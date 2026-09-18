@@ -43,6 +43,7 @@ use std::collections::BTreeMap;
 use anyhow::{anyhow, Context, Result};
 use labwired_config::{DeviceDescriptor, Event, PinEdge};
 
+use super::declarative_artifact::CompiledArtifact;
 use super::declarative_regs::{apply_timing_action, TimerBank};
 use super::rule_machine::{PinOnlyCtx, RuleMachine};
 use crate::bus::{BusResidentDevice, DevicePins};
@@ -74,6 +75,11 @@ pub struct DeclarativeGpioDevice {
     observed: Vec<BoundPin>,
     /// Last level seen on each observed pad; `None` until the first service.
     last_seen: Vec<Option<bool>>,
+    /// Which pads moved in the store currently being serviced. Written in
+    /// phase 1 and consumed in phase 3, so the per-pad events are raised from
+    /// the SAME snapshot the simultaneous-pad event saw rather than from a
+    /// second read of the pads.
+    last_changed: Vec<bool>,
     /// Pads this device drives (IDR + the external-world seam).
     driven: Vec<BoundPin>,
     /// Measurement slots in engineering units, keyed by input-channel key.
@@ -91,6 +97,17 @@ pub struct DeclarativeGpioDevice {
     cycle_remainder: u64,
     /// Device time in µs, derived from cycles above.
     elapsed_us: u64,
+    /// What this part SHOWS, declared rather than coded. `None` for a part that
+    /// shows nothing, which is every `gpio_device` written before the
+    /// `artifact:` key existed. See
+    /// [`CompiledArtifact`](super::declarative_artifact::CompiledArtifact).
+    artifact: Option<CompiledArtifact>,
+    /// Whether any rule listens for the simultaneous-pad event, so the sampler
+    /// skips building the changed-pad list when nothing would read it.
+    listens_for_pin_sets: bool,
+    /// Scratch for the pads that moved in the store being serviced, reused
+    /// across passes so the write path allocates nothing per store.
+    moved: Vec<String>,
     /// Output-register addresses this device must be serviced on SYNCHRONOUSLY,
     /// from the MMIO write hook rather than the peripheral tick. Non-empty when
     /// a rule listens for a pin EDGE — see
@@ -130,11 +147,16 @@ impl DeclarativeGpioDevice {
         // LEVELS and misses the transitions between them. A part whose rules
         // only listen for timers and stimuli stays tick-driven and costs the
         // write path the `is_empty()` check and nothing else.
+        // ⚠️ BOTH pad events count. A part whose ONLY pad rule is
+        // `on: { pins: [...] }` is every bit as firmware-clocked as one using
+        // `on: { pin: X }`; leaving it off this list would leave it serviced
+        // only on the tick, which for a bit-banged protocol delivers one edge
+        // per tick interval or none at all.
         let edge_driven = descriptor
             .behavior
             .rules
             .iter()
-            .any(|r| matches!(r.on, Event::Pin { .. }));
+            .any(|r| matches!(r.on, Event::Pin { .. } | Event::Pins { .. }));
         let edge_addrs: Vec<u64> = if edge_driven {
             let mut addrs: Vec<u64> = observed.iter().map(|p| p.addr).collect();
             addrs.sort_unstable();
@@ -143,11 +165,16 @@ impl DeclarativeGpioDevice {
         } else {
             Vec::new()
         };
+        let listens_for_pin_sets = machine.listens_for_pin_sets();
         Ok(Self {
             id,
+            artifact: CompiledArtifact::from_descriptor(descriptor)?,
+            listens_for_pin_sets,
+            moved: Vec::new(),
             machine,
             timers: TimerBank::new(&descriptor.behavior.timers),
             last_seen: vec![None; observed.len()],
+            last_changed: vec![false; observed.len()],
             observed,
             driven,
             edge_addrs,
@@ -251,28 +278,91 @@ impl BusResidentDevice for DeclarativeGpioDevice {
     /// arrived — which is what a bit-banged read loop expects: clock high, read
     /// the data line.
     fn service(&mut self, pins: &mut dyn DevicePins, now: u64) {
+        // ── PHASE 1: resample EVERY observed pad, raise nothing ────────────
+        //
+        // ⚠️ THE TWO PHASES ARE THE WHOLE SIMULTANEOUS-PAD FIX, AND THE ORDER
+        // IS THE ARGUMENT. One MMIO store can move several pads at once — a
+        // BSRR write sets CLK and clears DIO in a single instruction — and this
+        // pass is called ONCE for that store. Sampling a pad and raising its
+        // event before the next pad has been sampled hands the second rule a
+        // STALE level for the first: a TM1637 START is "DIO fell while CLK was
+        // high", and decomposed that way a store that moves both lines either
+        // synthesises a START that never happened or misses one that did.
+        //
+        // So: the whole snapshot is installed in the machine first, and only
+        // then is anything raised. Inside any rule, `pin(X)` is the level pad X
+        // holds AFTER the store, for every X.
+        self.moved.clear();
+        let mut changed_any = false;
         for i in 0..self.observed.len() {
-            let pin = self.observed[i].clone();
             // An address that does not read back means the MCU is driving
             // nothing there; `false` is the same default the other resident
             // models take for an undriven output.
-            let level = pins.output_bit(pin.addr, pin.bit).unwrap_or(false);
-            let was = self.last_seen[i];
-            self.last_seen[i] = Some(level);
-            let Some(was) = was else { continue }; // the first sample is an anchor
-            if was == level {
+            let level = pins
+                .output_bit(self.observed[i].addr, self.observed[i].bit)
+                .unwrap_or(false);
+            let was = self.last_seen[i].replace(level);
+            self.machine
+                .set_observed_level(&self.observed[i].role, level);
+            // ⚠️ THE TWO PAD EVENTS DIFFER ON THE FIRST SAMPLE, AND THEY MUST.
+            //
+            // `on: { pin: X, edge: … }` is an EDGE event: it needs a previous
+            // level, and the first pass has none, so it raises nothing. That is
+            // the behaviour every part written against it depends on.
+            //
+            // `on: { pins: [...] }` is a LEVEL event — "these pads now hold
+            // these levels" — and the first store is as much a statement of
+            // levels as any later one. Skipping it would mean a combinational
+            // part shows NOTHING until the second store: firmware that lights a
+            // digit with one `BSRR` write and then leaves it alone would leave
+            // the panel blank forever. It would also cost the TM1637 its first
+            // START, because its idle-high seed IS a previous level, stated in
+            // the descriptor rather than discovered from a pad.
+            if self.listens_for_pin_sets && was != Some(level) {
+                self.moved.push(self.observed[i].role.clone());
+            }
+            if was.is_none() {
                 continue;
             }
-            self.fire(Event::Pin {
-                name: pin.role.clone(),
-                edge: if level {
-                    PinEdge::Rising
-                } else {
-                    PinEdge::Falling
-                },
+            if was != Some(level) {
+                changed_any = true;
+            }
+            self.last_changed[i] = was != Some(level);
+        }
+
+        // ── PHASE 2: the simultaneous-pad event, ONCE for the whole store ──
+        //
+        // Raised before the per-pad events so a part framed by two lines
+        // decodes the store as one thing, and a part clocked on one line is
+        // untouched.
+        if self.listens_for_pin_sets && !self.moved.is_empty() {
+            let names = std::mem::take(&mut self.moved);
+            self.fire(Event::Pins {
+                names: names.clone(),
             });
-            // An edge rule may have started or stopped a timer.
             self.drain_timer_requests();
+            self.moved = names;
+        }
+
+        // ── PHASE 3: the per-pad edges, in observed order ──────────────────
+        if changed_any {
+            for i in 0..self.observed.len() {
+                if !self.last_changed[i] {
+                    continue;
+                }
+                self.last_changed[i] = false;
+                let level = self.last_seen[i].unwrap_or(false);
+                self.fire(Event::Pin {
+                    name: self.observed[i].role.clone(),
+                    edge: if level {
+                        PinEdge::Rising
+                    } else {
+                        PinEdge::Falling
+                    },
+                });
+                // An edge rule may have started or stopped a timer.
+                self.drain_timer_requests();
+            }
         }
 
         self.advance_clock(now);
@@ -293,8 +383,39 @@ impl BusResidentDevice for DeclarativeGpioDevice {
         }
     }
 
+    /// ⚠️ STATED, not inherited, and the two halves of the condition are each a
+    /// fact a default would get wrong.
+    ///
+    /// A part that owns NO TIMER and DRIVES NO PAD can only change when
+    /// firmware stores to an output register, and `edge_service_addrs` already
+    /// services it synchronously inside that store. A tick pass would resample
+    /// pads that cannot have moved. The TM1637 and the bare 7-segment digit are
+    /// both this, and their hand-written predecessors each said so by hand —
+    /// left at the trait's `true`, a board carrying either would force
+    /// `requires_cycle_accurate()` and pin `max_safe_tick_interval()` to 1: a
+    /// performance regression against the models they replace, invisible to
+    /// every behavioural test.
+    ///
+    /// ⚠️ A `gpio_device` with `timers:` MUST NOT say false — its clock only
+    /// advances on the tick — and one that DRIVES a pad must not either, since
+    /// the level it answers with is put on the pad by this same pass. The HX711
+    /// is both, and answers `true` through this expression rather than through
+    /// an override somebody has to remember.
+    fn needs_per_cycle_service(&self) -> bool {
+        !self.timers.is_empty() || !self.driven.is_empty()
+    }
+
     fn edge_service_addrs(&self) -> &[u64] {
         &self.edge_addrs
+    }
+
+    /// A pins-only part has no controller trait to hang evidence on — it binds
+    /// on PADS — so #1176 gave [`BusResidentDevice`] the seam directly. This is
+    /// what fills it for a DESCRIPTOR: a part that declares an `artifact:`
+    /// reports through the same door the hand-written models used, and a part
+    /// that declares none answers `None` rather than an empty panel.
+    fn evidence(&self) -> Option<&dyn crate::inspect::DeviceEvidence> {
+        self.artifact.as_ref().map(|_| self as _)
     }
 
     fn as_sim_input(&mut self) -> &mut dyn SimInput {
@@ -311,6 +432,30 @@ impl BusResidentDevice for DeclarativeGpioDevice {
 
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
         self
+    }
+}
+
+impl crate::inspect::DeviceEvidence for DeclarativeGpioDevice {
+    fn artifacts(
+        &self,
+        id: &str,
+        opts: &crate::inspect::InspectOpts,
+    ) -> Vec<crate::inspect::Artifact> {
+        let Some(artifact) = &self.artifact else {
+            return Vec::new();
+        };
+        // The renderer needs a `RuleCtx` to evaluate a `meta.value:` expression
+        // that reads `input()`. Building it here needs `&mut` slots, which an
+        // evidence read does not have — so it reads a CLONE of the slots. That
+        // is sound because rendering never writes: `set_input` on this context
+        // would change a clone nobody keeps, and the only way to reach it is an
+        // action, which a `meta.value:` expression cannot contain.
+        let mut slots = self.slots.clone();
+        let ctx = PinOnlyCtx {
+            slots: &mut slots,
+            expr_scale: &self.expr_scale,
+        };
+        vec![artifact.render(&self.machine, &ctx, id, opts)]
     }
 }
 
@@ -373,6 +518,12 @@ pub(crate) fn validate_descriptor(desc: &DeviceDescriptor) -> Result<()> {
         .map_err(|e| anyhow!("{e}"))
         .with_context(|| format!("gpio_device '{}' has an invalid rule", desc.r#type))?;
     validate_rule_names(desc)?;
+    // Same reason the rules are compiled here: a malformed artifact must be a
+    // LOAD error naming the part, not a panel that renders nothing at the first
+    // inspect.
+    if let Some(artifact) = &b.artifact {
+        artifact.validate(&desc.r#type)?;
+    }
     Ok(())
 }
 

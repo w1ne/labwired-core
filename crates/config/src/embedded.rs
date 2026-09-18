@@ -50,6 +50,20 @@ pub static EMBEDDED_DEVICES: &[(&[&str], &str)] = &[
         &["keypad"],
         include_str!("../../../configs/devices/keypad.yaml"),
     ),
+    // The two segment displays. The FIRST spelling is the `type:` the YAML
+    // declares, and it is the hyphenated one deliberately: it is the
+    // `device_type` the hand-written kits published, so every shipped manifest,
+    // lab and browser entry that says `tm1637-7seg` keeps resolving. The
+    // underscored alias matches the file name and the way the rest of the
+    // gpio descriptors spell themselves.
+    (
+        &["tm1637-7seg", "tm1637_7seg"],
+        include_str!("../../../configs/devices/tm1637_7seg.yaml"),
+    ),
+    (
+        &["seven-segment", "seven_segment"],
+        include_str!("../../../configs/devices/seven_segment.yaml"),
+    ),
     (
         &["dht22", "am2302"],
         include_str!("../../../configs/devices/dht22.yaml"),

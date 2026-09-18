@@ -334,6 +334,24 @@ pub enum Event {
     Timer { name: String },
     /// An observed pad changed level.
     Pin { name: String, edge: PinEdge },
+    /// **One or more of a NAMED SET of pads moved in the same store.**
+    ///
+    /// The simultaneous-pad event. [`Event::Pin`] is raised once per pad, which
+    /// is exactly right for a part clocked on one line and wrong for a part
+    /// framed by two: a single `BSRR` store can set CLK and clear DIO in one
+    /// instruction, and decomposing it into two sequential edges hands the
+    /// second rule a STALE level for the first pad. A TM1637 START is "DIO fell
+    /// while CLK was high" — decomposed, a store that moves both lines either
+    /// synthesises a START that never happened or misses one that did.
+    ///
+    /// Raised ONCE per service pass in which any listed pad changed, AFTER
+    /// every observed pad has been resampled — so [`crate::expr::Expr::Pin`]
+    /// (`pin(NAME)`) reads the post-store level of EVERY pad inside the rule,
+    /// and the rule decides for itself what the combination means.
+    ///
+    /// A rule matches when the raised set and the declared set intersect, so
+    /// `on: { pins: [CLK, DIO] }` fires whether one line moved or both.
+    Pins { names: Vec<String> },
     /// A SimInput channel was driven.
     Input { key: String },
 }
@@ -390,6 +408,12 @@ impl Serialize for Event {
                 };
                 m.insert(Value::from("edge"), Value::from(edge));
             }
+            Event::Pins { names } => {
+                m.insert(
+                    Value::from("pins"),
+                    Value::Sequence(names.iter().map(|n| Value::from(n.clone())).collect()),
+                );
+            }
             _ => unreachable!("bare events took the scalar path"),
         }
         Value::Mapping(m).serialize(s)
@@ -408,7 +432,7 @@ impl<'de> Deserialize<'de> for Event {
                     D::Error::custom(format!(
                         "`on: {s}` is not an event. Bare events are start, stop, cs_select, \
                          cs_release, frame; the rest are single-key maps: write:, read:, \
-                         timer:, pin:, input:"
+                         timer:, pin:, pins:, input:"
                     ))
                 });
         }
@@ -446,6 +470,27 @@ impl<'de> Deserialize<'de> for Event {
                 key: as_name("input", val)?,
             });
         }
+        if let Some(val) = get("pins") {
+            let seq = val.as_sequence().ok_or_else(|| {
+                D::Error::custom(
+                    "`on: { pins: … }` needs a LIST of pad roles, such as `{ pins: [CLK, DIO] }`",
+                )
+            })?;
+            let names: Vec<String> = seq
+                .iter()
+                .map(|v| {
+                    v.as_str().map(str::to_string).ok_or_else(|| {
+                        D::Error::custom("`on: { pins: … }` entries must be pad role names")
+                    })
+                })
+                .collect::<Result<_, _>>()?;
+            if names.is_empty() {
+                return Err(D::Error::custom(
+                    "`on: { pins: [] }` names no pad, so it could never fire",
+                ));
+            }
+            return Ok(Event::Pins { names });
+        }
         if let Some(val) = get("pin") {
             let name = as_name("pin", val)?;
             let edge = match get("edge").and_then(|e| e.as_str()) {
@@ -462,8 +507,8 @@ impl<'de> Deserialize<'de> for Event {
             return Ok(Event::Pin { name, edge });
         }
         Err(D::Error::custom(
-            "unknown event; expected one of write:, read:, timer:, pin:, input:, or the bare \
-             start / stop / cs_select / cs_release / frame",
+            "unknown event; expected one of write:, read:, timer:, pin:, pins:, input:, or the \
+             bare start / stop / cs_select / cs_release / frame",
         ))
     }
 }
@@ -1013,7 +1058,37 @@ pub fn validate_rule_names(rules: &[Rule], names: &RuleNames<'_>) -> anyhow::Res
                 "{}: no pin role named '{name}' in `pins:` or `outputs:`",
                 at("on.pin")
             ),
+            Event::Pins { names: listed } => {
+                for name in listed {
+                    anyhow::ensure!(
+                        has(names.pins, name) || has(names.outputs, name),
+                        "{}: no pin role named '{name}' in `pins:` or `outputs:`",
+                        at("on.pins")
+                    );
+                }
+            }
             Event::Start | Event::Stop | Event::CsSelect | Event::CsRelease | Event::Frame => {}
+        }
+        // ⚠️ `pin(NAME)` is validated HERE, inside the expressions, and not
+        // only on the `on:` line. An undeclared pad reads 0 forever — a guard
+        // that is quietly always-false, which is the failure mode that looks
+        // exactly like a part the firmware never clocked.
+        for (src, what) in rule_expression_sources(rule) {
+            let parsed = match crate::expr::Expr::parse(&src) {
+                Ok(e) => e,
+                // A malformed expression is `compile_rules`' error to report,
+                // with its own message; saying it twice here would bury it.
+                Err(_) => continue,
+            };
+            let mut pads = Vec::new();
+            parsed.pin_names(&mut pads);
+            for pad in pads {
+                anyhow::ensure!(
+                    has(names.pins, &pad) || has(names.outputs, &pad),
+                    "{}: `pin({pad})` names no pad in `pins:` or `outputs:`",
+                    at(what)
+                );
+            }
         }
         for (j, action) in rule.actions.iter().enumerate() {
             let at = |what: &str| format!("rules[{i}].do[{j}] ({what})");
@@ -1077,6 +1152,28 @@ pub fn validate_rule_names(rules: &[Rule], names: &RuleNames<'_>) -> anyhow::Res
         }
     }
     Ok(())
+}
+
+/// Every expression source in one rule, paired with where it was written, so a
+/// name check can walk them all without knowing the action vocabulary twice.
+fn rule_expression_sources(rule: &Rule) -> Vec<(String, &'static str)> {
+    let mut out: Vec<(String, &'static str)> = Vec::new();
+    if let Some(w) = &rule.when {
+        out.push((w.clone(), "when"));
+    }
+    for action in &rule.actions {
+        match action {
+            Action::Write { value, .. } => out.push((value.clone(), "write.value")),
+            Action::Var { value, .. } => out.push((value.clone(), "var.value")),
+            Action::SetInput { value, .. } => out.push((value.clone(), "set_input.value")),
+            Action::Push {
+                value: Some(value), ..
+            } => out.push((value.clone(), "push.value")),
+            Action::Pin { level, .. } => out.push((level.clone(), "pin.level")),
+            _ => {}
+        }
+    }
+    out
 }
 
 /// Every name a set of rules reads through `reg()` / `field()`, so a caller can

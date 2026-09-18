@@ -56,8 +56,6 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     &components::declarative_display::UC8151D_TRICOLOR_290_KIT,
     &components::sn74hc165::SN74HC165_KIT,
     &components::hc595_7seg::HC595_7SEG_KIT,
-    &components::tm1637_7seg::TM1637_7SEG_KIT,
-    &components::seven_segment::SEVEN_SEGMENT_KIT,
     &components::declarative_display::PCD8544_KIT,
     &components::iolink_master::IOLINK_MASTER_KIT,
     &components::ntc_thermistor::NTC_THERMISTOR_KIT,

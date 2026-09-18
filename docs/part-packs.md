@@ -524,8 +524,8 @@ typed field per bit-banged part. It used to carry three:
 | gone | what it was | what replaced it |
 |---|---|---|
 | `hx711: Vec<Hx711>` + `maybe_clock_hx711` | a 24-bit shift-out clocked by SCK | `hx711.yaml`, a `gpio_device` |
-| `tm1637: Vec<Tm1637>` + `maybe_clock_tm1637` | an I²C-like 2-wire display, framed by CLK/DIO edges | the model itself, as one `BusResidentDevice` |
-| `seven_segment: Vec<SevenSegment>` + `maybe_sample_seven_segment` | nine pads, combinational | likewise |
+| `tm1637: Vec<Tm1637>` + `maybe_clock_tm1637` | an I²C-like 2-wire display, framed by CLK/DIO edges | `tm1637_7seg.yaml`, a `gpio_device` |
+| `seven_segment: Vec<SevenSegment>` + `maybe_sample_seven_segment` | nine pads, combinational | `seven_segment.yaml`, a `gpio_device` |
 
 Each hook was one part's private copy of
 `maybe_service_edge_driven_gpio_devices`, complete with its own cache of
@@ -549,7 +549,126 @@ Two facts a bus-resident display states, and both are load-bearing:
 
 A bus-resident display also reports through `BusResidentDevice::evidence()`,
 which is what lets it publish artifacts without a typed bus field and an arm of
-its own in `for_each_bus_resident_device`.
+its own in `for_each_bus_resident_device`. A DESCRIPTOR fills that seam through
+[`artifact:`](#artifact--what-a-part-shows) below.
+
+### `on: { pins: [...] }` — one store, one event, every pad's new level
+
+`on: { pin: X, edge: … }` is raised once per pad that moved. That is exactly
+right for a part clocked on ONE line, and it cannot express a part framed by
+two.
+
+⚠️ **A single MMIO store can move several pads at once.** `BSRR = (1<<8) |
+(1<<(9+16))` sets CLK and clears DIO in one instruction. Decomposed into two
+sequential edge events, whichever fires first is decided against a STALE level
+for the other line — and a TM1637 START is *"DIO fell **while CLK was high**"*,
+a condition over both pads. A store that moved both would either synthesise a
+START the firmware never sent or miss one it did.
+
+The simultaneous-pad event is the fix. The engine resamples **every** observed
+pad, installs the whole snapshot, and only then raises:
+
+```yaml
+behavior:
+  primitive: gpio_device
+  pins: { CLK: clk_pin, DIO: dio_pin }
+  vars: { prev_clk: 1, prev_dio: 1, in_txn: 0 }
+  rules:
+    # START — DIO fell while CLK stayed high ACROSS THIS STORE.
+    - on: { pins: [CLK, DIO] }
+      when: "var(prev_clk) && pin(CLK) && var(prev_dio) && !pin(DIO)"
+      do: [{ var: { name: in_txn, value: 1 } }]
+
+    # ⚠️ LAST: latch the levels this store delivered.
+    - on: { pins: [CLK, DIO] }
+      do:
+        - { var: { name: prev_clk, value: "pin(CLK)" } }
+        - { var: { name: prev_dio, value: "pin(DIO)" } }
+```
+
+* **`pin(NAME)`** is a new name in the expression vocabulary: the CURRENT level
+  of a pad the part observes or drives, 0 or 1. Inside any rule it is the
+  post-store level of **every** pad, not just the one whose event was raised.
+* **Matching is by INTERSECTION.** `on: { pins: [CLK, DIO] }` fires whether one
+  of them moved or both. Requiring the exact set would make the rule fire only
+  on the rarest store.
+* **It fires BEFORE the per-pad `pin:` events** of the same store, so a part can
+  use both.
+* **`pins:` is a LEVEL event; `pin:` is an EDGE event.** The difference shows on
+  the FIRST service pass: an edge needs a previous level and the first pass has
+  none, so `pin:` raises nothing — while `pins:` fires, because the first store
+  is as much a statement of levels as any later one. A combinational part that
+  waited for a second store would stay blank forever under firmware that lights
+  a digit once and leaves it alone.
+* **A rule listening for `pins:` makes the part edge-serviced**, exactly as a
+  `pin:` rule does.
+* A `pin()` naming a pad the descriptor does not declare is a **load error**, in
+  `when:` and in every action expression — not a guard that silently reads low.
+
+⚠️ **Rule order is load-bearing here too, and more sharply.** Every guard above
+compares `var(prev_*)` against `pin(*)`, so the rule that latches `prev_*` must
+be declared **last**. Anywhere else it turns every condition into a comparison
+of a level with itself: no START, no STOP, no sampled bit, and a panel that
+stays blank while the firmware appears to work.
+
+## `artifact:` — what a part SHOWS
+
+A part could be simulated perfectly by a rule list and **inspect as nothing**:
+`evidence()` / `artifacts()` had to be implemented, and only a concrete type can
+implement a trait. So a ported TM1637 decoded every frame correctly and
+published no text, no panel and no evidence — which made every display-oracle
+clause about it unresolvable and painted an empty panel in the browser.
+
+`artifact:` closes that. **The rules fill a RAM; the engine renders it.**
+
+```yaml
+behavior:
+  primitive: gpio_device        # or spi_device — the SAME key
+  vars: { g0: 0, g1: 0, g2: 0, g3: 0, g4: 0, g5: 0, display_on: 0, bright: 0 }
+  rules: [ … the rules that fill those vars … ]
+
+  artifact:
+    kind: text_display          # text_display | framebuffer
+    format: tm1637_grid         # meta.format — how the bytes are packed
+    ram: { vars: [g0, g1, g2, g3] }
+    decode: { font: seven_segment, digits: 4 }
+    meta:
+      - { key: lit_segments, source: lit_bits }
+      - { key: display_on,   value: "var(display_on)", type: bool }
+      - { key: brightness,   value: "var(bright)" }
+      - { key: colon,        value: "var(g1) & 0x80", type: bool }
+```
+
+| key | meaning |
+|---|---|
+| `kind` | `text_display` (decoded characters) or `framebuffer` (packed pixels). These are the two kinds a display surface paints; a third spelling is a load error. |
+| `id` | optional artifact-id **suffix**, for a part publishing more than one. ⚠️ Not an absolute id — the artifact is addressed by the DEVICE's manifest id, or two placements of one part would collide. |
+| `format` | the `meta.format` string, matching a `crate::inspect::artifact_format` constant. A reader matches on it instead of downcasting to a Rust type. |
+| `ram.vars` | variables, in order, each contributing its LOW BYTE. The list is the artifact's whole extent. |
+| `ram.fifo` | a FIFO instead, oldest entry first. Exactly one of the two. |
+| `decode.font` | `seven_segment` (the shared `0b0gfedcba` table, dp on bit 7) or `none`. |
+| `decode.digits` | how many leading RAM bytes become `meta.text`. |
+| `meta[].value` | an EXPRESSION over the part's own state — the whole rule vocabulary. |
+| `meta[].source` | an engine-derived quantity over the rendered RAM: `lit_bits`, `ink_bytes`, `bytes`. |
+| `meta[].type` | `int` (default) or `bool`. ⚠️ Not cosmetic: `display_on` is read with `as_bool()`, and an integer there is a different artifact. |
+| `bytes` | publish the RAM as the artifact payload, gated behind `include_bytes`. Default false. |
+
+`format` and `generation` are stamped by the engine and cannot be redeclared.
+`generation` is the cheap content hash a poller diffs, taken over the RAM the
+artifact **publishes** — so a part that keeps more RAM than it shows (the
+TM1637 has six GRIDs and a four-digit module wires four) does not report a
+change nobody can see.
+
+⚠️ **Why `lit_bits` is a `source:` and not a `popcount()` operator.** The
+expression language has no bit-counting, and adding one would mean an operator
+that exists for a single `meta` field — in a grammar whose whole argument is
+that every name in it is something a datasheet says.
+
+⚠️ **The key lives on the DESCRIPTOR, not on a primitive.** A part's artifact is
+a property of the part: a segment display publishes the same `text_display`
+whether the bytes arrived on nine pads or over SPI. So `gpio_device` and
+`spi_device` read the same block and hand it to the same renderer. A second,
+transport-flavoured spelling is how two renderings of one part drift apart.
 
 ## Parallel (8080) panels: the `I80Panel` seam
 

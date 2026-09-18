@@ -17,7 +17,7 @@ The models column is a content digest over everything that board's `models` list
 | `nucleo-l073rz` | 🟢 silicon-verified | 2026-08-09 | `c1d1511d2a12c2cb` | ⚠ drift acked 2026-09-17, expires 2026-10-17 (re-capture pending) |
 | `stm32f103` | 🟢 silicon-verified | 2026-08-09 | `fe69cc622cf785ec` | ⚠ drift acked 2026-09-17, expires 2026-10-17 (re-capture pending) |
 | `stm32f407` | 🟢 silicon-smoke | 2026-06-20 | `c3e6ce849dcfecf3` | ⚠ drift acked 2026-09-17, expires 2026-10-17 (re-capture pending) |
-| `esp32s3` | 🟢 silicon-verified | 2026-08-09 | `70a3f2727130c10e` | ⚠ drift acked 2026-09-17, expires 2026-10-17 (re-capture pending) |
+| `esp32s3` | 🟢 silicon-verified | 2026-08-09 | `70a3f2727130c10e` | ⚠ drift acked 2026-09-18, expires 2026-10-18 (re-capture pending) |
 | `stm32f401` | 🟡 smoke-manual | — | `1011b7fa82c75eec` | no silicon capture |
 | `stm32wba52` | 🟡 smoke-manual | — | `5bdce03df46d9e22` | no silicon capture |
 | `nrf52832` | ⚪ structural | — | `19469063d8c55a30` | no silicon capture |
@@ -116,7 +116,7 @@ The models column is a content digest over everything that board's `models` list
 - Silicon: **2026-08-09** on USB-JTAG built-in (USB 303a:1001, openocd-esp32 v0.12.0-esp32-20260703, both Tensilica taps 0x120034e5), board MAC 3c:0f:02:df:f3:c8 (QFN56 rev v0.2) — re-captured live 2026-08-09 on a SECOND physical S3 (MAC 3c:0f:02:df:f3:c8, QFN56 rev v0.2; the 2026-07-15 baseline came from an ESP32-S3-Zero, MAC 9c:13:9e:f4:40:c0, same rev) — cross-board corroboration, not a re-read of the same part. Both Xtensa taps (tap0+tap1) examined. 384 registers read across 10 windows (UART0, GPIO, I2C0, RMT, MCPWM0, TIMG0, SYSTIMER, GDMA, SYSTEM, RTC_CNTL): 9/9 RESET_VALUES matched, 0 mismatched. Scope is unchanged and still thin — this is a 9-register reset-state anchor, NOT a broad register or behavioural diff; see the KNOWN GAPS in `note`. Artifacts: scripts/hw-oracle/captures/esp32s3/recapture-20260809T130700Z/.
   - offline (CI): esp32s3_reset_conformance (9 reset regs vs live silicon, firmware-path bus)
   - offline (CI): e2e_i2c_tmp102 / e2e_hello_world / xtensa_exec / e2e_esp32_epaper (sim)
-- Drift status: **⚠ drift acked 2026-09-17, expires 2026-10-17 (re-capture pending)**
+- Drift status: **⚠ drift acked 2026-09-18, expires 2026-10-18 (re-capture pending)**
 
 ## `stm32f401` — 🟡 smoke-manual
 

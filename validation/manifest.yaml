@@ -4667,6 +4667,26 @@ boards:
       # changes. Behaviour-preserving extraction, not a model correction —
       # `pr-workspace-tests` green on all shards is what exercises this peripheral,
       # so nothing the silicon capture asserts changed and the capture stands.
+    # 2026-09-18: `esp32s3/lcd_cam.rs` — the i80 panel seam only. `panels` goes
+    # from `Vec<Arc<Ili9341Parallel>>` to `Vec<Arc<dyn I80Panel>>` and
+    # `attach_panel` takes the trait; `I80Panel` is one method
+    # (`i80_write_word(&self, dc_high, word)`) and `Ili9341Parallel`'s impl
+    # forwards to the inherent method it already had. NO register, reset value,
+    # source ID or output-format bit changed, and no LCD_CAM register is inside
+    # the nine reset-state windows the 2026-08-09 capture anchors
+    # (UART0/GPIO/I2C0/RMT/MCPWM0/TIMG0/SYSTIMER/GDMA/SYSTEM/RTC_CNTL). What is
+    # dispatched over the seam is measured, not asserted: `esp32s3_lcd_i80_
+    # pixels` (6 passed) holds the DMA/i80 pixel path byte-exact — distinct
+    # RGB565 per pixel, window bounds, `suc_eof` truncation — and
+    # `e2e_ili9341_16bit_gpio_smoke` (2 passed) holds the GPIO bit-bang path.
+    # Both were unchanged except for reading the panel through its ARTIFACT
+    # instead of downcasting to the concrete type. This is an ACK, NOT A
+    # CAPTURE — the live re-capture owed above is still owed.
+    #
+    # 2026-09-18 (merge): this digest also covers `main`'s own standing ack for
+    # the generic Xtensa BB JIT emit core (#1139) — the merge of the two is one
+    # digest, so it is re-stamped once here rather than twice.
+    drift_ack: 2026-09-18
     drift_ack_digest: 70a3f2727130c10e675b19566c9efe8b1b0f062a01807ffe0d5ac0cfecf8b566
     models:
       - crates/core/src/cpu/xtensa_lx7.rs

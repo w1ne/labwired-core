@@ -736,6 +736,13 @@ mod tests {
         fn input(&self, key: &str) -> i64 {
             self.inputs.get(key).copied().unwrap_or(0)
         }
+        /// A UART part is a STREAM: it has no observed pads at all, so there is
+        /// no pad whose level this could report. 0 here is the truth, not a
+        /// stub — and `validate_rule_names` refuses a `pin()` naming a pad the
+        /// part does not declare, so no shipped descriptor can reach it.
+        fn pin(&self, _: &str) -> i64 {
+            0
+        }
         fn fifo_len(&self, _: &str) -> i64 {
             0
         }

@@ -1,0 +1,270 @@
+# TM1637 4-digit 7-segment LED display — 2-wire bit-banged. Declarative
+# `gpio_device`; replaces the hand-written `components/tm1637_7seg.rs`, whose
+# behaviour is pinned verbatim in
+# `crates/core/tests/gpio_artifact_migration_parity.rs`.
+#
+# ── The protocol, from the datasheet ───────────────────────────────────────
+#
+# Not a hardware bus: the MCU bit-bangs CLK and DIO with an I²C-LIKE but
+# LSB-FIRST and ADDRESS-LESS protocol.
+#
+#   * START — DIO falls while CLK is high.
+#   * STOP  — DIO rises while CLK is high.
+#   * DATA  — DIO sampled on each CLK rising edge, 8 bits LSB-FIRST, then a 9th
+#             ACK clock (the chip pulls DIO low; not modelled, see below).
+#   * Commands — data command 0x40/0x44 (auto-increment vs fixed address),
+#             address command 0xC0..0xC5, display control 0x80..0x8F
+#             (bit 3 = on, bits 0..2 = brightness).
+#
+# ── ⚠️ WHY THIS PART NEEDS `on: { pins: [CLK, DIO] }` ──────────────────────
+#
+# Every framing condition above is a statement about BOTH LINES AT ONCE. "DIO
+# falls while CLK is high" is not a DIO event and a CLK event; it is one
+# transition of the pair. The hand-written model was handed `(clk, dio)`
+# TOGETHER on every call and decided from both, which is why it could say it in
+# four lines.
+#
+# A per-pad `on: { pin: X }` rule cannot. The engine raises one event per pad
+# that moved, in `observed` order, and a single BSRR store can move BOTH — so
+# the store decomposes into two sequential edges, and whichever fires first
+# reads a STALE level for the other line. Concretely: a store that clears DIO
+# and clears CLK together would, decomposed, deliver "DIO fell" while CLK still
+# read HIGH — a START the firmware never sent. #1176 named this as the one
+# fidelity fact this port had to pin rather than discover.
+#
+# `on: { pins: [CLK, DIO] }` is the fix, and it is a fix in the ENGINE, not
+# here: every observed pad is resampled and the whole snapshot installed BEFORE
+# anything is raised, then this rule fires ONCE for the store. Inside it,
+# `pin(CLK)` and `pin(DIO)` are both post-store levels.
+#
+# `prev_clk` / `prev_dio` carry the pre-store levels, so the rules below read
+# exactly the four quantities the hand-written model read:
+#
+#     clk_rose        = !prev_clk && pin(CLK)
+#     clk_steady_high = prev_clk && pin(CLK)
+#     dio_moved       = pin(DIO) != prev_dio
+#
+# ⚠️ AND THE LAST RULE, WHICH LATCHES prev_clk/prev_dio, MUST BE DECLARED LAST.
+# Rules fire in declaration order and each `do:` runs to completion, so every
+# rule above it still sees the PREVIOUS levels. Moving it up turns every
+# condition into a comparison of a level with itself: no START, no STOP, no
+# sampled bit, and a display that stays blank while the firmware "works".
+#
+# ── The state machine ──────────────────────────────────────────────────────
+#
+# Vars, no registers (this part has no register map):
+#   prev_clk, prev_dio   pad levels as of the PREVIOUS store (idle bus is high)
+#   in_txn               1 between START and STOP
+#   expect_ack           1 once 8 bits are in; the next CLK↑ is the ACK clock
+#   bit_buf, bit_count   the byte being shifted in, LSB-first
+#   byte_done            1 for exactly the event the 8th bit landed in
+#   have_cmd             1 once the transaction's first (command) byte is in
+#   auto_inc             0 after a 0x44 fixed-address command; persists
+#   addr_ptr             GRID write pointer, wraps modulo 6
+#   display_on, bright   display-control register
+#   g0..g5               the six GRID bytes — the display RAM
+#
+# ⚠️ An ODR that does not read back defaults HIGH here (`idle` below seeds
+# prev_clk/prev_dio to 1), the OPPOSITE of the bare 7-segment digit's default.
+# A two-wire bus line that nobody is driving is RELEASED and pulled up; reading
+# it as low would synthesise a START out of the first store. The deleted
+# `maybe_clock_tm1637` hook defaulted exactly this way.
+#
+# ⚠️ NOT MODELLED, named rather than faked:
+#   * **The ACK the chip drives.** On silicon the TM1637 pulls DIO low on the
+#     ninth clock. This part drives no pad at all — the master's read of the ACK
+#     is not what any firmware in the corpus branches on, and the hand-written
+#     model ignored it too. Modelling it means `outputs: [DIO]`, which makes DIO
+#     both observed and driven and needs the open-drain seam a real two-wire bus
+#     has.
+#   * **Brightness as luminance.** `brightness` is reported as the 0..7 register
+#     value; nothing dims.
+#   * **The 6th/5th grid.** The RAM is six bytes (the pointer wraps modulo six,
+#     as the part does), but a 4-digit module wires four, so the ARTIFACT is the
+#     first four. `g4`/`g5` exist so a firmware that writes them does not
+#     corrupt a digit; they are not shown, and they do not move `generation`.
+type: tm1637-7seg
+
+behavior:
+  primitive: gpio_device
+
+  # Both lines are MCU OUTPUTS while the host writes display data, so both are
+  # observed (ODR) and neither is driven.
+  pins:
+    CLK: clk_pin
+    DIO: dio_pin
+
+  vars:
+    # Idle bus is both lines HIGH — see the unresolved-read note above.
+    prev_clk: 1
+    prev_dio: 1
+    in_txn: 0
+    expect_ack: 0
+    bit_buf: 0
+    bit_count: 0
+    have_cmd: 0
+    # ⚠️ 1 for EXACTLY the event in which the 8th bit landed, and 0 again by the
+    # end of it. The command and data rules below are guarded on THIS and not on
+    # `bit_count == 8`, and the difference is a whole class of corruption:
+    # `bit_count` stays 8 from the eighth data edge until the ACK edge clears
+    # it, and there is at least one store in between (CLK falling, and usually
+    # DIO moving with it). Guarded on `bit_count == 8`, every one of those
+    # stores re-applies the completed byte — so a data command (0x40) is first
+    # decoded as a command and then written into GRID 0 as display data, and the
+    # panel reads "-112" instead of "12  ". Measured, not hypothesised: that is
+    # the exact string this descriptor produced before `byte_done` existed.
+    byte_done: 0
+    auto_inc: 1
+    addr_ptr: 0
+    display_on: 0
+    bright: 0
+    g0: 0
+    g1: 0
+    g2: 0
+    g3: 0
+    g4: 0
+    g5: 0
+
+  rules:
+    # ── framing: START ────────────────────────────────────────────────────
+    # DIO fell while CLK stayed high across this store. `var(prev_clk) &&
+    # pin(CLK)` is "CLK was high and still is" — a store that also moved CLK
+    # is NOT a START, which is exactly the case a decomposed per-pad event
+    # would get wrong.
+    - on: { pins: [CLK, DIO] }
+      when: "var(prev_clk) && pin(CLK) && var(prev_dio) && !pin(DIO)"
+      do:
+        - { var: { name: in_txn, value: 1 } }
+        - { var: { name: expect_ack, value: 0 } }
+        - { var: { name: bit_buf, value: 0 } }
+        - { var: { name: bit_count, value: 0 } }
+        - { var: { name: byte_done, value: 0 } }
+        - { var: { name: have_cmd, value: 0 } }
+
+    # ── framing: STOP ─────────────────────────────────────────────────────
+    - on: { pins: [CLK, DIO] }
+      when: "var(prev_clk) && pin(CLK) && !var(prev_dio) && pin(DIO)"
+      do: [{ var: { name: in_txn, value: 0 } }]
+
+    # ── sample one data bit, LSB-first ────────────────────────────────────
+    # ⚠️ DECLARED BEFORE THE ACK RULE, AND THE ORDER IS THE CORRECTNESS
+    # ARGUMENT. Rules fire in declaration order and each `do:` runs to
+    # completion, so a later rule sees what an earlier one assigned. With the
+    # ACK rule first, the ninth clock would clear `expect_ack` and `bit_count`
+    # and THIS rule would then fire on the very same edge, shifting a phantom
+    # bit 0 into the next byte: every byte after the first would arrive with
+    # its low bit wrong. `!var(expect_ack)` is what makes this rule skip the
+    # ACK edge, and it only reads 1 here because the ACK rule has not run yet.
+    - on: { pins: [CLK, DIO] }
+      when: "!var(prev_clk) && pin(CLK) && var(in_txn) && !var(expect_ack) && var(bit_count) < 8"
+      do:
+        - { var: { name: bit_buf, value: "var(bit_buf) | (pin(DIO) << var(bit_count))" } }
+        - { var: { name: bit_count, value: "var(bit_count) + 1" } }
+        - { var: { name: byte_done, value: "var(bit_count) == 8" } }
+
+    # ── the ACK clock ─────────────────────────────────────────────────────
+    # The 9th CLK↑ of a byte: the chip would pull DIO low here. Consumed, and
+    # the shifter reset for the next byte of the same transaction. See the
+    # ordering note on the sampling rule above.
+    - on: { pins: [CLK, DIO] }
+      when: "!var(prev_clk) && pin(CLK) && var(in_txn) && var(expect_ack)"
+      do:
+        - { var: { name: expect_ack, value: 0 } }
+        - { var: { name: bit_buf, value: 0 } }
+        - { var: { name: bit_count, value: 0 } }
+
+    # ── the byte completed: it is a COMMAND (first of the transaction) ─────
+    # Every rule from here reads the `bit_count` the rule above just set, so
+    # "the 8th bit just landed" is `var(bit_count) == 8`.
+    #
+    # Data command 0x40/0x44: bit 2 selects fixed (1) vs auto-increment (0).
+    - on: { pins: [CLK, DIO] }
+      when: "var(in_txn) && var(byte_done) && !var(have_cmd) && (var(bit_buf) & 0xC0) == 0x40"
+      do: [{ var: { name: auto_inc, value: "(var(bit_buf) & 0x04) == 0" } }]
+    # Address command 0xC0..0xC7: the low three bits are the GRID pointer.
+    - on: { pins: [CLK, DIO] }
+      when: "var(in_txn) && var(byte_done) && !var(have_cmd) && (var(bit_buf) & 0xC0) == 0xC0"
+      do: [{ var: { name: addr_ptr, value: "var(bit_buf) & 0x07" } }]
+    # Display control 0x80..0x8F: bit 3 = on, bits 0..2 = brightness.
+    - on: { pins: [CLK, DIO] }
+      when: "var(in_txn) && var(byte_done) && !var(have_cmd) && (var(bit_buf) & 0xC0) == 0x80"
+      do:
+        - { var: { name: display_on, value: "(var(bit_buf) & 0x08) != 0" } }
+        - { var: { name: bright, value: "var(bit_buf) & 0x07" } }
+
+    # ── the byte completed: it is DISPLAY DATA ────────────────────────────
+    # One rule per GRID because the write target is an INDEX and the action
+    # vocabulary assigns to a NAME. Six rules, each guarded on the pointer.
+    - on: { pins: [CLK, DIO] }
+      when: "var(in_txn) && var(byte_done) && var(have_cmd) && (var(addr_ptr) % 6) == 0"
+      do: [{ var: { name: g0, value: "var(bit_buf)" } }]
+    - on: { pins: [CLK, DIO] }
+      when: "var(in_txn) && var(byte_done) && var(have_cmd) && (var(addr_ptr) % 6) == 1"
+      do: [{ var: { name: g1, value: "var(bit_buf)" } }]
+    - on: { pins: [CLK, DIO] }
+      when: "var(in_txn) && var(byte_done) && var(have_cmd) && (var(addr_ptr) % 6) == 2"
+      do: [{ var: { name: g2, value: "var(bit_buf)" } }]
+    - on: { pins: [CLK, DIO] }
+      when: "var(in_txn) && var(byte_done) && var(have_cmd) && (var(addr_ptr) % 6) == 3"
+      do: [{ var: { name: g3, value: "var(bit_buf)" } }]
+    - on: { pins: [CLK, DIO] }
+      when: "var(in_txn) && var(byte_done) && var(have_cmd) && (var(addr_ptr) % 6) == 4"
+      do: [{ var: { name: g4, value: "var(bit_buf)" } }]
+    - on: { pins: [CLK, DIO] }
+      when: "var(in_txn) && var(byte_done) && var(have_cmd) && (var(addr_ptr) % 6) == 5"
+      do: [{ var: { name: g5, value: "var(bit_buf)" } }]
+    # …then advance the pointer, in auto-increment mode only. AFTER the six
+    # rules above, so the byte lands where the pointer pointed when it arrived.
+    - on: { pins: [CLK, DIO] }
+      when: "var(in_txn) && var(byte_done) && var(have_cmd) && var(auto_inc)"
+      do: [{ var: { name: addr_ptr, value: "(var(addr_ptr) + 1) % 6" } }]
+
+    # ── close the byte ────────────────────────────────────────────────────
+    # The first completed byte of a transaction is its command; every later one
+    # is data. Declared after both handlers so `have_cmd` is still 0 while the
+    # command rules run and 1 by the time the next byte completes.
+    - on: { pins: [CLK, DIO] }
+      when: "var(in_txn) && var(byte_done)"
+      do:
+        - { var: { name: have_cmd, value: 1 } }
+        - { var: { name: expect_ack, value: 1 } }
+        - { var: { name: byte_done, value: 0 } }
+
+    # ── ⚠️ LAST: latch the levels this store delivered ────────────────────
+    # Every rule above compares `var(prev_*)` against `pin(*)`. Declared
+    # anywhere but last, this turns every one of those comparisons into a
+    # level against itself.
+    - on: { pins: [CLK, DIO] }
+      do:
+        - { var: { name: prev_clk, value: "pin(CLK)" } }
+        - { var: { name: prev_dio, value: "pin(DIO)" } }
+
+  # What the panel shows. The rules fill the GRID vars; the engine renders.
+  artifact:
+    kind: text_display
+    format: tm1637_grid
+    # FOUR, not six — the 4-digit module wires four GRIDs. See the header.
+    ram: { vars: [g0, g1, g2, g3] }
+    decode: { font: seven_segment, digits: 4 }
+    meta:
+      - { key: lit_segments, source: lit_bits }
+      - { key: display_on, value: "var(display_on)", type: bool }
+      - { key: brightness, value: "var(bright)" }
+      # The colon on the clock-style module is the decimal point of GRID 1.
+      - { key: colon, value: "var(g1) & 0x80", type: bool }
+
+metadata:
+  label: "TM1637 7-Segment (4-digit)"
+  summary: "4-digit 7-segment LED display with the TM1637 2-wire (CLK/DIO) driver."
+  detail: "The RobotDyn-style 4-digit clock display. The host bit-bangs two GPIO lines with the TM1637's I2C-like, LSB-first, address-less protocol. Both pads are resampled together before any rule runs, so START and STOP - each of which is a condition over BOTH lines - decode from a single store rather than from two sequential edges with a stale level. The model decodes start/stop/data/ACK framing and the data / address / display-control commands, and renders the four grids through the standard a-g/dp segment font (including the clock colon). NOT modelled: the ACK the chip drives on the ninth clock, brightness as luminance, and the two unwired GRIDs are kept but not shown."
+  category: gpio
+  config_keys:
+    - { name: clk_pin, ty: str, doc: "CLK GPIO pin the firmware bit-bangs (e.g. \"PA8\")." }
+    - { name: dio_pin, ty: str, doc: "DIO GPIO pin the firmware bit-bangs (e.g. \"PA9\")." }
+  inputs: []
+
+emit:
+  connection: gpio
+  config:
+    - { key: clk_pin, from_part_pins: [CLK] }
+    - { key: dio_pin, from_part_pins: [DIO] }

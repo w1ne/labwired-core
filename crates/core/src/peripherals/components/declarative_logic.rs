@@ -171,6 +171,14 @@ impl EvalCtx for PinLevels<'_> {
     fn var(&self, name: &str) -> i64 {
         i64::from(self.0.get(name).copied().unwrap_or(false))
     }
+    /// A gate's pads ARE its whole state, and `var()` above is the spelling the
+    /// shared table grammar uses for them. `pin()` resolves against the SAME
+    /// map rather than 0: two accessors over one set of pads that disagreed
+    /// would be a rule reading a pad as low while the truth table reads it
+    /// high.
+    fn pin(&self, name: &str) -> i64 {
+        i64::from(self.0.get(name).copied().unwrap_or(false))
+    }
     fn input(&self, _: &str) -> i64 {
         0
     }

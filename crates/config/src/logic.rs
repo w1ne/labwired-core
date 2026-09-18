@@ -566,6 +566,13 @@ mod tests {
         fn var(&self, name: &str) -> i64 {
             self.0.get(name).copied().unwrap_or(0)
         }
+        /// A logic gate's pads ARE its vars here — the table expressions name
+        /// them through `var()`, which is the spelling `logic:` has always
+        /// used — so `pin()` resolves against the same map rather than
+        /// answering 0 for a pad this fixture is holding high.
+        fn pin(&self, name: &str) -> i64 {
+            self.0.get(name).copied().unwrap_or(0)
+        }
         fn input(&self, _: &str) -> i64 {
             0
         }

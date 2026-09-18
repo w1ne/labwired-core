@@ -587,6 +587,38 @@ fn every_panel_the_browser_renders_reports_evidence_to_inspect() {
          ported to YAML is invisible to inspect: {engine:?}"
     );
 
+    // …and the same check for the SECOND declarative producer. A framebuffer
+    // panel is `primitive: display`; a segment display is a `gpio_device` (or a
+    // `spi_device`) that DECLARES an `artifact:`, rendered by
+    // `declarative_artifact.rs`. Two engines because the acquisition differs,
+    // not the evidence: a TM1637 is bit-banged on two pads and a MAX7219 is
+    // clocked on SPI, and neither is a framebuffer panel with a command table.
+    //
+    // ⚠️ Both halves are checked — the renderer that turns RAM into an artifact,
+    // AND the door each primitive publishes it through. Without the second, a
+    // primitive could stop calling the renderer and every panel it hosts would
+    // go invisible with this test still green.
+    let artifact_engine = components.join("declarative_artifact.rs");
+    let artifact_src =
+        std::fs::read_to_string(&artifact_engine).expect("read the declarative artifact engine");
+    assert!(
+        artifact_src.contains("fn render("),
+        "the declarative artifact engine renders nothing: {artifact_engine:?}"
+    );
+    for (file, door) in [
+        ("declarative_gpio.rs", "fn evidence("),
+        ("declarative_spi.rs", "fn artifacts("),
+    ] {
+        let path = components.join(file);
+        let src = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {path:?}: {e}"));
+        assert!(
+            src.contains(door),
+            "{file} no longer publishes its declared artifact through `{door}` — \
+             every part that declares one is invisible to inspect, however \
+             correctly it simulates"
+        );
+    }
+
     for panel in &panels {
         let rust = components.join(format!("{}.rs", module_of(panel)));
         if let Ok(src) = std::fs::read_to_string(&rust) {
@@ -606,9 +638,11 @@ fn every_panel_the_browser_renders_reports_evidence_to_inspect() {
             )
         });
         assert!(
-            src.contains("primitive: display"),
-            "the browser renders '{panel}' and {yaml:?} exists, but it does not name the \
-             `display` primitive — nothing in that descriptor produces a paint artifact."
+            src.contains("primitive: display") || src.contains("  artifact:"),
+            "the browser renders '{panel}' and {yaml:?} exists, but it neither names the \
+             `display` primitive nor declares an `artifact:` block — nothing in that \
+             descriptor produces a paint artifact, so every oracle clause about that \
+             panel is unresolvable."
         );
     }
 }

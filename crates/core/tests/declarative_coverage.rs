@@ -41,13 +41,25 @@ use std::path::PathBuf;
 ///
 /// 58 → 60: the two tri-colour e-paper descriptors. Both DID delete their Rust
 /// model, so the Rust baseline below falls by two in the same commit.
-const YAML_DEVICES_BASELINE: usize = 60;
+///
+/// 60 → 62: `tm1637_7seg.yaml` and `seven_segment.yaml`, the two pin-driven
+/// segment displays. Both DID delete their Rust model, so the Rust baseline
+/// below falls by two in the same commit. They are the first descriptors to
+/// declare an `artifact:` — until that key existed a ported display would
+/// simulate perfectly and inspect as nothing.
+const YAML_DEVICES_BASELINE: usize = 62;
 
 /// Device models still hand-written in Rust
 /// (`crates/core/src/peripherals/components/*.rs`, minus [`EXCLUDED`]).
 ///
 /// ⚠️ THE RUST COUNT ONLY GOES DOWN. Lower this when you port one to YAML.
-const RUST_DEVICES_BASELINE: usize = 45;
+///
+/// 45 → 43: `tm1637_7seg.rs` and `seven_segment.rs` are deleted, ported to the
+/// descriptors counted above. `declarative_artifact.rs` is added in the same
+/// change and is NOT counted — it is the ENGINE that renders a declared
+/// artifact, with no model behind it, and `ENGINE_PREFIX` excludes it for the
+/// same reason it excludes `rule_machine.rs`.
+const RUST_DEVICES_BASELINE: usize = 43;
 
 /// Files in `components/` that are NOT a device model, with the reason. Listed
 /// here rather than pattern-matched so every exemption is a line someone wrote

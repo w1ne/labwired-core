@@ -271,77 +271,122 @@ fn resident_device_port_stays_narrow() {
 // port, and the structural guard that the fields cannot come back.
 // ───────────────────────────────────────────────────────────────────────────
 
+use labwired_config::DeviceDescriptor;
 use labwired_core::bus::BusResidentDevice;
-use labwired_core::peripherals::components::seven_segment::{SevenSegment, SEGMENTS};
-use labwired_core::peripherals::components::tm1637_7seg::Tm1637;
+use labwired_core::inspect::{Artifact, DeviceEvidence, InspectOpts};
+use labwired_core::peripherals::components::declarative_gpio::{BoundPin, DeclarativeGpioDevice};
 
 const CLK_ADDR: u64 = 0x4800_0014;
 const CLK_BIT: u8 = 8;
 const DIO_BIT: u8 = 9;
 
+/// Build a `gpio_device` from its SHIPPED descriptor, with pads bound by hand.
+///
+/// ⚠️ The descriptor comes from `embedded_device_yaml`, not from a fixture
+/// written here. A fixture would make every test below a test of itself: the
+/// shipped YAML could lose a rule and this file would stay green.
+fn from_descriptor(type_name: &str, observed: &[(&str, u64, u8)]) -> DeclarativeGpioDevice {
+    let yaml = labwired_config::embedded_device_yaml(type_name)
+        .unwrap_or_else(|| panic!("{type_name} is an embedded descriptor"));
+    let desc = DeviceDescriptor::from_yaml(yaml).expect("the shipped descriptor parses");
+    DeclarativeGpioDevice::new(
+        "panel".to_string(),
+        &desc,
+        observed
+            .iter()
+            .map(|(role, addr, bit)| BoundPin {
+                role: (*role).to_string(),
+                addr: *addr,
+                bit: *bit,
+            })
+            .collect(),
+        Vec::new(),
+        8_000_000,
+        &[],
+    )
+    .expect("the shipped descriptor constructs")
+}
+
+/// The device's artifact, read through the SAME evidence seam `inspect` uses.
+fn artifact(dev: &DeclarativeGpioDevice) -> Artifact {
+    DeviceEvidence::artifacts(dev, "panel", &InspectOpts::default())
+        .into_iter()
+        .next()
+        .expect("a declared artifact is published")
+}
+
 /// Bit-bang one TM1637 byte, LSB first, plus the ACK clock — through the PORT,
 /// servicing the model after every pad move exactly as the bus's write hook
 /// does after every MMIO store.
-fn tm1637_byte(dev: &mut Tm1637, pins: &mut FakePins, byte: u8, now: &mut u64) {
-    let mut step = |pins: &mut FakePins, dev: &mut Tm1637, clk: bool, dio: bool| {
-        pins.drive_out(CLK_ADDR, CLK_BIT, clk);
-        pins.drive_out(CLK_ADDR, DIO_BIT, dio);
-        *now += 1;
-        BusResidentDevice::service(dev, pins, *now);
-    };
+fn tm1637_byte(dev: &mut DeclarativeGpioDevice, pins: &mut FakePins, byte: u8, now: &mut u64) {
     for i in 0..8 {
         let bit = (byte >> i) & 1 != 0;
-        step(pins, dev, false, bit);
-        step(pins, dev, true, bit);
+        tm1637_lines(dev, pins, false, bit, now);
+        tm1637_lines(dev, pins, true, bit, now);
     }
-    step(pins, dev, false, true); // ACK clock
-    step(pins, dev, true, true);
-    step(pins, dev, false, true);
+    tm1637_lines(dev, pins, false, true, now); // ACK clock
+    tm1637_lines(dev, pins, true, true, now);
+    tm1637_lines(dev, pins, false, true, now);
+}
+
+/// Put both levels on the pads with ONE port update and service once — which is
+/// what one BSRR store does, and what the simultaneous-pad event exists for.
+fn tm1637_lines(
+    dev: &mut DeclarativeGpioDevice,
+    pins: &mut FakePins,
+    clk: bool,
+    dio: bool,
+    now: &mut u64,
+) {
+    pins.drive_out(CLK_ADDR, CLK_BIT, clk);
+    pins.drive_out(CLK_ADDR, DIO_BIT, dio);
+    *now += 1;
+    BusResidentDevice::service(dev, pins, *now);
 }
 
 /// A real TM1637 decodes a real frame with no `SystemBus` anywhere in the test.
 ///
-/// Before this port the model could only be driven through
+/// Before the resident-device port the model could only be driven through
 /// `SystemBus::maybe_clock_tm1637`, so this test could not have been written:
-/// its existence is the measurement. The protocol is the genuine one — START,
-/// data command, STOP, START, address command, two grid bytes, STOP.
+/// its existence is the measurement. It is now a DESCRIPTOR rather than a Rust
+/// model, and the port did not have to change for that — which is the second
+/// measurement. The protocol is the genuine one: START, data command, STOP,
+/// START, address command, two grid bytes, STOP, display control.
 #[test]
 fn a_tm1637_decodes_a_frame_with_no_bus_in_sight() {
     let mut pins = FakePins::default();
-    let mut dev = Tm1637::new("seg".to_string(), CLK_ADDR, CLK_BIT, CLK_ADDR, DIO_BIT);
+    let mut dev = from_descriptor(
+        "tm1637-7seg",
+        &[("CLK", CLK_ADDR, CLK_BIT), ("DIO", CLK_ADDR, DIO_BIT)],
+    );
     let mut now = 0u64;
 
-    let lines = |pins: &mut FakePins, dev: &mut Tm1637, clk: bool, dio: bool, now: &mut u64| {
-        pins.drive_out(CLK_ADDR, CLK_BIT, clk);
-        pins.drive_out(CLK_ADDR, DIO_BIT, dio);
-        *now += 1;
-        BusResidentDevice::service(dev, pins, *now);
-    };
-
-    lines(&mut pins, &mut dev, true, true, &mut now); // idle
-    lines(&mut pins, &mut dev, true, false, &mut now); // START
-    lines(&mut pins, &mut dev, false, false, &mut now);
+    tm1637_lines(&mut dev, &mut pins, true, true, &mut now); // idle
+    tm1637_lines(&mut dev, &mut pins, true, false, &mut now); // START
+    tm1637_lines(&mut dev, &mut pins, false, false, &mut now);
     tm1637_byte(&mut dev, &mut pins, 0x40, &mut now); // auto-increment data cmd
-    lines(&mut pins, &mut dev, true, false, &mut now);
-    lines(&mut pins, &mut dev, true, true, &mut now); // STOP
+    tm1637_lines(&mut dev, &mut pins, true, false, &mut now);
+    tm1637_lines(&mut dev, &mut pins, true, true, &mut now); // STOP
 
-    lines(&mut pins, &mut dev, true, false, &mut now); // START
-    lines(&mut pins, &mut dev, false, false, &mut now);
+    tm1637_lines(&mut dev, &mut pins, true, false, &mut now); // START
+    tm1637_lines(&mut dev, &mut pins, false, false, &mut now);
     tm1637_byte(&mut dev, &mut pins, 0xC0, &mut now); // address 0
     tm1637_byte(&mut dev, &mut pins, 0x06, &mut now); // '1'
     tm1637_byte(&mut dev, &mut pins, 0x5B, &mut now); // '2'
-    lines(&mut pins, &mut dev, true, false, &mut now);
-    lines(&mut pins, &mut dev, true, true, &mut now); // STOP
+    tm1637_lines(&mut dev, &mut pins, true, false, &mut now);
+    tm1637_lines(&mut dev, &mut pins, true, true, &mut now); // STOP
 
-    lines(&mut pins, &mut dev, true, false, &mut now); // START
-    lines(&mut pins, &mut dev, false, false, &mut now);
+    tm1637_lines(&mut dev, &mut pins, true, false, &mut now); // START
+    tm1637_lines(&mut dev, &mut pins, false, false, &mut now);
     tm1637_byte(&mut dev, &mut pins, 0x8F, &mut now); // display ON, brightness 7
-    lines(&mut pins, &mut dev, true, false, &mut now);
-    lines(&mut pins, &mut dev, true, true, &mut now); // STOP
+    tm1637_lines(&mut dev, &mut pins, true, false, &mut now);
+    tm1637_lines(&mut dev, &mut pins, true, true, &mut now); // STOP
 
-    assert_eq!(&dev.text()[..2], "12", "decoded grids: {:?}", dev.text());
-    assert!(dev.display_on());
-    assert_eq!(dev.brightness(), 7);
+    let a = artifact(&dev);
+    assert_eq!(a.kind, "text_display");
+    assert_eq!(a.meta["text"], "12  ", "decoded grids");
+    assert_eq!(a.meta["display_on"], serde_json::Value::Bool(true));
+    assert_eq!(a.meta["brightness"], 7);
 
     // A DISPLAY drives nothing. Both halves of the driving port must stay
     // untouched — a model that wrote a pad here would be inventing a level the
@@ -359,24 +404,34 @@ fn a_tm1637_decodes_a_frame_with_no_bus_in_sight() {
 #[test]
 fn a_seven_segment_digit_reads_nine_pads_with_no_bus_in_sight() {
     const ODR: u64 = 0x4800_0014;
+    const ROLES: [&str; 8] = ["A", "B", "C", "D", "E", "F", "G", "DP"];
     let mut pins = FakePins::default();
-    let seg = std::array::from_fn(|i| (ODR, i as u8));
-    let mut dev = SevenSegment::new("digit", seg, ODR, 8);
+    let mut observed: Vec<(&str, u64, u8)> = ROLES
+        .iter()
+        .enumerate()
+        .map(|(i, r)| (*r, ODR, i as u8))
+        .collect();
+    observed.push(("COM", ODR, 8));
+    let mut dev = from_descriptor("seven-segment", &observed);
 
-    let show = |pins: &mut FakePins, dev: &mut SevenSegment, segs: u8, com: bool| {
-        for i in 0..SEGMENTS {
-            pins.drive_out(ODR, i as u8, (segs >> i) & 1 != 0);
+    let show = |pins: &mut FakePins, dev: &mut DeclarativeGpioDevice, segs: u8, com: bool| {
+        for i in 0..8u8 {
+            pins.drive_out(ODR, i, (segs >> i) & 1 != 0);
         }
         pins.drive_out(ODR, 8, com);
         BusResidentDevice::service(dev, pins, 0);
-        (dev.ch(), dev.segments())
+        let a = artifact(dev);
+        (
+            a.meta["text"].as_str().unwrap_or("").to_string(),
+            a.meta["segments"].as_i64().unwrap_or(-1),
+        )
     };
 
     // Common cathode (COM low): a segment lights when its pin is HIGH.
-    assert_eq!(show(&mut pins, &mut dev, 0x3F, false), ('0', 0x3F));
-    assert_eq!(show(&mut pins, &mut dev, 0x06, false), ('1', 0x06));
+    assert_eq!(show(&mut pins, &mut dev, 0x3F, false), ("0".into(), 0x3F));
+    assert_eq!(show(&mut pins, &mut dev, 0x06, false), ("1".into(), 0x06));
     // Common anode (COM high): the same glyph, every pin inverted.
-    assert_eq!(show(&mut pins, &mut dev, !0x06, true), ('1', 0x06));
+    assert_eq!(show(&mut pins, &mut dev, !0x06, true), ("1".into(), 0x06));
 
     assert!(
         pins.idr_writes.is_empty() && pins.input_writes.is_empty(),
@@ -390,34 +445,47 @@ fn a_seven_segment_digit_reads_nine_pads_with_no_bus_in_sight() {
 ///
 /// The keypad is the positive control: a scanned device DOES need the tick, and
 /// names no edge address. Without it this test would pass on a build where
-/// every device answered the same way.
+/// every device answered the same way. The HX711 is the SECOND positive
+/// control, and a sharper one: it is a `gpio_device` from the same primitive as
+/// the two displays, and it must answer `true` because it owns a timer and
+/// drives a pad.
 #[test]
 fn the_displays_are_edge_serviced_and_the_keypad_is_not() {
-    let tm = Tm1637::new("seg".to_string(), 0x4800_0014, 8, 0x4800_0414, 9);
+    let tm = from_descriptor(
+        "tm1637-7seg",
+        &[("CLK", 0x4800_0014, 8), ("DIO", 0x4800_0414, 9)],
+    );
     assert_eq!(
-        tm.edge_service_addrs(),
+        BusResidentDevice::edge_service_addrs(&tm),
         &[0x4800_0014u64, 0x4800_0414],
         "both ODR addresses, sorted"
     );
-    assert!(!tm.needs_per_cycle_service());
+    assert!(!BusResidentDevice::needs_per_cycle_service(&tm));
 
     // Two pads on ONE port dedupe to one address: the bus consults this on
     // every MMIO write, so a duplicate would be a cost paid per store.
-    let one_port = Tm1637::new("seg".to_string(), 0x4800_0014, 8, 0x4800_0014, 9);
-    assert_eq!(one_port.edge_service_addrs(), &[0x4800_0014u64]);
-
-    let seg = SevenSegment::new(
-        "digit",
-        std::array::from_fn(|i| (0x4800_0014u64, i as u8)),
-        0x4800_0414,
-        0,
+    let one_port = from_descriptor(
+        "tm1637-7seg",
+        &[("CLK", 0x4800_0014, 8), ("DIO", 0x4800_0014, 9)],
     );
     assert_eq!(
-        seg.edge_service_addrs(),
+        BusResidentDevice::edge_service_addrs(&one_port),
+        &[0x4800_0014u64]
+    );
+
+    let mut nine: Vec<(&str, u64, u8)> = ["A", "B", "C", "D", "E", "F", "G", "DP"]
+        .iter()
+        .enumerate()
+        .map(|(i, r)| (*r, 0x4800_0014u64, i as u8))
+        .collect();
+    nine.push(("COM", 0x4800_0414, 0));
+    let seg = from_descriptor("seven-segment", &nine);
+    assert_eq!(
+        BusResidentDevice::edge_service_addrs(&seg),
         &[0x4800_0014u64, 0x4800_0414],
         "nine pads across two ports dedupe to two addresses"
     );
-    assert!(!seg.needs_per_cycle_service());
+    assert!(!BusResidentDevice::needs_per_cycle_service(&seg));
 
     let pad = wired_keypad();
     assert!(
@@ -429,6 +497,50 @@ fn the_displays_are_edge_serviced_and_the_keypad_is_not() {
         pad.needs_per_cycle_service(),
         "positive control: a device that IS scanned per tick must say so, or \
          this test would pass on a build where every device answered `false`"
+    );
+}
+
+/// A `gpio_device` that OWNS A TIMER must still be serviced every cycle.
+///
+/// The displays answer `false` above through an expression, not an override —
+/// `!timers.is_empty() || !driven.is_empty()` — so the two halves of that
+/// expression need a part that exercises each. The HX711 is both: it arms a
+/// power-on timer and it drives DOUT. Without this, a change that made the
+/// expression a bare `false` would leave every test above green and would stop
+/// the HX711's clock dead.
+#[test]
+fn a_gpio_device_with_a_timer_still_needs_the_tick() {
+    let hx = from_descriptor("hx711", &[("SCK", 0x4800_0014, 8)]);
+    assert!(
+        BusResidentDevice::needs_per_cycle_service(&hx),
+        "the HX711 owns a timer and drives a pad; saying `false` would stop its \
+         derived clock and the part would look busy forever"
+    );
+}
+
+/// A part that declares NO `artifact:` publishes NO evidence — absence, not an
+/// empty panel.
+///
+/// The two displays above report through `BusResidentDevice::evidence`. That
+/// seam is on the trait, so EVERY resident device answers it, and the honest
+/// answer for a load cell is `None`. An empty-but-present artifact would make
+/// `labwired_verify`'s display oracle resolve against a blank panel for a part
+/// that has no panel at all.
+#[test]
+fn a_part_that_shows_nothing_publishes_no_artifact() {
+    let hx = from_descriptor("hx711", &[("SCK", 0x4800_0014, 8)]);
+    assert!(
+        BusResidentDevice::evidence(&hx).is_none(),
+        "an HX711 is not a display"
+    );
+    let tm = from_descriptor(
+        "tm1637-7seg",
+        &[("CLK", 0x4800_0014, 8), ("DIO", 0x4800_0014, 9)],
+    );
+    assert!(
+        BusResidentDevice::evidence(&tm).is_some(),
+        "anti-vacuity: a part that DOES declare an artifact must answer Some, \
+         or the assertion above passes on a build where evidence is never wired"
     );
 }
 

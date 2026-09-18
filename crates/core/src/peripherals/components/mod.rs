@@ -13,6 +13,7 @@ pub mod bno055;
 pub mod button;
 pub mod can_testers;
 pub mod declarative_analog;
+pub mod declarative_artifact;
 pub mod declarative_display;
 pub mod declarative_expr;
 pub mod declarative_gpio;
@@ -60,7 +61,6 @@ pub mod rule_machine;
 pub mod sensirion;
 pub mod servo;
 pub mod seven_seg_font;
-pub mod seven_segment;
 pub mod shm_i2c;
 pub mod sn74hc165;
 pub mod soil_moisture;
@@ -68,7 +68,6 @@ pub mod sps30;
 pub mod step_dir_motor;
 pub mod supply;
 pub mod tca9548a;
-pub mod tm1637_7seg;
 pub mod unipolar_stepper;
 /// Hand-written VEML7700 model, retained only as the byte-parity oracle the
 /// declarative descriptor is proven identical against (see `veml7700_parity`).
@@ -124,7 +123,6 @@ pub use shm_i2c::ShmI2c;
 pub use sn74hc165::Sn74hc165;
 pub use sps30::{Sps30, SPS30_ADDR};
 pub use tca9548a::Tca9548a;
-pub use tm1637_7seg::Tm1637;
 #[cfg(test)]
 pub use veml7700::{Veml7700, VEML7700_ADDR};
 pub use vl53l1x::Vl53l1x;

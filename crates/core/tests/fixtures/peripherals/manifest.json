@@ -1318,85 +1318,6 @@
       "inputs": []
     },
     {
-      "device_type": "tm1637-7seg",
-      "label": "TM1637 7-Segment (4-digit)",
-      "summary": "4-digit 7-segment LED display with the TM1637 2-wire (CLK/DIO) driver.",
-      "detail": "The RobotDyn-style 4-digit clock display. The host bit-bangs two GPIO lines with the TM1637's I²C-like, LSB-first, address-less protocol; the model observes both output pins through the bus write-hook, decodes start/stop/data/ACK framing and the data / address / display-control commands, and renders the four grids through the standard a–g/dp segment font (including the clock colon).",
-      "transport": "gpio_group",
-      "category": "gpio",
-      "config_keys": [
-        {
-          "name": "clk_pin",
-          "ty": "str",
-          "doc": "CLK GPIO pin the firmware bit-bangs (e.g. \"PA8\"). Defaults to PA8."
-        },
-        {
-          "name": "dio_pin",
-          "ty": "str",
-          "doc": "DIO GPIO pin the firmware bit-bangs (e.g. \"PA9\"). Defaults to PA9."
-        }
-      ],
-      "labs": [],
-      "inputs": []
-    },
-    {
-      "device_type": "seven-segment",
-      "label": "7-Segment Display (single digit)",
-      "summary": "Bare single-digit 7-segment LED display driven straight from nine GPIO pins.",
-      "detail": "The raw display with no driver chip: segment pins A–G plus DP and one common pin, each wired directly to a GPIO. The model samples all nine output registers after every write to a hosting port and recomputes the lit segments combinationally — there is no protocol or state machine. COM polarity is inferred from the level the firmware holds the common pin at: COM low means common cathode (a segment lights when its pin is HIGH), COM high means common anode (a segment lights when its pin is LOW). The readback always reports which segments are lit regardless of wiring, decoded to a character through the standard a–g/dp segment font.",
-      "transport": "gpio_group",
-      "category": "gpio",
-      "config_keys": [
-        {
-          "name": "a_pin",
-          "ty": "str",
-          "doc": "GPIO pin driving segment A (e.g. \"PA0\"). Defaults to PA0."
-        },
-        {
-          "name": "b_pin",
-          "ty": "str",
-          "doc": "GPIO pin driving segment B (e.g. \"PA1\"). Defaults to PA1."
-        },
-        {
-          "name": "c_pin",
-          "ty": "str",
-          "doc": "GPIO pin driving segment C (e.g. \"PA2\"). Defaults to PA2."
-        },
-        {
-          "name": "d_pin",
-          "ty": "str",
-          "doc": "GPIO pin driving segment D (e.g. \"PA3\"). Defaults to PA3."
-        },
-        {
-          "name": "e_pin",
-          "ty": "str",
-          "doc": "GPIO pin driving segment E (e.g. \"PA4\"). Defaults to PA4."
-        },
-        {
-          "name": "f_pin",
-          "ty": "str",
-          "doc": "GPIO pin driving segment F (e.g. \"PA5\"). Defaults to PA5."
-        },
-        {
-          "name": "g_pin",
-          "ty": "str",
-          "doc": "GPIO pin driving segment G (e.g. \"PA6\"). Defaults to PA6."
-        },
-        {
-          "name": "dp_pin",
-          "ty": "str",
-          "doc": "GPIO pin driving the decimal point (e.g. \"PA7\"). Defaults to PA7."
-        },
-        {
-          "name": "com_pin",
-          "ty": "str",
-          "doc": "GPIO pin driving the common pin (e.g. \"PA8\"). Its level selects the wiring: low = common cathode, high = common anode. Defaults to PA8."
-        }
-      ],
-      "labs": [],
-      "inputs": []
-    },
-    {
       "device_type": "pcd8544",
       "label": "Nokia 5110 LCD",
       "summary": "Nokia 5110 (PCD8544) monochrome 84×48 LCD over SPI.",
@@ -2938,6 +2859,85 @@
           "max": 15.0
         }
       ]
+    },
+    {
+      "device_type": "tm1637-7seg",
+      "label": "TM1637 7-Segment (4-digit)",
+      "summary": "4-digit 7-segment LED display with the TM1637 2-wire (CLK/DIO) driver.",
+      "detail": "The RobotDyn-style 4-digit clock display. The host bit-bangs two GPIO lines with the TM1637's I2C-like, LSB-first, address-less protocol. Both pads are resampled together before any rule runs, so START and STOP - each of which is a condition over BOTH lines - decode from a single store rather than from two sequential edges with a stale level. The model decodes start/stop/data/ACK framing and the data / address / display-control commands, and renders the four grids through the standard a-g/dp segment font (including the clock colon). NOT modelled: the ACK the chip drives on the ninth clock, brightness as luminance, and the two unwired GRIDs are kept but not shown.",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [
+        {
+          "name": "clk_pin",
+          "ty": "str",
+          "doc": "CLK GPIO pin the firmware bit-bangs (e.g. \"PA8\")."
+        },
+        {
+          "name": "dio_pin",
+          "ty": "str",
+          "doc": "DIO GPIO pin the firmware bit-bangs (e.g. \"PA9\")."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "seven-segment",
+      "label": "7-Segment Display (single digit)",
+      "summary": "Bare single-digit 7-segment LED display driven straight from nine GPIO pins.",
+      "detail": "The raw display with no driver chip: segment pins A-G plus DP and one common pin, each wired directly to a GPIO. There is no protocol and no state machine - the lit segments are recomputed from all nine pad levels after any store that moves one of them, from a single snapshot rather than pad by pad. COM polarity is inferred from the level the firmware holds the common pin at: COM low means common cathode (a segment lights when its pin is HIGH), COM high means common anode (a segment lights when its pin is LOW). The readback always reports which segments are lit regardless of wiring, decoded to a character through the standard a-g/dp segment font. NOT modelled: multiplexing across digits, and brightness.",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [
+        {
+          "name": "a_pin",
+          "ty": "str",
+          "doc": "GPIO pin driving segment A (e.g. \"PA0\")."
+        },
+        {
+          "name": "b_pin",
+          "ty": "str",
+          "doc": "GPIO pin driving segment B (e.g. \"PA1\")."
+        },
+        {
+          "name": "c_pin",
+          "ty": "str",
+          "doc": "GPIO pin driving segment C (e.g. \"PA2\")."
+        },
+        {
+          "name": "d_pin",
+          "ty": "str",
+          "doc": "GPIO pin driving segment D (e.g. \"PA3\")."
+        },
+        {
+          "name": "e_pin",
+          "ty": "str",
+          "doc": "GPIO pin driving segment E (e.g. \"PA4\")."
+        },
+        {
+          "name": "f_pin",
+          "ty": "str",
+          "doc": "GPIO pin driving segment F (e.g. \"PA5\")."
+        },
+        {
+          "name": "g_pin",
+          "ty": "str",
+          "doc": "GPIO pin driving segment G (e.g. \"PA6\")."
+        },
+        {
+          "name": "dp_pin",
+          "ty": "str",
+          "doc": "GPIO pin driving the decimal point (e.g. \"PA7\")."
+        },
+        {
+          "name": "com_pin",
+          "ty": "str",
+          "doc": "GPIO pin driving the common pin (e.g. \"PA8\"). Its level selects the wiring: low = common cathode, high = common anode."
+        }
+      ],
+      "labs": [],
+      "inputs": []
     },
     {
       "device_type": "dht22",
