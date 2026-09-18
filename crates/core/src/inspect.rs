@@ -583,6 +583,11 @@ pub mod artifact_format {
     pub const EPAPER_TRICOLOR_PLANES: &str = "epaper_tricolor_1bpp_planes";
     pub const TM1637_GRID: &str = "tm1637_grid";
     pub const SEVEN_SEGMENT_MASK: &str = "seven_segment_mask";
+    /// The chained-74HC595 4-digit module's latched segment bytes, one per
+    /// digit, leftmost first. Its own name rather than `SEVEN_SEGMENT_MASK`
+    /// because that one is ONE digit's mask and a reader that asked for it
+    /// would get four.
+    pub const HC595_7SEG_DIGITS: &str = "hc595_7seg_digits";
     pub const WS2812_GRB: &str = "ws2812_grb";
 }
 

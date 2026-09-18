@@ -582,6 +582,9 @@ mod tests {
         fn fifo_len(&self, _: &str) -> i64 {
             0
         }
+        fn frame_byte(&self, _: usize) -> i64 {
+            0
+        }
         fn written(&self) -> i64 {
             0
         }

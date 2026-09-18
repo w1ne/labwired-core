@@ -652,6 +652,8 @@ behavior:
 | `meta[].source` | an engine-derived quantity over the rendered RAM: `lit_bits`, `ink_bytes`, `bytes`. |
 | `meta[].type` | `int` (default) or `bool`. ⚠️ Not cosmetic: `display_on` is read with `as_bool()`, and an integer there is a different artifact. |
 | `bytes` | publish the RAM as the artifact payload, gated behind `include_bytes`. Default false. |
+| `fill_when` | expression: while true, every rendered byte reads `0xFF`. Checked FIRST. |
+| `blank_when` | expression: while true, every rendered byte reads `0x00`. |
 
 `format` and `generation` are stamped by the engine and cannot be redeclared.
 `generation` is the cheap content hash a poller diffs, taken over the RAM the
@@ -669,6 +671,41 @@ a property of the part: a segment display publishes the same `text_display`
 whether the bytes arrived on nine pads or over SPI. So `gpio_device` and
 `spi_device` read the same block and hand it to the same renderer. A second,
 transport-flavoured spelling is how two renderings of one part drift apart.
+
+### `blank_when` / `fill_when` — a panel that is off, without a second RAM
+
+What a panel SHOWS is not always what its RAM holds. A MAX7219 in shutdown is
+dark and a MAX7219 in display test is fully lit, and the datasheet is explicit
+that **neither disturbs digit RAM** — the stored pattern reappears untouched
+when the mode is cleared.
+
+```yaml
+  artifact:
+    kind: framebuffer
+    format: max7219_rows
+    ram: { vars: [d0, d1, d2, d3, d4, d5, d6, d7] }
+    fill_when:  "var(display_test)"     # 0xFF everywhere — checked FIRST
+    blank_when: "var(shutdown)"         # 0x00 everywhere
+    bytes: true
+```
+
+Both are evaluated at RENDER time over the one RAM, and everything derived from
+the RAM follows: `meta.text`, `lit_bits`, `ink_bytes`, the `bytes` payload and
+`generation` are all computed from what the panel shows, so a blanked panel
+reports a blanked panel rather than the picture nobody can see.
+
+⚠️ **`fill_when` wins, because the datasheet says so** — "display-test mode
+overrides shutdown mode" (MAX7219/MAX7221, Table 10). Checked the other way
+round, a display-test write on a shut-down panel would be invisible.
+
+⚠️ **Written as rules instead, this is a SHADOW COPY of the RAM**, recomputed by
+eight `var:` actions on every one of thirteen register writes — a part with two
+RAMs that can disagree, and no way to report what firmware actually stored. Both
+readings come out of one store here, which is what the deleted Rust model's
+`framebuffer()` / `digit_ram()` pair was.
+
+⚠️ **Neither can override the absence of a rail.** `powered:` refuses the bus
+itself (below), so an unpowered part never leaves its power-on state at all.
 
 ## Parallel (8080) panels: the `I80Panel` seam
 
@@ -1117,6 +1154,112 @@ image is `0xB6`, which is SOFTRESET**. The upload would reset the part it is
 initialising, repeatedly, and the handshake it exists to satisfy could never
 complete. A part's FIFO data register (the BMI270's own `FIFO_DATA`, 0x24) has
 the same shape.
+
+## Framed parts: a message instead of a register
+
+Some parts have no register map at all. A MAX7219 is **written and never read**;
+a 74HC595 has no addressable anything. Their unit of work is a *message*, so a
+`spi_device` descriptor may declare `frames:` plus `rules:` and omit `registers:`
+and `register_file:` entirely. `framing:` is not consulted for such a part, and
+it presents `0x00` on MISO.
+
+Inventing a register map for one of these is worse than having none: the command
+phase would eat the first byte of every frame.
+
+### `frame_byte(N)` — a rule reads the frame's own bytes
+
+`on: frame` hands a rule `written`, which is ONE byte: the one that CLOSED the
+frame. A MAX7219 transaction is `[address, data]`, so its address byte — and
+with it all thirteen registers — was unreachable from a rule. `frame_byte(N)` is
+byte N of the frame being handled, MOSI order.
+
+```yaml
+behavior:
+  primitive: spi_device
+  spi: {}                       # no register map: this part is written, never read
+  frames:
+    length: 2
+    opcode_byte: true           # byte 0 is ALSO recorded in var(opcode)
+    discard_partial: true       # a short frame is dropped, not decoded
+  vars: { opcode: 0, d0: 0, intensity: 0 }
+  rules:
+    - on: frame
+      when: "(var(opcode) & 0x0F) == 0x01"
+      do: [{ var: { name: d0, value: "frame_byte(1)" } }]
+    - on: frame
+      when: "(var(opcode) & 0x0F) == 0x0A"
+      do: [{ var: { name: intensity, value: "frame_byte(1)" } }]
+```
+
+| key | meaning |
+|---|---|
+| `frames.length` | fixed frame length in bytes. Absent ⇒ the frame ends at the transaction boundary only. |
+| `frames.opcode_byte` | byte 0 is also recorded in `var(opcode)`. The part MUST declare `opcode` in `vars:`, or it is a load error. |
+| `frames.discard_partial` | a transaction boundary that finds fewer than `length` bytes clears them and raises NOTHING; CS↓ clears them too. Default false. |
+
+⚠️ **`frame_byte(N)` and `var(opcode)` are not redundant.** `frame_byte(0)` is
+live only while the frame that carried it is being handled; `var(opcode)`
+PERSISTS, so a part whose command byte decides what the NEXT frame means can
+still answer. `frames.opcode_byte` has documented exactly that since it was
+declared — it simply had no implementation until now.
+
+⚠️ **The index is a LITERAL, checked at load** against the declared
+`frames.length`. `frame_byte(2)` of a two-byte frame is a load error, and so is
+`frame_byte()` in a part that declares no `frames:` at all — the same strictness
+`pin(NAME)` gets, for the same reason: an unchecked index reads 0 forever, which
+is a guard that is quietly always-false and looks exactly like a part the
+firmware never clocked.
+
+⚠️ **Why `discard_partial` is not the default.** A truncated command shell must
+be SEEN and rejected, which is what the transaction-boundary frame exists for. A
+fixed-width shift register is the opposite: eight clocked bits of a sixteen-bit
+MAX7219 write are not half a write, they are a frame that never happened.
+Delivered as a frame, a stray odd byte decodes its low nibble as a register
+address and writes a zero data byte into a digit register — a row going dark
+because of a byte the part never latched.
+
+### `outputs:` on a `spi_device` — a bus part that drives PADS
+
+A 74HC595 is an SPI part whose whole output is eight pins. `outputs:` and
+`output_pins:` are the same keys a `gpio_device` uses: each role binds to a
+`config:` key at attach, a `{ pin: QA, level: … }` action queues a transition,
+and the per-tick pass drains the queue through the narrowed `DevicePins` port —
+both seams, exactly as an I²C part's INT line goes out.
+
+```yaml
+  outputs: [QA, QB, QC, QD, QE, QF, QG, QH]
+  output_pins: { QA: qa_pin, QB: qb_pin, QC: qc_pin, QD: qd_pin,
+                 QE: qe_pin, QF: qf_pin, QG: qg_pin, QH: qh_pin }
+  rules:
+    - on: frame
+      do: [{ var: { name: shift_reg, value: "frame_byte(0)" } }]
+    - on: cs_release                      # RCLK↑ latches
+      do:
+        - { pin: QA, level: "var(shift_reg) & 0x01" }
+        - { pin: QB, level: "var(shift_reg) & 0x02" }
+```
+
+⚠️ **A role whose `config:` key the placement does not set is SKIPPED, not an
+error.** A board that leaves QD unconnected is an ordinary board; the rule still
+runs and that line goes nowhere. It is also what keeps every placement written
+before the descriptor existed working unchanged.
+
+⚠️ **The pads move on the TICK**, not inside the transfer — the drain is one
+pass per peripheral tick, the same one an I²C interrupt line rides.
+
+### `powered:` on a `spi_device` / `gpio_device`
+
+The `powered` config key (ABSENT MEANS POWERED — see `components::supply`) is
+now honoured by both primitives. An explicit `powered: false` refuses the bus at
+`transfer` / `service`, so the part stays at its power-on values **by
+construction** rather than being blanked at readback: digit RAM never
+accumulates, a timer never ages, and no pad is driven. The artifact is still
+published, stamped `"powered": false`, because "dark" and "no evidence" are
+different findings.
+
+⚠️ An unpowered SPI part clocks out `0xFF`, not `0x00`. A chip with no rail
+drives nothing, so the master samples the idle bus — the same all-ones this
+engine reports everywhere else that means "nothing is answering".
 
 ### The register and command shells that did NOT port, and why
 

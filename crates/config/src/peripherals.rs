@@ -2104,6 +2104,29 @@ pub struct ArtifactSpec {
     /// Extra `meta` entries, in declaration order (see [`ArtifactMetaField`]).
     #[serde(default)]
     pub meta: Vec<ArtifactMetaField>,
+    /// **Blank the panel while this expression is true**, without disturbing the
+    /// RAM. Every rendered byte reads `0x00`.
+    ///
+    /// This is a DISPLAY property, not a rule: the MAX7219's `SHUTDOWN`
+    /// register, the TM1637's display-off bit and the HT16K33's blink/display
+    /// bit all blank what the panel shows while leaving digit RAM exactly where
+    /// firmware left it — so `digit_ram()` and `framebuffer()` are two readings
+    /// of one store. Expressed as rules instead it would be a SHADOW COPY of
+    /// the RAM recomputed by eight `var:` actions on every register write, and
+    /// a part would then have two RAMs that can disagree.
+    ///
+    /// Evaluated at RENDER time, after [`fill_when`](Self::fill_when).
+    #[serde(default)]
+    pub blank_when: Option<String>,
+    /// **Flood the panel while this expression is true** — every rendered byte
+    /// reads `0xFF`. The MAX7219's display-test register (`0x0F`).
+    ///
+    /// ⚠️ Checked BEFORE [`blank_when`](Self::blank_when), because the
+    /// datasheet says so: "display-test mode overrides shutdown mode"
+    /// (MAX7219/MAX7221, Table 10). A part that declares both and is in both
+    /// states floods.
+    #[serde(default)]
+    pub fill_when: Option<String>,
     /// Whether the RAM is also published as the artifact's `bytes` payload,
     /// gated behind `include_bytes` like every other large payload.
     ///
@@ -2240,6 +2263,14 @@ impl ArtifactSpec {
                  itself",
                 field.key
             );
+        }
+        for (src, what) in [
+            (&self.fill_when, "fill_when"),
+            (&self.blank_when, "blank_when"),
+        ] {
+            let Some(src) = src else { continue };
+            crate::expr::Expr::parse(src)
+                .map_err(|e| anyhow::anyhow!("part '{part}' artifact.{what}: {e} — in `{src}`"))?;
         }
         if let Some(decode) = &self.decode {
             if let Some(digits) = decode.digits {

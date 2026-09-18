@@ -1,0 +1,191 @@
+# MAX7219 8×8 LED matrix driver — declarative `spi_device`; replaces the
+# hand-written `components/max7219.rs`, whose behaviour is pinned verbatim in
+# `crates/core/tests/spi_frame_migration_parity.rs`.
+#
+# ── The protocol, from the datasheet ───────────────────────────────────────
+#
+# Every transaction is a 16-bit register write, MSB first: an ADDRESS byte then
+# a DATA byte, latched on the rising edge of CS/LOAD. Only the low nibble of the
+# address is decoded; the upper bits are don't-care on real silicon.
+#
+#   0x00        No-op (shifts through cascaded drivers)
+#   0x01..0x08  Digit 0..7 — one byte per matrix row on an 8×8 module
+#   0x09        Decode mode
+#   0x0A        Intensity
+#   0x0B        Scan limit
+#   0x0C        Shutdown   (data bit 0: 0 = shutdown, 1 = normal operation)
+#   0x0F        Display test (data bit 0: 1 = every LED on)
+#
+# ── ⚠️ WHY THIS PART NEEDED `frames.opcode_byte` IMPLEMENTED ───────────────
+#
+# `on: frame` hands a rule `written` — ONE byte, the one that closed the frame,
+# i.e. the DATA byte. Which register that data was for is in the byte before it,
+# and until now nothing in `crates/` read `frames.opcode_byte` at all (#1181
+# measured it: one grep hit, the struct field). So all eight digit registers
+# plus decode-mode / intensity / scan-limit / shutdown / display-test were
+# unreachable from a rule, and this part could not be a descriptor.
+#
+# Two spellings now exist and both are used below, deliberately:
+#   * `frame_byte(N)` — byte N of the frame being handled. The general shape:
+#     the same 16 bits mean `[address, data]` here and `[segments, digit]` on
+#     the chained-74HC595 module, and only the part can say which.
+#   * `var(opcode)` — byte 0, REMEMBERED, because that is what
+#     `frames.opcode_byte` has always documented. It outlives the event.
+#
+# ── ⚠️ WHY THE PANEL IS BLANKED BY THE ARTIFACT AND NOT BY A RULE ──────────
+#
+# What the panel SHOWS is `f(digit RAM, shutdown, display_test)`, and the RAM
+# itself must NOT change: the datasheet is explicit that shutdown and display
+# test leave digit RAM alone, so the stored pattern reappears untouched when the
+# mode is cleared (the hand-written model had `framebuffer()` and `digit_ram()`
+# as two readings of one store). Written as rules that is a SHADOW COPY of the
+# RAM, recomputed by eight `var:` actions on every one of the thirteen register
+# writes — a part with two RAMs that can disagree. `artifact.blank_when` /
+# `fill_when` say it once, at render time, over the one RAM.
+#
+# ⚠️ `fill_when` is checked FIRST because the datasheet says so: "display-test
+# mode overrides shutdown mode" (Table 10). Neither can override the absence of
+# a rail — `powered:` refuses the bus itself, so an unpowered module never
+# leaves its power-on shutdown at all.
+#
+# ⚠️ NOT MODELLED, named rather than faked:
+#   * **Cascading.** DOUT is the delayed DIN of a chained module; a single
+#     driver presents nothing meaningful on MISO and this descriptor answers
+#     0x00 there, exactly as the hand-written model did.
+#   * **Intensity as luminance.** `intensity` is reported as the 0..15 register
+#     value; nothing dims.
+#   * **Scan limit as multiplexing.** It is reported, not applied: all eight
+#     rows are published whatever it says, which is what the hand-written model
+#     did too.
+#   * **Decode mode.** Stored and reported; an 8×8 matrix runs with 0x00 (no
+#     decode) and nothing in the corpus sets otherwise.
+type: led-matrix
+
+behavior:
+  primitive: spi_device
+
+  # ⚠️ No `registers:` and no `register_file:` — deliberately. This part is
+  # WRITTEN and never read: it has no addressable anything a master can clock
+  # back out. Inventing a register map for it would be worse than having none,
+  # because the command phase would then eat the first byte of every frame.
+  # `frames:` + `rules:` is the whole wire model; `framing:` is not consulted.
+  spi: {}
+
+  frames:
+    length: 2
+    # Byte 0 is the address byte, recorded in `var(opcode)`.
+    opcode_byte: true
+    # A 16-bit write is latched or it never happened. An odd byte left in the
+    # shifter when CS moves is discarded rather than delivered as a one-byte
+    # frame whose low nibble would decode as a register address.
+    discard_partial: true
+
+  vars:
+    # Written by the engine on every frame (`frames.opcode_byte`).
+    opcode: 0
+    # Digit RAM = the eight matrix rows. Power-on: all registers cleared.
+    d0: 0
+    d1: 0
+    d2: 0
+    d3: 0
+    d4: 0
+    d5: 0
+    d6: 0
+    d7: 0
+    decode_mode: 0
+    intensity: 0
+    scan_limit: 0
+    # ⚠️ 1 at power-on: the datasheet's reset state is SHUTDOWN, and firmware
+    # that never writes 0x0C must read as a dark panel rather than a lit one.
+    shutdown: 1
+    display_test: 0
+
+  rules:
+    # ── 0x01..0x08: the eight digit registers ─────────────────────────────
+    # One rule per register because the write target is an ADDRESS and the
+    # action vocabulary assigns to a NAME — the same shape the TM1637's six
+    # GRID rules have.
+    - on: frame
+      when: "(var(opcode) & 0x0F) == 0x01"
+      do: [{ var: { name: d0, value: "frame_byte(1)" } }]
+    - on: frame
+      when: "(var(opcode) & 0x0F) == 0x02"
+      do: [{ var: { name: d1, value: "frame_byte(1)" } }]
+    - on: frame
+      when: "(var(opcode) & 0x0F) == 0x03"
+      do: [{ var: { name: d2, value: "frame_byte(1)" } }]
+    - on: frame
+      when: "(var(opcode) & 0x0F) == 0x04"
+      do: [{ var: { name: d3, value: "frame_byte(1)" } }]
+    - on: frame
+      when: "(var(opcode) & 0x0F) == 0x05"
+      do: [{ var: { name: d4, value: "frame_byte(1)" } }]
+    - on: frame
+      when: "(var(opcode) & 0x0F) == 0x06"
+      do: [{ var: { name: d5, value: "frame_byte(1)" } }]
+    - on: frame
+      when: "(var(opcode) & 0x0F) == 0x07"
+      do: [{ var: { name: d6, value: "frame_byte(1)" } }]
+    - on: frame
+      when: "(var(opcode) & 0x0F) == 0x08"
+      do: [{ var: { name: d7, value: "frame_byte(1)" } }]
+
+    # ── the control registers ─────────────────────────────────────────────
+    - on: frame
+      when: "(var(opcode) & 0x0F) == 0x09"
+      do: [{ var: { name: decode_mode, value: "frame_byte(1)" } }]
+    - on: frame
+      when: "(var(opcode) & 0x0F) == 0x0A"
+      do: [{ var: { name: intensity, value: "frame_byte(1)" } }]
+    - on: frame
+      when: "(var(opcode) & 0x0F) == 0x0B"
+      do: [{ var: { name: scan_limit, value: "frame_byte(1)" } }]
+    # Data bit 0: 0 = shutdown, 1 = normal operation. Note the inversion — the
+    # register is "operation", the var is "shutdown".
+    - on: frame
+      when: "(var(opcode) & 0x0F) == 0x0C"
+      do: [{ var: { name: shutdown, value: "(frame_byte(1) & 1) == 0" } }]
+    - on: frame
+      when: "(var(opcode) & 0x0F) == 0x0F"
+      do: [{ var: { name: display_test, value: "(frame_byte(1) & 1) != 0" } }]
+    # 0x00 (no-op) and the undocumented 0x0D/0x0E decode nothing, so there is no
+    # rule for them — an address no rule matches leaves every var alone, which
+    # is exactly what a part that decodes nothing for it does.
+
+  # What the panel shows. The rules fill digit RAM; the engine renders it.
+  artifact:
+    kind: framebuffer
+    format: max7219_rows
+    ram: { vars: [d0, d1, d2, d3, d4, d5, d6, d7] }
+    # Display test floods every LED; shutdown blanks the panel. Both leave the
+    # RAM alone, and `fill_when` wins — see the header.
+    fill_when: "var(display_test)"
+    blank_when: "var(shutdown)"
+    bytes: true
+    meta:
+      - { key: w, value: "8" }
+      - { key: h, value: "8" }
+      # Bit-counting is not in the expression language — see `ArtifactMetaField`
+      # for why these are derived sources rather than a `popcount()` operator.
+      - { key: ink_bytes, source: ink_bytes }
+      - { key: lit_pixels, source: lit_bits }
+      # Reported rather than folded in: a module holding a pattern while shut
+      # down is a different finding from a blank one.
+      - { key: shutdown, value: "var(shutdown)", type: bool }
+      # ⚠️ Stamped `true` here and overwritten by the engine's `mark_unpowered`
+      # when the placement says `powered: false`, so a dark matrix explains
+      # itself: without it, "no supply" is indistinguishable from "firmware
+      # never left shutdown".
+      - { key: powered, value: "1", type: bool }
+      - { key: intensity, value: "var(intensity)" }
+      - { key: scan_limit, value: "var(scan_limit)" }
+
+metadata:
+  label: "MAX7219 8×8 LED Matrix"
+  summary: "8×8 LED matrix driven by a MAX7219 serial display driver over SPI."
+  detail: "The common 8×8 dot-matrix module built around a MAX7219 common-cathode display driver. Firmware clocks 16 bits per transaction — an address byte then a data byte — and pulses CS/LOAD to latch. Digit registers 0x01–0x08 are the eight matrix rows, so digit RAM is the framebuffer; the model also tracks decode mode, intensity, scan limit, shutdown and display test, blanking or flooding the readback the way the real part drives the panel. A 16-bit write is latched or it never happened: an odd byte left in the shifter when CS moves is discarded rather than decoded. NOT modelled: cascading (DOUT), intensity as luminance, and scan limit as multiplexing — all eight rows are published whatever it says."
+  category: spi
+  config_keys:
+    - { name: cs_pin, ty: str, doc: "CS/LOAD GPIO pin, wired as SPI chip-select (e.g. \"PA4\"). Defaults to PA4." }
+    - { name: powered, ty: bool, doc: "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered part -- ABSENT MEANS POWERED, because curated labs state signals and leave the rails implicit. Only an explicit `false`, which the diagram compiler emits when it can see the supply pins are on no net, changes anything: the part then ignores its bus entirely and reports the dark/idle state it has on a bench." }
+  inputs: []

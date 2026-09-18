@@ -66,7 +66,18 @@ pub const POWERED_CONFIG_KEY: ConfigKey = ConfigKey {
 /// `None` (no key at all — every hand-written lab manifest) and `Some(true)`
 /// are both powered. `Some(false)` is the only darkening value.
 pub fn powered_from_config(ctx: &AttachCtx<'_>) -> bool {
-    ctx.config_bool("powered") != Some(false)
+    powered_from_placement(ctx.ext)
+}
+
+/// The same reading, straight off a placed device.
+///
+/// The `gpio_device` primitive does not attach through [`AttachCtx`] — it goes
+/// through `SystemBus::attach_declarative_device`, which holds the
+/// [`ExternalDevice`] itself — and a second `!= Some(false)` written there is
+/// exactly how the asymmetry above would come to be spelled two ways. ONE
+/// function, two callers.
+pub fn powered_from_placement(ext: &labwired_config::ExternalDevice) -> bool {
+    ext.config.get("powered").and_then(|v| v.as_bool()) != Some(false)
 }
 
 /// Stamp `"powered": false` into an artifact's meta so a dark frame explains

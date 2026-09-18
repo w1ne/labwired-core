@@ -1,0 +1,114 @@
+# 4-digit 7-segment LED display driven by two chained 74HC595s — declarative
+# `spi_device`; replaces the hand-written `components/hc595_7seg.rs`, whose
+# behaviour is pinned verbatim in
+# `crates/core/tests/spi_frame_migration_parity.rs`.
+#
+# The ubiquitous blue "4-bit LED display module" (the QIFEI board and its
+# clones): a segment 74HC595 and a digit-select 74HC595 in series.
+#
+#   DIO  → MOSI   SCLK → SCK   RCLK → chip-select / latch
+#
+# For each digit the firmware shifts 16 bits — one SEGMENT byte and one
+# DIGIT-SELECT byte — then pulses RCLK, and cycles through the four digits fast
+# enough that persistence of vision fuses them into a steady readout.
+#
+# ── ⚠️ A NAMED DIFFERENCE: THE ONE-HOT SEARCH IS GONE ──────────────────────
+#
+# The hand-written model did not know which of the two bytes was which. It
+# SEARCHED: it tested byte 1 for a one-hot low nibble, and if that failed it
+# tested byte 0 and used the other as segments
+# (`digit_select_index(b1).or_else(|| digit_select_index(b0))`). That is a
+# search over candidates with a fallback, not a statement of how the module is
+# wired — and it is not datasheet behaviour: the chain order of two 74HC595s is
+# fixed by the traces on the board, and this part IS that board.
+#
+# It is also not free. Any segment byte whose value happens to be one-hot in the
+# low nibble and empty in the high nibble — 0x01, 0x02, 0x04, 0x08 — is
+# indistinguishable from a digit select, so a frame carrying one would be
+# resolved the wrong way round. No standard glyph is such a byte, which is why
+# the search survived; a firmware lighting a single segment deliberately (a
+# spinner, a progress bar, a dash-per-digit animation) is not standard glyphs.
+#
+# So the wiring is DATA here: `frame_byte(0)` is the segment byte and
+# `frame_byte(1)` is the digit select, stated once. What stays expressed rather
+# than searched for is POLARITY, which really is a property of the module: the
+# four common lines may be driven active-HIGH (0x01/0x02/0x04/0x08) or
+# active-LOW (their complements 0xFE/0xFD/0xFB/0xF7). Both are listed, per
+# digit, as eight literal comparisons — a guard over declared values, not a
+# search.
+#
+# ⚠️ A byte that is NEITHER polarity selects no digit, so no rule fires and no
+# segment byte lands. The hand-written model's fallback would have tried the
+# other byte; here a frame that names no common line is a frame that lit
+# nothing, which is what the module does.
+#
+# ⚠️ NOT MODELLED, named rather than faked:
+#   * **Multiplexing as brightness.** Each digit holds its last segment byte;
+#     nothing decays, and the four are reported as a steady readout — which is
+#     what persistence of vision produces and what the hand-written model did.
+#   * **QH′ and the second stage's own outputs.** The two registers are chained
+#     inside the module; nothing on the board brings their pads out.
+type: hc595-7seg
+
+behavior:
+  primitive: spi_device
+
+  # ⚠️ No register map — see the same note on `max7219.yaml`.
+  spi: {}
+
+  frames:
+    length: 2
+    # Byte 0 is the SEGMENT byte, recorded in `var(opcode)` so the guards below
+    # can name it once. (`opcode` is the key's name, not this part's word for
+    # it: on this module byte 0 carries segments, not a command.)
+    opcode_byte: true
+    # A 16-bit frame is latched or it never happened; a byte-misaligned burst
+    # must not smear one digit's segments across another.
+    discard_partial: true
+
+  vars:
+    opcode: 0
+    # Latched segment byte per digit, index 0 = the leftmost digit.
+    s0: 0
+    s1: 0
+    s2: 0
+    s3: 0
+
+  rules:
+    # One rule per digit: active-HIGH select, or its active-LOW complement.
+    - on: frame
+      when: "frame_byte(1) == 0x01 || frame_byte(1) == 0xFE"
+      do: [{ var: { name: s0, value: "var(opcode)" } }]
+    - on: frame
+      when: "frame_byte(1) == 0x02 || frame_byte(1) == 0xFD"
+      do: [{ var: { name: s1, value: "var(opcode)" } }]
+    - on: frame
+      when: "frame_byte(1) == 0x04 || frame_byte(1) == 0xFB"
+      do: [{ var: { name: s2, value: "var(opcode)" } }]
+    - on: frame
+      when: "frame_byte(1) == 0x08 || frame_byte(1) == 0xF7"
+      do: [{ var: { name: s3, value: "var(opcode)" } }]
+
+  # ⚠️ THE HAND-WRITTEN MODEL PUBLISHED NO ARTIFACT AT ALL — it had `text()`
+  # and no `artifacts` impl, so the module simulated and inspected as nothing.
+  # This is new evidence, not ported evidence.
+  artifact:
+    kind: text_display
+    format: hc595_7seg_digits
+    ram: { vars: [s0, s1, s2, s3] }
+    decode: { font: seven_segment, digits: 4 }
+    meta:
+      - { key: lit_segments, source: lit_bits }
+      # The decimal point of each digit is bit 7 of its segment byte.
+      - { key: decimal_points, value: "((var(s0) >> 7) & 1) | (((var(s1) >> 7) & 1) << 1) | (((var(s2) >> 7) & 1) << 2) | (((var(s3) >> 7) & 1) << 3)" }
+      - { key: powered, value: "1", type: bool }
+
+metadata:
+  label: "74HC595 7-Segment (4-digit)"
+  summary: "4-digit 7-segment LED display driven by two chained 74HC595 shift registers over SPI."
+  detail: "The classic blue 4-digit module: a segment 74HC595 and a digit-select 74HC595 in series. Firmware shifts a segment byte then a digit-select byte (16 bits), pulses RCLK (SPI chip-select) to latch, and multiplexes the four digits. The chain order is a property of the board and is stated rather than auto-detected: byte 0 is the segments, byte 1 selects the digit, active-high (0x01/0x02/0x04/0x08) or active-low (its complement). The four displayed characters are decoded through the standard a–g/dp segment font and published as inspectable evidence. NOT modelled: multiplexing as brightness, and the chained registers' own QH' / parallel pads, which the module does not bring out."
+  category: spi
+  config_keys:
+    - { name: cs_pin, ty: str, doc: "RCLK latch GPIO pin, wired as SPI chip-select (e.g. \"PA4\"). Defaults to PA4." }
+    - { name: powered, ty: bool, doc: "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered part -- ABSENT MEANS POWERED, because curated labs state signals and leave the rails implicit. Only an explicit `false`, which the diagram compiler emits when it can see the supply pins are on no net, changes anything: the part then ignores its bus entirely and reports the dark/idle state it has on a bench." }
+  inputs: []

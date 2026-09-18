@@ -746,6 +746,11 @@ mod tests {
         fn fifo_len(&self, _: &str) -> i64 {
             0
         }
+        /// A UART part is a byte STREAM with no `frames:` block; see `pin`
+        /// above for why 0 here is the truth rather than a stub.
+        fn frame_byte(&self, _: usize) -> i64 {
+            0
+        }
         fn written(&self) -> i64 {
             0
         }

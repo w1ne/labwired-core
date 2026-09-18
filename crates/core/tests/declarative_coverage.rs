@@ -47,7 +47,14 @@ use std::path::PathBuf;
 /// below falls by two in the same commit. They are the first descriptors to
 /// declare an `artifact:` — until that key existed a ported display would
 /// simulate perfectly and inspect as nothing.
-const YAML_DEVICES_BASELINE: usize = 62;
+///
+/// 62 → 65: `max7219.yaml`, `hc595.yaml` and `hc595_7seg.yaml`, the three
+/// shift-register display drivers. All three DID delete their Rust model, so
+/// the Rust baseline below falls by three in the same commit. They are the
+/// first `spi_device` descriptors with NO register map at all — a part whose
+/// unit of work is a MESSAGE rather than a register — and the first to dispatch
+/// a rule on a frame's own bytes (`frames.opcode_byte` / `frame_byte(N)`).
+const YAML_DEVICES_BASELINE: usize = 65;
 
 /// Device models still hand-written in Rust
 /// (`crates/core/src/peripherals/components/*.rs`, minus [`EXCLUDED`]).
@@ -59,7 +66,13 @@ const YAML_DEVICES_BASELINE: usize = 62;
 /// change and is NOT counted — it is the ENGINE that renders a declared
 /// artifact, with no model behind it, and `ENGINE_PREFIX` excludes it for the
 /// same reason it excludes `rule_machine.rs`.
-const RUST_DEVICES_BASELINE: usize = 43;
+///
+/// 43 → 40: `max7219.rs`, `hc595.rs` and `hc595_7seg.rs` are deleted, ported to
+/// the descriptors counted above. No engine file is added in the same change —
+/// the three ports needed new KEYS (`frame_byte()`, `frames.opcode_byte`,
+/// `frames.discard_partial`, `artifact.blank_when` / `fill_when`, and `powered:`
+/// honoured by two primitives) rather than a new primitive.
+const RUST_DEVICES_BASELINE: usize = 40;
 
 /// Files in `components/` that are NOT a device model, with the reason. Listed
 /// here rather than pattern-matched so every exemption is a line someone wrote

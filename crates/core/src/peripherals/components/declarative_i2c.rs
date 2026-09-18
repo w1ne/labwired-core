@@ -228,6 +228,12 @@ pub struct GenericI2cDevice {
     rules: Option<RuleMachine>,
     /// Message framing, when the part declares any (see [`FrameSpec`]).
     frames: Option<FrameSpec>,
+    /// The frame's own MOSI bytes, for `frame_byte(N)`. Same field, same
+    /// contract and same reason as the SPI twin — a framed part must be able to
+    /// read its whole message, not only the byte that closed it.
+    frame_buf: Vec<u8>,
+    /// The last byte pushed CLOSED a frame; the next one starts a new buffer.
+    frame_closed: bool,
     /// Bytes the master has written since the last `frame` event, for a
     /// [`FrameSpec`] with a fixed `length`. Reset by every frame boundary.
     frame_bytes: u16,
@@ -392,6 +398,8 @@ impl GenericI2cDevice {
             rules: RuleMachine::from_behavior(&descriptor.behavior)?,
             frames: descriptor.behavior.frames.clone(),
             frame_bytes: 0,
+            frame_buf: Vec::new(),
+            frame_closed: false,
         };
         // Resolve any field-driven timer period against the RESET register
         // file, so a part whose rate register powers up at something other
@@ -1223,6 +1231,22 @@ impl GenericI2cDevice {
         self.drain_timer_requests();
     }
 
+    /// Close the frame the wire just completed: hand the machine the frame's
+    /// BYTES, then raise the event. The SPI twin carries the argument for the
+    /// ordering; it is the same one, on the other transport.
+    fn close_frame(&mut self, written: i64) {
+        let opcode = self.frames.as_ref().is_some_and(|f| f.opcode_byte);
+        if self.rules.is_some() {
+            let buf = std::mem::take(&mut self.frame_buf);
+            if let Some(m) = self.rules.as_mut() {
+                m.set_frame_bytes(&buf, opcode);
+            }
+            self.frame_buf = buf;
+        }
+        self.frame_closed = true;
+        self.raise_and_settle(Event::Frame, written);
+    }
+
     /// Let the rule machine record the elapsed µs. It schedules nothing: the
     /// device's [`TimerBank`] is the one clock and raises `Event::Timer`.
     fn advance_rule_time(&mut self, us: u64) {
@@ -1512,7 +1536,19 @@ impl I2cDevice for GenericI2cDevice {
         // and rejected rather than waited on forever.
         if self.frames.is_some() {
             self.frame_bytes = 0;
-            self.raise_and_settle(Event::Frame, 0);
+            // A frame the LENGTH already closed leaves nothing new on the wire,
+            // so this boundary frame carries no bytes rather than re-serving a
+            // message the rules have already handled.
+            if self.frame_closed {
+                self.frame_buf.clear();
+                self.frame_closed = false;
+            }
+            // Same contract as the SPI twin: see `FrameSpec::discard_partial`.
+            if self.frames.as_ref().is_some_and(|f| f.discard_partial) {
+                self.frame_buf.clear();
+            } else {
+                self.close_frame(0);
+            }
         }
     }
 
@@ -1523,6 +1559,13 @@ impl I2cDevice for GenericI2cDevice {
         // expected to act on the last byte of the command, not on the end of
         // the transaction — a master that streams two commands in one
         // transaction must get two frames.
+        if self.frames.is_some() {
+            if self.frame_closed {
+                self.frame_buf.clear();
+                self.frame_closed = false;
+            }
+            self.frame_buf.push(data);
+        }
         if let Some(length) = self.frames.as_ref().and_then(|f| f.length) {
             if length > 0 {
                 self.frame_bytes = self.frame_bytes.saturating_add(1);
@@ -1532,7 +1575,7 @@ impl I2cDevice for GenericI2cDevice {
                     // raised after, so a rule sees the complete message. The
                     // borrow is released by the time `raise` runs.
                     self.write_inner(data);
-                    self.raise_and_settle(Event::Frame, i64::from(data));
+                    self.close_frame(i64::from(data));
                     return;
                 }
             }

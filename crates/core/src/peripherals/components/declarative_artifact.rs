@@ -69,6 +69,11 @@ pub struct CompiledArtifact {
     font: ArtifactFont,
     digits: Option<usize>,
     meta: Vec<CompiledMeta>,
+    /// `fill_when` / `blank_when`, parsed once. See [`ArtifactSpec::fill_when`]
+    /// for why these are a property of the ARTIFACT rather than eight shadow
+    /// vars a rule has to keep in step with the RAM.
+    fill_when: Option<Expr>,
+    blank_when: Option<Expr>,
     bytes: bool,
 }
 
@@ -121,6 +126,8 @@ impl CompiledArtifact {
             font: spec.decode.as_ref().map(|d| d.font).unwrap_or_default(),
             digits: spec.decode.as_ref().and_then(|d| d.digits),
             meta,
+            fill_when: parse_gate(spec.fill_when.as_deref(), part, "fill_when")?,
+            blank_when: parse_gate(spec.blank_when.as_deref(), part, "blank_when")?,
             bytes: spec.bytes,
         })
     }
@@ -144,6 +151,35 @@ impl CompiledArtifact {
             .collect()
     }
 
+    /// What the PANEL is showing: the RAM, blanked or flooded by the declared
+    /// gates.
+    ///
+    /// ⚠️ ORDER IS THE DATASHEET'S. `fill_when` wins over `blank_when` because
+    /// display test overrides shutdown on the part this generalises
+    /// (MAX7219/MAX7221, Table 10). A model that checked them the other way
+    /// round would leave a display-test write invisible on a shut-down panel,
+    /// which is what silicon does NOT do.
+    ///
+    /// The RAM itself is untouched, so the stored pattern reappears the moment
+    /// the mode is cleared — and every derived `meta` (`lit_bits`,
+    /// `ink_bytes`), the `text`, the `bytes` payload and the `generation` are
+    /// all computed from THIS, which is what makes a blanked panel report a
+    /// blanked panel rather than the picture nobody can see.
+    fn shown(&self, machine: &RuleMachine, ctx: &dyn RuleCtx) -> Vec<u8> {
+        let ram = self.ram(machine);
+        let on = |gate: &Option<Expr>| {
+            gate.as_ref()
+                .is_some_and(|e| machine.eval_expr(e, ctx) != 0)
+        };
+        if on(&self.fill_when) {
+            return vec![0xFF; ram.len()];
+        }
+        if on(&self.blank_when) {
+            return vec![0x00; ram.len()];
+        }
+        ram
+    }
+
     /// Render the artifact for a device addressed by `id`.
     pub fn render(
         &self,
@@ -152,7 +188,7 @@ impl CompiledArtifact {
         id: &str,
         opts: &InspectOpts,
     ) -> Artifact {
-        let ram = self.ram(machine);
+        let ram = self.shown(machine, ctx);
         let mut meta = serde_json::Map::new();
         if let Some(format) = &self.format {
             meta.insert(
@@ -203,6 +239,14 @@ impl CompiledArtifact {
             },
         }
     }
+}
+
+/// Parse one render-time gate expression, naming the key that carried it.
+fn parse_gate(src: Option<&str>, part: &str, what: &str) -> Result<Option<Expr>> {
+    let Some(src) = src else { return Ok(None) };
+    Expr::parse(src)
+        .map(Some)
+        .map_err(|e| anyhow::anyhow!("part '{part}' artifact.{what}: {e} — in `{src}`"))
 }
 
 /// The engine-derived `meta` quantities. See the module note for why these are

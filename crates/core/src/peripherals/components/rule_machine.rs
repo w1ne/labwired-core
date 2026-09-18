@@ -236,6 +236,18 @@ pub struct RuleMachine {
     observed_levels: BTreeMap<String, bool>,
     /// `(role, level)` waiting for the bus to put on a pad.
     pending_pins: Vec<(String, bool)>,
+    /// **The bytes of the message frame the current event closed**, MOSI order,
+    /// as [`Expr::FrameByte`] (`frame_byte(N)`) reads them.
+    ///
+    /// Installed by the owning device BEFORE it raises [`Event::Frame`], the
+    /// same way `observed_levels` is installed before a pad event, and for the
+    /// same reason: a rule must see the WHOLE frame, not the last byte of it.
+    /// `written` carries one byte and nothing else, which is why a 16-bit
+    /// `[address, data]` write could not be dispatched on its address at all.
+    ///
+    /// Kept until the next frame starts, so a rule on a LATER event can still
+    /// read what the last frame carried. Empty for a part with no `frames:`.
+    frame_bytes: Vec<u8>,
     /// Device time in µs, advanced by the central drive.
     elapsed_us: u64,
     /// The value the master just wrote, for `written` inside a `write:` rule.
@@ -281,6 +293,7 @@ impl RuleMachine {
             pin_levels: BTreeMap::new(),
             observed_levels: BTreeMap::new(),
             pending_pins: Vec::new(),
+            frame_bytes: Vec::new(),
             elapsed_us: 0,
             written: 0,
             divide_by_zero: std::cell::Cell::new(0),
@@ -329,6 +342,35 @@ impl RuleMachine {
     /// The snapshot level of an observed pad. `None` ⇒ never sampled.
     pub fn observed_level(&self, role: &str) -> Option<bool> {
         self.observed_levels.get(role).copied()
+    }
+
+    /// Install the bytes of the frame that just closed, for `frame_byte(N)`.
+    ///
+    /// Called by the owning device immediately BEFORE it raises
+    /// [`Event::Frame`] — the frame twin of
+    /// [`set_observed_level`](Self::set_observed_level), and installed first
+    /// for the same reason: every rule on that event must read the same frame.
+    ///
+    /// `opcode` is [`labwired_config::FrameSpec::opcode_byte`]. When set, byte
+    /// 0 is ALSO recorded in `var(opcode)`, which is what the key has always
+    /// documented and what nothing implemented. The two are not redundant:
+    /// `frame_byte(0)` is live only for the frame being handled, while
+    /// `var(opcode)` PERSISTS, so a part whose command byte selects what the
+    /// NEXT frame means can still answer. A part that declares `opcode_byte`
+    /// must declare `vars: { opcode: … }` — `validate_descriptor` refuses it
+    /// otherwise, rather than inventing a variable no descriptor mentions.
+    pub fn set_frame_bytes(&mut self, bytes: &[u8], opcode: bool) {
+        self.frame_bytes.clear();
+        self.frame_bytes.extend_from_slice(bytes);
+        if opcode {
+            let first = bytes.first().map(|b| i64::from(*b)).unwrap_or(0);
+            self.vars.insert("opcode".to_string(), first);
+        }
+    }
+
+    /// The bytes of the most recent frame (diagnostics and tests).
+    pub fn frame_bytes(&self) -> &[u8] {
+        &self.frame_bytes
     }
 
     /// Whether any rule listens for the simultaneous-pad event, so a device can
@@ -813,6 +855,10 @@ impl RuleMachine {
         self.pending_timers.clear();
         self.pending_pins.clear();
         self.pin_levels.clear();
+        // The last frame's bytes ARE cleared, unlike the observed pad snapshot
+        // below: a frame is a message the part has already consumed, not a
+        // level the outside world is still holding.
+        self.frame_bytes.clear();
         // The observed snapshot is NOT cleared. It is not machine state — it is
         // what the pads outside are holding right now, and a reset of the part
         // does not change the level the MCU is driving. Clearing it would make
@@ -871,6 +917,17 @@ impl EvalCtx for Env<'_> {
     }
     fn fifo_len(&self, name: &str) -> i64 {
         self.m.fifo_len(name) as i64
+    }
+    /// Byte `index` of the frame the owning device installed before raising.
+    /// Out of range is 0 — a SHORT frame (one closed by CS↑ before the declared
+    /// length was clocked) really did carry no such byte, and a declared index
+    /// past `frames.length` is refused at load rather than answered here.
+    fn frame_byte(&self, index: usize) -> i64 {
+        self.m
+            .frame_bytes
+            .get(index)
+            .map(|b| i64::from(*b))
+            .unwrap_or(0)
     }
     fn written(&self) -> i64 {
         self.m.written

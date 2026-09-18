@@ -1,0 +1,131 @@
+# 74HC595 8-bit serial-in / parallel-out shift register — declarative
+# `spi_device` DRIVING PADS; replaces the hand-written `components/hc595.rs`,
+# whose behaviour is pinned verbatim in
+# `crates/core/tests/spi_frame_migration_parity.rs`.
+#
+# ── The wiring, from the datasheet ─────────────────────────────────────────
+#
+#   SER   → MOSI   serial data in
+#   SRCLK → SCK    shift clock
+#   RCLK  → CS     storage-register (latch) clock
+#
+# Firmware shifts one byte, then pulses RCLK to copy the shift register into
+# the eight output pins QA..QH. The parallel outputs do NOT change until that
+# latch, so a half-shifted value is never visible on the pins.
+#
+# SPI transmits MSB-first, so the first bit clocked in ends up at QH and the
+# last at QA. One transferred byte therefore lands verbatim with bit 7 = QH and
+# bit 0 = QA.
+#
+# ── ⚠️ THE SEAM THIS PART EXISTS TO PROVE ──────────────────────────────────
+#
+# This is an SPI part whose whole output is PADS. #1181 measured that nothing
+# resolved a `QA..QH` pad map for an SPI part, so the hand-written model drove
+# no pad at all — `outputs()` was a readback nobody on the board could see.
+#
+# It needed no new engine seam in the end, only the wiring: `outputs:` is the
+# same key a `gpio_device` uses, `output_pins:` binds each role to a `config:`
+# key at attach (`AttachCtx::bind_output_pins`), a `{ pin: QA, level: … }`
+# action queues a transition, and the per-tick pass drains the queue through the
+# narrowed `DevicePins` port — both seams, `drive_input_bit` and
+# `drive_idr_bit`, exactly as an I²C part's INT line goes out.
+#
+# ⚠️ A role whose `config:` key the placement does not set is SKIPPED, not an
+# error. A board using this part as a plain shift register with nothing wired to
+# QD is an ordinary board; the rule still runs and that line simply goes
+# nowhere. It is also what keeps every placement written before this descriptor
+# existed working unchanged: they set `cs_pin` and nothing else.
+#
+# ── ⚠️ A NAMED DIFFERENCE FROM THE MODEL THIS REPLACES: THE LATCH EDGE ─────
+#
+# The hand-written model latched in `cs_select` — CS going LOW. A 74HC595
+# latches on the RISING edge of RCLK, and with RCLK wired to an active-low chip
+# select that edge is CS going HIGH. Latching on CS↓ publishes the byte of the
+# PREVIOUS transaction: the pins lag the firmware by one whole transfer, and a
+# value written once and never rewritten never appears at all.
+#
+# So this descriptor latches on `cs_release`. Both models converge to the same
+# steady state under a repeating loop, which is why the old one looked right;
+# `spi_frame_migration_parity.rs` measures the one-transaction lag explicitly
+# rather than leaving it to be rediscovered.
+#
+# ⚠️ NOT MODELLED, named rather than faked:
+#   * **QH′ (the cascade output).** A chained module's second stage would need
+#     the PREVIOUS latch's bit 7 clocked on; nothing in the corpus chains this
+#     part, and the hand-written model did not model it either. The two-stage
+#     chain that does exist in the catalog is its own part (`hc595-7seg`).
+#   * **SRCLR and OE.** Both are tied to their inactive levels on every module
+#     that carries this chip; neither is a pin the SPI attach path can bind.
+type: 74hc595
+
+behavior:
+  primitive: spi_device
+
+  # ⚠️ No register map: a shift register has no addressable anything. See the
+  # same note on `max7219.yaml`.
+  spi: {}
+
+  frames:
+    # One byte per shift. The part has no opcode: every byte is data.
+    length: 1
+    discard_partial: true
+
+  # The eight parallel outputs. Bound to pads at attach through the `config:`
+  # keys below, driven from the rules' pending pin queue.
+  outputs: [QA, QB, QC, QD, QE, QF, QG, QH]
+  output_pins:
+    QA: qa_pin
+    QB: qb_pin
+    QC: qc_pin
+    QD: qd_pin
+    QE: qe_pin
+    QF: qf_pin
+    QG: qg_pin
+    QH: qh_pin
+
+  vars:
+    # Bits clocked in but not yet latched. bit 7 = QH end, bit 0 = QA end.
+    shift_reg: 0
+    # The latched word currently driven on QA..QH, published for readback.
+    latch: 0
+
+  rules:
+    # SRCLK: a whole byte arrived. A single 8-bit stage, so the transferred
+    # byte BECOMES the shift register — there is nothing before it to shift out.
+    - on: frame
+      do: [{ var: { name: shift_reg, value: "frame_byte(0)" } }]
+
+    # RCLK↑: copy the shift register to the output pins. See the latch-edge note
+    # in the header for why this is `cs_release` and not `cs_select`.
+    #
+    # ⚠️ The pin queue carries TRANSITIONS only, so re-latching the same word
+    # costs no bus write at all — the same contract `DevicePins` keeps at the
+    # pad, which is what makes a multiplexing loop cheap.
+    - on: cs_release
+      do:
+        - { var: { name: latch, value: "var(shift_reg)" } }
+        - { pin: QA, level: "var(shift_reg) & 0x01" }
+        - { pin: QB, level: "var(shift_reg) & 0x02" }
+        - { pin: QC, level: "var(shift_reg) & 0x04" }
+        - { pin: QD, level: "var(shift_reg) & 0x08" }
+        - { pin: QE, level: "var(shift_reg) & 0x10" }
+        - { pin: QF, level: "var(shift_reg) & 0x20" }
+        - { pin: QG, level: "var(shift_reg) & 0x40" }
+        - { pin: QH, level: "var(shift_reg) & 0x80" }
+
+metadata:
+  label: "74HC595 Shift Register (8-bit output)"
+  summary: "8-bit serial-in / parallel-out shift register over SPI."
+  detail: "Lets a host MCU drive 8 outputs (QA..QH) through one SPI byte: SER→MOSI, SRCLK→SCK, RCLK→chip-select. Firmware shifts a byte then pulses RCLK to latch it onto the pins; the parallel outputs hold until that latch, and each one is driven onto a real GPIO input pad the MCU can read back. Bit 7 = QH, bit 0 = QA (MSB-first). RCLK latches on the RISING edge, i.e. chip-select going high. A QA..QH pin whose config key the placement does not set is simply not wired. NOT modelled: the QH' cascade output, SRCLR and OE."
+  category: spi
+  config_keys:
+    - { name: cs_pin, ty: str, doc: "RCLK latch GPIO pin, wired as SPI chip-select (e.g. \"PA4\"). Defaults to PA4." }
+    - { name: qa_pin, ty: str, doc: "GPIO pin the QA output drives (e.g. \"PB0\"). Omit to leave QA unwired." }
+    - { name: qb_pin, ty: str, doc: "GPIO pin the QB output drives. Omit to leave QB unwired." }
+    - { name: qc_pin, ty: str, doc: "GPIO pin the QC output drives. Omit to leave QC unwired." }
+    - { name: qd_pin, ty: str, doc: "GPIO pin the QD output drives. Omit to leave QD unwired." }
+    - { name: qe_pin, ty: str, doc: "GPIO pin the QE output drives. Omit to leave QE unwired." }
+    - { name: qf_pin, ty: str, doc: "GPIO pin the QF output drives. Omit to leave QF unwired." }
+    - { name: qg_pin, ty: str, doc: "GPIO pin the QG output drives. Omit to leave QG unwired." }
+    - { name: qh_pin, ty: str, doc: "GPIO pin the QH output drives. Omit to leave QH unwired." }
+  inputs: []

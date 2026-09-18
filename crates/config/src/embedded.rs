@@ -264,6 +264,23 @@ pub static EMBEDDED_DEVICES: &[(&[&str], &str)] = &[
         &["cap1188"],
         include_str!("../../../configs/devices/cap1188.yaml"),
     ),
+    // ── shift-register / serial display drivers (`spi_device` + `frames:`) ─
+    //
+    // Three parts whose unit of work is a MESSAGE rather than a register, all
+    // three migrated from hand-written Rust. The `device_type` strings are the
+    // ones the manifests and the browser already use and are UNCHANGED.
+    (
+        &["led-matrix", "max7219"],
+        include_str!("../../../configs/devices/max7219.yaml"),
+    ),
+    (
+        &["74hc595", "hc595"],
+        include_str!("../../../configs/devices/hc595.yaml"),
+    ),
+    (
+        &["hc595-7seg", "hc595_7seg"],
+        include_str!("../../../configs/devices/hc595_7seg.yaml"),
+    ),
     // ── 74-series logic (`logic_gate`) ─────────────────────────────────────
     //
     // The third largest model gap in the 39-project KiCad corpus: 139 dropped

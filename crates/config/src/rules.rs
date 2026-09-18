@@ -242,6 +242,28 @@ pub struct FrameSpec {
     /// CRC-8 parameters, when the frame carries a trailing checksum.
     #[serde(default)]
     pub crc: Option<crate::Crc8Spec>,
+    /// **Drop a SHORT frame instead of delivering it at the transaction
+    /// boundary.**
+    ///
+    /// The default is false — a truncated command shell must be SEEN and
+    /// rejected, which is what the boundary frame exists for, and every
+    /// descriptor written before this key relies on it.
+    ///
+    /// A part that latches a fixed-width shift register is the opposite case. A
+    /// MAX7219 transaction is 16 bits latched on CS↑; eight clocked bits are
+    /// not half a write, they are a frame that never happened, and the
+    /// hand-written models discarded exactly this (`cs_select` resetting
+    /// `shift_len`). Delivered as a frame, a stray odd byte would decode its
+    /// low nibble as a register address and write a zero data byte into a digit
+    /// register — a row of the panel going dark because of a byte the part
+    /// never latched.
+    ///
+    /// With this set, a transaction boundary that finds fewer than
+    /// [`length`](Self::length) bytes buffered clears them and raises NOTHING;
+    /// CS↓ clears them too, so a re-assertion cannot pair an orphan byte with
+    /// the next transaction's first. Meaningless without `length`.
+    #[serde(default)]
+    pub discard_partial: bool,
 }
 
 // ─── named bit-fields ──────────────────────────────────────────────────────
@@ -1014,6 +1036,15 @@ pub struct RuleNames<'a> {
     pub outputs: &'a [String],
     pub inputs: &'a [String],
     pub pins: &'a [String],
+    /// The part's `frames:` block, when it declares one.
+    ///
+    /// Present only so `frame_byte(N)` can be checked: `None` refuses the name
+    /// outright (a part with no framing has no frame to read a byte of), and a
+    /// declared [`FrameSpec::length`] bounds the index. Without both, a
+    /// `frame_byte(2)` on a two-byte frame would read 0 forever — a guard that
+    /// is quietly always-false, which looks exactly like a part the firmware
+    /// never clocked.
+    pub frames: Option<&'a FrameSpec>,
 }
 
 /// Check every rule's names against what the part declares.
@@ -1088,6 +1119,25 @@ pub fn validate_rule_names(rules: &[Rule], names: &RuleNames<'_>) -> anyhow::Res
                     "{}: `pin({pad})` names no pad in `pins:` or `outputs:`",
                     at(what)
                 );
+            }
+            // …and the same for `frame_byte(N)`, for the same reason.
+            let mut indices = Vec::new();
+            parsed.frame_byte_indices(&mut indices);
+            for index in indices {
+                let Some(frames) = names.frames else {
+                    anyhow::bail!(
+                        "{}: `frame_byte({index})` but the part declares no `frames:` block, \
+                         so there is no frame to read a byte of",
+                        at(what)
+                    );
+                };
+                if let Some(length) = frames.length {
+                    anyhow::ensure!(
+                        (index as u64) < u64::from(length),
+                        "{}: `frame_byte({index})` reads past a {length}-byte frame",
+                        at(what)
+                    );
+                }
             }
         }
         for (j, action) in rule.actions.iter().enumerate() {
@@ -1387,6 +1437,7 @@ mod tests {
             outputs: &empty,
             inputs: &empty,
             pins: &empty,
+            frames: None,
         };
         let err = validate_rule_names(&rules, &names).unwrap_err();
         assert!(err.to_string().contains("no timer named 'nope'"), "{err}");
@@ -1407,6 +1458,7 @@ mod tests {
             outputs: &empty,
             inputs: &empty,
             pins: &empty,
+            frames: None,
         };
         let err = validate_rule_names(&rules, &names).unwrap_err();
         assert!(err.to_string().contains("`outputs:`"), "{err}");

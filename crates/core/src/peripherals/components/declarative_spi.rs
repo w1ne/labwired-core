@@ -95,6 +95,45 @@ pub struct GenericSpiDevice {
     /// MOSI bytes clocked since the last `frame` event, for a [`FrameSpec`]
     /// with a fixed `length`.
     frame_bytes: u16,
+    /// **The MOSI bytes of the frame itself**, so a rule can read the whole
+    /// message rather than only its last byte.
+    ///
+    /// `written` inside an `on: frame` rule is ONE byte — the one that closed
+    /// the frame — which is why a 16-bit MAX7219 write could not be dispatched
+    /// on its address byte at all (#1181: `frames.opcode_byte` was a declared
+    /// key with no implementation anywhere in `crates/`). Handed to the rule
+    /// machine as `frame_byte(N)` immediately before the event is raised.
+    frame_buf: Vec<u8>,
+    /// The last byte pushed CLOSED a frame, so the next one starts a new
+    /// buffer. Deferred rather than cleared on close so `frame_byte(N)` still
+    /// answers for the frame being handled, and keeps answering until the wire
+    /// actually carries the next one.
+    frame_closed: bool,
+    /// **A part whose unit of work is a MESSAGE and which has no register map
+    /// at all**: `frames:` plus `rules:`, no `registers:` and no
+    /// `register_file:`.
+    ///
+    /// The three shift-register display drivers are exactly this. A MAX7219 is
+    /// written and never read; a 74HC595 has no addressable anything. Forcing
+    /// them through the register/command machinery would mean inventing a
+    /// register map the datasheet does not have, and the command phase would
+    /// eat the first byte of every frame.
+    ///
+    /// `transfer_inner` is skipped entirely for such a part — the frame
+    /// accumulation and the `frame` event in [`Self::transfer`] are its whole
+    /// wire behaviour.
+    frame_only: bool,
+    /// **Whether the module's supply pins are connected in the design.**
+    ///
+    /// ⚠️ NOT any power-down MODE the part itself has (the MAX7219's
+    /// `SHUTDOWN` register is one): that is firmware selecting a mode over a
+    /// bus that works. This is whether the module has a rail at all.
+    ///
+    /// ⚠️ DEFAULTS TO `true`. Only an explicit `powered: false` in the compiled
+    /// manifest darkens anything — see
+    /// [`supply`](crate::peripherals::components::supply) for why that
+    /// asymmetry is load-bearing.
+    powered: bool,
 
     /// Flat RAM behind every address no declared register covers
     /// (`behavior.spi.register_file`). `None` ⇒ an undeclared address reads
@@ -146,7 +185,20 @@ pub(crate) fn validate_descriptor(descriptor: &DeviceDescriptor) -> Result<()> {
         .as_ref()
         .context("declarative spi device is missing behavior.spi")?;
     if spec.registers.is_empty() && spec.register_file.is_none() {
-        bail!("behavior.spi declares no registers and no register_file");
+        // ⚠️ ONE exception, and it is a shape rather than a loophole: a part
+        // whose unit of work is a MESSAGE. A MAX7219 is written and never read;
+        // a 74HC595 has no addressable anything. Both are `frames:` + `rules:`
+        // and a register map would have to be invented for them — which is
+        // worse than no map, because the command phase would then eat the first
+        // byte of every frame. The `rules:` half is what stops this from
+        // admitting a descriptor that does nothing at all.
+        if descriptor.behavior.frames.is_none() || descriptor.behavior.rules.is_empty() {
+            bail!(
+                "behavior.spi declares no registers and no register_file, and the part declares \
+                 no `frames:` with `rules:` either — it would answer every byte identically and \
+                 look like a working device"
+            );
+        }
     }
     if let Some(file) = &spec.register_file {
         if file.size == 0 {
@@ -232,6 +284,19 @@ pub(crate) fn validate_descriptor(descriptor: &DeviceDescriptor) -> Result<()> {
             );
         }
     }
+    // `frames.opcode_byte` records byte 0 of each frame in `var(opcode)`. The
+    // variable has to be DECLARED: inventing one no descriptor mentions would
+    // make `var(opcode)` readable in a part that never asked for it, and would
+    // hide the typo in a part that meant to ask and misspelled the key.
+    if let Some(frames) = &descriptor.behavior.frames {
+        if frames.opcode_byte && !descriptor.behavior.vars.contains_key("opcode") {
+            bail!(
+                "behavior.frames declares `opcode_byte: true`, which records each frame's first \
+                 byte in `var(opcode)`, but the part declares no `opcode` in `vars:` — the \
+                 variable a rule would read would never have a reset value"
+            );
+        }
+    }
     let names: Vec<String> = spec.registers.iter().map(|r| r.name.clone()).collect();
     validate_timers(
         &descriptor.behavior.timers,
@@ -306,8 +371,14 @@ impl GenericSpiDevice {
             elapsed_us: 0,
             timers: TimerBank::new(&descriptor.behavior.timers),
             rules: RuleMachine::from_behavior(&descriptor.behavior)?,
+            frame_only: spec.registers.is_empty()
+                && spec.register_file.is_none()
+                && descriptor.behavior.frames.is_some(),
             frames: descriptor.behavior.frames.clone(),
             frame_bytes: 0,
+            frame_buf: Vec::new(),
+            frame_closed: false,
+            powered: true,
             file: spec.register_file.as_ref().map(build_file),
             artifact: super::declarative_artifact::CompiledArtifact::from_descriptor(descriptor)?,
         })
@@ -671,7 +742,54 @@ impl GenericSpiDevice {
     pub fn rule_machine(&self) -> Option<&RuleMachine> {
         self.rules.as_ref()
     }
+
+    /// Declare whether the module's supply is connected. Only ever called with
+    /// `false`, from `attach`, when the compiled manifest explicitly says the
+    /// supply pins are on no net. See the `powered` field.
+    pub fn with_powered(mut self, powered: bool) -> Self {
+        self.powered = powered;
+        self
+    }
+
+    /// True when the module has a supply. See the `powered` field.
+    pub fn powered(&self) -> bool {
+        self.powered
+    }
+
+    /// Close the frame the wire just completed: hand the machine the frame's
+    /// BYTES, then raise the event.
+    ///
+    /// The order is the argument, and it is the same one the simultaneous-pad
+    /// snapshot makes (#1181): every rule on this event must read the same,
+    /// whole frame. Installing the bytes from inside a rule — or after the
+    /// raise — would give the first rule the previous frame.
+    fn close_frame(&mut self, written: i64) {
+        let opcode = self.frames.as_ref().is_some_and(|f| f.opcode_byte);
+        if self.rules.is_some() {
+            let buf = std::mem::take(&mut self.frame_buf);
+            if let Some(m) = self.rules.as_mut() {
+                m.set_frame_bytes(&buf, opcode);
+            }
+            self.frame_buf = buf;
+        }
+        self.frame_closed = true;
+        self.raise_and_settle(Event::Frame, written);
+    }
 }
+
+/// What an UNPOWERED SPI part puts on MISO.
+///
+/// A chip with no rail drives nothing, so the master clocks in whatever the net
+/// floats to — which this engine reports as all-ones everywhere it means
+/// "nothing is answering": a read past the last declared register, and
+/// [`UnpoweredI2cDevice::read`](super::supply::UnpoweredI2cDevice) on an idle
+/// two-wire bus. One byte, one meaning.
+///
+/// ⚠️ This is a NAMED difference from the three hand-written display models
+/// this replaces, which returned `0x00` powered or not. Their powered answer is
+/// unchanged (see [`GenericSpiDevice::transfer`]); only the unpowered one
+/// moves, and it moves because a part that is not there cannot drive a zero.
+const UNPOWERED_MISO: u8 = 0xFF;
 
 impl SpiDevice for GenericSpiDevice {
     fn sampling(&self) -> SpiSampling {
@@ -699,7 +817,16 @@ impl SpiDevice for GenericSpiDevice {
             reg_values: &mut reg_values,
             slots: &mut slots,
         };
-        vec![artifact.render(machine, &ctx, id, opts)]
+        let rendered = artifact.render(machine, &ctx, id, opts);
+        // Published, never swallowed — and stamped with WHY it is blank. A
+        // decorator that dropped the artifact would turn "dark" into "no
+        // evidence", which is the failure mode `inspect::DeviceEvidence`
+        // exists to end. Same call the I²C decorator makes.
+        vec![if self.powered {
+            rendered
+        } else {
+            super::supply::mark_unpowered(rendered)
+        }]
     }
 
     /// Record elapsed simulated time and age the part's own timers on it.
@@ -711,6 +838,12 @@ impl SpiDevice for GenericSpiDevice {
     /// machine holds no timer state of its own — it could not drift from this
     /// one if it tried.
     fn advance_time_us(&mut self, us: u64) {
+        // NOT forwarded when unpowered, exactly as `UnpoweredI2cDevice` does
+        // it: a free-running sample clock is the chip's own oscillator, and
+        // with no rail it does not run.
+        if !self.powered {
+            return;
+        }
         self.elapsed_us = self.elapsed_us.saturating_add(us);
         self.advance_rule_time(us);
         if !self.timers.is_empty() {
@@ -725,6 +858,14 @@ impl SpiDevice for GenericSpiDevice {
 
     /// Tier 2: hand the bus whatever pin transitions the rules queued.
     fn take_pin_drives(&mut self) -> Vec<(String, bool)> {
+        // An unpowered part cannot drive a pad — not its interrupt line and not
+        // a shift register's parallel outputs. Returning nothing leaves each
+        // pad wherever the board's pull leaves it, which is what a dead chip
+        // does. (Nothing can be queued anyway, since `transfer` is refused; this
+        // is the belt to that braces.)
+        if !self.powered {
+            return Vec::new();
+        }
         match self.rules.as_mut() {
             Some(m) => m.take_pin_drives(),
             None => Vec::new(),
@@ -736,6 +877,22 @@ impl SpiDevice for GenericSpiDevice {
     }
 
     fn cs_select(&mut self) {
+        // THE SUPPLY GATE, first of four. A part with no rail has no internal
+        // state to reframe and no rules to run: refusing here is what leaves it
+        // at its power-on defaults BY CONSTRUCTION rather than masking the
+        // readback at report time. Same argument, same placement as the
+        // hand-written MAX7219's gate in `transfer`.
+        if !self.powered {
+            return;
+        }
+        // A fixed-width shift register starts a FRESH frame on CS↓: whatever
+        // was half-clocked is gone, so a re-assertion cannot pair an orphan
+        // byte with this transaction's first. See `FrameSpec::discard_partial`.
+        if self.frames.as_ref().is_some_and(|f| f.discard_partial) {
+            self.frame_bytes = 0;
+            self.frame_buf.clear();
+            self.frame_closed = false;
+        }
         self.cmd_consumed = 0;
         self.is_read = None;
         self.cur_addr = None;
@@ -754,6 +911,9 @@ impl SpiDevice for GenericSpiDevice {
     }
 
     fn cs_release(&mut self) {
+        if !self.powered {
+            return;
+        }
         self.cs_held = false;
         self.write_acc.clear();
         self.raise_and_settle(Event::CsRelease, 0);
@@ -761,14 +921,42 @@ impl SpiDevice for GenericSpiDevice {
         // message is delivered rather than swallowed.
         if self.frames.is_some() {
             self.frame_bytes = 0;
-            self.raise_and_settle(Event::Frame, 0);
+            // A frame the LENGTH already closed leaves nothing new on the wire,
+            // so this boundary frame carries no bytes — rather than re-serving
+            // the frame the rules have already handled. The event itself is
+            // still raised, because it always was and a shipped descriptor may
+            // be listening for the boundary alone.
+            if self.frame_closed {
+                self.frame_buf.clear();
+                self.frame_closed = false;
+            }
+            // A part that latches only COMPLETE frames drops a short one here
+            // rather than acting on it. See `FrameSpec::discard_partial`.
+            if self.frames.as_ref().is_some_and(|f| f.discard_partial) {
+                self.frame_buf.clear();
+            } else {
+                self.close_frame(0);
+            }
         }
     }
 
     fn transfer(&mut self, mosi: u8) -> u8 {
+        // THE SUPPLY GATE. Every state change this device has arrives through
+        // here, so refusing the bus leaves digit RAM, latches and rule state at
+        // their power-on values rather than blanking them at readback.
+        if !self.powered {
+            return UNPOWERED_MISO;
+        }
         // Framing: close the frame the moment the declared length is clocked,
         // without waiting for CS↑. Same contract as the I²C side.
         let mut close_frame = false;
+        if self.frames.is_some() {
+            if self.frame_closed {
+                self.frame_buf.clear();
+                self.frame_closed = false;
+            }
+            self.frame_buf.push(mosi);
+        }
         if let Some(length) = self.frames.as_ref().and_then(|f| f.length) {
             if length > 0 {
                 self.frame_bytes = self.frame_bytes.saturating_add(1);
@@ -778,9 +966,17 @@ impl SpiDevice for GenericSpiDevice {
                 }
             }
         }
-        let miso = self.transfer_inner(mosi);
+        // A `frame_only` part has no register map to walk: the frame IS the
+        // transaction. It presents nothing on MISO — the three shift-register
+        // display drivers this covers each answered 0x00, and a 595's QH' is a
+        // cascade line, not a MISO.
+        let miso = if self.frame_only {
+            0x00
+        } else {
+            self.transfer_inner(mosi)
+        };
         if close_frame {
-            self.raise_and_settle(Event::Frame, i64::from(mosi));
+            self.close_frame(i64::from(mosi));
         }
         miso
     }
@@ -1062,8 +1258,15 @@ impl PeripheralKit for DeclarativeSpiKit {
                 .map_err(|_| anyhow::anyhow!("spi_mode {mode} is not a SPI mode (0..=3)"))?;
             device.set_spi_mode(m)?;
         }
-        // Tier 2: bind `outputs:` roles to pads (the DRDY/IRQ twin of the I²C
-        // INT line) before the device goes in.
+        // Supply state. `Some(false)` is the only value that changes anything;
+        // an absent key means powered. See `components::supply`.
+        let device = device.with_powered(
+            crate::peripherals::components::supply::powered_from_config(ctx),
+        );
+        // Tier 2: bind `outputs:` roles to pads. The DRDY/IRQ twin of the I²C
+        // INT line — and, for a shift register, the eight parallel outputs
+        // themselves: `QA..QH` are `outputs:` roles like any other, and the
+        // rules drive them through the same narrowed `DevicePins` port.
         ctx.bind_output_pins(&self.descriptor)?;
         ctx.attach_spi_device(Box::new(device))
     }
@@ -1122,6 +1325,47 @@ pub static RC522_KIT: LazyLock<DeclarativeSpiKit> = LazyLock::new(|| {
         labwired_config::embedded_device_yaml("rc522").expect("rc522 descriptor embedded"),
     )
     .expect("rc522.yaml is a valid declarative spi descriptor")
+});
+
+/// Maxim MAX7219 8×8 LED matrix driver (declarative `max7219.yaml`).
+///
+/// Migrated from the hand-written `components/max7219.rs`, which is DELETED.
+/// The first `spi_device` to dispatch on a frame's ADDRESS byte
+/// (`frames.opcode_byte` + `frame_byte(N)`) and the first to declare an
+/// artifact with render-time blanking. `tests/spi_frame_migration_parity.rs`
+/// pins it against the deleted model byte for byte.
+pub static MAX7219_KIT: LazyLock<DeclarativeSpiKit> = LazyLock::new(|| {
+    DeclarativeSpiKit::from_yaml(
+        labwired_config::embedded_device_yaml("led-matrix")
+            .expect("led-matrix descriptor embedded"),
+    )
+    .expect("max7219.yaml is a valid declarative spi descriptor")
+});
+
+/// 74HC595 8-bit shift register (declarative `hc595.yaml`).
+///
+/// Migrated from the hand-written `components/hc595.rs`, which is DELETED —
+/// and which drove no pad at all. The descriptor's `outputs: [QA..QH]` bind to
+/// real pads at attach, so the eight parallel outputs are something the MCU can
+/// read back rather than a private field.
+pub static HC595_KIT: LazyLock<DeclarativeSpiKit> = LazyLock::new(|| {
+    DeclarativeSpiKit::from_yaml(
+        labwired_config::embedded_device_yaml("74hc595").expect("74hc595 descriptor embedded"),
+    )
+    .expect("hc595.yaml is a valid declarative spi descriptor")
+});
+
+/// Dual-74HC595 4-digit 7-segment module (declarative `hc595_7seg.yaml`).
+///
+/// Migrated from the hand-written `components/hc595_7seg.rs`, which is DELETED.
+/// The byte-order SEARCH that model used is NOT ported: see the descriptor's
+/// header for what replaced it and why.
+pub static HC595_7SEG_KIT: LazyLock<DeclarativeSpiKit> = LazyLock::new(|| {
+    DeclarativeSpiKit::from_yaml(
+        labwired_config::embedded_device_yaml("hc595-7seg")
+            .expect("hc595-7seg descriptor embedded"),
+    )
+    .expect("hc595_7seg.yaml is a valid declarative spi descriptor")
 });
 
 /// Nordic nRF24L01+ transceiver (declarative `nrf24l01.yaml`).

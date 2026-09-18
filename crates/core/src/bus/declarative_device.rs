@@ -207,8 +207,11 @@ impl SystemBus {
         }
 
         let channels = crate::peripherals::components::declarative_i2c::leak_channels(desc);
+        // Supply state. `Some(false)` is the only value that changes anything;
+        // an absent key means powered. See `components::supply`.
         let mut device =
-            DeclarativeGpioDevice::new(ext.id.clone(), desc, observed, driven, cpu_hz, channels)?;
+            DeclarativeGpioDevice::new(ext.id.clone(), desc, observed, driven, cpu_hz, channels)?
+                .with_powered(crate::peripherals::components::supply::powered_from_placement(ext));
         for ch in channels {
             if let Some(v) = ext.config.get(ch.key).and_then(|v| v.as_f64()) {
                 device.seed_input(ch.key, v);

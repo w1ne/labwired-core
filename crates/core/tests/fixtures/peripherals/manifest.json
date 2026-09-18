@@ -1299,7 +1299,7 @@
       "device_type": "hc595-7seg",
       "label": "74HC595 7-Segment (4-digit)",
       "summary": "4-digit 7-segment LED display driven by two chained 74HC595 shift registers over SPI.",
-      "detail": "The classic blue 4-digit module: a segment 74HC595 and a digit-select 74HC595 in series. Firmware shifts a segment byte then a digit-select byte (16 bits), pulses RCLK (SPI chip-select) to latch, and multiplexes the four digits. The model auto-detects the digit-select byte, decodes the standard a–g/dp segment font, and surfaces the four displayed characters.",
+      "detail": "The classic blue 4-digit module: a segment 74HC595 and a digit-select 74HC595 in series. Firmware shifts a segment byte then a digit-select byte (16 bits), pulses RCLK (SPI chip-select) to latch, and multiplexes the four digits. The chain order is a property of the board and is stated rather than auto-detected: byte 0 is the segments, byte 1 selects the digit, active-high (0x01/0x02/0x04/0x08) or active-low (its complement). The four displayed characters are decoded through the standard a–g/dp segment font and published as inspectable evidence. NOT modelled: multiplexing as brightness, and the chained registers' own QH' / parallel pads, which the module does not bring out.",
       "transport": "spi",
       "category": "spi",
       "config_keys": [
@@ -1583,7 +1583,7 @@
       "device_type": "74hc595",
       "label": "74HC595 Shift Register (8-bit output)",
       "summary": "8-bit serial-in / parallel-out shift register over SPI.",
-      "detail": "Lets a host MCU drive 8 outputs (QA..QH) through one SPI byte: SER→MOSI, SRCLK→SCK, RCLK→chip-select. Firmware shifts a byte then pulses RCLK to latch it onto the pins; the parallel outputs hold until that latch. Bit 7 = QH, bit 0 = QA (MSB-first).",
+      "detail": "Lets a host MCU drive 8 outputs (QA..QH) through one SPI byte: SER→MOSI, SRCLK→SCK, RCLK→chip-select. Firmware shifts a byte then pulses RCLK to latch it onto the pins; the parallel outputs hold until that latch, and each one is driven onto a real GPIO input pad the MCU can read back. Bit 7 = QH, bit 0 = QA (MSB-first). RCLK latches on the RISING edge, i.e. chip-select going high. A QA..QH pin whose config key the placement does not set is simply not wired. NOT modelled: the QH' cascade output, SRCLR and OE.",
       "transport": "spi",
       "category": "spi",
       "config_keys": [
@@ -1591,6 +1591,46 @@
           "name": "cs_pin",
           "ty": "str",
           "doc": "RCLK latch GPIO pin, wired as SPI chip-select (e.g. \"PA4\"). Defaults to PA4."
+        },
+        {
+          "name": "qa_pin",
+          "ty": "str",
+          "doc": "GPIO pin the QA output drives (e.g. \"PB0\"). Omit to leave QA unwired."
+        },
+        {
+          "name": "qb_pin",
+          "ty": "str",
+          "doc": "GPIO pin the QB output drives. Omit to leave QB unwired."
+        },
+        {
+          "name": "qc_pin",
+          "ty": "str",
+          "doc": "GPIO pin the QC output drives. Omit to leave QC unwired."
+        },
+        {
+          "name": "qd_pin",
+          "ty": "str",
+          "doc": "GPIO pin the QD output drives. Omit to leave QD unwired."
+        },
+        {
+          "name": "qe_pin",
+          "ty": "str",
+          "doc": "GPIO pin the QE output drives. Omit to leave QE unwired."
+        },
+        {
+          "name": "qf_pin",
+          "ty": "str",
+          "doc": "GPIO pin the QF output drives. Omit to leave QF unwired."
+        },
+        {
+          "name": "qg_pin",
+          "ty": "str",
+          "doc": "GPIO pin the QG output drives. Omit to leave QG unwired."
+        },
+        {
+          "name": "qh_pin",
+          "ty": "str",
+          "doc": "GPIO pin the QH output drives. Omit to leave QH unwired."
         }
       ],
       "labs": [],
@@ -1800,7 +1840,7 @@
       "device_type": "led-matrix",
       "label": "MAX7219 8×8 LED Matrix",
       "summary": "8×8 LED matrix driven by a MAX7219 serial display driver over SPI.",
-      "detail": "The common 8×8 dot-matrix module built around a MAX7219 common-cathode display driver. Firmware clocks 16 bits per transaction — an address byte then a data byte — and pulses CS/LOAD to latch. Digit registers 0x01–0x08 are the eight matrix rows, so digit RAM is the framebuffer; the model also tracks decode mode, intensity, scan limit, shutdown and display test, blanking or flooding the readback the way the real part drives the panel.",
+      "detail": "The common 8×8 dot-matrix module built around a MAX7219 common-cathode display driver. Firmware clocks 16 bits per transaction — an address byte then a data byte — and pulses CS/LOAD to latch. Digit registers 0x01–0x08 are the eight matrix rows, so digit RAM is the framebuffer; the model also tracks decode mode, intensity, scan limit, shutdown and display test, blanking or flooding the readback the way the real part drives the panel. A 16-bit write is latched or it never happened: an odd byte left in the shifter when CS moves is discarded rather than decoded. NOT modelled: cascading (DOUT), intensity as luminance, and scan limit as multiplexing — all eight rows are published whatever it says.",
       "transport": "spi",
       "category": "spi",
       "config_keys": [

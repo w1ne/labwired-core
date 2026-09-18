@@ -591,6 +591,8 @@ pub(crate) fn validate_descriptor(desc: &DeviceDescriptor) -> Result<()> {
             outputs: &desc.behavior.outputs,
             inputs: &inputs,
             pins: &[],
+            // A UART part is a byte stream, not a framed message bus.
+            frames: None,
         },
     )
     .with_context(|| {

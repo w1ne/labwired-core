@@ -188,6 +188,13 @@ impl EvalCtx for PinLevels<'_> {
     fn fifo_len(&self, _: &str) -> i64 {
         0
     }
+    /// A logic gate is COMBINATIONAL over pads — it has no bus, so it has no
+    /// frame. 0 is the truth here, not a stub, and `validate_rule_names`
+    /// refuses a `frame_byte()` in a part that declares no `frames:`, so no
+    /// shipped descriptor can reach it.
+    fn frame_byte(&self, _: usize) -> i64 {
+        0
+    }
     fn written(&self) -> i64 {
         0
     }

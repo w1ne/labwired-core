@@ -26,8 +26,6 @@ pub mod declarative_uart;
 pub mod dht22;
 pub mod drv2605;
 pub mod h_bridge_motor;
-pub mod hc595;
-pub mod hc595_7seg;
 pub mod i2c_factory;
 pub mod i80_panel;
 pub mod ili9341_parallel;
@@ -41,7 +39,6 @@ pub mod lcd1602;
 pub mod ldr;
 pub mod lipo_charger;
 pub mod max30102;
-pub mod max7219;
 pub mod mcp2515;
 pub mod microsd;
 pub mod mlx90640;
@@ -98,8 +95,6 @@ pub use declarative_led_strip::{
 pub use declarative_logic::DeclarativeLogicDevice;
 pub use declarative_spi::{DeclarativeSpiKit, GenericSpiDevice};
 pub use drv2605::{Drv2605, DRV2605_ADDR};
-pub use hc595::Hc595;
-pub use hc595_7seg::Hc5957Seg;
 pub use i2c_factory::{
     build_external_i2c_device, build_i2c_device, build_i2c_tree, i2c_mux_child_ids,
     is_i2c_mux_type, validate_i2c_mux_topology,
@@ -112,7 +107,6 @@ pub use iolink_master::{
 pub use lcd1602::Lcd1602;
 pub use ldr::Ldr;
 pub use max30102::{Max30102, MAX30102_ADDR};
-pub use max7219::Max7219;
 pub use mlx90640::{Mlx90640, ThermalScene, MLX90640_ADDR};
 pub use ntc_thermistor::NtcThermistor;
 pub use pca9685::Pca9685;

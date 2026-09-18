@@ -108,6 +108,15 @@ pub struct DeclarativeGpioDevice {
     /// Scratch for the pads that moved in the store being serviced, reused
     /// across passes so the write path allocates nothing per store.
     moved: Vec<String>,
+    /// **Whether the module's supply pins are connected in the design.**
+    ///
+    /// The same key, the same asymmetry and the same reason as on the SPI
+    /// primitive — ABSENT MEANS POWERED. A TM1637 module wired SCK/DIO and
+    /// nothing else decodes perfectly here and is dark on a bench; the gate is
+    /// in [`Self::service`], so an unpowered part observes no pad, runs no rule
+    /// and drives no output, and its RAM stays at its power-on value BY
+    /// CONSTRUCTION rather than being blanked at readback.
+    powered: bool,
     /// Output-register addresses this device must be serviced on SYNCHRONOUSLY,
     /// from the MMIO write hook rather than the peripheral tick. Non-empty when
     /// a rule listens for a pin EDGE — see
@@ -168,6 +177,7 @@ impl DeclarativeGpioDevice {
         let listens_for_pin_sets = machine.listens_for_pin_sets();
         Ok(Self {
             id,
+            powered: true,
             artifact: CompiledArtifact::from_descriptor(descriptor)?,
             listens_for_pin_sets,
             moved: Vec::new(),
@@ -186,6 +196,19 @@ impl DeclarativeGpioDevice {
             cycle_remainder: 0,
             elapsed_us: 0,
         })
+    }
+
+    /// Declare whether the module's supply is connected. Only ever called with
+    /// `false`, from attach, when the compiled manifest explicitly says the
+    /// supply pins are on no net. See the `powered` field.
+    pub fn with_powered(mut self, powered: bool) -> Self {
+        self.powered = powered;
+        self
+    }
+
+    /// True when the module has a supply. See the `powered` field.
+    pub fn powered(&self) -> bool {
+        self.powered
     }
 
     /// Seed a measurement slot from a `config:` override, like every other
@@ -278,6 +301,14 @@ impl BusResidentDevice for DeclarativeGpioDevice {
     /// arrived — which is what a bit-banged read loop expects: clock high, read
     /// the data line.
     fn service(&mut self, pins: &mut dyn DevicePins, now: u64) {
+        // THE SUPPLY GATE. One return, ahead of every phase: no sampling, no
+        // events, no clock, no pad drive. Placing it here rather than on the
+        // artifact is what makes an unpowered part's RAM stay at its power-on
+        // value instead of being blanked at report time — the same argument the
+        // hand-written MAX7219 made for putting its gate in `transfer`.
+        if !self.powered {
+            return;
+        }
         // ── PHASE 1: resample EVERY observed pad, raise nothing ────────────
         //
         // ⚠️ THE TWO PHASES ARE THE WHOLE SIMULTANEOUS-PAD FIX, AND THE ORDER
@@ -455,7 +486,13 @@ impl crate::inspect::DeviceEvidence for DeclarativeGpioDevice {
             slots: &mut slots,
             expr_scale: &self.expr_scale,
         };
-        vec![artifact.render(&self.machine, &ctx, id, opts)]
+        let rendered = artifact.render(&self.machine, &ctx, id, opts);
+        // Published, never swallowed, and stamped with WHY it is blank.
+        vec![if self.powered {
+            rendered
+        } else {
+            super::supply::mark_unpowered(rendered)
+        }]
     }
 }
 
@@ -566,6 +603,11 @@ pub(crate) fn validate_rule_names(desc: &DeviceDescriptor) -> Result<()> {
             outputs: &b.outputs,
             inputs: &inputs,
             pins: &pins,
+            // Shared by the gpio, I²C and SPI primitives: a `frame_byte(N)` is
+            // checked against the part's OWN `frames:` block, so a pins-only
+            // part reading one is a load error and a framed part's index is
+            // bounded by the declared length.
+            frames: b.frames.as_ref(),
         },
     )
     .with_context(|| format!("part '{}' names something it does not declare", desc.r#type))
