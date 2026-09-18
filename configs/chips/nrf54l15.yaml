@@ -47,6 +47,16 @@ core: "cortex-m33"
 # (datasheet v1.0 §5.5.3), which is the state every lab here runs in.
 cpu_hz: 128_000_000
 
+# TrustZone non-secure peripheral alias window. Every peripheral mapped at the
+# secure base 0x5000_0000+ is mirrored exactly 0x1000_0000 below it, and a
+# firmware image built for the NS view (USE_NON_SECURE_ADDRESS_MAP, e.g. the
+# hosted nrf54l15-app-ns lane) addresses P2 at 0x4005_0400, GRTC at 0x400E_2000
+# and so on — addresses this descriptor's secure view does not declare. The
+# bus applies this offset strictly as a FALLBACK: an access that maps to a
+# declared peripheral stays where it is, and an address that maps nowhere even
+# after translation stays unmapped. See `ChipDescriptor::ns_alias_offset`.
+ns_alias_offset: 0x10000000
+
 flash:
   base: 0x00000000
   size: "1524KB"

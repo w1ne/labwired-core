@@ -699,6 +699,36 @@ impl SystemBus {
         active
     }
 
+    /// Map a non-secure (TrustZone) peripheral alias address onto the secure
+    /// window this bus actually maps, or return `addr` unchanged.
+    ///
+    /// A chip opts in by declaring `ns_alias_offset:` in its descriptor
+    /// (nRF54L15: `0x1000_0000`). A firmware image built for the NS view then
+    /// addresses `secure - offset` — `0x400D_8200` for P1, mapped at
+    /// `0x500D_8200`. The translation is a FALLBACK, never an override: it fires
+    /// only when `addr` maps to no peripheral and `addr + offset` does, so a
+    /// real mapping — declared or not — is never shadowed, and an address that
+    /// maps nowhere even after translation stays unmapped (which is what keeps
+    /// the offset from leaking into a chip's unrelated address space).
+    ///
+    /// `None` on every chip without the field, so their hot path is one
+    /// `Option` test.
+    #[inline]
+    pub(crate) fn resolve_ns_alias(&self, addr: u64) -> u64 {
+        let Some(offset) = self.ns_alias_offset else {
+            return addr;
+        };
+        if self.find_peripheral_index(addr).is_some() {
+            return addr;
+        }
+        let translated = addr.wrapping_add(offset);
+        if self.find_peripheral_index(translated).is_some() {
+            translated
+        } else {
+            addr
+        }
+    }
+
     pub(crate) fn find_peripheral_index(&self, addr: u64) -> Option<usize> {
         // Canonical routing: among the windows CONTAINING `addr`, the one
         // with the GREATEST start wins (last-start-wins; equal starts resolve

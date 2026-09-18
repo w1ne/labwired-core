@@ -57,6 +57,38 @@ peripherals:
     assert_eq!(desc.peripherals[0].irq, Some(37));
 }
 
+/// `ns_alias_offset` accepts the same spellings `base_address` does and stays
+/// `None` when absent, so every chip written before the key existed loads and
+/// the bus never translates for it.
+#[test]
+fn ns_alias_offset_parses_lax_number_forms() {
+    let base = r#"
+name: "test-chip"
+arch: "cortex-m3"
+flash:
+  base: 0x0
+  size: "1MB"
+ram:
+  base: 0x20000000
+  size: "128KB"
+peripherals: []
+"#;
+    let absent: ChipDescriptor = serde_yaml::from_str(base).unwrap();
+    assert_eq!(absent.ns_alias_offset, None);
+
+    let underscored: ChipDescriptor =
+        serde_yaml::from_str(&format!("{base}\nns_alias_offset: \"0x1000_0000\"\n")).unwrap();
+    assert_eq!(underscored.ns_alias_offset, Some(0x1000_0000));
+
+    let plain_hex: ChipDescriptor =
+        serde_yaml::from_str(&format!("{base}\nns_alias_offset: \"0x10000000\"\n")).unwrap();
+    assert_eq!(plain_hex.ns_alias_offset, Some(0x1000_0000));
+
+    let decimal: ChipDescriptor =
+        serde_yaml::from_str(&format!("{base}\nns_alias_offset: 268435456\n")).unwrap();
+    assert_eq!(decimal.ns_alias_offset, Some(0x1000_0000));
+}
+
 #[test]
 fn irq_accepts_bare_number() {
     let p: PeripheralConfig = serde_yaml::from_str(

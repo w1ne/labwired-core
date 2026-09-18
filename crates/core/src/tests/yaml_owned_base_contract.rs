@@ -383,20 +383,6 @@ const WINDOW_OVERLAP_ALLOWLIST: &[(&str, &str, &str, &str)] = &[
          0x3FF4_9000 for 0x400 bytes.",
     ),
     (
-        "nrf54l15.yaml",
-        "gpio1",
-        "temp",
-        "nRF54L15 uses documented negative-offset remaps (MDK base - 0x504) to \
-         line up Zephyr's register views; the side effect is 0x504 bytes of \
-         gpio1 landing inside `temp`'s window.",
-    ),
-    (
-        "nrf54l15.yaml",
-        "gpio0",
-        "wdt31",
-        "Same documented -0x504 remap, gpio0 into `wdt31`'s window.",
-    ),
-    (
         "stm32l476.yaml",
         "comp",
         "syscfg",

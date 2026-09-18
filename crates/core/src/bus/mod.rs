@@ -296,6 +296,12 @@ pub struct SystemBus {
     /// read-modify-write on the aligned base register; the flavour decides
     /// which of the three aliases is SET, which CLR and which XOR/TGL.
     pub atomic_register_aliases: AtomicAliasFlavour,
+    /// Non-secure peripheral alias offset from `ChipDescriptor::ns_alias_offset`
+    /// (`None` on every chip that does not opt in). When `Some`, an MMIO access
+    /// that [`Self::find_peripheral_index`] would miss is retried at
+    /// `addr + offset`; the translated address is what both the range lookup
+    /// and the `addr - base` offset math use. See [`Self::resolve_ns_alias`].
+    pub ns_alias_offset: Option<u64>,
     /// Plan 3: per-core bitmask of pending cpu IRQ slots (32 bits each;
     /// index 0 = PRO_CPU, 1 = APP_CPU). Aggregated by
     /// `tick_peripherals_with_costs` from peripheral `explicit_irqs` source
