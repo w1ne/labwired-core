@@ -8,7 +8,7 @@
 // the heavy end-to-end resume test lives in `e2e_external_arduino_esp32_in_sim.rs`.
 
 use labwired_core::bus::SystemBus;
-use labwired_core::peripherals::components::Ssd1680Tricolor290;
+use labwired_core::peripherals::components::{ssd1680_tricolor_290, GenericDisplay};
 use labwired_core::peripherals::esp32::spi::Esp32Spi;
 use labwired_core::runtime_snapshot::{CpuKind, MachineRuntimeSnapshot};
 use labwired_core::system::xtensa::configure_xtensa_esp32;
@@ -103,7 +103,7 @@ fn ram_peripheral_runtime_snapshot_roundtrips_memory() {
 
 #[test]
 fn ssd1680_runtime_snapshot_roundtrips_panel_planes() {
-    let mut panel = Ssd1680Tricolor290::new("GPIO5");
+    let mut panel = ssd1680_tricolor_290("GPIO5");
     // Drive the panel through a minimal command sequence so internal state
     // diverges from default: SWRESET → power_on toggle → write a black byte.
     use labwired_core::peripherals::spi::SpiDevice;
@@ -119,7 +119,7 @@ fn ssd1680_runtime_snapshot_roundtrips_panel_planes() {
 
     // Build a fresh panel; verify it starts blank, restore, verify state
     // matches the original.
-    let mut fresh = Ssd1680Tricolor290::new("GPIO5");
+    let mut fresh = ssd1680_tricolor_290("GPIO5");
     SpiDevice::restore_runtime_snapshot(&mut fresh, &blob).expect("restore");
     // Round-trip stability: serialize both and compare.
     let blob2 = SpiDevice::runtime_snapshot(&fresh);
@@ -132,7 +132,7 @@ fn machine_runtime_snapshot_roundtrips_through_serialization() {
     let cpu = configure_xtensa_esp32(&mut bus);
 
     // Attach an SSD1680 to spi3 so the snapshot covers the SPI-device path.
-    bus.attach_spi_device("spi3", Box::new(Ssd1680Tricolor290::new("GPIO5")))
+    bus.attach_spi_device("spi3", Box::new(ssd1680_tricolor_290("GPIO5")))
         .expect("spi3 is an Esp32Spi controller");
     bus.refresh_peripheral_index();
 
@@ -214,7 +214,7 @@ fn agentdeck_snapshot_file_restores_post_paint_panel() {
     // Build a fresh machine matching the the reference firmware topology.
     let mut bus = SystemBus::new();
     let cpu = configure_xtensa_esp32(&mut bus);
-    bus.attach_spi_device("spi3", Box::new(Ssd1680Tricolor290::new("GPIO5")))
+    bus.attach_spi_device("spi3", Box::new(ssd1680_tricolor_290("GPIO5")))
         .expect("spi3 is an Esp32Spi controller");
     bus.refresh_peripheral_index();
 
@@ -233,20 +233,18 @@ fn agentdeck_snapshot_file_restores_post_paint_panel() {
     let panel = spi3
         .attached_devices
         .iter()
-        .filter_map(|d| {
-            d.as_any()
-                .and_then(|a| a.downcast_ref::<Ssd1680Tricolor290>())
-        })
+        .filter_map(|d| d.as_any().and_then(|a| a.downcast_ref::<GenericDisplay>()))
         .next()
         .expect("panel attached");
+    let planes = panel.planes();
 
     assert_eq!(
         panel.refresh_generation(),
         1,
         "snapshot must restore post-first-paint refresh_generation"
     );
-    let bp = panel.black_plane();
-    let rp = panel.red_plane();
+    let bp = planes.ram("black").expect("black plane");
+    let rp = planes.ram("red").expect("red plane");
     let black_non_ff = bp.iter().filter(|&&b| b != 0xFF).count();
     let red_non_ff = rp.iter().filter(|&&b| b != 0xFF).count();
     let red_zero = rp.iter().filter(|&&b| b == 0x00).count();

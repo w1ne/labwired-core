@@ -512,6 +512,134 @@ The pads such a part drives still go out through the narrowed `DevicePins` port,
 exactly as on the tick pass — this changes WHEN `service` runs, not what it may
 touch.
 
+## `logic_gate` — 74-series logic, as a truth table
+
+A gate has **no bus**. No address, no register file, nothing to write and
+nothing to read back — so neither `i2c_device`, `spi_device` nor `uart_device`
+can describe one, and none of the 139 74-series symbols the 39-project KiCad
+corpus drops could be a register part. What a gate has is input pads, output
+pads, a boolean function between them, enables that take outputs off the wire,
+and a propagation delay. That is the whole of `logic:`.
+
+```yaml
+# configs/devices/74hc125.yaml — quad 3-state buffer, one enable PER GATE
+type: 74hc125
+
+behavior:
+  primitive: logic_gate
+  logic:
+    inputs: [A1, A2, A3, A4]
+    outputs: [Y1, Y2, Y3, Y4]
+    enables:
+      - { pin: OE1, active: low, outputs: [Y1] }
+      - { pin: OE2, active: low, outputs: [Y2] }
+      - { pin: OE3, active: low, outputs: [Y3] }
+      - { pin: OE4, active: low, outputs: [Y4] }
+    table:
+      Y1: "A1"
+      Y2: "A2"
+      Y3: "A3"
+      Y4: "A4"
+    tprop_ns: 9
+    drive:
+      hiz_when_disabled: true
+```
+
+`enables` is a LIST of `{ pin, outputs }` and not one part-wide enable pin
+because the '125 genuinely has four. A model with a single OE switches all four
+buffers together: it passes a one-gate test and is wrong on every board that
+uses the '125 the way the corpus does — as four independently gated drivers onto
+a shared net.
+
+### The table is the shared expression grammar
+
+A `table:` entry is compiled by the same [Phase C expression
+parser](#reportedreg--the-word-a-register-would-put-on-the-wire) every Tier-2
+rule guard uses — `! & | ^ ~`, parentheses, C precedence. Each bare pin name is
+rewritten to the `var(NAME)` call the grammar already has, so a gate cannot grow
+its own dialect of `&` and a malformed entry is refused at load with the same
+error machinery.
+
+The consequence a part author sees: **a pin role must be an identifier**
+(`[A-Za-z_][A-Za-z0-9_]*`). The datasheets spell the '125's gates `1A` / `1Y` /
+`1OE`, which start with a digit; the in-tree descriptors use `A1` / `Y1` / `OE1`
+and the loader rejects anything else by name rather than letting it fail as a
+parse error nobody can read. Use `!` and not `~`: `!` is the logical not a pad
+wants, `~A` on a LOW pad is `-1`.
+
+Each role binds to a pad through the `config:` key `<role lowercased>_pin` —
+`A1` → `a1_pin` — so an eight-bit transceiver does not need a twenty-line
+`pins:` block. `behavior.pins` / `behavior.output_pins` override it for a part
+whose key is spelled differently.
+
+### Three shapes, and exactly one per part
+
+| block | part | what it says |
+| --- | --- | --- |
+| `table:` | combinational gate | `Y1: "!(A1 & B1)"` — output role → boolean function |
+| `direction:` | bidirectional transceiver | `{ pin: DIR, a_to_b_when: 1, a: [A1…], b: [B1…] }`, paired by index |
+| `select:` | 1-of-2 bus switch | `{ pin: S, low: [A1…], high: [B1…] }`, paired by index with `outputs:` |
+
+Declaring none is a load error (the part would attach, drive nothing and look
+like it worked); declaring two is a load error as well, because they are three
+different parts and not three spellings of one.
+
+A transceiver role appears in **both** `inputs:` and `outputs:`, and that is the
+point: the same pad is read in one direction and driven in the other. Attach
+binds both ends of it — the pin's output register (what the MCU drives) and its
+input register (what the MCU samples) — so a DIR flip costs no pad resolution.
+
+### `tprop_ns`, and the one-cycle floor
+
+`tprop_ns` is converted to simulated CYCLES at attach, rounded up, with a floor
+of **one cycle**. A zero-delay gate would let firmware store an input and read
+the answer back inside the same instruction, which no real part does — and it
+would make the answer depend on whether the bus happened to service the device
+inside that store. One cycle is 12.5 ns at 80 MHz, the right order for the
+5–15 ns this family specifies. A placement may override the clock the delay is
+derived from with `config: { cpu_hz: … }`, which is how
+`tests/logic_gate_74series.rs` walks a 9 ns delay one cycle at a time.
+
+A `logic_gate` is serviced from BOTH the MMIO write hook (through
+`edge_service_addrs`, so an input that moves and moves back inside one tick
+interval is still seen) and the peripheral tick (so a deadline can EXPIRE with
+nothing writing anything). It needs both; either alone is a part that answers
+sometimes.
+
+### ⚠️ What Hi-Z means on this twin
+
+`drive: { hiz_when_disabled: true }` — the default, and the truth for every part
+in this family — means a disabled output is **released**, not forced: the part
+stops writing the pad.
+
+It does NOT mean the pad floats to a pull-up. This engine has exactly two level
+sources per pad — what the MCU drives out of a pin configured as an output, and
+the external level a bus-resident device last applied — and `GpioPort` computes
+the input word as "ODR for the bits driven push-pull, the latched external level
+for the rest". There is no resistor network and no bus arbitration. So a
+released output leaves the pad holding whatever level it last held: correct for
+the case the '125 and the '245 exist for (the driver is off the wire and
+something else owns the net), and an approximation when nothing else drives the
+net at all, where silicon would drift to the MCU's internal pull and this model
+stays put.
+
+The observable in a test is therefore not "the pad went to X" but "the pad
+stopped ANSWERING": move the input while the output is disabled and assert the
+pad does not follow. Set `hiz_when_disabled: false` for the rare part whose
+disabled output is actively pulled to 0; the engine then drives a LOW.
+
+### ⚠️ What a `logic_gate` does not model
+
+* **Contention.** Two parts driving one net is an electrical question; this
+  engine has one level source per pad and the last writer wins.
+* **Voltage domains.** A `74lvc1t45` level translator's whole purpose is VCCA ≠
+  VCCB, and a level here is a bit. The direction and the isolation are modelled;
+  the translation is a no-op, so a board a missing translator would break still
+  runs.
+* **A FET switch is not a buffer.** The `74cbtlv3257` is four pass transistors
+  and is modelled as a one-way mux, because two pads cannot become one net here.
+* Input thresholds, slew, drive strength, and the supply rail.
+
 ## `uart_device` — a part whose whole interface is a byte stream
 
 Two shapes a register map cannot reach because the part has no registers: an
@@ -928,6 +1056,42 @@ are never transformed: contrast, gamma and inversion are reported as flags, so
 what the artifact holds is what firmware wrote and a photograph of the glass can
 be compared against it. The proof parts are `ssd1306.yaml` (I²C, page-major
 1 bpp) and `st7789.yaml` (SPI, row-major RGB565 with MADCTL orientation).
+
+**E-paper is where a framebuffer stops being one**, and the four keys the two
+tri-colour panels forced are the four ways it differs. They are stated, never
+inferred, and `ssd1680_tricolor_290.yaml` / `uc8151d_tricolor_290.yaml` are the
+proof parts.
+
+| key | the fact it states | what a house default would have done |
+|---|---|---|
+| `ram.planes: [black, red]` | Two independent 1-bpp RAMs selected by the command that opens the stream (SSD1680 0x24/0x26, UC8151D DTM1/DTM2). `ram_write` names one. The artifact payload is the planes concatenated, with `plane_bytes` giving the split. | One frame memory composes the two into a picture the model never produced — and a stream defaulting to the first plane paints the red image in black. |
+| `ram.blank: 0xFF` | The ERASED byte, and therefore what an ink count treats as no ink. A set bit on e-paper is no ink; an OLED's GDDRAM is the other way round. It is also what `clear_ram` fills with. | A default of 0 reports a blank panel as fully inked and a cleared one as blank — backwards on both counts. |
+| `ram.units: { col: bytes, row: pixels }` | What ONE STEP of each address counter covers. SSD1680 0x44 takes the X window as start/8 and 0x45 takes Y as raw pixel rows. | Reading both in pixels streams a plausible byte count into the wrong rows, with no error anywhere. |
+| `refresh` + `refresh_generation` | FRAME MEMORY IS NOT THE SCREEN. SSD1680 0x20 and UC8151D 0x12 are what move the ink; until one arrives the glass still shows the previous image. The action latches RAM into a separate screen and bumps the counter `labwired_verify`'s `min_refresh_generation` clause resolves against. `{ plane: black, of: screen }` publishes the ink on the GLASS, which disagrees with `{ plane: black }` exactly when firmware wrote a frame it never activated. | Reporting frame memory as the picture passes firmware that wrote a perfect frame and never refreshed. |
+
+Two more keys the same two panels forced, both about framing rather than pixels:
+
+* **`ram.stream: window_counted`** — the window BOUNDS the stream: the controller
+  accepts exactly `(col_end - col_start + 1) × (row_end - row_start + 1)` write
+  units and then the stream is shut. That is the SSD1680's own behaviour, not a
+  tidier spelling of `command`; running past it wraps the counters back to the
+  window origin and overwrites the rows just written. The UC8151D has no RAM
+  window command at all and stays on `command`.
+* **`dc.unwired`** — what a panel does when NO D/C pad is resolved at attach,
+  which is a real board (the ESP32 e-paper lab wires CS and nothing else). It is
+  per panel because the two deleted models answered differently: the SSD1680
+  INFERRED (a byte with no stream open is a command — which only terminates
+  because the stream is window-counted), and the UC8151D could not infer at all
+  and treated every byte as DATA. Both are declared cheats, both carry a `real:`
+  clause, and a house default would have silently changed one panel's picture.
+
+A `when: { arg, mask, equals }` guard on a `do:` entry runs it only for a given
+PARAMETER value: the SSD1680's 0x22 is a sequence selector, where 0xF8 powers
+the booster on and 0x83 powers it off. And `busy: { config_key, idle_level }`
+drives the BUSY line the host polls to its idle level at attach — stated per
+panel because SSD1680 is busy-HIGH and UC8151D is busy-LOW, and the wrong level
+hangs GxEPD2's `_waitWhileBusy` for a timeout that never arrives at simulated
+speed.
 
 `led_strip` is the primitive for addressable LED strips, and it is separate from
 `display` on purpose: a strip is a per-LED COLOUR ARRAY clocked by a wire

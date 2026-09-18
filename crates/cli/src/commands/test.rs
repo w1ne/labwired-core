@@ -367,7 +367,7 @@ fn run_s3_rom_boot_no_elf(
 /// ONE home: both S3 rom-boot arms (ELF-bearing and ELF-less) call this, so the
 /// two cannot drift into reporting different things about the same panel.
 fn emit_device_block_readout(bus: &labwired_core::bus::SystemBus) {
-    use labwired_core::peripherals::components::{Ssd1680Tricolor290, Uc8151dTricolor290};
+    use labwired_core::peripherals::components::GenericDisplay;
     use labwired_core::peripherals::esp32::spi::Esp32Spi;
     let Some(idx) = bus.find_peripheral_index_by_name("spi3") else {
         return;
@@ -378,23 +378,27 @@ fn emit_device_block_readout(bus: &labwired_core::bus::SystemBus) {
     let Some(spi3) = any.downcast_ref::<Esp32Spi>() else {
         return;
     };
+    // ONE arm, keyed on what the descriptor DECLARES rather than on a concrete
+    // Rust type: a panel with named 1-bpp planes is an e-paper, whichever
+    // controller it is. The two per-panel arms this replaces were the reason a
+    // second e-paper controller meant an edit here.
     for dev in &spi3.attached_devices {
-        let Some(a) = dev.as_any() else { continue };
-        if let Some(p) = a.downcast_ref::<Ssd1680Tricolor290>() {
-            let ink = p.black_plane().iter().filter(|&&b| b != 0xFF).count();
-            eprintln!(
-                "[device-block] ssd1680_tricolor_290 refresh_gen={} black_ink={}",
-                p.refresh_generation(),
-                ink
-            );
-        } else if let Some(p) = a.downcast_ref::<Uc8151dTricolor290>() {
-            let ink = p.black_plane().iter().filter(|&&b| b != 0xFF).count();
-            eprintln!(
-                "[device-block] uc8151d_tricolor_290 refresh_gen={} black_ink={}",
-                p.refresh_generation(),
-                ink
-            );
-        }
+        let Some(panel) = dev
+            .as_any()
+            .and_then(|a| a.downcast_ref::<GenericDisplay>())
+        else {
+            continue;
+        };
+        let planes = panel.planes();
+        let Some(ink) = planes.ink_bytes("black") else {
+            continue;
+        };
+        eprintln!(
+            "[device-block] {} refresh_gen={} black_ink={}",
+            labwired_core::peripherals::spi::SpiDevice::component_id(panel).unwrap_or("e-paper"),
+            panel.refresh_generation(),
+            ink
+        );
     }
 }
 

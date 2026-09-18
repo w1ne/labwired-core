@@ -437,11 +437,11 @@ fn sh1107_reports_ink_matching_what_was_written() {
 /// separates "RAM was written" from "the image is on the glass".
 #[test]
 fn epaper_reports_ink_and_whether_it_reached_the_glass() {
-    use labwired_core::peripherals::components::Ssd1680Tricolor290;
+    use labwired_core::peripherals::components::ssd1680_tricolor_290;
 
     const INKED_BYTES: usize = 12;
 
-    let mut dev = Ssd1680Tricolor290::new("PA4");
+    let mut dev = ssd1680_tricolor_290("PA4");
     // GxEPD2_290_C90c::_InitDisplay(), trimmed to what sets the RAM window.
     let init: &[u8] = &[
         0x12, 0x01, 0x27, 0x01, 0x00, 0x11, 0x03, 0x3C, 0x05, 0x18, 0x80, 0x21, 0x00, 0x80, 0x44,

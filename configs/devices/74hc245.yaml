@@ -1,0 +1,60 @@
+# 74HC245 — octal BIDIRECTIONAL bus transceiver with three-state outputs.
+#
+# Datasheet (Nexperia 74HC245 Rev. 5): "The 74HC245 is an octal transceiver
+# featuring non-inverting 3-state bus compatible outputs in both send and
+# receive directions. The device features an Output Enable (OE) input for easy
+# cascading and a Send/Receive (DIR) input for direction control. OE controls
+# the outputs so that the buses are effectively isolated." tPHL/tPLH is 11 ns
+# typical at VCC = 5 V, CL = 15 pF (Table 9).
+#
+# ⚠️ EIGHT PADS, SIXTEEN ROLES-WORTH OF WORK. Every An and Bn appears in BOTH
+# `inputs:` and `outputs:`: a transceiver pad is read in one direction and
+# driven in the other, and attach binds both ends of each so a DIR flip costs no
+# pad re-resolution. `direction.a` and `direction.b` are paired BY INDEX — A1
+# with B1, A8 with B8 — so a reviewer holding the datasheet checks pin order and
+# nothing else.
+#
+# Imported from KiCad as `74LS245` / `74HC245` / `SN74LVC245A`.
+type: 74hc245
+
+behavior:
+  primitive: logic_gate
+  logic:
+    inputs: [A1, A2, A3, A4, A5, A6, A7, A8, B1, B2, B3, B4, B5, B6, B7, B8]
+    outputs: [A1, A2, A3, A4, A5, A6, A7, A8, B1, B2, B3, B4, B5, B6, B7, B8]
+    enables:
+      - { pin: OE, active: low, outputs: [A1, A2, A3, A4, A5, A6, A7, A8, B1, B2, B3, B4, B5, B6, B7, B8] }
+    direction:
+      pin: DIR
+      a_to_b_when: 1
+      a: [A1, A2, A3, A4, A5, A6, A7, A8]
+      b: [B1, B2, B3, B4, B5, B6, B7, B8]
+    tprop_ns: 11
+    drive:
+      hiz_when_disabled: true
+
+metadata:
+  label: "74HC245 Octal Bus Transceiver"
+  summary: "Eight bidirectional bits; DIR picks the direction, OE isolates both buses."
+  detail: "74HC245 / 74LS245 / SN74LVC245A octal bus transceiver. DIR HIGH sends A to B, DIR LOW sends B to A, and a HIGH on OE isolates both buses — this twin then stops driving those pads rather than forcing a level, so the pads hold whatever they last had. All eight bits switch together; there is no per-bit enable. NOT modelled: bus contention between two enabled drivers on one net, input thresholds, output drive strength and the supply rail."
+  category: gpio
+  config_keys:
+    - { name: a1_pin, ty: str, doc: "A1 pin (A-side bit 1)." }
+    - { name: a2_pin, ty: str, doc: "A2 pin (A-side bit 2)." }
+    - { name: a3_pin, ty: str, doc: "A3 pin (A-side bit 3)." }
+    - { name: a4_pin, ty: str, doc: "A4 pin (A-side bit 4)." }
+    - { name: a5_pin, ty: str, doc: "A5 pin (A-side bit 5)." }
+    - { name: a6_pin, ty: str, doc: "A6 pin (A-side bit 6)." }
+    - { name: a7_pin, ty: str, doc: "A7 pin (A-side bit 7)." }
+    - { name: a8_pin, ty: str, doc: "A8 pin (A-side bit 8)." }
+    - { name: b1_pin, ty: str, doc: "B1 pin (B-side bit 1)." }
+    - { name: b2_pin, ty: str, doc: "B2 pin (B-side bit 2)." }
+    - { name: b3_pin, ty: str, doc: "B3 pin (B-side bit 3)." }
+    - { name: b4_pin, ty: str, doc: "B4 pin (B-side bit 4)." }
+    - { name: b5_pin, ty: str, doc: "B5 pin (B-side bit 5)." }
+    - { name: b6_pin, ty: str, doc: "B6 pin (B-side bit 6)." }
+    - { name: b7_pin, ty: str, doc: "B7 pin (B-side bit 7)." }
+    - { name: b8_pin, ty: str, doc: "B8 pin (B-side bit 8)." }
+    - { name: dir_pin, ty: str, doc: "DIR pin. HIGH = A to B, LOW = B to A." }
+    - { name: oe_pin, ty: str, doc: "OE pin, active LOW. HIGH isolates both buses." }
+  inputs: []

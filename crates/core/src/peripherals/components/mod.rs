@@ -18,6 +18,7 @@ pub mod declarative_expr;
 pub mod declarative_gpio;
 pub mod declarative_i2c;
 pub mod declarative_led_strip;
+pub mod declarative_logic;
 pub mod declarative_regs;
 pub mod declarative_spi;
 pub mod declarative_uart;
@@ -63,12 +64,10 @@ pub mod shm_i2c;
 pub mod sn74hc165;
 pub mod soil_moisture;
 pub mod sps30;
-pub mod ssd1680_tricolor_290;
 pub mod step_dir_motor;
 pub mod supply;
 pub mod tca9548a;
 pub mod tm1637_7seg;
-pub mod uc8151d_tricolor_290;
 pub mod unipolar_stepper;
 /// Hand-written VEML7700 model, retained only as the byte-parity oracle the
 /// declarative descriptor is proven identical against (see `veml7700_parity`).
@@ -87,14 +86,16 @@ pub use bg770a::QuectelBg770a;
 pub use bme280::Bme280;
 pub use bmp280::Bmp280;
 pub use declarative_display::{
-    ili9341, pcd8544, rm67162_gpio_dc, rm67162_hw_dcx, sh1107, ssd1306, ssd1306_128x32, st7789,
-    DcWiring, DeclarativeDisplayKit, GenericDisplay,
+    ili9341, pcd8544, rm67162_gpio_dc, rm67162_hw_dcx, sh1107, ssd1306, ssd1306_128x32,
+    ssd1680_tricolor_290, st7789, uc8151d_tricolor_290, DcWiring, DeclarativeDisplayKit,
+    GenericDisplay, PlaneView,
 };
 pub use declarative_gpio::DeclarativeGpioDevice;
 pub use declarative_i2c::{DeclarativeI2cKit, GenericI2cDevice};
 pub use declarative_led_strip::{
     apa102, ws2812, DeclarativeLedStripKit, GenericLedStrip, LedPixel,
 };
+pub use declarative_logic::DeclarativeLogicDevice;
 pub use declarative_spi::{DeclarativeSpiKit, GenericSpiDevice};
 pub use drv2605::{Drv2605, DRV2605_ADDR};
 pub use hc595::Hc595;
@@ -120,10 +121,8 @@ pub use servo::{LedcServoDriver, McpwmServoDriver, Servo, ServoCal};
 pub use shm_i2c::ShmI2c;
 pub use sn74hc165::Sn74hc165;
 pub use sps30::{Sps30, SPS30_ADDR};
-pub use ssd1680_tricolor_290::Ssd1680Tricolor290;
 pub use tca9548a::Tca9548a;
 pub use tm1637_7seg::Tm1637;
-pub use uc8151d_tricolor_290::Uc8151dTricolor290;
 #[cfg(test)]
 pub use veml7700::{Veml7700, VEML7700_ADDR};
 pub use vl53l1x::Vl53l1x;

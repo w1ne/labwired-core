@@ -1,0 +1,67 @@
+# 74HC125 — quad buffer with THREE-STATE outputs and a PER-GATE output enable.
+#
+# Datasheet (Nexperia 74HC125 Rev. 6): "The 74HC125 is a quad buffer/line driver
+# with 3-state outputs. The 3-state outputs are controlled by the output enable
+# inputs 1OE to 4OE. A HIGH on nOE causes the outputs to assume a high-impedance
+# OFF-state." tPHL/tPLH is 9 ns typical at VCC = 5 V, CL = 15 pF (Table 9).
+#
+# ⚠️ FOUR enables, not one. Each buffer has its own nOE, which is the whole
+# reason `logic.enables` is a LIST of `{ pin, outputs }` rather than one
+# part-wide enable pin. A model with a single OE would switch all four buffers
+# together: it would pass a one-gate test and be wrong on any board that uses
+# the '125 the way the corpus uses it — as four independently gated drivers onto
+# a shared bus.
+#
+# SN74LVTH125 is the single most-dropped 74-series symbol in the KiCad corpus
+# (38 placements). It is this part with LVT levels; the logic is identical.
+#
+# ── What Hi-Z means here ───────────────────────────────────────────────────
+#
+# `drive.hiz_when_disabled: true` (the default) means a disabled output is
+# RELEASED, not forced: this part stops writing the pad and the pad keeps the
+# level it last had. That is correct for the case the '125 exists for — the
+# buffer is off the wire and another driver owns the net — and an approximation
+# when nothing else drives the net, where silicon would drift to whatever the
+# MCU's pull configuration decides and this twin stays put. The engine has one
+# level source per pad and no resistor network; see `LogicDrive` in
+# `crates/config/src/logic.rs`.
+type: 74hc125
+
+behavior:
+  primitive: logic_gate
+  logic:
+    inputs: [A1, A2, A3, A4]
+    outputs: [Y1, Y2, Y3, Y4]
+    enables:
+      - { pin: OE1, active: low, outputs: [Y1] }
+      - { pin: OE2, active: low, outputs: [Y2] }
+      - { pin: OE3, active: low, outputs: [Y3] }
+      - { pin: OE4, active: low, outputs: [Y4] }
+    table:
+      Y1: "A1"
+      Y2: "A2"
+      Y3: "A3"
+      Y4: "A4"
+    tprop_ns: 9
+    drive:
+      hiz_when_disabled: true
+
+metadata:
+  label: "74HC125 Quad 3-State Buffer"
+  summary: "Four non-inverting buffers, each with its own active-low output enable."
+  detail: "74HC125 / 74LS125 / SN74LVTH125 quad buffer with three-state outputs. Yn follows An while nOE is LOW; a HIGH on nOE releases that output, and this twin then stops driving the pad rather than forcing a level — the pad holds whatever it last had. Each of the four buffers is gated independently, which is what makes the '125 a bus driver rather than four inverters. NOT modelled: LVT vs HC input thresholds, output drive strength, bus contention between two enabled drivers on one net, and the supply rail."
+  category: gpio
+  config_keys:
+    - { name: a1_pin, ty: str, doc: "1A input pin (e.g. \"PA0\")." }
+    - { name: y1_pin, ty: str, doc: "1Y three-state output pin." }
+    - { name: oe1_pin, ty: str, doc: "1OE output-enable pin, active LOW." }
+    - { name: a2_pin, ty: str, doc: "2A input pin." }
+    - { name: y2_pin, ty: str, doc: "2Y three-state output pin." }
+    - { name: oe2_pin, ty: str, doc: "2OE output-enable pin, active LOW." }
+    - { name: a3_pin, ty: str, doc: "3A input pin." }
+    - { name: y3_pin, ty: str, doc: "3Y three-state output pin." }
+    - { name: oe3_pin, ty: str, doc: "3OE output-enable pin, active LOW." }
+    - { name: a4_pin, ty: str, doc: "4A input pin." }
+    - { name: y4_pin, ty: str, doc: "4Y three-state output pin." }
+    - { name: oe4_pin, ty: str, doc: "4OE output-enable pin, active LOW." }
+  inputs: []

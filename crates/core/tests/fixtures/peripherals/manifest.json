@@ -1135,8 +1135,8 @@
     {
       "device_type": "ssd1680_tricolor_290",
       "label": "SSD1680 Tri-Color E-Paper",
-      "summary": "2.9\" tri-color (black/white/red) e-paper over SPI. Driver class GxEPD2_290_C90c — the WeAct / Waveshare 2.9\" B/W/R module. Not interchangeable with the UC8151D part.",
-      "detail": "Full SPI command + display-data RAM state machine, validated by the e2e e-paper integration test. Same model drives the STM32F103 lab, the ESP32-classic playground board and the ESP32-C3 e-paper labs. Decodes SSD1680 opcodes (0x12 SWRESET, 0x11 data entry, 0x24/0x26 RAM planes, 0x22+0x20 update) — the stream GxEPD2_290_C90c emits. If your sketch instantiates GxEPD2_290_Z13c instead, use uc8151d_tricolor_290; the two command sets share nothing, and the wrong one reports success and renders blank.",
+      "summary": "2.9\" tri-color (black/white/red) e-paper over SPI. Driver class GxEPD2_290_C90c -- the WeAct / Waveshare 2.9\" B/W/R module. Not interchangeable with the UC8151D part.",
+      "detail": "Full SPI command + display-data RAM state machine, validated by the e2e e-paper integration test. Same model drives the STM32F103 lab, the ESP32-classic playground board and the ESP32-C3 e-paper labs. Decodes SSD1680 opcodes (0x12 SWRESET, 0x11 data entry, 0x24/0x26 RAM planes, 0x22+0x20 update) -- the stream GxEPD2_290_C90c emits. If your sketch instantiates GxEPD2_290_Z13c instead, use uc8151d_tricolor_290; the two command sets share nothing, and the wrong one reports success and renders blank.",
       "transport": "spi",
       "category": "spi",
       "config_keys": [
@@ -1148,7 +1148,7 @@
         {
           "name": "dc_pin",
           "ty": "str",
-          "doc": "Data/Command GPIO pin (e.g. \"GPIO17\"). Required for command framing."
+          "doc": "Data/Command GPIO pin (e.g. \"GPIO17\"). Wire it for silicon-accurate framing. Without it this panel falls back to inferring command from data by protocol state, which is a declared cheat (FIDELITY.md section E) and the only reason the ESP32 e-paper lab paints."
         },
         {
           "name": "busy_pin",
@@ -1158,7 +1158,7 @@
         {
           "name": "powered",
           "ty": "bool",
-          "doc": "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered part -- ABSENT MEANS POWERED, because curated labs state signals and leave the rails implicit. Only an explicit `false`, which the diagram compiler emits when it can see the supply pins are on no net, changes anything: the part then ignores its bus entirely and reports the dark/idle state it has on a bench."
+          "doc": "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered part -- ABSENT MEANS POWERED. Only an explicit `false`, which the diagram compiler emits when it can see the supply pins are on no net, changes anything: the panel then ignores its bus entirely and reports blank planes and refresh_generation 0. E-paper makes the lie especially convincing, because a real panel HOLDS its image with the supply removed -- but a panel that never had a supply never had an image to hold."
         }
       ],
       "labs": [
@@ -1180,8 +1180,8 @@
     {
       "device_type": "uc8151d_tricolor_290",
       "label": "UC8151D Tri-Color E-Paper",
-      "summary": "2.9\" tri-color (black/white/red) e-paper over SPI. Driver class GxEPD2_290_Z13c. Different command set from the SSD1680 part — pick by the driver class your firmware instantiates, not by how the panel looks.",
-      "detail": "Decodes UC8151D opcodes (0x00 PSR / 0x04 PON / 0x10 DTM1 / 0x13 DTM2 / 0x12 DRF), the stream GxEPD2_290_Z13c emits. Same plane layout as SSD1680; different command stream, and BUSY is inverted (busy-LOW). GxEPD2_290_C90c is NOT this part — it is an SSD1680 controller; see peripherals::kit::registry::TYPE_ALIASES, which owns driver-class → controller. No board manifest in this repo ships this panel: every 2.9\" tri-color lab here is the C90c/SSD1680 module. It exists so firmware written against GxEPD2_290_Z13c has a faithful twin.",
+      "summary": "2.9\" tri-color (black/white/red) e-paper over SPI. Driver class GxEPD2_290_Z13c. Different command set from the SSD1680 part -- pick by the driver class your firmware instantiates, not by how the panel looks.",
+      "detail": "Decodes UC8151D opcodes (0x00 PSR / 0x04 PON / 0x10 DTM1 / 0x13 DTM2 / 0x12 DRF), the stream GxEPD2_290_Z13c emits. Same plane layout as SSD1680; different command stream, and BUSY is inverted (busy-LOW). GxEPD2_290_C90c is NOT this part -- it is an SSD1680 controller; see peripherals::kit::registry::TYPE_ALIASES, which owns driver-class -> controller. No board manifest in this repo ships this panel: every 2.9\" tri-color lab here is the C90c/SSD1680 module. It exists so firmware written against GxEPD2_290_Z13c has a faithful twin.",
       "transport": "spi",
       "category": "spi",
       "config_keys": [
@@ -1193,17 +1193,17 @@
         {
           "name": "dc_pin",
           "ty": "str",
-          "doc": "Data/Command GPIO pin (e.g. \"GPIO2\"). Required for command framing."
+          "doc": "Data/Command GPIO pin (e.g. \"GPIO2\"). Required for any decoding at all: without it this panel treats every byte as data and paints nothing, which is a declared cheat (FIDELITY.md section E) and deliberately not a plausible wrong picture."
         },
         {
           "name": "busy_pin",
           "ty": "str",
-          "doc": "BUSY status GPIO the host polls (e.g. \"GPIO5\"). Held HIGH (idle) — UC8151D is busy-LOW, the inverse of ssd1680_tricolor_290."
+          "doc": "BUSY status GPIO the host polls (e.g. \"GPIO5\"). Held HIGH (idle) -- UC8151D is busy-LOW, the inverse of ssd1680_tricolor_290."
         },
         {
           "name": "powered",
           "ty": "bool",
-          "doc": "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered part -- ABSENT MEANS POWERED, because curated labs state signals and leave the rails implicit. Only an explicit `false`, which the diagram compiler emits when it can see the supply pins are on no net, changes anything: the part then ignores its bus entirely and reports the dark/idle state it has on a bench."
+          "doc": "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered part -- ABSENT MEANS POWERED. Only an explicit `false` changes anything: the panel then ignores its bus entirely and reports blank planes and refresh_generation 0."
         }
       ],
       "labs": [],
@@ -3003,6 +3003,582 @@
       "transport": "gpio_group",
       "category": "gpio",
       "config_keys": [],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "74hc04",
+      "label": "74HC04 Hex Inverter",
+      "summary": "Six independent inverting buffers, 7 ns propagation delay.",
+      "detail": "74HC04/74LS04 hex inverter. Each output Yn is the complement of its input An, after the part's propagation delay; there is no enable, so the outputs are always driven. Wire only the gates you use — an unconnected input reads LOW on this twin, which makes its output read HIGH, the same thing an unconnected gate does on a board with a pull-down. NOT modelled: input threshold voltages, output drive strength, supply rail, and contention with another driver on the same net.",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [
+        {
+          "name": "a1_pin",
+          "ty": "str",
+          "doc": "1A input pin (e.g. \"PA0\")."
+        },
+        {
+          "name": "y1_pin",
+          "ty": "str",
+          "doc": "1Y output pin."
+        },
+        {
+          "name": "a2_pin",
+          "ty": "str",
+          "doc": "2A input pin."
+        },
+        {
+          "name": "y2_pin",
+          "ty": "str",
+          "doc": "2Y output pin."
+        },
+        {
+          "name": "a3_pin",
+          "ty": "str",
+          "doc": "3A input pin."
+        },
+        {
+          "name": "y3_pin",
+          "ty": "str",
+          "doc": "3Y output pin."
+        },
+        {
+          "name": "a4_pin",
+          "ty": "str",
+          "doc": "4A input pin."
+        },
+        {
+          "name": "y4_pin",
+          "ty": "str",
+          "doc": "4Y output pin."
+        },
+        {
+          "name": "a5_pin",
+          "ty": "str",
+          "doc": "5A input pin."
+        },
+        {
+          "name": "y5_pin",
+          "ty": "str",
+          "doc": "5Y output pin."
+        },
+        {
+          "name": "a6_pin",
+          "ty": "str",
+          "doc": "6A input pin."
+        },
+        {
+          "name": "y6_pin",
+          "ty": "str",
+          "doc": "6Y output pin."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "74hc00",
+      "label": "74HC00 Quad NAND",
+      "summary": "Four independent 2-input NAND gates, 9 ns propagation delay.",
+      "detail": "74HC00/74LS00 quad 2-input NAND gate. Yn is LOW only when both An and Bn are HIGH. An unconnected input reads LOW on this twin, so an unwired gate asserts its output HIGH — the same thing a real NAND does with a pulled-down input, and the reason a datasheet tells you to tie unused inputs. NOT modelled: input threshold voltages, output drive strength, the supply rail, and contention with another driver on the same net — this engine has one level source per pad and the last writer wins.",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [
+        {
+          "name": "a1_pin",
+          "ty": "str",
+          "doc": "1A input pin (e.g. \"PA0\")."
+        },
+        {
+          "name": "b1_pin",
+          "ty": "str",
+          "doc": "1B input pin."
+        },
+        {
+          "name": "y1_pin",
+          "ty": "str",
+          "doc": "1Y output pin."
+        },
+        {
+          "name": "a2_pin",
+          "ty": "str",
+          "doc": "2A input pin (e.g. \"PA0\")."
+        },
+        {
+          "name": "b2_pin",
+          "ty": "str",
+          "doc": "2B input pin."
+        },
+        {
+          "name": "y2_pin",
+          "ty": "str",
+          "doc": "2Y output pin."
+        },
+        {
+          "name": "a3_pin",
+          "ty": "str",
+          "doc": "3A input pin (e.g. \"PA0\")."
+        },
+        {
+          "name": "b3_pin",
+          "ty": "str",
+          "doc": "3B input pin."
+        },
+        {
+          "name": "y3_pin",
+          "ty": "str",
+          "doc": "3Y output pin."
+        },
+        {
+          "name": "a4_pin",
+          "ty": "str",
+          "doc": "4A input pin (e.g. \"PA0\")."
+        },
+        {
+          "name": "b4_pin",
+          "ty": "str",
+          "doc": "4B input pin."
+        },
+        {
+          "name": "y4_pin",
+          "ty": "str",
+          "doc": "4Y output pin."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "74hc08",
+      "label": "74HC08 Quad AND",
+      "summary": "Four independent 2-input AND gates, 8 ns propagation delay.",
+      "detail": "74HC08/74LS08 quad 2-input AND gate. Yn is HIGH only when both An and Bn are HIGH. NOT modelled: input threshold voltages, output drive strength, the supply rail, and contention with another driver on the same net — this engine has one level source per pad and the last writer wins.",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [
+        {
+          "name": "a1_pin",
+          "ty": "str",
+          "doc": "1A input pin (e.g. \"PA0\")."
+        },
+        {
+          "name": "b1_pin",
+          "ty": "str",
+          "doc": "1B input pin."
+        },
+        {
+          "name": "y1_pin",
+          "ty": "str",
+          "doc": "1Y output pin."
+        },
+        {
+          "name": "a2_pin",
+          "ty": "str",
+          "doc": "2A input pin (e.g. \"PA0\")."
+        },
+        {
+          "name": "b2_pin",
+          "ty": "str",
+          "doc": "2B input pin."
+        },
+        {
+          "name": "y2_pin",
+          "ty": "str",
+          "doc": "2Y output pin."
+        },
+        {
+          "name": "a3_pin",
+          "ty": "str",
+          "doc": "3A input pin (e.g. \"PA0\")."
+        },
+        {
+          "name": "b3_pin",
+          "ty": "str",
+          "doc": "3B input pin."
+        },
+        {
+          "name": "y3_pin",
+          "ty": "str",
+          "doc": "3Y output pin."
+        },
+        {
+          "name": "a4_pin",
+          "ty": "str",
+          "doc": "4A input pin (e.g. \"PA0\")."
+        },
+        {
+          "name": "b4_pin",
+          "ty": "str",
+          "doc": "4B input pin."
+        },
+        {
+          "name": "y4_pin",
+          "ty": "str",
+          "doc": "4Y output pin."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "74hc32",
+      "label": "74HC32 Quad OR",
+      "summary": "Four independent 2-input OR gates, 9 ns propagation delay.",
+      "detail": "74HC32/74LS32 quad 2-input OR gate. Yn is HIGH when either An or Bn is HIGH. NOT modelled: input threshold voltages, output drive strength, the supply rail, and contention with another driver on the same net — this engine has one level source per pad and the last writer wins.",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [
+        {
+          "name": "a1_pin",
+          "ty": "str",
+          "doc": "1A input pin (e.g. \"PA0\")."
+        },
+        {
+          "name": "b1_pin",
+          "ty": "str",
+          "doc": "1B input pin."
+        },
+        {
+          "name": "y1_pin",
+          "ty": "str",
+          "doc": "1Y output pin."
+        },
+        {
+          "name": "a2_pin",
+          "ty": "str",
+          "doc": "2A input pin (e.g. \"PA0\")."
+        },
+        {
+          "name": "b2_pin",
+          "ty": "str",
+          "doc": "2B input pin."
+        },
+        {
+          "name": "y2_pin",
+          "ty": "str",
+          "doc": "2Y output pin."
+        },
+        {
+          "name": "a3_pin",
+          "ty": "str",
+          "doc": "3A input pin (e.g. \"PA0\")."
+        },
+        {
+          "name": "b3_pin",
+          "ty": "str",
+          "doc": "3B input pin."
+        },
+        {
+          "name": "y3_pin",
+          "ty": "str",
+          "doc": "3Y output pin."
+        },
+        {
+          "name": "a4_pin",
+          "ty": "str",
+          "doc": "4A input pin (e.g. \"PA0\")."
+        },
+        {
+          "name": "b4_pin",
+          "ty": "str",
+          "doc": "4B input pin."
+        },
+        {
+          "name": "y4_pin",
+          "ty": "str",
+          "doc": "4Y output pin."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "74hc125",
+      "label": "74HC125 Quad 3-State Buffer",
+      "summary": "Four non-inverting buffers, each with its own active-low output enable.",
+      "detail": "74HC125 / 74LS125 / SN74LVTH125 quad buffer with three-state outputs. Yn follows An while nOE is LOW; a HIGH on nOE releases that output, and this twin then stops driving the pad rather than forcing a level — the pad holds whatever it last had. Each of the four buffers is gated independently, which is what makes the '125 a bus driver rather than four inverters. NOT modelled: LVT vs HC input thresholds, output drive strength, bus contention between two enabled drivers on one net, and the supply rail.",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [
+        {
+          "name": "a1_pin",
+          "ty": "str",
+          "doc": "1A input pin (e.g. \"PA0\")."
+        },
+        {
+          "name": "y1_pin",
+          "ty": "str",
+          "doc": "1Y three-state output pin."
+        },
+        {
+          "name": "oe1_pin",
+          "ty": "str",
+          "doc": "1OE output-enable pin, active LOW."
+        },
+        {
+          "name": "a2_pin",
+          "ty": "str",
+          "doc": "2A input pin."
+        },
+        {
+          "name": "y2_pin",
+          "ty": "str",
+          "doc": "2Y three-state output pin."
+        },
+        {
+          "name": "oe2_pin",
+          "ty": "str",
+          "doc": "2OE output-enable pin, active LOW."
+        },
+        {
+          "name": "a3_pin",
+          "ty": "str",
+          "doc": "3A input pin."
+        },
+        {
+          "name": "y3_pin",
+          "ty": "str",
+          "doc": "3Y three-state output pin."
+        },
+        {
+          "name": "oe3_pin",
+          "ty": "str",
+          "doc": "3OE output-enable pin, active LOW."
+        },
+        {
+          "name": "a4_pin",
+          "ty": "str",
+          "doc": "4A input pin."
+        },
+        {
+          "name": "y4_pin",
+          "ty": "str",
+          "doc": "4Y three-state output pin."
+        },
+        {
+          "name": "oe4_pin",
+          "ty": "str",
+          "doc": "4OE output-enable pin, active LOW."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "74lvc1t45",
+      "label": "74LVC1T45 Level Translator",
+      "summary": "Single-bit bidirectional translator; DIR picks the direction, OE isolates.",
+      "detail": "TI SN74LVC1T45 single-bit dual-supply bus transceiver. DIR HIGH sends A to B, DIR LOW sends B to A, and a HIGH on OE isolates both sides — this twin then stops driving either pad rather than forcing a level. NOT modelled: the two supply rails. VCCA/VCCB level translation is the reason this part exists and this engine has no voltage domains, so the direction and the isolation are simulated and the translation itself is a no-op; a board that a missing translator would break still runs here.",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [
+        {
+          "name": "a_pin",
+          "ty": "str",
+          "doc": "A-side data pin (VCCA domain)."
+        },
+        {
+          "name": "b_pin",
+          "ty": "str",
+          "doc": "B-side data pin (VCCB domain)."
+        },
+        {
+          "name": "dir_pin",
+          "ty": "str",
+          "doc": "DIR pin. HIGH = A to B, LOW = B to A."
+        },
+        {
+          "name": "oe_pin",
+          "ty": "str",
+          "doc": "OE pin, active LOW. HIGH isolates both sides."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "74hc245",
+      "label": "74HC245 Octal Bus Transceiver",
+      "summary": "Eight bidirectional bits; DIR picks the direction, OE isolates both buses.",
+      "detail": "74HC245 / 74LS245 / SN74LVC245A octal bus transceiver. DIR HIGH sends A to B, DIR LOW sends B to A, and a HIGH on OE isolates both buses — this twin then stops driving those pads rather than forcing a level, so the pads hold whatever they last had. All eight bits switch together; there is no per-bit enable. NOT modelled: bus contention between two enabled drivers on one net, input thresholds, output drive strength and the supply rail.",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [
+        {
+          "name": "a1_pin",
+          "ty": "str",
+          "doc": "A1 pin (A-side bit 1)."
+        },
+        {
+          "name": "a2_pin",
+          "ty": "str",
+          "doc": "A2 pin (A-side bit 2)."
+        },
+        {
+          "name": "a3_pin",
+          "ty": "str",
+          "doc": "A3 pin (A-side bit 3)."
+        },
+        {
+          "name": "a4_pin",
+          "ty": "str",
+          "doc": "A4 pin (A-side bit 4)."
+        },
+        {
+          "name": "a5_pin",
+          "ty": "str",
+          "doc": "A5 pin (A-side bit 5)."
+        },
+        {
+          "name": "a6_pin",
+          "ty": "str",
+          "doc": "A6 pin (A-side bit 6)."
+        },
+        {
+          "name": "a7_pin",
+          "ty": "str",
+          "doc": "A7 pin (A-side bit 7)."
+        },
+        {
+          "name": "a8_pin",
+          "ty": "str",
+          "doc": "A8 pin (A-side bit 8)."
+        },
+        {
+          "name": "b1_pin",
+          "ty": "str",
+          "doc": "B1 pin (B-side bit 1)."
+        },
+        {
+          "name": "b2_pin",
+          "ty": "str",
+          "doc": "B2 pin (B-side bit 2)."
+        },
+        {
+          "name": "b3_pin",
+          "ty": "str",
+          "doc": "B3 pin (B-side bit 3)."
+        },
+        {
+          "name": "b4_pin",
+          "ty": "str",
+          "doc": "B4 pin (B-side bit 4)."
+        },
+        {
+          "name": "b5_pin",
+          "ty": "str",
+          "doc": "B5 pin (B-side bit 5)."
+        },
+        {
+          "name": "b6_pin",
+          "ty": "str",
+          "doc": "B6 pin (B-side bit 6)."
+        },
+        {
+          "name": "b7_pin",
+          "ty": "str",
+          "doc": "B7 pin (B-side bit 7)."
+        },
+        {
+          "name": "b8_pin",
+          "ty": "str",
+          "doc": "B8 pin (B-side bit 8)."
+        },
+        {
+          "name": "dir_pin",
+          "ty": "str",
+          "doc": "DIR pin. HIGH = A to B, LOW = B to A."
+        },
+        {
+          "name": "oe_pin",
+          "ty": "str",
+          "doc": "OE pin, active LOW. HIGH isolates both buses."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "74cbtlv3257",
+      "label": "74CBTLV3257 Quad Bus Switch",
+      "summary": "Four 1-of-2 bus switches; S picks the A or B side, OE opens all four.",
+      "detail": "TI SN74CBTLV3257 quad 1-of-2 FET bus switch. Yn follows An while S is LOW and Bn while S is HIGH; a HIGH on OE opens all four switches and this twin stops driving the Y pads. NOT modelled: the switch is a pass transistor on silicon and is modelled here as a one-way multiplexer, because this engine has one level source per pad and cannot express two pads becoming one net. A design that drives Y and expects to read it back on the selected input side will not see its own data. Also not modelled: ON resistance, charge injection, and the supply rail.",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [
+        {
+          "name": "a1_pin",
+          "ty": "str",
+          "doc": "1A input pin, selected when S is LOW."
+        },
+        {
+          "name": "b1_pin",
+          "ty": "str",
+          "doc": "1B input pin, selected when S is HIGH."
+        },
+        {
+          "name": "y1_pin",
+          "ty": "str",
+          "doc": "1Y output pin."
+        },
+        {
+          "name": "a2_pin",
+          "ty": "str",
+          "doc": "2A input pin, selected when S is LOW."
+        },
+        {
+          "name": "b2_pin",
+          "ty": "str",
+          "doc": "2B input pin, selected when S is HIGH."
+        },
+        {
+          "name": "y2_pin",
+          "ty": "str",
+          "doc": "2Y output pin."
+        },
+        {
+          "name": "a3_pin",
+          "ty": "str",
+          "doc": "3A input pin, selected when S is LOW."
+        },
+        {
+          "name": "b3_pin",
+          "ty": "str",
+          "doc": "3B input pin, selected when S is HIGH."
+        },
+        {
+          "name": "y3_pin",
+          "ty": "str",
+          "doc": "3Y output pin."
+        },
+        {
+          "name": "a4_pin",
+          "ty": "str",
+          "doc": "4A input pin, selected when S is LOW."
+        },
+        {
+          "name": "b4_pin",
+          "ty": "str",
+          "doc": "4B input pin, selected when S is HIGH."
+        },
+        {
+          "name": "y4_pin",
+          "ty": "str",
+          "doc": "4Y output pin."
+        },
+        {
+          "name": "s_pin",
+          "ty": "str",
+          "doc": "S select pin. LOW picks the A side, HIGH the B side."
+        },
+        {
+          "name": "oe_pin",
+          "ty": "str",
+          "doc": "OE pin, active LOW. HIGH opens all four switches."
+        }
+      ],
       "labs": [],
       "inputs": []
     }

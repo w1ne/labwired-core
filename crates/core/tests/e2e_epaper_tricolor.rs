@@ -12,7 +12,7 @@
 
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
-use labwired_core::peripherals::components::Ssd1680Tricolor290;
+use labwired_core::peripherals::components::GenericDisplay;
 use labwired_core::system::cortex_m::configure_cortex_m;
 use labwired_core::{Cpu, Machine};
 use std::path::PathBuf;
@@ -109,11 +109,9 @@ fn firmware_drives_panel_to_three_band_pattern() {
     let panel = spi
         .attached_devices
         .iter()
-        .find_map(|d| {
-            d.as_any()
-                .and_then(|a| a.downcast_ref::<Ssd1680Tricolor290>())
-        })
+        .find_map(|d| d.as_any().and_then(|a| a.downcast_ref::<GenericDisplay>()))
         .expect("SSD1680 panel attached to spi1");
+    let planes = panel.planes();
 
     assert!(
         panel.refresh_generation() >= 1,
@@ -121,8 +119,8 @@ fn firmware_drives_panel_to_three_band_pattern() {
         panel.refresh_generation()
     );
 
-    let black = panel.black_plane();
-    let red = panel.red_plane();
+    let black = planes.ram("black").expect("black plane");
+    let red = planes.ram("red").expect("red plane");
     assert_eq!(black.len(), 4736, "black plane size");
     assert_eq!(red.len(), 4736, "red plane size");
 

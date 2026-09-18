@@ -34,7 +34,7 @@
 // `LABWIRED_EREADER_ELF` points.
 
 use labwired_core::boot::esp32_arduino::{build_arduino_elf_machine, ArduinoElfBootOpts};
-use labwired_core::peripherals::components::Ssd1680Tricolor290;
+use labwired_core::peripherals::components::GenericDisplay;
 use labwired_core::peripherals::esp32::spi::Esp32Spi;
 use labwired_core::Cpu;
 use std::path::PathBuf;
@@ -237,8 +237,7 @@ external_devices:
                     .and_then(|a| a.downcast_ref::<Esp32Spi>())
                     .and_then(|spi| {
                         spi.attached_devices.iter().find_map(|d| {
-                            d.as_any()
-                                .and_then(|a| a.downcast_ref::<Ssd1680Tricolor290>())
+                            d.as_any().and_then(|a| a.downcast_ref::<GenericDisplay>())
                         })
                     })
                 {
@@ -246,7 +245,8 @@ external_devices:
                     // all-white plane. Exiting on it stops before drawPage()
                     // ever renders, so the ink assertion below could never pass.
                     // Wait for a refresh that actually carries ink.
-                    if p.refresh_generation() >= 1 && p.black_plane().iter().any(|&b| b != 0xFF) {
+                    if p.refresh_generation() >= 1 && p.planes().ink_bytes("black").unwrap_or(0) > 0
+                    {
                         break;
                     }
                 }
@@ -264,13 +264,10 @@ external_devices:
     let panel = spi
         .attached_devices
         .iter()
-        .find_map(|d| {
-            d.as_any()
-                .and_then(|a| a.downcast_ref::<Ssd1680Tricolor290>())
-        })
+        .find_map(|d| d.as_any().and_then(|a| a.downcast_ref::<GenericDisplay>()))
         .expect("panel attached");
     let refresh_gen = panel.refresh_generation();
-    let power_on = panel.power_on();
+    let power_on = panel.display_on();
     let txns = spi.transactions();
 
     eprintln!("[ereader-sim] ── final state ─────────────────────────────────");
@@ -301,7 +298,7 @@ external_devices:
     // A refresh with an all-white black plane is a false positive (the DC line
     // was mis-latched and the 0x24 RAM stream was dropped); the real firmware
     // renders text, so the black plane must carry ink.
-    let black_ink = panel.black_plane().iter().filter(|&&b| b != 0xFF).count();
+    let black_ink = panel.planes().ink_bytes("black").expect("black plane");
     eprintln!("[ereader-sim] black-plane ink bytes: {black_ink}");
 
     let wire: Vec<u8> = spi.captured_bytes().to_vec();

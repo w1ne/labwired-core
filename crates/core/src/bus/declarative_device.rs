@@ -53,6 +53,13 @@ pub(crate) fn validate_descriptor(desc: &DeviceDescriptor) -> Result<()> {
     if desc.behavior.primitive == "gpio_device" {
         return crate::peripherals::components::declarative_gpio::validate_descriptor(desc);
     }
+    // Same argument for `logic_gate`: its roles ARE its `logic:` block, so it
+    // validates itself — truth-table expressions, enable targets and
+    // transceiver pairing included — rather than being checked against a fixed
+    // role table it does not have.
+    if desc.behavior.primitive == "logic_gate" {
+        return crate::peripherals::components::declarative_logic::validate_descriptor(desc);
+    }
     let required_roles: &[&str] = match desc.behavior.primitive.as_str() {
         "quadrature" => &["a", "b"],
         "matrix" => &["rows", "cols"],
@@ -104,6 +111,7 @@ impl SystemBus {
             "one_wire" => self.attach_one_wire(ext, desc),
             "pulse_echo" => self.attach_pulse_echo(ext, desc),
             "gpio_device" => self.attach_gpio_device(ext, desc),
+            "logic_gate" => self.attach_logic_gate(ext, desc),
             other => Err(anyhow!(
                 "declarative device '{}' names unknown primitive '{}'",
                 ext.id,
@@ -207,6 +215,104 @@ impl SystemBus {
             }
         }
         self.gpio_devices.push(Box::new(device));
+        Ok(())
+    }
+
+    /// `logic_gate` primitive → [`DeclarativeLogicDevice`]. A 74-series part
+    /// whose whole model is a truth table.
+    ///
+    /// Pad binding follows the same split every pin-driven primitive uses, with
+    /// one addition the others do not need:
+    ///
+    /// * an INPUT or a CONTROL role (an enable, a direction, a select) is a pad
+    ///   the MCU drives, so it resolves to the output register (ODR);
+    /// * an OUTPUT role is a pad this part drives, so it resolves to the input
+    ///   register (IDR);
+    /// * a TRANSCEIVER role is BOTH, and is bound at both ends here, because
+    ///   which end is live is decided by the DIR pad at run time and must not
+    ///   cost a pad re-resolution per pass.
+    ///
+    /// The `config:` key for a role defaults to `<role lowercased>_pin` — see
+    /// [`config_key_for`](crate::peripherals::components::declarative_logic::config_key_for).
+    /// An eight-bit transceiver binds twenty pads, and a `pins:` block spelling
+    /// each of them out would be twenty lines of `A1: a1_pin`.
+    fn attach_logic_gate(&mut self, ext: &ExternalDevice, desc: &DeviceDescriptor) -> Result<()> {
+        use crate::peripherals::components::declarative_logic::{
+            config_key_for, pad_roles, DeclarativeLogicDevice, LogicPad,
+        };
+
+        let spec = desc
+            .behavior
+            .logic
+            .as_ref()
+            .ok_or_else(|| anyhow!("logic_gate '{}' has no `logic:` block", ext.id))?;
+        let cpu_hz = param_cpu_hz(desc, ext, self.cpu_hz);
+        let (observed_roles, driven_roles) = pad_roles(spec);
+
+        let label = |role: &str| -> Result<String> {
+            let key = config_key_for(desc, role);
+            ext.config
+                .get(&key)
+                .and_then(|v| {
+                    v.as_str()
+                        .map(|s| s.to_string())
+                        .or_else(|| v.as_i64().map(|n| n.to_string()))
+                        .or_else(|| v.as_u64().map(|n| n.to_string()))
+                })
+                .ok_or_else(|| {
+                    anyhow!(
+                        "logic_gate '{}' pin role '{}' needs config key '{}', which this \
+                         placement does not set",
+                        ext.id,
+                        role,
+                        key
+                    )
+                })
+        };
+
+        let mut observed = Vec::with_capacity(observed_roles.len());
+        for role in &observed_roles {
+            let pin = label(role)?;
+            let odr = Self::resolve_pin_odr(self, &pin).ok_or_else(|| {
+                anyhow!(
+                    "logic_gate '{}' input '{}' ({}) could not be resolved to a GPIO output",
+                    ext.id,
+                    role,
+                    pin
+                )
+            })?;
+            observed.push(LogicPad {
+                role: role.clone(),
+                odr: Some(odr),
+                idr: None,
+            });
+        }
+
+        let mut driven = Vec::with_capacity(driven_roles.len());
+        for role in &driven_roles {
+            let pin = label(role)?;
+            let idr = Self::resolve_pin_idr(self, &pin).ok_or_else(|| {
+                anyhow!(
+                    "logic_gate '{}' output '{}' ({}) could not be resolved to a GPIO input",
+                    ext.id,
+                    role,
+                    pin
+                )
+            })?;
+            driven.push(LogicPad {
+                role: role.clone(),
+                odr: None,
+                idr: Some(idr),
+            });
+        }
+
+        self.gpio_devices.push(Box::new(DeclarativeLogicDevice::new(
+            ext.id.clone(),
+            desc,
+            observed,
+            driven,
+            cpu_hz,
+        )?));
         Ok(())
     }
 

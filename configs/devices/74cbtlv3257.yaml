@@ -1,0 +1,57 @@
+# 74CBTLV3257 — low-voltage quad 1-of-2 FET BUS SWITCH (multiplexer/demux).
+#
+# Datasheet (TI SN74CBTLV3257, SCDS034): "The SN74CBTLV3257 is a high-speed TTL
+# compatible FET bus switch with low ON-state resistance... The select (S) input
+# controls the data path of the switch. The output enable (OE) input, when HIGH,
+# disables all switches and places them in a high-impedance state."
+#
+# ⚠️ A FET SWITCH IS NOT A BUFFER, and this model is the buffer approximation.
+# On silicon the '3257 is four pass transistors: it has no propagation delay in
+# the gate sense (the datasheet quotes a 0.25 ns propagation delay through the
+# ON resistance), it is bidirectional through the closed path, and it adds no
+# drive of its own. Modelled here as a one-way mux from the selected input to Y,
+# because this twin has one level source per pad and no way to express "these
+# two pads are now the same net". 1 ns is the stated tpd, and the engine's
+# one-simulated-cycle floor applies. What that costs: a design that drives Y and
+# reads it back through the switch on the A side will not see its own data.
+#
+# `select.low` and `select.high` are paired BY INDEX with `outputs:` — Y1 follows
+# A1 while S is LOW and B1 while S is HIGH.
+type: 74cbtlv3257
+
+behavior:
+  primitive: logic_gate
+  logic:
+    inputs: [A1, B1, A2, B2, A3, B3, A4, B4]
+    outputs: [Y1, Y2, Y3, Y4]
+    enables:
+      - { pin: OE, active: low, outputs: [Y1, Y2, Y3, Y4] }
+    select:
+      pin: S
+      low: [A1, A2, A3, A4]
+      high: [B1, B2, B3, B4]
+    tprop_ns: 1
+    drive:
+      hiz_when_disabled: true
+
+metadata:
+  label: "74CBTLV3257 Quad Bus Switch"
+  summary: "Four 1-of-2 bus switches; S picks the A or B side, OE opens all four."
+  detail: "TI SN74CBTLV3257 quad 1-of-2 FET bus switch. Yn follows An while S is LOW and Bn while S is HIGH; a HIGH on OE opens all four switches and this twin stops driving the Y pads. NOT modelled: the switch is a pass transistor on silicon and is modelled here as a one-way multiplexer, because this engine has one level source per pad and cannot express two pads becoming one net. A design that drives Y and expects to read it back on the selected input side will not see its own data. Also not modelled: ON resistance, charge injection, and the supply rail."
+  category: gpio
+  config_keys:
+    - { name: a1_pin, ty: str, doc: "1A input pin, selected when S is LOW." }
+    - { name: b1_pin, ty: str, doc: "1B input pin, selected when S is HIGH." }
+    - { name: y1_pin, ty: str, doc: "1Y output pin." }
+    - { name: a2_pin, ty: str, doc: "2A input pin, selected when S is LOW." }
+    - { name: b2_pin, ty: str, doc: "2B input pin, selected when S is HIGH." }
+    - { name: y2_pin, ty: str, doc: "2Y output pin." }
+    - { name: a3_pin, ty: str, doc: "3A input pin, selected when S is LOW." }
+    - { name: b3_pin, ty: str, doc: "3B input pin, selected when S is HIGH." }
+    - { name: y3_pin, ty: str, doc: "3Y output pin." }
+    - { name: a4_pin, ty: str, doc: "4A input pin, selected when S is LOW." }
+    - { name: b4_pin, ty: str, doc: "4B input pin, selected when S is HIGH." }
+    - { name: y4_pin, ty: str, doc: "4Y output pin." }
+    - { name: s_pin, ty: str, doc: "S select pin. LOW picks the A side, HIGH the B side." }
+    - { name: oe_pin, ty: str, doc: "OE pin, active LOW. HIGH opens all four switches." }
+  inputs: []

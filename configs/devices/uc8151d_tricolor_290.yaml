@@ -1,0 +1,129 @@
+# UltraChip UC8151D — 128x296 tri-colour (black/white/red) e-paper over 4-wire
+# SPI. Waveshare GDEW029Z13c / GDEW029Z13, driver class GxEPD2_290_Z13c.
+# Declarative `display` primitive, sharing the engine with ssd1680_tricolor_290
+# and with every framebuffer panel.
+#
+# GxEPD2_290_C90c (GDEY029Z90c) is NOT this part. Despite the similar name it is
+# an SSD1680 controller, and it is what the labwired-ereader firmware and the
+# WeAct 2.9" module actually use. `peripherals::kit::registry::TYPE_ALIASES`
+# owns driver-class -> controller. The two command sets conflict at 0x10, 0x20
+# and 0x22, so the wrong one reports success and renders blank.
+#
+# SAME GLASS AS THE SSD1680, DIFFERENT CONTROLLER, AND THE DESCRIPTOR SHOWS
+# EXACTLY WHERE THEY DIVERGE:
+#
+# * THE STREAM ENDS AT THE NEXT COMMAND (`ram.stream: command`), not at a window
+#   bound. DTM1 (0x10) and DTM2 (0x13) rewind a LINEAR plane cursor and then
+#   accept data until something else arrives; there is no RAM window command in
+#   this set at all. The SSD1680's `window_counted` would be a different part.
+#
+# * BUSY IS INVERTED. UC8151D pulls BUSY LOW while busy and releases it HIGH, so
+#   idle is HIGH -- the exact opposite of the SSD1680. GxEPD2's `_busy_level`
+#   differs to match. Driving the wrong idle level hangs `_waitWhileBusy` for a
+#   30 s timeout that never arrives at simulated speed.
+#
+# * WITH NO D/C LINE THIS PANEL CANNOT INFER (`dc.unwired: data`). The SSD1680's
+#   inference terminates because its stream is window-counted; a UC8151D plane
+#   stream ends only at a command byte, so an inferring decoder that entered one
+#   could never leave it. The deleted model treated every byte as DATA instead,
+#   which paints nothing at all -- an honest blank rather than a plausible
+#   wrong picture. It is a CHEAT and declared as one; see FIDELITY.md section E.
+#
+# SHARED WITH THE SSD1680, and stated the same way there: two 1-bpp planes
+# (`ram.planes`), an erased byte of 0xFF (`ram.blank`), a column counter that
+# steps a BYTE (`ram.units`), and a `refresh` that puts frame memory on the
+# glass (0x12 DRF) because frame memory is not the screen.
+#
+# ONE DELIBERATE DIFFERENCE FROM THE DELETED MODEL, and it is named rather than
+# hidden: a plane stream longer than one plane. The deleted model CLIPPED (the
+# cursor stopped at 4736 and further bytes were dropped); this engine's address
+# counters WRAP to the window origin, which is what the counters of every other
+# panel here do and what the SSD1680's own datasheet describes. GxEPD2 sends
+# exactly one plane, so no firmware in this tree reaches it;
+# `display_migration_parity` pins BOTH behaviours so neither can be "fixed" into
+# the other by accident.
+#
+# NOT MODELLED: partial window (0x90/0x91/0x92), resolution (0x61 -- the
+# geometry is the descriptor's), VCOM/data interval (0x50), PLL (0x30),
+# temperature (0x40/0x41) and the waveform LUTs (0x20..0x24). Their parameters
+# are COUNTED so the decoder stays in step, and nothing acts on them.
+type: uc8151d_tricolor_290
+
+behavior:
+  primitive: display
+  display:
+    width: 128
+    height: 296
+    pixel_format: tricolor
+    artifact_format: epaper_tricolor_1bpp_planes
+    ram:
+      bytes: 9472
+      layout: row_major
+      stream: command
+      blank: 0xFF
+      planes: [black, red]
+      units: { col: bytes, row: pixels }
+    dc: { source: pin, pin_role: dc, command_level: 0, unwired: data }
+    addressing: { modes: [horizontal], default: horizontal }
+    supply_gated: true
+    # Busy-LOW part: the line rests HIGH. The inverse of ssd1680_tricolor_290.
+    busy: { config_key: busy_pin, idle_level: true }
+    artifact_meta:
+      # `power_on` is PON (0x04), the controller's own booster sequence, NOT the
+      # module's supply. Both are published; see ssd1680_tricolor_290.yaml.
+      - { flag: display_on, as: power_on }
+      - powered
+      - plane_bytes
+      - refresh_generation
+      - { plane: black }
+      - { plane: red }
+      - { plane: black, of: screen }
+      - { plane: red, of: screen }
+    commands:
+      - { opcode: 0x04, name: PON, do: [ { display_on: true } ] }
+      - { opcode: 0x02, name: POF, do: [ { display_on: false } ] }
+      - { opcode: 0x12, name: DRF, do: [ { refresh: true } ] }
+      - { opcode: 0x10, name: DTM1, do: [ { ram_write: { reset_cursor: true, plane: black } } ] }
+      - { opcode: 0x13, name: DTM2, do: [ { ram_write: { reset_cursor: true, plane: red } } ] }
+      # Parameters COUNTED, behaviour not modelled — see the header.
+      - { opcode: 0x00, name: PSR, args: 1 }
+      - { opcode: 0x01, name: PWR, args: 5 }
+      - { opcode: 0x03, name: PFS, args: 1 }
+      - { opcode: 0x05, name: PMES }
+      - { opcode: 0x06, name: BTST, args: 3 }
+      - { opcode: 0x07, name: DSLP, args: 1 }
+      - { opcode: 0x11, name: DSP }
+      - { opcode: 0x16, opcode_end: 0x17, name: AUTO, args: 1 }
+      - { opcode: 0x20, name: LUT_VCOM, args: 44 }
+      - { opcode: 0x21, opcode_end: 0x24, name: LUT_WW_BW_WB_BB, args: 42 }
+      - { opcode: 0x30, name: PLL, args: 1 }
+      - { opcode: 0x40, name: TSC }
+      - { opcode: 0x41, name: TSE, args: 1 }
+      - { opcode: 0x50, name: CDI, args: 1 }
+      - { opcode: 0x51, name: LPD, args: 1 }
+      - { opcode: 0x60, name: TCON, args: 1 }
+      - { opcode: 0x61, name: TRES, args: 3 }
+      - { opcode: 0x65, name: GSST, args: 4 }
+      - { opcode: 0x70, opcode_end: 0x71, name: REV_FLG }
+      - { opcode: 0x80, opcode_end: 0x82, name: AMV_VV_VDCS, args: 1 }
+      - { opcode: 0x90, name: PARTIAL_WINDOW, args: 7 }
+      - { opcode: 0x91, opcode_end: 0x92, name: PARTIAL_IN_OUT }
+
+metadata:
+  label: "UC8151D Tri-Color E-Paper"
+  summary: "2.9\" tri-color (black/white/red) e-paper over SPI. Driver class GxEPD2_290_Z13c. Different command set from the SSD1680 part -- pick by the driver class your firmware instantiates, not by how the panel looks."
+  detail: "Decodes UC8151D opcodes (0x00 PSR / 0x04 PON / 0x10 DTM1 / 0x13 DTM2 / 0x12 DRF), the stream GxEPD2_290_Z13c emits. Same plane layout as SSD1680; different command stream, and BUSY is inverted (busy-LOW). GxEPD2_290_C90c is NOT this part -- it is an SSD1680 controller; see peripherals::kit::registry::TYPE_ALIASES, which owns driver-class -> controller. No board manifest in this repo ships this panel: every 2.9\" tri-color lab here is the C90c/SSD1680 module. It exists so firmware written against GxEPD2_290_Z13c has a faithful twin."
+  category: spi
+  config_keys:
+    - name: cs_pin
+      ty: str
+      doc: "Chip-select GPIO pin (e.g. \"GPIO7\"). Defaults to GPIO5."
+    - name: dc_pin
+      ty: str
+      doc: "Data/Command GPIO pin (e.g. \"GPIO2\"). Required for any decoding at all: without it this panel treats every byte as data and paints nothing, which is a declared cheat (FIDELITY.md section E) and deliberately not a plausible wrong picture."
+    - name: busy_pin
+      ty: str
+      doc: "BUSY status GPIO the host polls (e.g. \"GPIO5\"). Held HIGH (idle) -- UC8151D is busy-LOW, the inverse of ssd1680_tricolor_290."
+    - name: powered
+      ty: bool
+      doc: "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered part -- ABSENT MEANS POWERED. Only an explicit `false` changes anything: the panel then ignores its bus entirely and reports blank planes and refresh_generation 0."

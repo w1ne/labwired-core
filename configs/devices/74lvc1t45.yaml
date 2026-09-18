@@ -1,0 +1,53 @@
+# 74LVC1T45 — single-bit dual-supply BIDIRECTIONAL level translator.
+#
+# Datasheet (TI SN74LVC1T45, SCES584): "The direction-control signal (DIR)
+# input determines the direction of data flow. A is transmitted to B when DIR is
+# high, and B is transmitted to A when DIR is low. The output-enable (OE) input
+# can be used to disable the device so that the buses are isolated." tpd is 2.6
+# ns typical at VCCA = VCCB = 3.3 V; 4 ns is used below as the rounded-up
+# worst-of-the-typicals across the supply combinations in Table 7.6.
+#
+# ⚠️ ONE PAD, TWO ROLES. A and B each appear in BOTH `inputs:` and `outputs:`,
+# and that is not a mistake: a transceiver pad is read in one direction and
+# driven in the other. Attach binds both ends of each pad (its ODR, what the MCU
+# drives out, and its IDR, what the MCU samples) so the runtime never has to
+# re-resolve one when DIR flips.
+#
+# SN74LVC1T45 is the second most-dropped 74-series symbol in the KiCad corpus
+# (32 placements) — it is the standard way a 3.3 V MCU talks to a 5 V or 1.8 V
+# part, so it shows up on almost every mixed-rail board.
+#
+# ⚠️ NOT MODELLED, named rather than faked: the two supply rails. VCCA and VCCB
+# are what this part is FOR, and this twin has no voltage domains at all — a
+# level is a bit. So the direction and the isolation are modelled and the
+# translation is a no-op. A board that would have been broken by a missing
+# translator will still work in simulation.
+type: 74lvc1t45
+
+behavior:
+  primitive: logic_gate
+  logic:
+    inputs: [A, B]
+    outputs: [A, B]
+    enables:
+      - { pin: OE, active: low, outputs: [A, B] }
+    direction:
+      pin: DIR
+      a_to_b_when: 1
+      a: [A]
+      b: [B]
+    tprop_ns: 4
+    drive:
+      hiz_when_disabled: true
+
+metadata:
+  label: "74LVC1T45 Level Translator"
+  summary: "Single-bit bidirectional translator; DIR picks the direction, OE isolates."
+  detail: "TI SN74LVC1T45 single-bit dual-supply bus transceiver. DIR HIGH sends A to B, DIR LOW sends B to A, and a HIGH on OE isolates both sides — this twin then stops driving either pad rather than forcing a level. NOT modelled: the two supply rails. VCCA/VCCB level translation is the reason this part exists and this engine has no voltage domains, so the direction and the isolation are simulated and the translation itself is a no-op; a board that a missing translator would break still runs here."
+  category: gpio
+  config_keys:
+    - { name: a_pin, ty: str, doc: "A-side data pin (VCCA domain)." }
+    - { name: b_pin, ty: str, doc: "B-side data pin (VCCB domain)." }
+    - { name: dir_pin, ty: str, doc: "DIR pin. HIGH = A to B, LOW = B to A." }
+    - { name: oe_pin, ty: str, doc: "OE pin, active LOW. HIGH isolates both sides." }
+  inputs: []

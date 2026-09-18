@@ -1,0 +1,44 @@
+# 74HC04 — hex inverting buffer. Six independent inverters, no enable.
+#
+# Datasheet (Nexperia 74HC04, Rev. 5): "The 74HC04 provides six inverting
+# buffers." Propagation delay tPHL/tPLH is 7 ns typical at VCC = 5 V, CL = 15 pF
+# (Table 8), which is the number below. The part has no output enable, no
+# direction and no select: every Y follows its A, always.
+#
+# Imported from KiCad as `74LS04` / `74HC04` / `SN74LVC04`. See
+# `docs/part-packs.md` § logic_gate for the app-side alias mapping.
+type: 74hc04
+
+behavior:
+  primitive: logic_gate
+  logic:
+    inputs: [A1, A2, A3, A4, A5, A6]
+    outputs: [Y1, Y2, Y3, Y4, Y5, Y6]
+    table:
+      Y1: "!A1"
+      Y2: "!A2"
+      Y3: "!A3"
+      Y4: "!A4"
+      Y5: "!A5"
+      Y6: "!A6"
+    tprop_ns: 7
+
+metadata:
+  label: "74HC04 Hex Inverter"
+  summary: "Six independent inverting buffers, 7 ns propagation delay."
+  detail: "74HC04/74LS04 hex inverter. Each output Yn is the complement of its input An, after the part's propagation delay; there is no enable, so the outputs are always driven. Wire only the gates you use — an unconnected input reads LOW on this twin, which makes its output read HIGH, the same thing an unconnected gate does on a board with a pull-down. NOT modelled: input threshold voltages, output drive strength, supply rail, and contention with another driver on the same net."
+  category: gpio
+  config_keys:
+    - { name: a1_pin, ty: str, doc: "1A input pin (e.g. \"PA0\")." }
+    - { name: y1_pin, ty: str, doc: "1Y output pin." }
+    - { name: a2_pin, ty: str, doc: "2A input pin." }
+    - { name: y2_pin, ty: str, doc: "2Y output pin." }
+    - { name: a3_pin, ty: str, doc: "3A input pin." }
+    - { name: y3_pin, ty: str, doc: "3Y output pin." }
+    - { name: a4_pin, ty: str, doc: "4A input pin." }
+    - { name: y4_pin, ty: str, doc: "4Y output pin." }
+    - { name: a5_pin, ty: str, doc: "5A input pin." }
+    - { name: y5_pin, ty: str, doc: "5Y output pin." }
+    - { name: a6_pin, ty: str, doc: "6A input pin." }
+    - { name: y6_pin, ty: str, doc: "6Y output pin." }
+  inputs: []

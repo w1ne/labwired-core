@@ -183,6 +183,14 @@ pub static EMBEDDED_DEVICES: &[(&[&str], &str)] = &[
         include_str!("../../../configs/devices/rm67162.yaml"),
     ),
     (
+        &["ssd1680_tricolor_290"],
+        include_str!("../../../configs/devices/ssd1680_tricolor_290.yaml"),
+    ),
+    (
+        &["uc8151d_tricolor_290"],
+        include_str!("../../../configs/devices/uc8151d_tricolor_290.yaml"),
+    ),
+    (
         &["apa102"],
         include_str!("../../../configs/devices/apa102.yaml"),
     ),
@@ -241,6 +249,44 @@ pub static EMBEDDED_DEVICES: &[(&[&str], &str)] = &[
     (
         &["cap1188"],
         include_str!("../../../configs/devices/cap1188.yaml"),
+    ),
+    // ── 74-series logic (`logic_gate`) ─────────────────────────────────────
+    //
+    // The third largest model gap in the 39-project KiCad corpus: 139 dropped
+    // symbols. The extra spellings are the ones the corpus actually uses — an
+    // LS, an HCT and an LVT part differ in levels and speed, not in logic, and
+    // a placement that names one must not be dropped for want of a row.
+    (
+        &["74hc04", "74ls04", "74hct04"],
+        include_str!("../../../configs/devices/74hc04.yaml"),
+    ),
+    (
+        &["74hc00", "74ls00", "74hct00"],
+        include_str!("../../../configs/devices/74hc00.yaml"),
+    ),
+    (
+        &["74hc08", "74ls08", "74hct08"],
+        include_str!("../../../configs/devices/74hc08.yaml"),
+    ),
+    (
+        &["74hc32", "74ls32", "74hct32"],
+        include_str!("../../../configs/devices/74hc32.yaml"),
+    ),
+    (
+        &["74hc125", "74ls125", "74lvth125", "sn74lvth125"],
+        include_str!("../../../configs/devices/74hc125.yaml"),
+    ),
+    (
+        &["74lvc1t45", "sn74lvc1t45"],
+        include_str!("../../../configs/devices/74lvc1t45.yaml"),
+    ),
+    (
+        &["74hc245", "74ls245", "74lvc245", "sn74lvc245a"],
+        include_str!("../../../configs/devices/74hc245.yaml"),
+    ),
+    (
+        &["74cbtlv3257", "sn74cbtlv3257"],
+        include_str!("../../../configs/devices/74cbtlv3257.yaml"),
     ),
 ];
 

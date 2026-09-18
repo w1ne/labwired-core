@@ -49,9 +49,9 @@ use std::collections::BTreeMap;
 use anyhow::{bail, Context, Result};
 use labwired_config::{
     DeviceDescriptor, DisplayAction, DisplayAddressingMode, DisplayAxis, DisplayCommand,
-    DisplayCsSelect, DisplayCursorPart, DisplayDcSource, DisplayMetaFlag, DisplayMetaFormat,
-    DisplayPageWrap, DisplayPixelFormat, DisplayRamLayout, DisplayRamStream, DisplaySpec,
-    DisplayValue,
+    DisplayCsSelect, DisplayCursorPart, DisplayDcSource, DisplayDcUnwired, DisplayMetaFlag,
+    DisplayMetaFormat, DisplayPageWrap, DisplayPixelFormat, DisplayPlaneOf, DisplayRamLayout,
+    DisplayRamStream, DisplaySpec, DisplayValue,
 };
 
 use crate::peripherals::i2c::I2cDevice;
@@ -66,6 +66,55 @@ pub struct GlassWindow {
     pub row_offset: u16,
     pub cols: u16,
     pub rows: u16,
+}
+
+/// A borrowed, by-name view of a multi-plane panel's frame memory and glass.
+/// See [`GenericDisplay::planes`].
+pub struct PlaneView<'a> {
+    dev: &'a GenericDisplay,
+}
+
+impl PlaneView<'_> {
+    /// Plane names in payload order. EMPTY for a panel with one undivided
+    /// frame memory — the honest answer, and what tells a caller to take its
+    /// single-framebuffer branch.
+    pub fn names(&self) -> &[String] {
+        &self.dev.plane_names
+    }
+
+    /// Bytes in one plane.
+    pub fn plane_bytes(&self) -> usize {
+        self.dev.plane_bytes
+    }
+
+    /// The value an erased byte holds, and therefore what "no ink" is.
+    pub fn blank(&self) -> u8 {
+        self.dev.spec.ram.blank
+    }
+
+    fn slice(buf: &[u8], idx: usize, len: usize) -> &[u8] {
+        &buf[idx * len..(idx + 1) * len]
+    }
+
+    /// One plane of FRAME MEMORY, as the wire wrote it.
+    pub fn ram(&self, name: &str) -> Option<&[u8]> {
+        let i = self.dev.plane_names.iter().position(|p| p == name)?;
+        Some(Self::slice(&self.dev.ram, i, self.dev.plane_bytes))
+    }
+
+    /// One plane of THE GLASS — what the last `refresh` latched. Not the same
+    /// thing as [`Self::ram`] on an e-paper, which is the whole point.
+    pub fn screen(&self, name: &str) -> Option<&[u8]> {
+        let i = self.dev.plane_names.iter().position(|p| p == name)?;
+        Some(Self::slice(&self.dev.screen, i, self.dev.plane_bytes))
+    }
+
+    /// Inked bytes of one plane of frame memory — bytes that are not
+    /// [`Self::blank`].
+    pub fn ink_bytes(&self, name: &str) -> Option<usize> {
+        let blank = self.blank();
+        Some(self.ram(name)?.iter().filter(|&&b| b != blank).count())
+    }
 }
 
 /// Which of the two real D/C wirings a placement uses. Only `hw_dcx` panels
@@ -116,6 +165,17 @@ pub struct GenericDisplay {
     height: usize,
     pages: usize,
     unit_bytes: usize,
+    /// Addressable extent in COUNTER STEPS, not pixels. Equal to `width` for
+    /// every panel whose column counter steps one pixel; `width / 8` for the
+    /// SSD1680, whose 0x44 window bounds are byte coordinates. See
+    /// `DisplayRam::units`.
+    col_units: usize,
+    row_units: usize,
+    /// Bytes in ONE plane. Equal to the whole frame memory when the panel has
+    /// no planes.
+    plane_bytes: usize,
+    /// Plane names in payload order, empty for a single-plane panel.
+    plane_names: Vec<String>,
 
     // ── identity ────────────────────────────────────────────────────────
     address: u8,
@@ -151,6 +211,13 @@ pub struct GenericDisplay {
     page_end: u16,
 
     ram: Vec<u8>,
+    /// WHAT IS ON THE GLASS. Equal to `ram` for every panel whose frame memory
+    /// IS the screen; latched from `ram` by a `refresh` action on the panels
+    /// where it is not (e-paper). Same length as `ram` always, so a consumer
+    /// can index it the same way.
+    screen: Vec<u8>,
+    /// How many `refresh` actions have run. Never reset by anything.
+    refresh_generation: u32,
 
     // ── protocol state ──────────────────────────────────────────────────
     framing: Framing,
@@ -159,11 +226,17 @@ pub struct GenericDisplay {
     /// than re-looked-up when the parameters complete, because a command may
     /// change the very var its own guard reads.
     pending_idx: Option<u16>,
-    params: [u8; 8],
+    params: [u8; 64],
     param_have: u8,
     param_want: u8,
     unit: [u8; 4],
     unit_have: usize,
+    /// Which plane the open RAM stream writes, as an index into `plane_names`.
+    /// 0 for a single-plane panel, which is the whole frame memory.
+    plane: usize,
+    /// Write units the open stream may still accept under
+    /// `ram.stream: window_counted`. `None` = the stream is not counted.
+    ram_remaining: Option<u32>,
     /// I²C only: the control byte latched at the start of this transaction.
     /// `None` = the next byte IS the control byte.
     control: Option<u8>,
@@ -240,6 +313,60 @@ fn validate_spec(spec: &DisplaySpec) -> Result<()> {
     // Two numbers for one fact is how a descriptor starts lying: a `bytes:`
     // that does not match the panel would allocate a buffer the counters walk
     // off the end of, and every write past it would be silently dropped.
+    // Counter STEPS, which is what the frame memory is indexed by. A byte-unit
+    // axis addresses eight pixels per step (SSD1680 0x44).
+    let step_w = spec.ram.units.col.pixels_per_step() as usize;
+    let step_h = spec.ram.units.row.pixels_per_step() as usize;
+    if step_w > 1 || step_h > 1 {
+        if spec.pixel_format.write_unit_bytes() != 1 {
+            bail!(
+                "ram.units counts bytes on a {:?} panel, whose write unit is {} bytes — one                  counter step cannot be both",
+                spec.pixel_format,
+                spec.pixel_format.write_unit_bytes()
+            );
+        }
+        if w % step_w != 0 || h % step_h != 0 {
+            bail!(
+                "ram.units divides the {w}x{h} geometry into {step_w}x{step_h}-pixel steps,                  which does not fit a whole number of steps"
+            );
+        }
+        if spec.orientation.is_some() || spec.glass_crop {
+            bail!(
+                "ram.units counts bytes AND the panel declares an orientation or a glass crop;                  this engine maps a crop and a rotation in pixels, so the two would disagree                  about what a coordinate means"
+            );
+        }
+    }
+    let units_w = w / step_w;
+    let units_h = h / step_h;
+
+    // PLANES. Two 1-bpp RAMs selected by the command that opens the stream.
+    let planes = &spec.ram.planes;
+    if !planes.is_empty() {
+        if spec.pixel_format.write_unit_bytes() != 1 {
+            bail!(
+                "ram.planes divides frame memory into 1 bpp planes, but the pixel format is                  {:?}, whose write unit is {} bytes",
+                spec.pixel_format,
+                spec.pixel_format.write_unit_bytes()
+            );
+        }
+        if planes.len() < 2 {
+            bail!(
+                "ram.planes lists one plane ('{}'); one plane is an undivided frame memory,                  which is what an empty list already says",
+                planes[0]
+            );
+        }
+        let mut seen: Vec<&str> = Vec::new();
+        for name in planes {
+            if name.is_empty() {
+                bail!("ram.planes carries an unnamed plane; a ram_write selects a plane BY NAME");
+            }
+            if seen.contains(&name.as_str()) {
+                bail!("ram.planes lists '{name}' twice — a ram_write naming it could mean either");
+            }
+            seen.push(name);
+        }
+    }
+
     let derived = match (spec.pixel_format, spec.ram.layout) {
         (DisplayPixelFormat::MonoPage, DisplayRamLayout::PageMajor) => {
             let pages = spec
@@ -253,12 +380,14 @@ fn validate_spec(spec: &DisplaySpec) -> Result<()> {
                     pages * 8
                 );
             }
-            w * pages
+            units_w * pages * planes.len().max(1)
         }
         (DisplayPixelFormat::MonoPage, DisplayRamLayout::RowMajor) => {
             bail!("mono_page pixels are page-major by construction; ram.layout says row_major")
         }
-        (fmt, DisplayRamLayout::RowMajor) => w * h * fmt.write_unit_bytes(),
+        (fmt, DisplayRamLayout::RowMajor) => {
+            units_w * units_h * fmt.write_unit_bytes() * planes.len().max(1)
+        }
         (fmt, DisplayRamLayout::PageMajor) => {
             bail!("{fmt:?} with ram.layout page_major is not a shape this engine knows")
         }
@@ -353,14 +482,77 @@ fn validate_spec(spec: &DisplaySpec) -> Result<()> {
                 );
             }
         }
-        DisplayRamStream::Command => {
+        DisplayRamStream::Command | DisplayRamStream::WindowCounted => {
             if !has_ram_write {
                 bail!(
-                    "ram.stream `command` means a `ram_write` action opens the pixel stream, and \
-                     the command table declares none — no data byte could ever reach frame memory"
+                    "ram.stream `{:?}` means a `ram_write` action opens the pixel stream, and \
+                     the command table declares none — no data byte could ever reach frame memory",
+                    spec.ram.stream
                 );
             }
         }
+    }
+
+    // THE UNWIRED-D/C CHEAT. Stated per panel; see `DisplayDc::unwired`.
+    match spec.dc.unwired {
+        DisplayDcUnwired::Level => {}
+        DisplayDcUnwired::Infer | DisplayDcUnwired::Data => {
+            if spec.dc.source == DisplayDcSource::ControlByte {
+                bail!(
+                    "dc.unwired {:?} describes a panel with no D/C PAD resolved, and this panel \
+                     is framed by an I²C control byte, which has no pad to be missing",
+                    spec.dc.unwired
+                );
+            }
+        }
+    }
+    if spec.dc.unwired == DisplayDcUnwired::Infer
+        && spec.ram.stream != DisplayRamStream::WindowCounted
+    {
+        bail!(
+            "dc.unwired `infer` decides a byte is a command because NO STREAM IS OPEN, and \
+             ram.stream `{:?}` leaves the pixel stream open until the next command — which \
+             under this cheat can never arrive, so every byte after the first ram_write would \
+             be a pixel forever",
+            spec.ram.stream
+        );
+    }
+
+    // `refresh` and the counter that reports it must both exist or neither.
+    let has_refresh = spec
+        .commands
+        .iter()
+        .flat_map(|c| c.actions.iter())
+        .any(|a| a.refresh);
+    let publishes_generation = spec
+        .artifact_meta
+        .iter()
+        .any(|f| f.flag() == Some(DisplayMetaFlag::RefreshGeneration));
+    if publishes_generation && !has_refresh {
+        bail!(
+            "artifact_meta publishes 'refresh_generation' and the command table has no \
+             `refresh` action — the key would report 0 for every firmware forever"
+        );
+    }
+    if has_refresh && !publishes_generation {
+        bail!(
+            "the command table declares a `refresh` action and artifact_meta publishes no \
+             'refresh_generation' — nothing could tell a written frame from a shown one, \
+             which is the only reason the action exists"
+        );
+    }
+    if has_refresh
+        && spec
+            .artifact_meta
+            .iter()
+            .all(|f| f.plane().is_none_or(|(_, of)| of != DisplayPlaneOf::Screen))
+        && !spec.ram.planes.is_empty()
+    {
+        bail!(
+            "a multi-plane panel with a `refresh` action publishes no `of: screen` plane \
+             count — frame memory and the glass would be indistinguishable in the artifact, \
+             so firmware that wrote a frame and never activated would read as if it had"
+        );
     }
 
     for req in &spec.lit_requires {
@@ -386,21 +578,30 @@ fn validate_spec(spec: &DisplaySpec) -> Result<()> {
              so a dark frame could not explain itself"
         );
     }
-    let mut meta_keys: Vec<&str> = Vec::new();
+    let mut meta_keys: Vec<String> = Vec::new();
     for field in &spec.artifact_meta {
-        let key = field.key();
-        if matches!(key, "w" | "h" | "format" | "generation") {
+        let key = field.key().into_owned();
+        if matches!(key.as_str(), "w" | "h" | "format" | "generation") {
             bail!("artifact_meta publishes '{key}', which describes the payload and is always present");
         }
         if meta_keys.contains(&key) {
             bail!("artifact_meta publishes '{key}' twice");
         }
-        meta_keys.push(key);
+        meta_keys.push(key.clone());
         if let Some(var) = field.var() {
             if !spec.vars.contains_key(var) {
                 bail!(
                     "artifact_meta publishes var '{var}', which is not declared — the key would \
                      read a cell nothing can write and report a constant forever"
+                );
+            }
+            continue;
+        }
+        if let Some((plane, _)) = field.plane() {
+            if !spec.ram.planes.iter().any(|p| p == plane) {
+                bail!(
+                    "artifact_meta counts plane '{plane}', which ram.planes does not declare — \
+                     the key would report 0 forever"
                 );
             }
             continue;
@@ -422,6 +623,12 @@ fn validate_spec(spec: &DisplaySpec) -> Result<()> {
                     spec.pixel_format
                 );
             }
+            Some(DisplayMetaFlag::PlaneBytes) if spec.ram.planes.is_empty() => {
+                bail!(
+                    "artifact_meta publishes 'plane_bytes', the SPLIT of a multi-plane payload, \
+                     and ram.planes declares none — there is nothing to split"
+                );
+            }
             Some(DisplayMetaFlag::DcSource) if spec.dc.source != DisplayDcSource::HwDcx => {
                 bail!(
                     "artifact_meta 'dc_source' names WHICH of two wirings drives D/C, and \
@@ -435,9 +642,15 @@ fn validate_spec(spec: &DisplaySpec) -> Result<()> {
 
     let mut claims: Vec<Vec<usize>> = vec![Vec::new(); 256];
     for (i, cmd) in spec.commands.iter().enumerate() {
-        if cmd.args as usize > 8 {
+        // 64 rather than 8: the UC8151D's waveform LUT commands (0x20 VCOM, 44
+        // bytes; 0x21..=0x24 WW/BW/WB/BB, 42 each) are real entries in a real
+        // command table, and a table that could not state their length would
+        // have to leave them undeclared and rely on an unlisted opcode dropping
+        // its parameters — which is only a no-op while `ram.stream` is
+        // `command`.
+        if cmd.args as usize > 64 {
             bail!(
-                "command 0x{:02X} takes {} parameters; this engine buffers 8",
+                "command 0x{:02X} takes {} parameters; this engine buffers 64",
                 cmd.opcode,
                 cmd.args
             );
@@ -559,6 +772,58 @@ fn validate_action(spec: &DisplaySpec, cmd: &DisplayCommand, action: &DisplayAct
             bail!("{}: set_var '{}' is not a declared var", where_(), sv.name);
         }
     }
+    if let Some(rw) = &action.ram_write {
+        match (&rw.plane, spec.ram.planes.is_empty()) {
+            (Some(name), false) => {
+                if !spec.ram.planes.iter().any(|p| p == name) {
+                    bail!(
+                        "{}: ram_write writes plane '{name}', which ram.planes does not declare",
+                        where_()
+                    );
+                }
+            }
+            (None, false) => bail!(
+                "{}: ram_write on a panel with planes {:?} names none. The plane is the only \
+                 thing that tells this stream from the other one, so defaulting would paint \
+                 one colour's image into the other's memory.",
+                where_(),
+                spec.ram.planes
+            ),
+            (Some(name), true) => bail!(
+                "{}: ram_write writes plane '{name}' and ram.planes declares no planes",
+                where_()
+            ),
+            (None, true) => {}
+        }
+    }
+    if let Some(g) = &action.when {
+        if g.arg >= cmd.args {
+            bail!(
+                "{}: `when` reads parameter {} but the command takes {} of them",
+                where_(),
+                g.arg,
+                cmd.args
+            );
+        }
+        if let Some(m) = g.mask {
+            if m == 0 {
+                bail!(
+                    "{}: `when` masks the parameter with 0, so every value equals {} or none \
+                     does — the guard reads as if it selected something",
+                    where_(),
+                    g.equals
+                );
+            }
+            if g.equals & !m != 0 {
+                bail!(
+                    "{}: `when` requires 0x{:02X} through mask 0x{m:02X}, which no masked byte \
+                     can equal",
+                    where_(),
+                    g.equals
+                );
+            }
+        }
+    }
     Ok(())
 }
 
@@ -613,13 +878,24 @@ impl GenericDisplay {
         let address = spec.default_address.unwrap_or(0);
         let vars = spec.vars.clone();
         let mode = spec.addressing.default;
-        let ram = vec![0u8; spec.ram.bytes as usize];
+        // A blank frame memory is the panel's ERASED value, not zero: an
+        // e-paper powers on white (`0xFF`), an OLED powers on dark (`0x00`).
+        let ram = vec![spec.ram.blank; spec.ram.bytes as usize];
+        let screen = ram.clone();
+        let col_units = width / spec.ram.units.col.pixels_per_step() as usize;
+        let row_units = height / spec.ram.units.row.pixels_per_step() as usize;
+        let plane_names = spec.ram.planes.clone();
+        let plane_bytes = spec.ram.bytes as usize / plane_names.len().max(1);
         let mut dev = Self {
             by_opcode,
             width,
             height,
             pages,
             unit_bytes,
+            col_units,
+            row_units,
+            plane_bytes,
+            plane_names,
             address,
             cs_pin: String::new(),
             dc_pin: None,
@@ -643,14 +919,18 @@ impl GenericDisplay {
             page_start: 0,
             page_end: 0,
             ram,
+            screen,
+            refresh_generation: 0,
             framing: Framing::Idle,
             pending_cmd: 0,
             pending_idx: None,
-            params: [0; 8],
+            params: [0; 64],
             param_have: 0,
             param_want: 0,
             unit: [0; 4],
             unit_have: 0,
+            plane: 0,
+            ram_remaining: None,
             control: None,
             glass: None,
             elapsed_us: 0,
@@ -669,13 +949,13 @@ impl GenericDisplay {
             .spec
             .window
             .col_end
-            .unwrap_or_else(|| self.spec.width.saturating_sub(1));
+            .unwrap_or_else(|| (self.col_units as u16).saturating_sub(1));
         self.row_start = 0;
         self.row_end = self
             .spec
             .window
             .row_end
-            .unwrap_or_else(|| self.spec.height.saturating_sub(1));
+            .unwrap_or_else(|| (self.row_units as u16).saturating_sub(1));
         self.page_start = 0;
         self.page_end = self
             .spec
@@ -786,6 +1066,25 @@ impl GenericDisplay {
         self.mode
     }
 
+    /// Read this panel's frame memory BY PLANE NAME, and what a refresh last
+    /// put on the glass.
+    ///
+    /// ONE accessor, not one type per panel. The CLI and the browser used to
+    /// reach an e-paper by casting to `Ssd1680Tricolor290` and then to
+    /// `Uc8151dTricolor290`, so every panel that grew a second plane grew an
+    /// arm in two more files. A panel with no planes reports none and the
+    /// callers take their other branch.
+    pub fn planes(&self) -> PlaneView<'_> {
+        PlaneView { dev: self }
+    }
+
+    /// How many `refresh` actions have run. Zero forever on a panel whose
+    /// frame memory IS the screen, which is why it is the e-paper's evidence
+    /// and nobody else's.
+    pub fn refresh_generation(&self) -> u32 {
+        self.refresh_generation
+    }
+
     // ── orientation ─────────────────────────────────────────────────────
 
     fn orientation_bits(&self) -> (bool, bool, bool) {
@@ -815,22 +1114,36 @@ impl GenericDisplay {
         }
     }
 
+    /// Addressable extent in COUNTER STEPS, in the current orientation. Equal
+    /// to [`Self::addressable`] for every panel that addresses pixels; the
+    /// SSD1680's column counter steps a byte, so its 128-pixel row is 16 steps
+    /// and a window bound clamped to 127 would be sixteen rows off the end.
+    fn addressable_units(&self) -> (u16, u16) {
+        let (swap, _, _) = self.orientation_bits();
+        let (w, h) = (self.col_units as u16, self.row_units as u16);
+        if swap {
+            (h, w)
+        } else {
+            (w, h)
+        }
+    }
+
     /// Map a logical (column, row) onto physical frame memory, which does not
     /// rotate.
     fn to_physical(&self, col: u16, row: u16) -> (usize, usize) {
         let (swap, mx, my) = self.orientation_bits();
         let (mut x, mut y) = if swap { (row, col) } else { (col, row) };
         if mx {
-            x = self.spec.width.saturating_sub(1).saturating_sub(x);
+            x = (self.col_units as u16).saturating_sub(1).saturating_sub(x);
         }
         if my {
-            y = self.spec.height.saturating_sub(1).saturating_sub(y);
+            y = (self.row_units as u16).saturating_sub(1).saturating_sub(y);
         }
         (x as usize, y as usize)
     }
 
     fn axis_max(&self, axis: DisplayAxis) -> u16 {
-        let (aw, ah) = self.addressable();
+        let (aw, ah) = self.addressable_units();
         match axis {
             DisplayAxis::Col => aw.saturating_sub(1),
             DisplayAxis::Row => ah.saturating_sub(1),
@@ -874,6 +1187,16 @@ impl GenericDisplay {
         // table entry is a handful of small enums.
         let actions = self.spec.commands[cmd_index].actions.clone();
         for action in &actions {
+            // A PARAMETER-GUARDED entry. The SSD1680's 0x22 is a sequence
+            // selector: 0xF8 powers the booster on, 0x83 powers it off, and
+            // every other value leaves it alone. The guard reads the parameter
+            // bytes this command just collected.
+            if let Some(g) = &action.when {
+                let byte = self.params[g.arg as usize];
+                if g.mask.map_or(byte, |m| byte & m) != g.equals {
+                    continue;
+                }
+            }
             if let Some(w) = &action.set_window {
                 let start = self.resolve(&w.start, w.axis) as u16;
                 let end = self.resolve(&w.end, w.axis) as u16;
@@ -923,7 +1246,17 @@ impl GenericDisplay {
                     self.row = self.row_start;
                     self.page = self.page_start;
                 }
+                // WHICH plane this stream writes. Validation has already proved
+                // the name is declared when the panel has planes and absent
+                // when it has none, so an unknown name here cannot happen.
+                self.plane = rw
+                    .plane
+                    .as_deref()
+                    .and_then(|n| self.plane_names.iter().position(|p| p == n))
+                    .unwrap_or(0);
                 self.unit_have = 0;
+                self.ram_remaining = (self.spec.ram.stream == DisplayRamStream::WindowCounted)
+                    .then(|| self.window_units());
                 self.framing = Framing::Ram;
             }
             if let Some(on) = action.display_on {
@@ -944,9 +1277,28 @@ impl GenericDisplay {
                 self.reset_window();
             }
             if action.clear_ram {
-                self.ram.fill(0);
+                self.ram.fill(self.spec.ram.blank);
+            }
+            // PUT FRAME MEMORY ON THE GLASS. Until this runs, an e-paper still
+            // shows the previous image however full its RAM is, and
+            // `refresh_generation` is the only thing that says so.
+            if action.refresh {
+                self.screen.copy_from_slice(&self.ram);
+                self.refresh_generation = self.refresh_generation.wrapping_add(1);
             }
         }
+    }
+
+    /// Write units the current window holds — the stream length a
+    /// `window_counted` `ram_write` opens.
+    fn window_units(&self) -> u32 {
+        let cols = u32::from(self.col_end.saturating_sub(self.col_start)) + 1;
+        let secondary = if self.spec.ram.layout == DisplayRamLayout::PageMajor {
+            u32::from(self.page_end.saturating_sub(self.page_start)) + 1
+        } else {
+            u32::from(self.row_end.saturating_sub(self.row_start)) + 1
+        };
+        cols * secondary
     }
 
     /// One command byte off the wire.
@@ -961,7 +1313,7 @@ impl GenericDisplay {
         self.pending_cmd = byte;
         self.param_have = 0;
         self.param_want = 0;
-        self.params = [0; 8];
+        self.params = [0; 64];
         let resolved = self.lookup(byte);
         self.pending_idx = resolved;
         let Some(idx) = resolved else {
@@ -1050,20 +1402,33 @@ impl GenericDisplay {
         self.unit_have = 0;
         self.commit_unit();
         self.advance();
+        // `window_counted`: the controller accepts exactly the window and then
+        // the stream is shut. Running past it would wrap the counters back to
+        // the window start and overwrite the rows just written.
+        if let Some(left) = self.ram_remaining.as_mut() {
+            *left = left.saturating_sub(1);
+            if *left == 0 {
+                self.ram_remaining = None;
+                self.framing = Framing::Idle;
+            }
+        }
     }
 
     fn commit_unit(&mut self) {
+        // Where this plane starts. Zero for a panel with no planes, which is
+        // every panel but the tri-colour e-papers.
+        let base = self.plane * self.plane_bytes;
         match self.spec.ram.layout {
             DisplayRamLayout::PageMajor => {
-                let idx = self.page as usize * self.width + self.col as usize;
-                if idx < self.ram.len() {
+                let idx = base + self.page as usize * self.col_units + self.col as usize;
+                if idx < base + self.plane_bytes && idx < self.ram.len() {
                     self.ram[idx] = self.unit[0];
                 }
             }
             DisplayRamLayout::RowMajor => {
                 let (x, y) = self.to_physical(self.col, self.row);
-                if x < self.width && y < self.height {
-                    let idx = (y * self.width + x) * self.unit_bytes;
+                if x < self.col_units && y < self.row_units {
+                    let idx = base + (y * self.col_units + x) * self.unit_bytes;
                     self.ram[idx..idx + self.unit_bytes]
                         .copy_from_slice(&self.unit[..self.unit_bytes]);
                 }
@@ -1114,7 +1479,7 @@ impl GenericDisplay {
                 // page never changes. What happens AT the last column is the
                 // one thing the two paged OLEDs here disagree about, so it is
                 // `addressing.page_wrap` rather than a house rule.
-                if (self.col as usize) < self.width.saturating_sub(1) {
+                if (self.col as usize) < self.col_units.saturating_sub(1) {
                     self.col += 1;
                 } else if self.spec.addressing.page_wrap == DisplayPageWrap::Wrap {
                     self.col = 0;
@@ -1210,6 +1575,18 @@ impl GenericDisplay {
         };
 
         for field in &self.spec.artifact_meta {
+            // A named plane's ink count, off frame memory or off the glass.
+            if let Some((plane, of)) = field.plane() {
+                let view = self.planes();
+                let blank = view.blank();
+                let bytes = match of {
+                    DisplayPlaneOf::Ram => view.ram(plane),
+                    DisplayPlaneOf::Screen => view.screen(plane),
+                };
+                let n = bytes.map_or(0, |b| b.iter().filter(|&&x| x != blank).count());
+                meta.insert(field.key().to_string(), serde_json::json!(n));
+                continue;
+            }
             if let Some(var) = field.var() {
                 let n = self.vars.get(var).copied().unwrap_or(0);
                 let value = match field.format() {
@@ -1243,6 +1620,8 @@ impl GenericDisplay {
                 // unpowered panel has never been woken, so it is asleep.
                 DisplayMetaFlag::Asleep => serde_json::json!(!self.awake),
                 DisplayMetaFlag::DcSource => serde_json::json!(self.dc_wiring.as_str()),
+                DisplayMetaFlag::RefreshGeneration => serde_json::json!(self.refresh_generation),
+                DisplayMetaFlag::PlaneBytes => serde_json::json!(self.plane_bytes),
             };
             meta.insert(field.key().to_string(), value);
         }
@@ -1255,18 +1634,79 @@ impl GenericDisplay {
         }]
     }
 
-    /// The frame memory, for a snapshot. Only the pixels: control state is
-    /// rebuilt by replaying the bus, and a snapshot that carried a cursor
-    /// would resume a half-written frame at a position the wire never sent.
+    /// The picture, for a snapshot: frame memory, THE GLASS, and the refresh
+    /// counter. Control state is deliberately NOT carried — it is rebuilt by
+    /// replaying the bus, and a snapshot that resumed a cursor would continue a
+    /// half-written frame at a position the wire never sent.
+    ///
+    /// The glass and the counter are here because on an e-paper they are not
+    /// derivable from frame memory: a resumed panel whose screen was rebuilt
+    /// from RAM would claim to be showing a frame that was written and never
+    /// activated, and `min_refresh_generation` would resolve against a zero
+    /// that the run had already passed.
     fn snapshot_ram(&self) -> Vec<u8> {
-        self.ram.clone()
+        let snap = DisplaySnapshot {
+            tag: DISPLAY_SNAPSHOT_TAG,
+            version: DISPLAY_SNAPSHOT_VERSION,
+            ram: self.ram.clone(),
+            screen: self.screen.clone(),
+            refresh_generation: self.refresh_generation,
+        };
+        bincode::serialize(&snap).expect("bincode serialize DisplaySnapshot")
     }
 
-    fn restore_ram(&mut self, bytes: &[u8]) {
-        if bytes.len() == self.ram.len() {
-            self.ram.copy_from_slice(bytes);
+    fn restore_ram(&mut self, bytes: &[u8]) -> crate::SimResult<()> {
+        let refuse = |why: String| crate::SimulationError::NotImplemented(why);
+        let snap: DisplaySnapshot = bincode::deserialize(bytes).map_err(|e| {
+            refuse(format!(
+                "display snapshot: not a tagged panel snapshot ({e}). Snapshots taken before                  the panel carried its glass and refresh counter cannot be resumed — retake it."
+            ))
+        })?;
+        if snap.tag != DISPLAY_SNAPSHOT_TAG {
+            return Err(refuse(format!(
+                "display snapshot: tag 0x{:08X} is not 0x{DISPLAY_SNAPSHOT_TAG:08X}. An                  untagged snapshot is a pre-versioning capture of raw frame memory — retake it.",
+                snap.tag
+            )));
         }
+        if snap.version != DISPLAY_SNAPSHOT_VERSION {
+            return Err(refuse(format!(
+                "display snapshot: version {} is not {DISPLAY_SNAPSHOT_VERSION} — retake it.",
+                snap.version
+            )));
+        }
+        if snap.ram.len() != self.ram.len() || snap.screen.len() != self.screen.len() {
+            return Err(refuse(format!(
+                "display snapshot: {} frame-memory bytes and {} glass bytes for a panel that                  holds {} of each",
+                snap.ram.len(),
+                snap.screen.len(),
+                self.ram.len()
+            )));
+        }
+        self.ram.copy_from_slice(&snap.ram);
+        self.screen.copy_from_slice(&snap.screen);
+        self.refresh_generation = snap.refresh_generation;
+        Ok(())
     }
+}
+
+/// Magic word every panel snapshot starts with — `"LWDS"`, LabWired display
+/// snapshot. THE POINT IS REFUSAL: before this existed a runtime snapshot was
+/// raw frame memory with no header, so a capture taken by an older build
+/// restored silently into a panel that now also carries a glass and a refresh
+/// counter, and the resumed run reported a picture nobody had activated. A
+/// blank e-paper's first four bytes are `0xFFFFFFFF` and an OLED's are zero;
+/// neither is this word.
+const DISPLAY_SNAPSHOT_TAG: u32 = 0x4C57_4453;
+/// Bumped whenever the fields below change shape. See the tag.
+const DISPLAY_SNAPSHOT_VERSION: u16 = 1;
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct DisplaySnapshot {
+    tag: u32,
+    version: u16,
+    ram: Vec<u8>,
+    screen: Vec<u8>,
+    refresh_generation: u32,
 }
 
 // ─── I²C door (control-byte framing) ───────────────────────────────────────
@@ -1362,6 +1802,7 @@ impl SpiDevice for GenericDisplay {
         self.param_want = 0;
         self.param_have = 0;
         self.unit_have = 0;
+        self.ram_remaining = None;
     }
 
     fn dc_pin(&self) -> Option<&str> {
@@ -1388,6 +1829,33 @@ impl SpiDevice for GenericDisplay {
         // report time.
         if !self.powered {
             return 0;
+        }
+        // NO D/C LINE RESOLVED AT ATTACH. What a panel does then is its own
+        // declared cheat, never a house rule — see `DisplayDc::unwired`, and
+        // FIDELITY.md §E. A panel that leaves the key at its default reads the
+        // latched level anyway, which is what every panel did before the key
+        // existed.
+        if self.dc_source.is_none() {
+            match self.spec.dc.unwired {
+                DisplayDcUnwired::Level => {}
+                // CHEAT(INFER): nothing open ⇒ this is a command — real:
+                // sample the D/C pad. Only terminates because
+                // `window_counted` closes the pixel stream. FIDELITY.md §E.
+                DisplayDcUnwired::Infer => {
+                    if self.framing == Framing::Idle {
+                        self.command_byte(mosi);
+                    } else {
+                        self.data_byte(mosi);
+                    }
+                    return 0;
+                }
+                // CHEAT(INFER): every byte is data — real: sample the D/C
+                // pad. FIDELITY.md §E.
+                DisplayDcUnwired::Data => {
+                    self.data_byte(mosi);
+                    return 0;
+                }
+            }
         }
         let command = self.dc_level == (self.spec.dc.command_level != 0);
         if command {
@@ -1424,8 +1892,7 @@ impl SpiDevice for GenericDisplay {
     }
 
     fn restore_runtime_snapshot(&mut self, bytes: &[u8]) -> crate::SimResult<()> {
-        self.restore_ram(bytes);
-        Ok(())
+        self.restore_ram(bytes)
     }
 }
 
@@ -1563,6 +2030,12 @@ impl PeripheralKit for DeclarativeDisplayKit {
                         self.descriptor.r#type,
                         ctx.device_id(),
                     ),
+                    // A panel that declares an `unwired` fallback accepts a
+                    // board with no D/C pad — see `DisplayDc::unwired`. That is
+                    // the ESP32 e-paper lab, whose manifest wires CS and
+                    // nothing else, and refusing it here would delete a lab
+                    // that has run for a year.
+                    (None, false) if spec.dc.unwired != DisplayDcUnwired::Level => {}
                     (None, false) => anyhow::bail!(
                         "{} '{}': no D/C source. {}This panel frames commands from the D/C line \
                          and has no infer-from-byte-values fallback: that inference decodes a \
@@ -1604,6 +2077,17 @@ impl PeripheralKit for DeclarativeDisplayKit {
 
                 if spec.supply_gated && ctx.config_bool("powered") == Some(false) {
                     dev.set_powered(false);
+                }
+                // BUSY, driven once to its idle level. An undriven line is what
+                // left the ESP32 e-reader lab blank: GxEPD2 spins in
+                // `_waitWhileBusy` to a 30 s timeout that never arrives at
+                // simulated speed. The POLARITY is the descriptor's, because
+                // the two e-papers here are opposites.
+                if let Some(busy) = &spec.busy {
+                    if let Some(pin) = ctx.config_str(&busy.config_key) {
+                        let pin = pin.to_string();
+                        ctx.drive_pin_input(&pin, busy.idle_level)?;
+                    }
                 }
                 if spec.glass_crop {
                     apply_glass_crop(&self.descriptor.r#type, ctx, spec, &mut dev)?;
@@ -1732,6 +2216,18 @@ display_kit!(
     RM67162_KIT,
     "amoled-rm67162"
 );
+display_kit!(
+    /// Solomon Systech SSD1680, 128×296 tri-colour e-paper
+    /// (`ssd1680_tricolor_290.yaml`).
+    SSD1680_TRICOLOR_290_KIT,
+    "ssd1680_tricolor_290"
+);
+display_kit!(
+    /// UltraChip UC8151D, 128×296 tri-colour e-paper
+    /// (`uc8151d_tricolor_290.yaml`).
+    UC8151D_TRICOLOR_290_KIT,
+    "uc8151d_tricolor_290"
+);
 
 /// The SSD1306 128×64 model, built from its embedded descriptor. The shape the
 /// in-crate tests used to get from `Ssd1306::new`.
@@ -1791,6 +2287,21 @@ pub fn rm67162_gpio_dc(cs_pin: &str, dc_pin: &str) -> GenericDisplay {
     dev.set_cs_pin(cs_pin);
     dev.set_dc_pin(dc_pin);
     dev.set_dc_wiring(DcWiring::Gpio);
+    dev
+}
+
+/// The SSD1680 tri-colour e-paper, built from its embedded descriptor. The
+/// shape the tests used to get from `Ssd1680Tricolor290::new`.
+pub fn ssd1680_tricolor_290(cs_pin: &str) -> GenericDisplay {
+    let mut dev = embedded("ssd1680_tricolor_290").expect("ssd1680_tricolor_290 descriptor builds");
+    dev.set_cs_pin(cs_pin);
+    dev
+}
+
+/// The UC8151D tri-colour e-paper, built from its embedded descriptor.
+pub fn uc8151d_tricolor_290(cs_pin: &str) -> GenericDisplay {
+    let mut dev = embedded("uc8151d_tricolor_290").expect("uc8151d_tricolor_290 descriptor builds");
+    dev.set_cs_pin(cs_pin);
     dev
 }
 
@@ -2192,6 +2703,276 @@ mod tests {
         assert_ne!(broken, yaml, "the sabotage did not apply");
         let err = GenericDisplay::from_yaml(&broken).expect_err("must be refused");
         assert!(format!("{err:#}").contains("1 bpp ink"), "got: {err:#}");
+    }
+
+    // ── the e-paper keys: planes, refresh, byte units, the unwired cheat ───
+    //
+    // Each of these SABOTAGES the shipped descriptor and asserts what the
+    // sabotage did. A validation message alone would only prove the engine can
+    // print; these prove the key is load-bearing.
+
+    fn epd_yaml_with(device: &str, replacement: (&str, &str)) -> String {
+        let yaml = labwired_config::embedded_device_yaml(device).expect("embedded");
+        let out = yaml.replace(replacement.0, replacement.1);
+        assert_ne!(out, yaml, "the edit '{}' did not apply", replacement.0);
+        out
+    }
+
+    /// Drive an SSD1680-shaped script: window the whole glass, open a plane
+    /// stream, write eight bytes of ink.
+    fn epd_write_black(dev: &mut GenericDisplay) {
+        epd_write_black_value(dev, 0x00);
+    }
+
+    /// The same script, writing a chosen byte.
+    fn epd_write_black_value(dev: &mut GenericDisplay, value: u8) {
+        SpiDevice::set_dc_source(dev, 0x4000_0000, 0);
+        for (op, params) in [
+            (0x44u8, &[0x00u8, 0x0F][..]),
+            (0x45, &[0x00, 0x00, 0x27, 0x01][..]),
+            (0x24, &[][..]),
+        ] {
+            dev.set_dc_level(false);
+            dev.transfer(op);
+            dev.set_dc_level(true);
+            for p in params {
+                dev.transfer(*p);
+            }
+        }
+        dev.set_dc_level(true);
+        for _ in 0..8 {
+            dev.transfer(value);
+        }
+    }
+
+    fn epd_planes(dev: &GenericDisplay) -> (usize, usize) {
+        let v = dev.planes();
+        (
+            v.ink_bytes("black").expect("black plane"),
+            v.ink_bytes("red").expect("red plane"),
+        )
+    }
+
+    /// TRANSPOSING THE TWO PLANES PAINTS THE OTHER COLOUR. 0x24 is the black
+    /// RAM and 0x26 the red one; a descriptor that swapped them would report a
+    /// red image for a black one and pass every count-only assertion.
+    #[test]
+    fn swapping_the_two_epaper_planes_paints_the_other_colour() {
+        let mut stock = embedded("ssd1680_tricolor_290").expect("embedded");
+        epd_write_black(&mut stock);
+        assert_eq!(epd_planes(&stock), (8, 0), "0x24 writes the BLACK plane");
+
+        let sabotaged = epd_yaml_with(
+            "ssd1680_tricolor_290",
+            (
+                "{ opcode: 0x24, name: WRITE_RAM_BLACK, do: [ { ram_write: { reset_cursor: true, plane: black } } ] }",
+                "{ opcode: 0x24, name: WRITE_RAM_BLACK, do: [ { ram_write: { reset_cursor: true, plane: red } } ] }",
+            ),
+        );
+        let mut moved = GenericDisplay::from_yaml(&sabotaged).expect("still a valid descriptor");
+        epd_write_black(&mut moved);
+        assert_eq!(
+            epd_planes(&moved),
+            (0, 8),
+            "the same 0x24 stream now lands in the RED plane",
+        );
+    }
+
+    /// `ram.blank` IS THE ERASED BYTE, and on this panel a SET bit is NO ink.
+    /// Declaring 0x00 inverts every ink count: `clearScreen(0xFF)` — the white
+    /// frame GxEPD2 sends first — is then reported as a fully inked plane.
+    #[test]
+    fn an_epaper_blank_byte_of_zero_inverts_every_ink_count() {
+        let mut stock = embedded("ssd1680_tricolor_290").expect("embedded");
+        assert_eq!(epd_planes(&stock), (0, 0), "a fresh panel carries no ink");
+        epd_write_black_value(&mut stock, 0xFF);
+        assert_eq!(epd_planes(&stock), (0, 0), "0xFF is white: still no ink");
+        epd_write_black_value(&mut stock, 0x00);
+        assert_eq!(epd_planes(&stock), (8, 0), "0x00 is ink");
+
+        let sabotaged = epd_yaml_with("ssd1680_tricolor_290", ("blank: 0xFF", "blank: 0x00"));
+        let mut wrong = GenericDisplay::from_yaml(&sabotaged).expect("still a valid descriptor");
+        epd_write_black_value(&mut wrong, 0xFF);
+        assert_eq!(
+            epd_planes(&wrong),
+            (8, 0),
+            "a white frame now reads as eight inked bytes",
+        );
+        epd_write_black_value(&mut wrong, 0x00);
+        assert_eq!(
+            epd_planes(&wrong),
+            (0, 0),
+            "and an inked frame reads as blank"
+        );
+    }
+
+    /// THE X WINDOW IS IN BYTES. Reading it in pixels does not merely move the
+    /// picture — it contradicts the stated RAM size, which is how the
+    /// descriptor catches it at load rather than at paint.
+    #[test]
+    fn reading_the_epaper_x_window_in_pixels_is_refused() {
+        let sabotaged = epd_yaml_with(
+            "ssd1680_tricolor_290",
+            (
+                "units: { col: bytes, row: pixels }",
+                "units: { col: pixels, row: pixels }",
+            ),
+        );
+        let err = GenericDisplay::from_yaml(&sabotaged).expect_err("pixel units must be refused");
+        assert!(
+            format!("{err:#}").contains("ram.bytes"),
+            "unexpected error: {err:#}"
+        );
+    }
+
+    /// The SSD1680's unwired-D/C inference only TERMINATES because the stream
+    /// is window-counted. Pairing `infer` with an uncounted stream is refused,
+    /// naming the trap.
+    #[test]
+    fn inferring_framing_on_an_uncounted_stream_is_refused() {
+        let sabotaged = epd_yaml_with(
+            "ssd1680_tricolor_290",
+            ("stream: window_counted", "stream: command"),
+        );
+        let err = GenericDisplay::from_yaml(&sabotaged).expect_err("infer needs a counted stream");
+        let msg = format!("{err:#}");
+        assert!(msg.contains("infer"), "unexpected error: {msg}");
+    }
+
+    /// A `ram_write` that names no plane on a two-plane panel is refused: a
+    /// default would paint one colour's image into the other's memory.
+    #[test]
+    fn a_ram_write_with_no_plane_on_a_multi_plane_panel_is_refused() {
+        let sabotaged = epd_yaml_with(
+            "uc8151d_tricolor_290",
+            (
+                "ram_write: { reset_cursor: true, plane: black }",
+                "ram_write: { reset_cursor: true }",
+            ),
+        );
+        let err = GenericDisplay::from_yaml(&sabotaged).expect_err("a nameless plane is refused");
+        assert!(
+            format!("{err:#}").contains("names none"),
+            "unexpected error: {err:#}"
+        );
+    }
+
+    /// `refresh` and `refresh_generation` must both exist or neither: an
+    /// artifact key that can only ever read 0 is worse than no key.
+    #[test]
+    fn a_refresh_action_without_its_counter_is_refused_and_so_is_the_counter_alone() {
+        let no_counter = epd_yaml_with(
+            "ssd1680_tricolor_290",
+            (
+                "      - refresh_generation
+",
+                "",
+            ),
+        );
+        let err = GenericDisplay::from_yaml(&no_counter).expect_err("refresh needs its counter");
+        assert!(
+            format!("{err:#}").contains("refresh_generation"),
+            "unexpected error: {err:#}"
+        );
+
+        let no_action = epd_yaml_with(
+            "ssd1680_tricolor_290",
+            (
+                "{ opcode: 0x20, name: MASTER_ACTIVATION, do: [ { refresh: true } ] }",
+                "{ opcode: 0x20, name: MASTER_ACTIVATION }",
+            ),
+        );
+        let err = GenericDisplay::from_yaml(&no_action).expect_err("the counter needs an action");
+        assert!(
+            format!("{err:#}").contains("report 0 for every firmware"),
+            "unexpected error: {err:#}"
+        );
+    }
+
+    /// MOVING THE 0x22 SEQUENCE SELECTOR CHANGES WHAT POWERS THE BOOSTER.
+    /// The guard reads a parameter byte; pointing it at the wrong value leaves
+    /// GxEPD2's `_PowerOn` doing nothing.
+    #[test]
+    fn moving_the_0x22_guard_stops_gxepd2_powering_the_booster_on() {
+        let drive = |dev: &mut GenericDisplay| {
+            SpiDevice::set_dc_source(dev, 0x4000_0000, 0);
+            dev.set_dc_level(false);
+            dev.transfer(0x22);
+            dev.set_dc_level(true);
+            dev.transfer(0xF8);
+        };
+        let mut stock = embedded("ssd1680_tricolor_290").expect("embedded");
+        drive(&mut stock);
+        assert!(stock.display_on(), "0x22 0xF8 powers the booster on");
+
+        let sabotaged = epd_yaml_with(
+            "ssd1680_tricolor_290",
+            (
+                "when: { arg: 0, equals: 0xF8 }",
+                "when: { arg: 0, equals: 0xF9 }",
+            ),
+        );
+        let mut moved = GenericDisplay::from_yaml(&sabotaged).expect("still valid");
+        drive(&mut moved);
+        assert!(
+            !moved.display_on(),
+            "a guard on the wrong value leaves _PowerOn a no-op",
+        );
+    }
+
+    /// A `when` guard reading a parameter the command does not take is refused.
+    #[test]
+    fn a_parameter_guard_past_the_parameter_count_is_refused() {
+        let sabotaged = epd_yaml_with(
+            "ssd1680_tricolor_290",
+            (
+                "when: { arg: 0, equals: 0xF8 }",
+                "when: { arg: 3, equals: 0xF8 }",
+            ),
+        );
+        let err = GenericDisplay::from_yaml(&sabotaged).expect_err("arg 3 of a 1-arg command");
+        assert!(
+            format!("{err:#}").contains("`when` reads parameter 3"),
+            "unexpected error: {err:#}"
+        );
+    }
+
+    /// `window_counted` BOUNDS the stream. Without it the counters wrap and the
+    /// bytes after a full plane overwrite the rows just written.
+    #[test]
+    fn a_counted_stream_shuts_at_the_window_end() {
+        let mut dev = embedded("ssd1680_tricolor_290").expect("embedded");
+        SpiDevice::set_dc_source(&mut dev, 0x4000_0000, 0);
+        // Window one byte-column by two rows: a two-byte stream.
+        for (op, params) in [
+            (0x44u8, &[0x00u8, 0x00][..]),
+            (0x45, &[0x00, 0x00, 0x01, 0x00][..]),
+            (0x24, &[][..]),
+        ] {
+            dev.set_dc_level(false);
+            dev.transfer(op);
+            dev.set_dc_level(true);
+            for p in params {
+                dev.transfer(*p);
+            }
+        }
+        dev.set_dc_level(true);
+        for b in [0x00u8, 0x00, 0xA5, 0xA5] {
+            dev.transfer(b);
+        }
+        let black = dev.planes().ram("black").expect("black plane").to_vec();
+        assert_eq!(black[0], 0x00, "row 0 written");
+        assert_eq!(black[16], 0x00, "row 1 written");
+        assert_eq!(
+            (black[0], black[16]),
+            (0x00, 0x00),
+            "the two bytes past the window were DROPPED, not wrapped over the window",
+        );
+        assert_eq!(
+            dev.planes().ink_bytes("black"),
+            Some(2),
+            "exactly the window"
+        );
     }
 
     fn ssd1306_yaml_with(replacement: (&str, &str)) -> String {

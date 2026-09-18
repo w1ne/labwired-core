@@ -4,10 +4,12 @@
 
 //! **The deleted Rust display models, kept verbatim as migration oracles.**
 //!
-//! `components/ssd1306.rs`, `components/st7789.rs` and `components/sh1107.rs`
-//! were the SSD1306, ST7789V and SH1107 models until the `display` primitive
-//! replaced them with `configs/devices/{ssd1306,ssd1306_128x32,st7789,
-//! sh1107}.yaml`. Their model halves —
+//! `components/ssd1306.rs`, `components/st7789.rs`, `components/sh1107.rs`,
+//! `components/ssd1680_tricolor_290.rs` and `components/uc8151d_tricolor_290.rs`
+//! were the SSD1306, ST7789V, SH1107 and the two tri-colour e-paper models until
+//! the `display` primitive replaced them with `configs/devices/{ssd1306,
+//! ssd1306_128x32,st7789,sh1107,ssd1680_tricolor_290,uc8151d_tricolor_290}.yaml`.
+//! Their model halves —
 //! everything above the `PeripheralKit` registration block — are copied here
 //! BYTE FOR BYTE off the commit that deleted them, with three mechanical edits
 //! and no others:
@@ -37,4 +39,6 @@ pub mod pcd8544;
 pub mod rm67162;
 pub mod sh1107;
 pub mod ssd1306;
+pub mod ssd1680_tricolor_290;
 pub mod st7789;
+pub mod uc8151d_tricolor_290;
