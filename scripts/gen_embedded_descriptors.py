@@ -50,6 +50,13 @@ HEADER = '''\
 // referenced by nothing — the first breaks a lab, the second bloats every
 // browser download.
 
+/// Every embedded descriptor, sorted by key so `lookup` can binary-search it.
+static DESCRIPTORS: &[(&str, &str)] = &[
+'''
+
+FOOTER = '''\
+];
+
 /// Look up an embedded descriptor by its chip-YAML `path:` value
 /// (e.g. `../peripherals/esp32c3/gpio.yaml`). Returns the YAML text if embedded.
 pub fn lookup(descriptor_path: &str) -> Option<&'static str> {
@@ -58,17 +65,29 @@ pub fn lookup(descriptor_path: &str) -> Option<&'static str> {
         .rsplit_once("peripherals/")
         .map(|(_, k)| k)
         .unwrap_or(descriptor_path);
-    match key {
-'''
-
-FOOTER = '''\
-        _ => None,
-    }
+    DESCRIPTORS
+        .binary_search_by(|(k, _)| k.cmp(&key))
+        .ok()
+        .map(|i| DESCRIPTORS[i].1)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::lookup;
+    use super::{lookup, DESCRIPTORS};
+
+    /// The table must stay sorted and duplicate-free: `lookup` binary-searches
+    /// it, so a hand edit that breaks either invariant would silently miss keys.
+    #[test]
+    fn embedded_descriptor_table_is_sorted_and_unique() {
+        let mut previous: Option<&str> = None;
+        for (key, _) in DESCRIPTORS {
+            assert!(
+                previous.is_none_or(|p| p < *key),
+                "embedded descriptor table is not sorted/unique at {key:?}"
+            );
+            previous = Some(key);
+        }
+    }
 
     /// Descriptor keys a chip YAML can actually ask for at runtime.
     ///
@@ -190,13 +209,13 @@ def main() -> None:
             "chip YAML references descriptors that do not exist: " + ", ".join(missing)
         )
     keys = sorted(wanted)
-    arms = [
-        f'        "{key}" => Some(include_str!(\n'
-        f'            "../../../../configs/peripherals/{key}"\n'
-        f"        )),"
+    entries = [
+        f'    ("{key}", include_str!(\n'
+        f'        "../../../../configs/peripherals/{key}"\n'
+        f"    )),"
         for key in keys
     ]
-    OUT.write_text(HEADER + "\n".join(arms) + "\n" + FOOTER)
+    OUT.write_text(HEADER + "\n".join(entries) + "\n" + FOOTER)
     # rustfmt owns the final shape (line collapsing etc.) so the emitted file
     # is byte-stable under `cargo fmt --check` regardless of fmt config.
     subprocess.run(["rustfmt", "--edition", "2021", str(OUT)], check=True)
