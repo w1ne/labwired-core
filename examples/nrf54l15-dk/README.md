@@ -58,11 +58,14 @@ literal in RRAM would fault on real silicon. `main.c` copies into a `static char
 tx_buf[]` in `.data` for exactly this reason — a simulator that allowed the RRAM
 version would be modelling the part too leniently.
 
-**GPIO base ≠ devicetree address.** A Nordic GPIO DT node points at the OUT
-register (`peripheral_base + 0x500`). `nrf54l15.h` therefore defines
-`GPIO_P2_BASE` as `0x5004FF00`, not the DT's `0x50050400`, and uses
-peripheral-relative offsets. Mixing the two conventions is silent: UART keeps
-working and only the LED stays dark. See
+**GPIO base is the devicetree address.** On the nRF54L family the MDK
+`NRF_GPIO_Type` has no RESERVED prefix, so the DT's `gpio2@50400` (absolute
+`0x5005_0400`) is the block base itself and `OUT` sits at `+0x000`.
+`nrf54l15.h` therefore defines `GPIO_P2_BASE` as `0x50050400` and uses
+peripheral-relative offsets. Do not carry the nRF52 convention over: there the
+DT node points at OUT, the base is `peripheral_base - 0x500`, and OUT lives at
+`+0x504`. Mixing the two conventions is silent: UART keeps working and only the
+LED stays dark. See
 [the board doc](../../docs/boards/nrf54l15.md#the-gpio-base-address-trap).
 
 ## Files
@@ -77,7 +80,7 @@ src/main.c        LED + UARTE banner
 
 ## Validation
 
-- `crates/core/tests/nrf54l15_boot.rs` — 7 bus-level conformance tests
+- `crates/core/tests/nrf54l15_boot.rs` — 13 bus-level conformance tests
 - `firmware_survival::test_nrf54l15_smoke_survival` — boots this ELF, asserts the banner
 - `firmware_survival::test_nrf54l15_lights_dk_led0` — boots this ELF, asserts
   DIR and OUT **at the pin**, because the banner alone does not catch a GPIO

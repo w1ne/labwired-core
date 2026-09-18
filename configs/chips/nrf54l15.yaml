@@ -203,7 +203,10 @@ peripherals:
   # by 0x680 (0x700 -> 0x080), so one constant back-offset cannot deliver both.
   # It delivered DIR and OUT and dropped every PIN_CNF access, and PIN_CNF is
   # the ONLY register through which Zephyr/nrfx configure an input's pull-up.
-  # The DK's four buttons are all PULL_UP, so a press would never have read.
+  # The DK's four buttons are all PULL_UP, so the old arrangement lost the pull
+  # configuration itself: this model stores PIN_CNF but derives no idle level
+  # from it. A press still reads when board_io drives the input latch; the
+  # fidelity gap is the pull, not the button.
   #
   # Verified against the vendored SVD (`GLOBAL_P0_S`/`P1_S`/`P2_S`, each based
   # at the address above with OUT at offset 0x000) and the MDK
