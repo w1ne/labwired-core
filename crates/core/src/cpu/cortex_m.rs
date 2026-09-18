@@ -164,6 +164,16 @@ pub struct CortexM {
     /// writes without requiring every bus implementation to expose epochs;
     /// an external write of the same byte value is therefore indistinguishable.
     exclusive_byte: Option<(u32, u8)>,
+    /// Cached `LABWIRED_TRACE_INSN` verdict, read once at construction rather
+    /// than through `trace_insn_enabled()`'s `OnceLock::get_or_init` on every
+    /// retired instruction. The `OnceLock` was already a fix for a prior
+    /// `std::env::var`-per-step regression, but its own already-initialized
+    /// fast path (an `Acquire` load through the lock's state machine plus the
+    /// `Option`/branch around it) still cost ~9 Ir/instruction on the batched
+    /// loop — this field is a plain `bool` already resident in the `CortexM`
+    /// struct callers have just touched, so the check is a single load with
+    /// no atomic and no OnceLock machinery in the hot path.
+    trace_insn: bool,
     /// Opt-in Thumb-2 wasm-JIT fast path. Synced from
     /// [`crate::SimulationConfig::cortex_m_jit_enabled`] on each `step_batch`
     /// entry. Off by default — the interpreter is the behavioral oracle.
@@ -218,6 +228,7 @@ impl Default for CortexM {
             fpscr: 0,
             sleeping: false,
             exclusive_byte: None,
+            trace_insn: trace_insn_enabled(),
             #[cfg(feature = "jit")]
             jit_enabled: false,
             #[cfg(feature = "jit")]
@@ -1986,7 +1997,7 @@ impl CortexM {
         // Per-instruction PC trace gated on LABWIRED_TRACE_INSN env var.
         // Use only for short runs — VERY chatty. Format suitable for grepping:
         //   INSN pc=0xPPPPPPPP op=0xOOOOOOOO
-        if trace_insn_enabled() {
+        if self.trace_insn {
             eprintln!("INSN pc=0x{:08X} op=0x{:08X}", self.pc, opcode);
         }
 

@@ -1,0 +1,126 @@
+# MemBrowse + LabWired — one build, one verdict.
+#
+# Build the firmware once, then ask two different questions of the same ELF:
+#   MemBrowse  — what did the linker place, which symbol owns it, and how has
+#                that moved since the last commit?
+#   LabWired   — does the firmware behave, and how much stack did it actually
+#                burn while doing so?
+#
+# combined-report.py adds the static and runtime halves together and gates the
+# sum, which is the number that has to fit in silicon.
+#
+# Copy to .github/workflows/memory-and-behaviour.yml and replace the build step,
+# the paths under `matrix`, and the budgets file.
+
+name: Memory & behaviour
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  firmware:
+    name: ${{ matrix.target.name }}
+    runs-on: ubuntu-latest
+    env:
+      # Job-level so the `if:` below can read it; step-level env is not in scope
+      # for that step's own condition, and `secrets` is not available in `if`.
+      MEMBROWSE_API_KEY: ${{ secrets.MEMBROWSE_API_KEY }}
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - name: nrf54l15-dk
+            elf: build/nrf54l15-smoke.elf
+            ld: nrf54l15.ld
+            script: tests/io-smoke.yaml
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # MemBrowse diffs this commit against its parent; a shallow clone has
+          # no parent to diff against.
+          fetch-depth: 0
+
+      - name: Build firmware
+        run: make all # replace with your build
+
+      # ---------------------------------------------------------------- static
+      - name: Install MemBrowse
+        run: pip install --quiet membrowse pyyaml
+
+      - name: Analyse memory footprint
+        run: |
+          mkdir -p out
+          membrowse report "${{ matrix.target.elf }}" "${{ matrix.target.ld }}" \
+            --json > out/membrowse.json
+
+      # Optional: upload to MemBrowse for history, trends and per-commit diffs.
+      # Drop this step and the comment step below to stay entirely local.
+      - name: Upload to MemBrowse
+        if: env.MEMBROWSE_API_KEY != ''
+        uses: membrowse/membrowse-action@v1
+        with:
+          elf: ${{ matrix.target.elf }}
+          ld: ${{ matrix.target.ld }}
+          target_name: ${{ matrix.target.name }}
+          api_key: ${{ secrets.MEMBROWSE_API_KEY }}
+
+      # --------------------------------------------------------------- runtime
+      - id: labwired
+        name: Run firmware on the modeled chip
+        # Action-source pin; `version` independently pins the CLI release.
+        uses: w1ne/labwired-core/.github/actions/labwired-test@64ed5d9723e2d9f5f4a851a81a3468025671d94e
+        continue-on-error: true # let the combined report render the failure
+        with:
+          script: ${{ matrix.target.script }}
+          version: v0.24.0
+          output-dir: out/labwired
+          args: --no-uart-stdout
+
+      # -------------------------------------------------------------- combined
+      - name: Combined memory & behaviour gate
+        id: combined
+        # combined-report.py is vendored into the firmware repo so CI pins the
+        # exact gate logic it runs:
+        #   cp labwired-core/examples/membrowse/combined-report.py ci/
+        run: |
+          python3 ci/combined-report.py \
+            --target "${{ matrix.target.name }}" \
+            --membrowse out/membrowse.json \
+            --labwired out/labwired/result.json \
+            --budgets .github/memory-budgets.yaml \
+            --markdown out/combined.md \
+            --json out/combined.json
+          cat out/combined.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Comment on the pull request
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = 'out/combined.md';
+            if (!fs.existsSync(path)) return;
+            const marker = `<!-- combined-memory:${{ matrix.target.name }} -->`;
+            const body = `${marker}\n${fs.readFileSync(path, 'utf8')}`;
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const existing = await github.rest.issues.listComments({ owner, repo, issue_number });
+            const mine = existing.data.find(c => c.body?.startsWith(marker));
+            if (mine) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: mine.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: memory-and-behaviour-${{ matrix.target.name }}
+          path: out/

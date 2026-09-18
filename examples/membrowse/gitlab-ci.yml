@@ -1,0 +1,65 @@
+# MemBrowse + LabWired on GitLab CI.
+#
+# Same shape as github-actions.yml: build once, measure statically with
+# MemBrowse, measure at runtime with LabWired, gate the sum.
+#
+# Copy to .gitlab-ci.yml, replace the build job and the TARGET/ELF/LD/SCRIPT
+# variables, and vendor combined-report.py into ci/.
+
+stages: [build, analyse]
+
+variables:
+  TARGET: nrf54l15-dk
+  ELF: build/nrf54l15-smoke.elf
+  LD: nrf54l15.ld
+  SCRIPT: tests/io-smoke.yaml
+  # MemBrowse diffs against the parent commit; a depth-1 clone has no parent.
+  GIT_DEPTH: "0"
+
+build:
+  stage: build
+  script:
+    - make all # replace with your build
+  artifacts:
+    paths: [build/]
+    expire_in: 1 day
+
+memory-and-behaviour:
+  stage: analyse
+  # The release image keeps `labwired` as its entrypoint; clear it so the job
+  # shell can run pip and python as well.
+  image:
+    name: ghcr.io/w1ne/labwired:v0.24.0
+    entrypoint: [""]
+  needs: [build]
+  script:
+    - mkdir -p out
+    - pip install --quiet membrowse pyyaml
+
+    # Static: what the linker placed, attributed per symbol and source file.
+    - membrowse report "$ELF" "$LD" --json > out/membrowse.json
+    # Optional cloud history/diffs; skipped when the variable is unset.
+    - |
+      if [ -n "${MEMBROWSE_API_KEY:-}" ]; then
+        membrowse report "$ELF" "$LD" --upload \
+          --target-name "$TARGET" --api-key "$MEMBROWSE_API_KEY"
+      fi
+
+    # Runtime: the same ELF on the modeled chip. Keep going so the combined
+    # report can render a behavioural failure rather than the job dying here.
+    - labwired test --script "$SCRIPT" --output-dir out/labwired --no-uart-stdout || true
+
+    # Combined: static + measured runtime, gated against the budgets file.
+    - |
+      python3 ci/combined-report.py \
+        --target "$TARGET" \
+        --membrowse out/membrowse.json \
+        --labwired out/labwired/result.json \
+        --budgets ci/memory-budgets.yaml \
+        --markdown out/combined.md \
+        --json out/combined.json
+  artifacts:
+    when: always
+    paths: [out/]
+    reports:
+      junit: out/labwired/junit.xml
