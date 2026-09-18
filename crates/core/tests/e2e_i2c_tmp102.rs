@@ -36,7 +36,18 @@ fn i2c_tmp102_firmware_runs_and_prints_temperature() {
     let elf_bytes = std::fs::read(&elf_path).expect("read firmware ELF");
 
     let mut bus = SystemBus::new();
-    let wiring = configure_xtensa_esp32s3(&mut bus, &Esp32s3Opts::default());
+    // Pin the modelled core clock to the 80 MHz operating point these tests
+    // were written for. `Systimer::cpu_per_systimer` is an integer division
+    // (80 MHz / 16 MHz = 5 cycles per SYSTIMER tick exactly), so guest time
+    // stays faithful and the budgets below keep their documented meaning.
+    // #1026 moved the model default to the chip descriptor's 240 MHz; these
+    // end-to-end behaviour tests assert guest-time events only, so paying 3x
+    // host time for the higher clock buys no coverage.
+    let opts = Esp32s3Opts {
+        cpu_clock_hz: 80_000_000,
+        ..Esp32s3Opts::default()
+    };
+    let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
 
     // Wire the TMP102 from a board manifest through the generic factory — the
     // same path app/CLI use — instead of relying on a hardcoded builder attach.
@@ -85,14 +96,12 @@ external_devices:
     )
     .expect("fast_boot");
 
-    // Run for up to ~14 simulated seconds at the 240 MHz core clock
-    // `ESP32S3_CPU_CLOCK_HZ` models (15 CPU cycles per 16 MHz SYSTIMER tick)
-    // = 3.36 G steps. The SYSTIMER alarm fires once per simulated second. The
-    // TMP102 model starts at 25 °C and drifts +0.5 °C per read, so reaching
-    // the firmware's 30 °C threshold (and seeing GPIO2 rise) needs at least
-    // 11 reads / 11 simulated seconds. (The old 1.12 G budget assumed the
-    // pre-#1026 80 MHz default and could only reach ~4 reads.)
-    const MAX_STEPS: u64 = 3_360_000_000;
+    // Run for up to ~14 simulated seconds at 80 MHz (5 CPU cycles per 16 MHz
+    // SYSTIMER tick) = 1.12 G steps. The SYSTIMER alarm fires once per
+    // simulated second. The TMP102 model starts at 25 °C and drifts +0.5 °C
+    // per read, so reaching the firmware's 30 °C threshold (and seeing GPIO2
+    // rise) needs at least 11 reads / 11 simulated seconds.
+    const MAX_STEPS: u64 = 1_120_000_000;
     let observers: Vec<Arc<dyn labwired_core::SimulationObserver>> = Vec::new();
     let cfg = labwired_core::SimulationConfig::default();
 

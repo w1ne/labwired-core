@@ -41,7 +41,18 @@ fn blinky_toggles_gpio2_at_500ms() {
     let elf_bytes = std::fs::read(&elf_path).expect("read firmware ELF");
 
     let mut bus = SystemBus::new();
-    let wiring = configure_xtensa_esp32s3(&mut bus, &Esp32s3Opts::default());
+    // Pin the modelled core clock to the 80 MHz operating point these tests
+    // were written for. `Systimer::cpu_per_systimer` is an integer division
+    // (80 MHz / 16 MHz = 5 cycles per SYSTIMER tick exactly), so guest time
+    // stays faithful and the budgets below keep their documented meaning.
+    // #1026 moved the model default to the chip descriptor's 240 MHz; these
+    // end-to-end behaviour tests assert guest-time events only, so paying 3x
+    // host time for the higher clock buys no coverage.
+    let opts = Esp32s3Opts {
+        cpu_clock_hz: 80_000_000,
+        ..Esp32s3Opts::default()
+    };
+    let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
 
     // Install a recording GPIO observer before fast-boot so we capture
     // every transition (including any during early init, though blinky
@@ -66,12 +77,11 @@ fn blinky_toggles_gpio2_at_500ms() {
     )
     .expect("fast_boot");
 
-    // Run for up to 1.44 G simulated cycles (~6 simulated seconds at the
-    // 240 MHz core clock `ESP32S3_CPU_CLOCK_HZ` models — 15 CPU cycles per
-    // 16 MHz SYSTIMER tick). Blinky toggles every 500 ms = 120 M cycles, so
-    // 6 s should produce ~12 transitions. We assert >= 4 to give plenty of
-    // margin. (The old 480 M budget assumed the pre-#1026 80 MHz default.)
-    const MAX_STEPS: u64 = 1_440_000_000;
+    // Run for up to 480 M simulated cycles (~6 simulated seconds at 80 MHz;
+    // 5 CPU cycles per 16 MHz SYSTIMER tick). Blinky toggles every 500 ms =
+    // 40 M cycles, so 6 s should produce ~12 transitions. We assert >= 4 to
+    // give plenty of margin.
+    const MAX_STEPS: u64 = 480_000_000;
     let observers: Vec<std::sync::Arc<dyn labwired_core::SimulationObserver>> = Vec::new();
     let config = labwired_core::SimulationConfig::default();
     for step in 0..MAX_STEPS {
