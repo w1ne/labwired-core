@@ -1,0 +1,123 @@
+# u-blox NEO-6M GPS receiver — NMEA 0183 sentences on a UART.
+#
+# Declarative `uart_device`; replaces the hand-written `components/neo6m.rs`,
+# whose NMEA bytes are pinned in `crates/core/tests/uart_migration_parity.rs`.
+#
+# ── The wire ───────────────────────────────────────────────────────────────
+#
+# A NEO-6M powers up talking NMEA at 9600 baud and never stops. Two sentences
+# are modelled, emitted alternately every 500 000 µs, so a GGA/RMC pair lands
+# once a second — which is the receiver's default `measRate`:
+#
+#   $GPGGA,120000.00,3746.4940,N,12225.1640,W,1,08,1.0,10.0,M,0.0,M,,*7F
+#   $GPRMC,120000.00,A,3746.4940,N,12225.1640,W,0.0,0.0,150526,,,A*40
+#
+# `wrap: nmea` is the framing: `$`, the rendered payload, `*`, the two
+# uppercase hex digits of the XOR over every payload byte, then CRLF. That is
+# the ONE checksum the template engine knows, and it is a key rather than
+# something a template could contain because the checksum is over the
+# template's own output.
+#
+# ── ⚠️ DDMM.mmmm WITHOUT A FLOAT ──────────────────────────────────────────
+#
+# NMEA carries a position as degrees plus DECIMAL MINUTES, not decimal degrees:
+# 37.7749° is `3746.4940`. The rule language is integer-only — that is what
+# makes a sentence bit-identical on native and wasm — so the conversion is
+# integer arithmetic over a channel scaled to 1e-7°:
+#
+#   expr_scale: 10000000        ⇒ input(lat) is degrees × 1e7
+#   whole degrees   = abs(input(lat)) / 10000000
+#   leftover        = abs(input(lat)) % 10000000          (units of 1e-7°)
+#   minutes × 1e-4  = leftover × 6 / 100                  (0.06 per 1e-7°)
+#   DDMM × 1e-4     = degrees × 1000000 + the above
+#
+# and `{…:09.4}` prints that count of 1e-4 with four decimals, zero-padded to
+# nine characters — exactly what `format!("{:09.4}", dm)` produced. The sign
+# never reaches the number: `abs()` takes the magnitude and a separate
+# `char(N,S)` placeholder carries the hemisphere, which is how the sentence is
+# shaped.
+#
+# ⚠️ DELIBERATE DIFFERENCE: the port rounds the fourth decimal HALF UP (the
+# `+ 50` before the `/ 100`), where the float path rounded half to even. The
+# two differ only when `leftover × 6` ends in exactly 50, which needs a
+# latitude that is an exact multiple of 2.5e-6°; `uart_migration_parity.rs`
+# asserts the SF and London positions are byte-identical either way.
+#
+# ── ⚠️ The frozen fields ──────────────────────────────────────────────────
+#
+# Everything in the sentences that is not the position or the fix is a
+# CONSTANT, and was one in the hand-written model too. They are listed here
+# rather than left to be discovered by a driver that trusts them:
+#
+#   * `120000.00` — UTC time of fix. It does NOT advance with simulated time.
+#   * `150526` — RMC date field, 15 May 2026.
+#   * `08` satellites in view and `1.0` HDOP. They do not drop when the fix is
+#     lost, which real silicon would.
+#   * `10.0,M` altitude and `0.0,M` geoid separation.
+#   * `0.0` speed over ground and `0.0` course over ground.
+#   * the RMC mode indicator `A`, which stays `A` even while the status field
+#     reads `V`.
+#
+# NOT MODELLED: UBX/PUBX commands (the part ignores everything firmware
+# transmits — it declares no `responses:`), GSV/GSA/VTG/GLL sentences,
+# per-satellite data, DOP that responds to anything, and the receiver's
+# configuration interface.
+type: neo6m-gps
+
+behavior:
+  primitive: uart_device
+  vars:
+    # Which sentence is next: even ⇒ GGA, odd ⇒ RMC. The `sentence_index` of
+    # the model this replaces.
+    idx: 0
+  timers:
+    # Half a second: a GGA/RMC pair per second.
+    - { name: sentence, period_us: 500000, start: on_reset }
+  uart:
+    baud: 9600
+    # The receiver ignores firmware's TX entirely, but a frame shape is still
+    # required so a stray byte cannot grow the buffer without bound.
+    frames: { terminator: "\r\n", max_bytes: 128 }
+    unsolicited:
+      # ⚠️ Both guards are evaluated BEFORE the `timer:` rule below runs, so
+      # both see the same `idx` and exactly one fires. If the rule ran first,
+      # the second guard would see the incremented value and every tick would
+      # emit both sentences.
+      - timer: sentence
+        when: "var(idx) % 2 == 0"
+        wrap: nmea
+        template: "GPGGA,120000.00,{abs(input(lat)) / 10000000 * 1000000 + (abs(input(lat)) % 10000000 * 6 + 50) / 100:09.4},{input(lat) >= 0:char(N,S)},{abs(input(lon)) / 10000000 * 1000000 + (abs(input(lon)) % 10000000 * 6 + 50) / 100:010.4},{input(lon) >= 0:char(E,W)},{input(fix) >= 1:d},08,1.0,10.0,M,0.0,M,,"
+      - timer: sentence
+        when: "var(idx) % 2 == 1"
+        wrap: nmea
+        template: "GPRMC,120000.00,{input(fix) >= 1:char(A,V)},{abs(input(lat)) / 10000000 * 1000000 + (abs(input(lat)) % 10000000 * 6 + 50) / 100:09.4},{input(lat) >= 0:char(N,S)},{abs(input(lon)) / 10000000 * 1000000 + (abs(input(lon)) % 10000000 * 6 + 50) / 100:010.4},{input(lon) >= 0:char(E,W)},0.0,0.0,150526,,,A"
+  rules:
+    - on: { timer: sentence }
+      do: [ { var: idx, value: "var(idx) + 1" } ]
+
+metadata:
+  label: "NEO-6M GPS"
+  summary: "GPS module streaming NMEA sentences over UART RX."
+  detail: "Declarative NMEA stream: GGA and RMC alternating every 500 ms, position taken from the lat/lon stimulus channels and converted to DDMM.mmmm by integer arithmetic (no float crosses the boundary), XOR checksum computed by the engine's `wrap: nmea` framing. The fix channel drives the GGA quality digit and the RMC status letter. Optional noise_sigma (° on lat/lon) uses the same seeded ChannelNoise facility as the IMU kits and is sampled once per sentence. CONSTANT in every sentence: the 120000.00 UTC time, the 150526 date, 08 satellites, 1.0 HDOP, 10.0 m altitude, 0.0 speed and course. NOT modelled: UBX/PUBX commands, GSV/GSA/VTG/GLL, and any configuration interface."
+  category: uart
+  config_keys:
+    - name: lat_deg
+      ty: float
+      doc: "Initial latitude in decimal degrees (paired with lon_deg)."
+    - name: lon_deg
+      ty: float
+      doc: "Initial longitude in decimal degrees (paired with lat_deg)."
+    - name: noise_sigma
+      ty: float
+      doc: "Seeded Gaussian sigma on lat/lon (degrees) applied once per NMEA sentence; 0 = off. ~1e-5 deg is about 1 m."
+  labs:
+    - board_id: neo6m-gps-lab
+      chip: stm32f103
+      example_dir: neo6m-gps-lab
+      demo_elf: demo-neo6m-gps-lab.elf
+  inputs:
+    # Defaults are San Francisco with a fix, which is what the hand-written
+    # model booted at, so the port's first sentence is byte-identical.
+    - { key: lat, label: "Latitude",  unit: "°",     min: -90,  max: 90,  default: 37.7749,   expr_scale: 10000000, config_key: lat_deg, noise_sigma_key: noise_sigma }
+    - { key: lon, label: "Longitude", unit: "°",     min: -180, max: 180, default: -122.4194, expr_scale: 10000000, config_key: lon_deg, noise_sigma_key: noise_sigma }
+    - { key: fix, label: "Fix",       unit: "level", min: 0,    max: 1,   default: 1 }

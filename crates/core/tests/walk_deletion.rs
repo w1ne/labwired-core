@@ -9,20 +9,14 @@
 //!   None        → auto-derive (conservative: delete iff EVERY peripheral is
 //!                 provably walk-independent for all firmware states)
 
+mod common;
+use common::root;
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 #[allow(unused_imports)]
 use labwired_core::bus::RECOMMENDED_TICK_INTERVAL;
 #[allow(unused_imports)]
 use labwired_core::Peripheral;
-use std::path::PathBuf;
-
-fn root(rel: &str) -> PathBuf {
-    let mut p = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    p.push("../..");
-    p.push(rel);
-    p
-}
 
 fn nokia() -> (ChipDescriptor, SystemManifest) {
     let chip = ChipDescriptor::from_file(root("configs/chips/stm32l476.yaml"))

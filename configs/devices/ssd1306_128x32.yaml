@@ -1,0 +1,97 @@
+# Solomon Systech SSD1306 OLED controller, 0.91" 128x32 form factor —
+# declarative `display` primitive.
+#
+# IDENTICAL command set to the 128x64 panel in `ssd1306.yaml`; only the GDDRAM
+# page count differs (4 pages / 512 bytes instead of 8 / 1024). The two are
+# separate descriptors rather than one parameterised file because they are two
+# catalog parts with two `type:` strings, two labels and two module footprints —
+# the page count is the ONE number that differs and it is stated once here.
+#
+# FRAMING, GDDRAM layout and the not-modelled list are exactly as in
+# `ssd1306.yaml`; read that file's header for both.
+
+type: oled-ssd1306-128x32
+
+behavior:
+  primitive: display
+  display:
+    width: 128
+    height: 32
+    pixel_format: mono_page
+    artifact_format: ssd1306_page
+    ram: { pages: 4, bytes: 512, layout: page_major, stream: always }
+    dc: { source: control_byte, command_value: 0x00 }
+    default_address: 0x3C
+    addressing:
+      modes: [horizontal, vertical, page]
+      default: horizontal
+    # What the paint artifact publishes beside the pixels. Stated per panel
+    # because these key names are the contract the browser overlay and the
+    # CLI's `painted bytes=` line read.
+    artifact_meta: [ink_bytes, lit_pixels]
+    commands:
+      # 0x20 SET MEMORY ADDRESSING MODE. A[1:0]: 00 horizontal, 01 vertical,
+      # 10 page. 11 is "invalid" in the datasheet; the engine holds the last
+      # declared mode for it.
+      - { opcode: 0x20, name: SETMEMORYMODE, args: 1, do: [ { set_mode: { args: [0], mask: 0x03 } } ] }
+      # 0x21 SET COLUMN ADDRESS: start, end. Seven-bit fields — the datasheet
+      # states A[6:0], so an out-of-range byte is MASKED, not clamped.
+      - opcode: 0x21
+        name: SETCOLUMNADDR
+        args: 2
+        do:
+          - set_window: { axis: col, start: { args: [0], mask: 0x7F }, end: { args: [1], mask: 0x7F } }
+      # 0x22 SET PAGE ADDRESS: start, end. Three-bit fields, A[2:0].
+      - opcode: 0x22
+        name: SETPAGEADDR
+        args: 2
+        do:
+          - set_window: { axis: page, start: { args: [0], mask: 0x07 }, end: { args: [1], mask: 0x07 } }
+      - { opcode: 0xAE, name: DISPLAYOFF, do: [ { display_on: false } ] }
+      - { opcode: 0xAF, name: DISPLAYON,  do: [ { display_on: true } ] }
+      # 0xB0..0xB7 SET PAGE START ADDRESS (page addressing mode): the page is in
+      # the opcode's low three bits. The page WINDOW is untouched.
+      - opcode: 0xB0
+        opcode_end: 0xB7
+        name: SETPAGESTART
+        do:
+          - set_cursor: { axis: page, value: { opcode_mask: 0x07 } }
+      # 0x00..0x0F / 0x10..0x1F SET LOWER / HIGHER COLUMN START ADDRESS (page
+      # addressing mode): each carries one nibble of the column, so the cursor is
+      # read-modify-written rather than replaced.
+      - opcode: 0x00
+        opcode_end: 0x0F
+        name: SETLOWCOLUMN
+        do:
+          - set_cursor: { axis: col, part: low_nibble, value: { opcode_mask: 0x0F } }
+      - opcode: 0x10
+        opcode_end: 0x1F
+        name: SETHIGHCOLUMN
+        do:
+          - set_cursor: { axis: col, part: high_nibble, value: { opcode_mask: 0x0F } }
+      # Declared for their PARAMETER COUNTS. Without these entries the argument
+      # byte of, say, `0x81 0xCF` would be decoded as opcode 0xCF, and a `0xD3
+      # 0x00` would set the column low nibble from 0x00. The whole init sequence
+      # would walk the cursor around and the first frame would land shifted.
+      - { opcode: 0x81, name: SETCONTRAST, args: 1 }
+      - { opcode: 0x8D, name: CHARGEPUMP, args: 1 }
+      - { opcode: 0xA8, name: SETMULTIPLEX, args: 1 }
+      - { opcode: 0xD3, name: SETDISPLAYOFFSET, args: 1 }
+      - { opcode: 0xD5, name: SETDISPLAYCLOCKDIV, args: 1 }
+      - { opcode: 0xD9, name: SETPRECHARGE, args: 1 }
+      - { opcode: 0xDA, name: SETCOMPINS, args: 1 }
+      - { opcode: 0xDB, name: SETVCOMDETECT, args: 1 }
+
+metadata:
+  label: "SSD1306 OLED 0.91\u2033"
+  summary: "0.91\u2033 128×32 monochrome OLED display over I2C with a paged framebuffer."
+  detail: "Solomon Systech SSD1306 in the 0.91-inch 128×32 form factor (4 GDDRAM pages). Identical command set to the 128×64 panel — only the page count differs. Canonical 0x3C / 0x3D address pair; the WASM bridge surfaces pixel state for the playground's display overlay."
+  category: i2c
+  config_keys:
+    - name: i2c_address
+      ty: int
+      doc: "7-bit slave address. Defaults to 0x3C; 0x3D selects the SA0=high variant."
+  # No lab yet: examples/ssd1306-128x32-lab has only a README + system.yaml — no
+  # demo firmware/ELF is built or published. Declaring a lab would promise a
+  # one-click demo that 404s (the playground gate rightly rejects it). Re-add it
+  # when the demo firmware ships.

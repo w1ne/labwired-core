@@ -1,0 +1,130 @@
+# Philips PCD8544 LCD controller — the Nokia 5110 module, 84x48 monochrome over
+# 4-wire SPI. Declarative `display` primitive.
+#
+# FRAMING is the D/C pad and nothing else, like the ST7789. What is different,
+# and what `ram.stream: always` states, is that this controller has NO RAMWR
+# OPCODE: every byte arriving with D/C high is DDRAM. Deriving that rule from
+# the framing ("a D/C panel needs a ram_write") instead of stating it would have
+# dropped every pixel this part is ever sent, on a path with no error to read.
+#
+# TWO INSTRUCTION SETS. The function-set command's H bit selects them, and the
+# same opcode means different things in each: `0x80 | n` is SET X ADDRESS in the
+# basic set and SET Vop (contrast) in the extended one. Nothing about the byte
+# says which. A flat command table has to pick one, and picking "set X" means a
+# stock init sequence -- 0x21, 0xBF, 0x14, 0x20, 0x0C -- leaves the column
+# pointer at 0x3F instead of 0, so the first frame lands 63 columns across.
+# `when:` is the guard that keeps both readings in the table.
+#
+# DDRAM is bank-major: byte (bank x 84 + column), bit (row mod 8), LSB the
+# topmost row of the bank. Same shape as the SSD1306's GDDRAM.
+#
+# POWER-ON IS NOT DARK. The display-control register resets with D = 1 and the
+# power-down bit resets clear, so a module on a bench is showing DDRAM before
+# firmware sends anything. Every MIPI panel here powers on dark; assuming that
+# default would have reported a blank screen for firmware that legitimately
+# never sends a display-on command.
+#
+# NOT modelled: Vop/contrast (0x80|n, extended), bias (0x10|n, extended) and the
+# temperature coefficient (0x04|n, extended). All three change how the glass
+# looks, not what is in DDRAM, and this model reports what is in DDRAM. They are
+# declared in the extended set with no actions so that they are consumed THERE
+# rather than falling through to the basic set's readings of the same opcodes.
+type: pcd8544
+
+behavior:
+  primitive: display
+  display:
+    width: 84
+    height: 48
+    pixel_format: mono_page
+    artifact_format: pcd8544_bank
+    ram: { pages: 6, bytes: 504, layout: page_major, stream: always }
+    dc: { source: pin, pin_role: dc, command_level: 0 }
+    # V bit of the function set: 0 = column-first (the reset default), 1 =
+    # bank-first. Both wrap inside the full DDRAM extent.
+    addressing: { modes: [horizontal, vertical], default: horizontal }
+    # H bit of the function set — which instruction set the `when:` guards read.
+    vars: { h: 0 }
+    power_on: { display_on: true, awake: true }
+    supply_gated: true
+    # `display_on` here is DISPON *and* not powered down *and* supplied, which
+    # is what this panel has always published under that name; `inverse` is the
+    # published spelling of the inversion flag.
+    artifact_meta:
+      [ink_bytes, lit_pixels, { flag: lit, as: display_on }, powered,
+       { flag: inverted, as: inverse }]
+    commands:
+      # ── FUNCTION SET, 0b0010_0PVH — legal in BOTH instruction sets, which is
+      # why these two entries carry no `when:`. Split at the PD bit because the
+      # power-down flag is a constant per opcode, while V and H are read out of
+      # the opcode's own bits.
+      - opcode: 0x20
+        opcode_end: 0x23
+        name: FUNCTIONSET_ACTIVE
+        do:
+          - awake: true
+          - set_mode: { opcode_mask: 0x02, opcode_shift: 1 }
+          - set_var: { name: h, value: { opcode_mask: 0x01 } }
+      - opcode: 0x24
+        opcode_end: 0x27
+        name: FUNCTIONSET_POWERDOWN
+        do:
+          - awake: false
+          - set_mode: { opcode_mask: 0x02, opcode_shift: 1 }
+          - set_var: { name: h, value: { opcode_mask: 0x01 } }
+
+      # ── BASIC INSTRUCTION SET (H = 0) ──────────────────────────────────────
+      # DISPLAY CONTROL, 0b0000_1D0E. D blanks or shows DDRAM; D and E together
+      # are inverse video. E alone is "all display segments on", which shows
+      # nothing that is in DDRAM, so it reports as dark here.
+      - { opcode: 0x08, opcode_end: 0x0B, name: DISPLAYBLANK, when: { var: h, equals: 0 },
+          do: [ { display_on: false }, { invert: false } ] }
+      - { opcode: 0x0C, name: DISPLAYNORMAL,  when: { var: h, equals: 0 },
+          do: [ { display_on: true }, { invert: false } ] }
+      - { opcode: 0x0D, name: DISPLAYINVERSE, when: { var: h, equals: 0 },
+          do: [ { display_on: true }, { invert: true } ] }
+      - { opcode: 0x0E, name: DISPLAYNORMAL2, when: { var: h, equals: 0 },
+          do: [ { display_on: true }, { invert: false } ] }
+      - { opcode: 0x0F, name: DISPLAYINVERSE2, when: { var: h, equals: 0 },
+          do: [ { display_on: true }, { invert: true } ] }
+      # SET Y ADDRESS, 0b0100_0yyy. The panel has six banks; 6 and 7 are out of
+      # range and the controller takes the pointer to bank 0 rather than
+      # clamping it, so they are their own entry instead of a mask.
+      - { opcode: 0x40, opcode_end: 0x45, name: SETYADDR, when: { var: h, equals: 0 },
+          do: [ { set_cursor: { axis: page, value: { opcode_mask: 0x07 } } } ] }
+      - { opcode: 0x46, opcode_end: 0x47, name: SETYADDR_OUTOFRANGE, when: { var: h, equals: 0 },
+          do: [ { set_cursor: { axis: page, value: { value: 0 } } } ] }
+      # SET X ADDRESS, 0b1xxx_xxxx. Columns 0..83 are addressable; 84..127 are
+      # out of range and take the pointer to column 0, same rule as the banks.
+      - { opcode: 0x80, opcode_end: 0xD3, name: SETXADDR, when: { var: h, equals: 0 },
+          do: [ { set_cursor: { axis: col, value: { opcode_mask: 0x7F } } } ] }
+      - { opcode: 0xD4, opcode_end: 0xFF, name: SETXADDR_OUTOFRANGE, when: { var: h, equals: 0 },
+          do: [ { set_cursor: { axis: col, value: { value: 0 } } } ] }
+
+      # ── EXTENDED INSTRUCTION SET (H = 1) ───────────────────────────────────
+      # Consumed here so they are NOT read as the basic set's cursor moves.
+      # None of the three changes DDRAM, so none of them has actions.
+      - { opcode: 0x04, opcode_end: 0x07, name: SETTEMPCOEFF, when: { var: h, equals: 1 } }
+      - { opcode: 0x10, opcode_end: 0x17, name: SETBIAS,      when: { var: h, equals: 1 } }
+      - { opcode: 0x80, opcode_end: 0xFF, name: SETVOP,       when: { var: h, equals: 1 } }
+
+metadata:
+  label: "Nokia 5110 LCD"
+  summary: "Nokia 5110 (PCD8544) monochrome 84×48 LCD over SPI."
+  detail: "Tracks the 504-byte (84×48 / 8) DDRAM, command vs data discrimination via a host GPIO D/C line that the bus resolves to a concrete GPIO ODR address at attach time."
+  category: spi
+  config_keys:
+    - name: cs_pin
+      ty: str
+      doc: "Chip-select GPIO pin label (e.g. \"PB6\")."
+    - name: dc_pin
+      ty: str
+      doc: "Data/command GPIO pin (e.g. \"PC7\"). Required, and it must resolve to a driveable GPIO output register: the bus latches command-vs-data from that register, so a passive (declarative) or unmapped GPIO leaves D/C stuck low, every pixel byte is decoded as a command, and the panel renders blank while the firmware streams real pixels."
+    - name: powered
+      ty: bool
+      doc: "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered part -- ABSENT MEANS POWERED, because curated labs state signals and leave the rails implicit. Only an explicit `false`, which the diagram compiler emits when it can see the supply pins are on no net, changes anything: the part then ignores its bus entirely and reports the dark/idle state it has on a bench."
+  labs:
+    - board_id: nokia5110-invaders-lab
+      chip: stm32l476
+      example_dir: nokia5110-invaders-lab
+      demo_elf: demo-nokia5110-invaders-lab.elf

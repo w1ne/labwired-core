@@ -49,8 +49,9 @@
 //! proved the S3 now reads `0x01907040` could not tell a fixed S3 from a C3 that
 //! had been dragged onto the S3's value.
 
+mod common;
+use common::root;
 use std::collections::HashMap;
-use std::path::PathBuf;
 
 use labwired_config::PeripheralDescriptor;
 use labwired_core::peripherals::declarative::GenericPeripheral;
@@ -65,12 +66,6 @@ const ESP32_TIMG0: &str = "configs/peripherals/esp32/timg0.yaml";
 const S3_SVD: &str = "tests/fixtures/svd/esp32s3.svd";
 const C3_SVD: &str = "tests/fixtures/real_world/esp32c3.svd";
 const ESP32_SVD: &str = "tests/fixtures/real_world/esp32.svd";
-
-fn root(rel: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join(rel)
-}
 
 fn descriptor(rel: &str) -> PeripheralDescriptor {
     PeripheralDescriptor::from_file(root(rel)).unwrap_or_else(|e| panic!("load {rel}: {e}"))

@@ -70,7 +70,7 @@
       "device_type": "neo6m-gps",
       "label": "NEO-6M GPS",
       "summary": "GPS module streaming NMEA sentences over UART RX.",
-      "detail": "GGA + RMC sentences with XOR checksum, generated entirely in the Rust core. Firmware echoes the stream back to the host UART. Optional noise_sigma (° lat/lon) uses the same seeded ChannelNoise facility as the IMU kits.",
+      "detail": "Declarative NMEA stream: GGA and RMC alternating every 500 ms, position taken from the lat/lon stimulus channels and converted to DDMM.mmmm by integer arithmetic (no float crosses the boundary), XOR checksum computed by the engine's `wrap: nmea` framing. The fix channel drives the GGA quality digit and the RMC status letter. Optional noise_sigma (° on lat/lon) uses the same seeded ChannelNoise facility as the IMU kits and is sampled once per sentence. CONSTANT in every sentence: the 120000.00 UTC time, the 150526 date, 08 satellites, 1.0 HDOP, 10.0 m altitude, 0.0 speed and course. NOT modelled: UBX/PUBX commands, GSV/GSA/VTG/GLL, and any configuration interface.",
       "transport": "uart",
       "category": "uart",
       "config_keys": [
@@ -87,7 +87,7 @@
         {
           "name": "noise_sigma",
           "ty": "float",
-          "doc": "Seeded Gaussian σ on lat/lon (degrees) applied per NMEA sentence; 0 = off. ~1e-5 ° ≈ 1 m."
+          "doc": "Seeded Gaussian sigma on lat/lon (degrees) applied once per NMEA sentence; 0 = off. ~1e-5 deg is about 1 m."
         }
       ],
       "labs": [
@@ -228,7 +228,7 @@
       "device_type": "adxl345",
       "label": "ADXL345 Tilt",
       "summary": "3-axis ±2/4/8/16 g digital accelerometer over I2C.",
-      "detail": "Analog Devices ADXL345 with the canonical 0x53 / 0x1D 7-bit address pair. Wired through the simulated I2C bus; host stimulus seeds X/Y/Z and the firmware reads them through the DATAX/Y/Z registers.",
+      "detail": "Analog Devices ADXL345 with the canonical 0x53 / 0x1D 7-bit address pair. The whole Table 16 register map is served at its datasheet reset values, and the three data registers follow the LIVE DATA_FORMAT: FULL_RES and the range bits set both the counts-per-g and the count at which the part saturates (±512 counts in fixed 10-bit mode at every range; ±512/1024/2048/4096 in full resolution). The DATA_READY interrupt is modelled end to end - a 100 Hz sample timer raises it, INT_ENABLE gates it, INT_MAP routes it to the INT1 or INT2 pad, and reading a data register clears it. NOT modelled: output data rates other than the 100 Hz reset value, tap/activity/free-fall detection, the FIFO, the offset trim and the JUSTIFY bit.",
       "transport": "i2c",
       "category": "i2c",
       "config_keys": [
@@ -236,6 +236,16 @@
           "name": "i2c_address",
           "ty": "int",
           "doc": "7-bit slave address. Defaults to 0x53; 0x1D selects the alternate-pin variant."
+        },
+        {
+          "name": "int1_pin",
+          "ty": "str",
+          "doc": "Pad the INT1 output drives (e.g. \"PA0\"). Optional - an unbound pin drives nothing."
+        },
+        {
+          "name": "int2_pin",
+          "ty": "str",
+          "doc": "Pad the INT2 output drives. Optional."
         }
       ],
       "labs": [
@@ -306,7 +316,7 @@
       "device_type": "ads1115",
       "label": "ADS1115 16-bit ADC",
       "summary": "4-channel 16-bit I²C ADC (TI ADS1115).",
-      "detail": "Texas Instruments ADS1115 (default address 0x48). Host stimulus sets A0–A3 voltages; firmware reads conversion/config over I²C with the standard pointer protocol used by Arduino ADS1X15 drivers.",
+      "detail": "Texas Instruments ADS1115 (default address 0x48). Host stimulus sets A0–A3 voltages; firmware reads conversion/config over I²C with the standard pointer protocol used by Arduino ADS1X15 drivers. CONVERSION follows the live CONFIG MUX bits — including the four differential pairs — at the full scale the PGA bits select.",
       "transport": "i2c",
       "category": "i2c",
       "config_keys": [
@@ -352,14 +362,19 @@
       "device_type": "ds3231",
       "label": "DS3231 RTC",
       "summary": "I²C real-time clock with temperature-compensated crystal.",
-      "detail": "Maxim DS3231 (address 0x68). BCD time registers 0x00–0x06 and control/status for common Arduino RTC libraries. Host can set unix_time or temperature via SimInput.",
+      "detail": "Maxim DS3231 at its fixed address 0x68. The seven timekeeping registers 0x00-0x06 are BCD windows on ONE settable instant: a read reports that civil field, and a write recomposes the clock, so RTClib::adjust() works and the registers can never disagree with each other. Alarm registers 0x07-0x0D are writable BCD storage, control/status carry the datasheet bit names, and 0x11/0x12 are the real 10-bit 0.25 °C temperature word. The INT/SQW pad emits a 1 Hz square wave while CONTROL.INTCN is 0. NOT modelled: the clock does not free-run (pose it with the unix_time channel), alarm matching, square-wave rates above 1 Hz, 12-hour mode, the century bit and the 32 kHz output.",
       "transport": "i2c",
       "category": "i2c",
       "config_keys": [
         {
           "name": "i2c_address",
           "ty": "int",
-          "doc": "7-bit slave address. Defaults to 0x68."
+          "doc": "7-bit slave address. Defaults to 0x68, which is the DS3231's only address - it has no address straps."
+        },
+        {
+          "name": "int_pin",
+          "ty": "str",
+          "doc": "Pad the INT/SQW output drives (e.g. \"PB0\"). Optional - an unbound pin drives nothing."
         }
       ],
       "labs": [],
@@ -384,14 +399,14 @@
       "device_type": "hx711",
       "label": "HX711 Load Cell",
       "summary": "24-bit load-cell amplifier (DT/SCK bit-bang).",
-      "detail": "Avia HX711. Firmware bit-bangs SCK while reading DT; host sets weight (g) or raw counts via SimInput. Gain/channel selection pulses after bit 24 are accepted.",
+      "detail": "Avia HX711. Firmware bit-bangs SCK while reading DT; DT low means a sample is ready, and twenty-four rising clock edges shift it out MSB first. A twenty-fifth pulse ends the frame. The host poses the sample in grams (100 counts per gram) or directly in raw counts. Because the clock comes from firmware rather than from the simulator, this part is serviced inside the MMIO write path, so every edge of a bit-bang loop is seen. NOT modelled: the gain/channel select encoded in the number of trailing pulses, power-down by holding SCK high, and the 10/80 SPS conversion delay.",
       "transport": "gpio_group",
       "category": "gpio",
       "config_keys": [
         {
           "name": "sck_pin",
           "ty": "str",
-          "doc": "SCK GPIO pin (e.g. \"PA8\"). Defaults to PA8."
+          "doc": "SCK (PD_SCK) GPIO pin (e.g. \"PA8\"). Defaults to PA8."
         },
         {
           "name": "dt_pin",
@@ -414,31 +429,6 @@
           "unit": "counts",
           "min": -8388608.0,
           "max": 8388607.0
-        }
-      ]
-    },
-    {
-      "device_type": "as5600",
-      "label": "AS5600 Magnetic Encoder",
-      "summary": "12-bit contactless magnetic rotary position sensor over I²C.",
-      "detail": "ams AS5600 (default address 0x36). Host sets angle in degrees; firmware reads RAW_ANGLE / ANGLE (12-bit) and STATUS magnet-detected bit.",
-      "transport": "i2c",
-      "category": "i2c",
-      "config_keys": [
-        {
-          "name": "i2c_address",
-          "ty": "int",
-          "doc": "7-bit slave address. Defaults to 0x36."
-        }
-      ],
-      "labs": [],
-      "inputs": [
-        {
-          "key": "angle",
-          "label": "Angle",
-          "unit": "deg",
-          "min": 0.0,
-          "max": 360.0
         }
       ]
     },
@@ -485,7 +475,7 @@
       "device_type": "hc-05",
       "label": "HC-05 Bluetooth",
       "summary": "Bluetooth SPP module with AT command shell over UART.",
-      "detail": "Thin AT echo model (OK to AT/AT+…). No RF pairing or wireless data path.",
+      "detail": "Declarative AT shell: OK to AT/AT+…, +VERSION and +NAME? answered from constants declared in the part document, ERROR to anything that is not an AT line. NOT modelled: the radio — no pairing, no inquiry, no link state, no RSSI and no transparent data pipe. AT+NAME= is accepted and answered OK but not stored.",
       "transport": "uart",
       "category": "uart",
       "config_keys": [],
@@ -547,7 +537,7 @@
       "device_type": "mpu6050",
       "label": "MPU6050 IMU",
       "summary": "6-axis gyro + accelerometer over I2C.",
-      "detail": "InvenSense MPU-6050 with WHO_AM_I = 0x68. Reports static sample values today; host stimulus hooks into the WASM bridge for live updates.",
+      "detail": "InvenSense MPU-6050 with WHO_AM_I = 0x68. The fourteen-byte measurement burst at 0x3B follows the datasheet - three accelerometer axes, TEMP_OUT, then three gyro axes - so the standard Adafruit / jrowberg burst read parses correctly. Both full-scale selects are live: ACCEL_CONFIG.AFS_SEL and GYRO_CONFIG.FS_SEL set the counts per g and per degree/second at read time. The DATA_RDY interrupt is modelled end to end: a sample timer raises INT_STATUS bit 0, INT_ENABLE gates it onto the INT pad, and any read of INT_STATUS clears both. NOT modelled: the programmable sample rate (the timer runs at the 1 kHz a DLPF-enabled part produces), the FIFO, motion detection, self-test, and the SLEEP bit (stored and echoed, but measurements are reported either way).",
       "transport": "i2c",
       "category": "i2c",
       "config_keys": [
@@ -560,6 +550,11 @@
           "name": "noise_sigma",
           "ty": "float",
           "doc": "Optional Gaussian noise sigma in channel units (g accel, °/s gyro), seeded and replay-safe. 0/absent = exact reads."
+        },
+        {
+          "name": "int_pin",
+          "ty": "str",
+          "doc": "Pad the INT output drives (e.g. \"PA0\"). Optional - an unbound pin drives nothing."
         }
       ],
       "labs": [
@@ -612,6 +607,13 @@
           "unit": "°/s",
           "min": -2000.0,
           "max": 2000.0
+        },
+        {
+          "key": "temp",
+          "label": "Die temperature",
+          "unit": "C",
+          "min": -40.0,
+          "max": 85.0
         }
       ]
     },
@@ -619,7 +621,7 @@
       "device_type": "mma8451q",
       "label": "MMA8451Q Accelerometer",
       "summary": "3-axis 14-bit accelerometer over I2C with standby/active gating.",
-      "detail": "NXP MMA8451Q, WHO_AM_I = 0x1A. XYZ held at zero in standby, converts while CTRL_REG1.ACTIVE; 2/4/8 g full scale. Optional seeded noise via noise_sigma (g). Tap/FIFO/interrupts not modelled.",
+      "detail": "NXP MMA8451Q, WHO_AM_I = 0x1A. XYZ held at zero in standby, converts while CTRL_REG1.ACTIVE; 2/4/8 g full scale selected by XYZ_DATA_CFG. Output is 14-bit two's-complement left-justified at bit 2. Tap/FIFO/interrupts not modelled.",
       "transport": "i2c",
       "category": "i2c",
       "config_keys": [
@@ -627,11 +629,6 @@
           "name": "i2c_address",
           "ty": "int",
           "doc": "7-bit slave address. Defaults to 0x1C; 0x1D selects SA0=high."
-        },
-        {
-          "name": "noise_sigma",
-          "ty": "float",
-          "doc": "Optional Gaussian noise sigma in g, seeded and replay-safe."
         }
       ],
       "labs": [],
@@ -743,14 +740,59 @@
       "device_type": "pcf8574",
       "label": "PCF8574 I/O Expander",
       "summary": "NXP PCF8574 8-bit I²C quasi-bidirectional port expander.",
-      "detail": "Default address 0x20. Write one byte to latch outputs; read returns the port value (host may override via SimInput port).",
+      "detail": "NXP PCF8574 at 0x20 (A2/A1/A0 select 0x20-0x27; the PCF8574A variant is 0x38-0x3F). Every byte on the wire is the port - there is no register pointer - and the port powers up at 0xFF, all pins released to their weak pull-ups. Writing a bit low drives that pad hard low; writing it high releases the pad, which is also how the datasheet says to use a pin as an input. The eight pads are bound through the optional p0_pin..p7_pin config keys, so an expander wired for four LEDs binds four. NOT modelled: the input direction (an external edge on a pad does not update the readable port) and the open-drain INT output; a read returns the last value written or driven through the `port` stimulus channel.",
       "transport": "i2c",
       "category": "i2c",
       "config_keys": [
         {
           "name": "i2c_address",
           "ty": "int",
-          "doc": "7-bit slave address. Defaults to 0x20."
+          "doc": "7-bit slave address. Defaults to 0x20; A2/A1/A0 select 0x20-0x27, and the PCF8574A variant uses 0x38-0x3F."
+        },
+        {
+          "name": "port",
+          "ty": "float",
+          "doc": "Initial port byte (0-255). Default 255, the datasheet power-on state. Drive it at runtime with the `port` input channel."
+        },
+        {
+          "name": "p0_pin",
+          "ty": "str",
+          "doc": "Pad P0 drives (e.g. \"PC0\"). Optional - an unbound pin drives nothing."
+        },
+        {
+          "name": "p1_pin",
+          "ty": "str",
+          "doc": "Pad P1 drives. Optional."
+        },
+        {
+          "name": "p2_pin",
+          "ty": "str",
+          "doc": "Pad P2 drives. Optional."
+        },
+        {
+          "name": "p3_pin",
+          "ty": "str",
+          "doc": "Pad P3 drives. Optional."
+        },
+        {
+          "name": "p4_pin",
+          "ty": "str",
+          "doc": "Pad P4 drives. Optional."
+        },
+        {
+          "name": "p5_pin",
+          "ty": "str",
+          "doc": "Pad P5 drives. Optional."
+        },
+        {
+          "name": "p6_pin",
+          "ty": "str",
+          "doc": "Pad P6 drives. Optional."
+        },
+        {
+          "name": "p7_pin",
+          "ty": "str",
+          "doc": "Pad P7 drives. Optional."
         }
       ],
       "labs": [],
@@ -776,55 +818,6 @@
           "name": "cs_pin",
           "ty": "str",
           "doc": "SPI CS GPIO pin name (module SDA/NSS). Defaults to PA4."
-        }
-      ],
-      "labs": [],
-      "inputs": []
-    },
-    {
-      "device_type": "sht30",
-      "label": "SHT30 Temp/Humidity",
-      "summary": "Sensirion SHT30 I²C temperature and humidity sensor.",
-      "detail": "Default address 0x44. Single-shot high-repeatability framing with CRC. Host sets temperature (°C) and humidity (%RH).",
-      "transport": "i2c",
-      "category": "i2c",
-      "config_keys": [
-        {
-          "name": "i2c_address",
-          "ty": "int",
-          "doc": "7-bit slave address. Defaults to 0x44."
-        }
-      ],
-      "labs": [],
-      "inputs": [
-        {
-          "key": "temperature",
-          "label": "Temperature",
-          "unit": "C",
-          "min": -40.0,
-          "max": 125.0
-        },
-        {
-          "key": "humidity",
-          "label": "Humidity",
-          "unit": "%RH",
-          "min": 0.0,
-          "max": 100.0
-        }
-      ]
-    },
-    {
-      "device_type": "at24c256",
-      "label": "AT24C256 EEPROM",
-      "summary": "I²C 32 KiB EEPROM shell (256-byte sim window).",
-      "detail": "Default address 0x50. Two-byte address pointer then sequential R/W. Simulated memory is 256 bytes wrapping for compactness.",
-      "transport": "i2c",
-      "category": "i2c",
-      "config_keys": [
-        {
-          "name": "i2c_address",
-          "ty": "int",
-          "doc": "7-bit slave address. Defaults to 0x50."
         }
       ],
       "labs": [],
@@ -890,7 +883,7 @@
       "device_type": "sim800l",
       "label": "SIM800L GSM",
       "summary": "SIM800L UART AT command shell (no cellular RF).",
-      "detail": "Responds OK to AT/AT+…; CGMI/CGMM/CSQ/CREG stubs for init sequences. SMS/GPRS air interface is not simulated.",
+      "detail": "Declarative AT shell. CGMI/CGMM/ATI/GMR/CSQ/CREG answer CONSTANTS declared in the part document — signal strength is a fixed +CSQ: 20,0 and registration a fixed +CREG: 0,1, neither of which moves. Every other AT line answers a bare OK and every non-AT line answers ERROR. NOT modelled: registration, PDP contexts, sockets, SMS and the air interface. Unlike the model it replaces, ATI answers the identification banner instead of ERROR.",
       "transport": "uart",
       "category": "uart",
       "config_keys": [],
@@ -973,17 +966,17 @@
         {
           "name": "cs_pin",
           "ty": "str",
-          "doc": "Chip-select GPIO pin (e.g. \"PA4\"). Defaults to PA4."
+          "doc": "Chip-select GPIO pin label (e.g. \"PA4\")."
         },
         {
           "name": "dc_pin",
           "ty": "str",
-          "doc": "Data/command GPIO pin (e.g. \"GPIO33\"). Strongly recommended: with it, command/data framing is read from the wire like real silicon. Without it the model must infer framing from byte values, which a real driver's init sequence desynchronises."
+          "doc": "Data/command GPIO pin (e.g. \"GPIO33\"). Required: this model has no infer-framing-from-byte-values fallback, because that inference decodes the second parameter of a stock init's 0xCB as RAMWR and writes the rest of the init sequence into the framebuffer as pixels."
         },
         {
           "name": "powered",
           "ty": "bool",
-          "doc": "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered part -- ABSENT MEANS POWERED, because curated labs state signals and leave the rails implicit. Only an explicit `false`, which the diagram compiler emits when it can see the supply pins are on no net, changes anything: the part then ignores its bus entirely and reports the dark/idle state it has on a bench."
+          "doc": "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered part -- ABSENT MEANS POWERED, because curated labs state signals and leave the rails implicit. Only an explicit `false`, which the diagram compiler emits when it can see the supply pins are on no net, changes anything: the panel then ignores its bus entirely and reports `display_on: false`, `painted_bytes: 0`, which is what the part does on a bench."
         }
       ],
       "labs": [
@@ -1022,7 +1015,7 @@
         {
           "name": "powered",
           "ty": "bool",
-          "doc": "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered part -- ABSENT MEANS POWERED, because curated labs state signals and leave the rails implicit. Only an explicit `false`, which the diagram compiler emits when it can see the supply pins are on no net, changes anything: the part then ignores its bus entirely and reports the dark/idle state it has on a bench."
+          "doc": "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered part -- ABSENT MEANS POWERED, because curated labs state signals and leave the rails implicit. Only an explicit `false`, which the diagram compiler emits when it can see the supply pins are on no net, changes anything: the panel then ignores its bus entirely and reports `lit: false`, `painted_bytes: 0`, which is what the part does on a bench."
         }
       ],
       "labs": [],
@@ -1142,8 +1135,8 @@
     {
       "device_type": "ssd1680_tricolor_290",
       "label": "SSD1680 Tri-Color E-Paper",
-      "summary": "2.9\" tri-color (black/white/red) e-paper over SPI. Driver class GxEPD2_290_C90c — the WeAct / Waveshare 2.9\" B/W/R module. Not interchangeable with the UC8151D part.",
-      "detail": "Full SPI command + display-data RAM state machine, validated by the e2e e-paper integration test. Same model drives the STM32F103 lab, the ESP32-classic playground board and the ESP32-C3 e-paper labs. Decodes SSD1680 opcodes (0x12 SWRESET, 0x11 data entry, 0x24/0x26 RAM planes, 0x22+0x20 update) — the stream GxEPD2_290_C90c emits. If your sketch instantiates GxEPD2_290_Z13c instead, use uc8151d_tricolor_290; the two command sets share nothing, and the wrong one reports success and renders blank.",
+      "summary": "2.9\" tri-color (black/white/red) e-paper over SPI. Driver class GxEPD2_290_C90c -- the WeAct / Waveshare 2.9\" B/W/R module. Not interchangeable with the UC8151D part.",
+      "detail": "Full SPI command + display-data RAM state machine, validated by the e2e e-paper integration test. Same model drives the STM32F103 lab, the ESP32-classic playground board and the ESP32-C3 e-paper labs. Decodes SSD1680 opcodes (0x12 SWRESET, 0x11 data entry, 0x24/0x26 RAM planes, 0x22+0x20 update) -- the stream GxEPD2_290_C90c emits. If your sketch instantiates GxEPD2_290_Z13c instead, use uc8151d_tricolor_290; the two command sets share nothing, and the wrong one reports success and renders blank.",
       "transport": "spi",
       "category": "spi",
       "config_keys": [
@@ -1155,7 +1148,7 @@
         {
           "name": "dc_pin",
           "ty": "str",
-          "doc": "Data/Command GPIO pin (e.g. \"GPIO17\"). Required for command framing."
+          "doc": "Data/Command GPIO pin (e.g. \"GPIO17\"). Wire it for silicon-accurate framing. Without it this panel falls back to inferring command from data by protocol state, which is a declared cheat (FIDELITY.md section E) and the only reason the ESP32 e-paper lab paints."
         },
         {
           "name": "busy_pin",
@@ -1165,7 +1158,7 @@
         {
           "name": "powered",
           "ty": "bool",
-          "doc": "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered part -- ABSENT MEANS POWERED, because curated labs state signals and leave the rails implicit. Only an explicit `false`, which the diagram compiler emits when it can see the supply pins are on no net, changes anything: the part then ignores its bus entirely and reports the dark/idle state it has on a bench."
+          "doc": "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered part -- ABSENT MEANS POWERED. Only an explicit `false`, which the diagram compiler emits when it can see the supply pins are on no net, changes anything: the panel then ignores its bus entirely and reports blank planes and refresh_generation 0. E-paper makes the lie especially convincing, because a real panel HOLDS its image with the supply removed -- but a panel that never had a supply never had an image to hold."
         }
       ],
       "labs": [
@@ -1187,8 +1180,8 @@
     {
       "device_type": "uc8151d_tricolor_290",
       "label": "UC8151D Tri-Color E-Paper",
-      "summary": "2.9\" tri-color (black/white/red) e-paper over SPI. Driver class GxEPD2_290_Z13c. Different command set from the SSD1680 part — pick by the driver class your firmware instantiates, not by how the panel looks.",
-      "detail": "Decodes UC8151D opcodes (0x00 PSR / 0x04 PON / 0x10 DTM1 / 0x13 DTM2 / 0x12 DRF), the stream GxEPD2_290_Z13c emits. Same plane layout as SSD1680; different command stream, and BUSY is inverted (busy-LOW). GxEPD2_290_C90c is NOT this part — it is an SSD1680 controller; see peripherals::kit::registry::TYPE_ALIASES, which owns driver-class → controller. No board manifest in this repo ships this panel: every 2.9\" tri-color lab here is the C90c/SSD1680 module. It exists so firmware written against GxEPD2_290_Z13c has a faithful twin.",
+      "summary": "2.9\" tri-color (black/white/red) e-paper over SPI. Driver class GxEPD2_290_Z13c. Different command set from the SSD1680 part -- pick by the driver class your firmware instantiates, not by how the panel looks.",
+      "detail": "Decodes UC8151D opcodes (0x00 PSR / 0x04 PON / 0x10 DTM1 / 0x13 DTM2 / 0x12 DRF), the stream GxEPD2_290_Z13c emits. Same plane layout as SSD1680; different command stream, and BUSY is inverted (busy-LOW). GxEPD2_290_C90c is NOT this part -- it is an SSD1680 controller; see peripherals::kit::registry::TYPE_ALIASES, which owns driver-class -> controller. No board manifest in this repo ships this panel: every 2.9\" tri-color lab here is the C90c/SSD1680 module. It exists so firmware written against GxEPD2_290_Z13c has a faithful twin.",
       "transport": "spi",
       "category": "spi",
       "config_keys": [
@@ -1200,17 +1193,17 @@
         {
           "name": "dc_pin",
           "ty": "str",
-          "doc": "Data/Command GPIO pin (e.g. \"GPIO2\"). Required for command framing."
+          "doc": "Data/Command GPIO pin (e.g. \"GPIO2\"). Required for any decoding at all: without it this panel treats every byte as data and paints nothing, which is a declared cheat (FIDELITY.md section E) and deliberately not a plausible wrong picture."
         },
         {
           "name": "busy_pin",
           "ty": "str",
-          "doc": "BUSY status GPIO the host polls (e.g. \"GPIO5\"). Held HIGH (idle) — UC8151D is busy-LOW, the inverse of ssd1680_tricolor_290."
+          "doc": "BUSY status GPIO the host polls (e.g. \"GPIO5\"). Held HIGH (idle) -- UC8151D is busy-LOW, the inverse of ssd1680_tricolor_290."
         },
         {
           "name": "powered",
           "ty": "bool",
-          "doc": "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered part -- ABSENT MEANS POWERED, because curated labs state signals and leave the rails implicit. Only an explicit `false`, which the diagram compiler emits when it can see the supply pins are on no net, changes anything: the part then ignores its bus entirely and reports the dark/idle state it has on a bench."
+          "doc": "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered part -- ABSENT MEANS POWERED. Only an explicit `false` changes anything: the panel then ignores its bus entirely and reports blank planes and refresh_generation 0."
         }
       ],
       "labs": [],
@@ -1414,12 +1407,12 @@
         {
           "name": "cs_pin",
           "ty": "str",
-          "doc": "Chip-select GPIO pin (e.g. \"PB6\"). Defaults to PB6."
+          "doc": "Chip-select GPIO pin label (e.g. \"PB6\")."
         },
         {
           "name": "dc_pin",
           "ty": "str",
-          "doc": "Data/command GPIO pin (e.g. \"PC7\"). Defaults to PC7. Resolved to the driving GPIO's ODR address at attach time."
+          "doc": "Data/command GPIO pin (e.g. \"PC7\"). Required, and it must resolve to a driveable GPIO output register: the bus latches command-vs-data from that register, so a passive (declarative) or unmapped GPIO leaves D/C stuck low, every pixel byte is decoded as a command, and the panel renders blank while the firmware streams real pixels."
         },
         {
           "name": "powered",
@@ -1883,55 +1876,6 @@
       ]
     },
     {
-      "device_type": "mlx90614",
-      "label": "Melexis MLX90614 IR Temp",
-      "summary": "Single-point IR (non-contact) thermometer over SMBus/I2C.",
-      "detail": "Melexis MLX90614 at address 0x5A. Reports an SMBus read-word (LSB, MSB, PEC) for ambient (0x06) and object/surface (0x07) temperature, encoded raw×0.02 K with a correct CRC-8 PEC. Both temperatures are externally driven inputs (channels surface_temp / ambient_temp); driving the surface below the air dew point is what makes firmware flag the surface condensation an air-only humidity index misses.",
-      "transport": "i2c",
-      "category": "i2c",
-      "config_keys": [
-        {
-          "name": "i2c_address",
-          "ty": "int",
-          "doc": "7-bit slave address. Defaults to the MLX90614 fixed address 0x5A."
-        },
-        {
-          "name": "surface_temp_c",
-          "ty": "float",
-          "doc": "Initial surface (object) temperature, °C. Default 18. Drive it at runtime with the `surface_temp` input channel."
-        },
-        {
-          "name": "ambient_temp_c",
-          "ty": "float",
-          "doc": "Initial ambient (chip) temperature reported on Ta, °C. Default 22. Runtime channel: `ambient_temp`."
-        }
-      ],
-      "labs": [
-        {
-          "board_id": "esp32c3-leo-airquality",
-          "chip": "esp32c3",
-          "example_dir": "esp32c3-leo-airquality",
-          "demo_elf": "demo-esp32c3-leo-airquality.elf"
-        }
-      ],
-      "inputs": [
-        {
-          "key": "surface_temp",
-          "label": "Surface temperature",
-          "unit": "°C",
-          "min": -70.0,
-          "max": 380.0
-        },
-        {
-          "key": "ambient_temp",
-          "label": "Ambient temperature",
-          "unit": "°C",
-          "min": -40.0,
-          "max": 125.0
-        }
-      ]
-    },
-    {
       "device_type": "led-matrix",
       "label": "MAX7219 8×8 LED Matrix",
       "summary": "8×8 LED matrix driven by a MAX7219 serial display driver over SPI.",
@@ -2196,6 +2140,198 @@
       ]
     },
     {
+      "device_type": "as5600",
+      "label": "AS5600 Magnetic Encoder",
+      "summary": "12-bit contactless magnetic rotary position sensor over I²C.",
+      "detail": "ams AS5600 at default address 0x36, a register-pointer device whose pointer walks one byte per byte read. Host sets shaft angle in degrees; RAW_ANGLE and ANGLE report it as a 12-bit right-aligned big-endian count (4096 per revolution) and STATUS reports the magnet-detected bit. ZPOS / MPOS / MANG / CONF are read/write storage, but the ZPOS/MPOS/MANG output scaling is not applied — ANGLE equals RAW_ANGLE. The ML / MH magnet-placement faults and the one-way BURN command are not modelled.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to the AS5600 fixed address 0x36."
+        },
+        {
+          "name": "angle",
+          "ty": "float",
+          "doc": "Initial shaft angle in degrees. Default 0. Drive it at runtime with the `angle` input channel."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "angle",
+          "label": "Angle",
+          "unit": "deg",
+          "min": 0.0,
+          "max": 360.0
+        }
+      ]
+    },
+    {
+      "device_type": "sht30",
+      "label": "SHT30 Temp/Humidity",
+      "summary": "Sensirion SHT30 I²C temperature and humidity sensor.",
+      "detail": "Sensirion SHT30 at default address 0x44 (ADDR low; 0x45 with ADDR high). Single-shot and periodic-mode opcodes return a temperature word and a humidity word, each 16-bit big-endian with a Sensirion CRC-8. A single-shot measurement takes the datasheet's 15 ms maximum, after which the frame is readable; a read issued sooner returns 0xFF. Host sets temperature (°C) and relative humidity (%). The periodic-mode cadence, the repeatability grades, the heater and the alert logic are not modelled, and the status register is the power-on constant.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to the SHT30 address 0x44 (ADDR pin low)."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "temperature",
+          "label": "Temperature",
+          "unit": "°C",
+          "min": -40.0,
+          "max": 125.0
+        },
+        {
+          "key": "humidity",
+          "label": "Relative humidity",
+          "unit": "%",
+          "min": 0.0,
+          "max": 100.0
+        }
+      ]
+    },
+    {
+      "device_type": "at24c256",
+      "label": "AT24C256 EEPROM",
+      "summary": "I²C serial EEPROM with a 16-bit address pointer and 64-byte pages.",
+      "detail": "Atmel/Microchip AT24C256 at default address 0x50 (A2:A0 straps to 0x57). Two address bytes select a cell; sequential read rolls over the array and a sequential write wraps inside its 64-byte page, as on silicon. The modelled array is a 256-byte window that repeats every 256 addresses, and the 5 ms write cycle is not modelled — a driver that polls for ready is answered immediately.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to the AT24C256 address 0x50 (A2:A0 = GND)."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "tmp117",
+      "label": "TMP117 Temperature",
+      "summary": "TI TMP117 high-accuracy digital temperature sensor over I2C.",
+      "detail": "Pointer-addressed 16-bit registers; TEMP_RESULT at 7.8125 m°C/LSB. Stimulus channel `temperature` (°C) sets the conversion result. CONFIGURATION, both alert limits, TEMP_OFFSET and the EEPROM words are read/write storage; DATA_READY reads set because the part powers up in continuous-conversion mode. The alert comparator and the TEMP_OFFSET addition are not modelled.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x48 (ADD0→GND)."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "temperature",
+          "label": "Temperature",
+          "unit": "°C",
+          "min": -55.0,
+          "max": 150.0
+        }
+      ]
+    },
+    {
+      "device_type": "fxos8700",
+      "label": "FXOS8700 Accel/Mag",
+      "summary": "NXP FXOS8700 6-axis accelerometer + magnetometer over I2C.",
+      "detail": "Onboard sensor on FRDM-KW41Z (address 0x1F). Stimulus channels x/y/z in g, reported as a 14-bit two's-complement count left-justified at bit 2 at the full scale XYZ_DATA_CFG selects. A burst that walks past the accelerometer block continues at the magnetometer block, per the datasheet's hybrid auto-increment.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x1F."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "x",
+          "label": "X",
+          "unit": "g",
+          "min": -8.0,
+          "max": 8.0
+        },
+        {
+          "key": "y",
+          "label": "Y",
+          "unit": "g",
+          "min": -8.0,
+          "max": 8.0
+        },
+        {
+          "key": "z",
+          "label": "Z",
+          "unit": "g",
+          "min": -8.0,
+          "max": 8.0
+        }
+      ]
+    },
+    {
+      "device_type": "mlx90614",
+      "label": "Melexis MLX90614 IR Temp",
+      "summary": "Single-point IR (non-contact) thermometer over SMBus/I2C.",
+      "detail": "Melexis MLX90614 at address 0x5A. Reports an SMBus read-word (LSB, MSB, PEC) for ambient (0x06) and object/surface (0x07) temperature, encoded raw×0.02 K with a correct CRC-8 PEC over the whole addressed transaction. Both temperatures are externally driven inputs (channels surface_temp / ambient_temp); driving the surface below the air dew point is what makes firmware flag the surface condensation an air-only humidity index misses.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to the MLX90614 fixed address 0x5A."
+        },
+        {
+          "name": "surface_temp_c",
+          "ty": "float",
+          "doc": "Initial surface (object) temperature, °C. Default 18. Drive it at runtime with the `surface_temp` input channel."
+        },
+        {
+          "name": "ambient_temp_c",
+          "ty": "float",
+          "doc": "Initial ambient (chip) temperature reported on Ta, °C. Default 22. Runtime channel: `ambient_temp`."
+        }
+      ],
+      "labs": [
+        {
+          "board_id": "esp32c3-leo-airquality",
+          "chip": "esp32c3",
+          "example_dir": "esp32c3-leo-airquality",
+          "demo_elf": "demo-esp32c3-leo-airquality.elf"
+        }
+      ],
+      "inputs": [
+        {
+          "key": "surface_temp",
+          "label": "Surface temperature",
+          "unit": "°C",
+          "min": -70.0,
+          "max": 380.0
+        },
+        {
+          "key": "ambient_temp",
+          "label": "Ambient temperature",
+          "unit": "°C",
+          "min": -40.0,
+          "max": 125.0
+        }
+      ]
+    },
+    {
       "device_type": "adxl345_spi",
       "label": "ADXL345 accelerometer",
       "summary": "3-axis ±16 g accelerometer over SPI (full-resolution, 256 LSB/g).",
@@ -2304,42 +2440,17 @@
         {
           "name": "powered",
           "ty": "bool",
-          "doc": "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered part -- ABSENT MEANS POWERED, because curated labs state signals and leave the rails implicit. Only an explicit `false`, which the diagram compiler emits when it can see the supply pins are on no net, changes anything: the part then ignores its bus entirely and reports the dark/idle state it has on a bench."
+          "doc": "Whether the strip's supply pins (5V, GND) are connected. Omit for a powered part -- ABSENT MEANS POWERED, because curated labs state signals and leave the rails implicit. Only an explicit `false`, which the diagram compiler emits when it can see the supply pins are on no net, changes anything: the strip then ignores its bus entirely and latches nothing, which is what the part does on a bench."
         }
       ],
       "labs": [],
       "inputs": []
     },
     {
-      "device_type": "tmp117",
-      "label": "TMP117 Temperature",
-      "summary": "TI TMP117 high-accuracy digital temperature sensor over I2C.",
-      "detail": "Pointer-addressed 16-bit registers; TEMP_RESULT at 7.8125 m°C/LSB. Stimulus channel `temperature` (°C) sets the conversion result.",
-      "transport": "i2c",
-      "category": "i2c",
-      "config_keys": [
-        {
-          "name": "i2c_address",
-          "ty": "int",
-          "doc": "7-bit slave address. Defaults to 0x48 (ADD0→GND)."
-        }
-      ],
-      "labs": [],
-      "inputs": [
-        {
-          "key": "temperature",
-          "label": "Temperature",
-          "unit": "°C",
-          "min": -55.0,
-          "max": 150.0
-        }
-      ]
-    },
-    {
       "device_type": "bmi270",
       "label": "BMI270 IMU",
       "summary": "Bosch BMI270 low-power IMU with hardware step counter over I2C.",
-      "detail": "Wearable IMU used on the smart-ring reference system. Stimulus channels              drive accel/gyro samples; feature-engine step counter is modelled.",
+      "detail": "Wearable IMU used on the smart-ring reference system. Stimulus channels drive accel/gyro samples; feature-engine step counter is modelled.",
       "transport": "i2c",
       "category": "i2c",
       "config_keys": [
@@ -2410,45 +2521,6 @@
       ]
     },
     {
-      "device_type": "fxos8700",
-      "label": "FXOS8700 Accel/Mag",
-      "summary": "NXP FXOS8700 6-axis accelerometer + magnetometer over I2C.",
-      "detail": "Onboard sensor on FRDM-KW41Z. Stimulus channels x/y/z in g.",
-      "transport": "i2c",
-      "category": "i2c",
-      "config_keys": [
-        {
-          "name": "i2c_address",
-          "ty": "int",
-          "doc": "7-bit slave address. Defaults to 0x1F."
-        }
-      ],
-      "labs": [],
-      "inputs": [
-        {
-          "key": "x",
-          "label": "X",
-          "unit": "g",
-          "min": -8.0,
-          "max": 8.0
-        },
-        {
-          "key": "y",
-          "label": "Y",
-          "unit": "g",
-          "min": -8.0,
-          "max": 8.0
-        },
-        {
-          "key": "z",
-          "label": "Z",
-          "unit": "g",
-          "min": -8.0,
-          "max": 8.0
-        }
-      ]
-    },
-    {
       "device_type": "max30102",
       "label": "MAX30102 PPG",
       "summary": "Maxim MAX30102 pulse-oximetry / heart-rate front-end over I2C.",
@@ -2499,7 +2571,7 @@
       "device_type": "cap1188",
       "label": "CAP1188 Touch",
       "summary": "Microchip CAP1188 8-channel capacitive touch controller over I2C.",
-      "detail": "Multi-channel touch sensor. Prefer a single GPIO touch for ring-class              products; this kit remains for boards that wire the CAP1188.",
+      "detail": "Multi-channel touch sensor. Prefer a single GPIO touch for ring-class products; this kit remains for boards that wire the CAP1188.",
       "transport": "i2c",
       "category": "i2c",
       "config_keys": [
@@ -2824,6 +2896,687 @@
           "name": "ticks_per_second",
           "ty": "int",
           "doc": "Sim ticks per log second (default 1_000_000)."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "rotary_encoder",
+      "label": "Rotary encoder",
+      "summary": "Incremental quadrature knob (EC11)",
+      "detail": "Incremental quadrature knob (EC11)",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "position",
+          "label": "Position",
+          "unit": "detents",
+          "min": -1000.0,
+          "max": 1000.0
+        }
+      ]
+    },
+    {
+      "device_type": "keypad",
+      "label": "Matrix keypad",
+      "summary": "4×4 membrane keypad (row-drive / column-read)",
+      "detail": "4×4 membrane keypad (row-drive / column-read)",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "key",
+          "label": "Key",
+          "unit": "index",
+          "min": -1.0,
+          "max": 15.0
+        }
+      ]
+    },
+    {
+      "device_type": "dht22",
+      "label": "DHT22 / AM2302",
+      "summary": "One-wire temperature + humidity sensor",
+      "detail": "One-wire temperature + humidity sensor",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "temperature",
+          "label": "Temperature",
+          "unit": "°C",
+          "min": -40.0,
+          "max": 80.0
+        },
+        {
+          "key": "humidity",
+          "label": "Humidity",
+          "unit": "%",
+          "min": 0.0,
+          "max": 100.0
+        }
+      ]
+    },
+    {
+      "device_type": "hc-sr04",
+      "label": "HC-SR04",
+      "summary": "Ultrasonic distance sensor (trigger / echo)",
+      "detail": "Ultrasonic distance sensor (trigger / echo)",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "distance",
+          "label": "Distance",
+          "unit": "cm",
+          "min": 2.0,
+          "max": 400.0
+        }
+      ]
+    },
+    {
+      "device_type": "dc-motor",
+      "label": "Brushed DC motor",
+      "summary": "Configurable deterministic brushed DC motor plant",
+      "detail": "Configurable deterministic brushed DC motor plant",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "bldc-motor",
+      "label": "Brushless DC motor",
+      "summary": "Configurable deterministic three-phase BLDC motor plant",
+      "detail": "Configurable deterministic three-phase BLDC motor plant",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "74hc04",
+      "label": "74HC04 Hex Inverter",
+      "summary": "Six independent inverting buffers, 7 ns propagation delay.",
+      "detail": "74HC04/74LS04 hex inverter. Each output Yn is the complement of its input An, after the part's propagation delay; there is no enable, so the outputs are always driven. Wire only the gates you use — an unconnected input reads LOW on this twin, which makes its output read HIGH, the same thing an unconnected gate does on a board with a pull-down. NOT modelled: input threshold voltages, output drive strength, supply rail, and contention with another driver on the same net.",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [
+        {
+          "name": "a1_pin",
+          "ty": "str",
+          "doc": "1A input pin (e.g. \"PA0\")."
+        },
+        {
+          "name": "y1_pin",
+          "ty": "str",
+          "doc": "1Y output pin."
+        },
+        {
+          "name": "a2_pin",
+          "ty": "str",
+          "doc": "2A input pin."
+        },
+        {
+          "name": "y2_pin",
+          "ty": "str",
+          "doc": "2Y output pin."
+        },
+        {
+          "name": "a3_pin",
+          "ty": "str",
+          "doc": "3A input pin."
+        },
+        {
+          "name": "y3_pin",
+          "ty": "str",
+          "doc": "3Y output pin."
+        },
+        {
+          "name": "a4_pin",
+          "ty": "str",
+          "doc": "4A input pin."
+        },
+        {
+          "name": "y4_pin",
+          "ty": "str",
+          "doc": "4Y output pin."
+        },
+        {
+          "name": "a5_pin",
+          "ty": "str",
+          "doc": "5A input pin."
+        },
+        {
+          "name": "y5_pin",
+          "ty": "str",
+          "doc": "5Y output pin."
+        },
+        {
+          "name": "a6_pin",
+          "ty": "str",
+          "doc": "6A input pin."
+        },
+        {
+          "name": "y6_pin",
+          "ty": "str",
+          "doc": "6Y output pin."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "74hc00",
+      "label": "74HC00 Quad NAND",
+      "summary": "Four independent 2-input NAND gates, 9 ns propagation delay.",
+      "detail": "74HC00/74LS00 quad 2-input NAND gate. Yn is LOW only when both An and Bn are HIGH. An unconnected input reads LOW on this twin, so an unwired gate asserts its output HIGH — the same thing a real NAND does with a pulled-down input, and the reason a datasheet tells you to tie unused inputs. NOT modelled: input threshold voltages, output drive strength, the supply rail, and contention with another driver on the same net — this engine has one level source per pad and the last writer wins.",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [
+        {
+          "name": "a1_pin",
+          "ty": "str",
+          "doc": "1A input pin (e.g. \"PA0\")."
+        },
+        {
+          "name": "b1_pin",
+          "ty": "str",
+          "doc": "1B input pin."
+        },
+        {
+          "name": "y1_pin",
+          "ty": "str",
+          "doc": "1Y output pin."
+        },
+        {
+          "name": "a2_pin",
+          "ty": "str",
+          "doc": "2A input pin (e.g. \"PA0\")."
+        },
+        {
+          "name": "b2_pin",
+          "ty": "str",
+          "doc": "2B input pin."
+        },
+        {
+          "name": "y2_pin",
+          "ty": "str",
+          "doc": "2Y output pin."
+        },
+        {
+          "name": "a3_pin",
+          "ty": "str",
+          "doc": "3A input pin (e.g. \"PA0\")."
+        },
+        {
+          "name": "b3_pin",
+          "ty": "str",
+          "doc": "3B input pin."
+        },
+        {
+          "name": "y3_pin",
+          "ty": "str",
+          "doc": "3Y output pin."
+        },
+        {
+          "name": "a4_pin",
+          "ty": "str",
+          "doc": "4A input pin (e.g. \"PA0\")."
+        },
+        {
+          "name": "b4_pin",
+          "ty": "str",
+          "doc": "4B input pin."
+        },
+        {
+          "name": "y4_pin",
+          "ty": "str",
+          "doc": "4Y output pin."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "74hc08",
+      "label": "74HC08 Quad AND",
+      "summary": "Four independent 2-input AND gates, 8 ns propagation delay.",
+      "detail": "74HC08/74LS08 quad 2-input AND gate. Yn is HIGH only when both An and Bn are HIGH. NOT modelled: input threshold voltages, output drive strength, the supply rail, and contention with another driver on the same net — this engine has one level source per pad and the last writer wins.",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [
+        {
+          "name": "a1_pin",
+          "ty": "str",
+          "doc": "1A input pin (e.g. \"PA0\")."
+        },
+        {
+          "name": "b1_pin",
+          "ty": "str",
+          "doc": "1B input pin."
+        },
+        {
+          "name": "y1_pin",
+          "ty": "str",
+          "doc": "1Y output pin."
+        },
+        {
+          "name": "a2_pin",
+          "ty": "str",
+          "doc": "2A input pin (e.g. \"PA0\")."
+        },
+        {
+          "name": "b2_pin",
+          "ty": "str",
+          "doc": "2B input pin."
+        },
+        {
+          "name": "y2_pin",
+          "ty": "str",
+          "doc": "2Y output pin."
+        },
+        {
+          "name": "a3_pin",
+          "ty": "str",
+          "doc": "3A input pin (e.g. \"PA0\")."
+        },
+        {
+          "name": "b3_pin",
+          "ty": "str",
+          "doc": "3B input pin."
+        },
+        {
+          "name": "y3_pin",
+          "ty": "str",
+          "doc": "3Y output pin."
+        },
+        {
+          "name": "a4_pin",
+          "ty": "str",
+          "doc": "4A input pin (e.g. \"PA0\")."
+        },
+        {
+          "name": "b4_pin",
+          "ty": "str",
+          "doc": "4B input pin."
+        },
+        {
+          "name": "y4_pin",
+          "ty": "str",
+          "doc": "4Y output pin."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "74hc32",
+      "label": "74HC32 Quad OR",
+      "summary": "Four independent 2-input OR gates, 9 ns propagation delay.",
+      "detail": "74HC32/74LS32 quad 2-input OR gate. Yn is HIGH when either An or Bn is HIGH. NOT modelled: input threshold voltages, output drive strength, the supply rail, and contention with another driver on the same net — this engine has one level source per pad and the last writer wins.",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [
+        {
+          "name": "a1_pin",
+          "ty": "str",
+          "doc": "1A input pin (e.g. \"PA0\")."
+        },
+        {
+          "name": "b1_pin",
+          "ty": "str",
+          "doc": "1B input pin."
+        },
+        {
+          "name": "y1_pin",
+          "ty": "str",
+          "doc": "1Y output pin."
+        },
+        {
+          "name": "a2_pin",
+          "ty": "str",
+          "doc": "2A input pin (e.g. \"PA0\")."
+        },
+        {
+          "name": "b2_pin",
+          "ty": "str",
+          "doc": "2B input pin."
+        },
+        {
+          "name": "y2_pin",
+          "ty": "str",
+          "doc": "2Y output pin."
+        },
+        {
+          "name": "a3_pin",
+          "ty": "str",
+          "doc": "3A input pin (e.g. \"PA0\")."
+        },
+        {
+          "name": "b3_pin",
+          "ty": "str",
+          "doc": "3B input pin."
+        },
+        {
+          "name": "y3_pin",
+          "ty": "str",
+          "doc": "3Y output pin."
+        },
+        {
+          "name": "a4_pin",
+          "ty": "str",
+          "doc": "4A input pin (e.g. \"PA0\")."
+        },
+        {
+          "name": "b4_pin",
+          "ty": "str",
+          "doc": "4B input pin."
+        },
+        {
+          "name": "y4_pin",
+          "ty": "str",
+          "doc": "4Y output pin."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "74hc125",
+      "label": "74HC125 Quad 3-State Buffer",
+      "summary": "Four non-inverting buffers, each with its own active-low output enable.",
+      "detail": "74HC125 / 74LS125 / SN74LVTH125 quad buffer with three-state outputs. Yn follows An while nOE is LOW; a HIGH on nOE releases that output, and this twin then stops driving the pad rather than forcing a level — the pad holds whatever it last had. Each of the four buffers is gated independently, which is what makes the '125 a bus driver rather than four inverters. NOT modelled: LVT vs HC input thresholds, output drive strength, bus contention between two enabled drivers on one net, and the supply rail.",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [
+        {
+          "name": "a1_pin",
+          "ty": "str",
+          "doc": "1A input pin (e.g. \"PA0\")."
+        },
+        {
+          "name": "y1_pin",
+          "ty": "str",
+          "doc": "1Y three-state output pin."
+        },
+        {
+          "name": "oe1_pin",
+          "ty": "str",
+          "doc": "1OE output-enable pin, active LOW."
+        },
+        {
+          "name": "a2_pin",
+          "ty": "str",
+          "doc": "2A input pin."
+        },
+        {
+          "name": "y2_pin",
+          "ty": "str",
+          "doc": "2Y three-state output pin."
+        },
+        {
+          "name": "oe2_pin",
+          "ty": "str",
+          "doc": "2OE output-enable pin, active LOW."
+        },
+        {
+          "name": "a3_pin",
+          "ty": "str",
+          "doc": "3A input pin."
+        },
+        {
+          "name": "y3_pin",
+          "ty": "str",
+          "doc": "3Y three-state output pin."
+        },
+        {
+          "name": "oe3_pin",
+          "ty": "str",
+          "doc": "3OE output-enable pin, active LOW."
+        },
+        {
+          "name": "a4_pin",
+          "ty": "str",
+          "doc": "4A input pin."
+        },
+        {
+          "name": "y4_pin",
+          "ty": "str",
+          "doc": "4Y three-state output pin."
+        },
+        {
+          "name": "oe4_pin",
+          "ty": "str",
+          "doc": "4OE output-enable pin, active LOW."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "74lvc1t45",
+      "label": "74LVC1T45 Level Translator",
+      "summary": "Single-bit bidirectional translator; DIR picks the direction, OE isolates.",
+      "detail": "TI SN74LVC1T45 single-bit dual-supply bus transceiver. DIR HIGH sends A to B, DIR LOW sends B to A, and a HIGH on OE isolates both sides — this twin then stops driving either pad rather than forcing a level. NOT modelled: the two supply rails. VCCA/VCCB level translation is the reason this part exists and this engine has no voltage domains, so the direction and the isolation are simulated and the translation itself is a no-op; a board that a missing translator would break still runs here.",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [
+        {
+          "name": "a_pin",
+          "ty": "str",
+          "doc": "A-side data pin (VCCA domain)."
+        },
+        {
+          "name": "b_pin",
+          "ty": "str",
+          "doc": "B-side data pin (VCCB domain)."
+        },
+        {
+          "name": "dir_pin",
+          "ty": "str",
+          "doc": "DIR pin. HIGH = A to B, LOW = B to A."
+        },
+        {
+          "name": "oe_pin",
+          "ty": "str",
+          "doc": "OE pin, active LOW. HIGH isolates both sides."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "74hc245",
+      "label": "74HC245 Octal Bus Transceiver",
+      "summary": "Eight bidirectional bits; DIR picks the direction, OE isolates both buses.",
+      "detail": "74HC245 / 74LS245 / SN74LVC245A octal bus transceiver. DIR HIGH sends A to B, DIR LOW sends B to A, and a HIGH on OE isolates both buses — this twin then stops driving those pads rather than forcing a level, so the pads hold whatever they last had. All eight bits switch together; there is no per-bit enable. NOT modelled: bus contention between two enabled drivers on one net, input thresholds, output drive strength and the supply rail.",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [
+        {
+          "name": "a1_pin",
+          "ty": "str",
+          "doc": "A1 pin (A-side bit 1)."
+        },
+        {
+          "name": "a2_pin",
+          "ty": "str",
+          "doc": "A2 pin (A-side bit 2)."
+        },
+        {
+          "name": "a3_pin",
+          "ty": "str",
+          "doc": "A3 pin (A-side bit 3)."
+        },
+        {
+          "name": "a4_pin",
+          "ty": "str",
+          "doc": "A4 pin (A-side bit 4)."
+        },
+        {
+          "name": "a5_pin",
+          "ty": "str",
+          "doc": "A5 pin (A-side bit 5)."
+        },
+        {
+          "name": "a6_pin",
+          "ty": "str",
+          "doc": "A6 pin (A-side bit 6)."
+        },
+        {
+          "name": "a7_pin",
+          "ty": "str",
+          "doc": "A7 pin (A-side bit 7)."
+        },
+        {
+          "name": "a8_pin",
+          "ty": "str",
+          "doc": "A8 pin (A-side bit 8)."
+        },
+        {
+          "name": "b1_pin",
+          "ty": "str",
+          "doc": "B1 pin (B-side bit 1)."
+        },
+        {
+          "name": "b2_pin",
+          "ty": "str",
+          "doc": "B2 pin (B-side bit 2)."
+        },
+        {
+          "name": "b3_pin",
+          "ty": "str",
+          "doc": "B3 pin (B-side bit 3)."
+        },
+        {
+          "name": "b4_pin",
+          "ty": "str",
+          "doc": "B4 pin (B-side bit 4)."
+        },
+        {
+          "name": "b5_pin",
+          "ty": "str",
+          "doc": "B5 pin (B-side bit 5)."
+        },
+        {
+          "name": "b6_pin",
+          "ty": "str",
+          "doc": "B6 pin (B-side bit 6)."
+        },
+        {
+          "name": "b7_pin",
+          "ty": "str",
+          "doc": "B7 pin (B-side bit 7)."
+        },
+        {
+          "name": "b8_pin",
+          "ty": "str",
+          "doc": "B8 pin (B-side bit 8)."
+        },
+        {
+          "name": "dir_pin",
+          "ty": "str",
+          "doc": "DIR pin. HIGH = A to B, LOW = B to A."
+        },
+        {
+          "name": "oe_pin",
+          "ty": "str",
+          "doc": "OE pin, active LOW. HIGH isolates both buses."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "74cbtlv3257",
+      "label": "74CBTLV3257 Quad Bus Switch",
+      "summary": "Four 1-of-2 bus switches; S picks the A or B side, OE opens all four.",
+      "detail": "TI SN74CBTLV3257 quad 1-of-2 FET bus switch. Yn follows An while S is LOW and Bn while S is HIGH; a HIGH on OE opens all four switches and this twin stops driving the Y pads. NOT modelled: the switch is a pass transistor on silicon and is modelled here as a one-way multiplexer, because this engine has one level source per pad and cannot express two pads becoming one net. A design that drives Y and expects to read it back on the selected input side will not see its own data. Also not modelled: ON resistance, charge injection, and the supply rail.",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [
+        {
+          "name": "a1_pin",
+          "ty": "str",
+          "doc": "1A input pin, selected when S is LOW."
+        },
+        {
+          "name": "b1_pin",
+          "ty": "str",
+          "doc": "1B input pin, selected when S is HIGH."
+        },
+        {
+          "name": "y1_pin",
+          "ty": "str",
+          "doc": "1Y output pin."
+        },
+        {
+          "name": "a2_pin",
+          "ty": "str",
+          "doc": "2A input pin, selected when S is LOW."
+        },
+        {
+          "name": "b2_pin",
+          "ty": "str",
+          "doc": "2B input pin, selected when S is HIGH."
+        },
+        {
+          "name": "y2_pin",
+          "ty": "str",
+          "doc": "2Y output pin."
+        },
+        {
+          "name": "a3_pin",
+          "ty": "str",
+          "doc": "3A input pin, selected when S is LOW."
+        },
+        {
+          "name": "b3_pin",
+          "ty": "str",
+          "doc": "3B input pin, selected when S is HIGH."
+        },
+        {
+          "name": "y3_pin",
+          "ty": "str",
+          "doc": "3Y output pin."
+        },
+        {
+          "name": "a4_pin",
+          "ty": "str",
+          "doc": "4A input pin, selected when S is LOW."
+        },
+        {
+          "name": "b4_pin",
+          "ty": "str",
+          "doc": "4B input pin, selected when S is HIGH."
+        },
+        {
+          "name": "y4_pin",
+          "ty": "str",
+          "doc": "4Y output pin."
+        },
+        {
+          "name": "s_pin",
+          "ty": "str",
+          "doc": "S select pin. LOW picks the A side, HIGH the B side."
+        },
+        {
+          "name": "oe_pin",
+          "ty": "str",
+          "doc": "OE pin, active LOW. HIGH opens all four switches."
         }
       ],
       "labs": [],

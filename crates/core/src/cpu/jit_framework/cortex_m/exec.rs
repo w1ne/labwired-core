@@ -6,20 +6,20 @@
 
 use wasmtime::{Caller, Engine, Func, Instance, Memory, MemoryType, Module, Store, TypedFunc};
 
-use crate::cpu::CortexM;
-use crate::Machine;
-
 use super::super::block_cache::{BlockCache, Lookup};
 use super::super::frontend::BlockPlan;
 use super::super::side_exit::{BailReason, SideExit};
 use super::super::{CodeView, Pc};
 use super::emit::{
-    MemBinding, FAULT_PC_SLOT, FAULT_RETIRED_SLOT, NEXT_PC_SLOT, RES_FLAG_SLOT, WIRE_CHAIN_DYNAMIC,
-    WIRE_FALL_THROUGH, WIRE_MEM_FAULT, WIRE_UNSUPPORTED,
+    MemBinding, FAULT_PC_SLOT, FAULT_RETIRED_SLOT, IT_STATE_SLOT, NEXT_PC_SLOT, RES_FLAG_SLOT,
+    WIRE_CHAIN_DYNAMIC, WIRE_FALL_THROUGH, WIRE_MEM_FAULT, WIRE_UNSUPPORTED,
 };
 use super::host::{pack_regs, unpack_regs};
 use super::CortexMFrontend;
 use crate::bus::SystemBus;
+use crate::cpu::cortex_m::{vfp_binop, VfpBinOp};
+use crate::cpu::CortexM;
+use crate::Machine;
 
 const REG_SYNC_BYTES: usize = NEXT_PC_SLOT as usize + 4;
 
@@ -27,6 +27,9 @@ struct RamHost {
     ptr: *mut u8,
     len: usize,
     fpu: *mut u32,
+    /// FPSCR snapshot for this call. `CortexMJitEngine` refreshes it before
+    /// every block run; VFP arithmetic host imports read it.
+    fpscr: u32,
 }
 
 unsafe impl Send for RamHost {}
@@ -72,6 +75,17 @@ fn host_vfp_set(caller: Caller<'_, RamHost>, sd: i32, bits: i32) {
     }
 }
 
+/// `vfp.binop(op, a_bits, b_bits)` — the compiled lane's arithmetic. Runs the
+/// exact helper the interpreter calls, including FPSCR.FZ/DN and the NaN
+/// canonicalization, so the two lanes cannot disagree on a single bit.
+fn host_vfp_binop(caller: Caller<'_, RamHost>, fop: i32, a: i32, b: i32) -> i32 {
+    let host = caller.data();
+    match VfpBinOp::from_code(fop) {
+        Some(op) => vfp_binop(op, a as u32, b as u32, host.fpscr) as i32,
+        None => 0,
+    }
+}
+
 fn host_ram_store(caller: Caller<'_, RamHost>, off: i32, val: i32, width: i32) {
     let host = caller.data();
     let off = off as u32 as usize;
@@ -112,6 +126,13 @@ pub struct CompiledBlock {
 }
 
 impl CompiledBlock {
+    /// Install the FPSCR value the block's VFP imports should observe. The
+    /// engine calls this before every run because FPSCR is guest-writable
+    /// state, not a compile-time constant.
+    pub fn set_fpscr(&mut self, fpscr: u32) {
+        self.store.data_mut().fpscr = fpscr;
+    }
+
     fn read_slot(&self, off: u32) -> u32 {
         let mut b = [0u8; 4];
         self.regs
@@ -120,12 +141,17 @@ impl CompiledBlock {
         u32::from_le_bytes(b)
     }
 
+    /// Run to the next side-exit. The fourth tuple element is the IT state to
+    /// reinstall in the core when control returns to the interpreter: `Some`
+    /// exactly on `WIRE_MEM_FAULT` / `WIRE_UNSUPPORTED`, where the block may
+    /// have stopped mid-IT (the emitter wrote the pre-fault state), and
+    /// `None` on chain/fall-through exits, which never carry one.
     pub fn run(
         &mut self,
         x: &mut [u32; 16],
         ram: &mut [u8],
         fpu: &mut [u32; 32],
-    ) -> (SideExit, u32, bool) {
+    ) -> (SideExit, u32, bool, Option<u8>) {
         let mut bytes = [0u8; REG_SYNC_BYTES];
         for (i, w) in x.iter().enumerate() {
             bytes[i * 4..i * 4 + 4].copy_from_slice(&w.to_le_bytes());
@@ -168,18 +194,19 @@ impl CompiledBlock {
             clear_exclusive = self.read_slot(RES_FLAG_SLOT) != 0;
         }
 
-        let (exit, n) = match wire {
+        let (exit, n, it_state) = match wire {
             WIRE_FALL_THROUGH => (
                 SideExit::Chain {
                     next_pc: self.end_pc,
                 },
                 self.instr_count,
+                None,
             ),
             WIRE_CHAIN_DYNAMIC => {
                 let s = NEXT_PC_SLOT as usize;
                 let next_pc =
                     u32::from_le_bytes([bytes[s], bytes[s + 1], bytes[s + 2], bytes[s + 3]]) as Pc;
-                (SideExit::Chain { next_pc }, self.instr_count)
+                (SideExit::Chain { next_pc }, self.instr_count, None)
             }
             WIRE_MEM_FAULT | WIRE_UNSUPPORTED => {
                 let resume_pc = self.read_slot(FAULT_PC_SLOT) as Pc;
@@ -189,7 +216,11 @@ impl CompiledBlock {
                 } else {
                     BailReason::UnsupportedInstruction
                 };
-                (SideExit::EnterInterpreter { resume_pc, reason }, retired)
+                (
+                    SideExit::EnterInterpreter { resume_pc, reason },
+                    retired,
+                    Some(self.read_slot(IT_STATE_SLOT) as u8),
+                )
             }
             _ => (
                 SideExit::EnterInterpreter {
@@ -197,9 +228,10 @@ impl CompiledBlock {
                     reason: BailReason::PartialBlock,
                 },
                 self.instr_count,
+                None,
             ),
         };
-        (exit, n, clear_exclusive)
+        (exit, n, clear_exclusive, it_state)
     }
 }
 
@@ -231,6 +263,7 @@ impl CortexMWasmJit {
                 ptr: std::ptr::null_mut(),
                 len: 0,
                 fpu: std::ptr::null_mut(),
+                fpscr: 0,
             },
         );
         let (ram_len, has_store) = match binding {
@@ -243,6 +276,7 @@ impl CortexMWasmJit {
             let store_fn = Func::wrap(&mut store, host_ram_store);
             let vget = Func::wrap(&mut store, host_vfp_get);
             let vset = Func::wrap(&mut store, host_vfp_set);
+            let vbinop = Func::wrap(&mut store, host_vfp_binop);
             Instance::new(
                 &mut store,
                 &module,
@@ -252,6 +286,7 @@ impl CortexMWasmJit {
                     store_fn.into(),
                     vget.into(),
                     vset.into(),
+                    vbinop.into(),
                 ],
             )
             .ok()?
@@ -339,8 +374,12 @@ impl CortexMJitEngine {
         let block = self.cache.run_artifact(pc).expect("run_ready on a hot PC");
         let mut x = [0u32; 16];
         pack_regs(cpu, &mut x);
-        let (exit, n, clear_exclusive) = block.run(&mut x, ram, &mut cpu.fpu_s);
+        block.set_fpscr(cpu.fpscr);
+        let (exit, n, clear_exclusive, it_state) = block.run(&mut x, ram, &mut cpu.fpu_s);
         unpack_regs(cpu, &x);
+        if let Some(it) = it_state {
+            cpu.it_state = it;
+        }
         self.stats.block_runs += 1;
         self.stats.block_instrs += n as u64;
         (
@@ -384,6 +423,13 @@ impl CortexMJitEngine {
     }
 
     pub fn step_unit(&mut self, machine: &mut Machine<CortexM>) -> u32 {
+        // A mid-IT entry must go to the interpreter: the compiled block at
+        // that PC models its body as unconditional (its `it_state` starts at
+        // 0), so predication lives in `cpu.it_state` alone. `run_jit_loop`
+        // applies the same gate per batch.
+        if machine.cpu.it_state != 0 {
+            return self.interpret_one(machine);
+        }
         let pc = machine.cpu.pc as Pc;
         match self.cache.observe(pc) {
             Lookup::Ready => {
@@ -392,9 +438,13 @@ impl CortexMJitEngine {
                 };
                 let mut x = [0u32; 16];
                 pack_regs(&machine.cpu, &mut x);
-                let (exit, n, clear_exclusive) =
+                block.set_fpscr(machine.cpu.fpscr);
+                let (exit, n, clear_exclusive, it_state) =
                     block.run(&mut x, &mut machine.bus.ram.data, &mut machine.cpu.fpu_s);
                 unpack_regs(&mut machine.cpu, &x);
+                if let Some(it) = it_state {
+                    machine.cpu.it_state = it;
+                }
                 if clear_exclusive {
                     machine.cpu.clear_exclusive_monitor();
                 }

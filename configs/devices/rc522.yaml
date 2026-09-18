@@ -1,0 +1,75 @@
+# NXP MFRC522 (RC522 module) 13.56 MHz reader — declarative SPI register shell.
+# Datasheet: MFRC522 rev 3.9, §8.1.2 "SPI interface" and §9.2 Table 20.
+#
+# ⚠️ THERE IS NO RF AIR INTERFACE, and there never was. The hand-written model
+# this replaces (`components/rc522.rs`, 158 lines) was a `[u8; 0x40]` behind an
+# address/data phase machine with two seeded values, and this descriptor is
+# that. No ISO/IEC 14443-A anticollision, no card UID, no CRC coprocessor, no
+# MIFARE Crypto1, no FIFO and no IRQ pad. `PCD_Init()` and `PCD_DumpVersion()`
+# from the common MFRC522 library see what they saw before; `PICC_IsNewCardPresent()`
+# finds nothing, because there is nothing in the field to find. That gap is
+# REPORTED, not faked — a tag a model invents is a test that passes against
+# fiction.
+#
+# The wire framing (§8.1.2.3): CS↓, one address byte — bit 7 is the direction
+# (1 = READ), bits [6:1] are the register address, bit 0 is always 0 — then the
+# data byte. The address does NOT walk: silicon repeats the selected register
+# for every further byte of the frame, which is how a driver drains FIFOData.
+type: rc522
+
+behavior:
+  primitive: spi_device
+  spi:
+    framing:
+      command_bytes: 1
+      rw_bit: 7
+      rw_read_high: true
+      addr_shift: 1
+      addr_mask: 0x3F
+      auto_increment: false
+    registers:
+      # CommandReg (0x01) is declared rather than left as storage because the
+      # soft reset below has to name it, and a rule names a REGISTER.
+      - name: CommandReg
+        addr: 0x01
+        width: 1
+        endian: be
+        access: rw
+        reset: 0x00
+        bits:
+          - { name: Command,  shift: 0, width_bits: 4 }
+          - { name: PowerDown, shift: 4 }
+          - { name: RcvOff,    shift: 5 }
+      # §9.3.4.8: VersionReg is read-only and reads 0x92 on an MFRC522 v2.0 —
+      # the value every driver's presence check compares against. The old model
+      # let a write land on it, so a stray burst could make the part deny being
+      # an MFRC522.
+      - { name: VersionReg, addr: 0x37, width: 1, endian: be, access: r, reset: 0x92 }
+    # The other 62 addresses are storage: written by the driver, read back.
+    # ⚠️ They power up at 0x00, NOT at the datasheet's Table 20 reset values
+    # (ModeReg 0x3F, TxControlReg 0x80, RxSelReg 0x84, …). That is the old
+    # model's behaviour held unchanged so this port moves no byte; stamping the
+    # real reset column is a separate change with its own test, because a driver
+    # that read-modify-writes one of those bytes would see a different result.
+    register_file:
+      size: 0x40
+  rules:
+    # §10.3.1.9, PCD_SoftReset: writing the SoftReset command (0x0F) to
+    # CommandReg resets the part, and CommandReg itself returns to Idle. The
+    # common MFRC522 library then polls CommandReg until the PowerDown bit
+    # clears, so a CommandReg that latched 0x0F forever is a part whose reset
+    # a driver cannot observe completing.
+    - on: { write: CommandReg }
+      when: "field(CommandReg.Command) == 0x0F"
+      do:
+        - { write: { register: CommandReg, value: 0 } }
+
+metadata:
+  label: "RC522 RFID"
+  summary: "MFRC522 SPI RFID reader register shell (no RF)."
+  detail: >-
+    VersionReg 0x37 returns 0x92. Soft reset via CommandReg is accepted.
+    ISO14443 card UID / crypto is not simulated.
+  category: spi
+  config_keys:
+    - { name: cs_pin, ty: str, doc: "SPI CS GPIO pin name (module SDA/NSS). Defaults to PA4." }

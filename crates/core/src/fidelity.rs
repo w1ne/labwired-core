@@ -73,10 +73,32 @@ pub struct FidelityReport {
     /// Accesses to addresses no peripheral or memory region claims,
     /// keyed by address.
     pub unmapped_mmio: BTreeMap<u64, Gap>,
+    /// Modelling APPROXIMATIONS this run relied on, keyed by kind.
+    ///
+    /// Not the same thing as the two maps above and deliberately not counted by
+    /// [`Self::is_empty`] / [`Self::total_hits`]. Those two say "the model hit
+    /// something it does not model" and a run that hits one is a run with a
+    /// hole in it — `world_station_services` asserts `is_empty()` on a real
+    /// firmware run for exactly that reason. An approximation is different: the
+    /// engine DID model the thing, by a stated simplification, and the honest
+    /// move is to name the simplification rather than to fail the run or to stay
+    /// silent. Each entry is recorded once per run (`count` stays 1), so this
+    /// is a note, not a counter.
+    ///
+    /// Surfaces through [`Self::to_gaps`] in the SAME record shape as the other
+    /// two — a new `kind` string, `address: Some("0x0")`, no opcode — so the
+    /// existing serializers (`builder run.ts`, the wasm `fidelity_gaps`, the
+    /// CLI's `result.json`) carry it with no schema change.
+    pub approximations: BTreeMap<String, Gap>,
 }
 
 impl FidelityReport {
-    /// True when the model hit no coverage gaps at all.
+    /// True when the model hit no coverage GAPS at all.
+    ///
+    /// Deliberately blind to [`Self::approximations`]: a stated approximation is
+    /// not a hole in the model, and a gate that asserts `is_empty()` on a real
+    /// firmware run must not start failing because the engine got more honest
+    /// about a clock it already derived.
     pub fn is_empty(&self) -> bool {
         self.undecoded_instructions.is_empty() && self.unmapped_mmio.is_empty()
     }
@@ -96,8 +118,11 @@ impl FidelityReport {
     /// shape the CLI emits in `result.json` and the builder/MCP surface as
     /// structured unmodeled-access faults.
     pub fn to_gaps(&self) -> Vec<FidelityGap> {
-        let mut gaps =
-            Vec::with_capacity(self.unmapped_mmio.len() + self.undecoded_instructions.len());
+        let mut gaps = Vec::with_capacity(
+            self.unmapped_mmio.len()
+                + self.undecoded_instructions.len()
+                + self.approximations.len(),
+        );
         for (addr, g) in &self.unmapped_mmio {
             gaps.push(FidelityGap {
                 kind: "unmapped_mmio".to_string(),
@@ -118,17 +143,44 @@ impl FidelityReport {
                 detail: g.detail.clone(),
             });
         }
+        // Approximations last, in the same record shape: `kind` names the
+        // approximation, `address` is the shape-mandated `"0x0"` (there is no
+        // address — this is not an access), `detail` is the human note.
+        for (kind, g) in &self.approximations {
+            gaps.push(FidelityGap {
+                kind: kind.clone(),
+                address: Some("0x0".to_string()),
+                opcode: None,
+                first_pc: format!("{:#x}", g.first_pc),
+                count: g.count,
+                detail: g.detail.clone(),
+            });
+        }
         gaps
+    }
+}
+
+impl FidelityReport {
+    fn fmt_approximations(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.approximations.is_empty() {
+            return Ok(());
+        }
+        writeln!(f, "  approximations:")?;
+        for (kind, g) in &self.approximations {
+            writeln!(f, "    {kind}: {}", g.detail)?;
+        }
+        Ok(())
     }
 }
 
 impl std::fmt::Display for FidelityReport {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.is_empty() {
-            return write!(
+            writeln!(
                 f,
                 "fidelity: clean (no undecoded instructions or unmapped MMIO)"
-            );
+            )?;
+            return self.fmt_approximations(f);
         }
         writeln!(
             f,
@@ -152,7 +204,7 @@ impl std::fmt::Display for FidelityReport {
                 writeln!(f, "    {:#010x} ({})  x{}", addr, g.detail, g.count)?;
             }
         }
-        Ok(())
+        self.fmt_approximations(f)
     }
 }
 
@@ -217,6 +269,39 @@ pub fn record_unmapped(addr: u64, detail: &str) {
     });
 }
 
+/// The census `kind` for the derived device clock. Public so a consumer can
+/// match on it without re-typing the string.
+pub const DERIVED_DEVICE_TIME: &str = "derived_device_time";
+
+/// Record, ONCE per run, that off-chip device time on this machine is derived
+/// from the declared core clock rather than read off a modelled µs counter.
+///
+/// Called by [`crate::Machine`] the first time the derived clock actually
+/// advances an attached device. A chip with a real absolute-µs source (the
+/// ESP32 SYSTIMER) never reaches it, so the note is absent exactly where it
+/// would be untrue.
+///
+/// Unlike `record_undecoded` / `record_unmapped` this does NOT panic under
+/// `LABWIRED_STRICT_FIDELITY`: strict mode exists to fail a run at the first
+/// thing the engine did not model, and this is a thing the engine DOES model,
+/// by a stated approximation. Panicking here would make the strict lane
+/// unusable on every Cortex-M board at once.
+pub fn record_derived_device_time(cpu_hz: u64) {
+    let detail = format!(
+        "device time derived from cpu_hz ({cpu_hz} Hz); PLL reconfiguration is not tracked"
+    );
+    LOG.with(|l| {
+        l.borrow_mut()
+            .approximations
+            .entry(DERIVED_DEVICE_TIME.to_string())
+            .or_insert(Gap {
+                count: 1,
+                first_pc: 0,
+                detail,
+            });
+    });
+}
+
 /// Snapshot the current thread's report without clearing it.
 pub fn report() -> FidelityReport {
     LOG.with(|l| l.borrow().clone())
@@ -258,6 +343,42 @@ mod tests {
         let taken = take();
         assert_eq!(taken.total_hits(), 3);
         assert!(report().is_empty());
+    }
+
+    /// The approximation note rides the EXISTING record shape and is invisible
+    /// to the two gap predicates, which is what keeps `world_station_services`'
+    /// `is_empty()` assertion meaningful.
+    #[test]
+    fn approximation_rides_the_gap_shape_without_counting_as_a_gap() {
+        if strict() {
+            return;
+        }
+        reset();
+        record_derived_device_time(80_000_000);
+        // Recorded twice: still ONE record, count still 1 — a note, not a counter.
+        record_derived_device_time(80_000_000);
+        let r = report();
+        assert!(r.is_empty(), "an approximation is not a coverage gap");
+        assert_eq!(r.total_hits(), 0);
+        let gaps = r.to_gaps();
+        assert_eq!(gaps.len(), 1);
+        assert_eq!(gaps[0].kind, DERIVED_DEVICE_TIME);
+        assert_eq!(gaps[0].address.as_deref(), Some("0x0"));
+        assert_eq!(gaps[0].opcode, None);
+        assert_eq!(gaps[0].first_pc, "0x0");
+        assert_eq!(gaps[0].count, 1);
+        assert!(
+            gaps[0]
+                .detail
+                .contains("PLL reconfiguration is not tracked"),
+            "{}",
+            gaps[0].detail
+        );
+        // Serializes through the same wire contract as any other gap.
+        let json = serde_json::to_string(&gaps[0]).unwrap();
+        let back: FidelityGap = serde_json::from_str(&json).unwrap();
+        assert_eq!(&back, &gaps[0]);
+        reset();
     }
 
     #[test]

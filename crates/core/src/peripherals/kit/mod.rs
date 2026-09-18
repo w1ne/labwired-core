@@ -31,9 +31,11 @@
 //! kit usable from headless CI / wasm builds where no UI exists.
 
 mod ctx;
+pub mod declarative;
 pub mod registry;
 
 pub use ctx::AttachCtx;
+pub use declarative::DeclarativeDeviceKit;
 
 use anyhow::Result;
 
@@ -89,7 +91,7 @@ pub struct KitMetadata {
     pub inputs: &'static [crate::sim_input::InputChannel],
 }
 
-#[derive(Debug, Clone, Copy, serde::Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Transport {
     Uart,

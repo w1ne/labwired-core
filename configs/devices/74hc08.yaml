@@ -1,0 +1,39 @@
+# 74HC08 — quad 2-input AND gate. Four independent gates, no enable.
+#
+# Nexperia 74HC08 Rev. 5, Table 8: tPHL/tPLH 8 ns typical at VCC = 5 V, CL = 15 pF.
+#
+# Imported from KiCad as `74LS08` / `74HC08` / `SN74LVC08`. See
+# `docs/part-packs.md` § logic_gate for the app-side alias mapping.
+type: 74hc08
+
+behavior:
+  primitive: logic_gate
+  logic:
+    inputs: [A1, B1, A2, B2, A3, B3, A4, B4]
+    outputs: [Y1, Y2, Y3, Y4]
+    table:
+      Y1: "A1 & B1"
+      Y2: "A2 & B2"
+      Y3: "A3 & B3"
+      Y4: "A4 & B4"
+    tprop_ns: 8
+
+metadata:
+  label: "74HC08 Quad AND"
+  summary: "Four independent 2-input AND gates, 8 ns propagation delay."
+  detail: "74HC08/74LS08 quad 2-input AND gate. Yn is HIGH only when both An and Bn are HIGH. NOT modelled: input threshold voltages, output drive strength, the supply rail, and contention with another driver on the same net — this engine has one level source per pad and the last writer wins."
+  category: gpio
+  config_keys:
+    - { name: a1_pin, ty: str, doc: "1A input pin (e.g. \"PA0\")." }
+    - { name: b1_pin, ty: str, doc: "1B input pin." }
+    - { name: y1_pin, ty: str, doc: "1Y output pin." }
+    - { name: a2_pin, ty: str, doc: "2A input pin (e.g. \"PA0\")." }
+    - { name: b2_pin, ty: str, doc: "2B input pin." }
+    - { name: y2_pin, ty: str, doc: "2Y output pin." }
+    - { name: a3_pin, ty: str, doc: "3A input pin (e.g. \"PA0\")." }
+    - { name: b3_pin, ty: str, doc: "3B input pin." }
+    - { name: y3_pin, ty: str, doc: "3Y output pin." }
+    - { name: a4_pin, ty: str, doc: "4A input pin (e.g. \"PA0\")." }
+    - { name: b4_pin, ty: str, doc: "4B input pin." }
+    - { name: y4_pin, ty: str, doc: "4Y output pin." }
+  inputs: []

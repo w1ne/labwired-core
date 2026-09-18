@@ -1738,7 +1738,7 @@ fn test_kw41z_lcd_activity_survival() {
 /// cooperated, not just that the CPU survived.
 #[test]
 fn test_kw41z_lcd_renders_screen() {
-    use labwired_core::peripherals::components::Pcd8544;
+    use labwired_core::peripherals::components::GenericDisplay;
     use labwired_core::peripherals::spi::Spi;
 
     let (chip, manifest) = load_system("mkw41z4", "frdm-kw41z-lcd");
@@ -1760,7 +1760,7 @@ fn test_kw41z_lcd_renders_screen() {
         .iter()
         .filter_map(|p| p.dev.as_any().and_then(|a| a.downcast_ref::<Spi>()))
         .flat_map(|spi| spi.attached_devices.iter())
-        .find_map(|d| d.as_any().and_then(|a| a.downcast_ref::<Pcd8544>()))
+        .find_map(|d| d.as_any().and_then(|a| a.downcast_ref::<GenericDisplay>()))
         .expect("PCD8544 attached to an SPI bus");
 
     assert!(lcd.display_on(), "PCD8544 display was never turned on");
@@ -1822,7 +1822,7 @@ fn test_kw41z_lcd_renders_screen() {
 /// chunky meter, so a hard tilt must change hundreds of pixels, not a few.
 #[test]
 fn test_kw41z_lcd_cow_reacts_to_tilt() {
-    use labwired_core::peripherals::components::{Fxos8700, Pcd8544};
+    use labwired_core::peripherals::components::GenericDisplay;
     use labwired_core::peripherals::i2c::I2c;
     use labwired_core::peripherals::spi::Spi;
 
@@ -1841,7 +1841,7 @@ fn test_kw41z_lcd_cow_reacts_to_tilt() {
             .iter()
             .filter_map(|p| p.dev.as_any().and_then(|a| a.downcast_ref::<Spi>()))
             .flat_map(|spi| spi.attached_devices.iter())
-            .find_map(|d| d.as_any().and_then(|a| a.downcast_ref::<Pcd8544>()))
+            .find_map(|d| d.as_any().and_then(|a| a.downcast_ref::<GenericDisplay>()))
             .expect("PCD8544 attached to an SPI bus")
             .framebuffer()
             .to_vec()
@@ -1855,8 +1855,8 @@ fn test_kw41z_lcd_cow_reacts_to_tilt() {
     }
     let fb_calm = grab_fb(&machine);
 
-    // Latch a hard tilt into the sensor — the same `set_sample` path the
-    // playground sliders use through `set_i2c_sensor_sample`.
+    // Drive a hard tilt into the sensor — the same `set_input` channel path the
+    // playground sliders use.
     let mut found = false;
     for p in machine.bus.peripherals.iter_mut() {
         let Some(any) = p.dev.as_any_mut() else {
@@ -1867,12 +1867,13 @@ fn test_kw41z_lcd_cow_reacts_to_tilt() {
         };
         for device in i2c.attached_devices() {
             let mut device = device.borrow_mut();
-            if let Some(sensor) = device
-                .as_any_mut()
-                .and_then(|a| a.downcast_mut::<Fxos8700>())
-            {
-                sensor.set_sample(0x2000, -0x2000, 0x1000); // 2 g X, -2 g Y
-                found = true;
+            if let Some(sensor) = device.as_sim_input_mut() {
+                if sensor.input_channels().iter().any(|c| c.key == "x") {
+                    sensor.set_input("x", 2.0).expect("x");
+                    sensor.set_input("y", -2.0).expect("y");
+                    sensor.set_input("z", 1.0).expect("z");
+                    found = true;
+                }
             }
         }
     }

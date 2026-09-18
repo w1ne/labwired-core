@@ -282,3 +282,157 @@ fn kit_metadata_carries_no_commercial_overlay_data() {
         }
     }
 }
+
+// ─── Every descriptor is a kit ─────────────────────────────────────────────
+//
+// The defect these two tests exist to prevent: a part ported to a declarative
+// primitive ATTACHES without a kit (`bus::external_devices` resolves
+// `configs/devices/*.yaml` on its own), but only a kit contributes a
+// `KitMetadata` entry to `peripherals-manifest.json` — the file the browser
+// palette reads. So a ported part could run, pass every test it had, and
+// simply not be in the library. `keypad`, `dht22`, `rotary_encoder`,
+// `hc-sr04`, `dc-motor` and `bldc-motor` all sat in that hole; `hx711` escaped
+// it only because somebody hand-wrote a wrapper.
+//
+// Nothing about that failure is visible at runtime, which is why it needs a
+// gate rather than a convention.
+
+/// The `type:` each `configs/devices/*.yaml` declares, paired with its
+/// filename so a failure can name the file to look at.
+///
+/// Read off the DIRECTORY, deliberately — not from
+/// `labwired_config::EMBEDDED_DEVICES`. Walking the embedded table would only
+/// prove the table agrees with itself; walking the directory also catches a
+/// descriptor that was added to the tree without a table row, which is the
+/// other way a part goes missing.
+fn descriptor_types_on_disk() -> Vec<(String, String)> {
+    let dir = workspace_root().join("configs/devices");
+    let mut out = Vec::new();
+    let entries = std::fs::read_dir(&dir)
+        .unwrap_or_else(|e| panic!("reading {dir:?}: {e}"))
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    for entry in entries {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("yaml") {
+            continue;
+        }
+        let text =
+            std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("reading {path:?}: {e}"));
+        let desc = labwired_config::DeviceDescriptor::from_yaml(&text)
+            .unwrap_or_else(|e| panic!("{path:?} is not a valid device descriptor: {e:#}"));
+        let file = path
+            .file_name()
+            .and_then(|f| f.to_str())
+            .unwrap_or_default()
+            .to_string();
+        out.push((desc.r#type, file));
+    }
+    out.sort();
+    assert!(
+        !out.is_empty(),
+        "no descriptors found under {dir:?} — this gate would pass vacuously"
+    );
+    out
+}
+
+/// Descriptors whose `type:` no registered kit answers to, rendered as
+/// `type (configs/devices/file.yaml)`. The shared body of the gate and its
+/// negative control, so the control exercises the real checker.
+fn descriptors_without_a_kit(
+    registered: &HashSet<&str>,
+    descriptors: &[(String, String)],
+) -> Vec<String> {
+    descriptors
+        .iter()
+        .filter(|(ty, _)| !registered.contains(ty.as_str()))
+        .map(|(ty, file)| format!("{ty} (configs/devices/{file})"))
+        .collect()
+}
+
+/// The gate: the peripherals manifest's device-type set ⊇ every descriptor's
+/// `type:`.
+///
+/// Asserted against `registry::kits()` — the manifest's source — because
+/// `manifest_json_matches_registry` above pins the committed JSON to exactly
+/// that set. The two together are the manifest property; splitting them keeps
+/// one cause per failure instead of reporting a missing kit as a stale file.
+#[test]
+fn every_device_descriptor_is_a_kit() {
+    let registered: HashSet<&str> = registry::kits()
+        .iter()
+        .map(|k| k.metadata().device_type)
+        .collect();
+    let descriptors = descriptor_types_on_disk();
+    let missing = descriptors_without_a_kit(&registered, &descriptors);
+    assert!(
+        missing.is_empty(),
+        "{} device descriptor(s) yield no PeripheralKit, so they are absent from \
+         peripherals-manifest.json and invisible in the playground library \
+         (they still ATTACH, which is why nothing else fails):\n  {}\n\n\
+         Every descriptor is supposed to become a kit automatically — see \
+         `peripherals::kit::declarative` and `registry::ALL_KITS`, which derive \
+         one per row of `labwired_config::EMBEDDED_DEVICES`. A descriptor \
+         missing here almost certainly has no row in that table.",
+        missing.len(),
+        missing.join("\n  ")
+    );
+}
+
+/// Negative control for [`every_device_descriptor_is_a_kit`].
+///
+/// A gate that can only pass proves nothing, and this one is a set difference
+/// that goes empty for two very different reasons — every part covered, or the
+/// descriptor list not being read at all. This drives the same checker with a
+/// descriptor that is deliberately absent from the registry and asserts it is
+/// reported BY NAME, and that a genuinely registered part alongside it is not.
+#[test]
+fn a_descriptor_with_no_kit_is_named() {
+    let registered: HashSet<&str> = registry::kits()
+        .iter()
+        .map(|k| k.metadata().device_type)
+        .collect();
+    // The "registered" half of the fixture is a HAND-WRITTEN kit, not a derived
+    // one, so this control keeps working — and keeps being a control — even
+    // when the derivation it guards is the thing that broke.
+    assert!(
+        registered.contains("bg770a-cellular"),
+        "fixture assumes the hand-written 'bg770a-cellular' kit is registered"
+    );
+    let descriptors = vec![
+        ("bg770a-cellular".to_string(), "bg770a.yaml".to_string()),
+        ("no-such-part".to_string(), "no_such_part.yaml".to_string()),
+    ];
+    let missing = descriptors_without_a_kit(&registered, &descriptors);
+    assert_eq!(
+        missing,
+        vec!["no-such-part (configs/devices/no_such_part.yaml)"],
+        "the gate must name the unregistered descriptor and only that one"
+    );
+}
+
+/// The six parts this gate was written for. A regression here means the
+/// generic derivation stopped covering a primitive — which is silent
+/// otherwise, because each of these attaches perfectly well without a kit.
+#[test]
+fn the_declarative_gpio_family_is_in_the_manifest() {
+    let registered: HashSet<&str> = registry::kits()
+        .iter()
+        .map(|k| k.metadata().device_type)
+        .collect();
+    for device_type in [
+        "keypad",
+        "dht22",
+        "rotary_encoder",
+        "hc-sr04",
+        "dc-motor",
+        "bldc-motor",
+        "hx711",
+    ] {
+        assert!(
+            registered.contains(device_type),
+            "'{device_type}' is not in the PeripheralKit registry, so it is absent \
+             from the peripherals manifest and from the playground library"
+        );
+    }
+}

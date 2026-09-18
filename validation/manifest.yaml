@@ -396,6 +396,15 @@ boards:
     # walk differentials, bus_visibility and logic_wire_channels_cross_family under
     # (none) / event-scheduler / jit,event-scheduler. This is an ack, not a capture.
     drift_ack: 2026-09-15
+    # 2026-09-17 (#1142): no model change. The inline `#[cfg(test)] mod tests`
+    # blocks were moved out of 13 model source files (spi.rs, i2c.rs, tick.rs,
+    # cortex_m.rs, esp32c3/{i2c,bt,virtual_wifi}.rs, esp32s3/gdma.rs, ...) into
+    # sibling `*_tests.rs` files. Production code is byte-identical apart from the
+    # removed test block and a 3-line `#[path]` module declaration; per-file
+    # `#[test]` counts before and after match exactly. The digest moves because
+    # it hashes the whole file. This is an ACK, NOT A CAPTURE — a live
+    # re-capture is still owed.
+    drift_ack: 2026-09-17
     # 2026-08-22: the Thumb-2 decoder gained SMLABB/BT/TB/TT and SMULBB/BT/TB/TT
     # (ARMv7-M A7.7.166/171). They were UNDECODED, which in this core means a
     # silent no-op — `digitalWrite` on EFR32MG26 computes its port base with
@@ -412,7 +421,26 @@ boards:
     # golden trace (crates/wasm/tests/fixtures/motor-parity-native.json) still
     # matches. No other pinned firmware on any board reaches the encoding, so
     # nothing a silicon capture asserts moved. No live re-capture is evidenced here.
-    drift_ack_digest: c443534385742d7edbb6170effe5afbdf555d448901885a48f0f9b362eb960bb
+    # 2026-09-17 (perf/bus-scheduler-pass): per-instruction COST only, no model
+    # change. Three edits: `CortexM::step_execute` asks "is anything pending"
+    # before ranking exceptions (the ranking it now skips returned `None`, and
+    # the `exception_num != 0` arm already made the block dead); `SystemBus`
+    # negative-caches the hole between `extra_mem` windows, which an access
+    # wholly inside provably misses; and `RiscV` remembers an aligned fetch
+    # window base whose refill just failed instead of re-deriving the same
+    # failure every instruction (the fetch still falls through to
+    # `bus.read_u32`, the path it was already taking). No register map, reset
+    # value, timing or IRQ route is touched.
+    # EVIDENCE: seven runs of five firmwares at --max-steps 5000000 (nrf52840
+    # Zephyr step+batch, nrf52840 tier1, stm32f405 tier1 step+batch, esp32c3
+    # tier1, esp32c3 demo) hash 21/21 IDENTICAL over stdout, the cycle-stamped
+    # `--bus-trace-out` event list and the `[batched]` summary, against a
+    # binary built from 80c01390d. The digest moves because it hashes whole
+    # files. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
+    drift_ack: 2026-09-17
+    # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
+    # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
+    drift_ack_digest: b9c3958daa284ef21ee8193eef9bc3af498efddd4983007e7d1f77ac0cdc9a9a
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -666,6 +694,15 @@ boards:
     # walk differentials, bus_visibility and logic_wire_channels_cross_family under
     # (none) / event-scheduler / jit,event-scheduler. This is an ack, not a capture.
     drift_ack: 2026-09-15
+    # 2026-09-17 (#1142): no model change. The inline `#[cfg(test)] mod tests`
+    # blocks were moved out of 13 model source files (spi.rs, i2c.rs, tick.rs,
+    # cortex_m.rs, esp32c3/{i2c,bt,virtual_wifi}.rs, esp32s3/gdma.rs, ...) into
+    # sibling `*_tests.rs` files. Production code is byte-identical apart from the
+    # removed test block and a 3-line `#[path]` module declaration; per-file
+    # `#[test]` counts before and after match exactly. The digest moves because
+    # it hashes the whole file. This is an ACK, NOT A CAPTURE — a live
+    # re-capture is still owed.
+    drift_ack: 2026-09-17
     # 2026-08-22: the Thumb-2 decoder gained SMLABB/BT/TB/TT and SMULBB/BT/TB/TT
     # (ARMv7-M A7.7.166/171). They were UNDECODED, which in this core means a
     # silent no-op — `digitalWrite` on EFR32MG26 computes its port base with
@@ -682,7 +719,26 @@ boards:
     # golden trace (crates/wasm/tests/fixtures/motor-parity-native.json) still
     # matches. No other pinned firmware on any board reaches the encoding, so
     # nothing a silicon capture asserts moved. No live re-capture is evidenced here.
-    drift_ack_digest: c443534385742d7edbb6170effe5afbdf555d448901885a48f0f9b362eb960bb
+    # 2026-09-17 (perf/bus-scheduler-pass): per-instruction COST only, no model
+    # change. Three edits: `CortexM::step_execute` asks "is anything pending"
+    # before ranking exceptions (the ranking it now skips returned `None`, and
+    # the `exception_num != 0` arm already made the block dead); `SystemBus`
+    # negative-caches the hole between `extra_mem` windows, which an access
+    # wholly inside provably misses; and `RiscV` remembers an aligned fetch
+    # window base whose refill just failed instead of re-deriving the same
+    # failure every instruction (the fetch still falls through to
+    # `bus.read_u32`, the path it was already taking). No register map, reset
+    # value, timing or IRQ route is touched.
+    # EVIDENCE: seven runs of five firmwares at --max-steps 5000000 (nrf52840
+    # Zephyr step+batch, nrf52840 tier1, stm32f405 tier1 step+batch, esp32c3
+    # tier1, esp32c3 demo) hash 21/21 IDENTICAL over stdout, the cycle-stamped
+    # `--bus-trace-out` event list and the `[batched]` summary, against a
+    # binary built from 80c01390d. The digest moves because it hashes whole
+    # files. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
+    drift_ack: 2026-09-17
+    # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
+    # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
+    drift_ack_digest: b9c3958daa284ef21ee8193eef9bc3af498efddd4983007e7d1f77ac0cdc9a9a
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -1119,7 +1175,26 @@ boards:
     # Offline session_can (5) and fdcan (4) tests pass. No physical-board
     # re-capture was performed. Keep the existing ack date and deadline;
     # this digest records the reviewed source, not new silicon evidence.
-    drift_ack_digest: f5799062367a48a8793b3d7777874ad9efdae6790bb5e15b26183c314ffab31f
+    # 2026-09-17 (perf/bus-scheduler-pass): per-instruction COST only, no model
+    # change. Three edits: `CortexM::step_execute` asks "is anything pending"
+    # before ranking exceptions (the ranking it now skips returned `None`, and
+    # the `exception_num != 0` arm already made the block dead); `SystemBus`
+    # negative-caches the hole between `extra_mem` windows, which an access
+    # wholly inside provably misses; and `RiscV` remembers an aligned fetch
+    # window base whose refill just failed instead of re-deriving the same
+    # failure every instruction (the fetch still falls through to
+    # `bus.read_u32`, the path it was already taking). No register map, reset
+    # value, timing or IRQ route is touched.
+    # EVIDENCE: seven runs of five firmwares at --max-steps 5000000 (nrf52840
+    # Zephyr step+batch, nrf52840 tier1, stm32f405 tier1 step+batch, esp32c3
+    # tier1, esp32c3 demo) hash 21/21 IDENTICAL over stdout, the cycle-stamped
+    # `--bus-trace-out` event list and the `[batched]` summary, against a
+    # binary built from 80c01390d. The digest moves because it hashes whole
+    # files. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
+    drift_ack: 2026-09-17
+    # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
+    # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
+    drift_ack_digest: 6d38a8a356bc48577f5669958864aefa89df68ff88021587ec2776b0d1dd01b4
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -1224,6 +1299,15 @@ boards:
     # i2c_component, i2c_mux_tca9548a and i2c_factory_kit_coverage, all green.
     # This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     drift_ack: 2026-09-15
+    # 2026-09-17 (#1142): no model change. The inline `#[cfg(test)] mod tests`
+    # blocks were moved out of 13 model source files (spi.rs, i2c.rs, tick.rs,
+    # cortex_m.rs, esp32c3/{i2c,bt,virtual_wifi}.rs, esp32s3/gdma.rs, ...) into
+    # sibling `*_tests.rs` files. Production code is byte-identical apart from the
+    # removed test block and a 3-line `#[path]` module declaration; per-file
+    # `#[test]` counts before and after match exactly. The digest moves because
+    # it hashes the whole file. This is an ACK, NOT A CAPTURE — a live
+    # re-capture is still owed.
+    drift_ack: 2026-09-17
   - id: esp32c3
     # 2026-09-15 (#932): SPI edge sampling is opt-in (`SpiSampling::Byte` default). Byte-level golden pins the pre-feature path. Controllers without a bit engine reject opt-in at config time.
     doc: docs/boards/esp32c3.md
@@ -1341,13 +1425,39 @@ boards:
     # stm32f401/stm32l476_walk_differential, kw41z_walk_free_differential. This is an
     # ack, not a capture — no live re-capture was made.
     drift_ack: 2026-09-15
+    # 2026-09-17 (#1142): no model change. The inline `#[cfg(test)] mod tests`
+    # blocks were moved out of 13 model source files (spi.rs, i2c.rs, tick.rs,
+    # cortex_m.rs, esp32c3/{i2c,bt,virtual_wifi}.rs, esp32s3/gdma.rs, ...) into
+    # sibling `*_tests.rs` files. Production code is byte-identical apart from the
+    # removed test block and a 3-line `#[path]` module declaration; per-file
+    # `#[test]` counts before and after match exactly. The digest moves because
+    # it hashes the whole file. This is an ACK, NOT A CAPTURE — a live
+    # re-capture is still owed.
+    drift_ack: 2026-09-17
       #
       # Re-stamped 2026-08-22 for the EspI2cCore extraction in this branch: the ESP
       # I2C models moved wholesale into a shared core, so every digest over them
       # changes. Behaviour-preserving extraction, not a model correction —
       # `pr-workspace-tests` green on all shards is what exercises this peripheral,
       # so nothing the silicon capture asserts changed and the capture stands.
-    drift_ack_digest: ef88c1e9189ce0dcbcd37fee8cd308b5c6aa15de6cabacedb074035d1828ba96
+    # 2026-09-17 (perf/bus-scheduler-pass): per-instruction COST only, no model
+    # change. Three edits: `CortexM::step_execute` asks "is anything pending"
+    # before ranking exceptions (the ranking it now skips returned `None`, and
+    # the `exception_num != 0` arm already made the block dead); `SystemBus`
+    # negative-caches the hole between `extra_mem` windows, which an access
+    # wholly inside provably misses; and `RiscV` remembers an aligned fetch
+    # window base whose refill just failed instead of re-deriving the same
+    # failure every instruction (the fetch still falls through to
+    # `bus.read_u32`, the path it was already taking). No register map, reset
+    # value, timing or IRQ route is touched.
+    # EVIDENCE: seven runs of five firmwares at --max-steps 5000000 (nrf52840
+    # Zephyr step+batch, nrf52840 tier1, stm32f405 tier1 step+batch, esp32c3
+    # tier1, esp32c3 demo) hash 21/21 IDENTICAL over stdout, the cycle-stamped
+    # `--bus-trace-out` event list and the `[batched]` summary, against a
+    # binary built from 80c01390d. The digest moves because it hashes whole
+    # files. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
+    drift_ack: 2026-09-17
+    drift_ack_digest: 9391634fbc6084eeac47d85e20f265d51b8a07c98bf3b16ea23e63e77bc20a9c
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
@@ -2384,7 +2494,26 @@ boards:
     # idr_pin_level_tests (3), all green. This is an ACK, NOT A CAPTURE — a live
     # re-capture on this board is still owed.
     drift_ack: 2026-08-24
-    drift_ack_digest: 51895c5e3b73b01ad03bf7c2e1672f35b7654d49ec45eb4888f971d7e7ec29ee
+    # 2026-09-17 (perf/bus-scheduler-pass): per-instruction COST only, no model
+    # change. Three edits: `CortexM::step_execute` asks "is anything pending"
+    # before ranking exceptions (the ranking it now skips returned `None`, and
+    # the `exception_num != 0` arm already made the block dead); `SystemBus`
+    # negative-caches the hole between `extra_mem` windows, which an access
+    # wholly inside provably misses; and `RiscV` remembers an aligned fetch
+    # window base whose refill just failed instead of re-deriving the same
+    # failure every instruction (the fetch still falls through to
+    # `bus.read_u32`, the path it was already taking). No register map, reset
+    # value, timing or IRQ route is touched.
+    # EVIDENCE: seven runs of five firmwares at --max-steps 5000000 (nrf52840
+    # Zephyr step+batch, nrf52840 tier1, stm32f405 tier1 step+batch, esp32c3
+    # tier1, esp32c3 demo) hash 21/21 IDENTICAL over stdout, the cycle-stamped
+    # `--bus-trace-out` event list and the `[batched]` summary, against a
+    # binary built from 80c01390d. The digest moves because it hashes whole
+    # files. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
+    drift_ack: 2026-09-17
+    # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
+    # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
+    drift_ack_digest: 04d676155a66047caf37969b041238d5986ec9bb4a42710022b609998a7be004
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -2484,6 +2613,15 @@ boards:
     # i2c_component, i2c_mux_tca9548a and i2c_factory_kit_coverage, all green.
     # This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     drift_ack: 2026-09-15
+    # 2026-09-17 (#1142): no model change. The inline `#[cfg(test)] mod tests`
+    # blocks were moved out of 13 model source files (spi.rs, i2c.rs, tick.rs,
+    # cortex_m.rs, esp32c3/{i2c,bt,virtual_wifi}.rs, esp32s3/gdma.rs, ...) into
+    # sibling `*_tests.rs` files. Production code is byte-identical apart from the
+    # removed test block and a 3-line `#[path]` module declaration; per-file
+    # `#[test]` counts before and after match exactly. The digest moves because
+    # it hashes the whole file. This is an ACK, NOT A CAPTURE — a live
+    # re-capture is still owed.
+    drift_ack: 2026-09-17
   - id: nucleo-l073rz
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
     # 2026-09-16 (#1125): Cortex-M JIT follow-ups (block chaining, floor 4, IT-predicated ALU, VFP S-ALU, VLDR/VSTR, LDR.W PC), plus two model fixes that ride along: the bit-band alias decode no longer swallows peripherals vendors place inside 0x4200_0000 (SAMD51 QSPI/SERCOM), and the STM32 timer's scheduled compare pend lands on the latch tick like the walk. JIT is opt-in (`cortex_m_jit_enabled` default off); interpreter path unchanged, JIT-on vs off lockstep in cortex_m_jit_nrf_differential; both fixes pinned by bus-level gates. No silicon capture pins JIT.
@@ -2856,7 +2994,26 @@ boards:
     # this board's own conformance/oracle sim arms and gpio's own suites.
     # This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     drift_ack: 2026-09-01
-    drift_ack_digest: 5a3b6b0d368430436b9785caa501091d7fb52d5b434d71c69904006a415e530f
+    # 2026-09-17 (perf/bus-scheduler-pass): per-instruction COST only, no model
+    # change. Three edits: `CortexM::step_execute` asks "is anything pending"
+    # before ranking exceptions (the ranking it now skips returned `None`, and
+    # the `exception_num != 0` arm already made the block dead); `SystemBus`
+    # negative-caches the hole between `extra_mem` windows, which an access
+    # wholly inside provably misses; and `RiscV` remembers an aligned fetch
+    # window base whose refill just failed instead of re-deriving the same
+    # failure every instruction (the fetch still falls through to
+    # `bus.read_u32`, the path it was already taking). No register map, reset
+    # value, timing or IRQ route is touched.
+    # EVIDENCE: seven runs of five firmwares at --max-steps 5000000 (nrf52840
+    # Zephyr step+batch, nrf52840 tier1, stm32f405 tier1 step+batch, esp32c3
+    # tier1, esp32c3 demo) hash 21/21 IDENTICAL over stdout, the cycle-stamped
+    # `--bus-trace-out` event list and the `[batched]` summary, against a
+    # binary built from 80c01390d. The digest moves because it hashes whole
+    # files. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
+    drift_ack: 2026-09-17
+    # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
+    # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
+    drift_ack_digest: b297a1f9a104ca5fc39f8ff41b10de900fa9ef23bc61127995d956248e9494e5
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -2924,6 +3081,15 @@ boards:
     # i2c_component, i2c_mux_tca9548a and i2c_factory_kit_coverage, all green.
     # This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     drift_ack: 2026-09-15
+    # 2026-09-17 (#1142): no model change. The inline `#[cfg(test)] mod tests`
+    # blocks were moved out of 13 model source files (spi.rs, i2c.rs, tick.rs,
+    # cortex_m.rs, esp32c3/{i2c,bt,virtual_wifi}.rs, esp32s3/gdma.rs, ...) into
+    # sibling `*_tests.rs` files. Production code is byte-identical apart from the
+    # removed test block and a 3-line `#[path]` module declaration; per-file
+    # `#[test]` counts before and after match exactly. The digest moves because
+    # it hashes the whole file. This is an ACK, NOT A CAPTURE — a live
+    # re-capture is still owed.
+    drift_ack: 2026-09-17
   - id: stm32f103
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
     # 2026-09-16 (#1125): Cortex-M JIT follow-ups (block chaining, floor 4, IT-predicated ALU, VFP S-ALU, VLDR/VSTR, LDR.W PC), plus two model fixes that ride along: the bit-band alias decode no longer swallows peripherals vendors place inside 0x4200_0000 (SAMD51 QSPI/SERCOM), and the STM32 timer's scheduled compare pend lands on the latch tick like the walk. JIT is opt-in (`cortex_m_jit_enabled` default off); interpreter path unchanged, JIT-on vs off lockstep in cortex_m_jit_nrf_differential; both fixes pinned by bus-level gates. No silicon capture pins JIT.
@@ -3350,7 +3516,26 @@ boards:
     # Offline session_can (5) and fdcan (4) tests pass. No physical-board
     # re-capture was performed. Keep the existing ack date and deadline;
     # this digest records the reviewed source, not new silicon evidence.
-    drift_ack_digest: 7bb5ccdcae524cec849ec5166ba69de9d42c9eccc8cbd730b475f95fc16ca35e
+    # 2026-09-17 (perf/bus-scheduler-pass): per-instruction COST only, no model
+    # change. Three edits: `CortexM::step_execute` asks "is anything pending"
+    # before ranking exceptions (the ranking it now skips returned `None`, and
+    # the `exception_num != 0` arm already made the block dead); `SystemBus`
+    # negative-caches the hole between `extra_mem` windows, which an access
+    # wholly inside provably misses; and `RiscV` remembers an aligned fetch
+    # window base whose refill just failed instead of re-deriving the same
+    # failure every instruction (the fetch still falls through to
+    # `bus.read_u32`, the path it was already taking). No register map, reset
+    # value, timing or IRQ route is touched.
+    # EVIDENCE: seven runs of five firmwares at --max-steps 5000000 (nrf52840
+    # Zephyr step+batch, nrf52840 tier1, stm32f405 tier1 step+batch, esp32c3
+    # tier1, esp32c3 demo) hash 21/21 IDENTICAL over stdout, the cycle-stamped
+    # `--bus-trace-out` event list and the `[batched]` summary, against a
+    # binary built from 80c01390d. The digest moves because it hashes whole
+    # files. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
+    drift_ack: 2026-09-17
+    # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
+    # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
+    drift_ack_digest: 902a8ec35c6e9194949a287723595653fb0a6ddf8e52de6c2dc50d485abe97f7
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -3452,6 +3637,15 @@ boards:
     # i2c_component, i2c_mux_tca9548a and i2c_factory_kit_coverage, all green.
     # This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     drift_ack: 2026-09-15
+    # 2026-09-17 (#1142): no model change. The inline `#[cfg(test)] mod tests`
+    # blocks were moved out of 13 model source files (spi.rs, i2c.rs, tick.rs,
+    # cortex_m.rs, esp32c3/{i2c,bt,virtual_wifi}.rs, esp32s3/gdma.rs, ...) into
+    # sibling `*_tests.rs` files. Production code is byte-identical apart from the
+    # removed test block and a 3-line `#[path]` module declaration; per-file
+    # `#[test]` counts before and after match exactly. The digest moves because
+    # it hashes the whole file. This is an ACK, NOT A CAPTURE — a live
+    # re-capture is still owed.
+    drift_ack: 2026-09-17
   - id: stm32f407
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
     # 2026-09-16 (#1125): Cortex-M JIT follow-ups (block chaining, floor 4, IT-predicated ALU, VFP S-ALU, VLDR/VSTR, LDR.W PC), plus two model fixes that ride along: the bit-band alias decode no longer swallows peripherals vendors place inside 0x4200_0000 (SAMD51 QSPI/SERCOM), and the STM32 timer's scheduled compare pend lands on the latch tick like the walk. JIT is opt-in (`cortex_m_jit_enabled` default off); interpreter path unchanged, JIT-on vs off lockstep in cortex_m_jit_nrf_differential; both fixes pinned by bus-level gates. No silicon capture pins JIT.
@@ -3842,7 +4036,26 @@ boards:
     # this board's own conformance/oracle sim arms and gpio's own suites.
     # This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     drift_ack: 2026-09-01
-    drift_ack_digest: efb1fe8bb938fd0a635b9ede864fbf3798ff5d6527ce5783cb99d42e0616c2fb
+    # 2026-09-17 (perf/bus-scheduler-pass): per-instruction COST only, no model
+    # change. Three edits: `CortexM::step_execute` asks "is anything pending"
+    # before ranking exceptions (the ranking it now skips returned `None`, and
+    # the `exception_num != 0` arm already made the block dead); `SystemBus`
+    # negative-caches the hole between `extra_mem` windows, which an access
+    # wholly inside provably misses; and `RiscV` remembers an aligned fetch
+    # window base whose refill just failed instead of re-deriving the same
+    # failure every instruction (the fetch still falls through to
+    # `bus.read_u32`, the path it was already taking). No register map, reset
+    # value, timing or IRQ route is touched.
+    # EVIDENCE: seven runs of five firmwares at --max-steps 5000000 (nrf52840
+    # Zephyr step+batch, nrf52840 tier1, stm32f405 tier1 step+batch, esp32c3
+    # tier1, esp32c3 demo) hash 21/21 IDENTICAL over stdout, the cycle-stamped
+    # `--bus-trace-out` event list and the `[batched]` summary, against a
+    # binary built from 80c01390d. The digest moves because it hashes whole
+    # files. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
+    drift_ack: 2026-09-17
+    # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
+    # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
+    drift_ack_digest: 0917078401278d375b5f0c8a569a7e18918187bc0939c974411d0cd31fa0bf6a
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     # 2026-08-12: chip yaml adds bxcan1 (type bxcan @ 0x40006400, APB1ENR bit 25) for
     # Arduino matrix L8 loopback. Existing BxCan model; no register-map change to
@@ -3913,7 +4126,17 @@ boards:
     # i2c_component, i2c_mux_tca9548a and i2c_factory_kit_coverage, all green.
     # This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     drift_ack: 2026-09-15
+    # 2026-09-17 (#1142): no model change. The inline `#[cfg(test)] mod tests`
+    # blocks were moved out of 13 model source files (spi.rs, i2c.rs, tick.rs,
+    # cortex_m.rs, esp32c3/{i2c,bt,virtual_wifi}.rs, esp32s3/gdma.rs, ...) into
+    # sibling `*_tests.rs` files. Production code is byte-identical apart from the
+    # removed test block and a 3-line `#[path]` module declaration; per-file
+    # `#[test]` counts before and after match exactly. The digest moves because
+    # it hashes the whole file. This is an ACK, NOT A CAPTURE — a live
+    # re-capture is still owed.
+    drift_ack: 2026-09-17
   - id: esp32s3
+    # 2026-09-16 (#jit-xtensa-browser): generic Xtensa BB emit core + browser adapter. `xtensa_lx7.rs` gains only `invalidate_for_data_write` — a public forwarder to the existing `maybe_invalidate_for_write` so JIT-committed stores run the same SMC invalidation the S8i/S32i interpreter arms run (no interpreter behavior change; the existing sub-word rules are reused). Hot-block dispatch and every interpreter arm are untouched; the new shapes are browser-only and refused when unsafe. Native interpreter-identity tests in `xtensa_jit/variable.rs`. No silicon capture pins the browser JIT.
     # 2026-09-15 (#1119): PeripheralConfig gained irq_controller (None). No silicon-visible behaviour change.
     doc: docs/boards/esp32s3.md
     chip: configs/chips/esp32s3.yaml
@@ -4339,6 +4562,15 @@ boards:
     # No silicon-anchored reset value is reachable from this: it changes when a level
     # is recomputed, never what the registers hold. This is an ack, not a capture.
     drift_ack: 2026-09-15
+    # 2026-09-17 (#1142): no model change. The inline `#[cfg(test)] mod tests`
+    # blocks were moved out of 13 model source files (spi.rs, i2c.rs, tick.rs,
+    # cortex_m.rs, esp32c3/{i2c,bt,virtual_wifi}.rs, esp32s3/gdma.rs, ...) into
+    # sibling `*_tests.rs` files. Production code is byte-identical apart from the
+    # removed test block and a 3-line `#[path]` module declaration; per-file
+    # `#[test]` counts before and after match exactly. The digest moves because
+    # it hashes the whole file. This is an ACK, NOT A CAPTURE — a live
+    # re-capture is still owed.
+    drift_ack: 2026-09-17
     # 2026-08-10: GP-SPI2 CPU W-buffer transactions now deliver MOSI bytes to
     # attached devices and return their MISO bytes; display D/C observes the S3
     # GPIO output; GPIO labels resolve against the S3 register bank. This is an
@@ -4435,7 +4667,7 @@ boards:
       # changes. Behaviour-preserving extraction, not a model correction —
       # `pr-workspace-tests` green on all shards is what exercises this peripheral,
       # so nothing the silicon capture asserts changed and the capture stands.
-    drift_ack_digest: 7501e03bc97d044a3a1039783958597969391a8f366beba905e7ae49df0d3970
+    drift_ack_digest: b3c30651c44678383db7a660b96a2c2331460e4b5cc845ce8086309b45ff091f
     models:
       - crates/core/src/cpu/xtensa_lx7.rs
       - crates/core/src/decoder/xtensa.rs

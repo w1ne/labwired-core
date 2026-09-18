@@ -163,6 +163,49 @@ impl SystemBus {
     /// drive DISJOINT pins, so merging their passes into one insertion-ordered
     /// pass leaves every register's final value unchanged. The HC-SR04 keeps its
     /// own `service_hcsr04` because it also rides the event-scheduler path.
+    /// **Tier-2 device pin drive.** Collect every declarative I²C / SPI device's
+    /// queued `(role, level)` transitions and put them on their pads.
+    ///
+    /// Two phases on purpose. Phase one walks the controllers, which each hand
+    /// back what their attached devices queued; phase two writes the pads. They
+    /// cannot be one loop because both borrow the bus — and keeping them apart
+    /// is also what makes the pad write go through the ordinary
+    /// [`DevicePins`](crate::bus::DevicePins) methods rather than a second,
+    /// wider path into the peripheral table.
+    ///
+    /// Early-outs on a bus with no such device, which is almost every bus.
+    pub(crate) fn service_device_pin_drives(&mut self) {
+        if self.device_pin_pads.is_empty() {
+            return;
+        }
+        let mut drives: Vec<(String, String, bool)> = Vec::new();
+        for entry in self.peripherals.iter_mut() {
+            entry.dev.drain_attached_pin_drives(&mut drives);
+        }
+        if drives.is_empty() {
+            return;
+        }
+        for (device_id, role, level) in drives {
+            let Some(pad) = self
+                .device_pin_pads
+                .iter()
+                .find(|p| p.device_id == device_id && p.role == role)
+                .cloned()
+            else {
+                // A role with no pad is a part wired for an interrupt line the
+                // placement did not connect. That is a real board, not a bug:
+                // the rule still ran, the line simply goes nowhere.
+                continue;
+            };
+            // ⚠️ BOTH SEAMS — see `rotary_encoder.rs`. `drive_idr_bit` lands
+            // only where a store to the input register lands (STM32);
+            // `drive_input_bit` is the external-world seam the read-only-IN
+            // models (EFR32, SAM, ESP32-C3) actually sample.
+            let _ = crate::bus::DevicePins::drive_input_bit(self, pad.addr, pad.bit, level);
+            crate::bus::DevicePins::drive_idr_bit(self, pad.addr, pad.bit, level);
+        }
+    }
+
     pub(crate) fn service_gpio_devices(&mut self) {
         if self.gpio_devices.is_empty() {
             return;
@@ -171,6 +214,46 @@ impl SystemBus {
         let mut devices = std::mem::take(&mut self.gpio_devices);
         for device in &mut devices {
             device.service(self, now);
+        }
+        self.gpio_devices = devices;
+    }
+
+    /// Write-hook for a bus-resident device that is clocked by FIRMWARE rather
+    /// than by the tick: after an MMIO write to peripheral `idx`, service every
+    /// device that named an output-register address this peripheral hosts.
+    ///
+    /// This is the generic form of `maybe_clock_hx711` / `maybe_clock_tm1637` —
+    /// each of those was one part's private copy of this hook, with its own
+    /// `Vec` on the bus and its own state machine. See
+    /// [`BusResidentDevice::edge_service_addrs`] for why a tick-only pass loses
+    /// edges: the device sees the pad after firmware has already moved it back.
+    ///
+    /// The pads a device DRIVES still go out through the narrowed
+    /// [`DevicePins`](crate::bus::DevicePins) port, exactly as they do on the
+    /// tick pass — this changes WHEN `service` runs, not what it may touch.
+    pub(crate) fn maybe_service_edge_driven_gpio_devices(&mut self, idx: usize) {
+        if self.gpio_devices.is_empty() {
+            return;
+        }
+        // Cheap gate: almost every bus has no edge-driven device at all, and
+        // this runs on every MMIO write.
+        if !self
+            .gpio_devices
+            .iter()
+            .any(|d| !d.edge_service_addrs().is_empty())
+        {
+            return;
+        }
+        let now = self.current_cycle;
+        let mut devices = std::mem::take(&mut self.gpio_devices);
+        for device in &mut devices {
+            let hosted = device
+                .edge_service_addrs()
+                .iter()
+                .any(|a| self.find_peripheral_index(*a) == Some(idx));
+            if hosted {
+                device.service(self, now);
+            }
         }
         self.gpio_devices = devices;
     }
@@ -346,59 +429,6 @@ impl SystemBus {
                 .unwrap_or(true);
             self.tm1637[i].observe_lines(clk, dio);
         }
-    }
-
-    /// Write-hook for HX711 SCK edges: re-read SCK ODR, advance the bit-bang
-    /// state machine, and drive DT onto the MCU IDR when the level changes.
-    pub(crate) fn maybe_clock_hx711(&mut self, idx: usize) {
-        if self.hx711.is_empty() {
-            return;
-        }
-        for i in 0..self.hx711.len() {
-            let sck_idx = match self.hx711[i].sck_peripheral_idx() {
-                Some(t) => t,
-                None => {
-                    let addr = self.hx711[i].sck_odr_addr;
-                    match self.find_peripheral_index(addr) {
-                        Some(t) => {
-                            self.hx711[i].set_sck_peripheral_idx(t);
-                            t
-                        }
-                        None => continue,
-                    }
-                }
-            };
-            if sck_idx != idx {
-                continue;
-            }
-            let sck_addr = self.hx711[i].sck_odr_addr;
-            let sck_bit = self.hx711[i].sck_bit;
-            let sck = self
-                .read_u32(sck_addr)
-                .map(|v| (v >> sck_bit) & 1 != 0)
-                .unwrap_or(false);
-            self.hx711[i].observe_sck(sck);
-            self.drive_hx711_dt(i);
-        }
-    }
-
-    fn drive_hx711_dt(&mut self, i: usize) {
-        let dt_high = self.hx711[i].dt_high();
-        if self.hx711[i].last_dt_high() == Some(dt_high) {
-            return;
-        }
-        let dt_addr = self.hx711[i].dt_idr_addr;
-        let dt_bit = self.hx711[i].dt_bit;
-        let idr = self.read_u32(dt_addr).unwrap_or(0);
-        let new_idr = if dt_high {
-            idr | (1 << dt_bit)
-        } else {
-            idr & !(1 << dt_bit)
-        };
-        if new_idr != idr {
-            let _ = self.write_u32(dt_addr, new_idr);
-        }
-        self.hx711[i].set_last_dt_high(dt_high);
     }
 
     /// Write-hook sibling of [`maybe_clock_tm1637`](Self::maybe_clock_tm1637)

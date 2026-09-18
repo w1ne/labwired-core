@@ -11,6 +11,8 @@
 //! None` (auto-derive), prints the walk-forcing set and non-forcer blockers,
 //! and guards the green families (C3 / F103 / nRF / RP2040 / H563 / S3).
 
+mod common;
+use common::root;
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 #[cfg(feature = "event-scheduler")]
@@ -18,14 +20,6 @@ use labwired_core::bus::RECOMMENDED_TICK_INTERVAL;
 use labwired_core::peripherals::components::IolinkMaster;
 use labwired_core::peripherals::flash::Flash;
 use labwired_core::peripherals::uart::Uart;
-use std::path::PathBuf;
-
-fn root(rel: &str) -> PathBuf {
-    let mut p = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    p.push("../..");
-    p.push(rel);
-    p
-}
 
 /// Walk-forcers: peripherals that still pin the legacy walk under derivation.
 #[derive(Clone)]

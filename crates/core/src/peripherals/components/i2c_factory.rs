@@ -255,7 +255,14 @@ fn build_declarative_i2c_device(
     match crate::peripherals::components::declarative_i2c::GenericI2cDevice::from_yaml(
         yaml, address,
     ) {
-        Ok(dev) => Some(Box::new(dev)),
+        Ok(mut dev) => {
+            // The same `config:` seeding the kit attach does. Without it the
+            // same descriptor would boot at two different starting values
+            // depending on whether the MCU's controller went through the kit
+            // registry or through this factory.
+            dev.seed_from_config(|key| config.get(key).and_then(|v| v.as_f64()));
+            Some(Box::new(dev))
+        }
         Err(e) => {
             eprintln!("declarative i2c device '{type_str}': {e}");
             None
@@ -274,57 +281,10 @@ pub fn build_i2c_device(
         // hand-written structs survive only as the byte-parity oracles.
         // The VCNL4010 joins them: its whole model is a register map plus two
         // input channels, so there is nothing for a hand-written struct to add.
-        "tmp102" | "pca9685" | "vcnl4010" | "vl53l0x" => {
-            build_declarative_i2c_device(&type_str.to_ascii_lowercase(), config)
-        }
-        "tmp117" => {
-            use crate::peripherals::components::tmp117::{Tmp117, TMP117_ADDR};
-            let address = config
-                .get("i2c_address")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(TMP117_ADDR as u64) as u8;
-            Some(Box::new(Tmp117::new(address)))
-        }
-        "mpu6050" => {
-            let address = config
-                .get("i2c_address")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0x68) as u8;
-            Some(Box::new(crate::peripherals::components::Mpu6050::new(
-                address,
-            )))
-        }
-        "bmi270" => {
-            use crate::peripherals::components::bmi270::{Bmi270, BMI270_ADDR};
-            let address = config
-                .get("i2c_address")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(BMI270_ADDR as u64) as u8;
-            Some(Box::new(Bmi270::new(address)))
-        }
-        "fxos8700" => {
-            let address = config
-                .get("i2c_address")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0x1f) as u8;
-            Some(Box::new(crate::peripherals::components::Fxos8700::new(
-                address,
-            )))
-        }
+        "tmp102" | "pca9685" | "vcnl4010" | "vl53l0x" | "tmp117" | "ina219" | "ads1115"
+        | "mma8451q" | "fxos8700" | "mlx90614" | "ds3231" | "adxl345" | "mpu6050" | "bmi270"
+        | "cap1188" => build_declarative_i2c_device(&type_str.to_ascii_lowercase(), config),
         "aht20" => Some(Box::new(crate::peripherals::components::Aht20::new())),
-        // INA219 is also a PeripheralKit; keep a factory arm so nRF TWIM /
-        // serial-instance (and any path that only calls build_external_i2c_device)
-        // attach the slave — kit-only types were marked "already attached" and
-        // never reached the kit pass (matrix L3 nRF ANACK).
-        "ina219" => {
-            let address = config
-                .get("i2c_address")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0x40) as u8;
-            Some(Box::new(
-                crate::peripherals::components::ina219::Ina219::new(address),
-            ))
-        }
         // ── Smart-ring sensor/actuator set ──────────────────────────────────
         "max30102" => {
             use crate::peripherals::components::max30102::{Max30102, MAX30102_ADDR};
@@ -343,14 +303,6 @@ pub fn build_i2c_device(
                 dev.set_transaction_advance(on);
             }
             Some(Box::new(dev))
-        }
-        "cap1188" => {
-            use crate::peripherals::components::cap1188::{Cap1188, CAP1188_ADDR};
-            let address = config
-                .get("i2c_address")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(CAP1188_ADDR as u64) as u8;
-            Some(Box::new(Cap1188::new(address)))
         }
         "drv2605" | "drv2605l" => {
             use crate::peripherals::components::drv2605::{Drv2605, DRV2605_ADDR};

@@ -103,8 +103,16 @@ use std::path::{Path, PathBuf};
 /// 199 → 202 / 214 → 217: SPI edge-sampling tests inspect the attached
 /// `EdgeSlave`/`EdgeDev` (latched MOSI bytes / call count). Production path
 /// does not grow a downcast; these three are test-only.
+/// 213 → 210: the two tri-colour e-papers became YAML `display` descriptors,
+/// so the CLI's `snapshot` and `test` commands stopped reaching for
+/// `Ssd1680Tricolor290` and then `Uc8151dTricolor290` and now take ONE arm on
+/// `GenericDisplay`, reading planes by name through `GenericDisplay::planes`.
+/// The seven e2e / snapshot / attach tests that reached a panel also collapsed
+/// onto that one type. This is the row going the right way for the right
+/// reason: the reach that remains is one per PRIMITIVE, not one per part, so
+/// the next panel adds none.
 ///
-/// 202 → 203 / 217 → 218: SEGGER RTT host model wiring. `SystemBus` gains
+/// 199 → 200 / 210 → 211: SEGGER RTT host model wiring. `SystemBus` gains
 /// `attach_rtt_sink` / `segger_rtt_status` (`bus::construct`); the status walk
 /// is one `as_any()` + `downcast_ref` reach for the `SeggerRtt`
 /// pseudo-peripheral, which is attached through `add_peripheral` and shares no
@@ -112,8 +120,8 @@ use std::path::{Path, PathBuf};
 /// uses `as_any_mut` / `downcast_mut` and adds no counted site. Retiring the
 /// reach means a capability trait over both methods, which is row 6.5's work,
 /// not a rider on the RTT feature.
-const MAX_AS_ANY: usize = 203;
-const MAX_DOWNCAST_REF: usize = 218;
+const MAX_AS_ANY: usize = 200;
+const MAX_DOWNCAST_REF: usize = 211;
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

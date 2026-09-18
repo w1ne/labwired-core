@@ -11,6 +11,8 @@
 //!   * [`bb_multi`] — wasmtime adapter for the multi-op hot block.
 //!     Feature-gated on `jit` (only built when wasmtime is in the
 //!     dep graph).
+//!   * [`variable`] — wasmtime adapter for runtime-emitted generic
+//!     blocks (Phase 4.3's 16-register ABI). Also `jit`-gated.
 //!   * [`windowed_call`] — wasmtime adapter for the CALL8 windowed
 //!     block. Also `jit`-gated.
 //!
@@ -43,6 +45,8 @@ pub mod emit_core;
 #[cfg(feature = "jit")]
 mod bb_multi;
 #[cfg(feature = "jit")]
+mod variable;
+#[cfg(feature = "jit")]
 mod windowed_call;
 
 #[cfg(feature = "jit")]
@@ -51,6 +55,8 @@ pub use bb_multi::{
     EXIT_HOST_BUS_ERROR as MULTI_EXIT_HOST_BUS_ERROR, HOT_BB_END, HOT_BB_INSTR_COUNT,
     HOT_BB_L32R_ADDR, HOT_BB_PC,
 };
+#[cfg(feature = "jit")]
+pub use variable::{VariableBlock, VariableResult};
 #[cfg(feature = "jit")]
 pub use windowed_call::{
     WindowedCallBlock, WindowedCallResult, EXIT_TAKEN as WINDOWED_EXIT_TAKEN, EXIT_WINDOWED_REFUSE,

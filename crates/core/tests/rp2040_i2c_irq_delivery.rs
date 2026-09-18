@@ -36,6 +36,8 @@
 
 #![cfg(feature = "event-scheduler")]
 
+mod common;
+use common::root;
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::{SystemBus, RECOMMENDED_TICK_INTERVAL};
 use labwired_core::snapshot::{ArmCpuSnapshot, CpuSnapshot};
@@ -44,7 +46,6 @@ use labwired_core::{
     AdvanceRequest, BreakpointPolicy, Bus, Cpu, Machine, SimResult, SimulationConfig,
     SimulationObserver,
 };
-use std::path::PathBuf;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
@@ -58,12 +59,6 @@ const INTR_TX_EMPTY: u32 = 1 << 4;
 
 /// RP2040 datasheet §2.3.2 — I2C0_IRQ = 23.
 const I2C0_IRQ: u32 = 23;
-
-fn root(rel: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join(rel)
-}
 
 /// Minimal cycle-advancing CPU: one cycle per step, so `Machine` drains the
 /// event scheduler without real Thumb firmware. Same stand-in as

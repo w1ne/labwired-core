@@ -325,7 +325,7 @@ directly, without firmware, for probing a manifest.
 The browser cannot spawn a process, so `external_process` — and with it
 ngspice — has no counterpart there. `labwired_core::analog` is a small
 deterministic MNA transient solver compiled into the engine itself: it runs in
-the browser, runs natively, and adds no dependency to either.
+the browser, runs natively, and adds one dependency (`libm`) to either.
 
 A manifest switches engines by changing one line. The `netlist`, `vdd`,
 `probes` and `sources` config keys are spelled exactly as the ngspice wrapper
@@ -359,9 +359,12 @@ the same circuit and the same routing as `system.yaml`.
 | Resistor | `R<name> n1 n2 <value>` |
 | Capacitor | `C<name> n1 n2 <value> [ic=<v>]` |
 | Inductor | `L<name> n1 n2 <value> [ic=<i>]` |
-| Voltage source | `V<name> n+ n- dc <value>` |
-| Current source | `I<name> n+ n- dc <value>` |
+| Voltage source | `V<name> n+ n- <source>` |
+| Current source | `I<name> n+ n- <source>` |
 | Switch | `S<name> n1 n2 <ctrl> ron=<r> roff=<r>` |
+| Diode | `D<name> n+ n- <model>` |
+| BJT | `Q<name> nc nb ne <model>` |
+| MOSFET | `M<name> nd ng ns nb <model> [w=<m>] [l=<m>]` |
 
 Plus `*` comment lines, `;` / `$` trailing comments, `.end`, and
 `.ic V(node)=<v>`. Node `0` and `gnd` are ground. Values take the usual SPICE
@@ -372,6 +375,78 @@ an element line is the worst thing a netlist parser can do.
 
 A switch's `<ctrl>` is the name of a routed boolean input, not a circuit node,
 so it needs no `sources:` entry.
+
+`.options`, `.tran`, `.op`, `.print`, `.plot`, `.save`, `.probe`, `.width`,
+`.temp`, `.nodeset`, `.title` and a whole `.control` … `.endc` block are
+accepted and ignored, so one deck can be handed to this engine and to ngspice
+unchanged. This engine takes its run length, step and outputs from the
+manifest. Any other directive is still a hard error naming the ngspice adapter,
+so a typo cannot quietly drop an element line.
+
+### Independent sources
+
+`<source>` is one of:
+
+| Form | Meaning |
+|---|---|
+| `[dc] <value>` | a constant |
+| `SIN(vo va freq [td [theta]])` | `vo + va·exp(−(t−td)·theta)·sin(2π·freq·(t−td))` after `td`, `vo` before |
+| `PULSE(v1 v2 [td [tr [tf [pw [per]]]]])` | a trapezoidal pulse train |
+
+Sources are evaluated at the END of each internal step, which is the point the
+companion models are written about, and is what SPICE does. The operating point
+uses the value at `t = 0`.
+
+A source that carries a function is driven by the clock, so it cannot also be a
+routed input: a `sources:` entry pointing at one is a config error rather than
+a race between two owners. Give that element a plain `dc` value, or route the
+input at a different element.
+
+### Semiconductor models
+
+```text
+.model <name> D    (IS=<a> N=<n> RS=<ohms>)
+.model <name> NPN  (IS=<a> BF=<n> BR=<n> NF=<n> NR=<n>)
+.model <name> PNP  (...)
+.model <name> NMOS (VTO=<v> KP=<a/v2> LAMBDA=<1/v> W=<m> L=<m>)
+.model <name> PMOS (...)      ; VTO is negative, as in ngspice
+```
+
+The parentheses are optional, parameters may be separated by spaces or commas,
+and a card may be written after the elements that use it. A parameter omitted
+from a card takes **ngspice's** default, so a deck written out in full means the
+same thing to both engines.
+
+Parameters this engine has no term for — every capacitance (`CJO`, `CJE`,
+`CJC`, `TT`, `CGSO`…), every temperature coefficient, `VAF`, `IKF`, `GAMMA`,
+`PHI`, `BV` — are **accepted and ignored**, so a vendor card pasted off a
+datasheet runs with the large-signal DC behaviour it describes. A MOSFET
+`LEVEL` other than 1 is the one exception and is refused by name: solving a
+BSIM card with Shichman–Hodges would be wrong by orders of magnitude rather
+than by a capacitance.
+
+Five built-in cards need no `.model` line at all, which is what a catalog part
+emits: `D` (1N4148-class, `IS=2.52n N=1.752`), `NPN`, `PNP` (β = 100), `NMOS`,
+`PMOS` (`VTO=±1 V`, `KP=20u`, `LAMBDA=0.02`). Those are this engine's
+convenience values, not ngspice's parameter defaults.
+
+**What is modelled:** Shockley diode with `RS` and SPICE's `GMIN`;
+Ebers–Moll (transport-form Gummel–Poon with `VAF`/`VAR`/`IKF`/`IKR` infinite
+and no ohmic terminal resistances); Shichman–Hodges MOSFET level 1 with channel
+-length modulation, both channel polarities and reverse mode. Every parameter is
+taken at 300.00 K; there is no temperature model, which is why decks handed to
+ngspice pin `temp`/`tnom` to 26.85 °C.
+
+**What is not, in this first version:** device capacitances, and therefore
+anything whose behaviour comes from stored device charge — reverse recovery, a
+Miller-limited edge, a charge pump. There is no Early effect (output conductance
+in the active region is `GMIN`, not `Ic/VAF`) and no body effect (`VTH` is
+`VTO`; the bulk terminal is required by the syntax and tied through `GMIN`, but
+does not shift the threshold). A circuit that needs any of those belongs on
+`adapter: external_process` with `tools/cosim/labwired_ngspice.py`.
+
+`RS > 0` on a diode adds one internal node named `<element>#internal`, exactly
+as SPICE does. It counts against the 64-unknown ceiling and can be probed.
 
 ### Solver
 
@@ -398,6 +473,22 @@ so it needs no `sources:` entry.
   GPIO at 0 before the firmware has done anything.
 - `CosimStep::time_ns` is the END of the interval being simulated, matching
   `tools/cosim/labwired_ngspice.py`.
+- A circuit holding a diode, BJT or MOSFET is solved by Newton–Raphson inside
+  each step: the device stamps are re-linearised, re-factorised and re-solved
+  until every unknown stops moving, damped by SPICE's `DEVpnjlim`, `DEVfetlim`
+  and `DEVlimvds`. The limiters change the path, never the point: the converged
+  answer is bit-identical whatever state the iteration started from. Running out
+  of iterations is a coded error naming the step, the time and the unknown that
+  was still moving — never a `NaN` written into the trace.
+- A circuit with **no** nonlinear element takes the pre-Newton code path
+  unchanged, down to the floating-point operation order.
+  `crates/core/tests/analog_linear_golden.rs` pins that against bit patterns
+  captured from the engine before any of this existed.
+- Agreement with ngspice on nonlinear decks is measured, not asserted:
+  `crates/cli/tests/analog_vs_ngspice_differential.rs` hands the same SPICE
+  text to both engines for a half-wave rectifier, a common-emitter amplifier
+  and an NMOS inverter, and compares every sample. Measured worst
+  disagreement: 2.5e-3 %, 2.6e-5 % and 1.0e-6 % of full scale.
 - Deterministic: `f64` only, `Vec` indices in the hot path, `BTreeMap` for
   names, no threads and no wall clock.
 

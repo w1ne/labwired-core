@@ -26,7 +26,8 @@
 
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
-use labwired_core::peripherals::components::{Adxl345, GenericSpiDevice};
+use labwired_core::peripherals::components::declarative_i2c::GenericI2cDevice;
+use labwired_core::peripherals::components::GenericSpiDevice;
 use labwired_core::peripherals::i2c::I2cDevice;
 use labwired_core::peripherals::spi::SpiDevice;
 use std::collections::BTreeMap;
@@ -179,7 +180,14 @@ impl Case {
                 });
                 bus.attach_i2c_slave_with_route(
                     self.controller,
-                    Box::new(Adxl345::new(*address)),
+                    Box::new(
+                        GenericI2cDevice::from_yaml(
+                            labwired_config::embedded_device_yaml("adxl345")
+                                .expect("adxl345 descriptor embedded"),
+                            *address,
+                        )
+                        .expect("adxl345.yaml is a valid declarative i2c descriptor"),
+                    ),
                     route.as_ref(),
                 )
                 .unwrap_or_else(|e| panic!("{}: attach ADXL345: {e}", self.chip));
@@ -217,8 +225,9 @@ impl Case {
             Attach::I2cAdxl345 { .. } => with_adxl345(bus, |dev| {
                 // DATAZ0/DATAZ1 (0x36/0x37), little-endian, 256 LSB/g in the
                 // full-resolution default the model boots in.
-                dev.stop(); // fresh transaction: reset the register-pointer phase
+                dev.start(); // fresh transaction: reset the register-pointer phase
                 dev.write(0x36);
+                dev.start();
                 let lo = dev.read() as u16;
                 let hi = dev.read() as u16;
                 (((hi << 8) | lo) as i16) as f64 / 256.0
@@ -242,7 +251,7 @@ impl Case {
 /// Enumerate every attached I²C slave across all controller families and hand
 /// the first ADXL345 to `f`. Panics when none is found — a silent miss here
 /// would make every assertion below vacuous.
-fn with_adxl345<R>(bus: &mut SystemBus, f: impl FnOnce(&mut Adxl345) -> R) -> R {
+fn with_adxl345<R>(bus: &mut SystemBus, f: impl FnOnce(&mut GenericI2cDevice) -> R) -> R {
     use labwired_core::peripherals::esp32c3::i2c::Esp32c3I2c;
     use labwired_core::peripherals::esp32s3::i2c::Esp32s3I2c;
     use labwired_core::peripherals::i2c::I2c;
@@ -256,33 +265,48 @@ fn with_adxl345<R>(bus: &mut SystemBus, f: impl FnOnce(&mut Adxl345) -> R) -> R 
         if let Some(c) = any.downcast_ref::<I2c>() {
             for cell in c.attached_devices() {
                 let mut dev = cell.borrow_mut();
-                if let Some(a) = dev.as_any_mut().and_then(|a| a.downcast_mut::<Adxl345>()) {
+                if let Some(a) = dev
+                    .as_any_mut()
+                    .and_then(|a| a.downcast_mut::<GenericI2cDevice>())
+                {
                     return f(a);
                 }
             }
         } else if let Some(c) = any.downcast_mut::<Esp32c3I2c>() {
             for slave in c.attached_slaves_mut() {
-                if let Some(a) = slave.as_any_mut().and_then(|a| a.downcast_mut::<Adxl345>()) {
+                if let Some(a) = slave
+                    .as_any_mut()
+                    .and_then(|a| a.downcast_mut::<GenericI2cDevice>())
+                {
                     return f(a);
                 }
             }
         } else if let Some(c) = any.downcast_mut::<Esp32s3I2c>() {
             for slave in c.attached_slaves_mut() {
-                if let Some(a) = slave.as_any_mut().and_then(|a| a.downcast_mut::<Adxl345>()) {
+                if let Some(a) = slave
+                    .as_any_mut()
+                    .and_then(|a| a.downcast_mut::<GenericI2cDevice>())
+                {
                     return f(a);
                 }
             }
         } else if let Some(c) = any.downcast_ref::<Nrf52Twim>() {
             for cell in c.attached_devices() {
                 let mut dev = cell.borrow_mut();
-                if let Some(a) = dev.as_any_mut().and_then(|a| a.downcast_mut::<Adxl345>()) {
+                if let Some(a) = dev
+                    .as_any_mut()
+                    .and_then(|a| a.downcast_mut::<GenericI2cDevice>())
+                {
                     return f(a);
                 }
             }
         } else if let Some(c) = any.downcast_ref::<Nrf52SerialInstance>() {
             for cell in c.attached_i2c_devices() {
                 let mut dev = cell.borrow_mut();
-                if let Some(a) = dev.as_any_mut().and_then(|a| a.downcast_mut::<Adxl345>()) {
+                if let Some(a) = dev
+                    .as_any_mut()
+                    .and_then(|a| a.downcast_mut::<GenericI2cDevice>())
+                {
                     return f(a);
                 }
             }

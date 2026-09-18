@@ -1,0 +1,111 @@
+# ILI Technology ILI9341 — 240x320 RGB565 TFT over 4-wire SPI. Declarative
+# `display` primitive, the same engine that reads `st7789.yaml`; the two
+# controllers differ in their command tables and in nothing else.
+#
+# FRAMING comes from the D/C line ONLY, and `dc_pin` is REQUIRED. There is no
+# infer-framing-from-byte-values fallback, and the reason is measured rather
+# than stylistic: Adafruit's stock init table sends the undocumented power
+# control 0xCB with five parameters, an inferring model reads 0xCB as a
+# zero-parameter command, its SECOND PARAMETER 0x2C is then decoded as RAMWR,
+# and every remaining init byte -- SLPOUT and DISPON included -- is written into
+# frame memory as pixels. The panel never turns on and the firmware is blameless.
+#
+# A CS ASSERT DOES NOT CLOSE THE PIXEL STREAM here (`cs_select: keeps_stream`),
+# which is the opposite of the ST7789 model. A driver that chunks a large blit
+# releases CS between bursts and resumes where it stopped; closing the stream on
+# CS would paint the first chunk and drop the rest.
+#
+# NOT modelled, and deliberately NOT given parameter counts: gamma (0x26, 0xE0,
+# 0xE1), frame rate (0xB1), display function (0xB6), power and VCOM control
+# (0xC0, 0xC1, 0xC5, 0xC7), vertical scroll (0x37), sleep in/out (0x10/0x11) and
+# every undocumented vendor command a stock init sends. An unlisted opcode is
+# consumed and CLOSES the stream; its parameter bytes then arrive with nothing
+# open and are dropped -- which is what the controller does with them and why an
+# unmodelled init command cannot corrupt frame memory.
+#
+# Sleep is not modelled because the old model did not act on 0x11 either, and
+# inventing an `awake` flag here would report a panel dark that this model has
+# always reported lit. `artifact_meta` therefore publishes `display_on` and not
+# `lit` / `awake` -- see st7789.yaml, which does model sleep and publishes all
+# three.
+type: ili9341
+
+behavior:
+  primitive: display
+  display:
+    width: 240
+    height: 320
+    pixel_format: rgb565
+    artifact_format: rgb565_be
+    ram: { bytes: 153600, layout: row_major, stream: command }
+    dc: { source: pin, pin_role: dc, command_level: 0 }
+    addressing: { modes: [horizontal], default: horizontal }
+    cs_select: keeps_stream
+    # Section 8.2.29: MADCTL D7 = page address order (MY), D6 = column address
+    # order (MX), D5 = page/column exchange (MV). MV is what `setRotation(1)`
+    # and `(3)` set, and it changes what a legal column IS (0..239 when MV=0,
+    # 0..319 when MV=1), so it moves the window clamp as well as the pixel map.
+    # Ignoring it folded a correct landscape image back into portrait.
+    vars: { madctl: 0 }
+    orientation: { var: madctl, swap_bit: 0x20, mirror_x_bit: 0x40, mirror_y_bit: 0x80 }
+    supply_gated: true
+    artifact_meta: [display_on, powered, painted_bytes, total_bytes, top_colour, top_colour_pixels]
+    commands:
+      # 8.2.2 SWRESET: "the Frame Memory contents are unaffected by this
+      # command". Only the control state resets -- the window, MADCTL and
+      # DISPON. Clearing frame memory here would let firmware that relies on
+      # SWRESET to blank the screen pass in the twin and show stale pixels on
+      # silicon.
+      - { opcode: 0x01, name: SWRESET, do: [ { reset_control: true } ] }
+      - { opcode: 0x28, name: DISPOFF, do: [ { display_on: false } ] }
+      - { opcode: 0x29, name: DISPON,  do: [ { display_on: true } ] }
+      # 8.2.18 / 8.2.19: XS/XE and YS/YE, 16-bit big-endian, CLAMPED to the
+      # addressable extent in the CURRENT orientation.
+      - opcode: 0x2A
+        name: CASET
+        args: 4
+        do:
+          - set_window:
+              axis: col
+              start: { args: [0, 1], clamp_axis_max: true }
+              end: { args: [2, 3], clamp_axis_max: true }
+      - opcode: 0x2B
+        name: PASET
+        args: 4
+        do:
+          - set_window:
+              axis: row
+              start: { args: [0, 1], clamp_axis_max: true }
+              end: { args: [2, 3], clamp_axis_max: true }
+      # 8.2.20 RAMWR rewinds the counters to the window origin.
+      - { opcode: 0x2C, name: RAMWR, do: [ { ram_write: { reset_cursor: true } } ] }
+      - { opcode: 0x36, name: MADCTL, args: 1, do: [ { set_var: { name: madctl, value: { args: [0] } } } ] }
+      # COLMOD is consumed for its argument count and otherwise ignored: this
+      # model is RGB565 throughout, so honouring the 18-bit encoding would mean
+      # claiming a pixel depth the artifact does not carry.
+      - { opcode: 0x3A, name: COLMOD, args: 1 }
+      # 8.2.34 RAMWRCONT: resume WITHOUT rewinding, which is how drivers chunk a
+      # large blit across transactions. Undecoded once, so those pixel bytes
+      # were read as commands.
+      - { opcode: 0x3C, name: RAMWRCONT, do: [ { ram_write: { reset_cursor: false } } ] }
+
+metadata:
+  label: "ILI9341 TFT"
+  summary: "240×320 RGB565 SPI TFT display."
+  detail: "Implements the cmd / RAMWR SPI protocol against an in-memory framebuffer. The playground surfaces pixels through the simulator bridge so the host can render the display verbatim."
+  category: spi
+  config_keys:
+    - name: cs_pin
+      ty: str
+      doc: "Chip-select GPIO pin label (e.g. \"PA4\")."
+    - name: dc_pin
+      ty: str
+      doc: "Data/command GPIO pin (e.g. \"GPIO33\"). Required: this model has no infer-framing-from-byte-values fallback, because that inference decodes the second parameter of a stock init's 0xCB as RAMWR and writes the rest of the init sequence into the framebuffer as pixels."
+    - name: powered
+      ty: bool
+      doc: "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered part -- ABSENT MEANS POWERED, because curated labs state signals and leave the rails implicit. Only an explicit `false`, which the diagram compiler emits when it can see the supply pins are on no net, changes anything: the panel then ignores its bus entirely and reports `display_on: false`, `painted_bytes: 0`, which is what the part does on a bench."
+  labs:
+    - board_id: ili9341-tft-lab
+      chip: stm32f103
+      example_dir: ili9341-tft-lab
+      demo_elf: demo-ili9341-tft-lab.elf

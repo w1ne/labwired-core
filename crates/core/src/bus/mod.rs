@@ -47,7 +47,7 @@ pub(crate) use tick::reconcile_nvic_level;
 
 pub use can_devices::*;
 pub use observed_device::ObservedDevice;
-pub use resident_device::{BusResidentDevice, DevicePins};
+pub use resident_device::{BusResidentDevice, DevicePinPad, DevicePins};
 
 pub use bus_trace::{new_log, BusPayload, BusTraceEvent, BusTraceLog, I2cSym};
 pub use interrupt_fabric::{
@@ -342,6 +342,27 @@ pub struct SystemBus {
     /// clears `last_route`). Same staleness contract as `last_route`: cleared
     /// on range rebuild.
     last_gap: Cell<Option<(u64, u64)>>,
+    /// Negative cache for the linear `extra_mem` probe: a `[start, end)`
+    /// address gap proven to contain NO `extra_mem` window, paired with the
+    /// `extra_mem.len()` it was derived from.
+    ///
+    /// Every accessor walks `extra_mem` in registration order and takes the
+    /// first window covering the access. A chip with several CPU-visible
+    /// windows — the ESP32-C3 declares five (iram, drom, rtc_fast, rom,
+    /// rom_data) — pays a bounds test per window on every access that lands
+    /// somewhere else, and instruction fetch out of `flash` (0x4200_0000)
+    /// lands somewhere else on EVERY instruction: ~85 Ir per instruction of
+    /// inlined bounds maths and slice iteration inside `read_u32`
+    /// (docs/performance/2026-09-17-bus-scheduler-pass.md).
+    ///
+    /// The gap is derived exactly as `last_gap` is: after a probe misses, the
+    /// floor is the greatest END among windows starting at or below the
+    /// address, the ceiling the least BASE among those starting above it, so
+    /// no window covers any byte in between — an access wholly inside the gap
+    /// MUST miss. That is what makes the skip byte-identical rather than a
+    /// heuristic. The stored length invalidates the cache if a window is added
+    /// afterwards (`boot::esp32c3_rom` pushes two before the run starts).
+    extra_mem_gap: Cell<Option<(u64, u64, usize)>>,
     /// Cached index of the classic-ESP32 DPORT peripheral, if one is
     /// registered (`None` otherwise — the common case, incl. every ESP32-S3
     /// bus). Recomputed in `rebuild_peripheral_ranges` on each peripheral
@@ -470,6 +491,22 @@ pub struct SystemBus {
     ///
     /// [`service_gpio_devices`]: Self::service_gpio_devices
     pub gpio_devices: Vec<Box<dyn BusResidentDevice>>,
+    /// **Tier-2 device output pins**: `outputs:` roles of declarative I²C / SPI
+    /// parts, resolved to `(input-register address, bit)` at attach.
+    ///
+    /// An I²C slave lives inside its CONTROLLER and can reach no GPIO, so it
+    /// cannot drive its own INT line. It queues `(role, level)` instead
+    /// ([`I2cDevice::take_pin_drives`](crate::peripherals::i2c::I2cDevice::take_pin_drives)),
+    /// the per-tick pass [`service_device_pin_drives`] collects the queues
+    /// through the controllers, and this map says which pad each role is. No
+    /// engine type crosses into a device model and the narrow
+    /// [`DevicePins`] port is untouched — `tests/bus_resident_device_port.rs`
+    /// is what keeps that true.
+    ///
+    /// Empty by default → the pass early-outs and costs nothing.
+    ///
+    /// [`service_device_pin_drives`]: Self::service_device_pin_drives
+    pub(crate) device_pin_pads: Vec<DevicePinPad>,
     /// Off-chip models the bus holds ONLY so something can read them back — the
     /// WS2812 strip, the hobby servo, the STEP/DIR and unipolar steppers, the
     /// H-bridge channel, the parallel ILI9341 panel. Each is driven by a GPIO
@@ -490,7 +527,6 @@ pub struct SystemBus {
     pub tm1637: Vec<crate::peripherals::components::tm1637_7seg::Tm1637>,
     /// HX711 load-cell amps bit-banged over SCK/DT. Write-hook clocks data out;
     /// DT level is driven onto the MCU input register. Empty → zero cost.
-    pub hx711: Vec<crate::peripherals::components::hx711::Hx711>,
     /// Direct-drive single-digit 7-segment displays: eight segment GPIOs plus a
     /// common pin, no driver chip. Sampled by the GPIO write-hook
     /// (`maybe_sample_seven_segment`), which recomputes the lit segments

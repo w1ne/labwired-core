@@ -11,7 +11,9 @@
 // are now deleted (FIDELITY.md §A).
 
 use labwired_core::bus::SystemBus;
-use labwired_core::peripherals::components::{Ssd1680Tricolor290, Uc8151dTricolor290};
+use labwired_core::peripherals::components::{
+    ssd1680_tricolor_290, uc8151d_tricolor_290, GenericDisplay,
+};
 use labwired_core::peripherals::esp32::spi::Esp32Spi;
 use labwired_core::peripherals::spi::SpiDevice;
 use labwired_core::system::xtensa::configure_xtensa_esp32;
@@ -53,6 +55,14 @@ fn dat(bus: &mut SystemBus, b: u8) {
     spi3_xfer(bus, true, b);
 }
 
+/// Declare the D/C pad. The bus still has to RESOLVE it to a GPIO output
+/// register (see `attach_panel_with_dc`); declaring it alone leaves framing to
+/// the panel's own unwired fallback.
+fn with_dc(mut panel: GenericDisplay) -> GenericDisplay {
+    panel.set_dc_pin(DC_PIN);
+    panel
+}
+
 fn attach_panel_with_dc(bus: &mut SystemBus, panel: Box<dyn SpiDevice>) -> usize {
     let dc_src = SystemBus::resolve_pin_odr_pub(bus, DC_PIN)
         .expect("GPIO17 must resolve to the ESP32 GPIO OUT register");
@@ -71,10 +81,7 @@ fn attach_panel_with_dc(bus: &mut SystemBus, panel: Box<dyn SpiDevice>) -> usize
 fn uc8151d_paints_over_real_spi3_and_dc() {
     let mut bus = SystemBus::new();
     let _cpu = configure_xtensa_esp32(&mut bus);
-    let spi3_idx = attach_panel_with_dc(
-        &mut bus,
-        Box::new(Uc8151dTricolor290::new("GPIO5").with_dc_pin(DC_PIN)),
-    );
+    let spi3_idx = attach_panel_with_dc(&mut bus, Box::new(with_dc(uc8151d_tricolor_290("GPIO5"))));
 
     // Real GxEPD2 (GxEPD2_290_Z13c / UC8151D) init + refresh stream — same bytes
     // as uc8151d::tests::ereader_init_powers_panel_on, but clocked through SPI3.
@@ -94,10 +101,10 @@ fn uc8151d_paints_over_real_spi3_and_dc() {
     let panel = spi3.attached_devices[0]
         .as_any()
         .unwrap()
-        .downcast_ref::<Uc8151dTricolor290>()
+        .downcast_ref::<GenericDisplay>()
         .unwrap();
     assert!(
-        panel.power_on(),
+        panel.display_on(),
         "PON clocked over real SPI3 with DC-low framing must power the panel on"
     );
     assert_eq!(
@@ -111,10 +118,7 @@ fn uc8151d_paints_over_real_spi3_and_dc() {
 fn ssd1680_paints_over_real_spi3_and_dc() {
     let mut bus = SystemBus::new();
     let _cpu = configure_xtensa_esp32(&mut bus);
-    let spi3_idx = attach_panel_with_dc(
-        &mut bus,
-        Box::new(Ssd1680Tricolor290::new("GPIO5").with_dc_pin(DC_PIN)),
-    );
+    let spi3_idx = attach_panel_with_dc(&mut bus, Box::new(with_dc(ssd1680_tricolor_290("GPIO5"))));
 
     // Minimal SSD1680 (GxEPD2_290_T94) update: reset, data-entry, a 1-byte RAM
     // window, write one black byte, then 0x22/0x20 master activation = refresh.
@@ -145,7 +149,7 @@ fn ssd1680_paints_over_real_spi3_and_dc() {
     let panel = spi3.attached_devices[0]
         .as_any()
         .unwrap()
-        .downcast_ref::<Ssd1680Tricolor290>()
+        .downcast_ref::<GenericDisplay>()
         .unwrap();
     assert_eq!(
         panel.refresh_generation(),

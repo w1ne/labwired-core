@@ -1,0 +1,59 @@
+# Semtech SX1278 / Ai-Thinker RA-02 LoRa module — declarative SPI register
+# shell. Datasheet: SX1276/77/78/79 rev 7, §4.1 "SPI Interface".
+#
+# ⚠️ THERE IS NO RF AIR LINK, and there never was. The hand-written model this
+# replaces (`components/lora_sx1278.rs`, 138 lines) was a `[u8; 0x80]` behind an
+# address/data phase machine and one non-zero reset value, and this descriptor
+# is that and nothing more: no modulation, no packet engine, no FIFO, no DIO
+# interrupt pads, no RSSI. A driver that probes RegVersion and configures the
+# part sees what it saw before; a driver that transmits sees its own registers
+# and never a packet. That gap is REPORTED here rather than faked, because a
+# packet a model invents is worse than no packet at all — see
+# `docs/part-packs.md`, "The stream parts that did NOT become data".
+#
+# The wire framing (§4.1.2): CS↓, one address byte whose bit 7 selects the
+# direction (1 = WRITE on this part, the opposite of the ADXL345 convention)
+# and whose bits [6:0] carry the address, then the data byte.
+type: lora-sx1278
+
+behavior:
+  primitive: spi_device
+  spi:
+    # `auto_increment: false` — the OLD MODEL'S behaviour, kept so the port
+    # moves no byte a driver could already see. The silicon does auto-increment
+    # in burst mode (§4.1.2.2), except at RegFifo (0x00) where a burst pops the
+    # data FIFO instead. Declaring the walk without modelling the FIFO pop would
+    # make address 0x00 the one address where the descriptor is confidently
+    # wrong, so the walk waits for the FIFO the air link would need anyway.
+    framing:
+      command_bytes: 1
+      rw_bit: 7
+      rw_read_high: false
+      addr_mask: 0x7F
+      auto_increment: false
+    registers:
+      # The one register a driver checks before it will talk to the part at all
+      # (§6.4, RegVersion 0x42 = 0x12 for SX1276/77/78/79). Read-only, which the
+      # old model was not: it stored a write to 0x42 and then reported it, so a
+      # stray burst could make the part deny being an SX127x.
+      - { name: RegVersion, addr: 0x42, width: 1, endian: be, access: r, reset: 0x12 }
+    # The other 127 addresses are storage: written by the driver and read back.
+    # RegOpMode powers up at 0x09 here — LoRa mode, sleep — which is what the
+    # old model seeded. ⚠️ NOT the datasheet's 0x01 (FSK/OOK STANDBY): the
+    # descriptor holds the model's value so this port moves no byte, and the
+    # correction is a separate, arguable change (a driver that assumes FSK at
+    # reset is a driver this twin has never exercised).
+    register_file:
+      size: 0x80
+      reset:
+        0x01: 0x09
+
+metadata:
+  label: "LoRa SX1278 / RA-02"
+  summary: "Semtech SX1278 SPI LoRa register shell (no RF)."
+  detail: >-
+    Version reg 0x42 = 0x12. OpMode and companion regs R/W. Packet air
+    interface is not simulated.
+  category: spi
+  config_keys:
+    - { name: cs_pin, ty: str, doc: "SPI NSS GPIO pin. Defaults to PA4." }

@@ -1,0 +1,103 @@
+# Sino Wealth SH1107 OLED controller — declarative `display` primitive.
+#
+# The 1.5" 128x128 module (GME128128-01-IIC), the panel the published "IMAX
+# Console" lab paints. Same family as the SSD1306 (`ssd1306.yaml`) and framed
+# identically — a 0x00 / 0x40 control byte on the first byte of each I2C
+# transaction, re-armed by a START — but three things differ and all three move
+# pixels:
+#
+#   1. SIXTEEN pages, not eight: 128 rows of GDDRAM.
+#   2. A SEVEN-BIT column address, so the higher-nibble command family stops at
+#      0x17 (0x18..0x1F address nothing and are consumed as unknown opcodes).
+#   3. SINGLE-BYTE addressing-mode selects — 0x20 is page mode and 0x21 is
+#      vertical mode, complete in themselves. The SSD1306's 0x20 takes a
+#      parameter and its 0x21 is SETCOLUMNADDR, so the same two bytes mean
+#      different things on the two parts. Every other SH1107 multi-byte command
+#      takes exactly one parameter; there is no two-parameter window command
+#      here at all, which is why this table declares no `set_window`.
+#
+# PAGE ADDRESSING WRAPS. At column 127 the counter returns to 0 and the page is
+# unchanged. The SSD1306 model holds the counter at the last column instead, so
+# `addressing.page_wrap` states which — a house default would have moved a whole
+# row of pixels on one of the two panels.
+#
+# NOT modelled: contrast (0x81), multiplex ratio (0xA8), display offset (0xD3),
+# clock divide (0xD5), pre-charge (0xD9), VCOMH (0xDB), DC-DC control (0xAD) and
+# display start line (0xDC). Each is declared with its parameter count so its
+# argument is CONSUMED rather than mis-read as a column- or page-address
+# command, and each then does nothing: they change how the glass looks, not what
+# is in GDDRAM, and this model reports what is in GDDRAM.
+type: oled-sh1107
+
+behavior:
+  primitive: display
+  display:
+    width: 128
+    height: 128
+    pixel_format: mono_page
+    artifact_format: sh1107_page
+    ram: { pages: 16, bytes: 2048, layout: page_major, stream: always }
+    dc: { source: control_byte, command_value: 0x00 }
+    default_address: 0x3C
+    # Page addressing is the reset default (the SH1107 powers up in it), and it
+    # is the mode Adafruit_SH110X drives.
+    addressing:
+      modes: [page, vertical]
+      default: page
+      page_wrap: wrap
+    artifact_meta: [ink_bytes, lit_pixels, display_on]
+    commands:
+      # 0x20 / 0x21 SET MEMORY ADDRESSING MODE — one byte each, no parameter.
+      - { opcode: 0x20, name: SETPAGEADDRESSING,     do: [ { set_mode: { value: 0 } } ] }
+      - { opcode: 0x21, name: SETVERTICALADDRESSING, do: [ { set_mode: { value: 1 } } ] }
+      - { opcode: 0xAE, name: DISPLAYOFF, do: [ { display_on: false } ] }
+      - { opcode: 0xAF, name: DISPLAYON,  do: [ { display_on: true } ] }
+      # 0xB0..0xBF SET PAGE ADDRESS: the page is the opcode's low FOUR bits,
+      # because this panel has sixteen of them.
+      - opcode: 0xB0
+        opcode_end: 0xBF
+        name: SETPAGEADDR
+        do:
+          - set_cursor: { axis: page, value: { opcode_mask: 0x0F } }
+      # 0x00..0x0F / 0x10..0x17 SET LOWER / HIGHER COLUMN ADDRESS: each carries
+      # one nibble of the column, so the cursor is read-modify-written rather
+      # than replaced. The higher family is THREE bits wide — a 7-bit column —
+      # so 0x18..0x1F are not commands here.
+      - opcode: 0x00
+        opcode_end: 0x0F
+        name: SETLOWCOLUMN
+        do:
+          - set_cursor: { axis: col, part: low_nibble, value: { opcode_mask: 0x0F } }
+      - opcode: 0x10
+        opcode_end: 0x17
+        name: SETHIGHCOLUMN
+        do:
+          - set_cursor: { axis: col, part: high_nibble, value: { opcode_mask: 0x07 } }
+      # Declared for their PARAMETER COUNTS. Without these entries the argument
+      # byte of, say, `0x81 0x4F` would be decoded as opcode 0x4F, and a
+      # `0xD3 0x60` would leave the page pointer somewhere the firmware never
+      # put it — the whole init sequence would walk the cursor around and the
+      # first frame would land shifted.
+      - { opcode: 0x81, name: SETCONTRAST, args: 1 }
+      - { opcode: 0xA8, name: SETMULTIPLEX, args: 1 }
+      - { opcode: 0xAD, name: SETDCDC, args: 1 }
+      - { opcode: 0xD3, name: SETDISPLAYOFFSET, args: 1 }
+      - { opcode: 0xD5, name: SETDISPLAYCLOCKDIV, args: 1 }
+      - { opcode: 0xD9, name: SETPRECHARGE, args: 1 }
+      - { opcode: 0xDB, name: SETVCOMDETECT, args: 1 }
+      - { opcode: 0xDC, name: SETDISPLAYSTARTLINE, args: 1 }
+
+metadata:
+  label: "SH1107 OLED"
+  summary: "128×128 monochrome OLED display over I2C with a paged framebuffer."
+  detail: "Sino Wealth SH1107 128×128 OLED (e.g. the 1.5\" GME128128-01-IIC module) on the canonical 0x3C / 0x3D address pair. Tracks the 16-page-by-128-column framebuffer; the WASM bridge surfaces pixel state for the playground's display overlay."
+  category: i2c
+  config_keys:
+    - name: i2c_address
+      ty: int
+      doc: "7-bit slave address. Defaults to 0x3C; 0x3D selects the SA0=high variant."
+  labs:
+    - board_id: openai-deck-s3
+      chip: esp32s3
+      example_dir: openai-deck-s3
+      demo_elf: demo-openai-deck-s3.elf

@@ -5,7 +5,7 @@
 //! End-to-end proof of the ESP32-S3 NeoPixel path: RMT → GPIO pad → observer →
 //! WS2812 decode. Builds an S3 GPIO + RMT on a bus, routes GPIO48 (the onboard
 //! NeoPixel pin) to the RMT channel-0 output signal through the GPIO matrix,
-//! attaches a `Ws2812` decoder as a GPIO observer on that pad, loads RMTMEM with
+//! attaches the declarative WS2812 strip as a GPIO observer on that pad, loads RMTMEM with
 //! the symbols for a known 3-pixel frame (red, green, blue), starts the RMT, and
 //! ticks the bus — asserting the decoder recovered exactly those pixels.
 //!
@@ -16,7 +16,7 @@
 //! discovers it.
 
 use labwired_core::bus::SystemBus;
-use labwired_core::peripherals::components::ws2812::Ws2812;
+use labwired_core::peripherals::components::declarative_led_strip::ws2812;
 use labwired_core::peripherals::esp32s3::gpio::{Esp32s3Gpio, GpioObserver, RMT_SIG_OUT0};
 use labwired_core::peripherals::esp32s3::rmt::{Esp32s3Rmt, TX_START_BIT};
 use labwired_core::Bus;
@@ -71,7 +71,7 @@ fn rmt_drives_ws2812_frame_decoded_end_to_end() {
     );
 
     // Attach the WS2812 decoder as a GPIO observer on the data pin.
-    let strip = Arc::new(Ws2812::new(DATA_PIN, 3, CPU_HZ));
+    let strip = Arc::new(ws2812(DATA_PIN, 3, CPU_HZ));
     {
         let idx = bus.find_peripheral_index_by_name("gpio").unwrap();
         let gpio = bus.peripherals[idx]
@@ -119,7 +119,7 @@ fn rmt_drives_ws2812_frame_decoded_end_to_end() {
     }
 
     assert_eq!(
-        strip.pixels(),
+        strip.pixels().iter().map(|p| p.wire).collect::<Vec<_>>(),
         vec![[0x00, 0xFF, 0x00], [0xFF, 0x00, 0x00], [0x00, 0x00, 0xFF]],
         "RMT-driven WS2812 frame must decode to red, green, blue (GRB wire order)"
     );

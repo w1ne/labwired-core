@@ -6,6 +6,12 @@
       "file": "crates/core/src/peripherals/esp_xtensa_common/rom_thunks.rs",
       "symbol": "return_pd_true"
     },
+    "11aa54f70810c4b4": {
+      "category": "INFER",
+      "clause": "every byte is data \u2014 real: sample the D/C pad. FIDELITY.md \u00a7E",
+      "file": "crates/core/src/peripherals/components/declarative_display.rs",
+      "symbol": "<module>"
+    },
     "134b9017d1526231": {
       "category": "THUNK-LIB",
       "clause": "echoes the static buffer back as the queue handle instead of running xQueueCreateMutexStatic \u2014 real: FreeRTOS initializes the queue structure. See FIDELITY.md \u00a7A",
@@ -69,7 +75,7 @@
     "774915942f0cd48a": {
       "category": "INFER",
       "clause": "no D/C line wired \u2014 guess command vs data from protocol state \u2014 real: sample the D/C GPIO. See FIDELITY.md \u00a7E",
-      "file": "crates/core/src/peripherals/components/ssd1680_tricolor_290.rs",
+      "file": "crates/core/tests/display_oracle/ssd1680_tricolor_290.rs",
       "symbol": "<module>"
     },
     "84bd3d25acaf0a7c": {
@@ -89,6 +95,12 @@
       "clause": "returns an incrementing counter as a fake timestamp \u2014 real: the IDF reads a hardware timer (systimer/CCOUNT). See FIDELITY.md \u00a7A",
       "file": "crates/core/src/peripherals/esp_xtensa_common/rom_thunks.rs",
       "symbol": "monotonic_counter_32"
+    },
+    "a3cdb35725243f50": {
+      "category": "INFER",
+      "clause": "nothing open \u21d2 this is a command \u2014 real: sample the D/C pad. Only terminates because `window_counted` closes the pixel stream. FIDELITY.md \u00a7E",
+      "file": "crates/core/src/peripherals/components/declarative_display.rs",
+      "symbol": "<module>"
     },
     "ab23fa4c41d1b614": {
       "category": "THUNK-LIB",
@@ -111,7 +123,7 @@
     "c86435d61543e04f": {
       "category": "INFER",
       "clause": "no D/C line wired \u2014 can't tell command from data, so treat every byte as data \u2014 real: sample the D/C GPIO. FIDELITY.md \u00a7E",
-      "file": "crates/core/src/peripherals/components/uc8151d_tricolor_290.rs",
+      "file": "crates/core/tests/display_oracle/uc8151d_tricolor_290.rs",
       "symbol": "dc_pin"
     },
     "e66fabdce77a2c75": {

@@ -49,6 +49,48 @@ impl SystemBus {
         )
     }
 
+    /// True when `[addr, addr + width)` provably falls in a hole between
+    /// `extra_mem` windows, so the linear probe every accessor runs must miss.
+    ///
+    /// Two compares and a length check instead of one bounds test per window.
+    /// See [`SystemBus::extra_mem_gap`] for why the answer is exact rather
+    /// than a heuristic.
+    #[inline(always)]
+    pub(crate) fn extra_mem_surely_misses(&self, addr: u64, width: u64) -> bool {
+        match self.extra_mem_gap.get() {
+            Some((floor, ceil, len)) => {
+                len == self.extra_mem.len() && addr >= floor && addr.saturating_add(width) <= ceil
+            }
+            None => false,
+        }
+    }
+
+    /// Record the `extra_mem`-free hole around `addr` after a probe missed it.
+    ///
+    /// Floor is the greatest END among windows starting at or below `addr`,
+    /// ceiling the least BASE among those starting above it. No window can
+    /// cover a byte in `[floor, ceil)`: one starting at or below `addr` ends
+    /// at or before `floor`, one starting above `addr` starts at or after
+    /// `ceil`. A window that straddles `addr` (covers it but not the whole
+    /// access) pushes the floor past `addr` and the guard below stores
+    /// nothing — the same shape `find_peripheral_index` uses for `last_gap`.
+    #[inline]
+    pub(crate) fn note_extra_mem_miss(&self, addr: u64) {
+        let mut floor = 0u64;
+        let mut ceil = u64::MAX;
+        for mem in &self.extra_mem {
+            if mem.base_addr <= addr {
+                floor = floor.max(mem.base_addr.saturating_add(mem.data.len() as u64));
+            } else {
+                ceil = ceil.min(mem.base_addr);
+            }
+        }
+        if floor <= addr && addr < ceil {
+            self.extra_mem_gap
+                .set(Some((floor, ceil, self.extra_mem.len())));
+        }
+    }
+
     #[inline]
     pub(crate) fn note_memory_read(&self) {
         self.memory_reads

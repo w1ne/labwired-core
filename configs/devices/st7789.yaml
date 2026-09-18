@@ -1,0 +1,127 @@
+# Sitronix ST7789V TFT controller over 4-wire SPI — declarative `display`
+# primitive. Every constant here is read out of the ST7789V datasheet held in
+# the corpus (Version 1.3, 2014/03, sha256 8ecf0e43...), cited by section below.
+#
+# THE FRAME MEMORY IS 240x320, NOT THE PANEL SIZE. Section 8.12 (p.124): "The
+# address ranges are X=0 to X=239 (Efh) and Y=0 to Y=319 (13Fh)." A 1.9" 170x320
+# module is a smaller glass wired to a subset of the source lines; the controller
+# still has all 240 columns. Firmware picks the visible strip with CASET, which
+# this descriptor honours, so NO panel offset is baked in.
+#
+# That absence is deliberate. The column offset of a particular glass (35 for
+# many 170-wide modules) appears in NEITHER the Sitronix document NOR the module
+# vendor's drawing — it is an integration value. Hard-coding it would put an
+# unsourced number where a sourced one is indistinguishable, and would be wrong
+# for every other ST7789 panel. `glass_crop` makes it opt-in through the four
+# `col_offset` / `row_offset` / `cols` / `rows` config keys, all-or-nothing.
+#
+# FRAMING comes from the D/C line ONLY. There is deliberately no
+# infer-framing-from-byte-values fallback: that inference is exactly how an init
+# sequence's parameter byte 0x2C gets decoded as RAMWR, opening the pixel stream
+# mid-init and painting the rest of the init sequence into frame memory. `attach`
+# refuses a panel with no resolvable D/C pad rather than guess.
+#
+# NOT modelled: gamma (0xE0/0xE1), porch/gate/power control (0xB2, 0xB7, 0xBB,
+# 0xC0..0xC6, 0xD0), tearing effect (0x34/0x35), partial mode, scrolling, and the
+# pixel format the COLMOD argument selects (the model is RGB565 throughout).
+# None of these carry parameter counts here: an unlisted opcode is consumed and
+# CLOSES the stream, and its parameter bytes then arrive with nothing open and
+# are dropped — which is what the controller does with them and why an
+# unmodelled init command cannot corrupt frame memory.
+type: st7789-170x320
+
+behavior:
+  primitive: display
+  display:
+    width: 240
+    height: 320
+    pixel_format: rgb565
+    artifact_format: rgb565_be
+    ram: { bytes: 153600, layout: row_major, stream: command }
+    dc: { source: pin, pin_role: dc, command_level: 0 }
+    addressing: { modes: [horizontal], default: horizontal }
+    # Section 9.1.28, p.215: MADCTL D7 = page address order (MY), D6 = column
+    # address order (MX), D5 = page/column exchange (MV). MV changes what a legal
+    # column IS (section 9.1.20 p.198: 0..239 when MV=0, 0..319 when MV=1), so it
+    # moves the window clamp as well as the pixel map.
+    vars: { madctl: 0 }
+    orientation: { var: madctl, swap_bit: 0x20, mirror_x_bit: 0x40, mirror_y_bit: 0x80 }
+    # The module's supply pins are part of the model: a diagram that wires only
+    # SCL/SDA/CS/DC/RES and no VCC/GND describes a panel that is dark on a bench.
+    supply_gated: true
+    glass_crop: true
+    # What the paint artifact publishes beside the pixels; see ssd1306.yaml.
+    artifact_meta:
+      [display_on, lit, awake, powered, inverted, painted_bytes, total_bytes,
+       top_colour, top_colour_pixels]
+    commands:
+      # 9.1.22 p.202, S/W Reset: "Contents of memory is not cleared." Only the
+      # control state resets — clearing frame memory here would erase a painted
+      # frame that real silicon keeps.
+      - { opcode: 0x01, name: SWRESET, do: [ { reset_control: true } ] }
+      - { opcode: 0x10, name: SLPIN,  do: [ { awake: false } ] }   # 9.1.12
+      - { opcode: 0x11, name: SLPOUT, do: [ { awake: true } ] }    # 9.1.13
+      - { opcode: 0x13, name: NORON }                              # 9.1.16
+      - { opcode: 0x20, name: INVOFF, do: [ { invert: false } ] }  # 9.1.17
+      - { opcode: 0x21, name: INVON,  do: [ { invert: true } ] }   # 9.1.18
+      - { opcode: 0x28, name: DISPOFF, do: [ { display_on: false } ] }
+      - { opcode: 0x29, name: DISPON,  do: [ { display_on: true } ] }  # 9.1.19 p.196
+      # 9.1.20 p.198 / 9.1.21 p.200: XS/XE and YS/YE, 16-bit big-endian, CLAMPED
+      # to the addressable extent in the current orientation (not masked — the
+      # datasheet states a range, and a value past it is held at the edge).
+      - opcode: 0x2A
+        name: CASET
+        args: 4
+        do:
+          - set_window:
+              axis: col
+              start: { args: [0, 1], clamp_axis_max: true }
+              end: { args: [2, 3], clamp_axis_max: true }
+      - opcode: 0x2B
+        name: RASET
+        args: 4
+        do:
+          - set_window:
+              axis: row
+              start: { args: [0, 1], clamp_axis_max: true }
+              end: { args: [2, 3], clamp_axis_max: true }
+      # 9.1.22 p.202: "When this command is accepted, the column register and the
+      # page register are reset to the start column/start page positions."
+      - { opcode: 0x2C, name: RAMWR, do: [ { ram_write: { reset_cursor: true } } ] }
+      - { opcode: 0x36, name: MADCTL, args: 1, do: [ { set_var: { name: madctl, value: { args: [0] } } } ] }
+      # COLMOD is consumed for its argument count and otherwise ignored: this
+      # model is RGB565 throughout, so honouring the 18-bit encoding would mean
+      # claiming a pixel depth the artifact does not carry.
+      - { opcode: 0x3A, name: COLMOD, args: 1 }
+      # 9.1.33 p.225, WRMEMC: "continuing from the pixel location following the
+      # previous write memory continue or memory write command" — so unlike RAMWR
+      # the counters are deliberately NOT reset.
+      - { opcode: 0x3C, name: WRMEMC, do: [ { ram_write: { reset_cursor: false } } ] }
+
+metadata:
+  label: "ST7789 IPS TFT"
+  summary: "1.9in 170x320 IPS TFT on a Sitronix ST7789V, 4-wire SPI."
+  detail: "Sitronix ST7789V controller against an in-memory 240x320 RGB565 frame memory, the extent the datasheet gives in section 8.12 (X 0..239, Y 0..319). The 1.9in glass shows a 170-column strip of that memory; firmware selects it with CASET, so no panel offset is assumed here -- that number is in neither Sitronix's document nor the module vendor's drawing. Set `col_offset`/`cols` to crop the artifact to a particular glass. Reports `lit` (DISPON AND awake) beside the raw pixels, because a panel that never got SLPOUT is dark whatever is in memory."
+  category: spi
+  config_keys:
+    - name: cs_pin
+      ty: str
+      doc: "Chip-select pin label."
+    - name: dc_pin
+      ty: str
+      doc: "Data/command GPIO pin. Required: this model has no infer-framing-from-byte-values fallback, because that inference decodes a parameter byte 0x2C as RAMWR and writes the rest of the init sequence into the framebuffer as pixels."
+    - name: powered
+      ty: bool
+      doc: "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered panel -- ABSENT MEANS POWERED, because the curated labs state signals and leave the rails implicit. Only an explicit `false`, which the diagram compiler emits when it can see the supply pins are on no net, darkens the panel: it then ignores the SPI bus entirely and reports `lit: false`, `display_on: false`, `awake: false`, `painted_bytes: 0`, which is what the part does on a bench."
+    - name: col_offset
+      ty: int
+      doc: "First frame-memory column the glass shows. NOT a datasheet value -- the ST7789V document describes a 240-column frame memory and says nothing about which strip a given panel exposes. Leave unset to get the whole 240x320 frame memory, which is what the controller holds."
+    - name: row_offset
+      ty: int
+      doc: "First frame-memory row the glass shows. Same provenance caveat as `col_offset`."
+    - name: cols
+      ty: int
+      doc: "Visible column count, e.g. 170 for the 1.9in module. Requires `col_offset`."
+    - name: rows
+      ty: int
+      doc: "Visible row count, e.g. 320 for the 1.9in module. Requires `row_offset`."

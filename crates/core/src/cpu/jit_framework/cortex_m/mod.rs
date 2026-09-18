@@ -7,7 +7,10 @@
 //! Same contract as the RV32IMC frontend: the interpreter remains the spec.
 //! Compiled blocks exit on MMIO, WFI, CPS/MRS/MSR, incomplete IT, and any
 //! instruction this frontend does not model. Complete IT blocks of
-//! emittable ALU are compiled (predicated; 16-bit DP does not set flags).
+//! emittable ALU *or windowed load/store* are compiled (predicated; 16-bit
+//! DP does not set flags). A side-exit inside the body records the
+//! pre-instruction `it_state`, which the runtime reinstalls before handing
+//! the resume PC to the interpreter (see `emit::IT_STATE_SLOT`).
 //! Cycle accounting is 1 retired guest
 //! instruction per boundary, matching `CortexM::step_batch`.
 
@@ -470,5 +473,49 @@ mod tests {
     #[test]
     fn isa_name_is_thumb2() {
         assert_eq!(CortexMFrontend::new().isa_name(), "thumb2");
+    }
+
+    #[test]
+    fn it_body_bail_names_every_refusal() {
+        use emit::{it_body_bail, ItBodyBail};
+        use Instruction::*;
+
+        assert_eq!(
+            it_body_bail(&It { cond: 0, mask: 1 }, true),
+            Some(ItBodyBail::NestedIt)
+        );
+        assert_eq!(
+            it_body_bail(&LdrLit { rt: 0, imm: 4 }, true),
+            Some(ItBodyBail::LdrLit)
+        );
+        assert_eq!(
+            it_body_bail(&Branch { offset: 2 }, true),
+            Some(ItBodyBail::Unsupported)
+        );
+        // Windowed mem joins the body; with no RAM window to bound it, only
+        // ALU does.
+        assert_eq!(
+            it_body_bail(
+                &StrImm {
+                    rt: 0,
+                    rn: 1,
+                    imm: 0
+                },
+                true
+            ),
+            None
+        );
+        assert_eq!(
+            it_body_bail(
+                &StrImm {
+                    rt: 0,
+                    rn: 1,
+                    imm: 0
+                },
+                false
+            ),
+            Some(ItBodyBail::Unsupported)
+        );
+        assert_eq!(it_body_bail(&AddImm8 { rd: 0, imm: 1 }, false), None);
     }
 }

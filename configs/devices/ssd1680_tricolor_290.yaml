@@ -1,0 +1,182 @@
+# Solomon Systech SSD1680 — 128x296 tri-colour (black/white/red) e-paper over
+# 4-wire SPI. Waveshare GDEM029C90 / WeAct 2.9" B/W/R, driver class
+# GxEPD2_290_C90c. Declarative `display` primitive, the same engine that reads
+# st7789.yaml and ili9341.yaml.
+#
+# E-PAPER IS WHERE THE `display` PRIMITIVE STOPPED BEING A FRAMEBUFFER, and the
+# four keys below are the four facts that made it one.
+#
+# 1. TWO PLANES, SELECTED BY THE COMMAND (`ram.planes`).
+#    0x24 opens the BLACK RAM and 0x26 the RED RAM. They are two independent
+#    1-bpp pictures, not one deeper pixel: a write to one leaves the other
+#    alone, and the artifact payload is black followed by red with `plane_bytes`
+#    giving the split. Composing them into one image here would synthesise a
+#    picture this model never produced and could not be checked against a photo
+#    of the glass.
+#
+# 2. THE ERASED BYTE IS 0xFF, NOT 0x00 (`ram.blank`).
+#    A set bit on this panel is NO INK. A fresh panel is 0xFF everywhere and
+#    `black_ink_bytes` therefore counts bytes that are NOT 0xFF. The house
+#    default of 0 would report a blank panel as fully inked.
+#
+# 3. THE X WINDOW IS IN BYTES AND THE Y WINDOW IS IN PIXELS (`ram.units`).
+#    0x44 takes the RAM-X bounds as start/8 and end/8 — datasheet table 8-1,
+#    "RAM X address start / end position", 6 bits — while 0x45 takes RAM-Y as
+#    raw 9-bit pixel rows. A model that read both in pixels streamed a plausible
+#    byte count into the wrong rows. So the column counter steps a BYTE here,
+#    and 0x3F/clamp bounds it at 15.
+#
+# 4. FRAME MEMORY IS NOT THE SCREEN (`refresh`).
+#    0x20 (master activation) is what moves the ink. Until one arrives the glass
+#    still shows the previous image however full both RAMs are. `refresh` latches
+#    RAM into the screen and bumps `refresh_generation`, which is what
+#    `labwired_verify`'s `min_refresh_generation` clause resolves against and the
+#    only thing that tells "RAM was written" from "the picture changed".
+#    `screen_black_ink_bytes` / `screen_red_ink_bytes` are the same count taken
+#    off the glass rather than off RAM; they disagree exactly when firmware wrote
+#    a frame it never activated.
+#
+# STREAM LENGTH (`ram.stream: window_counted`). 0x24/0x26 accept exactly
+# (col_end - col_start + 1) x (row_end - row_start + 1) bytes, which is a number
+# the controller knows because GxEPD2 always configures 0x44/0x45 and 0x4E/0x4F
+# first. Letting the stream run past it would wrap the counters back to the
+# window origin and overwrite the rows just written.
+#
+# NO D/C LINE IS ALSO A BOARD (`dc.unwired: infer`). The ESP32 e-paper lab wires
+# CS and nothing else. The deleted model inferred framing there — a byte with no
+# stream open is a command — and that inference only terminates because the
+# stream is window-counted. It is a CHEAT and it is declared as one; see
+# FIDELITY.md section E. A board that wires `dc_pin` never reaches it.
+#
+# NOT MODELLED: the waveform LUTs (0x32), the temperature sensor (0x18/0x1A),
+# the border waveform (0x3C), the analog/digital block controls and data-entry
+# modes other than 0x03 (X+/Y+, X-major), which is the only mode GxEPD2 sets.
+# Their parameters are COUNTED so the decoder stays in step, and nothing acts on
+# them. An unlisted opcode is consumed as a zero-parameter no-op, which is what
+# the controller does with a command it does not implement.
+type: ssd1680_tricolor_290
+
+behavior:
+  primitive: display
+  display:
+    width: 128
+    height: 296
+    pixel_format: tricolor
+    artifact_format: epaper_tricolor_1bpp_planes
+    # 2 planes x (128/8) x 296 = 9472.
+    ram:
+      bytes: 9472
+      layout: row_major
+      stream: window_counted
+      blank: 0xFF
+      planes: [black, red]
+      units: { col: bytes, row: pixels }
+    dc: { source: pin, pin_role: dc, command_level: 0, unwired: infer }
+    addressing: { modes: [horizontal], default: horizontal }
+    supply_gated: true
+    # SSD1680 asserts BUSY HIGH while refreshing, so idle is LOW. The UC8151D
+    # is the exact opposite; do not copy this constant.
+    busy: { config_key: busy_pin, idle_level: false }
+    artifact_meta:
+      # `power_on` is the controller's own booster sequence (0x22 + 0x20), NOT
+      # the module's supply. Both are published because a panel with no rail and
+      # a panel that was never powered on look identical otherwise.
+      - { flag: display_on, as: power_on }
+      - powered
+      - plane_bytes
+      - refresh_generation
+      - { plane: black }
+      - { plane: red }
+      - { plane: black, of: screen }
+      - { plane: red, of: screen }
+    commands:
+      # 0x12 SWRESET wipes the window and the counters and NOT the frame memory
+      # (real silicon preserves RAM; GxEPD2 clears it explicitly with 0x24/0x26
+      # in writeScreenBuffer). It also leaves the booster state alone, which is
+      # why this is two `set_window` actions and not `reset_control`.
+      - opcode: 0x12
+        name: SWRESET
+        do:
+          - set_window: { axis: col, start: { value: 0 }, end: { value: 15 } }
+          - set_window: { axis: row, start: { value: 0 }, end: { value: 295 } }
+      # 0x10 deep sleep. Parameter bit 0 set = enter, and entering drops the
+      # booster.
+      - opcode: 0x10
+        name: DEEP_SLEEP
+        args: 1
+        do:
+          - { display_on: false, when: { arg: 0, mask: 0x01, equals: 0x01 } }
+      # 0x22 DISPLAY_UPDATE_CONTROL_2 is a SEQUENCE SELECTOR, not a flag: GxEPD2
+      # sends 0xF8 for _PowerOn and 0x83 for _PowerOff, and 0xF7 for a full
+      # update (which changes no power state). The following 0x20 activates.
+      - opcode: 0x22
+        name: DISPLAY_UPDATE_CONTROL_2
+        args: 1
+        do:
+          - { display_on: true,  when: { arg: 0, equals: 0xF8 } }
+          - { display_on: false, when: { arg: 0, equals: 0x83 } }
+      - { opcode: 0x20, name: MASTER_ACTIVATION, do: [ { refresh: true } ] }
+      # RAM-X window: start/8 and end/8, 6 bits, clamped to the last byte column.
+      - opcode: 0x44
+        name: SET_RAM_X_WINDOW
+        args: 2
+        do:
+          - set_window:
+              axis: col
+              start: { args: [0], mask: 0x3F, clamp_axis_max: true }
+              end: { args: [1], mask: 0x3F, clamp_axis_max: true }
+      # RAM-Y window: two 16-bit little-endian pixel rows.
+      - opcode: 0x45
+        name: SET_RAM_Y_WINDOW
+        args: 4
+        do:
+          - set_window:
+              axis: row
+              start: { args: [1, 0], clamp_axis_max: true }
+              end: { args: [3, 2], clamp_axis_max: true }
+      - opcode: 0x4E
+        name: SET_RAM_X_COUNTER
+        args: 1
+        do:
+          - set_cursor: { axis: col, value: { args: [0], mask: 0x3F, clamp_axis_max: true } }
+      - opcode: 0x4F
+        name: SET_RAM_Y_COUNTER
+        args: 2
+        do:
+          - set_cursor: { axis: row, value: { args: [1, 0], clamp_axis_max: true } }
+      - { opcode: 0x24, name: WRITE_RAM_BLACK, do: [ { ram_write: { reset_cursor: true, plane: black } } ] }
+      - { opcode: 0x26, name: WRITE_RAM_RED,   do: [ { ram_write: { reset_cursor: true, plane: red } } ] }
+      # Parameters COUNTED, behaviour not modelled — see the header.
+      - { opcode: 0x01, name: DRIVER_OUTPUT_CONTROL, args: 3 }
+      - { opcode: 0x11, name: DATA_ENTRY_MODE, args: 1 }
+      - { opcode: 0x18, name: TEMPERATURE_SENSOR_SELECT, args: 1 }
+      - { opcode: 0x21, name: DISPLAY_UPDATE_CONTROL_1, args: 2 }
+      - { opcode: 0x3C, name: BORDER_WAVEFORM_CONTROL, args: 1 }
+
+metadata:
+  label: "SSD1680 Tri-Color E-Paper"
+  summary: "2.9\" tri-color (black/white/red) e-paper over SPI. Driver class GxEPD2_290_C90c -- the WeAct / Waveshare 2.9\" B/W/R module. Not interchangeable with the UC8151D part."
+  detail: "Full SPI command + display-data RAM state machine, validated by the e2e e-paper integration test. Same model drives the STM32F103 lab, the ESP32-classic playground board and the ESP32-C3 e-paper labs. Decodes SSD1680 opcodes (0x12 SWRESET, 0x11 data entry, 0x24/0x26 RAM planes, 0x22+0x20 update) -- the stream GxEPD2_290_C90c emits. If your sketch instantiates GxEPD2_290_Z13c instead, use uc8151d_tricolor_290; the two command sets share nothing, and the wrong one reports success and renders blank."
+  category: spi
+  config_keys:
+    - name: cs_pin
+      ty: str
+      doc: "Chip-select GPIO pin (e.g. \"PA4\"). Defaults to PA4."
+    - name: dc_pin
+      ty: str
+      doc: "Data/Command GPIO pin (e.g. \"GPIO17\"). Wire it for silicon-accurate framing. Without it this panel falls back to inferring command from data by protocol state, which is a declared cheat (FIDELITY.md section E) and the only reason the ESP32 e-paper lab paints."
+    - name: busy_pin
+      ty: str
+      doc: "BUSY status GPIO the host polls (e.g. \"GPIO4\"). Held LOW (idle) because this model refreshes instantly; without it a driver that waits on BUSY blocks until its timeout and the panel stays blank."
+    - name: powered
+      ty: bool
+      doc: "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered part -- ABSENT MEANS POWERED. Only an explicit `false`, which the diagram compiler emits when it can see the supply pins are on no net, changes anything: the panel then ignores its bus entirely and reports blank planes and refresh_generation 0. E-paper makes the lie especially convincing, because a real panel HOLDS its image with the supply removed -- but a panel that never had a supply never had an image to hold."
+  labs:
+    - board_id: epaper-tricolor-lab
+      chip: stm32f103
+      example_dir: epaper-tricolor-lab
+      demo_elf: demo-epaper-tricolor-lab.elf
+    - board_id: esp32-epaper-lab
+      chip: esp32
+      example_dir: esp32-epaper-lab
+      demo_elf: demo-esp32-epaper-lab.elf
