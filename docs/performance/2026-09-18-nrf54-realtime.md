@@ -70,3 +70,39 @@ ELF/config loading, on a host with concurrent builds.
 The corrected ELF's P2.06 edges were exactly `(1152, high)`,
 `(32001475, low)`, `(64001731, high)` in both runs. Full assertions for both
 ELFs passed, including CPU, SRAM and peripheral state.
+
+## Chromium measurement
+
+The release WASM plus production RealtimeGovernor advanced 381,004,800 cycles
+(2,976.6 ms simulated) in 3,002.1 ms wall time: **0.991506x real time**.
+It captured 12 P2.06 edges with the same exact timestamps as native execution,
+then 32,000,256 cycles between subsequent edges (250.002 ms).
+380,996,793 idle cycles were coalesced. The benchmark's speed and interval
+assertions passed. This first browser run used release WASM before wasm-opt.
+
+Repeating with the deployment optimizer flags (`wasm-opt -O3 --strip-debug`
+plus the project's enabled WASM features) passed too: 380,812,799 cycles
+(2,975.100 ms simulated) in 3,000.2 ms wall, **0.991634x real time**, with
+the same 12 exact GPIO edge cycles.
+
+## Actual worker and default CLI
+
+The production WorkerSimClient → SimHost → WASM path, with normal inspector and
+snapshot settings, advanced 382,988,800 cycles in 3,001.4 ms: **0.996901x real
+time**. All 12 GPIO edges matched the native reference timestamps and values;
+no worker errors occurred. This additionally caught and fixed a pacing-clock
+fallback: chip-only `cpu_hz` must supply the governor clock when the system YAML
+has no override. An unknown pacing clock had selected turbo despite the correct
+engine clock. The app's `scripts/benchmark-nrf54-worker.mjs` reproduces this check
+against the built UI worker and optimized public WASM.
+
+The default release CLI command (no `--batched` or pacing flags), with
+`LABWIRED_RUN_STATS=1`, simulated 1,280,000,000 cycles (10 seconds) in **0.26 s
+wall time**, including process startup/config/ELF loading: about **38x real
+time**. It executed 24,680 instructions and coalesced 1,279,975,320 idle cycles;
+fuel was exactly 1,280,000,000. The seven ARM batching/default-policy tests and
+the tier-1 chip regression matrix passed.
+
+These are local engine/browser-worker results, not a signed-in production
+acceptance or a silicon measurement. CPU-bound firmware has no corresponding
+real-time guarantee; only architecturally idle intervals are skipped.

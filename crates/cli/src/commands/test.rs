@@ -48,13 +48,9 @@ use tracing::warn;
 /// per-instruction idling for one run, so a fidelity investigation can diff
 /// the two arms without rebuilding the CLI.
 ///
-/// ⚠️ Inert unless the CLI is built `--features event-scheduler` —
-/// `try_idle_fast_forward` compiles to `0` without it. The hosted builder image
-/// does NOT build with that feature today (11 Xtensa tier-1 cells hang when it
-/// is on — see the feature's note in `crates/cli/Cargo.toml`), so setting this
-/// flag currently buys the hosted runner nothing. It is set here so the run
-/// path is correct the moment that blocker clears, and so
-/// `--features event-scheduler` builds get the acceleration now.
+/// The CLI includes `event-scheduler` by default. A custom
+/// `--no-default-features` build must enable it explicitly or the idle skip
+/// remains inert (`try_idle_fast_forward` returns zero).
 ///
 /// `LABWIRED_MATRIX_SPEED=1` is still accepted by the Arduino-matrix scripts;
 /// it now only asks for the log line, because the setting it used to gate is
