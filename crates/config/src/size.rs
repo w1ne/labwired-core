@@ -47,9 +47,12 @@ where
     let raw = Option::<serde_yaml::Value>::deserialize(deserializer)?;
     match raw {
         None | Some(serde_yaml::Value::Null) => Ok(None),
-        Some(v) => deserialize_u64_lax(v).map(Some).map_err(|e| {
-            serde::de::Error::custom(format!("cpu_hz is not a whole number of hertz: {e}"))
-        }),
+        // The message names no field: this parser serves any optional u64 key
+        // (`cpu_hz`, `ns_alias_offset`), and serde's path in the error already
+        // says which one failed.
+        Some(v) => deserialize_u64_lax(v)
+            .map(Some)
+            .map_err(|e| serde::de::Error::custom(format!("expected a whole number: {e}"))),
     }
 }
 

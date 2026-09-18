@@ -186,6 +186,50 @@ fn compare_pends_the_group_that_enabled_it() {
 }
 
 #[test]
+fn cc11_compare_fires_and_ccen_reads_back() {
+    // CC[11] is the LAST channel of the 12 on this part, at 0x5D0..0x5DC
+    // (0x520 + 11 * 0x10). A CC window that stops at 0x5AC (CC[8].CCEN)
+    // silently drops every CC[9..11] write, so a firmware driving the last
+    // channel — embassy's CC[11], or any driver with a 12-channel loop —
+    // never arms and never sees EVENTS_COMPARE[11].
+    let mut g = Nrf54lGrtc::new_with_cc_and_irq(12, GRTC_IRQ_BASE_DEFAULT);
+    // Arm CC[11] the way nrfx does: CCL then CCH (the CCH write arms it),
+    // then the direct CCEN write.
+    g.write_u32(cc_reg(11, 0x0), 5).unwrap();
+    g.write_u32(cc_reg(11, 0x4), 0).unwrap();
+    g.write_u32(cc_reg(11, 0xC), CCEN_ACTIVE).unwrap();
+    assert_eq!(
+        g.read_u32(cc_reg(11, 0xC)).unwrap(),
+        CCEN_ACTIVE,
+        "CC[11].CCEN at {:#x} must read back the enable",
+        cc_reg(11, 0xC)
+    );
+    // INTENSET1.COMPARE11.
+    g.write_u32(OFF_INTEN0 + INT_GROUP_STRIDE + 0x4, 1 << 11)
+        .unwrap();
+    g.write_u32(OFF_MODE, MODE_SYSCOUNTEREN).unwrap();
+
+    let mut pended = None;
+    for _ in 0..(6 * CYCLES_PER_SYSCOUNTER_TICK) {
+        if let Some(lines) = g.tick().explicit_irqs {
+            pended = Some(lines);
+            break;
+        }
+    }
+    assert_eq!(
+        g.read_u32(OFF_EVENTS_COMPARE0 + 4 * 11).unwrap(),
+        1,
+        "CC[11]'s compare must latch EVENTS_COMPARE[11] at {:#x}",
+        OFF_EVENTS_COMPARE0 + 4 * 11
+    );
+    assert_eq!(
+        pended,
+        Some(vec![GRTC_IRQ_BASE_DEFAULT + 1]),
+        "the group-1 compare must pend GRTC_1 = irq_base + 1"
+    );
+}
+
+#[test]
 fn writing_cch_arms_and_writing_ccl_disarms() {
     // The arm bit is a write side effect of CCL/CCH, exactly how nrfx's
     // `nrf_grtc_sys_counter_cc_set` (CCL then CCH, never CCEN) arms the

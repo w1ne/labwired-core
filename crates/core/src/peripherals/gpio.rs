@@ -64,13 +64,18 @@ pub enum GpioRegisterLayout {
     /// MDK `nrf54lm20a_application.svd`, peripheral GLOBAL_P2.
     ///
     /// ⚠️ This is NOT a constant shift of the nRF52 map, which is why it is a
-    /// layout and not a `reg_offset`. The first block moved by exactly 0x504,
-    /// but PIN_CNF moved from 0x700 to 0x080 — a delta of 0x680. A port
-    /// declared as nRF52-with-an-offset therefore serves DIR and OUT correctly
-    /// and drops every PIN_CNF access on the floor, which is silent: LEDs still
-    /// light, because they only need DIR and OUT, while an input's pull-up
-    /// configuration — written by Zephyr and nrfx through PIN_CNF alone — never
-    /// arrives, and the pin reads whatever the bus floats at.
+    /// layout and not a `reg_offset`. OUT..DIRCLR moved by 0x504 (DETECTMODE
+    /// by 0x500), but PIN_CNF moved from 0x700 to 0x080 — a delta of 0x680. A
+    /// port declared as nRF52-with-an-offset therefore serves DIR and OUT
+    /// correctly and drops every PIN_CNF access on the floor, which is silent:
+    /// LEDs still light, because they only need DIR and OUT, while an input's
+    /// pull-up configuration — written by Zephyr and nrfx through PIN_CNF
+    /// alone — never arrives. That is a pull-configuration fidelity gap, not a
+    /// dead button: this model stores PIN_CNF but derives no idle level from
+    /// it, and an externally driven input (board_io, GPIO stimulus) still
+    /// reads its driven level. LATCH itself is not modelled — the nRF54L
+    /// `translate` arm leaves it unmapped rather than folding it onto
+    /// DETECTMODE.
     Nrf54l,
     /// NXP Kinetis (KW41Z GPIOA/B/C): PDOR @0x0 (output), PSOR/PCOR/PTOR
     /// set/clear/toggle, PDIR @0x10 (input), PDDR @0x14 (direction).
@@ -1274,16 +1279,20 @@ impl GpioPort {
 
     /// nRF54L window offset -> the nRF52 model's register offset.
     ///
-    /// Piecewise, because the two blocks moved by different amounts: the
-    /// OUT..DETECTMODE run by 0x504, PIN_CNF by 0x680. An unrecognised offset
-    /// is passed through unchanged so it reaches the model's own census
-    /// counter rather than being folded onto a real register.
+    /// Piecewise, because the blocks did not all move by the same amount:
+    /// OUT..DIRCLR (and the reserved word at 0x01C) moved by 0x504, DETECTMODE
+    /// (0x024) by 0x500, and PIN_CNF by 0x680. LATCH (0x020) is deliberately
+    /// NOT translated: the nRF52 model has no latch, and the old wide arm sent
+    /// it onto DETECTMODE, so a latch write silently reconfigured the detect
+    /// mode. It falls to `other` and reaches the model's own census counter
+    /// rather than being folded onto a real register.
     fn translate(&self, offset: u64) -> u64 {
         if !self.nrf54l_offsets {
             return offset;
         }
         match offset {
-            0x000..=0x024 => offset + 0x504,
+            0x000..=0x01C => offset + 0x504,
+            0x024 => offset + 0x500,
             0x080..=0x0FC => offset + 0x680,
             other => other,
         }

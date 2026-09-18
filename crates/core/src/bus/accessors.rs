@@ -48,9 +48,10 @@ impl SystemBus {
                 return Some(val);
             }
         }
-        if let Some(idx) = self.find_peripheral_index(addr) {
+        let mmio_addr = self.resolve_ns_alias(addr);
+        if let Some(idx) = self.find_peripheral_index(mmio_addr) {
             let p = &self.peripherals[idx];
-            return p.dev.peek(addr - p.base);
+            return p.dev.peek(mmio_addr - p.base);
         }
         None
     }
@@ -150,12 +151,13 @@ impl crate::Bus for SystemBus {
                 self.note_memory_read();
                 return Ok(val);
             }
-            if let Some(idx) = self.find_peripheral_index(addr) {
+            let mmio_addr = self.resolve_ns_alias(addr);
+            if let Some(idx) = self.find_peripheral_index(mmio_addr) {
                 if !self.is_peripheral_clocked(idx) {
                     return Ok(0); // unclocked peripheral reads 0 (silicon gating)
                 }
                 let p = &self.peripherals[idx];
-                let off = addr - p.base;
+                let off = mmio_addr - p.base;
                 self.note_mmio_activity(idx, off);
                 return p.dev.read(off);
             }
@@ -163,12 +165,13 @@ impl crate::Bus for SystemBus {
             // Peripherals first so an MMU-translating FlashXip window overrides a
             // plain flash/extra_mem region claiming the same XIP address; flash/
             // extra_mem remain the fallback for addresses no peripheral covers.
-            if let Some(idx) = self.find_peripheral_index(addr) {
+            let mmio_addr = self.resolve_ns_alias(addr);
+            if let Some(idx) = self.find_peripheral_index(mmio_addr) {
                 if !self.is_peripheral_clocked(idx) {
                     return Ok(0); // unclocked peripheral reads 0 (silicon gating)
                 }
                 let p = &self.peripherals[idx];
-                let off = addr - p.base;
+                let off = mmio_addr - p.base;
                 self.note_mmio_activity(idx, off);
                 return p.dev.read(off);
             }
@@ -228,9 +231,13 @@ impl crate::Bus for SystemBus {
             .or(flash_alias_old)
             .or_else(|| self.extra_mem.iter().find_map(|m| m.read_u8(addr)))
             .or_else(|| {
-                self.find_peripheral_index(addr).and_then(|idx| {
+                // Memory missed, so this is an MMIO (or unmapped) store: safe
+                // to resolve the NS alias here too, so the observer reports the
+                // register's real previous value.
+                let mmio_addr = self.resolve_ns_alias(addr);
+                self.find_peripheral_index(mmio_addr).and_then(|idx| {
                     let p = &self.peripherals[idx];
-                    p.dev.peek(addr - p.base)
+                    p.dev.peek(mmio_addr - p.base)
                 })
             })
             .unwrap_or(0);
@@ -333,6 +340,11 @@ impl crate::Bus for SystemBus {
             && addr < self.flash.data.len() as u64
             && self.flash.write_u8(self.flash.base_addr + addr, value);
 
+        // Address this store actually routes to: the translated NS alias when
+        // (and only when) the store falls through to a peripheral. Memory is
+        // checked first, so a RAM/flash mapping is never shadowed, and for a
+        // memory store this stays `addr` (see `resolve_ns_alias`).
+        let mut mmio_addr = addr;
         let res = if self.ram.write_u8(addr, value)
             || self.flash.write_u8(addr, value)
             || flash_alias_write
@@ -342,14 +354,15 @@ impl crate::Bus for SystemBus {
             Ok(())
         } else {
             // Dynamic Peripherals
-            if let Some(idx) = self.find_peripheral_index(addr) {
+            mmio_addr = self.resolve_ns_alias(addr);
+            if let Some(idx) = self.find_peripheral_index(mmio_addr) {
                 if !self.is_peripheral_clocked(idx) {
                     // Unclocked peripheral: the write is dropped on real silicon
                     // (the bus access never reaches the gated block), so status
                     // bits never change and the firmware visibly stalls.
                     return Ok(());
                 }
-                let off = addr - self.peripherals[idx].base;
+                let off = mmio_addr - self.peripherals[idx].base;
                 self.note_mmio_activity(idx, off);
                 #[cfg(feature = "event-scheduler")]
                 self.sync_scheduler_peripheral(idx);
@@ -384,9 +397,9 @@ impl crate::Bus for SystemBus {
 
         if res.is_ok() {
             // Wake up the peripheral
-            if let Some(idx) = self.find_peripheral_index(addr) {
+            if let Some(idx) = self.find_peripheral_index(mmio_addr) {
                 let base = self.peripherals[idx].base;
-                self.sync_esp32c3_irq_cache_write(idx, addr - base);
+                self.sync_esp32c3_irq_cache_write(idx, mmio_addr - base);
                 // Same write choke, ESP32-S3 interrupt matrix: a level moved by
                 // this write (above all the FROM_CPU self-IPI that implements
                 // `portYIELD_WITHIN_API`) must reach the core on the NEXT
@@ -395,13 +408,15 @@ impl crate::Bus for SystemBus {
                 // Same write choke, for the C3 permission-control unit: a
                 // write into the SENSITIVE PMS span re-derives the permission
                 // map (and honours a VIOLATE_CLR pulse).
-                self.sync_esp32c3_pms_write(idx, addr - base);
+                self.sync_esp32c3_pms_write(idx, mmio_addr - base);
                 self.peripherals[idx].ticks_remaining = 0;
                 self.refresh_legacy_tick_index(idx);
                 self.refresh_bus_tick_index(idx);
             }
 
-            // Trigger observers
+            // Trigger observers, with the address the firmware actually issued
+            // (the NS alias on a translated access) rather than the window it
+            // resolved to.
             for observer in &self.observers {
                 observer.on_memory_write(addr, old_value, value);
             }
@@ -455,20 +470,22 @@ impl crate::Bus for SystemBus {
                 self.note_memory_read();
                 return Ok(val);
             }
-            if let Some(idx) = self.find_peripheral_index(addr) {
+            let mmio_addr = self.resolve_ns_alias(addr);
+            if let Some(idx) = self.find_peripheral_index(mmio_addr) {
                 if !self.is_peripheral_clocked(idx) {
                     return Ok(0);
                 }
-                let off = addr - self.peripherals[idx].base;
+                let off = mmio_addr - self.peripherals[idx].base;
                 self.note_mmio_activity(idx, off);
                 return self.peripherals[idx].dev.read_u16(off);
             }
         } else {
-            if let Some(idx) = self.find_peripheral_index(addr) {
+            let mmio_addr = self.resolve_ns_alias(addr);
+            if let Some(idx) = self.find_peripheral_index(mmio_addr) {
                 if !self.is_peripheral_clocked(idx) {
                     return Ok(0);
                 }
-                let off = addr - self.peripherals[idx].base;
+                let off = mmio_addr - self.peripherals[idx].base;
                 self.note_mmio_activity(idx, off);
                 return self.peripherals[idx].dev.read_u16(off);
             }
@@ -573,20 +590,22 @@ impl crate::Bus for SystemBus {
                 self.note_memory_read();
                 return Ok(val);
             }
-            if let Some(idx) = self.find_peripheral_index(addr) {
+            let mmio_addr = self.resolve_ns_alias(addr);
+            if let Some(idx) = self.find_peripheral_index(mmio_addr) {
                 if !self.is_peripheral_clocked(idx) {
                     return Ok(0);
                 }
-                let off = addr - self.peripherals[idx].base;
+                let off = mmio_addr - self.peripherals[idx].base;
                 self.note_mmio_activity(idx, off);
                 return self.peripherals[idx].dev.read_u32(off);
             }
         } else {
-            if let Some(idx) = self.find_peripheral_index(addr) {
+            let mmio_addr = self.resolve_ns_alias(addr);
+            if let Some(idx) = self.find_peripheral_index(mmio_addr) {
                 if !self.is_peripheral_clocked(idx) {
                     return Ok(0);
                 }
-                let off = addr - self.peripherals[idx].base;
+                let off = mmio_addr - self.peripherals[idx].base;
                 self.note_mmio_activity(idx, off);
                 return self.peripherals[idx].dev.read_u32(off);
             }
@@ -625,11 +644,12 @@ impl crate::Bus for SystemBus {
             self.note_memory_write();
             return Ok(());
         }
-        if let Some(idx) = self.find_peripheral_index(addr) {
+        let mmio_addr = self.resolve_ns_alias(addr);
+        if let Some(idx) = self.find_peripheral_index(mmio_addr) {
             if !self.is_peripheral_clocked(idx) {
                 return Ok(()); // unclocked peripheral: write dropped (gating)
             }
-            let off = addr - self.peripherals[idx].base;
+            let off = mmio_addr - self.peripherals[idx].base;
             self.note_mmio_activity(idx, off);
             #[cfg(feature = "event-scheduler")]
             self.sync_scheduler_peripheral(idx);
@@ -652,7 +672,7 @@ impl crate::Bus for SystemBus {
             self.collect_scheduled_events(idx);
             if r.is_ok() {
                 let base = self.peripherals[idx].base;
-                self.sync_esp32c3_irq_cache_write(idx, addr - base);
+                self.sync_esp32c3_irq_cache_write(idx, mmio_addr - base);
                 // Same write choke, ESP32-S3 interrupt matrix: a level moved by
                 // this write (above all the FROM_CPU self-IPI that implements
                 // `portYIELD_WITHIN_API`) must reach the core on the NEXT
@@ -661,7 +681,7 @@ impl crate::Bus for SystemBus {
                 // Same write choke, for the C3 permission-control unit: a
                 // write into the SENSITIVE PMS span re-derives the permission
                 // map (and honours a VIOLATE_CLR pulse).
-                self.sync_esp32c3_pms_write(idx, addr - base);
+                self.sync_esp32c3_pms_write(idx, mmio_addr - base);
                 self.refresh_legacy_tick_index(idx);
                 self.refresh_bus_tick_index(idx);
                 // Level reconcile at the write choke: for a LEVEL source, the
@@ -754,11 +774,12 @@ impl crate::Bus for SystemBus {
             self.note_memory_write();
             return Ok(());
         }
-        if let Some(idx) = self.find_peripheral_index(addr) {
+        let mmio_addr = self.resolve_ns_alias(addr);
+        if let Some(idx) = self.find_peripheral_index(mmio_addr) {
             if !self.is_peripheral_clocked(idx) {
                 return Ok(()); // unclocked peripheral: write dropped (gating)
             }
-            let off = addr - self.peripherals[idx].base;
+            let off = mmio_addr - self.peripherals[idx].base;
             self.note_mmio_activity(idx, off);
             #[cfg(feature = "event-scheduler")]
             self.sync_scheduler_peripheral(idx);
@@ -781,7 +802,7 @@ impl crate::Bus for SystemBus {
             self.collect_scheduled_events(idx);
             if r.is_ok() {
                 let base = self.peripherals[idx].base;
-                self.sync_esp32c3_irq_cache_write(idx, addr - base);
+                self.sync_esp32c3_irq_cache_write(idx, mmio_addr - base);
                 // Same write choke, ESP32-S3 interrupt matrix: a level moved by
                 // this write (above all the FROM_CPU self-IPI that implements
                 // `portYIELD_WITHIN_API`) must reach the core on the NEXT
@@ -790,7 +811,7 @@ impl crate::Bus for SystemBus {
                 // Same write choke, for the C3 permission-control unit: a
                 // write into the SENSITIVE PMS span re-derives the permission
                 // map (and honours a VIOLATE_CLR pulse).
-                self.sync_esp32c3_pms_write(idx, addr - base);
+                self.sync_esp32c3_pms_write(idx, mmio_addr - base);
                 self.refresh_legacy_tick_index(idx);
                 self.refresh_bus_tick_index(idx);
                 // Level reconcile at the write choke: for a LEVEL source, the

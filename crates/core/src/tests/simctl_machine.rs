@@ -213,6 +213,7 @@ mod from_declaration {
             },
             reset_vector_offset: 0,
             atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
+            ns_alias_offset: None,
             memory_regions: Vec::new(),
             peripherals: vec![PeripheralConfig {
                 id: "simctl".to_string(),

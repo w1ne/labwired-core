@@ -552,6 +552,27 @@ pub struct ChipDescriptor {
     /// faults, which is correct for STM32/nRF/etc.
     #[serde(default, deserialize_with = "deserialize_atomic_alias_flavour")]
     pub atomic_register_aliases: AtomicAliasFlavour,
+    /// Non-secure peripheral alias window. When set, an MMIO access that maps
+    /// to no peripheral window but whose address plus this offset DOES map to
+    /// one is served by that peripheral — the TrustZone NS alias of a secure
+    /// peripheral map.
+    ///
+    /// The nRF54L family exposes every peripheral twice: the secure alias at
+    /// `0x5000_0000+` (the devicetree default this chip YAML maps) and the
+    /// non-secure alias exactly `0x1000_0000` below it
+    /// (`USE_NON_SECURE_ADDRESS_MAP`). An NS firmware image addresses
+    /// `0x400D_8200` where the mapped descriptor says `0x500D_8200`; without
+    /// this key those accesses map to nothing. The offset is applied ONLY as a
+    /// fallback for addresses that are otherwise unmapped, so it can never
+    /// shadow a peripheral the chip declares, and a chip that omits the key is
+    /// byte-identical to before. Accepts an integer or the same
+    /// `"0x…"`/`_`-separated string forms as `base_address`.
+    #[serde(
+        default,
+        deserialize_with = "deserialize_opt_u64_lax",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub ns_alias_offset: Option<u64>,
     /// Extra CPU-visible memory windows beyond `flash`/`ram` (e.g. ESP32 IRAM
     /// and flash-DROM). Empty for chips with a simple two-region map.
     #[serde(default)]
@@ -1151,6 +1172,7 @@ impl From<labwired_ir::IrDevice> for ChipDescriptor {
             ram,
             reset_vector_offset: 0,
             atomic_register_aliases: AtomicAliasFlavour::None,
+            ns_alias_offset: None,
             memory_regions: Vec::new(),
             peripherals: ir
                 .peripherals

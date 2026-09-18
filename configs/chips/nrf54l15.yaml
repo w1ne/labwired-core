@@ -47,6 +47,16 @@ core: "cortex-m33"
 # (datasheet v1.0 §5.5.3), which is the state every lab here runs in.
 cpu_hz: 128_000_000
 
+# TrustZone non-secure peripheral alias window. Every peripheral mapped at the
+# secure base 0x5000_0000+ is mirrored exactly 0x1000_0000 below it, and a
+# firmware image built for the NS view (USE_NON_SECURE_ADDRESS_MAP, e.g. the
+# hosted nrf54l15-app-ns lane) addresses P2 at 0x4005_0400, GRTC at 0x400E_2000
+# and so on — addresses this descriptor's secure view does not declare. The
+# bus applies this offset strictly as a FALLBACK: an access that maps to a
+# declared peripheral stays where it is, and an address that maps nowhere even
+# after translation stays unmapped. See `ChipDescriptor::ns_alias_offset`.
+ns_alias_offset: 0x10000000
+
 flash:
   base: 0x00000000
   size: "1524KB"
@@ -182,55 +192,53 @@ peripherals:
   #
   # BASE ADDRESS — read before "fixing" these values.
   #
-  # Nordic changed the GPIO port struct EVERY generation, so there is no single
-  # rule to carry across the family. What the MDK actually says:
+  # These ports use `profile: nrf54l`, which decodes this family's real offsets
+  # (OUT 0x000, OUTSET 0x004, OUTCLR 0x008, IN 0x00C, DIR 0x010, DIRSET 0x014,
+  # PIN_CNF 0x080 + 4n), at the MDK's own NRF_Pn_S_BASE values:
   #
-  #   part      NRF_Pn base    OUT offset within the struct
-  #   nRF52840  0x50000000     +0x504   (RESERVED[321] prefix)
-  #   nRF5340   0x50842500     +0x004   (RESERVED[1] prefix)
-  #   nRF54L15  0x500D8200     +0x000   (no prefix at all)
+  #   P0 0x5010A000, P1 0x500D8200, P2 0x50050400
   #
-  # LabWired's gpio model uses the nRF52 peripheral-relative offsets (OUT 0x504,
-  # OUTSET 0x508, IN 0x510, DIR 0x514, DIRSET 0x518), so the base mapped here
-  # must be chosen so those offsets land on the real registers:
+  # The previous arrangement — `profile: nrf52` mapped at `MDK_base - 0x504` —
+  # was wrong even though LEDs lit: this block moved OUT by 0x504 but PIN_CNF
+  # by 0x680 (0x700 -> 0x080), so one constant back-offset cannot deliver both.
+  # It delivered DIR and OUT and dropped every PIN_CNF access, and PIN_CNF is
+  # the ONLY register through which Zephyr/nrfx configure an input's pull-up.
+  # The DK's four buttons are all PULL_UP, so the old arrangement lost the pull
+  # configuration itself: this model stores PIN_CNF but derives no idle level
+  # from it. A press still reads when board_io drives the input latch; the
+  # fidelity gap is the pull, not the button.
   #
-  #   mapped_base = MDK_base - 0x504
+  # Verified against the vendored SVD (`GLOBAL_P0_S`/`P1_S`/`P2_S`, each based
+  # at the address above with OUT at offset 0x000) and the MDK
+  # nrf54l15_global.h / nrf54l15_types.h; `svd_conformance` now needs no
+  # deviation entry for these ports.
   #
-  # P0 0x5010A000-0x504=0x50109AFC, P1 0x500D8200-0x504=0x500D7CFC,
-  # P2 0x50050400-0x504=0x5004FEFC. Verified against the MDK
-  # nrf54l15_global.h (NRF_P0/P1/P2_S_BASE) and nrf54l15_types.h
-  # (NRF_GPIO_Type, OUT at 0x000).
-  #
-  # This is silent when wrong: UART still works and the board still boots, only
-  # the pins never move — which is why firmware_survival asserts DIR and OUT at
-  # the pin after booting a real ELF rather than trusting the banner.
-  #
-  # These three therefore carry NO `debug_schema`. The SVD's GLOBAL_P0/P1/P2
-  # descriptors are relative to the MDK base (OUT at offset 0x000), while the
-  # window mapped here starts 0x504 lower, so attaching one would name every
-  # register 0x504 off. A debugger stating a wrong name confidently is worse
-  # than showing none. Do not "fix" this by pointing at global_p0_s.yaml — it
-  # would need a hand-authored, offset-shifted descriptor.
+  # `size: 768` is the DT `reg` length (0x300), matching nrf54lm20a.yaml. It
+  # covers PIN_CNF for the widest port (P1, 17 pins) and cannot swallow a
+  # neighbouring window. The GPIO wire behaviour is silent when wrong: UART
+  # still works and the board still boots, only the pins never move — which is
+  # why firmware_survival asserts DIR and OUT at the pin after booting a real
+  # ELF rather than trusting the banner.
   - id: "gpio0"
     type: "gpio"
-    base_address: 0x50109AFC
-    size: "4KB"
+    base_address: 0x5010A000
+    size: 768
     config:
-      profile: "nrf52"
+      profile: "nrf54l"
       num_pins: 7
   - id: "gpio1"
     type: "gpio"
-    base_address: 0x500D7CFC
-    size: "4KB"
+    base_address: 0x500D8200
+    size: 768
     config:
-      profile: "nrf52"
+      profile: "nrf54l"
       num_pins: 17
   - id: "gpio2"
     type: "gpio"
-    base_address: 0x5004FEFC
-    size: "4KB"
+    base_address: 0x50050400
+    size: 768
     config:
-      profile: "nrf52"
+      profile: "nrf54l"
       num_pins: 11
 
   # ── TEMP ───────────────────────────────────────────────────────────────

@@ -1711,13 +1711,12 @@ fn test_nrf54l15_lights_dk_led0() {
     use labwired_core::Bus;
 
     // DK LED0 is P2.09 (board DT nrf54l15dk_common.dtsi, GPIO_ACTIVE_HIGH).
-    // Mapped P2 base = MDK NRF_P2_S_BASE (0x5005_0400) - 0x504, so the gpio
-    // model's nRF52-relative offsets land on the real registers: OUT ends up at
-    // 0x5005_0400 and DIR at 0x5005_0410, which is where the MDK puts them on
-    // this family (NRF_GPIO_Type has OUT at +0x000 here, unlike nRF52/nRF5340).
-    const GPIO_P2: u64 = 0x5004_FEFC;
-    const GPIO_OUT: u64 = 0x504;
-    const GPIO_DIR: u64 = 0x514;
+    // P2 is mapped at the MDK/SVD NRF_P2_S_BASE (0x5005_0400) with the nRF54L
+    // register profile, so OUT lands at +0x000 and DIR at +0x010 — the offsets
+    // the MDK nrf54l15_types.h gives this family's NRF_GPIO_Type.
+    const GPIO_P2: u64 = 0x5005_0400;
+    const GPIO_OUT: u64 = 0x000;
+    const GPIO_DIR: u64 = 0x010;
     const LED0: u32 = 1 << 9;
 
     let (chip, manifest) = load_system("nrf54l15", "nrf54l15dk");

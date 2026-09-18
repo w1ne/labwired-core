@@ -13,7 +13,9 @@
 //! the constant shift happens to place correctly. What it drops is PIN_CNF —
 //! and PIN_CNF is the ONLY register through which Zephyr and nrfx configure an
 //! input's pull-up. A board whose buttons are `GPIO_PULL_UP | GPIO_ACTIVE_LOW`
-//! would therefore boot, blink, and never read a press.
+//! therefore loses its pull configuration. That is a fidelity gap, not a dead
+//! button: this model stores PIN_CNF but derives no idle level from it, and an
+//! externally driven input (board_io) still reads a press.
 
 use labwired_core::peripherals::gpio::GpioPort;
 use labwired_core::Peripheral;
@@ -116,5 +118,44 @@ fn nrf54l_port_width_is_enforced() {
         read_u32(&p0, 0x010) & (1 << 20),
         0,
         "a 10-pin port must not accept a direction for pin 20"
+    );
+}
+
+/// LATCH (0x020) and DETECTMODE (0x024) are two DIFFERENT registers.
+///
+/// The constant-shift arm used to run `0x000..=0x024 => offset + 0x504`, which
+/// folded LATCH onto the nRF52 model's DETECTMODE (0x524) and pushed a genuine
+/// DETECTMODE access onto 0x528 — a register the model does not have. A driver
+/// that enables the latch filter therefore silently reconfigured the detect
+/// mode, and every DETECTMODE write/readback vanished. This pins the boundary:
+/// DETECTMODE round-trips at its own offset, and a LATCH write cannot move it.
+#[test]
+fn nrf54l_latch_and_detectmode_decode_to_their_own_registers() {
+    let mut port = GpioPort::new_nrf54l(32);
+
+    // DETECTMODE is a real, writable register at 0x024.
+    write_u32(&mut port, 0x024, 1);
+    assert_eq!(
+        read_u32(&port, 0x024),
+        1,
+        "DETECTMODE @0x024 must read back what firmware wrote"
+    );
+
+    // LATCH is a read-to-clear latch the model does not implement. Writing it
+    // must NOT reach DETECTMODE — that aliasing is exactly the defect.
+    write_u32(&mut port, 0x020, 0x5A5A);
+    assert_eq!(
+        read_u32(&port, 0x024),
+        1,
+        "a LATCH write at 0x020 must not corrupt DETECTMODE at 0x024"
+    );
+
+    // And the reverse: DETECTMODE is not where LATCH reads from. LATCH stays
+    // the unimplemented-register zero whatever DETECTMODE holds.
+    write_u32(&mut port, 0x024, 0);
+    assert_eq!(
+        read_u32(&port, 0x020),
+        0,
+        "LATCH is not modelled; it must read 0 after a DETECTMODE write"
     );
 }

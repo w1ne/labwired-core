@@ -27,19 +27,17 @@
 
 use labwired_config::ChipDescriptor;
 use labwired_core::bus::SystemBus;
-use labwired_core::Bus;
+use labwired_core::{Bus, SimulationError};
 
 // Peripherals at the secure alias the cpuapp DT uses by default.
 const UARTE20: u64 = 0x500C_6000;
 const UARTE30: u64 = 0x5010_4000;
-// GPIO mapped bases = MDK NRF_Pn_S_BASE - 0x504, so the gpio model's
-// nRF52-relative offsets land on the real registers. On THIS family
-// NRF_GPIO_Type has OUT at +0x000 (nRF52840: +0x504, nRF5340: +0x004), so
-// e.g. P2 OUT ends up at 0x5005_0400 = NRF_P2_S_BASE. See the comment in
-// configs/chips/nrf54l15.yaml.
-const GPIO_P0: u64 = 0x5010_9AFC;
-const GPIO_P1: u64 = 0x500D_7CFC;
-const GPIO_P2: u64 = 0x5004_FEFC;
+// GPIO ports sit at the MDK/SVD NRF_Pn_S_BASE with `profile: nrf54l`, so the
+// model decodes this family's real offsets (OUT 0x000, PIN_CNF 0x080) — no
+// back-offset. See the comment in configs/chips/nrf54l15.yaml.
+const GPIO_P0: u64 = 0x5010_A000;
+const GPIO_P1: u64 = 0x500D_8200;
+const GPIO_P2: u64 = 0x5005_0400;
 const TIMER20: u64 = 0x500C_A000;
 const GRTC: u64 = 0x500E_2000;
 const TEMP: u64 = 0x500D_7000;
@@ -57,25 +55,28 @@ const UARTE_PSEL_TXD: u64 = 0x604;
 const UARTE_BAUDRATE: u64 = 0x524;
 const UARTE_ENABLE_UARTE: u32 = 8;
 
-// GPIO (nRF52 profile), peripheral-base-relative.
-const GPIO_OUT: u64 = 0x504;
-const GPIO_OUTSET: u64 = 0x508;
-const GPIO_DIRSET: u64 = 0x518;
+// GPIO (nRF54L profile), peripheral-base-relative.
+const GPIO_OUT: u64 = 0x000;
+const GPIO_OUTSET: u64 = 0x004;
+const GPIO_DIRSET: u64 = 0x014;
 
 fn nrf54l15_chip_path() -> std::path::PathBuf {
     std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../configs/chips/nrf54l15.yaml")
 }
 
-fn nrf54l15_bus() -> SystemBus {
-    let path = nrf54l15_chip_path();
-    let chip = ChipDescriptor::from_file(&path).expect("load nrf54l15 chip");
+fn nrf54lm20a_chip_path() -> std::path::PathBuf {
+    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../configs/chips/nrf54lm20a.yaml")
+}
+
+fn bus_for_chip(path: &std::path::Path) -> SystemBus {
+    let chip = ChipDescriptor::from_file(path).expect("load chip");
     let manifest = labwired_config::SystemManifest {
         parts: Vec::new(),
         cosim_models: Vec::new(),
         motor_models: Vec::new(),
         walk_deleted: Some(false),
         schema_version: "1.0".to_string(),
-        name: "nrf54l15-boot".to_string(),
+        name: "nrf54l-boot".to_string(),
         chip: path.to_string_lossy().to_string(),
         cpu_hz: None,
         external_devices: vec![],
@@ -85,7 +86,11 @@ fn nrf54l15_bus() -> SystemBus {
         peripherals: vec![],
         memory_overrides: Default::default(),
     };
-    SystemBus::from_config(&chip, &manifest).expect("assemble nrf54l15 bus")
+    SystemBus::from_config(&chip, &manifest).expect("assemble nrf54l bus")
+}
+
+fn nrf54l15_bus() -> SystemBus {
+    bus_for_chip(&nrf54l15_chip_path())
 }
 
 #[test]
@@ -153,9 +158,9 @@ fn all_three_gpio_ports_are_mapped_and_independent() {
     let mut bus = nrf54l15_bus();
 
     // DK LED0 is P2.09, LED1 is P1.10 — the split across ports is the point.
-    // These land on the absolute addresses the MDK advertises:
-    // P2 OUT    = 0x5004_FEFC + 0x504 = 0x5005_0400 = NRF_P2_S_BASE + 0x000
-    // P2 OUTSET = 0x5004_FEFC + 0x508 = 0x5005_0404 = NRF_P2_S_BASE + 0x004
+    // These land on the absolute addresses the MDK and the SVD advertise:
+    // P2 OUT    = 0x5005_0400 + 0x000 = NRF_P2_S_BASE
+    // P2 OUTSET = 0x5005_0400 + 0x004 = NRF_P2_S_BASE + 0x004
     bus.write_u32(GPIO_P2 + GPIO_DIRSET, 1 << 9).unwrap();
     bus.write_u32(GPIO_P2 + GPIO_OUTSET, 1 << 9).unwrap();
     assert_ne!(
@@ -174,6 +179,100 @@ fn all_three_gpio_ports_are_mapped_and_independent() {
         bus.read_u32(GPIO_P1 + GPIO_OUT).unwrap() & (1 << 10),
         0,
         "P1.10 (DK LED1) must latch high"
+    );
+}
+
+/// The non-secure (TrustZone) alias view: every peripheral this descriptor maps
+/// at the secure base `0x5000_0000+` is mirrored exactly `0x1000_0000` below
+/// it. The hosted `nrf54l15-app-ns` firmware lane links against the NS view
+/// (`USE_NON_SECURE_ADDRESS_MAP`), so its first GPIO/UARTE/GRTC write is an
+/// address the secure mapping does not declare. `ns_alias_offset` in the chip
+/// YAML makes the bus answer those addresses from the same peripheral — the NS
+/// write must be observable at the secure base and vice versa, because it is
+/// one register, not two.
+#[test]
+fn non_secure_alias_reaches_the_same_peripheral_as_the_secure_base() {
+    let mut bus = nrf54l15_bus();
+
+    // GPIO P2: secure base 0x5005_0400, NS alias 0x4005_0400.
+    const GPIO_P2_NS: u64 = GPIO_P2 - 0x1000_0000;
+    assert_eq!(
+        GPIO_P2_NS, 0x4005_0400,
+        "the NS alias is secure - 0x1000_0000"
+    );
+
+    bus.write_u32(GPIO_P2_NS + GPIO_DIRSET, 1 << 9).unwrap();
+    bus.write_u32(GPIO_P2_NS + GPIO_OUTSET, 1 << 9).unwrap();
+    assert_ne!(
+        bus.read_u32(GPIO_P2 + GPIO_OUT).unwrap() & (1 << 9),
+        0,
+        "an NS OUTSET must latch the bit a secure OUT read observes"
+    );
+    // And reading through the alias sees the same register the secure base does.
+    assert_eq!(
+        bus.read_u32(GPIO_P2_NS + GPIO_OUT).unwrap(),
+        bus.read_u32(GPIO_P2 + GPIO_OUT).unwrap(),
+        "secure and NS reads of P2.OUT must return the same latch"
+    );
+
+    // GRTC: enable the SYSCOUNTER the way nrfx does (MODE.SYSCOUNTEREN), give
+    // the model some time, then read SYSCOUNTER[0].L from both views.
+    const GRTC_NS: u64 = GRTC - 0x1000_0000;
+    const GRTC_MODE: u64 = 0x510;
+    const GRTC_SYSCOUNTER0_L: u64 = 0x720;
+    const GRTC_MODE_SYSCOUNTEREN: u32 = 1 << 1;
+
+    bus.write_u32(GRTC_NS + GRTC_MODE, GRTC_MODE_SYSCOUNTEREN)
+        .unwrap();
+    // Advance whichever drive mode this build uses: the legacy per-cycle walk
+    // (128 CPU cycles = one 1 MHz SYSCOUNTER tick) and the scheduler's lazy
+    // cycle-clock sync both have to reach the same nonzero count.
+    bus.set_current_cycle(128_000);
+    for _ in 0..=128 {
+        bus.tick_peripherals_fully();
+    }
+    let secure = bus.read_u32(GRTC + GRTC_SYSCOUNTER0_L).unwrap();
+    let non_secure = bus.read_u32(GRTC_NS + GRTC_SYSCOUNTER0_L).unwrap();
+    assert_ne!(secure, 0, "precondition: the SYSCOUNTER must have advanced");
+    assert_eq!(
+        non_secure, secure,
+        "an NS GRTC SYSCOUNTER read must return the secure-base value"
+    );
+}
+
+/// The alias translation is an explicit per-chip opt-in. nRF54LM20A shares the
+/// nRF54L address map — its P2 is also at `0x5005_0400` — but its profile maps
+/// the secure view (the `cpuapp` and the in-tree snake lane build against it)
+/// and does NOT declare `ns_alias_offset`. Its NS range must stay unmapped: a
+/// fallback that silently translated on such a chip would make the secure
+/// peripheral answer addresses its descriptor never promised.
+#[test]
+fn ns_alias_translation_does_not_leak_to_a_chip_without_the_field() {
+    let path = nrf54lm20a_chip_path();
+    let chip = ChipDescriptor::from_file(&path).expect("load nrf54lm20a chip");
+    assert!(
+        chip.ns_alias_offset.is_none(),
+        "nRF54LM20A maps the secure view; it must not opt into NS translation"
+    );
+
+    let mut bus = bus_for_chip(&path);
+    const GPIO_P2_NS: u64 = 0x4005_0400;
+    const GPIO_P2_OUTSET: u64 = 0x004;
+
+    let err = bus
+        .write_u32(GPIO_P2_NS + GPIO_P2_OUTSET, 1 << 9)
+        .expect_err("an NS alias on a chip without ns_alias_offset must stay unmapped");
+    assert!(
+        matches!(err, SimulationError::MemoryViolation(a) if a == GPIO_P2_NS + GPIO_P2_OUTSET),
+        "expected MemoryViolation at the NS address, got {err:?}"
+    );
+
+    // The guard's point: it did NOT land on the secure port (same alias it
+    // would have hit had translation leaked across chips).
+    assert_eq!(
+        bus.read_u32(0x5005_0400).unwrap(),
+        0,
+        "the secure P2.OUT must be untouched by the refused NS write"
     );
 }
 
