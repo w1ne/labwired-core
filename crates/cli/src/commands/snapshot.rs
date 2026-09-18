@@ -31,7 +31,7 @@ pub(crate) fn run_snapshot_capture(
     plugins: &[&dyn labwired_core::plugin::ChipPlugin],
 ) -> ExitCode {
     use labwired_core::bus::SystemBus;
-    use labwired_core::peripherals::components::{Ssd1680Tricolor290, Uc8151dTricolor290};
+    use labwired_core::peripherals::components::GenericDisplay;
     use labwired_core::peripherals::esp32::spi::Esp32Spi;
     use labwired_core::system::xtensa::configure_xtensa_esp32;
     use labwired_core::{Machine, SimulationError};
@@ -386,114 +386,123 @@ pub(crate) fn run_snapshot_capture(
                         );
                     }
                 }
+                // ONE arm for every YAML panel, e-paper and TFT alike. This
+                // used to be three: `Ssd1680Tricolor290`, then `GenericDisplay`,
+                // then `Uc8151dTricolor290`, each a cast to a concrete
+                // per-panel type, so a new panel meant a new arm in this file
+                // and in `test.rs`. What tells the two families apart now is
+                // what the descriptor DECLARES — a panel with named 1-bpp planes
+                // is an e-paper — and every fact printed below comes off the
+                // same `artifacts()` seam the browser and the oracles read.
                 for attached in &spi3.attached_devices {
-                    if let Some(panel_any) = attached.as_any() {
-                        if let Some(panel) = panel_any.downcast_ref::<Ssd1680Tricolor290>() {
-                            let bp = panel.black_plane();
-                            let non_ff = bp.iter().filter(|&&b| b != 0xFF).count();
-                            eprintln!(
-                                "labwired-cli snapshot: panel (ssd1680) state — refresh_generation={}, power_on={}, black-plane non-FF bytes={}/{}",
-                                panel.refresh_generation(),
-                                panel.power_on(),
-                                non_ff,
-                                bp.len(),
-                            );
-                        } else if let Some(panel) = panel_any
-                            .downcast_ref::<labwired_core::peripherals::components::GenericDisplay>(
-                        ) {
-                            // An RGB565 TFT has no e-paper "refresh" — the
-                            // frame memory IS the screen — so the evidence is
-                            // DISPON plus how much of the framebuffer the
-                            // firmware actually wrote. Without this line the
-                            // panel produced no run evidence at all: a `display`
-                            // oracle clause could not resolve, and a lab could
-                            // only assert that `tft.begin()` returned, which is
-                            // a host-side value the driver tracks itself and
-                            // would read the same with no panel on the bus.
-                            //
-                            // `refresh_generation` is reported as 1 once the
-                            // display is on and pixels exist, so one oracle
-                            // shape covers both panel families.
-                            let fb = panel.framebuffer();
-                            let painted = fb.iter().filter(|&&b| b != 0x00).count();
-                            let generation = u32::from(panel.display_on() && painted > 0);
-                            let (w, h) = (panel.width(), panel.height());
-                            // The most common non-black pixel, so the line says
-                            // WHAT was drawn and not merely that something was.
-                            // "10176 bytes changed" cannot be checked against a
-                            // photo of the real panel; "top colour 0x07E0"
-                            // (RGB565 green) can. A BTreeMap, not a HashMap: a
-                            // tie between two colours must resolve the same way
-                            // on every run, and `max_by_key` over an ordered
-                            // iterator does that by construction.
-                            let mut counts: std::collections::BTreeMap<u16, usize> =
-                                std::collections::BTreeMap::new();
-                            for px in fb.chunks_exact(2) {
-                                let v = u16::from_be_bytes([px[0], px[1]]);
-                                if v != 0 {
-                                    *counts.entry(v).or_default() += 1;
-                                }
+                    let Some(panel) = attached
+                        .as_any()
+                        .and_then(|a| a.downcast_ref::<GenericDisplay>())
+                    else {
+                        continue;
+                    };
+                    let Some(art) = labwired_core::peripherals::spi::SpiDevice::artifacts(
+                        attached.as_ref(),
+                        "panel",
+                        &labwired_core::inspect::InspectOpts {
+                            include_bytes: false,
+                            peripheral: None,
+                        },
+                    )
+                    .into_iter()
+                    .next() else {
+                        continue;
+                    };
+                    let meta = &art.meta;
+                    let planes = panel.planes();
+                    let (w, h) = (panel.width(), panel.height());
+                    if planes.names().is_empty() {
+                        // An RGB565 TFT has no e-paper "refresh" — the frame
+                        // memory IS the screen — so the evidence is DISPON plus
+                        // how much of the framebuffer the firmware actually
+                        // wrote. Without this line the panel produced no run
+                        // evidence at all: a `display` oracle clause could not
+                        // resolve, and a lab could only assert that
+                        // `tft.begin()` returned, which is a host-side value the
+                        // driver tracks itself and would read the same with no
+                        // panel on the bus.
+                        //
+                        // `refresh_generation` is reported as 1 once the display
+                        // is on and pixels exist, so one oracle shape covers
+                        // both panel families.
+                        let painted = meta
+                            .get("painted_bytes")
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(0);
+                        let display_on = meta
+                            .get("display_on")
+                            .and_then(|v| v.as_bool())
+                            .unwrap_or(false);
+                        let generation = u32::from(display_on && painted > 0);
+                        // The most common non-black pixel, so the line says WHAT
+                        // was drawn and not merely that something was. "10176
+                        // bytes changed" cannot be checked against a photo of
+                        // the real panel; "top colour 0x07E0" (RGB565 green)
+                        // can.
+                        let top = match (meta.get("top_colour"), meta.get("top_colour_pixels")) {
+                            (Some(v), Some(n)) if !v.is_null() => {
+                                format!("{} x{n}", v.as_str().unwrap_or_default())
                             }
-                            let top = counts
-                                .iter()
-                                .max_by_key(|&(_, n)| *n)
-                                .map(|(v, n)| format!("0x{v:04X} x{n}"))
-                                .unwrap_or_else(|| "none".to_string());
-                            eprintln!(
-                                "labwired-cli snapshot: panel (ili9341) state — refresh_generation={}, display_on={}, painted bytes={}/{}, {}x{}, top colour {}",
-                                generation,
-                                panel.display_on(),
-                                painted,
-                                fb.len(),
-                                w,
-                                h,
-                                top,
-                            );
-                        } else if let Some(panel) = panel_any.downcast_ref::<Uc8151dTricolor290>() {
-                            let bp = panel.black_plane();
-                            let non_ff = bp.iter().filter(|&&b| b != 0xFF).count();
-                            let rp = panel.red_plane();
-                            let non_ff_red = rp.iter().filter(|&&b| b != 0xFF).count();
-                            eprintln!(
-                                "labwired-cli snapshot: panel (uc8151d) state — refresh_generation={}, power_on={}, black-plane non-FF bytes={}/{}, red-plane non-FF bytes={}/{}",
-                                panel.refresh_generation(),
-                                panel.power_on(),
-                                non_ff,
-                                bp.len(),
-                                non_ff_red,
-                                rp.len(),
-                            );
-                            // Render the panel as a PPM next to the
-                            // snapshot output so an operator can visually
-                            // confirm "yes, this looks like the real-HW
-                            // panel image" before shipping the snapshot.
-                            let (w, h) = panel.dimensions();
-                            let stride = w / 8;
-                            let mut ppm = format!("P6\n{w} {h}\n255\n").into_bytes();
-                            for y in 0..h {
-                                for x in 0..w {
-                                    let idx = y * stride + x / 8;
-                                    let bit = 7 - (x % 8);
-                                    let black_bit = (bp[idx] >> bit) & 1;
-                                    let red_bit = (rp[idx] >> bit) & 1;
-                                    let (r, g, b) = if red_bit == 0 {
-                                        (220u8, 30u8, 40u8)
-                                    } else if black_bit == 0 {
-                                        (0u8, 0u8, 0u8)
-                                    } else {
-                                        (245u8, 245u8, 240u8)
-                                    };
-                                    ppm.extend_from_slice(&[r, g, b]);
-                                }
-                            }
-                            let ppm_path = args.output.with_extension("ppm");
-                            if std::fs::write(&ppm_path, &ppm).is_ok() {
-                                eprintln!(
-                                    "labwired-cli snapshot: panel PPM written to {}",
-                                    ppm_path.display()
-                                );
-                            }
+                            _ => "none".to_string(),
+                        };
+                        eprintln!(
+                            "labwired-cli snapshot: panel ({}) state — refresh_generation={}, display_on={}, painted bytes={}/{}, {w}x{h}, top colour {}",
+                            meta.get("format").and_then(|v| v.as_str()).unwrap_or("display"),
+                            generation,
+                            display_on,
+                            painted,
+                            meta.get("total_bytes").and_then(|v| v.as_u64()).unwrap_or(0),
+                            top,
+                        );
+                        continue;
+                    }
+
+                    let plane_bytes = planes.plane_bytes();
+                    eprintln!(
+                        "labwired-cli snapshot: panel (e-paper) state — refresh_generation={}, power_on={}, black-plane non-FF bytes={}/{plane_bytes}, red-plane non-FF bytes={}/{plane_bytes}",
+                        panel.refresh_generation(),
+                        meta.get("power_on").and_then(|v| v.as_bool()).unwrap_or(false),
+                        planes.ink_bytes("black").unwrap_or(0),
+                        planes.ink_bytes("red").unwrap_or(0),
+                    );
+                    // Render THE GLASS as a PPM next to the snapshot output so
+                    // an operator can visually confirm "yes, this looks like the
+                    // real-HW panel image" before shipping the snapshot. The
+                    // glass, not frame memory: a frame written and never
+                    // activated is not what a camera would see.
+                    let (Some(bp), Some(rp)) = (planes.screen("black"), planes.screen("red"))
+                    else {
+                        continue;
+                    };
+                    let stride = w / 8;
+                    let mut ppm = format!("P6\n{w} {h}\n255\n").into_bytes();
+                    for y in 0..h {
+                        for x in 0..w {
+                            let idx = y * stride + x / 8;
+                            let bit = 7 - (x % 8);
+                            let black_bit = (bp[idx] >> bit) & 1;
+                            let red_bit = (rp[idx] >> bit) & 1;
+                            let (r, g, b) = if red_bit == 0 {
+                                (220u8, 30u8, 40u8)
+                            } else if black_bit == 0 {
+                                (0u8, 0u8, 0u8)
+                            } else {
+                                (245u8, 245u8, 240u8)
+                            };
+                            ppm.extend_from_slice(&[r, g, b]);
                         }
+                    }
+                    let ppm_path = args.output.with_extension("ppm");
+                    if std::fs::write(&ppm_path, &ppm).is_ok() {
+                        eprintln!(
+                            "labwired-cli snapshot: panel PPM written to {}",
+                            ppm_path.display()
+                        );
                     }
                 }
             }

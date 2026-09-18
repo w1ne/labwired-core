@@ -15,7 +15,7 @@
 // to match — the gitignored ELF had let the stale golden go unnoticed.)
 
 use labwired_core::bus::SystemBus;
-use labwired_core::peripherals::components::Ssd1680Tricolor290;
+use labwired_core::peripherals::components::{ssd1680_tricolor_290, GenericDisplay};
 use labwired_core::peripherals::esp32::spi::Esp32Spi;
 use labwired_core::system::xtensa::configure_xtensa_esp32;
 use labwired_core::{Cpu, Machine};
@@ -76,7 +76,7 @@ fn firmware_drives_panel_to_ereader_bitmap() {
 
     // Attach SSD1680 panel to SPI3 — mirrors what
     // `WasmSimulator::attach_esp32_external_devices` does for the playground.
-    bus.attach_spi_device("spi3", Box::new(Ssd1680Tricolor290::new("GPIO5")))
+    bus.attach_spi_device("spi3", Box::new(ssd1680_tricolor_290("GPIO5")))
         .expect("spi3 is an Esp32Spi controller");
 
     bus.refresh_peripheral_index();
@@ -135,11 +135,9 @@ fn firmware_drives_panel_to_ereader_bitmap() {
     let panel = spi
         .attached_devices
         .iter()
-        .find_map(|d| {
-            d.as_any()
-                .and_then(|a| a.downcast_ref::<Ssd1680Tricolor290>())
-        })
+        .find_map(|d| d.as_any().and_then(|a| a.downcast_ref::<GenericDisplay>()))
         .expect("SSD1680 attached to spi3");
+    let planes = panel.planes();
 
     assert!(
         panel.refresh_generation() >= 1,
@@ -147,8 +145,8 @@ fn firmware_drives_panel_to_ereader_bitmap() {
         panel.refresh_generation()
     );
 
-    let black = panel.black_plane();
-    let red = panel.red_plane();
+    let black = planes.ram("black").expect("black plane");
+    let red = planes.ram("red").expect("red plane");
     assert_eq!(black.len(), 4736);
     assert_eq!(red.len(), 4736);
 

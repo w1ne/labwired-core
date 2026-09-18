@@ -33,6 +33,19 @@ pub const HOT_BB_L32R_ADDR: u32 = 0x4008_0534;
 
 /// Side-exit: block executed cleanly to the terminator.
 pub const EXIT_FALL_THROUGH: i32 = 0;
+/// Side-exit: the block's conditional branch evaluated true and the caller
+/// must continue at the target PC returned alongside this code. Value 1
+/// matches the pre-existing `fillScreen` / windowed-CALL8 "taken" wire
+/// code so the three emitters agree on the vocabulary.
+pub const EXIT_BRANCH_TAKEN: i32 = 1;
+/// Side-exit: an unconditional `J` retired and the caller must continue at
+/// the target PC. Distinct from [`EXIT_BRANCH_TAKEN`] because the
+/// interpreter's `J` arm does **not** set `Cpu::branched` (only
+/// `branch()`-family arms do), and `branched` feeds the zero-overhead-loop
+/// post-instruction check: a `J` whose destination is `LEND` must still
+/// loop back when its fall-through also reaches `LEND`. Value 2 is unused
+/// by the hot block (0/5) and fillScreen (0/1/3/5) vocabularies.
+pub const EXIT_JUMP_TAKEN: i32 = 2;
 /// Side-exit: host `read_u8` import signalled a bus error.
 pub const EXIT_HOST_BUS_ERROR: i32 = 5;
 

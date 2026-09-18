@@ -1205,6 +1205,14 @@ fn pcd8544_unpowered_module_matches() {
 
 /// A snapshot carries the PIXELS: the save/restore door the browser's
 /// state round-trip uses, kept across the port.
+///
+/// ⚠️ THE BLOB IS NO LONGER THE FRAME MEMORY. It used to be exactly the
+/// framebuffer, and this test compared the two models' blobs byte for byte. A
+/// panel now also carries its glass and its refresh counter, so the blob is a
+/// TAGGED record — see `DISPLAY_SNAPSHOT_TAG`. What is kept across the port is
+/// the CONTRACT, which is what this asserts: the pixels the old model saved are
+/// the pixels the new one restores, and the deleted model's untagged blob is
+/// refused rather than silently misread.
 #[test]
 fn pcd8544_runtime_snapshot_round_trips_the_pixels() {
     let frame = lcd_full_frame();
@@ -1216,12 +1224,25 @@ fn pcd8544_runtime_snapshot_round_trips_the_pixels() {
         vec![Step::CsRelease],
     ]);
     let (old, new, _, _) = drive_both_pcd8544(&steps);
+    let legacy = SpiDevice::runtime_snapshot(&old);
     let snap = SpiDevice::runtime_snapshot(&new);
-    assert_eq!(snap, SpiDevice::runtime_snapshot(&old), "snapshot bytes");
 
     let mut fresh = new_pcd8544();
     SpiDevice::restore_runtime_snapshot(&mut fresh, &snap).expect("restore");
     assert_eq!(fresh.framebuffer(), new.framebuffer());
+    assert_eq!(
+        fresh.framebuffer(),
+        old.framebuffer(),
+        "and the restored pixels are the deleted model's pixels",
+    );
+
+    assert_eq!(
+        legacy,
+        old.framebuffer(),
+        "the deleted model's blob WAS the frame memory — that is what is refused below",
+    );
+    SpiDevice::restore_runtime_snapshot(&mut fresh, &legacy)
+        .expect_err("an untagged blob must be refused, not restored as if it were tagged");
 }
 
 // ─── ILI9341 ───────────────────────────────────────────────────────────────
@@ -2068,5 +2089,561 @@ fn rm67162_artifact_keeps_its_published_shape() {
         &SpiDevice::artifacts(&old, "amoled", &opts())[0],
         art,
         "rm67162 power-on artifact",
+    );
+}
+
+// ─── tri-colour e-paper: SSD1680 and UC8151D ───────────────────────────────
+//
+// The first panels here where FRAME MEMORY IS NOT THE SCREEN, and the first
+// with two RAMs. Everything below drives the descriptor and the deleted model
+// through one script and compares the transcript, BOTH PLANES byte for byte,
+// the latched screen, and every field of the artifact's `meta`.
+
+use display_oracle::ssd1680_tricolor_290::Ssd1680Tricolor290 as OldSsd1680;
+use display_oracle::uc8151d_tricolor_290::Uc8151dTricolor290 as OldUc8151d;
+
+/// 128 px / 8 = 16 bytes per row.
+const EPD_ROW_BYTES: usize = 16;
+/// One plane of the 2.9" tri-colour glass.
+const EPD_PLANE_BYTES: usize = EPD_ROW_BYTES * 296;
+/// A D/C output register the bus would have resolved. Its VALUE is irrelevant —
+/// what matters is that both models are told a D/C line EXISTS, so both take
+/// their wired path and `Step::Dc` frames the script. Without it each takes its
+/// own declared unwired cheat, which is a different test (see
+/// `ssd1680_with_no_dc_line_infers_framing_in_both_models`).
+const EPD_DC_ODR: u64 = 0x4000_0000;
+
+fn new_ssd1680() -> GenericDisplay {
+    let mut dev = labwired_core::peripherals::components::ssd1680_tricolor_290(CS);
+    dev.set_dc_pin(DC);
+    SpiDevice::set_dc_source(&mut dev, EPD_DC_ODR, 0);
+    dev
+}
+
+fn new_uc8151d() -> GenericDisplay {
+    let mut dev = labwired_core::peripherals::components::uc8151d_tricolor_290(CS);
+    dev.set_dc_pin(DC);
+    SpiDevice::set_dc_source(&mut dev, EPD_DC_ODR, 0);
+    dev
+}
+
+fn old_ssd1680() -> OldSsd1680 {
+    let mut dev = OldSsd1680::new(CS).with_dc_pin(DC);
+    SpiDevice::set_dc_source(&mut dev, EPD_DC_ODR, 0);
+    dev
+}
+
+fn old_uc8151d() -> OldUc8151d {
+    let mut dev = OldUc8151d::new(CS).with_dc_pin(DC);
+    SpiDevice::set_dc_source(&mut dev, EPD_DC_ODR, 0);
+    dev
+}
+
+/// The keys the YAML e-paper publishes that the deleted models could not:
+/// the ink on THE GLASS, as opposed to the ink in frame memory. Named here so
+/// the parity comparison can require exactly these two and no others — a third
+/// new key is a contract change and fails the test.
+const EPD_NEW_META_KEYS: [&str; 2] = ["screen_black_ink_bytes", "screen_red_ink_bytes"];
+
+/// Compare an e-paper's two artifacts the way [`assert_same_artifact`] compares
+/// every other panel's, with ONE named exception: the descriptor publishes the
+/// two `screen_*` counts and the deleted model had no screen to count. Every
+/// other key must be identical, the payload must be identical, and the new
+/// key set must be exactly the old one plus those two.
+fn assert_same_epaper_artifact(old: &Artifact, new: &Artifact, what: &str) {
+    let (o, n) = (
+        old.meta.as_object().expect("old meta is an object"),
+        new.meta.as_object().expect("new meta is an object"),
+    );
+    for (k, v) in o {
+        assert_eq!(
+            Some(v),
+            n.get(k),
+            "{what}: artifact meta['{k}'] differs — the Rust model said {v:?}, the descriptor \
+             {:?}",
+            n.get(k)
+        );
+    }
+    let mut extra: Vec<&str> = n
+        .keys()
+        .filter(|k| !o.contains_key(*k))
+        .map(|k| k.as_str())
+        .collect();
+    extra.sort_unstable();
+    assert_eq!(
+        extra, EPD_NEW_META_KEYS,
+        "{what}: the descriptor may add exactly the two `of: screen` counts and nothing else"
+    );
+    assert_eq!(old.kind, new.kind, "{what}: artifact kind");
+    assert_eq!(old.id, new.id, "{what}: artifact id");
+    assert_eq!(old.bytes, new.bytes, "{what}: artifact payload");
+}
+
+/// Both planes, straight off the artifact payload, so the comparison reads the
+/// PUBLISHED bytes rather than a private accessor.
+fn planes_of(a: &Artifact) -> (&[u8], &[u8]) {
+    let bytes = a.bytes.as_ref().expect("artifact carries its bytes");
+    assert_eq!(
+        bytes.len(),
+        2 * EPD_PLANE_BYTES,
+        "black plane then red plane"
+    );
+    bytes.split_at(EPD_PLANE_BYTES)
+}
+
+fn epd_art(dev: &dyn SpiDevice) -> Artifact {
+    SpiDevice::artifacts(dev, "epd", &opts())
+        .into_iter()
+        .next()
+        .expect("one framebuffer artifact")
+}
+
+/// The exact byte sequence `GxEPD2_290_C90c::_InitDisplay()` emits.
+fn ssd1680_init() -> Vec<Step<'static>> {
+    script([
+        dc_command(0x12, &[]),
+        dc_command(0x01, &[0x27, 0x01, 0x00]),
+        dc_command(0x11, &[0x03]),
+        dc_command(0x3C, &[0x05]),
+        dc_command(0x18, &[0x80]),
+        dc_command(0x21, &[0x00, 0x80]),
+        // _setPartialRamArea(0, 0, 128, 296)
+        dc_command(0x44, &[0x00, 0x0F]),
+        dc_command(0x45, &[0x00, 0x00, 0x27, 0x01]),
+        dc_command(0x4E, &[0x00]),
+        dc_command(0x4F, &[0x00, 0x00]),
+    ])
+}
+
+/// `clearScreen(0xFF, 0xFF)`: a white black-plane and — because GxEPD2 writes
+/// `~color_value` for red — a fully RED red-plane, then the `_Update_Part`
+/// sequence that activates.
+fn ssd1680_clear_screen() -> Vec<Step<'static>> {
+    script([
+        dc_command(0x24, &[]),
+        dc_data(&vec![0xFF; EPD_PLANE_BYTES]),
+        dc_command(0x26, &[]),
+        dc_data(&vec![0x00; EPD_PLANE_BYTES]),
+        dc_command(0x22, &[0xF7]),
+        dc_command(0x20, &[]),
+    ])
+}
+
+fn drive_both_ssd1680(steps: &[Step<'_>]) -> (OldSsd1680, GenericDisplay, Transcript, Transcript) {
+    let mut old = old_ssd1680();
+    let mut new = new_ssd1680();
+    let t_old = run_spi(&mut old, steps);
+    let t_new = run_spi(&mut new, steps);
+    (old, new, t_old, t_new)
+}
+
+fn drive_both_uc8151d(steps: &[Step<'_>]) -> (OldUc8151d, GenericDisplay, Transcript, Transcript) {
+    let mut old = old_uc8151d();
+    let mut new = new_uc8151d();
+    let t_old = run_spi(&mut old, steps);
+    let t_new = run_spi(&mut new, steps);
+    (old, new, t_old, t_new)
+}
+
+#[test]
+fn ssd1680_init_and_clear_screen_are_byte_identical() {
+    let steps = script([ssd1680_init(), ssd1680_clear_screen()]);
+    let (old, new, t_old, t_new) = drive_both_ssd1680(&steps);
+    assert_eq!(t_old, t_new, "wire transcript");
+
+    let (a_old, a_new) = (epd_art(&old), epd_art(&new));
+    assert_same_epaper_artifact(&a_old, &a_new, "ssd1680 init + clearScreen");
+
+    // Not merely "equal to each other": the picture is the one GxEPD2 asked for.
+    let (black, red) = planes_of(&a_new);
+    assert!(black.iter().all(|&b| b == 0xFF), "black plane all white");
+    assert!(
+        red.iter().all(|&b| b == 0x00),
+        "red plane all red on the wire"
+    );
+    assert_eq!(a_new.meta["black_ink_bytes"], 0, "0xFF is NO ink");
+    assert_eq!(a_new.meta["red_ink_bytes"], EPD_PLANE_BYTES);
+    assert_eq!(a_new.meta["refresh_generation"], 1, "0x20 activated once");
+    assert_eq!(a_new.meta["plane_bytes"], EPD_PLANE_BYTES);
+}
+
+#[test]
+fn ssd1680_a_partial_window_writes_the_same_thirty_two_bytes() {
+    // 16x16 pixels in the top-left corner: 2 byte-columns x 16 rows.
+    let steps = script([
+        dc_command(0x44, &[0x00, 0x01]),
+        dc_command(0x45, &[0x00, 0x00, 0x0F, 0x00]),
+        dc_command(0x4E, &[0x00]),
+        dc_command(0x4F, &[0x00, 0x00]),
+        dc_command(0x24, &[]),
+        dc_data(&[0x55; 32]),
+        // The 33rd byte after 0x24 must be a COMMAND again: the window counted
+        // the stream out. SWRESET is the one whose effect is visible.
+        dc_command(0x12, &[]),
+    ]);
+    let (old, new, t_old, t_new) = drive_both_ssd1680(&steps);
+    assert_eq!(t_old, t_new, "wire transcript");
+    let (a_old, a_new) = (epd_art(&old), epd_art(&new));
+    assert_same_epaper_artifact(&a_old, &a_new, "ssd1680 partial window");
+
+    let (black, _) = planes_of(&a_new);
+    for row in 0..16 {
+        assert_eq!(black[row * EPD_ROW_BYTES], 0x55, "row {row} col 0");
+        assert_eq!(black[row * EPD_ROW_BYTES + 1], 0x55, "row {row} col 1");
+        assert_eq!(
+            black[row * EPD_ROW_BYTES + 2],
+            0xFF,
+            "row {row} outside the window"
+        );
+    }
+    assert_eq!(a_new.meta["black_ink_bytes"], 32, "exactly the window");
+}
+
+/// THE BYTE-UNIT X AXIS. 0x44 takes RAM-X as start/8; if the descriptor read it
+/// in pixels the window would be eight times too narrow and the rows would land
+/// on top of one another. The oracle is the reference for where they land.
+#[test]
+fn ssd1680_an_offset_byte_window_lands_on_the_same_rows() {
+    let steps = script([
+        // X bytes 4..=5, Y rows 100..=103.
+        dc_command(0x44, &[0x04, 0x05]),
+        dc_command(0x45, &[0x64, 0x00, 0x67, 0x00]),
+        dc_command(0x4E, &[0x04]),
+        dc_command(0x4F, &[0x64, 0x00]),
+        dc_command(0x24, &[]),
+        dc_data(&[0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7]),
+    ]);
+    let (old, new, _, _) = drive_both_ssd1680(&steps);
+    let (a_old, a_new) = (epd_art(&old), epd_art(&new));
+    assert_same_epaper_artifact(&a_old, &a_new, "ssd1680 offset window");
+    let (black, _) = planes_of(&a_new);
+    assert_eq!(black[100 * EPD_ROW_BYTES + 4], 0xA0);
+    assert_eq!(black[100 * EPD_ROW_BYTES + 5], 0xA1);
+    assert_eq!(black[103 * EPD_ROW_BYTES + 4], 0xA6);
+    assert_eq!(black[103 * EPD_ROW_BYTES + 5], 0xA7);
+    assert_eq!(a_new.meta["black_ink_bytes"], 8);
+}
+
+/// 0x22 IS A SEQUENCE SELECTOR, which is what the per-action `when` guard is
+/// for: 0xF8 powers the booster on, 0x83 powers it off, 0xF7 does neither.
+#[test]
+fn ssd1680_power_on_and_off_track_the_0x22_parameter() {
+    for (param, expect) in [(0xF8u8, true), (0x83, false)] {
+        let steps = script([dc_command(0x22, &[param]), dc_command(0x20, &[])]);
+        let (old, new, _, _) = drive_both_ssd1680(&steps);
+        let (a_old, a_new) = (epd_art(&old), epd_art(&new));
+        assert_same_epaper_artifact(&a_old, &a_new, &format!("ssd1680 0x22 {param:#04X}"));
+        assert_eq!(a_new.meta["power_on"], expect, "0x22 {param:#04X}");
+    }
+    // 0xF7 — the full-update selector GxEPD2 sends — changes no power state.
+    let steps = script([
+        dc_command(0x22, &[0xF8]),
+        dc_command(0x20, &[]),
+        dc_command(0x22, &[0xF7]),
+        dc_command(0x20, &[]),
+    ]);
+    let (old, new, _, _) = drive_both_ssd1680(&steps);
+    let (a_old, a_new) = (epd_art(&old), epd_art(&new));
+    assert_same_epaper_artifact(&a_old, &a_new, "ssd1680 0x22 0xF7");
+    assert_eq!(a_new.meta["power_on"], true, "0xF7 must not power off");
+    assert_eq!(a_new.meta["refresh_generation"], 2, "two activations");
+}
+
+#[test]
+fn ssd1680_deep_sleep_drops_the_booster_only_when_the_enter_bit_is_set() {
+    for (param, expect) in [(0x01u8, false), (0x00, true)] {
+        let steps = script([
+            dc_command(0x22, &[0xF8]),
+            dc_command(0x20, &[]),
+            dc_command(0x10, &[param]),
+        ]);
+        let (old, new, _, _) = drive_both_ssd1680(&steps);
+        let (a_old, a_new) = (epd_art(&old), epd_art(&new));
+        assert_same_epaper_artifact(&a_old, &a_new, &format!("ssd1680 0x10 {param:#04X}"));
+        assert_eq!(a_new.meta["power_on"], expect, "0x10 param {param:#04X}");
+    }
+}
+
+/// THE SUPPLY GATE, both directions. The positive control matters: "unpowered
+/// stays blank" also passes on a model that never inks anything.
+#[test]
+fn ssd1680_an_unpowered_panel_is_blank_in_both_models() {
+    let steps = script([
+        ssd1680_init(),
+        dc_command(0x24, &[]),
+        dc_data(&vec![0x00; EPD_PLANE_BYTES]),
+        dc_command(0x22, &[0xF7]),
+        dc_command(0x20, &[]),
+    ]);
+
+    let (old, new, _, _) = drive_both_ssd1680(&steps);
+    let (a_old, a_new) = (epd_art(&old), epd_art(&new));
+    assert_same_epaper_artifact(&a_old, &a_new, "ssd1680 powered control");
+    assert_eq!(
+        a_new.meta["black_ink_bytes"], EPD_PLANE_BYTES,
+        "positive control"
+    );
+    assert_eq!(a_new.meta["refresh_generation"], 1);
+
+    let mut old = old_ssd1680().with_powered(false);
+    let mut new = new_ssd1680();
+    new.set_powered(false);
+    run_spi(&mut old, &steps);
+    run_spi(&mut new, &steps);
+    let (a_old, a_new) = (epd_art(&old), epd_art(&new));
+    assert_same_epaper_artifact(&a_old, &a_new, "ssd1680 unpowered");
+    assert_eq!(a_new.meta["black_ink_bytes"], 0, "no supply, no ink");
+    assert_eq!(a_new.meta["refresh_generation"], 0);
+    assert_eq!(a_new.meta["powered"], false, "the artifact must say WHY");
+}
+
+/// NO D/C LINE IS ALSO A BOARD. The ESP32 e-paper lab wires CS and nothing
+/// else, and the deleted model inferred framing there. The descriptor's
+/// `dc.unwired: infer` is that same cheat, stated.
+#[test]
+fn ssd1680_with_no_dc_line_infers_framing_in_both_models() {
+    // The same bytes, with NO `Step::Dc` anywhere and no `dc_source` on either
+    // device: pure byte stream, exactly what the lab's SPI peripheral clocks.
+    let mut bytes: Vec<u8> = vec![
+        0x12, 0x01, 0x27, 0x01, 0x00, 0x11, 0x03, 0x44, 0x00, 0x0F, 0x45, 0x00, 0x00, 0x27, 0x01,
+        0x4E, 0x00, 0x4F, 0x00, 0x00, 0x24,
+    ];
+    bytes.extend(std::iter::repeat_n(0x00u8, EPD_PLANE_BYTES));
+    bytes.extend([0x22, 0xF7, 0x20]);
+    let steps = vec![Step::CsSelect, Step::Transfer(&bytes), Step::CsRelease];
+
+    let mut old = OldSsd1680::new(CS);
+    let mut new = labwired_core::peripherals::components::ssd1680_tricolor_290(CS);
+    assert_eq!(run_spi(&mut old, &steps), run_spi(&mut new, &steps));
+    let (a_old, a_new) = (epd_art(&old), epd_art(&new));
+    assert_same_epaper_artifact(&a_old, &a_new, "ssd1680 unwired D/C");
+    assert_eq!(
+        a_new.meta["black_ink_bytes"], EPD_PLANE_BYTES,
+        "the inference must terminate at the window end and let 0x22 decode",
+    );
+    assert_eq!(
+        a_new.meta["refresh_generation"], 1,
+        "0x20 decoded as a command"
+    );
+}
+
+// ─── UC8151D ───────────────────────────────────────────────────────────────
+
+/// `GxEPD2_290_Z13c`-shaped drive: power on, both planes, refresh.
+fn uc8151d_frame(black: u8, red: u8) -> Vec<Step<'static>> {
+    script([
+        dc_command(0x00, &[0x0F]),
+        dc_command(0x61, &[0x80, 0x01, 0x28]),
+        dc_command(0x50, &[0x77]),
+        dc_command(0x04, &[]),
+        dc_command(0x10, &[]),
+        dc_data(&vec![black; EPD_PLANE_BYTES]),
+        dc_command(0x13, &[]),
+        dc_data(&vec![red; EPD_PLANE_BYTES]),
+        dc_command(0x12, &[]),
+    ])
+}
+
+#[test]
+fn uc8151d_a_full_frame_is_byte_identical() {
+    let steps = uc8151d_frame(0x00, 0xFF);
+    let (old, new, t_old, t_new) = drive_both_uc8151d(&steps);
+    assert_eq!(t_old, t_new, "wire transcript");
+    let (a_old, a_new) = (epd_art(&old), epd_art(&new));
+    assert_same_epaper_artifact(&a_old, &a_new, "uc8151d full frame");
+
+    let (black, red) = planes_of(&a_new);
+    assert!(black.iter().all(|&b| b == 0x00), "black plane all ink");
+    assert!(red.iter().all(|&b| b == 0xFF), "red plane blank");
+    assert_eq!(a_new.meta["black_ink_bytes"], EPD_PLANE_BYTES);
+    assert_eq!(a_new.meta["red_ink_bytes"], 0);
+    assert_eq!(a_new.meta["power_on"], true, "PON");
+    assert_eq!(a_new.meta["refresh_generation"], 1, "DRF");
+}
+
+#[test]
+fn uc8151d_pon_and_pof_move_the_booster() {
+    let steps = script([dc_command(0x04, &[]), dc_command(0x02, &[])]);
+    let (old, new, _, _) = drive_both_uc8151d(&steps);
+    let (a_old, a_new) = (epd_art(&old), epd_art(&new));
+    assert_same_epaper_artifact(&a_old, &a_new, "uc8151d PON then POF");
+    assert_eq!(a_new.meta["power_on"], false);
+}
+
+/// The LUT commands carry 42 and 44 parameters. They must be COUNTED, or the
+/// byte after a LUT decodes as an opcode and the next plane stream never opens.
+#[test]
+fn uc8151d_a_forty_four_byte_lut_does_not_desynchronise_either_model() {
+    let steps = script([
+        dc_command(0x20, &[0x11; 44]),
+        dc_command(0x21, &[0x22; 42]),
+        dc_command(0x04, &[]),
+        dc_command(0x10, &[]),
+        dc_data(&[0x0F; 8]),
+        dc_command(0x12, &[]),
+    ]);
+    let (old, new, _, _) = drive_both_uc8151d(&steps);
+    let (a_old, a_new) = (epd_art(&old), epd_art(&new));
+    assert_same_epaper_artifact(&a_old, &a_new, "uc8151d LUTs");
+    let (black, _) = planes_of(&a_new);
+    assert_eq!(&black[..8], &[0x0F; 8], "the stream after the LUTs painted");
+    assert_eq!(a_new.meta["power_on"], true);
+    assert_eq!(a_new.meta["refresh_generation"], 1);
+}
+
+/// ⚠️ THE ONE DELIBERATE DIFFERENCE, pinned from BOTH sides so neither can be
+/// "fixed" into the other by accident.
+///
+/// A DTM1 stream longer than one plane: the deleted model CLIPPED (its cursor
+/// stopped at 4736 and further bytes were dropped), the descriptor's address
+/// counters WRAP to the window origin — which is what every other panel here
+/// does and what the counters of this family are described as doing. GxEPD2
+/// sends exactly one plane, so no firmware in this tree reaches it.
+#[test]
+fn uc8151d_an_over_long_plane_stream_clips_in_the_old_model_and_wraps_in_the_new() {
+    let mut data = vec![0x0Fu8; EPD_PLANE_BYTES];
+    data.extend([0xA5, 0xA5, 0xA5, 0xA5]);
+    let steps = script([dc_command(0x10, &[]), dc_data(&data)]);
+
+    let mut old = old_uc8151d();
+    let mut new = new_uc8151d();
+    run_spi(&mut old, &steps);
+    run_spi(&mut new, &steps);
+
+    let a_old = epd_art(&old);
+    let (black_old, _) = planes_of(&a_old);
+    assert_eq!(
+        &black_old[..4],
+        &[0x0F; 4],
+        "the deleted model DROPPED the four trailing bytes",
+    );
+    let a_new = epd_art(&new);
+    let (black_new, _) = planes_of(&a_new);
+    assert_eq!(
+        &black_new[..4],
+        &[0xA5; 4],
+        "the descriptor's counters WRAPPED and rewrote the first four bytes",
+    );
+    assert_eq!(
+        &black_new[4..8],
+        &[0x0F; 4],
+        "and only the four bytes that were re-sent moved",
+    );
+}
+
+/// WITH NO D/C LINE THE UC8151D CANNOT INFER, and both models say so the same
+/// way: every byte is data, nothing decodes, nothing paints. An honest blank
+/// rather than a plausible wrong picture.
+#[test]
+fn uc8151d_with_no_dc_line_paints_nothing_in_both_models() {
+    let mut bytes = vec![0x04u8, 0x10];
+    bytes.extend(std::iter::repeat_n(0x00u8, EPD_PLANE_BYTES));
+    bytes.push(0x12);
+    let steps = vec![Step::CsSelect, Step::Transfer(&bytes), Step::CsRelease];
+
+    let mut old = OldUc8151d::new(CS);
+    let mut new = labwired_core::peripherals::components::uc8151d_tricolor_290(CS);
+    assert_eq!(run_spi(&mut old, &steps), run_spi(&mut new, &steps));
+    let (a_old, a_new) = (epd_art(&old), epd_art(&new));
+    assert_same_epaper_artifact(&a_old, &a_new, "uc8151d unwired D/C");
+    assert_eq!(
+        a_new.meta["black_ink_bytes"], 0,
+        "nothing decoded, nothing painted"
+    );
+    assert_eq!(a_new.meta["refresh_generation"], 0);
+    assert_eq!(a_new.meta["power_on"], false);
+}
+
+// ─── what the deleted models could not say: the glass ──────────────────────
+
+/// FRAME MEMORY IS NOT THE SCREEN. A frame written and never activated changes
+/// `black_ink_bytes` and leaves `screen_black_ink_bytes` where it was. Nothing
+/// in either deleted model could tell the two apart, which is why these are the
+/// only two keys the port adds.
+#[test]
+fn a_frame_written_after_the_refresh_is_in_ram_and_not_on_the_glass() {
+    let mut new = new_ssd1680();
+    run_spi(
+        &mut new,
+        &script([
+            ssd1680_init(),
+            dc_command(0x24, &[]),
+            dc_data(&vec![0x00; EPD_PLANE_BYTES]),
+            dc_command(0x20, &[]),
+        ]),
+    );
+    let a = epd_art(&new);
+    assert_eq!(a.meta["black_ink_bytes"], EPD_PLANE_BYTES);
+    assert_eq!(
+        a.meta["screen_black_ink_bytes"], EPD_PLANE_BYTES,
+        "activated"
+    );
+    assert_eq!(a.meta["refresh_generation"], 1);
+
+    // A second frame, NEVER activated: RAM goes blank, the glass does not.
+    run_spi(
+        &mut new,
+        &script([
+            dc_command(0x44, &[0x00, 0x0F]),
+            dc_command(0x45, &[0x00, 0x00, 0x27, 0x01]),
+            dc_command(0x24, &[]),
+            dc_data(&vec![0xFF; EPD_PLANE_BYTES]),
+        ]),
+    );
+    let a = epd_art(&new);
+    assert_eq!(a.meta["black_ink_bytes"], 0, "frame memory was erased");
+    assert_eq!(
+        a.meta["screen_black_ink_bytes"], EPD_PLANE_BYTES,
+        "the glass still holds the activated frame — that is what e-paper does",
+    );
+    assert_eq!(a.meta["refresh_generation"], 1, "no second activation");
+}
+
+/// The runtime snapshot round-trips the PICTURE — both planes, the glass and
+/// the refresh counter — and an untagged capture is REFUSED rather than
+/// restored into a panel whose shape has changed.
+#[test]
+fn an_epaper_runtime_snapshot_round_trips_and_an_untagged_one_is_refused() {
+    let mut src = new_ssd1680();
+    run_spi(
+        &mut src,
+        &script([
+            ssd1680_init(),
+            dc_command(0x24, &[]),
+            dc_data(&vec![0x0F; EPD_PLANE_BYTES]),
+            dc_command(0x20, &[]),
+            // Written after the activation, so RAM and the glass DISAGREE and a
+            // snapshot that carried only RAM would restore the wrong picture.
+            dc_command(0x44, &[0x00, 0x0F]),
+            dc_command(0x45, &[0x00, 0x00, 0x27, 0x01]),
+            dc_command(0x24, &[]),
+            dc_data(&vec![0xFF; EPD_PLANE_BYTES]),
+        ]),
+    );
+    let blob = SpiDevice::runtime_snapshot(&src);
+
+    let mut dst = new_ssd1680();
+    SpiDevice::restore_runtime_snapshot(&mut dst, &blob).expect("a tagged snapshot restores");
+    assert_eq!(
+        epd_art(&dst).meta,
+        epd_art(&src).meta,
+        "every published fact survives the round trip",
+    );
+    assert_eq!(epd_art(&dst).bytes, epd_art(&src).bytes, "and every byte");
+    assert_eq!(
+        epd_art(&dst).meta["screen_black_ink_bytes"],
+        EPD_PLANE_BYTES
+    );
+    assert_eq!(epd_art(&dst).meta["black_ink_bytes"], 0);
+
+    // The pre-versioning format was RAW FRAME MEMORY with no header. It must be
+    // refused, and the message must say what to do.
+    let legacy = vec![0xFFu8; 2 * EPD_PLANE_BYTES];
+    let err = SpiDevice::restore_runtime_snapshot(&mut dst, &legacy)
+        .expect_err("an untagged snapshot must be refused");
+    let msg = err.to_string();
+    assert!(
+        msg.contains("retake"),
+        "the error must say what to do: {msg}"
     );
 }

@@ -386,10 +386,6 @@ const XTENSA: ArchCoverage = ArchCoverage {
         ("Abs", "unary ALU op, not in the JIT hot-block op set"),
         ("AbsS", "FPU (single-precision) op, not translated"),
         ("AddS", "FPU (single-precision) op, not translated"),
-        (
-            "Addmi",
-            "add-immediate-with-shift, not in the JIT hot-block op set",
-        ),
         ("Addx2", "scaled add, not in the JIT hot-block op set"),
         ("Addx4", "scaled add, not in the JIT hot-block op set"),
         ("Addx8", "scaled add, not in the JIT hot-block op set"),
@@ -406,21 +402,8 @@ const XTENSA: ArchCoverage = ArchCoverage {
         ("FloatS", "FPU int-to-float convert, not translated"),
         ("FloorS", "FPU (single-precision) op, not translated"),
         ("Isync", "pipeline sync op, cold path stays interpreted"),
-        ("J", "unconditional jump, not in the JIT terminator set"),
-        (
-            "L16si",
-            "load, JIT hot-block translator has no load/store emit",
-        ),
-        (
-            "L16ui",
-            "load, JIT hot-block translator has no load/store emit",
-        ),
         ("L32ai", "atomic load, not in the JIT hot-block op set"),
         ("L32e", "windowed-register-file load, interpreter only"),
-        (
-            "L32i",
-            "load, JIT hot-block translator has no load/store emit",
-        ),
         (
             "Loop",
             "zero-overhead loop setup, control flow the JIT does not model",
@@ -502,23 +485,11 @@ const XTENSA: ArchCoverage = ArchCoverage {
         ("Rur", "user-register read, interpreter only"),
         ("Rsync", "pipeline sync op, cold path stays interpreted"),
         (
-            "S16i",
-            "store, JIT hot-block translator has no load/store emit",
-        ),
-        (
             "S32c1i",
             "compare-and-swap, not in the JIT hot-block op set",
         ),
         ("S32e", "windowed-register-file store, interpreter only"),
-        (
-            "S32i",
-            "store, JIT hot-block translator has no load/store emit",
-        ),
         ("S32ri", "release-store, not in the JIT hot-block op set"),
-        (
-            "S8i",
-            "store, JIT hot-block translator has no load/store emit",
-        ),
         ("Salt", "signed less-than-with-trap compare, not translated"),
         (
             "Saltu",

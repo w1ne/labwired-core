@@ -183,6 +183,14 @@ pub static EMBEDDED_DEVICES: &[(&[&str], &str)] = &[
         include_str!("../../../configs/devices/rm67162.yaml"),
     ),
     (
+        &["ssd1680_tricolor_290"],
+        include_str!("../../../configs/devices/ssd1680_tricolor_290.yaml"),
+    ),
+    (
+        &["uc8151d_tricolor_290"],
+        include_str!("../../../configs/devices/uc8151d_tricolor_290.yaml"),
+    ),
+    (
         &["apa102"],
         include_str!("../../../configs/devices/apa102.yaml"),
     ),

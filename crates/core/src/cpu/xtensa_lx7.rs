@@ -307,6 +307,17 @@ impl XtensaLx7 {
         }
     }
 
+    /// Public hook for out-of-band data writes — JIT blocks commit their
+    /// stores through the `Bus` without going through [`Self::execute`]'s
+    /// `S8i`/`S32i` arms, so the caller must run the same self-modifying-
+    /// code invalidation those arms perform. Exposed (rather than making
+    /// the JIT callers re-derive the address rule) so the interpreter
+    /// stays the single source of truth for when caches go stale.
+    #[inline]
+    pub fn invalidate_for_data_write(&mut self, addr: u32) {
+        self.maybe_invalidate_for_write(addr);
+    }
+
     /// Construct an APP_CPU instance: PRID reads as 0xABAB (so
     /// `xPortGetCoreID()` returns 1) and the CPU starts halted —
     /// waiting for PRO_CPU to release it via `ets_set_appcpu_boot_addr`.

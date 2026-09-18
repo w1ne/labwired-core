@@ -103,8 +103,16 @@ use std::path::{Path, PathBuf};
 /// 199 → 202 / 214 → 217: SPI edge-sampling tests inspect the attached
 /// `EdgeSlave`/`EdgeDev` (latched MOSI bytes / call count). Production path
 /// does not grow a downcast; these three are test-only.
+/// 213 → 210: the two tri-colour e-papers became YAML `display` descriptors,
+/// so the CLI's `snapshot` and `test` commands stopped reaching for
+/// `Ssd1680Tricolor290` and then `Uc8151dTricolor290` and now take ONE arm on
+/// `GenericDisplay`, reading planes by name through `GenericDisplay::planes`.
+/// The seven e2e / snapshot / attach tests that reached a panel also collapsed
+/// onto that one type. This is the row going the right way for the right
+/// reason: the reach that remains is one per PRIMITIVE, not one per part, so
+/// the next panel adds none.
 const MAX_AS_ANY: usize = 199;
-const MAX_DOWNCAST_REF: usize = 213;
+const MAX_DOWNCAST_REF: usize = 210;
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

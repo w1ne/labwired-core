@@ -28,19 +28,34 @@
 //! anyway so when Phase 4.4 starts emitting PS-dependent code
 //! (CALL{n}/RETW need CALLINC) the cache is already correct.
 //!
-//! ## Host import surface (Phase 4.2 scope)
+//! ## Host import surface (Phase 4.3)
 //!
-//! The emit-core today produces a single import: `host.read_u8(i32) ->
-//! i32`. Backend behaviour: the host pre-stages the L8UI bytes via
-//! [`BrowserCompiledBlock::stage_loads`], the closure dequeues from
-//! that shared [`Rc<RefCell<Vec<u8>>>`]. If the queue is empty the
-//! closure returns `-1` and the wasm body exits with
+//! Every compiled block gets the same five-import host object, whether
+//! it needs them or not (unused wasm imports are free):
+//!
+//! | import | signature | host behaviour |
+//! |---|---|---|
+//! | `host.read_u8` | `(addr) -> i32` | dequeue a staged byte; `-1` on empty |
+//! | `host.read_u32` | `(addr) -> i32` | dequeue a staged word; `-1` on empty |
+//! | `host.write_u8` | `(addr, val) -> i32` | queue `(addr, val)`; always `0` |
+//! | `host.write_u32` | `(addr, val) -> i32` | queue `(addr, val)`; always `0` |
+//! | `host.branch_target` | `(pc, off) -> i32` | `pc.wrapping_add(off)` |
+//!
+//! The canonical hot block uses only `read_u8`; the Phase 4.3 generic
+//! ABI (`BlockAbi::Lx7Generic`, `run(a0..a15) -> (exit, target,
+//! r0..r15)`) uses all five. Loads are pre-read through the live `Bus`
+//! by the dispatcher (which resolves each `LoadReq`'s `base + imm`
+//! against the register file), staged via
+//! [`BrowserCompiledBlock::stage_reads`], and dequeued in order. Stores
+//! are queued by the import and committed by the dispatcher after a
+//! clean exit. Any `-1` from a read import side-exits with
 //! [`EXIT_HOST_BUS_ERROR`]; the dispatcher treats that as a refusal.
 //!
-//! Phase 4.3 will add `host.read_u32` / `host.write_u32` /
-//! `host.branch_target` imports as variable-length-block emit lands;
-//! [`build_imports`] is structured so wiring more imports is
-//! additive.
+//! Generic blocks are additionally refused while a zero-overhead loop is
+//! armed (`LCOUNT > 0`): the interpreter applies the `LEND` loop-back
+//! check after every instruction, which a multi-instruction block cannot
+//! replay. The interpreter runs the region instead; the hot block (no
+//! control transfers) keeps its fast path.
 //!
 //! ## Dispatch path
 //!
@@ -52,12 +67,17 @@
 //!      [`Bus::fetch_slice`] (#119 Phase 1.2), run
 //!      [`emit_core::walk_and_emit`] over it, install the resulting
 //!      block into the cache.
-//!   4. Pre-resolve any host-input values the block needs (today: two
-//!      L8UI bytes + one L32R literal).
-//!   5. Call `run(a3, a5, l32r_val)`, marshal the return tuple back
-//!      into the CPU register file, advance PC to [`EmittedBlock::end_pc`],
-//!      bump CCOUNT by `length_in_instrs - 1` (the outer step already
-//!      counted one).
+//!   4. Dispatch on [`BlockAbi`]: the hot block marshals
+//!      `(a3, a5, l32r)`; generic blocks marshal the whole 16-register
+//!      file plus their load/store manifests.
+//!   5. Commit registers/PC/CCOUNT on fall-through, branch-taken, or
+//!      jump-taken. Conditional branches come back as `EXIT_BRANCH_TAKEN`
+//!      (PC = target, `branched = true`); `J` comes back as
+//!      `EXIT_JUMP_TAKEN` (PC = target, `branched = false`, matching the
+//!      interpreter's `J` arm). Commit queued stores through the `Bus`
+//!      first and invalidate the CPU's caches for each written address
+//!      (self-modifying-code safety, same hook the interpreter's `S*I`
+//!      arms use).
 
 use js_sys::{Array, Function, Object, Reflect, Uint8Array, WebAssembly};
 use labwired_core::bus::SystemBus;
@@ -69,11 +89,13 @@ use labwired_core::cpu::jit_framework::cortex_m::emit::{
 use labwired_core::cpu::jit_framework::cortex_m::host::{pack_regs, unpack_regs};
 use labwired_core::cpu::jit_framework::cortex_m::CortexMFrontend;
 use labwired_core::cpu::jit_framework::CodeView;
-use labwired_core::cpu::xtensa_jit::emit_core::{self, EmitError, EmittedBlock, PsBits};
-use labwired_core::cpu::xtensa_jit_bytes::{
-    EXIT_FALL_THROUGH, EXIT_HOST_BUS_ERROR, HOT_BB_L32R_ADDR, HOT_BB_PC,
+use labwired_core::cpu::xtensa_jit::emit_core::{
+    self, BlockAbi, EmitError, EmittedBlock, MemWidth, PsBits,
 };
-use labwired_core::cpu::xtensa_sr::CCOUNT;
+use labwired_core::cpu::xtensa_jit_bytes::{
+    EXIT_BRANCH_TAKEN, EXIT_FALL_THROUGH, EXIT_HOST_BUS_ERROR, EXIT_JUMP_TAKEN, HOT_BB_L32R_ADDR,
+};
+use labwired_core::cpu::xtensa_sr::{CCOUNT, LCOUNT};
 use labwired_core::cpu::{CortexM, XtensaLx7};
 use labwired_core::{Bus, Cpu, SimResult, SimulationConfig, SimulationObserver};
 use std::cell::RefCell;
@@ -93,37 +115,62 @@ pub struct BrowserMultiOpResult {
     pub a10: u32,
 }
 
+/// Result of running an emitted generic block in the browser. Mirrors
+/// the native `variable::VariableResult` 18-value tuple.
+pub struct BrowserGenericResult {
+    pub exit_code: i32,
+    pub target_pc: u32,
+    pub regs: [u32; 16],
+}
+
+/// Closure types for the five Phase 4.3 host imports. Kept as type
+/// aliases so the struct fields and `build_imports` agree on the
+/// signatures the emit-core modules declare.
+type ReadClosure = Closure<dyn FnMut(i32) -> i32>;
+type WriteClosure = Closure<dyn FnMut(i32, i32) -> i32>;
+type BranchTargetClosure = Closure<dyn FnMut(i32, i32) -> i32>;
+
 /// One installed block: the compiled `WebAssembly.Module`, its
-/// `Instance`, the cached `run` export, and the host-side load queue
-/// the `host.read_u8` import dequeues from.
+/// `Instance`, the cached `run` export, and the host-side queues the
+/// `host.read_*` / `host.write_*` imports use.
 ///
-/// Drop order: Rust drops fields top-to-bottom. We list the closure
-/// AFTER `run` and `_instance` so the JS-reachable import is still
+/// Drop order: Rust drops fields top-to-bottom. We list the closures
+/// AFTER `run` and `_instance` so the JS-reachable imports are still
 /// alive whenever `run` could conceivably be called. Once we stop
-/// invoking `run` (by dropping the whole struct), the closure can be
+/// invoking `run` (by dropping the whole struct), the closures can be
 /// torn down safely.
 pub struct BrowserCompiledBlock {
     /// Exported `run` function — the wasm body of the emitted block.
-    /// Cached as a `Function` so dispatch is a direct `call3` with no
+    /// Cached as a `Function` so dispatch is a direct call with no
     /// `Reflect::get` per invocation.
     run: Function,
-    /// Host-side queue of pre-staged byte values. The closure dequeues
-    /// from this each time wasm invokes `host.read_u8`. RefCell+Rc
-    /// because (a) the closure holds a long-lived clone, (b)
-    /// `stage_loads` mutates it from outside the closure.
-    pending: Rc<RefCell<Vec<u8>>>,
+    /// Host-side queue of pre-staged load values. The `read_u8` /
+    /// `read_u32` closures dequeue from this each time wasm invokes
+    /// them, in manifest (execution) order. Values are carried as u32;
+    /// `read_u8` masks to 8 bits so a hot-path byte stage and a generic
+    /// word stage can share one queue.
+    reads: Rc<RefCell<Vec<u32>>>,
+    /// Host-side queue of `(addr, value)` store requests the wasm body
+    /// produced. The dispatcher drains and commits these through the
+    /// `Bus` after a clean exit.
+    writes: Rc<RefCell<Vec<(u32, u32)>>>,
     /// emit-core's view of the block — kept for `length_in_instrs`,
-    /// `end_pc`, and the side-exit reason map. Cheap to clone (a Vec
-    /// of bytes + small metadata) and we only do it once at install.
+    /// `end_pc`, the load/store manifests, and the side-exit reason map.
+    /// Cheap to clone (a Vec of bytes + small metadata) and we only do
+    /// it once at install.
     emitted: EmittedBlock,
     /// Hit counter. Surfaced as `WasmSimulator::jit_hits()` so the
     /// bench harness can confirm the JIT actually fired.
     pub hits: u64,
-    /// Closure must outlive the instance: the JS-side imports table
-    /// references it. Dropping it while wasm could still call back
-    /// would dangle. Leading underscore: never read in Rust, only
-    /// holds the closure alive.
-    _read_u8_closure: Closure<dyn FnMut(i32) -> i32>,
+    /// Closures must outlive the instance: the JS-side imports table
+    /// references them. Dropping one while wasm could still call back
+    /// would dangle. Leading underscores: never read in Rust, only
+    /// held alive.
+    _read_u8_closure: ReadClosure,
+    _read_u32_closure: ReadClosure,
+    _write_u8_closure: WriteClosure,
+    _write_u32_closure: WriteClosure,
+    _branch_target_closure: BranchTargetClosure,
     /// Instance keeps the module + imports rooted. Held so `run`
     /// (which is just a JS function value pulled from
     /// `instance.exports`) stays callable.
@@ -156,25 +203,58 @@ impl BrowserCompiledBlock {
         let module = WebAssembly::Module::new(&buf.into())
             .map_err(|e| JsValue::from_str(&format!("WebAssembly.Module: {e:?}")))?;
 
-        // 3. Build the host-side queue + the JS closure that dequeues
-        //    from it. The closure captures the queue via `Rc` so both
-        //    Rust (`stage_loads`) and JS (each `host.read_u8` call) can
-        //    reach it.
-        let pending: Rc<RefCell<Vec<u8>>> = Rc::new(RefCell::new(Vec::with_capacity(4)));
-        let pending_for_closure = pending.clone();
+        // 3. Build the host-side queues + the JS closures. The read
+        //    closures share one queue (wasm consumes staged values in
+        //    call order); the write closures share the store queue.
+        let reads: Rc<RefCell<Vec<u32>>> = Rc::new(RefCell::new(Vec::with_capacity(4)));
+        let writes: Rc<RefCell<Vec<(u32, u32)>>> = Rc::new(RefCell::new(Vec::with_capacity(4)));
+
+        let reads_for_u8 = reads.clone();
         let read_u8_closure = Closure::<dyn FnMut(i32) -> i32>::new(move |_addr: i32| -> i32 {
-            // Wasm passes the address but we don't need it — the host
-            // pre-staged the bytes in BB order. Empty queue ⇒ bus
-            // error; wasm body returns EXIT_HOST_BUS_ERROR.
-            let mut q = pending_for_closure.borrow_mut();
+            // Wasm passes the address but the host pre-staged the values
+            // in BB order. Empty queue ⇒ bus error; the wasm body then
+            // returns EXIT_HOST_BUS_ERROR.
+            let mut q = reads_for_u8.borrow_mut();
+            if q.is_empty() {
+                return -1;
+            }
+            (q.remove(0) & 0xFF) as i32
+        });
+        let reads_for_u32 = reads.clone();
+        let read_u32_closure = Closure::<dyn FnMut(i32) -> i32>::new(move |_addr: i32| -> i32 {
+            let mut q = reads_for_u32.borrow_mut();
             if q.is_empty() {
                 return -1;
             }
             q.remove(0) as i32
         });
+        let writes_for_u8 = writes.clone();
+        let write_u8_closure =
+            Closure::<dyn FnMut(i32, i32) -> i32>::new(move |addr: i32, val: i32| -> i32 {
+                writes_for_u8.borrow_mut().push((addr as u32, val as u32));
+                0
+            });
+        let writes_for_u32 = writes.clone();
+        let write_u32_closure =
+            Closure::<dyn FnMut(i32, i32) -> i32>::new(move |addr: i32, val: i32| -> i32 {
+                writes_for_u32.borrow_mut().push((addr as u32, val as u32));
+                0
+            });
+        // branch_target(pc, decoder_prebiased_offset): the host owns the
+        // architectural taken-PC arithmetic so wasm never re-derives it.
+        let branch_target_closure =
+            Closure::<dyn FnMut(i32, i32) -> i32>::new(move |pc: i32, offset: i32| -> i32 {
+                (pc as u32).wrapping_add(offset as u32) as i32
+            });
 
         // 4. Build imports + instantiate.
-        let imports = build_imports(&read_u8_closure)?;
+        let imports = build_imports(
+            &read_u8_closure,
+            &read_u32_closure,
+            &write_u8_closure,
+            &write_u32_closure,
+            &branch_target_closure,
+        )?;
         let instance = WebAssembly::Instance::new(&module, &imports)
             .map_err(|e| JsValue::from_str(&format!("WebAssembly.Instance: {e:?}")))?;
 
@@ -189,30 +269,51 @@ impl BrowserCompiledBlock {
 
         Ok(Self {
             run,
-            pending,
+            reads,
+            writes,
             emitted,
             hits: 0,
             _read_u8_closure: read_u8_closure,
+            _read_u32_closure: read_u32_closure,
+            _write_u8_closure: write_u8_closure,
+            _write_u32_closure: write_u32_closure,
+            _branch_target_closure: branch_target_closure,
             _instance: instance,
         })
     }
 
-    /// Stage the byte values the wasm body's L8UI ops will receive.
+    /// Stage the byte values the hot block's L8UI ops will receive.
     /// Caller must supply exactly as many bytes as the block expects;
     /// extras are ignored, shortages surface as `EXIT_HOST_BUS_ERROR`
     /// inside wasm.
     pub fn stage_loads(&self, bytes: &[u8]) {
-        let mut q = self.pending.borrow_mut();
+        let mut q = self.reads.borrow_mut();
         q.clear();
-        q.extend_from_slice(bytes);
+        q.extend(bytes.iter().map(|b| *b as u32));
     }
 
-    /// Invoke the block. Returns the 5-tuple `(exit, a2, a6, a8, a10)`
-    /// produced by the wasm body.
-    ///
-    /// JS-side, multi-value wasm returns become Arrays. We pluck five
-    /// `i32`s out via `Array::get` + `as_f64` — JS numbers round-trip
-    /// every i32 cleanly.
+    /// Stage the values a generic block's [`LoadReq`] manifest resolved
+    /// (one per load, in execution order). Same refusal contract as
+    /// [`Self::stage_loads`].
+    pub(crate) fn stage_reads(&self, values: &[u32]) {
+        let mut q = self.reads.borrow_mut();
+        q.clear();
+        q.extend_from_slice(values);
+        // Drop any store requests a previous (refused) run left queued.
+        // The dispatcher only drains after a clean exit, so a stale
+        // `(addr, value)` would otherwise be committed against the next
+        // run's store manifest. Mirrors the native adapter's
+        // `variable::VariableBlock::resolve_loads`.
+        self.writes.borrow_mut().clear();
+    }
+
+    /// Drain the `(addr, value)` store requests the wasm body queued, in
+    /// execution order.
+    pub(crate) fn drain_writes(&self) -> Vec<(u32, u32)> {
+        std::mem::take(&mut *self.writes.borrow_mut())
+    }
+
+    /// Invoke the hot-block ABI (`run(a3, a5, l32r_val)`, 5 results).
     pub fn run(
         &mut self,
         a3: u32,
@@ -225,7 +326,7 @@ impl BrowserCompiledBlock {
             &JsValue::from_f64(a5 as i32 as f64),
             &JsValue::from_f64(l32r_val as i32 as f64),
         )?;
-        let arr: Array = result
+        let arr = result
             .dyn_into::<Array>()
             .map_err(|_| JsValue::from_str("wasm.run return is not an Array"))?;
         if arr.length() != 5 {
@@ -245,6 +346,37 @@ impl BrowserCompiledBlock {
         })
     }
 
+    /// Invoke the generic ABI (`run(a0..a15)`, 18 results:
+    /// `exit, target, r0..r15`). `Function::apply` handles the 16-arg
+    /// array uniformly; multi-value wasm returns arrive as a JS Array.
+    pub fn run_generic(&mut self, regs: &[u32; 16]) -> Result<BrowserGenericResult, JsValue> {
+        let args = Array::new_with_length(16);
+        for (i, r) in regs.iter().enumerate() {
+            args.set(i as u32, JsValue::from_f64(*r as i32 as f64));
+        }
+        let result = self.run.apply(&JsValue::NULL, &args)?;
+        let arr = result
+            .dyn_into::<Array>()
+            .map_err(|_| JsValue::from_str("wasm.run (generic) return is not an Array"))?;
+        if arr.length() != 18 {
+            return Err(JsValue::from_str(&format!(
+                "wasm.run (generic) returned {} values; expected 18",
+                arr.length()
+            )));
+        }
+        let g = |i: u32| -> i32 { arr.get(i).as_f64().map(|f| f as i64 as i32).unwrap_or(0) };
+        let mut out = [0u32; 16];
+        for (i, slot) in out.iter_mut().enumerate() {
+            *slot = g(i as u32 + 2) as u32;
+        }
+        self.hits += 1;
+        Ok(BrowserGenericResult {
+            exit_code: g(0),
+            target_pc: g(1) as u32,
+            regs: out,
+        })
+    }
+
     /// Expose the block's emit-core metadata. Used by the dispatcher
     /// to advance PC and bump CCOUNT after a clean fall-through.
     pub fn emitted(&self) -> &EmittedBlock {
@@ -252,19 +384,28 @@ impl BrowserCompiledBlock {
     }
 }
 
-/// Build the JS `imports` object the wasm module expects. Today the
-/// emit-core produces only `host.read_u8`; Phase 4.3 will grow this to
-/// `read_u32` / `write_u32` / `branch_target` as variable-length emit
-/// lands. Structuring this as a separate helper keeps the additions
-/// surgical.
-fn build_imports(read_u8_closure: &Closure<dyn FnMut(i32) -> i32>) -> Result<Object, JsValue> {
+/// Build the JS `imports` object the wasm module expects. Every module
+/// gets the full Phase 4.3 host surface — the hot block imports only
+/// `read_u8`, generic blocks import all five, and unused properties on
+/// an import object are ignored by `WebAssembly.Instance`.
+fn build_imports(
+    read_u8: &ReadClosure,
+    read_u32: &ReadClosure,
+    write_u8: &WriteClosure,
+    write_u32: &WriteClosure,
+    branch_target: &BranchTargetClosure,
+) -> Result<Object, JsValue> {
     let host_obj = Object::new();
-    Reflect::set(
-        &host_obj,
-        &JsValue::from_str("read_u8"),
-        read_u8_closure.as_ref().unchecked_ref(),
-    )
-    .map_err(|e| JsValue::from_str(&format!("set host.read_u8: {e:?}")))?;
+    let set = |name: &str, value: &JsValue| -> Result<(), JsValue> {
+        Reflect::set(&host_obj, &JsValue::from_str(name), value)
+            .map(|_| ())
+            .map_err(|e| JsValue::from_str(&format!("set host.{name}: {e:?}")))
+    };
+    set("read_u8", read_u8.as_ref().unchecked_ref())?;
+    set("read_u32", read_u32.as_ref().unchecked_ref())?;
+    set("write_u8", write_u8.as_ref().unchecked_ref())?;
+    set("write_u32", write_u32.as_ref().unchecked_ref())?;
+    set("branch_target", branch_target.as_ref().unchecked_ref())?;
 
     let imports = Object::new();
     Reflect::set(&imports, &JsValue::from_str("host"), &host_obj)
@@ -537,75 +678,194 @@ pub fn try_browser_jit_step(
         }
     }
 
-    // Pre-read host-input values. Today's emit (the canonical hot BB)
-    // needs two L8UI bytes from [a3, a3+1] and the L32R literal at
-    // HOT_BB_L32R_ADDR. Phase 4.3+ will need a more general staging
-    // model — at that point the EmittedBlock will carry a manifest of
-    // required inputs.
-    let a3 = cpu.regs.read_logical(3);
-    let a5 = cpu.regs.read_logical(5);
-    let b0 = match bus.read_u8(a3 as u64) {
-        Ok(v) => v,
-        Err(_) => return false,
-    };
-    let b1 = match bus.read_u8((a3.wrapping_add(1)) as u64) {
-        Ok(v) => v,
-        Err(_) => return false,
-    };
-    // L32R address is currently hardcoded for the hot block. Phase 4.3
-    // will move this into EmittedBlock alongside the rest of the input
-    // staging manifest.
-    let l32r_addr = if pc == HOT_BB_PC { HOT_BB_L32R_ADDR } else { 0 };
-    let l32r_val = match bus.read_u32(l32r_addr as u64) {
-        Ok(v) => v,
-        Err(_) => return false,
-    };
-
-    let block = match cache.get_mut(pc, ps_bits) {
-        Some(b) => b,
+    // Fetch the block's ABI + manifests up front. Cloning the manifests
+    // (a handful of `Copy` structs) keeps the dispatch free to touch the
+    // `Bus` without holding the cache borrow across the reads.
+    let (abi, loads, stores, end_pc, length_in_instrs) = match cache.get_mut(pc, ps_bits) {
+        Some(b) => {
+            let e = b.emitted();
+            (
+                e.abi,
+                e.loads.clone(),
+                e.stores.clone(),
+                e.end_pc,
+                e.length_in_instrs,
+            )
+        }
         None => return false,
     };
-    let end_pc = block.emitted().end_pc;
-    let length_in_instrs = block.emitted().length_in_instrs;
 
-    block.stage_loads(&[b0, b1]);
-    let res = match block.run(a3, a5, l32r_val) {
-        Ok(r) => r,
-        Err(_) => {
-            cache.refusals = cache.refusals.saturating_add(1);
-            return false;
+    let outcome = {
+        let block = match cache.get_mut(pc, ps_bits) {
+            Some(b) => b,
+            None => return false,
+        };
+        match abi {
+            BlockAbi::HotBb => {
+                // Canonical hot-block marshalling, unchanged since Phase
+                // 4.2: two L8UI bytes from [a3, a3+1] + the L32R literal
+                // at HOT_BB_L32R_ADDR. A bus error during the pre-read
+                // refuses the step (no refusal counter) so the
+                // interpreter can raise the genuine fault.
+                let a3 = cpu.regs.read_logical(3);
+                let a5 = cpu.regs.read_logical(5);
+                let b0 = match bus.read_u8(a3 as u64) {
+                    Ok(v) => v,
+                    Err(_) => return false,
+                };
+                let b1 = match bus.read_u8(a3.wrapping_add(1) as u64) {
+                    Ok(v) => v,
+                    Err(_) => return false,
+                };
+                let l32r_val = match bus.read_u32(HOT_BB_L32R_ADDR as u64) {
+                    Ok(v) => v,
+                    Err(_) => return false,
+                };
+
+                block.stage_loads(&[b0, b1]);
+                match block.run(a3, a5, l32r_val) {
+                    Ok(res) => match res.exit_code {
+                        x if x == EXIT_FALL_THROUGH => {
+                            cpu.regs.write_logical(10, res.a10);
+                            cpu.regs.write_logical(6, res.a6);
+                            cpu.regs.write_logical(2, res.a2);
+                            cpu.regs.write_logical(8, res.a8);
+                            cpu.pc = end_pc;
+                            bump_ccount(cpu, length_in_instrs);
+                            cpu.branched = false;
+                            StepOutcome::Applied
+                        }
+                        x if x == EXIT_HOST_BUS_ERROR => StepOutcome::Refused,
+                        _ => StepOutcome::Refused,
+                    },
+                    Err(_) => StepOutcome::Refused,
+                }
+            }
+            BlockAbi::Lx7Generic => {
+                // Zero-overhead loops: the interpreter runs the LEND
+                // loop-back check after *every* retired instruction; a
+                // compiled multi-instruction block bypasses it, so while a
+                // hardware loop is armed (`LCOUNT > 0`) the block would miss
+                // a loop-back its last instruction should have taken. Refuse
+                // the compiled path and let the interpreter run the region.
+                // (The canonical hot block has no control transfer, so its
+                // pre-existing path is unaffected.)
+                if cpu.sr.read(LCOUNT) > 0 {
+                    return false;
+                }
+                // Generic blocks: snapshot the whole logical file, resolve
+                // every manifest load against it, stage the values in
+                // execution order, run the 16-register ABI.
+                let mut regs = [0u32; 16];
+                for (i, slot) in regs.iter_mut().enumerate() {
+                    *slot = cpu.regs.read_logical(i as u8);
+                }
+                let mut staged = Vec::with_capacity(loads.len());
+                for req in &loads {
+                    let addr = regs[req.base as usize].wrapping_add(req.imm) as u64;
+                    let val = match req.width {
+                        MemWidth::U8 => match bus.read_u8(addr) {
+                            Ok(v) => v as u32,
+                            Err(_) => return false,
+                        },
+                        MemWidth::U32 => match bus.read_u32(addr) {
+                            Ok(v) => v,
+                            Err(_) => return false,
+                        },
+                    };
+                    staged.push(val);
+                }
+                block.stage_reads(&staged);
+
+                match block.run_generic(&regs) {
+                    Ok(res) => match res.exit_code {
+                        x if x == EXIT_FALL_THROUGH
+                            || x == EXIT_BRANCH_TAKEN
+                            || x == EXIT_JUMP_TAKEN =>
+                        {
+                            // Commit stores before the register file,
+                            // mirroring the interpreter's `S*I` order. A
+                            // store fault refuses the step so the
+                            // interpreter re-raises; stores already
+                            // committed stay committed (a documented
+                            // limitation of the "queue then commit"
+                            // model, same as the native fillScreen block).
+                            let writes = block.drain_writes();
+                            let mut store_fault = false;
+                            for (req, (addr, val)) in stores.iter().zip(writes.iter()) {
+                                let write_res = match req.width {
+                                    MemWidth::U8 => bus.write_u8(*addr as u64, *val as u8),
+                                    MemWidth::U32 => bus.write_u32(*addr as u64, *val),
+                                };
+                                if write_res.is_err() {
+                                    store_fault = true;
+                                    break;
+                                }
+                                // The JIT bypasses `execute`'s S*I arms, so
+                                // replicate their self-modifying-code cache
+                                // invalidation via the CPU's public hook.
+                                cpu.invalidate_for_data_write(*addr);
+                            }
+                            if store_fault {
+                                return false;
+                            }
+                            for (i, v) in res.regs.iter().enumerate() {
+                                cpu.regs.write_logical(i as u8, *v);
+                            }
+                            cpu.pc = if res.exit_code == EXIT_FALL_THROUGH {
+                                end_pc
+                            } else {
+                                res.target_pc
+                            };
+                            bump_ccount(cpu, length_in_instrs);
+                            cpu.branched = res.exit_code == EXIT_BRANCH_TAKEN;
+                            StepOutcome::Applied
+                        }
+                        // EXIT_HOST_BUS_ERROR (host import refused) or an
+                        // unknown code: no state committed.
+                        _ => StepOutcome::Refused,
+                    },
+                    Err(e) => {
+                        web_sys_console_warn(&format!(
+                            "labwired-wasm: browser JIT generic run failed at pc=0x{pc:08x}: {e:?}"
+                        ));
+                        StepOutcome::Refused
+                    }
+                }
+            }
         }
     };
 
-    match res.exit_code {
-        x if x == EXIT_FALL_THROUGH => {
-            cpu.regs.write_logical(10, res.a10);
-            cpu.regs.write_logical(6, res.a6);
-            cpu.regs.write_logical(2, res.a2);
-            cpu.regs.write_logical(8, res.a8);
-            cpu.pc = end_pc;
-            // CCOUNT honesty: the interpreter would have advanced
-            // CCOUNT by length_in_instrs - 1 (one per instruction; the
-            // outer step counts one more on its own). Mirror the
-            // native `try_jit_multi_op` path. If a future emit ever
-            // produces a 0-length block, the saturating_sub keeps the
-            // arithmetic sane.
-            if length_in_instrs > 1 {
-                let cc = cpu.sr.read(CCOUNT);
-                cpu.sr.write(CCOUNT, cc.wrapping_add(length_in_instrs - 1));
-            }
-            cpu.branched = false;
+    match outcome {
+        StepOutcome::Applied => {
             cache.bump_hit();
             true
         }
-        x if x == EXIT_HOST_BUS_ERROR => {
+        StepOutcome::Refused => {
             cache.refusals = cache.refusals.saturating_add(1);
             false
         }
-        _ => {
-            cache.refusals = cache.refusals.saturating_add(1);
-            false
-        }
+    }
+}
+
+/// Disposition of one dispatch attempt, computed while the cache borrow
+/// is live and applied after it drops.
+enum StepOutcome {
+    /// Block ran cleanly and state was committed; bump hits.
+    Applied,
+    /// Block declined (host bus error, wasm call error, unknown exit
+    /// code); bump refusals and fall back to the interpreter.
+    Refused,
+}
+
+/// CCOUNT honesty: the interpreter advances CCOUNT once per retired
+/// instruction; the outer step already counted the first, so the JIT
+/// adds the remaining `length_in_instrs - 1`.
+#[inline]
+fn bump_ccount(cpu: &mut XtensaLx7, length_in_instrs: u32) {
+    if length_in_instrs > 1 {
+        let cc = cpu.sr.read(CCOUNT);
+        cpu.sr.write(CCOUNT, cc.wrapping_add(length_in_instrs - 1));
     }
 }
 

@@ -12,7 +12,7 @@
 // has built a reference firmware locally and pointed the var at it.
 
 use labwired_core::bus::SystemBus;
-use labwired_core::peripherals::components::Ssd1680Tricolor290;
+use labwired_core::peripherals::components::{ssd1680_tricolor_290, GenericDisplay};
 use labwired_core::peripherals::esp32::spi::Esp32Spi;
 use labwired_core::system::xtensa::configure_xtensa_esp32;
 use labwired_core::{Bus, Cpu, Machine};
@@ -44,7 +44,7 @@ fn external_arduino_esp32_firmware_drives_panel_in_sim() {
     let cpu = configure_xtensa_esp32(&mut bus);
 
     // Wire the SSD1680 to spi3, same as the e-paper lab.
-    bus.attach_spi_device("spi3", Box::new(Ssd1680Tricolor290::new("GPIO5")))
+    bus.attach_spi_device("spi3", Box::new(ssd1680_tricolor_290("GPIO5")))
         .expect("spi3 is an Esp32Spi controller");
     // Capture every byte on the wire so we can diagnose missing panel state.
     {
@@ -705,16 +705,13 @@ fn external_arduino_esp32_firmware_drives_panel_in_sim() {
     let panel = spi
         .attached_devices
         .iter()
-        .find_map(|d| {
-            d.as_any()
-                .and_then(|a| a.downcast_ref::<Ssd1680Tricolor290>())
-        })
+        .find_map(|d| d.as_any().and_then(|a| a.downcast_ref::<GenericDisplay>()))
         .expect("panel attached");
 
     eprintln!(
         "[arduino-esp32-sim] panel state: refresh_generation={}, power_on={}",
         panel.refresh_generation(),
-        panel.power_on()
+        panel.display_on()
     );
     eprintln!(
         "[arduino-esp32-sim] SPI3 transactions={} captured_bytes_len={}",
@@ -739,9 +736,10 @@ fn external_arduino_esp32_firmware_drives_panel_in_sim() {
         );
     }
     // Count non-trivial pixels (anything that's not the all-white reset state).
-    let black = panel.black_plane();
+    let planes = panel.planes();
+    let black = planes.ram("black").expect("black plane");
     let non_white_black = black.iter().filter(|&&b| b != 0xFF).count();
-    let red = panel.red_plane();
+    let red = planes.ram("red").expect("red plane");
     let non_white_red = red.iter().filter(|&&b| b != 0xFF).count();
     eprintln!(
         "[arduino-esp32-sim] black plane non-FF bytes: {non_white_black}/{}, \
@@ -752,7 +750,7 @@ fn external_arduino_esp32_firmware_drives_panel_in_sim() {
 
     // Render the panel as a PPM so a human can visually verify the splash.
     // Native portrait: 128w × 296h; black plane bit-packed MSB-first, 16 bytes per row.
-    let (w, h) = panel.dimensions();
+    let (w, h) = (panel.width(), panel.height());
     let stride = w / 8;
     let mut ppm = format!("P6\n{w} {h}\n255\n").into_bytes();
     for y in 0..h {

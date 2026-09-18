@@ -1057,6 +1057,42 @@ what the artifact holds is what firmware wrote and a photograph of the glass can
 be compared against it. The proof parts are `ssd1306.yaml` (I²C, page-major
 1 bpp) and `st7789.yaml` (SPI, row-major RGB565 with MADCTL orientation).
 
+**E-paper is where a framebuffer stops being one**, and the four keys the two
+tri-colour panels forced are the four ways it differs. They are stated, never
+inferred, and `ssd1680_tricolor_290.yaml` / `uc8151d_tricolor_290.yaml` are the
+proof parts.
+
+| key | the fact it states | what a house default would have done |
+|---|---|---|
+| `ram.planes: [black, red]` | Two independent 1-bpp RAMs selected by the command that opens the stream (SSD1680 0x24/0x26, UC8151D DTM1/DTM2). `ram_write` names one. The artifact payload is the planes concatenated, with `plane_bytes` giving the split. | One frame memory composes the two into a picture the model never produced — and a stream defaulting to the first plane paints the red image in black. |
+| `ram.blank: 0xFF` | The ERASED byte, and therefore what an ink count treats as no ink. A set bit on e-paper is no ink; an OLED's GDDRAM is the other way round. It is also what `clear_ram` fills with. | A default of 0 reports a blank panel as fully inked and a cleared one as blank — backwards on both counts. |
+| `ram.units: { col: bytes, row: pixels }` | What ONE STEP of each address counter covers. SSD1680 0x44 takes the X window as start/8 and 0x45 takes Y as raw pixel rows. | Reading both in pixels streams a plausible byte count into the wrong rows, with no error anywhere. |
+| `refresh` + `refresh_generation` | FRAME MEMORY IS NOT THE SCREEN. SSD1680 0x20 and UC8151D 0x12 are what move the ink; until one arrives the glass still shows the previous image. The action latches RAM into a separate screen and bumps the counter `labwired_verify`'s `min_refresh_generation` clause resolves against. `{ plane: black, of: screen }` publishes the ink on the GLASS, which disagrees with `{ plane: black }` exactly when firmware wrote a frame it never activated. | Reporting frame memory as the picture passes firmware that wrote a perfect frame and never refreshed. |
+
+Two more keys the same two panels forced, both about framing rather than pixels:
+
+* **`ram.stream: window_counted`** — the window BOUNDS the stream: the controller
+  accepts exactly `(col_end - col_start + 1) × (row_end - row_start + 1)` write
+  units and then the stream is shut. That is the SSD1680's own behaviour, not a
+  tidier spelling of `command`; running past it wraps the counters back to the
+  window origin and overwrites the rows just written. The UC8151D has no RAM
+  window command at all and stays on `command`.
+* **`dc.unwired`** — what a panel does when NO D/C pad is resolved at attach,
+  which is a real board (the ESP32 e-paper lab wires CS and nothing else). It is
+  per panel because the two deleted models answered differently: the SSD1680
+  INFERRED (a byte with no stream open is a command — which only terminates
+  because the stream is window-counted), and the UC8151D could not infer at all
+  and treated every byte as DATA. Both are declared cheats, both carry a `real:`
+  clause, and a house default would have silently changed one panel's picture.
+
+A `when: { arg, mask, equals }` guard on a `do:` entry runs it only for a given
+PARAMETER value: the SSD1680's 0x22 is a sequence selector, where 0xF8 powers
+the booster on and 0x83 powers it off. And `busy: { config_key, idle_level }`
+drives the BUSY line the host polls to its idle level at attach — stated per
+panel because SSD1680 is busy-HIGH and UC8151D is busy-LOW, and the wrong level
+hangs GxEPD2's `_waitWhileBusy` for a timeout that never arrives at simulated
+speed.
+
 `led_strip` is the primitive for addressable LED strips, and it is separate from
 `display` on purpose: a strip is a per-LED COLOUR ARRAY clocked by a wire
 protocol, with no address counter, no command table, no window and no frame

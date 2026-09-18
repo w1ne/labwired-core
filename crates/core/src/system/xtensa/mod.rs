@@ -557,7 +557,7 @@ mod tests {
     }
 
     /// `configure_xtensa_esp32` + `attach_esp32_external_devices` must register
-    /// `spi3` on the bus and attach an `Ssd1680Tricolor290` panel to it when the
+    /// `spi3` on the bus and attach an `ssd1680_tricolor_290` panel to it when the
     /// manifest declares an `ssd1680_tricolor_290` external device on `spi3`.
     ///
     /// This is the unit-level guard that the manifest/CLI path (which was
@@ -623,20 +623,24 @@ mod tests {
         let spi = any
             .downcast_ref::<crate::peripherals::esp32::spi::Esp32Spi>()
             .expect("spi3 is Esp32Spi");
+        // Identified by WHAT IT IS, not by a concrete Rust type: the SSD1680 is
+        // a YAML `display` descriptor now, so every tri-colour e-paper is the
+        // same `GenericDisplay` and the thing that tells them apart is the two
+        // named planes the descriptor declares.
         let panel_count = spi
             .attached_devices
             .iter()
             .filter(|d| {
                 d.as_any()
                     .and_then(|a| {
-                        a.downcast_ref::<crate::peripherals::components::Ssd1680Tricolor290>()
+                        a.downcast_ref::<crate::peripherals::components::GenericDisplay>()
                     })
-                    .is_some()
+                    .is_some_and(|p| p.planes().names() == ["black", "red"])
             })
             .count();
         assert_eq!(
             panel_count, 1,
-            "exactly one Ssd1680Tricolor290 should be attached to spi3"
+            "exactly one tri-colour e-paper panel should be attached to spi3"
         );
     }
 

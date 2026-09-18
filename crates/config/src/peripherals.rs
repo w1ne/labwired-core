@@ -2376,6 +2376,31 @@ pub struct DisplaySpec {
     /// `lit` and flatter a driver that cannot work.
     #[serde(default)]
     pub lit_requires: Vec<DisplayLitRequirement>,
+    /// A BUSY line the host polls, and the level it rests at when idle.
+    ///
+    /// Only e-paper has one, and THE TWO E-PAPERS HERE DISAGREE ABOUT THE
+    /// POLARITY: the SSD1680 asserts BUSY high, so idle is low; the UC8151D
+    /// pulls it low while busy and releases it high. GxEPD2 blocks in
+    /// `_waitWhileBusy` until it reads not-busy, with a 30 s escape timeout
+    /// that at simulated speed is ~10^7 steps per refresh and reads to a user
+    /// as hung firmware. Driving the line to the WRONG idle level is therefore
+    /// indistinguishable from not driving it at all, and a house default would
+    /// pick one panel's polarity and hang the other.
+    ///
+    /// These models refresh instantaneously, so "always idle" is the faithful
+    /// reading — the line is driven once, at attach, and never moves.
+    #[serde(default)]
+    pub busy: Option<DisplayBusy>,
+}
+
+/// See [`DisplaySpec::busy`].
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct DisplayBusy {
+    /// Config key naming the pad, so a board that does not wire BUSY simply
+    /// omits it.
+    pub config_key: String,
+    /// The level BUSY rests at when the controller is not refreshing.
+    pub idle_level: bool,
 }
 
 /// One clause of [`DisplaySpec::lit_requires`]: a declared var that must be at
@@ -2451,6 +2476,39 @@ pub enum DisplayMetaField {
         #[serde(default)]
         format: DisplayMetaFormat,
     },
+    /// INKED BYTES OF ONE NAMED PLANE — bytes that are not [`DisplayRam::blank`].
+    ///
+    /// Written `- { plane: black }` (key `black_ink_bytes`) or
+    /// `- { plane: black, of: screen }` (key `screen_black_ink_bytes`).
+    /// A separate entry from [`DisplayMetaFlag::InkBytes`] because that one
+    /// counts the WHOLE frame memory, and on a two-plane e-paper the two
+    /// planes are independent pictures: one number for both cannot say which
+    /// colour is on the glass, and both deleted models published the two
+    /// counts separately.
+    Plane {
+        plane: String,
+        /// Which copy of the plane to count. See [`DisplayPlaneOf`].
+        #[serde(default)]
+        of: DisplayPlaneOf,
+        /// Publish under this key instead of the derived one.
+        #[serde(default, rename = "as")]
+        published_as: Option<String>,
+    },
+}
+
+/// Which copy of a plane a [`DisplayMetaField::Plane`] entry counts.
+///
+/// THE E-PAPER DISTINCTION, and the reason `refresh` exists: frame memory is
+/// not the screen. Firmware that writes a new frame and never activates has
+/// changed `ram` and changed nothing a camera can see.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum DisplayPlaneOf {
+    /// The controller's frame memory, as written by the wire.
+    #[default]
+    Ram,
+    /// What the last `refresh` action put on the glass.
+    Screen,
 }
 
 /// How a [`DisplayMetaField::Var`] renders into the artifact's `meta`.
@@ -2467,19 +2525,27 @@ pub enum DisplayMetaFormat {
 }
 
 impl DisplayMetaField {
-    /// The flag this entry publishes, or `None` for a var entry.
+    /// The flag this entry publishes, or `None` for a var / plane entry.
     pub fn flag(&self) -> Option<DisplayMetaFlag> {
         match self {
             Self::Flag(f) => Some(*f),
             Self::Renamed { flag, .. } => Some(*flag),
-            Self::Var { .. } => None,
+            Self::Var { .. } | Self::Plane { .. } => None,
         }
     }
 
-    /// The var this entry reads, or `None` for a flag entry.
+    /// The var this entry reads, or `None` for a flag / plane entry.
     pub fn var(&self) -> Option<&str> {
         match self {
             Self::Var { var, .. } => Some(var),
+            _ => None,
+        }
+    }
+
+    /// The plane this entry counts and which copy of it, or `None`.
+    pub fn plane(&self) -> Option<(&str, DisplayPlaneOf)> {
+        match self {
+            Self::Plane { plane, of, .. } => Some((plane, *of)),
             _ => None,
         }
     }
@@ -2492,19 +2558,38 @@ impl DisplayMetaField {
     }
 
     /// The `meta` key this entry publishes under.
-    pub fn key(&self) -> &str {
+    ///
+    /// Borrowed for every entry that names its own key, OWNED for the one that
+    /// derives it (`{ plane: black }` → `black_ink_bytes`). A `Cow` rather than
+    /// a leak: `key()` is called once per artifact per field, and a leak there
+    /// grows without bound over a long run.
+    pub fn key(&self) -> std::borrow::Cow<'_, str> {
+        use std::borrow::Cow;
         match self {
-            Self::Flag(f) => f.default_key(),
-            Self::Renamed { published_as, .. } => published_as,
+            Self::Flag(f) => Cow::Borrowed(f.default_key()),
+            Self::Renamed { published_as, .. } => Cow::Borrowed(published_as.as_str()),
             Self::Var {
                 var,
                 published_as: None,
                 ..
-            } => var,
+            } => Cow::Borrowed(var.as_str()),
             Self::Var {
                 published_as: Some(k),
                 ..
-            } => k,
+            }
+            | Self::Plane {
+                published_as: Some(k),
+                ..
+            } => Cow::Borrowed(k.as_str()),
+            // `black` → `black_ink_bytes`; `of: screen` → `screen_black_ink_bytes`.
+            Self::Plane {
+                plane,
+                of,
+                published_as: None,
+            } => match of {
+                DisplayPlaneOf::Ram => Cow::Owned(format!("{plane}_ink_bytes")),
+                DisplayPlaneOf::Screen => Cow::Owned(format!("screen_{plane}_ink_bytes")),
+            },
         }
     }
 }
@@ -2547,6 +2632,13 @@ pub enum DisplayMetaFlag {
     /// firmware toggles a pin, `"controller_dcx"` when the SPI controller
     /// drives the line itself. A string, because it is a choice and not a flag.
     DcSource,
+    /// How many times a `refresh` action has put frame memory on the glass.
+    /// The only thing that tells a written frame from a shown one, and what
+    /// `labwired_verify`'s `min_refresh_generation` clause resolves against.
+    RefreshGeneration,
+    /// Bytes per plane — the SPLIT of a multi-plane artifact payload. Without
+    /// it a consumer cannot find where the red plane starts.
+    PlaneBytes,
 }
 
 impl DisplayMetaFlag {
@@ -2565,6 +2657,8 @@ impl DisplayMetaFlag {
             Self::Inverted => "inverted",
             Self::Asleep => "asleep",
             Self::DcSource => "dc_source",
+            Self::RefreshGeneration => "refresh_generation",
+            Self::PlaneBytes => "plane_bytes",
         }
     }
 }
@@ -2772,6 +2866,40 @@ pub struct DisplayRam {
     /// trusting it, so the two cannot drift apart.
     pub bytes: u32,
     pub layout: DisplayRamLayout,
+    /// The value an ERASED frame-memory byte holds, and therefore the value an
+    /// ink count treats as "no ink".
+    ///
+    /// STATED, because the two families disagree and the disagreement is the
+    /// whole picture. An OLED's GDDRAM powers on at `0x00` and a set bit is a
+    /// lit pixel. A tri-colour e-paper powers on at `0xFF` and a set bit is NO
+    /// ink — the planes are erased white — so `black_ink_bytes` counts bytes
+    /// that are not `0xFF`. A house default of 0 would report a blank e-paper
+    /// as fully inked and a cleared one as blank, which is backwards on both
+    /// counts. It is also what `clear_ram` fills with.
+    #[serde(default)]
+    pub blank: u8,
+    /// Named 1-bpp PLANES the frame memory is divided into, in payload order.
+    ///
+    /// Empty — the default — is one undivided frame memory, which is every
+    /// panel but the tri-colour e-papers. Those hold TWO independent 1-bpp
+    /// RAMs selected by the command that opens the stream (SSD1680 0x24 black /
+    /// 0x26 red; UC8151D DTM1 0x10 / DTM2 0x13), not one deeper pixel format:
+    /// a write to one plane leaves the other alone, and the artifact payload is
+    /// the planes concatenated in this order with `plane_bytes` giving the
+    /// split.
+    #[serde(default)]
+    pub planes: Vec<String>,
+    /// What one step of each address counter MEANS.
+    ///
+    /// EXPLICIT AND PER AXIS, because the SSD1680 mixes them in one window:
+    /// 0x44 (RAM-X window) takes the X bounds in BYTES — the datasheet's
+    /// "start/8" — while 0x45 (RAM-Y window) takes Y in pixels. A model that
+    /// read both in pixels put every row of a partial window in the wrong place
+    /// and still streamed a plausible byte count. Never inferred from the pixel
+    /// format: a 1-bpp panel may address either way, and the SSD1306 addresses
+    /// columns in pixels.
+    #[serde(default)]
+    pub units: DisplayRamUnits,
     /// Whether a data byte is frame memory unconditionally, or only after a
     /// `ram_write` command has opened the stream.
     ///
@@ -2791,8 +2919,52 @@ pub enum DisplayRamStream {
     /// Every data byte is frame memory. There is no RAMWR opcode.
     Always,
     /// A `ram_write` action opens the stream; data bytes outside it are
-    /// command parameters or strays.
+    /// command parameters or strays. The stream stays open until the next
+    /// command byte closes it.
     Command,
+    /// A `ram_write` action opens the stream and the WINDOW BOUNDS IT: the
+    /// controller accepts exactly `(col_end - col_start + 1) * (row_end -
+    /// row_start + 1)` write units and then the stream is closed, whatever
+    /// arrives next.
+    ///
+    /// The SSD1680's own behaviour, and not a tidier spelling of `command`.
+    /// GxEPD2 configures the RAM window (0x44/0x45) and the counters
+    /// (0x4E/0x4F) before every 0x24/0x26, so the byte count is a fact the
+    /// controller knows; a stream that ran past it would wrap the counters back
+    /// to the window start and overwrite the rows it had just written. It is
+    /// also what lets a panel with no D/C line wired tell the byte AFTER a full
+    /// plane from a pixel — see `DisplayDc::unwired`.
+    WindowCounted,
+}
+
+/// See [`DisplayRam::units`]. One entry per addressed axis.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
+pub struct DisplayRamUnits {
+    #[serde(default)]
+    pub col: DisplayUnit,
+    #[serde(default)]
+    pub row: DisplayUnit,
+}
+
+/// What one step of an address counter covers.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum DisplayUnit {
+    /// One pixel. Every panel but the e-papers, on both axes.
+    #[default]
+    Pixels,
+    /// One BYTE — eight pixels of a 1-bpp row. The SSD1680's X axis.
+    Bytes,
+}
+
+impl DisplayUnit {
+    /// Pixels per counter step.
+    pub fn pixels_per_step(self) -> u16 {
+        match self {
+            Self::Pixels => 1,
+            Self::Bytes => 8,
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
@@ -2821,6 +2993,36 @@ pub struct DisplayDc {
     /// SSD1306 does with Co/D̄C̄ (0x00 vs 0x40).
     #[serde(default)]
     pub command_value: Option<u8>,
+    /// What framing this panel falls back to when NO D/C line is resolved at
+    /// attach. A declared CHEAT, per panel, never a house rule.
+    ///
+    /// A board that wires no D/C pad is a real board — the ESP32 e-paper lab is
+    /// one — and the two e-paper models ported here answered it DIFFERENTLY,
+    /// which is why it is data. The SSD1680 model inferred: a byte arriving
+    /// with no stream open is a command, anything else is a parameter or a
+    /// pixel, and `window_counted` is what makes that inference terminate. The
+    /// UC8151D model could not infer (its plane streams end at the next command
+    /// byte, so an inferring decoder can never leave one) and treated every
+    /// byte as DATA. Both are cheats; both are what the deleted models did; a
+    /// default would have silently changed one panel's picture.
+    #[serde(default)]
+    pub unwired: DisplayDcUnwired,
+}
+
+/// See [`DisplayDc::unwired`].
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum DisplayDcUnwired {
+    /// Read the latched level anyway — what every panel did before this key
+    /// existed, and what a panel whose D/C pad is REQUIRED keeps doing.
+    #[default]
+    Level,
+    /// No stream open ⇒ command, otherwise parameter/pixel. A declared cheat;
+    /// the marker and its `real:` clause sit on the engine's decode, which is
+    /// the one place it actually happens.
+    Infer,
+    /// Every byte is data. Same, and the same marker.
+    Data,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
@@ -3026,6 +3228,39 @@ pub struct DisplayAction {
     /// actions; nothing is implied.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub clear_ram: bool,
+    /// Put the frame memory ON THE GLASS and bump the refresh generation.
+    ///
+    /// E-paper is the only family here where writing frame memory does not
+    /// change what a camera sees. SSD1680 0x20 (master activation) and UC8151D
+    /// 0x12 (DRF) are what move the ink; until one arrives the panel still
+    /// shows the previous image, and `labwired_verify`'s
+    /// `min_refresh_generation` clause is the only thing that can tell "RAM was
+    /// written" from "the picture changed".
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub refresh: bool,
+    /// Guard: run this entry only when a PARAMETER BYTE of the command holds a
+    /// particular value. Not an action — an action still has to be set.
+    ///
+    /// Forced by the SSD1680's 0x22, which is a SEQUENCE SELECTOR: the same
+    /// opcode with parameter 0xF8 powers the booster on and with 0x83 powers it
+    /// off, and GxEPD2 sends both. One entry per arm, each guarded, is the
+    /// datasheet's own shape. Without it a command whose meaning is in its
+    /// parameter needs a Rust arm, which is the thing this primitive exists to
+    /// delete.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub when: Option<DisplayArgWhen>,
+}
+
+/// See [`DisplayAction::when`].
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct DisplayArgWhen {
+    /// Index of the parameter byte this guard reads.
+    pub arg: u8,
+    /// Applied to the byte before the comparison. Absent ⇒ the whole byte.
+    #[serde(default)]
+    pub mask: Option<u8>,
+    /// The masked value this entry requires.
+    pub equals: u8,
 }
 
 impl DisplayAction {
@@ -3042,6 +3277,7 @@ impl DisplayAction {
             + self.invert.is_some() as usize
             + self.reset_control as usize
             + self.clear_ram as usize
+            + self.refresh as usize
     }
 }
 
@@ -3072,6 +3308,12 @@ pub struct DisplayRamWrite {
     /// from where the last write stopped (WRMEMC, 0x3C — §9.1.33 p.225).
     #[serde(default = "default_true")]
     pub reset_cursor: bool,
+    /// Which of [`DisplayRam::planes`] this stream writes. Required when the
+    /// frame memory HAS planes, refused when it does not — the plane is the
+    /// only thing that tells the SSD1680's 0x24 from its 0x26, and a stream
+    /// that defaulted to the first plane would paint the red image in black.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plane: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]

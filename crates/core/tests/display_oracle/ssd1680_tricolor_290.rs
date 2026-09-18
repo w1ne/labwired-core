@@ -4,7 +4,7 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
-use crate::peripherals::spi::SpiDevice;
+use labwired_core::peripherals::spi::SpiDevice;
 use std::any::Any;
 
 /// Native panel resolution. The Waveshare 2.9" tri-color module is wired
@@ -60,7 +60,7 @@ pub struct Ssd1680Tricolor290 {
     /// `refresh_generation`; on a bench the glass never changes.
     ///
     /// ⚠️ DEFAULTS TO `true`. Only an explicit `powered: false` in the compiled
-    /// manifest darkens it — see [`crate::peripherals::components::supply`].
+    /// manifest darkens it — see `peripherals::components::supply`.
     powered: bool,
 
     // Power / mode flags driven by the SSD1680 command set.
@@ -194,7 +194,7 @@ impl Ssd1680Tricolor290 {
     }
 
     /// Process one command byte (DC=low on real hardware). Mirrors
-    /// [`Uc8151dTricolor290::command_byte`] so the ESP32/GxEPD2 thunk path —
+    /// `Uc8151dTricolor290::command_byte` so the ESP32/GxEPD2 thunk path —
     /// which knows the DC line from the calling function identity — can drive
     /// the panel without going through the SPI peripheral. Drives the same
     /// datasheet dispatch the real SPI `transfer()` path uses.
@@ -446,8 +446,8 @@ impl SpiDevice for Ssd1680Tricolor290 {
     fn artifacts(
         &self,
         id: &str,
-        opts: &crate::inspect::InspectOpts,
-    ) -> Vec<crate::inspect::Artifact> {
+        opts: &labwired_core::inspect::InspectOpts,
+    ) -> Vec<labwired_core::inspect::Artifact> {
         let (w, h) = self.dimensions();
         let black = self.black_plane();
         let red = self.red_plane();
@@ -455,14 +455,14 @@ impl SpiDevice for Ssd1680Tricolor290 {
         let mut both = Vec::with_capacity(black.len() + red.len());
         both.extend_from_slice(black);
         both.extend_from_slice(red);
-        vec![crate::inspect::Artifact {
+        vec![labwired_core::inspect::Artifact {
             kind: "framebuffer".to_string(),
             id: id.to_string(),
             meta: serde_json::json!({
                 "w": w,
                 "h": h,
-                "format": crate::inspect::artifact_format::EPAPER_TRICOLOR_PLANES,
-                "generation": crate::inspect::artifact_generation(&both),
+                "format": labwired_core::inspect::artifact_format::EPAPER_TRICOLOR_PLANES,
+                "generation": labwired_core::inspect::artifact_generation(&both),
                 "plane_bytes": black.len(),
                 "black_ink_bytes": ink(black),
                 "red_ink_bytes": ink(red),
@@ -472,7 +472,7 @@ impl SpiDevice for Ssd1680Tricolor290 {
                 // supply" is indistinguishable from "firmware never refreshed".
                 "powered": self.powered,
             }),
-            bytes: crate::inspect::artifact_bytes(&both, opts),
+            bytes: labwired_core::inspect::artifact_bytes(&both, opts),
         }]
     }
 
@@ -501,9 +501,9 @@ impl SpiDevice for Ssd1680Tricolor290 {
         bincode::serialize(&snap).expect("bincode serialize Ssd1680Snap")
     }
 
-    fn restore_runtime_snapshot(&mut self, bytes: &[u8]) -> crate::SimResult<()> {
+    fn restore_runtime_snapshot(&mut self, bytes: &[u8]) -> labwired_core::SimResult<()> {
         let snap: Ssd1680Snap = bincode::deserialize(bytes).map_err(|e| {
-            crate::SimulationError::NotImplemented(format!("Ssd1680 snapshot decode: {e}"))
+            labwired_core::SimulationError::NotImplemented(format!("Ssd1680 snapshot decode: {e}"))
         })?;
         self.cs_pin = snap.cs_pin;
         self.hibernating = snap.hibernating;
@@ -519,7 +519,7 @@ impl SpiDevice for Ssd1680Tricolor290 {
         if snap.black_plane.len() != self.black_plane.len()
             || snap.red_plane.len() != self.red_plane.len()
         {
-            return Err(crate::SimulationError::NotImplemented(format!(
+            return Err(labwired_core::SimulationError::NotImplemented(format!(
                 "Ssd1680 snapshot plane size mismatch: black {} vs {}, red {} vs {}",
                 snap.black_plane.len(),
                 self.black_plane.len(),
@@ -614,370 +614,5 @@ impl SpiDevice for Ssd1680Tricolor290 {
 
     fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
         Some(self)
-    }
-}
-
-// ─── PeripheralKit registration ────────────────────────────────────────────
-
-use crate::peripherals::kit::{
-    AttachCtx, Category, ConfigKey, ConfigType, KitMetadata, LabRef, PeripheralKit, Transport,
-};
-
-pub struct Ssd1680Tricolor290Kit;
-pub static SSD1680_TRICOLOR_290_KIT: Ssd1680Tricolor290Kit = Ssd1680Tricolor290Kit;
-
-/// Level the BUSY line rests at when the panel is not refreshing. SSD1680
-/// asserts BUSY HIGH, so idle is LOW.
-const BUSY_IDLE_LEVEL: bool = false;
-
-static SSD1680_TRICOLOR_290_METADATA: KitMetadata = KitMetadata {
-    inputs: &[],
-    device_type: "ssd1680_tricolor_290",
-    label: "SSD1680 Tri-Color E-Paper",
-    summary: "2.9\" tri-color (black/white/red) e-paper over SPI. Driver class \
-              GxEPD2_290_C90c — the WeAct / Waveshare 2.9\" B/W/R module. Not \
-              interchangeable with the UC8151D part.",
-    detail: "Full SPI command + display-data RAM state machine, validated by the e2e e-paper \
-             integration test. Same model drives the STM32F103 lab, the ESP32-classic \
-             playground board and the ESP32-C3 e-paper labs. Decodes SSD1680 opcodes \
-             (0x12 SWRESET, 0x11 data entry, 0x24/0x26 RAM planes, 0x22+0x20 update) — the \
-             stream GxEPD2_290_C90c emits. If your sketch instantiates GxEPD2_290_Z13c \
-             instead, use uc8151d_tricolor_290; the two command sets share nothing, and the \
-             wrong one reports success and renders blank.",
-    transport: Transport::Spi,
-    category: Category::Spi,
-    config_keys: &[
-        ConfigKey {
-            name: "cs_pin",
-            ty: ConfigType::Str,
-            doc: "Chip-select GPIO pin (e.g. \"PA4\"). Defaults to PA4.",
-        },
-        ConfigKey {
-            name: "dc_pin",
-            ty: ConfigType::Str,
-            doc: "Data/Command GPIO pin (e.g. \"GPIO17\"). Required for command framing.",
-        },
-        ConfigKey {
-            name: "busy_pin",
-            ty: ConfigType::Str,
-            doc: "BUSY status GPIO the host polls (e.g. \"GPIO4\"). Held LOW (idle) \
-                  because this model refreshes instantly; without it a driver that \
-                  waits on BUSY blocks until its timeout and the panel stays blank.",
-        },
-        crate::peripherals::components::supply::POWERED_CONFIG_KEY,
-    ],
-    labs: &[
-        LabRef {
-            board_id: "epaper-tricolor-lab",
-            chip: "stm32f103",
-            example_dir: "epaper-tricolor-lab",
-            demo_elf: "demo-epaper-tricolor-lab.elf",
-        },
-        LabRef {
-            board_id: "esp32-epaper-lab",
-            chip: "esp32",
-            example_dir: "esp32-epaper-lab",
-            demo_elf: "demo-esp32-epaper-lab.elf",
-        },
-    ],
-};
-
-impl PeripheralKit for Ssd1680Tricolor290Kit {
-    fn metadata(&self) -> &'static KitMetadata {
-        &SSD1680_TRICOLOR_290_METADATA
-    }
-    fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
-        let cs_pin = ctx.config_str("cs_pin").unwrap_or("PA4").to_string();
-        // Supply state. `Some(false)` is the only value that changes anything;
-        // an absent key means powered. See `components::supply`.
-        let mut panel = Ssd1680Tricolor290::new(cs_pin).with_powered(
-            crate::peripherals::components::supply::powered_from_config(ctx),
-        );
-        if let Some(dc_pin) = ctx.config_str("dc_pin") {
-            let (odr_addr, bit) = ctx.resolve_pin_odr(dc_pin).ok_or_else(|| {
-                anyhow::anyhow!(
-                    "ssd1680_tricolor_290 '{}' dc_pin '{}' could not be resolved to a GPIO output",
-                    ctx.device_id(),
-                    dc_pin
-                )
-            })?;
-            panel = panel.with_dc_pin(dc_pin.to_string());
-            crate::peripherals::spi::SpiDevice::set_dc_source(&mut panel, odr_addr, bit);
-        }
-        // BUSY: SSD1680 drives it HIGH while refreshing, LOW when idle, and
-        // GxEPD2 blocks in _waitWhileBusy until it reads not-busy (its
-        // `_busy_level` is HIGH for this controller, and the escape timeout is
-        // 30 s — unreachable at simulated speed). This model refreshes
-        // instantaneously, so "always idle" is the faithful reading of it, and
-        // an undriven line is what left the ESP32 e-reader lab blank.
-        //
-        // NOTE: uc8151d_tricolor_290 is the exact opposite polarity — idle
-        // HIGH. Do not copy this constant across without checking the
-        // controller's datasheet and the driver's `_busy_level`.
-        if let Some(busy_pin) = ctx.config_str("busy_pin") {
-            let busy_pin = busy_pin.to_string();
-            ctx.drive_pin_input(&busy_pin, BUSY_IDLE_LEVEL)?;
-        }
-        ctx.attach_spi_device(Box::new(panel))?;
-        Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn send_seq(dev: &mut Ssd1680Tricolor290, bytes: &[u8]) {
-        dev.cs_select();
-        for &b in bytes {
-            dev.transfer(b);
-        }
-        dev.cs_release();
-    }
-
-    /// Build the exact byte sequence emitted by GxEPD2_290_C90c::_InitDisplay().
-    fn init_display_bytes() -> Vec<u8> {
-        vec![
-            0x12, // SWRESET
-            0x01, 0x27, 0x01, 0x00, // Driver output control
-            0x11, 0x03, // Data entry mode
-            0x3C, 0x05, // Border waveform
-            0x18, 0x80, // Temp sensor select
-            0x21, 0x00, 0x80, // Display update ctrl 1
-            // _setPartialRamArea(0, 0, WIDTH=128, HEIGHT=296)
-            0x44, 0x00, 0x0F, // RAM-X window: 0..15 (bytes)
-            0x45, 0x00, 0x00, 0x27, 0x01, // RAM-Y window: 0..295
-            0x4E, 0x00, // RAM-X counter
-            0x4F, 0x00, 0x00, // RAM-Y counter
-        ]
-    }
-
-    #[test]
-    fn init_sequence_sets_window_and_counters() {
-        let mut dev = Ssd1680Tricolor290::new("PA4");
-        send_seq(&mut dev, &init_display_bytes());
-
-        assert_eq!(dev.col_start_bytes, 0);
-        assert_eq!(dev.col_end_bytes, 15);
-        assert_eq!(dev.row_start, 0);
-        assert_eq!(dev.row_end, 295);
-        assert_eq!(dev.cur_col_bytes, 0);
-        assert_eq!(dev.cur_row, 0);
-    }
-
-    #[test]
-    fn clearscreen_fills_both_planes_white() {
-        // Replicates GxEPD2_290_C90c::clearScreen(0xFF, 0xFF):
-        // init + 0x24 + 4736 bytes of 0xFF + 0x26 + 4736 bytes of ~0xFF=0x00.
-        // After: black plane = 0xFF (all white), red plane = 0x00 (all red).
-        let mut dev = Ssd1680Tricolor290::new("PA4");
-        send_seq(&mut dev, &init_display_bytes());
-
-        dev.cs_select();
-        dev.transfer(0x24);
-        for _ in 0..PLANE_BYTES {
-            dev.transfer(0xFF);
-        }
-        dev.transfer(0x26);
-        for _ in 0..PLANE_BYTES {
-            dev.transfer(0x00); // GxEPD2 writes ~color_value, 0xFF → 0x00
-        }
-        // _Update_Part sequence
-        dev.transfer(0x22);
-        dev.transfer(0xF7);
-        dev.transfer(0x20);
-        dev.cs_release();
-
-        assert!(
-            dev.black_plane().iter().all(|&b| b == 0xFF),
-            "black plane all-white"
-        );
-        assert!(
-            dev.red_plane().iter().all(|&b| b == 0x00),
-            "red plane all-red on wire"
-        );
-        assert!(dev.refresh_pending, "0x20 must arm refresh");
-        assert_eq!(dev.refresh_generation, 1);
-    }
-
-    #[test]
-    fn stream_length_terminates_correctly() {
-        // Confirms that exactly PLANE_BYTES bytes are consumed by 0x24,
-        // and the very next byte is parsed as a command again.
-        let mut dev = Ssd1680Tricolor290::new("PA4");
-        send_seq(&mut dev, &init_display_bytes());
-
-        dev.cs_select();
-        dev.transfer(0x24);
-        for _ in 0..PLANE_BYTES {
-            dev.transfer(0xAA);
-        }
-        // Next byte: should be parsed as command, not pixel.
-        dev.transfer(0x12); // SWRESET
-        dev.cs_release();
-        assert!(
-            dev.reset_seen,
-            "byte after full stream should be parsed as command"
-        );
-    }
-
-    #[test]
-    fn partial_window_streams_correct_byte_count() {
-        // 16×16-pixel window in the top-left corner: 2 bytes × 16 rows = 32 bytes.
-        let mut dev = Ssd1680Tricolor290::new("PA4");
-        send_seq(
-            &mut dev,
-            &[
-                0x44, 0x00, 0x01, // X: 0..1 (bytes)
-                0x45, 0x00, 0x00, 0x0F, 0x00, // Y: 0..15
-                0x4E, 0x00, //
-                0x4F, 0x00, 0x00, //
-            ],
-        );
-
-        dev.cs_select();
-        dev.transfer(0x24);
-        for _ in 0..32 {
-            dev.transfer(0x55);
-        }
-        // 33rd byte after 0x24 must be treated as a command.
-        dev.transfer(0x12);
-        dev.cs_release();
-        assert!(dev.reset_seen);
-        // Top-left 2×16 region of black plane should be 0x55, rest untouched.
-        for row in 0..16 {
-            assert_eq!(dev.black_plane()[row * WIDTH_BYTES], 0x55);
-            assert_eq!(dev.black_plane()[row * WIDTH_BYTES + 1], 0x55);
-            assert_eq!(
-                dev.black_plane()[row * WIDTH_BYTES + 2],
-                0xFF,
-                "outside window"
-            );
-        }
-    }
-
-    #[test]
-    fn power_state_tracks_0x22_param() {
-        let mut dev = Ssd1680Tricolor290::new("PA4");
-        // _PowerOn: 0x22 0xF8 0x20
-        send_seq(&mut dev, &[0x22, 0xF8, 0x20]);
-        assert!(dev.power_on);
-        // _PowerOff: 0x22 0x83 0x20
-        send_seq(&mut dev, &[0x22, 0x83, 0x20]);
-        assert!(!dev.power_on);
-    }
-
-    #[test]
-    fn hibernate_command_sets_flag() {
-        let mut dev = Ssd1680Tricolor290::new("PA4");
-        send_seq(&mut dev, &[0x10, 0x01]);
-        assert!(dev.hibernating);
-    }
-
-    #[test]
-    fn refresh_generation_advances_per_activation() {
-        let mut dev = Ssd1680Tricolor290::new("PA4");
-        assert_eq!(dev.refresh_generation, 0);
-        send_seq(&mut dev, &[0x20]);
-        assert_eq!(dev.refresh_generation, 1);
-        send_seq(&mut dev, &[0x20]);
-        assert_eq!(dev.refresh_generation, 2);
-    }
-
-    // ─── Supply ───────────────────────────────────────────────────────────
-    //
-    // THE MEASURED BUG (st7789.rs carries the full account): a diagram wiring
-    // only a panel's signal pins — no VCC, no GND — ran and reported inked
-    // planes and a bumped refresh generation. On a bench the glass never
-    // changes. E-paper makes the lie especially convincing, because a real
-    // panel HOLDS its image with the supply removed — but a panel that never
-    // had a supply never had an image to hold.
-
-    /// A GxEPD2-shaped drive that inks the black plane and refreshes.
-    fn drive_a_refresh(dev: &mut Ssd1680Tricolor290) {
-        send_seq(dev, &init_display_bytes());
-        dev.cs_select();
-        dev.transfer(0x24);
-        for _ in 0..PLANE_BYTES {
-            dev.transfer(0x00); // all black ink
-        }
-        dev.transfer(0x22);
-        dev.transfer(0xF7);
-        dev.transfer(0x20); // master activation → refresh
-        dev.cs_release();
-    }
-
-    fn supply_meta(dev: &Ssd1680Tricolor290) -> serde_json::Value {
-        SpiDevice::artifacts(dev, "epd", &crate::inspect::InspectOpts::default())
-            .into_iter()
-            .next()
-            .expect("one framebuffer artifact")
-            .meta
-    }
-
-    /// The POSITIVE control. Without it, "unpowered stays blank" would also
-    /// pass on a model that never inks anything.
-    #[test]
-    fn a_powered_panel_driven_this_way_inks_and_refreshes() {
-        let mut dev = Ssd1680Tricolor290::new("PA4");
-        drive_a_refresh(&mut dev);
-
-        assert!(dev.powered(), "no supply config at all must mean powered");
-        let m = supply_meta(&dev);
-        assert_eq!(m["black_ink_bytes"], PLANE_BYTES);
-        assert_eq!(m["refresh_generation"], 1);
-        assert_eq!(m["powered"], true);
-    }
-
-    /// The FIX. Identical drive, supply declared absent: nothing latches.
-    #[test]
-    fn an_unpowered_panel_reports_blank_on_every_field_the_bug_reported() {
-        let mut dev = Ssd1680Tricolor290::new("PA4").with_powered(false);
-        drive_a_refresh(&mut dev);
-
-        assert!(!dev.power_on(), "an unpowered controller cannot power on");
-        let m = supply_meta(&dev);
-        assert_eq!(m["black_ink_bytes"], 0, "no supply, no ink");
-        assert_eq!(m["red_ink_bytes"], 0);
-        assert_eq!(
-            m["refresh_generation"], 0,
-            "nothing ever reached the glass, so nothing ever refreshed",
-        );
-        assert_eq!(m["powered"], false, "the artifact must say WHY it is blank");
-    }
-
-    /// Ink must not ACCUMULATE, and the RAM window must not move either.
-    #[test]
-    fn an_unpowered_panel_never_accumulates_ink() {
-        let mut dev = Ssd1680Tricolor290::new("PA4").with_powered(false);
-        for _ in 0..5 {
-            drive_a_refresh(&mut dev);
-        }
-        assert!(
-            dev.black_plane().iter().all(|&b| b == 0xFF),
-            "the black plane must be untouched, not just reported as blank",
-        );
-        assert!(dev.red_plane().iter().all(|&b| b == 0xFF));
-        assert_eq!(dev.refresh_generation, 0);
-        assert!(!dev.hibernating, "not even mode flags may latch");
-        assert!(!dev.refresh_pending);
-    }
-
-    /// ⚠️ THE BACKWARDS-COMPATIBILITY GUARD. Every hand-written lab manifest —
-    /// `epaper-tricolor-lab` included — declares no supply at all.
-    #[test]
-    fn absent_supply_information_means_powered() {
-        assert!(
-            Ssd1680Tricolor290::new("PA4").powered(),
-            "the default must be powered",
-        );
-        assert!(
-            Ssd1680Tricolor290::default().powered(),
-            "and so must the Default impl the factories use",
-        );
-        assert!(
-            Ssd1680Tricolor290::new("PA4").with_powered(true).powered(),
-            "an explicit true is powered too — only `false` darkens",
-        );
     }
 }
