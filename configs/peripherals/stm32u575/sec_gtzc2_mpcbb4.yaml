@@ -1,0 +1,373 @@
+peripheral: SEC_GTZC2_MPCBB4
+version: 0.1.0
+registers:
+- id: MPCBB4_CR
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GLOCK
+    bit_range:
+    - 0
+    - 0
+    description: lock the control register of the MPCBB until next reset
+  - name: INVSECSTATE
+    bit_range:
+    - 30
+    - 30
+    description: SRAMx clocks security state
+  - name: SRWILADIS
+    bit_range:
+    - 31
+    - 31
+    description: secure read/write illegal access disable
+  side_effects: null
+- id: MPCBB4_CFGLOCK
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPLCK0
+    bit_range:
+    - 0
+    - 0
+    description: Security/privilege configuration lock for super-block 0
+  side_effects: null
+- id: MPCBB4_SECCFGR0
+  address_offset: 256
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: SEC0
+    bit_range:
+    - 0
+    - 0
+    description: SEC0
+  - name: SEC1
+    bit_range:
+    - 1
+    - 1
+    description: SEC1
+  - name: SEC2
+    bit_range:
+    - 2
+    - 2
+    description: SEC2
+  - name: SEC3
+    bit_range:
+    - 3
+    - 3
+    description: SEC3
+  - name: SEC4
+    bit_range:
+    - 4
+    - 4
+    description: SEC4
+  - name: SEC5
+    bit_range:
+    - 5
+    - 5
+    description: SEC5
+  - name: SEC6
+    bit_range:
+    - 6
+    - 6
+    description: SEC6
+  - name: SEC7
+    bit_range:
+    - 7
+    - 7
+    description: SEC7
+  - name: SEC8
+    bit_range:
+    - 8
+    - 8
+    description: SEC8
+  - name: SEC9
+    bit_range:
+    - 9
+    - 9
+    description: SEC9
+  - name: SEC10
+    bit_range:
+    - 10
+    - 10
+    description: SEC10
+  - name: SEC11
+    bit_range:
+    - 11
+    - 11
+    description: SEC11
+  - name: SEC12
+    bit_range:
+    - 12
+    - 12
+    description: SEC12
+  - name: SEC13
+    bit_range:
+    - 13
+    - 13
+    description: SEC13
+  - name: SEC14
+    bit_range:
+    - 14
+    - 14
+    description: SEC14
+  - name: SEC15
+    bit_range:
+    - 15
+    - 15
+    description: SEC15
+  - name: SEC16
+    bit_range:
+    - 16
+    - 16
+    description: SEC16
+  - name: SEC17
+    bit_range:
+    - 17
+    - 17
+    description: SEC17
+  - name: SEC18
+    bit_range:
+    - 18
+    - 18
+    description: SEC18
+  - name: SEC19
+    bit_range:
+    - 19
+    - 19
+    description: SEC19
+  - name: SEC20
+    bit_range:
+    - 20
+    - 20
+    description: SEC20
+  - name: SEC21
+    bit_range:
+    - 21
+    - 21
+    description: SEC21
+  - name: SEC22
+    bit_range:
+    - 22
+    - 22
+    description: SEC22
+  - name: SEC23
+    bit_range:
+    - 23
+    - 23
+    description: SEC23
+  - name: SEC24
+    bit_range:
+    - 24
+    - 24
+    description: SEC24
+  - name: SEC25
+    bit_range:
+    - 25
+    - 25
+    description: SEC25
+  - name: SEC26
+    bit_range:
+    - 26
+    - 26
+    description: SEC26
+  - name: SEC27
+    bit_range:
+    - 27
+    - 27
+    description: SEC27
+  - name: SEC28
+    bit_range:
+    - 28
+    - 28
+    description: SEC28
+  - name: SEC29
+    bit_range:
+    - 29
+    - 29
+    description: SEC29
+  - name: SEC30
+    bit_range:
+    - 30
+    - 30
+    description: SEC30
+  - name: SEC31
+    bit_range:
+    - 31
+    - 31
+    description: SEC31
+  side_effects: null
+- id: MPCBB4_PRIVCFGR0
+  address_offset: 512
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: PRIV0
+    bit_range:
+    - 0
+    - 0
+    description: PRIV0
+  - name: PRIV1
+    bit_range:
+    - 1
+    - 1
+    description: PRIV1
+  - name: PRIV2
+    bit_range:
+    - 2
+    - 2
+    description: PRIV2
+  - name: PRIV3
+    bit_range:
+    - 3
+    - 3
+    description: PRIV3
+  - name: PRIV4
+    bit_range:
+    - 4
+    - 4
+    description: PRIV4
+  - name: PRIV5
+    bit_range:
+    - 5
+    - 5
+    description: PRIV5
+  - name: PRIV6
+    bit_range:
+    - 6
+    - 6
+    description: PRIV6
+  - name: PRIV7
+    bit_range:
+    - 7
+    - 7
+    description: PRIV7
+  - name: PRIV8
+    bit_range:
+    - 8
+    - 8
+    description: PRIV8
+  - name: PRIV9
+    bit_range:
+    - 9
+    - 9
+    description: PRIV9
+  - name: PRIV10
+    bit_range:
+    - 10
+    - 10
+    description: PRIV10
+  - name: PRIV11
+    bit_range:
+    - 11
+    - 11
+    description: PRIV11
+  - name: PRIV12
+    bit_range:
+    - 12
+    - 12
+    description: PRIV12
+  - name: PRIV13
+    bit_range:
+    - 13
+    - 13
+    description: PRIV13
+  - name: PRIV14
+    bit_range:
+    - 14
+    - 14
+    description: PRIV14
+  - name: PRIV15
+    bit_range:
+    - 15
+    - 15
+    description: PRIV15
+  - name: PRIV16
+    bit_range:
+    - 16
+    - 16
+    description: PRIV16
+  - name: PRIV17
+    bit_range:
+    - 17
+    - 17
+    description: PRIV17
+  - name: PRIV18
+    bit_range:
+    - 18
+    - 18
+    description: PRIV18
+  - name: PRIV19
+    bit_range:
+    - 19
+    - 19
+    description: PRIV19
+  - name: PRIV20
+    bit_range:
+    - 20
+    - 20
+    description: PRIV20
+  - name: PRIV21
+    bit_range:
+    - 21
+    - 21
+    description: PRIV21
+  - name: PRIV22
+    bit_range:
+    - 22
+    - 22
+    description: PRIV22
+  - name: PRIV23
+    bit_range:
+    - 23
+    - 23
+    description: PRIV23
+  - name: PRIV24
+    bit_range:
+    - 24
+    - 24
+    description: PRIV24
+  - name: PRIV25
+    bit_range:
+    - 25
+    - 25
+    description: PRIV25
+  - name: PRIV26
+    bit_range:
+    - 26
+    - 26
+    description: PRIV26
+  - name: PRIV27
+    bit_range:
+    - 27
+    - 27
+    description: PRIV27
+  - name: PRIV28
+    bit_range:
+    - 28
+    - 28
+    description: PRIV28
+  - name: PRIV29
+    bit_range:
+    - 29
+    - 29
+    description: PRIV29
+  - name: PRIV30
+    bit_range:
+    - 30
+    - 30
+    description: PRIV30
+  - name: PRIV31
+    bit_range:
+    - 31
+    - 31
+    description: PRIV31
+  side_effects: null
+interrupts: null
+timing: null

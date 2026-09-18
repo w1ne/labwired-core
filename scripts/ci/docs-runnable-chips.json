@@ -160,6 +160,10 @@
       "firmware": "tests/fixtures/tier1/stm32wba52.elf",
       "expect": "TIER1 clock PASS"
     },
+    "stm32u575": {
+      "how": "needs-build",
+      "why": "First U5 part. The io-smoke firmware is built from source (examples/nucleo-u575zi/io-smoke.yaml expects target/thumbv8m.main-none-eabi/release/firmware-stm32u575-demo); no firmware-demos release asset exists yet"
+    },
     "atmega328p": {
       "how": "example",
       "script": "examples/arduino-nano-blinky/io-smoke.yaml",

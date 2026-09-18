@@ -2130,9 +2130,10 @@ impl CortexM {
                     rn,
                     rm,
                     shift_type,
+                    set_flags,
                 } => {
                     pc_increment = self
-                        .exec_shift_reg32(rd, rn, rm, shift_type)?
+                        .exec_shift_reg32(rd, rn, rm, shift_type, set_flags)?
                         .apply(pc_increment);
                 }
                 Instruction::Movw { rd, imm } => {

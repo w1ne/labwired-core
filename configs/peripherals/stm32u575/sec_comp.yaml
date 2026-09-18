@@ -1,0 +1,130 @@
+peripheral: SEC_COMP
+version: 0.1.0
+registers:
+- id: COMP1_CSR
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: COMP1_EN
+    bit_range:
+    - 0
+    - 0
+    description: Comparator 1 enable bit
+  - name: COMP1_INMSEL
+    bit_range:
+    - 7
+    - 4
+    description: Comparator 1 Input Minus connection configuration bit
+  - name: COMP1_INPSEL
+    bit_range:
+    - 9
+    - 8
+    description: Comparator1 input plus selection bit
+  - name: COMP1_WINMODE
+    bit_range:
+    - 11
+    - 11
+    description: COMP1_WINMODE
+  - name: COMP1_WINOUT
+    bit_range:
+    - 14
+    - 14
+    description: COMP1_WINOUT
+  - name: COMP1_POLARITY
+    bit_range:
+    - 15
+    - 15
+    description: Comparator 1 polarity selection bit
+  - name: COMP1_HYST
+    bit_range:
+    - 17
+    - 16
+    description: Comparator 1 hysteresis selection bits
+  - name: COMP1_PWRMODE
+    bit_range:
+    - 19
+    - 18
+    description: COMP1_PWRMODE
+  - name: COMP1_BLANKSEL
+    bit_range:
+    - 24
+    - 20
+    description: COMP1_BLANKSEL
+  - name: COMP1_VALUE
+    bit_range:
+    - 30
+    - 30
+    description: Comparator 1 output status bit
+  - name: COMP1_LOCK
+    bit_range:
+    - 31
+    - 31
+    description: COMP1_CSR register lock bit
+  side_effects: null
+- id: COMP2_CSR
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: COM2_EN
+    bit_range:
+    - 0
+    - 0
+    description: Comparator 2 enable bit
+  - name: COM2_INMSEL
+    bit_range:
+    - 7
+    - 4
+    description: Comparator 2 Input Minus connection configuration bit
+  - name: COM2_INPSEL
+    bit_range:
+    - 9
+    - 8
+    description: Comparator 2 input plus selection bit
+  - name: COM2_WINMODE
+    bit_range:
+    - 11
+    - 11
+    description: COM2_WINMODE
+  - name: COM2_WINOUT
+    bit_range:
+    - 14
+    - 14
+    description: COM2_WINOUT
+  - name: COM2_POLARITY
+    bit_range:
+    - 15
+    - 15
+    description: Comparator 2 polarity selection bit
+  - name: COM2_HYST
+    bit_range:
+    - 17
+    - 16
+    description: Comparator 2 hysteresis selection bits
+  - name: COM2_PWRMODE
+    bit_range:
+    - 19
+    - 18
+    description: COM2_PWRMODE
+  - name: COM2_BLANKSEL
+    bit_range:
+    - 24
+    - 20
+    description: COM2_BLANKSEL
+  - name: COM2_VALUE
+    bit_range:
+    - 30
+    - 30
+    description: Comparator 2 output status bit
+  - name: COM2_LOCK
+    bit_range:
+    - 31
+    - 31
+    description: COMP2_CSR register lock bit
+  side_effects: null
+interrupts:
+  COMP: 72
+timing: null

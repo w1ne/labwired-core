@@ -1,0 +1,279 @@
+peripheral: SYSCFG
+version: 0.1.0
+registers:
+- id: SECCFGR
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYSCFGSEC
+    bit_range:
+    - 0
+    - 0
+    description: SYSCFG clock control security
+  - name: CLASSBSEC
+    bit_range:
+    - 1
+    - 1
+    description: CLASSBSEC
+  - name: FPUSEC
+    bit_range:
+    - 3
+    - 3
+    description: FPUSEC
+  side_effects: null
+- id: CFGR1
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PB9_FMP
+    bit_range:
+    - 19
+    - 19
+    description: PB9_FMP
+  - name: PB8_FMP
+    bit_range:
+    - 18
+    - 18
+    description: PB8_FMP
+  - name: PB7_FMP
+    bit_range:
+    - 17
+    - 17
+    description: PB7_FMP
+  - name: PB6_FMP
+    bit_range:
+    - 16
+    - 16
+    description: PB6_FMP
+  - name: ANASWVDD
+    bit_range:
+    - 9
+    - 9
+    description: GPIO analog switch control voltage selection
+  - name: BOOSTEN
+    bit_range:
+    - 8
+    - 8
+    description: I/O analog switch voltage booster enable
+  side_effects: null
+- id: FPUIMR
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 31
+  fields:
+  - name: FPU_IE
+    bit_range:
+    - 5
+    - 0
+    description: Floating point unit interrupts enable bits
+  side_effects: null
+- id: CNSLCKR
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LOCKNSVTOR
+    bit_range:
+    - 0
+    - 0
+    description: VTOR_NS register lock
+  - name: LOCKNSMPU
+    bit_range:
+    - 1
+    - 1
+    description: Non-secure MPU registers lock
+  side_effects: null
+- id: CSLOCKR
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LOCKSVTAIRCR
+    bit_range:
+    - 0
+    - 0
+    description: LOCKSVTAIRCR
+  - name: LOCKSMPU
+    bit_range:
+    - 1
+    - 1
+    description: LOCKSMPU
+  - name: LOCKSAU
+    bit_range:
+    - 2
+    - 2
+    description: LOCKSAU
+  side_effects: null
+- id: CFGR2
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ECCL
+    bit_range:
+    - 3
+    - 3
+    description: ECC Lock
+  - name: PVDL
+    bit_range:
+    - 2
+    - 2
+    description: PVD lock enable bit
+  - name: SPL
+    bit_range:
+    - 1
+    - 1
+    description: SRAM ECC lock bit
+  - name: CLL
+    bit_range:
+    - 0
+    - 0
+    description: LOCKUP (hardfault) output enable bit
+  side_effects: null
+- id: MESR
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IPMEE
+    bit_range:
+    - 16
+    - 16
+    description: IPMEE
+  - name: MCLR
+    bit_range:
+    - 0
+    - 0
+    description: MCLR
+  side_effects: null
+- id: CCCSR
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 10
+  fields:
+  - name: EN1
+    bit_range:
+    - 0
+    - 0
+    description: EN1
+  - name: CS1
+    bit_range:
+    - 1
+    - 1
+    description: CS1
+  - name: EN2
+    bit_range:
+    - 2
+    - 2
+    description: EN2
+  - name: CS2
+    bit_range:
+    - 3
+    - 3
+    description: CS2
+  - name: RDY1
+    bit_range:
+    - 8
+    - 8
+    description: RDY1
+  - name: RDY2
+    bit_range:
+    - 9
+    - 9
+    description: RDY2
+  side_effects: null
+- id: CCVR
+  address_offset: 32
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: NCV1
+    bit_range:
+    - 3
+    - 0
+    description: NCV1
+  - name: PCV1
+    bit_range:
+    - 7
+    - 4
+    description: PCV1
+  - name: NCV2
+    bit_range:
+    - 11
+    - 8
+    description: NCV2
+  - name: PCV2
+    bit_range:
+    - 15
+    - 12
+    description: PCV2
+  side_effects: null
+- id: CCCR
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 30840
+  fields:
+  - name: NCC1
+    bit_range:
+    - 3
+    - 0
+    description: NCC1
+  - name: PCC1
+    bit_range:
+    - 7
+    - 4
+    description: PCC1
+  - name: NCC2
+    bit_range:
+    - 11
+    - 8
+    description: NCC2
+  - name: PCC2
+    bit_range:
+    - 15
+    - 12
+    description: PCC2
+  side_effects: null
+- id: RSSCMDR
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RSSCMD
+    bit_range:
+    - 15
+    - 0
+    description: RSS commands
+  side_effects: null
+- id: UCPDR
+  address_offset: 112
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CC1ENRXFILTER
+    bit_range:
+    - 0
+    - 0
+    description: CC1ENRXFILTER
+  - name: CC2ENRXFILTER
+    bit_range:
+    - 1
+    - 1
+    description: CC2ENRXFILTER
+  side_effects: null
+interrupts: null
+timing: null

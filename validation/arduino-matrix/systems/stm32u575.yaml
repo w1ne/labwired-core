@@ -1,0 +1,17 @@
+# Arduino matrix system — INA219 on Wire for L3; L0-L2 ignore it.
+name: "arduino-matrix-stm32u575"
+chip: "../../../configs/chips/stm32u575.yaml"
+external_devices:
+  # Matrix L3_i2c_sensor: INA219 at 0x40 on default Arduino Wire bus (i2c1).
+  - id: "ina219"
+    type: "ina219"
+    connection: "i2c1"
+    config:
+      i2c_address: 0x40
+  # Matrix L4_spi_sensor: MAX31855 on default Arduino SPI (spi1).
+  - id: "max31855"
+    type: "max31855"
+    connection: "spi1"
+    config:
+      cs_pin: "PA4"
+board_io: []

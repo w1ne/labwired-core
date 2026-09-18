@@ -1,0 +1,606 @@
+peripheral: SEC_DMA2D
+version: 0.1.0
+registers:
+- id: CR
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MODE
+    bit_range:
+    - 17
+    - 16
+    description: DMA2D mode
+  - name: CEIE
+    bit_range:
+    - 13
+    - 13
+    description: Configuration Error Interrupt Enable
+  - name: CTCIE
+    bit_range:
+    - 12
+    - 12
+    description: CLUT transfer complete interrupt enable
+  - name: CAEIE
+    bit_range:
+    - 11
+    - 11
+    description: CLUT access error interrupt enable
+  - name: TWIE
+    bit_range:
+    - 10
+    - 10
+    description: Transfer watermark interrupt enable
+  - name: TCIE
+    bit_range:
+    - 9
+    - 9
+    description: Transfer complete interrupt enable
+  - name: TEIE
+    bit_range:
+    - 8
+    - 8
+    description: Transfer error interrupt enable
+  - name: LOM
+    bit_range:
+    - 6
+    - 6
+    description: Line Offset Mode
+  - name: ABORT
+    bit_range:
+    - 2
+    - 2
+    description: Abort
+  - name: SUSP
+    bit_range:
+    - 1
+    - 1
+    description: Suspend
+  - name: START
+    bit_range:
+    - 0
+    - 0
+    description: Start
+  side_effects: null
+- id: ISR
+  address_offset: 4
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: CEIF
+    bit_range:
+    - 5
+    - 5
+    description: Configuration error interrupt flag
+  - name: CTCIF
+    bit_range:
+    - 4
+    - 4
+    description: CLUT transfer complete interrupt flag
+  - name: CAEIF
+    bit_range:
+    - 3
+    - 3
+    description: CLUT access error interrupt flag
+  - name: TWIF
+    bit_range:
+    - 2
+    - 2
+    description: Transfer watermark interrupt flag
+  - name: TCIF
+    bit_range:
+    - 1
+    - 1
+    description: Transfer complete interrupt flag
+  - name: TEIF
+    bit_range:
+    - 0
+    - 0
+    description: Transfer error interrupt flag
+  side_effects: null
+- id: IFCR
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CCEIF
+    bit_range:
+    - 5
+    - 5
+    description: Clear configuration error interrupt flag
+  - name: CCTCIF
+    bit_range:
+    - 4
+    - 4
+    description: Clear CLUT transfer complete interrupt flag
+  - name: CAECIF
+    bit_range:
+    - 3
+    - 3
+    description: Clear CLUT access error interrupt flag
+  - name: CTWIF
+    bit_range:
+    - 2
+    - 2
+    description: Clear transfer watermark interrupt flag
+  - name: CTCIF
+    bit_range:
+    - 1
+    - 1
+    description: Clear transfer complete interrupt flag
+  - name: CTEIF
+    bit_range:
+    - 0
+    - 0
+    description: Clear Transfer error interrupt flag
+  side_effects: null
+- id: FGMAR
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MA
+    bit_range:
+    - 31
+    - 0
+    description: Memory address
+  side_effects: null
+- id: FGOR
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LO
+    bit_range:
+    - 15
+    - 0
+    description: Line offset
+  side_effects: null
+- id: BGMAR
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MA
+    bit_range:
+    - 31
+    - 0
+    description: Memory address
+  side_effects: null
+- id: BGOR
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LO
+    bit_range:
+    - 15
+    - 0
+    description: Line offset
+  side_effects: null
+- id: FGPFCCR
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ALPHA
+    bit_range:
+    - 31
+    - 24
+    description: Alpha value
+  - name: RBS
+    bit_range:
+    - 21
+    - 21
+    description: Red Blue Swap
+  - name: AI
+    bit_range:
+    - 20
+    - 20
+    description: Alpha Inverted
+  - name: AM
+    bit_range:
+    - 17
+    - 16
+    description: Alpha mode
+  - name: CS
+    bit_range:
+    - 15
+    - 8
+    description: CLUT size
+  - name: START
+    bit_range:
+    - 5
+    - 5
+    description: Start
+  - name: CCM
+    bit_range:
+    - 4
+    - 4
+    description: CLUT color mode
+  - name: CM
+    bit_range:
+    - 3
+    - 0
+    description: Color mode
+  side_effects: null
+- id: FGCOLR
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RED
+    bit_range:
+    - 23
+    - 16
+    description: Red Value
+  - name: GREEN
+    bit_range:
+    - 15
+    - 8
+    description: Green Value
+  - name: BLUE
+    bit_range:
+    - 7
+    - 0
+    description: Blue Value
+  side_effects: null
+- id: BGPFCCR
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ALPHA
+    bit_range:
+    - 31
+    - 24
+    description: Alpha value
+  - name: RBS
+    bit_range:
+    - 21
+    - 21
+    description: Red Blue Swap
+  - name: AI
+    bit_range:
+    - 20
+    - 20
+    description: Alpha Inverted
+  - name: AM
+    bit_range:
+    - 17
+    - 16
+    description: Alpha mode
+  - name: CS
+    bit_range:
+    - 15
+    - 8
+    description: CLUT size
+  - name: START
+    bit_range:
+    - 5
+    - 5
+    description: Start
+  - name: CCM
+    bit_range:
+    - 4
+    - 4
+    description: CLUT Color mode
+  - name: CM
+    bit_range:
+    - 3
+    - 0
+    description: Color mode
+  side_effects: null
+- id: BGCOLR
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RED
+    bit_range:
+    - 23
+    - 16
+    description: Red Value
+  - name: GREEN
+    bit_range:
+    - 15
+    - 8
+    description: Green Value
+  - name: BLUE
+    bit_range:
+    - 7
+    - 0
+    description: Blue Value
+  side_effects: null
+- id: FGCMAR
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MA
+    bit_range:
+    - 31
+    - 0
+    description: Memory Address
+  side_effects: null
+- id: BGCMAR
+  address_offset: 48
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MA
+    bit_range:
+    - 31
+    - 0
+    description: Memory address
+  side_effects: null
+- id: OPFCCR
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RBS
+    bit_range:
+    - 21
+    - 21
+    description: Red Blue Swap
+  - name: AI
+    bit_range:
+    - 20
+    - 20
+    description: Alpha Inverted
+  - name: SB
+    bit_range:
+    - 9
+    - 9
+    description: Swap Bytes
+  - name: CM
+    bit_range:
+    - 2
+    - 0
+    description: Color mode
+  side_effects: null
+- id: OCOLR_RGB888
+  address_offset: 56
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: APLHA
+    bit_range:
+    - 31
+    - 24
+    description: Alpha Channel Value
+  - name: RED
+    bit_range:
+    - 23
+    - 16
+    description: Red Value
+  - name: GREEN
+    bit_range:
+    - 15
+    - 8
+    description: Green Value
+  - name: BLUE
+    bit_range:
+    - 7
+    - 0
+    description: Blue Value
+  side_effects: null
+- id: OCOLR_RGB565
+  address_offset: 56
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RED
+    bit_range:
+    - 15
+    - 11
+    description: Red value in RGB565 mode
+  - name: GREEN
+    bit_range:
+    - 10
+    - 5
+    description: Green value in RGB565 mode
+  - name: BLUE
+    bit_range:
+    - 4
+    - 0
+    description: Blue value in RGB565 mode
+  side_effects: null
+- id: OCOLR_ARGB1555
+  address_offset: 56
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: A
+    bit_range:
+    - 15
+    - 15
+    description: Alpha channel value in ARGB1555 mode
+  - name: RED
+    bit_range:
+    - 14
+    - 10
+    description: Red value in ARGB1555 mode
+  - name: GREEN
+    bit_range:
+    - 9
+    - 5
+    description: Green value in ARGB1555 mode
+  - name: BLUE
+    bit_range:
+    - 4
+    - 0
+    description: Blue value in ARGB1555 mode
+  side_effects: null
+- id: OCOLR_ARGB4444
+  address_offset: 56
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ALPHA
+    bit_range:
+    - 15
+    - 12
+    description: Alpha channel value in ARGB4444
+  - name: RED
+    bit_range:
+    - 11
+    - 8
+    description: Red value in ARGB4444 mode
+  - name: GREEN
+    bit_range:
+    - 7
+    - 4
+    description: Green value in ARGB4444 mode
+  - name: BLUE
+    bit_range:
+    - 3
+    - 0
+    description: Blue value in ARGB4444 mode
+  side_effects: null
+- id: OMAR
+  address_offset: 60
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MA
+    bit_range:
+    - 31
+    - 0
+    description: Memory Address
+  side_effects: null
+- id: OOR
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LO
+    bit_range:
+    - 15
+    - 0
+    description: Line Offset
+  side_effects: null
+- id: NLR
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PL
+    bit_range:
+    - 29
+    - 16
+    description: Pixel per lines
+  - name: NL
+    bit_range:
+    - 15
+    - 0
+    description: Number of lines
+  side_effects: null
+- id: LWR
+  address_offset: 72
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LW
+    bit_range:
+    - 15
+    - 0
+    description: Line watermark
+  side_effects: null
+- id: AMTCR
+  address_offset: 76
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DT
+    bit_range:
+    - 15
+    - 8
+    description: Dead Time
+  - name: EN
+    bit_range:
+    - 0
+    - 0
+    description: Enable
+  side_effects: null
+- id: FGCLUT
+  address_offset: 1024
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: APLHA
+    bit_range:
+    - 31
+    - 24
+    description: APLHA
+  - name: RED
+    bit_range:
+    - 23
+    - 16
+    description: RED
+  - name: GREEN
+    bit_range:
+    - 15
+    - 8
+    description: GREEN
+  - name: BLUE
+    bit_range:
+    - 7
+    - 0
+    description: BLUE
+  side_effects: null
+- id: BGCLUT
+  address_offset: 2048
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: APLHA
+    bit_range:
+    - 31
+    - 24
+    description: APLHA
+  - name: RED
+    bit_range:
+    - 23
+    - 16
+    description: RED
+  - name: GREEN
+    bit_range:
+    - 15
+    - 8
+    description: GREEN
+  - name: BLUE
+    bit_range:
+    - 7
+    - 0
+    description: BLUE
+  side_effects: null
+interrupts:
+  DMA2D: 118
+timing: null

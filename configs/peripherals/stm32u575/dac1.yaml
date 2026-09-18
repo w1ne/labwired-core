@@ -1,0 +1,483 @@
+peripheral: DAC1
+version: 0.1.0
+registers:
+- id: DAC_CR
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EN1
+    bit_range:
+    - 0
+    - 0
+    description: DAC channel1 enable
+  - name: TEN1
+    bit_range:
+    - 1
+    - 1
+    description: DAC channel1 trigger enable
+  - name: TSEL1
+    bit_range:
+    - 5
+    - 2
+    description: DAC channel1 trigger selection
+  - name: WAVE1
+    bit_range:
+    - 7
+    - 6
+    description: DAC channel1 noise/triangle wave generation enable
+  - name: MAMP1
+    bit_range:
+    - 11
+    - 8
+    description: DAC channel1 mask/amplitude selector
+  - name: DMAEN1
+    bit_range:
+    - 12
+    - 12
+    description: DAC channel1 DMA enable
+  - name: DMAUDRIE1
+    bit_range:
+    - 13
+    - 13
+    description: DAC channel1 DMA Underrun Interrupt enable
+  - name: CEN1
+    bit_range:
+    - 14
+    - 14
+    description: DAC channel1 calibration enable
+  - name: EN2
+    bit_range:
+    - 16
+    - 16
+    description: DAC channel2 enable
+  - name: TEN2
+    bit_range:
+    - 17
+    - 17
+    description: DAC channel2 trigger enable
+  - name: TSEL2
+    bit_range:
+    - 21
+    - 18
+    description: DAC channel2 trigger selection
+  - name: WAVE2
+    bit_range:
+    - 23
+    - 22
+    description: DAC channel2 noise/triangle wave generation enable
+  - name: MAMP2
+    bit_range:
+    - 27
+    - 24
+    description: DAC channel2 mask/amplitude selector
+  - name: DMAEN2
+    bit_range:
+    - 28
+    - 28
+    description: DAC channel2 DMA enable
+  - name: DMAUDRIE2
+    bit_range:
+    - 29
+    - 29
+    description: DAC channel2 DMA underrun interrupt enable
+  - name: CEN2
+    bit_range:
+    - 30
+    - 30
+    description: DAC channel2 calibration enable
+  side_effects: null
+- id: DAC_SWTRGR
+  address_offset: 4
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: SWTRIG1
+    bit_range:
+    - 0
+    - 0
+    description: DAC channel1 software trigger
+  - name: SWTRIG2
+    bit_range:
+    - 1
+    - 1
+    description: DAC channel2 software trigger
+  side_effects: null
+- id: DAC_DHR12R1
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DACC1DHR
+    bit_range:
+    - 11
+    - 0
+    description: DAC channel1 12-bit right-aligned data
+  - name: DACC1DHRB
+    bit_range:
+    - 27
+    - 16
+    description: DAC channel1 12-bit right-aligned data B
+  side_effects: null
+- id: DAC_DHR12L1
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DACC1DHR
+    bit_range:
+    - 15
+    - 4
+    description: DAC channel1 12-bit left-aligned data
+  - name: DACC1DHRB
+    bit_range:
+    - 31
+    - 20
+    description: DAC channel1 12-bit left-aligned data B
+  side_effects: null
+- id: DAC_DHR8R1
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DACC1DHR
+    bit_range:
+    - 7
+    - 0
+    description: DAC channel1 8-bit right-aligned data
+  - name: DACC1DHRB
+    bit_range:
+    - 15
+    - 8
+    description: DAC channel1 8-bit right-aligned Sdata
+  side_effects: null
+- id: DAC_DHR12R2
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DACC2DHR
+    bit_range:
+    - 11
+    - 0
+    description: DAC channel2 12-bit right-aligned data
+  - name: DACC2DHRB
+    bit_range:
+    - 27
+    - 16
+    description: DAC channel2 12-bit right-aligned data
+  side_effects: null
+- id: DAC_DHR12L2
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DACC2DHR
+    bit_range:
+    - 15
+    - 4
+    description: DAC channel2 12-bit left-aligned data
+  - name: DACC2DHRB
+    bit_range:
+    - 31
+    - 20
+    description: DAC channel2 12-bit left-aligned data B
+  side_effects: null
+- id: DAC_DHR8R2
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DACC2DHR
+    bit_range:
+    - 7
+    - 0
+    description: DAC channel2 8-bit right-aligned data
+  - name: DACC2DHRB
+    bit_range:
+    - 15
+    - 8
+    description: DAC channel2 8-bit right-aligned data
+  side_effects: null
+- id: DAC_DHR12RD
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DACC1DHR
+    bit_range:
+    - 11
+    - 0
+    description: DAC channel1 12-bit right-aligned data
+  - name: DACC2DHR
+    bit_range:
+    - 27
+    - 16
+    description: DAC channel2 12-bit right-aligned data
+  side_effects: null
+- id: DAC_DHR12LD
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DACC1DHR
+    bit_range:
+    - 15
+    - 4
+    description: DAC channel1 12-bit left-aligned data
+  - name: DACC2DHR
+    bit_range:
+    - 31
+    - 20
+    description: DAC channel2 12-bit left-aligned data
+  side_effects: null
+- id: DAC_DHR8RD
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DACC1DHR
+    bit_range:
+    - 7
+    - 0
+    description: DAC channel1 8-bit right-aligned data
+  - name: DACC2DHR
+    bit_range:
+    - 15
+    - 8
+    description: DAC channel2 8-bit right-aligned data
+  side_effects: null
+- id: DAC_DOR1
+  address_offset: 44
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: DACC1DOR
+    bit_range:
+    - 11
+    - 0
+    description: DAC channel1 data output
+  - name: DACC1DORB
+    bit_range:
+    - 27
+    - 16
+    description: DAC channel1 data output
+  side_effects: null
+- id: DAC_DOR2
+  address_offset: 48
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: DACC2DOR
+    bit_range:
+    - 11
+    - 0
+    description: DAC channel2 data output
+  - name: DACC2DORB
+    bit_range:
+    - 27
+    - 16
+    description: DAC channel2 data output
+  side_effects: null
+- id: DAC_SR
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DAC1RDY
+    bit_range:
+    - 11
+    - 11
+    description: DAC channel1 ready status bit
+  - name: DORSTAT1
+    bit_range:
+    - 12
+    - 12
+    description: DAC channel1 output register status bit
+  - name: DMAUDR1
+    bit_range:
+    - 13
+    - 13
+    description: DAC channel1 DMA underrun flag
+  - name: CAL_FLAG1
+    bit_range:
+    - 14
+    - 14
+    description: DAC Channel 1 calibration offset status
+  - name: BWST1
+    bit_range:
+    - 15
+    - 15
+    description: DAC Channel 1 busy writing sample time flag
+  - name: DAC2RDY
+    bit_range:
+    - 27
+    - 27
+    description: DAC channel 2 ready status bit
+  - name: DORSTAT2
+    bit_range:
+    - 28
+    - 28
+    description: DAC channel 2 output register status bit
+  - name: DMAUDR2
+    bit_range:
+    - 29
+    - 29
+    description: DAC channel2 DMA underrun flag
+  - name: CAL_FLAG2
+    bit_range:
+    - 30
+    - 30
+    description: DAC Channel 2 calibration offset status
+  - name: BWST2
+    bit_range:
+    - 31
+    - 31
+    description: DAC Channel 2 busy writing sample time flag
+  side_effects: null
+- id: DAC_CCR
+  address_offset: 56
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OTRIM1
+    bit_range:
+    - 4
+    - 0
+    description: DAC Channel 1 offset trimming value
+  - name: OTRIM2
+    bit_range:
+    - 20
+    - 16
+    description: DAC Channel 2 offset trimming value
+  side_effects: null
+- id: DAC_MCR
+  address_offset: 60
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MODE1
+    bit_range:
+    - 2
+    - 0
+    description: DAC Channel 1 mode
+  - name: DMADOUBLE1
+    bit_range:
+    - 8
+    - 8
+    description: DAC Channel1 DMA double data mode
+  - name: SINFORMAT1
+    bit_range:
+    - 9
+    - 9
+    description: Enable signed format for DAC channel1
+  - name: HFSEL
+    bit_range:
+    - 15
+    - 14
+    description: High frequency interface mode selection
+  - name: MODE2
+    bit_range:
+    - 18
+    - 16
+    description: DAC Channel 2 mode
+  - name: DMADOUBLE2
+    bit_range:
+    - 24
+    - 24
+    description: DAC Channel2 DMA double data mode
+  - name: SINFORMAT2
+    bit_range:
+    - 25
+    - 25
+    description: Enable signed format for DAC channel2
+  side_effects: null
+- id: DAC_SHSR1
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TSAMPLE1
+    bit_range:
+    - 9
+    - 0
+    description: DAC Channel 1 sample Time (only valid in               sample &amp; hold mode)
+  side_effects: null
+- id: DAC_SHSR2
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TSAMPLE2
+    bit_range:
+    - 9
+    - 0
+    description: DAC Channel 2 sample Time (only valid in sample and hold mode)
+  side_effects: null
+- id: DAC_SHHR
+  address_offset: 72
+  size: 32
+  access: READ_WRITE
+  reset_value: 65537
+  fields:
+  - name: THOLD1
+    bit_range:
+    - 9
+    - 0
+    description: DAC Channel 1 hold Time (only valid in sample and hold mode)
+  - name: THOLD2
+    bit_range:
+    - 25
+    - 16
+    description: DAC Channel 2 hold time (only valid in sample and hold mode)
+  side_effects: null
+- id: DAC_SHRR
+  address_offset: 76
+  size: 32
+  access: READ_WRITE
+  reset_value: 65537
+  fields:
+  - name: TREFRESH1
+    bit_range:
+    - 7
+    - 0
+    description: DAC Channel 1 refresh Time (only valid in sample and hold mode)
+  - name: TREFRESH2
+    bit_range:
+    - 23
+    - 16
+    description: DAC Channel 2 refresh Time (only valid in sample and hold mode)
+  side_effects: null
+- id: DAC_AUTOCR
+  address_offset: 84
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: AUTOMODE
+    bit_range:
+    - 22
+    - 22
+    description: DAC Autonomous mode
+  side_effects: null
+interrupts:
+  DAC1: 38
+timing: null

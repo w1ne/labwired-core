@@ -1,0 +1,1454 @@
+peripheral: SEC_TAMP
+version: 0.1.0
+registers:
+- id: TAMP_CR1
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TAMP1E
+    bit_range:
+    - 0
+    - 0
+    description: Tamper detection on TAMP_IN1 enable
+  - name: TAMP2E
+    bit_range:
+    - 1
+    - 1
+    description: Tamper detection on TAMP_IN2 enable
+  - name: TAMP3E
+    bit_range:
+    - 2
+    - 2
+    description: Tamper detection on TAMP_IN3 enable
+  - name: TAMP4E
+    bit_range:
+    - 3
+    - 3
+    description: Tamper detection on TAMP_IN4 enable
+  - name: TAMP5E
+    bit_range:
+    - 4
+    - 4
+    description: Tamper detection on TAMP_IN5 enable
+  - name: TAMP6E
+    bit_range:
+    - 5
+    - 5
+    description: Tamper detection on TAMP_IN6 enable
+  - name: TAMP7E
+    bit_range:
+    - 6
+    - 6
+    description: Tamper detection on TAMP_IN7 enable
+  - name: TAMP8E
+    bit_range:
+    - 7
+    - 7
+    description: Tamper detection on TAMP_IN8 enable
+  - name: ITAMP1E
+    bit_range:
+    - 16
+    - 16
+    description: Internal tamper 1 enable
+  - name: ITAMP2E
+    bit_range:
+    - 17
+    - 17
+    description: Internal tamper 2 enable
+  - name: ITAMP3E
+    bit_range:
+    - 18
+    - 18
+    description: Internal tamper 3 enable
+  - name: ITAMP5E
+    bit_range:
+    - 20
+    - 20
+    description: Internal tamper 5 enable
+  - name: ITAMP6E
+    bit_range:
+    - 21
+    - 21
+    description: Internal tamper 6 enable
+  - name: ITAMP7E
+    bit_range:
+    - 22
+    - 22
+    description: Internal tamper 7 enable
+  - name: ITAMP8E
+    bit_range:
+    - 23
+    - 23
+    description: Internal tamper 8 enable
+  - name: ITAMP9E
+    bit_range:
+    - 24
+    - 24
+    description: Internal tamper 9 enable
+  - name: ITAMP11E
+    bit_range:
+    - 26
+    - 26
+    description: Internal tamper 11 enable
+  - name: ITAMP12E
+    bit_range:
+    - 27
+    - 27
+    description: Internal tamper 12 enable
+  - name: ITAMP13E
+    bit_range:
+    - 28
+    - 28
+    description: Internal tamper 13 enable
+  side_effects: null
+- id: TAMP_CR2
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TAMP1NOER
+    bit_range:
+    - 0
+    - 0
+    description: Tamper 1 no erase
+  - name: TAMP2NOER
+    bit_range:
+    - 1
+    - 1
+    description: Tamper 2 no erase
+  - name: TAMP3NOER
+    bit_range:
+    - 2
+    - 2
+    description: Tamper 3 no erase
+  - name: TAMP4NOER
+    bit_range:
+    - 3
+    - 3
+    description: Tamper 4 no erase
+  - name: TAMP5NOER
+    bit_range:
+    - 4
+    - 4
+    description: Tamper 5 no erase
+  - name: TAMP6NOER
+    bit_range:
+    - 5
+    - 5
+    description: Tamper 6 no erase
+  - name: TAMP7NOER
+    bit_range:
+    - 6
+    - 6
+    description: Tamper 7 no erase
+  - name: TAMP8NOER
+    bit_range:
+    - 7
+    - 7
+    description: Tamper 8 no erase
+  - name: TAMP1MSK
+    bit_range:
+    - 16
+    - 16
+    description: Tamper 1 mask The tamper 1 interrupt must not be enabled when TAMP1MSK is set.
+  - name: TAMP2MSK
+    bit_range:
+    - 17
+    - 17
+    description: Tamper 2 mask The tamper 2 interrupt must not be enabled when TAMP2MSK is set.
+  - name: TAMP3MSK
+    bit_range:
+    - 18
+    - 18
+    description: Tamper 3 mask The tamper 3 interrupt must not be enabled when TAMP3MSK is set.
+  - name: BKBLOCK
+    bit_range:
+    - 22
+    - 22
+    description: Backup registers and device secrets access blocked
+  - name: BKERASE
+    bit_range:
+    - 23
+    - 23
+    description: "Backup registers and device secrets erase Writing '1\x80\x99 to this bit reset the backup registers and device secrets(1). Writing 0 has no effect. This bit is always read as 0."
+  - name: TAMP1TRG
+    bit_range:
+    - 24
+    - 24
+    description: Active level for tamper 1 input If TAMPFLT = 00 Tamper 1 input rising edge and high level triggers a tamper detection event. If TAMPFLT = 00 Tamper 1 input falling edge and low level triggers a tamper detection event.
+  - name: TAMP2TRG
+    bit_range:
+    - 25
+    - 25
+    description: Active level for tamper 2 input If TAMPFLT = 00 Tamper 2 input rising edge and high level triggers a tamper detection event. If TAMPFLT = 00 Tamper 2 input falling edge and low level triggers a tamper detection event.
+  - name: TAMP3TRG
+    bit_range:
+    - 26
+    - 26
+    description: Active level for tamper 3 input If TAMPFLT = 00 Tamper 3 input rising edge and high level triggers a tamper detection event. If TAMPFLT = 00 Tamper 3 input falling edge and low level triggers a tamper detection event.
+  - name: TAMP4TRG
+    bit_range:
+    - 27
+    - 27
+    description: Active level for tamper 4 input (active mode disabled) If TAMPFLT = 00 Tamper 4 input rising edge and high level triggers a tamper detection event. If TAMPFLT = 00 Tamper 4 input falling edge and low level triggers a tamper detection event.
+  - name: TAMP5TRG
+    bit_range:
+    - 28
+    - 28
+    description: Active level for tamper 5 input (active mode disabled) If TAMPFLT = 00 Tamper 5 input rising edge and high level triggers a tamper detection event. If TAMPFLT = 00 Tamper 5 input falling edge and low level triggers a tamper detection event.
+  - name: TAMP6TRG
+    bit_range:
+    - 29
+    - 29
+    description: Active level for tamper 6 input (active mode disabled) If TAMPFLT = 00 Tamper 6 input rising edge and high level triggers a tamper detection event. If TAMPFLT = 00 Tamper 6 input falling edge and low level triggers a tamper detection event.
+  - name: TAMP7TRG
+    bit_range:
+    - 30
+    - 30
+    description: Active level for tamper 7 input (active mode disabled) If TAMPFLT = 00 Tamper 7 input rising edge and high level triggers a tamper detection event. If TAMPFLT = 00 Tamper 7 input falling edge and low level triggers a tamper detection event.
+  - name: TAMP8TRG
+    bit_range:
+    - 31
+    - 31
+    description: Active level for tamper 8 input (active mode disabled) If TAMPFLT = 00 Tamper 8 input rising edge and high level triggers a tamper detection event. If TAMPFLT  = 00 Tamper 8 input falling edge and low level triggers a tamper detection event.
+  side_effects: null
+- id: TAMP_CR3
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ITAMP1NOER
+    bit_range:
+    - 0
+    - 0
+    description: Internal Tamper 1 no erase
+  - name: ITAMP2NOER
+    bit_range:
+    - 1
+    - 1
+    description: Internal Tamper 2 no erase
+  - name: ITAMP3NOER
+    bit_range:
+    - 2
+    - 2
+    description: Internal Tamper 3 no erase
+  - name: ITAMP5NOER
+    bit_range:
+    - 4
+    - 4
+    description: Internal Tamper 5 no erase
+  - name: ITAMP6NOER
+    bit_range:
+    - 5
+    - 5
+    description: Internal Tamper 6 no erase
+  - name: ITAMP7NOER
+    bit_range:
+    - 6
+    - 6
+    description: Internal Tamper 7 no erase
+  - name: ITAMP8NOER
+    bit_range:
+    - 7
+    - 7
+    description: Internal Tamper 8 no erase
+  - name: ITAMP9NOER
+    bit_range:
+    - 8
+    - 8
+    description: Internal Tamper 9 no erase
+  - name: ITAMP11NOER
+    bit_range:
+    - 10
+    - 10
+    description: Internal Tamper 11 no erase
+  - name: ITAMP12NOER
+    bit_range:
+    - 11
+    - 11
+    description: Internal Tamper 12 no erase
+  - name: ITAMP13NOER
+    bit_range:
+    - 12
+    - 12
+    description: Internal Tamper 13 no erase
+  side_effects: null
+- id: TAMP_FLTCR
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TAMPFREQ
+    bit_range:
+    - 2
+    - 0
+    description: Tamper sampling frequency Determines the frequency at which each of the TAMP_INx inputs are sampled.
+  - name: TAMPFLT
+    bit_range:
+    - 4
+    - 3
+    description: TAMP_INx filter count These bits determines the number of consecutive samples at the specified level (TAMP*TRG) needed to activate a tamper event. TAMPFLT is valid for each of the TAMP_INx inputs.
+  - name: TAMPPRCH
+    bit_range:
+    - 6
+    - 5
+    description: TAMP_INx precharge duration These bit determines the duration of time during which the pull-up/is activated before each sample. TAMPPRCH is valid for each of the TAMP_INx inputs.
+  - name: TAMPPUDIS
+    bit_range:
+    - 7
+    - 7
+    description: TAMP_INx pull-up disable This bit determines if each of the TAMPx pins are precharged before each sample.
+  side_effects: null
+- id: TAMP_ATCR1
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 458752
+  fields:
+  - name: TAMP1AM
+    bit_range:
+    - 0
+    - 0
+    description: Tamper 1 active mode
+  - name: TAMP2AM
+    bit_range:
+    - 1
+    - 1
+    description: Tamper 2 active mode
+  - name: TAMP3AM
+    bit_range:
+    - 2
+    - 2
+    description: Tamper 3 active mode
+  - name: TAMP4AM
+    bit_range:
+    - 3
+    - 3
+    description: Tamper 4 active mode
+  - name: TAMP5AM
+    bit_range:
+    - 4
+    - 4
+    description: Tamper 5 active mode
+  - name: TAMP6AM
+    bit_range:
+    - 5
+    - 5
+    description: Tamper 6 active mode
+  - name: TAMP7AM
+    bit_range:
+    - 6
+    - 6
+    description: Tamper 7 active mode
+  - name: TAMP8AM
+    bit_range:
+    - 7
+    - 7
+    description: Tamper 8 active mode
+  - name: ATOSEL1
+    bit_range:
+    - 9
+    - 8
+    description: Active tamper shared output 1 selection The selected output must be available in the package pinout
+  - name: ATOSEL2
+    bit_range:
+    - 11
+    - 10
+    description: Active tamper shared output 2 selection The selected output must be available in the package pinout
+  - name: ATOSEL3
+    bit_range:
+    - 13
+    - 12
+    description: Active tamper shared output 3 selection The selected output must be available in the package pinout
+  - name: ATOSEL4
+    bit_range:
+    - 15
+    - 14
+    description: Active tamper shared output 4 selection The selected output must be available in the package pinout.
+  - name: ATCKSEL
+    bit_range:
+    - 18
+    - 16
+    description: Active tamper RTC asynchronous prescaler clock selection These bits selects the RTC asynchronous prescaler stage output.The selected clock is CK_ATPRE. fCK_ATPRE = fRTCCLK / 2ATCKSEL when (PREDIV_A+1) = 128. ... These bits can be written only when all active tampers are disabled. The write protection remains for up to 1.5 ck_atpre cycles after all the active tampers are disable.
+  - name: ATPER
+    bit_range:
+    - 26
+    - 24
+    description: Active tamper output change period The tamper output is changed every CK_ATPER = (2ATPER x CK_ATPRE) cycles. Refer to .
+  - name: ATOSHARE
+    bit_range:
+    - 30
+    - 30
+    description: Active tamper output sharing TAMP_IN1 is compared with TAMPOUTSEL1 TAMP_IN2 is compared with TAMPOUTSEL2 TAMP_IN3 is compared with TAMPOUTSEL3 TAMP_IN4 is compared with TAMPOUTSEL4 TAMP_IN5 is compared with TAMPOUTSEL5 TAMP_IN6 is compared with TAMPOUTSEL6 TAMP_IN7 is compared with TAMPOUTSEL7 TAMP_IN8 is compared with TAMPOUTSEL8
+  - name: FLTEN
+    bit_range:
+    - 31
+    - 31
+    description: Active tamper filter enable
+  side_effects: null
+- id: TAMP_ATSEEDR
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SEED
+    bit_range:
+    - 31
+    - 0
+    description: Pseudo-random generator seed value This register must be written four times with 32-bit values to provide the 128-bit seed to the PRNG. Writing to this register automatically sends the seed value to the PRNG.
+  side_effects: null
+- id: TAMP_ATOR
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PRNG
+    bit_range:
+    - 7
+    - 0
+    description: Pseudo-random generator value This field provides the values of the PRNG output. Because of potential inconsistencies due to synchronization delays, PRNG must be read at least twice. The read value is correct if it is equal to previous read value. This field can only be read when the APB is in secure mode.
+  - name: SEEDF
+    bit_range:
+    - 14
+    - 14
+    description: Seed running flag This flag is set by hardware when a new seed is written in the TAMP_ATSEEDR. It is cleared by hardware when the PRNG has absorbed this new seed, and by system reset. The TAMP APB cock must not be switched off as long as SEEDF is set.
+  - name: INITS
+    bit_range:
+    - 15
+    - 15
+    description: Active tamper initialization status This flag is set by hardware when the PRNG has absorbed the first 128-bit seed, meaning that the enabled active tampers are functional. This flag is cleared when the active tampers are disabled.
+  side_effects: null
+- id: TAMP_ATCR2
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ATOSEL1
+    bit_range:
+    - 10
+    - 8
+    description: Active tamper shared output 1 selection The selected output must be available in the package pinout. Bits 9:8 are the mirror of ATOSEL1[1:0] in the TAMP_ATCR1, and so can also be read or written through TAMP_ATCR1.
+  - name: ATOSEL2
+    bit_range:
+    - 13
+    - 11
+    description: Active tamper shared output 2 selection The selected output must be available in the package pinout. Bits 12:11 are the mirror of ATOSEL2[1:0] in the TAMP_ATCR1, and so can also be read or written through TAMP_ATCR1.
+  - name: ATOSEL3
+    bit_range:
+    - 16
+    - 14
+    description: Active tamper shared output 3 selection The selected output must be available in the package pinout. Bits 15:14 are the mirror of ATOSEL3[1:0] in the TAMP_ATCR1, and so can also be read or written through TAMP_ATCR1.
+  - name: ATOSEL4
+    bit_range:
+    - 19
+    - 17
+    description: Active tamper shared output 4 selection The selected output must be available in the package pinout. Bits 18:17 are the mirror of ATOSEL2[1:0] in the TAMP_ATCR1, and so can also be read or written through TAMP_ATCR1.
+  - name: ATOSEL5
+    bit_range:
+    - 22
+    - 20
+    description: Active tamper shared output 5 selection The selected output must be available in the package pinout.
+  - name: ATOSEL6
+    bit_range:
+    - 25
+    - 23
+    description: Active tamper shared output 6 selection The selected output must be available in the package pinout.
+  - name: ATOSEL7
+    bit_range:
+    - 28
+    - 26
+    description: Active tamper shared output 7 selection The selected output must be available in the package pinout.
+  - name: ATOSEL8
+    bit_range:
+    - 31
+    - 29
+    description: Active tamper shared output 8 selection The selected output must be available in the package pinout.
+  side_effects: null
+- id: TAMP_SECCFGR
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BKPRWSEC
+    bit_range:
+    - 7
+    - 0
+    description: "Backup registers read/write protection offset Protection zone 1 is defined for backup registers from TAMP_BKP0R to TAMP_BKPxR (x = BKPRWSEC-1, from 0 to 128). if TZEN=1, these backup registers can be read and written only with secure access. If TZEN=0:\tthe protection zone 1 can be read and written with non-secure access. If BKPRWSEC = 0: there is no protection zone 1. If BKPRWPRIV is set, BKPRWSEC[7:0] can be written only in privileged mode."
+  - name: CNT1SEC
+    bit_range:
+    - 15
+    - 15
+    description: Monotonic counter 1 secure protection
+  - name: BKPWSEC
+    bit_range:
+    - 23
+    - 16
+    description: "Backup registers write protection offset Protection zone 2 is defined for backup registers from TAMP_BKPyR (y = BKPRWSEC, from 0 to 128) to TAMP_BKPzR (z = BKPWSEC-1, from 0 to 128, BKPWSEC \x89¥ BKPRWSEC): if TZEN=1, these backup registers can be written only with secure access. They can be read with secure or non-secure access. Protection zone 3 defined for backup registers from TAMP_BKPtR (t = BKPWSEC, from 0 to 127). They can be read or written with secure or non-secure access. If TZEN=0:\tthe protection zone 2 can be read and written with non-secure access. If BKPWSEC = 0 or if BKPWSEC \x89¤ BKPRWSEC: there is no protection zone 2. If BKPWPRIV is set, BKPRWSEC[7:0] can be written only in privileged mode."
+  - name: BHKLOCK
+    bit_range:
+    - 30
+    - 30
+    description: Boot hardware key lock This bit can be read and can only be written to 1 by software. It is cleared by hardware together with the backup registers following a tamper detection event or when the readout protection (RDP) is disabled.
+  - name: TAMPSEC
+    bit_range:
+    - 31
+    - 31
+    description: 'Tamper protection (excluding monotonic counters and backup registers) Note: Refer to  for details on the read protection.'
+  side_effects: null
+- id: TAMP_PRIVCR
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CNT1PRIV
+    bit_range:
+    - 15
+    - 15
+    description: Monotonic counter 1 privilege protection
+  - name: BKPRWPRIV
+    bit_range:
+    - 29
+    - 29
+    description: Backup registers zone 1 privilege protection
+  - name: BKPWPRIV
+    bit_range:
+    - 30
+    - 30
+    description: Backup registers zone 2 privilege protection
+  - name: TAMPPRIV
+    bit_range:
+    - 31
+    - 31
+    description: 'Tamper privilege protection (excluding backup registers) Note: Refer to  for details on the read protection.'
+  side_effects: null
+- id: TAMP_IER
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TAMP1IE
+    bit_range:
+    - 0
+    - 0
+    description: Tamper 1 interrupt enable
+  - name: TAMP2IE
+    bit_range:
+    - 1
+    - 1
+    description: Tamper 2 interrupt enable
+  - name: TAMP3IE
+    bit_range:
+    - 2
+    - 2
+    description: Tamper 3 interrupt enable
+  - name: TAMP4IE
+    bit_range:
+    - 3
+    - 3
+    description: Tamper 4 interrupt enable
+  - name: TAMP5IE
+    bit_range:
+    - 4
+    - 4
+    description: Tamper 5 interrupt enable
+  - name: TAMP6IE
+    bit_range:
+    - 5
+    - 5
+    description: Tamper 6 interrupt enable
+  - name: TAMP7IE
+    bit_range:
+    - 6
+    - 6
+    description: Tamper 7interrupt enable
+  - name: TAMP8IE
+    bit_range:
+    - 7
+    - 7
+    description: Tamper 8 interrupt enable
+  - name: ITAMP1IE
+    bit_range:
+    - 16
+    - 16
+    description: Internal tamper 1 interrupt enable
+  - name: ITAMP2IE
+    bit_range:
+    - 17
+    - 17
+    description: Internal tamper 2 interrupt enable
+  - name: ITAMP3IE
+    bit_range:
+    - 18
+    - 18
+    description: Internal tamper 3 interrupt enable
+  - name: ITAMP5IE
+    bit_range:
+    - 20
+    - 20
+    description: Internal tamper 5 interrupt enable
+  - name: ITAMP6IE
+    bit_range:
+    - 21
+    - 21
+    description: Internal tamper 6 interrupt enable
+  - name: ITAMP7IE
+    bit_range:
+    - 22
+    - 22
+    description: Internal tamper 7 interrupt enable
+  - name: ITAMP8IE
+    bit_range:
+    - 23
+    - 23
+    description: Internal tamper 8 interrupt enable
+  - name: ITAMP9IE
+    bit_range:
+    - 24
+    - 24
+    description: Internal tamper 9 interrupt enable
+  - name: ITAMP11IE
+    bit_range:
+    - 26
+    - 26
+    description: Internal tamper 11 interrupt enable
+  - name: ITAMP12IE
+    bit_range:
+    - 27
+    - 27
+    description: Internal tamper 12 interrupt enable
+  - name: ITAMP13IE
+    bit_range:
+    - 28
+    - 28
+    description: Internal tamper 13 interrupt enable
+  side_effects: null
+- id: TAMP_SR
+  address_offset: 48
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TAMP1F
+    bit_range:
+    - 0
+    - 0
+    description: TAMP1 detection flag This flag is set by hardware when a tamper detection event is detected on the TAMP1 input.
+  - name: TAMP2F
+    bit_range:
+    - 1
+    - 1
+    description: TAMP2 detection flag This flag is set by hardware when a tamper detection event is detected on the TAMP2 input.
+  - name: TAMP3F
+    bit_range:
+    - 2
+    - 2
+    description: TAMP3 detection flag This flag is set by hardware when a tamper detection event is detected on the TAMP3 input.
+  - name: TAMP4F
+    bit_range:
+    - 3
+    - 3
+    description: TAMP4 detection flag This flag is set by hardware when a tamper detection event is detected on the TAMP4 input.
+  - name: TAMP5F
+    bit_range:
+    - 4
+    - 4
+    description: TAMP5 detection flag This flag is set by hardware when a tamper detection event is detected on the TAMP5 input.
+  - name: TAMP6F
+    bit_range:
+    - 5
+    - 5
+    description: TAMP6 detection flag This flag is set by hardware when a tamper detection event is detected on the TAMP6 input.
+  - name: TAMP7F
+    bit_range:
+    - 6
+    - 6
+    description: TAMP7 detection flag This flag is set by hardware when a tamper detection event is detected on the TAMP7 input.
+  - name: TAMP8F
+    bit_range:
+    - 7
+    - 7
+    description: TAMP8 detection flag This flag is set by hardware when a tamper detection event is detected on the TAMP8 input
+  - name: ITAMP1F
+    bit_range:
+    - 16
+    - 16
+    description: Internal tamper 1 flag This flag is set by hardware when a tamper detection event is detected on the internal tamper 1.
+  - name: ITAMP2F
+    bit_range:
+    - 17
+    - 17
+    description: Internal tamper 2 flag This flag is set by hardware when a tamper detection event is detected on the internal tamper 2.
+  - name: ITAMP3F
+    bit_range:
+    - 18
+    - 18
+    description: Internal tamper 3 flag This flag is set by hardware when a tamper detection event is detected on the internal tamper 3.
+  - name: ITAMP5F
+    bit_range:
+    - 20
+    - 20
+    description: Internal tamper 5 flag This flag is set by hardware when a tamper detection event is detected on the internal tamper 5.
+  - name: ITAMP6F
+    bit_range:
+    - 21
+    - 21
+    description: Internal tamper 6 flag This flag is set by hardware when a tamper detection event is detected on the internal tamper 6.
+  - name: ITAMP7F
+    bit_range:
+    - 22
+    - 22
+    description: Internal tamper 7 flag This flag is set by hardware when a tamper detection event is detected on the internal tamper 7.
+  - name: ITAMP8F
+    bit_range:
+    - 23
+    - 23
+    description: Internal tamper 8 flag This flag is set by hardware when a tamper detection event is detected on the internal tamper 8.
+  - name: ITAMP9F
+    bit_range:
+    - 24
+    - 24
+    description: Internal tamper 9 flag This flag is set by hardware when a tamper detection event is detected on the internal tamper 9.
+  - name: ITAMP11F
+    bit_range:
+    - 26
+    - 26
+    description: Internal tamper 11 flag This flag is set by hardware when a tamper detection event is detected on the internal tamper 11.
+  - name: ITAMP12F
+    bit_range:
+    - 27
+    - 27
+    description: Internal tamper 12 flag This flag is set by hardware when a tamper detection event is detected on the internal tamper 12.
+  - name: ITAMP13F
+    bit_range:
+    - 28
+    - 28
+    description: Internal tamper 13 flag This flag is set by hardware when a tamper detection event is detected on the internal tamper 13.
+  side_effects: null
+- id: TAMP_MISR
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TAMP1MF
+    bit_range:
+    - 0
+    - 0
+    description: TAMP1 non-secure interrupt masked flag This flag is set by hardware when the tamper 1 non-secure interrupt is raised.
+  - name: TAMP2MF
+    bit_range:
+    - 1
+    - 1
+    description: TAMP2 non-secure interrupt masked flag This flag is set by hardware when the tamper 2 non-secure interrupt is raised.
+  - name: TAMP3MF
+    bit_range:
+    - 2
+    - 2
+    description: TAMP3 non-secure interrupt masked flag This flag is set by hardware when the tamper 3 non-secure interrupt is raised.
+  - name: TAMP4MF
+    bit_range:
+    - 3
+    - 3
+    description: TAMP4 non-secure interrupt masked flag This flag is set by hardware when the tamper 4 non-secure interrupt is raised.
+  - name: TAMP5MF
+    bit_range:
+    - 4
+    - 4
+    description: TAMP5 non-secure interrupt masked flag This flag is set by hardware when the tamper 5 non-secure interrupt is raised.
+  - name: TAMP6MF
+    bit_range:
+    - 5
+    - 5
+    description: TAMP6 non-secure interrupt masked flag This flag is set by hardware when the tamper 6 non-secure interrupt is raised.
+  - name: TAMP7MF
+    bit_range:
+    - 6
+    - 6
+    description: TAMP7 non-secure interrupt masked flag This flag is set by hardware when the tamper 7 non-secure interrupt is raised.
+  - name: TAMP8MF
+    bit_range:
+    - 7
+    - 7
+    description: TAMP8 non-secure interrupt masked flag This flag is set by hardware when the tamper 8 non-secure interrupt is raised.
+  - name: ITAMP1MF
+    bit_range:
+    - 16
+    - 16
+    description: Internal tamper 1 non-secure interrupt masked flag This flag is set by hardware when the internal tamper 1 non-secure interrupt is raised.
+  - name: ITAMP2MF
+    bit_range:
+    - 17
+    - 17
+    description: Internal tamper 2 non-secure interrupt masked flag This flag is set by hardware when the internal tamper 2 non-secure interrupt is raised.
+  - name: ITAMP3MF
+    bit_range:
+    - 18
+    - 18
+    description: Internal tamper 3 non-secure interrupt masked flag This flag is set by hardware when the internal tamper 3 non-secure interrupt is raised.
+  - name: ITAMP5MF
+    bit_range:
+    - 20
+    - 20
+    description: Internal tamper 5 non-secure interrupt masked flag This flag is set by hardware when the internal tamper 5 non-secure interrupt is raised.
+  - name: ITAMP6MF
+    bit_range:
+    - 21
+    - 21
+    description: Internal tamper 6 non-secure interrupt masked flag This flag is set by hardware when the internal tamper 6 non-secure interrupt is raised.
+  - name: ITAMP7MF
+    bit_range:
+    - 22
+    - 22
+    description: VCORE monitoring tamper non-secure interrupt masked flag This flag is set by hardware when the internal tamper 7 non-secure interrupt is raised.
+  - name: ITAMP8MF
+    bit_range:
+    - 23
+    - 23
+    description: Internal tamper 8 non-secure interrupt masked flag This flag is set by hardware when the internal tamper 8 non-secure interrupt is raised.
+  - name: ITAMP9MF
+    bit_range:
+    - 24
+    - 24
+    description: internal tamper 9 non-secure interrupt masked flag This flag is set by hardware when the internal tamper 9 non-secure interrupt is raised.
+  - name: ITAMP11MF
+    bit_range:
+    - 26
+    - 26
+    description: internal tamper 11 non-secure interrupt masked flag This flag is set by hardware when the internal tamper 11 non-secure interrupt is raised.
+  - name: ITAMP12MF
+    bit_range:
+    - 27
+    - 27
+    description: internal tamper 12 non-secure interrupt masked flag This flag is set by hardware when the internal tamper 12 non-secure interrupt is raised.
+  - name: ITAMP13MF
+    bit_range:
+    - 28
+    - 28
+    description: internal tamper 13 non-secure interrupt masked flag This flag is set by hardware when the internal tamper 13 non-secure interrupt is raised.
+  side_effects: null
+- id: TAMP_SMISR
+  address_offset: 56
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TAMP1MF
+    bit_range:
+    - 0
+    - 0
+    description: TAMP1 secure interrupt masked flag This flag is set by hardware when the tamper 1 secure interrupt is raised.
+  - name: TAMP2MF
+    bit_range:
+    - 1
+    - 1
+    description: TAMP2 secure interrupt masked flag This flag is set by hardware when the tamper 2 secure interrupt is raised.
+  - name: TAMP3MF
+    bit_range:
+    - 2
+    - 2
+    description: TAMP3 secure interrupt masked flag This flag is set by hardware when the tamper 3 secure interrupt is raised.
+  - name: TAMP4MF
+    bit_range:
+    - 3
+    - 3
+    description: TAMP4 secure interrupt masked flag This flag is set by hardware when the tamper 4 secure interrupt is raised.
+  - name: TAMP5MF
+    bit_range:
+    - 4
+    - 4
+    description: TAMP5 secure interrupt masked flag This flag is set by hardware when the tamper 5 secure interrupt is raised.
+  - name: TAMP6MF
+    bit_range:
+    - 5
+    - 5
+    description: TAMP6 secure interrupt masked flag This flag is set by hardware when the tamper 6 secure interrupt is raised.
+  - name: TAMP7MF
+    bit_range:
+    - 6
+    - 6
+    description: TAMP7 secure interrupt masked flag This flag is set by hardware when the tamper 7 secure interrupt is raised.
+  - name: TAMP8MF
+    bit_range:
+    - 7
+    - 7
+    description: TAMP8 secure interrupt masked flag This flag is set by hardware when the tamper 8 secure interrupt is raised.
+  - name: ITAMP1MF
+    bit_range:
+    - 16
+    - 16
+    description: Internal tamper 1 secure interrupt masked flag This flag is set by hardware when the internal tamper 1 secure interrupt is raised.
+  - name: ITAMP2MF
+    bit_range:
+    - 17
+    - 17
+    description: Internal tamper 2 secure interrupt masked flag This flag is set by hardware when the internal tamper 2 secure interrupt is raised.
+  - name: ITAMP3MF
+    bit_range:
+    - 18
+    - 18
+    description: Internal tamper 3 secure interrupt masked flag This flag is set by hardware when the internal tamper 3 secure interrupt is raised.
+  - name: ITAMP5MF
+    bit_range:
+    - 20
+    - 20
+    description: Internal tamper 5 secure interrupt masked flag This flag is set by hardware when the internal tamper 5 secure interrupt is raised.
+  - name: ITAMP6MF
+    bit_range:
+    - 21
+    - 21
+    description: Internal tamper 6 secure interrupt masked flag This flag is set by hardware when the internal tamper 6 secure interrupt is raised.
+  - name: ITAMP7MF
+    bit_range:
+    - 22
+    - 22
+    description: VCORE monitoring tamper secure interrupt masked flag This flag is set by hardware when the internal tamper 7 secure interrupt is raised.
+  - name: ITAMP8MF
+    bit_range:
+    - 23
+    - 23
+    description: Internal tamper 8 secure interrupt masked flag This flag is set by hardware when the internal tamper 8 secure interrupt is raised.
+  - name: ITAMP9MF
+    bit_range:
+    - 24
+    - 24
+    description: internal tamper 9 secure interrupt masked flag This flag is set by hardware when the internal tamper 9 secure interrupt is raised.
+  - name: ITAMP11MF
+    bit_range:
+    - 26
+    - 26
+    description: internal tamper 11 secure interrupt masked flag This flag is set by hardware when the internal tamper 11 secure interrupt is raised.
+  - name: ITAMP12MF
+    bit_range:
+    - 27
+    - 27
+    description: internal tamper 12 secure interrupt masked flag This flag is set by hardware when the internal tamper 12 secure interrupt is raised.
+  - name: ITAMP13MF
+    bit_range:
+    - 28
+    - 28
+    description: internal tamper 13 secure interrupt masked flag This flag is set by hardware when the internal tamper 13 secure interrupt is raised.
+  side_effects: null
+- id: TAMP_SCR
+  address_offset: 60
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CTAMP1F
+    bit_range:
+    - 0
+    - 0
+    description: Clear TAMP1 detection flag Writing 1 in this bit clears the TAMP1F bit in the TAMP_SR register.
+  - name: CTAMP2F
+    bit_range:
+    - 1
+    - 1
+    description: Clear TAMP2 detection flag Writing 1 in this bit clears the TAMP2F bit in the TAMP_SR register.
+  - name: CTAMP3F
+    bit_range:
+    - 2
+    - 2
+    description: Clear TAMP3 detection flag Writing 1 in this bit clears the TAMP3F bit in the TAMP_SR register.
+  - name: CTAMP4F
+    bit_range:
+    - 3
+    - 3
+    description: Clear TAMP4 detection flag Writing 1 in this bit clears the TAMP4F bit in the TAMP_SR register.
+  - name: CTAMP5F
+    bit_range:
+    - 4
+    - 4
+    description: Clear TAMP5 detection flag Writing 1 in this bit clears the TAMP5F bit in the TAMP_SR register.
+  - name: CTAMP6F
+    bit_range:
+    - 5
+    - 5
+    description: Clear TAMP6 detection flag Writing 1 in this bit clears the TAMP6F bit in the TAMP_SR register.
+  - name: CTAMP7F
+    bit_range:
+    - 6
+    - 6
+    description: Clear TAMP7 detection flag Writing 1 in this bit clears the TAMP7F bit in the TAMP_SR register.
+  - name: CTAMP8F
+    bit_range:
+    - 7
+    - 7
+    description: Clear TAMP8 detection flag Writing 1 in this bit clears the TAMP8F bit in the TAMP_SR register.
+  - name: CITAMP1F
+    bit_range:
+    - 16
+    - 16
+    description: Clear ITAMP1 detection flag Writing 1 in this bit clears the ITAMP1F bit in the TAMP_SR register.
+  - name: CITAMP2F
+    bit_range:
+    - 17
+    - 17
+    description: Clear ITAMP2 detection flag Writing 1 in this bit clears the ITAMP2F bit in the TAMP_SR register.
+  - name: CITAMP3F
+    bit_range:
+    - 18
+    - 18
+    description: Clear ITAMP3 detection flag Writing 1 in this bit clears the ITAMP3F bit in the TAMP_SR register.
+  - name: CITAMP5F
+    bit_range:
+    - 20
+    - 20
+    description: Clear ITAMP5 detection flag Writing 1 in this bit clears the ITAMP5F bit in the TAMP_SR register.
+  - name: CITAMP6F
+    bit_range:
+    - 21
+    - 21
+    description: Clear ITAMP6 detection flag Writing 1 in this bit clears the ITAMP6F bit in the TAMP_SR register.
+  - name: CITAMP7F
+    bit_range:
+    - 22
+    - 22
+    description: Clear ITAMP7 detection flag Writing 1 in this bit clears the ITAMP7F bit in the TAMP_SR register.
+  - name: CITAMP8F
+    bit_range:
+    - 23
+    - 23
+    description: Clear ITAMP8 detection flag Writing 1 in this bit clears the ITAMP8F bit in the TAMP_SR register.
+  - name: CITAMP9F
+    bit_range:
+    - 24
+    - 24
+    description: Clear ITAMP9 detection flag Writing 1 in this bit clears the ITAMP9F bit in the TAMP_SR register.
+  - name: CITAMP11F
+    bit_range:
+    - 26
+    - 26
+    description: Clear ITAMP11 detection flag Writing 1 in this bit clears the ITAMP11F bit in the TAMP_SR register.
+  - name: CITAMP12F
+    bit_range:
+    - 27
+    - 27
+    description: Clear ITAMP12 detection flag Writing 1 in this bit clears the ITAMP12F bit in the TAMP_SR register.
+  - name: CITAMP13F
+    bit_range:
+    - 28
+    - 28
+    description: Clear ITAMP13 detection flag Writing 1 in this bit clears the ITAMP13F bit in the TAMP_SR register.
+  side_effects: null
+- id: TAMP_COUNT1R
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: COUNT
+    bit_range:
+    - 31
+    - 0
+    description: This register is read-only only and is incremented by one when a write access is done to this register. This register cannot roll-over and is frozen when reaching the maximum value.
+  side_effects: null
+- id: TAMP_ERCFGR
+  address_offset: 84
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ERCFG0
+    bit_range:
+    - 0
+    - 0
+    description: Configurable device secrets configuration
+  side_effects: null
+- id: TAMP_BKP0R
+  address_offset: 256
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BKP
+    bit_range:
+    - 31
+    - 0
+    description: The application can write or read data to and from these registers. In the default (ERASE) configuration this register is reset on a tamper detection event. It is forced to reset value as long as there is at least one internal or external tamper flag being set. This register is also reset when the readout protection (RDP) is disabled.
+  side_effects: null
+- id: TAMP_BKP1R
+  address_offset: 260
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BKP
+    bit_range:
+    - 31
+    - 0
+    description: The application can write or read data to and from these registers. In the default (ERASE) configuration this register is reset on a tamper detection event. It is forced to reset value as long as there is at least one internal or external tamper flag being set. This register is also reset when the readout protection (RDP) is disabled.
+  side_effects: null
+- id: TAMP_BKP2R
+  address_offset: 264
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BKP
+    bit_range:
+    - 31
+    - 0
+    description: The application can write or read data to and from these registers. In the default (ERASE) configuration this register is reset on a tamper detection event. It is forced to reset value as long as there is at least one internal or external tamper flag being set. This register is also reset when the readout protection (RDP) is disabled.
+  side_effects: null
+- id: TAMP_BKP3R
+  address_offset: 268
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BKP
+    bit_range:
+    - 31
+    - 0
+    description: The application can write or read data to and from these registers. In the default (ERASE) configuration this register is reset on a tamper detection event. It is forced to reset value as long as there is at least one internal or external tamper flag being set. This register is also reset when the readout protection (RDP) is disabled.
+  side_effects: null
+- id: TAMP_BKP4R
+  address_offset: 272
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BKP
+    bit_range:
+    - 31
+    - 0
+    description: The application can write or read data to and from these registers. In the default (ERASE) configuration this register is reset on a tamper detection event. It is forced to reset value as long as there is at least one internal or external tamper flag being set. This register is also reset when the readout protection (RDP) is disabled.
+  side_effects: null
+- id: TAMP_BKP5R
+  address_offset: 276
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BKP
+    bit_range:
+    - 31
+    - 0
+    description: The application can write or read data to and from these registers. In the default (ERASE) configuration this register is reset on a tamper detection event. It is forced to reset value as long as there is at least one internal or external tamper flag being set. This register is also reset when the readout protection (RDP) is disabled.
+  side_effects: null
+- id: TAMP_BKP6R
+  address_offset: 280
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BKP
+    bit_range:
+    - 31
+    - 0
+    description: The application can write or read data to and from these registers. In the default (ERASE) configuration this register is reset on a tamper detection event. It is forced to reset value as long as there is at least one internal or external tamper flag being set. This register is also reset when the readout protection (RDP) is disabled.
+  side_effects: null
+- id: TAMP_BKP7R
+  address_offset: 284
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BKP
+    bit_range:
+    - 31
+    - 0
+    description: The application can write or read data to and from these registers. In the default (ERASE) configuration this register is reset on a tamper detection event. It is forced to reset value as long as there is at least one internal or external tamper flag being set. This register is also reset when the readout protection (RDP) is disabled.
+  side_effects: null
+- id: TAMP_BKP8R
+  address_offset: 288
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BKP
+    bit_range:
+    - 31
+    - 0
+    description: The application can write or read data to and from these registers. In the default (ERASE) configuration this register is reset on a tamper detection event. It is forced to reset value as long as there is at least one internal or external tamper flag being set. This register is also reset when the readout protection (RDP) is disabled.
+  side_effects: null
+- id: TAMP_BKP9R
+  address_offset: 292
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BKP
+    bit_range:
+    - 31
+    - 0
+    description: The application can write or read data to and from these registers. In the default (ERASE) configuration this register is reset on a tamper detection event. It is forced to reset value as long as there is at least one internal or external tamper flag being set. This register is also reset when the readout protection (RDP) is disabled.
+  side_effects: null
+- id: TAMP_BKP10R
+  address_offset: 296
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BKP
+    bit_range:
+    - 31
+    - 0
+    description: The application can write or read data to and from these registers. In the default (ERASE) configuration this register is reset on a tamper detection event. It is forced to reset value as long as there is at least one internal or external tamper flag being set. This register is also reset when the readout protection (RDP) is disabled.
+  side_effects: null
+- id: TAMP_BKP11R
+  address_offset: 300
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BKP
+    bit_range:
+    - 31
+    - 0
+    description: The application can write or read data to and from these registers. In the default (ERASE) configuration this register is reset on a tamper detection event. It is forced to reset value as long as there is at least one internal or external tamper flag being set. This register is also reset when the readout protection (RDP) is disabled.
+  side_effects: null
+- id: TAMP_BKP12R
+  address_offset: 304
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BKP
+    bit_range:
+    - 31
+    - 0
+    description: The application can write or read data to and from these registers. In the default (ERASE) configuration this register is reset on a tamper detection event. It is forced to reset value as long as there is at least one internal or external tamper flag being set. This register is also reset when the readout protection (RDP) is disabled.
+  side_effects: null
+- id: TAMP_BKP13R
+  address_offset: 308
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BKP
+    bit_range:
+    - 31
+    - 0
+    description: The application can write or read data to and from these registers. In the default (ERASE) configuration this register is reset on a tamper detection event. It is forced to reset value as long as there is at least one internal or external tamper flag being set. This register is also reset when the readout protection (RDP) is disabled.
+  side_effects: null
+- id: TAMP_BKP14R
+  address_offset: 312
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BKP
+    bit_range:
+    - 31
+    - 0
+    description: The application can write or read data to and from these registers. In the default (ERASE) configuration this register is reset on a tamper detection event. It is forced to reset value as long as there is at least one internal or external tamper flag being set. This register is also reset when the readout protection (RDP) is disabled.
+  side_effects: null
+- id: TAMP_BKP15R
+  address_offset: 316
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BKP
+    bit_range:
+    - 31
+    - 0
+    description: The application can write or read data to and from these registers. In the default (ERASE) configuration this register is reset on a tamper detection event. It is forced to reset value as long as there is at least one internal or external tamper flag being set. This register is also reset when the readout protection (RDP) is disabled.
+  side_effects: null
+- id: TAMP_BKP16R
+  address_offset: 320
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BKP
+    bit_range:
+    - 31
+    - 0
+    description: The application can write or read data to and from these registers. In the default (ERASE) configuration this register is reset on a tamper detection event. It is forced to reset value as long as there is at least one internal or external tamper flag being set. This register is also reset when the readout protection (RDP) is disabled.
+  side_effects: null
+- id: TAMP_BKP17R
+  address_offset: 324
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BKP
+    bit_range:
+    - 31
+    - 0
+    description: The application can write or read data to and from these registers. In the default (ERASE) configuration this register is reset on a tamper detection event. It is forced to reset value as long as there is at least one internal or external tamper flag being set. This register is also reset when the readout protection (RDP) is disabled.
+  side_effects: null
+- id: TAMP_BKP18R
+  address_offset: 328
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BKP
+    bit_range:
+    - 31
+    - 0
+    description: The application can write or read data to and from these registers. In the default (ERASE) configuration this register is reset on a tamper detection event. It is forced to reset value as long as there is at least one internal or external tamper flag being set. This register is also reset when the readout protection (RDP) is disabled.
+  side_effects: null
+- id: TAMP_BKP19R
+  address_offset: 332
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BKP
+    bit_range:
+    - 31
+    - 0
+    description: The application can write or read data to and from these registers. In the default (ERASE) configuration this register is reset on a tamper detection event. It is forced to reset value as long as there is at least one internal or external tamper flag being set. This register is also reset when the readout protection (RDP) is disabled.
+  side_effects: null
+- id: TAMP_BKP20R
+  address_offset: 336
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BKP
+    bit_range:
+    - 31
+    - 0
+    description: The application can write or read data to and from these registers. In the default (ERASE) configuration this register is reset on a tamper detection event. It is forced to reset value as long as there is at least one internal or external tamper flag being set. This register is also reset when the readout protection (RDP) is disabled.
+  side_effects: null
+- id: TAMP_BKP21R
+  address_offset: 340
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BKP
+    bit_range:
+    - 31
+    - 0
+    description: The application can write or read data to and from these registers. In the default (ERASE) configuration this register is reset on a tamper detection event. It is forced to reset value as long as there is at least one internal or external tamper flag being set. This register is also reset when the readout protection (RDP) is disabled.
+  side_effects: null
+- id: TAMP_BKP22R
+  address_offset: 344
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BKP
+    bit_range:
+    - 31
+    - 0
+    description: The application can write or read data to and from these registers. In the default (ERASE) configuration this register is reset on a tamper detection event. It is forced to reset value as long as there is at least one internal or external tamper flag being set. This register is also reset when the readout protection (RDP) is disabled.
+  side_effects: null
+- id: TAMP_BKP23R
+  address_offset: 348
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BKP
+    bit_range:
+    - 31
+    - 0
+    description: The application can write or read data to and from these registers. In the default (ERASE) configuration this register is reset on a tamper detection event. It is forced to reset value as long as there is at least one internal or external tamper flag being set. This register is also reset when the readout protection (RDP) is disabled.
+  side_effects: null
+- id: TAMP_BKP24R
+  address_offset: 352
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BKP
+    bit_range:
+    - 31
+    - 0
+    description: The application can write or read data to and from these registers. In the default (ERASE) configuration this register is reset on a tamper detection event. It is forced to reset value as long as there is at least one internal or external tamper flag being set. This register is also reset when the readout protection (RDP) is disabled.
+  side_effects: null
+- id: TAMP_BKP25R
+  address_offset: 356
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BKP
+    bit_range:
+    - 31
+    - 0
+    description: The application can write or read data to and from these registers. In the default (ERASE) configuration this register is reset on a tamper detection event. It is forced to reset value as long as there is at least one internal or external tamper flag being set. This register is also reset when the readout protection (RDP) is disabled.
+  side_effects: null
+- id: TAMP_BKP26R
+  address_offset: 360
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BKP
+    bit_range:
+    - 31
+    - 0
+    description: The application can write or read data to and from these registers. In the default (ERASE) configuration this register is reset on a tamper detection event. It is forced to reset value as long as there is at least one internal or external tamper flag being set. This register is also reset when the readout protection (RDP) is disabled.
+  side_effects: null
+- id: TAMP_BKP27R
+  address_offset: 364
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BKP
+    bit_range:
+    - 31
+    - 0
+    description: The application can write or read data to and from these registers. In the default (ERASE) configuration this register is reset on a tamper detection event. It is forced to reset value as long as there is at least one internal or external tamper flag being set. This register is also reset when the readout protection (RDP) is disabled.
+  side_effects: null
+- id: TAMP_BKP28R
+  address_offset: 368
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BKP
+    bit_range:
+    - 31
+    - 0
+    description: The application can write or read data to and from these registers. In the default (ERASE) configuration this register is reset on a tamper detection event. It is forced to reset value as long as there is at least one internal or external tamper flag being set. This register is also reset when the readout protection (RDP) is disabled.
+  side_effects: null
+- id: TAMP_BKP29R
+  address_offset: 372
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BKP
+    bit_range:
+    - 31
+    - 0
+    description: The application can write or read data to and from these registers. In the default (ERASE) configuration this register is reset on a tamper detection event. It is forced to reset value as long as there is at least one internal or external tamper flag being set. This register is also reset when the readout protection (RDP) is disabled.
+  side_effects: null
+- id: TAMP_BKP30R
+  address_offset: 376
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BKP
+    bit_range:
+    - 31
+    - 0
+    description: The application can write or read data to and from these registers. In the default (ERASE) configuration this register is reset on a tamper detection event. It is forced to reset value as long as there is at least one internal or external tamper flag being set. This register is also reset when the readout protection (RDP) is disabled.
+  side_effects: null
+- id: TAMP_BKP31R
+  address_offset: 380
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BKP
+    bit_range:
+    - 31
+    - 0
+    description: The application can write or read data to and from these registers. In the default (ERASE) configuration this register is reset on a tamper detection event. It is forced to reset value as long as there is at least one internal or external tamper flag being set. This register is also reset when the readout protection (RDP) is disabled.
+  side_effects: null
+interrupts:
+  TAMP: 4
+timing: null

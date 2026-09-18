@@ -1,0 +1,628 @@
+peripheral: SEC_OTFDEC2
+version: 0.1.0
+registers:
+- id: CR
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ENC
+    bit_range:
+    - 0
+    - 0
+    description: Encryption mode bit
+  side_effects: null
+- id: PRIVCFGR
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PRIV
+    bit_range:
+    - 0
+    - 0
+    description: Encryption mode bit
+  side_effects: null
+- id: R1CFGR
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REG_EN
+    bit_range:
+    - 0
+    - 0
+    description: region on-the-fly decryption enable
+  - name: CONFIGLOCK
+    bit_range:
+    - 1
+    - 1
+    description: region config lock
+  - name: KEYLOCK
+    bit_range:
+    - 2
+    - 2
+    description: region key lock
+  - name: MODE
+    bit_range:
+    - 5
+    - 4
+    description: operating mode
+  - name: KEYCRC
+    bit_range:
+    - 15
+    - 8
+    description: region key 8-bit CRC
+  - name: REGx_VERSION
+    bit_range:
+    - 31
+    - 16
+    description: region firmware version
+  side_effects: null
+- id: R2CFGR
+  address_offset: 80
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REG_EN
+    bit_range:
+    - 0
+    - 0
+    description: region on-the-fly decryption enable
+  - name: CONFIGLOCK
+    bit_range:
+    - 1
+    - 1
+    description: region config lock
+  - name: KEYLOCK
+    bit_range:
+    - 2
+    - 2
+    description: region key lock
+  - name: MODE
+    bit_range:
+    - 5
+    - 4
+    description: operating mode
+  - name: KEYCRC
+    bit_range:
+    - 15
+    - 8
+    description: region key 8-bit CRC
+  - name: REGx_VERSION
+    bit_range:
+    - 31
+    - 16
+    description: region firmware version
+  side_effects: null
+- id: R3CFGR
+  address_offset: 128
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REG_EN
+    bit_range:
+    - 0
+    - 0
+    description: region on-the-fly decryption enable
+  - name: CONFIGLOCK
+    bit_range:
+    - 1
+    - 1
+    description: region config lock
+  - name: KEYLOCK
+    bit_range:
+    - 2
+    - 2
+    description: region key lock
+  - name: MODE
+    bit_range:
+    - 5
+    - 4
+    description: operating mode
+  - name: KEYCRC
+    bit_range:
+    - 15
+    - 8
+    description: region key 8-bit CRC
+  - name: REGx_VERSION
+    bit_range:
+    - 31
+    - 16
+    description: region firmware version
+  side_effects: null
+- id: R4CFGR
+  address_offset: 176
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REG_EN
+    bit_range:
+    - 0
+    - 0
+    description: region on-the-fly decryption enable
+  - name: CONFIGLOCK
+    bit_range:
+    - 1
+    - 1
+    description: region config lock
+  - name: KEYLOCK
+    bit_range:
+    - 2
+    - 2
+    description: region key lock
+  - name: MODE
+    bit_range:
+    - 5
+    - 4
+    description: operating mode
+  - name: KEYCRC
+    bit_range:
+    - 15
+    - 8
+    description: region key 8-bit CRC
+  - name: REGx_VERSION
+    bit_range:
+    - 31
+    - 16
+    description: region firmware version
+  side_effects: null
+- id: R1STARTADDR
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REGx_START_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Region AXI start address
+  side_effects: null
+- id: R2STARTADDR
+  address_offset: 84
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REGx_START_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Region AXI start address
+  side_effects: null
+- id: R3STARTADDR
+  address_offset: 132
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REGx_START_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Region AXI start address
+  side_effects: null
+- id: R4STARTADDR
+  address_offset: 180
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REGx_START_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Region AXI start address
+  side_effects: null
+- id: R1ENDADDR
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 4095
+  fields:
+  - name: REGx_END_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Region AXI end address
+  side_effects: null
+- id: R2ENDADDR
+  address_offset: 88
+  size: 32
+  access: READ_WRITE
+  reset_value: 4095
+  fields:
+  - name: REGx_END_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Region AXI end address
+  side_effects: null
+- id: R3ENDADDR
+  address_offset: 136
+  size: 32
+  access: READ_WRITE
+  reset_value: 4095
+  fields:
+  - name: REGx_END_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Region AXI end address
+  side_effects: null
+- id: R4ENDADDR
+  address_offset: 140
+  size: 32
+  access: READ_WRITE
+  reset_value: 4095
+  fields:
+  - name: REGx_END_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Region AXI end address
+  side_effects: null
+- id: R1NONCER0
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REGx_NONCE
+    bit_range:
+    - 31
+    - 0
+    description: REGx_NONCE
+  side_effects: null
+- id: R2NONCER0
+  address_offset: 92
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REGx_NONCE
+    bit_range:
+    - 31
+    - 0
+    description: REGx_NONCE
+  side_effects: null
+- id: R3NONCER0
+  address_offset: 140
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REGx_NONCE
+    bit_range:
+    - 31
+    - 0
+    description: REGx_NONCE
+  side_effects: null
+- id: R4NONCER0
+  address_offset: 188
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REGx_NONCE
+    bit_range:
+    - 31
+    - 0
+    description: REGx_NONCE
+  side_effects: null
+- id: R1NONCER1
+  address_offset: 48
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REGx_NONCE
+    bit_range:
+    - 31
+    - 0
+    description: Region nonce
+  side_effects: null
+- id: R2NONCER1
+  address_offset: 96
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REGx_NONCE
+    bit_range:
+    - 31
+    - 0
+    description: Region nonce, bits [63:32]REGx_NONCE[63:32]
+  side_effects: null
+- id: R3NONCER1
+  address_offset: 144
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REGx_NONCE
+    bit_range:
+    - 31
+    - 0
+    description: REGx_NONCE
+  side_effects: null
+- id: R4NONCER1
+  address_offset: 192
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REGx_NONCE
+    bit_range:
+    - 31
+    - 0
+    description: REGx_NONCE
+  side_effects: null
+- id: R1KEYR0
+  address_offset: 52
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: REGx_KEY
+    bit_range:
+    - 31
+    - 0
+    description: REGx_KEY
+  side_effects: null
+- id: R2KEYR0
+  address_offset: 100
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: REGx_KEY
+    bit_range:
+    - 31
+    - 0
+    description: REGx_KEY
+  side_effects: null
+- id: R3KEYR0
+  address_offset: 148
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: REGx_KEY
+    bit_range:
+    - 31
+    - 0
+    description: REGx_KEY
+  side_effects: null
+- id: R4KEYR0
+  address_offset: 196
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: REGx_KEY
+    bit_range:
+    - 31
+    - 0
+    description: REGx_KEY
+  side_effects: null
+- id: R1KEYR1
+  address_offset: 56
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: REGx_KEY
+    bit_range:
+    - 31
+    - 0
+    description: REGx_KEY
+  side_effects: null
+- id: R2KEYR1
+  address_offset: 104
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: REGx_KEY
+    bit_range:
+    - 31
+    - 0
+    description: REGx_KEY
+  side_effects: null
+- id: R3KEYR1
+  address_offset: 152
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: REGx_KEY
+    bit_range:
+    - 31
+    - 0
+    description: REGx_KEY
+  side_effects: null
+- id: R4KEYR1
+  address_offset: 200
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: REGx_KEY
+    bit_range:
+    - 31
+    - 0
+    description: REGx_KEY
+  side_effects: null
+- id: R1KEYR2
+  address_offset: 60
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: REGx_KEY
+    bit_range:
+    - 31
+    - 0
+    description: REGx_KEY
+  side_effects: null
+- id: R2KEYR2
+  address_offset: 108
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: REGx_KEY_
+    bit_range:
+    - 31
+    - 0
+    description: REGx_KEY
+  side_effects: null
+- id: R3KEYR2
+  address_offset: 156
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: REGx_KEY
+    bit_range:
+    - 31
+    - 0
+    description: REGx_KEY
+  side_effects: null
+- id: R4KEYR2
+  address_offset: 204
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: REGx_KEY
+    bit_range:
+    - 31
+    - 0
+    description: REGx_KEY
+  side_effects: null
+- id: R1KEYR3
+  address_offset: 64
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: REGx_KEY
+    bit_range:
+    - 31
+    - 0
+    description: REGx_KEY
+  side_effects: null
+- id: R2KEYR3
+  address_offset: 112
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: REGx_KEY
+    bit_range:
+    - 31
+    - 0
+    description: REGx_KEY
+  side_effects: null
+- id: R3KEYR3
+  address_offset: 160
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: REGx_KEY
+    bit_range:
+    - 31
+    - 0
+    description: REGx_KEY
+  side_effects: null
+- id: R4KEYR3
+  address_offset: 208
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: REGx_KEY
+    bit_range:
+    - 31
+    - 0
+    description: REGx_KEY
+  side_effects: null
+- id: ISR
+  address_offset: 768
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: SEIF
+    bit_range:
+    - 0
+    - 0
+    description: Security Error Interrupt Flag status
+  - name: XONEIF
+    bit_range:
+    - 1
+    - 1
+    description: Execute-only execute-Never Error Interrupt Flag status
+  - name: KEIF
+    bit_range:
+    - 2
+    - 2
+    description: Key Error Interrupt Flag status
+  side_effects: null
+- id: ICR
+  address_offset: 772
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: SEIF
+    bit_range:
+    - 0
+    - 0
+    description: SEIF
+  - name: XONEIF
+    bit_range:
+    - 1
+    - 1
+    description: Execute-only execute-Never Error Interrupt Flag clear
+  - name: KEIF
+    bit_range:
+    - 2
+    - 2
+    description: KEIF
+  side_effects: null
+- id: IER
+  address_offset: 776
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SEIE
+    bit_range:
+    - 0
+    - 0
+    description: Security Error Interrupt Enable
+  - name: XONEIE
+    bit_range:
+    - 1
+    - 1
+    description: XONEIE
+  - name: KEIE
+    bit_range:
+    - 2
+    - 2
+    description: KEIE
+  side_effects: null
+interrupts:
+  OTFDEC1: 108
+timing: null

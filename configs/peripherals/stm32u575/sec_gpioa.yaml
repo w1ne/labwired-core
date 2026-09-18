@@ -1,0 +1,1141 @@
+peripheral: SEC_GPIOA
+version: 0.1.0
+registers:
+- id: GPIO_MODER
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 2885681151
+  fields:
+  - name: MODE0
+    bit_range:
+    - 1
+    - 0
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O mode. Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: MODE1
+    bit_range:
+    - 3
+    - 2
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O mode. Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: MODE2
+    bit_range:
+    - 5
+    - 4
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O mode. Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: MODE3
+    bit_range:
+    - 7
+    - 6
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O mode. Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: MODE4
+    bit_range:
+    - 9
+    - 8
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O mode. Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: MODE5
+    bit_range:
+    - 11
+    - 10
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O mode. Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: MODE6
+    bit_range:
+    - 13
+    - 12
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O mode. Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: MODE7
+    bit_range:
+    - 15
+    - 14
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O mode. Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: MODE8
+    bit_range:
+    - 17
+    - 16
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O mode. Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: MODE9
+    bit_range:
+    - 19
+    - 18
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O mode. Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: MODE10
+    bit_range:
+    - 21
+    - 20
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O mode. Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: MODE11
+    bit_range:
+    - 23
+    - 22
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O mode. Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: MODE12
+    bit_range:
+    - 25
+    - 24
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O mode. Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: MODE13
+    bit_range:
+    - 27
+    - 26
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O mode. Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: MODE14
+    bit_range:
+    - 29
+    - 28
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O mode. Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: MODE15
+    bit_range:
+    - 31
+    - 30
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O mode. Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  side_effects: null
+- id: GPIO_OTYPER
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OT0
+    bit_range:
+    - 0
+    - 0
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O output type. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: OT1
+    bit_range:
+    - 1
+    - 1
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O output type. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: OT2
+    bit_range:
+    - 2
+    - 2
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O output type. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: OT3
+    bit_range:
+    - 3
+    - 3
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O output type. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: OT4
+    bit_range:
+    - 4
+    - 4
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O output type. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: OT5
+    bit_range:
+    - 5
+    - 5
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O output type. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: OT6
+    bit_range:
+    - 6
+    - 6
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O output type. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: OT7
+    bit_range:
+    - 7
+    - 7
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O output type. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: OT8
+    bit_range:
+    - 8
+    - 8
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O output type. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: OT9
+    bit_range:
+    - 9
+    - 9
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O output type. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: OT10
+    bit_range:
+    - 10
+    - 10
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O output type. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: OT11
+    bit_range:
+    - 11
+    - 11
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O output type. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: OT12
+    bit_range:
+    - 12
+    - 12
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O output type. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: OT13
+    bit_range:
+    - 13
+    - 13
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O output type. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: OT14
+    bit_range:
+    - 14
+    - 14
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O output type. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: OT15
+    bit_range:
+    - 15
+    - 15
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O output type. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  side_effects: null
+- id: GPIO_OSPEEDR
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 201326592
+  fields:
+  - name: OSPEED0
+    bit_range:
+    - 1
+    - 0
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O output speed. Note: Refer to the device datasheet for the frequency specifications, and the power supply and load conditions for each speed. Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: OSPEED1
+    bit_range:
+    - 3
+    - 2
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O output speed. Note: Refer to the device datasheet for the frequency specifications, and the power supply and load conditions for each speed. Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: OSPEED2
+    bit_range:
+    - 5
+    - 4
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O output speed. Note: Refer to the device datasheet for the frequency specifications, and the power supply and load conditions for each speed. Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: OSPEED3
+    bit_range:
+    - 7
+    - 6
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O output speed. Note: Refer to the device datasheet for the frequency specifications, and the power supply and load conditions for each speed. Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: OSPEED4
+    bit_range:
+    - 9
+    - 8
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O output speed. Note: Refer to the device datasheet for the frequency specifications, and the power supply and load conditions for each speed. Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: OSPEED5
+    bit_range:
+    - 11
+    - 10
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O output speed. Note: Refer to the device datasheet for the frequency specifications, and the power supply and load conditions for each speed. Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: OSPEED6
+    bit_range:
+    - 13
+    - 12
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O output speed. Note: Refer to the device datasheet for the frequency specifications, and the power supply and load conditions for each speed. Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: OSPEED7
+    bit_range:
+    - 15
+    - 14
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O output speed. Note: Refer to the device datasheet for the frequency specifications, and the power supply and load conditions for each speed. Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: OSPEED8
+    bit_range:
+    - 17
+    - 16
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O output speed. Note: Refer to the device datasheet for the frequency specifications, and the power supply and load conditions for each speed. Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: OSPEED9
+    bit_range:
+    - 19
+    - 18
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O output speed. Note: Refer to the device datasheet for the frequency specifications, and the power supply and load conditions for each speed. Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: OSPEED10
+    bit_range:
+    - 21
+    - 20
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O output speed. Note: Refer to the device datasheet for the frequency specifications, and the power supply and load conditions for each speed. Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: OSPEED11
+    bit_range:
+    - 23
+    - 22
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O output speed. Note: Refer to the device datasheet for the frequency specifications, and the power supply and load conditions for each speed. Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: OSPEED12
+    bit_range:
+    - 25
+    - 24
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O output speed. Note: Refer to the device datasheet for the frequency specifications, and the power supply and load conditions for each speed. Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: OSPEED13
+    bit_range:
+    - 27
+    - 26
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O output speed. Note: Refer to the device datasheet for the frequency specifications, and the power supply and load conditions for each speed. Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: OSPEED14
+    bit_range:
+    - 29
+    - 28
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O output speed. Note: Refer to the device datasheet for the frequency specifications, and the power supply and load conditions for each speed. Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: OSPEED15
+    bit_range:
+    - 31
+    - 30
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O output speed. Note: Refer to the device datasheet for the frequency specifications, and the power supply and load conditions for each speed. Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  side_effects: null
+- id: GPIO_PUPDR
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 1677721600
+  fields:
+  - name: PUPD0
+    bit_range:
+    - 1
+    - 0
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O pull-up or pull-down Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: PUPD1
+    bit_range:
+    - 3
+    - 2
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O pull-up or pull-down Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: PUPD2
+    bit_range:
+    - 5
+    - 4
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O pull-up or pull-down Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: PUPD3
+    bit_range:
+    - 7
+    - 6
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O pull-up or pull-down Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: PUPD4
+    bit_range:
+    - 9
+    - 8
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O pull-up or pull-down Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: PUPD5
+    bit_range:
+    - 11
+    - 10
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O pull-up or pull-down Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: PUPD6
+    bit_range:
+    - 13
+    - 12
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O pull-up or pull-down Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: PUPD7
+    bit_range:
+    - 15
+    - 14
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O pull-up or pull-down Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: PUPD8
+    bit_range:
+    - 17
+    - 16
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O pull-up or pull-down Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: PUPD9
+    bit_range:
+    - 19
+    - 18
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O pull-up or pull-down Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: PUPD10
+    bit_range:
+    - 21
+    - 20
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O pull-up or pull-down Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: PUPD11
+    bit_range:
+    - 23
+    - 22
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O pull-up or pull-down Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: PUPD12
+    bit_range:
+    - 25
+    - 24
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O pull-up or pull-down Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: PUPD13
+    bit_range:
+    - 27
+    - 26
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O pull-up or pull-down Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: PUPD14
+    bit_range:
+    - 29
+    - 28
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O pull-up or pull-down Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: PUPD15
+    bit_range:
+    - 31
+    - 30
+    description: 'Port x configuration I/O pin y These bits are written by software to configure the I/O pull-up or pull-down Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  side_effects: null
+- id: GPIO_IDR
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ID0
+    bit_range:
+    - 0
+    - 0
+    description: 'Port x input data I/O pin y These bits are read-only. They contain the input value of the corresponding I/O port. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: ID1
+    bit_range:
+    - 1
+    - 1
+    description: 'Port x input data I/O pin y These bits are read-only. They contain the input value of the corresponding I/O port. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: ID2
+    bit_range:
+    - 2
+    - 2
+    description: 'Port x input data I/O pin y These bits are read-only. They contain the input value of the corresponding I/O port. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: ID3
+    bit_range:
+    - 3
+    - 3
+    description: 'Port x input data I/O pin y These bits are read-only. They contain the input value of the corresponding I/O port. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: ID4
+    bit_range:
+    - 4
+    - 4
+    description: 'Port x input data I/O pin y These bits are read-only. They contain the input value of the corresponding I/O port. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: ID5
+    bit_range:
+    - 5
+    - 5
+    description: 'Port x input data I/O pin y These bits are read-only. They contain the input value of the corresponding I/O port. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: ID6
+    bit_range:
+    - 6
+    - 6
+    description: 'Port x input data I/O pin y These bits are read-only. They contain the input value of the corresponding I/O port. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: ID7
+    bit_range:
+    - 7
+    - 7
+    description: 'Port x input data I/O pin y These bits are read-only. They contain the input value of the corresponding I/O port. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: ID8
+    bit_range:
+    - 8
+    - 8
+    description: 'Port x input data I/O pin y These bits are read-only. They contain the input value of the corresponding I/O port. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: ID9
+    bit_range:
+    - 9
+    - 9
+    description: 'Port x input data I/O pin y These bits are read-only. They contain the input value of the corresponding I/O port. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: ID10
+    bit_range:
+    - 10
+    - 10
+    description: 'Port x input data I/O pin y These bits are read-only. They contain the input value of the corresponding I/O port. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: ID11
+    bit_range:
+    - 11
+    - 11
+    description: 'Port x input data I/O pin y These bits are read-only. They contain the input value of the corresponding I/O port. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: ID12
+    bit_range:
+    - 12
+    - 12
+    description: 'Port x input data I/O pin y These bits are read-only. They contain the input value of the corresponding I/O port. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: ID13
+    bit_range:
+    - 13
+    - 13
+    description: 'Port x input data I/O pin y These bits are read-only. They contain the input value of the corresponding I/O port. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: ID14
+    bit_range:
+    - 14
+    - 14
+    description: 'Port x input data I/O pin y These bits are read-only. They contain the input value of the corresponding I/O port. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: ID15
+    bit_range:
+    - 15
+    - 15
+    description: 'Port x input data I/O pin y These bits are read-only. They contain the input value of the corresponding I/O port. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  side_effects: null
+- id: GPIO_ODR
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OD0
+    bit_range:
+    - 0
+    - 0
+    description: 'Port output data I/O pin y These bits can be read and written by software. Note: For atomic bit set/reset, these bits can be individually set and/or reset by writing to�GPIOx_BSRR or GPIOx_BRR (x = A to J). Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: OD1
+    bit_range:
+    - 1
+    - 1
+    description: 'Port output data I/O pin y These bits can be read and written by software. Note: For atomic bit set/reset, these bits can be individually set and/or reset by writing to�GPIOx_BSRR or GPIOx_BRR (x = A to J). Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: OD2
+    bit_range:
+    - 2
+    - 2
+    description: 'Port output data I/O pin y These bits can be read and written by software. Note: For atomic bit set/reset, these bits can be individually set and/or reset by writing to�GPIOx_BSRR or GPIOx_BRR (x = A to J). Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: OD3
+    bit_range:
+    - 3
+    - 3
+    description: 'Port output data I/O pin y These bits can be read and written by software. Note: For atomic bit set/reset, these bits can be individually set and/or reset by writing to�GPIOx_BSRR or GPIOx_BRR (x = A to J). Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: OD4
+    bit_range:
+    - 4
+    - 4
+    description: 'Port output data I/O pin y These bits can be read and written by software. Note: For atomic bit set/reset, these bits can be individually set and/or reset by writing to�GPIOx_BSRR or GPIOx_BRR (x = A to J). Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: OD5
+    bit_range:
+    - 5
+    - 5
+    description: 'Port output data I/O pin y These bits can be read and written by software. Note: For atomic bit set/reset, these bits can be individually set and/or reset by writing to�GPIOx_BSRR or GPIOx_BRR (x = A to J). Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: OD6
+    bit_range:
+    - 6
+    - 6
+    description: 'Port output data I/O pin y These bits can be read and written by software. Note: For atomic bit set/reset, these bits can be individually set and/or reset by writing to�GPIOx_BSRR or GPIOx_BRR (x = A to J). Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: OD7
+    bit_range:
+    - 7
+    - 7
+    description: 'Port output data I/O pin y These bits can be read and written by software. Note: For atomic bit set/reset, these bits can be individually set and/or reset by writing to�GPIOx_BSRR or GPIOx_BRR (x = A to J). Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: OD8
+    bit_range:
+    - 8
+    - 8
+    description: 'Port output data I/O pin y These bits can be read and written by software. Note: For atomic bit set/reset, these bits can be individually set and/or reset by writing to�GPIOx_BSRR or GPIOx_BRR (x = A to J). Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: OD9
+    bit_range:
+    - 9
+    - 9
+    description: 'Port output data I/O pin y These bits can be read and written by software. Note: For atomic bit set/reset, these bits can be individually set and/or reset by writing to�GPIOx_BSRR or GPIOx_BRR (x = A to J). Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: OD10
+    bit_range:
+    - 10
+    - 10
+    description: 'Port output data I/O pin y These bits can be read and written by software. Note: For atomic bit set/reset, these bits can be individually set and/or reset by writing to�GPIOx_BSRR or GPIOx_BRR (x = A to J). Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: OD11
+    bit_range:
+    - 11
+    - 11
+    description: 'Port output data I/O pin y These bits can be read and written by software. Note: For atomic bit set/reset, these bits can be individually set and/or reset by writing to�GPIOx_BSRR or GPIOx_BRR (x = A to J). Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: OD12
+    bit_range:
+    - 12
+    - 12
+    description: 'Port output data I/O pin y These bits can be read and written by software. Note: For atomic bit set/reset, these bits can be individually set and/or reset by writing to�GPIOx_BSRR or GPIOx_BRR (x = A to J). Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: OD13
+    bit_range:
+    - 13
+    - 13
+    description: 'Port output data I/O pin y These bits can be read and written by software. Note: For atomic bit set/reset, these bits can be individually set and/or reset by writing to�GPIOx_BSRR or GPIOx_BRR (x = A to J). Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: OD14
+    bit_range:
+    - 14
+    - 14
+    description: 'Port output data I/O pin y These bits can be read and written by software. Note: For atomic bit set/reset, these bits can be individually set and/or reset by writing to�GPIOx_BSRR or GPIOx_BRR (x = A to J). Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: OD15
+    bit_range:
+    - 15
+    - 15
+    description: 'Port output data I/O pin y These bits can be read and written by software. Note: For atomic bit set/reset, these bits can be individually set and/or reset by writing to�GPIOx_BSRR or GPIOx_BRR (x = A to J). Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  side_effects: null
+- id: GPIO_BSRR
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BS0
+    bit_range:
+    - 0
+    - 0
+    description: 'Port x set I/O pin y These bits are write-only. A read to these bits returns the value 0x0000. Note: The bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: BS1
+    bit_range:
+    - 1
+    - 1
+    description: 'Port x set I/O pin y These bits are write-only. A read to these bits returns the value 0x0000. Note: The bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: BS2
+    bit_range:
+    - 2
+    - 2
+    description: 'Port x set I/O pin y These bits are write-only. A read to these bits returns the value 0x0000. Note: The bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: BS3
+    bit_range:
+    - 3
+    - 3
+    description: 'Port x set I/O pin y These bits are write-only. A read to these bits returns the value 0x0000. Note: The bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: BS4
+    bit_range:
+    - 4
+    - 4
+    description: 'Port x set I/O pin y These bits are write-only. A read to these bits returns the value 0x0000. Note: The bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: BS5
+    bit_range:
+    - 5
+    - 5
+    description: 'Port x set I/O pin y These bits are write-only. A read to these bits returns the value 0x0000. Note: The bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: BS6
+    bit_range:
+    - 6
+    - 6
+    description: 'Port x set I/O pin y These bits are write-only. A read to these bits returns the value 0x0000. Note: The bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: BS7
+    bit_range:
+    - 7
+    - 7
+    description: 'Port x set I/O pin y These bits are write-only. A read to these bits returns the value 0x0000. Note: The bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: BS8
+    bit_range:
+    - 8
+    - 8
+    description: 'Port x set I/O pin y These bits are write-only. A read to these bits returns the value 0x0000. Note: The bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: BS9
+    bit_range:
+    - 9
+    - 9
+    description: 'Port x set I/O pin y These bits are write-only. A read to these bits returns the value 0x0000. Note: The bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: BS10
+    bit_range:
+    - 10
+    - 10
+    description: 'Port x set I/O pin y These bits are write-only. A read to these bits returns the value 0x0000. Note: The bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: BS11
+    bit_range:
+    - 11
+    - 11
+    description: 'Port x set I/O pin y These bits are write-only. A read to these bits returns the value 0x0000. Note: The bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: BS12
+    bit_range:
+    - 12
+    - 12
+    description: 'Port x set I/O pin y These bits are write-only. A read to these bits returns the value 0x0000. Note: The bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: BS13
+    bit_range:
+    - 13
+    - 13
+    description: 'Port x set I/O pin y These bits are write-only. A read to these bits returns the value 0x0000. Note: The bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: BS14
+    bit_range:
+    - 14
+    - 14
+    description: 'Port x set I/O pin y These bits are write-only. A read to these bits returns the value 0x0000. Note: The bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: BS15
+    bit_range:
+    - 15
+    - 15
+    description: 'Port x set I/O pin y These bits are write-only. A read to these bits returns the value 0x0000. Note: The bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: BR0
+    bit_range:
+    - 16
+    - 16
+    description: 'Port x reset I/O pin y These bits are write-only. A read to these bits returns the value 0x0000. Note: If both BSy and BRy are set, BSy has priority. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: BR1
+    bit_range:
+    - 17
+    - 17
+    description: 'Port x reset I/O pin y These bits are write-only. A read to these bits returns the value 0x0000. Note: If both BSy and BRy are set, BSy has priority. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: BR2
+    bit_range:
+    - 18
+    - 18
+    description: 'Port x reset I/O pin y These bits are write-only. A read to these bits returns the value 0x0000. Note: If both BSy and BRy are set, BSy has priority. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: BR3
+    bit_range:
+    - 19
+    - 19
+    description: 'Port x reset I/O pin y These bits are write-only. A read to these bits returns the value 0x0000. Note: If both BSy and BRy are set, BSy has priority. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: BR4
+    bit_range:
+    - 20
+    - 20
+    description: 'Port x reset I/O pin y These bits are write-only. A read to these bits returns the value 0x0000. Note: If both BSy and BRy are set, BSy has priority. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: BR5
+    bit_range:
+    - 21
+    - 21
+    description: 'Port x reset I/O pin y These bits are write-only. A read to these bits returns the value 0x0000. Note: If both BSy and BRy are set, BSy has priority. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: BR6
+    bit_range:
+    - 22
+    - 22
+    description: 'Port x reset I/O pin y These bits are write-only. A read to these bits returns the value 0x0000. Note: If both BSy and BRy are set, BSy has priority. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: BR7
+    bit_range:
+    - 23
+    - 23
+    description: 'Port x reset I/O pin y These bits are write-only. A read to these bits returns the value 0x0000. Note: If both BSy and BRy are set, BSy has priority. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: BR8
+    bit_range:
+    - 24
+    - 24
+    description: 'Port x reset I/O pin y These bits are write-only. A read to these bits returns the value 0x0000. Note: If both BSy and BRy are set, BSy has priority. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: BR9
+    bit_range:
+    - 25
+    - 25
+    description: 'Port x reset I/O pin y These bits are write-only. A read to these bits returns the value 0x0000. Note: If both BSy and BRy are set, BSy has priority. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: BR10
+    bit_range:
+    - 26
+    - 26
+    description: 'Port x reset I/O pin y These bits are write-only. A read to these bits returns the value 0x0000. Note: If both BSy and BRy are set, BSy has priority. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: BR11
+    bit_range:
+    - 27
+    - 27
+    description: 'Port x reset I/O pin y These bits are write-only. A read to these bits returns the value 0x0000. Note: If both BSy and BRy are set, BSy has priority. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: BR12
+    bit_range:
+    - 28
+    - 28
+    description: 'Port x reset I/O pin y These bits are write-only. A read to these bits returns the value 0x0000. Note: If both BSy and BRy are set, BSy has priority. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: BR13
+    bit_range:
+    - 29
+    - 29
+    description: 'Port x reset I/O pin y These bits are write-only. A read to these bits returns the value 0x0000. Note: If both BSy and BRy are set, BSy has priority. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: BR14
+    bit_range:
+    - 30
+    - 30
+    description: 'Port x reset I/O pin y These bits are write-only. A read to these bits returns the value 0x0000. Note: If both BSy and BRy are set, BSy has priority. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: BR15
+    bit_range:
+    - 31
+    - 31
+    description: 'Port x reset I/O pin y These bits are write-only. A read to these bits returns the value 0x0000. Note: If both BSy and BRy are set, BSy has priority. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  side_effects: null
+- id: GPIO_LCKR
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LCK0
+    bit_range:
+    - 0
+    - 0
+    description: 'Port x lock I/O pin y These bits are read/write but can only be written when the LCKK bit is 0 Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: LCK1
+    bit_range:
+    - 1
+    - 1
+    description: 'Port x lock I/O pin y These bits are read/write but can only be written when the LCKK bit is 0 Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: LCK2
+    bit_range:
+    - 2
+    - 2
+    description: 'Port x lock I/O pin y These bits are read/write but can only be written when the LCKK bit is 0 Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: LCK3
+    bit_range:
+    - 3
+    - 3
+    description: 'Port x lock I/O pin y These bits are read/write but can only be written when the LCKK bit is 0 Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: LCK4
+    bit_range:
+    - 4
+    - 4
+    description: 'Port x lock I/O pin y These bits are read/write but can only be written when the LCKK bit is 0 Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: LCK5
+    bit_range:
+    - 5
+    - 5
+    description: 'Port x lock I/O pin y These bits are read/write but can only be written when the LCKK bit is 0 Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: LCK6
+    bit_range:
+    - 6
+    - 6
+    description: 'Port x lock I/O pin y These bits are read/write but can only be written when the LCKK bit is 0 Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: LCK7
+    bit_range:
+    - 7
+    - 7
+    description: 'Port x lock I/O pin y These bits are read/write but can only be written when the LCKK bit is 0 Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: LCK8
+    bit_range:
+    - 8
+    - 8
+    description: 'Port x lock I/O pin y These bits are read/write but can only be written when the LCKK bit is 0 Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: LCK9
+    bit_range:
+    - 9
+    - 9
+    description: 'Port x lock I/O pin y These bits are read/write but can only be written when the LCKK bit is 0 Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: LCK10
+    bit_range:
+    - 10
+    - 10
+    description: 'Port x lock I/O pin y These bits are read/write but can only be written when the LCKK bit is 0 Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: LCK11
+    bit_range:
+    - 11
+    - 11
+    description: 'Port x lock I/O pin y These bits are read/write but can only be written when the LCKK bit is 0 Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: LCK12
+    bit_range:
+    - 12
+    - 12
+    description: 'Port x lock I/O pin y These bits are read/write but can only be written when the LCKK bit is 0 Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: LCK13
+    bit_range:
+    - 13
+    - 13
+    description: 'Port x lock I/O pin y These bits are read/write but can only be written when the LCKK bit is 0 Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: LCK14
+    bit_range:
+    - 14
+    - 14
+    description: 'Port x lock I/O pin y These bits are read/write but can only be written when the LCKK bit is 0 Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: LCK15
+    bit_range:
+    - 15
+    - 15
+    description: 'Port x lock I/O pin y These bits are read/write but can only be written when the LCKK bit is 0 Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: LCKK
+    bit_range:
+    - 16
+    - 16
+    description: 'Lock key This bit can be read any time. It can only be modified using the lock key write sequence. - LOCK key write sequence: WR LCKR[16] = 1 + LCKR[15:0] WR LCKR[16] = 0 + LCKR[15:0] WR LCKR[16] = 1 + LCKR[15:0] - LOCK key read RD LCKR[16] = 1 (this read operation is optional but it confirms that the lock is active) Note: During the lock key write sequence, the value of LCK[15:0] must not change. Note: Any error in the lock sequence aborts the LOCK. Note: After the first lock sequence on any bit of the port, any read access on the LCKK bit returns 1 until the next MCU reset or peripheral reset.'
+  side_effects: null
+- id: GPIO_AFRL
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: AFSEL0
+    bit_range:
+    - 3
+    - 0
+    description: 'Alternate function selection for port x I/O pin y These bits are written by software to configure alternate function I/Os. Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: AFSEL1
+    bit_range:
+    - 7
+    - 4
+    description: 'Alternate function selection for port x I/O pin y These bits are written by software to configure alternate function I/Os. Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: AFSEL2
+    bit_range:
+    - 11
+    - 8
+    description: 'Alternate function selection for port x I/O pin y These bits are written by software to configure alternate function I/Os. Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: AFSEL3
+    bit_range:
+    - 15
+    - 12
+    description: 'Alternate function selection for port x I/O pin y These bits are written by software to configure alternate function I/Os. Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: AFSEL4
+    bit_range:
+    - 19
+    - 16
+    description: 'Alternate function selection for port x I/O pin y These bits are written by software to configure alternate function I/Os. Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: AFSEL5
+    bit_range:
+    - 23
+    - 20
+    description: 'Alternate function selection for port x I/O pin y These bits are written by software to configure alternate function I/Os. Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: AFSEL6
+    bit_range:
+    - 27
+    - 24
+    description: 'Alternate function selection for port x I/O pin y These bits are written by software to configure alternate function I/Os. Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: AFSEL7
+    bit_range:
+    - 31
+    - 28
+    description: 'Alternate function selection for port x I/O pin y These bits are written by software to configure alternate function I/Os. Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  side_effects: null
+- id: GPIO_AFRH
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: AFSEL8
+    bit_range:
+    - 3
+    - 0
+    description: 'Alternate function selection for port x I/O pin y These bits are written by the software to configure alternate function I/Os. Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: AFSEL9
+    bit_range:
+    - 7
+    - 4
+    description: 'Alternate function selection for port x I/O pin y These bits are written by the software to configure alternate function I/Os. Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: AFSEL10
+    bit_range:
+    - 11
+    - 8
+    description: 'Alternate function selection for port x I/O pin y These bits are written by the software to configure alternate function I/Os. Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: AFSEL11
+    bit_range:
+    - 15
+    - 12
+    description: 'Alternate function selection for port x I/O pin y These bits are written by the software to configure alternate function I/Os. Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: AFSEL12
+    bit_range:
+    - 19
+    - 16
+    description: 'Alternate function selection for port x I/O pin y These bits are written by the software to configure alternate function I/Os. Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: AFSEL13
+    bit_range:
+    - 23
+    - 20
+    description: 'Alternate function selection for port x I/O pin y These bits are written by the software to configure alternate function I/Os. Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: AFSEL14
+    bit_range:
+    - 27
+    - 24
+    description: 'Alternate function selection for port x I/O pin y These bits are written by the software to configure alternate function I/Os. Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: AFSEL15
+    bit_range:
+    - 31
+    - 28
+    description: 'Alternate function selection for port x I/O pin y These bits are written by the software to configure alternate function I/Os. Note: This field is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  side_effects: null
+- id: GPIO_BRR
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BR0
+    bit_range:
+    - 0
+    - 0
+    description: 'Port x reset IO pin y These bits are write-only. A read to these bits returns the value 0x0000. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: BR1
+    bit_range:
+    - 1
+    - 1
+    description: 'Port x reset IO pin y These bits are write-only. A read to these bits returns the value 0x0000. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: BR2
+    bit_range:
+    - 2
+    - 2
+    description: 'Port x reset IO pin y These bits are write-only. A read to these bits returns the value 0x0000. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: BR3
+    bit_range:
+    - 3
+    - 3
+    description: 'Port x reset IO pin y These bits are write-only. A read to these bits returns the value 0x0000. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: BR4
+    bit_range:
+    - 4
+    - 4
+    description: 'Port x reset IO pin y These bits are write-only. A read to these bits returns the value 0x0000. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: BR5
+    bit_range:
+    - 5
+    - 5
+    description: 'Port x reset IO pin y These bits are write-only. A read to these bits returns the value 0x0000. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: BR6
+    bit_range:
+    - 6
+    - 6
+    description: 'Port x reset IO pin y These bits are write-only. A read to these bits returns the value 0x0000. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: BR7
+    bit_range:
+    - 7
+    - 7
+    description: 'Port x reset IO pin y These bits are write-only. A read to these bits returns the value 0x0000. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: BR8
+    bit_range:
+    - 8
+    - 8
+    description: 'Port x reset IO pin y These bits are write-only. A read to these bits returns the value 0x0000. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: BR9
+    bit_range:
+    - 9
+    - 9
+    description: 'Port x reset IO pin y These bits are write-only. A read to these bits returns the value 0x0000. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: BR10
+    bit_range:
+    - 10
+    - 10
+    description: 'Port x reset IO pin y These bits are write-only. A read to these bits returns the value 0x0000. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: BR11
+    bit_range:
+    - 11
+    - 11
+    description: 'Port x reset IO pin y These bits are write-only. A read to these bits returns the value 0x0000. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: BR12
+    bit_range:
+    - 12
+    - 12
+    description: 'Port x reset IO pin y These bits are write-only. A read to these bits returns the value 0x0000. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: BR13
+    bit_range:
+    - 13
+    - 13
+    description: 'Port x reset IO pin y These bits are write-only. A read to these bits returns the value 0x0000. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: BR14
+    bit_range:
+    - 14
+    - 14
+    description: 'Port x reset IO pin y These bits are write-only. A read to these bits returns the value 0x0000. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: BR15
+    bit_range:
+    - 15
+    - 15
+    description: 'Port x reset IO pin y These bits are write-only. A read to these bits returns the value 0x0000. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  side_effects: null
+- id: GPIO_HSLVR
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: HSLV0
+    bit_range:
+    - 0
+    - 0
+    description: 'Port x high-speed low-voltage configuration These bits are written by software to optimize the I/O speed when the I/O supply is low. Each bit is active only if the corresponding IO_VDD_HSLV/IO_VDDIO2_HSLV user option bit is set. It must be used only if the I/O supply voltage is below 2.7 V. Setting these bits when the I/O supply (VDD or VDDIO2) is higher than 2.7 V may be destructive. Note: Not all I/Os support the HSLV mode. Refer to the I/O structure in the corresponding datasheet for the list of I/Os supporting this feature. Other I/Os HSLV configuration must be kept at reset value. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: HSLV1
+    bit_range:
+    - 1
+    - 1
+    description: 'Port x high-speed low-voltage configuration These bits are written by software to optimize the I/O speed when the I/O supply is low. Each bit is active only if the corresponding IO_VDD_HSLV/IO_VDDIO2_HSLV user option bit is set. It must be used only if the I/O supply voltage is below 2.7 V. Setting these bits when the I/O supply (VDD or VDDIO2) is higher than 2.7 V may be destructive. Note: Not all I/Os support the HSLV mode. Refer to the I/O structure in the corresponding datasheet for the list of I/Os supporting this feature. Other I/Os HSLV configuration must be kept at reset value. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: HSLV2
+    bit_range:
+    - 2
+    - 2
+    description: 'Port x high-speed low-voltage configuration These bits are written by software to optimize the I/O speed when the I/O supply is low. Each bit is active only if the corresponding IO_VDD_HSLV/IO_VDDIO2_HSLV user option bit is set. It must be used only if the I/O supply voltage is below 2.7 V. Setting these bits when the I/O supply (VDD or VDDIO2) is higher than 2.7 V may be destructive. Note: Not all I/Os support the HSLV mode. Refer to the I/O structure in the corresponding datasheet for the list of I/Os supporting this feature. Other I/Os HSLV configuration must be kept at reset value. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: HSLV3
+    bit_range:
+    - 3
+    - 3
+    description: 'Port x high-speed low-voltage configuration These bits are written by software to optimize the I/O speed when the I/O supply is low. Each bit is active only if the corresponding IO_VDD_HSLV/IO_VDDIO2_HSLV user option bit is set. It must be used only if the I/O supply voltage is below 2.7 V. Setting these bits when the I/O supply (VDD or VDDIO2) is higher than 2.7 V may be destructive. Note: Not all I/Os support the HSLV mode. Refer to the I/O structure in the corresponding datasheet for the list of I/Os supporting this feature. Other I/Os HSLV configuration must be kept at reset value. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: HSLV4
+    bit_range:
+    - 4
+    - 4
+    description: 'Port x high-speed low-voltage configuration These bits are written by software to optimize the I/O speed when the I/O supply is low. Each bit is active only if the corresponding IO_VDD_HSLV/IO_VDDIO2_HSLV user option bit is set. It must be used only if the I/O supply voltage is below 2.7 V. Setting these bits when the I/O supply (VDD or VDDIO2) is higher than 2.7 V may be destructive. Note: Not all I/Os support the HSLV mode. Refer to the I/O structure in the corresponding datasheet for the list of I/Os supporting this feature. Other I/Os HSLV configuration must be kept at reset value. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: HSLV5
+    bit_range:
+    - 5
+    - 5
+    description: 'Port x high-speed low-voltage configuration These bits are written by software to optimize the I/O speed when the I/O supply is low. Each bit is active only if the corresponding IO_VDD_HSLV/IO_VDDIO2_HSLV user option bit is set. It must be used only if the I/O supply voltage is below 2.7 V. Setting these bits when the I/O supply (VDD or VDDIO2) is higher than 2.7 V may be destructive. Note: Not all I/Os support the HSLV mode. Refer to the I/O structure in the corresponding datasheet for the list of I/Os supporting this feature. Other I/Os HSLV configuration must be kept at reset value. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: HSLV6
+    bit_range:
+    - 6
+    - 6
+    description: 'Port x high-speed low-voltage configuration These bits are written by software to optimize the I/O speed when the I/O supply is low. Each bit is active only if the corresponding IO_VDD_HSLV/IO_VDDIO2_HSLV user option bit is set. It must be used only if the I/O supply voltage is below 2.7 V. Setting these bits when the I/O supply (VDD or VDDIO2) is higher than 2.7 V may be destructive. Note: Not all I/Os support the HSLV mode. Refer to the I/O structure in the corresponding datasheet for the list of I/Os supporting this feature. Other I/Os HSLV configuration must be kept at reset value. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: HSLV7
+    bit_range:
+    - 7
+    - 7
+    description: 'Port x high-speed low-voltage configuration These bits are written by software to optimize the I/O speed when the I/O supply is low. Each bit is active only if the corresponding IO_VDD_HSLV/IO_VDDIO2_HSLV user option bit is set. It must be used only if the I/O supply voltage is below 2.7 V. Setting these bits when the I/O supply (VDD or VDDIO2) is higher than 2.7 V may be destructive. Note: Not all I/Os support the HSLV mode. Refer to the I/O structure in the corresponding datasheet for the list of I/Os supporting this feature. Other I/Os HSLV configuration must be kept at reset value. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: HSLV8
+    bit_range:
+    - 8
+    - 8
+    description: 'Port x high-speed low-voltage configuration These bits are written by software to optimize the I/O speed when the I/O supply is low. Each bit is active only if the corresponding IO_VDD_HSLV/IO_VDDIO2_HSLV user option bit is set. It must be used only if the I/O supply voltage is below 2.7 V. Setting these bits when the I/O supply (VDD or VDDIO2) is higher than 2.7 V may be destructive. Note: Not all I/Os support the HSLV mode. Refer to the I/O structure in the corresponding datasheet for the list of I/Os supporting this feature. Other I/Os HSLV configuration must be kept at reset value. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: HSLV9
+    bit_range:
+    - 9
+    - 9
+    description: 'Port x high-speed low-voltage configuration These bits are written by software to optimize the I/O speed when the I/O supply is low. Each bit is active only if the corresponding IO_VDD_HSLV/IO_VDDIO2_HSLV user option bit is set. It must be used only if the I/O supply voltage is below 2.7 V. Setting these bits when the I/O supply (VDD or VDDIO2) is higher than 2.7 V may be destructive. Note: Not all I/Os support the HSLV mode. Refer to the I/O structure in the corresponding datasheet for the list of I/Os supporting this feature. Other I/Os HSLV configuration must be kept at reset value. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: HSLV10
+    bit_range:
+    - 10
+    - 10
+    description: 'Port x high-speed low-voltage configuration These bits are written by software to optimize the I/O speed when the I/O supply is low. Each bit is active only if the corresponding IO_VDD_HSLV/IO_VDDIO2_HSLV user option bit is set. It must be used only if the I/O supply voltage is below 2.7 V. Setting these bits when the I/O supply (VDD or VDDIO2) is higher than 2.7 V may be destructive. Note: Not all I/Os support the HSLV mode. Refer to the I/O structure in the corresponding datasheet for the list of I/Os supporting this feature. Other I/Os HSLV configuration must be kept at reset value. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: HSLV11
+    bit_range:
+    - 11
+    - 11
+    description: 'Port x high-speed low-voltage configuration These bits are written by software to optimize the I/O speed when the I/O supply is low. Each bit is active only if the corresponding IO_VDD_HSLV/IO_VDDIO2_HSLV user option bit is set. It must be used only if the I/O supply voltage is below 2.7 V. Setting these bits when the I/O supply (VDD or VDDIO2) is higher than 2.7 V may be destructive. Note: Not all I/Os support the HSLV mode. Refer to the I/O structure in the corresponding datasheet for the list of I/Os supporting this feature. Other I/Os HSLV configuration must be kept at reset value. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: HSLV12
+    bit_range:
+    - 12
+    - 12
+    description: 'Port x high-speed low-voltage configuration These bits are written by software to optimize the I/O speed when the I/O supply is low. Each bit is active only if the corresponding IO_VDD_HSLV/IO_VDDIO2_HSLV user option bit is set. It must be used only if the I/O supply voltage is below 2.7 V. Setting these bits when the I/O supply (VDD or VDDIO2) is higher than 2.7 V may be destructive. Note: Not all I/Os support the HSLV mode. Refer to the I/O structure in the corresponding datasheet for the list of I/Os supporting this feature. Other I/Os HSLV configuration must be kept at reset value. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: HSLV13
+    bit_range:
+    - 13
+    - 13
+    description: 'Port x high-speed low-voltage configuration These bits are written by software to optimize the I/O speed when the I/O supply is low. Each bit is active only if the corresponding IO_VDD_HSLV/IO_VDDIO2_HSLV user option bit is set. It must be used only if the I/O supply voltage is below 2.7 V. Setting these bits when the I/O supply (VDD or VDDIO2) is higher than 2.7 V may be destructive. Note: Not all I/Os support the HSLV mode. Refer to the I/O structure in the corresponding datasheet for the list of I/Os supporting this feature. Other I/Os HSLV configuration must be kept at reset value. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: HSLV14
+    bit_range:
+    - 14
+    - 14
+    description: 'Port x high-speed low-voltage configuration These bits are written by software to optimize the I/O speed when the I/O supply is low. Each bit is active only if the corresponding IO_VDD_HSLV/IO_VDDIO2_HSLV user option bit is set. It must be used only if the I/O supply voltage is below 2.7 V. Setting these bits when the I/O supply (VDD or VDDIO2) is higher than 2.7 V may be destructive. Note: Not all I/Os support the HSLV mode. Refer to the I/O structure in the corresponding datasheet for the list of I/Os supporting this feature. Other I/Os HSLV configuration must be kept at reset value. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  - name: HSLV15
+    bit_range:
+    - 15
+    - 15
+    description: 'Port x high-speed low-voltage configuration These bits are written by software to optimize the I/O speed when the I/O supply is low. Each bit is active only if the corresponding IO_VDD_HSLV/IO_VDDIO2_HSLV user option bit is set. It must be used only if the I/O supply voltage is below 2.7 V. Setting these bits when the I/O supply (VDD or VDDIO2) is higher than 2.7 V may be destructive. Note: Not all I/Os support the HSLV mode. Refer to the I/O structure in the corresponding datasheet for the list of I/Os supporting this feature. Other I/Os HSLV configuration must be kept at reset value. Note: This bit is reserved and must be kept at reset value when the corresponding I/O is not available on the selected package.'
+  side_effects: null
+- id: GPIO_SECCFGR
+  address_offset: 48
+  size: 32
+  access: READ_WRITE
+  reset_value: 65535
+  fields:
+  - name: SEC0
+    bit_range:
+    - 0
+    - 0
+    description: 'I/O pin of Port x secure bit enable y These bits are written by software to enable or disable the I/O port pin security. Note: The bit is reserved and must be kept to reset value when the corresponding I/O is not available on the selected package.'
+  - name: SEC1
+    bit_range:
+    - 1
+    - 1
+    description: 'I/O pin of Port x secure bit enable y These bits are written by software to enable or disable the I/O port pin security. Note: The bit is reserved and must be kept to reset value when the corresponding I/O is not available on the selected package.'
+  - name: SEC2
+    bit_range:
+    - 2
+    - 2
+    description: 'I/O pin of Port x secure bit enable y These bits are written by software to enable or disable the I/O port pin security. Note: The bit is reserved and must be kept to reset value when the corresponding I/O is not available on the selected package.'
+  - name: SEC3
+    bit_range:
+    - 3
+    - 3
+    description: 'I/O pin of Port x secure bit enable y These bits are written by software to enable or disable the I/O port pin security. Note: The bit is reserved and must be kept to reset value when the corresponding I/O is not available on the selected package.'
+  - name: SEC4
+    bit_range:
+    - 4
+    - 4
+    description: 'I/O pin of Port x secure bit enable y These bits are written by software to enable or disable the I/O port pin security. Note: The bit is reserved and must be kept to reset value when the corresponding I/O is not available on the selected package.'
+  - name: SEC5
+    bit_range:
+    - 5
+    - 5
+    description: 'I/O pin of Port x secure bit enable y These bits are written by software to enable or disable the I/O port pin security. Note: The bit is reserved and must be kept to reset value when the corresponding I/O is not available on the selected package.'
+  - name: SEC6
+    bit_range:
+    - 6
+    - 6
+    description: 'I/O pin of Port x secure bit enable y These bits are written by software to enable or disable the I/O port pin security. Note: The bit is reserved and must be kept to reset value when the corresponding I/O is not available on the selected package.'
+  - name: SEC7
+    bit_range:
+    - 7
+    - 7
+    description: 'I/O pin of Port x secure bit enable y These bits are written by software to enable or disable the I/O port pin security. Note: The bit is reserved and must be kept to reset value when the corresponding I/O is not available on the selected package.'
+  - name: SEC8
+    bit_range:
+    - 8
+    - 8
+    description: 'I/O pin of Port x secure bit enable y These bits are written by software to enable or disable the I/O port pin security. Note: The bit is reserved and must be kept to reset value when the corresponding I/O is not available on the selected package.'
+  - name: SEC9
+    bit_range:
+    - 9
+    - 9
+    description: 'I/O pin of Port x secure bit enable y These bits are written by software to enable or disable the I/O port pin security. Note: The bit is reserved and must be kept to reset value when the corresponding I/O is not available on the selected package.'
+  - name: SEC10
+    bit_range:
+    - 10
+    - 10
+    description: 'I/O pin of Port x secure bit enable y These bits are written by software to enable or disable the I/O port pin security. Note: The bit is reserved and must be kept to reset value when the corresponding I/O is not available on the selected package.'
+  - name: SEC11
+    bit_range:
+    - 11
+    - 11
+    description: 'I/O pin of Port x secure bit enable y These bits are written by software to enable or disable the I/O port pin security. Note: The bit is reserved and must be kept to reset value when the corresponding I/O is not available on the selected package.'
+  - name: SEC12
+    bit_range:
+    - 12
+    - 12
+    description: 'I/O pin of Port x secure bit enable y These bits are written by software to enable or disable the I/O port pin security. Note: The bit is reserved and must be kept to reset value when the corresponding I/O is not available on the selected package.'
+  - name: SEC13
+    bit_range:
+    - 13
+    - 13
+    description: 'I/O pin of Port x secure bit enable y These bits are written by software to enable or disable the I/O port pin security. Note: The bit is reserved and must be kept to reset value when the corresponding I/O is not available on the selected package.'
+  - name: SEC14
+    bit_range:
+    - 14
+    - 14
+    description: 'I/O pin of Port x secure bit enable y These bits are written by software to enable or disable the I/O port pin security. Note: The bit is reserved and must be kept to reset value when the corresponding I/O is not available on the selected package.'
+  - name: SEC15
+    bit_range:
+    - 15
+    - 15
+    description: 'I/O pin of Port x secure bit enable y These bits are written by software to enable or disable the I/O port pin security. Note: The bit is reserved and must be kept to reset value when the corresponding I/O is not available on the selected package.'
+  side_effects: null
+interrupts: null
+timing: null

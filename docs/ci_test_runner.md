@@ -170,6 +170,7 @@ limits:
 assertions:
   - uart_contains: "Hello"
   - uart_regex: "^Hello.*$"
+  - rtt_contains: "Boot complete"
   - expected_stop_reason: max_steps
 ```
 
@@ -187,6 +188,10 @@ Notes:
   - `--max-uart-bytes` overrides `limits.max_uart_bytes`
   - `--detect-stuck` (alias: `--no-progress`) overrides `limits.no_progress_steps`
 - `--breakpoint <addr>` (repeatable) stops the run when PC matches and sets `stop_reason: halt`.
+
+`rtt_contains` matches only the dedicated SEGGER RTT stream
+(see [SEGGER RTT logging](howto/segger-rtt.md)); its presence enables RTT
+capture automatically. Environment/world scripts reject it at validation.
 
 The single-machine example above permits the documented single-machine
 assertions. Environment scripts are stricter: they require at least one
@@ -256,6 +261,7 @@ Artifacts:
 - `out/artifacts/result.json`: machine-readable summary
 - `out/artifacts/snapshot.json`: a CPU snapshot for a single machine, or an environment snapshot with a `nodes` array for a world (also written for config errors)
 - `out/artifacts/uart.log`: captured UART TX bytes; world output is grouped by node
+- `out/artifacts/rtt.log`: captured SEGGER RTT bytes (empty unless RTT was enabled)
 - `out/artifacts/junit.xml`: JUnit XML report (one testcase for `run` + one per assertion)
 
 Alternatively, you can write JUnit XML to a specific path:

@@ -1,0 +1,359 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+#
+# Source references:
+# - ST SVD (bases/IRQs): tests/fixtures/real_world/stm32u575.svd
+#   (cmsis-svd-data STMicro/STM32U575.svd, sha256
+#   2e45c70a3387a46a07092b145301e7bee3e95480377e67e252db6bf4ecfd701a)
+# - Memory sizes: DS13736 + Zephyr dts/arm/st/u5/stm32u575Xi.dtsi
+#   (flash 2 MiB @0x08000000; SRAM1+2+3 768 KiB @0x20000000; SRAM4 16 KiB @0x28000000).
+# - Board VCP (USART1 PA9/PA10, 115200 8N1): stm32u5xx-nucleo BSP COM1 +
+#   Zephyr nucleo_u575zi_q board docs.
+#
+# No bench part: reset values below are SVD/RM0456-derived unless a comment
+# says otherwise. The `stm32v2` RCC profile is U5-only: WBA52 uses
+# `stm32wba`, WB55 `stm32wb` and G474 `stm32g4`. WBA/U5 do share the H5-style
+# enable/reset block placement (0x8C/0x9C/0xA4), which is what the profile
+# name referred to before it was split.
+#
+# Known divergences / not modeled (first pass):
+# - TrustZone/GTZC/SAU enforcement: not modeled (factory TZEN=0 per UM2883,
+#   so non-secure alias 0x08000000 is the boot path).
+# - OCTOSPI/HSPI, USB OTG, FDCAN, ethernet, ADC4: not declared.
+# - FLASH programming semantics beyond HAL latency/option-lock: not modeled.
+# - Clock gating (`clock:` gates) is not declared yet, so the RCC model is
+#   permissive about missing clock-enable bits on U5 for now.
+
+name: "stm32u575zi"
+arch: "arm"
+core: "cortex-m33"
+# STM32U575ZI maximum CPU frequency, 160 MHz (DS13736).
+cpu_hz: 160_000_000
+
+flash:
+  base: 0x08000000
+  # Binary units so the buffer is exactly 2 * 0x100000 bytes (two 1 MiB banks on
+  # real silicon); SI "2MB" would parse as 2,000,000 and break bank math.
+  size: "2MiB"
+ram:
+  base: 0x20000000
+  # SRAM1+SRAM2+SRAM3 = 768 KiB contiguous (Zephyr stm32u575Xi.dtsi).
+  size: "768KiB"
+memory_regions:
+  # SRAM4, 16 KiB (DS13736 + RM0456; SVD SRAM4 base 0x28000000).
+  - name: "sram4"
+    base: 0x28000000
+    size: "16KiB"
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x46020C00
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32u575/rcc.yaml"
+      profile: "stm32v2"
+  - id: "pwr"
+    type: "pwr"
+    base_address: 0x46020800
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32u575/pwr.yaml"
+      profile: "wba"
+  # FLASH: the "l4" profile is ACR/LATENCY-approximate only; U5 NSKEYR/
+  # SECKEYR/OPTKEYR (0x08/0x0C/0x10) fit neither L4 nor H5 map, not modeled.
+  - id: "flash"
+    type: "flash"
+    base_address: 0x40022000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32u575/flash.yaml"
+      profile: "l4"
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x42020000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32u575/gpioa.yaml"
+      profile: "stm32v2"
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x42020400
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32u575/gpiob.yaml"
+      profile: "stm32v2"
+  - id: "gpioc"
+    type: "gpio"
+    base_address: 0x42020800
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32u575/gpioc.yaml"
+      profile: "stm32v2"
+  - id: "gpiod"
+    type: "gpio"
+    base_address: 0x42020C00
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32u575/gpiod.yaml"
+      profile: "stm32v2"
+  - id: "gpioe"
+    type: "gpio"
+    base_address: 0x42021000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32u575/gpioe.yaml"
+      profile: "stm32v2"
+  - id: "gpiof"
+    type: "gpio"
+    base_address: 0x42021400
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32u575/gpiof.yaml"
+      profile: "stm32v2"
+  - id: "gpiog"
+    type: "gpio"
+    base_address: 0x42021800
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32u575/gpiog.yaml"
+      profile: "stm32v2"
+  - id: "gpioh"
+    type: "gpio"
+    base_address: 0x42021C00
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32u575/gpioh.yaml"
+      profile: "stm32v2"
+  - id: "gpioi"
+    type: "gpio"
+    base_address: 0x42022000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32u575/gpioi.yaml"
+      profile: "stm32v2"
+  # USART1 is the NUCLEO-U575ZI-Q VCP console (PA9/PA10). IRQ 61 per SVD.
+  - id: "usart1"
+    type: "uart"
+    base_address: 0x40013800
+    size: "1KB"
+    irq: 61
+    config:
+      debug_schema: "../peripherals/stm32u575/usart1.yaml"
+      profile: "stm32v2"
+  - id: "usart2"
+    type: "uart"
+    base_address: 0x40004400
+    size: "1KB"
+    irq: 62
+    config:
+      debug_schema: "../peripherals/stm32u575/usart2.yaml"
+      profile: "stm32v2"
+  - id: "usart3"
+    type: "uart"
+    base_address: 0x40004800
+    size: "1KB"
+    irq: 63
+    config:
+      debug_schema: "../peripherals/stm32u575/usart3.yaml"
+      profile: "stm32v2"
+  - id: "uart4"
+    type: "uart"
+    base_address: 0x40004C00
+    size: "1KB"
+    irq: 64
+    config:
+      debug_schema: "../peripherals/stm32u575/uart4.yaml"
+      profile: "stm32v2"
+  - id: "lpuart1"
+    type: "uart"
+    base_address: 0x46002400
+    size: "1KB"
+    irq: 66
+    config:
+      debug_schema: "../peripherals/stm32u575/lpuart1.yaml"
+      profile: "stm32v2"
+  # I2C1 is the default Arduino Wire bus. Modern L4-class I2C IP (same profile
+  # WBA52 wires). Event IRQ 55; error IRQ 56 not declared (single-line model).
+  - id: "i2c1"
+    type: "i2c"
+    base_address: 0x40005400
+    size: "1KB"
+    irq: 55
+    config:
+      debug_schema: "../peripherals/stm32u575/i2c1.yaml"
+      profile: "stm32l4"
+  - id: "i2c2"
+    type: "i2c"
+    base_address: 0x40005800
+    size: "1KB"
+    irq: 57
+    config:
+      debug_schema: "../peripherals/stm32u575/i2c2.yaml"
+      profile: "stm32l4"
+  - id: "i2c3"
+    type: "i2c"
+    base_address: 0x46002800
+    size: "1KB"
+    irq: 88
+    config:
+      debug_schema: "../peripherals/stm32u575/i2c3.yaml"
+      profile: "stm32l4"
+  # SPI1 is the default Arduino SPI bus (PA5 SCK / PA6 MISO / PA7 MOSI / PA4 NSS).
+  # No pad_map for SPI1-3 on this first pass: per-pad logic-analyzer publishing
+  # is off; the H5 AF table is not transcribed yet.
+  - id: "spi1"
+    type: "spi"
+    base_address: 0x40013000
+    size: "1KB"
+    irq: 59
+    config:
+      debug_schema: "../peripherals/stm32u575/spi1.yaml"
+      profile: "stm32h5"
+  - id: "spi2"
+    type: "spi"
+    base_address: 0x40003800
+    size: "1KB"
+    irq: 60
+    config:
+      debug_schema: "../peripherals/stm32u575/spi2.yaml"
+      profile: "stm32h5"
+  - id: "spi3"
+    type: "spi"
+    base_address: 0x46002000
+    size: "1KB"
+    irq: 99
+    config:
+      debug_schema: "../peripherals/stm32u575/spi3.yaml"
+      profile: "stm32h5"
+  # TIM2/TIM5 are the 32-bit general-purpose timers on U5.
+  - id: "tim2"
+    type: "timer"
+    base_address: 0x40000000
+    size: "1KB"
+    irq: 45
+    config:
+      debug_schema: "../peripherals/stm32u575/tim2.yaml"
+      width: 32
+  - id: "tim3"
+    type: "timer"
+    base_address: 0x40000400
+    size: "1KB"
+    irq: 46
+    config:
+      debug_schema: "../peripherals/stm32u575/tim3.yaml"
+  - id: "tim6"
+    type: "timer"
+    base_address: 0x40001000
+    size: "1KB"
+    irq: 49
+    config:
+      debug_schema: "../peripherals/stm32u575/tim6.yaml"
+      basic: true
+  - id: "tim7"
+    type: "timer"
+    base_address: 0x40001400
+    size: "1KB"
+    irq: 50
+    config:
+      debug_schema: "../peripherals/stm32u575/tim7.yaml"
+      basic: true
+  - id: "tim1_pwm"
+    type: "timer"
+    base_address: 0x40012C00
+    size: "1KB"
+    irq: 42
+    config:
+      debug_schema: "../peripherals/stm32u575/tim1.yaml"
+      advanced: true
+  - id: "gpdma1"
+    type: "gpdma"
+    base_address: 0x40020000
+    # U5 GPDMA1 has 16 channels (SVD registers to ~0x84C); the model implements
+    # only 8. 8 x 0x80 + 0x50 base exceeds 1KB, so the window must be 2KB.
+    size: "2KB"
+    irq: 29
+    config:
+      debug_schema: "../peripherals/stm32u575/gpdma1.yaml"
+      irq_base: 29
+  # ADC1 is the analogRead path on the Arduino core, clocked from AHB2ENR.ADCEN.
+  - id: "adc1"
+    type: "adc"
+    base_address: 0x42028000
+    size: "1KB"
+    irq: 37
+    config:
+      debug_schema: "../peripherals/stm32u575/adc1.yaml"
+      # U5 ADC is NOT the L4/H5 map and NOT exactly the H7 map either. Verified
+      # from the vendored SVD: CFGR1.RES is 2 bits at [3:2] (L4: [4:3], H7:
+      # 3 bits [4:2]) while PCSEL/LTR1-3/HTR1-3/CALFACT2 are present like the
+      # H7. "stm32h7" is the closest existing layout; the RES delta is
+      # documented, not modeled. analogRead (matrix L5_adc) stays skipped.
+      profile: "stm32h7"
+  - id: "rtc"
+    type: "rtc_v3"
+    base_address: 0x46007800
+    size: "1KB"
+    irq: 2
+    config:
+      debug_schema: "../peripherals/stm32u575/rtc.yaml"
+  - id: "iwdg"
+    type: "iwdg"
+    base_address: 0x40003000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32u575/iwdg.yaml"
+  - id: "crc"
+    type: "crc"
+    base_address: 0x40023000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32u575/crc.yaml"
+      idr_width: 32
+  # CRS calibrates HSI48. The Arduino U5 core's SystemClock_Config ends in
+  # HAL_RCCEx_CRSConfig: force-reset through RCC APB1RSTR1, write CFGR/TRIM,
+  # enable AUTOTRIMEN|CEN. Undeclared, the first CRS_CFGR write bus-faults
+  # into Default_Handler before setup() ever runs — the second sequential
+  # Arduino-matrix L0 boot blocker, after the RCC HSI48 fix (rcc.rs).
+  - id: "crs"
+    type: "crs"
+    base_address: 0x40006000
+    size: "1KB"
+    irq: 74
+    config:
+      debug_schema: "../peripherals/stm32u575/crs.yaml"
+  - id: "rng"
+    type: "rng"
+    base_address: 0x420C0800
+    size: "1KB"
+    irq: 94
+    config:
+      debug_schema: "../peripherals/stm32u575/rng.yaml"
+  - id: "icache"
+    type: "icache"
+    base_address: 0x40030400
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32u575/icache.yaml"
+  # U5 DBGMCU base is 0xE0044000 (not the M4 0xE0042000). IDCODE reset
+  # 0x30016482 per SVD (DEV_ID 0x482, REV_ID 0x3001).
+  - id: "dbgmcu"
+    type: "dbgmcu"
+    base_address: 0xE0044000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32u575/dbgmcu.yaml"
+      idcode: 0x30016482
+  # SysTick is required by every HAL/Arduino delay path; declare it so the
+  # scheduler-backed counter is mapped at 0xE000E010. CALIB is left at the
+  # model default (NoRef) — no bench silicon capture for a U5 TENMS value yet.
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+  - id: "nvic"
+    type: "nvic"
+    base_address: 0xE000E100
+    size: "1KB"

@@ -60,6 +60,7 @@ impl CortexM {
         rn: u8,
         rm: u8,
         shift_type: u8,
+        set_flags: bool,
     ) -> SimResult<PcAdvance> {
         let mut __pc = PcAdvance::Keep;
         let value = self.read_reg(rn);
@@ -104,6 +105,26 @@ impl CortexM {
             _ => value,
         };
         self.write_reg(rd, result);
+        if set_flags {
+            // ARMv7-M A2.3.1 Shift_C: N/Z from the result, C is the last
+            // bit shifted out (unchanged for a zero shift), V unaffected.
+            let carry = if shift == 0 {
+                self.get_carry()
+            } else {
+                match shift_type {
+                    0 if shift < 32 => (value >> (32 - shift)) & 1 == 1,
+                    0 if shift == 32 => value & 1 == 1,
+                    0 => false,
+                    1 if shift <= 32 => (value >> (shift - 1)) & 1 == 1,
+                    1 => false,
+                    2 if shift < 32 => (value >> (shift - 1)) & 1 == 1,
+                    2 => value >> 31 == 1,
+                    3 => value.rotate_right(shift % 32) >> 31 == 1,
+                    _ => false,
+                }
+            };
+            self.update_nzcv(result, carry, self.get_overflow());
+        }
         __pc = PcAdvance::Add4;
         Ok(__pc)
     }

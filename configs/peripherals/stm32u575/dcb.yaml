@@ -1,0 +1,17 @@
+peripheral: DCB
+version: 0.1.0
+registers:
+- id: DSCSR
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CDS
+    bit_range:
+    - 16
+    - 16
+    description: Current domain Secure
+  side_effects: null
+interrupts: null
+timing: null

@@ -81,6 +81,12 @@ boards:
     zephyr_board: nucleo_wba52cg
     family: stm32
 
+  - id: stm32u575
+    chip: stm32u575
+    system: systems/stm32u575.yaml
+    zephyr_board: nucleo_u575zi_q
+    family: stm32
+
   - id: rp2040
     chip: rp2040
     system: systems/rp2040.yaml

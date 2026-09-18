@@ -68,6 +68,7 @@ const PARSE_FALLBACK_CHIPS: &[&str] = &[
     "stm32h735",
     "stm32l073",
     "stm32l476",
+    "stm32u575",
     "stm32wb55",
     "stm32wba52",
 ];

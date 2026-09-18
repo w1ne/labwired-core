@@ -1,0 +1,749 @@
+peripheral: SAI1
+version: 0.1.0
+registers:
+- id: GCR
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNCIN
+    bit_range:
+    - 1
+    - 0
+    description: Synchronization inputs
+  - name: SYNCOUT
+    bit_range:
+    - 5
+    - 4
+    description: Synchronization outputs
+  side_effects: null
+- id: ACR1
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 64
+  fields:
+  - name: MCKEN
+    bit_range:
+    - 27
+    - 27
+    description: MCKEN
+  - name: OSR
+    bit_range:
+    - 26
+    - 26
+    description: OSR
+  - name: MCKDIV
+    bit_range:
+    - 25
+    - 20
+    description: Master clock divider
+  - name: NODIV
+    bit_range:
+    - 19
+    - 19
+    description: No divider
+  - name: DMAEN
+    bit_range:
+    - 17
+    - 17
+    description: DMA enable
+  - name: SAIAEN
+    bit_range:
+    - 16
+    - 16
+    description: Audio block A enable
+  - name: OUTDRIV
+    bit_range:
+    - 13
+    - 13
+    description: Output drive
+  - name: MONO
+    bit_range:
+    - 12
+    - 12
+    description: Mono mode
+  - name: SYNCEN
+    bit_range:
+    - 11
+    - 10
+    description: Synchronization enable
+  - name: CKSTR
+    bit_range:
+    - 9
+    - 9
+    description: Clock strobing edge
+  - name: LSBFIRST
+    bit_range:
+    - 8
+    - 8
+    description: Least significant bit first
+  - name: DS
+    bit_range:
+    - 7
+    - 5
+    description: Data size
+  - name: PRTCFG
+    bit_range:
+    - 3
+    - 2
+    description: Protocol configuration
+  - name: MODE
+    bit_range:
+    - 1
+    - 0
+    description: Audio block mode
+  side_effects: null
+- id: BCR1
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 64
+  fields:
+  - name: MCKEN
+    bit_range:
+    - 27
+    - 27
+    description: MCKEN
+  - name: OSR
+    bit_range:
+    - 26
+    - 26
+    description: OSR
+  - name: MCKDIV
+    bit_range:
+    - 25
+    - 20
+    description: Master clock divider
+  - name: NODIV
+    bit_range:
+    - 19
+    - 19
+    description: No divider
+  - name: DMAEN
+    bit_range:
+    - 17
+    - 17
+    description: DMA enable
+  - name: SAIAEN
+    bit_range:
+    - 16
+    - 16
+    description: Audio block A enable
+  - name: OUTDRIV
+    bit_range:
+    - 13
+    - 13
+    description: Output drive
+  - name: MONO
+    bit_range:
+    - 12
+    - 12
+    description: Mono mode
+  - name: SYNCEN
+    bit_range:
+    - 11
+    - 10
+    description: Synchronization enable
+  - name: CKSTR
+    bit_range:
+    - 9
+    - 9
+    description: Clock strobing edge
+  - name: LSBFIRST
+    bit_range:
+    - 8
+    - 8
+    description: Least significant bit first
+  - name: DS
+    bit_range:
+    - 7
+    - 5
+    description: Data size
+  - name: PRTCFG
+    bit_range:
+    - 3
+    - 2
+    description: Protocol configuration
+  - name: MODE
+    bit_range:
+    - 1
+    - 0
+    description: Audio block mode
+  side_effects: null
+- id: ACR2
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: COMP
+    bit_range:
+    - 15
+    - 14
+    description: Companding mode
+  - name: CPL
+    bit_range:
+    - 13
+    - 13
+    description: Complement bit
+  - name: MUTECN
+    bit_range:
+    - 12
+    - 7
+    description: Mute counter
+  - name: MUTEVAL
+    bit_range:
+    - 6
+    - 6
+    description: Mute value
+  - name: MUTE
+    bit_range:
+    - 5
+    - 5
+    description: Mute
+  - name: TRIS
+    bit_range:
+    - 4
+    - 4
+    description: Tristate management on data line
+  - name: FFLUSH
+    bit_range:
+    - 3
+    - 3
+    description: FIFO flush
+  - name: FTH
+    bit_range:
+    - 2
+    - 0
+    description: FIFO threshold
+  side_effects: null
+- id: BCR2
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: COMP
+    bit_range:
+    - 15
+    - 14
+    description: Companding mode
+  - name: CPL
+    bit_range:
+    - 13
+    - 13
+    description: Complement bit
+  - name: MUTECN
+    bit_range:
+    - 12
+    - 7
+    description: Mute counter
+  - name: MUTEVAL
+    bit_range:
+    - 6
+    - 6
+    description: Mute value
+  - name: MUTE
+    bit_range:
+    - 5
+    - 5
+    description: Mute
+  - name: TRIS
+    bit_range:
+    - 4
+    - 4
+    description: Tristate management on data line
+  - name: FFLUSH
+    bit_range:
+    - 3
+    - 3
+    description: FIFO flush
+  - name: FTH
+    bit_range:
+    - 2
+    - 0
+    description: FIFO threshold
+  side_effects: null
+- id: AFRCR
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 7
+  fields:
+  - name: FSOFF
+    bit_range:
+    - 18
+    - 18
+    description: Frame synchronization offset
+  - name: FSPOL
+    bit_range:
+    - 17
+    - 17
+    description: Frame synchronization polarity
+  - name: FSDEF
+    bit_range:
+    - 16
+    - 16
+    description: Frame synchronization definition
+  - name: FSALL
+    bit_range:
+    - 14
+    - 8
+    description: Frame synchronization active level length
+  - name: FRL
+    bit_range:
+    - 7
+    - 0
+    description: Frame length
+  side_effects: null
+- id: BFRCR
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 7
+  fields:
+  - name: FSOFF
+    bit_range:
+    - 18
+    - 18
+    description: Frame synchronization offset
+  - name: FSPOL
+    bit_range:
+    - 17
+    - 17
+    description: Frame synchronization polarity
+  - name: FSDEF
+    bit_range:
+    - 16
+    - 16
+    description: Frame synchronization definition
+  - name: FSALL
+    bit_range:
+    - 14
+    - 8
+    description: Frame synchronization active level length
+  - name: FRL
+    bit_range:
+    - 7
+    - 0
+    description: Frame length
+  side_effects: null
+- id: ASLOTR
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SLOTEN
+    bit_range:
+    - 31
+    - 16
+    description: Slot enable
+  - name: NBSLOT
+    bit_range:
+    - 11
+    - 8
+    description: Number of slots in an audio frame
+  - name: SLOTSZ
+    bit_range:
+    - 7
+    - 6
+    description: Slot size
+  - name: FBOFF
+    bit_range:
+    - 4
+    - 0
+    description: First bit offset
+  side_effects: null
+- id: BSLOTR
+  address_offset: 48
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SLOTEN
+    bit_range:
+    - 31
+    - 16
+    description: Slot enable
+  - name: NBSLOT
+    bit_range:
+    - 11
+    - 8
+    description: Number of slots in an audio frame
+  - name: SLOTSZ
+    bit_range:
+    - 7
+    - 6
+    description: Slot size
+  - name: FBOFF
+    bit_range:
+    - 4
+    - 0
+    description: First bit offset
+  side_effects: null
+- id: AIM
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LFSDETIE
+    bit_range:
+    - 6
+    - 6
+    description: Late frame synchronization detection interrupt enable
+  - name: AFSDETIE
+    bit_range:
+    - 5
+    - 5
+    description: Anticipated frame synchronization detection interrupt enable
+  - name: CNRDYIE
+    bit_range:
+    - 4
+    - 4
+    description: Codec not ready interrupt enable
+  - name: FREQIE
+    bit_range:
+    - 3
+    - 3
+    description: FIFO request interrupt enable
+  - name: WCKCFGIE
+    bit_range:
+    - 2
+    - 2
+    description: Wrong clock configuration interrupt enable
+  - name: MUTEDETIE
+    bit_range:
+    - 1
+    - 1
+    description: Mute detection interrupt enable
+  - name: OVRUDRIE
+    bit_range:
+    - 0
+    - 0
+    description: Overrun/underrun interrupt enable
+  side_effects: null
+- id: BIM
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LFSDETIE
+    bit_range:
+    - 6
+    - 6
+    description: Late frame synchronization detection interrupt enable
+  - name: AFSDETIE
+    bit_range:
+    - 5
+    - 5
+    description: Anticipated frame synchronization detection interrupt enable
+  - name: CNRDYIE
+    bit_range:
+    - 4
+    - 4
+    description: Codec not ready interrupt enable
+  - name: FREQIE
+    bit_range:
+    - 3
+    - 3
+    description: FIFO request interrupt enable
+  - name: WCKCFGIE
+    bit_range:
+    - 2
+    - 2
+    description: Wrong clock configuration interrupt enable
+  - name: MUTEDETIE
+    bit_range:
+    - 1
+    - 1
+    description: Mute detection interrupt enable
+  - name: OVRUDRIE
+    bit_range:
+    - 0
+    - 0
+    description: Overrun/underrun interrupt enable
+  side_effects: null
+- id: ASR
+  address_offset: 24
+  size: 32
+  access: READ_ONLY
+  reset_value: 8
+  fields:
+  - name: FLVL
+    bit_range:
+    - 18
+    - 16
+    description: FIFO level threshold
+  - name: LFSDET
+    bit_range:
+    - 6
+    - 6
+    description: Late frame synchronization detection
+  - name: AFSDET
+    bit_range:
+    - 5
+    - 5
+    description: Anticipated frame synchronization detection
+  - name: CNRDY
+    bit_range:
+    - 4
+    - 4
+    description: Codec not ready
+  - name: FREQ
+    bit_range:
+    - 3
+    - 3
+    description: FIFO request
+  - name: WCKCFG
+    bit_range:
+    - 2
+    - 2
+    description: Wrong clock configuration flag. This bit is read only
+  - name: MUTEDET
+    bit_range:
+    - 1
+    - 1
+    description: Mute detection
+  - name: OVRUDR
+    bit_range:
+    - 0
+    - 0
+    description: Overrun / underrun
+  side_effects: null
+- id: BSR
+  address_offset: 56
+  size: 32
+  access: READ_ONLY
+  reset_value: 8
+  fields:
+  - name: FLVL
+    bit_range:
+    - 18
+    - 16
+    description: FIFO level threshold
+  - name: LFSDET
+    bit_range:
+    - 6
+    - 6
+    description: Late frame synchronization detection
+  - name: AFSDET
+    bit_range:
+    - 5
+    - 5
+    description: Anticipated frame synchronization detection
+  - name: CNRDY
+    bit_range:
+    - 4
+    - 4
+    description: Codec not ready
+  - name: FREQ
+    bit_range:
+    - 3
+    - 3
+    description: FIFO request
+  - name: WCKCFG
+    bit_range:
+    - 2
+    - 2
+    description: Wrong clock configuration flag
+  - name: MUTEDET
+    bit_range:
+    - 1
+    - 1
+    description: Mute detection
+  - name: OVRUDR
+    bit_range:
+    - 0
+    - 0
+    description: Overrun / underrun
+  side_effects: null
+- id: ACLRFR
+  address_offset: 28
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: CLFSDET
+    bit_range:
+    - 6
+    - 6
+    description: Clear late frame synchronization detection flag
+  - name: CAFSDET
+    bit_range:
+    - 5
+    - 5
+    description: Clear anticipated frame synchronization detection flag
+  - name: CCNRDY
+    bit_range:
+    - 4
+    - 4
+    description: Clear codec not ready flag
+  - name: CWCKCFG
+    bit_range:
+    - 2
+    - 2
+    description: Clear wrong clock configuration flag
+  - name: CMUTEDET
+    bit_range:
+    - 1
+    - 1
+    description: Mute detection flag
+  - name: COVRUDR
+    bit_range:
+    - 0
+    - 0
+    description: Clear overrun / underrun
+  side_effects: null
+- id: BCLRFR
+  address_offset: 60
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: CLFSDET
+    bit_range:
+    - 6
+    - 6
+    description: Clear late frame synchronization detection flag
+  - name: CAFSDET
+    bit_range:
+    - 5
+    - 5
+    description: Clear anticipated frame synchronization detection flag
+  - name: CCNRDY
+    bit_range:
+    - 4
+    - 4
+    description: Clear codec not ready flag
+  - name: CWCKCFG
+    bit_range:
+    - 2
+    - 2
+    description: Clear wrong clock configuration flag
+  - name: CMUTEDET
+    bit_range:
+    - 1
+    - 1
+    description: Mute detection flag
+  - name: COVRUDR
+    bit_range:
+    - 0
+    - 0
+    description: Clear overrun / underrun
+  side_effects: null
+- id: ADR
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DATA
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: BDR
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DATA
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: PDMCR
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PDMEN
+    bit_range:
+    - 0
+    - 0
+    description: PDM enable
+  - name: MICNBR
+    bit_range:
+    - 5
+    - 4
+    description: MICNBR
+  - name: CKEN1
+    bit_range:
+    - 8
+    - 8
+    description: Clock enable of bitstream clock number 1
+  - name: CKEN2
+    bit_range:
+    - 9
+    - 9
+    description: CKEN2
+  - name: CKEN3
+    bit_range:
+    - 10
+    - 10
+    description: CKEN3
+  - name: CKEN4
+    bit_range:
+    - 11
+    - 11
+    description: CKEN4
+  side_effects: null
+- id: PDMDLY
+  address_offset: 72
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DLYM1L
+    bit_range:
+    - 2
+    - 0
+    description: Delay line adjust for first microphone of pair 1
+  - name: DLYM1R
+    bit_range:
+    - 6
+    - 4
+    description: Delay line adjust for second microphone of pair 1
+  - name: DLYM2L
+    bit_range:
+    - 10
+    - 8
+    description: Delay line for first microphone of pair 2
+  - name: DLYM2R
+    bit_range:
+    - 14
+    - 12
+    description: Delay line for second microphone of pair 2
+  - name: DLYM3L
+    bit_range:
+    - 18
+    - 16
+    description: DLYM3L
+  - name: DLYM3R
+    bit_range:
+    - 22
+    - 20
+    description: DLYM3R
+  - name: DLYM4L
+    bit_range:
+    - 26
+    - 24
+    description: DLYM4L
+  - name: DLYM4R
+    bit_range:
+    - 30
+    - 28
+    description: DLYM4R
+  side_effects: null
+interrupts:
+  SAI1: 90
+timing: null

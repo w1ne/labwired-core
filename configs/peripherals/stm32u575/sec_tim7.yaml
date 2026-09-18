@@ -1,0 +1,142 @@
+peripheral: SEC_TIM7
+version: 0.1.0
+registers:
+- id: CR1
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DITHEN
+    bit_range:
+    - 12
+    - 12
+    description: Dithering Enable
+  - name: UIFREMAP
+    bit_range:
+    - 11
+    - 11
+    description: UIF status bit remapping
+  - name: ARPE
+    bit_range:
+    - 7
+    - 7
+    description: Auto-reload preload enable
+  - name: OPM
+    bit_range:
+    - 3
+    - 3
+    description: One-pulse mode
+  - name: URS
+    bit_range:
+    - 2
+    - 2
+    description: Update request source
+  - name: UDIS
+    bit_range:
+    - 1
+    - 1
+    description: Update disable
+  - name: CEN
+    bit_range:
+    - 0
+    - 0
+    description: Counter enable
+  side_effects: null
+- id: CR2
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MMS
+    bit_range:
+    - 6
+    - 4
+    description: Master mode selection
+  side_effects: null
+- id: DIER
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: UDE
+    bit_range:
+    - 8
+    - 8
+    description: UDE
+  - name: UIE
+    bit_range:
+    - 0
+    - 0
+    description: UIE
+  side_effects: null
+- id: SR
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: UIF
+    bit_range:
+    - 0
+    - 0
+    description: UIF
+  side_effects: null
+- id: EGR
+  address_offset: 20
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: UG
+    bit_range:
+    - 0
+    - 0
+    description: UG
+  side_effects: null
+- id: CNT
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: UIFCPY
+    bit_range:
+    - 31
+    - 31
+    description: UIFCPY
+  - name: CNT
+    bit_range:
+    - 15
+    - 0
+    description: CNT
+  side_effects: null
+- id: PSC
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PSC
+    bit_range:
+    - 15
+    - 0
+    description: PSC
+  side_effects: null
+- id: ARR
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 65535
+  fields:
+  - name: ARR
+    bit_range:
+    - 18
+    - 0
+    description: ARR
+  side_effects: null
+interrupts:
+  TIM6: 49
+timing: null

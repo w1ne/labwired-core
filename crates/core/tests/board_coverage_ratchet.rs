@@ -485,6 +485,7 @@ fn every_shipped_descriptor_is_ratcheted() {
         "ra4m1",
         "imxrt1064",
         "stm32f746",
+        "stm32u575", // First U5 part; sim-validated, no bench silicon capture yet
     ];
     // configs/chips id -> ratchet chip id (kw41z ships as mkw41z4.yaml).
     fn to_ratchet_id(stem: &str) -> &str {

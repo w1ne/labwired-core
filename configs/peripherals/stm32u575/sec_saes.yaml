@@ -1,0 +1,381 @@
+peripheral: SEC_SAES
+version: 0.1.0
+registers:
+- id: CR
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IPRST
+    bit_range:
+    - 31
+    - 31
+    description: IPRST
+  - name: KEYSEL
+    bit_range:
+    - 30
+    - 28
+    description: KEYSEL
+  - name: KSHAREID
+    bit_range:
+    - 27
+    - 26
+    description: KSHAREID
+  - name: KMOD
+    bit_range:
+    - 25
+    - 24
+    description: KMOD
+  - name: KEYPROT
+    bit_range:
+    - 19
+    - 19
+    description: KEYPROT
+  - name: KEYSIZE
+    bit_range:
+    - 18
+    - 18
+    description: KEYSIZE
+  - name: DMAOUTEN
+    bit_range:
+    - 12
+    - 12
+    description: DMAOUTEN
+  - name: DMAINEN
+    bit_range:
+    - 11
+    - 11
+    description: DMAINEN
+  - name: CHMOD
+    bit_range:
+    - 6
+    - 5
+    description: CHMOD
+  - name: MODE
+    bit_range:
+    - 4
+    - 3
+    description: MODE
+  - name: DATATYPE
+    bit_range:
+    - 2
+    - 1
+    description: DATATYPE
+  - name: EN
+    bit_range:
+    - 0
+    - 0
+    description: SAES enable
+  side_effects: null
+- id: SR
+  address_offset: 4
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: KEYVALID
+    bit_range:
+    - 7
+    - 7
+    description: Key Valid flag
+  - name: BUSY
+    bit_range:
+    - 3
+    - 3
+    description: BUSY
+  - name: WRERR
+    bit_range:
+    - 2
+    - 2
+    description: Write error flag
+  - name: RDERR
+    bit_range:
+    - 1
+    - 1
+    description: Read error flag
+  - name: CCF
+    bit_range:
+    - 0
+    - 0
+    description: Computation complete flag
+  side_effects: null
+- id: DINR
+  address_offset: 8
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: DIN
+    bit_range:
+    - 31
+    - 0
+    description: Input data word
+  side_effects: null
+- id: DOUTR
+  address_offset: 12
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: DOUT
+    bit_range:
+    - 31
+    - 0
+    description: Output data word
+  side_effects: null
+- id: KEYR0
+  address_offset: 16
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: KEY
+    bit_range:
+    - 31
+    - 0
+    description: Cryptographic key, bits [31:0]
+  side_effects: null
+- id: KEYR1
+  address_offset: 20
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: KEY
+    bit_range:
+    - 31
+    - 0
+    description: Cryptographic key, bits [63:32]
+  side_effects: null
+- id: KEYR2
+  address_offset: 24
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: KEYR
+    bit_range:
+    - 31
+    - 0
+    description: Cryptographic key, bits [95:64]
+  side_effects: null
+- id: KEYR3
+  address_offset: 28
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: SAES_KEYR3
+    bit_range:
+    - 31
+    - 0
+    description: Cryptographic key, bits [127:96]
+  side_effects: null
+- id: IVR0
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IVI
+    bit_range:
+    - 31
+    - 0
+    description: Initialization vector input, bits [31:0]
+  side_effects: null
+- id: IVR1
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IVI
+    bit_range:
+    - 31
+    - 0
+    description: Initialization vector input, bits [63:32]
+  side_effects: null
+- id: IVR2
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IVI
+    bit_range:
+    - 31
+    - 0
+    description: Initialization vector input, bits [95:64]
+  side_effects: null
+- id: IVR3
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IVI
+    bit_range:
+    - 31
+    - 0
+    description: Initialization vector input, bits [127:96]
+  side_effects: null
+- id: KEYR4
+  address_offset: 48
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: KEY
+    bit_range:
+    - 31
+    - 0
+    description: Cryptographic key, bits [159:128]
+  side_effects: null
+- id: KEYR5
+  address_offset: 52
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: KEY
+    bit_range:
+    - 31
+    - 0
+    description: Cryptographic key, bits [191:160]
+  side_effects: null
+- id: KEYR6
+  address_offset: 56
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: KEY
+    bit_range:
+    - 31
+    - 0
+    description: Cryptographic key, bits [223:192]
+  side_effects: null
+- id: KEYR7
+  address_offset: 60
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: KEY
+    bit_range:
+    - 31
+    - 0
+    description: Cryptographic key, bits [255:224]
+  side_effects: null
+- id: DPACFGR
+  address_offset: 256
+  size: 32
+  access: READ_WRITE
+  reset_value: 8
+  fields:
+  - name: CONFIGLOCK
+    bit_range:
+    - 31
+    - 31
+    description: CONFIGLOCK
+  - name: TRIMCFG
+    bit_range:
+    - 4
+    - 3
+    description: TRIMCFG
+  - name: RESEED
+    bit_range:
+    - 2
+    - 2
+    description: RESEED
+  - name: REDCFG
+    bit_range:
+    - 1
+    - 1
+    description: REDCFG
+  side_effects: null
+- id: IER
+  address_offset: 768
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RNGEIE
+    bit_range:
+    - 3
+    - 3
+    description: RNGEIE
+  - name: KEIE
+    bit_range:
+    - 2
+    - 2
+    description: Key error interrupt enable
+  - name: RWEIE
+    bit_range:
+    - 1
+    - 1
+    description: Read or write error interrupt enable
+  - name: CCFIE
+    bit_range:
+    - 0
+    - 0
+    description: Computation complete flag interrupt enable
+  side_effects: null
+- id: ISR
+  address_offset: 772
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: RNGEIF
+    bit_range:
+    - 3
+    - 3
+    description: RNGEIF
+  - name: KEIF
+    bit_range:
+    - 2
+    - 2
+    description: Key error interrupt flag
+  - name: RWEIF
+    bit_range:
+    - 1
+    - 1
+    description: Read or write error interrupt flag
+  - name: CCF
+    bit_range:
+    - 0
+    - 0
+    description: Computation complete flag
+  side_effects: null
+- id: ICR
+  address_offset: 776
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: RNGEIF
+    bit_range:
+    - 3
+    - 3
+    description: RNGEIF
+  - name: KEIF
+    bit_range:
+    - 2
+    - 2
+    description: Key error interrupt flag clear
+  - name: RWEIF
+    bit_range:
+    - 1
+    - 1
+    description: Read or write error interrupt flag clear
+  - name: CCF
+    bit_range:
+    - 0
+    - 0
+    description: Computation complete flag clear
+  side_effects: null
+interrupts:
+  SAES: 28
+timing: null

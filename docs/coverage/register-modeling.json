@@ -8,39 +8,39 @@
     "total": 2606
   },
   "esp32s3": {
-    "modeled": 3334,
+    "modeled": 3340,
     "total": 4283
   },
   "nrf52832": {
-    "modeled": 397,
+    "modeled": 402,
     "total": 1690
   },
   "nrf52840": {
-    "modeled": 968,
+    "modeled": 975,
     "total": 2142
   },
   "rp2040": {
-    "modeled": 677,
+    "modeled": 678,
     "total": 1182
   },
   "stm32f103": {
-    "modeled": 273,
+    "modeled": 275,
     "total": 722
   },
   "stm32f401": {
-    "modeled": 223,
+    "modeled": 224,
     "total": 660
   },
   "stm32f407": {
-    "modeled": 364,
+    "modeled": 451,
     "total": 1540
   },
   "stm32f411ceu6": {
-    "modeled": 273,
+    "modeled": 274,
     "total": 669
   },
   "stm32g474re": {
-    "modeled": 230,
+    "modeled": 241,
     "total": 1585
   },
   "stm32h563": {
@@ -52,15 +52,19 @@
     "total": 524
   },
   "stm32l476": {
-    "modeled": 734,
+    "modeled": 737,
     "total": 1485
   },
+  "stm32u575": {
+    "modeled": 405,
+    "total": 4483
+  },
   "stm32wb55": {
-    "modeled": 204,
+    "modeled": 210,
     "total": 799
   },
   "stm32wba52": {
-    "modeled": 227,
+    "modeled": 238,
     "total": 1713
   }
 }

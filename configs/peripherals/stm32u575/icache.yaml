@@ -1,0 +1,276 @@
+peripheral: ICache
+version: 0.1.0
+registers:
+- id: ICACHE_CR
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 4
+  fields:
+  - name: EN
+    bit_range:
+    - 0
+    - 0
+    description: EN
+  - name: CACHEINV
+    bit_range:
+    - 1
+    - 1
+    description: CACHEINV
+  - name: WAYSEL
+    bit_range:
+    - 2
+    - 2
+    description: WAYSEL
+  - name: HITMEN
+    bit_range:
+    - 16
+    - 16
+    description: HITMEN
+  - name: MISSMEN
+    bit_range:
+    - 17
+    - 17
+    description: MISSMEN
+  - name: HITMRST
+    bit_range:
+    - 18
+    - 18
+    description: HITMRST
+  - name: MISSMRST
+    bit_range:
+    - 19
+    - 19
+    description: MISSMRST
+  side_effects: null
+- id: ICACHE_SR
+  address_offset: 4
+  size: 32
+  access: READ_ONLY
+  reset_value: 1
+  fields:
+  - name: BUSYF
+    bit_range:
+    - 0
+    - 0
+    description: BUSYF
+  - name: BSYENDF
+    bit_range:
+    - 1
+    - 1
+    description: BSYENDF
+  - name: ERRF
+    bit_range:
+    - 2
+    - 2
+    description: ERRF
+  side_effects: null
+- id: ICACHE_IER
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BSYENDIE
+    bit_range:
+    - 1
+    - 1
+    description: BSYENDIE
+  - name: ERRIE
+    bit_range:
+    - 2
+    - 2
+    description: ERRIE
+  side_effects: null
+- id: ICACHE_FCR
+  address_offset: 12
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: CBSYENDF
+    bit_range:
+    - 1
+    - 1
+    description: CBSYENDF
+  - name: CERRF
+    bit_range:
+    - 2
+    - 2
+    description: CERRF
+  side_effects: null
+- id: ICACHE_HMONR
+  address_offset: 16
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: HITMON
+    bit_range:
+    - 31
+    - 0
+    description: HITMON
+  side_effects: null
+- id: ICACHE_MMONR
+  address_offset: 20
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: MISSMON
+    bit_range:
+    - 15
+    - 0
+    description: MISSMON
+  side_effects: null
+- id: ICACHE_CRR0
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 512
+  fields:
+  - name: BASEADDR
+    bit_range:
+    - 7
+    - 0
+    description: BASEADDR
+  - name: RSIZE
+    bit_range:
+    - 11
+    - 9
+    description: RSIZE
+  - name: REN
+    bit_range:
+    - 15
+    - 15
+    description: REN
+  - name: REMAPADDR
+    bit_range:
+    - 26
+    - 16
+    description: REMAPADDR
+  - name: MSTSEL
+    bit_range:
+    - 28
+    - 28
+    description: MSTSEL
+  - name: HBURST
+    bit_range:
+    - 31
+    - 31
+    description: HBURST
+  side_effects: null
+- id: ICACHE_CRR1
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 512
+  fields:
+  - name: BASEADDR
+    bit_range:
+    - 7
+    - 0
+    description: BASEADDR
+  - name: RSIZE
+    bit_range:
+    - 11
+    - 9
+    description: RSIZE
+  - name: REN
+    bit_range:
+    - 15
+    - 15
+    description: REN
+  - name: REMAPADDR
+    bit_range:
+    - 26
+    - 16
+    description: REMAPADDR
+  - name: MSTSEL
+    bit_range:
+    - 28
+    - 28
+    description: MSTSEL
+  - name: HBURST
+    bit_range:
+    - 31
+    - 31
+    description: HBURST
+  side_effects: null
+- id: ICACHE_CRR2
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 512
+  fields:
+  - name: BASEADDR
+    bit_range:
+    - 7
+    - 0
+    description: BASEADDR
+  - name: RSIZE
+    bit_range:
+    - 11
+    - 9
+    description: RSIZE
+  - name: REN
+    bit_range:
+    - 15
+    - 15
+    description: REN
+  - name: REMAPADDR
+    bit_range:
+    - 26
+    - 16
+    description: REMAPADDR
+  - name: MSTSEL
+    bit_range:
+    - 28
+    - 28
+    description: MSTSEL
+  - name: HBURST
+    bit_range:
+    - 31
+    - 31
+    description: HBURST
+  side_effects: null
+- id: ICACHE_CRR3
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 512
+  fields:
+  - name: BASEADDR
+    bit_range:
+    - 7
+    - 0
+    description: BASEADDR
+  - name: RSIZE
+    bit_range:
+    - 11
+    - 9
+    description: RSIZE
+  - name: REN
+    bit_range:
+    - 15
+    - 15
+    description: REN
+  - name: REMAPADDR
+    bit_range:
+    - 26
+    - 16
+    description: REMAPADDR
+  - name: MSTSEL
+    bit_range:
+    - 28
+    - 28
+    description: MSTSEL
+  - name: HBURST
+    bit_range:
+    - 31
+    - 31
+    description: HBURST
+  side_effects: null
+interrupts:
+  ICACHE: 107
+timing: null

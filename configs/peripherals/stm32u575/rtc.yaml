@@ -1,0 +1,962 @@
+peripheral: RTC
+version: 0.1.0
+registers:
+- id: TR
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PM
+    bit_range:
+    - 22
+    - 22
+    description: AM/PM notation
+  - name: HT
+    bit_range:
+    - 21
+    - 20
+    description: Hour tens in BCD format
+  - name: HU
+    bit_range:
+    - 19
+    - 16
+    description: Hour units in BCD format
+  - name: MNT
+    bit_range:
+    - 14
+    - 12
+    description: Minute tens in BCD format
+  - name: MNU
+    bit_range:
+    - 11
+    - 8
+    description: Minute units in BCD format
+  - name: ST
+    bit_range:
+    - 6
+    - 4
+    description: Second tens in BCD format
+  - name: SU
+    bit_range:
+    - 3
+    - 0
+    description: Second units in BCD format
+  side_effects: null
+- id: DR
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 8449
+  fields:
+  - name: YT
+    bit_range:
+    - 23
+    - 20
+    description: Year tens in BCD format
+  - name: YU
+    bit_range:
+    - 19
+    - 16
+    description: Year units in BCD format
+  - name: WDU
+    bit_range:
+    - 15
+    - 13
+    description: Week day units
+  - name: MT
+    bit_range:
+    - 12
+    - 12
+    description: Month tens in BCD format
+  - name: MU
+    bit_range:
+    - 11
+    - 8
+    description: Month units in BCD format
+  - name: DT
+    bit_range:
+    - 5
+    - 4
+    description: Date tens in BCD format
+  - name: DU
+    bit_range:
+    - 3
+    - 0
+    description: Date units in BCD format
+  side_effects: null
+- id: SSR
+  address_offset: 8
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: SS
+    bit_range:
+    - 31
+    - 0
+    description: SS
+  side_effects: null
+- id: ICSR
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 7
+  fields:
+  - name: WUTWF
+    bit_range:
+    - 2
+    - 2
+    description: Wakeup timer write flag
+  - name: SHPF
+    bit_range:
+    - 3
+    - 3
+    description: Shift operation pending
+  - name: INITS
+    bit_range:
+    - 4
+    - 4
+    description: Initialization status flag
+  - name: RSF
+    bit_range:
+    - 5
+    - 5
+    description: Registers synchronization flag
+  - name: INITF
+    bit_range:
+    - 6
+    - 6
+    description: Initialization flag
+  - name: INIT
+    bit_range:
+    - 7
+    - 7
+    description: Initialization mode
+  - name: BIN
+    bit_range:
+    - 9
+    - 8
+    description: BIN
+  - name: BCDU
+    bit_range:
+    - 12
+    - 10
+    description: BCDU
+  - name: RECALPF
+    bit_range:
+    - 16
+    - 16
+    description: Recalibration pending Flag
+  side_effects: null
+- id: PRER
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 8323327
+  fields:
+  - name: PREDIV_A
+    bit_range:
+    - 22
+    - 16
+    description: Asynchronous prescaler factor
+  - name: PREDIV_S
+    bit_range:
+    - 14
+    - 0
+    description: Synchronous prescaler factor
+  side_effects: null
+- id: WUTR
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 65535
+  fields:
+  - name: WUT
+    bit_range:
+    - 15
+    - 0
+    description: Wakeup auto-reload value bits
+  - name: WUTOCLR
+    bit_range:
+    - 31
+    - 16
+    description: WUTOCLR
+  side_effects: null
+- id: CR
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: WUCKSEL
+    bit_range:
+    - 2
+    - 0
+    description: WUCKSEL
+  - name: TSEDGE
+    bit_range:
+    - 3
+    - 3
+    description: TSEDGE
+  - name: REFCKON
+    bit_range:
+    - 4
+    - 4
+    description: REFCKON
+  - name: BYPSHAD
+    bit_range:
+    - 5
+    - 5
+    description: BYPSHAD
+  - name: FMT
+    bit_range:
+    - 6
+    - 6
+    description: FMT
+  - name: SSRUIE
+    bit_range:
+    - 7
+    - 7
+    description: SSRUIE
+  - name: ALRAE
+    bit_range:
+    - 8
+    - 8
+    description: ALRAE
+  - name: ALRBE
+    bit_range:
+    - 9
+    - 9
+    description: ALRBE
+  - name: WUTE
+    bit_range:
+    - 10
+    - 10
+    description: WUTE
+  - name: TSE
+    bit_range:
+    - 11
+    - 11
+    description: TSE
+  - name: ALRAIE
+    bit_range:
+    - 12
+    - 12
+    description: ALRAIE
+  - name: ALRBIE
+    bit_range:
+    - 13
+    - 13
+    description: ALRBIE
+  - name: WUTIE
+    bit_range:
+    - 14
+    - 14
+    description: WUTIE
+  - name: TSIE
+    bit_range:
+    - 15
+    - 15
+    description: TSIE
+  - name: ADD1H
+    bit_range:
+    - 16
+    - 16
+    description: ADD1H
+  - name: SUB1H
+    bit_range:
+    - 17
+    - 17
+    description: SUB1H
+  - name: BKP
+    bit_range:
+    - 18
+    - 18
+    description: BKP
+  - name: COSEL
+    bit_range:
+    - 19
+    - 19
+    description: COSEL
+  - name: POL
+    bit_range:
+    - 20
+    - 20
+    description: POL
+  - name: OSEL
+    bit_range:
+    - 22
+    - 21
+    description: OSEL
+  - name: COE
+    bit_range:
+    - 23
+    - 23
+    description: COE
+  - name: ITSE
+    bit_range:
+    - 24
+    - 24
+    description: ITSE
+  - name: TAMPTS
+    bit_range:
+    - 25
+    - 25
+    description: TAMPTS
+  - name: TAMPOE
+    bit_range:
+    - 26
+    - 26
+    description: TAMPOE
+  - name: ALRAFCLR
+    bit_range:
+    - 27
+    - 27
+    description: ALRAFCLR
+  - name: ALRBFCLR
+    bit_range:
+    - 28
+    - 28
+    description: ALRBFCLR
+  - name: TAMPALRM_PU
+    bit_range:
+    - 29
+    - 29
+    description: TAMPALRM_PU
+  - name: TAMPALRM_TYPE
+    bit_range:
+    - 30
+    - 30
+    description: TAMPALRM_TYPE
+  - name: OUT2EN
+    bit_range:
+    - 31
+    - 31
+    description: OUT2EN
+  side_effects: null
+- id: PRIVCR
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PRIV
+    bit_range:
+    - 15
+    - 15
+    description: PRIV
+  - name: INITPRIV
+    bit_range:
+    - 14
+    - 14
+    description: INITPRIV
+  - name: CALPRIV
+    bit_range:
+    - 13
+    - 13
+    description: CALPRIV
+  - name: TSPRIV
+    bit_range:
+    - 3
+    - 3
+    description: TSPRIV
+  - name: WUTPRIV
+    bit_range:
+    - 2
+    - 2
+    description: WUTPRIV
+  - name: ALRBPRIV
+    bit_range:
+    - 1
+    - 1
+    description: ALRBPRIV
+  - name: ALRAPRIV
+    bit_range:
+    - 0
+    - 0
+    description: ALRAPRIV
+  side_effects: null
+- id: SECCFGR
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SEC
+    bit_range:
+    - 15
+    - 15
+    description: SEC
+  - name: INITSEC
+    bit_range:
+    - 14
+    - 14
+    description: INITSEC
+  - name: CALSEC
+    bit_range:
+    - 13
+    - 13
+    description: CALSEC
+  - name: TSSEC
+    bit_range:
+    - 3
+    - 3
+    description: TSSEC
+  - name: WUTSEC
+    bit_range:
+    - 2
+    - 2
+    description: WUTSEC
+  - name: ALRBSEC
+    bit_range:
+    - 1
+    - 1
+    description: ALRBSEC
+  - name: ALRASEC
+    bit_range:
+    - 0
+    - 0
+    description: ALRASEC
+  side_effects: null
+- id: WPR
+  address_offset: 36
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: KEY
+    bit_range:
+    - 7
+    - 0
+    description: Write protection key
+  side_effects: null
+- id: CALR
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CALP
+    bit_range:
+    - 15
+    - 15
+    description: Increase frequency of RTC by 488.5 ppm
+  - name: CALW8
+    bit_range:
+    - 14
+    - 14
+    description: Use an 8-second calibration cycle period
+  - name: CALW16
+    bit_range:
+    - 13
+    - 13
+    description: Use a 16-second calibration cycle period
+  - name: LPCAL
+    bit_range:
+    - 12
+    - 12
+    description: LPCAL
+  - name: CALM
+    bit_range:
+    - 8
+    - 0
+    description: Calibration minus
+  side_effects: null
+- id: SHIFTR
+  address_offset: 44
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: ADD1S
+    bit_range:
+    - 31
+    - 31
+    description: Add one second
+  - name: SUBFS
+    bit_range:
+    - 14
+    - 0
+    description: Subtract a fraction of a second
+  side_effects: null
+- id: TSTR
+  address_offset: 48
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: SU
+    bit_range:
+    - 3
+    - 0
+    description: Second units in BCD format
+  - name: ST
+    bit_range:
+    - 6
+    - 4
+    description: Second tens in BCD format
+  - name: MNU
+    bit_range:
+    - 11
+    - 8
+    description: Minute units in BCD format
+  - name: MNT
+    bit_range:
+    - 14
+    - 12
+    description: Minute tens in BCD format
+  - name: HU
+    bit_range:
+    - 19
+    - 16
+    description: Hour units in BCD format
+  - name: HT
+    bit_range:
+    - 21
+    - 20
+    description: Hour tens in BCD format
+  - name: PM
+    bit_range:
+    - 22
+    - 22
+    description: AM/PM notation
+  side_effects: null
+- id: TSDR
+  address_offset: 52
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: WDU
+    bit_range:
+    - 15
+    - 13
+    description: Week day units
+  - name: MT
+    bit_range:
+    - 12
+    - 12
+    description: Month tens in BCD format
+  - name: MU
+    bit_range:
+    - 11
+    - 8
+    description: Month units in BCD format
+  - name: DT
+    bit_range:
+    - 5
+    - 4
+    description: Date tens in BCD format
+  - name: DU
+    bit_range:
+    - 3
+    - 0
+    description: Date units in BCD format
+  side_effects: null
+- id: TSSSR
+  address_offset: 56
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: SS
+    bit_range:
+    - 31
+    - 0
+    description: Sub second value
+  side_effects: null
+- id: ALRMAR
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MSK4
+    bit_range:
+    - 31
+    - 31
+    description: Alarm A date mask
+  - name: WDSEL
+    bit_range:
+    - 30
+    - 30
+    description: Week day selection
+  - name: DT
+    bit_range:
+    - 29
+    - 28
+    description: Date tens in BCD format
+  - name: DU
+    bit_range:
+    - 27
+    - 24
+    description: Date units or day in BCD format
+  - name: MSK3
+    bit_range:
+    - 23
+    - 23
+    description: Alarm A hours mask
+  - name: PM
+    bit_range:
+    - 22
+    - 22
+    description: AM/PM notation
+  - name: HT
+    bit_range:
+    - 21
+    - 20
+    description: Hour tens in BCD format
+  - name: HU
+    bit_range:
+    - 19
+    - 16
+    description: Hour units in BCD format
+  - name: MSK2
+    bit_range:
+    - 15
+    - 15
+    description: Alarm A minutes mask
+  - name: MNT
+    bit_range:
+    - 14
+    - 12
+    description: Minute tens in BCD format
+  - name: MNU
+    bit_range:
+    - 11
+    - 8
+    description: Minute units in BCD format
+  - name: MSK1
+    bit_range:
+    - 7
+    - 7
+    description: Alarm A seconds mask
+  - name: ST
+    bit_range:
+    - 6
+    - 4
+    description: Second tens in BCD format
+  - name: SU
+    bit_range:
+    - 3
+    - 0
+    description: Second units in BCD format
+  side_effects: null
+- id: ALRMASSR
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SSCLR
+    bit_range:
+    - 31
+    - 31
+    description: SSCLR
+  - name: MASKSS
+    bit_range:
+    - 29
+    - 24
+    description: Mask the most-significant bits starting at this bit
+  - name: SS
+    bit_range:
+    - 14
+    - 0
+    description: Sub seconds value
+  side_effects: null
+- id: ALRMBR
+  address_offset: 72
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MSK4
+    bit_range:
+    - 31
+    - 31
+    description: Alarm B date mask
+  - name: WDSEL
+    bit_range:
+    - 30
+    - 30
+    description: Week day selection
+  - name: DT
+    bit_range:
+    - 29
+    - 28
+    description: Date tens in BCD format
+  - name: DU
+    bit_range:
+    - 27
+    - 24
+    description: Date units or day in BCD format
+  - name: MSK3
+    bit_range:
+    - 23
+    - 23
+    description: Alarm B hours mask
+  - name: PM
+    bit_range:
+    - 22
+    - 22
+    description: AM/PM notation
+  - name: HT
+    bit_range:
+    - 21
+    - 20
+    description: Hour tens in BCD format
+  - name: HU
+    bit_range:
+    - 19
+    - 16
+    description: Hour units in BCD format
+  - name: MSK2
+    bit_range:
+    - 15
+    - 15
+    description: Alarm B minutes mask
+  - name: MNT
+    bit_range:
+    - 14
+    - 12
+    description: Minute tens in BCD format
+  - name: MNU
+    bit_range:
+    - 11
+    - 8
+    description: Minute units in BCD format
+  - name: MSK1
+    bit_range:
+    - 7
+    - 7
+    description: Alarm B seconds mask
+  - name: ST
+    bit_range:
+    - 6
+    - 4
+    description: Second tens in BCD format
+  - name: SU
+    bit_range:
+    - 3
+    - 0
+    description: Second units in BCD format
+  side_effects: null
+- id: ALRMBSSR
+  address_offset: 76
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SSCLR
+    bit_range:
+    - 31
+    - 31
+    description: SSCLR
+  - name: MASKSS
+    bit_range:
+    - 29
+    - 24
+    description: Mask the most-significant bits starting at this bit
+  - name: SS
+    bit_range:
+    - 14
+    - 0
+    description: Sub seconds value
+  side_effects: null
+- id: SR
+  address_offset: 80
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: ALRAF
+    bit_range:
+    - 0
+    - 0
+    description: ALRAF
+  - name: ALRBF
+    bit_range:
+    - 1
+    - 1
+    description: ALRBF
+  - name: WUTF
+    bit_range:
+    - 2
+    - 2
+    description: WUTF
+  - name: TSF
+    bit_range:
+    - 3
+    - 3
+    description: TSF
+  - name: TSOVF
+    bit_range:
+    - 4
+    - 4
+    description: TSOVF
+  - name: ITSF
+    bit_range:
+    - 5
+    - 5
+    description: ITSF
+  - name: SSRUF
+    bit_range:
+    - 6
+    - 6
+    description: SSRUF
+  side_effects: null
+- id: MISR
+  address_offset: 84
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: ALRAMF
+    bit_range:
+    - 0
+    - 0
+    description: ALRAMF
+  - name: ALRBMF
+    bit_range:
+    - 1
+    - 1
+    description: ALRBMF
+  - name: WUTMF
+    bit_range:
+    - 2
+    - 2
+    description: WUTMF
+  - name: TSMF
+    bit_range:
+    - 3
+    - 3
+    description: TSMF
+  - name: TSOVMF
+    bit_range:
+    - 4
+    - 4
+    description: TSOVMF
+  - name: ITSMF
+    bit_range:
+    - 5
+    - 5
+    description: ITSMF
+  - name: SSRUMF
+    bit_range:
+    - 6
+    - 6
+    description: SSRUMF
+  side_effects: null
+- id: SMISR
+  address_offset: 88
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: ALRAMF
+    bit_range:
+    - 0
+    - 0
+    description: ALRAMF
+  - name: ALRBMF
+    bit_range:
+    - 1
+    - 1
+    description: ALRBMF
+  - name: WUTMF
+    bit_range:
+    - 2
+    - 2
+    description: WUTMF
+  - name: TSMF
+    bit_range:
+    - 3
+    - 3
+    description: TSMF
+  - name: TSOVMF
+    bit_range:
+    - 4
+    - 4
+    description: TSOVMF
+  - name: ITSMF
+    bit_range:
+    - 5
+    - 5
+    description: ITSMF
+  - name: SSRUMF
+    bit_range:
+    - 6
+    - 6
+    description: SSRUMF
+  side_effects: null
+- id: SCR
+  address_offset: 92
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: CALRAF
+    bit_range:
+    - 0
+    - 0
+    description: CALRAF
+  - name: CALRBF
+    bit_range:
+    - 1
+    - 1
+    description: CALRBF
+  - name: CWUTF
+    bit_range:
+    - 2
+    - 2
+    description: CWUTF
+  - name: CTSF
+    bit_range:
+    - 3
+    - 3
+    description: CTSF
+  - name: CTSOVF
+    bit_range:
+    - 4
+    - 4
+    description: CTSOVF
+  - name: CITSF
+    bit_range:
+    - 5
+    - 5
+    description: CITSF
+  - name: CSSRUF
+    bit_range:
+    - 6
+    - 6
+    description: CSSRUF
+  side_effects: null
+- id: ALRABINR
+  address_offset: 112
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SS
+    bit_range:
+    - 31
+    - 0
+    description: Synchronous counter alarm value in Binary mode
+  side_effects: null
+- id: ALRBBINR
+  address_offset: 116
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SS
+    bit_range:
+    - 31
+    - 0
+    description: Synchronous counter alarm value in Binary mode
+  side_effects: null
+interrupts:
+  RTC: 2
+  RTC_S: 3
+timing: null

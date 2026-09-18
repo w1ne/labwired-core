@@ -1,0 +1,1124 @@
+peripheral: GTZC1_TZIC
+version: 0.1.0
+registers:
+- id: IER1
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIM2IE
+    bit_range:
+    - 0
+    - 0
+    description: TIM2IE
+  - name: TIM3IE
+    bit_range:
+    - 1
+    - 1
+    description: TIM3IE
+  - name: TIM4IE
+    bit_range:
+    - 2
+    - 2
+    description: TIM4IE
+  - name: TIM5IE
+    bit_range:
+    - 3
+    - 3
+    description: TIM5IE
+  - name: TIM6IE
+    bit_range:
+    - 4
+    - 4
+    description: TIM6IE
+  - name: TIM7IE
+    bit_range:
+    - 5
+    - 5
+    description: TIM7IE
+  - name: WWDGIE
+    bit_range:
+    - 6
+    - 6
+    description: WWDGIE
+  - name: IWDGIE
+    bit_range:
+    - 7
+    - 7
+    description: IWDGIE
+  - name: SPI2IE
+    bit_range:
+    - 8
+    - 8
+    description: SPI2IE
+  - name: USART2IE
+    bit_range:
+    - 9
+    - 9
+    description: illegal access interrupt enable for USART2
+  - name: USART3IE
+    bit_range:
+    - 10
+    - 10
+    description: illegal access interrupt enable for USART3
+  - name: USART4IE
+    bit_range:
+    - 11
+    - 11
+    description: illegal access interrupt enable for UART4
+  - name: UART5IE
+    bit_range:
+    - 12
+    - 12
+    description: illegal access interrupt enable for UART5
+  - name: I2C1IE
+    bit_range:
+    - 13
+    - 13
+    description: illegal access interrupt enable for I2C1
+  - name: I2C2IE
+    bit_range:
+    - 14
+    - 14
+    description: illegal access interrupt enable for I2C2
+  - name: CRSIE
+    bit_range:
+    - 15
+    - 15
+    description: illegal access interrupt enable for CRS
+  - name: I2C4IE
+    bit_range:
+    - 16
+    - 16
+    description: illegal access interrupt enable for I2C4
+  - name: LPTIM2IE
+    bit_range:
+    - 17
+    - 17
+    description: illegal access interrupt enable for LPTIM2
+  - name: FDCAN1IE
+    bit_range:
+    - 18
+    - 18
+    description: illegal access interrupt enable for FDCAN1
+  - name: UCPD1IE
+    bit_range:
+    - 19
+    - 19
+    description: illegal access interrupt enable for UCPD1
+  side_effects: null
+- id: IER2
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIM1IE
+    bit_range:
+    - 0
+    - 0
+    description: illegal access interrupt enable for TIM1
+  - name: SPI1IE
+    bit_range:
+    - 1
+    - 1
+    description: illegal access interrupt enable for SPI1
+  - name: TIM8IE
+    bit_range:
+    - 2
+    - 2
+    description: illegal access interrupt enable for TIM8
+  - name: USART1IE
+    bit_range:
+    - 3
+    - 3
+    description: illegal access interrupt enable for USART1
+  - name: TIM15IE
+    bit_range:
+    - 4
+    - 4
+    description: illegal access interrupt enable for TIM5
+  - name: TIM16IE
+    bit_range:
+    - 5
+    - 5
+    description: illegal access interrupt enable for TIM6
+  - name: TIM17IE
+    bit_range:
+    - 6
+    - 6
+    description: illegal access interrupt enable for TIM7
+  - name: SAI1IE
+    bit_range:
+    - 7
+    - 7
+    description: illegal access interrupt enable for SAI1
+  - name: SAI2IE
+    bit_range:
+    - 8
+    - 8
+    description: illegal access interrupt enable for SAI2
+  side_effects: null
+- id: IER3
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MDF1IE
+    bit_range:
+    - 0
+    - 0
+    description: illegal access interrupt enable for MDF1
+  - name: CORDICIE
+    bit_range:
+    - 1
+    - 1
+    description: illegal access interrupt enable for CORDIC
+  - name: FMACIE
+    bit_range:
+    - 2
+    - 2
+    description: illegal access interrupt enable for FMAC
+  - name: CRCIE
+    bit_range:
+    - 3
+    - 3
+    description: illegal access interrupt enable for CRC
+  - name: TSCIE
+    bit_range:
+    - 4
+    - 4
+    description: illegal access interrupt enable for TSC
+  - name: DMA2DIE
+    bit_range:
+    - 5
+    - 5
+    description: illegal access interrupt enable for register of DMA2D
+  - name: ICACHEIE
+    bit_range:
+    - 6
+    - 6
+    description: illegal access interrupt enable for ICACHE registers
+  - name: DCACHEIE
+    bit_range:
+    - 7
+    - 7
+    description: illegal access interrupt enable for DCACHE registers
+  - name: ADC1IE
+    bit_range:
+    - 8
+    - 8
+    description: illegal access interrupt enable for ADC1
+  - name: DCMIIE
+    bit_range:
+    - 9
+    - 9
+    description: illegal access interrupt enable for DCMI
+  - name: OTGFSIE
+    bit_range:
+    - 10
+    - 10
+    description: illegal access interrupt enable for OTG_FS
+  - name: AESIE
+    bit_range:
+    - 11
+    - 11
+    description: illegal access interrupt enable for AES
+  - name: HASHIE
+    bit_range:
+    - 12
+    - 12
+    description: illegal access interrupt enable for HASH
+  - name: RNGIE
+    bit_range:
+    - 13
+    - 13
+    description: illegal access interrupt enable for RNG
+  - name: PKAIE
+    bit_range:
+    - 14
+    - 14
+    description: illegal access interrupt enable for PKA
+  - name: SAESIE
+    bit_range:
+    - 15
+    - 15
+    description: illegal access interrupt enable for SAES
+  - name: OCTOSPIMIE
+    bit_range:
+    - 16
+    - 16
+    description: illegal access interrupt enable for OCTOSPIM
+  - name: SDMMC1IE
+    bit_range:
+    - 17
+    - 17
+    description: illegal access interrupt enable for SDMMC2
+  - name: SDMMC2IE
+    bit_range:
+    - 18
+    - 18
+    description: illegal access interrupt enable for SDMMC1
+  - name: FSMCIE
+    bit_range:
+    - 19
+    - 19
+    description: illegal access interrupt enable for FSMC registers
+  - name: OCTOSPI1IE
+    bit_range:
+    - 20
+    - 20
+    description: illegal access interrupt enable for OCTOSPI1 registers
+  - name: OCTOSPI2IE
+    bit_range:
+    - 21
+    - 21
+    description: illegal access interrupt enable for OCTOSPI2 registers
+  - name: RAMCFGIE
+    bit_range:
+    - 22
+    - 22
+    description: illegal access interrupt enable for RAMCFG
+  side_effects: null
+- id: IER4
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPDMA1IE
+    bit_range:
+    - 0
+    - 0
+    description: illegal access interrupt enable for GPDMA1
+  - name: FLASH_REGIE
+    bit_range:
+    - 1
+    - 1
+    description: illegal access interrupt enable for FLASH registers
+  - name: FLASHIE
+    bit_range:
+    - 2
+    - 2
+    description: illegal access interrupt enable for FLASH memory
+  - name: OTFDEC1IE
+    bit_range:
+    - 3
+    - 3
+    description: illegal access interrupt enable for OTFDEC1
+  - name: OTFDEC2IE
+    bit_range:
+    - 4
+    - 4
+    description: illegal access interrupt enable for OTFDEC2
+  - name: TZSC1IE
+    bit_range:
+    - 14
+    - 14
+    description: illegal access interrupt enable for GTZC1 TZSC registers
+  - name: TZIC1IE
+    bit_range:
+    - 15
+    - 15
+    description: illegal access interrupt enable for GTZC1 TZIC registers
+  - name: OCTOSPI1_MEMIE
+    bit_range:
+    - 16
+    - 16
+    description: illegal access interrupt enable for MPCWM1 (OCTOSPI1) memory bank
+  - name: FSMC_MEMIE
+    bit_range:
+    - 17
+    - 17
+    description: illegal access interrupt enable for MPCWM2 (FSMC NAND) and MPCWM3
+  - name: BKPSRAMIE
+    bit_range:
+    - 18
+    - 18
+    description: illegal access interrupt enable for MPCWM3 (BKPSRAM) memory bank
+  - name: OCTOSPI2_MEMIE
+    bit_range:
+    - 19
+    - 19
+    description: illegal access interrupt enable for OCTOSPI2 memory bank
+  - name: SRAM1IE
+    bit_range:
+    - 24
+    - 24
+    description: illegal access interrupt enable for SRAM1
+  - name: MPCBB1_REGIE
+    bit_range:
+    - 25
+    - 25
+    description: illegal access interrupt enable for MPCBB1 registers
+  - name: SRAM2IE
+    bit_range:
+    - 26
+    - 26
+    description: illegal access interrupt enable for SRAM2
+  - name: MPCBB2_REGIE
+    bit_range:
+    - 27
+    - 27
+    description: illegal access interrupt enable for MPCBB2 registers
+  - name: SRAM3IE
+    bit_range:
+    - 28
+    - 28
+    description: illegal access interrupt enable for SRAM3
+  - name: MPCBB3_REGIE
+    bit_range:
+    - 29
+    - 29
+    description: illegal access interrupt enable for MPCBB3 registers
+  side_effects: null
+- id: SR1
+  address_offset: 16
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: TIM2F
+    bit_range:
+    - 0
+    - 0
+    description: illegal access flag for TIM2
+  - name: TIM3F
+    bit_range:
+    - 1
+    - 1
+    description: illegal access flag for TIM3
+  - name: TIM4F
+    bit_range:
+    - 2
+    - 2
+    description: illegal access flag for TIM4
+  - name: TIM5F
+    bit_range:
+    - 3
+    - 3
+    description: illegal access flag for TIM5
+  - name: TIM6F
+    bit_range:
+    - 4
+    - 4
+    description: illegal access flag for TIM6
+  - name: TIM7F
+    bit_range:
+    - 5
+    - 5
+    description: illegal access flag for TIM7
+  - name: WWDGF
+    bit_range:
+    - 6
+    - 6
+    description: illegal access flag for WWDG
+  - name: IWDGF
+    bit_range:
+    - 7
+    - 7
+    description: illegal access flag for IWDG
+  - name: SPI2F
+    bit_range:
+    - 8
+    - 8
+    description: illegal access flag for SPI2
+  - name: USART2F
+    bit_range:
+    - 9
+    - 9
+    description: illegal access flag for USART2
+  - name: USART3F
+    bit_range:
+    - 10
+    - 10
+    description: illegal access flag for USART3
+  - name: UART4F
+    bit_range:
+    - 11
+    - 11
+    description: illegal access flag for UART4
+  - name: UART5F
+    bit_range:
+    - 12
+    - 12
+    description: illegal access flag for UART5
+  - name: I2C1F
+    bit_range:
+    - 13
+    - 13
+    description: illegal access flag for I2C1
+  - name: I2C2F
+    bit_range:
+    - 14
+    - 14
+    description: illegal access flag for I2C2
+  - name: CRSF
+    bit_range:
+    - 15
+    - 15
+    description: illegal access flag for CRS
+  - name: I2C4F
+    bit_range:
+    - 16
+    - 16
+    description: illegal access flag for I2C4
+  - name: LPTIM2F
+    bit_range:
+    - 17
+    - 17
+    description: illegal access flag for LPTIM2
+  - name: FDCAN1F
+    bit_range:
+    - 18
+    - 18
+    description: illegal access flag for FDCAN1
+  - name: UCPD1F
+    bit_range:
+    - 19
+    - 19
+    description: illegal access flag for UCPD1
+  side_effects: null
+- id: SR2
+  address_offset: 20
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: TIM1F
+    bit_range:
+    - 0
+    - 0
+    description: illegal access flag for TIM1
+  - name: SPI1F
+    bit_range:
+    - 1
+    - 1
+    description: illegal access flag for SPI1
+  - name: TIM8F
+    bit_range:
+    - 2
+    - 2
+    description: illegal access flag for TIM8
+  - name: USART1F
+    bit_range:
+    - 3
+    - 3
+    description: illegal access flag for USART1
+  - name: TIM15F
+    bit_range:
+    - 4
+    - 4
+    description: illegal access flag for TIM5
+  - name: TIM16F
+    bit_range:
+    - 5
+    - 5
+    description: illegal access flag for TIM6
+  - name: TIM17F
+    bit_range:
+    - 6
+    - 6
+    description: illegal access flag for TIM7
+  - name: SAI1F
+    bit_range:
+    - 7
+    - 7
+    description: illegal access flag for SAI1
+  - name: SAI2F
+    bit_range:
+    - 8
+    - 8
+    description: illegal access flag for SAI2
+  side_effects: null
+- id: SR3
+  address_offset: 24
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: MDF1F
+    bit_range:
+    - 0
+    - 0
+    description: illegal access flag for MDF1
+  - name: CORDICF
+    bit_range:
+    - 1
+    - 1
+    description: illegal access flag for CORDIC
+  - name: FMACF
+    bit_range:
+    - 2
+    - 2
+    description: illegal access flag for FMAC
+  - name: CRCF
+    bit_range:
+    - 3
+    - 3
+    description: illegal access flag for CRC
+  - name: TSCF
+    bit_range:
+    - 4
+    - 4
+    description: illegal access flag for TSC
+  - name: DMA2DF
+    bit_range:
+    - 5
+    - 5
+    description: illegal access flag for register of DMA2D
+  - name: ICACHEF
+    bit_range:
+    - 6
+    - 6
+    description: illegal access flag for ICACHE registers
+  - name: DCACHEF
+    bit_range:
+    - 7
+    - 7
+    description: illegal access flag for DCACHE registers
+  - name: ADC1F
+    bit_range:
+    - 8
+    - 8
+    description: illegal access flag for ADC1
+  - name: DCMIF
+    bit_range:
+    - 9
+    - 9
+    description: illegal access flag for DCMI
+  - name: OTGFSF
+    bit_range:
+    - 10
+    - 10
+    description: illegal access flag for OTG_FS
+  - name: AESF
+    bit_range:
+    - 11
+    - 11
+    description: illegal access flag for AES
+  - name: HASHF
+    bit_range:
+    - 12
+    - 12
+    description: illegal access flag for HASH
+  - name: RNGF
+    bit_range:
+    - 13
+    - 13
+    description: illegal access flag for RNG
+  - name: PKAF
+    bit_range:
+    - 14
+    - 14
+    description: illegal access flag for PKA
+  - name: SAESF
+    bit_range:
+    - 15
+    - 15
+    description: illegal access flag for SAES
+  - name: OCTOSPIMF
+    bit_range:
+    - 16
+    - 16
+    description: illegal access flag for OCTOSPIM
+  - name: SDMMC1F
+    bit_range:
+    - 17
+    - 17
+    description: illegal access flag for SDMMC2
+  - name: SDMMC2F
+    bit_range:
+    - 18
+    - 18
+    description: illegal access flag for SDMMC1
+  - name: FSMCF
+    bit_range:
+    - 19
+    - 19
+    description: illegal access flag for FSMC registers
+  - name: OCTOSPI1F
+    bit_range:
+    - 20
+    - 20
+    description: illegal access flag for OCTOSPI1 registers
+  - name: OCTOSPI2F
+    bit_range:
+    - 21
+    - 21
+    description: illegal access flag for OCTOSPI2 registers
+  - name: RAMCFGF
+    bit_range:
+    - 22
+    - 22
+    description: illegal access flag for RAMCFG
+  side_effects: null
+- id: SR4
+  address_offset: 28
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: GPDMA1F
+    bit_range:
+    - 0
+    - 0
+    description: illegal access flag for GPDMA1
+  - name: FLASH_REGF
+    bit_range:
+    - 1
+    - 1
+    description: illegal access flag for FLASH registers
+  - name: FLASHF
+    bit_range:
+    - 2
+    - 2
+    description: illegal access flag for FLASH memory
+  - name: OTFDEC1F
+    bit_range:
+    - 3
+    - 3
+    description: illegal access flag for OTFDEC1
+  - name: OTFDEC2F
+    bit_range:
+    - 4
+    - 4
+    description: illegal access flag for OTFDEC2
+  - name: TZSC1F
+    bit_range:
+    - 14
+    - 14
+    description: illegal access flag for GTZC1 TZSC registers
+  - name: TZIC1F
+    bit_range:
+    - 15
+    - 15
+    description: illegal access flag for GTZC1 TZIC registers
+  - name: OCTOSPI1_MEMF
+    bit_range:
+    - 16
+    - 16
+    description: illegal access flag for MPCWM1 (OCTOSPI1) memory bank
+  - name: FSMC_MEMF
+    bit_range:
+    - 17
+    - 17
+    description: illegal access flag for MPCWM2 (FSMC NAND) and MPCWM3 (FSMC NOR)
+  - name: BKPSRAMF
+    bit_range:
+    - 18
+    - 18
+    description: illegal access flag for MPCWM3 (BKPSRAM) memory bank
+  - name: OCTOSPI2_MEMF
+    bit_range:
+    - 19
+    - 19
+    description: illegal access flag for OCTOSPI2 memory bank
+  - name: SRAM1F
+    bit_range:
+    - 24
+    - 24
+    description: illegal access flag for SRAM1
+  - name: MPCBB1_REGF
+    bit_range:
+    - 25
+    - 25
+    description: illegal access flag for MPCBB1 registers
+  - name: SRAM2F
+    bit_range:
+    - 26
+    - 26
+    description: illegal access flag for SRAM2
+  - name: MPCBB2_REGF
+    bit_range:
+    - 27
+    - 27
+    description: illegal access flag for MPCBB2 registers
+  - name: SRAM3F
+    bit_range:
+    - 28
+    - 28
+    description: illegal access flag for SRAM3
+  - name: MPCBB3_REGF
+    bit_range:
+    - 29
+    - 29
+    description: illegal access flag for MPCBB3 registers
+  side_effects: null
+- id: FCR1
+  address_offset: 32
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: CTIM2F
+    bit_range:
+    - 0
+    - 0
+    description: clear the illegal access flag for TIM2
+  - name: CTIM3F
+    bit_range:
+    - 1
+    - 1
+    description: clear the illegal access flag for TIM3
+  - name: CTIM4F
+    bit_range:
+    - 2
+    - 2
+    description: clear the illegal access flag for TIM4
+  - name: CTIM5F
+    bit_range:
+    - 3
+    - 3
+    description: clear the illegal access flag for TIM5
+  - name: CTIM6F
+    bit_range:
+    - 4
+    - 4
+    description: clear the illegal access flag for TIM6
+  - name: CTIM7F
+    bit_range:
+    - 5
+    - 5
+    description: clear the illegal access flag for TIM7
+  - name: CWWDGF
+    bit_range:
+    - 6
+    - 6
+    description: clear the illegal access flag for WWDG
+  - name: CIWDGF
+    bit_range:
+    - 7
+    - 7
+    description: clear the illegal access flag for IWDG
+  - name: CSPI2F
+    bit_range:
+    - 8
+    - 8
+    description: clear the illegal access flag for SPI2
+  - name: CUSART2F
+    bit_range:
+    - 9
+    - 9
+    description: clear the illegal access flag for USART2
+  - name: CUSART3F
+    bit_range:
+    - 10
+    - 10
+    description: clear the illegal access flag for USART3
+  - name: CUART4F
+    bit_range:
+    - 11
+    - 11
+    description: clear the illegal access flag for UART4
+  - name: CUART5F
+    bit_range:
+    - 12
+    - 12
+    description: clear the illegal access flag for UART5
+  - name: CI2C1F
+    bit_range:
+    - 13
+    - 13
+    description: clear the illegal access flag for I2C1
+  - name: CI2C2F
+    bit_range:
+    - 14
+    - 14
+    description: clear the illegal access flag for I2C2
+  - name: CCRSF
+    bit_range:
+    - 15
+    - 15
+    description: clear the illegal access flag for CRS
+  - name: CI2C4F
+    bit_range:
+    - 16
+    - 16
+    description: clear the illegal access flag for I2C4
+  - name: CLPTIM2F
+    bit_range:
+    - 17
+    - 17
+    description: clear the illegal access flag for LPTIM2
+  - name: CFDCAN1F
+    bit_range:
+    - 18
+    - 18
+    description: clear the illegal access flag for FDCAN1
+  - name: CUCPD1F
+    bit_range:
+    - 19
+    - 19
+    description: clear the illegal access flag for UCPD1
+  side_effects: null
+- id: FCR2
+  address_offset: 36
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: CTIM1F
+    bit_range:
+    - 0
+    - 0
+    description: clear the illegal access flag for TIM1
+  - name: CSPI1F
+    bit_range:
+    - 1
+    - 1
+    description: clear the illegal access flag for SPI1
+  - name: CTIM8F
+    bit_range:
+    - 2
+    - 2
+    description: clear the illegal access flag for TIM8
+  - name: CUSART1F
+    bit_range:
+    - 3
+    - 3
+    description: clear the illegal access flag for USART1
+  - name: CTIM15F
+    bit_range:
+    - 4
+    - 4
+    description: clear the illegal access flag for TIM5
+  - name: CTIM16F
+    bit_range:
+    - 5
+    - 5
+    description: clear the illegal access flag for TIM6
+  - name: CTIM17F
+    bit_range:
+    - 6
+    - 6
+    description: clear the illegal access flag for TIM7
+  - name: CSAI1F
+    bit_range:
+    - 7
+    - 7
+    description: clear the illegal access flag for SAI1
+  - name: CSAI2F
+    bit_range:
+    - 8
+    - 8
+    description: clear the illegal access flag for SAI2
+  side_effects: null
+- id: FCR3
+  address_offset: 40
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: CMDF1F
+    bit_range:
+    - 0
+    - 0
+    description: clear the illegal access flag for MDF1
+  - name: CCORDICF
+    bit_range:
+    - 1
+    - 1
+    description: clear the illegal access flag for CORDIC
+  - name: CFMACF
+    bit_range:
+    - 2
+    - 2
+    description: clear the illegal access flag for FMAC
+  - name: CCRCF
+    bit_range:
+    - 3
+    - 3
+    description: clear the illegal access flag for CRC
+  - name: CTSCF
+    bit_range:
+    - 4
+    - 4
+    description: clear the illegal access flag for TSC
+  - name: CDMA2DF
+    bit_range:
+    - 5
+    - 5
+    description: clear the illegal access flag for register of DMA2D
+  - name: CICACHEF
+    bit_range:
+    - 6
+    - 6
+    description: clear the illegal access flag for ICACHE registers
+  - name: CDCACHEF
+    bit_range:
+    - 7
+    - 7
+    description: clear the illegal access flag for DCACHE registers
+  - name: CADC1F
+    bit_range:
+    - 8
+    - 8
+    description: clear the illegal access flag for ADC1
+  - name: CDCMIF
+    bit_range:
+    - 9
+    - 9
+    description: clear the illegal access flag for DCMI
+  - name: COTGFSF
+    bit_range:
+    - 10
+    - 10
+    description: clear the illegal access flag for OTG_FS
+  - name: CAESF
+    bit_range:
+    - 11
+    - 11
+    description: clear the illegal access flag for AES
+  - name: CHASHF
+    bit_range:
+    - 12
+    - 12
+    description: clear the illegal access flag for HASH
+  - name: CRNGF
+    bit_range:
+    - 13
+    - 13
+    description: clear the illegal access flag for RNG
+  - name: CPKAF
+    bit_range:
+    - 14
+    - 14
+    description: clear the illegal access flag for PKA
+  - name: CSAESF
+    bit_range:
+    - 15
+    - 15
+    description: clear the illegal access flag for SAES
+  - name: COCTOSPIMF
+    bit_range:
+    - 16
+    - 16
+    description: clear the illegal access flag for OCTOSPIM
+  - name: CSDMMC1F
+    bit_range:
+    - 17
+    - 17
+    description: clear the illegal access flag for SDMMC2
+  - name: CSDMMC2F
+    bit_range:
+    - 18
+    - 18
+    description: clear the illegal access flag for SDMMC1
+  - name: CFSMCF
+    bit_range:
+    - 19
+    - 19
+    description: clear the illegal access flag for FSMC registers
+  - name: COCTOSPI1F
+    bit_range:
+    - 20
+    - 20
+    description: clear the illegal access flag for OCTOSPI1 registers
+  - name: COCTOSPI2F
+    bit_range:
+    - 21
+    - 21
+    description: clear the illegal access flag for OCTOSPI2 registers
+  - name: CRAMCFGF
+    bit_range:
+    - 22
+    - 22
+    description: clear the illegal access flag for RAMCFG
+  side_effects: null
+- id: FCR4
+  address_offset: 44
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: CGPDMA1F
+    bit_range:
+    - 0
+    - 0
+    description: clear the illegal access flag for GPDMA1
+  - name: CFLASH_REGF
+    bit_range:
+    - 1
+    - 1
+    description: clear the illegal access flag for FLASH registers
+  - name: CFLASHF
+    bit_range:
+    - 2
+    - 2
+    description: clear the illegal access flag for FLASH memory
+  - name: COTFDEC1F
+    bit_range:
+    - 3
+    - 3
+    description: clear the illegal access flag for OTFDEC1
+  - name: COTFDEC2F
+    bit_range:
+    - 4
+    - 4
+    description: clear the illegal access flag for OTFDEC2
+  - name: CTZSC1F
+    bit_range:
+    - 14
+    - 14
+    description: clear the illegal access flag for GTZC1 TZSC registers
+  - name: CTZIC1F
+    bit_range:
+    - 15
+    - 15
+    description: clear the illegal access flag for GTZC1 TZIC registers
+  - name: COCTOSPI1_MEMF
+    bit_range:
+    - 16
+    - 16
+    description: clear the illegal access flag for MPCWM1 (OCTOSPI1) memory bank
+  - name: CFSMC_MEMF
+    bit_range:
+    - 17
+    - 17
+    description: clear the illegal access flag for MPCWM2 (FSMC NAND) and MPCWM3
+  - name: CBKPSRAMF
+    bit_range:
+    - 18
+    - 18
+    description: clear the illegal access flag for MPCWM3 (BKPSRAM) memory bank
+  - name: COCTOSPI2_MEMF
+    bit_range:
+    - 19
+    - 19
+    description: clear the illegal access flag for OCTOSPI2 memory bank
+  - name: CSRAM1F
+    bit_range:
+    - 24
+    - 24
+    description: clear the illegal access flag for SRAM1
+  - name: CMPCBB1_REGF
+    bit_range:
+    - 25
+    - 25
+    description: clear the illegal access flag for MPCBB1 registers
+  - name: CSRAM2F
+    bit_range:
+    - 26
+    - 26
+    description: clear the illegal access flag for SRAM2
+  - name: CMPCBB2_REGF
+    bit_range:
+    - 27
+    - 27
+    description: clear the illegal access flag for MPCBB2 registers
+  - name: CSRAM3F
+    bit_range:
+    - 28
+    - 28
+    description: clear the illegal access flag for SRAM3
+  - name: CMPCBB3_REGF
+    bit_range:
+    - 29
+    - 29
+    description: clear the illegal access flag for MPCBB3 registers
+  side_effects: null
+interrupts: null
+timing: null

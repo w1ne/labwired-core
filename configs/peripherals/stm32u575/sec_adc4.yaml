@@ -1,0 +1,862 @@
+peripheral: SEC_ADC4
+version: 0.1.0
+registers:
+- id: ADC_ISR
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LDORDY
+    bit_range:
+    - 12
+    - 12
+    description: LDORDY
+  - name: EOCAL
+    bit_range:
+    - 11
+    - 11
+    description: EOCAL
+  - name: AWD3
+    bit_range:
+    - 9
+    - 9
+    description: AWD3
+  - name: AWD2
+    bit_range:
+    - 8
+    - 8
+    description: AWD2
+  - name: AWD1
+    bit_range:
+    - 7
+    - 7
+    description: AWD1
+  - name: OVR
+    bit_range:
+    - 4
+    - 4
+    description: OVR
+  - name: EOS
+    bit_range:
+    - 3
+    - 3
+    description: EOS
+  - name: EOC
+    bit_range:
+    - 2
+    - 2
+    description: EOC
+  - name: EOSMP
+    bit_range:
+    - 1
+    - 1
+    description: EOSMP
+  - name: ADRDY
+    bit_range:
+    - 0
+    - 0
+    description: ADRDY
+  side_effects: null
+- id: ADC_IER
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LDORDYIE
+    bit_range:
+    - 12
+    - 12
+    description: LDORDYIE
+  - name: EOCALIE
+    bit_range:
+    - 11
+    - 11
+    description: EOCALIE
+  - name: AWD3IE
+    bit_range:
+    - 9
+    - 9
+    description: AWD3IE
+  - name: AWD2IE
+    bit_range:
+    - 8
+    - 8
+    description: AWD2IE
+  - name: AWD1IE
+    bit_range:
+    - 7
+    - 7
+    description: AWD1IE
+  - name: OVRIE
+    bit_range:
+    - 4
+    - 4
+    description: OVRIE
+  - name: EOSIE
+    bit_range:
+    - 3
+    - 3
+    description: EOSIE
+  - name: EOCIE
+    bit_range:
+    - 2
+    - 2
+    description: EOCIE
+  - name: EOSMPIE
+    bit_range:
+    - 1
+    - 1
+    description: EOSMPIE
+  - name: ADRDYIE
+    bit_range:
+    - 0
+    - 0
+    description: ADRDYIE
+  side_effects: null
+- id: ADC_CR
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ADCAL
+    bit_range:
+    - 31
+    - 31
+    description: ADCAL
+  - name: ADVREGEN
+    bit_range:
+    - 28
+    - 28
+    description: ADVREGEN
+  - name: ADSTP
+    bit_range:
+    - 4
+    - 4
+    description: ADSTP
+  - name: ADSTART
+    bit_range:
+    - 2
+    - 2
+    description: ADSTART
+  - name: ADDIS
+    bit_range:
+    - 1
+    - 1
+    description: ADDIS
+  - name: ADEN
+    bit_range:
+    - 0
+    - 0
+    description: ADEN
+  side_effects: null
+- id: ADC_CFGR1
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: AWD1CH
+    bit_range:
+    - 30
+    - 26
+    description: AWD1CH
+  - name: AWD1EN
+    bit_range:
+    - 23
+    - 23
+    description: AWD1EN
+  - name: AWD1SGL
+    bit_range:
+    - 22
+    - 22
+    description: AWD1SGL
+  - name: CHSELRMOD
+    bit_range:
+    - 21
+    - 21
+    description: CHSELRMOD
+  - name: DISCEN
+    bit_range:
+    - 16
+    - 16
+    description: DISCEN
+  - name: WAIT
+    bit_range:
+    - 14
+    - 14
+    description: WAIT
+  - name: CONT
+    bit_range:
+    - 13
+    - 13
+    description: CONT
+  - name: OVRMOD
+    bit_range:
+    - 12
+    - 12
+    description: OVRMOD
+  - name: EXTEN
+    bit_range:
+    - 11
+    - 10
+    description: EXTEN
+  - name: EXTSEL
+    bit_range:
+    - 8
+    - 6
+    description: EXTSEL
+  - name: ALIGN
+    bit_range:
+    - 5
+    - 5
+    description: ALIGN
+  - name: SCANDIR
+    bit_range:
+    - 4
+    - 4
+    description: SCANDIR
+  - name: RES
+    bit_range:
+    - 3
+    - 2
+    description: RES
+  - name: DMACFG
+    bit_range:
+    - 1
+    - 1
+    description: DMACFG
+  - name: DMAEN
+    bit_range:
+    - 0
+    - 0
+    description: DMAEN
+  side_effects: null
+- id: ADC_CFGR2
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LFTRIG
+    bit_range:
+    - 29
+    - 29
+    description: LFTRIG
+  - name: TOVS
+    bit_range:
+    - 9
+    - 9
+    description: TOVS
+  - name: OVSS
+    bit_range:
+    - 8
+    - 5
+    description: OVSS
+  - name: OVSR
+    bit_range:
+    - 4
+    - 2
+    description: OVSR
+  - name: OVSE
+    bit_range:
+    - 0
+    - 0
+    description: OVSE
+  side_effects: null
+- id: ADC_SMPR
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SMPSEL23
+    bit_range:
+    - 31
+    - 31
+    description: SMPSEL23
+  - name: SMPSEL22
+    bit_range:
+    - 30
+    - 30
+    description: SMPSEL22
+  - name: SMPSEL21
+    bit_range:
+    - 29
+    - 29
+    description: SMPSEL21
+  - name: SMPSEL20
+    bit_range:
+    - 28
+    - 28
+    description: SMPSEL20
+  - name: SMPSEL19
+    bit_range:
+    - 27
+    - 27
+    description: SMPSEL19
+  - name: SMPSEL18
+    bit_range:
+    - 26
+    - 26
+    description: SMPSEL18
+  - name: SMPSEL17
+    bit_range:
+    - 25
+    - 25
+    description: SMPSEL17
+  - name: SMPSEL16
+    bit_range:
+    - 24
+    - 24
+    description: SMPSEL16
+  - name: SMPSEL15
+    bit_range:
+    - 23
+    - 23
+    description: SMPSEL15
+  - name: SMPSEL14
+    bit_range:
+    - 22
+    - 22
+    description: SMPSEL14
+  - name: SMPSEL13
+    bit_range:
+    - 21
+    - 21
+    description: SMPSEL13
+  - name: SMPSEL12
+    bit_range:
+    - 20
+    - 20
+    description: SMPSEL12
+  - name: SMPSEL11
+    bit_range:
+    - 19
+    - 19
+    description: SMPSEL11
+  - name: SMPSEL10
+    bit_range:
+    - 18
+    - 18
+    description: SMPSEL10
+  - name: SMPSEL9
+    bit_range:
+    - 17
+    - 17
+    description: SMPSEL9
+  - name: SMPSEL8
+    bit_range:
+    - 16
+    - 16
+    description: SMPSEL8
+  - name: SMPSEL7
+    bit_range:
+    - 15
+    - 15
+    description: SMPSEL7
+  - name: SMPSEL6
+    bit_range:
+    - 14
+    - 14
+    description: SMPSEL6
+  - name: SMPSEL5
+    bit_range:
+    - 13
+    - 13
+    description: SMPSEL5
+  - name: SMPSEL4
+    bit_range:
+    - 12
+    - 12
+    description: SMPSEL4
+  - name: SMPSEL3
+    bit_range:
+    - 11
+    - 11
+    description: SMPSEL3
+  - name: SMPSEL2
+    bit_range:
+    - 10
+    - 10
+    description: SMPSEL2
+  - name: SMPSEL1
+    bit_range:
+    - 9
+    - 9
+    description: SMPSEL1
+  - name: SMPSEL0
+    bit_range:
+    - 8
+    - 8
+    description: SMPSEL0
+  - name: SMP2
+    bit_range:
+    - 6
+    - 4
+    description: SMP2
+  - name: SMP1
+    bit_range:
+    - 2
+    - 0
+    description: SMP1
+  side_effects: null
+- id: ADC_AWD1TR
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 268369920
+  fields:
+  - name: HT1
+    bit_range:
+    - 27
+    - 16
+    description: HT1
+  - name: LT1
+    bit_range:
+    - 11
+    - 0
+    description: LT1
+  side_effects: null
+- id: ADC_AWD2TR
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 268369920
+  fields:
+  - name: HT2
+    bit_range:
+    - 27
+    - 16
+    description: HT2
+  - name: LT2
+    bit_range:
+    - 11
+    - 0
+    description: LT2
+  side_effects: null
+- id: ADC_CHSELRMOD0
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CHSEL
+    bit_range:
+    - 23
+    - 0
+    description: CHSEL
+  side_effects: null
+- id: ADC_CHSELRMOD1
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SQ8
+    bit_range:
+    - 31
+    - 28
+    description: SQ8
+  - name: SQ7
+    bit_range:
+    - 27
+    - 24
+    description: SQ7
+  - name: SQ6
+    bit_range:
+    - 23
+    - 20
+    description: SQ6
+  - name: SQ5
+    bit_range:
+    - 19
+    - 16
+    description: SQ5
+  - name: SQ4
+    bit_range:
+    - 15
+    - 12
+    description: SQ4
+  - name: SQ3
+    bit_range:
+    - 11
+    - 8
+    description: SQ3
+  - name: SQ2
+    bit_range:
+    - 7
+    - 4
+    description: SQ2
+  - name: SQ1
+    bit_range:
+    - 3
+    - 0
+    description: SQ1
+  side_effects: null
+- id: ADC_AWD3TR
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 268369920
+  fields:
+  - name: HT3
+    bit_range:
+    - 27
+    - 16
+    description: HT3
+  - name: LT3
+    bit_range:
+    - 11
+    - 0
+    description: LT3
+  side_effects: null
+- id: ADC_DR
+  address_offset: 64
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: DATA
+    bit_range:
+    - 15
+    - 0
+    description: DATA
+  side_effects: null
+- id: ADC_PWR
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: VREFSECSMP
+    bit_range:
+    - 3
+    - 3
+    description: VREFSECSMP
+  - name: VREFPROT
+    bit_range:
+    - 2
+    - 2
+    description: VREFPROT
+  - name: DPD
+    bit_range:
+    - 1
+    - 1
+    description: DPD
+  - name: AUTOFF
+    bit_range:
+    - 0
+    - 0
+    description: AUTOFF
+  side_effects: null
+- id: ADC_AWD2CR
+  address_offset: 160
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: AWD2CH23
+    bit_range:
+    - 23
+    - 23
+    description: AWD2CH23
+  - name: AWD2CH22
+    bit_range:
+    - 22
+    - 22
+    description: AWD2CH22
+  - name: AWD2CH21
+    bit_range:
+    - 21
+    - 21
+    description: AWD2CH21
+  - name: AWD2CH20
+    bit_range:
+    - 20
+    - 20
+    description: AWD2CH20
+  - name: AWD2CH19
+    bit_range:
+    - 19
+    - 19
+    description: AWD2CH19
+  - name: AWD2CH18
+    bit_range:
+    - 18
+    - 18
+    description: AWD2CH18
+  - name: AWD2CH17
+    bit_range:
+    - 17
+    - 17
+    description: AWD2CH17
+  - name: AWD2CH16
+    bit_range:
+    - 16
+    - 16
+    description: AWD2CH16
+  - name: AWD2CH15
+    bit_range:
+    - 15
+    - 15
+    description: AWD2CH15
+  - name: AWD2CH14
+    bit_range:
+    - 14
+    - 14
+    description: AWD2CH14
+  - name: AWD2CH13
+    bit_range:
+    - 13
+    - 13
+    description: AWD2CH13
+  - name: AWD2CH12
+    bit_range:
+    - 12
+    - 12
+    description: AWD2CH12
+  - name: AWD2CH11
+    bit_range:
+    - 11
+    - 11
+    description: AWD2CH11
+  - name: AWD2CH10
+    bit_range:
+    - 10
+    - 10
+    description: AWD2CH10
+  - name: AWD2CH9
+    bit_range:
+    - 9
+    - 9
+    description: AWD2CH9
+  - name: AWD2CH8
+    bit_range:
+    - 8
+    - 8
+    description: AWD2CH8
+  - name: AWD2CH7
+    bit_range:
+    - 7
+    - 7
+    description: AWD2CH7
+  - name: AWD2CH6
+    bit_range:
+    - 6
+    - 6
+    description: AWD2CH6
+  - name: AWD2CH5
+    bit_range:
+    - 5
+    - 5
+    description: AWD2CH5
+  - name: AWD2CH4
+    bit_range:
+    - 4
+    - 4
+    description: AWD2CH4
+  - name: AWD2CH3
+    bit_range:
+    - 3
+    - 3
+    description: AWD2CH3
+  - name: AWD2CH2
+    bit_range:
+    - 2
+    - 2
+    description: AWD2CH2
+  - name: AWD2CH1
+    bit_range:
+    - 1
+    - 1
+    description: AWD2CH1
+  - name: AWD2CH0
+    bit_range:
+    - 0
+    - 0
+    description: AWD2CH0
+  side_effects: null
+- id: ADC_AWD3CR
+  address_offset: 164
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: AWD3CH23
+    bit_range:
+    - 23
+    - 23
+    description: AWD3CH23
+  - name: AWD3CH22
+    bit_range:
+    - 22
+    - 22
+    description: AWD3CH22
+  - name: AWD3CH21
+    bit_range:
+    - 21
+    - 21
+    description: AWD3CH21
+  - name: AWD3CH20
+    bit_range:
+    - 20
+    - 20
+    description: AWD3CH20
+  - name: AWD3CH19
+    bit_range:
+    - 19
+    - 19
+    description: AWD3CH19
+  - name: AWD3CH18
+    bit_range:
+    - 18
+    - 18
+    description: AWD3CH18
+  - name: AWD3CH17
+    bit_range:
+    - 17
+    - 17
+    description: AWD3CH17
+  - name: AWD3CH16
+    bit_range:
+    - 16
+    - 16
+    description: AWD3CH16
+  - name: AWD3CH15
+    bit_range:
+    - 15
+    - 15
+    description: AWD3CH15
+  - name: AWD3CH14
+    bit_range:
+    - 14
+    - 14
+    description: AWD3CH14
+  - name: AWD3CH13
+    bit_range:
+    - 13
+    - 13
+    description: AWD3CH13
+  - name: AWD3CH12
+    bit_range:
+    - 12
+    - 12
+    description: AWD3CH12
+  - name: AWD3CH11
+    bit_range:
+    - 11
+    - 11
+    description: AWD3CH11
+  - name: AWD3CH10
+    bit_range:
+    - 10
+    - 10
+    description: AWD3CH10
+  - name: AWD3CH9
+    bit_range:
+    - 9
+    - 9
+    description: AWD3CH9
+  - name: AWD3CH8
+    bit_range:
+    - 8
+    - 8
+    description: AWD3CH8
+  - name: AWD3CH7
+    bit_range:
+    - 7
+    - 7
+    description: AWD3CH7
+  - name: AWD3CH6
+    bit_range:
+    - 6
+    - 6
+    description: AWD3CH6
+  - name: AWD3CH5
+    bit_range:
+    - 5
+    - 5
+    description: AWD3CH5
+  - name: AWD3CH4
+    bit_range:
+    - 4
+    - 4
+    description: AWD3CH4
+  - name: AWD3CH3
+    bit_range:
+    - 3
+    - 3
+    description: AWD3CH3
+  - name: AWD3CH2
+    bit_range:
+    - 2
+    - 2
+    description: AWD3CH2
+  - name: AWD3CH1
+    bit_range:
+    - 1
+    - 1
+    description: AWD3CH1
+  - name: AWD3CH0
+    bit_range:
+    - 0
+    - 0
+    description: AWD3CH0
+  side_effects: null
+- id: ADC_CALFACT
+  address_offset: 196
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CALFACT
+    bit_range:
+    - 6
+    - 0
+    description: CALFACT
+  side_effects: null
+- id: ADC_OR
+  address_offset: 208
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CHN21SEL
+    bit_range:
+    - 0
+    - 0
+    description: CHN21SEL
+  side_effects: null
+- id: ADC_CCR
+  address_offset: 776
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: VBATEN
+    bit_range:
+    - 24
+    - 24
+    description: VBATEN
+  - name: VSENSESEL
+    bit_range:
+    - 23
+    - 23
+    description: VSENSESEL
+  - name: VREFEN
+    bit_range:
+    - 22
+    - 22
+    description: VREFEN
+  - name: PRESC
+    bit_range:
+    - 21
+    - 18
+    description: PRESC
+  side_effects: null
+interrupts:
+  ADC4: 113
+timing: null

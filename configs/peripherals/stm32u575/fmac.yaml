@@ -1,0 +1,207 @@
+peripheral: FMAC
+version: 0.1.0
+registers:
+- id: X1BUFCFG
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: X1_BASE
+    bit_range:
+    - 7
+    - 0
+    description: Base address of X1 buffer
+  - name: X1_BUF_SIZE
+    bit_range:
+    - 15
+    - 8
+    description: Allocated size of X1 buffer in 16-bit words
+  - name: FULL_WM
+    bit_range:
+    - 25
+    - 24
+    description: Watermark for buffer full flag
+  side_effects: null
+- id: X2BUFCFG
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: X2_BASE
+    bit_range:
+    - 7
+    - 0
+    description: Base address of X2 buffer
+  - name: X2_BUF_SIZE
+    bit_range:
+    - 15
+    - 8
+    description: Size of X2 buffer in 16-bit words
+  side_effects: null
+- id: YBUFCFG
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: Y_BASE
+    bit_range:
+    - 7
+    - 0
+    description: Base address of Y buffer
+  - name: Y_BUF_SIZE
+    bit_range:
+    - 15
+    - 8
+    description: Size of Y buffer in 16-bit words
+  - name: EMPTY_WM
+    bit_range:
+    - 25
+    - 24
+    description: Watermark for buffer empty flag
+  side_effects: null
+- id: PARAM
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: START
+    bit_range:
+    - 31
+    - 31
+    description: Enable execution
+  - name: FUNC
+    bit_range:
+    - 30
+    - 24
+    description: Function
+  - name: R
+    bit_range:
+    - 23
+    - 16
+    description: Input parameter R
+  - name: Q
+    bit_range:
+    - 15
+    - 8
+    description: Input parameter Q
+  - name: P
+    bit_range:
+    - 7
+    - 0
+    description: Input parameter P
+  side_effects: null
+- id: CR
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RESET
+    bit_range:
+    - 16
+    - 16
+    description: Reset FMAC unit
+  - name: CLIPEN
+    bit_range:
+    - 15
+    - 15
+    description: Enable clipping
+  - name: DMAWEN
+    bit_range:
+    - 9
+    - 9
+    description: Enable DMA write channel requests
+  - name: DMAREN
+    bit_range:
+    - 8
+    - 8
+    description: Enable DMA read channel requests
+  - name: SATIEN
+    bit_range:
+    - 4
+    - 4
+    description: Enable saturation error interrupts
+  - name: UNFLIEN
+    bit_range:
+    - 3
+    - 3
+    description: Enable underflow error interrupts
+  - name: OVFLIEN
+    bit_range:
+    - 2
+    - 2
+    description: Enable overflow error interrupts
+  - name: WIEN
+    bit_range:
+    - 1
+    - 1
+    description: Enable write interrupt
+  - name: RIEN
+    bit_range:
+    - 0
+    - 0
+    description: Enable read interrupt
+  side_effects: null
+- id: SR
+  address_offset: 20
+  size: 32
+  access: READ_ONLY
+  reset_value: 1
+  fields:
+  - name: YEMPTY
+    bit_range:
+    - 0
+    - 0
+    description: Y buffer empty flag
+  - name: X1FULL
+    bit_range:
+    - 1
+    - 1
+    description: X1 buffer full flag
+  - name: OVFL
+    bit_range:
+    - 8
+    - 8
+    description: Overflow error flag
+  - name: UNFL
+    bit_range:
+    - 9
+    - 9
+    description: Underflow error flag
+  - name: SAT
+    bit_range:
+    - 10
+    - 10
+    description: Saturation error flag
+  side_effects: null
+- id: WDATA
+  address_offset: 24
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: WDATA
+    bit_range:
+    - 15
+    - 0
+    description: Write data
+  side_effects: null
+- id: RDATA
+  address_offset: 28
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: RDATA
+    bit_range:
+    - 15
+    - 0
+    description: Read data
+  side_effects: null
+interrupts:
+  FMAC: 124
+timing: null

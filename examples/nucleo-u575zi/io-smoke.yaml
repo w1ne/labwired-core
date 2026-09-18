@@ -1,0 +1,12 @@
+# LabWired - NUCLEO-U575ZI-Q IO smoke test
+# The Rust demo writes OK over USART1 (VCP) and idles; strict_onboarding.rs
+# requires this exact filename for every chip with an example directory.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-stm32u575-demo"
+  system: "./system.yaml"
+limits:
+  max_steps: 64
+assertions:
+  - uart_contains: "OK"
+  - expected_stop_reason: max_steps

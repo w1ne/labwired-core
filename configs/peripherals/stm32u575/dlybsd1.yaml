@@ -1,0 +1,49 @@
+peripheral: DLYBSD1
+version: 0.1.0
+registers:
+- id: DLYB_CR
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DEN
+    bit_range:
+    - 0
+    - 0
+    description: Operational amplifier Enable
+  - name: SEN
+    bit_range:
+    - 1
+    - 1
+    description: OPALPM
+  side_effects: null
+- id: DLYB_CFGR
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SEL
+    bit_range:
+    - 3
+    - 0
+    description: SEL
+  - name: UNIT
+    bit_range:
+    - 14
+    - 8
+    description: UNIT
+  - name: LNG
+    bit_range:
+    - 27
+    - 16
+    description: LNG
+  - name: LNGF
+    bit_range:
+    - 31
+    - 31
+    description: LNGF
+  side_effects: null
+interrupts: null
+timing: null

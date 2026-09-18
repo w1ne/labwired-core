@@ -1876,6 +1876,15 @@ fn mul32(rd: u8, rn: u8, rm: u8) -> (u16, u16) {
     )
 }
 
+/// `MOVS.W Rd, Rm, RRX` — DataProc32 op=2 (logical MOV), S=1, rn=0xF,
+/// shift_type=ROR with imm5=0 (`EA5F 0031` for Rd=R0, Rm=R1).
+fn movs_rrx(rd: u8, rm: u8) -> (u16, u16) {
+    (
+        0xEA5F,
+        ((rd as u16 & 0xF) << 8) | 0x0030 | u16::from(rm & 0xF),
+    )
+}
+
 fn assert_nzcv(interp: &Machine<CortexM>, jit: &Machine<CortexM>, what: &str) {
     assert_eq!(
         interp.cpu.xpsr & 0xF000_0000,
@@ -1979,6 +1988,53 @@ fn adc_sbc_rsbs_shift_mul32_match_interpreter() {
     });
     assert!(engine.stats().block_runs > 0);
     assert_eq!(interp.cpu.r0, jit.cpu.r0, "r0 after MUL.W");
+}
+
+/// `MOVS.W R0, R1, RRX` must lower with the interpreter's rotate-through-
+/// carry: result `(C<<31)|(R1>>1)`, carry-out `R1[0]`. C is seeded both ways
+/// so a JIT that lowers RRX as a pass-through (or drops the carry-out) is
+/// caught on both the value and the NZCV words.
+#[test]
+fn rrx_immediate_matches_interpreter() {
+    for (name, r1, carry_in) in [
+        ("rrx C=0", 0x8000_0001u32, false),
+        ("rrx C=1", 0x0000_0002u32, true),
+    ] {
+        let mut prog = Vec::new();
+        h(&mut prog, mov_reg(0, 1));
+        for _ in 0..14 {
+            h(&mut prog, 0xBF00);
+        }
+        let (h1, h2) = movs_rrx(0, 1);
+        h(&mut prog, h1);
+        h(&mut prog, h2);
+        let from = prog.len() as i32;
+        h(&mut prog, b_to(from, 0));
+
+        let probe = build_machine(&prog);
+        let mut engine_probe = CortexMJitEngine::new(4);
+        engine_probe.try_compile_from_bus(0, &probe.bus);
+        assert!(
+            engine_probe.ready_instr_count(0).unwrap_or(0) >= 16,
+            "{name} must compile a profitable block: {:?}",
+            engine_probe.stats()
+        );
+        let (interp, jit, engine) = lockstep_until_compiled(&prog, |m| {
+            m.cpu.r1 = r1;
+            if carry_in {
+                m.cpu.xpsr |= 1 << 29;
+            } else {
+                m.cpu.xpsr &= !(1 << 29);
+            }
+        });
+        assert!(
+            engine.stats().block_runs > 0,
+            "{name} never ran compiled: {:?}",
+            engine.stats()
+        );
+        assert_eq!(interp.cpu.r0, jit.cpu.r0, "r0 after {name}");
+        assert_nzcv(&interp, &jit, name);
+    }
 }
 
 fn ands_w(rd: u8, rn: u8, imm8: u8) -> (u16, u16) {

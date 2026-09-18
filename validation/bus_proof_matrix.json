@@ -524,6 +524,33 @@
         "lane": "core-ci / core-full (nightly 02:30 UTC + workflow_dispatch + '[full-ci]') via tier1_matrix + tier1_matrix_ratchet"
       }
     },
+    "stm32u575": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_stm32u575_zephyr_survival",
+        "signal": "the committed stock Zephyr 3.7.2 hello_world ELF (tests/fixtures/stm32u575-zephyr-hello.elf, Zephyr commit c66235fb7346, built for nucleo_u575zi_q) is booted in-sim and assert_uart_contains matches 'Hello World! nucleo_u575zi_q' on a real bus.attach_uart_tx_sink capture. Fixture absence is a hard assert!, not a skip.",
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival",
+        "note": "two further independent UART proofs land in the same file: test_stm32u575_arduino_serial_survival (PlatformIO L0 sketch, 'LW_L0_OK') and the Arduino/Zephyr matrix L0 cells. Evidence captured 2026-09-18."
+      },
+      "spi": {
+        "state": "proven",
+        "file": "validation/arduino-matrix/sketches/L4_spi_sensor/src/main.ino",
+        "test": "LW_L4_OK",
+        "signal": "real PlatformIO-compiled Arduino firmware clocks the MAX31855 device model over spi1 and accepts ONLY the exact default kit frame 0x01901600 (tc=25.0 C, internal=22.0 C, fault=0; any other word prints LW_L4_FAIL frame=0x...); the LW_L4_OK verdict returns as real bytes on the modelled USART1, matched by a uart_contains oracle. The engine's classic-SPI model is NOT a blanket responder: this is a value-exact oracle.",
+        "lane": "core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
+        "note": "no SPI pad_map is declared for U575, so this proves the shift engine and the device model, not per-pad logic-analyzer publication. Local run 2026-09-18 (validation/arduino-matrix/out/stm32u575/L4_spi_sensor/run/uart.log)."
+      },
+      "i2c": {
+        "state": "proven",
+        "file": "validation/arduino-matrix/sketches/L3_i2c_sensor/src/main.ino",
+        "test": "LW_L3_OK",
+        "signal": "real PlatformIO-compiled Arduino firmware drives an INA219 model attached at 0x40 on i2c1 through the Wire (stm32l4 engine) path; the device ACKs and the LW_L3_OK verdict returns as real bytes on the modelled USART1, matched by a uart_contains oracle.",
+        "lane": "core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
+        "note": "the lane's oracle is `uart_contains LW_L3_OK`, which the sketch ALSO prints for its ACK-only PARTIAL tier, so the lane asserts address+data out and the ACK back, not the exact register readback. The exact tier (config 0x399F + bus 0x19CA, no LW_L3_PARTIAL_NO_RX) was observed in the local 2026-09-18 run (validation/arduino-matrix/out/stm32u575/L3_i2c_sensor/run/uart.log) but is NOT asserted by the lane. The Zephyr matrix L3 cell (same INA219 kit, stock Zephyr i2c driver, LW_Z3_OK) is a second ACK-level proof."
+      }
+    },
     "stm32l073": {
       "in_boards": false,
       "uart": {

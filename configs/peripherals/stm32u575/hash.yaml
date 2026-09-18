@@ -1,0 +1,950 @@
+peripheral: HASH
+version: 0.1.0
+registers:
+- id: CR
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INIT
+    bit_range:
+    - 2
+    - 2
+    description: Initialize message digest calculation
+  - name: DMAE
+    bit_range:
+    - 3
+    - 3
+    description: DMA enable
+  - name: DATATYPE
+    bit_range:
+    - 5
+    - 4
+    description: Data type selection
+  - name: MODE
+    bit_range:
+    - 6
+    - 6
+    description: Mode selection
+  - name: ALGO
+    bit_range:
+    - 18
+    - 17
+    description: Algorithm selection
+  - name: NBW
+    bit_range:
+    - 11
+    - 8
+    description: Number of words already               pushed
+  - name: DINNE
+    bit_range:
+    - 12
+    - 12
+    description: DIN not empty
+  - name: MDMAT
+    bit_range:
+    - 13
+    - 13
+    description: Multiple DMA Transfers
+  - name: LKEY
+    bit_range:
+    - 16
+    - 16
+    description: Long key selection
+  side_effects: null
+- id: DIN
+  address_offset: 4
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: DATAIN
+    bit_range:
+    - 31
+    - 0
+    description: Data input
+  side_effects: null
+- id: STR
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DCAL
+    bit_range:
+    - 8
+    - 8
+    description: Digest calculation
+  - name: NBLW
+    bit_range:
+    - 4
+    - 0
+    description: Number of valid bits in the last word of               the message
+  side_effects: null
+- id: HRA0
+  address_offset: 12
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: H0
+    bit_range:
+    - 31
+    - 0
+    description: H0
+  side_effects: null
+- id: HRA1
+  address_offset: 16
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: H1
+    bit_range:
+    - 31
+    - 0
+    description: H1
+  side_effects: null
+- id: HRA2
+  address_offset: 20
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: H2
+    bit_range:
+    - 31
+    - 0
+    description: H2
+  side_effects: null
+- id: HRA3
+  address_offset: 24
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: H3
+    bit_range:
+    - 31
+    - 0
+    description: H3
+  side_effects: null
+- id: HRA4
+  address_offset: 28
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: H4
+    bit_range:
+    - 31
+    - 0
+    description: H4
+  side_effects: null
+- id: HR0
+  address_offset: 784
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: H0
+    bit_range:
+    - 31
+    - 0
+    description: H0
+  side_effects: null
+- id: HR1
+  address_offset: 788
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: H1
+    bit_range:
+    - 31
+    - 0
+    description: H1
+  side_effects: null
+- id: HR2
+  address_offset: 792
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: H2
+    bit_range:
+    - 31
+    - 0
+    description: H2
+  side_effects: null
+- id: HR3
+  address_offset: 796
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: H3
+    bit_range:
+    - 31
+    - 0
+    description: H3
+  side_effects: null
+- id: HR4
+  address_offset: 800
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: H4
+    bit_range:
+    - 31
+    - 0
+    description: H4
+  side_effects: null
+- id: HR5
+  address_offset: 804
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: H5
+    bit_range:
+    - 31
+    - 0
+    description: H5
+  side_effects: null
+- id: HR6
+  address_offset: 808
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: H6
+    bit_range:
+    - 31
+    - 0
+    description: H6
+  side_effects: null
+- id: HR7
+  address_offset: 812
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: H7
+    bit_range:
+    - 31
+    - 0
+    description: H7
+  side_effects: null
+- id: IMR
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DCIE
+    bit_range:
+    - 1
+    - 1
+    description: Digest calculation completion interrupt               enable
+  - name: DINIE
+    bit_range:
+    - 0
+    - 0
+    description: Data input interrupt               enable
+  side_effects: null
+- id: SR
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: BUSY
+    bit_range:
+    - 3
+    - 3
+    description: Busy bit
+  - name: DMAS
+    bit_range:
+    - 2
+    - 2
+    description: DMA Status
+  - name: DCIS
+    bit_range:
+    - 1
+    - 1
+    description: Digest calculation completion interrupt               status
+  - name: DINIS
+    bit_range:
+    - 0
+    - 0
+    description: Data input interrupt               status
+  - name: NBWE
+    bit_range:
+    - 20
+    - 16
+    description: Number of words expected
+  - name: DINNE
+    bit_range:
+    - 15
+    - 15
+    description: DIN not empty
+  - name: NBWP
+    bit_range:
+    - 13
+    - 9
+    description: Number of words already pushed
+  side_effects: null
+- id: CSR0
+  address_offset: 248
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR0
+    bit_range:
+    - 31
+    - 0
+    description: CSR0
+  side_effects: null
+- id: CSR1
+  address_offset: 252
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR1
+    bit_range:
+    - 31
+    - 0
+    description: CSR1
+  side_effects: null
+- id: CSR2
+  address_offset: 256
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR2
+    bit_range:
+    - 31
+    - 0
+    description: CSR2
+  side_effects: null
+- id: CSR3
+  address_offset: 260
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR3
+    bit_range:
+    - 31
+    - 0
+    description: CSR3
+  side_effects: null
+- id: CSR4
+  address_offset: 264
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR4
+    bit_range:
+    - 31
+    - 0
+    description: CSR4
+  side_effects: null
+- id: CSR5
+  address_offset: 268
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR5
+    bit_range:
+    - 31
+    - 0
+    description: CSR5
+  side_effects: null
+- id: CSR6
+  address_offset: 272
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR6
+    bit_range:
+    - 31
+    - 0
+    description: CSR6
+  side_effects: null
+- id: CSR7
+  address_offset: 276
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR7
+    bit_range:
+    - 31
+    - 0
+    description: CSR7
+  side_effects: null
+- id: CSR8
+  address_offset: 280
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR8
+    bit_range:
+    - 31
+    - 0
+    description: CSR8
+  side_effects: null
+- id: CSR9
+  address_offset: 284
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR9
+    bit_range:
+    - 31
+    - 0
+    description: CSR9
+  side_effects: null
+- id: CSR10
+  address_offset: 288
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR10
+    bit_range:
+    - 31
+    - 0
+    description: CSR10
+  side_effects: null
+- id: CSR11
+  address_offset: 292
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR11
+    bit_range:
+    - 31
+    - 0
+    description: CSR11
+  side_effects: null
+- id: CSR12
+  address_offset: 296
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR12
+    bit_range:
+    - 31
+    - 0
+    description: CSR12
+  side_effects: null
+- id: CSR13
+  address_offset: 300
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR13
+    bit_range:
+    - 31
+    - 0
+    description: CSR13
+  side_effects: null
+- id: CSR14
+  address_offset: 304
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR14
+    bit_range:
+    - 31
+    - 0
+    description: CSR14
+  side_effects: null
+- id: CSR15
+  address_offset: 308
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR15
+    bit_range:
+    - 31
+    - 0
+    description: CSR15
+  side_effects: null
+- id: CSR16
+  address_offset: 312
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR16
+    bit_range:
+    - 31
+    - 0
+    description: CSR16
+  side_effects: null
+- id: CSR17
+  address_offset: 316
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR17
+    bit_range:
+    - 31
+    - 0
+    description: CSR17
+  side_effects: null
+- id: CSR18
+  address_offset: 320
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR18
+    bit_range:
+    - 31
+    - 0
+    description: CSR18
+  side_effects: null
+- id: CSR19
+  address_offset: 324
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR19
+    bit_range:
+    - 31
+    - 0
+    description: CSR19
+  side_effects: null
+- id: CSR20
+  address_offset: 328
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR20
+    bit_range:
+    - 31
+    - 0
+    description: CSR20
+  side_effects: null
+- id: CSR21
+  address_offset: 332
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR21
+    bit_range:
+    - 31
+    - 0
+    description: CSR21
+  side_effects: null
+- id: CSR22
+  address_offset: 336
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR22
+    bit_range:
+    - 31
+    - 0
+    description: CSR22
+  side_effects: null
+- id: CSR23
+  address_offset: 340
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR23
+    bit_range:
+    - 31
+    - 0
+    description: CSR23
+  side_effects: null
+- id: CSR24
+  address_offset: 344
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR24
+    bit_range:
+    - 31
+    - 0
+    description: CSR24
+  side_effects: null
+- id: CSR25
+  address_offset: 348
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR25
+    bit_range:
+    - 31
+    - 0
+    description: CSR25
+  side_effects: null
+- id: CSR26
+  address_offset: 352
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR26
+    bit_range:
+    - 31
+    - 0
+    description: CSR26
+  side_effects: null
+- id: CSR27
+  address_offset: 356
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR27
+    bit_range:
+    - 31
+    - 0
+    description: CSR27
+  side_effects: null
+- id: CSR28
+  address_offset: 360
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR28
+    bit_range:
+    - 31
+    - 0
+    description: CSR28
+  side_effects: null
+- id: CSR29
+  address_offset: 364
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR29
+    bit_range:
+    - 31
+    - 0
+    description: CSR29
+  side_effects: null
+- id: CSR30
+  address_offset: 368
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR30
+    bit_range:
+    - 31
+    - 0
+    description: CSR30
+  side_effects: null
+- id: CSR31
+  address_offset: 372
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR31
+    bit_range:
+    - 31
+    - 0
+    description: CSR31
+  side_effects: null
+- id: CSR32
+  address_offset: 376
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR32
+    bit_range:
+    - 31
+    - 0
+    description: CSR32
+  side_effects: null
+- id: CSR33
+  address_offset: 380
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR33
+    bit_range:
+    - 31
+    - 0
+    description: CSR33
+  side_effects: null
+- id: CSR34
+  address_offset: 384
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR34
+    bit_range:
+    - 31
+    - 0
+    description: CSR34
+  side_effects: null
+- id: CSR35
+  address_offset: 388
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR35
+    bit_range:
+    - 31
+    - 0
+    description: CSR35
+  side_effects: null
+- id: CSR36
+  address_offset: 392
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR36
+    bit_range:
+    - 31
+    - 0
+    description: CSR36
+  side_effects: null
+- id: CSR37
+  address_offset: 396
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR37
+    bit_range:
+    - 31
+    - 0
+    description: CSR37
+  side_effects: null
+- id: CSR38
+  address_offset: 400
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR38
+    bit_range:
+    - 31
+    - 0
+    description: CSR38
+  side_effects: null
+- id: CSR39
+  address_offset: 404
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR39
+    bit_range:
+    - 31
+    - 0
+    description: CSR39
+  side_effects: null
+- id: CSR40
+  address_offset: 408
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR40
+    bit_range:
+    - 31
+    - 0
+    description: CSR40
+  side_effects: null
+- id: CSR41
+  address_offset: 412
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR41
+    bit_range:
+    - 31
+    - 0
+    description: CSR41
+  side_effects: null
+- id: CSR42
+  address_offset: 416
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR42
+    bit_range:
+    - 31
+    - 0
+    description: CSR42
+  side_effects: null
+- id: CSR43
+  address_offset: 420
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR43
+    bit_range:
+    - 31
+    - 0
+    description: CSR43
+  side_effects: null
+- id: CSR44
+  address_offset: 424
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR44
+    bit_range:
+    - 31
+    - 0
+    description: CSR44
+  side_effects: null
+- id: CSR45
+  address_offset: 428
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR45
+    bit_range:
+    - 31
+    - 0
+    description: CSR45
+  side_effects: null
+- id: CSR46
+  address_offset: 432
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR46
+    bit_range:
+    - 31
+    - 0
+    description: CSR46
+  side_effects: null
+- id: CSR47
+  address_offset: 436
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR47
+    bit_range:
+    - 31
+    - 0
+    description: CSR47
+  side_effects: null
+- id: CSR48
+  address_offset: 440
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR48
+    bit_range:
+    - 31
+    - 0
+    description: CSR48
+  side_effects: null
+- id: CSR49
+  address_offset: 444
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR49
+    bit_range:
+    - 31
+    - 0
+    description: CSR49
+  side_effects: null
+- id: CSR50
+  address_offset: 448
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR50
+    bit_range:
+    - 31
+    - 0
+    description: CSR50
+  side_effects: null
+- id: CSR51
+  address_offset: 452
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR51
+    bit_range:
+    - 31
+    - 0
+    description: CSR51
+  side_effects: null
+- id: CSR52
+  address_offset: 456
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR52
+    bit_range:
+    - 31
+    - 0
+    description: CSR52
+  side_effects: null
+- id: CSR53
+  address_offset: 460
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSR53
+    bit_range:
+    - 31
+    - 0
+    description: CSR53
+  side_effects: null
+interrupts:
+  HASH: 96
+timing: null

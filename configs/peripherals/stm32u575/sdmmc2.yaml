@@ -1,0 +1,973 @@
+peripheral: SDMMC2
+version: 0.1.0
+registers:
+- id: POWER
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PWRCTRL
+    bit_range:
+    - 1
+    - 0
+    description: SDMMC state control bits
+  - name: VSWITCH
+    bit_range:
+    - 2
+    - 2
+    description: Voltage switch sequence start
+  - name: VSWITCHEN
+    bit_range:
+    - 3
+    - 3
+    description: Voltage switch procedure enable
+  - name: DIRPOL
+    bit_range:
+    - 4
+    - 4
+    description: Data and command direction signals polarity selection
+  side_effects: null
+- id: CLKCR
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SELCLKRX
+    bit_range:
+    - 21
+    - 20
+    description: Receive clock selection
+  - name: BUSSPEED
+    bit_range:
+    - 19
+    - 19
+    description: Bus speed mode selection between DS, HS, SDR12, SDR25 and SDR50,DDR50, SDR104
+  - name: DDR
+    bit_range:
+    - 18
+    - 18
+    description: Data rate signaling selection
+  - name: HWFC_EN
+    bit_range:
+    - 17
+    - 17
+    description: HW Flow Control enable
+  - name: NEGEDGE
+    bit_range:
+    - 16
+    - 16
+    description: SDIO_CK dephasing selection bit
+  - name: WIDBUS
+    bit_range:
+    - 15
+    - 14
+    description: Wide bus mode enable bit
+  - name: PWRSAV
+    bit_range:
+    - 12
+    - 12
+    description: Power saving configuration bit
+  - name: CLKDIV
+    bit_range:
+    - 9
+    - 0
+    description: Clock divide factor
+  side_effects: null
+- id: ARGR
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CMDARG
+    bit_range:
+    - 31
+    - 0
+    description: Command argument
+  side_effects: null
+- id: CMDR
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CMDSUSPEND
+    bit_range:
+    - 16
+    - 16
+    description: The CPSM treats the command as a Suspend or Resume command and signals interrupt period start/end
+  - name: BOOTEN
+    bit_range:
+    - 15
+    - 15
+    description: Enable boot mode procedure
+  - name: BOOTMODE
+    bit_range:
+    - 14
+    - 14
+    description: Select the boot mode procedure to be used
+  - name: DTHOLD
+    bit_range:
+    - 13
+    - 13
+    description: Hold new data block transmission and reception in the DPSM
+  - name: CPSMEN
+    bit_range:
+    - 12
+    - 12
+    description: Command path state machine (CPSM) Enable bit
+  - name: WAITPEND
+    bit_range:
+    - 11
+    - 11
+    description: CPSM Waits for ends of data transfer (CmdPend internal signal) from DPSM
+  - name: WAITINT
+    bit_range:
+    - 10
+    - 10
+    description: CPSM waits for interrupt request
+  - name: WAITRESP
+    bit_range:
+    - 9
+    - 8
+    description: Wait for response bits
+  - name: CMDSTOP
+    bit_range:
+    - 7
+    - 7
+    description: The CPSM treats the command as a Stop Transmission command and signals Abort to the DPSM
+  - name: CMDTRANS
+    bit_range:
+    - 6
+    - 6
+    description: The CPSM treats the command as a data transfer command, stops the interrupt period, and signals DataEnable to the DPSM
+  - name: CMDINDEX
+    bit_range:
+    - 5
+    - 0
+    description: Command index
+  side_effects: null
+- id: RESPCMDR
+  address_offset: 16
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: RESPCMD
+    bit_range:
+    - 5
+    - 0
+    description: Response command index
+  side_effects: null
+- id: RESP1
+  address_offset: 20
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: CARDSTATUS1
+    bit_range:
+    - 31
+    - 0
+    description: CARDSTATUS1
+  side_effects: null
+- id: RESP2
+  address_offset: 24
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: CARDSTATUS2
+    bit_range:
+    - 31
+    - 0
+    description: CARDSTATUS2
+  side_effects: null
+- id: RESP3
+  address_offset: 28
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: CARDSTATUS3
+    bit_range:
+    - 31
+    - 0
+    description: CARDSTATUS3
+  side_effects: null
+- id: RESP4
+  address_offset: 32
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: CARDSTATUS4
+    bit_range:
+    - 31
+    - 0
+    description: CARDSTATUS4
+  side_effects: null
+- id: DTIMER
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DATATIME
+    bit_range:
+    - 31
+    - 0
+    description: Data and R1b busy timeout period
+  side_effects: null
+- id: DLENR
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DATALENGTH
+    bit_range:
+    - 24
+    - 0
+    description: Data length value
+  side_effects: null
+- id: DCTRL
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FIFORST
+    bit_range:
+    - 13
+    - 13
+    description: FIFO reset, will flush any remaining data
+  - name: BOOTACKEN
+    bit_range:
+    - 12
+    - 12
+    description: Enable the reception of the boot acknowledgment
+  - name: SDIOEN
+    bit_range:
+    - 11
+    - 11
+    description: SD I/O enable functions
+  - name: RWMOD
+    bit_range:
+    - 10
+    - 10
+    description: Read wait mode
+  - name: RWSTOP
+    bit_range:
+    - 9
+    - 9
+    description: Read wait stop
+  - name: RWSTART
+    bit_range:
+    - 8
+    - 8
+    description: Read wait start
+  - name: DBLOCKSIZE
+    bit_range:
+    - 7
+    - 4
+    description: Data block size
+  - name: DTMODE
+    bit_range:
+    - 3
+    - 2
+    description: Data transfer mode selection
+  - name: DTDIR
+    bit_range:
+    - 1
+    - 1
+    description: Data transfer direction selection
+  - name: DTEN
+    bit_range:
+    - 0
+    - 0
+    description: DTEN
+  side_effects: null
+- id: DCNTR
+  address_offset: 48
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: DATACOUNT
+    bit_range:
+    - 24
+    - 0
+    description: Data count value
+  side_effects: null
+- id: STAR
+  address_offset: 52
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: IDMABTC
+    bit_range:
+    - 28
+    - 28
+    description: IDMA buffer transfer complete
+  - name: IDMATE
+    bit_range:
+    - 27
+    - 27
+    description: IDMA transfer error
+  - name: CKSTOP
+    bit_range:
+    - 26
+    - 26
+    description: SDMMC_CK stopped in Voltage switch procedure
+  - name: VSWEND
+    bit_range:
+    - 25
+    - 25
+    description: Voltage switch critical timing section completion
+  - name: ACKTIMEOUT
+    bit_range:
+    - 24
+    - 24
+    description: Boot acknowledgment timeout
+  - name: ACKFAIL
+    bit_range:
+    - 23
+    - 23
+    description: Boot acknowledgment received (boot acknowledgment check fail)
+  - name: SDIOIT
+    bit_range:
+    - 22
+    - 22
+    description: SDIO interrupt received
+  - name: BUSYD0END
+    bit_range:
+    - 21
+    - 21
+    description: end of SDMMC_D0 Busy following a CMD response detected
+  - name: BUSYD0
+    bit_range:
+    - 20
+    - 20
+    description: Inverted value of SDMMC_D0 line (Busy), sampled at the end of a CMD response and a second time 2 SDMMC_CK cycles after the CMD response
+  - name: RXFIFOE
+    bit_range:
+    - 19
+    - 19
+    description: Receive FIFO empty
+  - name: TXFIFOE
+    bit_range:
+    - 18
+    - 18
+    description: Transmit FIFO empty
+  - name: RXFIFOF
+    bit_range:
+    - 17
+    - 17
+    description: Receive FIFO full
+  - name: TXFIFOF
+    bit_range:
+    - 16
+    - 16
+    description: Transmit FIFO full
+  - name: RXFIFOHF
+    bit_range:
+    - 15
+    - 15
+    description: Receive FIFO half full
+  - name: TXFIFOHE
+    bit_range:
+    - 14
+    - 14
+    description: Transmit FIFO half empty
+  - name: CPSMACT
+    bit_range:
+    - 13
+    - 13
+    description: Command path state machine active, i.e. not in Idle state
+  - name: DPSMACT
+    bit_range:
+    - 12
+    - 12
+    description: Data path state machine active, i.e. not in Idle state
+  - name: DABORT
+    bit_range:
+    - 11
+    - 11
+    description: Data transfer aborted by CMD12
+  - name: DBCKEND
+    bit_range:
+    - 10
+    - 10
+    description: Data block sent/received
+  - name: DHOLD
+    bit_range:
+    - 9
+    - 9
+    description: Data transfer Hold
+  - name: DATAEND
+    bit_range:
+    - 8
+    - 8
+    description: Data transfer ended correctly
+  - name: CMDSENT
+    bit_range:
+    - 7
+    - 7
+    description: Command sent (no response required)
+  - name: CMDREND
+    bit_range:
+    - 6
+    - 6
+    description: Command response received (CRC check passed, or no CRC)
+  - name: RXOVERR
+    bit_range:
+    - 5
+    - 5
+    description: Received FIFO overrun error (masked by hardware when IDMA is enabled)
+  - name: TXUNDERR
+    bit_range:
+    - 4
+    - 4
+    description: Transmit FIFO underrun error (masked by hardware when IDMA is enabled)
+  - name: DTIMEOUT
+    bit_range:
+    - 3
+    - 3
+    description: Data timeout
+  - name: CTIMEOUT
+    bit_range:
+    - 2
+    - 2
+    description: Command response timeout
+  - name: DCRCFAIL
+    bit_range:
+    - 1
+    - 1
+    description: Data block sent/received (CRC check failed)
+  - name: CCRCFAIL
+    bit_range:
+    - 0
+    - 0
+    description: Command response received (CRC check failed)
+  side_effects: null
+- id: ICR
+  address_offset: 56
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IDMABTCC
+    bit_range:
+    - 28
+    - 28
+    description: IDMA buffer transfer complete clear bit
+  - name: IDMATEC
+    bit_range:
+    - 27
+    - 27
+    description: IDMA transfer error clear bit
+  - name: CKSTOPC
+    bit_range:
+    - 26
+    - 26
+    description: CKSTOP flag clear bit
+  - name: VSWENDC
+    bit_range:
+    - 25
+    - 25
+    description: VSWEND flag clear bit
+  - name: ACKTIMEOUTC
+    bit_range:
+    - 24
+    - 24
+    description: ACKTIMEOUT flag clear bit
+  - name: ACKFAILC
+    bit_range:
+    - 23
+    - 23
+    description: ACKFAIL flag clear bit
+  - name: SDIOITC
+    bit_range:
+    - 22
+    - 22
+    description: SDIOIT flag clear bit
+  - name: BUSYD0ENDC
+    bit_range:
+    - 21
+    - 21
+    description: BUSYD0END flag clear bit
+  - name: DABORTC
+    bit_range:
+    - 11
+    - 11
+    description: DABORT flag clear bit
+  - name: DBCKENDC
+    bit_range:
+    - 10
+    - 10
+    description: DBCKEND flag clear bit
+  - name: DHOLDC
+    bit_range:
+    - 9
+    - 9
+    description: DHOLD flag clear bit
+  - name: DATAENDC
+    bit_range:
+    - 8
+    - 8
+    description: DATAEND flag clear bit
+  - name: CMDSENTC
+    bit_range:
+    - 7
+    - 7
+    description: CMDSENT flag clear bit
+  - name: CMDRENDC
+    bit_range:
+    - 6
+    - 6
+    description: CMDREND flag clear bit
+  - name: RXOVERRC
+    bit_range:
+    - 5
+    - 5
+    description: RXOVERR flag clear bit
+  - name: TXUNDERRC
+    bit_range:
+    - 4
+    - 4
+    description: TXUNDERR flag clear bit
+  - name: DTIMEOUTC
+    bit_range:
+    - 3
+    - 3
+    description: DTIMEOUT flag clear bit
+  - name: CTIMEOUTC
+    bit_range:
+    - 2
+    - 2
+    description: CTIMEOUT flag clear bit
+  - name: DCRCFAILC
+    bit_range:
+    - 1
+    - 1
+    description: DCRCFAIL flag clear bit
+  - name: CCRCFAILC
+    bit_range:
+    - 0
+    - 0
+    description: CCRCFAIL flag clear bit
+  side_effects: null
+- id: MASKR
+  address_offset: 60
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IDMABTCIE
+    bit_range:
+    - 28
+    - 28
+    description: IDMA buffer transfer complete interrupt enable
+  - name: CKSTOPIE
+    bit_range:
+    - 26
+    - 26
+    description: Voltage Switch clock stopped interrupt enable
+  - name: VSWENDIE
+    bit_range:
+    - 25
+    - 25
+    description: Voltage switch critical timing section completion interrupt enable
+  - name: ACKTIMEOUTIE
+    bit_range:
+    - 24
+    - 24
+    description: Acknowledgment timeout interrupt enable
+  - name: ACKFAILIE
+    bit_range:
+    - 23
+    - 23
+    description: Acknowledgment Fail interrupt enable
+  - name: SDIOITIE
+    bit_range:
+    - 22
+    - 22
+    description: SDIO mode interrupt received interrupt enable
+  - name: BUSYD0ENDIE
+    bit_range:
+    - 21
+    - 21
+    description: BUSYD0END interrupt enable
+  - name: TXFIFOEIE
+    bit_range:
+    - 18
+    - 18
+    description: Tx FIFO empty interrupt enable
+  - name: RXFIFOFIE
+    bit_range:
+    - 17
+    - 17
+    description: Rx FIFO full interrupt enable
+  - name: RXFIFOHFIE
+    bit_range:
+    - 15
+    - 15
+    description: Rx FIFO half full interrupt enable
+  - name: TXFIFOHEIE
+    bit_range:
+    - 14
+    - 14
+    description: Tx FIFO half empty interrupt enable
+  - name: DABORTIE
+    bit_range:
+    - 11
+    - 11
+    description: Data transfer aborted interrupt enable
+  - name: DBCKENDIE
+    bit_range:
+    - 10
+    - 10
+    description: Data block end interrupt enable
+  - name: DHOLDIE
+    bit_range:
+    - 9
+    - 9
+    description: Data hold interrupt enable
+  - name: DATAENDIE
+    bit_range:
+    - 8
+    - 8
+    description: Data end interrupt enable
+  - name: CMDSENTIE
+    bit_range:
+    - 7
+    - 7
+    description: Command sent interrupt enable
+  - name: CMDRENDIE
+    bit_range:
+    - 6
+    - 6
+    description: Command response received interrupt enable
+  - name: RXOVERRIE
+    bit_range:
+    - 5
+    - 5
+    description: Rx FIFO overrun error interrupt enable
+  - name: TXUNDERRIE
+    bit_range:
+    - 4
+    - 4
+    description: Tx FIFO underrun error interrupt enable
+  - name: DTIMEOUTIE
+    bit_range:
+    - 3
+    - 3
+    description: Data timeout interrupt enable
+  - name: CTIMEOUTIE
+    bit_range:
+    - 2
+    - 2
+    description: Command timeout interrupt enable
+  - name: DCRCFAILIE
+    bit_range:
+    - 1
+    - 1
+    description: Data CRC fail interrupt enable
+  - name: CCRCFAILIE
+    bit_range:
+    - 0
+    - 0
+    description: Command CRC fail interrupt enable
+  side_effects: null
+- id: ACKTIMER
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ACKTIME
+    bit_range:
+    - 24
+    - 0
+    description: Boot acknowledgment timeout period
+  side_effects: null
+- id: FIFOR0
+  address_offset: 128
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FIFODATA
+    bit_range:
+    - 31
+    - 0
+    description: Receive and transmit FIFO data
+  side_effects: null
+- id: FIFOR1
+  address_offset: 132
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FIFODATA
+    bit_range:
+    - 31
+    - 0
+    description: Receive and transmit FIFO data
+  side_effects: null
+- id: FIFOR2
+  address_offset: 136
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FIFODATA
+    bit_range:
+    - 31
+    - 0
+    description: Receive and transmit FIFO data
+  side_effects: null
+- id: FIFOR3
+  address_offset: 140
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FIFODATA
+    bit_range:
+    - 31
+    - 0
+    description: Receive and transmit FIFO data
+  side_effects: null
+- id: FIFOR4
+  address_offset: 144
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FIFODATA
+    bit_range:
+    - 31
+    - 0
+    description: Receive and transmit FIFO data
+  side_effects: null
+- id: FIFOR5
+  address_offset: 148
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FIFODATA
+    bit_range:
+    - 31
+    - 0
+    description: Receive and transmit FIFO data
+  side_effects: null
+- id: FIFOR6
+  address_offset: 152
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FIFODATA
+    bit_range:
+    - 31
+    - 0
+    description: Receive and transmit FIFO data
+  side_effects: null
+- id: FIFOR7
+  address_offset: 156
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FIFODATA
+    bit_range:
+    - 31
+    - 0
+    description: Receive and transmit FIFO data
+  side_effects: null
+- id: FIFOR8
+  address_offset: 160
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FIFODATA
+    bit_range:
+    - 31
+    - 0
+    description: Receive and transmit FIFO data
+  side_effects: null
+- id: FIFOR9
+  address_offset: 164
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FIFODATA
+    bit_range:
+    - 31
+    - 0
+    description: Receive and transmit FIFO data
+  side_effects: null
+- id: FIFOR10
+  address_offset: 168
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FIFODATA
+    bit_range:
+    - 31
+    - 0
+    description: Receive and transmit FIFO data
+  side_effects: null
+- id: FIFOR11
+  address_offset: 172
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FIFODATA
+    bit_range:
+    - 31
+    - 0
+    description: Receive and transmit FIFO data
+  side_effects: null
+- id: FIFOR12
+  address_offset: 176
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FIFODATA
+    bit_range:
+    - 31
+    - 0
+    description: Receive and transmit FIFO data
+  side_effects: null
+- id: FIFOR13
+  address_offset: 180
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FIFODATA
+    bit_range:
+    - 31
+    - 0
+    description: Receive and transmit FIFO data
+  side_effects: null
+- id: FIFOR14
+  address_offset: 184
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FIFODATA
+    bit_range:
+    - 31
+    - 0
+    description: Receive and transmit FIFO data
+  side_effects: null
+- id: FIFOR15
+  address_offset: 188
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FIFODATA
+    bit_range:
+    - 31
+    - 0
+    description: Receive and transmit FIFO data
+  side_effects: null
+- id: SDMMC_IDMACTRLR
+  address_offset: 80
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IDMAEN
+    bit_range:
+    - 0
+    - 0
+    description: IDMA enable This bit can only be written by firmware when DPSM is inactive (DPSMACT = 0).
+  - name: IDMABMODE
+    bit_range:
+    - 1
+    - 1
+    description: Buffer mode selection. This bit can only be written by firmware when DPSM is inactive (DPSMACT = 0).
+  side_effects: null
+- id: SDMMC_IDMABSIZER
+  address_offset: 84
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IDMABNDT
+    bit_range:
+    - 16
+    - 5
+    description: Number of bytes per buffer
+  side_effects: null
+- id: SDMMC_IDMABASER
+  address_offset: 88
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IDMABASE
+    bit_range:
+    - 31
+    - 0
+    description: Buffer memory base address bits [31:2], shall be word aligned (bit [1:0] are always 0 and read only)
+  side_effects: null
+- id: SDMMC_IDMALAR
+  address_offset: 100
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ULA
+    bit_range:
+    - 31
+    - 31
+    description: Update SDMMC_IDMALAR from linked list when in linked list mode (SDMMC_IDMACTRLR.IDMABMODE select linked list mode)
+  - name: ULS
+    bit_range:
+    - 30
+    - 30
+    description: Update SDMMC_IDMABSIZE from the next linked list when in linked list mode (SDMMC_IDMACTRLR.IDMABMODE select linked list mode and ULA = 1)
+  - name: ABR
+    bit_range:
+    - 29
+    - 29
+    description: Acknowledge linked list buffer ready
+  - name: IDMALA
+    bit_range:
+    - 15
+    - 2
+    description: Acknowledge linked list buffer ready
+  side_effects: null
+- id: SDMMC_IDMABAR
+  address_offset: 104
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IDMABA
+    bit_range:
+    - 31
+    - 2
+    description: Word aligned Linked list memory base address
+  side_effects: null
+interrupts:
+  SDMMC2: 79
+  SDMMC1: 78
+timing: null

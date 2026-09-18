@@ -1,0 +1,164 @@
+peripheral: SEC_CRS
+version: 0.1.0
+registers:
+- id: CR
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 16384
+  fields:
+  - name: TRIM
+    bit_range:
+    - 14
+    - 8
+    description: HSI48 oscillator smooth trimming
+  - name: SWSYNC
+    bit_range:
+    - 7
+    - 7
+    description: Generate software SYNC event
+  - name: AUTOTRIMEN
+    bit_range:
+    - 6
+    - 6
+    description: Automatic trimming enable
+  - name: CEN
+    bit_range:
+    - 5
+    - 5
+    description: Frequency error counter enable
+  - name: ESYNCIE
+    bit_range:
+    - 3
+    - 3
+    description: Expected SYNC interrupt enable
+  - name: ERRIE
+    bit_range:
+    - 2
+    - 2
+    description: Synchronization or trimming error interrupt enable
+  - name: SYNCWARNIE
+    bit_range:
+    - 1
+    - 1
+    description: SYNC warning interrupt enable
+  - name: SYNCOKIE
+    bit_range:
+    - 0
+    - 0
+    description: SYNC event OK interrupt enable
+  side_effects: null
+- id: CFGR
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 539147135
+  fields:
+  - name: SYNCPOL
+    bit_range:
+    - 31
+    - 31
+    description: SYNC polarity selection
+  - name: SYNCSRC
+    bit_range:
+    - 29
+    - 28
+    description: SYNC signal source selection
+  - name: SYNCDIV
+    bit_range:
+    - 26
+    - 24
+    description: SYNC divider
+  - name: FELIM
+    bit_range:
+    - 23
+    - 16
+    description: Frequency error limit
+  - name: RELOAD
+    bit_range:
+    - 15
+    - 0
+    description: Counter reload value
+  side_effects: null
+- id: ISR
+  address_offset: 8
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: FECAP
+    bit_range:
+    - 31
+    - 16
+    description: Frequency error capture
+  - name: FEDIR
+    bit_range:
+    - 15
+    - 15
+    description: Frequency error direction
+  - name: TRIMOVF
+    bit_range:
+    - 10
+    - 10
+    description: Trimming overflow or underflow
+  - name: SYNCMISS
+    bit_range:
+    - 9
+    - 9
+    description: SYNC missed
+  - name: SYNCERR
+    bit_range:
+    - 8
+    - 8
+    description: SYNC error
+  - name: ESYNCF
+    bit_range:
+    - 3
+    - 3
+    description: Expected SYNC flag
+  - name: ERRF
+    bit_range:
+    - 2
+    - 2
+    description: Error flag
+  - name: SYNCWARNF
+    bit_range:
+    - 1
+    - 1
+    description: SYNC warning flag
+  - name: SYNCOKF
+    bit_range:
+    - 0
+    - 0
+    description: SYNC event OK flag
+  side_effects: null
+- id: ICR
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ESYNCC
+    bit_range:
+    - 3
+    - 3
+    description: Expected SYNC clear flag
+  - name: ERRC
+    bit_range:
+    - 2
+    - 2
+    description: Error clear flag
+  - name: SYNCWARNC
+    bit_range:
+    - 1
+    - 1
+    description: SYNC warning clear flag
+  - name: SYNCOKC
+    bit_range:
+    - 0
+    - 0
+    description: SYNC event OK clear flag
+  side_effects: null
+interrupts:
+  CRS: 74
+timing: null

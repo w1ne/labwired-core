@@ -1,0 +1,107 @@
+peripheral: SEC_IWDG
+version: 0.1.0
+registers:
+- id: KR
+  address_offset: 0
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: KEY
+    bit_range:
+    - 15
+    - 0
+    description: Key value (write only, read 0x0000)
+  side_effects: null
+- id: PR
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PR
+    bit_range:
+    - 3
+    - 0
+    description: Prescaler divider
+  side_effects: null
+- id: RLR
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 4095
+  fields:
+  - name: RL
+    bit_range:
+    - 11
+    - 0
+    description: Watchdog counter reload value
+  side_effects: null
+- id: SR
+  address_offset: 12
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: EWIF
+    bit_range:
+    - 14
+    - 14
+    description: Watchdog Early interrupt flag
+  - name: EWU
+    bit_range:
+    - 3
+    - 3
+    description: Watchdog interrupt comparator value update
+  - name: WVU
+    bit_range:
+    - 2
+    - 2
+    description: Watchdog counter window value update
+  - name: RVU
+    bit_range:
+    - 1
+    - 1
+    description: Watchdog counter reload value update
+  - name: PVU
+    bit_range:
+    - 0
+    - 0
+    description: Watchdog prescaler value update
+  side_effects: null
+- id: WINR
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 4095
+  fields:
+  - name: WIN
+    bit_range:
+    - 11
+    - 0
+    description: Watchdog counter window value
+  side_effects: null
+- id: EWCR
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EWIT
+    bit_range:
+    - 11
+    - 0
+    description: Watchdog counter window value
+  - name: EWIC
+    bit_range:
+    - 14
+    - 14
+    description: Watchdog early interrupt acknowledge
+  - name: EWIE
+    bit_range:
+    - 15
+    - 15
+    description: Watchdog early interrupt enable
+  side_effects: null
+interrupts: null
+timing: null

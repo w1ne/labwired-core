@@ -1,0 +1,451 @@
+peripheral: ADF1
+version: 0.1.0
+registers:
+- id: ADF_GCR
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TRGO
+    bit_range:
+    - 0
+    - 0
+    description: Trigger output control Set by software and reset by
+  side_effects: null
+- id: ADF_CKGCR
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CKGACTIVE
+    bit_range:
+    - 31
+    - 31
+    description: Clock generator active flag
+  - name: PROCDIV
+    bit_range:
+    - 30
+    - 24
+    description: Divider to control the serial interface clock
+  - name: CCKDIV
+    bit_range:
+    - 19
+    - 16
+    description: Divider to control the ADF_CCK clock
+  - name: TRGSRC
+    bit_range:
+    - 15
+    - 12
+    description: Digital filter trigger signal selection
+  - name: TRGSENS
+    bit_range:
+    - 8
+    - 8
+    description: CKGEN trigger sensitivity selection
+  - name: CCK1DIR
+    bit_range:
+    - 6
+    - 6
+    description: ADF_CCK1 direction
+  - name: CCK0DIR
+    bit_range:
+    - 5
+    - 5
+    description: ADF_CCK0 direction
+  - name: CKGMOD
+    bit_range:
+    - 4
+    - 4
+    description: Clock generator mode
+  - name: CCK1EN
+    bit_range:
+    - 2
+    - 2
+    description: ADF_CCK1 clock enable
+  - name: CCK0EN
+    bit_range:
+    - 1
+    - 1
+    description: ADF_CCK0 clock enable
+  - name: CKGDEN
+    bit_range:
+    - 0
+    - 0
+    description: CKGEN dividers enable
+  side_effects: null
+- id: ADF_SITF0CR
+  address_offset: 128
+  size: 32
+  access: READ_WRITE
+  reset_value: 7936
+  fields:
+  - name: SITFACTIVE
+    bit_range:
+    - 31
+    - 31
+    description: SITFACTIVE
+  - name: STH
+    bit_range:
+    - 12
+    - 8
+    description: STH
+  - name: SITFMOD
+    bit_range:
+    - 5
+    - 4
+    description: SITFMOD
+  - name: SCKSRC
+    bit_range:
+    - 2
+    - 1
+    description: SCKSRC
+  - name: SITFEN
+    bit_range:
+    - 0
+    - 0
+    description: SITFEN
+  side_effects: null
+- id: ADF_BSMX0CR
+  address_offset: 132
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BSMXACTIVE
+    bit_range:
+    - 31
+    - 31
+    description: BSMX active flag
+  - name: BSSEL
+    bit_range:
+    - 4
+    - 0
+    description: Bitstream selection
+  side_effects: null
+- id: ADF_DFLT0CR
+  address_offset: 136
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DFLTACTIVE
+    bit_range:
+    - 31
+    - 31
+    description: DFLT0 active flag
+  - name: DFLTRUN
+    bit_range:
+    - 30
+    - 30
+    description: DFLT0 run status flag
+  - name: NBDIS
+    bit_range:
+    - 27
+    - 20
+    description: Number of samples to be discarded
+  - name: TRGSRC
+    bit_range:
+    - 15
+    - 12
+    description: DFLT0 trigger signal selection
+  - name: ACQMOD
+    bit_range:
+    - 6
+    - 4
+    description: DFLT0 trigger mode
+  - name: FTH
+    bit_range:
+    - 2
+    - 2
+    description: RXFIFO threshold selection
+  - name: DMAEN
+    bit_range:
+    - 1
+    - 1
+    description: DMA requests enable
+  - name: DFLTEN
+    bit_range:
+    - 0
+    - 0
+    description: DFLT0 enable
+  side_effects: null
+- id: ADF_DFLT0CICR
+  address_offset: 140
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SCALE
+    bit_range:
+    - 25
+    - 20
+    description: Scaling factor selection
+  - name: MCICD
+    bit_range:
+    - 16
+    - 8
+    description: CIC decimation ratio selection
+  - name: CICMOD
+    bit_range:
+    - 6
+    - 4
+    description: Select the CIC order
+  - name: DATSRC
+    bit_range:
+    - 1
+    - 0
+    description: Source data for the digital filter
+  side_effects: null
+- id: ADF_DFLT0RSFR
+  address_offset: 144
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: HPFC
+    bit_range:
+    - 9
+    - 8
+    description: High-pass filter cut-off frequency
+  - name: HPFBYP
+    bit_range:
+    - 7
+    - 7
+    description: High-pass filter bypass
+  - name: RSFLTD
+    bit_range:
+    - 4
+    - 4
+    description: Reshaper filter decimation ratio
+  - name: RSFLTBYP
+    bit_range:
+    - 0
+    - 0
+    description: Reshaper filter bypass
+  side_effects: null
+- id: ADF_DLY0CR
+  address_offset: 164
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SKPBF
+    bit_range:
+    - 31
+    - 31
+    description: Skip busy flag
+  - name: SKPDLY
+    bit_range:
+    - 6
+    - 0
+    description: Delay to apply to a bitstream
+  side_effects: null
+- id: ADF_DFLT0IER
+  address_offset: 172
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SDLVLIE
+    bit_range:
+    - 13
+    - 13
+    description: SAD sound-level value ready enable
+  - name: SDDETIE
+    bit_range:
+    - 12
+    - 12
+    description: Sound activity detection interrupt enable
+  - name: RFOVRIE
+    bit_range:
+    - 11
+    - 11
+    description: Reshape filter overrun interrupt enable
+  - name: CKABIE
+    bit_range:
+    - 10
+    - 10
+    description: Clock absence detection interrupt enable
+  - name: SATIE
+    bit_range:
+    - 9
+    - 9
+    description: Saturation detection interrupt enable
+  - name: DOVRIE
+    bit_range:
+    - 1
+    - 1
+    description: Data overflow interrupt enable
+  - name: FTHIE
+    bit_range:
+    - 0
+    - 0
+    description: RXFIFO threshold interrupt enable
+  side_effects: null
+- id: ADF_DFLT0ISR
+  address_offset: 176
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SDLVLF
+    bit_range:
+    - 13
+    - 13
+    description: Sound level value ready flag
+  - name: SDDETF
+    bit_range:
+    - 12
+    - 12
+    description: Sound activity detection flag
+  - name: RFOVRF
+    bit_range:
+    - 11
+    - 11
+    description: Reshape filter overrun detection flag
+  - name: CKABF
+    bit_range:
+    - 10
+    - 10
+    description: Clock absence detection flag
+  - name: SATF
+    bit_range:
+    - 9
+    - 9
+    description: Saturation detection flag
+  - name: RXNEF
+    bit_range:
+    - 3
+    - 3
+    description: RXFIFO not empty flag
+  - name: DOVRF
+    bit_range:
+    - 1
+    - 1
+    description: Data overflow flag
+  - name: FTHF
+    bit_range:
+    - 0
+    - 0
+    description: RXFIFO threshold flag
+  side_effects: null
+- id: ADF_SADCR
+  address_offset: 184
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SADACTIVE
+    bit_range:
+    - 31
+    - 31
+    description: SAD Active flag
+  - name: SADMOD
+    bit_range:
+    - 13
+    - 12
+    description: SAD working mode
+  - name: FRSIZE
+    bit_range:
+    - 10
+    - 8
+    description: Frame size
+  - name: HYSTEN
+    bit_range:
+    - 7
+    - 7
+    description: Hysteresis enable
+  - name: SADST
+    bit_range:
+    - 5
+    - 4
+    description: SAD state
+  - name: DETCFG
+    bit_range:
+    - 3
+    - 3
+    description: Sound trigger event configuration
+  - name: DATCAP
+    bit_range:
+    - 2
+    - 1
+    description: Data capture mode
+  - name: SADEN
+    bit_range:
+    - 0
+    - 0
+    description: Sound activity detector enable
+  side_effects: null
+- id: ADF_SADCFGR
+  address_offset: 188
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ANMIN
+    bit_range:
+    - 28
+    - 16
+    description: ANMIN
+  - name: HGOVR
+    bit_range:
+    - 14
+    - 12
+    description: Hangover time window
+  - name: LFRNB
+    bit_range:
+    - 10
+    - 8
+    description: LFRNB
+  - name: ANSLP
+    bit_range:
+    - 6
+    - 4
+    description: ANSLP
+  - name: SNTHR
+    bit_range:
+    - 3
+    - 0
+    description: SNTHR
+  side_effects: null
+- id: ADF_SADSDLVR
+  address_offset: 192
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: SDLVL
+    bit_range:
+    - 14
+    - 0
+    description: SDLVL
+  side_effects: null
+- id: ADF_SADANLVR
+  address_offset: 196
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: ANLVL
+    bit_range:
+    - 14
+    - 0
+    description: ANLVL
+  side_effects: null
+- id: ADF_DFLT0DR
+  address_offset: 240
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: DR
+    bit_range:
+    - 31
+    - 8
+    description: DR
+  side_effects: null
+interrupts:
+  ADF1_FLT0: 112
+timing: null

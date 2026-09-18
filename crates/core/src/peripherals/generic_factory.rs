@@ -61,6 +61,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "rng",
     "simctl",
     "crc",
+    "crs",
     "rtc",
     "rtc_f1",
     "rtc_v3",
@@ -599,6 +600,7 @@ pub fn try_build(
                 .unwrap_or(32);
             Box::new(crate::peripherals::crc::Crc::new().with_idr_width(idr_width))
         }
+        "crs" => Box::new(crate::peripherals::crs::Crs::new()),
         "rtc" => Box::new(crate::peripherals::rtc::Rtc::new()),
         "rtc_f1" => Box::new(crate::peripherals::rtc_f1::RtcF1::new()),
         "rtc_v3" => Box::new(crate::peripherals::rtc_v3::RtcV3::new()),

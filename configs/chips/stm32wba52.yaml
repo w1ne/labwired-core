@@ -21,7 +21,13 @@ peripherals:
     base_address: 0x46020C00
     config:
       debug_schema: "../peripherals/stm32wba52/rcc.yaml"
-      profile: "stm32v2"
+      # RM0493 §7.7.13 — RCC_PLL1CFGR bit22 (PLL1RCLKPRERDY, read-only)
+      # tracks the inverse of bit20 (PLL1RCLKPRE). Both Zephyr's
+      # clock_stm32_ll_wba.c and the Cube HAL clear bit20 and poll bit22
+      # during PLL1 bring-up, so WBA must synthesize that status. The generic
+      # "stm32v2" layout (U5, RM0456) has no field at bits 19-31 and keeps
+      # 0x28 as plain storage — which is why this is its own layout.
+      profile: "stm32wba"
   - id: "gpioa"
     type: "gpio"
     base_address: 0x42020000
@@ -100,7 +106,8 @@ peripherals:
   # CRC-32 polynomial 0x04C11DB7 to CRC_POL during Arduino core startup; with no
   # CRC mapped that store landed on unmapped MMIO. IDR is 32-bit here (F0/F1/L0
   # are the 8-bit parts). Left ungated: RCC_AHB1ENR.CRCEN is not surfaced by the
-  # stm32v2 RCC model's enable-register set, matching the gpdma1 entry below.
+  # V2 RCC model's (profile `stm32wba`) enable-register set, matching the gpdma1
+  # entry below.
   - id: "crc"
     type: "crc"
     base_address: 0x40023000
@@ -108,8 +115,8 @@ peripherals:
     config:
       debug_schema: "../peripherals/stm32wba52/crc.yaml"
       idr_width: 32
-  # ── Tier-1 peripherals (RM0493). The RCC model is profile stm32v2, so the
-  # clock-gate `reg:` names resolve to the V2 enable-register offsets
+  # ── Tier-1 peripherals (RM0493). The RCC model uses profile `stm32wba`, so
+  # the clock-gate `reg:` names resolve through the V2 enable-register offsets
   # (ahb2enr@0x8C, apb1lenr@0x9C, apb2enr@0xA4); the `bit:` values are the
   # silicon RM0493 enable bits for each block's real bus. ──────────────────
   # TIM2 — 32-bit GP timer (APB1). RCC_APB1ENR1.TIM2EN (bit 0).
@@ -159,8 +166,9 @@ peripherals:
       pad_map: "stm32wba"
     clock: { reg: "apb2enr", bit: 12 }
   # GPDMA1 (AHB1, 8-channel, RM0481/RM0493 fixed layout). RM0493 puts GPDMA1EN
-  # on AHB1ENR (bit 0), which the stm32v2 RCC model does not surface, so the
-  # channel is declared ungated; the mem-to-mem round-trip is the proof.
+  # on AHB1ENR (bit 0), which the V2 RCC model (profile `stm32wba`) does not
+  # surface, so the channel is declared ungated; the mem-to-mem round-trip is
+  # the proof.
   - id: "gpdma1"
     type: "gpdma"
     base_address: 0x40020000
@@ -177,9 +185,10 @@ peripherals:
     config:
       debug_schema: "../peripherals/stm32wba52/iwdg.yaml"
   # RTC (APB7, base 0x46007800). Its register interface is gated by
-  # RCC_APB7ENR.RTCAPBEN (bit 21) on the SmartRun domain, which the stm32v2 RCC
-  # model does not surface (it exposes only ahb2enr/apb1lenr/apb2enr), so the
-  # RTC is declared ungated and the WPR/calendar round-trip carries the proof.
+  # RCC_APB7ENR.RTCAPBEN (bit 21) on the SmartRun domain, which the V2 RCC model
+  # (profile `stm32wba`) does not surface (it exposes only
+  # ahb2enr/apb1lenr/apb2enr), so the RTC is declared ungated and the
+  # WPR/calendar round-trip carries the proof.
   - id: "rtc"
     type: "rtc"
     base_address: 0x46007800
@@ -194,9 +203,9 @@ peripherals:
     base_address: 0xE000E100
     size: "1KB"
   # NOTE: ADC4 (base 0x46021000) is NOT declared. Its clock enable is
-  # RCC_AHB4ENR.ADC4EN on the SmartRun (APB7/AHB4) domain, which the stm32v2
-  # RCC model does not surface, so it cannot be honestly clock-gated — the adc
-  # class is left `na` rather than shipped ungated.
+  # RCC_AHB4ENR.ADC4EN on the SmartRun (APB7/AHB4) domain, which the V2 RCC
+  # model (profile `stm32wba`) does not surface, so it cannot be honestly
+  # clock-gated — the adc class is left `na` rather than shipped ungated.
   # DBGMCU (RM0493 §75) @ 0xE0044000 — note the base, which is NOT the
   # 0xE0042000 the Cortex-M3/M4 STM32s use. ST's own stm32wba52.svd puts it at
   # 0xE0044000, and the Zephyr lab confirms it: with the ARMv8-M TT decode

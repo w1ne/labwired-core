@@ -1,0 +1,151 @@
+peripheral: SEC_GTZC2_TZSC
+version: 0.1.0
+registers:
+- id: TZSC_CR
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LCK
+    bit_range:
+    - 0
+    - 0
+    description: lock the configuration of GTZC1_TZSC_SECCFGRx and GTZC1_TZSC_PRIVCFGRx registers until next reset
+  side_effects: null
+- id: TZSC_SECCFGR1
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPI3SEC
+    bit_range:
+    - 0
+    - 0
+    description: secure access mode for SPI3
+  - name: LPUART1SEC
+    bit_range:
+    - 1
+    - 1
+    description: secure access mode for LPUART1
+  - name: I2C3SEC
+    bit_range:
+    - 2
+    - 2
+    description: secure access mode for I2C3
+  - name: LPTIM1SEC
+    bit_range:
+    - 3
+    - 3
+    description: secure access mode for LPTIM1
+  - name: LPTIM3SEC
+    bit_range:
+    - 4
+    - 4
+    description: secure access mode for LPTIM3
+  - name: LPTIM4SEC
+    bit_range:
+    - 5
+    - 5
+    description: secure access mode for LPTIM4
+  - name: OPAMPSEC
+    bit_range:
+    - 6
+    - 6
+    description: secure access mode for OPAMP
+  - name: COMPSEC
+    bit_range:
+    - 7
+    - 7
+    description: secure access mode for COMP
+  - name: ADC4SEC
+    bit_range:
+    - 8
+    - 8
+    description: secure access mode for ADC4
+  - name: VREFBUFSEC
+    bit_range:
+    - 9
+    - 9
+    description: secure access mode for VREFBUF
+  - name: DAC1SEC
+    bit_range:
+    - 11
+    - 11
+    description: secure access mode for DAC1
+  - name: ADF1SEC
+    bit_range:
+    - 12
+    - 12
+    description: secure access mode for ADF1
+  side_effects: null
+- id: TZSC_PRIVCFGR1
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPI3PRIV
+    bit_range:
+    - 0
+    - 0
+    description: privileged access mode for SPI3
+  - name: LPUART1PRIV
+    bit_range:
+    - 1
+    - 1
+    description: privileged access mode for LPUART1
+  - name: I2C3PRIV
+    bit_range:
+    - 2
+    - 2
+    description: privileged access mode for I2C3
+  - name: LPTIM1PRIV
+    bit_range:
+    - 3
+    - 3
+    description: privileged access mode for LPTIM1
+  - name: LPTIM3PRIV
+    bit_range:
+    - 4
+    - 4
+    description: privileged access mode for LPTIM3
+  - name: LPTIM4PRIV
+    bit_range:
+    - 5
+    - 5
+    description: privileged access mode for LPTIM4
+  - name: OPAMPPRIV
+    bit_range:
+    - 6
+    - 6
+    description: privileged access mode for OPAMP
+  - name: COMPPRIV
+    bit_range:
+    - 7
+    - 7
+    description: privileged access mode for COMP
+  - name: ADC4PRIV
+    bit_range:
+    - 8
+    - 8
+    description: privileged access mode for ADC4
+  - name: VREFBUFPRIV
+    bit_range:
+    - 9
+    - 9
+    description: privileged access mode for VREFBUF
+  - name: DAC1PRIV
+    bit_range:
+    - 11
+    - 11
+    description: privileged access mode for DAC1
+  - name: ADF1PRIV
+    bit_range:
+    - 12
+    - 12
+    description: privileged access mode for ADF1
+  side_effects: null
+interrupts: null
+timing: null

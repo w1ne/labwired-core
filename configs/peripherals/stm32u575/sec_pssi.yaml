@@ -1,0 +1,144 @@
+peripheral: SEC_PSSI
+version: 0.1.0
+registers:
+- id: CR
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 1073741824
+  fields:
+  - name: CKPOL
+    bit_range:
+    - 5
+    - 5
+    description: Parallel data clock polarity This bit configures the capture edge of the parallel clock or the edge used for driving outputs, depending on OUTEN.
+  - name: DEPOL
+    bit_range:
+    - 6
+    - 6
+    description: Data enable (PSSI_DE) polarity This bit indicates the level on the PSSI_DE pin when the data are not valid on the parallel interface.
+  - name: RDYPOL
+    bit_range:
+    - 8
+    - 8
+    description: Ready (PSSI_RDY) polarity This bit indicates the level on the PSSI_RDY pin when the data are not valid on the parallel interface.
+  - name: EDM
+    bit_range:
+    - 11
+    - 10
+    description: Extended data mode
+  - name: ENABLE
+    bit_range:
+    - 14
+    - 14
+    description: 'PSSI enable The contents of the FIFO are flushed when ENABLE is cleared to 0. Note: When ENABLE=1, the content of PSSI_CR must not be changed, except for the ENABLE bit itself. All configuration bits can change as soon as ENABLE changes from 0 to 1. The DMA controller and all PSSI configuration registers must be programmed correctly before setting the ENABLE bit to 1. The ENABLE bit and the DCMI ENABLE bit (bit 15 of DCMI_CR) must not be set to 1 at the same time.'
+  - name: DERDYCFG
+    bit_range:
+    - 20
+    - 18
+    description: Data enable and ready configuration When the PSSI_RDY function is mapped to the PSSI_DE pin (settings 101 or 111), it is still the RDYPOL bit which determines its polarity. Similarly, when the PSSI_DE function is mapped to the PSSI_RDY pin (settings 110 or 111), it is still the DEPOL bit which determines its polarity.
+  - name: DMAEN
+    bit_range:
+    - 30
+    - 30
+    description: DMA enable bit
+  - name: OUTEN
+    bit_range:
+    - 31
+    - 31
+    description: Data direction selection bit
+  side_effects: null
+- id: SR
+  address_offset: 4
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: RTT4B
+    bit_range:
+    - 2
+    - 2
+    description: RTT4B
+  - name: RTT1B
+    bit_range:
+    - 3
+    - 3
+    description: RTT1B
+  side_effects: null
+- id: RIS
+  address_offset: 8
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: OVR_RIS
+    bit_range:
+    - 1
+    - 1
+    description: OVR_RIS
+  side_effects: null
+- id: IER
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OVR_IE
+    bit_range:
+    - 1
+    - 1
+    description: OVR_IE
+  side_effects: null
+- id: MIS
+  address_offset: 16
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: OVR_MIS
+    bit_range:
+    - 1
+    - 1
+    description: OVR_MIS
+  side_effects: null
+- id: ICR
+  address_offset: 20
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: OVR_ISC
+    bit_range:
+    - 1
+    - 1
+    description: OVR_ISC
+  side_effects: null
+- id: DR
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 3221225472
+  fields:
+  - name: BYTE0
+    bit_range:
+    - 7
+    - 0
+    description: Data byte 0
+  - name: BYTE1
+    bit_range:
+    - 15
+    - 8
+    description: Data byte 1
+  - name: BYTE2
+    bit_range:
+    - 23
+    - 16
+    description: Data byte 2
+  - name: BYTE3
+    bit_range:
+    - 31
+    - 24
+    description: Data byte 3
+  side_effects: null
+interrupts: null
+timing: null

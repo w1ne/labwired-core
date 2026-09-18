@@ -1,0 +1,931 @@
+peripheral: GTZC1_TZSC
+version: 0.1.0
+registers:
+- id: TZSC_CR
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LCK
+    bit_range:
+    - 0
+    - 0
+    description: lock the configuration of GTZC1_TZSC_SECCFGRx and GTZC1_TZSC_PRIVCFGRx registers until next reset
+  side_effects: null
+- id: TZSC_SECCFGR1
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIM2SEC
+    bit_range:
+    - 0
+    - 0
+    description: secure access mode for TIM2
+  - name: TIM3SEC
+    bit_range:
+    - 1
+    - 1
+    description: secure access mode for TIM3
+  - name: TIM4SEC
+    bit_range:
+    - 2
+    - 2
+    description: secure access mode for TIM4
+  - name: TIM5SEC
+    bit_range:
+    - 3
+    - 3
+    description: secure access mode for TIM5
+  - name: TIM6SEC
+    bit_range:
+    - 4
+    - 4
+    description: secure access mode for TIM6
+  - name: TIM7SEC
+    bit_range:
+    - 5
+    - 5
+    description: secure access mode for TIM7
+  - name: WWDGSEC
+    bit_range:
+    - 6
+    - 6
+    description: secure access mode for WWDG
+  - name: IWDGSEC
+    bit_range:
+    - 7
+    - 7
+    description: secure access mode for IWDG
+  - name: SPI2SEC
+    bit_range:
+    - 8
+    - 8
+    description: secure access mode for SPI2
+  - name: USART2SEC
+    bit_range:
+    - 9
+    - 9
+    description: secure access mode for USART2
+  - name: USART3SEC
+    bit_range:
+    - 10
+    - 10
+    description: secure access mode for USART3
+  - name: UART4SEC
+    bit_range:
+    - 11
+    - 11
+    description: secure access mode for UART4
+  - name: UART5SEC
+    bit_range:
+    - 12
+    - 12
+    description: secure access mode for UART5
+  - name: I2C1SEC
+    bit_range:
+    - 13
+    - 13
+    description: secure access mode for I2C1
+  - name: I2C2SEC
+    bit_range:
+    - 14
+    - 14
+    description: secure access mode for I2C2
+  - name: CRSSEC
+    bit_range:
+    - 15
+    - 15
+    description: secure access mode for CRS
+  - name: I2C4SEC
+    bit_range:
+    - 16
+    - 16
+    description: secure access mode for I2C4
+  - name: LPTIM2SEC
+    bit_range:
+    - 17
+    - 17
+    description: secure access mode for LPTIM2
+  - name: FDCAN1SEC
+    bit_range:
+    - 18
+    - 18
+    description: secure access mode for FDCAN1
+  - name: UCPD1SEC
+    bit_range:
+    - 19
+    - 19
+    description: secure access mode for UCPD1
+  side_effects: null
+- id: TZSC_SECCFGR2
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIM1SEC
+    bit_range:
+    - 0
+    - 0
+    description: secure access mode for TIM1
+  - name: SPI1SEC
+    bit_range:
+    - 1
+    - 1
+    description: secure access mode for SPI1
+  - name: TIM8SEC
+    bit_range:
+    - 2
+    - 2
+    description: secure access mode for TIM8
+  - name: USART1SEC
+    bit_range:
+    - 3
+    - 3
+    description: secure access mode for USART1
+  - name: TIM15SEC
+    bit_range:
+    - 4
+    - 4
+    description: secure access mode for TIM5
+  - name: TIM16SEC
+    bit_range:
+    - 5
+    - 5
+    description: secure access mode for TIM6
+  - name: TIM17SEC
+    bit_range:
+    - 6
+    - 6
+    description: secure access mode for TIM7
+  - name: SAI1SEC
+    bit_range:
+    - 7
+    - 7
+    description: secure access mode for SAI1
+  - name: SAI2SEC
+    bit_range:
+    - 8
+    - 8
+    description: secure access mode for SAI2
+  side_effects: null
+- id: TZSC_SECCFGR3
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MDF1SEC
+    bit_range:
+    - 0
+    - 0
+    description: secure access mode for MDF1
+  - name: CORDICSEC
+    bit_range:
+    - 1
+    - 1
+    description: secure access mode for CORDIC
+  - name: FMACSEC
+    bit_range:
+    - 2
+    - 2
+    description: secure access mode for FMAC
+  - name: CRCSEC
+    bit_range:
+    - 3
+    - 3
+    description: secure access mode for CRC
+  - name: TSCSEC
+    bit_range:
+    - 4
+    - 4
+    description: secure access mode for TSC
+  - name: DMA2DSEC
+    bit_range:
+    - 5
+    - 5
+    description: secure access mode for register of DMA2D
+  - name: ICACHE_REGSEC
+    bit_range:
+    - 6
+    - 6
+    description: secure access mode for ICACHE registers
+  - name: DCACHE_REGSEC
+    bit_range:
+    - 7
+    - 7
+    description: secure access mode for DCACHE registers
+  - name: ADC1SEC
+    bit_range:
+    - 8
+    - 8
+    description: secure access mode for ADC1
+  - name: DCMISEC
+    bit_range:
+    - 9
+    - 9
+    description: secure access mode for DCMI
+  - name: OTGFSSEC
+    bit_range:
+    - 10
+    - 10
+    description: secure access mode for OTG_FS
+  - name: AESSEC
+    bit_range:
+    - 11
+    - 11
+    description: secure access mode for AES
+  - name: HASHSEC
+    bit_range:
+    - 12
+    - 12
+    description: secure access mode for HASH
+  - name: RNGSEC
+    bit_range:
+    - 13
+    - 13
+    description: secure access mode for RNG
+  - name: PKASEC
+    bit_range:
+    - 14
+    - 14
+    description: secure access mode for PKA
+  - name: SAESSEC
+    bit_range:
+    - 15
+    - 15
+    description: secure access mode for SAES
+  - name: OCTOSPIMSEC
+    bit_range:
+    - 16
+    - 16
+    description: secure access mode for OCTOSPIM
+  - name: SDMMC1SEC
+    bit_range:
+    - 17
+    - 17
+    description: secure access mode for SDMMC2
+  - name: SDMMC2SEC
+    bit_range:
+    - 18
+    - 18
+    description: secure access mode for SDMMC1
+  - name: FSMC_REGSEC
+    bit_range:
+    - 19
+    - 19
+    description: secure access mode for FSMC registers
+  - name: OCTOSPI1_REGSEC
+    bit_range:
+    - 20
+    - 20
+    description: secure access mode for OCTOSPI1 registers
+  - name: OCTOSPI2_REGSEC
+    bit_range:
+    - 21
+    - 21
+    description: secure access mode for OCTOSPI2 registers
+  - name: RAMCFGSEC
+    bit_range:
+    - 22
+    - 22
+    description: secure access mode for RAMCFG
+  side_effects: null
+- id: TZSC_PRIVCFGR1
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIM2PRIV
+    bit_range:
+    - 0
+    - 0
+    description: privileged access mode for TIM2
+  - name: TIM3PRIV
+    bit_range:
+    - 1
+    - 1
+    description: privileged access mode for TIM3
+  - name: TIM4PRIV
+    bit_range:
+    - 2
+    - 2
+    description: privileged access mode for TIM4
+  - name: TIM5PRIV
+    bit_range:
+    - 3
+    - 3
+    description: privileged access mode for TIM5
+  - name: TIM6PRIV
+    bit_range:
+    - 4
+    - 4
+    description: privileged access mode for TIM6
+  - name: TIM7PRIV
+    bit_range:
+    - 5
+    - 5
+    description: privileged access mode for TIM7
+  - name: WWDGPRIV
+    bit_range:
+    - 6
+    - 6
+    description: privileged access mode for WWDG
+  - name: IWDGPRIV
+    bit_range:
+    - 7
+    - 7
+    description: privileged access mode for IWDG
+  - name: SPI2PRIV
+    bit_range:
+    - 8
+    - 8
+    description: privileged access mode for SPI2
+  - name: USART2PRIV
+    bit_range:
+    - 9
+    - 9
+    description: privileged access mode for USART2
+  - name: USART3PRIV
+    bit_range:
+    - 10
+    - 10
+    description: privileged access mode for USART3
+  - name: UART4PRIV
+    bit_range:
+    - 11
+    - 11
+    description: privileged access mode for UART4
+  - name: UART5PRIV
+    bit_range:
+    - 12
+    - 12
+    description: privileged access mode for UART5
+  - name: I2C1PRIV
+    bit_range:
+    - 13
+    - 13
+    description: privileged access mode for I2C1
+  - name: I2C2PRIV
+    bit_range:
+    - 14
+    - 14
+    description: privileged access mode for I2C2
+  - name: CRSPRIV
+    bit_range:
+    - 15
+    - 15
+    description: privileged access mode for CRS
+  - name: I2C4PRIV
+    bit_range:
+    - 16
+    - 16
+    description: privileged access mode for I2C4
+  - name: LPTIM2PRIV
+    bit_range:
+    - 17
+    - 17
+    description: privileged access mode for LPTIM2
+  - name: FDCAN1PRIV
+    bit_range:
+    - 18
+    - 18
+    description: privileged access mode for FDCAN1
+  - name: UCPD1PRIV
+    bit_range:
+    - 19
+    - 19
+    description: privileged access mode for UCPD1
+  side_effects: null
+- id: TZSC_PRIVCFGR2
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIM1PRIV
+    bit_range:
+    - 0
+    - 0
+    description: privileged access mode for TIM1
+  - name: SPI1PRIV
+    bit_range:
+    - 1
+    - 1
+    description: privileged access mode for SPI1PRIV
+  - name: TIM8PRIV
+    bit_range:
+    - 2
+    - 2
+    description: privileged access mode for TIM8
+  - name: USART1PRIV
+    bit_range:
+    - 3
+    - 3
+    description: privileged access mode for USART1
+  - name: TIM15PRIV
+    bit_range:
+    - 4
+    - 4
+    description: privileged access mode for TIM15
+  - name: TIM16PRIV
+    bit_range:
+    - 5
+    - 5
+    description: privileged access mode for TIM16
+  - name: TIM17PRIV
+    bit_range:
+    - 6
+    - 6
+    description: privileged access mode for TIM17
+  - name: SAI1PRIV
+    bit_range:
+    - 7
+    - 7
+    description: privileged access mode for SAI1
+  - name: SAI2PRIV
+    bit_range:
+    - 8
+    - 8
+    description: privileged access mode for SAI2
+  side_effects: null
+- id: TZSC_PRIVCFGR3
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MDF1PRIV
+    bit_range:
+    - 0
+    - 0
+    description: privileged access mode for MDF1
+  - name: CORDICPRIV
+    bit_range:
+    - 1
+    - 1
+    description: privileged access mode for CORDIC
+  - name: FMACPRIV
+    bit_range:
+    - 2
+    - 2
+    description: privileged access mode for FMAC
+  - name: CRCPRIV
+    bit_range:
+    - 3
+    - 3
+    description: privileged access mode for CRC
+  - name: TSCPRIV
+    bit_range:
+    - 4
+    - 4
+    description: privileged access mode for TSC
+  - name: DMA2DPRIV
+    bit_range:
+    - 5
+    - 5
+    description: privileged access mode for register of DMA2D
+  - name: ICACHE_REGPRIV
+    bit_range:
+    - 6
+    - 6
+    description: privileged access mode for ICACHE registers
+  - name: DCACHE_REGPRIV
+    bit_range:
+    - 7
+    - 7
+    description: privileged access mode for DCACHE registers
+  - name: ADC1PRIV
+    bit_range:
+    - 8
+    - 8
+    description: privileged access mode for ADC1
+  - name: DCMIPRIV
+    bit_range:
+    - 9
+    - 9
+    description: privileged access mode for DCMI
+  - name: OTGFSPRIV
+    bit_range:
+    - 10
+    - 10
+    description: privileged access mode for OTG_FS
+  - name: AESPRIV
+    bit_range:
+    - 11
+    - 11
+    description: privileged access mode for AES
+  - name: HASHPRIV
+    bit_range:
+    - 12
+    - 12
+    description: privileged access mode for HASH
+  - name: RNGPRIV
+    bit_range:
+    - 13
+    - 13
+    description: privileged access mode for RNG
+  - name: PKAPRIV
+    bit_range:
+    - 14
+    - 14
+    description: privileged access mode for PKA
+  - name: SAESPRIV
+    bit_range:
+    - 15
+    - 15
+    description: privileged access mode for SAES
+  - name: OCTOSPIMPRIV
+    bit_range:
+    - 16
+    - 16
+    description: privileged access mode for OCTOSPIM
+  - name: SDMMC1PRIV
+    bit_range:
+    - 17
+    - 17
+    description: privileged access mode for SDMMC2
+  - name: SDMMC2PRIV
+    bit_range:
+    - 18
+    - 18
+    description: privileged access mode for SDMMC1
+  - name: FSMC_REGPRIV
+    bit_range:
+    - 19
+    - 19
+    description: privileged access mode for FSMC registers
+  - name: OCTOSPI1_REGPRIV
+    bit_range:
+    - 20
+    - 20
+    description: privileged access mode for OCTOSPI1
+  - name: OCTOSPI2_REGPRIV
+    bit_range:
+    - 21
+    - 21
+    description: privileged access mode for OCTOSPI2
+  - name: RAMCFGPRIV
+    bit_range:
+    - 22
+    - 22
+    description: privileged access mode for RAMCFG
+  side_effects: null
+- id: TZSC_MPCWM1ACFGR
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SREN
+    bit_range:
+    - 0
+    - 0
+    description: Sub-region enable
+  - name: SRLOCK
+    bit_range:
+    - 1
+    - 1
+    description: Sub-region lock
+  - name: SEC
+    bit_range:
+    - 8
+    - 8
+    description: Secure sub-region
+  - name: PRIV
+    bit_range:
+    - 9
+    - 9
+    description: Privileged sub-region
+  side_effects: null
+- id: TZSC_MPCWM1AR
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SUBA_START
+    bit_range:
+    - 10
+    - 0
+    description: Start of sub-region A
+  - name: SUBA_LENGTH
+    bit_range:
+    - 27
+    - 16
+    description: Length of sub-region A
+  side_effects: null
+- id: TZSC_MPCWM1BCFGR
+  address_offset: 72
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SREN
+    bit_range:
+    - 0
+    - 0
+    description: Sub-region enable
+  - name: SRLOCK
+    bit_range:
+    - 1
+    - 1
+    description: Sub-region lock
+  - name: SEC
+    bit_range:
+    - 8
+    - 8
+    description: Secure sub-region
+  - name: PRIV
+    bit_range:
+    - 9
+    - 9
+    description: Privileged sub-region
+  side_effects: null
+- id: TZSC_MPCWM1BR
+  address_offset: 76
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SUBB_START
+    bit_range:
+    - 10
+    - 0
+    description: Start of sub-region A
+  - name: SUBB_LENGTH
+    bit_range:
+    - 27
+    - 16
+    description: Length of sub-region A
+  side_effects: null
+- id: TZSC_MPCWM2ACFGR
+  address_offset: 80
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SREN
+    bit_range:
+    - 0
+    - 0
+    description: Sub-region enable
+  - name: SRLOCK
+    bit_range:
+    - 1
+    - 1
+    description: Sub-region lock
+  - name: SEC
+    bit_range:
+    - 8
+    - 8
+    description: Secure sub-region
+  - name: PRIV
+    bit_range:
+    - 9
+    - 9
+    description: Privileged sub-region
+  side_effects: null
+- id: TZSC_MPCWM2AR
+  address_offset: 84
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SUBA_START
+    bit_range:
+    - 10
+    - 0
+    description: Start of sub-region A
+  - name: SUBA_LENGTH
+    bit_range:
+    - 27
+    - 16
+    description: Length of sub-region A
+  side_effects: null
+- id: TZSC_MPCWM2BCFGR
+  address_offset: 88
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SREN
+    bit_range:
+    - 0
+    - 0
+    description: Sub-region enable
+  - name: SRLOCK
+    bit_range:
+    - 1
+    - 1
+    description: Sub-region lock
+  - name: SEC
+    bit_range:
+    - 8
+    - 8
+    description: Secure sub-region
+  - name: PRIV
+    bit_range:
+    - 9
+    - 9
+    description: Privileged sub-region
+  side_effects: null
+- id: TZSC_MPCWM2BR
+  address_offset: 92
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SUBB_START
+    bit_range:
+    - 10
+    - 0
+    description: Start of sub-region A
+  - name: SUBB_LENGTH
+    bit_range:
+    - 27
+    - 16
+    description: Length of sub-region A
+  side_effects: null
+- id: TZSC_MPCWM3ACFGR
+  address_offset: 96
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SREN
+    bit_range:
+    - 0
+    - 0
+    description: Sub-region enable
+  - name: SRLOCK
+    bit_range:
+    - 1
+    - 1
+    description: Sub-region lock
+  - name: SEC
+    bit_range:
+    - 8
+    - 8
+    description: Secure sub-region
+  - name: PRIV
+    bit_range:
+    - 9
+    - 9
+    description: Privileged sub-region
+  side_effects: null
+- id: TZSC_MPCWM3AR
+  address_offset: 100
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SUBA_START
+    bit_range:
+    - 10
+    - 0
+    description: Start of sub-region A
+  - name: SUBA_LENGTH
+    bit_range:
+    - 27
+    - 16
+    description: Length of sub-region A
+  side_effects: null
+- id: TZSC_MPCWM4ACFGR
+  address_offset: 112
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SREN
+    bit_range:
+    - 0
+    - 0
+    description: Sub-region enable
+  - name: SRLOCK
+    bit_range:
+    - 1
+    - 1
+    description: Sub-region lock
+  - name: SEC
+    bit_range:
+    - 8
+    - 8
+    description: Secure sub-region
+  - name: PRIV
+    bit_range:
+    - 9
+    - 9
+    description: Privileged sub-region
+  side_effects: null
+- id: TZSC_MPCWM4AR
+  address_offset: 116
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SUBA_START
+    bit_range:
+    - 10
+    - 0
+    description: Start of sub-region A
+  - name: SUBA_LENGTH
+    bit_range:
+    - 27
+    - 16
+    description: Length of sub-region A
+  side_effects: null
+- id: TZSC_MPCWM5ACFGR
+  address_offset: 128
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SREN
+    bit_range:
+    - 0
+    - 0
+    description: Sub-region enable
+  - name: SRLOCK
+    bit_range:
+    - 1
+    - 1
+    description: Sub-region lock
+  - name: SEC
+    bit_range:
+    - 8
+    - 8
+    description: Secure sub-region
+  - name: PRIV
+    bit_range:
+    - 9
+    - 9
+    description: Privileged sub-region
+  side_effects: null
+- id: TZSC_MPCWM5AR
+  address_offset: 132
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SUBA_START
+    bit_range:
+    - 10
+    - 0
+    description: Start of sub-region A
+  - name: SUBA_LENGTH
+    bit_range:
+    - 27
+    - 16
+    description: Length of sub-region A
+  side_effects: null
+- id: TZSC_MPCWM5BCFGR
+  address_offset: 136
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SREN
+    bit_range:
+    - 0
+    - 0
+    description: Sub-region enable
+  - name: SRLOCK
+    bit_range:
+    - 1
+    - 1
+    description: Sub-region lock
+  - name: SEC
+    bit_range:
+    - 8
+    - 8
+    description: Secure sub-region
+  - name: PRIV
+    bit_range:
+    - 9
+    - 9
+    description: Privileged sub-region
+  side_effects: null
+- id: TZSC_MPCWM5BR
+  address_offset: 140
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SUBB_START
+    bit_range:
+    - 10
+    - 0
+    description: Start of sub-region A
+  - name: SUBB_LENGTH
+    bit_range:
+    - 27
+    - 16
+    description: Length of sub-region A
+  side_effects: null
+interrupts: null
+timing: null

@@ -1479,6 +1479,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-stm32u575-demo"
+version = "0.24.0"
+dependencies = [
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-uart-echo-fixture"
 version = "0.24.0"
 dependencies = [

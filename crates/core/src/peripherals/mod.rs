@@ -15,6 +15,7 @@ pub mod chip_map;
 pub mod comp;
 pub mod components;
 pub mod crc;
+pub mod crs;
 pub mod dac;
 pub mod dbgmcu;
 pub mod declarative;

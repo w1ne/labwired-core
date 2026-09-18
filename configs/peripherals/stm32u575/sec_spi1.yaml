@@ -1,0 +1,494 @@
+peripheral: SEC_SPI1
+version: 0.1.0
+registers:
+- id: SPI_CR1
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPE
+    bit_range:
+    - 0
+    - 0
+    description: serial peripheral enable This bit is set by and cleared by software. When SPE=1, SPI data transfer is enabled, SPI_CFG1 and SPI_CFG2 configuration registers, CRCPOLY, UDRDR, part of SPI_AUTOCR register and IOLOCK bit in the SPI_CR1 register are write protected. They can be changed only when SPE=0. When SPE=0 any SPI operation is stopped and disabled, all the pending requests of the events with enabled interrupt are blocked except the MODF interrupt request (but their pending still propagates the request of the spi_plck clock), the SS output is deactivated at master, the RDY signal keeps not ready status at slave, the internal state machine is reseted, all the FIFOs content is flushed, CRC calculation initialized, receive data register is read zero. SPE is cleared and cannot be set when MODF error flag is active.
+  - name: MASRX
+    bit_range:
+    - 8
+    - 8
+    description: master automatic suspension in Receive mode This bit is set and cleared by software to control continuous SPI transfer in master receiver mode and automatic management in order to avoid overrun condition. When SPI communication is suspended by hardware automatically, it could happen that few bits of next frame are already clocked out due to internal synchronization delay. This is why, the automatic suspension is not quite reliable when size of data drops below 8 bits. In this case, a safe suspension can be achieved by combination with delay inserted between data frames applied when MIDI parameter keeps a non zero value; sum of data size and the interleaved SPI cycles should always produce interval at length of 8 SPI clock periods at minimum. After software clearing of the SUSP bit, the communication resumes and continues by subsequent bits transaction without any next constraint. Prior the SUSP bit is cleared, the user must release the RxFIFO space as much as possible by reading out all the data packets available at RxFIFO based on the RXP flag indication to prevent any subsequent suspension.
+  - name: CSTART
+    bit_range:
+    - 9
+    - 9
+    description: master transfer start This bit can be set by software if SPI is enabled only to start an SPI communication. it is cleared by hardware when end of transfer (EOT) flag is set or when a transaction suspend request is accepted. In SPI mode, the bit is taken into account at master mode only. If transmission is enabled, communication starts or continues only if any data is available in the transmission FIFO.
+  - name: CSUSP
+    bit_range:
+    - 10
+    - 10
+    description: master SUSPend request This bit reads as zero. In Master mode, when this bit is set by software, the CSTART bit is reset at the end of the current frame and SPI communication is suspended. The user has to check SUSP flag to check end of the frame transaction. The Master mode communication must be suspended (using this bit or keeping TXDR empty) before disabling the SPI or going to Low-power mode. After software suspension, SUSP flag has to be cleared and SPI disabled and re-enabled before the next transaction starts.
+  - name: HDDIR
+    bit_range:
+    - 11
+    - 11
+    description: Rx/Tx direction at Half-duplex mode In Half-Duplex configuration the HDDIR bit establishes the Rx/Tx direction of the data transfer. This bit is ignored in Full-Duplex or any Simplex configuration.
+  - name: SSI
+    bit_range:
+    - 12
+    - 12
+    description: internal SS signal input level This bit has an effect only when the SSM bit is set. The value of this bit is forced onto the peripheral SS input internally and the I/O value of the SS pin is ignored.
+  - name: CRC33_17
+    bit_range:
+    - 13
+    - 13
+    description: 32-bit CRC polynomial configuration
+  - name: RCRCINI
+    bit_range:
+    - 14
+    - 14
+    description: CRC calculation initialization pattern control for receiver
+  - name: TCRCINI
+    bit_range:
+    - 15
+    - 15
+    description: CRC calculation initialization pattern control for transmitter
+  - name: IOLOCK
+    bit_range:
+    - 16
+    - 16
+    description: locking the AF configuration of associated IOs This bit is set by software and cleared by hardware whenever the SPE bit is changed from 1 to 0. When this bit is set, SPI_CFG2 register content cannot be modified. This bit can be set when SPI is disabled only else it is write protected. It is cleared and cannot be set when MODF bit is set.
+  side_effects: null
+- id: SPI_CR2
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TSIZE
+    bit_range:
+    - 15
+    - 0
+    description: 'number of data at current transfer When these bits are changed by software, the SPI has to be disabled. Endless transaction is initialized when CSTART is set while zero value is stored at TSIZE. TSIZE cannot be set to 0xFFFF respective 0x3FFF value when CRC is enabled. Note: TSIZE[15:10] bits are reserved at limited feature set instances and must be kept at reset value.'
+  side_effects: null
+- id: SPI_CFG1
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 458759
+  fields:
+  - name: DSIZE
+    bit_range:
+    - 4
+    - 0
+    description: 'number of bits in at single SPI data frame ..... Note: Maximum data size can be limited up to 16-bits at some instances. At instances with limited set of features, DSIZE2:0] bits are reserved and must be kept at reset state. DSIZE[4:3] bits then control next settings of data size: 00xxx: 8-bits 01xxx: 16-bits 10xxx: 24-bits 11xxx: 32-bits.'
+  - name: FTHLV
+    bit_range:
+    - 8
+    - 5
+    description: "FIFO threshold level Defines number of data frames at single data packet. Size of the packet should not exceed 1/2 of FIFO space. SPI interface is more efficient if configured packet sizes are aligned with data register access parallelism: If SPI data register is accessed as a 16-bit register and DSIZE \x89¤ 8 bit, better to select FTHLV = 2, 4, 6. If SPI data register is accessed as a 32-bit register and DSIZE> 8 bit, better to select FTHLV = 2, 4, 6, while if DSIZE \x89¤ 8bit, better to select FTHLV = 4, 8, 12. Note: FTHLV[3:2] bits are reserved at instances with limited set of features"
+  - name: UDRCFG
+    bit_range:
+    - 9
+    - 9
+    description: behavior of slave transmitter at underrun condition For more details see underrun condition.
+  - name: RXDMAEN
+    bit_range:
+    - 14
+    - 14
+    description: Rx DMA stream enable
+  - name: TXDMAEN
+    bit_range:
+    - 15
+    - 15
+    description: Tx DMA stream enable
+  - name: CRCSIZE
+    bit_range:
+    - 20
+    - 16
+    description: 'length of CRC frame to be transacted and compared Most significant bits are taken into account from polynomial calculation when CRC result is transacted or compared. The length of the polynomial is not affected by this setting. ..... The value must be set equal or multiply of data size (DSIZE[4:0]). Its maximum size corresponds to DSIZE maximum at the instance. Note: The most significant bit at CRCSIZE bit field is reserved at the peripheral instances where data size is limited to 16-bit.'
+  - name: CRCEN
+    bit_range:
+    - 22
+    - 22
+    description: hardware CRC computation enable
+  - name: MBR
+    bit_range:
+    - 30
+    - 28
+    description: 'master baud rate prescaler setting Note: MBR setting is considered at slave working at TI mode, too (see mode).'
+  - name: BPASS
+    bit_range:
+    - 31
+    - 31
+    description: bypass of the prescaler at master baud rate clock generator
+  side_effects: null
+- id: SPI_CFG2
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MSSI
+    bit_range:
+    - 3
+    - 0
+    description: 'Master SS Idleness Specifies an extra delay, expressed in number of SPI clock cycle periods, inserted additionally between active edge of SS opening a session and the beginning of the first data frame of the session in Master mode when SSOE is enabled. ... Note: This feature is not supported in TI mode. To include the delay, the SPI must be disabled and re-enabled between sessions.'
+  - name: MIDI
+    bit_range:
+    - 7
+    - 4
+    description: 'master Inter-Data Idleness Specifies minimum time delay (expressed in SPI clock cycles periods) inserted between two consecutive data frames in Master mode. ... Note: This feature is not supported in TI mode.'
+  - name: RDIOM
+    bit_range:
+    - 13
+    - 13
+    description: 'RDY signal input/output management Note: When DSIZE at the SPI_CFG1 register is configured shorter than 8-bit, the RDIOM bit has to be kept at zero.'
+  - name: RDIOP
+    bit_range:
+    - 14
+    - 14
+    description: RDY signal input/output polarity
+  - name: IOSWP
+    bit_range:
+    - 15
+    - 15
+    description: swap functionality of MISO and MOSI pins When this bit is set, the function of MISO and MOSI pins alternate functions are inverted. Original MISO pin becomes MOSI and original MOSI pin becomes MISO.
+  - name: COMM
+    bit_range:
+    - 18
+    - 17
+    description: SPI Communication Mode
+  - name: SP
+    bit_range:
+    - 21
+    - 19
+    description: 'serial protocol others: reserved, must not be used'
+  - name: MASTER
+    bit_range:
+    - 22
+    - 22
+    description: SPI Master
+  - name: LSBFRST
+    bit_range:
+    - 23
+    - 23
+    description: data frame format
+  - name: CPHA
+    bit_range:
+    - 24
+    - 24
+    description: clock phase
+  - name: CPOL
+    bit_range:
+    - 25
+    - 25
+    description: clock polarity
+  - name: SSM
+    bit_range:
+    - 26
+    - 26
+    description: software management of SS signal input When master uses hardware SS output (SSM=0 and SSOE=1) the SS signal input is forced to not active state internally to prevent master mode fault error.
+  - name: SSIOP
+    bit_range:
+    - 28
+    - 28
+    description: SS input/output polarity
+  - name: SSOE
+    bit_range:
+    - 29
+    - 29
+    description: SS output enable This bit is taken into account in Master mode only
+  - name: SSOM
+    bit_range:
+    - 30
+    - 30
+    description: SS output management in Master mode This bit is taken into account in Master mode when SSOE is enabled. It allows the SS output to be configured between two consecutive data transfers.
+  - name: AFCNTR
+    bit_range:
+    - 31
+    - 31
+    description: alternate function GPIOs control This bit is taken into account when SPE=0 only When SPI has to be disabled temporary for a specific configuration reason (e.g. CRC reset, CPHA or HDDIR change) setting this bit prevents any glitches on the associated outputs configured at alternate function mode by keeping them forced at state corresponding the current SPI configuration.
+  side_effects: null
+- id: SPI_IER
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RXPIE
+    bit_range:
+    - 0
+    - 0
+    description: RXP interrupt enable
+  - name: TXPIE
+    bit_range:
+    - 1
+    - 1
+    description: TXP interrupt enable TXPIE is set by software and cleared by TXTF flag set event.
+  - name: DXPIE
+    bit_range:
+    - 2
+    - 2
+    description: DXP interrupt enabled DXPIE is set by software and cleared by TXTF flag set event.
+  - name: EOTIE
+    bit_range:
+    - 3
+    - 3
+    description: EOT, SUSP and TXC interrupt enable
+  - name: TXTFIE
+    bit_range:
+    - 4
+    - 4
+    description: TXTFIE interrupt enable
+  - name: UDRIE
+    bit_range:
+    - 5
+    - 5
+    description: UDR interrupt enable
+  - name: OVRIE
+    bit_range:
+    - 6
+    - 6
+    description: OVR interrupt enable
+  - name: CRCEIE
+    bit_range:
+    - 7
+    - 7
+    description: CRC error interrupt enable
+  - name: TIFREIE
+    bit_range:
+    - 8
+    - 8
+    description: TIFRE interrupt enable
+  - name: MODFIE
+    bit_range:
+    - 9
+    - 9
+    description: mode Fault interrupt enable
+  side_effects: null
+- id: SPI_SR
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 4098
+  fields:
+  - name: RXP
+    bit_range:
+    - 0
+    - 0
+    description: Rx-Packet available RXP flag is changed by hardware. It monitors number of overall data currently available at RxFIFO if SPI is enabled. It has to be checked once a data packet is completely read out from RxFIFO.
+  - name: TXP
+    bit_range:
+    - 1
+    - 1
+    description: Tx-Packet space available TXP flag is changed by hardware. It monitors overall space currently available at TxFIFO no matter if SPI is enabled or not. It has to be checked once a complete data packet is stored at TxFIFO.
+  - name: DXP
+    bit_range:
+    - 2
+    - 2
+    description: duplex packet DXP flag is set whenever both TXP and RXP flags are set regardless SPI mode.
+  - name: EOT
+    bit_range:
+    - 3
+    - 3
+    description: end of transfer EOT is set by hardware as soon as a full transfer is complete, that is when TSIZE number of data have been transmitted and/or received on the SPI. EOT is cleared by software write 1 to EOTC bit at SPI_IFCR. EOT flag triggers an interrupt if EOTIE bit is set. If DXP flag is used until TXTF flag is set and DXPIE is cleared, EOT can be used to download the last packets contained into RxFIFO in one-shot. In master, EOT event terminates the data transaction and handles SS output optionally. When CRC is applied, the EOT event is extended over the CRC frame transaction. To restart the internal state machine properly, SPI is strongly suggested to be disabled and re-enabled before next transaction starts despite its setting is not changed.
+  - name: TXTF
+    bit_range:
+    - 4
+    - 4
+    description: transmission transfer filled TXTF is set by hardware as soon as all of the data packets in a transfer have been submitted for transmission by application software or DMA, that is when TSIZE number of data have been pushed into the TxFIFO. This bit is cleared by software write 1 to TXTFC bit at SPI_IFCR TXTF flag triggers an interrupt if TXTFIE bit is set. TXTF setting clears the TXPIE and DXPIE masks so to off-load application software from calculating when to disable TXP and DXP interrupts.
+  - name: UDR
+    bit_range:
+    - 5
+    - 5
+    description: 'underrun at slave transmission mode This bit is cleared by writing 1 to UDRC bit at SPI_IFCR Note: UDR flag applies to Slave mode only'
+  - name: OVR
+    bit_range:
+    - 6
+    - 6
+    description: overrun This bit is cleared by writing 1 to OVRC bit at SPI_IFCR
+  - name: CRCE
+    bit_range:
+    - 7
+    - 7
+    description: CRC error This bit is cleared by writing 1 to CRCEC bit at SPI_IFCR
+  - name: TIFRE
+    bit_range:
+    - 8
+    - 8
+    description: TI frame format error This bit is cleared by writing 1 to TIFREC bit at SPI_IFCR
+  - name: MODF
+    bit_range:
+    - 9
+    - 9
+    description: mode fault This bit is cleared by writing 1 to MODFC bit at SPI_IFCR
+  - name: SUSP
+    bit_range:
+    - 11
+    - 11
+    description: suspension status In Master mode, SUSP is set by hardware either as soon as the current frame is completed after CSUSP request is done or at master automatic suspend receive mode (MASRX bit is set at SPI_CR1 register) on RxFIFO full condition. SUSP generates an interrupt when EOTIE is set. This bit has to be cleared prior SPI is disabled by writing 1 to SUSPC bit at SPI_IFCR.
+  - name: TXC
+    bit_range:
+    - 12
+    - 12
+    description: TxFIFO transmission complete The flag behavior depends on TSIZE setting. When TSIZE=0 the TXC is changed by hardware exclusively and it raises each time the TxFIFO becomes empty and there is no activity on the bus. If TSIZE <>0 there is no specific reason to monitor TXC as it just copies the EOT flag value including its software clearing. The TXC generates an interrupt when EOTIE is set.
+  - name: RXPLVL
+    bit_range:
+    - 14
+    - 13
+    description: 'RxFIFO packing level When RXWNE=0 and data size is set up to 16-bit, the value gives number of remaining data frames persisting at RxFIFO. Note: (*): Optional value when data size is set up to 8-bit only. When data size is greater than 16-bit, these bits are always read as 00. In that consequence, the single data frame received at the FIFO cannot be detected neither by RWNE nor by RXPLVL bits if data size is set from 17 to 24 bits. The user then must apply other methods like TSIZE>0 or FTHLV=0.'
+  - name: RXWNE
+    bit_range:
+    - 15
+    - 15
+    description: 'RxFIFO word not empty Note: This bit value does not depend on DSIZE setting and keeps together with RXPLVL[1:0] information about RxFIFO occupancy by residual data.'
+  - name: CTSIZE
+    bit_range:
+    - 31
+    - 16
+    description: 'number of data frames remaining in current TSIZE session The value is not quite reliable when traffic is ongoing on bus or during autonomous operation at low-power mode. Note: CTSIZE[15:0] bits are not available at instances with limited set of features'
+  side_effects: null
+- id: SPI_IFCR
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EOTC
+    bit_range:
+    - 3
+    - 3
+    description: end of transfer flag clear Writing a 1 into this bit clears EOT flag in the SPI_SR register
+  - name: TXTFC
+    bit_range:
+    - 4
+    - 4
+    description: transmission transfer filled flag clear Writing a 1 into this bit clears TXTF flag in the SPI_SR register
+  - name: UDRC
+    bit_range:
+    - 5
+    - 5
+    description: underrun flag clear Writing a 1 into this bit clears UDR flag in the SPI_SR register
+  - name: OVRC
+    bit_range:
+    - 6
+    - 6
+    description: overrun flag clear Writing a 1 into this bit clears OVR flag in the SPI_SR register
+  - name: CRCEC
+    bit_range:
+    - 7
+    - 7
+    description: CRC error flag clear Writing a 1 into this bit clears CRCE flag in the SPI_SR register
+  - name: TIFREC
+    bit_range:
+    - 8
+    - 8
+    description: TI frame format error flag clear Writing a 1 into this bit clears TIFRE flag in the SPI_SR register
+  - name: MODFC
+    bit_range:
+    - 9
+    - 9
+    description: mode fault flag clear Writing a 1 into this bit clears MODF flag in the SPI_SR register
+  - name: SUSPC
+    bit_range:
+    - 11
+    - 11
+    description: SUSPend flag clear Writing a 1 into this bit clears SUSP flag in the SPI_SR register
+  side_effects: null
+- id: SPI_AUTOCR
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TRIGSEL
+    bit_range:
+    - 19
+    - 16
+    description: 'trigger selection (refer ). ... Note: these bits can be written only when SPE = 0.'
+  - name: TRIGPOL
+    bit_range:
+    - 20
+    - 20
+    description: 'trigger polarity Note: This bit can be written only when SPE = 0.'
+  - name: TRIGEN
+    bit_range:
+    - 21
+    - 21
+    description: 'trigger of CSTART control enable Note: if user can''t prevent trigger event during write, the TRIGEN has to be changed when SPI is disabled'
+  side_effects: null
+- id: SPI_TXDR
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TXDR
+    bit_range:
+    - 31
+    - 0
+    description: 'transmit data register The register serves as an interface with TxFIFO. A write to it accesses TxFIFO. Note: data is always right-aligned. Unused bits are ignored when writing to the register, and read as zero when the register is read. Note: DR can be accessed byte-wise (8-bit access): in this case only one data-byte is written by single access. halfword-wise (16 bit access) in this case 2 data-bytes or 1 halfword-data can be written by single access. word-wise (32 bit access). In this case 4 data-bytes or 2 halfword-data or word-data can be written by single access. Write access of this register less than the configured data size is forbidden.'
+  side_effects: null
+- id: SPI_RXDR
+  address_offset: 48
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RXDR
+    bit_range:
+    - 31
+    - 0
+    description: 'receive data register The register serves as an interface with RxFIFO. When it is read, RxFIFO is accessed. Note: data is always right-aligned. Unused bits are read as zero when the register is read. Writing to the register is ignored. Note: DR can be accessed byte-wise (8-bit access): in this case only one data-byte is read by single access halfword-wise (16 bit access) in this case 2 data-bytes or 1 halfword-data can be read by single access word-wise (32 bit access). In this case 4 data-bytes or 2 halfword-data or word-data can be read by single access. Read access of this register less than the configured data size is forbidden.'
+  side_effects: null
+- id: SPI_CRCPOLY
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 263
+  fields:
+  - name: CRCPOLY
+    bit_range:
+    - 31
+    - 0
+    description: 'CRC polynomial register This register contains the polynomial for the CRC calculation. The default 9-bit polynomial setting 0x107 corresponds to default 8-bit setting of DSIZE. It is compatible with setting 0x07 used at some other ST products with fixed length of the polynomial string where the most significant bit of the string is always kept hidden. Length of the polynomial is given by the most significant bit of the value stored at this register. It has to be set greater than DSIZE. CRC33_17 bit has to be set additionally with CRCPOLY register when DSIZE is configured to maximum 32-bit or 16-bit size and CRC is enabled (to keep polynomial length grater than data size). Note: CRCPOLY[31:16] bits are reserved at instances with data size limited to 16-bit. There is no constrain when 32-bit access is applied at these addresses. Reserved bits 31-16 are always read zero while any write to them is ignored.'
+  side_effects: null
+- id: SPI_TXCRC
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TXCRC
+    bit_range:
+    - 31
+    - 0
+    description: 'CRC register for transmitter When CRC calculation is enabled, the TXCRC[31:0] bits contain the computed CRC value of the subsequently transmitted bytes. CRC calculation is initialized when the CRCEN bit of SPI_CR1 is written to 1 or when a data block is transacted completely. The CRC is calculated serially using the polynomial programmed in the SPI_CRCPOLY register. The number of bits considered at calculation depends on SPI_CRCPOLY register and CRCSIZE bits settings at SPI_CFG1 register. Note: a read to this register when the communication is ongoing could return an incorrect value. Note: TXCRC[31-16] bits are reserved at instances with data size limited to 16-bit. There is no constrain when 32-bit access is applied at these addresses. Reserved bits 31-16 are always read zero while any write to them is ignored. Note: The configuration of CRCSIZE bit field is not taken into account when the content of this register is read by software. No masking is applied for unused bits at this case.'
+  side_effects: null
+- id: SPI_RXCRC
+  address_offset: 72
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RXCRC
+    bit_range:
+    - 31
+    - 0
+    description: 'CRC register for receiver When CRC calculation is enabled, the RXCRC[31:0] bits contain the computed CRC value of the subsequently received bytes. CRC calculation is initialized when the CRCEN bit of SPI_CR1 is written to 1 or when a data block is transacted completely. The CRC is calculated serially using the polynomial programmed in the SPI_CRCPOLY register. The number of bits considered at calculation depends on SPI_CRCPOLY register and CRCSIZE bits settings at SPI_CFG1 register. Note: a read to this register when the communication is ongoing could return an incorrect value. RXCRC[31-16] bits are reserved at the peripheral instances with data size limited to 16-bit. There is no constrain when 32-bit access is applied at these addresses. Reserved bits 31-16 are always read zero while any write to them is ignored. Note: The configuration of CRCSIZE bit field is not taken into account when the content of this register is read by software. No masking is applied for unused bits at this case.'
+  side_effects: null
+- id: SPI_UDRDR
+  address_offset: 76
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: UDRDR
+    bit_range:
+    - 31
+    - 0
+    description: 'data at slave underrun condition The register is taken into account in Slave mode and at underrun condition only. The number of bits considered depends on DSIZE bit settings of the SPI_CFG1 register. Underrun condition handling depends on setting UDRCFG bit at SPI_CFG1 register. Note: UDRDR[31-16] bits are reserved at the peripheral instances with data size limited to 16-bit. There is no constraint when 32-bit access is applied at these addresses. Reserved bits 31-16 are always read zero while any write to them is ignored.'
+  side_effects: null
+interrupts:
+  SPI1: 59
+timing: null

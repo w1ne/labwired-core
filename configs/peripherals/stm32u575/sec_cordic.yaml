@@ -1,0 +1,92 @@
+peripheral: SEC_CORDIC
+version: 0.1.0
+registers:
+- id: CSR
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 80
+  fields:
+  - name: FUNC
+    bit_range:
+    - 3
+    - 0
+    description: Function
+  - name: PRECISION
+    bit_range:
+    - 7
+    - 4
+    description: Precision required (number of iterations)
+  - name: SCALE
+    bit_range:
+    - 10
+    - 8
+    description: Scaling factor
+  - name: IEN
+    bit_range:
+    - 16
+    - 16
+    description: Enable interrupt
+  - name: DMAREN
+    bit_range:
+    - 17
+    - 17
+    description: Enable DMA read channel
+  - name: DMAWEN
+    bit_range:
+    - 18
+    - 18
+    description: Enable DMA write channel
+  - name: NRES
+    bit_range:
+    - 19
+    - 19
+    description: Number of results in the CORDIC_RDATA register
+  - name: NARGS
+    bit_range:
+    - 20
+    - 20
+    description: Number of arguments expected by the CORDIC_WDATA register
+  - name: RESSIZE
+    bit_range:
+    - 21
+    - 21
+    description: Width of output data
+  - name: ARGSIZE
+    bit_range:
+    - 22
+    - 22
+    description: Width of input data
+  - name: RRDY
+    bit_range:
+    - 31
+    - 31
+    description: Result ready flag
+  side_effects: null
+- id: WDATA
+  address_offset: 4
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: ARG
+    bit_range:
+    - 31
+    - 0
+    description: Function input arguments
+  side_effects: null
+- id: RDATA
+  address_offset: 8
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: RES
+    bit_range:
+    - 31
+    - 0
+    description: Function result
+  side_effects: null
+interrupts:
+  Cordic: 123
+timing: null

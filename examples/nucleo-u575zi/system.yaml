@@ -1,0 +1,32 @@
+# LabWired - NUCLEO-U575ZI-Q example system configuration.
+# Same board IO as configs/systems/nucleo-u575zi.yaml; kept as its own file so
+# the example is self-contained the way examples/nucleo-h563zi is.
+name: "nucleo-u575zi-example"
+chip: "../../configs/chips/stm32u575.yaml"
+debug_uart: "usart1"
+external_devices: []
+board_io:
+  - id: "led_green_ld1"
+    kind: "led"
+    peripheral: "gpioc"
+    pin: 7
+    signal: "output"
+    active_high: true
+  - id: "led_blue_ld2"
+    kind: "led"
+    peripheral: "gpiob"
+    pin: 7
+    signal: "output"
+    active_high: true
+  - id: "led_red_ld3"
+    kind: "led"
+    peripheral: "gpiog"
+    pin: 2
+    signal: "output"
+    active_high: true
+  - id: "button_user_pc13"
+    kind: "button"
+    peripheral: "gpioc"
+    pin: 13
+    signal: "input"
+    active_high: true

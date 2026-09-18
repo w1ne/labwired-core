@@ -38,7 +38,7 @@ registers:
     bit_range:
     - 18
     - 16
-    description: Device low power mode selected 10x: Standby mode others reserved
+    description: 'Device low power mode selected 10x: Standby mode others reserved'
   - name: STOPF
     bit_range:
     - 19
@@ -205,12 +205,12 @@ registers:
     bit_range:
     - 15
     - 0
-    description: Bit n identifies whether access port APn is present in device Bit n = 0: APn absent Bit n = 1: APn present
+    description: 'Bit n identifies whether access port APn is present in device Bit n = 0: APn absent Bit n = 1: APn present'
   - name: AP_ENABLED
     bit_range:
     - 31
     - 16
-    description: Bit n identifies whether access port APn is open (can be accessed via the debug port) or locked (debug access to the APn is blocked, except for DBGMCU access) Bit n = 0: APn locked (except for access to DBGMCU) Bit n = 1: APn enabled
+    description: 'Bit n identifies whether access port APn is open (can be accessed via the debug port) or locked (debug access to the APn is blocked, except for DBGMCU access) Bit n = 0: APn locked (except for access to DBGMCU) Bit n = 1: APn enabled'
   side_effects: null
 - id: DBGMCU_DBG_AUTH_HOST
   address_offset: 256

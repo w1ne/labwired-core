@@ -1,0 +1,846 @@
+peripheral: RAMCFG
+version: 0.1.0
+registers:
+- id: RAM1CR
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ECCE
+    bit_range:
+    - 0
+    - 0
+    description: ECCE
+  - name: ALE
+    bit_range:
+    - 4
+    - 4
+    description: ALE
+  - name: SRAMER
+    bit_range:
+    - 8
+    - 8
+    description: SRAMER
+  - name: WSC
+    bit_range:
+    - 18
+    - 16
+    description: WSC
+  side_effects: null
+- id: RAM1ISR
+  address_offset: 8
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: SEDC
+    bit_range:
+    - 0
+    - 0
+    description: SEDC
+  - name: DED
+    bit_range:
+    - 1
+    - 1
+    description: DED
+  - name: SRAMBUSY
+    bit_range:
+    - 8
+    - 8
+    description: SRAMBUSY
+  side_effects: null
+- id: RAM1ERKEYR
+  address_offset: 40
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: ERASEKEY
+    bit_range:
+    - 7
+    - 0
+    description: ERASEKEY
+  side_effects: null
+- id: RAM2CR
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ECCE
+    bit_range:
+    - 0
+    - 0
+    description: ECCE
+  - name: ALE
+    bit_range:
+    - 4
+    - 4
+    description: ALE
+  - name: SRAMER
+    bit_range:
+    - 8
+    - 8
+    description: SRAMER
+  - name: WSC
+    bit_range:
+    - 18
+    - 16
+    description: WSC
+  side_effects: null
+- id: RAM2IER
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SEIE
+    bit_range:
+    - 0
+    - 0
+    description: SEIE
+  - name: DEIE
+    bit_range:
+    - 1
+    - 1
+    description: DEIE
+  - name: ECCNMI
+    bit_range:
+    - 3
+    - 3
+    description: ECCNMI
+  side_effects: null
+- id: RAM2ISR
+  address_offset: 72
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: SEDC
+    bit_range:
+    - 0
+    - 0
+    description: SEDC
+  - name: DED
+    bit_range:
+    - 1
+    - 1
+    description: DED
+  - name: SRAMBUSY
+    bit_range:
+    - 8
+    - 8
+    description: SRAMBUSY
+  side_effects: null
+- id: RAM2SEAR
+  address_offset: 76
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: ESEA
+    bit_range:
+    - 31
+    - 0
+    description: ESEA
+  side_effects: null
+- id: RAM2DEAR
+  address_offset: 80
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: EDEA
+    bit_range:
+    - 31
+    - 0
+    description: EDEA
+  side_effects: null
+- id: RAM2ICR
+  address_offset: 84
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSEDC
+    bit_range:
+    - 0
+    - 0
+    description: CSEDC
+  - name: CDED
+    bit_range:
+    - 1
+    - 1
+    description: CDED
+  side_effects: null
+- id: RAM2WPR1
+  address_offset: 88
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: P0WP
+    bit_range:
+    - 0
+    - 0
+    description: P0WP
+  - name: P1WP
+    bit_range:
+    - 1
+    - 1
+    description: P1WP
+  - name: P2WP
+    bit_range:
+    - 2
+    - 2
+    description: P2WP
+  - name: P3WP
+    bit_range:
+    - 3
+    - 3
+    description: P3WP
+  - name: P4WP
+    bit_range:
+    - 4
+    - 4
+    description: P4WP
+  - name: P5WP
+    bit_range:
+    - 5
+    - 5
+    description: P5WP
+  - name: P6WP
+    bit_range:
+    - 6
+    - 6
+    description: P6WP
+  - name: P7WP
+    bit_range:
+    - 7
+    - 7
+    description: P7WP
+  - name: P8WP
+    bit_range:
+    - 8
+    - 8
+    description: P8WP
+  - name: P9WP
+    bit_range:
+    - 9
+    - 9
+    description: P9WP
+  - name: P10WP
+    bit_range:
+    - 10
+    - 10
+    description: P10WP
+  - name: P11WP
+    bit_range:
+    - 11
+    - 11
+    description: P11WP
+  - name: P12WP
+    bit_range:
+    - 12
+    - 12
+    description: P12WP
+  - name: P13WP
+    bit_range:
+    - 13
+    - 13
+    description: P13WP
+  - name: P14WP
+    bit_range:
+    - 14
+    - 14
+    description: P14WP
+  - name: P15WP
+    bit_range:
+    - 15
+    - 15
+    description: P15WP
+  - name: P16WP
+    bit_range:
+    - 16
+    - 16
+    description: P16WP
+  - name: P17WP
+    bit_range:
+    - 17
+    - 17
+    description: P17WP
+  - name: P18WP
+    bit_range:
+    - 18
+    - 18
+    description: P18WP
+  - name: P19WP
+    bit_range:
+    - 19
+    - 19
+    description: P19WP
+  - name: P20WP
+    bit_range:
+    - 20
+    - 20
+    description: P20WP
+  - name: P21WP
+    bit_range:
+    - 21
+    - 21
+    description: P21WP
+  - name: P22WP
+    bit_range:
+    - 22
+    - 22
+    description: P22WP
+  - name: P23WP
+    bit_range:
+    - 23
+    - 23
+    description: P23WP
+  - name: P24WP
+    bit_range:
+    - 24
+    - 24
+    description: P24WP
+  - name: P25WP
+    bit_range:
+    - 25
+    - 25
+    description: P25WP
+  - name: P26WP
+    bit_range:
+    - 26
+    - 26
+    description: P26WP
+  - name: P27WP
+    bit_range:
+    - 27
+    - 27
+    description: P27WP
+  - name: P28WP
+    bit_range:
+    - 28
+    - 28
+    description: P28WP
+  - name: P29WP
+    bit_range:
+    - 29
+    - 29
+    description: P29WP
+  - name: P30WP
+    bit_range:
+    - 30
+    - 30
+    description: P30WP
+  - name: P31WP
+    bit_range:
+    - 31
+    - 31
+    description: P31WP
+  side_effects: null
+- id: RAM2WPR2
+  address_offset: 92
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: P32WP
+    bit_range:
+    - 0
+    - 0
+    description: P32WP
+  - name: P33WP
+    bit_range:
+    - 1
+    - 1
+    description: P33WP
+  - name: P34WP
+    bit_range:
+    - 2
+    - 2
+    description: P34WP
+  - name: P35WP
+    bit_range:
+    - 3
+    - 3
+    description: P35WP
+  - name: P36WP
+    bit_range:
+    - 4
+    - 4
+    description: P36WP
+  - name: P37WP
+    bit_range:
+    - 5
+    - 5
+    description: P37WP
+  - name: P38WP
+    bit_range:
+    - 6
+    - 6
+    description: P38WP
+  - name: P39WP
+    bit_range:
+    - 7
+    - 7
+    description: P39WP
+  - name: P40WP
+    bit_range:
+    - 8
+    - 8
+    description: P40WP
+  - name: P41WP
+    bit_range:
+    - 9
+    - 9
+    description: P41WP
+  - name: P42WP
+    bit_range:
+    - 10
+    - 10
+    description: P42WP
+  - name: P43WP
+    bit_range:
+    - 11
+    - 11
+    description: P43WP
+  - name: P44WP
+    bit_range:
+    - 12
+    - 12
+    description: P44WP
+  - name: P45WP
+    bit_range:
+    - 13
+    - 13
+    description: P45WP
+  - name: P46WP
+    bit_range:
+    - 14
+    - 14
+    description: P46WP
+  - name: P47WP
+    bit_range:
+    - 15
+    - 15
+    description: P47WP
+  - name: P48WP
+    bit_range:
+    - 16
+    - 16
+    description: P48WP
+  - name: P49WP
+    bit_range:
+    - 17
+    - 17
+    description: P49WP
+  - name: P50WP
+    bit_range:
+    - 18
+    - 18
+    description: P50WP
+  - name: P51WP
+    bit_range:
+    - 19
+    - 19
+    description: P51WP
+  - name: P52WP
+    bit_range:
+    - 20
+    - 20
+    description: P52WP
+  - name: P53WP
+    bit_range:
+    - 21
+    - 21
+    description: P53WP
+  - name: P54WP
+    bit_range:
+    - 22
+    - 22
+    description: P54WP
+  - name: P55WP
+    bit_range:
+    - 23
+    - 23
+    description: P55WP
+  - name: P56WP
+    bit_range:
+    - 24
+    - 24
+    description: P56WP
+  - name: P57WP
+    bit_range:
+    - 25
+    - 25
+    description: P57WP
+  - name: P58WP
+    bit_range:
+    - 26
+    - 26
+    description: P58WP
+  - name: P59WP
+    bit_range:
+    - 27
+    - 27
+    description: P59WP
+  - name: P60WP
+    bit_range:
+    - 28
+    - 28
+    description: P60WP
+  - name: P61WP
+    bit_range:
+    - 29
+    - 29
+    description: P61WP
+  - name: P62WP
+    bit_range:
+    - 30
+    - 30
+    description: P62WP
+  - name: P63WP
+    bit_range:
+    - 31
+    - 31
+    description: P63WP
+  side_effects: null
+- id: RAM2ECCKEYR
+  address_offset: 100
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: ECCKEY
+    bit_range:
+    - 7
+    - 0
+    description: ECCKEY
+  side_effects: null
+- id: RAM2ERKEYR
+  address_offset: 104
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: ERASEKEY
+    bit_range:
+    - 7
+    - 0
+    description: ERASEKEY
+  side_effects: null
+- id: RAM3CR
+  address_offset: 128
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ECCE
+    bit_range:
+    - 0
+    - 0
+    description: ECCE
+  - name: ALE
+    bit_range:
+    - 4
+    - 4
+    description: ALE
+  - name: SRAMER
+    bit_range:
+    - 8
+    - 8
+    description: SRAMER
+  - name: WSC
+    bit_range:
+    - 18
+    - 16
+    description: WSC
+  side_effects: null
+- id: RAM3IER
+  address_offset: 132
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SEIE
+    bit_range:
+    - 0
+    - 0
+    description: SEIE
+  - name: DEIE
+    bit_range:
+    - 1
+    - 1
+    description: DEIE
+  - name: ECCNMI
+    bit_range:
+    - 3
+    - 3
+    description: ECCNMI
+  side_effects: null
+- id: RAM3ISR
+  address_offset: 136
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: SEDC
+    bit_range:
+    - 0
+    - 0
+    description: SEDC
+  - name: DED
+    bit_range:
+    - 1
+    - 1
+    description: DED
+  - name: SRAMBUSY
+    bit_range:
+    - 8
+    - 8
+    description: SRAMBUSY
+  side_effects: null
+- id: RAM3SEAR
+  address_offset: 140
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: ESEA
+    bit_range:
+    - 31
+    - 0
+    description: ESEA
+  side_effects: null
+- id: RAM3DEAR
+  address_offset: 144
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: EDEA
+    bit_range:
+    - 31
+    - 0
+    description: EDEA
+  side_effects: null
+- id: RAM3ICR
+  address_offset: 148
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSEDC
+    bit_range:
+    - 0
+    - 0
+    description: CSEDC
+  - name: CDED
+    bit_range:
+    - 1
+    - 1
+    description: CDED
+  side_effects: null
+- id: RAM3ECCKEYR
+  address_offset: 164
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: ECCKEY
+    bit_range:
+    - 7
+    - 0
+    description: ECCKEY
+  side_effects: null
+- id: RAM3ERKEYR
+  address_offset: 168
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: ERASEKEY
+    bit_range:
+    - 7
+    - 0
+    description: ERASEKEY
+  side_effects: null
+- id: RAM4CR
+  address_offset: 192
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ECCE
+    bit_range:
+    - 0
+    - 0
+    description: ECCE
+  - name: ALE
+    bit_range:
+    - 4
+    - 4
+    description: ALE
+  - name: SRAMER
+    bit_range:
+    - 8
+    - 8
+    description: SRAMER
+  - name: WSC
+    bit_range:
+    - 18
+    - 16
+    description: WSC
+  side_effects: null
+- id: RAM4ISR
+  address_offset: 200
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: SEDC
+    bit_range:
+    - 0
+    - 0
+    description: SEDC
+  - name: DED
+    bit_range:
+    - 1
+    - 1
+    description: DED
+  - name: SRAMBUSY
+    bit_range:
+    - 8
+    - 8
+    description: SRAMBUSY
+  side_effects: null
+- id: RAM4ERKEYR
+  address_offset: 232
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: ERASEKEY
+    bit_range:
+    - 7
+    - 0
+    description: ERASEKEY
+  side_effects: null
+- id: RAM5CR
+  address_offset: 256
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ECCE
+    bit_range:
+    - 0
+    - 0
+    description: ECCE
+  - name: ALE
+    bit_range:
+    - 4
+    - 4
+    description: ALE
+  - name: SRAMER
+    bit_range:
+    - 8
+    - 8
+    description: SRAMER
+  - name: WSC
+    bit_range:
+    - 18
+    - 16
+    description: WSC
+  side_effects: null
+- id: RAM5IER
+  address_offset: 260
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SEIE
+    bit_range:
+    - 0
+    - 0
+    description: SEIE
+  - name: DEIE
+    bit_range:
+    - 1
+    - 1
+    description: DEIE
+  - name: ECCNMI
+    bit_range:
+    - 3
+    - 3
+    description: ECCNMI
+  side_effects: null
+- id: RAM5ISR
+  address_offset: 264
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: SEDC
+    bit_range:
+    - 0
+    - 0
+    description: SEDC
+  - name: DED
+    bit_range:
+    - 1
+    - 1
+    description: DED
+  - name: SRAMBUSY
+    bit_range:
+    - 8
+    - 8
+    description: SRAMBUSY
+  side_effects: null
+- id: RAM5SEAR
+  address_offset: 268
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: ESEA
+    bit_range:
+    - 31
+    - 0
+    description: ESEA
+  side_effects: null
+- id: RAM5DEAR
+  address_offset: 272
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: EDEA
+    bit_range:
+    - 31
+    - 0
+    description: EDEA
+  side_effects: null
+- id: RAM5ICR
+  address_offset: 276
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSEDC
+    bit_range:
+    - 0
+    - 0
+    description: CSEDC
+  - name: CDED
+    bit_range:
+    - 1
+    - 1
+    description: CDED
+  side_effects: null
+interrupts:
+  RAMCFG: 5
+timing: null

@@ -1,0 +1,226 @@
+peripheral: SEC_DCACHE
+version: 0.1.0
+registers:
+- id: DCACHE_CR
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EN
+    bit_range:
+    - 0
+    - 0
+    description: EN
+  - name: CACHEINV
+    bit_range:
+    - 1
+    - 1
+    description: CACHEINV
+  - name: CACHECMD
+    bit_range:
+    - 10
+    - 8
+    description: CACHECMD
+  - name: STARTCMD
+    bit_range:
+    - 11
+    - 11
+    description: STARTCMD
+  - name: RHITMEN
+    bit_range:
+    - 16
+    - 16
+    description: RHITMEN
+  - name: RMISSMEN
+    bit_range:
+    - 17
+    - 17
+    description: RMISSMEN
+  - name: RHITMRST
+    bit_range:
+    - 18
+    - 18
+    description: RHITMRST
+  - name: RMISSMRST
+    bit_range:
+    - 19
+    - 19
+    description: RMISSMRST
+  - name: WHITMEN
+    bit_range:
+    - 20
+    - 20
+    description: WHITMEN
+  - name: WMISSMEN
+    bit_range:
+    - 21
+    - 21
+    description: WMISSMEN
+  - name: WHITMRST
+    bit_range:
+    - 22
+    - 22
+    description: WHITMRST
+  - name: WMISSMRST
+    bit_range:
+    - 23
+    - 23
+    description: WMISSMRST
+  - name: HBURST
+    bit_range:
+    - 31
+    - 31
+    description: HBURST
+  side_effects: null
+- id: DCACHE_SR
+  address_offset: 4
+  size: 32
+  access: READ_ONLY
+  reset_value: 1
+  fields:
+  - name: BUSYF
+    bit_range:
+    - 0
+    - 0
+    description: BUSYF
+  - name: BSYENDF
+    bit_range:
+    - 1
+    - 1
+    description: BSYENDF
+  - name: ERRF
+    bit_range:
+    - 2
+    - 2
+    description: ERRF
+  - name: BUSYCMDF
+    bit_range:
+    - 3
+    - 3
+    description: BUSYCMDF
+  - name: CMDENDF
+    bit_range:
+    - 4
+    - 4
+    description: CMDENDF
+  side_effects: null
+- id: DCACHE_IER
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BSYENDIE
+    bit_range:
+    - 1
+    - 1
+    description: BSYENDIE
+  - name: ERRIE
+    bit_range:
+    - 2
+    - 2
+    description: ERRIE
+  - name: CMDENDIE
+    bit_range:
+    - 4
+    - 4
+    description: CMDENDIE
+  side_effects: null
+- id: DCACHE_FCR
+  address_offset: 12
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: CBSYENDF
+    bit_range:
+    - 1
+    - 1
+    description: CBSYENDF
+  - name: CERRF
+    bit_range:
+    - 2
+    - 2
+    description: CERRF
+  - name: CCMDENDF
+    bit_range:
+    - 4
+    - 4
+    description: CCMDENDF
+  side_effects: null
+- id: DCACHE_RHMONR
+  address_offset: 16
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: RHITMON
+    bit_range:
+    - 31
+    - 0
+    description: RHITMON
+  side_effects: null
+- id: DCACHE_RMMONR
+  address_offset: 20
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: MRISSMON
+    bit_range:
+    - 15
+    - 0
+    description: RMISSMON
+  side_effects: null
+- id: DCACHE_WHMONR
+  address_offset: 32
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: WHITMON
+    bit_range:
+    - 31
+    - 0
+    description: WHITMON
+  side_effects: null
+- id: DCACHE_WMMONR
+  address_offset: 36
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: WMISSMON
+    bit_range:
+    - 15
+    - 0
+    description: WMISSMON
+  side_effects: null
+- id: DCACHE_CMDRSADDRR
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CMDSTARTADDR
+    bit_range:
+    - 31
+    - 0
+    description: CMDSTARTADDR
+  side_effects: null
+- id: DCACHE_CMDREADDRR
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CMDENDADDR
+    bit_range:
+    - 31
+    - 0
+    description: CMDENDADDR
+  side_effects: null
+interrupts:
+  DCACHE: 111
+timing: null

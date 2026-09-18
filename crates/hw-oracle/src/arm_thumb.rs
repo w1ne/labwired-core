@@ -606,6 +606,33 @@ pub fn movt_imm16(rd: u8, imm16: u16) -> u32 {
     movw_movt_common(0b1111_0010_1100_0000u32, rd, imm16)
 }
 
+/// `LSRS.W Rd, Rn, Rm` — T2 encoding, S=1 (ARMv7-M ARM §A7.7.57):
+/// `1111 1010 001 S Rn | 1111 Rd 0000 Rm`.
+pub fn lsrs_w(rd: u8, rn: u8, rm: u8) -> u32 {
+    assert!(rd <= 12, "LSRS.W Rd must be r0..r12 (got r{rd})");
+    assert!(rm <= 12, "LSRS.W Rm must be r0..r12 (got r{rm})");
+    let hi = 0xFA00u32 | (1 << 5) | (1 << 4) | (rn as u32 & 0xF);
+    let lo = 0xF000u32 | ((rd as u32) << 8) | (rm as u32 & 0xF);
+    (hi << 16) | lo
+}
+
+/// `MOVS.W Rd, Rm, <type> #imm5` — data-processing (shifted register) T2 with
+/// op=ORR, Rn=PC and S=1 (ARMv7-M ARM §A7.7.75):
+/// `1110 1010 0100 1111 | imm3 imm2 type Rd Rm`.
+pub fn movs_shifted(rd: u8, rm: u8, shift_type: u8, imm5: u8) -> u32 {
+    assert!(rd <= 12, "MOVS.W Rd must be r0..r12 (got r{rd})");
+    assert!(rm <= 12, "MOVS.W Rm must be r0..r12 (got r{rm})");
+    assert!(shift_type <= 3, "shift type must be 0..=3");
+    assert!(imm5 <= 31, "imm5 must be 0..=31");
+    let hi = 0xEA00u32 | (0x2 << 5) | (1 << 4) | 0xF;
+    let lo = (((imm5 >> 2) as u32) << 12)
+        | (((imm5 & 0x3) as u32) << 6)
+        | ((shift_type as u32) << 4)
+        | ((rd as u32) << 8)
+        | (rm as u32);
+    (hi << 16) | lo
+}
+
 /// Shared field-packing for MOV.W T3 / MOVT T1 (same layout, different base).
 fn movw_movt_common(hi_base: u32, rd: u8, imm16: u16) -> u32 {
     let imm = imm16 as u32;
@@ -1389,6 +1416,15 @@ mod encoder_tests {
         assert_eq!(lsr_reg(2, 1), 0x40CA); // LSRS r2, r1
         assert_eq!(asr_reg(2, 1), 0x410A); // ASRS r2, r1
         assert_eq!(ror_reg(2, 1), 0x41CA); // RORS r2, r1
+    }
+
+    #[test]
+    fn thumb2_shift_encodings() {
+        // Cross-checked with arm-none-eabi-as:
+        //   lsrs.w r4, r5, r2  → 35 fa 02 f4
+        //   movs.w r0, r1, lsl #1 → 5f ea 41 00
+        assert_eq!(lsrs_w(4, 5, 2), 0xFA35_F402);
+        assert_eq!(movs_shifted(0, 1, 0, 1), 0xEA5F_0041);
     }
 
     #[test]

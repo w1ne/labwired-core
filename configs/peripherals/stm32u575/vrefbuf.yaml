@@ -1,0 +1,44 @@
+peripheral: VREFBUF
+version: 0.1.0
+registers:
+- id: VREFBUF_CSR
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 2
+  fields:
+  - name: ENVR
+    bit_range:
+    - 0
+    - 0
+    description: ENVR
+  - name: HIZ
+    bit_range:
+    - 1
+    - 1
+    description: HIZ
+  - name: VRR
+    bit_range:
+    - 3
+    - 3
+    description: VRR
+  - name: VRS
+    bit_range:
+    - 6
+    - 4
+    description: VRS
+  side_effects: null
+- id: VREFBUF_CCR
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TRIM
+    bit_range:
+    - 5
+    - 0
+    description: TRIM
+  side_effects: null
+interrupts: null
+timing: null

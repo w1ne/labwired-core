@@ -67,6 +67,12 @@ def parse_int(raw: str, default: int = 0) -> int:
             return int(raw, 16)
         if raw.lower().startswith("#"):
             return int(raw[1:].replace("x", "0"), 2)
+        if raw.isdigit():
+            # ST's SVDs zero-pad some decimal values (`<value>061</value>` for
+            # USART1's IRQ). `int(raw, 0)` reads a leading `0` as an invalid
+            # base-0 octal literal and raises, which used to yield the default
+            # 0. Pure digits are decimal, leading zeros included.
+            return int(raw, 10)
         return int(raw, 0)
     except ValueError:
         return default
@@ -91,6 +97,65 @@ def bit_range(field: ET.Element) -> tuple[int, int]:
     return msb, lsb
 
 
+# libyaml's spelling for the control and line-break characters that have one.
+# Anything else below U+0020, plus U+007F-U+009F, is written as \xXX.
+CONTROL_ESCAPES = {
+    "\0": "\\0",
+    "\a": "\\a",
+    "\b": "\\b",
+    "\t": "\\t",
+    "\n": "\\n",
+    "\v": "\\v",
+    "\f": "\\f",
+    "\r": "\\r",
+    "\x1b": "\\e",
+    "\x85": "\\N",  # NEL
+    "\u2028": "\\L",  # LINE SEPARATOR
+    "\u2029": "\\P",  # PARAGRAPH SEPARATOR
+}
+
+
+def is_printable(code: int) -> bool:
+    """libyaml's printable set: only these characters may be written raw."""
+    return (
+        0x20 <= code <= 0x7E
+        or code == 0x85
+        or 0xA0 <= code <= 0xD7FF
+        or 0xE000 <= code <= 0xFFFD
+        or code >= 0x10000
+    )
+
+
+def escaped_scalar(value: str) -> str:
+    """Double-quoted scalar escaping exactly as the Rust ingestor's emitter does.
+
+    A raw control character is not valid YAML: serde_yaml 0.9.34 (libyaml), the
+    parser the debugger loads `PeripheralDescriptor` files with, rejects the
+    whole document, and PyYAML does the same. ST's SVDs carry C1 controls such
+    as U+0089 inside descriptions, so those values take this style; every other
+    value keeps the plain/single-quoted form.
+    """
+    out = []
+    for ch in value:
+        if ch in ('"', "\\"):
+            out.append("\\" + ch)
+            continue
+        special = CONTROL_ESCAPES.get(ch)
+        if special is not None:
+            out.append(special)
+            continue
+        code = ord(ch)
+        if is_printable(code):
+            out.append(ch)
+        elif code <= 0xFF:
+            out.append(f"\\x{code:02X}")
+        elif code <= 0xFFFF:
+            out.append(f"\\u{code:04X}")
+        else:
+            out.append(f"\\U{code:08X}")
+    return '"' + "".join(out) + '"'
+
+
 def yaml_str(value: str) -> str:
     """Emit a YAML scalar, quoting only where the emitter would.
 
@@ -101,6 +166,9 @@ def yaml_str(value: str) -> str:
     """
     if value == "":
         return "''"
+
+    if any(ch in CONTROL_ESCAPES or not is_printable(ord(ch)) for ch in value):
+        return escaped_scalar(value)
 
     needs_quote = (
         ": " in value

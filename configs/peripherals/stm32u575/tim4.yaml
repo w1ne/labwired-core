@@ -1,0 +1,880 @@
+peripheral: TIM4
+version: 0.1.0
+registers:
+- id: CR1
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DITHEN
+    bit_range:
+    - 12
+    - 12
+    description: Dithering Enable
+  - name: UIFREMAP
+    bit_range:
+    - 11
+    - 11
+    description: UIF status bit remapping
+  - name: CKD
+    bit_range:
+    - 9
+    - 8
+    description: Clock division
+  - name: ARPE
+    bit_range:
+    - 7
+    - 7
+    description: Auto-reload preload enable
+  - name: CMS
+    bit_range:
+    - 6
+    - 5
+    description: Center-aligned mode selection
+  - name: DIR
+    bit_range:
+    - 4
+    - 4
+    description: Direction
+  - name: OPM
+    bit_range:
+    - 3
+    - 3
+    description: One-pulse mode
+  - name: URS
+    bit_range:
+    - 2
+    - 2
+    description: Update request source
+  - name: UDIS
+    bit_range:
+    - 1
+    - 1
+    description: Update disable
+  - name: CEN
+    bit_range:
+    - 0
+    - 0
+    description: Counter enable
+  side_effects: null
+- id: CR2
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MMS_3
+    bit_range:
+    - 25
+    - 25
+    description: Master mode selection
+  - name: TI1S
+    bit_range:
+    - 7
+    - 7
+    description: TI1 selection
+  - name: MMS
+    bit_range:
+    - 6
+    - 4
+    description: Master mode selection
+  - name: CCDS
+    bit_range:
+    - 3
+    - 3
+    description: Capture/compare DMA selection
+  side_effects: null
+- id: SMCR
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SMSPS
+    bit_range:
+    - 25
+    - 25
+    description: SMS preload source
+  - name: SMSPE
+    bit_range:
+    - 24
+    - 24
+    description: SMS preload enable
+  - name: TS_4_3
+    bit_range:
+    - 21
+    - 20
+    description: Trigger selection
+  - name: SMS_bit3
+    bit_range:
+    - 16
+    - 16
+    description: Slave mode selection - bit 3
+  - name: ETP
+    bit_range:
+    - 15
+    - 15
+    description: External trigger polarity
+  - name: ECE
+    bit_range:
+    - 14
+    - 14
+    description: External clock enable
+  - name: ETPS
+    bit_range:
+    - 13
+    - 12
+    description: External trigger prescaler
+  - name: ETF
+    bit_range:
+    - 11
+    - 8
+    description: External trigger filter
+  - name: MSM
+    bit_range:
+    - 7
+    - 7
+    description: Master/Slave mode
+  - name: TS_2_0
+    bit_range:
+    - 6
+    - 4
+    description: Trigger selection
+  - name: OCCS
+    bit_range:
+    - 3
+    - 3
+    description: OCREF clear selection
+  - name: SMS
+    bit_range:
+    - 2
+    - 0
+    description: Slave mode selection
+  side_effects: null
+- id: DIER
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TERRIE
+    bit_range:
+    - 23
+    - 23
+    description: Transition error interrupt enable
+  - name: IERRIE
+    bit_range:
+    - 22
+    - 22
+    description: Index error interrupt enable
+  - name: DIRIE
+    bit_range:
+    - 21
+    - 21
+    description: Direction change interrupt enable
+  - name: IDXIE
+    bit_range:
+    - 20
+    - 20
+    description: Index interrupt enable
+  - name: TDE
+    bit_range:
+    - 14
+    - 14
+    description: Trigger DMA request enable
+  - name: CC4DE
+    bit_range:
+    - 12
+    - 12
+    description: Capture/Compare 4 DMA request enable
+  - name: CC3DE
+    bit_range:
+    - 11
+    - 11
+    description: Capture/Compare 3 DMA request enable
+  - name: CC2DE
+    bit_range:
+    - 10
+    - 10
+    description: Capture/Compare 2 DMA request enable
+  - name: CC1DE
+    bit_range:
+    - 9
+    - 9
+    description: Capture/Compare 1 DMA request enable
+  - name: UDE
+    bit_range:
+    - 8
+    - 8
+    description: Update DMA request enable
+  - name: TIE
+    bit_range:
+    - 6
+    - 6
+    description: Trigger interrupt enable
+  - name: CC4IE
+    bit_range:
+    - 4
+    - 4
+    description: Capture/Compare 4 interrupt enable
+  - name: CC3IE
+    bit_range:
+    - 3
+    - 3
+    description: Capture/Compare 3 interrupt enable
+  - name: CC2IE
+    bit_range:
+    - 2
+    - 2
+    description: Capture/Compare 2 interrupt enable
+  - name: CC1IE
+    bit_range:
+    - 1
+    - 1
+    description: Capture/Compare 1 interrupt enable
+  - name: UIE
+    bit_range:
+    - 0
+    - 0
+    description: Update interrupt enable
+  side_effects: null
+- id: SR
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TERRF
+    bit_range:
+    - 23
+    - 23
+    description: Transition error interrupt flag
+  - name: IERRF
+    bit_range:
+    - 22
+    - 22
+    description: Index error interrupt flag
+  - name: DIRF
+    bit_range:
+    - 21
+    - 21
+    description: Direction change interrupt flag
+  - name: IDXF
+    bit_range:
+    - 20
+    - 20
+    description: Index interrupt flag
+  - name: CC4OF
+    bit_range:
+    - 12
+    - 12
+    description: Capture/Compare 4 overcapture flag
+  - name: CC3OF
+    bit_range:
+    - 11
+    - 11
+    description: Capture/Compare 3 overcapture flag
+  - name: CC2OF
+    bit_range:
+    - 10
+    - 10
+    description: Capture/compare 2 overcapture flag
+  - name: CC1OF
+    bit_range:
+    - 9
+    - 9
+    description: Capture/Compare 1 overcapture flag
+  - name: TIF
+    bit_range:
+    - 6
+    - 6
+    description: Trigger interrupt flag
+  - name: CC4IF
+    bit_range:
+    - 4
+    - 4
+    description: Capture/Compare 4 interrupt flag
+  - name: CC3IF
+    bit_range:
+    - 3
+    - 3
+    description: Capture/Compare 3 interrupt flag
+  - name: CC2IF
+    bit_range:
+    - 2
+    - 2
+    description: Capture/Compare 2 interrupt flag
+  - name: CC1IF
+    bit_range:
+    - 1
+    - 1
+    description: Capture/compare 1 interrupt flag
+  - name: UIF
+    bit_range:
+    - 0
+    - 0
+    description: Update interrupt flag
+  side_effects: null
+- id: EGR
+  address_offset: 20
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: TG
+    bit_range:
+    - 6
+    - 6
+    description: Trigger generation
+  - name: CC4G
+    bit_range:
+    - 4
+    - 4
+    description: Capture/compare 4 generation
+  - name: CC3G
+    bit_range:
+    - 3
+    - 3
+    description: Capture/compare 3 generation
+  - name: CC2G
+    bit_range:
+    - 2
+    - 2
+    description: Capture/compare 2 generation
+  - name: CC1G
+    bit_range:
+    - 1
+    - 1
+    description: Capture/compare 1 generation
+  - name: UG
+    bit_range:
+    - 0
+    - 0
+    description: Update generation
+  side_effects: null
+- id: CCMR1_Output
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OC2M_bit3
+    bit_range:
+    - 24
+    - 24
+    description: Output Compare 2 mode - bit 3
+  - name: OC1M_bit3
+    bit_range:
+    - 16
+    - 16
+    description: Output Compare 1 mode - bit 3
+  - name: OC2CE
+    bit_range:
+    - 15
+    - 15
+    description: Output compare 2 clear enable
+  - name: OC2M
+    bit_range:
+    - 14
+    - 12
+    description: Output compare 2 mode
+  - name: OC2PE
+    bit_range:
+    - 11
+    - 11
+    description: Output compare 2 preload enable
+  - name: OC2FE
+    bit_range:
+    - 10
+    - 10
+    description: Output compare 2 fast enable
+  - name: CC2S
+    bit_range:
+    - 9
+    - 8
+    description: Capture/Compare 2 selection
+  - name: OC1CE
+    bit_range:
+    - 7
+    - 7
+    description: Output compare 1 clear enable
+  - name: OC1M
+    bit_range:
+    - 6
+    - 4
+    description: Output compare 1 mode
+  - name: OC1PE
+    bit_range:
+    - 3
+    - 3
+    description: Output compare 1 preload enable
+  - name: OC1FE
+    bit_range:
+    - 2
+    - 2
+    description: Output compare 1 fast enable
+  - name: CC1S
+    bit_range:
+    - 1
+    - 0
+    description: Capture/Compare 1 selection
+  side_effects: null
+- id: CCMR1_Input
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IC2F
+    bit_range:
+    - 15
+    - 12
+    description: Input capture 2 filter
+  - name: IC2PSC
+    bit_range:
+    - 11
+    - 10
+    description: Input capture 2 prescaler
+  - name: CC2S
+    bit_range:
+    - 9
+    - 8
+    description: Capture/compare 2 selection
+  - name: IC1F
+    bit_range:
+    - 7
+    - 4
+    description: Input capture 1 filter
+  - name: IC1PSC
+    bit_range:
+    - 3
+    - 2
+    description: Input capture 1 prescaler
+  - name: CC1S
+    bit_range:
+    - 1
+    - 0
+    description: Capture/Compare 1 selection
+  side_effects: null
+- id: CCMR2_Output
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OC4M_bit3
+    bit_range:
+    - 24
+    - 24
+    description: Output Compare 2 mode - bit 3
+  - name: OC3M_bit3
+    bit_range:
+    - 16
+    - 16
+    description: Output Compare 1 mode - bit 3
+  - name: OC4CE
+    bit_range:
+    - 15
+    - 15
+    description: Output compare 4 clear enable
+  - name: OC4M
+    bit_range:
+    - 14
+    - 12
+    description: Output compare 4 mode
+  - name: OC4PE
+    bit_range:
+    - 11
+    - 11
+    description: Output compare 4 preload enable
+  - name: OC4FE
+    bit_range:
+    - 10
+    - 10
+    description: Output compare 4 fast enable
+  - name: CC4S
+    bit_range:
+    - 9
+    - 8
+    description: Capture/Compare 4 selection
+  - name: OC3CE
+    bit_range:
+    - 7
+    - 7
+    description: Output compare 3 clear enable
+  - name: OC3M
+    bit_range:
+    - 6
+    - 4
+    description: Output compare 3 mode
+  - name: OC3PE
+    bit_range:
+    - 3
+    - 3
+    description: Output compare 3 preload enable
+  - name: OC3FE
+    bit_range:
+    - 2
+    - 2
+    description: Output compare 3 fast enable
+  - name: CC3S
+    bit_range:
+    - 1
+    - 0
+    description: Capture/Compare 3 selection
+  side_effects: null
+- id: CCMR2_Input
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IC4F
+    bit_range:
+    - 15
+    - 12
+    description: Input capture 4 filter
+  - name: IC4PSC
+    bit_range:
+    - 11
+    - 10
+    description: Input capture 4 prescaler
+  - name: CC4S
+    bit_range:
+    - 9
+    - 8
+    description: Capture/Compare 4 selection
+  - name: IC3F
+    bit_range:
+    - 7
+    - 4
+    description: Input capture 3 filter
+  - name: IC3PSC
+    bit_range:
+    - 3
+    - 2
+    description: Input capture 3 prescaler
+  - name: CC3S
+    bit_range:
+    - 1
+    - 0
+    description: Capture/Compare 3 selection
+  side_effects: null
+- id: CCER
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CC4NP
+    bit_range:
+    - 15
+    - 15
+    description: Capture/Compare 4 output Polarity
+  - name: CC4P
+    bit_range:
+    - 13
+    - 13
+    description: Capture/Compare 3 output Polarity
+  - name: CC4E
+    bit_range:
+    - 12
+    - 12
+    description: Capture/Compare 4 output enable
+  - name: CC3NP
+    bit_range:
+    - 11
+    - 11
+    description: Capture/Compare 3 output Polarity
+  - name: CC3P
+    bit_range:
+    - 9
+    - 9
+    description: Capture/Compare 3 output Polarity
+  - name: CC3E
+    bit_range:
+    - 8
+    - 8
+    description: Capture/Compare 3 output enable
+  - name: CC2NP
+    bit_range:
+    - 7
+    - 7
+    description: Capture/Compare 2 output Polarity
+  - name: CC2P
+    bit_range:
+    - 5
+    - 5
+    description: Capture/Compare 2 output Polarity
+  - name: CC2E
+    bit_range:
+    - 4
+    - 4
+    description: Capture/Compare 2 output enable
+  - name: CC1NP
+    bit_range:
+    - 3
+    - 3
+    description: Capture/Compare 1 output Polarity
+  - name: CC1P
+    bit_range:
+    - 1
+    - 1
+    description: Capture/Compare 1 output Polarity
+  - name: CC1E
+    bit_range:
+    - 0
+    - 0
+    description: Capture/Compare 1 output enable
+  side_effects: null
+- id: CNT
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CNT_H
+    bit_range:
+    - 30
+    - 16
+    description: Most significant part counter value (on TIM2 and TIM5)
+  - name: CNT_L
+    bit_range:
+    - 15
+    - 0
+    description: Least significant part of counter value
+  - name: CNT_bit31
+    bit_range:
+    - 31
+    - 31
+    description: Most significant bit of counter value (on TIM2 and TIM5)
+  side_effects: null
+- id: PSC
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PSC
+    bit_range:
+    - 15
+    - 0
+    description: Prescaler value
+  side_effects: null
+- id: ARR
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: ARR_H
+    bit_range:
+    - 31
+    - 16
+    description: High Auto-reload value (TIM2 only)
+  - name: ARR_L
+    bit_range:
+    - 15
+    - 0
+    description: Low Auto-reload value
+  side_effects: null
+- id: CCR1
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CCR1_H
+    bit_range:
+    - 31
+    - 16
+    description: High Capture/Compare 1 value (TIM2 only)
+  - name: CCR1_L
+    bit_range:
+    - 15
+    - 0
+    description: Low Capture/Compare 1 value
+  side_effects: null
+- id: CCR2
+  address_offset: 56
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CCR2_H
+    bit_range:
+    - 31
+    - 16
+    description: High Capture/Compare 2 value (TIM2 only)
+  - name: CCR2_L
+    bit_range:
+    - 15
+    - 0
+    description: Low Capture/Compare 2 value
+  side_effects: null
+- id: CCR3
+  address_offset: 60
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CCR3_H
+    bit_range:
+    - 31
+    - 16
+    description: High Capture/Compare value (TIM2 only)
+  - name: CCR3_L
+    bit_range:
+    - 15
+    - 0
+    description: Low Capture/Compare value
+  side_effects: null
+- id: CCR4
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CCR4_H
+    bit_range:
+    - 31
+    - 16
+    description: High Capture/Compare value (TIM2 only)
+  - name: CCR4_L
+    bit_range:
+    - 15
+    - 0
+    description: Low Capture/Compare value
+  side_effects: null
+- id: ECR
+  address_offset: 88
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PWPRSC
+    bit_range:
+    - 26
+    - 24
+    description: Pulse width prescaler
+  - name: PW
+    bit_range:
+    - 23
+    - 16
+    description: Pulse width
+  - name: IPOS
+    bit_range:
+    - 7
+    - 6
+    description: Index positioning
+  - name: FIDX
+    bit_range:
+    - 5
+    - 5
+    description: First index
+  - name: IBLK
+    bit_range:
+    - 4
+    - 3
+    description: Index blanking This bit indicates if the Index event is conditioned by the tim_ti3 input
+  - name: IDIR
+    bit_range:
+    - 2
+    - 1
+    description: Index direction
+  - name: IE
+    bit_range:
+    - 0
+    - 0
+    description: Index enable
+  side_effects: null
+- id: TISEL
+  address_offset: 92
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TI4SEL
+    bit_range:
+    - 27
+    - 24
+    description: Selects tim_ti4[0..15] input
+  - name: TI3SEL
+    bit_range:
+    - 19
+    - 16
+    description: Selects tim_ti3[0..15] input
+  - name: TI2SEL
+    bit_range:
+    - 11
+    - 8
+    description: Selects tim_ti2[0..15] input
+  - name: TI1SEL
+    bit_range:
+    - 3
+    - 0
+    description: Selects tim_ti1[0..15] input
+  side_effects: null
+- id: AF1
+  address_offset: 96
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ETRSEL
+    bit_range:
+    - 17
+    - 14
+    description: etr_in source selection
+  side_effects: null
+- id: AF2
+  address_offset: 100
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OCRSEL
+    bit_range:
+    - 18
+    - 16
+    description: ocref_clr source selection
+  side_effects: null
+- id: DCR
+  address_offset: 988
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DBSS
+    bit_range:
+    - 19
+    - 16
+    description: DMA burst source selection
+  - name: DBL
+    bit_range:
+    - 12
+    - 8
+    description: DMA burst length
+  - name: DBA
+    bit_range:
+    - 4
+    - 0
+    description: DMA base address
+  side_effects: null
+- id: DMAR
+  address_offset: 992
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ETRSEL
+    bit_range:
+    - 31
+    - 0
+    description: DMA register for burst accesses
+  side_effects: null
+interrupts:
+  TIM4: 47
+  TIM2: 45
+timing: null

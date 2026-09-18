@@ -1,0 +1,686 @@
+peripheral: OCTOSPI2
+version: 0.1.0
+registers:
+- id: CR
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FMODE
+    bit_range:
+    - 29
+    - 28
+    description: Functional mode
+  - name: PMM
+    bit_range:
+    - 23
+    - 23
+    description: Polling match mode
+  - name: APMS
+    bit_range:
+    - 22
+    - 22
+    description: Automatic poll mode stop
+  - name: TOIE
+    bit_range:
+    - 20
+    - 20
+    description: TimeOut interrupt enable
+  - name: SMIE
+    bit_range:
+    - 19
+    - 19
+    description: Status match interrupt enable
+  - name: FTIE
+    bit_range:
+    - 18
+    - 18
+    description: FIFO threshold interrupt enable
+  - name: TCIE
+    bit_range:
+    - 17
+    - 17
+    description: Transfer complete interrupt enable
+  - name: TEIE
+    bit_range:
+    - 16
+    - 16
+    description: Transfer error interrupt enable
+  - name: FTHRES
+    bit_range:
+    - 12
+    - 8
+    description: IFO threshold level
+  - name: FSEL
+    bit_range:
+    - 7
+    - 7
+    description: FLASH memory selection
+  - name: DQM
+    bit_range:
+    - 6
+    - 6
+    description: Dual-quad mode
+  - name: TCEN
+    bit_range:
+    - 3
+    - 3
+    description: Timeout counter enable
+  - name: DMAEN
+    bit_range:
+    - 2
+    - 2
+    description: DMA enable
+  - name: ABORT
+    bit_range:
+    - 1
+    - 1
+    description: Abort request
+  - name: EN
+    bit_range:
+    - 0
+    - 0
+    description: Enable
+  side_effects: null
+- id: DCR1
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CKMODE
+    bit_range:
+    - 0
+    - 0
+    description: Mode 0 / mode 3
+  - name: FRCK
+    bit_range:
+    - 1
+    - 1
+    description: Free running clock
+  - name: DLYBYP
+    bit_range:
+    - 3
+    - 3
+    description: Delay block bypass
+  - name: CSHT
+    bit_range:
+    - 13
+    - 8
+    description: Chip-select high time
+  - name: DEVSIZE
+    bit_range:
+    - 20
+    - 16
+    description: Device size
+  - name: MTYP
+    bit_range:
+    - 26
+    - 24
+    description: Memory type
+  side_effects: null
+- id: DCR2
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PRESCALER
+    bit_range:
+    - 7
+    - 0
+    description: Clock prescaler
+  - name: WRAPSIZE
+    bit_range:
+    - 18
+    - 16
+    description: Wrap size
+  side_effects: null
+- id: DCR3
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MAXTRAN
+    bit_range:
+    - 7
+    - 0
+    description: Maximum transfer
+  - name: CSBOUND
+    bit_range:
+    - 20
+    - 16
+    description: CS boundary
+  side_effects: null
+- id: DCR4
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REFRESH
+    bit_range:
+    - 31
+    - 0
+    description: Refresh rate
+  side_effects: null
+- id: SR
+  address_offset: 32
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: TEF
+    bit_range:
+    - 0
+    - 0
+    description: Transfer error flag
+  - name: TCF
+    bit_range:
+    - 1
+    - 1
+    description: transfer complete flag
+  - name: FTF
+    bit_range:
+    - 2
+    - 2
+    description: FIFO threshold flag
+  - name: SMF
+    bit_range:
+    - 3
+    - 3
+    description: status match flag
+  - name: TOF
+    bit_range:
+    - 4
+    - 4
+    description: timeout flag
+  - name: BUSY
+    bit_range:
+    - 5
+    - 5
+    description: BUSY
+  - name: FLEVEL
+    bit_range:
+    - 13
+    - 8
+    description: FIFO level
+  side_effects: null
+- id: FCR
+  address_offset: 36
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: CTEF
+    bit_range:
+    - 0
+    - 0
+    description: Clear Transfer error flag
+  - name: CTCF
+    bit_range:
+    - 1
+    - 1
+    description: Clear transfer complete flag
+  - name: CSMF
+    bit_range:
+    - 3
+    - 3
+    description: Clear status match flag
+  - name: CTOF
+    bit_range:
+    - 4
+    - 4
+    description: Clear timeout flag
+  side_effects: null
+- id: DLR
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DL
+    bit_range:
+    - 31
+    - 0
+    description: Data length
+  side_effects: null
+- id: AR
+  address_offset: 72
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ADDRESS
+    bit_range:
+    - 31
+    - 0
+    description: ADDRESS
+  side_effects: null
+- id: DR
+  address_offset: 80
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DATA
+    bit_range:
+    - 31
+    - 0
+    description: DATA
+  side_effects: null
+- id: PSMKR
+  address_offset: 128
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MASK
+    bit_range:
+    - 31
+    - 0
+    description: Status MASK
+  side_effects: null
+- id: PSMAR
+  address_offset: 136
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MATCH
+    bit_range:
+    - 31
+    - 0
+    description: Status match
+  side_effects: null
+- id: PIR
+  address_offset: 144
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTERVAL
+    bit_range:
+    - 15
+    - 0
+    description: polling interval
+  side_effects: null
+- id: CCR
+  address_offset: 256
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IMODE
+    bit_range:
+    - 2
+    - 0
+    description: Instruction mode
+  - name: IDTR
+    bit_range:
+    - 3
+    - 3
+    description: Instruction double transfer rate
+  - name: ISIZE
+    bit_range:
+    - 5
+    - 4
+    description: Instruction size
+  - name: ADMODE
+    bit_range:
+    - 10
+    - 8
+    description: Address mode
+  - name: ADDTR
+    bit_range:
+    - 11
+    - 11
+    description: Address double transfer rate
+  - name: ADSIZE
+    bit_range:
+    - 13
+    - 12
+    description: Address size
+  - name: ABMODE
+    bit_range:
+    - 18
+    - 16
+    description: Alternate byte mode
+  - name: ABDTR
+    bit_range:
+    - 19
+    - 19
+    description: Alternate bytes double transfer rate
+  - name: ABSIZE
+    bit_range:
+    - 21
+    - 20
+    description: Alternate bytes size
+  - name: DMODE
+    bit_range:
+    - 26
+    - 24
+    description: Data mode
+  - name: DDTR
+    bit_range:
+    - 27
+    - 27
+    description: Alternate bytes double transfer rate
+  - name: DQSE
+    bit_range:
+    - 29
+    - 29
+    description: DQS enable
+  - name: SIOO
+    bit_range:
+    - 31
+    - 31
+    description: Send instruction only once mode
+  side_effects: null
+- id: TCR
+  address_offset: 264
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DCYC
+    bit_range:
+    - 4
+    - 0
+    description: Number of dummy cycles
+  - name: DHQC
+    bit_range:
+    - 28
+    - 28
+    description: Delay hold quarter cycle
+  - name: SSHIFT
+    bit_range:
+    - 30
+    - 30
+    description: Sample shift
+  side_effects: null
+- id: IR
+  address_offset: 272
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INSTRUCTION
+    bit_range:
+    - 31
+    - 0
+    description: INSTRUCTION
+  side_effects: null
+- id: ABR
+  address_offset: 288
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ALTERNATE
+    bit_range:
+    - 31
+    - 0
+    description: Alternate bytes
+  side_effects: null
+- id: LPTR
+  address_offset: 304
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIMEOUT
+    bit_range:
+    - 15
+    - 0
+    description: Timeout period
+  side_effects: null
+- id: WPCCR
+  address_offset: 320
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IMODE
+    bit_range:
+    - 2
+    - 0
+    description: Instruction mode
+  - name: IDTR
+    bit_range:
+    - 3
+    - 3
+    description: Instruction double transfer rate
+  - name: ISIZE
+    bit_range:
+    - 5
+    - 4
+    description: Instruction size
+  - name: ADMODE
+    bit_range:
+    - 10
+    - 8
+    description: Address mode
+  - name: ADDTR
+    bit_range:
+    - 11
+    - 11
+    description: Address double transfer rate
+  - name: ADSIZE
+    bit_range:
+    - 13
+    - 12
+    description: Address size
+  - name: ABMODE
+    bit_range:
+    - 18
+    - 16
+    description: Alternate byte mode
+  - name: ABDTR
+    bit_range:
+    - 19
+    - 19
+    description: Alternate bytes double transfer rate
+  - name: ABSIZE
+    bit_range:
+    - 21
+    - 20
+    description: Alternate bytes size
+  - name: DMODE
+    bit_range:
+    - 26
+    - 24
+    description: Data mode
+  - name: DDTR
+    bit_range:
+    - 27
+    - 27
+    description: alternate bytes double transfer rate
+  - name: DQSE
+    bit_range:
+    - 29
+    - 29
+    description: DQS enable
+  side_effects: null
+- id: WPTCR
+  address_offset: 328
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DCYC
+    bit_range:
+    - 4
+    - 0
+    description: Number of dummy cycles
+  - name: DHQC
+    bit_range:
+    - 28
+    - 28
+    description: Delay hold quarter cycle
+  - name: SSHIFT
+    bit_range:
+    - 30
+    - 30
+    description: Sample shift
+  side_effects: null
+- id: WPIR
+  address_offset: 336
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INSTRUCTION
+    bit_range:
+    - 31
+    - 0
+    description: INSTRUCTION
+  side_effects: null
+- id: WPABR
+  address_offset: 352
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ALTERNATE
+    bit_range:
+    - 31
+    - 0
+    description: Alternate bytes
+  side_effects: null
+- id: WCCR
+  address_offset: 384
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IMODE
+    bit_range:
+    - 2
+    - 0
+    description: Instruction mode
+  - name: IDTR
+    bit_range:
+    - 3
+    - 3
+    description: Instruction double transfer rate
+  - name: ISIZE
+    bit_range:
+    - 5
+    - 4
+    description: Instruction size
+  - name: ADMODE
+    bit_range:
+    - 10
+    - 8
+    description: Address mode
+  - name: ADDTR
+    bit_range:
+    - 11
+    - 11
+    description: Address double transfer rate
+  - name: ADSIZE
+    bit_range:
+    - 13
+    - 12
+    description: Address size
+  - name: ABMODE
+    bit_range:
+    - 18
+    - 16
+    description: Alternate byte mode
+  - name: ABDTR
+    bit_range:
+    - 19
+    - 19
+    description: Alternate bytes double transfer rate
+  - name: ABSIZE
+    bit_range:
+    - 21
+    - 20
+    description: Alternate bytes size
+  - name: DMODE
+    bit_range:
+    - 26
+    - 24
+    description: Data mode
+  - name: DDTR
+    bit_range:
+    - 27
+    - 27
+    description: alternate bytes double transfer rate
+  - name: DQSE
+    bit_range:
+    - 29
+    - 29
+    description: DQS enable
+  side_effects: null
+- id: WTCR
+  address_offset: 392
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DCYC
+    bit_range:
+    - 4
+    - 0
+    description: Number of dummy cycles
+  side_effects: null
+- id: WIR
+  address_offset: 400
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INSTRUCTION
+    bit_range:
+    - 31
+    - 0
+    description: INSTRUCTION
+  side_effects: null
+- id: WABR
+  address_offset: 416
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ALTERNATE
+    bit_range:
+    - 31
+    - 0
+    description: ALTERNATE
+  side_effects: null
+- id: HLCR
+  address_offset: 512
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LM
+    bit_range:
+    - 0
+    - 0
+    description: Latency mode
+  - name: WZL
+    bit_range:
+    - 1
+    - 1
+    description: Write zero latency
+  - name: TACC
+    bit_range:
+    - 15
+    - 8
+    description: Access time
+  - name: TRWR
+    bit_range:
+    - 23
+    - 16
+    description: Read write recovery time
+  side_effects: null
+interrupts:
+  OCTOSPI2: 120
+  OCTOSPI1: 76
+timing: null

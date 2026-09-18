@@ -1,0 +1,202 @@
+peripheral: OPAMP
+version: 0.1.0
+registers:
+- id: OPAMP1_CSR
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OPAEN
+    bit_range:
+    - 0
+    - 0
+    description: OPAMP enable
+  - name: OPALPM
+    bit_range:
+    - 1
+    - 1
+    description: OPAMP low-power mode The OPAMP must be disabled to change this configuration.
+  - name: OPAMODE
+    bit_range:
+    - 3
+    - 2
+    description: 'OPAMP PGA mode 00 and 01: internal PGA disabled'
+  - name: PGA_GAIN
+    bit_range:
+    - 5
+    - 4
+    description: OPAMP programmable amplifier gain value
+  - name: VM_SEL
+    bit_range:
+    - 9
+    - 8
+    description: 'Inverting input selection These bits are used only when OPAMODE = 00, 01 or 10. 1x: inverting input not externally connected'
+  - name: VP_SEL
+    bit_range:
+    - 10
+    - 10
+    description: Non-inverted input selection
+  - name: CALON
+    bit_range:
+    - 12
+    - 12
+    description: Calibration mode enable
+  - name: CALSEL
+    bit_range:
+    - 13
+    - 13
+    description: Calibration selection
+  - name: USERTRIM
+    bit_range:
+    - 14
+    - 14
+    description: ‘factory’ or ‘user’ offset trimmed values selection This bit is active for normal and low-power modes.
+  - name: CALOUT
+    bit_range:
+    - 15
+    - 15
+    description: OPAMP calibration output During the calibration mode, the offset is trimmed when this signal toggles.
+  - name: OPAHSM
+    bit_range:
+    - 30
+    - 30
+    description: OPAMP high-speed mode This bit is effective for both normal and low-power modes.
+  - name: OPA_RANGE
+    bit_range:
+    - 31
+    - 31
+    description: OPAMP range setting This bit must be set before enabling the OPAMP and this bit affects all OPAMP instances.
+  side_effects: null
+- id: OPAMP1_OTR
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TRIMOFFSETN
+    bit_range:
+    - 4
+    - 0
+    description: Trim for NMOS differential pairs
+  - name: TRIMOFFSETP
+    bit_range:
+    - 12
+    - 8
+    description: Trim for PMOS differential pairs
+  side_effects: null
+- id: OPAMP1_LPOTR
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TRIMLPOFFSETN
+    bit_range:
+    - 4
+    - 0
+    description: Low-power mode trim for NMOS differential pairs
+  - name: TRIMLPOFFSETP
+    bit_range:
+    - 12
+    - 8
+    description: Low-power mode trim for PMOS differential pairs
+  side_effects: null
+- id: OPAMP2_CRS
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OPAEN
+    bit_range:
+    - 0
+    - 0
+    description: OPAMP enable
+  - name: OPALPM
+    bit_range:
+    - 1
+    - 1
+    description: OPAMP low-power mode The OPAMP must be disabled to change this configuration.
+  - name: OPAMODE
+    bit_range:
+    - 3
+    - 2
+    description: 'OPAMP PGA mode 00 and 01: internal PGA disabled'
+  - name: PGA_GAIN
+    bit_range:
+    - 5
+    - 4
+    description: OPAMP programmable amplifier gain value
+  - name: VM_SEL
+    bit_range:
+    - 9
+    - 8
+    description: 'Inverting input selection These bits are used only when OPAMODE = 00, 01 or 10. in PGA mode for filtering) 1x: inverting input not externally connected'
+  - name: VP_SEL
+    bit_range:
+    - 10
+    - 10
+    description: Non inverted input selection
+  - name: CALON
+    bit_range:
+    - 12
+    - 12
+    description: Calibration mode enable
+  - name: CALSEL
+    bit_range:
+    - 13
+    - 13
+    description: Calibration selection
+  - name: USERTRIM
+    bit_range:
+    - 14
+    - 14
+    description: ‘factory’ or ‘user’ offset trimmed values selection This bit is active for normal and low-power modes.
+  - name: CALOUT
+    bit_range:
+    - 15
+    - 15
+    description: OPAMP calibration output During calibration mode, the offset is trimmed when this signal toggles.
+  - name: OPAHSM
+    bit_range:
+    - 30
+    - 30
+    description: OPAMP high-speed mode This bit is effective for both normal and high-speed modes.
+  side_effects: null
+- id: OPAMP2_OTR
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TRIMOFFSETN
+    bit_range:
+    - 4
+    - 0
+    description: Trim for NMOS differential pairs
+  - name: TRIMOFFSETP
+    bit_range:
+    - 12
+    - 8
+    description: Trim for PMOS differential pairs
+  side_effects: null
+- id: OPAMP2_LPOTR
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TRIMLPOFFSETN
+    bit_range:
+    - 4
+    - 0
+    description: Low-power mode trim for NMOS differential pairs
+  - name: TRIMLPOFFSETP
+    bit_range:
+    - 12
+    - 8
+    description: Low-power mode trim for PMOS differential pairs
+  side_effects: null
+interrupts: null
+timing: null

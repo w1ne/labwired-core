@@ -506,6 +506,7 @@ pub enum Instruction {
         rn: u8,
         rm: u8,
         shift_type: u8,
+        set_flags: bool,
     }, // LSL/LSR/ASR/ROR (register)
 
     It {
@@ -1785,14 +1786,30 @@ mod tests {
 
     #[test]
     fn test_decode_shift_reg32_lsl() {
-        // LSL.W R2, R1, R2
+        // LSL.W R2, R1, R2 (S=0)
         assert_eq!(
             decode_thumb_32(0xFA01, 0xF202),
             Instruction::ShiftReg32 {
                 rd: 2,
                 rn: 1,
                 rm: 2,
-                shift_type: 0
+                shift_type: 0,
+                set_flags: false,
+            }
+        );
+    }
+
+    #[test]
+    fn test_decode_shift_reg32_lsrs_flags() {
+        // LSRS.W R4, R5, R2 (S=1)
+        assert_eq!(
+            decode_thumb_32(0xFA35, 0xF402),
+            Instruction::ShiftReg32 {
+                rd: 4,
+                rn: 5,
+                rm: 2,
+                shift_type: 1,
+                set_flags: true,
             }
         );
     }
@@ -1854,6 +1871,25 @@ mod tests {
                 imm5: 4,
                 shift_type: 1,
                 set_flags: false
+            }
+        );
+    }
+
+    #[test]
+    fn test_decode_dataproc32_rrx() {
+        // MOVS.W R0, R1, RRX -> 0xEA5F 0x0031. RRX is the DataProc32 form
+        // with shift_type=ROR and imm5=0; the executor interprets it as
+        // rotate-through-carry (ARMv7-M A7.7.154).
+        assert_eq!(
+            decode_thumb_32(0xEA5F, 0x0031),
+            Instruction::DataProc32 {
+                op: 0x2,
+                rn: 0xF,
+                rd: 0,
+                rm: 1,
+                imm5: 0,
+                shift_type: 3,
+                set_flags: true
             }
         );
     }

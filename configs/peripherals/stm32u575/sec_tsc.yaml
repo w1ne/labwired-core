@@ -1,0 +1,975 @@
+peripheral: SEC_TSC
+version: 0.1.0
+registers:
+- id: CR
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CTPH
+    bit_range:
+    - 31
+    - 28
+    description: Charge transfer pulse high
+  - name: CTPL
+    bit_range:
+    - 27
+    - 24
+    description: Charge transfer pulse low
+  - name: SSD
+    bit_range:
+    - 23
+    - 17
+    description: Spread spectrum deviation
+  - name: SSE
+    bit_range:
+    - 16
+    - 16
+    description: Spread spectrum enable
+  - name: SSPSC
+    bit_range:
+    - 15
+    - 15
+    description: Spread spectrum prescaler
+  - name: PGPSC
+    bit_range:
+    - 14
+    - 12
+    description: pulse generator prescaler
+  - name: MCV
+    bit_range:
+    - 7
+    - 5
+    description: Max count value
+  - name: IODEF
+    bit_range:
+    - 4
+    - 4
+    description: I/O Default mode
+  - name: SYNCPOL
+    bit_range:
+    - 3
+    - 3
+    description: Synchronization pin polarity
+  - name: AM
+    bit_range:
+    - 2
+    - 2
+    description: Acquisition mode
+  - name: START
+    bit_range:
+    - 1
+    - 1
+    description: Start a new acquisition
+  - name: TSCE
+    bit_range:
+    - 0
+    - 0
+    description: Touch sensing controller enable
+  side_effects: null
+- id: IER
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MCEIE
+    bit_range:
+    - 1
+    - 1
+    description: Max count error interrupt enable
+  - name: EOAIE
+    bit_range:
+    - 0
+    - 0
+    description: End of acquisition interrupt enable
+  side_effects: null
+- id: ICR
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MCEIC
+    bit_range:
+    - 1
+    - 1
+    description: Max count error interrupt clear
+  - name: EOAIC
+    bit_range:
+    - 0
+    - 0
+    description: End of acquisition interrupt clear
+  side_effects: null
+- id: ISR
+  address_offset: 12
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: MCEF
+    bit_range:
+    - 1
+    - 1
+    description: Max count error flag
+  - name: EOAF
+    bit_range:
+    - 0
+    - 0
+    description: End of acquisition flag
+  side_effects: null
+- id: IOHCR
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: G8_IO4
+    bit_range:
+    - 31
+    - 31
+    description: G8_IO4
+  - name: G8_IO3
+    bit_range:
+    - 30
+    - 30
+    description: G8_IO3
+  - name: G8_IO2
+    bit_range:
+    - 29
+    - 29
+    description: G8_IO2
+  - name: G8_IO1
+    bit_range:
+    - 28
+    - 28
+    description: G8_IO1
+  - name: G7_IO4
+    bit_range:
+    - 27
+    - 27
+    description: G7_IO4
+  - name: G7_IO3
+    bit_range:
+    - 26
+    - 26
+    description: G7_IO3
+  - name: G7_IO2
+    bit_range:
+    - 25
+    - 25
+    description: G7_IO2
+  - name: G7_IO1
+    bit_range:
+    - 24
+    - 24
+    description: G7_IO1
+  - name: G6_IO4
+    bit_range:
+    - 23
+    - 23
+    description: G6_IO4
+  - name: G6_IO3
+    bit_range:
+    - 22
+    - 22
+    description: G6_IO3
+  - name: G6_IO2
+    bit_range:
+    - 21
+    - 21
+    description: G6_IO2
+  - name: G6_IO1
+    bit_range:
+    - 20
+    - 20
+    description: G6_IO1
+  - name: G5_IO4
+    bit_range:
+    - 19
+    - 19
+    description: G5_IO4
+  - name: G5_IO3
+    bit_range:
+    - 18
+    - 18
+    description: G5_IO3
+  - name: G5_IO2
+    bit_range:
+    - 17
+    - 17
+    description: G5_IO2
+  - name: G5_IO1
+    bit_range:
+    - 16
+    - 16
+    description: G5_IO1
+  - name: G4_IO4
+    bit_range:
+    - 15
+    - 15
+    description: G4_IO4
+  - name: G4_IO3
+    bit_range:
+    - 14
+    - 14
+    description: G4_IO3
+  - name: G4_IO2
+    bit_range:
+    - 13
+    - 13
+    description: G4_IO2
+  - name: G4_IO1
+    bit_range:
+    - 12
+    - 12
+    description: G4_IO1
+  - name: G3_IO4
+    bit_range:
+    - 11
+    - 11
+    description: G3_IO4
+  - name: G3_IO3
+    bit_range:
+    - 10
+    - 10
+    description: G3_IO3
+  - name: G3_IO2
+    bit_range:
+    - 9
+    - 9
+    description: G3_IO2
+  - name: G3_IO1
+    bit_range:
+    - 8
+    - 8
+    description: G3_IO1
+  - name: G2_IO4
+    bit_range:
+    - 7
+    - 7
+    description: G2_IO4
+  - name: G2_IO3
+    bit_range:
+    - 6
+    - 6
+    description: G2_IO3
+  - name: G2_IO2
+    bit_range:
+    - 5
+    - 5
+    description: G2_IO2
+  - name: G2_IO1
+    bit_range:
+    - 4
+    - 4
+    description: G2_IO1
+  - name: G1_IO4
+    bit_range:
+    - 3
+    - 3
+    description: G1_IO4
+  - name: G1_IO3
+    bit_range:
+    - 2
+    - 2
+    description: G1_IO3
+  - name: G1_IO2
+    bit_range:
+    - 1
+    - 1
+    description: G1_IO2
+  - name: G1_IO1
+    bit_range:
+    - 0
+    - 0
+    description: G1_IO1
+  side_effects: null
+- id: IOASCR
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: G8_IO4
+    bit_range:
+    - 31
+    - 31
+    description: G8_IO4
+  - name: G8_IO3
+    bit_range:
+    - 30
+    - 30
+    description: G8_IO3
+  - name: G8_IO2
+    bit_range:
+    - 29
+    - 29
+    description: G8_IO2
+  - name: G8_IO1
+    bit_range:
+    - 28
+    - 28
+    description: G8_IO1
+  - name: G7_IO4
+    bit_range:
+    - 27
+    - 27
+    description: G7_IO4
+  - name: G7_IO3
+    bit_range:
+    - 26
+    - 26
+    description: G7_IO3
+  - name: G7_IO2
+    bit_range:
+    - 25
+    - 25
+    description: G7_IO2
+  - name: G7_IO1
+    bit_range:
+    - 24
+    - 24
+    description: G7_IO1
+  - name: G6_IO4
+    bit_range:
+    - 23
+    - 23
+    description: G6_IO4
+  - name: G6_IO3
+    bit_range:
+    - 22
+    - 22
+    description: G6_IO3
+  - name: G6_IO2
+    bit_range:
+    - 21
+    - 21
+    description: G6_IO2
+  - name: G6_IO1
+    bit_range:
+    - 20
+    - 20
+    description: G6_IO1
+  - name: G5_IO4
+    bit_range:
+    - 19
+    - 19
+    description: G5_IO4
+  - name: G5_IO3
+    bit_range:
+    - 18
+    - 18
+    description: G5_IO3
+  - name: G5_IO2
+    bit_range:
+    - 17
+    - 17
+    description: G5_IO2
+  - name: G5_IO1
+    bit_range:
+    - 16
+    - 16
+    description: G5_IO1
+  - name: G4_IO4
+    bit_range:
+    - 15
+    - 15
+    description: G4_IO4
+  - name: G4_IO3
+    bit_range:
+    - 14
+    - 14
+    description: G4_IO3
+  - name: G4_IO2
+    bit_range:
+    - 13
+    - 13
+    description: G4_IO2
+  - name: G4_IO1
+    bit_range:
+    - 12
+    - 12
+    description: G4_IO1
+  - name: G3_IO4
+    bit_range:
+    - 11
+    - 11
+    description: G3_IO4
+  - name: G3_IO3
+    bit_range:
+    - 10
+    - 10
+    description: G3_IO3
+  - name: G3_IO2
+    bit_range:
+    - 9
+    - 9
+    description: G3_IO2
+  - name: G3_IO1
+    bit_range:
+    - 8
+    - 8
+    description: G3_IO1
+  - name: G2_IO4
+    bit_range:
+    - 7
+    - 7
+    description: G2_IO4
+  - name: G2_IO3
+    bit_range:
+    - 6
+    - 6
+    description: G2_IO3
+  - name: G2_IO2
+    bit_range:
+    - 5
+    - 5
+    description: G2_IO2
+  - name: G2_IO1
+    bit_range:
+    - 4
+    - 4
+    description: G2_IO1
+  - name: G1_IO4
+    bit_range:
+    - 3
+    - 3
+    description: G1_IO4
+  - name: G1_IO3
+    bit_range:
+    - 2
+    - 2
+    description: G1_IO3
+  - name: G1_IO2
+    bit_range:
+    - 1
+    - 1
+    description: G1_IO2
+  - name: G1_IO1
+    bit_range:
+    - 0
+    - 0
+    description: G1_IO1
+  side_effects: null
+- id: IOSCR
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: G8_IO4
+    bit_range:
+    - 31
+    - 31
+    description: G8_IO4
+  - name: G8_IO3
+    bit_range:
+    - 30
+    - 30
+    description: G8_IO3
+  - name: G8_IO2
+    bit_range:
+    - 29
+    - 29
+    description: G8_IO2
+  - name: G8_IO1
+    bit_range:
+    - 28
+    - 28
+    description: G8_IO1
+  - name: G7_IO4
+    bit_range:
+    - 27
+    - 27
+    description: G7_IO4
+  - name: G7_IO3
+    bit_range:
+    - 26
+    - 26
+    description: G7_IO3
+  - name: G7_IO2
+    bit_range:
+    - 25
+    - 25
+    description: G7_IO2
+  - name: G7_IO1
+    bit_range:
+    - 24
+    - 24
+    description: G7_IO1
+  - name: G6_IO4
+    bit_range:
+    - 23
+    - 23
+    description: G6_IO4
+  - name: G6_IO3
+    bit_range:
+    - 22
+    - 22
+    description: G6_IO3
+  - name: G6_IO2
+    bit_range:
+    - 21
+    - 21
+    description: G6_IO2
+  - name: G6_IO1
+    bit_range:
+    - 20
+    - 20
+    description: G6_IO1
+  - name: G5_IO4
+    bit_range:
+    - 19
+    - 19
+    description: G5_IO4
+  - name: G5_IO3
+    bit_range:
+    - 18
+    - 18
+    description: G5_IO3
+  - name: G5_IO2
+    bit_range:
+    - 17
+    - 17
+    description: G5_IO2
+  - name: G5_IO1
+    bit_range:
+    - 16
+    - 16
+    description: G5_IO1
+  - name: G4_IO4
+    bit_range:
+    - 15
+    - 15
+    description: G4_IO4
+  - name: G4_IO3
+    bit_range:
+    - 14
+    - 14
+    description: G4_IO3
+  - name: G4_IO2
+    bit_range:
+    - 13
+    - 13
+    description: G4_IO2
+  - name: G4_IO1
+    bit_range:
+    - 12
+    - 12
+    description: G4_IO1
+  - name: G3_IO4
+    bit_range:
+    - 11
+    - 11
+    description: G3_IO4
+  - name: G3_IO3
+    bit_range:
+    - 10
+    - 10
+    description: G3_IO3
+  - name: G3_IO2
+    bit_range:
+    - 9
+    - 9
+    description: G3_IO2
+  - name: G3_IO1
+    bit_range:
+    - 8
+    - 8
+    description: G3_IO1
+  - name: G2_IO4
+    bit_range:
+    - 7
+    - 7
+    description: G2_IO4
+  - name: G2_IO3
+    bit_range:
+    - 6
+    - 6
+    description: G2_IO3
+  - name: G2_IO2
+    bit_range:
+    - 5
+    - 5
+    description: G2_IO2
+  - name: G2_IO1
+    bit_range:
+    - 4
+    - 4
+    description: G2_IO1
+  - name: G1_IO4
+    bit_range:
+    - 3
+    - 3
+    description: G1_IO4
+  - name: G1_IO3
+    bit_range:
+    - 2
+    - 2
+    description: G1_IO3
+  - name: G1_IO2
+    bit_range:
+    - 1
+    - 1
+    description: G1_IO2
+  - name: G1_IO1
+    bit_range:
+    - 0
+    - 0
+    description: G1_IO1
+  side_effects: null
+- id: IOCCR
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: G8_IO4
+    bit_range:
+    - 31
+    - 31
+    description: G8_IO4
+  - name: G8_IO3
+    bit_range:
+    - 30
+    - 30
+    description: G8_IO3
+  - name: G8_IO2
+    bit_range:
+    - 29
+    - 29
+    description: G8_IO2
+  - name: G8_IO1
+    bit_range:
+    - 28
+    - 28
+    description: G8_IO1
+  - name: G7_IO4
+    bit_range:
+    - 27
+    - 27
+    description: G7_IO4
+  - name: G7_IO3
+    bit_range:
+    - 26
+    - 26
+    description: G7_IO3
+  - name: G7_IO2
+    bit_range:
+    - 25
+    - 25
+    description: G7_IO2
+  - name: G7_IO1
+    bit_range:
+    - 24
+    - 24
+    description: G7_IO1
+  - name: G6_IO4
+    bit_range:
+    - 23
+    - 23
+    description: G6_IO4
+  - name: G6_IO3
+    bit_range:
+    - 22
+    - 22
+    description: G6_IO3
+  - name: G6_IO2
+    bit_range:
+    - 21
+    - 21
+    description: G6_IO2
+  - name: G6_IO1
+    bit_range:
+    - 20
+    - 20
+    description: G6_IO1
+  - name: G5_IO4
+    bit_range:
+    - 19
+    - 19
+    description: G5_IO4
+  - name: G5_IO3
+    bit_range:
+    - 18
+    - 18
+    description: G5_IO3
+  - name: G5_IO2
+    bit_range:
+    - 17
+    - 17
+    description: G5_IO2
+  - name: G5_IO1
+    bit_range:
+    - 16
+    - 16
+    description: G5_IO1
+  - name: G4_IO4
+    bit_range:
+    - 15
+    - 15
+    description: G4_IO4
+  - name: G4_IO3
+    bit_range:
+    - 14
+    - 14
+    description: G4_IO3
+  - name: G4_IO2
+    bit_range:
+    - 13
+    - 13
+    description: G4_IO2
+  - name: G4_IO1
+    bit_range:
+    - 12
+    - 12
+    description: G4_IO1
+  - name: G3_IO4
+    bit_range:
+    - 11
+    - 11
+    description: G3_IO4
+  - name: G3_IO3
+    bit_range:
+    - 10
+    - 10
+    description: G3_IO3
+  - name: G3_IO2
+    bit_range:
+    - 9
+    - 9
+    description: G3_IO2
+  - name: G3_IO1
+    bit_range:
+    - 8
+    - 8
+    description: G3_IO1
+  - name: G2_IO4
+    bit_range:
+    - 7
+    - 7
+    description: G2_IO4
+  - name: G2_IO3
+    bit_range:
+    - 6
+    - 6
+    description: G2_IO3
+  - name: G2_IO2
+    bit_range:
+    - 5
+    - 5
+    description: G2_IO2
+  - name: G2_IO1
+    bit_range:
+    - 4
+    - 4
+    description: G2_IO1
+  - name: G1_IO4
+    bit_range:
+    - 3
+    - 3
+    description: G1_IO4
+  - name: G1_IO3
+    bit_range:
+    - 2
+    - 2
+    description: G1_IO3
+  - name: G1_IO2
+    bit_range:
+    - 1
+    - 1
+    description: G1_IO2
+  - name: G1_IO1
+    bit_range:
+    - 0
+    - 0
+    description: G1_IO1
+  side_effects: null
+- id: IOGCSR
+  address_offset: 48
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: G8S
+    bit_range:
+    - 23
+    - 23
+    description: Analog I/O group x status
+  - name: G7S
+    bit_range:
+    - 22
+    - 22
+    description: Analog I/O group x status
+  - name: G6S
+    bit_range:
+    - 21
+    - 21
+    description: Analog I/O group x status
+  - name: G5S
+    bit_range:
+    - 20
+    - 20
+    description: Analog I/O group x status
+  - name: G4S
+    bit_range:
+    - 19
+    - 19
+    description: Analog I/O group x status
+  - name: G3S
+    bit_range:
+    - 18
+    - 18
+    description: Analog I/O group x status
+  - name: G2S
+    bit_range:
+    - 17
+    - 17
+    description: Analog I/O group x status
+  - name: G1S
+    bit_range:
+    - 16
+    - 16
+    description: Analog I/O group x status
+  - name: G8E
+    bit_range:
+    - 7
+    - 7
+    description: Analog I/O group x enable
+  - name: G7E
+    bit_range:
+    - 6
+    - 6
+    description: Analog I/O group x enable
+  - name: G6E
+    bit_range:
+    - 5
+    - 5
+    description: Analog I/O group x enable
+  - name: G5E
+    bit_range:
+    - 4
+    - 4
+    description: Analog I/O group x enable
+  - name: G4E
+    bit_range:
+    - 3
+    - 3
+    description: Analog I/O group x enable
+  - name: G3E
+    bit_range:
+    - 2
+    - 2
+    description: Analog I/O group x enable
+  - name: G2E
+    bit_range:
+    - 1
+    - 1
+    description: Analog I/O group x enable
+  - name: G1E
+    bit_range:
+    - 0
+    - 0
+    description: Analog I/O group x enable
+  side_effects: null
+- id: IOG1CR
+  address_offset: 52
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: CNT
+    bit_range:
+    - 13
+    - 0
+    description: Counter value
+  side_effects: null
+- id: IOG2CR
+  address_offset: 56
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: CNT
+    bit_range:
+    - 13
+    - 0
+    description: Counter value
+  side_effects: null
+- id: IOG3CR
+  address_offset: 60
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: CNT
+    bit_range:
+    - 13
+    - 0
+    description: Counter value
+  side_effects: null
+- id: IOG4CR
+  address_offset: 64
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: CNT
+    bit_range:
+    - 13
+    - 0
+    description: Counter value
+  side_effects: null
+- id: IOG5CR
+  address_offset: 68
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: CNT
+    bit_range:
+    - 13
+    - 0
+    description: Counter value
+  side_effects: null
+- id: IOG6CR
+  address_offset: 72
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: CNT
+    bit_range:
+    - 13
+    - 0
+    description: Counter value
+  side_effects: null
+- id: IOG7CR
+  address_offset: 76
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: CNT
+    bit_range:
+    - 13
+    - 0
+    description: Counter value
+  side_effects: null
+- id: IOG8CR
+  address_offset: 80
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: CNT
+    bit_range:
+    - 13
+    - 0
+    description: Counter value
+  side_effects: null
+interrupts:
+  TSC: 92
+timing: null

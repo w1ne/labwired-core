@@ -31,9 +31,9 @@
 
 use labwired_hw_oracle::arm_thumb::{
     adds_imm3, adds_imm8, adds_reg, ands, asr_reg, asrs_imm, b_uncond, beq, cmp_reg, eors, it,
-    ldr_imm5, ldrh_reg, ldrsb_reg, ldrsh_reg, lsl_reg, lsls_imm, lsr_reg, lsrs_imm, movs_imm8,
-    movw_imm16, muls, orrs, ror_reg, sdiv, str_imm5, strb_reg, strh_reg, subs_reg, udiv,
-    ThumbOracleCase, COND_EQ, DATA_BASE,
+    ldr_imm5, ldrh_reg, ldrsb_reg, ldrsh_reg, lsl_reg, lsls_imm, lsr_reg, lsrs_imm, lsrs_w,
+    movs_imm8, movs_shifted, movw_imm16, muls, orrs, ror_reg, sdiv, str_imm5, strb_reg, strh_reg,
+    subs_reg, udiv, ThumbOracleCase, COND_EQ, DATA_BASE,
 };
 use labwired_hw_oracle::thumb_oracle_test;
 
@@ -429,6 +429,35 @@ fn ror_reg_sets_carry() -> ThumbOracleCase {
         .expect(|st| {
             st.assert_reg("r2", 0x8000_0000);
             st.assert_nzcv(true, false, true, false); // N=1, C=1
+        })
+}
+
+// ── 24b. LSRS.W (32-bit T2) — same carry contract as the T1 form ──────────────
+// 0x8000_0001 >> 1 = 0x4000_0000, carry = bit 0 = 1.
+#[thumb_oracle_test]
+fn lsrs_w_sets_flags() -> ThumbOracleCase {
+    ThumbOracleCase::t2_words(&[lsrs_w(4, 5, 2)])
+        .setup(|st| {
+            st.write_reg("r5", 0x8000_0001);
+            st.write_reg("r2", 1);
+        })
+        .expect(|st| {
+            st.assert_reg("r4", 0x4000_0000);
+            st.assert_nzcv(false, false, true, false); // Z=0, C=1
+        })
+}
+
+// ── 24c. MOVS.W immediate shift sets the shifter carry ────────────────────────
+// 0x8000_0001 << 1 = 2, carry = bit 31 = 1.
+#[thumb_oracle_test]
+fn movs_w_shift_sets_carry() -> ThumbOracleCase {
+    ThumbOracleCase::t2_words(&[movs_shifted(0, 1, 0, 1)])
+        .setup(|st| {
+            st.write_reg("r1", 0x8000_0001);
+        })
+        .expect(|st| {
+            st.assert_reg("r0", 0x0000_0002);
+            st.assert_nzcv(false, false, true, false); // Z=0, C=1
         })
 }
 

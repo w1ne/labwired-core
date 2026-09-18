@@ -674,11 +674,13 @@ pub(super) fn decode_dp_shifted_reg_mid(h1: u16, h2: u16) -> Option<Instruction>
         let rd = ((h2 >> 8) & 0xF) as u8;
         let rm = (h2 & 0xF) as u8;
         let shift_type = ((h1 >> 5) & 0x3) as u8;
+        let set_flags = (h1 & 0x10) != 0;
         return Some(Instruction::ShiftReg32 {
             rd,
             rn,
             rm,
             shift_type,
+            set_flags,
         });
     }
 
@@ -962,11 +964,13 @@ pub(super) fn decode_dp_shifted_reg_late(h1: u16, h2: u16) -> Option<Instruction
         let rd = ((h2 >> 8) & 0xF) as u8;
         let rm = (h2 & 0xF) as u8;
         let shift_type = ((h1 >> 5) & 0x3) as u8;
+        let set_flags = (h1 & 0x10) != 0;
         return Some(Instruction::ShiftReg32 {
             rd,
             rn,
             rm,
             shift_type,
+            set_flags,
         });
     }
 

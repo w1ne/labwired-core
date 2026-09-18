@@ -1,0 +1,112 @@
+peripheral: SEC_PKA
+version: 0.1.0
+registers:
+- id: CR
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OPERRIE
+    bit_range:
+    - 21
+    - 21
+    description: Operation error interrupt enable
+  - name: ADDRERRIE
+    bit_range:
+    - 20
+    - 20
+    description: Address error interrupt enable
+  - name: RAMERRIE
+    bit_range:
+    - 19
+    - 19
+    description: RAM error interrupt enable
+  - name: PROCENDIE
+    bit_range:
+    - 17
+    - 17
+    description: End of operation interrupt enable
+  - name: MODE
+    bit_range:
+    - 13
+    - 8
+    description: PKA Operation Mode
+  - name: START
+    bit_range:
+    - 1
+    - 1
+    description: Start the operation
+  - name: EN
+    bit_range:
+    - 0
+    - 0
+    description: Peripheral Enable
+  side_effects: null
+- id: SR
+  address_offset: 4
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: INITOK
+    bit_range:
+    - 0
+    - 0
+    description: INITOK
+  - name: BUSY
+    bit_range:
+    - 16
+    - 16
+    description: PKA operation is in progress
+  - name: PROCENDF
+    bit_range:
+    - 17
+    - 17
+    description: PKA End of Operation flag
+  - name: RAMERRF
+    bit_range:
+    - 19
+    - 19
+    description: RAMERRF
+  - name: ADDRERRF
+    bit_range:
+    - 20
+    - 20
+    description: ADDRERRF
+  - name: OPERRF
+    bit_range:
+    - 21
+    - 21
+    description: OPERRF
+  side_effects: null
+- id: CLRFR
+  address_offset: 8
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: PROCENDFC
+    bit_range:
+    - 17
+    - 17
+    description: Clear PKA End of Operation flag
+  - name: RAMERRFC
+    bit_range:
+    - 19
+    - 19
+    description: RAMERRFC
+  - name: ADDRERRFC
+    bit_range:
+    - 20
+    - 20
+    description: ADDRERRFC
+  - name: OPERRFC
+    bit_range:
+    - 21
+    - 21
+    description: OPERRFC
+  side_effects: null
+interrupts:
+  PKA: 97
+timing: null

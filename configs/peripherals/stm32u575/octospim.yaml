@@ -1,0 +1,136 @@
+peripheral: OCTOSPIM
+version: 0.1.0
+registers:
+- id: CR
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REQ2ACK_TIME
+    bit_range:
+    - 23
+    - 16
+    description: REQ to ACK time
+  - name: MUXEN
+    bit_range:
+    - 0
+    - 0
+    description: Multiplexed mode enable
+  side_effects: null
+- id: P1CR
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 50397457
+  fields:
+  - name: IOHSRC
+    bit_range:
+    - 26
+    - 25
+    description: IOHSR
+  - name: IOHEN
+    bit_range:
+    - 24
+    - 24
+    description: IOHEN
+  - name: IOLSRC
+    bit_range:
+    - 18
+    - 17
+    description: IOLSRC
+  - name: IOLEN
+    bit_range:
+    - 16
+    - 16
+    description: IOLEN
+  - name: NCSSRC
+    bit_range:
+    - 9
+    - 9
+    description: NCSSRC
+  - name: NCSEN
+    bit_range:
+    - 8
+    - 8
+    description: NCSEN
+  - name: DQSSRC
+    bit_range:
+    - 5
+    - 5
+    description: DQSSRC
+  - name: DQSEN
+    bit_range:
+    - 4
+    - 4
+    description: DQSEN
+  - name: CLKSRC
+    bit_range:
+    - 1
+    - 1
+    description: CLKSRC
+  - name: CLKEN
+    bit_range:
+    - 0
+    - 0
+    description: CLKEN
+  side_effects: null
+- id: P2CR
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 117769011
+  fields:
+  - name: IOHSRC
+    bit_range:
+    - 26
+    - 25
+    description: IOHSR
+  - name: IOHEN
+    bit_range:
+    - 24
+    - 24
+    description: IOHEN
+  - name: IOLSRC
+    bit_range:
+    - 18
+    - 17
+    description: IOLSRC
+  - name: IOLEN
+    bit_range:
+    - 16
+    - 16
+    description: IOLEN
+  - name: NCSSRC
+    bit_range:
+    - 9
+    - 9
+    description: NCSSRC
+  - name: NCSEN
+    bit_range:
+    - 8
+    - 8
+    description: NCSEN
+  - name: DQSSRC
+    bit_range:
+    - 5
+    - 5
+    description: DQSSRC
+  - name: DQSEN
+    bit_range:
+    - 4
+    - 4
+    description: DQSEN
+  - name: CLKSRC
+    bit_range:
+    - 1
+    - 1
+    description: CLKSRC
+  - name: CLKEN
+    bit_range:
+    - 0
+    - 0
+    description: CLKEN
+  side_effects: null
+interrupts: null
+timing: null

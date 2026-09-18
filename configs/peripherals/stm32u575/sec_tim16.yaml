@@ -1,0 +1,541 @@
+peripheral: SEC_TIM16
+version: 0.1.0
+registers:
+- id: CR1
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: UIFREMAP
+    bit_range:
+    - 11
+    - 11
+    description: UIF status bit remapping
+  - name: CKD
+    bit_range:
+    - 9
+    - 8
+    description: Clock division
+  - name: ARPE
+    bit_range:
+    - 7
+    - 7
+    description: Auto-reload preload enable
+  - name: OPM
+    bit_range:
+    - 3
+    - 3
+    description: One pulse mode
+  - name: URS
+    bit_range:
+    - 2
+    - 2
+    description: Update request source
+  - name: UDIS
+    bit_range:
+    - 1
+    - 1
+    description: Update disable
+  - name: CEN
+    bit_range:
+    - 0
+    - 0
+    description: Counter enable
+  side_effects: null
+- id: CR2
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OIS1N
+    bit_range:
+    - 9
+    - 9
+    description: Output Idle state 1
+  - name: OIS1
+    bit_range:
+    - 8
+    - 8
+    description: Output Idle state 1
+  - name: CCDS
+    bit_range:
+    - 3
+    - 3
+    description: Capture/compare DMA selection
+  - name: CCUS
+    bit_range:
+    - 2
+    - 2
+    description: Capture/compare control update selection
+  - name: CCPC
+    bit_range:
+    - 0
+    - 0
+    description: Capture/compare preloaded control
+  side_effects: null
+- id: DIER
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: COMDE
+    bit_range:
+    - 13
+    - 13
+    description: COM DMA request enable
+  - name: CC1DE
+    bit_range:
+    - 9
+    - 9
+    description: Capture/Compare 1 DMA request enable
+  - name: UDE
+    bit_range:
+    - 8
+    - 8
+    description: Update DMA request enable
+  - name: BIE
+    bit_range:
+    - 7
+    - 7
+    description: Break interrupt enable
+  - name: COMIE
+    bit_range:
+    - 5
+    - 5
+    description: COM interrupt enable
+  - name: CC1IE
+    bit_range:
+    - 1
+    - 1
+    description: Capture/Compare 1 interrupt enable
+  - name: UIE
+    bit_range:
+    - 0
+    - 0
+    description: Update interrupt enable
+  side_effects: null
+- id: SR
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CC1OF
+    bit_range:
+    - 9
+    - 9
+    description: CC1OF
+  - name: BIF
+    bit_range:
+    - 7
+    - 7
+    description: Break interrupt flag
+  - name: COMIF
+    bit_range:
+    - 5
+    - 5
+    description: COM interrupt flag
+  - name: CC1IF
+    bit_range:
+    - 1
+    - 1
+    description: Capture/Compare 1 interrupt flag
+  - name: UIF
+    bit_range:
+    - 0
+    - 0
+    description: Update interrupt flag
+  side_effects: null
+- id: EGR
+  address_offset: 20
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: BG
+    bit_range:
+    - 7
+    - 7
+    description: Break generation
+  - name: COMG
+    bit_range:
+    - 5
+    - 5
+    description: Capture/Compare control update generation
+  - name: CC1G
+    bit_range:
+    - 1
+    - 1
+    description: Capture/compare 1 generation
+  - name: UG
+    bit_range:
+    - 0
+    - 0
+    description: Update generation
+  side_effects: null
+- id: CCMR1_Output
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OC1M_2
+    bit_range:
+    - 16
+    - 16
+    description: Output Compare 1 mode
+  - name: OC1CE
+    bit_range:
+    - 7
+    - 7
+    description: Output Compare 1 clear enable
+  - name: OC1M
+    bit_range:
+    - 6
+    - 4
+    description: Output Compare 1 mode
+  - name: OC1PE
+    bit_range:
+    - 3
+    - 3
+    description: Output Compare 1 preload enable
+  - name: OC1FE
+    bit_range:
+    - 2
+    - 2
+    description: Output Compare 1 fast enable
+  - name: CC1S
+    bit_range:
+    - 1
+    - 0
+    description: Capture/Compare 1 selection
+  side_effects: null
+- id: CCMR1_Input
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IC1F
+    bit_range:
+    - 7
+    - 4
+    description: Input capture 1 filter
+  - name: IC1PSC
+    bit_range:
+    - 3
+    - 2
+    description: Input capture 1 prescaler
+  - name: CC1S
+    bit_range:
+    - 1
+    - 0
+    description: Capture/Compare 1 selection
+  side_effects: null
+- id: CCER
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CC1NP
+    bit_range:
+    - 3
+    - 3
+    description: Capture/Compare 1 output Polarity
+  - name: CC1NE
+    bit_range:
+    - 2
+    - 2
+    description: Capture/Compare 1 complementary output enable
+  - name: CC1P
+    bit_range:
+    - 1
+    - 1
+    description: Capture/Compare 1 output Polarity
+  - name: CC1E
+    bit_range:
+    - 0
+    - 0
+    description: Capture/Compare 1 output enable
+  side_effects: null
+- id: CNT
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: UIFCPY
+    bit_range:
+    - 31
+    - 31
+    description: UIF Copy
+  - name: CNT
+    bit_range:
+    - 15
+    - 0
+    description: CNT
+  side_effects: null
+- id: PSC
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PSC
+    bit_range:
+    - 15
+    - 0
+    description: Prescaler value
+  side_effects: null
+- id: ARR
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 65535
+  fields:
+  - name: ARR
+    bit_range:
+    - 19
+    - 0
+    description: Auto-reload value
+  side_effects: null
+- id: RCR
+  address_offset: 48
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REP
+    bit_range:
+    - 7
+    - 0
+    description: Repetition counter value
+  side_effects: null
+- id: CCR1
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CCR1
+    bit_range:
+    - 19
+    - 0
+    description: Capture/Compare 1 value
+  side_effects: null
+- id: BDTR
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BKBID
+    bit_range:
+    - 28
+    - 28
+    description: Break Bidirectional
+  - name: BKDSRM
+    bit_range:
+    - 26
+    - 26
+    description: Break Disarm
+  - name: MOE
+    bit_range:
+    - 15
+    - 15
+    description: Main output enable
+  - name: AOE
+    bit_range:
+    - 14
+    - 14
+    description: Automatic output enable
+  - name: BKP
+    bit_range:
+    - 13
+    - 13
+    description: Break polarity
+  - name: BKE
+    bit_range:
+    - 12
+    - 12
+    description: Break enable
+  - name: OSSR
+    bit_range:
+    - 11
+    - 11
+    description: Off-state selection for Run mode
+  - name: OSSI
+    bit_range:
+    - 10
+    - 10
+    description: Off-state selection for Idle mode
+  - name: LOCK
+    bit_range:
+    - 9
+    - 8
+    description: Lock configuration
+  - name: DTG
+    bit_range:
+    - 7
+    - 0
+    description: Dead-time generator setup
+  side_effects: null
+- id: DTR2
+  address_offset: 84
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DTPE
+    bit_range:
+    - 17
+    - 17
+    description: Deadtime preload enable
+  - name: DTAE
+    bit_range:
+    - 16
+    - 16
+    description: Deadtime asymmetric enable
+  - name: DTGF
+    bit_range:
+    - 7
+    - 0
+    description: Deadtime asymmetric enable
+  side_effects: null
+- id: TISEL
+  address_offset: 92
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TI1SEL
+    bit_range:
+    - 3
+    - 0
+    description: selects tim_ti1_in[0..15] input
+  side_effects: null
+- id: AF1
+  address_offset: 96
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: BKCMP4P
+    bit_range:
+    - 13
+    - 13
+    description: tim_brk_cmp4 input polarity
+  - name: BKCMP3P
+    bit_range:
+    - 12
+    - 12
+    description: tim_brk_cmp3 input polarity
+  - name: BKCMP2P
+    bit_range:
+    - 11
+    - 11
+    description: tim_brk_cmp2 input polarity
+  - name: BKCMP1P
+    bit_range:
+    - 10
+    - 10
+    description: tim_brk_cmp1 input polarity
+  - name: BKINP
+    bit_range:
+    - 9
+    - 9
+    description: TIMx_BKIN input polarity
+  - name: BKCMP7E
+    bit_range:
+    - 7
+    - 7
+    description: tim_brk_cmp7 enable
+  - name: BKCMP6E
+    bit_range:
+    - 6
+    - 6
+    description: tim_brk_cmp6 enable
+  - name: BKCMP5E
+    bit_range:
+    - 5
+    - 5
+    description: tim_brk_cmp5 enable
+  - name: BKCMP4E
+    bit_range:
+    - 4
+    - 4
+    description: tim_brk_cmp4 enable
+  - name: BKCMP3E
+    bit_range:
+    - 3
+    - 3
+    description: tim_brk_cmp3 enable
+  - name: BKCMP2E
+    bit_range:
+    - 2
+    - 2
+    description: tim_brk_cmp2 enable
+  - name: BKCMP1E
+    bit_range:
+    - 1
+    - 1
+    description: tim_brk_cmp1 enable
+  - name: BKINE
+    bit_range:
+    - 0
+    - 0
+    description: TIMx_BKIN input enable
+  side_effects: null
+- id: AF2
+  address_offset: 100
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: OCRSEL
+    bit_range:
+    - 18
+    - 16
+    description: tim_ocref_clr source selection
+  side_effects: null
+- id: DCR
+  address_offset: 988
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: DBSS
+    bit_range:
+    - 19
+    - 16
+    description: DMA burst source selection
+  - name: DBL
+    bit_range:
+    - 12
+    - 8
+    description: DMA burst length
+  - name: DBA
+    bit_range:
+    - 4
+    - 0
+    description: DMA base address
+  side_effects: null
+- id: DMAR
+  address_offset: 992
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: DMAB
+    bit_range:
+    - 31
+    - 0
+    description: DMA register for burst accesses
+  side_effects: null
+interrupts:
+  TIM16: 70
+timing: null

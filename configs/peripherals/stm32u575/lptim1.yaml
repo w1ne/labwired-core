@@ -1,0 +1,710 @@
+peripheral: LPTIM1
+version: 0.1.0
+registers:
+- id: ISR_output
+  address_offset: 0
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: DIEROK
+    bit_range:
+    - 24
+    - 24
+    description: Interrupt enable register update OK
+  - name: CMP2OK
+    bit_range:
+    - 19
+    - 19
+    description: Compare register 2 update OK
+  - name: CC2IF
+    bit_range:
+    - 9
+    - 9
+    description: Compare 2 interrupt flag
+  - name: REPOK
+    bit_range:
+    - 8
+    - 8
+    description: Repetition register update Ok
+  - name: UE
+    bit_range:
+    - 7
+    - 7
+    description: LPTIM update event occurred
+  - name: DOWN
+    bit_range:
+    - 6
+    - 6
+    description: Counter direction change up to down
+  - name: UP
+    bit_range:
+    - 5
+    - 5
+    description: Counter direction change down to up
+  - name: ARROK
+    bit_range:
+    - 4
+    - 4
+    description: Autoreload register update OK
+  - name: CMP1OK
+    bit_range:
+    - 3
+    - 3
+    description: Compare register 1 update OK
+  - name: EXTTRIG
+    bit_range:
+    - 2
+    - 2
+    description: External trigger edge event
+  - name: ARRM
+    bit_range:
+    - 1
+    - 1
+    description: Autoreload match
+  - name: CC1IF
+    bit_range:
+    - 0
+    - 0
+    description: Compare 1 interrupt flag
+  side_effects: null
+- id: ISR_input
+  address_offset: 0
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: DIEROK
+    bit_range:
+    - 24
+    - 24
+    description: Interrupt enable register update OK
+  - name: CC2OF
+    bit_range:
+    - 13
+    - 13
+    description: Capture 2 over-capture flag
+  - name: CC1OF
+    bit_range:
+    - 12
+    - 12
+    description: Capture 1 over-capture flag
+  - name: CC2IF
+    bit_range:
+    - 9
+    - 9
+    description: Capture 2 interrupt flag
+  - name: REPOK
+    bit_range:
+    - 8
+    - 8
+    description: Repetition register update Ok
+  - name: UE
+    bit_range:
+    - 7
+    - 7
+    description: LPTIM update event occurred
+  - name: DOWN
+    bit_range:
+    - 6
+    - 6
+    description: Counter direction change up to down
+  - name: UP
+    bit_range:
+    - 5
+    - 5
+    description: Counter direction change down to up
+  - name: ARROK
+    bit_range:
+    - 4
+    - 4
+    description: Autoreload register update OK
+  - name: EXTTRIG
+    bit_range:
+    - 2
+    - 2
+    description: External trigger edge event
+  - name: ARRM
+    bit_range:
+    - 1
+    - 1
+    description: Autoreload match
+  - name: CC1IF
+    bit_range:
+    - 0
+    - 0
+    description: Compare 1 interrupt flag
+  side_effects: null
+- id: ICR_output
+  address_offset: 4
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: DIEROKCF
+    bit_range:
+    - 24
+    - 24
+    description: Interrupt enable register update OK clear flag
+  - name: CMP2OKCF
+    bit_range:
+    - 19
+    - 19
+    description: Compare register 2 update OK clear flag
+  - name: CC2CF
+    bit_range:
+    - 9
+    - 9
+    description: Capture/compare 2 clear flag
+  - name: REPOKCF
+    bit_range:
+    - 8
+    - 8
+    description: Repetition register update OK clear flag
+  - name: UECF
+    bit_range:
+    - 7
+    - 7
+    description: Update event clear flag
+  - name: DOWNCF
+    bit_range:
+    - 6
+    - 6
+    description: Direction change to down Clear Flag
+  - name: UPCF
+    bit_range:
+    - 5
+    - 5
+    description: Direction change to UP Clear Flag
+  - name: ARROKCF
+    bit_range:
+    - 4
+    - 4
+    description: Autoreload register update OK Clear Flag
+  - name: CMP1OKCF
+    bit_range:
+    - 3
+    - 3
+    description: Compare register 1 update OK Clear Flag
+  - name: EXTTRIGCF
+    bit_range:
+    - 2
+    - 2
+    description: External trigger valid edge Clear Flag
+  - name: ARRMCF
+    bit_range:
+    - 1
+    - 1
+    description: Autoreload match Clear Flag
+  - name: CC1IF
+    bit_range:
+    - 0
+    - 0
+    description: Capture/compare 1 clear flag
+  side_effects: null
+- id: ICR_input
+  address_offset: 4
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: DIEROKCF
+    bit_range:
+    - 24
+    - 24
+    description: Interrupt enable register update OK clear flag
+  - name: CC2OCF
+    bit_range:
+    - 13
+    - 13
+    description: Capture/compare 2 over-capture clear flag
+  - name: CC1OCF
+    bit_range:
+    - 12
+    - 12
+    description: Capture/compare 1 over-capture clear flag
+  - name: CC2CF
+    bit_range:
+    - 9
+    - 9
+    description: Capture/compare 2 clear flag
+  - name: REPOKCF
+    bit_range:
+    - 8
+    - 8
+    description: Repetition register update OK clear flag
+  - name: UECF
+    bit_range:
+    - 7
+    - 7
+    description: Update event clear flag
+  - name: DOWNCF
+    bit_range:
+    - 6
+    - 6
+    description: Direction change to down Clear Flag
+  - name: UPCF
+    bit_range:
+    - 5
+    - 5
+    description: Direction change to UP Clear Flag
+  - name: ARROKCF
+    bit_range:
+    - 4
+    - 4
+    description: Autoreload register update OK Clear Flag
+  - name: EXTTRIGCF
+    bit_range:
+    - 2
+    - 2
+    description: External trigger valid edge Clear Flag
+  - name: ARRMCF
+    bit_range:
+    - 1
+    - 1
+    description: Autoreload match Clear Flag
+  - name: CC1IF
+    bit_range:
+    - 0
+    - 0
+    description: Capture/compare 1 clear flag
+  side_effects: null
+- id: DIER_output
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: UEDE
+    bit_range:
+    - 23
+    - 23
+    description: Update event DMA request enable
+  - name: CMP2OKIE
+    bit_range:
+    - 19
+    - 19
+    description: Compare register 2 update OK interrupt enable
+  - name: CC2IE
+    bit_range:
+    - 9
+    - 9
+    description: Capture/compare 2 interrupt enable
+  - name: REPOKIE
+    bit_range:
+    - 8
+    - 8
+    description: REPOKIE
+  - name: UEIE
+    bit_range:
+    - 7
+    - 7
+    description: Update event interrupt enable
+  - name: DOWNIE
+    bit_range:
+    - 6
+    - 6
+    description: Direction change to down Interrupt Enable
+  - name: UPIE
+    bit_range:
+    - 5
+    - 5
+    description: Direction change to UP Interrupt Enable
+  - name: ARROKIE
+    bit_range:
+    - 4
+    - 4
+    description: Autoreload register update OK Interrupt Enable
+  - name: CMP1OKIE
+    bit_range:
+    - 3
+    - 3
+    description: Compare register 1 update OK Interrupt Enable
+  - name: EXTTRIGIE
+    bit_range:
+    - 2
+    - 2
+    description: External trigger valid edge Interrupt Enable
+  - name: ARRMIE
+    bit_range:
+    - 1
+    - 1
+    description: Autoreload match Interrupt Enable
+  - name: CC1IF
+    bit_range:
+    - 0
+    - 0
+    description: Capture/compare 1 clear flag
+  side_effects: null
+- id: DIER_input
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CC2DE
+    bit_range:
+    - 25
+    - 25
+    description: Capture/compare 2 DMA request enable
+  - name: CC1DE
+    bit_range:
+    - 16
+    - 16
+    description: Capture/compare 1 DMA request enable
+  - name: CC2OIE
+    bit_range:
+    - 13
+    - 13
+    description: Capture/compare 2 over-capture interrupt enable
+  - name: CC1OIE
+    bit_range:
+    - 12
+    - 12
+    description: Capture/compare 1 over-capture interrupt enable
+  - name: CC2IE
+    bit_range:
+    - 9
+    - 9
+    description: Capture/compare 2 interrupt enable
+  - name: REPOKIE
+    bit_range:
+    - 8
+    - 8
+    description: REPOKIE
+  - name: UEIE
+    bit_range:
+    - 7
+    - 7
+    description: Update event interrupt enable
+  - name: DOWNIE
+    bit_range:
+    - 6
+    - 6
+    description: Direction change to down Interrupt Enable
+  - name: UPIE
+    bit_range:
+    - 5
+    - 5
+    description: Direction change to UP Interrupt Enable
+  - name: ARROKIE
+    bit_range:
+    - 4
+    - 4
+    description: Autoreload register update OK Interrupt Enable
+  - name: EXTTRIGIE
+    bit_range:
+    - 2
+    - 2
+    description: External trigger valid edge Interrupt Enable
+  - name: ARRMIE
+    bit_range:
+    - 1
+    - 1
+    description: Autoreload match Interrupt Enable
+  - name: CC1IF
+    bit_range:
+    - 0
+    - 0
+    description: Capture/compare 1 clear flag
+  side_effects: null
+- id: CFGR
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ENC
+    bit_range:
+    - 24
+    - 24
+    description: Encoder mode enable
+  - name: COUNTMODE
+    bit_range:
+    - 23
+    - 23
+    description: counter mode enabled
+  - name: PRELOAD
+    bit_range:
+    - 22
+    - 22
+    description: Registers update mode
+  - name: WAVPOL
+    bit_range:
+    - 21
+    - 21
+    description: Waveform shape polarity
+  - name: WAVE
+    bit_range:
+    - 20
+    - 20
+    description: Waveform shape
+  - name: TIMOUT
+    bit_range:
+    - 19
+    - 19
+    description: Timeout enable
+  - name: TRIGEN
+    bit_range:
+    - 18
+    - 17
+    description: Trigger enable and polarity
+  - name: TRIGSEL
+    bit_range:
+    - 15
+    - 13
+    description: Trigger selector
+  - name: PRESC
+    bit_range:
+    - 11
+    - 9
+    description: Clock prescaler
+  - name: TRGFLT
+    bit_range:
+    - 7
+    - 6
+    description: Configurable digital filter for trigger
+  - name: CKFLT
+    bit_range:
+    - 4
+    - 3
+    description: Configurable digital filter for external clock
+  - name: CKPOL
+    bit_range:
+    - 2
+    - 1
+    description: Clock Polarity
+  - name: CKSEL
+    bit_range:
+    - 0
+    - 0
+    description: Clock selector
+  side_effects: null
+- id: CR
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RSTARE
+    bit_range:
+    - 4
+    - 4
+    description: Reset after read enable
+  - name: COUNTRST
+    bit_range:
+    - 3
+    - 3
+    description: Counter reset
+  - name: CNTSTRT
+    bit_range:
+    - 2
+    - 2
+    description: Timer start in continuous mode
+  - name: SNGSTRT
+    bit_range:
+    - 1
+    - 1
+    description: LPTIM start in single mode
+  - name: ENABLE
+    bit_range:
+    - 0
+    - 0
+    description: LPTIM Enable
+  side_effects: null
+- id: CCR1
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CCR1
+    bit_range:
+    - 15
+    - 0
+    description: Capture/compare 1 value
+  side_effects: null
+- id: ARR
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: ARR
+    bit_range:
+    - 15
+    - 0
+    description: Auto reload value
+  side_effects: null
+- id: CNT
+  address_offset: 28
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: CNT
+    bit_range:
+    - 15
+    - 0
+    description: Counter value
+  side_effects: null
+- id: CFGR2
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IC2SEL
+    bit_range:
+    - 21
+    - 20
+    description: LPTIM input capture 2 selection
+  - name: IC1SEL
+    bit_range:
+    - 17
+    - 16
+    description: LPTIM input capture 1 selection
+  - name: IN2SEL
+    bit_range:
+    - 5
+    - 4
+    description: LPTIM input 2 selection
+  - name: IN1SEL
+    bit_range:
+    - 1
+    - 0
+    description: LPTIM input 1 selection
+  side_effects: null
+- id: RCR
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REP
+    bit_range:
+    - 7
+    - 0
+    description: Repetition register value
+  side_effects: null
+- id: CCMR1
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CC1SEL
+    bit_range:
+    - 0
+    - 0
+    description: Capture/compare 1 selection
+  - name: CC1E
+    bit_range:
+    - 1
+    - 1
+    description: Capture/compare 1 output enable
+  - name: CC1P
+    bit_range:
+    - 3
+    - 2
+    description: Capture/compare 1 output polarity
+  - name: IC1PSC
+    bit_range:
+    - 9
+    - 8
+    description: Input capture 1 prescaler
+  - name: IC1F
+    bit_range:
+    - 13
+    - 12
+    description: Input capture 1 filter
+  - name: CC2SEL
+    bit_range:
+    - 16
+    - 16
+    description: Capture/compare 2 selection
+  - name: CC2E
+    bit_range:
+    - 17
+    - 17
+    description: Capture/compare 2 output enable
+  - name: CC2P
+    bit_range:
+    - 19
+    - 18
+    description: Capture/compare 2 output polarity
+  - name: IC2PSC
+    bit_range:
+    - 25
+    - 24
+    description: Input capture 2 prescaler
+  - name: IC2F
+    bit_range:
+    - 29
+    - 28
+    description: Input capture 2 filter
+  side_effects: null
+- id: CCR2
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CCR2
+    bit_range:
+    - 15
+    - 0
+    description: Capture/compare 2 value
+  side_effects: null
+- id: HWCFGR2
+  address_offset: 1004
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: CFG1
+    bit_range:
+    - 3
+    - 0
+    description: peripheral hardware configuration 1
+  - name: CFG2
+    bit_range:
+    - 15
+    - 8
+    description: peripheral hardware configuration 2
+  - name: CFG3
+    bit_range:
+    - 16
+    - 16
+    description: peripheral hardware configuration 3
+  side_effects: null
+- id: HWCFGR1
+  address_offset: 1008
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: CFG1
+    bit_range:
+    - 7
+    - 0
+    description: peripheral hardware configuration 1
+  - name: CFG2
+    bit_range:
+    - 15
+    - 8
+    description: peripheral hardware configuration 2
+  - name: CFG3
+    bit_range:
+    - 19
+    - 16
+    description: peripheral hardware configuration 3
+  - name: CFG4
+    bit_range:
+    - 31
+    - 24
+    description: peripheral hardware configuration 4
+  side_effects: null
+interrupts:
+  LPTIM1: 67
+timing: null

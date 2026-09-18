@@ -40,6 +40,7 @@ This is the product bar beyond unit tests and UART-only CI fixtures.
 | stm32h735 | ❌ | ❌ | — | Chip model; framework path TBD |
 | stm32l073 | ✅ L0–L4 | ✅ | ✅ Arduino | |
 | stm32l476 | ✅ L0–L4 | ✅ | ✅ Arduino | |
+| stm32u575 | ✅ L0–L4/L6/L7 (L5/L8 skip) | ✅ L0–L3 | ✅ both | U5 RCC ready bits + CRS; Zephyr `nucleo_u575zi_q` |
 | stm32wb55 | ✅ L0–L4 | ✅ | ✅ Arduino | |
 | stm32wba52 | ✅ L0–L4 | ✅ | ✅ Arduino | Custom PIO board JSON |
 | atmega328p | ✅ L0–L4 | ❌ | ✅ Arduino TWI | Nano: USART+PORT+Timer0+TWI+SPI on CPU |

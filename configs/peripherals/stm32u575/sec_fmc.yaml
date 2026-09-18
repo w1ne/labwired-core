@@ -1,0 +1,917 @@
+peripheral: SEC_FMC
+version: 0.1.0
+registers:
+- id: BCR1
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 12507
+  fields:
+  - name: MBKEN
+    bit_range:
+    - 0
+    - 0
+    description: Memory bank enable bit
+  - name: MUXEN
+    bit_range:
+    - 1
+    - 1
+    description: Address/data multiplexing enable bit
+  - name: MTYP
+    bit_range:
+    - 3
+    - 2
+    description: Memory type
+  - name: MWID
+    bit_range:
+    - 5
+    - 4
+    description: Memory data bus width
+  - name: FACCEN
+    bit_range:
+    - 6
+    - 6
+    description: Flash access enable
+  - name: BURSTEN
+    bit_range:
+    - 8
+    - 8
+    description: Burst enable bit
+  - name: WAITPOL
+    bit_range:
+    - 9
+    - 9
+    description: Wait signal polarity bit
+  - name: WAITCFG
+    bit_range:
+    - 11
+    - 11
+    description: Wait timing configuration
+  - name: WREN
+    bit_range:
+    - 12
+    - 12
+    description: Write enable bit
+  - name: WAITEN
+    bit_range:
+    - 13
+    - 13
+    description: Wait enable bit
+  - name: EXTMOD
+    bit_range:
+    - 14
+    - 14
+    description: Extended mode enable
+  - name: ASYNCWAIT
+    bit_range:
+    - 15
+    - 15
+    description: Wait signal during asynchronous transfers
+  - name: CPSIZE
+    bit_range:
+    - 18
+    - 16
+    description: CRAM Page Size
+  - name: CBURSTRW
+    bit_range:
+    - 19
+    - 19
+    description: Write burst enable
+  - name: CCLKEN
+    bit_range:
+    - 20
+    - 20
+    description: Continuous clock enable
+  - name: WFDIS
+    bit_range:
+    - 21
+    - 21
+    description: Write FIFO disable
+  - name: NBLSET
+    bit_range:
+    - 23
+    - 22
+    description: Byte lane (NBL) setup
+  - name: FMCEN
+    bit_range:
+    - 31
+    - 31
+    description: FMC controller enable
+  side_effects: null
+- id: BCR2
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 12498
+  fields:
+  - name: MBKEN
+    bit_range:
+    - 0
+    - 0
+    description: Memory bank enable bit
+  - name: MUXEN
+    bit_range:
+    - 1
+    - 1
+    description: Address/data multiplexing enable bit
+  - name: MTYP
+    bit_range:
+    - 3
+    - 2
+    description: Memory type
+  - name: MWID
+    bit_range:
+    - 5
+    - 4
+    description: Memory data bus width
+  - name: FACCEN
+    bit_range:
+    - 6
+    - 6
+    description: Flash access enable
+  - name: BURSTEN
+    bit_range:
+    - 8
+    - 8
+    description: Burst enable bit
+  - name: WAITPOL
+    bit_range:
+    - 9
+    - 9
+    description: Wait signal polarity bit
+  - name: WAITCFG
+    bit_range:
+    - 11
+    - 11
+    description: Wait timing configuration
+  - name: WREN
+    bit_range:
+    - 12
+    - 12
+    description: Write enable bit
+  - name: WAITEN
+    bit_range:
+    - 13
+    - 13
+    description: Wait enable bit
+  - name: EXTMOD
+    bit_range:
+    - 14
+    - 14
+    description: Extended mode enable
+  - name: ASYNCWAIT
+    bit_range:
+    - 15
+    - 15
+    description: Wait signal during asynchronous transfers
+  - name: CPSIZE
+    bit_range:
+    - 18
+    - 16
+    description: CRAM Page Size
+  - name: CBURSTRW
+    bit_range:
+    - 19
+    - 19
+    description: Write burst enable
+  - name: CCLKEN
+    bit_range:
+    - 20
+    - 20
+    description: Continuous clock enable
+  - name: WFDIS
+    bit_range:
+    - 21
+    - 21
+    description: Write FIFO disable
+  - name: NBLSET
+    bit_range:
+    - 23
+    - 22
+    description: Byte lane (NBL) setup
+  - name: FMCEN
+    bit_range:
+    - 31
+    - 31
+    description: FMC controller enable
+  side_effects: null
+- id: BCR3
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 12498
+  fields:
+  - name: MBKEN
+    bit_range:
+    - 0
+    - 0
+    description: Memory bank enable bit
+  - name: MUXEN
+    bit_range:
+    - 1
+    - 1
+    description: Address/data multiplexing enable bit
+  - name: MTYP
+    bit_range:
+    - 3
+    - 2
+    description: Memory type
+  - name: MWID
+    bit_range:
+    - 5
+    - 4
+    description: Memory data bus width
+  - name: FACCEN
+    bit_range:
+    - 6
+    - 6
+    description: Flash access enable
+  - name: BURSTEN
+    bit_range:
+    - 8
+    - 8
+    description: Burst enable bit
+  - name: WAITPOL
+    bit_range:
+    - 9
+    - 9
+    description: Wait signal polarity bit
+  - name: WAITCFG
+    bit_range:
+    - 11
+    - 11
+    description: Wait timing configuration
+  - name: WREN
+    bit_range:
+    - 12
+    - 12
+    description: Write enable bit
+  - name: WAITEN
+    bit_range:
+    - 13
+    - 13
+    description: Wait enable bit
+  - name: EXTMOD
+    bit_range:
+    - 14
+    - 14
+    description: Extended mode enable
+  - name: ASYNCWAIT
+    bit_range:
+    - 15
+    - 15
+    description: Wait signal during asynchronous transfers
+  - name: CPSIZE
+    bit_range:
+    - 18
+    - 16
+    description: CRAM Page Size
+  - name: CBURSTRW
+    bit_range:
+    - 19
+    - 19
+    description: Write burst enable
+  - name: CCLKEN
+    bit_range:
+    - 20
+    - 20
+    description: Continuous clock enable
+  - name: WFDIS
+    bit_range:
+    - 21
+    - 21
+    description: Write FIFO disable
+  - name: NBLSET
+    bit_range:
+    - 23
+    - 22
+    description: Byte lane (NBL) setup
+  - name: FMCEN
+    bit_range:
+    - 31
+    - 31
+    description: FMC controller enable
+  side_effects: null
+- id: BCR4
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 12498
+  fields:
+  - name: MBKEN
+    bit_range:
+    - 0
+    - 0
+    description: Memory bank enable bit
+  - name: MUXEN
+    bit_range:
+    - 1
+    - 1
+    description: Address/data multiplexing enable bit
+  - name: MTYP
+    bit_range:
+    - 3
+    - 2
+    description: Memory type
+  - name: MWID
+    bit_range:
+    - 5
+    - 4
+    description: Memory data bus width
+  - name: FACCEN
+    bit_range:
+    - 6
+    - 6
+    description: Flash access enable
+  - name: BURSTEN
+    bit_range:
+    - 8
+    - 8
+    description: Burst enable bit
+  - name: WAITPOL
+    bit_range:
+    - 9
+    - 9
+    description: Wait signal polarity bit
+  - name: WAITCFG
+    bit_range:
+    - 11
+    - 11
+    description: Wait timing configuration
+  - name: WREN
+    bit_range:
+    - 12
+    - 12
+    description: Write enable bit
+  - name: WAITEN
+    bit_range:
+    - 13
+    - 13
+    description: Wait enable bit
+  - name: EXTMOD
+    bit_range:
+    - 14
+    - 14
+    description: Extended mode enable
+  - name: ASYNCWAIT
+    bit_range:
+    - 15
+    - 15
+    description: Wait signal during asynchronous transfers
+  - name: CPSIZE
+    bit_range:
+    - 18
+    - 16
+    description: CRAM Page Size
+  - name: CBURSTRW
+    bit_range:
+    - 19
+    - 19
+    description: Write burst enable
+  - name: CCLKEN
+    bit_range:
+    - 20
+    - 20
+    description: Continuous clock enable
+  - name: WFDIS
+    bit_range:
+    - 21
+    - 21
+    description: Write FIFO disable
+  - name: NBLSET
+    bit_range:
+    - 23
+    - 22
+    description: Byte lane (NBL) setup
+  - name: FMCEN
+    bit_range:
+    - 31
+    - 31
+    description: FMC controller enable
+  side_effects: null
+- id: BTR1
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 268435455
+  fields:
+  - name: ADDSET
+    bit_range:
+    - 3
+    - 0
+    description: Address setup phase duration
+  - name: ADDHLD
+    bit_range:
+    - 7
+    - 4
+    description: Address-hold phase duration
+  - name: DATAST
+    bit_range:
+    - 15
+    - 8
+    description: Data-phase duration
+  - name: BUSTURN
+    bit_range:
+    - 19
+    - 16
+    description: Bus turnaround phase duration
+  - name: CLKDIV
+    bit_range:
+    - 23
+    - 20
+    description: Clock divide ratio (for FMC_CLK signal)
+  - name: DATLAT
+    bit_range:
+    - 27
+    - 24
+    description: Data latency for synchronous memory
+  - name: ACCMOD
+    bit_range:
+    - 29
+    - 28
+    description: Access mode
+  - name: DATAHLD
+    bit_range:
+    - 31
+    - 30
+    description: Data hold phase duration
+  side_effects: null
+- id: BTR2
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 268435455
+  fields:
+  - name: ADDSET
+    bit_range:
+    - 3
+    - 0
+    description: Address setup phase duration
+  - name: ADDHLD
+    bit_range:
+    - 7
+    - 4
+    description: Address-hold phase duration
+  - name: DATAST
+    bit_range:
+    - 15
+    - 8
+    description: Data-phase duration
+  - name: BUSTURN
+    bit_range:
+    - 19
+    - 16
+    description: Bus turnaround phase duration
+  - name: CLKDIV
+    bit_range:
+    - 23
+    - 20
+    description: Clock divide ratio (for FMC_CLK signal)
+  - name: DATLAT
+    bit_range:
+    - 27
+    - 24
+    description: Data latency for synchronous memory
+  - name: ACCMOD
+    bit_range:
+    - 29
+    - 28
+    description: Access mode
+  - name: DATAHLD
+    bit_range:
+    - 31
+    - 30
+    description: Data hold phase duration
+  side_effects: null
+- id: BTR3
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 268435455
+  fields:
+  - name: ADDSET
+    bit_range:
+    - 3
+    - 0
+    description: Address setup phase duration
+  - name: ADDHLD
+    bit_range:
+    - 7
+    - 4
+    description: Address-hold phase duration
+  - name: DATAST
+    bit_range:
+    - 15
+    - 8
+    description: Data-phase duration
+  - name: BUSTURN
+    bit_range:
+    - 19
+    - 16
+    description: Bus turnaround phase duration
+  - name: CLKDIV
+    bit_range:
+    - 23
+    - 20
+    description: Clock divide ratio (for FMC_CLK signal)
+  - name: DATLAT
+    bit_range:
+    - 27
+    - 24
+    description: Data latency for synchronous memory
+  - name: ACCMOD
+    bit_range:
+    - 29
+    - 28
+    description: Access mode
+  - name: DATAHLD
+    bit_range:
+    - 31
+    - 30
+    description: Data hold phase duration
+  side_effects: null
+- id: BTR4
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 268435455
+  fields:
+  - name: ADDSET
+    bit_range:
+    - 3
+    - 0
+    description: Address setup phase duration
+  - name: ADDHLD
+    bit_range:
+    - 7
+    - 4
+    description: Address-hold phase duration
+  - name: DATAST
+    bit_range:
+    - 15
+    - 8
+    description: Data-phase duration
+  - name: BUSTURN
+    bit_range:
+    - 19
+    - 16
+    description: Bus turnaround phase duration
+  - name: CLKDIV
+    bit_range:
+    - 23
+    - 20
+    description: Clock divide ratio (for FMC_CLK signal)
+  - name: DATLAT
+    bit_range:
+    - 27
+    - 24
+    description: Data latency for synchronous memory
+  - name: ACCMOD
+    bit_range:
+    - 29
+    - 28
+    description: Access mode
+  - name: DATAHLD
+    bit_range:
+    - 31
+    - 30
+    description: Data hold phase duration
+  side_effects: null
+- id: BWTR1
+  address_offset: 260
+  size: 32
+  access: READ_WRITE
+  reset_value: 268435455
+  fields:
+  - name: ADDSET
+    bit_range:
+    - 3
+    - 0
+    description: Address setup phase duration
+  - name: ADDHLD
+    bit_range:
+    - 7
+    - 4
+    description: Address-hold phase duration
+  - name: DATAST
+    bit_range:
+    - 15
+    - 8
+    description: Data-phase duration
+  - name: BUSTURN
+    bit_range:
+    - 19
+    - 16
+    description: Bus turnaround phase duration
+  - name: ACCMOD
+    bit_range:
+    - 29
+    - 28
+    description: Access mode
+  - name: DATAHLD
+    bit_range:
+    - 31
+    - 30
+    description: Data hold phase duration
+  side_effects: null
+- id: BWTR2
+  address_offset: 268
+  size: 32
+  access: READ_WRITE
+  reset_value: 268435455
+  fields:
+  - name: ADDSET
+    bit_range:
+    - 3
+    - 0
+    description: Address setup phase duration
+  - name: ADDHLD
+    bit_range:
+    - 7
+    - 4
+    description: Address-hold phase duration
+  - name: DATAST
+    bit_range:
+    - 15
+    - 8
+    description: Data-phase duration
+  - name: BUSTURN
+    bit_range:
+    - 19
+    - 16
+    description: Bus turnaround phase duration
+  - name: ACCMOD
+    bit_range:
+    - 29
+    - 28
+    description: Access mode
+  - name: DATAHLD
+    bit_range:
+    - 31
+    - 30
+    description: Data hold phase duration
+  side_effects: null
+- id: BWTR3
+  address_offset: 276
+  size: 32
+  access: READ_WRITE
+  reset_value: 268435455
+  fields:
+  - name: ADDSET
+    bit_range:
+    - 3
+    - 0
+    description: Address setup phase duration
+  - name: ADDHLD
+    bit_range:
+    - 7
+    - 4
+    description: Address-hold phase duration
+  - name: DATAST
+    bit_range:
+    - 15
+    - 8
+    description: Data-phase duration
+  - name: BUSTURN
+    bit_range:
+    - 19
+    - 16
+    description: Bus turnaround phase duration
+  - name: ACCMOD
+    bit_range:
+    - 29
+    - 28
+    description: Access mode
+  - name: DATAHLD
+    bit_range:
+    - 31
+    - 30
+    description: Data hold phase duration
+  side_effects: null
+- id: BWTR4
+  address_offset: 284
+  size: 32
+  access: READ_WRITE
+  reset_value: 268435455
+  fields:
+  - name: ADDSET
+    bit_range:
+    - 3
+    - 0
+    description: Address setup phase duration
+  - name: ADDHLD
+    bit_range:
+    - 7
+    - 4
+    description: Address-hold phase duration
+  - name: DATAST
+    bit_range:
+    - 15
+    - 8
+    description: Data-phase duration
+  - name: BUSTURN
+    bit_range:
+    - 19
+    - 16
+    description: Bus turnaround phase duration
+  - name: ACCMOD
+    bit_range:
+    - 29
+    - 28
+    description: Access mode
+  - name: DATAHLD
+    bit_range:
+    - 31
+    - 30
+    description: Data hold phase duration
+  side_effects: null
+- id: PCSCNTR
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSCOUNT
+    bit_range:
+    - 15
+    - 0
+    description: Chip select counter
+  - name: CNTB1EN
+    bit_range:
+    - 16
+    - 16
+    description: Counter Bank 1 enable
+  - name: CNTB2EN
+    bit_range:
+    - 17
+    - 17
+    description: Counter Bank 2 enable
+  - name: CNTB3EN
+    bit_range:
+    - 18
+    - 18
+    description: Counter Bank 3 enable
+  - name: CNTB4EN
+    bit_range:
+    - 19
+    - 19
+    description: Counter Bank 4 enable
+  side_effects: null
+- id: PCR
+  address_offset: 128
+  size: 32
+  access: READ_WRITE
+  reset_value: 24
+  fields:
+  - name: PWAITEN
+    bit_range:
+    - 1
+    - 1
+    description: Wait feature enable bit
+  - name: PBKEN
+    bit_range:
+    - 2
+    - 2
+    description: NAND Flash memory bank enable bit
+  - name: PTYP
+    bit_range:
+    - 3
+    - 3
+    description: Memory type
+  - name: PWID
+    bit_range:
+    - 5
+    - 4
+    description: Data bus width
+  - name: ECCEN
+    bit_range:
+    - 6
+    - 6
+    description: ECC computation logic enable bit
+  - name: TCLR
+    bit_range:
+    - 12
+    - 9
+    description: CLE to RE delay
+  - name: TAR
+    bit_range:
+    - 15
+    - 13
+    description: ALE to RE delay
+  - name: ECCPS
+    bit_range:
+    - 19
+    - 17
+    description: ECC page size
+  side_effects: null
+- id: SR
+  address_offset: 132
+  size: 32
+  access: READ_WRITE
+  reset_value: 64
+  fields:
+  - name: IRS
+    bit_range:
+    - 0
+    - 0
+    description: 'Interrupt rising edge status The flag is set by hardware and reset by software. Note: If this bit is written by software to 1 it will be set.'
+  - name: ILS
+    bit_range:
+    - 1
+    - 1
+    description: Interrupt high-level status The flag is set by hardware and reset by software.
+  - name: IFS
+    bit_range:
+    - 2
+    - 2
+    description: 'Interrupt falling edge status The flag is set by hardware and reset by software. Note: If this bit is written by software to 1 it will be set.'
+  - name: IREN
+    bit_range:
+    - 3
+    - 3
+    description: Interrupt rising edge detection enable bit
+  - name: ILEN
+    bit_range:
+    - 4
+    - 4
+    description: Interrupt high-level detection enable bit
+  - name: IFEN
+    bit_range:
+    - 5
+    - 5
+    description: Interrupt falling edge detection enable bit
+  - name: FEMPT
+    bit_range:
+    - 6
+    - 6
+    description: FIFO empty. Read-only bit that provides the status of the FIFO
+  side_effects: null
+- id: PMEM
+  address_offset: 136
+  size: 32
+  access: READ_WRITE
+  reset_value: 4244438268
+  fields:
+  - name: MEMSET
+    bit_range:
+    - 7
+    - 0
+    description: 'Common memory x setup time These bits define the number of KCK_FMC (+1) clock cycles to set up the address before the command assertion (NWE, NOE), for NAND Flash read or write access to common memory space:'
+  - name: MEMWAIT
+    bit_range:
+    - 15
+    - 8
+    description: 'Common memory wait time These bits define the minimum number of KCK_FMC (+1) clock cycles to assert the command (NWE, NOE), for NAND Flash read or write access to common memory space. The duration of command assertion is extended if the wait signal (NWAIT) is active (low) at the end of the programmed value of KCK_FMC:'
+  - name: MEMHOLD
+    bit_range:
+    - 23
+    - 16
+    description: 'Common memory hold time These bits define the number of KCK_FMC clock cycles for write accesses and KCK_FMC+1 clock cycles for read accesses during which the address is held (and data for write accesses) after the command is de-asserted (NWE, NOE), for NAND Flash read or write access to common memory space:'
+  - name: MEMHIZ
+    bit_range:
+    - 31
+    - 24
+    description: 'Common memory x data bus Hi-Z time These bits define the number of KCK_FMC clock cycles during which the data bus is kept Hi-Z after the start of a NAND Flash write access to common memory space. This is only valid for write transactions:'
+  side_effects: null
+- id: PATT
+  address_offset: 140
+  size: 32
+  access: READ_WRITE
+  reset_value: 4244438268
+  fields:
+  - name: ATTSET
+    bit_range:
+    - 7
+    - 0
+    description: 'Attribute memory setup time These bits define the number of KCK_FMC (+1) clock cycles to set up address before the command assertion (NWE, NOE), for NAND Flash read or write access to attribute memory space:'
+  - name: ATTWAIT
+    bit_range:
+    - 15
+    - 8
+    description: 'Attribute memory wait time These bits define the minimum number of x KCK_FMC (+1) clock cycles to assert the command (NWE, NOE), for NAND Flash read or write access to attribute memory space. The duration for command assertion is extended if the wait signal (NWAIT) is active (low) at the end of the programmed value of KCK_FMC:'
+  - name: ATTHOLD
+    bit_range:
+    - 23
+    - 16
+    description: 'Attribute memory hold time These bits define the number of KCK_FMC clock cycles during which the address is held (and data for write access) after the command de-assertion (NWE, NOE), for NAND Flash read or write access to attribute memory space:'
+  - name: ATTHIZ
+    bit_range:
+    - 31
+    - 24
+    description: 'Attribute memory data bus Hi-Z time These bits define the number of KCK_FMC clock cycles during which the data bus is kept in Hi-Z after the start of a NAND Flash write access to attribute memory space on socket. Only valid for writ transaction:'
+  side_effects: null
+- id: ECCR
+  address_offset: 148
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: ECC
+    bit_range:
+    - 31
+    - 0
+    description: ECC result This field contains the value computed by the ECC computation logic. Table167 describes the contents of these bit fields.
+  side_effects: null
+interrupts:
+  FMC: 75
+timing: null

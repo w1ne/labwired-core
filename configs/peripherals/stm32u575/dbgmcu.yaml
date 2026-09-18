@@ -1,0 +1,485 @@
+peripheral: DBGMCU
+version: 0.1.0
+registers:
+- id: IDCODE
+  address_offset: 0
+  size: 32
+  access: READ_ONLY
+  reset_value: 805397634
+  fields:
+  - name: DEV_ID
+    bit_range:
+    - 11
+    - 0
+    description: Device dentification
+  - name: REV_ID
+    bit_range:
+    - 31
+    - 16
+    description: Revision
+  side_effects: null
+- id: CR
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DBG_STOP
+    bit_range:
+    - 1
+    - 1
+    description: Debug Stop mode
+  - name: DBG_STANDBY
+    bit_range:
+    - 2
+    - 2
+    description: Debug Standby mode
+  - name: TRACE_IOEN
+    bit_range:
+    - 4
+    - 4
+    description: Trace pin assignment control
+  - name: TRACE_EN
+    bit_range:
+    - 5
+    - 5
+    description: trace port and clock enable
+  - name: TRACE_MODE
+    bit_range:
+    - 7
+    - 6
+    description: Trace pin assignment control
+  side_effects: null
+- id: APB1LFZR
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DBG_TIM2_STOP
+    bit_range:
+    - 0
+    - 0
+    description: TIM2 stop in debug
+  - name: DBG_TIM3_STOP
+    bit_range:
+    - 1
+    - 1
+    description: TIM3 stop in debug
+  - name: DBG_TIM4_STOP
+    bit_range:
+    - 2
+    - 2
+    description: TIM4 stop in debug
+  - name: DBG_TIM5_STOP
+    bit_range:
+    - 3
+    - 3
+    description: TIM5 stop in debug
+  - name: DBG_TIM6_STOP
+    bit_range:
+    - 4
+    - 4
+    description: TIM6 stop in debug
+  - name: DBG_TIM7_STOP
+    bit_range:
+    - 5
+    - 5
+    description: TIM7 stop in debug
+  - name: DBG_WWDG_STOP
+    bit_range:
+    - 11
+    - 11
+    description: Window watchdog counter stop in debug
+  - name: DBG_IWDG_STOP
+    bit_range:
+    - 12
+    - 12
+    description: Independent watchdog counter stop in debug
+  - name: DBG_I2C1_STOP
+    bit_range:
+    - 21
+    - 21
+    description: I2C1 SMBUS timeout stop in debug
+  - name: DBG_I2C2_STOP
+    bit_range:
+    - 22
+    - 22
+    description: I2C2 SMBUS timeout stop in debug
+  side_effects: null
+- id: APB1HFZR
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DBG_I2C4_STOP
+    bit_range:
+    - 1
+    - 1
+    description: I2C4 stop in debug
+  - name: DBG_LPTIM2_STOP
+    bit_range:
+    - 5
+    - 5
+    description: LPTIM2 stop in debug
+  side_effects: null
+- id: APB2FZR
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DBG_TIM1_STOP
+    bit_range:
+    - 11
+    - 11
+    description: TIM1 counter stopped when core is halted
+  - name: DBG_TIM8_STOP
+    bit_range:
+    - 13
+    - 13
+    description: TIM8 stop in debug
+  - name: DBG_TIM15_STOP
+    bit_range:
+    - 16
+    - 16
+    description: TIM15 counter stopped when core is halted
+  - name: DBG_TIM16_STOP
+    bit_range:
+    - 17
+    - 17
+    description: TIM16 counter stopped when core is halted
+  - name: DBG_TIM17_STOP
+    bit_range:
+    - 18
+    - 18
+    description: DBG_TIM17_STOP
+  side_effects: null
+- id: APB3FZR
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DBG_I2C3_STOP
+    bit_range:
+    - 10
+    - 10
+    description: I2C3 stop in debug
+  - name: DBG_LPTIM1_STOP
+    bit_range:
+    - 17
+    - 17
+    description: LPTIM1 stop in debug
+  - name: DBG_LPTIM3_STOP
+    bit_range:
+    - 18
+    - 18
+    description: LPTIM3 stop in debug
+  - name: DBG_LPTIM4_STOP
+    bit_range:
+    - 19
+    - 19
+    description: LPTIM4 stop in debug
+  - name: DBG_RTC_STOP
+    bit_range:
+    - 30
+    - 30
+    description: RTC stop in debug
+  side_effects: null
+- id: AHB1FZR
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DBG_GPDMA0_STOP
+    bit_range:
+    - 0
+    - 0
+    description: GPDMA channel 0 stop in debug
+  - name: DBG_GPDMA1_STOP
+    bit_range:
+    - 1
+    - 1
+    description: GPDMA channel 1 stop in debug
+  - name: DBG_GPDMA2_STOP
+    bit_range:
+    - 2
+    - 2
+    description: GPDMA channel 2 stop in debug
+  - name: DBG_GPDMA3_STOP
+    bit_range:
+    - 3
+    - 3
+    description: GPDMA channel 3 stop in debug
+  - name: DBG_GPDMA4_STOP
+    bit_range:
+    - 4
+    - 4
+    description: GPDMA channel 4 stop in debug
+  - name: DBG_GPDMA5_STOP
+    bit_range:
+    - 5
+    - 5
+    description: GPDMA channel 5 stop in debug
+  - name: DBG_GPDMA6_STOP
+    bit_range:
+    - 6
+    - 6
+    description: GPDMA channel 6 stop in debug
+  - name: DBG_GPDMA7_STOP
+    bit_range:
+    - 7
+    - 7
+    description: GPDMA channel 7 stop in debug
+  - name: DBG_GPDMA8_STOP
+    bit_range:
+    - 8
+    - 8
+    description: GPDMA channel 8 stop in debug
+  - name: DBG_GPDMA9_STOP
+    bit_range:
+    - 9
+    - 9
+    description: GPDMA channel 9 stop in debug
+  - name: DBG_GPDMA10_STOP
+    bit_range:
+    - 10
+    - 10
+    description: GPDMA channel 10 stop in debug
+  - name: DBG_GPDMA11_STOP
+    bit_range:
+    - 11
+    - 11
+    description: GPDMA channel 11 stop in debug
+  - name: DBG_GPDMA12_STOP
+    bit_range:
+    - 12
+    - 12
+    description: GPDMA channel 12 stop in debug
+  - name: DBG_GPDMA13_STOP
+    bit_range:
+    - 13
+    - 13
+    description: GPDMA channel 13 stop in debug
+  - name: DBG_GPDMA14_STOP
+    bit_range:
+    - 14
+    - 14
+    description: GPDMA channel 14 stop in debug
+  - name: DBG_GPDMA15_STOP
+    bit_range:
+    - 15
+    - 15
+    description: GPDMA channel 15 stop in debug
+  side_effects: null
+- id: AHB3FZR
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DBG_LPDMA0_STOP
+    bit_range:
+    - 0
+    - 0
+    description: LPDMA channel 0 stop in debug
+  - name: DBG_LPDMA1_STOP
+    bit_range:
+    - 1
+    - 1
+    description: LPDMA channel 1 stop in debug
+  - name: DBG_LPDMA2_STOP
+    bit_range:
+    - 2
+    - 2
+    description: LPDMA channel 2 stop in debug
+  - name: DBG_LPDMA3_STOP
+    bit_range:
+    - 3
+    - 3
+    description: LPDMA channel 3 stop in debug
+  side_effects: null
+- id: DBGMCU_SR
+  address_offset: 252
+  size: 32
+  access: READ_ONLY
+  reset_value: 1
+  fields:
+  - name: AP_PRESENT
+    bit_range:
+    - 7
+    - 0
+    description: 'Bit n identifies whether access port AP n is present in device Bit n = 0: APn absent Bit n = 1: APn present'
+  - name: AP_LOCKED
+    bit_range:
+    - 15
+    - 8
+    description: 'DECLARATION TO BE CONFIRMED by PRODUCT OWNER! Bit n identifies whether access port AP n is open (can be accessed via the debug port) or locked (debug access to the AP is blocked) Bit n = 0: APn locked Bit n = 1: APn enabled'
+  side_effects: null
+- id: DBGMCU_DBG_AUTH_HOST
+  address_offset: 256
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: AUTH_KEY
+    bit_range:
+    - 31
+    - 0
+    description: Device authentication key The device specific 64-bit authentication key (OEM key) must be written to this register (in two successive 32-bit writes, least significant word first) to permit RDP regression. Writing a wrong key locks access to the device and prevent code execution from the Flash memory.
+  side_effects: null
+- id: DBGMCU_DBG_AUTH_DEVICE
+  address_offset: 260
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: AUTH_ID
+    bit_range:
+    - 31
+    - 0
+    description: Device specific ID Device specific ID used for RDP regression.
+  side_effects: null
+- id: PIDR4
+  address_offset: 4048
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: JEP106CON
+    bit_range:
+    - 3
+    - 0
+    description: JEP106 continuation code
+  - name: KCOUNT_4
+    bit_range:
+    - 7
+    - 4
+    description: register file size
+  side_effects: null
+- id: PIDR0
+  address_offset: 4064
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: PARTNUM
+    bit_range:
+    - 7
+    - 0
+    description: part number bits [7:0]
+  side_effects: null
+- id: PIDR1
+  address_offset: 4068
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: PARTNUM
+    bit_range:
+    - 3
+    - 0
+    description: part number bits [11:8]
+  - name: JEP106ID
+    bit_range:
+    - 7
+    - 4
+    description: JEP106 identity code bits [3:0]
+  side_effects: null
+- id: PIDR2
+  address_offset: 4072
+  size: 32
+  access: READ_ONLY
+  reset_value: 10
+  fields:
+  - name: JEP106ID
+    bit_range:
+    - 2
+    - 0
+    description: JEP106 identity code bits [6:4]
+  - name: JEDEC
+    bit_range:
+    - 3
+    - 3
+    description: JEDEC assigned value
+  - name: REVISION
+    bit_range:
+    - 7
+    - 4
+    description: component revision number
+  side_effects: null
+- id: PIDR3
+  address_offset: 4076
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: CMOD
+    bit_range:
+    - 3
+    - 0
+    description: customer modified
+  - name: REVAND
+    bit_range:
+    - 7
+    - 4
+    description: metal fix version
+  side_effects: null
+- id: CIDR0
+  address_offset: 4080
+  size: 32
+  access: READ_ONLY
+  reset_value: 13
+  fields:
+  - name: PREAMBLE
+    bit_range:
+    - 7
+    - 0
+    description: component identification bits [7:0]
+  side_effects: null
+- id: CIDR1
+  address_offset: 4084
+  size: 32
+  access: READ_ONLY
+  reset_value: 240
+  fields:
+  - name: PREAMBLE
+    bit_range:
+    - 3
+    - 0
+    description: component identification bits [11:8]
+  - name: CLASS
+    bit_range:
+    - 7
+    - 4
+    description: component identification bits [15:12] - component class
+  side_effects: null
+- id: CIDR2
+  address_offset: 4088
+  size: 32
+  access: READ_ONLY
+  reset_value: 5
+  fields:
+  - name: PREAMBLE
+    bit_range:
+    - 7
+    - 0
+    description: component identification bits [23:16]
+  side_effects: null
+- id: CIDR3
+  address_offset: 4092
+  size: 32
+  access: READ_ONLY
+  reset_value: 177
+  fields:
+  - name: PREAMBLE
+    bit_range:
+    - 7
+    - 0
+    description: component identification bits [31:24]
+  side_effects: null
+interrupts: null
+timing: null

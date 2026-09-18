@@ -53,6 +53,8 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * I2C: rp2350 from_config bus not yet edge-gated (no line cells)
   * SPI: rp2350 from_config bus not yet edge-gated (no line cells)
   * UART: rp2350 from_config bus not yet edge-gated (no line cells)
+* **stm32u575**
+  * SPI: SPI1-3 declare no pad_map on this first pass (the H5 AF table is not transcribed), so the controller's SCK/MOSI never reach a routed pad and the named lines stay flat
 
 | Chip | I2C | SPI | UART |
 |------|-----|-----|------|
@@ -88,5 +90,6 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | stm32h735 | ✓ | ✓ | ✓ |
 | stm32l073 | ✓ | ✓ | ✓ |
 | stm32l476 | ✓ | ✓ | ✓ |
+| stm32u575 | ✓ | — | ✓ |
 | stm32wb55 | ✓ | ✓ | ✓ |
 | stm32wba52 | ✓ | ✓ | ✓ |

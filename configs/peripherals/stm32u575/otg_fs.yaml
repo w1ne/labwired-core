@@ -1,0 +1,5618 @@
+peripheral: OTG_FS
+version: 0.1.0
+registers:
+- id: GOTGCTL
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 65536
+  fields:
+  - name: SRQSCS
+    bit_range:
+    - 0
+    - 0
+    description: SRQSCS
+  - name: SRQ
+    bit_range:
+    - 1
+    - 1
+    description: SRQ
+  - name: VBVALOEN
+    bit_range:
+    - 2
+    - 2
+    description: VBVALOEN
+  - name: VBVALOVAL
+    bit_range:
+    - 3
+    - 3
+    description: VBVALOVAL
+  - name: AVALOEN
+    bit_range:
+    - 4
+    - 4
+    description: AVALOEN
+  - name: AVALOVAL
+    bit_range:
+    - 5
+    - 5
+    description: AVALOVAL
+  - name: BVALOEN
+    bit_range:
+    - 6
+    - 6
+    description: BVALOEN
+  - name: BVALOVAL
+    bit_range:
+    - 7
+    - 7
+    description: BVALOVAL
+  - name: HNGSCS
+    bit_range:
+    - 8
+    - 8
+    description: HNGSCS
+  - name: HNPRQ
+    bit_range:
+    - 9
+    - 9
+    description: HNPRQ
+  - name: HSHNPEN
+    bit_range:
+    - 10
+    - 10
+    description: HSHNPEN
+  - name: DHNPEN
+    bit_range:
+    - 11
+    - 11
+    description: DHNPEN
+  - name: EHEN
+    bit_range:
+    - 12
+    - 12
+    description: EHEN
+  - name: CIDSTS
+    bit_range:
+    - 16
+    - 16
+    description: CIDSTS
+  - name: DBCT
+    bit_range:
+    - 17
+    - 17
+    description: DBCT
+  - name: ASVLD
+    bit_range:
+    - 18
+    - 18
+    description: ASVLD
+  - name: BSVLD
+    bit_range:
+    - 19
+    - 19
+    description: BSVLD
+  - name: OTGVER
+    bit_range:
+    - 20
+    - 20
+    description: OTGVER
+  - name: CURMOD
+    bit_range:
+    - 21
+    - 21
+    description: CURMOD
+  side_effects: null
+- id: GOTGINT
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SEDET
+    bit_range:
+    - 2
+    - 2
+    description: SEDET
+  - name: SRSSCHG
+    bit_range:
+    - 8
+    - 8
+    description: SRSSCHG
+  - name: HNSSCHG
+    bit_range:
+    - 9
+    - 9
+    description: HNSSCHG
+  - name: HNGDET
+    bit_range:
+    - 17
+    - 17
+    description: HNGDET
+  - name: ADTOCHG
+    bit_range:
+    - 18
+    - 18
+    description: ADTOCHG
+  - name: DBCDNE
+    bit_range:
+    - 19
+    - 19
+    description: DBCDNE
+  side_effects: null
+- id: GAHBCFG
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GINTMSK
+    bit_range:
+    - 0
+    - 0
+    description: GINTMSK
+  - name: TXFELVL
+    bit_range:
+    - 7
+    - 7
+    description: TXFELVL
+  - name: PTXFELVL
+    bit_range:
+    - 8
+    - 8
+    description: PTXFELVL
+  side_effects: null
+- id: GUSBCFG
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 5184
+  fields:
+  - name: TOCAL
+    bit_range:
+    - 2
+    - 0
+    description: TOCAL
+  - name: PHYSEL
+    bit_range:
+    - 6
+    - 6
+    description: PHYSEL
+  - name: SRPCAP
+    bit_range:
+    - 8
+    - 8
+    description: SRPCAP
+  - name: HNPCAP
+    bit_range:
+    - 9
+    - 9
+    description: HNPCAP
+  - name: TRDT
+    bit_range:
+    - 13
+    - 10
+    description: TRDT
+  - name: FHMOD
+    bit_range:
+    - 29
+    - 29
+    description: FHMOD
+  - name: FDMOD
+    bit_range:
+    - 30
+    - 30
+    description: FDMOD
+  side_effects: null
+- id: GRSTCTL
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 2147483648
+  fields:
+  - name: CSRST
+    bit_range:
+    - 0
+    - 0
+    description: CSRST
+  - name: PSRST
+    bit_range:
+    - 1
+    - 1
+    description: PSRST
+  - name: FSRST
+    bit_range:
+    - 2
+    - 2
+    description: FSRST
+  - name: RXFFLSH
+    bit_range:
+    - 4
+    - 4
+    description: RXFFLSH
+  - name: TXFFLSH
+    bit_range:
+    - 5
+    - 5
+    description: TXFFLSH
+  - name: TXFNUM
+    bit_range:
+    - 10
+    - 6
+    description: TXFNUM
+  - name: AHBIDL
+    bit_range:
+    - 31
+    - 31
+    description: AHBIDL
+  side_effects: null
+- id: GINTSTS
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 67108896
+  fields:
+  - name: CMOD
+    bit_range:
+    - 0
+    - 0
+    description: CMOD
+  - name: MMIS
+    bit_range:
+    - 1
+    - 1
+    description: MMIS
+  - name: OTGINT
+    bit_range:
+    - 2
+    - 2
+    description: OTGINT
+  - name: SOF
+    bit_range:
+    - 3
+    - 3
+    description: SOF
+  - name: RXFLVL
+    bit_range:
+    - 4
+    - 4
+    description: RXFLVL
+  - name: NPTXFE
+    bit_range:
+    - 5
+    - 5
+    description: NPTXFE
+  - name: GINAKEFF
+    bit_range:
+    - 6
+    - 6
+    description: GINAKEFF
+  - name: GONAKEFF
+    bit_range:
+    - 7
+    - 7
+    description: GONAKEFF
+  - name: ESUSP
+    bit_range:
+    - 10
+    - 10
+    description: ESUSP
+  - name: USBSUSP
+    bit_range:
+    - 11
+    - 11
+    description: USBSUSP
+  - name: USBRST
+    bit_range:
+    - 12
+    - 12
+    description: USBRST
+  - name: ENUMDNE
+    bit_range:
+    - 13
+    - 13
+    description: ENUMDNE
+  - name: ISOODRP
+    bit_range:
+    - 14
+    - 14
+    description: ISOODRP
+  - name: EOPF
+    bit_range:
+    - 15
+    - 15
+    description: EOPF
+  - name: IEPINT
+    bit_range:
+    - 18
+    - 18
+    description: IEPINT
+  - name: OEPINT
+    bit_range:
+    - 19
+    - 19
+    description: OEPINT
+  - name: IISOIXFR
+    bit_range:
+    - 20
+    - 20
+    description: IISOIXFR
+  - name: IPXFR
+    bit_range:
+    - 21
+    - 21
+    description: IPXFR
+  - name: RSTDET
+    bit_range:
+    - 23
+    - 23
+    description: RSTDET
+  - name: HPRTINT
+    bit_range:
+    - 24
+    - 24
+    description: HPRTINT
+  - name: HCINT
+    bit_range:
+    - 25
+    - 25
+    description: HCINT
+  - name: PTXFE
+    bit_range:
+    - 26
+    - 26
+    description: PTXFE
+  - name: LPMINT
+    bit_range:
+    - 27
+    - 27
+    description: LPMINT
+  - name: CIDSCHG
+    bit_range:
+    - 28
+    - 28
+    description: CIDSCHG
+  - name: DISCINT
+    bit_range:
+    - 29
+    - 29
+    description: DISCINT
+  - name: SRQINT
+    bit_range:
+    - 30
+    - 30
+    description: SRQINT
+  - name: WKUPINT
+    bit_range:
+    - 31
+    - 31
+    description: WKUPINT
+  side_effects: null
+- id: GINTMSK
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MMISM
+    bit_range:
+    - 1
+    - 1
+    description: MMISM
+  - name: OTGINT
+    bit_range:
+    - 2
+    - 2
+    description: OTGINT
+  - name: SOFM
+    bit_range:
+    - 3
+    - 3
+    description: SOFM
+  - name: RXFLVLM
+    bit_range:
+    - 4
+    - 4
+    description: RXFLVLM
+  - name: NPTXFEM
+    bit_range:
+    - 5
+    - 5
+    description: NPTXFEM
+  - name: GINAKEFFM
+    bit_range:
+    - 6
+    - 6
+    description: GINAKEFFM
+  - name: GONAKEFFM
+    bit_range:
+    - 7
+    - 7
+    description: GONAKEFFM
+  - name: ESUSPM
+    bit_range:
+    - 10
+    - 10
+    description: ESUSPM
+  - name: USBSUSPM
+    bit_range:
+    - 11
+    - 11
+    description: USBSUSPM
+  - name: USBRST
+    bit_range:
+    - 12
+    - 12
+    description: USBRST
+  - name: ENUMDNEM
+    bit_range:
+    - 13
+    - 13
+    description: ENUMDNEM
+  - name: ISOODRPM
+    bit_range:
+    - 14
+    - 14
+    description: ISOODRPM
+  - name: EOPFM
+    bit_range:
+    - 15
+    - 15
+    description: EOPFM
+  - name: IEPINT
+    bit_range:
+    - 18
+    - 18
+    description: IEPINT
+  - name: OEPINT
+    bit_range:
+    - 19
+    - 19
+    description: OEPINT
+  - name: IISOIXFRM
+    bit_range:
+    - 20
+    - 20
+    description: IISOIXFRM
+  - name: IPXFRM
+    bit_range:
+    - 21
+    - 21
+    description: IPXFRM
+  - name: RSTDETM
+    bit_range:
+    - 23
+    - 23
+    description: RSTDETM
+  - name: PRTIM
+    bit_range:
+    - 24
+    - 24
+    description: PRTIM
+  - name: HCIM
+    bit_range:
+    - 25
+    - 25
+    description: HCIM
+  - name: PTXFEM
+    bit_range:
+    - 26
+    - 26
+    description: PTXFEM
+  - name: LPMINTM
+    bit_range:
+    - 27
+    - 27
+    description: LPMINTM
+  - name: CIDSCHGM
+    bit_range:
+    - 28
+    - 28
+    description: CIDSCHGM
+  - name: DISCINT
+    bit_range:
+    - 29
+    - 29
+    description: DISCINT
+  - name: SRQIM
+    bit_range:
+    - 30
+    - 30
+    description: SRQIM
+  - name: WUIM
+    bit_range:
+    - 31
+    - 31
+    description: WUIM
+  side_effects: null
+- id: GRXSTSR_DEVICE
+  address_offset: 28
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: EPNUM
+    bit_range:
+    - 3
+    - 0
+    description: EPNUM
+  - name: BCNT
+    bit_range:
+    - 14
+    - 4
+    description: BCNT
+  - name: DPID
+    bit_range:
+    - 16
+    - 15
+    description: DPID
+  - name: PKTSTS
+    bit_range:
+    - 20
+    - 17
+    description: PKTSTS
+  - name: FRMNUM
+    bit_range:
+    - 24
+    - 21
+    description: FRMNUM
+  - name: STSPHST
+    bit_range:
+    - 27
+    - 27
+    description: STSPHST
+  side_effects: null
+- id: GRXSTSR_HOST
+  address_offset: 28
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: CHNUM
+    bit_range:
+    - 3
+    - 0
+    description: CHNUM
+  - name: BCNT
+    bit_range:
+    - 14
+    - 4
+    description: BCNT
+  - name: DPID
+    bit_range:
+    - 16
+    - 15
+    description: DPID
+  - name: PKTSTS
+    bit_range:
+    - 20
+    - 17
+    description: PKTSTS
+  side_effects: null
+- id: GRXSTSP_DEVICE
+  address_offset: 32
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: EPNUM
+    bit_range:
+    - 3
+    - 0
+    description: EPNUM
+  - name: BCNT
+    bit_range:
+    - 14
+    - 4
+    description: BCNT
+  - name: DPID
+    bit_range:
+    - 16
+    - 15
+    description: DPID
+  - name: PKTSTS
+    bit_range:
+    - 20
+    - 17
+    description: PKTSTS
+  - name: FRMNUM
+    bit_range:
+    - 24
+    - 21
+    description: FRMNUM
+  - name: STSPHST
+    bit_range:
+    - 27
+    - 27
+    description: STSPHST
+  side_effects: null
+- id: GRXSTSP_HOST
+  address_offset: 32
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: CHNUM
+    bit_range:
+    - 3
+    - 0
+    description: CHNUM
+  - name: BCNT
+    bit_range:
+    - 14
+    - 4
+    description: BCNT
+  - name: DPID
+    bit_range:
+    - 16
+    - 15
+    description: DPID
+  - name: PKTSTS
+    bit_range:
+    - 20
+    - 17
+    description: PKTSTS
+  side_effects: null
+- id: GRXFSIZ
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 512
+  fields:
+  - name: RXFD
+    bit_range:
+    - 15
+    - 0
+    description: RXFD
+  side_effects: null
+- id: HNPTXFSIZ
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 33554944
+  fields:
+  - name: NPTXFSA
+    bit_range:
+    - 15
+    - 0
+    description: NPTXFSA
+  - name: NPTXFD
+    bit_range:
+    - 31
+    - 16
+    description: NPTXFD
+  side_effects: null
+- id: HNPTXSTS
+  address_offset: 44
+  size: 32
+  access: READ_ONLY
+  reset_value: 524800
+  fields:
+  - name: NPTXFSAV
+    bit_range:
+    - 15
+    - 0
+    description: NPTXFSAV
+  - name: NPTQXSAV
+    bit_range:
+    - 23
+    - 16
+    description: NPTQXSAV
+  - name: NPTXQTOP
+    bit_range:
+    - 30
+    - 24
+    description: NPTXQTOP
+  side_effects: null
+- id: GCCFG
+  address_offset: 56
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DCDET
+    bit_range:
+    - 0
+    - 0
+    description: DCDET
+  - name: PDET
+    bit_range:
+    - 1
+    - 1
+    description: PDET
+  - name: SDET
+    bit_range:
+    - 2
+    - 2
+    description: SDET
+  - name: PS2DET
+    bit_range:
+    - 3
+    - 3
+    description: PS2DET
+  - name: PWRDWN
+    bit_range:
+    - 16
+    - 16
+    description: PWRDWN
+  - name: BCDEN
+    bit_range:
+    - 17
+    - 17
+    description: BCDEN
+  - name: DCDEN
+    bit_range:
+    - 18
+    - 18
+    description: DCDEN
+  - name: PDEN
+    bit_range:
+    - 19
+    - 19
+    description: PDEN
+  - name: SDEN
+    bit_range:
+    - 20
+    - 20
+    description: SDEN
+  - name: VBDEN
+    bit_range:
+    - 21
+    - 21
+    description: VBDEN
+  side_effects: null
+- id: CID
+  address_offset: 60
+  size: 32
+  access: READ_WRITE
+  reset_value: 12288
+  fields:
+  - name: PRODUCT_ID
+    bit_range:
+    - 31
+    - 0
+    description: PRODUCT_ID
+  side_effects: null
+- id: GLPMCFG
+  address_offset: 84
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LPMEN
+    bit_range:
+    - 0
+    - 0
+    description: LPMEN
+  - name: LPMACK
+    bit_range:
+    - 1
+    - 1
+    description: LPMACK
+  - name: BESL
+    bit_range:
+    - 5
+    - 2
+    description: BESL
+  - name: REMWAKE
+    bit_range:
+    - 6
+    - 6
+    description: REMWAKE
+  - name: L1SSEN
+    bit_range:
+    - 7
+    - 7
+    description: L1SSEN
+  - name: BESLTHRS
+    bit_range:
+    - 11
+    - 8
+    description: BESLTHRS
+  - name: L1DSEN
+    bit_range:
+    - 12
+    - 12
+    description: L1DSEN
+  - name: LPMRSP
+    bit_range:
+    - 14
+    - 13
+    description: LPMRSP
+  - name: SLPSTS
+    bit_range:
+    - 15
+    - 15
+    description: SLPSTS
+  - name: L1RSMOK
+    bit_range:
+    - 16
+    - 16
+    description: L1RSMOK
+  - name: LPMCHIDX
+    bit_range:
+    - 20
+    - 17
+    description: LPMCHIDX
+  - name: LPMRCNT
+    bit_range:
+    - 23
+    - 21
+    description: LPMRCNT
+  - name: SNDLPM
+    bit_range:
+    - 24
+    - 24
+    description: SNDLPM
+  - name: LPMRCNTSTS
+    bit_range:
+    - 27
+    - 25
+    description: LPMRCNTSTS
+  - name: ENBESL
+    bit_range:
+    - 28
+    - 28
+    description: ENBESL
+  side_effects: null
+- id: HPTXFSIZ
+  address_offset: 256
+  size: 32
+  access: READ_WRITE
+  reset_value: 33555456
+  fields:
+  - name: PTXSA
+    bit_range:
+    - 15
+    - 0
+    description: PTXSA
+  - name: PTXFSIZ
+    bit_range:
+    - 31
+    - 16
+    description: PTXFSIZ
+  side_effects: null
+- id: DIEPTXF1
+  address_offset: 260
+  size: 32
+  access: READ_WRITE
+  reset_value: 33555456
+  fields:
+  - name: INEPTXSA
+    bit_range:
+    - 15
+    - 0
+    description: INEPTXSA
+  - name: INEPTXFD
+    bit_range:
+    - 31
+    - 16
+    description: INEPTXFD
+  side_effects: null
+- id: DIEPTXF2
+  address_offset: 264
+  size: 32
+  access: READ_WRITE
+  reset_value: 33555968
+  fields:
+  - name: INEPTXSA
+    bit_range:
+    - 15
+    - 0
+    description: INEPTXSA
+  - name: INEPTXFD
+    bit_range:
+    - 31
+    - 16
+    description: INEPTXFD
+  side_effects: null
+- id: DIEPTXF3
+  address_offset: 268
+  size: 32
+  access: READ_WRITE
+  reset_value: 33556480
+  fields:
+  - name: INEPTXSA
+    bit_range:
+    - 15
+    - 0
+    description: INEPTXSA
+  - name: INEPTXFD
+    bit_range:
+    - 31
+    - 16
+    description: INEPTXFD
+  side_effects: null
+- id: DIEPTXF4
+  address_offset: 272
+  size: 32
+  access: READ_WRITE
+  reset_value: 33556992
+  fields:
+  - name: INEPTXSA
+    bit_range:
+    - 15
+    - 0
+    description: INEPTXSA
+  - name: INEPTXFD
+    bit_range:
+    - 31
+    - 16
+    description: INEPTXFD
+  side_effects: null
+- id: DIEPTXF5
+  address_offset: 276
+  size: 32
+  access: READ_WRITE
+  reset_value: 33557504
+  fields:
+  - name: INEPTXSA
+    bit_range:
+    - 15
+    - 0
+    description: INEPTXSA
+  - name: INEPTXFD
+    bit_range:
+    - 31
+    - 16
+    description: INEPTXFD
+  side_effects: null
+- id: HCFG
+  address_offset: 1024
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FSLSPCS
+    bit_range:
+    - 1
+    - 0
+    description: FSLSPCS
+  - name: FSLSS
+    bit_range:
+    - 2
+    - 2
+    description: FSLSS
+  side_effects: null
+- id: HFIR
+  address_offset: 1028
+  size: 32
+  access: READ_WRITE
+  reset_value: 60000
+  fields:
+  - name: FRIVL
+    bit_range:
+    - 15
+    - 0
+    description: FRIVL
+  - name: RLDCTRL
+    bit_range:
+    - 16
+    - 16
+    description: RLDCTRL
+  side_effects: null
+- id: HFNUM
+  address_offset: 1032
+  size: 32
+  access: READ_ONLY
+  reset_value: 16383
+  fields:
+  - name: FRNUM
+    bit_range:
+    - 15
+    - 0
+    description: FRNUM
+  - name: FTREM
+    bit_range:
+    - 31
+    - 16
+    description: FTREM
+  side_effects: null
+- id: HPTXSTS
+  address_offset: 1040
+  size: 32
+  access: READ_ONLY
+  reset_value: 524544
+  fields:
+  - name: PTXFSAVL
+    bit_range:
+    - 15
+    - 0
+    description: PTXFSAVL
+  - name: PTXQSAV
+    bit_range:
+    - 23
+    - 16
+    description: PTXQSAV
+  - name: PTXQTOP
+    bit_range:
+    - 31
+    - 24
+    description: PTXQTOP
+  side_effects: null
+- id: HAINT
+  address_offset: 1044
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: HAINT
+    bit_range:
+    - 15
+    - 0
+    description: HAINT
+  side_effects: null
+- id: HAINTMSK
+  address_offset: 1048
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: HAINTM
+    bit_range:
+    - 15
+    - 0
+    description: HAINTM
+  side_effects: null
+- id: HPRT
+  address_offset: 1088
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PCSTS
+    bit_range:
+    - 0
+    - 0
+    description: PCSTS
+  - name: PCDET
+    bit_range:
+    - 1
+    - 1
+    description: PCDET
+  - name: PENA
+    bit_range:
+    - 2
+    - 2
+    description: PENA
+  - name: PENCHNG
+    bit_range:
+    - 3
+    - 3
+    description: PENCHNG
+  - name: POCA
+    bit_range:
+    - 4
+    - 4
+    description: POCA
+  - name: POCCHNG
+    bit_range:
+    - 5
+    - 5
+    description: POCCHNG
+  - name: PRES
+    bit_range:
+    - 6
+    - 6
+    description: PRES
+  - name: PSUSP
+    bit_range:
+    - 7
+    - 7
+    description: PSUSP
+  - name: PRST
+    bit_range:
+    - 8
+    - 8
+    description: PRST
+  - name: PLSTS
+    bit_range:
+    - 11
+    - 10
+    description: PLSTS
+  - name: PPWR
+    bit_range:
+    - 12
+    - 12
+    description: PPWR
+  - name: PTCTL
+    bit_range:
+    - 16
+    - 13
+    description: PTCTL
+  - name: PSPD
+    bit_range:
+    - 18
+    - 17
+    description: PSPD
+  side_effects: null
+- id: HCCHAR0
+  address_offset: 1280
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MPSIZ
+    bit_range:
+    - 10
+    - 0
+    description: MPSIZ
+  - name: EPNUM
+    bit_range:
+    - 14
+    - 11
+    description: EPNUM
+  - name: EPDIR
+    bit_range:
+    - 15
+    - 15
+    description: EPDIR
+  - name: LSDEV
+    bit_range:
+    - 17
+    - 17
+    description: LSDEV
+  - name: EPTYP
+    bit_range:
+    - 19
+    - 18
+    description: EPTYP
+  - name: MCNT
+    bit_range:
+    - 21
+    - 20
+    description: MCNT
+  - name: DAD
+    bit_range:
+    - 28
+    - 22
+    description: DAD
+  - name: ODDFRM
+    bit_range:
+    - 29
+    - 29
+    description: ODDFRM
+  - name: CHDIS
+    bit_range:
+    - 30
+    - 30
+    description: CHDIS
+  - name: CHENA
+    bit_range:
+    - 31
+    - 31
+    description: CHENA
+  side_effects: null
+- id: HCINT0
+  address_offset: 1288
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRC
+    bit_range:
+    - 0
+    - 0
+    description: XFRC
+  - name: CHH
+    bit_range:
+    - 1
+    - 1
+    description: CHH
+  - name: STALL
+    bit_range:
+    - 3
+    - 3
+    description: STALL
+  - name: NAK
+    bit_range:
+    - 4
+    - 4
+    description: NAK
+  - name: ACK
+    bit_range:
+    - 5
+    - 5
+    description: ACK
+  - name: TXERR
+    bit_range:
+    - 7
+    - 7
+    description: TXERR
+  - name: BBERR
+    bit_range:
+    - 8
+    - 8
+    description: BBERR
+  - name: FRMOR
+    bit_range:
+    - 9
+    - 9
+    description: FRMOR
+  - name: DTERR
+    bit_range:
+    - 10
+    - 10
+    description: DTERR
+  side_effects: null
+- id: HCINTMSK0
+  address_offset: 1292
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRCM
+    bit_range:
+    - 0
+    - 0
+    description: XFRCM
+  - name: CHHM
+    bit_range:
+    - 1
+    - 1
+    description: CHHM
+  - name: STALLM
+    bit_range:
+    - 3
+    - 3
+    description: STALLM
+  - name: NAKM
+    bit_range:
+    - 4
+    - 4
+    description: NAKM
+  - name: ACKM
+    bit_range:
+    - 5
+    - 5
+    description: ACKM
+  - name: TXERRM
+    bit_range:
+    - 7
+    - 7
+    description: TXERRM
+  - name: BBERRM
+    bit_range:
+    - 8
+    - 8
+    description: BBERRM
+  - name: FRMORM
+    bit_range:
+    - 9
+    - 9
+    description: FRMORM
+  - name: DTERRM
+    bit_range:
+    - 10
+    - 10
+    description: DTERRM
+  side_effects: null
+- id: HCTSIZ0
+  address_offset: 1296
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRSIZ
+    bit_range:
+    - 18
+    - 0
+    description: XFRSIZ
+  - name: PKTCNT
+    bit_range:
+    - 28
+    - 19
+    description: PKTCNT
+  - name: DPID
+    bit_range:
+    - 30
+    - 29
+    description: DPID
+  - name: DOPNG
+    bit_range:
+    - 31
+    - 31
+    description: DOPNG
+  side_effects: null
+- id: HCCHAR1
+  address_offset: 1312
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MPSIZ
+    bit_range:
+    - 10
+    - 0
+    description: MPSIZ
+  - name: EPNUM
+    bit_range:
+    - 14
+    - 11
+    description: EPNUM
+  - name: EPDIR
+    bit_range:
+    - 15
+    - 15
+    description: EPDIR
+  - name: LSDEV
+    bit_range:
+    - 17
+    - 17
+    description: LSDEV
+  - name: EPTYP
+    bit_range:
+    - 19
+    - 18
+    description: EPTYP
+  - name: MCNT
+    bit_range:
+    - 21
+    - 20
+    description: MCNT
+  - name: DAD
+    bit_range:
+    - 28
+    - 22
+    description: DAD
+  - name: ODDFRM
+    bit_range:
+    - 29
+    - 29
+    description: ODDFRM
+  - name: CHDIS
+    bit_range:
+    - 30
+    - 30
+    description: CHDIS
+  - name: CHENA
+    bit_range:
+    - 31
+    - 31
+    description: CHENA
+  side_effects: null
+- id: HCINT1
+  address_offset: 1320
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRC
+    bit_range:
+    - 0
+    - 0
+    description: XFRC
+  - name: CHH
+    bit_range:
+    - 1
+    - 1
+    description: CHH
+  - name: STALL
+    bit_range:
+    - 3
+    - 3
+    description: STALL
+  - name: NAK
+    bit_range:
+    - 4
+    - 4
+    description: NAK
+  - name: ACK
+    bit_range:
+    - 5
+    - 5
+    description: ACK
+  - name: TXERR
+    bit_range:
+    - 7
+    - 7
+    description: TXERR
+  - name: BBERR
+    bit_range:
+    - 8
+    - 8
+    description: BBERR
+  - name: FRMOR
+    bit_range:
+    - 9
+    - 9
+    description: FRMOR
+  - name: DTERR
+    bit_range:
+    - 10
+    - 10
+    description: DTERR
+  side_effects: null
+- id: HCINTMSK1
+  address_offset: 1324
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRCM
+    bit_range:
+    - 0
+    - 0
+    description: XFRCM
+  - name: CHHM
+    bit_range:
+    - 1
+    - 1
+    description: CHHM
+  - name: STALLM
+    bit_range:
+    - 3
+    - 3
+    description: STALLM
+  - name: NAKM
+    bit_range:
+    - 4
+    - 4
+    description: NAKM
+  - name: ACKM
+    bit_range:
+    - 5
+    - 5
+    description: ACKM
+  - name: TXERRM
+    bit_range:
+    - 7
+    - 7
+    description: TXERRM
+  - name: BBERRM
+    bit_range:
+    - 8
+    - 8
+    description: BBERRM
+  - name: FRMORM
+    bit_range:
+    - 9
+    - 9
+    description: FRMORM
+  - name: DTERRM
+    bit_range:
+    - 10
+    - 10
+    description: DTERRM
+  side_effects: null
+- id: HCTSIZ1
+  address_offset: 1328
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRSIZ
+    bit_range:
+    - 18
+    - 0
+    description: XFRSIZ
+  - name: PKTCNT
+    bit_range:
+    - 28
+    - 19
+    description: PKTCNT
+  - name: DPID
+    bit_range:
+    - 30
+    - 29
+    description: DPID
+  - name: DOPNG
+    bit_range:
+    - 31
+    - 31
+    description: DOPNG
+  side_effects: null
+- id: HCCHAR2
+  address_offset: 1344
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MPSIZ
+    bit_range:
+    - 10
+    - 0
+    description: MPSIZ
+  - name: EPNUM
+    bit_range:
+    - 14
+    - 11
+    description: EPNUM
+  - name: EPDIR
+    bit_range:
+    - 15
+    - 15
+    description: EPDIR
+  - name: LSDEV
+    bit_range:
+    - 17
+    - 17
+    description: LSDEV
+  - name: EPTYP
+    bit_range:
+    - 19
+    - 18
+    description: EPTYP
+  - name: MCNT
+    bit_range:
+    - 21
+    - 20
+    description: MCNT
+  - name: DAD
+    bit_range:
+    - 28
+    - 22
+    description: DAD
+  - name: ODDFRM
+    bit_range:
+    - 29
+    - 29
+    description: ODDFRM
+  - name: CHDIS
+    bit_range:
+    - 30
+    - 30
+    description: CHDIS
+  - name: CHENA
+    bit_range:
+    - 31
+    - 31
+    description: CHENA
+  side_effects: null
+- id: HCINT2
+  address_offset: 1352
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRC
+    bit_range:
+    - 0
+    - 0
+    description: XFRC
+  - name: CHH
+    bit_range:
+    - 1
+    - 1
+    description: CHH
+  - name: STALL
+    bit_range:
+    - 3
+    - 3
+    description: STALL
+  - name: NAK
+    bit_range:
+    - 4
+    - 4
+    description: NAK
+  - name: ACK
+    bit_range:
+    - 5
+    - 5
+    description: ACK
+  - name: TXERR
+    bit_range:
+    - 7
+    - 7
+    description: TXERR
+  - name: BBERR
+    bit_range:
+    - 8
+    - 8
+    description: BBERR
+  - name: FRMOR
+    bit_range:
+    - 9
+    - 9
+    description: FRMOR
+  - name: DTERR
+    bit_range:
+    - 10
+    - 10
+    description: DTERR
+  side_effects: null
+- id: HCINTMSK2
+  address_offset: 1356
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRCM
+    bit_range:
+    - 0
+    - 0
+    description: XFRCM
+  - name: CHHM
+    bit_range:
+    - 1
+    - 1
+    description: CHHM
+  - name: STALLM
+    bit_range:
+    - 3
+    - 3
+    description: STALLM
+  - name: NAKM
+    bit_range:
+    - 4
+    - 4
+    description: NAKM
+  - name: ACKM
+    bit_range:
+    - 5
+    - 5
+    description: ACKM
+  - name: TXERRM
+    bit_range:
+    - 7
+    - 7
+    description: TXERRM
+  - name: BBERRM
+    bit_range:
+    - 8
+    - 8
+    description: BBERRM
+  - name: FRMORM
+    bit_range:
+    - 9
+    - 9
+    description: FRMORM
+  - name: DTERRM
+    bit_range:
+    - 10
+    - 10
+    description: DTERRM
+  side_effects: null
+- id: HCTSIZ2
+  address_offset: 1360
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRSIZ
+    bit_range:
+    - 18
+    - 0
+    description: XFRSIZ
+  - name: PKTCNT
+    bit_range:
+    - 28
+    - 19
+    description: PKTCNT
+  - name: DPID
+    bit_range:
+    - 30
+    - 29
+    description: DPID
+  - name: DOPNG
+    bit_range:
+    - 31
+    - 31
+    description: DOPNG
+  side_effects: null
+- id: HCCHAR3
+  address_offset: 1376
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MPSIZ
+    bit_range:
+    - 10
+    - 0
+    description: MPSIZ
+  - name: EPNUM
+    bit_range:
+    - 14
+    - 11
+    description: EPNUM
+  - name: EPDIR
+    bit_range:
+    - 15
+    - 15
+    description: EPDIR
+  - name: LSDEV
+    bit_range:
+    - 17
+    - 17
+    description: LSDEV
+  - name: EPTYP
+    bit_range:
+    - 19
+    - 18
+    description: EPTYP
+  - name: MCNT
+    bit_range:
+    - 21
+    - 20
+    description: MCNT
+  - name: DAD
+    bit_range:
+    - 28
+    - 22
+    description: DAD
+  - name: ODDFRM
+    bit_range:
+    - 29
+    - 29
+    description: ODDFRM
+  - name: CHDIS
+    bit_range:
+    - 30
+    - 30
+    description: CHDIS
+  - name: CHENA
+    bit_range:
+    - 31
+    - 31
+    description: CHENA
+  side_effects: null
+- id: HCINT3
+  address_offset: 1384
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRC
+    bit_range:
+    - 0
+    - 0
+    description: XFRC
+  - name: CHH
+    bit_range:
+    - 1
+    - 1
+    description: CHH
+  - name: STALL
+    bit_range:
+    - 3
+    - 3
+    description: STALL
+  - name: NAK
+    bit_range:
+    - 4
+    - 4
+    description: NAK
+  - name: ACK
+    bit_range:
+    - 5
+    - 5
+    description: ACK
+  - name: TXERR
+    bit_range:
+    - 7
+    - 7
+    description: TXERR
+  - name: BBERR
+    bit_range:
+    - 8
+    - 8
+    description: BBERR
+  - name: FRMOR
+    bit_range:
+    - 9
+    - 9
+    description: FRMOR
+  - name: DTERR
+    bit_range:
+    - 10
+    - 10
+    description: DTERR
+  side_effects: null
+- id: HCINTMSK3
+  address_offset: 1388
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRCM
+    bit_range:
+    - 0
+    - 0
+    description: XFRCM
+  - name: CHHM
+    bit_range:
+    - 1
+    - 1
+    description: CHHM
+  - name: STALLM
+    bit_range:
+    - 3
+    - 3
+    description: STALLM
+  - name: NAKM
+    bit_range:
+    - 4
+    - 4
+    description: NAKM
+  - name: ACKM
+    bit_range:
+    - 5
+    - 5
+    description: ACKM
+  - name: TXERRM
+    bit_range:
+    - 7
+    - 7
+    description: TXERRM
+  - name: BBERRM
+    bit_range:
+    - 8
+    - 8
+    description: BBERRM
+  - name: FRMORM
+    bit_range:
+    - 9
+    - 9
+    description: FRMORM
+  - name: DTERRM
+    bit_range:
+    - 10
+    - 10
+    description: DTERRM
+  side_effects: null
+- id: HCTSIZ3
+  address_offset: 1392
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRSIZ
+    bit_range:
+    - 18
+    - 0
+    description: XFRSIZ
+  - name: PKTCNT
+    bit_range:
+    - 28
+    - 19
+    description: PKTCNT
+  - name: DPID
+    bit_range:
+    - 30
+    - 29
+    description: DPID
+  - name: DOPNG
+    bit_range:
+    - 31
+    - 31
+    description: DOPNG
+  side_effects: null
+- id: HCCHAR4
+  address_offset: 1408
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MPSIZ
+    bit_range:
+    - 10
+    - 0
+    description: MPSIZ
+  - name: EPNUM
+    bit_range:
+    - 14
+    - 11
+    description: EPNUM
+  - name: EPDIR
+    bit_range:
+    - 15
+    - 15
+    description: EPDIR
+  - name: LSDEV
+    bit_range:
+    - 17
+    - 17
+    description: LSDEV
+  - name: EPTYP
+    bit_range:
+    - 19
+    - 18
+    description: EPTYP
+  - name: MCNT
+    bit_range:
+    - 21
+    - 20
+    description: MCNT
+  - name: DAD
+    bit_range:
+    - 28
+    - 22
+    description: DAD
+  - name: ODDFRM
+    bit_range:
+    - 29
+    - 29
+    description: ODDFRM
+  - name: CHDIS
+    bit_range:
+    - 30
+    - 30
+    description: CHDIS
+  - name: CHENA
+    bit_range:
+    - 31
+    - 31
+    description: CHENA
+  side_effects: null
+- id: HCINT4
+  address_offset: 1416
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRC
+    bit_range:
+    - 0
+    - 0
+    description: XFRC
+  - name: CHH
+    bit_range:
+    - 1
+    - 1
+    description: CHH
+  - name: STALL
+    bit_range:
+    - 3
+    - 3
+    description: STALL
+  - name: NAK
+    bit_range:
+    - 4
+    - 4
+    description: NAK
+  - name: ACK
+    bit_range:
+    - 5
+    - 5
+    description: ACK
+  - name: TXERR
+    bit_range:
+    - 7
+    - 7
+    description: TXERR
+  - name: BBERR
+    bit_range:
+    - 8
+    - 8
+    description: BBERR
+  - name: FRMOR
+    bit_range:
+    - 9
+    - 9
+    description: FRMOR
+  - name: DTERR
+    bit_range:
+    - 10
+    - 10
+    description: DTERR
+  side_effects: null
+- id: HCINTMSK4
+  address_offset: 1420
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRCM
+    bit_range:
+    - 0
+    - 0
+    description: XFRCM
+  - name: CHHM
+    bit_range:
+    - 1
+    - 1
+    description: CHHM
+  - name: STALLM
+    bit_range:
+    - 3
+    - 3
+    description: STALLM
+  - name: NAKM
+    bit_range:
+    - 4
+    - 4
+    description: NAKM
+  - name: ACKM
+    bit_range:
+    - 5
+    - 5
+    description: ACKM
+  - name: TXERRM
+    bit_range:
+    - 7
+    - 7
+    description: TXERRM
+  - name: BBERRM
+    bit_range:
+    - 8
+    - 8
+    description: BBERRM
+  - name: FRMORM
+    bit_range:
+    - 9
+    - 9
+    description: FRMORM
+  - name: DTERRM
+    bit_range:
+    - 10
+    - 10
+    description: DTERRM
+  side_effects: null
+- id: HCTSIZ4
+  address_offset: 1424
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRSIZ
+    bit_range:
+    - 18
+    - 0
+    description: XFRSIZ
+  - name: PKTCNT
+    bit_range:
+    - 28
+    - 19
+    description: PKTCNT
+  - name: DPID
+    bit_range:
+    - 30
+    - 29
+    description: DPID
+  - name: DOPNG
+    bit_range:
+    - 31
+    - 31
+    description: DOPNG
+  side_effects: null
+- id: HCCHAR5
+  address_offset: 1440
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MPSIZ
+    bit_range:
+    - 10
+    - 0
+    description: MPSIZ
+  - name: EPNUM
+    bit_range:
+    - 14
+    - 11
+    description: EPNUM
+  - name: EPDIR
+    bit_range:
+    - 15
+    - 15
+    description: EPDIR
+  - name: LSDEV
+    bit_range:
+    - 17
+    - 17
+    description: LSDEV
+  - name: EPTYP
+    bit_range:
+    - 19
+    - 18
+    description: EPTYP
+  - name: MCNT
+    bit_range:
+    - 21
+    - 20
+    description: MCNT
+  - name: DAD
+    bit_range:
+    - 28
+    - 22
+    description: DAD
+  - name: ODDFRM
+    bit_range:
+    - 29
+    - 29
+    description: ODDFRM
+  - name: CHDIS
+    bit_range:
+    - 30
+    - 30
+    description: CHDIS
+  - name: CHENA
+    bit_range:
+    - 31
+    - 31
+    description: CHENA
+  side_effects: null
+- id: HCINT5
+  address_offset: 1448
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRC
+    bit_range:
+    - 0
+    - 0
+    description: XFRC
+  - name: CHH
+    bit_range:
+    - 1
+    - 1
+    description: CHH
+  - name: STALL
+    bit_range:
+    - 3
+    - 3
+    description: STALL
+  - name: NAK
+    bit_range:
+    - 4
+    - 4
+    description: NAK
+  - name: ACK
+    bit_range:
+    - 5
+    - 5
+    description: ACK
+  - name: TXERR
+    bit_range:
+    - 7
+    - 7
+    description: TXERR
+  - name: BBERR
+    bit_range:
+    - 8
+    - 8
+    description: BBERR
+  - name: FRMOR
+    bit_range:
+    - 9
+    - 9
+    description: FRMOR
+  - name: DTERR
+    bit_range:
+    - 10
+    - 10
+    description: DTERR
+  side_effects: null
+- id: HCINTMSK5
+  address_offset: 1452
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRCM
+    bit_range:
+    - 0
+    - 0
+    description: XFRCM
+  - name: CHHM
+    bit_range:
+    - 1
+    - 1
+    description: CHHM
+  - name: STALLM
+    bit_range:
+    - 3
+    - 3
+    description: STALLM
+  - name: NAKM
+    bit_range:
+    - 4
+    - 4
+    description: NAKM
+  - name: ACKM
+    bit_range:
+    - 5
+    - 5
+    description: ACKM
+  - name: TXERRM
+    bit_range:
+    - 7
+    - 7
+    description: TXERRM
+  - name: BBERRM
+    bit_range:
+    - 8
+    - 8
+    description: BBERRM
+  - name: FRMORM
+    bit_range:
+    - 9
+    - 9
+    description: FRMORM
+  - name: DTERRM
+    bit_range:
+    - 10
+    - 10
+    description: DTERRM
+  side_effects: null
+- id: HCTSIZ5
+  address_offset: 1456
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRSIZ
+    bit_range:
+    - 18
+    - 0
+    description: XFRSIZ
+  - name: PKTCNT
+    bit_range:
+    - 28
+    - 19
+    description: PKTCNT
+  - name: DPID
+    bit_range:
+    - 30
+    - 29
+    description: DPID
+  - name: DOPNG
+    bit_range:
+    - 31
+    - 31
+    description: DOPNG
+  side_effects: null
+- id: HCCHAR6
+  address_offset: 1472
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MPSIZ
+    bit_range:
+    - 10
+    - 0
+    description: MPSIZ
+  - name: EPNUM
+    bit_range:
+    - 14
+    - 11
+    description: EPNUM
+  - name: EPDIR
+    bit_range:
+    - 15
+    - 15
+    description: EPDIR
+  - name: LSDEV
+    bit_range:
+    - 17
+    - 17
+    description: LSDEV
+  - name: EPTYP
+    bit_range:
+    - 19
+    - 18
+    description: EPTYP
+  - name: MCNT
+    bit_range:
+    - 21
+    - 20
+    description: MCNT
+  - name: DAD
+    bit_range:
+    - 28
+    - 22
+    description: DAD
+  - name: ODDFRM
+    bit_range:
+    - 29
+    - 29
+    description: ODDFRM
+  - name: CHDIS
+    bit_range:
+    - 30
+    - 30
+    description: CHDIS
+  - name: CHENA
+    bit_range:
+    - 31
+    - 31
+    description: CHENA
+  side_effects: null
+- id: HCINT6
+  address_offset: 1480
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRC
+    bit_range:
+    - 0
+    - 0
+    description: XFRC
+  - name: CHH
+    bit_range:
+    - 1
+    - 1
+    description: CHH
+  - name: STALL
+    bit_range:
+    - 3
+    - 3
+    description: STALL
+  - name: NAK
+    bit_range:
+    - 4
+    - 4
+    description: NAK
+  - name: ACK
+    bit_range:
+    - 5
+    - 5
+    description: ACK
+  - name: TXERR
+    bit_range:
+    - 7
+    - 7
+    description: TXERR
+  - name: BBERR
+    bit_range:
+    - 8
+    - 8
+    description: BBERR
+  - name: FRMOR
+    bit_range:
+    - 9
+    - 9
+    description: FRMOR
+  - name: DTERR
+    bit_range:
+    - 10
+    - 10
+    description: DTERR
+  side_effects: null
+- id: HCINTMSK6
+  address_offset: 1484
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRCM
+    bit_range:
+    - 0
+    - 0
+    description: XFRCM
+  - name: CHHM
+    bit_range:
+    - 1
+    - 1
+    description: CHHM
+  - name: STALLM
+    bit_range:
+    - 3
+    - 3
+    description: STALLM
+  - name: NAKM
+    bit_range:
+    - 4
+    - 4
+    description: NAKM
+  - name: ACKM
+    bit_range:
+    - 5
+    - 5
+    description: ACKM
+  - name: TXERRM
+    bit_range:
+    - 7
+    - 7
+    description: TXERRM
+  - name: BBERRM
+    bit_range:
+    - 8
+    - 8
+    description: BBERRM
+  - name: FRMORM
+    bit_range:
+    - 9
+    - 9
+    description: FRMORM
+  - name: DTERRM
+    bit_range:
+    - 10
+    - 10
+    description: DTERRM
+  side_effects: null
+- id: HCTSIZ6
+  address_offset: 1488
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRSIZ
+    bit_range:
+    - 18
+    - 0
+    description: XFRSIZ
+  - name: PKTCNT
+    bit_range:
+    - 28
+    - 19
+    description: PKTCNT
+  - name: DPID
+    bit_range:
+    - 30
+    - 29
+    description: DPID
+  - name: DOPNG
+    bit_range:
+    - 31
+    - 31
+    description: DOPNG
+  side_effects: null
+- id: HCCHAR7
+  address_offset: 1504
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MPSIZ
+    bit_range:
+    - 10
+    - 0
+    description: MPSIZ
+  - name: EPNUM
+    bit_range:
+    - 14
+    - 11
+    description: EPNUM
+  - name: EPDIR
+    bit_range:
+    - 15
+    - 15
+    description: EPDIR
+  - name: LSDEV
+    bit_range:
+    - 17
+    - 17
+    description: LSDEV
+  - name: EPTYP
+    bit_range:
+    - 19
+    - 18
+    description: EPTYP
+  - name: MCNT
+    bit_range:
+    - 21
+    - 20
+    description: MCNT
+  - name: DAD
+    bit_range:
+    - 28
+    - 22
+    description: DAD
+  - name: ODDFRM
+    bit_range:
+    - 29
+    - 29
+    description: ODDFRM
+  - name: CHDIS
+    bit_range:
+    - 30
+    - 30
+    description: CHDIS
+  - name: CHENA
+    bit_range:
+    - 31
+    - 31
+    description: CHENA
+  side_effects: null
+- id: HCINT7
+  address_offset: 1512
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRC
+    bit_range:
+    - 0
+    - 0
+    description: XFRC
+  - name: CHH
+    bit_range:
+    - 1
+    - 1
+    description: CHH
+  - name: STALL
+    bit_range:
+    - 3
+    - 3
+    description: STALL
+  - name: NAK
+    bit_range:
+    - 4
+    - 4
+    description: NAK
+  - name: ACK
+    bit_range:
+    - 5
+    - 5
+    description: ACK
+  - name: TXERR
+    bit_range:
+    - 7
+    - 7
+    description: TXERR
+  - name: BBERR
+    bit_range:
+    - 8
+    - 8
+    description: BBERR
+  - name: FRMOR
+    bit_range:
+    - 9
+    - 9
+    description: FRMOR
+  - name: DTERR
+    bit_range:
+    - 10
+    - 10
+    description: DTERR
+  side_effects: null
+- id: HCINTMSK7
+  address_offset: 1516
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRCM
+    bit_range:
+    - 0
+    - 0
+    description: XFRCM
+  - name: CHHM
+    bit_range:
+    - 1
+    - 1
+    description: CHHM
+  - name: STALLM
+    bit_range:
+    - 3
+    - 3
+    description: STALLM
+  - name: NAKM
+    bit_range:
+    - 4
+    - 4
+    description: NAKM
+  - name: ACKM
+    bit_range:
+    - 5
+    - 5
+    description: ACKM
+  - name: TXERRM
+    bit_range:
+    - 7
+    - 7
+    description: TXERRM
+  - name: BBERRM
+    bit_range:
+    - 8
+    - 8
+    description: BBERRM
+  - name: FRMORM
+    bit_range:
+    - 9
+    - 9
+    description: FRMORM
+  - name: DTERRM
+    bit_range:
+    - 10
+    - 10
+    description: DTERRM
+  side_effects: null
+- id: HCTSIZ7
+  address_offset: 1520
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRSIZ
+    bit_range:
+    - 18
+    - 0
+    description: XFRSIZ
+  - name: PKTCNT
+    bit_range:
+    - 28
+    - 19
+    description: PKTCNT
+  - name: DPID
+    bit_range:
+    - 30
+    - 29
+    description: DPID
+  - name: DOPNG
+    bit_range:
+    - 31
+    - 31
+    description: DOPNG
+  side_effects: null
+- id: HCCHAR8
+  address_offset: 1536
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MPSIZ
+    bit_range:
+    - 10
+    - 0
+    description: MPSIZ
+  - name: EPNUM
+    bit_range:
+    - 14
+    - 11
+    description: EPNUM
+  - name: EPDIR
+    bit_range:
+    - 15
+    - 15
+    description: EPDIR
+  - name: LSDEV
+    bit_range:
+    - 17
+    - 17
+    description: LSDEV
+  - name: EPTYP
+    bit_range:
+    - 19
+    - 18
+    description: EPTYP
+  - name: MCNT
+    bit_range:
+    - 21
+    - 20
+    description: MCNT
+  - name: DAD
+    bit_range:
+    - 28
+    - 22
+    description: DAD
+  - name: ODDFRM
+    bit_range:
+    - 29
+    - 29
+    description: ODDFRM
+  - name: CHDIS
+    bit_range:
+    - 30
+    - 30
+    description: CHDIS
+  - name: CHENA
+    bit_range:
+    - 31
+    - 31
+    description: CHENA
+  side_effects: null
+- id: HCINT8
+  address_offset: 1544
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRC
+    bit_range:
+    - 0
+    - 0
+    description: XFRC
+  - name: CHH
+    bit_range:
+    - 1
+    - 1
+    description: CHH
+  - name: STALL
+    bit_range:
+    - 3
+    - 3
+    description: STALL
+  - name: NAK
+    bit_range:
+    - 4
+    - 4
+    description: NAK
+  - name: ACK
+    bit_range:
+    - 5
+    - 5
+    description: ACK
+  - name: TXERR
+    bit_range:
+    - 7
+    - 7
+    description: TXERR
+  - name: BBERR
+    bit_range:
+    - 8
+    - 8
+    description: BBERR
+  - name: FRMOR
+    bit_range:
+    - 9
+    - 9
+    description: FRMOR
+  - name: DTERR
+    bit_range:
+    - 10
+    - 10
+    description: DTERR
+  side_effects: null
+- id: HCINTMSK8
+  address_offset: 1548
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRCM
+    bit_range:
+    - 0
+    - 0
+    description: XFRCM
+  - name: CHHM
+    bit_range:
+    - 1
+    - 1
+    description: CHHM
+  - name: STALLM
+    bit_range:
+    - 3
+    - 3
+    description: STALLM
+  - name: NAKM
+    bit_range:
+    - 4
+    - 4
+    description: NAKM
+  - name: ACKM
+    bit_range:
+    - 5
+    - 5
+    description: ACKM
+  - name: TXERRM
+    bit_range:
+    - 7
+    - 7
+    description: TXERRM
+  - name: BBERRM
+    bit_range:
+    - 8
+    - 8
+    description: BBERRM
+  - name: FRMORM
+    bit_range:
+    - 9
+    - 9
+    description: FRMORM
+  - name: DTERRM
+    bit_range:
+    - 10
+    - 10
+    description: DTERRM
+  side_effects: null
+- id: HCTSIZ8
+  address_offset: 1552
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRSIZ
+    bit_range:
+    - 18
+    - 0
+    description: XFRSIZ
+  - name: PKTCNT
+    bit_range:
+    - 28
+    - 19
+    description: PKTCNT
+  - name: DPID
+    bit_range:
+    - 30
+    - 29
+    description: DPID
+  - name: DOPNG
+    bit_range:
+    - 31
+    - 31
+    description: DOPNG
+  side_effects: null
+- id: HCCHAR9
+  address_offset: 1568
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MPSIZ
+    bit_range:
+    - 10
+    - 0
+    description: MPSIZ
+  - name: EPNUM
+    bit_range:
+    - 14
+    - 11
+    description: EPNUM
+  - name: EPDIR
+    bit_range:
+    - 15
+    - 15
+    description: EPDIR
+  - name: LSDEV
+    bit_range:
+    - 17
+    - 17
+    description: LSDEV
+  - name: EPTYP
+    bit_range:
+    - 19
+    - 18
+    description: EPTYP
+  - name: MCNT
+    bit_range:
+    - 21
+    - 20
+    description: MCNT
+  - name: DAD
+    bit_range:
+    - 28
+    - 22
+    description: DAD
+  - name: ODDFRM
+    bit_range:
+    - 29
+    - 29
+    description: ODDFRM
+  - name: CHDIS
+    bit_range:
+    - 30
+    - 30
+    description: CHDIS
+  - name: CHENA
+    bit_range:
+    - 31
+    - 31
+    description: CHENA
+  side_effects: null
+- id: HCINT9
+  address_offset: 1576
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRC
+    bit_range:
+    - 0
+    - 0
+    description: XFRC
+  - name: CHH
+    bit_range:
+    - 1
+    - 1
+    description: CHH
+  - name: STALL
+    bit_range:
+    - 3
+    - 3
+    description: STALL
+  - name: NAK
+    bit_range:
+    - 4
+    - 4
+    description: NAK
+  - name: ACK
+    bit_range:
+    - 5
+    - 5
+    description: ACK
+  - name: TXERR
+    bit_range:
+    - 7
+    - 7
+    description: TXERR
+  - name: BBERR
+    bit_range:
+    - 8
+    - 8
+    description: BBERR
+  - name: FRMOR
+    bit_range:
+    - 9
+    - 9
+    description: FRMOR
+  - name: DTERR
+    bit_range:
+    - 10
+    - 10
+    description: DTERR
+  side_effects: null
+- id: HCINTMSK9
+  address_offset: 1580
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRCM
+    bit_range:
+    - 0
+    - 0
+    description: XFRCM
+  - name: CHHM
+    bit_range:
+    - 1
+    - 1
+    description: CHHM
+  - name: STALLM
+    bit_range:
+    - 3
+    - 3
+    description: STALLM
+  - name: NAKM
+    bit_range:
+    - 4
+    - 4
+    description: NAKM
+  - name: ACKM
+    bit_range:
+    - 5
+    - 5
+    description: ACKM
+  - name: TXERRM
+    bit_range:
+    - 7
+    - 7
+    description: TXERRM
+  - name: BBERRM
+    bit_range:
+    - 8
+    - 8
+    description: BBERRM
+  - name: FRMORM
+    bit_range:
+    - 9
+    - 9
+    description: FRMORM
+  - name: DTERRM
+    bit_range:
+    - 10
+    - 10
+    description: DTERRM
+  side_effects: null
+- id: HCTSIZ9
+  address_offset: 1584
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRSIZ
+    bit_range:
+    - 18
+    - 0
+    description: XFRSIZ
+  - name: PKTCNT
+    bit_range:
+    - 28
+    - 19
+    description: PKTCNT
+  - name: DPID
+    bit_range:
+    - 30
+    - 29
+    description: DPID
+  - name: DOPNG
+    bit_range:
+    - 31
+    - 31
+    description: DOPNG
+  side_effects: null
+- id: HCCHAR10
+  address_offset: 1600
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MPSIZ
+    bit_range:
+    - 10
+    - 0
+    description: MPSIZ
+  - name: EPNUM
+    bit_range:
+    - 14
+    - 11
+    description: EPNUM
+  - name: EPDIR
+    bit_range:
+    - 15
+    - 15
+    description: EPDIR
+  - name: LSDEV
+    bit_range:
+    - 17
+    - 17
+    description: LSDEV
+  - name: EPTYP
+    bit_range:
+    - 19
+    - 18
+    description: EPTYP
+  - name: MCNT
+    bit_range:
+    - 21
+    - 20
+    description: MCNT
+  - name: DAD
+    bit_range:
+    - 28
+    - 22
+    description: DAD
+  - name: ODDFRM
+    bit_range:
+    - 29
+    - 29
+    description: ODDFRM
+  - name: CHDIS
+    bit_range:
+    - 30
+    - 30
+    description: CHDIS
+  - name: CHENA
+    bit_range:
+    - 31
+    - 31
+    description: CHENA
+  side_effects: null
+- id: HCINT10
+  address_offset: 1608
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRC
+    bit_range:
+    - 0
+    - 0
+    description: XFRC
+  - name: CHH
+    bit_range:
+    - 1
+    - 1
+    description: CHH
+  - name: STALL
+    bit_range:
+    - 3
+    - 3
+    description: STALL
+  - name: NAK
+    bit_range:
+    - 4
+    - 4
+    description: NAK
+  - name: ACK
+    bit_range:
+    - 5
+    - 5
+    description: ACK
+  - name: TXERR
+    bit_range:
+    - 7
+    - 7
+    description: TXERR
+  - name: BBERR
+    bit_range:
+    - 8
+    - 8
+    description: BBERR
+  - name: FRMOR
+    bit_range:
+    - 9
+    - 9
+    description: FRMOR
+  - name: DTERR
+    bit_range:
+    - 10
+    - 10
+    description: DTERR
+  side_effects: null
+- id: HCINTMSK10
+  address_offset: 1612
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRCM
+    bit_range:
+    - 0
+    - 0
+    description: XFRCM
+  - name: CHHM
+    bit_range:
+    - 1
+    - 1
+    description: CHHM
+  - name: STALLM
+    bit_range:
+    - 3
+    - 3
+    description: STALLM
+  - name: NAKM
+    bit_range:
+    - 4
+    - 4
+    description: NAKM
+  - name: ACKM
+    bit_range:
+    - 5
+    - 5
+    description: ACKM
+  - name: TXERRM
+    bit_range:
+    - 7
+    - 7
+    description: TXERRM
+  - name: BBERRM
+    bit_range:
+    - 8
+    - 8
+    description: BBERRM
+  - name: FRMORM
+    bit_range:
+    - 9
+    - 9
+    description: FRMORM
+  - name: DTERRM
+    bit_range:
+    - 10
+    - 10
+    description: DTERRM
+  side_effects: null
+- id: HCTSIZ10
+  address_offset: 1616
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRSIZ
+    bit_range:
+    - 18
+    - 0
+    description: XFRSIZ
+  - name: PKTCNT
+    bit_range:
+    - 28
+    - 19
+    description: PKTCNT
+  - name: DPID
+    bit_range:
+    - 30
+    - 29
+    description: DPID
+  - name: DOPNG
+    bit_range:
+    - 31
+    - 31
+    description: DOPNG
+  side_effects: null
+- id: HCCHAR11
+  address_offset: 1632
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MPSIZ
+    bit_range:
+    - 10
+    - 0
+    description: MPSIZ
+  - name: EPNUM
+    bit_range:
+    - 14
+    - 11
+    description: EPNUM
+  - name: EPDIR
+    bit_range:
+    - 15
+    - 15
+    description: EPDIR
+  - name: LSDEV
+    bit_range:
+    - 17
+    - 17
+    description: LSDEV
+  - name: EPTYP
+    bit_range:
+    - 19
+    - 18
+    description: EPTYP
+  - name: MCNT
+    bit_range:
+    - 21
+    - 20
+    description: MCNT
+  - name: DAD
+    bit_range:
+    - 28
+    - 22
+    description: DAD
+  - name: ODDFRM
+    bit_range:
+    - 29
+    - 29
+    description: ODDFRM
+  - name: CHDIS
+    bit_range:
+    - 30
+    - 30
+    description: CHDIS
+  - name: CHENA
+    bit_range:
+    - 31
+    - 31
+    description: CHENA
+  side_effects: null
+- id: HCINT11
+  address_offset: 1640
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRC
+    bit_range:
+    - 0
+    - 0
+    description: XFRC
+  - name: CHH
+    bit_range:
+    - 1
+    - 1
+    description: CHH
+  - name: STALL
+    bit_range:
+    - 3
+    - 3
+    description: STALL
+  - name: NAK
+    bit_range:
+    - 4
+    - 4
+    description: NAK
+  - name: ACK
+    bit_range:
+    - 5
+    - 5
+    description: ACK
+  - name: TXERR
+    bit_range:
+    - 7
+    - 7
+    description: TXERR
+  - name: BBERR
+    bit_range:
+    - 8
+    - 8
+    description: BBERR
+  - name: FRMOR
+    bit_range:
+    - 9
+    - 9
+    description: FRMOR
+  - name: DTERR
+    bit_range:
+    - 10
+    - 10
+    description: DTERR
+  side_effects: null
+- id: HCINTMSK11
+  address_offset: 1644
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRCM
+    bit_range:
+    - 0
+    - 0
+    description: XFRCM
+  - name: CHHM
+    bit_range:
+    - 1
+    - 1
+    description: CHHM
+  - name: STALLM
+    bit_range:
+    - 3
+    - 3
+    description: STALLM
+  - name: NAKM
+    bit_range:
+    - 4
+    - 4
+    description: NAKM
+  - name: ACKM
+    bit_range:
+    - 5
+    - 5
+    description: ACKM
+  - name: TXERRM
+    bit_range:
+    - 7
+    - 7
+    description: TXERRM
+  - name: BBERRM
+    bit_range:
+    - 8
+    - 8
+    description: BBERRM
+  - name: FRMORM
+    bit_range:
+    - 9
+    - 9
+    description: FRMORM
+  - name: DTERRM
+    bit_range:
+    - 10
+    - 10
+    description: DTERRM
+  side_effects: null
+- id: HCTSIZ11
+  address_offset: 1648
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRSIZ
+    bit_range:
+    - 18
+    - 0
+    description: XFRSIZ
+  - name: PKTCNT
+    bit_range:
+    - 28
+    - 19
+    description: PKTCNT
+  - name: DPID
+    bit_range:
+    - 30
+    - 29
+    description: DPID
+  - name: DOPNG
+    bit_range:
+    - 31
+    - 31
+    description: DOPNG
+  side_effects: null
+- id: DCFG
+  address_offset: 2048
+  size: 32
+  access: READ_WRITE
+  reset_value: 35651584
+  fields:
+  - name: DSPD
+    bit_range:
+    - 1
+    - 0
+    description: DSPD
+  - name: NZLSOHSK
+    bit_range:
+    - 2
+    - 2
+    description: NZLSOHSK
+  - name: DAD
+    bit_range:
+    - 10
+    - 4
+    description: DAD
+  - name: PFIVL
+    bit_range:
+    - 12
+    - 11
+    description: PFIVL
+  - name: ERRATIM
+    bit_range:
+    - 15
+    - 15
+    description: ERRATIM
+  side_effects: null
+- id: DCTL
+  address_offset: 2052
+  size: 32
+  access: READ_WRITE
+  reset_value: 2
+  fields:
+  - name: RWUSIG
+    bit_range:
+    - 0
+    - 0
+    description: RWUSIG
+  - name: SDIS
+    bit_range:
+    - 1
+    - 1
+    description: SDIS
+  - name: GINSTS
+    bit_range:
+    - 2
+    - 2
+    description: GINSTS
+  - name: GONSTS
+    bit_range:
+    - 3
+    - 3
+    description: GONSTS
+  - name: TCTL
+    bit_range:
+    - 6
+    - 4
+    description: TCTL
+  - name: SGINAK
+    bit_range:
+    - 7
+    - 7
+    description: SGINAK
+  - name: CGINAK
+    bit_range:
+    - 8
+    - 8
+    description: CGINAK
+  - name: SGONAK
+    bit_range:
+    - 9
+    - 9
+    description: SGONAK
+  - name: CGONAK
+    bit_range:
+    - 10
+    - 10
+    description: CGONAK
+  - name: POPRGDNE
+    bit_range:
+    - 11
+    - 11
+    description: POPRGDNE
+  - name: DSBESLRJCT
+    bit_range:
+    - 18
+    - 18
+    description: DSBESLRJCT
+  side_effects: null
+- id: DSTS
+  address_offset: 2056
+  size: 32
+  access: READ_ONLY
+  reset_value: 16
+  fields:
+  - name: SUSPSTS
+    bit_range:
+    - 0
+    - 0
+    description: SUSPSTS
+  - name: ENUMSPD
+    bit_range:
+    - 2
+    - 1
+    description: ENUMSPD
+  - name: EERR
+    bit_range:
+    - 3
+    - 3
+    description: EERR
+  - name: FNSOF
+    bit_range:
+    - 21
+    - 8
+    description: FNSOF
+  - name: DEVLNSTS
+    bit_range:
+    - 23
+    - 22
+    description: DEVLNSTS
+  side_effects: null
+- id: DIEPMSK
+  address_offset: 2064
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRCM
+    bit_range:
+    - 0
+    - 0
+    description: XFRCM
+  - name: EPDM
+    bit_range:
+    - 1
+    - 1
+    description: EPDM
+  - name: TOM
+    bit_range:
+    - 3
+    - 3
+    description: TOM
+  - name: ITTXFEMSK
+    bit_range:
+    - 4
+    - 4
+    description: ITTXFEMSK
+  - name: INEPNMM
+    bit_range:
+    - 5
+    - 5
+    description: INEPNMM
+  - name: INEPNEM
+    bit_range:
+    - 6
+    - 6
+    description: INEPNEM
+  - name: NAKM
+    bit_range:
+    - 13
+    - 13
+    description: NAKM
+  side_effects: null
+- id: DOEPMSK
+  address_offset: 2068
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRCM
+    bit_range:
+    - 0
+    - 0
+    description: XFRCM
+  - name: EPDM
+    bit_range:
+    - 1
+    - 1
+    description: EPDM
+  - name: STUPM
+    bit_range:
+    - 3
+    - 3
+    description: STUPM
+  - name: OTEPDM
+    bit_range:
+    - 4
+    - 4
+    description: OTEPDM
+  - name: STSPHSRXM
+    bit_range:
+    - 5
+    - 5
+    description: STSPHSRXM
+  - name: OUTPKTERRM
+    bit_range:
+    - 8
+    - 8
+    description: OUTPKTERRM
+  - name: BERRM
+    bit_range:
+    - 12
+    - 12
+    description: BERRM
+  - name: NAKMSK
+    bit_range:
+    - 13
+    - 13
+    description: NAKMSK
+  side_effects: null
+- id: DAINT
+  address_offset: 2072
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: IEPINT
+    bit_range:
+    - 15
+    - 0
+    description: IEPINT
+  - name: OEPINT
+    bit_range:
+    - 31
+    - 16
+    description: OEPINT
+  side_effects: null
+- id: DAINTMSK
+  address_offset: 2076
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IEPM
+    bit_range:
+    - 15
+    - 0
+    description: IEPM
+  - name: OEPM
+    bit_range:
+    - 31
+    - 16
+    description: OEPM
+  side_effects: null
+- id: DVBUSDIS
+  address_offset: 2088
+  size: 32
+  access: READ_WRITE
+  reset_value: 6103
+  fields:
+  - name: VBUSDT
+    bit_range:
+    - 15
+    - 0
+    description: VBUSDT
+  side_effects: null
+- id: DVBUSPULSE
+  address_offset: 2092
+  size: 32
+  access: READ_WRITE
+  reset_value: 1464
+  fields:
+  - name: DVBUSP
+    bit_range:
+    - 15
+    - 0
+    description: DVBUSP
+  side_effects: null
+- id: DIEPEMPMSK
+  address_offset: 2100
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INEPTXFEM
+    bit_range:
+    - 15
+    - 0
+    description: INEPTXFEM
+  side_effects: null
+- id: DIEPCTL0
+  address_offset: 2304
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MPSIZ
+    bit_range:
+    - 1
+    - 0
+    description: MPSIZ
+  - name: USBAEP
+    bit_range:
+    - 15
+    - 15
+    description: USBAEP
+  - name: NAKSTS
+    bit_range:
+    - 17
+    - 17
+    description: NAKSTS
+  - name: EPTYP
+    bit_range:
+    - 19
+    - 18
+    description: EPTYP
+  - name: STALL
+    bit_range:
+    - 21
+    - 21
+    description: STALL
+  - name: TXFNUM
+    bit_range:
+    - 25
+    - 22
+    description: TXFNUM
+  - name: CNAK
+    bit_range:
+    - 26
+    - 26
+    description: CNAK
+  - name: SNAK
+    bit_range:
+    - 27
+    - 27
+    description: SNAK
+  - name: EPDIS
+    bit_range:
+    - 30
+    - 30
+    description: EPDIS
+  - name: EPENA
+    bit_range:
+    - 31
+    - 31
+    description: EPENA
+  side_effects: null
+- id: DIEPINT0
+  address_offset: 2312
+  size: 32
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: XFRC
+    bit_range:
+    - 0
+    - 0
+    description: XFRC
+  - name: EPDISD
+    bit_range:
+    - 1
+    - 1
+    description: EPDISD
+  - name: TOC
+    bit_range:
+    - 3
+    - 3
+    description: TOC
+  - name: ITTXFE
+    bit_range:
+    - 4
+    - 4
+    description: ITTXFE
+  - name: INEPNM
+    bit_range:
+    - 5
+    - 5
+    description: INEPNM
+  - name: INEPNE
+    bit_range:
+    - 6
+    - 6
+    description: INEPNE
+  - name: TXFE
+    bit_range:
+    - 7
+    - 7
+    description: TXFE
+  - name: PKTDRPSTS
+    bit_range:
+    - 11
+    - 11
+    description: PKTDRPSTS
+  - name: NAK
+    bit_range:
+    - 13
+    - 13
+    description: NAK
+  side_effects: null
+- id: DIEPTSIZ0
+  address_offset: 2320
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRSIZ
+    bit_range:
+    - 6
+    - 0
+    description: XFRSIZ
+  - name: PKTCNT
+    bit_range:
+    - 20
+    - 19
+    description: PKTCNT
+  side_effects: null
+- id: DTXFSTS0
+  address_offset: 2328
+  size: 32
+  access: READ_ONLY
+  reset_value: 512
+  fields:
+  - name: INEPTFSAV
+    bit_range:
+    - 15
+    - 0
+    description: INEPTFSAV
+  side_effects: null
+- id: DIEPCTL1
+  address_offset: 2336
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MPSIZ
+    bit_range:
+    - 10
+    - 0
+    description: MPSIZ
+  - name: USBAEP
+    bit_range:
+    - 15
+    - 15
+    description: USBAEP
+  - name: EONUM_DPIP
+    bit_range:
+    - 16
+    - 16
+    description: EONUM_DPIP
+  - name: NAKSTS
+    bit_range:
+    - 17
+    - 17
+    description: NAKSTS
+  - name: EPTYP
+    bit_range:
+    - 19
+    - 18
+    description: EPTYP
+  - name: STALL
+    bit_range:
+    - 21
+    - 21
+    description: STALL
+  - name: TXFNUM
+    bit_range:
+    - 25
+    - 22
+    description: TXFNUM
+  - name: CNAK
+    bit_range:
+    - 26
+    - 26
+    description: CNAK
+  - name: SNAK
+    bit_range:
+    - 27
+    - 27
+    description: SNAK
+  - name: SD0PID_SEVNFRM
+    bit_range:
+    - 28
+    - 28
+    description: SD0PID_SEVNFRM
+  - name: SODDFRM
+    bit_range:
+    - 29
+    - 29
+    description: SODDFRM
+  - name: EPDIS
+    bit_range:
+    - 30
+    - 30
+    description: EPDIS
+  - name: EPENA
+    bit_range:
+    - 31
+    - 31
+    description: EPENA
+  side_effects: null
+- id: DIEPINT1
+  address_offset: 2344
+  size: 32
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: XFRC
+    bit_range:
+    - 0
+    - 0
+    description: XFRC
+  - name: EPDISD
+    bit_range:
+    - 1
+    - 1
+    description: EPDISD
+  - name: TOC
+    bit_range:
+    - 3
+    - 3
+    description: TOC
+  - name: ITTXFE
+    bit_range:
+    - 4
+    - 4
+    description: ITTXFE
+  - name: INEPNM
+    bit_range:
+    - 5
+    - 5
+    description: INEPNM
+  - name: INEPNE
+    bit_range:
+    - 6
+    - 6
+    description: INEPNE
+  - name: TXFE
+    bit_range:
+    - 7
+    - 7
+    description: TXFE
+  - name: PKTDRPSTS
+    bit_range:
+    - 11
+    - 11
+    description: PKTDRPSTS
+  - name: NAK
+    bit_range:
+    - 13
+    - 13
+    description: NAK
+  side_effects: null
+- id: DIEPTSIZ1
+  address_offset: 2352
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRSIZ
+    bit_range:
+    - 18
+    - 0
+    description: XFRSIZ
+  - name: PKTCNT
+    bit_range:
+    - 28
+    - 19
+    description: PKTCNT
+  - name: MCNT
+    bit_range:
+    - 30
+    - 29
+    description: MCNT
+  side_effects: null
+- id: DTXFSTS1
+  address_offset: 2360
+  size: 32
+  access: READ_ONLY
+  reset_value: 512
+  fields:
+  - name: INEPTFSAV
+    bit_range:
+    - 15
+    - 0
+    description: INEPTFSAV
+  side_effects: null
+- id: DIEPCTL2
+  address_offset: 2368
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MPSIZ
+    bit_range:
+    - 10
+    - 0
+    description: MPSIZ
+  - name: USBAEP
+    bit_range:
+    - 15
+    - 15
+    description: USBAEP
+  - name: EONUM_DPIP
+    bit_range:
+    - 16
+    - 16
+    description: EONUM_DPIP
+  - name: NAKSTS
+    bit_range:
+    - 17
+    - 17
+    description: NAKSTS
+  - name: EPTYP
+    bit_range:
+    - 19
+    - 18
+    description: EPTYP
+  - name: STALL
+    bit_range:
+    - 21
+    - 21
+    description: STALL
+  - name: TXFNUM
+    bit_range:
+    - 25
+    - 22
+    description: TXFNUM
+  - name: CNAK
+    bit_range:
+    - 26
+    - 26
+    description: CNAK
+  - name: SNAK
+    bit_range:
+    - 27
+    - 27
+    description: SNAK
+  - name: SD0PID_SEVNFRM
+    bit_range:
+    - 28
+    - 28
+    description: SD0PID_SEVNFRM
+  - name: SODDFRM
+    bit_range:
+    - 29
+    - 29
+    description: SODDFRM
+  - name: EPDIS
+    bit_range:
+    - 30
+    - 30
+    description: EPDIS
+  - name: EPENA
+    bit_range:
+    - 31
+    - 31
+    description: EPENA
+  side_effects: null
+- id: DIEPINT2
+  address_offset: 2376
+  size: 32
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: XFRC
+    bit_range:
+    - 0
+    - 0
+    description: XFRC
+  - name: EPDISD
+    bit_range:
+    - 1
+    - 1
+    description: EPDISD
+  - name: TOC
+    bit_range:
+    - 3
+    - 3
+    description: TOC
+  - name: ITTXFE
+    bit_range:
+    - 4
+    - 4
+    description: ITTXFE
+  - name: INEPNM
+    bit_range:
+    - 5
+    - 5
+    description: INEPNM
+  - name: INEPNE
+    bit_range:
+    - 6
+    - 6
+    description: INEPNE
+  - name: TXFE
+    bit_range:
+    - 7
+    - 7
+    description: TXFE
+  - name: PKTDRPSTS
+    bit_range:
+    - 11
+    - 11
+    description: PKTDRPSTS
+  - name: NAK
+    bit_range:
+    - 13
+    - 13
+    description: NAK
+  side_effects: null
+- id: DIEPTSIZ2
+  address_offset: 2384
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRSIZ
+    bit_range:
+    - 18
+    - 0
+    description: XFRSIZ
+  - name: PKTCNT
+    bit_range:
+    - 28
+    - 19
+    description: PKTCNT
+  - name: MCNT
+    bit_range:
+    - 30
+    - 29
+    description: MCNT
+  side_effects: null
+- id: DTXFSTS2
+  address_offset: 2392
+  size: 32
+  access: READ_ONLY
+  reset_value: 512
+  fields:
+  - name: INEPTFSAV
+    bit_range:
+    - 15
+    - 0
+    description: INEPTFSAV
+  side_effects: null
+- id: DIEPCTL3
+  address_offset: 2400
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MPSIZ
+    bit_range:
+    - 10
+    - 0
+    description: MPSIZ
+  - name: USBAEP
+    bit_range:
+    - 15
+    - 15
+    description: USBAEP
+  - name: EONUM_DPIP
+    bit_range:
+    - 16
+    - 16
+    description: EONUM_DPIP
+  - name: NAKSTS
+    bit_range:
+    - 17
+    - 17
+    description: NAKSTS
+  - name: EPTYP
+    bit_range:
+    - 19
+    - 18
+    description: EPTYP
+  - name: STALL
+    bit_range:
+    - 21
+    - 21
+    description: STALL
+  - name: TXFNUM
+    bit_range:
+    - 25
+    - 22
+    description: TXFNUM
+  - name: CNAK
+    bit_range:
+    - 26
+    - 26
+    description: CNAK
+  - name: SNAK
+    bit_range:
+    - 27
+    - 27
+    description: SNAK
+  - name: SD0PID_SEVNFRM
+    bit_range:
+    - 28
+    - 28
+    description: SD0PID_SEVNFRM
+  - name: SODDFRM
+    bit_range:
+    - 29
+    - 29
+    description: SODDFRM
+  - name: EPDIS
+    bit_range:
+    - 30
+    - 30
+    description: EPDIS
+  - name: EPENA
+    bit_range:
+    - 31
+    - 31
+    description: EPENA
+  side_effects: null
+- id: DIEPINT3
+  address_offset: 2408
+  size: 32
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: XFRC
+    bit_range:
+    - 0
+    - 0
+    description: XFRC
+  - name: EPDISD
+    bit_range:
+    - 1
+    - 1
+    description: EPDISD
+  - name: TOC
+    bit_range:
+    - 3
+    - 3
+    description: TOC
+  - name: ITTXFE
+    bit_range:
+    - 4
+    - 4
+    description: ITTXFE
+  - name: INEPNM
+    bit_range:
+    - 5
+    - 5
+    description: INEPNM
+  - name: INEPNE
+    bit_range:
+    - 6
+    - 6
+    description: INEPNE
+  - name: TXFE
+    bit_range:
+    - 7
+    - 7
+    description: TXFE
+  - name: PKTDRPSTS
+    bit_range:
+    - 11
+    - 11
+    description: PKTDRPSTS
+  - name: NAK
+    bit_range:
+    - 13
+    - 13
+    description: NAK
+  side_effects: null
+- id: DIEPTSIZ3
+  address_offset: 2416
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRSIZ
+    bit_range:
+    - 18
+    - 0
+    description: XFRSIZ
+  - name: PKTCNT
+    bit_range:
+    - 28
+    - 19
+    description: PKTCNT
+  - name: MCNT
+    bit_range:
+    - 30
+    - 29
+    description: MCNT
+  side_effects: null
+- id: DTXFSTS3
+  address_offset: 2424
+  size: 32
+  access: READ_ONLY
+  reset_value: 512
+  fields:
+  - name: INEPTFSAV
+    bit_range:
+    - 15
+    - 0
+    description: INEPTFSAV
+  side_effects: null
+- id: DIEPCTL4
+  address_offset: 2432
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MPSIZ
+    bit_range:
+    - 10
+    - 0
+    description: MPSIZ
+  - name: USBAEP
+    bit_range:
+    - 15
+    - 15
+    description: USBAEP
+  - name: EONUM_DPIP
+    bit_range:
+    - 16
+    - 16
+    description: EONUM_DPIP
+  - name: NAKSTS
+    bit_range:
+    - 17
+    - 17
+    description: NAKSTS
+  - name: EPTYP
+    bit_range:
+    - 19
+    - 18
+    description: EPTYP
+  - name: STALL
+    bit_range:
+    - 21
+    - 21
+    description: STALL
+  - name: TXFNUM
+    bit_range:
+    - 25
+    - 22
+    description: TXFNUM
+  - name: CNAK
+    bit_range:
+    - 26
+    - 26
+    description: CNAK
+  - name: SNAK
+    bit_range:
+    - 27
+    - 27
+    description: SNAK
+  - name: SD0PID_SEVNFRM
+    bit_range:
+    - 28
+    - 28
+    description: SD0PID_SEVNFRM
+  - name: SODDFRM
+    bit_range:
+    - 29
+    - 29
+    description: SODDFRM
+  - name: EPDIS
+    bit_range:
+    - 30
+    - 30
+    description: EPDIS
+  - name: EPENA
+    bit_range:
+    - 31
+    - 31
+    description: EPENA
+  side_effects: null
+- id: DIEPINT4
+  address_offset: 2440
+  size: 32
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: XFRC
+    bit_range:
+    - 0
+    - 0
+    description: XFRC
+  - name: EPDISD
+    bit_range:
+    - 1
+    - 1
+    description: EPDISD
+  - name: TOC
+    bit_range:
+    - 3
+    - 3
+    description: TOC
+  - name: ITTXFE
+    bit_range:
+    - 4
+    - 4
+    description: ITTXFE
+  - name: INEPNM
+    bit_range:
+    - 5
+    - 5
+    description: INEPNM
+  - name: INEPNE
+    bit_range:
+    - 6
+    - 6
+    description: INEPNE
+  - name: TXFE
+    bit_range:
+    - 7
+    - 7
+    description: TXFE
+  - name: PKTDRPSTS
+    bit_range:
+    - 11
+    - 11
+    description: PKTDRPSTS
+  - name: NAK
+    bit_range:
+    - 13
+    - 13
+    description: NAK
+  side_effects: null
+- id: DIEPTSIZ4
+  address_offset: 2448
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRSIZ
+    bit_range:
+    - 18
+    - 0
+    description: XFRSIZ
+  - name: PKTCNT
+    bit_range:
+    - 28
+    - 19
+    description: PKTCNT
+  - name: MCNT
+    bit_range:
+    - 30
+    - 29
+    description: MCNT
+  side_effects: null
+- id: DTXFSTS4
+  address_offset: 2456
+  size: 32
+  access: READ_ONLY
+  reset_value: 512
+  fields:
+  - name: INEPTFSAV
+    bit_range:
+    - 15
+    - 0
+    description: INEPTFSAV
+  side_effects: null
+- id: DIEPCTL5
+  address_offset: 2464
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MPSIZ
+    bit_range:
+    - 10
+    - 0
+    description: MPSIZ
+  - name: USBAEP
+    bit_range:
+    - 15
+    - 15
+    description: USBAEP
+  - name: EONUM_DPIP
+    bit_range:
+    - 16
+    - 16
+    description: EONUM_DPIP
+  - name: NAKSTS
+    bit_range:
+    - 17
+    - 17
+    description: NAKSTS
+  - name: EPTYP
+    bit_range:
+    - 19
+    - 18
+    description: EPTYP
+  - name: STALL
+    bit_range:
+    - 21
+    - 21
+    description: STALL
+  - name: TXFNUM
+    bit_range:
+    - 25
+    - 22
+    description: TXFNUM
+  - name: CNAK
+    bit_range:
+    - 26
+    - 26
+    description: CNAK
+  - name: SNAK
+    bit_range:
+    - 27
+    - 27
+    description: SNAK
+  - name: SD0PID_SEVNFRM
+    bit_range:
+    - 28
+    - 28
+    description: SD0PID_SEVNFRM
+  - name: SODDFRM
+    bit_range:
+    - 29
+    - 29
+    description: SODDFRM
+  - name: EPDIS
+    bit_range:
+    - 30
+    - 30
+    description: EPDIS
+  - name: EPENA
+    bit_range:
+    - 31
+    - 31
+    description: EPENA
+  side_effects: null
+- id: DIEPINT5
+  address_offset: 2472
+  size: 32
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: XFRC
+    bit_range:
+    - 0
+    - 0
+    description: XFRC
+  - name: EPDISD
+    bit_range:
+    - 1
+    - 1
+    description: EPDISD
+  - name: TOC
+    bit_range:
+    - 3
+    - 3
+    description: TOC
+  - name: ITTXFE
+    bit_range:
+    - 4
+    - 4
+    description: ITTXFE
+  - name: INEPNM
+    bit_range:
+    - 5
+    - 5
+    description: INEPNM
+  - name: INEPNE
+    bit_range:
+    - 6
+    - 6
+    description: INEPNE
+  - name: TXFE
+    bit_range:
+    - 7
+    - 7
+    description: TXFE
+  - name: PKTDRPSTS
+    bit_range:
+    - 11
+    - 11
+    description: PKTDRPSTS
+  - name: NAK
+    bit_range:
+    - 13
+    - 13
+    description: NAK
+  side_effects: null
+- id: DIEPTSIZ5
+  address_offset: 2480
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRSIZ
+    bit_range:
+    - 18
+    - 0
+    description: XFRSIZ
+  - name: PKTCNT
+    bit_range:
+    - 28
+    - 19
+    description: PKTCNT
+  - name: MCNT
+    bit_range:
+    - 30
+    - 29
+    description: MCNT
+  side_effects: null
+- id: DTXFSTS5
+  address_offset: 2488
+  size: 32
+  access: READ_ONLY
+  reset_value: 512
+  fields:
+  - name: INEPTFSAV
+    bit_range:
+    - 15
+    - 0
+    description: INEPTFSAV
+  side_effects: null
+- id: DOEPCTL0
+  address_offset: 2816
+  size: 32
+  access: READ_WRITE
+  reset_value: 32768
+  fields:
+  - name: MPSIZ
+    bit_range:
+    - 1
+    - 0
+    description: MPSIZ
+  - name: USBAEP
+    bit_range:
+    - 15
+    - 15
+    description: USBAEP
+  - name: NAKSTS
+    bit_range:
+    - 17
+    - 17
+    description: NAKSTS
+  - name: EPTYP
+    bit_range:
+    - 19
+    - 18
+    description: EPTYP
+  - name: SNPM
+    bit_range:
+    - 20
+    - 20
+    description: SNPM
+  - name: STALL
+    bit_range:
+    - 21
+    - 21
+    description: STALL
+  - name: CNAK
+    bit_range:
+    - 26
+    - 26
+    description: CNAK
+  - name: SNAK
+    bit_range:
+    - 27
+    - 27
+    description: SNAK
+  - name: EPDIS
+    bit_range:
+    - 30
+    - 30
+    description: EPDIS
+  - name: EPENA
+    bit_range:
+    - 31
+    - 31
+    description: EPENA
+  side_effects: null
+- id: DOEPINT0
+  address_offset: 2824
+  size: 32
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: XFRC
+    bit_range:
+    - 0
+    - 0
+    description: XFRC
+  - name: EPDISD
+    bit_range:
+    - 1
+    - 1
+    description: EPDISD
+  - name: AHBERR
+    bit_range:
+    - 2
+    - 2
+    description: AHBERR
+  - name: STUP
+    bit_range:
+    - 3
+    - 3
+    description: STUP
+  - name: OTEPDIS
+    bit_range:
+    - 4
+    - 4
+    description: OTEPDIS
+  - name: STSPHSRX
+    bit_range:
+    - 5
+    - 5
+    description: STSPHSRX
+  - name: B2BSTUP
+    bit_range:
+    - 6
+    - 6
+    description: B2BSTUP
+  - name: OUTPKTERR
+    bit_range:
+    - 8
+    - 8
+    description: OUTPKTERR
+  - name: BNA
+    bit_range:
+    - 9
+    - 9
+    description: BNA
+  - name: BERR
+    bit_range:
+    - 12
+    - 12
+    description: BERR
+  - name: NAK
+    bit_range:
+    - 13
+    - 13
+    description: NAK
+  - name: NYET
+    bit_range:
+    - 14
+    - 14
+    description: NYET
+  - name: STPKTRX
+    bit_range:
+    - 15
+    - 15
+    description: STPKTRX
+  side_effects: null
+- id: DOEPTSIZ0
+  address_offset: 2832
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRSIZ
+    bit_range:
+    - 6
+    - 0
+    description: XFRSIZ
+  - name: PKTCNT
+    bit_range:
+    - 19
+    - 19
+    description: PKTCNT
+  - name: STUPCNT
+    bit_range:
+    - 30
+    - 29
+    description: STUPCNT
+  side_effects: null
+- id: DOEPCTL1
+  address_offset: 2848
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MPSIZ
+    bit_range:
+    - 10
+    - 0
+    description: MPSIZ
+  - name: USBAEP
+    bit_range:
+    - 15
+    - 15
+    description: USBAEP
+  - name: EONUM_DPIP
+    bit_range:
+    - 16
+    - 16
+    description: EONUM_DPIP
+  - name: NAKSTS
+    bit_range:
+    - 17
+    - 17
+    description: NAKSTS
+  - name: EPTYP
+    bit_range:
+    - 19
+    - 18
+    description: EPTYP
+  - name: SNPM
+    bit_range:
+    - 20
+    - 20
+    description: SNPM
+  - name: STALL
+    bit_range:
+    - 21
+    - 21
+    description: STALL
+  - name: CNAK
+    bit_range:
+    - 26
+    - 26
+    description: CNAK
+  - name: SNAK
+    bit_range:
+    - 27
+    - 27
+    description: SNAK
+  - name: SD0PID_SEVNFRM
+    bit_range:
+    - 28
+    - 28
+    description: SD0PID_SEVNFRM
+  - name: SD1PID_SODDFRM
+    bit_range:
+    - 29
+    - 29
+    description: SD1PID_SODDFRM
+  - name: EPDIS
+    bit_range:
+    - 30
+    - 30
+    description: EPDIS
+  - name: EPENA
+    bit_range:
+    - 31
+    - 31
+    description: EPENA
+  side_effects: null
+- id: DOEPINT1
+  address_offset: 2856
+  size: 32
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: XFRC
+    bit_range:
+    - 0
+    - 0
+    description: XFRC
+  - name: EPDISD
+    bit_range:
+    - 1
+    - 1
+    description: EPDISD
+  - name: AHBERR
+    bit_range:
+    - 2
+    - 2
+    description: AHBERR
+  - name: STUP
+    bit_range:
+    - 3
+    - 3
+    description: STUP
+  - name: OTEPDIS
+    bit_range:
+    - 4
+    - 4
+    description: OTEPDIS
+  - name: STSPHSRX
+    bit_range:
+    - 5
+    - 5
+    description: STSPHSRX
+  - name: B2BSTUP
+    bit_range:
+    - 6
+    - 6
+    description: B2BSTUP
+  - name: OUTPKTERR
+    bit_range:
+    - 8
+    - 8
+    description: OUTPKTERR
+  - name: BNA
+    bit_range:
+    - 9
+    - 9
+    description: BNA
+  - name: BERR
+    bit_range:
+    - 12
+    - 12
+    description: BERR
+  - name: NAK
+    bit_range:
+    - 13
+    - 13
+    description: NAK
+  - name: NYET
+    bit_range:
+    - 14
+    - 14
+    description: NYET
+  - name: STPKTRX
+    bit_range:
+    - 15
+    - 15
+    description: STPKTRX
+  side_effects: null
+- id: DOEPTSIZ1
+  address_offset: 2864
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRSIZ
+    bit_range:
+    - 18
+    - 0
+    description: XFRSIZ
+  - name: PKTCNT
+    bit_range:
+    - 28
+    - 19
+    description: PKTCNT
+  - name: RXDPID_STUPCNT
+    bit_range:
+    - 30
+    - 29
+    description: RXDPID_STUPCNT
+  side_effects: null
+- id: DOEPCTL2
+  address_offset: 2880
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MPSIZ
+    bit_range:
+    - 10
+    - 0
+    description: MPSIZ
+  - name: USBAEP
+    bit_range:
+    - 15
+    - 15
+    description: USBAEP
+  - name: EONUM_DPIP
+    bit_range:
+    - 16
+    - 16
+    description: EONUM_DPIP
+  - name: NAKSTS
+    bit_range:
+    - 17
+    - 17
+    description: NAKSTS
+  - name: EPTYP
+    bit_range:
+    - 19
+    - 18
+    description: EPTYP
+  - name: SNPM
+    bit_range:
+    - 20
+    - 20
+    description: SNPM
+  - name: STALL
+    bit_range:
+    - 21
+    - 21
+    description: STALL
+  - name: CNAK
+    bit_range:
+    - 26
+    - 26
+    description: CNAK
+  - name: SNAK
+    bit_range:
+    - 27
+    - 27
+    description: SNAK
+  - name: SD0PID_SEVNFRM
+    bit_range:
+    - 28
+    - 28
+    description: SD0PID_SEVNFRM
+  - name: SD1PID_SODDFRM
+    bit_range:
+    - 29
+    - 29
+    description: SD1PID_SODDFRM
+  - name: EPDIS
+    bit_range:
+    - 30
+    - 30
+    description: EPDIS
+  - name: EPENA
+    bit_range:
+    - 31
+    - 31
+    description: EPENA
+  side_effects: null
+- id: DOEPINT2
+  address_offset: 2888
+  size: 32
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: XFRC
+    bit_range:
+    - 0
+    - 0
+    description: XFRC
+  - name: EPDISD
+    bit_range:
+    - 1
+    - 1
+    description: EPDISD
+  - name: AHBERR
+    bit_range:
+    - 2
+    - 2
+    description: AHBERR
+  - name: STUP
+    bit_range:
+    - 3
+    - 3
+    description: STUP
+  - name: OTEPDIS
+    bit_range:
+    - 4
+    - 4
+    description: OTEPDIS
+  - name: STSPHSRX
+    bit_range:
+    - 5
+    - 5
+    description: STSPHSRX
+  - name: B2BSTUP
+    bit_range:
+    - 6
+    - 6
+    description: B2BSTUP
+  - name: OUTPKTERR
+    bit_range:
+    - 8
+    - 8
+    description: OUTPKTERR
+  - name: BNA
+    bit_range:
+    - 9
+    - 9
+    description: BNA
+  - name: BERR
+    bit_range:
+    - 12
+    - 12
+    description: BERR
+  - name: NAK
+    bit_range:
+    - 13
+    - 13
+    description: NAK
+  - name: NYET
+    bit_range:
+    - 14
+    - 14
+    description: NYET
+  - name: STPKTRX
+    bit_range:
+    - 15
+    - 15
+    description: STPKTRX
+  side_effects: null
+- id: DOEPTSIZ2
+  address_offset: 2896
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRSIZ
+    bit_range:
+    - 18
+    - 0
+    description: XFRSIZ
+  - name: PKTCNT
+    bit_range:
+    - 28
+    - 19
+    description: PKTCNT
+  - name: RXDPID_STUPCNT
+    bit_range:
+    - 30
+    - 29
+    description: RXDPID_STUPCNT
+  side_effects: null
+- id: DOEPCTL3
+  address_offset: 2912
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MPSIZ
+    bit_range:
+    - 10
+    - 0
+    description: MPSIZ
+  - name: USBAEP
+    bit_range:
+    - 15
+    - 15
+    description: USBAEP
+  - name: EONUM_DPIP
+    bit_range:
+    - 16
+    - 16
+    description: EONUM_DPIP
+  - name: NAKSTS
+    bit_range:
+    - 17
+    - 17
+    description: NAKSTS
+  - name: EPTYP
+    bit_range:
+    - 19
+    - 18
+    description: EPTYP
+  - name: SNPM
+    bit_range:
+    - 20
+    - 20
+    description: SNPM
+  - name: STALL
+    bit_range:
+    - 21
+    - 21
+    description: STALL
+  - name: CNAK
+    bit_range:
+    - 26
+    - 26
+    description: CNAK
+  - name: SNAK
+    bit_range:
+    - 27
+    - 27
+    description: SNAK
+  - name: SD0PID_SEVNFRM
+    bit_range:
+    - 28
+    - 28
+    description: SD0PID_SEVNFRM
+  - name: SD1PID_SODDFRM
+    bit_range:
+    - 29
+    - 29
+    description: SD1PID_SODDFRM
+  - name: EPDIS
+    bit_range:
+    - 30
+    - 30
+    description: EPDIS
+  - name: EPENA
+    bit_range:
+    - 31
+    - 31
+    description: EPENA
+  side_effects: null
+- id: DOEPINT3
+  address_offset: 2920
+  size: 32
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: XFRC
+    bit_range:
+    - 0
+    - 0
+    description: XFRC
+  - name: EPDISD
+    bit_range:
+    - 1
+    - 1
+    description: EPDISD
+  - name: AHBERR
+    bit_range:
+    - 2
+    - 2
+    description: AHBERR
+  - name: STUP
+    bit_range:
+    - 3
+    - 3
+    description: STUP
+  - name: OTEPDIS
+    bit_range:
+    - 4
+    - 4
+    description: OTEPDIS
+  - name: STSPHSRX
+    bit_range:
+    - 5
+    - 5
+    description: STSPHSRX
+  - name: B2BSTUP
+    bit_range:
+    - 6
+    - 6
+    description: B2BSTUP
+  - name: OUTPKTERR
+    bit_range:
+    - 8
+    - 8
+    description: OUTPKTERR
+  - name: BNA
+    bit_range:
+    - 9
+    - 9
+    description: BNA
+  - name: BERR
+    bit_range:
+    - 12
+    - 12
+    description: BERR
+  - name: NAK
+    bit_range:
+    - 13
+    - 13
+    description: NAK
+  - name: NYET
+    bit_range:
+    - 14
+    - 14
+    description: NYET
+  - name: STPKTRX
+    bit_range:
+    - 15
+    - 15
+    description: STPKTRX
+  side_effects: null
+- id: DOEPTSIZ3
+  address_offset: 2928
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRSIZ
+    bit_range:
+    - 18
+    - 0
+    description: XFRSIZ
+  - name: PKTCNT
+    bit_range:
+    - 28
+    - 19
+    description: PKTCNT
+  - name: RXDPID_STUPCNT
+    bit_range:
+    - 30
+    - 29
+    description: RXDPID_STUPCNT
+  side_effects: null
+- id: DOEPCTL4
+  address_offset: 2944
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MPSIZ
+    bit_range:
+    - 10
+    - 0
+    description: MPSIZ
+  - name: USBAEP
+    bit_range:
+    - 15
+    - 15
+    description: USBAEP
+  - name: EONUM_DPIP
+    bit_range:
+    - 16
+    - 16
+    description: EONUM_DPIP
+  - name: NAKSTS
+    bit_range:
+    - 17
+    - 17
+    description: NAKSTS
+  - name: EPTYP
+    bit_range:
+    - 19
+    - 18
+    description: EPTYP
+  - name: SNPM
+    bit_range:
+    - 20
+    - 20
+    description: SNPM
+  - name: STALL
+    bit_range:
+    - 21
+    - 21
+    description: STALL
+  - name: CNAK
+    bit_range:
+    - 26
+    - 26
+    description: CNAK
+  - name: SNAK
+    bit_range:
+    - 27
+    - 27
+    description: SNAK
+  - name: SD0PID_SEVNFRM
+    bit_range:
+    - 28
+    - 28
+    description: SD0PID_SEVNFRM
+  - name: SD1PID_SODDFRM
+    bit_range:
+    - 29
+    - 29
+    description: SD1PID_SODDFRM
+  - name: EPDIS
+    bit_range:
+    - 30
+    - 30
+    description: EPDIS
+  - name: EPENA
+    bit_range:
+    - 31
+    - 31
+    description: EPENA
+  side_effects: null
+- id: DOEPINT4
+  address_offset: 2952
+  size: 32
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: XFRC
+    bit_range:
+    - 0
+    - 0
+    description: XFRC
+  - name: EPDISD
+    bit_range:
+    - 1
+    - 1
+    description: EPDISD
+  - name: AHBERR
+    bit_range:
+    - 2
+    - 2
+    description: AHBERR
+  - name: STUP
+    bit_range:
+    - 3
+    - 3
+    description: STUP
+  - name: OTEPDIS
+    bit_range:
+    - 4
+    - 4
+    description: OTEPDIS
+  - name: STSPHSRX
+    bit_range:
+    - 5
+    - 5
+    description: STSPHSRX
+  - name: B2BSTUP
+    bit_range:
+    - 6
+    - 6
+    description: B2BSTUP
+  - name: OUTPKTERR
+    bit_range:
+    - 8
+    - 8
+    description: OUTPKTERR
+  - name: BNA
+    bit_range:
+    - 9
+    - 9
+    description: BNA
+  - name: BERR
+    bit_range:
+    - 12
+    - 12
+    description: BERR
+  - name: NAK
+    bit_range:
+    - 13
+    - 13
+    description: NAK
+  - name: NYET
+    bit_range:
+    - 14
+    - 14
+    description: NYET
+  - name: STPKTRX
+    bit_range:
+    - 15
+    - 15
+    description: STPKTRX
+  side_effects: null
+- id: DOEPTSIZ4
+  address_offset: 2960
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRSIZ
+    bit_range:
+    - 18
+    - 0
+    description: XFRSIZ
+  - name: PKTCNT
+    bit_range:
+    - 28
+    - 19
+    description: PKTCNT
+  - name: RXDPID_STUPCNT
+    bit_range:
+    - 30
+    - 29
+    description: RXDPID_STUPCNT
+  side_effects: null
+- id: DOEPCTL5
+  address_offset: 2976
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MPSIZ
+    bit_range:
+    - 10
+    - 0
+    description: MPSIZ
+  - name: USBAEP
+    bit_range:
+    - 15
+    - 15
+    description: USBAEP
+  - name: EONUM_DPIP
+    bit_range:
+    - 16
+    - 16
+    description: EONUM_DPIP
+  - name: NAKSTS
+    bit_range:
+    - 17
+    - 17
+    description: NAKSTS
+  - name: EPTYP
+    bit_range:
+    - 19
+    - 18
+    description: EPTYP
+  - name: SNPM
+    bit_range:
+    - 20
+    - 20
+    description: SNPM
+  - name: STALL
+    bit_range:
+    - 21
+    - 21
+    description: STALL
+  - name: CNAK
+    bit_range:
+    - 26
+    - 26
+    description: CNAK
+  - name: SNAK
+    bit_range:
+    - 27
+    - 27
+    description: SNAK
+  - name: SD0PID_SEVNFRM
+    bit_range:
+    - 28
+    - 28
+    description: SD0PID_SEVNFRM
+  - name: SD1PID_SODDFRM
+    bit_range:
+    - 29
+    - 29
+    description: SD1PID_SODDFRM
+  - name: EPDIS
+    bit_range:
+    - 30
+    - 30
+    description: EPDIS
+  - name: EPENA
+    bit_range:
+    - 31
+    - 31
+    description: EPENA
+  side_effects: null
+- id: DOEPINT5
+  address_offset: 2984
+  size: 32
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: XFRC
+    bit_range:
+    - 0
+    - 0
+    description: XFRC
+  - name: EPDISD
+    bit_range:
+    - 1
+    - 1
+    description: EPDISD
+  - name: AHBERR
+    bit_range:
+    - 2
+    - 2
+    description: AHBERR
+  - name: STUP
+    bit_range:
+    - 3
+    - 3
+    description: STUP
+  - name: OTEPDIS
+    bit_range:
+    - 4
+    - 4
+    description: OTEPDIS
+  - name: STSPHSRX
+    bit_range:
+    - 5
+    - 5
+    description: STSPHSRX
+  - name: B2BSTUP
+    bit_range:
+    - 6
+    - 6
+    description: B2BSTUP
+  - name: OUTPKTERR
+    bit_range:
+    - 8
+    - 8
+    description: OUTPKTERR
+  - name: BNA
+    bit_range:
+    - 9
+    - 9
+    description: BNA
+  - name: BERR
+    bit_range:
+    - 12
+    - 12
+    description: BERR
+  - name: NAK
+    bit_range:
+    - 13
+    - 13
+    description: NAK
+  - name: NYET
+    bit_range:
+    - 14
+    - 14
+    description: NYET
+  - name: STPKTRX
+    bit_range:
+    - 15
+    - 15
+    description: STPKTRX
+  side_effects: null
+- id: DOEPTSIZ5
+  address_offset: 2992
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XFRSIZ
+    bit_range:
+    - 18
+    - 0
+    description: XFRSIZ
+  - name: PKTCNT
+    bit_range:
+    - 28
+    - 19
+    description: PKTCNT
+  - name: RXDPID_STUPCNT
+    bit_range:
+    - 30
+    - 29
+    description: RXDPID_STUPCNT
+  side_effects: null
+- id: PCGCCTL
+  address_offset: 3584
+  size: 32
+  access: READ_WRITE
+  reset_value: 537624576
+  fields:
+  - name: STPPCLK
+    bit_range:
+    - 0
+    - 0
+    description: STPPCLK
+  - name: GATEHCLK
+    bit_range:
+    - 1
+    - 1
+    description: GATEHCLK
+  - name: PHYSUSP
+    bit_range:
+    - 4
+    - 4
+    description: PHYSUSP
+  - name: ENL1GTG
+    bit_range:
+    - 5
+    - 5
+    description: ENL1GTG
+  - name: PHYSLEEP
+    bit_range:
+    - 6
+    - 6
+    description: PHYSLEEP
+  - name: SUSP
+    bit_range:
+    - 7
+    - 7
+    description: SUSP
+  side_effects: null
+interrupts:
+  OTG_FS: 73
+timing: null

@@ -1,0 +1,32 @@
+peripheral: ADC12
+version: 0.1.0
+registers:
+- id: ADC12_CCR
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PRESC
+    bit_range:
+    - 21
+    - 18
+    description: 'ADC prescaler These bits are set and cleared by software to select the frequency of the ADC clock. The clock is common to all ADCs. Others: Reserved, must not be used Note: The software is allowed to write this bit only when the ADCs are disabled (ADCAL = 0, JADSTART = 0, ADSTART = 0, ADSTP = 0, ADDIS = 0 and ADEN = 0).'
+  - name: VREFEN
+    bit_range:
+    - 22
+    - 22
+    description: 'VREFINT enable This bit is set and cleared by software to enable/disable the VREFINT buffer. Note: The software is allowed to write this bit only when the ADCs are disabled (ADCAL = 0, JADSTART = 0, ADSTART = 0, ADSTP = 0, ADDIS = 0 and ADEN = 0).'
+  - name: VSENSESEL
+    bit_range:
+    - 23
+    - 23
+    description: 'Temperature sensor voltage selection This bit is set and cleared by software to control the temperature sensor channel. Note: The software is allowed to write this bit only when the ADCs are disabled (ADCAL = 0, JADSTART = 0, ADSTART = 0, ADSTP = 0, ADDIS = 0 and ADEN = 0).'
+  - name: VBATEN
+    bit_range:
+    - 24
+    - 24
+    description: 'VBAT enable This bit is set and cleared by software to control the VBAT channel. Note: The software is allowed to write this bit only when the ADCs are disabled (ADCAL = 0, JADSTART = 0, ADSTART = 0, ADSTP = 0, ADDIS = 0 and ADEN = 0).'
+  side_effects: null
+interrupts: null
+timing: null

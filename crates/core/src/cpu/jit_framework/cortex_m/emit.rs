@@ -33,7 +33,11 @@ const XPSR_LOCAL: u32 = 15;
 const SCRATCH_LOCAL: u32 = 16;
 const RESULT_LOCAL: u32 = 17;
 const OP2_LOCAL: u32 = 18;
-const LOCAL_COUNT: u32 = 19;
+/// Shifter carry-out of an immediate-shifted operand (ARMv7-M A2.3.1), used
+/// by the `DataProc32` logical flag path. Kept beside OP2 because the
+/// interpreter computes it from the *unshifted* Rm after the result.
+const SHIFTER_CARRY_LOCAL: u32 = 19;
+const LOCAL_COUNT: u32 = 20;
 
 pub const NEXT_PC_SLOT: i32 = 16 * 4;
 pub const FAULT_PC_SLOT: u32 = 68;
@@ -789,12 +793,16 @@ impl Body {
         }
     }
 
-    fn finish_dataproc_logical(&mut self, rd: u8, set_flags: bool) {
+    fn finish_dataproc_logical(&mut self, rd: u8, set_flags: bool, use_shifter_carry: bool) {
         self.set_result_from_stack();
         self.maybe_write(rd);
         if set_flags {
             self.xpsr_touch();
-            self.push_old_carry();
+            if use_shifter_carry {
+                self.local_get(SHIFTER_CARRY_LOCAL);
+            } else {
+                self.push_old_carry();
+            }
             self.push_old_overflow();
             self.update_nzcv(true);
         }
@@ -929,14 +937,21 @@ impl Body {
         self.update_nzcv(true);
     }
 
-    fn emit_dataproc_from_ops(&mut self, op: u8, rn: u8, rd: u8, set_flags: bool) {
+    fn emit_dataproc_from_ops(
+        &mut self,
+        op: u8,
+        rn: u8,
+        rd: u8,
+        set_flags: bool,
+        use_shifter_carry: bool,
+    ) {
         // op1 in SCRATCH, op2 in OP2.
         match op {
             0x0 => {
                 self.local_get(SCRATCH_LOCAL);
                 self.local_get(OP2_LOCAL);
                 self.buf.push(op::I32_AND);
-                self.finish_dataproc_logical(rd, set_flags);
+                self.finish_dataproc_logical(rd, set_flags, use_shifter_carry);
             }
             0x1 => {
                 self.local_get(SCRATCH_LOCAL);
@@ -944,7 +959,7 @@ impl Body {
                 self.i32_const(-1);
                 self.buf.push(op::I32_XOR);
                 self.buf.push(op::I32_AND);
-                self.finish_dataproc_logical(rd, set_flags);
+                self.finish_dataproc_logical(rd, set_flags, use_shifter_carry);
             }
             0x2 => {
                 if rn == 0xF {
@@ -954,7 +969,7 @@ impl Body {
                     self.local_get(OP2_LOCAL);
                     self.buf.push(op::I32_OR);
                 }
-                self.finish_dataproc_logical(rd, set_flags);
+                self.finish_dataproc_logical(rd, set_flags, use_shifter_carry);
             }
             0x3 => {
                 if rn == 0xF {
@@ -968,13 +983,13 @@ impl Body {
                     self.buf.push(op::I32_XOR);
                     self.buf.push(op::I32_OR);
                 }
-                self.finish_dataproc_logical(rd, set_flags);
+                self.finish_dataproc_logical(rd, set_flags, use_shifter_carry);
             }
             0x4 => {
                 self.local_get(SCRATCH_LOCAL);
                 self.local_get(OP2_LOCAL);
                 self.buf.push(op::I32_XOR);
-                self.finish_dataproc_logical(rd, set_flags);
+                self.finish_dataproc_logical(rd, set_flags, use_shifter_carry);
             }
             0x8 => self.emit_dataproc_add_flags(rd, set_flags),
             0xA => self.emit_dataproc_adc_sbc(rd, set_flags, false),
@@ -991,11 +1006,21 @@ impl Body {
         self.local_set(SCRATCH_LOCAL);
         self.i32_const(imm);
         self.local_set(OP2_LOCAL);
-        self.emit_dataproc_from_ops(op, rn, rd, set_flags);
+        // A modified immediate has no barrel shift, so the logical ops keep
+        // the old carry (interpreter: `carry_in`).
+        self.emit_dataproc_from_ops(op, rn, rd, set_flags, false);
     }
 
-    fn emit_shifted_rm(&mut self, pc: u32, rm: u8, imm5: u8, shift_type: u8) {
+    /// Lowers the shifted Rm of a `DataProc32` into OP2's stack slot.
+    /// `need_carry` additionally leaves the shifter carry-out in
+    /// [`SHIFTER_CARRY_LOCAL`], matching the interpreter's `shifter_carry`.
+    fn emit_shifted_rm(&mut self, pc: u32, rm: u8, imm5: u8, shift_type: u8, need_carry: bool) {
         self.read_gpr_or_pc_raw(rm, pc);
+        if need_carry {
+            // Keep the unshifted Rm; the carry-out is derived from it after
+            // the result is computed (LSL #0 keeps the old carry).
+            self.local_tee(SHIFTER_CARRY_LOCAL);
+        }
         match shift_type {
             0 if imm5 != 0 => {
                 self.i32_const(imm5 as i32);
@@ -1021,7 +1046,54 @@ impl Body {
                 self.i32_const(imm5 as i32);
                 self.buf.push(op::I32_ROTR);
             }
+            3 => {
+                // RRX (ARMv7-M A7.7.154): rotate right by one *through* the
+                // carry — result (C<<31)|(Rm>>1), carry-out Rm[0]. The raw
+                // value is already on the stack (tee'd when `need_carry`).
+                self.i32_const(1);
+                self.buf.push(op::I32_SHR_U);
+                self.push_old_carry();
+                self.i32_const(31);
+                self.buf.push(op::I32_SHL);
+                self.buf.push(op::I32_OR);
+            }
             _ => {}
+        }
+        if need_carry {
+            // Same table as the interpreter's `DataProc32` shifter_carry:
+            // the last bit shifted out of Rm, or the old carry when nothing
+            // is shifted (LSL #0).
+            match shift_type {
+                0 if imm5 == 0 => {
+                    self.push_old_carry();
+                    self.local_set(SHIFTER_CARRY_LOCAL);
+                }
+                0 => {
+                    self.local_get(SHIFTER_CARRY_LOCAL);
+                    self.i32_const((32 - imm5) as i32);
+                }
+                1 | 2 if imm5 == 0 => {
+                    self.local_get(SHIFTER_CARRY_LOCAL);
+                    self.i32_const(31);
+                }
+                1 | 2 => {
+                    self.local_get(SHIFTER_CARRY_LOCAL);
+                    self.i32_const((imm5 - 1) as i32);
+                }
+                3 if imm5 == 0 => {
+                    self.local_get(SHIFTER_CARRY_LOCAL);
+                    self.i32_const(0);
+                }
+                3 => {
+                    self.local_get(SHIFTER_CARRY_LOCAL);
+                    self.i32_const((imm5 - 1) as i32);
+                }
+                _ => unreachable!(),
+            }
+            self.buf.push(op::I32_SHR_U);
+            self.i32_const(1);
+            self.buf.push(op::I32_AND);
+            self.local_set(SHIFTER_CARRY_LOCAL);
         }
     }
 
@@ -1037,11 +1109,14 @@ impl Body {
         shift_type: u8,
         set_flags: bool,
     ) {
+        // Only the logical opcodes read the shifter carry-out when S=1;
+        // ADD/SUB/ADC/SBC/RSB compute C from the adder instead.
+        let logical_flags = set_flags && matches!(op, 0x0..=0x4);
         self.read_gpr_or_pc_raw(rn, pc);
         self.local_set(SCRATCH_LOCAL);
-        self.emit_shifted_rm(pc, rm, imm5, shift_type);
+        self.emit_shifted_rm(pc, rm, imm5, shift_type, logical_flags);
         self.local_set(OP2_LOCAL);
-        self.emit_dataproc_from_ops(op, rn, rd, set_flags);
+        self.emit_dataproc_from_ops(op, rn, rd, set_flags, logical_flags);
     }
 
     fn emit_shift_reg(&mut self, pc: u32, rd: u8, rm: u8, kind: ShiftKind) {

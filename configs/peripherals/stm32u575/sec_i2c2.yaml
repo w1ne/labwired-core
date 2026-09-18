@@ -1,0 +1,511 @@
+peripheral: SEC_I2C2
+version: 0.1.0
+registers:
+- id: CR1
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PE
+    bit_range:
+    - 0
+    - 0
+    description: Peripheral enable
+  - name: TXIE
+    bit_range:
+    - 1
+    - 1
+    description: TX Interrupt enable
+  - name: RXIE
+    bit_range:
+    - 2
+    - 2
+    description: RX Interrupt enable
+  - name: ADDRIE
+    bit_range:
+    - 3
+    - 3
+    description: Address match interrupt enable (slave only)
+  - name: NACKIE
+    bit_range:
+    - 4
+    - 4
+    description: Not acknowledge received interrupt enable
+  - name: STOPIE
+    bit_range:
+    - 5
+    - 5
+    description: STOP detection Interrupt enable
+  - name: TCIE
+    bit_range:
+    - 6
+    - 6
+    description: Transfer Complete interrupt enable
+  - name: ERRIE
+    bit_range:
+    - 7
+    - 7
+    description: Error interrupts enable
+  - name: DNF
+    bit_range:
+    - 11
+    - 8
+    description: Digital noise filter
+  - name: ANFOFF
+    bit_range:
+    - 12
+    - 12
+    description: Analog noise filter OFF
+  - name: TXDMAEN
+    bit_range:
+    - 14
+    - 14
+    description: DMA transmission requests enable
+  - name: RXDMAEN
+    bit_range:
+    - 15
+    - 15
+    description: DMA reception requests enable
+  - name: SBC
+    bit_range:
+    - 16
+    - 16
+    description: Slave byte control
+  - name: NOSTRETCH
+    bit_range:
+    - 17
+    - 17
+    description: Clock stretching disable
+  - name: WUPEN
+    bit_range:
+    - 18
+    - 18
+    description: Wakeup from STOP enable
+  - name: GCEN
+    bit_range:
+    - 19
+    - 19
+    description: General call enable
+  - name: SMBHEN
+    bit_range:
+    - 20
+    - 20
+    description: SMBus Host address enable
+  - name: SMBDEN
+    bit_range:
+    - 21
+    - 21
+    description: SMBus Device Default address enable
+  - name: ALERTEN
+    bit_range:
+    - 22
+    - 22
+    description: SMBUS alert enable
+  - name: PECEN
+    bit_range:
+    - 23
+    - 23
+    description: PEC enable
+  - name: FMP
+    bit_range:
+    - 24
+    - 24
+    description: Fast-mode Plus 20 mA drive enable
+  - name: ADDRACLR
+    bit_range:
+    - 30
+    - 30
+    description: Address match flag (ADDR) automatic clear
+  - name: STOPFACLR
+    bit_range:
+    - 31
+    - 31
+    description: STOP detection flag (STOPF) automatic clear
+  side_effects: null
+- id: CR2
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PECBYTE
+    bit_range:
+    - 26
+    - 26
+    description: Packet error checking byte
+  - name: AUTOEND
+    bit_range:
+    - 25
+    - 25
+    description: Automatic end mode (master mode)
+  - name: RELOAD
+    bit_range:
+    - 24
+    - 24
+    description: NBYTES reload mode
+  - name: NBYTES
+    bit_range:
+    - 23
+    - 16
+    description: Number of bytes
+  - name: NACK
+    bit_range:
+    - 15
+    - 15
+    description: NACK generation (slave mode)
+  - name: STOP
+    bit_range:
+    - 14
+    - 14
+    description: Stop generation (master mode)
+  - name: START
+    bit_range:
+    - 13
+    - 13
+    description: Start generation
+  - name: HEAD10R
+    bit_range:
+    - 12
+    - 12
+    description: 10-bit address header only read direction (master receiver mode)
+  - name: ADD10
+    bit_range:
+    - 11
+    - 11
+    description: 10-bit addressing mode (master mode)
+  - name: RD_WRN
+    bit_range:
+    - 10
+    - 10
+    description: Transfer direction (master mode)
+  - name: SADD
+    bit_range:
+    - 9
+    - 0
+    description: Slave address bit (master mode)
+  side_effects: null
+- id: OAR1
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OA1
+    bit_range:
+    - 9
+    - 0
+    description: Interface address
+  - name: OA1MODE
+    bit_range:
+    - 10
+    - 10
+    description: Own Address 1 10-bit mode
+  - name: OA1EN
+    bit_range:
+    - 15
+    - 15
+    description: Own Address 1 enable
+  side_effects: null
+- id: OAR2
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OA2
+    bit_range:
+    - 7
+    - 1
+    description: Interface address
+  - name: OA2MSK
+    bit_range:
+    - 10
+    - 8
+    description: Own Address 2 masks
+  - name: OA2EN
+    bit_range:
+    - 15
+    - 15
+    description: Own Address 2 enable
+  side_effects: null
+- id: TIMINGR
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SCLL
+    bit_range:
+    - 7
+    - 0
+    description: SCL low period (master mode)
+  - name: SCLH
+    bit_range:
+    - 15
+    - 8
+    description: SCL high period (master mode)
+  - name: SDADEL
+    bit_range:
+    - 19
+    - 16
+    description: Data hold time
+  - name: SCLDEL
+    bit_range:
+    - 23
+    - 20
+    description: Data setup time
+  - name: PRESC
+    bit_range:
+    - 31
+    - 28
+    description: Timing prescaler
+  side_effects: null
+- id: TIMEOUTR
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIMEOUTA
+    bit_range:
+    - 11
+    - 0
+    description: Bus timeout A
+  - name: TIDLE
+    bit_range:
+    - 12
+    - 12
+    description: Idle clock timeout detection
+  - name: TIMOUTEN
+    bit_range:
+    - 15
+    - 15
+    description: Clock timeout enable
+  - name: TIMEOUTB
+    bit_range:
+    - 27
+    - 16
+    description: Bus timeout B
+  - name: TEXTEN
+    bit_range:
+    - 31
+    - 31
+    description: Extended clock timeout enable
+  side_effects: null
+- id: ISR
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: ADDCODE
+    bit_range:
+    - 23
+    - 17
+    description: Address match code (Slave mode)
+  - name: DIR
+    bit_range:
+    - 16
+    - 16
+    description: Transfer direction (Slave mode)
+  - name: BUSY
+    bit_range:
+    - 15
+    - 15
+    description: Bus busy
+  - name: ALERT
+    bit_range:
+    - 13
+    - 13
+    description: SMBus alert
+  - name: TIMEOUT
+    bit_range:
+    - 12
+    - 12
+    description: Timeout or t_low detection flag
+  - name: PECERR
+    bit_range:
+    - 11
+    - 11
+    description: PEC Error in reception
+  - name: OVR
+    bit_range:
+    - 10
+    - 10
+    description: Overrun/Underrun (slave mode)
+  - name: ARLO
+    bit_range:
+    - 9
+    - 9
+    description: Arbitration lost
+  - name: BERR
+    bit_range:
+    - 8
+    - 8
+    description: Bus error
+  - name: TCR
+    bit_range:
+    - 7
+    - 7
+    description: Transfer Complete Reload
+  - name: TC
+    bit_range:
+    - 6
+    - 6
+    description: Transfer Complete (master mode)
+  - name: STOPF
+    bit_range:
+    - 5
+    - 5
+    description: Stop detection flag
+  - name: NACKF
+    bit_range:
+    - 4
+    - 4
+    description: Not acknowledge received flag
+  - name: ADDR
+    bit_range:
+    - 3
+    - 3
+    description: Address matched (slave mode)
+  - name: RXNE
+    bit_range:
+    - 2
+    - 2
+    description: Receive data register not empty (receivers)
+  - name: TXIS
+    bit_range:
+    - 1
+    - 1
+    description: Transmit interrupt status (transmitters)
+  - name: TXE
+    bit_range:
+    - 0
+    - 0
+    description: Transmit data register empty (transmitters)
+  side_effects: null
+- id: ICR
+  address_offset: 28
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: ALERTCF
+    bit_range:
+    - 13
+    - 13
+    description: Alert flag clear
+  - name: TIMOUTCF
+    bit_range:
+    - 12
+    - 12
+    description: Timeout detection flag clear
+  - name: PECCF
+    bit_range:
+    - 11
+    - 11
+    description: PEC Error flag clear
+  - name: OVRCF
+    bit_range:
+    - 10
+    - 10
+    description: Overrun/Underrun flag clear
+  - name: ARLOCF
+    bit_range:
+    - 9
+    - 9
+    description: Arbitration lost flag clear
+  - name: BERRCF
+    bit_range:
+    - 8
+    - 8
+    description: Bus error flag clear
+  - name: STOPCF
+    bit_range:
+    - 5
+    - 5
+    description: Stop detection flag clear
+  - name: NACKCF
+    bit_range:
+    - 4
+    - 4
+    description: Not Acknowledge flag clear
+  - name: ADDRCF
+    bit_range:
+    - 3
+    - 3
+    description: Address Matched flag clear
+  side_effects: null
+- id: PECR
+  address_offset: 32
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: PEC
+    bit_range:
+    - 7
+    - 0
+    description: Packet error checking register
+  side_effects: null
+- id: RXDR
+  address_offset: 36
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: RXDATA
+    bit_range:
+    - 7
+    - 0
+    description: 8-bit receive data
+  side_effects: null
+- id: TXDR
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TXDATA
+    bit_range:
+    - 7
+    - 0
+    description: 8-bit transmit data
+  side_effects: null
+- id: I2C_AUTOCR
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TCDMAEN
+    bit_range:
+    - 6
+    - 6
+    description: DMA request enable on Transfer Complete event
+  - name: TCRDMAEN
+    bit_range:
+    - 7
+    - 7
+    description: DMA request enable on Transfer Complete Reload event
+  - name: TRIGSEL
+    bit_range:
+    - 19
+    - 16
+    description: Trigger selection
+  - name: TRIGPOL
+    bit_range:
+    - 20
+    - 20
+    description: Trigger polarity
+  - name: TRIGEN
+    bit_range:
+    - 21
+    - 21
+    description: Trigger enable
+  side_effects: null
+interrupts:
+  I2C1_EV: 55
+  I2C1_ER: 56
+timing: null

@@ -1,0 +1,445 @@
+peripheral: SEC_LPGPIO1
+version: 0.1.0
+registers:
+- id: LPGPIO_MODER
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MODE15
+    bit_range:
+    - 15
+    - 15
+    description: MODE15
+  - name: MODE14
+    bit_range:
+    - 14
+    - 14
+    description: MODE14
+  - name: MODE13
+    bit_range:
+    - 13
+    - 13
+    description: MODE13
+  - name: MODE12
+    bit_range:
+    - 12
+    - 12
+    description: MODE12
+  - name: MODE11
+    bit_range:
+    - 11
+    - 11
+    description: MODE11
+  - name: MODE10
+    bit_range:
+    - 10
+    - 10
+    description: MODE10
+  - name: MODE9
+    bit_range:
+    - 9
+    - 9
+    description: MODE9
+  - name: MODE8
+    bit_range:
+    - 8
+    - 8
+    description: MODE8
+  - name: MODE7
+    bit_range:
+    - 7
+    - 7
+    description: MODE7
+  - name: MODE6
+    bit_range:
+    - 6
+    - 6
+    description: MODE6
+  - name: MODE5
+    bit_range:
+    - 5
+    - 5
+    description: MODE5
+  - name: MODE4
+    bit_range:
+    - 4
+    - 4
+    description: MODE4
+  - name: MODE3
+    bit_range:
+    - 3
+    - 3
+    description: MODE3
+  - name: MODE2
+    bit_range:
+    - 2
+    - 2
+    description: MODE2
+  - name: MODE1
+    bit_range:
+    - 1
+    - 1
+    description: MODE1
+  - name: MODE0
+    bit_range:
+    - 0
+    - 0
+    description: MODE0
+  side_effects: null
+- id: LPGPIO_IDR
+  address_offset: 16
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: IDy
+    bit_range:
+    - 15
+    - 0
+    description: IDy
+  side_effects: null
+- id: LPGPIO_ODR
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ODy15
+    bit_range:
+    - 15
+    - 15
+    description: ODy15
+  - name: ODy14
+    bit_range:
+    - 14
+    - 14
+    description: ODy14
+  - name: ODy13
+    bit_range:
+    - 13
+    - 13
+    description: ODy13
+  - name: ODy12
+    bit_range:
+    - 12
+    - 12
+    description: ODy12
+  - name: ODy11
+    bit_range:
+    - 11
+    - 11
+    description: ODy11
+  - name: ODy10
+    bit_range:
+    - 10
+    - 10
+    description: ODy10
+  - name: ODy9
+    bit_range:
+    - 9
+    - 9
+    description: ODy9
+  - name: ODy8
+    bit_range:
+    - 8
+    - 8
+    description: ODy8
+  - name: ODy7
+    bit_range:
+    - 7
+    - 7
+    description: ODy7
+  - name: ODy6
+    bit_range:
+    - 6
+    - 6
+    description: ODy6
+  - name: ODy5
+    bit_range:
+    - 5
+    - 5
+    description: ODy5
+  - name: ODy4
+    bit_range:
+    - 4
+    - 4
+    description: ODy4
+  - name: ODy3
+    bit_range:
+    - 3
+    - 3
+    description: ODy3
+  - name: ODy2
+    bit_range:
+    - 2
+    - 2
+    description: ODy2
+  - name: ODy1
+    bit_range:
+    - 1
+    - 1
+    description: ODy1
+  - name: ODy0
+    bit_range:
+    - 0
+    - 0
+    description: ODy0
+  side_effects: null
+- id: LPGPIO_BSRR
+  address_offset: 24
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: BRy31
+    bit_range:
+    - 31
+    - 31
+    description: BRy31
+  - name: BRy30
+    bit_range:
+    - 30
+    - 30
+    description: BRy30
+  - name: BRy29
+    bit_range:
+    - 29
+    - 29
+    description: BRy29
+  - name: BRy28
+    bit_range:
+    - 28
+    - 28
+    description: BRy28
+  - name: BRy27
+    bit_range:
+    - 27
+    - 27
+    description: BRy27
+  - name: BRy26
+    bit_range:
+    - 26
+    - 26
+    description: BRy26
+  - name: BRy25
+    bit_range:
+    - 25
+    - 25
+    description: BRy25
+  - name: BRy24
+    bit_range:
+    - 24
+    - 24
+    description: BRy24
+  - name: BRy23
+    bit_range:
+    - 23
+    - 23
+    description: BRy23
+  - name: BRy22
+    bit_range:
+    - 22
+    - 22
+    description: BRy22
+  - name: BRy21
+    bit_range:
+    - 21
+    - 21
+    description: BRy21
+  - name: BRy20
+    bit_range:
+    - 20
+    - 20
+    description: BRy20
+  - name: BRy19
+    bit_range:
+    - 19
+    - 19
+    description: BRy19
+  - name: BRy18
+    bit_range:
+    - 18
+    - 18
+    description: BRy18
+  - name: BRy17
+    bit_range:
+    - 17
+    - 17
+    description: BRy17
+  - name: BRy16
+    bit_range:
+    - 16
+    - 16
+    description: BRy16
+  - name: BSy15
+    bit_range:
+    - 15
+    - 15
+    description: BSy15
+  - name: BSy14
+    bit_range:
+    - 14
+    - 14
+    description: BSy14
+  - name: BSy13
+    bit_range:
+    - 13
+    - 13
+    description: BSy13
+  - name: BSy12
+    bit_range:
+    - 12
+    - 12
+    description: BSy12
+  - name: BSy11
+    bit_range:
+    - 11
+    - 11
+    description: BSy11
+  - name: BSy10
+    bit_range:
+    - 10
+    - 10
+    description: BSy10
+  - name: BSy9
+    bit_range:
+    - 9
+    - 9
+    description: BSy9
+  - name: BSy8
+    bit_range:
+    - 8
+    - 8
+    description: BSy8
+  - name: BSy7
+    bit_range:
+    - 7
+    - 7
+    description: BSy7
+  - name: BSy6
+    bit_range:
+    - 6
+    - 6
+    description: BSy6
+  - name: BSy5
+    bit_range:
+    - 5
+    - 5
+    description: BSy5
+  - name: BSy4
+    bit_range:
+    - 4
+    - 4
+    description: BSy4
+  - name: BSy3
+    bit_range:
+    - 3
+    - 3
+    description: BSy3
+  - name: BSy2
+    bit_range:
+    - 2
+    - 2
+    description: BSy2
+  - name: BSy1
+    bit_range:
+    - 1
+    - 1
+    description: BSy1
+  - name: BSy0
+    bit_range:
+    - 0
+    - 0
+    description: BSy0
+  side_effects: null
+- id: LPGPIO_BRR
+  address_offset: 40
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: BRy15
+    bit_range:
+    - 15
+    - 15
+    description: BRy15
+  - name: BRy14
+    bit_range:
+    - 14
+    - 14
+    description: BRy14
+  - name: BRy13
+    bit_range:
+    - 13
+    - 13
+    description: BRy13
+  - name: BRy12
+    bit_range:
+    - 12
+    - 12
+    description: BRy12
+  - name: BRy11
+    bit_range:
+    - 11
+    - 11
+    description: BRy11
+  - name: BRy10
+    bit_range:
+    - 10
+    - 10
+    description: BRy10
+  - name: BRy9
+    bit_range:
+    - 9
+    - 9
+    description: BRy9
+  - name: BRy8
+    bit_range:
+    - 8
+    - 8
+    description: BRy8
+  - name: BRy7
+    bit_range:
+    - 7
+    - 7
+    description: BRy7
+  - name: BRy6
+    bit_range:
+    - 6
+    - 6
+    description: BRy6
+  - name: BRy5
+    bit_range:
+    - 5
+    - 5
+    description: BRy5
+  - name: BRy4
+    bit_range:
+    - 4
+    - 4
+    description: BRy4
+  - name: BRy3
+    bit_range:
+    - 3
+    - 3
+    description: BRy3
+  - name: BRy2
+    bit_range:
+    - 2
+    - 2
+    description: BRy2
+  - name: BRy1
+    bit_range:
+    - 1
+    - 1
+    description: BRy1
+  - name: BRy0
+    bit_range:
+    - 0
+    - 0
+    description: BRy0
+  side_effects: null
+interrupts: null
+timing: null

@@ -1378,6 +1378,387 @@ fn test_thumb2_shift_register_lsr_lsl_asr() {
     assert_eq!(cpu.r2, 0xFF00_0000, "ASR.W by 4 of 0xF0000000 sign-extends");
 }
 
+#[test]
+fn test_shift_reg32_flags_table() {
+    // LSRS/LSLS/ASRS/RORS.W R4, R5, R2 — S=1, rn=5, rd=4, rm=2.
+    struct Case {
+        name: &'static str,
+        shift_type: u8,
+        shift: u32,
+        value: u32,
+        expected: u32,
+        /// `Some` asserts the shifter carry-out; `None` asserts C survives.
+        carry: Option<bool>,
+    }
+    let cases = [
+        Case {
+            name: "lsl #0",
+            shift_type: 0,
+            shift: 0,
+            value: 0x8000_0001,
+            expected: 0x8000_0001,
+            carry: None,
+        },
+        Case {
+            name: "lsl #1",
+            shift_type: 0,
+            shift: 1,
+            value: 0x8000_0001,
+            expected: 0x0000_0002,
+            carry: Some(true),
+        },
+        Case {
+            name: "lsl #31",
+            shift_type: 0,
+            shift: 31,
+            value: 0x8000_0001,
+            expected: 0x8000_0000,
+            carry: Some(false),
+        },
+        Case {
+            name: "lsl #32",
+            shift_type: 0,
+            shift: 32,
+            value: 0x8000_0001,
+            expected: 0x0000_0000,
+            carry: Some(true),
+        },
+        Case {
+            name: "lsl #33",
+            shift_type: 0,
+            shift: 33,
+            value: 0x8000_0001,
+            expected: 0x0000_0000,
+            carry: Some(false),
+        },
+        Case {
+            name: "lsl #255",
+            shift_type: 0,
+            shift: 255,
+            value: 0x8000_0001,
+            expected: 0x0000_0000,
+            carry: Some(false),
+        },
+        Case {
+            name: "lsr #0",
+            shift_type: 1,
+            shift: 0,
+            value: 0x8000_0001,
+            expected: 0x8000_0001,
+            carry: None,
+        },
+        Case {
+            name: "lsr #1",
+            shift_type: 1,
+            shift: 1,
+            value: 0x8000_0001,
+            expected: 0x4000_0000,
+            carry: Some(true),
+        },
+        Case {
+            name: "lsr #31",
+            shift_type: 1,
+            shift: 31,
+            value: 0x8000_0001,
+            expected: 0x0000_0001,
+            carry: Some(false),
+        },
+        Case {
+            name: "lsr #32",
+            shift_type: 1,
+            shift: 32,
+            value: 0x8000_0001,
+            expected: 0x0000_0000,
+            carry: Some(true),
+        },
+        Case {
+            name: "lsr #33",
+            shift_type: 1,
+            shift: 33,
+            value: 0x8000_0001,
+            expected: 0x0000_0000,
+            carry: Some(false),
+        },
+        Case {
+            name: "lsr #255",
+            shift_type: 1,
+            shift: 255,
+            value: 0x8000_0001,
+            expected: 0x0000_0000,
+            carry: Some(false),
+        },
+        Case {
+            name: "asr #0",
+            shift_type: 2,
+            shift: 0,
+            value: 0x8000_0001,
+            expected: 0x8000_0001,
+            carry: None,
+        },
+        Case {
+            name: "asr #1",
+            shift_type: 2,
+            shift: 1,
+            value: 0x8000_0001,
+            expected: 0xC000_0000,
+            carry: Some(true),
+        },
+        Case {
+            name: "asr #31",
+            shift_type: 2,
+            shift: 31,
+            value: 0x8000_0001,
+            expected: 0xFFFF_FFFF,
+            carry: Some(false),
+        },
+        Case {
+            name: "asr #32",
+            shift_type: 2,
+            shift: 32,
+            value: 0x8000_0001,
+            expected: 0xFFFF_FFFF,
+            carry: Some(true),
+        },
+        Case {
+            name: "asr #33",
+            shift_type: 2,
+            shift: 33,
+            value: 0x8000_0001,
+            expected: 0xFFFF_FFFF,
+            carry: Some(true),
+        },
+        Case {
+            name: "asr #255",
+            shift_type: 2,
+            shift: 255,
+            value: 0x8000_0001,
+            expected: 0xFFFF_FFFF,
+            carry: Some(true),
+        },
+        Case {
+            name: "ror #0",
+            shift_type: 3,
+            shift: 0,
+            value: 0x8000_0001,
+            expected: 0x8000_0001,
+            carry: None,
+        },
+        Case {
+            name: "ror #1",
+            shift_type: 3,
+            shift: 1,
+            value: 0x8000_0001,
+            expected: 0xC000_0000,
+            carry: Some(true),
+        },
+        Case {
+            name: "ror #31",
+            shift_type: 3,
+            shift: 31,
+            value: 0x8000_0001,
+            expected: 0x0000_0003,
+            carry: Some(false),
+        },
+        Case {
+            name: "ror #32",
+            shift_type: 3,
+            shift: 32,
+            value: 0x8000_0001,
+            expected: 0x8000_0001,
+            carry: Some(true),
+        },
+        Case {
+            name: "ror #33",
+            shift_type: 3,
+            shift: 33,
+            value: 0x8000_0001,
+            expected: 0xC000_0000,
+            carry: Some(true),
+        },
+        Case {
+            name: "ror #255",
+            shift_type: 3,
+            shift: 255,
+            value: 0x8000_0001,
+            expected: 0x0000_0003,
+            carry: Some(false),
+        },
+    ];
+    for case in cases {
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.pc = 0x1000;
+        cpu.r5 = case.value;
+        cpu.r2 = case.shift;
+        // Preset C opposite to the expected carry so a "leave carry_in"
+        // implementation cannot pass; a preserved carry is preset and
+        // must survive. V is never touched by a shift.
+        match case.carry {
+            Some(true) => cpu.xpsr &= !C_BIT,
+            Some(false) | None => cpu.xpsr |= C_BIT,
+        }
+        cpu.xpsr |= V_BIT;
+        let h1 = 0xFA00u32 | ((case.shift_type as u32) << 5) | 0x10 | 5;
+        run_test_instr(&mut cpu, &mut bus, (h1 << 16) | 0xF402, true);
+        assert_eq!(cpu.r4, case.expected, "{} result", case.name);
+        assert_eq!(
+            cpu.xpsr & C_BIT != 0,
+            case.carry.unwrap_or(true),
+            "{} carry",
+            case.name
+        );
+        assert_eq!(
+            cpu.xpsr & N_BIT != 0,
+            case.expected & 0x8000_0000 != 0,
+            "{} N",
+            case.name
+        );
+        assert_eq!(cpu.xpsr & Z_BIT != 0, case.expected == 0, "{} Z", case.name);
+        assert_ne!(cpu.xpsr & V_BIT, 0, "{} must not touch V", case.name);
+        if case.shift != 0 {
+            assert_eq!(cpu.r5, case.value, "{} must not change Rn", case.name);
+        }
+    }
+}
+
+#[test]
+fn test_shift_reg32_s0_leaves_apsr_alone() {
+    // LSL.W R4, R5, R2 (S=0) still shifts but preserves all flags.
+    let mut cpu = CortexM::new();
+    let mut bus = MockBus::new();
+    cpu.pc = 0x1000;
+    cpu.r5 = 0x8000_0001;
+    cpu.r2 = 1;
+    let apsr = N_BIT | V_BIT;
+    cpu.xpsr = (cpu.xpsr & !0xF000_0000) | apsr;
+    run_test_instr(&mut cpu, &mut bus, 0xFA05F402, true);
+    assert_eq!(cpu.r4, 0x0000_0002);
+    assert_eq!(cpu.xpsr & 0xF000_0000, apsr);
+}
+
+#[test]
+fn test_dataproc32_immediate_shift_sets_shifter_carry() {
+    // MOVS.W R0, R1, <type> #<imm5> — op=0x2, S=1, rn=0xF.
+    struct Case {
+        name: &'static str,
+        h2: u16,
+        value: u32,
+        expected: u32,
+        /// `Some` asserts the shifter carry-out; `None` asserts C survives.
+        carry: Option<bool>,
+    }
+    let cases = [
+        Case {
+            name: "lsl #1",
+            h2: 0x0041,
+            value: 0x8000_0001,
+            expected: 0x0000_0002,
+            carry: Some(true),
+        },
+        Case {
+            name: "lsr #1",
+            h2: 0x0051,
+            value: 0x8000_0002,
+            expected: 0x4000_0001,
+            carry: Some(false),
+        },
+        Case {
+            name: "asr #1",
+            h2: 0x0061,
+            value: 0xC000_0000,
+            expected: 0xE000_0000,
+            carry: Some(false),
+        },
+        Case {
+            name: "ror #1",
+            h2: 0x0071,
+            value: 0x0000_0001,
+            expected: 0x8000_0000,
+            carry: Some(true),
+        },
+        Case {
+            name: "lsl #0",
+            h2: 0x0001,
+            value: 0x1234_5678,
+            expected: 0x1234_5678,
+            carry: None,
+        },
+        Case {
+            name: "lsr #32",
+            h2: 0x0011,
+            value: 0x8000_0000,
+            expected: 0x0000_0000,
+            carry: Some(true),
+        },
+        Case {
+            name: "asr #32",
+            h2: 0x0021,
+            value: 0x8000_0000,
+            expected: 0xFFFF_FFFF,
+            carry: Some(true),
+        },
+    ];
+    for case in cases {
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.pc = 0x1000;
+        cpu.r1 = case.value;
+        // Preset C opposite to the expected carry so a "leave carry_in"
+        // implementation cannot pass; a preserved carry is preset and
+        // must survive the instruction.
+        match case.carry {
+            Some(true) => cpu.xpsr &= !C_BIT,
+            Some(false) | None => cpu.xpsr |= C_BIT,
+        }
+        run_test_instr(&mut cpu, &mut bus, 0xEA5F_0000 | case.h2 as u32, true);
+        assert_eq!(cpu.r0, case.expected, "{} result", case.name);
+        assert_eq!(
+            cpu.xpsr & C_BIT != 0,
+            case.carry.unwrap_or(true),
+            "{} carry",
+            case.name
+        );
+        assert_eq!(
+            cpu.xpsr & N_BIT != 0,
+            case.expected & 0x8000_0000 != 0,
+            "{} N",
+            case.name
+        );
+        assert_eq!(cpu.xpsr & Z_BIT != 0, case.expected == 0, "{} Z", case.name);
+    }
+}
+
+/// ARMv7-M A7.7.154: `MOVS.W Rd, Rm, RRX` (`EA5F 0031`, shift=ROR with
+/// imm5=0) is rotate-right-with-extend: result = `(C<<31)|(Rm>>1)`,
+/// carry-out = `Rm[0]`. The register-shift `ROR` with a zero amount is a
+/// different encoding (no shift, carry preserved) and keeps its own test
+/// in `test_shift_reg32_flags_table`.
+#[test]
+fn test_dataproc32_rrx_rotates_through_carry() {
+    // C=0: bit31 is vacated and gets 0; carry-out is Rm[0]=1.
+    let mut cpu = CortexM::new();
+    let mut bus = MockBus::new();
+    cpu.pc = 0x1000;
+    cpu.r1 = 0x8000_0001;
+    cpu.xpsr &= !C_BIT;
+    run_test_instr(&mut cpu, &mut bus, 0xEA5F_0031, true);
+    assert_eq!(cpu.r0, 0x4000_0000, "C=0 rotates 0 into bit31");
+    assert_ne!(cpu.xpsr & C_BIT, 0, "carry-out is Rm[0]=1");
+    assert_eq!(cpu.xpsr & N_BIT, 0, "N follows result bit31");
+    assert_eq!(cpu.xpsr & Z_BIT, 0, "Z follows result");
+
+    // C=1: bit31 gets the old carry; carry-out is Rm[0]=0.
+    let mut cpu = CortexM::new();
+    let mut bus = MockBus::new();
+    cpu.pc = 0x1000;
+    cpu.r1 = 0x0000_0002;
+    cpu.xpsr |= C_BIT;
+    run_test_instr(&mut cpu, &mut bus, 0xEA5F_0031, true);
+    assert_eq!(cpu.r0, 0x8000_0001, "C=1 rotates 1 into bit31");
+    assert_eq!(cpu.xpsr & C_BIT, 0, "carry-out is Rm[0]=0");
+    assert_ne!(cpu.xpsr & N_BIT, 0, "N follows result bit31");
+}
+
 /// SHPR3-driven priority dispatch: PendSV at lowest priority (0xFF) must
 /// not preempt an active higher-priority IRQ. This is the load-bearing
 /// behaviour for FreeRTOS — SysTick (higher prio) pends PendSV which

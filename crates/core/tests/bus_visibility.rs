@@ -266,6 +266,13 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         BusKind::Uart,
         "no edge bring-up path for i.MX LPUART in this gate yet",
     ),
+    (
+        "stm32u575",
+        BusKind::Spi,
+        "SPI1-3 declare no pad_map on this first pass (the H5 AF table is not \
+         transcribed), so the controller's SCK/MOSI never reach a routed pad and \
+         the named lines stay flat",
+    ),
 ];
 
 fn is_excluded(chip: &str, kind: BusKind) -> Option<&'static str> {

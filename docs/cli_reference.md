@@ -11,6 +11,7 @@ These options apply to the interactive runner and most subcommands.
 | `--trace` | Enable instruction-level execution tracing (prints every executed instruction). |
 | `--json` | Output errors and diagnostics as structured JSON for agent consumption. |
 | `--vcd <PATH>` | Output a Value Change Dump (VCD) trace file to the specified path. |
+| `--rtt` | Emit SEGGER RTT output: interactive runs echo drained RTT bytes; `test` captures them to `rtt.log` and enables `rtt_contains`. |
 | `--version` | Print version information. |
 | `--help` | Print help message. |
 
@@ -42,7 +43,7 @@ labwired test --script <YAML> [OVERRIDES]
 - `-c, --script <PATH>`: Path to the test script (see [Test Runner](ci_test_runner.md)).
 - `-f, --firmware <PATH>`: Override the firmware path in a single-machine script only; environment topology comes from `inputs.env`.
 - `-s, --system <PATH>`: Override the system manifest in a single-machine script only; environment topology comes from `inputs.env`.
-- `--output-dir <PATH>`: Directory for `result.json`, `snapshot.json`, `uart.log`, and `junit.xml`; requested trace, fault-evidence, coverage, and run-manifest artifacts are written there too.
+- `--output-dir <PATH>`: Directory for `result.json`, `snapshot.json`, `uart.log`, `rtt.log`, and `junit.xml`; requested trace, fault-evidence, coverage, and run-manifest artifacts are written there too.
 - `--junit <PATH>`: Path to write JUnit XML report.
 - `--max-steps <N>`: Override default step limit.
 - `--max-cycles <N>`: Override cycle limit.

@@ -203,6 +203,20 @@ boards:
       L5_adc: "No ADC model in stm32wba52 chip yaml yet"
       L8_can: "No CAN model in matrix path"
 
+  - id: stm32u575
+    chip: stm32u575
+    system: systems/stm32u575.yaml
+    pio: { platform: ststm32, board: nucleo_u575zi_q, framework: arduino }
+    max_steps: 10000000
+    budget_reason: "Measured first run: L0~0.17M, L2~0.49M, L3 Wire.begin i2c_computeTiming 7.1M, L6 analogWrite 5.0M — 10M covers L0-L4/L6/L7 with ~40% headroom (was 20M H563/L476 sibling budget)"
+    led_watch: "gpioc:7"
+    led_min_edges: 2
+    family: stm32
+    sketches_skip: [L5_adc, L8_can]
+    sketches_skip_reason:
+      L5_adc: "ADC1 descriptor uses the closest profile (stm32h7); the U5 RES[3:2] delta is documented but analogRead is unproven on U5 yet"
+      L8_can: "FDCAN not declared in the U5 chip yaml (first pass)"
+
   - id: atmega328p
     chip: atmega328p
     system: systems/atmega328p.yaml

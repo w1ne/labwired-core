@@ -1,0 +1,2971 @@
+peripheral: SEC_RCC
+version: 0.1.0
+registers:
+- id: RCC_CR
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 53
+  fields:
+  - name: MSISON
+    bit_range:
+    - 0
+    - 0
+    description: MSIS clock enable This bit is set and cleared by software. It is cleared by hardware to stop the MSIS oscillator when entering Stop, Standby or Shutdown mode. This bit is set by hardware to force the�MSIS oscillator on when exiting Standby or Shutdown mode. It is set by hardware to force the MSIS oscillator ON when STOPWUCK = 0 when exiting Stop modes, or in case of a failure of the HSE oscillator. Set by hardware when used directly or indirectly as system clock.
+  - name: MSIKERON
+    bit_range:
+    - 1
+    - 1
+    description: MSI enable for some peripheral kernels This bit is set and cleared by software to force MSI ON even in Stop modes. Keeping the MSI on in Stop mode allows the communication speed not to be reduced by the MSI startup time. This bit has no effect on MSISON and MSIKON values (see Section�11.4.24 for more details). This bit must be configured at 0 before entering Stop 3 mode.
+  - name: MSISRDY
+    bit_range:
+    - 2
+    - 2
+    description: 'MSIS clock ready flag This bit is set by hardware to indicate that the MSIS oscillator is stable. It is set only when MSIS is enabled by software (by setting MSISON). Note: Once the MSISON bit is cleared, MSISRDY goes low after six MSIS clock cycles.'
+  - name: MSIPLLEN
+    bit_range:
+    - 3
+    - 3
+    description: MSI clock PLL-mode enable This bit is set and cleared by software to enable/disable the PLL part of the MSI clock source. MSIPLLEN must be enabled after LSE is enabled (LSEON enabled) and ready (LSERDY set by hardware). A hardware protection prevents from enabling MSIPLLEN if LSE is not ready. This bit is cleared by hardware when LSE is disabled (LSEON = 0) or when the CSS on LSE detects a LSE failure (see RCC_CSR).
+  - name: MSIKON
+    bit_range:
+    - 4
+    - 4
+    description: MSIK clock enable This bit is set and cleared by software. It is cleared by hardware to stop the MSIK when entering Stop, Standby, or Shutdown mode. This bit is set by hardware to force the MSIK oscillator ON when exiting Standby or Shutdown mode. It is set by hardware to force the MSIK oscillator on when STOPWUCK = 0 or STOPKERWUCK�=�0 when exiting Stop modes, or in case of a failure of the HSE oscillator.
+  - name: MSIKRDY
+    bit_range:
+    - 5
+    - 5
+    description: 'MSIK clock ready flag This bit is set by hardware to indicate that the MSIK is stable. It is set only when MSI kernel oscillator is enabled by software by setting MSIKON. Note: Once MSIKON bit is cleared, MSIKRDY goes low after six MSIK oscillator clock cycles.'
+  - name: MSIPLLSEL
+    bit_range:
+    - 6
+    - 6
+    description: 'MSI clock with PLL mode selection This bit is set and cleared by software to select which MSI output clock uses the PLL mode. It�can be written only when the MSI PLL mode is disabled (MSIPLLEN = 0). Note: If the MSI kernel clock output uses the same oscillator source than the MSI system clock output, then the PLL mode is applied to both clock outputs.'
+  - name: MSIPLLFAST
+    bit_range:
+    - 7
+    - 7
+    description: MSI PLL mode fast startup This bit is set and reset by software to enable/disable the fast PLL mode start-up of the MSI clock source. This bit is used only if PLL mode is selected (MSIPLLEN = 1). The fast start-up feature is not active the first time the PLL mode is selected. The�fast start-up is active when the MSI in PLL mode returns from switch off.
+  - name: HSION
+    bit_range:
+    - 8
+    - 8
+    description: HSI16 clock enable This bit is set and cleared by software. It is cleared by hardware to stop the HSI16 oscillator when entering Stop, Standby, or Shutdown mode. This bit is set by hardware to force the�HSI16 oscillator on when STOPWUCK = 1 when leaving Stop modes, or in case of failure of the HSE crystal oscillator. This bit is set by hardware if the HSI16 is used directly or indirectly as system clock.
+  - name: HSIKERON
+    bit_range:
+    - 9
+    - 9
+    description: HSI16 enable for some peripheral kernels This bit is set and cleared by software to force HSI16 ON even in Stop modes. Keeping HSI16 on in Stop mode allows the communication speed not to be reduced by the HSI16 startup time. This bit has no effect on HSION value. Refer to Section�11.4.24 for more details. This bit must be configured at 0 before entering Stop 3 mode.
+  - name: HSIRDY
+    bit_range:
+    - 10
+    - 10
+    description: 'HSI16 clock ready flag This bit is set by hardware to indicate that HSI16 oscillator is stable. It is set only when HSI16 is enabled by software (by setting HSION). Note: Once the HSION bit is cleared, HSIRDY goes low after six HSI16 clock cycles.'
+  - name: HSI48ON
+    bit_range:
+    - 12
+    - 12
+    description: HSI48 clock enable This bit is set and cleared by software. It is cleared by hardware to stop the HSI48 when entering in Stop, Standby, or Shutdown modes.
+  - name: HSI48RDY
+    bit_range:
+    - 13
+    - 13
+    description: HSI48 clock ready flag This bit is set by hardware to indicate that HSI48 oscillator is stable. Itis set only when HSI48 is enabled by software (by setting HSI48ON).
+  - name: SHSION
+    bit_range:
+    - 14
+    - 14
+    description: SHSI clock enable This bit is set and cleared by software. It is cleared by hardware to stop the SHSI when entering in Stop, Standby, or Shutdown modes.
+  - name: SHSIRDY
+    bit_range:
+    - 15
+    - 15
+    description: 'SHSI clock ready flag This bit is set by hardware to indicate that the SHSI oscillator is stable. It is set only when SHSI is enabled by software (by setting SHSION). Note: Once the SHSION bit is cleared, SHSIRDY goes low after six SHSI clock cycles.'
+  - name: HSEON
+    bit_range:
+    - 16
+    - 16
+    description: HSE clock enable This bit is set and cleared by software. It is cleared by hardware to stop the HSE oscillator when entering Stop, Standby, or Shutdown mode. This bit cannot be reset if the HSE oscillator is used directly or indirectly as the system clock.
+  - name: HSERDY
+    bit_range:
+    - 17
+    - 17
+    description: 'HSE clock ready flag This bit is set by hardware to indicate that the HSE oscillator is stable. Note: Once the HSEON bit is cleared, HSERDY goes low after six HSE clock cycles.'
+  - name: HSEBYP
+    bit_range:
+    - 18
+    - 18
+    description: HSE crystal oscillator bypass This bit is set and cleared by software to bypass the oscillator with an external clock. The�external clock must be enabled with the HSEON bit set, to be used by the device. This�bit can be written only if the HSE oscillator is disabled.
+  - name: CSSON
+    bit_range:
+    - 19
+    - 19
+    description: Clock security system enable This bit is set by software to enable the clock security system. When CSSON is set, the clock detector is enabled by hardware when the HSE oscillator is ready, and disabled by hardware if a HSE clock failure is detected. This bit is set only and is cleared by reset.
+  - name: HSEEXT
+    bit_range:
+    - 20
+    - 20
+    description: HSE external clock bypass mode This bit is set and reset by software to select the external clock mode in bypass mode. External clock mode must be configured with HSEON bit to be used by the device. This bit can be written only if the HSE oscillator is disabled. This bit is active only if the HSE bypass mode is enabled.
+  - name: PLL1ON
+    bit_range:
+    - 24
+    - 24
+    description: PLL1 enable This bit is set and cleared by software to enable the main PLL. It is cleared by hardware when entering Stop, Standby, or Shutdown mode. This bit cannot be reset if the PLL1 clock is used as the system clock.
+  - name: PLL1RDY
+    bit_range:
+    - 25
+    - 25
+    description: PLL1 clock ready flag This bit is set by hardware to indicate that the PLL1 is locked.
+  - name: PLL2ON
+    bit_range:
+    - 26
+    - 26
+    description: PLL2 enable This bit is set and cleared by software to enable PLL2. It is cleared by hardware when entering Stop, Standby, or Shutdown mode.
+  - name: PLL2RDY
+    bit_range:
+    - 27
+    - 27
+    description: PLL2 clock ready flag This bit is set by hardware to indicate that the PLL2 is locked.
+  - name: PLL3ON
+    bit_range:
+    - 28
+    - 28
+    description: PLL3 enable This bit is set and cleared by software to enable PLL3. It is cleared by hardware when entering Stop, Standby, or Shutdown mode.
+  - name: PLL3RDY
+    bit_range:
+    - 29
+    - 29
+    description: PLL3 clock ready flag This bit is set by hardware to indicate that the PLL3 is locked.
+  side_effects: null
+- id: RCC_ICSCR1
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 1140850688
+  fields:
+  - name: MSICAL3
+    bit_range:
+    - 4
+    - 0
+    description: MSIRC3 clock calibration for MSI ranges 12 to 15 These bits are initialized at startup with the factory-programmed MSIRC3 calibration trim value for ranges 12 to 15. When MSITRIM3 is written, MSICAL3 is updated with the sum of MSITRIM3[4:0] and the factory calibration trim value MSIRC2[4:0]. There is no hardware protection to limit a potential overflow due to the addition of MSITRIM bitfield and factory program bitfield for this calibration value. Control must be managed by software at user level.
+  - name: MSICAL2
+    bit_range:
+    - 9
+    - 5
+    description: MSIRC2 clock calibration for MSI ranges 8 to 11 These bits are initialized at startup with the factory-programmed MSIRC2 calibration trim value for ranges 8 to 11. When MSITRIM2 is written, MSICAL2 is updated with the sum of MSITRIM2[4:0] and the factory calibration trim value MSIRC2[4:0]. There is no hardware protection to limit a potential overflow due to the addition of MSITRIM bitfield and factory program bitfield for this calibration value. Control must be managed by software at user level.
+  - name: MSICAL1
+    bit_range:
+    - 14
+    - 10
+    description: MSIRC1 clock calibration for MSI ranges 4 to 7 These bits are initialized at startup with the factory-programmed MSIRC1 calibration trim value for ranges 4 to 7. When MSITRIM1 is written, MSICAL1 is updated with the sum of MSITRIM1[4:0] and the factory calibration trim value MSIRC1[4:0]. There is no hardware protection to limit a potential overflow due to the addition of MSITRIM bitfield and factory program bitfield for this calibration value. Control must be managed by software at user level.
+  - name: MSICAL0
+    bit_range:
+    - 19
+    - 15
+    description: MSIRC0 clock calibration for MSI ranges 0 to 3 These bits are initialized at startup with the factory-programmed MSIRC0 calibration trim value for ranges 0 to 3. When MSITRIM0 is written, MSICAL0 is updated with the sum of MSITRIM0[4:0] and the factory-programmed calibration trim value MSIRC0[4:0]. There is no hardware protection to limit a potential overflow due to the addition of MSITRIM bitfield and factory program bitfield for this calibration value. Control must be managed by software at user level.
+  - name: MSIBIAS
+    bit_range:
+    - 22
+    - 22
+    description: MSI bias mode selection This bit is set by software to select the MSI bias mode. By default, the MSI bias is in�continuous mode in order to maintain the output clocks accuracy. Setting this bit reduces the MSI consumption when the regulator is in range 4, or when the device is in Stop 1 or Stop�2 mode, but it�decreases the MSI accuracy
+  - name: MSIRGSEL
+    bit_range:
+    - 23
+    - 23
+    description: MSI clock range selection This bit is set by software to select the MSIS and MSIK clocks range with MSISRANGE[3:0] and MSIKRANGE[3:0]. Write 0 has no effect. After exiting Standby or Shutdown mode, or after a reset, this bit is at 0 and the MSIS and MSIK ranges are provided by MSISSRANGE[3:0] and MSIKSRANGE[3:0] in RCC_CSR.
+  - name: MSIKRANGE
+    bit_range:
+    - 27
+    - 24
+    description: 'MSIK clock ranges These bits are configured by software to choose the frequency range of MSIK oscillator when MSIRGSEL is set. 16 frequency ranges are available: Note: MSIKRANGE can be modified when MSIK is off (MSISON = 0) or when MSIK is ready (MSIKRDY�=�1). MSIKRANGE must NOT be modified when MSIK is on and NOT ready (MSIKON = 1 and MSIKRDY = 0) Note: MSIKRANGE is kept when the device wakes up from Stop mode, except when the�MSIK range is above 24 MHz. In this case MSIKRANGE is changed by hardware into�range 2 (24 MHz).'
+  - name: MSISRANGE
+    bit_range:
+    - 31
+    - 28
+    description: 'MSIS clock ranges These bits are configured by software to choose the frequency range of MSIS oscillator when MSIRGSEL is set. 16 frequency ranges are available: Note: MSISRANGE can be modified when MSIS is off (MSISON = 0) or when MSIS is ready (MSISRDY�=�1). MSISRANGE must NOT be modified when MSIS is on and NOT ready (MSISON�=�1 and MSISRDY�=�0) Note: MSISRANGE is kept when the device wakes up from Stop mode, except when the�MSIS range is above 24 MHz. In this case MSISRANGE is changed by hardware into range 2 (24 MHz).'
+  side_effects: null
+- id: RCC_ICSCR2
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 541200
+  fields:
+  - name: MSITRIM3
+    bit_range:
+    - 4
+    - 0
+    description: MSI clock trimming for ranges 12 to 15 These bits provide an additional user-programmable trimming value that is added to the factory-programmed calibration trim value MSIRC3[4:0] bits. It can be programmed to adjust to voltage and temperature variations that influence the frequency of the MSI.
+  - name: MSITRIM2
+    bit_range:
+    - 9
+    - 5
+    description: MSI clock trimming for ranges 8 to 11 These bits provide an additional user-programmable trimming value that is added to the factory-programmed calibration trim value MSIRC2[4:0] bits. It can be programmed to adjust to voltage and temperature variations that influence the frequency of the MSI.
+  - name: MSITRIM1
+    bit_range:
+    - 14
+    - 10
+    description: MSI clock trimming for ranges 4 to 7 These bits provide an additional user-programmable trimming value that is added to the factory-programmed calibration trim value MSIRC1[4:0] bits. It can be programmed to adjust to voltage and temperature variations that influence the frequency of the MSI.
+  - name: MSITRIM0
+    bit_range:
+    - 19
+    - 15
+    description: MSI clock trimming for ranges 0 to 3 These bits provide an additional user-programmable trimming value that is added to the factory-programmed calibration trim value MSIRC0[4:0] bits. It can be programmed to adjust to voltage and temperature variations that influence the frequency of the MSI.
+  side_effects: null
+- id: RCC_ICSCR3
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 1048576
+  fields:
+  - name: HSICAL
+    bit_range:
+    - 11
+    - 0
+    description: HSI clock calibration These bits are initialized at startup with the factory-programmed HSI calibration trim value. When HSITRIM is written, HSICAL is updated with the sum of HSITRIM and the factory trim value.
+  - name: HSITRIM
+    bit_range:
+    - 20
+    - 16
+    description: HSI clock trimming These bits provide an additional user-programmable trimming value that is added to HSICAL[11:0] bits. It can be programmed to adjust to voltage and temperature variations that influence the frequency of the HSI.
+  side_effects: null
+- id: RCC_CRRCR
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: HSI48CAL
+    bit_range:
+    - 8
+    - 0
+    description: HSI48 clock calibration These bits are initialized at startup with the factory-programmed HSI48 calibration trim value.
+  side_effects: null
+- id: RCC_CFGR1
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SW
+    bit_range:
+    - 1
+    - 0
+    description: system clock switch This bitfield is set and cleared by software to select system clock source (SYSCLK). It is configured by hardware to force MSIS oscillator selection when exiting Standby or Shutdown mode. This bitfield is configured by hardware to force MSIS or HSI16 oscillator selection when exiting Stop mode or in case of HSE oscillator failure, depending on STOPWUCK.
+  - name: SWS
+    bit_range:
+    - 3
+    - 2
+    description: system clock switch status This bitfield is set and cleared by hardware to indicate which clock source is used as system clock.
+  - name: STOPWUCK
+    bit_range:
+    - 4
+    - 4
+    description: wake-up from Stop and CSS backup clock selection This bit is set and cleared by software to select the system clock used when exiting Stop mode. The selected clock is also used as emergency clock for the clock security system on�HSE. STOPWUCK must not be modified when the CSS is enabled by HSECSSON in�RCC_CR, and the system clock is HSE (SWS = 10) or a switch on HSE is�requested (SW�=�10).
+  - name: STOPKERWUCK
+    bit_range:
+    - 5
+    - 5
+    description: wake-up from Stop kernel clock automatic enable selection This bit is set and cleared by software to enable automatically another oscillator when exiting Stop mode. This oscillator can be used as independent kernel clock by peripherals.
+  - name: MCOSEL
+    bit_range:
+    - 27
+    - 24
+    description: 'microcontroller clock output This bitfield is set and cleared by software. Others: reserved Note: This clock output may have some truncated cycles at startup or during MCO clock source switching.'
+  - name: MCOPRE
+    bit_range:
+    - 30
+    - 28
+    description: 'microcontroller clock output prescaler This bitfield is set and cleared by software. It is highly recommended to change this prescaler before MCO output is enabled. Others: not allowed'
+  side_effects: null
+- id: RCC_CFGR2
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 24576
+  fields:
+  - name: HPRE
+    bit_range:
+    - 3
+    - 0
+    description: 'AHB prescaler This bitfiled is set and cleared by software to control the division factor of the AHB clock (HCLK). Depending on the device voltage range, the software must set these bits correctly to ensure that the system frequency does not exceed the maximum allowed frequency (for more details, refer to Table�118). After a write operation to these bits and before decreasing the voltage range, this register must be read to be sure that the new value is taken into account. 0xxx: SYSCLK not divided'
+  - name: PPRE1
+    bit_range:
+    - 6
+    - 4
+    description: 'APB1 prescaler This bitfiled is set and cleared by software to control the division factor of APB1 clock (PCLK1). 0xx: PCLK1 not divided'
+  - name: PPRE2
+    bit_range:
+    - 10
+    - 8
+    description: 'APB2 prescaler This bitfiled is set and cleared by software to control the division factor of APB2 clock (PCLK2). 0xx: PCLK2 not divided'
+  - name: DPRE
+    bit_range:
+    - 14
+    - 12
+    description: 'DSI PHY prescaler This bitfiled is set and cleared by software to control the division factor of DSI PHY bus clock (DCLK). 0xx: DCLK not divided Note: This bitfield is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bitfield as reserved and keep it at reset value.'
+  - name: AHB1DIS
+    bit_range:
+    - 16
+    - 16
+    description: AHB1 clock disable This bit can be set in order to further reduce power consumption, when none of the AHB1 peripherals (except those listed hereafter) are used and when their clocks are disabled in RCC_AHB1ENR. When this bit is set, all the AHB1 peripherals clocks are off, except for FLASH, BKPSRAM, ICACHE, DCACHE1 and SRAM1.
+  - name: AHB2DIS1
+    bit_range:
+    - 17
+    - 17
+    description: AHB2_1 clock disable This bit can be set in order to further reduce power consumption, when none of the AHB2 peripherals from RCC_AHB2ENR1 (except SRAM2 and SRAM3) are used and when their clocks are disabled in RCC_AHB2ENR1. When this bit is set, all the AHB2 peripherals clocks from RCC_AHB2ENR1 are off, except for SRAM2 and SRAM3.
+  - name: AHB2DIS2
+    bit_range:
+    - 18
+    - 18
+    description: AHB2_2 clock disable This bit can be set in order to further reduce power consumption, when none of the AHB2 peripherals from RCC_AHB2ENR2 are used and when their clocks are disabled in RCC_AHB2ENR2. When this bit is set, all the AHB2 peripherals clocks from RCC_AHB2ENR2 are off.
+  - name: APB1DIS
+    bit_range:
+    - 19
+    - 19
+    description: APB1 clock disable This bit can be set in order to further reduce power consumption, when none of the APB1 peripherals (except IWDG) are used and when their clocks are disabled in RCC_APB1ENR. When this bit is set, all the APB1 peripherals clocks are off, except for IWDG.
+  - name: APB2DIS
+    bit_range:
+    - 20
+    - 20
+    description: APB2 clock disable This bit can be set in order to further reduce power consumption, when none of the APB2 peripherals are used and when their clocks are disabled in RCC_APB2ENR. When this bit is set, all APB2 peripherals clocks are off.
+  side_effects: null
+- id: RCC_CFGR3
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PPRE3
+    bit_range:
+    - 6
+    - 4
+    description: 'APB3 prescaler This bitfield is set and cleared by software to control the division factor of the APB3 clock (PCLK3). 0xx: HCLK not divided'
+  - name: AHB3DIS
+    bit_range:
+    - 16
+    - 16
+    description: AHB3 clock disable This bit can be set in order to further reduce power consumption, when none of the AHB3 peripherals (except SRAM4) are used and when their clocks are disabled in RCC_AHB3ENR. When this bit is set, all the AHB3 peripherals clocks are off, except for SRAM4.
+  - name: APB3DIS
+    bit_range:
+    - 17
+    - 17
+    description: APB3 clock disable This bit can be set in order to further reduce power consumption, when none of the APB3 peripherals from RCC_APB3ENR are used and when their clocks are disabled in RCC_APB3ENR. When this bit is set, all the APB3 peripherals clocks are off.
+  side_effects: null
+- id: RCC_PLL1CFGR
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PLL1SRC
+    bit_range:
+    - 1
+    - 0
+    description: PLL1 entry clock source This bitfield is set and cleared by software to select PLL1 clock source. It can be written only when the PLL1 is disabled. In order to save power, when no PLL1 is used, this bitfield value must be zero.
+  - name: PLL1RGE
+    bit_range:
+    - 3
+    - 2
+    description: 'PLL1 input frequency range This bit is set and reset by software to select the proper reference frequency range used for PLL1. It must be written before enabling the PLL1. 00-01-10: PLL1 input (ref1_ck) clock range frequency between 4 and 8 MHz'
+  - name: PLL1FRACEN
+    bit_range:
+    - 4
+    - 4
+    description: 'PLL1 fractional latch enable This bit is set and reset by software to latch the content of PLL1FRACN in the ΣΔ modulator. In order to latch the PLL1FRACN value into the ΣΔ modulator, PLL1FRACEN must be set to 0, then set to 1: the transition 0 to 1 transfers the content of PLL1FRACN into the modulator (see PLL initialization phase for details).'
+  - name: PLL1M
+    bit_range:
+    - 11
+    - 8
+    description: Prescaler for PLL1 This bitfield is set and cleared by software to configure the prescaler of the PLL1. The VCO1 input frequency is PLL1 input clock frequency/PLL1M. This bit can be written only when the PLL1 is disabled (PLL1ON = 0 and PLL1RDY = 0). ...
+  - name: PLL1MBOOST
+    bit_range:
+    - 15
+    - 12
+    description: 'Prescaler for EPOD booster input clock This bitfield is set and cleared by software to configure the prescaler of the PLL1, used for the EPOD booster. The EPOD booster input frequency is PLL1�input�clock�frequency/PLL1MBOOST. This bit can be written only when the PLL1 is disabled (PLL1ON = 0 and PLL1RDY = 0) and EPODboost mode is disabled (see Section�10: Power control (PWR)). others: reserved'
+  - name: PLL1PEN
+    bit_range:
+    - 16
+    - 16
+    description: PLL1 DIVP divider output enable This bit is set and reset by software to enable the pll1_p_ck output of the PLL1. To save power, PLL1PEN and PLL1P bits must be set to 0 when pll1_p_ck is not used.
+  - name: PLL1QEN
+    bit_range:
+    - 17
+    - 17
+    description: PLL1 DIVQ divider output enable This bit is set and reset by software to enable the pll1_q_ck output of the PLL1. To save power, PLL1QEN and PLL1Q bits must be set to 0 when pll1_q_ck is not used.
+  - name: PLL1REN
+    bit_range:
+    - 18
+    - 18
+    description: PLL1 DIVR divider output enable This bit is set and reset by software to enable the pll1_r_ck output of the PLL1. To save power, PLL1RENPLL2REN and PLL1R bits must be set to 0 when pll1_r_ck is not used. This bit can be cleared only when the PLL1 is not used as SYSCLK.
+  side_effects: null
+- id: RCC_PLL2CFGR
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PLL2SRC
+    bit_range:
+    - 1
+    - 0
+    description: PLL2 entry clock source This bitfield is set and cleared by software to select PLL2 clock source. It can be written only when the PLL2 is disabled. To save power, when no PLL2 is used, this bitfield value must be�zero.
+  - name: PLL2RGE
+    bit_range:
+    - 3
+    - 2
+    description: 'PLL2 input frequency range This bitfield is set and reset by software to select the proper reference frequency range used for�PLL2. It must be written before enabling the PLL2. 00-01-10: PLL2 input (ref2_ck) clock range frequency between 4 and 8 MHz'
+  - name: PLL2FRACEN
+    bit_range:
+    - 4
+    - 4
+    description: 'PLL2 fractional latch enable This bit is set and reset by software to latch the content of PLL2FRACN in the ΣΔ modulator. In order to latch the PLL2FRACN value into the ΣΔ modulator, PLL2FRACEN must be set to 0, then set to 1: the transition 0 to 1 transfers the content of PLL2FRACN into the modulator (see PLL initialization phase for details).'
+  - name: PLL2M
+    bit_range:
+    - 11
+    - 8
+    description: Prescaler for PLL2 This bitfield is set and cleared by software to configure the prescaler of the PLL2. The VCO2 input frequency is PLL2 input clock frequency/PLL2M. This bit can be written only when the PLL2 is disabled (PLL2ON = 0 and PLL2RDY = 0). ...
+  - name: PLL2PEN
+    bit_range:
+    - 16
+    - 16
+    description: PLL2 DIVP divider output enable This bit is set and reset by software to enable the pll2_p_ck output of the PLL2. To save power, PLL2PEN and PLL2P bits must be set to 0 when pll2_p_ck is not used.
+  - name: PLL2QEN
+    bit_range:
+    - 17
+    - 17
+    description: PLL2 DIVQ divider output enable This bit is set and reset by software to enable the pll2_q_ck output of the PLL2. To save power, PLL2QEN and PLL2Q bits must be set to 0 when pll2_q_ck is not used.
+  - name: PLL2REN
+    bit_range:
+    - 18
+    - 18
+    description: PLL2 DIVR divider output enable This bit is set and reset by software to enable the pll2_r_ck output of the PLL2. To save power, PLL2REN and PLL2R bits must be set to 0 when pll2_r_ck is not used.
+  side_effects: null
+- id: RCC_PLL3CFGR
+  address_offset: 48
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PLL3SRC
+    bit_range:
+    - 1
+    - 0
+    description: PLL3 entry clock source This bitfield is set and cleared by software to select PLL3 clock source. It can be written only when the PLL3 is disabled. To save power, when no PLL3 is used, this bitfield value must be�zero.
+  - name: PLL3RGE
+    bit_range:
+    - 3
+    - 2
+    description: 'PLL3 input frequency range This bit is set and reset by software to select the proper reference frequency range used for�PLL3. It must be written before enabling the PLL3. 00-01-10: PLL3 input (ref3_ck) clock range frequency between 4 and 8 MHz'
+  - name: PLL3FRACEN
+    bit_range:
+    - 4
+    - 4
+    description: 'PLL3 fractional latch enable This bit is set and reset by software to latch the content of PLL3FRACN in the ΣΔ modulator. In order to latch the PLL3FRACN value into the ΣΔ modulator, PLL3FRACEN must be set to 0, then set to 1: the transition 0 to 1 transfers the content of PLL3FRACN into the modulator (see PLL initialization phase for details).'
+  - name: PLL3M
+    bit_range:
+    - 11
+    - 8
+    description: Prescaler for PLL3 This bitfield is set and cleared by software to configure the prescaler of the PLL3. The VCO3 input frequency is PLL3 input clock frequency/PLL3M. This bitfield can be written only when the PLL3 is disabled (PLL3ON = 0 and PLL3RDY = 0). ...
+  - name: PLL3PEN
+    bit_range:
+    - 16
+    - 16
+    description: PLL3 DIVP divider output enable This bit is set and reset by software to enable the pll3_p_ck output of the PLL3. To save power, PLL3PEN and PLL3P bits must be set to 0 when pll3_p_ck is not used.
+  - name: PLL3QEN
+    bit_range:
+    - 17
+    - 17
+    description: PLL3 DIVQ divider output enable This bit is set and reset by software to enable the pll3_q_ck output of the PLL3. To save power, PLL3QEN and PLL3Q bits must be set to 0 when pll3_q_ck is not used.
+  - name: PLL3REN
+    bit_range:
+    - 18
+    - 18
+    description: PLL3 DIVR divider output enable This bit is set and reset by software to enable the pll3_r_ck output of the PLL3. To save power, PLL3REN and PLL3R bits must be set to 0 when pll3_r_ck is not used.
+  side_effects: null
+- id: RCC_PLL1DIVR
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 16843392
+  fields:
+  - name: PLL1N
+    bit_range:
+    - 8
+    - 0
+    description: 'Multiplication factor for PLL1 VCO This bitfield is set and reset by software to control the multiplication factor of the VCO. It can be written only when the PLL is disabled (PLL1ON = 0 and PLL1RDY = 0). ... ... Others: reserved VCO output frequency = F<sub>ref1_ck</sub> x PLL1N, when fractional value 0 has been loaded in PLL1FRACN, with: PLL1N between 4 and 512 input frequency F<sub>ref1_ck</sub> between 4 and 16�MHz'
+  - name: PLL1P
+    bit_range:
+    - 15
+    - 9
+    description: PLL1 DIVP division factor This bitfield is set and reset by software to control the frequency of the pll1_p_ck clock. It can be written only when the PLL1 is disabled (PLL1ON = 0 and PLL1RDY = 0). ...
+  - name: PLL1Q
+    bit_range:
+    - 22
+    - 16
+    description: PLL1 DIVQ division factor This bitfield is set and reset by software to control the frequency of the pll1_q_ck clock. It can be written only when the PLL1 is disabled (PLL1ON = 0 and PLL1RDY = 0). ...
+  - name: PLL1R
+    bit_range:
+    - 30
+    - 24
+    description: PLL1 DIVR division factor This bitfield is set and reset by software to control frequency of the pll1_r_ck clock. It can be written only when the PLL1 is disabled (PLL1ON = 0 and PLL1RDY = 0). Only division by one and even division factors are allowed. ...
+  side_effects: null
+- id: RCC_PLL1FRACR
+  address_offset: 56
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PLL1FRACN
+    bit_range:
+    - 15
+    - 3
+    description: 'Fractional part of the multiplication factor for PLL1 VCO This bitfield is set and reset by software to control the fractional part of the VCO multiplication factor. It can be written at any time, allowing dynamic fine-tuning of the PLL1 VCO. VCO output frequency = F<sub>ref1_ck</sub> x (PLL1N + (PLL1FRACN / 2<sup>13</sup>)), with: PLL1N must be between 4 and 512. PLL1FRACN can be between 0 and 2<sup>13</sup>- 1. The input frequency F<sub>ref1_ck</sub> must be between 4 and 16 MHz. To change the FRACN value on-the-fly even if the PLL is enabled, the application must proceed as�follows: Set PLL1FRACEN = 0. Write the new fractional value into PLL1FRACN. Set PLL1FRACEN = 1.'
+  side_effects: null
+- id: RCC_PLL2DIVR
+  address_offset: 60
+  size: 32
+  access: READ_WRITE
+  reset_value: 16843392
+  fields:
+  - name: PLL2N
+    bit_range:
+    - 8
+    - 0
+    description: 'Multiplication factor for PLL2 VCO This bitfield is set and reset by software to control the multiplication factor of the VCO. It can be written only when the PLL is disabled (PLL2ON = 0 and PLL2RDY = 0). ... ... Others: reserved VCO output frequency = F<sub>ref2_ck</sub> x PLL2N, when fractional value 0 has been loaded in PLL2FRACN, with: PLL2N between 4 and 512 input frequency F<sub>ref2_ck</sub> between 1MHz and 16MHz'
+  - name: PLL2P
+    bit_range:
+    - 15
+    - 9
+    description: PLL2 DIVP division factor This bitfield is set and reset by software to control the frequency of the pll2_p_ck clock. It can be written only when the PLL2 is disabled (PLL2ON = 0 and PLL2RDY = 0). ...
+  - name: PLL2Q
+    bit_range:
+    - 22
+    - 16
+    description: PLL2 DIVQ division factor This bitfield is set and reset by software to control the frequency of the pll2_q_ck clock. It can be written only when the PLL2 is disabled (PLL2ON = 0 and PLL2RDY = 0). ...
+  - name: PLL2R
+    bit_range:
+    - 30
+    - 24
+    description: PLL2 DIVR division factor This bitfield is set and reset by software to control the frequency of the pll2_r_ck clock. It can be written only when the PLL2 is disabled (PLL2ON = 0 and PLL2RDY = 0). ...
+  side_effects: null
+- id: RCC_PLL2FRACR
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PLL2FRACN
+    bit_range:
+    - 15
+    - 3
+    description: 'Fractional part of the multiplication factor for PLL2 VCO This bitfield is set and reset by software to control the fractional part of the VCO multiplication factor. It can be written at any time, allowing dynamic fine-tuning of the PLL2 VCO. VCO output frequency = F<sub>ref2_ck</sub> x (PLL2N + (PLL2FRACN / 2<sup>13</sup>)), with PLL2N must be between 4 and 512. PLL2FRACN can be between 0 and 2<sup>13 </sup>- 1. The input frequency F<sub>ref2_ck</sub> must be between 4 and 16 MHz. In order to change the FRACN value on-the-fly even if the PLL is enabled, the application must proceed as follows: Set the bit PLL2FRACEN to 0. Write the new fractional value into PLL2FRACN. Set the bit PLL2FRACEN to 1.'
+  side_effects: null
+- id: RCC_PLL3DIVR
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 16843392
+  fields:
+  - name: PLL3N
+    bit_range:
+    - 8
+    - 0
+    description: 'Multiplication factor for PLL3 VCO This bitfield is set and reset by software to control the multiplication factor of the VCO. It can be written only when the PLL is disabled (PLL3ON = 0 and PLL3RDY = 0). ... ... Others: reserved VCO output frequency = F<sub>ref3_ck</sub> x PLL3N, when fractional value 0 has been loaded in PLL3FRACN, with: PLL3N between 4 and 512 input frequency F<sub>ref3_ck</sub> between 4 and 16MHz'
+  - name: PLL3P
+    bit_range:
+    - 15
+    - 9
+    description: PLL3 DIVP division factor This bitfield is set and reset by software to control the frequency of the pll3_p_ck clock. It can be written only when the PLL3 is disabled (PLL3ON = 0 and PLL3RDY = 0). ...
+  - name: PLL3Q
+    bit_range:
+    - 22
+    - 16
+    description: PLL3 DIVQ division factor This bitfield is set and reset by software to control the frequency of the pll3_q_ck clock. It can be written only when the PLL3 is disabled (PLL3ON = 0 and PLL3RDY = 0). ...
+  - name: PLL3R
+    bit_range:
+    - 30
+    - 24
+    description: PLL3 DIVR division factor This bitfield is set and reset by software to control the frequency of the pll3_r_ck clock. It can be written only when the PLL3 is disabled (PLL3ON = 0 and PLL3RDY = 0). ...
+  side_effects: null
+- id: RCC_PLL3FRACR
+  address_offset: 72
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PLL3FRACN
+    bit_range:
+    - 15
+    - 3
+    description: 'Fractional part of the multiplication factor for PLL3 VCO This bitfield is set and reset by software to control the fractional part of the VCO multiplication factor. It can be written at any time, allowing dynamic fine-tuning of the PLL3 VCO. VCO output frequency = F<sub>ref3_ck</sub> x (PLL3N + (PLL3FRACN / 2<sup>13</sup>)), with: PLL3N must be between 4 and 512. PLL3FRACN can be between 0 and 2<sup>13 </sup>- 1. The input frequency F<sub>ref3_ck</sub> must be between 4 and 16 MHz. In order to change the FRACN value on-the-fly even if the PLL is enabled, the application must proceed as follows: Set the bit PLL3FRACEN to 0. Write the new fractional value into PLL3FRACN. Set the bit PLL3FRACEN to 1.'
+  side_effects: null
+- id: RCC_CIER
+  address_offset: 80
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LSIRDYIE
+    bit_range:
+    - 0
+    - 0
+    description: LSI ready interrupt enable This bit is set and cleared by software to enable/disable interrupt caused by the LSI oscillator stabilization.
+  - name: LSERDYIE
+    bit_range:
+    - 1
+    - 1
+    description: LSE ready interrupt enable This bit is set and cleared by software to enable/disable interrupt caused by the LSE oscillator stabilization.
+  - name: MSISRDYIE
+    bit_range:
+    - 2
+    - 2
+    description: MSIS ready interrupt enable This bit is set and cleared by software to enable/disable interrupt caused by the MSIS oscillator stabilization.
+  - name: HSIRDYIE
+    bit_range:
+    - 3
+    - 3
+    description: HSI16 ready interrupt enable This bit is set and cleared by software to enable/disable interrupt caused by the HSI16 oscillator stabilization.
+  - name: HSERDYIE
+    bit_range:
+    - 4
+    - 4
+    description: HSE ready interrupt enable This bit is set and cleared by software to enable/disable interrupt caused by the HSE oscillator stabilization.
+  - name: HSI48RDYIE
+    bit_range:
+    - 5
+    - 5
+    description: HSI48 ready interrupt enable This bit is set and cleared by software to enable/disable interrupt caused by the HSI48 oscillator stabilization.
+  - name: PLL1RDYIE
+    bit_range:
+    - 6
+    - 6
+    description: PLL ready interrupt enable This bit is set and cleared by software to enable/disable interrupt caused by PLL1 lock.
+  - name: PLL2RDYIE
+    bit_range:
+    - 7
+    - 7
+    description: PLL2 ready interrupt enable This bit is set and cleared by software to enable/disable interrupt caused by PLL2 lock.
+  - name: PLL3RDYIE
+    bit_range:
+    - 8
+    - 8
+    description: PLL3 ready interrupt enable This bit is set and cleared by software to enable/disable interrupt caused by PLL3 lock.
+  - name: MSIKRDYIE
+    bit_range:
+    - 11
+    - 11
+    description: MSIK ready interrupt enable This bit is set and cleared by software to enable/disable interrupt caused by the MSIK oscillator stabilization.
+  - name: SHSIRDYIE
+    bit_range:
+    - 12
+    - 12
+    description: SHSI ready interrupt enable This bit is set and cleared by software to enable/disable interrupt caused by the SHSI oscillator stabilization.
+  side_effects: null
+- id: RCC_CIFR
+  address_offset: 84
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LSIRDYF
+    bit_range:
+    - 0
+    - 0
+    description: LSI ready interrupt flag This bit is set by hardware when the LSI clock becomes stable and LSIRDYIE is set. It is cleared by software by�setting the LSIRDYC bit.
+  - name: LSERDYF
+    bit_range:
+    - 1
+    - 1
+    description: LSE ready interrupt flag This bit is set by hardware when the LSE clock becomes stable and LSERDYIE is set. It is cleared by software by setting the LSERDYC bit.
+  - name: MSISRDYF
+    bit_range:
+    - 2
+    - 2
+    description: MSIS ready interrupt flag This bit is set by hardware when the MSIS clock becomes stable and MSISRDYIE is set. It�is cleared by software by setting the MSISRDYC bit.
+  - name: HSIRDYF
+    bit_range:
+    - 3
+    - 3
+    description: HSI16 ready interrupt flag This bit is set by hardware when the HSI16 clock becomes stable and HSIRDYIE = 1 in�response to setting the HSION (see RCC_CR). When HSION = 0 but the HSI16 oscillator is enabled by the peripheral through a clock request, this bit is not set and no interrupt is generated. This bit is cleared by software by setting the HSIRDYC bit.
+  - name: HSERDYF
+    bit_range:
+    - 4
+    - 4
+    description: HSE ready interrupt flag This bit is set by hardware when the HSE clock becomes stable and HSERDYIE is set. It is cleared by software by setting the HSERDYC bit.
+  - name: HSI48RDYF
+    bit_range:
+    - 5
+    - 5
+    description: HSI48 ready interrupt flag This bit is set by hardware when the HSI48 clock becomes stable and HSI48RDYIE is set. it�is cleared by software by setting the HSI48RDYC bit.
+  - name: PLL1RDYF
+    bit_range:
+    - 6
+    - 6
+    description: PLL1 ready interrupt flag This bit is set by hardware when the PLL1 locks and PLL1RDYIE is set. It is cleared by software by setting the PLL1RDYC bit.
+  - name: PLL2RDYF
+    bit_range:
+    - 7
+    - 7
+    description: PLL2 ready interrupt flag This bit is set by hardware when the PLL2 locks and PLL2RDYIE is set. It is cleared by software by setting the PLL2RDYC bit.
+  - name: PLL3RDYF
+    bit_range:
+    - 8
+    - 8
+    description: PLL3 ready interrupt flag This bit is set by hardware when the PLL3 locks and PLL3RDYIE is set. It is cleared by software by setting the PLL3RDYC bit.
+  - name: CSSF
+    bit_range:
+    - 10
+    - 10
+    description: Clock security system interrupt flag This bit is set by hardware when a failure is detected in the HSE oscillator. It is cleared by software by setting the CSSC bit.
+  - name: MSIKRDYF
+    bit_range:
+    - 11
+    - 11
+    description: MSIK ready interrupt flag This bit is set by hardware when the MSIK clock becomes stable and MSIKRDYIE is set. It is cleared by software by setting the MSIKRDYC bit.
+  - name: SHSIRDYF
+    bit_range:
+    - 12
+    - 12
+    description: SHSI ready interrupt flag This bit is set by hardware when the SHSI clock becomes stable and SHSIRDYIE is set. It is cleared by software by setting the SHSIRDYC bit.
+  side_effects: null
+- id: RCC_CICR
+  address_offset: 88
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LSIRDYC
+    bit_range:
+    - 0
+    - 0
+    description: LSI ready interrupt clear Writing this bit to 1 clears the LSIRDYF flag. Writing 0 has no effect.
+  - name: LSERDYC
+    bit_range:
+    - 1
+    - 1
+    description: LSE ready interrupt clear Writing this bit to 1 clears the LSERDYF flag. Writing 0 has no effect.
+  - name: MSISRDYC
+    bit_range:
+    - 2
+    - 2
+    description: MSIS ready interrupt clear Writing this bit to 1 clears the MSISRDYF flag. Writing 0 has no effect.
+  - name: HSIRDYC
+    bit_range:
+    - 3
+    - 3
+    description: HSI16 ready interrupt clear Writing this bit to 1 clears the HSIRDYF flag. Writing 0 has no effect.
+  - name: HSERDYC
+    bit_range:
+    - 4
+    - 4
+    description: HSE ready interrupt clear Writing this bit to 1 clears the HSERDYF flag. Writing 0 has no effect.
+  - name: HSI48RDYC
+    bit_range:
+    - 5
+    - 5
+    description: HSI48 ready interrupt clear Writing this bit to 1 clears the HSI48RDYF flag. Writing 0 has no effect.
+  - name: PLL1RDYC
+    bit_range:
+    - 6
+    - 6
+    description: PLL1 ready interrupt clear Writing this bit to 1 clears the PLL1RDYF flag. Writing 0 has no effect.
+  - name: PLL2RDYC
+    bit_range:
+    - 7
+    - 7
+    description: PLL2 ready interrupt clear Writing this bit to 1 clears the PLL2RDYF flag. Writing 0 has no effect.
+  - name: PLL3RDYC
+    bit_range:
+    - 8
+    - 8
+    description: PLL3 ready interrupt clear Writing this bit to 1 clears the PLL3RDYF flag. Writing 0 has no effect.
+  - name: CSSC
+    bit_range:
+    - 10
+    - 10
+    description: Clock security system interrupt clear Writing this bit to 1 clears the CSSF flag. Writing 0 has no effect.
+  - name: MSIKRDYC
+    bit_range:
+    - 11
+    - 11
+    description: MSIK oscillator ready interrupt clear Writing this bit to 1 clears the MSIKRDYF flag. Writing 0 has no effect.
+  - name: SHSIRDYC
+    bit_range:
+    - 12
+    - 12
+    description: SHSI oscillator ready interrupt clear Writing this bit to 1 clears the SHSIRDYF flag. Writing 0 has no effect.
+  side_effects: null
+- id: RCC_AHB1RSTR
+  address_offset: 96
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPDMA1RST
+    bit_range:
+    - 0
+    - 0
+    description: GPDMA1 reset This bit is set and cleared by software.
+  - name: CORDICRST
+    bit_range:
+    - 1
+    - 1
+    description: CORDIC reset This bit is set and cleared by software.
+  - name: FMACRST
+    bit_range:
+    - 2
+    - 2
+    description: FMAC reset This bit is set and cleared by software.
+  - name: MDF1RST
+    bit_range:
+    - 3
+    - 3
+    description: MDF1 reset This bit is set and cleared by software.
+  - name: CRCRST
+    bit_range:
+    - 12
+    - 12
+    description: CRC reset This bit is set and cleared by software.
+  - name: JPEGRST
+    bit_range:
+    - 15
+    - 15
+    description: 'JPEG reset This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: TSCRST
+    bit_range:
+    - 16
+    - 16
+    description: TSC reset This bit is set and cleared by software.
+  - name: RAMCFGRST
+    bit_range:
+    - 17
+    - 17
+    description: RAMCFG reset This bit is set and cleared by software.
+  - name: DMA2DRST
+    bit_range:
+    - 18
+    - 18
+    description: 'DMA2D reset This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: GFXMMURST
+    bit_range:
+    - 19
+    - 19
+    description: 'GFXMMU reset This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: GPU2DRST
+    bit_range:
+    - 20
+    - 20
+    description: 'GPU2D reset This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  side_effects: null
+- id: RCC_AHB2RSTR1
+  address_offset: 100
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIOARST
+    bit_range:
+    - 0
+    - 0
+    description: I/O port A reset This bit is set and cleared by software.
+  - name: GPIOBRST
+    bit_range:
+    - 1
+    - 1
+    description: I/O port B reset This bit is set and cleared by software.
+  - name: GPIOCRST
+    bit_range:
+    - 2
+    - 2
+    description: I/O port C reset This bit is set and cleared by software.
+  - name: GPIODRST
+    bit_range:
+    - 3
+    - 3
+    description: I/O port D reset This bit is set and cleared by software.
+  - name: GPIOERST
+    bit_range:
+    - 4
+    - 4
+    description: I/O port E reset This bit is set and cleared by software.
+  - name: GPIOFRST
+    bit_range:
+    - 5
+    - 5
+    description: 'I/O port F reset This bit is set and cleared by software. This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. Note: If not present, consider this bit as reserved and keep it at reset value.'
+  - name: GPIOGRST
+    bit_range:
+    - 6
+    - 6
+    description: I/O port G reset This bit is set and cleared by software.
+  - name: GPIOHRST
+    bit_range:
+    - 7
+    - 7
+    description: I/O port H reset This bit is set and cleared by software.
+  - name: GPIOIRST
+    bit_range:
+    - 8
+    - 8
+    description: 'I/O port I reset This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: GPIOJRST
+    bit_range:
+    - 9
+    - 9
+    description: 'I/O port J reset This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: ADC12RST
+    bit_range:
+    - 10
+    - 10
+    description: 'ADC1 and ADC2 reset This bit is set and cleared by software. Note: This bit impacts ADC1 in STM32U535/545/575/585, and ADC1/ADC2 in�STM32U59x/5Ax/5Fx/5Gx.'
+  - name: DCMI_PSSIRST
+    bit_range:
+    - 12
+    - 12
+    description: DCMI and PSSI reset This bit is set and cleared by software.
+  - name: OTGRST
+    bit_range:
+    - 14
+    - 14
+    description: 'OTG_FS or OTG_HS reset This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: AESRST
+    bit_range:
+    - 16
+    - 16
+    description: 'AES hardware accelerator reset This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: HASHRST
+    bit_range:
+    - 17
+    - 17
+    description: HASH reset This bit is set and cleared by software.
+  - name: RNGRST
+    bit_range:
+    - 18
+    - 18
+    description: RNG reset This bit is set and cleared by software.
+  - name: PKARST
+    bit_range:
+    - 19
+    - 19
+    description: 'PKA reset This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: SAESRST
+    bit_range:
+    - 20
+    - 20
+    description: 'SAES hardware accelerator reset This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: OCTOSPIMRST
+    bit_range:
+    - 21
+    - 21
+    description: 'OCTOSPIM reset This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: OTFDEC1RST
+    bit_range:
+    - 23
+    - 23
+    description: 'OTFDEC1 reset This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: OTFDEC2RST
+    bit_range:
+    - 24
+    - 24
+    description: 'OTFDEC2 reset This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: SDMMC1RST
+    bit_range:
+    - 27
+    - 27
+    description: SDMMC1 reset This bit is set and cleared by software.
+  - name: SDMMC2RST
+    bit_range:
+    - 28
+    - 28
+    description: 'SDMMC2 reset This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  side_effects: null
+- id: RCC_AHB2RSTR2
+  address_offset: 104
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FSMCRST
+    bit_range:
+    - 0
+    - 0
+    description: 'Flexible memory controller reset This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: OCTOSPI1RST
+    bit_range:
+    - 4
+    - 4
+    description: OCTOSPI1 reset This bit is set and cleared by software.
+  - name: OCTOSPI2RST
+    bit_range:
+    - 8
+    - 8
+    description: 'OCTOSPI2 reset This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: HSPI1RST
+    bit_range:
+    - 12
+    - 12
+    description: 'HSPI1 reset This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  side_effects: null
+- id: RCC_AHB3RSTR
+  address_offset: 108
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LPGPIO1RST
+    bit_range:
+    - 0
+    - 0
+    description: LPGPIO1 reset This bit is set and cleared by software.
+  - name: ADC4RST
+    bit_range:
+    - 5
+    - 5
+    description: ADC4 reset This bit is set and cleared by software.
+  - name: DAC1RST
+    bit_range:
+    - 6
+    - 6
+    description: DAC1 reset This bit is set and cleared by software.
+  - name: LPDMA1RST
+    bit_range:
+    - 9
+    - 9
+    description: LPDMA1 reset This bit is set and cleared by software.
+  - name: ADF1RST
+    bit_range:
+    - 10
+    - 10
+    description: ADF1 reset This bit is set and cleared by software.
+  side_effects: null
+- id: RCC_APB1RSTR1
+  address_offset: 116
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIM2RST
+    bit_range:
+    - 0
+    - 0
+    description: TIM2 reset This bit is set and cleared by software.
+  - name: TIM3RST
+    bit_range:
+    - 1
+    - 1
+    description: TIM3 reset This bit is set and cleared by software.
+  - name: TIM4RST
+    bit_range:
+    - 2
+    - 2
+    description: TIM4 reset This bit is set and cleared by software.
+  - name: TIM5RST
+    bit_range:
+    - 3
+    - 3
+    description: TIM5 reset This bit is set and cleared by software.
+  - name: TIM6RST
+    bit_range:
+    - 4
+    - 4
+    description: TIM6 reset This bit is set and cleared by software.
+  - name: TIM7RST
+    bit_range:
+    - 5
+    - 5
+    description: TIM7 reset This bit is set and cleared by software.
+  - name: SPI2RST
+    bit_range:
+    - 14
+    - 14
+    description: SPI2 reset This bit is set and cleared by software.
+  - name: USART2RST
+    bit_range:
+    - 17
+    - 17
+    description: 'USART2 reset This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series.Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: USART3RST
+    bit_range:
+    - 18
+    - 18
+    description: USART3 reset This bit is set and cleared by software.
+  - name: UART4RST
+    bit_range:
+    - 19
+    - 19
+    description: UART4 reset This bit is set and cleared by software.
+  - name: UART5RST
+    bit_range:
+    - 20
+    - 20
+    description: UART5 reset This bit is set and cleared by software.
+  - name: I2C1RST
+    bit_range:
+    - 21
+    - 21
+    description: I2C1 reset This bit is set and cleared by software.
+  - name: I2C2RST
+    bit_range:
+    - 22
+    - 22
+    description: I2C2 reset This bit is set and cleared by software.
+  - name: CRSRST
+    bit_range:
+    - 24
+    - 24
+    description: CRS reset This bit is set and cleared by software.
+  - name: USART6RST
+    bit_range:
+    - 25
+    - 25
+    description: 'USART6 reset This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  side_effects: null
+- id: RCC_APB1RSTR2
+  address_offset: 120
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: I2C4RST
+    bit_range:
+    - 1
+    - 1
+    description: I2C4 reset This bit is set and cleared by software
+  - name: LPTIM2RST
+    bit_range:
+    - 5
+    - 5
+    description: LPTIM2 reset This bit is set and cleared by software.
+  - name: I2C5RST
+    bit_range:
+    - 6
+    - 6
+    description: 'I2C5 reset This bit is set and cleared by software Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: I2C6RST
+    bit_range:
+    - 7
+    - 7
+    description: 'I2C6 reset This bit is set and cleared by software Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: FDCAN1RST
+    bit_range:
+    - 9
+    - 9
+    description: FDCAN1 reset This bit is set and cleared by software.
+  - name: UCPD1RST
+    bit_range:
+    - 23
+    - 23
+    description: 'UCPD1 reset This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  side_effects: null
+- id: RCC_APB2RSTR
+  address_offset: 124
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIM1RST
+    bit_range:
+    - 11
+    - 11
+    description: TIM1 reset This bit is set and cleared by software.
+  - name: SPI1RST
+    bit_range:
+    - 12
+    - 12
+    description: SPI1 reset This bit is set and cleared by software.
+  - name: TIM8RST
+    bit_range:
+    - 13
+    - 13
+    description: TIM8 reset This bit is set and cleared by software.
+  - name: USART1RST
+    bit_range:
+    - 14
+    - 14
+    description: USART1 reset This bit is set and cleared by software.
+  - name: TIM15RST
+    bit_range:
+    - 16
+    - 16
+    description: TIM15 reset This bit is set and cleared by software.
+  - name: TIM16RST
+    bit_range:
+    - 17
+    - 17
+    description: TIM16 reset This bit is set and cleared by software.
+  - name: TIM17RST
+    bit_range:
+    - 18
+    - 18
+    description: TIM17 reset This bit is set and cleared by software.
+  - name: SAI1RST
+    bit_range:
+    - 21
+    - 21
+    description: SAI1 reset This bit is set and cleared by software.
+  - name: SAI2RST
+    bit_range:
+    - 22
+    - 22
+    description: 'SAI2 reset This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: USBRST
+    bit_range:
+    - 24
+    - 24
+    description: 'USB reset This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: GFXTIMRST
+    bit_range:
+    - 25
+    - 25
+    description: 'GFXTIM reset This bit is set and cleared by software. Note: .This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: LTDCRST
+    bit_range:
+    - 26
+    - 26
+    description: 'LTDC reset This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: DSIRST
+    bit_range:
+    - 27
+    - 27
+    description: 'DSI reset This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  side_effects: null
+- id: RCC_APB3RSTR
+  address_offset: 128
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYSCFGRST
+    bit_range:
+    - 1
+    - 1
+    description: SYSCFG reset This bit is set and cleared by software.
+  - name: SPI3RST
+    bit_range:
+    - 5
+    - 5
+    description: SPI3 reset This bit is set and cleared by software.
+  - name: LPUART1RST
+    bit_range:
+    - 6
+    - 6
+    description: LPUART1 reset This bit is set and cleared by software.
+  - name: I2C3RST
+    bit_range:
+    - 7
+    - 7
+    description: I2C3 reset This bit is set and cleared by software.
+  - name: LPTIM1RST
+    bit_range:
+    - 11
+    - 11
+    description: LPTIM1 reset This bit is set and cleared by software.
+  - name: LPTIM3RST
+    bit_range:
+    - 12
+    - 12
+    description: LPTIM3 reset This bit is set and cleared by software.
+  - name: LPTIM4RST
+    bit_range:
+    - 13
+    - 13
+    description: LPTIM4 reset This bit is set and cleared by software.
+  - name: OPAMPRST
+    bit_range:
+    - 14
+    - 14
+    description: OPAMP reset This bit is set and cleared by software.
+  - name: COMPRST
+    bit_range:
+    - 15
+    - 15
+    description: COMP reset This bit is set and cleared by software.
+  - name: VREFRST
+    bit_range:
+    - 20
+    - 20
+    description: VREFBUF reset This bit is set and cleared by software.
+  side_effects: null
+- id: RCC_AHB1ENR
+  address_offset: 136
+  size: 32
+  access: READ_WRITE
+  reset_value: 3491758336
+  fields:
+  - name: GPDMA1EN
+    bit_range:
+    - 0
+    - 0
+    description: GPDMA1 clock enable This bit is set and cleared by software.
+  - name: CORDICEN
+    bit_range:
+    - 1
+    - 1
+    description: CORDIC clock enable This bit is set and cleared by software.
+  - name: FMACEN
+    bit_range:
+    - 2
+    - 2
+    description: FMAC clock enable This bit is set and reset by software.
+  - name: MDF1EN
+    bit_range:
+    - 3
+    - 3
+    description: MDF1 clock enable This bit is set and reset by software.
+  - name: FLASHEN
+    bit_range:
+    - 8
+    - 8
+    description: FLASH clock enable This bit is set and cleared by software. This bit can be disabled only when the flash memory is in power-down mode.
+  - name: CRCEN
+    bit_range:
+    - 12
+    - 12
+    description: CRC clock enable This bit is set and cleared by software.
+  - name: JPEGEN
+    bit_range:
+    - 15
+    - 15
+    description: 'JPEG clock enable This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: TSCEN
+    bit_range:
+    - 16
+    - 16
+    description: Touch sensing controller clock enable This bit is set and cleared by software.
+  - name: RAMCFGEN
+    bit_range:
+    - 17
+    - 17
+    description: RAMCFG clock enable This bit is set and cleared by software.
+  - name: DMA2DEN
+    bit_range:
+    - 18
+    - 18
+    description: 'DMA2D clock enable This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: GFXMMUEN
+    bit_range:
+    - 19
+    - 19
+    description: 'GFXMMU clock enable This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: GPU2DEN
+    bit_range:
+    - 20
+    - 20
+    description: 'GPU2D clock enable This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: DCACHE2EN
+    bit_range:
+    - 21
+    - 21
+    description: 'DCACHE2 clock enable This bit is set and reset by software. Note: DCACHE2 clock must be enabled to access memories, even if the DCACHE2 is bypassed. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: GTZC1EN
+    bit_range:
+    - 24
+    - 24
+    description: GTZC1 clock enable This bit is set and reset by software.
+  - name: BKPSRAMEN
+    bit_range:
+    - 28
+    - 28
+    description: BKPSRAM clock enable This bit is set and reset by software.
+  - name: DCACHE1EN
+    bit_range:
+    - 30
+    - 30
+    description: 'DCACHE1 clock enable This bit is set and reset by software. Note: DCACHE1 clock must be enabled when external memories are accessed through OCTOSPI1, OCTOSPI2, HSPI1 or FSMC, even if the DCACHE1 is bypassed.'
+  - name: SRAM1EN
+    bit_range:
+    - 31
+    - 31
+    description: SRAM1 clock enable This bit is set and reset by software.
+  side_effects: null
+- id: RCC_AHB2ENR1
+  address_offset: 140
+  size: 32
+  access: READ_WRITE
+  reset_value: 3221225472
+  fields:
+  - name: GPIOAEN
+    bit_range:
+    - 0
+    - 0
+    description: I/O port A clock enable This bit is set and cleared by software.
+  - name: GPIOBEN
+    bit_range:
+    - 1
+    - 1
+    description: I/O port B clock enable This bit is set and cleared by software.
+  - name: GPIOCEN
+    bit_range:
+    - 2
+    - 2
+    description: I/O port C clock enable This bit is set and cleared by software.
+  - name: GPIODEN
+    bit_range:
+    - 3
+    - 3
+    description: I/O port D clock enable This bit is set and cleared by software.
+  - name: GPIOEEN
+    bit_range:
+    - 4
+    - 4
+    description: I/O port E clock enable This bit is set and cleared by software.
+  - name: GPIOFEN
+    bit_range:
+    - 5
+    - 5
+    description: 'I/O port F clock enable This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: GPIOGEN
+    bit_range:
+    - 6
+    - 6
+    description: I/O port G clock enable This bit is set and cleared by software.
+  - name: GPIOHEN
+    bit_range:
+    - 7
+    - 7
+    description: I/O port H clock enable This bit is set and cleared by software.
+  - name: GPIOIEN
+    bit_range:
+    - 8
+    - 8
+    description: 'I/O port I clock enable This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: GPIOJEN
+    bit_range:
+    - 9
+    - 9
+    description: 'I/O port J clock enable This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: ADC12EN
+    bit_range:
+    - 10
+    - 10
+    description: 'ADC1 and ADC2 clock enable This bit is set and cleared by software. Note: This bit impacts ADC1 in STM32U535/545/575/585, and ADC1/ADC2 in�STM32U59x/5Ax/5Fx/5Gx.'
+  - name: DCMI_PSSIEN
+    bit_range:
+    - 12
+    - 12
+    description: DCMI and PSSI clock enable This bit is set and cleared by software.
+  - name: OTGEN
+    bit_range:
+    - 14
+    - 14
+    description: 'OTG_FS or OTG_HS clock enable This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: OTGHSPHYEN
+    bit_range:
+    - 15
+    - 15
+    description: 'OTG_HS PHY clock enable This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: AESEN
+    bit_range:
+    - 16
+    - 16
+    description: 'AES clock enable This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: HASHEN
+    bit_range:
+    - 17
+    - 17
+    description: HASH clock enable This bit is set and cleared by software
+  - name: RNGEN
+    bit_range:
+    - 18
+    - 18
+    description: RNG clock enable This bit is set and cleared by software.
+  - name: PKAEN
+    bit_range:
+    - 19
+    - 19
+    description: 'PKA clock enable This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: SAESEN
+    bit_range:
+    - 20
+    - 20
+    description: 'SAES clock enable This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: OCTOSPIMEN
+    bit_range:
+    - 21
+    - 21
+    description: 'OCTOSPIM clock enable This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: OTFDEC1EN
+    bit_range:
+    - 23
+    - 23
+    description: 'OTFDEC1 clock enable This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: OTFDEC2EN
+    bit_range:
+    - 24
+    - 24
+    description: 'OTFDEC2 clock enable This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: SDMMC1EN
+    bit_range:
+    - 27
+    - 27
+    description: SDMMC1 clock enable This bit is set and cleared by software.
+  - name: SDMMC2EN
+    bit_range:
+    - 28
+    - 28
+    description: 'SDMMC2 clock enable This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: SRAM2EN
+    bit_range:
+    - 30
+    - 30
+    description: SRAM2 clock enable This bit is set and reset by software.
+  - name: SRAM3EN
+    bit_range:
+    - 31
+    - 31
+    description: 'SRAM3 clock enable This bit is set and reset by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  side_effects: null
+- id: RCC_AHB2ENR2
+  address_offset: 144
+  size: 32
+  access: READ_WRITE
+  reset_value: 2147483648
+  fields:
+  - name: FSMCEN
+    bit_range:
+    - 0
+    - 0
+    description: 'FSMC clock enable This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: OCTOSPI1EN
+    bit_range:
+    - 4
+    - 4
+    description: OCTOSPI1 clock enable This bit is set and cleared by software.
+  - name: OCTOSPI2EN
+    bit_range:
+    - 8
+    - 8
+    description: 'OCTOSPI2 clock enable This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: HSPI1EN
+    bit_range:
+    - 12
+    - 12
+    description: 'HSPI1 clock enable This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: SRAM6EN
+    bit_range:
+    - 30
+    - 30
+    description: 'SRAM6 clock enable This bit is set and reset by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: SRAM5EN
+    bit_range:
+    - 31
+    - 31
+    description: 'SRAM5 clock enable This bit is set and reset by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  side_effects: null
+- id: RCC_AHB3ENR
+  address_offset: 148
+  size: 32
+  access: READ_WRITE
+  reset_value: 2147483648
+  fields:
+  - name: LPGPIO1EN
+    bit_range:
+    - 0
+    - 0
+    description: LPGPIO1 enable This bit is set and cleared by software.
+  - name: PWREN
+    bit_range:
+    - 2
+    - 2
+    description: PWR clock enable This bit is set and cleared by software.
+  - name: ADC4EN
+    bit_range:
+    - 5
+    - 5
+    description: ADC4 clock enable This bit is set and cleared by software.
+  - name: DAC1EN
+    bit_range:
+    - 6
+    - 6
+    description: DAC1 clock enable This bit is set and cleared by software.
+  - name: LPDMA1EN
+    bit_range:
+    - 9
+    - 9
+    description: LPDMA1 clock enable This bit is set and cleared by software.
+  - name: ADF1EN
+    bit_range:
+    - 10
+    - 10
+    description: ADF1 clock enable This bit is set and cleared by software.
+  - name: GTZC2EN
+    bit_range:
+    - 12
+    - 12
+    description: GTZC2 clock enable This bit is set and cleared by software.
+  - name: SRAM4EN
+    bit_range:
+    - 31
+    - 31
+    description: SRAM4 clock enable This bit is set and reset by software.
+  side_effects: null
+- id: RCC_APB1ENR1
+  address_offset: 156
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIM2EN
+    bit_range:
+    - 0
+    - 0
+    description: TIM2 clock enable This bit is set and cleared by software.
+  - name: TIM3EN
+    bit_range:
+    - 1
+    - 1
+    description: TIM3 clock enable This bit is set and cleared by software.
+  - name: TIM4EN
+    bit_range:
+    - 2
+    - 2
+    description: TIM4 clock enable This bit is set and cleared by software.
+  - name: TIM5EN
+    bit_range:
+    - 3
+    - 3
+    description: TIM5 clock enable This bit is set and cleared by software.
+  - name: TIM6EN
+    bit_range:
+    - 4
+    - 4
+    description: TIM6 clock enable This bit is set and cleared by software.
+  - name: TIM7EN
+    bit_range:
+    - 5
+    - 5
+    description: TIM7 clock enable This bit is set and cleared by software.
+  - name: WWDGEN
+    bit_range:
+    - 11
+    - 11
+    description: WWDG clock enable This bit is set by software to enable the window watchdog clock. It is reset by hardware system reset. This bit can also be set by hardware if the WWDG_SW option bit is reset.
+  - name: SPI2EN
+    bit_range:
+    - 14
+    - 14
+    description: SPI2 clock enable This bit is set and cleared by software.
+  - name: USART2EN
+    bit_range:
+    - 17
+    - 17
+    description: 'USART2 clock enable This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: USART3EN
+    bit_range:
+    - 18
+    - 18
+    description: USART3 clock enable This bit is set and cleared by software.
+  - name: UART4EN
+    bit_range:
+    - 19
+    - 19
+    description: UART4 clock enable This bit is set and cleared by software.
+  - name: UART5EN
+    bit_range:
+    - 20
+    - 20
+    description: UART5 clock enable This bit is set and cleared by software.
+  - name: I2C1EN
+    bit_range:
+    - 21
+    - 21
+    description: I2C1 clock enable This bit is set and cleared by software.
+  - name: I2C2EN
+    bit_range:
+    - 22
+    - 22
+    description: I2C2 clock enable This bit is set and cleared by software.
+  - name: CRSEN
+    bit_range:
+    - 24
+    - 24
+    description: CRS clock enable This bit is set and cleared by software.
+  - name: USART6EN
+    bit_range:
+    - 25
+    - 25
+    description: 'USART6 clock enable This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  side_effects: null
+- id: RCC_APB1ENR2
+  address_offset: 160
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: I2C4EN
+    bit_range:
+    - 1
+    - 1
+    description: I2C4 clock enable This bit is set and cleared by software
+  - name: LPTIM2EN
+    bit_range:
+    - 5
+    - 5
+    description: LPTIM2 clock enable This bit is set and cleared by software.
+  - name: I2C5EN
+    bit_range:
+    - 6
+    - 6
+    description: 'I2C5 clock enable This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: I2C6EN
+    bit_range:
+    - 7
+    - 7
+    description: 'I2C6 clock enable This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: FDCAN1EN
+    bit_range:
+    - 9
+    - 9
+    description: FDCAN1 clock enable This bit is set and cleared by software.
+  - name: UCPD1EN
+    bit_range:
+    - 23
+    - 23
+    description: 'UCPD1 clock enable This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  side_effects: null
+- id: RCC_APB2ENR
+  address_offset: 164
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIM1EN
+    bit_range:
+    - 11
+    - 11
+    description: TIM1 clock enable This bit is set and cleared by software.
+  - name: SPI1EN
+    bit_range:
+    - 12
+    - 12
+    description: SPI1 clock enable This bit is set and cleared by software.
+  - name: TIM8EN
+    bit_range:
+    - 13
+    - 13
+    description: TIM8 clock enable This bit is set and cleared by software.
+  - name: USART1EN
+    bit_range:
+    - 14
+    - 14
+    description: USART1clock enable This bit is set and cleared by software.
+  - name: TIM15EN
+    bit_range:
+    - 16
+    - 16
+    description: TIM15 clock enable This bit is set and cleared by software.
+  - name: TIM16EN
+    bit_range:
+    - 17
+    - 17
+    description: TIM16 clock enable This bit is set and cleared by software.
+  - name: TIM17EN
+    bit_range:
+    - 18
+    - 18
+    description: TIM17 clock enable This bit is set and cleared by software.
+  - name: SAI1EN
+    bit_range:
+    - 21
+    - 21
+    description: SAI1 clock enable This bit is set and cleared by software.
+  - name: SAI2EN
+    bit_range:
+    - 22
+    - 22
+    description: 'SAI2 clock enable This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: USBEN
+    bit_range:
+    - 24
+    - 24
+    description: 'USB clock enable This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: GFXTIMEN
+    bit_range:
+    - 25
+    - 25
+    description: 'GFXTIM clock enable This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: LTDCEN
+    bit_range:
+    - 26
+    - 26
+    description: 'LTDC clock enable This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: DSIEN
+    bit_range:
+    - 27
+    - 27
+    description: 'DSI clock enable This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  side_effects: null
+- id: RCC_APB3ENR
+  address_offset: 168
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYSCFGEN
+    bit_range:
+    - 1
+    - 1
+    description: SYSCFG clock enable This bit is set and cleared by software.
+  - name: SPI3EN
+    bit_range:
+    - 5
+    - 5
+    description: SPI3 clock enable This bit is set and cleared by software.
+  - name: LPUART1EN
+    bit_range:
+    - 6
+    - 6
+    description: LPUART1 clock enable This bit is set and cleared by software.
+  - name: I2C3EN
+    bit_range:
+    - 7
+    - 7
+    description: I2C3 clock enable This bit is set and cleared by software.
+  - name: LPTIM1EN
+    bit_range:
+    - 11
+    - 11
+    description: LPTIM1 clock enable This bit is set and cleared by software.
+  - name: LPTIM3EN
+    bit_range:
+    - 12
+    - 12
+    description: LPTIM3 clock enable This bit is set and cleared by software.
+  - name: LPTIM4EN
+    bit_range:
+    - 13
+    - 13
+    description: LPTIM4 clock enable This bit is set and cleared by software.
+  - name: OPAMPEN
+    bit_range:
+    - 14
+    - 14
+    description: OPAMP clock enable This bit is set and cleared by software.
+  - name: COMPEN
+    bit_range:
+    - 15
+    - 15
+    description: COMP clock enable This bit is set and cleared by software.
+  - name: VREFEN
+    bit_range:
+    - 20
+    - 20
+    description: VREFBUF clock enable This bit is set and cleared by software.
+  - name: RTCAPBEN
+    bit_range:
+    - 21
+    - 21
+    description: RTC and TAMP APB clock enable This bit is set and cleared by software.
+  side_effects: null
+- id: RCC_AHB1SMENR
+  address_offset: 176
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: GPDMA1SMEN
+    bit_range:
+    - 0
+    - 0
+    description: 'GPDMA1 clocks enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit must be set to allow the peripheral to wake up from Stop modes.'
+  - name: CORDICSMEN
+    bit_range:
+    - 1
+    - 1
+    description: CORDIC clocks enable during Sleep and Stop modes This bit is set and cleared by software during Sleep mode.
+  - name: FMACSMEN
+    bit_range:
+    - 2
+    - 2
+    description: FMAC clocks enable during Sleep and Stop modes. This bit is set and cleared by software.
+  - name: MDF1SMEN
+    bit_range:
+    - 3
+    - 3
+    description: 'MDF1 clocks enable during Sleep and Stop modes. This bit is set and cleared by software. Note: This bit must be set to allow the peripheral to wake up from Stop modes.'
+  - name: FLASHSMEN
+    bit_range:
+    - 8
+    - 8
+    description: FLASH clocks enable during Sleep and Stop modes This bit is set and cleared by software.
+  - name: CRCSMEN
+    bit_range:
+    - 12
+    - 12
+    description: CRC clocks enable during Sleep and Stop modes This bit is set and cleared by software.
+  - name: JPEGSMEN
+    bit_range:
+    - 15
+    - 15
+    description: 'JPEG clocks enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: TSCSMEN
+    bit_range:
+    - 16
+    - 16
+    description: TSC clocks enable during Sleep and Stop modes This bit is set and cleared by software.
+  - name: RAMCFGSMEN
+    bit_range:
+    - 17
+    - 17
+    description: RAMCFG clock enable during Sleep and Stop modes This bit is set and cleared by software.
+  - name: DMA2DSMEN
+    bit_range:
+    - 18
+    - 18
+    description: 'DMA2D clock enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: GFXMMUSMEN
+    bit_range:
+    - 19
+    - 19
+    description: 'GFXMMU clock enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: GPU2DSMEN
+    bit_range:
+    - 20
+    - 20
+    description: 'GPU2D clock enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: DCACHE2SMEN
+    bit_range:
+    - 21
+    - 21
+    description: 'DCACHE2 clock enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: GTZC1SMEN
+    bit_range:
+    - 24
+    - 24
+    description: GTZC1 clock enable during Sleep and Stop modes This bit is set and cleared by software.
+  - name: BKPSRAMSMEN
+    bit_range:
+    - 28
+    - 28
+    description: BKPSRAM clock enable during Sleep and Stop modes This bit is set and cleared by software
+  - name: ICACHESMEN
+    bit_range:
+    - 29
+    - 29
+    description: ICACHE clock enable during Sleep and Stop modes This bit is set and cleared by software.
+  - name: DCACHE1SMEN
+    bit_range:
+    - 30
+    - 30
+    description: DCACHE1 clock enable during Sleep and Stop modes This bit is set and cleared by software.
+  - name: SRAM1SMEN
+    bit_range:
+    - 31
+    - 31
+    description: SRAM1 clock enable during Sleep and Stop modes This bit is set and cleared by software.
+  side_effects: null
+- id: RCC_AHB2SMENR1
+  address_offset: 180
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: GPIOASMEN
+    bit_range:
+    - 0
+    - 0
+    description: I/O port A clocks enable during Sleep and Stop modes This bit is set and cleared by software.
+  - name: GPIOBSMEN
+    bit_range:
+    - 1
+    - 1
+    description: I/O port B clocks enable during Sleep and Stop modes This bit is set and cleared by software.
+  - name: GPIOCSMEN
+    bit_range:
+    - 2
+    - 2
+    description: I/O port C clocks enable during Sleep and Stop modes This bit is set and cleared by software.
+  - name: GPIODSMEN
+    bit_range:
+    - 3
+    - 3
+    description: I/O port D clocks enable during Sleep and Stop modes This bit is set and cleared by software.
+  - name: GPIOESMEN
+    bit_range:
+    - 4
+    - 4
+    description: I/O port E clocks enable during Sleep and Stop modes This bit is set and cleared by software.
+  - name: GPIOFSMEN
+    bit_range:
+    - 5
+    - 5
+    description: 'I/O port F clocks enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: GPIOGSMEN
+    bit_range:
+    - 6
+    - 6
+    description: I/O port G clocks enable during Sleep and Stop modes This bit is set and cleared by software.
+  - name: GPIOHSMEN
+    bit_range:
+    - 7
+    - 7
+    description: I/O port H clocks enable during Sleep and Stop modes This bit is set and cleared by software.
+  - name: GPIOISMEN
+    bit_range:
+    - 8
+    - 8
+    description: 'I/O port I clocks enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: GPIOJSMEN
+    bit_range:
+    - 9
+    - 9
+    description: 'I/O port J clock enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: ADC12SMEN
+    bit_range:
+    - 10
+    - 10
+    description: 'ADC1 and ADC2 clock enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit impacts ADC1 in STM32U535/545/575/585 and ADC1/ADC2 in�STM32U59x/5Ax/5Fx/5Gx.'
+  - name: DCMI_PSSISMEN
+    bit_range:
+    - 12
+    - 12
+    description: DCMI and PSSI clock enable during Sleep and Stop modes This bit is set and cleared by software.
+  - name: OTGSMEN
+    bit_range:
+    - 14
+    - 14
+    description: 'OTG_FS and OTG_HS clocks enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: OTGHSPHYSMEN
+    bit_range:
+    - 15
+    - 15
+    description: 'OTG_HS PHY clock enable during Sleep and Stop modes This bit is set and cleared by software Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: AESSMEN
+    bit_range:
+    - 16
+    - 16
+    description: 'AES clock enable during Sleep and Stop modes This bit is set and cleared by software Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: HASHSMEN
+    bit_range:
+    - 17
+    - 17
+    description: HASH clock enable during Sleep and Stop modes This bit is set and cleared by software
+  - name: RNGSMEN
+    bit_range:
+    - 18
+    - 18
+    description: RNG clock enable during Sleep and Stop modes This bit is set and cleared by software.
+  - name: PKASMEN
+    bit_range:
+    - 19
+    - 19
+    description: 'PKA clock enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: SAESSMEN
+    bit_range:
+    - 20
+    - 20
+    description: 'SAES accelerator clock enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: OCTOSPIMSMEN
+    bit_range:
+    - 21
+    - 21
+    description: 'OCTOSPIM clock enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: OTFDEC1SMEN
+    bit_range:
+    - 23
+    - 23
+    description: 'OTFDEC1 clock enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: OTFDEC2SMEN
+    bit_range:
+    - 24
+    - 24
+    description: 'OTFDEC2 clock enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: SDMMC1SMEN
+    bit_range:
+    - 27
+    - 27
+    description: SDMMC1 clock enable during Sleep and Stop modes This bit is set and cleared by software.
+  - name: SDMMC2SMEN
+    bit_range:
+    - 28
+    - 28
+    description: 'SDMMC2 clock enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: SRAM2SMEN
+    bit_range:
+    - 30
+    - 30
+    description: SRAM2 clock enable during Sleep and Stop modes This bit is set and cleared by software.
+  - name: SRAM3SMEN
+    bit_range:
+    - 31
+    - 31
+    description: 'SRAM3 clock enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  side_effects: null
+- id: RCC_AHB2SMENR2
+  address_offset: 184
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: FSMCSMEN
+    bit_range:
+    - 0
+    - 0
+    description: 'FSMC clock enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: OCTOSPI1SMEN
+    bit_range:
+    - 4
+    - 4
+    description: OCTOSPI1 clock enable during Sleep and Stop modes This bit is set and cleared by software.
+  - name: OCTOSPI2SMEN
+    bit_range:
+    - 8
+    - 8
+    description: 'OCTOSPI2 clock enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: HSPI1SMEN
+    bit_range:
+    - 12
+    - 12
+    description: 'HSPI1 clock enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: SRAM6SMEN
+    bit_range:
+    - 30
+    - 30
+    description: 'SRAM6 clock enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: SRAM5SMEN
+    bit_range:
+    - 31
+    - 31
+    description: 'SRAM5 clock enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  side_effects: null
+- id: RCC_AHB3SMENR
+  address_offset: 188
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: LPGPIO1SMEN
+    bit_range:
+    - 0
+    - 0
+    description: LPGPIO1 enable during Sleep and Stop modes This bit is set and cleared by software.
+  - name: PWRSMEN
+    bit_range:
+    - 2
+    - 2
+    description: PWR clock enable during Sleep and Stop modes This bit is set and cleared by software.
+  - name: ADC4SMEN
+    bit_range:
+    - 5
+    - 5
+    description: 'ADC4 clock enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit must be set to allow the peripheral to wake up from Stop modes.'
+  - name: DAC1SMEN
+    bit_range:
+    - 6
+    - 6
+    description: 'DAC1 clock enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit must be set to allow the peripheral to wake up from Stop modes.'
+  - name: LPDMA1SMEN
+    bit_range:
+    - 9
+    - 9
+    description: 'LPDMA1 clock enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit must be set to allow the peripheral to wake up from Stop modes.'
+  - name: ADF1SMEN
+    bit_range:
+    - 10
+    - 10
+    description: 'ADF1 clock enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit must be set to allow the peripheral to wake up from Stop modes.'
+  - name: GTZC2SMEN
+    bit_range:
+    - 12
+    - 12
+    description: GTZC2 clock enable during Sleep and Stop modes This bit is set and cleared by software.
+  - name: SRAM4SMEN
+    bit_range:
+    - 31
+    - 31
+    description: SRAM4 clock enable during Sleep and Stop modes This bit is set and cleared by software.
+  side_effects: null
+- id: RCC_APB1SMENR1
+  address_offset: 196
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: TIM2SMEN
+    bit_range:
+    - 0
+    - 0
+    description: TIM2 clock enable during Sleep and Stop modes This bit is set and cleared by software.
+  - name: TIM3SMEN
+    bit_range:
+    - 1
+    - 1
+    description: TIM3 clock enable during Sleep and Stop modes This bit is set and cleared by software.
+  - name: TIM4SMEN
+    bit_range:
+    - 2
+    - 2
+    description: TIM4 clock enable during Sleep and Stop modes This bit is set and cleared by software.
+  - name: TIM5SMEN
+    bit_range:
+    - 3
+    - 3
+    description: TIM5 clock enable during Sleep and Stop modes This bit is set and cleared by software.
+  - name: TIM6SMEN
+    bit_range:
+    - 4
+    - 4
+    description: TIM6 clock enable during Sleep and Stop modes This bit is set and cleared by software.
+  - name: TIM7SMEN
+    bit_range:
+    - 5
+    - 5
+    description: TIM7 clock enable during Sleep and Stop modes This bit is set and cleared by software.
+  - name: WWDGSMEN
+    bit_range:
+    - 11
+    - 11
+    description: Window watchdog clock enable during Sleep and Stop modes This bit is set and cleared by software. It is forced to one by hardware when the hardware WWDG option is activated.
+  - name: SPI2SMEN
+    bit_range:
+    - 14
+    - 14
+    description: 'SPI2 clock enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit must be set to allow the peripheral to wake up from Stop modes.'
+  - name: USART2SMEN
+    bit_range:
+    - 17
+    - 17
+    description: 'USART2 clock enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit must be set to allow the peripheral to wake up from Stop modes. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: USART3SMEN
+    bit_range:
+    - 18
+    - 18
+    description: 'USART3 clock enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit must be set to allow the peripheral to wake up from Stop modes.'
+  - name: UART4SMEN
+    bit_range:
+    - 19
+    - 19
+    description: 'UART4 clock enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit must be set to allow the peripheral to wake up from Stop modes.'
+  - name: UART5SMEN
+    bit_range:
+    - 20
+    - 20
+    description: 'UART5 clock enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit must be set to allow the peripheral to wake up from Stop modes.'
+  - name: I2C1SMEN
+    bit_range:
+    - 21
+    - 21
+    description: 'I2C1 clock enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit must be set to allow the peripheral to wake up from Stop modes.'
+  - name: I2C2SMEN
+    bit_range:
+    - 22
+    - 22
+    description: 'I2C2 clock enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit must be set to allow the peripheral to wake up from Stop modes.'
+  - name: CRSSMEN
+    bit_range:
+    - 24
+    - 24
+    description: CRS clock enable during Sleep and Stop modes This bit is set and cleared by software.
+  - name: USART6SMEN
+    bit_range:
+    - 25
+    - 25
+    description: 'USART6 clock enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit must be set to allow the peripheral to wake up from Stop modes. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  side_effects: null
+- id: RCC_APB1SMENR2
+  address_offset: 200
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: I2C4SMEN
+    bit_range:
+    - 1
+    - 1
+    description: 'I2C4 clock enable during Sleep and Stop modes This bit is set and cleared by software Note: This bit must be set to allow the peripheral to wake up from Stop modes.'
+  - name: LPTIM2SMEN
+    bit_range:
+    - 5
+    - 5
+    description: 'LPTIM2 clock enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit must be set to allow the peripheral to wake up from Stop modes.'
+  - name: I2C5SMEN
+    bit_range:
+    - 6
+    - 6
+    description: 'I2C5 clock enable during Sleep and Stop modes This bit is set and cleared by software Note: This bit must be set to allow the peripheral to wake up from Stop modes. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: I2C6SMEN
+    bit_range:
+    - 7
+    - 7
+    description: 'I2C6 clock enable during Sleep and Stop modes This bit is set and cleared by software Note: This bit must be set to allow the peripheral to wake up from Stop modes. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: FDCAN1SMEN
+    bit_range:
+    - 9
+    - 9
+    description: FDCAN1 clock enable during Sleep and Stop modes This bit is set and cleared by software.
+  - name: UCPD1SMEN
+    bit_range:
+    - 23
+    - 23
+    description: 'UCPD1 clock enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  side_effects: null
+- id: RCC_APB2SMENR
+  address_offset: 204
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: TIM1SMEN
+    bit_range:
+    - 11
+    - 11
+    description: TIM1 clock enable during Sleep and Stop modes This bit is set and cleared by software.
+  - name: SPI1SMEN
+    bit_range:
+    - 12
+    - 12
+    description: 'SPI1 clock enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit must be set to allow the peripheral to wake up from Stop modes.'
+  - name: TIM8SMEN
+    bit_range:
+    - 13
+    - 13
+    description: TIM8 clock enable during Sleep and Stop modes This bit is set and cleared by software.
+  - name: USART1SMEN
+    bit_range:
+    - 14
+    - 14
+    description: 'USART1 clock enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit must be set to allow the peripheral to wake up from Stop modes.'
+  - name: TIM15SMEN
+    bit_range:
+    - 16
+    - 16
+    description: TIM15 clock enable during Sleep and Stop modes This bit is set and cleared by software.
+  - name: TIM16SMEN
+    bit_range:
+    - 17
+    - 17
+    description: TIM16 clock enable during Sleep and Stop modes This bit is set and cleared by software.
+  - name: TIM17SMEN
+    bit_range:
+    - 18
+    - 18
+    description: TIM17 clock enable during Sleep and Stop modes This bit is set and cleared by software.
+  - name: SAI1SMEN
+    bit_range:
+    - 21
+    - 21
+    description: SAI1 clock enable during Sleep and Stop modes This bit is set and cleared by software.
+  - name: SAI2SMEN
+    bit_range:
+    - 22
+    - 22
+    description: 'SAI2 clock enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series.Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: USBSMEN
+    bit_range:
+    - 24
+    - 24
+    description: 'USB clock enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: GFXTIMSMEN
+    bit_range:
+    - 25
+    - 25
+    description: 'GFXTIM clock enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: LTDCSMEN
+    bit_range:
+    - 26
+    - 26
+    description: 'LTDC clock enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: DSISMEN
+    bit_range:
+    - 27
+    - 27
+    description: 'DSI clock enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  side_effects: null
+- id: RCC_APB3SMENR
+  address_offset: 208
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: SYSCFGSMEN
+    bit_range:
+    - 1
+    - 1
+    description: SYSCFG clock enable during Sleep and Stop modes This bit is set and cleared by software.
+  - name: SPI3SMEN
+    bit_range:
+    - 5
+    - 5
+    description: 'SPI3 clock enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit must be set to allow the peripheral to wake up from Stop modes.'
+  - name: LPUART1SMEN
+    bit_range:
+    - 6
+    - 6
+    description: 'LPUART1 clock enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit must be set to allow the peripheral to wake up from Stop modes.'
+  - name: I2C3SMEN
+    bit_range:
+    - 7
+    - 7
+    description: 'I2C3 clock enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit must be set to allow the peripheral to wake up from Stop modes.'
+  - name: LPTIM1SMEN
+    bit_range:
+    - 11
+    - 11
+    description: 'LPTIM1 clock enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit must be set to allow the peripheral to wake up from Stop modes.'
+  - name: LPTIM3SMEN
+    bit_range:
+    - 12
+    - 12
+    description: 'LPTIM3 clock enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit must be set to allow the peripheral to wake up from Stop modes.'
+  - name: LPTIM4SMEN
+    bit_range:
+    - 13
+    - 13
+    description: 'LPTIM4 clock enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit must be set to allow the peripheral to wake up from Stop modes.'
+  - name: OPAMPSMEN
+    bit_range:
+    - 14
+    - 14
+    description: OPAMP clock enable during Sleep and Stop modes This bit is set and cleared by software.
+  - name: COMPSMEN
+    bit_range:
+    - 15
+    - 15
+    description: COMP clock enable during Sleep and Stop modes This bit is set and cleared by software.
+  - name: VREFSMEN
+    bit_range:
+    - 20
+    - 20
+    description: VREFBUF clock enable during Sleep and Stop modes This bit is set and cleared by software.
+  - name: RTCAPBSMEN
+    bit_range:
+    - 21
+    - 21
+    description: 'RTC and TAMP APB clock enable during Sleep and Stop modes This bit is set and cleared by software. Note: This bit must be set to allow the peripheral to wake up from Stop modes.'
+  side_effects: null
+- id: RCC_SRDAMR
+  address_offset: 216
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPI3AMEN
+    bit_range:
+    - 5
+    - 5
+    description: 'SPI3 autonomous mode enable in Stop 0,1, 2 mode This bit is set and cleared by software. Note: This bit must be set to allow the peripheral to wake up from Stop modes.'
+  - name: LPUART1AMEN
+    bit_range:
+    - 6
+    - 6
+    description: 'LPUART1 autonomous mode enable in Stop 0/1/2 mode This bit is set and cleared by software. Note: This bit must be set to allow the peripheral to wake up from Stop modes.'
+  - name: I2C3AMEN
+    bit_range:
+    - 7
+    - 7
+    description: 'I2C3 autonomous mode enable in Stop 0/1/2 mode This bit is set and cleared by software. Note: This bit must be set to allow the peripheral to wake up from Stop modes.'
+  - name: LPTIM1AMEN
+    bit_range:
+    - 11
+    - 11
+    description: 'LPTIM1 autonomous mode enable in Stop 0/1/2 mode This bit is set and cleared by software. Note: This bit must be set to allow the peripheral to wake up from Stop modes.'
+  - name: LPTIM3AMEN
+    bit_range:
+    - 12
+    - 12
+    description: 'LPTIM3 autonomous mode enable in Stop 0/1/2 mode This bit is set and cleared by software. Note: This bit must be set to allow the peripheral to wake up from Stop modes.'
+  - name: LPTIM4AMEN
+    bit_range:
+    - 13
+    - 13
+    description: 'LPTIM4 autonomous mode enable in Stop 0/1/2 mode This bit is set and cleared by software. Note: This bit must be set to allow the peripheral to wake up from Stop modes.'
+  - name: OPAMPAMEN
+    bit_range:
+    - 14
+    - 14
+    description: OPAMP autonomous mode enable in Stop 0/1/2 mode This bit is set and cleared by software.
+  - name: COMPAMEN
+    bit_range:
+    - 15
+    - 15
+    description: COMP autonomous mode enable in Stop 0/1/2 mode This bit is set and cleared by software.
+  - name: VREFAMEN
+    bit_range:
+    - 20
+    - 20
+    description: VREFBUF autonomous mode enable in Stop 0/1/2 mode This bit is set and cleared by software.
+  - name: RTCAPBAMEN
+    bit_range:
+    - 21
+    - 21
+    description: 'RTC and TAMP autonomous mode enable in Stop 0/1/2 mode This bit is set and cleared by software. Note: This bit must be set to allow the peripheral to wake up from Stop modes.'
+  - name: ADC4AMEN
+    bit_range:
+    - 25
+    - 25
+    description: 'ADC4 autonomous mode enable in Stop 0/1/2 mode This bit is set and cleared by software. Note: This bit must be set to allow the peripheral to wake up from Stop modes.'
+  - name: LPGPIO1AMEN
+    bit_range:
+    - 26
+    - 26
+    description: LPGPIO1 autonomous mode enable in Stop 0/1/2 mode This bit is set and cleared by software.
+  - name: DAC1AMEN
+    bit_range:
+    - 27
+    - 27
+    description: 'DAC1 autonomous mode enable in Stop 0/1/2 mode This bit is set and cleared by software. Note: This bit must be set to allow the peripheral to wake up from Stop modes.'
+  - name: LPDMA1AMEN
+    bit_range:
+    - 28
+    - 28
+    description: 'LPDMA1 autonomous mode enable in Stop 0/1/2 mode This bit is set and cleared by software. Note: This bit must be set to allow the peripheral to wake up from Stop modes.'
+  - name: ADF1AMEN
+    bit_range:
+    - 29
+    - 29
+    description: 'ADF1 autonomous mode enable in Stop 0/1/2 mode This bit is set and cleared by software. Note: This bit must be set to allow the peripheral to wake up from Stop modes.'
+  - name: SRAM4AMEN
+    bit_range:
+    - 31
+    - 31
+    description: SRAM4 autonomous mode enable in Stop 0/1/2 mode This bit is set and cleared by software.
+  side_effects: null
+- id: RCC_CCIPR1
+  address_offset: 224
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: USART1SEL
+    bit_range:
+    - 1
+    - 0
+    description: 'USART1 kernel clock source selection These bits are used to select the USART1 kernel clock source. Note: The USART1 is functional in Stop 0 and Stop 1 modes only when the kernel clock is HSI16 or LSE.'
+  - name: USART2SEL
+    bit_range:
+    - 3
+    - 2
+    description: 'USART2 kernel clock source selection These bits are used to select the USART2 kernel clock source. The USART2 is functional in Stop 0 and Stop 1 modes only when the kernel clock is HSI16 or LSE. Note: This bitfield is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bitfield as reserved and keep it at reset value.'
+  - name: USART3SEL
+    bit_range:
+    - 5
+    - 4
+    description: 'USART3 kernel clock source selection These bits are used to select the USART3 kernel clock source. Note: The USART3 is functional in Stop 0 and Stop 1 modes only when the kernel clock is HSI16 or LSE.'
+  - name: UART4SEL
+    bit_range:
+    - 7
+    - 6
+    description: 'UART4 kernel clock source selection These bits are used to select the UART4 kernel clock source. Note: The UART4 is functional in Stop 0 and Stop 1 modes only when the kernel clock is HSI16 or LSE.'
+  - name: UART5SEL
+    bit_range:
+    - 9
+    - 8
+    description: 'UART5 kernel clock source selection These bits are used to select the UART5 kernel clock source. Note: The UART5 is functional in Stop 0 and Stop 1 modes only when the kernel clock is HSI16 or LSE.'
+  - name: I2C1SEL
+    bit_range:
+    - 11
+    - 10
+    description: 'I2C1 kernel clock source selection These bits are used to select the I2C1 kernel clock source. Note: The I2C1 is functional in Stop 0 and Stop 1 mode sonly when the kernel clock is HSI16�or MSIK.'
+  - name: I2C2SEL
+    bit_range:
+    - 13
+    - 12
+    description: 'I2C2 kernel clock source selection These bits are used to select the I2C2 kernel clock source. Note: The I2C2 is functional in Stop 0 and Stop 1 mode sonly when the kernel clock is HSI16�or MSIK.'
+  - name: I2C4SEL
+    bit_range:
+    - 15
+    - 14
+    description: 'I2C4 kernel clock source selection These bits are used to select the I2C4 kernel clock source. Note: The I2C4 is functional in Stop 0 and Stop 1 modes only when the kernel clock is HSI16�or MSIK.'
+  - name: SPI2SEL
+    bit_range:
+    - 17
+    - 16
+    description: 'SPI2 kernel clock source selection These bits are used to select the SPI2 kernel clock source. Note: The SPI2 is functional in Stop 0 and Stop 1 mode only when the kernel clock is HSI16 or MSIK.'
+  - name: LPTIM2SEL
+    bit_range:
+    - 19
+    - 18
+    description: 'Low-power timer 2 kernel clock source selection These bits are used to select the LPTIM2 kernel clock source. Note: The LPTIM2 is functional in Stop 0 and Stop 1 mode only when the kernel clock is LSI, LSE or HSI16 if HSIKERON = 1.'
+  - name: SPI1SEL
+    bit_range:
+    - 21
+    - 20
+    description: 'SPI1 kernel clock source selection These bits are used to select the SPI1 kernel clock source. Note: The SPI1 is functional in Stop 0 and Stop 1 mode only when the kernel clock is HSI16 or MSIK.'
+  - name: SYSTICKSEL
+    bit_range:
+    - 23
+    - 22
+    description: 'SysTick clock source selection These bits are used to select the SysTick clock source. Note: When LSE or LSI is selected, the AHB frequency must be at least four times higher than the LSI or LSE frequency. In addition, a jitter up to one HCLK cycle is introduced, due to the LSE or LSI sampling with HCLK in the SysTick circuitry.'
+  - name: FDCAN1SEL
+    bit_range:
+    - 25
+    - 24
+    description: FDCAN1 kernel clock source selection These bits are used to select the FDCAN1 kernel clock source.
+  - name: ICLKSEL
+    bit_range:
+    - 27
+    - 26
+    description: Intermediate clock source selection These bits are used to select the clock source for the OTG_FS, the USB, and the SDMMC.
+  - name: TIMICSEL
+    bit_range:
+    - 31
+    - 29
+    description: 'Clock sources for TIM16,TIM17, and LPTIM2 internal input capture When TIMICSEL2 is set, the TIM16, TIM17, and LPTIM2 internal input capture can be connected either to HSI/256, MSI/4, or MSI/1024. Depending on TIMICSEL[1:0] value, MSI is either MSIK or MSIS. When TIMICSEL2 is cleared, the HSI, MSIK, and MSIS clock sources cannot be selected as�TIM16, TIM17, or LPTIM2 internal input capture. 0xx: HSI, MSIK and MSIS dividers disabled Note: The clock division must be disabled (TIMICSEL configured to 0xx) before selecting or changing a clock sources division.'
+  side_effects: null
+- id: RCC_CCIPR2
+  address_offset: 228
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MDF1SEL
+    bit_range:
+    - 2
+    - 0
+    description: 'MDF1 kernel clock source selection These bits are used to select the MDF1 kernel clock source. others: reserved'
+  - name: SAI1SEL
+    bit_range:
+    - 7
+    - 5
+    description: 'SAI1 kernel clock source selection These bits are used to select the SAI1 kernel clock source. others: reserved Note: If the selected clock is the external clock and this clock is stopped, a switch to another clock is impossible.'
+  - name: SAI2SEL
+    bit_range:
+    - 10
+    - 8
+    description: 'SAI2 kernel clock source selection These bits are used to select the SAI2 kernel clock source. others: reserved If the selected clock is the external clock and this clock is stopped, a switch to another clock is impossible. Note: This bitfield is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bitfield as reserved and keep it at reset value.'
+  - name: SAESSEL
+    bit_range:
+    - 11
+    - 11
+    description: 'SAES kernel clock source selection This bit is used to select the SAES kernel clock source. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: RNGSEL
+    bit_range:
+    - 13
+    - 12
+    description: RNG kernel clock source selection These bits are used to select the RNG kernel clock source.
+  - name: SDMMCSEL
+    bit_range:
+    - 14
+    - 14
+    description: SDMMC1 and SDMMC2 kernel clock source selection This bit is used to select the SDMMC kernel clock source. It is recommended to change it only after reset and before enabling the SDMMC.
+  - name: DSISEL
+    bit_range:
+    - 15
+    - 15
+    description: 'DSI kernel clock source selection This bit is used to select the DSI kernel clock source. This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. Note: If not present, consider this bit as reserved and keep it at reset value.'
+  - name: USART6SEL
+    bit_range:
+    - 17
+    - 16
+    description: 'USART6 kernel clock source selection These bits are used to select the USART6 kernel clock source. The USART6 is functional in Stop 0 and Stop 1 modes only when the kernel clock is HSI16 or LSE. Note: This bitfield is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bitfield as reserved and keep it at reset value.'
+  - name: LTDCSEL
+    bit_range:
+    - 18
+    - 18
+    description: 'LTDC kernel clock source selection This bit is used to select the LTDC kernel clock source. Note: This bit is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bit as reserved and keep it at reset value.'
+  - name: OCTOSPISEL
+    bit_range:
+    - 21
+    - 20
+    description: OCTOSPI1 and OCTOSPI2 kernel clock source selection These bits are used to select the OCTOSPI1 and OCTOSPI2 kernel clock source.
+  - name: HSPI1SEL
+    bit_range:
+    - 23
+    - 22
+    description: 'HSPI1 kernel clock source selection These bits are used to select the HSPI1 kernel clock source. Note: This bitfield is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bitfield as reserved and keep it at reset value.'
+  - name: I2C5SEL
+    bit_range:
+    - 25
+    - 24
+    description: 'I2C5 kernel clock source selection These bits are used to select the I2C5 kernel clock source. The I2C5 is functional in Stop 0 and Stop 1 modes only when the kernel clock is HSI16�or MSIK. Note: This bitfield is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bitfield as reserved and keep it at reset value.'
+  - name: I2C6SEL
+    bit_range:
+    - 27
+    - 26
+    description: 'I2C6 kernel clock source selection These bits are used to select the I2C6 kernel clock source. The I2C6 is functional in Stop 0 and Stop 1 modes only when the kernel clock is HSI16�or MSIK. Note: This bitfield is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bitfield as reserved and keep it at reset value.'
+  - name: OTGHSSEL
+    bit_range:
+    - 31
+    - 30
+    description: 'OTG_HS PHY kernel clock source selection These bits are used to select the OTG_HS PHY kernel clock source. Note: This bitfield is only available on some devices in the STM32U5 Series. Refer to the device datasheet for availability of its associated peripheral. If not present, consider this bitfield as reserved and keep it at reset value.'
+  side_effects: null
+- id: RCC_CCIPR3
+  address_offset: 232
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LPUART1SEL
+    bit_range:
+    - 2
+    - 0
+    description: 'LPUART1 kernel clock source selection These bits are used to select the LPUART1 kernel clock source. others: reserved Note: The LPUART1 is functional in Stop 0, Stop 1, and Stop 2 modes only when the kernel clock is HSI16, LSE, or MSIK.'
+  - name: SPI3SEL
+    bit_range:
+    - 4
+    - 3
+    description: 'SPI3 kernel clock source selection These bits are used to select the SPI3 kernel clock source. Note: The SPI3 is functional in Stop 0, Stop 1, and Stop 2 modes only when the kernel clock is HSI16 or MSIK.'
+  - name: I2C3SEL
+    bit_range:
+    - 7
+    - 6
+    description: 'I2C3 kernel clock source selection These bits are used to select the I2C3 kernel clock source. Note: The I2C3 is functional in Stop 0, Stop 1, and Stop 2 modes only when the kernel clock is HSI16 or MSIK.'
+  - name: LPTIM34SEL
+    bit_range:
+    - 9
+    - 8
+    description: 'LPTIM3 and LPTIM4 kernel clock source selection These bits are used to select the LPTIM3 and LPTIM4 kernel clock source. Note: The LPTIM3 and LPTIM4 are functional in Stop 0, Stop 1, and Stop 2 modes only when the kernel clock is LSI, LSE, HSI16 with HSIKERON = 1, or MSIK with MSIKERON�=�1.'
+  - name: LPTIM1SEL
+    bit_range:
+    - 11
+    - 10
+    description: 'LPTIM1 kernel clock source selection These bits are used to select the LPTIM1 kernel clock source. Note: The LPTIM1 is functional in Stop 0, Stop 1, and Stop 2 modes only when the kernel clock is LSI, LSE, HSI16 with HSIKERON = 1, or MSIK with MSIKERON = 1.'
+  - name: ADCDACSEL
+    bit_range:
+    - 14
+    - 12
+    description: 'ADC1, ADC2, ADC4 and DAC1 kernel clock source selection These bits are used to select the ADC1, ADC2, ADC4, and DAC1 kernel clock source. others: reserved Note: The ADC1, ADC2, ADC4, and DAC1 are functional in Stop 0, Stop 1, and Stop 2 modes only when the kernel clock is HSI16 or MSIK (only ADC4 and DAC1 are functional in�Stop 2 mode).'
+  - name: DAC1SEL
+    bit_range:
+    - 15
+    - 15
+    description: DAC1 sample-and-hold clock source selection This bit is used to select the DAC1 sample-and-hold clock source.
+  - name: ADF1SEL
+    bit_range:
+    - 18
+    - 16
+    description: 'ADF1 kernel clock source selection These bits are used to select the ADF1 kernel clock source. others: reserved Note: The ADF1 is functional in Stop 0, Stop 1, and Stop 2 modes only when the kernel clock is AUDIOCLK or MSIK.'
+  side_effects: null
+- id: RCC_BDCR
+  address_offset: 240
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LSEON
+    bit_range:
+    - 0
+    - 0
+    description: LSE oscillator enable This bit is set and cleared by software.
+  - name: LSERDY
+    bit_range:
+    - 1
+    - 1
+    description: LSE oscillator ready This bit is set and cleared by hardware to indicate when the external 32�kHz oscillator is stable. After LSEON is cleared, this LSERDY bit goes low after six external low-speed oscillator clock cycles.
+  - name: LSEBYP
+    bit_range:
+    - 2
+    - 2
+    description: LSE oscillator bypass This bit is set and cleared by software to bypass oscillator in debug mode. It can be written only when the external 32�kHz oscillator is disabled (LSEON = 0 and LSERDY = 0).
+  - name: LSEDRV
+    bit_range:
+    - 4
+    - 3
+    description: 'LSE oscillator drive capability This bitfield is set by software to modulate the drive capability of the LSE oscillator. It can be written only when the external 32 kHz oscillator is disabled (LSEON = 0 and LSERDY = 0). Note: The oscillator is in ‘Xtal mode’ when it is not in bypass mode.'
+  - name: LSECSSON
+    bit_range:
+    - 5
+    - 5
+    description: CSS on LSE enable This bit is set by software to enable the CSS on LSE. It must be enabled after the LSE oscillator is enabled (LSEON bit enabled) and ready (LSERDY flag set by hardware), and after the RTCSEL bit is selected. Once enabled, this bit cannot be disabled, except after a LSE failure detection (LSECSSD�=�1). In that case, the software must disable this LSECSSON bit.
+  - name: LSECSSD
+    bit_range:
+    - 6
+    - 6
+    description: CSS on LSE failure detection This bit is set by hardware to indicate when a failure is detected by the CCS on the external 32�kHz oscillator (LSE).
+  - name: LSESYSEN
+    bit_range:
+    - 7
+    - 7
+    description: LSE system clock (LSESYS) enable This bit is set by software to enable always the LSE system clock generated by RCC, which can be used by any peripheral when its source clock is the LSE, or at system level if one of LSCOSEL, MCO, or MSI PLL mode is needed.
+  - name: RTCSEL
+    bit_range:
+    - 9
+    - 8
+    description: RTC and TAMP clock source selection This bit is set by software to select the clock source for the RTC and TAMP. Once the RTC and TAMP clock source has been selected, it cannot be changed anymore unless the�backup domain is reset, or unless a failure is detected on LSE (LSECSSD is set). BDRST bit can be used to reset them.
+  - name: LSESYSRDY
+    bit_range:
+    - 11
+    - 11
+    description: LSE system clock (LSESYS) ready This bit is set and cleared by hardware to indicate when the LSE system clock is stable.When LSESYSEN is set, this LSESYSRDY flag is set after two LSE clock cycles. The LSE clock must be already enabled and stable (LSEON and LSERDY are set). When the LSEON bit is cleared, LSERDY goes low after six external low-speed oscillator clock cycles.
+  - name: LSEGFON
+    bit_range:
+    - 12
+    - 12
+    description: LSE clock glitch filter enable This bit is set and cleared by hardware to enable the LSE glitch filter. It can be written only when the LSE is disabled (LSEON = 0 and LSERDY = 0).
+  - name: RTCEN
+    bit_range:
+    - 15
+    - 15
+    description: RTC and TAMP clock enable This bit is set and cleared by software.
+  - name: BDRST
+    bit_range:
+    - 16
+    - 16
+    description: Backup domain software reset This bit is set and cleared by software.
+  - name: LSCOEN
+    bit_range:
+    - 24
+    - 24
+    description: Low-speed clock output (LSCO) enable This bit is set and cleared by software.
+  - name: LSCOSEL
+    bit_range:
+    - 25
+    - 25
+    description: Low-speed clock output selection This bit is set and cleared by software.
+  - name: LSION
+    bit_range:
+    - 26
+    - 26
+    description: LSI oscillator enable This bit is set and cleared by software. The LSI oscillator is disabled 60��s maximum after the LSION bit is cleared.
+  - name: LSIRDY
+    bit_range:
+    - 27
+    - 27
+    description: LSI oscillator ready This bit is set and cleared by hardware to indicate when the LSI oscillator is stable. After�LSION is cleared, LSIRDY goes low after three internal low-speed oscillator clock cycles. This bit is set when the LSI is used by IWDG or RTC, even if LSION = 0.
+  - name: LSIPREDIV
+    bit_range:
+    - 28
+    - 28
+    description: Low-speed clock divider configuration This bit is set and cleared by software to enable the LSI division. It can be written only when the LSI is disabled (LSION = 0 and LSIRDY = 0). If the LSI was previously enabled, it is necessary to wait for at least 60 μs after clearing LSION bit (synchronization time for LSI to be really disabled), before writing LSIPREDIV. The LSIPREDIV cannot be changed if the LSI is used by the IWDG or by the RTC.
+  side_effects: null
+- id: RCC_CSR
+  address_offset: 244
+  size: 32
+  access: READ_WRITE
+  reset_value: 201344000
+  fields:
+  - name: MSIKSRANGE
+    bit_range:
+    - 11
+    - 8
+    description: 'MSIK range after Standby mode This bit is set by software to chose the MSIK frequency at startup. It is used after exiting Standby mode until MSIRGSEL is set. After a NRST pin or a power-on reset or when exiting Shutdown mode, the range is always 4�MHz. MSIKSRANGE can be written only when MSIRGSEL = 1. others: reserved Note: Changing this bitfield does not change the current MSIK frequency.'
+  - name: MSISSRANGE
+    bit_range:
+    - 15
+    - 12
+    description: 'MSIS range after Standby mode This bitfield is set by software to chose the MSIS frequency at startup. It is used after exiting Standby mode until MSIRGSEL is set. After a NRST pin or a power-on reset or when exiting Shutdown mode, the range is always 4�MHz. MSISSRANGE can be written only when MSIRGSEL = 1. others: reserved Note: Changing this bitfield does not change the current MSIS frequency.'
+  - name: RMVF
+    bit_range:
+    - 23
+    - 23
+    description: Remove reset flag This bit is set by software to clear the reset flags.
+  - name: OBLRSTF
+    bit_range:
+    - 25
+    - 25
+    description: Option-byte loader reset flag This bit is set by hardware when a reset from the option-byte loading occurs. It is cleared by�writing to the RMVF bit.
+  - name: PINRSTF
+    bit_range:
+    - 26
+    - 26
+    description: NRST pin reset flag This bit is set by hardware when a reset from the NRST pin occurs. It is cleared by writing to�the RMVF bit.
+  - name: BORRSTF
+    bit_range:
+    - 27
+    - 27
+    description: Brownout reset or an exit from Shutdown mode reset flag This bit is set by hardware when a brownout reset or an exit from Shutdown mode reset occurs. It is cleared by writing to the RMVF bit.
+  - name: SFTRSTF
+    bit_range:
+    - 28
+    - 28
+    description: Software reset flag This bit is set by hardware when a software reset occurs. It is cleared by writing to RMVF.
+  - name: IWDGRSTF
+    bit_range:
+    - 29
+    - 29
+    description: Independent watchdog reset flag This bit is set by hardware when an independent watchdog reset domain occurs. It is cleared by writing to the RMVF bit.
+  - name: WWDGRSTF
+    bit_range:
+    - 30
+    - 30
+    description: Window watchdog reset flag This bit is set by hardware when a window watchdog reset occurs. It is cleared by writing to�the RMVF bit.
+  - name: LPWRRSTF
+    bit_range:
+    - 31
+    - 31
+    description: Low-power reset flag This bit is set by hardware when a reset occurs due to a Stop, Standby, or Shutdown mode entry, whereas the corresponding NRST_STOP, NRST_STBY, or NRST_SHDW option bit is cleared. This bit is cleared by writing to the RMVF bit.
+  side_effects: null
+- id: RCC_SECCFGR
+  address_offset: 272
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: HSISEC
+    bit_range:
+    - 0
+    - 0
+    description: HSI clock configuration and status bit security This bit is set and reset by software.
+  - name: HSESEC
+    bit_range:
+    - 1
+    - 1
+    description: HSE clock configuration bits, status bit and HSE_CSS security This bit is set and reset by software.
+  - name: MSISEC
+    bit_range:
+    - 2
+    - 2
+    description: MSI clock configuration and status bit security This bit is set and reset by software.
+  - name: LSISEC
+    bit_range:
+    - 3
+    - 3
+    description: LSI clock configuration and status bit security This bit is set and reset by software.
+  - name: LSESEC
+    bit_range:
+    - 4
+    - 4
+    description: LSE clock configuration and status bit security This bit is set and reset by software.
+  - name: SYSCLKSEC
+    bit_range:
+    - 5
+    - 5
+    description: SYSCLK clock selection, STOPWUCK bit, clock output on MCO configuration security This bit is set and reset by software.
+  - name: PRESCSEC
+    bit_range:
+    - 6
+    - 6
+    description: AHBx/APBx prescaler configuration bits security This bit is set and reset by software.
+  - name: PLL1SEC
+    bit_range:
+    - 7
+    - 7
+    description: PLL1 clock configuration and status bit security This bit is set and reset by software.
+  - name: PLL2SEC
+    bit_range:
+    - 8
+    - 8
+    description: PLL2 clock configuration and status bit security Set and reset by software.
+  - name: PLL3SEC
+    bit_range:
+    - 9
+    - 9
+    description: PLL3 clock configuration and status bit security This bit is set and reset by software.
+  - name: ICLKSEC
+    bit_range:
+    - 10
+    - 10
+    description: Intermediate clock source selection security This bit is set and reset by software.
+  - name: HSI48SEC
+    bit_range:
+    - 11
+    - 11
+    description: HSI48 clock configuration and status bit security This bit is set and reset by software.
+  - name: RMVFSEC
+    bit_range:
+    - 12
+    - 12
+    description: Remove reset flag security This bit is set and reset by software.
+  side_effects: null
+- id: RCC_PRIVCFGR
+  address_offset: 276
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPRIV
+    bit_range:
+    - 0
+    - 0
+    description: RCC secure function privilege configuration This bit is set and reset by software. It can be written only by a secure privileged access.
+  - name: NSPRIV
+    bit_range:
+    - 1
+    - 1
+    description: RCC non-secure function privilege configuration This bit is set and reset by software. It can be written only by privileged access, secure or non-secure.
+  side_effects: null
+interrupts:
+  RCC: 9
+  RCC_S: 10
+timing: null

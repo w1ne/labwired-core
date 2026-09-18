@@ -1,0 +1,2217 @@
+peripheral: PWR
+version: 0.1.0
+registers:
+- id: PWR_CR1
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LPMS
+    bit_range:
+    - 2
+    - 0
+    description: 'Low-power mode selection These bits select the low-power mode entered when the CPU enters the Deepsleep mode. 10x: Standby mode (Standby mode also entered if LPMS = 11X in PWR_CR1 with BREN = 1 in PWR_BDCR1) 11x: Shutdown mode if BREN = 0 in PWR_BDCR1'
+  - name: RRSB1
+    bit_range:
+    - 5
+    - 5
+    description: 'SRAM2 page 1 retention in Stop 3 and Standby modes This bit is used to keep the SRAM2 page 1 content in Stop 3 and Standby modes. The SRAM2 page 1 corresponds to the first 8 Kbytes of the SRAM2 (from SRAM2 base address to SRAM2 base address + 0x1FFF). Note: This bit has no effect in Shutdown mode.'
+  - name: RRSB2
+    bit_range:
+    - 6
+    - 6
+    description: 'SRAM2 page 2 retention in Stop 3 and Standby modes This bit is used to keep the SRAM2 page 2 content in Stop 3 and Standby modes. The SRAM2 page 2 corresponds to the last 56 Kbytes of the SRAM2 (from SRAM2 base address + 0x2000 to SRAM2 base address + 0xFFFF). Note: This bit has no effect in Shutdown mode.'
+  - name: ULPMEN
+    bit_range:
+    - 7
+    - 7
+    description: BOR ultra-low power mode This bit is used to reduce the consumption by configuring the BOR in discontinuous mode. This bit must be set to reach the lowest power consumption in the low-power modes.
+  - name: SRAM1PD
+    bit_range:
+    - 8
+    - 8
+    description: SRAM1 power down This bit is used to reduce the consumption by powering off the SRAM1.
+  - name: SRAM2PD
+    bit_range:
+    - 9
+    - 9
+    description: SRAM2 power down This bit is used to reduce the consumption by powering off the SRAM2.
+  - name: SRAM3PD
+    bit_range:
+    - 10
+    - 10
+    description: SRAM3 power down This bit is used to reduce the consumption by powering off the SRAM3.
+  - name: SRAM4PD
+    bit_range:
+    - 11
+    - 11
+    description: SRAM4 power down This bit is used to reduce the consumption by powering off the SRAM4.
+  side_effects: null
+- id: PWR_CR2
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SRAM1PDS1
+    bit_range:
+    - 0
+    - 0
+    description: SRAM1 page 1 (64 Kbytes) power-down in Stop modes (Stop 0, 1, 2, 3)
+  - name: SRAM1PDS2
+    bit_range:
+    - 1
+    - 1
+    description: SRAM1 page 2 (64 Kbytes) power-down in Stop modes (Stop 0, 1, 2, 3)
+  - name: SRAM1PDS3
+    bit_range:
+    - 2
+    - 2
+    description: SRAM1 page 3 (64 Kbytes) power-down in Stop modes (Stop 0, 1, 2, 3)
+  - name: SRAM2PDS1
+    bit_range:
+    - 4
+    - 4
+    description: 'SRAM2 page 1 (8 Kbytes) power-down in Stop modes (Stop 0, 1, 2) Note: The SRAM2 page 1 retention in Stop 3 is controlled by RRSB1 bit in PWR_CR1.'
+  - name: SRAM2PDS2
+    bit_range:
+    - 5
+    - 5
+    description: 'SRAM2 page 2 (56 Kbytes) power-down in Stop modes (Stop 0, 1, 2) Note: The SRAM2 page 2 retention in Stop 3 is controlled by RRSB2 bit in PWR_CR1.'
+  - name: SRAM4PDS
+    bit_range:
+    - 6
+    - 6
+    description: SRAM4 power-down in Stop modes (Stop 0, 1, 2, 3)
+  - name: ICRAMPDS
+    bit_range:
+    - 8
+    - 8
+    description: ICACHE SRAM power-down in Stop modes (Stop 0, 1, 2, 3)
+  - name: DC1RAMPDS
+    bit_range:
+    - 9
+    - 9
+    description: DCACHE1 SRAM power-down in Stop modes (Stop 0, 1, 2, 3)
+  - name: DMA2DRAMPDS
+    bit_range:
+    - 10
+    - 10
+    description: DMA2D SRAM power-down in Stop modes (Stop 0, 1, 2, 3)
+  - name: PRAMPDS
+    bit_range:
+    - 11
+    - 11
+    description: FMAC, FDCAN and USB peripherals SRAM power-down in Stop modes (Stop 0, 1, 2, 3)
+  - name: PKARAMPDS
+    bit_range:
+    - 12
+    - 12
+    description: PKA SRAM power-down
+  - name: SRAM4FWU
+    bit_range:
+    - 13
+    - 13
+    description: SRAM4 fast wakeup from Stop 0, Stop 1 and Stop 2 modes This bit is used to obtain the best trade-off between low-power consumption and wakeup time. SRAM4 wakeup time increases the wakeup time when exiting Stop 0, 1 and 2 modes, and also increases the LPDMA access time to SRAM4 during Stop modes.
+  - name: FLASHFWU
+    bit_range:
+    - 14
+    - 14
+    description: Flash memory fast wakeup from Stop 0 and Stop 1 modes This bit is used to obtain the best trade-off between low-power consumption and wakeup time when exiting the Stop 0 or Stop 1 modes. When this bit is set, the Flash memory remains in normal mode in Stop 0 and Stop 1 modes, which offers a faster startup time with higher consumption.
+  - name: SRAM3PDS1
+    bit_range:
+    - 16
+    - 16
+    description: SRAM3 page 1 (64 Kbytes) power-down in Stop modes (Stop 0, 1, 2, 3)
+  - name: SRAM3PDS2
+    bit_range:
+    - 17
+    - 17
+    description: SRAM3 page 2 (64 Kbytes) power-down in Stop modes (Stop 0, 1, 2, 3)
+  - name: SRAM3PDS3
+    bit_range:
+    - 18
+    - 18
+    description: SRAM3 page 3 (64 Kbytes) power-down in Stop modes (Stop 0, 1, 2, 3)
+  - name: SRAM3PDS4
+    bit_range:
+    - 19
+    - 19
+    description: SRAM3 page 4 (64 Kbytes) power-down in Stop modes (Stop 0, 1, 2, 3)
+  - name: SRAM3PDS5
+    bit_range:
+    - 20
+    - 20
+    description: SRAM3 page 5 (64 Kbytes) power-down in Stop modes (Stop 0, 1, 2, 3)
+  - name: SRAM3PDS6
+    bit_range:
+    - 21
+    - 21
+    description: SRAM3 page 6 (64 Kbytes) power-down in Stop modes (Stop 0, 1, 2, 3)
+  - name: SRAM3PDS7
+    bit_range:
+    - 22
+    - 22
+    description: SRAM3 page 7 (64 Kbytes) power-down in Stop modes (Stop 0, 1, 2, 3)
+  - name: SRAM3PDS8
+    bit_range:
+    - 23
+    - 23
+    description: SRAM3 page 8 (64 Kbytes) power-down in Stop modes (Stop 0, 1, 2, 3)
+  - name: SRDRUN
+    bit_range:
+    - 31
+    - 31
+    description: SmartRun domain in Run mode
+  side_effects: null
+- id: PWR_CR3
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REGSEL
+    bit_range:
+    - 1
+    - 1
+    description: 'Regulator selection Note: REGSEL is reserved and must be kept at reset value in packages without SMPS.'
+  - name: FSTEN
+    bit_range:
+    - 2
+    - 2
+    description: Fast soft start
+  side_effects: null
+- id: PWR_VOSR
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 32768
+  fields:
+  - name: BOOSTRDY
+    bit_range:
+    - 14
+    - 14
+    description: EPOD booster ready This bit is set to 1 by hardware when the power booster startup time is reached. The system clock frequency can be switched higher than 50 MHz only after this bit is set.
+  - name: VOSRDY
+    bit_range:
+    - 15
+    - 15
+    description: Ready bit for VCORE voltage scaling output selection
+  - name: VOS
+    bit_range:
+    - 17
+    - 16
+    description: Voltage scaling range selection This field is protected against non-secure access when SYSCLKSEC = 1 in RCC_SECCFGR. It is protected against unprivileged access when SYSCLKSEC = 1 in RCC_SECCFGR and SPRIV = 1 in PWR_PRIVCFGR, or when SYSCLKSEC = 0 and NSPRIV = 1.
+  - name: BOOSTEN
+    bit_range:
+    - 18
+    - 18
+    description: EPOD booster enable
+  side_effects: null
+- id: PWR_SVMCR
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PVDE
+    bit_range:
+    - 4
+    - 4
+    description: Power voltage detector enable
+  - name: PVDLS
+    bit_range:
+    - 7
+    - 5
+    description: 'Power voltage detector level selection These bits select the voltage threshold detected by the power voltage detector:'
+  - name: UVMEN
+    bit_range:
+    - 24
+    - 24
+    description: VDDUSB independent USB voltage monitor enable
+  - name: IO2VMEN
+    bit_range:
+    - 25
+    - 25
+    description: VDDIO2 independent I/Os voltage monitor enable
+  - name: AVM1EN
+    bit_range:
+    - 26
+    - 26
+    description: VDDA independent analog supply voltage monitor 1 enable (1.6 V threshold)
+  - name: AVM2EN
+    bit_range:
+    - 27
+    - 27
+    description: VDDA independent analog supply voltage monitor 2 enable (1.8 V threshold)
+  - name: USV
+    bit_range:
+    - 28
+    - 28
+    description: VDDUSB independent USB supply valid
+  - name: IO2SV
+    bit_range:
+    - 29
+    - 29
+    description: VDDIO2 independent I/Os supply valid This bit is used to validate the VDDIO2 supply for electrical and logical isolation purpose. Setting this bit is mandatory to use PG[15:2]. If VDDIO2 is not always present in the application, the VDDIO2 voltage monitor can be used to determine whether this supply is ready or not.
+  - name: ASV
+    bit_range:
+    - 30
+    - 30
+    description: VDDA independent analog supply valid
+  side_effects: null
+- id: PWR_WUCR1
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: WUPEN1
+    bit_range:
+    - 0
+    - 0
+    description: Wakeup pin WKUP1 enable
+  - name: WUPEN2
+    bit_range:
+    - 1
+    - 1
+    description: Wakeup pin WKUP2 enable
+  - name: WUPEN3
+    bit_range:
+    - 2
+    - 2
+    description: Wakeup pin WKUP3 enable
+  - name: WUPEN4
+    bit_range:
+    - 3
+    - 3
+    description: Wakeup pin WKUP4 enable
+  - name: WUPEN5
+    bit_range:
+    - 4
+    - 4
+    description: Wakeup pin WKUP5 enable
+  - name: WUPEN6
+    bit_range:
+    - 5
+    - 5
+    description: Wakeup pin WKUP6 enable
+  - name: WUPEN7
+    bit_range:
+    - 6
+    - 6
+    description: Wakeup pin WKUP7 enable
+  - name: WUPEN8
+    bit_range:
+    - 7
+    - 7
+    description: Wakeup pin WKUP8 enable
+  side_effects: null
+- id: PWR_WUCR2
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: WUPP1
+    bit_range:
+    - 0
+    - 0
+    description: Wakeup pin WKUP1 polarity. This bit must be configured when WUPEN1 = 0.
+  - name: WUPP2
+    bit_range:
+    - 1
+    - 1
+    description: Wakeup pin WKUP2 polarity This bit must be configured when WUPEN2 = 0.
+  - name: WUPP3
+    bit_range:
+    - 2
+    - 2
+    description: Wakeup pin WKUP3 polarity This bit must be configured when WUPEN3 = 0.
+  - name: WUPP4
+    bit_range:
+    - 3
+    - 3
+    description: Wakeup pin WKUP4 polarity This bit must be configured when WUPEN4 = 0.
+  - name: WUPP5
+    bit_range:
+    - 4
+    - 4
+    description: Wakeup pin WKUP5 polarity This bit must be configured when WUPEN5 = 0.
+  - name: WUPP6
+    bit_range:
+    - 5
+    - 5
+    description: Wakeup pin WKUP6 polarity This bit must be configured when WUPEN6 = 0.
+  - name: WUPP7
+    bit_range:
+    - 6
+    - 6
+    description: Wakeup pin WKUP7 polarity This bit must be configured when WUPEN7 = 0.
+  - name: WUPP8
+    bit_range:
+    - 7
+    - 7
+    description: Wakeup pin WKUP8 polarity This bit must be configured when WUPEN8 = 0.
+  side_effects: null
+- id: PWR_WUCR3
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: WUSEL1
+    bit_range:
+    - 1
+    - 0
+    description: Wakeup pin WKUP1 selection This field must be configured when WUPEN1 = 0.
+  - name: WUSEL2
+    bit_range:
+    - 3
+    - 2
+    description: Wakeup pin WKUP2 selection This field must be configured when WUPEN2 = 0.
+  - name: WUSEL3
+    bit_range:
+    - 5
+    - 4
+    description: Wakeup pin WKUP3 selection This field must be configured when WUPEN3 = 0.
+  - name: WUSEL4
+    bit_range:
+    - 7
+    - 6
+    description: Wakeup pin WKUP4 selection This field must be configured when WUPEN4 = 0.
+  - name: WUSEL5
+    bit_range:
+    - 9
+    - 8
+    description: Wakeup pin WKUP5 selection This field must be configured when WUPEN5 = 0.
+  - name: WUSEL6
+    bit_range:
+    - 11
+    - 10
+    description: Wakeup pin WKUP6 selection This field must be configured when WUPEN6 = 0.
+  - name: WUSEL7
+    bit_range:
+    - 13
+    - 12
+    description: Wakeup pin WKUP7 selection This field must be configured when WUPEN7 = 0.
+  - name: WUSEL8
+    bit_range:
+    - 15
+    - 14
+    description: Wakeup pin WKUP8 selection This field must be configured when WUPEN8 = 0.
+  side_effects: null
+- id: PWR_BDCR1
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BREN
+    bit_range:
+    - 0
+    - 0
+    description: 'Backup RAM retention in Standby and VBAT modes When this bit is set, the backup RAM content is kept in Standby and VBAT modes. If BREN is reset, the backup RAM can still be used in Run, Sleep and Stop modes. However, its content is lost in Standby, Shutdown and VBAT modes. This bit can be written only when the regulator is LDO, which must be configured before switching to SMPS. Note: Backup RAM cannot be preserved in Shutdown mode.'
+  - name: MONEN
+    bit_range:
+    - 4
+    - 4
+    description: Backup domain voltage and temperature monitoring enable
+  side_effects: null
+- id: PWR_BDCR2
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: VBE
+    bit_range:
+    - 0
+    - 0
+    description: VBAT charging enable
+  - name: VBRS
+    bit_range:
+    - 1
+    - 1
+    description: VBAT charging resistor selection
+  side_effects: null
+- id: PWR_DBPR
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DBP
+    bit_range:
+    - 0
+    - 0
+    description: Disable Backup domain write protection In reset state, all registers and SRAM in Backup domain are protected against parasitic write access. This bit must be set to enable the write access to these registers.
+  side_effects: null
+- id: PWR_UCPDR
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: UCPD_DBDIS
+    bit_range:
+    - 0
+    - 0
+    description: UCPD dead battery disable After exiting reset, the USB Type-C “dead battery” behavior is enabled, which may have a pull-down effect on CC1 and CC2 pins. It is recommended to disable it in all cases, either to stop this pull-down or to handover control to the UCPD (the UCPD must be initialized before doing the disable).
+  - name: UCPD_STBY
+    bit_range:
+    - 1
+    - 1
+    description: UCPD Standby mode When set, this bit is used to memorize the UCPD configuration in Standby mode. This bit must be written to 1 just before entering Standby mode when using UCPD. It must be written to 0 after exiting the Standby mode and before writing any UCPD registers.
+  side_effects: null
+- id: PWR_SECCFGR
+  address_offset: 48
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: WUP1SEC
+    bit_range:
+    - 0
+    - 0
+    description: WUP1 secure protection
+  - name: WUP2SEC
+    bit_range:
+    - 1
+    - 1
+    description: WUP2 secure protection
+  - name: WUP3SEC
+    bit_range:
+    - 2
+    - 2
+    description: WUP3 secure protection
+  - name: WUP4SEC
+    bit_range:
+    - 3
+    - 3
+    description: WUP4 secure protection
+  - name: WUP5SEC
+    bit_range:
+    - 4
+    - 4
+    description: WUP5 secure protection
+  - name: WUP6SEC
+    bit_range:
+    - 5
+    - 5
+    description: WUP6 secure protection
+  - name: WUP7SEC
+    bit_range:
+    - 6
+    - 6
+    description: WUP7 secure protection
+  - name: WUP8SEC
+    bit_range:
+    - 7
+    - 7
+    description: WUP8 secure protection
+  - name: LPMSEC
+    bit_range:
+    - 12
+    - 12
+    description: Low-power modes secure protection
+  - name: VDMSEC
+    bit_range:
+    - 13
+    - 13
+    description: Voltage detection and monitoring secure protection
+  - name: VBSEC
+    bit_range:
+    - 14
+    - 14
+    description: Backup domain secure protection
+  - name: APCSEC
+    bit_range:
+    - 15
+    - 15
+    description: Pull-up/pull-down secure protection
+  side_effects: null
+- id: PWR_PRIVCFGR
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPRIV
+    bit_range:
+    - 0
+    - 0
+    description: PWR secure functions privilege configuration This bit is set and reset by software. It can be written only by a secure privileged access.
+  - name: NSPRIV
+    bit_range:
+    - 1
+    - 1
+    description: PWR non-secure functions privilege configuration This bit is set and reset by software. It can be written only by privileged access, secure or non-secure.
+  side_effects: null
+- id: PWR_SR
+  address_offset: 56
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CSSF
+    bit_range:
+    - 0
+    - 0
+    description: Clear Stop and Standby flags This bit is protected against non-secure access when LPMSEC = 1 in PWR_SECCFGR. This bit is protected against unprivileged access when LPMSEC = 1 and SPRIV = 1 in PWR_PRIVCFGR, or when LPMSEC = 0 and NSPRIV = 1. Writing 1 to this bit clears the STOPF and SBF flags.
+  - name: STOPF
+    bit_range:
+    - 1
+    - 1
+    description: Stop flag This bit is set by hardware when the device enters a Stop mode, and is cleared by software by writing 1 to the CSSF bit.
+  - name: SBF
+    bit_range:
+    - 2
+    - 2
+    description: Standby flag This bit is set by hardware when the device enters the Standby mode, and is cleared by writing 1 to the CSSF bit, or by a power-on reset. It is not cleared by the system reset.
+  side_effects: null
+- id: PWR_SVMSR
+  address_offset: 60
+  size: 32
+  access: READ_WRITE
+  reset_value: 32768
+  fields:
+  - name: REGS
+    bit_range:
+    - 1
+    - 1
+    description: Regulator selection
+  - name: PVDO
+    bit_range:
+    - 4
+    - 4
+    description: VDD voltage detector output
+  - name: ACTVOSRDY
+    bit_range:
+    - 15
+    - 15
+    description: Voltage level ready for currently used VOS
+  - name: ACTVOS
+    bit_range:
+    - 17
+    - 16
+    description: VOS currently applied to VCORE This field provides the last VOS value.
+  - name: VDDUSBRDY
+    bit_range:
+    - 24
+    - 24
+    description: VDDUSB ready
+  - name: VDDIO2RDY
+    bit_range:
+    - 25
+    - 25
+    description: VDDIO2 ready
+  - name: VDDA1RDY
+    bit_range:
+    - 26
+    - 26
+    description: VDDA ready versus 1.6V voltage monitor
+  - name: VDDA2RDY
+    bit_range:
+    - 27
+    - 27
+    description: VDDA ready versus 1.8 V voltage monitor
+  side_effects: null
+- id: PWR_BDSR
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: VBATH
+    bit_range:
+    - 1
+    - 1
+    description: Backup domain voltage level monitoring versus high threshold
+  - name: TEMPL
+    bit_range:
+    - 2
+    - 2
+    description: Temperature level monitoring versus low threshold
+  - name: TEMPH
+    bit_range:
+    - 3
+    - 3
+    description: Temperature level monitoring versus high threshold
+  side_effects: null
+- id: PWR_WUSR
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: WUF1
+    bit_range:
+    - 0
+    - 0
+    description: Wakeup flag 1 This bit is set when a wakeup event is detected on WKUP1 pin. This bit is cleared by writing 1 in the CWUF1 bit of PWR_WUSCR when WUSEL ≠ 11, or by hardware when WUPEN1 = 0.
+  - name: WUF2
+    bit_range:
+    - 1
+    - 1
+    description: Wakeup flag 2 This bit is set when a wakeup event is detected on WKUP2 pin. This bit is cleared by writing 1 in the CWUF2 bit of PWR_WUSCR when WUSEL ≠ 11, or by hardware when WUPEN2 = 0.
+  - name: WUF3
+    bit_range:
+    - 2
+    - 2
+    description: Wakeup flag 3 This bit is set when a wakeup event is detected on WKUP3 pin. This bit is cleared by writing 1 in the CWUF3 bit of PWR_WUSCR when WUSEL ≠ 11, or by hardware when WUPEN3 = 0.
+  - name: WUF4
+    bit_range:
+    - 3
+    - 3
+    description: Wakeup flag 4 This bit is set when a wakeup event is detected on WKUP4 pin. This bit is cleared by writing 1 in the CWUF4 bit of PWR_WUSCR when WUSEL ≠ 11, or by hardware when WUPEN4 = 0.
+  - name: WUF5
+    bit_range:
+    - 4
+    - 4
+    description: Wakeup flag 5 This bit is set when a wakeup event is detected on WKUP5 pin. This bit is cleared by writing 1 in the CWUF5 bit of PWR_WUSCR when WUSEL ≠ 11, or by hardware when WUPEN5 = 0.
+  - name: WUF6
+    bit_range:
+    - 5
+    - 5
+    description: Wakeup flag 6 This bit is set when a wakeup event is detected on WKUP6 pin. This bit is cleared by writing 1 in the CWUF6 bit of PWR_WUSCR when WUSEL ≠ 11, or by hardware when WUPEN6 = 0. If WUSEL = 11, this bit is cleared by hardware when all internal wakeup source are cleared.
+  - name: WUF7
+    bit_range:
+    - 6
+    - 6
+    description: Wakeup flag 7 This bit is set when a wakeup event is detected on WKUP7 pin. This bit is cleared by writing 1 in the CWUF7 bit of PWR_WUSCR when WUSEL ≠ 11, or by hardware when WUPEN7 = 0. If WUSEL = 11, this bit is cleared by hardware when all internal wakeup source are cleared.
+  - name: WUF8
+    bit_range:
+    - 7
+    - 7
+    description: Wakeup flag 8 This bit is set when a wakeup event is detected on WKUP8 pin. This bit is cleared by writing 1 in the CWUF8 bit of PWR_WUSCR when WUSEL ≠ 11, or by hardware when WUPEN8 = 0. If WUSEL = 11, this bit is cleared by hardware when all internal wakeup source are cleared.
+  side_effects: null
+- id: PWR_WUSCR
+  address_offset: 72
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CWUF1
+    bit_range:
+    - 0
+    - 0
+    description: Wakeup flag 1 Writing 1 to this bit clears the WUF1 flag in PWR_WUSR.
+  - name: CWUF2
+    bit_range:
+    - 1
+    - 1
+    description: Wakeup flag 2 Writing 1 to this bit clears the WUF2 flag in PWR_WUSR.
+  - name: CWUF3
+    bit_range:
+    - 2
+    - 2
+    description: Wakeup flag 3 Writing 1 to this bit clears the WUF3 flag in PWR_WUSR.
+  - name: CWUF4
+    bit_range:
+    - 3
+    - 3
+    description: Wakeup flag 4 Writing 1 to this bit clears the WUF4 flag in PWR_WUSR.
+  - name: CWUF5
+    bit_range:
+    - 4
+    - 4
+    description: Wakeup flag 5 Writing 1 to this bit clears the WUF5 flag in PWR_WUSR.
+  - name: CWUF6
+    bit_range:
+    - 5
+    - 5
+    description: Wakeup flag 6 Writing 1 to this bit clears the WUF6 flag in PWR_WUSR.
+  - name: CWUF7
+    bit_range:
+    - 6
+    - 6
+    description: Wakeup flag 7 Writing 1 to this bit clears the WUF7 flag in PWR_WUSR.
+  - name: CWUF8
+    bit_range:
+    - 7
+    - 7
+    description: Wakeup flag 8 Writing 1 to this bit clears the WUF8 flag in PWR_WUSR.
+  side_effects: null
+- id: PWR_APCR
+  address_offset: 76
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: APC
+    bit_range:
+    - 0
+    - 0
+    description: Apply pull-up and pull-down configuration When this bit is set, the I/O pull-up and pull-down configurations defined in PWR_PUCRx and PWR_PDCRx are applied. When this bit is cleared, PWR_PUCRx and PWR_PDCRx are not applied to the I/Os.
+  side_effects: null
+- id: PWR_PUCRA
+  address_offset: 80
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PU0
+    bit_range:
+    - 0
+    - 0
+    description: Port A pull-up bit
+  - name: PU1
+    bit_range:
+    - 1
+    - 1
+    description: Port A pull-up bit
+  - name: PU2
+    bit_range:
+    - 2
+    - 2
+    description: Port A pull-up bit
+  - name: PU3
+    bit_range:
+    - 3
+    - 3
+    description: Port A pull-up bit
+  - name: PU4
+    bit_range:
+    - 4
+    - 4
+    description: Port A pull-up bit
+  - name: PU5
+    bit_range:
+    - 5
+    - 5
+    description: Port A pull-up bit
+  - name: PU6
+    bit_range:
+    - 6
+    - 6
+    description: Port A pull-up bit
+  - name: PU7
+    bit_range:
+    - 7
+    - 7
+    description: Port A pull-up bit
+  - name: PU8
+    bit_range:
+    - 8
+    - 8
+    description: Port A pull-up bit
+  - name: PU9
+    bit_range:
+    - 9
+    - 9
+    description: Port A pull-up bit
+  - name: PU10
+    bit_range:
+    - 10
+    - 10
+    description: Port A pull-up bit
+  - name: PU11
+    bit_range:
+    - 11
+    - 11
+    description: Port A pull-up bit
+  - name: PU12
+    bit_range:
+    - 12
+    - 12
+    description: Port A pull-up bit
+  - name: PU13
+    bit_range:
+    - 13
+    - 13
+    description: Port A pull-up bit
+  - name: PU15
+    bit_range:
+    - 15
+    - 15
+    description: Port A pull-up bit 15 When set, this bit activates the pull-up on PA15 when the APC bit is set in PWR_APCR. The pull-up is not activated if the corresponding PD15 bit is also set.
+  side_effects: null
+- id: PWR_PDCRA
+  address_offset: 84
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PD0
+    bit_range:
+    - 0
+    - 0
+    description: Port A pull-down bit
+  - name: PD1
+    bit_range:
+    - 1
+    - 1
+    description: Port A pull-down bit
+  - name: PD2
+    bit_range:
+    - 2
+    - 2
+    description: Port A pull-down bit
+  - name: PD3
+    bit_range:
+    - 3
+    - 3
+    description: Port A pull-down bit
+  - name: PD4
+    bit_range:
+    - 4
+    - 4
+    description: Port A pull-down bit
+  - name: PD5
+    bit_range:
+    - 5
+    - 5
+    description: Port A pull-down bit
+  - name: PD6
+    bit_range:
+    - 6
+    - 6
+    description: Port A pull-down bit
+  - name: PD7
+    bit_range:
+    - 7
+    - 7
+    description: Port A pull-down bit
+  - name: PD8
+    bit_range:
+    - 8
+    - 8
+    description: Port A pull-down bit
+  - name: PD9
+    bit_range:
+    - 9
+    - 9
+    description: Port A pull-down bit
+  - name: PD10
+    bit_range:
+    - 10
+    - 10
+    description: Port A pull-down bit
+  - name: PD11
+    bit_range:
+    - 11
+    - 11
+    description: Port A pull-down bit
+  - name: PD12
+    bit_range:
+    - 12
+    - 12
+    description: Port A pull-down bit
+  - name: PD14
+    bit_range:
+    - 14
+    - 14
+    description: Port A pull-down bit
+  side_effects: null
+- id: PWR_PUCRB
+  address_offset: 88
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PU0
+    bit_range:
+    - 0
+    - 0
+    description: Port B pull-up bit
+  - name: PU1
+    bit_range:
+    - 1
+    - 1
+    description: Port B pull-up bit
+  - name: PU2
+    bit_range:
+    - 2
+    - 2
+    description: Port B pull-up bit
+  - name: PU3
+    bit_range:
+    - 3
+    - 3
+    description: Port B pull-up bit
+  - name: PU4
+    bit_range:
+    - 4
+    - 4
+    description: Port B pull-up bit
+  - name: PU5
+    bit_range:
+    - 5
+    - 5
+    description: Port B pull-up bit
+  - name: PU6
+    bit_range:
+    - 6
+    - 6
+    description: Port B pull-up bit
+  - name: PU7
+    bit_range:
+    - 7
+    - 7
+    description: Port B pull-up bit
+  - name: PU8
+    bit_range:
+    - 8
+    - 8
+    description: Port B pull-up bit
+  - name: PU9
+    bit_range:
+    - 9
+    - 9
+    description: Port B pull-up bit
+  - name: PU10
+    bit_range:
+    - 10
+    - 10
+    description: Port B pull-up bit
+  - name: PU11
+    bit_range:
+    - 11
+    - 11
+    description: Port B pull-up bit
+  - name: PU12
+    bit_range:
+    - 12
+    - 12
+    description: Port B pull-up bit
+  - name: PU13
+    bit_range:
+    - 13
+    - 13
+    description: Port B pull-up bit
+  - name: PU14
+    bit_range:
+    - 14
+    - 14
+    description: Port B pull-up bit
+  - name: PU15
+    bit_range:
+    - 15
+    - 15
+    description: Port B pull-up bit
+  side_effects: null
+- id: PWR_PDCRB
+  address_offset: 92
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PD0
+    bit_range:
+    - 0
+    - 0
+    description: Port B pull-down bit
+  - name: PD1
+    bit_range:
+    - 1
+    - 1
+    description: Port B pull-down bit
+  - name: PD2
+    bit_range:
+    - 2
+    - 2
+    description: Port B pull-down bit
+  - name: PD3
+    bit_range:
+    - 3
+    - 3
+    description: Port B pull-down bit
+  - name: PD5
+    bit_range:
+    - 5
+    - 5
+    description: Port B pull-down bit
+  - name: PD6
+    bit_range:
+    - 6
+    - 6
+    description: Port B pull-down bit
+  - name: PD7
+    bit_range:
+    - 7
+    - 7
+    description: Port B pull-down bit
+  - name: PD8
+    bit_range:
+    - 8
+    - 8
+    description: Port B pull-down bit
+  - name: PD9
+    bit_range:
+    - 9
+    - 9
+    description: Port B pull-down bit
+  - name: PD10
+    bit_range:
+    - 10
+    - 10
+    description: Port B pull-down bit
+  - name: PD11
+    bit_range:
+    - 11
+    - 11
+    description: Port B pull-down bit
+  - name: PD12
+    bit_range:
+    - 12
+    - 12
+    description: Port B pull-down bit
+  - name: PD13
+    bit_range:
+    - 13
+    - 13
+    description: Port B pull-down bit
+  - name: PD14
+    bit_range:
+    - 14
+    - 14
+    description: Port B pull-down bit
+  - name: PD15
+    bit_range:
+    - 15
+    - 15
+    description: Port B pull-down bit
+  side_effects: null
+- id: PWR_PUCRC
+  address_offset: 96
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PU0
+    bit_range:
+    - 0
+    - 0
+    description: Port C pull-up bit
+  - name: PU1
+    bit_range:
+    - 1
+    - 1
+    description: Port C pull-up bit
+  - name: PU2
+    bit_range:
+    - 2
+    - 2
+    description: Port C pull-up bit
+  - name: PU3
+    bit_range:
+    - 3
+    - 3
+    description: Port C pull-up bit
+  - name: PU4
+    bit_range:
+    - 4
+    - 4
+    description: Port C pull-up bit
+  - name: PU5
+    bit_range:
+    - 5
+    - 5
+    description: Port C pull-up bit
+  - name: PU6
+    bit_range:
+    - 6
+    - 6
+    description: Port C pull-up bit
+  - name: PU7
+    bit_range:
+    - 7
+    - 7
+    description: Port C pull-up bit
+  - name: PU8
+    bit_range:
+    - 8
+    - 8
+    description: Port C pull-up bit
+  - name: PU9
+    bit_range:
+    - 9
+    - 9
+    description: Port C pull-up bit
+  - name: PU10
+    bit_range:
+    - 10
+    - 10
+    description: Port C pull-up bit
+  - name: PU11
+    bit_range:
+    - 11
+    - 11
+    description: Port C pull-up bit
+  - name: PU12
+    bit_range:
+    - 12
+    - 12
+    description: Port C pull-up bit
+  - name: PU13
+    bit_range:
+    - 13
+    - 13
+    description: Port C pull-up bit
+  - name: PU14
+    bit_range:
+    - 14
+    - 14
+    description: Port C pull-up bit
+  - name: PU15
+    bit_range:
+    - 15
+    - 15
+    description: Port C pull-up bit
+  side_effects: null
+- id: PWR_PDCRC
+  address_offset: 100
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PD0
+    bit_range:
+    - 0
+    - 0
+    description: Port C pull-down bit
+  - name: PD1
+    bit_range:
+    - 1
+    - 1
+    description: Port C pull-down bit
+  - name: PD2
+    bit_range:
+    - 2
+    - 2
+    description: Port C pull-down bit
+  - name: PD3
+    bit_range:
+    - 3
+    - 3
+    description: Port C pull-down bit
+  - name: PD4
+    bit_range:
+    - 4
+    - 4
+    description: Port C pull-down bit
+  - name: PD5
+    bit_range:
+    - 5
+    - 5
+    description: Port C pull-down bit
+  - name: PD6
+    bit_range:
+    - 6
+    - 6
+    description: Port C pull-down bit
+  - name: PD7
+    bit_range:
+    - 7
+    - 7
+    description: Port C pull-down bit
+  - name: PD8
+    bit_range:
+    - 8
+    - 8
+    description: Port C pull-down bit
+  - name: PD9
+    bit_range:
+    - 9
+    - 9
+    description: Port C pull-down bit
+  - name: PD10
+    bit_range:
+    - 10
+    - 10
+    description: Port C pull-down bit
+  - name: PD11
+    bit_range:
+    - 11
+    - 11
+    description: Port C pull-down bit
+  - name: PD12
+    bit_range:
+    - 12
+    - 12
+    description: Port C pull-down bit
+  - name: PD13
+    bit_range:
+    - 13
+    - 13
+    description: Port C pull-down bit
+  - name: PD14
+    bit_range:
+    - 14
+    - 14
+    description: Port C pull-down bit
+  - name: PD15
+    bit_range:
+    - 15
+    - 15
+    description: Port C pull-down bit
+  side_effects: null
+- id: PWR_PUCRD
+  address_offset: 104
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PU0
+    bit_range:
+    - 0
+    - 0
+    description: Port D pull-up bit
+  - name: PU1
+    bit_range:
+    - 1
+    - 1
+    description: Port D pull-up bit
+  - name: PU2
+    bit_range:
+    - 2
+    - 2
+    description: Port D pull-up bit
+  - name: PU3
+    bit_range:
+    - 3
+    - 3
+    description: Port D pull-up bit
+  - name: PU4
+    bit_range:
+    - 4
+    - 4
+    description: Port D pull-up bit
+  - name: PU5
+    bit_range:
+    - 5
+    - 5
+    description: Port D pull-up bit
+  - name: PU6
+    bit_range:
+    - 6
+    - 6
+    description: Port D pull-up bit
+  - name: PU7
+    bit_range:
+    - 7
+    - 7
+    description: Port D pull-up bit
+  - name: PU8
+    bit_range:
+    - 8
+    - 8
+    description: Port D pull-up bit
+  - name: PU9
+    bit_range:
+    - 9
+    - 9
+    description: Port D pull-up bit
+  - name: PU10
+    bit_range:
+    - 10
+    - 10
+    description: Port D pull-up bit
+  - name: PU11
+    bit_range:
+    - 11
+    - 11
+    description: Port D pull-up bit
+  - name: PU12
+    bit_range:
+    - 12
+    - 12
+    description: Port D pull-up bit
+  - name: PU13
+    bit_range:
+    - 13
+    - 13
+    description: Port D pull-up bit
+  - name: PU14
+    bit_range:
+    - 14
+    - 14
+    description: Port D pull-up bit
+  - name: PU15
+    bit_range:
+    - 15
+    - 15
+    description: Port D pull-up bit
+  side_effects: null
+- id: PWR_PDCRD
+  address_offset: 108
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PD0
+    bit_range:
+    - 0
+    - 0
+    description: Port D pull-down bit
+  - name: PD1
+    bit_range:
+    - 1
+    - 1
+    description: Port D pull-down bit
+  - name: PD2
+    bit_range:
+    - 2
+    - 2
+    description: Port D pull-down bit
+  - name: PD3
+    bit_range:
+    - 3
+    - 3
+    description: Port D pull-down bit
+  - name: PD4
+    bit_range:
+    - 4
+    - 4
+    description: Port D pull-down bit
+  - name: PD5
+    bit_range:
+    - 5
+    - 5
+    description: Port D pull-down bit
+  - name: PD6
+    bit_range:
+    - 6
+    - 6
+    description: Port D pull-down bit
+  - name: PD7
+    bit_range:
+    - 7
+    - 7
+    description: Port D pull-down bit
+  - name: PD8
+    bit_range:
+    - 8
+    - 8
+    description: Port D pull-down bit
+  - name: PD9
+    bit_range:
+    - 9
+    - 9
+    description: Port D pull-down bit
+  - name: PD10
+    bit_range:
+    - 10
+    - 10
+    description: Port D pull-down bit
+  - name: PD11
+    bit_range:
+    - 11
+    - 11
+    description: Port D pull-down bit
+  - name: PD12
+    bit_range:
+    - 12
+    - 12
+    description: Port D pull-down bit
+  - name: PD13
+    bit_range:
+    - 13
+    - 13
+    description: Port D pull-down bit
+  - name: PD14
+    bit_range:
+    - 14
+    - 14
+    description: Port D pull-down bit
+  - name: PD15
+    bit_range:
+    - 15
+    - 15
+    description: Port D pull-down bit
+  side_effects: null
+- id: PWR_PUCRE
+  address_offset: 112
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PU0
+    bit_range:
+    - 0
+    - 0
+    description: Port E pull-up bit
+  - name: PU1
+    bit_range:
+    - 1
+    - 1
+    description: Port E pull-up bit
+  - name: PU2
+    bit_range:
+    - 2
+    - 2
+    description: Port E pull-up bit
+  - name: PU3
+    bit_range:
+    - 3
+    - 3
+    description: Port E pull-up bit
+  - name: PU4
+    bit_range:
+    - 4
+    - 4
+    description: Port E pull-up bit
+  - name: PU5
+    bit_range:
+    - 5
+    - 5
+    description: Port E pull-up bit
+  - name: PU6
+    bit_range:
+    - 6
+    - 6
+    description: Port E pull-up bit
+  - name: PU7
+    bit_range:
+    - 7
+    - 7
+    description: Port E pull-up bit
+  - name: PU8
+    bit_range:
+    - 8
+    - 8
+    description: Port E pull-up bit
+  - name: PU9
+    bit_range:
+    - 9
+    - 9
+    description: Port E pull-up bit
+  - name: PU10
+    bit_range:
+    - 10
+    - 10
+    description: Port E pull-up bit
+  - name: PU11
+    bit_range:
+    - 11
+    - 11
+    description: Port E pull-up bit
+  - name: PU12
+    bit_range:
+    - 12
+    - 12
+    description: Port E pull-up bit
+  - name: PU13
+    bit_range:
+    - 13
+    - 13
+    description: Port E pull-up bit
+  - name: PU14
+    bit_range:
+    - 14
+    - 14
+    description: Port E pull-up bit
+  - name: PU15
+    bit_range:
+    - 15
+    - 15
+    description: Port E pull-up bit
+  side_effects: null
+- id: PWR_PDCRE
+  address_offset: 116
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PD0
+    bit_range:
+    - 0
+    - 0
+    description: Port E pull-down bit
+  - name: PD1
+    bit_range:
+    - 1
+    - 1
+    description: Port E pull-down bit
+  - name: PD2
+    bit_range:
+    - 2
+    - 2
+    description: Port E pull-down bit
+  - name: PD3
+    bit_range:
+    - 3
+    - 3
+    description: Port E pull-down bit
+  - name: PD4
+    bit_range:
+    - 4
+    - 4
+    description: Port E pull-down bit
+  - name: PD5
+    bit_range:
+    - 5
+    - 5
+    description: Port E pull-down bit
+  - name: PD6
+    bit_range:
+    - 6
+    - 6
+    description: Port E pull-down bit
+  - name: PD7
+    bit_range:
+    - 7
+    - 7
+    description: Port E pull-down bit
+  - name: PD8
+    bit_range:
+    - 8
+    - 8
+    description: Port E pull-down bit
+  - name: PD9
+    bit_range:
+    - 9
+    - 9
+    description: Port E pull-down bit
+  - name: PD10
+    bit_range:
+    - 10
+    - 10
+    description: Port E pull-down bit
+  - name: PD11
+    bit_range:
+    - 11
+    - 11
+    description: Port E pull-down bit
+  - name: PD12
+    bit_range:
+    - 12
+    - 12
+    description: Port E pull-down bit
+  - name: PD13
+    bit_range:
+    - 13
+    - 13
+    description: Port E pull-down bit
+  - name: PD14
+    bit_range:
+    - 14
+    - 14
+    description: Port E pull-down bit
+  - name: PD15
+    bit_range:
+    - 15
+    - 15
+    description: Port E pull-down bit
+  side_effects: null
+- id: PWR_PUCRF
+  address_offset: 120
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PU0
+    bit_range:
+    - 0
+    - 0
+    description: Port F pull-up bit
+  - name: PU1
+    bit_range:
+    - 1
+    - 1
+    description: Port F pull-up bit
+  - name: PU2
+    bit_range:
+    - 2
+    - 2
+    description: Port F pull-up bit
+  - name: PU3
+    bit_range:
+    - 3
+    - 3
+    description: Port F pull-up bit
+  - name: PU4
+    bit_range:
+    - 4
+    - 4
+    description: Port F pull-up bit
+  - name: PU5
+    bit_range:
+    - 5
+    - 5
+    description: Port F pull-up bit
+  - name: PU6
+    bit_range:
+    - 6
+    - 6
+    description: Port F pull-up bit
+  - name: PU7
+    bit_range:
+    - 7
+    - 7
+    description: Port F pull-up bit
+  - name: PU8
+    bit_range:
+    - 8
+    - 8
+    description: Port F pull-up bit
+  - name: PU9
+    bit_range:
+    - 9
+    - 9
+    description: Port F pull-up bit
+  - name: PU10
+    bit_range:
+    - 10
+    - 10
+    description: Port F pull-up bit
+  - name: PU11
+    bit_range:
+    - 11
+    - 11
+    description: Port F pull-up bit
+  - name: PU12
+    bit_range:
+    - 12
+    - 12
+    description: Port F pull-up bit
+  - name: PU13
+    bit_range:
+    - 13
+    - 13
+    description: Port F pull-up bit
+  - name: PU14
+    bit_range:
+    - 14
+    - 14
+    description: Port F pull-up bit
+  - name: PU15
+    bit_range:
+    - 15
+    - 15
+    description: Port F pull-up bit
+  side_effects: null
+- id: PWR_PDCRF
+  address_offset: 124
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PD0
+    bit_range:
+    - 0
+    - 0
+    description: Port F pull-down bit
+  - name: PD1
+    bit_range:
+    - 1
+    - 1
+    description: Port F pull-down bit
+  - name: PD2
+    bit_range:
+    - 2
+    - 2
+    description: Port F pull-down bit
+  - name: PD3
+    bit_range:
+    - 3
+    - 3
+    description: Port F pull-down bit
+  - name: PD4
+    bit_range:
+    - 4
+    - 4
+    description: Port F pull-down bit
+  - name: PD5
+    bit_range:
+    - 5
+    - 5
+    description: Port F pull-down bit
+  - name: PD6
+    bit_range:
+    - 6
+    - 6
+    description: Port F pull-down bit
+  - name: PD7
+    bit_range:
+    - 7
+    - 7
+    description: Port F pull-down bit
+  - name: PD8
+    bit_range:
+    - 8
+    - 8
+    description: Port F pull-down bit
+  - name: PD9
+    bit_range:
+    - 9
+    - 9
+    description: Port F pull-down bit
+  - name: PD10
+    bit_range:
+    - 10
+    - 10
+    description: Port F pull-down bit
+  - name: PD11
+    bit_range:
+    - 11
+    - 11
+    description: Port F pull-down bit
+  - name: PD12
+    bit_range:
+    - 12
+    - 12
+    description: Port F pull-down bit
+  - name: PD13
+    bit_range:
+    - 13
+    - 13
+    description: Port F pull-down bit
+  - name: PD14
+    bit_range:
+    - 14
+    - 14
+    description: Port F pull-down bit
+  - name: PD15
+    bit_range:
+    - 15
+    - 15
+    description: Port F pull-down bit
+  side_effects: null
+- id: PWR_PUCRG
+  address_offset: 128
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PU0
+    bit_range:
+    - 0
+    - 0
+    description: Port G pull-up bit
+  - name: PU1
+    bit_range:
+    - 1
+    - 1
+    description: Port G pull-up bit
+  - name: PU2
+    bit_range:
+    - 2
+    - 2
+    description: Port G pull-up bit
+  - name: PU3
+    bit_range:
+    - 3
+    - 3
+    description: Port G pull-up bit
+  - name: PU4
+    bit_range:
+    - 4
+    - 4
+    description: Port G pull-up bit
+  - name: PU5
+    bit_range:
+    - 5
+    - 5
+    description: Port G pull-up bit
+  - name: PU6
+    bit_range:
+    - 6
+    - 6
+    description: Port G pull-up bit
+  - name: PU7
+    bit_range:
+    - 7
+    - 7
+    description: Port G pull-up bit
+  - name: PU8
+    bit_range:
+    - 8
+    - 8
+    description: Port G pull-up bit
+  - name: PU9
+    bit_range:
+    - 9
+    - 9
+    description: Port G pull-up bit
+  - name: PU10
+    bit_range:
+    - 10
+    - 10
+    description: Port G pull-up bit
+  - name: PU11
+    bit_range:
+    - 11
+    - 11
+    description: Port G pull-up bit
+  - name: PU12
+    bit_range:
+    - 12
+    - 12
+    description: Port G pull-up bit
+  - name: PU13
+    bit_range:
+    - 13
+    - 13
+    description: Port G pull-up bit
+  - name: PU14
+    bit_range:
+    - 14
+    - 14
+    description: Port G pull-up bit
+  - name: PU15
+    bit_range:
+    - 15
+    - 15
+    description: Port G pull-up bit
+  side_effects: null
+- id: PWR_PDCRG
+  address_offset: 132
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PD0
+    bit_range:
+    - 0
+    - 0
+    description: Port G pull-down bit
+  - name: PD1
+    bit_range:
+    - 1
+    - 1
+    description: Port G pull-down bit
+  - name: PD2
+    bit_range:
+    - 2
+    - 2
+    description: Port G pull-down bit
+  - name: PD3
+    bit_range:
+    - 3
+    - 3
+    description: Port G pull-down bit
+  - name: PD4
+    bit_range:
+    - 4
+    - 4
+    description: Port G pull-down bit
+  - name: PD5
+    bit_range:
+    - 5
+    - 5
+    description: Port G pull-down bit
+  - name: PD6
+    bit_range:
+    - 6
+    - 6
+    description: Port G pull-down bit
+  - name: PD7
+    bit_range:
+    - 7
+    - 7
+    description: Port G pull-down bit
+  - name: PD8
+    bit_range:
+    - 8
+    - 8
+    description: Port G pull-down bit
+  - name: PD9
+    bit_range:
+    - 9
+    - 9
+    description: Port G pull-down bit
+  - name: PD10
+    bit_range:
+    - 10
+    - 10
+    description: Port G pull-down bit
+  - name: PD11
+    bit_range:
+    - 11
+    - 11
+    description: Port G pull-down bit
+  - name: PD12
+    bit_range:
+    - 12
+    - 12
+    description: Port G pull-down bit
+  - name: PD13
+    bit_range:
+    - 13
+    - 13
+    description: Port G pull-down bit
+  - name: PD14
+    bit_range:
+    - 14
+    - 14
+    description: Port G pull-down bit
+  - name: PD15
+    bit_range:
+    - 15
+    - 15
+    description: Port G pull-down bit
+  side_effects: null
+- id: PWR_PUCRH
+  address_offset: 136
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PU0
+    bit_range:
+    - 0
+    - 0
+    description: Port H pull-up bit
+  - name: PU1
+    bit_range:
+    - 1
+    - 1
+    description: Port H pull-up bit
+  - name: PU2
+    bit_range:
+    - 2
+    - 2
+    description: Port H pull-up bit
+  - name: PU3
+    bit_range:
+    - 3
+    - 3
+    description: Port H pull-up bit
+  - name: PU4
+    bit_range:
+    - 4
+    - 4
+    description: Port H pull-up bit
+  - name: PU5
+    bit_range:
+    - 5
+    - 5
+    description: Port H pull-up bit
+  - name: PU6
+    bit_range:
+    - 6
+    - 6
+    description: Port H pull-up bit
+  - name: PU7
+    bit_range:
+    - 7
+    - 7
+    description: Port H pull-up bit
+  - name: PU8
+    bit_range:
+    - 8
+    - 8
+    description: Port H pull-up bit
+  - name: PU9
+    bit_range:
+    - 9
+    - 9
+    description: Port H pull-up bit
+  - name: PU10
+    bit_range:
+    - 10
+    - 10
+    description: Port H pull-up bit
+  - name: PU11
+    bit_range:
+    - 11
+    - 11
+    description: Port H pull-up bit
+  - name: PU12
+    bit_range:
+    - 12
+    - 12
+    description: Port H pull-up bit
+  - name: PU13
+    bit_range:
+    - 13
+    - 13
+    description: Port H pull-up bit
+  - name: PU14
+    bit_range:
+    - 14
+    - 14
+    description: Port H pull-up bit
+  - name: PU15
+    bit_range:
+    - 15
+    - 15
+    description: Port H pull-up bit
+  side_effects: null
+- id: PWR_PDCRH
+  address_offset: 140
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PD0
+    bit_range:
+    - 0
+    - 0
+    description: Port H pull-down bit
+  - name: PD1
+    bit_range:
+    - 1
+    - 1
+    description: Port H pull-down bit
+  - name: PD2
+    bit_range:
+    - 2
+    - 2
+    description: Port H pull-down bit
+  - name: PD3
+    bit_range:
+    - 3
+    - 3
+    description: Port H pull-down bit
+  - name: PD4
+    bit_range:
+    - 4
+    - 4
+    description: Port H pull-down bit
+  - name: PD5
+    bit_range:
+    - 5
+    - 5
+    description: Port H pull-down bit
+  - name: PD6
+    bit_range:
+    - 6
+    - 6
+    description: Port H pull-down bit
+  - name: PD7
+    bit_range:
+    - 7
+    - 7
+    description: Port H pull-down bit
+  - name: PD8
+    bit_range:
+    - 8
+    - 8
+    description: Port H pull-down bit
+  - name: PD9
+    bit_range:
+    - 9
+    - 9
+    description: Port H pull-down bit
+  - name: PD10
+    bit_range:
+    - 10
+    - 10
+    description: Port H pull-down bit
+  - name: PD11
+    bit_range:
+    - 11
+    - 11
+    description: Port H pull-down bit
+  - name: PD12
+    bit_range:
+    - 12
+    - 12
+    description: Port H pull-down bit
+  - name: PD13
+    bit_range:
+    - 13
+    - 13
+    description: Port H pull-down bit
+  - name: PD14
+    bit_range:
+    - 14
+    - 14
+    description: Port H pull-down bit
+  - name: PD15
+    bit_range:
+    - 15
+    - 15
+    description: Port H pull-down bit
+  side_effects: null
+- id: PWR_PUCRI
+  address_offset: 144
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PU0
+    bit_range:
+    - 0
+    - 0
+    description: Port I pull-up bit
+  - name: PU1
+    bit_range:
+    - 1
+    - 1
+    description: Port I pull-up bit
+  - name: PU2
+    bit_range:
+    - 2
+    - 2
+    description: Port I pull-up bit
+  - name: PU3
+    bit_range:
+    - 3
+    - 3
+    description: Port I pull-up bit
+  - name: PU4
+    bit_range:
+    - 4
+    - 4
+    description: Port I pull-up bit
+  - name: PU5
+    bit_range:
+    - 5
+    - 5
+    description: Port I pull-up bit
+  - name: PU6
+    bit_range:
+    - 6
+    - 6
+    description: Port I pull-up bit
+  - name: PU7
+    bit_range:
+    - 7
+    - 7
+    description: Port I pull-up bit
+  side_effects: null
+- id: PWR_PDCRI
+  address_offset: 148
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PD0
+    bit_range:
+    - 0
+    - 0
+    description: Port I pull-down bit
+  - name: PD1
+    bit_range:
+    - 1
+    - 1
+    description: Port I pull-down bit
+  - name: PD2
+    bit_range:
+    - 2
+    - 2
+    description: Port I pull-down bit
+  - name: PD3
+    bit_range:
+    - 3
+    - 3
+    description: Port I pull-down bit
+  - name: PD4
+    bit_range:
+    - 4
+    - 4
+    description: Port I pull-down bit
+  - name: PD5
+    bit_range:
+    - 5
+    - 5
+    description: Port I pull-down bit
+  - name: PD6
+    bit_range:
+    - 6
+    - 6
+    description: Port I pull-down bit
+  - name: PD7
+    bit_range:
+    - 7
+    - 7
+    description: Port I pull-down bit
+  side_effects: null
+interrupts:
+  PWR_S3WU: 77
+timing: null

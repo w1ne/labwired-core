@@ -78,6 +78,7 @@ nav:
     - Board onboarding: board_onboarding_playbook.md
     - Target support levels: target_support_rubric.md
     - Multi-node worlds: howto/multi-node.md
+    - SEGGER RTT logging: howto/segger-rtt.md
     - CI integration: ci_integration.md
     - Peripheral modeling: peripherals.md
     - Hardware Interaction Guide: hardware_interaction_guide.md
@@ -120,6 +121,7 @@ nav:
     - NUCLEO-L073RZ: boards/nucleo-l073rz.md
     - STM32H563: boards/stm32h563.md
     - STM32H735: boards/stm32h735.md
+    - STM32U575: boards/stm32u575.md
     - STM32WBA52: boards/stm32wba52.md
     - nRF52832: boards/nrf52832.md
     - nRF5340: boards/nrf5340.md
