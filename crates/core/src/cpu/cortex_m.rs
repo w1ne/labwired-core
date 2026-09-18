@@ -191,6 +191,8 @@ pub struct CortexM {
     /// `step_internal`. Gates idle fast-forward; transient (not snapshotted),
     /// mirroring the RISC-V `waiting_for_interrupt` flag.
     sleeping: bool,
+    waiting_for_event: bool,
+    event_register: bool,
     /// Local byte-exclusive reservation: address and value observed by LDREXB.
     /// Comparing the value at STREXB conservatively detects conflicting bus
     /// writes without requiring every bus implementation to expose epochs;
@@ -259,6 +261,8 @@ impl Default for CortexM {
             fpu_s: [0u32; 32],
             fpscr: 0,
             sleeping: false,
+            waiting_for_event: false,
+            event_register: false,
             exclusive_byte: None,
             trace_insn: trace_insn_enabled(),
             #[cfg(feature = "jit")]
@@ -795,6 +799,68 @@ impl CortexM {
         exc_prio < active_prio && !self.masked_by_basepri(exc_prio) && !self.faultmask_blocks(exc)
     }
 
+    /// A compiled backend must interpret the wake boundary before running
+    /// a cached block at the instruction following WFE.
+    pub fn waiting_for_event(&self) -> bool {
+        self.waiting_for_event
+    }
+
+    fn event_pending(&self) -> bool {
+        self.event_register
+            || self
+                .nvic_state
+                .as_ref()
+                .is_some_and(|n| n.event_register.load(Ordering::Relaxed))
+    }
+
+    fn consume_event(&mut self) -> bool {
+        let local = std::mem::take(&mut self.event_register);
+        let shared = self
+            .nvic_state
+            .as_ref()
+            .is_some_and(|n| n.event_register.swap(false, Ordering::Relaxed));
+        local || shared
+    }
+
+    fn wfe_wake_pending(&self) -> bool {
+        if self.event_pending() {
+            return true;
+        }
+        for (word_idx, &word) in self.pending_exceptions.iter().enumerate() {
+            let mut mask = word;
+            while mask != 0 {
+                let exc = word_idx as u32 * 64 + mask.trailing_zeros();
+                mask &= mask - 1;
+                // CPU pending bits may outlive ICPR/ICER writes. A stale or
+                // disabled external line must not wake WFE (SEVONPEND events
+                // are latched separately when ISPR transitions).
+                if exc >= 16 {
+                    if let Some(nvic) = &self.nvic_state {
+                        let irq = exc - 16;
+                        let idx = (irq / 32) as usize;
+                        let bit = 1 << (irq % 32);
+                        if (nvic.ispr[idx].load(Ordering::Relaxed)
+                            & nvic.iser[idx].load(Ordering::Relaxed)
+                            & bit)
+                            == 0
+                        {
+                            continue;
+                        }
+                    }
+                }
+                let priority = self.exception_priority(exc);
+                if !self.masked_by_primask(exc)
+                    && priority < self.exception_priority(self.active_exception)
+                    && !self.masked_by_basepri(priority)
+                    && !self.faultmask_blocks(exc)
+                {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
     /// True when the live `sp` is the Process stack: Thread mode with
     /// CONTROL.SPSEL set. Handler mode always uses MSP.
     #[inline]
@@ -892,6 +958,9 @@ impl CortexM {
 
         // Re-point the live `sp` at whichever bank is now selected.
         self.sp = self.current_stack_value();
+        // ARM event register is set by exception return, including an ISR
+        // that completed before its thread reaches WFE.
+        self.event_register = true;
 
         tracing::debug!(
             "EXC_RETURN: frame={:#010x} restored LR={:#010x} PC={:#010x} active_exc={} sp={:#010x}",
@@ -1022,7 +1091,7 @@ impl CortexM {
                 }
                 self.step(bus, observers, config)?;
                 engine.note_interpreted();
-            } else if self.it_state != 0 {
+            } else if self.it_state != 0 || self.waiting_for_event {
                 self.step(bus, observers, config)?;
                 engine.note_interpreted();
             } else {
@@ -1180,6 +1249,12 @@ impl Cpu for CortexM {
         self.sp = 0x2000_0000;
         self.pending_exceptions = [0; 4];
         self.exclusive_byte = None;
+        self.sleeping = false;
+        self.waiting_for_event = false;
+        self.event_register = false;
+        if let Some(nvic) = &self.nvic_state {
+            nvic.event_register.store(false, Ordering::Relaxed);
+        }
         self.set_active_exception(0);
         self.decode_cache.fill(None);
 
@@ -1223,7 +1298,20 @@ impl Cpu for CortexM {
             eprintln!("EXC pend num={} pc=0x{:08X}", exception_num, self.pc);
         }
         if exception_num < 256 {
-            self.pending_exceptions[(exception_num / 64) as usize] |= 1u64 << (exception_num % 64);
+            let word = &mut self.pending_exceptions[(exception_num / 64) as usize];
+            let mask = 1u64 << (exception_num % 64);
+            // External IRQ transitions are tracked in NVIC ISPR, including
+            // disabled lines. System exceptions have their pending bits here.
+            if exception_num < 16
+                && *word & mask == 0
+                && self
+                    .nvic_state
+                    .as_ref()
+                    .is_some_and(|n| n.sev_on_pend.load(Ordering::Relaxed))
+            {
+                self.event_register = true;
+            }
+            *word |= mask;
         }
     }
 
@@ -1247,6 +1335,8 @@ impl Cpu for CortexM {
             pending_exceptions: self.pending_exceptions[0],
             pending_exceptions_hi: self.pending_exceptions[1..].to_vec(),
             vtor: self.vtor.load(Ordering::Relaxed),
+            waiting_for_event: self.waiting_for_event,
+            event_register: self.event_pending(),
         })
     }
 
@@ -1278,6 +1368,12 @@ impl Cpu for CortexM {
                 self.pending_exceptions[i + 1] = *w;
             }
             self.vtor.store(s.vtor, Ordering::Relaxed);
+            self.waiting_for_event = s.waiting_for_event;
+            self.event_register = s.event_register;
+            self.sleeping = false;
+            if let Some(nvic) = &self.nvic_state {
+                nvic.event_register.store(false, Ordering::Relaxed);
+            }
         }
     }
 
@@ -1519,6 +1615,9 @@ impl Cpu for CortexM {
         // has arrived. A pending wake exception (evaluated ignoring PRIMASK)
         // resumes normal execution: the machine must re-enter `step` so the
         // core either takes the exception or, under PRIMASK, falls through it.
+        if self.waiting_for_event {
+            return (!self.wfe_wake_pending()).then_some(u64::MAX);
+        }
         if !self.sleeping || self.wfi_wake_pending() {
             return None;
         }
@@ -1833,6 +1932,16 @@ impl CortexM {
         _observers: &[Arc<dyn SimulationObserver>],
         config: &SimulationConfig,
     ) -> SimResult<()> {
+        // A single-cycle reference run must honor WFE too. Sleeping cycles
+        // advance devices without fetching another instruction. Acceleration
+        // only coalesces these same cycles up to the next scheduler deadline.
+        if self.waiting_for_event {
+            if !self.wfe_wake_pending() {
+                return Ok(());
+            }
+            self.waiting_for_event = false;
+            self.consume_event();
+        }
         // Leave WFI sleep before this step commits: the flag is re-armed only if
         // this instruction is itself a WFI with no wake event pending.
         self.sleeping = false;
@@ -2210,6 +2319,14 @@ impl CortexM {
                 Instruction::Nop => { /* Do nothing */ }
                 Instruction::Wfi => {
                     pc_increment = self.exec_wfi()?.apply(pc_increment);
+                }
+                Instruction::Wfe => {
+                    if !self.consume_event() && !self.wfe_wake_pending() {
+                        self.waiting_for_event = true;
+                    }
+                }
+                Instruction::Sev => {
+                    self.event_register = true;
                 }
                 Instruction::MovImm { rd, imm } => {
                     pc_increment = self

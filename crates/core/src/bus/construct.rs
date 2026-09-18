@@ -1027,7 +1027,7 @@ impl SystemBus {
                 let idx = (irq / 32) as usize;
                 let bit = irq % 32;
                 if idx < 8 {
-                    nvic.ispr[idx].fetch_or(1 << bit, Ordering::SeqCst);
+                    nvic.pend(idx, 1 << bit);
                 }
             } else {
                 // Core exceptions are handled differently if needed,

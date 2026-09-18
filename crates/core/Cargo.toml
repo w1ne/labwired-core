@@ -305,6 +305,10 @@ required-features = ["event-scheduler"]
 name = "nrf54l15_idle_ff_speedup"
 required-features = ["event-scheduler"]
 
+[[test]]
+name = "nrf54l15_embassy_realtime"
+required-features = ["event-scheduler"]
+
 # #![cfg(feature = "esp32s3-fixtures")]
 [[test]]
 name = "openai_deck_s3_boot"

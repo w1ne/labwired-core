@@ -86,7 +86,10 @@ fn tier1_esp32_elf() -> PathBuf {
 /// `WasmSimulator::new_from_config_xtensa_esp32` does: `configure_xtensa_esp32`,
 /// a TX sink on UART0, a real second LX6 as APP_CPU, ELF entry + seeded stacks.
 #[cfg(feature = "event-scheduler")]
-fn browser_like_machine(elf: &Path) -> (Machine<Box<dyn Cpu>>, Arc<Mutex<Vec<u8>>>) {
+type UartSink = Arc<Mutex<Vec<u8>>>;
+
+#[cfg(feature = "event-scheduler")]
+fn browser_like_machine(elf: &Path) -> (Machine<Box<dyn Cpu>>, UartSink) {
     let mut bus = SystemBus::new();
     let cpu = configure_xtensa_esp32(&mut bus);
 

@@ -14,7 +14,7 @@
 //! What these tests hold down:
 //!   1. `--batched` changes which loop runs, and says so, so a measurement can
 //!      prove which path it measured instead of assuming.
-//!   2. The default run is untouched — no flag, no marker, no behaviour change.
+//!   2. The default run uses batching without adding diagnostics to stderr.
 //!   3. The two loops produce the same firmware-visible output. A faster path
 //!      that simulates something else is not a faster path.
 
@@ -119,7 +119,7 @@ fn fixtures() -> Vec<(&'static str, PathBuf, PathBuf)> {
 }
 
 #[test]
-fn batched_run_reports_the_loop_it_took_and_retires_every_requested_step() {
+fn batched_run_reports_the_loop_and_accounts_for_every_requested_fuel_unit() {
     let boards = fixtures();
     if boards.is_empty() {
         eprintln!("SKIP: no TIER1 ARM fixtures present");
@@ -128,13 +128,15 @@ fn batched_run_reports_the_loop_it_took_and_retires_every_requested_step() {
     for (board, chip, elf) in boards {
         let out = run(&chip, &elf, true);
         let (instructions, per_batch) = parse_marker(&out.stderr);
-        // The perf gate's slope divides by the REQUESTED step delta. A run that
-        // retired fewer instructions than it was asked for would silently
-        // inflate Ir/step, so the count is part of the contract, not a stat.
+        // The budget counts CPU steps plus coalesced idle cycles. Neither can
+        // disappear from the accounting when default acceleration is active.
+        let fuel: u64 = marker_field(&out.stderr, "fuel=").parse().unwrap();
+        let idle: u64 = marker_field(&out.stderr, "idle_cycles=").parse().unwrap();
         assert_eq!(
-            instructions, STEPS,
-            "{board}: batched run retired {instructions} of {STEPS} requested steps"
+            fuel, STEPS,
+            "{board}: batched run consumed {fuel} of {STEPS} requested fuel"
         );
+        assert_eq!(instructions + idle, fuel, "{board}: unaccounted fuel");
         assert!(
             per_batch >= 1.0,
             "{board}: nonsensical batch width {per_batch}"
@@ -143,7 +145,7 @@ fn batched_run_reports_the_loop_it_took_and_retires_every_requested_step() {
 }
 
 #[test]
-fn default_run_is_untouched_by_the_flags_existence() {
+fn default_run_keeps_diagnostics_opt_in() {
     let boards = fixtures();
     if boards.is_empty() {
         eprintln!("SKIP: no TIER1 ARM fixtures present");
@@ -196,7 +198,15 @@ fn batching_does_not_change_what_the_firmware_does() {
     let mut newly_divergent = Vec::new();
     let mut silently_fixed = Vec::new();
     for (board, chip, elf) in boards {
-        let stepped = run(&chip, &elf, false);
+        let stepped = run_with_env(
+            &chip,
+            &elf,
+            false,
+            &[
+                ("LABWIRED_ARM_SINGLE_STEP", "1"),
+                ("LABWIRED_IDLE_FAST_FORWARD", "0"),
+            ],
+        );
         let batched = run(&chip, &elf, true);
         // UART bytes echoed to stdout are the firmware's own output, produced by
         // the modelled peripheral in both cases. Byte-identical or the batched
@@ -356,4 +366,27 @@ fn batched_marker_names_whether_the_build_or_the_bus_capped_the_window() {
         "tick_cap says the BUILD capped {build_capped:?} but the BUS capped \
          {bus_capped:?} in the same binary"
     );
+}
+
+#[test]
+fn default_arm_run_uses_scheduler_sleep_and_counts_idle_fuel() {
+    let root = workspace_root();
+    let out = Command::new(labwired_bin())
+        .args(["run", "--chip"])
+        .arg(root.join("configs/chips/nrf54l15.yaml"))
+        .arg("--firmware")
+        .arg(root.join("tests/fixtures/nrf54l15-embassy-blinky.elf"))
+        .args(["--max-steps", "65000000"])
+        .env("LABWIRED_RUN_STATS", "1")
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(marker_field(&stderr, "fuel="), "65000000");
+    let skipped: u64 = marker_field(&stderr, "idle_cycles=").parse().unwrap();
+    assert!(skipped > 60_000_000, "{stderr}");
 }

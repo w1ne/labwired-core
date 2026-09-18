@@ -83,6 +83,7 @@ pub fn configure_cortex_m(bus: &mut SystemBus) -> (CortexM, Arc<NvicState>) {
         sysreset_signal,
         faults,
     });
+    scb.event_state = Some(nvic_state.clone());
     // Walk-free plan batch B1: this install path replaces the placeholder dev
     // (or pushes directly) and so bypasses the `add_peripheral`/`push_peripheral`
     // attach chokes — attach the bus cycle clock here explicitly, flipping the
