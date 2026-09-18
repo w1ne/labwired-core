@@ -85,21 +85,31 @@ external_devices:
     )
     .expect("fast_boot");
 
-    // Run for up to ~14 simulated seconds at 80 MHz = 1.12 G steps. Each
-    // SYSTIMER tick fires once per simulated second. The TMP102 model starts
-    // at 25 °C and drifts +0.5 °C per read, so reaching the firmware's 30 °C
-    // threshold (and seeing GPIO2 toggle) needs at least 11 reads.
-    const MAX_STEPS: u64 = 1_120_000_000;
+    // Run for up to ~14 simulated seconds at the 240 MHz core clock
+    // `ESP32S3_CPU_CLOCK_HZ` models (15 CPU cycles per 16 MHz SYSTIMER tick)
+    // = 3.36 G steps. The SYSTIMER alarm fires once per simulated second. The
+    // TMP102 model starts at 25 °C and drifts +0.5 °C per read, so reaching
+    // the firmware's 30 °C threshold (and seeing GPIO2 rise) needs at least
+    // 11 reads / 11 simulated seconds. (The old 1.12 G budget assumed the
+    // pre-#1026 80 MHz default and could only reach ~4 reads.)
+    const MAX_STEPS: u64 = 3_360_000_000;
     let observers: Vec<Arc<dyn labwired_core::SimulationObserver>> = Vec::new();
     let cfg = labwired_core::SimulationConfig::default();
 
-    for _ in 0..MAX_STEPS {
+    for step in 0..MAX_STEPS {
         match cpu.step(&mut bus, &observers, &cfg) {
             Ok(()) => {}
             Err(SimulationError::BreakpointHit(_)) => break,
             Err(e) => panic!("simulator error at pc=0x{:08x}: {e}", cpu.get_pc()),
         }
         let _ = bus.tick_peripherals_with_costs();
+        // Publish the cycle so clock-driven peripherals see time advance (the
+        // CLI gets this from `Machine::advance`). Both the SYSTIMER alarm the
+        // firmware paces itself with and the USB_SERIAL_JTAG host-pickup
+        // window (235 us) are measured against this clock; frozen at 0, the
+        // alarm never fires and every byte after the first IN packet is
+        // dropped, so neither the ≥4 "T = " lines nor the GPIO rise can happen.
+        bus.set_current_cycle(step + 1);
 
         // Early-out once we have ≥4 complete "T = " lines AND have seen the
         // GPIO2 0→1 transition that the firmware drives once temp exceeds the

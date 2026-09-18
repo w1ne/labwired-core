@@ -66,13 +66,15 @@ fn blinky_toggles_gpio2_at_500ms() {
     )
     .expect("fast_boot");
 
-    // Run for up to 480 M simulated cycles (~6 simulated seconds at 80 MHz).
-    // Blinky toggles every 500 ms = 40M cycles, so 6 s should produce ~12
-    // transitions. We assert >= 4 to give plenty of margin.
-    const MAX_STEPS: u64 = 480_000_000;
+    // Run for up to 1.44 G simulated cycles (~6 simulated seconds at the
+    // 240 MHz core clock `ESP32S3_CPU_CLOCK_HZ` models — 15 CPU cycles per
+    // 16 MHz SYSTIMER tick). Blinky toggles every 500 ms = 120 M cycles, so
+    // 6 s should produce ~12 transitions. We assert >= 4 to give plenty of
+    // margin. (The old 480 M budget assumed the pre-#1026 80 MHz default.)
+    const MAX_STEPS: u64 = 1_440_000_000;
     let observers: Vec<std::sync::Arc<dyn labwired_core::SimulationObserver>> = Vec::new();
     let config = labwired_core::SimulationConfig::default();
-    for _ in 0..MAX_STEPS {
+    for step in 0..MAX_STEPS {
         match cpu.step(&mut bus, &observers, &config) {
             Ok(()) => {}
             Err(SimulationError::BreakpointHit(_)) => break,
@@ -80,6 +82,11 @@ fn blinky_toggles_gpio2_at_500ms() {
         }
         // Drain peripheral interrupts so SYSTIMER ticks (just like the CLI does).
         let _ = bus.tick_peripherals_with_costs();
+        // Publish the cycle so clock-driven peripherals see time advance (the
+        // CLI gets this from `Machine::advance`). The periodic SYSTIMER alarm
+        // this firmware toggles the LED from is measured against this clock;
+        // with it frozen at 0 the alarm never fires at all.
+        bus.set_current_cycle(step + 1);
 
         // Early exit once we've captured enough GPIO2 transitions.
         let events = obs.events.lock().unwrap();

@@ -62,7 +62,7 @@ fn hello_world_prints_at_least_twice() {
     const MAX_STEPS: u64 = 500_000_000;
     let observers: Vec<std::sync::Arc<dyn labwired_core::SimulationObserver>> = Vec::new();
     let config = labwired_core::SimulationConfig::default();
-    for _ in 0..MAX_STEPS {
+    for step in 0..MAX_STEPS {
         match cpu.step(&mut bus, &observers, &config) {
             Ok(()) => {}
             Err(SimulationError::BreakpointHit(_)) => break,
@@ -70,6 +70,13 @@ fn hello_world_prints_at_least_twice() {
         }
         // Drain peripheral interrupts so SYSTIMER ticks (just like the CLI does).
         let _ = bus.tick_peripherals_with_costs();
+        // Publish the cycle so clock-driven peripherals see time advance. The
+        // CLI gets this from `Machine::advance`; a raw step loop must do it by
+        // hand. Without it the USB_SERIAL_JTAG's measured host-pickup window
+        // (235 us) never expires, `DATA_FREE` stays 0, and every byte after
+        // the first IN packet is dropped by the (silicon-faithful) model —
+        // so this test could never see a second "Hello world!".
+        bus.set_current_cycle(step + 1);
 
         // Early exit once we have two Hello-world lines.
         let captured = sink.lock().unwrap();
