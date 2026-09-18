@@ -1252,9 +1252,20 @@ boards:
     drift_ack: 2026-09-17
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: 57052803bc24a0f0f35423e5ae33ac9f7e39de4fb7dfb15afaeb6aaec33b54bc
+    drift_ack_digest: 98953290f0bee809b68d12fc49dfded824d355bd1f16b2d57a62fb5b812dc3ac
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
+    drift_ack: 2026-09-18
+    # 2026-09-18 (nRF54L GPIO model work on fix/nrf54l15-ns-aliases-grtc-gpio):
+    # `crates/core/src/peripherals/gpio.rs` carries the nRF54L LATCH/DETECTMODE
+    # translate fix (0x020 LATCH no longer folds onto DETECTMODE at 0x024; a
+    # genuine DETECTMODE access now decodes to its own register) on top of the
+    # nRF54L15 compacted-layout profile. Both live inside the `nrf54l_offsets`
+    # / `GpioRegisterLayout::Nrf54l` arms, which this board's STM32 ports never
+    # select (its ports are Stm32F1/Stm32V2 and the flag stays false), so no
+    # register this capture anchors changes value. The digest moves because it
+    # hashes whole files. This is an ACK, NOT A CAPTURE — a live re-capture is
+    # still owed.
     drift_ack: 2026-09-18
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -2605,9 +2616,20 @@ boards:
     drift_ack: 2026-09-17
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: b3716e2f7374dae3625e62cbfbde0e96c169beb7a3edb9f62ab8532d7c56b531
+    drift_ack_digest: 8148a53f30a6c43e4f45348565da98b502b838c9a5b92b91f553e1c05e285103
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
+    drift_ack: 2026-09-18
+    # 2026-09-18 (nRF54L GPIO model work on fix/nrf54l15-ns-aliases-grtc-gpio):
+    # `crates/core/src/peripherals/gpio.rs` carries the nRF54L LATCH/DETECTMODE
+    # translate fix (0x020 LATCH no longer folds onto DETECTMODE at 0x024; a
+    # genuine DETECTMODE access now decodes to its own register) on top of the
+    # nRF54L15 compacted-layout profile. Both live inside the `nrf54l_offsets`
+    # / `GpioRegisterLayout::Nrf54l` arms, which this board's STM32 ports never
+    # select (its ports are Stm32F1/Stm32V2 and the flag stays false), so no
+    # register this capture anchors changes value. The digest moves because it
+    # hashes whole files. This is an ACK, NOT A CAPTURE — a live re-capture is
+    # still owed.
     drift_ack: 2026-09-18
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -3139,9 +3161,20 @@ boards:
     drift_ack: 2026-09-17
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: 4a8dcbd32992668c59e3ab7f0a81523958a7ee824770e00308d9b5b508084843
+    drift_ack_digest: cbcb4beaaa4a30f57aaed1b690448240c1da698f3c6d73180d7fc050e1a6c34c
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
+    drift_ack: 2026-09-18
+    # 2026-09-18 (nRF54L GPIO model work on fix/nrf54l15-ns-aliases-grtc-gpio):
+    # `crates/core/src/peripherals/gpio.rs` carries the nRF54L LATCH/DETECTMODE
+    # translate fix (0x020 LATCH no longer folds onto DETECTMODE at 0x024; a
+    # genuine DETECTMODE access now decodes to its own register) on top of the
+    # nRF54L15 compacted-layout profile. Both live inside the `nrf54l_offsets`
+    # / `GpioRegisterLayout::Nrf54l` arms, which this board's STM32 ports never
+    # select (its ports are Stm32F1/Stm32V2 and the flag stays false), so no
+    # register this capture anchors changes value. The digest moves because it
+    # hashes whole files. This is an ACK, NOT A CAPTURE — a live re-capture is
+    # still owed.
     drift_ack: 2026-09-18
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -3695,9 +3728,20 @@ boards:
     drift_ack: 2026-09-17
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: aa1772e27ddb80e67608e7c5b72db07f00894dd3dff4f53d719add64eb8ce9e6
+    drift_ack_digest: ec33bc064465dedf86fb1239d713990c10023264d1361a72d22ec99de9e785e1
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
+    drift_ack: 2026-09-18
+    # 2026-09-18 (nRF54L GPIO model work on fix/nrf54l15-ns-aliases-grtc-gpio):
+    # `crates/core/src/peripherals/gpio.rs` carries the nRF54L LATCH/DETECTMODE
+    # translate fix (0x020 LATCH no longer folds onto DETECTMODE at 0x024; a
+    # genuine DETECTMODE access now decodes to its own register) on top of the
+    # nRF54L15 compacted-layout profile. Both live inside the `nrf54l_offsets`
+    # / `GpioRegisterLayout::Nrf54l` arms, which this board's STM32 ports never
+    # select (its ports are Stm32F1/Stm32V2 and the flag stays false), so no
+    # register this capture anchors changes value. The digest moves because it
+    # hashes whole files. This is an ACK, NOT A CAPTURE — a live re-capture is
+    # still owed.
     drift_ack: 2026-09-18
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -4249,12 +4293,23 @@ boards:
     drift_ack: 2026-09-17
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: 1d89452350fd0cf53fc03def54f8b91984ae8fe71c9202db4279d51bfcd83ab8
+    drift_ack_digest: 1611e9926cb22a1d801ca094c4811bb930f0f6c5bb1f3027e9bbb197edc6e847
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     # 2026-08-12: chip yaml adds bxcan1 (type bxcan @ 0x40006400, APB1ENR bit 25) for
     # Arduino matrix L8 loopback. Existing BxCan model; no register-map change to
     # the silicon-pinned SPI/I2C/UART/GPIO set. Matrix L8 green; no live re-capture.
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
+    drift_ack: 2026-09-18
+    # 2026-09-18 (nRF54L GPIO model work on fix/nrf54l15-ns-aliases-grtc-gpio):
+    # `crates/core/src/peripherals/gpio.rs` carries the nRF54L LATCH/DETECTMODE
+    # translate fix (0x020 LATCH no longer folds onto DETECTMODE at 0x024; a
+    # genuine DETECTMODE access now decodes to its own register) on top of the
+    # nRF54L15 compacted-layout profile. Both live inside the `nrf54l_offsets`
+    # / `GpioRegisterLayout::Nrf54l` arms, which this board's STM32 ports never
+    # select (its ports are Stm32F1/Stm32V2 and the flag stays false), so no
+    # register this capture anchors changes value. The digest moves because it
+    # hashes whole files. This is an ACK, NOT A CAPTURE — a live re-capture is
+    # still owed.
     drift_ack: 2026-09-18
     models:
       - crates/core/src/cpu/cortex_m.rs
