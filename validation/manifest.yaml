@@ -4788,9 +4788,19 @@ boards:
     # the generic Xtensa BB JIT emit core (#1139) — the merge of the two is one
     # digest, so it is re-stamped once here rather than twice.
     drift_ack: 2026-09-18
-    drift_ack_digest: 9a820f9ea16e6fdc0c6a8c8da61e97101ad839a4e4acda35f79ce1236643db23
+    drift_ack_digest: 8722d172db5f29d3be66b9c933008a709352001c5f8ca66db538017cc9ff57f3
+    #
+    # 2026-09-18 (execute split): no execution change. The arm bodies of
+    # `XtensaLx7::execute` moved verbatim into `cpu/xtensa_lx7/exec/*.rs` as
+    # `#[inline(always)]` methods behind the one remaining `match`; the new
+    # directory is watched below. `xtensa_sr.rs` gained an `#[inline]` hint on
+    # `write` so the per-step CCOUNT update stays folded (callgrind Ir/step
+    # esp32s3 1072.9 vs 1074.7 before). ACK, NOT A CAPTURE — the live
+    # re-capture owed above is still owed.
+    drift_ack: 2026-09-18
     models:
       - crates/core/src/cpu/xtensa_lx7.rs
+      - crates/core/src/cpu/xtensa_lx7/exec
       - crates/core/src/decoder/xtensa.rs
       - crates/core/src/peripherals/esp32s3
       - crates/core/src/peripherals/esp_xtensa_common
