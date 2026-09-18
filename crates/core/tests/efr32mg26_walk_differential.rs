@@ -325,7 +325,9 @@ fn probe(run: &mut LaneRun, step: u64) -> Probe {
         periph,
         ispr,
         pads,
-        sram: step.is_multiple_of(SRAM_HASH_EVERY).then(|| sram_hash(&m.bus)),
+        sram: step
+            .is_multiple_of(SRAM_HASH_EVERY)
+            .then(|| sram_hash(&m.bus)),
     }
 }
 
