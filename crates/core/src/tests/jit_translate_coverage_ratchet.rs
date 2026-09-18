@@ -760,6 +760,18 @@ fn a_stale_allow_list_entry_is_reported() {
 /// concurrently on another thread cannot replace the one under test.
 fn capture_panic_message(f: impl FnOnce() + std::panic::UnwindSafe) -> Option<String> {
     use std::sync::{Arc, Mutex};
+    // ⚠️ The panic hook is PROCESS-GLOBAL. Two tests in this file call this
+    // helper, the harness runs them on different threads, and whichever one
+    // reached `set_hook` second used to clobber the other's — so the first
+    // test's panic printed to stderr, `captured` stayed empty, and the test
+    // failed with the very message it was asserting on. Measured 2026-09-18:
+    // red in parallel, green under `--test-threads=1`, which is what a
+    // deterministic race looks like from the outside.
+    //
+    // One lock, so the two tests take the hook in turn. Poisoning is ignored:
+    // the body below panics ON PURPOSE.
+    static HOOK_LOCK: Mutex<()> = Mutex::new(());
+    let _serialised = HOOK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let captured: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
     let captured_hook = captured.clone();
     let prev_hook = std::panic::take_hook();

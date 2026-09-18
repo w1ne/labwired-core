@@ -1,0 +1,101 @@
+# TI SN74HC165 8-bit parallel-in / serial-out shift register — declarative
+# `spi_device`, the complement of `hc595.yaml`: that part turns ONE SPI byte
+# into eight pads, this one turns eight switch positions into ONE SPI byte.
+#
+# ── The wiring, from the datasheet (SN74HC165 SCLS116D) ────────────────────
+#
+#   SH/LD → CS     LOW loads the eight parallel inputs A..H into the register
+#   CLK   → SCK    shift clock
+#   QH    → MISO   serial output, MSB-first: H leaves first
+#
+# SPI clocks MSB-first and QH is stage H, so ONE transferred byte lands
+# verbatim with bit 7 = channel 7 (H) and bit 0 = channel 0 (A). That is one
+# byte-wide read-only register at address 0 with eight one-bit `fields:`, which
+# is exactly the shape `max31855.yaml` has — `framing: { command_bytes: 0 }`,
+# CS↓ clocks the word straight out with no opcode.
+#
+# ── ⚠️ THE KEY THIS PART EXISTS TO PROVE: `bits:` ──────────────────────────
+#
+# The hand-written kit took `inputs: 165` — ONE integer whose bit i is channel
+# i — and four shipped manifests set it (`examples/iolink-dido` and the three
+# `examples/iolink-station/sensor*`). A descriptor's seed was one `config:` key
+# carrying one FLOAT per channel, so `inputs:` would have parsed and silently
+# done nothing: the part would have booted with every switch open and the four
+# labs would have shown a field side that is never asserted. That is the exact
+# failure `metadata.inputs[].config_key` exists to prevent, so the port was
+# blocked on it (PR #1186) rather than shipped with a dead key.
+#
+# `bits:` is that key. ONE declared channel stands for `count` one-bit
+# channels, and the group's `config_key` is the integer that seeds all of them
+# at once. The expansion happens once, in `DeviceDescriptor::from_yaml`, so the
+# kit metadata, the offline peripherals manifest, `SimInput` and the `source:`
+# lookups below all see eight ordinary channels `ch0..ch7` labelled `D0..D7` —
+# byte-for-byte the table the deleted model published.
+#
+# It also brought SPI config seeding into existence at all: until this port the
+# SPI primitive had NO `seed_from_config` (the I²C one has had it since the
+# MLX90614), so any starting value in an SPI part's `config:` was ignored.
+#
+# ── ⚠️ A NAMED DIFFERENCE FROM THE MODEL THIS REPLACES ─────────────────────
+#
+# Past the EIGHTH clocked bit inside one held-CS transaction the model answered
+# the same byte again, for ever; this descriptor answers open bus (0xFF) once
+# the word is out. Neither is the datasheet's answer, which is whatever the SER
+# (serial-in) pin carries as the ninth and later stages shift through — the
+# model's repeat is an artefact of sampling the live inputs on every `transfer`
+# rather than a shift register's behaviour.
+#
+# It is unobservable on every shipped manifest: the STM32 SPI bus never drives
+# the CS callbacks, so each byte re-frames and re-samples the live inputs, which
+# is the behaviour `sn74hc165_migration_parity.rs` pins byte for byte. The
+# held-CS burst is asserted there AS the difference.
+#
+# ⚠️ NOT MODELLED, named rather than faked: SER (the cascade input) and CLK INH.
+# The hand-written model had neither, and no board in the corpus chains two.
+type: sn74hc165
+
+behavior:
+  primitive: spi_device
+  spi:
+    # No opcode: SH/LD↓ loads, and every clocked byte is data.
+    framing: { command_bytes: 0 }
+    registers:
+      - name: PARALLEL
+        addr: 0x00
+        width: 1
+        endian: be
+        access: r
+        fields:
+          # `encode:` is the default (scale 1, round: nearest), which puts the
+          # threshold at exactly 0.5 — the `value >= 0.5` the deleted model's
+          # `set_input` used, and the reason no explicit `encode:` appears here.
+          - { source: ch0, shift: 0, width_bits: 1 }
+          - { source: ch1, shift: 1, width_bits: 1 }
+          - { source: ch2, shift: 2, width_bits: 1 }
+          - { source: ch3, shift: 3, width_bits: 1 }
+          - { source: ch4, shift: 4, width_bits: 1 }
+          - { source: ch5, shift: 5, width_bits: 1 }
+          - { source: ch6, shift: 6, width_bits: 1 }
+          - { source: ch7, shift: 7, width_bits: 1 }
+
+metadata:
+  label: "74HC165 Shift Register"
+  summary: "8-bit parallel-in / serial-out shift register over SPI."
+  detail: "Lets a host MCU sample 8 GPIO inputs through one SPI clock burst. Used in the IO-Link DI/DO lab to surface field-side switch state. SH/LD is wired as the chip-select; QH clocks out MSB-first, so bit 7 is channel 7. `inputs:` seeds all eight channels at once as a bitmask; a single channel may also be set by its own key (ch0..ch7). NOT modelled: the SER cascade input and CLK INH."
+  category: spi
+  config_keys:
+    - { name: cs_pin, ty: str, doc: "Chip-select GPIO pin (e.g. \"PA4\"). Defaults to PA4." }
+    - { name: inputs, ty: int, doc: "Optional initial 8-bit input state (0..0xFF) — useful for static test stimulus. Bit i seeds channel i." }
+  inputs:
+    # ONE entry, EIGHT channels: see the `bits:` note in the header.
+    - key: ch
+      label: "D"
+      unit: level
+      min: 0.0
+      max: 1.0
+      bits: { count: 8, config_key: inputs }
+  labs:
+    - board_id: iolink-dido
+      chip: stm32l476
+      example_dir: iolink-dido
+      demo_elf: demo-iolink-dido.elf

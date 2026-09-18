@@ -353,6 +353,18 @@ pub(crate) fn pack(raw: u32, width: u8, endian: Endian) -> Vec<u8> {
     le
 }
 
+/// [`pack`] for a word WIDER than 32 bits — a command device's response word
+/// with `fields:` may be up to 8 bytes (the AHT20 packs two 20-bit
+/// measurements into five). Identical arithmetic; only the accumulator differs,
+/// so a 1..=4-byte word packs the same bytes either way.
+pub(crate) fn pack_wide(raw: u64, width: u8, endian: Endian) -> Vec<u8> {
+    let mut le: Vec<u8> = (0..width).map(|i| (raw >> (8 * i as u32)) as u8).collect();
+    if endian == Endian::Be {
+        le.reverse();
+    }
+    le
+}
+
 /// Unpack `width` bytes (in `endian` order) into a value.
 pub(crate) fn unpack(bytes: &[u8], endian: Endian) -> u32 {
     let mut acc = 0u32;

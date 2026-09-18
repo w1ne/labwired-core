@@ -74,7 +74,21 @@ use std::path::PathBuf;
 /// ADC words were two literals and it declared no stimulus channels — so the
 /// count goes up without a sensor being gained. The descriptor's header says so
 /// and says what driving it would take.
-const YAML_DEVICES_BASELINE: usize = 74;
+///
+/// 74 → 75: `sn74hc165.yaml`. It DID delete its Rust model, so the Rust
+/// baseline below falls by one in the same commit. The key it needed is
+/// `metadata.inputs[].bits:` — ONE declared channel standing for eight, seeded
+/// together by the single integer `inputs:` key four shipped manifests set.
+/// Per-channel seeding could not express it, so the key and the port landed
+/// together (see `sn74hc165_migration_parity.rs`).
+///
+/// 75 → 76: `aht20.yaml`. It DID delete its Rust model, so the Rust baseline
+/// falls by one in the same commit. Three keys: `crc8.covers: { bytes: N }`,
+/// `response[].fields` (a packed word whose fields straddle byte boundaries),
+/// and `i2c.not_ready_byte`. ⚠️ Its BUSY bit stops being a COUNT of status
+/// reads and becomes the datasheet's 80 ms — which broke the shipped
+/// `nucleo-f407-i2c` firmware, because that firmware never waited.
+const YAML_DEVICES_BASELINE: usize = 76;
 
 /// Device models still hand-written in Rust
 /// (`crates/core/src/peripherals/components/*.rs`, minus [`EXCLUDED`]).
@@ -133,7 +147,18 @@ const YAML_DEVICES_BASELINE: usize = 74;
 /// digest in `validation/manifest.yaml`, so editing a `#[cfg(test)]` module
 /// inside that directory turns `generate_validation_status.py --check --drift`
 /// red for a change that touches no model.
-const RUST_DEVICES_BASELINE: usize = 29;
+///
+/// 29 → 28: `sn74hc165.rs` is DELETED, ported to the descriptor counted above.
+/// Not kept as an oracle — nothing in the tree attaches it as a generic slave,
+/// and the transcript it produced is reproduced verbatim inside
+/// `tests/sn74hc165_migration_parity.rs`.
+///
+/// 28 → 27: `aht20.rs` is DELETED, ported to the descriptor counted above. Not
+/// kept as an oracle: its BUSY thunk and its constant measurement are the two
+/// things the port deliberately changes, so an oracle in `components/` would be
+/// asserting both. It is reproduced verbatim inside
+/// `tests/aht20_migration_parity.rs`.
+const RUST_DEVICES_BASELINE: usize = 27;
 
 /// Files in `components/` that are NOT a device model, with the reason. Listed
 /// here rather than pattern-matched so every exemption is a line someone wrote

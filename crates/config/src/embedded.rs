@@ -9,7 +9,20 @@ use crate::*;
 
 impl DeviceDescriptor {
     pub fn from_yaml(yaml: &str) -> Result<Self> {
-        serde_yaml::from_str(yaml).context("Failed to parse Device Descriptor")
+        let mut desc: Self =
+            serde_yaml::from_str(yaml).context("Failed to parse Device Descriptor")?;
+        // ONE expansion point for `metadata.inputs[].bits:` channel groups.
+        // Every consumer of `metadata.inputs` — the kit metadata, the offline
+        // peripherals manifest, `SimInput`, a register field's `source:` — goes
+        // through a parsed descriptor, so expanding here is what makes the
+        // group invisible everywhere else instead of a case each of the six
+        // primitives has to remember.
+        if let Some(meta) = desc.metadata.as_mut() {
+            if meta.inputs.iter().any(|i| i.bits.is_some()) {
+                meta.inputs = meta.inputs.iter().flat_map(|i| i.expand()).collect();
+            }
+        }
+        Ok(desc)
     }
 
     /// Look up and parse the embedded descriptor for a device `type:` string
@@ -83,6 +96,14 @@ pub static EMBEDDED_DEVICES: &[(&[&str], &str)] = &[
     (
         &["max31855"],
         include_str!("../../../configs/devices/max31855.yaml"),
+    ),
+    (
+        &["sn74hc165"],
+        include_str!("../../../configs/devices/sn74hc165.yaml"),
+    ),
+    (
+        &["aht20"],
+        include_str!("../../../configs/devices/aht20.yaml"),
     ),
     (
         &["bh1750"],

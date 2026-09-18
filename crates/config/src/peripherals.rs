@@ -497,6 +497,145 @@ pub struct InputSpec {
     /// this schema refuses elsewhere.
     #[serde(default)]
     pub config_key: Option<String>,
+    /// **One entry that FANS OUT into `count` one-bit channels.** See
+    /// [`InputBits`]. Absent ⇒ this entry is one ordinary channel.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bits: Option<InputBits>,
+    /// Set on an EXPANDED channel only (see [`InputSpec::expand`]): the bit
+    /// this channel occupies in the integer its group's
+    /// [`config_key`](Self::config_key) carries. Present ⇒ the seed is read as
+    /// an integer and this bit tested, rather than as a float.
+    ///
+    /// Never written by hand in a descriptor — `bits:` is the key an author
+    /// spells, and this is what it becomes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seed_bit: Option<u8>,
+}
+
+/// The `(channel key, starting value)` pairs an `external_devices` `config:`
+/// block seeds, given a lookup for one key.
+///
+/// ONE function for every primitive, because the two seeding shapes must not
+/// drift apart:
+///   * an ordinary channel takes a FLOAT from its
+///     [`config_key`](InputSpec::config_key) (or, failing that, from its own
+///     key — the spelling every descriptor written before `config_key` existed
+///     used);
+///   * a channel that came out of a [`InputBits`] group takes ONE BIT of the
+///     INTEGER under the group's key: set ⇒ [`InputSpec::max`], clear ⇒
+///     [`InputSpec::min`]. Its own key still wins when the placement sets it,
+///     so `inputs: 0xA5` plus `ch3: 1` means what it reads like.
+///
+/// A key the placement does not set seeds nothing and the channel keeps its
+/// declared `default:` — the same contract every descriptor has had.
+pub fn seeded_channel_values(
+    inputs: &[InputSpec],
+    get: impl Fn(&str) -> Option<f64>,
+) -> Vec<(String, f64)> {
+    let mut out = Vec::new();
+    for input in inputs {
+        let config_key = input
+            .config_key
+            .clone()
+            .unwrap_or_else(|| input.key.clone());
+        match input.seed_bit {
+            Some(bit) => {
+                if let Some(v) = get(&input.key) {
+                    out.push((input.key.clone(), v));
+                } else if let Some(word) = get(&config_key) {
+                    // `as f64 -> i64` and then a shift: the seed is an integer
+                    // bitmask, and a placement that writes `inputs: 165.0` means
+                    // the same eight bits.
+                    let set = (word as i64) >> u32::from(bit) & 1 == 1;
+                    out.push((input.key.clone(), if set { input.max } else { input.min }));
+                }
+            }
+            None => {
+                if let Some(v) = get(&config_key).or_else(|| get(&input.key)) {
+                    out.push((input.key.clone(), v));
+                }
+            }
+        }
+    }
+    out
+}
+
+/// A CHANNEL GROUP: one declared [`InputSpec`] standing for `count` one-bit
+/// channels, seeded together by ONE integer `config:` key.
+///
+/// The 74HC165 is the motivating case and says why this is a schema key rather
+/// than eight hand-written entries. Its kit takes `inputs: 165` — one integer
+/// whose bit *i* is channel *i* — and four shipped manifests
+/// (`examples/iolink-dido` plus three `iolink-station` sensors) set it. Per
+/// channel seeding cannot express that: a descriptor's seed is one `config:`
+/// key carrying one float per channel, so `inputs:` would parse and silently do
+/// nothing, which is exactly the failure mode
+/// [`InputSpec::config_key`] exists to prevent.
+///
+/// Writing the eight channels out by hand would still leave `inputs:` dead, so
+/// the fan-out and the seed are ONE key: declaring the group is what makes the
+/// integer reach the channels.
+///
+/// Expansion happens once, in [`DeviceDescriptor::from_yaml`], so every
+/// consumer — the kit metadata, the peripherals manifest, `SimInput`, a
+/// `source:` in a register field — sees the eight ordinary channels and none of
+/// them needs to know the group existed.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct InputBits {
+    /// How many one-bit channels this entry stands for. Channel *i* is bit *i*
+    /// of the seed integer, `i` counting from 0.
+    pub count: u8,
+    /// Key prefix: channel *i* is named `{key_prefix}{i}`. Absent ⇒ the entry's
+    /// own [`InputSpec::key`], which is the spelling the 74HC165 uses (`ch` →
+    /// `ch0`..`ch7`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key_prefix: Option<String>,
+    /// Label prefix: channel *i* is labelled `{label_prefix}{i}`. Absent ⇒ the
+    /// entry's own [`InputSpec::label`] (`D` → `D0`..`D7`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label_prefix: Option<String>,
+    /// The `config:` key of the ONE integer that seeds the whole group: bit *i*
+    /// set ⇒ channel *i* starts at [`InputSpec::max`], clear ⇒
+    /// [`InputSpec::min`]. Absent ⇒ the group is not config-seedable.
+    ///
+    /// ⚠️ Per-channel [`InputSpec::config_key`] seeding still applies on top of
+    /// this by the channel's own expanded key, so a placement may set
+    /// `inputs: 0xA5` and then override one line.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub config_key: Option<String>,
+}
+
+impl InputSpec {
+    /// This entry as the channels the rest of the engine sees: itself, or the
+    /// `count` one-bit channels a [`bits:`](InputSpec::bits) group stands for.
+    ///
+    /// The expanded channels carry `bits: None` and a
+    /// [`seed_bit`](Self::seed_bit) instead, so expansion is IDEMPOTENT: a
+    /// descriptor that is parsed, serialised and parsed again names the same
+    /// eight channels rather than `ch00`..`ch07`.
+    pub fn expand(&self) -> Vec<InputSpec> {
+        let Some(bits) = &self.bits else {
+            return vec![self.clone()];
+        };
+        let key_prefix = bits.key_prefix.clone().unwrap_or_else(|| self.key.clone());
+        let label_prefix = bits
+            .label_prefix
+            .clone()
+            .unwrap_or_else(|| self.label.clone());
+        (0..bits.count)
+            .map(|i| InputSpec {
+                key: format!("{key_prefix}{i}"),
+                label: format!("{label_prefix}{i}"),
+                bits: None,
+                // The group's ONE integer seed key lands on every expanded
+                // channel together with its bit index, so the seeding code has
+                // one uniform shape to read rather than a special case.
+                config_key: bits.config_key.clone().or_else(|| self.config_key.clone()),
+                seed_bit: bits.config_key.as_ref().map(|_| i),
+                ..self.clone()
+            })
+            .collect()
+    }
 }
 
 /// The `behavior.i2c` section of a declarative `i2c_device` — a datasheet-shaped
@@ -513,6 +652,19 @@ pub struct I2cSpec {
     /// 7-bit slave address used when the `external_devices` entry omits
     /// `i2c_address`.
     pub default_address: u8,
+    /// The byte a COMMAND device answers before its delayed response is ready
+    /// (see [`I2cCommand::delay_us`]). Absent ⇒ `0xFF`, open bus, which is what
+    /// every descriptor written before this key answered.
+    ///
+    /// A part whose datasheet gives that byte a MEANING states it here. The
+    /// AHT20 is the motivating case: while its 80 ms measurement runs, a read
+    /// returns its status byte with BUSY (bit 7) and CAL (bit 3) set — `0x88` —
+    /// and that is the byte its drivers poll. `0xFF` happens to carry both bits
+    /// too, which is exactly why this needs declaring rather than leaving to
+    /// luck: a part whose ready flag is active-LOW would read READY the whole
+    /// time it was busy.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub not_ready_byte: Option<u8>,
     /// Command-code width in bytes for a command device. `2` (the default) is
     /// the Sensirion 16-bit big-endian opcode; `1` is a single-byte opcode
     /// device (BH1750-style, where each measurement mode / power command is one
@@ -1215,9 +1367,15 @@ pub struct Crc8Spec {
     pub covers: Crc8Covers,
 }
 
-/// The two scopes a command device's CRC-8 is computed over.
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, Default, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
+/// The three scopes a command device's CRC-8 is computed over.
+///
+/// ⚠️ Hand-written `Serialize`/`Deserialize` (below) rather than derived: the
+/// two named scopes are YAML STRINGS (`covers: transaction`) and the third
+/// carries a count (`covers: { bytes: 6 }`). serde's externally-tagged enum
+/// representation would demand a `!Bytes` YAML tag for the third and break
+/// every descriptor that already spells the first two, so the mapping is
+/// written out instead.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Crc8Covers {
     /// One checksum byte after EVERY 16-bit word of the response, computed over
     /// that word alone. The Sensirion framing (SHT3x/SCD4x), and the default.
@@ -1238,6 +1396,60 @@ pub enum Crc8Covers {
     /// moved to a second address by `i2c_address:` still answers a PEC its
     /// driver accepts.
     Transaction,
+    /// ONE checksum byte after the first `N` ANSWER bytes, computed over those
+    /// bytes alone. Spelled `covers: { bytes: 6 }`.
+    ///
+    /// This is the shape of every part whose frame is "the payload, then a
+    /// checksum of the payload" — the Aosong AHT20 is the motivating case: its
+    /// datasheet (rev 1.1 §5.4) answers `[status, h19:12, h11:4, h3:0|t19:16,
+    /// t15:8, t7:0, crc8]` and the CRC covers ALL SIX preceding bytes. That is
+    /// neither [`Response`](Self::Response) (a checksum after every 16-bit
+    /// word, which would put three bytes in the middle of the measurement) nor
+    /// [`Transaction`](Self::Transaction) (an SMBus PEC, which covers the
+    /// address and command bytes the MASTER drove).
+    ///
+    /// `N` counts ANSWER bytes, not words, because that is how a datasheet
+    /// states it. A count that exceeds the response the commands actually build
+    /// is a LOAD error: a checksum over bytes that are not there is a literal
+    /// wearing a checksum's name.
+    Bytes(u8),
+}
+
+impl Serialize for Crc8Covers {
+    fn serialize<S: serde::Serializer>(&self, ser: S) -> std::result::Result<S::Ok, S::Error> {
+        match self {
+            Crc8Covers::Response => ser.serialize_str("response"),
+            Crc8Covers::Transaction => ser.serialize_str("transaction"),
+            Crc8Covers::Bytes(n) => {
+                use serde::ser::SerializeMap;
+                let mut m = ser.serialize_map(Some(1))?;
+                m.serialize_entry("bytes", n)?;
+                m.end()
+            }
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for Crc8Covers {
+    fn deserialize<D: serde::Deserializer<'de>>(de: D) -> std::result::Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Repr {
+            Name(String),
+            Bytes { bytes: u8 },
+        }
+        match Repr::deserialize(de)? {
+            Repr::Bytes { bytes } => Ok(Crc8Covers::Bytes(bytes)),
+            Repr::Name(name) => match name.as_str() {
+                "response" => Ok(Crc8Covers::Response),
+                "transaction" => Ok(Crc8Covers::Transaction),
+                other => Err(serde::de::Error::custom(format!(
+                    "unknown crc8.covers '{other}'; expected `response`, `transaction`, \
+                     or `{{ bytes: N }}`"
+                ))),
+            },
+        }
+    }
 }
 
 /// Byte order of a register's on-wire word.
@@ -1848,6 +2060,24 @@ pub struct ResponseWord {
     /// Linear encoding for a `source` word.
     #[serde(default)]
     pub encode: Option<Encode>,
+    /// **Packed sub-fields that may STRADDLE a byte boundary.** Present ⇒
+    /// `source`/`const` are ignored and the word is assembled from these,
+    /// exactly as [`RegisterSpec::fields`] assembles a register.
+    ///
+    /// A register's fields already span bytes (the MAX31855's 14-bit
+    /// thermocouple word starts at bit 18 of a 32-bit frame), but a COMMAND
+    /// device's response word had no `fields:` at all and was capped at a
+    /// `u32`. The AHT20 is the motivating case: it packs a 20-bit humidity and
+    /// a 20-bit temperature into FIVE bytes, so one byte carries the low nibble
+    /// of the humidity and the high nibble of the temperature. That is neither
+    /// a word boundary nor a `u32`, and the alternative — a constant payload —
+    /// freezes the part at 25 °C / 50 %RH for ever, which is what the model it
+    /// replaces did.
+    ///
+    /// `width` may therefore be up to 8 bytes here, and `shift + width_bits`
+    /// must fit inside `8 * width` or it is a LOAD error.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fields: Vec<FieldSpec>,
 }
 
 pub(crate) fn default_response_endian() -> Endian {

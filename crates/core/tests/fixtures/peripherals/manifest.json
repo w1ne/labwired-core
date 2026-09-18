@@ -706,7 +706,7 @@
       "device_type": "aht20",
       "label": "AHT20 Temp/Humidity",
       "summary": "Aosong AHT20 I²C temperature and humidity sensor.",
-      "detail": "Command-stream protocol at 0x38 with fixed 25 °C / 50 %RH measurement and BUSY-poll semantics for firmware that triggers then reads.",
+      "detail": "Command-stream protocol at 0x38: trigger with 0xAC 0x33 0x00, wait the datasheet's 80 ms, then read seven bytes — status, a 20-bit humidity and a 20-bit temperature packed across five bytes, and a CRC-8 over all six. Both measurements are drivable stimulus channels, and the checksum is computed over what the twin actually answered. A read taken before the 80 ms elapses returns 0x88 (BUSY | CAL). NOT modelled: the 0x71 status opcode and the init command's calibration bookkeeping.",
       "transport": "i2c",
       "category": "i2c",
       "config_keys": [
@@ -714,10 +714,35 @@
           "name": "i2c_address",
           "ty": "int",
           "doc": "7-bit slave address. Defaults to 0x38 (fixed on real silicon)."
+        },
+        {
+          "name": "temperature",
+          "ty": "float",
+          "doc": "Starting temperature in °C. Defaults to 25."
+        },
+        {
+          "name": "humidity",
+          "ty": "float",
+          "doc": "Starting relative humidity in %. Defaults to 50."
         }
       ],
       "labs": [],
-      "inputs": []
+      "inputs": [
+        {
+          "key": "temperature",
+          "label": "Temperature",
+          "unit": "°C",
+          "min": -40.0,
+          "max": 85.0
+        },
+        {
+          "key": "humidity",
+          "label": "Humidity",
+          "unit": "%",
+          "min": 0.0,
+          "max": 100.0
+        }
+      ]
     },
     {
       "device_type": "bmp280",
@@ -1213,7 +1238,7 @@
       "device_type": "sn74hc165",
       "label": "74HC165 Shift Register",
       "summary": "8-bit parallel-in / serial-out shift register over SPI.",
-      "detail": "Lets a host MCU sample 8 GPIO inputs through one SPI clock burst. Used in the IO-Link DI/DO lab to surface field-side switch state.",
+      "detail": "Lets a host MCU sample 8 GPIO inputs through one SPI clock burst. Used in the IO-Link DI/DO lab to surface field-side switch state. SH/LD is wired as the chip-select; QH clocks out MSB-first, so bit 7 is channel 7. `inputs:` seeds all eight channels at once as a bitmask; a single channel may also be set by its own key (ch0..ch7). NOT modelled: the SER cascade input and CLK INH.",
       "transport": "spi",
       "category": "spi",
       "config_keys": [
@@ -1225,7 +1250,7 @@
         {
           "name": "inputs",
           "ty": "int",
-          "doc": "Optional initial 8-bit input state (0..0xFF) — useful for static test stimulus."
+          "doc": "Optional initial 8-bit input state (0..0xFF) — useful for static test stimulus. Bit i seeds channel i."
         }
       ],
       "labs": [

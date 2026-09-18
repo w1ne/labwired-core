@@ -236,9 +236,11 @@ const F407_FIRMWARE_ELF: &str = "thumbv7em-none-eabi/release/nucleo-f407-i2c";
 
 fn ensure_f407_firmware_built() -> PathBuf {
     let elf = labwired_core::test_support::target_dir().join(F407_FIRMWARE_ELF);
-    if elf.exists() {
-        return elf;
-    }
+    // ⚠️ This used to return early when the ELF already existed, so an edit to
+    // `examples/nucleo-f407-i2c/src/main.rs` was NEVER compiled once any build
+    // of it was on disk — the test measured a firmware that no longer existed
+    // in the tree. Always build; cargo's own freshness check makes the no-op
+    // case a couple of seconds.
     let example_dir =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples/nucleo-f407-i2c");
     let status = Command::new("cargo")
@@ -294,44 +296,54 @@ fn firmware_drives_aht20_and_bmp280_through_simulator() {
     const I2C1_CR1: u64 = 0x40005400;
     const I2C1_SR1: u64 = 0x40005414;
     const PA5_MASK: u32 = 1 << 5;
-    const MAX_CYCLES: u32 = 4_000_000;
+    // ⚠️ Raised from 4 M when the AHT20 twin stopped counting status reads and
+    // started measuring the datasheet's 80 ms (AHT20 rev 1.1 §5.4). At the
+    // F407's declared 168 MHz that conversion alone is 13.44 M core cycles, so
+    // a 4 M budget could not reach the success branch however correct the
+    // firmware was. See configs/devices/aht20.yaml.
+    const MAX_CYCLES: u32 = 40_000_000;
+    // Sampling STRIDE for the LED readback. The ODR read is the expensive part
+    // of this loop and PA5 LATCHES — the firmware sets it and spins forever —
+    // so sampling every N steps cannot miss the transition, only delay noticing
+    // it by at most N steps.
+    const ODR_STRIDE: u32 = 256;
 
+    // ⚠️ The "PC has not moved in 300k cycles ⇒ bail" heuristic that used to
+    // live here is GONE. The firmware now spends 80 ms inside a deliberate spin
+    // (AHT20 §5.4), and a deliberate spin is indistinguishable from a hang by
+    // PC identity alone — the heuristic would have bailed out of the very wait
+    // it is here to measure. `MAX_CYCLES` is the bound; the diagnostic dump
+    // below still says where the run got to.
     let mut max_odr_seen: u32 = 0;
-    let mut last_pc = 0u32;
-    let mut stuck_count = 0u32;
     for step in 0..MAX_CYCLES {
         machine
             .step()
             .unwrap_or_else(|e| panic!("simulator crashed at step {step}: {e}"));
 
-        // Sample ODR every step to catch any LED transition.
-        let odr = machine.bus.read_u32(GPIOA_ODR).unwrap_or(0);
-        if odr > max_odr_seen {
-            max_odr_seen = odr;
-        }
-        if (odr & PA5_MASK) != 0 {
-            led_was_high = true;
-            break;
+        // Sample ODR on the stride: PA5 latches, so this cannot miss it.
+        if step % ODR_STRIDE == 0 {
+            let odr = machine.bus.read_u32(GPIOA_ODR).unwrap_or(0);
+            if odr > max_odr_seen {
+                max_odr_seen = odr;
+            }
+            if (odr & PA5_MASK) != 0 {
+                led_was_high = true;
+                break;
+            }
         }
 
-        if step % 100_000 == 0 {
+        if step % 4_000_000 == 0 {
             let pc = machine.cpu.get_pc();
             let cr1 = machine.bus.read_u32(I2C1_CR1).unwrap_or(0);
             let sr1 = machine.bus.read_u32(I2C1_SR1).unwrap_or(0);
             eprintln!(
-                "step={:>8} pc=0x{:08x} cr1=0x{:04x} sr1=0x{:04x} odr=0x{:04x}",
-                step, pc, cr1, sr1, odr
+                "step={:>9} pc=0x{:08x} cr1=0x{:04x} sr1=0x{:04x} odr=0x{:04x}",
+                step,
+                pc,
+                cr1,
+                sr1,
+                machine.bus.read_u32(GPIOA_ODR).unwrap_or(0)
             );
-            if pc == last_pc {
-                stuck_count += 1;
-                if stuck_count >= 3 {
-                    eprintln!("PC stuck at 0x{pc:08x} for >300k cycles — bailing");
-                    break;
-                }
-            } else {
-                stuck_count = 0;
-                last_pc = pc;
-            }
         }
     }
 

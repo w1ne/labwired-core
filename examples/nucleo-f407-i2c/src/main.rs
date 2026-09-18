@@ -78,6 +78,36 @@ const BMP280_ADDR: u8 = 0x76;
 // AHT20 status BUSY bit
 const AHT20_STATUS_BUSY: u8 = 0x80;
 
+// AHT20 rev 1.1 §5.4: the measurement takes 80 ms. The core runs at 168 MHz
+// (configs/chips/stm32f407.yaml), so 80 ms is 13.44 M core cycles. `spin`
+// below costs several cycles per iteration, so these two numbers only have to
+// OVERSHOOT — the loop exits on the first poll that sees BUSY clear, so the
+// overshoot is bounded by one round rather than by the product.
+const AHT20_POLL_ROUNDS: u32 = 40;
+const AHT20_SPIN_PER_ROUND: u32 = 250_000;
+
+/// Sink for `spin`'s volatile store. ⚠️ A `black_box` loop was NOT enough:
+/// the release build deleted it outright and the wait below took no time at
+/// all. A volatile store cannot be removed.
+static mut SPIN_SINK: u32 = 0;
+/// Latched progress bits, OR-ed into the final `GPIOA_ODR` write. The header's
+/// PA3 / PA4 markers were documented and never written; a transient ODR poke
+/// would not have survived the final write anyway, so they are accumulated
+/// here and published once.
+static mut PROGRESS: u32 = 0;
+
+/// Burn `iters` loop iterations. There is no timer peripheral wired on this
+/// board, and the only thing this firmware needs from a delay is that
+/// simulated microseconds actually pass.
+#[inline(never)]
+fn spin(iters: u32) {
+    let mut i: u32 = 0;
+    while i < iters {
+        unsafe { write_volatile(&raw mut SPIN_SINK, i) };
+        i += 1;
+    }
+}
+
 // Generous polling budget — bus is fully synchronous in the simulator,
 // and real silicon at 100 kHz needs only tens of cycles per byte.
 const POLL_BUDGET: u32 = 100_000;
@@ -117,7 +147,7 @@ fn main() -> ! {
         if aht20_ok && bmp280_ok {
             bits |= 1 << 5;
         }
-        write_volatile(GPIOA_ODR, bits);
+        write_volatile(GPIOA_ODR, bits | PROGRESS);
 
         loop {
             cortex_m::asm::nop();
@@ -275,10 +305,20 @@ unsafe fn aht20_one_shot() -> bool {
         return false;
     }
     i2c_stop();
+    PROGRESS |= 1 << 3;
 
-    // Poll status until BUSY clears.
+    // Poll status until BUSY clears, SPENDING TIME between polls.
+    //
+    // ⚠️ This loop used to poll sixteen times back-to-back — about 0.2 ms of
+    // bus traffic — and pass. It passed because the simulator's AHT20 model
+    // counted status READS rather than elapsed time, a thunk its own header
+    // admitted to. AHT20 rev 1.1 §5.4 gives the measurement 80 ms, so this
+    // firmware would have failed on the bench and the twin was hiding it.
+    // The twin is a descriptor now (`configs/devices/aht20.yaml`) with a real
+    // 80 ms conversion, so the wait is here where the datasheet puts it.
     let mut busy_cleared = false;
-    for _ in 0..16 {
+    for _ in 0..AHT20_POLL_ROUNDS {
+        spin(AHT20_SPIN_PER_ROUND);
         if !i2c_start() {
             return false;
         }
@@ -297,6 +337,7 @@ unsafe fn aht20_one_shot() -> bool {
     if !busy_cleared {
         return false;
     }
+    PROGRESS |= 1 << 4;
 
     // Read all 7 bytes in one transaction.
     if !i2c_start() {

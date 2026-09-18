@@ -438,10 +438,35 @@ impl WasmSimulator {
                 continue;
             };
             for device in &spi.attached_devices {
-                if let Some(sr) = device.as_any().and_then(|a| {
-                    a.downcast_ref::<labwired_core::peripherals::components::Sn74hc165>()
-                }) {
-                    return sr.inputs() as i32;
+                // The 74HC165 is a descriptor now (`sn74hc165.yaml`), so this
+                // reads the eight declared channels back through the GENERIC
+                // accessor rather than downcasting to a concrete struct — the
+                // same move `sim_input.rs` made for the ported I²C parts. A
+                // downcast to `Sn74hc165` would have answered `None` the day
+                // the part ported and quietly reported "no shifter wired".
+                let Some(dev) = device.as_any().and_then(|a| {
+                    a.downcast_ref::<labwired_core::peripherals::components::declarative_spi::GenericSpiDevice>()
+                }) else {
+                    continue;
+                };
+                let mut byte = 0i32;
+                let mut found = false;
+                for bit in 0..8 {
+                    match dev.input_value(&format!("ch{bit}")) {
+                        Some(v) => {
+                            found = true;
+                            if v >= 0.5 {
+                                byte |= 1 << bit;
+                            }
+                        }
+                        None => {
+                            found = false;
+                            break;
+                        }
+                    }
+                }
+                if found {
+                    return byte;
                 }
             }
         }

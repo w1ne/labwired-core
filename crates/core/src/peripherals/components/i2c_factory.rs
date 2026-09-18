@@ -283,10 +283,9 @@ pub fn build_i2c_device(
         // input channels, so there is nothing for a hand-written struct to add.
         "tmp102" | "pca9685" | "vcnl4010" | "vl53l0x" | "tmp117" | "ina219" | "ads1115"
         | "mma8451q" | "fxos8700" | "mlx90614" | "ds3231" | "adxl345" | "mpu6050" | "bmi270"
-        | "cap1188" | "vl53l1x" | "bno055" | "bmp280" => {
+        | "cap1188" | "vl53l1x" | "bno055" | "bmp280" | "aht20" => {
             build_declarative_i2c_device(&type_str.to_ascii_lowercase(), config)
         }
-        "aht20" => Some(Box::new(crate::peripherals::components::Aht20::new())),
         // ── Smart-ring sensor/actuator set ──────────────────────────────────
         "max30102" => {
             use crate::peripherals::components::max30102::{Max30102, MAX30102_ADDR};

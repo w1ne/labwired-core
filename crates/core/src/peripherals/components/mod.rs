@@ -4,7 +4,6 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
-pub mod aht20;
 pub mod atecc608a;
 pub mod bg770a;
 pub mod bme280;
@@ -60,7 +59,6 @@ pub mod sensirion;
 pub mod servo;
 pub mod seven_seg_font;
 pub mod shm_i2c;
-pub mod sn74hc165;
 pub mod sps30;
 pub mod step_dir_motor;
 pub mod supply;
@@ -77,7 +75,6 @@ pub mod veml7700;
 mod veml7700_parity;
 pub mod ydlidar;
 
-pub use aht20::Aht20;
 pub use bg770a::QuectelBg770a;
 pub use bme280::Bme280;
 pub use bmp280::Bmp280;
@@ -110,7 +107,6 @@ pub use pca9685::Pca9685;
 pub use rule_machine::{RuleCtx, RuleMachine};
 pub use servo::{LedcServoDriver, McpwmServoDriver, Servo, ServoCal};
 pub use shm_i2c::ShmI2c;
-pub use sn74hc165::Sn74hc165;
 pub use sps30::{Sps30, SPS30_ADDR};
 pub use tca9548a::Tca9548a;
 #[cfg(test)]

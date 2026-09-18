@@ -136,7 +136,7 @@ fn set_input_rejects_unknown_channel_and_out_of_range() {
 // exercise `component` disambiguation.
 
 use labwired_core::peripherals::components::declarative_uart::DeclarativeUartDevice;
-use labwired_core::peripherals::components::{GenericSpiDevice, QuectelBg770a, Sn74hc165};
+use labwired_core::peripherals::components::{GenericSpiDevice, QuectelBg770a};
 use labwired_core::peripherals::spi::Spi;
 use labwired_core::peripherals::uart::{Uart, UartStreamDevice};
 
@@ -195,6 +195,41 @@ external_devices:
     )
     .expect("parse matrix system yaml");
     SystemBus::from_config(&chip, &manifest).expect("build matrix bus")
+}
+
+/// Find the SPI device on `owner` that serves stimulus channel `key`, and run
+/// `f` on it. Selection by channel rather than by concrete type: every ported
+/// SPI part is the same `GenericSpiDevice`, so a type downcast picks whichever
+/// one attached first.
+fn spi_device_with_channel<R>(
+    bus: &mut SystemBus,
+    owner: &str,
+    key: &str,
+    f: impl FnOnce(&mut GenericSpiDevice) -> R,
+) -> R {
+    for entry in bus.peripherals.iter_mut() {
+        if entry.name != owner {
+            continue;
+        }
+        let Some(any) = entry.dev.as_any_mut() else {
+            continue;
+        };
+        let Some(spi) = any.downcast_mut::<Spi>() else {
+            continue;
+        };
+        for dev in spi.attached_devices.iter_mut() {
+            let Some(g) = dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<GenericSpiDevice>())
+            else {
+                continue;
+            };
+            if g.input_value(key).is_some() {
+                return f(g);
+            }
+        }
+    }
+    panic!("no SPI device on {owner} serves channel {key}");
 }
 
 /// Find the unique attached device of concrete type `T` on the bus and run
@@ -306,8 +341,23 @@ fn drives_each_transport_through_the_generic_api() {
     assert_eq!(ax, 16384, "1 g at power-on scale = 16384 LSB");
 
     // SPI device (unique key): single 74HC165 channel goes high.
+    //
+    // ⚠️ Read back through the GENERIC accessor, not `with_device::<Sn74hc165>`:
+    // the 74HC165 is `sn74hc165.yaml` now, so a concrete-type downcast would
+    // answer `None` and this assertion would measure nothing. Same reason
+    // `with_device::<Vl53l1x>` had to go in #1186.
     bus.set_input(None, "ch3", 1.0).expect("drive dio ch3");
-    let dio = with_device::<Sn74hc165, _>(&mut bus, "spi2", |sr| sr.inputs());
+    //
+    // ⚠️ `with_device::<GenericSpiDevice>` would find the WRONG device: `thermo2`
+    // (a max31855) is also a `GenericSpiDevice` on spi2 and is attached first.
+    // "the first device of type T on this bus" stopped being an identity the
+    // day more than one part on a bus became a descriptor (#1186). Selected by
+    // the CHANNEL it serves instead.
+    let dio = spi_device_with_channel(&mut bus, "spi2", "ch0", |sr| {
+        (0..8).fold(0u8, |acc, b| {
+            acc | u8::from(sr.input_value(&format!("ch{b}")).unwrap_or(0.0) >= 0.5) << b
+        })
+    });
     assert_eq!(dio, 0b0000_1000);
 
     // UART stream (unique key): GPS latitude lands in the NMEA source.

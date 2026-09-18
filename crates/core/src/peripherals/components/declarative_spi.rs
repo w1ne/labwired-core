@@ -68,6 +68,10 @@ pub struct GenericSpiDevice {
     write_acc: Vec<u8>,
 
     channels: &'static [InputChannel],
+    /// The declared input specs, kept whole so `seed_from_config` can hand them
+    /// to the ONE seeding rule ([`labwired_config::seeded_channel_values`]) —
+    /// the same call the I²C primitive makes.
+    seed_specs: Vec<labwired_config::InputSpec>,
     component_id: Option<String>,
     /// How this instance latches the wire. [`SpiSampling::Byte`] unless the
     /// lab asked for edge-accurate sampling (`config.spi_mode`), so every
@@ -366,6 +370,11 @@ impl GenericSpiDevice {
             cs_held: false,
             write_acc: Vec::with_capacity(4),
             channels,
+            seed_specs: descriptor
+                .metadata
+                .as_ref()
+                .map(|m| m.inputs.clone())
+                .unwrap_or_default(),
             component_id: None,
             sampling: SpiSampling::Byte,
             elapsed_us: 0,
@@ -744,6 +753,30 @@ impl GenericSpiDevice {
     }
 
     /// Declare whether the module's supply is connected. Only ever called with
+    /// Seed a measurement slot's initial value from a `config:` override. Only
+    /// keys naming a declared input channel take effect, exactly as the I²C
+    /// twin does.
+    pub fn seed_input(&mut self, key: &str, value: f64) {
+        if self.channels.iter().any(|c| c.key == key) {
+            self.slots.insert(key.to_string(), value);
+        }
+    }
+
+    /// Seed every declared input channel from an `external_devices` `config:`
+    /// block. ⚠️ Until the 74HC165 port there was NO config seeding on the SPI
+    /// primitive at all: an SPI part's stimulus could only be driven at
+    /// runtime, so a manifest that wrote a starting value got a part that
+    /// booted at the descriptor default. `inputs: 165` is exactly such a key —
+    /// four shipped manifests set it — which is why the fan-out and the seed
+    /// landed together.
+    pub fn seed_from_config(&mut self, get: impl Fn(&str) -> Option<f64>) {
+        for (channel, value) in
+            labwired_config::seeded_channel_values(&self.seed_specs.clone(), get)
+        {
+            self.seed_input(&channel, value);
+        }
+    }
+
     /// `false`, from `attach`, when the compiled manifest explicitly says the
     /// supply pins are on no net. See the `powered` field.
     pub fn with_powered(mut self, powered: bool) -> Self {
@@ -1253,6 +1286,7 @@ impl PeripheralKit for DeclarativeSpiKit {
         // different CPOL/CPHA corrupts the exchange the way silicon does.
         // Absent — which is every manifest that exists today — leaves the
         // byte-level path untouched.
+        device.seed_from_config(|key| ctx.config_f64(key));
         if let Some(mode) = ctx.config_i64("spi_mode") {
             let m = u8::try_from(mode)
                 .map_err(|_| anyhow::anyhow!("spi_mode {mode} is not a SPI mode (0..=3)"))?;
@@ -1300,6 +1334,21 @@ pub static ADXL345_KIT: LazyLock<DeclarativeSpiKit> = LazyLock::new(|| {
             .expect("adxl345_spi descriptor embedded"),
     )
     .expect("adxl345_spi.yaml is a valid declarative spi descriptor")
+});
+
+/// TI SN74HC165 parallel-in / serial-out shift register (declarative
+/// `sn74hc165.yaml`). Migrated from the hand-written
+/// `components::sn74hc165::Sn74hc165`, which is DELETED; the transcript it
+/// produced is pinned in `tests/sn74hc165_migration_parity.rs`.
+///
+/// It is the first part to use `metadata.inputs[].bits:` — ONE declared channel
+/// standing for eight, seeded together by the single integer `inputs:` key four
+/// shipped manifests set.
+pub static SN74HC165_KIT: LazyLock<DeclarativeSpiKit> = LazyLock::new(|| {
+    DeclarativeSpiKit::from_yaml(
+        labwired_config::embedded_device_yaml("sn74hc165").expect("sn74hc165 descriptor embedded"),
+    )
+    .expect("sn74hc165.yaml is a valid declarative spi descriptor")
 });
 
 /// Maxim MAX31855 thermocouple converter (declarative `max31855.yaml`).

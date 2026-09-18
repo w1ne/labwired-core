@@ -504,6 +504,105 @@ Without it `input(weight)` truncates to whole grams and a load cell loses
 exactly the digits it exists to measure — silently, because 10 g and 10.5 g
 would shift out the same word.
 
+### `crc8.covers: { bytes: N }` — a checksum over the first N ANSWER bytes
+
+Three scopes, and a part is exactly one of them:
+
+| `covers:` | the checksum framing |
+|---|---|
+| `response` (default) | one byte after EVERY 16-bit word, over that word alone — the Sensirion shape |
+| `transaction` | one byte at the END, over `[addr·W, cmd, addr·R, data…]` — the SMBus PEC |
+| `{ bytes: N }` | one byte at the END, over the first **N answer bytes** |
+
+```yaml
+    # AHT20 rev 1.1 §5.4: seven bytes out, the last a CRC-8 of the six before it.
+    crc8: { poly: 0x31, init: 0xFF, covers: { bytes: 6 } }
+```
+
+`N` counts ANSWER bytes because that is how a datasheet states it. A **write-only**
+command answers nothing and gets no checksum; every command that DOES answer must
+answer at least `N` bytes or it is a LOAD error — a checksum over bytes the part
+never sent is a literal wearing a checksum's name.
+
+### `response[].fields` — a packed word that straddles byte boundaries
+
+A command device's response word was one `source` (or one `const`) capped at a
+`u32`. `fields:` gives it the same composite shape a register has, and widens it
+to eight bytes:
+
+```yaml
+        response:
+          - { const: 0x08, width: 1 }         # status
+          - width: 5                          # 40 bits, big-endian
+            endian: be
+            fields:
+              - { source: humidity,    shift: 20, width_bits: 20, encode: { scale: 10485.76 } }
+              - { source: temperature, shift: 0,  width_bits: 20,
+                  encode: { scale: 5242.88, offset: 262144.0 } }
+```
+
+Byte 3 of that word carries humidity[3:0] in its HIGH nibble and
+temperature[19:16] in its LOW nibble — neither a word boundary nor a `u32`.
+Without the key the only port is a CONSTANT payload, which freezes the part at
+one reading and makes its checksum a literal.
+
+`shift + width_bits` must fit inside `8 * width`, and `width` is 1..=8; both are
+load errors rather than silent truncation. Each field is rounded and saturated
+at its OWN bit width before `shift` places it — the same call
+`register_read_bytes` makes, so a field means the same thing in a register and
+in a response.
+
+### `i2c.not_ready_byte` — what a command device says while it is busy
+
+A command with `delay_us:` holds its response until the simulated clock reaches
+the deadline. Until then the part answers `0xFF` (open bus) unless the datasheet
+gives that byte a meaning:
+
+```yaml
+    not_ready_byte: 0x88     # AHT20: BUSY (bit 7) | CAL (bit 3)
+```
+
+⚠️ `0xFF` happens to carry BUSY and CAL too, which is exactly why this needs
+declaring rather than leaving to luck: a part whose ready flag is active-LOW
+would read READY the whole time it was busy.
+
+### `bits:` — one declared channel standing for eight, seeded by ONE integer
+
+A part whose channels are switch positions takes them as a BITMASK, not as eight
+floats. `bits:` says so:
+
+```yaml
+metadata:
+  config_keys:
+    - { name: inputs, ty: int,
+        doc: "Initial 8-bit input state (0..0xFF). Bit i seeds channel i." }
+  inputs:
+    - key: ch          # → ch0 … ch7
+      label: "D"       # → D0  … D7
+      unit: level
+      min: 0.0
+      max: 1.0
+      bits: { count: 8, config_key: inputs }
+```
+
+The group expands ONCE, in `DeviceDescriptor::from_yaml`, so the kit metadata,
+`peripherals-manifest.json`, `SimInput`, and a register field's `source:` all
+see eight ordinary channels and none of them knows the group existed. `count`
+channels are named `{key_prefix}{i}` / `{label_prefix}{i}`, defaulting to the
+entry's own `key` and `label`.
+
+`config_key` is what makes it a schema key rather than eight lines of copy-paste:
+bit *i* of the integer under that key seeds channel *i* — set ⇒ `max`, clear ⇒
+`min`. A channel's OWN key still wins when the placement sets it, so
+`inputs: 0xA5` with `ch1: 1` means what it reads like.
+
+⚠️ The 74HC165 was blocked on exactly this (PR #1186): four shipped manifests
+set `inputs: 165`, per-channel seeding could not express it, and a port without
+the key would have shipped a `config:` value that parses and changes nothing.
+It also brought SPI config seeding into existence at all — until that port
+`GenericSpiDevice` had no `seed_from_config`, so ANY starting value in an SPI
+part's `config:` was silently ignored.
+
 ## Edge-driven `gpio_device` parts
 
 A `gpio_device` is serviced on the peripheral tick. That is right for a part
@@ -1346,78 +1445,194 @@ porting".
 Three more were looked at in the register-shell round that ported `vl53l1x`,
 `bno055` and `bmp280`, and each is blocked on something specific:
 
-- **AHT20** — a command stream with no pointer, and three separate gaps. Its
-  BUSY bit is a stated **thunk**: the model's own header says "we don't actually
-  model elapsed time" and clears BUSY after a fixed COUNT of status reads, so a
-  `delay_us` port would be a different part that happens to answer the same
-  probe (the MAX30102 / DRV2605L disqualification, exactly). Its seven-byte
-  answer packs a status byte and two 20-bit measurements so that ONE byte
-  carries the low nibble of the humidity and the high nibble of the temperature,
-  which is not a `response[]` word boundary and does not fit `response_word_raw`'s
-  `u32` as a single 40-bit word either. And its CRC-8 covers all six preceding
-  bytes, which is neither `crc8.covers: response` (per 16-bit word) nor
-  `transaction` (the addressed SMBus frame). A constant-payload port would make
-  the checksum a literal and freeze the part at 25 °C / 50 %RH for ever, which
-  is what the model does and not what a descriptor should promise.
-- **BME280** — the one shipped Bosch model that DOES invert its compensation,
-  and it inverts it with a **binary search over the forward function**
-  (`invert_t` / `invert_p` / `invert_h` in `components/bme280.rs`, each bisecting
-  the exact `BME280_compensate_*_int32` reference code). `derived:` is names,
-  decimal literals, `+ - * /`, unary minus, parentheses and `abs/min/max`: no
-  square root, no iteration, no integer shift. Bosch's temperature half is
-  quadratic in `adc_T` (`dig_T3` multiplies the square) and its pressure half is
-  a rational function of `t_fine` and `adc_P`. The inverse becomes expressible
-  only if the calibration block is CHOSEN to degenerate (`dig_T3 = 0`,
-  `dig_P7..P9 = 0`) — a different part's factory calibration, and therefore a
-  deliberate change to prove against the vendor formula rather than something to
-  fold into a parity port. `bmp280.yaml` ported anyway, because that model
-  answers constants and inverts nothing; its header says so.
-- **SN74HC165** — expressible as a `spi_device` (`framing: { command_bytes: 0 }`
-  plus one byte-wide register whose eight one-bit `fields:` read the eight
-  channels, the exact shape `max31855.yaml` already has). What blocks it is the
-  placement key: the kit takes `inputs: 165`, ONE integer that seeds all eight
-  channels at once, and `examples/iolink-dido` plus three `iolink-station`
-  manifests set it. Descriptor seeding is one `config:` key per channel carrying
-  a float, so `inputs:` would parse and silently do nothing — the failure mode
-  `metadata.inputs[].config_key` exists to prevent. `crates/wasm/src/inputs.rs`
-  (`get_sn74hc165_inputs`) also reads the byte back by downcasting to the
-  concrete struct. Both are fixable; neither is fixable *inside* a parity port.
+- **AHT20** — ✅ **PORTED.** All three gaps are now general keys:
+  `crc8.covers: { bytes: 6 }` (one checksum over the first N ANSWER bytes),
+  `response[].fields` (a packed word up to 8 bytes whose fields straddle byte
+  boundaries — the shared nibble of byte 3 carries humidity[3:0] AND
+  temperature[19:16]), and `i2c.not_ready_byte` (the byte a command device
+  answers while a delayed response is cooking; `0x88` = BUSY | CAL here, where
+  the undeclared default is open bus).
+
+  ⚠️ The BUSY **thunk is gone, and it was load-bearing.** The deleted model's
+  own header said "we don't actually model elapsed time" and cleared BUSY after
+  two status READS. The descriptor uses `delay_us: 80000` — AHT20 rev 1.1 §5.4's
+  measurement time — on the same simulated microsecond clock every other delayed
+  part uses. That **broke `examples/nucleo-f407-i2c`**, which polled sixteen
+  times back-to-back (about 0.2 ms) and passed only because the model counted
+  reads; that firmware would have failed on the bench. It now waits the 80 ms,
+  and `aht20_migration_parity.rs` asserts both halves — BUSY at 79 999 µs, clear
+  at 80 000 µs, and NOT clear after a thousand reads that spend no time.
+
+  The measurement is no longer a constant either: `temperature` and `humidity`
+  are ordinary stimulus channels and the checksum is computed over what the twin
+  actually answered, which is what `response[].fields` bought. `aht20.rs` is
+  DELETED rather than kept as an oracle — two of the things it did are the two
+  things this port deliberately changes, so an oracle in `components/` would be
+  asserting them.
+- **BME280** — **STOPPED, and the blocker moved.** The plan was a general
+  `derived[].invert: { of: <forward expr>, over: [lo, hi], tol }` — a
+  deterministic bisection so a descriptor states the FORWARD datasheet formula
+  and the engine inverts it, which is exactly what `invert_t` / `invert_p` /
+  `invert_h` in `components/bme280.rs` do by hand against the exact
+  `BME280_compensate_*_int32` reference code.
+
+  Inversion is the *easy* half and `invert:` would be general. What stops the
+  port is the arithmetic the forward expression itself is written in.
+  `derived:` evaluates in **f64**, and Bosch's `_P_int64` does not fit:
+
+  - `((1i64 << 47) + var1) * dig_P1` — with the shipped `dig_P1 = 38221` that
+    product is `38221 × 2^47 ≈ 5.4e18`, about `2^62.2`. An f64 mantissa is 53
+    bits (`2^53 ≈ 9.0e15`), so values that size are representable only to
+    within about 1024, and the very next step is an arithmetic `>> 33` whose
+    FLOOR flips at the boundary.
+  - `(((p << 31) - var2) * 3125) / var1` — `p` reaches `2^20`, so the numerator
+    reaches `≈ 2^62.6`. Same problem, same place.
+
+  The temperature and humidity halves DO fit (their reference code is `i32`,
+  peaking at 419 430 400) and would need only `floor()` added to the expression
+  grammar to spell the arithmetic shifts. So a `derived[].invert` that landed
+  today would port two of the part's three channels and leave the third
+  hand-written — which is not a parity port, it is a part that is half a
+  descriptor.
+
+  ⚠️ The honest next step is an **integer/fixed-point evaluator** for `derived:`
+  (i64 with explicit shift and floor-division), and `invert:` on top of that.
+  Written down rather than half-built.
+
+  ⚠️ Separately: `bme280.rs` would NOT be deletable even after a port.
+  `crates/core/src/peripherals/nrf52/serial_instance.rs` attaches
+  `Bme280::new(0x76)` as a generic slave in `twim_path_reads_bme280_chip_id`, so
+  it would take the `bmp280.rs` route and move to the coverage ratchet's
+  EXCLUDED list as a byte-parity oracle. Checked, and said, because the question
+  changes what a port is worth.
+
+  `bmp280.yaml` ported anyway, because that model answers constants and inverts
+  nothing; its header says so.
+- **SN74HC165** — ✅ **PORTED.** It was listed here because of the placement
+  key: the kit takes `inputs: 165`, ONE integer that seeds all eight channels at
+  once, and `examples/iolink-dido` plus three `iolink-station` manifests set it,
+  while descriptor seeding was one `config:` key per channel carrying a float —
+  so `inputs:` would have parsed and silently done nothing. That gap is now the
+  general key `metadata.inputs[].bits:` (below), and the wire shape is the
+  `spi_device` the entry predicted: `framing: { command_bytes: 0 }` plus one
+  byte-wide register whose eight one-bit `fields:` read the eight channels, the
+  exact shape `max31855.yaml` has. `crates/wasm/src/inputs.rs`
+  (`get_sn74hc165_inputs`) now reads the byte back through
+  `GenericSpiDevice::input_value` instead of downcasting to the struct — the
+  same move `sim_input.rs` made for the ported I²C parts, and the one that stops
+  the accessor answering "no shifter wired" the day a part becomes a descriptor.
+  See `sn74hc165.yaml` and `sn74hc165_migration_parity.rs`.
 
 ### The pin-driven parts that did NOT port, and why
 
-- **Push button / contact** — not an `external_devices` part at all.
-  `Button` is what `SystemBus::attach_board_io_buttons` materialises from a
-  `board_io:` binding, and TWO of its properties are per-PLACEMENT: the
-  `active_high` polarity the canvas derives from which rail the other terminal
-  is on, and the stimulus channel KEY, which the binding picks out of a closed
-  set of six (`pressed`, `obstacle`, `field`, `vibration`, `motion`, `touch`) so
-  that a PIR is the same model under a word an agent can script. A descriptor's
-  `metadata.inputs` is static, so one descriptor cannot be six channel names,
-  and a `gpio_device` binds pads by config key rather than by the peripheral +
-  pin INDEX a `board_io` binding carries. The port is a change to the board_io
-  attach path first and a descriptor second.
-- **4×4 keypad** — `keypad.yaml` already exists and names the `matrix`
-  primitive, whose `pins:` are LIST-valued roles (`rows: row_pins`,
-  `cols: col_pins`, each a four-entry list). A `gpio_device` resolves one pad per
-  role from one config key, so the port is eight roles and eight keys — a change
-  to the descriptor's `emit:` block and to every placement, on both engines.
-- **Rotary encoder** — `rotary_encoder.yaml` names the `quadrature` primitive.
-  This one is genuinely close: `outputs: [CLK, DT]` on the existing `clk_pin` /
-  `dt_pin` keys, a 2 ms `timers:` entry, and rules that walk `phase` toward
-  `input(position) * 4` and drive the Gray code. Two things to settle first, and
-  both are observable: the model re-anchors its cadence on the first SERVICED
-  tick after a retarget (a descriptor's `{ timer: …, start: true }` anchors at
-  the last one), and `set_input` ROUNDS the detent count where `input()`
-  truncates. Named here rather than half-done.
-- **DHT22 / AM2302** — does not fit `timers:` honestly, and the numbers say why.
-  The model precomputes the whole frame as **83 absolute edge times** and answers
-  `sensor_high_at(cycle)` by binary search, so the pad level is exact at any
-  cycle. The information is in the pulse WIDTHS: a `0` bit is a 27 µs HIGH and a
-  `1` bit is a 70 µs HIGH, after a 50 µs LOW slot. A `timers:` descriptor moves
-  its pads on the peripheral TICK, so telling 27 µs from 70 µs needs a tick
-  interval of a few microseconds across the whole 40-bit frame — and
-  `period_from` reads a REGISTER field, which a part with no registers does not
-  have. The missing primitive is a declared edge SCHEDULE, not a timer.
+- **Push button / contact** — **STAYS RUST, and here is exactly why.** Checked
+  against the resident-device path, which is the thing that would have made it
+  portable: `config:`/placement cannot supply either of the two per-placement
+  properties, because a button has no `external_devices` entry to carry them.
+
+  1. **It is materialised from `board_io:`, not from `external_devices:`.**
+     `SystemBus::attach_board_io_buttons` (`bus/from_config.rs`) walks
+     `manifest.board_io` for `kind: button, signal: input`, resolves the named
+     PERIPHERAL, and builds a `Button` addressed by `(peripheral base, pin
+     index)`. A `gpio_device` descriptor resolves its pads from a `config:` key
+     holding a PAD LABEL (`"PC13"`), and a `board_io` binding has no `config:`
+     block and no pad label — it has a peripheral name and an integer. Two
+     different addressing schemes, and the descriptor path speaks only one.
+  2. **The stimulus channel KEY is per placement.** The binding picks one of six
+     words (`pressed`, `obstacle`, `field`, `vibration`, `motion`, `touch`) so a
+     PIR is the same contact under a word an agent can script blind.
+     `metadata.inputs` is static per descriptor, so one descriptor is one
+     channel name. `bits:` (above) fans one entry into MANY channels, but they
+     are all present at once — it does not let a placement CHOOSE which one
+     exists, and it should not: a part whose channel list depends on its wiring
+     is not a part, it is six parts.
+  3. **`active_high` is derived from the diagram**, not from the part. That one
+     alone would be an ordinary `config:` key.
+
+  So the port is a change to the `board_io` attach path first — pads addressed
+  by peripheral + index, and a placement-chosen channel name — and a descriptor
+  second. Neither belongs inside a parity port, and doing (3) alone would ship a
+  descriptor that cannot replace the model.
+- **4×4 keypad** — **STOPPED, and the entry needs a correction.** List-valued
+  `pins:` roles are NOT the missing thing: `SystemBus::pin_list_config`
+  (`bus/declarative_device.rs`) already reads a role whose `config:` value is a
+  list, which is how `keypad.yaml`'s `rows: row_pins` / `cols: col_pins` resolve
+  today. What it is not is GENERAL — it hardcodes `const EXPECTED: usize = 4`
+  and its error strings say "keypad", so it is a keypad-shaped special case
+  living inside `attach_matrix`, reachable by no other primitive.
+
+  The two real blockers, measured:
+
+  1. **`gpio_device` binds ONE pad per role.** `behavior.pins` and
+     `behavior.output_pins` are `BTreeMap<String, String>` — role → one
+     `config:` key holding one pad LABEL. A list-valued role would have to fan
+     out the way `metadata.inputs[].bits:` (above) fans out channels: one
+     declared role becoming `row0..row3`, each resolved from index *i* of the
+     list under one key. That is the same trick and would be general; it is not
+     written.
+  2. **A rule cannot address a pad by INDEX.** `Event::Pin { name, edge }`,
+     `Event::Pins` and `Action::Pin { name, level }` all carry a bare `String`,
+     and the load-time name validation checks it against the declared role set.
+     `pin(row[i])` does not parse, so even with (1) the sixteen-key scan would
+     have to be written out as sixteen rules over eight flat role names.
+
+  Doing it as eight flat roles and eight `config:` keys — which is possible
+  today — changes the emitted `external_devices` block from two LIST keys to
+  eight scalars, on both engines and in every shipped placement. That is a
+  migration, not a parity port, and it makes the descriptor WORSE at describing
+  the part: a keypad's rows are a set, and a schema that cannot say so is the
+  thing to fix.
+- **Rotary encoder** — the two observable questions are **SETTLED and PINNED**
+  (`crates/core/tests/rotary_encoder_semantics.rs`); the port is still open on a
+  third thing, named below.
+
+  1. **Where the cadence anchors.** Settled: on the first SERVICED tick after a
+     retarget, because the invariant that matters is that *no inter-edge gap is
+     ever shorter than one interval, the first one included*. An EC11's phase
+     figures are all MINIMUM durations, so a short phase is not a faster knob —
+     it is a phase a debouncing decoder may legitimately drop. The test measures
+     that invariant at four different sub-interval stimulus offsets, which is
+     precisely where a free-running `timers:` grid gets it wrong.
+  2. **`set_input` rounds where `input()` truncates.** Settled: ROUND, on both
+     sides. A detent is a discrete mechanical stop — there is no shaft position
+     2.6 detents from the origin — and truncation additionally biases the knob
+     toward zero, so half a detent clockwise counts and half a detent
+     anticlockwise does not. The test asserts the symmetry as well as the
+     rounding. ⚠️ That makes `input()`'s truncation the thing a port must
+     change, which is worth having written down before someone "fixes" it by
+     making `set_input` truncate to match the engine.
+
+  **Still open:** a descriptor's `timers:` has no way to RE-ANCHOR on a stimulus.
+  `start: on_reset` is a free-running grid and `start_on_write:` is keyed to a
+  REGISTER write, which a part with no registers never sees. Answer 1 above says
+  the anchor must move when the target does, so the port needs a timer that a
+  `set_input` can restart — a general key (`timers[].restart_on_input:`, say)
+  that does not exist yet. Named rather than approximated by a grid.
+- **DHT22 / AM2302** — **STOPPED.** The diagnosis stands (the model precomputes
+  83 absolute edge times and answers `sensor_high_at(cycle)` by binary search;
+  the information is in 27 µs vs 70 µs HIGH pulses after a 50 µs LOW slot, which
+  a tick-driven `timers:` cannot resolve). The plan was to generalise the
+  HC-SR04's existing edge-deadline path rather than invent a second scheduler.
+  Measured, that path is further from an edge SCHEDULE than its name suggests:
+
+  - **`HcSr04::take_edge_schedule` returns exactly two cycles**, `(rise, fall)`
+    — one pulse window, not a list — and `next_edge_deadline_cycle` likewise
+    hardcodes `[rise, fall]`. A DHT22 frame is 83 edges, so this is not a
+    generalisation of a list; it is the introduction of one.
+  - **It is not a trait.** `SystemBus::apply_hcsr04_event(sensor: usize)` indexes
+    a concrete `Vec<HcSr04>` on the bus (`bus/device_hooks.rs`). Every
+    bus-resident device that wants a deadline would first have to reach it
+    through `BusResidentDevice` instead.
+  - **It is `#[cfg(feature = "event-scheduler")]`.** With the flag off the path
+    does not exist, so a DHT22 built on it alone would be a part that works on
+    one build configuration — and the per-tick fallback is exactly what cannot
+    resolve 27 µs from 70 µs.
+
+  So a declared `schedule: [{ level, us }…]` emitted by an `emit_schedule` rule
+  action needs all three of those first: an N-edge list, on the resident-device
+  trait, with a tick-driven fallback that is honest about its resolution.
+  ⚠️ And porting `hc_sr04.yaml` onto it is then part of the same change, not a
+  follow-up — two schedulers for one concept is the thing to avoid.
 
 ## `timers[].period_from` — a field-driven timer period
 

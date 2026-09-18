@@ -78,6 +78,7 @@ nav:
     - Board onboarding: board_onboarding_playbook.md
     - Target support levels: target_support_rubric.md
     - Multi-node worlds: howto/multi-node.md
+    - SEGGER RTT logging: howto/segger-rtt.md
     - CI integration: ci_integration.md
     - Peripheral modeling: peripherals.md
     - Hardware Interaction Guide: hardware_interaction_guide.md
