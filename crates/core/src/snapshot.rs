@@ -71,6 +71,10 @@ pub struct ArmCpuSnapshot {
     #[serde(default)]
     pub pending_exceptions_hi: Vec<u64>,
     pub vtor: u32,
+    #[serde(default)]
+    pub waiting_for_event: bool,
+    #[serde(default)]
+    pub event_register: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -119,6 +123,8 @@ mod tests {
             pending_exceptions: 0,
             pending_exceptions_hi: Vec::new(),
             vtor: 0,
+            waiting_for_event: false,
+            event_register: false,
         })
     }
 

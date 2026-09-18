@@ -295,7 +295,8 @@ pub struct RunArgs {
     pub stop_on: Option<String>,
 
     /// Maximum number of simulator steps before exit (default: unlimited;
-    /// required when --system is given without --chip).
+    /// required when --system is given without --chip). In accelerated ARM
+    /// runs, each coalesced idle cycle also consumes one step of this budget.
     #[arg(long)]
     pub max_steps: Option<u64>,
 
@@ -367,16 +368,15 @@ pub struct RunArgs {
     ///
     /// This is an assertion, not a hint: the flag fails the run rather than
     /// falling back, on any chip family or option combination that cannot take
-    /// the batched path. On ARM it selects the batched loop; on RISC-V the
-    /// batched loop is already the default and the flag only refuses the
+    /// the batched path. ARM and RISC-V use batching by default for ordinary
+    /// runs. On RISC-V the flag refuses the
     /// per-instruction instrumentation (`--break-at`, the WiFi bridge, the DHCP
     /// trace) that would silently turn it back into single-stepping; on Xtensa
-    /// there is no `Machine`-driven path at all, so it is rejected outright.
+    /// this flag is not supported, so it is rejected outright.
     ///
-    /// Exists because the batched path is what users actually run in the
-    /// browser while the CLI default is not, which left engine changes to ARM
-    /// batch orchestration invisible to `scripts/perf/board_perf.py`. It also
-    /// prints a `[batched] ...` summary line to stderr on exit, so a caller can
+    /// Keeps throughput measurements explicit even when instrumentation would
+    /// otherwise select single-stepping. It also prints a `[batched] ...`
+    /// summary line to stderr on exit, so a caller can
     /// prove which path executed rather than assume it.
     #[arg(long = "batched")]
     pub batched: bool,

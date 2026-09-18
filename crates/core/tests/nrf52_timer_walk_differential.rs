@@ -115,6 +115,8 @@ impl Cpu for CycleCpu {
             pending_exceptions: 0,
             pending_exceptions_hi: Vec::new(),
             vtor: 0,
+            waiting_for_event: false,
+            event_register: false,
         })
     }
 
@@ -981,6 +983,8 @@ impl Cpu for PollingCpu {
             pending_exceptions: 0,
             pending_exceptions_hi: Vec::new(),
             vtor: 0,
+            waiting_for_event: false,
+            event_register: false,
         })
     }
     fn apply_snapshot(&mut self, _snapshot: &CpuSnapshot) {}

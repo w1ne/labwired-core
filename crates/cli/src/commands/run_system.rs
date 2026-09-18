@@ -191,6 +191,9 @@ pub(crate) fn run_firmware_with_system(
     };
     let (cpu, _nvic) = configure_cortex_m(&mut bus);
     let mut machine = Machine::new(cpu, bus);
+    machine.config.host_time_mode = args.time_mode;
+    machine.config.idle_fast_forward_enabled =
+        std::env::var("LABWIRED_IDLE_FAST_FORWARD").as_deref() != Ok("0");
     if let Err(e) = machine.load_firmware(&program) {
         emit_error(
             json,
@@ -238,7 +241,7 @@ pub(crate) fn run_firmware_with_system(
             .with_breakpoints(labwired_core::BreakpointPolicy::Ignore);
         match machine.advance(request) {
             Ok(report) => {
-                steps += report.primary_steps;
+                steps += report.fuel_consumed;
                 if report.primary_steps == 0 && report.idle_cycles == 0 {
                     break; // halt
                 }

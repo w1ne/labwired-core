@@ -5,12 +5,16 @@
 // See the LICENSE file in the project root for full license information.
 
 use crate::{Peripheral, SimResult};
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 
 /// Shared state for NVIC registers.
 #[derive(Debug)]
 pub struct NvicState {
+    /// Local Cortex-M event latch and SCR.SEVONPEND mirror. Disabled IRQs
+    /// still generate events when they transition to pending with SEVONPEND.
+    pub event_register: AtomicBool,
+    pub sev_on_pend: AtomicBool,
     pub iser: [AtomicU32; 8],
     pub ispr: [AtomicU32; 8],
     pub iabr: [AtomicU32; 8],
@@ -27,6 +31,13 @@ pub struct NvicState {
 }
 
 impl NvicState {
+    pub fn pend(&self, word: usize, mask: u32) {
+        let previous = self.ispr[word].fetch_or(mask, Ordering::SeqCst);
+        if mask & !previous != 0 && self.sev_on_pend.load(Ordering::Relaxed) {
+            self.event_register.store(true, Ordering::Relaxed);
+        }
+    }
+
     /// Read the configured priority byte for an external IRQ
     /// (`irq` is 0-based — exception_number minus 16).
     /// Used by CortexM::exception_priority for IRQs ≥ 16.
@@ -44,6 +55,8 @@ impl NvicState {
 impl Default for NvicState {
     fn default() -> Self {
         Self {
+            event_register: AtomicBool::new(false),
+            sev_on_pend: AtomicBool::new(false),
             iser: Default::default(),
             ispr: Default::default(),
             iabr: Default::default(),
@@ -159,7 +172,7 @@ impl Peripheral for Nvic {
         } else if (0x100..0x120).contains(&offset) {
             // ISPR: Writing 1 sets the pending bit
             let real_idx = reg_idx - 0x100 / 4;
-            self.state.ispr[real_idx].fetch_or(mask, Ordering::SeqCst);
+            self.state.pend(real_idx, mask);
         } else if (0x180..0x1A0).contains(&offset) {
             // ICPR: Writing 1 clears the pending bit
             let real_idx = reg_idx - 0x180 / 4;

@@ -1395,7 +1395,7 @@ pub(crate) fn run_browser_cortex_m_jit_window(
             }
             cpu.step(bus, observers, config)?;
             n = 1;
-        } else if cpu.it_state != 0 {
+        } else if cpu.it_state != 0 || cpu.waiting_for_event() {
             cpu.step(bus, observers, config)?;
             n = 1;
         } else {
@@ -1418,7 +1418,9 @@ pub(crate) fn run_browser_cortex_m_jit_window(
             bus.current_cycle += live_step * u64::from(n);
         }
         retired += n;
-        if cpu.sysreset_latched() {
+        if cpu.sysreset_latched()
+            || (config.idle_fast_forward_enabled && cpu.idle_fast_forward_budget(bus).is_some())
+        {
             break;
         }
     }

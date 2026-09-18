@@ -69,7 +69,7 @@ use labwired_core::boot::esp32s3_rom::RomImages;
 use labwired_core::bus::SystemBus;
 use labwired_core::cpu::RiscV;
 use labwired_core::memory::ProgramImage;
-use labwired_core::peripherals::components::{ssd1306, GenericDisplay};
+use labwired_core::peripherals::components::GenericDisplay;
 use labwired_core::peripherals::esp32c3::i2c::Esp32c3I2c;
 use labwired_core::{Arch, Bus, Cpu, DebugControl, Machine};
 use std::path::PathBuf;
@@ -294,11 +294,7 @@ fn run_classic_arduino_lab(
 
     let serial_bytes = booted.uart_sink.lock().unwrap().len();
     let total_cycles = booted.machine.total_cycles;
-    (
-        booted.machine.step_profile().clone(),
-        serial_bytes,
-        total_cycles,
-    )
+    (booted.machine.step_profile(), serial_bytes, total_cycles)
 }
 
 /// One row of the committed per-lab budget (`docs/coverage/lab-perf-budget.json`).

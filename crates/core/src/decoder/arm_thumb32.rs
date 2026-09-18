@@ -13,6 +13,14 @@ use super::{vfp_dp_regs, vfp_expand_imm8, Instruction};
 
 #[inline(always)]
 pub(super) fn decode_system(h1: u16, h2: u16) -> Option<Instruction> {
+    if h1 == 0xF3AF {
+        match h2 {
+            0x8002 => return Some(Instruction::Wfe),
+            0x8003 => return Some(Instruction::Wfi),
+            0x8004 => return Some(Instruction::Sev),
+            _ => {}
+        }
+    }
     // DMB / DSB / ISB — ARMv7-M A7.7.31/30/37. CLREX (func = 2) clears the
     // exclusive monitor, which this sim models as always-succeeding — all
     // four are architectural no-ops here.

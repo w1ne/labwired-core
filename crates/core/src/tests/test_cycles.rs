@@ -41,6 +41,8 @@ impl Cpu for MockCpu {
             pending_exceptions: 0,
             pending_exceptions_hi: Vec::new(),
             vtor: 0,
+            waiting_for_event: false,
+            event_register: false,
         })
     } // Dummy
     fn apply_snapshot(&mut self, _snapshot: &crate::snapshot::CpuSnapshot) {}

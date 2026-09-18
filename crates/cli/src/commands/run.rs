@@ -1761,20 +1761,20 @@ pub(crate) fn run_firmware_arm(
     // Run the step loop.
     let limit = args.max_steps.unwrap_or(u64::MAX);
 
-    // Opt-in batched orchestration (--batched): the path the browser runs.
-    // Kept behind the flag so the default `labwired run` for ARM — TIER1
-    // fixtures, labs, every existing test — keeps the exact `machine.step()`
-    // loop, byte for byte.
-    //
-    // Both loops live in their own `#[inline(never)]` function, and this is not
-    // cosmetic: with the two inlined into one body, adding the batched arm cost
-    // the SINGLE-STEP loop ~12 Ir/step (+0.6% on stm32l476) with its source
-    // untouched — LLVM's register allocation over the merged function changed.
-    // Splitting them puts each loop back in a frame whose codegen does not
-    // depend on the other's existence, which is what "the default path is
-    // unaffected" has to mean for a gate that measures instructions.
-    let faulted = if args.batched {
-        run_arm_batched_loop(&mut machine, limit)
+    // Normal runs use the scheduler without host throttling. Instrumented
+    // runs retain the per-instruction path; --batched explicitly requests it.
+    machine.config.idle_fast_forward_enabled =
+        std::env::var("LABWIRED_IDLE_FAST_FORWARD").as_deref() != Ok("0");
+    let fast = args.batched
+        || (args.gpio_trace.is_none()
+            && std::env::var("LABWIRED_ARM_TRACE").is_err()
+            && std::env::var("LABWIRED_ARM_SINGLE_STEP").as_deref() != Ok("1"));
+    let faulted = if fast {
+        run_arm_batched_loop(
+            &mut machine,
+            limit,
+            args.batched || std::env::var("LABWIRED_RUN_STATS").as_deref() == Ok("1"),
+        )
     } else {
         run_arm_step_loop(&mut machine, limit)
     };
@@ -1839,7 +1839,7 @@ fn run_arm_step_loop(
 
 /// One line of proof that the batched path ran, and how wide its batches were.
 ///
-/// Printed only under `--batched`, so no default run's stderr changes. A caller
+/// Printed only under `--batched` or explicit run stats, so default stderr is unchanged. A caller
 /// that asks for the batched path and gets no `[batched]` line back knows the
 /// run did not take it — which is the difference between a measurement and a
 /// guess. `steps_per_batch` is the observable that separates "batched" from
@@ -1879,11 +1879,9 @@ fn print_batched_summary(profile: labwired_core::StepProfile, tick_interval: u32
 ///     stored and ignored;
 ///   * the planned window must be wider than one instruction: that arm is gated
 ///     on `max_count > 1`, so at `peripheral_tick_interval == 1` every window is
-///     interpreted. `jit-core` deliberately does NOT enable `event-scheduler`
-///     (see the feature note in `crates/cli/Cargo.toml`), and without that
-///     feature `SystemBus::max_safe_tick_interval` (`crates/core/src/bus/policy.rs`)
-///     returns 1 for every board — so a plain `--features jit-core` CLI cannot
-///     dispatch a single Thumb block on ANY chip;
+///     interpreted. The CLI includes `event-scheduler` by default; a custom
+///     `--no-default-features` build without it reports interval 1 on every
+///     board and cannot dispatch a compiled Thumb block;
 ///   * the bus must not require cycle accuracy (`jit_gate_allows` refuses a
 ///     block when `requires_cycle_accurate()` holds — H5 FLASH, DHT-class GPIO
 ///     devices, legacy HC-SR04).
@@ -1970,6 +1968,7 @@ impl ArmJitState {
 fn run_arm_batched_loop(
     machine: &mut labwired_core::Machine<labwired_core::cpu::CortexM>,
     limit: u64,
+    report_stats: bool,
 ) -> bool {
     use labwired_core::{AdvanceRequest, AdvanceStop};
 
@@ -1993,24 +1992,27 @@ fn run_arm_batched_loop(
     let mut ran: u64 = 0;
     while ran < limit {
         let fuel = CHUNK.min(limit - ran);
-        let before = machine.step_profile().cpu_instructions;
-        let stop = match machine.advance(AdvanceRequest::run(Some(fuel))) {
-            Ok(report) => Some(report.stop),
+        match machine.advance(AdvanceRequest::run(Some(fuel))) {
+            Ok(report) => {
+                ran += report.fuel_consumed;
+                match report.stop {
+                    AdvanceStop::FirmwareExit { code } => {
+                        eprintln!(
+                            "[firmware] {} (step {ran})",
+                            crate::firmware_exit_message(code)
+                        );
+                        break;
+                    }
+                    AdvanceStop::NoProgress => break,
+                    _ if report.fuel_consumed == 0 => break,
+                    _ => {}
+                }
+            }
             Err(e) => {
-                // Same contract as the single-step loop above.
                 eprintln!("labwired run (arm, batched): simulation error: {e}");
                 faulted = true;
-                None
+                break;
             }
-        };
-        let delta = machine.step_profile().cpu_instructions - before;
-        ran += delta;
-        match stop {
-            // No forward progress (halt/idle with nothing left to skip): stop
-            // rather than spin re-issuing empty batches up to `limit`.
-            Some(AdvanceStop::NoProgress) | None => break,
-            Some(_) if delta == 0 => break,
-            Some(_) => {}
         }
     }
 
@@ -2050,11 +2052,17 @@ fn run_arm_batched_loop(
             "build(no-event-scheduler)"
         }
     };
-    print_batched_summary(
-        machine.step_profile(),
-        interval,
-        &format!(" jit={} tick_cap={tick_cap}", jit_state.marker()),
-    );
+    if report_stats {
+        print_batched_summary(
+            machine.step_profile(),
+            interval,
+            &format!(
+                " jit={} tick_cap={tick_cap} fuel={ran} idle_cycles={}",
+                jit_state.marker(),
+                machine.idle_fast_forward_cycles_skipped
+            ),
+        );
+    }
     faulted
 }
 

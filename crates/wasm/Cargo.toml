@@ -25,10 +25,9 @@ wasm-bindgen = "0.2.92"
 # transitive dep of `serde-wasm-bindgen`; pinning it here makes the direct
 # usage visible at the dep boundary.
 js-sys = "0.3"
-# Phase 2B.1 (issue #192): the event-driven peripheral scheduler. THIS is the
-# one crate that ships it — the CLI deliberately leaves it off — so any bug that
-# needs the feature to reproduce is a browser-only bug by construction, and only
-# `--features event-scheduler` lanes can see it (see the classic-ESP32 gate in
+# Phase 2B.1 (issue #192): the event-driven peripheral scheduler. This
+# feature is also enabled by default in the CLI. Core-only test lanes still
+# need `--features event-scheduler` to exercise it (see the classic-ESP32 gate in
 # `crates/core/tests/esp32_classic_walk_differential.rs`).
 #
 # The comment that used to live here claimed the browser's ESP32-classic bus had

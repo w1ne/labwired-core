@@ -44,7 +44,7 @@ ureq = { workspace = true }
 goblin = { workspace = true }
 
 [features]
-default = []
+default = ["event-scheduler"]
 # Silent-path census — pass-through to labwired-core's `silent-census`.
 # Measurement only; see the note on that feature. Build the measuring binary
 # with `cargo build -p labwired-cli --features silent-census` and point
@@ -54,14 +54,9 @@ silent-census = ["labwired-core/silent-census"]
 # feature. Build with `cargo build --release -p labwired-cli --features
 # jit-core` to enable the wasmtime-backed RV32IMC JIT.
 #
-# NOTE: this deliberately does NOT pull in `event-scheduler`. Enabling that
-# feature CLI-wide makes scheduler-driven peripherals defer work to events that
-# only `Machine::run` drains — the CLI's non-eligible manual step_batch path
-# does not, so coupling it here regressed unrelated chips (KW41Z stimulus,
-# ESP32/ESP32-S3 tier1 labs). The JIT-eligible C3 path drives `Machine::run` and
-# engages the JIT at its fixed tick window regardless of the scheduler, and the
-# JIT-on vs JIT-off differential is byte-identical either way (both arms tick
-# peripherals identically), so the scheduler is not required for this path.
+# JIT is optional because of its native compiler dependency. The event
+# scheduler is a separate default feature: all CLI run paths now drive
+# Machine's lifecycle, including scheduler drains.
 jit-core = ["labwired-core/jit"]
 # Event scheduler + walk-delete / idle-FF infrastructure. Build:
 #   cargo build -p labwired-cli --release --features event-scheduler
@@ -91,8 +86,8 @@ jit-core = ["labwired-core/jit"]
 # is green, and `tests/lifecycle_single_source.rs` fails if a CLI run path ever
 # forks the lifecycle again.
 #
-# Still NOT in `default`, and still not to be combined with `jit-core` for
-# general CLI use (see the note above).
+# Enabled by default so normal CLI runs can coalesce architectural sleep.
+# `--no-default-features` retains a per-cycle build for differential testing.
 event-scheduler = ["labwired-core/event-scheduler"]
 # Swap the built-in fuzzing loop for the LibAFL engine (havoc/splice mutators,
 # map-feedback scheduler, crash objectives). Heavy dependency tree, so opt-in:

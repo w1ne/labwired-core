@@ -46,7 +46,7 @@ pub(crate) fn reconcile_nvic_level(
         let bit = 1u32 << (irq % 32);
         if idx < 8 {
             if level {
-                nvic.ispr[idx].fetch_or(bit, std::sync::atomic::Ordering::SeqCst);
+                nvic.pend(idx, bit);
                 nvic.level_pended[idx].fetch_or(bit, std::sync::atomic::Ordering::SeqCst);
             } else if nvic.level_pended[idx].load(std::sync::atomic::Ordering::SeqCst) & bit != 0 {
                 nvic.ispr[idx].fetch_and(!bit, std::sync::atomic::Ordering::SeqCst);
@@ -65,7 +65,7 @@ fn pend_nvic(
         let idx = (irq / 32) as usize;
         let bit = irq % 32;
         if idx < 8 {
-            nvic.ispr[idx].fetch_or(1 << bit, std::sync::atomic::Ordering::SeqCst);
+            nvic.pend(idx, 1 << bit);
         }
     } else {
         interrupts.push(irq);

@@ -616,16 +616,6 @@ fn panel_artifact(bus: &SystemBus, include_bytes: bool) -> labwired_core::inspec
     found.remove(0)
 }
 
-/// Non-zero bytes on the glass. See the note on `painted_bytes` in
-/// `esp32s3_lcd_i80_pixels.rs`: it counts BYTES, exactly as `ink_bytes()` did.
-fn panel_ink(bus: &SystemBus) -> usize {
-    panel_artifact(bus, false)
-        .meta
-        .get("painted_bytes")
-        .and_then(serde_json::Value::as_u64)
-        .expect("an labwired_core::inspect::artifact_format::RGB565_BE565 artifact reports painted_bytes") as usize
-}
-
 fn doom_inputs() -> (ChipDescriptor, SystemManifest) {
     let root = core_root();
     let chip_yaml = root.join("configs/chips/esp32s3.yaml");

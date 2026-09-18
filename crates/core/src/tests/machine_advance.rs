@@ -160,6 +160,8 @@ impl Cpu for CountingCpu {
             pending_exceptions: self.pending.first().copied().unwrap_or(0),
             pending_exceptions_hi: self.pending.iter().skip(1).copied().collect(),
             vtor: 0,
+            waiting_for_event: false,
+            event_register: false,
         })
     }
 

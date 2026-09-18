@@ -157,6 +157,8 @@ pub struct Scb {
     pub vectactive: Arc<AtomicU32>,
     pub aircr: u32,
     pub scr: u32,
+    #[serde(skip)]
+    pub event_state: Option<Arc<super::nvic::NvicState>>,
     pub ccr: u32,
     #[serde(skip)]
     /// SHPR1 (offset 0x18) holds priorities for MemManage(4), BusFault(5),
@@ -273,6 +275,7 @@ impl Scb {
             vectactive: s.vectactive,
             aircr: 0,
             scr: 0,
+            event_state: None,
             ccr: 0,
             shpr1: s.shpr1,
             shpr2: s.shpr2,
@@ -475,7 +478,14 @@ impl Scb {
                 // Store masked: VECTKEY field reads back as 0 (matches silicon).
                 self.aircr = value & 0x0000_FFFF;
             }
-            0x10 => self.scr = value,
+            0x10 => {
+                self.scr = value;
+                if let Some(state) = &self.event_state {
+                    state
+                        .sev_on_pend
+                        .store(value & (1 << 4) != 0, Ordering::Relaxed);
+                }
+            }
             0x14 => self.ccr = value,
             0x18 => self.shpr1.store(value, Ordering::Relaxed),
             0x1C => self.shpr2.store(value, Ordering::Relaxed),
