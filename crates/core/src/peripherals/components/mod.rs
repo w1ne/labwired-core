@@ -13,6 +13,7 @@ pub mod bno055;
 pub mod button;
 pub mod can_testers;
 pub mod declarative_analog;
+pub mod declarative_artifact;
 pub mod declarative_display;
 pub mod declarative_expr;
 pub mod declarative_gpio;
@@ -28,6 +29,7 @@ pub mod h_bridge_motor;
 pub mod hc595;
 pub mod hc595_7seg;
 pub mod i2c_factory;
+pub mod i80_panel;
 pub mod ili9341_parallel;
 pub mod inmp441;
 pub mod iolink_master;
@@ -59,7 +61,6 @@ pub mod rule_machine;
 pub mod sensirion;
 pub mod servo;
 pub mod seven_seg_font;
-pub mod seven_segment;
 pub mod shm_i2c;
 pub mod sn74hc165;
 pub mod soil_moisture;
@@ -67,7 +68,6 @@ pub mod sps30;
 pub mod step_dir_motor;
 pub mod supply;
 pub mod tca9548a;
-pub mod tm1637_7seg;
 pub mod unipolar_stepper;
 /// Hand-written VEML7700 model, retained only as the byte-parity oracle the
 /// declarative descriptor is proven identical against (see `veml7700_parity`).
@@ -104,6 +104,7 @@ pub use i2c_factory::{
     build_external_i2c_device, build_i2c_device, build_i2c_tree, i2c_mux_child_ids,
     is_i2c_mux_type, validate_i2c_mux_topology,
 };
+pub use i80_panel::I80Panel;
 pub use ili9341_parallel::{Ili9341Parallel, ParallelPins};
 pub use iolink_master::{
     IolinkComSpeed, IolinkFrameKind, IolinkLinkState, IolinkMaster, IolinkXfer,
@@ -122,7 +123,6 @@ pub use shm_i2c::ShmI2c;
 pub use sn74hc165::Sn74hc165;
 pub use sps30::{Sps30, SPS30_ADDR};
 pub use tca9548a::Tca9548a;
-pub use tm1637_7seg::Tm1637;
 #[cfg(test)]
 pub use veml7700::{Veml7700, VEML7700_ADDR};
 pub use vl53l1x::Vl53l1x;

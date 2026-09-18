@@ -171,7 +171,7 @@ impl Lcd1602 {
     /// Bytes outside printable ASCII (`0x20`…`0x7E`) render as a space; the
     /// HD44780 ROM maps them to katakana or user glyphs that have no faithful
     /// single-`char` form. A display that is off reads as all spaces, mirroring
-    /// the way [`super::max7219::Max7219`] and [`super::tm1637_7seg::Tm1637`]
+    /// the way [`super::max7219::Max7219`] and the TM1637 descriptor
     /// blank their readback — reporting DDRAM here would render a picture the
     /// real panel is not showing.
     pub fn text(&self) -> String {

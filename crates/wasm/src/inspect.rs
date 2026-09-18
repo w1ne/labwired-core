@@ -962,8 +962,14 @@ impl WasmSimulator {
     }
 
     /// Return the decoded four-character text currently latched into a TM1637
-    /// 4-digit display. The TM1637 is GPIO bit-banged, so it is stored on the
-    /// bus side rather than inside a hardware bus peripheral.
+    /// 4-digit display.
+    ///
+    /// Read through the SAME artifact door every other panel uses. It used to
+    /// reach into `machine.bus.tm1637` — a typed field that existed only
+    /// because a GPIO-bound display had nowhere else to live. The display is
+    /// now one `BusResidentDevice` among many and reports through
+    /// `BusResidentDevice::evidence`, so this accessor cannot tell it apart
+    /// from an OLED except by the `format` it filters on.
     #[wasm_bindgen]
     pub fn get_tm1637_text(&self, device_id: &str) -> Result<String, JsValue> {
         // A panic here would throw a JS exception straight out of this wasm
@@ -971,25 +977,18 @@ impl WasmSimulator {
         // wasm-bindgen borrow guard would never drop and EVERY later call
         // would fail with "recursive use of an object". Never panic in an
         // accessor — answer neutrally instead.
-        let Some(machine) = self.machine.as_ref() else {
-            return Err(JsValue::from_str("simulator has no machine loaded"));
-        };
-        machine
-            .bus
-            .tm1637
-            .iter()
-            .find(|dev| dev.id == device_id)
-            .map(|dev| {
-                let mut text = dev.text();
-                if dev.colon() && text.len() >= 2 {
-                    text.insert(2, ':');
-                }
-                if !dev.display_on() {
-                    text.clear();
-                }
-                text
-            })
-            .ok_or_else(|| JsValue::from_str(&format!("TM1637 device '{}' not found", device_id)))
+        let artifact = self.panel_artifact(device_id, &[F::TM1637_GRID], None, false, "TM1637")?;
+        let meta = &artifact.meta;
+        let str_of = |k: &str| meta.get(k).and_then(|v| v.as_str()).unwrap_or("");
+        let bool_of = |k: &str| meta.get(k).and_then(serde_json::Value::as_bool) == Some(true);
+        let mut text = str_of("text").to_string();
+        if bool_of("colon") && text.len() >= 2 {
+            text.insert(2, ':');
+        }
+        if !bool_of("display_on") {
+            text.clear();
+        }
+        Ok(text)
     }
 
     /// Return the character shown on the direct-drive 7-segment digit
@@ -1002,33 +1001,31 @@ impl WasmSimulator {
     ///
     /// The lit-segment mask is polarity-normalised by the model (COM low =
     /// common cathode, COM high = common anode), so the text reads the same
-    /// either way it is wired.
+    /// either way it is wired. Like the TM1637 above, this now reads the
+    /// artifact rather than a typed bus field.
     #[wasm_bindgen]
     pub fn get_seven_segment_text(&self, device_id: &str) -> Result<String, JsValue> {
-        // A panic here would throw a JS exception straight out of this wasm
-        // frame; JS exceptions do NOT run Rust destructors, so the
-        // wasm-bindgen borrow guard would never drop and EVERY later call
-        // would fail with "recursive use of an object". Never panic in an
-        // accessor — answer neutrally instead.
-        let Some(machine) = self.machine.as_ref() else {
-            return Err(JsValue::from_str("simulator has no machine loaded"));
-        };
-        machine
-            .bus
-            .seven_segment
-            .iter()
-            .find(|dev| dev.id == device_id)
-            .map(|dev| {
-                let mut text = String::new();
-                text.push(dev.ch());
-                if dev.decimal_point() {
-                    text.push('.');
-                }
-                text
-            })
-            .ok_or_else(|| {
-                JsValue::from_str(&format!("7-segment device '{}' not found", device_id))
-            })
+        let artifact = self.panel_artifact(
+            device_id,
+            &[F::SEVEN_SEGMENT_MASK],
+            None,
+            false,
+            "7-segment",
+        )?;
+        let meta = &artifact.meta;
+        let mut text = meta
+            .get("text")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        if meta
+            .get("decimal_point")
+            .and_then(serde_json::Value::as_bool)
+            == Some(true)
+        {
+            text.push('.');
+        }
+        Ok(text)
     }
 
     /// Return the SSD1680 tri-color e-paper framebuffer for the device identified by `device_id`.

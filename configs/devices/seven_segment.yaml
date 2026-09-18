@@ -1,0 +1,133 @@
+# Single-digit direct-drive 7-segment LED display. Declarative `gpio_device`;
+# replaces the hand-written `components/seven_segment.rs`, whose behaviour is
+# pinned verbatim in `crates/core/tests/gpio_artifact_migration_parity.rs`.
+#
+# ── The part ───────────────────────────────────────────────────────────────
+#
+# The bare display: eight segment pins (A–G plus DP) and one common pin, each
+# wired straight to a GPIO. No driver chip, no bus, no protocol. Sampling is
+# purely COMBINATIONAL — what the digit shows is a function of the nine pad
+# levels right now, with no history at all.
+#
+# ── Why this part needed the simultaneous-pad event ────────────────────────
+#
+# ⚠️ THE MASK MUST BE RECOMPUTED AFTER *ANY* OF THE NINE PADS MOVES, FROM THE
+# LEVELS OF ALL NINE. That is one sentence and it is exactly what a per-pad
+# `on: { pin: X }` rule cannot say. Firmware drives a digit with ONE store —
+# `BSRR = 0x3F | (0x1C0 << 16)` lights a '0' and clears the rest in a single
+# instruction — and nine separate edge events decompose that store into nine
+# sequential recomputations, eight of which read a pad that has already moved
+# at its OLD level. The intermediate glyphs are not what the panel showed.
+#
+# `on: { pins: [...] }` is the fix: the engine resamples every observed pad,
+# installs the whole snapshot, and THEN raises one event. Inside the rule,
+# `pin(X)` is the post-store level of every pad, so the mask below is the
+# function the datasheet describes rather than a replay of an arbitrary order.
+#
+# The alternative considered and refused was nine copies of one 60-term
+# expression, one per pad's edge rule — nine places to edit a polarity fold,
+# which is the drift this whole seam exists to remove.
+#
+# ── COM polarity, folded in ────────────────────────────────────────────────
+#
+# The same part is sold in both wirings, and which one is in use is inferred
+# from the level firmware holds COM at:
+#
+#   * COM LOW  ⇒ common CATHODE. The shared pin is the cathode tied low, so a
+#     segment conducts (lights) when its own pin is driven HIGH.
+#   * COM HIGH ⇒ common ANODE. The shared pin is the anode tied high, so a
+#     segment conducts (lights) when its own pin is pulled LOW.
+#
+# `lit` therefore always reports WHICH SEGMENTS ARE LIT, in the standard
+# `0b0gfedcba` layout (dp = bit 7), regardless of wiring — a reader never has
+# to know the polarity to read the digit. `pin(X) != pin(COM)` is that fold in
+# one term per segment: a segment is lit exactly when its pad differs from the
+# common pad.
+#
+# ⚠️ An ODR that does not read back defaults to LOW here, which is the OPPOSITE
+# of the TM1637's default and deliberately so. This is not a pulled-up two-wire
+# bus, it is nine push-pull LED pins, and an output register nobody drives is a
+# segment nobody is lighting. The deleted `maybe_sample_seven_segment` hook and
+# the model that replaced it both defaulted this way; flipping it would light
+# every segment of an unresolved digit on a common-anode wiring.
+#
+# ⚠️ NOT MODELLED, named rather than faked:
+#   * **Multiplexing.** A multi-digit panel strobes one digit at a time and
+#     relies on persistence of vision. This is ONE digit; a scanned panel is
+#     the TM1637 or a 74HC595 module, both of which latch instead.
+#   * **Brightness / current limiting.** A segment is lit or it is not.
+type: seven-segment
+
+behavior:
+  primitive: gpio_device
+
+  # Nine pads the MCU drives and this part observes. Order is the segment bit
+  # order the shared font expects: A = bit 0 … G = bit 6, DP = bit 7.
+  pins:
+    A: a_pin
+    B: b_pin
+    C: c_pin
+    D: d_pin
+    E: e_pin
+    F: f_pin
+    G: g_pin
+    DP: dp_pin
+    COM: com_pin
+
+  vars:
+    # The lit-segment mask, `0b0gfedcba` with dp on bit 7. Polarity is already
+    # folded in, so this is what a human sees — and it is the artifact's whole
+    # RAM.
+    lit: 0
+
+  rules:
+    # ONE rule, one event, one expression. `pin(X) != pin(COM)` is the polarity
+    # fold; the shift is the segment's bit position. Every term reads the
+    # SAME snapshot, which is the point.
+    - on: { pins: [A, B, C, D, E, F, G, DP, COM] }
+      do:
+        - var: { name: lit, value: "((pin(A) != pin(COM)) << 0) | ((pin(B) != pin(COM)) << 1) | ((pin(C) != pin(COM)) << 2) | ((pin(D) != pin(COM)) << 3) | ((pin(E) != pin(COM)) << 4) | ((pin(F) != pin(COM)) << 5) | ((pin(G) != pin(COM)) << 6) | ((pin(DP) != pin(COM)) << 7)" }
+
+  # What the digit shows. The rules fill `lit`; the engine renders it.
+  artifact:
+    kind: text_display
+    format: seven_segment_mask
+    ram: { vars: [lit] }
+    decode: { font: seven_segment, digits: 1 }
+    meta:
+      # The raw mask, so a reader can see a pattern the font does not name.
+      - { key: segments, value: "var(lit)" }
+      # Bit-counting is not in the expression language — see `ArtifactMetaField`
+      # for why it is a derived source rather than a `popcount()` operator.
+      - { key: lit_segments, source: lit_bits }
+      - { key: decimal_point, value: "var(lit) & 0x80", type: bool }
+
+metadata:
+  label: "7-Segment Display (single digit)"
+  summary: "Bare single-digit 7-segment LED display driven straight from nine GPIO pins."
+  detail: "The raw display with no driver chip: segment pins A-G plus DP and one common pin, each wired directly to a GPIO. There is no protocol and no state machine - the lit segments are recomputed from all nine pad levels after any store that moves one of them, from a single snapshot rather than pad by pad. COM polarity is inferred from the level the firmware holds the common pin at: COM low means common cathode (a segment lights when its pin is HIGH), COM high means common anode (a segment lights when its pin is LOW). The readback always reports which segments are lit regardless of wiring, decoded to a character through the standard a-g/dp segment font. NOT modelled: multiplexing across digits, and brightness."
+  category: gpio
+  config_keys:
+    - { name: a_pin, ty: str, doc: "GPIO pin driving segment A (e.g. \"PA0\")." }
+    - { name: b_pin, ty: str, doc: "GPIO pin driving segment B (e.g. \"PA1\")." }
+    - { name: c_pin, ty: str, doc: "GPIO pin driving segment C (e.g. \"PA2\")." }
+    - { name: d_pin, ty: str, doc: "GPIO pin driving segment D (e.g. \"PA3\")." }
+    - { name: e_pin, ty: str, doc: "GPIO pin driving segment E (e.g. \"PA4\")." }
+    - { name: f_pin, ty: str, doc: "GPIO pin driving segment F (e.g. \"PA5\")." }
+    - { name: g_pin, ty: str, doc: "GPIO pin driving segment G (e.g. \"PA6\")." }
+    - { name: dp_pin, ty: str, doc: "GPIO pin driving the decimal point (e.g. \"PA7\")." }
+    - { name: com_pin, ty: str, doc: "GPIO pin driving the common pin (e.g. \"PA8\"). Its level selects the wiring: low = common cathode, high = common anode." }
+  inputs: []
+
+emit:
+  connection: gpio
+  config:
+    - { key: a_pin, from_part_pins: [A] }
+    - { key: b_pin, from_part_pins: [B] }
+    - { key: c_pin, from_part_pins: [C] }
+    - { key: d_pin, from_part_pins: [D] }
+    - { key: e_pin, from_part_pins: [E] }
+    - { key: f_pin, from_part_pins: [F] }
+    - { key: g_pin, from_part_pins: [G] }
+    - { key: dp_pin, from_part_pins: [DP] }
+    - { key: com_pin, from_part_pins: [COM] }

@@ -2028,6 +2028,14 @@ pub struct DeviceBehavior {
     /// clock of its own, which is every descriptor written before this existed.
     #[serde(default)]
     pub timers: Vec<DeviceTimer>,
+    /// **What this part SHOWS** — the artifact a reader (the browser, `inspect`,
+    /// `panel_artifact_evidence`) can paint, rendered from the part's own RAM
+    /// by the engine rather than by a hand-written model. See [`ArtifactSpec`].
+    ///
+    /// Absent for every part that shows nothing, which is every descriptor
+    /// written before this key existed.
+    #[serde(default)]
+    pub artifact: Option<ArtifactSpec>,
     /// **Derived measurement channels** — named values computed from the
     /// device's stimulus channels (and from earlier derived names) by a small
     /// arithmetic expression, evaluated fresh on every read. A `source:` on a
@@ -2036,6 +2044,219 @@ pub struct DeviceBehavior {
     /// descriptor written before this existed. See [`DerivedChannel`].
     #[serde(default)]
     pub derived: Vec<DerivedChannel>,
+}
+
+// ─── declared artifacts ────────────────────────────────────────────────────
+
+/// **The artifact a part publishes**, declared rather than coded.
+///
+/// ## Why this is a key on the primitive and not a primitive of its own
+///
+/// Three display-ish parts were looked at together: the TM1637 (2-wire
+/// bit-bang), the bare 7-segment digit (nine pads, no protocol at all) and the
+/// MAX7219 (SPI, 16-bit frames). A `digit_driver` primitive justified by them
+/// would be a wrapper: they share no ACQUISITION at all, and the MAX7219 does
+/// not even share the OUTPUT — it is an 8x8 row matrix with no font and no
+/// text. What the first two share is exactly this: a RAM the rules fill, and a
+/// declaration saying how to render it. That is a key, on whatever primitive
+/// already knows how to fill the RAM.
+///
+/// So the same `artifact:` block is read by the `gpio_device` primitive
+/// (published through `BusResidentDevice::evidence()`) and by the `spi_device`
+/// primitive (published through `SpiDevice::artifacts()`). The rules fill the
+/// RAM; the engine renders. Neither half knows what the part is.
+///
+/// ## The shape it must produce
+///
+/// Byte for byte what the hand-written models published, because the readers
+/// are already written against that shape: `kind` selects the surface
+/// (`text_display` for decoded characters, `framebuffer` for packed pixels),
+/// `meta.format` names the packing, `meta.generation` is the cheap content hash
+/// a poller diffs, and everything else is declared.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct ArtifactSpec {
+    /// `text_display` (decoded characters) or `framebuffer` (packed pixels).
+    /// These are the two kinds `crate` readers treat as paintable; a third
+    /// spelling would publish an artifact no surface renders, so it is refused
+    /// at load.
+    pub kind: String,
+    /// Optional artifact-id SUFFIX, for a part that publishes more than one.
+    ///
+    /// ⚠️ NOT an absolute id. The artifact is addressed by the DEVICE's
+    /// manifest id, which is what joins it to the placement a reader is looking
+    /// at; a literal id in a descriptor would make two placements of the same
+    /// part publish the same artifact. When present the id becomes
+    /// `"<device id>.<suffix>"`.
+    #[serde(default)]
+    pub id: Option<String>,
+    /// `meta.format` — the ONE name for how these bytes are packed. Must match
+    /// a `crate::inspect::artifact_format` constant on the engine side; the
+    /// reader matches on it instead of downcasting to a Rust type.
+    #[serde(default)]
+    pub format: Option<String>,
+    /// Where the bytes come from (see [`ArtifactRam`]).
+    pub ram: ArtifactRam,
+    /// How to turn those bytes into something a human reads (see
+    /// [`ArtifactDecode`]). Absent ⇒ the bytes are published as they stand,
+    /// which is what a framebuffer wants.
+    #[serde(default)]
+    pub decode: Option<ArtifactDecode>,
+    /// Extra `meta` entries, in declaration order (see [`ArtifactMetaField`]).
+    #[serde(default)]
+    pub meta: Vec<ArtifactMetaField>,
+    /// Whether the RAM is also published as the artifact's `bytes` payload,
+    /// gated behind `include_bytes` like every other large payload.
+    ///
+    /// Defaults to FALSE, which is what the two segment displays want: four or
+    /// six bytes are metadata-sized and the hand-written models published
+    /// `bytes: None`. A framebuffer says `bytes: true`.
+    #[serde(default)]
+    pub bytes: bool,
+}
+
+/// Where a declared artifact's bytes come from: the part's own RAM.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
+pub struct ArtifactRam {
+    /// Variables, in order, each contributing its LOW BYTE.
+    ///
+    /// Order is the artifact's byte order, and the list is the artifact's whole
+    /// extent — a var the rules keep but the panel does not show is simply not
+    /// listed. (The TM1637 has six GRID registers and a four-digit module: the
+    /// pointer wraps modulo six, and the artifact is the first four.)
+    #[serde(default)]
+    pub vars: Vec<String>,
+    /// A FIFO, oldest entry first, each entry contributing its low byte.
+    /// Mutually exclusive with `vars:`.
+    #[serde(default)]
+    pub fifo: Option<String>,
+}
+
+/// Which font decodes a declared artifact's RAM.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ArtifactFont {
+    /// The standard `0b0gfedcba` 7-segment font (dp on bit 7), shared by the
+    /// TM1637, the bare digit and the 74HC595 modules. One table: forking it
+    /// per driver is how two renderings of the same byte drift apart.
+    SevenSegment,
+    /// No decode — the bytes are pixels, not glyphs.
+    #[default]
+    None,
+}
+
+/// How a declared artifact's RAM becomes text.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
+pub struct ArtifactDecode {
+    /// Which font (see [`ArtifactFont`]).
+    #[serde(default)]
+    pub font: ArtifactFont,
+    /// How many leading RAM bytes become `meta.text`. Absent ⇒ all of them.
+    #[serde(default)]
+    pub digits: Option<usize>,
+}
+
+/// One declared `meta` entry.
+///
+/// Exactly one of [`value`](Self::value) and [`source`](Self::source) — an
+/// entry that declared both would have two answers and no rule for picking one.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct ArtifactMetaField {
+    /// The `meta` key, verbatim. These strings are read by the browser and by
+    /// the wasm accessors, so they are part of the contract.
+    pub key: String,
+    /// An expression over the part's own state — `var()`, `reg()`, `input()`,
+    /// `pin()`, the whole vocabulary a rule has. This is the common case:
+    /// `display_on`, `brightness`, `colon`.
+    #[serde(default)]
+    pub value: Option<String>,
+    /// An ENGINE-DERIVED quantity over the rendered RAM, for the facts an
+    /// expression cannot reach because the language has no bit-counting:
+    ///
+    /// * `lit_bits` — total set bits across the RAM (the TM1637's
+    ///   `lit_segments`, the MAX7219's `lit_pixels`).
+    /// * `ink_bytes` — how many RAM bytes are non-zero.
+    /// * `bytes` — how many bytes the RAM has.
+    #[serde(default)]
+    pub source: Option<String>,
+    /// How the number is published: `int` (the default) or `bool` (non-zero is
+    /// `true`). A `bool` is not cosmetic — `display_on` is read as a JSON
+    /// boolean by the wasm accessor and by the browser, and an integer there
+    /// would be a different artifact.
+    #[serde(default)]
+    pub r#type: ArtifactMetaType,
+}
+
+/// The JSON type a declared `meta` entry publishes.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ArtifactMetaType {
+    #[default]
+    Int,
+    Bool,
+}
+
+impl ArtifactSpec {
+    /// Static contract check, shared by every primitive that can carry one.
+    pub fn validate(&self, part: &str) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            matches!(self.kind.as_str(), "text_display" | "framebuffer"),
+            "part '{part}' declares `artifact.kind: {}` — the paintable kinds are \
+             `text_display` and `framebuffer`, and a third spelling would publish an artifact \
+             no surface renders",
+            self.kind
+        );
+        anyhow::ensure!(
+            self.ram.vars.is_empty() != self.ram.fifo.is_none(),
+            "part '{part}' must declare exactly one of `artifact.ram.vars` or \
+             `artifact.ram.fifo`; an artifact with no RAM would publish an empty panel that \
+             looks like a working one"
+        );
+        for (i, field) in self.meta.iter().enumerate() {
+            anyhow::ensure!(
+                field.value.is_some() != field.source.is_some(),
+                "part '{part}' artifact.meta[{i}] ('{}') must declare exactly one of `value:` \
+                 (an expression) and `source:` (an engine-derived quantity)",
+                field.key
+            );
+            if let Some(src) = &field.source {
+                anyhow::ensure!(
+                    matches!(src.as_str(), "lit_bits" | "ink_bytes" | "bytes"),
+                    "part '{part}' artifact.meta[{i}] ('{}') names source '{src}'; the derived \
+                     quantities are lit_bits, ink_bytes and bytes",
+                    field.key
+                );
+            }
+            if let Some(expr) = &field.value {
+                crate::expr::Expr::parse(expr).map_err(|e| {
+                    anyhow::anyhow!(
+                        "part '{part}' artifact.meta[{i}] ('{}'): {e} — in `{expr}`",
+                        field.key
+                    )
+                })?;
+            }
+            anyhow::ensure!(
+                !matches!(field.key.as_str(), "format" | "generation"),
+                "part '{part}' artifact.meta[{i}] redeclares '{}', which the engine stamps \
+                 itself",
+                field.key
+            );
+        }
+        if let Some(decode) = &self.decode {
+            if let Some(digits) = decode.digits {
+                let ram_len = if self.ram.vars.is_empty() {
+                    usize::MAX
+                } else {
+                    self.ram.vars.len()
+                };
+                anyhow::ensure!(
+                    digits > 0 && digits <= ram_len,
+                    "part '{part}' declares `artifact.decode.digits: {digits}` over {ram_len} \
+                     RAM byte(s)"
+                );
+            }
+        }
+        Ok(())
+    }
 }
 
 /// One **derived channel**: a named value computed from other channels.

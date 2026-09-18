@@ -117,6 +117,66 @@ impl Rig {
     }
 }
 
+// ─── the panel, read by ARTIFACT rather than by concrete type ──────────────
+//
+// Every assertion below about WHAT WAS PAINTED used to start with
+// `bus.observed_of::<Ili9341Parallel>()`. That lookup answers an empty
+// iterator for a panel of any other type — including this same panel the day
+// it becomes a `configs/devices/*.yaml` descriptor — so `.next().expect(...)`
+// would either panic or, worse, the `.count()` assertions would have had to be
+// relaxed and the byte-exact tests would have stopped measuring the pixels.
+//
+// A FORMAT is what the panel says it holds, in its own words, and it survives
+// the port: `rgb565_be`, with `w`/`h`/`painted_bytes` in `meta` and the
+// oriented framebuffer as the payload.
+
+/// The single `rgb565_be` panel artifact on this bus.
+fn panel_artifact(bus: &SystemBus, include_bytes: bool) -> labwired_core::inspect::Artifact {
+    let opts = labwired_core::inspect::InspectOpts {
+        include_bytes,
+        peripheral: None,
+    };
+    let mut found = bus
+        .display_artifacts_of_format(&[labwired_core::inspect::artifact_format::RGB565_BE], &opts);
+    assert_eq!(
+        found.len(),
+        1,
+        "exactly one RGB565 panel must report on this bus; found {}",
+        found.len()
+    );
+    found.remove(0)
+}
+
+/// `(logical width, logical height)` off the artifact's `meta`.
+fn panel_dims(bus: &SystemBus) -> (usize, usize) {
+    let a = panel_artifact(bus, false);
+    let get = |k: &str| a.meta.get(k).and_then(serde_json::Value::as_u64).unwrap() as usize;
+    (get("w"), get("h"))
+}
+
+/// The oriented framebuffer, as the panel publishes it.
+fn panel_framebuffer(bus: &SystemBus) -> Vec<u8> {
+    panel_artifact(bus, true)
+        .bytes
+        .expect("a full-mode artifact carries its payload")
+}
+
+/// Non-zero bytes on the glass — the artifact's own count.
+///
+/// ⚠️ This is `meta.painted_bytes`, and `painted_bytes` counts NON-ZERO BYTES,
+/// not lit pixels: a pixel whose RGB565 value happens to be `0x0000` (black)
+/// contributes nothing and `0x00FF` contributes one. That is exactly what
+/// `Ili9341Parallel::ink_bytes` counted, over a permutation of the same bytes,
+/// which is why the substitution is byte-for-byte and not an approximation —
+/// `painted_bytes_counts_what_ink_bytes_counted` below pins it.
+fn panel_ink(bus: &SystemBus) -> usize {
+    panel_artifact(bus, false)
+        .meta
+        .get("painted_bytes")
+        .and_then(serde_json::Value::as_u64)
+        .expect("an RGB565 artifact reports painted_bytes") as usize
+}
+
 fn build_bus() -> Rig {
     let mut bus = SystemBus::new();
     let wiring = configure_xtensa_esp32s3(&mut bus, &Esp32s3Opts::default());
@@ -155,7 +215,18 @@ board_io: []
     )
     .expect("parse manifest");
     attach_esp32_external_devices(&mut bus, &manifest).expect("attach parallel panel");
-    assert_eq!(bus.observed_of::<labwired_core::peripherals::components::ili9341_parallel::Ili9341Parallel>().count(), 1, "panel attached");
+    assert_eq!(
+        bus.display_artifacts_of_format(
+            &[labwired_core::inspect::artifact_format::RGB565_BE],
+            &labwired_core::inspect::InspectOpts {
+                include_bytes: false,
+                peripheral: None,
+            },
+        )
+        .len(),
+        1,
+        "panel attached"
+    );
     // The kit must bind the panel to LCD_CAM as well as to the GPIO observer;
     // without that binding the i80 path has nothing to paint and every
     // assertion below would fail for the wrong reason.
@@ -326,13 +397,9 @@ fn i80_transaction_streams_pixels_into_the_panel_framebuffer() {
     }
     send_dma_transaction(&mut bus, 0x2C, &payload); // RAMWR
 
-    let panel = bus
-        .observed_of::<labwired_core::peripherals::components::ili9341_parallel::Ili9341Parallel>()
-        .next()
-        .expect("parallel panel attached");
-    let (lw, lh) = panel.logical_dimensions();
+    let (lw, lh) = panel_dims(&bus);
     assert_eq!((lw, lh), (320, 240), "MADCTL 0x28 gives landscape 320x240");
-    let fb = panel.oriented_framebuffer();
+    let fb = panel_framebuffer(&bus);
 
     // Region bound: every painted pixel is inside the window, in order.
     for (i, want) in pixels.iter().enumerate() {
@@ -359,7 +426,14 @@ fn i80_transaction_streams_pixels_into_the_panel_framebuffer() {
         }
     }
     assert_eq!(lit, (W * H) as usize, "exactly the window is lit");
-    assert!(panel.display_on(), "DISPON reached the panel");
+    assert_eq!(
+        panel_artifact(&bus, false)
+            .meta
+            .get("display_on")
+            .and_then(serde_json::Value::as_bool),
+        Some(true),
+        "DISPON reached the panel"
+    );
 }
 
 /// TRANS_DONE must stay low while the outlink chain is still streaming.
@@ -406,11 +480,7 @@ fn trans_done_is_withheld_until_the_outlink_chain_drains() {
         !trans_done(&mut bus),
         "TRANS_DONE latched while the chain was still draining"
     );
-    let partial = bus
-        .observed_of::<labwired_core::peripherals::components::ili9341_parallel::Ili9341Parallel>()
-        .next()
-        .expect("parallel panel attached")
-        .ink_bytes();
+    let partial = panel_ink(&bus);
     assert!(partial > 0, "no pixels moved on the first tick");
 
     let ticks = 1 + tick_until(&mut bus, 4096, trans_done);
@@ -424,10 +494,7 @@ fn trans_done_is_withheld_until_the_outlink_chain_drains() {
         "GDMA must latch OUT_EOF when the chain drains"
     );
     assert!(
-        bus.observed_of::<labwired_core::peripherals::components::ili9341_parallel::Ili9341Parallel>()
-        .next()
-        .expect("parallel panel attached")
-        .ink_bytes() > partial,
+        panel_ink(&bus) > partial,
         "the rest of the chain never reached the panel"
     );
 }
@@ -464,10 +531,7 @@ fn outlink_walk_stops_at_suc_eof_not_at_the_end_of_the_pool() {
 
     // Exactly one pixel: 2 non-zero bytes. The stale node would have added 256.
     assert_eq!(
-        bus.observed_of::<labwired_core::peripherals::components::ili9341_parallel::Ili9341Parallel>()
-        .next()
-        .expect("parallel panel attached")
-        .ink_bytes(),
+        panel_ink(&bus),
         2,
         "walk ran past the suc_eof descriptor into the stale pool tail"
     );
@@ -478,6 +542,11 @@ fn outlink_walk_stops_at_suc_eof_not_at_the_end_of_the_pool() {
 #[test]
 fn gpio_bitbang_path_still_paints_without_lcd_cam() {
     let bus = build_bus();
+    // ⚠️ The ONE remaining concrete reach in this file, and it is not a
+    // readback: this test drives the panel's PADS by hand, which is the GPIO
+    // bit-bang path itself. It goes when the model does — the ported panel is
+    // driven through its `GpioObserver` instead. Everything it ASSERTS below
+    // still comes off the artifact.
     let panel = bus.observed_arcs_of::<labwired_core::peripherals::components::ili9341_parallel::Ili9341Parallel>()
         .next()
         .expect("parallel panel attached");
@@ -498,8 +567,107 @@ fn gpio_bitbang_path_still_paints_without_lcd_cam() {
     strobe(false, 0x2C); // RAMWR
     strobe(true, 0x07E0); // one green pixel
 
-    assert!(panel.display_on(), "DISPON via GPIO edges");
-    let fb = panel.framebuffer();
+    // The readback is the artifact, exactly as on the i80 path.
+    let artifact = panel_artifact(&bus, true);
+    assert_eq!(
+        artifact
+            .meta
+            .get("display_on")
+            .and_then(serde_json::Value::as_bool),
+        Some(true),
+        "DISPON via GPIO edges"
+    );
+    let fb = artifact.bytes.expect("payload");
     assert_eq!((fb[0], fb[1]), (0x07, 0xE0), "GPIO-driven pixel at origin");
-    assert_eq!(panel.ink_bytes(), 2, "exactly one pixel painted");
+    assert_eq!(panel_ink(&bus), 2, "exactly one pixel painted");
+
+    // ⚠️ THE SUBSTITUTION, PINNED. Every ink assertion in this file moved from
+    // `Ili9341Parallel::ink_bytes()` (non-zero bytes of the PHYSICAL
+    // framebuffer) to `meta.painted_bytes` (non-zero bytes of the ORIENTED
+    // one). MADCTL makes the second a permutation of the first, so the counts
+    // are equal — but "is a permutation" is an argument, and an argument that
+    // is wrong here would silently rescale every other assertion in this file.
+    // While the Rust model still exists, measure it.
+    assert_eq!(
+        panel.ink_bytes(),
+        panel_ink(&bus),
+        "`meta.painted_bytes` must count exactly what `ink_bytes()` counted, or \
+         every ink assertion in this file changed meaning when it stopped \
+         downcasting"
+    );
+}
+
+/// The i80 seam must stay one strobe.
+///
+/// `Esp32s3LcdCam` used to hold `Vec<Arc<Ili9341Parallel>>`: a chip peripheral
+/// naming a part, and the thing #1174 named as what blocked porting the
+/// parallel panel. It now holds `Vec<Arc<dyn I80Panel>>`.
+///
+/// The build cannot catch the regression that matters. Adding a second method
+/// to `I80Panel` — `fn framebuffer(&self) -> Vec<u8>`, `fn state(&mut self) ->
+/// &mut PanelState` — compiles, and re-couples the controller to one model's
+/// internals through a trait that still looks narrow at the call site. So this
+/// reads the declaration, the same way `resident_device_port_stays_narrow`
+/// reads `DevicePins`.
+#[test]
+fn i80_panel_seam_stays_narrow() {
+    let src = std::fs::read_to_string(
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("src/peripherals/components/i80_panel.rs"),
+    )
+    .expect("read peripherals/components/i80_panel.rs");
+    let body = src
+        .split_once("pub trait I80Panel:")
+        .expect("I80Panel declaration — this test is measuring the wrong file")
+        .1
+        .split_once("\n}")
+        .expect("end of the I80Panel trait")
+        .0;
+    let sigs: Vec<&str> = body
+        .lines()
+        .map(str::trim)
+        .filter(|l| l.starts_with("fn "))
+        .collect();
+
+    // Anti-vacuity: a parser that found no signatures would pass everything.
+    assert_eq!(
+        sigs.len(),
+        1,
+        "the i80 seam is ONE strobe; found {sigs:?}. A second method is how a \
+         controller learns about a part again."
+    );
+    assert!(
+        sigs[0].contains("i80_write_word") && sigs[0].contains("&self"),
+        "the strobe must stay `fn i80_write_word(&self, dc_high: bool, word: u16)` \
+         — `&mut self` would mean the controller owns the panel, and a panel is \
+         shared with its GPIO observer: {sigs:?}"
+    );
+
+    // And the controller must not name a concrete panel anywhere.
+    let lcd = std::fs::read_to_string(
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("src/peripherals/esp32s3/lcd_cam.rs"),
+    )
+    .expect("read esp32s3/lcd_cam.rs");
+    assert!(
+        lcd.contains("dyn crate::peripherals::components::I80Panel"),
+        "lcd_cam must hold the TRAIT — this test is reading the wrong file if not"
+    );
+    assert!(
+        lcd.contains("Ili9341Parallel"),
+        "anti-vacuity: the doc that explains what this field used to be is gone, \
+         so the comment-stripping filter below is no longer being exercised"
+    );
+    // Comments are allowed to name the part — they have to: that IS the story.
+    // Only CODE is constrained.
+    let lcd_code: String = lcd
+        .lines()
+        .filter(|l| !l.trim_start().starts_with("//"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(
+        !lcd_code.contains("Ili9341Parallel"),
+        "`Esp32s3LcdCam` names `Ili9341Parallel` again. The i80 master needs one \
+         strobe; naming a part is what kept that part in Rust."
+    );
 }

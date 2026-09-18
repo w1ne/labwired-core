@@ -8,7 +8,6 @@
 
 use crate::artifacts::{write_interactive_snapshot, InteractiveSnapshotInputs};
 use crate::*;
-use labwired_core::peripherals::components::ili9341_parallel::Ili9341Parallel;
 
 /// Export every attached parallel-panel framebuffer, if `--display-out <path>`
 /// was given: a binary PPM per panel (`<path>` for the first, `<path>.<id>`
@@ -25,19 +24,56 @@ pub(crate) fn export_display_if_requested(
     let Some(path) = display_out else {
         return;
     };
-    let panels: Vec<&Ili9341Parallel> = bus.observed_of::<Ili9341Parallel>().collect();
+    // ⚠️ Asked by FORMAT, not by concrete type. `observed_of::<Ili9341Parallel>()`
+    // used to stand here; it answers an empty list for any other panel — the
+    // same panel included, once it is a descriptor — so `--display-out` would
+    // have started printing "no parallel panel is attached" for a panel that
+    // was painting perfectly. Every line below comes off the artifact's `meta`
+    // or its payload.
+    let opts = labwired_core::inspect::InspectOpts {
+        include_bytes: true,
+        peripheral: None,
+    };
+    let panels = bus
+        .display_artifacts_of_format(&[labwired_core::inspect::artifact_format::RGB565_BE], &opts);
     if panels.is_empty() {
         eprintln!("labwired-cli run: --display-out given but no parallel panel is attached");
         return;
     }
     for (n, panel) in panels.iter().enumerate() {
-        let (w, h) = panel.logical_dimensions();
-        let fb = panel.oriented_framebuffer();
+        let usize_of = |k: &str| {
+            panel
+                .meta
+                .get(k)
+                .and_then(serde_json::Value::as_u64)
+                .unwrap_or(0) as usize
+        };
+        let (w, h) = (usize_of("w"), usize_of("h"));
+        let Some(fb) = panel.bytes.as_ref() else {
+            eprintln!(
+                "labwired-cli run: panel '{}' reported no pixels; nothing to export",
+                panel.id
+            );
+            continue;
+        };
+        if w == 0 || h == 0 || fb.len() < w * h * 2 {
+            eprintln!(
+                "labwired-cli run: panel '{}' reports {w}x{h} but {} payload bytes; \
+                 refusing to export a mis-sized image",
+                panel.id,
+                fb.len()
+            );
+            continue;
+        }
         let ink = fb.iter().filter(|&&b| b != 0).count();
         eprintln!(
             "labwired-cli run: panel '{}' {w}x{h} display_on={} ink_bytes={ink}/{}",
-            panel.id(),
-            panel.display_on(),
+            panel.id,
+            panel
+                .meta
+                .get("display_on")
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(false),
             fb.len(),
         );
 
@@ -68,7 +104,7 @@ pub(crate) fn export_display_if_requested(
             path.clone()
         } else {
             let mut p = path.clone().into_os_string();
-            p.push(format!(".{}", panel.id()));
+            p.push(format!(".{}", panel.id));
             PathBuf::from(p)
         };
         let mut ppm = format!("P6\n{w} {h}\n255\n").into_bytes();

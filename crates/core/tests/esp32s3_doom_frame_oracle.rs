@@ -347,7 +347,14 @@ fn build_doom_machine(
         .expect("attach the Doom lab's ILI9341 parallel panel from the manifest");
     bus.refresh_peripheral_index();
     assert_eq!(
-        bus.observed_of::<labwired_core::peripherals::components::ili9341_parallel::Ili9341Parallel>().count(),
+        bus.display_artifacts_of_format(
+            &[labwired_core::inspect::artifact_format::RGB565_BE],
+            &labwired_core::inspect::InspectOpts {
+                include_bytes: false,
+                peripheral: None,
+            },
+        )
+        .len(),
         1,
         "the manifest's 16-bit parallel ILI9341 must be on the bus; without it the \
          GPIO->panel pixel path is not exercised at all"
@@ -562,16 +569,16 @@ impl DoomRun {
     /// much of an async DMA push has landed at the instant the firmware logs
     /// its line legitimately moves when the engine's timing moves.
     fn assert_panel_live(&self, observed: u32) -> (usize, usize, u64) {
-        let panel = self.machine
-            .bus
-            .observed_of::<labwired_core::peripherals::components::ili9341_parallel::Ili9341Parallel>()
-            .next()
-            .expect("parallel panel attached");
-        let panel_fb = panel.oriented_framebuffer();
+        let artifact = panel_artifact(&self.machine.bus, true);
+        let panel_fb = artifact.bytes.expect("a full-mode artifact carries pixels");
         let panel_ink = panel_fb.iter().filter(|&&byte| byte != 0).count();
         let digest = fnv1a_64(&panel_fb);
         assert!(
-            panel.display_on(),
+            artifact
+                .meta
+                .get("display_on")
+                .and_then(serde_json::Value::as_bool)
+                == Some(true),
             "the ILI9341 never left sleep/display-off: the firmware's frame hash is right \
              but nothing was ever shown. Panel digest 0x{digest:016x}.",
         );
@@ -584,6 +591,39 @@ impl DoomRun {
         );
         (panel_fb.len(), panel_ink, digest)
     }
+}
+
+// ─── the panel, read by ARTIFACT rather than by concrete type ──────────────
+//
+// `observed_of::<Ili9341Parallel>()` answers an empty iterator for a panel of
+// any other type — this same panel included, the day it becomes a descriptor.
+// A FORMAT is what the panel says it holds, in its own words, and survives the
+// port: `rgb565_be`, `meta.w/h/display_on/painted_bytes`, oriented pixels as
+// the payload.
+
+fn panel_artifact(bus: &SystemBus, include_bytes: bool) -> labwired_core::inspect::Artifact {
+    let opts = labwired_core::inspect::InspectOpts {
+        include_bytes,
+        peripheral: None,
+    };
+    let mut found = bus
+        .display_artifacts_of_format(&[labwired_core::inspect::artifact_format::RGB565_BE], &opts);
+    assert_eq!(
+        found.len(),
+        1,
+        "exactly one labwired_core::inspect::artifact_format::RGB565_BE565 panel must report"
+    );
+    found.remove(0)
+}
+
+/// Non-zero bytes on the glass. See the note on `painted_bytes` in
+/// `esp32s3_lcd_i80_pixels.rs`: it counts BYTES, exactly as `ink_bytes()` did.
+fn panel_ink(bus: &SystemBus) -> usize {
+    panel_artifact(bus, false)
+        .meta
+        .get("painted_bytes")
+        .and_then(serde_json::Value::as_u64)
+        .expect("an labwired_core::inspect::artifact_format::RGB565_BE565 artifact reports painted_bytes") as usize
 }
 
 fn doom_inputs() -> (ChipDescriptor, SystemManifest) {

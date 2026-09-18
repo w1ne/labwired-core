@@ -623,6 +623,17 @@ impl crate::inspect::DeviceEvidence for Ili9341Parallel {
     }
 }
 
+/// The i80 seam. `Esp32s3LcdCam` reaches this panel through
+/// [`I80Panel`](crate::peripherals::components::I80Panel) and nothing else —
+/// it cannot see the framebuffer, the MADCTL or the power flag, which is what
+/// lets the controller keep working when this model is replaced by a
+/// descriptor.
+impl crate::peripherals::components::I80Panel for Ili9341Parallel {
+    fn i80_write_word(&self, dc_high: bool, word: u16) {
+        Ili9341Parallel::i80_write_word(self, dc_high, word)
+    }
+}
+
 /// A bus-resident DISPLAY: readback only as far as the bus is concerned, but
 /// it reports its RGB565 framebuffer as evidence, the same shape the SPI kit's
 /// panels emit.

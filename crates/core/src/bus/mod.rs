@@ -520,19 +520,6 @@ pub struct SystemBus {
     motors: Vec<motors::MotorRuntime>,
     /// Last simulator-cycle boundary applied to `motors`.
     motor_cycle_anchor: u64,
-    /// TM1637 4-digit 7-segment displays bit-banged over two GPIO lines. Each is
-    /// driven by the CLK/DIO GPIO write-hook (`maybe_clock_tm1637`), which feeds
-    /// line transitions to the display's protocol state machine. Purely
-    /// write-driven (no per-tick pass). Empty by default → zero cost.
-    pub tm1637: Vec<crate::peripherals::components::tm1637_7seg::Tm1637>,
-    /// HX711 load-cell amps bit-banged over SCK/DT. Write-hook clocks data out;
-    /// DT level is driven onto the MCU input register. Empty → zero cost.
-    /// Direct-drive single-digit 7-segment displays: eight segment GPIOs plus a
-    /// common pin, no driver chip. Sampled by the GPIO write-hook
-    /// (`maybe_sample_seven_segment`), which recomputes the lit segments
-    /// combinationally — no protocol state, no per-tick pass. Empty by default
-    /// → zero cost.
-    pub seven_segment: Vec<crate::peripherals::components::seven_segment::SevenSegment>,
     /// Analog stimulus sources (potentiometer, NTC thermistor). Unlike a bus
     /// slave these do not sit on I2C/SPI/UART - they drive one ADC channel's
     /// injected millivolt level. They are held here so the generic stimulus

@@ -120,24 +120,40 @@ pub trait BusResidentDevice: std::fmt::Debug + Send {
     /// Stable system.yaml id, for sim-input targeting + diagnostics.
     fn id(&self) -> &str;
 
-    /// Whether this device's pin level changes ONLY when a stimulus drives it,
-    /// so it needs no per-cycle [`service`](Self::service) pass to stay correct.
+    /// Whether this device needs the per-cycle [`service`](Self::service) pass
+    /// to stay correct.
     ///
-    /// A push button is the one such device: a contact holds its level until
-    /// something moves it, and that level is applied at the stimulus apply
-    /// point. Everything else here is scanned or sampled per tick — a keypad
-    /// re-reads the driven row every cycle, an encoder walks a Gray sequence, a
-    /// DHT22 clocks out a timed frame — and must say `false`.
+    /// `true` is the default — the safe answer — so a device added later gets
+    /// serviced unless its author deliberately opts out. Two kinds of device
+    /// opt out, for two different reasons, and both reasons have to be stated
+    /// or the predicate turns into "whatever the button needed":
     ///
-    /// This exists so a bus hosting only a button keeps the walk-free fast path
-    /// (see [`SystemBus::per_cycle_tick_is_trivial`]) without that optimisation
-    /// ever being able to silently un-wire a device that does need servicing.
-    /// It defaults to `false` — the safe answer — so a device added later gets
-    /// serviced unless its author deliberately opts out.
+    /// * **Level-driven on stimulus.** A push button's contact holds its level
+    ///   until something moves it, and that level is applied at the stimulus
+    ///   apply point. Nothing a tick could do would change it.
+    /// * **Edge-serviced from the write hook.** A device whose pads move ONLY
+    ///   when firmware stores to a GPIO output register, that owns no timer and
+    ///   drives no pad, is already serviced synchronously inside the MMIO write
+    ///   path (see [`edge_service_addrs`](Self::edge_service_addrs)). A tick
+    ///   pass would resample pads that cannot have moved since the last store.
+    ///   The bit-banged TM1637 and the direct-drive 7-segment digit are both
+    ///   this — which is exactly why their hand-written predecessors lived
+    ///   OUTSIDE `gpio_devices` on their own typed bus fields and cost no bus
+    ///   its fast path.
+    ///
+    /// Everything else here is scanned or sampled per tick — a keypad re-reads
+    /// the driven row every cycle, an encoder walks a Gray sequence, a DHT22
+    /// clocks out a timed frame, an HX711 arms a power-on timer — and must say
+    /// `true`.
+    ///
+    /// This exists so a bus hosting only such devices keeps the walk-free fast
+    /// path (see [`SystemBus::per_cycle_tick_is_trivial`]) and its relaxed tick
+    /// interval, without that optimisation ever being able to silently un-wire
+    /// a device that does need servicing.
     ///
     /// [`SystemBus::per_cycle_tick_is_trivial`]: crate::bus::SystemBus
-    fn is_level_driven_on_stimulus(&self) -> bool {
-        false
+    fn needs_per_cycle_service(&self) -> bool {
+        true
     }
 
     /// Output-register addresses whose MMIO writes must service this device
@@ -172,6 +188,20 @@ pub trait BusResidentDevice: std::fmt::Debug + Send {
     /// cost the whole engine pays for one part's wiring.
     fn edge_service_addrs(&self) -> &[u64] {
         &[]
+    }
+
+    /// What this device currently holds, for the inspect/evidence walk — or
+    /// `None` when it has nothing to show.
+    ///
+    /// A bus-resident device that is a DISPLAY has no controller trait to hang
+    /// its artifacts on: it binds on PINS. Before this method, the only way one
+    /// could report was to sit on its own typed `SystemBus` field with its own
+    /// arm in `for_each_bus_resident_device` — which is precisely the plumbing
+    /// the TM1637 and the 7-segment digit were kept in Rust by. Evidence is a
+    /// read-only inspection seam, not an engine handle, so it does not widen
+    /// [`DevicePins`]: nothing here can touch the machine.
+    fn evidence(&self) -> Option<&dyn crate::inspect::DeviceEvidence> {
+        None
     }
 
     /// Concrete-type escape hatch for typed readback / diagnostics (see

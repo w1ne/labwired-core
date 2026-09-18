@@ -219,8 +219,8 @@ impl crate::bus::BusResidentDevice for Button {
     /// applies that level at the stimulus point, so a button needs no per-cycle
     /// pass. Adding a push button to a canvas therefore must not cost the bus
     /// its walk-free fast path.
-    fn is_level_driven_on_stimulus(&self) -> bool {
-        true
+    fn needs_per_cycle_service(&self) -> bool {
+        false
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

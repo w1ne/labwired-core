@@ -226,6 +226,14 @@ pub struct RuleMachine {
     outputs: Vec<String>,
     /// Last level driven on each output, so the queue carries TRANSITIONS only.
     pin_levels: BTreeMap<String, bool>,
+    /// **Levels of the pads the part OBSERVES**, as of the most recent sample.
+    ///
+    /// The simultaneous-pad snapshot. Its owner resamples every observed pad
+    /// and installs the whole map here BEFORE raising any event, so `pin(X)`
+    /// inside any rule is the level pad X holds after the store that caused the
+    /// event — for every X, not just the one whose edge was raised. Empty for a
+    /// part with no observed pads, which is every part on a data bus.
+    observed_levels: BTreeMap<String, bool>,
     /// `(role, level)` waiting for the bus to put on a pad.
     pending_pins: Vec<(String, bool)>,
     /// Device time in µs, advanced by the central drive.
@@ -271,6 +279,7 @@ impl RuleMachine {
             pending_timers: Vec::new(),
             outputs: behavior.outputs.clone(),
             pin_levels: BTreeMap::new(),
+            observed_levels: BTreeMap::new(),
             pending_pins: Vec::new(),
             elapsed_us: 0,
             written: 0,
@@ -305,6 +314,29 @@ impl RuleMachine {
     /// The level this machine last drove on `role`. `None` ⇒ never driven.
     pub fn pin_level(&self, role: &str) -> Option<bool> {
         self.pin_levels.get(role).copied()
+    }
+
+    /// Install the level of ONE observed pad in the snapshot `pin()` reads.
+    ///
+    /// Called by the owning device for EVERY observed pad, before it raises any
+    /// event for the store that moved them. Doing it pad-by-pad as the events
+    /// are raised is the bug this exists to prevent: the second pad's rule
+    /// would then read the first pad's PREVIOUS level.
+    pub fn set_observed_level(&mut self, role: &str, level: bool) {
+        self.observed_levels.insert(role.to_string(), level);
+    }
+
+    /// The snapshot level of an observed pad. `None` ⇒ never sampled.
+    pub fn observed_level(&self, role: &str) -> Option<bool> {
+        self.observed_levels.get(role).copied()
+    }
+
+    /// Whether any rule listens for the simultaneous-pad event, so a device can
+    /// skip building the changed-pad list when nothing would read it.
+    pub fn listens_for_pin_sets(&self) -> bool {
+        self.rules
+            .iter()
+            .any(|r| matches!(r.on, Event::Pins { .. }))
     }
 
     /// Pin roles this part declares as outputs.
@@ -660,6 +692,15 @@ impl RuleMachine {
                     edge: happened,
                 },
             ) => a == b && (*want == PinEdge::Any || want == happened),
+            // The simultaneous-pad event matches on INTERSECTION, not equality:
+            // the device raises the set of pads that actually moved in this
+            // store, and `on: { pins: [CLK, DIO] }` fires whether one of them
+            // moved or both. Equality would make the rule fire only on the
+            // exact-both case — i.e. only on the rarest store — which reads as
+            // a protocol that decodes sometimes.
+            (Event::Pins { names: want }, Event::Pins { names: moved }) => {
+                want.iter().any(|w| moved.iter().any(|m| m == w))
+            }
             (a, b) => a == b,
         }
     }
@@ -772,6 +813,11 @@ impl RuleMachine {
         self.pending_timers.clear();
         self.pending_pins.clear();
         self.pin_levels.clear();
+        // The observed snapshot is NOT cleared. It is not machine state — it is
+        // what the pads outside are holding right now, and a reset of the part
+        // does not change the level the MCU is driving. Clearing it would make
+        // every pad read low until the next store, which on an idle-high
+        // two-wire bus synthesises a START.
     }
 }
 
@@ -801,6 +847,24 @@ impl EvalCtx for Env<'_> {
     }
     fn var(&self, name: &str) -> i64 {
         self.m.vars.get(name).copied().unwrap_or(0)
+    }
+    /// An OBSERVED pad first, then a DRIVEN one.
+    ///
+    /// The two namespaces are disjoint by construction — `pins:` and
+    /// `outputs:` are separate lists and `validate_rule_names` checks a
+    /// `pin()` against both — so the order is a tie-break that never fires
+    /// rather than a precedence rule. A pad never sampled and never driven
+    /// reads 0, which for an observed pad is the same default the device's own
+    /// sampler takes for an output register that does not read back.
+    fn pin(&self, name: &str) -> i64 {
+        let level = self
+            .m
+            .observed_levels
+            .get(name)
+            .or_else(|| self.m.pin_levels.get(name))
+            .copied()
+            .unwrap_or(false);
+        i64::from(level)
     }
     fn input(&self, key: &str) -> i64 {
         self.ctx.input(key)
