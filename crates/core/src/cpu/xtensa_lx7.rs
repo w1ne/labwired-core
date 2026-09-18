@@ -12,7 +12,7 @@
 use crate::cpu::xtensa_regs::{ArFile, Ps};
 use crate::cpu::xtensa_sr::{
     XtensaSrFile, EPC1, EPC2, EPC3, EPC4, EPC5, EPC6, EPC7, EPS2, EPS3, EPS4, EPS5, EPS6, EPS7,
-    EXCCAUSE, INTENABLE, INTERRUPT, PS as PS_SR, SAR, SCOMPARE1, VECBASE, WINDOWBASE, WINDOWSTART,
+    EXCCAUSE, INTENABLE, INTERRUPT, PS as PS_SR, VECBASE, WINDOWBASE, WINDOWSTART,
 };
 use crate::decoder::{xtensa, xtensa_length, xtensa_narrow};
 
@@ -22,6 +22,13 @@ const DECODE_CACHE_MASK: usize = DECODE_CACHE_SIZE - 1;
 use crate::snapshot::{CpuSnapshot, XtensaLx7CpuSnapshot};
 use crate::{Bus, Cpu, SimResult, SimulationError, SimulationObserver};
 use std::sync::Arc;
+
+/// `execute`'s instruction match arm bodies, one method per arm, grouped by
+/// instruction class. The single dispatch `match ins` stays in `execute`; each
+/// non-trivial arm calls one `exec_*` method. `#[path]` keeps the submodules
+/// inside this file's directory without moving the crate path.
+#[path = "xtensa_lx7/exec/mod.rs"]
+mod exec;
 
 /// Offset of _KernelExceptionVector relative to VECBASE on ESP32-S3 LX7.
 ///
@@ -1165,159 +1172,27 @@ impl XtensaLx7 {
             }
         }
         match ins {
-            Add { ar, as_, at } => {
-                let v = self
-                    .regs
-                    .read_logical(as_)
-                    .wrapping_add(self.regs.read_logical(at));
-                self.regs.write_logical(ar, v);
-                self.pc = self.pc.wrapping_add(len);
-            }
-            Sub { ar, as_, at } => {
-                let v = self
-                    .regs
-                    .read_logical(as_)
-                    .wrapping_sub(self.regs.read_logical(at));
-                self.regs.write_logical(ar, v);
-                self.pc = self.pc.wrapping_add(len);
-            }
-            And { ar, as_, at } => {
-                let v = self.regs.read_logical(as_) & self.regs.read_logical(at);
-                self.regs.write_logical(ar, v);
-                self.pc = self.pc.wrapping_add(len);
-            }
-            Or { ar, as_, at } => {
-                let v = self.regs.read_logical(as_) | self.regs.read_logical(at);
-                self.regs.write_logical(ar, v);
-                self.pc = self.pc.wrapping_add(len);
-            }
-            Xor { ar, as_, at } => {
-                let v = self.regs.read_logical(as_) ^ self.regs.read_logical(at);
-                self.regs.write_logical(ar, v);
-                self.pc = self.pc.wrapping_add(len);
-            }
-            Neg { ar, at } => {
-                let v = 0u32.wrapping_sub(self.regs.read_logical(at));
-                self.regs.write_logical(ar, v);
-                self.pc = self.pc.wrapping_add(len);
-            }
-            Abs { ar, at } => {
-                // ISA RM: result is unsigned abs of the 2's-complement value.
-                // i32::unsigned_abs() returns 0x80000000 for i32::MIN — matches HW behaviour.
-                let x = self.regs.read_logical(at) as i32;
-                self.regs.write_logical(ar, x.unsigned_abs());
-                self.pc = self.pc.wrapping_add(len);
-            }
-            Addx2 { ar, as_, at } => {
-                let v = (self.regs.read_logical(as_) << 1).wrapping_add(self.regs.read_logical(at));
-                self.regs.write_logical(ar, v);
-                self.pc = self.pc.wrapping_add(len);
-            }
-            Addx4 { ar, as_, at } => {
-                let v = (self.regs.read_logical(as_) << 2).wrapping_add(self.regs.read_logical(at));
-                self.regs.write_logical(ar, v);
-                self.pc = self.pc.wrapping_add(len);
-            }
-            Addx8 { ar, as_, at } => {
-                let v = (self.regs.read_logical(as_) << 3).wrapping_add(self.regs.read_logical(at));
-                self.regs.write_logical(ar, v);
-                self.pc = self.pc.wrapping_add(len);
-            }
-            Subx2 { ar, as_, at } => {
-                let v = (self.regs.read_logical(as_) << 1).wrapping_sub(self.regs.read_logical(at));
-                self.regs.write_logical(ar, v);
-                self.pc = self.pc.wrapping_add(len);
-            }
-            Subx4 { ar, as_, at } => {
-                let v = (self.regs.read_logical(as_) << 2).wrapping_sub(self.regs.read_logical(at));
-                self.regs.write_logical(ar, v);
-                self.pc = self.pc.wrapping_add(len);
-            }
-            Subx8 { ar, as_, at } => {
-                let v = (self.regs.read_logical(as_) << 3).wrapping_sub(self.regs.read_logical(at));
-                self.regs.write_logical(ar, v);
-                self.pc = self.pc.wrapping_add(len);
-            }
-            Movi { at, imm } => {
-                self.regs.write_logical(at, imm as u32);
-                self.pc = self.pc.wrapping_add(len);
-            }
-            Break { imm_s, imm_t } => {
-                use crate::peripherals::esp_xtensa_common::rom_thunks::{
-                    ROM_THUNK_IMM_S, ROM_THUNK_IMM_T,
-                };
-                if imm_s == ROM_THUNK_IMM_S && imm_t == ROM_THUNK_IMM_T {
-                    let pc = self.pc;
-                    if let Some(thunk) = bus.get_rom_thunk(pc) {
-                        return thunk(self, bus);
-                    }
-                    return Err(SimulationError::NotImplemented(format!(
-                        "ROM thunk at 0x{pc:08x} not registered (BREAK 1,14 with no thunk)"
-                    )));
-                }
-                return Err(SimulationError::BreakpointHit(self.pc));
-            }
-            Nop | Memw | Extw | Isync | Rsync | Esync | Dsync => {
-                self.pc = self.pc.wrapping_add(len);
-            }
-            Moveqz { ar, as_, at } => {
-                if self.regs.read_logical(at) == 0 {
-                    let v = self.regs.read_logical(as_);
-                    self.regs.write_logical(ar, v);
-                }
-                self.pc = self.pc.wrapping_add(len);
-            }
-            Movnez { ar, as_, at } => {
-                if self.regs.read_logical(at) != 0 {
-                    let v = self.regs.read_logical(as_);
-                    self.regs.write_logical(ar, v);
-                }
-                self.pc = self.pc.wrapping_add(len);
-            }
-            Movltz { ar, as_, at } => {
-                if (self.regs.read_logical(at) as i32) < 0 {
-                    let v = self.regs.read_logical(as_);
-                    self.regs.write_logical(ar, v);
-                }
-                self.pc = self.pc.wrapping_add(len);
-            }
-            Movgez { ar, as_, at } => {
-                if (self.regs.read_logical(at) as i32) >= 0 {
-                    let v = self.regs.read_logical(as_);
-                    self.regs.write_logical(ar, v);
-                }
-                self.pc = self.pc.wrapping_add(len);
-            }
-            Waiti { level } => {
-                // Xtensa ISA RM, WAITI: PS.INTLEVEL ← level, then the core
-                // suspends. **WAITI retires before it waits** — the wait state
-                // sits between WAITI and its successor, so the interrupt that
-                // ends it is taken with EPC[level] = the address of the
-                // instruction AFTER the WAITI, and RFI/RFE resumes there.
-                //
-                // Advancing the PC here is load-bearing, not cosmetic. Parking
-                // *on* the WAITI made every wake re-enter it: dispatch_irq
-                // latched EPC1 = the WAITI's own address, the handler ran, and
-                // RFE dropped the core straight back into the wait. Code that
-                // must make forward progress after a wake therefore never did.
-                // ESP-IDF's SMP bring-up is exactly that shape — core 1's idle
-                // task calls esp_cpu_wait_for_intr() from
-                // esp_vApplicationIdleHook() and only reaches the registered
-                // idle hooks (which set `s_other_cpu_startup_done`) on the NEXT
-                // loop iteration, i.e. after the call returns. With the PC
-                // pinned, core 1 took its systimer tick hundreds of times and
-                // still never returned from the call, so core 0 spun forever in
-                // main_task's `while (!s_other_cpu_startup_done)`.
-                //
-                // `waiti_parked` is what models the wait itself: later steps
-                // skip fetch/decode (and let the idle fast-forward run) until a
-                // wake-capable IRQ arrives, at which point the pre-fetch
-                // interrupt check clears the park and dispatches with the PC
-                // already pointing past the WAITI.
-                self.ps.set_intlevel(level);
-                self.waiti_parked = true;
-                self.pc = self.pc.wrapping_add(len);
-            }
+            Add { ar, as_, at } => self.exec_add(bus, len, ar, as_, at),
+            Sub { ar, as_, at } => self.exec_sub(bus, len, ar, as_, at),
+            And { ar, as_, at } => self.exec_and(bus, len, ar, as_, at),
+            Or { ar, as_, at } => self.exec_or(bus, len, ar, as_, at),
+            Xor { ar, as_, at } => self.exec_xor(bus, len, ar, as_, at),
+            Neg { ar, at } => self.exec_neg(bus, len, ar, at),
+            Abs { ar, at } => self.exec_abs(bus, len, ar, at),
+            Addx2 { ar, as_, at } => self.exec_addx2(bus, len, ar, as_, at),
+            Addx4 { ar, as_, at } => self.exec_addx4(bus, len, ar, as_, at),
+            Addx8 { ar, as_, at } => self.exec_addx8(bus, len, ar, as_, at),
+            Subx2 { ar, as_, at } => self.exec_subx2(bus, len, ar, as_, at),
+            Subx4 { ar, as_, at } => self.exec_subx4(bus, len, ar, as_, at),
+            Subx8 { ar, as_, at } => self.exec_subx8(bus, len, ar, as_, at),
+            Movi { at, imm } => self.exec_movi(bus, len, at, imm),
+            Break { imm_s, imm_t } => self.exec_break(bus, len, imm_s, imm_t),
+            Nop | Memw | Extw | Isync | Rsync | Esync | Dsync => self.exec_nop_fence(bus, len),
+            Moveqz { ar, as_, at } => self.exec_moveqz(bus, len, ar, as_, at),
+            Movnez { ar, as_, at } => self.exec_movnez(bus, len, ar, as_, at),
+            Movltz { ar, as_, at } => self.exec_movltz(bus, len, ar, as_, at),
+            Movgez { ar, as_, at } => self.exec_movgez(bus, len, ar, as_, at),
+            Waiti { level } => self.exec_waiti(bus, len, level),
             // Xtensa Zero Overhead Loops (LOOP / LOOPNEZ / LOOPGTZ).
             // ISA RM §4.3.2: LCOUNT = as_ - 1, LBEG = PC + 3 (after LOOP),
             // LEND = PC + 3 + offset. After each instruction at PC=LEND-N
@@ -1330,226 +1205,87 @@ impl XtensaLx7 {
             // which is the instruction AFTER the loop — at that point our
             // ZOL post-PC check below (see step()) re-enters the body.
             Loop { as_, offset } | Loopnez { as_, offset } | Loopgtz { as_, offset } => {
-                use crate::cpu::xtensa_sr::{LBEG, LCOUNT, LEND};
-                let count = self.regs.read_logical(as_);
-                // ISA RM §7.4: LOOPNEZ/LOOPGTZ skip body when count is
-                // 0/non-positive. LOOP always enters the body. The post-LEND
-                // check decrements LCOUNT and branches back while LCOUNT > 0.
-                let take = match ins {
-                    Loop { .. } => true,
-                    Loopnez { .. } => count != 0,
-                    Loopgtz { .. } => (count as i32) > 0,
-                    _ => unreachable!(),
-                };
-                let after = self.pc.wrapping_add(len);
-                // ISA RM §7.4.1: LEND = LOOP_PC + 4 + imm8. Decoder produces
-                // `offset = imm8 + 4`, so LEND = PC + offset (not PC+len+offset).
-                let lend = (self.pc as i32).wrapping_add(offset) as u32;
-                if take {
-                    self.sr.write(LBEG, after);
-                    self.sr.write(LEND, lend);
-                    // LCOUNT = count - 1 (wrapping). With post-LEND check
-                    // `if LCOUNT > 0 { LCOUNT--; PC = LBEG; }`, body runs
-                    // exactly count times for count > 0. For LOOP-with-
-                    // count=0, LCOUNT wraps to 0xFFFFFFFF so the body
-                    // iterates ~unbounded — terminated only by the body's
-                    // own internal branches (this is how strlen sweeps for
-                    // a null byte without a fixed upper bound).
-                    self.sr.write(LCOUNT, count.wrapping_sub(1));
-                    self.pc = after; // fall through to loop body
-                } else {
-                    // LOOPNEZ/LOOPGTZ with non-positive count: skip body.
-                    self.sr.write(LCOUNT, 0);
-                    self.pc = lend;
-                }
+                self.exec_loop(bus, len, ins, as_, offset)
             }
 
             // ── D2: SAR-setup instructions ───────────────────────────────────
             // SSL as_: SAR = 32 - (as_ & 0x1F).
             // When as_ & 0x1F == 0, SAR = 32 — valid 6-bit value per ISA RM §8.
-            Ssl { as_ } => {
-                let v = 32u32 - (self.regs.read_logical(as_) & 0x1F);
-                self.sr.write(SAR, v);
-                self.pc = self.pc.wrapping_add(len);
-            }
+            Ssl { as_ } => self.exec_ssl(bus, len, as_),
             // SSR as_: SAR = as_ & 0x1F.
-            Ssr { as_ } => {
-                let v = self.regs.read_logical(as_) & 0x1F;
-                self.sr.write(SAR, v);
-                self.pc = self.pc.wrapping_add(len);
-            }
+            Ssr { as_ } => self.exec_ssr(bus, len, as_),
             // SSAI shamt: SAR = shamt & 0x1F (decoder already bounds shamt to 5 bits).
-            Ssai { shamt } => {
-                self.sr.write(SAR, shamt as u32 & 0x1F);
-                self.pc = self.pc.wrapping_add(len);
-            }
+            Ssai { shamt } => self.exec_ssai(bus, len, shamt),
             // RER — Read External Register: AT = ext_read(AS). The ESP32-S3
             // "external register" space (RF/PHY/config, accessed via a side
             // bus) is not modeled; the boot path only probes config/feature
             // bits here, for which the silicon default reads as 0. Returning 0
             // keeps those checks on their default (feature-off) branch.
-            Rer { at, as_ } => {
-                let _addr = self.regs.read_logical(as_);
-                self.regs.write_logical(at, 0);
-                self.pc = self.pc.wrapping_add(len);
-            }
+            Rer { at, as_ } => self.exec_rer(bus, len, at, as_),
             // WER — Write External Register: ext_write(AS, AT). Unmodeled
             // external space — accept and drop, as a benign config write.
-            Wer { .. } => {
-                self.pc = self.pc.wrapping_add(len);
-            }
+            Wer { .. } => self.exec_wer(bus, len),
             // SSA8L as_: SAR = (as_ & 3) * 8. (little-endian byte-select; ISA RM §4.3.7)
-            Ssa8l { as_ } => {
-                let v = (self.regs.read_logical(as_) & 3) * 8;
-                self.sr.write(SAR, v);
-                self.pc = self.pc.wrapping_add(len);
-            }
+            Ssa8l { as_ } => self.exec_ssa8l(bus, len, as_),
             // SSA8B as_: SAR = 32 - (as_ & 3) * 8. (big-endian byte-select; ISA RM §4.3.7)
             // When as_ & 3 == 0, SAR = 32 — valid 6-bit value (SAR accommodates 0..=63).
-            Ssa8b { as_ } => {
-                let v = 32u32 - (self.regs.read_logical(as_) & 3) * 8;
-                self.sr.write(SAR, v);
-                self.pc = self.pc.wrapping_add(len);
-            }
+            Ssa8b { as_ } => self.exec_ssa8b(bus, len, as_),
 
             // ── D2: Shift register instructions ──────────────────────────────
             // SLL ar, as_: ar = as_ << (32 - SAR).
             // When SAR=0, shift count = 32. Use u64 cast to avoid Rust UB
             // (u64 shifts are defined for counts 0..=63 per Rust reference).
             // (as_ as u64) << 32 = 0 for any as_, which matches ISA RM §8.
-            Sll { ar, as_ } => {
-                let sar = self.sr.read(SAR);
-                let shift = 32u32.wrapping_sub(sar);
-                // SAR ranges by setter: SSL 1..=32, SSR 0..=31, SSAI 0..=31, SSA8L {0,8,16,24}, SSA8B {32,24,16,8}.
-                // wrapping_sub handles SAR=32 → shift=0 (passthrough); SAR=0 → shift=32 (u64 << 32 yields 0).
-                // u64 cast is required because a u32 << 32 is undefined in Rust.
-                let v = ((self.regs.read_logical(as_) as u64) << shift) as u32;
-                self.regs.write_logical(ar, v);
-                self.pc = self.pc.wrapping_add(len);
-            }
+            Sll { ar, as_ } => self.exec_sll(bus, len, ar, as_),
             // SRL ar, at: ar = at >> SAR (unsigned). SAR is 0..=31.
             // For SAR >= 32 (possible if set via WSR), result is 0 per ISA RM §8.
-            Srl { ar, at } => {
-                let sar = self.sr.read(SAR);
-                let v = if sar >= 32 {
-                    0
-                } else {
-                    self.regs.read_logical(at) >> sar
-                };
-                self.regs.write_logical(ar, v);
-                self.pc = self.pc.wrapping_add(len);
-            }
+            Srl { ar, at } => self.exec_srl(bus, len, ar, at),
             // SRA ar, at: ar = (at as i32) >> SAR (arithmetic). SAR is 0..=31.
             // For SAR >= 32 result is all sign bits: 0xFFFFFFFF or 0x00000000.
-            Sra { ar, at } => {
-                let sar = self.sr.read(SAR);
-                let src = self.regs.read_logical(at) as i32;
-                let v = if sar >= 32 {
-                    if src < 0 {
-                        u32::MAX
-                    } else {
-                        0
-                    }
-                } else {
-                    (src >> sar) as u32
-                };
-                self.regs.write_logical(ar, v);
-                self.pc = self.pc.wrapping_add(len);
-            }
+            Sra { ar, at } => self.exec_sra(bus, len, ar, at),
             // SRC ar, as_, at: ar = low32((as_ : at) >> SAR).
             // Concatenate as_ (upper 32b) and at (lower 32b) into 64b, shift right by SAR.
             // SAR is 0..=63; u64 shifts for counts 0..=63 are safe in Rust.
-            Src { ar, as_, at } => {
-                let sar = self.sr.read(SAR);
-                let hi = self.regs.read_logical(as_) as u64;
-                let lo = self.regs.read_logical(at) as u64;
-                let w = (hi << 32) | lo;
-                let v = (w >> sar) as u32;
-                self.regs.write_logical(ar, v);
-                self.pc = self.pc.wrapping_add(len);
-            }
+            Src { ar, as_, at } => self.exec_src(bus, len, ar, as_, at),
 
             // ── D2: Shift immediate instructions ─────────────────────────────
             // SLLI ar, as_, shamt: ar = as_ << shamt. shamt is 1..=31 (decoder
             // computes shamt = 32 - raw, so it's the actual count, never 0 or 32).
-            Slli { ar, as_, shamt } => {
-                let v = self.regs.read_logical(as_) << shamt;
-                self.regs.write_logical(ar, v);
-                self.pc = self.pc.wrapping_add(len);
-            }
+            Slli { ar, as_, shamt } => self.exec_slli(bus, len, ar, as_, shamt),
             // SRLI ar, at, shamt: ar = at >> shamt (unsigned). shamt 0..=15 from decoder.
             // Note: `at` is the t field (= shamt & 0xF per ISA encoding).
-            Srli { ar, at, shamt } => {
-                let v = self.regs.read_logical(at) >> shamt;
-                self.regs.write_logical(ar, v);
-                self.pc = self.pc.wrapping_add(len);
-            }
+            Srli { ar, at, shamt } => self.exec_srli(bus, len, ar, at, shamt),
             // SRAI ar, at, shamt: ar = (at as i32) >> shamt (arithmetic). shamt 0..=31.
             // shamt < 32 always here (decoder range), so no need for SAR-guard.
-            Srai { ar, at, shamt } => {
-                let src = self.regs.read_logical(at) as i32;
-                let v = (src >> shamt) as u32;
-                self.regs.write_logical(ar, v);
-                self.pc = self.pc.wrapping_add(len);
-            }
+            Srai { ar, at, shamt } => self.exec_srai(bus, len, ar, at, shamt),
 
             // ── D3: Arithmetic immediate instructions ──────────────────────────────
             // ADDI at, as_, imm8: at = as_ + sext8(imm8). Two's complement addition.
-            Addi { at, as_, imm8 } => {
-                let v = self.regs.read_logical(as_).wrapping_add(imm8 as u32);
-                self.regs.write_logical(at, v);
-                self.pc = self.pc.wrapping_add(len);
-            }
+            Addi { at, as_, imm8 } => self.exec_addi(bus, len, at, as_, imm8),
             // ADDMI at, as_, imm: at = as_ + imm, where imm = sext8(raw) << 8.
             // Decoder pre-shifts, so imm is already the full immediate value.
-            Addmi { at, as_, imm } => {
-                let v = self.regs.read_logical(as_).wrapping_add(imm as u32);
-                self.regs.write_logical(at, v);
-                self.pc = self.pc.wrapping_add(len);
-            }
+            Addmi { at, as_, imm } => self.exec_addmi(bus, len, at, as_, imm),
 
             // ── D4: Load instructions ──────────────────────────────────────────
 
             // L8UI at, as_, imm: at = zero_extend(mem[as_ + imm]).
             // imm is the raw byte offset (0..=255); no alignment requirement.
-            L8ui { at, as_, imm } => {
-                let ea = self.regs.read_logical(as_).wrapping_add(imm) as u64;
-                let val = bus.read_u8(ea)? as u32;
-                self.regs.write_logical(at, val);
-                self.pc = self.pc.wrapping_add(len);
-            }
+            L8ui { at, as_, imm } => self.exec_l8ui(bus, len, at, as_, imm),
 
             // L16UI at, as_, imm: at = zero_extend(mem16[as_ + imm]).
             // Decoder pre-shifts imm by 1 (imm = raw_imm8 << 1), so imm is already
             // the byte offset. Requires 2-byte alignment; alignment check deferred to Phase G.
-            L16ui { at, as_, imm } => {
-                let ea = self.regs.read_logical(as_).wrapping_add(imm) as u64;
-                let val = bus.read_u16(ea)? as u32;
-                self.regs.write_logical(at, val);
-                self.pc = self.pc.wrapping_add(len);
-            }
+            L16ui { at, as_, imm } => self.exec_l16ui(bus, len, at, as_, imm),
 
             // L16SI at, as_, imm: at = sign_extend(mem16[as_ + imm]).
             // Decoder pre-shifts imm by 1. Sign-extend 16-bit to 32-bit.
             // Alignment check deferred to Phase G.
-            L16si { at, as_, imm } => {
-                let ea = self.regs.read_logical(as_).wrapping_add(imm) as u64;
-                let raw = bus.read_u16(ea)?;
-                // Sign-extend 16-bit: cast to i16 then to i32, reinterpret as u32.
-                let val = (raw as i16) as i32 as u32;
-                self.regs.write_logical(at, val);
-                self.pc = self.pc.wrapping_add(len);
-            }
+            L16si { at, as_, imm } => self.exec_l16si(bus, len, at, as_, imm),
 
             // L32I at, as_, imm: at = mem32[as_ + imm].
             // Decoder pre-shifts imm by 2 (imm = raw_imm8 << 2). Requires 4-byte alignment;
             // alignment check deferred to Phase G.
-            L32i { at, as_, imm } => {
-                let ea = self.regs.read_logical(as_).wrapping_add(imm) as u64;
-                let val = bus.read_u32(ea)?;
-                self.regs.write_logical(at, val);
-                self.pc = self.pc.wrapping_add(len);
-            }
+            L32i { at, as_, imm } => self.exec_l32i(bus, len, at, as_, imm),
 
             // L32R at, pc_rel_byte_offset:
             //   EA = ((pc + 3) & !3) + pc_rel_byte_offset
@@ -1560,43 +1296,22 @@ impl XtensaLx7 {
             L32r {
                 at,
                 pc_rel_byte_offset,
-            } => {
-                let base = (self.pc.wrapping_add(3)) & !3u32;
-                let ea = base.wrapping_add(pc_rel_byte_offset as u32) as u64;
-                let val = bus.read_u32(ea)?;
-                self.regs.write_logical(at, val);
-                self.pc = self.pc.wrapping_add(len);
-            }
+            } => self.exec_l32r(bus, len, at, pc_rel_byte_offset),
 
             // ── D5: Store instructions ──────────────────────────────────────
             // S8I at, as_, imm: EA = as_ + imm; mem8[EA] = at[0:7].
             // imm is the raw byte offset (0..=255); no alignment requirement.
-            S8i { at, as_, imm } => {
-                let ea = self.regs.read_logical(as_).wrapping_add(imm);
-                self.maybe_invalidate_for_write(ea);
-                bus.write_u8(ea as u64, (self.regs.read_logical(at) & 0xFF) as u8)?;
-                self.pc = self.pc.wrapping_add(len);
-            }
+            S8i { at, as_, imm } => self.exec_s8i(bus, len, at, as_, imm),
 
             // S16I at, as_, imm: EA = as_ + imm; mem16[EA] = at[0:15].
             // Decoder pre-shifts imm by 1. Requires 2-byte alignment;
             // alignment check deferred to Phase G.
-            S16i { at, as_, imm } => {
-                let ea = self.regs.read_logical(as_).wrapping_add(imm);
-                self.maybe_invalidate_for_write(ea);
-                bus.write_u16(ea as u64, (self.regs.read_logical(at) & 0xFFFF) as u16)?;
-                self.pc = self.pc.wrapping_add(len);
-            }
+            S16i { at, as_, imm } => self.exec_s16i(bus, len, at, as_, imm),
 
             // S32I at, as_, imm: EA = as_ + imm; mem32[EA] = at.
             // Decoder pre-shifts imm by 2. Requires 4-byte alignment;
             // alignment check deferred to Phase G.
-            S32i { at, as_, imm } => {
-                let ea = self.regs.read_logical(as_).wrapping_add(imm);
-                self.maybe_invalidate_for_write(ea);
-                bus.write_u32(ea as u64, self.regs.read_logical(at))?;
-                self.pc = self.pc.wrapping_add(len);
-            }
+            S32i { at, as_, imm } => self.exec_s32i(bus, len, at, as_, imm),
 
             // ── D6: Branch instructions ───────────────────────────────────
             // Decoder pre-bakes +4 into all branch offsets, so:
@@ -1604,51 +1319,27 @@ impl XtensaLx7 {
             //   not-taken: self.pc = self.pc.wrapping_add(len)
 
             // BEQ: taken if as_ == at
-            Beq { as_, at, offset } => {
-                let cond = self.regs.read_logical(as_) == self.regs.read_logical(at);
-                self.branch(offset, len, cond);
-            }
+            Beq { as_, at, offset } => self.exec_beq(bus, len, as_, at, offset),
             // BNE: taken if as_ != at
-            Bne { as_, at, offset } => {
-                let cond = self.regs.read_logical(as_) != self.regs.read_logical(at);
-                self.branch(offset, len, cond);
-            }
+            Bne { as_, at, offset } => self.exec_bne(bus, len, as_, at, offset),
             // BLT: taken if (as_ as i32) < (at as i32)
-            Blt { as_, at, offset } => {
-                let cond =
-                    (self.regs.read_logical(as_) as i32) < (self.regs.read_logical(at) as i32);
-                self.branch(offset, len, cond);
-            }
+            Blt { as_, at, offset } => self.exec_blt(bus, len, as_, at, offset),
             // BGE: taken if (as_ as i32) >= (at as i32)
-            Bge { as_, at, offset } => {
-                let cond =
-                    (self.regs.read_logical(as_) as i32) >= (self.regs.read_logical(at) as i32);
-                self.branch(offset, len, cond);
-            }
+            Bge { as_, at, offset } => self.exec_bge(bus, len, as_, at, offset),
             // BLTU: taken if as_ < at (unsigned)
-            Bltu { as_, at, offset } => {
-                let cond = self.regs.read_logical(as_) < self.regs.read_logical(at);
-                self.branch(offset, len, cond);
-            }
+            Bltu { as_, at, offset } => self.exec_bltu(bus, len, as_, at, offset),
             // BGEU: taken if as_ >= at (unsigned)
-            Bgeu { as_, at, offset } => {
-                let cond = self.regs.read_logical(as_) >= self.regs.read_logical(at);
-                self.branch(offset, len, cond);
-            }
+            Bgeu { as_, at, offset } => self.exec_bgeu(bus, len, as_, at, offset),
 
             // ── D7: Jumps and calls ───────────────────────────────────────────
 
             // J offset: unconditional jump; decoder pre-bakes +4 into offset.
             // pc = pc + offset  (offset = sign_extend18(imm18) + 4)
-            J { offset } => {
-                self.pc = self.pc.wrapping_add(offset as u32);
-            }
+            J { offset } => self.exec_j(bus, len, offset),
 
             // JX as_: register-indirect unconditional jump.
             // pc = a[as_]
-            Jx { as_ } => {
-                self.pc = self.regs.read_logical(as_);
-            }
+            Jx { as_ } => self.exec_jx(bus, len, as_),
 
             // CALL0 offset: save return address in a0, jump to target.
             // a0 = pc + 3  (return address: byte after this 3-byte instruction)
@@ -1659,21 +1350,11 @@ impl XtensaLx7 {
             //   Formula must give: ((0+4)&!3) + 0 = 4. ✓
             //   Earlier (PC+3)&!3 was used and gave 0+0 = 0 — silently off by 4
             //   for every 4-aligned PC, which broke real ESP32-S3 firmware.
-            Call0 { offset } => {
-                let ret_pc = self.pc.wrapping_add(3);
-                let target = (self.pc.wrapping_add(4) & !3u32).wrapping_add(offset as u32);
-                self.regs.write_logical(0, ret_pc);
-                self.pc = target;
-            }
+            Call0 { offset } => self.exec_call0(bus, len, offset),
 
             // CALLX0 as_: register-indirect CALL0.
             // a0 = pc + 3, pc = a[as_]
-            Callx0 { as_ } => {
-                let ret_pc = self.pc.wrapping_add(3);
-                let target = self.regs.read_logical(as_);
-                self.regs.write_logical(0, ret_pc);
-                self.pc = target;
-            }
+            Callx0 { as_ } => self.exec_callx0(bus, len, as_),
 
             // CALL4/8/12 offset: windowed call.
             // a[N] = (pc + 3 low-30) | (N << 30)
@@ -1684,68 +1365,18 @@ impl XtensaLx7 {
             // target = ((pc + 4) & !3) + offset  (ISA RM §4.4)
             //
             // See `Call0` above for the HW-oracle proof of the (pc+4) base.
-            Call4 { offset } => {
-                let raw_ret = self.pc.wrapping_add(3);
-                let ret_pc = (raw_ret & 0x3FFF_FFFF) | (1 << 30);
-                let target = (self.pc.wrapping_add(4) & !3u32).wrapping_add(offset as u32);
-                self.spill_shadow_on_call(1);
-                self.regs.write_logical(4, ret_pc);
-                self.ps.set_callinc(1);
-                self.pc = target;
-            }
-            Call8 { offset } => {
-                let raw_ret = self.pc.wrapping_add(3);
-                let ret_pc = (raw_ret & 0x3FFF_FFFF) | (2 << 30);
-                let target = (self.pc.wrapping_add(4) & !3u32).wrapping_add(offset as u32);
-                self.spill_shadow_on_call(2);
-                self.regs.write_logical(8, ret_pc);
-                self.ps.set_callinc(2);
-                self.pc = target;
-            }
-            Call12 { offset } => {
-                let raw_ret = self.pc.wrapping_add(3);
-                let ret_pc = (raw_ret & 0x3FFF_FFFF) | (3 << 30);
-                let target = (self.pc.wrapping_add(4) & !3u32).wrapping_add(offset as u32);
-                self.spill_shadow_on_call(3);
-                self.regs.write_logical(12, ret_pc);
-                self.ps.set_callinc(3);
-                self.pc = target;
-            }
+            Call4 { offset } => self.exec_call4(bus, len, offset),
+            Call8 { offset } => self.exec_call8(bus, len, offset),
+            Call12 { offset } => self.exec_call12(bus, len, offset),
 
             // CALLX4/8/12 as_: register-indirect windowed calls.
             // Same semantics as CALL4/8/12 but target = a[as_] (before we overwrite a[N]).
-            Callx4 { as_ } => {
-                let raw_ret = self.pc.wrapping_add(3);
-                let ret_pc = (raw_ret & 0x3FFF_FFFF) | (1 << 30);
-                let target = self.regs.read_logical(as_);
-                self.spill_shadow_on_call(1);
-                self.regs.write_logical(4, ret_pc);
-                self.ps.set_callinc(1);
-                self.pc = target;
-            }
-            Callx8 { as_ } => {
-                let raw_ret = self.pc.wrapping_add(3);
-                let ret_pc = (raw_ret & 0x3FFF_FFFF) | (2 << 30);
-                let target = self.regs.read_logical(as_);
-                self.spill_shadow_on_call(2);
-                self.regs.write_logical(8, ret_pc);
-                self.ps.set_callinc(2);
-                self.pc = target;
-            }
-            Callx12 { as_ } => {
-                let raw_ret = self.pc.wrapping_add(3);
-                let ret_pc = (raw_ret & 0x3FFF_FFFF) | (3 << 30);
-                let target = self.regs.read_logical(as_);
-                self.spill_shadow_on_call(3);
-                self.regs.write_logical(12, ret_pc);
-                self.ps.set_callinc(3);
-                self.pc = target;
-            }
+            Callx4 { as_ } => self.exec_callx4(bus, len, as_),
+            Callx8 { as_ } => self.exec_callx8(bus, len, as_),
+            Callx12 { as_ } => self.exec_callx12(bus, len, as_),
 
             // RET: CALL0 return. pc = a0.
-            Ret => {
-                self.pc = self.regs.read_logical(0);
-            }
+            Ret => self.exec_ret(bus, len),
 
             // ── F1: ENTRY / RETW — windowed call prologue / epilogue ──────────
 
@@ -1778,45 +1409,7 @@ impl XtensaLx7 {
             // EXCCAUSE: window overflow exceptions do NOT use EXCCAUSE. They vector
             // independently via dedicated vector slots (not the general exception path).
             // EXCCAUSE values 5/6/7 mean AllocaCause/IntDivByZero/PrivilegedCause.
-            Entry { as_, imm } => {
-                let callinc = self.ps.callinc();
-                let wb_old = self.regs.windowbase();
-                let wb_new = wb_old.wrapping_add(callinc) & 0x0F;
-
-                // F3: Window overflow detection. Per Xtensa ISA RM §4.7.1.6,
-                // real silicon vectors to OF4/OF8/OF12 handlers that spill the
-                // displaced frame to its stack save area, relying on a chain
-                // of prior spills to know where the parent frame's SP is
-                // (`l32e a0, a1, -12` in OF8/OF12). On a cold call chain that
-                // wraps for the first time, no prior spill has primed that
-                // chain, so the canonical handler reads garbage.
-                //
-                // We sidestep this with sim-level transparent spilling: on
-                // CALL{n}, if the slot we'd land in is already live, save the
-                // displaced frame's a0..a3 to a per-WB shadow stack BEFORE the
-                // CALL clobbers them. On the corresponding RETW, restore.
-                //
-                // The displaced-frame save happens in the CALL{n} exec arms,
-                // not here — by the time we reach ENTRY, the corruption has
-                // already happened. See `spill_to_shadow_on_call` in this file.
-
-                // Per Xtensa ISA RM §8.1.5 ENTRY:
-                //   AR[WB_new*4 + as] = AR[WB_old*4 + as] - imm*8
-                // i.e. read the SP from the CALLER's frame, subtract the
-                // requested frame size, and write it into the CALLEE's frame
-                // — a single value flowing across the window boundary. We
-                // were reading post-rotation, which gave the callee an
-                // uninitialized AR slot (typically 0) instead of caller's SP,
-                // so chained CALL4 calls underflowed SP into 0xffffffXX and
-                // every subsequent stack write trapped MemoryViolation.
-                let caller_sp = self.regs.read_logical(as_);
-                self.regs.set_windowbase(wb_new);
-                self.regs.set_windowstart_bit(wb_new, true);
-                self.ps.set_callinc(0);
-                self.regs
-                    .write_logical(as_, caller_sp.wrapping_sub(imm * 8));
-                self.pc = self.pc.wrapping_add(len);
-            }
+            Entry { as_, imm } => self.exec_entry(bus, len, as_, imm),
 
             // RETW: windowed return with window underflow check (F4).
             //
@@ -1847,275 +1440,64 @@ impl XtensaLx7 {
             // match covers N=3; N=0 is treated as N=3 by the same arm, which is
             // benign since CALL0 toolchains never emit RETW. If strict enforcement is
             // needed, add an explicit N=0 → illegal-instruction error here.
-            Retw => {
-                let a0 = self.regs.read_logical(0);
-                let n = (a0 >> 30) as u8; // bits[31:30] = callinc used by the call
-                let wb_cur = self.regs.windowbase();
-                let wb_dest = wb_cur.wrapping_sub(n) & 0x0F;
-
-                // Shadow mode owns window save/restore only while it still
-                // HOLDS the frames — i.e. while `call_preserve_stack` is
-                // non-empty. Once `spill_call_preserve_to_stack` has run, the
-                // frames live in the on-stack OF save areas and WINDOWSTART has
-                // collapsed to `1<<WB`; from then on the firmware's underflow
-                // handler is the correct reader and this shortcut must not fire.
-                //
-                // Dropping the `is_empty` condition (an earlier attempt at the
-                // `graphicstest` fault below) is measurably wrong: with
-                // LABWIRED_DIAG_RETW instrumentation, all 14 force-live events
-                // in that run had `preserve_depth=0` and a prior spill, so the
-                // shortcut skipped the only path that could still reload the
-                // frame. `testFillScreen`'s RETW then returned a1=0x20 to
-                // `setup()` and `Print::printNumber` faulted on the garbage SP.
-                //
-                // The remaining defect is NOT here. Adafruit's stock
-                // `graphicstest` still faults (real silicon, an ESP32-D0WDQ6,
-                // completes all twelve benchmarks) because the underflow
-                // handler reads a save area the spill never populated:
-                // `spill_call_preserve_to_stack` skips frames whose a1 fails
-                // `valid_sp`/`stackish`, leaving holes. Fixing the holes is the
-                // open work — see the graphicstest task.
-                if !self.faithful_windows
-                    && !self.regs.windowstart_bit(wb_dest)
-                    && n > 0
-                    && !self.call_preserve_stack.is_empty()
-                {
-                    self.regs.set_windowstart_bit(wb_dest, true);
-                    for k in 1..n {
-                        let s = wb_dest.wrapping_add(k) & 0x0F;
-                        self.regs.set_windowstart_bit(s, true);
-                    }
-                }
-
-                // F4: Window underflow check — destination frame must be live.
-                if !self.regs.windowstart_bit(wb_dest) {
-                    // Window underflow path — symmetric to ENTRY's overflow:
-                    // rotate WB *backwards* by N (the call type encoded in
-                    // a0[31:30]) so the handler runs in the window the
-                    // caller-of-caller occupies. Save WB → PS.OWB so RFWU
-                    // can restore it. Set EXCM, EPC1, jump to UF vector.
-                    //
-                    // Window underflow vector offsets (Xtensa LX ISA RM §5.6):
-                    const UF4_VECOFS: u32 = 0x040;
-                    const UF8_VECOFS: u32 = 0x0C0;
-                    const UF12_VECOFS: u32 = 0x140;
-                    let vec_ofs = match n {
-                        1 => UF4_VECOFS,
-                        2 => UF8_VECOFS,
-                        _ => UF12_VECOFS, // N=3 → UF12; N=0 also lands here (see note above)
-                    };
-                    let vecbase = self.sr.read(VECBASE);
-                    self.sr.write(EPC1, self.pc);
-                    self.ps.set_owb(wb_cur);
-                    self.regs.set_windowbase(wb_dest);
-                    self.ps.set_excm(true);
-                    self.pc = vecbase.wrapping_add(vec_ofs);
-                    // Still consumed a RETW attempt — clear thunk IRQ deferral.
-                    self.defer_irq_until_retw = false;
-                    return Ok(());
-                }
-
-                // Normal RETW path (destination frame is live).
-                let target_pc = (a0 & 0x3FFF_FFFF) | (self.pc & 0xC000_0000);
-                self.regs.set_windowstart_bit(wb_cur, false);
-                self.regs.set_windowbase(wb_dest);
-                self.pc = target_pc;
-                // The callee just placed its return value in its a2 =
-                // AR[wb_cur*4 + 2] = caller's a{n*4 + 2} after rotation.
-                // Save it before the pops below — displace pop would restore
-                // stale data into that physical and clobber the return value.
-                let return_value = if n > 0 {
-                    Some(self.regs.read_logical(n * 4 + 2))
-                } else {
-                    None
-                };
-                // Hybrid restore:
-                //  1. Classic LIFO for displace (callee window) + WS re-set —
-                //     same as early-boot path; LIFO holds ONLY displaces now.
-                //  2. Authoritative preserve from call_preserve_stack so outer
-                //     a4..a7 cannot be stolen by a wrap-around displace sweep.
-                for k in 0..4u8 {
-                    let slot = wb_cur.wrapping_add(k) & 0x0F;
-                    if self.regs.pop_shadow(slot) {
-                        self.regs.set_windowstart_bit(slot, true);
-                    }
-                }
-                self.restore_call_preserve();
-                if let Some(rv) = return_value {
-                    self.regs.write_logical(n * 4 + 2, rv);
-                }
-                // Close the windowed-thunk IRQ deferral window (if any).
-                self.defer_irq_until_retw = false;
-            }
+            Retw => self.exec_retw(bus, len),
 
             // BANY: taken if (as_ & at) != 0
-            Bany { as_, at, offset } => {
-                let cond = (self.regs.read_logical(as_) & self.regs.read_logical(at)) != 0;
-                self.branch(offset, len, cond);
-            }
+            Bany { as_, at, offset } => self.exec_bany(bus, len, as_, at, offset),
             // BALL: taken if (as_ & at) == at  (all bits of at set in as_)
-            Ball { as_, at, offset } => {
-                let a = self.regs.read_logical(as_);
-                let b = self.regs.read_logical(at);
-                let cond = (a & b) == b;
-                self.branch(offset, len, cond);
-            }
+            Ball { as_, at, offset } => self.exec_ball(bus, len, as_, at, offset),
             // BNONE: taken if (as_ & at) == 0
-            Bnone { as_, at, offset } => {
-                let cond = (self.regs.read_logical(as_) & self.regs.read_logical(at)) == 0;
-                self.branch(offset, len, cond);
-            }
+            Bnone { as_, at, offset } => self.exec_bnone(bus, len, as_, at, offset),
             // BNALL: taken if (as_ & at) != at  (at least one bit of at missing in as_)
-            Bnall { as_, at, offset } => {
-                let a = self.regs.read_logical(as_);
-                let b = self.regs.read_logical(at);
-                let cond = (a & b) != b;
-                self.branch(offset, len, cond);
-            }
+            Bnall { as_, at, offset } => self.exec_bnall(bus, len, as_, at, offset),
             // BBC: taken if bit (at & 0x1F) of as_ is CLEAR
-            Bbc { as_, at, offset } => {
-                let bit = self.regs.read_logical(at) & 0x1F;
-                let cond = (self.regs.read_logical(as_) >> bit) & 1 == 0;
-                self.branch(offset, len, cond);
-            }
+            Bbc { as_, at, offset } => self.exec_bbc(bus, len, as_, at, offset),
             // BBS: taken if bit (at & 0x1F) of as_ is SET
-            Bbs { as_, at, offset } => {
-                let bit = self.regs.read_logical(at) & 0x1F;
-                let cond = (self.regs.read_logical(as_) >> bit) & 1 == 1;
-                self.branch(offset, len, cond);
-            }
+            Bbs { as_, at, offset } => self.exec_bbs(bus, len, as_, at, offset),
             // BBCI: taken if bit `bit` (0..=31) of as_ is CLEAR
-            Bbci { as_, bit, offset } => {
-                let cond = (self.regs.read_logical(as_) >> bit) & 1 == 0;
-                self.branch(offset, len, cond);
-            }
+            Bbci { as_, bit, offset } => self.exec_bbci(bus, len, as_, bit, offset),
             // BBSI: taken if bit `bit` (0..=31) of as_ is SET
-            Bbsi { as_, bit, offset } => {
-                let val = self.regs.read_logical(as_);
-                let cond = (val >> bit) & 1 == 1;
-                if std::env::var_os("LABWIRED_TRACE_BBSI").is_some() && self.pc == 0x400ed00d {
-                    eprintln!(
-                        "[trace] BBSI at pc=0x{:08x} as_=a{} val=0x{:08x} bit={} cond={}",
-                        self.pc, as_, val, bit, cond
-                    );
-                }
-                self.branch(offset, len, cond);
-            }
+            Bbsi { as_, bit, offset } => self.exec_bbsi(bus, len, as_, bit, offset),
             // BEQZ: taken if as_ == 0
-            Beqz { as_, offset } => {
-                let cond = self.regs.read_logical(as_) == 0;
-                self.branch(offset, len, cond);
-            }
+            Beqz { as_, offset } => self.exec_beqz(bus, len, as_, offset),
             // BNEZ: taken if as_ != 0
-            Bnez { as_, offset } => {
-                let cond = self.regs.read_logical(as_) != 0;
-                self.branch(offset, len, cond);
-            }
+            Bnez { as_, offset } => self.exec_bnez(bus, len, as_, offset),
             // BLTZ: taken if (as_ as i32) < 0
-            Bltz { as_, offset } => {
-                let cond = (self.regs.read_logical(as_) as i32) < 0;
-                self.branch(offset, len, cond);
-            }
+            Bltz { as_, offset } => self.exec_bltz(bus, len, as_, offset),
             // BGEZ: taken if (as_ as i32) >= 0
-            Bgez { as_, offset } => {
-                let cond = (self.regs.read_logical(as_) as i32) >= 0;
-                self.branch(offset, len, cond);
-            }
+            Bgez { as_, offset } => self.exec_bgez(bus, len, as_, offset),
             // BT bs: taken if boolean register BR[bs] == 1 (Boolean Option).
-            Bt { bs, offset } => {
-                let cond = (self.br >> (bs & 0xF)) & 1 == 1;
-                self.branch(offset, len, cond);
-            }
+            Bt { bs, offset } => self.exec_bt(bus, len, bs, offset),
             // BF bs: taken if boolean register BR[bs] == 0 (Boolean Option).
-            Bf { bs, offset } => {
-                let cond = (self.br >> (bs & 0xF)) & 1 == 0;
-                self.branch(offset, len, cond);
-            }
+            Bf { bs, offset } => self.exec_bf(bus, len, bs, offset),
             // BEQI: taken if as_ == imm  (decoder resolved B4CONST[r] into imm: i32)
-            Beqi { as_, imm, offset } => {
-                let cond = (self.regs.read_logical(as_) as i32) == imm;
-                self.branch(offset, len, cond);
-            }
+            Beqi { as_, imm, offset } => self.exec_beqi(bus, len, as_, imm, offset),
             // BNEI: taken if as_ != imm
-            Bnei { as_, imm, offset } => {
-                let cond = (self.regs.read_logical(as_) as i32) != imm;
-                self.branch(offset, len, cond);
-            }
+            Bnei { as_, imm, offset } => self.exec_bnei(bus, len, as_, imm, offset),
             // BLTI: taken if (as_ as i32) < imm  (signed)
-            Blti { as_, imm, offset } => {
-                let cond = (self.regs.read_logical(as_) as i32) < imm;
-                self.branch(offset, len, cond);
-            }
+            Blti { as_, imm, offset } => self.exec_blti(bus, len, as_, imm, offset),
             // BGEI: taken if (as_ as i32) >= imm  (signed)
-            Bgei { as_, imm, offset } => {
-                let cond = (self.regs.read_logical(as_) as i32) >= imm;
-                self.branch(offset, len, cond);
-            }
+            Bgei { as_, imm, offset } => self.exec_bgei(bus, len, as_, imm, offset),
             // BLTUI: taken if as_ < imm  (unsigned; decoder resolved B4CONSTU[r] into imm: u32)
-            Bltui { as_, imm, offset } => {
-                let cond = self.regs.read_logical(as_) < imm;
-                self.branch(offset, len, cond);
-            }
+            Bltui { as_, imm, offset } => self.exec_bltui(bus, len, as_, imm, offset),
             // BGEUI: taken if as_ >= imm  (unsigned)
-            Bgeui { as_, imm, offset } => {
-                let cond = self.regs.read_logical(as_) >= imm;
-                self.branch(offset, len, cond);
-            }
+            Bgeui { as_, imm, offset } => self.exec_bgeui(bus, len, as_, imm, offset),
 
             // ── MUL family ────────────────────────────────────────────────────────
             // MULL: low 32 bits of unsigned 32×32 product (same bits as signed).
             // SALT: AR[r] = (AR[s] < AR[t]) signed ? 1 : 0.
-            Salt { ar, as_, at } => {
-                let a = self.regs.read_logical(as_) as i32;
-                let b = self.regs.read_logical(at) as i32;
-                self.regs.write_logical(ar, u32::from(a < b));
-                self.pc = self.pc.wrapping_add(len);
-            }
+            Salt { ar, as_, at } => self.exec_salt(bus, len, ar, as_, at),
             // SALTU: AR[r] = (AR[s] < AR[t]) unsigned ? 1 : 0.
-            Saltu { ar, as_, at } => {
-                let a = self.regs.read_logical(as_);
-                let b = self.regs.read_logical(at);
-                self.regs.write_logical(ar, u32::from(a < b));
-                self.pc = self.pc.wrapping_add(len);
-            }
-            Mull { ar, as_, at } => {
-                let v = self
-                    .regs
-                    .read_logical(as_)
-                    .wrapping_mul(self.regs.read_logical(at));
-                self.regs.write_logical(ar, v);
-                self.pc = self.pc.wrapping_add(len);
-            }
+            Saltu { ar, as_, at } => self.exec_saltu(bus, len, ar, as_, at),
+            Mull { ar, as_, at } => self.exec_mull(bus, len, ar, as_, at),
             // MULUH: upper 32 bits of unsigned 64-bit product.
-            Muluh { ar, as_, at } => {
-                let a = self.regs.read_logical(as_) as u64;
-                let b = self.regs.read_logical(at) as u64;
-                let v = (a.wrapping_mul(b) >> 32) as u32;
-                self.regs.write_logical(ar, v);
-                self.pc = self.pc.wrapping_add(len);
-            }
+            Muluh { ar, as_, at } => self.exec_muluh(bus, len, ar, as_, at),
             // MULSH: upper 32 bits of signed 64-bit product.
-            Mulsh { ar, as_, at } => {
-                let a = self.regs.read_logical(as_) as i32 as i64;
-                let b = self.regs.read_logical(at) as i32 as i64;
-                let v = (a.wrapping_mul(b) >> 32) as u32;
-                self.regs.write_logical(ar, v);
-                self.pc = self.pc.wrapping_add(len);
-            }
+            Mulsh { ar, as_, at } => self.exec_mulsh(bus, len, ar, as_, at),
             // MUL16U: unsigned 16×16 → 32 product; only low 16 bits of each source used.
-            Mul16u { ar, as_, at } => {
-                let a = self.regs.read_logical(as_) & 0xFFFF;
-                let b = self.regs.read_logical(at) & 0xFFFF;
-                self.regs.write_logical(ar, a * b);
-                self.pc = self.pc.wrapping_add(len);
-            }
+            Mul16u { ar, as_, at } => self.exec_mul16u(bus, len, ar, as_, at),
             // MUL16S: signed 16×16 → 32 product; low 16 sign-extended before multiply.
-            Mul16s { ar, as_, at } => {
-                let a = self.regs.read_logical(as_) as i16 as i32;
-                let b = self.regs.read_logical(at) as i16 as i32;
-                self.regs.write_logical(ar, (a * b) as u32);
-                self.pc = self.pc.wrapping_add(len);
-            }
+            Mul16s { ar, as_, at } => self.exec_mul16s(bus, len, ar, as_, at),
 
             // ── DIV family ────────────────────────────────────────────────────
             // Divide-by-zero: set EXCCAUSE=6 (IntegerDivideByZeroCause) and
@@ -2123,53 +1505,17 @@ impl XtensaLx7 {
 
             // QUOS ar, as_, at: signed quotient as_ / at.
             // i32::MIN / -1 wraps to i32::MIN per ISA RM §8 (saturating result).
-            Quos { ar, as_, at } => {
-                let dividend = self.regs.read_logical(as_) as i32;
-                let divisor = self.regs.read_logical(at) as i32;
-                if divisor == 0 {
-                    return self.raise_general_exception(6);
-                }
-                let q = dividend.wrapping_div(divisor);
-                self.regs.write_logical(ar, q as u32);
-                self.pc = self.pc.wrapping_add(len);
-            }
+            Quos { ar, as_, at } => self.exec_quos(bus, len, ar, as_, at),
 
             // QUOU ar, as_, at: unsigned quotient as_ / at.
-            Quou { ar, as_, at } => {
-                let dividend = self.regs.read_logical(as_);
-                let divisor = self.regs.read_logical(at);
-                if divisor == 0 {
-                    return self.raise_general_exception(6);
-                }
-                let q = dividend / divisor;
-                self.regs.write_logical(ar, q);
-                self.pc = self.pc.wrapping_add(len);
-            }
+            Quou { ar, as_, at } => self.exec_quou(bus, len, ar, as_, at),
 
             // REMS ar, as_, at: signed remainder as_ % at. Sign follows dividend (Rust `%` semantics).
             // i32::MIN % -1 = 0 (overflow corner; wrapping_rem handles this).
-            Rems { ar, as_, at } => {
-                let dividend = self.regs.read_logical(as_) as i32;
-                let divisor = self.regs.read_logical(at) as i32;
-                if divisor == 0 {
-                    return self.raise_general_exception(6);
-                }
-                let r = dividend.wrapping_rem(divisor);
-                self.regs.write_logical(ar, r as u32);
-                self.pc = self.pc.wrapping_add(len);
-            }
+            Rems { ar, as_, at } => self.exec_rems(bus, len, ar, as_, at),
 
             // REMU ar, as_, at: unsigned remainder as_ % at.
-            Remu { ar, as_, at } => {
-                let dividend = self.regs.read_logical(as_);
-                let divisor = self.regs.read_logical(at);
-                if divisor == 0 {
-                    return self.raise_general_exception(6);
-                }
-                let r = dividend % divisor;
-                self.regs.write_logical(ar, r);
-                self.pc = self.pc.wrapping_add(len);
-            }
+            Remu { ar, as_, at } => self.exec_remu(bus, len, ar, as_, at),
 
             // ── E3: Bit-manip instructions ────────────────────────────────────
 
@@ -2178,81 +1524,35 @@ impl XtensaLx7 {
             // For as_>=0: counts leading 0 bits minus 1 (result range 0..=31).
             // For as_<0:  counts leading 1 bits minus 1 (same range).
             // NSA(0) = 31 (clz(0)=32, 32-1=31). NSA(-1) = 31 (clz(!0xFFFF)=32, -1=31).
-            Nsa { ar, as_ } => {
-                let src = self.regs.read_logical(as_);
-                let count = if (src as i32) >= 0 {
-                    src.leading_zeros()
-                } else {
-                    (!src).leading_zeros()
-                };
-                self.regs.write_logical(ar, count - 1);
-                self.pc = self.pc.wrapping_add(len);
-            }
+            Nsa { ar, as_ } => self.exec_nsa(bus, len, ar, as_),
 
             // NSAU ar, as_: Number of leading zeros, Unsigned.
             // Result = clz(as_) for unsigned as_. NSAU(0) = 32.
-            Nsau { ar, as_ } => {
-                let src = self.regs.read_logical(as_);
-                self.regs.write_logical(ar, src.leading_zeros());
-                self.pc = self.pc.wrapping_add(len);
-            }
+            Nsau { ar, as_ } => self.exec_nsau(bus, len, ar, as_),
 
             // MIN ar, as_, at: ar = signed min(as_, at).
-            Min { ar, as_, at } => {
-                let a = self.regs.read_logical(as_) as i32;
-                let b = self.regs.read_logical(at) as i32;
-                self.regs.write_logical(ar, a.min(b) as u32);
-                self.pc = self.pc.wrapping_add(len);
-            }
+            Min { ar, as_, at } => self.exec_min(bus, len, ar, as_, at),
 
             // MAX ar, as_, at: ar = signed max(as_, at).
-            Max { ar, as_, at } => {
-                let a = self.regs.read_logical(as_) as i32;
-                let b = self.regs.read_logical(at) as i32;
-                self.regs.write_logical(ar, a.max(b) as u32);
-                self.pc = self.pc.wrapping_add(len);
-            }
+            Max { ar, as_, at } => self.exec_max(bus, len, ar, as_, at),
 
             // MINU ar, as_, at: ar = unsigned min(as_, at).
-            Minu { ar, as_, at } => {
-                let a = self.regs.read_logical(as_);
-                let b = self.regs.read_logical(at);
-                self.regs.write_logical(ar, a.min(b));
-                self.pc = self.pc.wrapping_add(len);
-            }
+            Minu { ar, as_, at } => self.exec_minu(bus, len, ar, as_, at),
 
             // MAXU ar, as_, at: ar = unsigned max(as_, at).
-            Maxu { ar, as_, at } => {
-                let a = self.regs.read_logical(as_);
-                let b = self.regs.read_logical(at);
-                self.regs.write_logical(ar, a.max(b));
-                self.pc = self.pc.wrapping_add(len);
-            }
+            Maxu { ar, as_, at } => self.exec_maxu(bus, len, ar, as_, at),
 
             // SEXT ar, as_, t: sign-extend as_ from bit position t downward.
             // Decoder stores sa (7..=22) in the `t` field of the Instruction.
             // Bit[sa] of as_ is the sign bit; bits[sa-1:0] are preserved;
             // bits[31:sa] are filled with the value of bit[sa].
             // Equivalently: ((as_ as i32) << (31 - sa)) >> (31 - sa)
-            Sext { ar, as_, t: sa } => {
-                let src = self.regs.read_logical(as_);
-                let shift = 31 - sa; // sa is 7..=22, shift is 9..=24
-                let v = ((src as i32) << shift >> shift) as u32;
-                self.regs.write_logical(ar, v);
-                self.pc = self.pc.wrapping_add(len);
-            }
+            Sext { ar, as_, t: sa } => self.exec_sext(bus, len, ar, as_, sa),
 
             // CLAMPS ar, as_, t: saturate signed as_ into (sa+1)-bit signed range.
             // Decoder stores sa (7..=22) in the `t` field of the Instruction.
             // Range: [-(2^sa), 2^sa - 1].  For sa=7: [-128, 127].
-            Clamps { ar, as_, t: sa } => {
-                let src = self.regs.read_logical(as_) as i32;
-                let max_val = (1i32 << sa) - 1;
-                let min_val = -(1i32 << sa);
-                let v = src.clamp(min_val, max_val);
-                self.regs.write_logical(ar, v as u32);
-                self.pc = self.pc.wrapping_add(len);
-            }
+            Clamps { ar, as_, t: sa } => self.exec_clamps(bus, len, ar, as_, sa),
 
             // ── E4: Atomic memory instructions ───────────────────────────────
 
@@ -2267,41 +1567,21 @@ impl XtensaLx7 {
             // Order: read mem first, compare, conditionally write, then update at.
             // For Plan 1 RAM there are no bus read/write side effects, so the order
             // only matters semantically. SCOMPARE1 is read via the SR dispatcher.
-            S32c1i { at, as_, imm } => {
-                let ea = self.regs.read_logical(as_).wrapping_add(imm);
-                let mem32 = bus.read_u32(ea as u64)?;
-                let scompare = self.sr.read(SCOMPARE1);
-                if mem32 == scompare {
-                    self.maybe_invalidate_for_write(ea);
-                    bus.write_u32(ea as u64, self.regs.read_logical(at))?;
-                }
-                self.regs.write_logical(at, mem32);
-                self.pc = self.pc.wrapping_add(len);
-            }
+            S32c1i { at, as_, imm } => self.exec_s32c1i(bus, len, at, as_, imm),
 
             // L32AI at, as_, imm: Load Acquire Implicit.
             //
             // In Plan 1 (single-core, no SMP) this is identical to L32I.
             // The acquire barrier is a no-op; SMP ordering is deferred to Plan 4.
             // EA = as_ + imm  (decoder pre-shifts imm by 2).
-            L32ai { at, as_, imm } => {
-                let ea = self.regs.read_logical(as_).wrapping_add(imm) as u64;
-                let val = bus.read_u32(ea)?;
-                self.regs.write_logical(at, val);
-                self.pc = self.pc.wrapping_add(len);
-            }
+            L32ai { at, as_, imm } => self.exec_l32ai(bus, len, at, as_, imm),
 
             // S32RI at, as_, imm: Store Release Implicit.
             //
             // In Plan 1 (single-core, no SMP) this is identical to S32I.
             // The release barrier is a no-op; SMP ordering is deferred to Plan 4.
             // EA = as_ + imm  (decoder pre-shifts imm by 2).
-            S32ri { at, as_, imm } => {
-                let ea = self.regs.read_logical(as_).wrapping_add(imm);
-                self.maybe_invalidate_for_write(ea);
-                bus.write_u32(ea as u64, self.regs.read_logical(at))?;
-                self.pc = self.pc.wrapping_add(len);
-            }
+            S32ri { at, as_, imm } => self.exec_s32ri(bus, len, at, as_, imm),
 
             // ── F5: S32E / L32E — windowed exception store/load ──────────────
             //
@@ -2323,27 +1603,11 @@ impl XtensaLx7 {
             // (explicit PS write to 0x40021) but RING=0, then uses S32E to
             // mirror caller-save registers into the spill area below SP.
             // An EXCM-only check incorrectly faulted that path.
-            S32e { at, as_, imm } => {
-                if !self.ps.excm() && self.ps.ring() != 0 {
-                    return self.raise_general_exception(0);
-                }
-                let ea = self.regs.read_logical(as_).wrapping_add(imm);
-                self.maybe_invalidate_for_write(ea);
-                bus.write_u32(ea as u64, self.regs.read_logical(at))?;
-                self.pc = self.pc.wrapping_add(len);
-            }
+            S32e { at, as_, imm } => self.exec_s32e(bus, len, at, as_, imm),
 
             // L32E at, as_, imm: load [as_ + imm] into at, privileged.
             // Same EXCM=1 OR RING=0 gate as S32E.
-            L32e { at, as_, imm } => {
-                if !self.ps.excm() && self.ps.ring() != 0 {
-                    return self.raise_general_exception(0);
-                }
-                let ea = self.regs.read_logical(as_).wrapping_add(imm) as u64;
-                let v = bus.read_u32(ea)?;
-                self.regs.write_logical(at, v);
-                self.pc = self.pc.wrapping_add(len);
-            }
+            L32e { at, as_, imm } => self.exec_l32e(bus, len, at, as_, imm),
 
             // ── F6: MOVSP / ROTW ─────────────────────────────────────────────
 
@@ -2366,26 +1630,7 @@ impl XtensaLx7 {
             //   save a[(WB+1)*4 .. (WB+1)*4+3] to memory at [a[at]-16..a[at]-4], then
             //   perform the move, then restore from the new SP. This matches the
             //   __window_spill / alloca vector handler ABI used by GCC/ESP-IDF.
-            Movsp { at, as_ } => {
-                let wb = self.regs.windowbase();
-                let next_idx = wb.wrapping_add(1) & 0x0F;
-
-                if self.regs.windowstart_bit(next_idx) {
-                    // Adjacent frame is live — silicon raises AllocaCause and the
-                    // firmware handler spills one window to the stack save area.
-                    if self.faithful_windows {
-                        return self.vector_exception(5);
-                    }
-                    // Shadow / fast-boot mode: just perform the register move.
-                    // Live frames are already on the shadow stacks for RETW.
-                    // Raising AllocaCause hard-faults heap_caps_init's VLA path.
-                }
-
-                // Safe path: simple register move (stack-pointer adjust).
-                let v = self.regs.read_logical(as_);
-                self.regs.write_logical(at, v);
-                self.pc = self.pc.wrapping_add(len);
-            }
+            Movsp { at, as_ } => self.exec_movsp(bus, len, at, as_),
 
             // ROTW n: rotate WindowBase by n (4-bit signed, range -8..=+7).
             //
@@ -2399,14 +1644,7 @@ impl XtensaLx7 {
             //
             // TODO(plan-priv): when PS.RING modelling is added, add a check here:
             //   if ps.ring() != 0 { raise PrivilegedCause (EXCCAUSE=8) }
-            Rotw { n } => {
-                let wb = self.regs.windowbase();
-                // n is i8 (range -8..=+7); wrapping add modulo 16.
-                let wb_new = (wb as i32).wrapping_add(n as i32).rem_euclid(16) as u8;
-                self.regs.set_windowbase(wb_new);
-                // WindowStart is NOT modified (ISA RM §8 ROTW).
-                self.pc = self.pc.wrapping_add(len);
-            }
+            Rotw { n } => self.exec_rotw(bus, len, n),
 
             // ── G2: Exception / interrupt return instructions ─────────────────
 
@@ -2428,28 +1666,14 @@ impl XtensaLx7 {
             // `_xt_to_syscall_exc` handler (window-spill for setjmp/longjmp,
             // libc) does the work and advances EPC1 past the instruction
             // before RFE. Newlib/Unity reach here during the test run.
-            Syscall => {
-                return self.vector_exception(1);
-            }
+            Syscall => self.exec_syscall(bus, len),
 
-            Rfe => {
-                self.ps.set_excm(false);
-                self.pc = self.sr.read(EPC1);
-                if !self.faithful_windows {
-                    self.pop_irq_window_frame(bus);
-                }
-            }
+            Rfe => self.exec_rfe(bus, len),
 
             // RFDE — Return From Debug Exception. Handled same as RFE for Plan 1:
             // clear PS.EXCM, jump to EPC1. Full DEPC/debug-exception semantics are
             // deferred to a later plan.
-            Rfde => {
-                self.ps.set_excm(false);
-                self.pc = self.sr.read(EPC1);
-                if !self.faithful_windows {
-                    self.pop_irq_window_frame(bus);
-                }
-            }
+            Rfde => self.exec_rfde(bus, len),
 
             // RFI n — Return From Interrupt at level n (n = 2..7 on LX7).
             //
@@ -2465,28 +1689,7 @@ impl XtensaLx7 {
             // and 1 are not valid targets for RFI on LX7; we silently treat them
             // as no-ops (stay at current PC, no state change) since privileged
             // firmware is the only caller and should not issue invalid RFI levels.
-            Rfi { level } => {
-                let (eps_id, epc_id) = match level {
-                    2 => (EPS2, EPC2),
-                    3 => (EPS3, EPC3),
-                    4 => (EPS4, EPC4),
-                    5 => (EPS5, EPC5),
-                    6 => (EPS6, EPC6),
-                    7 => (EPS7, EPC7),
-                    _ => {
-                        // Invalid level — skip silently.
-                        self.pc = self.pc.wrapping_add(len);
-                        return Ok(());
-                    }
-                };
-                let new_ps = self.sr.read(eps_id);
-                let new_pc = self.sr.read(epc_id);
-                self.ps = Ps::from_raw(new_ps);
-                self.pc = new_pc;
-                if !self.faithful_windows {
-                    self.pop_irq_window_frame(bus);
-                }
-            }
+            Rfi { level } => self.exec_rfi(bus, len, level),
 
             // RFWO — Return From Window Overflow handler.
             //
@@ -2501,14 +1704,7 @@ impl XtensaLx7 {
             // After RFWO, the re-executed ENTRY succeeds because WS at the
             // (previously conflicting) position is now 0, and ENTRY itself
             // sets WS[wb_new] for the new frame.
-            Rfwo => {
-                let wb_handler = self.regs.windowbase();
-                let wb_old = self.ps.owb();
-                self.regs.set_windowstart_bit(wb_handler, false);
-                self.regs.set_windowbase(wb_old);
-                self.ps.set_excm(false);
-                self.pc = self.sr.read(EPC1);
-            }
+            Rfwo => self.exec_rfwo(bus, len),
 
             // RFWU — Return From Window Underflow handler.
             //
@@ -2521,14 +1717,7 @@ impl XtensaLx7 {
             //   4. PC ← EPC1                    (re-execute the faulting RETW)
             //
             // The re-executed RETW succeeds because WS[wb_dest] is now set.
-            Rfwu => {
-                let wb_handler = self.regs.windowbase();
-                let wb_old = self.ps.owb();
-                self.regs.set_windowstart_bit(wb_handler, true);
-                self.regs.set_windowbase(wb_old);
-                self.ps.set_excm(false);
-                self.pc = self.sr.read(EPC1);
-            }
+            Rfwu => self.exec_rfwu(bus, len),
 
             // ── G3: Special-Register / User-Register access ──────────────────
             //
@@ -2543,55 +1732,16 @@ impl XtensaLx7 {
             // we model only as storage (no behavioural side-effects). Genuine
             // privilege checks (PS.RING) are not enforced here because all
             // firmware we simulate runs in ring 0.
-            Rsr { at, sr } => {
-                let mut v = self.read_sr(sr);
-                // INTERRUPT (SR 226) is a hardware-aggregated view of pending
-                // interrupts. In our model, peripheral source IDs route
-                // through the bus's `pending_cpu_irqs` aggregator and never
-                // touch the SR-file `INTERRUPT` slot directly. esp-hal's
-                // `__level_1_interrupt` reads INTERRUPT to find which
-                // peripheral source fired, so we must OR the bus-side bits
-                // in here, otherwise the firmware sees INTERRUPT=0 and
-                // never dispatches to the user ISR (Plan 3 Task 10 case
-                // study).
-                if sr == INTERRUPT {
-                    // Per-core IRQ routing handled by the bus aggregator:
-                    // PRO_CPU (core 0) gets peripheral source IRQs; both cores
-                    // get their own cross-core FROM_CPU IPIs. APP_CPU never
-                    // sees PRO_CPU's peripheral interrupts (which would unbalance
-                    // its critical nesting → vPortExitCritical "nesting > 0").
-                    v |= bus.pending_cpu_irqs(self.core_id());
-                }
-                self.regs.write_logical(at, v);
-                self.pc = self.pc.wrapping_add(len);
-            }
-            Wsr { at, sr } => {
-                let v = self.regs.read_logical(at);
-                self.write_sr(sr, v);
-                self.pc = self.pc.wrapping_add(len);
-            }
-            Xsr { at, sr } => {
-                let new_v = self.regs.read_logical(at);
-                let old_v = self.read_sr(sr);
-                self.write_sr(sr, new_v);
-                self.regs.write_logical(at, old_v);
-                self.pc = self.pc.wrapping_add(len);
-            }
+            Rsr { at, sr } => self.exec_rsr(bus, len, at, sr),
+            Wsr { at, sr } => self.exec_wsr(bus, len, at, sr),
+            Xsr { at, sr } => self.exec_xsr(bus, len, at, sr),
             // RUR ar, ur / WUR at, ur — User-Register read/write. URs are a
             // separate 8-bit-ID space from SRs; we model them as a simple
             // [u32; 256] storage array. The commonly-used URs are THREADPTR
             // (231), FCR (232), FSR (233). Floating-point semantics of FCR/FSR
             // are not modeled; they roundtrip as plain storage.
-            Rur { ar, ur } => {
-                let v = self.ur[(ur as usize) & 0xFF];
-                self.regs.write_logical(ar, v);
-                self.pc = self.pc.wrapping_add(len);
-            }
-            Wur { at, ur } => {
-                let v = self.regs.read_logical(at);
-                self.ur[(ur as usize) & 0xFF] = v;
-                self.pc = self.pc.wrapping_add(len);
-            }
+            Rur { ar, ur } => self.exec_rur(bus, len, ar, ur),
+            Wur { at, ur } => self.exec_wur(bus, len, at, ur),
 
             // EXTUI ar, at, shift, bits: ar = (at >> shift) & ((1<<bits)-1).
             // bits ∈ 1..=16, shift ∈ 0..=31. The mask wraps cleanly because
@@ -2601,17 +1751,7 @@ impl XtensaLx7 {
                 at,
                 shift,
                 bits,
-            } => {
-                let v = self.regs.read_logical(at);
-                let mask: u32 = if bits >= 32 {
-                    u32::MAX
-                } else {
-                    (1u32 << bits) - 1
-                };
-                let extracted = (v >> shift) & mask;
-                self.regs.write_logical(ar, extracted);
-                self.pc = self.pc.wrapping_add(len);
-            }
+            } => self.exec_extui(bus, len, ar, at, shift, bits),
 
             // RSIL at, level: atomic { at = PS; PS.INTLEVEL = level; }.
             //
@@ -2619,13 +1759,7 @@ impl XtensaLx7 {
             // given priority, returning the previous PS so a later WSR.PS
             // can restore it. Per ISA RM the only PS bits modified are
             // INTLEVEL[3:0]; EXCM/UM/CALLINC/etc. are preserved.
-            Rsil { at, level } => {
-                let prev_ps = self.ps.as_raw();
-                self.regs.write_logical(at, prev_ps);
-                let new_ps = (prev_ps & !0xF) | (level as u32 & 0xF);
-                self.ps = Ps::from_raw(new_ps);
-                self.pc = self.pc.wrapping_add(len);
-            }
+            Rsil { at, level } => self.exec_rsil(bus, len, at, level),
 
             // ILL / ILL.N — illegal instruction (intentional trap).
             //
@@ -2644,243 +1778,65 @@ impl XtensaLx7 {
             //   ILL.N  → 16-bit `6d f0` (op0=0xD, r=0xF, t-field=6, s=0)
             //   ILL    → 24-bit `00 00 00` (routed via Unknown today; same
             //             EXCCAUSE=0 semantics, so leaving the alias).
-            Ill => return self.raise_general_exception(0),
+            Ill => self.exec_ill(bus, len),
 
             // ── Single-precision FPU (Xtensa LX7 hardware FPU) ──────────────
             // The FR file is `self.fp` (raw u32 bit patterns); arithmetic goes
             // through Rust `f32`, which gives IEEE-754 round-to-nearest and
             // correct NaN/inf/signed-zero handling for free. FCR rounding-mode
             // overrides are not modeled (firmware leaves it at the default).
-            AddS { fr, fs, ft } => {
-                let v = self.fget(fs) + self.fget(ft);
-                self.fset(fr, v);
-                self.pc = self.pc.wrapping_add(len);
-            }
-            SubS { fr, fs, ft } => {
-                let v = self.fget(fs) - self.fget(ft);
-                self.fset(fr, v);
-                self.pc = self.pc.wrapping_add(len);
-            }
-            MulS { fr, fs, ft } => {
-                let v = self.fget(fs) * self.fget(ft);
-                self.fset(fr, v);
-                self.pc = self.pc.wrapping_add(len);
-            }
+            AddS { fr, fs, ft } => self.exec_add_s(bus, len, fr, fs, ft),
+            SubS { fr, fs, ft } => self.exec_sub_s(bus, len, fr, fs, ft),
+            MulS { fr, fs, ft } => self.exec_mul_s(bus, len, fr, fs, ft),
             // madd.s: fr = fr + fs*ft. f32::mul_add would give a fused (single-
             // rounding) result; the Xtensa FPU rounds the product and the sum
             // separately, so use discrete ops to match the hardware bit-for-bit.
-            MaddS { fr, fs, ft } => {
-                let v = self.fget(fr) + self.fget(fs) * self.fget(ft);
-                self.fset(fr, v);
-                self.pc = self.pc.wrapping_add(len);
-            }
-            MsubS { fr, fs, ft } => {
-                let v = self.fget(fr) - self.fget(fs) * self.fget(ft);
-                self.fset(fr, v);
-                self.pc = self.pc.wrapping_add(len);
-            }
+            MaddS { fr, fs, ft } => self.exec_madd_s(bus, len, fr, fs, ft),
+            MsubS { fr, fs, ft } => self.exec_msub_s(bus, len, fr, fs, ft),
             // abs.s / neg.s operate on the sign bit only (preserve NaN payload).
-            AbsS { fr, fs } => {
-                let v = self.fp[(fs & 0xF) as usize] & 0x7FFF_FFFF;
-                self.fp[(fr & 0xF) as usize] = v;
-                self.pc = self.pc.wrapping_add(len);
-            }
-            NegS { fr, fs } => {
-                let v = self.fp[(fs & 0xF) as usize] ^ 0x8000_0000;
-                self.fp[(fr & 0xF) as usize] = v;
-                self.pc = self.pc.wrapping_add(len);
-            }
-            MovS { fr, fs } => {
-                self.fp[(fr & 0xF) as usize] = self.fp[(fs & 0xF) as usize];
-                self.pc = self.pc.wrapping_add(len);
-            }
+            AbsS { fr, fs } => self.exec_abs_s(bus, len, fr, fs),
+            NegS { fr, fs } => self.exec_neg_s(bus, len, fr, fs),
+            MovS { fr, fs } => self.exec_mov_s(bus, len, fr, fs),
             // rfr ar, fs : AR[ar] = raw bits of f[fs] (move FR → AR, no convert).
-            Rfr { ar, fs } => {
-                let v = self.fp[(fs & 0xF) as usize];
-                self.regs.write_logical(ar, v);
-                self.pc = self.pc.wrapping_add(len);
-            }
+            Rfr { ar, fs } => self.exec_rfr(bus, len, ar, fs),
             // wfr fr, as_ : f[fr] = raw bits of AR[as_] (move AR → FR, no convert).
-            Wfr { fr, as_ } => {
-                let v = self.regs.read_logical(as_);
-                self.fp[(fr & 0xF) as usize] = v;
-                self.pc = self.pc.wrapping_add(len);
-            }
+            Wfr { fr, as_ } => self.exec_wfr(bus, len, fr, as_),
             // float.s fr, as_, imm : f[fr] = (f32)(i32)AR[as_] * 2^-imm.
-            FloatS { fr, as_, imm } => {
-                let x = self.regs.read_logical(as_) as i32 as f32;
-                let v = x / (1u32 << imm) as f32;
-                self.fset(fr, v);
-                self.pc = self.pc.wrapping_add(len);
-            }
-            UfloatS { fr, as_, imm } => {
-                let x = self.regs.read_logical(as_) as f32;
-                let v = x / (1u32 << imm) as f32;
-                self.fset(fr, v);
-                self.pc = self.pc.wrapping_add(len);
-            }
+            FloatS { fr, as_, imm } => self.exec_float_s(bus, len, fr, as_, imm),
+            UfloatS { fr, as_, imm } => self.exec_ufloat_s(bus, len, fr, as_, imm),
             // trunc.s / utrunc.s : scale by 2^imm then round toward zero.
             // round.s / ceil.s / floor.s : round to nearest / up / down.
             // Out-of-range / NaN saturate the way Rust's `as` cast does, which
             // matches the FPU's saturating overflow behaviour closely enough
             // for the firmware paths we care about.
-            TruncS { ar, fs, imm } => {
-                let v = self.fget(fs) * (1u32 << imm) as f32;
-                self.regs.write_logical(ar, v.trunc() as i32 as u32);
-                self.pc = self.pc.wrapping_add(len);
-            }
-            UtruncS { ar, fs, imm } => {
-                let v = self.fget(fs) * (1u32 << imm) as f32;
-                self.regs.write_logical(ar, v.trunc() as u32);
-                self.pc = self.pc.wrapping_add(len);
-            }
-            RoundS { ar, fs, imm } => {
-                // round half-to-even (IEEE default), matching round.s.
-                let v = self.fget(fs) * (1u32 << imm) as f32;
-                self.regs
-                    .write_logical(ar, round_half_even(v) as i32 as u32);
-                self.pc = self.pc.wrapping_add(len);
-            }
-            CeilS { ar, fs, imm } => {
-                let v = self.fget(fs) * (1u32 << imm) as f32;
-                self.regs.write_logical(ar, v.ceil() as i32 as u32);
-                self.pc = self.pc.wrapping_add(len);
-            }
-            FloorS { ar, fs, imm } => {
-                let v = self.fget(fs) * (1u32 << imm) as f32;
-                self.regs.write_logical(ar, v.floor() as i32 as u32);
-                self.pc = self.pc.wrapping_add(len);
-            }
+            TruncS { ar, fs, imm } => self.exec_trunc_s(bus, len, ar, fs, imm),
+            UtruncS { ar, fs, imm } => self.exec_utrunc_s(bus, len, ar, fs, imm),
+            RoundS { ar, fs, imm } => self.exec_round_s(bus, len, ar, fs, imm),
+            CeilS { ar, fs, imm } => self.exec_ceil_s(bus, len, ar, fs, imm),
+            FloorS { ar, fs, imm } => self.exec_floor_s(bus, len, ar, fs, imm),
             // FP conditional moves: predicate on an AR register, copy FR→FR.
-            MoveqzS { fr, fs, at } => {
-                if self.regs.read_logical(at) == 0 {
-                    self.fp[(fr & 0xF) as usize] = self.fp[(fs & 0xF) as usize];
-                }
-                self.pc = self.pc.wrapping_add(len);
-            }
-            MovnezS { fr, fs, at } => {
-                if self.regs.read_logical(at) != 0 {
-                    self.fp[(fr & 0xF) as usize] = self.fp[(fs & 0xF) as usize];
-                }
-                self.pc = self.pc.wrapping_add(len);
-            }
-            MovltzS { fr, fs, at } => {
-                if (self.regs.read_logical(at) as i32) < 0 {
-                    self.fp[(fr & 0xF) as usize] = self.fp[(fs & 0xF) as usize];
-                }
-                self.pc = self.pc.wrapping_add(len);
-            }
-            MovgezS { fr, fs, at } => {
-                if (self.regs.read_logical(at) as i32) >= 0 {
-                    self.fp[(fr & 0xF) as usize] = self.fp[(fs & 0xF) as usize];
-                }
-                self.pc = self.pc.wrapping_add(len);
-            }
+            MoveqzS { fr, fs, at } => self.exec_moveqz_s(bus, len, fr, fs, at),
+            MovnezS { fr, fs, at } => self.exec_movnez_s(bus, len, fr, fs, at),
+            MovltzS { fr, fs, at } => self.exec_movltz_s(bus, len, fr, fs, at),
+            MovgezS { fr, fs, at } => self.exec_movgez_s(bus, len, fr, fs, at),
             // movf.s / movt.s: predicate on boolean register BR[bt].
-            MovfS { fr, fs, bt } => {
-                if (self.br >> (bt & 0xF)) & 1 == 0 {
-                    self.fp[(fr & 0xF) as usize] = self.fp[(fs & 0xF) as usize];
-                }
-                self.pc = self.pc.wrapping_add(len);
-            }
-            MovtS { fr, fs, bt } => {
-                if (self.br >> (bt & 0xF)) & 1 == 1 {
-                    self.fp[(fr & 0xF) as usize] = self.fp[(fs & 0xF) as usize];
-                }
-                self.pc = self.pc.wrapping_add(len);
-            }
+            MovfS { fr, fs, bt } => self.exec_movf_s(bus, len, fr, fs, bt),
+            MovtS { fr, fs, bt } => self.exec_movt_s(bus, len, fr, fs, bt),
             // FP compare → boolean register BR[br]. Ordered predicates are
             // false when either operand is NaN; unordered are true on NaN.
-            CmpS { br, fs, ft, kind } => {
-                use xtensa::FpCmp::*;
-                let a = self.fget(fs);
-                let b = self.fget(ft);
-                let unordered = a.is_nan() || b.is_nan();
-                let result = match kind {
-                    Un => unordered,
-                    Oeq => a == b,
-                    Ueq => unordered || a == b,
-                    Olt => a < b,
-                    Ult => unordered || a < b,
-                    Ole => a <= b,
-                    Ule => unordered || a <= b,
-                };
-                let bit = 1u16 << (br & 0xF);
-                if result {
-                    self.br |= bit;
-                } else {
-                    self.br &= !bit;
-                }
-                self.pc = self.pc.wrapping_add(len);
-            }
+            CmpS { br, fs, ft, kind } => self.exec_cmp_s(bus, len, br, fs, ft, kind),
             // FP loads/stores. The FR file holds raw 32-bit patterns, and the
             // bus moves 4 bytes verbatim, so memory round-trips the bit pattern.
-            Lsi { ft, as_, imm } => {
-                let ea = self.regs.read_logical(as_).wrapping_add(imm) as u64;
-                let val = bus.read_u32(ea)?;
-                self.fp[(ft & 0xF) as usize] = val;
-                self.pc = self.pc.wrapping_add(len);
-            }
-            Lsiu { ft, as_, imm } => {
-                let base = self.regs.read_logical(as_).wrapping_add(imm);
-                let val = bus.read_u32(base as u64)?;
-                self.fp[(ft & 0xF) as usize] = val;
-                self.regs.write_logical(as_, base);
-                self.pc = self.pc.wrapping_add(len);
-            }
-            Ssi { ft, as_, imm } => {
-                let ea = self.regs.read_logical(as_).wrapping_add(imm);
-                self.maybe_invalidate_for_write(ea);
-                bus.write_u32(ea as u64, self.fp[(ft & 0xF) as usize])?;
-                self.pc = self.pc.wrapping_add(len);
-            }
-            Ssiu { ft, as_, imm } => {
-                let base = self.regs.read_logical(as_).wrapping_add(imm);
-                self.maybe_invalidate_for_write(base);
-                bus.write_u32(base as u64, self.fp[(ft & 0xF) as usize])?;
-                self.regs.write_logical(as_, base);
-                self.pc = self.pc.wrapping_add(len);
-            }
+            Lsi { ft, as_, imm } => self.exec_lsi(bus, len, ft, as_, imm),
+            Lsiu { ft, as_, imm } => self.exec_lsiu(bus, len, ft, as_, imm),
+            Ssi { ft, as_, imm } => self.exec_ssi(bus, len, ft, as_, imm),
+            Ssiu { ft, as_, imm } => self.exec_ssiu(bus, len, ft, as_, imm),
             // Indexed FP loads/stores: EA = AR[as_] + AR[at]. The *U (xp)
             // forms write the computed address back into AR[as_].
-            Lsx { fr, as_, at } => {
-                let ea = self
-                    .regs
-                    .read_logical(as_)
-                    .wrapping_add(self.regs.read_logical(at)) as u64;
-                let val = bus.read_u32(ea)?;
-                self.fp[(fr & 0xF) as usize] = val;
-                self.pc = self.pc.wrapping_add(len);
-            }
-            Lsxu { fr, as_, at } => {
-                let base = self
-                    .regs
-                    .read_logical(as_)
-                    .wrapping_add(self.regs.read_logical(at));
-                let val = bus.read_u32(base as u64)?;
-                self.fp[(fr & 0xF) as usize] = val;
-                self.regs.write_logical(as_, base);
-                self.pc = self.pc.wrapping_add(len);
-            }
-            Ssx { fr, as_, at } => {
-                let ea = self
-                    .regs
-                    .read_logical(as_)
-                    .wrapping_add(self.regs.read_logical(at));
-                self.maybe_invalidate_for_write(ea);
-                bus.write_u32(ea as u64, self.fp[(fr & 0xF) as usize])?;
-                self.pc = self.pc.wrapping_add(len);
-            }
-            Ssxu { fr, as_, at } => {
-                let base = self
-                    .regs
-                    .read_logical(as_)
-                    .wrapping_add(self.regs.read_logical(at));
-                self.maybe_invalidate_for_write(base);
-                bus.write_u32(base as u64, self.fp[(fr & 0xF) as usize])?;
-                self.regs.write_logical(as_, base);
-                self.pc = self.pc.wrapping_add(len);
-            }
+            Lsx { fr, as_, at } => self.exec_lsx(bus, len, fr, as_, at),
+            Lsxu { fr, as_, at } => self.exec_lsxu(bus, len, fr, as_, at),
+            Ssx { fr, as_, at } => self.exec_ssx(bus, len, fr, as_, at),
+            Ssxu { fr, as_, at } => self.exec_ssxu(bus, len, fr, as_, at),
 
             // Unknown opcode: raise IllegalInstruction (EXCCAUSE=0).
             //
@@ -2889,16 +1845,15 @@ impl XtensaLx7 {
             // This is the Plan-1 digital-twin guarantee: any byte pattern decoded
             // as Unknown by the decode layer faithfully raises EXCCAUSE=0, matching
             // real ESP32-S3 hardware behaviour.
-            Unknown(_) => return self.raise_general_exception(0),
+            Unknown(_) => self.raise_general_exception(0),
 
             // Defensive guard for any instruction variant not yet wired into
             // the executor. Currently unreachable (every variant is handled),
             // but kept so adding a decoder variant fails loudly at runtime
             // rather than silently mis-executing.
             #[allow(unreachable_patterns)]
-            _ => return Err(SimulationError::NotImplemented(format!("exec: {:?}", ins))),
+            _ => Err(SimulationError::NotImplemented(format!("exec: {:?}", ins))),
         }
-        Ok(())
     }
 
     /// Apply branch condition: if taken, jump to `pc + offset` (offset pre-baked with +4);

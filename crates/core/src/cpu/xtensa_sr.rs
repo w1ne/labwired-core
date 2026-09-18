@@ -162,6 +162,10 @@ impl XtensaSrFile {
     ///   point used by FreeRTOS `portYIELD()` (BIT(7) → SOFTWARE0).
     /// - `PRID (235)`: writes ignored (read-only).
     /// - `SAR (3)`: masked to 6 bits per Xtensa LX ISA.
+    // `step` writes CCOUNT through here every instruction; inlined, the match
+    // on the constant id folds away. Left to the heuristic it went out of line
+    // once `execute` grew more call sites, costing 16 Ir per step on esp32s3.
+    #[inline]
     pub fn write(&mut self, sr_id: u16, v: u32) {
         if sr_id > 255 {
             tracing::trace!("WSR: unknown SR id={} (out of range), ignoring", sr_id);
