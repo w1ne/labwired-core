@@ -440,13 +440,22 @@ boards:
     drift_ack: 2026-09-17
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: aa265a382731ab9f124254c0c38eeee8550822cd861777b625a03dd2f9fbe901
+    drift_ack_digest: 732812b3bd29c817a1483786425cb433f35bd1e32ccbe95e4f46f81f1414ed04
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
+      - crates/core/src/decoder/arm_thumb32.rs
       - crates/core/src/peripherals/nrf52
       - configs/chips/nrf52840.yaml
 
+    # 2026-09-18: decode_thumb_32 split into per-encoding-group functions in a new
+    # crates/core/src/decoder/arm_thumb32.rs. Pure refactor: all 43 encoding blocks
+    # moved verbatim (same masks, same field extraction, same order); decode_thumb_32
+    # calls them in the original order. Exhaustive differential over h1=0xE800..=0xFFFF
+    # and h2=0x0000..=0xFFFF (402,653,184 inputs) matched the pre-split reference
+    # exactly. No decode change. This is an ACK, NOT A CAPTURE — a live re-capture
+    # is still owed.
+    drift_ack: 2026-09-18
   - id: seeed-xiao-nrf52840-sense
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
     # 2026-09-16 (#1125): Cortex-M JIT follow-ups (block chaining, floor 4, IT-predicated ALU, VFP S-ALU, VLDR/VSTR, LDR.W PC), plus two model fixes that ride along: the bit-band alias decode no longer swallows peripherals vendors place inside 0x4200_0000 (SAMD51 QSPI/SERCOM), and the STM32 timer's scheduled compare pend lands on the latch tick like the walk. JIT is opt-in (`cortex_m_jit_enabled` default off); interpreter path unchanged, JIT-on vs off lockstep in cortex_m_jit_nrf_differential; both fixes pinned by bus-level gates. No silicon capture pins JIT.
@@ -738,13 +747,22 @@ boards:
     drift_ack: 2026-09-17
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: aa265a382731ab9f124254c0c38eeee8550822cd861777b625a03dd2f9fbe901
+    drift_ack_digest: 732812b3bd29c817a1483786425cb433f35bd1e32ccbe95e4f46f81f1414ed04
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
+      - crates/core/src/decoder/arm_thumb32.rs
       - crates/core/src/peripherals/nrf52
       - configs/chips/nrf52840.yaml
 
+    # 2026-09-18: decode_thumb_32 split into per-encoding-group functions in a new
+    # crates/core/src/decoder/arm_thumb32.rs. Pure refactor: all 43 encoding blocks
+    # moved verbatim (same masks, same field extraction, same order); decode_thumb_32
+    # calls them in the original order. Exhaustive differential over h1=0xE800..=0xFFFF
+    # and h2=0x0000..=0xFFFF (402,653,184 inputs) matched the pre-split reference
+    # exactly. No decode change. This is an ACK, NOT A CAPTURE — a live re-capture
+    # is still owed.
+    drift_ack: 2026-09-18
   - id: stm32h563
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
     # 2026-09-16 (#1125): Cortex-M JIT follow-ups (block chaining, floor 4, IT-predicated ALU, VFP S-ALU, VLDR/VSTR, LDR.W PC), plus two model fixes that ride along: the bit-band alias decode no longer swallows peripherals vendors place inside 0x4200_0000 (SAMD51 QSPI/SERCOM), and the STM32 timer's scheduled compare pend lands on the latch tick like the walk. JIT is opt-in (`cortex_m_jit_enabled` default off); interpreter path unchanged, JIT-on vs off lockstep in cortex_m_jit_nrf_differential; both fixes pinned by bus-level gates. No silicon capture pins JIT.
@@ -1194,11 +1212,12 @@ boards:
     drift_ack: 2026-09-17
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: 151737b55f6135b668e60718ee2c3a9a31fb13ec74e58c4e4ca93cf3a3610572
+    drift_ack_digest: d1594cf974f151aaf712751bfe1610fa3dd884d728eda8325e292eb63391ce06
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
+      - crates/core/src/decoder/arm_thumb32.rs
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
       - crates/core/src/peripherals/uart.rs
@@ -1308,6 +1327,14 @@ boards:
     # it hashes the whole file. This is an ACK, NOT A CAPTURE — a live
     # re-capture is still owed.
     drift_ack: 2026-09-17
+    # 2026-09-18: decode_thumb_32 split into per-encoding-group functions in a new
+    # crates/core/src/decoder/arm_thumb32.rs. Pure refactor: all 43 encoding blocks
+    # moved verbatim (same masks, same field extraction, same order); decode_thumb_32
+    # calls them in the original order. Exhaustive differential over h1=0xE800..=0xFFFF
+    # and h2=0x0000..=0xFFFF (402,653,184 inputs) matched the pre-split reference
+    # exactly. No decode change. This is an ACK, NOT A CAPTURE — a live re-capture
+    # is still owed.
+    drift_ack: 2026-09-18
   - id: esp32c3
     # 2026-09-15 (#932): SPI edge sampling is opt-in (`SpiSampling::Byte` default). Byte-level golden pins the pre-feature path. Controllers without a bit engine reject opt-in at config time.
     doc: docs/boards/esp32c3.md
@@ -2513,11 +2540,12 @@ boards:
     drift_ack: 2026-09-17
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: b2530501dfaaa7cc569ad8d3e0286d02e44698657853a83b0543bf0c53153b65
+    drift_ack_digest: 8f4e3ca0e8b77aab6e26c2dee366d12b419f23e15e9aeaa89dd63cb519a07b11
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
+      - crates/core/src/decoder/arm_thumb32.rs
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
       - crates/core/src/peripherals/uart.rs
@@ -2622,6 +2650,14 @@ boards:
     # it hashes the whole file. This is an ACK, NOT A CAPTURE — a live
     # re-capture is still owed.
     drift_ack: 2026-09-17
+    # 2026-09-18: decode_thumb_32 split into per-encoding-group functions in a new
+    # crates/core/src/decoder/arm_thumb32.rs. Pure refactor: all 43 encoding blocks
+    # moved verbatim (same masks, same field extraction, same order); decode_thumb_32
+    # calls them in the original order. Exhaustive differential over h1=0xE800..=0xFFFF
+    # and h2=0x0000..=0xFFFF (402,653,184 inputs) matched the pre-split reference
+    # exactly. No decode change. This is an ACK, NOT A CAPTURE — a live re-capture
+    # is still owed.
+    drift_ack: 2026-09-18
   - id: nucleo-l073rz
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
     # 2026-09-16 (#1125): Cortex-M JIT follow-ups (block chaining, floor 4, IT-predicated ALU, VFP S-ALU, VLDR/VSTR, LDR.W PC), plus two model fixes that ride along: the bit-band alias decode no longer swallows peripherals vendors place inside 0x4200_0000 (SAMD51 QSPI/SERCOM), and the STM32 timer's scheduled compare pend lands on the latch tick like the walk. JIT is opt-in (`cortex_m_jit_enabled` default off); interpreter path unchanged, JIT-on vs off lockstep in cortex_m_jit_nrf_differential; both fixes pinned by bus-level gates. No silicon capture pins JIT.
@@ -3013,11 +3049,12 @@ boards:
     drift_ack: 2026-09-17
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: c1d1511d2a12c2cb959538ecc8a41f05208dfc792ba31f0143c5dcb6c83cc73f
+    drift_ack_digest: 0c21a3d83651d2ca14522b5cdfcaaa3908a18cbfa40a0aa0789e5fd992d8e3a9
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
+      - crates/core/src/decoder/arm_thumb32.rs
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
       - crates/core/src/peripherals/uart.rs
@@ -3090,6 +3127,14 @@ boards:
     # it hashes the whole file. This is an ACK, NOT A CAPTURE — a live
     # re-capture is still owed.
     drift_ack: 2026-09-17
+    # 2026-09-18: decode_thumb_32 split into per-encoding-group functions in a new
+    # crates/core/src/decoder/arm_thumb32.rs. Pure refactor: all 43 encoding blocks
+    # moved verbatim (same masks, same field extraction, same order); decode_thumb_32
+    # calls them in the original order. Exhaustive differential over h1=0xE800..=0xFFFF
+    # and h2=0x0000..=0xFFFF (402,653,184 inputs) matched the pre-split reference
+    # exactly. No decode change. This is an ACK, NOT A CAPTURE — a live re-capture
+    # is still owed.
+    drift_ack: 2026-09-18
   - id: stm32f103
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
     # 2026-09-16 (#1125): Cortex-M JIT follow-ups (block chaining, floor 4, IT-predicated ALU, VFP S-ALU, VLDR/VSTR, LDR.W PC), plus two model fixes that ride along: the bit-band alias decode no longer swallows peripherals vendors place inside 0x4200_0000 (SAMD51 QSPI/SERCOM), and the STM32 timer's scheduled compare pend lands on the latch tick like the walk. JIT is opt-in (`cortex_m_jit_enabled` default off); interpreter path unchanged, JIT-on vs off lockstep in cortex_m_jit_nrf_differential; both fixes pinned by bus-level gates. No silicon capture pins JIT.
@@ -3535,11 +3580,12 @@ boards:
     drift_ack: 2026-09-17
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: fe69cc622cf785ec4c3607f2c0a10ff2be904568c830fbd1d6de017c2f520482
+    drift_ack_digest: 67ba8b44b079bc68dd9820423165d5c8040b327ba5e9b836e807063803d03e19
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
+      - crates/core/src/decoder/arm_thumb32.rs
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/afio.rs
       - crates/core/src/peripherals/gpio.rs
@@ -3646,6 +3692,14 @@ boards:
     # it hashes the whole file. This is an ACK, NOT A CAPTURE — a live
     # re-capture is still owed.
     drift_ack: 2026-09-17
+    # 2026-09-18: decode_thumb_32 split into per-encoding-group functions in a new
+    # crates/core/src/decoder/arm_thumb32.rs. Pure refactor: all 43 encoding blocks
+    # moved verbatim (same masks, same field extraction, same order); decode_thumb_32
+    # calls them in the original order. Exhaustive differential over h1=0xE800..=0xFFFF
+    # and h2=0x0000..=0xFFFF (402,653,184 inputs) matched the pre-split reference
+    # exactly. No decode change. This is an ACK, NOT A CAPTURE — a live re-capture
+    # is still owed.
+    drift_ack: 2026-09-18
   - id: stm32f407
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
     # 2026-09-16 (#1125): Cortex-M JIT follow-ups (block chaining, floor 4, IT-predicated ALU, VFP S-ALU, VLDR/VSTR, LDR.W PC), plus two model fixes that ride along: the bit-band alias decode no longer swallows peripherals vendors place inside 0x4200_0000 (SAMD51 QSPI/SERCOM), and the STM32 timer's scheduled compare pend lands on the latch tick like the walk. JIT is opt-in (`cortex_m_jit_enabled` default off); interpreter path unchanged, JIT-on vs off lockstep in cortex_m_jit_nrf_differential; both fixes pinned by bus-level gates. No silicon capture pins JIT.
@@ -4055,7 +4109,7 @@ boards:
     drift_ack: 2026-09-17
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: c3e6ce849dcfecf3ddfb8a9d4b8c0d82444c5e6bb29cfcf5ad72219beee0fa80
+    drift_ack_digest: e312f698bedec2bc66852eadafe173b7f037649eac8e049fc6ed13e6f43e229c
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     # 2026-08-12: chip yaml adds bxcan1 (type bxcan @ 0x40006400, APB1ENR bit 25) for
     # Arduino matrix L8 loopback. Existing BxCan model; no register-map change to
@@ -4063,6 +4117,7 @@ boards:
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
+      - crates/core/src/decoder/arm_thumb32.rs
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
       - crates/core/src/peripherals/uart.rs
@@ -4135,6 +4190,14 @@ boards:
     # it hashes the whole file. This is an ACK, NOT A CAPTURE — a live
     # re-capture is still owed.
     drift_ack: 2026-09-17
+    # 2026-09-18: decode_thumb_32 split into per-encoding-group functions in a new
+    # crates/core/src/decoder/arm_thumb32.rs. Pure refactor: all 43 encoding blocks
+    # moved verbatim (same masks, same field extraction, same order); decode_thumb_32
+    # calls them in the original order. Exhaustive differential over h1=0xE800..=0xFFFF
+    # and h2=0x0000..=0xFFFF (402,653,184 inputs) matched the pre-split reference
+    # exactly. No decode change. This is an ACK, NOT A CAPTURE — a live re-capture
+    # is still owed.
+    drift_ack: 2026-09-18
   - id: esp32s3
     # 2026-09-16 (#jit-xtensa-browser): generic Xtensa BB emit core + browser adapter. `xtensa_lx7.rs` gains only `invalidate_for_data_write` — a public forwarder to the existing `maybe_invalidate_for_write` so JIT-committed stores run the same SMC invalidation the S8i/S32i interpreter arms run (no interpreter behavior change; the existing sub-word rules are reused). Hot-block dispatch and every interpreter arm are untouched; the new shapes are browser-only and refused when unsafe. Native interpreter-identity tests in `xtensa_jit/variable.rs`. No silicon capture pins the browser JIT.
     # 2026-09-15 (#1119): PeripheralConfig gained irq_controller (None). No silicon-visible behaviour change.
