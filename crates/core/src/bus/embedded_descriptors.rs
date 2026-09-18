@@ -15,6 +15,2658 @@
 // referenced by nothing — the first breaks a lab, the second bloats every
 // browser download.
 
+/// Every embedded descriptor, sorted by key so `lookup` can binary-search it.
+static DESCRIPTORS: &[(&str, &str)] = &[
+    (
+        "atsamd21g18a/gclk.yaml",
+        include_str!("../../../../configs/peripherals/atsamd21g18a/gclk.yaml"),
+    ),
+    (
+        "atsamd21g18a/nvmctrl.yaml",
+        include_str!("../../../../configs/peripherals/atsamd21g18a/nvmctrl.yaml"),
+    ),
+    (
+        "atsamd21g18a/pm.yaml",
+        include_str!("../../../../configs/peripherals/atsamd21g18a/pm.yaml"),
+    ),
+    (
+        "atsamd21g18a/sysctrl.yaml",
+        include_str!("../../../../configs/peripherals/atsamd21g18a/sysctrl.yaml"),
+    ),
+    (
+        "atsamd21g18a/wdt.yaml",
+        include_str!("../../../../configs/peripherals/atsamd21g18a/wdt.yaml"),
+    ),
+    (
+        "esp32/apb_ctrl.yaml",
+        include_str!("../../../../configs/peripherals/esp32/apb_ctrl.yaml"),
+    ),
+    (
+        "esp32/dport.yaml",
+        include_str!("../../../../configs/peripherals/esp32/dport.yaml"),
+    ),
+    (
+        "esp32/efuse.yaml",
+        include_str!("../../../../configs/peripherals/esp32/efuse.yaml"),
+    ),
+    (
+        "esp32/gpio.yaml",
+        include_str!("../../../../configs/peripherals/esp32/gpio.yaml"),
+    ),
+    (
+        "esp32/i2c0.yaml",
+        include_str!("../../../../configs/peripherals/esp32/i2c0.yaml"),
+    ),
+    (
+        "esp32/i2s0.yaml",
+        include_str!("../../../../configs/peripherals/esp32/i2s0.yaml"),
+    ),
+    (
+        "esp32/i2s1.yaml",
+        include_str!("../../../../configs/peripherals/esp32/i2s1.yaml"),
+    ),
+    (
+        "esp32/io_mux.yaml",
+        include_str!("../../../../configs/peripherals/esp32/io_mux.yaml"),
+    ),
+    (
+        "esp32/ledc.yaml",
+        include_str!("../../../../configs/peripherals/esp32/ledc.yaml"),
+    ),
+    (
+        "esp32/mcpwm0.yaml",
+        include_str!("../../../../configs/peripherals/esp32/mcpwm0.yaml"),
+    ),
+    (
+        "esp32/pcnt.yaml",
+        include_str!("../../../../configs/peripherals/esp32/pcnt.yaml"),
+    ),
+    (
+        "esp32/rmt.yaml",
+        include_str!("../../../../configs/peripherals/esp32/rmt.yaml"),
+    ),
+    (
+        "esp32/rtc_cntl.yaml",
+        include_str!("../../../../configs/peripherals/esp32/rtc_cntl.yaml"),
+    ),
+    (
+        "esp32/rtc_io.yaml",
+        include_str!("../../../../configs/peripherals/esp32/rtc_io.yaml"),
+    ),
+    (
+        "esp32/sens.yaml",
+        include_str!("../../../../configs/peripherals/esp32/sens.yaml"),
+    ),
+    (
+        "esp32/sha.yaml",
+        include_str!("../../../../configs/peripherals/esp32/sha.yaml"),
+    ),
+    (
+        "esp32/slc.yaml",
+        include_str!("../../../../configs/peripherals/esp32/slc.yaml"),
+    ),
+    (
+        "esp32/spi0.yaml",
+        include_str!("../../../../configs/peripherals/esp32/spi0.yaml"),
+    ),
+    (
+        "esp32/spi1.yaml",
+        include_str!("../../../../configs/peripherals/esp32/spi1.yaml"),
+    ),
+    (
+        "esp32/spi3.yaml",
+        include_str!("../../../../configs/peripherals/esp32/spi3.yaml"),
+    ),
+    (
+        "esp32/timg0.yaml",
+        include_str!("../../../../configs/peripherals/esp32/timg0.yaml"),
+    ),
+    (
+        "esp32/timg1.yaml",
+        include_str!("../../../../configs/peripherals/esp32/timg1.yaml"),
+    ),
+    (
+        "esp32/twai0.yaml",
+        include_str!("../../../../configs/peripherals/esp32/twai0.yaml"),
+    ),
+    (
+        "esp32/uart0.yaml",
+        include_str!("../../../../configs/peripherals/esp32/uart0.yaml"),
+    ),
+    (
+        "esp32/uart1.yaml",
+        include_str!("../../../../configs/peripherals/esp32/uart1.yaml"),
+    ),
+    (
+        "esp32/uart2.yaml",
+        include_str!("../../../../configs/peripherals/esp32/uart2.yaml"),
+    ),
+    (
+        "esp32/uhci0.yaml",
+        include_str!("../../../../configs/peripherals/esp32/uhci0.yaml"),
+    ),
+    (
+        "esp32c3/aes.yaml",
+        include_str!("../../../../configs/peripherals/esp32c3/aes.yaml"),
+    ),
+    (
+        "esp32c3/apb_ctrl.yaml",
+        include_str!("../../../../configs/peripherals/esp32c3/apb_ctrl.yaml"),
+    ),
+    (
+        "esp32c3/apb_saradc.yaml",
+        include_str!("../../../../configs/peripherals/esp32c3/apb_saradc.yaml"),
+    ),
+    (
+        "esp32c3/assist_debug.yaml",
+        include_str!("../../../../configs/peripherals/esp32c3/assist_debug.yaml"),
+    ),
+    (
+        "esp32c3/bb.yaml",
+        include_str!("../../../../configs/peripherals/esp32c3/bb.yaml"),
+    ),
+    (
+        "esp32c3/dma.yaml",
+        include_str!("../../../../configs/peripherals/esp32c3/dma.yaml"),
+    ),
+    (
+        "esp32c3/ds.yaml",
+        include_str!("../../../../configs/peripherals/esp32c3/ds.yaml"),
+    ),
+    (
+        "esp32c3/efuse.yaml",
+        include_str!("../../../../configs/peripherals/esp32c3/efuse.yaml"),
+    ),
+    (
+        "esp32c3/extmem.yaml",
+        include_str!("../../../../configs/peripherals/esp32c3/extmem.yaml"),
+    ),
+    (
+        "esp32c3/gpio.yaml",
+        include_str!("../../../../configs/peripherals/esp32c3/gpio.yaml"),
+    ),
+    (
+        "esp32c3/gpio_sd.yaml",
+        include_str!("../../../../configs/peripherals/esp32c3/gpio_sd.yaml"),
+    ),
+    (
+        "esp32c3/hmac.yaml",
+        include_str!("../../../../configs/peripherals/esp32c3/hmac.yaml"),
+    ),
+    (
+        "esp32c3/i2c0.yaml",
+        include_str!("../../../../configs/peripherals/esp32c3/i2c0.yaml"),
+    ),
+    (
+        "esp32c3/i2s0.yaml",
+        include_str!("../../../../configs/peripherals/esp32c3/i2s0.yaml"),
+    ),
+    (
+        "esp32c3/interrupt_core0.yaml",
+        include_str!("../../../../configs/peripherals/esp32c3/interrupt_core0.yaml"),
+    ),
+    (
+        "esp32c3/io_mux.yaml",
+        include_str!("../../../../configs/peripherals/esp32c3/io_mux.yaml"),
+    ),
+    (
+        "esp32c3/ledc.yaml",
+        include_str!("../../../../configs/peripherals/esp32c3/ledc.yaml"),
+    ),
+    (
+        "esp32c3/radio_fe.yaml",
+        include_str!("../../../../configs/peripherals/esp32c3/radio_fe.yaml"),
+    ),
+    (
+        "esp32c3/radio_nrx.yaml",
+        include_str!("../../../../configs/peripherals/esp32c3/radio_nrx.yaml"),
+    ),
+    (
+        "esp32c3/rmt.yaml",
+        include_str!("../../../../configs/peripherals/esp32c3/rmt.yaml"),
+    ),
+    (
+        "esp32c3/rsa.yaml",
+        include_str!("../../../../configs/peripherals/esp32c3/rsa.yaml"),
+    ),
+    (
+        "esp32c3/rtc_cntl.yaml",
+        include_str!("../../../../configs/peripherals/esp32c3/rtc_cntl.yaml"),
+    ),
+    (
+        "esp32c3/sensitive.yaml",
+        include_str!("../../../../configs/peripherals/esp32c3/sensitive.yaml"),
+    ),
+    (
+        "esp32c3/sha.yaml",
+        include_str!("../../../../configs/peripherals/esp32c3/sha.yaml"),
+    ),
+    (
+        "esp32c3/spi0.yaml",
+        include_str!("../../../../configs/peripherals/esp32c3/spi0.yaml"),
+    ),
+    (
+        "esp32c3/spi1.yaml",
+        include_str!("../../../../configs/peripherals/esp32c3/spi1.yaml"),
+    ),
+    (
+        "esp32c3/spi2.yaml",
+        include_str!("../../../../configs/peripherals/esp32c3/spi2.yaml"),
+    ),
+    (
+        "esp32c3/system.yaml",
+        include_str!("../../../../configs/peripherals/esp32c3/system.yaml"),
+    ),
+    (
+        "esp32c3/systimer.yaml",
+        include_str!("../../../../configs/peripherals/esp32c3/systimer.yaml"),
+    ),
+    (
+        "esp32c3/timg0.yaml",
+        include_str!("../../../../configs/peripherals/esp32c3/timg0.yaml"),
+    ),
+    (
+        "esp32c3/timg1.yaml",
+        include_str!("../../../../configs/peripherals/esp32c3/timg1.yaml"),
+    ),
+    (
+        "esp32c3/twai0.yaml",
+        include_str!("../../../../configs/peripherals/esp32c3/twai0.yaml"),
+    ),
+    (
+        "esp32c3/uart0.yaml",
+        include_str!("../../../../configs/peripherals/esp32c3/uart0.yaml"),
+    ),
+    (
+        "esp32c3/uart1.yaml",
+        include_str!("../../../../configs/peripherals/esp32c3/uart1.yaml"),
+    ),
+    (
+        "esp32c3/uhci0.yaml",
+        include_str!("../../../../configs/peripherals/esp32c3/uhci0.yaml"),
+    ),
+    (
+        "esp32c3/uhci1.yaml",
+        include_str!("../../../../configs/peripherals/esp32c3/uhci1.yaml"),
+    ),
+    (
+        "esp32c3/usb_device.yaml",
+        include_str!("../../../../configs/peripherals/esp32c3/usb_device.yaml"),
+    ),
+    (
+        "esp32c3/wifi_mac.yaml",
+        include_str!("../../../../configs/peripherals/esp32c3/wifi_mac.yaml"),
+    ),
+    (
+        "esp32c3/xts_aes.yaml",
+        include_str!("../../../../configs/peripherals/esp32c3/xts_aes.yaml"),
+    ),
+    (
+        "esp32s3/dma.yaml",
+        include_str!("../../../../configs/peripherals/esp32s3/dma.yaml"),
+    ),
+    (
+        "esp32s3/efuse.yaml",
+        include_str!("../../../../configs/peripherals/esp32s3/efuse.yaml"),
+    ),
+    (
+        "esp32s3/gpio.yaml",
+        include_str!("../../../../configs/peripherals/esp32s3/gpio.yaml"),
+    ),
+    (
+        "esp32s3/i2c0.yaml",
+        include_str!("../../../../configs/peripherals/esp32s3/i2c0.yaml"),
+    ),
+    (
+        "esp32s3/interrupt_core0.yaml",
+        include_str!("../../../../configs/peripherals/esp32s3/interrupt_core0.yaml"),
+    ),
+    (
+        "esp32s3/mcpwm0.yaml",
+        include_str!("../../../../configs/peripherals/esp32s3/mcpwm0.yaml"),
+    ),
+    (
+        "esp32s3/rmt.yaml",
+        include_str!("../../../../configs/peripherals/esp32s3/rmt.yaml"),
+    ),
+    (
+        "esp32s3/rtc_cntl.yaml",
+        include_str!("../../../../configs/peripherals/esp32s3/rtc_cntl.yaml"),
+    ),
+    (
+        "esp32s3/system.yaml",
+        include_str!("../../../../configs/peripherals/esp32s3/system.yaml"),
+    ),
+    (
+        "esp32s3/systimer.yaml",
+        include_str!("../../../../configs/peripherals/esp32s3/systimer.yaml"),
+    ),
+    (
+        "esp32s3/timg0.yaml",
+        include_str!("../../../../configs/peripherals/esp32s3/timg0.yaml"),
+    ),
+    (
+        "esp32s3/uart0.yaml",
+        include_str!("../../../../configs/peripherals/esp32s3/uart0.yaml"),
+    ),
+    (
+        "esp32s3/usb_device.yaml",
+        include_str!("../../../../configs/peripherals/esp32s3/usb_device.yaml"),
+    ),
+    (
+        "mkw41z4/gpioa.yaml",
+        include_str!("../../../../configs/peripherals/mkw41z4/gpioa.yaml"),
+    ),
+    (
+        "mkw41z4/gpiob.yaml",
+        include_str!("../../../../configs/peripherals/mkw41z4/gpiob.yaml"),
+    ),
+    (
+        "mkw41z4/gpioc.yaml",
+        include_str!("../../../../configs/peripherals/mkw41z4/gpioc.yaml"),
+    ),
+    (
+        "mkw41z4/i2c0.yaml",
+        include_str!("../../../../configs/peripherals/mkw41z4/i2c0.yaml"),
+    ),
+    (
+        "mkw41z4/i2c1.yaml",
+        include_str!("../../../../configs/peripherals/mkw41z4/i2c1.yaml"),
+    ),
+    (
+        "mkw41z4/lpuart0.yaml",
+        include_str!("../../../../configs/peripherals/mkw41z4/lpuart0.yaml"),
+    ),
+    (
+        "mkw41z4/mcg.yaml",
+        include_str!("../../../../configs/peripherals/mkw41z4/mcg.yaml"),
+    ),
+    (
+        "mkw41z4/pit.yaml",
+        include_str!("../../../../configs/peripherals/mkw41z4/pit.yaml"),
+    ),
+    (
+        "mkw41z4/pmc.yaml",
+        include_str!("../../../../configs/peripherals/mkw41z4/pmc.yaml"),
+    ),
+    (
+        "mkw41z4/porta.yaml",
+        include_str!("../../../../configs/peripherals/mkw41z4/porta.yaml"),
+    ),
+    (
+        "mkw41z4/portb.yaml",
+        include_str!("../../../../configs/peripherals/mkw41z4/portb.yaml"),
+    ),
+    (
+        "mkw41z4/portc.yaml",
+        include_str!("../../../../configs/peripherals/mkw41z4/portc.yaml"),
+    ),
+    (
+        "mkw41z4/rcm.yaml",
+        include_str!("../../../../configs/peripherals/mkw41z4/rcm.yaml"),
+    ),
+    (
+        "mkw41z4/rsim.yaml",
+        include_str!("../../../../configs/peripherals/mkw41z4/rsim.yaml"),
+    ),
+    (
+        "mkw41z4/sim.yaml",
+        include_str!("../../../../configs/peripherals/mkw41z4/sim.yaml"),
+    ),
+    (
+        "mkw41z4/smc.yaml",
+        include_str!("../../../../configs/peripherals/mkw41z4/smc.yaml"),
+    ),
+    (
+        "mkw41z4/spi0.yaml",
+        include_str!("../../../../configs/peripherals/mkw41z4/spi0.yaml"),
+    ),
+    (
+        "mkw41z4/systick.yaml",
+        include_str!("../../../../configs/peripherals/mkw41z4/systick.yaml"),
+    ),
+    (
+        "mkw41z4/tpm0.yaml",
+        include_str!("../../../../configs/peripherals/mkw41z4/tpm0.yaml"),
+    ),
+    (
+        "mkw41z4/trng0.yaml",
+        include_str!("../../../../configs/peripherals/mkw41z4/trng0.yaml"),
+    ),
+    (
+        "nrf52832/clock.yaml",
+        include_str!("../../../../configs/peripherals/nrf52832/clock.yaml"),
+    ),
+    (
+        "nrf52832/ficr.yaml",
+        include_str!("../../../../configs/peripherals/nrf52832/ficr.yaml"),
+    ),
+    (
+        "nrf52832/nvmc.yaml",
+        include_str!("../../../../configs/peripherals/nrf52832/nvmc.yaml"),
+    ),
+    (
+        "nrf52832/p0.yaml",
+        include_str!("../../../../configs/peripherals/nrf52832/p0.yaml"),
+    ),
+    (
+        "nrf52832/pwm0.yaml",
+        include_str!("../../../../configs/peripherals/nrf52832/pwm0.yaml"),
+    ),
+    (
+        "nrf52832/radio.yaml",
+        include_str!("../../../../configs/peripherals/nrf52832/radio.yaml"),
+    ),
+    (
+        "nrf52832/rtc0.yaml",
+        include_str!("../../../../configs/peripherals/nrf52832/rtc0.yaml"),
+    ),
+    (
+        "nrf52832/rtc1.yaml",
+        include_str!("../../../../configs/peripherals/nrf52832/rtc1.yaml"),
+    ),
+    (
+        "nrf52832/saadc.yaml",
+        include_str!("../../../../configs/peripherals/nrf52832/saadc.yaml"),
+    ),
+    (
+        "nrf52832/spi2.yaml",
+        include_str!("../../../../configs/peripherals/nrf52832/spi2.yaml"),
+    ),
+    (
+        "nrf52832/timer0.yaml",
+        include_str!("../../../../configs/peripherals/nrf52832/timer0.yaml"),
+    ),
+    (
+        "nrf52832/twi1.yaml",
+        include_str!("../../../../configs/peripherals/nrf52832/twi1.yaml"),
+    ),
+    (
+        "nrf52832/twim0.yaml",
+        include_str!("../../../../configs/peripherals/nrf52832/twim0.yaml"),
+    ),
+    (
+        "nrf52832/uart0.yaml",
+        include_str!("../../../../configs/peripherals/nrf52832/uart0.yaml"),
+    ),
+    (
+        "nrf52832/uicr.yaml",
+        include_str!("../../../../configs/peripherals/nrf52832/uicr.yaml"),
+    ),
+    (
+        "nrf52832/wdt.yaml",
+        include_str!("../../../../configs/peripherals/nrf52832/wdt.yaml"),
+    ),
+    (
+        "nrf52840/aar.yaml",
+        include_str!("../../../../configs/peripherals/nrf52840/aar.yaml"),
+    ),
+    (
+        "nrf52840/acl.yaml",
+        include_str!("../../../../configs/peripherals/nrf52840/acl.yaml"),
+    ),
+    (
+        "nrf52840/clock.yaml",
+        include_str!("../../../../configs/peripherals/nrf52840/clock.yaml"),
+    ),
+    (
+        "nrf52840/comp.yaml",
+        include_str!("../../../../configs/peripherals/nrf52840/comp.yaml"),
+    ),
+    (
+        "nrf52840/cryptocell.yaml",
+        include_str!("../../../../configs/peripherals/nrf52840/cryptocell.yaml"),
+    ),
+    (
+        "nrf52840/ecb.yaml",
+        include_str!("../../../../configs/peripherals/nrf52840/ecb.yaml"),
+    ),
+    (
+        "nrf52840/egu0.yaml",
+        include_str!("../../../../configs/peripherals/nrf52840/egu0.yaml"),
+    ),
+    (
+        "nrf52840/egu1.yaml",
+        include_str!("../../../../configs/peripherals/nrf52840/egu1.yaml"),
+    ),
+    (
+        "nrf52840/egu2.yaml",
+        include_str!("../../../../configs/peripherals/nrf52840/egu2.yaml"),
+    ),
+    (
+        "nrf52840/egu3.yaml",
+        include_str!("../../../../configs/peripherals/nrf52840/egu3.yaml"),
+    ),
+    (
+        "nrf52840/egu4.yaml",
+        include_str!("../../../../configs/peripherals/nrf52840/egu4.yaml"),
+    ),
+    (
+        "nrf52840/egu5.yaml",
+        include_str!("../../../../configs/peripherals/nrf52840/egu5.yaml"),
+    ),
+    (
+        "nrf52840/ficr.yaml",
+        include_str!("../../../../configs/peripherals/nrf52840/ficr.yaml"),
+    ),
+    (
+        "nrf52840/gpiote.yaml",
+        include_str!("../../../../configs/peripherals/nrf52840/gpiote.yaml"),
+    ),
+    (
+        "nrf52840/i2s.yaml",
+        include_str!("../../../../configs/peripherals/nrf52840/i2s.yaml"),
+    ),
+    (
+        "nrf52840/mwu.yaml",
+        include_str!("../../../../configs/peripherals/nrf52840/mwu.yaml"),
+    ),
+    (
+        "nrf52840/nfct.yaml",
+        include_str!("../../../../configs/peripherals/nrf52840/nfct.yaml"),
+    ),
+    (
+        "nrf52840/nvmc.yaml",
+        include_str!("../../../../configs/peripherals/nrf52840/nvmc.yaml"),
+    ),
+    (
+        "nrf52840/p0.yaml",
+        include_str!("../../../../configs/peripherals/nrf52840/p0.yaml"),
+    ),
+    (
+        "nrf52840/p1.yaml",
+        include_str!("../../../../configs/peripherals/nrf52840/p1.yaml"),
+    ),
+    (
+        "nrf52840/pdm.yaml",
+        include_str!("../../../../configs/peripherals/nrf52840/pdm.yaml"),
+    ),
+    (
+        "nrf52840/power.yaml",
+        include_str!("../../../../configs/peripherals/nrf52840/power.yaml"),
+    ),
+    (
+        "nrf52840/ppi.yaml",
+        include_str!("../../../../configs/peripherals/nrf52840/ppi.yaml"),
+    ),
+    (
+        "nrf52840/pwm0.yaml",
+        include_str!("../../../../configs/peripherals/nrf52840/pwm0.yaml"),
+    ),
+    (
+        "nrf52840/pwm1.yaml",
+        include_str!("../../../../configs/peripherals/nrf52840/pwm1.yaml"),
+    ),
+    (
+        "nrf52840/pwm2.yaml",
+        include_str!("../../../../configs/peripherals/nrf52840/pwm2.yaml"),
+    ),
+    (
+        "nrf52840/pwm3.yaml",
+        include_str!("../../../../configs/peripherals/nrf52840/pwm3.yaml"),
+    ),
+    (
+        "nrf52840/qdec.yaml",
+        include_str!("../../../../configs/peripherals/nrf52840/qdec.yaml"),
+    ),
+    (
+        "nrf52840/qspi.yaml",
+        include_str!("../../../../configs/peripherals/nrf52840/qspi.yaml"),
+    ),
+    (
+        "nrf52840/radio.yaml",
+        include_str!("../../../../configs/peripherals/nrf52840/radio.yaml"),
+    ),
+    (
+        "nrf52840/rng.yaml",
+        include_str!("../../../../configs/peripherals/nrf52840/rng.yaml"),
+    ),
+    (
+        "nrf52840/rtc0.yaml",
+        include_str!("../../../../configs/peripherals/nrf52840/rtc0.yaml"),
+    ),
+    (
+        "nrf52840/rtc1.yaml",
+        include_str!("../../../../configs/peripherals/nrf52840/rtc1.yaml"),
+    ),
+    (
+        "nrf52840/rtc2.yaml",
+        include_str!("../../../../configs/peripherals/nrf52840/rtc2.yaml"),
+    ),
+    (
+        "nrf52840/saadc.yaml",
+        include_str!("../../../../configs/peripherals/nrf52840/saadc.yaml"),
+    ),
+    (
+        "nrf52840/spi2.yaml",
+        include_str!("../../../../configs/peripherals/nrf52840/spi2.yaml"),
+    ),
+    (
+        "nrf52840/temp.yaml",
+        include_str!("../../../../configs/peripherals/nrf52840/temp.yaml"),
+    ),
+    (
+        "nrf52840/timer0.yaml",
+        include_str!("../../../../configs/peripherals/nrf52840/timer0.yaml"),
+    ),
+    (
+        "nrf52840/timer1.yaml",
+        include_str!("../../../../configs/peripherals/nrf52840/timer1.yaml"),
+    ),
+    (
+        "nrf52840/timer2.yaml",
+        include_str!("../../../../configs/peripherals/nrf52840/timer2.yaml"),
+    ),
+    (
+        "nrf52840/timer3.yaml",
+        include_str!("../../../../configs/peripherals/nrf52840/timer3.yaml"),
+    ),
+    (
+        "nrf52840/timer4.yaml",
+        include_str!("../../../../configs/peripherals/nrf52840/timer4.yaml"),
+    ),
+    (
+        "nrf52840/twi1.yaml",
+        include_str!("../../../../configs/peripherals/nrf52840/twi1.yaml"),
+    ),
+    (
+        "nrf52840/twim0.yaml",
+        include_str!("../../../../configs/peripherals/nrf52840/twim0.yaml"),
+    ),
+    (
+        "nrf52840/uart0.yaml",
+        include_str!("../../../../configs/peripherals/nrf52840/uart0.yaml"),
+    ),
+    (
+        "nrf52840/uarte1.yaml",
+        include_str!("../../../../configs/peripherals/nrf52840/uarte1.yaml"),
+    ),
+    (
+        "nrf52840/uicr.yaml",
+        include_str!("../../../../configs/peripherals/nrf52840/uicr.yaml"),
+    ),
+    (
+        "nrf52840/usbd.yaml",
+        include_str!("../../../../configs/peripherals/nrf52840/usbd.yaml"),
+    ),
+    (
+        "nrf52840/wdt.yaml",
+        include_str!("../../../../configs/peripherals/nrf52840/wdt.yaml"),
+    ),
+    (
+        "nrf5340/cache_s.yaml",
+        include_str!("../../../../configs/peripherals/nrf5340/cache_s.yaml"),
+    ),
+    (
+        "nrf5340/clock_s.yaml",
+        include_str!("../../../../configs/peripherals/nrf5340/clock_s.yaml"),
+    ),
+    (
+        "nrf5340/ctrlap_s.yaml",
+        include_str!("../../../../configs/peripherals/nrf5340/ctrlap_s.yaml"),
+    ),
+    (
+        "nrf5340/dcnf_s.yaml",
+        include_str!("../../../../configs/peripherals/nrf5340/dcnf_s.yaml"),
+    ),
+    (
+        "nrf5340/dppic_s.yaml",
+        include_str!("../../../../configs/peripherals/nrf5340/dppic_s.yaml"),
+    ),
+    (
+        "nrf5340/ficr_s.yaml",
+        include_str!("../../../../configs/peripherals/nrf5340/ficr_s.yaml"),
+    ),
+    (
+        "nrf5340/gpiote0_s.yaml",
+        include_str!("../../../../configs/peripherals/nrf5340/gpiote0_s.yaml"),
+    ),
+    (
+        "nrf5340/oscillators_s.yaml",
+        include_str!("../../../../configs/peripherals/nrf5340/oscillators_s.yaml"),
+    ),
+    (
+        "nrf5340/rtc0_s.yaml",
+        include_str!("../../../../configs/peripherals/nrf5340/rtc0_s.yaml"),
+    ),
+    (
+        "nrf5340/rtc1_s.yaml",
+        include_str!("../../../../configs/peripherals/nrf5340/rtc1_s.yaml"),
+    ),
+    (
+        "nrf5340/spu_s.yaml",
+        include_str!("../../../../configs/peripherals/nrf5340/spu_s.yaml"),
+    ),
+    (
+        "nrf5340/timer0_s.yaml",
+        include_str!("../../../../configs/peripherals/nrf5340/timer0_s.yaml"),
+    ),
+    (
+        "nrf5340/timer1_s.yaml",
+        include_str!("../../../../configs/peripherals/nrf5340/timer1_s.yaml"),
+    ),
+    (
+        "nrf5340/timer2_s.yaml",
+        include_str!("../../../../configs/peripherals/nrf5340/timer2_s.yaml"),
+    ),
+    (
+        "nrf5340/uarte0_s.yaml",
+        include_str!("../../../../configs/peripherals/nrf5340/uarte0_s.yaml"),
+    ),
+    (
+        "nrf5340/uicr_s.yaml",
+        include_str!("../../../../configs/peripherals/nrf5340/uicr_s.yaml"),
+    ),
+    (
+        "nrf54l15/global_clock_s.yaml",
+        include_str!("../../../../configs/peripherals/nrf54l15/global_clock_s.yaml"),
+    ),
+    (
+        "nrf54l15/global_dppic20_s.yaml",
+        include_str!("../../../../configs/peripherals/nrf54l15/global_dppic20_s.yaml"),
+    ),
+    (
+        "nrf54l15/global_dppic30_s.yaml",
+        include_str!("../../../../configs/peripherals/nrf54l15/global_dppic30_s.yaml"),
+    ),
+    (
+        "nrf54l15/global_egu10_s.yaml",
+        include_str!("../../../../configs/peripherals/nrf54l15/global_egu10_s.yaml"),
+    ),
+    (
+        "nrf54l15/global_egu20_s.yaml",
+        include_str!("../../../../configs/peripherals/nrf54l15/global_egu20_s.yaml"),
+    ),
+    (
+        "nrf54l15/global_ficr_ns.yaml",
+        include_str!("../../../../configs/peripherals/nrf54l15/global_ficr_ns.yaml"),
+    ),
+    (
+        "nrf54l15/global_gpiote20_s.yaml",
+        include_str!("../../../../configs/peripherals/nrf54l15/global_gpiote20_s.yaml"),
+    ),
+    (
+        "nrf54l15/global_gpiote30_s.yaml",
+        include_str!("../../../../configs/peripherals/nrf54l15/global_gpiote30_s.yaml"),
+    ),
+    (
+        "nrf54l15/global_grtc_s.yaml",
+        include_str!("../../../../configs/peripherals/nrf54l15/global_grtc_s.yaml"),
+    ),
+    (
+        "nrf54l15/global_regulators_s.yaml",
+        include_str!("../../../../configs/peripherals/nrf54l15/global_regulators_s.yaml"),
+    ),
+    (
+        "nrf54l15/global_rramc_s.yaml",
+        include_str!("../../../../configs/peripherals/nrf54l15/global_rramc_s.yaml"),
+    ),
+    (
+        "nrf54l15/global_tampc_s.yaml",
+        include_str!("../../../../configs/peripherals/nrf54l15/global_tampc_s.yaml"),
+    ),
+    (
+        "nrf54l15/global_temp_s.yaml",
+        include_str!("../../../../configs/peripherals/nrf54l15/global_temp_s.yaml"),
+    ),
+    (
+        "nrf54l15/global_timer10_s.yaml",
+        include_str!("../../../../configs/peripherals/nrf54l15/global_timer10_s.yaml"),
+    ),
+    (
+        "nrf54l15/global_timer20_s.yaml",
+        include_str!("../../../../configs/peripherals/nrf54l15/global_timer20_s.yaml"),
+    ),
+    (
+        "nrf54l15/global_timer21_s.yaml",
+        include_str!("../../../../configs/peripherals/nrf54l15/global_timer21_s.yaml"),
+    ),
+    (
+        "nrf54l15/global_timer22_s.yaml",
+        include_str!("../../../../configs/peripherals/nrf54l15/global_timer22_s.yaml"),
+    ),
+    (
+        "nrf54l15/global_twim21_s.yaml",
+        include_str!("../../../../configs/peripherals/nrf54l15/global_twim21_s.yaml"),
+    ),
+    (
+        "nrf54l15/global_twim22_s.yaml",
+        include_str!("../../../../configs/peripherals/nrf54l15/global_twim22_s.yaml"),
+    ),
+    (
+        "nrf54l15/global_uarte20_s.yaml",
+        include_str!("../../../../configs/peripherals/nrf54l15/global_uarte20_s.yaml"),
+    ),
+    (
+        "nrf54l15/global_uarte30_s.yaml",
+        include_str!("../../../../configs/peripherals/nrf54l15/global_uarte30_s.yaml"),
+    ),
+    (
+        "nrf54l15/global_uicr_s.yaml",
+        include_str!("../../../../configs/peripherals/nrf54l15/global_uicr_s.yaml"),
+    ),
+    (
+        "nrf54l15/global_wdt30_s.yaml",
+        include_str!("../../../../configs/peripherals/nrf54l15/global_wdt30_s.yaml"),
+    ),
+    (
+        "nrf54l15/global_wdt31_s.yaml",
+        include_str!("../../../../configs/peripherals/nrf54l15/global_wdt31_s.yaml"),
+    ),
+    (
+        "nrf54l15/icache_s.yaml",
+        include_str!("../../../../configs/peripherals/nrf54l15/icache_s.yaml"),
+    ),
+    (
+        "rp2040/adc.yaml",
+        include_str!("../../../../configs/peripherals/rp2040/adc.yaml"),
+    ),
+    (
+        "rp2040/clocks.yaml",
+        include_str!("../../../../configs/peripherals/rp2040/clocks.yaml"),
+    ),
+    (
+        "rp2040/dma.yaml",
+        include_str!("../../../../configs/peripherals/rp2040/dma.yaml"),
+    ),
+    (
+        "rp2040/i2c0.yaml",
+        include_str!("../../../../configs/peripherals/rp2040/i2c0.yaml"),
+    ),
+    (
+        "rp2040/io_bank0.yaml",
+        include_str!("../../../../configs/peripherals/rp2040/io_bank0.yaml"),
+    ),
+    (
+        "rp2040/pio0.yaml",
+        include_str!("../../../../configs/peripherals/rp2040/pio0.yaml"),
+    ),
+    (
+        "rp2040/pwm.yaml",
+        include_str!("../../../../configs/peripherals/rp2040/pwm.yaml"),
+    ),
+    (
+        "rp2040/rosc.yaml",
+        include_str!("../../../../configs/peripherals/rp2040/rosc.yaml"),
+    ),
+    (
+        "rp2040/rtc.yaml",
+        include_str!("../../../../configs/peripherals/rp2040/rtc.yaml"),
+    ),
+    (
+        "rp2040/sio.yaml",
+        include_str!("../../../../configs/peripherals/rp2040/sio.yaml"),
+    ),
+    (
+        "rp2040/spi0.yaml",
+        include_str!("../../../../configs/peripherals/rp2040/spi0.yaml"),
+    ),
+    (
+        "rp2040/ssi.yaml",
+        include_str!("../../../../configs/peripherals/rp2040/ssi.yaml"),
+    ),
+    (
+        "rp2040/sysinfo.yaml",
+        include_str!("../../../../configs/peripherals/rp2040/sysinfo.yaml"),
+    ),
+    (
+        "rp2040/tbman.yaml",
+        include_str!("../../../../configs/peripherals/rp2040/tbman.yaml"),
+    ),
+    (
+        "rp2040/timer.yaml",
+        include_str!("../../../../configs/peripherals/rp2040/timer.yaml"),
+    ),
+    (
+        "rp2040/uart0.yaml",
+        include_str!("../../../../configs/peripherals/rp2040/uart0.yaml"),
+    ),
+    (
+        "rp2040/usb_dpram.yaml",
+        include_str!("../../../../configs/peripherals/rp2040/usb_dpram.yaml"),
+    ),
+    (
+        "rp2040/vreg_and_chip_reset.yaml",
+        include_str!("../../../../configs/peripherals/rp2040/vreg_and_chip_reset.yaml"),
+    ),
+    (
+        "rp2040/watchdog.yaml",
+        include_str!("../../../../configs/peripherals/rp2040/watchdog.yaml"),
+    ),
+    (
+        "rp2040/xip_ctrl.yaml",
+        include_str!("../../../../configs/peripherals/rp2040/xip_ctrl.yaml"),
+    ),
+    (
+        "rp2350/adc.yaml",
+        include_str!("../../../../configs/peripherals/rp2350/adc.yaml"),
+    ),
+    (
+        "rp2350/clocks.yaml",
+        include_str!("../../../../configs/peripherals/rp2350/clocks.yaml"),
+    ),
+    (
+        "rp2350/dma.yaml",
+        include_str!("../../../../configs/peripherals/rp2350/dma.yaml"),
+    ),
+    (
+        "rp2350/pio0.yaml",
+        include_str!("../../../../configs/peripherals/rp2350/pio0.yaml"),
+    ),
+    (
+        "rp2350/pwm.yaml",
+        include_str!("../../../../configs/peripherals/rp2350/pwm.yaml"),
+    ),
+    (
+        "rp2350/sio.yaml",
+        include_str!("../../../../configs/peripherals/rp2350/sio.yaml"),
+    ),
+    (
+        "rp2350/sysinfo.yaml",
+        include_str!("../../../../configs/peripherals/rp2350/sysinfo.yaml"),
+    ),
+    (
+        "rp2350/uart0.yaml",
+        include_str!("../../../../configs/peripherals/rp2350/uart0.yaml"),
+    ),
+    (
+        "rp2350/watchdog.yaml",
+        include_str!("../../../../configs/peripherals/rp2350/watchdog.yaml"),
+    ),
+    (
+        "rp2350/xip_ctrl.yaml",
+        include_str!("../../../../configs/peripherals/rp2350/xip_ctrl.yaml"),
+    ),
+    (
+        "stm32f103/adc1.yaml",
+        include_str!("../../../../configs/peripherals/stm32f103/adc1.yaml"),
+    ),
+    (
+        "stm32f103/adc2.yaml",
+        include_str!("../../../../configs/peripherals/stm32f103/adc2.yaml"),
+    ),
+    (
+        "stm32f103/afio.yaml",
+        include_str!("../../../../configs/peripherals/stm32f103/afio.yaml"),
+    ),
+    (
+        "stm32f103/can.yaml",
+        include_str!("../../../../configs/peripherals/stm32f103/can.yaml"),
+    ),
+    (
+        "stm32f103/crc.yaml",
+        include_str!("../../../../configs/peripherals/stm32f103/crc.yaml"),
+    ),
+    (
+        "stm32f103/dbg.yaml",
+        include_str!("../../../../configs/peripherals/stm32f103/dbg.yaml"),
+    ),
+    (
+        "stm32f103/dma1.yaml",
+        include_str!("../../../../configs/peripherals/stm32f103/dma1.yaml"),
+    ),
+    (
+        "stm32f103/exti.yaml",
+        include_str!("../../../../configs/peripherals/stm32f103/exti.yaml"),
+    ),
+    (
+        "stm32f103/flash.yaml",
+        include_str!("../../../../configs/peripherals/stm32f103/flash.yaml"),
+    ),
+    (
+        "stm32f103/gpioa.yaml",
+        include_str!("../../../../configs/peripherals/stm32f103/gpioa.yaml"),
+    ),
+    (
+        "stm32f103/gpiob.yaml",
+        include_str!("../../../../configs/peripherals/stm32f103/gpiob.yaml"),
+    ),
+    (
+        "stm32f103/gpioc.yaml",
+        include_str!("../../../../configs/peripherals/stm32f103/gpioc.yaml"),
+    ),
+    (
+        "stm32f103/i2c1.yaml",
+        include_str!("../../../../configs/peripherals/stm32f103/i2c1.yaml"),
+    ),
+    (
+        "stm32f103/i2c2.yaml",
+        include_str!("../../../../configs/peripherals/stm32f103/i2c2.yaml"),
+    ),
+    (
+        "stm32f103/iwdg.yaml",
+        include_str!("../../../../configs/peripherals/stm32f103/iwdg.yaml"),
+    ),
+    (
+        "stm32f103/pwr.yaml",
+        include_str!("../../../../configs/peripherals/stm32f103/pwr.yaml"),
+    ),
+    (
+        "stm32f103/rcc.yaml",
+        include_str!("../../../../configs/peripherals/stm32f103/rcc.yaml"),
+    ),
+    (
+        "stm32f103/rtc.yaml",
+        include_str!("../../../../configs/peripherals/stm32f103/rtc.yaml"),
+    ),
+    (
+        "stm32f103/spi1.yaml",
+        include_str!("../../../../configs/peripherals/stm32f103/spi1.yaml"),
+    ),
+    (
+        "stm32f103/spi2.yaml",
+        include_str!("../../../../configs/peripherals/stm32f103/spi2.yaml"),
+    ),
+    (
+        "stm32f103/tim1.yaml",
+        include_str!("../../../../configs/peripherals/stm32f103/tim1.yaml"),
+    ),
+    (
+        "stm32f103/tim2.yaml",
+        include_str!("../../../../configs/peripherals/stm32f103/tim2.yaml"),
+    ),
+    (
+        "stm32f103/tim3.yaml",
+        include_str!("../../../../configs/peripherals/stm32f103/tim3.yaml"),
+    ),
+    (
+        "stm32f103/tim4.yaml",
+        include_str!("../../../../configs/peripherals/stm32f103/tim4.yaml"),
+    ),
+    (
+        "stm32f103/usart1.yaml",
+        include_str!("../../../../configs/peripherals/stm32f103/usart1.yaml"),
+    ),
+    (
+        "stm32f103/usart2.yaml",
+        include_str!("../../../../configs/peripherals/stm32f103/usart2.yaml"),
+    ),
+    (
+        "stm32f103/usart3.yaml",
+        include_str!("../../../../configs/peripherals/stm32f103/usart3.yaml"),
+    ),
+    (
+        "stm32f103/usb.yaml",
+        include_str!("../../../../configs/peripherals/stm32f103/usb.yaml"),
+    ),
+    (
+        "stm32f103/wwdg.yaml",
+        include_str!("../../../../configs/peripherals/stm32f103/wwdg.yaml"),
+    ),
+    (
+        "stm32f401/adc1.yaml",
+        include_str!("../../../../configs/peripherals/stm32f401/adc1.yaml"),
+    ),
+    (
+        "stm32f401/crc.yaml",
+        include_str!("../../../../configs/peripherals/stm32f401/crc.yaml"),
+    ),
+    (
+        "stm32f401/dbg.yaml",
+        include_str!("../../../../configs/peripherals/stm32f401/dbg.yaml"),
+    ),
+    (
+        "stm32f401/dma1.yaml",
+        include_str!("../../../../configs/peripherals/stm32f401/dma1.yaml"),
+    ),
+    (
+        "stm32f401/dma2.yaml",
+        include_str!("../../../../configs/peripherals/stm32f401/dma2.yaml"),
+    ),
+    (
+        "stm32f401/exti.yaml",
+        include_str!("../../../../configs/peripherals/stm32f401/exti.yaml"),
+    ),
+    (
+        "stm32f401/flash.yaml",
+        include_str!("../../../../configs/peripherals/stm32f401/flash.yaml"),
+    ),
+    (
+        "stm32f401/gpioa.yaml",
+        include_str!("../../../../configs/peripherals/stm32f401/gpioa.yaml"),
+    ),
+    (
+        "stm32f401/gpiob.yaml",
+        include_str!("../../../../configs/peripherals/stm32f401/gpiob.yaml"),
+    ),
+    (
+        "stm32f401/gpioc.yaml",
+        include_str!("../../../../configs/peripherals/stm32f401/gpioc.yaml"),
+    ),
+    (
+        "stm32f401/gpiod.yaml",
+        include_str!("../../../../configs/peripherals/stm32f401/gpiod.yaml"),
+    ),
+    (
+        "stm32f401/gpioe.yaml",
+        include_str!("../../../../configs/peripherals/stm32f401/gpioe.yaml"),
+    ),
+    (
+        "stm32f401/gpioh.yaml",
+        include_str!("../../../../configs/peripherals/stm32f401/gpioh.yaml"),
+    ),
+    (
+        "stm32f401/i2c1.yaml",
+        include_str!("../../../../configs/peripherals/stm32f401/i2c1.yaml"),
+    ),
+    (
+        "stm32f401/i2c2.yaml",
+        include_str!("../../../../configs/peripherals/stm32f401/i2c2.yaml"),
+    ),
+    (
+        "stm32f401/i2c3.yaml",
+        include_str!("../../../../configs/peripherals/stm32f401/i2c3.yaml"),
+    ),
+    (
+        "stm32f401/i2s2ext.yaml",
+        include_str!("../../../../configs/peripherals/stm32f401/i2s2ext.yaml"),
+    ),
+    (
+        "stm32f401/i2s3ext.yaml",
+        include_str!("../../../../configs/peripherals/stm32f401/i2s3ext.yaml"),
+    ),
+    (
+        "stm32f401/iwdg.yaml",
+        include_str!("../../../../configs/peripherals/stm32f401/iwdg.yaml"),
+    ),
+    (
+        "stm32f401/otg_fs_device.yaml",
+        include_str!("../../../../configs/peripherals/stm32f401/otg_fs_device.yaml"),
+    ),
+    (
+        "stm32f401/otg_fs_global.yaml",
+        include_str!("../../../../configs/peripherals/stm32f401/otg_fs_global.yaml"),
+    ),
+    (
+        "stm32f401/otg_fs_host.yaml",
+        include_str!("../../../../configs/peripherals/stm32f401/otg_fs_host.yaml"),
+    ),
+    (
+        "stm32f401/otg_fs_pwrclk.yaml",
+        include_str!("../../../../configs/peripherals/stm32f401/otg_fs_pwrclk.yaml"),
+    ),
+    (
+        "stm32f401/pwr.yaml",
+        include_str!("../../../../configs/peripherals/stm32f401/pwr.yaml"),
+    ),
+    (
+        "stm32f401/rcc.yaml",
+        include_str!("../../../../configs/peripherals/stm32f401/rcc.yaml"),
+    ),
+    (
+        "stm32f401/rtc.yaml",
+        include_str!("../../../../configs/peripherals/stm32f401/rtc.yaml"),
+    ),
+    (
+        "stm32f401/sdio.yaml",
+        include_str!("../../../../configs/peripherals/stm32f401/sdio.yaml"),
+    ),
+    (
+        "stm32f401/spi1.yaml",
+        include_str!("../../../../configs/peripherals/stm32f401/spi1.yaml"),
+    ),
+    (
+        "stm32f401/spi2.yaml",
+        include_str!("../../../../configs/peripherals/stm32f401/spi2.yaml"),
+    ),
+    (
+        "stm32f401/spi3.yaml",
+        include_str!("../../../../configs/peripherals/stm32f401/spi3.yaml"),
+    ),
+    (
+        "stm32f401/spi4.yaml",
+        include_str!("../../../../configs/peripherals/stm32f401/spi4.yaml"),
+    ),
+    (
+        "stm32f401/syscfg.yaml",
+        include_str!("../../../../configs/peripherals/stm32f401/syscfg.yaml"),
+    ),
+    (
+        "stm32f401/tim1.yaml",
+        include_str!("../../../../configs/peripherals/stm32f401/tim1.yaml"),
+    ),
+    (
+        "stm32f401/tim10.yaml",
+        include_str!("../../../../configs/peripherals/stm32f401/tim10.yaml"),
+    ),
+    (
+        "stm32f401/tim11.yaml",
+        include_str!("../../../../configs/peripherals/stm32f401/tim11.yaml"),
+    ),
+    (
+        "stm32f401/tim2.yaml",
+        include_str!("../../../../configs/peripherals/stm32f401/tim2.yaml"),
+    ),
+    (
+        "stm32f401/tim3.yaml",
+        include_str!("../../../../configs/peripherals/stm32f401/tim3.yaml"),
+    ),
+    (
+        "stm32f401/tim4.yaml",
+        include_str!("../../../../configs/peripherals/stm32f401/tim4.yaml"),
+    ),
+    (
+        "stm32f401/tim5.yaml",
+        include_str!("../../../../configs/peripherals/stm32f401/tim5.yaml"),
+    ),
+    (
+        "stm32f401/tim9.yaml",
+        include_str!("../../../../configs/peripherals/stm32f401/tim9.yaml"),
+    ),
+    (
+        "stm32f401/usart1.yaml",
+        include_str!("../../../../configs/peripherals/stm32f401/usart1.yaml"),
+    ),
+    (
+        "stm32f401/usart2.yaml",
+        include_str!("../../../../configs/peripherals/stm32f401/usart2.yaml"),
+    ),
+    (
+        "stm32f401/usart6.yaml",
+        include_str!("../../../../configs/peripherals/stm32f401/usart6.yaml"),
+    ),
+    (
+        "stm32f401/wwdg.yaml",
+        include_str!("../../../../configs/peripherals/stm32f401/wwdg.yaml"),
+    ),
+    (
+        "stm32f405/adc1.yaml",
+        include_str!("../../../../configs/peripherals/stm32f405/adc1.yaml"),
+    ),
+    (
+        "stm32f405/dbg.yaml",
+        include_str!("../../../../configs/peripherals/stm32f405/dbg.yaml"),
+    ),
+    (
+        "stm32f405/dma1.yaml",
+        include_str!("../../../../configs/peripherals/stm32f405/dma1.yaml"),
+    ),
+    (
+        "stm32f405/dma2.yaml",
+        include_str!("../../../../configs/peripherals/stm32f405/dma2.yaml"),
+    ),
+    (
+        "stm32f405/exti.yaml",
+        include_str!("../../../../configs/peripherals/stm32f405/exti.yaml"),
+    ),
+    (
+        "stm32f405/flash.yaml",
+        include_str!("../../../../configs/peripherals/stm32f405/flash.yaml"),
+    ),
+    (
+        "stm32f405/gpioa.yaml",
+        include_str!("../../../../configs/peripherals/stm32f405/gpioa.yaml"),
+    ),
+    (
+        "stm32f405/gpiob.yaml",
+        include_str!("../../../../configs/peripherals/stm32f405/gpiob.yaml"),
+    ),
+    (
+        "stm32f405/gpioc.yaml",
+        include_str!("../../../../configs/peripherals/stm32f405/gpioc.yaml"),
+    ),
+    (
+        "stm32f405/i2c1.yaml",
+        include_str!("../../../../configs/peripherals/stm32f405/i2c1.yaml"),
+    ),
+    (
+        "stm32f405/iwdg.yaml",
+        include_str!("../../../../configs/peripherals/stm32f405/iwdg.yaml"),
+    ),
+    (
+        "stm32f405/pwr.yaml",
+        include_str!("../../../../configs/peripherals/stm32f405/pwr.yaml"),
+    ),
+    (
+        "stm32f405/rcc.yaml",
+        include_str!("../../../../configs/peripherals/stm32f405/rcc.yaml"),
+    ),
+    (
+        "stm32f405/rtc.yaml",
+        include_str!("../../../../configs/peripherals/stm32f405/rtc.yaml"),
+    ),
+    (
+        "stm32f405/spi1.yaml",
+        include_str!("../../../../configs/peripherals/stm32f405/spi1.yaml"),
+    ),
+    (
+        "stm32f405/tim1.yaml",
+        include_str!("../../../../configs/peripherals/stm32f405/tim1.yaml"),
+    ),
+    (
+        "stm32f405/tim2.yaml",
+        include_str!("../../../../configs/peripherals/stm32f405/tim2.yaml"),
+    ),
+    (
+        "stm32f405/usart1.yaml",
+        include_str!("../../../../configs/peripherals/stm32f405/usart1.yaml"),
+    ),
+    (
+        "stm32f405/usart2.yaml",
+        include_str!("../../../../configs/peripherals/stm32f405/usart2.yaml"),
+    ),
+    (
+        "stm32f407/adc1.yaml",
+        include_str!("../../../../configs/peripherals/stm32f407/adc1.yaml"),
+    ),
+    (
+        "stm32f407/can1.yaml",
+        include_str!("../../../../configs/peripherals/stm32f407/can1.yaml"),
+    ),
+    (
+        "stm32f407/dbg.yaml",
+        include_str!("../../../../configs/peripherals/stm32f407/dbg.yaml"),
+    ),
+    (
+        "stm32f407/dma1.yaml",
+        include_str!("../../../../configs/peripherals/stm32f407/dma1.yaml"),
+    ),
+    (
+        "stm32f407/dma2.yaml",
+        include_str!("../../../../configs/peripherals/stm32f407/dma2.yaml"),
+    ),
+    (
+        "stm32f407/exti.yaml",
+        include_str!("../../../../configs/peripherals/stm32f407/exti.yaml"),
+    ),
+    (
+        "stm32f407/flash.yaml",
+        include_str!("../../../../configs/peripherals/stm32f407/flash.yaml"),
+    ),
+    (
+        "stm32f407/gpioa.yaml",
+        include_str!("../../../../configs/peripherals/stm32f407/gpioa.yaml"),
+    ),
+    (
+        "stm32f407/gpiob.yaml",
+        include_str!("../../../../configs/peripherals/stm32f407/gpiob.yaml"),
+    ),
+    (
+        "stm32f407/gpioc.yaml",
+        include_str!("../../../../configs/peripherals/stm32f407/gpioc.yaml"),
+    ),
+    (
+        "stm32f407/gpiod.yaml",
+        include_str!("../../../../configs/peripherals/stm32f407/gpiod.yaml"),
+    ),
+    (
+        "stm32f407/gpioe.yaml",
+        include_str!("../../../../configs/peripherals/stm32f407/gpioe.yaml"),
+    ),
+    (
+        "stm32f407/i2c1.yaml",
+        include_str!("../../../../configs/peripherals/stm32f407/i2c1.yaml"),
+    ),
+    (
+        "stm32f407/i2c2.yaml",
+        include_str!("../../../../configs/peripherals/stm32f407/i2c2.yaml"),
+    ),
+    (
+        "stm32f407/i2c3.yaml",
+        include_str!("../../../../configs/peripherals/stm32f407/i2c3.yaml"),
+    ),
+    (
+        "stm32f407/iwdg.yaml",
+        include_str!("../../../../configs/peripherals/stm32f407/iwdg.yaml"),
+    ),
+    (
+        "stm32f407/nvic.yaml",
+        include_str!("../../../../configs/peripherals/stm32f407/nvic.yaml"),
+    ),
+    (
+        "stm32f407/pwr.yaml",
+        include_str!("../../../../configs/peripherals/stm32f407/pwr.yaml"),
+    ),
+    (
+        "stm32f407/rcc.yaml",
+        include_str!("../../../../configs/peripherals/stm32f407/rcc.yaml"),
+    ),
+    (
+        "stm32f407/rtc.yaml",
+        include_str!("../../../../configs/peripherals/stm32f407/rtc.yaml"),
+    ),
+    (
+        "stm32f407/spi1.yaml",
+        include_str!("../../../../configs/peripherals/stm32f407/spi1.yaml"),
+    ),
+    (
+        "stm32f407/spi2.yaml",
+        include_str!("../../../../configs/peripherals/stm32f407/spi2.yaml"),
+    ),
+    (
+        "stm32f407/spi3.yaml",
+        include_str!("../../../../configs/peripherals/stm32f407/spi3.yaml"),
+    ),
+    (
+        "stm32f407/stk.yaml",
+        include_str!("../../../../configs/peripherals/stm32f407/stk.yaml"),
+    ),
+    (
+        "stm32f407/tim1.yaml",
+        include_str!("../../../../configs/peripherals/stm32f407/tim1.yaml"),
+    ),
+    (
+        "stm32f407/tim2.yaml",
+        include_str!("../../../../configs/peripherals/stm32f407/tim2.yaml"),
+    ),
+    (
+        "stm32f407/tim3.yaml",
+        include_str!("../../../../configs/peripherals/stm32f407/tim3.yaml"),
+    ),
+    (
+        "stm32f407/tim4.yaml",
+        include_str!("../../../../configs/peripherals/stm32f407/tim4.yaml"),
+    ),
+    (
+        "stm32f407/tim5.yaml",
+        include_str!("../../../../configs/peripherals/stm32f407/tim5.yaml"),
+    ),
+    (
+        "stm32f407/usart1.yaml",
+        include_str!("../../../../configs/peripherals/stm32f407/usart1.yaml"),
+    ),
+    (
+        "stm32f407/usart2.yaml",
+        include_str!("../../../../configs/peripherals/stm32f407/usart2.yaml"),
+    ),
+    (
+        "stm32f407/usart3.yaml",
+        include_str!("../../../../configs/peripherals/stm32f407/usart3.yaml"),
+    ),
+    (
+        "stm32f407/usart6.yaml",
+        include_str!("../../../../configs/peripherals/stm32f407/usart6.yaml"),
+    ),
+    (
+        "stm32f411/adc1.yaml",
+        include_str!("../../../../configs/peripherals/stm32f411/adc1.yaml"),
+    ),
+    (
+        "stm32f411/crc.yaml",
+        include_str!("../../../../configs/peripherals/stm32f411/crc.yaml"),
+    ),
+    (
+        "stm32f411/dbg.yaml",
+        include_str!("../../../../configs/peripherals/stm32f411/dbg.yaml"),
+    ),
+    (
+        "stm32f411/dma1.yaml",
+        include_str!("../../../../configs/peripherals/stm32f411/dma1.yaml"),
+    ),
+    (
+        "stm32f411/dma2.yaml",
+        include_str!("../../../../configs/peripherals/stm32f411/dma2.yaml"),
+    ),
+    (
+        "stm32f411/exti.yaml",
+        include_str!("../../../../configs/peripherals/stm32f411/exti.yaml"),
+    ),
+    (
+        "stm32f411/flash.yaml",
+        include_str!("../../../../configs/peripherals/stm32f411/flash.yaml"),
+    ),
+    (
+        "stm32f411/gpioa.yaml",
+        include_str!("../../../../configs/peripherals/stm32f411/gpioa.yaml"),
+    ),
+    (
+        "stm32f411/gpiob.yaml",
+        include_str!("../../../../configs/peripherals/stm32f411/gpiob.yaml"),
+    ),
+    (
+        "stm32f411/gpioc.yaml",
+        include_str!("../../../../configs/peripherals/stm32f411/gpioc.yaml"),
+    ),
+    (
+        "stm32f411/gpiod.yaml",
+        include_str!("../../../../configs/peripherals/stm32f411/gpiod.yaml"),
+    ),
+    (
+        "stm32f411/gpioe.yaml",
+        include_str!("../../../../configs/peripherals/stm32f411/gpioe.yaml"),
+    ),
+    (
+        "stm32f411/gpioh.yaml",
+        include_str!("../../../../configs/peripherals/stm32f411/gpioh.yaml"),
+    ),
+    (
+        "stm32f411/i2c1.yaml",
+        include_str!("../../../../configs/peripherals/stm32f411/i2c1.yaml"),
+    ),
+    (
+        "stm32f411/i2c2.yaml",
+        include_str!("../../../../configs/peripherals/stm32f411/i2c2.yaml"),
+    ),
+    (
+        "stm32f411/i2c3.yaml",
+        include_str!("../../../../configs/peripherals/stm32f411/i2c3.yaml"),
+    ),
+    (
+        "stm32f411/i2s2ext.yaml",
+        include_str!("../../../../configs/peripherals/stm32f411/i2s2ext.yaml"),
+    ),
+    (
+        "stm32f411/i2s3ext.yaml",
+        include_str!("../../../../configs/peripherals/stm32f411/i2s3ext.yaml"),
+    ),
+    (
+        "stm32f411/iwdg.yaml",
+        include_str!("../../../../configs/peripherals/stm32f411/iwdg.yaml"),
+    ),
+    (
+        "stm32f411/otg_fs_device.yaml",
+        include_str!("../../../../configs/peripherals/stm32f411/otg_fs_device.yaml"),
+    ),
+    (
+        "stm32f411/otg_fs_global.yaml",
+        include_str!("../../../../configs/peripherals/stm32f411/otg_fs_global.yaml"),
+    ),
+    (
+        "stm32f411/otg_fs_host.yaml",
+        include_str!("../../../../configs/peripherals/stm32f411/otg_fs_host.yaml"),
+    ),
+    (
+        "stm32f411/otg_fs_pwrclk.yaml",
+        include_str!("../../../../configs/peripherals/stm32f411/otg_fs_pwrclk.yaml"),
+    ),
+    (
+        "stm32f411/pwr.yaml",
+        include_str!("../../../../configs/peripherals/stm32f411/pwr.yaml"),
+    ),
+    (
+        "stm32f411/rcc.yaml",
+        include_str!("../../../../configs/peripherals/stm32f411/rcc.yaml"),
+    ),
+    (
+        "stm32f411/rtc.yaml",
+        include_str!("../../../../configs/peripherals/stm32f411/rtc.yaml"),
+    ),
+    (
+        "stm32f411/sdio.yaml",
+        include_str!("../../../../configs/peripherals/stm32f411/sdio.yaml"),
+    ),
+    (
+        "stm32f411/spi1.yaml",
+        include_str!("../../../../configs/peripherals/stm32f411/spi1.yaml"),
+    ),
+    (
+        "stm32f411/spi2.yaml",
+        include_str!("../../../../configs/peripherals/stm32f411/spi2.yaml"),
+    ),
+    (
+        "stm32f411/spi3.yaml",
+        include_str!("../../../../configs/peripherals/stm32f411/spi3.yaml"),
+    ),
+    (
+        "stm32f411/spi4.yaml",
+        include_str!("../../../../configs/peripherals/stm32f411/spi4.yaml"),
+    ),
+    (
+        "stm32f411/spi5.yaml",
+        include_str!("../../../../configs/peripherals/stm32f411/spi5.yaml"),
+    ),
+    (
+        "stm32f411/syscfg.yaml",
+        include_str!("../../../../configs/peripherals/stm32f411/syscfg.yaml"),
+    ),
+    (
+        "stm32f411/tim1.yaml",
+        include_str!("../../../../configs/peripherals/stm32f411/tim1.yaml"),
+    ),
+    (
+        "stm32f411/tim10.yaml",
+        include_str!("../../../../configs/peripherals/stm32f411/tim10.yaml"),
+    ),
+    (
+        "stm32f411/tim11.yaml",
+        include_str!("../../../../configs/peripherals/stm32f411/tim11.yaml"),
+    ),
+    (
+        "stm32f411/tim2.yaml",
+        include_str!("../../../../configs/peripherals/stm32f411/tim2.yaml"),
+    ),
+    (
+        "stm32f411/tim3.yaml",
+        include_str!("../../../../configs/peripherals/stm32f411/tim3.yaml"),
+    ),
+    (
+        "stm32f411/tim4.yaml",
+        include_str!("../../../../configs/peripherals/stm32f411/tim4.yaml"),
+    ),
+    (
+        "stm32f411/tim5.yaml",
+        include_str!("../../../../configs/peripherals/stm32f411/tim5.yaml"),
+    ),
+    (
+        "stm32f411/tim9.yaml",
+        include_str!("../../../../configs/peripherals/stm32f411/tim9.yaml"),
+    ),
+    (
+        "stm32f411/usart1.yaml",
+        include_str!("../../../../configs/peripherals/stm32f411/usart1.yaml"),
+    ),
+    (
+        "stm32f411/usart2.yaml",
+        include_str!("../../../../configs/peripherals/stm32f411/usart2.yaml"),
+    ),
+    (
+        "stm32f411/usart6.yaml",
+        include_str!("../../../../configs/peripherals/stm32f411/usart6.yaml"),
+    ),
+    (
+        "stm32f411/wwdg.yaml",
+        include_str!("../../../../configs/peripherals/stm32f411/wwdg.yaml"),
+    ),
+    (
+        "stm32f767/adc1.yaml",
+        include_str!("../../../../configs/peripherals/stm32f767/adc1.yaml"),
+    ),
+    (
+        "stm32f767/dbg.yaml",
+        include_str!("../../../../configs/peripherals/stm32f767/dbg.yaml"),
+    ),
+    (
+        "stm32f767/dma1.yaml",
+        include_str!("../../../../configs/peripherals/stm32f767/dma1.yaml"),
+    ),
+    (
+        "stm32f767/dma2.yaml",
+        include_str!("../../../../configs/peripherals/stm32f767/dma2.yaml"),
+    ),
+    (
+        "stm32f767/exti.yaml",
+        include_str!("../../../../configs/peripherals/stm32f767/exti.yaml"),
+    ),
+    (
+        "stm32f767/flash.yaml",
+        include_str!("../../../../configs/peripherals/stm32f767/flash.yaml"),
+    ),
+    (
+        "stm32f767/gpioa.yaml",
+        include_str!("../../../../configs/peripherals/stm32f767/gpioa.yaml"),
+    ),
+    (
+        "stm32f767/gpiob.yaml",
+        include_str!("../../../../configs/peripherals/stm32f767/gpiob.yaml"),
+    ),
+    (
+        "stm32f767/gpioc.yaml",
+        include_str!("../../../../configs/peripherals/stm32f767/gpioc.yaml"),
+    ),
+    (
+        "stm32f767/i2c1.yaml",
+        include_str!("../../../../configs/peripherals/stm32f767/i2c1.yaml"),
+    ),
+    (
+        "stm32f767/iwdg.yaml",
+        include_str!("../../../../configs/peripherals/stm32f767/iwdg.yaml"),
+    ),
+    (
+        "stm32f767/pwr.yaml",
+        include_str!("../../../../configs/peripherals/stm32f767/pwr.yaml"),
+    ),
+    (
+        "stm32f767/rcc.yaml",
+        include_str!("../../../../configs/peripherals/stm32f767/rcc.yaml"),
+    ),
+    (
+        "stm32f767/rtc.yaml",
+        include_str!("../../../../configs/peripherals/stm32f767/rtc.yaml"),
+    ),
+    (
+        "stm32f767/spi1.yaml",
+        include_str!("../../../../configs/peripherals/stm32f767/spi1.yaml"),
+    ),
+    (
+        "stm32f767/tim1.yaml",
+        include_str!("../../../../configs/peripherals/stm32f767/tim1.yaml"),
+    ),
+    (
+        "stm32f767/tim2.yaml",
+        include_str!("../../../../configs/peripherals/stm32f767/tim2.yaml"),
+    ),
+    (
+        "stm32f767/usart1.yaml",
+        include_str!("../../../../configs/peripherals/stm32f767/usart1.yaml"),
+    ),
+    (
+        "stm32f767/usart2.yaml",
+        include_str!("../../../../configs/peripherals/stm32f767/usart2.yaml"),
+    ),
+    (
+        "stm32g474re/adc1.yaml",
+        include_str!("../../../../configs/peripherals/stm32g474re/adc1.yaml"),
+    ),
+    (
+        "stm32g474re/crc.yaml",
+        include_str!("../../../../configs/peripherals/stm32g474re/crc.yaml"),
+    ),
+    (
+        "stm32g474re/dbgmcu.yaml",
+        include_str!("../../../../configs/peripherals/stm32g474re/dbgmcu.yaml"),
+    ),
+    (
+        "stm32g474re/dma1.yaml",
+        include_str!("../../../../configs/peripherals/stm32g474re/dma1.yaml"),
+    ),
+    (
+        "stm32g474re/flash.yaml",
+        include_str!("../../../../configs/peripherals/stm32g474re/flash.yaml"),
+    ),
+    (
+        "stm32g474re/gpioa.yaml",
+        include_str!("../../../../configs/peripherals/stm32g474re/gpioa.yaml"),
+    ),
+    (
+        "stm32g474re/gpiob.yaml",
+        include_str!("../../../../configs/peripherals/stm32g474re/gpiob.yaml"),
+    ),
+    (
+        "stm32g474re/gpioc.yaml",
+        include_str!("../../../../configs/peripherals/stm32g474re/gpioc.yaml"),
+    ),
+    (
+        "stm32g474re/gpiod.yaml",
+        include_str!("../../../../configs/peripherals/stm32g474re/gpiod.yaml"),
+    ),
+    (
+        "stm32g474re/i2c1.yaml",
+        include_str!("../../../../configs/peripherals/stm32g474re/i2c1.yaml"),
+    ),
+    (
+        "stm32g474re/iwdg.yaml",
+        include_str!("../../../../configs/peripherals/stm32g474re/iwdg.yaml"),
+    ),
+    (
+        "stm32g474re/lpuart1.yaml",
+        include_str!("../../../../configs/peripherals/stm32g474re/lpuart1.yaml"),
+    ),
+    (
+        "stm32g474re/nvic.yaml",
+        include_str!("../../../../configs/peripherals/stm32g474re/nvic.yaml"),
+    ),
+    (
+        "stm32g474re/pwr.yaml",
+        include_str!("../../../../configs/peripherals/stm32g474re/pwr.yaml"),
+    ),
+    (
+        "stm32g474re/rcc.yaml",
+        include_str!("../../../../configs/peripherals/stm32g474re/rcc.yaml"),
+    ),
+    (
+        "stm32g474re/rtc.yaml",
+        include_str!("../../../../configs/peripherals/stm32g474re/rtc.yaml"),
+    ),
+    (
+        "stm32g474re/spi1.yaml",
+        include_str!("../../../../configs/peripherals/stm32g474re/spi1.yaml"),
+    ),
+    (
+        "stm32g474re/stk.yaml",
+        include_str!("../../../../configs/peripherals/stm32g474re/stk.yaml"),
+    ),
+    (
+        "stm32g474re/tim1.yaml",
+        include_str!("../../../../configs/peripherals/stm32g474re/tim1.yaml"),
+    ),
+    (
+        "stm32g474re/tim2.yaml",
+        include_str!("../../../../configs/peripherals/stm32g474re/tim2.yaml"),
+    ),
+    (
+        "stm32g474re/usart1.yaml",
+        include_str!("../../../../configs/peripherals/stm32g474re/usart1.yaml"),
+    ),
+    (
+        "stm32g474re/usart2.yaml",
+        include_str!("../../../../configs/peripherals/stm32g474re/usart2.yaml"),
+    ),
+    (
+        "stm32h563/adc1.yaml",
+        include_str!("../../../../configs/peripherals/stm32h563/adc1.yaml"),
+    ),
+    (
+        "stm32h563/crc.yaml",
+        include_str!("../../../../configs/peripherals/stm32h563/crc.yaml"),
+    ),
+    (
+        "stm32h563/dbgmcu.yaml",
+        include_str!("../../../../configs/peripherals/stm32h563/dbgmcu.yaml"),
+    ),
+    (
+        "stm32h563/fdcan1.yaml",
+        include_str!("../../../../configs/peripherals/stm32h563/fdcan1.yaml"),
+    ),
+    (
+        "stm32h563/flash.yaml",
+        include_str!("../../../../configs/peripherals/stm32h563/flash.yaml"),
+    ),
+    (
+        "stm32h563/gpdma1.yaml",
+        include_str!("../../../../configs/peripherals/stm32h563/gpdma1.yaml"),
+    ),
+    (
+        "stm32h563/gpioa.yaml",
+        include_str!("../../../../configs/peripherals/stm32h563/gpioa.yaml"),
+    ),
+    (
+        "stm32h563/gpiob.yaml",
+        include_str!("../../../../configs/peripherals/stm32h563/gpiob.yaml"),
+    ),
+    (
+        "stm32h563/gpioc.yaml",
+        include_str!("../../../../configs/peripherals/stm32h563/gpioc.yaml"),
+    ),
+    (
+        "stm32h563/gpiod.yaml",
+        include_str!("../../../../configs/peripherals/stm32h563/gpiod.yaml"),
+    ),
+    (
+        "stm32h563/gpioe.yaml",
+        include_str!("../../../../configs/peripherals/stm32h563/gpioe.yaml"),
+    ),
+    (
+        "stm32h563/gpiof.yaml",
+        include_str!("../../../../configs/peripherals/stm32h563/gpiof.yaml"),
+    ),
+    (
+        "stm32h563/gpiog.yaml",
+        include_str!("../../../../configs/peripherals/stm32h563/gpiog.yaml"),
+    ),
+    (
+        "stm32h563/i2c1.yaml",
+        include_str!("../../../../configs/peripherals/stm32h563/i2c1.yaml"),
+    ),
+    (
+        "stm32h563/i2c2.yaml",
+        include_str!("../../../../configs/peripherals/stm32h563/i2c2.yaml"),
+    ),
+    (
+        "stm32h563/icache.yaml",
+        include_str!("../../../../configs/peripherals/stm32h563/icache.yaml"),
+    ),
+    (
+        "stm32h563/iwdg.yaml",
+        include_str!("../../../../configs/peripherals/stm32h563/iwdg.yaml"),
+    ),
+    (
+        "stm32h563/lptim1.yaml",
+        include_str!("../../../../configs/peripherals/stm32h563/lptim1.yaml"),
+    ),
+    (
+        "stm32h563/lpuart.yaml",
+        include_str!("../../../../configs/peripherals/stm32h563/lpuart.yaml"),
+    ),
+    (
+        "stm32h563/pwr.yaml",
+        include_str!("../../../../configs/peripherals/stm32h563/pwr.yaml"),
+    ),
+    (
+        "stm32h563/rcc.yaml",
+        include_str!("../../../../configs/peripherals/stm32h563/rcc.yaml"),
+    ),
+    (
+        "stm32h563/rng.yaml",
+        include_str!("../../../../configs/peripherals/stm32h563/rng.yaml"),
+    ),
+    (
+        "stm32h563/rtc.yaml",
+        include_str!("../../../../configs/peripherals/stm32h563/rtc.yaml"),
+    ),
+    (
+        "stm32h563/spi1.yaml",
+        include_str!("../../../../configs/peripherals/stm32h563/spi1.yaml"),
+    ),
+    (
+        "stm32h563/spi2.yaml",
+        include_str!("../../../../configs/peripherals/stm32h563/spi2.yaml"),
+    ),
+    (
+        "stm32h563/spi3.yaml",
+        include_str!("../../../../configs/peripherals/stm32h563/spi3.yaml"),
+    ),
+    (
+        "stm32h563/tim1.yaml",
+        include_str!("../../../../configs/peripherals/stm32h563/tim1.yaml"),
+    ),
+    (
+        "stm32h563/tim12.yaml",
+        include_str!("../../../../configs/peripherals/stm32h563/tim12.yaml"),
+    ),
+    (
+        "stm32h563/tim2.yaml",
+        include_str!("../../../../configs/peripherals/stm32h563/tim2.yaml"),
+    ),
+    (
+        "stm32h563/tim3.yaml",
+        include_str!("../../../../configs/peripherals/stm32h563/tim3.yaml"),
+    ),
+    (
+        "stm32h563/tim6.yaml",
+        include_str!("../../../../configs/peripherals/stm32h563/tim6.yaml"),
+    ),
+    (
+        "stm32h563/usart1.yaml",
+        include_str!("../../../../configs/peripherals/stm32h563/usart1.yaml"),
+    ),
+    (
+        "stm32h563/usart2.yaml",
+        include_str!("../../../../configs/peripherals/stm32h563/usart2.yaml"),
+    ),
+    (
+        "stm32h563/usart3.yaml",
+        include_str!("../../../../configs/peripherals/stm32h563/usart3.yaml"),
+    ),
+    (
+        "stm32h563/wwdg.yaml",
+        include_str!("../../../../configs/peripherals/stm32h563/wwdg.yaml"),
+    ),
+    (
+        "stm32h735/adc1.yaml",
+        include_str!("../../../../configs/peripherals/stm32h735/adc1.yaml"),
+    ),
+    (
+        "stm32h735/adc2.yaml",
+        include_str!("../../../../configs/peripherals/stm32h735/adc2.yaml"),
+    ),
+    (
+        "stm32h735/crc.yaml",
+        include_str!("../../../../configs/peripherals/stm32h735/crc.yaml"),
+    ),
+    (
+        "stm32h735/dbgmcu.yaml",
+        include_str!("../../../../configs/peripherals/stm32h735/dbgmcu.yaml"),
+    ),
+    (
+        "stm32h735/fdcan1.yaml",
+        include_str!("../../../../configs/peripherals/stm32h735/fdcan1.yaml"),
+    ),
+    (
+        "stm32h735/fdcan2.yaml",
+        include_str!("../../../../configs/peripherals/stm32h735/fdcan2.yaml"),
+    ),
+    (
+        "stm32h735/flash.yaml",
+        include_str!("../../../../configs/peripherals/stm32h735/flash.yaml"),
+    ),
+    (
+        "stm32h735/gpioa.yaml",
+        include_str!("../../../../configs/peripherals/stm32h735/gpioa.yaml"),
+    ),
+    (
+        "stm32h735/gpiob.yaml",
+        include_str!("../../../../configs/peripherals/stm32h735/gpiob.yaml"),
+    ),
+    (
+        "stm32h735/gpioc.yaml",
+        include_str!("../../../../configs/peripherals/stm32h735/gpioc.yaml"),
+    ),
+    (
+        "stm32h735/gpiod.yaml",
+        include_str!("../../../../configs/peripherals/stm32h735/gpiod.yaml"),
+    ),
+    (
+        "stm32h735/gpioe.yaml",
+        include_str!("../../../../configs/peripherals/stm32h735/gpioe.yaml"),
+    ),
+    (
+        "stm32h735/gpiof.yaml",
+        include_str!("../../../../configs/peripherals/stm32h735/gpiof.yaml"),
+    ),
+    (
+        "stm32h735/gpiog.yaml",
+        include_str!("../../../../configs/peripherals/stm32h735/gpiog.yaml"),
+    ),
+    (
+        "stm32h735/gpioh.yaml",
+        include_str!("../../../../configs/peripherals/stm32h735/gpioh.yaml"),
+    ),
+    (
+        "stm32h735/i2c1.yaml",
+        include_str!("../../../../configs/peripherals/stm32h735/i2c1.yaml"),
+    ),
+    (
+        "stm32h735/i2c2.yaml",
+        include_str!("../../../../configs/peripherals/stm32h735/i2c2.yaml"),
+    ),
+    (
+        "stm32h735/i2c3.yaml",
+        include_str!("../../../../configs/peripherals/stm32h735/i2c3.yaml"),
+    ),
+    (
+        "stm32h735/iwdg1.yaml",
+        include_str!("../../../../configs/peripherals/stm32h735/iwdg1.yaml"),
+    ),
+    (
+        "stm32h735/lpuart1.yaml",
+        include_str!("../../../../configs/peripherals/stm32h735/lpuart1.yaml"),
+    ),
+    (
+        "stm32h735/pwr.yaml",
+        include_str!("../../../../configs/peripherals/stm32h735/pwr.yaml"),
+    ),
+    (
+        "stm32h735/rcc.yaml",
+        include_str!("../../../../configs/peripherals/stm32h735/rcc.yaml"),
+    ),
+    (
+        "stm32h735/rng.yaml",
+        include_str!("../../../../configs/peripherals/stm32h735/rng.yaml"),
+    ),
+    (
+        "stm32h735/spi1.yaml",
+        include_str!("../../../../configs/peripherals/stm32h735/spi1.yaml"),
+    ),
+    (
+        "stm32h735/spi2.yaml",
+        include_str!("../../../../configs/peripherals/stm32h735/spi2.yaml"),
+    ),
+    (
+        "stm32h735/spi3.yaml",
+        include_str!("../../../../configs/peripherals/stm32h735/spi3.yaml"),
+    ),
+    (
+        "stm32h735/syscfg.yaml",
+        include_str!("../../../../configs/peripherals/stm32h735/syscfg.yaml"),
+    ),
+    (
+        "stm32h735/tim1.yaml",
+        include_str!("../../../../configs/peripherals/stm32h735/tim1.yaml"),
+    ),
+    (
+        "stm32h735/tim2.yaml",
+        include_str!("../../../../configs/peripherals/stm32h735/tim2.yaml"),
+    ),
+    (
+        "stm32h735/tim3.yaml",
+        include_str!("../../../../configs/peripherals/stm32h735/tim3.yaml"),
+    ),
+    (
+        "stm32h735/tim4.yaml",
+        include_str!("../../../../configs/peripherals/stm32h735/tim4.yaml"),
+    ),
+    (
+        "stm32h735/tim8.yaml",
+        include_str!("../../../../configs/peripherals/stm32h735/tim8.yaml"),
+    ),
+    (
+        "stm32h735/uart4.yaml",
+        include_str!("../../../../configs/peripherals/stm32h735/uart4.yaml"),
+    ),
+    (
+        "stm32h735/usart1.yaml",
+        include_str!("../../../../configs/peripherals/stm32h735/usart1.yaml"),
+    ),
+    (
+        "stm32h735/usart2.yaml",
+        include_str!("../../../../configs/peripherals/stm32h735/usart2.yaml"),
+    ),
+    (
+        "stm32h735/usart3.yaml",
+        include_str!("../../../../configs/peripherals/stm32h735/usart3.yaml"),
+    ),
+    (
+        "stm32h735/usart6.yaml",
+        include_str!("../../../../configs/peripherals/stm32h735/usart6.yaml"),
+    ),
+    (
+        "stm32l073/adc.yaml",
+        include_str!("../../../../configs/peripherals/stm32l073/adc.yaml"),
+    ),
+    (
+        "stm32l073/crc.yaml",
+        include_str!("../../../../configs/peripherals/stm32l073/crc.yaml"),
+    ),
+    (
+        "stm32l073/dac.yaml",
+        include_str!("../../../../configs/peripherals/stm32l073/dac.yaml"),
+    ),
+    (
+        "stm32l073/dbgmcu.yaml",
+        include_str!("../../../../configs/peripherals/stm32l073/dbgmcu.yaml"),
+    ),
+    (
+        "stm32l073/dma1.yaml",
+        include_str!("../../../../configs/peripherals/stm32l073/dma1.yaml"),
+    ),
+    (
+        "stm32l073/exti.yaml",
+        include_str!("../../../../configs/peripherals/stm32l073/exti.yaml"),
+    ),
+    (
+        "stm32l073/flash.yaml",
+        include_str!("../../../../configs/peripherals/stm32l073/flash.yaml"),
+    ),
+    (
+        "stm32l073/gpioa.yaml",
+        include_str!("../../../../configs/peripherals/stm32l073/gpioa.yaml"),
+    ),
+    (
+        "stm32l073/gpiob.yaml",
+        include_str!("../../../../configs/peripherals/stm32l073/gpiob.yaml"),
+    ),
+    (
+        "stm32l073/gpioc.yaml",
+        include_str!("../../../../configs/peripherals/stm32l073/gpioc.yaml"),
+    ),
+    (
+        "stm32l073/gpiod.yaml",
+        include_str!("../../../../configs/peripherals/stm32l073/gpiod.yaml"),
+    ),
+    (
+        "stm32l073/gpioe.yaml",
+        include_str!("../../../../configs/peripherals/stm32l073/gpioe.yaml"),
+    ),
+    (
+        "stm32l073/gpioh.yaml",
+        include_str!("../../../../configs/peripherals/stm32l073/gpioh.yaml"),
+    ),
+    (
+        "stm32l073/i2c1.yaml",
+        include_str!("../../../../configs/peripherals/stm32l073/i2c1.yaml"),
+    ),
+    (
+        "stm32l073/i2c2.yaml",
+        include_str!("../../../../configs/peripherals/stm32l073/i2c2.yaml"),
+    ),
+    (
+        "stm32l073/i2c3.yaml",
+        include_str!("../../../../configs/peripherals/stm32l073/i2c3.yaml"),
+    ),
+    (
+        "stm32l073/iwdg.yaml",
+        include_str!("../../../../configs/peripherals/stm32l073/iwdg.yaml"),
+    ),
+    (
+        "stm32l073/lcd.yaml",
+        include_str!("../../../../configs/peripherals/stm32l073/lcd.yaml"),
+    ),
+    (
+        "stm32l073/lptim.yaml",
+        include_str!("../../../../configs/peripherals/stm32l073/lptim.yaml"),
+    ),
+    (
+        "stm32l073/lpusart1.yaml",
+        include_str!("../../../../configs/peripherals/stm32l073/lpusart1.yaml"),
+    ),
+    (
+        "stm32l073/nvic.yaml",
+        include_str!("../../../../configs/peripherals/stm32l073/nvic.yaml"),
+    ),
+    (
+        "stm32l073/pwr.yaml",
+        include_str!("../../../../configs/peripherals/stm32l073/pwr.yaml"),
+    ),
+    (
+        "stm32l073/rcc.yaml",
+        include_str!("../../../../configs/peripherals/stm32l073/rcc.yaml"),
+    ),
+    (
+        "stm32l073/rng.yaml",
+        include_str!("../../../../configs/peripherals/stm32l073/rng.yaml"),
+    ),
+    (
+        "stm32l073/rtc.yaml",
+        include_str!("../../../../configs/peripherals/stm32l073/rtc.yaml"),
+    ),
+    (
+        "stm32l073/scb.yaml",
+        include_str!("../../../../configs/peripherals/stm32l073/scb.yaml"),
+    ),
+    (
+        "stm32l073/spi1.yaml",
+        include_str!("../../../../configs/peripherals/stm32l073/spi1.yaml"),
+    ),
+    (
+        "stm32l073/spi2.yaml",
+        include_str!("../../../../configs/peripherals/stm32l073/spi2.yaml"),
+    ),
+    (
+        "stm32l073/stk.yaml",
+        include_str!("../../../../configs/peripherals/stm32l073/stk.yaml"),
+    ),
+    (
+        "stm32l073/syscfg_comp.yaml",
+        include_str!("../../../../configs/peripherals/stm32l073/syscfg_comp.yaml"),
+    ),
+    (
+        "stm32l073/tim2.yaml",
+        include_str!("../../../../configs/peripherals/stm32l073/tim2.yaml"),
+    ),
+    (
+        "stm32l073/tim21.yaml",
+        include_str!("../../../../configs/peripherals/stm32l073/tim21.yaml"),
+    ),
+    (
+        "stm32l073/tim22.yaml",
+        include_str!("../../../../configs/peripherals/stm32l073/tim22.yaml"),
+    ),
+    (
+        "stm32l073/tim3.yaml",
+        include_str!("../../../../configs/peripherals/stm32l073/tim3.yaml"),
+    ),
+    (
+        "stm32l073/tim6.yaml",
+        include_str!("../../../../configs/peripherals/stm32l073/tim6.yaml"),
+    ),
+    (
+        "stm32l073/tim7.yaml",
+        include_str!("../../../../configs/peripherals/stm32l073/tim7.yaml"),
+    ),
+    (
+        "stm32l073/usart1.yaml",
+        include_str!("../../../../configs/peripherals/stm32l073/usart1.yaml"),
+    ),
+    (
+        "stm32l073/usart2.yaml",
+        include_str!("../../../../configs/peripherals/stm32l073/usart2.yaml"),
+    ),
+    (
+        "stm32l073/usart4.yaml",
+        include_str!("../../../../configs/peripherals/stm32l073/usart4.yaml"),
+    ),
+    (
+        "stm32l073/usart5.yaml",
+        include_str!("../../../../configs/peripherals/stm32l073/usart5.yaml"),
+    ),
+    (
+        "stm32l073/usb_fs.yaml",
+        include_str!("../../../../configs/peripherals/stm32l073/usb_fs.yaml"),
+    ),
+    (
+        "stm32l073/wwdg.yaml",
+        include_str!("../../../../configs/peripherals/stm32l073/wwdg.yaml"),
+    ),
+    (
+        "stm32l476/adc1.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/adc1.yaml"),
+    ),
+    (
+        "stm32l476/can1.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/can1.yaml"),
+    ),
+    (
+        "stm32l476/comp.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/comp.yaml"),
+    ),
+    (
+        "stm32l476/crc.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/crc.yaml"),
+    ),
+    (
+        "stm32l476/dac.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/dac.yaml"),
+    ),
+    (
+        "stm32l476/dbgmcu.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/dbgmcu.yaml"),
+    ),
+    (
+        "stm32l476/dma1.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/dma1.yaml"),
+    ),
+    (
+        "stm32l476/dma2.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/dma2.yaml"),
+    ),
+    (
+        "stm32l476/exti.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/exti.yaml"),
+    ),
+    (
+        "stm32l476/flash.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/flash.yaml"),
+    ),
+    (
+        "stm32l476/fmc.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/fmc.yaml"),
+    ),
+    (
+        "stm32l476/gpioa.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/gpioa.yaml"),
+    ),
+    (
+        "stm32l476/gpiob.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/gpiob.yaml"),
+    ),
+    (
+        "stm32l476/gpioc.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/gpioc.yaml"),
+    ),
+    (
+        "stm32l476/gpiod.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/gpiod.yaml"),
+    ),
+    (
+        "stm32l476/gpioe.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/gpioe.yaml"),
+    ),
+    (
+        "stm32l476/gpioh.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/gpioh.yaml"),
+    ),
+    (
+        "stm32l476/i2c1.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/i2c1.yaml"),
+    ),
+    (
+        "stm32l476/i2c2.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/i2c2.yaml"),
+    ),
+    (
+        "stm32l476/i2c3.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/i2c3.yaml"),
+    ),
+    (
+        "stm32l476/iwdg.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/iwdg.yaml"),
+    ),
+    (
+        "stm32l476/lptim1.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/lptim1.yaml"),
+    ),
+    (
+        "stm32l476/lptim2.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/lptim2.yaml"),
+    ),
+    (
+        "stm32l476/lpuart1.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/lpuart1.yaml"),
+    ),
+    (
+        "stm32l476/nvic.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/nvic.yaml"),
+    ),
+    (
+        "stm32l476/otg_fs_global.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/otg_fs_global.yaml"),
+    ),
+    (
+        "stm32l476/pwr.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/pwr.yaml"),
+    ),
+    (
+        "stm32l476/quadspi.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/quadspi.yaml"),
+    ),
+    (
+        "stm32l476/rcc.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/rcc.yaml"),
+    ),
+    (
+        "stm32l476/rng.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/rng.yaml"),
+    ),
+    (
+        "stm32l476/rtc.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/rtc.yaml"),
+    ),
+    (
+        "stm32l476/sai1.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/sai1.yaml"),
+    ),
+    (
+        "stm32l476/sai2.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/sai2.yaml"),
+    ),
+    (
+        "stm32l476/scb.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/scb.yaml"),
+    ),
+    (
+        "stm32l476/sdmmc1.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/sdmmc1.yaml"),
+    ),
+    (
+        "stm32l476/spi1.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/spi1.yaml"),
+    ),
+    (
+        "stm32l476/spi2.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/spi2.yaml"),
+    ),
+    (
+        "stm32l476/spi3.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/spi3.yaml"),
+    ),
+    (
+        "stm32l476/stk.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/stk.yaml"),
+    ),
+    (
+        "stm32l476/syscfg.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/syscfg.yaml"),
+    ),
+    (
+        "stm32l476/tim1.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/tim1.yaml"),
+    ),
+    (
+        "stm32l476/tim15.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/tim15.yaml"),
+    ),
+    (
+        "stm32l476/tim16.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/tim16.yaml"),
+    ),
+    (
+        "stm32l476/tim17.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/tim17.yaml"),
+    ),
+    (
+        "stm32l476/tim2.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/tim2.yaml"),
+    ),
+    (
+        "stm32l476/tim3.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/tim3.yaml"),
+    ),
+    (
+        "stm32l476/tim4.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/tim4.yaml"),
+    ),
+    (
+        "stm32l476/tim5.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/tim5.yaml"),
+    ),
+    (
+        "stm32l476/tim6.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/tim6.yaml"),
+    ),
+    (
+        "stm32l476/tim7.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/tim7.yaml"),
+    ),
+    (
+        "stm32l476/tim8.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/tim8.yaml"),
+    ),
+    (
+        "stm32l476/tsc.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/tsc.yaml"),
+    ),
+    (
+        "stm32l476/uart4.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/uart4.yaml"),
+    ),
+    (
+        "stm32l476/uart5.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/uart5.yaml"),
+    ),
+    (
+        "stm32l476/usart1.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/usart1.yaml"),
+    ),
+    (
+        "stm32l476/usart2.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/usart2.yaml"),
+    ),
+    (
+        "stm32l476/usart3.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/usart3.yaml"),
+    ),
+    (
+        "stm32l476/wwdg.yaml",
+        include_str!("../../../../configs/peripherals/stm32l476/wwdg.yaml"),
+    ),
+    (
+        "stm32wb55/adc.yaml",
+        include_str!("../../../../configs/peripherals/stm32wb55/adc.yaml"),
+    ),
+    (
+        "stm32wb55/crc.yaml",
+        include_str!("../../../../configs/peripherals/stm32wb55/crc.yaml"),
+    ),
+    (
+        "stm32wb55/dbgmcu.yaml",
+        include_str!("../../../../configs/peripherals/stm32wb55/dbgmcu.yaml"),
+    ),
+    (
+        "stm32wb55/dma1.yaml",
+        include_str!("../../../../configs/peripherals/stm32wb55/dma1.yaml"),
+    ),
+    (
+        "stm32wb55/flash.yaml",
+        include_str!("../../../../configs/peripherals/stm32wb55/flash.yaml"),
+    ),
+    (
+        "stm32wb55/gpioa.yaml",
+        include_str!("../../../../configs/peripherals/stm32wb55/gpioa.yaml"),
+    ),
+    (
+        "stm32wb55/gpiob.yaml",
+        include_str!("../../../../configs/peripherals/stm32wb55/gpiob.yaml"),
+    ),
+    (
+        "stm32wb55/gpioc.yaml",
+        include_str!("../../../../configs/peripherals/stm32wb55/gpioc.yaml"),
+    ),
+    (
+        "stm32wb55/gpiod.yaml",
+        include_str!("../../../../configs/peripherals/stm32wb55/gpiod.yaml"),
+    ),
+    (
+        "stm32wb55/hsem.yaml",
+        include_str!("../../../../configs/peripherals/stm32wb55/hsem.yaml"),
+    ),
+    (
+        "stm32wb55/i2c1.yaml",
+        include_str!("../../../../configs/peripherals/stm32wb55/i2c1.yaml"),
+    ),
+    (
+        "stm32wb55/iwdg.yaml",
+        include_str!("../../../../configs/peripherals/stm32wb55/iwdg.yaml"),
+    ),
+    (
+        "stm32wb55/lpuart1.yaml",
+        include_str!("../../../../configs/peripherals/stm32wb55/lpuart1.yaml"),
+    ),
+    (
+        "stm32wb55/pwr.yaml",
+        include_str!("../../../../configs/peripherals/stm32wb55/pwr.yaml"),
+    ),
+    (
+        "stm32wb55/rcc.yaml",
+        include_str!("../../../../configs/peripherals/stm32wb55/rcc.yaml"),
+    ),
+    (
+        "stm32wb55/rtc.yaml",
+        include_str!("../../../../configs/peripherals/stm32wb55/rtc.yaml"),
+    ),
+    (
+        "stm32wb55/spi1.yaml",
+        include_str!("../../../../configs/peripherals/stm32wb55/spi1.yaml"),
+    ),
+    (
+        "stm32wb55/tim1.yaml",
+        include_str!("../../../../configs/peripherals/stm32wb55/tim1.yaml"),
+    ),
+    (
+        "stm32wb55/tim2.yaml",
+        include_str!("../../../../configs/peripherals/stm32wb55/tim2.yaml"),
+    ),
+    (
+        "stm32wb55/usart1.yaml",
+        include_str!("../../../../configs/peripherals/stm32wb55/usart1.yaml"),
+    ),
+    (
+        "stm32wba52/crc.yaml",
+        include_str!("../../../../configs/peripherals/stm32wba52/crc.yaml"),
+    ),
+    (
+        "stm32wba52/dbgmcu.yaml",
+        include_str!("../../../../configs/peripherals/stm32wba52/dbgmcu.yaml"),
+    ),
+    (
+        "stm32wba52/flash.yaml",
+        include_str!("../../../../configs/peripherals/stm32wba52/flash.yaml"),
+    ),
+    (
+        "stm32wba52/gpdma.yaml",
+        include_str!("../../../../configs/peripherals/stm32wba52/gpdma.yaml"),
+    ),
+    (
+        "stm32wba52/gpioa.yaml",
+        include_str!("../../../../configs/peripherals/stm32wba52/gpioa.yaml"),
+    ),
+    (
+        "stm32wba52/gpiob.yaml",
+        include_str!("../../../../configs/peripherals/stm32wba52/gpiob.yaml"),
+    ),
+    (
+        "stm32wba52/gpioc.yaml",
+        include_str!("../../../../configs/peripherals/stm32wba52/gpioc.yaml"),
+    ),
+    (
+        "stm32wba52/gpioh.yaml",
+        include_str!("../../../../configs/peripherals/stm32wba52/gpioh.yaml"),
+    ),
+    (
+        "stm32wba52/i2c.yaml",
+        include_str!("../../../../configs/peripherals/stm32wba52/i2c.yaml"),
+    ),
+    (
+        "stm32wba52/icache.yaml",
+        include_str!("../../../../configs/peripherals/stm32wba52/icache.yaml"),
+    ),
+    (
+        "stm32wba52/iwdg.yaml",
+        include_str!("../../../../configs/peripherals/stm32wba52/iwdg.yaml"),
+    ),
+    (
+        "stm32wba52/lpuart1.yaml",
+        include_str!("../../../../configs/peripherals/stm32wba52/lpuart1.yaml"),
+    ),
+    (
+        "stm32wba52/pwr.yaml",
+        include_str!("../../../../configs/peripherals/stm32wba52/pwr.yaml"),
+    ),
+    (
+        "stm32wba52/rcc.yaml",
+        include_str!("../../../../configs/peripherals/stm32wba52/rcc.yaml"),
+    ),
+    (
+        "stm32wba52/rtc.yaml",
+        include_str!("../../../../configs/peripherals/stm32wba52/rtc.yaml"),
+    ),
+    (
+        "stm32wba52/spi1.yaml",
+        include_str!("../../../../configs/peripherals/stm32wba52/spi1.yaml"),
+    ),
+    (
+        "stm32wba52/tim1.yaml",
+        include_str!("../../../../configs/peripherals/stm32wba52/tim1.yaml"),
+    ),
+    (
+        "stm32wba52/tim2.yaml",
+        include_str!("../../../../configs/peripherals/stm32wba52/tim2.yaml"),
+    ),
+    (
+        "stm32wba52/usart1.yaml",
+        include_str!("../../../../configs/peripherals/stm32wba52/usart1.yaml"),
+    ),
+];
+
 /// Look up an embedded descriptor by its chip-YAML `path:` value
 /// (e.g. `../peripherals/esp32c3/gpio.yaml`). Returns the YAML text if embedded.
 pub fn lookup(descriptor_path: &str) -> Option<&'static str> {
@@ -23,2000 +2675,29 @@ pub fn lookup(descriptor_path: &str) -> Option<&'static str> {
         .rsplit_once("peripherals/")
         .map(|(_, k)| k)
         .unwrap_or(descriptor_path);
-    match key {
-        "atsamd21g18a/gclk.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/atsamd21g18a/gclk.yaml"
-        )),
-        "atsamd21g18a/nvmctrl.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/atsamd21g18a/nvmctrl.yaml"
-        )),
-        "atsamd21g18a/pm.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/atsamd21g18a/pm.yaml"
-        )),
-        "atsamd21g18a/sysctrl.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/atsamd21g18a/sysctrl.yaml"
-        )),
-        "atsamd21g18a/wdt.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/atsamd21g18a/wdt.yaml"
-        )),
-        "esp32/apb_ctrl.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32/apb_ctrl.yaml"
-        )),
-        "esp32/dport.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32/dport.yaml"
-        )),
-        "esp32/efuse.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32/efuse.yaml"
-        )),
-        "esp32/gpio.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32/gpio.yaml"
-        )),
-        "esp32/i2c0.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32/i2c0.yaml"
-        )),
-        "esp32/i2s0.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32/i2s0.yaml"
-        )),
-        "esp32/i2s1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32/i2s1.yaml"
-        )),
-        "esp32/io_mux.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32/io_mux.yaml"
-        )),
-        "esp32/ledc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32/ledc.yaml"
-        )),
-        "esp32/mcpwm0.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32/mcpwm0.yaml"
-        )),
-        "esp32/pcnt.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32/pcnt.yaml"
-        )),
-        "esp32/rmt.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32/rmt.yaml"
-        )),
-        "esp32/rtc_cntl.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32/rtc_cntl.yaml"
-        )),
-        "esp32/rtc_io.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32/rtc_io.yaml"
-        )),
-        "esp32/sens.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32/sens.yaml"
-        )),
-        "esp32/sha.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32/sha.yaml"
-        )),
-        "esp32/slc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32/slc.yaml"
-        )),
-        "esp32/spi0.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32/spi0.yaml"
-        )),
-        "esp32/spi1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32/spi1.yaml"
-        )),
-        "esp32/spi3.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32/spi3.yaml"
-        )),
-        "esp32/timg0.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32/timg0.yaml"
-        )),
-        "esp32/timg1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32/timg1.yaml"
-        )),
-        "esp32/twai0.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32/twai0.yaml"
-        )),
-        "esp32/uart0.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32/uart0.yaml"
-        )),
-        "esp32/uart1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32/uart1.yaml"
-        )),
-        "esp32/uart2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32/uart2.yaml"
-        )),
-        "esp32/uhci0.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32/uhci0.yaml"
-        )),
-        "esp32c3/aes.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32c3/aes.yaml"
-        )),
-        "esp32c3/apb_ctrl.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32c3/apb_ctrl.yaml"
-        )),
-        "esp32c3/apb_saradc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32c3/apb_saradc.yaml"
-        )),
-        "esp32c3/assist_debug.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32c3/assist_debug.yaml"
-        )),
-        "esp32c3/bb.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32c3/bb.yaml"
-        )),
-        "esp32c3/dma.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32c3/dma.yaml"
-        )),
-        "esp32c3/ds.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32c3/ds.yaml"
-        )),
-        "esp32c3/efuse.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32c3/efuse.yaml"
-        )),
-        "esp32c3/extmem.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32c3/extmem.yaml"
-        )),
-        "esp32c3/gpio.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32c3/gpio.yaml"
-        )),
-        "esp32c3/gpio_sd.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32c3/gpio_sd.yaml"
-        )),
-        "esp32c3/hmac.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32c3/hmac.yaml"
-        )),
-        "esp32c3/i2c0.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32c3/i2c0.yaml"
-        )),
-        "esp32c3/i2s0.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32c3/i2s0.yaml"
-        )),
-        "esp32c3/interrupt_core0.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32c3/interrupt_core0.yaml"
-        )),
-        "esp32c3/io_mux.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32c3/io_mux.yaml"
-        )),
-        "esp32c3/ledc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32c3/ledc.yaml"
-        )),
-        "esp32c3/radio_fe.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32c3/radio_fe.yaml"
-        )),
-        "esp32c3/radio_nrx.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32c3/radio_nrx.yaml"
-        )),
-        "esp32c3/rmt.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32c3/rmt.yaml"
-        )),
-        "esp32c3/rsa.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32c3/rsa.yaml"
-        )),
-        "esp32c3/rtc_cntl.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32c3/rtc_cntl.yaml"
-        )),
-        "esp32c3/sensitive.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32c3/sensitive.yaml"
-        )),
-        "esp32c3/sha.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32c3/sha.yaml"
-        )),
-        "esp32c3/spi0.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32c3/spi0.yaml"
-        )),
-        "esp32c3/spi1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32c3/spi1.yaml"
-        )),
-        "esp32c3/spi2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32c3/spi2.yaml"
-        )),
-        "esp32c3/system.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32c3/system.yaml"
-        )),
-        "esp32c3/systimer.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32c3/systimer.yaml"
-        )),
-        "esp32c3/timg0.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32c3/timg0.yaml"
-        )),
-        "esp32c3/timg1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32c3/timg1.yaml"
-        )),
-        "esp32c3/twai0.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32c3/twai0.yaml"
-        )),
-        "esp32c3/uart0.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32c3/uart0.yaml"
-        )),
-        "esp32c3/uart1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32c3/uart1.yaml"
-        )),
-        "esp32c3/uhci0.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32c3/uhci0.yaml"
-        )),
-        "esp32c3/uhci1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32c3/uhci1.yaml"
-        )),
-        "esp32c3/usb_device.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32c3/usb_device.yaml"
-        )),
-        "esp32c3/wifi_mac.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32c3/wifi_mac.yaml"
-        )),
-        "esp32c3/xts_aes.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32c3/xts_aes.yaml"
-        )),
-        "esp32s3/dma.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32s3/dma.yaml"
-        )),
-        "esp32s3/efuse.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32s3/efuse.yaml"
-        )),
-        "esp32s3/gpio.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32s3/gpio.yaml"
-        )),
-        "esp32s3/i2c0.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32s3/i2c0.yaml"
-        )),
-        "esp32s3/interrupt_core0.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32s3/interrupt_core0.yaml"
-        )),
-        "esp32s3/mcpwm0.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32s3/mcpwm0.yaml"
-        )),
-        "esp32s3/rmt.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32s3/rmt.yaml"
-        )),
-        "esp32s3/rtc_cntl.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32s3/rtc_cntl.yaml"
-        )),
-        "esp32s3/system.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32s3/system.yaml"
-        )),
-        "esp32s3/systimer.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32s3/systimer.yaml"
-        )),
-        "esp32s3/timg0.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32s3/timg0.yaml"
-        )),
-        "esp32s3/uart0.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32s3/uart0.yaml"
-        )),
-        "esp32s3/usb_device.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/esp32s3/usb_device.yaml"
-        )),
-        "mkw41z4/gpioa.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/mkw41z4/gpioa.yaml"
-        )),
-        "mkw41z4/gpiob.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/mkw41z4/gpiob.yaml"
-        )),
-        "mkw41z4/gpioc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/mkw41z4/gpioc.yaml"
-        )),
-        "mkw41z4/i2c0.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/mkw41z4/i2c0.yaml"
-        )),
-        "mkw41z4/i2c1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/mkw41z4/i2c1.yaml"
-        )),
-        "mkw41z4/lpuart0.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/mkw41z4/lpuart0.yaml"
-        )),
-        "mkw41z4/mcg.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/mkw41z4/mcg.yaml"
-        )),
-        "mkw41z4/pit.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/mkw41z4/pit.yaml"
-        )),
-        "mkw41z4/pmc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/mkw41z4/pmc.yaml"
-        )),
-        "mkw41z4/porta.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/mkw41z4/porta.yaml"
-        )),
-        "mkw41z4/portb.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/mkw41z4/portb.yaml"
-        )),
-        "mkw41z4/portc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/mkw41z4/portc.yaml"
-        )),
-        "mkw41z4/rcm.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/mkw41z4/rcm.yaml"
-        )),
-        "mkw41z4/rsim.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/mkw41z4/rsim.yaml"
-        )),
-        "mkw41z4/sim.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/mkw41z4/sim.yaml"
-        )),
-        "mkw41z4/smc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/mkw41z4/smc.yaml"
-        )),
-        "mkw41z4/spi0.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/mkw41z4/spi0.yaml"
-        )),
-        "mkw41z4/systick.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/mkw41z4/systick.yaml"
-        )),
-        "mkw41z4/tpm0.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/mkw41z4/tpm0.yaml"
-        )),
-        "mkw41z4/trng0.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/mkw41z4/trng0.yaml"
-        )),
-        "nrf52832/clock.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52832/clock.yaml"
-        )),
-        "nrf52832/ficr.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52832/ficr.yaml"
-        )),
-        "nrf52832/nvmc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52832/nvmc.yaml"
-        )),
-        "nrf52832/p0.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52832/p0.yaml"
-        )),
-        "nrf52832/pwm0.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52832/pwm0.yaml"
-        )),
-        "nrf52832/radio.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52832/radio.yaml"
-        )),
-        "nrf52832/rtc0.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52832/rtc0.yaml"
-        )),
-        "nrf52832/rtc1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52832/rtc1.yaml"
-        )),
-        "nrf52832/saadc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52832/saadc.yaml"
-        )),
-        "nrf52832/spi2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52832/spi2.yaml"
-        )),
-        "nrf52832/timer0.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52832/timer0.yaml"
-        )),
-        "nrf52832/twi1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52832/twi1.yaml"
-        )),
-        "nrf52832/twim0.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52832/twim0.yaml"
-        )),
-        "nrf52832/uart0.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52832/uart0.yaml"
-        )),
-        "nrf52832/uicr.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52832/uicr.yaml"
-        )),
-        "nrf52832/wdt.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52832/wdt.yaml"
-        )),
-        "nrf52840/aar.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52840/aar.yaml"
-        )),
-        "nrf52840/acl.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52840/acl.yaml"
-        )),
-        "nrf52840/clock.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52840/clock.yaml"
-        )),
-        "nrf52840/comp.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52840/comp.yaml"
-        )),
-        "nrf52840/cryptocell.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52840/cryptocell.yaml"
-        )),
-        "nrf52840/ecb.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52840/ecb.yaml"
-        )),
-        "nrf52840/egu0.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52840/egu0.yaml"
-        )),
-        "nrf52840/egu1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52840/egu1.yaml"
-        )),
-        "nrf52840/egu2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52840/egu2.yaml"
-        )),
-        "nrf52840/egu3.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52840/egu3.yaml"
-        )),
-        "nrf52840/egu4.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52840/egu4.yaml"
-        )),
-        "nrf52840/egu5.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52840/egu5.yaml"
-        )),
-        "nrf52840/ficr.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52840/ficr.yaml"
-        )),
-        "nrf52840/gpiote.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52840/gpiote.yaml"
-        )),
-        "nrf52840/i2s.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52840/i2s.yaml"
-        )),
-        "nrf52840/mwu.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52840/mwu.yaml"
-        )),
-        "nrf52840/nfct.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52840/nfct.yaml"
-        )),
-        "nrf52840/nvmc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52840/nvmc.yaml"
-        )),
-        "nrf52840/p0.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52840/p0.yaml"
-        )),
-        "nrf52840/p1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52840/p1.yaml"
-        )),
-        "nrf52840/pdm.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52840/pdm.yaml"
-        )),
-        "nrf52840/power.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52840/power.yaml"
-        )),
-        "nrf52840/ppi.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52840/ppi.yaml"
-        )),
-        "nrf52840/pwm0.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52840/pwm0.yaml"
-        )),
-        "nrf52840/pwm1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52840/pwm1.yaml"
-        )),
-        "nrf52840/pwm2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52840/pwm2.yaml"
-        )),
-        "nrf52840/pwm3.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52840/pwm3.yaml"
-        )),
-        "nrf52840/qdec.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52840/qdec.yaml"
-        )),
-        "nrf52840/qspi.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52840/qspi.yaml"
-        )),
-        "nrf52840/radio.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52840/radio.yaml"
-        )),
-        "nrf52840/rng.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52840/rng.yaml"
-        )),
-        "nrf52840/rtc0.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52840/rtc0.yaml"
-        )),
-        "nrf52840/rtc1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52840/rtc1.yaml"
-        )),
-        "nrf52840/rtc2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52840/rtc2.yaml"
-        )),
-        "nrf52840/saadc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52840/saadc.yaml"
-        )),
-        "nrf52840/spi2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52840/spi2.yaml"
-        )),
-        "nrf52840/temp.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52840/temp.yaml"
-        )),
-        "nrf52840/timer0.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52840/timer0.yaml"
-        )),
-        "nrf52840/timer1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52840/timer1.yaml"
-        )),
-        "nrf52840/timer2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52840/timer2.yaml"
-        )),
-        "nrf52840/timer3.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52840/timer3.yaml"
-        )),
-        "nrf52840/timer4.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52840/timer4.yaml"
-        )),
-        "nrf52840/twi1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52840/twi1.yaml"
-        )),
-        "nrf52840/twim0.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52840/twim0.yaml"
-        )),
-        "nrf52840/uart0.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52840/uart0.yaml"
-        )),
-        "nrf52840/uarte1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52840/uarte1.yaml"
-        )),
-        "nrf52840/uicr.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52840/uicr.yaml"
-        )),
-        "nrf52840/usbd.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52840/usbd.yaml"
-        )),
-        "nrf52840/wdt.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf52840/wdt.yaml"
-        )),
-        "nrf5340/cache_s.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf5340/cache_s.yaml"
-        )),
-        "nrf5340/clock_s.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf5340/clock_s.yaml"
-        )),
-        "nrf5340/ctrlap_s.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf5340/ctrlap_s.yaml"
-        )),
-        "nrf5340/dcnf_s.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf5340/dcnf_s.yaml"
-        )),
-        "nrf5340/dppic_s.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf5340/dppic_s.yaml"
-        )),
-        "nrf5340/ficr_s.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf5340/ficr_s.yaml"
-        )),
-        "nrf5340/gpiote0_s.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf5340/gpiote0_s.yaml"
-        )),
-        "nrf5340/oscillators_s.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf5340/oscillators_s.yaml"
-        )),
-        "nrf5340/rtc0_s.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf5340/rtc0_s.yaml"
-        )),
-        "nrf5340/rtc1_s.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf5340/rtc1_s.yaml"
-        )),
-        "nrf5340/spu_s.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf5340/spu_s.yaml"
-        )),
-        "nrf5340/timer0_s.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf5340/timer0_s.yaml"
-        )),
-        "nrf5340/timer1_s.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf5340/timer1_s.yaml"
-        )),
-        "nrf5340/timer2_s.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf5340/timer2_s.yaml"
-        )),
-        "nrf5340/uarte0_s.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf5340/uarte0_s.yaml"
-        )),
-        "nrf5340/uicr_s.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf5340/uicr_s.yaml"
-        )),
-        "nrf54l15/global_clock_s.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf54l15/global_clock_s.yaml"
-        )),
-        "nrf54l15/global_dppic20_s.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf54l15/global_dppic20_s.yaml"
-        )),
-        "nrf54l15/global_dppic30_s.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf54l15/global_dppic30_s.yaml"
-        )),
-        "nrf54l15/global_egu10_s.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf54l15/global_egu10_s.yaml"
-        )),
-        "nrf54l15/global_egu20_s.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf54l15/global_egu20_s.yaml"
-        )),
-        "nrf54l15/global_ficr_ns.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf54l15/global_ficr_ns.yaml"
-        )),
-        "nrf54l15/global_gpiote20_s.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf54l15/global_gpiote20_s.yaml"
-        )),
-        "nrf54l15/global_gpiote30_s.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf54l15/global_gpiote30_s.yaml"
-        )),
-        "nrf54l15/global_grtc_s.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf54l15/global_grtc_s.yaml"
-        )),
-        "nrf54l15/global_regulators_s.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf54l15/global_regulators_s.yaml"
-        )),
-        "nrf54l15/global_rramc_s.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf54l15/global_rramc_s.yaml"
-        )),
-        "nrf54l15/global_tampc_s.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf54l15/global_tampc_s.yaml"
-        )),
-        "nrf54l15/global_temp_s.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf54l15/global_temp_s.yaml"
-        )),
-        "nrf54l15/global_timer10_s.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf54l15/global_timer10_s.yaml"
-        )),
-        "nrf54l15/global_timer20_s.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf54l15/global_timer20_s.yaml"
-        )),
-        "nrf54l15/global_timer21_s.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf54l15/global_timer21_s.yaml"
-        )),
-        "nrf54l15/global_timer22_s.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf54l15/global_timer22_s.yaml"
-        )),
-        "nrf54l15/global_twim21_s.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf54l15/global_twim21_s.yaml"
-        )),
-        "nrf54l15/global_twim22_s.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf54l15/global_twim22_s.yaml"
-        )),
-        "nrf54l15/global_uarte20_s.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf54l15/global_uarte20_s.yaml"
-        )),
-        "nrf54l15/global_uarte30_s.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf54l15/global_uarte30_s.yaml"
-        )),
-        "nrf54l15/global_uicr_s.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf54l15/global_uicr_s.yaml"
-        )),
-        "nrf54l15/global_wdt30_s.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf54l15/global_wdt30_s.yaml"
-        )),
-        "nrf54l15/global_wdt31_s.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf54l15/global_wdt31_s.yaml"
-        )),
-        "nrf54l15/icache_s.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/nrf54l15/icache_s.yaml"
-        )),
-        "rp2040/adc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/rp2040/adc.yaml"
-        )),
-        "rp2040/clocks.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/rp2040/clocks.yaml"
-        )),
-        "rp2040/dma.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/rp2040/dma.yaml"
-        )),
-        "rp2040/i2c0.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/rp2040/i2c0.yaml"
-        )),
-        "rp2040/io_bank0.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/rp2040/io_bank0.yaml"
-        )),
-        "rp2040/pio0.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/rp2040/pio0.yaml"
-        )),
-        "rp2040/pwm.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/rp2040/pwm.yaml"
-        )),
-        "rp2040/rosc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/rp2040/rosc.yaml"
-        )),
-        "rp2040/rtc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/rp2040/rtc.yaml"
-        )),
-        "rp2040/sio.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/rp2040/sio.yaml"
-        )),
-        "rp2040/spi0.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/rp2040/spi0.yaml"
-        )),
-        "rp2040/ssi.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/rp2040/ssi.yaml"
-        )),
-        "rp2040/sysinfo.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/rp2040/sysinfo.yaml"
-        )),
-        "rp2040/tbman.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/rp2040/tbman.yaml"
-        )),
-        "rp2040/timer.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/rp2040/timer.yaml"
-        )),
-        "rp2040/uart0.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/rp2040/uart0.yaml"
-        )),
-        "rp2040/usb_dpram.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/rp2040/usb_dpram.yaml"
-        )),
-        "rp2040/vreg_and_chip_reset.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/rp2040/vreg_and_chip_reset.yaml"
-        )),
-        "rp2040/watchdog.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/rp2040/watchdog.yaml"
-        )),
-        "rp2040/xip_ctrl.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/rp2040/xip_ctrl.yaml"
-        )),
-        "rp2350/adc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/rp2350/adc.yaml"
-        )),
-        "rp2350/clocks.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/rp2350/clocks.yaml"
-        )),
-        "rp2350/dma.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/rp2350/dma.yaml"
-        )),
-        "rp2350/pio0.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/rp2350/pio0.yaml"
-        )),
-        "rp2350/pwm.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/rp2350/pwm.yaml"
-        )),
-        "rp2350/sio.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/rp2350/sio.yaml"
-        )),
-        "rp2350/sysinfo.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/rp2350/sysinfo.yaml"
-        )),
-        "rp2350/uart0.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/rp2350/uart0.yaml"
-        )),
-        "rp2350/watchdog.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/rp2350/watchdog.yaml"
-        )),
-        "rp2350/xip_ctrl.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/rp2350/xip_ctrl.yaml"
-        )),
-        "stm32f103/adc1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f103/adc1.yaml"
-        )),
-        "stm32f103/adc2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f103/adc2.yaml"
-        )),
-        "stm32f103/afio.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f103/afio.yaml"
-        )),
-        "stm32f103/can.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f103/can.yaml"
-        )),
-        "stm32f103/crc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f103/crc.yaml"
-        )),
-        "stm32f103/dbg.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f103/dbg.yaml"
-        )),
-        "stm32f103/dma1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f103/dma1.yaml"
-        )),
-        "stm32f103/exti.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f103/exti.yaml"
-        )),
-        "stm32f103/flash.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f103/flash.yaml"
-        )),
-        "stm32f103/gpioa.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f103/gpioa.yaml"
-        )),
-        "stm32f103/gpiob.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f103/gpiob.yaml"
-        )),
-        "stm32f103/gpioc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f103/gpioc.yaml"
-        )),
-        "stm32f103/i2c1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f103/i2c1.yaml"
-        )),
-        "stm32f103/i2c2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f103/i2c2.yaml"
-        )),
-        "stm32f103/iwdg.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f103/iwdg.yaml"
-        )),
-        "stm32f103/pwr.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f103/pwr.yaml"
-        )),
-        "stm32f103/rcc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f103/rcc.yaml"
-        )),
-        "stm32f103/rtc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f103/rtc.yaml"
-        )),
-        "stm32f103/spi1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f103/spi1.yaml"
-        )),
-        "stm32f103/spi2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f103/spi2.yaml"
-        )),
-        "stm32f103/tim1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f103/tim1.yaml"
-        )),
-        "stm32f103/tim2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f103/tim2.yaml"
-        )),
-        "stm32f103/tim3.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f103/tim3.yaml"
-        )),
-        "stm32f103/tim4.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f103/tim4.yaml"
-        )),
-        "stm32f103/usart1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f103/usart1.yaml"
-        )),
-        "stm32f103/usart2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f103/usart2.yaml"
-        )),
-        "stm32f103/usart3.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f103/usart3.yaml"
-        )),
-        "stm32f103/usb.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f103/usb.yaml"
-        )),
-        "stm32f103/wwdg.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f103/wwdg.yaml"
-        )),
-        "stm32f401/adc1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f401/adc1.yaml"
-        )),
-        "stm32f401/crc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f401/crc.yaml"
-        )),
-        "stm32f401/dbg.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f401/dbg.yaml"
-        )),
-        "stm32f401/dma1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f401/dma1.yaml"
-        )),
-        "stm32f401/dma2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f401/dma2.yaml"
-        )),
-        "stm32f401/exti.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f401/exti.yaml"
-        )),
-        "stm32f401/flash.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f401/flash.yaml"
-        )),
-        "stm32f401/gpioa.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f401/gpioa.yaml"
-        )),
-        "stm32f401/gpiob.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f401/gpiob.yaml"
-        )),
-        "stm32f401/gpioc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f401/gpioc.yaml"
-        )),
-        "stm32f401/gpiod.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f401/gpiod.yaml"
-        )),
-        "stm32f401/gpioe.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f401/gpioe.yaml"
-        )),
-        "stm32f401/gpioh.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f401/gpioh.yaml"
-        )),
-        "stm32f401/i2c1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f401/i2c1.yaml"
-        )),
-        "stm32f401/i2c2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f401/i2c2.yaml"
-        )),
-        "stm32f401/i2c3.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f401/i2c3.yaml"
-        )),
-        "stm32f401/i2s2ext.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f401/i2s2ext.yaml"
-        )),
-        "stm32f401/i2s3ext.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f401/i2s3ext.yaml"
-        )),
-        "stm32f401/iwdg.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f401/iwdg.yaml"
-        )),
-        "stm32f401/otg_fs_device.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f401/otg_fs_device.yaml"
-        )),
-        "stm32f401/otg_fs_global.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f401/otg_fs_global.yaml"
-        )),
-        "stm32f401/otg_fs_host.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f401/otg_fs_host.yaml"
-        )),
-        "stm32f401/otg_fs_pwrclk.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f401/otg_fs_pwrclk.yaml"
-        )),
-        "stm32f401/pwr.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f401/pwr.yaml"
-        )),
-        "stm32f401/rcc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f401/rcc.yaml"
-        )),
-        "stm32f401/rtc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f401/rtc.yaml"
-        )),
-        "stm32f401/sdio.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f401/sdio.yaml"
-        )),
-        "stm32f401/spi1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f401/spi1.yaml"
-        )),
-        "stm32f401/spi2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f401/spi2.yaml"
-        )),
-        "stm32f401/spi3.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f401/spi3.yaml"
-        )),
-        "stm32f401/spi4.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f401/spi4.yaml"
-        )),
-        "stm32f401/syscfg.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f401/syscfg.yaml"
-        )),
-        "stm32f401/tim1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f401/tim1.yaml"
-        )),
-        "stm32f401/tim10.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f401/tim10.yaml"
-        )),
-        "stm32f401/tim11.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f401/tim11.yaml"
-        )),
-        "stm32f401/tim2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f401/tim2.yaml"
-        )),
-        "stm32f401/tim3.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f401/tim3.yaml"
-        )),
-        "stm32f401/tim4.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f401/tim4.yaml"
-        )),
-        "stm32f401/tim5.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f401/tim5.yaml"
-        )),
-        "stm32f401/tim9.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f401/tim9.yaml"
-        )),
-        "stm32f401/usart1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f401/usart1.yaml"
-        )),
-        "stm32f401/usart2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f401/usart2.yaml"
-        )),
-        "stm32f401/usart6.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f401/usart6.yaml"
-        )),
-        "stm32f401/wwdg.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f401/wwdg.yaml"
-        )),
-        "stm32f405/adc1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f405/adc1.yaml"
-        )),
-        "stm32f405/dbg.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f405/dbg.yaml"
-        )),
-        "stm32f405/dma1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f405/dma1.yaml"
-        )),
-        "stm32f405/dma2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f405/dma2.yaml"
-        )),
-        "stm32f405/exti.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f405/exti.yaml"
-        )),
-        "stm32f405/flash.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f405/flash.yaml"
-        )),
-        "stm32f405/gpioa.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f405/gpioa.yaml"
-        )),
-        "stm32f405/gpiob.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f405/gpiob.yaml"
-        )),
-        "stm32f405/gpioc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f405/gpioc.yaml"
-        )),
-        "stm32f405/i2c1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f405/i2c1.yaml"
-        )),
-        "stm32f405/iwdg.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f405/iwdg.yaml"
-        )),
-        "stm32f405/pwr.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f405/pwr.yaml"
-        )),
-        "stm32f405/rcc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f405/rcc.yaml"
-        )),
-        "stm32f405/rtc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f405/rtc.yaml"
-        )),
-        "stm32f405/spi1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f405/spi1.yaml"
-        )),
-        "stm32f405/tim1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f405/tim1.yaml"
-        )),
-        "stm32f405/tim2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f405/tim2.yaml"
-        )),
-        "stm32f405/usart1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f405/usart1.yaml"
-        )),
-        "stm32f405/usart2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f405/usart2.yaml"
-        )),
-        "stm32f407/adc1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f407/adc1.yaml"
-        )),
-        "stm32f407/can1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f407/can1.yaml"
-        )),
-        "stm32f407/dbg.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f407/dbg.yaml"
-        )),
-        "stm32f407/dma1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f407/dma1.yaml"
-        )),
-        "stm32f407/dma2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f407/dma2.yaml"
-        )),
-        "stm32f407/exti.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f407/exti.yaml"
-        )),
-        "stm32f407/flash.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f407/flash.yaml"
-        )),
-        "stm32f407/gpioa.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f407/gpioa.yaml"
-        )),
-        "stm32f407/gpiob.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f407/gpiob.yaml"
-        )),
-        "stm32f407/gpioc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f407/gpioc.yaml"
-        )),
-        "stm32f407/gpiod.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f407/gpiod.yaml"
-        )),
-        "stm32f407/gpioe.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f407/gpioe.yaml"
-        )),
-        "stm32f407/i2c1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f407/i2c1.yaml"
-        )),
-        "stm32f407/i2c2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f407/i2c2.yaml"
-        )),
-        "stm32f407/i2c3.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f407/i2c3.yaml"
-        )),
-        "stm32f407/iwdg.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f407/iwdg.yaml"
-        )),
-        "stm32f407/nvic.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f407/nvic.yaml"
-        )),
-        "stm32f407/pwr.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f407/pwr.yaml"
-        )),
-        "stm32f407/rcc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f407/rcc.yaml"
-        )),
-        "stm32f407/rtc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f407/rtc.yaml"
-        )),
-        "stm32f407/spi1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f407/spi1.yaml"
-        )),
-        "stm32f407/spi2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f407/spi2.yaml"
-        )),
-        "stm32f407/spi3.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f407/spi3.yaml"
-        )),
-        "stm32f407/stk.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f407/stk.yaml"
-        )),
-        "stm32f407/tim1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f407/tim1.yaml"
-        )),
-        "stm32f407/tim2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f407/tim2.yaml"
-        )),
-        "stm32f407/tim3.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f407/tim3.yaml"
-        )),
-        "stm32f407/tim4.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f407/tim4.yaml"
-        )),
-        "stm32f407/tim5.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f407/tim5.yaml"
-        )),
-        "stm32f407/usart1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f407/usart1.yaml"
-        )),
-        "stm32f407/usart2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f407/usart2.yaml"
-        )),
-        "stm32f407/usart3.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f407/usart3.yaml"
-        )),
-        "stm32f407/usart6.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f407/usart6.yaml"
-        )),
-        "stm32f411/adc1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f411/adc1.yaml"
-        )),
-        "stm32f411/crc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f411/crc.yaml"
-        )),
-        "stm32f411/dbg.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f411/dbg.yaml"
-        )),
-        "stm32f411/dma1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f411/dma1.yaml"
-        )),
-        "stm32f411/dma2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f411/dma2.yaml"
-        )),
-        "stm32f411/exti.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f411/exti.yaml"
-        )),
-        "stm32f411/flash.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f411/flash.yaml"
-        )),
-        "stm32f411/gpioa.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f411/gpioa.yaml"
-        )),
-        "stm32f411/gpiob.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f411/gpiob.yaml"
-        )),
-        "stm32f411/gpioc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f411/gpioc.yaml"
-        )),
-        "stm32f411/gpiod.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f411/gpiod.yaml"
-        )),
-        "stm32f411/gpioe.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f411/gpioe.yaml"
-        )),
-        "stm32f411/gpioh.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f411/gpioh.yaml"
-        )),
-        "stm32f411/i2c1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f411/i2c1.yaml"
-        )),
-        "stm32f411/i2c2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f411/i2c2.yaml"
-        )),
-        "stm32f411/i2c3.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f411/i2c3.yaml"
-        )),
-        "stm32f411/i2s2ext.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f411/i2s2ext.yaml"
-        )),
-        "stm32f411/i2s3ext.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f411/i2s3ext.yaml"
-        )),
-        "stm32f411/iwdg.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f411/iwdg.yaml"
-        )),
-        "stm32f411/otg_fs_device.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f411/otg_fs_device.yaml"
-        )),
-        "stm32f411/otg_fs_global.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f411/otg_fs_global.yaml"
-        )),
-        "stm32f411/otg_fs_host.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f411/otg_fs_host.yaml"
-        )),
-        "stm32f411/otg_fs_pwrclk.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f411/otg_fs_pwrclk.yaml"
-        )),
-        "stm32f411/pwr.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f411/pwr.yaml"
-        )),
-        "stm32f411/rcc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f411/rcc.yaml"
-        )),
-        "stm32f411/rtc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f411/rtc.yaml"
-        )),
-        "stm32f411/sdio.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f411/sdio.yaml"
-        )),
-        "stm32f411/spi1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f411/spi1.yaml"
-        )),
-        "stm32f411/spi2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f411/spi2.yaml"
-        )),
-        "stm32f411/spi3.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f411/spi3.yaml"
-        )),
-        "stm32f411/spi4.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f411/spi4.yaml"
-        )),
-        "stm32f411/spi5.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f411/spi5.yaml"
-        )),
-        "stm32f411/syscfg.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f411/syscfg.yaml"
-        )),
-        "stm32f411/tim1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f411/tim1.yaml"
-        )),
-        "stm32f411/tim10.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f411/tim10.yaml"
-        )),
-        "stm32f411/tim11.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f411/tim11.yaml"
-        )),
-        "stm32f411/tim2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f411/tim2.yaml"
-        )),
-        "stm32f411/tim3.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f411/tim3.yaml"
-        )),
-        "stm32f411/tim4.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f411/tim4.yaml"
-        )),
-        "stm32f411/tim5.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f411/tim5.yaml"
-        )),
-        "stm32f411/tim9.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f411/tim9.yaml"
-        )),
-        "stm32f411/usart1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f411/usart1.yaml"
-        )),
-        "stm32f411/usart2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f411/usart2.yaml"
-        )),
-        "stm32f411/usart6.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f411/usart6.yaml"
-        )),
-        "stm32f411/wwdg.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f411/wwdg.yaml"
-        )),
-        "stm32f767/adc1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f767/adc1.yaml"
-        )),
-        "stm32f767/dbg.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f767/dbg.yaml"
-        )),
-        "stm32f767/dma1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f767/dma1.yaml"
-        )),
-        "stm32f767/dma2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f767/dma2.yaml"
-        )),
-        "stm32f767/exti.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f767/exti.yaml"
-        )),
-        "stm32f767/flash.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f767/flash.yaml"
-        )),
-        "stm32f767/gpioa.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f767/gpioa.yaml"
-        )),
-        "stm32f767/gpiob.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f767/gpiob.yaml"
-        )),
-        "stm32f767/gpioc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f767/gpioc.yaml"
-        )),
-        "stm32f767/i2c1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f767/i2c1.yaml"
-        )),
-        "stm32f767/iwdg.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f767/iwdg.yaml"
-        )),
-        "stm32f767/pwr.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f767/pwr.yaml"
-        )),
-        "stm32f767/rcc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f767/rcc.yaml"
-        )),
-        "stm32f767/rtc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f767/rtc.yaml"
-        )),
-        "stm32f767/spi1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f767/spi1.yaml"
-        )),
-        "stm32f767/tim1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f767/tim1.yaml"
-        )),
-        "stm32f767/tim2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f767/tim2.yaml"
-        )),
-        "stm32f767/usart1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f767/usart1.yaml"
-        )),
-        "stm32f767/usart2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32f767/usart2.yaml"
-        )),
-        "stm32g474re/adc1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32g474re/adc1.yaml"
-        )),
-        "stm32g474re/crc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32g474re/crc.yaml"
-        )),
-        "stm32g474re/dbgmcu.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32g474re/dbgmcu.yaml"
-        )),
-        "stm32g474re/dma1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32g474re/dma1.yaml"
-        )),
-        "stm32g474re/flash.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32g474re/flash.yaml"
-        )),
-        "stm32g474re/gpioa.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32g474re/gpioa.yaml"
-        )),
-        "stm32g474re/gpiob.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32g474re/gpiob.yaml"
-        )),
-        "stm32g474re/gpioc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32g474re/gpioc.yaml"
-        )),
-        "stm32g474re/gpiod.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32g474re/gpiod.yaml"
-        )),
-        "stm32g474re/i2c1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32g474re/i2c1.yaml"
-        )),
-        "stm32g474re/iwdg.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32g474re/iwdg.yaml"
-        )),
-        "stm32g474re/lpuart1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32g474re/lpuart1.yaml"
-        )),
-        "stm32g474re/nvic.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32g474re/nvic.yaml"
-        )),
-        "stm32g474re/pwr.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32g474re/pwr.yaml"
-        )),
-        "stm32g474re/rcc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32g474re/rcc.yaml"
-        )),
-        "stm32g474re/rtc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32g474re/rtc.yaml"
-        )),
-        "stm32g474re/spi1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32g474re/spi1.yaml"
-        )),
-        "stm32g474re/stk.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32g474re/stk.yaml"
-        )),
-        "stm32g474re/tim1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32g474re/tim1.yaml"
-        )),
-        "stm32g474re/tim2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32g474re/tim2.yaml"
-        )),
-        "stm32g474re/usart1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32g474re/usart1.yaml"
-        )),
-        "stm32g474re/usart2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32g474re/usart2.yaml"
-        )),
-        "stm32h563/adc1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h563/adc1.yaml"
-        )),
-        "stm32h563/crc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h563/crc.yaml"
-        )),
-        "stm32h563/dbgmcu.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h563/dbgmcu.yaml"
-        )),
-        "stm32h563/fdcan1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h563/fdcan1.yaml"
-        )),
-        "stm32h563/flash.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h563/flash.yaml"
-        )),
-        "stm32h563/gpdma1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h563/gpdma1.yaml"
-        )),
-        "stm32h563/gpioa.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h563/gpioa.yaml"
-        )),
-        "stm32h563/gpiob.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h563/gpiob.yaml"
-        )),
-        "stm32h563/gpioc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h563/gpioc.yaml"
-        )),
-        "stm32h563/gpiod.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h563/gpiod.yaml"
-        )),
-        "stm32h563/gpioe.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h563/gpioe.yaml"
-        )),
-        "stm32h563/gpiof.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h563/gpiof.yaml"
-        )),
-        "stm32h563/gpiog.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h563/gpiog.yaml"
-        )),
-        "stm32h563/i2c1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h563/i2c1.yaml"
-        )),
-        "stm32h563/i2c2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h563/i2c2.yaml"
-        )),
-        "stm32h563/icache.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h563/icache.yaml"
-        )),
-        "stm32h563/iwdg.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h563/iwdg.yaml"
-        )),
-        "stm32h563/lptim1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h563/lptim1.yaml"
-        )),
-        "stm32h563/lpuart.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h563/lpuart.yaml"
-        )),
-        "stm32h563/pwr.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h563/pwr.yaml"
-        )),
-        "stm32h563/rcc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h563/rcc.yaml"
-        )),
-        "stm32h563/rng.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h563/rng.yaml"
-        )),
-        "stm32h563/rtc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h563/rtc.yaml"
-        )),
-        "stm32h563/spi1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h563/spi1.yaml"
-        )),
-        "stm32h563/spi2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h563/spi2.yaml"
-        )),
-        "stm32h563/spi3.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h563/spi3.yaml"
-        )),
-        "stm32h563/tim1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h563/tim1.yaml"
-        )),
-        "stm32h563/tim12.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h563/tim12.yaml"
-        )),
-        "stm32h563/tim2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h563/tim2.yaml"
-        )),
-        "stm32h563/tim3.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h563/tim3.yaml"
-        )),
-        "stm32h563/tim6.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h563/tim6.yaml"
-        )),
-        "stm32h563/usart1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h563/usart1.yaml"
-        )),
-        "stm32h563/usart2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h563/usart2.yaml"
-        )),
-        "stm32h563/usart3.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h563/usart3.yaml"
-        )),
-        "stm32h563/wwdg.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h563/wwdg.yaml"
-        )),
-        "stm32h735/adc1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h735/adc1.yaml"
-        )),
-        "stm32h735/adc2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h735/adc2.yaml"
-        )),
-        "stm32h735/crc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h735/crc.yaml"
-        )),
-        "stm32h735/dbgmcu.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h735/dbgmcu.yaml"
-        )),
-        "stm32h735/fdcan1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h735/fdcan1.yaml"
-        )),
-        "stm32h735/fdcan2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h735/fdcan2.yaml"
-        )),
-        "stm32h735/flash.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h735/flash.yaml"
-        )),
-        "stm32h735/gpioa.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h735/gpioa.yaml"
-        )),
-        "stm32h735/gpiob.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h735/gpiob.yaml"
-        )),
-        "stm32h735/gpioc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h735/gpioc.yaml"
-        )),
-        "stm32h735/gpiod.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h735/gpiod.yaml"
-        )),
-        "stm32h735/gpioe.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h735/gpioe.yaml"
-        )),
-        "stm32h735/gpiof.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h735/gpiof.yaml"
-        )),
-        "stm32h735/gpiog.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h735/gpiog.yaml"
-        )),
-        "stm32h735/gpioh.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h735/gpioh.yaml"
-        )),
-        "stm32h735/i2c1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h735/i2c1.yaml"
-        )),
-        "stm32h735/i2c2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h735/i2c2.yaml"
-        )),
-        "stm32h735/i2c3.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h735/i2c3.yaml"
-        )),
-        "stm32h735/iwdg1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h735/iwdg1.yaml"
-        )),
-        "stm32h735/lpuart1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h735/lpuart1.yaml"
-        )),
-        "stm32h735/pwr.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h735/pwr.yaml"
-        )),
-        "stm32h735/rcc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h735/rcc.yaml"
-        )),
-        "stm32h735/rng.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h735/rng.yaml"
-        )),
-        "stm32h735/spi1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h735/spi1.yaml"
-        )),
-        "stm32h735/spi2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h735/spi2.yaml"
-        )),
-        "stm32h735/spi3.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h735/spi3.yaml"
-        )),
-        "stm32h735/syscfg.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h735/syscfg.yaml"
-        )),
-        "stm32h735/tim1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h735/tim1.yaml"
-        )),
-        "stm32h735/tim2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h735/tim2.yaml"
-        )),
-        "stm32h735/tim3.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h735/tim3.yaml"
-        )),
-        "stm32h735/tim4.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h735/tim4.yaml"
-        )),
-        "stm32h735/tim8.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h735/tim8.yaml"
-        )),
-        "stm32h735/uart4.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h735/uart4.yaml"
-        )),
-        "stm32h735/usart1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h735/usart1.yaml"
-        )),
-        "stm32h735/usart2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h735/usart2.yaml"
-        )),
-        "stm32h735/usart3.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h735/usart3.yaml"
-        )),
-        "stm32h735/usart6.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32h735/usart6.yaml"
-        )),
-        "stm32l073/adc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l073/adc.yaml"
-        )),
-        "stm32l073/crc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l073/crc.yaml"
-        )),
-        "stm32l073/dac.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l073/dac.yaml"
-        )),
-        "stm32l073/dbgmcu.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l073/dbgmcu.yaml"
-        )),
-        "stm32l073/dma1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l073/dma1.yaml"
-        )),
-        "stm32l073/exti.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l073/exti.yaml"
-        )),
-        "stm32l073/flash.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l073/flash.yaml"
-        )),
-        "stm32l073/gpioa.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l073/gpioa.yaml"
-        )),
-        "stm32l073/gpiob.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l073/gpiob.yaml"
-        )),
-        "stm32l073/gpioc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l073/gpioc.yaml"
-        )),
-        "stm32l073/gpiod.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l073/gpiod.yaml"
-        )),
-        "stm32l073/gpioe.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l073/gpioe.yaml"
-        )),
-        "stm32l073/gpioh.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l073/gpioh.yaml"
-        )),
-        "stm32l073/i2c1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l073/i2c1.yaml"
-        )),
-        "stm32l073/i2c2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l073/i2c2.yaml"
-        )),
-        "stm32l073/i2c3.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l073/i2c3.yaml"
-        )),
-        "stm32l073/iwdg.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l073/iwdg.yaml"
-        )),
-        "stm32l073/lcd.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l073/lcd.yaml"
-        )),
-        "stm32l073/lptim.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l073/lptim.yaml"
-        )),
-        "stm32l073/lpusart1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l073/lpusart1.yaml"
-        )),
-        "stm32l073/nvic.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l073/nvic.yaml"
-        )),
-        "stm32l073/pwr.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l073/pwr.yaml"
-        )),
-        "stm32l073/rcc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l073/rcc.yaml"
-        )),
-        "stm32l073/rng.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l073/rng.yaml"
-        )),
-        "stm32l073/rtc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l073/rtc.yaml"
-        )),
-        "stm32l073/scb.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l073/scb.yaml"
-        )),
-        "stm32l073/spi1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l073/spi1.yaml"
-        )),
-        "stm32l073/spi2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l073/spi2.yaml"
-        )),
-        "stm32l073/stk.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l073/stk.yaml"
-        )),
-        "stm32l073/syscfg_comp.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l073/syscfg_comp.yaml"
-        )),
-        "stm32l073/tim2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l073/tim2.yaml"
-        )),
-        "stm32l073/tim21.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l073/tim21.yaml"
-        )),
-        "stm32l073/tim22.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l073/tim22.yaml"
-        )),
-        "stm32l073/tim3.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l073/tim3.yaml"
-        )),
-        "stm32l073/tim6.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l073/tim6.yaml"
-        )),
-        "stm32l073/tim7.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l073/tim7.yaml"
-        )),
-        "stm32l073/usart1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l073/usart1.yaml"
-        )),
-        "stm32l073/usart2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l073/usart2.yaml"
-        )),
-        "stm32l073/usart4.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l073/usart4.yaml"
-        )),
-        "stm32l073/usart5.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l073/usart5.yaml"
-        )),
-        "stm32l073/usb_fs.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l073/usb_fs.yaml"
-        )),
-        "stm32l073/wwdg.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l073/wwdg.yaml"
-        )),
-        "stm32l476/adc1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/adc1.yaml"
-        )),
-        "stm32l476/can1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/can1.yaml"
-        )),
-        "stm32l476/comp.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/comp.yaml"
-        )),
-        "stm32l476/crc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/crc.yaml"
-        )),
-        "stm32l476/dac.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/dac.yaml"
-        )),
-        "stm32l476/dbgmcu.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/dbgmcu.yaml"
-        )),
-        "stm32l476/dma1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/dma1.yaml"
-        )),
-        "stm32l476/dma2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/dma2.yaml"
-        )),
-        "stm32l476/exti.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/exti.yaml"
-        )),
-        "stm32l476/flash.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/flash.yaml"
-        )),
-        "stm32l476/fmc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/fmc.yaml"
-        )),
-        "stm32l476/gpioa.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/gpioa.yaml"
-        )),
-        "stm32l476/gpiob.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/gpiob.yaml"
-        )),
-        "stm32l476/gpioc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/gpioc.yaml"
-        )),
-        "stm32l476/gpiod.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/gpiod.yaml"
-        )),
-        "stm32l476/gpioe.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/gpioe.yaml"
-        )),
-        "stm32l476/gpioh.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/gpioh.yaml"
-        )),
-        "stm32l476/i2c1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/i2c1.yaml"
-        )),
-        "stm32l476/i2c2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/i2c2.yaml"
-        )),
-        "stm32l476/i2c3.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/i2c3.yaml"
-        )),
-        "stm32l476/iwdg.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/iwdg.yaml"
-        )),
-        "stm32l476/lptim1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/lptim1.yaml"
-        )),
-        "stm32l476/lptim2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/lptim2.yaml"
-        )),
-        "stm32l476/lpuart1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/lpuart1.yaml"
-        )),
-        "stm32l476/nvic.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/nvic.yaml"
-        )),
-        "stm32l476/otg_fs_global.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/otg_fs_global.yaml"
-        )),
-        "stm32l476/pwr.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/pwr.yaml"
-        )),
-        "stm32l476/quadspi.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/quadspi.yaml"
-        )),
-        "stm32l476/rcc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/rcc.yaml"
-        )),
-        "stm32l476/rng.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/rng.yaml"
-        )),
-        "stm32l476/rtc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/rtc.yaml"
-        )),
-        "stm32l476/sai1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/sai1.yaml"
-        )),
-        "stm32l476/sai2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/sai2.yaml"
-        )),
-        "stm32l476/scb.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/scb.yaml"
-        )),
-        "stm32l476/sdmmc1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/sdmmc1.yaml"
-        )),
-        "stm32l476/spi1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/spi1.yaml"
-        )),
-        "stm32l476/spi2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/spi2.yaml"
-        )),
-        "stm32l476/spi3.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/spi3.yaml"
-        )),
-        "stm32l476/stk.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/stk.yaml"
-        )),
-        "stm32l476/syscfg.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/syscfg.yaml"
-        )),
-        "stm32l476/tim1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/tim1.yaml"
-        )),
-        "stm32l476/tim15.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/tim15.yaml"
-        )),
-        "stm32l476/tim16.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/tim16.yaml"
-        )),
-        "stm32l476/tim17.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/tim17.yaml"
-        )),
-        "stm32l476/tim2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/tim2.yaml"
-        )),
-        "stm32l476/tim3.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/tim3.yaml"
-        )),
-        "stm32l476/tim4.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/tim4.yaml"
-        )),
-        "stm32l476/tim5.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/tim5.yaml"
-        )),
-        "stm32l476/tim6.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/tim6.yaml"
-        )),
-        "stm32l476/tim7.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/tim7.yaml"
-        )),
-        "stm32l476/tim8.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/tim8.yaml"
-        )),
-        "stm32l476/tsc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/tsc.yaml"
-        )),
-        "stm32l476/uart4.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/uart4.yaml"
-        )),
-        "stm32l476/uart5.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/uart5.yaml"
-        )),
-        "stm32l476/usart1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/usart1.yaml"
-        )),
-        "stm32l476/usart2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/usart2.yaml"
-        )),
-        "stm32l476/usart3.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/usart3.yaml"
-        )),
-        "stm32l476/wwdg.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32l476/wwdg.yaml"
-        )),
-        "stm32wb55/adc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32wb55/adc.yaml"
-        )),
-        "stm32wb55/crc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32wb55/crc.yaml"
-        )),
-        "stm32wb55/dbgmcu.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32wb55/dbgmcu.yaml"
-        )),
-        "stm32wb55/dma1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32wb55/dma1.yaml"
-        )),
-        "stm32wb55/flash.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32wb55/flash.yaml"
-        )),
-        "stm32wb55/gpioa.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32wb55/gpioa.yaml"
-        )),
-        "stm32wb55/gpiob.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32wb55/gpiob.yaml"
-        )),
-        "stm32wb55/gpioc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32wb55/gpioc.yaml"
-        )),
-        "stm32wb55/gpiod.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32wb55/gpiod.yaml"
-        )),
-        "stm32wb55/hsem.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32wb55/hsem.yaml"
-        )),
-        "stm32wb55/i2c1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32wb55/i2c1.yaml"
-        )),
-        "stm32wb55/iwdg.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32wb55/iwdg.yaml"
-        )),
-        "stm32wb55/lpuart1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32wb55/lpuart1.yaml"
-        )),
-        "stm32wb55/pwr.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32wb55/pwr.yaml"
-        )),
-        "stm32wb55/rcc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32wb55/rcc.yaml"
-        )),
-        "stm32wb55/rtc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32wb55/rtc.yaml"
-        )),
-        "stm32wb55/spi1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32wb55/spi1.yaml"
-        )),
-        "stm32wb55/tim1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32wb55/tim1.yaml"
-        )),
-        "stm32wb55/tim2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32wb55/tim2.yaml"
-        )),
-        "stm32wb55/usart1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32wb55/usart1.yaml"
-        )),
-        "stm32wba52/crc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32wba52/crc.yaml"
-        )),
-        "stm32wba52/dbgmcu.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32wba52/dbgmcu.yaml"
-        )),
-        "stm32wba52/flash.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32wba52/flash.yaml"
-        )),
-        "stm32wba52/gpdma.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32wba52/gpdma.yaml"
-        )),
-        "stm32wba52/gpioa.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32wba52/gpioa.yaml"
-        )),
-        "stm32wba52/gpiob.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32wba52/gpiob.yaml"
-        )),
-        "stm32wba52/gpioc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32wba52/gpioc.yaml"
-        )),
-        "stm32wba52/gpioh.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32wba52/gpioh.yaml"
-        )),
-        "stm32wba52/i2c.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32wba52/i2c.yaml"
-        )),
-        "stm32wba52/icache.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32wba52/icache.yaml"
-        )),
-        "stm32wba52/iwdg.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32wba52/iwdg.yaml"
-        )),
-        "stm32wba52/lpuart1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32wba52/lpuart1.yaml"
-        )),
-        "stm32wba52/pwr.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32wba52/pwr.yaml"
-        )),
-        "stm32wba52/rcc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32wba52/rcc.yaml"
-        )),
-        "stm32wba52/rtc.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32wba52/rtc.yaml"
-        )),
-        "stm32wba52/spi1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32wba52/spi1.yaml"
-        )),
-        "stm32wba52/tim1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32wba52/tim1.yaml"
-        )),
-        "stm32wba52/tim2.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32wba52/tim2.yaml"
-        )),
-        "stm32wba52/usart1.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/stm32wba52/usart1.yaml"
-        )),
-        _ => None,
-    }
+    DESCRIPTORS
+        .binary_search_by(|(k, _)| k.cmp(&key))
+        .ok()
+        .map(|i| DESCRIPTORS[i].1)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::lookup;
+    use super::{lookup, DESCRIPTORS};
+
+    /// The table must stay sorted and duplicate-free: `lookup` binary-searches
+    /// it, so a hand edit that breaks either invariant would silently miss keys.
+    #[test]
+    fn embedded_descriptor_table_is_sorted_and_unique() {
+        let mut previous: Option<&str> = None;
+        for (key, _) in DESCRIPTORS {
+            assert!(
+                previous.is_none_or(|p| p < *key),
+                "embedded descriptor table is not sorted/unique at {key:?}"
+            );
+            previous = Some(key);
+        }
+    }
 
     /// Descriptor keys a chip YAML can actually ask for at runtime.
     ///

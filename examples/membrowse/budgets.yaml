@@ -1,0 +1,24 @@
+# Combined static + runtime memory budgets.
+#
+# Static numbers come from MemBrowse (ELF sections placed by the linker script).
+# Runtime numbers come from LabWired (measured while the firmware executes on the
+# modeled chip). combined-report.py checks the sum against these budgets, which is
+# the number that actually has to fit in silicon.
+#
+# Omit a key to leave that dimension ungated.
+
+targets:
+  nrf54l15-dk:
+    # Cortex-M33. Stack paint is supported, so ram_combined_bytes is a real
+    # static + runtime figure.
+    flash_used_bytes: 4096
+    ram_static_bytes: 2048
+    main_stack_high_water_bytes: 1024
+    ram_combined_bytes: 3072
+
+  esp32c3-blinky:
+    # RISC-V. LabWired cannot paint the stack on this core yet (see FIDELITY.md),
+    # so a combined budget would be a guess. Gate what is actually measured and
+    # leave the rest off until the paint lands.
+    flash_used_bytes: 4096
+    ram_static_bytes: 2048

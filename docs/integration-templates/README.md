@@ -59,3 +59,12 @@ reproducible.
 cargo build --release -p labwired-cli
 ./target/release/labwired test --script tests/firmware-test.yaml --output-dir out/labwired
 ~~~
+
+## Combined with static analysis
+
+[examples/membrowse/](../../examples/membrowse/) pairs a LabWired run with a
+[MemBrowse](https://membrowse.com) static memory report over the same ELF. MemBrowse
+attributes every linker-placed byte to a symbol and source file; LabWired measures what
+the run actually used. The example adds the two halves, gates the sum, and cross-checks
+the linker script's memory map against the chip catalog's. It ships GitHub Actions and
+GitLab CI templates of its own.
