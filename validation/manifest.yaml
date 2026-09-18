@@ -440,9 +440,12 @@ boards:
     drift_ack: 2026-09-17
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: aa265a382731ab9f124254c0c38eeee8550822cd861777b625a03dd2f9fbe901
+    drift_ack_digest: b17c058c01ff2c012eaffb145337ccd73bc0921afc677558077a4f615e54d87b
+    # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
+    drift_ack: 2026-09-18
     models:
       - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/cpu/cortex_m/exec
       - crates/core/src/decoder/arm.rs
       - crates/core/src/peripherals/nrf52
       - configs/chips/nrf52840.yaml
@@ -738,9 +741,12 @@ boards:
     drift_ack: 2026-09-17
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: aa265a382731ab9f124254c0c38eeee8550822cd861777b625a03dd2f9fbe901
+    drift_ack_digest: b17c058c01ff2c012eaffb145337ccd73bc0921afc677558077a4f615e54d87b
+    # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
+    drift_ack: 2026-09-18
     models:
       - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/cpu/cortex_m/exec
       - crates/core/src/decoder/arm.rs
       - crates/core/src/peripherals/nrf52
       - configs/chips/nrf52840.yaml
@@ -1194,10 +1200,13 @@ boards:
     drift_ack: 2026-09-17
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: 151737b55f6135b668e60718ee2c3a9a31fb13ec74e58c4e4ca93cf3a3610572
+    drift_ack_digest: 63dbee78171f39ba003231360fb3a3daed8e19635f1282cf7b561914956a4e07
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
+    # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
+    drift_ack: 2026-09-18
     models:
       - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/cpu/cortex_m/exec
       - crates/core/src/decoder/arm.rs
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -2513,10 +2522,13 @@ boards:
     drift_ack: 2026-09-17
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: b2530501dfaaa7cc569ad8d3e0286d02e44698657853a83b0543bf0c53153b65
+    drift_ack_digest: 8829c4ec042f36d3a2f1cb3446fff1f7d4e626f49b2fb41e468f8fb33208466f
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
+    # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
+    drift_ack: 2026-09-18
     models:
       - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/cpu/cortex_m/exec
       - crates/core/src/decoder/arm.rs
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -3013,10 +3025,13 @@ boards:
     drift_ack: 2026-09-17
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: c1d1511d2a12c2cb959538ecc8a41f05208dfc792ba31f0143c5dcb6c83cc73f
+    drift_ack_digest: 0586e52977f43704fe1696a6b73c11a7554841ae1e167ed87f56d6759997886e
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
+    # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
+    drift_ack: 2026-09-18
     models:
       - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/cpu/cortex_m/exec
       - crates/core/src/decoder/arm.rs
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -3535,10 +3550,13 @@ boards:
     drift_ack: 2026-09-17
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: fe69cc622cf785ec4c3607f2c0a10ff2be904568c830fbd1d6de017c2f520482
+    drift_ack_digest: 2417d01a2c5ce5ee8b82abe6f78eb81e0c6d9e05cffcd19a3c333fe737b93310
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
+    # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
+    drift_ack: 2026-09-18
     models:
       - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/cpu/cortex_m/exec
       - crates/core/src/decoder/arm.rs
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/afio.rs
@@ -4055,13 +4073,16 @@ boards:
     drift_ack: 2026-09-17
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: c3e6ce849dcfecf3ddfb8a9d4b8c0d82444c5e6bb29cfcf5ad72219beee0fa80
+    drift_ack_digest: 8d31d31cbbed1b2fef40b302275a5e04426f015e7d2a3e889edde71f3820cb87
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     # 2026-08-12: chip yaml adds bxcan1 (type bxcan @ 0x40006400, APB1ENR bit 25) for
     # Arduino matrix L8 loopback. Existing BxCan model; no register-map change to
     # the silicon-pinned SPI/I2C/UART/GPIO set. Matrix L8 green; no live re-capture.
+    # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
+    drift_ack: 2026-09-18
     models:
       - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/cpu/cortex_m/exec
       - crates/core/src/decoder/arm.rs
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
