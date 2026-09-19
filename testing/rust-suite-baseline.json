@@ -1,0 +1,2227 @@
+{
+  "_about": "Committed test-FUNCTION counts per target. Regenerate with scripts/ci/rust-suite-baseline.py --write. Read that file's preconditions before comparing numbers taken on different hosts.",
+  "profile": "debug",
+  "totals": {
+    "targets": 277,
+    "tests": 4984,
+    "ignored": 72
+  },
+  "targets": [
+    {
+      "package": "firmware-nrf52840-obd2-scanner",
+      "target": "firmware_nrf52840_obd2_scanner",
+      "kind": "lib",
+      "tests": 31,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-cli",
+      "target": "arm_batched_path",
+      "kind": "test",
+      "tests": 3,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-cli",
+      "target": "asset_import",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-cli",
+      "target": "breakpoints",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-cli",
+      "target": "bus_trace_export",
+      "kind": "test",
+      "tests": 3,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-cli",
+      "target": "cli_integration",
+      "kind": "test",
+      "tests": 3,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-cli",
+      "target": "config_validation",
+      "kind": "test",
+      "tests": 6,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-cli",
+      "target": "demo_blinky",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-cli",
+      "target": "demo_multi_node",
+      "kind": "bin",
+      "tests": 0,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-cli",
+      "target": "determinism",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-cli",
+      "target": "e2e_esp32c3_ble_arduino",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 1,
+      "release_only": false
+    },
+    {
+      "package": "labwired-cli",
+      "target": "e2e_esp32c3_blinky",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-cli",
+      "target": "e2e_h563_uds",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-cli",
+      "target": "e2e_kw41z_cow_stimulus",
+      "kind": "test",
+      "tests": 2,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-cli",
+      "target": "e2e_leo_airquality",
+      "kind": "test",
+      "tests": 2,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-cli",
+      "target": "e2e_stimulus_reporting",
+      "kind": "test",
+      "tests": 5,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-cli",
+      "target": "e2e_uart_injection",
+      "kind": "test",
+      "tests": 6,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-cli",
+      "target": "environment_runner",
+      "kind": "test",
+      "tests": 25,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-cli",
+      "target": "esp32s3_test_command_boot",
+      "kind": "test",
+      "tests": 3,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-cli",
+      "target": "gen-peripherals-manifest",
+      "kind": "bin",
+      "tests": 0,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-cli",
+      "target": "golden_examples",
+      "kind": "test",
+      "tests": 4,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-cli",
+      "target": "h5_demo",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 1,
+      "release_only": false
+    },
+    {
+      "package": "labwired-cli",
+      "target": "ingest_svd",
+      "kind": "test",
+      "tests": 3,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-cli",
+      "target": "integration_stress_tests",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-cli",
+      "target": "interactive_snapshot",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-cli",
+      "target": "labwired",
+      "kind": "bin",
+      "tests": 0,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-cli",
+      "target": "labwired_cli",
+      "kind": "lib",
+      "tests": 134,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-cli",
+      "target": "legacy_schema",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-cli",
+      "target": "lifecycle_single_source",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-cli",
+      "target": "manifest_reproducible",
+      "kind": "test",
+      "tests": 3,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-cli",
+      "target": "no_elf_c3_rom_boot",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-cli",
+      "target": "no_elf_s3_rom_boot",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-cli",
+      "target": "outputs",
+      "kind": "test",
+      "tests": 11,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-cli",
+      "target": "plugin_contract",
+      "kind": "test",
+      "tests": 2,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-cli",
+      "target": "resource_metrics",
+      "kind": "test",
+      "tests": 2,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-cli",
+      "target": "riscv_jit_c3_oled_test_differential",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-cli",
+      "target": "riscv_tick_interval_fidelity_differential",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-cli",
+      "target": "run_exit_code",
+      "kind": "test",
+      "tests": 4,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-cli",
+      "target": "run_verdict_single_source",
+      "kind": "test",
+      "tests": 4,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-cli",
+      "target": "runner",
+      "kind": "test",
+      "tests": 8,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-cli",
+      "target": "script_validation",
+      "kind": "test",
+      "tests": 3,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-cli",
+      "target": "simctl_firmware_verdict_e2e",
+      "kind": "test",
+      "tests": 4,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-cli",
+      "target": "simctl_selftest_dogfood",
+      "kind": "test",
+      "tests": 2,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-cli",
+      "target": "snapshots",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-cli",
+      "target": "stop_conditions",
+      "kind": "test",
+      "tests": 8,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-cli",
+      "target": "svd_coverage_ratchet",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-cli",
+      "target": "tier1_matrix",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 1,
+      "release_only": false
+    },
+    {
+      "package": "labwired-cli",
+      "target": "tier1_matrix_ratchet",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 1,
+      "release_only": false
+    },
+    {
+      "package": "labwired-cli",
+      "target": "uart_regex_compatibility",
+      "kind": "test",
+      "tests": 3,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-codegen",
+      "target": "labwired_codegen",
+      "kind": "lib",
+      "tests": 4,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-config",
+      "target": "chip_pins_ratchet",
+      "kind": "test",
+      "tests": 3,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-config",
+      "target": "config_tests",
+      "kind": "test",
+      "tests": 19,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-config",
+      "target": "environment_manifest_validation",
+      "kind": "test",
+      "tests": 9,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-config",
+      "target": "labwired_config",
+      "kind": "lib",
+      "tests": 80,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "adxl345_register_map",
+      "kind": "test",
+      "tests": 7,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "analog_stimulus",
+      "kind": "test",
+      "tests": 5,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "apa102_strip",
+      "kind": "test",
+      "tests": 4,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "arch_chip_isolation",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "avr_nano_golden_survival",
+      "kind": "test",
+      "tests": 3,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "bench_walk_free_kw41z",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 1,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "bg770a_validation",
+      "kind": "test",
+      "tests": 4,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "board_batch_width",
+      "kind": "test",
+      "tests": 3,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "board_coverage_ratchet",
+      "kind": "test",
+      "tests": 2,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "board_io_button_stimulus",
+      "kind": "test",
+      "tests": 13,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "board_registry_consistency",
+      "kind": "test",
+      "tests": 3,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "brom_boot_smoke",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "bus_visibility",
+      "kind": "test",
+      "tests": 3,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "capture_nokia5110_frames",
+      "kind": "test",
+      "tests": 4,
+      "ignored": 3,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "chip_conformance",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "cosim_contract",
+      "kind": "test",
+      "tests": 8,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "cpu_hz_single_source",
+      "kind": "test",
+      "tests": 8,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "cpu_runtime_snapshot_honesty",
+      "kind": "test",
+      "tests": 11,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "cpu_trace_conformance",
+      "kind": "test",
+      "tests": 3,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "debug_schema_is_not_fidelity",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "declarative_device_byte_parity",
+      "kind": "test",
+      "tests": 7,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "declarative_noise",
+      "kind": "test",
+      "tests": 8,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "diag_c3_yield",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 1,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "diag_esp32_dual_core_boot",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 1,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "diag_esp32c3_boot",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 1,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "diag_esp32c3_panic",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 1,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "diag_esp32s3_boot",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 1,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "diag_esp32s3_l2",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 1,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "display_evidence_one_seam",
+      "kind": "test",
+      "tests": 3,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "display_one_door",
+      "kind": "test",
+      "tests": 3,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "display_resolution_ignores_board_io_type",
+      "kind": "test",
+      "tests": 2,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "e2e_epaper_tricolor",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "e2e_esp32_epaper",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 1,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "e2e_esp32c3_snapshot_resume",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 1,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "e2e_external_arduino_esp32_in_sim",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 1,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "e2e_ili9341_16bit_gpio_smoke",
+      "kind": "test",
+      "tests": 2,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "e2e_iolink_dido",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "e2e_labwired_ereader",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "e2e_nokia5110_invaders",
+      "kind": "test",
+      "tests": 5,
+      "ignored": 5,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "e2e_nrf52840_obd2_scanner",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "e2e_nrf52840_proximity",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 1,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "e2e_spi3_dc_epaper",
+      "kind": "test",
+      "tests": 2,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "e2e_stm32f407_i2c",
+      "kind": "test",
+      "tests": 4,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "epaper_ssd1680_differential",
+      "kind": "test",
+      "tests": 2,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "epaper_twin_single_source",
+      "kind": "test",
+      "tests": 2,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "esp32_classic_aids_stability",
+      "kind": "test",
+      "tests": 5,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "esp32_classic_walk_differential",
+      "kind": "test",
+      "tests": 2,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "esp32_ili9341_attach",
+      "kind": "test",
+      "tests": 2,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "esp32_syscon_overlap",
+      "kind": "test",
+      "tests": 2,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "esp32c3_ble_pong_perf_probe",
+      "kind": "test",
+      "tests": 0,
+      "ignored": 0,
+      "release_only": true
+    },
+    {
+      "package": "labwired-core",
+      "target": "esp32c3_bt_active_walk_pinners",
+      "kind": "test",
+      "tests": 2,
+      "ignored": 1,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "esp32c3_bt_event_residency_gate",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "esp32c3_clamped_full_state_differential",
+      "kind": "test",
+      "tests": 3,
+      "ignored": 3,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "esp32c3_oled_profile",
+      "kind": "test",
+      "tests": 6,
+      "ignored": 6,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "esp32c3_pms_shipped_firmware",
+      "kind": "test",
+      "tests": 0,
+      "ignored": 0,
+      "release_only": true
+    },
+    {
+      "package": "labwired-core",
+      "target": "esp32c3_pms_violation",
+      "kind": "test",
+      "tests": 9,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "esp32c3_rmt_irq_delivery",
+      "kind": "test",
+      "tests": 3,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "esp32c3_rtc_slow_calibration",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "esp32c3_shipped_lab_batch_gate",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 1,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "esp32c3_usb_cdc_console",
+      "kind": "test",
+      "tests": 5,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "esp32c3_walk_differential",
+      "kind": "test",
+      "tests": 11,
+      "ignored": 10,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "esp32c3_workshop_source",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "esp32s3_gdma_oracle",
+      "kind": "test",
+      "tests": 2,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "esp32s3_gpspi_oracle",
+      "kind": "test",
+      "tests": 2,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "esp32s3_ili9341_attach",
+      "kind": "test",
+      "tests": 3,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "esp32s3_oled_profile",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 1,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "esp32s3_ssd1306_differential",
+      "kind": "test",
+      "tests": 2,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "esp32s3_walk_differential",
+      "kind": "test",
+      "tests": 2,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "esp32s3_ws2812_rmt",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "event_scheduler",
+      "kind": "test",
+      "tests": 11,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "fdcan",
+      "kind": "test",
+      "tests": 4,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "fdcan_attach_seam",
+      "kind": "test",
+      "tests": 2,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "firmware_survival",
+      "kind": "test",
+      "tests": 66,
+      "ignored": 5,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "fixture_ble_pong_provenance",
+      "kind": "test",
+      "tests": 3,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "flash_h5_ops",
+      "kind": "test",
+      "tests": 6,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "gpio_devices_walk_free",
+      "kind": "test",
+      "tests": 2,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "h563_conformance",
+      "kind": "test",
+      "tests": 6,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "hardware_fidelity",
+      "kind": "test",
+      "tests": 4,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "host_console_selection",
+      "kind": "test",
+      "tests": 6,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "i2c_component",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "i2c_factory_kit_coverage",
+      "kind": "test",
+      "tests": 3,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "i2c_mux_tca9548a",
+      "kind": "test",
+      "tests": 15,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "inspect_device_binding_universal",
+      "kind": "test",
+      "tests": 8,
+      "ignored": 1,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "inspect_external_devices",
+      "kind": "test",
+      "tests": 8,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "intmatrix_alarm",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "jit_lockstep",
+      "kind": "test",
+      "tests": 4,
+      "ignored": 4,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "kw41z_clock_boot",
+      "kind": "test",
+      "tests": 5,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "kw41z_walk_free_differential",
+      "kind": "test",
+      "tests": 6,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "labwired_core",
+      "kind": "lib",
+      "tests": 3223,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "leo_oled_i2c_readback",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "logic_analyzer_f1_rp2040_pad_visibility",
+      "kind": "test",
+      "tests": 10,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "logic_analyzer_lab_pad_visibility",
+      "kind": "test",
+      "tests": 11,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "logic_capture_bench",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 1,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "logic_wire_channels_cross_family",
+      "kind": "test",
+      "tests": 6,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "mma8451q_component",
+      "kind": "test",
+      "tests": 6,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "motor_models",
+      "kind": "test",
+      "tests": 37,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "mpu6050_noise",
+      "kind": "test",
+      "tests": 3,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "multi_node_iot",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "no_bus_device_board_io_dual",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "no_display_board_io_dual",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "noise_model",
+      "kind": "test",
+      "tests": 5,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "nokia5110_pcd8544_differential",
+      "kind": "test",
+      "tests": 2,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "nrf52840_timer_machine_gate",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "nrf52_bus_waveform",
+      "kind": "test",
+      "tests": 10,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "nrf52_easydma_tick512_fidelity",
+      "kind": "test",
+      "tests": 4,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "nrf52_spim_easydma_executing",
+      "kind": "test",
+      "tests": 2,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "nrf52_timer_walk_differential",
+      "kind": "test",
+      "tests": 14,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "nrf5340_clock_boot",
+      "kind": "test",
+      "tests": 3,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "nrf54l15_boot",
+      "kind": "test",
+      "tests": 11,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "nrf54l15_grtc_walk_differential",
+      "kind": "test",
+      "tests": 3,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "nrf54l15_idle_ff_speedup",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "nrf54l15_smart_ring_probe",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "nucleo_l476rg",
+      "kind": "test",
+      "tests": 4,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "nvic_masking_config_path",
+      "kind": "test",
+      "tests": 5,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "panel_artifact_evidence",
+      "kind": "test",
+      "tests": 11,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "part_pack_contract",
+      "kind": "test",
+      "tests": 9,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "pca9685_tmp102_parity",
+      "kind": "test",
+      "tests": 13,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "peripheral_kit_gate",
+      "kind": "test",
+      "tests": 8,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "pin_map_resolution",
+      "kind": "test",
+      "tests": 4,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "plugin_trait",
+      "kind": "test",
+      "tests": 4,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "rcc_kernel_clock_gate",
+      "kind": "test",
+      "tests": 6,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "register_compliance",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "register_coverage",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "release_only_cfg_ratchet",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "rp2040_i2c_irq_delivery",
+      "kind": "test",
+      "tests": 5,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "rp2040_pio_onboarding",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "rp2040_timer_machine_gate",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "rp2350_clkrst_profile",
+      "kind": "test",
+      "tests": 3,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "runtime_snapshot",
+      "kind": "test",
+      "tests": 6,
+      "ignored": 1,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "sim_input",
+      "kind": "test",
+      "tests": 9,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "sim_input_reachability",
+      "kind": "test",
+      "tests": 3,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "simctl_abi_single_source",
+      "kind": "test",
+      "tests": 5,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "stm32_dma_walk_differential",
+      "kind": "test",
+      "tests": 2,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "stm32_timer_walk_differential",
+      "kind": "test",
+      "tests": 5,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "stm32f103_dma_walk_differential",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "stm32f401_conformance",
+      "kind": "test",
+      "tests": 4,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "stm32f401_walk_differential",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "stm32f407_dma_walk_differential",
+      "kind": "test",
+      "tests": 3,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "stm32h563_walk_differential",
+      "kind": "test",
+      "tests": 5,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "stm32h735_peripheral_estate",
+      "kind": "test",
+      "tests": 3,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "stm32l073_walk_differential",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "stm32l476_walk_differential",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "strict_onboarding",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "svd_conformance",
+      "kind": "test",
+      "tests": 2,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "systick_walk_differential",
+      "kind": "test",
+      "tests": 4,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "tick_interval_inventory",
+      "kind": "test",
+      "tests": 6,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "tmp102_config_writable",
+      "kind": "test",
+      "tests": 4,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "trace_event_contract",
+      "kind": "test",
+      "tests": 2,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "uart_attach_seam",
+      "kind": "test",
+      "tests": 3,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "uart_parity_ratchet",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "unknown_peripheral_type",
+      "kind": "test",
+      "tests": 6,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "vcnl4010_bay_occupancy",
+      "kind": "test",
+      "tests": 15,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "vl53l0x_migration_parity",
+      "kind": "test",
+      "tests": 9,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "vl53l0x_vendor_init",
+      "kind": "test",
+      "tests": 8,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "walk_deletion",
+      "kind": "test",
+      "tests": 5,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "world_can_bus",
+      "kind": "test",
+      "tests": 10,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "world_determinism",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "world_esp32c3_ble_pong",
+      "kind": "test",
+      "tests": 0,
+      "ignored": 0,
+      "release_only": true
+    },
+    {
+      "package": "labwired-core",
+      "target": "world_esp32c3_pingpong",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "world_manifest_validation",
+      "kind": "test",
+      "tests": 7,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "world_multichip",
+      "kind": "test",
+      "tests": 3,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "world_node_factory",
+      "kind": "test",
+      "tests": 3,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "world_station_services",
+      "kind": "test",
+      "tests": 4,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "xtensa_decode",
+      "kind": "test",
+      "tests": 99,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "xtensa_exec",
+      "kind": "test",
+      "tests": 197,
+      "ignored": 3,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "xtensa_length",
+      "kind": "test",
+      "tests": 4,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "xtensa_lx7",
+      "kind": "test",
+      "tests": 13,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-core",
+      "target": "xtensa_regs",
+      "kind": "test",
+      "tests": 6,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-dap",
+      "target": "e2e",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-dap",
+      "target": "evaluation",
+      "kind": "test",
+      "tests": 2,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-dap",
+      "target": "labwired-dap",
+      "kind": "bin",
+      "tests": 0,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-dap",
+      "target": "labwired_dap",
+      "kind": "lib",
+      "tests": 23,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-dap",
+      "target": "step_operations",
+      "kind": "test",
+      "tests": 5,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-egress-relay",
+      "target": "labwired-egress-relay",
+      "kind": "bin",
+      "tests": 2,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-egress-relay",
+      "target": "labwired_egress_relay",
+      "kind": "lib",
+      "tests": 5,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-fuzz",
+      "target": "finds_planted_bug",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-fuzz",
+      "target": "labwired_fuzz",
+      "kind": "lib",
+      "tests": 0,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-gdbstub",
+      "target": "gdb_e2e",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-gdbstub",
+      "target": "labwired_gdbstub",
+      "kind": "lib",
+      "tests": 3,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-hw-oracle",
+      "target": "esp32_replay_in_sim",
+      "kind": "bin",
+      "tests": 0,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-hw-oracle",
+      "target": "esp32c3_reset_conformance",
+      "kind": "test",
+      "tests": 2,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-hw-oracle",
+      "target": "esp32s3_reset_conformance",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-hw-oracle",
+      "target": "f103_conformance",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-hw-oracle",
+      "target": "f103_fuzz_phase0",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-hw-oracle",
+      "target": "foreign_firmware_probe",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 1,
+      "release_only": false
+    },
+    {
+      "package": "labwired-hw-oracle",
+      "target": "h563_mmio_diff",
+      "kind": "test",
+      "tests": 3,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-hw-oracle",
+      "target": "l476_mmio_diff",
+      "kind": "test",
+      "tests": 2,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-hw-oracle",
+      "target": "labwired_hw_oracle",
+      "kind": "lib",
+      "tests": 26,
+      "ignored": 3,
+      "release_only": false
+    },
+    {
+      "package": "labwired-hw-oracle",
+      "target": "nrf52_conformance",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-hw-oracle",
+      "target": "nrf52_cpu_conformance",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-hw-oracle",
+      "target": "oracles",
+      "kind": "test",
+      "tests": 48,
+      "ignored": 1,
+      "release_only": false
+    },
+    {
+      "package": "labwired-hw-oracle",
+      "target": "riscv_oracles",
+      "kind": "test",
+      "tests": 15,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-hw-oracle",
+      "target": "rp2040_dma_oracle",
+      "kind": "test",
+      "tests": 3,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-hw-oracle",
+      "target": "rp2040_reset_conformance",
+      "kind": "test",
+      "tests": 2,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-hw-oracle",
+      "target": "rp2040_timer_exec_oracle",
+      "kind": "test",
+      "tests": 3,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-hw-oracle",
+      "target": "stm32f1_exec_oracle",
+      "kind": "test",
+      "tests": 14,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-hw-oracle",
+      "target": "stm32f1_mmio_diff",
+      "kind": "test",
+      "tests": 4,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-hw-oracle",
+      "target": "stm32f4_exec_oracle",
+      "kind": "test",
+      "tests": 2,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-hw-oracle",
+      "target": "stm32f4_mmio_diff",
+      "kind": "test",
+      "tests": 3,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-hw-oracle",
+      "target": "stm32l0_mmio_diff",
+      "kind": "test",
+      "tests": 2,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-hw-oracle",
+      "target": "thumb_oracles",
+      "kind": "test",
+      "tests": 27,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-hw-oracle-macros",
+      "target": "expand",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-hw-oracle-macros",
+      "target": "labwired_hw_oracle_macros",
+      "kind": "lib",
+      "tests": 0,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-hw-runner",
+      "target": "labwired-hw-runner",
+      "kind": "bin",
+      "tests": 0,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-hw-trace",
+      "target": "event_contract",
+      "kind": "test",
+      "tests": 2,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-hw-trace",
+      "target": "labwired_hw_trace",
+      "kind": "lib",
+      "tests": 0,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-ir",
+      "target": "labwired_ir",
+      "kind": "lib",
+      "tests": 3,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-loader",
+      "target": "labwired_loader",
+      "kind": "lib",
+      "tests": 14,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-python",
+      "target": "labwired",
+      "kind": "lib",
+      "tests": 0,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-wasm",
+      "target": "labwired_wasm",
+      "kind": "lib",
+      "tests": 50,
+      "ignored": 7,
+      "release_only": false
+    },
+    {
+      "package": "labwired-wasm",
+      "target": "motor_states",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "svd-ingestor",
+      "target": "e2e",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "svd-ingestor",
+      "target": "fuzz_test",
+      "kind": "test",
+      "tests": 1,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "svd-ingestor",
+      "target": "parsing_test",
+      "kind": "test",
+      "tests": 4,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "svd-ingestor",
+      "target": "svd-ingestor",
+      "kind": "bin",
+      "tests": 0,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "svd-ingestor",
+      "target": "svd_ingestor",
+      "kind": "lib",
+      "tests": 6,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "tier1-fixture-common",
+      "target": "tier1_fixture_common",
+      "kind": "lib",
+      "tests": 0,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "validation-report",
+      "target": "hw_oracle",
+      "kind": "test",
+      "tests": 2,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "validation-report",
+      "target": "svd",
+      "kind": "test",
+      "tests": 3,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "validation-report",
+      "target": "tier1",
+      "kind": "test",
+      "tests": 4,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "validation-report",
+      "target": "validation-report",
+      "kind": "bin",
+      "tests": 0,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "validation-report",
+      "target": "validation_report",
+      "kind": "lib",
+      "tests": 0,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "validation-report",
+      "target": "vendor_stack",
+      "kind": "test",
+      "tests": 2,
+      "ignored": 0,
+      "release_only": false
+    }
+  ]
+}
