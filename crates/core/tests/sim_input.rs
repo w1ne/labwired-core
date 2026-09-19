@@ -77,12 +77,12 @@ fn lists_the_accelerometer_channels() {
         inputs.iter().all(|(owner, _)| owner == "fxos8700"),
         "expected owners to be the external-device id, got {inputs:?}"
     );
-    let keys: Vec<_> = inputs.iter().map(|(_, ch)| ch.key).collect();
+    let keys: Vec<_> = inputs.iter().map(|(_, ch)| ch.key.as_ref()).collect();
     assert!(keys.contains(&"x"), "expected an x channel, got {keys:?}");
     assert!(keys.contains(&"y"));
     assert!(keys.contains(&"z"));
     // Channels carry discovery metadata (unit + range) for agents.
-    let x = inputs.iter().find(|(_, c)| c.key == "x").unwrap().1;
+    let x = &inputs.iter().find(|(_, c)| c.key == "x").unwrap().1;
     assert_eq!(x.unit, "g");
     // Schema range = hardware max full-scale (±8 g); the conversion follows
     // the live xyz_data_cfg FS bits (±2 g at reset).
@@ -306,7 +306,7 @@ fn lists_channels_across_all_transports() {
     let inputs = bus.list_inputs();
     let pairs: Vec<(String, &str)> = inputs
         .iter()
-        .map(|(owner, ch)| (owner.clone(), ch.key))
+        .map(|(owner, ch)| (owner.clone(), ch.key.as_ref()))
         .collect();
 
     for expected in [

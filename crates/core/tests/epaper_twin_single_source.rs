@@ -69,7 +69,7 @@ fn part_family(device_type: &str) -> Option<&str> {
 fn contested_families() -> Vec<String> {
     let mut counts: BTreeMap<&str, usize> = BTreeMap::new();
     for kit in labwired_core::peripherals::kit::registry::kits() {
-        if let Some(f) = part_family(kit.metadata().device_type) {
+        if let Some(f) = part_family(kit.metadata().device_type.as_ref()) {
             *counts.entry(f).or_default() += 1;
         }
     }

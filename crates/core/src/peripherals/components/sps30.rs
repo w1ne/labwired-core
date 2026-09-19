@@ -260,30 +260,30 @@ impl I2cDevice for Sps30 {
 /// ONE table backs BOTH the `SimInput` impl and the kit metadata.
 pub const INPUT_CHANNELS: &[crate::sim_input::InputChannel] = &[
     crate::sim_input::InputChannel {
-        key: "pm1_0",
-        label: "PM1.0",
-        unit: "µg/m³",
+        key: std::borrow::Cow::Borrowed("pm1_0"),
+        label: std::borrow::Cow::Borrowed("PM1.0"),
+        unit: std::borrow::Cow::Borrowed("µg/m³"),
         min: 0.0,
         max: 1000.0,
     },
     crate::sim_input::InputChannel {
-        key: "pm2_5",
-        label: "PM2.5",
-        unit: "µg/m³",
+        key: std::borrow::Cow::Borrowed("pm2_5"),
+        label: std::borrow::Cow::Borrowed("PM2.5"),
+        unit: std::borrow::Cow::Borrowed("µg/m³"),
         min: 0.0,
         max: 1000.0,
     },
     crate::sim_input::InputChannel {
-        key: "pm4_0",
-        label: "PM4.0",
-        unit: "µg/m³",
+        key: std::borrow::Cow::Borrowed("pm4_0"),
+        label: std::borrow::Cow::Borrowed("PM4.0"),
+        unit: std::borrow::Cow::Borrowed("µg/m³"),
         min: 0.0,
         max: 1000.0,
     },
     crate::sim_input::InputChannel {
-        key: "pm10",
-        label: "PM10",
-        unit: "µg/m³",
+        key: std::borrow::Cow::Borrowed("pm10"),
+        label: std::borrow::Cow::Borrowed("PM10"),
+        unit: std::borrow::Cow::Borrowed("µg/m³"),
         min: 0.0,
         max: 1000.0,
     },
@@ -325,38 +325,44 @@ pub struct Sps30Kit;
 pub static SPS30_KIT: Sps30Kit = Sps30Kit;
 
 static SPS30_METADATA: KitMetadata = KitMetadata {
-    inputs: INPUT_CHANNELS,
-    device_type: "sps30",
-    label: "Sensirion SPS30 PM",
-    summary: "Laser particulate-matter sensor (PM1/2.5/4/10) over I2C.",
-    detail: "Sensirion SPS30 at fixed address 0x69, speaking the real Sensirion \
+    inputs: std::borrow::Cow::Borrowed(INPUT_CHANNELS),
+    device_type: std::borrow::Cow::Borrowed("sps30"),
+    label: std::borrow::Cow::Borrowed("Sensirion SPS30 PM"),
+    summary: std::borrow::Cow::Borrowed("Laser particulate-matter sensor (PM1/2.5/4/10) over I2C."),
+    detail: std::borrow::Cow::Borrowed(
+        "Sensirion SPS30 at fixed address 0x69, speaking the real Sensirion \
              command protocol with CRC-8 (poly 0x31) in both float and uint16 output \
              modes. The four mass concentrations are externally driven inputs \
              (channels pm1_0 / pm2_5 / pm4_0 / pm10); config seeds them from one \
              pm2_5 value. Drive it in uint16 mode on the ESP32-C3 (30-byte frame \
              fits the controller's 32-byte FIFO).",
+    ),
     transport: Transport::I2c,
     category: Category::I2c,
-    config_keys: &[
+    config_keys: std::borrow::Cow::Borrowed(&[
         ConfigKey {
-            name: "i2c_address",
+            name: std::borrow::Cow::Borrowed("i2c_address"),
             ty: ConfigType::Int,
-            doc: "7-bit slave address. Defaults to the SPS30 fixed address 0x69.",
+            doc: std::borrow::Cow::Borrowed(
+                "7-bit slave address. Defaults to the SPS30 fixed address 0x69.",
+            ),
         },
         ConfigKey {
-            name: "pm2_5",
+            name: std::borrow::Cow::Borrowed("pm2_5"),
             ty: ConfigType::Float,
-            doc: "Initial PM2.5 mass, µg/m³. Default 6.0 (clean indoor air). The other \
+            doc: std::borrow::Cow::Borrowed(
+                "Initial PM2.5 mass, µg/m³. Default 6.0 (clean indoor air). The other \
                   mass bins are seeded from it with the typical urban-aerosol ratios; \
                   each bin is drivable at runtime via its own input channel.",
+            ),
         },
-    ],
-    labs: &[LabRef {
-        board_id: "esp32c3-leo-airquality",
-        chip: "esp32c3",
-        example_dir: "esp32c3-leo-airquality",
-        demo_elf: "demo-esp32c3-leo-airquality.elf",
-    }],
+    ]),
+    labs: std::borrow::Cow::Borrowed(&[LabRef {
+        board_id: std::borrow::Cow::Borrowed("esp32c3-leo-airquality"),
+        chip: std::borrow::Cow::Borrowed("esp32c3"),
+        example_dir: std::borrow::Cow::Borrowed("esp32c3-leo-airquality"),
+        demo_elf: std::borrow::Cow::Borrowed("demo-esp32c3-leo-airquality.elf"),
+    }]),
 };
 
 impl PeripheralKit for Sps30Kit {

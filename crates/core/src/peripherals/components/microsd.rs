@@ -166,20 +166,24 @@ pub struct MicroSdKit;
 pub static MICROSD_KIT: MicroSdKit = MicroSdKit;
 
 static MICROSD_METADATA: KitMetadata = KitMetadata {
-    inputs: &[],
-    device_type: "microsd",
-    label: "microSD (SPI)",
-    summary: "SPI SD card command shell (init + single-block read zeros).",
-    detail: "CMD0/8/55/41/58/17 shell for common Arduino card-init paths. No real \
+    inputs: std::borrow::Cow::Borrowed(&[]),
+    device_type: std::borrow::Cow::Borrowed("microsd"),
+    label: std::borrow::Cow::Borrowed("microSD (SPI)"),
+    summary: std::borrow::Cow::Borrowed(
+        "SPI SD card command shell (init + single-block read zeros).",
+    ),
+    detail: std::borrow::Cow::Borrowed(
+        "CMD0/8/55/41/58/17 shell for common Arduino card-init paths. No real \
              filesystem; CMD17 returns a 512-byte zero block.",
+    ),
     transport: Transport::Spi,
     category: Category::Spi,
-    config_keys: &[ConfigKey {
-        name: "cs_pin",
+    config_keys: std::borrow::Cow::Borrowed(&[ConfigKey {
+        name: std::borrow::Cow::Borrowed("cs_pin"),
         ty: ConfigType::Str,
-        doc: "Card CS GPIO pin (e.g. \"PA4\"). Defaults to PA4.",
-    }],
-    labs: &[],
+        doc: std::borrow::Cow::Borrowed("Card CS GPIO pin (e.g. \"PA4\"). Defaults to PA4."),
+    }]),
+    labs: std::borrow::Cow::Borrowed(&[]),
 };
 
 impl PeripheralKit for MicroSdKit {

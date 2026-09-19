@@ -18,10 +18,9 @@
 //! 3. **Legacy residual** — `tca9548a` / `shm_i2c` (allowlisted in
 //!    `i2c_factory_kit_coverage`)
 //!
-//! Product types that also have a kit may keep a thin construct arm here so
-//! mux children of that type still resolve; the kit is the source of
-//! metadata and the universal attach path. Do not add a new product type
-//! to this match without a kit (the coverage gate fails).
+//! Embedded I²C descriptors resolve generically: a YAML part needs no second
+//! type allowlist to work behind a mux. Rust-only models retain their construct
+//! arms; the kit remains the source of metadata and controller attachment.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -117,7 +116,9 @@ pub fn validate_i2c_mux_topology(
                 ext.id
             );
         }
-        if !is_i2c_mux_type(&parent.r#type) {
+        let parent_is_mux = resolve_i2c_leaf(manifest, parent)?
+            .is_some_and(|device| is_mux_device(device.as_ref()));
+        if !parent_is_mux {
             anyhow::bail!(
                 "external device '{}' hangs off '{}', but '{}' is a '{}' — only an I²C bus \
                  switch (tca9548a) can carry downstream devices",
@@ -137,15 +138,10 @@ pub fn validate_i2c_mux_topology(
                 crate::peripherals::components::tca9548a::TCA9548A_CHANNELS - 1
             );
         }
-        if build_i2c_device(&ext.r#type, &ext.config).is_none() {
-            // A device on a controller may legitimately fall through to the kit
-            // registry or the declarative-device loader. A device behind a
-            // switch has no such fallback — those paths attach straight to a
-            // controller and would silently bypass the switch. Fail instead.
+        if resolve_i2c_leaf(manifest, ext)?.is_none() {
             anyhow::bail!(
                 "external device '{}' (type '{}') sits behind I²C switch '{}', but no I²C model \
-                 is registered for that type in the device factory; types reached only through \
-                 the PeripheralKit registry cannot yet be placed behind a switch",
+                 can be constructed for that type",
                 ext.id,
                 ext.r#type,
                 parent.id
@@ -173,8 +169,8 @@ pub fn validate_i2c_mux_topology(
 /// Build `ext`'s I²C model and, when it is a bus switch, recursively build and
 /// bucket every manifest entry wired behind it onto its channels.
 ///
-/// Returns `Ok(None)` when `ext.type` has no factory arm, exactly as
-/// [`build_external_i2c_device`] does, so callers keep their existing
+/// Returns `Ok(None)` when `ext.type` has no I²C descriptor or Rust model,
+/// so callers keep their existing
 /// "unknown device type" handling. The returned device is ready to hand to
 /// `attach_i2c_slave_with_route` as ONE unit — the switch is the thing on the
 /// controller's bus; its children are not.
@@ -182,22 +178,26 @@ pub fn build_i2c_tree(
     manifest: &labwired_config::SystemManifest,
     ext: &labwired_config::ExternalDevice,
 ) -> anyhow::Result<Option<Box<dyn I2cDevice>>> {
-    // A part this manifest CARRIES outranks the built-in factory: it is the most
-    // specific thing anyone said about this system. A pack can only reach here
-    // for a type we already ship by declaring `overrides:`; otherwise
-    // `bus::part_pack::lookup` refuses it rather than picking a winner.
-    if let Some(device) = crate::bus::part_pack::i2c_device(manifest, ext)? {
-        return Ok(Some(device));
-    }
-    let Some(mut device) = build_external_i2c_device(&ext.r#type, &ext.id, &ext.config) else {
+    let has_children = manifest
+        .external_devices
+        .iter()
+        .any(|child| child.connection == ext.id);
+    let Some(mut device) = resolve_i2c_leaf(manifest, ext)? else {
+        anyhow::ensure!(
+            !has_children,
+            "external device '{}' has downstream devices but no I²C model can be constructed for its type '{}'",
+            ext.id,
+            ext.r#type
+        );
         return Ok(None);
     };
-    let is_mux = device
-        .as_any()
-        .map(|a| a.is::<crate::peripherals::components::tca9548a::Tca9548a>())
-        .unwrap_or(false);
-    if !is_mux {
-        return Ok(Some(device));
+    if !is_mux_device(device.as_ref()) {
+        anyhow::ensure!(
+            !has_children,
+            "external device '{}' has downstream devices but its resolved model is not an I²C bus switch",
+            ext.id
+        );
+        return Ok(Some(with_supply(device, ext)));
     }
     // Collect first: the recursive build borrows `manifest` immutably while
     // `device` is borrowed mutably below.
@@ -233,19 +233,60 @@ pub fn build_i2c_tree(
             mux.attach(channel, dev)?;
         }
     }
-    Ok(Some(device))
+    Ok(Some(with_supply(device, ext)))
 }
 
-/// Build a declarative [`GenericI2cDevice`] from its embedded
-/// `configs/devices/<type>.yaml` descriptor, honouring an `i2c_address` override.
-/// Used by the factory arms of parts (TMP102, PCA9685) that were migrated off
-/// hand-written models but still need a factory entry so every attach path — not
-/// just the kit pass — wires them.
+fn is_mux_device(device: &dyn I2cDevice) -> bool {
+    device
+        .as_any()
+        .is_some_and(|a| a.is::<crate::peripherals::components::tca9548a::Tca9548a>())
+}
+
+/// Resolve a single leaf for BOTH topology preflight and actual construction.
+/// A manifest override claims its type even when its transport is not I²C;
+/// falling back in that case would silently run the model it replaced.
+fn resolve_i2c_leaf(
+    manifest: &labwired_config::SystemManifest,
+    ext: &labwired_config::ExternalDevice,
+) -> anyhow::Result<Option<Box<dyn I2cDevice>>> {
+    if let Some(value) = ext.config.get("i2c_address") {
+        anyhow::ensure!(
+            value.as_u64().is_some_and(|address| address <= 0x7f),
+            "external device '{}' has invalid 7-bit i2c_address {:?}",
+            ext.id,
+            value
+        );
+    }
+    if crate::bus::part_pack::lookup(manifest, &ext.r#type)?.is_some() {
+        return crate::bus::part_pack::i2c_device(manifest, ext);
+    }
+    Ok(build_external_i2c_device(&ext.r#type, &ext.id, &ext.config))
+}
+
+/// Apply the same supply semantics as `AttachCtx::attach_i2c_device` to every
+/// node in a mux tree, including the switch itself.
+fn with_supply(
+    device: Box<dyn I2cDevice>,
+    ext: &labwired_config::ExternalDevice,
+) -> Box<dyn I2cDevice> {
+    if super::supply::powered_from_placement(ext) {
+        device
+    } else {
+        Box::new(super::supply::UnpoweredI2cDevice::new(device))
+    }
+}
+
+/// Resolve embedded descriptors before the remaining Rust-only construct arms.
+/// Non-I²C descriptors do not become I²C devices just because they have YAML.
 fn build_declarative_i2c_device(
     type_str: &str,
     config: &HashMap<String, serde_yaml::Value>,
 ) -> Option<Box<dyn I2cDevice>> {
     let yaml = labwired_config::embedded_device_yaml(type_str)?;
+    let descriptor = labwired_config::DeviceDescriptor::from_yaml(yaml).ok()?;
+    if descriptor.behavior.primitive != "i2c_device" {
+        return None;
+    }
     // 0 tells GenericI2cDevice to use the descriptor's default_address.
     let address = config
         .get("i2c_address")
@@ -274,18 +315,12 @@ pub fn build_i2c_device(
     type_str: &str,
     config: &HashMap<String, serde_yaml::Value>,
 ) -> Option<Box<dyn I2cDevice>> {
-    match type_str.to_ascii_lowercase().as_str() {
-        // TMP102 (register-pointer + drift) and PCA9685 (byte register file +
-        // servo observable) are declarative devices — the model lives entirely in
-        // configs/devices/*.yaml, interpreted by the generic GenericI2cDevice. The
-        // hand-written structs survive only as the byte-parity oracles.
-        // The VCNL4010 joins them: its whole model is a register map plus two
-        // input channels, so there is nothing for a hand-written struct to add.
-        "tmp102" | "pca9685" | "vcnl4010" | "vl53l0x" | "tmp117" | "ina219" | "ads1115"
-        | "mma8451q" | "fxos8700" | "mlx90614" | "ds3231" | "adxl345" | "mpu6050" | "bmi270"
-        | "cap1188" | "vl53l1x" | "bno055" | "bmp280" | "aht20" => {
-            build_declarative_i2c_device(&type_str.to_ascii_lowercase(), config)
-        }
+    let lower = type_str.to_ascii_lowercase();
+    let canonical = crate::peripherals::kit::registry::canonical_device_type(&lower);
+    if labwired_config::embedded_device_yaml(canonical).is_some() {
+        return build_declarative_i2c_device(canonical, config);
+    }
+    match canonical {
         // ── Smart-ring sensor/actuator set ──────────────────────────────────
         "max30102" => {
             use crate::peripherals::components::max30102::{Max30102, MAX30102_ADDR};
@@ -313,9 +348,8 @@ pub fn build_i2c_device(
                 .unwrap_or(DRV2605_ADDR as u64) as u8;
             Some(Box::new(Drv2605::new(address)))
         }
-        // scd41 / sgp41 / sps30 / veml7700 are onboarded through the
-        // PeripheralKit registry (peripherals/kit), which dispatches them on
-        // both the STM32 and ESP32-C3 I²C buses — no legacy arm needed here.
+        // Declarative sensors are resolved above; these are the remaining
+        // Rust-backed models with a standalone I²C constructor.
         "bme280" => {
             let address = config
                 .get("i2c_address")

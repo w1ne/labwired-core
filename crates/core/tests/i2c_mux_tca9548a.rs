@@ -43,9 +43,9 @@ struct FakeProximity {
 }
 
 const CH_PROXIMITY: &[InputChannel] = &[InputChannel {
-    key: "proximity",
-    label: "Proximity",
-    unit: "count",
+    key: std::borrow::Cow::Borrowed("proximity"),
+    label: std::borrow::Cow::Borrowed("Proximity"),
+    unit: std::borrow::Cow::Borrowed("count"),
     min: 0.0,
     max: 65535.0,
 }];

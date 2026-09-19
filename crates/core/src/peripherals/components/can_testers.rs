@@ -39,27 +39,31 @@ pub struct CanDiagnosticTesterKit;
 pub static CAN_DIAGNOSTIC_TESTER_KIT: CanDiagnosticTesterKit = CanDiagnosticTesterKit;
 
 static CAN_DIAGNOSTIC_METADATA: KitMetadata = KitMetadata {
-    inputs: &[],
-    device_type: "can-diagnostic-tester",
-    label: "CAN diagnostic tester",
-    summary: "One-shot single-frame UDS-style request injector on bxCAN/FDCAN.",
-    detail: "Injects a single diagnostic request frame (default 0x7E0 / ReadDataByIdentifier) \
+    inputs: std::borrow::Cow::Borrowed(&[]),
+    device_type: std::borrow::Cow::Borrowed("can-diagnostic-tester"),
+    label: std::borrow::Cow::Borrowed("CAN diagnostic tester"),
+    summary: std::borrow::Cow::Borrowed(
+        "One-shot single-frame UDS-style request injector on bxCAN/FDCAN.",
+    ),
+    detail: std::borrow::Cow::Borrowed(
+        "Injects a single diagnostic request frame (default 0x7E0 / ReadDataByIdentifier) \
              once the connected CAN controller is up. Alias: uds-diagnostic-tester.",
+    ),
     transport: Transport::Can,
     category: Category::Misc,
-    config_keys: &[
+    config_keys: std::borrow::Cow::Borrowed(&[
         ConfigKey {
-            name: "request_id",
+            name: std::borrow::Cow::Borrowed("request_id"),
             ty: ConfigType::Int,
-            doc: "CAN id for the request (default 0x7E0).",
+            doc: std::borrow::Cow::Borrowed("CAN id for the request (default 0x7E0)."),
         },
         ConfigKey {
-            name: "request_data",
+            name: std::borrow::Cow::Borrowed("request_data"),
             ty: ConfigType::Str,
-            doc: "Hex/bytes payload (default 03 22 F1 90).",
+            doc: std::borrow::Cow::Borrowed("Hex/bytes payload (default 03 22 F1 90)."),
         },
-    ],
-    labs: &[],
+    ]),
+    labs: std::borrow::Cow::Borrowed(&[]),
 };
 
 impl PeripheralKit for CanDiagnosticTesterKit {
@@ -91,43 +95,51 @@ pub struct CanUdsTesterKit;
 pub static CAN_UDS_TESTER_KIT: CanUdsTesterKit = CanUdsTesterKit;
 
 static CAN_UDS_METADATA: KitMetadata = KitMetadata {
-    inputs: &[],
-    device_type: "uds-tester",
-    label: "UDS / ISO-TP tester",
-    summary: "Stateful multi-frame UDS tester (SecurityAccess-class handshakes).",
-    detail: "Second CAN node that drives ISO-TP First/Consecutive frames and \
+    inputs: std::borrow::Cow::Borrowed(&[]),
+    device_type: std::borrow::Cow::Borrowed("uds-tester"),
+    label: std::borrow::Cow::Borrowed("UDS / ISO-TP tester"),
+    summary: std::borrow::Cow::Borrowed(
+        "Stateful multi-frame UDS tester (SecurityAccess-class handshakes).",
+    ),
+    detail: std::borrow::Cow::Borrowed(
+        "Second CAN node that drives ISO-TP First/Consecutive frames and \
              observes ECU responses via the public bxCAN/FDCAN inject API. \
              Optional `script:` steps; legacy first_frame/consecutive_frame still work.",
+    ),
     transport: Transport::Can,
     category: Category::Misc,
-    config_keys: &[
+    config_keys: std::borrow::Cow::Borrowed(&[
         ConfigKey {
-            name: "request_id",
+            name: std::borrow::Cow::Borrowed("request_id"),
             ty: ConfigType::Int,
-            doc: "Tester → ECU id (default 0x111).",
+            doc: std::borrow::Cow::Borrowed("Tester → ECU id (default 0x111)."),
         },
         ConfigKey {
-            name: "reply_id",
+            name: std::borrow::Cow::Borrowed("reply_id"),
             ty: ConfigType::Int,
-            doc: "ECU → tester id (default 0x222).",
+            doc: std::borrow::Cow::Borrowed("ECU → tester id (default 0x222)."),
         },
         ConfigKey {
-            name: "first_frame",
+            name: std::borrow::Cow::Borrowed("first_frame"),
             ty: ConfigType::Str,
-            doc: "Legacy ISO-TP FirstFrame bytes when script is omitted.",
+            doc: std::borrow::Cow::Borrowed(
+                "Legacy ISO-TP FirstFrame bytes when script is omitted.",
+            ),
         },
         ConfigKey {
-            name: "consecutive_frame",
+            name: std::borrow::Cow::Borrowed("consecutive_frame"),
             ty: ConfigType::Str,
-            doc: "Legacy ISO-TP ConsecutiveFrame bytes when script is omitted.",
+            doc: std::borrow::Cow::Borrowed(
+                "Legacy ISO-TP ConsecutiveFrame bytes when script is omitted.",
+            ),
         },
         ConfigKey {
-            name: "script",
+            name: std::borrow::Cow::Borrowed("script"),
             ty: ConfigType::Str,
-            doc: "YAML list of {send, expect, expect_nrc} steps.",
+            doc: std::borrow::Cow::Borrowed("YAML list of {send, expect, expect_nrc} steps."),
         },
-    ],
-    labs: &[],
+    ]),
+    labs: std::borrow::Cow::Borrowed(&[]),
 };
 
 impl PeripheralKit for CanUdsTesterKit {
@@ -208,27 +220,31 @@ pub struct CanLogPlayerKit;
 pub static CAN_LOG_PLAYER_KIT: CanLogPlayerKit = CanLogPlayerKit;
 
 static CAN_LOG_PLAYER_METADATA: KitMetadata = KitMetadata {
-    inputs: &[],
-    device_type: "can-player",
-    label: "CAN log player",
-    summary: "Replays candump-format traffic into a bxCAN/FDCAN controller.",
-    detail: "Host-side log player for J1939 / bus-monitor labs. Requires inline \
+    inputs: std::borrow::Cow::Borrowed(&[]),
+    device_type: std::borrow::Cow::Borrowed("can-player"),
+    label: std::borrow::Cow::Borrowed("CAN log player"),
+    summary: std::borrow::Cow::Borrowed(
+        "Replays candump-format traffic into a bxCAN/FDCAN controller.",
+    ),
+    detail: std::borrow::Cow::Borrowed(
+        "Host-side log player for J1939 / bus-monitor labs. Requires inline \
              `data:` (candump text) and optional ticks_per_second.",
+    ),
     transport: Transport::Can,
     category: Category::Misc,
-    config_keys: &[
+    config_keys: std::borrow::Cow::Borrowed(&[
         ConfigKey {
-            name: "data",
+            name: std::borrow::Cow::Borrowed("data"),
             ty: ConfigType::Str,
-            doc: "Inline candump .log text (required).",
+            doc: std::borrow::Cow::Borrowed("Inline candump .log text (required)."),
         },
         ConfigKey {
-            name: "ticks_per_second",
+            name: std::borrow::Cow::Borrowed("ticks_per_second"),
             ty: ConfigType::Int,
-            doc: "Sim ticks per log second (default 1_000_000).",
+            doc: std::borrow::Cow::Borrowed("Sim ticks per log second (default 1_000_000)."),
         },
-    ],
-    labs: &[],
+    ]),
+    labs: std::borrow::Cow::Borrowed(&[]),
 };
 
 impl PeripheralKit for CanLogPlayerKit {

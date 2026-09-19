@@ -479,52 +479,62 @@ pub struct Ili9341ParallelKit;
 pub static ILI9341_PARALLEL_KIT: Ili9341ParallelKit = Ili9341ParallelKit;
 
 static ILI9341_PARALLEL_METADATA: KitMetadata = KitMetadata {
-    inputs: &[],
-    device_type: "ili9341-16bit",
-    label: "ILI9341 TFT (16-bit parallel)",
-    summary: "240×320 RGB565 TFT over Intel 8080 16-bit GPIO bit-bang.",
-    detail: "LCDWiki MRB3205-class 3.2\" module contract: CS/RS/WR/RD/RST + DB0..DB15. \
+    inputs: std::borrow::Cow::Borrowed(&[]),
+    device_type: std::borrow::Cow::Borrowed("ili9341-16bit"),
+    label: std::borrow::Cow::Borrowed("ILI9341 TFT (16-bit parallel)"),
+    summary: std::borrow::Cow::Borrowed("240×320 RGB565 TFT over Intel 8080 16-bit GPIO bit-bang."),
+    detail: std::borrow::Cow::Borrowed(
+        "LCDWiki MRB3205-class 3.2\" module contract: CS/RS/WR/RD/RST + DB0..DB15. \
              Firmware bit-bangs the bus; the twin watches GPIO edges (classic ESP32 / \
              ESP32-S3) and paints an in-memory RGB565 framebuffer. Not SPI — use \
              device_type ili9341 for the 4-wire SPI kit.",
+    ),
     transport: Transport::GpioGroup,
     category: Category::Gpio,
-    config_keys: &[
+    config_keys: std::borrow::Cow::Borrowed(&[
         ConfigKey {
-            name: "cs_pin",
+            name: std::borrow::Cow::Borrowed("cs_pin"),
             ty: ConfigType::Str,
-            doc: "LCD chip-select GPIO (e.g. \"GPIO15\"). Defaults to GPIO15.",
+            doc: std::borrow::Cow::Borrowed(
+                "LCD chip-select GPIO (e.g. \"GPIO15\"). Defaults to GPIO15.",
+            ),
         },
         ConfigKey {
-            name: "rs_pin",
+            name: std::borrow::Cow::Borrowed("rs_pin"),
             ty: ConfigType::Str,
-            doc: "Register/data select GPIO (alias dc_pin). Defaults to GPIO2.",
+            doc: std::borrow::Cow::Borrowed(
+                "Register/data select GPIO (alias dc_pin). Defaults to GPIO2.",
+            ),
         },
         ConfigKey {
-            name: "wr_pin",
+            name: std::borrow::Cow::Borrowed("wr_pin"),
             ty: ConfigType::Str,
-            doc: "Write strobe GPIO. Defaults to GPIO4.",
+            doc: std::borrow::Cow::Borrowed("Write strobe GPIO. Defaults to GPIO4."),
         },
         ConfigKey {
-            name: "rd_pin",
+            name: std::borrow::Cow::Borrowed("rd_pin"),
             ty: ConfigType::Str,
-            doc: "Read strobe GPIO (latched; read-back not modelled). Defaults to GPIO5.",
+            doc: std::borrow::Cow::Borrowed(
+                "Read strobe GPIO (latched; read-back not modelled). Defaults to GPIO5.",
+            ),
         },
         ConfigKey {
-            name: "rst_pin",
+            name: std::borrow::Cow::Borrowed("rst_pin"),
             ty: ConfigType::Str,
-            doc: "Reset GPIO (active low). Defaults to GPIO33.",
+            doc: std::borrow::Cow::Borrowed("Reset GPIO (active low). Defaults to GPIO33."),
         },
         ConfigKey {
-            name: "db0_pin",
+            name: std::borrow::Cow::Borrowed("db0_pin"),
             ty: ConfigType::Str,
-            doc: "Data bus bit 0 (LSB). Also db1_pin..db15_pin. Defaults GPIO10..GPIO25.",
+            doc: std::borrow::Cow::Borrowed(
+                "Data bus bit 0 (LSB). Also db1_pin..db15_pin. Defaults GPIO10..GPIO25.",
+            ),
         },
         crate::peripherals::components::supply::POWERED_CONFIG_KEY,
-    ],
+    ]),
     // Example system lives at examples/ili9341-16bit-lab; keep labs empty until
     // a non-empty demo_elf ships (UI kitsWithLabs requires demo_elf length > 0).
-    labs: &[],
+    labs: std::borrow::Cow::Borrowed(&[]),
 };
 
 impl PeripheralKit for Ili9341ParallelKit {

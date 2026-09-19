@@ -155,9 +155,9 @@ impl crate::sim_input::SimInput for Keypad {
     fn input_channels(&self) -> &'static [crate::sim_input::InputChannel] {
         use crate::sim_input::InputChannel;
         const CH: &[InputChannel] = &[InputChannel {
-            key: "key",
-            label: "Key",
-            unit: "index",
+            key: std::borrow::Cow::Borrowed("key"),
+            label: std::borrow::Cow::Borrowed("Key"),
+            unit: std::borrow::Cow::Borrowed("index"),
             min: -1.0,
             max: (ROWS * COLS - 1) as f64,
         }];

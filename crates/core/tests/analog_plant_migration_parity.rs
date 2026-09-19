@@ -410,7 +410,7 @@ fn no_analog_plant_silently_gained_or_lost_a_channel() {
     ];
     for (device_type, channels) in expected {
         let kit = kit(device_type);
-        let got = labwired_core::peripherals::kit::PeripheralKit::metadata(&kit).inputs;
+        let got = &labwired_core::peripherals::kit::PeripheralKit::metadata(&kit).inputs;
         assert_eq!(
             got.len(),
             channels.len(),

@@ -410,16 +410,16 @@ impl Dht22 {
 /// each sensor under its `id` — same as [`HcSr04`](crate::peripherals::hc_sr04::HcSr04).
 pub const INPUT_CHANNELS: &[crate::sim_input::InputChannel] = &[
     crate::sim_input::InputChannel {
-        key: "temperature",
-        label: "Temperature",
-        unit: "°C",
+        key: std::borrow::Cow::Borrowed("temperature"),
+        label: std::borrow::Cow::Borrowed("Temperature"),
+        unit: std::borrow::Cow::Borrowed("°C"),
         min: MIN_TEMP_C as f64,
         max: MAX_TEMP_C as f64,
     },
     crate::sim_input::InputChannel {
-        key: "humidity",
-        label: "Humidity",
-        unit: "%RH",
+        key: std::borrow::Cow::Borrowed("humidity"),
+        label: std::borrow::Cow::Borrowed("Humidity"),
+        unit: std::borrow::Cow::Borrowed("%RH"),
         min: MIN_HUMIDITY_PCT as f64,
         max: MAX_HUMIDITY_PCT as f64,
     },
@@ -432,7 +432,7 @@ impl crate::sim_input::SimInput for Dht22 {
 
     fn set_input(&mut self, key: &str, value: f64) -> Result<(), crate::sim_input::SimInputError> {
         let ch = self.require_channel(key, value)?;
-        match ch.key {
+        match ch.key.as_ref() {
             "temperature" => self.set_temperature_c(value as f32),
             "humidity" => self.set_humidity_pct(value as f32),
             _ => unreachable!("require_channel only returns declared channels"),

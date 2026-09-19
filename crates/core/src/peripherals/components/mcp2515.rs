@@ -632,24 +632,28 @@ pub struct Mcp2515Kit;
 pub static MCP2515_KIT: Mcp2515Kit = Mcp2515Kit;
 
 static MCP2515_METADATA: KitMetadata = KitMetadata {
-    inputs: &[],
-    device_type: "mcp2515",
-    label: "MCP2515 CAN",
-    summary: "Functional SPI classical CAN controller for standard 11-bit data frames.",
-    detail: "Microchip MCP2515 SPI commands, modes, timing, three transmit buffers, two receive \
+    inputs: std::borrow::Cow::Borrowed(&[]),
+    device_type: std::borrow::Cow::Borrowed("mcp2515"),
+    label: std::borrow::Cow::Borrowed("MCP2515 CAN"),
+    summary: std::borrow::Cow::Borrowed(
+        "Functional SPI classical CAN controller for standard 11-bit data frames.",
+    ),
+    detail: std::borrow::Cow::Borrowed(
+        "Microchip MCP2515 SPI commands, modes, timing, three transmit buffers, two receive \
              buffers, standard-ID masks/filters, rollover, overflow, interrupt flags, and shared \
              classical CAN delivery. Limitations: 11-bit data frames only; extended identifiers, \
              remote frames, CAN FD/bitrate switching, physical INT GPIO wiring, and nested-device \
              trace contribution are not modeled. Active modes currently validate only a 16 MHz \
              oscillator at 500 kbit/s (within 1%); other oscillators and bitrates are not modeled.",
+    ),
     transport: Transport::Spi,
     category: Category::Spi,
-    config_keys: &[ConfigKey {
-        name: "cs_pin",
+    config_keys: std::borrow::Cow::Borrowed(&[ConfigKey {
+        name: std::borrow::Cow::Borrowed("cs_pin"),
         ty: ConfigType::Str,
-        doc: "Chip-select GPIO pin (e.g. \"PA4\"). Defaults to PA4.",
-    }],
-    labs: &[],
+        doc: std::borrow::Cow::Borrowed("Chip-select GPIO pin (e.g. \"PA4\"). Defaults to PA4."),
+    }]),
+    labs: std::borrow::Cow::Borrowed(&[]),
 };
 
 impl PeripheralKit for Mcp2515Kit {

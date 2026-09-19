@@ -118,36 +118,38 @@ pub struct UnipolarStepperKit;
 pub static UNIPOLAR_STEPPER_KIT: UnipolarStepperKit = UnipolarStepperKit;
 
 static UNIPOLAR_METADATA: KitMetadata = KitMetadata {
-    inputs: &[],
-    device_type: "uln2003",
-    label: "ULN2003 / 28BYJ-48 stepper",
-    summary: "Four-phase unipolar stepper twin (IN1..IN4).",
-    detail: "Alias stepper-28byj48 maps to this kit. Half-step sequencing from GPIO edges.",
+    inputs: std::borrow::Cow::Borrowed(&[]),
+    device_type: std::borrow::Cow::Borrowed("uln2003"),
+    label: std::borrow::Cow::Borrowed("ULN2003 / 28BYJ-48 stepper"),
+    summary: std::borrow::Cow::Borrowed("Four-phase unipolar stepper twin (IN1..IN4)."),
+    detail: std::borrow::Cow::Borrowed(
+        "Alias stepper-28byj48 maps to this kit. Half-step sequencing from GPIO edges.",
+    ),
     transport: Transport::GpioGroup,
     category: Category::Gpio,
-    config_keys: &[
+    config_keys: std::borrow::Cow::Borrowed(&[
         ConfigKey {
-            name: "in1_pin",
+            name: std::borrow::Cow::Borrowed("in1_pin"),
             ty: ConfigType::Str,
-            doc: "Phase 1 pin (default GPIO16).",
+            doc: std::borrow::Cow::Borrowed("Phase 1 pin (default GPIO16)."),
         },
         ConfigKey {
-            name: "in2_pin",
+            name: std::borrow::Cow::Borrowed("in2_pin"),
             ty: ConfigType::Str,
-            doc: "Phase 2 pin (default GPIO17).",
+            doc: std::borrow::Cow::Borrowed("Phase 2 pin (default GPIO17)."),
         },
         ConfigKey {
-            name: "in3_pin",
+            name: std::borrow::Cow::Borrowed("in3_pin"),
             ty: ConfigType::Str,
-            doc: "Phase 3 pin (default GPIO18).",
+            doc: std::borrow::Cow::Borrowed("Phase 3 pin (default GPIO18)."),
         },
         ConfigKey {
-            name: "in4_pin",
+            name: std::borrow::Cow::Borrowed("in4_pin"),
             ty: ConfigType::Str,
-            doc: "Phase 4 pin (default GPIO19).",
+            doc: std::borrow::Cow::Borrowed("Phase 4 pin (default GPIO19)."),
         },
-    ],
-    labs: &[],
+    ]),
+    labs: std::borrow::Cow::Borrowed(&[]),
 };
 
 impl PeripheralKit for UnipolarStepperKit {

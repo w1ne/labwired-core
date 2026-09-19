@@ -601,26 +601,28 @@ pub struct Mlx90640Kit;
 pub static MLX90640_KIT: Mlx90640Kit = Mlx90640Kit;
 
 static MLX90640_METADATA: KitMetadata = KitMetadata {
-    inputs: &[],
-    device_type: "mlx90640",
-    label: "MLX90640 Thermal",
-    summary: "Melexis MLX90640 32×24 far-IR thermal array over I2C.",
-    detail: "Thermal scene configured via ambient_c / hot_* config keys (see factory).",
+    inputs: std::borrow::Cow::Borrowed(&[]),
+    device_type: std::borrow::Cow::Borrowed("mlx90640"),
+    label: std::borrow::Cow::Borrowed("MLX90640 Thermal"),
+    summary: std::borrow::Cow::Borrowed("Melexis MLX90640 32×24 far-IR thermal array over I2C."),
+    detail: std::borrow::Cow::Borrowed(
+        "Thermal scene configured via ambient_c / hot_* config keys (see factory).",
+    ),
     transport: Transport::I2c,
     category: Category::I2c,
-    config_keys: &[
+    config_keys: std::borrow::Cow::Borrowed(&[
         ConfigKey {
-            name: "i2c_address",
+            name: std::borrow::Cow::Borrowed("i2c_address"),
             ty: ConfigType::Int,
-            doc: "7-bit slave address. Defaults to 0x33.",
+            doc: std::borrow::Cow::Borrowed("7-bit slave address. Defaults to 0x33."),
         },
         ConfigKey {
-            name: "ambient_c",
+            name: std::borrow::Cow::Borrowed("ambient_c"),
             ty: ConfigType::Float,
-            doc: "Ambient temperature of the thermal scene (°C).",
+            doc: std::borrow::Cow::Borrowed("Ambient temperature of the thermal scene (°C)."),
         },
-    ],
-    labs: &[],
+    ]),
+    labs: std::borrow::Cow::Borrowed(&[]),
 };
 
 impl PeripheralKit for Mlx90640Kit {

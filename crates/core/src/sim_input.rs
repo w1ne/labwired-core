@@ -20,14 +20,14 @@
 /// Metadata for one drivable channel of an input component. Serialized
 /// verbatim into the peripherals manifest (device schema), so external
 /// consumers see each device's drivable channels without running a machine.
-#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
 pub struct InputChannel {
     /// Stable key used to address the channel (e.g. `"x"`, `"distance"`).
-    pub key: &'static str,
+    pub key: std::borrow::Cow<'static, str>,
     /// Human-facing label (e.g. `"X"`, `"Distance"`).
-    pub label: &'static str,
+    pub label: std::borrow::Cow<'static, str>,
     /// Engineering unit of `value` in [`SimInput::set_input`] (e.g. `"g"`).
-    pub unit: &'static str,
+    pub unit: std::borrow::Cow<'static, str>,
     /// Inclusive minimum accepted value, in `unit`.
     pub min: f64,
     /// Inclusive maximum accepted value, in `unit`.
@@ -86,7 +86,7 @@ impl std::error::Error for SimInputError {}
 /// downcasting to the concrete type.
 pub trait SimInput {
     /// The channels this device accepts, with metadata for discovery.
-    fn input_channels(&self) -> &'static [InputChannel];
+    fn input_channels(&self) -> &[InputChannel];
 
     /// Apply `value` (in the channel's `unit`) to channel `key`.
     fn set_input(&mut self, key: &str, value: f64) -> Result<(), SimInputError>;
@@ -111,7 +111,7 @@ pub trait SimInput {
             .input_channels()
             .iter()
             .find(|c| c.key == key)
-            .copied()
+            .cloned()
             .ok_or_else(|| SimInputError::UnknownChannel(key.to_string()))?;
         if value < ch.min || value > ch.max {
             return Err(SimInputError::OutOfRange {

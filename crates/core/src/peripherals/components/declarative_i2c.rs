@@ -191,8 +191,8 @@ pub struct GenericI2cDevice {
     /// Engineering-unit observables derived from the register file.
     observables: Vec<ObservableSpec>,
 
-    /// Discovery channels (leaked to `'static`; see [`DeclarativeI2cKit`]).
-    channels: &'static [InputChannel],
+    /// Discovery metadata owned by this device, independent of its kit.
+    channels: std::borrow::Cow<'static, [InputChannel]>,
     /// system.yaml `external_devices` id, stamped at attach.
     component_id: Option<String>,
 
@@ -245,11 +245,11 @@ pub struct GenericI2cDevice {
 }
 
 impl GenericI2cDevice {
-    /// Build from a descriptor and pre-leaked channel table.
+    /// Build from a descriptor and an owned or static channel table.
     pub fn from_descriptor(
         descriptor: &DeviceDescriptor,
         address: u8,
-        channels: &'static [InputChannel],
+        channels: std::borrow::Cow<'static, [InputChannel]>,
     ) -> Result<Self> {
         validate_descriptor(descriptor)?;
         let spec = descriptor
@@ -818,12 +818,10 @@ impl GenericI2cDevice {
         );
     }
 
-    /// Convenience for tests / standalone use: parse a descriptor YAML and leak
-    /// its channel table. (The kit path shares one leaked table across attaches;
-    /// this leaks per call, which is fine for the few devices a test builds.)
+    /// Parse descriptor YAML and retain its discovery channels with the device.
     pub fn from_yaml(yaml: &str, address: u8) -> Result<Self> {
         let descriptor = DeviceDescriptor::from_yaml(yaml)?;
-        let channels = leak_channels(&descriptor);
+        let channels = owned_channels(&descriptor);
         Self::from_descriptor(&descriptor, address, channels)
     }
 
@@ -888,10 +886,16 @@ impl GenericI2cDevice {
     /// same YAML would boot with different switch positions depending on which
     /// controller it hung off.
     pub fn seed_from_config(&mut self, get: impl Fn(&str) -> Option<f64>) {
-        for (channel, value) in
-            labwired_config::seeded_channel_values(&self.seed_specs.clone(), get)
-        {
+        let specs = self.seed_specs.clone();
+        for (channel, value) in labwired_config::seeded_channel_values(&specs, &get) {
             self.seed_input(&channel, value);
+        }
+        // Keep placement noise configuration on the shared construction path:
+        // one named knob may tune several channels, directly or behind a mux.
+        for input in &specs {
+            if let Some(sigma) = input.noise_sigma_key.as_deref().and_then(&get) {
+                self.set_channel_noise_sigma(&input.key, sigma);
+            }
         }
     }
 
@@ -1889,8 +1893,8 @@ impl I2cDevice for GenericI2cDevice {
 }
 
 impl SimInput for GenericI2cDevice {
-    fn input_channels(&self) -> &'static [InputChannel] {
-        self.channels
+    fn input_channels(&self) -> &[InputChannel] {
+        &self.channels
     }
 
     fn set_input(&mut self, key: &str, value: f64) -> Result<(), SimInputError> {
@@ -1934,6 +1938,10 @@ pub(crate) fn validate_descriptor(descriptor: &DeviceDescriptor) -> Result<()> {
         .i2c
         .as_ref()
         .context("declarative i2c kit is missing behavior.i2c")?;
+    anyhow::ensure!(
+        spec.default_address <= 0x7f,
+        "behavior.i2c.default_address must be a 7-bit I²C address"
+    );
     validate_spec(spec)?;
     // A timer fires at registers BY NAME. A register-file device has no names,
     // so a timer there could never do anything; say so at load rather than
@@ -2494,12 +2502,12 @@ fn validate_spec(spec: &I2cSpec) -> Result<()> {
     Ok(())
 }
 
-// ─── Discovery-channel leaking ─────────────────────────────────────────────
+// ─── Owned discovery channels ──────────────────────────────────────────────
 
-/// Leak the descriptor's `metadata.inputs` into a `'static` channel table
-/// (`InputChannel` requires `'static` strings). One table per call — the kit
-/// leaks once and shares it; tests leak per device.
-pub(crate) fn leak_channels(descriptor: &DeviceDescriptor) -> &'static [InputChannel] {
+/// Copy descriptor inputs into a table whose strings have the owner's lifetime.
+pub(crate) fn owned_channels(
+    descriptor: &DeviceDescriptor,
+) -> std::borrow::Cow<'static, [InputChannel]> {
     let inputs = descriptor
         .metadata
         .as_ref()
@@ -2508,14 +2516,14 @@ pub(crate) fn leak_channels(descriptor: &DeviceDescriptor) -> &'static [InputCha
     let channels: Vec<InputChannel> = inputs
         .iter()
         .map(|i| InputChannel {
-            key: Box::leak(i.key.clone().into_boxed_str()),
-            label: Box::leak(i.label.clone().into_boxed_str()),
-            unit: Box::leak(i.unit.clone().into_boxed_str()),
+            key: std::borrow::Cow::Owned(i.key.clone()),
+            label: std::borrow::Cow::Owned(i.label.clone()),
+            unit: std::borrow::Cow::Owned(i.unit.clone()),
             min: i.min,
             max: i.max,
         })
         .collect();
-    Box::leak(channels.into_boxed_slice())
+    std::borrow::Cow::Owned(channels)
 }
 
 // ─── PeripheralKit registration ────────────────────────────────────────────
@@ -2525,17 +2533,16 @@ use crate::peripherals::kit::{
 };
 
 /// A [`PeripheralKit`] backed by a declarative `i2c_device` descriptor — one
-/// instance per YAML device. `metadata()` must hand back a `&'static
-/// KitMetadata`, so `from_yaml` builds it once and leaks it (the kit is itself
-/// a long-lived registry entry, so the leak is bounded by the device count).
+/// instance per YAML device. Metadata belongs to the kit; each attached model
+/// receives its own channel table so the kit can be dropped after attachment.
 ///
 /// Phase 1 ships the machinery but registers no real parts: no instance is
 /// added to [`crate::peripherals::kit::registry::KITS`], so the offline
 /// peripherals manifest is unchanged.
 pub struct DeclarativeI2cKit {
     descriptor: DeviceDescriptor,
-    channels: &'static [InputChannel],
-    metadata: &'static KitMetadata,
+    channels: std::borrow::Cow<'static, [InputChannel]>,
+    metadata: KitMetadata,
 }
 
 impl DeclarativeI2cKit {
@@ -2549,8 +2556,8 @@ impl DeclarativeI2cKit {
             .context("declarative i2c kit is missing behavior.i2c")?;
         let default_address = spec.default_address;
 
-        let channels = leak_channels(&descriptor);
-        let metadata = leak_metadata(&descriptor, channels, default_address);
+        let channels = owned_channels(&descriptor);
+        let metadata = owned_metadata(&descriptor, channels.clone(), default_address);
         Ok(Self {
             descriptor,
             channels,
@@ -2570,14 +2577,14 @@ pub(super) fn config_type_from_str(ty: &str) -> ConfigType {
     }
 }
 
-/// Derive a `&'static KitMetadata` from the descriptor's display metadata.
-fn leak_metadata(
+/// Derive owned kit metadata from the descriptor's display metadata.
+fn owned_metadata(
     descriptor: &DeviceDescriptor,
-    channels: &'static [InputChannel],
+    channels: std::borrow::Cow<'static, [InputChannel]>,
     default_address: u8,
-) -> &'static KitMetadata {
+) -> KitMetadata {
     let meta = descriptor.metadata.as_ref();
-    let leak = |s: String| -> &'static str { Box::leak(s.into_boxed_str()) };
+    let owned_text = |s: String| -> std::borrow::Cow<'static, str> { std::borrow::Cow::Owned(s) };
     let label = meta
         .and_then(|m| m.label.clone())
         .unwrap_or_else(|| descriptor.r#type.clone());
@@ -2594,69 +2601,64 @@ fn leak_metadata(
     // set (it may list `i2c_address` itself); otherwise synthesise the lone
     // `i2c_address` key from the default address.
     let declared_keys = meta.map(|m| m.config_keys.as_slice()).unwrap_or(&[]);
-    let config_keys: &'static [ConfigKey] = if declared_keys.is_empty() {
-        Box::leak(
-            vec![ConfigKey {
-                name: "i2c_address",
-                ty: ConfigType::Int,
-                doc: leak(format!(
-                    "7-bit slave address. Defaults to 0x{default_address:02x}."
-                )),
-            }]
-            .into_boxed_slice(),
-        )
+    let config_keys: std::borrow::Cow<'static, [ConfigKey]> = if declared_keys.is_empty() {
+        std::borrow::Cow::Owned(vec![ConfigKey {
+            name: std::borrow::Cow::Borrowed("i2c_address"),
+            ty: ConfigType::Int,
+            doc: owned_text(format!(
+                "7-bit slave address. Defaults to 0x{default_address:02x}."
+            )),
+        }])
     } else {
-        Box::leak(
+        std::borrow::Cow::Owned(
             declared_keys
                 .iter()
                 .map(|k| ConfigKey {
-                    name: leak(k.name.clone()),
+                    name: owned_text(k.name.clone()),
                     ty: config_type_from_str(&k.ty),
-                    doc: leak(k.doc.clone()),
+                    doc: owned_text(k.doc.clone()),
                 })
-                .collect::<Vec<_>>()
-                .into_boxed_slice(),
+                .collect::<Vec<_>>(),
         )
     };
 
     // Labs: mirror any declared starter labs verbatim.
     let declared_labs = meta.map(|m| m.labs.as_slice()).unwrap_or(&[]);
-    let labs: &'static [LabRef] = Box::leak(
+    let labs: std::borrow::Cow<'static, [LabRef]> = std::borrow::Cow::Owned(
         declared_labs
             .iter()
             .map(|l| LabRef {
-                board_id: leak(l.board_id.clone()),
-                chip: leak(l.chip.clone()),
-                example_dir: leak(l.example_dir.clone()),
-                demo_elf: leak(l.demo_elf.clone()),
+                board_id: owned_text(l.board_id.clone()),
+                chip: owned_text(l.chip.clone()),
+                example_dir: owned_text(l.example_dir.clone()),
+                demo_elf: owned_text(l.demo_elf.clone()),
             })
-            .collect::<Vec<_>>()
-            .into_boxed_slice(),
+            .collect::<Vec<_>>(),
     );
 
-    Box::leak(Box::new(KitMetadata {
-        device_type: leak(descriptor.r#type.clone()),
-        label: leak(label),
-        summary: leak(summary),
-        detail: leak(detail),
+    KitMetadata {
+        device_type: owned_text(descriptor.r#type.clone()),
+        label: owned_text(label),
+        summary: owned_text(summary),
+        detail: owned_text(detail),
         transport: Transport::I2c,
         category: Category::I2c,
         config_keys,
         labs,
         inputs: channels,
-    }))
+    }
 }
 
-/// [`leak_metadata`]'s GPIO twin: a pins-only descriptor has no I²C address, so
+/// [`owned_metadata`]'s GPIO twin: a pins-only descriptor has no I²C address, so
 /// there is no synthesised `i2c_address` key and the transport is the GPIO
 /// group. Everything else — label, summary, detail, `config_keys`, labs and
 /// stimulus channels — is mirrored from the descriptor exactly the same way, so
 /// a part reads identically in the manifest whichever primitive it uses.
-pub(crate) fn leak_gpio_metadata(
+pub(crate) fn owned_gpio_metadata(
     descriptor: &DeviceDescriptor,
-    channels: &'static [InputChannel],
-) -> &'static KitMetadata {
-    leak_pinlike_metadata(
+    channels: std::borrow::Cow<'static, [InputChannel]>,
+) -> KitMetadata {
+    owned_pinlike_metadata(
         descriptor,
         channels,
         Transport::GpioGroup,
@@ -2670,11 +2672,11 @@ pub(crate) fn leak_gpio_metadata(
 /// the GPIO one because the only thing that differs is the transport label the
 /// manifest shows — writing it twice is how the two would come to disagree
 /// about which `config_keys` a descriptor may declare.
-pub(crate) fn leak_uart_metadata(
+pub(crate) fn owned_uart_metadata(
     descriptor: &DeviceDescriptor,
-    channels: &'static [InputChannel],
-) -> &'static KitMetadata {
-    leak_pinlike_metadata(
+    channels: std::borrow::Cow<'static, [InputChannel]>,
+) -> KitMetadata {
+    owned_pinlike_metadata(
         descriptor,
         channels,
         Transport::Uart,
@@ -2686,15 +2688,15 @@ pub(crate) fn leak_uart_metadata(
 /// The shared body: a descriptor with no `i2c:`/`spi:` block, so there is no
 /// address to synthesise a `config_keys` entry from and the declared list is
 /// taken as the complete set.
-fn leak_pinlike_metadata(
+fn owned_pinlike_metadata(
     descriptor: &DeviceDescriptor,
-    channels: &'static [InputChannel],
+    channels: std::borrow::Cow<'static, [InputChannel]>,
     transport: Transport,
     category: Category,
     default_summary: &str,
-) -> &'static KitMetadata {
+) -> KitMetadata {
     let meta = descriptor.metadata.as_ref();
-    let leak = |s: String| -> &'static str { Box::leak(s.into_boxed_str()) };
+    let owned_text = |s: String| -> std::borrow::Cow<'static, str> { std::borrow::Cow::Owned(s) };
     let label = meta
         .and_then(|m| m.label.clone())
         .unwrap_or_else(|| descriptor.r#type.clone());
@@ -2704,47 +2706,45 @@ fn leak_pinlike_metadata(
     let detail = meta
         .and_then(|m| m.detail.clone())
         .unwrap_or_else(|| summary.clone());
-    let config_keys: &'static [ConfigKey] = Box::leak(
+    let config_keys: std::borrow::Cow<'static, [ConfigKey]> = std::borrow::Cow::Owned(
         meta.map(|m| m.config_keys.as_slice())
             .unwrap_or(&[])
             .iter()
             .map(|k| ConfigKey {
-                name: leak(k.name.clone()),
+                name: owned_text(k.name.clone()),
                 ty: config_type_from_str(&k.ty),
-                doc: leak(k.doc.clone()),
+                doc: owned_text(k.doc.clone()),
             })
-            .collect::<Vec<_>>()
-            .into_boxed_slice(),
+            .collect::<Vec<_>>(),
     );
-    let labs: &'static [LabRef] = Box::leak(
+    let labs: std::borrow::Cow<'static, [LabRef]> = std::borrow::Cow::Owned(
         meta.map(|m| m.labs.as_slice())
             .unwrap_or(&[])
             .iter()
             .map(|l| LabRef {
-                board_id: leak(l.board_id.clone()),
-                chip: leak(l.chip.clone()),
-                example_dir: leak(l.example_dir.clone()),
-                demo_elf: leak(l.demo_elf.clone()),
+                board_id: owned_text(l.board_id.clone()),
+                chip: owned_text(l.chip.clone()),
+                example_dir: owned_text(l.example_dir.clone()),
+                demo_elf: owned_text(l.demo_elf.clone()),
             })
-            .collect::<Vec<_>>()
-            .into_boxed_slice(),
+            .collect::<Vec<_>>(),
     );
-    Box::leak(Box::new(KitMetadata {
-        device_type: leak(descriptor.r#type.clone()),
-        label: leak(label),
-        summary: leak(summary),
-        detail: leak(detail),
+    KitMetadata {
+        device_type: owned_text(descriptor.r#type.clone()),
+        label: owned_text(label),
+        summary: owned_text(summary),
+        detail: owned_text(detail),
         transport,
         category,
         config_keys,
         labs,
         inputs: channels,
-    }))
+    }
 }
 
 impl PeripheralKit for DeclarativeI2cKit {
-    fn metadata(&self) -> &'static KitMetadata {
-        self.metadata
+    fn metadata(&self) -> &KitMetadata {
+        &self.metadata
     }
 
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> Result<()> {
@@ -2756,26 +2756,10 @@ impl PeripheralKit for DeclarativeI2cKit {
             .context("declarative i2c kit is missing behavior.i2c")?;
         let address = ctx.i2c_address_or(spec.default_address)?;
         let mut device =
-            GenericI2cDevice::from_descriptor(&self.descriptor, address, self.channels)?;
+            GenericI2cDevice::from_descriptor(&self.descriptor, address, self.channels.clone())?;
         // Honour `config:` overrides that seed an input channel (e.g. a `lux`
         // seed), matching how a hand-written kit seeded its initial reading.
         device.seed_from_config(|key| ctx.config_f64(key));
-        // `noise_sigma_key`: a `config:` knob that sets a channel's noise sigma.
-        // Named per channel, so one key can reach a whole channel SET — an
-        // IMU's six axes quote one datasheet noise figure, and the placement
-        // says `noise_sigma: 0.02` once.
-        for input in self
-            .descriptor
-            .metadata
-            .iter()
-            .flat_map(|m| m.inputs.iter())
-            .filter(|i| i.noise_sigma_key.is_some())
-        {
-            let key = input.noise_sigma_key.as_deref().expect("filtered above");
-            if let Some(sigma) = ctx.config_f64(key) {
-                device.set_channel_noise_sigma(&input.key, sigma);
-            }
-        }
         // Tier 2: bind `outputs:` roles to pads BEFORE the device goes in, so a
         // wiring error is reported against the placement rather than leaving a
         // device attached with an interrupt line that goes nowhere.
@@ -2797,7 +2781,7 @@ impl PeripheralKit for DeclarativeI2cKit {
 use std::sync::LazyLock;
 
 impl PeripheralKit for LazyLock<DeclarativeI2cKit> {
-    fn metadata(&self) -> &'static KitMetadata {
+    fn metadata(&self) -> &KitMetadata {
         LazyLock::force(self).metadata()
     }
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> Result<()> {

@@ -643,16 +643,16 @@ impl I2cDevice for Max30102 {
 /// kit metadata, so the schema and the runtime API cannot drift.
 pub const INPUT_CHANNELS: &[crate::sim_input::InputChannel] = &[
     crate::sim_input::InputChannel {
-        key: "bpm",
-        label: "Heart Rate",
-        unit: "bpm",
+        key: std::borrow::Cow::Borrowed("bpm"),
+        label: std::borrow::Cow::Borrowed("Heart Rate"),
+        unit: std::borrow::Cow::Borrowed("bpm"),
         min: 20.0,
         max: 250.0,
     },
     crate::sim_input::InputChannel {
-        key: "perfusion",
-        label: "Perfusion Index",
-        unit: "%",
+        key: std::borrow::Cow::Borrowed("perfusion"),
+        label: std::borrow::Cow::Borrowed("Perfusion Index"),
+        unit: std::borrow::Cow::Borrowed("%"),
         min: 0.0,
         max: 20.0,
     },
@@ -692,36 +692,36 @@ pub struct Max30102Kit;
 pub static MAX30102_KIT: Max30102Kit = Max30102Kit;
 
 static MAX30102_METADATA: KitMetadata = KitMetadata {
-    inputs: INPUT_CHANNELS,
-    device_type: "max30102",
-    label: "MAX30102 PPG",
-    summary: "Maxim MAX30102 pulse-oximetry / heart-rate front-end over I2C.",
-    detail: "Reflective PPG with FIFO. Stimulus channels `bpm` and `perfusion`.              Optional config: seed, heart_rate_bpm, transaction_advance.",
+    inputs: std::borrow::Cow::Borrowed(INPUT_CHANNELS),
+    device_type: std::borrow::Cow::Borrowed("max30102"),
+    label: std::borrow::Cow::Borrowed("MAX30102 PPG"),
+    summary: std::borrow::Cow::Borrowed("Maxim MAX30102 pulse-oximetry / heart-rate front-end over I2C."),
+    detail: std::borrow::Cow::Borrowed("Reflective PPG with FIFO. Stimulus channels `bpm` and `perfusion`.              Optional config: seed, heart_rate_bpm, transaction_advance."),
     transport: Transport::I2c,
     category: Category::I2c,
-    config_keys: &[
+    config_keys: std::borrow::Cow::Borrowed(&[
         ConfigKey {
-            name: "i2c_address",
+            name: std::borrow::Cow::Borrowed("i2c_address"),
             ty: ConfigType::Int,
-            doc: "7-bit slave address. Defaults to 0x57.",
+            doc: std::borrow::Cow::Borrowed("7-bit slave address. Defaults to 0x57."),
         },
         ConfigKey {
-            name: "seed",
+            name: std::borrow::Cow::Borrowed("seed"),
             ty: ConfigType::Int,
-            doc: "Optional RNG seed for deterministic waveform noise.",
+            doc: std::borrow::Cow::Borrowed("Optional RNG seed for deterministic waveform noise."),
         },
         ConfigKey {
-            name: "heart_rate_bpm",
+            name: std::borrow::Cow::Borrowed("heart_rate_bpm"),
             ty: ConfigType::Float,
-            doc: "Optional initial heart-rate stimulus (bpm).",
+            doc: std::borrow::Cow::Borrowed("Optional initial heart-rate stimulus (bpm)."),
         },
         ConfigKey {
-            name: "transaction_advance",
+            name: std::borrow::Cow::Borrowed("transaction_advance"),
             ty: ConfigType::Bool,
-            doc: "When true, advance one sample per I2C transaction (fallback clock).",
+            doc: std::borrow::Cow::Borrowed("When true, advance one sample per I2C transaction (fallback clock)."),
         },
-    ],
-    labs: &[],
+    ]),
+    labs: std::borrow::Cow::Borrowed(&[]),
 };
 
 impl PeripheralKit for Max30102Kit {

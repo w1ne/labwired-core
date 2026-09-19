@@ -115,32 +115,36 @@ pub struct HBridgeMotorKit;
 pub static H_BRIDGE_MOTOR_KIT: HBridgeMotorKit = HBridgeMotorKit;
 
 static H_BRIDGE_METADATA: KitMetadata = KitMetadata {
-    inputs: &[],
-    device_type: "l298n",
-    label: "H-bridge motor driver",
-    summary: "L298N/TB6612/L293D-class dual H-bridge twin (direction + enable effort).",
-    detail: "Channel A from IN1/IN2/ENA (or AIN1/AIN2/PWMA). Optional channel B when \
+    inputs: std::borrow::Cow::Borrowed(&[]),
+    device_type: std::borrow::Cow::Borrowed("l298n"),
+    label: std::borrow::Cow::Borrowed("H-bridge motor driver"),
+    summary: std::borrow::Cow::Borrowed(
+        "L298N/TB6612/L293D-class dual H-bridge twin (direction + enable effort).",
+    ),
+    detail: std::borrow::Cow::Borrowed(
+        "Channel A from IN1/IN2/ENA (or AIN1/AIN2/PWMA). Optional channel B when \
              IN3/IN4 or BIN* keys are present. Aliases: tb6612, l293d.",
+    ),
     transport: Transport::GpioGroup,
     category: Category::Gpio,
-    config_keys: &[
+    config_keys: std::borrow::Cow::Borrowed(&[
         ConfigKey {
-            name: "in1_pin",
+            name: std::borrow::Cow::Borrowed("in1_pin"),
             ty: ConfigType::Str,
-            doc: "Channel A input 1 (or ain1_pin).",
+            doc: std::borrow::Cow::Borrowed("Channel A input 1 (or ain1_pin)."),
         },
         ConfigKey {
-            name: "in2_pin",
+            name: std::borrow::Cow::Borrowed("in2_pin"),
             ty: ConfigType::Str,
-            doc: "Channel A input 2 (or ain2_pin).",
+            doc: std::borrow::Cow::Borrowed("Channel A input 2 (or ain2_pin)."),
         },
         ConfigKey {
-            name: "en_pin",
+            name: std::borrow::Cow::Borrowed("en_pin"),
             ty: ConfigType::Str,
-            doc: "Channel A enable (or pwma_pin).",
+            doc: std::borrow::Cow::Borrowed("Channel A enable (or pwma_pin)."),
         },
-    ],
-    labs: &[],
+    ]),
+    labs: std::borrow::Cow::Borrowed(&[]),
 };
 
 impl PeripheralKit for HBridgeMotorKit {

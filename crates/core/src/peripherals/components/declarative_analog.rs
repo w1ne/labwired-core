@@ -65,8 +65,8 @@ pub struct DeclarativeAnalogDevice {
     /// channel key.
     input_values: HashMap<String, f64>,
     /// The input channels this primitive drives (from `metadata.inputs`),
-    /// leaked to `'static` by the kit so `input_channels()` can hand them out.
-    inputs: &'static [InputChannel],
+    /// owned by this device so it remains independent of the originating kit.
+    inputs: std::borrow::Cow<'static, [InputChannel]>,
     /// `behavior.derived`, compiled once at load.
     #[serde(skip)]
     derived: Vec<CompiledExpr>,
@@ -83,7 +83,7 @@ impl DeclarativeAnalogDevice {
     fn from_descriptor(
         descriptor: &DeviceDescriptor,
         channel: u8,
-        inputs: &'static [InputChannel],
+        inputs: std::borrow::Cow<'static, [InputChannel]>,
     ) -> Result<Self> {
         let spec = descriptor
             .behavior
@@ -94,7 +94,7 @@ impl DeclarativeAnalogDevice {
 
         let declared = descriptor.metadata.as_ref().map(|m| m.inputs.as_slice());
         let mut input_values = HashMap::new();
-        for input in inputs {
+        for input in inputs.iter() {
             let default = declared
                 .and_then(|list| list.iter().find(|candidate| candidate.key == input.key))
                 .and_then(|candidate| candidate.default)
@@ -306,8 +306,8 @@ fn validate_spec(spec: &AnalogSpec, input_count: usize) -> Result<()> {
 }
 
 impl SimInput for DeclarativeAnalogDevice {
-    fn input_channels(&self) -> &'static [InputChannel] {
-        self.inputs
+    fn input_channels(&self) -> &[InputChannel] {
+        &self.inputs
     }
 
     fn set_input(&mut self, key: &str, value: f64) -> Result<(), crate::sim_input::SimInputError> {
@@ -336,13 +336,12 @@ impl crate::bus::sim_inputs::AnalogSource for DeclarativeAnalogDevice {
 // ─── PeripheralKit registration ────────────────────────────────────────────
 
 /// A [`PeripheralKit`] backed by a declarative `analog_source` descriptor —
-/// one instance per YAML device. `metadata()` must hand back a `&'static
-/// KitMetadata`, so `from_yaml` builds it once and leaks it (the kit is itself
-/// a long-lived registry entry, so the leak is bounded by the device count).
+/// one instance per YAML device. The kit owns its metadata and each attached
+/// model owns its channels, so temporary runtime kits can be dropped.
 pub struct DeclarativeAnalogKit {
     descriptor: DeviceDescriptor,
-    channels: &'static [InputChannel],
-    metadata: &'static KitMetadata,
+    channels: std::borrow::Cow<'static, [InputChannel]>,
+    metadata: KitMetadata,
 }
 
 impl DeclarativeAnalogKit {
@@ -350,8 +349,8 @@ impl DeclarativeAnalogKit {
         let descriptor = DeviceDescriptor::from_yaml(yaml)?;
         validate_descriptor(&descriptor)?;
 
-        let channels = leak_channels(&descriptor);
-        let metadata = leak_metadata(&descriptor, channels);
+        let channels = owned_channels(&descriptor);
+        let metadata = owned_metadata(&descriptor, channels.clone());
         Ok(Self {
             descriptor,
             channels,
@@ -367,7 +366,7 @@ impl DeclarativeAnalogKit {
     /// thing under test. Channel seeding still comes from the descriptor's own
     /// `metadata.inputs[].default`, which is the only thing `attach` adds.
     pub fn build(&self, channel: u8) -> Result<DeclarativeAnalogDevice> {
-        DeclarativeAnalogDevice::from_descriptor(&self.descriptor, channel, self.channels)
+        DeclarativeAnalogDevice::from_descriptor(&self.descriptor, channel, self.channels.clone())
     }
 }
 
@@ -424,10 +423,10 @@ pub(crate) fn validate_descriptor(descriptor: &DeviceDescriptor) -> Result<()> {
     Ok(())
 }
 
-/// Leak the descriptor's `metadata.inputs` into a static channel table — the
-/// same derivation the I²C primitive's `leak_channels` does, kept local so
+/// Copy the descriptor's `metadata.inputs` into an owned channel table — the
+/// same derivation the I²C primitive's `owned_channels` does, kept local so
 /// this module owns its whole contract.
-fn leak_channels(descriptor: &DeviceDescriptor) -> &'static [InputChannel] {
+fn owned_channels(descriptor: &DeviceDescriptor) -> std::borrow::Cow<'static, [InputChannel]> {
     let inputs = descriptor
         .metadata
         .as_ref()
@@ -436,14 +435,14 @@ fn leak_channels(descriptor: &DeviceDescriptor) -> &'static [InputChannel] {
     let channels: Vec<InputChannel> = inputs
         .iter()
         .map(|i| InputChannel {
-            key: Box::leak(i.key.clone().into_boxed_str()),
-            label: Box::leak(i.label.clone().into_boxed_str()),
-            unit: Box::leak(i.unit.clone().into_boxed_str()),
+            key: std::borrow::Cow::Owned(i.key.clone()),
+            label: std::borrow::Cow::Owned(i.label.clone()),
+            unit: std::borrow::Cow::Owned(i.unit.clone()),
             min: i.min,
             max: i.max,
         })
         .collect();
-    Box::leak(channels.into_boxed_slice())
+    std::borrow::Cow::Owned(channels)
 }
 
 /// Map a descriptor's `config_keys[].ty` string onto a [`ConfigType`].
@@ -456,13 +455,13 @@ fn config_type_from_str(ty: &str) -> ConfigType {
     }
 }
 
-/// Derive a `&'static KitMetadata` from the descriptor's display metadata.
-fn leak_metadata(
+/// Derive owned kit metadata from the descriptor's display metadata.
+fn owned_metadata(
     descriptor: &DeviceDescriptor,
-    channels: &'static [InputChannel],
-) -> &'static KitMetadata {
+    channels: std::borrow::Cow<'static, [InputChannel]>,
+) -> KitMetadata {
     let meta = descriptor.metadata.as_ref();
-    let leak = |s: String| -> &'static str { Box::leak(s.into_boxed_str()) };
+    let owned_text = |s: String| -> std::borrow::Cow<'static, str> { std::borrow::Cow::Owned(s) };
     let label = meta
         .and_then(|m| m.label.clone())
         .unwrap_or_else(|| descriptor.r#type.clone());
@@ -477,73 +476,71 @@ fn leak_metadata(
     // otherwise synthesise the lone `channel` key, matching the hand-written
     // analog kits this primitive replaces.
     let declared_keys = meta.map(|m| m.config_keys.as_slice()).unwrap_or(&[]);
-    let config_keys: &'static [ConfigKey] = if declared_keys.is_empty() {
-        Box::leak(
-            vec![ConfigKey {
-                name: "channel",
-                ty: ConfigType::Int,
-                doc: "ADC channel index (0..N). Defaults to 0.",
-            }]
-            .into_boxed_slice(),
-        )
+    let config_keys: std::borrow::Cow<'static, [ConfigKey]> = if declared_keys.is_empty() {
+        std::borrow::Cow::Owned(vec![ConfigKey {
+            name: std::borrow::Cow::Borrowed("channel"),
+            ty: ConfigType::Int,
+            doc: std::borrow::Cow::Borrowed("ADC channel index (0..N). Defaults to 0."),
+        }])
     } else {
-        Box::leak(
+        std::borrow::Cow::Owned(
             declared_keys
                 .iter()
                 .map(|k| ConfigKey {
-                    name: leak(k.name.clone()),
+                    name: owned_text(k.name.clone()),
                     ty: config_type_from_str(&k.ty),
-                    doc: leak(k.doc.clone()),
+                    doc: owned_text(k.doc.clone()),
                 })
-                .collect::<Vec<_>>()
-                .into_boxed_slice(),
+                .collect::<Vec<_>>(),
         )
     };
 
     // Labs: mirror any declared starter labs verbatim. A descriptor that
     // dropped them would take the part's one-click demo off the shelf while
     // every test still passed.
-    let labs: &'static [LabRef] = Box::leak(
+    let labs: std::borrow::Cow<'static, [LabRef]> = std::borrow::Cow::Owned(
         meta.map(|m| m.labs.as_slice())
             .unwrap_or(&[])
             .iter()
             .map(|l| LabRef {
-                board_id: leak(l.board_id.clone()),
-                chip: leak(l.chip.clone()),
-                example_dir: leak(l.example_dir.clone()),
-                demo_elf: leak(l.demo_elf.clone()),
+                board_id: owned_text(l.board_id.clone()),
+                chip: owned_text(l.chip.clone()),
+                example_dir: owned_text(l.example_dir.clone()),
+                demo_elf: owned_text(l.demo_elf.clone()),
             })
-            .collect::<Vec<_>>()
-            .into_boxed_slice(),
+            .collect::<Vec<_>>(),
     );
 
-    Box::leak(Box::new(KitMetadata {
-        device_type: leak(descriptor.r#type.clone()),
-        label: leak(label),
-        summary: leak(summary),
-        detail: leak(detail),
+    KitMetadata {
+        device_type: owned_text(descriptor.r#type.clone()),
+        label: owned_text(label),
+        summary: owned_text(summary),
+        detail: owned_text(detail),
         transport: Transport::Analog,
         category: Category::Analog,
         config_keys,
         labs,
         inputs: channels,
-    }))
+    }
 }
 
 impl PeripheralKit for DeclarativeAnalogKit {
-    fn metadata(&self) -> &'static KitMetadata {
-        self.metadata
+    fn metadata(&self) -> &KitMetadata {
+        &self.metadata
     }
 
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> Result<()> {
         let channel = ctx.config_i64("channel").unwrap_or(0).clamp(0, 255) as u8;
-        let mut device =
-            DeclarativeAnalogDevice::from_descriptor(&self.descriptor, channel, self.channels)?;
+        let mut device = DeclarativeAnalogDevice::from_descriptor(
+            &self.descriptor,
+            channel,
+            self.channels.clone(),
+        )?;
         // Honour `config:` overrides that name the input channel (e.g. a
         // `distance` seed), matching how a hand-written kit seeded its default.
-        for input in self.channels {
-            if let Some(v) = ctx.config_f64(input.key) {
-                let _ = device.set_input(input.key, v);
+        for input in self.channels.iter() {
+            if let Some(v) = ctx.config_f64(input.key.as_ref()) {
+                let _ = device.set_input(input.key.as_ref(), v);
             }
         }
         ctx.attach_analog_source(channel, Box::new(device))?;
@@ -564,7 +561,7 @@ impl PeripheralKit for DeclarativeAnalogKit {
 use std::sync::LazyLock;
 
 impl PeripheralKit for LazyLock<DeclarativeAnalogKit> {
-    fn metadata(&self) -> &'static KitMetadata {
+    fn metadata(&self) -> &KitMetadata {
         LazyLock::force(self).metadata()
     }
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> Result<()> {
@@ -610,9 +607,9 @@ mod tests {
     use crate::sim_input::SimInput;
 
     static TEST_CHANNELS: &[InputChannel] = &[InputChannel {
-        key: "distance",
-        label: "Distance",
-        unit: "mm",
+        key: std::borrow::Cow::Borrowed("distance"),
+        label: std::borrow::Cow::Borrowed("Distance"),
+        unit: std::borrow::Cow::Borrowed("mm"),
         min: 0.0,
         max: 800.0,
     }];
@@ -621,7 +618,7 @@ mod tests {
         let descriptor =
             DeviceDescriptor::from_yaml(labwired_config::embedded_device_yaml("gp2y0a21").unwrap())
                 .unwrap();
-        DeclarativeAnalogDevice::from_descriptor(&descriptor, 0, TEST_CHANNELS).unwrap()
+        DeclarativeAnalogDevice::from_descriptor(&descriptor, 0, TEST_CHANNELS.into()).unwrap()
     }
 
     fn kit_device(stem: &str) -> DeclarativeAnalogDevice {

@@ -302,7 +302,7 @@ fn from_descriptor(type_name: &str, observed: &[(&str, u64, u8)]) -> Declarative
             .collect(),
         Vec::new(),
         8_000_000,
-        &[],
+        std::borrow::Cow::Borrowed(&[]),
     )
     .expect("the shipped descriptor constructs")
 }

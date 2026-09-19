@@ -423,28 +423,34 @@ pub struct Lcd1602Kit;
 pub static LCD1602_KIT: Lcd1602Kit = Lcd1602Kit;
 
 static LCD1602_METADATA: KitMetadata = KitMetadata {
-    inputs: &[],
-    device_type: "lcd1602",
-    label: "LCD1602 Character Display (I2C)",
-    summary: "16×2 HD44780 character LCD behind a PCF8574 I2C backpack.",
-    detail: "The ubiquitous blue/green 1602 module with an I2C adapter soldered on. Each I2C byte \
+    inputs: std::borrow::Cow::Borrowed(&[]),
+    device_type: std::borrow::Cow::Borrowed("lcd1602"),
+    label: std::borrow::Cow::Borrowed("LCD1602 Character Display (I2C)"),
+    summary: std::borrow::Cow::Borrowed(
+        "16×2 HD44780 character LCD behind a PCF8574 I2C backpack.",
+    ),
+    detail: std::borrow::Cow::Borrowed(
+        "The ubiquitous blue/green 1602 module with an I2C adapter soldered on. Each I2C byte \
              is a PCF8574 P-port snapshot (P7..P4 = D7..D4, P3 = backlight, P2 = E, P1 = RW, \
              P0 = RS); the HD44780 latches a nibble on every falling edge of E and two latches \
              make one instruction or character. The model tracks the full 80-byte DDRAM, the \
              address counter, entry mode, display/cursor/blink flags and the backlight line, and \
              the WASM bridge surfaces the visible 32 characters for the playground's display \
              overlay.",
+    ),
     transport: Transport::I2c,
     category: Category::I2c,
-    config_keys: &[ConfigKey {
-        name: "i2c_address",
+    config_keys: std::borrow::Cow::Borrowed(&[ConfigKey {
+        name: std::borrow::Cow::Borrowed("i2c_address"),
         ty: ConfigType::Int,
-        doc: "7-bit slave address of the PCF8574 backpack. Defaults to 0x27 (PCF8574T); \
+        doc: std::borrow::Cow::Borrowed(
+            "7-bit slave address of the PCF8574 backpack. Defaults to 0x27 (PCF8574T); \
               0x3F is the other common strapping (PCF8574AT).",
-    }],
+        ),
+    }]),
     // No lab yet: no demo firmware/ELF is built or published for this module.
     // Declaring a LabRef would promise a one-click demo that 404s.
-    labs: &[],
+    labs: std::borrow::Cow::Borrowed(&[]),
 };
 
 impl PeripheralKit for Lcd1602Kit {

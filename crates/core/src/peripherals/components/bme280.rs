@@ -413,23 +413,23 @@ impl I2cDevice for Bme280 {
 /// metadata, so the device schema and the runtime API cannot drift.
 pub const INPUT_CHANNELS: &[crate::sim_input::InputChannel] = &[
     crate::sim_input::InputChannel {
-        key: "temperature",
-        label: "Temperature",
-        unit: "°C",
+        key: std::borrow::Cow::Borrowed("temperature"),
+        label: std::borrow::Cow::Borrowed("Temperature"),
+        unit: std::borrow::Cow::Borrowed("°C"),
         min: -40.0,
         max: 85.0,
     },
     crate::sim_input::InputChannel {
-        key: "humidity",
-        label: "Humidity",
-        unit: "%RH",
+        key: std::borrow::Cow::Borrowed("humidity"),
+        label: std::borrow::Cow::Borrowed("Humidity"),
+        unit: std::borrow::Cow::Borrowed("%RH"),
         min: 0.0,
         max: 100.0,
     },
     crate::sim_input::InputChannel {
-        key: "pressure",
-        label: "Pressure",
-        unit: "hPa",
+        key: std::borrow::Cow::Borrowed("pressure"),
+        label: std::borrow::Cow::Borrowed("Pressure"),
+        unit: std::borrow::Cow::Borrowed("hPa"),
         min: 300.0,
         max: 1100.0,
     },
@@ -474,28 +474,32 @@ pub struct Bme280Kit;
 pub static BME280_KIT: Bme280Kit = Bme280Kit;
 
 static BME280_METADATA: KitMetadata = KitMetadata {
-    inputs: INPUT_CHANNELS,
-    device_type: "bme280",
-    label: "BME280 Weather",
-    summary: "Bosch BME280 temp + humidity + pressure sensor over I2C.",
-    detail: "Serves factory calibration coefficients plus raw ADC words, exactly like the \
+    inputs: std::borrow::Cow::Borrowed(INPUT_CHANNELS),
+    device_type: std::borrow::Cow::Borrowed("bme280"),
+    label: std::borrow::Cow::Borrowed("BME280 Weather"),
+    summary: std::borrow::Cow::Borrowed("Bosch BME280 temp + humidity + pressure sensor over I2C."),
+    detail: std::borrow::Cow::Borrowed(
+        "Serves factory calibration coefficients plus raw ADC words, exactly like the \
              silicon; the firmware driver recovers engineering units by running Bosch's \
              compensation formulas. Stimulus takes °C / %RH / hPa and inverts that same \
              compensation against the same coefficients, so a real driver reads back what \
              was set. Defaults to 25 °C / 50 %RH / 1013.25 hPa.",
+    ),
     transport: Transport::I2c,
     category: Category::I2c,
-    config_keys: &[ConfigKey {
-        name: "i2c_address",
+    config_keys: std::borrow::Cow::Borrowed(&[ConfigKey {
+        name: std::borrow::Cow::Borrowed("i2c_address"),
         ty: ConfigType::Int,
-        doc: "7-bit slave address. Defaults to 0x76; 0x77 selects the SDO=VDDIO variant.",
-    }],
-    labs: &[LabRef {
-        board_id: "bme280-weather-lab",
-        chip: "stm32f103",
-        example_dir: "bme280-weather-lab",
-        demo_elf: "demo-bme280-weather-lab.elf",
-    }],
+        doc: std::borrow::Cow::Borrowed(
+            "7-bit slave address. Defaults to 0x76; 0x77 selects the SDO=VDDIO variant.",
+        ),
+    }]),
+    labs: std::borrow::Cow::Borrowed(&[LabRef {
+        board_id: std::borrow::Cow::Borrowed("bme280-weather-lab"),
+        chip: std::borrow::Cow::Borrowed("stm32f103"),
+        example_dir: std::borrow::Cow::Borrowed("bme280-weather-lab"),
+        demo_elf: std::borrow::Cow::Borrowed("demo-bme280-weather-lab.elf"),
+    }]),
 };
 
 impl PeripheralKit for Bme280Kit {

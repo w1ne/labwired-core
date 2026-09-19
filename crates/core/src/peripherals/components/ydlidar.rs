@@ -517,44 +517,44 @@ impl UartStreamDevice for YdLidar {
 /// impl and the kit metadata, so the device schema and the runtime API cannot drift.
 pub const INPUT_CHANNELS: &[crate::sim_input::InputChannel] = &[
     crate::sim_input::InputChannel {
-        key: "target_bearing",
-        label: "Target bearing",
-        unit: "°",
+        key: std::borrow::Cow::Borrowed("target_bearing"),
+        label: std::borrow::Cow::Borrowed("Target bearing"),
+        unit: std::borrow::Cow::Borrowed("°"),
         min: 0.0,
         max: 360.0,
     },
     crate::sim_input::InputChannel {
-        key: "target_range",
-        label: "Target range",
-        unit: "mm",
+        key: std::borrow::Cow::Borrowed("target_range"),
+        label: std::borrow::Cow::Borrowed("Target range"),
+        unit: std::borrow::Cow::Borrowed("mm"),
         min: 0.0,
         max: 12000.0,
     },
     crate::sim_input::InputChannel {
-        key: "target_width",
-        label: "Target width",
-        unit: "°",
+        key: std::borrow::Cow::Borrowed("target_width"),
+        label: std::borrow::Cow::Borrowed("Target width"),
+        unit: std::borrow::Cow::Borrowed("°"),
         min: 0.0,
         max: 180.0,
     },
     crate::sim_input::InputChannel {
-        key: "spin_hz",
-        label: "Spin rate",
-        unit: "Hz",
+        key: std::borrow::Cow::Borrowed("spin_hz"),
+        label: std::borrow::Cow::Borrowed("Spin rate"),
+        unit: std::borrow::Cow::Borrowed("Hz"),
         min: 1.0,
         max: 20.0,
     },
     crate::sim_input::InputChannel {
-        key: "room_width",
-        label: "Room width",
-        unit: "mm",
+        key: std::borrow::Cow::Borrowed("room_width"),
+        label: std::borrow::Cow::Borrowed("Room width"),
+        unit: std::borrow::Cow::Borrowed("mm"),
         min: 200.0,
         max: 20000.0,
     },
     crate::sim_input::InputChannel {
-        key: "room_depth",
-        label: "Room depth",
-        unit: "mm",
+        key: std::borrow::Cow::Borrowed("room_depth"),
+        label: std::borrow::Cow::Borrowed("Room depth"),
+        unit: std::borrow::Cow::Borrowed("mm"),
         min: 200.0,
         max: 20000.0,
     },
@@ -598,66 +598,86 @@ pub struct YdLidarKit;
 pub static YDLIDAR_KIT: YdLidarKit = YdLidarKit;
 
 static YDLIDAR_METADATA: KitMetadata = KitMetadata {
-    inputs: INPUT_CHANNELS,
-    device_type: "ydlidar-scanner",
-    label: "360° Scanning Lidar",
-    summary: "Spinning lidar streaming YDLIDAR scan frames over UART RX at 230400 baud.",
-    detail: "Emits 0xAA55 frames — 25 samples of quarter-millimetre range plus 6-bit \
+    inputs: std::borrow::Cow::Borrowed(INPUT_CHANNELS),
+    device_type: std::borrow::Cow::Borrowed("ydlidar-scanner"),
+    label: std::borrow::Cow::Borrowed("360° Scanning Lidar"),
+    summary: std::borrow::Cow::Borrowed(
+        "Spinning lidar streaming YDLIDAR scan frames over UART RX at 230400 baud.",
+    ),
+    detail: std::borrow::Cow::Borrowed(
+        "Emits 0xAA55 frames — 25 samples of quarter-millimetre range plus 6-bit \
              intensity, with a one-sample zero packet marking each revolution. Ranges come \
              from raycasting a declared rectangular room plus a drivable target arc, and the \
              generator inverts the atan angle correction so decoded bearings match the room \
              as authored. Wire format is gated byte-for-byte against a capture from physical \
              silicon.",
+    ),
     transport: Transport::Uart,
     category: Category::Uart,
-    config_keys: &[
+    config_keys: std::borrow::Cow::Borrowed(&[
         ConfigKey {
-            name: "room_width_mm",
+            name: std::borrow::Cow::Borrowed("room_width_mm"),
             ty: ConfigType::Float,
-            doc: "Interior room width along X in millimetres (default 4000).",
+            doc: std::borrow::Cow::Borrowed(
+                "Interior room width along X in millimetres (default 4000).",
+            ),
         },
         ConfigKey {
-            name: "room_depth_mm",
+            name: std::borrow::Cow::Borrowed("room_depth_mm"),
             ty: ConfigType::Float,
-            doc: "Interior room depth along Y in millimetres (default 3000).",
+            doc: std::borrow::Cow::Borrowed(
+                "Interior room depth along Y in millimetres (default 3000).",
+            ),
         },
         ConfigKey {
-            name: "scanner_x_mm",
+            name: std::borrow::Cow::Borrowed("scanner_x_mm"),
             ty: ConfigType::Float,
-            doc: "Scanner offset from the room centre along X (default 0).",
+            doc: std::borrow::Cow::Borrowed(
+                "Scanner offset from the room centre along X (default 0).",
+            ),
         },
         ConfigKey {
-            name: "scanner_y_mm",
+            name: std::borrow::Cow::Borrowed("scanner_y_mm"),
             ty: ConfigType::Float,
-            doc: "Scanner offset from the room centre along Y (default 0).",
+            doc: std::borrow::Cow::Borrowed(
+                "Scanner offset from the room centre along Y (default 0).",
+            ),
         },
         ConfigKey {
-            name: "spin_hz",
+            name: std::borrow::Cow::Borrowed("spin_hz"),
             ty: ConfigType::Float,
-            doc: "Revolutions per second (default 10.0; the measured unit reported 10.0).",
+            doc: std::borrow::Cow::Borrowed(
+                "Revolutions per second (default 10.0; the measured unit reported 10.0).",
+            ),
         },
         ConfigKey {
-            name: "sample_rate_hz",
+            name: std::borrow::Cow::Borrowed("sample_rate_hz"),
             ty: ConfigType::Float,
-            doc: "Ranging samples per second (default 4000; measured 4031).",
+            doc: std::borrow::Cow::Borrowed(
+                "Ranging samples per second (default 4000; measured 4031).",
+            ),
         },
         ConfigKey {
-            name: "intensity",
+            name: std::borrow::Cow::Borrowed("intensity"),
             ty: ConfigType::Float,
-            doc: "Reported 6-bit return intensity 0-63 (default 31, the measured median).",
+            doc: std::borrow::Cow::Borrowed(
+                "Reported 6-bit return intensity 0-63 (default 31, the measured median).",
+            ),
         },
         ConfigKey {
-            name: "baud",
+            name: std::borrow::Cow::Borrowed("baud"),
             ty: ConfigType::Float,
-            doc: "Link rate used to pace bytes onto the wire (default 230400).",
+            doc: std::borrow::Cow::Borrowed(
+                "Link rate used to pace bytes onto the wire (default 230400).",
+            ),
         },
-    ],
-    labs: &[LabRef {
-        board_id: "ydlidar-scan-lab",
-        chip: "stm32f103",
-        example_dir: "ydlidar-scan-lab",
-        demo_elf: "demo-ydlidar-scan-lab.elf",
-    }],
+    ]),
+    labs: std::borrow::Cow::Borrowed(&[LabRef {
+        board_id: std::borrow::Cow::Borrowed("ydlidar-scan-lab"),
+        chip: std::borrow::Cow::Borrowed("stm32f103"),
+        example_dir: std::borrow::Cow::Borrowed("ydlidar-scan-lab"),
+        demo_elf: std::borrow::Cow::Borrowed("demo-ydlidar-scan-lab.elf"),
+    }]),
 };
 
 impl PeripheralKit for YdLidarKit {

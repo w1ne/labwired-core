@@ -218,7 +218,7 @@ impl SystemBus {
         self.for_each_sim_input(&mut |name, si| {
             let owner = si.component_id().unwrap_or(name).to_string();
             for ch in si.input_channels() {
-                out.push((owner.clone(), *ch));
+                out.push((owner.clone(), ch.clone()));
             }
             false
         });
@@ -246,7 +246,7 @@ impl SystemBus {
             if Self::component_matches(component, name, si) {
                 if let Some(ch) = si.input_channels().iter().find(|c| c.key == channel) {
                     matches += 1;
-                    found = Some(*ch);
+                    found = Some(ch.clone());
                 }
             }
             false

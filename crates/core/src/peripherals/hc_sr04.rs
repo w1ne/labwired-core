@@ -157,9 +157,9 @@ impl crate::sim_input::SimInput for HcSr04 {
     fn input_channels(&self) -> &'static [crate::sim_input::InputChannel] {
         use crate::sim_input::InputChannel;
         const CH: &[InputChannel] = &[InputChannel {
-            key: "distance",
-            label: "Distance",
-            unit: "cm",
+            key: std::borrow::Cow::Borrowed("distance"),
+            label: std::borrow::Cow::Borrowed("Distance"),
+            unit: std::borrow::Cow::Borrowed("cm"),
             min: MIN_CM as f64,
             max: MAX_CM as f64,
         }];

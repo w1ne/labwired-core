@@ -219,9 +219,9 @@ impl I2cDevice for Veml7700 {
 /// detectable range (gain ×1/8, IT 25 ms). ONE table backs BOTH the `SimInput`
 /// impl and the kit metadata.
 pub const INPUT_CHANNELS: &[crate::sim_input::InputChannel] = &[crate::sim_input::InputChannel {
-    key: "lux",
-    label: "Illuminance",
-    unit: "lx",
+    key: std::borrow::Cow::Borrowed("lux"),
+    label: std::borrow::Cow::Borrowed("Illuminance"),
+    unit: std::borrow::Cow::Borrowed("lx"),
     min: 0.0,
     max: 120000.0,
 }];

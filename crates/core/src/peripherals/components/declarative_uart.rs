@@ -87,7 +87,7 @@ pub struct DeclarativeUartDevice {
     /// Per-channel `expr_scale` — the counts per engineering unit a template's
     /// `input()` sees. See [`labwired_config::InputSpec::expr_scale`].
     expr_scale: BTreeMap<String, f64>,
-    channels: &'static [InputChannel],
+    channels: std::borrow::Cow<'static, [InputChannel]>,
     /// Per-channel seeded Gaussian noise, keyed by channel key. Present only
     /// for a channel whose descriptor (or a `config:` override) gives it a
     /// sigma. Sampled ONCE per rendered template, never per byte — a
@@ -121,7 +121,7 @@ impl DeclarativeUartDevice {
     pub fn new(
         id: String,
         descriptor: &DeviceDescriptor,
-        channels: &'static [InputChannel],
+        channels: std::borrow::Cow<'static, [InputChannel]>,
     ) -> Result<Self> {
         let spec =
             descriptor.behavior.uart.clone().ok_or_else(|| {
@@ -497,8 +497,8 @@ impl UartStreamDevice for DeclarativeUartDevice {
 }
 
 impl SimInput for DeclarativeUartDevice {
-    fn input_channels(&self) -> &'static [InputChannel] {
-        self.channels
+    fn input_channels(&self) -> &[InputChannel] {
+        &self.channels
     }
 
     fn set_input(&mut self, key: &str, value: f64) -> Result<(), SimInputError> {
@@ -619,8 +619,8 @@ pub(crate) fn validate_descriptor(desc: &DeviceDescriptor) -> Result<()> {
 /// made. There is still exactly one attach path per transport.
 pub struct DeclarativeUartKit {
     descriptor: DeviceDescriptor,
-    channels: &'static [InputChannel],
-    metadata: &'static crate::peripherals::kit::KitMetadata,
+    channels: std::borrow::Cow<'static, [InputChannel]>,
+    metadata: crate::peripherals::kit::KitMetadata,
 }
 
 impl std::fmt::Debug for DeclarativeUartKit {
@@ -635,8 +635,8 @@ impl DeclarativeUartKit {
     pub fn from_yaml(yaml: &str) -> Result<Self> {
         let descriptor = DeviceDescriptor::from_yaml(yaml)?;
         validate_descriptor(&descriptor)?;
-        let channels = super::declarative_i2c::leak_channels(&descriptor);
-        let metadata = super::declarative_i2c::leak_uart_metadata(&descriptor, channels);
+        let channels = super::declarative_i2c::owned_channels(&descriptor);
+        let metadata = super::declarative_i2c::owned_uart_metadata(&descriptor, channels.clone());
         Ok(Self {
             descriptor,
             channels,
@@ -648,21 +648,21 @@ impl DeclarativeUartKit {
     /// tests drive, so a golden transcript is captured from the real engine
     /// rather than from a test-only reimplementation of it.
     pub fn device(&self, id: &str) -> Result<DeclarativeUartDevice> {
-        DeclarativeUartDevice::new(id.to_string(), &self.descriptor, self.channels)
+        DeclarativeUartDevice::new(id.to_string(), &self.descriptor, self.channels.clone())
     }
 }
 
 impl crate::peripherals::kit::PeripheralKit for DeclarativeUartKit {
-    fn metadata(&self) -> &'static crate::peripherals::kit::KitMetadata {
-        self.metadata
+    fn metadata(&self) -> &crate::peripherals::kit::KitMetadata {
+        &self.metadata
     }
 
     fn attach(&self, ctx: &mut crate::peripherals::kit::AttachCtx<'_>) -> Result<()> {
         let id = ctx.device_id().to_string();
-        let mut device = DeclarativeUartDevice::new(id, &self.descriptor, self.channels)?;
-        for ch in self.channels {
-            if let Some(v) = ctx.config_f64(ch.key) {
-                device.seed_input(ch.key, v);
+        let mut device = DeclarativeUartDevice::new(id, &self.descriptor, self.channels.clone())?;
+        for ch in self.channels.iter() {
+            if let Some(v) = ctx.config_f64(ch.key.as_ref()) {
+                device.seed_input(ch.key.as_ref(), v);
             }
         }
         // A descriptor may alias a channel to a differently-spelled `config:`
@@ -695,7 +695,7 @@ impl crate::peripherals::kit::PeripheralKit for DeclarativeUartKit {
 /// Same bridge the I²C and GPIO kits use: the registry is a `const` slice of
 /// `&'static dyn PeripheralKit`, and a descriptor is parsed at runtime.
 impl crate::peripherals::kit::PeripheralKit for std::sync::LazyLock<DeclarativeUartKit> {
-    fn metadata(&self) -> &'static crate::peripherals::kit::KitMetadata {
+    fn metadata(&self) -> &crate::peripherals::kit::KitMetadata {
         std::sync::LazyLock::force(self).metadata()
     }
     fn attach(&self, ctx: &mut crate::peripherals::kit::AttachCtx<'_>) -> Result<()> {
@@ -765,7 +765,8 @@ behavior:
     fn shell() -> DeclarativeUartDevice {
         let desc = DeviceDescriptor::from_yaml(SHELL).expect("fixture parses");
         validate_descriptor(&desc).expect("fixture validates");
-        DeclarativeUartDevice::new("sh".into(), &desc, &[]).expect("constructs")
+        DeclarativeUartDevice::new("sh".into(), &desc, std::borrow::Cow::Borrowed(&[]))
+            .expect("constructs")
     }
 
     fn drain(dev: &mut DeclarativeUartDevice) -> String {
@@ -849,7 +850,8 @@ metadata:
     fn stream() -> DeclarativeUartDevice {
         let desc = DeviceDescriptor::from_yaml(STREAM).expect("fixture parses");
         validate_descriptor(&desc).expect("fixture validates");
-        let channels: &'static [InputChannel] = super::super::declarative_i2c::leak_channels(&desc);
+        let channels: std::borrow::Cow<'static, [InputChannel]> =
+            super::super::declarative_i2c::owned_channels(&desc);
         DeclarativeUartDevice::new("st".into(), &desc, channels).expect("constructs")
     }
 
@@ -917,7 +919,8 @@ behavior:
     fn a_delayed_answer_waits_its_declared_microseconds() {
         let desc = DeviceDescriptor::from_yaml(DELAYED).unwrap();
         validate_descriptor(&desc).unwrap();
-        let mut dev = DeclarativeUartDevice::new("m".into(), &desc, &[]).unwrap();
+        let mut dev =
+            DeclarativeUartDevice::new("m".into(), &desc, std::borrow::Cow::Borrowed(&[])).unwrap();
         send(&mut dev, "AT\r\n");
         assert_eq!(dev.poll(0), None, "nothing yet");
         assert_eq!(dev.poll(89_999), None, "still inside the delay");
@@ -940,7 +943,8 @@ behavior:
     fn a_response_action_changes_the_parts_state() {
         let desc = DeviceDescriptor::from_yaml(STATEFUL).unwrap();
         validate_descriptor(&desc).unwrap();
-        let mut dev = DeclarativeUartDevice::new("s".into(), &desc, &[]).unwrap();
+        let mut dev =
+            DeclarativeUartDevice::new("s".into(), &desc, std::borrow::Cow::Borrowed(&[])).unwrap();
         assert_eq!(dev.rule_machine().state(), "command");
         send(&mut dev, "AT+MODE=1\r\n");
         assert_eq!(drain(&mut dev), "OK\r\n");

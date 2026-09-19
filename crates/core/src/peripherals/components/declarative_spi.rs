@@ -23,7 +23,7 @@ use labwired_config::{
 
 use super::declarative_expr::{compile_derived, eval_derived, CompiledExpr};
 use super::declarative_regs::{
-    apply_timing_action, apply_write, decode_raw, encode_raw, leak_labs, read_clears,
+    apply_timing_action, apply_write, decode_raw, encode_raw, owned_labs, read_clears,
     register_read_bytes, unpack, validate_timers, TimerBank,
 };
 use super::rule_machine::{RuleCtx, RuleMachine};
@@ -67,7 +67,7 @@ pub struct GenericSpiDevice {
     /// Bytes accumulated toward the current write register's width.
     write_acc: Vec<u8>,
 
-    channels: &'static [InputChannel],
+    channels: std::borrow::Cow<'static, [InputChannel]>,
     /// The declared input specs, kept whole so `seed_from_config` can hand them
     /// to the ONE seeding rule ([`labwired_config::seeded_channel_values`]) —
     /// the same call the I²C primitive makes.
@@ -326,7 +326,7 @@ impl GenericSpiDevice {
     pub fn from_descriptor(
         descriptor: &DeviceDescriptor,
         cs_pin: String,
-        channels: &'static [InputChannel],
+        channels: std::borrow::Cow<'static, [InputChannel]>,
     ) -> Result<Self> {
         validate_descriptor(descriptor)?;
         let spec = descriptor
@@ -395,7 +395,7 @@ impl GenericSpiDevice {
 
     pub fn from_yaml(yaml: &str, cs_pin: &str) -> Result<Self> {
         let descriptor = DeviceDescriptor::from_yaml(yaml)?;
-        let channels = super::declarative_i2c::leak_channels(&descriptor);
+        let channels = super::declarative_i2c::owned_channels(&descriptor);
         Self::from_descriptor(&descriptor, cs_pin.to_string(), channels)
     }
 
@@ -1159,8 +1159,8 @@ impl GenericSpiDevice {
 }
 
 impl SimInput for GenericSpiDevice {
-    fn input_channels(&self) -> &'static [InputChannel] {
-        self.channels
+    fn input_channels(&self) -> &[InputChannel] {
+        &self.channels
     }
     fn set_input(&mut self, key: &str, value: f64) -> Result<(), SimInputError> {
         self.require_channel(key, value)?;
@@ -1186,16 +1186,16 @@ use crate::peripherals::kit::{
 /// added to `registry::KITS` and the offline peripherals manifest is unchanged.
 pub struct DeclarativeSpiKit {
     descriptor: DeviceDescriptor,
-    channels: &'static [InputChannel],
-    metadata: &'static KitMetadata,
+    channels: std::borrow::Cow<'static, [InputChannel]>,
+    metadata: KitMetadata,
 }
 
 impl DeclarativeSpiKit {
     pub fn from_yaml(yaml: &str) -> Result<Self> {
         let descriptor = DeviceDescriptor::from_yaml(yaml)?;
         validate_descriptor(&descriptor)?;
-        let channels = super::declarative_i2c::leak_channels(&descriptor);
-        let metadata = leak_metadata(&descriptor, channels);
+        let channels = super::declarative_i2c::owned_channels(&descriptor);
+        let metadata = owned_metadata(&descriptor, channels.clone());
         Ok(Self {
             descriptor,
             channels,
@@ -1204,12 +1204,12 @@ impl DeclarativeSpiKit {
     }
 }
 
-fn leak_metadata(
+fn owned_metadata(
     descriptor: &DeviceDescriptor,
-    channels: &'static [InputChannel],
-) -> &'static KitMetadata {
+    channels: std::borrow::Cow<'static, [InputChannel]>,
+) -> KitMetadata {
     let meta = descriptor.metadata.as_ref();
-    let leak = |s: String| -> &'static str { Box::leak(s.into_boxed_str()) };
+    let owned_text = |s: String| -> std::borrow::Cow<'static, str> { std::borrow::Cow::Owned(s) };
     let label = meta
         .and_then(|m| m.label.clone())
         .unwrap_or_else(|| descriptor.r#type.clone());
@@ -1225,44 +1225,40 @@ fn leak_metadata(
         .and_then(|m| m.detail.clone())
         .unwrap_or_else(|| summary.clone());
     let declared_keys = meta.map(|m| m.config_keys.as_slice()).unwrap_or(&[]);
-    let config_keys: &'static [ConfigKey] = if declared_keys.is_empty() {
-        Box::leak(
-            vec![
+    let config_keys: std::borrow::Cow<'static, [ConfigKey]> = if declared_keys.is_empty() {
+        std::borrow::Cow::Owned(vec![
                 ConfigKey {
-                    name: "cs_pin",
+                    name: std::borrow::Cow::Borrowed("cs_pin"),
                     ty: ConfigType::Str,
-                    doc: "CS GPIO pin wired as SPI chip-select (e.g. \"PA4\").",
+                    doc: std::borrow::Cow::Borrowed("CS GPIO pin wired as SPI chip-select (e.g. \"PA4\")."),
                 },
                 ConfigKey {
-                    name: "spi_mode",
+                    name: std::borrow::Cow::Borrowed("spi_mode"),
                     ty: ConfigType::Int,
-                    doc: "Opt in to edge-accurate (bit-level) slave sampling in this SPI mode (0..=3). Omit for the default byte-level frame exchange.",
+                    doc: std::borrow::Cow::Borrowed("Opt in to edge-accurate (bit-level) slave sampling in this SPI mode (0..=3). Omit for the default byte-level frame exchange."),
                 },
-            ]
-            .into_boxed_slice(),
-        )
+            ])
     } else {
-        Box::leak(
+        std::borrow::Cow::Owned(
             declared_keys
                 .iter()
                 .map(|k| ConfigKey {
-                    name: leak(k.name.clone()),
+                    name: owned_text(k.name.clone()),
                     ty: super::declarative_i2c::config_type_from_str(&k.ty),
-                    doc: leak(k.doc.clone()),
+                    doc: owned_text(k.doc.clone()),
                 })
-                .collect::<Vec<_>>()
-                .into_boxed_slice(),
+                .collect::<Vec<_>>(),
         )
     };
-    Box::leak(Box::new(KitMetadata {
-        device_type: leak(descriptor.r#type.clone()),
-        label: leak(label),
-        summary: leak(summary),
-        detail: leak(detail),
+    KitMetadata {
+        device_type: owned_text(descriptor.r#type.clone()),
+        label: owned_text(label),
+        summary: owned_text(summary),
+        detail: owned_text(detail),
         transport: Transport::Spi,
         category: Category::Spi,
         config_keys,
-        labs: leak_labs(
+        labs: owned_labs(
             descriptor
                 .metadata
                 .as_ref()
@@ -1270,17 +1266,17 @@ fn leak_metadata(
                 .unwrap_or(&[]),
         ),
         inputs: channels,
-    }))
+    }
 }
 
 impl PeripheralKit for DeclarativeSpiKit {
-    fn metadata(&self) -> &'static KitMetadata {
-        self.metadata
+    fn metadata(&self) -> &KitMetadata {
+        &self.metadata
     }
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> Result<()> {
         let cs_pin = ctx.config_str("cs_pin").unwrap_or("PA4").to_string();
         let mut device =
-            GenericSpiDevice::from_descriptor(&self.descriptor, cs_pin, self.channels)?;
+            GenericSpiDevice::from_descriptor(&self.descriptor, cs_pin, self.channels.clone())?;
         // Opt-in, per lab: `config: { spi_mode: N }` straps this part for
         // edge-accurate sampling in ITS mode, so a controller programmed for a
         // different CPOL/CPHA corrupts the exchange the way silicon does.
@@ -1319,7 +1315,7 @@ impl PeripheralKit for DeclarativeSpiKit {
 use std::sync::LazyLock;
 
 impl PeripheralKit for LazyLock<DeclarativeSpiKit> {
-    fn metadata(&self) -> &'static KitMetadata {
+    fn metadata(&self) -> &KitMetadata {
         LazyLock::force(self).metadata()
     }
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> Result<()> {
@@ -1635,7 +1631,7 @@ metadata:
     #[test]
     fn declarative_spi_kit_advertises_labs_from_descriptor_metadata() {
         let kit = DeclarativeSpiKit::from_yaml(LABS_FIXTURE).unwrap();
-        let labs = kit.metadata().labs;
+        let labs = &kit.metadata().labs;
         assert_eq!(labs.len(), 1);
         assert_eq!(labs[0].board_id, "test-board-lab");
         assert_eq!(labs[0].chip, "stm32f103");

@@ -18,21 +18,21 @@ use labwired_config::{
 
 use crate::peripherals::kit::LabRef;
 
-/// `Box::leak`s a slice of config-layer [`LabDescriptor`]s into the `'static`
-/// [`LabRef`]s a `KitMetadata` requires. Shared by both declarative engines
+/// Copy config-layer [`LabDescriptor`]s into owned [`LabRef`] metadata.
+/// Shared by both declarative engines
 /// (SPI and I²C) so a descriptor's `metadata.labs` becomes the kit's
 /// advertised demo labs identically either way.
-pub(crate) fn leak_labs(labs: &[LabDescriptor]) -> &'static [LabRef] {
-    let leaked: Vec<LabRef> = labs
+pub(crate) fn owned_labs(labs: &[LabDescriptor]) -> std::borrow::Cow<'static, [LabRef]> {
+    let owned: Vec<LabRef> = labs
         .iter()
         .map(|l| LabRef {
-            board_id: Box::leak(l.board_id.clone().into_boxed_str()),
-            chip: Box::leak(l.chip.clone().into_boxed_str()),
-            example_dir: Box::leak(l.example_dir.clone().into_boxed_str()),
-            demo_elf: Box::leak(l.demo_elf.clone().into_boxed_str()),
+            board_id: std::borrow::Cow::Owned(l.board_id.clone()),
+            chip: std::borrow::Cow::Owned(l.chip.clone()),
+            example_dir: std::borrow::Cow::Owned(l.example_dir.clone()),
+            demo_elf: std::borrow::Cow::Owned(l.demo_elf.clone()),
         })
         .collect();
-    Box::leak(leaked.into_boxed_slice())
+    std::borrow::Cow::Owned(owned)
 }
 
 /// Largest value representable in `width` bytes, as f64 (width ≤ 4).

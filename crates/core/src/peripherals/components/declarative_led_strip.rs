@@ -643,14 +643,14 @@ use crate::peripherals::kit::{
 /// A [`PeripheralKit`] backed by a declarative `led_strip` descriptor.
 pub struct DeclarativeLedStripKit {
     descriptor: DeviceDescriptor,
-    metadata: &'static KitMetadata,
+    metadata: KitMetadata,
 }
 
 impl DeclarativeLedStripKit {
     pub fn from_yaml(yaml: &str) -> Result<Self> {
         let descriptor = DeviceDescriptor::from_yaml(yaml)?;
         validate_descriptor(&descriptor)?;
-        let metadata = leak_metadata(&descriptor);
+        let metadata = owned_metadata(&descriptor);
         Ok(Self {
             descriptor,
             metadata,
@@ -666,8 +666,8 @@ impl DeclarativeLedStripKit {
     }
 }
 
-fn leak(s: String) -> &'static str {
-    Box::leak(s.into_boxed_str())
+fn owned_text(s: String) -> std::borrow::Cow<'static, str> {
+    std::borrow::Cow::Owned(s)
 }
 
 fn config_type_from_str(ty: &str) -> ConfigType {
@@ -679,7 +679,7 @@ fn config_type_from_str(ty: &str) -> ConfigType {
     }
 }
 
-fn leak_metadata(descriptor: &DeviceDescriptor) -> &'static KitMetadata {
+fn owned_metadata(descriptor: &DeviceDescriptor) -> KitMetadata {
     let spec = descriptor
         .behavior
         .led_strip
@@ -695,51 +695,49 @@ fn leak_metadata(descriptor: &DeviceDescriptor) -> &'static KitMetadata {
     let detail = meta
         .and_then(|m| m.detail.clone())
         .unwrap_or_else(|| summary.clone());
-    let config_keys: &'static [ConfigKey] = Box::leak(
+    let config_keys: std::borrow::Cow<'static, [ConfigKey]> = std::borrow::Cow::Owned(
         meta.map(|m| m.config_keys.as_slice())
             .unwrap_or(&[])
             .iter()
             .map(|k| ConfigKey {
-                name: leak(k.name.clone()),
+                name: owned_text(k.name.clone()),
                 ty: config_type_from_str(&k.ty),
-                doc: leak(k.doc.clone()),
+                doc: owned_text(k.doc.clone()),
             })
-            .collect::<Vec<_>>()
-            .into_boxed_slice(),
+            .collect::<Vec<_>>(),
     );
-    let labs: &'static [LabRef] = Box::leak(
+    let labs: std::borrow::Cow<'static, [LabRef]> = std::borrow::Cow::Owned(
         meta.map(|m| m.labs.as_slice())
             .unwrap_or(&[])
             .iter()
             .map(|l| LabRef {
-                board_id: leak(l.board_id.clone()),
-                chip: leak(l.chip.clone()),
-                example_dir: leak(l.example_dir.clone()),
-                demo_elf: leak(l.demo_elf.clone()),
+                board_id: owned_text(l.board_id.clone()),
+                chip: owned_text(l.chip.clone()),
+                example_dir: owned_text(l.example_dir.clone()),
+                demo_elf: owned_text(l.demo_elf.clone()),
             })
-            .collect::<Vec<_>>()
-            .into_boxed_slice(),
+            .collect::<Vec<_>>(),
     );
     let (transport, category) = match spec.wire {
         LedStripWire::SpiFrames => (Transport::Spi, Category::Spi),
         LedStripWire::NrzGpio => (Transport::GpioGroup, Category::Gpio),
     };
-    Box::leak(Box::new(KitMetadata {
-        device_type: leak(descriptor.r#type.clone()),
-        label: leak(label),
-        summary: leak(summary),
-        detail: leak(detail),
+    KitMetadata {
+        device_type: owned_text(descriptor.r#type.clone()),
+        label: owned_text(label),
+        summary: owned_text(summary),
+        detail: owned_text(detail),
         transport,
         category,
         config_keys,
         labs,
-        inputs: &[],
-    }))
+        inputs: std::borrow::Cow::Borrowed(&[]),
+    }
 }
 
 impl PeripheralKit for DeclarativeLedStripKit {
-    fn metadata(&self) -> &'static KitMetadata {
-        self.metadata
+    fn metadata(&self) -> &KitMetadata {
+        &self.metadata
     }
 
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> Result<()> {
@@ -796,7 +794,7 @@ impl PeripheralKit for DeclarativeLedStripKit {
 use std::sync::LazyLock;
 
 impl PeripheralKit for LazyLock<DeclarativeLedStripKit> {
-    fn metadata(&self) -> &'static KitMetadata {
+    fn metadata(&self) -> &KitMetadata {
         LazyLock::force(self).metadata()
     }
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> Result<()> {

@@ -32,16 +32,13 @@
 //!   TWIM) turns a `type:` into a model. One hook there means a private sensor
 //!   works on every MCU, not just the one we happened to try it on.
 //! - **SPI** — SPI devices only ever attach through the `PeripheralKit`
-//!   registry, so [`kit_for`] interns the pack as a kit and `from_config`
+//!   registry, so [`kit_for`] builds an owned kit and `from_config`
 //!   attaches it exactly as it attaches a built-in.
 //! - **Analog source** — a source owns both its ADC connection and simulator
 //!   input channel, so it also attaches through its `PeripheralKit`.
 //! - **GPIO / pin-timing** — no factory at all; `from_config` hands the
 //!   descriptor to `attach_declarative_device`, the same call the embedded
 //!   `configs/devices/*.yaml` descriptors take.
-
-use std::collections::HashMap;
-use std::sync::{LazyLock, Mutex};
 
 use anyhow::{Context, Result};
 use labwired_config::{DeviceDescriptor, SystemManifest};
@@ -50,16 +47,6 @@ use crate::peripherals::components::declarative_analog::DeclarativeAnalogKit;
 use crate::peripherals::components::{DeclarativeI2cKit, DeclarativeSpiKit};
 use crate::peripherals::kit::PeripheralKit;
 use crate::sim_input::SimInput;
-
-/// Interned dynamic kits, keyed by the pack's canonical serialisation.
-///
-/// The registry contract is `&'static dyn PeripheralKit`, and a pack arrives at
-/// runtime — so building one means leaking it. Keying on the pack's own bytes
-/// makes that leak bounded and idempotent: re-running the same system reuses the
-/// same kit, and editing a pack interns the edited one rather than serving a
-/// stale model under the same `type:` (which would be the worst of both).
-static INTERNED: LazyLock<Mutex<HashMap<String, &'static (dyn PeripheralKit + 'static)>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// Built-in `type:` strings a pack would shadow. Both built-in registries are
 /// consulted, because "already built in" must mean the same thing to a pack
@@ -130,7 +117,7 @@ pub(crate) fn validate_manifest(manifest: &SystemManifest) -> Result<()> {
 }
 
 /// Validate one pack against the primitive that will eventually interpret it,
-/// without constructing/interning a runtime kit. The same eight primitive
+/// without constructing a runtime kit. The same eight primitive
 /// names are the public `labwired.part/v1` contract.
 fn validate_runtime_descriptor(pack: &DeviceDescriptor) -> Result<()> {
     let result = match pack.behavior.primitive.as_str() {
@@ -159,18 +146,18 @@ fn validate_runtime_descriptor(pack: &DeviceDescriptor) -> Result<()> {
     })
 }
 
-/// Intern a pack as a `PeripheralKit` for bus-resident (I²C / SPI / analog)
+/// Build an owned `PeripheralKit` for bus-resident (I²C / SPI / analog)
 /// primitives. Returns `Ok(None)` for a primitive that is not bus-resident —
 /// the GPIO / pin-timing family, which attaches through
 /// [`super::declarative_device`] instead.
-pub(crate) fn kit_for(pack: &DeviceDescriptor) -> Result<Option<&'static dyn PeripheralKit>> {
+pub(crate) fn kit_for(pack: &DeviceDescriptor) -> Result<Option<Box<dyn PeripheralKit>>> {
     let transport = match pack.behavior.primitive.as_str() {
         "i2c_device" => Transport::I2c,
         "spi_device" => Transport::Spi,
         "analog_source" => Transport::Analog,
         // A display is bus-resident too, but which bus it hangs off is decided
         // by its FRAMING (a D/C pad means SPI, a control byte means I²C), not by
-        // the primitive name — so the one kit covers both and interns once.
+        // the primitive name — so the one kit covers both.
         "display" => Transport::Display,
         _ => return Ok(None),
     };
@@ -178,31 +165,26 @@ pub(crate) fn kit_for(pack: &DeviceDescriptor) -> Result<Option<&'static dyn Per
     let key = serde_yaml::to_string(pack)
         .with_context(|| format!("part pack '{}' could not be canonicalised", pack.r#type))?;
 
-    let mut interned = INTERNED
-        .lock()
-        .map_err(|_| anyhow::anyhow!("part-pack registry lock poisoned"))?;
-    if let Some(kit) = interned.get(&key) {
-        return Ok(Some(*kit));
-    }
-
-    let kit: &'static dyn PeripheralKit = match transport {
-        Transport::I2c => Box::leak(Box::new(DeclarativeI2cKit::from_yaml(&key).with_context(
-            || format!("part pack '{}' is not a valid i2c_device", pack.r#type),
-        )?)),
-        Transport::Spi => Box::leak(Box::new(DeclarativeSpiKit::from_yaml(&key).with_context(
-            || format!("part pack '{}' is not a valid spi_device", pack.r#type),
-        )?)),
-        Transport::Analog => Box::leak(Box::new(
-            DeclarativeAnalogKit::from_yaml(&key).with_context(|| {
-                format!("part pack '{}' is not a valid analog_source", pack.r#type)
-            })?,
-        )),
-        Transport::Display => Box::leak(Box::new(
-            crate::peripherals::components::DeclarativeDisplayKit::from_yaml(&key)
-                .with_context(|| format!("part pack '{}' is not a valid display", pack.r#type))?,
-        )),
-    };
-    interned.insert(key, kit);
+    let kit: Box<dyn PeripheralKit> =
+        match transport {
+            Transport::I2c => Box::new(DeclarativeI2cKit::from_yaml(&key).with_context(|| {
+                format!("part pack '{}' is not a valid i2c_device", pack.r#type)
+            })?),
+            Transport::Spi => Box::new(DeclarativeSpiKit::from_yaml(&key).with_context(|| {
+                format!("part pack '{}' is not a valid spi_device", pack.r#type)
+            })?),
+            Transport::Analog => {
+                Box::new(DeclarativeAnalogKit::from_yaml(&key).with_context(|| {
+                    format!("part pack '{}' is not a valid analog_source", pack.r#type)
+                })?)
+            }
+            Transport::Display => Box::new(
+                crate::peripherals::components::DeclarativeDisplayKit::from_yaml(&key)
+                    .with_context(|| {
+                        format!("part pack '{}' is not a valid display", pack.r#type)
+                    })?,
+            ),
+        };
     Ok(Some(kit))
 }
 
@@ -248,6 +230,9 @@ pub(crate) fn i2c_device(
                 pack.source.as_deref().unwrap_or("no declared source")
             )
         })?;
+    // A mux child and a directly attached pack must start from the same
+    // placement inputs, not the descriptor defaults on just one path.
+    device.seed_from_config(|key| ext.config.get(key).and_then(|value| value.as_f64()));
     // Same identity stamping the built-in factory does, so a pack's stimulus
     // channels are addressable by the id the manifest author wrote.
     device.set_component_id(ext.id.clone());

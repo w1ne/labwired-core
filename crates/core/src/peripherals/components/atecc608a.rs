@@ -280,29 +280,29 @@ pub struct Atecc608aKit;
 pub static ATECC608A_KIT: Atecc608aKit = Atecc608aKit;
 
 static ATECC608A_METADATA: KitMetadata = KitMetadata {
-    inputs: &[],
-    device_type: "atecc608a",
-    label: "ATECC608A Secure Element",
-    summary: "I²C secure element: P-256 sign/verify, RNG, key slots (HSM/TPM role).",
-    detail: "ATECC608A-style command set (INFO/RANDOM/READ/NONCE/VERIFY/SIGN) with real \
+    inputs: std::borrow::Cow::Borrowed(&[]),
+    device_type: std::borrow::Cow::Borrowed("atecc608a"),
+    label: std::borrow::Cow::Borrowed("ATECC608A Secure Element"),
+    summary: std::borrow::Cow::Borrowed("I²C secure element: P-256 sign/verify, RNG, key slots (HSM/TPM role)."),
+    detail: std::borrow::Cow::Borrowed("ATECC608A-style command set (INFO/RANDOM/READ/NONCE/VERIFY/SIGN) with real \
              p256 ECDSA. Data slot 0 holds the OEM update-verify public key; a fixed device \
              key signs attestation challenges. Deterministic RNG (SHA-256 chain) for \
-             reproducible tests.",
+             reproducible tests."),
     transport: Transport::I2c,
     category: Category::I2c,
-    config_keys: &[
+    config_keys: std::borrow::Cow::Borrowed(&[
         ConfigKey {
-            name: "i2c_address",
+            name: std::borrow::Cow::Borrowed("i2c_address"),
             ty: ConfigType::Int,
-            doc: "7-bit slave address. Defaults to 0x60.",
+            doc: std::borrow::Cow::Borrowed("7-bit slave address. Defaults to 0x60."),
         },
         ConfigKey {
-            name: "oem_pubkey_hex",
+            name: std::borrow::Cow::Borrowed("oem_pubkey_hex"),
             ty: ConfigType::Str,
-            doc: "Optional 128-char hex OEM update-verify public key (64-byte                   uncompressed P-256 X‖Y) for data slot 0. When omitted, the                   well-known demo pubkey is used.",
+            doc: std::borrow::Cow::Borrowed("Optional 128-char hex OEM update-verify public key (64-byte                   uncompressed P-256 X‖Y) for data slot 0. When omitted, the                   well-known demo pubkey is used."),
         },
-    ],
-    labs: &[],
+    ]),
+    labs: std::borrow::Cow::Borrowed(&[]),
 };
 
 impl PeripheralKit for Atecc608aKit {

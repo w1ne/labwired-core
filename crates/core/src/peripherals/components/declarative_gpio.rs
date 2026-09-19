@@ -87,7 +87,7 @@ pub struct DeclarativeGpioDevice {
     /// Per-channel `expr_scale` — the counts per engineering unit a rule's
     /// `input()` sees. See [`labwired_config::InputSpec::expr_scale`].
     expr_scale: BTreeMap<String, f64>,
-    channels: &'static [InputChannel],
+    channels: std::borrow::Cow<'static, [InputChannel]>,
     cpu_hz: u64,
     /// Simulated cycle at the previous service, for the derived clock.
     last_cycle: Option<u64>,
@@ -132,7 +132,7 @@ impl DeclarativeGpioDevice {
         observed: Vec<BoundPin>,
         driven: Vec<BoundPin>,
         cpu_hz: u64,
-        channels: &'static [InputChannel],
+        channels: std::borrow::Cow<'static, [InputChannel]>,
     ) -> Result<Self> {
         let machine = RuleMachine::from_behavior(&descriptor.behavior)?.ok_or_else(|| {
             anyhow!(
@@ -497,8 +497,8 @@ impl crate::inspect::DeviceEvidence for DeclarativeGpioDevice {
 }
 
 impl SimInput for DeclarativeGpioDevice {
-    fn input_channels(&self) -> &'static [InputChannel] {
-        self.channels
+    fn input_channels(&self) -> &[InputChannel] {
+        &self.channels
     }
 
     fn set_input(&mut self, key: &str, value: f64) -> Result<(), SimInputError> {
@@ -627,8 +627,8 @@ pub(crate) fn validate_rule_names(desc: &DeviceDescriptor) -> Result<()> {
 /// `dht22` and `rotary_encoder` came to be absent from it.
 pub struct DeclarativeGpioKit {
     descriptor: DeviceDescriptor,
-    channels: &'static [InputChannel],
-    metadata: &'static crate::peripherals::kit::KitMetadata,
+    channels: std::borrow::Cow<'static, [InputChannel]>,
+    metadata: crate::peripherals::kit::KitMetadata,
 }
 
 impl std::fmt::Debug for DeclarativeGpioKit {
@@ -643,8 +643,8 @@ impl DeclarativeGpioKit {
     pub fn from_yaml(yaml: &str) -> Result<Self> {
         let descriptor = DeviceDescriptor::from_yaml(yaml)?;
         validate_descriptor(&descriptor)?;
-        let channels = super::declarative_i2c::leak_channels(&descriptor);
-        let metadata = super::declarative_i2c::leak_gpio_metadata(&descriptor, channels);
+        let channels = super::declarative_i2c::owned_channels(&descriptor);
+        let metadata = super::declarative_i2c::owned_gpio_metadata(&descriptor, channels.clone());
         Ok(Self {
             descriptor,
             channels,
@@ -654,8 +654,8 @@ impl DeclarativeGpioKit {
 }
 
 impl crate::peripherals::kit::PeripheralKit for DeclarativeGpioKit {
-    fn metadata(&self) -> &'static crate::peripherals::kit::KitMetadata {
-        self.metadata
+    fn metadata(&self) -> &crate::peripherals::kit::KitMetadata {
+        &self.metadata
     }
 
     fn attach(&self, ctx: &mut crate::peripherals::kit::AttachCtx<'_>) -> Result<()> {
@@ -671,7 +671,7 @@ impl crate::peripherals::kit::PeripheralKit for DeclarativeGpioKit {
 /// Same bridge the I²C kits use: the registry is a `const` slice of
 /// `&'static dyn PeripheralKit`, and a descriptor is parsed at runtime.
 impl crate::peripherals::kit::PeripheralKit for std::sync::LazyLock<DeclarativeGpioKit> {
-    fn metadata(&self) -> &'static crate::peripherals::kit::KitMetadata {
+    fn metadata(&self) -> &crate::peripherals::kit::KitMetadata {
         std::sync::LazyLock::force(self).metadata()
     }
     fn attach(&self, ctx: &mut crate::peripherals::kit::AttachCtx<'_>) -> Result<()> {
@@ -746,9 +746,9 @@ metadata:
         let desc = DeviceDescriptor::from_yaml(FIXTURE).expect("fixture parses");
         validate_descriptor(&desc).expect("fixture validates");
         const CH: &[InputChannel] = &[InputChannel {
-            key: "weight",
-            label: "W",
-            unit: "g",
+            key: std::borrow::Cow::Borrowed("weight"),
+            label: std::borrow::Cow::Borrowed("W"),
+            unit: std::borrow::Cow::Borrowed("g"),
             min: 0.0,
             max: 10.0,
         }];
@@ -766,7 +766,7 @@ metadata:
                 bit: 5,
             }],
             8_000_000,
-            CH,
+            CH.into(),
         )
         .expect("constructs");
         (dev, FakePads::default())

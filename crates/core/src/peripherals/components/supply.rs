@@ -51,14 +51,16 @@ use crate::peripherals::kit::{AttachCtx, ConfigKey, ConfigType};
 /// it is the reference implementation this generalises, not an exception to
 /// the semantics.)
 pub const POWERED_CONFIG_KEY: ConfigKey = ConfigKey {
-    name: "powered",
+    name: std::borrow::Cow::Borrowed("powered"),
     ty: ConfigType::Bool,
-    doc: "Whether the module's supply pins (VCC, GND) are connected. \
+    doc: std::borrow::Cow::Borrowed(
+        "Whether the module's supply pins (VCC, GND) are connected. \
           Omit for a powered part -- ABSENT MEANS POWERED, because curated \
           labs state signals and leave the rails implicit. Only an explicit \
           `false`, which the diagram compiler emits when it can see the \
           supply pins are on no net, changes anything: the part then ignores \
           its bus entirely and reports the dark/idle state it has on a bench.",
+    ),
 };
 
 /// Read the `powered` key with the asymmetry the corpus requires.

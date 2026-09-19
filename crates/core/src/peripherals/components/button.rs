@@ -99,9 +99,9 @@ pub const CHANNELS: &[crate::sim_input::InputChannel] = &[
 /// One boolean contact channel: 0 released / absent, 1 asserted.
 const fn ch(key: &'static str, label: &'static str) -> crate::sim_input::InputChannel {
     crate::sim_input::InputChannel {
-        key,
-        label,
-        unit: "bool",
+        key: std::borrow::Cow::Borrowed(key),
+        label: std::borrow::Cow::Borrowed(label),
+        unit: std::borrow::Cow::Borrowed("bool"),
         min: 0.0,
         max: 1.0,
     }

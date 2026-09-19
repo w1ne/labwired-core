@@ -465,19 +465,19 @@ pub struct Drv2605Kit;
 pub static DRV2605_KIT: Drv2605Kit = Drv2605Kit;
 
 static DRV2605_METADATA: KitMetadata = KitMetadata {
-    inputs: &[],
-    device_type: "drv2605",
-    label: "DRV2605 Haptic",
-    summary: "TI DRV2605 haptic motor driver over I2C.",
-    detail: "Waveform library + realtime playback for ERM/LRA actuators.              Alias type `drv2605l` is accepted by the I2C factory construct path.",
+    inputs: std::borrow::Cow::Borrowed(&[]),
+    device_type: std::borrow::Cow::Borrowed("drv2605"),
+    label: std::borrow::Cow::Borrowed("DRV2605 Haptic"),
+    summary: std::borrow::Cow::Borrowed("TI DRV2605 haptic motor driver over I2C."),
+    detail: std::borrow::Cow::Borrowed("Waveform library + realtime playback for ERM/LRA actuators.              Alias type `drv2605l` is accepted by the I2C factory construct path."),
     transport: Transport::I2c,
     category: Category::I2c,
-    config_keys: &[ConfigKey {
-        name: "i2c_address",
+    config_keys: std::borrow::Cow::Borrowed(&[ConfigKey {
+        name: std::borrow::Cow::Borrowed("i2c_address"),
         ty: ConfigType::Int,
-        doc: "7-bit slave address. Defaults to 0x5A.",
-    }],
-    labs: &[],
+        doc: std::borrow::Cow::Borrowed("7-bit slave address. Defaults to 0x5A."),
+    }]),
+    labs: std::borrow::Cow::Borrowed(&[]),
 };
 
 impl PeripheralKit for Drv2605Kit {

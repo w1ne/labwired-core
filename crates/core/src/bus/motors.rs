@@ -7,9 +7,9 @@ use labwired_config::{BldcMotorConfig, BrushedMotorConfig, MotorModelConfig, Sys
 
 pub(super) const MOTOR_STALL_INPUT: crate::sim_input::InputChannel =
     crate::sim_input::InputChannel {
-        key: "stall",
-        label: "Mechanical stall",
-        unit: "boolean",
+        key: std::borrow::Cow::Borrowed("stall"),
+        label: std::borrow::Cow::Borrowed("Mechanical stall"),
+        unit: std::borrow::Cow::Borrowed("boolean"),
         min: 0.0,
         max: 1.0,
     };

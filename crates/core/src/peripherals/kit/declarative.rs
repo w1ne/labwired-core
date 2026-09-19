@@ -57,7 +57,7 @@ use super::{AttachCtx, KitMetadata, PeripheralKit};
 /// Any declarative descriptor, as a [`PeripheralKit`].
 pub struct DeclarativeDeviceKit {
     descriptor: DeviceDescriptor,
-    metadata: &'static KitMetadata,
+    metadata: KitMetadata,
 }
 
 impl std::fmt::Debug for DeclarativeDeviceKit {
@@ -82,12 +82,12 @@ impl DeclarativeDeviceKit {
     }
 
     pub fn from_descriptor(descriptor: DeviceDescriptor) -> Self {
-        let channels = crate::peripherals::components::declarative_i2c::leak_channels(&descriptor);
+        let channels = crate::peripherals::components::declarative_i2c::owned_channels(&descriptor);
         // The same derivation `hx711` already reads through: label, summary,
         // detail, `config_keys`, labs and stimulus channels straight off the
         // descriptor's `metadata:` block. Sharing it is what makes a part read
         // identically in the manifest whichever primitive it uses.
-        let metadata = crate::peripherals::components::declarative_i2c::leak_gpio_metadata(
+        let metadata = crate::peripherals::components::declarative_i2c::owned_gpio_metadata(
             &descriptor,
             channels,
         );
@@ -103,8 +103,8 @@ impl DeclarativeDeviceKit {
 }
 
 impl PeripheralKit for DeclarativeDeviceKit {
-    fn metadata(&self) -> &'static KitMetadata {
-        self.metadata
+    fn metadata(&self) -> &KitMetadata {
+        &self.metadata
     }
 
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> Result<()> {
@@ -121,13 +121,11 @@ impl PeripheralKit for DeclarativeDeviceKit {
 /// descriptor and a customer's own YAML produce the same kit for the same
 /// primitive. Everything else — the GPIO / pin-timing family and anything
 /// added later — gets [`DeclarativeDeviceKit`].
-pub(crate) fn kit_for_descriptor(
-    descriptor: &DeviceDescriptor,
-) -> Result<&'static dyn PeripheralKit> {
+pub(crate) fn kit_for_descriptor(descriptor: &DeviceDescriptor) -> Result<Box<dyn PeripheralKit>> {
     if let Some(kit) = crate::bus::part_pack::kit_for(descriptor)? {
         return Ok(kit);
     }
-    Ok(Box::leak(Box::new(DeclarativeDeviceKit::from_descriptor(
+    Ok(Box::new(DeclarativeDeviceKit::from_descriptor(
         descriptor.clone(),
-    ))))
+    )))
 }

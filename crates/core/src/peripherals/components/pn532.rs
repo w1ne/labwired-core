@@ -78,20 +78,22 @@ pub struct Pn532Kit;
 pub static PN532_KIT: Pn532Kit = Pn532Kit;
 
 static PN532_METADATA: KitMetadata = KitMetadata {
-    inputs: &[],
-    device_type: "pn532",
-    label: "PN532 NFC",
-    summary: "NXP PN532 I²C NFC controller probe shell (no RF).",
-    detail: "Responds to GetFirmwareVersion so library init succeeds. \
+    inputs: std::borrow::Cow::Borrowed(&[]),
+    device_type: std::borrow::Cow::Borrowed("pn532"),
+    label: std::borrow::Cow::Borrowed("PN532 NFC"),
+    summary: std::borrow::Cow::Borrowed("NXP PN532 I²C NFC controller probe shell (no RF)."),
+    detail: std::borrow::Cow::Borrowed(
+        "Responds to GetFirmwareVersion so library init succeeds. \
              ISO14443 card UID / peer-to-peer is not simulated.",
+    ),
     transport: Transport::I2c,
     category: Category::I2c,
-    config_keys: &[ConfigKey {
-        name: "i2c_address",
+    config_keys: std::borrow::Cow::Borrowed(&[ConfigKey {
+        name: std::borrow::Cow::Borrowed("i2c_address"),
         ty: ConfigType::Int,
-        doc: "7-bit slave address. Defaults to 0x24.",
-    }],
-    labs: &[],
+        doc: std::borrow::Cow::Borrowed("7-bit slave address. Defaults to 0x24."),
+    }]),
+    labs: std::borrow::Cow::Borrowed(&[]),
 };
 
 impl PeripheralKit for Pn532Kit {

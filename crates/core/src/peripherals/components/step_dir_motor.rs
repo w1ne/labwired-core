@@ -134,32 +134,36 @@ pub struct StepDirMotorKit;
 pub static STEP_DIR_MOTOR_KIT: StepDirMotorKit = StepDirMotorKit;
 
 static STEP_DIR_METADATA: KitMetadata = KitMetadata {
-    inputs: &[],
-    device_type: "a4988",
-    label: "STEP/DIR stepper driver",
-    summary: "A4988/DRV8825/TMC2209-class STEP/DIR twin (step count + angle).",
-    detail: "Counts rising STEP edges while EN is active; DIR selects direction. \
+    inputs: std::borrow::Cow::Borrowed(&[]),
+    device_type: std::borrow::Cow::Borrowed("a4988"),
+    label: std::borrow::Cow::Borrowed("STEP/DIR stepper driver"),
+    summary: std::borrow::Cow::Borrowed(
+        "A4988/DRV8825/TMC2209-class STEP/DIR twin (step count + angle).",
+    ),
+    detail: std::borrow::Cow::Borrowed(
+        "Counts rising STEP edges while EN is active; DIR selects direction. \
              Type aliases drv8825 and tmc2209 map here (tmc2209 uses 1/16 microstep cal).",
+    ),
     transport: Transport::GpioGroup,
     category: Category::Gpio,
-    config_keys: &[
+    config_keys: std::borrow::Cow::Borrowed(&[
         ConfigKey {
-            name: "step_pin",
+            name: std::borrow::Cow::Borrowed("step_pin"),
             ty: ConfigType::Str,
-            doc: "STEP pin (default GPIO16).",
+            doc: std::borrow::Cow::Borrowed("STEP pin (default GPIO16)."),
         },
         ConfigKey {
-            name: "dir_pin",
+            name: std::borrow::Cow::Borrowed("dir_pin"),
             ty: ConfigType::Str,
-            doc: "DIR pin (default GPIO17).",
+            doc: std::borrow::Cow::Borrowed("DIR pin (default GPIO17)."),
         },
         ConfigKey {
-            name: "en_pin",
+            name: std::borrow::Cow::Borrowed("en_pin"),
             ty: ConfigType::Str,
-            doc: "Optional EN pin.",
+            doc: std::borrow::Cow::Borrowed("Optional EN pin."),
         },
-    ],
-    labs: &[],
+    ]),
+    labs: std::borrow::Cow::Borrowed(&[]),
 };
 
 impl PeripheralKit for StepDirMotorKit {

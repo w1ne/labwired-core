@@ -208,9 +208,9 @@ impl crate::sim_input::SimInput for RotaryEncoder {
         // Relative detents from the origin; range is a generous soft bound for a
         // UI slider — the model itself imposes no hard limit.
         const CH: &[InputChannel] = &[InputChannel {
-            key: "position",
-            label: "Position",
-            unit: "detents",
+            key: std::borrow::Cow::Borrowed("position"),
+            label: std::borrow::Cow::Borrowed("Position"),
+            unit: std::borrow::Cow::Borrowed("detents"),
             min: -1_000.0,
             max: 1_000.0,
         }];

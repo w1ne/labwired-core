@@ -155,23 +155,23 @@ mod legacy {
             use labwired_core::sim_input::InputChannel;
             const CH: &[InputChannel] = &[
                 InputChannel {
-                    key: "x",
-                    label: "X",
-                    unit: "g",
+                    key: std::borrow::Cow::Borrowed("x"),
+                    label: std::borrow::Cow::Borrowed("X"),
+                    unit: std::borrow::Cow::Borrowed("g"),
                     min: -8.0,
                     max: 8.0,
                 },
                 InputChannel {
-                    key: "y",
-                    label: "Y",
-                    unit: "g",
+                    key: std::borrow::Cow::Borrowed("y"),
+                    label: std::borrow::Cow::Borrowed("Y"),
+                    unit: std::borrow::Cow::Borrowed("g"),
                     min: -8.0,
                     max: 8.0,
                 },
                 InputChannel {
-                    key: "z",
-                    label: "Z",
-                    unit: "g",
+                    key: std::borrow::Cow::Borrowed("z"),
+                    label: std::borrow::Cow::Borrowed("Z"),
+                    unit: std::borrow::Cow::Borrowed("g"),
                     min: -8.0,
                     max: 8.0,
                 },

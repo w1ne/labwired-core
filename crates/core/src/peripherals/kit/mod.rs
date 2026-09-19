@@ -41,14 +41,14 @@ use anyhow::Result;
 
 /// What every external peripheral must provide.
 ///
-/// Implementations are unit structs (the kit itself carries no per-attach
-/// state — the model it constructs does). The single `&'static` instance
-/// is what gets registered in [`registry::kits`].
+/// Built-in implementations have static registry owners. Runtime declarative
+/// kits own their descriptor and metadata and can be dropped after attachment;
+/// the attached model owns everything it needs to run.
 pub trait PeripheralKit: Send + Sync {
-    /// Static metadata: device_type string, label, transport, config keys,
+    /// Metadata borrowed from this kit: device_type, label, transport, config keys,
     /// associated lab. Consumed by the manifest generator and by tooling
     /// that wants to introspect what's available.
-    fn metadata(&self) -> &'static KitMetadata;
+    fn metadata(&self) -> &KitMetadata;
 
     /// Construct the model and attach it to the bus. `ctx` carries the
     /// `ExternalDevice` config from system.yaml plus typed accessors that
@@ -62,13 +62,13 @@ pub trait PeripheralKit: Send + Sync {
 pub struct KitMetadata {
     /// String used as `type:` in system.yaml `external_devices` entries.
     /// Must be unique across all kits.
-    pub device_type: &'static str,
+    pub device_type: std::borrow::Cow<'static, str>,
     /// Display label shown in the playground library tile / chip row.
-    pub label: &'static str,
+    pub label: std::borrow::Cow<'static, str>,
     /// One-line summary for the library tile.
-    pub summary: &'static str,
+    pub summary: std::borrow::Cow<'static, str>,
     /// Long-form description shown in the library detail view.
-    pub detail: &'static str,
+    pub detail: std::borrow::Cow<'static, str>,
     /// The bus transport this peripheral attaches to.
     pub transport: Transport,
     /// Palette grouping for the playground command palette / icon fallback.
@@ -76,19 +76,19 @@ pub struct KitMetadata {
     /// Config keys this peripheral accepts in `config:` under its system.yaml
     /// `external_devices` entry. Used for docs + manifest schema; not (yet)
     /// enforced at parse time.
-    pub config_keys: &'static [ConfigKey],
+    pub config_keys: std::borrow::Cow<'static, [ConfigKey]>,
     /// Starter labs that ship a one-click demo using this peripheral. A
     /// peripheral may appear in zero, one, or several labs (e.g. the same
     /// e-paper model used in both an STM32 and ESP32 example). The first
     /// entry is treated as the primary lab by tooling that wants a default.
-    pub labs: &'static [LabRef],
+    pub labs: std::borrow::Cow<'static, [LabRef]>,
     /// Drivable input channels this device accepts at runtime through the
     /// generic stimulus API ([`crate::sim_input::SimInput`] →
     /// `Machine::set_input` → test-script `stimuli:` / MCP `run_lab`). Part
-    /// of the device schema: the SAME static table backs the device's
+    /// of the device schema: the same channel definitions back the device's
     /// `SimInput` impl, so the manifest cannot advertise channels the model
     /// doesn't serve. Empty = not an input device.
-    pub inputs: &'static [crate::sim_input::InputChannel],
+    pub inputs: std::borrow::Cow<'static, [crate::sim_input::InputChannel]>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
@@ -117,9 +117,9 @@ pub enum Category {
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct ConfigKey {
-    pub name: &'static str,
+    pub name: std::borrow::Cow<'static, str>,
     pub ty: ConfigType,
-    pub doc: &'static str,
+    pub doc: std::borrow::Cow<'static, str>,
 }
 
 #[derive(Debug, Clone, Copy, serde::Serialize)]
@@ -134,11 +134,11 @@ pub enum ConfigType {
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct LabRef {
     /// `boardId` in `BOARD_CONFIGS` (e.g. `"quectel-bg770a-lab"`).
-    pub board_id: &'static str,
+    pub board_id: std::borrow::Cow<'static, str>,
     /// Chip identifier the lab runs against (e.g. `"stm32f103"`).
-    pub chip: &'static str,
+    pub chip: std::borrow::Cow<'static, str>,
     /// Path under `core/examples/` containing the firmware + system.yaml.
-    pub example_dir: &'static str,
+    pub example_dir: std::borrow::Cow<'static, str>,
     /// Demo ELF filename under `packages/playground/public/wasm/`.
-    pub demo_elf: &'static str,
+    pub demo_elf: std::borrow::Cow<'static, str>,
 }

@@ -167,25 +167,36 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
 /// has a hand-written kit (every declarative I²C / SPI / display device does)
 /// keeps it, so its manifest bytes and its position in the manifest array are
 /// unchanged — only genuinely unrepresented descriptors are appended.
-static ALL_KITS: std::sync::LazyLock<Vec<&'static dyn PeripheralKit>> =
+static DERIVED_KITS: std::sync::LazyLock<Vec<Box<dyn PeripheralKit>>> =
     std::sync::LazyLock::new(|| {
-        let mut out: Vec<&'static dyn PeripheralKit> = KITS.to_vec();
-        let mut seen: std::collections::HashSet<&'static str> =
-            out.iter().map(|k| k.metadata().device_type).collect();
+        let mut out: Vec<Box<dyn PeripheralKit>> = Vec::new();
+        let mut seen: std::collections::HashSet<String> = KITS
+            .iter()
+            .map(|k| k.metadata().device_type.to_string())
+            .collect();
         for yaml in labwired_config::embedded_device_yamls() {
             // A descriptor that does not parse is a build-breaking bug in an
             // in-tree file, not a runtime condition to route around: the
             // `every_embedded_descriptor_is_a_kit` gate would report it as a
             // missing part with no way to see why. Say which file, and stop.
-            let kit = super::declarative::kit_for_descriptor(
-                &labwired_config::DeviceDescriptor::from_yaml(yaml)
-                    .expect("in-tree configs/devices descriptor must parse"),
-            )
-            .expect("in-tree configs/devices descriptor must yield a kit");
-            if seen.insert(kit.metadata().device_type) {
-                out.push(kit);
+            let descriptor = labwired_config::DeviceDescriptor::from_yaml(yaml)
+                .expect("in-tree configs/devices descriptor must parse");
+            if seen.insert(descriptor.r#type.clone()) {
+                out.push(
+                    super::declarative::kit_for_descriptor(&descriptor)
+                        .expect("in-tree configs/devices descriptor must yield a kit"),
+                );
             }
         }
+        out
+    });
+
+// The boxes above own derived built-ins for the process lifetime; references
+// remain stable without leaking either kits or their nested metadata.
+static ALL_KITS: std::sync::LazyLock<Vec<&'static dyn PeripheralKit>> =
+    std::sync::LazyLock::new(|| {
+        let mut out = KITS.to_vec();
+        out.extend(DERIVED_KITS.iter().map(|kit| kit.as_ref()));
         out
     });
 

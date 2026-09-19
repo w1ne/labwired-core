@@ -1108,17 +1108,17 @@ impl UartStreamDevice for QuectelBg770a {
 /// metadata. Drive `range_m` (path loss) — no free-floating CSQ override in UI.
 pub const INPUT_CHANNELS: &[crate::sim_input::InputChannel] = &[
     crate::sim_input::InputChannel {
-        key: "range_m",
-        label: "Range",
-        unit: "m",
+        key: std::borrow::Cow::Borrowed("range_m"),
+        label: std::borrow::Cow::Borrowed("Range"),
+        unit: std::borrow::Cow::Borrowed("m"),
         // UE ↔ cell distance for path loss. 0 = co-located (strong CSQ).
         min: 0.0,
         max: 50_000.0,
     },
     crate::sim_input::InputChannel {
-        key: "ber",
-        label: "BER",
-        unit: "CSQ",
+        key: std::borrow::Cow::Borrowed("ber"),
+        label: std::borrow::Cow::Borrowed("BER"),
+        unit: std::borrow::Cow::Borrowed("CSQ"),
         min: 0.0,
         max: 99.0,
     },
@@ -1164,60 +1164,72 @@ pub struct QuectelBg770aKit;
 pub static BG770A_KIT: QuectelBg770aKit = QuectelBg770aKit;
 
 static BG770A_METADATA: KitMetadata = KitMetadata {
-    inputs: INPUT_CHANNELS,
-    device_type: "bg770a-cellular",
-    label: "Quectel BG770A Cellular",
-    summary: "LTE-M / NB-IoT cellular modem with the full Quectel AT command surface.",
-    detail: "Byte-exact V.250 + Quectel +QI*/+QMT*/+QHTTP*/+QGPS*/+QSSL* state machines, \
+    inputs: std::borrow::Cow::Borrowed(INPUT_CHANNELS),
+    device_type: std::borrow::Cow::Borrowed("bg770a-cellular"),
+    label: std::borrow::Cow::Borrowed("Quectel BG770A Cellular"),
+    summary: std::borrow::Cow::Borrowed(
+        "LTE-M / NB-IoT cellular modem with the full Quectel AT command surface.",
+    ),
+    detail: std::borrow::Cow::Borrowed(
+        "Byte-exact V.250 + Quectel +QI*/+QMT*/+QHTTP*/+QGPS*/+QSSL* state machines, \
              validated against real BG770A-GL hardware captures. Firmware sends AT commands, \
              modem replies stream back over UART. Radio quality (AT+CSQ / AT+QCSQ) uses the \
              same RfMedium path-loss geometry as VirtualAirBus: drive `range_m` (metres to \
              cell). Seed CSQ via config `rssi` only when no medium is attached.",
+    ),
     transport: Transport::Uart,
     category: Category::Uart,
-    config_keys: &[
+    config_keys: std::borrow::Cow::Borrowed(&[
         ConfigKey {
-            name: "apn",
+            name: std::borrow::Cow::Borrowed("apn"),
             ty: ConfigType::Str,
-            doc: "APN to set on the PDP context (e.g. \"internet\").",
+            doc: std::borrow::Cow::Borrowed("APN to set on the PDP context (e.g. \"internet\")."),
         },
         ConfigKey {
-            name: "rssi",
+            name: std::borrow::Cow::Borrowed("rssi"),
             ty: ConfigType::Int,
-            doc: "YAML seed CSQ (0..99) until `range_m` is driven. Not a UI SimInput — \
+            doc: std::borrow::Cow::Borrowed(
+                "YAML seed CSQ (0..99) until `range_m` is driven. Not a UI SimInput — \
                   playground radio quality is path-loss only (`range_m`).",
+            ),
         },
         ConfigKey {
-            name: "ber",
+            name: std::borrow::Cow::Borrowed("ber"),
             ty: ConfigType::Int,
-            doc: "Initial bit-error-rate reported by AT+CSQ (0..99, defaults to 99). Drive \
+            doc: std::borrow::Cow::Borrowed(
+                "Initial bit-error-rate reported by AT+CSQ (0..99, defaults to 99). Drive \
                   it at runtime with the `ber` input channel.",
+            ),
         },
         ConfigKey {
-            name: "boot_urcs",
+            name: std::borrow::Cow::Borrowed("boot_urcs"),
             ty: ConfigType::Bool,
-            doc: "If true, the modem emits the cold-boot URC sequence on attach.",
+            doc: std::borrow::Cow::Borrowed(
+                "If true, the modem emits the cold-boot URC sequence on attach.",
+            ),
         },
         ConfigKey {
-            name: "auto_attach",
+            name: std::borrow::Cow::Borrowed("auto_attach"),
             ty: ConfigType::Bool,
-            doc: "If true, the modem reports itself already registered + attached at boot.",
+            doc: std::borrow::Cow::Borrowed(
+                "If true, the modem reports itself already registered + attached at boot.",
+            ),
         },
-    ],
-    labs: &[
+    ]),
+    labs: std::borrow::Cow::Borrowed(&[
         LabRef {
-            board_id: "quectel-bg770a-lab",
-            chip: "stm32f103",
-            example_dir: "quectel-bg770a-lab",
-            demo_elf: "demo-quectel-bg770a-lab.elf",
+            board_id: std::borrow::Cow::Borrowed("quectel-bg770a-lab"),
+            chip: std::borrow::Cow::Borrowed("stm32f103"),
+            example_dir: std::borrow::Cow::Borrowed("quectel-bg770a-lab"),
+            demo_elf: std::borrow::Cow::Borrowed("demo-quectel-bg770a-lab.elf"),
         },
         LabRef {
-            board_id: "h735-telematics-lab",
-            chip: "stm32h735",
-            example_dir: "h735-telematics-lab",
-            demo_elf: "demo-h735-telematics-lab.elf",
+            board_id: std::borrow::Cow::Borrowed("h735-telematics-lab"),
+            chip: std::borrow::Cow::Borrowed("stm32h735"),
+            example_dir: std::borrow::Cow::Borrowed("h735-telematics-lab"),
+            demo_elf: std::borrow::Cow::Borrowed("demo-h735-telematics-lab.elf"),
         },
-    ],
+    ]),
 };
 
 impl PeripheralKit for QuectelBg770aKit {

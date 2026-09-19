@@ -491,7 +491,7 @@ impl SimInput for DeclarativeLogicDevice {
     /// MCU pin they are wired to, or by placing whatever else drives that net.
     /// Advertising a fake `a1` channel would put a stimulus in the palette that
     /// bypasses the wiring the part exists to model.
-    fn input_channels(&self) -> &'static [InputChannel] {
+    fn input_channels(&self) -> &[InputChannel] {
         NO_CHANNELS
     }
 

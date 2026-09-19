@@ -677,42 +677,42 @@ pub struct IolinkMasterKit;
 pub static IOLINK_MASTER_KIT: IolinkMasterKit = IolinkMasterKit;
 
 static IOLINK_MASTER_METADATA: KitMetadata = KitMetadata {
-    inputs: &[],
-    device_type: "iolink-master",
-    label: "IO-Link Master",
-    summary: "IO-Link master state machine over UART.",
-    detail: "Drives wake-up / startup / operate cycles, m-sequence types, process-data \
-             exchange. The IO-Link DI/DO device demo uses this to host two digital-input channels.",
+    inputs: std::borrow::Cow::Borrowed(&[]),
+    device_type: std::borrow::Cow::Borrowed("iolink-master"),
+    label: std::borrow::Cow::Borrowed("IO-Link Master"),
+    summary: std::borrow::Cow::Borrowed("IO-Link master state machine over UART."),
+    detail: std::borrow::Cow::Borrowed("Drives wake-up / startup / operate cycles, m-sequence types, process-data \
+             exchange. The IO-Link DI/DO device demo uses this to host two digital-input channels."),
     transport: Transport::Uart,
     category: Category::Uart,
-    config_keys: &[
+    config_keys: std::borrow::Cow::Borrowed(&[
         ConfigKey {
-            name: "pd_in_len",
+            name: std::borrow::Cow::Borrowed("pd_in_len"),
             ty: ConfigType::Int,
-            doc: "Process-data input length in bytes. Defaults to 1 (single-byte DI device).",
+            doc: std::borrow::Cow::Borrowed("Process-data input length in bytes. Defaults to 1 (single-byte DI device)."),
         },
         ConfigKey {
-            name: "m_seq_type",
+            name: std::borrow::Cow::Borrowed("m_seq_type"),
             ty: ConfigType::Int,
-            doc: "M-sequence type (1..6). Used to derive od_len: one OD octet, or two for TYPE_2_V (Table A.10).",
+            doc: std::borrow::Cow::Borrowed("M-sequence type (1..6). Used to derive od_len: one OD octet, or two for TYPE_2_V (Table A.10)."),
         },
         ConfigKey {
-            name: "com",
+            name: std::borrow::Cow::Borrowed("com"),
             ty: ConfigType::Str,
-            doc: "Communication speed: \"COM1\" (4.8 kbaud), \"COM2\" (38.4 kbaud, default), or \"COM3\" (230.4 kbaud).",
+            doc: std::borrow::Cow::Borrowed("Communication speed: \"COM1\" (4.8 kbaud), \"COM2\" (38.4 kbaud, default), or \"COM3\" (230.4 kbaud)."),
         },
         ConfigKey {
-            name: "frame_gap_ticks",
+            name: std::borrow::Cow::Borrowed("frame_gap_ticks"),
             ty: ConfigType::Int,
-            doc: "Inter-frame gap in UART ticks (default 6000). A faster -O2 device can use a small gap so many cyclic reads fit the step budget.",
+            doc: std::borrow::Cow::Borrowed("Inter-frame gap in UART ticks (default 6000). A faster -O2 device can use a small gap so many cyclic reads fit the step budget."),
         },
-    ],
-    labs: &[LabRef {
-        board_id: "iolink-dido",
-        chip: "stm32l476",
-        example_dir: "iolink-dido",
-        demo_elf: "demo-iolink-dido.elf",
-    }],
+    ]),
+    labs: std::borrow::Cow::Borrowed(&[LabRef {
+        board_id: std::borrow::Cow::Borrowed("iolink-dido"),
+        chip: std::borrow::Cow::Borrowed("stm32l476"),
+        example_dir: std::borrow::Cow::Borrowed("iolink-dido"),
+        demo_elf: std::borrow::Cow::Borrowed("demo-iolink-dido.elf"),
+    }]),
 };
 
 impl PeripheralKit for IolinkMasterKit {

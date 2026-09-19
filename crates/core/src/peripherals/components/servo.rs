@@ -321,33 +321,33 @@ pub struct ServoKit;
 pub static SERVO_KIT: ServoKit = ServoKit;
 
 static SERVO_METADATA: KitMetadata = KitMetadata {
-    inputs: &[],
-    device_type: "servo",
-    label: "Hobby PWM Servo",
-    summary: "RC hobby servo driven by a single PWM control pin (GPIO edges and/or LEDC duty).",
-    detail: "Attaches as a GPIO observer on signal_pin; optional ledc_channel binds ESP32 LEDC \
+    inputs: std::borrow::Cow::Borrowed(&[]),
+    device_type: std::borrow::Cow::Borrowed("servo"),
+    label: std::borrow::Cow::Borrowed("Hobby PWM Servo"),
+    summary: std::borrow::Cow::Borrowed("RC hobby servo driven by a single PWM control pin (GPIO edges and/or LEDC duty)."),
+    detail: std::borrow::Cow::Borrowed("Attaches as a GPIO observer on signal_pin; optional ledc_channel binds ESP32 LEDC \
              duty for ledcWrite paths. Type aliases sg90 / mg996r select calibration via config.model \
-             or the top-level type string.",
+             or the top-level type string."),
     transport: Transport::GpioGroup,
     category: Category::Gpio,
-    config_keys: &[
+    config_keys: std::borrow::Cow::Borrowed(&[
         ConfigKey {
-            name: "signal_pin",
+            name: std::borrow::Cow::Borrowed("signal_pin"),
             ty: ConfigType::Str,
-            doc: "Control pin (also control_pin / pwm_pin / pin). Defaults to GPIO18.",
+            doc: std::borrow::Cow::Borrowed("Control pin (also control_pin / pwm_pin / pin). Defaults to GPIO18."),
         },
         ConfigKey {
-            name: "model",
+            name: std::borrow::Cow::Borrowed("model"),
             ty: ConfigType::Str,
-            doc: "Calibration: sg90 | mg996r | standard. Defaults from type alias when omitted.",
+            doc: std::borrow::Cow::Borrowed("Calibration: sg90 | mg996r | standard. Defaults from type alias when omitted."),
         },
         ConfigKey {
-            name: "ledc_channel",
+            name: std::borrow::Cow::Borrowed("ledc_channel"),
             ty: ConfigType::Int,
-            doc: "Optional ESP32 LEDC channel (0..15). When omitted, all 16 channels observe.",
+            doc: std::borrow::Cow::Borrowed("Optional ESP32 LEDC channel (0..15). When omitted, all 16 channels observe."),
         },
-    ],
-    labs: &[],
+    ]),
+    labs: std::borrow::Cow::Borrowed(&[]),
 };
 
 impl PeripheralKit for ServoKit {

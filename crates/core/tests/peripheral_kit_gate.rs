@@ -46,7 +46,7 @@ fn registry_is_non_empty() {
 fn device_type_strings_are_unique() {
     let mut seen = HashSet::new();
     for kit in registry::kits() {
-        let dt = kit.metadata().device_type;
+        let dt = kit.metadata().device_type.as_ref();
         assert!(
             seen.insert(dt),
             "duplicate device_type '{dt}' in PeripheralKit registry"
@@ -57,7 +57,7 @@ fn device_type_strings_are_unique() {
 #[test]
 fn lookup_resolves_every_registered_kit() {
     for kit in registry::kits() {
-        let dt = kit.metadata().device_type;
+        let dt = kit.metadata().device_type.as_ref();
         let found = registry::lookup(dt);
         assert!(
             found.is_some(),
@@ -96,9 +96,9 @@ fn metadata_text_fields_are_non_empty() {
 fn config_keys_are_internally_unique() {
     for kit in registry::kits() {
         let mut seen = HashSet::new();
-        for ck in kit.metadata().config_keys {
+        for ck in kit.metadata().config_keys.iter() {
             assert!(
-                seen.insert(ck.name),
+                seen.insert(ck.name.as_ref()),
                 "kit '{}' lists duplicate config key '{}'",
                 kit.metadata().device_type,
                 ck.name
@@ -193,8 +193,8 @@ fn manifest_json_matches_registry() {
 fn lab_example_dirs_exist_on_disk() {
     let examples = workspace_root().join("examples");
     for kit in registry::kits() {
-        for lab in kit.metadata().labs {
-            let dir = examples.join(lab.example_dir);
+        for lab in kit.metadata().labs.iter() {
+            let dir = examples.join(lab.example_dir.as_ref());
             assert!(
                 dir.is_dir(),
                 "kit '{}' references example_dir '{}' but {:?} is not a directory",
@@ -254,7 +254,7 @@ fn kit_metadata_carries_no_commercial_overlay_data() {
         let md = kit.metadata();
         // Config keys are the machine-readable surface: a banned key name here
         // would put commerce data into system.yaml itself.
-        for key in md.config_keys {
+        for key in md.config_keys.iter() {
             let name = key.name.to_ascii_lowercase();
             for bad in BANNED {
                 assert!(
@@ -361,7 +361,7 @@ fn descriptors_without_a_kit(
 fn every_device_descriptor_is_a_kit() {
     let registered: HashSet<&str> = registry::kits()
         .iter()
-        .map(|k| k.metadata().device_type)
+        .map(|k| k.metadata().device_type.as_ref())
         .collect();
     let descriptors = descriptor_types_on_disk();
     let missing = descriptors_without_a_kit(&registered, &descriptors);
@@ -390,7 +390,7 @@ fn every_device_descriptor_is_a_kit() {
 fn a_descriptor_with_no_kit_is_named() {
     let registered: HashSet<&str> = registry::kits()
         .iter()
-        .map(|k| k.metadata().device_type)
+        .map(|k| k.metadata().device_type.as_ref())
         .collect();
     // The "registered" half of the fixture is a HAND-WRITTEN kit, not a derived
     // one, so this control keeps working — and keeps being a control — even
@@ -418,7 +418,7 @@ fn a_descriptor_with_no_kit_is_named() {
 fn the_declarative_gpio_family_is_in_the_manifest() {
     let registered: HashSet<&str> = registry::kits()
         .iter()
-        .map(|k| k.metadata().device_type)
+        .map(|k| k.metadata().device_type.as_ref())
         .collect();
     for device_type in [
         "keypad",
