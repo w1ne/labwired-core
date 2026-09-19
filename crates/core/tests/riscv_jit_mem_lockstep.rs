@@ -276,7 +276,7 @@ fn assert_op_matches(op: u32, setup: &[(usize, u32)], ram: &[u8]) {
     let frontend = RiscVFrontend::with_ram_window(RAM_BASE, RAM_LEN as u32);
     let jit = RiscvWasmJit::new();
     let flash = flash_of(&prog);
-    let (plan, binding) = frontend
+    let (plan, binding, _block_count) = frontend
         .translate_block_riscv(0, &CodeView::new(0, &flash))
         .expect("translate");
     assert!(!plan.is_stub(), "expected a compiled load/store block");
@@ -384,7 +384,7 @@ fn assert_op_matches_words(prog: &[u32], setup: &[(usize, u32)], ram: &[u8]) {
     let frontend = RiscVFrontend::with_ram_window(RAM_BASE, RAM_LEN as u32);
     let jit = RiscvWasmJit::new();
     let flash = flash_of(prog);
-    let (plan, binding) = frontend
+    let (plan, binding, _block_count) = frontend
         .translate_block_riscv(0, &CodeView::new(0, &flash))
         .expect("translate");
     assert!(!plan.is_stub(), "expected a compiled block");

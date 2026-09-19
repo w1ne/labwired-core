@@ -149,7 +149,7 @@ fn combined_block_is_one_alu_mem_branch_block() {
     let flash = flash_of(&prog);
     let frontend = RiscVFrontend::with_ram_window(RAM_BASE, RAM_LEN as u32);
 
-    let (plan, binding) = frontend
+    let (plan, binding, _block_count) = frontend
         .translate_block_riscv(HEAD_PC, &CodeView::new(0, &flash))
         .expect("loop-head block must translate");
 
