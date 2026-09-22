@@ -130,7 +130,7 @@ hardware.
 
 ## Limitations
 
-* Up-channels only (logging). Down channels (host → target) are not modeled.
+* Down-channel 0 is the host-to-target path (`SEGGER_RTT_GetKey` / `SEGGER_RTT_Read`). Other down channels are not written.
 * 32-bit control blocks; 64-bit targets are out of scope.
 * ARM paths only. Xtensa and ELF-less ROM-boot runs do not attach the model, so
   `rtt_contains` fails closed there.

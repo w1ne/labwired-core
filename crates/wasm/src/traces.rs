@@ -56,6 +56,18 @@ impl WasmSimulator {
         Ok(self.machine_or_err()?.bus.segger_rtt_status().is_some())
     }
 
+    /// Push bytes into RTT down-channel 0, the buffer `SEGGER_RTT_GetKey` and
+    /// `SEGGER_RTT_Read` drain. No-op success when the machine has no RTT model
+    /// is the wrong signal — callers learn that from `rtt_attached`.
+    #[wasm_bindgen]
+    pub fn feed_rtt_input(&self, data: &[u8]) -> Result<(), JsValue> {
+        let machine = self.machine_or_err()?;
+        if !machine.bus.write_rtt_input(data) {
+            return Err(JsValue::from_str("SEGGER RTT is not attached"));
+        }
+        Ok(())
+    }
+
     /// Why the Serial pane can be empty while the firmware is talking.
     ///
     /// An ESP32-C3/S3 has two consoles and a board's USB socket is soldered to

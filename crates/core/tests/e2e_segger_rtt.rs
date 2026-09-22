@@ -91,6 +91,74 @@ fn stock_segger_rtt_firmware_output_is_drained_from_ram() {
     assert!(status.bytes_drained >= 24);
 }
 
+fn ensure_demo_built(root: &std::path::Path) -> PathBuf {
+    let bin = labwired_core::test_support::target_dir()
+        .join("thumbv7em-none-eabi/release/firmware-nrf52840-rtt-demo");
+    let status = Command::new("cargo")
+        .current_dir(root)
+        .args([
+            "build",
+            "-p",
+            "firmware-nrf52840-rtt-demo",
+            "--release",
+            "--target",
+            "thumbv7em-none-eabi",
+        ])
+        .env_remove("CARGO_ENCODED_RUSTFLAGS")
+        .env_remove("RUSTFLAGS")
+        .status()
+        .expect("execute cargo build");
+    assert!(status.success(), "failed to build firmware-nrf52840-rtt-demo");
+    bin
+}
+
+/// SEGGER's GetKey example: the host stores a byte in down-channel 0 and the
+/// stock library returns it. `q` is the knowledge-base sample's quit key.
+#[test]
+fn getkey_reads_the_byte_the_host_stored_in_down_channel_0() {
+    let root = repo_root();
+    let elf_path = ensure_demo_built(&root);
+    let elf_bytes = std::fs::read(&elf_path).expect("read ELF");
+    let chip = labwired_config::ChipDescriptor::from_file(root.join("configs/chips/nrf52840.yaml"))
+        .expect("nrf52840 chip");
+    let manifest: labwired_config::SystemManifest =
+        serde_yaml::from_str("name: rtt-e2e\nchip: ignored\n").expect("manifest");
+    let mut bus = SystemBus::from_config(&chip, &manifest).expect("build bus");
+    let control_block = labwired_loader::resolve_symbol_in_elf(&elf_bytes, "_SEGGER_RTT");
+    assert!(control_block.is_some(), "firmware ELF must export _SEGGER_RTT");
+    bus.attach_segger_rtt(control_block);
+    let sink = Arc::new(Mutex::new(Vec::<u8>::new()));
+    assert!(bus.attach_rtt_sink(Some(sink.clone()), false));
+    let (cpu, _nvic) = configure_cortex_m(&mut bus);
+    let mut machine = Machine::new(cpu, bus);
+    let image = labwired_loader::load_elf(&elf_path).expect("load ELF");
+    machine.load_firmware(&image).expect("load firmware");
+
+    let mut saw_hello = false;
+    for _ in 0..2_000_000u64 {
+        machine.step().expect("simulator step");
+        if String::from_utf8_lossy(&sink.lock().unwrap()).contains("Hello World from SEGGER!") {
+            saw_hello = true;
+            break;
+        }
+    }
+    assert!(saw_hello, "demo never printed the SEGGER banner");
+
+    assert!(machine.bus.write_rtt_input(b"q\n"));
+    let mut captured = String::new();
+    for _ in 0..2_000_000u64 {
+        machine.step().expect("simulator step");
+        captured = String::from_utf8_lossy(&sink.lock().unwrap()).to_string();
+        if captured.contains("Got key: q") {
+            break;
+        }
+    }
+    assert!(
+        captured.contains("Got key: q"),
+        "SEGGER_RTT_GetKey did not return the hosted byte, captured {captured:?}"
+    );
+}
+
 // Runs in the feature-enabled lanes only — `cargo test -p labwired-core
 // --features jit,event-scheduler` (core-full/nightly). PR shards skip it.
 #[cfg(all(feature = "jit", feature = "event-scheduler"))]

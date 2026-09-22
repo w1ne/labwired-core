@@ -21,6 +21,7 @@ pub mod pc_coverage_report;
 pub mod regex;
 /// What a finished run reports (row 6.11: verdict / report / drive).
 mod report;
+mod rtt_stdin;
 pub mod test_support;
 pub mod tier1;
 pub mod verdict;
@@ -1236,6 +1237,12 @@ fn run_simulation_loop<C: labwired_core::Cpu>(
 
     info!("Running for {} steps...", cli.max_steps);
     for step in 0..cli.max_steps {
+        if cli.rtt && step % 1024 == 0 {
+            let pending = crate::rtt_stdin::drain_rtt_stdin();
+            if !pending.is_empty() {
+                let _ = machine.bus.write_rtt_input(&pending);
+            }
+        }
         if !cli.breakpoint.is_empty() && cli.breakpoint.contains(&machine.cpu.get_pc()) {
             info!(
                 "Breakpoint hit at PC={:#x} (step={})",

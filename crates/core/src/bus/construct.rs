@@ -565,6 +565,19 @@ impl SystemBus {
         }
     }
 
+    /// Queue host-to-target bytes for RTT down-channel 0 (`SEGGER_RTT_GetKey`).
+    /// False when no RTT model is attached. The bytes enter the target ring on
+    /// the next probe poll.
+    pub fn write_rtt_input(&self, data: &[u8]) -> bool {
+        match self.rtt_ref() {
+            Some(rtt) => {
+                rtt.queue_input(data);
+                true
+            }
+            None => false,
+        }
+    }
+
     /// Wire a capture sink into any attached IO-Link master so it records what
     /// it received over IO-Link (`MASTER PD=`, `MASTER VERDICT`, `MASTER EVENT`)
     /// into the given buffer. Pass the same `Arc<Mutex<Vec<u8>>>` used for the

@@ -2084,6 +2084,7 @@ dependencies = [
  "labwired-gdbstub",
  "labwired-ir",
  "labwired-loader",
+ "libc",
  "serde",
  "serde_json",
  "serde_yaml",
