@@ -5,105 +5,105 @@
   },
   "atsamd21g18a": {
     "batch": 53.6,
-    "step": 53.6
+    "step": 830.8
   },
   "efr32mg26": {
     "batch": 55.9,
-    "step": 55.9
+    "step": 1827.0
   },
   "esp32c3": {
     "batch": 274.4
   },
   "mkw41z4": {
     "batch": 53.8,
-    "step": 53.8
+    "step": 862.1
   },
   "nrf52832": {
     "batch": 54.6,
-    "step": 54.6
+    "step": 1230.6
   },
   "nrf52840": {
     "batch": 54.7,
-    "step": 55.1
+    "step": 1284.8
   },
   "nrf5340": {
     "batch": 54.4,
-    "step": 54.4
+    "step": 1218.7
   },
   "nrf54l15": {
     "batch": 54.5,
-    "step": 54.5
+    "step": 1282.8
   },
   "nrf54lm20a": {
     "batch": 54.8,
-    "step": 54.8
+    "step": 1369.2
   },
   "rp2040": {
     "batch": 53.8,
-    "step": 53.8
+    "step": 861.2
   },
   "rp2350": {
     "batch": 53.9,
-    "step": 53.9
+    "step": 861.4
   },
   "stm32f103": {
     "batch": 54.0,
-    "step": 54.0
+    "step": 897.8
   },
   "stm32f401": {
     "batch": 53.8,
-    "step": 53.9
+    "step": 897.0
   },
   "stm32f401cdu6": {
     "batch": 54.3,
-    "step": 54.1
+    "step": 898.5
   },
   "stm32f405": {
     "batch": 53.9,
-    "step": 53.9
+    "step": 896.6
   },
   "stm32f407": {
     "batch": 53.9,
-    "step": 54.1
+    "step": 897.2
   },
   "stm32f411ceu6": {
     "batch": 53.8,
-    "step": 54.2
+    "step": 898.4
   },
   "stm32f767": {
     "batch": 54.1,
-    "step": 54.1
+    "step": 895.7
   },
   "stm32g474re": {
     "batch": 53.9,
-    "step": 53.9
+    "step": 896.6
   },
   "stm32h563": {
     "batch": 54.2,
-    "step": 53.9
+    "step": 944.9
   },
   "stm32h735": {
     "batch": 54.0,
-    "step": 54.0
+    "step": 895.1
   },
   "stm32l073": {
     "batch": 54.0,
-    "step": 54.0
+    "step": 899.2
   },
   "stm32l476": {
     "batch": 54.1,
-    "step": 53.8
+    "step": 898.3
   },
   "stm32u575": {
     "batch": 54.4,
-    "step": 54.6
+    "step": 950.0
   },
   "stm32wb55": {
     "batch": 53.8,
-    "step": 53.8
+    "step": 897.2
   },
   "stm32wba52": {
     "batch": 53.7,
-    "step": 53.9
+    "step": 895.4
   }
 }

@@ -14,11 +14,13 @@ WHY TWO MODES AND NOT ONE
     "Ir/step" is only the number that transfers to users if it is measured on
     the loop users run. There are two, and they are not the same loop:
 
-      step   `Machine::step()` — one instruction per call, the CLI default on
-             ARM and the only thing the Xtensa driver has.
+      step   `Machine::step()` — one instruction per call. On ARM the CLI
+             takes this loop only when `LABWIRED_ARM_SINGLE_STEP=1`. Xtensa
+             has no other loop.
       batch  `Machine::advance(AdvanceRequest::run(..))` — the call the browser
-             makes from `Sim::step_batch` in `crates/wasm/src/lib.rs`, and the
-             CLI default on RISC-V.
+             makes from `Sim::step_batch` in `crates/wasm/src/lib.rs`. On ARM
+             this is also the CLI default: `--batched` only asks for the
+             `[batched]` summary line.
 
     This gate used to measure only `step` on ARM, and that made its own stated
     rationale false there. #830 removed three clamps that had pinned the ARM CPU
@@ -26,7 +28,10 @@ WHY TWO MODES AND NOT ONE
     path — and all 22 ARM boards moved 0.2-0.4% through this gate, because the
     gate never entered that path. A regression in ARM batch orchestration (a
     fourth clamp of the kind #830 deleted) was invisible on the only path the
-    browser runs.
+    browser runs. The following failure was the mirror image: both columns
+    called `measure_once` without `LABWIRED_ARM_SINGLE_STEP`, so both measured
+    `run_arm_batched_loop` and the step baselines became a second copy of the
+    batch number.
 
     Which modes a board has is derived from its fixture's `Spin.modes`, not
     hand-listed per board, for the same reason coverage is derived from the chip
@@ -43,12 +48,14 @@ WHY TWO MODES AND NOT ONE
     Still 6x inside the 3% tolerance, but a `batch` delta under 1% is noise and
     should not be read as a finding.
 
-    Note that batching engaged is not the same as batching WIDE. A bus carrying
-    something non-relaxable (H5 embedded FLASH modelling its own ops, nRF54L15's
-    non-walk-deletable peripherals) reports `max_safe_tick_interval() == 1` or
-    `requires_cycle_accurate()`, so its batches are one instruction wide and its
-    `batch` number lands near its `step` number. That is a true property of the
-    board, reported as `steps_per_batch=1.00`, not a failure to measure.
+    Note that batching engaged is not the same as batching WIDE. A bus that
+    still pins the quantum to one instruction reports `steps_per_batch=1.00`
+    on the `[batched]` line. That proof is checked when the number is taken.
+    A committed pair whose step and batch costs sit within `SAME_LOOP_RATIO`
+    is not that case: it is the fingerprint of one loop written into both
+    columns, which is what every ARM board carried while the step lever was
+    unset. An honest width-1 board would trip the same test, and the answer
+    then is to record why, not to widen the ratio until the duplicate hides.
 
 WHY Ir/step AND NOT WALL CLOCK
     Wall clock on a shared CI runner swings by tens of percent, which forces a
@@ -330,6 +337,12 @@ REGRESSION_TOLERANCE = 0.03
 # the gate the moment it lands, narrow enough that a 2x-slack baseline cannot
 # sit there for months hiding real regressions underneath it.
 STALE_TOLERANCE = 0.10
+
+# Step and batch costs closer than this measured one loop twice. The duplicated
+# ARM pairs sat at ~1.00. The narrowest honest pair seen once step mode
+# actually ran the step loop was about 2.4 (classic ESP32, on a fork). 1.25
+# sits between those, with room before an honest board can trip it.
+SAME_LOOP_RATIO = 1.25
 
 IREFS_RE = re.compile(r"^==\d+==\s+I\s+refs:\s+([\d,]+)", re.MULTILINE)
 
@@ -684,15 +697,40 @@ class Run(NamedTuple):
     tick_interval: int | None = None
 
 
+def same_loop_baselines(baselines: dict, ratio: float = SAME_LOOP_RATIO) -> list[str]:
+    """Boards whose step and batch baselines are too close to be two loops.
+
+    A board with only one of the two modes is not a finding: there is no
+    second column to have copied. Zero or negative costs are skipped; they
+    are a corrupt file, and the schema test already rejects them.
+    """
+    found = []
+    for board, entry in baselines.items():
+        if not isinstance(entry, dict):
+            continue
+        step, batch = entry.get(MODE_STEP), entry.get(MODE_BATCH)
+        if not isinstance(step, (int, float)) or not isinstance(batch, (int, float)):
+            continue
+        low, high = min(step, batch), max(step, batch)
+        if low <= 0:
+            continue
+        if high / low < ratio:
+            found.append(board)
+    return found
+
+
 def measure_once(cli: Path, chip: Path, firmware: Path, steps: int, mode: str) -> Run:
     """Retired host instructions for a full run of `steps` simulated steps."""
-    # `--batched` is the only flag difference: same binary, same fixture, same
-    # step count. On ARM it does not select the loop. `run_firmware_arm` already
-    # takes `run_arm_batched_loop` unless `LABWIRED_ARM_SINGLE_STEP=1`, which
-    # this harness never sets, so both ARM columns are that one loop. Identical
-    # step/batch pairs in baselines.json are not two measurements. The step
-    # loop itself is unguarded here.
+    # `--batched` does not select the ARM loop. `run_firmware_arm` takes
+    # `run_arm_batched_loop` whenever `LABWIRED_ARM_SINGLE_STEP` is unset,
+    # and prints the `[batched]` summary only when `--batched` was passed.
+    # Step mode sets the variable; every non-ARM driver ignores it. Batch
+    # mode passes `--batched` and must not set the variable, or the summary
+    # line would describe the step loop.
     extra = ["--batched"] if mode == MODE_BATCH else []
+    env = dict(os.environ)
+    if mode == MODE_STEP:
+        env["LABWIRED_ARM_SINGLE_STEP"] = "1"
     with tempfile.TemporaryDirectory() as tmp:
         proc = subprocess.run(
             [
@@ -713,6 +751,7 @@ def measure_once(cli: Path, chip: Path, firmware: Path, steps: int, mode: str) -
             ],
             capture_output=True,
             text=True,
+            env=env,
         )
     match = IREFS_RE.search(proc.stderr)
     if not match:
@@ -723,6 +762,16 @@ def measure_once(cli: Path, chip: Path, firmware: Path, steps: int, mode: str) -
     irefs = int(match.group(1).replace(",", ""))
 
     if mode != MODE_BATCH:
+        # Mirror of the batch proof below. A `[batched]` line here means the
+        # step lever did not take and the number is for the other loop.
+        strayed = BATCHED_RE.search(proc.stderr)
+        if strayed:
+            raise ModeNotTakenError(
+                f"{chip.stem}: asked for the STEP loop but the CLI printed a "
+                f"'[batched] ...' line, so it took the batched one. The number "
+                f"would be for the loop this mode exists to avoid.\n"
+                f"{proc.stderr[-2000:]}"
+            )
         return Run(irefs)
 
     # The whole point of the `batch` mode is that it is a DIFFERENT loop. If the

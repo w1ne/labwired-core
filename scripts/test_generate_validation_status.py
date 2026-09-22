@@ -362,19 +362,34 @@ def test_the_generated_document_does_not_move_with_the_calendar(tmp_path, monkey
     assert "expires 2026-07-01" in baseline
 
 
+def test_lapsed_acks_are_the_ones_the_gate_fails(tmp_path, monkeypatch):
+    """An expiry only counts when the ack was holding a drift back.
+
+    A board with no silicon capture has `failing` false on the day the ack is
+    written and a year later: there is nothing to re-capture. The committed-
+    manifest test used to ask bare `expired`, which is true for that board, so
+    it could go red while `--drift` stayed green.
+    """
+    holding = _acked_drifted_board(tmp_path, monkeypatch)
+    holding["id"] = "holding"
+    idle = dict(holding)
+    idle["id"] = "idle"
+    idle.pop("silicon", None)
+    expires = holding["drift_ack"] + datetime.timedelta(days=gvs.ACK_TTL_DAYS)
+    today = expires + datetime.timedelta(days=1)
+
+    assert gvs.lapsed_acks({"boards": [holding, idle]}, today=today) == ["holding"]
+
+
 def test_the_committed_manifest_is_not_already_expired():
     """Reads the real manifest: this change must cost nothing on the day it lands.
 
-    Not a restatement of the manifest — it asserts the property that made this
-    safe to merge, and it will fail loudly the day a real ack comes due, which
-    is the entire intent.
+    Asks `lapsed_acks`, the same question `--drift` asks. A bare `expired`
+    flag also fires for a board whose ack covers nothing, and that failure
+    cannot be cleared by a re-capture because there is no capture to refresh.
     """
     manifest = yaml.safe_load(gvs.MANIFEST.read_text())
-    stale = [
-        b["id"]
-        for b in manifest["boards"]
-        if gvs.evaluate(b, today=datetime.date.today())["expired"]
-    ]
+    stale = gvs.lapsed_acks(manifest, today=datetime.date.today())
     assert not stale, (
         "drift acks have come due: " + ", ".join(stale) + ". Re-capture and bump "
         "silicon.last_capture, or renew the ack — do not widen ACK_TTL_DAYS to clear this."

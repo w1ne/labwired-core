@@ -1187,10 +1187,14 @@ jobs:
       #
       # The list is the sub-2s half of the uncovered set (measured; the whole
       # step adds ~3s of test runtime to a job that already builds this exact
-      # crate + feature). The expensive remainder stays nightly, named and
-      # reasoned in `scheduler_lane_coverage`'s NIGHTLY_ONLY table — that
-      # ratchet is what keeps this list from silently rotting again: a new
-      # scheduler-gated test file must be added here or given a written reason.
+      # crate + feature), plus the four STM32 walk differentials. Those four
+      # are ~55s together and used to be excused as nightly-only, which meant
+      # a pull request could break them and only core-full — a push job that
+      # this workflow skips on pull requests — would notice. The remainder
+      # stays nightly, named and reasoned in `scheduler_lane_coverage`'s
+      # NIGHTLY_ONLY table — that ratchet is what keeps this list from
+      # silently rotting again: a new scheduler-gated test file must be added
+      # here or given a written reason.
       # `esp32c3_bt_event_residency_gate` is here and not in `core-integrity`
       # BECAUSE OF THE FEATURE MATRIX, not because it is cheap (it is: 4.5s).
       # The property it defends — `esp32c3::bt` stays inside
@@ -1230,6 +1234,10 @@ jobs:
           --test nrf54l15_uarte_walk_differential
           --test nrf54l15_twim_walk_differential
           --test atsamd21_sercom_walk_differential
+          --test stm32f401_walk_differential
+          --test stm32h563_walk_differential
+          --test stm32l073_walk_differential
+          --test stm32l476_walk_differential
 
       # JIT-on vs interpreter on nRF TIMER0 / UART / WFI at tick 512. Needs
       # `jit` as well as `event-scheduler` (`required-features` on the target).
@@ -2086,6 +2094,25 @@ jobs:
               echo "::warning title=known-red test still red::${target}::${test} — tracked as issue ${issue}, not counted against this job."
             fi
           done < /tmp/known-red.txt
+
+      # A runner that fills its disk dies while writing its own trace, so the
+      # run uploads nothing and the only surviving evidence is a one-line
+      # annotation. The 2026-09-22 v0.25.0 run died in the next step with
+      # "No space left on device" and 68 MB free. Deleting the debug tree is
+      # what makes room; refusing afterwards turns a mute death into a failed
+      # step that states the number. 20G is enough to start a build that
+      # needs tens of gigabytes, checked after the deletion so a large debug
+      # tree cannot false-fail a runner the cleanup would have saved.
+      - name: Refuse rather than die mutely if the disk is nearly gone
+        run: |
+          rm -rf target/debug
+          df -h / | tail -1
+          avail=$(df --output=avail -BG / | tail -1 | tr -dc '0-9')
+          echo "available before the feature and release builds: ${avail}G"
+          if [ "${avail:-0}" -lt 20 ]; then
+            echo "::error title=core-full is out of disk::only ${avail}G free before the feature and release builds; the runner would die mid-build and upload no logs"
+            exit 1
+          fi
 
       - name: Feature tests — jit + event-scheduler
         # The workspace test above is a cold build when the release version
