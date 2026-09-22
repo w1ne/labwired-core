@@ -108,7 +108,10 @@ fn ensure_demo_built(root: &std::path::Path) -> PathBuf {
         .env_remove("RUSTFLAGS")
         .status()
         .expect("execute cargo build");
-    assert!(status.success(), "failed to build firmware-nrf52840-rtt-demo");
+    assert!(
+        status.success(),
+        "failed to build firmware-nrf52840-rtt-demo"
+    );
     bin
 }
 
@@ -125,7 +128,10 @@ fn getkey_reads_the_byte_the_host_stored_in_down_channel_0() {
         serde_yaml::from_str("name: rtt-e2e\nchip: ignored\n").expect("manifest");
     let mut bus = SystemBus::from_config(&chip, &manifest).expect("build bus");
     let control_block = labwired_loader::resolve_symbol_in_elf(&elf_bytes, "_SEGGER_RTT");
-    assert!(control_block.is_some(), "firmware ELF must export _SEGGER_RTT");
+    assert!(
+        control_block.is_some(),
+        "firmware ELF must export _SEGGER_RTT"
+    );
     bus.attach_segger_rtt(control_block);
     let sink = Arc::new(Mutex::new(Vec::<u8>::new()));
     assert!(bus.attach_rtt_sink(Some(sink.clone()), false));

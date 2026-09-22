@@ -343,7 +343,11 @@ impl SeggerRtt {
         }
         let mut wrote = false;
         while !q.is_empty() {
-            let free = if wr >= rd { size - (wr - rd) - 1 } else { rd - wr - 1 };
+            let free = if wr >= rd {
+                size - (wr - rd) - 1
+            } else {
+                rd - wr - 1
+            };
             if free == 0 {
                 break;
             }
@@ -764,7 +768,15 @@ mod tests {
         cb + CB_OFF_AUP0 + CHAN_SIZE * max_up
     }
 
-    fn setup_down(bus: &mut SystemBus, cb: u64, max_up: u32, buf: u64, size: u32, wr: u32, rd: u32) {
+    fn setup_down(
+        bus: &mut SystemBus,
+        cb: u64,
+        max_up: u32,
+        buf: u64,
+        size: u32,
+        wr: u32,
+        rd: u32,
+    ) {
         write_u32_at(bus, cb + CB_OFF_MAX_DOWN, 1);
         write_u32_at(bus, cb + CB_OFF_MAX_UP, max_up);
         let desc = down_desc(cb, max_up as u64);
