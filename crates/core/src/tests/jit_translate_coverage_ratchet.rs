@@ -48,12 +48,32 @@
 //! that kind of edge case, reviewed by a human once, not re-derived by magic
 //! on every run.
 
+use super::source_text::strip_comments_and_strings;
 use std::path::{Path, PathBuf};
 
 // ---------------------------------------------------------------------------
-// Source-text plumbing, shared with `event_scheduler_cfg_ratchet`'s approach:
-// blank comments/strings before scanning so prose can never masquerade as
-// code.
+// Source-text plumbing, shared with the other counting gates: blank
+// comments/strings before scanning so prose can never masquerade as code.
+//
+// This file used to carry its own copy of the reader, and that copy had never
+// learned raw strings. The `r#"(module ..."#` WAT blob in
+// `cpu/xtensa_jit/mod.rs` therefore terminated at its first inner quote and the
+// rest of the WAT text was code to the scan below -- a gate judging JIT
+// coverage partly by what a test fixture's WebAssembly text happened to spell.
+//
+// Converging was checked before it was done, not after, and over all three
+// architectures rather than the one with the obvious raw string -- there is a
+// second one in `xtensa_jit/windowed_call.rs`, in a file that is not where you
+// would look for it. Under the two readers:
+//
+//     cortex_m  154 variants  111 covered both ways   0 chars differ
+//     riscv      83 variants   83 covered both ways   0 chars differ
+//     xtensa    166 variants   64 covered both ways  75 chars differ
+//
+// No `Instruction` variant name falls inside the 75 characters, so this commit
+// changes the reader without moving any verdict. If a future raw string lands
+// in one of these files and DOES hide a variant, this gate gets stricter, which
+// is the direction it should fail in.
 // ---------------------------------------------------------------------------
 
 fn repo_root() -> PathBuf {
@@ -64,69 +84,6 @@ fn repo_root() -> PathBuf {
 }
 
 /// Blank every comment and string/char literal body, preserving byte offsets
-/// NOT yet the shared reader in `super::source_text`, and deliberately so:
-/// this copy never learned raw strings, so the `r#"(module ..."#` WAT blob in
-/// `cpu/xtensa_jit/mod.rs` terminates at its first inner quote and the rest of
-/// the WAT text reads as code to the scan below. Converging on the shared
-/// reader therefore moves this gate's coverage numbers, which is a claim that
-/// needs measuring on its own rather than riding along with an unrelated fix.
-fn strip_comments_and_strings(src: &str) -> String {
-    let b = src.as_bytes();
-    let mut out = b.to_vec();
-    let mut i = 0usize;
-    let blank = |out: &mut Vec<u8>, from: usize, to: usize| {
-        for p in from..to.min(out.len()) {
-            if out[p] != b'\n' {
-                out[p] = b' ';
-            }
-        }
-    };
-    while i < b.len() {
-        if b[i] == b'"' {
-            let mut j = i + 1;
-            while j < b.len() {
-                if b[j] == b'\\' {
-                    j += 2;
-                    continue;
-                }
-                if b[j] == b'"' {
-                    break;
-                }
-                j += 1;
-            }
-            let end = (j + 1).min(b.len());
-            blank(&mut out, i, end);
-            i = end;
-            continue;
-        }
-        if b[i] == b'/' && i + 1 < b.len() && b[i + 1] == b'/' {
-            let end = src[i..].find('\n').map(|k| i + k).unwrap_or(b.len());
-            blank(&mut out, i, end);
-            i = end;
-            continue;
-        }
-        if b[i] == b'/' && i + 1 < b.len() && b[i + 1] == b'*' {
-            let mut depth = 1usize;
-            let mut j = i + 2;
-            while j < b.len() && depth > 0 {
-                if b[j] == b'/' && j + 1 < b.len() && b[j + 1] == b'*' {
-                    depth += 1;
-                    j += 2;
-                } else if b[j] == b'*' && j + 1 < b.len() && b[j + 1] == b'/' {
-                    depth -= 1;
-                    j += 2;
-                } else {
-                    j += 1;
-                }
-            }
-            blank(&mut out, i, j.min(b.len()));
-            i = j;
-            continue;
-        }
-        i += 1;
-    }
-    String::from_utf8_lossy(&out).into_owned()
-}
 
 /// Read `path` under the repo root, comment/string-stripped.
 fn read_stripped(path: &Path) -> String {
