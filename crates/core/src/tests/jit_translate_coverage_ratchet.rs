@@ -64,7 +64,12 @@ fn repo_root() -> PathBuf {
 }
 
 /// Blank every comment and string/char literal body, preserving byte offsets
-/// (mirrors `event_scheduler_cfg_ratchet::strip_comments_and_strings`).
+/// NOT yet the shared reader in `super::source_text`, and deliberately so:
+/// this copy never learned raw strings, so the `r#"(module ..."#` WAT blob in
+/// `cpu/xtensa_jit/mod.rs` terminates at its first inner quote and the rest of
+/// the WAT text reads as code to the scan below. Converging on the shared
+/// reader therefore moves this gate's coverage numbers, which is a claim that
+/// needs measuring on its own rather than riding along with an unrelated fix.
 fn strip_comments_and_strings(src: &str) -> String {
     let b = src.as_bytes();
     let mut out = b.to_vec();

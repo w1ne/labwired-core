@@ -99,6 +99,7 @@
 //! self-exclusion: its own doc comment above is invisible to it, which
 //! [`this_file_contributes_no_sites`] proves rather than assumes.
 
+use super::source_text::strip_comments_and_strings;
 use std::path::{Path, PathBuf};
 
 /// The literal the predicates are matched against. Not `env!` — the point is
@@ -256,96 +257,6 @@ const MAX_HARNESS_SITES: usize = 86;
 // The counter. A pure function over source text, so its definition is testable
 // against fixtures rather than only against the tree it happens to be run on.
 // ---------------------------------------------------------------------------
-
-/// Blank every comment and string/char literal body, preserving byte offsets.
-///
-/// Everything downstream runs on the result, so a mention of the feature in a
-/// doc comment, an `assert!` message or a test fixture cannot be a site. Raw
-/// strings (`r"..."`, `r#"..."#`) and nested block comments are handled because
-/// this file's own fixtures use both.
-fn strip_comments_and_strings(src: &str) -> String {
-    let b = src.as_bytes();
-    let mut out = b.to_vec();
-    let mut i = 0usize;
-    let blank = |out: &mut Vec<u8>, from: usize, to: usize| {
-        for p in from..to.min(out.len()) {
-            if out[p] != b'\n' {
-                out[p] = b' ';
-            }
-        }
-    };
-    while i < b.len() {
-        // Raw string: r"..." or r#"..."# (any number of hashes).
-        if b[i] == b'r' && i + 1 < b.len() && (b[i + 1] == b'"' || b[i + 1] == b'#') {
-            let mut j = i + 1;
-            let mut hashes = 0usize;
-            while j < b.len() && b[j] == b'#' {
-                hashes += 1;
-                j += 1;
-            }
-            if j < b.len() && b[j] == b'"' {
-                j += 1;
-                let mut term = String::from("\"");
-                term.push_str(&"#".repeat(hashes));
-                let end = src[j..]
-                    .find(&term)
-                    .map(|k| j + k + term.len())
-                    .unwrap_or(b.len());
-                blank(&mut out, i, end);
-                i = end;
-                continue;
-            }
-        }
-        // Ordinary string literal (covers char literals closely enough: a
-        // `'"'` would be a lone quote, which we terminate at the next quote —
-        // and no `cfg` predicate hides inside a char literal).
-        if b[i] == b'"' {
-            let mut j = i + 1;
-            while j < b.len() {
-                if b[j] == b'\\' {
-                    j += 2;
-                    continue;
-                }
-                if b[j] == b'"' {
-                    break;
-                }
-                j += 1;
-            }
-            let end = (j + 1).min(b.len());
-            blank(&mut out, i, end);
-            i = end;
-            continue;
-        }
-        // Line comment (`//`, `///`, `//!`).
-        if b[i] == b'/' && i + 1 < b.len() && b[i + 1] == b'/' {
-            let end = src[i..].find('\n').map(|k| i + k).unwrap_or(b.len());
-            blank(&mut out, i, end);
-            i = end;
-            continue;
-        }
-        // Block comment, nesting as Rust does.
-        if b[i] == b'/' && i + 1 < b.len() && b[i + 1] == b'*' {
-            let mut depth = 1usize;
-            let mut j = i + 2;
-            while j < b.len() && depth > 0 {
-                if b[j] == b'/' && j + 1 < b.len() && b[j + 1] == b'*' {
-                    depth += 1;
-                    j += 2;
-                } else if b[j] == b'*' && j + 1 < b.len() && b[j + 1] == b'/' {
-                    depth -= 1;
-                    j += 2;
-                } else {
-                    j += 1;
-                }
-            }
-            blank(&mut out, i, j.min(b.len()));
-            i = j;
-            continue;
-        }
-        i += 1;
-    }
-    String::from_utf8_lossy(&out).into_owned()
-}
 
 /// Byte index of the delimiter that closes the group opened at `open`.
 fn matching_close(b: &[u8], open: usize, opens: &[u8], closes: &[u8]) -> usize {

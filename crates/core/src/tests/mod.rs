@@ -88,6 +88,9 @@ pub mod scb_reset;
 pub mod scheduler_lane_coverage;
 #[cfg(test)]
 pub mod simctl_machine;
+/// One home for reading Rust source as code rather than as prose.
+#[cfg(test)]
+pub mod source_text;
 #[cfg(test)]
 pub mod spi_byte_level_golden;
 #[cfg(test)]
