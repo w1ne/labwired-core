@@ -243,6 +243,11 @@ pub struct V2Gpio {
     lckr: u32,    // 0x1C
     afrl: u32,    // 0x20
     afrh: u32,    // 0x24
+    /// Pins the outside world is holding. A pull applies only where this bit
+    /// is clear, so a button on the pad wins over the weak resistor. Not a
+    /// register: snapshots stay the register file they were.
+    #[serde(skip)]
+    external: u32,
 }
 
 impl V2Gpio {
@@ -264,15 +269,31 @@ impl V2Gpio {
     /// driving. Returning a bare latch instead makes `digitalRead()` on an
     /// OUTPUT pin — one of the most common Arduino idioms — read 0 forever.
     /// OTYPER bit set = open-drain: the pin is only driven while ODR is 0;
-    /// a 1 releases it, leaving the level to the external world / pull-up,
-    /// which is what the latched `idr` represents here.
+    /// a 1 releases it. An undriven pin with nothing else holding it takes
+    /// its level from PUPDR (01 pull-up, 10 pull-down). An external driver
+    /// recorded by `set_external_input` wins over that weak pull.
     fn effective_idr(&self) -> u32 {
         let out = self.output_mask();
         let open_drain = out & self.otyper;
         let push_pull = out & !self.otyper;
         let od_driven_low = open_drain & !self.odr;
         let driven = push_pull | od_driven_low;
-        ((self.odr & push_pull) | (self.idr & !driven)) & 0xFFFF
+        let undriven = !driven & 0xFFFF;
+        let mut pull_level = 0u32;
+        let mut pull_apply = 0u32;
+        for pin in 0..16u32 {
+            match (self.pupdr >> (pin * 2)) & 0x3 {
+                0b01 => {
+                    pull_apply |= 1 << pin;
+                    pull_level |= 1 << pin;
+                }
+                0b10 => pull_apply |= 1 << pin,
+                _ => {}
+            }
+        }
+        let from_pull = undriven & pull_apply & !self.external;
+        let from_latch = undriven & !from_pull;
+        ((self.odr & push_pull) | (pull_level & from_pull) | (self.idr & from_latch)) & 0xFFFF
     }
 
     fn read_reg(&self, offset: u64) -> u32 {
@@ -906,7 +927,12 @@ impl GpioFamily {
         };
         match self {
             Self::Stm32F1(g) => apply(&mut g.idr),
-            Self::Stm32V2(g) => apply(&mut g.idr),
+            Self::Stm32V2(g) => {
+                apply(&mut g.idr);
+                if pin < 16 {
+                    g.external |= 1 << pin;
+                }
+            }
             Self::Nrf52(g) => apply(&mut g.idr),
             // Kinetis names its input latch PDIR.
             Self::Kinetis(g) => apply(&mut g.pdir),
@@ -2148,6 +2174,65 @@ mod idr_pin_level_tests {
             rd32(&gpio, 0x10) & (1 << 5),
             0,
             "input pin must not take its level from ODR"
+        );
+    }
+
+    /// Nothing is wired to an input, so the pin is the pull. PUPDR is two bits
+    /// per pin: 01 pull-up, 10 pull-down. Reset leaves the input latch at 0,
+    /// which used to read as a held-low button.
+    #[test]
+    fn v2_idr_undriven_input_follows_pupdr() {
+        let mut gpio = v2();
+        // PA5 pull-up, PA6 pull-down. MODER stays input.
+        gpio.write_u32(0x0C, (0b01 << 10) | (0b10 << 12)).unwrap();
+        assert_eq!(rd32(&gpio, 0x10) & (1 << 5), 1 << 5, "pull-up reads high");
+        assert_eq!(rd32(&gpio, 0x10) & (1 << 6), 0, "pull-down reads low");
+    }
+
+    /// A push-pull driver wins over the pull. The pin is PA5, driven high,
+    /// with a pull-down requested.
+    #[test]
+    fn v2_idr_push_pull_ignores_pull() {
+        let mut gpio = v2();
+        gpio.write_u32(0x00, 0x1 << 10).unwrap(); // PA5 output
+        gpio.write_u32(0x0C, 0b10 << 10).unwrap(); // pull-down
+        gpio.write_u32(0x18, 1 << 5).unwrap(); // drive high
+        assert_eq!(
+            rd32(&gpio, 0x10) & (1 << 5),
+            1 << 5,
+            "driven high reads high despite the pull-down"
+        );
+    }
+
+    /// An external driver beats the weak pull. A button holding the pad low
+    /// must read low even though PUPDR asks for a pull-up.
+    #[test]
+    fn v2_idr_external_level_beats_pull() {
+        let mut gpio = v2();
+        gpio.write_u32(0x0C, 0b01 << 10).unwrap(); // PA5 pull-up
+        assert!(gpio.set_gpio_input(5, false));
+        assert_eq!(
+            rd32(&gpio, 0x10) & (1 << 5),
+            0,
+            "a pad held low reads low through the pull-up"
+        );
+        assert!(gpio.set_gpio_input(5, true));
+        assert_eq!(rd32(&gpio, 0x10) & (1 << 5), 1 << 5);
+    }
+
+    /// Open-drain released is not driven. A pull-up then holds the pad high;
+    /// without one it stays at the latched input.
+    #[test]
+    fn v2_idr_released_open_drain_uses_pull() {
+        let mut gpio = v2();
+        gpio.write_u32(0x00, 0x1 << 10).unwrap();
+        gpio.write_u32(0x04, 1 << 5).unwrap(); // open-drain
+        gpio.write_u32(0x0C, 0b01 << 10).unwrap(); // pull-up
+        gpio.write_u32(0x18, 1 << 5).unwrap(); // release
+        assert_eq!(
+            rd32(&gpio, 0x10) & (1 << 5),
+            1 << 5,
+            "released open-drain with a pull-up reads high"
         );
     }
 }
