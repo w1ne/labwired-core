@@ -83,8 +83,6 @@ fn repo_root() -> PathBuf {
         .expect("repo root")
 }
 
-/// Blank every comment and string/char literal body, preserving byte offsets
-
 /// Read `path` under the repo root, comment/string-stripped.
 fn read_stripped(path: &Path) -> String {
     let full = repo_root().join(path);
