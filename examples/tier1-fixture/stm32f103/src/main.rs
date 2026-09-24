@@ -267,8 +267,12 @@ fn check_spi() -> Result<(), &'static [u8]> {
     Ok(())
 }
 
-/// adc: F1 ADC1. ADON (CR2 bit 0) powers the converter; a rising SWSTART
-/// (CR2 bit 30) launches a regular conversion. The engine latches EOC
+/// adc: F1 ADC1. ADON (CR2 bit 0) powers the converter. On F1 (RM0008
+/// §11.12.3) SWSTART is CR2 bit **22**, and it starts a regular conversion only
+/// when the regular trigger is software (EXTSEL[2:0] = 0b111, bits 19:17) with
+/// external triggering enabled (EXTTRIG, bit 20). Bit 30 is SWSTART on F2/F4
+/// and reserved here: this check used it until the model learned the F1
+/// layout (f5e0e3cb), after which it read `blocked`. The engine latches EOC
 /// (SR bit 1) after its fixed conversion time and writes the result to DR.
 fn check_adc() -> Result<(), &'static [u8]> {
     // clock-gating: ADC1 (RCC_APB2ENR.ADC1EN bit 9) is unclocked out of reset.
@@ -281,7 +285,10 @@ fn check_adc() -> Result<(), &'static [u8]> {
     wr32(RCC_BASE + 0x18, rd32(RCC_BASE + 0x18) | (1 << 9)); // APB2ENR.ADC1EN
     wr32(ADC1_BASE + 0x08, 1); // CR2.ADON @ 0x08
     spin(100); // converter wake-up
-    wr32(ADC1_BASE + 0x08, 1 | (1 << 30)); // CR2: ADON + SWSTART (rising edge)
+    // CR2: ADON + EXTSEL=SWSTART (0b111 << 17) + EXTTRIG, then SWSTART (bit 22).
+    let cr2 = 1 | (0b111 << 17) | (1 << 20);
+    wr32(ADC1_BASE + 0x08, cr2);
+    wr32(ADC1_BASE + 0x08, cr2 | (1 << 22));
     let mut eoc = false;
     for _ in 0..20_000 {
         if rd32(ADC1_BASE) & (1 << 1) != 0 {
