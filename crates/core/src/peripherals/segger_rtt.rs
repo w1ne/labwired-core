@@ -19,6 +19,7 @@
 //! polls instead of restarting from the first range base every time.
 
 use std::any::Any;
+use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
 use crate::{Bus, CycleClock, Peripheral, SimResult};
@@ -26,6 +27,7 @@ use crate::{Bus, CycleClock, Peripheral, SimResult};
 /// `"SEGGER RTT"` followed by six NULs, at control-block offset 0.
 const RTT_ID: [u8; 16] = *b"SEGGER RTT\0\0\0\0\0\0";
 const CB_OFF_MAX_UP: u64 = 0x10;
+const CB_OFF_MAX_DOWN: u64 = 0x14;
 const CB_OFF_AUP0: u64 = 0x18;
 const CHAN_SIZE: u64 = 24;
 const CHAN_OFF_PBUFFER: u64 = 0x04;
@@ -63,6 +65,9 @@ pub struct SeggerRtt {
     sink: Option<Arc<Mutex<Vec<u8>>>>,
     echo_stdout: bool,
     bytes_drained: u64,
+    /// Host bytes waiting for down-channel 0. The probe writes `WrOff`; the
+    /// target's `SEGGER_RTT_GetKey` / `SEGGER_RTT_Read` advances `RdOff`.
+    input: Mutex<VecDeque<u8>>,
 }
 
 impl SeggerRtt {
@@ -80,6 +85,19 @@ impl SeggerRtt {
             sink: None,
             echo_stdout: false,
             bytes_drained: 0,
+            input: Mutex::new(VecDeque::new()),
+        }
+    }
+
+    /// Queue bytes for down-channel 0. They land in the target ring on the
+    /// next probe poll, stopping one byte short of `RdOff` so a full buffer
+    /// cannot look empty. Leftovers stay queued until the target reads.
+    pub fn queue_input(&self, data: &[u8]) {
+        if data.is_empty() {
+            return;
+        }
+        if let Ok(mut q) = self.input.lock() {
+            q.extend(data);
         }
     }
 
@@ -288,6 +306,122 @@ impl SeggerRtt {
             let _ = bus.write_u32(desc + CHAN_OFF_RD, wr);
         }
     }
+
+    /// `aDown` starts at `aUp[MaxNumUpBuffers]`. A zero up-count, or a control
+    /// block whose ID is not present yet, must not produce that address: it
+    /// would alias `aDown` onto `aUp`. Re-read every call; `_DoInit` publishes
+    /// the count before the ID, and a later re-init can change it.
+    fn down_channel_desc(bus: &dyn Bus, cb: u64, index: u32) -> Option<u64> {
+        if !Self::magic_at(bus, cb) {
+            return None;
+        }
+        let max_up = bus.read_u32(cb + CB_OFF_MAX_UP).unwrap_or(0);
+        if max_up == 0 {
+            return None;
+        }
+        let max_down = bus.read_u32(cb + CB_OFF_MAX_DOWN).unwrap_or(0);
+        if index >= max_down {
+            return None;
+        }
+        Some(cb + CB_OFF_AUP0 + CHAN_SIZE * u64::from(max_up) + CHAN_SIZE * u64::from(index))
+    }
+
+    /// `None` when this descriptor must not be written: bad geometry, a
+    /// non-zero `Flags[31:24]`, or a buffer outside the RAM `attach_segger_rtt`
+    /// already collected.
+    fn usable_down(&self, bus: &dyn Bus, desc: u64) -> Option<(u32, u32, u32, u32)> {
+        let (Ok(p_buffer), Ok(size), Ok(wr), Ok(rd), Ok(flags)) = (
+            bus.read_u32(desc + CHAN_OFF_PBUFFER),
+            bus.read_u32(desc + CHAN_OFF_SIZE),
+            bus.read_u32(desc + CHAN_OFF_WR),
+            bus.read_u32(desc + CHAN_OFF_RD),
+            bus.read_u32(desc + CHAN_OFF_FLAGS),
+        ) else {
+            return None;
+        };
+        if size < 2 || p_buffer == 0 || flags >> 24 != 0 || rd >= size || wr >= size {
+            return None;
+        }
+        if !self.in_ranges(p_buffer as u64, size as u64) {
+            return None;
+        }
+        Some((p_buffer, size, wr, rd))
+    }
+
+    /// Free bytes in a down ring. One slot stays empty so full and empty stay
+    /// distinct: zero means full.
+    fn free_down(size: u32, wr: u32, rd: u32) -> u32 {
+        if rd > wr {
+            rd - wr - 1
+        } else {
+            size - (wr - rd + 1)
+        }
+    }
+
+    /// Copy `data` into down-channel `index` and store the new `WrOff` once.
+    /// Returns how many bytes fit. The rest is discarded; this does not stall
+    /// and does not write `RdOff`. No control block, a missing ID, or
+    /// `MaxNumUpBuffers == 0` accepts nothing.
+    pub fn write_down(&self, bus: &mut dyn Bus, index: u32, data: &[u8]) -> usize {
+        if data.is_empty() {
+            return 0;
+        }
+        let Some(cb) = self.control_block else {
+            return 0;
+        };
+        let Some(desc) = Self::down_channel_desc(bus, cb as u64, index) else {
+            return 0;
+        };
+        let Some((p_buffer, size, mut wr, rd)) = self.usable_down(bus, desc) else {
+            return 0;
+        };
+        let n = (Self::free_down(size, wr, rd) as usize).min(data.len());
+        let mut accepted = 0usize;
+        for &byte in &data[..n] {
+            if bus.write_u8(p_buffer as u64 + u64::from(wr), byte).is_err() {
+                break;
+            }
+            wr = if wr + 1 == size { 0 } else { wr + 1 };
+            accepted += 1;
+        }
+        if accepted > 0 && bus.write_u32(desc + CHAN_OFF_WR, wr).is_err() {
+            return 0;
+        }
+        accepted
+    }
+
+    /// Queued host bytes for down-channel 0. `write_rtt_input` has no bus
+    /// borrow, so the copy waits for this poll. [`Self::write_down`] stores
+    /// immediately and does not use this queue.
+    fn fill_down(&mut self, bus: &mut dyn Bus) {
+        let Some(cb) = self.control_block else { return };
+        let Some(desc) = Self::down_channel_desc(bus, cb as u64, 0) else {
+            return;
+        };
+        let Some((p_buffer, size, mut wr, rd)) = self.usable_down(bus, desc) else {
+            return;
+        };
+        let Ok(mut q) = self.input.lock() else { return };
+        if q.is_empty() {
+            return;
+        }
+        let mut wrote = false;
+        while !q.is_empty() {
+            if Self::free_down(size, wr, rd) == 0 {
+                break;
+            }
+            let Some(byte) = q.pop_front() else { break };
+            if bus.write_u8(p_buffer as u64 + u64::from(wr), byte).is_err() {
+                q.push_front(byte);
+                break;
+            }
+            wr = if wr + 1 == size { 0 } else { wr + 1 };
+            wrote = true;
+        }
+        if wrote {
+            let _ = bus.write_u32(desc + CHAN_OFF_WR, wr);
+        }
+    }
 }
 
 impl Peripheral for SeggerRtt {
@@ -326,6 +460,7 @@ impl Peripheral for SeggerRtt {
             }
         }
         self.drain(bus);
+        self.fill_down(bus);
     }
 
     fn needs_bus_tick(&self) -> bool {
@@ -683,5 +818,183 @@ mod tests {
         bus.set_current_cycle(1124);
         bus.tick_peripherals_with_costs();
         assert_eq!(&*sink.lock().unwrap(), b"abcdefgh");
+    }
+
+    /// Down-channel 0 sits after the whole up array. The stock library compiles
+    /// three up buffers, so a host that assumes "the slot after up[0]" writes
+    /// into the wrong descriptor and `SEGGER_RTT_GetKey` stays empty.
+    fn down_desc(cb: u64, max_up: u64) -> u64 {
+        cb + CB_OFF_AUP0 + CHAN_SIZE * max_up
+    }
+
+    fn setup_down(
+        bus: &mut SystemBus,
+        cb: u64,
+        max_up: u32,
+        buf: u64,
+        size: u32,
+        wr: u32,
+        rd: u32,
+    ) {
+        write_u32_at(bus, cb + CB_OFF_MAX_DOWN, 1);
+        write_u32_at(bus, cb + CB_OFF_MAX_UP, max_up);
+        let desc = down_desc(cb, max_up as u64);
+        write_u32_at(bus, desc + CHAN_OFF_PBUFFER, buf as u32);
+        write_u32_at(bus, desc + CHAN_OFF_SIZE, size);
+        write_u32_at(bus, desc + CHAN_OFF_WR, wr);
+        write_u32_at(bus, desc + CHAN_OFF_RD, rd);
+    }
+
+    fn attach(bus: &mut SystemBus, cb: u64) {
+        let mut rtt = SeggerRtt::new(Some(cb as u32), vec![(0x2000_0000, 0x10_0000)]);
+        rtt.set_poll_every_cycles(1);
+        bus.add_peripheral("segger_rtt", 0xE00F_F000, 0x1000, None, Box::new(rtt));
+    }
+
+    #[test]
+    fn host_write_lands_in_down_channel_0_and_leaves_rd_to_the_target() {
+        let mut bus = SystemBus::new();
+        let cb = 0x2000_0000u64;
+        let up = 0x2000_1000u64;
+        let down = 0x2000_2000u64;
+        // Stock SEGGER_RTT_Conf.h: 3 up buffers, then the down array.
+        setup_cb(&mut bus, cb, up, 16, 0, 0);
+        setup_down(&mut bus, cb, 3, down, 16, 0, 0);
+        attach(&mut bus, cb);
+
+        assert!(bus.write_rtt_input(b"ab"));
+        bus.tick_peripherals_with_costs();
+
+        assert_eq!(bus.ram.read_u8(down), Some(b'a'));
+        assert_eq!(bus.ram.read_u8(down + 1), Some(b'b'));
+        let desc = down_desc(cb, 3);
+        assert_eq!(bus.ram.read_u32(desc + CHAN_OFF_WR), Some(2));
+        assert_eq!(bus.ram.read_u32(desc + CHAN_OFF_RD), Some(0));
+    }
+
+    #[test]
+    fn host_write_keeps_one_byte_free_and_resumes_after_the_target_reads() {
+        let mut bus = SystemBus::new();
+        let cb = 0x2000_0000u64;
+        let up = 0x2000_1000u64;
+        let down = 0x2000_2000u64;
+        setup_cb(&mut bus, cb, up, 8, 0, 0);
+        // Size 4 holds 3 bytes. `WrOff == RdOff` means empty, so the 4th slot stays free.
+        setup_down(&mut bus, cb, 3, down, 4, 0, 0);
+        attach(&mut bus, cb);
+
+        assert!(bus.write_rtt_input(b"abcde"));
+        bus.tick_peripherals_with_costs();
+        let desc = down_desc(cb, 3);
+        assert_eq!(bus.ram.read_u32(desc + CHAN_OFF_WR), Some(3));
+        assert_eq!(bus.ram.read_u8(down), Some(b'a'));
+        assert_eq!(bus.ram.read_u8(down + 2), Some(b'c'));
+
+        // Target consumed a,b,c the way SEGGER_RTT_ReadNoLock advances RdOff.
+        write_u32_at(&mut bus, desc + CHAN_OFF_RD, 3);
+        bus.set_current_cycle(100);
+        bus.tick_peripherals_with_costs();
+        assert_eq!(bus.ram.read_u8(down + 3), Some(b'd'));
+        assert_eq!(bus.ram.read_u8(down), Some(b'e'));
+        assert_eq!(bus.ram.read_u32(desc + CHAN_OFF_WR), Some(1));
+        assert_eq!(bus.ram.read_u32(desc + CHAN_OFF_RD), Some(3));
+    }
+
+    #[test]
+    fn host_write_waits_until_a_down_channel_exists() {
+        let bus = SystemBus::new();
+        assert!(!bus.write_rtt_input(b"x"));
+    }
+
+    /// Wrap, the one-byte gap that means full, and `Flags[31:24] != 0`.
+    #[test]
+    fn write_down_wraps_stops_when_one_byte_free_and_skips_flagged_channels() {
+        let mut bus = SystemBus::new();
+        let cb = 0x2000_0000u64;
+        let up = 0x2000_1000u64;
+        let down = 0x2000_2000u64;
+        setup_cb(&mut bus, cb, up, 16, 0, 0);
+        // Size 8, WrOff 6, RdOff 1: two free slots (6, 7). Index 0 is the
+        // reserved byte that keeps the ring from looking empty.
+        setup_down(&mut bus, cb, 3, down, 8, 6, 1);
+        for i in 0..8u64 {
+            bus.ram.write_u8(down + i, 0xEE);
+        }
+        attach(&mut bus, cb);
+
+        assert_eq!(bus.write_rtt_down(0, b"abcd"), 2);
+        assert_eq!(bus.ram.read_u8(down + 6), Some(b'a'));
+        assert_eq!(bus.ram.read_u8(down + 7), Some(b'b'));
+        assert_eq!(bus.ram.read_u8(down), Some(0xEE));
+        let desc = down_desc(cb, 3);
+        assert_eq!(bus.ram.read_u32(desc + CHAN_OFF_WR), Some(0));
+        assert_eq!(bus.ram.read_u32(desc + CHAN_OFF_RD), Some(1));
+
+        // RdOff == WrOff + 1: the only gap is the reserved byte, so the ring
+        // is full and a further write must not move either cursor.
+        write_u32_at(&mut bus, desc + CHAN_OFF_WR, 0);
+        write_u32_at(&mut bus, desc + CHAN_OFF_RD, 1);
+        bus.ram.write_u8(down, 0xEE);
+        assert_eq!(bus.write_rtt_down(0, b"Z"), 0);
+        assert_eq!(bus.ram.read_u8(down), Some(0xEE));
+        assert_eq!(bus.ram.read_u32(desc + CHAN_OFF_WR), Some(0));
+        assert_eq!(bus.ram.read_u32(desc + CHAN_OFF_RD), Some(1));
+
+        // WrOff immediately behind RdOff (the other one-byte gap): also full.
+        write_u32_at(&mut bus, desc + CHAN_OFF_WR, 7);
+        write_u32_at(&mut bus, desc + CHAN_OFF_RD, 0);
+        bus.ram.write_u8(down + 7, 0xEE);
+        assert_eq!(bus.write_rtt_down(0, b"Z"), 0);
+        assert_eq!(bus.ram.read_u8(down + 7), Some(0xEE));
+        assert_eq!(bus.ram.read_u32(desc + CHAN_OFF_WR), Some(7));
+        assert_eq!(bus.ram.read_u32(desc + CHAN_OFF_RD), Some(0));
+
+        write_u32_at(&mut bus, desc + CHAN_OFF_WR, 0);
+        write_u32_at(&mut bus, desc + CHAN_OFF_RD, 0);
+        write_u32_at(&mut bus, desc + CHAN_OFF_FLAGS, 1 << 24);
+        bus.ram.write_u8(down, 0xEE);
+        assert_eq!(bus.write_rtt_down(0, b"Q"), 0);
+        assert_eq!(bus.ram.read_u8(down), Some(0xEE));
+        assert_eq!(bus.ram.read_u32(desc + CHAN_OFF_WR), Some(0));
+        assert_eq!(bus.ram.read_u32(desc + CHAN_OFF_RD), Some(0));
+    }
+
+    #[test]
+    fn write_down_uses_each_index_and_refuses_an_alias_onto_up() {
+        let mut bus = SystemBus::new();
+        let cb = 0x2000_0000u64;
+        let up = 0x2000_1000u64;
+        let down0 = 0x2000_2000u64;
+        let down1 = 0x2000_3000u64;
+        setup_cb(&mut bus, cb, up, 16, 0, 0);
+        setup_down(&mut bus, cb, 2, down0, 8, 0, 0);
+        let desc1 = down_desc(cb, 2) + CHAN_SIZE;
+        write_u32_at(&mut bus, cb + CB_OFF_MAX_DOWN, 2);
+        write_u32_at(&mut bus, desc1 + CHAN_OFF_PBUFFER, down1 as u32);
+        write_u32_at(&mut bus, desc1 + CHAN_OFF_SIZE, 8);
+        write_u32_at(&mut bus, desc1 + CHAN_OFF_WR, 0);
+        write_u32_at(&mut bus, desc1 + CHAN_OFF_RD, 0);
+        attach(&mut bus, cb);
+
+        assert_eq!(bus.write_rtt_down(1, b"Z"), 1);
+        assert_eq!(bus.ram.read_u8(down1), Some(b'Z'));
+        assert_eq!(bus.ram.read_u32(desc1 + CHAN_OFF_WR), Some(1));
+        assert_eq!(bus.ram.read_u32(desc1 + CHAN_OFF_RD), Some(0));
+        assert_ne!(bus.ram.read_u8(down0), Some(b'Z'));
+
+        // MaxNumUpBuffers == 0 must not treat aUp[0] as aDown[0].
+        write_u32_at(&mut bus, cb + CB_OFF_MAX_UP, 0);
+        bus.ram.write_u8(up, 0xEE);
+        assert_eq!(bus.write_rtt_down(0, b"Q"), 0);
+        assert_eq!(bus.ram.read_u8(up), Some(0xEE));
+
+        // No ID: do not compute aDown even when the counts look real.
+        write_u32_at(&mut bus, cb + CB_OFF_MAX_UP, 2);
+        for i in 0..16u64 {
+            bus.ram.write_u8(cb + i, 0);
+        }
+        bus.ram.write_u8(down0, 0xEE);
+        assert_eq!(bus.write_rtt_down(0, b"Q"), 0);
+        assert_eq!(bus.ram.read_u8(down0), Some(0xEE));
     }
 }

@@ -91,11 +91,48 @@ fn u5_resolution_bits(cfgr: u32) -> u32 {
 /// Analog input channels on the widest modelled family (STM32H7 ADC1, 0..=19).
 const MAX_CHANNELS: usize = 20;
 
+// ── STM32F1 ADC_CR2 bits (RM0008 §11.12.3 / stm32f1xx.h) ────────────────────
+// Independently checked against ST headers — NOT against this model's older
+// (wrong) bit-30 SWSTART constant. F2/F4 reuse the same SR/CR1/CR2/SQR *offsets*
+// but place SWSTART at bit 30; see `F4_CR2_SWSTART` and `AdcRegisterLayout::Stm32F4`.
+const F1_CR2_ADON: u32 = 1 << 0;
+const F1_CR2_CONT: u32 = 1 << 1;
+const F1_CR2_CAL: u32 = 1 << 2;
+const F1_CR2_RSTCAL: u32 = 1 << 3;
+/// Software trigger selected when EXTSEL[2:0] == 0b111 (bits 19:17).
+const F1_CR2_EXTSEL: u32 = 0b111 << 17;
+const F1_CR2_EXTTRIG: u32 = 1 << 20;
+const F1_CR2_SWSTART: u32 = 1 << 22;
+
+/// STM32F2/F4 ADC_CR2.SWSTART (RM0090) — same legacy register *block* as F1,
+/// different bit. Kept so F4 board bindings are not silently retargeted to F1.
+const F4_CR2_SWSTART: u32 = 1 << 30;
+
+/// Approximate F1 RSTCAL completion latency in model cycles (not host time).
+/// Silicon clears RSTCAL after a short internal reset; a fixed 2-cycle delay is
+/// enough for HAL spin-loops (`while (CR2 & RSTCAL)`) to observe completion.
+/// Explicitly an approximation — not cycle-accurate ADC-clock timing.
+const F1_RSTCAL_CYCLES: u32 = 2;
+/// Approximate F1 CAL completion latency in model cycles. ST calibration takes
+/// many ADC clocks; a short fixed delay unblocks HAL polls without claiming
+/// silicon-accurate duration.
+const F1_CAL_CYCLES: u32 = 14;
+
+/// Scheduler / walk event tokens for the F1 side-band (conversion uses 0).
+const F1_EVT_CONVERT: u32 = 0;
+const F1_EVT_RSTCAL: u32 = 1;
+const F1_EVT_CAL: u32 = 2;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AdcRegisterLayout {
     #[default]
     Stm32F1,
+    /// STM32F2/F4 legacy ADC block: same SR/CR1/CR2/SQR offsets as F1, but
+    /// `CR2.SWSTART` is bit 30 (RM0090) and there is no F1-style CAL/RSTCAL.
+    /// Kept as a distinct layout so fixing F1 bit 22 does not retarget F4 boards
+    /// that share the old `"adc"` default profile.
+    Stm32F4,
     Stm32L4,
     /// STM32H7 (RM0468). A genuinely different block from the L4 — see
     /// [`H7AdcRegs`] for what diverges and why the alias that used to point
@@ -130,7 +167,10 @@ impl FromStr for AdcRegisterLayout {
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         let v = value.trim().to_ascii_lowercase();
         match v.as_str() {
-            "stm32f1" | "f1" | "legacy" => Ok(Self::Stm32F1),
+            "stm32f1" | "f1" => Ok(Self::Stm32F1),
+            // "legacy" kept as F2/F4 bit-30 SWSTART: the pre-fix shared layout
+            // answered software-start on bit 30. F1 callers must name `stm32f1`.
+            "stm32f4" | "f4" | "stm32f2" | "f2" | "legacy" => Ok(Self::Stm32F4),
             // `stm32h7`/`h7` used to land here. It no longer does: the H7 block
             // has PCSEL, LTR/HTR watchdog pairs instead of TR1..TR3, CALFACT2,
             // a 3-bit RES at a different offset with a different encoding, and
@@ -141,7 +181,7 @@ impl FromStr for AdcRegisterLayout {
             "stm32h5" | "h5" => Ok(Self::Stm32H5),
             "stm32u5" | "u5" => Ok(Self::Stm32U5),
             _ => Err(format!(
-                "unsupported ADC register layout '{}'; supported: stm32f1, stm32l4, stm32h5, stm32h7, stm32u5",
+                "unsupported ADC register layout '{}'; supported: stm32f1, stm32f4, stm32l4, stm32h5, stm32h7, stm32u5",
                 value
             )),
         }
@@ -284,6 +324,8 @@ pub struct U5AdcRegs {
 #[derive(Debug, serde::Serialize)]
 enum AdcRegs {
     Stm32F1(F1AdcRegs),
+    /// F2/F4: same `F1AdcRegs` storage, F4 SWSTART/EXTEN semantics in the write path.
+    Stm32F4(F1AdcRegs),
     Stm32L4(L4AdcRegs),
     Stm32H7(H7AdcRegs),
     Stm32U5(U5AdcRegs),
@@ -314,6 +356,18 @@ pub struct Adc {
     /// Scheduler mode: `true` while the conversion-countdown event is live.
     #[serde(skip)]
     chain_live: bool,
+    /// F1 RSTCAL countdown remaining (model cycles). `None` = idle.
+    #[serde(skip)]
+    f1_rstcal_remaining: Option<u32>,
+    /// F1 CAL countdown remaining (model cycles). `None` = idle.
+    #[serde(skip)]
+    f1_cal_remaining: Option<u32>,
+    /// Scheduler: RSTCAL event chain armed.
+    #[serde(skip)]
+    f1_rstcal_live: bool,
+    /// Scheduler: CAL event chain armed.
+    #[serde(skip)]
+    f1_cal_live: bool,
     /// Does a calibration request complete, so `CR.ADCAL` self-clears?
     ///
     /// `ADCAL` is a self-clearing COMMAND bit, but only once calibration can
@@ -340,6 +394,7 @@ impl Adc {
         // F1 reset is all-zeros.
         let regs = match layout {
             AdcRegisterLayout::Stm32F1 => AdcRegs::Stm32F1(F1AdcRegs::default()),
+            AdcRegisterLayout::Stm32F4 => AdcRegs::Stm32F4(F1AdcRegs::default()),
             AdcRegisterLayout::Stm32L4 | AdcRegisterLayout::Stm32H5 => {
                 AdcRegs::Stm32L4(L4AdcRegs {
                     cr: 0x2000_0000,
@@ -387,6 +442,10 @@ impl Adc {
             channel_inputs: [0xFFFF; MAX_CHANNELS],
             clock: None,
             chain_live: false,
+            f1_rstcal_remaining: None,
+            f1_cal_remaining: None,
+            f1_rstcal_live: false,
+            f1_cal_live: false,
         }
     }
 
@@ -430,8 +489,8 @@ impl Adc {
                 if (cr1 & (1 << 5)) != 0 {
                     irq = true; // EOCIE
                 }
-                // Continuous mode (CONT bit1 + ADON bit0).
-                if (cr2 & (1 << 1)) != 0 && (cr2 & 1) != 0 {
+                // Continuous mode (CONT + ADON).
+                if (cr2 & F1_CR2_CONT) != 0 && (cr2 & F1_CR2_ADON) != 0 {
                     self.start_conversion();
                 }
             }
@@ -463,7 +522,7 @@ impl Adc {
     /// * U5 — 0..=19, the `PCSEL` bitmap's width.
     pub fn channel_count(&self) -> u8 {
         match &self.regs {
-            AdcRegs::Stm32F1(_) | AdcRegs::Stm32L4(_) => 19,
+            AdcRegs::Stm32F1(_) | AdcRegs::Stm32F4(_) | AdcRegs::Stm32L4(_) => 19,
             AdcRegs::Stm32H7(_) | AdcRegs::Stm32U5(_) => 20,
         }
     }
@@ -495,7 +554,7 @@ impl Adc {
     /// engine runs there, so these are only consulted on the F1 path).
     fn f1_ctrl(&self) -> (u32, u32) {
         match &self.regs {
-            AdcRegs::Stm32F1(r) => (r.cr1, r.cr2),
+            AdcRegs::Stm32F1(r) | AdcRegs::Stm32F4(r) => (r.cr1, r.cr2),
             // Neither the L4, the H7 nor the U5 runs the F1 countdown engine.
             AdcRegs::Stm32L4(_) | AdcRegs::Stm32H7(_) | AdcRegs::Stm32U5(_) => (0, 0),
         }
@@ -505,7 +564,7 @@ impl Adc {
     /// the other families (their engines select from their own SQR1/PCSEL).
     fn f1_regular_channel(&self) -> usize {
         match &self.regs {
-            AdcRegs::Stm32F1(r) => (r.sqr3 & 0x1F) as usize,
+            AdcRegs::Stm32F1(r) | AdcRegs::Stm32F4(r) => (r.sqr3 & 0x1F) as usize,
             AdcRegs::Stm32L4(_) | AdcRegs::Stm32H7(_) | AdcRegs::Stm32U5(_) => 0,
         }
     }
@@ -543,7 +602,10 @@ impl Adc {
             AdcRegs::Stm32L4(r) => (r.isr & 0x1 != 0, r.cfgr),
             // H7 and U5 have their own engines (`maybe_start_h7_conversion`,
             // `maybe_start_u5_conversion`).
-            AdcRegs::Stm32F1(_) | AdcRegs::Stm32H7(_) | AdcRegs::Stm32U5(_) => return,
+            AdcRegs::Stm32F1(_)
+            | AdcRegs::Stm32F4(_)
+            | AdcRegs::Stm32H7(_)
+            | AdcRegs::Stm32U5(_) => return,
         };
         if !(aden && adstart && adrdy) {
             return;
@@ -922,6 +984,146 @@ impl Adc {
             }
         }
     }
+    /// Cancel F1 RSTCAL/CAL countdowns and the conversion engine. Used when
+    /// ADON falls or the block is reset — pending scheduler events become no-ops
+    /// once the remaining counters are cleared.
+    fn cancel_f1_pending(&mut self) {
+        self.converting = false;
+        self.cycles_remaining = 0;
+        self.chain_live = false;
+        self.f1_rstcal_remaining = None;
+        self.f1_cal_remaining = None;
+        self.f1_rstcal_live = false;
+        self.f1_cal_live = false;
+    }
+
+    /// Apply a full CR2 word on the STM32F1 layout after a byte merge.
+    ///
+    /// Software start (RM0008 §11.3.1): ADON set, EXTSEL[2:0] == 111 (software
+    /// event selected), rising edge of SWSTART (bit 22). EXTTRIG enables the
+    /// external-trigger path; when EXTSEL selects software, SWSTART is the
+    /// trigger and EXTTRIG is not required — but if EXTTRIG is clear *and*
+    /// EXTSEL is not software, SWSTART alone must not convert (external event
+    /// not armed). Bit 30 is ignored on F1 (that is the F2/F4 SWSTART).
+    ///
+    /// Calibration (ST F1 HAL): rising RSTCAL with ADON schedules reset
+    /// completion (clears RSTCAL); rising CAL with ADON and RSTCAL idle
+    /// schedules cal completion (clears CAL). Bits are NOT cleared on every
+    /// write — only when the scheduled completion fires, or when ADON drops
+    /// (pending work is cancelled and the command bits are dropped so a HAL
+    /// poll cannot hang on a cancelled request).
+    fn apply_f1_cr2(&mut self, old_cr2: u32, new_cr2: u32) -> bool {
+        let mut cr2 = new_cr2;
+        let adon = (cr2 & F1_CR2_ADON) != 0;
+        if !adon {
+            self.cancel_f1_pending();
+            // Drop sticky command bits so a cancelled cal cannot trap a poll.
+            cr2 &= !(F1_CR2_RSTCAL | F1_CR2_CAL | F1_CR2_SWSTART);
+            if let AdcRegs::Stm32F1(r) = &mut self.regs {
+                r.cr2 = cr2;
+            }
+            return false;
+        }
+
+        let rstcal_rise = (cr2 & F1_CR2_RSTCAL) != 0 && (old_cr2 & F1_CR2_RSTCAL) == 0;
+        if rstcal_rise {
+            self.f1_rstcal_remaining = Some(F1_RSTCAL_CYCLES);
+            self.f1_rstcal_live = false; // re-arm take_scheduled_events
+        }
+
+        let cal_rise = (cr2 & F1_CR2_CAL) != 0 && (old_cr2 & F1_CR2_CAL) == 0;
+        let rstcal_busy = (cr2 & F1_CR2_RSTCAL) != 0 || self.f1_rstcal_remaining.is_some();
+        if cal_rise && !rstcal_busy {
+            self.f1_cal_remaining = Some(F1_CAL_CYCLES);
+            self.f1_cal_live = false;
+        }
+
+        // RM0008: SWSTART starts a regular conversion only when EXTSEL[2:0]=111
+        // (software trigger). EXTTRIG arms *external* events for other EXTSEL
+        // codes — those fire from the selected timer/EXTI edge, not from
+        // SWSTART. Bit 30 (F2/F4 SWSTART) is ignored here.
+        let sw_selected = (cr2 & F1_CR2_EXTSEL) == F1_CR2_EXTSEL;
+        let swstart_rise = (cr2 & F1_CR2_SWSTART) != 0 && (old_cr2 & F1_CR2_SWSTART) == 0;
+        let mut trigger = false;
+        if swstart_rise {
+            // Self-clearing command bit whether or not the selection is valid.
+            cr2 &= !F1_CR2_SWSTART;
+            if sw_selected {
+                trigger = true;
+            }
+        }
+        // EXTTRIG is part of the F1 trigger contract (external edges not modelled).
+        // Touch the constant so a rename/removal cannot silently drop the bit.
+        debug_assert_eq!(F1_CR2_EXTTRIG, 1 << 20);
+
+        if let AdcRegs::Stm32F1(r) = &mut self.regs {
+            r.cr2 = cr2;
+        }
+        trigger
+    }
+
+    /// F2/F4 CR2 write: SWSTART at bit 30, rising edge + ADON starts conversion.
+    fn apply_f4_cr2(&mut self, old_cr2: u32, new_cr2: u32) -> bool {
+        let mut cr2 = new_cr2;
+        let adon = (cr2 & F1_CR2_ADON) != 0;
+        if !adon {
+            self.cancel_f1_pending();
+            cr2 &= !F4_CR2_SWSTART;
+            if let AdcRegs::Stm32F4(r) = &mut self.regs {
+                r.cr2 = cr2;
+            }
+            return false;
+        }
+        let swstart = (cr2 & F4_CR2_SWSTART) != 0;
+        let old_swstart = (old_cr2 & F4_CR2_SWSTART) != 0;
+        let mut trigger = false;
+        if swstart && !old_swstart {
+            cr2 &= !F4_CR2_SWSTART;
+            trigger = true;
+        }
+        if let AdcRegs::Stm32F4(r) = &mut self.regs {
+            r.cr2 = cr2;
+        }
+        trigger
+    }
+
+    /// Advance one model cycle of F1 RSTCAL/CAL countdowns (walk path).
+    fn advance_f1_calibration(&mut self) {
+        self.advance_f1_rstcal();
+        self.advance_f1_cal();
+    }
+
+    fn advance_f1_rstcal(&mut self) {
+        let Some(left) = self.f1_rstcal_remaining.as_mut() else {
+            return;
+        };
+        if *left > 0 {
+            *left -= 1;
+        }
+        if *left == 0 {
+            self.f1_rstcal_remaining = None;
+            self.f1_rstcal_live = false;
+            if let AdcRegs::Stm32F1(r) = &mut self.regs {
+                r.cr2 &= !F1_CR2_RSTCAL;
+            }
+        }
+    }
+
+    fn advance_f1_cal(&mut self) {
+        let Some(left) = self.f1_cal_remaining.as_mut() else {
+            return;
+        };
+        if *left > 0 {
+            *left -= 1;
+        }
+        if *left == 0 {
+            self.f1_cal_remaining = None;
+            self.f1_cal_live = false;
+            if let AdcRegs::Stm32F1(r) = &mut self.regs {
+                r.cr2 &= !F1_CR2_CAL;
+            }
+        }
+    }
 }
 
 impl Default for Adc {
@@ -937,7 +1139,7 @@ impl Peripheral for Adc {
 
     fn read(&self, offset: u64) -> SimResult<u8> {
         let val = match &self.regs {
-            AdcRegs::Stm32F1(r) => match offset {
+            AdcRegs::Stm32F1(r) | AdcRegs::Stm32F4(r) => match offset {
                 0x00..=0x03 => self.sr,
                 0x04..=0x07 => r.cr1,
                 0x08..=0x0B => r.cr2,
@@ -962,38 +1164,38 @@ impl Peripheral for Adc {
         let val_shifted = (value as u32) << shift;
 
         match self.regs {
-            AdcRegs::Stm32F1(_) => match offset {
+            AdcRegs::Stm32F1(_) | AdcRegs::Stm32F4(_) => match offset {
                 0x00..=0x03 => self.sr = (self.sr & !mask) | val_shifted,
-                0x04..=0x07 => {
-                    if let AdcRegs::Stm32F1(r) = &mut self.regs {
+                0x04..=0x07 => match &mut self.regs {
+                    AdcRegs::Stm32F1(r) | AdcRegs::Stm32F4(r) => {
                         r.cr1 = (r.cr1 & !mask) | val_shifted;
                     }
-                }
+                    _ => {}
+                },
                 0x08..=0x0B => {
-                    // Update CR2; decide whether to kick off a conversion, then
-                    // release the `regs` borrow before calling start_conversion
-                    // (which mutates the shared engine fields).
-                    let mut trigger = false;
-                    if let AdcRegs::Stm32F1(r) = &mut self.regs {
-                        let old_cr2 = r.cr2;
-                        r.cr2 = (r.cr2 & !mask) | val_shifted;
-                        let adon = (r.cr2 & 1) != 0;
-                        let swstart = (r.cr2 & (1 << 30)) != 0;
-                        let old_swstart = (old_cr2 & (1 << 30)) != 0;
-                        if adon && swstart && !old_swstart {
-                            r.cr2 &= !(1 << 30);
-                            trigger = true;
-                        }
-                    }
+                    // Byte-merge CR2, then apply family-specific side effects
+                    // (F1: bit-22 SWSTART + EXTSEL/EXTTRIG + CAL/RSTCAL;
+                    //  F4: bit-30 SWSTART). Release `regs` before start_conversion.
+                    let (old_cr2, merged, is_f1) = match &self.regs {
+                        AdcRegs::Stm32F1(r) => (r.cr2, (r.cr2 & !mask) | val_shifted, true),
+                        AdcRegs::Stm32F4(r) => (r.cr2, (r.cr2 & !mask) | val_shifted, false),
+                        _ => (0, 0, false),
+                    };
+                    let trigger = if is_f1 {
+                        self.apply_f1_cr2(old_cr2, merged)
+                    } else {
+                        self.apply_f4_cr2(old_cr2, merged)
+                    };
                     if trigger {
                         self.start_conversion();
                     }
                 }
-                0x34..=0x37 => {
-                    if let AdcRegs::Stm32F1(r) = &mut self.regs {
+                0x34..=0x37 => match &mut self.regs {
+                    AdcRegs::Stm32F1(r) | AdcRegs::Stm32F4(r) => {
                         r.sqr3 = (r.sqr3 & !mask) | val_shifted;
                     }
-                }
+                    _ => {}
+                },
                 _ => {
                     crate::census_reg!("adc:Adc", offset, "write");
                 }
@@ -1048,6 +1250,7 @@ impl Peripheral for Adc {
         if self.scheduler_mode() {
             return PeripheralTickResult::default();
         }
+        self.advance_f1_calibration();
         let irq = self.advance_conversion();
         // Tick-cost normalization (mirrors SysTick B1): the legacy model charged
         // `cycles: 1` per converting tick into `total_cycles` — a sim artifact (a
@@ -1082,38 +1285,66 @@ impl Peripheral for Adc {
     }
 
     fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
-        // Arm the conversion-countdown chain the moment a write starts a
-        // conversion (`converting` set by SWSTART on F1). L4 converts
-        // synchronously in `write` and never sets `converting`, so it arms
-        // nothing. delay-0 → deadline `current_cycle + 1` = the walk's next tick.
-        if self.scheduler_mode() && self.converting && !self.chain_live {
-            self.chain_live = true;
-            vec![(0u64, 0u32)]
-        } else {
-            Vec::new()
+        // Arm conversion / F1 CAL / F1 RSTCAL chains when work is pending.
+        // L4 converts synchronously in `write` and never sets `converting`.
+        // delay-0 → deadline `current_cycle + 1` = the walk's next tick.
+        if !self.scheduler_mode() {
+            return Vec::new();
         }
+        let mut out = Vec::new();
+        if self.converting && !self.chain_live {
+            self.chain_live = true;
+            out.push((0u64, F1_EVT_CONVERT));
+        }
+        if self.f1_rstcal_remaining.is_some() && !self.f1_rstcal_live {
+            self.f1_rstcal_live = true;
+            out.push((0u64, F1_EVT_RSTCAL));
+        }
+        if self.f1_cal_remaining.is_some() && !self.f1_cal_live {
+            self.f1_cal_live = true;
+            out.push((0u64, F1_EVT_CAL));
+        }
+        out
     }
 
     fn on_event(
         &mut self,
-        _event_token: u32,
+        event_token: u32,
         _sched: &mut crate::sched::EventScheduler,
         _bus: &mut dyn crate::Bus,
     ) -> crate::sched::EventResult {
         if !self.scheduler_mode() {
             return crate::sched::EventResult::default();
         }
-        // Run one cycle of the SAME conversion countdown the walk runs and pend
-        // the EOC line on its verdict. Continuous mode re-arms `converting` in
-        // `advance_conversion`, so re-check it AFTER and perpetuate at delay 1
-        // while still converting; stop when the conversion completes (single
-        // shot) so idle fast-forward engages.
-        let irq = self.advance_conversion();
-        self.chain_live = self.converting;
-        crate::sched::EventResult {
-            raise_own_irq: irq,
-            reschedule_delay: self.converting.then_some(1),
-            ..Default::default()
+        match event_token {
+            F1_EVT_RSTCAL => {
+                self.advance_f1_rstcal();
+                let still = self.f1_rstcal_remaining.is_some();
+                self.f1_rstcal_live = still;
+                crate::sched::EventResult {
+                    reschedule_delay: still.then_some(1),
+                    ..Default::default()
+                }
+            }
+            F1_EVT_CAL => {
+                self.advance_f1_cal();
+                let still = self.f1_cal_remaining.is_some();
+                self.f1_cal_live = still;
+                crate::sched::EventResult {
+                    reschedule_delay: still.then_some(1),
+                    ..Default::default()
+                }
+            }
+            _ => {
+                // Conversion countdown (token 0) — same engine as the walk.
+                let irq = self.advance_conversion();
+                self.chain_live = self.converting;
+                crate::sched::EventResult {
+                    raise_own_irq: irq,
+                    reschedule_delay: self.converting.then_some(1),
+                    ..Default::default()
+                }
+            }
         }
     }
 
@@ -1133,11 +1364,25 @@ impl Peripheral for Adc {
 mod tests {
     use super::*;
 
+    /// ST-correct F1 software-start sequence: ADON | EXTSEL=111, then SWSTART
+    /// at bit 22. Expected masks are the named F1 constants (from ST headers),
+    /// never the old production bit-30 value.
+    fn f1_software_start(adc: &mut Adc) {
+        let cr2 = F1_CR2_ADON | F1_CR2_EXTSEL | F1_CR2_SWSTART;
+        adc.write_u32(0x08, F1_CR2_ADON | F1_CR2_EXTSEL).unwrap();
+        adc.write_u32(0x08, cr2).unwrap();
+    }
+
+    fn f1_software_start_with(adc: &mut Adc, extra_cr2: u32) {
+        let base = F1_CR2_ADON | F1_CR2_EXTSEL | extra_cr2;
+        adc.write_u32(0x08, base).unwrap();
+        adc.write_u32(0x08, base | F1_CR2_SWSTART).unwrap();
+    }
+
     #[test]
     fn test_adc_basic_conversion() {
         let mut adc = Adc::new();
-        adc.write(0x08, 1).unwrap(); // ADON
-        adc.write(0x0B, 1 << 6).unwrap(); // SWSTART (bit 30)
+        f1_software_start(&mut adc);
 
         assert!(adc.converting);
         assert_eq!(adc.cycles_remaining, 14);
@@ -1168,8 +1413,7 @@ mod tests {
         assert_eq!(adc.read_u32(0x34).unwrap(), 5);
 
         let convert = |adc: &mut Adc| {
-            adc.write(0x08, 1).unwrap(); // ADON
-            adc.write(0x0B, 1 << 6).unwrap(); // SWSTART
+            f1_software_start(adc);
             for _ in 0..15 {
                 adc.tick();
             }
@@ -1196,8 +1440,7 @@ mod tests {
     fn clear_channel_input_returns_channel_to_the_modeled_source() {
         let mut adc = Adc::new();
         let convert = |adc: &mut Adc| {
-            adc.write(0x08, 1).unwrap(); // ADON
-            adc.write(0x0B, 1 << 6).unwrap(); // SWSTART
+            f1_software_start(adc);
             for _ in 0..15 {
                 adc.tick();
             }
@@ -1229,8 +1472,7 @@ mod tests {
     fn f1_unwritten_sqr3_converts_channel_zero() {
         let mut adc = Adc::new();
         adc.set_channel_input(0, 1650);
-        adc.write(0x08, 1).unwrap(); // ADON, CR2 low bits = 1
-        adc.write(0x0B, 1 << 6).unwrap(); // SWSTART
+        f1_software_start(&mut adc);
         for _ in 0..15 {
             adc.tick();
         }
@@ -1244,8 +1486,7 @@ mod tests {
         let mut adc = Adc::new();
         adc.set_channel_input(0, 1650);
         adc.set_channel_input(3, 3300);
-        adc.write(0x08, 1 | (1 << 1)).unwrap(); // ADON | CONT
-        adc.write(0x0B, 1 << 6).unwrap(); // SWSTART
+        f1_software_start_with(&mut adc, F1_CR2_CONT);
         for _ in 0..15 {
             adc.tick();
         }
@@ -1256,8 +1497,7 @@ mod tests {
     fn test_adc_interrupt() {
         let mut adc = Adc::new();
         adc.write(0x04, 1 << 5).unwrap(); // EOCIE
-        adc.write(0x08, 1).unwrap(); // ADON
-        adc.write(0x0B, 1 << 6).unwrap(); // SWSTART
+        f1_software_start(&mut adc);
 
         for _ in 0..15 {
             let res = adc.tick();
@@ -1448,8 +1688,7 @@ mod tests {
     fn tick_cost_is_normalized_to_zero_while_converting() {
         // The legacy `cycles: 1` per converting tick is gone in BOTH modes.
         let mut adc = Adc::new();
-        adc.write(0x08, 1).unwrap(); // ADON
-        adc.write(0x0B, 1 << 6).unwrap(); // SWSTART
+        f1_software_start(&mut adc);
         assert!(adc.converting);
         for _ in 0..14 {
             assert_eq!(
@@ -1572,6 +1811,155 @@ mod tests {
             AdcRegisterLayout::Stm32H7
         );
     }
+
+    /// ST headers (`ADC_CR2_SWSTART = 0x00400000`) — bit 22, not bit 30.
+    #[test]
+    fn f1_swstart_constant_matches_st_headers() {
+        assert_eq!(F1_CR2_SWSTART, 0x0040_0000);
+        assert_eq!(F1_CR2_EXTSEL, 0x000E_0000);
+        assert_eq!(F1_CR2_EXTTRIG, 0x0010_0000);
+        assert_eq!(F1_CR2_CAL, 0x0000_0004);
+        assert_eq!(F1_CR2_RSTCAL, 0x0000_0008);
+        assert_ne!(F1_CR2_SWSTART, F4_CR2_SWSTART);
+        assert_eq!(F4_CR2_SWSTART, 0x4000_0000);
+        assert_eq!(
+            "stm32f1".parse::<AdcRegisterLayout>().unwrap(),
+            AdcRegisterLayout::Stm32F1
+        );
+        assert_eq!(
+            "legacy".parse::<AdcRegisterLayout>().unwrap(),
+            AdcRegisterLayout::Stm32F4
+        );
+    }
+
+    /// F103 ST HAL path: RSTCAL then CAL complete (bits self-clear) with ADON.
+    #[test]
+    fn f103_calibration_rstcal_and_cal_complete() {
+        let mut adc = Adc::new();
+        adc.write_u32(0x08, F1_CR2_ADON).unwrap();
+
+        adc.write_u32(0x08, F1_CR2_ADON | F1_CR2_RSTCAL).unwrap();
+        assert_ne!(
+            adc.read_u32(0x08).unwrap() & F1_CR2_RSTCAL,
+            0,
+            "RSTCAL stays set until scheduled completion"
+        );
+        for _ in 0..(F1_RSTCAL_CYCLES + 1) {
+            adc.tick();
+        }
+        assert_eq!(
+            adc.read_u32(0x08).unwrap() & F1_CR2_RSTCAL,
+            0,
+            "RSTCAL must clear — HAL spins while it is set"
+        );
+
+        adc.write_u32(0x08, F1_CR2_ADON | F1_CR2_CAL).unwrap();
+        assert_ne!(adc.read_u32(0x08).unwrap() & F1_CR2_CAL, 0);
+        for _ in 0..(F1_CAL_CYCLES + 1) {
+            adc.tick();
+        }
+        assert_eq!(
+            adc.read_u32(0x08).unwrap() & F1_CR2_CAL,
+            0,
+            "CAL must clear — HAL spins while it is set"
+        );
+        assert_eq!(
+            adc.read_u32(0x08).unwrap() & F1_CR2_ADON,
+            F1_CR2_ADON,
+            "calibration must not clear ADON"
+        );
+    }
+
+    /// Bit 22 with EXTSEL=111 starts conversion; bit 30 alone does not on F1.
+    #[test]
+    fn f103_software_start_bit22_not_bit30() {
+        let mut adc = Adc::new();
+        adc.set_channel_input(0, 1650);
+
+        // Bit 30 alone (the old buggy constant) must NOT start an F1 conversion.
+        adc.write_u32(0x08, F1_CR2_ADON | F4_CR2_SWSTART).unwrap();
+        assert!(!adc.converting, "F1 must ignore bit 30 (F2/F4 SWSTART)");
+        assert_eq!(
+            adc.read_u32(0x08).unwrap() & F4_CR2_SWSTART,
+            F4_CR2_SWSTART,
+            "ignored bit 30 is just a stored CR2 bit on F1"
+        );
+
+        // EXTSEL not software → SWSTART bit 22 clears but does not convert.
+        adc.write_u32(0x08, F1_CR2_ADON).unwrap();
+        adc.write_u32(0x08, F1_CR2_ADON | F1_CR2_SWSTART).unwrap();
+        assert!(
+            !adc.converting,
+            "SWSTART without EXTSEL=111 must not convert"
+        );
+        assert_eq!(adc.read_u32(0x08).unwrap() & F1_CR2_SWSTART, 0);
+
+        // ST-correct path.
+        f1_software_start(&mut adc);
+        assert!(adc.converting);
+        for _ in 0..15 {
+            adc.tick();
+        }
+        assert_eq!(adc.dr, adc.channel_input_count(0) as u32);
+    }
+
+    /// Two independently seeded channels convert to their own counts.
+    #[test]
+    fn f103_two_seeded_channels_convert_independently() {
+        let mut adc = Adc::new();
+        adc.set_channel_input(1, 1100);
+        adc.set_channel_input(4, 2750);
+        let c1 = adc.channel_input_count(1) as u32;
+        let c4 = adc.channel_input_count(4) as u32;
+        assert_ne!(c1, c4);
+
+        adc.write_u32(0x34, 1).unwrap(); // SQR3 SQ1 = ch1
+        f1_software_start(&mut adc);
+        for _ in 0..15 {
+            adc.tick();
+        }
+        assert_eq!(adc.dr, c1);
+
+        adc.write_u32(0x34, 4).unwrap();
+        f1_software_start(&mut adc);
+        for _ in 0..15 {
+            adc.tick();
+        }
+        assert_eq!(adc.dr, c4);
+    }
+
+    /// ADON clear cancels an in-flight CAL so a HAL cannot hang on a dead bit.
+    #[test]
+    fn f103_adon_clear_cancels_pending_calibration() {
+        let mut adc = Adc::new();
+        adc.write_u32(0x08, F1_CR2_ADON | F1_CR2_CAL).unwrap();
+        assert!(adc.f1_cal_remaining.is_some());
+        adc.write_u32(0x08, 0).unwrap(); // ADON off
+        assert!(adc.f1_cal_remaining.is_none());
+        assert_eq!(adc.read_u32(0x08).unwrap() & F1_CR2_CAL, 0);
+    }
+
+    /// F4 layout still starts on bit 30 (board bindings share the legacy block).
+    #[test]
+    fn f4_software_start_uses_bit30() {
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32F4);
+        adc.set_channel_input(0, 1650);
+        adc.write_u32(0x08, F1_CR2_ADON | F4_CR2_SWSTART).unwrap();
+        assert!(adc.converting, "F4 SWSTART is bit 30");
+        for _ in 0..15 {
+            adc.tick();
+        }
+        assert_eq!(adc.dr, adc.channel_input_count(0) as u32);
+
+        // F1 bit 22 alone must not start on the F4 layout.
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32F4);
+        adc.write_u32(0x08, F1_CR2_ADON | F1_CR2_EXTSEL | F1_CR2_SWSTART)
+            .unwrap();
+        assert!(
+            !adc.converting,
+            "F4 layout must not treat bit 22 as SWSTART"
+        );
+    }
 }
 
 // ── Walk-free differential: F1 ADC conversion engine walk vs scheduler ────────
@@ -1651,11 +2039,13 @@ mod scheduler_diff {
         // EOCIE + ADON + SWSTART on channel 3 (SQR3 SQ1) → 14-cycle countdown →
         // EOC + DR. The channel is programmed through SQR3 @ 0x34, the register
         // the model consults since the CR2 low-bits fallback was removed.
+        // F1 SWSTART is bit 22 (byte 0x0A bit 6); EXTSEL=111 required (byte 0x0A bits 3:1).
         let script = [
             (1u64, Op::Write(0x04, 1 << 5)), // CR1.EOCIE
             (1, Op::Write(0x34, 3)),         // SQR3.SQ1 = channel 3
             (1, Op::Write(0x08, 1)),         // CR2.ADON
-            (2, Op::Write(0x0B, 1 << 6)),    // CR2.SWSTART (bit 30) → convert
+            (1, Op::Write(0x0A, 0x0E)),      // CR2.EXTSEL = 111 (software)
+            (2, Op::Write(0x0A, 0x4E)),      // EXTSEL | SWSTART (bit 22) → convert
             (20, Op::Write(0x00, 0)),        // read-back settle (no-op SR write)
         ];
         assert_walk_identical(&script, 26);
@@ -1669,7 +2059,8 @@ mod scheduler_diff {
             (1u64, Op::Write(0x04, 1 << 5)),    // CR1.EOCIE
             (1, Op::Write(0x34, 3)),            // SQR3.SQ1 = channel 3
             (1, Op::Write(0x08, 1 | (1 << 1))), // CR2.ADON | CONT
-            (2, Op::Write(0x0B, 1 << 6)),       // SWSTART → first conversion
+            (1, Op::Write(0x0A, 0x0E)),         // EXTSEL = 111
+            (2, Op::Write(0x0A, 0x4E)),         // EXTSEL | SWSTART (bit 22)
         ];
         // 2 + 15 + 15 + 15 ≈ 47 cycles covers three back-to-back conversions.
         assert_walk_identical(&script, 50);

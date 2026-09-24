@@ -200,6 +200,31 @@ pub(crate) struct TestResult {
     /// SEGGER RTT diagnostics, present only when RTT was enabled for this run.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) rtt: Option<labwired_core::peripherals::segger_rtt::RttStatus>,
+    /// Semihosting capture. Present only when `--semihosting` or a
+    /// `semihosting_contains` assertion enabled it. Not a field of `rtt` or
+    /// `itm`. `observable` is false on a target that cannot retire `bkpt #0xAB`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) semihosting: Option<SemihostReport>,
+    /// ITM port-0 capture. Present only when `--itm` or `itm_contains` enabled
+    /// it. `observable` is false on a target that has no ITM peripheral.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) itm: Option<ItmStatus>,
+}
+
+/// `result.json`'s `semihosting` object. `observable: false` is the fail-closed
+/// signal; a green test with that value is a harness bug.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct SemihostReport {
+    pub observable: bool,
+    pub bytes_drained: u64,
+}
+
+/// `result.json`'s `itm` object. Not a field of the RTT or semihosting block:
+/// a token in one stream must not satisfy another.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct ItmStatus {
+    pub observable: bool,
+    pub bytes_drained: u64,
 }
 
 /// Industry-standard execution counters for `result.json` (`metrics`).

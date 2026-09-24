@@ -149,6 +149,7 @@ peripherals:
     clock: { reg: "apb2enr", bit: 8 }
     config:
       debug_schema: "../peripherals/stm32f401/adc1.yaml"
+      profile: "stm32f4"
   # IWDG — independent watchdog (RM0368 §14). Clocked from the dedicated LSI
   # oscillator, NOT an APB/AHB peripheral-enable bit, so it carries no `clock:`
   # gate. The KR key (0x5555) protects PR/RLR writes instead.

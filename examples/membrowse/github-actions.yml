@@ -78,7 +78,7 @@ jobs:
         continue-on-error: true # let the combined report render the failure
         with:
           script: ${{ matrix.target.script }}
-          version: v0.24.0
+          version: v0.25.0
           output-dir: out/labwired
           args: --no-uart-stdout
 

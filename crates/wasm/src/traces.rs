@@ -56,6 +56,59 @@ impl WasmSimulator {
         Ok(self.machine_or_err()?.bus.segger_rtt_status().is_some())
     }
 
+    /// Drain ARM semihosting output captured since the last call. Empty when
+    /// firmware has not executed `bkpt #0xAB`. Not mixed into UART, RTT, or ITM.
+    #[wasm_bindgen]
+    pub fn drain_semihosting_output(&self) -> Result<Vec<u8>, JsValue> {
+        Ok(self.machine_or_err()?.bus.drain_semihosting_output())
+    }
+
+    /// True once any `bkpt #0xAB` has retired on this machine, so a UART-only
+    /// Cortex-M lab does not grow a dead source button.
+    #[wasm_bindgen]
+    pub fn semihosting_attached(&self) -> Result<bool, JsValue> {
+        Ok(self.machine_or_err()?.bus.semihosting_attached())
+    }
+
+    /// Append host bytes for `SYS_READ` (stdin, handle 0). Does not block the guest.
+    #[wasm_bindgen]
+    pub fn write_semihosting_input(&self, data: &[u8]) -> Result<(), JsValue> {
+        self.machine_or_err()?.bus.write_semihosting_input(data);
+        Ok(())
+    }
+
+    /// Push bytes into RTT down-channel 0, the buffer `SEGGER_RTT_GetKey` and
+    /// `SEGGER_RTT_Read` drain. No-op success when the machine has no RTT model
+    /// is the wrong signal — callers learn that from `rtt_attached`.
+    #[wasm_bindgen]
+    pub fn feed_rtt_input(&self, data: &[u8]) -> Result<(), JsValue> {
+        let machine = self.machine_or_err()?;
+        if !machine.bus.write_rtt_input(data) {
+            return Err(JsValue::from_str("SEGGER RTT is not attached"));
+        }
+        Ok(())
+    }
+
+    /// Drain ITM stimulus port 0 bytes accumulated since the last call.
+    /// Empty when the machine has no ITM or firmware has not emitted.
+    ///
+    /// Errors when this simulator has no machine. An empty buffer is "the
+    /// machine produced no ITM bytes", which a missing machine is not.
+    #[wasm_bindgen]
+    pub fn drain_itm_output(&self) -> Result<Vec<u8>, JsValue> {
+        Ok(self.machine_or_err()?.bus.drain_itm_output())
+    }
+
+    /// True once firmware has written ITM_TCR, ITM_TER, or any stimulus port.
+    /// There is no ELF symbol. A Cortex-M image that never touches ITM stays
+    /// false, and a non-Cortex-M machine stays false.
+    ///
+    /// Errors when this simulator has no machine.
+    #[wasm_bindgen]
+    pub fn itm_attached(&self) -> Result<bool, JsValue> {
+        Ok(self.machine_or_err()?.bus.itm_attached())
+    }
+
     /// Why the Serial pane can be empty while the firmware is talking.
     ///
     /// An ESP32-C3/S3 has two consoles and a board's USB socket is soldered to

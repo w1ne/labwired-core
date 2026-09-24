@@ -171,6 +171,7 @@ peripherals:
     irq: 18
     config:
       debug_schema: "../peripherals/stm32f401/adc1.yaml"
+      profile: "stm32f4"
   - id: "sdio"
     type: "stub"
     base_address: 0x40012C00

@@ -29,7 +29,7 @@ memory-and-behaviour:
   # The release image keeps `labwired` as its entrypoint; clear it so the job
   # shell can run pip and python as well.
   image:
-    name: ghcr.io/w1ne/labwired:v0.24.0
+    name: ghcr.io/w1ne/labwired:v0.25.0
     entrypoint: [""]
   needs: [build]
   script:

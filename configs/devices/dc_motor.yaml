@@ -35,8 +35,8 @@ emit:
     - { key: direction_pin, from_part_pin: [DIRECTION] }
     - { key: brake_pin, from_part_pin: [BRAKE] }
     - { key: enable_pin, from_part_pin: [ENABLE] }
-    - { key: encoder_a_pin, from_part_pin: [ENC_A] }
-    - { key: encoder_b_pin, from_part_pin: [ENC_B] }
+    - { key: encoder_a_pin, from_part_pin: [ENC_A], required: false }
+    - { key: encoder_b_pin, from_part_pin: [ENC_B], required: false }
     - { key: encoder_index_pin, from_part_pin: [INDEX], required: false }
     - { key: fault_pin, from_part_pin: [FAULT], required: false }
     - { key: simulation_clock_hz, from: sim_cpu_hz }

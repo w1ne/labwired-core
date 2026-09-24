@@ -645,6 +645,88 @@ pub struct SystemBus {
     /// that no live model matches is therefore never reported as a device —
     /// see [`crate::inspect::DeviceInspect::declared`].
     pub external_device_decls: Vec<ExternalDeviceDecl>,
+    /// Semihosting byte stream. Not UART, RTT, or ITM: `bkpt #0xAB` is the only writer.
+    semihost: SemihostState,
+}
+
+/// One `write_semihosting_input` is capped so a stuck UI cannot grow the
+/// queue without bound. `SYS_WRITE0`'s 4096-byte scan is the guest-side pair.
+const SEMIHOST_INPUT_CAP: usize = 64 * 1024;
+
+/// Host-side semihosting sink. Interior mutability so wasm can drain through
+/// `&SystemBus`. The bus is `!Sync`; counters are `Cell`s like the rest of it.
+#[derive(Debug)]
+pub(crate) struct SemihostState {
+    output: Mutex<Vec<u8>>,
+    input: Mutex<VecDeque<u8>>,
+    attached: Cell<bool>,
+    bytes_appended: Cell<u64>,
+}
+
+impl SemihostState {
+    pub(crate) fn new() -> Self {
+        Self {
+            output: Mutex::new(Vec::new()),
+            input: Mutex::new(VecDeque::new()),
+            attached: Cell::new(false),
+            bytes_appended: Cell::new(0),
+        }
+    }
+
+    fn lock_output(&self) -> std::sync::MutexGuard<'_, Vec<u8>> {
+        self.output.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    fn write(&self, bytes: &[u8]) {
+        if bytes.is_empty() {
+            return;
+        }
+        self.bytes_appended
+            .set(self.bytes_appended.get().wrapping_add(bytes.len() as u64));
+        self.lock_output().extend_from_slice(bytes);
+    }
+
+    fn captured(&self) -> Vec<u8> {
+        self.lock_output().clone()
+    }
+
+    fn drain(&self) -> Vec<u8> {
+        std::mem::take(&mut *self.lock_output())
+    }
+
+    fn push_input(&self, data: &[u8]) {
+        if data.is_empty() {
+            return;
+        }
+        let mut q = self.input.lock().unwrap_or_else(|e| e.into_inner());
+        let room = SEMIHOST_INPUT_CAP.saturating_sub(q.len());
+        let take = data.len().min(SEMIHOST_INPUT_CAP).min(room);
+        q.extend(data.iter().copied().take(take));
+    }
+
+    fn pop_input(&self, dst: &mut [u8]) -> usize {
+        if dst.is_empty() {
+            return 0;
+        }
+        let mut q = self.input.lock().unwrap_or_else(|e| e.into_inner());
+        let n = dst.len().min(q.len());
+        for (slot, byte) in dst.iter_mut().zip(q.drain(..n)) {
+            *slot = byte;
+        }
+        n
+    }
+
+    fn note_attached(&self) {
+        self.attached.set(true);
+    }
+
+    fn is_attached(&self) -> bool {
+        self.attached.get()
+    }
+
+    fn bytes_appended(&self) -> u64 {
+        self.bytes_appended.get()
+    }
 }
 
 /// One `external_devices:` entry, reduced to the fields inspect joins on.

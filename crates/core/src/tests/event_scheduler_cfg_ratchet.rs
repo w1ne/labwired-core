@@ -234,7 +234,23 @@ const MAX_MODEL_SITES: usize = 183;
 /// These END with the feature, not before it: they are the evidence that the
 /// migration preserved behaviour, so they are worth keeping until the walk
 /// itself is deleted and there is no second world left to compare against.
-const MAX_HARNESS_SITES: usize = 83;
+///
+/// 83 → 84: `esp32_classic_ahb_fifo_wakes_uart` is crate-gated
+/// `#![cfg(feature = "event-scheduler")]`. It pins that an AHB-FIFO alias write
+/// wakes the shared `Esp32Uart` owner after UART left the legacy walk — the
+/// walk used to hide the alias's default `uses_scheduler()=false`. Registered
+/// with `[[test]] required-features` and listed in `scheduler_lane_coverage`'s
+/// NIGHTLY_ONLY until a workflow-scoped push can register it in
+/// `pr-scheduler-observable`. Ends with the feature: once the walk is gone
+/// there is no second world whose silence this was catching.
+///
+/// 84 → 86: `esp32_classic_is_walk_free_and_tick_512` (was
+/// `esp32_classic_walk_forcers_are_named`) takes the same
+/// `#[cfg(feature = "event-scheduler")]` / `#[cfg(not(feature =
+/// "event-scheduler"))]` pair every other walk-free family gate already
+/// carries. `not(...)` counts; see the module docs. The feature half asserts
+/// empty forcers + max_safe=512; the not half keeps max_safe=1.
+const MAX_HARNESS_SITES: usize = 86;
 
 // ---------------------------------------------------------------------------
 // The counter. A pure function over source text, so its definition is testable

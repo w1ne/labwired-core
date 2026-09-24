@@ -71,16 +71,16 @@ fn undecoded_rcc_offset_is_counted_and_still_reads_zero() {
     );
 }
 
-/// Documents the byte-granularity multiplier that the raw counts carry, so a
-/// reader of the census table divides by the right number.
+/// An aligned RCC `write_u32` is one word store, not four byte writes.
 ///
-/// `Peripheral::read`/`write` are byte-granular and `read_u32`/`write_u32`
-/// decompose into four byte accesses. On top of that, `Rcc::write` is a
-/// read-modify-write: each of the four byte writes first calls `read_reg`.
-/// So ONE 32-bit undecoded register write costs 4 write-hits AND 4 read-hits,
-/// and one 32-bit undecoded read costs 4 read-hits.
+/// The trait default splits a 32-bit store into four byte read-modify-writes.
+/// `Rcc::write_u32` does not: a split store re-latches write-1-to-clear bits
+/// (`RCC_CSR.RMVF`) when the flag byte is written after the clear byte. The
+/// census must follow that path — one `write` hit, no accompanying `read` —
+/// or a reader dividing raw counts by four under-counts every aligned RCC
+/// store.
 #[test]
-fn raw_counts_carry_a_four_times_byte_multiplier() {
+fn aligned_rcc_u32_write_is_one_census_hit() {
     let _guard = serialized();
     let mut rcc = labwired_core::peripherals::rcc::Rcc::new();
 
@@ -96,8 +96,8 @@ fn raw_counts_carry_a_four_times_byte_multiplier() {
             .and_then(|e| e["count"].as_u64())
             .unwrap_or(0)
     };
-    assert_eq!(get("write"), 4, "one u32 write == four byte writes");
-    assert_eq!(get("read"), 4, "…each preceded by a read-modify-write read");
+    assert_eq!(get("write"), 1, "aligned u32 write is one word store");
+    assert_eq!(get("read"), 0, "the word store must not read-modify-write");
 }
 
 /// The gate for counter (b2), and the regression test for the wrong number the

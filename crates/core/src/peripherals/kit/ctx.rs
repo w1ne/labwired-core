@@ -51,7 +51,12 @@ impl<'a> AttachCtx<'a> {
         self.ext.config.get(key).and_then(|v| v.as_i64())
     }
     pub fn config_f64(&self, key: &str) -> Option<f64> {
-        self.ext.config.get(key).and_then(|v| v.as_f64())
+        self.ext.config.get(key).and_then(|v| {
+            v.as_f64()
+                .or_else(|| v.as_i64().map(|i| i as f64))
+                .or_else(|| v.as_u64().map(|u| u as f64))
+                .or_else(|| v.as_str().and_then(|s| s.trim().parse::<f64>().ok()))
+        })
     }
 
     pub fn uart(&mut self) -> Result<&mut Uart> {
@@ -410,4 +415,38 @@ fn wrong_transport_err(ext: &ExternalDevice, expected: &str) -> anyhow::Error {
         ext.connection,
         expected
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use labwired_config::ExternalDevice;
+    use std::collections::{BTreeMap, HashMap};
+
+    fn ext_with_moisture(value: serde_yaml::Value) -> ExternalDevice {
+        let mut config = HashMap::new();
+        config.insert("moisture".into(), value);
+        ExternalDevice {
+            id: "soil".into(),
+            r#type: "soil-moisture".into(),
+            connection: "adc1".into(),
+            channel: None,
+            route: BTreeMap::new(),
+            config,
+        }
+    }
+
+    #[test]
+    fn config_f64_parses_string_moisture_25() {
+        // Scene compilers sometimes emit channel seeds as YAML strings ("25")
+        // rather than bare numbers. config_f64 must accept both.
+        let mut bus = SystemBus::new();
+        let ext = ext_with_moisture(serde_yaml::Value::String("25".into()));
+        let ctx = AttachCtx::new(&mut bus, &ext);
+        assert_eq!(ctx.config_f64("moisture"), Some(25.0));
+
+        let ext = ext_with_moisture(serde_yaml::Value::from(25));
+        let ctx = AttachCtx::new(&mut bus, &ext);
+        assert_eq!(ctx.config_f64("moisture"), Some(25.0));
+    }
 }

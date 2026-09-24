@@ -304,6 +304,17 @@ impl WasmSimulator {
         }
     }
 
+    /// Bytes accepted into SEGGER RTT down-channel 0, the buffer
+    /// `SEGGER_RTT_GetKey` reads. A short count means the ring was full; the
+    /// rest is discarded and the simulator does not stall.
+    ///
+    /// Errors when this simulator has no machine, same as `drain_rtt_output`.
+    #[wasm_bindgen]
+    pub fn write_rtt_down(&mut self, data: &[u8]) -> Result<u32, JsValue> {
+        let n = self.machine_mut_or_err()?.bus.write_rtt_down(0, data);
+        Ok(u32::try_from(n).unwrap_or(u32::MAX))
+    }
+
     /// Inject an ADC value into a named ADC peripheral's data register.
     #[wasm_bindgen]
     pub fn set_adc_value(&mut self, peripheral_name: &str, value: u16) -> Result<(), JsValue> {

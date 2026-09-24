@@ -17,10 +17,29 @@ pub(crate) struct CoreProgress {
     /// `Cpu::instruction_cycles_are_time`; `None` everywhere else, where the
     /// window is worth one machine cycle per instruction.
     pub timed_cycles: Option<u64>,
+    /// This window published and charged its cycles internally, one retired
+    /// instruction at a time. The outer boundary must not charge them again.
+    pub internally_committed_cycles: bool,
 }
 
 impl<C: Cpu> Machine<C> {
+    /// Drive resident GPIO waveforms whose deadline fell inside the window
+    /// just committed, and stamp a push-mode logic tap with that cycle.
+    ///
+    /// A bus with no resident devices and no push capture has nothing to do
+    /// here. Returning before [`SystemBus::set_current_cycle`] keeps that
+    /// publish off the single-step path: `plan_cpu_window` and the boundary
+    /// commit both call this once per `Machine::step`, and the publish plus
+    /// the empty-list walk was ~29 host instructions per AVR step. The
+    /// instruction window and, when `event-scheduler` is on, the scheduler
+    /// drain already publish the cycle. Callers that have devices still
+    /// publish first so an edge is sampled at the committed cycle, not the
+    /// pre-instruction one.
+    #[inline]
     pub(crate) fn service_resident_edges_at_boundary(&mut self) {
+        if self.bus.gpio_devices.is_empty() && !self.logic_capture.push_active() {
+            return;
+        }
         self.bus.set_current_cycle(self.total_cycles);
         if self.logic_capture.push_active() {
             self.bus.logic_tap.set_clock(self.total_cycles);
@@ -79,10 +98,14 @@ impl<C: Cpu> Machine<C> {
                 // is present so a mid-batch SW_SYS_RST latches and stops the
                 // window before more PRO instructions retire past the reset.
                 // Otherwise use step_batch for throughput.
-                let parked_secondary = self
+                let secondary_state = self
                     .cpu_secondary
                     .as_ref()
-                    .is_some_and(|s| s.is_parked_idle());
+                    .map(|s| s.secondary_execution_state());
+                let parked_secondary =
+                    secondary_state == Some(crate::SecondaryExecutionState::ParkedIdle);
+                let reset_held_secondary =
+                    secondary_state == Some(crate::SecondaryExecutionState::ResetHeld);
                 // A tick interval of one is an interrupt-visibility contract,
                 // not a reason to throw away the CPU batch. Keep one planned
                 // window for accounting/dispatch, but retire it instruction by
@@ -95,28 +118,49 @@ impl<C: Cpu> Machine<C> {
                     .cpu
                     .instruction_cycles_are_time()
                     .then(|| self.cpu.clock_cycles());
-                if parked_secondary && self.config.peripheral_tick_interval.max(1) == 1 {
+                if (parked_secondary || reset_held_secondary)
+                    && self.config.peripheral_tick_interval.max(1) == 1
+                {
                     let mut primary_steps = 0u32;
                     let mut secondary_steps = 0u32;
                     for _ in 0..count {
                         // Same pre-charge publication as the quantum-1 arm.
                         self.bus.set_current_cycle(self.total_cycles);
                         self.bus.bus_trace.set_cycle(self.total_cycles);
-                        self.total_cycles += 1;
-                        if self.logic_capture.push_active() {
-                            self.bus.logic_tap.set_clock(self.total_cycles);
+                        let retired =
+                            self.cpu
+                                .step_batch(&mut self.bus, &self.observers, &self.config, 1)?;
+                        if retired == 0 {
+                            break;
                         }
-                        self.cpu
-                            .step(&mut self.bus, &self.observers, &self.config)?;
-                        primary_steps += 1;
+                        debug_assert_eq!(retired, 1);
+                        self.total_cycles += u64::from(retired);
+                        primary_steps += retired;
+
+                        // A reset-held APP CPU can be released by this primary
+                        // instruction. Consume the request now, run APP once at
+                        // the same boundary as the reference lockstep path, and
+                        // end the coalesced window before another primary
+                        // instruction can starve it.
+                        self.release_secondary_cpu_if_requested();
+                        let secondary_released = reset_held_secondary
+                            && self.cpu_secondary.as_ref().is_some_and(|sec| {
+                                sec.secondary_execution_state()
+                                    != crate::SecondaryExecutionState::ResetHeld
+                            });
                         if let Some(sec) = self.cpu_secondary.as_mut() {
-                            if sec.is_parked_idle() {
+                            if sec.is_parked_idle() || secondary_released {
                                 sec.step(&mut self.bus, &self.observers, &self.config)?;
-                                secondary_steps += 1;
+                                secondary_steps += retired;
                             }
                         }
                         self.tick_peripherals_at_boundary();
+                        #[cfg(feature = "event-scheduler")]
+                        self.drain_scheduler_events();
                         if self.rtc_cntl_reset_pending() {
+                            break;
+                        }
+                        if secondary_released {
                             break;
                         }
                     }
@@ -124,6 +168,7 @@ impl<C: Cpu> Machine<C> {
                         primary_steps,
                         secondary_steps,
                         timed_cycles: None,
+                        internally_committed_cycles: true,
                     });
                 }
                 let executed = if parked_secondary && self.rtc_cntl_index.is_some() {
@@ -171,6 +216,7 @@ impl<C: Cpu> Machine<C> {
                     secondary_steps,
                     timed_cycles: clock_before
                         .map(|before| self.cpu.clock_cycles().saturating_sub(before)),
+                    internally_committed_cycles: false,
                 });
             }
         }
@@ -193,6 +239,7 @@ impl<C: Cpu> Machine<C> {
                 primary_steps: 1,
                 secondary_steps: 0,
                 timed_cycles,
+                internally_committed_cycles: false,
             });
         }
 
@@ -212,6 +259,7 @@ impl<C: Cpu> Machine<C> {
             primary_steps: 1,
             secondary_steps: 1,
             timed_cycles: None,
+            internally_committed_cycles: false,
         })
     }
 
@@ -250,10 +298,8 @@ impl<C: Cpu> Machine<C> {
         _batch_start: u64,
         progress: CoreProgress,
     ) -> SimResult<()> {
-        let internally_committed_per_cycle_batch = mode == ExecutionMode::RunBatch
-            && self.config.peripheral_tick_interval.max(1) == 1
-            && progress.primary_steps > 0
-            && progress.secondary_steps == progress.primary_steps;
+        let internally_committed_per_cycle_batch =
+            mode == ExecutionMode::RunBatch && progress.internally_committed_cycles;
         if mode == ExecutionMode::RunBatch && !internally_committed_per_cycle_batch {
             self.total_cycles += progress
                 .timed_cycles

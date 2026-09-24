@@ -107,6 +107,8 @@ peripherals:
     base_address: 0x40012000
     size: "1KB"
     irq: 18
+    config:
+      profile: "stm32f4"
   - id: "sdio"
     type: "stub"
     base_address: 0x40012C00

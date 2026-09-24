@@ -76,7 +76,7 @@ Clone the repository, install the CLI, run a firmware. No cross-toolchain needed
 
 ```sh
 git clone https://github.com/w1ne/labwired-core && cd labwired-core
-curl -fsSL https://labwired.com/install.sh | LABWIRED_VERSION=v0.24.0 sh
+curl -fsSL https://labwired.com/install.sh | LABWIRED_VERSION=v0.25.0 sh
 labwired test --script examples/nrf54l15-dk/io-smoke.yaml
 ```
 
@@ -110,7 +110,7 @@ UART output and `--json` stay on stdout, so pipes keep working.
 The install script covers Linux, macOS, and Windows via WSL2.
 
 ```sh
-curl -fsSL https://labwired.com/install.sh | LABWIRED_VERSION=v0.24.0 sh
+curl -fsSL https://labwired.com/install.sh | LABWIRED_VERSION=v0.25.0 sh
 ```
 
 | Variable | Effect |
@@ -133,7 +133,7 @@ no install script for it; the archive is unpacked by hand. PowerShell 5.1 and
 later have `tar` built in.
 
 ```powershell
-$v = "v0.24.0"
+$v = "v0.25.0"
 Invoke-WebRequest "https://github.com/w1ne/labwired-core/releases/download/$v/labwired-$v-windows-x86_64.tar.gz" -OutFile labwired.tar.gz
 mkdir $env:LOCALAPPDATA\LabWired -Force
 tar -xzf labwired.tar.gz -C $env:LOCALAPPDATA\LabWired

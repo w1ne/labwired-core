@@ -115,6 +115,7 @@ impl SystemBus {
             io_voltage_v: None,
             gpio_input_thresholds: None,
             external_device_decls: Vec::new(),
+            semihost: SemihostState::new(),
         };
         bus.rebuild_peripheral_ranges();
         bus
@@ -195,6 +196,7 @@ impl SystemBus {
             io_voltage_v: None,
             gpio_input_thresholds: None,
             external_device_decls: Vec::new(),
+            semihost: SemihostState::new(),
         };
         bus.rebuild_peripheral_ranges();
         bus
@@ -506,6 +508,18 @@ impl SystemBus {
         for m in &self.extra_mem {
             ranges.push((m.base_addr, m.data.len() as u64));
         }
+        // Xtensa IRAM/DRAM are `RamPeripheral`s, not `bus.ram`. A symbol that
+        // resolves into DRAM would otherwise fail the range gate, and the scan
+        // would never see an ID that lives only there.
+        for p in &self.peripherals {
+            if p.dev
+                .as_any()
+                .and_then(|any| any.downcast_ref::<crate::system::xtensa::RamPeripheral>())
+                .is_some()
+            {
+                ranges.push((p.base, p.size));
+            }
+        }
         self.add_peripheral(
             "segger_rtt",
             SENTINEL_BASE,
@@ -563,6 +577,128 @@ impl SystemBus {
             Some(rtt) => rtt.drain_captured(),
             None => Vec::new(),
         }
+    }
+
+    /// Take semihosting bytes captured since the last drain. Empty when firmware
+    /// has not trapped `bkpt #0xAB`, or when a previous drain already took them.
+    /// Never mixed into the UART, RTT, or ITM sinks.
+    pub fn drain_semihosting_output(&self) -> Vec<u8> {
+        self.semihost.drain()
+    }
+
+    /// Bytes currently sitting in the semihosting sink, without removing them.
+    /// Assertions and `semihosting.log` read this; wasm streaming uses the drain.
+    pub fn semihost_captured(&self) -> Vec<u8> {
+        self.semihost.captured()
+    }
+
+    /// Total bytes appended to the semihosting stream, including ones already drained.
+    pub fn semihost_bytes_appended(&self) -> u64 {
+        self.semihost.bytes_appended()
+    }
+
+    /// True once any `bkpt #0xAB` has retired on this bus.
+    pub fn semihosting_attached(&self) -> bool {
+        self.semihost.is_attached()
+    }
+
+    /// Queue host bytes for `SYS_READ` (handle 0). A single call is capped at
+    /// 64 KiB, and so is the queued total.
+    pub fn write_semihosting_input(&self, data: &[u8]) {
+        self.semihost.push_input(data);
+    }
+
+    fn itm_ref(&self) -> Option<&crate::peripherals::itm::Itm> {
+        self.peripherals.iter().find_map(|p| {
+            p.dev
+                .as_any()
+                .and_then(|any| any.downcast_ref::<crate::peripherals::itm::Itm>())
+        })
+    }
+
+    /// Point port 0 at a capture sink and/or stdout. False when this bus has
+    /// no ITM (RISC-V, Xtensa, AVR). `sink == None` does not retain bytes.
+    pub fn attach_itm_output(
+        &mut self,
+        sink: Option<Arc<Mutex<Vec<u8>>>>,
+        echo_stdout: bool,
+    ) -> bool {
+        for p in &mut self.peripherals {
+            let Some(any) = p.dev.as_any_mut() else {
+                continue;
+            };
+            if let Some(itm) = any.downcast_mut::<crate::peripherals::itm::Itm>() {
+                itm.set_output(sink, echo_stdout);
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Take port-0 bytes accumulated since the last call. Empty when ITM is
+    /// not installed or nothing has been emitted into the retained buffer.
+    pub fn drain_itm_output(&self) -> Vec<u8> {
+        match self.itm_ref() {
+            Some(itm) => itm.drain_captured(),
+            None => Vec::new(),
+        }
+    }
+
+    /// True once firmware has written TCR, TER, or any stimulus port.
+    /// False when ITM is not installed.
+    pub fn itm_attached(&self) -> bool {
+        self.itm_ref().is_some_and(|itm| itm.attached())
+    }
+
+    pub fn itm_installed(&self) -> bool {
+        self.itm_ref().is_some()
+    }
+
+    /// Bytes emitted on stimulus port 0. Not reduced by [`Self::drain_itm_output`].
+    pub fn itm_bytes_emitted(&self) -> u64 {
+        self.itm_ref().map(|itm| itm.bytes_emitted()).unwrap_or(0)
+    }
+
+    /// Queue host-to-target bytes for RTT down-channel 0 (`SEGGER_RTT_GetKey`).
+    /// False when no RTT model is attached. The bytes enter the target ring on
+    /// the next probe poll.
+    pub fn write_rtt_input(&self, data: &[u8]) -> bool {
+        match self.rtt_ref() {
+            Some(rtt) => {
+                rtt.queue_input(data);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Store `data` into down-channel `channel` now. Returns how many bytes
+    /// fit in the ring; the rest is discarded. Zero when no RTT model is
+    /// attached, the control block is not identifiable, or the channel cannot
+    /// be written. Does not scan RAM and does not write the target's `RdOff`.
+    pub fn write_rtt_down(&mut self, channel: u32, data: &[u8]) -> usize {
+        let Some(idx) = self.peripherals.iter().position(|p| {
+            p.dev
+                .as_any()
+                .and_then(|any| any.downcast_ref::<crate::peripherals::segger_rtt::SeggerRtt>())
+                .is_some()
+        }) else {
+            return 0;
+        };
+        // Same swap the bus-tick pass uses: the model has to borrow the bus
+        // to store into guest RAM, and it currently lives inside that bus.
+        let placeholder: Box<dyn crate::Peripheral> =
+            Box::new(crate::peripherals::stub::StubPeripheral::new(0));
+        let mut dev = std::mem::replace(&mut self.peripherals[idx].dev, placeholder);
+        let accepted = match dev.as_any_mut() {
+            Some(any) => match any.downcast_mut::<crate::peripherals::segger_rtt::SeggerRtt>() {
+                Some(rtt) => rtt.write_down(self, channel, data),
+                None => 0,
+            },
+            None => 0,
+        };
+        self.peripherals[idx].dev = dev;
+        accepted
     }
 
     /// Wire a capture sink into any attached IO-Link master so it records what
@@ -1063,6 +1199,12 @@ mod tests {
     fn drain_rtt_output_is_empty_without_a_model() {
         let bus = SystemBus::new();
         assert!(bus.drain_rtt_output().is_empty());
+    }
+
+    #[test]
+    fn write_rtt_down_without_a_model_accepts_nothing() {
+        let mut bus = SystemBus::new();
+        assert_eq!(bus.write_rtt_down(0, b"x"), 0);
     }
 
     #[test]

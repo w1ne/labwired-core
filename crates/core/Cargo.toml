@@ -155,6 +155,10 @@ svd-parser = "0.14"
 name = "bench_walk_free_kw41z"
 required-features = ["event-scheduler"]
 
+[[test]]
+name = "esp32_classic_ahb_fifo_wakes_uart"
+required-features = ["event-scheduler"]
+
 # #![cfg(feature = "event-scheduler")]
 [[test]]
 name = "board_batch_width"

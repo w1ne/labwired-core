@@ -64,14 +64,18 @@
       "expect": "TIER1 clock PASS"
     },
     "stm32f401": {
-      "how": "committed",
-      "firmware": "tests/fixtures/tier1/stm32f401.elf",
-      "expect": "TIER1 clock PASS"
+      "how": "blocked",
+      "firmware": "demo-nucleo-f401.elf",
+      "sha256": "eee67caf8ded9f9385981ce43220b4d6677d1cd34c49f528f964b7462b558674",
+      "expect": null,
+      "note": "v0.25.0 refuses adc1 profile 'stm32f4' (unsupported ADC register layout; supported: stm32f1, stm32l4, stm32h5, stm32h7, stm32u5). Fixed on main by #1222 (AdcRegisterLayout::Stm32F4). This entry flips back to committed in the first release that carries that fix; the gate fails if it starts passing while still marked blocked. Prior map: how=committed firmware=tests/fixtures/tier1/stm32f401.elf expect='TIER1 clock PASS'."
     },
     "stm32f411ceu6": {
-      "how": "committed",
-      "firmware": "tests/fixtures/tier1/stm32f411.elf",
-      "expect": "TIER1 clock PASS"
+      "how": "blocked",
+      "firmware": "demo-nucleo-f401.elf",
+      "sha256": "eee67caf8ded9f9385981ce43220b4d6677d1cd34c49f528f964b7462b558674",
+      "expect": null,
+      "note": "v0.25.0 refuses adc1 profile 'stm32f4' (unsupported ADC register layout; supported: stm32f1, stm32l4, stm32h5, stm32h7, stm32u5). Fixed on main by #1222 (AdcRegisterLayout::Stm32F4). This entry flips back to committed in the first release that carries that fix; the gate fails if it starts passing while still marked blocked. Prior map: how=committed firmware=tests/fixtures/tier1/stm32f411.elf expect='TIER1 clock PASS'."
     },
     "stm32h563": {
       "how": "committed",
@@ -130,27 +134,32 @@
       "note": "Board variant of esp32s3; runs the same TIER1 image."
     },
     "stm32f401cdu6": {
-      "how": "committed",
-      "firmware": "tests/fixtures/tier1/stm32f401.elf",
-      "expect": "TIER1 clock PASS",
-      "note": "Board variant of stm32f401."
+      "how": "blocked",
+      "firmware": "demo-nucleo-f401.elf",
+      "sha256": "eee67caf8ded9f9385981ce43220b4d6677d1cd34c49f528f964b7462b558674",
+      "expect": null,
+      "note": "v0.25.0 refuses adc1 profile 'stm32f4' (unsupported ADC register layout; supported: stm32f1, stm32l4, stm32h5, stm32h7, stm32u5). Fixed on main by #1222 (AdcRegisterLayout::Stm32F4). This entry flips back to committed in the first release that carries that fix; the gate fails if it starts passing while still marked blocked. Prior map: how=committed firmware=tests/fixtures/tier1/stm32f401.elf expect='TIER1 clock PASS'."
     },
     "stm32f405": {
-      "how": "committed",
-      "firmware": "tests/fixtures/tier1/stm32f405.elf",
-      "expect": "TIER1 i2c PASS",
-      "note": "Part-specific TIER1 fixture. Asserts the I2C class, which is where this part differed from its F4 sibling: I2C1 was ungated until the fixture proved it."
+      "how": "blocked",
+      "firmware": "demo-nucleo-f401.elf",
+      "sha256": "eee67caf8ded9f9385981ce43220b4d6677d1cd34c49f528f964b7462b558674",
+      "expect": null,
+      "note": "v0.25.0 refuses adc1 profile 'stm32f4' (unsupported ADC register layout; supported: stm32f1, stm32l4, stm32h5, stm32h7, stm32u5). Fixed on main by #1222 (AdcRegisterLayout::Stm32F4). This entry flips back to committed in the first release that carries that fix; the gate fails if it starts passing while still marked blocked. Prior map: how=committed firmware=tests/fixtures/tier1/stm32f405.elf expect='TIER1 i2c PASS'."
     },
     "stm32f407": {
-      "how": "committed",
-      "firmware": "tests/fixtures/tier1/stm32f407.elf",
-      "expect": "TIER1 clock PASS"
+      "how": "blocked",
+      "firmware": "demo-nucleo-f401.elf",
+      "sha256": "eee67caf8ded9f9385981ce43220b4d6677d1cd34c49f528f964b7462b558674",
+      "expect": null,
+      "note": "v0.25.0 refuses adc1 profile 'stm32f4' (unsupported ADC register layout; supported: stm32f1, stm32l4, stm32h5, stm32h7, stm32u5). Fixed on main by #1222 (AdcRegisterLayout::Stm32F4). This entry flips back to committed in the first release that carries that fix; the gate fails if it starts passing while still marked blocked. Prior map: how=committed firmware=tests/fixtures/tier1/stm32f407.elf expect='TIER1 clock PASS'."
     },
     "stm32f767": {
-      "how": "committed",
-      "firmware": "tests/fixtures/tier1/stm32f767.elf",
-      "expect": "TIER1 i2c PASS",
-      "note": "Part-specific TIER1 fixture. Asserts the I2C class, which is where this part differed from its F4 sibling: I2C1 was ungated until the fixture proved it."
+      "how": "blocked",
+      "firmware": "demo-nucleo-f401.elf",
+      "sha256": "eee67caf8ded9f9385981ce43220b4d6677d1cd34c49f528f964b7462b558674",
+      "expect": null,
+      "note": "v0.25.0 refuses adc1 profile 'stm32f4' (unsupported ADC register layout; supported: stm32f1, stm32l4, stm32h5, stm32h7, stm32u5). Fixed on main by #1222 (AdcRegisterLayout::Stm32F4). This entry flips back to committed in the first release that carries that fix; the gate fails if it starts passing while still marked blocked. Prior map: how=committed firmware=tests/fixtures/tier1/stm32f767.elf expect='TIER1 i2c PASS'."
     },
     "stm32g474re": {
       "how": "committed",

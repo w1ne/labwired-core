@@ -77,11 +77,21 @@ impl<C: Cpu> Machine<C> {
 
         // Dual-core: only lockstep while APP is active or still in reset-hold.
         // WAITI-parked APP (FreeRTOS idle) lets PRO batch.
-        let secondary_parked = self
-            .cpu_secondary
-            .as_ref()
-            .is_some_and(|sec| sec.is_parked_idle());
-        let secondary_lockstep = self.cpu_secondary.is_some() && !secondary_parked;
+        // A single-step request is already clamped to one instruction. Its
+        // secondary classification cannot narrow the plan further, so avoid
+        // charging that query to every reference-path instruction.
+        let secondary_state = if request.is_single() {
+            None
+        } else {
+            self.cpu_secondary
+                .as_ref()
+                .map(|sec| sec.secondary_execution_state())
+        };
+        let secondary_parked = secondary_state == Some(crate::SecondaryExecutionState::ParkedIdle);
+        let secondary_reset_held =
+            secondary_state == Some(crate::SecondaryExecutionState::ResetHeld);
+        let secondary_lockstep =
+            self.cpu_secondary.is_some() && !secondary_parked && !secondary_reset_held;
 
         // Reset fidelity is enforced by the party that can see the request,
         // not by pinning the quantum for the life of the bus:
@@ -137,7 +147,7 @@ impl<C: Cpu> Machine<C> {
                 clause::HONORED_BREAKPOINTS
             };
             clamp!(count, binder, arm, 1);
-        } else if secondary_parked {
+        } else if secondary_parked || secondary_reset_held {
             // Coalesced dual-core idle batch: while the secondary core is
             // WAITI-parked the primary may retire several instructions per
             // machine boundary. Commit advances peripherals once with

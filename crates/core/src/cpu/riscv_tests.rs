@@ -997,6 +997,27 @@ fn spin_fixture() -> (RiscV, SystemBus) {
 }
 
 #[test]
+fn mapped_flash_populates_riscv_fetch_window() {
+    const FLASH: u32 = 0x4200_0000;
+    let mut bus = SystemBus::new();
+    bus.flash = crate::memory::LinearMemory::new(256, u64::from(FLASH));
+    bus.flash.data[..8].copy_from_slice(&[0x93, 0x82, 0x12, 0x00, 0x6f, 0xf0, 0xdf, 0xff]);
+    let mut cpu = RiscV::new();
+    cpu.pc = FLASH;
+    let config = crate::SimulationConfig::default();
+
+    assert_eq!(cpu.try_spin_window(&bus, 64), 0, "window starts cold");
+    cpu.step(&mut bus, &[], &config).unwrap();
+    cpu.step(&mut bus, &[], &config).unwrap();
+    assert_eq!(cpu.pc, FLASH);
+    assert_eq!(
+        cpu.try_spin_window(&bus, 64),
+        64,
+        "mapped flash should use the vetted code window"
+    );
+}
+
+#[test]
 fn spin_snapshot_restore_refetches_replaced_code() {
     let (mut cpu, mut bus) = spin_fixture();
     let config = crate::SimulationConfig::default();

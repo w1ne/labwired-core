@@ -588,7 +588,9 @@ impl PeripheralKit for DeclarativeAnalogKit {
         // `distance` seed), matching how a hand-written kit seeded its default.
         for input in self.channels.iter() {
             if let Some(v) = ctx.config_f64(input.key.as_ref()) {
-                let _ = device.set_input(input.key.as_ref(), v);
+                device.set_input(input.key.as_ref(), v).map_err(|e| {
+                    anyhow::anyhow!("device '{}': input '{}': {e}", ctx.device_id(), input.key)
+                })?;
             }
         }
         ctx.attach_analog_source(channel, Box::new(device))?;

@@ -215,6 +215,7 @@ impl SystemBus {
             debug_schemas: Self::load_debug_schemas(chip, manifest),
             // Filled by `record_external_devices` below — the one home for it.
             external_device_decls: Vec::new(),
+            semihost: SemihostState::new(),
             nvic: None,
             observers: Vec::new(),
             config: crate::SimulationConfig::default(),

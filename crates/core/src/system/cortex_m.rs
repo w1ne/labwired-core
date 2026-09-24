@@ -7,6 +7,7 @@
 use crate::bus::{PeripheralEntry, SystemBus};
 use crate::cpu::CortexM;
 use crate::peripherals::dwt::Dwt;
+use crate::peripherals::itm::Itm;
 use crate::peripherals::nvic::{Nvic, NvicState};
 use crate::peripherals::scb::{Scb, ScbFaultState, SharedScbState};
 use crate::Peripheral;
@@ -200,6 +201,31 @@ pub fn configure_cortex_m(bus: &mut SystemBus) -> (CortexM, Arc<NvicState>) {
             size: 0x1000,
             irq: None,
             dev: Box::new(dwt),
+            ticks_remaining: 0,
+            clock_gate: None,
+        });
+    }
+
+    // Stimulus ports sit at 0xE0000000..0xE000007F. The window ends where DWT
+    // begins (0xE0001000); do not widen DWT backwards to cover ITM.
+    let itm = Itm::new();
+    if let Some(p) = bus
+        .peripherals
+        .iter_mut()
+        .find(|p| p.name == "itm" || p.base == 0xE000_0000)
+    {
+        p.name = "itm".to_string();
+        p.base = 0xE000_0000;
+        p.size = 0x1000;
+        p.irq = None;
+        p.dev = Box::new(itm);
+    } else {
+        bus.peripherals.push(PeripheralEntry {
+            name: "itm".to_string(),
+            base: 0xE000_0000,
+            size: 0x1000,
+            irq: None,
+            dev: Box::new(itm),
             ticks_remaining: 0,
             clock_gate: None,
         });

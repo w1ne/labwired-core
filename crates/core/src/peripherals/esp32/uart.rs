@@ -45,6 +45,9 @@ use std::io::{self, Write};
 use std::sync::{Arc, Mutex};
 
 const OFF_FIFO: u64 = 0x00;
+/// This UART's single self-perpetuating scheduler event.
+const UART_WAKE_TOKEN: u32 = 0;
+
 const OFF_INT_RAW: u64 = 0x04;
 const OFF_INT_ST: u64 = 0x08;
 const OFF_INT_ENA: u64 = 0x0C;
@@ -151,11 +154,18 @@ pub struct Esp32Uart {
     /// not); `None` when a test ticks this model directly, where there is
     /// nowhere to put a waveform.
     ///
-    /// This does NOT migrate the model to the event scheduler:
-    /// `uses_scheduler()` stays false and `needs_legacy_walk()` stays at its
-    /// `true` default, because `tick_elapsed` still drains the TX FIFO and
-    /// nothing else does. Changing either is what wedged classic ESP32 in the
-    /// browser once already — see the note in `configure_xtensa_esp32`.
+    /// Its presence is ALSO what migrates the model: `scheduler_mode()` reads
+    /// `clock.is_some()`, so an attached clock means `uses_scheduler()` is true
+    /// and the walk is deletable.
+    ///
+    /// That was false until the classic DPORT gained a scheduler arm in
+    /// `SystemBus::deliver_scheduled_irq_levels`. Before it, flipping either
+    /// flag deleted the walk out from under the only thing that drains
+    /// `tx_fifo` and wedged arduino-esp32 in `uart_ll_write_txfifo` — see the
+    /// note in `configure_xtensa_esp32`, which named that arm as the
+    /// prerequisite. `on_event` now replays elapsed cycles into the same
+    /// `tick_elapsed`, and `matrix_irq_sources_into` keeps TXFIFO_EMPTY
+    /// routed.
     clock: Option<CycleClock>,
     /// A HANDLE to the same TX/RX wire cell `UartCore::lines` owns — not a
     /// second home for it.
@@ -167,12 +177,25 @@ pub struct Esp32Uart {
     /// place, [`Self::pad_lines_arc`], from the very `Arc` that call returns,
     /// so the two can never point at different cells.
     wire: Option<Arc<PadLines>>,
+    /// True while a WAKE event is in flight, so a driver poking several
+    /// registers between writes does not stack redundant wakeups.
+    scheduled: bool,
+    /// Test-only lever: pin this model back onto the per-cycle walk so the
+    /// walk-differential oracle can build the SAME bus twice.
+    legacy_walk_forced: bool,
+    /// Cycle the scheduler last serviced this UART at. The TX drain is
+    /// RATE-based (baud), so `on_event` must replay the cycles that ELAPSED,
+    /// not a tick count — `tick_elapsed(cycles)` already takes exactly that.
+    last_cycle: u64,
 }
 
 /// AHB-bus FIFO alias (`UART_FIFO_AHB_REG(i)`). Write-only TX push into the
 /// paired [`Esp32Uart`]'s shared core.
 pub struct Esp32UartAhbFifo {
     core: Arc<Mutex<UartCore>>,
+    /// Bus index of the `Esp32Uart` that owns this FIFO, so a write here can
+    /// arm THAT model's drain. See `Peripheral::scheduler_wake_owner`.
+    owner: usize,
 }
 
 impl std::fmt::Debug for Esp32Uart {
@@ -196,6 +219,40 @@ impl std::fmt::Debug for Esp32UartAhbFifo {
 }
 
 impl Esp32Uart {
+    /// Pin this UART onto the legacy per-cycle walk. See
+    /// [`Self::legacy_walk_forced`].
+    pub fn force_legacy_walk(&mut self) {
+        self.legacy_walk_forced = true;
+    }
+
+    // The shared macro, NOT a hand-written `cfg!` -- folding these bodies into
+    // it is what took the engine's conditional-compilation surface from 208 to
+    // 179. The walk-pin lever lives OUTSIDE it, so it costs no site.
+    crate::cycle_clock::scheduler_mode!();
+
+    #[inline]
+    fn sched_driven(&self) -> bool {
+        self.scheduler_mode() && !self.legacy_walk_forced
+    }
+
+    /// Whether the scheduler must keep waking this UART.
+    ///
+    /// `tx_fifo` non-empty is the one that matters: the drain happens ONLY in
+    /// `tick_elapsed`, and a UART that stops being driven pins
+    /// `UART_STATUS.TXFIFO_CNT` at its high-water mark. arduino-esp32's
+    /// `uart_ll_write_txfifo` then spins on `while (128 - txfifo_cnt) < 2`
+    /// forever — the firmware boots, burns billions of cycles, paints nothing
+    /// and never reaches `loop()`. That is not hypothetical; it is what a hand
+    /// `legacy_walk_disabled = true` did to this model once already.
+    fn has_active_work(&self) -> bool {
+        let Ok(core) = self.core.lock() else {
+            // A poisoned lock cannot be reasoned about; keep waking rather
+            // than silently stop draining.
+            return true;
+        };
+        !core.tx_fifo.is_empty() || (core.int_raw() & core.reg(OFF_INT_ENA)) != 0
+    }
+
     /// A UART instance. `echo_stdout` true routes shifted-out TX to the host
     /// console (use for UART0, the typical `Serial`); false keeps it
     /// capture-only. `source_id` is the intr-matrix source (34/35/36).
@@ -223,6 +280,9 @@ impl Esp32Uart {
             source_id,
             clock: None,
             wire: None,
+            scheduled: false,
+            legacy_walk_forced: false,
+            last_cycle: 0,
         }
     }
 
@@ -246,9 +306,10 @@ impl Esp32Uart {
     }
 
     /// AHB FIFO window paired with this APB UART (same FIFO/sink/state).
-    pub fn ahb_fifo_alias(&self) -> Esp32UartAhbFifo {
+    pub fn ahb_fifo_alias(&self, owner: usize) -> Esp32UartAhbFifo {
         Esp32UartAhbFifo {
             core: Arc::clone(&self.core),
+            owner,
         }
     }
 
@@ -620,13 +681,114 @@ impl Peripheral for Esp32Uart {
         }
     }
 
-    /// Take the bus's cycle axis so a shifted character can be narrated onto its
-    /// routed pad. ⚠️ Storing a clock does NOT migrate this model to the event
-    /// scheduler — `uses_scheduler()` is deliberately left at its `false`
-    /// default, because `tick_elapsed` is still the only thing that drains the
-    /// TX FIFO.
+    /// Take the bus's cycle axis. Since the classic DPORT gained a scheduler
+    /// arm in `deliver_scheduled_irq_levels`, this ALSO migrates the model:
+    /// `scheduler_mode()` reads `clock.is_some()`, and `on_event` now drains
+    /// the TX FIFO by elapsed cycles.
     fn attach_cycle_clock(&mut self, clock: CycleClock) {
+        self.last_cycle = clock.now();
         self.clock = Some(clock);
+    }
+
+    fn uses_scheduler(&self) -> bool {
+        self.sched_driven()
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        // `derive_walk_deletable` is an ALL over the bus: while ANY peripheral
+        // answers true the whole classic-ESP32 board stays at
+        // `max_safe_tick_interval() == 1`. Profiling puts the per-cycle walk at
+        // 93% of the gap to the Cortex-M control (3283 vs 198 Ir/step at the
+        // peripheral boundary), which is what this migration is for.
+        !self.sched_driven()
+    }
+
+    /// The matrix source this UART asserts, for the DPORT scheduler arm.
+    ///
+    /// THE LOAD-BEARING HALF OF THIS MIGRATION. `poll_scheduler_matrix_sources`
+    /// reads this; without it `deliver_scheduled_irq_levels` would route an
+    /// empty set and TXFIFO_EMPTY would stop reaching the CPU — the failure the
+    /// note in `configure_xtensa_esp32` predicted for exactly this change.
+    fn matrix_irq_sources_into(&self, out: &mut Vec<u32>) {
+        let Ok(core) = self.core.lock() else {
+            return;
+        };
+        if core.int_raw() & core.reg(OFF_INT_ENA) != 0 {
+            out.push(self.source_id);
+        }
+    }
+
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        if self.has_active_work() && !self.scheduled {
+            self.scheduled = true;
+            vec![(0, UART_WAKE_TOKEN)]
+        } else {
+            Vec::new()
+        }
+    }
+
+    /// Drain the TX FIFO over the cycles that ELAPSED since the last service.
+    ///
+    /// Not a tick count: the drain is baud-rate-based, so replaying elapsed
+    /// cycles is what keeps byte timing independent of the wake cadence. Same
+    /// contract `tick_elapsed` already documents for the batched walk.
+    fn on_event(
+        &mut self,
+        _event_token: u32,
+        _sched: &mut crate::sched::EventScheduler,
+        bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        // No `#[cfg]` pair. `Bus::current_cycle` IS feature-gated, but this
+        // model already holds the same axis in `self.clock` -- `tick_elapsed`
+        // reads it the same way -- and `peripheral_tick_interval` was made
+        // unconditional precisely so interval-paced models need no gate here.
+        let now = self
+            .clock
+            .as_ref()
+            .map(|c| c.now())
+            .unwrap_or(self.last_cycle + 1);
+        let interval = bus.peripheral_tick_interval().max(1);
+
+        // Clamp: the first wake, and any wake delayed past its deadline (an
+        // idle fast-forward window), must not turn into an unbounded drain.
+        // Bounded at one interval because that is the cadence we re-arm at.
+        //
+        // KNOWN BEHAVIOUR -- time skipped past one interval is DISCARDED, not
+        // deferred. `self.last_cycle = now` below advances over the whole gap,
+        // so a wake that arrives N intervals late still drains one interval's
+        // worth and the other N-1 are simply gone. TX therefore shifts out
+        // slower than the baud rate implies after an idle fast-forward.
+        //
+        // It costs timing, never bytes. `has_active_work()` keeps the wake
+        // armed while `tx_fifo` is non-empty, so the FIFO always drains; it
+        // just takes more wakes than elapsed time says it should, bounded by
+        // FIFO depth x interval. Nothing observable is dropped, and
+        // `UART_STATUS.TXFIFO_CNT` stays monotone, which is what the firmware
+        // spins on.
+        //
+        // Unclamping is the obvious fix and is NOT obviously right: a
+        // multi-million-cycle idle jump would then empty the whole FIFO inside
+        // one wake, which is the unbounded drain this clamp exists to stop and
+        // would collapse byte timing in the other direction. Whichever way it
+        // goes wants a test that pins TX byte cadence across an idle
+        // fast-forward -- there is none today, and choosing without one is how
+        // a timing fix becomes a timing bug.
+        let elapsed = now
+            .saturating_sub(self.last_cycle)
+            .clamp(1, u64::from(interval));
+        self.last_cycle = now;
+
+        let res = self.tick_elapsed(elapsed);
+        let keep_going = self.has_active_work();
+        self.scheduled = keep_going;
+
+        crate::sched::EventResult {
+            // The matrix SOURCE id, routed by the DPORT arm — not an NVIC
+            // exception number.
+            explicit_irqs: res.explicit_irqs.unwrap_or_default(),
+            reschedule_delay: keep_going.then_some(u64::from(interval)),
+            ..Default::default()
+        }
     }
 
     fn as_any(&self) -> Option<&dyn std::any::Any> {
@@ -639,6 +801,9 @@ impl Peripheral for Esp32Uart {
 }
 
 impl Peripheral for Esp32UartAhbFifo {
+    fn scheduler_wake_owner(&self) -> Option<usize> {
+        Some(self.owner)
+    }
     fn needs_legacy_walk(&self) -> bool {
         false
     }
@@ -837,7 +1002,10 @@ mod tests {
         let sink = Arc::new(Mutex::new(Vec::new()));
         let mut u = Esp32Uart::new(false, 34);
         u.set_sink(Some(sink.clone()));
-        let mut ahb = u.ahb_fifo_alias();
+        // Owner index 0: this UART is standalone, not on a bus, so the wake
+        // owner is never consulted. The bus-level contract that the index is
+        // the RIGHT one lives in tests/esp32_classic_ahb_fifo_wakes_uart.rs.
+        let mut ahb = u.ahb_fifo_alias(0);
         ahb.write_u32(0, b'L' as u32).unwrap();
         ahb.write_u32(0, b'W' as u32).unwrap();
         assert_eq!((status(&u) >> 16) & 0xFF, 2);

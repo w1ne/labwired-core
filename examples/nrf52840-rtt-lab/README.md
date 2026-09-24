@@ -50,8 +50,11 @@ cargo run -q -p labwired-cli -- test \
   --output-dir out/nrf52840-rtt-lab/rtt-printf-smoke
 ```
 
-The same ELF runs in the browser as the `nrf52840-rtt-lab` playground lab, with
-the RTT console in the Serial pane (UART | RTT source toggle).
+The same ELF runs in the browser as the `nrf52840-rtt-lab` playground lab.
+The console is the RTT viewer when the firmware links SEGGER RTT: channel 0
+terminals, and a down-channel 0 line that `SEGGER_RTT_GetKey` reads. `q`
+prints `quit` and stops the loop. `labwired run --rtt` writes stdin into
+that same down buffer.
 
 ## Zephyr note
 

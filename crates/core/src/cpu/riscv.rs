@@ -284,7 +284,33 @@ impl RiscV {
             }
         }
 
-        // 2. extra_mem: ESP32-C3 IRAM (0x4037_0000) + mask ROM (0x4000_0000).
+        // 2. Plain flash. Declarative ESP32-C3 boards map IROM directly through
+        // `SystemBus::flash` rather than a FlashXipPeripheral. It is just as
+        // safe to window: guest stores already invalidate an overlapping live
+        // window, while a peripheral mapped over the same address must retain
+        // routing precedence and is therefore deliberately refused here.
+        // Keep the synthetic base-zero flash used by debugger/host-patching
+        // tests on the uncached path. Real mapped flash has a non-zero base;
+        // after load it is immutable except through guest bus stores, which
+        // are covered by `invalidate_fetch_if_store_overlaps`.
+        if sb.flash.base_addr != 0 && sb.find_peripheral_index(base as u64).is_none() {
+            if let Some(offset) = (base as u64).checked_sub(sb.flash.base_addr) {
+                let off = offset as usize;
+                if off < sb.flash.data.len() {
+                    let max = (sb.flash.data.len() - off).min(FETCH_WINDOW_BYTES);
+                    if max >= 4 {
+                        let mut buf = [0u8; FETCH_WINDOW_BYTES];
+                        buf[..max].copy_from_slice(&sb.flash.data[off..off + max]);
+                        self.fetch_base = base;
+                        self.fetch_bytes = buf;
+                        self.fetch_len = max as u16;
+                        return;
+                    }
+                }
+            }
+        }
+
+        // 3. extra_mem: ESP32-C3 IRAM (0x4037_0000) + mask ROM (0x4000_0000).
         // IRAM holds FreeRTOS/ISR text (~35% of C3 OLED busy instructions).
         // Side-effect free; guest stores that overlap the window invalidate it
         // via [`invalidate_fetch_if_store_overlaps`]. Host-side `bus.write_*`

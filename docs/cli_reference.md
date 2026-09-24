@@ -11,7 +11,7 @@ These options apply to the interactive runner and most subcommands.
 | `--trace` | Enable instruction-level execution tracing (prints every executed instruction). |
 | `--json` | Output errors and diagnostics as structured JSON for agent consumption. |
 | `--vcd <PATH>` | Output a Value Change Dump (VCD) trace file to the specified path. |
-| `--rtt` | Emit SEGGER RTT output: interactive runs echo drained RTT bytes; `test` captures them to `rtt.log` and enables `rtt_contains`. |
+| `--rtt` | Emit SEGGER RTT output: interactive runs echo drained up-channel bytes and write stdin into down-channel 0 (`SEGGER_RTT_GetKey`); `test` captures up-channel bytes to `rtt.log` and enables `rtt_contains`. |
 | `--version` | Print version information. |
 | `--help` | Print help message. |
 

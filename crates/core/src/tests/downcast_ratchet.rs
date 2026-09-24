@@ -120,9 +120,16 @@ use std::path::{Path, PathBuf};
 /// uses `as_any_mut` / `downcast_mut` and adds no counted site. Retiring the
 /// reach means a capability trait over both methods, which is row 6.5's work,
 /// not a rider on the RTT feature.
-const MAX_AS_ANY: usize = 200;
+///
+/// 200 → 203 / 207 → 210: RTT down-channels and ITM. `bus::construct` reaches
+/// three peripherals that share no capability trait yet: Xtensa
+/// `RamPeripheral` (an RTT id that lives only in DRAM), `SeggerRtt` (down-
+/// channel fill), and `Itm` (stimulus port 0). Mutable writes use
+/// `as_any_mut` / `downcast_mut` and add no counted site. A capability trait
+/// is row 6.5, not a rider on this feature.
+const MAX_AS_ANY: usize = 203;
 // GPIO schedule migration removes four concrete sensor downcasts.
-const MAX_DOWNCAST_REF: usize = 207;
+const MAX_DOWNCAST_REF: usize = 210;
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

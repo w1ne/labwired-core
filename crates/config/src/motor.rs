@@ -38,8 +38,11 @@ pub struct BrushedMotorConfig {
     pub direction_pin: String,
     pub brake_pin: String,
     pub enable_pin: String,
-    pub encoder_a_pin: String,
-    pub encoder_b_pin: String,
+    /// Optional: unused encoder outputs may be left unwired.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub encoder_a_pin: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub encoder_b_pin: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub encoder_index_pin: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -80,8 +83,10 @@ pub struct BldcMotorConfig {
     pub hall_a_pin: String,
     pub hall_b_pin: String,
     pub hall_c_pin: String,
-    pub encoder_a_pin: String,
-    pub encoder_b_pin: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub encoder_a_pin: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub encoder_b_pin: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub encoder_index_pin: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -177,9 +182,25 @@ impl MotorModelConfig {
                         ("direction_pin", config.direction_pin.as_str()),
                         ("brake_pin", config.brake_pin.as_str()),
                         ("enable_pin", config.enable_pin.as_str()),
-                        ("encoder_a_pin", config.encoder_a_pin.as_str()),
-                        ("encoder_b_pin", config.encoder_b_pin.as_str()),
                     ],
+                    None,
+                    &mut issues,
+                );
+                validate_optional_motor_pin(
+                    &config.id,
+                    "encoder_a_pin",
+                    config.encoder_a_pin.as_deref(),
+                    &mut issues,
+                );
+                validate_optional_motor_pin(
+                    &config.id,
+                    "encoder_b_pin",
+                    config.encoder_b_pin.as_deref(),
+                    &mut issues,
+                );
+                validate_optional_motor_pin(
+                    &config.id,
+                    "encoder_index_pin",
                     config.encoder_index_pin.as_deref(),
                     &mut issues,
                 );
@@ -250,9 +271,25 @@ impl MotorModelConfig {
                         ("hall_a_pin", config.hall_a_pin.as_str()),
                         ("hall_b_pin", config.hall_b_pin.as_str()),
                         ("hall_c_pin", config.hall_c_pin.as_str()),
-                        ("encoder_a_pin", config.encoder_a_pin.as_str()),
-                        ("encoder_b_pin", config.encoder_b_pin.as_str()),
                     ],
+                    None,
+                    &mut issues,
+                );
+                validate_optional_motor_pin(
+                    &config.id,
+                    "encoder_a_pin",
+                    config.encoder_a_pin.as_deref(),
+                    &mut issues,
+                );
+                validate_optional_motor_pin(
+                    &config.id,
+                    "encoder_b_pin",
+                    config.encoder_b_pin.as_deref(),
+                    &mut issues,
+                );
+                validate_optional_motor_pin(
+                    &config.id,
+                    "encoder_index_pin",
                     config.encoder_index_pin.as_deref(),
                     &mut issues,
                 );

@@ -19,6 +19,8 @@ mod install;
 mod jit_browser;
 #[cfg(test)]
 mod playground_repro;
+#[cfg(test)]
+mod rtt_arch_tests;
 mod traces;
 mod world;
 // CortexM and XtensaLx7 are used via Box<dyn Cpu>; the concrete types are
@@ -341,6 +343,14 @@ impl WasmSimulator {
             .as_ref()
             .ok_or_else(|| JsValue::from_str("simulator has no machine"))
     }
+
+    /// [`Self::machine_or_err`] for a call that stores into guest RAM. Same
+    /// error: a missing machine is not an empty write.
+    fn machine_mut_or_err(&mut self) -> Result<&mut Machine<Box<dyn Cpu>>, JsValue> {
+        self.machine
+            .as_mut()
+            .ok_or_else(|| JsValue::from_str("simulator has no machine"))
+    }
 }
 
 #[wasm_bindgen]
@@ -636,9 +646,34 @@ impl WasmSimulator {
         firmware: &[u8],
         blobs: &std::collections::HashMap<String, Vec<u8>>,
     ) -> Result<WasmSimulator, JsValue> {
+        // Symbol only, from the ELF bytes, before the image is built.
+        // `new_from_config_riscv_program_image` has no ELF and must stay
+        // fail-closed, including when a test calls it directly. There is no
+        // bus until that call returns, so the model is attached on the
+        // machine it builds — still `Some` only, never a RAM scan.
+        let control_block = labwired_loader::resolve_symbol_in_elf(firmware, "_SEGGER_RTT");
         let program_image = load_elf_bytes(firmware)
             .map_err(|e| JsValue::from_str(&format!("Loader Error: {}", e)))?;
-        Self::new_from_config_riscv_program_image(chip, manifest, &program_image, blobs)
+        let mut sim =
+            Self::new_from_config_riscv_program_image(chip, manifest, &program_image, blobs)?;
+        if let Some(addr) = control_block {
+            if let Some(machine) = sim.machine.as_mut() {
+                machine.bus.attach_segger_rtt(Some(addr));
+                machine
+                    .bus
+                    .attach_rtt_sink(Some(Arc::new(Mutex::new(Vec::new()))), false);
+            }
+        }
+        Ok(sim)
+    }
+
+    /// Wasm RTT is symbol-only. A stripped ELF gets no model and pays no scan.
+    fn attach_symbol_only_rtt(bus: &mut SystemBus, firmware: &[u8]) {
+        if let Some(control_block) = labwired_loader::resolve_symbol_in_elf(firmware, "_SEGGER_RTT")
+        {
+            bus.attach_segger_rtt(Some(control_block));
+            bus.attach_rtt_sink(Some(Arc::new(Mutex::new(Vec::new()))), false);
+        }
     }
 
     /// Attach every real WiFi MAC to a per-lab virtual-WiFi medium built from the
@@ -1021,6 +1056,7 @@ impl WasmSimulator {
         labwired_core::system::xtensa::attach_esp32_external_devices(&mut bus, manifest)
             .map_err(|e| JsValue::from_str(&format!("ESP32 external_devices: {:#}", e)))?;
         bus.refresh_peripheral_index();
+        Self::attach_symbol_only_rtt(&mut bus, firmware);
 
         let boxed: Box<dyn Cpu> = Box::new(cpu);
         // Real dual-core: attach a second LX6 as APP_CPU (PRID 0xABAB → core 1,
@@ -1327,6 +1363,7 @@ impl WasmSimulator {
         labwired_core::system::xtensa::attach_esp32_external_devices(&mut bus, manifest)
             .map_err(|e| JsValue::from_str(&format!("ESP32-S3 external_devices: {:#}", e)))?;
         bus.refresh_peripheral_index();
+        Self::attach_symbol_only_rtt(&mut bus, firmware);
 
         fast_boot(
             firmware,

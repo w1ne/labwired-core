@@ -56,6 +56,8 @@ pub struct InterruptFabric {
     pub esp32c3: Esp32c3Fabric,
     /// ESP32-S3 (dual-core Xtensa interrupt matrix).
     pub esp32s3: Esp32s3Fabric,
+    /// Classic ESP32 (dual-core Xtensa, DPORT matrix — TRM 7).
+    pub esp32_classic: Esp32ClassicFabric,
 }
 
 impl InterruptFabric {
@@ -184,6 +186,30 @@ pub struct Esp32c3Fabric {
     /// `recompute_esp32c3_irq_lines`. Same level semantics, so delivery matches
     /// the legacy walk cycle-for-cycle at a given tick interval.
     pub(crate) sched_sources: [u64; 2],
+}
+
+/// Classic ESP32 DPORT interrupt-matrix state.
+///
+/// Exists for the same reason [`Esp32s3Fabric`] does: the routed CPU-interrupt
+/// bitmap must be the UNION of the sources the per-cycle WALK saw and the
+/// sources SCHEDULER-driven peripherals assert. Before this, classic routing
+/// read only the walk's list (`aggregate_esp32_classic_irqs`), so a
+/// scheduler-driven classic peripheral had nowhere to put a matrix source —
+/// its `explicit_irqs` fell through to `pend_irq_for_event`, which the event
+/// path documents as mis-routing a matrix source ID.
+///
+/// Inert until something uses it: no classic-ESP32 model asserts a matrix
+/// source from `on_event` yet, so `sched_sources` is empty on every existing
+/// bus and the routed output is bit-identical to the walk-only behaviour.
+#[derive(Debug, Clone, Default)]
+pub struct Esp32ClassicFabric {
+    /// DPORT matrix source IDs asserted by the most recent peripheral WALK
+    /// tick. Level semantics, exactly as [`Esp32s3Fabric::walk_sources`]:
+    /// set while a source asserts, cleared the tick it stops.
+    pub walk_sources: [u64; 2],
+    /// DPORT sources asserted by SCHEDULER-driven peripherals, re-derived from
+    /// `matrix_irq_sources_into` and UNIONED with [`Self::walk_sources`].
+    pub sched_sources: [u64; 2],
 }
 
 /// ESP32-S3 interrupt-fabric state: the dual-core Xtensa interrupt matrix.

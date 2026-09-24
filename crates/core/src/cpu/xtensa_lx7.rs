@@ -2116,6 +2116,16 @@ impl Cpu for XtensaLx7 {
         self.waiti_parked && !self.halted
     }
 
+    fn secondary_execution_state(&self) -> crate::SecondaryExecutionState {
+        if self.halted {
+            crate::SecondaryExecutionState::ResetHeld
+        } else if self.waiti_parked {
+            crate::SecondaryExecutionState::ParkedIdle
+        } else {
+            crate::SecondaryExecutionState::Active
+        }
+    }
+
     fn idle_fast_forward_budget(&self, bus: &dyn Bus) -> Option<u64> {
         // Architectural WAITI park (FreeRTOS idle / vTaskDelay sleep). Only
         // offer a budget while no wake-capable interrupt is already visible.

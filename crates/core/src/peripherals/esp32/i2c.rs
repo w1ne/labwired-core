@@ -123,6 +123,9 @@ const SCL_PERIOD_MASK: u32 = 0x3FFF;
 const CORE_PER_APB: u64 = 3;
 
 pub struct Esp32I2c {
+    /// Bus cycle clock. Its presence is what `scheduler_mode()` reads, so an
+    /// attached clock is what migrates this model off the walk.
+    clock: Option<crate::cycle_clock::CycleClock>,
     ctr: u32,
     sr: u32,
     slave_addr: u32,
@@ -163,6 +166,11 @@ pub struct Esp32I2c {
 /// writes here instead of the APB DATA register at `0x3FF5_301c`.
 pub struct Esp32I2cAhbFifo {
     tx_fifo: std::sync::Arc<std::sync::Mutex<std::collections::VecDeque<u8>>>,
+    /// Bus index of the `Esp32I2c` that owns this FIFO. `Esp32I2c` has no event
+    /// chain today, so the harvest through it is a no-op — wired anyway so the
+    /// alias cannot become the silent-console bug `uart0_ahb_fifo` was the day
+    /// this controller grows one.
+    owner: usize,
 }
 
 impl std::fmt::Debug for Esp32I2cAhbFifo {
@@ -172,8 +180,11 @@ impl std::fmt::Debug for Esp32I2cAhbFifo {
 }
 
 impl Esp32I2c {
+    crate::cycle_clock::scheduler_mode!();
+
     pub fn new() -> Self {
         Self {
+            clock: None,
             ctr: CTR_RESET,
             sr: 0,
             slave_addr: 0,
@@ -204,9 +215,10 @@ impl Esp32I2c {
     }
 
     /// AHB FIFO window paired with this APB I2C (same TX FIFO).
-    pub fn ahb_tx_fifo_alias(&self) -> Esp32I2cAhbFifo {
+    pub fn ahb_tx_fifo_alias(&self, owner: usize) -> Esp32I2cAhbFifo {
         Esp32I2cAhbFifo {
             tx_fifo: std::sync::Arc::clone(&self.tx_fifo),
+            owner,
         }
     }
 
@@ -317,6 +329,9 @@ impl std::fmt::Debug for Esp32I2c {
 }
 
 impl Peripheral for Esp32I2cAhbFifo {
+    fn scheduler_wake_owner(&self) -> Option<usize> {
+        Some(self.owner)
+    }
     /// A write-only alias onto `Esp32I2c`'s TX FIFO: a `write` pushes a byte,
     /// a `read` returns 0. The engine that drains that FIFO lives on
     /// [`Esp32I2c`], not here. No `tick`/`tick_elapsed` override, so the walk
@@ -482,6 +497,57 @@ impl Peripheral for Esp32I2c {
             explicit_irqs: explicit,
             ..Default::default()
         }
+    }
+
+    /// The same level, for the DPORT scheduler arm.
+    ///
+    /// `deliver_scheduled_irq_levels` POLLS this on every re-derivation, which
+    /// is the whole reason this model needs no `on_event` and no WAKE token:
+    /// `tick()` above mutates nothing, it only reports a level computed from
+    /// `int_raw & int_ena`. A poll reproduces it exactly, and a pure level has
+    /// nothing to schedule.
+    fn matrix_irq_sources_into(&self, out: &mut Vec<u32>) {
+        if self.int_raw & self.int_ena != 0 {
+            out.push(self.intr_source_id);
+        }
+    }
+
+    /// The walk need not drive this model, and BOTH build configurations are
+    /// covered — which is the part worth checking rather than assuming:
+    ///
+    /// * with `event-scheduler`: the production walk skips `uses_scheduler()`
+    ///   peripherals (`bus/tick.rs`, gated on the same feature), and the level
+    ///   reaches the CPU through `matrix_irq_sources_into` + the DPORT arm in
+    ///   `deliver_scheduled_irq_levels`;
+    /// * without it: that skip does not compile, `legacy_walk_disabled` is
+    ///   never read, so the walk always runs and `tick()` emits the level as
+    ///   it always did.
+    ///
+    /// The two halves are coupled by construction — walk deletion and the
+    /// matrix poll are gated on the SAME feature — so there is no build in
+    /// which the level has no route. That coupling is why this needs no
+    /// `cfg!` of its own.
+    fn attach_cycle_clock(&mut self, clock: crate::cycle_clock::CycleClock) {
+        self.clock = Some(clock);
+    }
+
+    fn uses_scheduler(&self) -> bool {
+        self.scheduler_mode()
+    }
+
+    /// CONDITIONAL, not a literal `false`.
+    ///
+    /// `walk_starvation_contract` rule A rejects a literal `false` on a model
+    /// whose `tick()` does walk work, and this one's does -- it emits the level
+    /// as `explicit_irqs`. The rule is right and the first version of this was
+    /// wrong: declaring walk-independence while still needing the walk to
+    /// deliver an IRQ is exactly the starvation shape the contract exists for.
+    ///
+    /// Keyed on an attached clock instead, so the two halves cannot separate:
+    /// no clock means no scheduler, which means the walk still drives `tick()`
+    /// and the IRQ still goes out the way it always did.
+    fn needs_legacy_walk(&self) -> bool {
+        !self.scheduler_mode()
     }
 
     fn as_any(&self) -> Option<&dyn std::any::Any> {

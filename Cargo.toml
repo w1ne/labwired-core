@@ -18,6 +18,7 @@ members = [
     "crates/firmware-atsamd51-demo",
     "crates/firmware-ra4m1-demo",
     "crates/firmware-imxrt1064-demo",
+    "crates/firmware-itm-smoke",
     "crates/firmware-stm32f746-demo",
     "crates/firmware-ci-fixture",
     "crates/firmware-uart-echo-fixture",
@@ -61,6 +62,8 @@ members = [
     "crates/firmware-nrf52840-rtt",
     "crates/firmware-nrf52840-rtt-blocking",
     "crates/firmware-nrf52840-rtt-demo",
+    "crates/firmware-nrf52840-rtt-echo",
+    "crates/firmware-semihost-smoke",
     "crates/firmware-nrf52840-secure-boot",
     "crates/firmware-nrf52840-timer-blinky",
     "crates/firmware-perf-spin",
@@ -130,7 +133,7 @@ exclude = [
 default-members = ["crates/cli", "crates/core", "crates/dap", "crates/loader", "crates/labwired-fuzz"]
 
 [workspace.package]
-version = "0.24.0"
+version = "0.25.0"
 edition = "2021"
 authors = ["Andrii Shylenko"]
 license = "MIT"
@@ -294,6 +297,10 @@ opt-level = "s"
 codegen-units = 1
 opt-level = "s"
 
+[profile.release.package.firmware-itm-smoke]
+codegen-units = 1
+opt-level = "s"
+
 [profile.release.package.firmware-nrf52840-rtt]
 codegen-units = 1
 opt-level = "s"
@@ -303,6 +310,14 @@ codegen-units = 1
 opt-level = "s"
 
 [profile.release.package.firmware-nrf52840-rtt-demo]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-nrf52840-rtt-echo]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-semihost-smoke]
 codegen-units = 1
 opt-level = "s"
 

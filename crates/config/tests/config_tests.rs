@@ -589,8 +589,8 @@ fn motor_model_descriptors_define_unambiguous_required_pin_contracts() {
             ("direction_pin", "DIRECTION", true),
             ("brake_pin", "BRAKE", true),
             ("enable_pin", "ENABLE", true),
-            ("encoder_a_pin", "ENC_A", true),
-            ("encoder_b_pin", "ENC_B", true),
+            ("encoder_a_pin", "ENC_A", false),
+            ("encoder_b_pin", "ENC_B", false),
             ("encoder_index_pin", "INDEX", false),
             ("fault_pin", "FAULT", false),
         ]
@@ -619,8 +619,6 @@ fn motor_model_descriptors_define_unambiguous_required_pin_contracts() {
             "hall_a_pin",
             "hall_b_pin",
             "hall_c_pin",
-            "encoder_a_pin",
-            "encoder_b_pin",
         ]
     );
     assert!(emit
@@ -794,7 +792,7 @@ fn motor_model_validation_rejects_blank_identity_and_bindings() {
     };
     config.id = " ".to_owned();
     config.pwm_pin = "\t".to_owned();
-    config.encoder_b_pin.clear();
+    config.encoder_b_pin = Some(" ".to_owned());
     config.encoder_index_pin = Some(" ".to_owned());
     let issues = model.validate();
     for field in ["id", "pwm_pin", "encoder_b_pin", "encoder_index_pin"] {

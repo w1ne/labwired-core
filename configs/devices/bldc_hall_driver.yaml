@@ -1,0 +1,101 @@
+# 400W Hall-sensor BLDC driver module — NOT the plant `bldc-motor`.
+#
+# Modulshop order #49213 / invoice SZ11956/2026 — SKU 3-4-13:
+#   product page: https://modulshop.hu/400w-haromfazisu-bldc-motorvezerlo-modul-dc-660v-pwmhall-2749
+# No authoritative controller PDF (commodity module); product page is the ingest
+# link. Catalog type: `bldc-hall-driver`.
+#
+# MCU drives PWM / DIR / ENABLE. This twin walks a 6-step Hall pattern on
+# HALL_A/B/C so firmware that closes a Hall loop has something to sample.
+# When ENABLE is high OR PWM is high (digital run/stop for v1 — duty→RPM is
+# NOT modelled), advance one Hall step every 2 ms. DIR reverses step order.
+# Six-step sequence (electrical):
+#   0:101  1:100  2:110  3:010  4:011  5:001
+#
+# NOT modelled: pot/PWM duty→RPM physics, current limit, fault/IS pins, U/V/W
+# phase voltages, and VM rail dynamics. U/V/W and VM/GND are catalog/power
+# pads only — gpio_device wires GPIO roles.
+type: bldc_hall_driver
+
+behavior:
+  primitive: gpio_device
+  output_update: final_level
+  timer_clock: cycles_floor
+  input_timer_start_on_service: true
+  pins:
+    PWM: pwm_pin
+    DIR: dir_pin
+    ENABLE: enable_pin
+  outputs: [HALL_A, HALL_B, HALL_C]
+  output_pins: { HALL_A: hall_a_pin, HALL_B: hall_b_pin, HALL_C: hall_c_pin }
+  pin_config_defaults:
+    {
+      pwm_pin: PA0,
+      dir_pin: PA1,
+      enable_pin: PA2,
+      hall_a_pin: PA3,
+      hall_b_pin: PA4,
+      hall_c_pin: PA5,
+    }
+  pin_defaults:
+    { PWM: false, DIR: false, ENABLE: false, HALL_A: true, HALL_B: false, HALL_C: true }
+  params:
+    cpu_hz: { key: cpu_hz, default: 80000000 }
+  vars: { step: 0 }
+  timers:
+    - { name: commute, period_us: 2000, start: manual }
+  rules:
+    - on: { pins: [PWM, ENABLE, DIR] }
+      when: "pin(ENABLE) || pin(PWM)"
+      do: [{ timer: commute, start: true }]
+    - on: { pins: [PWM, ENABLE, DIR] }
+      when: "!pin(ENABLE) && !pin(PWM)"
+      do: [{ timer: commute, start: false }]
+    - on: { timer: commute }
+      when: "pin(ENABLE) || pin(PWM)"
+      do:
+        - { var: step, value: "var(step) + 2 * pin(DIR) - 1" }
+        - {
+            pin: HALL_A,
+            level: "((var(step) % 6 + 6) % 6 == 0) || ((var(step) % 6 + 6) % 6 == 1) || ((var(step) % 6 + 6) % 6 == 2)",
+          }
+        - {
+            pin: HALL_B,
+            level: "((var(step) % 6 + 6) % 6 == 2) || ((var(step) % 6 + 6) % 6 == 3) || ((var(step) % 6 + 6) % 6 == 4)",
+          }
+        - {
+            pin: HALL_C,
+            level: "((var(step) % 6 + 6) % 6 == 4) || ((var(step) % 6 + 6) % 6 == 5) || ((var(step) % 6 + 6) % 6 == 0)",
+          }
+
+metadata:
+  label: "BLDC Hall driver (400W)"
+  summary: "PWM/DIR/ENABLE in; 6-step Hall pattern out. Duty→RPM not modelled."
+  detail: >-
+    Modulshop 3-4-13 400W Hall BLDC driver module (DC 6–60 V, pot or external
+    PWM, Hall closed-loop). NOT the `bldc-motor` plant. When ENABLE or PWM is
+    high, this twin advances a 6-step Hall sequence on HALL_A/B/C every 2 ms;
+    DIR reverses the step order. PWM is digital run/stop for v1 — pot/PWM
+    duty→RPM physics is NOT modelled. Also not modelled: fault/IS pins, U/V/W
+    phase voltages, and VM rail dynamics.
+  category: gpio
+  config_keys:
+    - { name: pwm_pin, ty: str, doc: "PWM / speed input (digital run for v1)." }
+    - { name: dir_pin, ty: str, doc: "Direction input. HIGH = forward step order." }
+    - { name: enable_pin, ty: str, doc: "Enable input. HIGH runs the Hall walker." }
+    - { name: hall_a_pin, ty: str, doc: "Hall A output to the MCU." }
+    - { name: hall_b_pin, ty: str, doc: "Hall B output to the MCU." }
+    - { name: hall_c_pin, ty: str, doc: "Hall C output to the MCU." }
+  inputs: []
+
+emit:
+  device_type: bldc-hall-driver
+  connection: gpio
+  config:
+    - { key: pwm_pin, from_part_pin: [PWM] }
+    - { key: dir_pin, from_part_pin: [DIR] }
+    - { key: enable_pin, from_part_pin: [ENABLE] }
+    - { key: hall_a_pin, from_part_pin: [HALL_A] }
+    - { key: hall_b_pin, from_part_pin: [HALL_B] }
+    - { key: hall_c_pin, from_part_pin: [HALL_C] }
+    - { key: cpu_hz, from: sim_cpu_hz }

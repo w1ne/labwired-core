@@ -381,6 +381,19 @@ pub static EMBEDDED_DEVICES: &[(&[&str], &str)] = &[
         &["74cbtlv3257", "sn74cbtlv3257"],
         include_str!("../../../configs/devices/74cbtlv3257.yaml"),
     ),
+    // Modulshop order #49213 / invoice SZ11956/2026
+    (
+        &["logic_level_shifter_4ch", "logic-level-shifter-4ch"],
+        include_str!("../../../configs/devices/logic_level_shifter_4ch.yaml"),
+    ),
+    (
+        &["xl4015"],
+        include_str!("../../../configs/devices/xl4015.yaml"),
+    ),
+    (
+        &["bldc_hall_driver", "bldc-hall-driver"],
+        include_str!("../../../configs/devices/bldc_hall_driver.yaml"),
+    ),
 ];
 
 /// The embedded `configs/devices/*.yaml` descriptors, keyed by `type:` string.

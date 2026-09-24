@@ -47,7 +47,7 @@
 #
 # EXCLUDED, BY DESIGN: the cross-build suites in workspace-test-shards.json
 # (they build firmware for thumbv*/xtensa at RUN time, or panic without a
-# pre-built cross ELF; core-full installs the five rustup targets and runs
+# pre-built cross ELF; core-full installs the cross rustup targets and runs
 # them nightly, so PR shards lose no coverage by skipping them). The
 # classification is closed: a built target in NEITHER the shard run nor the
 # exclusion list is a hard error, so a new test file cannot silently miss the

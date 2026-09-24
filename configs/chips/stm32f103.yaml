@@ -269,12 +269,14 @@ peripherals:
     clock: { reg: "apb2enr", bit: 9 }
     config:
       debug_schema: "../peripherals/stm32f103/adc1.yaml"
+      profile: "stm32f1"
   - id: "adc2"
     type: "adc"
     base_address: 0x40012800
     size: "1KB"
     config:
       debug_schema: "../peripherals/stm32f103/adc2.yaml"
+      profile: "stm32f1"
   - id: "usart3"
     type: "uart"
     base_address: 0x40004800

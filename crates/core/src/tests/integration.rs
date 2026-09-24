@@ -2281,15 +2281,20 @@ pub mod integration_tests {
         let (cpu, _nvic) = crate::system::cortex_m::configure_cortex_m(&mut bus);
         let mut machine = Machine::new(cpu, bus);
 
-        // 2. Enable ADC (ADON=1 in CR2)
-        // Offset 0x08
+        // 2. Enable ADC with software trigger selected (RM0008: ADON|EXTSEL=111)
+        // Offset 0x08. Adc::new() is Stm32F1 layout — SWSTART is bit 22, not 30.
         let adc_base = 0x4001_2400;
         let cr2_addr = adc_base + 0x08;
-        machine.bus.write_u32(cr2_addr, 1).unwrap(); // ADON=1
+        const ADON: u32 = 1 << 0;
+        const EXTSEL_SW: u32 = 0b111 << 17; // software trigger
+        const SWSTART: u32 = 1 << 22; // F1 ADC_CR2.SWSTART (ST headers 0x00400000)
+        machine.bus.write_u32(cr2_addr, ADON | EXTSEL_SW).unwrap();
 
-        // 3. Start Conversion (SWSTART=1 in CR2)
-        // Set SWSTART (bit 30) | ADON (bit 0)
-        machine.bus.write_u32(cr2_addr, (1 << 30) | 1).unwrap();
+        // 3. Start conversion: rising edge of SWSTART with EXTSEL=111
+        machine
+            .bus
+            .write_u32(cr2_addr, ADON | EXTSEL_SW | SWSTART)
+            .unwrap();
 
         // 4. Step simulation to process conversion (cycles = 14)
         // We need to execute instructions or just tick.

@@ -47,6 +47,7 @@ const SOURCES: &[(&str, &str)] = &[
     ("jit_browser.rs", include_str!("jit_browser.rs")),
     ("lib.rs", include_str!("lib.rs")),
     ("playground_repro.rs", include_str!("playground_repro.rs")),
+    ("rtt_arch_tests.rs", include_str!("rtt_arch_tests.rs")),
     ("traces.rs", include_str!("traces.rs")),
     ("world.rs", include_str!("world.rs")),
 ];

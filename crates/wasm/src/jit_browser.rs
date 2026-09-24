@@ -1352,8 +1352,9 @@ pub(crate) fn try_browser_cortex_m_jit_step(
 /// browser cache, with the same gates the in-tree `run_jit_loop` applies
 /// before every compiled block: a takeable exception ends the window (or is
 /// dispatched by the interpreter at zero progress), leftover IT — and every
-/// miss — interprets one instruction, and a latching SCB reset ends the
-/// window on the instruction that latched it.
+/// miss — interprets one instruction, and a latching SCB reset or a
+/// semihosting `SYS_EXIT` ends the window on the instruction that latched
+/// it. The exit check does not take the code; `Machine::advance` does.
 ///
 /// This only decides compiled-vs-interpreted per instruction. The machine
 /// boundary around the window (tick cadence, scheduler drains, resets, idle
@@ -1419,12 +1420,54 @@ pub(crate) fn run_browser_cortex_m_jit_window(
         }
         retired += n;
         if cpu.sysreset_latched()
+            || cpu.firmware_exit_latched()
             || (config.idle_fast_forward_enabled && cpu.idle_fast_forward_budget(bus).is_some())
         {
             break;
         }
     }
     Ok(retired)
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod firmware_exit_window_tests {
+    use super::*;
+
+    /// `movs r2, #1`. Retires only if the window continues after `SYS_EXIT`.
+    const MOVS_R2_1: u16 = 0x2201;
+
+    #[test]
+    fn browser_window_stops_after_sys_exit_without_taking_the_code() {
+        let mut cpu = CortexM::new();
+        let mut bus = SystemBus::new();
+        bus.write_u16(0, 0xBEAB).unwrap();
+        bus.write_u16(2, MOVS_R2_1).unwrap();
+        cpu.pc = 0;
+        cpu.r0 = 0x18;
+        cpu.r1 = 0x20026;
+        cpu.r2 = 0;
+        let mut cache = BrowserJitCache::new();
+
+        let retired = run_browser_cortex_m_jit_window(
+            &mut cpu,
+            &mut bus,
+            &[],
+            &SimulationConfig::default(),
+            &mut cache,
+            8,
+        )
+        .unwrap();
+
+        assert_eq!(retired, 1, "the window must stop on SYS_EXIT");
+        assert_eq!(cpu.r2, 0, "the instruction after the trap must not retire");
+        assert_eq!(cpu.pc, 2);
+        assert!(
+            cpu.firmware_exit_latched(),
+            "the window must not consume the latch"
+        );
+        assert_eq!(cpu.take_firmware_exit(), Some(0));
+        assert!(!cpu.firmware_exit_latched());
+    }
 }
 
 #[cfg(all(test, not(target_arch = "wasm32")))]

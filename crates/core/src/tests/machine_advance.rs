@@ -31,6 +31,11 @@ pub(crate) struct CountingCpu {
     zero_batch: bool,
     // Non-architectural WAITI-park injection (dual-core coalesced-idle batching).
     parked: bool,
+    // Non-architectural APP-release injection: publish an APPCPU boot address
+    // once the primary has retired this many instructions, so a test can put
+    // the release in the MIDDLE of a coalesced reset-held window rather than
+    // before it starts.
+    release_appcpu_at_step: Option<u32>,
     // Non-architectural stand-in for a core-internal timer edge (CCOMPARE0).
     wake_deadline: Option<u64>,
     fail_batch_after: Option<u32>,
@@ -73,6 +78,13 @@ impl Cpu for CountingCpu {
                 if step == self.steps {
                     bus.write_u32(address, value)?;
                 }
+            }
+            // Publish an APPCPU boot address mid-window, the way
+            // `ets_set_appcpu_boot_addr` does from firmware, so a test can
+            // land the release INSIDE a coalesced reset-held window.
+            if self.release_appcpu_at_step == Some(self.steps) {
+                crate::peripherals::esp_xtensa_common::rom_thunks::APPCPU_BOOT_ADDR
+                    .with(|slot| slot.set(Some(0x4008_0000)));
             }
             self.pc = self.pc.wrapping_add(2);
         }
@@ -119,6 +131,16 @@ impl Cpu for CountingCpu {
 
     fn is_parked_idle(&self) -> bool {
         self.parked && !self.halted
+    }
+
+    fn secondary_execution_state(&self) -> crate::SecondaryExecutionState {
+        if self.halted {
+            crate::SecondaryExecutionState::ResetHeld
+        } else if self.parked {
+            crate::SecondaryExecutionState::ParkedIdle
+        } else {
+            crate::SecondaryExecutionState::Active
+        }
     }
 
     fn parked_wake_deadline_cycles(&self) -> Option<u64> {
@@ -578,6 +600,48 @@ fn parked_secondary_batches_without_skipping_per_cycle_ticks() {
         Some(1),
         "the IRQ raised after instruction 1 must be visible before instruction 2"
     );
+}
+
+/// A reset-held secondary cannot observe CPU time, so host orchestration may
+/// be coalesced while peripherals retain the requested per-cycle visibility.
+/// Unlike the retired wide-window attempt, this path accounts elapsed cycles
+/// internally and never reports execution by the held core.
+#[test]
+fn reset_held_secondary_coalesces_without_skipping_per_cycle_ticks() {
+    let mut machine = counting_dual_core_machine();
+    machine.cpu_secondary.as_mut().unwrap().halt();
+    machine.config.peripheral_tick_interval = 1;
+    machine.bus.config.peripheral_tick_interval = 1;
+
+    let report = machine.advance(AdvanceRequest::run(Some(64))).unwrap();
+
+    assert_eq!(report.stop, AdvanceStop::FuelLimit);
+    assert_eq!((report.primary_steps, report.secondary_steps), (64, 0));
+    assert_eq!((report.fuel_consumed, report.elapsed_cycles), (64, 64));
+    assert_eq!(report.cpu_batches, 1);
+    assert_eq!(machine.total_cycles, 64);
+    assert_eq!(machine.step_profile().peripheral_ticks, 64);
+    assert_eq!(machine.cpu_secondary.as_ref().unwrap().steps, 0);
+}
+
+/// The coalesced path must use the CPU's retired count, not assume that a
+/// requested one-instruction sub-window made progress. This is the
+/// zero-progress/accounting defect that invalidated the earlier generalisation.
+#[test]
+fn reset_held_secondary_zero_progress_does_not_charge_time() {
+    let mut machine = counting_dual_core_machine();
+    machine.cpu.zero_batch = true;
+    machine.cpu_secondary.as_mut().unwrap().halt();
+    machine.config.peripheral_tick_interval = 1;
+    machine.bus.config.peripheral_tick_interval = 1;
+
+    let report = machine.advance(AdvanceRequest::run(Some(64))).unwrap();
+
+    assert_eq!(report.stop, AdvanceStop::NoProgress);
+    assert_eq!((report.primary_steps, report.fuel_consumed), (0, 0));
+    assert_eq!(report.elapsed_cycles, 0);
+    assert_eq!(machine.total_cycles, 0);
+    assert_eq!(machine.step_profile().peripheral_ticks, 0);
 }
 
 #[test]
@@ -1296,6 +1360,63 @@ impl Drop for AppCpuBootAddrReset {
         crate::peripherals::esp_xtensa_common::rom_thunks::APPCPU_BOOT_ADDR
             .with(|slot| slot.set(None));
     }
+}
+
+/// APP released in the MIDDLE of a coalesced reset-held window.
+///
+/// The coalesced path exists because a reset-held secondary cannot observe CPU
+/// time, so host orchestration may be batched while peripherals keep per-cycle
+/// visibility. That argument stops holding the instant the secondary is
+/// released: from that instruction on it CAN observe time, and any further
+/// primary instruction retired in the same window is one the released core
+/// never got to interleave with.
+///
+/// So the coalesced window must END at the release rather than run to its
+/// planned count; `advance` then continues in lockstep for any remaining fuel.
+/// The two existing reset-held tests cover a window where the state never
+/// changes; neither can see a window that should have been cut short.
+#[test]
+fn reset_held_release_ends_the_coalesced_window_at_the_release() {
+    let _reset = AppCpuBootAddrReset;
+    let mut machine = counting_dual_core_machine();
+    machine.cpu_secondary.as_mut().unwrap().halt();
+    machine.config.peripheral_tick_interval = 1;
+    machine.bus.config.peripheral_tick_interval = 1;
+    // Firmware publishes the boot address on the 8th primary instruction, so
+    // the release lands inside a window planned for 64.
+    machine.cpu.release_appcpu_at_step = Some(8);
+
+    let report = machine.advance(AdvanceRequest::run(Some(64))).unwrap();
+
+    // The fully-held sibling finishes all 64 steps in ONE coalesced batch.
+    // Ending that window at the release forces the remaining fuel onto the
+    // lockstep path, so the run must take more than one batch.
+    assert!(
+        report.cpu_batches > 1,
+        "expected the coalesced window to end at the release (then continue as          lockstep), but the whole run stayed in one batch ({})",
+        report.cpu_batches
+    );
+    assert_eq!(
+        report.primary_steps, 64,
+        "fuel 64 must still be consumed; cutting the coalesced window is not a          stop of advance()"
+    );
+    assert_eq!(
+        machine.total_cycles, 64,
+        "cycles charged must match the instructions actually retired"
+    );
+
+    let cpu1 = machine.cpu_secondary.as_ref().unwrap();
+    assert!(
+        !cpu1.halted,
+        "APP is still held after its boot address landed"
+    );
+    // One step at the release boundary inside the coalesced window, then one
+    // per remaining primary instruction on the lockstep path (64 - 8 = 56).
+    assert_eq!(
+        cpu1.steps, 57,
+        "APP must run once at the release boundary and then lockstep for the \
+         remaining fuel -- the same place the reference path would have run it"
+    );
 }
 
 #[test]

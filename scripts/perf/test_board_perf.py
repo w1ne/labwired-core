@@ -232,6 +232,97 @@ def test_a_mode_that_did_not_execute_is_an_error_not_a_number():
     assert m and int(m.group(1)) == 200000 and float(m.group(3)) == 511.51
 
 
+class _Callgrind:
+    def __init__(self, stderr: str):
+        self.stderr = stderr
+        self.returncode = 0
+
+
+def _fake_callgrind(stderr: str):
+    seen: dict = {}
+
+    def run(argv, **kwargs):
+        seen["argv"] = argv
+        seen["env"] = kwargs.get("env") or {}
+        return _Callgrind(stderr)
+
+    return seen, run
+
+
+_IREFS = "==1== I refs: 1,000\n"
+_BATCHED_PROOF = (
+    "[batched] instructions=200000 batches=391 "
+    "steps_per_batch=511.51 tick_interval=512\n"
+)
+
+
+def test_step_mode_selects_the_arm_step_loop(monkeypatch):
+    """`--batched` does not select the ARM loop. The step column has to.
+
+    `run_firmware_arm` takes `run_arm_batched_loop` unless
+    `LABWIRED_ARM_SINGLE_STEP=1`. A step measurement that forgets the variable
+    records the batched loop a second time, which is how every ARM board came
+    to carry the same number in both columns.
+    """
+    seen, run = _fake_callgrind(_IREFS)
+    monkeypatch.setattr(bp.subprocess, "run", run)
+    measured = bp.measure_once(
+        Path("labwired"), Path("stm32f103.yaml"), Path("fw.elf"), 200_000, bp.MODE_STEP
+    )
+    assert seen["env"].get("LABWIRED_ARM_SINGLE_STEP") == "1"
+    assert "--batched" not in seen["argv"]
+    assert measured.irefs == 1000
+
+
+def test_step_mode_rejects_a_run_that_took_the_batched_loop(monkeypatch):
+    """A `[batched]` line in a step run means the lever did not take."""
+    _, run = _fake_callgrind(_IREFS + _BATCHED_PROOF)
+    monkeypatch.setattr(bp.subprocess, "run", run)
+    with pytest.raises(bp.ModeNotTakenError, match="STEP"):
+        bp.measure_once(
+            Path("labwired"), Path("stm32f103.yaml"), Path("fw.elf"), 200_000, bp.MODE_STEP
+        )
+
+
+def test_batch_mode_still_requires_the_batched_proof_line(monkeypatch):
+    """The step lever must not leak into the batch column."""
+    seen, run = _fake_callgrind(_IREFS + _BATCHED_PROOF)
+    monkeypatch.setattr(bp.subprocess, "run", run)
+    bp.measure_once(
+        Path("labwired"), Path("stm32f103.yaml"), Path("fw.elf"), 200_000, bp.MODE_BATCH
+    )
+    assert seen["env"].get("LABWIRED_ARM_SINGLE_STEP") != "1"
+    assert "--batched" in seen["argv"]
+
+
+def test_a_pair_that_measured_one_loop_is_rejected():
+    """Near-equal step and batch numbers are the duplicated-loop fingerprint.
+
+    The ARM boards really carried step and batch within a percent of each
+    other, both the batched loop.
+    An honest pair sits much further apart (a 1100-vs-450 pair is about
+    2.4x). A width-1 batch still prints `steps_per_batch=1`, which is a
+    different check. 1.25x is below every honest pair on this tree and above
+    every duplicated one.
+    """
+    assert bp.same_loop_baselines({"stm32f103": {"step": 54.0, "batch": 54.0}}) == [
+        "stm32f103"
+    ]
+    assert bp.same_loop_baselines({"esp32": {"step": 1100.2, "batch": 450.6}}) == []
+    # One mode only: nothing to compare, so not a duplicate.
+    assert bp.same_loop_baselines({"esp32c3": {"batch": 274.4}}) == []
+
+
+def test_committed_baselines_are_two_different_loops():
+    """The gate over the file, not only over a fixture built in the test."""
+    baselines = json.loads(bp.BASELINE_PATH.read_text())
+    dup = bp.same_loop_baselines(baselines)
+    assert not dup, (
+        "step and batch baselines are within "
+        f"{bp.SAME_LOOP_RATIO}x, so one column measured the other loop: {dup}"
+    )
+
+
 def test_no_baseline_for_a_board_that_is_gone():
     """A stale entry for a deleted chip makes coverage look wider than it is."""
     import json

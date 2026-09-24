@@ -28,6 +28,46 @@ pub(super) struct ResolvedPin {
     bit: u8,
 }
 
+/// Where a motor control input (PWM / direction / brake / enable) is driven from.
+///
+/// Rails are classified from board rail *vocabulary* (supply vs ground), not by
+/// treating the literal string `"VCC"` as a special GPIO name. An MCU pad stays
+/// a [`MotorControlSource::Pad`]; an unsupported or floating label is rejected
+/// with an explicit diagnostic at construction.
+#[derive(Debug, Clone, Copy)]
+pub(super) enum MotorControlSource {
+    Pad(ResolvedPin),
+    Constant(bool),
+}
+
+/// Optional encoder observer pads. Absent wires mean the plant still evolves;
+/// nothing is driven onto GPIO.
+#[derive(Debug, Clone, Copy, Default)]
+pub(super) struct MotorFeedbackBindings {
+    encoder_a: Option<ResolvedPin>,
+    encoder_b: Option<ResolvedPin>,
+}
+
+/// Supply / ground rail vocabulary shared with board-config power-rails
+/// (union of the names LabWired already treats as rails). Classification is by
+/// normalized identity, not "pin named VCC".
+fn classify_logic_rail(label: &str) -> Option<bool> {
+    let n = label.trim().to_ascii_uppercase();
+    // Strip a trailing `.N` multi-instance suffix (GND.2 → GND).
+    let n = n.split('.').next().unwrap_or(&n);
+    const SUPPLY: &[&str] = &[
+        "3V3", "3.3V", "5V", "VCC", "VDD", "VDD33", "VCC33", "VBUS", "VUSB", "VIN", "VMCU", "P3V",
+    ];
+    const GROUND: &[&str] = &["GND", "VSS", "AGND", "DGND", "GNDA", "0", "GROUND"];
+    if SUPPLY.contains(&n) {
+        Some(true)
+    } else if GROUND.contains(&n) {
+        Some(false)
+    } else {
+        None
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub(super) struct PwmPhaseCursor {
     revision: u64,
@@ -56,11 +96,11 @@ pub(super) enum MotorRuntime {
         id: String,
         plant: Box<BrushedDcMotor>,
         encoder: QuadratureEncoder,
-        pwm: ResolvedPin,
-        direction: ResolvedPin,
-        brake: ResolvedPin,
-        enable: ResolvedPin,
-        feedback: [ResolvedPin; 2],
+        pwm: MotorControlSource,
+        direction: MotorControlSource,
+        brake: MotorControlSource,
+        enable: MotorControlSource,
+        feedback: MotorFeedbackBindings,
         index: Option<ResolvedPin>,
         fault: Option<ResolvedPin>,
         simulation_clock_hz: u64,
@@ -71,9 +111,9 @@ pub(super) enum MotorRuntime {
         plant: Box<BldcMotor>,
         encoder: QuadratureEncoder,
         timer: usize,
-        enable: ResolvedPin,
+        enable: MotorControlSource,
         hall: [ResolvedPin; 3],
-        feedback: [ResolvedPin; 2],
+        feedback: MotorFeedbackBindings,
         index: Option<ResolvedPin>,
         motor_fault: Option<ResolvedPin>,
         inverter_fault: Option<ResolvedPin>,
@@ -100,7 +140,7 @@ impl SystemBus {
         self.motor_cycle_anchor
     }
 
-    pub(super) fn install_motor_models(&mut self, manifest: &SystemManifest) -> anyhow::Result<()> {
+    pub(crate) fn install_motor_models(&mut self, manifest: &SystemManifest) -> anyhow::Result<()> {
         for config in manifest.resolved_motor_models()? {
             self.motors.push(match config {
                 MotorModelConfig::Dc(config) => self.build_dc_motor(*config)?,
@@ -141,6 +181,37 @@ impl SystemBus {
         Ok(ResolvedPin { peripheral, bit })
     }
 
+    /// Resolve a control input from the compiled net label: powered logic rail →
+    /// `Constant(true)`, ground → `Constant(false)`, MCU-driven pad → `Pad`,
+    /// anything else → explicit diagnostic (floating / unsupported).
+    fn resolve_motor_control(
+        &self,
+        motor: &str,
+        role: &str,
+        label: &str,
+    ) -> anyhow::Result<MotorControlSource> {
+        if let Some(level) = classify_logic_rail(label) {
+            return Ok(MotorControlSource::Constant(level));
+        }
+        match self.resolve_motor_pin(motor, role, label) {
+            Ok(pin) => Ok(MotorControlSource::Pad(pin)),
+            Err(_) => Err(anyhow::anyhow!(
+                "motor '{motor}': {role} '{label}' is not an MCU-driven pad or a                  known powered/ground logic rail (unsupported or floating net)"
+            )),
+        }
+    }
+
+    fn resolve_optional_motor_input(
+        &self,
+        motor: &str,
+        role: &str,
+        label: Option<&str>,
+    ) -> anyhow::Result<Option<ResolvedPin>> {
+        label
+            .map(|p| self.resolve_motor_input(motor, role, p))
+            .transpose()
+    }
+
     fn build_dc_motor(&self, c: BrushedMotorConfig) -> anyhow::Result<MotorRuntime> {
         let shaft = ShaftParams {
             inertia_kg_m2: c.rotor_inertia_kg_m2,
@@ -156,24 +227,28 @@ impl SystemBus {
             shaft,
         })?;
         Ok(MotorRuntime::Dc {
-            pwm: self.resolve_motor_pin(&c.id, "pwm", &c.pwm_pin)?,
-            direction: self.resolve_motor_pin(&c.id, "direction", &c.direction_pin)?,
-            brake: self.resolve_motor_pin(&c.id, "brake", &c.brake_pin)?,
-            enable: self.resolve_motor_pin(&c.id, "enable", &c.enable_pin)?,
-            feedback: [
-                self.resolve_motor_input(&c.id, "encoder A", &c.encoder_a_pin)?,
-                self.resolve_motor_input(&c.id, "encoder B", &c.encoder_b_pin)?,
-            ],
-            index: c
-                .encoder_index_pin
-                .as_deref()
-                .map(|p| self.resolve_motor_input(&c.id, "encoder index", p))
-                .transpose()?,
-            fault: c
-                .fault_pin
-                .as_deref()
-                .map(|p| self.resolve_motor_input(&c.id, "fault", p))
-                .transpose()?,
+            pwm: self.resolve_motor_control(&c.id, "pwm", &c.pwm_pin)?,
+            direction: self.resolve_motor_control(&c.id, "direction", &c.direction_pin)?,
+            brake: self.resolve_motor_control(&c.id, "brake", &c.brake_pin)?,
+            enable: self.resolve_motor_control(&c.id, "enable", &c.enable_pin)?,
+            feedback: MotorFeedbackBindings {
+                encoder_a: self.resolve_optional_motor_input(
+                    &c.id,
+                    "encoder A",
+                    c.encoder_a_pin.as_deref(),
+                )?,
+                encoder_b: self.resolve_optional_motor_input(
+                    &c.id,
+                    "encoder B",
+                    c.encoder_b_pin.as_deref(),
+                )?,
+            },
+            index: self.resolve_optional_motor_input(
+                &c.id,
+                "encoder index",
+                c.encoder_index_pin.as_deref(),
+            )?,
+            fault: self.resolve_optional_motor_input(&c.id, "fault", c.fault_pin.as_deref())?,
             simulation_clock_hz: c.simulation_clock_hz,
             control_state: "coast".to_owned(),
             encoder: QuadratureEncoder::new(c.encoder_cpr)?,
@@ -240,21 +315,29 @@ impl SystemBus {
             plant: Box::new(plant),
             encoder: QuadratureEncoder::new(c.encoder_cpr)?,
             timer,
-            enable: self.resolve_motor_pin(&c.id, "enable", &c.enable_pin)?,
+            enable: self.resolve_motor_control(&c.id, "enable", &c.enable_pin)?,
             hall: [
                 self.resolve_motor_input(&c.id, "Hall A", &c.hall_a_pin)?,
                 self.resolve_motor_input(&c.id, "Hall B", &c.hall_b_pin)?,
                 self.resolve_motor_input(&c.id, "Hall C", &c.hall_c_pin)?,
             ],
-            feedback: [
-                self.resolve_motor_input(&c.id, "encoder A", &c.encoder_a_pin)?,
-                self.resolve_motor_input(&c.id, "encoder B", &c.encoder_b_pin)?,
-            ],
-            index: c
-                .encoder_index_pin
-                .as_deref()
-                .map(|p| self.resolve_motor_input(&c.id, "encoder index", p))
-                .transpose()?,
+            feedback: MotorFeedbackBindings {
+                encoder_a: self.resolve_optional_motor_input(
+                    &c.id,
+                    "encoder A",
+                    c.encoder_a_pin.as_deref(),
+                )?,
+                encoder_b: self.resolve_optional_motor_input(
+                    &c.id,
+                    "encoder B",
+                    c.encoder_b_pin.as_deref(),
+                )?,
+            },
+            index: self.resolve_optional_motor_input(
+                &c.id,
+                "encoder index",
+                c.encoder_index_pin.as_deref(),
+            )?,
             motor_fault: c
                 .motor_fault_pin
                 .as_deref()
@@ -288,6 +371,13 @@ impl SystemBus {
             .dev
             .read_gpio_output(pin.bit)
             .unwrap_or(false)
+    }
+
+    fn control_level(&self, source: MotorControlSource) -> bool {
+        match source {
+            MotorControlSource::Pad(pin) => self.pin_output(pin),
+            MotorControlSource::Constant(level) => level,
+        }
     }
 
     fn drive_input(&mut self, pin: ResolvedPin, level: bool) {
@@ -337,14 +427,14 @@ impl SystemBus {
                     ..
                 } => {
                     let dt_s = elapsed as f64 / *simulation_clock_hz as f64;
-                    let enabled = self.pin_output(*enable);
-                    let braking = self.pin_output(*brake);
-                    let duty = f64::from(self.pin_output(*pwm));
+                    let enabled = self.control_level(*enable);
+                    let braking = self.control_level(*brake);
+                    let duty = f64::from(self.control_level(*pwm));
                     let state = if !enabled {
                         HBridgeState::Coast
                     } else if braking {
                         HBridgeState::Brake
-                    } else if self.pin_output(*direction) {
+                    } else if self.control_level(*direction) {
                         HBridgeState::Forward
                     } else {
                         HBridgeState::Reverse
@@ -369,8 +459,12 @@ impl SystemBus {
                     }
                     let pins = encoder.sample(plant.snapshot().position_rad).ok();
                     if let Some(pins) = pins {
-                        self.drive_input(feedback[0], pins.a);
-                        self.drive_input(feedback[1], pins.b);
+                        if let Some(a) = feedback.encoder_a {
+                            self.drive_input(a, pins.a);
+                        }
+                        if let Some(b) = feedback.encoder_b {
+                            self.drive_input(b, pins.b);
+                        }
                         if let Some(index) = index {
                             self.drive_input(*index, pins.index);
                         }
@@ -444,7 +538,7 @@ impl SystemBus {
                     } else {
                         *pwm_phase_cursor = None;
                     }
-                    let external_enabled = self.pin_output(*enable);
+                    let external_enabled = self.control_level(*enable);
                     let valid_pwm = timer_output.is_some_and(|pwm| {
                         pwm.channels[..3].iter().all(|channel| {
                             matches!(
@@ -499,8 +593,12 @@ impl SystemBus {
                         self.drive_input(*pin, snapshot.hall_state & (1 << bit) != 0);
                     }
                     if let Ok(pins) = encoder.sample(snapshot.position_rad) {
-                        self.drive_input(feedback[0], pins.a);
-                        self.drive_input(feedback[1], pins.b);
+                        if let Some(a) = feedback.encoder_a {
+                            self.drive_input(a, pins.a);
+                        }
+                        if let Some(b) = feedback.encoder_b {
+                            self.drive_input(b, pins.b);
+                        }
                         if let Some(index) = index {
                             self.drive_input(*index, pins.index);
                         }

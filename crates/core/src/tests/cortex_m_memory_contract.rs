@@ -100,6 +100,22 @@ mod no_discarded_bus_access {
                 "bus.read_u32(addr).unwrap_or(0)",
             ],
         ),
+        (
+            // Semihosting is a debugger trap, not a CPU load/store. A bad
+            // guest pointer returns the syscall error `0xFFFFFFFF` in r0.
+            // It does not leave a data register stale and it does not drop
+            // a store on the execute path. The CPU stays in the trap handler.
+            "semihost.rs",
+            &[
+                "match bus.read_u8(u64::from(ptr)) {",
+                "match bus.read_u8(u64::from(ptr.wrapping_add(i))) {",
+                "if bus.write_u8(u64::from(addr), byte).is_err() {",
+                "let handle = bus.read_u32(u64::from(block)).ok()?;",
+                "let buf = bus.read_u32(u64::from(block.wrapping_add(4))).ok()?;",
+                "let count = bus.read_u32(u64::from(block.wrapping_add(8))).ok()?;",
+                "out.push(bus.read_u8(u64::from(buf.wrapping_add(i))).ok()?);",
+            ],
+        ),
     ];
 
     fn cpu_root() -> PathBuf {

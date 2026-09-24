@@ -108,6 +108,16 @@ impl PeripheralKit for DeclarativeDeviceKit {
     }
 
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> Result<()> {
+        // Motor plant primitives are metadata-only on this path. Docs above
+        // already say `dc_motor` / `bldc_motor` convert to typed plants at the
+        // loader boundary (`MotorModelConfig::from_external_device` →
+        // `SystemBus::install_motor_models`). Calling `attach_declarative_device`
+        // would hard-error on an unknown primitive and never reach that install
+        // — which is exactly how a placed canvas `dc-motor` failed to start.
+        match self.descriptor.behavior.primitive.as_str() {
+            "dc_motor" | "bldc_motor" => return Ok(()),
+            _ => {}
+        }
         ctx.bus.attach_declarative_device(ctx.ext, &self.descriptor)
     }
 }

@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-09-22
+
+### Added
+- ESP32-C6 DevKitC-1 through L1, with a C6 UART, interrupt matrix, and
+  watchdog depth (#1204, #1210).
+- STM32G071 (NUCLEO-G071RB) and STM32WBA52, each with its own RCC layout,
+  plus STM32U575 onboarding and fidelity (#1188, #1201, #1204).
+- Declarative devices finished the YAML migration: register shells, GPIO
+  edge schedules, displays, e-paper, SPI opcodes and pads, analog plants,
+  and an exact-integer BME280 (#1146 through #1207).
+- Derived device time on chips that have no absolute microsecond counter
+  (#1144), and analog semiconductor models (#1153).
+- RTT in the browser session (#1209) and host stimulus on `labwired run`
+  (#1133).
+- Fleet L1 gates and the beyond-rubric ledger (#1214).
+
+### Changed
+- nRF54L and SAMD21 leave the per-instruction peripheral walk; Thumb loops
+  batch, and Xtensa advance batches the same way (#1178, #1179, #1211).
+- The shipped CLI is this tree. v0.24.0 could not build `esp32c6`,
+  `stm32g071`, or `stm32wba52`, which is what the install canary was
+  refusing.
+
+### Fixed
+- Arduino matrix smoke stays on the PlatformIO versions it was green on
+  (`ststm32@19.7.1`, `espressif32@7.0.1`, `atmelavr@5.3.0`). A new I2C
+  pointer re-latches when the master reads without START, which is the
+  AVR TWI and classic ESP32 path. Coverage no longer calls an approximate
+  device-time note an unmodelled gap (#1212).
+- nRF5340 Zephyr hello no longer spends the coverage job inside idle
+  fast-forward (#1212).
+- An empty resident-waveform hook no longer runs on every AVR step. It was
+  29 host instructions per step on the spin fixture (#1207).
+- Scheduled core-full installs `riscv32imc-unknown-none-elf`, which the
+  ESP32-C6 strict-onboarding firmware build needs.
+
 ## [0.24.0] - 2026-09-16
 
 ### Added

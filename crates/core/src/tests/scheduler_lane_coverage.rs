@@ -67,24 +67,6 @@ use std::path::PathBuf;
 /// the entire point: the previous arrangement made it a silence.
 const NIGHTLY_ONLY: &[(&str, &str)] = &[
     (
-        "stm32f401_walk_differential",
-        "9.6s of runtime (measured, debug). The four STM32 walk differentials \
-         together are ~55s — most of the uncovered set's cost in four files. \
-         They run in core-full; the cheap half runs pre-merge.",
-    ),
-    (
-        "stm32h563_walk_differential",
-        "12.9s of runtime (measured, debug); see stm32f401_walk_differential.",
-    ),
-    (
-        "stm32l073_walk_differential",
-        "14.3s of runtime (measured, debug); see stm32f401_walk_differential.",
-    ),
-    (
-        "stm32l476_walk_differential",
-        "18.6s of runtime (measured, debug); see stm32f401_walk_differential.",
-    ),
-    (
         "nrf54l15_idle_ff_speedup",
         "43.6s of runtime (measured, debug): it measures an idle fast-forward \
          speedup, so the wall clock IS the assertion and cannot be shortened.",
@@ -126,6 +108,10 @@ const NIGHTLY_ONLY: &[(&str, &str)] = &[
         "riscv_jit_c3_oled_differential",
         "Every test in the file is #[ignore]d, AND it needs `jit` as well as \
          `event-scheduler`; see bench_walk_free_kw41z.",
+    ),
+(
+        "esp32_classic_ahb_fifo_wakes_uart",
+        "AHB-FIFO alias wake pin for classic Esp32Uart after walk migration. Belongs in          pr-scheduler-observable; kept nightly-only until a workflow-scoped push can          register the --test lane. core-full/nightly still runs it under event-scheduler.",
     ),
 ];
 

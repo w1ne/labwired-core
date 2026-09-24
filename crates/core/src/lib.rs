@@ -252,6 +252,12 @@ pub struct CpuJitStats {
     /// Guest instructions retired on the interpreter fallback path.
     pub interpreted: u64,
 }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SecondaryExecutionState {
+    Active,
+    ParkedIdle,
+    ResetHeld,
+}
 
 pub trait Cpu: Send {
     fn reset(&mut self, bus: &mut dyn Bus) -> SimResult<()>;
@@ -460,6 +466,17 @@ pub trait Cpu: Send {
         1
     }
 
+    /// Classify a secondary core with one query on the hot planning path.
+    /// Reset-held and architecturally parked are distinct: the former retires
+    /// nothing, while the latter owns live counters and wake deadlines.
+    fn secondary_execution_state(&self) -> SecondaryExecutionState {
+        if self.is_parked_idle() {
+            SecondaryExecutionState::ParkedIdle
+        } else {
+            SecondaryExecutionState::Active
+        }
+    }
+
     /// True while this core is parked in an architectural wait (e.g. Xtensa
     /// `WAITI`) and will only retire work when an interrupt wakes it.
     ///
@@ -476,6 +493,20 @@ pub trait Cpu: Send {
     /// query it in reporting paths.
     fn jit_hit_count(&self) -> u64 {
         0
+    }
+
+    /// Firmware exit code latched by the core (Cortex-M `SYS_EXIT`), taken once.
+    /// Default `None`: cores other than Cortex-M have no semihosting trap.
+    /// Polled by `Machine::advance` beside `drain_simctl_exit_code`. Not the
+    /// simctl device — that peripheral is not on every bus.
+    fn take_firmware_exit(&mut self) -> Option<u32> {
+        None
+    }
+
+    /// `true` only for a core that can retire `bkpt #0xAB` as semihosting.
+    /// `semihosting_contains` fails closed when this is false.
+    fn supports_semihosting(&self) -> bool {
+        false
     }
 }
 
@@ -591,8 +622,17 @@ impl Cpu for Box<dyn Cpu> {
     fn is_parked_idle(&self) -> bool {
         (**self).is_parked_idle()
     }
+    fn secondary_execution_state(&self) -> SecondaryExecutionState {
+        (**self).secondary_execution_state()
+    }
     fn jit_hit_count(&self) -> u64 {
         (**self).jit_hit_count()
+    }
+    fn take_firmware_exit(&mut self) -> Option<u32> {
+        (**self).take_firmware_exit()
+    }
+    fn supports_semihosting(&self) -> bool {
+        (**self).supports_semihosting()
     }
 }
 
@@ -1327,6 +1367,29 @@ pub trait Peripheral: std::fmt::Debug + Send {
         Vec::new()
     }
 
+    /// The peripheral whose scheduler wake this one's writes must arm, by bus
+    /// index, when that is NOT itself.
+    ///
+    /// An ALIAS WINDOW is a second bus entry onto another peripheral's state:
+    /// classic-ESP32 registers `uart0_ahb_fifo` at `0x6000_0000` over the same
+    /// `tx_fifo` as `uart0`, because IDF and arduino-esp32 write TX there
+    /// rather than at the APB base. `SystemBus::collect_scheduled_events` runs
+    /// on the index that was WRITTEN, so without this the harvest lands on the
+    /// alias — which schedules nothing and whose `uses_scheduler()` is the
+    /// default `false` — and the model that actually owns the drain is never
+    /// woken. Under the legacy walk that could not matter, since the owner was
+    /// ticked every cycle whatever address the firmware used; deleting the walk
+    /// is what made the write site load-bearing.
+    ///
+    /// An INDEX, not a name: this is consulted on every MMIO write, and
+    /// `find_peripheral_index_by_name` is a linear scan. Resolve it once at
+    /// registration, where the owner's index is already in hand.
+    ///
+    /// Default `None` — only alias windows override.
+    fn scheduler_wake_owner(&self) -> Option<usize> {
+        None
+    }
+
     /// Hand this peripheral the bus's shared [`CycleClock`] so `&self` reads
     /// can lazily sync `Cell`-held counter state to the published "now"
     /// (batch-boundary freshness — exact at batch boundaries, < one
@@ -1775,6 +1838,19 @@ pub trait Bus {
     ) -> Option<crate::peripherals::esp_xtensa_common::rom_thunks::RomThunkFn> {
         None
     }
+
+    /// Append bytes to the semihosting stream. Default no-op: only `SystemBus`
+    /// has the sink, and the trap holds `&mut dyn Bus`.
+    fn semihost_write(&mut self, _bytes: &[u8]) {}
+
+    /// Pop up to `dst.len()` host semihosting-input bytes. Does not block.
+    /// Default 0 (nothing available).
+    fn semihost_read(&mut self, _dst: &mut [u8]) -> usize {
+        0
+    }
+
+    /// A `bkpt #0xAB` has retired. Default no-op.
+    fn semihost_note_attached(&mut self) {}
 
     fn read_u16(&self, addr: u64) -> SimResult<u16> {
         let b0 = self.read_u8(addr)? as u16;

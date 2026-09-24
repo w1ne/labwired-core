@@ -61,3 +61,7 @@ pub use uart::{
 #[cfg(test)]
 #[path = "lib_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "modulshop_49213_tests.rs"]
+mod modulshop_49213_tests;

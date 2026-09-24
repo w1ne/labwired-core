@@ -1008,6 +1008,18 @@ impl crate::Bus for SystemBus {
         self.config.peripheral_tick_interval.max(1)
     }
 
+    fn semihost_write(&mut self, bytes: &[u8]) {
+        self.semihost.write(bytes);
+    }
+
+    fn semihost_read(&mut self, dst: &mut [u8]) -> usize {
+        self.semihost.pop_input(dst)
+    }
+
+    fn semihost_note_attached(&mut self) {
+        self.semihost.note_attached();
+    }
+
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         Some(self)
     }

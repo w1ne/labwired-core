@@ -53,8 +53,8 @@ emit:
     - { key: hall_a_pin, from_part_pin: [HALL_A] }
     - { key: hall_b_pin, from_part_pin: [HALL_B] }
     - { key: hall_c_pin, from_part_pin: [HALL_C] }
-    - { key: encoder_a_pin, from_part_pin: [ENC_A] }
-    - { key: encoder_b_pin, from_part_pin: [ENC_B] }
+    - { key: encoder_a_pin, from_part_pin: [ENC_A], required: false }
+    - { key: encoder_b_pin, from_part_pin: [ENC_B], required: false }
     - { key: encoder_index_pin, from_part_pin: [INDEX], required: false }
     - { key: motor_fault_pin, from_part_pin: [MOTOR_FAULT], required: false }
     - { key: inverter_fault_pin, from_part_pin: [INVERTER_FAULT], required: false }

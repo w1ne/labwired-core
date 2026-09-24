@@ -1235,6 +1235,40 @@ fn uds_tester_assertion_parses_result_done() {
 }
 
 #[test]
+fn env_script_rejects_semihosting_contains_explicitly() {
+    let script_path = write_temp_file(
+        "env-semihost-assertion",
+        r#"
+schema_version: "1.0"
+inputs: { env: "twonode-env.yaml" }
+limits: { max_steps: 10 }
+assertions:
+  - semihosting_contains: "semihost hello"
+"#,
+    );
+
+    let err = load_test_script(&script_path).unwrap_err().to_string();
+    assert!(err.contains("cannot observe"), "unexpected error: {err}");
+}
+
+#[test]
+fn env_script_rejects_itm_contains_explicitly() {
+    let script_path = write_temp_file(
+        "env-itm-assertion",
+        r#"
+schema_version: "1.0"
+inputs: { env: "twonode-env.yaml" }
+limits: { max_steps: 10 }
+assertions:
+  - itm_contains: "ITM hello"
+"#,
+    );
+
+    let err = load_test_script(&script_path).unwrap_err().to_string();
+    assert!(err.contains("cannot observe"), "unexpected error: {err}");
+}
+
+#[test]
 fn env_script_rejects_rtt_contains_explicitly() {
     let script_path = write_temp_file(
         "env-rtt-assertion",

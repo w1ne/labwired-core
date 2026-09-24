@@ -196,6 +196,18 @@ pub struct RttContainsAssertion {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
+pub struct SemihostingContainsAssertion {
+    pub semihosting_contains: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct ItmContainsAssertion {
+    pub itm_contains: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct UartRegexAssertion {
     pub uart_regex: String,
 }
@@ -479,6 +491,8 @@ pub enum TestAssertion {
     MqttFabric(MqttFabricAssertion),
     DisplayRegion(DisplayRegionAssertion),
     RttContains(RttContainsAssertion),
+    SemihostingContains(SemihostingContainsAssertion),
+    ItmContains(ItmContainsAssertion),
 }
 
 /// Which input channel a stimulus drives. `channel` is the `sim_input`
@@ -846,6 +860,16 @@ impl TestScript {
             if let TestAssertion::RttContains(assertion) = assertion {
                 if assertion.rtt_contains.is_empty() {
                     anyhow::bail!("assertions[{index}]: rtt_contains cannot be empty");
+                }
+            }
+            if let TestAssertion::SemihostingContains(assertion) = assertion {
+                if assertion.semihosting_contains.is_empty() {
+                    anyhow::bail!("assertions[{index}]: semihosting_contains cannot be empty");
+                }
+            }
+            if let TestAssertion::ItmContains(assertion) = assertion {
+                if assertion.itm_contains.is_empty() {
+                    anyhow::bail!("assertions[{index}]: itm_contains cannot be empty");
                 }
             }
         }

@@ -114,6 +114,12 @@ pub fn attach_esp32_external_devices(
     // every registration, so — unlike `from_config`, which pushes entries
     // directly — there is nothing left to rebuild here.
     bus.attach_board_io_buttons(manifest);
+    // Motor plants: DeclarativeDeviceKit no-ops `dc_motor` / `bldc_motor` so
+    // attach can succeed, then this pass converts `external_devices` motors
+    // (and any typed `motor_models:`) into runtime plants — the same call
+    // `SystemBus::from_config` makes after its attach loop. Without it, Xtensa
+    // playground/WASM builds would claim the motor and never install it.
+    bus.install_motor_models(manifest)?;
     Ok(())
 }
 
@@ -730,7 +736,7 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
             .as_any()
             .and_then(|a| a.downcast_ref::<crate::peripherals::esp32::i2c::Esp32I2c>())
         {
-            let ahb = i2c.ahb_tx_fifo_alias();
+            let ahb = i2c.ahb_tx_fifo_alias(idx);
             bus.add_peripheral("i2c0_ahb_fifo", 0x6001_301c, 4, None, Box::new(ahb));
         }
     }
@@ -745,7 +751,7 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
                 .as_any()
                 .and_then(|a| a.downcast_ref::<crate::peripherals::esp32::uart::Esp32Uart>())
             {
-                let ahb = uart.ahb_fifo_alias();
+                let ahb = uart.ahb_fifo_alias(idx);
                 bus.add_peripheral(
                     &format!("{name}_ahb_fifo"),
                     ahb_base,
@@ -815,14 +821,25 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
     //
     // The derivation is conservative by construction and cannot make that
     // mistake: it deletes the walk only when EVERY peripheral is provably
-    // walk-independent. On this bus `Esp32Uart` (uart0/1/2) forces it back on,
-    // which costs classic-ESP32 browser throughput (no interval-512 batching,
-    // no idle fast-forward) until `Esp32Uart` is genuinely migrated — that
-    // migration additionally needs a DPORT arm in
-    // `SystemBus::deliver_scheduled_irq_levels`, which today handles only the
-    // C3 and S3 matrices, or the UART's TXFIFO_EMPTY interrupt would stop
-    // being routed. A slow lab beats a wedged one; see the gate in
-    // `crates/core/tests/esp32_classic_walk_differential.rs`.
+    // walk-independent.
+    //
+    // RESOLVED. `Esp32Uart` is genuinely migrated: it has a WAKE token and an
+    // `on_event` that replays ELAPSED CYCLES into the same `tick_elapsed` that
+    // always drained `tx_fifo`, so the drain did not move — only what calls
+    // it. `Esp32I2c` needed no event chain at all, its `tick()` being a pure
+    // level; `matrix_irq_sources_into` reproduces it under a poll.
+    //
+    // Both deliver through the DPORT arm this note used to name as the missing
+    // prerequisite — `SystemBus::deliver_scheduled_irq_levels` now handles the
+    // classic matrix alongside the C3 and S3, routing the UNION of walk-emitted
+    // and scheduler-driven sources, so TXFIFO_EMPTY stays routed.
+    //
+    // The flag is still DERIVED, never asserted. Nothing here hand-sets it;
+    // `derive_walk_deletable` reaches `true` on its own because no peripheral
+    // forces the walk any more. The gate that would catch a regression is the
+    // observable arm of `crates/core/tests/esp32_classic_walk_differential.rs`
+    // — serial bytes reaching the sink, which is what the original defect
+    // destroyed while every flag still read correct.
 
     // Default flash image: app XIP MMU seed for cache2phys + SPI0/1 backing.
     // Callers (diag / labwired test) overlay partitions.bin at 0x8000 via

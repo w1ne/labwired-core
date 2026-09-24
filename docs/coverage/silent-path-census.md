@@ -125,14 +125,16 @@ instances across the runnable corpus are declarative, so omitting them would hav
 a near-zero (c) result misleading. They are counted and reported separately as
 `shape: declarative_miss`.
 
-### Read the raw counts with a 4x byte multiplier
+### Raw counts are not one-per-register unless the model stored a word
 
-`Peripheral::read`/`write` are **byte**-granular; `read_u32`/`write_u32` decompose into
-four byte accesses. Several models (RCC among them) additionally do a read-modify-write
-per byte. So **one** 32-bit write to an undecoded register costs 4 `write` hits *and* 4
-`read` hits. This is pinned by a test
-(`crates/core/tests/census_probe.rs::raw_counts_carry_a_four_times_byte_multiplier`).
-Divide raw (c) counts by 4 to get register-level accesses.
+`Peripheral::read`/`write` are **byte**-granular, and the trait default splits
+`read_u32`/`write_u32` into four byte accesses. Several models also
+read-modify-write each byte, so one 32-bit store can cost 4 `write` hits and 4
+`read` hits. RCC does not: an aligned `write_u32` is one word store, because a
+byte split re-latches write-1-to-clear bits (`RCC_CSR.RMVF`). That path records
+one `write` and no `read`, pinned by
+`crates/core/tests/census_probe.rs::aligned_rcc_u32_write_is_one_census_hit`.
+Divide a raw count by four only when the model still takes the byte path.
 
 ## Coverage
 

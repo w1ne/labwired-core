@@ -242,6 +242,7 @@ peripherals:
     clock: { reg: "apb2enr", bit: 8 }
     config:
       debug_schema: "../peripherals/stm32f407/adc1.yaml"
+      profile: "stm32f4"
   # bxCAN1 — basic-extended CAN (RM0090 §32). Same IP as F1/L4; matrix L8
   # loopback uses BTR.LBKM + filter accept-all. Clock: RCC_APB1ENR.CAN1EN bit 25.
   - id: "bxcan1"

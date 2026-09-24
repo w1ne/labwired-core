@@ -457,7 +457,7 @@ boards:
     drift_ack: 2026-09-17
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: 4a6ed04bab74148e49efc4e8785b1bf985377bff0e05b44dea9575811ed70d80
+    drift_ack_digest: 6263fb77b1a6369c8950016c0f78963dcc8bac24f31de0950baa249888108b29
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
     drift_ack: 2026-09-18
     models:
@@ -488,6 +488,12 @@ boards:
     # semantics moved, so nothing this board's silicon anchor asserts is
     # reachable from it. ACK, NOT A CAPTURE.
     drift_ack: 2026-09-21
+    # 2026-09-24 (#1230): bkpt #0xAB serves semihosting on the Cortex-M
+    # execute path (WRITEC, WRITE0, WRITE, READ, EXIT). Watched
+    # cortex_m.rs and cortex_m/exec moved. No register map, reset value,
+    # or peripheral programming model on this board changed.
+    # ACK, NOT A CAPTURE. The live re-capture owed above is still owed.
+    drift_ack: 2026-09-24
   - id: seeed-xiao-nrf52840-sense
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
     # 2026-09-16 (#1125): Cortex-M JIT follow-ups (block chaining, floor 4, IT-predicated ALU, VFP S-ALU, VLDR/VSTR, LDR.W PC), plus two model fixes that ride along: the bit-band alias decode no longer swallows peripherals vendors place inside 0x4200_0000 (SAMD51 QSPI/SERCOM), and the STM32 timer's scheduled compare pend lands on the latch tick like the walk. JIT is opt-in (`cortex_m_jit_enabled` default off); interpreter path unchanged, JIT-on vs off lockstep in cortex_m_jit_nrf_differential; both fixes pinned by bus-level gates. No silicon capture pins JIT.
@@ -796,7 +802,7 @@ boards:
     drift_ack: 2026-09-17
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: 4a6ed04bab74148e49efc4e8785b1bf985377bff0e05b44dea9575811ed70d80
+    drift_ack_digest: 6263fb77b1a6369c8950016c0f78963dcc8bac24f31de0950baa249888108b29
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
     drift_ack: 2026-09-18
     models:
@@ -827,6 +833,12 @@ boards:
     # semantics moved, so nothing this board's silicon anchor asserts is
     # reachable from it. ACK, NOT A CAPTURE.
     drift_ack: 2026-09-21
+    # 2026-09-24 (#1230): bkpt #0xAB serves semihosting on the Cortex-M
+    # execute path (WRITEC, WRITE0, WRITE, READ, EXIT). Watched
+    # cortex_m.rs and cortex_m/exec moved. No register map, reset value,
+    # or peripheral programming model on this board changed.
+    # ACK, NOT A CAPTURE. The live re-capture owed above is still owed.
+    drift_ack: 2026-09-24
   - id: stm32h563
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
     # 2026-09-16 (#1125): Cortex-M JIT follow-ups (block chaining, floor 4, IT-predicated ALU, VFP S-ALU, VLDR/VSTR, LDR.W PC), plus two model fixes that ride along: the bit-band alias decode no longer swallows peripherals vendors place inside 0x4200_0000 (SAMD51 QSPI/SERCOM), and the STM32 timer's scheduled compare pend lands on the latch tick like the walk. JIT is opt-in (`cortex_m_jit_enabled` default off); interpreter path unchanged, JIT-on vs off lockstep in cortex_m_jit_nrf_differential; both fixes pinned by bus-level gates. No silicon capture pins JIT.
@@ -1276,7 +1288,7 @@ boards:
     drift_ack: 2026-09-17
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: 2a07932d72f74a678ac057fc6f251d24130f3bf207478b7ccf7e87c43aae7fb7
+    drift_ack_digest: dbd6af40c517425afffe4a597819c3db7fb8739584851f34b70d5df5765b9fcc
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -1499,7 +1511,15 @@ boards:
     # end-condition only — no register, reset value or programming
     # semantics moved, so nothing this board's silicon anchor asserts is
     # reachable from it. ACK, NOT A CAPTURE.
-    drift_ack: 2026-09-21
+    # 2026-09-23 (#1222): STM32F1 ADC SWSTART is bit 22 (not 30); scheduled
+    # CAL/RSTCAL settle. Watched adc.rs / chip yaml digests move; ACK, NOT A CAPTURE.
+    drift_ack: 2026-09-23
+    # 2026-09-24 (#1230): bkpt #0xAB serves semihosting on the Cortex-M
+    # execute path (WRITEC, WRITE0, WRITE, READ, EXIT). Watched
+    # cortex_m.rs and cortex_m/exec moved. No register map, reset value,
+    # or peripheral programming model on this board changed.
+    # ACK, NOT A CAPTURE. The live re-capture owed above is still owed.
+    drift_ack: 2026-09-24
   - id: esp32c3
     # 2026-09-15 (#932): SPI edge sampling is opt-in (`SpiSampling::Byte` default). Byte-level golden pins the pre-feature path. Controllers without a bit engine reject opt-in at config time.
     doc: docs/boards/esp32c3.md
@@ -1656,7 +1676,7 @@ boards:
     # IRQ-enabled, observer, logic-tap, and cycle-accurate execution remains
     # interpreted. This acknowledges CPU-source drift, NOT a silicon recapture.
     drift_ack: 2026-09-20
-    drift_ack_digest: eb6221cfa93825aeab639455f5c023ef86e1e8cfbcfdb51a02604edff7be39c8
+    drift_ack_digest: 989f9ebffca81e71cebe4193439d02694866ebb0e28ce9325bcecff81cb3bd40
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
@@ -2307,6 +2327,12 @@ boards:
     # still passes every cell. ACK, NOT A CAPTURE — the live re-capture owed
     # above is still owed.
     drift_ack: 2026-09-21
+    # 2026-09-23 (#1226): mapped-flash instruction fetch windowing in riscv.rs
+    # — resolve the mapped-flash peripheral window once per region instead of
+    # once per fetch. Decode/execution/register state unchanged. Watched
+    # cpu/riscv.rs digest moves; ACK, NOT A CAPTURE. The live re-capture owed
+    # above is still owed.
+    drift_ack: 2026-09-23
 
   - id: nucleo-l476rg
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
@@ -2740,7 +2766,7 @@ boards:
     drift_ack: 2026-09-17
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: 2ca9079ca51bf41941d0617a205a6d910c33f221752b0a5d9cd373af0cabbc8b
+    drift_ack_digest: 4e4bf9f1137ad196c9e7440246db4f3ec49de232f29be181b84c70ee265d675b
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -2939,7 +2965,15 @@ boards:
     # end-condition only — no register, reset value or programming
     # semantics moved, so nothing this board's silicon anchor asserts is
     # reachable from it. ACK, NOT A CAPTURE.
-    drift_ack: 2026-09-21
+    # 2026-09-23 (#1222): STM32F1 ADC SWSTART is bit 22 (not 30); scheduled
+    # CAL/RSTCAL settle. Watched adc.rs / chip yaml digests move; ACK, NOT A CAPTURE.
+    drift_ack: 2026-09-23
+    # 2026-09-24 (#1230): bkpt #0xAB serves semihosting on the Cortex-M
+    # execute path (WRITEC, WRITE0, WRITE, READ, EXIT). Watched
+    # cortex_m.rs and cortex_m/exec moved. No register map, reset value,
+    # or peripheral programming model on this board changed.
+    # ACK, NOT A CAPTURE. The live re-capture owed above is still owed.
+    drift_ack: 2026-09-24
   - id: nucleo-l073rz
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
     # 2026-09-16 (#1125): Cortex-M JIT follow-ups (block chaining, floor 4, IT-predicated ALU, VFP S-ALU, VLDR/VSTR, LDR.W PC), plus two model fixes that ride along: the bit-band alias decode no longer swallows peripherals vendors place inside 0x4200_0000 (SAMD51 QSPI/SERCOM), and the STM32 timer's scheduled compare pend lands on the latch tick like the walk. JIT is opt-in (`cortex_m_jit_enabled` default off); interpreter path unchanged, JIT-on vs off lockstep in cortex_m_jit_nrf_differential; both fixes pinned by bus-level gates. No silicon capture pins JIT.
@@ -3331,7 +3365,7 @@ boards:
     drift_ack: 2026-09-17
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: d6d8a0ecd0ca65b4b6dc64093d3de95dccfee7d885447bf71ef599d0031883a3
+    drift_ack_digest: 6fe782bf70ecd7c91b6eeb8ac69f59ed0a6a40cd6290e7cd16f228a7811a6fdc
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -3489,6 +3523,12 @@ boards:
     # semantics moved, so nothing this board's silicon anchor asserts is
     # reachable from it. ACK, NOT A CAPTURE.
     drift_ack: 2026-09-21
+    # 2026-09-24 (#1230): bkpt #0xAB serves semihosting on the Cortex-M
+    # execute path (WRITEC, WRITE0, WRITE, READ, EXIT). Watched
+    # cortex_m.rs and cortex_m/exec moved. No register map, reset value,
+    # or peripheral programming model on this board changed.
+    # ACK, NOT A CAPTURE. The live re-capture owed above is still owed.
+    drift_ack: 2026-09-24
   - id: stm32f103
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
     # 2026-09-16 (#1125): Cortex-M JIT follow-ups (block chaining, floor 4, IT-predicated ALU, VFP S-ALU, VLDR/VSTR, LDR.W PC), plus two model fixes that ride along: the bit-band alias decode no longer swallows peripherals vendors place inside 0x4200_0000 (SAMD51 QSPI/SERCOM), and the STM32 timer's scheduled compare pend lands on the latch tick like the walk. JIT is opt-in (`cortex_m_jit_enabled` default off); interpreter path unchanged, JIT-on vs off lockstep in cortex_m_jit_nrf_differential; both fixes pinned by bus-level gates. No silicon capture pins JIT.
@@ -3934,7 +3974,7 @@ boards:
     drift_ack: 2026-09-17
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: 5ae475ef8bcc8d40f7e31379f578795003ed8a8c3759d2b5bc80c681a049f424
+    drift_ack_digest: 76a7457b5b812731341ba5f2a8e40de9bd2387795d6aa82e1765d5018780a5b1
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4135,7 +4175,15 @@ boards:
     # end-condition only — no register, reset value or programming
     # semantics moved, so nothing this board's silicon anchor asserts is
     # reachable from it. ACK, NOT A CAPTURE.
-    drift_ack: 2026-09-21
+    # 2026-09-23 (#1222): STM32F1 ADC SWSTART is bit 22 (not 30); scheduled
+    # CAL/RSTCAL settle. Watched adc.rs / chip yaml digests move; ACK, NOT A CAPTURE.
+    drift_ack: 2026-09-23
+    # 2026-09-24 (#1230): bkpt #0xAB serves semihosting on the Cortex-M
+    # execute path (WRITEC, WRITE0, WRITE, READ, EXIT). Watched
+    # cortex_m.rs and cortex_m/exec moved. No register map, reset value,
+    # or peripheral programming model on this board changed.
+    # ACK, NOT A CAPTURE. The live re-capture owed above is still owed.
+    drift_ack: 2026-09-24
   - id: stm32f407
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
     # 2026-09-16 (#1125): Cortex-M JIT follow-ups (block chaining, floor 4, IT-predicated ALU, VFP S-ALU, VLDR/VSTR, LDR.W PC), plus two model fixes that ride along: the bit-band alias decode no longer swallows peripherals vendors place inside 0x4200_0000 (SAMD51 QSPI/SERCOM), and the STM32 timer's scheduled compare pend lands on the latch tick like the walk. JIT is opt-in (`cortex_m_jit_enabled` default off); interpreter path unchanged, JIT-on vs off lockstep in cortex_m_jit_nrf_differential; both fixes pinned by bus-level gates. No silicon capture pins JIT.
@@ -4545,7 +4593,7 @@ boards:
     drift_ack: 2026-09-17
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: 3b95c074fe1f4e4ad5e3024cce8099438c271cb080ac294602cea1e88e62f33f
+    drift_ack_digest: 2512357ade2d556fad2d1926d6a1b98ce1e677a74ff5347d6749114b864b2878
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4705,7 +4753,15 @@ boards:
     # end-condition only — no register, reset value or programming
     # semantics moved, so nothing this board's silicon anchor asserts is
     # reachable from it. ACK, NOT A CAPTURE.
-    drift_ack: 2026-09-21
+    # 2026-09-23 (#1222): STM32F1 ADC SWSTART is bit 22 (not 30); scheduled
+    # CAL/RSTCAL settle. Watched adc.rs / chip yaml digests move; ACK, NOT A CAPTURE.
+    drift_ack: 2026-09-23
+    # 2026-09-24 (#1230): bkpt #0xAB serves semihosting on the Cortex-M
+    # execute path (WRITEC, WRITE0, WRITE, READ, EXIT). Watched
+    # cortex_m.rs and cortex_m/exec moved. No register map, reset value,
+    # or peripheral programming model on this board changed.
+    # ACK, NOT A CAPTURE. The live re-capture owed above is still owed.
+    drift_ack: 2026-09-24
   - id: esp32s3
     # 2026-09-16 (#jit-xtensa-browser): generic Xtensa BB emit core + browser adapter. `xtensa_lx7.rs` gains only `invalidate_for_data_write` — a public forwarder to the existing `maybe_invalidate_for_write` so JIT-committed stores run the same SMC invalidation the S8i/S32i interpreter arms run (no interpreter behavior change; the existing sub-word rules are reused). Hot-block dispatch and every interpreter arm are untouched; the new shapes are browser-only and refused when unsafe. Native interpreter-identity tests in `xtensa_jit/variable.rs`. No silicon capture pins the browser JIT.
     # 2026-09-15 (#1119): PeripheralConfig gained irq_controller (None). No silicon-visible behaviour change.
@@ -5275,7 +5331,7 @@ boards:
     # the generic Xtensa BB JIT emit core (#1139) — the merge of the two is one
     # digest, so it is re-stamped once here rather than twice.
     drift_ack: 2026-09-18
-    drift_ack_digest: 756ed28f1bc9a4fbf82c686304f563eebaa408958a8844174aa468bce0a8141b
+    drift_ack_digest: f7982e397b7d426e78c6e116eff14348292969a21a1bfbf2ab2313504468db14
     #
     # 2026-09-18 (execute split): no execution change. The arm bodies of
     # `XtensaLx7::execute` moved verbatim into `cpu/xtensa_lx7/exec/*.rs` as
@@ -5294,6 +5350,12 @@ boards:
     # every cell. ACK, NOT A CAPTURE — the live re-capture owed above is still
     # owed.
     drift_ack: 2026-09-21
+    # 2026-09-23 (#1225): SecondaryExecutionState + reset-held coalesce on the
+    # machine advance path. Watched xtensa_lx7.rs gains secondary_execution_state()
+    # (ResetHeld when halted, ParkedIdle when WAITI). No register map, reset
+    # value, or peripheral model changed — ACK, NOT A CAPTURE. The live
+    # re-capture owed above is still owed.
+    drift_ack: 2026-09-23
     models:
       - crates/core/src/cpu/xtensa_lx7.rs
       - crates/core/src/cpu/xtensa_lx7/exec
