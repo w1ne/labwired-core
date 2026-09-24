@@ -1288,7 +1288,7 @@ boards:
     drift_ack: 2026-09-17
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: dbd6af40c517425afffe4a597819c3db7fb8739584851f34b70d5df5765b9fcc
+    drift_ack_digest: 04e7d28d658d90947305469deb8f5067fb4cae8d3fa1d18c4c019fda34ee6274
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -1518,6 +1518,10 @@ boards:
     # execute path (WRITEC, WRITE0, WRITE, READ, EXIT). Watched
     # cortex_m.rs and cortex_m/exec moved. No register map, reset value,
     # or peripheral programming model on this board changed.
+    # ACK, NOT A CAPTURE. The live re-capture owed above is still owed.
+    drift_ack: 2026-09-24
+    # 2026-09-24 (#1231): an undriven STM32 pin follows PUPDR. A push-pull
+    # driver and an external pad level still win. Watched gpio.rs moved.
     # ACK, NOT A CAPTURE. The live re-capture owed above is still owed.
     drift_ack: 2026-09-24
   - id: esp32c3
@@ -2766,7 +2770,7 @@ boards:
     drift_ack: 2026-09-17
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: 4e4bf9f1137ad196c9e7440246db4f3ec49de232f29be181b84c70ee265d675b
+    drift_ack_digest: a95f587468f0b74c431d221a4ddaca11a47c746300f644aa13a737f78522ac8f
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -2972,6 +2976,10 @@ boards:
     # execute path (WRITEC, WRITE0, WRITE, READ, EXIT). Watched
     # cortex_m.rs and cortex_m/exec moved. No register map, reset value,
     # or peripheral programming model on this board changed.
+    # ACK, NOT A CAPTURE. The live re-capture owed above is still owed.
+    drift_ack: 2026-09-24
+    # 2026-09-24 (#1231): an undriven STM32 pin follows PUPDR. A push-pull
+    # driver and an external pad level still win. Watched gpio.rs moved.
     # ACK, NOT A CAPTURE. The live re-capture owed above is still owed.
     drift_ack: 2026-09-24
   - id: nucleo-l073rz
@@ -3365,7 +3373,7 @@ boards:
     drift_ack: 2026-09-17
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: 6fe782bf70ecd7c91b6eeb8ac69f59ed0a6a40cd6290e7cd16f228a7811a6fdc
+    drift_ack_digest: cbf4e9c773dd129940cf7670abad33f23ae1324cac6ffcddc157eabca56b1399
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -3527,6 +3535,12 @@ boards:
     # execute path (WRITEC, WRITE0, WRITE, READ, EXIT). Watched
     # cortex_m.rs and cortex_m/exec moved. No register map, reset value,
     # or peripheral programming model on this board changed.
+    # ACK, NOT A CAPTURE. The live re-capture owed above is still owed.
+    drift_ack: 2026-09-24
+    # 2026-09-24 (#1231): an undriven STM32 pin follows PUPDR. A push-pull
+    # driver and an external pad level still win. Watched gpio.rs moved.
+    # GPIOA_IDR leaves the verifiable set: PA13 is SWDIO, so the capture
+    # reads the probe, not the pull. The other 54 registers still match.
     # ACK, NOT A CAPTURE. The live re-capture owed above is still owed.
     drift_ack: 2026-09-24
   - id: stm32f103
@@ -3974,7 +3988,7 @@ boards:
     drift_ack: 2026-09-17
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: 76a7457b5b812731341ba5f2a8e40de9bd2387795d6aa82e1765d5018780a5b1
+    drift_ack_digest: 7644a569ef0b3839d3e006d65648371d39c0fd075f1b9d73763981829f78ab83
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4182,6 +4196,10 @@ boards:
     # execute path (WRITEC, WRITE0, WRITE, READ, EXIT). Watched
     # cortex_m.rs and cortex_m/exec moved. No register map, reset value,
     # or peripheral programming model on this board changed.
+    # ACK, NOT A CAPTURE. The live re-capture owed above is still owed.
+    drift_ack: 2026-09-24
+    # 2026-09-24 (#1231): an undriven STM32 pin follows PUPDR. A push-pull
+    # driver and an external pad level still win. Watched gpio.rs moved.
     # ACK, NOT A CAPTURE. The live re-capture owed above is still owed.
     drift_ack: 2026-09-24
   - id: stm32f407
@@ -4593,7 +4611,7 @@ boards:
     drift_ack: 2026-09-17
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: 2512357ade2d556fad2d1926d6a1b98ce1e677a74ff5347d6749114b864b2878
+    drift_ack_digest: 85c2d52d1c9dbfc60cb474b7c7316c18309fb243386248c1f3126f5a13333305
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4760,6 +4778,10 @@ boards:
     # execute path (WRITEC, WRITE0, WRITE, READ, EXIT). Watched
     # cortex_m.rs and cortex_m/exec moved. No register map, reset value,
     # or peripheral programming model on this board changed.
+    # ACK, NOT A CAPTURE. The live re-capture owed above is still owed.
+    drift_ack: 2026-09-24
+    # 2026-09-24 (#1231): an undriven STM32 pin follows PUPDR. A push-pull
+    # driver and an external pad level still win. Watched gpio.rs moved.
     # ACK, NOT A CAPTURE. The live re-capture owed above is still owed.
     drift_ack: 2026-09-24
   - id: esp32s3

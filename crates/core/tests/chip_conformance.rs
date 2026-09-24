@@ -434,6 +434,11 @@ fn dynamic_excludes(name: &str) -> &'static [(u64, u64, &'static str)] {
                 0x4000002c,
                 "TIM2_ARR: timer clock-gated at reset (APB1 off → reads 0)",
             ),
+            (
+                0x50000010,
+                0x50000010,
+                "GPIOA_IDR: PA13 is SWDIO. The capture reads the probe level, not the undriven pull-up",
+            ),
         ],
         "esp32c3" => &[
             (

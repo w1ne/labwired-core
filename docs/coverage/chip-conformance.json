@@ -176,10 +176,10 @@
   },
   {
     "behavior": true,
-    "excluded": 5,
+    "excluded": 6,
     "level": 2,
     "name": "stm32l073",
-    "reg_match": 55
+    "reg_match": 54
   },
   {
     "behavior": true,
