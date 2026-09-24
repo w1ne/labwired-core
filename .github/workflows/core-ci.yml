@@ -1390,6 +1390,17 @@ jobs:
           -p labwired-core --features esp32s3-fixtures
           --test e2e_esp32s3_flash_boot_no_elf -- --nocapture
 
+      # The same committed TIER1 image, stepped AND batched: every class must
+      # get the same verdict. The Tier-1 matrix runs stepped only and the
+      # browser runs batched; #68 (`TIER1 dma` PASS stepped, FAIL batched) lived
+      # in that gap with nothing on a PR able to see it. Two 30M-step release
+      # runs. The CLI's default features include event-scheduler, which is what
+      # makes batched mode widen the tick interval at all.
+      - name: ESP32-S3 TIER1 verdicts match between step and batched
+        run: >
+          scripts/ci/cargo-test-nonvacuous.sh --release
+          -p labwired-cli --test tier1_s3_batched_parity -- --nocapture
+
   pr-workspace-tests:
     name: pr-workspace-tests (shard ${{ matrix.shard }})
     # `workflow_dispatch` too: it is the only way to exercise the lane against

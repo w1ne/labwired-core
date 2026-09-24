@@ -760,6 +760,18 @@ pub fn run_target(
     target: &Tier1Target,
     labwired_bin: &Path,
 ) -> Result<BTreeMap<String, Cell>, String> {
+    run_target_mode(target, labwired_bin, false)
+}
+
+/// [`run_target`], optionally with `--batched` -- the execution mode the
+/// browser ships. The matrix itself runs stepped; a batched run of the same
+/// target exists so a verdict that differs between the two modes is caught
+/// (see `tests/tier1_s3_batched_parity.rs`, #68).
+pub fn run_target_mode(
+    target: &Tier1Target,
+    labwired_bin: &Path,
+    batched: bool,
+) -> Result<BTreeMap<String, Cell>, String> {
     let root = workspace_root();
     let mut cmd = std::process::Command::new(labwired_bin);
     cmd.arg("run")
@@ -769,6 +781,9 @@ pub fn run_target(
         .arg(root.join(target.elf))
         .arg("--max-steps")
         .arg(target.max_steps.to_string());
+    if batched {
+        cmd.arg("--batched");
+    }
 
     // Scrub any inherited LABWIRED_* vars so the matrix is deterministic
     // regardless of the caller's shell environment, then set only the ones
