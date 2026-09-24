@@ -1,0 +1,62 @@
+# XL4015 CC/CV buck converter module — declarative `analog_source`.
+#
+# Modulshop order #49213 / invoice SZ11956/2026 — SKU 7-1-8:
+#   product page: https://modulshop.hu/xl4015-dc-dc-konverter-step-down-converter-5-35v-max-5a-cccv-akku-tolto-tapegyseg-662
+# Chip datasheet (XLSEMI XL4015, for follow-up datasheet-sources acquire):
+#   https://www.xlsemi.com/datasheet/XL4015-EN.pdf
+# Catalog type: `xl4015`.
+#
+# Module claims (Modulshop): Vin 4–38 V, Vout 1.25–36 V adjustable, Iout to 5 A,
+# CC/CV. Firmware's only observable here is VOUT through a divider into an ADC
+# — there is no I²C and no register file.
+#
+# Modelled quantity (ADC pin, mV after a ÷11 divider so 36 V stays inside a
+# 3.3 V window):
+#
+#   dropout_v = 1.0                         stated XL4015-class dropout
+#   vout_v    = clamp(vout_set_v, 1.25,
+#                     min(36, max(vin_v - dropout_v, 1.25)))
+#   pin_mv    = vout_v * 1000 / 11
+#
+# NOT modelled, named rather than faked: reverse-polarity protection (Modulshop
+# says the module has none), thermal shutdown dynamics, inductor/ESR ripple,
+# and constant-current foldback as a load plant — `ilim_a` is accepted as a
+# stimulus so labs can record the setpoint, but it does not bend Vout.
+type: xl4015
+
+behavior:
+  primitive: analog_source
+  derived:
+    - name: dropout_v
+      expr: "1.0"
+    - name: vmax_v
+      expr: "min(36, max(vin_v - dropout_v, 1.25))"
+    - name: vout_v
+      expr: "min(max(vout_set_v, 1.25), vmax_v)"
+  analog:
+    formula: "vout_v * 1000 / 11"
+    encode: trunc
+
+metadata:
+  label: XL4015 CC/CV buck
+  summary: Adjustable XL4015 buck; Vout setpoint observed through a ÷11 ADC divider.
+  detail: >-
+    XL4015-class CC/CV step-down module (Vin 4–38 V, Vout 1.25–36 V, up to 5 A).
+    Drive `vout_set_v`, `vin_v`, and optional `ilim_a` at runtime. The ADC
+    channel reports Vout through a ÷11 divider after a deterministic clamp so
+    Vout cannot exceed Vin − 1.0 V (stated dropout) or leave [1.25, 36] V. NOT
+    modelled: reverse-polarity protection, thermal shutdown dynamics, and CC
+    foldback as a load plant (`ilim_a` is recorded only).
+  config_keys:
+    - name: channel
+      ty: int
+      doc: "ADC channel index (0..N) the divided Vout is wired to. Defaults to 0."
+  inputs:
+    - { key: vout_set_v, label: Vout setpoint, unit: V, min: 1.25, max: 36, default: 5 }
+    - { key: vin_v, label: Input voltage, unit: V, min: 4, max: 38, default: 12 }
+    - { key: ilim_a, label: Current limit (note only), unit: A, min: 0, max: 5, default: 5 }
+
+emit:
+  connection: adc
+  config:
+    - { key: channel, from_attr: channel, default: 0 }

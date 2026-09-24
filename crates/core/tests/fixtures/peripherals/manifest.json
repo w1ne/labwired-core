@@ -2756,7 +2756,7 @@
       "device_type": "l298n",
       "label": "H-bridge motor driver",
       "summary": "L298N/TB6612/L293D-class dual H-bridge twin (direction + enable effort).",
-      "detail": "Channel A from IN1/IN2/ENA (or AIN1/AIN2/PWMA). Optional channel B when IN3/IN4 or BIN* keys are present. Aliases: tb6612, l293d.",
+      "detail": "Channel A from IN1/IN2/ENA (or AIN1/AIN2/PWMA). Optional channel B when IN3/IN4 or BIN* keys are present. IBT-2 / BTS7960 boards use              LPWM/RPWM + L_EN/R_EN (Modulshop Arduino: speed>0 → LPWM, speed<0 →              RPWM, 0 → coast; both enables high). Digital on/off effort ±1 for              v1 — PWM duty is not observed. Aliases: tb6612, l293d, bts7960,              ibt-2, ibt2.",
       "transport": "gpio_group",
       "category": "gpio",
       "config_keys": [
@@ -2774,6 +2774,26 @@
           "name": "en_pin",
           "ty": "str",
           "doc": "Channel A enable (or pwma_pin)."
+        },
+        {
+          "name": "lpwm_pin",
+          "ty": "str",
+          "doc": "IBT-2 LPWM (forward PWM); synonym LPWM."
+        },
+        {
+          "name": "rpwm_pin",
+          "ty": "str",
+          "doc": "IBT-2 RPWM (reverse PWM); synonym RPWM."
+        },
+        {
+          "name": "l_en_pin",
+          "ty": "str",
+          "doc": "IBT-2 L_EN enable; synonym LEN."
+        },
+        {
+          "name": "r_en_pin",
+          "ty": "str",
+          "doc": "IBT-2 R_EN enable; synonym REN."
         }
       ],
       "labs": [],
@@ -3673,6 +3693,144 @@
           "name": "oe_pin",
           "ty": "str",
           "doc": "OE pin, active LOW. HIGH opens all four switches."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "logic_level_shifter_4ch",
+      "label": "4-ch MOSFET level shifter",
+      "summary": "BSS138-class 4-channel bidirectional shifter; DIR is a sim strap (not on the PCB).",
+      "detail": "Modulshop 2-2-32 / BSS138-style 4-channel bidirectional level shifter (VCCA/VCCB/GND/A1–A4/B1–B4, 1.8–6 V). Modelled as a 4-bit transceiver so it fits the engine's logic_gate direction shape: DIR HIGH copies A→B, DIR LOW copies B→A. The real module has NO DIR pin and NO OE pin — strap DIR in the manifest for the lab direction you want (typically HIGH for LV→HV). NOT modelled: the two supply rails (translation is a bit no-op, same honesty as 74lvc1t45), auto open-drain I²C both-ways, per-channel pull-ups, and MOSFET Ron/threshold. Power pads VCCA/VCCB/GND are catalog-only.",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [
+        {
+          "name": "a1_pin",
+          "ty": "str",
+          "doc": "A1 pin (A-side / LV bit 1)."
+        },
+        {
+          "name": "a2_pin",
+          "ty": "str",
+          "doc": "A2 pin (A-side / LV bit 2)."
+        },
+        {
+          "name": "a3_pin",
+          "ty": "str",
+          "doc": "A3 pin (A-side / LV bit 3)."
+        },
+        {
+          "name": "a4_pin",
+          "ty": "str",
+          "doc": "A4 pin (A-side / LV bit 4)."
+        },
+        {
+          "name": "b1_pin",
+          "ty": "str",
+          "doc": "B1 pin (B-side / HV bit 1)."
+        },
+        {
+          "name": "b2_pin",
+          "ty": "str",
+          "doc": "B2 pin (B-side / HV bit 2)."
+        },
+        {
+          "name": "b3_pin",
+          "ty": "str",
+          "doc": "B3 pin (B-side / HV bit 3)."
+        },
+        {
+          "name": "b4_pin",
+          "ty": "str",
+          "doc": "B4 pin (B-side / HV bit 4)."
+        },
+        {
+          "name": "dir_pin",
+          "ty": "str",
+          "doc": "DIR strap (NOT on the PCB). HIGH = A to B, LOW = B to A. Required."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "xl4015",
+      "label": "XL4015 CC/CV buck",
+      "summary": "Adjustable XL4015 buck; Vout setpoint observed through a ÷11 ADC divider.",
+      "detail": "XL4015-class CC/CV step-down module (Vin 4–38 V, Vout 1.25–36 V, up to 5 A). Drive `vout_set_v`, `vin_v`, and optional `ilim_a` at runtime. The ADC channel reports Vout through a ÷11 divider after a deterministic clamp so Vout cannot exceed Vin − 1.0 V (stated dropout) or leave [1.25, 36] V. NOT modelled: reverse-polarity protection, thermal shutdown dynamics, and CC foldback as a load plant (`ilim_a` is recorded only).",
+      "transport": "analog",
+      "category": "analog",
+      "config_keys": [
+        {
+          "name": "channel",
+          "ty": "int",
+          "doc": "ADC channel index (0..N) the divided Vout is wired to. Defaults to 0."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "vout_set_v",
+          "label": "Vout setpoint",
+          "unit": "V",
+          "min": 1.25,
+          "max": 36.0
+        },
+        {
+          "key": "vin_v",
+          "label": "Input voltage",
+          "unit": "V",
+          "min": 4.0,
+          "max": 38.0
+        },
+        {
+          "key": "ilim_a",
+          "label": "Current limit (note only)",
+          "unit": "A",
+          "min": 0.0,
+          "max": 5.0
+        }
+      ]
+    },
+    {
+      "device_type": "bldc_hall_driver",
+      "label": "BLDC Hall driver (400W)",
+      "summary": "PWM/DIR/ENABLE in; 6-step Hall pattern out. Duty→RPM not modelled.",
+      "detail": "Modulshop 3-4-13 400W Hall BLDC driver module (DC 6–60 V, pot or external PWM, Hall closed-loop). NOT the `bldc-motor` plant. When ENABLE or PWM is high, this twin advances a 6-step Hall sequence on HALL_A/B/C every 2 ms; DIR reverses the step order. PWM is digital run/stop for v1 — pot/PWM duty→RPM physics is NOT modelled. Also not modelled: fault/IS pins, U/V/W phase voltages, and VM rail dynamics.",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [
+        {
+          "name": "pwm_pin",
+          "ty": "str",
+          "doc": "PWM / speed input (digital run for v1)."
+        },
+        {
+          "name": "dir_pin",
+          "ty": "str",
+          "doc": "Direction input. HIGH = forward step order."
+        },
+        {
+          "name": "enable_pin",
+          "ty": "str",
+          "doc": "Enable input. HIGH runs the Hall walker."
+        },
+        {
+          "name": "hall_a_pin",
+          "ty": "str",
+          "doc": "Hall A output to the MCU."
+        },
+        {
+          "name": "hall_b_pin",
+          "ty": "str",
+          "doc": "Hall B output to the MCU."
+        },
+        {
+          "name": "hall_c_pin",
+          "ty": "str",
+          "doc": "Hall C output to the MCU."
         }
       ],
       "labs": [],

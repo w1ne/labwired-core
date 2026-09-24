@@ -1,0 +1,72 @@
+# 4-channel BSS138-class bidirectional MOSFET level shifter.
+#
+# Modulshop order #49213 / invoice SZ11956/2026 — SKU 2-2-32:
+#   product page: https://modulshop.hu/4-csatornas-szintilleszto-33-5-volt-1002
+# No authoritative module PDF (commodity BSS138 board); product page is the
+# ingest link. Catalog type: `logic-level-shifter-4ch`.
+#
+# Pads: VCCA / VCCB / GND / A1–A4 / B1–B4. Rails 1.8–6 V. Typical silkscreen
+# LV = VCCA, HV = VCCB.
+#
+# ⚠️ MOSFET MODULES HAVE NO DIR PIN ON THE PCB. This twin still requires a DIR
+# role because the engine's transceiver shape (same as 74hc245 / 74lvc1t45)
+# needs one: attach binds both ends of each An/Bn pad and DIR picks which way
+# the bit is copied. Strap DIR for LV→HV labs (DIR HIGH = A→B). Translation is
+# a bit no-op — this engine has no voltage domains (same honesty as 74lvc1t45).
+# Auto open-drain I²C both-ways is NOT claimed.
+type: logic_level_shifter_4ch
+
+behavior:
+  primitive: logic_gate
+  logic:
+    inputs: [A1, A2, A3, A4, B1, B2, B3, B4]
+    outputs: [A1, A2, A3, A4, B1, B2, B3, B4]
+    direction:
+      pin: DIR
+      a_to_b_when: 1
+      a: [A1, A2, A3, A4]
+      b: [B1, B2, B3, B4]
+    # MOSFET modules are slow vs a 74LVC1T45; 50 ns is a stated ballpark, not a
+    # datasheet tpd — the BSS138 board does not publish one.
+    tprop_ns: 50
+    drive:
+      hiz_when_disabled: true
+
+metadata:
+  label: "4-ch MOSFET level shifter"
+  summary: "BSS138-class 4-channel bidirectional shifter; DIR is a sim strap (not on the PCB)."
+  detail: >-
+    Modulshop 2-2-32 / BSS138-style 4-channel bidirectional level shifter
+    (VCCA/VCCB/GND/A1–A4/B1–B4, 1.8–6 V). Modelled as a 4-bit transceiver so it
+    fits the engine's logic_gate direction shape: DIR HIGH copies A→B, DIR LOW
+    copies B→A. The real module has NO DIR pin and NO OE pin — strap DIR in the
+    manifest for the lab direction you want (typically HIGH for LV→HV). NOT
+    modelled: the two supply rails (translation is a bit no-op, same honesty as
+    74lvc1t45), auto open-drain I²C both-ways, per-channel pull-ups, and MOSFET
+    Ron/threshold. Power pads VCCA/VCCB/GND are catalog-only.
+  category: gpio
+  config_keys:
+    - { name: a1_pin, ty: str, doc: "A1 pin (A-side / LV bit 1)." }
+    - { name: a2_pin, ty: str, doc: "A2 pin (A-side / LV bit 2)." }
+    - { name: a3_pin, ty: str, doc: "A3 pin (A-side / LV bit 3)." }
+    - { name: a4_pin, ty: str, doc: "A4 pin (A-side / LV bit 4)." }
+    - { name: b1_pin, ty: str, doc: "B1 pin (B-side / HV bit 1)." }
+    - { name: b2_pin, ty: str, doc: "B2 pin (B-side / HV bit 2)." }
+    - { name: b3_pin, ty: str, doc: "B3 pin (B-side / HV bit 3)." }
+    - { name: b4_pin, ty: str, doc: "B4 pin (B-side / HV bit 4)." }
+    - { name: dir_pin, ty: str, doc: "DIR strap (NOT on the PCB). HIGH = A to B, LOW = B to A. Required." }
+  inputs: []
+
+# DIR is required: a partially-wired shifter with no direction is not emitted.
+emit:
+  connection: gpio
+  config:
+    - { key: a1_pin, from_part_pin: [A1] }
+    - { key: a2_pin, from_part_pin: [A2] }
+    - { key: a3_pin, from_part_pin: [A3] }
+    - { key: a4_pin, from_part_pin: [A4] }
+    - { key: b1_pin, from_part_pin: [B1] }
+    - { key: b2_pin, from_part_pin: [B2] }
+    - { key: b3_pin, from_part_pin: [B3] }
+    - { key: b4_pin, from_part_pin: [B4] }
+    - { key: dir_pin, from_part_pin: [DIR] }

@@ -2,10 +2,14 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! Dual-input H-bridge channel twin (L298N / TB6612 / L293D half-bridge).
+//! Dual-input H-bridge channel twin (L298N / TB6612 / L293D / BTS7960 IBT-2).
 //!
 //! Tracks IN1/IN2 direction and EN (or PWM) enable level. Exposes a signed
 //! "effort" in [-1, +1] for UI/oracle: +1 = forward, -1 = reverse, 0 = brake/coast.
+//! IBT-2 / BTS7960 boards use LPWM/RPWM + L_EN/R_EN instead of IN1/IN2/EN:
+//! Modulshop Arduino example maps speed>0 → LPWM=speed RPWM=0 (forward),
+//! speed<0 → opposite (reverse), 0 → both PWM low (coast). Both enables must
+//! be high. Digital GPIO edges only for v1 — duty-aware effort is not modelled.
 //! No motor dynamics — honest for direction + enable labs.
 
 use std::sync::Mutex;
@@ -14,7 +18,10 @@ use std::sync::Mutex;
 struct State {
     in1: bool,
     in2: bool,
+    /// Primary enable (EN / L_EN). True when the pin is absent.
     en: bool,
+    /// Second enable (R_EN on IBT-2). True when the pin is absent.
+    en2: bool,
     commanded: bool,
 }
 
@@ -24,6 +31,8 @@ pub struct HBridgeMotor {
     in1_pin: u8,
     in2_pin: u8,
     en_pin: Option<u8>,
+    /// Optional second enable (IBT-2 R_EN). When set, effort requires both EN high.
+    en2_pin: Option<u8>,
     state: Mutex<State>,
     id: String,
     declared_id: Option<String>,
@@ -31,12 +40,36 @@ pub struct HBridgeMotor {
 
 impl HBridgeMotor {
     pub fn new(id: impl Into<String>, in1: u8, in2: u8, en: Option<u8>) -> Self {
+        Self::new_with_enables(id, in1, in2, en, None)
+    }
+
+    /// IBT-2 / BTS7960: LPWM/RPWM plus optional L_EN and R_EN (both must be high).
+    pub fn new_ibt2(
+        id: impl Into<String>,
+        lpwm: u8,
+        rpwm: u8,
+        l_en: Option<u8>,
+        r_en: Option<u8>,
+    ) -> Self {
+        Self::new_with_enables(id, lpwm, rpwm, l_en, r_en)
+    }
+
+    fn new_with_enables(
+        id: impl Into<String>,
+        in1: u8,
+        in2: u8,
+        en: Option<u8>,
+        en2: Option<u8>,
+    ) -> Self {
         Self {
             in1_pin: in1,
             in2_pin: in2,
             en_pin: en,
+            en2_pin: en2,
             state: Mutex::new(State {
-                en: en.is_none(), // no EN pin → always "enabled"
+                // Absent enable pins read as always-on.
+                en: en.is_none(),
+                en2: en2.is_none(),
                 ..State::default()
             }),
             id: id.into(),
@@ -68,13 +101,16 @@ impl HBridgeMotor {
     /// Signed effort in [-1.0, 1.0].
     pub fn effort(&self) -> f32 {
         let s = self.state.lock().unwrap();
-        if !s.en {
+        if !(s.en && s.en2) {
             return 0.0;
         }
+        // L298N: IN1 high / IN2 low = forward. IBT-2 Arduino example: LPWM
+        // high / RPWM low = forward (speed>0). Both-high is brake; both-low
+        // is coast — effort 0 either way for this digital twin.
         match (s.in1, s.in2) {
             (true, false) => 1.0,
             (false, true) => -1.0,
-            _ => 0.0, // brake or coast
+            _ => 0.0,
         }
     }
 
@@ -92,6 +128,9 @@ impl HBridgeMotor {
             s.commanded = true;
         } else if self.en_pin == Some(pin) {
             s.en = to;
+            s.commanded = true;
+        } else if self.en2_pin == Some(pin) {
+            s.en2 = to;
             s.commanded = true;
         }
     }
@@ -123,7 +162,7 @@ static H_BRIDGE_METADATA: KitMetadata = KitMetadata {
     ),
     detail: std::borrow::Cow::Borrowed(
         "Channel A from IN1/IN2/ENA (or AIN1/AIN2/PWMA). Optional channel B when \
-             IN3/IN4 or BIN* keys are present. Aliases: tb6612, l293d.",
+             IN3/IN4 or BIN* keys are present. IBT-2 / BTS7960 boards use              LPWM/RPWM + L_EN/R_EN (Modulshop Arduino: speed>0 → LPWM, speed<0 →              RPWM, 0 → coast; both enables high). Digital on/off effort ±1 for              v1 — PWM duty is not observed. Aliases: tb6612, l293d, bts7960,              ibt-2, ibt2.",
     ),
     transport: Transport::GpioGroup,
     category: Category::Gpio,
@@ -143,6 +182,26 @@ static H_BRIDGE_METADATA: KitMetadata = KitMetadata {
             ty: ConfigType::Str,
             doc: std::borrow::Cow::Borrowed("Channel A enable (or pwma_pin)."),
         },
+        ConfigKey {
+            name: std::borrow::Cow::Borrowed("lpwm_pin"),
+            ty: ConfigType::Str,
+            doc: std::borrow::Cow::Borrowed("IBT-2 LPWM (forward PWM); synonym LPWM."),
+        },
+        ConfigKey {
+            name: std::borrow::Cow::Borrowed("rpwm_pin"),
+            ty: ConfigType::Str,
+            doc: std::borrow::Cow::Borrowed("IBT-2 RPWM (reverse PWM); synonym RPWM."),
+        },
+        ConfigKey {
+            name: std::borrow::Cow::Borrowed("l_en_pin"),
+            ty: ConfigType::Str,
+            doc: std::borrow::Cow::Borrowed("IBT-2 L_EN enable; synonym LEN."),
+        },
+        ConfigKey {
+            name: std::borrow::Cow::Borrowed("r_en_pin"),
+            ty: ConfigType::Str,
+            doc: std::borrow::Cow::Borrowed("IBT-2 R_EN enable; synonym REN."),
+        },
     ]),
     labs: std::borrow::Cow::Borrowed(&[]),
 };
@@ -153,6 +212,38 @@ impl PeripheralKit for HBridgeMotorKit {
     }
 
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
+        let ibt2 = ctx.ext.config.contains_key("lpwm_pin")
+            || ctx.ext.config.contains_key("LPWM")
+            || ctx.ext.config.contains_key("rpwm_pin")
+            || ctx.ext.config.contains_key("RPWM");
+        if ibt2 {
+            let lpwm = ctx
+                .config_gpio_pin("lpwm_pin", "LPWM", "GPIO16")
+                .or_else(|_| ctx.config_gpio_pin("LPWM", "lpwm", "GPIO16"))?;
+            let rpwm = ctx
+                .config_gpio_pin("rpwm_pin", "RPWM", "GPIO17")
+                .or_else(|_| ctx.config_gpio_pin("RPWM", "rpwm", "GPIO17"))?;
+            let l_en = ctx
+                .config_str("l_en_pin")
+                .or_else(|| ctx.config_str("L_EN"))
+                .or_else(|| ctx.config_str("LEN"))
+                .or_else(|| ctx.config_str("len_pin"))
+                .and_then(|l| ctx.parse_gpio_pin(l));
+            let r_en = ctx
+                .config_str("r_en_pin")
+                .or_else(|| ctx.config_str("R_EN"))
+                .or_else(|| ctx.config_str("REN"))
+                .or_else(|| ctx.config_str("ren_pin"))
+                .and_then(|l| ctx.parse_gpio_pin(l));
+            let motor = Arc::new(
+                HBridgeMotor::new_ibt2(format!("{}-a", ctx.device_id()), lpwm, rpwm, l_en, r_en)
+                    .with_declared_id(ctx.device_id().to_string()),
+            );
+            ctx.install_gpio_observer(motor.clone());
+            ctx.bus.observe_device(motor);
+            return Ok(());
+        }
+
         let in1 = ctx
             .config_gpio_pin("in1_pin", "AIN1", "GPIO16")
             .or_else(|_| ctx.config_gpio_pin("ain1_pin", "IN1", "GPIO16"))?;
@@ -245,5 +336,49 @@ mod tests {
         m.on_gpio_edge(1, false, 1);
         m.on_gpio_edge(2, true, 2);
         assert_eq!(m.effort(), -1.0);
+    }
+
+    /// Modulshop IBT-2 Arduino example: speed>0 → LPWM high, RPWM low.
+    #[test]
+    fn ibt2_forward_when_lpwm_high() {
+        // pins: LPWM=1, RPWM=2, L_EN=3, R_EN=4
+        let m = HBridgeMotor::new_ibt2("ibt", 1, 2, Some(3), Some(4));
+        m.on_gpio_edge(3, true, 0);
+        m.on_gpio_edge(4, true, 1);
+        m.on_gpio_edge(1, true, 2);
+        m.on_gpio_edge(2, false, 3);
+        assert_eq!(m.effort(), 1.0);
+    }
+
+    /// Modulshop IBT-2 Arduino example: speed<0 → LPWM low, RPWM high.
+    #[test]
+    fn ibt2_reverse_when_rpwm_high() {
+        let m = HBridgeMotor::new_ibt2("ibt", 1, 2, Some(3), Some(4));
+        m.on_gpio_edge(3, true, 0);
+        m.on_gpio_edge(4, true, 1);
+        m.on_gpio_edge(1, false, 2);
+        m.on_gpio_edge(2, true, 3);
+        assert_eq!(m.effort(), -1.0);
+    }
+
+    /// speed==0 → both PWM low → coast.
+    #[test]
+    fn ibt2_coast_when_both_pwm_low() {
+        let m = HBridgeMotor::new_ibt2("ibt", 1, 2, Some(3), Some(4));
+        m.on_gpio_edge(3, true, 0);
+        m.on_gpio_edge(4, true, 1);
+        m.on_gpio_edge(1, false, 2);
+        m.on_gpio_edge(2, false, 3);
+        assert_eq!(m.effort(), 0.0);
+    }
+
+    /// Both enables must be high — one low disables the bridge.
+    #[test]
+    fn ibt2_disabled_when_one_en_low() {
+        let m = HBridgeMotor::new_ibt2("ibt", 1, 2, Some(3), Some(4));
+        m.on_gpio_edge(3, true, 0);
+        m.on_gpio_edge(4, false, 1);
+        m.on_gpio_edge(1, true, 2);
+        assert_eq!(m.effort(), 0.0);
     }
 }
