@@ -184,9 +184,24 @@ impl<C: Cpu> Machine<C> {
             // `docs/performance/2026-09-18-xtensa-batched.md` for the trace
             // that caught a real ~1000-cycle-late delivery here.
             clamp!(count, binder, clause::SECONDARY_PARKED, 1024);
-            // A write can arm a grid waveform inside this window. Stop on the
-            // next grid even when no edge was pending before the batch.
-            if self.bus.has_grid_gpio_schedules() {
+            // Both end the window on the next tick boundary, sharing one clamp.
+            //
+            // A RESET-HELD secondary is never stepped, so `boundary.rs` does not
+            // commit this window as coalesced (that needs `secondary_steps > 0`)
+            // and ticks peripherals only when the window LANDS on the tick
+            // grid. At tick_interval 1 its reset-held arm ticks after every
+            // instruction itself; above 1 nothing does, so the window has to end
+            // on the grid here -- the normal single-core path's clamp, which is
+            // what a core with nothing running on its twin is. Without it a
+            // 1024-wide window that starts off-grid never lands again: on the
+            // ESP32-S3 TIER1 image 25 peripheral ticks ran in 10M batched
+            // steps, the GDMA M2M transfer (which runs in `tick_with_bus`) never
+            // happened, and `TIER1 dma` failed batched while passing stepped.
+            //
+            // Separately, a write can arm a grid waveform inside this window:
+            // stop on the next grid even when no edge was pending before the
+            // batch.
+            if (secondary_reset_held && tick_interval > 1) || self.bus.has_grid_gpio_schedules() {
                 let until_tick = tick_interval - (self.total_cycles % tick_interval);
                 clamp!(
                     count,
