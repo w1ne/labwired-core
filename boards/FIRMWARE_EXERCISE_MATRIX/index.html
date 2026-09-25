@@ -1,0 +1,4500 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://docs.labwired.com/boards/FIRMWARE_EXERCISE_MATRIX/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>FIRMWARE EXERCISE MATRIX - LabWired docs</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#firmware-exercise-matrix" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="LabWired docs" class="md-header__button md-logo" aria-label="LabWired docs" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            LabWired docs
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              FIRMWARE EXERCISE MATRIX
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/w1ne/labwired-core" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    w1ne/labwired-core
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="LabWired docs" class="md-nav__button md-logo" aria-label="LabWired docs" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    LabWired docs
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/w1ne/labwired-core" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    w1ne/labwired-core
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../fidelity/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fidelity
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../golden_reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware-Sim Parity
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Agent
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../agent/mcp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Connect MCP
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../agent/tools/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tool reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../agent/first-run/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    First agent run
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing (engine agents)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tutorials
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/playground/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Playground first run
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting_started_firmware/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Run firmware (CLI)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/i2c_sensor_example/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    I2C sensor example (TMP102)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/dma_exti_example/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DMA & Interrupts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/integrated_test_walkthrough/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Integrated Test Walkthrough
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How-To Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How-To Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/onboard-hardware/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Onboard hardware
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/onboard-part/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Onboard a part (I2C/SPI/actuators)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../board_onboarding_playbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Board onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../target_support_rubric/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Target support levels
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/multi-node/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-node worlds
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/segger-rtt/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SEGGER RTT logging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ci_integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CI integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../peripherals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Peripheral modeling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../hardware_interaction_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware Interaction Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../vscode_debugging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Debugging with VS Code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../gdb_integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GDB Integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../debugging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Debugging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../platformio_integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PlatformIO Integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cosimulation_plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Co-simulation Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../integration-templates/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CI Integration Templates
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration_reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration (YAML)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../declarative_registers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Declarative Registers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli_reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../python-sdk/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python SDK
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ci_test_runner/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test Script Schema
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference_client_flows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Client Flows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../isa_coverage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ISA Coverage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../schema_compatibility/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Schema Compatibility
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../catalog_validation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Catalog Validation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../target_support_rubric/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Target support levels
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Boards
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Boards
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../arduino-uno/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Arduino Uno R3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../esp32c3/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ESP32-C3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../esp32c6-devkitc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ESP32-C6
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../esp32s3/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ESP32-S3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../nrf52840/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    nRF52840
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microbit-v2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    micro:bit v2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../seeed-xiao-nrf52840-sense/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    XIAO nRF52840 Sense
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rp2040/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RP2040
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rp2350/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RP2350
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rp2350-zero/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RP2350-Zero
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../stm32f103/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F103
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../stm32f401/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F401
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../stm32f405/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F405
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../stm32f407/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F407
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../stm32f411/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F411
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../stm32f767/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F767
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../nucleo-l476rg/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NUCLEO-L476RG
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../nucleo-l073rz/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NUCLEO-L073RZ
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../nucleo-g071rb/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NUCLEO-G071RB
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../stm32h563/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32H563
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../stm32h735/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32H735
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../stm32u575/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32U575
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../stm32wba52/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32WBA52
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../nrf52832/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    nRF52832
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../nrf5340/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    nRF5340
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../nrf54l15/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    nRF54L15
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../atsamd21g18a/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ATSAMD21G18A
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Parts
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Parts
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/mcp9808/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP9808
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/mma8451q/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MMA8451Q
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/mpu6050/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MPU-6050
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/bmp280/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    BMP280
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/ssd1306/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SSD1306 OLED
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/lcd1602/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LCD1602
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/apa102/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    APA102
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/servo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Servo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/button/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Button
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/buzzer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Buzzer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/seven-segment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Seven-segment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release_strategy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Strategy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../RELEASE_DETERMINISM/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Determinism
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../labwired_audit_protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Verification Audit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../coverage_scoreboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coverage Scoreboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../coverage/chip-conformance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Chip Conformance (live)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../coverage/tier1-scoreboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tier-1 Matrix (live)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../coverage/arduino-scoreboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Arduino Scoreboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../coverage/zephyr-scoreboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Zephyr Scoreboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../engineering/test_harness/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test Harness
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../limits/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Run Limits
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../demos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Demos
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../case_study_stm32/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Case Study (STM32)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_12" >
+        
+          
+          <label class="md-nav__link" for="__nav_12" id="__nav_12_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Explanation
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Explanation
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture_overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../simulation_protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Simulation Protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#rubric-coverage-authoritative-from-the-tier-1-fixtures" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rubric coverage — authoritative, from the Tier-1 fixtures
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#beyond-the-rubric-functional-reads-advanced-peripherals-shims" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Beyond the rubric — functional reads, advanced peripherals, shims
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Beyond the rubric — functional reads, advanced peripherals, shims">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#stm32l476" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stm32l476
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#esp32c3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        esp32c3
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#esp32s3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        esp32s3
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#esp32" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        esp32
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nrf52840" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nrf52840
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nrf52832" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nrf52832
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nrf52833" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nrf52833
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rp2040" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        rp2040
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stm32h563" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stm32h563
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nrf5340" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nrf5340
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nrf54l15" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nrf54l15
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nrf54lm20a" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nrf54lm20a
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#esp32c6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        esp32c6
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#esp32s3-zero" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        esp32s3-zero
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stm32f103" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stm32f103
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stm32f401" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stm32f401
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stm32f405" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stm32f405
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stm32f407" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stm32f407
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stm32f401cdu6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stm32f401cdu6
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stm32f411ceu6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stm32f411ceu6
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stm32f746" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stm32f746
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stm32f767" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stm32f767
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stm32g071" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stm32g071
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stm32g474re" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stm32g474re
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stm32h735" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stm32h735
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stm32l073" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stm32l073
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stm32u575" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stm32u575
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stm32wb55" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stm32wb55
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stm32wba52" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stm32wba52
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#atmega328p" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        atmega328p
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#atsamd21" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        atsamd21
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#atsamd21g18a" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        atsamd21g18a
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#atsamd51" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        atsamd51
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#efr32mg26" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        efr32mg26
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#imxrt1064" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        imxrt1064
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mkw41z4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        mkw41z4
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ra4m1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ra4m1
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rp2350" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        rp2350
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<!-- GENERATED by scripts/generate_firmware_exercise_matrix.py — DO NOT EDIT BY HAND.
+     Rubric coverage: docs/coverage/tier1-matrix.json (authoritative, ratchet-gated).
+     Beyond-rubric layer: validation/firmware_exercise.yaml. -->
+
+<h1 id="firmware-exercise-matrix">Firmware-exercise matrix</h1>
+<p>Where <code>VALIDATION_STATUS.md</code> asks <em>"is the model right vs silicon?"</em>, this matrix asks the complementary question: <strong>does a real booting firmware actually RUN against the model?</strong> A model is only counted when a booting firmware drives it — a banner-only boot or a register-poke unit test does not.</p>
+<h2 id="rubric-coverage-authoritative-from-the-tier-1-fixtures">Rubric coverage — authoritative, from the Tier-1 fixtures</h2>
+<p>Each chip's Tier-1 fixture is <strong>real firmware</strong> that drives these peripheral classes and self-reports <code>PASS</code> over UART; the grid below is generated from <code>docs/coverage/tier1-matrix.json</code> (ratchet-gated, so it cannot drift). 🟢 driven-by-firmware · 🟠 modeled but fixture does not exercise it · · not modeled on this chip (n/a).</p>
+<table>
+<thead>
+<tr>
+<th>chip</th>
+<th>clock</th>
+<th>gpio</th>
+<th>uart</th>
+<th>timer</th>
+<th>dma</th>
+<th>irq</th>
+<th>i2c</th>
+<th>spi</th>
+<th>adc</th>
+<th>pwm</th>
+<th>wdt</th>
+<th>rtc</th>
+<th>can</th>
+<th>rmt</th>
+<th><strong>proven</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>esp32</code></td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>·</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>·</td>
+<td>🟠</td>
+<td></td>
+<td></td>
+<td><strong>9</strong></td>
+</tr>
+<tr>
+<td><code>esp32c3</code></td>
+<td>🟠</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟠</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>·</td>
+<td>·</td>
+<td></td>
+<td></td>
+<td><strong>8</strong></td>
+</tr>
+<tr>
+<td><code>esp32c6</code></td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td></td>
+<td></td>
+<td><strong>12</strong></td>
+</tr>
+<tr>
+<td><code>esp32s3</code></td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟠</td>
+<td>🟠</td>
+<td>🟢</td>
+<td>·</td>
+<td>·</td>
+<td></td>
+<td>🟢</td>
+<td><strong>9</strong></td>
+</tr>
+<tr>
+<td><code>nrf52832</code></td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>·</td>
+<td>·</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td></td>
+<td></td>
+<td><strong>10</strong></td>
+</tr>
+<tr>
+<td><code>nrf52833</code></td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td></td>
+<td></td>
+<td><strong>12</strong></td>
+</tr>
+<tr>
+<td><code>nrf52840</code></td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>·</td>
+<td>·</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td></td>
+<td></td>
+<td><strong>10</strong></td>
+</tr>
+<tr>
+<td><code>rp2040</code></td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟠</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td></td>
+<td></td>
+<td><strong>11</strong></td>
+</tr>
+<tr>
+<td><code>stm32f103</code></td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>·</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>·</td>
+<td>🟢</td>
+<td>🟢</td>
+<td></td>
+<td></td>
+<td><strong>10</strong></td>
+</tr>
+<tr>
+<td><code>stm32f401</code></td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td></td>
+<td></td>
+<td><strong>12</strong></td>
+</tr>
+<tr>
+<td><code>stm32f407</code></td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟠</td>
+<td>🟠</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟠</td>
+<td>🟢</td>
+<td>🟢</td>
+<td></td>
+<td></td>
+<td><strong>9</strong></td>
+</tr>
+<tr>
+<td><code>stm32f411</code></td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟠</td>
+<td>·</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>·</td>
+<td>🟢</td>
+<td>🟢</td>
+<td></td>
+<td></td>
+<td><strong>9</strong></td>
+</tr>
+<tr>
+<td><code>stm32g071</code></td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td></td>
+<td></td>
+<td><strong>12</strong></td>
+</tr>
+<tr>
+<td><code>stm32g474re</code></td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td></td>
+<td></td>
+<td><strong>12</strong></td>
+</tr>
+<tr>
+<td><code>stm32h563</code></td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td></td>
+<td><strong>13</strong></td>
+</tr>
+<tr>
+<td><code>stm32h735</code></td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>·</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟠</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>·</td>
+<td></td>
+<td></td>
+<td><strong>9</strong></td>
+</tr>
+<tr>
+<td><code>stm32l073</code></td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>·</td>
+<td>🟢</td>
+<td>🟢</td>
+<td></td>
+<td></td>
+<td><strong>11</strong></td>
+</tr>
+<tr>
+<td><code>stm32l476</code></td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>·</td>
+<td>🟢</td>
+<td>🟢</td>
+<td></td>
+<td></td>
+<td><strong>11</strong></td>
+</tr>
+<tr>
+<td><code>stm32wb55</code></td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td></td>
+<td></td>
+<td><strong>12</strong></td>
+</tr>
+<tr>
+<td><code>stm32wba52</code></td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>·</td>
+<td>🟢</td>
+<td>🟢</td>
+<td>🟢</td>
+<td></td>
+<td></td>
+<td><strong>11</strong></td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>212 rubric cells are driven by real firmware</strong> across 20 chips; 11 are modeled-but-unrecorded (see below). Most chips drive 9–13 of the common peripheral classes — the STM32 family included.</p>
+</blockquote>
+<p><strong>Unrecorded rubric cells (modeled, fixture does not drive them):</strong> <code>esp32</code>/rtc, <code>esp32c3</code>/clock, <code>esp32c3</code>/dma, <code>esp32s3</code>/spi, <code>esp32s3</code>/adc, <code>rp2040</code>/dma, <code>stm32f407</code>/dma, <code>stm32f407</code>/irq, <code>stm32f407</code>/pwm, <code>stm32f411</code>/dma, <code>stm32h735</code>/adc.</p>
+<h2 id="beyond-the-rubric-functional-reads-advanced-peripherals-shims">Beyond the rubric — functional reads, advanced peripherals, shims</h2>
+<p>What the rubric grid does not cover: real drivers decoding a sensor/protocol over a bus (the gold standard), chip-specific advanced peripherals, and shims (hardcoded stubs or declarative register files with no engine behind them). From <code>validation/firmware_exercise.yaml</code>.</p>
+<h3 id="stm32l476"><code>stm32l476</code></h3>
+<p><em>Richest ARM coverage: drives 11 rubric classes via real firmware, plus the gated IO-Link station (real AHT20/BMP280 + shift-register devices over USART3/I2C). Beyond the rubric, PR-gated survival firmware also drives PWR (cubeMX VOS/VOSF handshake), FLASH (ACR 4WS latency dance), DBGMCU (IDCODE=10076415), LPTIM1 (ENABLE-gated ARR/CMP writes, ARROK/CMPOK), SDMMC1 (silicon-diffed CMD/CTIMEOUT handshake) and COMP/TSC (silicon-diffed EN→VALUE and START→EOAF/MCEF). RNG/CRC/FMC/SPI2/SPI3 are unit-tested only — RNG's only coverage is the shared L073 kernel-clock tests over the L073 bus (rcc_kernel_clock_gate.rs:184-254, no L476 test) — and DAC/QUADSPI/SAI1/USB OTG FS are modeled but appear only as reset-value reads in gated transcripts, while LPTIM2/SAI2 are touched by no firmware and no test; SYSCFG and WWDG are inert shims.</em></p>
+<p><strong>Functional device/protocol reads</strong> (real driver, decoded value):
+- IO-Link master station — AHT20 + BMP280 over I2C, SN74HC165 shift register — <code>iolink-station</code> · examples/iolink-station ci/test.sh (firmware-gate) (PR gate)</p>
+<p><strong>Advanced peripherals — unit-tested only</strong> (no firmware drives them): <code>SPI2</code>, <code>SPI3</code>, <code>CRC</code>, <code>RNG</code>, <code>FMC</code></p>
+<p><strong>Dead</strong> (6 modeled, never exercised): <code>DAC</code>, <code>LPTIM2</code>, <code>QUADSPI</code>, <code>SAI1</code>, <code>SAI2</code>, <code>USB OTG FS</code></p>
+<p><strong>Shims</strong> (hardcoded stubs or engine-less declarative register files — not real fidelity):
+- <code>SYSCFG</code> (configs/chips/stm32l476.yaml:421 (type: stub; configs/peripherals/stm32l476/syscfg.yaml; docs/coverage/silent-path-census.md:403)) — CLOSABLE: author-declared stub — read 0, writes dropped, so EXTI source-select (the block's main job) is not modelled and nothing reads the window back: r12 gates its clock because COMP shares the window (crates/firmware-l476-demo/src/r12.rs:130), and the silent-path census records it as the live stub of examples/ci/l476-bldc-stall.yaml.
+- <code>WWDG</code> (crates/core/src/peripherals/wwdg.rs:63 (configs/chips/stm32l476.yaml:396; configs/peripherals/stm32l476/wwdg.yaml)) — CLOSABLE: inert register bank — tick() is the trait-default no-op, so an armed watchdog never fires; the PR-gated nucleo_l476rg_misc fingerprint reads CR/CFR/SR off it (crates/core/tests/firmware_survival.rs:623), but that exercises storage only, not watchdog behaviour.</p>
+<h3 id="esp32c3"><code>esp32c3</code></h3>
+<p><em>Leo air-quality is the sensor-depth proof: the nightly example e2e asserts it explicitly, and the advisory PR workspace shards also exercise it. clock/dma stay unrecorded by design — esp32c3 wires system/rtc_cntl/dma as declarative register files with no behavioural engine, so a PASS would overclaim. The non-rubric declarative wall (crypto, USB device, I2S, UHCI, radio) is not yet swept into this entry — tracked for a later ledger pass.</em></p>
+<p><strong>Functional device/protocol reads</strong> (real driver, decoded value):
+- Leo air-quality — real Sensirion SCD41/SGP41/SPS30 + Melexis MLX90614 + Vishay VEML7700 decode CO2 / humidity / surface condensation to plain-language verdicts — <code>leo-airquality</code> · e2e_leo_airquality.rs:121-143 (nightly CI)</p>
+<p><strong>Advanced peripherals — unit-tested only</strong> (no firmware drives them): <code>ana_i2c</code>, <code>sha</code>, <code>virtual_wifi (real shared-802.11 medium model two C3 firmwares associate over, 2 tests)</code>, <code>wifi_mac (RE'd MAC&lt;-&gt;SimNet bridge, RX descriptor ring, 5 tests)</code></p>
+<p><strong>Dead</strong> (2 modeled, never exercised): <code>cache</code>, <code>rng</code></p>
+<h3 id="esp32s3"><code>esp32s3</code></h3>
+<p><em>Broad model surface (~35); the rubric grid proves ~9, plus a TMP102 functional read in the nightly fixtures lane. GDMA is a real 65-test mem-to-mem engine (proven via the dma rubric cell), not a stub. <code>spi_mem_flash</code>/<code>extmem</code> stay unit-only: mask-ROM bring-up reads are not firmware exercise.</em></p>
+<p><strong>Functional device/protocol reads</strong> (real driver, decoded value):
+- TMP102 temperature read over I2C (real driver, decoded value + GPIO threshold) — <code>esp32s3-i2c-tmp102</code> · e2e_i2c_tmp102.rs:147-188 (nightly CI)</p>
+<p><strong>Advanced peripherals — unit-tested only</strong> (no firmware drives them): <code>aes</code>, <code>ds</code>, <code>hmac</code>, <code>rsa</code>, <code>rng</code>, <code>sha</code>, <code>i2s</code>, <code>lcd_cam</code>, <code>sdmmc</code>, <code>usb_otg</code>, <code>gpspi</code>, <code>pcnt</code>, <code>io_mux</code>, <code>extmem</code>, <code>spi_mem_flash</code>, <code>sens</code>, <code>system</code>, <code>core1_control</code>, <code>crosscore_ipi</code></p>
+<p><strong>Shims</strong> (hardcoded stubs or engine-less declarative register files — not real fidelity):
+- <code>efuse_stub</code> (crates/core/src/system/xtensa/esp32s3.rs:647 (esp_xtensa_common/system_stub.rs:454)) — CLOSABLE: canned MAC + chip-rev only; no eFuse state, no burn path. The ROM boot and esp-hal accept the canned values.
+- <code>rtc_cntl_stub</code> (crates/core/src/system/xtensa/esp32s3.rs:640 (esp_xtensa_common/system_stub.rs:203)) — CLOSABLE: register round-trip plus three canned behaviours — PLL_LOCK seeded, TIME_UPDATE snapshot handshake, APP_CPU un-stall. The RTC clock tree, SWD_CONF super-watchdog and sleep domains are not modelled.
+- <code>wifi_thunks</code> (esp32s3/wifi_thunks.rs:8 (CHEAT(THUNK-LIB))) — IRREDUCIBLE: the ESP32 WiFi MAC/PHY is a closed RF-coprocessor blob with NO executable image — there is no firmware to run, so it can never be firmware-exercised. The lwIP/socket layer above is routed to a real SimNet.</p>
+<h3 id="esp32"><code>esp32</code></h3>
+<p><em>tier1 fixture drives 8 rubric classes incl. a BMP280 chip-id read over the I2C command-list engine and a real LEDC duty-latch.</em></p>
+<p><strong>Advanced peripherals — unit-tested only</strong> (no firmware drives them): <code>efuse</code>, <code>sha</code>, <code>syscon</code>, <code>twai</code>, <code>mcpwm</code>, <code>rtc_cntl</code></p>
+<p><strong>Shims</strong> (hardcoded stubs or engine-less declarative register files — not real fidelity):
+- <code>sdio_stub</code> (esp32/sdio_stub.rs:5) — STRUCTURAL: hardcoded FSM_DONE so the boot ROM's SDIO bring-up poll terminates. Removing it breaks boot; the ROM blob is the only 'firmware' that touches it.</p>
+<h3 id="nrf52840"><code>nrf52840</code></h3>
+<p><em>TWIM/PWM are firmware-proven via the rubric fixture; the PR-gated OBD2 scanner e2e drives the RADIO TXEN/READY/START/END handshake (asserts ble_tx &gt; 0), and the #[ignore]d proximity e2e adds an on-demand radio path. The Zephyr BME280 temperature read runs in an external west build.</em></p>
+<p><strong>Functional device/protocol reads</strong> (real driver, decoded value):
+- BME280 temperature read (~25 °C) via an unmodified Zephyr sensor driver — <code>zephyr-bme280-ztest</code> · external west build (not in core cargo test) (on-demand)</p>
+<p><strong>Advanced peripherals — unit-tested only</strong> (no firmware drives them): <code>TWIS</code>, <code>SPIS</code>, <code>CCM</code>, <code>RNG</code>, <code>TEMP</code>, <code>ECB</code>, <code>GPIOTE</code>, <code>PPI</code>, <code>NVMC</code>, <code>FICR</code>, <code>UICR</code>, <code>NFCT</code>, <code>PDM</code>, <code>EGU</code>, <code>QSPI</code>, <code>USBD</code></p>
+<p><strong>Dead</strong> (8 modeled, never exercised): <code>QDEC</code>, <code>AAR</code>, <code>ACL</code>, <code>COMP</code>, <code>CRYPTOCELL</code>, <code>I2S</code>, <code>LPCOMP</code>, <code>MWU</code></p>
+<p><strong>Shims</strong> (hardcoded stubs or engine-less declarative register files — not real fidelity):
+- <code>USBREGULATOR</code> (nrf52/usbregulator.rs (70 lines, 0 tests)) — thin VBUS-ready register stub</p>
+<h3 id="nrf52832"><code>nrf52832</code></h3>
+<p><em>Shares the nRF52 model; tier1 fixture drives TWIM/SPIM/SAADC/WDT/RTC/PWM. (The separate firmware_survival demo ELF is RAM-broken — built for 256KB on a 64KB part — but the tier1 fixture is correct.)</em></p>
+<p><strong>Advanced peripherals — unit-tested only</strong> (no firmware drives them): <code>TWIS</code>, <code>SPIS</code>, <code>CCM</code>, <code>RADIO</code>, <code>RNG</code>, <code>TEMP</code>, <code>ECB</code>, <code>GPIOTE</code>, <code>PPI</code>, <code>NVMC</code>, <code>FICR</code>, <code>UICR</code>, <code>NFCT</code>, <code>PDM</code>, <code>EGU0-5</code></p>
+<p><strong>Dead</strong> (7 modeled, never exercised): <code>AAR</code>, <code>BPROT</code>, <code>COMP</code>, <code>I2S</code>, <code>LPCOMP</code>, <code>MWU</code>, <code>QDEC</code></p>
+<h3 id="nrf52833"><code>nrf52833</code></h3>
+<p><em>Shares the nRF52 model with nrf52840/nrf52832; tier-1 drives 12 rubric classes (incl. EasyDMA and a real TIMER0 IRQ) and the micro:bit-v2 smoke proves UARTE0. Nothing beyond the rubric is firmware-driven: TWIS/SPIS/CCM/RADIO/NFCT/GPIOTE/TEMP/RNG/ECB/EGU/PDM/NVMC/PPI/USBD/FICR/UICR are unit-tested models, and QDEC/AAR/ACL/COMP/LPCOMP/MWU/I2S have no tests at all.</em></p>
+<p><strong>Advanced peripherals — unit-tested only</strong> (no firmware drives them): <code>TWIS</code>, <code>SPIS</code>, <code>CCM</code>, <code>RADIO</code>, <code>GPIOTE</code>, <code>NFCT</code>, <code>TEMP</code>, <code>RNG</code>, <code>ECB</code>, <code>EGU0-5</code>, <code>PDM</code>, <code>NVMC</code>, <code>PPI</code>, <code>USBD</code>, <code>FICR</code>, <code>UICR</code></p>
+<p><strong>Dead</strong> (7 modeled, never exercised): <code>QDEC</code>, <code>AAR</code>, <code>ACL</code>, <code>COMP</code>, <code>LPCOMP</code>, <code>MWU</code>, <code>I2S</code></p>
+<blockquote>
+<p>⚠ ACL is on the part (nRF52833 PS feature list + ch. 6.3; Zephyr nrf52833.dtsi acl@4001e000) but shares the NVMC window the descriptor declares, so no ACL instance is wired.</p>
+</blockquote>
+<h3 id="rp2040"><code>rp2040</code></h3>
+<p><em>tier1 fixture drives clock/timer/gpio/spi/i2c (PL022/DW_apb); boots unmodified Zephyr. PIO0 is exercised by the required nightly PIO onboarding lane — not by a tier-1 fixture: firmware-rp2040-pio-onboarding boots through this descriptor and must reach PIO_OK (crates/core/tests/rp2040_pio_onboarding.rs:82-135), built and required by the core-full job's LABWIRED_REQUIRE_FIRMWARE (core-ci.yml:2014, :2034, run at :2062; cross-build-excluded from the PR shards).</em></p>
+<h3 id="stm32h563"><code>stm32h563</code></h3>
+<p><em>Drives all 13 rubric classes (incl. FDCAN→can) via real firmware — the broadest rubric coverage. UDS bootloader/ECU examples exist but are not yet gated as automated tests.</em></p>
+<p><strong>Advanced peripherals — unit-tested only</strong> (no firmware drives them): <code>UDS bootloader/ECU (0x10/0x27/0x34/0x36/0x37/0x85/0x28 — example firmware, not gated)</code></p>
+<h3 id="nrf5340"><code>nrf5340</code></h3>
+<p><em>No tier1 fixture. Boots unmodified Zephyr hello_world end-to-end: CLOCK/UARTE0/RTC1 drive the boot (firmware_survival + nrf5340_clock_boot). Nine peripheral blocks are benign boot stubs.</em></p>
+<p><strong>Functional device/protocol reads</strong> (real driver, decoded value):
+- Unmodified Zephyr v3.7 hello_world boots + prints over UARTE0 EasyDMA — <code>nrf5340-zephyr</code> · firmware_survival::test_nrf5340_zephyr_survival (PR gate)</p>
+<p><strong>Advanced peripherals — unit-tested only</strong> (no firmware drives them): <code>GPIO</code>, <code>TIMER0-2</code>, <code>RTC0</code></p>
+<p><strong>Shims</strong> (hardcoded stubs or engine-less declarative register files — not real fidelity):
+- <code>DCNF/FPU/CACHE/SPU/OSC_REG/CTRLAP/GPIOTE0/DPPIC/FICR</code> (nrf5340_*_stub) — STRUCTURAL: SystemInit pokes them once at boot and never polls them again, so a register stub is byte-faithful for the hello_world boot path.</p>
+<h3 id="nrf54l15"><code>nrf54l15</code></h3>
+<p><em>No tier1 fixture. Unmodified Zephyr v4.4 hello_world boots end-to-end (nRF54L CLOCK/LFCLK, GRTC kernel tick, TAMPC approtect gate, RRAM-mapped UARTE20 EasyDMA) and the PR-gated smart-ring probe reads four I2C sensor IDs. Beyond the rubric TEMP/EGU/GPIOTE are unit-tested models no firmware drives; TAMPC/RRAMC/regulators/FICR/UICR/DPPIC are zero-filled stub windows the boot path pokes but never polls.</em></p>
+<p><strong>Advanced peripherals — unit-tested only</strong> (no firmware drives them): <code>TEMP</code>, <code>EGU10</code>, <code>EGU20</code>, <code>GPIOTE20</code>, <code>GPIOTE30</code></p>
+<p><strong>Shims</strong> (hardcoded stubs or engine-less declarative register files — not real fidelity):
+- <code>TAMPC</code> (configs/chips/nrf54l15.yaml:363 (nrf54l_tampc_stub)) — STRUCTURAL: SystemInit READS the protect-domain signal registers, and the MDK deliberately hangs the part on locked+high — zero is the only boot-safe answer. Read once, never polled.
+- <code>RRAMC</code> (configs/chips/nrf54l15.yaml:390 (nrf54l_rramc_stub)) — STRUCTURAL: firmware executes from RRAM and no boot path polls the controller for a settled value. Closable only by firmware that writes NVM at runtime — none does.
+- <code>REGULATORS</code> (configs/chips/nrf54l15.yaml:398 (nrf54l_regulators_stub)) — STRUCTURAL: DCDC/LDO selection is write-only on the boot path; nothing reads it back.
+- <code>FICR</code> (configs/chips/nrf54l15.yaml:423 (nrf54l_ficr_stub)) — STRUCTURAL: factory info read once at boot; zero is the honest answer for an unprovisioned part.
+- <code>UICR</code> (configs/chips/nrf54l15.yaml:429 (nrf54l_uicr_stub)) — STRUCTURAL: unprovisioned UICR reads zero, which the boot path accepts; APPROTECT provisioning is not modelled.
+- <code>DPPIC20/DPPIC30</code> (configs/chips/nrf54l15.yaml:407,413 (nrf54l_dppic_stub)) — CLOSABLE: event-routing fabric only — poked during peripheral init, never polled for a settled value, and no firmware routes events through DPPI.</p>
+<h3 id="nrf54lm20a"><code>nrf54lm20a</code></h3>
+<p><em>No tier1 fixture. The strict-onboarding snake lab is the only firmware: SPIM22 drives an RM67162 AMOLED and the gate asserts rendered frame ink (a rubric class, so unrecorded here). Beyond the rubric TEMP/EGU/GPIOTE are unit-tested models no firmware drives; TAMPC/RRAMC/regulators/DPPIC20/DPPIC30 are zero-filled stub windows.</em></p>
+<p><strong>Advanced peripherals — unit-tested only</strong> (no firmware drives them): <code>TEMP</code>, <code>EGU10</code>, <code>EGU20</code>, <code>GPIOTE20</code>, <code>GPIOTE30</code></p>
+<p><strong>Shims</strong> (hardcoded stubs or engine-less declarative register files — not real fidelity):
+- <code>TAMPC</code> (configs/chips/nrf54lm20a.yaml:329 (nrf54l_tampc_stub)) — STRUCTURAL: SystemInit READS the protect-domain signal registers, and the MDK deliberately hangs the part on locked+high — zero is the only boot-safe answer. Read once, never polled.
+- <code>RRAMC</code> (configs/chips/nrf54lm20a.yaml:351 (nrf54l_rramc_stub)) — STRUCTURAL: firmware executes from RRAM and no boot path polls the controller for a settled value. Closable only by firmware that writes NVM at runtime — none does.
+- <code>REGULATORS</code> (configs/chips/nrf54lm20a.yaml:358 (nrf54l_regulators_stub)) — STRUCTURAL: DCDC/LDO selection is write-only on the boot path; nothing reads it back.
+- <code>DPPIC20/DPPIC30</code> (configs/chips/nrf54lm20a.yaml:365,369 (nrf54l_dppic_stub)) — CLOSABLE: event-routing fabric only — poked during peripheral init, never polled for a settled value, and no firmware routes events through DPPI.</p>
+<h3 id="esp32c6"><code>esp32c6</code></h3>
+<p><em>Richest Espressif rubric coverage: the tier-1 fixture drives all 12 of its declared classes. clock and irq are real engines, not register stand-ins — the native PCR enforces CLK_EN (gated UART0 reads back 0, then recovers) and interrupt_core0+intpri route both the software doorbell and UART0's peripheral source into real mcause traps. Beyond the rubric only io_mux and hp_sys remain — SVD-derived declarative register files with no behavioural engine.</em></p>
+<p><strong>Shims</strong> (hardcoded stubs or engine-less declarative register files — not real fidelity):
+- <code>io_mux</code> (configs/chips/esp32c6.yaml:231 (declarative; configs/peripherals/esp32c6/io_mux.yaml)) — CLOSABLE: reset-value register storage; pad function writes are recorded but never read back or electrically enforced — the DevKitC demo writes U0TXD's MCU_SEL and the tier-1 console both pass regardless of routing. The S3's real io_mux model is the port path.
+- <code>hp_sys</code> (configs/chips/esp32c6.yaml:256 (declarative; configs/peripherals/esp32c6/hp_sys.yaml)) — CLOSABLE: declarative register file with no engine; nothing drives it today, so the false-success path is latent — timeout monitor, SDIO control, ROM-table lock and memory test are not modelled.</p>
+<h3 id="esp32s3-zero"><code>esp32s3-zero</code></h3>
+<p><em>Board variant of the esp32s3 die: same configure_xtensa_esp32s3 wiring and the same committed tier-1 ELF, which non-ignored CLI/workspace tests boot under this chip's name and assert through <code>TIER1 ... PASS</code> (SYSTIMER runs the clock check; USB-Serial/JTAG is the console of the TMP102 e2e, so neither is a gap). The yaml's IRAM/ROM-thunk/XIP windows are memory-map declarations, not per-chip models, and its eFuse/RTC_CNTL stubs are the shared family stubs listed on the esp32s3 entry. <code>spi_mem_flash</code>/<code>extmem</code> stay unit-only here too: mask-ROM bring-up reads are not firmware exercise.</em></p>
+<p><strong>Advanced peripherals — unit-tested only</strong> (no firmware drives them): <code>aes</code>, <code>ds</code>, <code>hmac</code>, <code>rsa</code>, <code>rng</code>, <code>sha</code>, <code>i2s</code>, <code>lcd_cam</code>, <code>sdmmc</code>, <code>usb_otg</code>, <code>gpspi</code>, <code>pcnt</code>, <code>io_mux</code>, <code>extmem</code>, <code>spi_mem_flash</code>, <code>sens</code>, <code>system</code>, <code>core1_control</code>, <code>crosscore_ipi</code></p>
+<p><strong>Shims</strong> (hardcoded stubs or engine-less declarative register files — not real fidelity):
+- <code>efuse_stub</code> (crates/core/src/system/xtensa/esp32s3.rs:647 (esp_xtensa_common/system_stub.rs:454; configs/chips/esp32s3-zero.yaml:72)) — CLOSABLE: canned MAC + chip-rev only; no eFuse state, no burn path. The ROM boot and esp-hal accept the canned values.
+- <code>rtc_cntl_stub</code> (crates/core/src/system/xtensa/esp32s3.rs:640 (esp_xtensa_common/system_stub.rs:203; configs/chips/esp32s3-zero.yaml:66)) — CLOSABLE: register round-trip plus three canned behaviours — PLL_LOCK seeded, TIME_UPDATE snapshot handshake, APP_CPU un-stall. The RTC clock tree, SWD_CONF super-watchdog and sleep domains are not modelled.
+- <code>wifi_thunks</code> (esp32s3/wifi_thunks.rs:8 (CHEAT(THUNK-LIB))) — IRREDUCIBLE: the ESP32 WiFi MAC/PHY is a closed RF-coprocessor blob with NO executable image — there is no firmware to run, so it can never be firmware-exercised. The lwIP/socket layer above is routed to a real SimNet. (Same shim as the esp32s3 entry.)</p>
+<h3 id="stm32f103"><code>stm32f103</code></h3>
+<p><em>Drives 10 rubric classes via its tier-1 fixture, and the nightly J1939 monitor drives bxCAN1 end to end (per-SA BAM reassembly + engine-speed decode); AFIO and DBGMCU are exercised by the PR-gated Zephyr hello (pinctrl remap, debug-init) and PWR by the Arduino startup; beyond the rubric, the shared CRC engine's always-run coverage is the H563 bench oracle (h563_conformance.rs:144) plus IDR-width masking (crc.rs:204), and the F103 polynomial is additionally pinned by the sim-only thumb oracle (stm32f1_exec_oracle.rs:300) and the conformance digest, which CI skips without its prebuilt ELF — while WWDG is an inert shim rather than a dead model, and the USB-device and BKP windows also resolve to zero stubs.</em></p>
+<p><strong>Functional device/protocol reads</strong> (real driver, decoded value):
+- J1939 engine-bus monitor — per-SA BAM transport reassembly and engine-speed decode from a replayed CAN capture (ENGINE idle_rpm=600; 9 DM1 source addresses) — <code>f103-j1939-monitor</code> · examples/f103-j1939-monitor/j1939-replay.yaml (nightly coverage-matrix required target, .github/workflows/core-coverage-matrix-smoke.yml:171) (nightly CI)</p>
+<p><strong>Advanced peripherals — unit-tested only</strong> (no firmware drives them): <code>CRC</code></p>
+<p><strong>Shims</strong> (hardcoded stubs or engine-less declarative register files — not real fidelity):
+- <code>usb_dev</code> (configs/chips/stm32f103.yaml:216 (type: stub; configs/peripherals/stm32f103/usb.yaml)) — CLOSABLE: author-declared stub — writes are dropped and every read returns 0, so the F1 USB-FS device engine (EPnR/CNTR/ISTR/BTABLE/PMA) is not modelled; no gated firmware opens the window, and the declarative usb.yaml is decode-only.
+- <code>bkp</code> (configs/chips/stm32f103.yaml:222 (type: stub)) — CLOSABLE: author-declared stub with no schema wired in the descriptor — the backup-domain registers (RTC backup data and calibration) are not modelled; no gated firmware touches the window.
+- <code>WWDG</code> (crates/core/src/peripherals/wwdg.rs:63 (configs/chips/stm32f103.yaml:185)) — CLOSABLE: inert register bank — tick() is the trait-default no-op, so an armed watchdog never fires. No behavioural test and no gated firmware drives it; reset values are pinned by the bench-F103 probe in stm32f1_mmio_diff.</p>
+<h3 id="stm32f401"><code>stm32f401</code></h3>
+<p><em>All 12 declared rubric classes are driven by its tier-1 fixture — including a byte-exact memory-to-memory transfer on DMA2 plus the EXTI→NVIC and TIM1-PWM checks — while PWR_CR.VOS is programmed by the PR-gated Arduino startup and DBGMCU_CR by the Zephyr SoC-debug init; that leaves the other stream controller, DMA1, as the chip's one beyond-rubric gap.</em></p>
+<p><strong>Advanced peripherals — unit-tested only</strong> (no firmware drives them): <code>DMA1</code></p>
+<h3 id="stm32f405"><code>stm32f405</code></h3>
+<p><em>No tier-1 target (absent from tier1-matrix.json), so this entry carries the whole story: the committed part-specific fixture runs nightly via examples/feather-f405/tier1-smoke.yaml and PR-gated firmware_survival::test_stm32f405_tier1_survival, driving clock/gpio/timer/i2c/spi/adc/wdt/rtc over USART2 and explicitly leaving dma/irq/pwm unclaimed; PWR and both DMA controllers are modeled but firmware-untouched, and DBGMCU is never exercised at all.</em></p>
+<p><strong>Advanced peripherals — unit-tested only</strong> (no firmware drives them): <code>PWR</code>, <code>DMA1</code>, <code>DMA2</code></p>
+<p><strong>Dead</strong> (1 modeled, never exercised): <code>DBGMCU</code></p>
+<h3 id="stm32f407"><code>stm32f407</code></h3>
+<p><em>Its 9-class tier-1 fixture leaves dma/irq/pwm unrecorded, and the DMA gap is real: no firmware drives either stream controller (only the descriptor-level differential does); the PR-gated smoke reads DBGMCU IDCODE, the Arduino startup programs PWR_CR.VOS then reads REV_ID back, and the <code>arduino-matrix-gate</code> L8_can loopback sketch drives bxCAN1 to self-reception (ID 0x123, data 0xA5), so debug, power and CAN are firmware-exercised; the AHT20+BMP280 e2e drives two real I²C device twins but decodes no physical value.</em></p>
+<p><strong>Advanced peripherals — unit-tested only</strong> (no firmware drives them): <code>DMA1</code>, <code>DMA2</code></p>
+<h3 id="stm32f401cdu6"><code>stm32f401cdu6</code></h3>
+<p><em>384 KiB Black-Pill package variant of the F401. Its PR-gated firmware is the UART-only black-pill demo (<code>firmware_survival::test_stm32f401cdu6_demo_survival</code>, <code>OK</code> over USART2); the install-canary lane runs the sibling stm32f401 tier-1 ELF against this descriptor but asserts only <code>TIER1 clock PASS</code>, because this descriptor declares no RCC clock gates and zero-window stubs for RTC/IWDG/WWDG/DMA1-2/CRC/SDIO/SYSCFG/I2S extensions/OTG FS/DBG — the sibling fixture's gate-proving timer/spi/adc/pwm checks, its wdt/rtc checks and its byte-exact DMA2 transfer all fail here (a dev run prints clock/gpio/i2c/irq PASS and seven FAIL lines, <code>dma-ndtr</code> among them). PWR is a real stm32f4-profile model that no firmware on this descriptor drives.</em></p>
+<p><strong>Advanced peripherals — unit-tested only</strong> (no firmware drives them): <code>PWR</code></p>
+<p><strong>Shims</strong> (hardcoded stubs or engine-less declarative register files — not real fidelity):
+- <code>RTC</code> (configs/chips/stm32f401cdu6.yaml:66 (type: stub; configs/peripherals/stm32f401/rtc.yaml)) — CLOSABLE: zero window — the calendar RTC the sibling stm32f401 descriptor wires for real (configs/chips/stm32f401.yaml:164) is absent here; the black-pill demo never opens it, and the sibling fixture's DR-reset check fails (<code>rtc-dr-reset</code>).
+- <code>WWDG</code> (configs/chips/stm32f401cdu6.yaml:72 (type: stub; configs/peripherals/stm32f401/wwdg.yaml)) — CLOSABLE: zero window — not even the inert <code>wwdg</code> register bank the F103/L476 descriptors carry; no gated firmware opens it.
+- <code>IWDG</code> (configs/chips/stm32f401cdu6.yaml:78 (type: stub; configs/peripherals/stm32f401/iwdg.yaml)) — CLOSABLE: zero window — the LSI-clocked engine the sibling descriptor wires (configs/chips/stm32f401.yaml:155) is absent, so the sibling fixture's KR-unlock/RLR round-trip fails (<code>wdt-unprotected</code>).
+- <code>I2S2EXT/I2S3EXT</code> (configs/chips/stm32f401cdu6.yaml:84,104 (type: stub; configs/peripherals/stm32f401/i2s2ext.yaml, i2s3ext.yaml)) — CLOSABLE: zero windows for the I2S2/I2S3 extension blocks; no STM32 I2S model exists (the engine's I2S models are the nRF52 and ESP32-S3 ones) and no gated firmware opens them.
+- <code>SDIO</code> (configs/chips/stm32f401cdu6.yaml:174 (type: stub; configs/peripherals/stm32f401/sdio.yaml)) — CLOSABLE: zero window; the engine carries a real STM32 SDMMC host (sdmmc.rs, wired on the L476) but not this earlier F4 SDIO controller, and no firmware opens the window.
+- <code>SYSCFG</code> (configs/chips/stm32f401cdu6.yaml:195 (type: stub; configs/peripherals/stm32f401/syscfg.yaml)) — CLOSABLE: zero window — EXTI source-select (EXTICR) is not modelled; the fixture triggers its EXTI line through SWIER, so nothing reads it back.
+- <code>CRC</code> (configs/chips/stm32f401cdu6.yaml:232 (type: stub; configs/peripherals/stm32f401/crc.yaml)) — CLOSABLE: zero window — the engine's real CRC model (crc.rs) is not wired on this descriptor; no firmware drives it.
+- <code>DMA1/DMA2</code> (configs/chips/stm32f401cdu6.yaml:248,254 (type: stub; the real engine is <code>stm32f4_dma</code>, used by configs/chips/stm32f401.yaml:216,226)) — CLOSABLE: both stream controllers are zero windows, so the sibling fixture's byte-exact DMA2 memcpy fails here (<code>dma-ndtr</code>) — the stm32f401 row's dma pass belongs to that descriptor's real DMA2, not this window. Port path: declare <code>type: stm32f4_dma</code> with the AHB1ENR gates and stream_irqs as the F401/F405/F407/F767 descriptors do.
+- <code>OTG_FS global/host/device/pwrclk</code> (configs/chips/stm32f401cdu6.yaml:309,315,321,327 (type: stub; configs/peripherals/stm32f401/otg_fs_<em>.yaml)) — CLOSABLE: four zero windows — the engine's STM32 OTG FS/DWC2 model (usb_otg.rs, wired on the L476) is not wired here (the F103 USB-device window is the same stub class), no gated firmware opens them, and the declarative otg_fs_</em>.yaml schemas are decode-only.
+- <code>DBG</code> (configs/chips/stm32f401cdu6.yaml:336 (type: stub; configs/peripherals/stm32f401/dbg.yaml)) — CLOSABLE: zero window with no IDCODE wired even though the yaml header records the CDU6's bench-read DBGMCU IDCODE 0x10016433 — the sibling descriptor's real <code>dbgmcu</code> model (configs/chips/stm32f401.yaml:187, idcode 0x10006411) is not reused; no gated firmware reads it.</p>
+<h3 id="stm32f411ceu6"><code>stm32f411ceu6</code></h3>
+<p><em>WeAct Black Pill. Its tier-1 fixture (PR-gated <code>firmware_survival::test_stm32f411_tier1_survival</code>; nightly coverage-matrix cell examples/stm32f411ceu6-blackpill/io-smoke.yaml) drives clock/gpio/timer/i2c/spi (SPI1+SPI5)/adc/wdt/rtc over USART2, leaving dma unrecorded (the fixture never attempts it, and both stream controllers are zero stubs) and irq/pwm n/a (the fixture does not attempt either class). PWR is a real stm32f4-profile model no firmware drives; the descriptor's remaining stub windows are listed below.</em></p>
+<p><strong>Advanced peripherals — unit-tested only</strong> (no firmware drives them): <code>PWR</code></p>
+<p><strong>Shims</strong> (hardcoded stubs or engine-less declarative register files — not real fidelity):
+- <code>WWDG</code> (configs/chips/stm32f411ceu6.yaml:112 (type: stub; configs/peripherals/stm32f411/wwdg.yaml)) — CLOSABLE: zero window — not even the inert <code>wwdg</code> register bank the F103/L476 descriptors carry; no gated firmware opens it.
+- <code>I2S2EXT/I2S3EXT</code> (configs/chips/stm32f411ceu6.yaml:127,147 (type: stub; configs/peripherals/stm32f411/i2s2ext.yaml, i2s3ext.yaml)) — CLOSABLE: zero windows for the I2S2/I2S3 extension blocks; no STM32 I2S model exists (the engine's I2S models are the nRF52 and ESP32-S3 ones) and no gated firmware opens them.
+- <code>SDIO</code> (configs/chips/stm32f411ceu6.yaml:220 (type: stub; configs/peripherals/stm32f411/sdio.yaml)) — CLOSABLE: zero window; the engine carries a real STM32 SDMMC host (sdmmc.rs, wired on the L476) but not this earlier F4 SDIO controller, and no firmware opens the window.
+- <code>SYSCFG</code> (configs/chips/stm32f411ceu6.yaml:247 (type: stub; configs/peripherals/stm32f411/syscfg.yaml)) — CLOSABLE: zero window — EXTI source-select (EXTICR) is not modelled, and no gated firmware configures it.
+- <code>CRC</code> (configs/chips/stm32f411ceu6.yaml:303 (type: stub; configs/peripherals/stm32f411/crc.yaml)) — CLOSABLE: zero window — the engine's real CRC model (crc.rs) is not wired on this descriptor; no firmware drives it.
+- <code>DMA1/DMA2</code> (configs/chips/stm32f411ceu6.yaml:319,325 (type: stub; the real engine is <code>stm32f4_dma</code>, wired by the sibling F401/F405/F407/F767 descriptors)) — CLOSABLE: both stream controllers are zero windows, which is why the fixture's dma cell is unrecorded; the yaml comment at :33 still says only the F1/L4 channel layout is modelled, but the stream-controller engine <code>stm32f4_dma</code> now exists — port path is to wire it with the AHB1ENR gates and stream_irqs as the F401 descriptor does.
+- <code>OTG_FS global/host/device/pwrclk</code> (configs/chips/stm32f411ceu6.yaml:380,386,392,398 (type: stub; configs/peripherals/stm32f411/otg_fs_<em>.yaml)) — CLOSABLE: four zero windows — the engine's STM32 OTG FS/DWC2 model (usb_otg.rs, wired on the L476) is not wired here (the F103 USB-device window is the same stub class), no gated firmware opens them, and the declarative otg_fs_</em>.yaml schemas are decode-only.
+- <code>DBG</code> (configs/chips/stm32f411ceu6.yaml:410 (type: stub; configs/peripherals/stm32f411/dbg.yaml)) — CLOSABLE: zero window and no IDCODE by design — the descriptor says the F411 DEV_ID/REV_ID has not been read off a part and inventing one would make a probe-identify path silently wrong; no gated firmware reads it.</p>
+<h3 id="stm32f746"><code>stm32f746</code></h3>
+<p><em>Sim-derived F7 (no bench part) and no tier-1 target — absent from TIER1_TARGETS and tier1-matrix.json: the only firmware that runs is the bare-metal Discovery smoke, PR-gated as <code>firmware_survival::test_stm32f746_discovery_smoke_survival</code> and rebuilt by the nightly coverage-matrix cell (examples/stm32f7-discovery/uart-smoke.yaml, crate firmware-stm32f746-demo). It un-gates GPIOIEN/USART1EN, configures PI1, prints <code>OK</code> over USART1 and sets PI1 via BSRR; beyond that the descriptor adds only five zero-window stubs to the F4-shared RCC/GPIO/systick set. FMC/SDRAM, SAI, SDMMC, DCMI, RNG and GPIOJ/K are unmapped holes, not stubs.</em></p>
+<p><strong>Shims</strong> (hardcoded stubs or engine-less declarative register files — not real fidelity):
+- <code>LTDC</code> (configs/chips/stm32f746.yaml:151 (type: stub; no schema)) — CLOSABLE: zero window — the display controller is not modelled and the smoke never opens it.
+- <code>Ethernet</code> (configs/chips/stm32f746.yaml:155 (type: stub; no schema)) — CLOSABLE: zero window; no Ethernet model exists in the engine and no firmware opens it.
+- <code>DMA2D</code> (configs/chips/stm32f746.yaml:159 (type: stub; no schema)) — CLOSABLE: zero window; the 2D blitter is not modelled and no firmware opens it.
+- <code>USB OTG FS</code> (configs/chips/stm32f746.yaml:163 (type: stub; no schema)) — CLOSABLE: zero window for the OTG FS core — the engine's STM32 OTG FS/DWC2 model (usb_otg.rs, wired on the L476) is not wired here (the F103 window is the same stub class) and the smoke never opens it.
+- <code>QUADSPI</code> (configs/chips/stm32f746.yaml:167 (type: stub; no schema)) — CLOSABLE: zero window; the engine's STM32 QUADSPI model (quadspi.rs, wired on the L476) is not wired here and no firmware drives the window.</p>
+<h3 id="stm32f767"><code>stm32f767</code></h3>
+<p><em>Not a tier-1 target (absent from TIER1_TARGETS and tier1-matrix.json), so this entry carries the whole story: its committed part-specific fixture runs PR-gated as <code>firmware_survival::test_stm32f767_tier1_survival</code> and in the nightly coverage-matrix cell examples/nucleo-f767zi/tier1-smoke.yaml, driving clock/gpio/timer/i2c/spi/adc/wdt/rtc over USART2 and leaving dma/irq/pwm unclaimed — the fixture never attempts them even though the descriptor now wires <code>stm32f4_dma</code> and <code>nvic</code> (the fixture's header comment still says no DMA/NVIC id is declared). That leaves PWR (real stm32f4-profile model) and both DMA stream controllers unit-only, and DBGMCU (real model, IDCODE 0x10006451 per RM0410) exercised by nothing at all.</em></p>
+<p><strong>Advanced peripherals — unit-tested only</strong> (no firmware drives them): <code>PWR</code>, <code>DMA1</code>, <code>DMA2</code></p>
+<p><strong>Dead</strong> (1 modeled, never exercised): <code>DBGMCU</code></p>
+<h3 id="stm32g071"><code>stm32g071</code></h3>
+<p><em>SIM-DERIVED first G0 port: its committed tier-1 fixture drives all 12 declared classes over USART2 (clock/gpio/timer/pwm/dma/irq/i2c/spi/adc/wdt/rtc plus the implicit uart; nightly-ratcheted by the full-CI <code>tier1_matrix_ratchet</code> step (core-ci.yml:2087), fixture drift checked on Sundays), and the PR-gated <code>firmware_survival::test_nucleo_g071rb_smoke_survival</code> (nightly coverage-matrix cell examples/nucleo-g071rb/uart-smoke.yaml, crate firmware-stm32g0-demo) pins the dedicated <code>stm32g0</code> RCC layout. Beyond the rubric nothing runs: PWR/LPTIM1/LPTIM2/DAC1/DBGMCU are family models with no unit test and no firmware (the port's KNOWN_LIMITATIONS.md records LPTIM/CRC/EXTI-SYSCFG as declared-but-untouched), CRC is driven by no firmware and its always-run coverage is the H563 bench oracle (h563_conformance.rs:144) plus the F103 sim-only thumb oracle (stm32f1_exec_oracle.rs:300) and IDR-width masking (crc.rs:204), with no G0-specific test asserting a computed value, and WWDG/SYSCFG are an inert register bank and a stub window.</em></p>
+<p><strong>Advanced peripherals — unit-tested only</strong> (no firmware drives them): <code>CRC</code></p>
+<p><strong>Dead</strong> (5 modeled, never exercised): <code>PWR</code>, <code>LPTIM1</code>, <code>LPTIM2</code>, <code>DAC1</code>, <code>DBGMCU</code></p>
+<p><strong>Shims</strong> (hardcoded stubs or engine-less declarative register files — not real fidelity):
+- <code>WWDG</code> (configs/chips/stm32g071.yaml:349 (type: wwdg; crates/core/src/peripherals/wwdg.rs:63)) — CLOSABLE: inert register bank — tick() is the trait-default no-op, so an armed watchdog never fires; no behavioural test and no gated firmware drives it (unlike the L476, no misc fingerprint reads its CR/CFR/SR).
+- <code>SYSCFG</code> (configs/chips/stm32g071.yaml:375 (type: syscfg; crates/core/src/peripherals/generic_factory.rs:739)) — CLOSABLE: hardcoded StubPeripheral — reads return 0 (plus a canned CCCSR=READY at 0x20 that is an H7-HAL seed, meaningless on G0) and writes are dropped, so EXTI source-select is not modelled; the tier-1 fixture pends its NVIC line via ISPR0 and nothing reads the window back.</p>
+<h3 id="stm32g474re"><code>stm32g474re</code></h3>
+<p><em>All 12 declared rubric classes are driven by its committed tier-1 fixture (nightly-ratcheted by the full-CI <code>tier1_matrix_ratchet</code> step (core-ci.yml:2087), fast_boot target, USART2 console), and the two PR-gated vendor firmwares cover the non-rubric blocks: the Zephyr hello's SoC init read-modify-writes DBGMCU_CR (the reason the descriptor declares DBGMCU) and the Arduino serial startup calls HAL_PWREx_ControlVoltageScaling (PWR_CR VOS + SR2.VOSF poll) plus HAL_CRC_Init (CRC_POL/INIT/CR — the reason that survival case exists), so PWR/CRC/DBGMCU are all firmware-driven and no non-rubric block is left unexercised. The CRC polynomial engine itself is still driven by no firmware: its always-run coverage is the H563 bench oracle (h563_conformance.rs:144) plus the F103 sim-only thumb oracle (stm32f1_exec_oracle.rs:300) and IDR-width masking (crc.rs:204), and no G4-specific test asserts a computed value.</em></p>
+<h3 id="stm32h735"><code>stm32h735</code></h3>
+<p><em>SIM-DERIVED first Cortex-M7 part. Its committed tier-1 fixture is PR-gated (<code>firmware_survival::test_stm32h735_tier1_survival</code>, Session builder) and drives clock/gpio/timer/pwm/i2c/spi/wdt/irq plus UART on USART3, leaving adc unrecorded and dma/rtc n/a (neither declared); the nightly h735-telematics-lab cell is the only other gated firmware (SPI1 TFT, USART1 BG770A modem, USART3 console), and its +QGPSLOC decode is not value-asserted — a parse failure falls back to a constant, so the transcript proves the stack ran, not the fix. Beyond the rubric, PWR (PwrH7) is driven only by the un-gated stm32h735-hal-demo/embassy-demo bring-up — no CI gate and no PwrH7 unit test — RNG is exercised only by the L073 kernel-clock unit tests over the L073 bus (rcc_kernel_clock_gate.rs:184-254 — no H735 behavioral test drives it, and rng.rs has no unit tests) and no firmware, DBGMCU is driven by nothing at all, FDCAN1/2 are pinned by fdcan.rs's 18 model unit tests plus the estate test's reset-value and CCCR-independence probes — no firmware touches them — CRC has the shared H563 bench oracle (h563_conformance.rs:144) and F103 sim-only thumb oracle (stm32f1_exec_oracle.rs:300) plus the IDR-width unit test, but no H7-specific computed-value check, and SYSCFG/WWDG are a seeded stub window and an inert register bank.</em></p>
+<p><strong>Advanced peripherals — unit-tested only</strong> (no firmware drives them): <code>CRC</code>, <code>FDCAN1</code>, <code>FDCAN2</code>, <code>RNG</code></p>
+<p><strong>Dead</strong> (2 modeled, never exercised): <code>PWR</code>, <code>DBGMCU</code></p>
+<blockquote>
+<p>⚠ PwrH7 was written for the H7 HAL's pwr.freeze() (VOSRDY/ACTVOSRDY) and the two community-HAL demos do run it, but neither example is wired into any test or workflow and pwr.rs has no PwrH7 unit test; DBGMCU has no firmware and no test at all.</p>
+</blockquote>
+<p><strong>Shims</strong> (hardcoded stubs or engine-less declarative register files — not real fidelity):
+- <code>SYSCFG</code> (configs/chips/stm32h735.yaml:450 (type: syscfg; crates/core/src/peripherals/generic_factory.rs:739; docs/coverage/silent-path-census.md:404)) — CLOSABLE: hardcoded StubPeripheral with one canned value — CCCSR (0x20) reads READY=1 so the H7 HAL's rcc.freeze() compensation-cell poll exits (examples/stm32h735-hal-demo/src/main.rs:43); writes are dropped, so the enable never latches and EXTI source-select is not modelled. The census records it as the telematics lab's only live stub.
+- <code>WWDG</code> (configs/chips/stm32h735.yaml:487 (type: wwdg; crates/core/src/peripherals/wwdg.rs:63)) — CLOSABLE: inert register bank — tick() is the trait-default no-op, so an armed watchdog never fires; no behavioural test and no gated firmware drives it.</p>
+<h3 id="stm32l073"><code>stm32l073</code></h3>
+<p><em>Silicon-diffed L0 part (SWD capture). Its committed tier-1 fixture (nightly-ratcheted by the full-CI <code>tier1_matrix_ratchet</code> step (core-ci.yml:2087), fixture drift checked on Sundays) drives clock/gpio/timer/dma/irq/i2c/spi/adc/wdt/rtc over USART2 — pwm is n/a, there is no advanced timer — and three PR-gated firmwares run on it: the hardware-validated firmware-l073-demo reads DBGMCU_IDCODE (<code>DEV=20086447</code>, asserted byte-for-byte against silicon) and computes CRC-32 by value (<code>CRC=B874177A</code>, also silicon-exact), the Arduino serial startup programs PWR_CR.VOS (and chip_conformance's reset oracle pins PWR's reset words), and the Zephyr hello boots. RNG is firmware-driven: the PR-gated demo enables HSI48, completes the DRDY handshake and reads a word (the drawn value is informational — the survival transcript asserts only DEV/CLK/CRC/DMA), and rcc_kernel_clock_gate.rs additionally pins that gate over the production bus. DAC and LPTIM1 are modeled but never exercised; SYSCFG/USB FS/LCD are stubs and WWDG an inert register bank. SCB is a core block installed by <code>configure_cortex_m</code> for every Cortex-M part (9 scb.rs tests plus the SCB ratchet at nvic_masking_config_path.rs:163; the fixture's IRQ handler reads ICSR), so it is not listed per-chip.</em></p>
+<p><strong>Dead</strong> (2 modeled, never exercised): <code>DAC</code>, <code>LPTIM1</code></p>
+<p><strong>Shims</strong> (hardcoded stubs or engine-less declarative register files — not real fidelity):
+- <code>SYSCFG</code> (configs/chips/stm32l073.yaml:408 (type: stub; configs/peripherals/stm32l073/syscfg_comp.yaml; docs/coverage/silent-path-census.md:381)) — CLOSABLE: author-declared stub — read 0, writes dropped (examples/nucleo-l073rz/VALIDATION.md:284); the PR-gated Arduino startup read-modify-writes SYSCFG+0x20 during HAL_RCC_OscConfig, but the RMW is fed 0 and its write is dropped, and the tier-1 fixture pends its NVIC line via ISPR0, so nothing depends on the window.
+- <code>USB FS</code> (configs/chips/stm32l073.yaml:416 (type: stub; configs/peripherals/stm32l073/usb_fs.yaml)) — CLOSABLE: author-declared stub — read 0, writes dropped (VALIDATION.md:284); the L0 USB-FS device engine (EPnR/CNTR/ISTR/BTABLE/PMA) is not modelled and no gated firmware opens the window.
+- <code>LCD</code> (configs/chips/stm32l073.yaml:425 (type: stub; configs/peripherals/stm32l073/lcd.yaml)) — CLOSABLE: author-declared stub — the L073's glass controller (the L072-vs-L073 differentiator) is not modelled and no gated firmware opens the window.
+- <code>WWDG</code> (configs/chips/stm32l073.yaml:358 (type: wwdg; crates/core/src/peripherals/wwdg.rs:63)) — CLOSABLE: inert register bank — tick() is the trait-default no-op, so an armed watchdog never fires; no behavioural test and no gated firmware drives it (the L073 reset capture does not cover its window).</p>
+<h3 id="stm32u575"><code>stm32u575</code></h3>
+<p><em>SIM-DERIVED first U5 part with NO tier-1 target (absent from TIER1_TARGETS and tier1-matrix.json), so this entry carries the whole story. Firmware that runs: the two PR-gated <code>firmware_survival</code> boots — the stock Zephyr 3.7.2 hello (U5 RCC PLL1/ready pairs, PWR, DBGMCU_CR, ICACHE, USART1 VCP console) and the Arduino L0 serial (HAL_PWREx_ControlVoltageScaling SVMSR/VOSR poll, HAL_CRC_Init CRC_POL/INIT/CR, HAL_RCCEx_CRSConfig, HAL_ICACHE_Enable) — plus <code>crates/firmware-stm32u575-demo</code>, whose RCC-APB2ENR-gate + USART1 io-smoke is built and run by <code>strict_onboarding</code> (cross-build-excluded from the PR shards, run by the nightly core-full job) and the nightly <code>core-onboarding-smoke</code> cell (core-onboarding-smoke.yml:51-55, not PR), and the un-gated CubeU5 HAL smoke (examples/nucleo-u575zi/VALIDATION.md §B: HAL_Init → ICACHE → PLL1/VOS → USART1; no CI gate, and its only beyond-rubric touches are the already-recorded PWR and ICACHE windows). The Arduino matrix L0–L8 runs on its push-to-main/nightly lane (core-arduino-matrix-smoke.yml:15, NOT PR) and drives the rubric classes (INA219 on I2C1, MAX31855 on SPI1, ADC/PWM/timer, FDCAN1 internal loopback). Beyond the rubric, GPDMA1 is the one modeled-but-firmware-untouched block (22 gpdma.rs unit tests; neither survival ELF contains its 0x40020000 base), RNG is exercised only by the L073 kernel-clock unit tests over the L073 bus (rcc_kernel_clock_gate.rs:184-254 — no U575 behavioral test drives it; register_coverage.rs:128,169-179 only pokes the window), and ICACHE is a hardcoded StubPeripheral. PWR/CRC/CRS/DBGMCU are all firmware-driven — the CRC polynomial engine (crc.rs:66) is still driven by no firmware (its always-run coverage is the H563 bench oracle, h563_conformance.rs:144, plus the F103 sim-only thumb oracle, stm32f1_exec_oracle.rs:300, and IDR-width masking, crc.rs:204 — no U5 test asserts a computed value) and CRS has no SYNC source or trim loop, but the HAL never polls one.</em></p>
+<p><strong>Advanced peripherals — unit-tested only</strong> (no firmware drives them): <code>GPDMA1</code>, <code>RNG</code></p>
+<p><strong>Shims</strong> (hardcoded stubs or engine-less declarative register files — not real fidelity):
+- <code>ICACHE</code> (configs/chips/stm32u575.yaml:447 (type: icache; crates/core/src/peripherals/generic_factory.rs:734)) — CLOSABLE: hardcoded StubPeripheral::new(0x00) — read 0, writes dropped. The PR-gated Arduino startup's HAL_ICACHE_Enable/ConfigAssociativityMode and the Zephyr boot's ICACHE enable writes are accepted but never latch, and neither polls a status bit, so the no-op cannot be detected (docs/boards/stm32u575.md:65 calls the window a stub declared so HAL_ICACHE_Enable cannot bus-fault).</p>
+<h3 id="stm32wb55"><code>stm32wb55</code></h3>
+<p><em>Dual-core WB (Cortex-M4 app + M0+ radio). Its committed tier-1 fixture (nightly-ratcheted by the full-CI <code>tier1_matrix_ratchet</code> step (core-ci.yml:2087)) drives all 12 declared classes including dma through DMA1; on the PR gate both <code>firmware_survival</code> boots cover every beyond-rubric block the descriptor declares: the Zephyr hello exercises the HSEM inter-core lock (the RLR read of Zephyr's z_stm32_hsem_lock is granted to CPU1 — this is why HSEM is NOT dead here, unlike the L476, which does not carry the block: the WB boot firmware actually drives the lock), the classic RCC BDCR LSE path, PWR and DBGMCU_CR; the Arduino serial startup writes CRC_POL at 0x4002_3014 (the reason that survival case exists), takes the same HSEM lock path and PWR backup-access. No beyond-rubric block is left unexercised and there are no shims.</em></p>
+<h3 id="stm32wba52"><code>stm32wba52</code></h3>
+<p><em>First WBA (Cortex-M33). Its committed tier-1 fixture (nightly-ratcheted by the full-CI <code>tier1_matrix_ratchet</code> step (core-ci.yml:2087)) drives all 11 of its declared classes — adc is n/a, ADC4 is not declared (configs/chips/stm32wba52.yaml:205) — including dma through GPDMA1, the descriptor's only DMA controller; on the PR gate both <code>firmware_survival</code> boots cover every beyond-rubric block: the Zephyr hello exercises the WBA-specific RCC (CFGR1@0x1C, BDCR1@0xF0, the PLL1CFGR PLL1RCLKPRE → PLL1RCLKPRERDY handshake at 0x28), the PWR VOSR handshake, DBGMCU_CR at 0xE0044004 and ICACHE; the Arduino serial startup calls HAL_PWREx_ControlVoltageScaling (VOSR write + SVMSR ACTVOSRDY poll), writes CRC_POL at 0x4002_3014 (the reason that survival case exists) and HAL_ICACHE_Enable. ICACHE is the descriptor's only shim.</em></p>
+<p><strong>Shims</strong> (hardcoded stubs or engine-less declarative register files — not real fidelity):
+- <code>ICACHE</code> (configs/chips/stm32wba52.yaml:95 (type: icache; crates/core/src/peripherals/generic_factory.rs:734)) — CLOSABLE: hardcoded StubPeripheral::new(0x00) — read 0, writes dropped. The PR-gated Arduino startup's HAL_ICACHE_Enable and the Zephyr boot write it and neither polls a status bit, so the enable never latches and the boot cannot tell.</p>
+<h3 id="atmega328p"><code>atmega328p</code></h3>
+<p><em>No tier-1 target (absent from TIER1_TARGETS and tier1-matrix.json). Firmware that runs: the PR-gated AVR golden <code>avr_nano_golden_survival::arduino_nano_golden_prints_and_blinks</code> (core-ci.yml:688) boots the committed PlatformIO blink ELF and asserts <code>nano-ok</code> on USART0 plus a PB5 toggle (avr_nano_golden_survival.rs:100-102); strict_onboarding boots the same ELF through examples/arduino-nano-blinky/io-smoke.yaml in the nightly core-full job (cross-build-excluded from the PR shards, workspace-test-shards.json:44-48; discovery documented at strict_onboarding.rs:369), and the nightly Arduino matrix drives L0–L7 on the part — L8 CAN is skipped, the chip has no CAN controller (validation/arduino-matrix/boards.yaml:218-231); its L3/L4 cells are raw register/frame oracles (INA219 config 0x399F + bus 0x19CA, validation/arduino-matrix/sketches/L3_i2c_sensor/src/main.ino:20-21,92; MAX31855 frame 0x01901600, validation/arduino-matrix/sketches/L4_spi_sensor/src/main.ino:66-67), not decoded physical values, so <code>functional</code> stays empty. Every peripheral the descriptor declares is a rubric class or kit-attach plumbing: the <code>spi</code>/<code>i2c</code> instances are parking controllers that exist only to drain attached slaves into the AVR CPU, which owns the real SPCR/SPSR/SPDR and TWI (configs/chips/atmega328p.yaml:28-39; crates/core/src/cpu/avr.rs:91-106), PORTB/C/D are <code>avr_gpio</code> and the ADC input side is <code>avr_adc</code> — so nothing beyond the rubric is declared and the lists below are empty.</em></p>
+<h3 id="atsamd21"><code>atsamd21</code></h3>
+<p><em>No tier-1 target. The firmware that runs is the PR-gated <code>firmware_survival::test_atsamd21_nano33_smoke_survival</code> (step core-ci.yml:779; case firmware_survival.rs:1323): the committed Nano 33 IoT smoke ELF (tests/fixtures/atsamd21-nano33-smoke.elf, built from crates/firmware-atsamd21-demo) writes PM.APBCMASK + GCLK SERCOM5_CORE and prints <code>OK</code> on Serial1 (crates/firmware-atsamd21-demo/src/main.rs:35-41). The same demo is built and run by strict_onboarding (nightly core-full, through examples/nano-33-iot/io-smoke.yaml) and the nightly coverage-matrix cell <code>nano-33-iot</code> (core-coverage-matrix-smoke.yml:75-81, examples/nano-33-iot/uart-smoke.yaml). Beyond the rubric the descriptor declares one block, the USB window, as a zero stub that no firmware opens.</em></p>
+<p><strong>Shims</strong> (hardcoded stubs or engine-less declarative register files — not real fidelity):
+- <code>USB</code> (configs/chips/atsamd21.yaml:68 (type: stub; crates/core/src/peripherals/stub.rs:12)) — CLOSABLE: author-declared zero window — reads return 0 and writes are dropped, so the SAM D21 native-USB device (the Nano 33 IoT's USB CDC console) is not modelled; the PR-gated smoke drives SERCOM5 (Serial1) only and no gated firmware opens the window (docs/boards/nano-33-iot.md:32 lists USB as unmodelled).</p>
+<h3 id="atsamd21g18a"><code>atsamd21g18a</code></h3>
+<p><em>No tier-1 target. The firmware that runs is the SAM D21 bring-up smoke built from <code>crates/firmware-samd21-demo</code> (committed copy at tests/fixtures/samd21-smoke.elf; the gated lanes build the crate, not that copy): examples/samd21-smoke/io-smoke.yaml asserts <code>OK</code>, <code>samd21 sercom0 up</code> and <code>led on</code> plus three PORT memory_value reads, and is executed by strict_onboarding (nightly core-full, cross-build-excluded from the PR shards, workspace-test-shards.json:44-48) and the nightly coverage-matrix cell <code>samd21-smoke</code> (core-coverage-matrix-smoke.yml:296-303). It drives the rubric classes (clock through PM/GCLK, GPIO through PORT, uart through SERCOM0) and touches both beyond-rubric declarative banks directly — the SYSCTRL.PCLKSR poll and the NVMCTRL.CTRLB wait-state write — which are register storage with no behavioural engine behind them. PM/GCLK are the clock-class banks and WDT the wdt-class bank: same declarative shape, class-owned, not listed here.</em></p>
+<p><strong>Shims</strong> (hardcoded stubs or engine-less declarative register files — not real fidelity):
+- <code>SYSCTRL</code> (configs/chips/atsamd21g18a.yaml:144 (type: declarative; configs/peripherals/atsamd21g18a/sysctrl.yaml)) — CLOSABLE: declarative register file with no engine — the smoke's OSC8MRDY poll (crates/firmware-samd21-demo/src/main.rs:151-155) is bounded (<code>for _ in 0..10_000</code>) and passes even with PCLKSR reset to 0, so it does not depend on the hand-set value; that value (0x1_8ADF, configs/peripherals/atsamd21g18a/sysctrl.yaml:250-272, value at :264) is what unbounded driver spins like the Arduino SAMD core's DFLLRDY wait need, and the pin is the estate test (atsamd21_peripheral_estate.rs:116-139), the chip's <code>chip_conformance</code> behavior gate (chip_conformance.rs:86-93). No oscillator/DFLL state is modelled, and regenerating the file from the SVD drops the value. ⚠️ examples/samd21-smoke/io-smoke.yaml:17-19 and crates/firmware-samd21-demo/src/main.rs:149-150 still claim a PCLKSR=0 model hangs / never returns — those comments are STALE (the poll is bounded); do not 'correct' this note back from them.
+- <code>NVMCTRL</code> (configs/chips/atsamd21g18a.yaml:172 (type: declarative; configs/peripherals/atsamd21g18a/nvmctrl.yaml)) — CLOSABLE: declarative register file — the smoke's CTRLB.RWS wait-state write (crates/firmware-samd21-demo/src/main.rs:147) is stored, never read back or polled, and no flash-controller behaviour follows (no programming, erase or ready timing).</p>
+<h3 id="atsamd51"><code>atsamd51</code></h3>
+<p><em>No tier-1 target. The firmware that runs is the PR-gated <code>firmware_survival::test_atsamd51_metro_m4_smoke_survival</code> (step core-ci.yml:779; case firmware_survival.rs:1336): the committed Metro M4 smoke ELF (tests/fixtures/atsamd51-metro-m4-smoke.elf, built from crates/firmware-atsamd51-demo) writes MCLK.APBBMASK + GCLK PCHCTRL[24] and prints <code>OK</code> on Serial1 (crates/firmware-atsamd51-demo/src/main.rs:35-41). The same demo is built and run by strict_onboarding (nightly core-full, through examples/metro-m4/io-smoke.yaml) and the nightly coverage-matrix cell <code>metro-m4</code> (core-coverage-matrix-smoke.yml:82-88, examples/metro-m4/uart-smoke.yaml). Beyond the rubric the descriptor declares two zero windows, USB and QSPI, that no firmware opens.</em></p>
+<p><strong>Shims</strong> (hardcoded stubs or engine-less declarative register files — not real fidelity):
+- <code>USB</code> (configs/chips/atsamd51.yaml:69 (type: stub; crates/core/src/peripherals/stub.rs:12)) — CLOSABLE: author-declared zero window — reads return 0 and writes are dropped, so the SAMD51 native-USB device is not modelled; the PR-gated smoke drives SERCOM3 (Serial1) only and no gated firmware opens the window (docs/boards/metro-m4.md:27-28 lists QSPI/USB/NeoPixel as deliberate stub windows).
+- <code>QSPI</code> (configs/chips/atsamd51.yaml:73 (type: stub; crates/core/src/peripherals/stub.rs:12)) — CLOSABLE: author-declared zero window — the SAMD51 QSPI controller (the board's onboard QSPI flash) is not modelled; firmware executes from internal flash and nothing opens the window (docs/boards/metro-m4.md:27-28).</p>
+<h3 id="efr32mg26"><code>efr32mg26</code></h3>
+<p><em>L2 on the conformance board (silicon reset oracle, 243/243 registers — docs/coverage/chip-conformance.md:39) and no tier-1 row, so this entry carries the story. Two firmwares are gated: the bare-metal demo, rebuilt by the nightly coverage-matrix cell examples/brd2709a/uart-smoke.yaml (core-coverage-matrix-smoke.yml:207-213), and the BRD2709A agent deck, named as this chip's behavior_gate in chip_conformance.rs:350 and asserted in process by efr32_deck_behavior::the_deck_firmware_drives_every_part (advisory PR workspace shards; a superset of the nightly CLI cell examples/brd2709a/deck-smoke.yaml, core-coverage-matrix-smoke.yml:221-227 — the CLI cell asserts 100% ink + lit, while the in-process gate adds the uniform top_colour=0x001F check): the committed bare-metal deck drives CMU-gated USART0 as SPI (ST7789 panel — all 170x320 pixels carry the 0x001F the firmware wrote), USART2 as I2S (INMP441 mic — even slots driven, odd tristated), IADC0 (fader code=2048) and five GPIO contacts through the Series-2 port model plus the USART ROUTE registers. That covers the board's spi/i2s/adc/gpio path where no tier-1 fixture exists. What the deck does NOT touch: the analog-bus allocation (the fader converts without allocating — on silicon that bus reads 0), SMU, MSC and the BLE controller — those are the shims and unit-only models below, and no in-tree gated firmware drives MSC or virtual_ble (the XMODEM bootloader is bench-only; firmware-mg26-ble is wired to no lane). I2C/timer are rubric classes, not recorded here.</em></p>
+<p><strong>Functional device/protocol reads</strong> (real driver, decoded value):
+- BRD2709A agent deck — ST7789 panel over USART0/SPI, INMP441 microphone over USART2/I2S, IADC fader and five GPIO contacts, asserted against the published display artifact (lit, every pixel inked, uniform 0x001F), the I2S slot halves (left=4 right=0), the 12-bit conversion (2048) and each contact's idle polarity — <code>firmware-mg26-deck</code> · crates/core/tests/efr32_deck_behavior.rs:138-246 (in process) + examples/brd2709a/deck-smoke.yaml (coverage-matrix cell, core-coverage-matrix-smoke.yml:221-227) (nightly CI)</p>
+<p><strong>Advanced peripherals — unit-tested only</strong> (no firmware drives them): <code>MSC (14 msc.rs unit tests plus efr32_msc_persistence.rs, which drives WREN/ADDRB/WDATA/BUSY and reads the word back through ordinary memory; the only firmware that drives it, firmware-mg26-bootloader, is bench-only — docs/boards/brd2709a.md:58-63)</code>, <code>virtual_ble (LabWired's DECLARED controller at 0x4F000000, NOT silicon — the EFR32 radio is a closed RAIL blob with no register documentation; 13 virtual_ble.rs unit tests plus efr32mg26_ble.rs two-machine advertising/scanning through this descriptor; firmware-mg26-ble exists but no lane runs it)</code></p>
+<p><strong>Shims</strong> (hardcoded stubs or engine-less declarative register files — not real fidelity):
+- <code>gpio_busalloc</code> (configs/chips/efr32mg26.yaml:265-269 (type efr32s2_busalloc; crates/core/src/peripherals/efr32/busalloc.rs:46-52)) — CLOSABLE: the three analog-bus words store and read back and adc0_owns() decodes them (6 unit tests), but IADC0 is not gated on the model — a firmware that never allocates still converts the pad, which reads 0 on silicon. Neither gated in-tree firmware allocates (the deck's fader converts without one; firmware-mg26-adc also skips it and its examples/brd2709a/adc-smoke.yaml is wired into no workflow); the external silabs-arduino analogRead is the one that writes it. Port path: gate IADC0 on adc0_owns, as RouteGate did for the USART/I2C routing.
+- <code>smu</code> (configs/chips/efr32mg26.yaml:529-534 (type efr32s2_smu; crates/core/src/peripherals/efr32/smu.rs:29-49)) — CLOSABLE: register file with header reset values and read-only members (4 unit tests, including SystemInit's exact sequence) but NO protection enforced — PPUFS never latches and the non-secure alias move is not modelled. Declared so a Simplicity-SDK SystemInit (CLKEN1_SET + PPUSATD*_CLR, three instructions in) cannot bus-fault; no in-tree gated firmware drives or polls it.</p>
+<h3 id="imxrt1064"><code>imxrt1064</code></h3>
+<p><em>No tier-1 target (absent from TIER1_TARGETS and tier1-matrix.json). Firmware that runs: the committed Teensy 4.1 smoke ELF, PR-gated as firmware_survival::test_imxrt1064_teensy41_smoke_survival (case firmware_survival.rs:1359-1372) and rebuilt by the nightly coverage-matrix cell examples/teensy-41/uart-smoke.yaml (core-coverage-matrix-smoke.yml:96-102); it un-gates CCM CCGR0/CCGR3, configures GPIO2_IO03 and prints OK over LPUART6 from a soft-float image linked in DTCM because FlexSPI/XIP is not modelled — the chip yaml deliberately claims neither 4 MiB SiP flash nor FlexSPI (configs/chips/imxrt1064.yaml:7-9). imxrt1064_config.rs:23-68 builds the same descriptor. Beyond the rubric there are exactly two blocks, both below; the CCM is the clock class and is firmware-driven.</em></p>
+<p><strong>Shims</strong> (hardcoded stubs or engine-less declarative register files — not real fidelity):
+- <code>iomuxc</code> (configs/chips/imxrt1064.yaml:37-41 (type imx_iomuxc; crates/core/src/peripherals/imx_iomuxc.rs:7-11)) — CLOSABLE: sticky register stub — every SW_MUX_CTL/SW_PAD_CTL/SELECT_INPUT word is stored and read back (2 unit tests pin only that read-back), but no alternate-function routing follows; the smoke never opens the window and a DTCM-linked image cannot reveal a pin-mux mistake.
+- <code>flexspi</code> (configs/chips/imxrt1064.yaml:59-62 (type stub; no schema)) — CLOSABLE: zero window at 0x402A8000 — the FlexSPI controller and XIP are not modelled and the descriptor claims no 4 MiB SiP flash; firmware is linked into DTCM because XIP cannot boot here, and nothing opens the window.</p>
+<h3 id="mkw41z4"><code>mkw41z4</code></h3>
+<p><em>No tier-1 target (absent from TIER1_TARGETS and tier1-matrix.json). Firmware that runs: five PR-gated firmware_survival ELFs — the bare-metal LPUART0 smoke, the genuine NXP MCUXpresso SystemInit + BOARD_BootClockRUN boot (MCG FEE + RSIM RF_OSC_READY + LPUART), unmodified Zephyr v3.7 hello_world, the stock Zephyr fxos8700 sample, and the bare-metal cow-activity tag — plus the tag's nightly CLI cell (examples/kw41z-cow-activity/calm.yaml, core-coverage-matrix-smoke.yml:200-202); strict_onboarding skips this chip (strict_onboarding.rs:99-104). The descriptor's beyond-rubric blocks are all engine-less declarative banks: SIM is driven by the gated vendor boot (SIM.COPC written, CLOCK_SetSimConfig programs SIM.CLKDIV1, BOARD_RfOscInit reads SIM.SDID), SMC only by the uncalled BOARD_BootClockVLPR path, and PMC/RCM/TRNG0 by nothing. The radio wall — BTLE_RF, the nine XCVR</em>* blocks, GENFSK, ZLL, ANT and CMT — is present in the vendored SVD (tests/fixtures/real_world/mkw41z4.svd) and deliberately not modelled: those windows are unmapped, so radio firmware faults loudly (configs/chips/mkw41z4.yaml:7-14)._</p>
+<p><strong>Functional device/protocol reads</strong> (real driver, decoded value):
+- FXOS8700 accelerometer read over Kinetis I2C1 drives a PCD8544 LCD render (cattle-activity tag): pixel-level cow features are asserted in the calm pose, and a tilt injected on the sensor channels (x=+2.0 g, y=-2.0 g, z=1.0 g) must change &gt;=300 framebuffer pixels — <code>kw41z-lcd-activity</code> · firmware_survival.rs:2111-2187 (render) and :2195-2285 (tilt reaction); nightly CLI cell examples/kw41z-cow-activity/calm.yaml (PR gate)</p>
+<p><strong>Shims</strong> (hardcoded stubs or engine-less declarative register files — not real fidelity):
+- <code>SIM</code> (configs/chips/mkw41z4.yaml:67-72 (type declarative; configs/peripherals/mkw41z4/sim.yaml)) — CLOSABLE: engine-less bank — the gated vendor boot writes SIM.COPC (crates/firmware-kw41z-nxp/vendor/system_MKW41Z4.c:87-88), programs SIM.CLKDIV1 via CLOCK_SetSimConfig (vendor/fsl_clock.c:475-479, called from BOARD_BootClockRUN at vendor/clock_config.c:163), and BOARD_RfOscInit reads SIM.SDID (vendor/clock_config.c:174); the hand-set SDID REVID is what makes that routine skip the rev-1.0 workaround (configs/chips/mkw41z4.yaml:62-66), and no gating or clock-divider behaviour follows the writes.
+- <code>PMC</code> (configs/chips/mkw41z4.yaml:91-96 (type declarative; configs/peripherals/mkw41z4/pmc.yaml)) — CLOSABLE: zero-behaviour power-mode bank with no engine; no in-tree firmware opens it — the vendor VLPR path that writes SMC is not called by this board's bring-up.
+- <code>SMC</code> (configs/chips/mkw41z4.yaml:97-102 (type declarative; configs/peripherals/mkw41z4/smc.yaml)) — CLOSABLE: engine-less power-mode controller — BOARD_BootClockVLPR's SMC_SetPowerModeVlpr + PMSTAT poll (vendor/clock_config.c:112-114) is dead code on this board; were it called, the poll would HANG, not pass — PMSTAT is a read-only 0x01 (Run) with no engine behind it to advance it (configs/peripherals/mkw41z4/smc.yaml:75-86), while kSMC_PowerStateVlpr is 0x04 (vendor/fsl_smc.h:63), so SMC_GetPowerModeState (fsl_smc.h:275-277) never equals it and the while loop never exits.
+- <code>RCM</code> (configs/chips/mkw41z4.yaml:103-108 (type declarative; configs/peripherals/mkw41z4/rcm.yaml)) — CLOSABLE: reset-cause/control bank with no engine; no gated firmware reads it.
+- <code>TRNG0</code> (configs/chips/mkw41z4.yaml:203-210 (type declarative; configs/peripherals/mkw41z4/trng0.yaml)) — CLOSABLE: register file only — no entropy source or ready-state engine and IRQ 13 is never pended; no firmware or test drives it (the radio crypto path that would is unmodelled).</p>
+<h3 id="ra4m1"><code>ra4m1</code></h3>
+<p><em>No tier-1 target (absent from TIER1_TARGETS and tier1-matrix.json). Firmware that runs: the bare-metal Uno R4 Minima smoke, PR-gated as firmware_survival::test_ra4m1_uno_r4_smoke_survival (case firmware_survival.rs:1346-1358) and rebuilt by the nightly coverage-matrix cell examples/arduino-uno-r4-minima/uart-smoke.yaml (core-coverage-matrix-smoke.yml:89-95); it waits on the ra_sysc HOCO/OSCSF handshake, drives P111 through PORT1 PCNTR1/PCNTR3 and prints OK over SCI2 TDR, and ra4m1_config.rs:20-45 builds the descriptor. Beyond the rubric the descriptor declares exactly one block — the out-of-scope USB CDC serial.</em></p>
+<p><strong>Shims</strong> (hardcoded stubs or engine-less declarative register files — not real fidelity):
+- <code>usbfs</code> (configs/chips/ra4m1.yaml:63-66 (type stub; crates/core/src/peripherals/stub.rs)) — CLOSABLE: zero window at 0x40090000 — the R7FA4M1AB USB FS device (the board's USB CDC console) is not modelled; the PR-gated smoke drives SCI2 on the D0/D1 header only, and no gated firmware opens the window (docs/boards/arduino-uno-r4-minima.md:25).</p>
+<h3 id="rp2350"><code>rp2350</code></h3>
+<p><em>No tier-1 target (absent from TIER1_TARGETS and tier1-matrix.json). Firmware that runs: the committed bare-metal M33 UART0 smoke, PR-gated as firmware_survival::test_rp2350_demo_survival (case firmware_survival.rs:1523-1533) and rebuilt by the nightly coverage-matrix cell examples/rp2350-demo/io-smoke.yaml (core-coverage-matrix-smoke.yml:276-283); strict_onboarding builds and runs the same ELF through examples/pico2/io-smoke.yaml in the nightly core-full workspace step (core-ci.yml:2062; cross-build-excluded from the PR shards — scripts/ci/workspace-test-shards.json strict_onboarding entry). It proves the RP2350 base map (UART0 at 0x40070000, not the RP2040's 0x40034000) and that a cortex-m-rt image boots from XIP flash 0x10000000; its only other MMIO is a scratch store into the PIO0 window used as a mocked LED (crates/firmware-rp2350-demo/src/main.rs:9-10), so no PIO program is loaded and no state machine is observed. rp2350_clkrst_profile.rs (3 unit tests) pins the moved CLOCKS/RESETS/XOSC/PLL map. Beyond the rubric SYSINFO/XIP_CTRL are engine-less declarative files and POWERMAN/TBMAN are zero stubs; PIO0/1/2 are the shared RP2040 PIO model (9 pio.rs unit tests; hardware_fidelity.rs:194-268 drives it at the RP2040 base, and the PIO onboarding lane boots the rp2040 descriptor, not this one), so all three are firmware-untouched here.</em></p>
+<p><strong>Advanced peripherals — unit-tested only</strong> (no firmware drives them): <code>PIO0</code>, <code>PIO1</code>, <code>PIO2</code></p>
+<p><strong>Shims</strong> (hardcoded stubs or engine-less declarative register files — not real fidelity):
+- <code>SYSINFO</code> (configs/chips/rp2350.yaml:43-48 (type declarative; configs/peripherals/rp2350/sysinfo.yaml)) — CLOSABLE: engine-less register file whose hand-set CHIP_ID (0x30004927) and PLATFORM=ASIC(2) are what a pico-sdk image reads; nothing reads it here — no USB enumeration is modelled, so the values are never exercised.
+- <code>POWERMAN/TICKS</code> (configs/chips/rp2350.yaml:68-71 (type stub)) — CLOSABLE: 48 KiB zero window — reads 0 and writes are dropped, with no power sequencing and no TICKS time source; no firmware opens it.
+- <code>xip_ctrl</code> (configs/chips/rp2350.yaml:124-129 (type declarative; configs/peripherals/rp2350/xip_ctrl.yaml)) — CLOSABLE: declarative cache-control storage — no XIP cache behaviour; firmware executes out of the flash region through the flat memory map and never opens the window.
+- <code>tbman</code> (configs/chips/rp2350.yaml:156-160 (type stub)) — STRUCTURAL: zero window — PLATFORM reads 0, which is the pico-sdk's ASIC path and the correct answer for the twin (configs/chips/rp2350.yaml:156-160); no firmware polls it.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.expand", "navigation.top", "toc.follow", "search.suggest", "search.highlight", "content.code.copy"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
