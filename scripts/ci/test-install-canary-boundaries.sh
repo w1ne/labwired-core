@@ -15,6 +15,11 @@
 #   2. a fetched body is checked to BE the script before it is executed;
 #   3. the canary stays out of surfaces another repository owns.
 #
+# grep, not ripgrep: the Ubuntu runner image does not carry `rg`, and the
+# previous form of this gate — `! rg -q '…'` — read "command not found" as
+# "no violation" and passed vacuously on every PR. A gate that cannot run must
+# not pass, and a tool every runner is guaranteed to have is the fix.
+#
 # Usage: scripts/ci/test-install-canary-boundaries.sh [workflow]
 set -euo pipefail
 
@@ -27,14 +32,14 @@ failures=0
 
 count_matches() {
   local file=$1 pattern=$2
-  rg -c -- "$pattern" "$file" 2>/dev/null || true
+  grep -c -e "$pattern" "$file" 2>/dev/null || true
 }
 
 # check <workflow> — print every contract violation, non-zero when any exist.
 check() {
   local file=$1 bad=0 line fetches checks
 
-  if rg -q 'marketplace\.visualstudio\.com|open-vsx\.org|labwired-vscode|extension is installable' "$file"; then
+  if grep -Eq 'marketplace\.visualstudio\.com|open-vsx\.org|labwired-vscode|extension is installable' "$file"; then
     printf '  the core canary owns the VS Code extension registry again\n' >&2
     bad=1
   fi
@@ -45,12 +50,12 @@ check() {
   while IFS= read -r line; do
     printf '  a published fetch without curl retry: %s\n' "$line" >&2
     bad=1
-  done < <(rg -n 'curl[^|]*https://labwired\.com' "$file" | rg -v -- '--retry' || true)
+  done < <(grep -En 'curl[^|]*https://labwired\.com' "$file" | grep -v -- '--retry' || true)
 
   # A Windows leg may not execute whatever the network handed it: a fetch
   # failure and a broken installer are different failures and must read
   # differently in the log.
-  if rg -q 'irm[[:space:]]+https://labwired\.com/mcp\.ps1[[:space:]]*\|[[:space:]]*iex' "$file"; then
+  if grep -Eq 'irm[[:space:]]+https://labwired\.com/mcp\.ps1[[:space:]]*\|[[:space:]]*iex' "$file"; then
     printf '  a Windows leg still pipes irm straight into iex\n' >&2
     bad=1
   fi
@@ -71,8 +76,8 @@ check() {
   fi
 
   # mcp.sh is fetched to a file and run, so it gets the same body check.
-  if rg -q 'https://labwired\.com/mcp\.sh' "$file" \
-    && ! rg -q "grep -q 'LabWired MCP' mcp\.sh" "$file"; then
+  if grep -q 'https://labwired\.com/mcp\.sh' "$file" \
+    && ! grep -q "grep -q 'LabWired MCP' mcp\.sh" "$file"; then
     printf '  mcp.sh is fetched and executed without checking it is the installer\n' >&2
     bad=1
   fi
