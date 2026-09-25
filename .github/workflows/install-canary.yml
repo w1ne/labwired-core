@@ -6,12 +6,18 @@
 # Nothing was wrong with the code under test — the tests simply never ran what a
 # user runs, on a machine like a user's.
 #
-# Two rules keep it honest:
+# Three rules keep it honest:
 #   1. Fetch the scripts LIVE from labwired.com. The copy in this repo is not
 #      what users execute; the landing site serves the file, and the two have
 #      drifted before.
 #   2. Assert on output, not exit codes alone. An installer that prints
 #      "Installation complete!" and exits 0 is exactly how the last outage hid.
+#   3. Retry a fetch before believing it. A CDN answers a transient 5xx now and
+#      then: on 2026-09-25 one GitHub Pages 500 for mcp.ps1 filed this
+#      workflow's "install path is broken" issue against a path that was
+#      healthy two seconds later. A 4xx is never retried — that is the path
+#      actually being broken — and a fetched body is checked to BE the script
+#      before it runs, so a fetch failure can never read as an installer bug.
 #
 # Every job carries `if: github.repository == 'w1ne/labwired-core'`, because
 # nothing here is a fork's business. The legs fetch labwired.com and this
@@ -64,7 +70,7 @@ jobs:
       - name: Install with the documented one-liner
         run: |
           set -euo pipefail
-          curl -fsSL https://labwired.com/install.sh | LABWIRED_NO_MODIFY_PATH=1 sh
+          curl -fsSL --connect-timeout 20 --retry 3 --retry-delay 2 https://labwired.com/install.sh | LABWIRED_NO_MODIFY_PATH=1 sh
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: The binary starts, and says which version it is
@@ -208,7 +214,7 @@ jobs:
       - name: Install and start
         run: |
           set -eu
-          curl -fsSL https://labwired.com/install.sh | LABWIRED_NO_MODIFY_PATH=1 sh
+          curl -fsSL --connect-timeout 20 --retry 3 --retry-delay 2 https://labwired.com/install.sh | LABWIRED_NO_MODIFY_PATH=1 sh
           "$HOME/.local/bin/labwired" --version
 
   # ── Every chip we document, run with the CLI a user can install ─────────────
@@ -228,7 +234,7 @@ jobs:
       - name: Install with the documented one-liner
         run: |
           set -euo pipefail
-          curl -fsSL https://labwired.com/install.sh | LABWIRED_NO_MODIFY_PATH=1 sh
+          curl -fsSL --connect-timeout 20 --retry 3 --retry-delay 2 https://labwired.com/install.sh | LABWIRED_NO_MODIFY_PATH=1 sh
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       # Firmware comes from the pinned demo release, so this is the experience
@@ -271,7 +277,9 @@ jobs:
       - name: Run the published command, then check what it actually registered
         run: |
           set -euo pipefail
-          curl -fsSL https://labwired.com/mcp.sh -o mcp.sh
+          curl -fsSL --connect-timeout 20 --retry 3 --retry-delay 2 https://labwired.com/mcp.sh -o mcp.sh
+          # The fetch must have returned the installer, not a CDN error page.
+          grep -q 'LabWired MCP' mcp.sh || { echo "::error::labwired.com/mcp.sh did not return the installer"; exit 1; }
           case "${{ matrix.shell }}" in
             busybox) timeout 120 busybox sh mcp.sh ;;
             *)       timeout 120 ${{ matrix.shell }} mcp.sh ;;
@@ -319,14 +327,74 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
-          irm https://labwired.com/mcp.ps1 | iex
+
+          # A published fetch is the only step here that depends on a CDN, so
+          # it retries a transient failure the way a user hits refresh: 5xx,
+          # timeout, dropped connection. A 4xx fails at once — that is the path
+          # actually being broken, and retrying it would only hide it. This leg
+          # filed an issue on 2026-09-25 for a GitHub Pages 500 that was gone
+          # by the time the sibling PowerShell 7 leg finished.
+          function Get-Published($Url) {
+            $delay = 2
+            for ($attempt = 1; $attempt -le 4; $attempt++) {
+              try { return Invoke-RestMethod -Uri $Url -TimeoutSec 30 }
+              catch {
+                $status = $null
+                if ($_.Exception.Response) { $status = [int]$_.Exception.Response.StatusCode }
+                $retry = ($null -eq $status) -or ($status -ge 500) -or ($status -eq 408) -or ($status -eq 429)
+                if (-not $retry -or $attempt -eq 4) { throw }
+                Write-Host "GET $Url failed (status $status); retrying in ${delay}s"
+                Start-Sleep -Seconds $delay
+                $delay *= 2
+              }
+            }
+          }
+
+          # Never execute whatever the network handed back. A CDN error page
+          # rendered as PowerShell reads as an installer bug, so the body is
+          # checked to be the installer before it runs.
+          $script = Get-Published 'https://labwired.com/mcp.ps1'
+          if ($script -notmatch 'LabWired MCP') {
+            throw "labwired.com/mcp.ps1 returned $($script.Length) bytes that are not the installer"
+          }
+          iex $script
 
       - name: Run the published Windows one-liner (PowerShell 7)
         if: matrix.ps == 'pwsh'
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          irm https://labwired.com/mcp.ps1 | iex
+
+          # A published fetch is the only step here that depends on a CDN, so
+          # it retries a transient failure the way a user hits refresh: 5xx,
+          # timeout, dropped connection. A 4xx fails at once — that is the path
+          # actually being broken, and retrying it would only hide it. This leg
+          # filed an issue on 2026-09-25 for a GitHub Pages 500 that was gone
+          # by the time the sibling PowerShell 7 leg finished.
+          function Get-Published($Url) {
+            $delay = 2
+            for ($attempt = 1; $attempt -le 4; $attempt++) {
+              try { return Invoke-RestMethod -Uri $Url -TimeoutSec 30 }
+              catch {
+                $status = $null
+                if ($_.Exception.Response) { $status = [int]$_.Exception.Response.StatusCode }
+                $retry = ($null -eq $status) -or ($status -ge 500) -or ($status -eq 408) -or ($status -eq 429)
+                if (-not $retry -or $attempt -eq 4) { throw }
+                Write-Host "GET $Url failed (status $status); retrying in ${delay}s"
+                Start-Sleep -Seconds $delay
+                $delay *= 2
+              }
+            }
+          }
+
+          # Never execute whatever the network handed back. A CDN error page
+          # rendered as PowerShell reads as an installer bug, so the body is
+          # checked to be the installer before it runs.
+          $script = Get-Published 'https://labwired.com/mcp.ps1'
+          if ($script -notmatch 'LabWired MCP') {
+            throw "labwired.com/mcp.ps1 returned $($script.Length) bytes that are not the installer"
+          }
+          iex $script
 
       - name: LabWired is registered and the other server is still there
         shell: pwsh

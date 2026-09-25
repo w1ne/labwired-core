@@ -71,7 +71,11 @@ jobs:
       - name: Verify installer contract
         run: bash scripts/ci/test-install-script.sh
 
-      - name: Keep extension distribution checks outside core
+      # The canary is what files "a published install path is broken"; its
+      # fetches must retry a transient CDN 5xx and check the body they got,
+      # or one GitHub Pages blip becomes an alarming issue about a healthy
+      # path. This also keeps extension distribution checks outside core.
+      - name: Verify the canary's fetch contract and boundaries
         run: bash scripts/ci/test-install-canary-boundaries.sh
 
       # Docs are checked against the RELEASED CLI, not the workspace build:
