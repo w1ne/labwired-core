@@ -691,6 +691,10 @@ pub struct SystemManifest {
     pub schema_version: String,
     pub name: String,
     pub chip: String, // Reference to chip name or file path
+    /// When non-zero, overrides chip reset_vector_offset for this board
+    /// (SoftDevice/mbed images at 0x10000 on Nano 33 BLE).
+    #[serde(default, deserialize_with = "deserialize_u64_lax")]
+    pub reset_vector_offset: u64,
     #[serde(default)]
     pub memory_overrides: HashMap<String, String>,
     #[serde(default)]
@@ -2673,6 +2677,11 @@ pub fn embedded_device_yaml(device_type: &str) -> Option<&'static str> {
         "bldc-motor" | "bldc_motor" => {
             Some(include_str!("../../../configs/devices/bldc_motor.yaml"))
         }
+        "lsm9ds1_ag" => Some(include_str!("../../../configs/devices/lsm9ds1_ag.yaml")),
+        "lsm9ds1_m" => Some(include_str!("../../../configs/devices/lsm9ds1_m.yaml")),
+        "hts221" => Some(include_str!("../../../configs/devices/hts221.yaml")),
+        "lps22hb" => Some(include_str!("../../../configs/devices/lps22hb.yaml")),
+        "apds9960" => Some(include_str!("../../../configs/devices/apds9960.yaml")),
         _ => None,
     }
 }
@@ -3242,6 +3251,31 @@ pub struct MqttFabricAssertion {
     pub mqtt_fabric: MqttFabricDetails,
 }
 
+/// One pad's transition-count requirement: "this pad must have toggled at
+/// least `min_edges` times". The pin is a `--watch-gpio` ref
+/// (`<peripheral>:<pin>`, e.g. `gpio:4`); a script using this assertion
+/// auto-arms the capture for its pins, so no separate `--watch-gpio` is
+/// required.
+///
+/// This exists so a `gpio_edges` oracle can STOP the run on real evidence
+/// instead of running out the step budget. On boards whose serial is not
+/// captured (ESP32-S3) gpio is the only observable channel: the hosted dual-LED
+/// prove satisfied its oracle at 86M cycles of a 200M budget and still spent
+/// the whole budget — 2.3x wall clock for a verdict already decided.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct GpioEdgesAssertion {
+    pub gpio_edges: GpioEdgesClause,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct GpioEdgesClause {
+    /// `peripheral:pin` watch ref, e.g. `gpio:4` (same spelling `--watch-gpio` takes).
+    pub pin: String,
+    pub min_edges: u64,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(untagged)]
 pub enum TestAssertion {
@@ -3255,6 +3289,7 @@ pub enum TestAssertion {
     MemoryValue(MemoryValueAssertion),
     UdsTester(UdsTesterAssertion),
     MqttFabric(MqttFabricAssertion),
+    GpioEdges(GpioEdgesAssertion),
 }
 
 /// Where a fault is applied. Either a peripheral (by `id`, optionally narrowed

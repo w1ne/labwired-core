@@ -384,6 +384,12 @@ pub struct LogicCapture {
     /// sequence `next_seq - ring.len()`.
     next_seq: u64,
     dropped: u64,
+    /// Per-channel totals since `install`, never decremented by `read_edges`.
+    /// The ring is a bounded window, so a caller asking "has this pad toggled
+    /// N times yet?" (the `gpio_edges` assertion's early-stop) cannot count
+    /// retained edges — they may have overflowed away. These are the honest
+    /// totals, bumped in `push_edge` beside `next_seq`.
+    counts: Vec<u64>,
 }
 
 impl LogicCapture {
@@ -440,6 +446,15 @@ impl LogicCapture {
         self.ring.clear();
         self.next_seq = 0;
         self.dropped = 0;
+        self.counts = vec![0; self.channels.len()];
+    }
+
+    /// Total transitions observed per channel since the watch set was installed
+    /// (indexed by the same `ch` as [`LogicEdge`]). Unlike the retained ring
+    /// window, these are cumulative and survive reads.
+    #[inline]
+    pub fn channel_edge_counts(&self) -> &[u64] {
+        &self.counts
     }
 
     /// Sample every watched pad at engine cycle `now`, recording a transition
@@ -527,6 +542,9 @@ impl LogicCapture {
         if self.ring.len() == LOGIC_RING_CAPACITY {
             self.ring.pop_front();
             self.dropped += 1;
+        }
+        if let Some(count) = self.counts.get_mut(edge.ch as usize) {
+            *count += 1;
         }
         self.ring.push_back(edge);
         self.next_seq += 1;

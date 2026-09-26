@@ -336,6 +336,37 @@ mod logic_capture_tests {
         assert_eq!(batch.cursor, total as u64);
     }
 
+    /// The per-channel totals the `gpio_edges` early-stop reads are CUMULATIVE:
+    /// an edge that overflowed the bounded ring away still counts. Counting
+    /// retained edges instead would make a "has this pad toggled twice?" check
+    /// go backwards after a long capture — the assertion would silently never
+    /// pass on a busy pad.
+    #[test]
+    fn channel_edge_counts_survive_ring_overflow_and_reads() {
+        let mut cap = LogicCapture::new();
+        cap.install(&[Some((0, 0))], &[Some(false)], &[false]);
+
+        let total = LOGIC_RING_CAPACITY + 100;
+        for i in 0..total {
+            cap.sample(i as u64 + 1, |_, _| Some(i % 2 == 0));
+        }
+        let batch = cap.read_edges(0);
+        assert_eq!(batch.edges.len(), LOGIC_RING_CAPACITY, "ring is bounded");
+        assert_eq!(
+            cap.channel_edge_counts(),
+            &[total as u64],
+            "totals count every edge, dropped ones included",
+        );
+
+        // Acknowledging the window must not decrement the totals.
+        let _ = cap.read_edges(batch.cursor);
+        assert_eq!(cap.channel_edge_counts(), &[total as u64]);
+
+        // Re-installing a watch set starts a fresh count.
+        cap.install(&[Some((0, 0))], &[Some(false)], &[false]);
+        assert_eq!(cap.channel_edge_counts(), &[0]);
+    }
+
     #[test]
     fn acknowledged_reads_free_ring_capacity_for_continuous_capture() {
         let mut cap = LogicCapture::new();

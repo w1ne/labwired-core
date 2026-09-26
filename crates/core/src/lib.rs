@@ -1674,6 +1674,16 @@ impl<C: Cpu> Machine<C> {
         self.logic_capture.poll_active()
     }
 
+    /// Cumulative transition totals per watched channel since the watch set was
+    /// installed (same `ch` indexing as [`Machine::logic_read_edges`]). Unlike
+    /// a drained edge batch this is not a bounded window, so it is the honest
+    /// "has this pad toggled N times" evidence a stop condition can consult
+    /// mid-run (the CLI's `gpio_edges` assertion).
+    #[inline]
+    pub fn logic_channel_edge_counts(&self) -> &[u64] {
+        self.logic_capture.channel_edge_counts()
+    }
+
     /// Observe the watched channels at the current cycle boundary: drain the
     /// push tap (event-driven channels) and sample the polled channels.
     /// Hooked into the step loop; the leading `is_active` guard is the entire

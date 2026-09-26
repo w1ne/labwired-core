@@ -1605,6 +1605,7 @@ fn assertion_currently_passes(
     assertion: &TestAssertion,
     uart_text: &str,
     machine: &labwired_core::Machine<impl labwired_core::Cpu>,
+    watch_meta: &[labwired_core::logic_capture::LogicChannelMeta],
 ) -> bool {
     match assertion {
         TestAssertion::UartContains(a) => uart_text.contains(&a.uart_contains),
@@ -1664,25 +1665,58 @@ fn assertion_currently_passes(
         TestAssertion::UdsTester(a) => {
             evaluate_uds_tester(&machine.bus.can_uds_testers, &a.uds_tester).is_ok()
         }
+        // Cumulative transition totals per watched channel, NOT a drained edge
+        // batch: the capture ring is bounded and an edge that overflowed away
+        // must still count toward `min_edges`. The pin is the same
+        // `peripheral:pin` ref `--watch-gpio` takes; the run auto-arms it when
+        // this assertion is present, so the channel exists whenever the pin
+        // parsed.
+        TestAssertion::GpioEdges(a) => {
+            let wanted = a.gpio_edges.pin.trim().to_ascii_lowercase();
+            let Some(meta) = watch_meta.iter().find(|m| {
+                format!("{}:{}", m.peripheral.to_ascii_lowercase(), m.pin) == wanted
+            }) else {
+                return false;
+            };
+            machine
+                .logic_channel_edge_counts()
+                .get(meta.ch as usize)
+                .is_some_and(|&count| count >= a.gpio_edges.min_edges)
+        }
     }
 }
 
 fn requires_fine_grained_observation(assertions: &[TestAssertion]) -> bool {
-    assertions
-        .iter()
-        .any(|assertion| matches!(assertion, TestAssertion::ShutdownLatency(_)))
+    // Which assertions can tolerate a 10k-step observation cadence? UART text
+    // accumulates in a buffer read at check time and push-mode logic-capture
+    // edges are stamped at their write sites, so both are batch-safe; the
+    // settle window (100k steps, 10 checks) absorbs the cadence. Everything
+    // else observes transient machine state (motor speed bands, memory words,
+    // shutdown latencies) that a batch boundary can step over, so those keep
+    // the instruction-by-instruction loop.
+    //
+    // This used to force batch 1 whenever `stop_when_assertions_pass` was on —
+    // which is every hosted acceptance run — halving the S3 step rate
+    // (~1.8M/s → ~0.83M/s) and handing back most of what the gpio early-stop
+    // saves (the dual-LED prove satisfied its oracle at 86M of 200M steps).
+    assertions.iter().any(|assertion| {
+        !matches!(
+            assertion,
+            TestAssertion::UartContains(_)
+                | TestAssertion::UartRegex(_)
+                | TestAssertion::UartOrdered(_)
+                | TestAssertion::GpioEdges(_)
+                | TestAssertion::ExpectedStopReason(_)
+        )
+    })
 }
 
 fn assertion_observation_batch_size(
     otherwise_batch_eligible: bool,
-    stop_when_assertions_pass: bool,
     assertions: &[TestAssertion],
     max_steps: u64,
 ) -> u64 {
-    if otherwise_batch_eligible
-        && !stop_when_assertions_pass
-        && !requires_fine_grained_observation(assertions)
-    {
+    if otherwise_batch_eligible && !requires_fine_grained_observation(assertions) {
         10_000.min(max_steps)
     } else {
         1
@@ -1909,14 +1943,30 @@ fn execute_test_loop<C: labwired_core::Cpu>(
     // tap, and keep the per-channel identity so the drained edges can be shaped
     // into `result.json`'s `logic_edges` block after the run. An empty watch set
     // is a no-op (no channels installed → zero-overhead capture path).
+    //
+    // A `gpio_edges` assertion names pads it needs watched, so those pins are
+    // armed here too: the assertion cannot observe a pad nobody watches, and a
+    // script author writing the assertion should not have to repeat every pin
+    // as a flag. Same ref grammar as `--watch-gpio` (`peripheral:pin`).
+    let watch_specs: Vec<String> = {
+        let mut specs = args.watch_gpio.clone();
+        for assertion in assertions {
+            if let TestAssertion::GpioEdges(a) = assertion {
+                let pin = a.gpio_edges.pin.trim().to_string();
+                if !pin.is_empty() && !specs.iter().any(|s| s.eq_ignore_ascii_case(&pin)) {
+                    specs.push(pin);
+                }
+            }
+        }
+        specs
+    };
     let logic_watch_meta: Vec<labwired_core::logic_capture::LogicChannelMeta> = {
-        let refs: Vec<(String, u8)> = args
-            .watch_gpio
+        let refs: Vec<(String, u8)> = watch_specs
             .iter()
             .filter_map(|spec| parse_watch_gpio_ref(spec))
             .collect();
-        if refs.len() != args.watch_gpio.len() {
-            for spec in &args.watch_gpio {
+        if refs.len() != watch_specs.len() {
+            for spec in &watch_specs {
                 if parse_watch_gpio_ref(spec).is_none() {
                     error!("--watch-gpio: ignoring malformed ref {spec:?} (want `peripheral:pin`)");
                 }
@@ -2016,7 +2066,6 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         && !machine.logic_poll_active();
     let batch_size = assertion_observation_batch_size(
         otherwise_batch_eligible,
-        resolved_limits.stop_when_assertions_pass,
         assertions,
         max_steps,
     );
@@ -2429,7 +2478,7 @@ fn execute_test_loop<C: labwired_core::Cpu>(
                 for (index, assertion) in assertions.iter().enumerate() {
                     let milestone_observed = match assertion {
                         TestAssertion::MotorSpeedReached(_) => {
-                            assertion_currently_passes(assertion, &uart_text, machine)
+                            assertion_currently_passes(assertion, &uart_text, machine, &logic_watch_meta)
                         }
                         _ => false,
                     };
@@ -2447,7 +2496,7 @@ fn execute_test_loop<C: labwired_core::Cpu>(
                             &stimulus_cycles,
                             &uart_milestone_cycles,
                         ))
-                        || assertion_currently_passes(assertion, &uart_text, machine)
+                        || assertion_currently_passes(assertion, &uart_text, machine, &logic_watch_meta)
                 });
                 if all_pass {
                     // Latch the first all-pass step, but not before the absolute
@@ -2514,12 +2563,13 @@ fn execute_test_loop<C: labwired_core::Cpu>(
             TestAssertion::UartRegex(a) => simple_regex_is_match(&a.uart_regex, &uart_text),
             TestAssertion::UartOrdered(_)
             | TestAssertion::MotorState(_)
-            | TestAssertion::MqttFabric(_) => {
-                assertion_currently_passes(assertion, &uart_text, machine)
+            | TestAssertion::MqttFabric(_)
+            | TestAssertion::GpioEdges(_) => {
+                assertion_currently_passes(assertion, &uart_text, machine, &logic_watch_meta)
             }
             TestAssertion::MotorSpeedReached(_) => {
                 assertion_latched[assertion_index]
-                    || assertion_currently_passes(assertion, &uart_text, machine)
+                    || assertion_currently_passes(assertion, &uart_text, machine, &logic_watch_meta)
             }
             TestAssertion::ShutdownLatency(a) => shutdown_latency_passes(
                 &a.shutdown_latency,
@@ -3508,6 +3558,10 @@ fn assertion_short_name(assertion: &TestAssertion) -> String {
                 a.uds_tester.id, a.uds_tester.result
             )
         }
+        TestAssertion::GpioEdges(a) => format!(
+            "gpio_edges: {} >= {} edges",
+            a.gpio_edges.pin, a.gpio_edges.min_edges
+        ),
     };
 
     if s.len() <= MAX_LEN {
@@ -3771,7 +3825,7 @@ mod tests {
         let assertions = [assertion];
         assert!(requires_fine_grained_observation(&assertions));
         assert_eq!(
-            assertion_observation_batch_size(true, false, &assertions, 50_000),
+            assertion_observation_batch_size(true, &assertions, 50_000),
             1
         );
 
@@ -3798,7 +3852,7 @@ mod tests {
         )];
         assert!(!assertion_compatible_jit_eligibility(true, &latency));
         assert_eq!(
-            assertion_observation_batch_size(true, false, &latency, 1_000_000),
+            assertion_observation_batch_size(true, &latency, 1_000_000),
             1
         );
 
@@ -3809,7 +3863,7 @@ mod tests {
         )];
         assert!(assertion_compatible_jit_eligibility(true, &ordinary));
         assert_eq!(
-            assertion_observation_batch_size(true, false, &ordinary, 1_000_000),
+            assertion_observation_batch_size(true, &ordinary, 1_000_000),
             10_000
         );
     }
