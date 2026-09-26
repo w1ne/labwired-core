@@ -369,6 +369,13 @@ fn configure_esp32s3_memmap(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp32s3M
 /// Register all ESP32-S3 peripherals on `bus` and return the CPU + the
 /// shared flash backing buffer.
 pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp32s3Wiring {
+    // The APP_CPU release contract follows the boot mode: a faithful ROM boot
+    // comes out of reset on the real CORE_1_RESETING edge, a thunk-harness
+    // fast-boot on `ets_set_appcpu_boot_addr`. `Machine::step` reads this so
+    // harness app code writing the same register cannot unhalt a core that has
+    // no boot address yet.
+    crate::peripherals::esp_xtensa_common::rom_thunks::APPCPU_REAL_RELEASE
+        .with(|s| s.set(opts.real_reset_boot));
     // SystemBus::new() seeds the bus with STM32 default peripherals
     // (tim2 at 0x4000_0000, tim3 at 0x4000_0400, …). On ESP32-S3 the
     // 0x4000_0000–0x4006_0000 window is the BROM, and on STM32 it's the

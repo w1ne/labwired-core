@@ -146,6 +146,25 @@ impl<C: Cpu> Machine<C> {
             }
             cpu1.unhalt();
         }
+        // Real-hardware release edge: the PRO_CPU cleared CORE_1_RESETING
+        // (SYSTEM_CORE_1_CONTROL_0), which is what silicon's APP_CPU comes out
+        // of reset on. Unlike the thunk path there is no boot address to
+        // install — the APP_CPU boots the real ROM from its reset vector — so
+        // unhalt is the whole release. Runners that step the CPU themselves
+        // (the `run` command) drain this flag in their own loop; every
+        // Machine-based runner (test/verify, wasm, node) needs it here or an
+        // Arduino app's call_start_cpu0 spins forever on
+        // `s_cpu_up[0] & s_cpu_up[1]` waiting for a core that never starts.
+        //
+        // Only the FAITHFUL boot owns this edge. A harness fast-boot runs app
+        // code that writes the same register, and releasing there unhalts the
+        // APP_CPU with no boot address or stack (immediate exception at pc=0).
+        if crate::peripherals::esp_xtensa_common::rom_thunks::APPCPU_REAL_RELEASE.with(|s| s.get())
+            && crate::peripherals::esp_xtensa_common::rom_thunks::APPCPU_RESET_RELEASED
+                .with(|s| s.take())
+        {
+            cpu1.unhalt();
+        }
     }
 
     pub(crate) fn commit_advance_boundary(

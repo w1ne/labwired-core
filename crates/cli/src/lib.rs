@@ -1013,7 +1013,14 @@ pub(crate) fn build_s3_rom_boot_machine(
     bus.refresh_peripheral_index();
     let mut cpu = wiring.cpu;
     cpu.faithful_windows = true;
-    Ok(labwired_core::Machine::new(cpu, bus))
+    // Dual-core die: the APP_CPU starts halted at its ROM reset vector and is
+    // released by the PRO_CPU's real CORE_1_RESETING write (Machine::step
+    // drains the edge). An Arduino app's call_start_cpu0 waits on
+    // `s_cpu_up[0] & s_cpu_up[1]`, so a machine without the second core spins
+    // forever — the "S3 boot eats the step budget before setup" stall.
+    let mut app_cpu = labwired_core::cpu::xtensa_lx7::XtensaLx7::new_app_cpu();
+    app_cpu.faithful_windows = true;
+    Ok(labwired_core::Machine::new(cpu, bus).with_secondary_cpu(app_cpu))
 }
 
 /// Two-node BLE run: boot two ESP32-C3 instances with distinct factory MACs and

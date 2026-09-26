@@ -72,13 +72,17 @@ impl<C: Cpu> Machine<C> {
             || honored_breakpoints
         {
             count = count.min(1);
-        } else if secondary_parked {
-            // Coalesced dual-core idle batch: allow multi-instruction PRO
-            // windows even when tick_interval is 1. Commit advances peripherals
-            // once with elapsed = primary_steps (see boundary.rs).
-            count = count.min(1024);
         } else {
             // Normal path: batch only up to the next peripheral tick boundary.
+            //
+            // There used to be a `secondary_parked` arm here allowing a
+            // 1024-instruction PRO window while APP sat in WAITI. It corrupts
+            // FreeRTOS state: with the S3 ROM-boot firmware the app reached
+            // loop() and then spun forever inside `vListInsert` on a corrupted
+            // list (same PC at 20M and 100M steps), while the identical run at
+            // quantum 1 (the `run` command's loop) reached setup()/loop() at
+            // ~5.2M and toggled its pads. Until dual-core batching can be shown
+            // equivalent to lockstep, a parked APP is not a license to batch.
             let until_tick = tick_interval - (self.total_cycles % tick_interval);
             count = count.min(until_tick);
         }

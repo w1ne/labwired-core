@@ -314,6 +314,23 @@ fn run_rom_boot_no_elf_tail<C: labwired_core::Cpu>(
             .attach_uart_tx_sink(uart_tx.clone(), !args.no_uart_stdout);
     }
     machine.bus.attach_iolink_master_log_sink(uart_tx.clone());
+    // USB Serial/JTAG: an Arduino build with ARDUINO_USB_CDC_ON_BOOT writes
+    // `Serial` here, not UART0. `attach_uart_tx_sink` covers the block, but the
+    // S3 bank's JTAG instance was still echoing to stdout and not landing in
+    // the capture buffer (uart.log stayed at the ROM banner), so attach it
+    // explicitly — the same wiring the fast-boot branch uses.
+    {
+        use labwired_core::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag;
+        for p in machine.bus.peripherals.iter_mut() {
+            if p.name == "usb_serial_jtag" {
+                if let Some(any) = p.dev.as_any_mut() {
+                    if let Some(jtag) = any.downcast_mut::<UsbSerialJtag>() {
+                        jtag.set_sink(Some(uart_tx.clone()), false);
+                    }
+                }
+            }
+        }
+    }
 
     // Universal WiFi adapter: if the diagram carries a `wifi_ap`, attach every
     // real WiFi MAC to a per-lab virtual-WiFi medium so the device associates →
@@ -888,7 +905,12 @@ pub(crate) fn run_test(
                     let mut cpu = wiring.cpu;
                     cpu.faithful_windows = true;
                     bus.attach_uart_tx_sink(uart_tx.clone(), !args.no_uart_stdout);
-                    let mut machine = labwired_core::Machine::new(cpu, bus);
+                    // Same dual-core die as the ELF-less helper: the APP_CPU
+                    // boots the real ROM once the PRO clears CORE_1_RESETING.
+                    let mut app_cpu = labwired_core::cpu::xtensa_lx7::XtensaLx7::new_app_cpu();
+                    app_cpu.faithful_windows = true;
+                    let mut machine = labwired_core::Machine::new(cpu, bus)
+                        .with_secondary_cpu(app_cpu);
                     machine.observers.push(metrics.clone());
                     machine
                 } else {

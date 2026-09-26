@@ -19,22 +19,41 @@
 //! |-------:|-------------------|-----------|-----------|
 //! |  0x00  | EP1               | W         | byte FIFO data; bottom 8 bits of write are appended |
 //! |  0x04  | EP1_CONF          | R         | reads `WR_DONE | SERIAL_IN_EP_DATA_FREE = 0x3` always |
-//! |  0x08  | INT_RAW           | R/W       | stub: 0 |
-//! |  0x0C  | INT_ST            | R         | stub: 0 |
-//! |  0x10  | INT_ENA           | R/W       | stub: 0 (no IRQs in Plan 2) |
-//! |  0x14  | INT_CLR           | W         | stub: NOP |
+//! |  0x08  | INT_RAW           | R         | SOF bit (0) raised every simulated 1 ms |
+//! |  0x0C  | INT_ST            | R         | mirrors INT_RAW |
+//! |  0x10  | INT_ENA           | R/W       | stub: 0 (no IRQs) |
+//! |  0x14  | INT_CLR           | W         | clears the SOF bit |
 //!
 //! Plan 2 does not generate interrupts — esp-hal's println path is
-//! polling-based.
+//! polling-based. The SOF pulse is not an IRQ: it is the host keepalive
+//! Arduino's HWCDC watches. `usb_serial_jtag_sof_tick_hook` reads
+//! `int_raw.sof_int_raw` on every FreeRTOS tick and marks the CDC
+//! disconnected after ~5 ms without one; while disconnected, `HWCDC::write`
+//! drops the bytes instead of queueing them, so a firmware that printed
+//! happily on hardware produced an empty capture here (S3 battery run).
 
-use crate::{Peripheral, SimResult};
+use crate::{Peripheral, PeripheralTickResult, SimResult};
 use std::io::{self, Write};
 use std::sync::{Arc, Mutex};
 
-#[derive(Default)]
+/// S3 CPU clock — the SOF period is derived from it, so the keepalive is
+/// 1 ms of SIMULATED time regardless of wall-clock speed.
+const CPU_CLOCK_HZ: u64 = 240_000_000;
+const SOF_PERIOD_CYCLES: u64 = CPU_CLOCK_HZ / 1000;
+
 pub struct UsbSerialJtag {
     sink: Option<Arc<Mutex<Vec<u8>>>>,
     echo_stdout: bool,
+    /// Cycles accumulated since the last simulated SOF pulse.
+    sof_accum: u64,
+    /// A SOF pulse has arrived and not been cleared through INT_CLR.
+    sof_pending: bool,
+}
+
+impl Default for UsbSerialJtag {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl std::fmt::Debug for UsbSerialJtag {
@@ -53,6 +72,8 @@ impl UsbSerialJtag {
         Self {
             sink: None,
             echo_stdout: true,
+            sof_accum: 0,
+            sof_pending: false,
         }
     }
 
@@ -64,18 +85,18 @@ impl UsbSerialJtag {
 }
 
 impl Peripheral for UsbSerialJtag {
-    // Inert walk: polling-based CDC byte sink (EP1_CONF always ready, no IRQs); tick() is the trait-default no-op.
-    fn needs_legacy_walk(&self) -> bool {
-        false
-    }
-
+    // Walk-active for the SOF keepalive (see `tick_elapsed`): Arduino's HWCDC
+    // drops output when no SOF arrives, so the model must tick even though the
+    // byte sink itself is polling-based (EP1_CONF always ready, no IRQs).
     fn read(&self, offset: u64) -> SimResult<u8> {
         match offset {
             // EP1_CONF (4 bytes, LE): always returns 0x0000_0003
             //   (WR_DONE | SERIAL_IN_EP_DATA_FREE).
             0x04 => Ok(0x03),
             0x05..=0x07 => Ok(0x00),
-            // INT_* registers stub to 0.
+            // INT_RAW / INT_ST bit 0: the host SOF keepalive.
+            0x08 | 0x0C => Ok(u8::from(self.sof_pending)),
+            // Remaining INT_* bytes / registers: no other sources.
             _ => Ok(0),
         }
     }
@@ -83,7 +104,6 @@ impl Peripheral for UsbSerialJtag {
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
         // EP1 (offset 0x00): only the low byte of the LE word is the data
         // byte; other 3 bytes of a 32-bit write are control bits we ignore.
-        // INT_* writes (any other offset) are accepted silently.
         if offset == 0x00 {
             if let Some(sink) = &self.sink {
                 if let Ok(mut g) = sink.lock() {
@@ -95,11 +115,33 @@ impl Peripheral for UsbSerialJtag {
                 let _ = io::stdout().flush();
             }
         }
+        // INT_CLR (0x14) bit 0 clears the SOF latch, exactly as the driver's
+        // `usb_serial_jtag_ll_clr_intsts_mask(SOF)` does after reading it.
+        if offset == 0x14 && value & 0x01 != 0 {
+            self.sof_pending = false;
+        }
         Ok(())
     }
 
+    /// A real full-speed host sends a SOF packet every 1 ms. Arduino's HWCDC
+    /// tick hook treats ~5 ms without one as "unplugged" and DROPS every write
+    /// instead of queueing it — so the keepalive is what makes a `Serial`
+    /// sketch printable on the twin.
+    fn tick_elapsed(&mut self, cycles: u64) -> PeripheralTickResult {
+        self.sof_accum += cycles;
+        if self.sof_accum >= SOF_PERIOD_CYCLES {
+            self.sof_accum %= SOF_PERIOD_CYCLES;
+            self.sof_pending = true;
+        }
+        PeripheralTickResult::default()
+    }
+
     fn legacy_tick_active(&self) -> bool {
-        false
+        true
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        true
     }
 
     fn as_any(&self) -> Option<&dyn std::any::Any> {

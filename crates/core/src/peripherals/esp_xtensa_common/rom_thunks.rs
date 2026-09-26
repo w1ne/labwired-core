@@ -1205,6 +1205,17 @@ thread_local! {
     /// no firmware-symbol hooks.
     pub static APPCPU_RESET_RELEASED: core::cell::Cell<bool> = const { core::cell::Cell::new(false) };
 
+    /// True when this machine's APP_CPU is released by the REAL register edge
+    /// (faithful ROM boot) rather than the harness thunk. Set by
+    /// `configure_xtensa_esp32s3` from `Esp32s3Opts::real_reset_boot`.
+    ///
+    /// `Machine::step`'s release path consults this: a harness fast-boot runs
+    /// app code that writes the SAME CORE_1_RESETING register, and releasing
+    /// there would unhalt the APP_CPU onto a ROM with no boot address or stack
+    /// (observed as an immediate exception at pc=0). Only the faithful boot
+    /// owns the real edge.
+    pub static APPCPU_REAL_RELEASE: core::cell::Cell<bool> = const { core::cell::Cell::new(false) };
+
     /// Firmware DRAM byte addresses of the dual-core startup handshake
     /// flags. Populated per-firmware via [`set_appcpu_up_flags`] once the
     /// symbols are resolved from the ELF; consumed by
