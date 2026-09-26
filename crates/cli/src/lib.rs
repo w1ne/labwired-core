@@ -975,6 +975,47 @@ pub(crate) fn build_c3_rom_boot_machine_from(
     ))
 }
 
+/// Build an ESP32-S3 (Xtensa LX7) faithful ROM-boot machine. The S3 twin of
+/// [`build_c3_rom_boot_machine`] for the ELF-less `test` path: the flash image
+/// (`LABWIRED_ESP32S3_FLASH`) is the program, so no debug ELF is needed.
+///
+/// The wiring itself is `configure_xtensa_esp32s3`, which provisions the real
+/// boot ROM (LABWIRED_ESP32S3_ROM/_DROM, else the toolchain ROM ELF, else the
+/// vendored `crates/core/roms/esp32s3/` dumps) and loads the flash image. NOTE:
+/// it REPLACES the bus's peripheral bank, so callers must attach UART/log sinks
+/// on `machine.bus` AFTER this returns, not on the pre-build bus.
+pub(crate) fn build_s3_rom_boot_machine(
+    mut bus: labwired_core::bus::SystemBus,
+    manifest: Option<&labwired_config::SystemManifest>,
+) -> Result<labwired_core::Machine<labwired_core::cpu::XtensaLx7>, ExitCode> {
+    use labwired_core::system::xtensa::{configure_xtensa_esp32s3, Esp32s3BootMode, Esp32s3Opts};
+    let opts = Esp32s3Opts {
+        real_reset_boot: true,
+        ..Esp32s3Opts::default()
+    };
+    let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
+    if wiring.boot_mode != Esp32s3BootMode::Faithful {
+        eprintln!(
+            "error: --rom-boot needs the real ESP32-S3 boot ROM, but none was found. \
+             Install the ESP toolchain or set LABWIRED_ESP32S3_ROM_ELF \
+             (or pin LABWIRED_ESP32S3_ROM/_DROM)."
+        );
+        return Err(ExitCode::from(EXIT_CONFIG_ERROR));
+    }
+    if let Some(manifest) = manifest {
+        if let Err(e) =
+            labwired_core::system::xtensa::attach_esp32_external_devices(&mut bus, manifest)
+        {
+            eprintln!("error: ESP32-S3 external_devices attach: {e:#}");
+            return Err(ExitCode::from(EXIT_CONFIG_ERROR));
+        }
+    }
+    bus.refresh_peripheral_index();
+    let mut cpu = wiring.cpu;
+    cpu.faithful_windows = true;
+    Ok(labwired_core::Machine::new(cpu, bus))
+}
+
 /// Two-node BLE run: boot two ESP32-C3 instances with distinct factory MACs and
 /// **different firmware** onto the shared BLE air, so one can advertise while
 /// the other scans. `LABWIRED_ESP32C3_FLASH` is node A, `LABWIRED_ESP32C3_FLASH_B`
