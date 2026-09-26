@@ -436,6 +436,7 @@ pub mod integration_tests {
             schema_version: "1.0".to_string(),
             name: "test-system".to_string(),
             chip: "test-chip".to_string(),
+        reset_vector_offset: 0,
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
             cosim_models: Vec::new(),
@@ -615,6 +616,7 @@ pub mod integration_tests {
             schema_version: "1.0".to_string(),
             name: "test-system-2".to_string(),
             chip: "test-chip-2".to_string(),
+        reset_vector_offset: 0,
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
             cosim_models: Vec::new(),
@@ -682,6 +684,7 @@ pub mod integration_tests {
             schema_version: "1.0".to_string(),
             name: "test-system-3".to_string(),
             chip: "test-chip-3".to_string(),
+        reset_vector_offset: 0,
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
             cosim_models: Vec::new(),
@@ -744,6 +747,7 @@ pub mod integration_tests {
             schema_version: "1.0".to_string(),
             name: "test-system-gpio-v2".to_string(),
             chip: "test-chip-gpio-v2".to_string(),
+        reset_vector_offset: 0,
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
             cosim_models: Vec::new(),
@@ -812,6 +816,7 @@ pub mod integration_tests {
             schema_version: "1.0".to_string(),
             name: "test-system-uart-v2".to_string(),
             chip: "test-chip-uart-v2".to_string(),
+        reset_vector_offset: 0,
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
             cosim_models: Vec::new(),
@@ -968,6 +973,7 @@ pub mod integration_tests {
             schema_version: "1.0".to_string(),
             name: "test-system-two-uarts".to_string(),
             chip: "test-chip-two-uarts".to_string(),
+        reset_vector_offset: 0,
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
             cosim_models: Vec::new(),
@@ -987,6 +993,71 @@ pub mod integration_tests {
 
         let data = sink.lock().unwrap().clone();
         assert_eq!(data, vec![b'D']);
+    }
+
+    #[test]
+    fn test_attach_uart_tx_sink_captures_usb_serial_jtag_console() {
+        // ESP32-C3/S3 Arduino `Serial` built with ARDUINO_USB_CDC_ON_BOOT writes
+        // the USB Serial/JTAG block, not UART0. The console sink must reach it
+        // the same way it reaches every UART and the RP2040 USB CDC — otherwise
+        // every app marker is invisible and a prove runs to the full step budget.
+        let chip = ChipDescriptor {
+            schema_version: "1.0".to_string(),
+            name: "test-chip-usb-console".to_string(),
+            arch: Arch::RiscV,
+            core: None,
+            flash: MemoryRange {
+                base: 0x0,
+                size: "128KB".to_string(),
+            },
+            ram: MemoryRange {
+                base: 0x3FC8_0000,
+                size: "20KB".to_string(),
+            },
+            memory_regions: Vec::new(),
+            peripherals: vec![PeripheralConfig {
+                id: "usb_serial_jtag".to_string(),
+                r#type: "esp32s3_usb_serial_jtag".to_string(),
+                base_address: 0x6004_3000,
+                size: Some("1KB".to_string()),
+                irq: None,
+                config: HashMap::new(),
+                clock: None,
+            }],
+            pins: Default::default(),
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
+        };
+
+        let manifest = SystemManifest {
+            parts: Vec::new(),
+            walk_deleted: Some(false),
+            schema_version: "1.0".to_string(),
+            name: "test-system-usb-console".to_string(),
+            chip: "test-chip-usb-console".to_string(),
+            reset_vector_offset: 0,
+            memory_overrides: HashMap::new(),
+            external_devices: Vec::new(),
+            cosim_models: Vec::new(),
+            motor_models: Vec::new(),
+            board_io: Vec::new(),
+            debug_uart: None,
+            wifi_ap: None,
+            peripherals: Vec::new(),
+        };
+
+        let mut bus = crate::bus::SystemBus::from_config(&chip, &manifest).unwrap();
+        let sink = Arc::new(Mutex::new(Vec::new()));
+        bus.attach_uart_tx_sink(sink.clone(), false);
+
+        // EP1_CONF must read DATA_FREE or the firmware's busy-poll wedges before
+        // writing anything. EP1 (offset 0) is the CDC TX FIFO byte.
+        assert_eq!(bus.read_u8(0x6004_3004).unwrap(), 0x03);
+        bus.write_u8(0x6004_3000, b'O').unwrap();
+        bus.write_u8(0x6004_3000, b'K').unwrap();
+
+        let data = sink.lock().unwrap().clone();
+        assert_eq!(data, vec![b'O', b'K']);
     }
 
     #[test]
@@ -1031,6 +1102,7 @@ pub mod integration_tests {
             schema_version: "1.0".to_string(),
             name: "test-system-rcc-v2".to_string(),
             chip: "test-chip-rcc-v2".to_string(),
+        reset_vector_offset: 0,
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
             cosim_models: Vec::new(),
@@ -1096,6 +1168,7 @@ pub mod integration_tests {
             schema_version: "1.0".to_string(),
             name: "test-system-rcc-f4".to_string(),
             chip: "test-chip-rcc-f4".to_string(),
+        reset_vector_offset: 0,
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
             cosim_models: Vec::new(),
@@ -1161,6 +1234,7 @@ pub mod integration_tests {
             schema_version: "1.0".to_string(),
             name: "test-system-gpio-v2-alias".to_string(),
             chip: "test-chip-gpio-v2-alias".to_string(),
+        reset_vector_offset: 0,
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
             cosim_models: Vec::new(),
@@ -2379,6 +2453,7 @@ pub mod integration_tests {
             schema_version: "1.0".to_string(),
             name: "test-system".to_string(),
             chip: "esp32c3-timg-test".to_string(),
+        reset_vector_offset: 0,
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
             cosim_models: Vec::new(),
@@ -2473,6 +2548,7 @@ pub mod integration_tests {
             schema_version: "1.0".to_string(),
             name: "esp32c3-gpio-test".to_string(),
             chip: "esp32c3-gpio-test".to_string(),
+        reset_vector_offset: 0,
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
             board_io: Vec::new(),
@@ -2549,6 +2625,7 @@ pub mod integration_tests {
             schema_version: "1.0".to_string(),
             name: "esp32c3-spi-dc-test".to_string(),
             chip: "esp32c3-spi-dc-test".to_string(),
+        reset_vector_offset: 0,
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
             board_io: Vec::new(),
@@ -2764,6 +2841,7 @@ pub mod integration_tests {
             schema_version: "1.0".to_string(),
             name: "esp32c3-i2c-trace-test".to_string(),
             chip: "esp32c3-i2c-trace-test".to_string(),
+        reset_vector_offset: 0,
             memory_overrides: HashMap::new(),
             external_devices: vec![labwired_config::ExternalDevice {
                 id: "oled".to_string(),
@@ -2906,6 +2984,7 @@ pub mod integration_tests {
                 schema_version: "1.0".to_string(),
                 name: "two-family-trace".to_string(),
                 chip: "two-family-trace".to_string(),
+        reset_vector_offset: 0,
                 memory_overrides: HashMap::new(),
                 external_devices: vec![labwired_config::ExternalDevice {
                     id: "oled".to_string(),

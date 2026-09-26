@@ -465,6 +465,22 @@ impl SystemBus {
                 uart.silence_stdout_echo_if(echo_stdout);
                 continue;
             }
+            // ESP32-C3 / S3 USB Serial/JTAG console. An Arduino sketch built
+            // with ARDUINO_USB_CDC_ON_BOOT writes `Serial` to this block, not
+            // UART0 — the same USB-console role the RP2040 arm below covers.
+            // Without this arm those bytes reached no sink: uart.log stayed
+            // empty, `uart_contains` could never match an app marker, and a
+            // C3 prove ran to the full 200M-step budget.
+            //
+            // Capture-only (echo_stdout = false): the boot banner already
+            // reaches stdout through UART0, so echoing here would double every
+            // boot character.
+            if let Some(usb) = any
+                .downcast_mut::<crate::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag>()
+            {
+                usb.set_sink(Some(sink.clone()), false);
+                continue;
+            }
             // RP2040 USB CDC: an Arduino Mbed-OS sketch's default `Serial` is
             // USB CDC, so the console text arrives on the USB bulk-IN endpoint,
             // not UART0. Route it into the same capture sink.
