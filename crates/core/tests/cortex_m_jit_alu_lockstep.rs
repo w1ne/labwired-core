@@ -54,7 +54,7 @@ fn lsls_imm(rd: u8, rm: u8, imm: u8) -> u16 {
 }
 fn b_to(from_pc: i32, to_pc: i32) -> u16 {
     let offset = to_pc - (from_pc + 4);
-    let imm11 = ((offset / 2) as i32) as u16 & 0x7FF;
+    let imm11 = (offset / 2) as u16 & 0x7FF;
     0xE000 | imm11
 }
 
@@ -1895,7 +1895,8 @@ fn assert_nzcv(interp: &Machine<CortexM>, jit: &Machine<CortexM>, what: &str) {
 
 #[test]
 fn adc_sbc_rsbs_shift_mul32_match_interpreter() {
-    let cases: &[(&str, Vec<u8>, fn(&mut Machine<CortexM>))] = &[
+    type Case = (&'static str, Vec<u8>, fn(&mut Machine<CortexM>));
+    let cases: &[Case] = &[
         (
             "adcs r0, r2",
             pad_alu_then(adc(0, 2), 14),
