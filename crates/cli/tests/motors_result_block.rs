@@ -136,3 +136,96 @@ motor_models:
 
     let _ = std::fs::remove_dir_all(&tmp);
 }
+
+/// The hosted/canvas emit shape: the plant rides `external_devices` as a
+/// declarative `dc-motor` (there is no `motor_models:` section), and an
+/// H-bridge-driven motor has no brake/enable/encoder wires, so the emitter
+/// omits those bindings entirely. This must attach through the descriptor's
+/// `dc_motor` primitive rather than dying as an unknown primitive at config
+/// time.
+#[test]
+fn external_device_dc_motor_attaches() {
+    let tmp = labwired_cli::test_support::unique_temp_dir("lw-motors-external");
+    std::fs::create_dir_all(&tmp).unwrap();
+    let chip = tmp.join("chip.yaml");
+    let system = tmp.join("system.yaml");
+    let script = tmp.join("script.yaml");
+    std::fs::write(
+        &chip,
+        r#"
+name: motor-test
+arch: arm
+core: cortex-m4
+flash: { base: 0x08000000, size: "1MB" }
+ram: { base: 0x20000000, size: "192KB" }
+peripherals:
+  - id: gpioa
+    type: gpio
+    base_address: 0x48000000
+    size: "1KB"
+    config: { profile: stm32v2 }
+"#,
+    )
+    .unwrap();
+    std::fs::write(
+        &system,
+        r#"
+name: motors-external
+chip: chip.yaml
+external_devices:
+  - id: motor
+    type: dc-motor
+    connection: gpio
+    config: { pwm_pin: PA0, direction_pin: PA1 }
+"#,
+    )
+    .unwrap();
+    std::fs::write(
+        &script,
+        format!(
+            "schema_version: \"1.0\"\ninputs:\n  firmware: \"\"\n  system: \"{}\"\nlimits:\n  max_steps: 1000\nassertions:\n  - expected_stop_reason: max_steps\n",
+            system.display()
+        ),
+    )
+    .unwrap();
+    let out = tmp.join("out");
+    let firmware = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/nucleo-f407-smoke.elf");
+    assert!(firmware.exists(), "missing fixture: {}", firmware.display());
+
+    let output = Command::new(env!("CARGO_BIN_EXE_labwired"))
+        .args([
+            "test",
+            "--script",
+            script.to_str().unwrap(),
+            "--firmware",
+            firmware.to_str().unwrap(),
+            "--no-uart-stdout",
+            "--no-key",
+            "--output-dir",
+            out.to_str().unwrap(),
+        ])
+        .output()
+        .expect("spawn labwired");
+    let result = std::fs::read_to_string(out.join("result.json")).unwrap_or_else(|e| {
+        panic!(
+            "no result.json ({e}); stderr:\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        )
+    });
+    assert!(
+        !result.contains("\"config_error\""),
+        "run ended in config_error:\n{result}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
+    let motors = parsed["motors"].as_array().expect("motors block");
+    assert_eq!(motors[0]["id"], "motor");
+    assert_eq!(
+        motors.len(),
+        1,
+        "the declarative motor must attach exactly once:\n{result}"
+    );
+
+    let _ = std::fs::remove_dir_all(&tmp);
+}

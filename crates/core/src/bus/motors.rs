@@ -107,10 +107,27 @@ impl SystemBus {
     }
 
     pub(super) fn install_motor_models(&mut self, manifest: &SystemManifest) -> anyhow::Result<()> {
-        for config in manifest.resolved_motor_models()? {
-            self.motors.push(match config {
-                MotorModelConfig::Dc(config) => self.build_dc_motor(*config)?,
-                MotorModelConfig::Bldc(config) => self.build_bldc_motor(*config)?,
+        // Only the typed `motor_models:` section is built here. An
+        // `external_devices` motor (`type: dc-motor`, the hosted emit shape)
+        // attaches on the universal pass through its descriptor primitive,
+        // which fills any omitted physics field from the descriptor's declared
+        // defaults. `resolved_motor_models()` would demand every field be
+        // spelled out, and building the entry here too would double every
+        // hosted plant.
+        let mut seen = std::collections::HashMap::<String, usize>::new();
+        for (index, model) in manifest.motor_models.iter().enumerate() {
+            if let Some(previous) = seen.insert(model.id().to_owned(), index) {
+                anyhow::bail!(
+                    "motor_models[{index}].id duplicates motor id declared at motor_models[{previous}].id"
+                );
+            }
+            let issues = model.validate();
+            if !issues.is_empty() {
+                anyhow::bail!(issues.join("; "));
+            }
+            self.motors.push(match model {
+                MotorModelConfig::Dc(config) => self.build_dc_motor(config.as_ref().clone())?,
+                MotorModelConfig::Bldc(config) => self.build_bldc_motor(config.as_ref().clone())?,
             });
         }
         self.motor_cycle_anchor = self.current_cycle;
@@ -147,7 +164,7 @@ impl SystemBus {
         Ok(ResolvedPin { peripheral, bit })
     }
 
-    fn build_dc_motor(&self, c: BrushedMotorConfig) -> anyhow::Result<MotorRuntime> {
+    pub(super) fn build_dc_motor(&self, c: BrushedMotorConfig) -> anyhow::Result<MotorRuntime> {
         let shaft = ShaftParams {
             inertia_kg_m2: c.rotor_inertia_kg_m2,
             viscous_friction_nm_per_rad_s: c.viscous_friction_nm_per_rad_s,

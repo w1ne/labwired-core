@@ -29,7 +29,7 @@
 
 use super::SystemBus;
 use anyhow::{anyhow, Result};
-use labwired_config::{DeviceDescriptor, ExternalDevice};
+use labwired_config::{BrushedMotorConfig, DeviceDescriptor, ExternalDevice};
 
 /// Parse the declarative descriptor for `device_type`, if one is embedded.
 /// Returns `Ok(None)` when the type is not declarative (the caller then falls
@@ -55,6 +55,7 @@ impl SystemBus {
             "matrix" => self.attach_matrix(ext, desc),
             "one_wire" => self.attach_one_wire(ext, desc),
             "pulse_echo" => self.attach_pulse_echo(ext, desc),
+            "dc_motor" => self.attach_dc_motor(ext, desc),
             other => Err(anyhow!(
                 "declarative device '{}' names unknown primitive '{}'",
                 ext.id,
@@ -225,6 +226,65 @@ impl SystemBus {
             ),
         ));
         Ok(())
+    }
+
+    /// `dc_motor` primitive → the brushed DC plant (the same runtime the
+    /// `motor_models:` manifest section builds). The descriptor binds the
+    /// plant's simulation pins; brake/enable/encoder pins are OPTIONAL — a
+    /// motor behind an H-bridge has none of them wired, and the emitter omits
+    /// those bindings (`required: false`).
+    fn attach_dc_motor(&mut self, ext: &ExternalDevice, desc: &DeviceDescriptor) -> Result<()> {
+        let pwm_pin = self.pin_config(ext, desc, "pwm", "PA0")?;
+        let direction_pin = self.pin_config(ext, desc, "direction", "PA1")?;
+        let config = BrushedMotorConfig {
+            id: ext.id.clone(),
+            resistance_ohm: param_f64(desc, ext, "resistance_ohm", 1.2),
+            inductance_h: param_f64(desc, ext, "inductance_h", 0.002),
+            torque_constant_nm_per_a: param_f64(desc, ext, "torque_constant_nm_per_a", 0.08),
+            back_emf_constant_v_per_rad_s: param_f64(
+                desc,
+                ext,
+                "back_emf_constant_v_per_rad_s",
+                0.08,
+            ),
+            rotor_inertia_kg_m2: param_f64(desc, ext, "rotor_inertia_kg_m2", 0.00004),
+            viscous_friction_nm_per_rad_s: param_f64(
+                desc,
+                ext,
+                "viscous_friction_nm_per_rad_s",
+                0.00001,
+            ),
+            supply_voltage_v: param_f64(desc, ext, "supply_voltage_v", 12.0),
+            load_torque_nm: param_f64(desc, ext, "load_torque_nm", 0.0),
+            encoder_cpr: param_u64(desc, ext, "encoder_cpr", 1024) as u32,
+            simulation_clock_hz: param_u64(desc, ext, "simulation_clock_hz", 80_000_000),
+            pwm_pin,
+            direction_pin,
+            brake_pin: self.optional_pin_config(ext, desc, "brake"),
+            enable_pin: self.optional_pin_config(ext, desc, "enable"),
+            encoder_a_pin: self.optional_pin_config(ext, desc, "encoder_a"),
+            encoder_b_pin: self.optional_pin_config(ext, desc, "encoder_b"),
+            encoder_index_pin: self.optional_pin_config(ext, desc, "encoder_index"),
+            fault_pin: self.optional_pin_config(ext, desc, "fault"),
+        };
+        let runtime = self.build_dc_motor(config)?;
+        self.motors.push(runtime);
+        Ok(())
+    }
+
+    /// Optional pin role: present in the descriptor but ABSENT from the emitted
+    /// config (the emitter omits unwired optional bindings) → `None`. The
+    /// `pin_config` default is deliberately empty so a missing key cannot be
+    /// mistaken for a real pin label.
+    fn optional_pin_config(
+        &self,
+        ext: &ExternalDevice,
+        desc: &DeviceDescriptor,
+        role: &str,
+    ) -> Option<String> {
+        self.pin_config(ext, desc, role, "")
+            .ok()
+            .filter(|pin| !pin.is_empty())
     }
 
     /// Resolve the pad label for the abstract pin `role`: read the `config:` key
