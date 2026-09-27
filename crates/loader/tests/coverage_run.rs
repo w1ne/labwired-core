@@ -47,7 +47,10 @@ fn report(s: &Session) -> CoverageReport {
     CoverageReport::from_run(&symbols, s.coverage().expect("coverage is on"))
 }
 
-fn function<'a>(r: &'a CoverageReport, name: &str) -> &'a labwired_loader::coverage::FunctionCoverage {
+fn function<'a>(
+    r: &'a CoverageReport,
+    name: &str,
+) -> &'a labwired_loader::coverage::FunctionCoverage {
     r.functions
         .iter()
         .find(|f| f.name == name)
@@ -64,9 +67,15 @@ fn full_run_maps_lines_and_functions() {
     let r = report(&s);
 
     let main_c = r.files.iter().find(|f| f.file == "main.c").unwrap();
-    assert_eq!(main_c.lines_hit, main_c.lines_found, "every main.c statement runs");
+    assert_eq!(
+        main_c.lines_hit, main_c.lines_found,
+        "every main.c statement runs"
+    );
     let startup = r.files.iter().find(|f| f.file == "startup.c").unwrap();
-    assert!(startup.lines_hit < startup.lines_found, "fault handlers never run");
+    assert!(
+        startup.lines_hit < startup.lines_found,
+        "fault handlers never run"
+    );
     assert!(r.covered_statements < r.total_statements);
 
     let main = function(&r, "main");
@@ -77,7 +86,10 @@ fn full_run_maps_lines_and_functions() {
     let hf = function(&r, "HardFault_Handler");
     assert!(!hf.entered);
     assert_eq!(hf.lines_hit, 0);
-    assert_eq!(r.covered_functions, r.functions.iter().filter(|f| f.entered).count());
+    assert_eq!(
+        r.covered_functions,
+        r.functions.iter().filter(|f| f.entered).count()
+    );
     assert!(r.covered_functions < r.total_functions);
     assert!(r.total_branches > 0 && r.covered_branches > 0);
 

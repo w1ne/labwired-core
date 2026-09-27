@@ -278,7 +278,10 @@ impl CoverageReport {
             }
             if !fns.is_empty() {
                 out.push_str(&format!("FNF:{}\n", fns.len()));
-                out.push_str(&format!("FNH:{}\n", fns.iter().filter(|f| f.entered).count()));
+                out.push_str(&format!(
+                    "FNH:{}\n",
+                    fns.iter().filter(|f| f.entered).count()
+                ));
             }
             for l in &f.lines {
                 out.push_str(&format!(

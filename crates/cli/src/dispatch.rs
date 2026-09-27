@@ -130,6 +130,15 @@ pub(crate) enum Commands {
     /// PC, location, registers, and serial. Observational only: never claims
     /// oracle proof (`proven` is always false).
     DebugProbe(commands::debug_probe::DebugProbeArgs),
+
+    /// Inject scheduled faults (register/memory bit flips, instruction skips)
+    /// and report the lockstep verdict against a golden run, as JSON.
+    ///
+    /// Builds the firmware twice from the same inputs, fires the faults on one
+    /// copy at their cycles, steps both one instruction at a time and compares
+    /// their registers, console and flipped memory. Verdicts: masked, latent,
+    /// diverged, output_changed, crashed, not_injected.
+    FaultInject(commands::fault_inject::FaultInjectArgs),
 }
 
 /// The chip-YAML lookup [`labwired_config::ChipDescriptor::resolve_with`]
@@ -216,6 +225,9 @@ pub fn run_with_plugins(plugins: &[&dyn labwired_core::plugin::ChipPlugin]) -> E
         Some(Commands::CosimStep(args)) => commands::cosim::run_cosim_step(args),
         Some(Commands::Fuzz(args)) => commands::fuzz::run_fuzz(args),
         Some(Commands::DebugProbe(args)) => commands::debug_probe::run(args, plugins),
+        Some(Commands::FaultInject(args)) => {
+            commands::fault_inject::run_fault_inject(args, plugins)
+        }
         None => commands::run::run_interactive(cli, plugins),
     }
 }
