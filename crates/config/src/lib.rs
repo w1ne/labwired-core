@@ -236,10 +236,21 @@ pub struct BrushedMotorConfig {
     pub simulation_clock_hz: u64,
     pub pwm_pin: String,
     pub direction_pin: String,
-    pub brake_pin: String,
-    pub enable_pin: String,
-    pub encoder_a_pin: String,
-    pub encoder_b_pin: String,
+    /// Brake input. Absent = the twin never brakes (coasts at zero drive).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub brake_pin: Option<String>,
+    /// Enable input. Absent = the twin is always enabled. An H-bridge drives
+    /// its load through the PWM pin, so binding "enable" to that same PWM pin
+    /// would gate the plant at PWM rate.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub enable_pin: Option<String>,
+    /// Quadrature feedback. Absent = the twin runs open-loop (no encoder
+    /// outputs). A motor behind an H-bridge commonly has no encoder wired, and
+    /// the plant's absence would otherwise drop the whole device block.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub encoder_a_pin: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub encoder_b_pin: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub encoder_index_pin: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -296,6 +307,10 @@ pub struct BldcMotorConfig {
 
 fn default_motor_simulation_clock_hz() -> u64 {
     80_000_000
+}
+
+fn default_motor_speed_unbounded_rpm() -> f64 {
+    f64::MAX
 }
 
 fn default_bldc_timer_name() -> String {
@@ -375,14 +390,18 @@ impl MotorModelConfig {
                     [
                         ("pwm_pin", config.pwm_pin.as_str()),
                         ("direction_pin", config.direction_pin.as_str()),
-                        ("brake_pin", config.brake_pin.as_str()),
-                        ("enable_pin", config.enable_pin.as_str()),
-                        ("encoder_a_pin", config.encoder_a_pin.as_str()),
-                        ("encoder_b_pin", config.encoder_b_pin.as_str()),
                     ],
                     config.encoder_index_pin.as_deref(),
                     &mut issues,
                 );
+                for (field, pin) in [
+                    ("brake_pin", config.brake_pin.as_deref()),
+                    ("enable_pin", config.enable_pin.as_deref()),
+                    ("encoder_a_pin", config.encoder_a_pin.as_deref()),
+                    ("encoder_b_pin", config.encoder_b_pin.as_deref()),
+                ] {
+                    validate_optional_motor_pin(&config.id, field, pin, &mut issues);
+                }
                 validate_optional_motor_pin(
                     &config.id,
                     "fault_pin",
@@ -3050,6 +3069,7 @@ pub struct UartOrderedAssertion {
 pub struct MotorSpeedReachedDetails {
     pub id: String,
     pub min_abs_rpm: f64,
+    #[serde(default = "default_motor_speed_unbounded_rpm")]
     pub max_abs_rpm: f64,
 }
 

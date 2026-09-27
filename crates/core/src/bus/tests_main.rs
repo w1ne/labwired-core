@@ -584,6 +584,7 @@ fn test_from_config_attaches_adxl345_external_device_to_i2c() {
         schema_version: "1.0".to_string(),
         name: "adxl345-test".to_string(),
         chip: "../chips/stm32f103.yaml".to_string(),
+        reset_vector_offset: 0,
         memory_overrides: HashMap::new(),
         external_devices: vec![ExternalDevice {
             id: "adxl345".to_string(),
@@ -1101,6 +1102,7 @@ fn test_esp32c3_i2c_gpio_matrix_distinguishes_gpio45_from_gpio67() {
             schema_version: "1.0".to_string(),
             name: "c3-physical-i2c-route".to_string(),
             chip: "../chips/esp32c3.yaml".to_string(),
+            reset_vector_offset: 0,
             memory_overrides: HashMap::new(),
             external_devices: vec![ExternalDevice {
                 id: "oled".to_string(),
@@ -1322,6 +1324,7 @@ fn test_from_config_attaches_bmp280_to_esp32c3_i2c0() {
         schema_version: "1.0".to_string(),
         name: "esp32c3-bmp280-test".to_string(),
         chip: "../chips/esp32c3.yaml".to_string(),
+        reset_vector_offset: 0,
         memory_overrides: HashMap::new(),
         external_devices: vec![ExternalDevice {
             id: "bmp280".to_string(),
@@ -1475,6 +1478,7 @@ fn test_from_config_attaches_mlx90640_to_esp32c3_i2c0_and_reads_eeprom() {
         schema_version: "1.0".to_string(),
         name: "esp32c3-mlx90640-test".to_string(),
         chip: "../chips/esp32c3.yaml".to_string(),
+        reset_vector_offset: 0,
         memory_overrides: HashMap::new(),
         external_devices: vec![ExternalDevice {
             id: "thermal_cam".to_string(),
@@ -2293,6 +2297,7 @@ fn empty_manifest() -> SystemManifest {
         schema_version: "1.0".to_string(),
         name: "bit-band-test".to_string(),
         chip: "unused".to_string(),
+        reset_vector_offset: 0,
         memory_overrides: std::collections::HashMap::new(),
         external_devices: Vec::new(),
         board_io: Vec::new(),
@@ -2413,6 +2418,61 @@ motor_models:
     assert!(
         slower_clock.motor_snapshots()[0].current_a.unwrap() > advanced[0].current_a.unwrap() * 1.9,
         "the authoritative configured clock must scale simulator delta"
+    );
+}
+
+#[test]
+fn bus_motor_dc_runs_with_no_brake_or_enable_pin() {
+    let chip: ChipDescriptor = serde_yaml::from_str(
+        r#"
+name: motor-test
+arch: arm
+core: cortex-m4
+flash: { base: 0x08000000, size: "64KB" }
+ram: { base: 0x20000000, size: "32KB" }
+peripherals:
+  - id: gpioa
+    type: gpio
+    base_address: 0x48000000
+    size: "1KB"
+    config: { profile: stm32v2 }
+"#,
+    )
+    .unwrap();
+    // brake_pin / enable_pin / encoder pins are ABSENT: the twin must run
+    // always-enabled, never-brake, and with no feedback (the H-bridge case,
+    // where EN is the PWM and the bridge gates the drive itself).
+    let manifest: SystemManifest = serde_yaml::from_str(
+        r#"
+name: dc-motor-no-enable
+chip: unused
+motor_models:
+  - kind: dc
+    id: wheel
+    resistance_ohm: 1.0
+    inductance_h: 0.001
+    torque_constant_nm_per_a: 0.1
+    back_emf_constant_v_per_rad_s: 0.1
+    rotor_inertia_kg_m2: 0.01
+    viscous_friction_nm_per_rad_s: 0.001
+    supply_voltage_v: 12.0
+    load_torque_nm: 0.0
+    encoder_cpr: 16
+    pwm_pin: PA0
+    direction_pin: PA1
+"#,
+    )
+    .unwrap();
+    let mut bus = SystemBus::from_config(&chip, &manifest).unwrap();
+    bus.write_u32(0x4800_0014, 0b0011).unwrap(); // PWM + direction, no enable bit
+    bus.set_current_cycle(100);
+    let (mut interrupts, mut costs) = (Vec::new(), Vec::new());
+    bus.tick_peripherals_fully_into(&mut interrupts, &mut costs);
+    let snapshot = bus.motor_snapshots();
+    assert_eq!(snapshot[0].control_state, "forward");
+    assert!(
+        snapshot[0].speed_rpm > 0.0,
+        "no enable pin must mean always enabled"
     );
 }
 
@@ -2840,6 +2900,7 @@ fn manifest_with_external_device(
         schema_version: "1.0".to_string(),
         name: "adxl345-test".to_string(),
         chip: "../chips/stm32f103.yaml".to_string(),
+        reset_vector_offset: 0,
         memory_overrides: std::collections::HashMap::new(),
         external_devices: vec![labwired_config::ExternalDevice {
             id: "sensor1".to_string(),

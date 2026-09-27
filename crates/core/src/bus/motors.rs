@@ -58,9 +58,9 @@ pub(super) enum MotorRuntime {
         encoder: QuadratureEncoder,
         pwm: ResolvedPin,
         direction: ResolvedPin,
-        brake: ResolvedPin,
-        enable: ResolvedPin,
-        feedback: [ResolvedPin; 2],
+        brake: Option<ResolvedPin>,
+        enable: Option<ResolvedPin>,
+        feedback: Option<[ResolvedPin; 2]>,
         index: Option<ResolvedPin>,
         fault: Option<ResolvedPin>,
         simulation_clock_hz: u64,
@@ -158,12 +158,23 @@ impl SystemBus {
         Ok(MotorRuntime::Dc {
             pwm: self.resolve_motor_pin(&c.id, "pwm", &c.pwm_pin)?,
             direction: self.resolve_motor_pin(&c.id, "direction", &c.direction_pin)?,
-            brake: self.resolve_motor_pin(&c.id, "brake", &c.brake_pin)?,
-            enable: self.resolve_motor_pin(&c.id, "enable", &c.enable_pin)?,
-            feedback: [
-                self.resolve_motor_input(&c.id, "encoder A", &c.encoder_a_pin)?,
-                self.resolve_motor_input(&c.id, "encoder B", &c.encoder_b_pin)?,
-            ],
+            brake: c
+                .brake_pin
+                .as_deref()
+                .map(|p| self.resolve_motor_pin(&c.id, "brake", p))
+                .transpose()?,
+            enable: c
+                .enable_pin
+                .as_deref()
+                .map(|p| self.resolve_motor_pin(&c.id, "enable", p))
+                .transpose()?,
+            feedback: match (c.encoder_a_pin.as_deref(), c.encoder_b_pin.as_deref()) {
+                (Some(a), Some(b)) => Some([
+                    self.resolve_motor_input(&c.id, "encoder A", a)?,
+                    self.resolve_motor_input(&c.id, "encoder B", b)?,
+                ]),
+                _ => None,
+            },
             index: c
                 .encoder_index_pin
                 .as_deref()
@@ -320,8 +331,8 @@ impl SystemBus {
                     ..
                 } => {
                     let dt_s = elapsed as f64 / *simulation_clock_hz as f64;
-                    let enabled = self.pin_output(*enable);
-                    let braking = self.pin_output(*brake);
+                    let enabled = enable.is_none_or(|p| self.pin_output(p));
+                    let braking = brake.is_some_and(|p| self.pin_output(p));
                     let duty = f64::from(self.pin_output(*pwm));
                     let state = if !enabled {
                         HBridgeState::Coast
@@ -351,7 +362,7 @@ impl SystemBus {
                         }
                     }
                     let pins = encoder.sample(plant.snapshot().position_rad).ok();
-                    if let Some(pins) = pins {
+                    if let (Some(feedback), Some(pins)) = (feedback.as_ref(), pins) {
                         self.drive_input(feedback[0], pins.a);
                         self.drive_input(feedback[1], pins.b);
                         if let Some(index) = index {
