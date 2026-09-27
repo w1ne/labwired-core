@@ -50,7 +50,7 @@ class Sim:
     """One ELF, one machine. Execution only advances during run_for/expect.
 
     ``uart`` is a peripheral ID, and ``set_pin`` takes a board_io binding ID.
-    ``expect`` and ``read_uart`` consume one shared stream; transcripts do not.
+    ``expect``, ``read_uart`` and ``read_uart_bytes`` consume one shared stream; transcripts do not.
     """
     def __init__(self, elf, *, chip=None, system=None, uart=None, coverage=False):
         if (chip is None) == (system is None):
@@ -121,7 +121,12 @@ class Sim:
         self._open().send(bytes(data))
 
     def read_uart(self):
-        return bytes(self._open().read_uart()).decode('utf-8', errors='replace')
+        """Drain unread UART output as text. Invalid UTF-8 becomes U+FFFD."""
+        return self.read_uart_bytes().decode('utf-8', errors='replace')
+
+    def read_uart_bytes(self):
+        """Drain unread UART output as raw bytes, with no decode."""
+        return bytes(self._open().read_uart())
 
     def uart_transcript(self):
         return self._transcript if self.closed else self._session.uart_transcript()

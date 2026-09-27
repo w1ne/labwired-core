@@ -5,12 +5,24 @@ build-backend = "maturin"
 [project]
 name = "labwired"
 dynamic = ["version"]
+description = "Run and test microcontroller firmware in a deterministic virtual-time simulator"
+readme = "README.md"
+license = { text = "MIT" }
 requires-python = ">=3.9"
+keywords = ["embedded", "firmware", "simulator", "testing", "pytest"]
 classifiers = [
+    "Framework :: Pytest",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Software Development :: Embedded Systems",
+    "Topic :: Software Development :: Testing",
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
+
+[project.urls]
+Homepage = "https://labwired.com"
+Source = "https://github.com/w1ne/labwired-core"
 
 [project.optional-dependencies]
 test = ["pytest>=7"]
@@ -21,4 +33,6 @@ labwired = "labwired.pytest_plugin"
 [tool.maturin]
 python-source = "python"
 module-name = "labwired._native"
+# Release builds carry debuginfo; strip it from the shipped extension.
+strip = true
 include = [{path = "python/labwired/configs/**/*", format = ["sdist", "wheel"]}, {path = "configs/**/*", format = "sdist"}]

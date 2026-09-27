@@ -3,10 +3,9 @@ import os
 import subprocess
 import sys
 import pytest
-try:
-    import labwired
-except ImportError:
-    labwired = None
+# A plain import: a missing or broken build must fail collection, not
+# degrade into skipped or vacuous tests.
+import labwired
 
 ROOT = Path(__file__).resolve().parents[3]
 ELF = ROOT / 'tests/fixtures/uart-ok-thumbv7m.elf'
@@ -229,6 +228,24 @@ def test_unknown_uart_text_cannot_turn_validation_error_into_skip():
             new(uart='not supported')
     except labwired.NotSupported as error:
         pytest.fail(f'invalid UART incorrectly classified as unsupported: {error}')
+
+
+def test_read_uart_bytes_keeps_non_utf8_output():
+    # A host store to the UART data register (offset 0) goes out through the
+    # same TX path as firmware output, so these bytes reach the real stream.
+    raw = b'\xff\x80\xc3'
+    with new() as s:
+        assert s.expect('OK', timeout='1ms').text == 'OK'
+        assert s.read_uart_bytes() == b'\n'
+        for byte in raw:
+            s.write_u32(0x4000C000, byte)
+        assert s.read_uart_bytes() == raw
+        assert s.read_uart_bytes() == b''
+        for byte in raw:
+            s.write_u32(0x4000C000, byte)
+        # The text reader loses these bytes; the bytes reader must not.
+        assert s.read_uart() == raw.decode('utf-8', errors='replace')
+        assert '�' in raw.decode('utf-8', errors='replace')
 
 
 RING_ELF = ROOT / 'tests/fixtures/nrf54l15-smart-ring.elf'

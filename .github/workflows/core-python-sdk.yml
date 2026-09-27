@@ -1,0 +1,92 @@
+name: Python SDK
+
+# Builds the `labwired` wheel, installs it into a clean venv, and runs
+# crates/python/tests against the installed package. The gate itself is
+# scripts/ci/python-sdk-gate.sh, so a local run uses the same invocation.
+# It is red when the import fails, when any test fails, and when any test
+# is skipped: a fully skipped suite exits 0 in pytest.
+#
+# Path-filtered to the crates the extension links (python -> core, config,
+# loader; core -> ir, hw-trace, svd-ingestor), the chip catalog the wheel
+# packages, and the fixtures the tests load.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "crates/python/**"
+      - "crates/core/**"
+      - "crates/config/**"
+      - "crates/loader/**"
+      - "crates/ir/**"
+      - "crates/hw-trace/**"
+      - "crates/svd-ingestor/**"
+      - "configs/**"
+      - "tests/fixtures/**"
+      - "examples/nrf54l15-smart-ring/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - "scripts/ci/python-sdk-gate.sh"
+      - ".github/workflows/core-python-sdk.yml"
+  push:
+    branches: [main]
+    paths:
+      - "crates/python/**"
+      - "crates/core/**"
+      - "crates/config/**"
+      - "crates/loader/**"
+      - "crates/ir/**"
+      - "crates/hw-trace/**"
+      - "crates/svd-ingestor/**"
+      - "configs/**"
+      - "tests/fixtures/**"
+      - "examples/nrf54l15-smart-ring/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - "scripts/ci/python-sdk-gate.sh"
+      - ".github/workflows/core-python-sdk.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: core-python-sdk-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  python-sdk:
+    name: python-sdk (wheel + pytest, 0 skipped)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.95.0
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: python-sdk
+
+      # 3.9 is the abi3 floor the wheel declares (cp39-abi3), so the suite
+      # runs on the oldest interpreter the wheel claims to support.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+
+      - name: Build wheel, install in a clean venv, run pytest
+        env:
+          PYTHON: python
+        run: bash scripts/ci/python-sdk-gate.sh "$RUNNER_TEMP/python-sdk"
+
+      # The release workflow publishes an sdist too. The wheel build above
+      # already ran build.rs, which stages the catalog the sdist must carry.
+      - name: Build sdist and check it carries the chip catalog
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/python-sdk/build-venv/bin/maturin" sdist \
+            --manifest-path crates/python/Cargo.toml --out "$RUNNER_TEMP/python-sdk/sdist"
+          bash scripts/ci/python-sdk-gate.sh --check-sdist "$RUNNER_TEMP"/python-sdk/sdist/*.tar.gz

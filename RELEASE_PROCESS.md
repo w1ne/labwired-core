@@ -75,6 +75,13 @@ This document outlines the standardized process for releasing new versions of La
   GHCR also contains the versioned `ghcr.io/w1ne/labwired:vX.Y.Z` runner
   image. Use that versioned image in CI; the workflow also updates its moving
   convenience tag.
+- [ ] **Python SDK on PyPI**: The same `vX.Y.Z` tag triggers
+  [`.github/workflows/core-python-release.yml`](.github/workflows/core-python-release.yml),
+  which builds the `labwired` abi3 wheels (Linux x86_64/aarch64, macOS
+  arm64/x86_64, Windows x64) plus the sdist and publishes them to PyPI with
+  Trusted Publishing (environment `pypi`, no stored token). Confirm
+  https://pypi.org/project/labwired/ shows `X.Y.Z` with 5 wheels and 1 sdist.
+  The publish job stops if the tag disagrees with the workspace version.
 - [ ] **First GHCR publication**: After the first successful image push, open
   the package settings in GitHub Packages and set the GHCR package visibility
   to public. The release smoke job deliberately performs an anonymous pull; if

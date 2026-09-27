@@ -3,10 +3,14 @@ import labwired
 import os
 import json
 
-# This fixture assumes we have access to a test binary.
-# In a real CI, we would build `firmware-ci-fixture` or `demo-blinky`.
-# For now, we expect the user to provide FIRMWARE_PATH env var or we look in default places.
-FIRMWARE_PATH = os.environ.get("LABWIRED_FIRMWARE", "../../examples/demo-blinky/target/thumbv7em-none-eabihf/debug/demo-blinky")
+from pathlib import Path
+
+# Defaults to a committed fixture, so a plain run executes every test.
+# LABWIRED_FIRMWARE points the suite at another ELF.
+FIRMWARE_PATH = os.environ.get(
+    "LABWIRED_FIRMWARE",
+    str(Path(__file__).resolve().parents[3] / "tests/fixtures/stm32f401-blinky.elf"),
+)
 
 @pytest.fixture
 def machine():

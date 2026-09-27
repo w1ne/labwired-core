@@ -1,0 +1,199 @@
+name: Python SDK release
+
+# Builds the `labwired` abi3 wheels and the sdist, and publishes them to PyPI
+# with Trusted Publishing (OIDC; no API token is stored in this repository).
+#
+#   * Release tag `vX.Y.Z` (the same tag that runs core-release.yml; X.Y.Z =
+#     the workspace version in Cargo.toml): build every wheel + sdist, then
+#     publish. A core release and its Python SDK ship from one tag.
+#   * pull_request that touches this file, or workflow_dispatch: build only.
+#     The publish job runs only for a release tag push.
+#
+# One-time setup on pypi.org (Trusted Publisher for project `labwired`):
+#   owner w1ne, repository labwired-core, workflow core-python-release.yml,
+#   environment pypi. The `pypi` environment must also exist in this repo's
+#   Settings > Environments.
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/core-python-release.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: core-python-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  wheels:
+    name: wheel ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-x86_64
+            runner: ubuntu-latest
+            target: x86_64
+            manylinux: "2_28"
+          - name: linux-aarch64
+            runner: ubuntu-latest
+            target: aarch64
+            manylinux: "2_28"
+          - name: macos-arm64
+            runner: macos-14
+            target: aarch64
+            manylinux: ""
+          - name: macos-x86_64
+            runner: macos-14
+            target: x86_64
+            manylinux: ""
+          - name: windows-x64
+            runner: windows-latest
+            target: x64
+            manylinux: ""
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # One abi3 wheel (cp39-abi3) per platform: pyo3's `abi3-py39` feature
+      # in crates/python/Cargo.toml selects the stable ABI.
+      - name: Build wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          command: build
+          args: --release --out dist --manifest-path crates/python/Cargo.toml
+          target: ${{ matrix.target }}
+          manylinux: ${{ matrix.manylinux || 'auto' }}
+          rust-toolchain: "1.95.0"
+
+      - name: Check the wheel is abi3
+        shell: bash
+        run: |
+          set -euo pipefail
+          ls -l dist
+          for wheel in dist/*.whl; do
+            case "$wheel" in
+              *-cp39-abi3-*) ;;
+              *) echo "::error::not a cp39-abi3 wheel: $wheel" >&2; exit 1 ;;
+            esac
+          done
+
+      # A native wheel can be imported and exercised here; a cross-built one
+      # (linux aarch64, macOS x86_64 on an arm64 runner) cannot.
+      - name: Smoke test the native wheel
+        if: matrix.name == 'linux-x86_64' || matrix.name == 'macos-arm64' || matrix.name == 'windows-x64'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m venv "$RUNNER_TEMP/smoke"
+          if [ -x "$RUNNER_TEMP/smoke/Scripts/python.exe" ]; then
+            py="$RUNNER_TEMP/smoke/Scripts/python.exe"
+          else
+            py="$RUNNER_TEMP/smoke/bin/python"
+          fi
+          "$py" -m pip install --quiet dist/*.whl
+          # cygpath gives Windows Python a drive-letter path under Git Bash.
+          root="$(cygpath -m "$PWD" 2>/dev/null || pwd)"
+          elf="$root/tests/fixtures/uart-ok-thumbv7m.elf"
+          cd "$RUNNER_TEMP"
+          "$py" - "$elf" <<'PY'
+          import sys
+          import labwired
+          with labwired.Sim(sys.argv[1], chip="ci-fixture-cortex-m3-uart1") as sim:
+              assert sim.expect("OK", timeout="1ms").text == "OK"
+              assert sim.read_uart_bytes() == b"\n"
+          print("smoke ok:", labwired.__file__)
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.name }}
+          path: dist/*.whl
+          if-no-files-found: error
+
+  sdist:
+    name: sdist
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.95.0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # crates/python/build.rs stages the chip catalog twice (for the wheel
+      # and for the sdist's relocated config crate). It runs on any cargo
+      # build, and `maturin sdist` alone never runs it, so run it first.
+      # Without this the sdist packs no catalog and cannot build.
+      - name: Build sdist
+        run: |
+          set -euo pipefail
+          cargo check --locked -p labwired-python
+          python -m pip install --quiet 'maturin>=1.5,<2'
+          maturin sdist --manifest-path crates/python/Cargo.toml --out dist
+          bash scripts/ci/python-sdk-gate.sh --check-sdist dist/*.tar.gz
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  publish:
+    name: publish to PyPI
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [wheels, sdist]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: pypi
+      url: https://pypi.org/project/labwired/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      # The tag names the version it publishes. A tag that disagrees with the
+      # built version (the workspace version in Cargo.toml) stops here.
+      - name: Check tag matches the built version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="${TAG#v}"
+          ls -l dist
+          count=0
+          for file in dist/*; do
+            case "$(basename "$file")" in
+              "labwired-${version}-"*.whl|"labwired-${version}.tar.gz") count=$((count + 1)) ;;
+              *) echo "::error::$file does not carry version $version (tag $TAG)" >&2; exit 1 ;;
+            esac
+          done
+          if [ "$count" -ne 6 ]; then
+            echo "::error::expected 5 wheels + 1 sdist, found $count files" >&2
+            exit 1
+          fi
+
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist
