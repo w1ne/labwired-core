@@ -53,7 +53,7 @@ pub(crate) struct CtorInputs {
 }
 
 /// One call that changes the machine, in the order JS made it.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Op {
     Step(u32),
     StepSingle,
@@ -93,12 +93,22 @@ impl Op {
     }
 }
 
+/// A position in the journal. Identical consecutive steps share one entry
+/// (the playground steps every frame, so an hour is hundreds of thousands of
+/// them); `last_times` pins how many repeats of the last entry the position
+/// includes, because that entry keeps counting after the position is taken.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Mark {
+    entries: usize,
+    last_times: u32,
+}
+
 /// A saved point: a journal position and what the machine looked like there.
 #[derive(Debug, Clone)]
 struct SavedPoint {
     id: u32,
     label: String,
-    ops: usize,
+    ops: Mark,
     cycles: u64,
     digest: u64,
 }
@@ -106,7 +116,8 @@ struct SavedPoint {
 #[derive(Default)]
 pub(crate) struct SimTools {
     pub(crate) ctor: Option<Rc<CtorInputs>>,
-    journal: Vec<Op>,
+    /// Calls with a repeat count; see [`Mark`].
+    journal: Vec<(Op, u32)>,
     /// The first change the journal cannot replay; snapshots are refused
     /// from then on.
     untracked: Option<String>,
@@ -128,7 +139,28 @@ impl WasmSimulator {
         if let Op::InstallEsp32Quirks(elf) = &op {
             tools.elf = Some(elf.clone());
         }
-        tools.journal.push(op);
+        match tools.journal.last_mut() {
+            Some((last, times)) if op.is_step() && *last == op && *times < u32::MAX => *times += 1,
+            _ => tools.journal.push((op, 1)),
+        }
+    }
+
+    fn current_mark(&self) -> Mark {
+        let tools = self.tools.borrow();
+        Mark {
+            entries: tools.journal.len(),
+            last_times: tools.journal.last().map_or(0, |(_, t)| *t),
+        }
+    }
+
+    /// The journal up to `mark`, with the last entry's repeats pinned.
+    fn journal_prefix(&self, mark: Mark) -> Vec<(Op, u32)> {
+        let tools = self.tools.borrow();
+        let mut prefix = tools.journal[..mark.entries].to_vec();
+        if let Some((_, times)) = prefix.last_mut() {
+            *times = mark.last_times;
+        }
+        prefix
     }
 
     /// Note a change the journal cannot replay.
@@ -217,15 +249,19 @@ impl WasmSimulator {
         };
     }
 
-    /// Number of journaled calls before the first step (the configuration a
-    /// run starts from).
-    fn boot_ops(&self) -> usize {
+    /// The position before the first step: the configuration a run starts
+    /// from.
+    fn boot_mark(&self) -> Mark {
         let tools = self.tools.borrow();
-        tools
+        let entries = tools
             .journal
             .iter()
-            .position(Op::is_step)
-            .unwrap_or(tools.journal.len())
+            .position(|(op, _)| op.is_step())
+            .unwrap_or(tools.journal.len());
+        Mark {
+            entries,
+            last_times: entries.checked_sub(1).map_or(0, |i| tools.journal[i].1),
+        }
     }
 
     fn firmware_elf(&self) -> Option<Vec<u8>> {
@@ -281,12 +317,13 @@ impl WasmSimulator {
         }
         let digest = self.digest_s()?;
         let cycles = self.machine_s()?.total_cycles;
+        let mark = self.current_mark();
         let mut tools = self.tools.borrow_mut();
         tools.next_id += 1;
         let point = SavedPoint {
             id: tools.next_id,
             label: label.unwrap_or_else(|| format!("state {}", tools.next_id)),
-            ops: tools.journal.len(),
+            ops: mark,
             cycles,
             digest,
         };
@@ -359,22 +396,21 @@ impl WasmSimulator {
         Ok(serde_json::json!({"id": point.id, "cycles": point.cycles}).to_string())
     }
 
-    /// A fresh simulator from this one's build inputs with the first `ops`
-    /// journaled calls replayed. With `coverage`, the observer is attached
+    /// A fresh simulator from this one's build inputs with the journal replayed
+    /// up to `ops`. With `coverage`, the observer is attached
     /// before the first replayed call, so it sees the run from power-on.
     fn rebuild_s(
         &self,
-        ops: usize,
+        ops: Mark,
         coverage: Option<Arc<PcCoverageObserver>>,
     ) -> Result<WasmSimulator, String> {
-        let (ctor, journal) = {
-            let tools = self.tools.borrow();
-            let ctor = tools
-                .ctor
-                .clone()
-                .ok_or("this simulator was not built by new_from_config")?;
-            (ctor, tools.journal[..ops].to_vec())
-        };
+        let ctor = self
+            .tools
+            .borrow()
+            .ctor
+            .clone()
+            .ok_or("this simulator was not built by new_from_config")?;
+        let journal = self.journal_prefix(ops);
         // The inputs built a machine once already, so they build one again;
         // an error here is not reachable from a well-formed simulator.
         let mut fresh = WasmSimulator::new_from_config_parts(ctor)
@@ -386,8 +422,10 @@ impl WasmSimulator {
             }
             fresh.tools.get_mut().coverage = Some(obs);
         }
-        for op in &journal {
-            fresh.replay(op);
+        for (op, times) in &journal {
+            for _ in 0..*times {
+                fresh.replay(op);
+            }
         }
         Ok(fresh)
     }
@@ -403,9 +441,9 @@ impl WasmSimulator {
             return Err(format!("cannot run a fault experiment: {why}"));
         }
         let ops = if from_boot {
-            self.boot_ops()
+            self.boot_mark()
         } else {
-            self.tools.borrow().journal.len()
+            self.current_mark()
         };
         let mut golden = self.rebuild_s(ops, None)?;
         let mut faulted = self.rebuild_s(ops, None)?;
@@ -449,7 +487,7 @@ impl WasmSimulator {
                     return Err(format!("cannot measure coverage by replay: {why}"));
                 }
                 let obs = Arc::new(PcCoverageObserver::new());
-                let ops = self.tools.borrow().journal.len();
+                let ops = self.current_mark();
                 let fresh = self.rebuild_s(ops, Some(obs.clone()))?;
                 let cycles = fresh.machine_s()?.total_cycles;
                 if cycles != self.machine_s()?.total_cycles {
@@ -632,6 +670,25 @@ mod tests {
         sim.snapshot_restore_s(saved["id"].as_u64().unwrap() as u32)
             .unwrap();
         assert_eq!(sim.machine_s().unwrap().total_cycles, 1_000);
+    }
+
+    #[test]
+    fn identical_steps_share_one_entry_and_a_mid_run_snapshot_still_restores() {
+        let mut sim = ring();
+        for _ in 0..50 {
+            sim.step_batch(100).unwrap();
+        }
+        let saved: serde_json::Value =
+            serde_json::from_str(&sim.snapshot_save_s(None).unwrap()).unwrap();
+        for _ in 0..70 {
+            sim.step_batch(100).unwrap();
+        }
+        // 120 identical calls, one journal entry (the constructor recorded none).
+        assert_eq!(sim.tools.borrow().journal.len(), 1);
+        assert_eq!(sim.tools.borrow().journal[0].1, 120);
+        sim.snapshot_restore_s(saved["id"].as_u64().unwrap() as u32)
+            .unwrap();
+        assert_eq!(sim.machine_s().unwrap().total_cycles, 5_000);
     }
 
     #[test]
