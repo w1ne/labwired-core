@@ -71,6 +71,49 @@ pub struct SourceLocation {
     pub line: u32,
 }
 
+/// A call that changed the machine, as the adapter made it. Replaying the
+/// list from a fresh load reproduces the machine exactly (the simulator is
+/// deterministic); that is how [`LabwiredAdapter::snapshot_restore`] works.
+#[derive(Debug, Clone)]
+enum JournalOp {
+    Step,
+    StepBack,
+    Run(u32),
+    WriteMemory(u64, Vec<u8>),
+    SetRegister(u8, u32),
+    SetPc(u32),
+    Reset,
+    ClearBreakpoints,
+    AddBreakpoint(u32),
+    RemoveBreakpoint(u32),
+}
+
+#[derive(Debug, Clone)]
+struct SavedPoint {
+    id: u32,
+    label: String,
+    ops: usize,
+    cycles: u64,
+    digest: u64,
+}
+
+#[derive(Debug, Default)]
+struct Journal {
+    /// `load_firmware`'s arguments; `None` until a firmware is loaded.
+    launch: Option<(PathBuf, Option<PathBuf>)>,
+    ops: Vec<JournalOp>,
+    points: Vec<SavedPoint>,
+    next_id: u32,
+}
+
+/// A saved point, as the DAP `labwired/snapshot` request reports it.
+#[derive(Debug, Clone, Serialize)]
+pub struct SnapshotInfo {
+    pub id: u32,
+    pub label: String,
+    pub cycles: u64,
+}
+
 #[derive(Clone)]
 pub struct LabwiredAdapter {
     pub machine: Arc<Mutex<Option<Box<dyn DebugControl + Send>>>>,
@@ -85,6 +128,8 @@ pub struct LabwiredAdapter {
     conditional_breakpoints: Arc<Mutex<std::collections::HashMap<u32, String>>>,
     /// Data breakpoint (watchpoint) addresses.
     data_breakpoints: Arc<Mutex<std::collections::HashSet<u64>>>,
+    /// Every machine-changing call since the firmware loaded, for snapshots.
+    journal: Arc<Mutex<Journal>>,
 }
 
 #[derive(Debug, Default)]
@@ -143,7 +188,19 @@ impl LabwiredAdapter {
             mem_tracker: Arc::new(MemoryTracker::default()),
             conditional_breakpoints: Arc::new(Mutex::new(std::collections::HashMap::new())),
             data_breakpoints: Arc::new(Mutex::new(std::collections::HashSet::new())),
+            journal: Arc::new(Mutex::new(Journal::default())),
         }
+    }
+
+    fn record(&self, op: JournalOp) {
+        self.journal.lock().unwrap().ops.push(op);
+    }
+
+    /// Drop the reverse-step history: the machine moved in a way the history
+    /// did not record, so undoing the recorded steps would no longer land on
+    /// states the firmware was ever in.
+    fn forget_history(&self) {
+        *self.trace_buffer.lock().unwrap() = TraceBuffer::new(100_000);
     }
 
     pub fn get_telemetry(&self) -> Option<TelemetryData> {
@@ -204,6 +261,14 @@ impl LabwiredAdapter {
         firmware_path: PathBuf,
         system_path: Option<PathBuf>,
     ) -> Result<()> {
+        {
+            let mut journal = self.journal.lock().unwrap();
+            journal.launch = Some((firmware_path.clone(), system_path.clone()));
+            journal.ops.clear();
+            journal.points.clear();
+        }
+        self.forget_history();
+        self.cycle_count.store(0, Ordering::SeqCst);
         self.board_io_bindings.lock().unwrap().clear();
         let image = labwired_loader::load_elf(&firmware_path)?;
 
@@ -330,6 +395,7 @@ impl LabwiredAdapter {
     pub fn set_register(&self, id: u8, val: u32) -> Result<()> {
         let mut guard = self.machine.lock().unwrap();
         if let Some(machine) = guard.as_mut() {
+            self.record(JournalOp::SetRegister(id, val));
             machine.write_core_reg(id, val);
             Ok(())
         } else {
@@ -340,6 +406,7 @@ impl LabwiredAdapter {
     pub fn set_pc(&self, addr: u32) -> Result<()> {
         let mut guard = self.machine.lock().unwrap();
         if let Some(machine) = guard.as_mut() {
+            self.record(JournalOp::SetPc(addr));
             machine.set_pc(addr);
             Ok(())
         } else {
@@ -350,6 +417,8 @@ impl LabwiredAdapter {
     pub fn reset(&self) -> Result<()> {
         let mut guard = self.machine.lock().unwrap();
         if let Some(machine) = guard.as_mut() {
+            self.record(JournalOp::Reset);
+            self.forget_history();
             machine
                 .reset()
                 .map_err(|e| anyhow!("Reset failed: {:?}", e))
@@ -375,6 +444,7 @@ impl LabwiredAdapter {
     pub fn step(&self) -> Result<labwired_core::StopReason> {
         let mut guard = self.machine.lock().unwrap();
         if let Some(machine) = guard.as_mut() {
+            self.record(JournalOp::Step);
             // Capture state BEFORE execution
             let pc_before = machine.get_pc();
             let registers_before: Vec<u32> = (0..16).map(|i| machine.read_core_reg(i)).collect();
@@ -615,6 +685,7 @@ impl LabwiredAdapter {
         if let Some(machine) = guard.as_mut() {
             let mut trace_buffer = self.trace_buffer.lock().unwrap();
             if let Some(trace) = trace_buffer.pop_trace() {
+                self.record(JournalOp::StepBack);
                 // 1. Undo memory writes (in reverse order)
                 for write in trace.memory_writes.iter().rev() {
                     machine
@@ -635,7 +706,10 @@ impl LabwiredAdapter {
 
                 Ok(labwired_core::StopReason::StepDone)
             } else {
-                Err(anyhow!("No history available for reverse stepping"))
+                Err(anyhow!(
+                    "No history available for reverse stepping: only single steps are \
+                     recorded, and a continue, reset or restore clears the history"
+                ))
             }
         } else {
             Err(anyhow!("Machine not initialized"))
@@ -702,6 +776,8 @@ impl LabwiredAdapter {
     pub fn continue_execution_chunk(&self, max_steps: u32) -> Result<labwired_core::StopReason> {
         let mut guard = self.machine.lock().unwrap();
         if let Some(machine) = guard.as_mut() {
+            self.record(JournalOp::Run(max_steps));
+            self.forget_history();
             let reason = machine
                 .run(Some(max_steps))
                 .map_err(|e| anyhow!("Run failed: {:?}", e))?;
@@ -784,8 +860,10 @@ impl LabwiredAdapter {
 
         let mut machine_guard = self.machine.lock().unwrap();
         if let Some(machine) = machine_guard.as_mut() {
+            self.record(JournalOp::ClearBreakpoints);
             machine.clear_breakpoints();
             for addr in addresses {
+                self.record(JournalOp::AddBreakpoint(addr));
                 machine.add_breakpoint(addr);
                 tracing::info!("Breakpoint set at {:#x}", addr);
             }
@@ -797,6 +875,7 @@ impl LabwiredAdapter {
     pub fn add_breakpoint_addr(&self, addr: u32) -> Result<()> {
         let mut machine_guard = self.machine.lock().unwrap();
         if let Some(machine) = machine_guard.as_mut() {
+            self.record(JournalOp::AddBreakpoint(addr));
             machine.add_breakpoint(addr);
             tracing::info!("Breakpoint added at {:#x}", addr);
             Ok(())
@@ -808,6 +887,7 @@ impl LabwiredAdapter {
     pub fn remove_breakpoint_addr(&self, addr: u32) -> Result<()> {
         let mut machine_guard = self.machine.lock().unwrap();
         if let Some(machine) = machine_guard.as_mut() {
+            self.record(JournalOp::RemoveBreakpoint(addr));
             machine.remove_breakpoint(addr);
             tracing::info!("Breakpoint removed at {:#x}", addr);
             Ok(())
@@ -964,12 +1044,169 @@ impl LabwiredAdapter {
     pub fn write_memory(&self, addr: u64, data: &[u8]) -> Result<()> {
         let mut machine_guard = self.machine.lock().unwrap();
         if let Some(machine) = machine_guard.as_mut() {
+            self.record(JournalOp::WriteMemory(addr, data.to_vec()));
             machine
                 .write_memory(addr as u32, data)
                 .map_err(|e| anyhow!("Memory write failed: {:?}", e))
         } else {
             Err(anyhow!("Machine not initialized"))
         }
+    }
+}
+
+impl LabwiredAdapter {
+    /// Registers, PC, cycles and the machine's serialisable state, hashed.
+    fn digest(machine: &dyn DebugControl) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        machine.get_cycle_count().hash(&mut h);
+        machine.get_pc().hash(&mut h);
+        for i in 0..machine.get_register_names().len() {
+            machine.read_core_reg(i as u8).hash(&mut h);
+        }
+        serde_json::to_string(&machine.snapshot())
+            .unwrap_or_default()
+            .hash(&mut h);
+        h.finish()
+    }
+
+    /// Save the current point. Returns its id and cycle count.
+    pub fn snapshot_save(&self, label: Option<String>) -> Result<SnapshotInfo> {
+        let guard = self.machine.lock().unwrap();
+        let machine = guard
+            .as_ref()
+            .ok_or_else(|| anyhow!("Machine not initialized"))?;
+        let (cycles, digest) = (machine.get_cycle_count(), Self::digest(machine.as_ref()));
+        drop(guard);
+        let mut journal = self.journal.lock().unwrap();
+        if journal.launch.is_none() {
+            return Err(anyhow!("no firmware loaded"));
+        }
+        journal.next_id += 1;
+        let id = journal.next_id;
+        let point = SavedPoint {
+            id,
+            label: label.unwrap_or_else(|| format!("state {id}")),
+            ops: journal.ops.len(),
+            cycles,
+            digest,
+        };
+        let info = SnapshotInfo {
+            id,
+            label: point.label.clone(),
+            cycles,
+        };
+        journal.points.push(point);
+        Ok(info)
+    }
+
+    /// Saved points, oldest first.
+    pub fn snapshot_list(&self) -> Vec<SnapshotInfo> {
+        self.journal
+            .lock()
+            .unwrap()
+            .points
+            .iter()
+            .map(|p| SnapshotInfo {
+                id: p.id,
+                label: p.label.clone(),
+                cycles: p.cycles,
+            })
+            .collect()
+    }
+
+    fn replay(&self, op: &JournalOp) {
+        let _ = match op {
+            JournalOp::Step => self.step().map(|_| ()),
+            JournalOp::StepBack => self.step_back().map(|_| ()),
+            JournalOp::Run(n) => self.continue_execution_chunk(*n).map(|_| ()),
+            JournalOp::WriteMemory(a, d) => self.write_memory(*a, d),
+            JournalOp::SetRegister(r, v) => self.set_register(*r, *v),
+            JournalOp::SetPc(pc) => self.set_pc(*pc),
+            JournalOp::Reset => self.reset(),
+            JournalOp::ClearBreakpoints => {
+                if let Some(m) = self.machine.lock().unwrap().as_mut() {
+                    self.record(JournalOp::ClearBreakpoints);
+                    m.clear_breakpoints();
+                }
+                Ok(())
+            }
+            JournalOp::AddBreakpoint(a) => self.add_breakpoint_addr(*a),
+            JournalOp::RemoveBreakpoint(a) => self.remove_breakpoint_addr(*a),
+        };
+    }
+
+    /// Return to saved point `id`: reload the firmware and replay every
+    /// recorded call up to it, then check the machine matches what was saved.
+    /// On a mismatch the previous machine is put back and this is an error.
+    /// Reverse-step history starts empty after a restore.
+    pub fn snapshot_restore(&self, id: u32) -> Result<SnapshotInfo> {
+        let (launch, ops, point, points, next_id) = {
+            let journal = self.journal.lock().unwrap();
+            let point = journal
+                .points
+                .iter()
+                .find(|p| p.id == id)
+                .cloned()
+                .ok_or_else(|| anyhow!("no saved state {id}"))?;
+            (
+                journal
+                    .launch
+                    .clone()
+                    .ok_or_else(|| anyhow!("no firmware loaded"))?,
+                journal.ops[..point.ops].to_vec(),
+                point,
+                journal.points.clone(),
+                journal.next_id,
+            )
+        };
+        // Keep what a failed restore must put back.
+        let old_machine = self.machine.lock().unwrap().take();
+        let old_ops = std::mem::take(&mut self.journal.lock().unwrap().ops);
+        let old_cycles = self.cycle_count.load(Ordering::SeqCst);
+        let old_trace = std::mem::replace(
+            &mut *self.trace_buffer.lock().unwrap(),
+            TraceBuffer::new(100_000),
+        );
+        let old_uart = std::mem::take(&mut *self.uart_sink.lock().unwrap());
+
+        let rebuilt = self.load_firmware(launch.0, launch.1).map(|()| {
+            for op in &ops {
+                self.replay(op);
+            }
+        });
+        let matches = rebuilt.is_ok()
+            && self.machine.lock().unwrap().as_ref().is_some_and(|m| {
+                m.get_cycle_count() == point.cycles && Self::digest(m.as_ref()) == point.digest
+            });
+        {
+            let mut journal = self.journal.lock().unwrap();
+            journal.points = points;
+            journal.next_id = next_id;
+        }
+        if !matches {
+            *self.machine.lock().unwrap() = old_machine;
+            self.journal.lock().unwrap().ops = old_ops;
+            self.cycle_count.store(old_cycles, Ordering::SeqCst);
+            *self.trace_buffer.lock().unwrap() = old_trace;
+            *self.uart_sink.lock().unwrap() = old_uart;
+            return Err(match rebuilt {
+                Err(e) => anyhow!("restore failed reloading the firmware: {e}"),
+                Ok(()) => anyhow!(
+                    "restore refused: the replay did not reproduce saved state {id} at cycle {}; \
+                     the previous state is unchanged",
+                    point.cycles
+                ),
+            });
+        }
+        // Output up to the saved point was delivered before; do not repeat it.
+        self.uart_sink.lock().unwrap().clear();
+        self.forget_history();
+        Ok(SnapshotInfo {
+            id,
+            label: point.label,
+            cycles: point.cycles,
+        })
     }
 }
 

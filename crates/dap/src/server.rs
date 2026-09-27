@@ -1551,6 +1551,61 @@ impl DapServer {
                 let state = self.adapter.get_rtos_state_json();
                 sender.send_response(req_seq, "readRTOSState", Some(state))?;
             }
+            // Snapshot and restore (LabWired extension requests). A snapshot is
+            // a point in the adapter's replay journal; a restore reloads the
+            // firmware and replays to it, checked against a state digest. See
+            // `LabwiredAdapter::snapshot_restore`. Only while halted: a running
+            // machine has no stable point to save or overwrite.
+            "labwired/snapshot" | "labwired/restore" | "labwired/snapshots"
+                if *self.running.lock().unwrap() =>
+            {
+                sender.send_error_response(
+                    req_seq,
+                    command,
+                    "the target is running; pause it first",
+                )?;
+            }
+            "labwired/snapshot" => {
+                let label = arguments
+                    .as_ref()
+                    .and_then(|a| a.get("label"))
+                    .and_then(|v| v.as_str())
+                    .map(str::to_string);
+                match self.adapter.snapshot_save(label) {
+                    Ok(info) => sender.send_response(req_seq, command, Some(json!(info)))?,
+                    Err(e) => sender.send_error_response(req_seq, command, &e.to_string())?,
+                }
+            }
+            "labwired/snapshots" => {
+                let list = self.adapter.snapshot_list();
+                sender.send_response(req_seq, command, Some(json!({ "snapshots": list })))?;
+            }
+            "labwired/restore" => {
+                let Some(id) = arguments
+                    .as_ref()
+                    .and_then(|a| a.get("id"))
+                    .and_then(|v| v.as_u64())
+                    .and_then(|v| u32::try_from(v).ok())
+                else {
+                    sender.send_error_response(req_seq, command, "restore needs a numeric `id`")?;
+                    return Ok(HandleResult::Continue);
+                };
+                match self.adapter.snapshot_restore(id) {
+                    Ok(info) => {
+                        sender.send_response(req_seq, command, Some(json!(info)))?;
+                        sender.send_event(
+                            "stopped",
+                            Some(json!({
+                                "reason": "restore",
+                                "description": format!("Restored saved state {id}"),
+                                "threadId": 1,
+                                "allThreadsStopped": true
+                            })),
+                        )?;
+                    }
+                    Err(e) => sender.send_error_response(req_seq, command, &e.to_string())?,
+                }
+            }
             _ => {
                 tracing::warn!("Unhandled command: {}", command);
                 sender.send_response(req_seq, command, None)?;
@@ -1768,6 +1823,62 @@ mod tests {
             .map(max_profile_depth)
             .max()
             .unwrap_or(0)
+    }
+
+    #[test]
+    fn test_snapshot_requests_round_trip() -> Result<()> {
+        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let server = DapServer::new();
+        server.adapter.load_firmware(
+            root.join("tests/fixtures/nrf54l15-smart-ring.elf"),
+            Some(root.join("examples/nrf54l15-smart-ring/system.yaml")),
+        )?;
+        let output = Arc::new(Mutex::new(Vec::new()));
+        let sender = MessageSender {
+            output: output.clone(),
+            seq: Arc::new(AtomicI64::new(1)),
+        };
+        let take = || String::from_utf8(std::mem::take(&mut *output.lock().unwrap())).unwrap();
+
+        server.handle_request(1, "stepIn", None, &sender)?;
+        let pc_after_step = server.adapter.get_pc()?;
+        server.handle_request(
+            2,
+            "labwired/snapshot",
+            Some(&json!({"label": "one"})),
+            &sender,
+        )?;
+        let out = take();
+        assert!(out.contains("\"success\":true"), "{out}");
+        assert!(out.contains("\"label\":\"one\""), "{out}");
+        server.handle_request(3, "stepIn", None, &sender)?;
+        server.handle_request(4, "stepBack", None, &sender)?;
+        assert_eq!(
+            server.adapter.get_pc()?,
+            pc_after_step,
+            "stepBack undid the step"
+        );
+        server.handle_request(5, "stepIn", None, &sender)?;
+        server.handle_request(6, "stepIn", None, &sender)?;
+        take();
+        server.handle_request(7, "labwired/restore", Some(&json!({"id": 1})), &sender)?;
+        let out = take();
+        assert!(out.contains("\"reason\":\"restore\""), "{out}");
+        assert_eq!(server.adapter.get_pc()?, pc_after_step);
+        server.handle_request(8, "labwired/restore", Some(&json!({"id": 99})), &sender)?;
+        let out = take();
+        assert!(
+            out.contains("\"success\":false") && out.contains("no saved state 99"),
+            "{out}"
+        );
+        server.handle_request(9, "labwired/snapshots", None, &sender)?;
+        assert!(take().contains("\"snapshots\":[{"));
+
+        *server.running.lock().unwrap() = true;
+        server.handle_request(10, "labwired/snapshot", None, &sender)?;
+        let out = take();
+        assert!(out.contains("pause it first"), "{out}");
+        Ok(())
     }
 
     #[test]
