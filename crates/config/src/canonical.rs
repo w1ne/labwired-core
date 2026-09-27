@@ -292,7 +292,8 @@ impl CanonicalConfig {
                     _ => None,
                 };
                 if let Some(desc_type) = desc_type {
-                    let (ext, bio) = emit_declarative(desc_type, &board, &wires, mcu_id, part);
+                    let (ext, bio) =
+                        emit_declarative(desc_type, &board, &wires, mcu_id, &self.parts, part);
                     push(ext, bio);
                 }
             }
@@ -603,6 +604,205 @@ fn mcu_pin_for_part_pin<'a>(
     None
 }
 
+/// One H-bridge driver channel (port of the catalog `driveChannels` entries for
+/// `l298n` and `tb6612`): `en`/`in1`/`in2` are the control inputs, `out1`/`out2`
+/// the load terminals.
+struct HBridgeChannel {
+    driver: &'static str,
+    en: &'static str,
+    in1: &'static str,
+    in2: &'static str,
+    out1: &'static str,
+    out2: &'static str,
+}
+
+const H_BRIDGE_CHANNELS: &[HBridgeChannel] = &[
+    HBridgeChannel {
+        driver: "l298n",
+        en: "ENA",
+        in1: "IN1",
+        in2: "IN2",
+        out1: "OUT1",
+        out2: "OUT2",
+    },
+    HBridgeChannel {
+        driver: "l298n",
+        en: "ENB",
+        in1: "IN3",
+        in2: "IN4",
+        out1: "OUT3",
+        out2: "OUT4",
+    },
+    HBridgeChannel {
+        driver: "tb6612",
+        en: "PWMA",
+        in1: "AIN1",
+        in2: "AIN2",
+        out1: "A01",
+        out2: "A02",
+    },
+    HBridgeChannel {
+        driver: "tb6612",
+        en: "PWMB",
+        in1: "BIN1",
+        in2: "BIN2",
+        out1: "B01",
+        out2: "B02",
+    },
+];
+
+/// A load that declares an H-bridge drive path (port of the catalog
+/// `driverDrive` entry for `dc-motor`): its terminal pair plus the channel role
+/// each of its own sim pins takes.
+struct HBridgeLoad {
+    load: &'static str,
+    plus: &'static str,
+    minus: &'static str,
+    /// Load pin id → channel role (`"en"` | `"in1"` | `"in2"`).
+    bind: &'static [(&'static str, &'static str)],
+}
+
+const H_BRIDGE_LOADS: &[HBridgeLoad] = &[HBridgeLoad {
+    load: "dc-motor",
+    plus: "M+",
+    minus: "M-",
+    bind: &[("PWM", "en"), ("DIRECTION", "in1")],
+}];
+
+/// One darlington line (port of the catalog `driveChannels` entry for
+/// `uln2003`): driver input → driver output, non-inverting.
+struct DarlingtonChannel {
+    driver: &'static str,
+    input: &'static str,
+    output: &'static str,
+}
+
+const DARLINGTON_CHANNELS: &[DarlingtonChannel] = &[
+    DarlingtonChannel {
+        driver: "uln2003",
+        input: "IN1",
+        output: "OUT1",
+    },
+    DarlingtonChannel {
+        driver: "uln2003",
+        input: "IN2",
+        output: "OUT2",
+    },
+    DarlingtonChannel {
+        driver: "uln2003",
+        input: "IN3",
+        output: "OUT3",
+    },
+    DarlingtonChannel {
+        driver: "uln2003",
+        input: "IN4",
+        output: "OUT4",
+    },
+];
+
+/// A load driven line-by-line through a darlington array (port of the catalog
+/// `driverDrive` entry for `stepper-28byj48`).
+struct DarlingtonLoad {
+    load: &'static str,
+    /// Load pin id → the driver output it mates with.
+    lines: &'static [(&'static str, &'static str)],
+}
+
+const DARLINGTON_LOADS: &[DarlingtonLoad] = &[DarlingtonLoad {
+    load: "stepper-28byj48",
+    lines: &[
+        ("IN1", "OUT1"),
+        ("IN2", "OUT2"),
+        ("IN3", "OUT3"),
+        ("IN4", "OUT4"),
+    ],
+}];
+
+/// The MCU pin that ultimately drives a load pin, following a declared driver
+/// hop (port of `drivePinForLoadPin` in `packages/board-config/src/drive-binding.ts`).
+///
+/// A load wired behind a driver (a motor behind an H-bridge, a stepper behind a
+/// darlington array) has no MCU pin on its own simulation pins — the physical
+/// path is load terminals ↔ driver outputs, and the driver's inputs carry the
+/// MCU signal. Direct MCU wires win first (behaviour unchanged); the hop
+/// applies only when the load type declares a drive path and a driver on the
+/// diagram declares channels whose outputs meet the load's terminals.
+fn drive_pin_for_load_pin(
+    wires: &[Wire],
+    mcu_id: &str,
+    parts: &[CanonicalPart],
+    load_part_id: &str,
+    load_pin_id: &str,
+) -> Option<String> {
+    if let Some(pin) = mcu_pin_for_part_pin(wires, mcu_id, load_part_id, load_pin_id) {
+        return Some(pin.to_string());
+    }
+    let load_type = parts.iter().find(|p| p.id == load_part_id)?.r#type.as_str();
+
+    if let Some(load) = H_BRIDGE_LOADS.iter().find(|l| l.load == load_type) {
+        let role = load.bind.iter().find(|(p, _)| *p == load_pin_id)?.1;
+        for driver in parts {
+            for c in H_BRIDGE_CHANNELS
+                .iter()
+                .filter(|c| c.driver == driver.r#type)
+            {
+                let straight = wired(wires, load_part_id, load.plus, &driver.id, c.out1)
+                    && wired(wires, load_part_id, load.minus, &driver.id, c.out2);
+                let swapped = wired(wires, load_part_id, load.plus, &driver.id, c.out2)
+                    && wired(wires, load_part_id, load.minus, &driver.id, c.out1);
+                if !straight && !swapped {
+                    continue;
+                }
+                // With the load's first terminal on out2 the channel drives it
+                // backwards, so the direction roles swap (the enable role does
+                // not).
+                let control = match (role, swapped) {
+                    ("en", _) => c.en,
+                    ("in1", false) => c.in1,
+                    ("in2", false) => c.in2,
+                    ("in1", true) => c.in2,
+                    ("in2", true) => c.in1,
+                    _ => return None,
+                };
+                return mcu_pin_for_part_pin(wires, mcu_id, &driver.id, control)
+                    .map(str::to_string);
+            }
+        }
+        return None;
+    }
+
+    if let Some(load) = DARLINGTON_LOADS.iter().find(|l| l.load == load_type) {
+        let out_pin = load.lines.iter().find(|(p, _)| *p == load_pin_id)?.1;
+        for driver in parts {
+            for line in DARLINGTON_CHANNELS
+                .iter()
+                .filter(|l| l.driver == driver.r#type)
+            {
+                if line.output != out_pin {
+                    continue;
+                }
+                if !wired(wires, load_part_id, load_pin_id, &driver.id, out_pin) {
+                    continue;
+                }
+                return mcu_pin_for_part_pin(wires, mcu_id, &driver.id, line.input)
+                    .map(str::to_string);
+            }
+        }
+    }
+    None
+}
+
+/// Whether two part pins are joined by a wire, in either direction.
+fn wired(wires: &[Wire], a_part: &str, a_pin: &str, b_part: &str, b_pin: &str) -> bool {
+    wires.iter().any(|w| {
+        (w.from_part == a_part && w.from_pin == a_pin && w.to_part == b_part && w.to_pin == b_pin)
+            || (w.to_part == a_part
+                && w.to_pin == a_pin
+                && w.from_part == b_part
+                && w.from_pin == b_pin)
+    })
+}
+
 /// The I²C peripheral for a device's SDA/SCL wire (port of
 /// `i2cPeripheralForPartWire` + the STM32 `findPinFunction('i2c')` lookup).
 fn i2c_peripheral_for_part_wire(
@@ -726,6 +926,9 @@ fn find_timer_function(board: &str, pin_label: &str) -> Option<(&'static str, u8
         // The CDU6 (UFQFPN-48) does not bond PC6–PC9; the base table routes
         // them to TIM8 (as does H735).
         "PC6" if board == "stm32f401cdu6" => None,
+        "PC7" if board == "stm32f401cdu6" => None,
+        "PC8" if board == "stm32f401cdu6" => None,
+        "PC9" if board == "stm32f401cdu6" => None,
         "PC6" => Some(("tim8", 1)),
         "PC7" => Some(("tim8", 2)),
         "PC8" => Some(("tim8", 3)),
@@ -1009,10 +1212,11 @@ fn emit_declarative(
     board: &str,
     wires: &[Wire],
     mcu_id: &str,
+    parts: &[CanonicalPart],
     part: &CanonicalPart,
 ) -> (Option<String>, Option<String>) {
     match crate::DeviceDescriptor::embedded(desc_type) {
-        Ok(Some(desc)) => emit_from_descriptor(&desc, board, wires, mcu_id, part),
+        Ok(Some(desc)) => emit_from_descriptor(&desc, board, wires, mcu_id, parts, part),
         _ => (None, None),
     }
 }
@@ -1028,16 +1232,20 @@ fn emit_from_descriptor(
     board: &str,
     wires: &[Wire],
     mcu_id: &str,
+    parts: &[CanonicalPart],
     part: &CanonicalPart,
 ) -> (Option<String>, Option<String>) {
     let Some(emit) = &desc.emit else {
         return (None, None);
     };
     let device_type = emit.device_type.as_deref().unwrap_or(&desc.r#type);
+    // A load wired behind a driver has no MCU pin on its own sim pins; the
+    // resolver follows the declared driver hop (see `drive_pin_for_load_pin`).
+    // For a directly wired part this is exactly `mcu_pin_for_part_pin`.
     let first_wired = |names: &[String]| -> Option<String> {
         names
             .iter()
-            .find_map(|n| mcu_pin_for_part_pin(wires, mcu_id, &part.id, n).map(|p| p.to_string()))
+            .find_map(|n| drive_pin_for_load_pin(wires, mcu_id, parts, &part.id, n))
     };
 
     // external_devices: one line per config entry; a missing pin binding drops
@@ -1057,8 +1265,8 @@ fn emit_from_descriptor(
         } else if let Some(names) = &c.from_part_pins {
             let mut pins = Vec::with_capacity(names.len());
             for n in names {
-                match mcu_pin_for_part_pin(wires, mcu_id, &part.id, n) {
-                    Some(p) => pins.push(p.to_string()),
+                match drive_pin_for_load_pin(wires, mcu_id, parts, &part.id, n) {
+                    Some(p) => pins.push(p),
                     None if !c.required => {
                         pins.clear();
                         break;
@@ -1617,6 +1825,145 @@ mod canonical_tests {
         assert_eq!(find_timer_function("stm32f401cdu6", "PC6"), None);
         assert_eq!(find_timer_function("stm32h735", "PB11"), Some(("tim2", 4)));
         assert_eq!(find_timer_function("stm32f103", "PB11"), None);
+    }
+
+    /// A motor behind an H-bridge has no MCU pin on `PWM`/`DIRECTION` — those
+    /// wires land on the bridge's `ENA`/`IN1`. The load's bindings must resolve
+    /// THROUGH the driver (the hop `drivePinForLoadPin` performs in TS) or the
+    /// plant's required pins stay unwired and no device is emitted at all.
+    #[test]
+    fn dc_motor_binds_through_an_h_bridge_hop() {
+        let json = r#"{
+          "version": 1,
+          "parts": [
+            { "id": "mcu", "type": "nucleo-f401re" },
+            { "id": "bridge", "type": "l298n" },
+            { "id": "motor", "type": "dc-motor" }
+          ],
+          "connections": [
+            ["mcu:PA8", "bridge:ENA"],
+            ["mcu:PA9", "bridge:IN1"],
+            ["mcu:PA10", "bridge:IN2"],
+            ["bridge:OUT1", "motor:M+"],
+            ["bridge:OUT2", "motor:M-"]
+          ]
+        }"#;
+        let yaml = CanonicalConfig::from_json(json).unwrap().resolve().unwrap();
+        assert!(yaml.contains("pwm_pin: \"PA8\""), "got:\n{yaml}");
+        assert!(yaml.contains("direction_pin: \"PA9\""), "got:\n{yaml}");
+        // PA8 carries TIM1_CH1 on the F401, so the pin-function lookup must run
+        // on the HOP-RESOLVED pin, not the load's own (unwired) PWM pin.
+        assert!(yaml.contains("timer_name: \"tim1\""), "got:\n{yaml}");
+        assert!(yaml.contains("timer_channel: 1"), "got:\n{yaml}");
+    }
+
+    /// Reversing the motor terminals swaps the channel's direction roles: the
+    /// first terminal sits on `OUT2`, so `DIRECTION` follows `IN2`.
+    #[test]
+    fn h_bridge_hop_swaps_direction_when_the_terminals_are_reversed() {
+        let json = r#"{
+          "version": 1,
+          "parts": [
+            { "id": "mcu", "type": "nucleo-f401re" },
+            { "id": "bridge", "type": "l298n" },
+            { "id": "motor", "type": "dc-motor" }
+          ],
+          "connections": [
+            ["mcu:PA8", "bridge:ENA"],
+            ["mcu:PA9", "bridge:IN1"],
+            ["mcu:PA10", "bridge:IN2"],
+            ["bridge:OUT2", "motor:M+"],
+            ["bridge:OUT1", "motor:M-"]
+          ]
+        }"#;
+        let yaml = CanonicalConfig::from_json(json).unwrap().resolve().unwrap();
+        assert!(yaml.contains("pwm_pin: \"PA8\""), "got:\n{yaml}");
+        assert!(yaml.contains("direction_pin: \"PA10\""), "got:\n{yaml}");
+    }
+
+    /// A partially wired bridge must NOT half-bind: with the direction control
+    /// wire missing the hop yields nothing, and the required `direction_pin`
+    /// entry drops the whole device (the same "unresolved pin drops the device"
+    /// rule the direct path already has).
+    #[test]
+    fn h_bridge_hop_drops_the_device_when_a_control_wire_is_missing() {
+        let json = r#"{
+          "version": 1,
+          "parts": [
+            { "id": "mcu", "type": "nucleo-f401re" },
+            { "id": "bridge", "type": "l298n" },
+            { "id": "motor", "type": "dc-motor" }
+          ],
+          "connections": [
+            ["mcu:PA8", "bridge:ENA"],
+            ["bridge:OUT1", "motor:M+"],
+            ["bridge:OUT2", "motor:M-"]
+          ]
+        }"#;
+        let yaml = CanonicalConfig::from_json(json).unwrap().resolve().unwrap();
+        assert!(!yaml.contains("dc-motor"), "got:\n{yaml}");
+    }
+
+    /// The darlington hop: each load line mates with one driver output; the
+    /// matching driver input carries the MCU signal (non-inverting). No Rust
+    /// emitter consumes the `stepper-28byj48` load yet, so the resolver is
+    /// exercised directly.
+    #[test]
+    fn darlington_hop_maps_each_line_to_the_matching_driver_input() {
+        let parts = vec![
+            CanonicalPart {
+                id: "mcu".to_string(),
+                r#type: "nucleo-f401re".to_string(),
+                attrs: Default::default(),
+            },
+            CanonicalPart {
+                id: "driver".to_string(),
+                r#type: "uln2003".to_string(),
+                attrs: Default::default(),
+            },
+            CanonicalPart {
+                id: "stepper".to_string(),
+                r#type: "stepper-28byj48".to_string(),
+                attrs: Default::default(),
+            },
+        ];
+        let wire = |a: &str, b: &str| {
+            let (fp, fpin) = split_pin_ref(a).unwrap();
+            let (tp, tpin) = split_pin_ref(b).unwrap();
+            Wire {
+                from_part: fp.to_string(),
+                from_pin: fpin.to_string(),
+                to_part: tp.to_string(),
+                to_pin: tpin.to_string(),
+            }
+        };
+        let wires = vec![
+            wire("mcu:PA0", "driver:IN1"),
+            wire("mcu:PA1", "driver:IN2"),
+            wire("mcu:PA2", "driver:IN3"),
+            wire("mcu:PA3", "driver:IN4"),
+            wire("driver:OUT1", "stepper:IN1"),
+            wire("driver:OUT2", "stepper:IN2"),
+            wire("driver:OUT3", "stepper:IN3"),
+            wire("driver:OUT4", "stepper:IN4"),
+        ];
+        for (load_pin, expect) in [
+            ("IN1", "PA0"),
+            ("IN2", "PA1"),
+            ("IN3", "PA2"),
+            ("IN4", "PA3"),
+        ] {
+            assert_eq!(
+                drive_pin_for_load_pin(&wires, "mcu", &parts, "stepper", load_pin).as_deref(),
+                Some(expect),
+                "load pin {load_pin}"
+            );
+        }
+        // A load line with no driver output wired stays unresolved.
+        assert_eq!(
+            drive_pin_for_load_pin(&wires, "mcu", &parts, "stepper", "VCC"),
+            None
+        );
     }
 
     #[test]
