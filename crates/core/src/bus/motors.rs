@@ -67,6 +67,10 @@ pub(super) enum MotorRuntime {
         feedback: Option<[ResolvedPin; 2]>,
         index: Option<ResolvedPin>,
         fault: Option<ResolvedPin>,
+        /// Timer peripheral index + 1-based channel that owns the PWM pin. When
+        /// present the plant samples the timer output instead of the PWM pin's
+        /// ODR latch (which never moves in alternate-function mode).
+        timer: Option<(usize, u8)>,
         simulation_clock_hz: u64,
         peak_abs_speed_rpm: f64,
         control_state: String,
@@ -178,6 +182,44 @@ impl SystemBus {
             supply_voltage_v: c.supply_voltage_v,
             shaft,
         })?;
+        // Hardware PWM: the emitter fills both fields only when the PWM pin has
+        // a timer alternate function, so either one being absent keeps the
+        // legacy ODR path. Mirrors the BLDC timer resolution.
+        let timer = match (
+            c.timer_name
+                .as_deref()
+                .map(str::trim)
+                .filter(|n| !n.is_empty()),
+            c.timer_channel,
+        ) {
+            (Some(name), Some(channel)) => {
+                let index = self.find_peripheral_index_by_name(name).ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "motor '{}': DC motor PWM timer '{name}' is not a configured peripheral (set timer_name in motor config)",
+                        c.id
+                    )
+                })?;
+                let is_timer = self.peripherals[index]
+                    .dev
+                    .as_any()
+                    .and_then(|a| a.downcast_ref::<crate::peripherals::timer::Timer>())
+                    .is_some();
+                if !is_timer {
+                    anyhow::bail!(
+                        "motor '{}': peripheral '{name}' is not an STM32 timer",
+                        c.id
+                    );
+                }
+                if !(1..=4).contains(&channel) {
+                    anyhow::bail!(
+                        "motor '{}': timer_channel {channel} is outside the timer's 1..=4 channels",
+                        c.id
+                    );
+                }
+                Some((index, channel))
+            }
+            _ => None,
+        };
         Ok(MotorRuntime::Dc {
             pwm: self.resolve_motor_pin(&c.id, "pwm", &c.pwm_pin)?,
             direction: self.resolve_motor_pin(&c.id, "direction", &c.direction_pin)?,
@@ -208,6 +250,7 @@ impl SystemBus {
                 .as_deref()
                 .map(|p| self.resolve_motor_input(&c.id, "fault", p))
                 .transpose()?,
+            timer,
             simulation_clock_hz: c.simulation_clock_hz,
             peak_abs_speed_rpm: 0.0,
             control_state: "coast".to_owned(),
@@ -351,15 +394,40 @@ impl SystemBus {
                     feedback,
                     index,
                     fault,
+                    timer,
                     simulation_clock_hz,
                     peak_abs_speed_rpm,
                     control_state,
                     ..
                 } => {
                     let dt_s = elapsed as f64 / *simulation_clock_hz as f64;
-                    let enabled = enable.is_none_or(|p| self.pin_output(p));
+                    // A timer-driven PWM pin sits in alternate-function mode, so
+                    // its ODR never moves and reading the latch yields duty 0.
+                    // Sample the timer's own output instead: same duty the gate
+                    // driver sees, gated like the BLDC arm gates its inverter.
+                    let (duty, timer_gate) = if let Some((timer, channel)) = timer {
+                        let output = self.peripherals[*timer]
+                            .dev
+                            .as_any()
+                            .and_then(|a| a.downcast_ref::<crate::peripherals::timer::Timer>())
+                            .map(crate::peripherals::timer::Timer::output_snapshot);
+                        match output {
+                            Some(pwm) => {
+                                let channel = pwm.channels[usize::from(*channel) - 1];
+                                (
+                                    channel.duty_fraction,
+                                    channel.enabled
+                                        && pwm.main_output_enabled
+                                        && pwm.counter_enabled,
+                                )
+                            }
+                            None => (0.0, false),
+                        }
+                    } else {
+                        (f64::from(self.pin_output(*pwm)), true)
+                    };
+                    let enabled = enable.is_none_or(|p| self.pin_output(p)) && timer_gate;
                     let braking = brake.is_some_and(|p| self.pin_output(p));
-                    let duty = f64::from(self.pin_output(*pwm));
                     let state = if !enabled {
                         HBridgeState::Coast
                     } else if braking {

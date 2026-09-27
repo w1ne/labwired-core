@@ -323,7 +323,11 @@ impl Timer {
         TimerOutputSnapshot {
             channels,
             dead_time_ticks: decode_dead_time_ticks((self.bdtr & 0xff) as u8),
-            main_output_enabled: self.advanced && (self.bdtr & (1 << 15)) != 0,
+            // Only advanced-control timers have the BDTR/MOE latch; a
+            // general-purpose timer's main outputs are enabled whenever CEN and
+            // CCxE allow. Reporting `false` for TIM2-class timers would gate
+            // every Arduino `analogWrite` PWM plant off forever.
+            main_output_enabled: !self.advanced || (self.bdtr & (1 << 15)) != 0,
             counter_enabled: (self.cr1 & 1) != 0,
             period_ticks: period,
             counter_ticks: self.cnt.get(),

@@ -2503,6 +2503,96 @@ motor_models:
 }
 
 #[test]
+fn bus_motor_dc_reads_timer_driven_pwm_not_the_pin_latch() {
+    let chip: ChipDescriptor = serde_yaml::from_str(
+        r#"
+name: dc-motor-timer-test
+arch: arm
+core: cortex-m4
+flash: { base: 0x08000000, size: "64KB" }
+ram: { base: 0x20000000, size: "32KB" }
+peripherals:
+  - { id: gpioa, type: gpio, base_address: 0x48000000, size: "1KB", config: { profile: stm32v2 } }
+  - { id: tim2, type: timer, base_address: 0x40000000, size: "1KB", config: { width: 32 } }
+"#,
+    )
+    .unwrap();
+    // The hosted/emit shape: a declarative `external_devices` DC motor with no
+    // brake/enable/encoder pins, and the PWM pin's timer channel — exactly what
+    // the board-config emitter now writes for PA0 on a Nucleo-F401RE.
+    let manifest: SystemManifest = serde_yaml::from_str(
+        r#"
+name: dc-motor-timer
+chip: unused
+external_devices:
+  - id: wheel
+    type: dc-motor
+    connection: gpio
+    config:
+      pwm_pin: "PA0"
+      direction_pin: "PA1"
+      timer_name: "tim2"
+      timer_channel: 1
+"#,
+    )
+    .unwrap();
+    let mut bus = SystemBus::from_config(&chip, &manifest).unwrap();
+    // Direction high; the PWM pad's ODR latch stays 0 — a timer-driven pin is
+    // in alternate-function mode, so only the timer's duty can drive the plant.
+    bus.write_u32(0x4800_0014, 1 << 1).unwrap();
+    // Arduino `analogWrite(PA0, 128)`-style TIM2 programming: ARR=99, CCR1=50
+    // (~50% duty), PWM mode 1 on OC1, CC1E, CEN. TIM2 is not advanced, so there
+    // is no MOE to set.
+    bus.write_u32(0x4000_0028, 0).unwrap(); // PSC
+    bus.write_u32(0x4000_002C, 99).unwrap(); // ARR
+    bus.write_u32(0x4000_0034, 50).unwrap(); // CCR1
+    bus.write_u32(0x4000_0018, 0x0060).unwrap(); // CCMR1: OC1 PWM mode 1
+    bus.write_u32(0x4000_0020, 0x0001).unwrap(); // CCER: CC1E
+    bus.write_u32(0x4000_0000, 1).unwrap(); // CEN
+    bus.set_current_cycle(100);
+    let (mut interrupts, mut costs) = (Vec::new(), Vec::new());
+    bus.tick_peripherals_fully_into(&mut interrupts, &mut costs);
+    let snapshot = bus.motor_snapshots();
+    assert_eq!(snapshot[0].control_state, "forward");
+    assert!(
+        snapshot[0].speed_rpm > 0.0,
+        "timer duty must reach the plant, not the static ODR latch: {snapshot:?}"
+    );
+
+    // Stopping the timer gates the drive off; the plant coasts.
+    bus.write_u32(0x4000_0000, 0).unwrap(); // CEN off
+    bus.set_current_cycle(bus.current_cycle + 100);
+    bus.tick_peripherals_with_costs();
+    assert_eq!(bus.motor_snapshots()[0].control_state, "coast");
+
+    // An unknown timer name is a construction error, not a silent ODR fallback.
+    let bogus: SystemManifest = serde_yaml::from_str(
+        r#"
+name: dc-motor-timer-bogus
+chip: unused
+external_devices:
+  - id: wheel
+    type: dc-motor
+    connection: gpio
+    config:
+      pwm_pin: "PA0"
+      direction_pin: "PA1"
+      timer_name: "tim9"
+      timer_channel: 1
+"#,
+    )
+    .unwrap();
+    let error = match SystemBus::from_config(&chip, &bogus) {
+        Ok(_) => panic!("unknown timer must fail construction"),
+        Err(error) => error,
+    };
+    assert!(
+        error.to_string().contains("tim9"),
+        "error must name the unknown timer: {error}"
+    );
+}
+
+#[test]
 fn bus_motor_bldc_samples_tim1_six_gates_and_is_deterministic() {
     fn build() -> SystemBus {
         let chip: ChipDescriptor = serde_yaml::from_str(

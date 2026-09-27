@@ -266,6 +266,10 @@ impl SystemBus {
             encoder_b_pin: self.optional_pin_config(ext, desc, "encoder_b"),
             encoder_index_pin: self.optional_pin_config(ext, desc, "encoder_index"),
             fault_pin: self.optional_pin_config(ext, desc, "fault"),
+            timer_name: param_str(desc, ext, "timer_name"),
+            timer_channel: param_str(desc, ext, "timer_channel")
+                .and_then(|channel| channel.parse::<u64>().ok())
+                .map(|channel| channel as u8),
         };
         let runtime = self.build_dc_motor(config)?;
         self.motors.push(runtime);
@@ -376,6 +380,26 @@ fn param_u64(desc: &DeviceDescriptor, ext: &ExternalDevice, name: &str, fallback
         .get(config_key)
         .and_then(|v| v.as_u64())
         .unwrap_or(default)
+}
+
+/// Read an optional scalar param as a string: the descriptor's `params.<name>`
+/// entry gives the `config:` key (same `{key, default}` shape as [`param_u64`],
+/// with no default of its own), and `config[key]` supplies the value. A bare
+/// integer is stringified so the emitter may write `timer_channel: 1` as a
+/// YAML number; absent or blank stays `None`.
+fn param_str(desc: &DeviceDescriptor, ext: &ExternalDevice, name: &str) -> Option<String> {
+    let config_key = desc
+        .behavior
+        .params
+        .get(name)
+        .and_then(|v| v.get("key"))
+        .and_then(|k| k.as_str())
+        .unwrap_or(name);
+    let text = match ext.config.get(config_key)? {
+        serde_yaml::Value::String(value) => value.trim().to_owned(),
+        value => value.as_u64().map(|number| number.to_string())?,
+    };
+    (!text.is_empty()).then_some(text)
 }
 
 /// Read an `f64` primitive param (temperature, humidity): same `{key, default}`

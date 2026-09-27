@@ -22,6 +22,8 @@ behavior:
     load_torque_nm: { key: load_torque_nm, default: 0.0 }
     encoder_cpr: { key: encoder_cpr, default: 1024 }
     simulation_clock_hz: { key: simulation_clock_hz, default: 80000000 }
+    timer_name: { key: timer_name }
+    timer_channel: { key: timer_channel }
 
 metadata:
   label: "Brushed DC motor"
@@ -33,6 +35,8 @@ emit:
   config:
     - { key: pwm_pin, from_part_pin: [PWM] }
     - { key: direction_pin, from_part_pin: [DIRECTION] }
+    - { key: timer_name, from_pin_function: { pin: [PWM], type: timer }, required: false }
+    - { key: timer_channel, from_pin_function_channel: { pin: [PWM], type: timer }, required: false }
     - { key: brake_pin, from_part_pin: [BRAKE], required: false }
     - { key: enable_pin, from_part_pin: [ENABLE], required: false }
     - { key: encoder_a_pin, from_part_pin: [ENC_A], required: false }

@@ -257,6 +257,13 @@ pub struct BrushedMotorConfig {
     pub encoder_index_pin: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fault_pin: Option<String>,
+    /// Timer channel that drives the PWM pin (STM32-class hardware PWM). When
+    /// present the plant reads the timer's duty instead of the pin latch — a
+    /// timer-driven pin is in alternate-function mode and its ODR never moves.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timer_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timer_channel: Option<u8>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -2515,10 +2522,11 @@ fn default_code_width() -> u8 {
 }
 
 /// The canvas-compiler emit spec for a declarative device — the single source
-/// both engines interpret. A `config` entry sources its value one of four ways
-/// (a wired MCU pin, a list of wired pins, a computed board value, or a parsed
-/// part attribute); a device that also needs an auxiliary `board_io` entry
-/// (e.g. a rotary encoder's push switch) lists it under `board_io`.
+/// both engines interpret. A `config` entry sources its value one of six ways
+/// (a wired MCU pin, a list of wired pins, a computed board value, a parsed
+/// part attribute, a pin's alternate-function peripheral, or that function's
+/// channel); a device that also needs an auxiliary `board_io` entry (e.g. a
+/// rotary encoder's push switch) lists it under `board_io`.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DeviceEmit {
     /// The emitted `type:` string. Defaults to the descriptor `type` when
@@ -2568,10 +2576,32 @@ pub struct EmitConfig {
     /// Presence of this field selects the string emission path.
     #[serde(default)]
     pub default_str: Option<String>,
+    /// Source: a pin's alternate function peripheral (e.g. the timer that owns
+    /// it). The first wired part-pin supplies the pad label, which resolves
+    /// through the board's pin map; unresolved emits nothing and does NOT
+    /// suppress the device (the timer is optional).
+    #[serde(default)]
+    pub from_pin_function: Option<EmitPinFunction>,
+    /// Same resolution as [`Self::from_pin_function`], emitting the function's
+    /// numeric `channel` instead of its peripheral name.
+    #[serde(default)]
+    pub from_pin_function_channel: Option<EmitPinFunction>,
     /// Whether a missing pin binding suppresses the whole device. Defaults to
     /// true; optional feedback signals such as encoder index set this false.
     #[serde(default = "default_true")]
     pub required: bool,
+}
+
+/// The `pin`/`type` operand of [`EmitConfig::from_pin_function`] and
+/// [`EmitConfig::from_pin_function_channel`]: candidate part-pin names plus the
+/// alternate-function type to look up (`timer` today).
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct EmitPinFunction {
+    /// Candidate part-pin names; the first wired one wins.
+    pub pin: Vec<String>,
+    /// The `findPinFunction` type to match (e.g. `timer`).
+    #[serde(rename = "type")]
+    pub function_type: String,
 }
 
 /// One auxiliary `board_io` entry emitted alongside the device (e.g. a rotary

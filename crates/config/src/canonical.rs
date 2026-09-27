@@ -682,6 +682,58 @@ fn find_can_function(board: &str, pin_label: &str) -> Option<(&'static str, &'st
     }
 }
 
+/// STM32 `findPinFunction(board, pin, 'timer')` → `(peripheral, channel)` — the
+/// timer function on the pin, from the board's pin map (port of the F103 /
+/// F401 / F401CDU6 / L476 / H563 / H735 timer entries). `None` for a non-STM32
+/// board or a pin with no timer function (e.g. PC13).
+fn find_timer_function(board: &str, pin_label: &str) -> Option<(&'static str, u8)> {
+    if !STM32_BOARDS.contains(&board) {
+        return None;
+    }
+    // The F401 die differs from the F1/L4/H5 base table on three points: PA5 is
+    // TIM2_CH1, PB5/PB10 carry TIM3/TIM2, and PC6–PC9 route to TIM3 (the base
+    // table, H735 included, says TIM8). F401CDU6 omits unbonded PC6–PC9.
+    let f401 = board == "stm32f401";
+    let f401_or_h735 = matches!(board, "stm32f401" | "stm32f401cdu6" | "stm32h735");
+    match pin_label.to_ascii_uppercase().as_str() {
+        "PA0" => Some(("tim2", 1)),
+        "PA1" => Some(("tim2", 2)),
+        "PA2" => Some(("tim2", 3)),
+        "PA3" => Some(("tim2", 4)),
+        "PA5" if f401_or_h735 => Some(("tim2", 1)),
+        "PA6" => Some(("tim3", 1)),
+        "PA7" => Some(("tim3", 2)),
+        "PA8" => Some(("tim1", 1)),
+        "PA9" => Some(("tim1", 2)),
+        "PA10" => Some(("tim1", 3)),
+        "PA11" => Some(("tim1", 4)),
+        "PA15" => Some(("tim2", 1)),
+        "PB0" => Some(("tim3", 3)),
+        "PB1" => Some(("tim3", 4)),
+        "PB3" => Some(("tim2", 2)),
+        "PB4" => Some(("tim3", 1)),
+        "PB5" if f401_or_h735 => Some(("tim3", 2)),
+        "PB6" => Some(("tim4", 1)),
+        "PB7" => Some(("tim4", 2)),
+        "PB8" => Some(("tim4", 3)),
+        "PB9" => Some(("tim4", 4)),
+        "PB10" if f401_or_h735 => Some(("tim2", 3)),
+        "PB11" if board == "stm32h735" => Some(("tim2", 4)),
+        "PC6" if f401 => Some(("tim3", 1)),
+        "PC7" if f401 => Some(("tim3", 2)),
+        "PC8" if f401 => Some(("tim3", 3)),
+        "PC9" if f401 => Some(("tim3", 4)),
+        // The CDU6 (UFQFPN-48) does not bond PC6–PC9; the base table routes
+        // them to TIM8 (as does H735).
+        "PC6" if board == "stm32f401cdu6" => None,
+        "PC6" => Some(("tim8", 1)),
+        "PC7" => Some(("tim8", 2)),
+        "PC8" => Some(("tim8", 3)),
+        "PC9" => Some(("tim8", 4)),
+        _ => None,
+    }
+}
+
 /// STM32 `findPinFunction(board, pin, 'adc')` — the ADC controller on the pin,
 /// from the STM32F103 base pin map (ADC1 on PA0–PA7, PB0/PB1, PC0–PC5). The
 /// emitter only needs the peripheral name; L476's differing ADC *channel*
@@ -1024,6 +1076,24 @@ fn emit_from_descriptor(
                 continue;
             }
             format!("[\"{}\"]", pins.join("\", \""))
+        } else if let Some(source) = &c.from_pin_function {
+            // Optional timer binding: an unwired pin or a pin with no timer
+            // function (e.g. PC13) skips the key without dropping the device.
+            match first_wired(&source.pin)
+                .filter(|_| source.function_type == "timer")
+                .and_then(|pin| find_timer_function(board, &pin))
+            {
+                Some((peripheral, _)) => format!("\"{peripheral}\""),
+                None => continue,
+            }
+        } else if let Some(source) = &c.from_pin_function_channel {
+            match first_wired(&source.pin)
+                .filter(|_| source.function_type == "timer")
+                .and_then(|pin| find_timer_function(board, &pin))
+            {
+                Some((_, channel)) => format!("{channel}"),
+                None => continue,
+            }
         } else if let Some(source) = &c.from {
             match computed_source(source, board) {
                 Some(v) => format!("{v}"),
@@ -1506,6 +1576,10 @@ mod canonical_tests {
           ]
         }"#;
         let yaml = CanonicalConfig::from_json(json).unwrap().resolve().unwrap();
+        // PA8 carries TIM1_CH1 on the L476, so the emit spec's pin-function
+        // lookup must land the plant its timer channel (TS/Rust parity).
+        assert!(yaml.contains("timer_name: \"tim1\""), "got:\n{yaml}");
+        assert!(yaml.contains("timer_channel: 1"), "got:\n{yaml}");
         let manifest: crate::SystemManifest = serde_yaml::from_str(&yaml).unwrap();
         let models = manifest.resolved_motor_models().unwrap();
         let crate::MotorModelConfig::Dc(config) = &models[0] else {
@@ -1514,6 +1588,35 @@ mod canonical_tests {
         assert_eq!(config.resistance_ohm, 1.5);
         assert_eq!(config.encoder_cpr, 4096);
         assert_eq!(config.encoder_index_pin, None);
+        assert_eq!(config.timer_name.as_deref(), Some("tim1"));
+        assert_eq!(config.timer_channel, Some(1));
+    }
+
+    #[test]
+    fn dc_motor_timer_lookup_skips_pins_without_a_timer_function() {
+        let json = r#"{
+          "version": 1,
+          "parts": [
+            { "id": "mcu", "type": "nucleo-f401re" },
+            { "id": "motor", "type": "dc-motor" }
+          ],
+          "connections": [
+            ["mcu:PC13", "motor:PWM"],
+            ["mcu:PA1", "motor:DIRECTION"]
+          ]
+        }"#;
+        let yaml = CanonicalConfig::from_json(json).unwrap().resolve().unwrap();
+        assert!(yaml.contains("pwm_pin: \"PC13\""), "got:\n{yaml}");
+        assert!(!yaml.contains("timer_name"), "got:\n{yaml}");
+        assert!(!yaml.contains("timer_channel"), "got:\n{yaml}");
+
+        // Per-board routing: the same pad resolves differently on F401 (TIM3)
+        // than on the F103 base table (TIM8).
+        assert_eq!(find_timer_function("stm32f401", "PC6"), Some(("tim3", 1)));
+        assert_eq!(find_timer_function("stm32f103", "PC6"), Some(("tim8", 1)));
+        assert_eq!(find_timer_function("stm32f401cdu6", "PC6"), None);
+        assert_eq!(find_timer_function("stm32h735", "PB11"), Some(("tim2", 4)));
+        assert_eq!(find_timer_function("stm32f103", "PB11"), None);
     }
 
     #[test]
