@@ -121,6 +121,17 @@ pub(crate) struct TestResult {
     /// prove-blink `gpio_edges`/`gpio_period`/`gpio_duty` clauses.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) logic_edges: Option<labwired_core::logic_capture::LogicEdgesResult>,
+    /// Final + peak motor evidence (empty when the manifest declared no motors).
+    /// The oracle evaluates the peak `|speed_rpm|` post-hoc: a continuous
+    /// trajectory from 0 passes through every value up to its peak, so a
+    /// final-state-only verdict cannot disagree with the CLI's latched in-run
+    /// `MotorSpeedReached` assertion when the run stopped early.
+    ///
+    /// `skip_deserializing`: `MotorSnapshot::kind` is a `&'static str` engine
+    /// tag that serde cannot materialize from input, and nothing deserializes
+    /// `TestResult` — `result.json` is a write-only artifact.
+    #[serde(default, skip_deserializing)]
+    pub(crate) motors: Vec<labwired_core::bus::MotorSnapshot>,
     /// What became of every declarative input stimulus the script declared —
     /// applied, rejected by the engine, or never reached. Absent (and omitted)
     /// when the script declared none, so runs that never used the feature keep

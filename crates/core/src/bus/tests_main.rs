@@ -2474,6 +2474,13 @@ motor_models:
         snapshot[0].speed_rpm > 0.0,
         "no enable pin must mean always enabled"
     );
+    // The peak is the post-hoc equivalent of the CLI's latched assertion:
+    // final-state speed alone cannot prove a transient band was ever reached.
+    assert!(
+        bus.motor_snapshots()[0].speed_rpm_peak_abs >= snapshot[0].speed_rpm.abs(),
+        "peak must cover the final speed"
+    );
+    assert!(bus.motor_snapshots()[0].speed_rpm_peak_abs > 0.0);
 }
 
 #[test]

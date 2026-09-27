@@ -36,12 +36,16 @@ pub(super) struct PwmPhaseCursor {
     prescaler_phase: u32,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
 pub struct MotorSnapshot {
     pub id: String,
     pub kind: &'static str,
     pub position_rad: f64,
     pub speed_rpm: f64,
+    /// Largest `|speed_rpm|` observed at any service boundary so far. A
+    /// final-state-only snapshot cannot prove a transient band was reached;
+    /// this is the post-hoc equivalent of the CLI's latched in-run assertion.
+    pub speed_rpm_peak_abs: f64,
     pub torque_nm: f64,
     pub current_a: Option<f64>,
     pub phase_currents_a: Option<[f64; 3]>,
@@ -64,6 +68,7 @@ pub(super) enum MotorRuntime {
         index: Option<ResolvedPin>,
         fault: Option<ResolvedPin>,
         simulation_clock_hz: u64,
+        peak_abs_speed_rpm: f64,
         control_state: String,
     },
     Bldc {
@@ -80,6 +85,7 @@ pub(super) enum MotorRuntime {
         overcurrent_fault: Option<ResolvedPin>,
         undervoltage_fault: Option<ResolvedPin>,
         simulation_clock_hz: u64,
+        peak_abs_speed_rpm: f64,
         control_state: String,
         injected_inverter_fault: bool,
         computed_inverter_fault: bool,
@@ -186,6 +192,7 @@ impl SystemBus {
                 .map(|p| self.resolve_motor_input(&c.id, "fault", p))
                 .transpose()?,
             simulation_clock_hz: c.simulation_clock_hz,
+            peak_abs_speed_rpm: 0.0,
             control_state: "coast".to_owned(),
             encoder: QuadratureEncoder::new(c.encoder_cpr)?,
             id: c.id,
@@ -287,6 +294,7 @@ impl SystemBus {
                 .map(|p| self.resolve_motor_input(&c.id, "undervoltage fault", p))
                 .transpose()?,
             simulation_clock_hz: c.simulation_clock_hz,
+            peak_abs_speed_rpm: 0.0,
             control_state: "off:timer-stopped".to_owned(),
             injected_inverter_fault: false,
             computed_inverter_fault: false,
@@ -327,6 +335,7 @@ impl SystemBus {
                     index,
                     fault,
                     simulation_clock_hz,
+                    peak_abs_speed_rpm,
                     control_state,
                     ..
                 } => {
@@ -361,6 +370,10 @@ impl SystemBus {
                             }
                         }
                     }
+                    let peak = plant.snapshot().speed_rpm.abs();
+                    if peak > *peak_abs_speed_rpm {
+                        *peak_abs_speed_rpm = peak;
+                    }
                     let pins = encoder.sample(plant.snapshot().position_rad).ok();
                     if let (Some(feedback), Some(pins)) = (feedback.as_ref(), pins) {
                         self.drive_input(feedback[0], pins.a);
@@ -386,6 +399,7 @@ impl SystemBus {
                     overcurrent_fault,
                     undervoltage_fault,
                     simulation_clock_hz,
+                    peak_abs_speed_rpm,
                     control_state,
                     injected_inverter_fault,
                     computed_inverter_fault,
@@ -488,6 +502,10 @@ impl SystemBus {
                             }
                         }
                     }
+                    let peak = plant.snapshot().speed_rpm.abs();
+                    if peak > *peak_abs_speed_rpm {
+                        *peak_abs_speed_rpm = peak;
+                    }
                     let snapshot = plant.snapshot();
                     for (bit, pin) in hall.iter().enumerate() {
                         self.drive_input(*pin, snapshot.hall_state & (1 << bit) != 0);
@@ -534,6 +552,7 @@ impl SystemBus {
                 MotorRuntime::Dc {
                     id,
                     plant,
+                    peak_abs_speed_rpm,
                     control_state,
                     ..
                 } => {
@@ -543,6 +562,7 @@ impl SystemBus {
                         kind: "dc",
                         position_rad: s.position_rad,
                         speed_rpm: s.speed_rpm,
+                        speed_rpm_peak_abs: *peak_abs_speed_rpm,
                         torque_nm: s.electromagnetic_torque_nm,
                         current_a: Some(s.current_a),
                         phase_currents_a: None,
@@ -560,6 +580,7 @@ impl SystemBus {
                 MotorRuntime::Bldc {
                     id,
                     plant,
+                    peak_abs_speed_rpm,
                     control_state,
                     injected_inverter_fault,
                     computed_inverter_fault,
@@ -599,6 +620,7 @@ impl SystemBus {
                         kind: "bldc",
                         position_rad: s.position_rad,
                         speed_rpm: s.speed_rpm,
+                        speed_rpm_peak_abs: *peak_abs_speed_rpm,
                         torque_nm: s.electromagnetic_torque_nm,
                         current_a: Some(s.dc_bus_current_a),
                         phase_currents_a: Some(s.phase_currents_a),

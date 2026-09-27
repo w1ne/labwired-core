@@ -1595,6 +1595,9 @@ fn handle_load_error<C: labwired_core::Cpu>(
         &[],
         None,
         None,
+        // Load/reset failed before a machine existed, so there is no motor
+        // evidence either.
+        Vec::new(),
         // Load/reset failed before the run loop, so no stimulus was attempted.
         Vec::new(),
     );
@@ -2812,6 +2815,7 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         &fault_evidence,
         Some(inspect_block),
         logic_edges,
+        machine.bus.motor_snapshots(),
         stimulus_outcomes,
     );
 
@@ -2850,6 +2854,7 @@ fn write_outputs<C: labwired_core::Cpu>(
     fault_evidence: &[labwired_cli::faults::FaultEvidence],
     inspect: Option<labwired_core::inspect::MachineInspect>,
     logic_edges: Option<labwired_core::logic_capture::LogicEdgesResult>,
+    motors: Vec<labwired_core::bus::MotorSnapshot>,
     stimuli: Vec<StimulusOutcome>,
 ) {
     let mut hasher = Sha256::new();
@@ -2903,6 +2908,7 @@ fn write_outputs<C: labwired_core::Cpu>(
         inspect,
         fidelity,
         logic_edges,
+        motors,
         stimuli,
     };
 
@@ -3236,6 +3242,8 @@ pub(crate) fn write_config_error_outputs(
         fidelity: Vec::new(),
         // Nor any logic-analyzer edges — capture never armed.
         logic_edges: None,
+        // Nor any motor evidence: the run was rejected before a machine existed.
+        motors: Vec::new(),
         // Nor any stimulus outcomes: the run was rejected before a machine
         // existed, so no stimulus was ever attempted.
         stimuli: Vec::new(),
