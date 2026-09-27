@@ -91,6 +91,8 @@ pub trait SessionMachine: DebugControl + Send {
     /// Deliver a frame to the named CAN controller's receive path
     /// ([`crate::bus::SystemBus::inject_can_frame`]).
     fn inject_can(&mut self, controller: &str, frame: CanFrame) -> Result<(), CanInjectError>;
+    /// Attach a per-instruction observer (coverage, tracing).
+    fn add_observer(&mut self, observer: std::sync::Arc<dyn crate::SimulationObserver>);
 }
 
 impl<C: Cpu + 'static> SessionMachine for Machine<C> {
@@ -173,5 +175,9 @@ impl<C: Cpu + 'static> SessionMachine for Machine<C> {
 
     fn inject_can(&mut self, controller: &str, frame: CanFrame) -> Result<(), CanInjectError> {
         self.bus.inject_can_frame(controller, frame)
+    }
+
+    fn add_observer(&mut self, observer: std::sync::Arc<dyn crate::SimulationObserver>) {
+        Machine::add_observer(self, observer)
     }
 }

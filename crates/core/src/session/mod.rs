@@ -61,6 +61,9 @@ pub struct OpenOptions {
     pub batch_fuel: u64,
     /// Echo the console to the host's stdout.
     pub echo_uart_stdout: bool,
+    /// Record which instruction addresses execute (firmware coverage). Off by
+    /// default: an observed CPU gives up its decode cache and runs slower.
+    pub coverage: bool,
 }
 
 impl Default for OpenOptions {
@@ -69,6 +72,7 @@ impl Default for OpenOptions {
             cpu_hz: None,
             batch_fuel: 20_000,
             echo_uart_stdout: false,
+            coverage: false,
         }
     }
 }
@@ -106,6 +110,7 @@ pub enum AddrOrSymbol<'a> {
 
 /// The build inputs, owned, so [`Session::restore`] can construct the same
 /// machine again.
+#[derive(Clone)]
 struct OwnedBuild {
     chip: labwired_config::ChipDescriptor,
     system: labwired_config::SystemManifest,
@@ -115,6 +120,7 @@ struct OwnedBuild {
     options: BuildOptions,
 }
 
+#[derive(Clone)]
 enum OwnedFirmware {
     Elf(Vec<u8>),
     FlashImage {
@@ -214,6 +220,10 @@ pub struct Session {
     build: OwnedBuild,
     journal: Mutex<Vec<Op>>,
     id: u64,
+    /// Firmware PC coverage, when [`OpenOptions::coverage`] asked for it. It
+    /// survives [`Session::restore`] (re-attached to the rebuilt machine), so
+    /// hits accumulate across every path a script explores.
+    coverage: Option<std::sync::Arc<crate::pc_coverage::PcCoverageObserver>>,
 }
 
 impl Session {
@@ -258,8 +268,14 @@ impl Session {
         }
         req.options.echo_uart_stdout |= opts.echo_uart_stdout;
         let build = OwnedBuild::from_request(&req);
-        let built = build_machine(req)?;
+        let mut built = build_machine(req)?;
+        let coverage = opts.coverage.then(|| {
+            let obs = std::sync::Arc::new(crate::pc_coverage::PcCoverageObserver::new());
+            built.machine.add_observer(obs.clone());
+            obs
+        });
         Ok(Session {
+            coverage,
             machine: built.machine,
             uart: uart::UartStream::new(built.uart),
             board_io: built.board_io,
@@ -679,8 +695,11 @@ impl Session {
                     .into(),
             ));
         }
-        let built = build_machine(self.build.request())
+        let mut built = build_machine(self.build.request())
             .map_err(|e| SessionError::Other(format!("restore: rebuilding the machine: {e:#}")))?;
+        if let Some(obs) = &self.coverage {
+            built.machine.add_observer(obs.clone());
+        }
         self.machine = built.machine;
         self.uart = uart::UartStream::new(built.uart);
         self.board_io = built.board_io;
@@ -701,6 +720,81 @@ impl Session {
         self.uart.set_cursor(snap.uart_cursor);
         self.frame_cursor = snap.frame_cursor;
         Ok(())
+    }
+
+    /// A second, independent session at this session's current point: the
+    /// machine rebuilt from the same inputs and every journaled call replayed,
+    /// exactly as [`Self::restore`] does. The copy has no coverage observer and
+    /// its own identity, so snapshots do not cross between the two.
+    pub fn fork(&self) -> SessionResult<Session> {
+        let built = build_machine(self.build.request())
+            .map_err(|e| SessionError::Other(format!("fork: rebuilding the machine: {e:#}")))?;
+        let ops = self
+            .journal
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone();
+        let mut copy = Session {
+            machine: built.machine,
+            uart: uart::UartStream::new(built.uart),
+            board_io: built.board_io,
+            firmware_bytes: self.firmware_bytes.clone(),
+            symbols: OnceLock::new(),
+            frame_cursor: self.frame_cursor,
+            cpu_hz: self.cpu_hz,
+            opts: self.opts.clone(),
+            build: self.build.clone(),
+            journal: Mutex::new(Vec::new()),
+            id: NEXT_SESSION_ID.fetch_add(1, Ordering::Relaxed),
+            coverage: None,
+        };
+        for op in &ops {
+            copy.replay(op);
+        }
+        *copy.journal.lock().unwrap_or_else(PoisonError::into_inner) = ops;
+        if copy.cycles() != self.cycles() || copy.uart.len() != self.uart.len() {
+            return Err(SessionError::Other(format!(
+                "fork diverged: replay reached cycle {} with {} console bytes, this session is \
+                 at cycle {} with {}",
+                copy.cycles(),
+                copy.uart.len(),
+                self.cycles(),
+                self.uart.len()
+            )));
+        }
+        copy.uart.set_cursor(self.uart.cursor());
+        Ok(copy)
+    }
+
+    /// Run a fault-injection experiment from this session's current point,
+    /// without changing this session.
+    ///
+    /// Two copies are forked ([`Self::fork`]): a golden one and a faulted one.
+    /// The plan's faults fire on the faulted copy at their cycles, and both
+    /// copies step in lockstep until `plan.until_cycle`, compared after every
+    /// instruction. See [`crate::vfi::lockstep`] for what is compared and what
+    /// each verdict means.
+    pub fn fault_experiment(
+        &self,
+        plan: &crate::vfi::FaultPlan,
+    ) -> SessionResult<crate::vfi::FaultReport> {
+        let family = crate::system::arch_policy::machine_family(&self.build.chip)
+            .map_err(|e| SessionError::Other(format!("{e:#}")))?;
+        let isa = crate::vfi::Isa::from_family(family);
+        let mut golden = self.fork()?;
+        let mut faulted = self.fork()?;
+        crate::vfi::run_lockstep(&mut golden, &mut faulted, plan, isa).map_err(SessionError::Other)
+    }
+
+    /// The PC-coverage observer, when the session was opened with
+    /// [`OpenOptions::coverage`].
+    pub fn coverage(&self) -> Option<&crate::pc_coverage::PcCoverageObserver> {
+        self.coverage.as_deref()
+    }
+
+    /// The firmware (or companion symbols) ELF the session loaded.
+    pub fn firmware_elf(&self) -> &[u8] {
+        &self.firmware_bytes
     }
 
     /// Re-apply one journaled call. Results are discarded: the original call
@@ -743,6 +837,18 @@ impl Session {
                 let _ = self.machine.logic_read_edges(*cursor);
             }
         }
+    }
+}
+
+impl crate::vfi::LockstepTarget for Session {
+    fn machine(&mut self) -> &mut dyn crate::DebugControl {
+        &mut *self.machine
+    }
+    fn machine_ref(&self) -> &dyn crate::DebugControl {
+        &*self.machine
+    }
+    fn console(&self) -> Vec<u8> {
+        self.uart.all()
     }
 }
 

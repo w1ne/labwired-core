@@ -8,6 +8,12 @@ use crate::{Bus, Cpu, SimResult, SimulationConfig, SimulationError, SimulationOb
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
+pub mod lockstep;
+pub use lockstep::{
+    run_lockstep, FaultAction, FaultPlan, FaultReport, FaultVerdict, Isa, LockstepTarget,
+    RegisterRef, ScheduledFault, SinkTarget,
+};
+
 /// Types of faults that can be injected into the simulation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Fault {
