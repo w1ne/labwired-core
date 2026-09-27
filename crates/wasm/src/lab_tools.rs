@@ -139,6 +139,11 @@ impl WasmSimulator {
         }
     }
 
+    /// Whether a coverage observer is attached (live recording).
+    pub(crate) fn coverage_recording(&self) -> bool {
+        self.tools.borrow().coverage.is_some()
+    }
+
     /// Why this simulator cannot be snapshotted, if it cannot.
     fn snapshot_refusal(&self) -> Option<String> {
         let tools = self.tools.borrow();
@@ -315,7 +320,7 @@ impl WasmSimulator {
             .find(|p| p.id == id)
             .cloned()
             .ok_or_else(|| format!("no saved state {id}"))?;
-        let mut fresh = self.rebuild_s(point.ops)?;
+        let mut fresh = self.rebuild_s(point.ops, None)?;
         let digest = fresh.digest_s()?;
         let cycles = fresh.machine_s()?.total_cycles;
         if digest != point.digest || cycles != point.cycles {
@@ -354,8 +359,14 @@ impl WasmSimulator {
         Ok(serde_json::json!({"id": point.id, "cycles": point.cycles}).to_string())
     }
 
-    /// [`Self::rebuild`] with a `String` error.
-    fn rebuild_s(&self, ops: usize) -> Result<WasmSimulator, String> {
+    /// A fresh simulator from this one's build inputs with the first `ops`
+    /// journaled calls replayed. With `coverage`, the observer is attached
+    /// before the first replayed call, so it sees the run from power-on.
+    fn rebuild_s(
+        &self,
+        ops: usize,
+        coverage: Option<Arc<PcCoverageObserver>>,
+    ) -> Result<WasmSimulator, String> {
         let (ctor, journal) = {
             let tools = self.tools.borrow();
             let ctor = tools
@@ -368,6 +379,13 @@ impl WasmSimulator {
         // an error here is not reachable from a well-formed simulator.
         let mut fresh = WasmSimulator::new_from_config_parts(ctor)
             .map_err(|_| "rebuilding the machine from its own inputs failed".to_string())?;
+        if let Some(obs) = coverage {
+            fresh.jit_browser_enabled = false;
+            if let Some(m) = fresh.machine.as_mut() {
+                m.add_observer(obs.clone());
+            }
+            fresh.tools.get_mut().coverage = Some(obs);
+        }
         for op in &journal {
             fresh.replay(op);
         }
@@ -389,8 +407,8 @@ impl WasmSimulator {
         } else {
             self.tools.borrow().journal.len()
         };
-        let mut golden = self.rebuild_s(ops)?;
-        let mut faulted = self.rebuild_s(ops)?;
+        let mut golden = self.rebuild_s(ops, None)?;
+        let mut faulted = self.rebuild_s(ops, None)?;
         let isa = labwired_core::vfi::Isa::from_family(self.arch);
         let report = labwired_core::vfi::run_lockstep(
             &mut Side(&mut golden),
@@ -416,13 +434,34 @@ impl WasmSimulator {
         Ok(())
     }
 
+    /// Firmware coverage as JSON. With live recording on
+    /// ([`Self::enable_coverage_s`]) it is what ran since recording started
+    /// (`"method": "live"`). Otherwise it is measured from power-on: a fresh
+    /// copy replays every recorded call with an observer attached from the
+    /// first instruction (`"method": "replay"`), which is exact because the
+    /// simulator is deterministic, and costs re-simulating the run.
     pub(crate) fn coverage_report_s(&self) -> Result<String, String> {
-        let obs = self
-            .tools
-            .borrow()
-            .coverage
-            .clone()
-            .ok_or("coverage is off; call enable_coverage() first")?;
+        let live = self.tools.borrow().coverage.clone();
+        let (obs, method, cycles) = match live {
+            Some(obs) => (obs, "live", self.machine_s()?.total_cycles),
+            None => {
+                if let Some(why) = self.snapshot_refusal() {
+                    return Err(format!("cannot measure coverage by replay: {why}"));
+                }
+                let obs = Arc::new(PcCoverageObserver::new());
+                let ops = self.tools.borrow().journal.len();
+                let fresh = self.rebuild_s(ops, Some(obs.clone()))?;
+                let cycles = fresh.machine_s()?.total_cycles;
+                if cycles != self.machine_s()?.total_cycles {
+                    return Err(format!(
+                        "coverage replay reached cycle {cycles}, the machine is at cycle {}; \
+                         something changed it that the journal does not record",
+                        self.machine_s()?.total_cycles
+                    ));
+                }
+                (obs, "replay", cycles)
+            }
+        };
         let elf = self.firmware_elf().ok_or(
             "coverage needs the firmware ELF with debug info; this machine was built from flash \
              images only",
@@ -435,6 +474,8 @@ impl WasmSimulator {
         value["statement_percent"] = serde_json::json!(report.statement_percent());
         value["function_percent"] = serde_json::json!(report.function_percent());
         value["branch_percent"] = serde_json::json!(report.branch_percent());
+        value["method"] = serde_json::json!(method);
+        value["cycles"] = serde_json::json!(cycles);
         Ok(value.to_string())
     }
 }
@@ -502,7 +543,9 @@ impl WasmSimulator {
     }
 
     /// The firmware coverage report as JSON: per-file lines, per-function
-    /// summary, branches, percentages, and the LCOV text under `lcov`.
+    /// summary, branches, percentages, the LCOV text under `lcov`, and
+    /// `method`: `"live"` (recording since `enable_coverage`) or `"replay"`
+    /// (measured from power-on by replaying the run on a fresh copy).
     #[wasm_bindgen]
     pub fn coverage_report(&self) -> Result<String, JsValue> {
         self.coverage_report_s().map_err(js)
@@ -654,9 +697,29 @@ mod tests {
     }
 
     #[test]
+    fn coverage_by_replay_covers_the_run_from_power_on() {
+        // No recording: the report replays the run on a fresh copy with an
+        // observer from the first instruction, and matches live recording.
+        let mut replayed = ring();
+        replayed.step_batch(20_000).unwrap();
+        let r: serde_json::Value =
+            serde_json::from_str(&replayed.coverage_report_s().unwrap()).unwrap();
+        assert_eq!(r["method"], "replay");
+        assert_eq!(r["cycles"], replayed.machine_s().unwrap().total_cycles);
+
+        let mut live = ring();
+        live.enable_coverage_s().unwrap();
+        live.step_batch(20_000).unwrap();
+        let l: serde_json::Value =
+            serde_json::from_str(&live.coverage_report_s().unwrap()).unwrap();
+        assert_eq!(l["method"], "live");
+        assert_eq!(r["files"], l["files"], "replay == live recording from boot");
+        assert_eq!(r["functions"], l["functions"]);
+    }
+
+    #[test]
     fn coverage_maps_the_run_to_lines_and_functions() {
         let mut sim = ring();
-        assert!(sim.coverage_report_s().is_err(), "off until enabled");
         sim.enable_coverage_s().unwrap();
         sim.step_batch(20_000).unwrap();
         let r: serde_json::Value = serde_json::from_str(&sim.coverage_report_s().unwrap()).unwrap();

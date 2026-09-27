@@ -1924,7 +1924,8 @@ impl WasmSimulator {
 
     pub fn set_jit_enabled(&mut self, enabled: bool) {
         self.record(lab_tools::Op::SetJit(enabled));
-        self.jit_browser_enabled = enabled;
+        // Coverage needs every instruction reported; compiled blocks do not.
+        self.jit_browser_enabled = enabled && !self.coverage_recording();
         if !enabled {
             // Cleanly drop the cached module + closures so the next
             // enable rebuilds from scratch.

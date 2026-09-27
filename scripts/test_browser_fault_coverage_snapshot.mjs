@@ -12,7 +12,7 @@
 //
 //   1. restore then run == straight run (cycles, PC, registers, console);
 //   2. fault_experiment gives the lockstep verdict, identically twice;
-//   3. coverage maps the run to functions and emits LCOV.
+//   3. coverage maps the run to functions and emits LCOV, live and by replay.
 //
 // Usage (after `wasm-pack build --target nodejs --dev --out-dir pkg` in
 // crates/wasm/):  node scripts/test_browser_fault_coverage_snapshot.mjs
@@ -98,5 +98,12 @@ assert.equal(fn('main').entered, true);
 assert.equal(fn('HardFault_Handler').entered, false);
 assert.ok(r.statement_percent > 50 && r.statement_percent < 100, String(r.statement_percent));
 assert.match(r.lcov, /FNDA:1,main\n/);
-console.log(`[lab-tools] coverage: ${r.covered_statements}/${r.total_statements} lines, ${r.covered_functions}/${r.total_functions} functions`);
+assert.equal(r.method, 'live');
+// Without recording, the report replays the run from power-on: same answer.
+const replay = open();
+replay.step_batch(20_000);
+const rr = JSON.parse(replay.coverage_report());
+assert.equal(rr.method, 'replay');
+assert.deepEqual(rr.functions, r.functions, 'replayed coverage == live coverage from boot');
+console.log(`[lab-tools] coverage: ${r.covered_statements}/${r.total_statements} lines, ${r.covered_functions}/${r.total_functions} functions (live == replay)`);
 console.log('[lab-tools] OK');
