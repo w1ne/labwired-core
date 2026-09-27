@@ -306,13 +306,19 @@ pub fn build_rom_boot_machine<C: crate::Cpu, F: FnOnce(crate::cpu::RiscV) -> C>(
     // and the USB CDC port — `usb_uart_tx_one_char` busy-polls EP1_CONF
     // (offset 0x04) for SERIAL_IN_EP_DATA_FREE. The declarative usb_device
     // stub reads 0 there, wedging boot_prepare's very first ets_printf line
-    // (observed: banner, then a uart/usb tx ping-pong, then ret-to-0). The C3
-    // block is the same IP as the S3's, so the S3 behavioral model (EP1_CONF
-    // always WR_DONE|DATA_FREE, bytes appended/echoed) drops in unchanged.
+    // (observed: banner, then a uart/usb tx ping-pong, then ret-to-0).
+    //
+    // The C3 and S3 blocks are the same IP and their register maps are
+    // byte-identical, so ONE behavioural model serves both — but the matrix
+    // source id is NOT shared (C3 = 26, S3 = 96), so the chip must be named
+    // rather than defaulted. `new_esp32c3()` is what lets an interrupt-driven
+    // HWCDC build (`ARDUINO_USB_CDC_ON_BOOT=1`, the ESP32-C3 SuperMini's real
+    // configuration) actually take its ISR; see the model's module docs.
+    //
     // Native leaves the sink `None` (the same console bytes reach stdout via
     // UART0; a second echo doubles every character); the browser widget passes
     // a sink so its Serial tab shows esp-hal / jtag-serial output.
-    let mut usb_serial = crate::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag::new();
+    let mut usb_serial = crate::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag::new_esp32c3();
     usb_serial.set_sink(opts.usb_serial_sink.clone(), false);
     bus.add_peripheral(
         "usb_serial_jtag",

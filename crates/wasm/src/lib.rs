@@ -645,7 +645,7 @@ impl WasmSimulator {
         // window overrides the declarative stub.
         if faithful_c3_rom {
             use labwired_core::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag;
-            let mut usb_serial = UsbSerialJtag::new();
+            let mut usb_serial = UsbSerialJtag::new_esp32c3();
             usb_serial.set_sink(Some(uart_sink.clone()), false);
             bus.add_peripheral(
                 "usb_serial_jtag",

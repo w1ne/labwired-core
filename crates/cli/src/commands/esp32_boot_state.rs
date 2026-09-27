@@ -177,7 +177,9 @@ pub fn install_esp32c3_fast_boot(bus: &mut SystemBus, firmware_path: &Path) {
         0x6004_3000,
         0x100,
         None,
-        Box::new(labwired_core::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag::new()),
+        Box::new(
+            labwired_core::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag::new_esp32c3(),
+        ),
     );
     bus.config.optimized_bus_access = false;
     // FreeRTOS first yield needs FROM_CPU matrix → riscv_irq_lines.

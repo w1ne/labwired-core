@@ -85,7 +85,7 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         "esp32s3_crosscore_ipi" => Box::new(crosscore_ipi::Esp32s3CrossCoreIpi::new()),
         "esp32s3_gpio" => Box::new(gpio::Esp32s3Gpio::new()),
         "esp32s3_io_mux" => Box::new(io_mux::Esp32s3IoMux::new()),
-        "esp32s3_usb_serial_jtag" => Box::new(usb_serial_jtag::UsbSerialJtag::new()),
+        "esp32s3_usb_serial_jtag" => Box::new(usb_serial_jtag::UsbSerialJtag::new_esp32s3()),
         "esp32s3_systimer" => {
             let cpu_clock_hz = p_cfg
                 .config

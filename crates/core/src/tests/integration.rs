@@ -1051,10 +1051,13 @@ pub mod integration_tests {
         bus.attach_uart_tx_sink(sink.clone(), false);
 
         // EP1_CONF must read DATA_FREE or the firmware's busy-poll wedges before
-        // writing anything. EP1 (offset 0) is the CDC TX FIFO byte.
-        assert_eq!(bus.read_u8(0x6004_3004).unwrap(), 0x03);
+        // writing anything. WR_DONE is write-triggered and reads back 0, so the
+        // byte reads 0x02. EP1 (offset 0) stages the CDC TX FIFO byte; WR_DONE
+        // (EP1_CONF bit 0) commits the staged packet to the console.
+        assert_eq!(bus.read_u8(0x6004_3004).unwrap(), 0x02);
         bus.write_u8(0x6004_3000, b'O').unwrap();
         bus.write_u8(0x6004_3000, b'K').unwrap();
+        bus.write_u8(0x6004_3004, 0x01).unwrap();
 
         let data = sink.lock().unwrap().clone();
         assert_eq!(data, vec![b'O', b'K']);
