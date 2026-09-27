@@ -193,12 +193,19 @@ impl SystemBus {
             c.timer_channel,
         ) {
             (Some(name), Some(channel)) => {
-                let index = self.find_peripheral_index_by_name(name).ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "motor '{}': DC motor PWM timer '{name}' is not a configured peripheral (set timer_name in motor config)",
-                        c.id
-                    )
-                })?;
+                // Advanced timers are declared as `tim1_pwm` on several chips
+                // (the `_pwm` id suffix adds the pwm class alongside timer),
+                // while pin maps and emitters name the timer `tim1`. Accept
+                // either spelling.
+                let index = self
+                    .find_peripheral_index_by_name(name)
+                    .or_else(|| self.find_peripheral_index_by_name(&format!("{name}_pwm")))
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "motor '{}': DC motor PWM timer '{name}' is not a configured peripheral (set timer_name in motor config)",
+                            c.id
+                        )
+                    })?;
                 let is_timer = self.peripherals[index]
                     .dev
                     .as_any()

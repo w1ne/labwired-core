@@ -111,6 +111,29 @@ peripherals:
       debug_schema: "../peripherals/stm32f401/tim2.yaml"
       width: 32
     clock: { reg: "apb1enr", bit: 0 }
+  # TIM3 — 16-bit general-purpose timer (RM0368 §13), APB1, IRQ 29. Clock-gated
+  # by RCC_APB1ENR.TIM3EN (bit 1); unclocked out of reset like TIM2. The pin map
+  # advertises TIM3 on PA6/PA7, PB0/PB1, PB4/PB5 and PC6–PC9.
+  - id: "tim3"
+    type: "timer"
+    base_address: 0x40000400
+    size: "1KB"
+    irq: 29
+    config:
+      debug_schema: "../peripherals/stm32f401/tim3.yaml"
+      width: 16
+    clock: { reg: "apb1enr", bit: 1 }
+  # TIM4 — 16-bit general-purpose timer (RM0368 §13), APB1, IRQ 30. Clock-gated
+  # by RCC_APB1ENR.TIM4EN (bit 2); the pin map advertises it on PB6–PB9.
+  - id: "tim4"
+    type: "timer"
+    base_address: 0x40000800
+    size: "1KB"
+    irq: 30
+    config:
+      debug_schema: "../peripherals/stm32f401/tim4.yaml"
+      width: 16
+    clock: { reg: "apb1enr", bit: 2 }
   # SPI1 — classic STM32 SPI (RM0368 §20). On APB2, clock-gated by
   # RCC_APB2ENR.SPI1EN (bit 12). F4 silicon CR masks mirror the F407:
   # CR2 bit 4 (FRF/TI-mode) writable → 0xF7; CR1 bit 12 (CRCNEXT) not latched

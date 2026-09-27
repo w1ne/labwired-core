@@ -2593,6 +2593,99 @@ external_devices:
 }
 
 #[test]
+fn bus_motor_f401_chip_exposes_tim3_and_tim4() {
+    // The F401 pin map advertises TIM3 (PA6/PA7, PB0/PB1, PB4/PB5, PC6..PC9)
+    // and TIM4 (PB6..PB9) timer functions, so a motor PWM on one of those pads
+    // emits `timer_name: tim3|tim4`. The chip descriptor must resolve both, or
+    // the motor build dies with a config_error (RM0368 §13: TIM3 IRQ 29,
+    // TIM4 IRQ 30, both APB1).
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let chip = ChipDescriptor::from_file(&root.join("../../configs/chips/stm32f401.yaml"))
+        .expect("load F401 chip");
+    let manifest: SystemManifest = serde_yaml::from_str(
+        r#"
+name: f401-timers
+chip: unused
+"#,
+    )
+    .unwrap();
+    let bus = SystemBus::from_config(&chip, &manifest).unwrap();
+    for (name, base, irq) in [("tim3", 0x4000_0400, 29u32), ("tim4", 0x4000_0800, 30u32)] {
+        let idx = bus
+            .find_peripheral_index_by_name(name)
+            .unwrap_or_else(|| panic!("F401 must expose {name} for its pin map"));
+        let entry = &bus.peripherals[idx];
+        assert_eq!(entry.base, base, "{name} base");
+        assert_eq!(entry.irq, Some(irq), "{name} IRQ");
+        assert!(
+            entry
+                .dev
+                .as_any()
+                .and_then(|a| a.downcast_ref::<crate::peripherals::timer::Timer>())
+                .is_some(),
+            "{name} must be an STM32 timer model"
+        );
+    }
+}
+
+#[test]
+fn bus_motor_dc_timer_name_resolves_the_chip_pwm_suffix() {
+    // The real F401 declares its advanced timer as `tim1_pwm` (the `_pwm` id
+    // suffix adds the pwm class), while the pin map / board emitter name a
+    // TIM1 pin's timer `tim1`. The DC plant must tolerate the `_pwm` variant
+    // instead of dying with a config_error.
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let chip = ChipDescriptor::from_file(&root.join("../../configs/chips/stm32f401.yaml"))
+        .expect("load F401 chip");
+    let manifest: SystemManifest = serde_yaml::from_str(
+        r#"
+name: dc-motor-timer-pwm-suffix
+chip: unused
+external_devices:
+  - id: wheel
+    type: dc-motor
+    connection: gpio
+    config:
+      pwm_pin: "PA8"
+      direction_pin: "PA1"
+      timer_name: "tim1"
+      timer_channel: 1
+"#,
+    )
+    .unwrap();
+    let mut bus = SystemBus::from_config(&chip, &manifest).unwrap();
+    assert!(
+        bus.find_peripheral_index_by_name("tim1").is_none(),
+        "the chip spells the advanced timer tim1_pwm; the bare name must be \
+         absent so the fallback is actually exercised"
+    );
+    // Direction high; PA8's ODR latch stays 0 (timer alternate-function mode),
+    // so only the timer's duty can drive the plant.
+    bus.write_u32(0x4002_0014, 1 << 1).unwrap();
+    // Un-gate TIM1 on APB2 (RCC_APB2ENR.TIM1EN), then Arduino-style
+    // `analogWrite(PA8, 128)` programming: ARR=99, CCR1=50 (~50% duty), PWM
+    // mode 1 on OC1, CC1E, BDTR.MOE (advanced timer), CEN.
+    bus.write_u32(0x4002_3844, 1).unwrap(); // RCC_APB2ENR.TIM1EN
+    bus.write_u32(0x4001_0028, 0).unwrap(); // PSC
+    bus.write_u32(0x4001_002C, 99).unwrap(); // ARR
+    bus.write_u32(0x4001_0034, 50).unwrap(); // CCR1
+    bus.write_u32(0x4001_0018, 0x0060).unwrap(); // CCMR1: OC1 PWM mode 1
+    bus.write_u32(0x4001_0020, 0x0001).unwrap(); // CCER: CC1E
+    bus.write_u32(0x4001_0044, 0x8000).unwrap(); // BDTR: MOE
+    bus.write_u32(0x4001_0000, 1).unwrap(); // CEN
+    bus.set_current_cycle(100);
+    let (mut interrupts, mut costs) = (Vec::new(), Vec::new());
+    bus.tick_peripherals_fully_into(&mut interrupts, &mut costs);
+    let snapshot = bus.motor_snapshots();
+    assert_eq!(snapshot[0].control_state, "forward");
+    assert!(
+        snapshot[0].speed_rpm > 0.0,
+        "timer_name 'tim1' must resolve to the chip's tim1_pwm and spin the \
+         plant: {snapshot:?}"
+    );
+}
+
+#[test]
 fn bus_motor_bldc_samples_tim1_six_gates_and_is_deterministic() {
     fn build() -> SystemBus {
         let chip: ChipDescriptor = serde_yaml::from_str(
