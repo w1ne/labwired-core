@@ -52,7 +52,7 @@ class Sim:
     ``uart`` is a peripheral ID, and ``set_pin`` takes a board_io binding ID.
     ``expect`` and ``read_uart`` consume one shared stream; transcripts do not.
     """
-    def __init__(self, elf, *, chip=None, system=None, uart=None):
+    def __init__(self, elf, *, chip=None, system=None, uart=None, coverage=False):
         if (chip is None) == (system is None):
             raise ValueError('provide exactly one of chip or system')
         chip_path = None
@@ -68,7 +68,7 @@ class Sim:
             candidate = root / 'systems' / (name + '.yaml')
             if candidate.is_file():
                 system_path = candidate
-        self._session = NativeSession(Path(elf), chip_path, system_path, uart, root)
+        self._session = NativeSession(Path(elf), chip_path, system_path, uart, root, bool(coverage))
         self._transcript = ''
 
     @property
@@ -165,6 +165,50 @@ class Sim:
 
     def inject_can(self, bus, id, data, *, extended=False, fd=False, bitrate_switch=False, remote=False):
         self._open().inject_can(bus, id, list(data), extended, fd, bitrate_switch, remote)
+
+    def inject_fault(self, kind=None, *, at_cycle=None, register=None, address=None, bit=None,
+                     faults=None, run_for=None, until_cycle=None):
+        """Run a lockstep fault experiment from the current point.
+
+        Two copies of this Sim are built at the current point: a golden one and
+        a faulted one. The faults fire on the faulted copy at their cycles, both
+        step one instruction at a time, and the report says what the fault did.
+        This Sim itself is not changed.
+
+        One fault: ``kind`` is ``'register_bit_flip'`` (``register`` name or
+        index, ``bit``), ``'memory_bit_flip'`` (``address``, ``bit``) or
+        ``'instruction_skip'``; ``at_cycle`` defaults to now. Several: pass
+        ``faults=[{'at_cycle': ..., 'kind': ..., ...}, ...]``.
+
+        The run lasts ``run_for`` (a duration) or until ``until_cycle``.
+
+        Returns the report as a dict. ``report['verdict']`` is one of
+        ``masked``, ``latent``, ``diverged``, ``output_changed``, ``crashed``
+        and ``not_injected``.
+        """
+        session = self._open()
+        if (faults is None) == (kind is None):
+            raise ValueError('pass kind=... for one fault, or faults=[...]')
+        if faults is None:
+            fault = {'kind': kind, 'at_cycle': session.cycles if at_cycle is None else at_cycle}
+            if register is not None:
+                fault['register'] = register
+            if address is not None:
+                fault['address'] = address
+            if bit is not None:
+                fault['bit'] = bit
+            faults = [fault]
+        if (run_for is None) == (until_cycle is None):
+            raise ValueError('pass exactly one of run_for or until_cycle')
+        plan = {'faults': list(faults), 'until_cycle': until_cycle or 0}
+        ns = None if run_for is None else _nanoseconds(run_for)
+        return json.loads(session.fault_experiment(json.dumps(plan), ns))
+
+    def coverage(self):
+        """Firmware coverage so far, as a dict: per-file lines, per-function
+        summary, branch counts, percentages, and the LCOV text under ``lcov``.
+        The Sim must be opened with ``coverage=True``."""
+        return json.loads(self._open().coverage())
 
 
 def run_firmware(elf, *, duration='1s', chip=None, system=None, uart=None,

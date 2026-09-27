@@ -53,13 +53,14 @@ impl NativeSession {
 #[pymethods]
 impl NativeSession {
     #[new]
-    #[pyo3(signature=(elf, chip_path, system_path=None, uart=None, catalog_root=None))]
+    #[pyo3(signature=(elf, chip_path, system_path=None, uart=None, catalog_root=None, coverage=false))]
     fn new(
         elf: PathBuf,
         chip_path: Option<PathBuf>,
         system_path: Option<PathBuf>,
         uart: Option<String>,
         catalog_root: Option<PathBuf>,
+        coverage: bool,
     ) -> PyResult<Self> {
         let loaded = system_path
             .as_ref()
@@ -113,7 +114,10 @@ impl NativeSession {
                     ..Default::default()
                 },
             },
-            OpenOptions::default(),
+            OpenOptions {
+                coverage,
+                ..OpenOptions::default()
+            },
         )
         .map_err(build_error)?;
         Ok(Self {
@@ -213,6 +217,42 @@ impl NativeSession {
     }
     fn restore(&mut self, snapshot: &Snapshot) -> PyResult<()> {
         self.get_mut()?.restore(&snapshot.inner).map_err(error)
+    }
+    /// Run a lockstep fault experiment from the current point and return the
+    /// report as JSON. `plan_json` is a `FaultPlan`; when `run_for_ns` is
+    /// given it sets `until_cycle` to that much virtual time from now.
+    fn fault_experiment(&self, plan_json: &str, run_for_ns: Option<u64>) -> PyResult<String> {
+        let s = self.get()?;
+        let mut plan: labwired_core::vfi::FaultPlan = serde_json::from_str(plan_json)
+            .map_err(|e| PyValueError::new_err(format!("fault plan: {e}")))?;
+        if let Some(ns) = run_for_ns {
+            let cycles = (u128::from(ns) * u128::from(s.cpu_hz())).div_ceil(1_000_000_000);
+            plan.until_cycle = s
+                .cycles()
+                .saturating_add(u64::try_from(cycles).unwrap_or(u64::MAX).max(1));
+        }
+        let report = s.fault_experiment(&plan).map_err(|e| match e {
+            SessionError::Other(msg) => PyValueError::new_err(msg),
+            other => error(other),
+        })?;
+        serde_json::to_string(&report).map_err(|e| PyRuntimeError::new_err(e.to_string()))
+    }
+    /// The firmware coverage report as JSON, with the LCOV text under `lcov`.
+    fn coverage(&self) -> PyResult<String> {
+        let s = self.get()?;
+        let observer = s.coverage().ok_or_else(|| {
+            PyRuntimeError::new_err("coverage is off; open the Sim with coverage=True")
+        })?;
+        let symbols = labwired_loader::SymbolProvider::from_bytes(s.firmware_elf().to_vec())
+            .map_err(|e| PyValueError::new_err(format!("firmware symbols: {e:#}")))?;
+        let report = labwired_loader::coverage::CoverageReport::from_run(&symbols, observer);
+        let mut value =
+            serde_json::to_value(&report).map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        value["lcov"] = serde_json::Value::String(report.to_lcov());
+        value["statement_percent"] = serde_json::json!(report.statement_percent());
+        value["function_percent"] = serde_json::json!(report.function_percent());
+        value["branch_percent"] = serde_json::json!(report.branch_percent());
+        Ok(value.to_string())
     }
     #[allow(clippy::too_many_arguments)]
     fn inject_can(
