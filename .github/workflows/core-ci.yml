@@ -1135,6 +1135,12 @@ jobs:
         working-directory: crates/wasm
       - name: Browser Cortex-M JIT end-to-end (JIT off vs on)
         run: node scripts/test_browser_cortex_m_jit.mjs
+      # Snapshot/restore, fault experiments and coverage through the same
+      # artifact the playground loads: restore-then-run must equal a straight
+      # run, the fault verdicts must repeat, and coverage must map the run to
+      # functions. Committed smart-ring ELF, no skip path.
+      - name: Browser snapshot, fault injection and coverage end-to-end
+        run: node scripts/test_browser_fault_coverage_snapshot.mjs
 
   pr-scheduler-observable:
     name: pr-scheduler-observable
