@@ -5,6 +5,7 @@
 //! WasmSimulator firmware-quirk installers + runtime-snapshot save/restore.
 //! Split out of lib.rs.
 
+use crate::lab_tools;
 use crate::*;
 use wasm_bindgen::prelude::*;
 
@@ -36,6 +37,7 @@ impl WasmSimulator {
     /// owns that mapping.
     #[wasm_bindgen]
     pub fn install_arduino_esp32_quirks(&mut self, elf_bytes: &[u8]) -> Result<(), JsValue> {
+        self.record(lab_tools::Op::InstallEsp32Quirks(elf_bytes.to_vec()));
         use labwired_core::peripherals::esp_xtensa_common::rom_thunks;
         // Re-install can happen after a soft re-run without a full construct;
         // always start from a clean session-global slate.
@@ -388,6 +390,7 @@ impl WasmSimulator {
     /// partially overwritten — callers should treat that as a hard reset.
     #[wasm_bindgen]
     pub fn apply_runtime_snapshot(&mut self, bytes: &[u8]) -> Result<(), JsValue> {
+        self.record(lab_tools::Op::ApplyRuntimeSnapshot(bytes.to_vec()));
         let machine = self
             .machine
             .as_mut()

@@ -10,6 +10,7 @@
 //! (not bus-resident — seeds the ADC), raw ADC injection, UART byte feed,
 //! plus the read-back queries the browser panels sync from.
 
+use crate::lab_tools;
 use crate::*;
 use wasm_bindgen::prelude::*;
 
@@ -128,6 +129,7 @@ impl WasmSimulator {
     /// Apply one allowlisted motor-plant input in SI units.
     #[wasm_bindgen]
     pub fn set_motor_input(&mut self, id: &str, name: &str, value: f64) -> Result<(), JsValue> {
+        self.record(lab_tools::Op::SetMotorInput(id.into(), name.into(), value));
         validate_motor_input(id, name, value).map_err(motor_error_to_js)?;
         let machine = self
             .machine
@@ -147,6 +149,11 @@ impl WasmSimulator {
     /// Toggle one allowlisted injected motor fault.
     #[wasm_bindgen]
     pub fn set_motor_fault(&mut self, id: &str, fault: &str, active: bool) -> Result<(), JsValue> {
+        self.record(lab_tools::Op::SetMotorFault(
+            id.into(),
+            fault.into(),
+            active,
+        ));
         let machine = self
             .machine
             .as_mut()
@@ -177,6 +184,7 @@ impl WasmSimulator {
     /// or the value is out of range.
     #[wasm_bindgen]
     pub fn set_input(&mut self, channel: &str, value: f64) -> Result<(), JsValue> {
+        self.record(lab_tools::Op::SetInput(channel.into(), value));
         let machine = self
             .machine
             .as_mut()
@@ -194,6 +202,9 @@ impl WasmSimulator {
     /// worker-engine bridge where single calls interleave with execution.
     #[wasm_bindgen]
     pub fn set_inputs(&mut self, sets: JsValue) -> Result<(), JsValue> {
+        self.record(lab_tools::Op::SetInputs(
+            serde_wasm_bindgen::from_value(sets.clone()).unwrap_or(serde_json::Value::Null),
+        ));
         #[derive(serde::Deserialize)]
         struct InputSet {
             channel: String,
@@ -224,6 +235,7 @@ impl WasmSimulator {
     /// before `set_input`.
     #[wasm_bindgen]
     pub fn list_inputs(&mut self) -> Result<JsValue, JsValue> {
+        self.record(lab_tools::Op::ListInputs);
         let machine = self
             .machine
             .as_mut()
@@ -249,6 +261,7 @@ impl WasmSimulator {
     /// Writes to the GPIO IDR register bit for the specified binding.
     #[wasm_bindgen]
     pub fn set_board_io_input(&mut self, id: &str, active: bool) -> Result<(), JsValue> {
+        self.record(lab_tools::Op::SetBoardIo(id.into(), active));
         let binding = self
             .board_io
             .iter()
@@ -297,6 +310,7 @@ impl WasmSimulator {
     /// Push bytes into all UART RX buffers (bidirectional serial input).
     #[wasm_bindgen]
     pub fn feed_uart_input(&self, data: &[u8]) {
+        self.record(lab_tools::Op::FeedUart(data.to_vec()));
         for buf in &self.uart_rx_bufs {
             if let Ok(mut guard) = buf.lock() {
                 guard.extend(data.iter());
@@ -311,6 +325,7 @@ impl WasmSimulator {
     /// Errors when this simulator has no machine, same as `drain_rtt_output`.
     #[wasm_bindgen]
     pub fn write_rtt_down(&mut self, data: &[u8]) -> Result<u32, JsValue> {
+        self.record(lab_tools::Op::WriteRttDown(data.to_vec()));
         let n = self.machine_mut_or_err()?.bus.write_rtt_down(0, data);
         Ok(u32::try_from(n).unwrap_or(u32::MAX))
     }
@@ -318,6 +333,7 @@ impl WasmSimulator {
     /// Inject an ADC value into a named ADC peripheral's data register.
     #[wasm_bindgen]
     pub fn set_adc_value(&mut self, peripheral_name: &str, value: u16) -> Result<(), JsValue> {
+        self.record(lab_tools::Op::SetAdcValue(peripheral_name.into(), value));
         let machine = self.machine.as_mut().unwrap();
         let idx = machine
             .bus
@@ -351,6 +367,11 @@ impl WasmSimulator {
         channel: u8,
         millivolts: u16,
     ) -> Result<(), JsValue> {
+        self.record(lab_tools::Op::SetAdcMillivolts(
+            peripheral_name.into(),
+            channel,
+            millivolts,
+        ));
         let machine = self
             .machine
             .as_mut()
@@ -374,6 +395,7 @@ impl WasmSimulator {
     /// returning the channel to the engine's modeled internal source.
     #[wasm_bindgen]
     pub fn clear_adc_channel(&mut self, peripheral_name: &str, channel: u8) -> Result<(), JsValue> {
+        self.record(lab_tools::Op::ClearAdc(peripheral_name.into(), channel));
         let machine = self
             .machine
             .as_mut()
@@ -404,6 +426,7 @@ impl WasmSimulator {
         device_id: &str,
         temperature_c: f32,
     ) -> Result<(), JsValue> {
+        self.record(lab_tools::Op::SetNtc(device_id.into(), temperature_c));
         let machine = self
             .machine
             .as_mut()
@@ -420,6 +443,7 @@ impl WasmSimulator {
     /// `position_pct` must be in 0..=100.
     #[wasm_bindgen]
     pub fn set_potentiometer(&mut self, device_id: &str, position_pct: f32) -> Result<(), JsValue> {
+        self.record(lab_tools::Op::SetPot(device_id.into(), position_pct));
         if !(0.0..=100.0).contains(&position_pct) {
             return Err(JsValue::from_str(&format!(
                 "potentiometer position {} out of range (0..=100)",
@@ -895,6 +919,7 @@ board_io:
             jit_browser_enabled: false,
             jit_browser_cache: None,
             cosim: None,
+            tools: Default::default(),
         }
     }
 

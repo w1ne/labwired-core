@@ -6,6 +6,7 @@
 //! SPI / UART device states, display framebuffers, and peripheral listings.
 //! A second #[wasm_bindgen] impl block, split out of lib.rs.
 
+use crate::lab_tools;
 use crate::*;
 use labwired_core::inspect::artifact_format as F;
 use serde::Serialize;
@@ -483,6 +484,9 @@ impl WasmSimulator {
     /// empty array to disarm capture.
     #[wasm_bindgen]
     pub fn watch_logic_signals(&mut self, refs: JsValue) -> JsValue {
+        self.record(lab_tools::Op::WatchLogic(
+            serde_wasm_bindgen::from_value(refs.clone()).unwrap_or(serde_json::Value::Null),
+        ));
         let refs: Vec<LogicRef> = match serde_wasm_bindgen::from_value(refs) {
             Ok(r) => r,
             Err(_) => return JsValue::NULL,
@@ -581,6 +585,7 @@ impl WasmSimulator {
     /// cycle counts the playground runs to.
     #[wasm_bindgen]
     pub fn read_logic_edges(&mut self, cursor: f64) -> JsValue {
+        self.record(lab_tools::Op::ReadLogicEdges(cursor));
         // A panic here would throw a JS exception straight out of this wasm
         // frame; JS exceptions do NOT run Rust destructors, so the
         // wasm-bindgen borrow guard would never drop and EVERY later call

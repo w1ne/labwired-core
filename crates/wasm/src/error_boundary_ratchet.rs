@@ -45,6 +45,7 @@ const SOURCES: &[(&str, &str)] = &[
     ("inspect.rs", include_str!("inspect.rs")),
     ("install.rs", include_str!("install.rs")),
     ("jit_browser.rs", include_str!("jit_browser.rs")),
+    ("lab_tools.rs", include_str!("lab_tools.rs")),
     ("lib.rs", include_str!("lib.rs")),
     ("playground_repro.rs", include_str!("playground_repro.rs")),
     ("rtt_arch_tests.rs", include_str!("rtt_arch_tests.rs")),

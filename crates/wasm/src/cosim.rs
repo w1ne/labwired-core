@@ -15,6 +15,7 @@
 //! skipped: a lab whose circuit silently never ran would still draw a flat
 //! oscilloscope trace and look like a result.
 
+use crate::lab_tools;
 use crate::WasmSimulator;
 use labwired_config::{CosimAdapter, CosimModelConfig, SystemManifest};
 use labwired_core::cosim::{CosimAdvanceError, CosimSession};
@@ -97,6 +98,7 @@ impl WasmSimulator {
     /// `path` is a board path the machine owns, and for NaN or an infinity.
     #[wasm_bindgen]
     pub fn set_cosim_signal(&mut self, path: &str, value: f64) -> Result<(), JsValue> {
+        self.record(lab_tools::Op::SetCosim(path.into(), value));
         self.set_cosim_signal_number(path, value)
             .map_err(|message| JsValue::from_str(&message))
     }
