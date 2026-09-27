@@ -2593,6 +2593,187 @@ external_devices:
 }
 
 #[test]
+fn bus_motor_dc_gpio_driven_pad_falls_back_from_an_idle_timer() {
+    let chip: ChipDescriptor = serde_yaml::from_str(
+        r#"
+name: dc-motor-gpio-fallback
+arch: arm
+core: cortex-m4
+flash: { base: 0x08000000, size: "64KB" }
+ram: { base: 0x20000000, size: "32KB" }
+peripherals:
+  - { id: gpioa, type: gpio, base_address: 0x48000000, size: "1KB", config: { profile: stm32v2 } }
+  - { id: tim2, type: timer, base_address: 0x40000000, size: "1KB", config: { width: 32 } }
+"#,
+    )
+    .unwrap();
+    // The pad is timer-capable (`timer_name: tim2`) but the firmware drives it
+    // as plain GPIO — `digitalWrite(PA0, HIGH)` (MODER=output, ODR=1) — and
+    // never configures a timer PWM output. Reading the idle timer would gate
+    // the plant off and coast forever.
+    let manifest: SystemManifest = serde_yaml::from_str(
+        r#"
+name: dc-motor-gpio-fallback
+chip: unused
+external_devices:
+  - id: wheel
+    type: dc-motor
+    connection: gpio
+    config:
+      pwm_pin: "PA0"
+      direction_pin: "PA1"
+      timer_name: "tim2"
+      timer_channel: 1
+"#,
+    )
+    .unwrap();
+    let mut bus = SystemBus::from_config(&chip, &manifest).unwrap();
+    bus.write_u32(0x4800_0000, 0b01).unwrap(); // MODER: PA0 output
+    bus.write_u32(0x4800_0014, 0b11).unwrap(); // ODR: PWM high, direction high
+    bus.set_current_cycle(100);
+    let (mut interrupts, mut costs) = (Vec::new(), Vec::new());
+    bus.tick_peripherals_fully_into(&mut interrupts, &mut costs);
+    let snapshot = bus.motor_snapshots();
+    assert_eq!(
+        snapshot[0].control_state, "forward",
+        "an idle timer must not gate a GPIO-driven pad off: {snapshot:?}"
+    );
+    assert!(
+        snapshot[0].speed_rpm > 0.0,
+        "the plant must read the pad latch when the timer is not driving it: {snapshot:?}"
+    );
+}
+
+#[test]
+fn bus_motor_external_device_shares_the_motor_model_validation() {
+    let chip: ChipDescriptor = serde_yaml::from_str(
+        r#"
+name: dc-motor-declarative-validation
+arch: arm
+core: cortex-m4
+flash: { base: 0x08000000, size: "64KB" }
+ram: { base: 0x20000000, size: "32KB" }
+peripherals:
+  - { id: gpioa, type: gpio, base_address: 0x48000000, size: "1KB", config: { profile: stm32v2 } }
+  - { id: tim2, type: timer, base_address: 0x40000000, size: "1KB", config: { width: 32 } }
+"#,
+    )
+    .unwrap();
+
+    // A half-wired encoder pair is rejected by the shared model validation
+    // instead of being silently ignored (the plant used to run open-loop).
+    let half_encoder: SystemManifest = serde_yaml::from_str(
+        r#"
+name: dc-motor-half-encoder
+chip: unused
+external_devices:
+  - id: wheel
+    type: dc-motor
+    connection: gpio
+    config:
+      pwm_pin: "PA0"
+      direction_pin: "PA1"
+      encoder_a_pin: "PA4"
+"#,
+    )
+    .unwrap();
+    let error = match SystemBus::from_config(&chip, &half_encoder) {
+        Ok(_) => panic!("half-wired encoder must fail construction"),
+        Err(error) => error,
+    };
+    assert!(
+        error
+            .to_string()
+            .contains("encoder A and B must be wired together"),
+        "{error}"
+    );
+
+    // `timer_channel: 257` used to truncate to channel 1 via `as u8`; the raw
+    // value must be rejected before the cast.
+    let truncated_channel: SystemManifest = serde_yaml::from_str(
+        r#"
+name: dc-motor-wide-channel
+chip: unused
+external_devices:
+  - id: wheel
+    type: dc-motor
+    connection: gpio
+    config:
+      pwm_pin: "PA0"
+      direction_pin: "PA1"
+      timer_name: "tim2"
+      timer_channel: 257
+"#,
+    )
+    .unwrap();
+    let error = match SystemBus::from_config(&chip, &truncated_channel) {
+        Ok(_) => panic!("out-of-range timer channel must fail construction"),
+        Err(error) => error,
+    };
+    assert!(
+        error
+            .to_string()
+            .contains("outside the timer's 1..=4 channels"),
+        "{error}"
+    );
+}
+
+#[test]
+fn bus_motor_rejects_a_cross_source_duplicate_id() {
+    let chip: ChipDescriptor = serde_yaml::from_str(
+        r#"
+name: dc-motor-cross-source
+arch: arm
+core: cortex-m4
+flash: { base: 0x08000000, size: "64KB" }
+ram: { base: 0x20000000, size: "32KB" }
+peripherals:
+  - { id: gpioa, type: gpio, base_address: 0x48000000, size: "1KB", config: { profile: stm32v2 } }
+"#,
+    )
+    .unwrap();
+    // The same id from both sources used to build two plants silently: the
+    // external device attaches through the declarative primitive, outside the
+    // `motor_models:` dedup set.
+    let manifest: SystemManifest = serde_yaml::from_str(
+        r#"
+name: dc-motor-cross-source-duplicate
+chip: unused
+external_devices:
+  - id: wheel
+    type: dc-motor
+    connection: gpio
+    config:
+      pwm_pin: "PA0"
+      direction_pin: "PA1"
+motor_models:
+  - kind: dc
+    id: wheel
+    resistance_ohm: 1.0
+    inductance_h: 0.001
+    torque_constant_nm_per_a: 0.1
+    back_emf_constant_v_per_rad_s: 0.1
+    rotor_inertia_kg_m2: 0.01
+    viscous_friction_nm_per_rad_s: 0.001
+    supply_voltage_v: 12.0
+    load_torque_nm: 0.0
+    encoder_cpr: 16
+    pwm_pin: PA0
+    direction_pin: PA1
+"#,
+    )
+    .unwrap();
+    let error = match SystemBus::from_config(&chip, &manifest) {
+        Ok(_) => panic!("cross-source duplicate motor id must fail construction"),
+        Err(error) => error,
+    };
+    assert!(
+        error.to_string().contains("duplicate motor id 'wheel'"),
+        "{error}"
+    );
+}
+
+#[test]
 fn bus_motor_f401_chip_exposes_tim3_and_tim4() {
     // The F401 pin map advertises TIM3 (PA6/PA7, PB0/PB1, PB4/PB5, PC6..PC9)
     // and TIM4 (PB6..PB9) timer functions, so a motor PWM on one of those pads

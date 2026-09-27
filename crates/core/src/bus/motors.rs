@@ -118,8 +118,26 @@ impl SystemBus {
         // defaults. `resolved_motor_models()` would demand every field be
         // spelled out, and building the entry here too would double every
         // hosted plant.
+        // Seed the check with the plants the universal pass already attached
+        // (`external_devices` `type: dc-motor`): the declarative path pushes
+        // onto `self.motors` outside this function, so an in-section check
+        // alone cannot see an id shared by the two sources and would silently
+        // build a second plant under the same id.
+        let attached: std::collections::HashSet<String> = self
+            .motors
+            .iter()
+            .map(|motor| match motor {
+                MotorRuntime::Dc { id, .. } | MotorRuntime::Bldc { id, .. } => id.clone(),
+            })
+            .collect();
         let mut seen = std::collections::HashMap::<String, usize>::new();
         for (index, model) in manifest.motor_models.iter().enumerate() {
+            if attached.contains(model.id()) {
+                anyhow::bail!(
+                    "duplicate motor id '{}': motor_models[{index}].id is already attached as an external device",
+                    model.id()
+                );
+            }
             if let Some(previous) = seen.insert(model.id().to_owned(), index) {
                 anyhow::bail!(
                     "motor_models[{index}].id duplicates motor id declared at motor_models[{previous}].id"
@@ -408,27 +426,41 @@ impl SystemBus {
                     ..
                 } => {
                     let dt_s = elapsed as f64 / *simulation_clock_hz as f64;
-                    // A timer-driven PWM pin sits in alternate-function mode, so
-                    // its ODR never moves and reading the latch yields duty 0.
-                    // Sample the timer's own output instead: same duty the gate
-                    // driver sees, gated like the BLDC arm gates its inverter.
+                    // Consume the timer ONLY while its channel actually owns
+                    // the pad as a PWM output. A timer-driven pin sits in
+                    // alternate-function mode, so its ODR never moves and the
+                    // timer's duty is the truth; but firmware that drives the
+                    // pad as plain GPIO (software PWM, `digitalWrite` full-on)
+                    // never configures the channel, and an unconditional timer
+                    // read would gate `enabled` off and coast forever. When the
+                    // channel is not configured as an output, read the latch
+                    // exactly like a pad with no timer at all.
                     let (duty, timer_gate) = if let Some((timer, channel)) = timer {
+                        use crate::peripherals::timer::{Timer, TimerChannelOutputMode};
                         let output = self.peripherals[*timer]
                             .dev
                             .as_any()
-                            .and_then(|a| a.downcast_ref::<crate::peripherals::timer::Timer>())
-                            .map(crate::peripherals::timer::Timer::output_snapshot);
+                            .and_then(|a| a.downcast_ref::<Timer>())
+                            .map(Timer::output_snapshot);
+                        let channel_index = usize::from(*channel).saturating_sub(1);
+                        let channel_is_pwm_output = output.as_ref().is_some_and(|pwm| {
+                            pwm.channels.get(channel_index).is_some_and(|ch| {
+                                ch.enabled
+                                    && matches!(
+                                        ch.mode,
+                                        TimerChannelOutputMode::Pwm1 | TimerChannelOutputMode::Pwm2
+                                    )
+                            })
+                        });
                         match output {
-                            Some(pwm) => {
-                                let channel = pwm.channels[usize::from(*channel) - 1];
-                                (
-                                    channel.duty_fraction,
-                                    channel.enabled
-                                        && pwm.main_output_enabled
-                                        && pwm.counter_enabled,
-                                )
-                            }
-                            None => (0.0, false),
+                            Some(pwm) if channel_is_pwm_output => (
+                                pwm.channels[channel_index].duty_fraction,
+                                // The channel owns the pad, so the timer's
+                                // gates still apply (stopped counter / no MOE
+                                // is a real off, not a GPIO fallback).
+                                pwm.main_output_enabled && pwm.counter_enabled,
+                            ),
+                            _ => (f64::from(self.pin_output(*pwm)), true),
                         }
                     } else {
                         (f64::from(self.pin_output(*pwm)), true)

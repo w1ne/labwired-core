@@ -29,7 +29,7 @@
 
 use super::SystemBus;
 use anyhow::{anyhow, Result};
-use labwired_config::{BrushedMotorConfig, DeviceDescriptor, ExternalDevice};
+use labwired_config::{BrushedMotorConfig, DeviceDescriptor, ExternalDevice, MotorModelConfig};
 
 /// Parse the declarative descriptor for `device_type`, if one is embedded.
 /// Returns `Ok(None)` when the type is not declarative (the caller then falls
@@ -236,6 +236,27 @@ impl SystemBus {
     fn attach_dc_motor(&mut self, ext: &ExternalDevice, desc: &DeviceDescriptor) -> Result<()> {
         let pwm_pin = self.pin_config(ext, desc, "pwm", "PA0")?;
         let direction_pin = self.pin_config(ext, desc, "direction", "PA1")?;
+        // Validate the raw channel BEFORE narrowing to `u8`: `257 as u8` would
+        // silently truncate to 1 and the plant's own 1..=4 check would never
+        // see the bad value.
+        let timer_channel = match param_str(desc, ext, "timer_channel") {
+            Some(raw) => {
+                let channel = raw.parse::<u64>().map_err(|_| {
+                    anyhow!(
+                        "dc motor '{}': timer_channel '{raw}' is not an integer",
+                        ext.id
+                    )
+                })?;
+                if !(1..=4).contains(&channel) {
+                    anyhow::bail!(
+                        "dc motor '{}': timer_channel {channel} is outside the timer's 1..=4 channels",
+                        ext.id
+                    );
+                }
+                Some(channel as u8)
+            }
+            None => None,
+        };
         let config = BrushedMotorConfig {
             id: ext.id.clone(),
             resistance_ohm: param_f64(desc, ext, "resistance_ohm", 1.2),
@@ -267,11 +288,20 @@ impl SystemBus {
             encoder_index_pin: self.optional_pin_config(ext, desc, "encoder_index"),
             fault_pin: self.optional_pin_config(ext, desc, "fault"),
             timer_name: param_str(desc, ext, "timer_name"),
-            timer_channel: param_str(desc, ext, "timer_channel")
-                .and_then(|channel| channel.parse::<u64>().ok())
-                .map(|channel| channel as u8),
+            timer_channel,
         };
-        let runtime = self.build_dc_motor(config)?;
+        // This path builds the config by hand, so it must enforce the shared
+        // `motor_models:` invariants itself — a half-wired encoder was silently
+        // ignored (the plant simply ran open-loop) before this check.
+        let model = MotorModelConfig::Dc(Box::new(config));
+        let issues = model.validate();
+        if !issues.is_empty() {
+            anyhow::bail!(issues.join("; "));
+        }
+        let MotorModelConfig::Dc(config) = model else {
+            unreachable!("model was just wrapped as MotorModelConfig::Dc")
+        };
+        let runtime = self.build_dc_motor(*config)?;
         self.motors.push(runtime);
         Ok(())
     }
