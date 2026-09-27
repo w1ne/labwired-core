@@ -6,7 +6,7 @@
 
 use labwired_config::{
     ChipDescriptor, CosimAdapter, DeviceDescriptor, MemoryValueDetails, MotorModelConfig,
-    SystemManifest,
+    SystemManifest, TestAssertion,
 };
 
 #[test]
@@ -631,6 +631,67 @@ fn motor_model_validation_rejects_blank_identity_and_bindings() {
             "missing {field}: {issues:?}"
         );
     }
+}
+
+#[test]
+fn motor_model_dc_rejects_half_wired_encoder() {
+    let mut model: MotorModelConfig = serde_yaml::from_str(valid_dc_motor_yaml()).unwrap();
+    let MotorModelConfig::Dc(config) = &mut model else {
+        unreachable!()
+    };
+    config.encoder_b_pin = None;
+    let issues = model.validate();
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.contains("encoder A and B must be wired together")),
+        "expected half-wired encoder issue, got {issues:?}"
+    );
+}
+
+#[test]
+fn motor_model_dc_rejects_encoder_index_without_pair() {
+    let mut model: MotorModelConfig = serde_yaml::from_str(valid_dc_motor_yaml()).unwrap();
+    let MotorModelConfig::Dc(config) = &mut model else {
+        unreachable!()
+    };
+    config.encoder_a_pin = None;
+    config.encoder_b_pin = None;
+    let issues = model.validate();
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.contains("encoder index requires both encoder A and B")),
+        "expected index-without-pair issue, got {issues:?}"
+    );
+}
+
+#[test]
+fn motor_model_dc_without_encoder_bindings_validates() {
+    let mut model: MotorModelConfig = serde_yaml::from_str(valid_dc_motor_yaml()).unwrap();
+    let MotorModelConfig::Dc(config) = &mut model else {
+        unreachable!()
+    };
+    config.encoder_a_pin = None;
+    config.encoder_b_pin = None;
+    config.encoder_index_pin = None;
+    let issues = model.validate();
+    assert!(
+        issues.is_empty(),
+        "all-absent encoder bindings must validate: {issues:?}"
+    );
+}
+
+#[test]
+fn motor_speed_reached_defaults_to_unbounded_band() {
+    let assertion: TestAssertion =
+        serde_yaml::from_str("motor_speed_reached: { id: wheel, min_abs_rpm: 1.0 }").unwrap();
+    let TestAssertion::MotorSpeedReached(assertion) = assertion else {
+        panic!("expected motor_speed_reached assertion");
+    };
+    assert_eq!(assertion.motor_speed_reached.id, "wheel");
+    assert_eq!(assertion.motor_speed_reached.min_abs_rpm, 1.0);
+    assert_eq!(assertion.motor_speed_reached.max_abs_rpm, f64::MAX);
 }
 
 #[test]

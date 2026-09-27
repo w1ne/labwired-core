@@ -236,7 +236,9 @@ pub struct BrushedMotorConfig {
     pub simulation_clock_hz: u64,
     pub pwm_pin: String,
     pub direction_pin: String,
-    /// Brake input. Absent = the twin never brakes (coasts at zero drive).
+    /// Brake input. Absent = no brake input is modeled; at zero duty the plant
+    /// still decays current through the bridge (idle braking), which is what an
+    /// H-bridge at zero drive does.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub brake_pin: Option<String>,
     /// Enable input. Absent = the twin is always enabled. An H-bridge drives
@@ -401,6 +403,19 @@ impl MotorModelConfig {
                     ("encoder_b_pin", config.encoder_b_pin.as_deref()),
                 ] {
                     validate_optional_motor_pin(&config.id, field, pin, &mut issues);
+                }
+                let encoder_pair = config.encoder_a_pin.is_some() && config.encoder_b_pin.is_some();
+                if config.encoder_a_pin.is_some() != config.encoder_b_pin.is_some() {
+                    issues.push(format!(
+                        "dc motor '{}': encoder A and B must be wired together, or both absent",
+                        config.id
+                    ));
+                }
+                if config.encoder_index_pin.is_some() && !encoder_pair {
+                    issues.push(format!(
+                        "dc motor '{}': encoder index requires both encoder A and B",
+                        config.id
+                    ));
                 }
                 validate_optional_motor_pin(
                     &config.id,

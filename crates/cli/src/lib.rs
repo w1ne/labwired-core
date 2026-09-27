@@ -3524,12 +3524,21 @@ fn assertion_short_name(assertion: &TestAssertion) -> String {
         TestAssertion::UartContains(a) => format!("uart_contains: {}", a.uart_contains),
         TestAssertion::UartRegex(a) => format!("uart_regex: {}", a.uart_regex),
         TestAssertion::UartOrdered(a) => format!("uart_ordered: {:?}", a.uart_ordered),
-        TestAssertion::MotorSpeedReached(a) => format!(
-            "motor_speed_reached: {} {}..={} rpm",
-            a.motor_speed_reached.id,
-            a.motor_speed_reached.min_abs_rpm,
-            a.motor_speed_reached.max_abs_rpm
-        ),
+        TestAssertion::MotorSpeedReached(a) => {
+            if a.motor_speed_reached.max_abs_rpm == f64::MAX {
+                format!(
+                    "motor_speed_reached: {} >= {} rpm",
+                    a.motor_speed_reached.id, a.motor_speed_reached.min_abs_rpm
+                )
+            } else {
+                format!(
+                    "motor_speed_reached: {} {}..={} rpm",
+                    a.motor_speed_reached.id,
+                    a.motor_speed_reached.min_abs_rpm,
+                    a.motor_speed_reached.max_abs_rpm
+                )
+            }
+        }
         TestAssertion::MotorState(a) => format!(
             "motor_state: {} state={}",
             a.motor_state.id, a.motor_state.control_state
@@ -3937,5 +3946,26 @@ mod tests {
 
         let json = serde_json::to_value(snapshot).expect("snapshot should serialize");
         assert_eq!(json["type"], "config_error");
+    }
+
+    #[test]
+    fn motor_speed_reached_junit_name_hides_an_unbounded_upper_bound() {
+        let speed_reached = |max_abs_rpm| {
+            TestAssertion::MotorSpeedReached(labwired_config::MotorSpeedReachedAssertion {
+                motor_speed_reached: labwired_config::MotorSpeedReachedDetails {
+                    id: "wheel".to_owned(),
+                    min_abs_rpm: 120.0,
+                    max_abs_rpm,
+                },
+            })
+        };
+        assert_eq!(
+            assertion_short_name(&speed_reached(f64::MAX)),
+            "motor_speed_reached: wheel >= 120 rpm"
+        );
+        assert_eq!(
+            assertion_short_name(&speed_reached(4000.0)),
+            "motor_speed_reached: wheel 120..=4000 rpm"
+        );
     }
 }
