@@ -370,11 +370,12 @@ impl SystemBus {
                             }
                         }
                     }
-                    let peak = plant.snapshot().speed_rpm.abs();
+                    let snapshot = plant.snapshot();
+                    let peak = snapshot.speed_rpm.abs();
                     if peak > *peak_abs_speed_rpm {
                         *peak_abs_speed_rpm = peak;
                     }
-                    let pins = encoder.sample(plant.snapshot().position_rad).ok();
+                    let pins = encoder.sample(snapshot.position_rad).ok();
                     if let (Some(feedback), Some(pins)) = (feedback.as_ref(), pins) {
                         self.drive_input(feedback[0], pins.a);
                         self.drive_input(feedback[1], pins.b);
@@ -502,11 +503,11 @@ impl SystemBus {
                             }
                         }
                     }
-                    let peak = plant.snapshot().speed_rpm.abs();
+                    let snapshot = plant.snapshot();
+                    let peak = snapshot.speed_rpm.abs();
                     if peak > *peak_abs_speed_rpm {
                         *peak_abs_speed_rpm = peak;
                     }
-                    let snapshot = plant.snapshot();
                     for (bit, pin) in hall.iter().enumerate() {
                         self.drive_input(*pin, snapshot.hall_state & (1 << bit) != 0);
                     }

@@ -125,12 +125,14 @@ pub(crate) struct TestResult {
     /// The oracle evaluates the peak `|speed_rpm|` post-hoc: a continuous
     /// trajectory from 0 passes through every value up to its peak, so a
     /// final-state-only verdict cannot disagree with the CLI's latched in-run
-    /// `MotorSpeedReached` assertion when the run stopped early.
+    /// `MotorSpeedReached` assertion when the run stopped early. Precondition:
+    /// that equivalence holds for a min-only clause with an unbounded maximum;
+    /// a finite upper bound is a band the peak cannot reproduce.
     ///
     /// `skip_deserializing`: `MotorSnapshot::kind` is a `&'static str` engine
     /// tag that serde cannot materialize from input, and nothing deserializes
     /// `TestResult` — `result.json` is a write-only artifact.
-    #[serde(default, skip_deserializing)]
+    #[serde(default, skip_deserializing, skip_serializing_if = "Vec::is_empty")]
     pub(crate) motors: Vec<labwired_core::bus::MotorSnapshot>,
     /// What became of every declarative input stimulus the script declared —
     /// applied, rejected by the engine, or never reached. Absent (and omitted)

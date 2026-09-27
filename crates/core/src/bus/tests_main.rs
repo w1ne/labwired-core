@@ -2481,6 +2481,25 @@ motor_models:
         "peak must cover the final speed"
     );
     assert!(bus.motor_snapshots()[0].speed_rpm_peak_abs > 0.0);
+
+    // Command zero drive (no enable/brake pin, so the bus selects Reverse at
+    // duty 0 — a closed winding, not a literal Coast) and service across
+    // several windows: the stored winding current first kicks the speed up,
+    // then the speed decays. The accumulated peak must stay above the decayed
+    // final speed; a snapshot-time copy of |speed_rpm| cannot do that.
+    bus.write_u32(0x4800_0014, 0b0000).unwrap();
+    bus.set_current_cycle(100 + 200_000);
+    bus.tick_peripherals_with_costs();
+    let kicked = bus.motor_snapshots();
+    assert!(kicked[0].speed_rpm_peak_abs >= snapshot[0].speed_rpm.abs());
+    bus.set_current_cycle(100 + 200_000 + 400_000_000);
+    bus.tick_peripherals_with_costs();
+    let decayed = bus.motor_snapshots();
+    assert!(
+        decayed[0].speed_rpm_peak_abs > decayed[0].speed_rpm.abs(),
+        "peak must survive the decay to stand in for the latched assertion"
+    );
+    assert!(decayed[0].speed_rpm_peak_abs >= snapshot[0].speed_rpm.abs());
 }
 
 #[test]
@@ -2773,6 +2792,26 @@ motor_models:
             .unwrap();
         assert_eq!(coincident.bus.motor_service_anchor(), expected_anchor);
     }
+
+    // Peak vs decay: drive the six-step inverter, then hold the external
+    // enable low so each service floats the phases with InverterCommand::off().
+    // The stored winding current kicks the speed up, then only viscous
+    // friction decays it; the peak sampled across services must stay above the
+    // final speed, which a snapshot-time copy of |speed_rpm| cannot do.
+    let mut decayed = build();
+    drive(&mut decayed);
+    let driven = decayed.motor_snapshots().remove(0);
+    decayed.write_u32(0x4800_0014, 0).unwrap();
+    decayed.set_current_cycle(decayed.current_cycle + 200_000);
+    decayed.tick_peripherals_with_costs();
+    decayed.set_current_cycle(decayed.current_cycle + 400_000_000);
+    decayed.tick_peripherals_with_costs();
+    let after = decayed.motor_snapshots().remove(0);
+    assert!(
+        after.speed_rpm_peak_abs > after.speed_rpm.abs(),
+        "peak must survive the decay to stand in for the latched assertion"
+    );
+    assert!(after.speed_rpm_peak_abs >= driven.speed_rpm.abs());
 }
 
 /// Cortex-M33 parts (STM32H5/WBA) have no bit-band feature and map real

@@ -34,6 +34,8 @@ peripherals:
 "#,
     )
     .unwrap();
+    // The DC config intentionally omits encoder pins: this exercises the
+    // no-feedback path.
     std::fs::write(
         &system,
         r#"
@@ -90,8 +92,47 @@ motor_models:
     });
     let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
     let motors = parsed["motors"].as_array().expect("motors block");
+    assert_eq!(motors.len(), 1);
     assert_eq!(motors[0]["id"], "wheel");
+    assert!(motors[0]["speed_rpm"].is_number());
     assert!(motors[0]["speed_rpm_peak_abs"].is_number());
+
+    // A manifest with no motors omits the block entirely, so motor-less
+    // result.json stays byte-identical to the pre-motors contract.
+    let no_motor_system = tmp.join("system-no-motors.yaml");
+    std::fs::write(&no_motor_system, "name: no-motors\nchip: chip.yaml\n").unwrap();
+    let no_motor_script = tmp.join("script-no-motors.yaml");
+    std::fs::write(
+        &no_motor_script,
+        format!(
+            "schema_version: \"1.0\"\ninputs:\n  firmware: \"\"\n  system: \"{}\"\nlimits:\n  max_steps: 1000\nassertions:\n  - expected_stop_reason: max_steps\n",
+            no_motor_system.display()
+        ),
+    )
+    .unwrap();
+    let no_motor_out = tmp.join("out-no-motors");
+    Command::new(env!("CARGO_BIN_EXE_labwired"))
+        .args([
+            "test",
+            "--script",
+            no_motor_script.to_str().unwrap(),
+            "--firmware",
+            firmware.to_str().unwrap(),
+            "--no-uart-stdout",
+            "--no-key",
+            "--output-dir",
+            no_motor_out.to_str().unwrap(),
+        ])
+        .output()
+        .expect("spawn labwired");
+    let no_motor: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(no_motor_out.join("result.json")).expect("no-motor result.json"),
+    )
+    .unwrap();
+    assert!(
+        no_motor.get("motors").is_none(),
+        "an empty motors block must be omitted"
+    );
 
     let _ = std::fs::remove_dir_all(&tmp);
 }
