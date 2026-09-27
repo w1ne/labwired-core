@@ -16,6 +16,7 @@ use std::path::Path;
 use std::sync::Arc;
 use tracing::{debug, info, warn};
 
+pub mod coverage;
 pub mod footprint;
 pub mod multi_image;
 
@@ -541,16 +542,24 @@ pub struct SymbolProvider {
     stmt_rows: Vec<StmtRow>,
     // Map of symbol_name -> address
     symbol_map: HashMap<String, u64>,
+    // Function symbols with a size: (start, size, name), start Thumb bit cleared
+    functions: Vec<(u64, u64, String)>,
     // Test-only locals: PC -> list of locals
     test_locals: HashMap<u64, Vec<LocalVariable>>,
 }
 
 impl SymbolProvider {
     pub fn new(path: &Path) -> Result<Self> {
-        use gimli::Reader;
-        use object::Object;
         let data = fs::read(path)
             .with_context(|| format!("Failed to read ELF for symbols: {:?}", path))?;
+        Self::from_bytes(data)
+    }
+
+    /// Parse symbols and DWARF from ELF bytes already in memory (the browser
+    /// has no filesystem).
+    pub fn from_bytes(data: Vec<u8>) -> Result<Self> {
+        use gimli::Reader;
+        use object::Object;
         let data = Arc::new(data);
 
         let slice: &'static [u8] = unsafe { std::mem::transmute(&data[..]) };
@@ -615,13 +624,19 @@ impl SymbolProvider {
         }
 
         let mut symbol_map = std::collections::HashMap::new();
+        let mut functions = Vec::new();
         for sym in object.symbols() {
             if let Ok(name) = sym.name() {
                 if sym.address() > 0 {
                     symbol_map.insert(name.to_string(), sym.address());
                 }
+                if sym.kind() == object::SymbolKind::Text && sym.size() > 0 && !name.is_empty() {
+                    functions.push((sym.address() & !1, sym.size(), name.to_string()));
+                }
             }
         }
+        functions.sort();
+        functions.dedup_by(|a, b| a.0 == b.0 && a.2 == b.2);
 
         let dwarf_for_context =
             gimli::Dwarf::load(&load_section).context("Failed to load DWARF for context")?;
@@ -635,6 +650,7 @@ impl SymbolProvider {
             line_map,
             stmt_rows,
             symbol_map,
+            functions,
             test_locals: HashMap::new(),
         })
     }
@@ -644,6 +660,12 @@ impl SymbolProvider {
     /// instruction at its address was executed.
     pub fn statement_rows(&self) -> &[StmtRow] {
         &self.stmt_rows
+    }
+
+    /// Sized function symbols as `(start, size, name)`, ascending by start,
+    /// with the Thumb bit cleared from `start`.
+    pub fn functions(&self) -> &[(u64, u64, String)] {
+        &self.functions
     }
 
     pub fn lookup(&self, addr: u64) -> Option<SourceLocation> {
@@ -883,6 +905,7 @@ impl SymbolProvider {
             line_map: HashMap::new(),
             stmt_rows: Vec::new(),
             symbol_map: HashMap::new(),
+            functions: Vec::new(),
             test_locals: HashMap::new(),
         }
     }

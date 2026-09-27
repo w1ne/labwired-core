@@ -19,3 +19,7 @@ tracing = { workspace = true }
 addr2line = "0.21"
 gimli = "0.28"
 object = "0.32"
+serde = { workspace = true }
+
+[dev-dependencies]
+labwired-config = { path = "../config" }
