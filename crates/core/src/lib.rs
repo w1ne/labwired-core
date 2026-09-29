@@ -1208,6 +1208,16 @@ pub trait Peripheral: std::fmt::Debug + Send {
         None
     }
 
+    /// The queue that `uart_injections` fill for this UART, if it is one.
+    ///
+    /// Named capability rather than a downcast in
+    /// `SystemBus::attach_uart_rx_source_named`. Default `None` = not a UART
+    /// with an injection queue (or one still found by that function's
+    /// older downcasts).
+    fn uart_rx_source(&self) -> Option<Arc<std::sync::Mutex<std::collections::VecDeque<u8>>>> {
+        None
+    }
+
     /// Stimulus reachability: call `f` once for every device attached to this
     /// controller that accepts simulated input, in attach order.
     ///

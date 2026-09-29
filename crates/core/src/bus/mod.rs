@@ -17,6 +17,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 mod accessors;
+mod analog_mux;
 mod attach;
 mod attached_devices;
 pub mod bus_trace;
@@ -556,6 +557,11 @@ pub struct SystemBus {
     /// computed a level at attach and dropped the model, which made these
     /// parts un-drivable at runtime. Empty by default -> zero cost.
     pub analog_inputs: Vec<sim_inputs::AnalogInputSource>,
+    /// Analog multiplexers (the `analog_mux` primitive, e.g. 74HC4051) between analog sources and an ADC
+    /// channel. Re-routed inside the MMIO write path of the GPIO peripherals
+    /// that host their select pads (see `bus/analog_mux.rs`). Empty by
+    /// default -> zero cost.
+    pub analog_muxes: Vec<crate::peripherals::components::declarative_analog_mux::AnalogMux>,
     /// Reusable CAN diagnostic clients declared as external devices. They
     /// inject configured CAN frames into a named FDCAN peripheral once it is
     /// running, so ECU examples can be driven by a virtual off-board tester

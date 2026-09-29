@@ -1,0 +1,45 @@
+# 74HC4051 — single 8-channel analog multiplexer (NXP 74HC4051 rev. 12,
+# TI CD74HC4051; the CMOS CD4051B has the same pinout and function table).
+#
+# Datasheet function table (NXP table 3): the select inputs S2 S1 S0 connect
+# ONE of Y0..Y7 to the common pin Z, channel = S2*4 + S1*2 + S0. A HIGH on E
+# (active LOW) opens every switch.
+#
+# Wiring in a system.yaml:
+#   - the mux `connection:` is the ADC that Z feeds, `config.channel` is its
+#     ADC channel;
+#   - s0_pin / s1_pin / s2_pin / e_pin are MCU pads (e_pin optional: absent
+#     means E is tied to GND);
+#   - an analog source (a potentiometer, a thermistor) names the mux as its
+#     `connection:` and a Y input as its `channel`. Declare the mux first.
+#
+# Runtime (crates/core/src/peripherals/components/declarative_analog_mux.rs):
+# the select pads are read from the GPIO model (pad level) inside every MMIO
+# write to a GPIO port that hosts one, so a conversion started by the next
+# instruction converts the new channel.
+#
+# NOT modelled: ON resistance (about 70 ohm; an ADC input draws no DC
+# current), switch time (t_on about 20 ns, far below one ADC sample time),
+# charge injection, and Z used as an input. With E HIGH, Z is open; the ADC
+# channel then reads 0 mV, as with a pull-down on Z.
+type: 74hc4051
+
+behavior:
+  primitive: analog_mux
+  analog_mux:
+    select: [S0, S1, S2]
+    channels: 8
+    enable: { pin: E, active: low }
+
+metadata:
+  label: "74HC4051 8-channel analog multiplexer"
+  summary: "Routes one of eight analog inputs (Y0..Y7) to an ADC channel, selected by three GPIO pins."
+  detail: "NXP/TI 74HC4051. S2 S1 S0 (MCU GPIO outputs) connect Yn = S2*4 + S1*2 + S0 to Z; E (active LOW, optional: absent means tied to GND) opens all switches. Z drives the ADC channel named by `connection:` and `channel`. Analog sources (for example a potentiometer) name this mux as their `connection:` and a Y input as their `channel`. The select pads are re-read on every GPIO write, so a conversion started after a select change converts the new channel. Not modelled: ON resistance, switch time, charge injection, Z used as an input. With E HIGH the ADC channel reads 0 mV (Z open, pull-down assumed)."
+  category: gpio
+  config_keys:
+    - { name: channel, ty: int, doc: "ADC channel (of the `connection:` ADC, or of another mux) that Z drives." }
+    - { name: s0_pin, ty: str, doc: "S0 select pad (chip pad label, for example GPIO_B1_01 or PA4)." }
+    - { name: s1_pin, ty: str, doc: "S1 select pad." }
+    - { name: s2_pin, ty: str, doc: "S2 select pad." }
+    - { name: e_pin, ty: str, doc: "E enable pad, active LOW. Leave it out when E is tied to GND." }
+  inputs: []

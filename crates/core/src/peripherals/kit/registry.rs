@@ -44,6 +44,9 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     &components::pn532::PN532_KIT,
     &components::declarative_spi::LORA_SX1278_KIT,
     &components::declarative_uart::SIM800L_KIT,
+    // BT201 (Jieli KT1025A) dual-mode Bluetooth module: hand-written, because
+    // the part has link state and a transparent data path, not a table.
+    &components::bt201::BT201_KIT,
     &components::declarative_display::SSD1306_KIT,
     &components::declarative_display::SSD1306_128X32_KIT,
     &components::declarative_display::SH1107_KIT,
@@ -133,6 +136,7 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     &components::max30102::MAX30102_KIT,
     &components::declarative_i2c::CAP1188_KIT,
     &components::drv2605::DRV2605_KIT,
+    &components::nau88l21::NAU88L21_KIT,
     &components::mlx90640::MLX90640_KIT,
     // GPIO-group actuators migrated off from_config residual arms.
     &components::servo::SERVO_KIT,

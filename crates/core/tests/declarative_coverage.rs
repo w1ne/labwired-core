@@ -92,7 +92,9 @@ use std::path::PathBuf;
 /// 81 → 82: `segment_display_mux.yaml`, the multiplexed N-digit segment LED
 /// display. New part, no Rust model to delete; its engine is
 /// `declarative_segment_display.rs` (the `segment_display` primitive).
-const YAML_DEVICES_BASELINE: usize = 82;
+/// 82 → 83: `74hc4051.yaml`, the proof part of the new `analog_mux`
+/// primitive (select pins route one of 2^N analog inputs to an ADC channel).
+const YAML_DEVICES_BASELINE: usize = 83;
 
 /// Device models still hand-written in Rust
 /// (`crates/core/src/peripherals/components/*.rs`, minus [`EXCLUDED`]).
@@ -166,7 +168,36 @@ const YAML_DEVICES_BASELINE: usize = 82;
 /// 26 → 25: rotary_encoder.rs deleted; Gray phases and cadence now live in YAML.
 /// 25 → 24: BME280 uses exact integer YAML; Rust remains only as an oracle/controller fixture.
 /// 24 → 23: DHT22 production routing uses GPIO schedules; Rust is a parity oracle.
-const RUST_DEVICES_BASELINE: usize = 23;
+///
+/// 23 → 24: ⚠️ A RISE, argued here as the assertion asks. `nau88l21.rs` (the
+/// Nuvoton NAU88L21 audio codec control port) is new and hand-written, because
+/// the `i2c_device` primitive cannot express three things its datasheet
+/// (Rev 3.3) states and its first user (the FB200 stock-firmware gate) checks:
+///
+/// * **word-wise auto-increment.** The register address counts 16-bit
+///   REGISTERS: a read without STOP returns R34, R35, R36 … and wraps 0xFFFF →
+///   0x0000 (§7.4). `auto_increment:` in `registers:` mode walks one BYTE per
+///   byte, which on this part would read the low half of R34 as R35. The Linux
+///   `nau8821` driver reads the 10 biquad words this way (`regmap_raw_read`).
+/// * **a write that restores every register to its default.** Any write to R00
+///   resets the whole register file (§7.6); a rule can only `write:` named
+///   registers one by one, so the reset table would be written twice and could
+///   drift.
+/// * **device logs.** The gate reads the codec's register writes and reads
+///   (`peripheral_log` with the device id). No declarative device records
+///   logs.
+///
+/// The missing primitives (a `pointer_unit: register` auto-increment, a
+/// `reset_all` action, and a generic write/read log for `i2c_device`) are the
+/// port path; with them this file is deleted and the count falls back.
+///
+/// 24 → 25: `bt201.rs`, the BT201 Bluetooth module (Jieli KT1025A). A UART
+/// stream peer with state no descriptor primitive holds: settings kept in
+/// module flash and applied only at `AT+CZ`, EDR and BLE link state driven by
+/// the test script, BLE data cut into 128-byte packets, and bytes injected
+/// from the phone side (`uart_injections` `device:`). The UART declarative
+/// path answers fixed request/response pairs only.
+const RUST_DEVICES_BASELINE: usize = 25;
 
 /// Files in `components/` that are NOT a device model, with the reason. Listed
 /// here rather than pattern-matched so every exemption is a line someone wrote

@@ -1,0 +1,10 @@
+# Negative control: the same codec with CSB strapped low answers at 0x1B,
+# so the fixture firmware (which talks to 0x54) gets a NACK.
+name: "nau88l21-fixture-csb-low"
+chip: "chip.yaml"
+external_devices:
+  - id: "codec"
+    type: "nau88l21"
+    connection: "lpi2c1"
+    config:
+      i2c_address: 0x1b

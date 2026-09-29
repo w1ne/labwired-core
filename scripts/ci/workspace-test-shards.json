@@ -77,6 +77,12 @@
       "reason": "Cross-builds firmware-uart-echo-fixture at test time."
     },
     {
+      "package": "labwired-cli",
+      "target": "e2e_bt201",
+      "needs": "rustup target thumbv6m-none-eabi",
+      "reason": "Cross-builds firmware-uart-echo-fixture at test time."
+    },
+    {
       "package": "labwired-core",
       "target": "e2e_segger_rtt",
       "needs": "rustup target thumbv7em-none-eabi + gcc-arm-none-eabi",

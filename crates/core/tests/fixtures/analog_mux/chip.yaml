@@ -1,0 +1,30 @@
+# Test chip for the 74HC4051 analog mux e2e test (tests/analog_mux_e2e.rs).
+# Not a real part: one i.MX RT style GPIO port and one i.MX RT ADC, with a
+# pad map, so the mux resolves pad labels the way it does on a real chip.
+name: "analog-mux-test"
+arch: "arm"
+core: "cortex-m7"
+cpu_hz: 100_000_000
+flash:
+  base: 0x60000000
+  size: "64KB"
+flash_boot_alias: false
+ram:
+  base: 0x20000000
+  size: "64KB"
+pins:
+  PAD_S0: { gpio: gpio1, bit: 4 }
+  PAD_S1: { gpio: gpio1, bit: 5 }
+  PAD_S2: { gpio: gpio1, bit: 6 }
+  PAD_E: { gpio: gpio1, bit: 9 }
+peripherals:
+  - id: "gpio1"
+    type: "gpio"
+    base_address: 0x401B8000
+    size: "16KB"
+    config:
+      profile: "imxrt"
+  - id: "adc1"
+    type: "imxrt_adc"
+    base_address: 0x400C4000
+    size: "16KB"

@@ -916,6 +916,78 @@
       "inputs": []
     },
     {
+      "device_type": "bt201",
+      "label": "BT201 Bluetooth module (KT1025A)",
+      "summary": "Dual-mode Bluetooth 5.0 audio + BLE module with a UART AT interface and BLE transparent data.",
+      "detail": "Jieli KT1025A/B based BT201 module, from the V2.3 user manual: AT commands with OK / ER+n replies, names and radio switches kept in module flash and applied at reset (AT+CZ), start-up block, TS+/TL+ link status pushes, and BLE transparent data in 128-byte packets. A test script drives the phone: input channels edr_link (TS code 0..3) and ble_link (0/1), and uart_injections with device: <id> for phone data. Logs on the hosting UART: at, link, air. Not modelled: audio, SPP data, calls, the card player, AT over BLE (FFF3), baud change, RF.",
+      "transport": "uart",
+      "category": "uart",
+      "config_keys": [
+        {
+          "name": "edr_name",
+          "ty": "str",
+          "doc": "EDR (classic) name in module flash at power-on. Default BT201-AUDIO."
+        },
+        {
+          "name": "ble_name",
+          "ty": "str",
+          "doc": "BLE name in module flash at power-on. Default BT201-BLE."
+        },
+        {
+          "name": "edr",
+          "ty": "bool",
+          "doc": "EDR on in module flash at power-on. Default true."
+        },
+        {
+          "name": "ble",
+          "ty": "bool",
+          "doc": "BLE on in module flash at power-on. Default true."
+        },
+        {
+          "name": "boot_ms",
+          "ty": "int",
+          "doc": "Power-on to ready, ms. Not in the manual; default 500."
+        },
+        {
+          "name": "reply_delay_us",
+          "ty": "int",
+          "doc": "Command to reply, µs. Not in the manual; default 1000."
+        },
+        {
+          "name": "status_period_ms",
+          "ty": "int",
+          "doc": "EDR status (TS+) repeat period, ms; 0 = on change only. Default 500."
+        },
+        {
+          "name": "packet_gap_us",
+          "ty": "int",
+          "doc": "Idle time that ends a transparent packet from the MCU, µs. Default 1000."
+        },
+        {
+          "name": "banner",
+          "ty": "bool",
+          "doc": "Send the start-up block (AT+VER.., QA+.., ...) at power-on. Default true."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "edr_link",
+          "label": "Phone EDR link (TS code)",
+          "unit": "state",
+          "min": 0.0,
+          "max": 3.0
+        },
+        {
+          "key": "ble_link",
+          "label": "Phone BLE link",
+          "unit": "on/off",
+          "min": 0.0,
+          "max": 1.0
+        }
+      ]
+    },
+    {
       "device_type": "oled-ssd1306",
       "label": "SSD1306 OLED",
       "summary": "128×64 monochrome OLED display over I2C with a paged framebuffer.",
@@ -2650,6 +2722,23 @@
       "inputs": []
     },
     {
+      "device_type": "nau88l21",
+      "label": "NAU88L21 Audio Codec",
+      "summary": "Nuvoton NAU88L21 stereo audio codec: I2C control port and register file.",
+      "detail": "16-bit register address and data, auto-increment, reset values and read-only status registers from the datasheet (Rev 3.3). Records the register writes and the configured audio interface. No audio data path.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address set by the CSB strap: 0x1B (CSB low, default) or 0x54 (CSB high)."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
       "device_type": "mlx90640",
       "label": "MLX90640 Thermal",
       "summary": "Melexis MLX90640 32×24 far-IR thermal array over I2C.",
@@ -3817,6 +3906,43 @@
           "name": "oe_pin",
           "ty": "str",
           "doc": "OE pin, active LOW. HIGH opens all four switches."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "74hc4051",
+      "label": "74HC4051 8-channel analog multiplexer",
+      "summary": "Routes one of eight analog inputs (Y0..Y7) to an ADC channel, selected by three GPIO pins.",
+      "detail": "NXP/TI 74HC4051. S2 S1 S0 (MCU GPIO outputs) connect Yn = S2*4 + S1*2 + S0 to Z; E (active LOW, optional: absent means tied to GND) opens all switches. Z drives the ADC channel named by `connection:` and `channel`. Analog sources (for example a potentiometer) name this mux as their `connection:` and a Y input as their `channel`. The select pads are re-read on every GPIO write, so a conversion started after a select change converts the new channel. Not modelled: ON resistance, switch time, charge injection, Z used as an input. With E HIGH the ADC channel reads 0 mV (Z open, pull-down assumed).",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [
+        {
+          "name": "channel",
+          "ty": "int",
+          "doc": "ADC channel (of the `connection:` ADC, or of another mux) that Z drives."
+        },
+        {
+          "name": "s0_pin",
+          "ty": "str",
+          "doc": "S0 select pad (chip pad label, for example GPIO_B1_01 or PA4)."
+        },
+        {
+          "name": "s1_pin",
+          "ty": "str",
+          "doc": "S1 select pad."
+        },
+        {
+          "name": "s2_pin",
+          "ty": "str",
+          "doc": "S2 select pad."
+        },
+        {
+          "name": "e_pin",
+          "ty": "str",
+          "doc": "E enable pad, active LOW. Leave it out when E is tied to GND."
         }
       ],
       "labs": [],

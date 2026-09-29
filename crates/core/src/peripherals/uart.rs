@@ -1488,6 +1488,17 @@ impl UartStreamHost for Uart {
                 .iter()
                 .any(|s| s.carries_protocol_octets())
     }
+
+    fn peer_ids(&self) -> Vec<String> {
+        self.attached_streams
+            .iter()
+            .filter_map(|s| s.device_id().map(str::to_string))
+            .collect()
+    }
+
+    fn inject_peer_remote(&mut self, device: &str, bytes: &[u8]) -> Result<(), String> {
+        crate::peripherals::device::inject_remote_into(&mut self.attached_streams, device, bytes)
+    }
 }
 
 impl crate::Peripheral for Uart {
@@ -1840,6 +1851,14 @@ impl crate::Peripheral for Uart {
 
     fn as_uart_stream_host(&mut self) -> Option<&mut dyn UartStreamHost> {
         Some(self)
+    }
+
+    /// The logs of the attached stream peers (a UART records none itself).
+    fn logs(&self) -> Vec<crate::peripheral_log::PeripheralLog> {
+        self.attached_streams
+            .iter()
+            .flat_map(|s| s.logs())
+            .collect()
     }
 
     /// UART's attachables are byte streams (GPS, modem), not addressed slaves,

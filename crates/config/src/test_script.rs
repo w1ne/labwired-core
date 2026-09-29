@@ -775,12 +775,28 @@ impl UartInjectionBytes {
 /// the named `uart` peripheral's receive queue when `trigger` fires. Reuses
 /// the [`FaultTrigger`] vocabulary; only the time-based triggers (`at_start`,
 /// `after_cycles`) are wired today, mirroring [`StimulusSpec`].
+///
+/// With `device:`, the bytes go to the FAR side of the external device with
+/// that id on this UART instead (for a radio module: data a phone sends over
+/// the air). The device decides what reaches the UART, as the real part does.
+///
+/// ```yaml
+/// uart_injections:
+///   - uart: lpuart5
+///     device: bt          # an external_devices id on lpuart5
+///     bytes: [0xAA, 0x55, 0x01, 0x00, 0x00, 0xC8, 0xCF]
+///     trigger: !after_cycles { cycles: 1000000 }
+/// ```
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct UartInjectionSpec {
     /// The UART peripheral's bus name (e.g. `"uart1"`), resolved against the
     /// built machine when the run starts.
     pub uart: String,
+    /// Give the bytes to the far side of this attached device (its
+    /// system.yaml `external_devices` id) instead of the UART RX line.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device: Option<String>,
     /// The bytes to deliver.
     pub bytes: UartInjectionBytes,
     #[serde(default)]
@@ -1012,6 +1028,9 @@ impl TestScript {
             }
             if u.bytes.is_empty() {
                 anyhow::bail!("uart_injections[{}]: 'bytes' cannot be empty", i);
+            }
+            if u.device.as_deref().is_some_and(|d| d.trim().is_empty()) {
+                anyhow::bail!("uart_injections[{}]: 'device' cannot be empty", i);
             }
             // Only the time-based triggers are wired for injections today; the
             // register-access triggers need a write/read hook we haven't added

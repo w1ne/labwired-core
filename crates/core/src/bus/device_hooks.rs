@@ -197,6 +197,9 @@ impl SystemBus {
     /// already unreachable and only the call remained.
     #[inline]
     pub(crate) fn maybe_service_edge_driven_gpio_devices(&mut self, idx: usize) {
+        // A select pad of an analog mux may have moved: re-route before the
+        // next instruction can start a conversion.
+        self.route_analog_muxes_on_write(idx);
         // A store to a GPIO input register (a device driving a pad through
         // `drive_idr_bit`) is an external edge like `set_gpio_input`.
         if self.timer_capture_wired {

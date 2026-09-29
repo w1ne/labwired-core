@@ -2187,15 +2187,17 @@ pub(crate) fn evaluate_fidelity_clean(
     }
 }
 
-/// The log a `peripheral_log` assertion names. `Err` is a config
-/// error: no peripheral or no log with that name. It lists the valid names.
+/// The log a `peripheral_log` assertion names. `Err` is a config error: no
+/// peripheral or attached device, or no log with that name. It lists the
+/// valid names. `peripheral` is a peripheral name or the `external_devices:`
+/// id of an attached device.
 pub(crate) fn resolve_peripheral_log(
     bus: &labwired_core::bus::SystemBus,
     details: &labwired_config::PeripheralLogDetails,
 ) -> Result<labwired_core::peripheral_log::PeripheralLog, String> {
     let Some(logs) = bus.peripheral_logs(&details.peripheral) else {
         return Err(format!(
-            "peripheral_log: no peripheral named '{}'",
+            "peripheral_log: no peripheral or attached device named '{}'",
             details.peripheral
         ));
     };

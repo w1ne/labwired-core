@@ -77,6 +77,15 @@ pub trait I2cDevice: Send {
         Vec::new()
     }
 
+    /// The named text logs this device records during a run (see
+    /// [`crate::peripheral_log`]). `labwired test` reads them with
+    /// `peripheral_log`, naming the device by its `external_devices:` id.
+    ///
+    /// Return every log the model keeps, also an empty one. Default: none.
+    fn logs(&self) -> Vec<crate::peripheral_log::PeripheralLog> {
+        Vec::new()
+    }
+
     /// Does this device answer to `addr` on the wire *right now*?
     ///
     /// A plain slave owns exactly one address, so the default is the obvious
@@ -360,6 +369,44 @@ pub trait UartStreamHost {
     /// True when any attached peer carries protocol octets — the test
     /// `attach_uart_tx_sink` uses to leave a linked UART off the console sink.
     fn hosts_protocol_peer(&self) -> bool;
+
+    /// Give `bytes` to the far side of the attached peer `device` (see
+    /// [`UartStreamDevice::inject_remote`]). The default is for a host that
+    /// cannot reach its peers.
+    /// The `external_devices` ids of the attached peers that have one.
+    fn peer_ids(&self) -> Vec<String> {
+        Vec::new()
+    }
+
+    fn inject_peer_remote(&mut self, device: &str, _bytes: &[u8]) -> Result<(), String> {
+        Err(format!(
+            "this UART cannot give data to the far side of its peer '{device}'"
+        ))
+    }
+}
+
+/// Find the peer `device` in `streams` and give it `bytes` on its far side.
+/// The one lookup every [`UartStreamHost::inject_peer_remote`] uses.
+pub fn inject_remote_into(
+    streams: &mut [Box<dyn UartStreamDevice>],
+    device: &str,
+    bytes: &[u8],
+) -> Result<(), String> {
+    let known: Vec<String> = streams
+        .iter()
+        .filter_map(|s| s.device_id().map(str::to_string))
+        .collect();
+    match streams.iter_mut().find(|s| s.device_id() == Some(device)) {
+        Some(stream) => stream.inject_remote(bytes),
+        None => Err(format!(
+            "no device '{device}' is attached to this UART (attached: {})",
+            if known.is_empty() {
+                "none".to_string()
+            } else {
+                known.join(", ")
+            }
+        )),
+    }
 }
 
 /// A device that emits bytes through the UART's RX path (e.g. a GPS module).
@@ -402,6 +449,37 @@ pub trait UartStreamDevice: Send {
     fn max_bytes_per_tick(&self) -> usize {
         1
     }
+
+    /// The system.yaml `external_devices` id of this peer, if it has one. A
+    /// test script names the peer by this id (`uart_injections: device:`).
+    fn device_id(&self) -> Option<&str> {
+        None
+    }
+
+    /// Bytes that arrive on the FAR side of this peer: for a radio module,
+    /// data a remote station (a phone) sends over the air. The peer decides
+    /// what to do with them, as the real part would (a Bluetooth module in
+    /// transparent mode puts them on its UART TX only while a link is up).
+    /// Default: this peer has no far side.
+    fn inject_remote(&mut self, _bytes: &[u8]) -> Result<(), String> {
+        Err("this device has no far side to give data to".to_string())
+    }
+
+    /// Microseconds of device time until this peer next has work (a reply
+    /// that comes due, a timer). A host that does not poll on every tick uses
+    /// it to wake in time. `None`: nothing is scheduled; the host polls at its
+    /// idle rate. Default `None`.
+    fn next_wake_us(&self) -> Option<u64> {
+        None
+    }
+
+    /// Named logs this peer records (see [`crate::peripheral_log`]). The
+    /// hosting UART returns them with its own, so a test script reads them as
+    /// `peripheral_log: {peripheral: <the uart>, log: <name>}`. Default: none.
+    fn logs(&self) -> Vec<crate::peripheral_log::PeripheralLog> {
+        Vec::new()
+    }
+
     fn as_any(&self) -> Option<&dyn Any> {
         None
     }

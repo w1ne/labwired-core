@@ -17,9 +17,19 @@
 //! (`CTRL` TIE/TCIE/RIE/ILIE/ORIE) and the TX/RX DMA requests (`BAUD`
 //! TDMAE/RDMAE). Transmitted characters go to the console sink and the bus
 //! trace; received characters are injected by the host (`push_rx`).
+//!
+//! External devices on the pins ([`UartStreamDevice`] peers, e.g. a Bluetooth
+//! module) attach through [`UartStreamHost`]. A peer gets each transmitted
+//! character when its stop bit ends, and its device time is brought forward to
+//! that cycle first. What a peer sends goes onto the RX wire and takes one
+//! frame time per character at the programmed baud rate. A character that
+//! completes while the receiver is off (`CTRL.RE` = 0) is lost, as on the pin;
+//! one that completes with the FIFO full sets `STAT.OR` and is lost.
+//! Test-script injections (`rx_buffer`) wait until the receiver is on.
 
 use super::{byte_of, Timebase};
 use crate::bus::bus_trace::{BusDir, BusPayload, BusTrace};
+use crate::peripherals::device::{UartStreamDevice, UartStreamHost};
 use crate::{Peripheral, PeripheralTickResult, SimResult};
 use std::any::Any;
 use std::cell::RefCell;
@@ -40,6 +50,9 @@ const FIFO: u32 = 0x28;
 const WATER: u32 = 0x2C;
 
 const FIFO_DEPTH: usize = 4;
+
+/// Longest time between two polls of the attached peers, µs.
+const PEER_POLL_US: u64 = 1_000;
 
 // STAT
 const ST_TDRE: u32 = 1 << 23;
@@ -95,8 +108,20 @@ struct Inner {
     rx_fifo: VecDeque<u8>,
     /// Last time the transmitter state was brought forward.
     synced: u64,
-    /// Bytes completed but not yet handed to the sink (drained on `&mut`).
-    tx_done: Vec<u8>,
+    /// Bytes completed but not yet handed to the sink (drained on `&mut`),
+    /// with the cycle their stop bit ended.
+    tx_done: Vec<(u8, u64)>,
+    /// Characters a peer has sent that are not on the RX wire yet, with the
+    /// cycle each was sent.
+    rx_wire: VecDeque<(u8, u64)>,
+    /// Character on the RX wire and the cycle its stop bit ends.
+    rx_shifting: Option<(u8, u64)>,
+    /// Characters that completed while the receiver was off or the FIFO was
+    /// full.
+    rx_lost: u64,
+    /// Characters that completed into the RX FIFO, for the bus trace
+    /// (drained on `&mut`).
+    rx_done: Vec<u8>,
 }
 
 impl Inner {
@@ -116,6 +141,10 @@ impl Inner {
             rx_fifo: VecDeque::new(),
             synced: 0,
             tx_done: Vec::new(),
+            rx_wire: VecDeque::new(),
+            rx_shifting: None,
+            rx_lost: 0,
+            rx_done: Vec::new(),
         }
     }
 
@@ -173,7 +202,6 @@ impl Inner {
     }
 }
 
-#[derive(Debug)]
 pub struct ImxrtLpuart {
     inner: RefCell<Inner>,
     time: Timebase,
@@ -184,6 +212,25 @@ pub struct ImxrtLpuart {
     trace_name: String,
     /// Every byte this instance transmitted (for inspection and tests).
     tx_log: Vec<u8>,
+    /// External devices on the TX/RX pins.
+    streams: Vec<Box<dyn UartStreamDevice>>,
+    /// The cycle up to which the peers' device time has been brought.
+    peer_cycles: u64,
+    /// Host injection queue (test scripts, interactive input). Its bytes go
+    /// onto the RX wire when the receiver is on.
+    rx_inject: Arc<Mutex<VecDeque<u8>>>,
+}
+
+impl std::fmt::Debug for ImxrtLpuart {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ImxrtLpuart")
+            .field("inner", &self.inner)
+            .field("uart_clk_hz", &self.uart_clk_hz)
+            .field("trace_name", &self.trace_name)
+            .field("tx_bytes", &self.tx_log.len())
+            .field("streams", &self.streams.len())
+            .finish()
+    }
 }
 
 impl Default for ImxrtLpuart {
@@ -203,7 +250,21 @@ impl ImxrtLpuart {
             trace: BusTrace::default(),
             trace_name: "lpuart".into(),
             tx_log: Vec::new(),
+            streams: Vec::new(),
+            peer_cycles: 0,
+            rx_inject: Arc::new(Mutex::new(VecDeque::new())),
         }
+    }
+
+    /// The host injection queue (see the module doc).
+    pub fn rx_buffer(&self) -> Arc<Mutex<VecDeque<u8>>> {
+        self.rx_inject.clone()
+    }
+
+    /// Attach an external device to the TX/RX pins.
+    pub fn attach_stream(&mut self, dev: Box<dyn UartStreamDevice>) {
+        self.peer_cycles = self.time.now();
+        self.streams.push(dev);
     }
 
     pub fn set_sink(&mut self, sink: Option<Arc<Mutex<Vec<u8>>>>, echo_stdout: bool) {
@@ -261,7 +322,7 @@ impl ImxrtLpuart {
         loop {
             match i.shifting {
                 Some((b, end)) if end <= now => {
-                    i.tx_done.push(b);
+                    i.tx_done.push((b, end));
                     i.shifting = None;
                     if let Some(next) = i.tx_fifo.pop_front() {
                         i.shifting = Some((next, end + frame));
@@ -279,12 +340,96 @@ impl ImxrtLpuart {
                 _ => break,
             }
         }
+        // The receive side: injected bytes join the wire while RE is on.
+        if i.ctrl & CT_RE != 0 {
+            if let Ok(mut q) = self.rx_inject.try_lock() {
+                while let Some(b) = q.pop_front() {
+                    i.rx_wire.push_back((b, now));
+                }
+            }
+        }
+        loop {
+            match i.rx_shifting {
+                Some((b, end)) if end <= now => {
+                    i.rx_shifting = None;
+                    if i.ctrl & CT_RE == 0 {
+                        i.rx_lost += 1;
+                    } else if i.rx_fifo.len() >= i.rx_depth() {
+                        i.stat |= ST_OR;
+                        i.rx_lost += 1;
+                    } else {
+                        i.rx_fifo.push_back(b);
+                        i.rx_done.push(b);
+                    }
+                    if let Some((next, sent)) = i.rx_wire.pop_front() {
+                        i.rx_shifting = Some((next, end.max(sent) + frame));
+                    }
+                }
+                None => match i.rx_wire.pop_front() {
+                    Some((next, sent)) => i.rx_shifting = Some((next, sent + frame)),
+                    None => break,
+                },
+                _ => break,
+            }
+        }
         i.synced = now;
+    }
+
+    /// Bring the peers' device time forward to `until` (a cycle) and put
+    /// what they send onto the RX wire.
+    fn service_peers(&mut self, until: u64) {
+        if self.streams.is_empty() {
+            self.peer_cycles = until;
+            return;
+        }
+        let per_us = (self.time.cpu_hz() / 1_000_000).max(1);
+        let us = until.saturating_sub(self.peer_cycles) / per_us;
+        self.peer_cycles += us * per_us;
+        let mut credit = us;
+        let mut sent = Vec::new();
+        loop {
+            let step = credit.min(u64::from(u32::MAX)) as u32;
+            credit -= u64::from(step);
+            for stream in self.streams.iter_mut() {
+                let mut elapsed = step;
+                while let Some(b) = stream.poll(elapsed) {
+                    sent.push(b);
+                    elapsed = 0;
+                }
+            }
+            if credit == 0 {
+                break;
+            }
+        }
+        if !sent.is_empty() {
+            let mut i = self.inner.borrow_mut();
+            let at = self.peer_cycles;
+            i.rx_wire.extend(sent.into_iter().map(|b| (b, at)));
+        }
+    }
+
+    fn flush_rx_done(&mut self) {
+        let done = std::mem::take(&mut self.inner.borrow_mut().rx_done);
+        for byte in done {
+            self.trace.push(
+                &self.trace_name,
+                BusPayload::Uart {
+                    direction: BusDir::Rx,
+                    byte,
+                },
+            );
+        }
     }
 
     fn flush_tx_done(&mut self) {
         let done = std::mem::take(&mut self.inner.borrow_mut().tx_done);
-        for b in done {
+        for (b, end) in done {
+            if !self.streams.is_empty() {
+                self.service_peers(end);
+                for stream in self.streams.iter_mut() {
+                    stream.on_tx_byte(b);
+                }
+            }
             self.tx_log.push(b);
             if let Some(sink) = &self.sink {
                 if let Ok(mut s) = sink.lock() {
@@ -400,6 +545,7 @@ impl ImxrtLpuart {
         }
         self.sync();
         self.flush_tx_done();
+        self.flush_rx_done();
     }
 
     /// DMA request line: 0 = TX (TDMAE & TDRE), 1 = RX (RDMAE & RDRF).
@@ -427,8 +573,73 @@ impl ImxrtLpuart {
         self.time.advance(cycles);
         self.sync();
         self.flush_tx_done();
-        let until = self.inner.borrow().shifting.map(|(_, end)| end);
-        super::wake_hint(self.time.now(), until)
+        let now = self.time.now();
+        self.service_peers(now);
+        // What the peers just sent may already be due (a zero-delay reply).
+        self.sync();
+        self.flush_tx_done();
+        self.flush_rx_done();
+        let until = {
+            let i = self.inner.borrow();
+            let rx_next = match (i.rx_shifting, i.rx_wire.is_empty()) {
+                (Some((_, end)), _) => Some(end),
+                (None, false) => Some(now + 1),
+                (None, true) => None,
+            };
+            let injected =
+                i.ctrl & CT_RE != 0 && self.rx_inject.try_lock().is_ok_and(|q| !q.is_empty());
+            let per_us = (self.time.cpu_hz() / 1_000_000).max(1);
+            // A peer can get work between two ticks that its last
+            // `next_wake_us` did not know about (a test-script stimulus, data
+            // from its far side), and only the bus can move a wake-up. So a
+            // host with peers wakes at least once per millisecond of device
+            // time, the pace of the generic UART.
+            let peer_next = (!self.streams.is_empty()).then(|| {
+                let us = self
+                    .streams
+                    .iter()
+                    .filter_map(|s| s.next_wake_us())
+                    .min()
+                    .unwrap_or(PEER_POLL_US)
+                    .clamp(1, PEER_POLL_US);
+                self.peer_cycles + us * per_us
+            });
+            [
+                i.shifting.map(|(_, end)| end),
+                rx_next,
+                injected.then_some(now + 1),
+                peer_next,
+            ]
+            .into_iter()
+            .flatten()
+            .min()
+        };
+        super::wake_hint(now, until)
+    }
+}
+
+impl UartStreamHost for ImxrtLpuart {
+    fn attach_stream_device(&mut self, dev: Box<dyn UartStreamDevice>) {
+        self.attach_stream(dev);
+    }
+
+    fn detach_console_sink(&mut self) {
+        self.set_sink(None, false);
+    }
+
+    fn hosts_protocol_peer(&self) -> bool {
+        self.streams.iter().any(|s| s.carries_protocol_octets())
+    }
+
+    fn peer_ids(&self) -> Vec<String> {
+        self.streams
+            .iter()
+            .filter_map(|s| s.device_id().map(str::to_string))
+            .collect()
+    }
+
+    fn inject_peer_remote(&mut self, device: &str, bytes: &[u8]) -> Result<(), String> {
+        crate::peripherals::device::inject_remote_into(&mut self.streams, device, bytes)
     }
 }
 
@@ -438,8 +649,13 @@ impl Peripheral for ImxrtLpuart {
     fn legacy_tick_active(&self) -> bool {
         ({
             let i = self.inner.borrow();
-            i.shifting.is_some() || !i.tx_fifo.is_empty()
+            i.shifting.is_some()
+                || !i.tx_fifo.is_empty()
+                || i.rx_shifting.is_some()
+                || !i.rx_wire.is_empty()
         }) || self.time.level()
+            || !self.streams.is_empty()
+            || self.rx_inject.try_lock().is_ok_and(|q| !q.is_empty())
     }
     fn legacy_tick_dynamic(&self) -> bool {
         true
@@ -501,6 +717,29 @@ impl Peripheral for ImxrtLpuart {
     fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
         Some(self)
     }
+    fn as_uart_stream_host(&mut self) -> Option<&mut dyn UartStreamHost> {
+        Some(self)
+    }
+    fn uart_rx_source(&self) -> Option<Arc<Mutex<VecDeque<u8>>>> {
+        Some(self.rx_buffer())
+    }
+    fn for_each_attached_sim_input(
+        &mut self,
+        f: &mut dyn FnMut(&mut dyn crate::sim_input::SimInput) -> bool,
+    ) -> bool {
+        for stream in self.streams.iter_mut() {
+            if let Some(si) = stream.as_sim_input_mut() {
+                if f(si) {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+    /// The logs of the attached peers (the LPUART records none itself).
+    fn logs(&self) -> Vec<crate::peripheral_log::PeripheralLog> {
+        self.streams.iter().flat_map(|s| s.logs()).collect()
+    }
     fn snapshot(&self) -> serde_json::Value {
         let i = self.inner.borrow();
         serde_json::json!({
@@ -509,6 +748,7 @@ impl Peripheral for ImxrtLpuart {
             "ctrl": i.ctrl,
             "stat": i.stat_view(),
             "tx_bytes": self.tx_log.len(),
+            "rx_lost": i.rx_lost,
         })
     }
 }
@@ -540,6 +780,140 @@ mod tests {
         assert_ne!(u.read_reg(STAT) & ST_TC, 0);
         u.write_reg(CTRL, CT_TE | CT_RE, u32::MAX);
         assert_eq!(u.tx_log(), b"A");
+    }
+
+    /// A peer that answers every byte with the byte + 1 after 100 µs, and
+    /// records the device time each byte arrived.
+    struct Plus1 {
+        now_us: u64,
+        seen: std::sync::Arc<std::sync::Mutex<Vec<(u8, u64)>>>,
+        due: VecDeque<(u64, u8)>,
+        out: VecDeque<u8>,
+    }
+
+    impl UartStreamDevice for Plus1 {
+        fn poll(&mut self, elapsed_us: u32) -> Option<u8> {
+            self.now_us += u64::from(elapsed_us);
+            while self.due.front().is_some_and(|(t, _)| *t <= self.now_us) {
+                let (_, b) = self.due.pop_front().unwrap();
+                self.out.push_back(b);
+            }
+            self.out.pop_front()
+        }
+        fn on_tx_byte(&mut self, byte: u8) {
+            self.seen.lock().unwrap().push((byte, self.now_us));
+            self.due
+                .push_back((self.now_us + 100, byte.wrapping_add(1)));
+        }
+        fn next_wake_us(&self) -> Option<u64> {
+            self.due
+                .front()
+                .map(|(t, _)| t.saturating_sub(self.now_us).max(1))
+        }
+        fn device_id(&self) -> Option<&str> {
+            Some("plus1")
+        }
+    }
+
+    type Seen = std::sync::Arc<std::sync::Mutex<Vec<(u8, u64)>>>;
+
+    /// 115200 baud LPUART at 600 MHz with a `Plus1` peer; returns the frame
+    /// time in cycles.
+    fn with_peer() -> (ImxrtLpuart, CycleClock, Seen, u64) {
+        let (mut u, c) = uart();
+        let seen: Seen = Default::default();
+        u.attach_stream(Box::new(Plus1 {
+            now_us: 0,
+            seen: seen.clone(),
+            due: VecDeque::new(),
+            out: VecDeque::new(),
+        }));
+        u.write_reg(BAUD, (15 << 24) | 43, u32::MAX);
+        u.write_reg(CTRL, CT_TE | CT_RE, u32::MAX);
+        (u, c, seen, 10 * 16 * 43 * 600 / 80)
+    }
+
+    /// Tick the model up to cycle `to` the way the bus does, following its
+    /// wake hints.
+    fn tick_to(u: &mut ImxrtLpuart, c: &CycleClock, to: u64) {
+        loop {
+            let now = c.now();
+            if now >= to {
+                break;
+            }
+            let hint = u.tick_elapsed(0).ticks_until_next.unwrap_or(1);
+            c.publish((now + hint).min(to));
+        }
+        u.tick_elapsed(0);
+    }
+
+    #[test]
+    fn peer_gets_tx_bytes_at_stop_bit_and_answers_at_baud_rate() {
+        let (mut u, c, seen, frame) = with_peer();
+        u.write_reg(DATA, 0x41, u32::MAX);
+        tick_to(&mut u, &c, frame - 1);
+        assert!(seen.lock().unwrap().is_empty(), "not before the stop bit");
+        tick_to(&mut u, &c, frame + 10);
+        let got = seen.lock().unwrap().clone();
+        assert_eq!(got.len(), 1);
+        assert_eq!(got[0].0, 0x41);
+        // Device time at delivery = the stop-bit cycle, in µs.
+        assert_eq!(got[0].1, frame / 600);
+        // Reply: 100 µs later, then one frame on the RX wire.
+        let reply_done = (got[0].1 + 100) * 600 + frame;
+        tick_to(&mut u, &c, reply_done - 600);
+        assert_eq!(u.read_reg(DATA), 1 << 12, "still on the wire");
+        tick_to(&mut u, &c, reply_done + 600);
+        assert_eq!(u.read_reg(DATA), 0x42);
+        assert_eq!(u.peer_ids(), vec!["plus1".to_string()]);
+    }
+
+    /// Work a peer gets between ticks (a stimulus, far-side data) must not
+    /// wait for the wake-up the peer asked for before it had that work.
+    #[test]
+    fn a_peer_is_polled_at_least_every_millisecond() {
+        let (mut u, _c, _, _) = with_peer();
+        let hint = u.tick_elapsed(0).ticks_until_next.unwrap();
+        assert!(hint <= 600_000, "hint {hint} cycles at 600 MHz");
+    }
+
+    #[test]
+    fn peer_bytes_are_lost_while_the_receiver_is_off() {
+        let (mut u, c, _, frame) = with_peer();
+        u.write_reg(DATA, 0x10, u32::MAX);
+        tick_to(&mut u, &c, frame + 10);
+        u.write_reg(CTRL, CT_TE, u32::MAX);
+        tick_to(&mut u, &c, frame * 3 + 200 * 600);
+        u.write_reg(CTRL, CT_TE | CT_RE, u32::MAX);
+        assert_eq!(u.read_reg(DATA), 1 << 12);
+        assert_eq!(u.snapshot()["rx_lost"], 1);
+    }
+
+    #[test]
+    fn injected_bytes_wait_for_the_receiver() {
+        let (mut u, c) = uart();
+        u.write_reg(BAUD, (15 << 24) | 43, u32::MAX);
+        // RX FIFO on (4 deep), so both characters fit without a read.
+        u.write_reg(FIFO, FF_RXFE, u32::MAX);
+        u.rx_buffer().lock().unwrap().extend([1u8, 2]);
+        tick_to(&mut u, &c, 1_000_000);
+        assert_eq!(u.read_reg(DATA), 1 << 12, "RE off: held");
+        u.write_reg(CTRL, CT_RE, u32::MAX);
+        tick_to(&mut u, &c, 2_000_000);
+        assert_eq!(u.read_reg(DATA), 1);
+        assert_eq!(u.read_reg(DATA), 2);
+    }
+
+    #[test]
+    fn a_full_fifo_sets_overrun() {
+        let (mut u, c) = uart();
+        u.write_reg(BAUD, (15 << 24) | 43, u32::MAX);
+        u.write_reg(CTRL, CT_RE, u32::MAX);
+        // FIFO off: depth 1.
+        u.rx_buffer().lock().unwrap().extend([1u8, 2, 3]);
+        tick_to(&mut u, &c, 1_000_000);
+        assert_ne!(u.read_reg(STAT) & ST_OR, 0);
+        assert_eq!(u.read_reg(DATA), 1);
     }
 
     #[test]

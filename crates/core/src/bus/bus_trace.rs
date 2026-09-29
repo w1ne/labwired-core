@@ -358,6 +358,9 @@ impl I2cDevice for TracingI2cDevice {
     ) -> Vec<crate::inspect::Artifact> {
         self.inner.artifacts(id, opts)
     }
+    fn logs(&self) -> Vec<crate::peripheral_log::PeripheralLog> {
+        self.inner.logs()
+    }
     fn claims_address(&self, addr: u8) -> bool {
         self.inner.claims_address(addr)
     }

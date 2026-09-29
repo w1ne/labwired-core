@@ -169,6 +169,11 @@ impl I2cDevice for UnpoweredI2cDevice {
             .collect()
     }
 
+    /// An unpowered part saw no traffic, so its logs are its empty logs.
+    fn logs(&self) -> Vec<crate::peripheral_log::PeripheralLog> {
+        self.inner.logs()
+    }
+
     fn for_each_sim_input(
         &mut self,
         f: &mut dyn FnMut(&mut dyn crate::sim_input::SimInput) -> bool,

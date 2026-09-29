@@ -207,7 +207,7 @@ fn peripheral_log_unknown_names_are_config_errors() {
     );
     assert_eq!(out.status.code(), Some(2), "{}", stderr(&out));
     assert!(
-        stderr(&out).contains("no peripheral named 'usb9'"),
+        stderr(&out).contains("no peripheral or attached device named 'usb9'"),
         "{}",
         stderr(&out)
     );

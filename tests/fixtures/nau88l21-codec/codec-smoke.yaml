@@ -1,0 +1,30 @@
+# The fixture firmware finds the codec at 0x54, reads its ID, and configures
+# the audio interface. Every expected value is a NAU88L21 datasheet fact
+# (Rev 3.3, §7 and §10), not a value the firmware prints.
+schema_version: "1.0"
+inputs:
+  firmware: "../imxrt-lpi2c-nau88l21.elf"
+  system: "system.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  # The sequence ran to the end.
+  - memory_value: {address: 0x20000000, expected_value: 0xC0DEC0DE}
+  # R58 I2C_DEVICE_ID, DS §10 (X bits read as 0).
+  - memory_value: {address: 0x20000004, expected_value: 0x1A20}
+  # R1C read back after the write: 32-bit I2S.
+  - memory_value: {address: 0x20000008, expected_value: 0x000E}
+  # No transfer got a NACK.
+  - memory_value: {address: 0x2000000C, expected_value: 0}
+  # The codec's own logs.
+  - peripheral_log: {peripheral: codec, log: reads, contains: "read 0x0058 = 0x1a20"}
+  - peripheral_log: {peripheral: codec, log: writes, contains: "write 0x0000 = 0x0000 (reset)"}
+  - peripheral_log: {peripheral: codec, log: writes, contains: "write 0x0001 = 0x0fff"}
+  - peripheral_log: {peripheral: codec, log: writes, contains: "write 0x001c = 0x000e"}
+  - peripheral_log: {peripheral: codec, log: regs, contains: "0x001d = 0x0000"}
+  - peripheral_log: {peripheral: codec, log: state, contains: "dai slave i2s 32-bit"}
+  - peripheral_log: {peripheral: codec, log: state, contains: "enable dac_l dac_r adc_l adc_r"}
+  # The controller's bus trace has each acknowledged byte once.
+  - peripheral_log: {peripheral: lpi2c1, log: bus_trace, contains: "addr 0x54 W ack", min_count: 6}
+  - fidelity_clean: true
+  - expected_stop_reason: max_steps

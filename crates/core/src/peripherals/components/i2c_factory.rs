@@ -78,10 +78,19 @@ pub fn i2c_mux_child_ids(manifest: &labwired_config::SystemManifest) -> Vec<&str
         .iter()
         .map(|e| e.id.as_str())
         .collect();
+    let analog_muxes: std::collections::HashSet<&str> = manifest
+        .external_devices
+        .iter()
+        .filter(|e| super::declarative_analog_mux::is_analog_mux_type(&e.r#type))
+        .map(|e| e.id.as_str())
+        .collect();
     manifest
         .external_devices
         .iter()
         .filter(|e| ids.contains(e.connection.as_str()))
+        // An analog source on a 74HC4051 input attaches through the
+        // generic loop; the mux is not an I²C switch.
+        .filter(|e| !analog_muxes.contains(e.connection.as_str()))
         .map(|e| e.id.as_str())
         .collect()
 }
@@ -110,6 +119,11 @@ pub fn validate_i2c_mux_topology(
             // `connection` names a controller (or nothing) — not our business.
             continue;
         };
+        if super::declarative_analog_mux::is_analog_mux_type(&parent.r#type) {
+            // An analog source on a 74HC4051 Y input: the mux wires it
+            // (`bus/analog_mux.rs`), not the I²C tree.
+            continue;
+        }
         if parent.id == ext.id {
             anyhow::bail!(
                 "external device '{}' declares itself as its own connection",
@@ -347,6 +361,17 @@ pub fn build_i2c_device(
                 .and_then(|v| v.as_u64())
                 .unwrap_or(DRV2605_ADDR as u64) as u8;
             Some(Box::new(Drv2605::new(address)))
+        }
+        "nau88l21" => {
+            use crate::peripherals::components::nau88l21::{
+                check_address, Nau88l21, NAU88L21_ADDR_CSB_LOW,
+            };
+            let address = config
+                .get("i2c_address")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(NAU88L21_ADDR_CSB_LOW as u64);
+            let address = check_address(u8::try_from(address).ok()?).ok()?;
+            Some(Box::new(Nau88l21::new(address)))
         }
         // Declarative sensors are resolved above; these are the remaining
         // Rust-backed models with a standalone I²C constructor.

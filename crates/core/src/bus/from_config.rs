@@ -294,6 +294,7 @@ impl SystemBus {
             motors: Vec::new(),
             motor_cycle_anchor: 0,
             analog_inputs: Vec::new(),
+            analog_muxes: Vec::new(),
             can_diagnostic_testers: Vec::new(),
             can_uds_testers: Vec::new(),
             can_log_players: Vec::new(),

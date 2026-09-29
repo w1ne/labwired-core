@@ -1346,7 +1346,7 @@ boards:
     drift_ack: 2026-09-17
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: 5a2298f813dd3a13600f30d48a06b8b61ad75e690e9467e157b0cb0544abebb0
+    drift_ack_digest: d7b4232bb27bdee472f9c9b79b64511c5dc5fd07e7ba5880048e44cbe406371a
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -1647,6 +1647,13 @@ boards:
     # (SysTick/USART) runs only on a scripted world node reset. Every existing
     # single-board and cross-link path is unchanged. No register map, reset value,
     # or peripheral programming model on this board changed.
+    # ACK, NOT A CAPTURE. The live re-capture owed above is still owed.
+    drift_ack: 2026-09-28
+    # 2026-09-28: UART stream peers. `UartStreamDevice` gained optional hooks
+    # (device_id, inject_remote, next_wake_us, logs) with no-op defaults, and
+    # `UartStreamHost` gained peer_ids / inject_peer_remote; uart.rs forwards
+    # them to its attached peers (for the new BT201 Bluetooth module). No
+    # register map, reset value, or peripheral programming model changed.
     # ACK, NOT A CAPTURE. The live re-capture owed above is still owed.
     drift_ack: 2026-09-28
   - id: esp32c3
@@ -2913,7 +2920,7 @@ boards:
     drift_ack: 2026-09-17
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: 735cbe53457b34b5c3572ab1c039e8e00c71a2e53c4f5972e290e741f33270d5
+    drift_ack_digest: d62d0acc8b1d9114b9c36d53f67ad60e571d42ae79904b4ade3ae5c021b21b5f
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -3184,6 +3191,13 @@ boards:
     # (SysTick/USART) runs only on a scripted world node reset. Every existing
     # single-board and cross-link path is unchanged. No register map, reset value,
     # or peripheral programming model on this board changed.
+    # ACK, NOT A CAPTURE. The live re-capture owed above is still owed.
+    drift_ack: 2026-09-28
+    # 2026-09-28: UART stream peers. `UartStreamDevice` gained optional hooks
+    # (device_id, inject_remote, next_wake_us, logs) with no-op defaults, and
+    # `UartStreamHost` gained peer_ids / inject_peer_remote; uart.rs forwards
+    # them to its attached peers (for the new BT201 Bluetooth module). No
+    # register map, reset value, or peripheral programming model changed.
     # ACK, NOT A CAPTURE. The live re-capture owed above is still owed.
     drift_ack: 2026-09-28
   - id: nucleo-l073rz
@@ -3577,7 +3591,7 @@ boards:
     drift_ack: 2026-09-17
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: 8f5f7fa8418475494d24fc9e709001536354f9912a74096860ae30d39978038f
+    drift_ack_digest: ec07acc17060dc7e3003e690f55c453ac543295ca2e92021aea0e2e96fcc9dfe
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -3806,6 +3820,13 @@ boards:
     # (SysTick/USART) runs only on a scripted world node reset. Every existing
     # single-board and cross-link path is unchanged. No register map, reset value,
     # or peripheral programming model on this board changed.
+    # ACK, NOT A CAPTURE. The live re-capture owed above is still owed.
+    drift_ack: 2026-09-28
+    # 2026-09-28: UART stream peers. `UartStreamDevice` gained optional hooks
+    # (device_id, inject_remote, next_wake_us, logs) with no-op defaults, and
+    # `UartStreamHost` gained peer_ids / inject_peer_remote; uart.rs forwards
+    # them to its attached peers (for the new BT201 Bluetooth module). No
+    # register map, reset value, or peripheral programming model changed.
     # ACK, NOT A CAPTURE. The live re-capture owed above is still owed.
     drift_ack: 2026-09-28
   - id: stm32f103
@@ -4253,7 +4274,7 @@ boards:
     drift_ack: 2026-09-17
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: 208e28b69c8745ba02a399c9c1e80b9c4bce9cc6a983b5225374da14ef62d40d
+    drift_ack_digest: 646b1ab18ad384ec821d7c1bba6a71a6728e938a68b9048ea25ca1a8d5e2fe6d
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4526,6 +4547,13 @@ boards:
     # (SysTick/USART) runs only on a scripted world node reset. Every existing
     # single-board and cross-link path is unchanged. No register map, reset value,
     # or peripheral programming model on this board changed.
+    # ACK, NOT A CAPTURE. The live re-capture owed above is still owed.
+    drift_ack: 2026-09-28
+    # 2026-09-28: UART stream peers. `UartStreamDevice` gained optional hooks
+    # (device_id, inject_remote, next_wake_us, logs) with no-op defaults, and
+    # `UartStreamHost` gained peer_ids / inject_peer_remote; uart.rs forwards
+    # them to its attached peers (for the new BT201 Bluetooth module). No
+    # register map, reset value, or peripheral programming model changed.
     # ACK, NOT A CAPTURE. The live re-capture owed above is still owed.
     drift_ack: 2026-09-28
   - id: stm32f407
@@ -4937,7 +4965,7 @@ boards:
     drift_ack: 2026-09-17
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: 252f87970ac9e87e1092123b4827a5f59f97aab77b33d6afa273992155837ffe
+    drift_ack_digest: 5baf794a4f30b88005189b32771aaac62db171bd2e4a87478e819dbe14230076
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5174,6 +5202,13 @@ boards:
     # (SysTick/USART) runs only on a scripted world node reset. Every existing
     # single-board and cross-link path is unchanged. No register map, reset value,
     # or peripheral programming model on this board changed.
+    # ACK, NOT A CAPTURE. The live re-capture owed above is still owed.
+    drift_ack: 2026-09-28
+    # 2026-09-28: UART stream peers. `UartStreamDevice` gained optional hooks
+    # (device_id, inject_remote, next_wake_us, logs) with no-op defaults, and
+    # `UartStreamHost` gained peer_ids / inject_peer_remote; uart.rs forwards
+    # them to its attached peers (for the new BT201 Bluetooth module). No
+    # register map, reset value, or peripheral programming model changed.
     # ACK, NOT A CAPTURE. The live re-capture owed above is still owed.
     drift_ack: 2026-09-28
   - id: esp32s3

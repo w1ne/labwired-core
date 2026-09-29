@@ -147,7 +147,10 @@ nav:
     - Button: parts/button.md
     - Buzzer: parts/buzzer.md
     - Seven-segment: parts/seven-segment.md
+    - BT201 Bluetooth: parts/bt201.md
     - Multiplexed segment display: parts/segment-display-mux.md
+    - 74HC4051: parts/74hc4051.md
+    - NAU88L21: parts/nau88l21.md
 
   - Operations:
     - Release Strategy: release_strategy.md

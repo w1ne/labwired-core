@@ -523,6 +523,17 @@ pub trait DeviceEvidence {
     /// `id` (the manifest id the inspect join resolved). Summary mode
     /// (`opts.include_bytes == false`) omits large payloads.
     fn artifacts(&self, id: &str, opts: &InspectOpts) -> Vec<Artifact>;
+
+    /// The named text logs the device records (see [`crate::peripheral_log`]).
+    /// `labwired test` reads them with `peripheral_log`, naming the device by
+    /// its manifest id. Default: none.
+    ///
+    /// Named `evidence_logs`, not `logs`, so a model that is also a
+    /// `BusResidentDevice` or an `I2cDevice` (both have a `logs`) does not get
+    /// two methods of one name.
+    fn evidence_logs(&self) -> Vec<crate::peripheral_log::PeripheralLog> {
+        Vec::new()
+    }
 }
 
 /// Adapter letting an `&dyn I2cDevice` be carried as evidence. Lives on the
@@ -533,6 +544,9 @@ struct I2cEvidence<'a>(&'a dyn crate::peripherals::i2c::I2cDevice);
 impl DeviceEvidence for I2cEvidence<'_> {
     fn artifacts(&self, id: &str, opts: &InspectOpts) -> Vec<Artifact> {
         self.0.artifacts(id, opts)
+    }
+    fn evidence_logs(&self) -> Vec<crate::peripheral_log::PeripheralLog> {
+        self.0.logs()
     }
 }
 

@@ -15,9 +15,11 @@ pub mod bme280;
 /// is reachable only from tests and from the ESP32-C3 controller tests that
 /// need A register-pointer slave to drive.
 pub mod bmp280;
+pub mod bt201;
 pub mod button;
 pub mod can_testers;
 pub mod declarative_analog;
+pub mod declarative_analog_mux;
 pub mod declarative_artifact;
 pub mod declarative_display;
 pub mod declarative_expr;
@@ -57,6 +59,7 @@ pub mod mlx90640;
 /// topology under test lives here rather than being copied six times.
 #[cfg(test)]
 pub(crate) mod mux_fixture;
+pub mod nau88l21;
 pub mod pca9685;
 pub mod pn532;
 pub mod rule_machine;
@@ -83,6 +86,7 @@ pub mod ydlidar;
 pub use bg770a::QuectelBg770a;
 pub use bme280::Bme280;
 pub use bmp280::Bmp280;
+pub use bt201::Bt201;
 pub use declarative_display::{
     ili9341, pcd8544, rm67162_gpio_dc, rm67162_hw_dcx, sh1107, ssd1306, ssd1306_128x32,
     ssd1680_tricolor_290, st7789, uc8151d_tricolor_290, DcWiring, DeclarativeDisplayKit,
@@ -108,6 +112,7 @@ pub use iolink_master::{
 pub use lcd1602::Lcd1602;
 pub use max30102::{Max30102, MAX30102_ADDR};
 pub use mlx90640::{Mlx90640, ThermalScene, MLX90640_ADDR};
+pub use nau88l21::Nau88l21;
 pub use pca9685::Pca9685;
 pub use rule_machine::{RuleCtx, RuleMachine};
 pub use servo::{LedcServoDriver, McpwmServoDriver, Servo, ServoCal};

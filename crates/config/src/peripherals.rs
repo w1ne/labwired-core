@@ -2409,6 +2409,11 @@ pub struct DeviceBehavior {
     /// back — so none of the `i2c`/`spi`/`uart` blocks above can describe one.
     #[serde(default)]
     pub logic: Option<LogicSpec>,
+    /// For the `analog_mux` primitive: an analog multiplexer's select pins,
+    /// channel count and enable (see [`AnalogMuxSpec`]). Absent for every
+    /// other primitive.
+    #[serde(default)]
+    pub analog_mux: Option<AnalogMuxSpec>,
 
     // ── Tier 2 (`crates/config/src/rules.rs`) ──────────────────────────────
     //
@@ -3019,6 +3024,44 @@ pub struct TimerStartOnWrite {
     /// the register starts it, which is the "write anything to trigger" idiom.
     #[serde(default)]
     pub mask: Option<u32>,
+}
+
+/// The `analog_mux` primitive: a 74HC4051-class analog multiplexer.
+///
+/// The select pads (MCU outputs) pick one of `channels` analog inputs and
+/// connect it to the common pin, which drives one ADC channel. Analog sources
+/// name the placed mux as their `connection:` and an input as their
+/// `channel`. The `config:` key of a role is `<role lowercased>_pin`, as for
+/// `logic_gate`.
+///
+/// ```yaml
+/// analog_mux:
+///   select: [S0, S1, S2]        # least significant first
+///   channels: 8                 # = 2 ^ select count
+///   enable: { pin: E, active: low }
+/// ```
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct AnalogMuxSpec {
+    /// Select pin roles, least significant bit first.
+    pub select: Vec<String>,
+    /// Number of analog inputs. Must be 2 to the power of `select.len()`.
+    pub channels: usize,
+    /// Optional enable pad. A placement that does not set its config key
+    /// means the pin is tied to its active level (always enabled).
+    #[serde(default)]
+    pub enable: Option<AnalogMuxEnable>,
+}
+
+/// The enable pad of an [`AnalogMuxSpec`].
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct AnalogMuxEnable {
+    /// Role name of the enable pad.
+    pub pin: String,
+    /// Level that ENABLES the switches (default `low`: the 74HC4051 `E`).
+    #[serde(default)]
+    pub active: ActiveLevel,
 }
 
 /// The `behavior.analog` section of a declarative `analog_source` — a

@@ -51,10 +51,25 @@ impl SystemBus {
         channel: u8,
         millivolts: u16,
     ) -> bool {
+        // An analog mux is a channel owner too (its Y inputs); it drives the
+        // ADC behind it itself. See `bus/analog_mux.rs`.
+        if let Some(accepted) = self.seed_analog_mux_input(connection, channel, millivolts) {
+            return accepted;
+        }
         if let Some(idx) = self.find_peripheral_index_by_name(connection) {
             if Self::seed_adc_at(self, idx, channel, millivolts) {
                 return true;
             }
+        } else if self
+            .external_device_decls
+            .iter()
+            .any(|d| d.id == connection)
+        {
+            // The connection names another external device (a mux declared
+            // AFTER this source, or a part that is not an ADC). The bus-scan
+            // fallback below would put the level on the same channel number
+            // of some unrelated ADC and report success.
+            return false;
         }
         for idx in 0..self.peripherals.len() {
             if Self::seed_adc_at(self, idx, channel, millivolts) {

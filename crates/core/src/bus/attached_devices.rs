@@ -164,6 +164,11 @@ impl SystemBus {
             let id = dev.source.component_id().unwrap_or("analog");
             self.emit_resident(f, Resident::analog(id, &dev.connection, dev.channel));
         }
+        for mux in &self.analog_muxes {
+            // An analog mux drives one ADC channel (its common pin), like an
+            // analog source; the sources behind it report the mux as theirs.
+            self.emit_resident(f, Resident::analog(&mux.id, &mux.connection, mux.channel));
+        }
         for dev in &self.can_diagnostic_testers {
             self.emit_resident(f, Resident::can(&dev.id, &dev.connection));
         }
@@ -295,6 +300,34 @@ impl SystemBus {
         only_id: Option<&str>,
         opts: &crate::inspect::InspectOpts,
     ) -> Vec<crate::inspect::DeviceInspect> {
+        self.join_devices_visit(filter, only_id, opts, &mut |_, _| {})
+    }
+
+    /// The named logs of the attached device whose manifest id is `id`
+    /// (see [`crate::peripheral_log`]). `None` when no attached device
+    /// resolves to that id. The id is resolved by the same join as
+    /// [`Self::inspect_devices`], so a device answers to the same name here
+    /// as in `inspect`.
+    pub fn device_logs(&self, id: &str) -> Option<Vec<crate::peripheral_log::PeripheralLog>> {
+        let mut logs = None;
+        let opts = crate::inspect::InspectOpts::default();
+        self.join_devices_visit(None, Some(id), &opts, &mut |_, d| {
+            if logs.is_none() {
+                logs = Some(d.evidence.map(|e| e.evidence_logs()).unwrap_or_default());
+            }
+        });
+        logs
+    }
+
+    /// [`Self::join_devices`], calling `visit(id, device)` for each device
+    /// that passes the filters, after its id is resolved.
+    fn join_devices_visit(
+        &self,
+        filter: Option<&str>,
+        only_id: Option<&str>,
+        opts: &crate::inspect::InspectOpts,
+        visit: &mut dyn FnMut(&str, &AttachedDeviceRef<'_>),
+    ) -> Vec<crate::inspect::DeviceInspect> {
         let decls = &self.external_device_decls;
         // A declaration's controller is its own `connection` unless that names
         // another declaration (a bus switch), in which case it inherits the
@@ -350,6 +383,7 @@ impl SystemBus {
             if only_id.is_some_and(|want| want != id) {
                 return;
             }
+            visit(&id, &d);
             // The device decides what it can show; this only supplies the id
             // it is addressed by, which is not known until the join above.
             let artifacts = d

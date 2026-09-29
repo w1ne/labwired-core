@@ -386,6 +386,10 @@ pub static EMBEDDED_DEVICES: &[(&[&str], &str)] = &[
         &["74cbtlv3257", "sn74cbtlv3257"],
         include_str!("../../../configs/devices/74cbtlv3257.yaml"),
     ),
+    (
+        &["74hc4051", "cd74hc4051", "cd4051"],
+        include_str!("../../../configs/devices/74hc4051.yaml"),
+    ),
     // Modulshop order #49213 / invoice SZ11956/2026
     (
         &["logic_level_shifter_4ch", "logic-level-shifter-4ch"],

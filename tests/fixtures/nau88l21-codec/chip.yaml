@@ -1,0 +1,18 @@
+# Minimal i.MX RT-style chip for the NAU88L21 codec e2e test: flash at 0,
+# RAM, and one LPI2C master at the i.MX RT LPI2C1 address.
+name: "imxrt-lpi2c-fixture"
+arch: "arm"
+core: "cortex-m7"
+cpu_hz: 600_000_000
+flash:
+  base: 0x00000000
+  size: "64KB"
+ram:
+  base: 0x20000000
+  size: "64KB"
+peripherals:
+  - id: "lpi2c1"
+    type: "imxrt_lpi2c"
+    base_address: 0x403f0000
+    size: "16KB"
+    irq: 28

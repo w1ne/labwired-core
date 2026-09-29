@@ -476,6 +476,24 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
     let mut uart_injection_error = false;
     let apply_uart_injection =
         |machine: &mut labwired_core::Machine<C>, u: &labwired_config::UartInjectionSpec| {
+            if let Some(device) = &u.device {
+                let bytes = u.bytes.as_bytes();
+                return match machine.bus.inject_uart_peer_remote(&u.uart, device, &bytes) {
+                    Ok(()) => {
+                        info!(
+                            "uart_injection: {} byte(s) given to the far side of '{}' on '{}'",
+                            bytes.len(),
+                            device,
+                            u.uart
+                        );
+                        None
+                    }
+                    Err(e) => Some(format!(
+                        "uart_injection '{}' device '{device}': {e}",
+                        u.uart
+                    )),
+                };
+            }
             match machine.bus.attach_uart_rx_source_named(&u.uart) {
                 Some(rx) => {
                     let bytes = u.bytes.as_bytes();
@@ -498,6 +516,16 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
                 )),
             }
         };
+    // A later injection that names a device which is not there could never be
+    // delivered; say so before the run.
+    for u in ctx.uart_injections {
+        if let Some(device) = &u.device {
+            if let Err(e) = ctx.machine.bus.check_uart_peer(&u.uart, device) {
+                error!("uart_injection: {e}");
+                uart_injection_error = true;
+            }
+        }
+    }
     for u in ctx.uart_injections {
         if matches!(u.trigger, labwired_config::FaultTrigger::AtStart) {
             if let Some(err) = apply_uart_injection(ctx.machine, u) {

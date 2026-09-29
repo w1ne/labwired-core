@@ -1,0 +1,9 @@
+# NAU88L21 with CSB strapped high: I2C address 0x54.
+name: "nau88l21-fixture"
+chip: "chip.yaml"
+external_devices:
+  - id: "codec"
+    type: "nau88l21"
+    connection: "lpi2c1"
+    config:
+      i2c_address: 0x54

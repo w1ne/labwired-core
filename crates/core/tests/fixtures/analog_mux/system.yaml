@@ -1,0 +1,18 @@
+# Board for the 74HC4051 e2e test: one mux, Z on ADC1 channel 3, eight
+# potentiometers on Y0..Y7, S0..S2 on PAD_S0..PAD_S2, E on PAD_E.
+# The muxes are declared before the parts that name them.
+name: "analog-mux-test"
+chip: "chip.yaml"
+external_devices:
+  - id: "mux"
+    type: "74hc4051"
+    connection: "adc1"
+    config: { channel: 3, s0_pin: "PAD_S0", s1_pin: "PAD_S1", s2_pin: "PAD_S2", e_pin: "PAD_E" }
+  - { id: "pot0", type: "potentiometer", connection: "mux", config: { channel: 0, position: 5 } }
+  - { id: "pot1", type: "potentiometer", connection: "mux", config: { channel: 1, position: 15 } }
+  - { id: "pot2", type: "potentiometer", connection: "mux", config: { channel: 2, position: 25 } }
+  - { id: "pot3", type: "potentiometer", connection: "mux", config: { channel: 3, position: 35 } }
+  - { id: "pot4", type: "potentiometer", connection: "mux", config: { channel: 4, position: 45 } }
+  - { id: "pot5", type: "potentiometer", connection: "mux", config: { channel: 5, position: 55 } }
+  - { id: "pot6", type: "potentiometer", connection: "mux", config: { channel: 6, position: 65 } }
+  - { id: "pot7", type: "potentiometer", connection: "mux", config: { channel: 7, position: 75 } }

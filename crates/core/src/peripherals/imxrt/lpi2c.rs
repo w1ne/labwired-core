@@ -301,11 +301,16 @@ impl ImxrtLpi2c {
                 return;
             };
             let byte = match i.selected {
-                Some((idx, Dir::Read)) => slaves.get_mut(idx).map(|d| d.read()).unwrap_or(0xFF),
-                _ => 0xFF,
+                Some((idx, Dir::Read)) => slaves.get_mut(idx).map(|d| d.read()),
+                _ => None,
             };
+            // A byte from a slave is traced by the slave's bus-trace wrapper.
+            // With no slave the bus floats high; only this model can say so.
             // The master ACKs every byte but the last of the command.
-            self.trace_byte(I2cSym::Data, byte, left > 1);
+            let byte = byte.unwrap_or_else(|| {
+                self.trace_byte(I2cSym::Data, 0xFF, left > 1);
+                0xFF
+            });
             if keep {
                 i.rx.push_back(byte);
             }
@@ -331,15 +336,22 @@ impl ImxrtLpi2c {
                     }
                     None => i.selected = None,
                 }
-                self.trace_byte(
-                    if dir == Dir::Read {
-                        I2cSym::AddrRead
-                    } else {
-                        I2cSym::AddrWrite
-                    },
-                    data,
-                    acked,
-                );
+                // An acknowledged transfer is traced by the slave's bus-trace
+                // wrapper (`bus::bus_trace::wrap_i2c`), the one tracer of
+                // every attached slave. This model traces only what no slave
+                // sees: an address nobody acknowledged. Tracing both would put
+                // every byte in the ring twice.
+                if !acked {
+                    self.trace_byte(
+                        if dir == Dir::Read {
+                            I2cSym::AddrRead
+                        } else {
+                            I2cSym::AddrWrite
+                        },
+                        data,
+                        false,
+                    );
+                }
                 if acked == expect_nack && i.mcfgr[1] & MCFGR1_IGNACK == 0 {
                     self.nack(i, slaves);
                 }
@@ -352,7 +364,9 @@ impl ImxrtLpi2c {
                     }
                     _ => false,
                 };
-                self.trace_byte(I2cSym::Data, data, acked);
+                if !acked {
+                    self.trace_byte(I2cSym::Data, data, false);
+                }
                 if !acked && i.mcfgr[1] & MCFGR1_IGNACK == 0 {
                     self.nack(i, slaves);
                 }
@@ -556,6 +570,12 @@ impl Peripheral for ImxrtLpi2c {
     fn attach_cpu_hz(&mut self, hz: u64) {
         self.time.attach_cpu_hz(hz);
     }
+    /// The attached slaves, for `inspect` and for device logs.
+    fn for_each_attached_device(&self, f: &mut dyn FnMut(crate::inspect::AttachedDeviceRef<'_>)) {
+        for dev in self.slaves.borrow().iter() {
+            crate::inspect::visit_i2c_device(&**dev, f);
+        }
+    }
     fn attach_bus_trace(&mut self, name: &str, trace: &BusTrace) {
         self.trace = trace.clone();
         self.trace_name = name.to_string();
@@ -640,6 +660,48 @@ mod tests {
         assert_eq!(m.read_reg(MFSR) & 0x7, 1);
         m.write_reg(MSR, MSR_NDF, u32::MAX);
         assert_eq!(m.read_reg(MSR) & MSR_NDF, 0);
+    }
+
+    /// Every byte is in the bus trace once: the slave's trace wrapper
+    /// records acknowledged traffic, the controller only a NACK.
+    #[test]
+    fn bus_trace_has_each_byte_once() {
+        let (mut m, c) = master();
+        let trace = BusTrace::default();
+        m.attach_bus_trace("lpi2c1", &trace);
+        let log = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        m.push_slave(crate::bus::bus_trace::wrap_i2c(
+            "lpi2c1",
+            &trace,
+            Box::new(Echo {
+                addr: 0x54,
+                last: 0,
+                log,
+            }),
+        ));
+        // Write 0x00 0x58 to 0x54, then address 0x1B (nobody there).
+        m.write_reg(MTDR, (0b100 << 8) | (0x54 << 1), u32::MAX);
+        m.write_reg(MTDR, 0x00, u32::MAX);
+        m.write_reg(MTDR, 0x58, u32::MAX);
+        m.write_reg(MTDR, 0b010 << 8, u32::MAX);
+        c.publish(10_000_000);
+        m.write_reg(MTDR, (0b100 << 8) | (0x1B << 1), u32::MAX);
+        c.publish(20_000_000);
+        m.read_reg(MSR);
+        let lines: Vec<String> = trace
+            .snapshot()
+            .iter()
+            .map(|e| e.payload.to_string())
+            .collect();
+        assert_eq!(
+            lines,
+            [
+                "addr 0x54 W ack",
+                "data 0x00 ack",
+                "data 0x58 ack",
+                "addr 0x1b W nack"
+            ]
+        );
     }
 
     #[test]

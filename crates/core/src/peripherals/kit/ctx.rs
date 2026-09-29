@@ -73,6 +73,22 @@ impl<'a> AttachCtx<'a> {
             .ok_or_else(|| wrong_transport_err(ext, "UART"))
     }
 
+    /// Any UART model that can host a stream peer (the generic `Uart`, the
+    /// i.MX RT LPUART, the Espressif UARTs), not only the generic `Uart`.
+    pub fn uart_stream_host(
+        &mut self,
+    ) -> Result<&mut dyn crate::peripherals::device::UartStreamHost> {
+        let ext = self.ext;
+        let idx = self
+            .bus
+            .find_peripheral_index_by_name(&ext.connection)
+            .ok_or_else(|| missing_connection_err(ext))?;
+        self.bus.peripherals[idx]
+            .dev
+            .as_uart_stream_host()
+            .ok_or_else(|| wrong_transport_err(ext, "UART"))
+    }
+
     pub fn spi(&mut self) -> Result<&mut Spi> {
         let ext = self.ext;
         let idx = self
@@ -272,6 +288,26 @@ impl<'a> AttachCtx<'a> {
         let connection = self.ext.connection.clone();
         let mv = source.output_mv();
         if !self.bus.seed_adc_channel(&connection, channel, mv) {
+            if let Some(mux) = self.bus.analog_mux(&connection) {
+                return Err(anyhow!(
+                    "'{}': channel {channel} is not an input of analog mux '{}' (0..={})",
+                    self.ext.id,
+                    mux.id,
+                    mux.channels() - 1
+                ));
+            }
+            if self
+                .bus
+                .external_device_decls
+                .iter()
+                .any(|d| d.id == connection)
+            {
+                return Err(anyhow!(
+                    "'{}': connection '{connection}' is an external device that is not attached \
+                     yet; declare it before the parts that name it",
+                    self.ext.id
+                ));
+            }
             return Err(wrong_transport_err(self.ext, "ADC"));
         }
         self.bus
