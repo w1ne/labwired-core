@@ -1,6 +1,6 @@
 ENTRY(Reset)
 
-/* nRF52840: 1 MB flash at 0, 256 KB SRAM. Renode's nrf52840.repl uses the same map. */
+/* nRF52840: 1 MB flash at 0, 256 KB SRAM. */
 MEMORY
 {
   FLASH (rx) : ORIGIN = 0x00000000, LENGTH = 1024K

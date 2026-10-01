@@ -46,7 +46,7 @@ impl Avr {
         Ok(None)
     }
 
-    /// SWAP, ASR, LSR, ROR.
+    /// SWAP, ASR, LSR, ROR, BST, BLD.
     #[inline(always)]
     pub(in crate::cpu::avr) fn exec_bitops_b(
         &mut self,
@@ -114,6 +114,31 @@ impl Avr {
             self.cycles += 1;
             return Ok(Some(()));
         }
+        // BST Rr,b: 1111 101r rrrr 0bbb — copy bit b of Rr into SREG.T
+        // Used by avr-libc __divmodsi4 (map()/division) before BRTC/BRTS.
+        if (op & 0xFE08) == 0xFA00 {
+            let rr = ((op >> 4) & 0x1F) as usize;
+            let b = (op & 0x07) as u8;
+            self.set_flag_t((self.r[rr] >> b) & 1 != 0);
+            self.pc = next;
+            self.cycles += 1;
+            return Ok(Some(()));
+        }
+
+        // BLD Rd,b: 1111 100d dddd 0bbb — copy SREG.T into bit b of Rd
+        if (op & 0xFE08) == 0xF800 {
+            let rd = ((op >> 4) & 0x1F) as usize;
+            let b = (op & 0x07) as u8;
+            if self.flag_t() {
+                self.r[rd] |= 1 << b;
+            } else {
+                self.r[rd] &= !(1 << b);
+            }
+            self.pc = next;
+            self.cycles += 1;
+            return Ok(Some(()));
+        }
+
         Ok(None)
     }
 }

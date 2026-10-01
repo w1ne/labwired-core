@@ -1,5 +1,5 @@
 schema_version: "1.0"
-# clockbug: USART1 clock is enabled and the image prints BENCH_UART_OK.
+# clockbug: BENCH_UART_OK prints only when TXE stays clear while USART1 is gated.
 inputs:
   system: "./system.yaml"
   firmware: "./firmware/build/clockbug.elf"

@@ -3,12 +3,12 @@
  * uses, stays inside the 20 KB SRAM, and prints its marker.
  *
  *   control                         BENCH_UART_OK
- *   clockbug  (-DSKIP_UART_CLOCK)   BENCH_UART_OK   USART1 clock on, same path
- *   gpiobug   (-DGPIO_CLOCK_BUG)    BENCH_GPIO_OK   GPIOA clock on, ODR reads back
- *   rambug    (-DRAM_OVERFLOW)      BENCH_RAM_OK    store lands in SRAM
+ *   clockbug  (-DSKIP_UART_CLOCK)   BENCH_UART_OK   TXE stays clear while USART1 is gated
+ *   gpiobug   (-DGPIO_CLOCK_BUG)    BENCH_GPIO_OK   GPIOA ODR does not read back while gated
+ *   rambug    (-DRAM_OVERFLOW)      BENCH_RAM_OK    store past 20 KB takes the fault handler
  *   irqtime   (-DIRQ_TIME)          BENCH_UIF_OK    TIM2 UIF still clear
  *   nvicclear (-DNVIC_CLEAR)        BENCH_NVIC_OK   cleared pending does not run
- *   usartmux  (-DUSART_MUX_BUG)     BENCH_UART_OK   PA9 muxed, BRR programmed
+ *   usartmux  (-DUSART_MUX_BUG)     BENCH_UART_OK   poison while PA9 is GPIO must stay off the pad
  */
 
 #include <stdint.h>
@@ -49,6 +49,8 @@
  * function, push-pull). */
 #define GPIOA_CRH_PA9_SHIFT 4u
 #define CRH_AF_PUSH_PULL_50MHZ 0xBu
+/* MODE 0b11, CNF 0b00: GPIO push-pull, 50 MHz. Not an alternate function. */
+#define CRH_GPIO_PUSH_PULL_50MHZ 0x3u
 
 /* --- USART1 (F1 layout: SR @ 0x00, DR @ 0x04, BRR @ 0x08, CR1 @ 0x0C) --- */
 #define USART1_BASE 0x40013800u
@@ -96,7 +98,15 @@ static void uart_puts(const char *s)
     while (*s) uart_putc(*s++);
 }
 
-static volatile uint32_t ram_cell;
+/* HardFault from the rambug store. Other images just stop here. */
+void Bench_HardFault(void)
+{
+#ifdef RAM_OVERFLOW
+    uart_puts("BENCH_RAM_OK\n");
+#endif
+    for (;;) {
+    }
+}
 
 int main(void)
 {
@@ -105,18 +115,34 @@ int main(void)
     uart_init();
 
 #ifdef RAM_OVERFLOW
-    /* Inside the 20 KB SRAM the linker describes. */
-    ram_cell = 0xCAFEBABEu;
+    /* 0x2000_6000 is 4 KB past the F103C8's 20 KB SRAM. A real map faults
+     * before the banner. An oversized map stores the word and falls through. */
+    volatile uint32_t *oob = (volatile uint32_t *) 0x20006000u;
+    *oob = 0xCAFEBABEu;
     uart_puts("BENCH_BANNER\n");
-    if (ram_cell == 0xCAFEBABEu) {
-        uart_puts("BENCH_RAM_OK\n");
-    }
 #elif defined(GPIO_CLOCK_BUG)
+    /* Pad is already muxed, so the report path survives gating GPIOA. */
     uart_puts("BENCH_BANNER\n");
+    RCC_APB2ENR &= ~RCC_APB2ENR_IOPAEN;
     GPIOA_CRL = 0x33333333u;
     GPIOA_ODR = 0x000000FFu;
-    if ((GPIOA_ODR & 0x000000FFu) == 0x000000FFu) {
+    if ((GPIOA_ODR & 0x000000FFu) != 0x000000FFu) {
         uart_puts("BENCH_GPIO_OK\n");
+    }
+#elif defined(SKIP_UART_CLOCK)
+    uart_puts("BENCH_BANNER\n");
+    RCC_APB2ENR &= ~RCC_APB2ENR_USART1EN;
+    int txe_seen = 0;
+    for (uint32_t i = 0; i < 64u; i++) {
+        if ((U1_SR & SR_TXE) != 0u) {
+            txe_seen = 1;
+            break;
+        }
+    }
+    RCC_APB2ENR |= RCC_APB2ENR_USART1EN;
+    uart_init();
+    if (txe_seen == 0) {
+        uart_puts("BENCH_UART_OK\n");
     }
 #elif defined(IRQ_TIME)
     /* Update event must still be clear a few cycles after CEN. */
@@ -143,6 +169,15 @@ int main(void)
     if (irq_ran == 0u) {
         uart_puts("BENCH_NVIC_OK\n");
     }
+#elif defined(USART_MUX_BUG)
+    /* PA9 leaves USART1_TX. DR still takes the poison byte; the pad must not.
+     * The mux is restored before the marker, so the report path is a real TX. */
+    uart_puts("BENCH_BANNER\n");
+    GPIOA_CRH = (GPIOA_CRH & ~(0xFu << GPIOA_CRH_PA9_SHIFT))
+                | (CRH_GPIO_PUSH_PULL_50MHZ << GPIOA_CRH_PA9_SHIFT);
+    uart_puts("BENCH_POISON\n");
+    uart_init();
+    uart_puts("BENCH_UART_OK\n");
 #else
     uart_puts("BENCH_BANNER\n");
     uart_puts("BENCH_UART_OK\n");

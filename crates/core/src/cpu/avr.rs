@@ -262,6 +262,20 @@ impl Avr {
     }
 
     #[inline]
+    fn flag_t(&self) -> bool {
+        self.sreg & 0x40 != 0
+    }
+
+    #[inline]
+    fn set_flag_t(&mut self, on: bool) {
+        if on {
+            self.sreg |= 0x40;
+        } else {
+            self.sreg &= !0x40;
+        }
+    }
+
+    #[inline]
     fn set_z(&mut self, v: u8) {
         if v == 0 {
             self.sreg |= 0x02;
@@ -1702,6 +1716,109 @@ mod tests {
         cpu.step(&mut bus, &[], &SimulationConfig::default())
             .unwrap();
         assert_eq!(cpu.r[25], 0xAB);
+    }
+
+    #[test]
+    fn bst_copies_register_bit_into_t() {
+        let mut cpu = Avr::new();
+        // BST r25, 7 = 0xFB97 (avr-libc __divmodsi4 prologue; host ELF PC 0x93c)
+        cpu.load_words(0, &[0xFB97]);
+        cpu.r[25] = 0x80;
+        let mut bus = MockBus::new();
+        cpu.step(&mut bus, &[], &SimulationConfig::default())
+            .unwrap();
+        assert!(cpu.flag_t());
+        assert_eq!(cpu.pc, 2);
+
+        cpu.pc = 0;
+        cpu.r[25] = 0x00;
+        cpu.step(&mut bus, &[], &SimulationConfig::default())
+            .unwrap();
+        assert!(!cpu.flag_t());
+    }
+
+    #[test]
+    fn bld_copies_t_into_register_bit() {
+        let mut cpu = Avr::new();
+        // BLD r16, 0 = 0xF900 (1111 100d dddd 0bbb with d=16, b=0)
+        cpu.load_words(0, &[0xF900]);
+        cpu.r[16] = 0xFE;
+        cpu.set_flag_t(true);
+        let mut bus = MockBus::new();
+        cpu.step(&mut bus, &[], &SimulationConfig::default())
+            .unwrap();
+        assert_eq!(cpu.r[16], 0xFF);
+
+        cpu.pc = 0;
+        cpu.r[16] = 0xFF;
+        cpu.set_flag_t(false);
+        cpu.step(&mut bus, &[], &SimulationConfig::default())
+            .unwrap();
+        assert_eq!(cpu.r[16], 0xFE);
+    }
+
+    #[test]
+    fn morning_divmodsi4_prologue_steps_past_bst() {
+        // Regression for Uno pot/bargraph prove: DecodeError at byte PC 0x93c
+        // was BST from avr-libc __divmodsi4 (map() → signed division). Hosted
+        // morning ELF faults at 0x93c; this fixture (same sketch, local
+        // arduino:avr core) places the same BST word nearby — without BST the
+        // twin hard-stops before LEDs/gpio_edges can move.
+        let mut cpu = Avr::new();
+        let elf_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/avr/arduino-uno-morning-bargraph.elf");
+        let elf = std::fs::read(&elf_path).expect("morning bargraph fixture ELF");
+        assert_eq!(&elf[0..4], b"\x7fELF");
+        let e_phoff = u32::from_le_bytes(elf[28..32].try_into().unwrap()) as usize;
+        let e_phentsize = u16::from_le_bytes(elf[42..44].try_into().unwrap()) as usize;
+        let e_phnum = u16::from_le_bytes(elf[44..46].try_into().unwrap()) as usize;
+        let mut loaded = false;
+        for i in 0..e_phnum {
+            let off = e_phoff + i * e_phentsize;
+            let p_type = u32::from_le_bytes(elf[off..off + 4].try_into().unwrap());
+            if p_type != 1 {
+                continue;
+            }
+            let p_offset = u32::from_le_bytes(elf[off + 4..off + 8].try_into().unwrap()) as usize;
+            let p_vaddr = u32::from_le_bytes(elf[off + 8..off + 12].try_into().unwrap());
+            let p_filesz = u32::from_le_bytes(elf[off + 16..off + 20].try_into().unwrap()) as usize;
+            if p_vaddr != 0 || p_filesz == 0 {
+                continue;
+            }
+            let src = &elf[p_offset..p_offset + p_filesz];
+            cpu.flash[..src.len()].copy_from_slice(src);
+            loaded = true;
+            break;
+        }
+        assert!(loaded, "no flash PT_LOAD");
+        let mut bst_pc = None;
+        let mut pc = 0usize;
+        while pc + 1 < cpu.flash.len() {
+            let op = u16::from_le_bytes([cpu.flash[pc], cpu.flash[pc + 1]]);
+            let is32 = (op & 0xFE0F) == 0x9000
+                || (op & 0xFE0F) == 0x9200
+                || (op & 0xFE0E) == 0x940C
+                || (op & 0xFE0E) == 0x940E;
+            if pc >= 0x100 && (op & 0xFE08) == 0xFA00 {
+                bst_pc = Some(pc as u32);
+                break;
+            }
+            pc += if is32 { 4 } else { 2 };
+        }
+        let bst_pc = bst_pc.expect("morning ELF should contain BST");
+        // Fixture places BST at 0x944; hosted morning prove faulted at 0x93c —
+        // same opcode family (0xFBxx BST).
+        assert_eq!(
+            u16::from_le_bytes([cpu.flash[bst_pc as usize], cpu.flash[bst_pc as usize + 1]]),
+            0xFB97
+        );
+        cpu.pc = bst_pc;
+        cpu.r[25] = 0x80;
+        let mut bus = MockBus::new();
+        cpu.step(&mut bus, &[], &SimulationConfig::default())
+            .unwrap_or_else(|e| panic!("must step past BST at {bst_pc:#x}: {e:?}"));
+        assert!(cpu.flag_t());
+        assert_eq!(cpu.pc, bst_pc + 2);
     }
 
     #[test]

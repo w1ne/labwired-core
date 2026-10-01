@@ -573,7 +573,6 @@ jobs:
             scripts/perf/test_board_perf.py \
             scripts/perf/test_board_rtx.py \
             scripts/perf/test_workload_perf.py \
-            scripts/perf/test_compare_renode_hello.py \
             scripts/ci/test_board_matrix.py \
             scripts/ci/test_chip_coverage.py \
             scripts/ci/test_matrix_external_cache.py \

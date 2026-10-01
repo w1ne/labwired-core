@@ -1,6 +1,6 @@
 ENTRY(Reset)
 
-/* STM32F103C8: 64 KB flash, 20 KB SRAM. */
+/* STM32F103C8: 64 KB flash, 20 KB SRAM. rambug stores past this RAM. */
 MEMORY
 {
   FLASH (rx) : ORIGIN = 0x08000000, LENGTH = 64K

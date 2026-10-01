@@ -1,5 +1,5 @@
 schema_version: "1.0"
-# gpiobug: GPIOA clock is enabled. ODR readback matches and BENCH_GPIO_OK prints.
+# gpiobug: BENCH_GPIO_OK prints only when a gated GPIOA drops the ODR write.
 inputs:
   system: "./system.yaml"
   firmware: "./firmware/build/gpiobug.elf"

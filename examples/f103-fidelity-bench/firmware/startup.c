@@ -38,14 +38,15 @@ __attribute__((naked, used, noreturn)) void Reset(void)
 }
 
 void Bench_IRQ0(void);
+void Bench_HardFault(void);
 
 __attribute__((section(".isr_vector"), used)) void (*const g_vectors[])(void) = {
     (void (*)(void)) &_estack,
     Reset,
     Default_Handler, /* NMI */
-    Default_Handler, /* HardFault */
+    Bench_HardFault, /* HardFault */
     Default_Handler, /* MemManage */
-    Default_Handler, /* BusFault  */
+    Bench_HardFault, /* BusFault  */
     Default_Handler, /* UsageFault */
     0,
     0,

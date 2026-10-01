@@ -1,10 +1,7 @@
 # nRF52840 fidelity cases
 
-Four images from `firmware/main.c`, scored by
-`scripts/perf/compare_renode_cases.py` on LabWired and on Renode's
-`platforms/cpus/nrf52840.repl`. A case passes when its marker reaches the UART.
-The silicon column is the expected LabWired verdict. Renode's verdict is
-whatever that run prints.
+Four images from `firmware/main.c`. A case passes when its marker reaches the UART.
+LabWired must match the silicon column.
 
 | case | silicon | marker | why |
 | --- | --- | --- | --- |
@@ -13,4 +10,4 @@ whatever that run prints.
 | `rtcclock` | PASS | `BENCH_RTC_OK` | RTC0 counter is unchanged after 32 CPU nops; it runs from 32.768 kHz |
 | `flashbound` | PASS | `BENCH_FLASH_OK` | ERASEPAGE past the 1 MB flash leaves the last real page alone |
 
-Needs `arm-none-eabi-gcc`. The comparison script builds the images.
+Needs `arm-none-eabi-gcc`.

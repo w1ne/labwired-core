@@ -1,5 +1,5 @@
 schema_version: "1.0"
-# rambug: the store stays inside the 20 KB SRAM and BENCH_RAM_OK prints.
+# rambug: BENCH_RAM_OK prints from the fault handler when the store is past 20 KB.
 inputs:
   system: "./system.yaml"
   firmware: "./firmware/build/rambug.elf"

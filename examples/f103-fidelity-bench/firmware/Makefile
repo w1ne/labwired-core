@@ -1,11 +1,11 @@
 # Builds the fidelity-benchmark variants from one source.
 #   build/control.elf    USART1 prints BENCH_UART_OK
-#   build/clockbug.elf   same USART1 path, clock enabled
-#   build/gpiobug.elf    GPIOA clock on, ODR readback prints BENCH_GPIO_OK
-#   build/rambug.elf     in-SRAM store prints BENCH_RAM_OK
+#   build/clockbug.elf   BENCH_UART_OK only if TXE stays clear while USART1 is gated
+#   build/gpiobug.elf    BENCH_GPIO_OK only if a gated GPIOA drops the ODR write
+#   build/rambug.elf     BENCH_RAM_OK only from the fault handler past 20 KB
 #   build/irqtime.elf    TIM2 UIF still clear prints BENCH_UIF_OK
 #   build/nvicclear.elf  cleared NVIC pending prints BENCH_NVIC_OK
-#   build/usartmux.elf   PA9 muxed and BRR set, prints BENCH_UART_OK
+#   build/usartmux.elf   BENCH_UART_OK, and BENCH_POISON must not leave a GPIO PA9
 BUILD_DIR := build
 CROSS ?= arm-none-eabi-
 CC := $(CROSS)gcc
