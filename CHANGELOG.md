@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Fixed
+- AVR `BST` / `BLD` (SREG.T bit transfer). Arduino `map()` / signed division
+  (`__divmodsi4`) hard-stopped prove with `DecodeError` at the BST word
+  (hosted morning Uno bargraph at byte PC `0x93c`).
+
 
 ### Added
 - BT201 Bluetooth module (`type: bt201`, Jieli KT1025A): a UART part from the
