@@ -1,0 +1,32 @@
+# Tier-1 baseline-ratchet acknowledgements.
+#
+# The Tier-1 gate (crates/cli/tests/tier1_matrix_ratchet.rs) compares the live
+# fixture run against the matrix recorded at the MERGE BASE with the trunk — a
+# baseline the change under test cannot move. Regenerating
+# docs/coverage/tier1-matrix.json does not clear a failure; that is the point.
+# The old committed-snapshot ratchet was vacuous exactly there: regenerating
+# made the snapshot equal the live run by construction, which is how the
+# ESP32-C3 row went from 8 `pass` cells to 0 across two onboarding PRs that
+# touched no C3 file at all, with CI green the whole way.
+#
+# Some drops ARE intentional: a fixture retired, a model made stricter, a class
+# renamed. Those are expressible here — but only by NAMING them. Silence is
+# never sufficient.
+#
+# Each entry needs all three fields:
+#
+#   cell    "<chip>/<class>", e.g. esp32c3/i2c. Must match a real regression.
+#   to      the status the live run now reports. An ack for `partial` does NOT
+#           cover a later slide to `blocked` — the gate re-fires.
+#   reason  why the drop is intentional (>= 30 chars). Say what changed and
+#           where the recovery is tracked.
+#
+# STALE ACKS ARE AN ERROR. An entry that matches no regression in the current
+# run fails the gate, so the ratchet re-arms the instant a cell recovers and
+# drops cannot be pre-acknowledged before they happen. Delete entries as cells
+# come back.
+#
+# Mirrors the `drift_ack` convention in validation/manifest.yaml: one explicit
+# key that has to cover the specific drift observed, plus prose saying why.
+
+acks: []
