@@ -129,7 +129,7 @@ struct SavedPoint {
 pub(crate) struct SimTools {
     pub(crate) ctor: Option<Rc<CtorInputs>>,
     /// Calls with a repeat count; see [`Mark`].
-    journal: Vec<(Op, u32)>,
+    pub(crate) journal: Vec<(Op, u32)>,
     /// The first change the journal cannot replay; snapshots are refused
     /// from then on.
     untracked: Option<String>,
@@ -143,6 +143,9 @@ pub(crate) struct SimTools {
     /// polls `fault_verdict()`; DWARF is parsed again only when the capture
     /// changes, not on every poll.
     fault_cache: Option<(labwired_core::fault_verdict::FaultCapture, Option<String>)>,
+    /// The firmware's DWARF, parsed once for source-level debugging. Dropped
+    /// when `install_arduino_esp32_quirks` hands over a different ELF.
+    pub(crate) source_debug: Option<Rc<crate::source_debug::SourceDebug>>,
 }
 
 fn js(e: impl std::fmt::Display) -> JsValue {
@@ -154,6 +157,7 @@ impl WasmSimulator {
         let mut tools = self.tools.borrow_mut();
         if let Op::InstallEsp32Quirks(elf) = &op {
             tools.elf = Some(elf.clone());
+            tools.source_debug = None;
         }
         match tools.journal.last_mut() {
             Some((last, times)) if op.is_step() && *last == op && *times < u32::MAX => *times += 1,
@@ -287,7 +291,7 @@ impl WasmSimulator {
         }
     }
 
-    fn firmware_elf(&self) -> Option<Vec<u8>> {
+    pub(crate) fn firmware_elf(&self) -> Option<Vec<u8>> {
         let tools = self.tools.borrow();
         if let Some(elf) = &tools.elf {
             return Some(elf.clone());
