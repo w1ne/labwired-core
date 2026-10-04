@@ -180,6 +180,43 @@ impl SourceMap {
         })
     }
 
+    /// [`Self::location`] for `pc` known to be a function's first
+    /// instruction.
+    ///
+    /// gcc gives the entry address the opening line, then the first
+    /// statement's line, then the opening line again as a non-statement row
+    /// that covers the prologue's register saves. `location` reports that
+    /// last row, the opening line; a breakpoint set on the first statement
+    /// lands on this address, so here the statement row wins. Only when the
+    /// last row restates the first row's line: an entry whose last row names
+    /// something else (an inlined callee's body) keeps it.
+    pub fn location_at_entry(&self, pc: u64) -> Option<SourcePos> {
+        let pc = pc & !1;
+        let last = self.row_at(pc)?;
+        let start = self.rows.partition_point(|r| r.addr < pc);
+        let end = self.rows.partition_point(|r| r.addr <= pc);
+        // Rows at exactly `pc`, end-of-sequence markers (sorted first) skipped.
+        let at: Vec<&Row> = self.rows[start..end]
+            .iter()
+            .filter(|r| r.file != END_OF_SEQUENCE)
+            .collect();
+        let row = at
+            .first()
+            .filter(|f| (f.file, f.line) == (last.file, last.line))
+            .and_then(|f| {
+                at[1..]
+                    .iter()
+                    .find(|r| r.is_stmt && (r.file, r.line) != (f.file, f.line))
+            })
+            .copied()
+            .unwrap_or(last);
+        Some(SourcePos {
+            file: self.files[row.file as usize].clone(),
+            line: row.line,
+            column: (row.column != 0).then_some(row.column),
+        })
+    }
+
     /// `(file index, line)` of `pc`, for cheap comparisons while stepping.
     pub fn line_key(&self, pc: u64) -> Option<(u32, u32)> {
         self.row_at(pc & !1).map(|r| (r.file, r.line))
@@ -399,6 +436,14 @@ mod tests {
             assert_eq!(map.location(hit.pc).unwrap().line, line, "line {line}");
             assert!(map.is_statement(hit.pc));
         }
+        // probe8's entry (0x1d8) carries 176 (`{`), 177 and 176 again
+        // (non-statement): at a function entry the statement row wins, so
+        // the breakpoint address for 177 reports 177.
+        assert_eq!(map.line_to_pc("src/main.c", 177).unwrap().pc, 0x1d8);
+        assert_eq!(map.location(0x1d8).unwrap().line, 176);
+        assert_eq!(map.location_at_entry(0x1d9).unwrap().line, 177);
+        // uart_puts' entry (0x160) ends on the inlined str_len (45): kept.
+        assert_eq!(map.location_at_entry(0x160).unwrap().line, 45);
         // A comment line snaps to the next line with code.
         let snapped = map.line_to_pc("src/main.c", 226).unwrap();
         assert_eq!((snapped.line, snapped.pc), (228, 0x382));

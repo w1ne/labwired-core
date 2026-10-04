@@ -106,8 +106,29 @@ impl WasmSimulator {
         Ok(parsed)
     }
 
+    /// The function symbol whose range holds `pc`, as `start..end`.
+    fn function_range(debug: &SourceDebug, pc: u32) -> Option<std::ops::Range<u64>> {
+        let pc = u64::from(pc & !1);
+        debug
+            .symbols
+            .functions()
+            .iter()
+            .rev()
+            .find(|(start, size, _)| *start <= pc && pc < start + size)
+            .map(|(start, size, _)| *start..start + size)
+    }
+
+    /// At a function's first instruction the first statement's line is
+    /// reported rather than the opening line (see
+    /// [`SourceMap::location_at_entry`]).
     fn location_of(debug: &SourceDebug, pc: u32) -> Option<Location> {
-        let pos = debug.map.location(u64::from(pc))?;
+        let at_entry =
+            Self::function_range(debug, pc).is_some_and(|r| r.start == u64::from(pc & !1));
+        let pos = if at_entry {
+            debug.map.location_at_entry(u64::from(pc))?
+        } else {
+            debug.map.location(u64::from(pc))?
+        };
         let function = debug
             .symbols
             .lookup(u64::from(pc & !1))
@@ -182,11 +203,20 @@ impl WasmSimulator {
     /// different function is a call (`bl`/`blx`/`jal`/`jalr`, or a tail
     /// branch): the return-address register then holds where the call comes
     /// back to, and stepping runs on until the pc is back there with the stack
-    /// no deeper than the frame's. Outside the function with the stack deeper
-    /// than the frame's (an exception handler on Cortex-M) also runs on.
-    /// Leaving the function with the stack shallower is a return: the caller
-    /// becomes the frame. Recursion into the stepped function itself is not
-    /// detected as a call.
+    /// no deeper than it was at the callee's first instruction. Outside the
+    /// function with the stack deeper than the frame's (an exception handler
+    /// on Cortex-M) also runs on. Leaving the function with the stack no
+    /// deeper than the frame's is a return: the caller becomes the frame.
+    /// Recursion into the stepped function itself is not detected as a call.
+    ///
+    /// The call's return is judged against the stack pointer at the call, not
+    /// the one recorded when the step started. A step that starts on a
+    /// function's first instruction (where a breakpoint on its opening line
+    /// stops) records the stack before the prologue pushes; the frame's own
+    /// pushes then sit below that value for the whole body, and a return
+    /// compared against it would never be seen. The stack pointer at a
+    /// callee's first instruction is the caller's at the call, whatever the
+    /// caller's prologue has done, and it is that value again on return.
     pub(crate) fn step_source_line_s(
         &mut self,
         over: bool,
@@ -203,24 +233,16 @@ impl WasmSimulator {
             }
             (_, regs) => regs,
         };
-        let function_at = |pc: u32| {
-            let pc = u64::from(pc & !1);
-            debug
-                .symbols
-                .functions()
-                .iter()
-                .rev()
-                .find(|(start, size, _)| *start <= pc && pc < start + size)
-                .map(|(start, size, _)| *start..start + size)
-        };
+        let function_at = |pc: u32| Self::function_range(&debug, pc);
         let reg = |sim: &Self, id: u8| sim.machine.as_ref().map_or(0, |m| m.cpu.get_register(id));
 
         let start_pc = self.machine_or_err()?.cpu.get_pc();
         let start_line = debug.map.line_key(u64::from(start_pc));
         let mut frame_sp = regs.map_or(0, |(sp, _)| reg(self, sp));
         let mut frame_fn = function_at(start_pc);
-        // Where the call currently being stepped over returns to.
-        let mut pending_return: Option<u32> = None;
+        // The call currently being stepped over: where it returns to, and the
+        // stack pointer at its first instruction.
+        let mut pending_return: Option<(u32, u32)> = None;
 
         let mut executed = 0u32;
         while executed < max_instructions {
@@ -241,8 +263,8 @@ impl WasmSimulator {
             }
             if let (true, Some((sp_id, ra_id))) = (over, regs) {
                 let sp = reg(self, sp_id);
-                if let Some(ret) = pending_return {
-                    if pc & !1 == ret && sp >= frame_sp {
+                if let Some((ret, call_sp)) = pending_return {
+                    if pc & !1 == ret && sp >= call_sp {
                         pending_return = None;
                     } else {
                         continue;
@@ -256,13 +278,16 @@ impl WasmSimulator {
                     // an address: the stack rule below covers it.
                     let ra = reg(self, ra_id) & !1;
                     if callee.as_ref().is_some_and(|r| r.start == here) && ra < 0xF000_0000 {
-                        pending_return = Some(ra);
+                        pending_return = Some((ra, sp));
                         continue;
                     }
                     if sp < frame_sp {
                         continue;
                     }
-                    if sp > frame_sp {
+                    // Equal counts as a return: a frame recorded at its
+                    // function's entry, or one with no prologue, holds the
+                    // caller's stack pointer.
+                    if sp >= frame_sp {
                         frame_sp = sp;
                         frame_fn = callee;
                     }
@@ -499,6 +524,67 @@ mod tests {
 
         let (reason, _, n) = sim.step_source_line_s(true, 3, &[]).unwrap();
         assert_eq!((reason, n), ("cap", 3));
+    }
+
+    /// Stopped on probe8's first instruction, as a breakpoint on its first
+    /// line (177) stops: 0x1d8, before `stmdb sp!, {r0, r1, r4-r8, lr}`.
+    fn ring_at_probe8_entry() -> WasmSimulator {
+        let mut sim = ring();
+        let caller = line_pc(&sim, "src/main.c", 223);
+        run_to(&mut sim, caller);
+        let entry = line_pc(&sim, "src/main.c", 177);
+        assert_eq!(entry, 0x1d8, "probe8 entry");
+        run_to(&mut sim, entry);
+        let debug = sim.source_debug_s().unwrap();
+        let at = WasmSimulator::location_of(&debug, entry).unwrap();
+        // The entry address carries 176 (`{`), 177 and 176 again; the
+        // statement wins.
+        assert_eq!((at.line, at.function.as_deref()), (177, Some("probe8")));
+        sim
+    }
+
+    #[test]
+    fn step_over_from_function_entry_stays_in_the_function() {
+        let mut sim = ring_at_probe8_entry();
+        // 177 calls twim_read_reg; its return is seen although the step
+        // started before the prologue moved the stack. The next statement
+        // boundary is 0x1f2 (179/180, interleaved by -Os).
+        let (reason, pc, n) = sim.step_source_line_s(true, 1_000_000, &[]).unwrap();
+        assert_eq!(reason, "line_changed");
+        let debug = sim.source_debug_s().unwrap();
+        let at = WasmSimulator::location_of(&debug, pc).unwrap();
+        assert_eq!(
+            (pc, at.line, at.function.as_deref()),
+            (0x1f2, 180, Some("probe8"))
+        );
+        assert!(
+            n > 10,
+            "twim_read_reg ran inside the step ({n} instructions)"
+        );
+    }
+
+    #[test]
+    fn step_out_from_function_entry_returns_to_caller() {
+        let mut sim = ring_at_probe8_entry();
+        // Step out as the playground does it: step over until the function
+        // changes.
+        let debug = sim.source_debug_s().unwrap();
+        let mut total = 0;
+        let (reason, pc) = loop {
+            let (reason, pc, n) = sim.step_source_line_s(true, 1_000_000, &[]).unwrap();
+            total += n;
+            let function = WasmSimulator::location_of(&debug, pc).and_then(|l| l.function);
+            if reason != "line_changed" || function.as_deref() != Some("probe8") {
+                break (reason, pc);
+            }
+            assert!(total < 1_000_000, "step out ran away");
+        };
+        assert_eq!(reason, "line_changed");
+        let at = WasmSimulator::location_of(&debug, pc).unwrap();
+        assert_eq!(
+            (pc, at.line, at.function.as_deref()),
+            (0x2d6, 224, Some("main"))
+        );
     }
 
     #[test]
