@@ -357,6 +357,23 @@ impl WasmSimulator {
         to_js(&self.locals_s(pc)?)
     }
 
+    /// Make `step_batch` stop before executing any of `addresses` (Thumb bit
+    /// ignored), replacing the previous set. The check runs inside the
+    /// engine's own advance loop, so a run with breakpoints keeps its batch
+    /// speed instead of being driven one instruction at a time from JS. A
+    /// batch that stops early returns fewer cycles than asked, with the pc on
+    /// the breakpoint; the next batch runs past it. `step_source_line`
+    /// honours the same set. Journaled, so a snapshot replay stops at the
+    /// same places.
+    #[wasm_bindgen]
+    pub fn set_breakpoints(&mut self, addresses: Vec<u32>) -> Result<(), JsValue> {
+        self.record(Op::SetBreakpoints(addresses.clone()));
+        let machine = self.machine_mut_or_err()?;
+        machine.breakpoints = addresses.into_iter().map(|a| a & !1).collect();
+        machine.last_breakpoint = None;
+        Ok(())
+    }
+
     /// Run until the source line changes:
     /// `{ reason, pc, instructions, location }`.
     ///
@@ -600,6 +617,36 @@ mod tests {
         let p = locals.iter().find(|l| l.name == "p").expect("local p");
         assert_eq!(p.kind, "frame_offset");
         assert!(p.offset.is_some() && p.value.is_none());
+    }
+
+    #[test]
+    fn step_batch_stops_at_engine_breakpoints() {
+        let mut sim = ring();
+        let target = line_pc(&sim, "src/main.c", 180);
+        sim.set_breakpoints(vec![target]).unwrap();
+        let mut ran = 0u64;
+        while sim.get_pc().unwrap() != target {
+            let n = sim.step_batch(100_000).unwrap();
+            ran += u64::from(n);
+            assert!(ran < 5_000_000, "never stopped at {target:#x}");
+        }
+        // Stopped before executing it; the next batch runs past it (probe8
+        // runs again for the next sensor, so it may stop there once more).
+        let n = sim.step_batch(100_000).unwrap();
+        assert!(n > 1, "resumed past the breakpoint ({n} cycles)");
+
+        // A snapshot replay reproduces the same stops.
+        let saved = sim.snapshot_save(None).unwrap();
+        let id = serde_json::from_str::<serde_json::Value>(&saved).unwrap()["id"]
+            .as_u64()
+            .unwrap() as u32;
+        let pc = sim.get_pc().unwrap();
+        sim.step_batch(1000).unwrap();
+        sim.snapshot_restore(id).unwrap();
+        assert_eq!(sim.get_pc().unwrap(), pc);
+
+        sim.set_breakpoints(vec![]).unwrap();
+        assert!(sim.step_batch(100_000).unwrap() >= 100_000);
     }
 
     /// RISC-V (riscv-rt, Rust release build with DWARF).
