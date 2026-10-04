@@ -124,7 +124,10 @@ fn decode_field() -> Vec<f32> {
 #[test]
 fn real_driver_decodes_ta_25_vdd_3v3() {
     let _g = lock_decode();
-    install(Mlx90640::with_default_scene(MLX90640_ADDR));
+    install(Mlx90640::new_for_decode(
+        MLX90640_ADDR,
+        ThermalScene::default(),
+    ));
     let mut ta = 0.0f32;
     let mut vdd = 0.0f32;
     let err = unsafe { lw_mlx_decode_ta_vdd(MLX90640_ADDR, &mut ta, &mut vdd) };
@@ -155,7 +158,7 @@ fn round_trip_ambient_25_hotspot_60_localizes_and_matches() {
         None, // no fault
         0.5,  // frame period
     );
-    install(Mlx90640::new(MLX90640_ADDR, scene));
+    install(Mlx90640::new_for_decode(MLX90640_ADDR, scene));
 
     let result = decode_field();
 
@@ -216,7 +219,7 @@ fn round_trip_warm_scene_tracks_multiple_levels() {
     // A warmer ambient with a stronger hotspot, to show the map is not pinned
     // to one calibration point.
     let scene = ThermalScene::from_config(40.0, 6, 8, 1, 95.0, 1.0, 0.0, 0.0, None, 0.5);
-    install(Mlx90640::new(MLX90640_ADDR, scene));
+    install(Mlx90640::new_for_decode(MLX90640_ADDR, scene));
     let result = decode_field();
 
     // Ambient pixel.

@@ -65,6 +65,13 @@
 //! This simplification (and only this) is what makes the round-trip exact; the
 //! I²C protocol, register map, status/subpage handshake and the entire decode
 //! path are the genuine article.
+//!
+//! Manifest devices sample from elapsed bus time at CONTROL1's refresh rate;
+//! status acknowledgment does not trigger a conversion. `new_for_decode` is an
+//! explicitly clockless mathematical oracle used only by host decoder tests.
+//! Sampling updates one chess/interleaved subpage at a time. Factory calibration
+//! remains synthetic; data-hold/protection and sensor electrical faults are not
+//! qualified by the radiometric round-trip tests.
 
 use std::any::Any;
 
@@ -108,7 +115,8 @@ pub struct ThermalScene {
     /// Fault time: at/after this sim time (s) cooling collapses to 0, so the
     /// hotspot keeps climbing. `None` = no fault.
     pub cooling_fault_at_s: Option<f64>,
-    /// Seconds of simulated time advanced per captured frame.
+    /// Synthetic frame interval for the clockless decoder oracle. Firmware
+    /// simulation uses CONTROL1's refresh rate and elapsed bus time instead.
     pub frame_period_s: f64,
 
     /// Current hotspot temperature (the integrated RC state), °C.
@@ -182,15 +190,32 @@ impl ThermalScene {
 
     /// Advance the RC model by one frame period and return the 768-pixel field.
     fn advance(&mut self) -> Vec<f64> {
-        self.elapsed_s += self.frame_period_s;
+        self.advance_by(self.frame_period_s);
+        self.field()
+    }
+
+    /// Integrate against elapsed device time, splitting exactly at a cooling
+    /// fault so batching bus ticks does not change the resulting temperature.
+    fn advance_by(&mut self, seconds: f64) {
+        let end = self.elapsed_s + seconds;
+        if let Some(fault) = self.cooling_fault_at_s {
+            if self.elapsed_s < fault && fault < end {
+                self.integrate(fault - self.elapsed_s);
+                self.elapsed_s = fault;
+            }
+        }
+        self.integrate(end - self.elapsed_s);
+        self.elapsed_s = end;
+    }
+
+    fn integrate(&mut self, seconds: f64) {
         let target = self.target_c();
         if self.tau_s <= 0.0 {
             self.hot_now_c = target;
         } else {
-            let alpha = 1.0 - (-self.frame_period_s / self.tau_s).exp();
+            let alpha = 1.0 - (-seconds / self.tau_s).exp();
             self.hot_now_c += (target - self.hot_now_c) * alpha;
         }
-        self.field()
     }
 
     /// Render the current field without advancing time.
@@ -252,9 +277,13 @@ pub struct Mlx90640 {
     /// extraction of our EEPROM (used to invert the decode exactly).
     alpha: Vec<u16>,
     alpha_scale: u8,
-    /// Has the driver consumed the current frame? When it clears STATUS we
-    /// advance the scene and arm the next subpage.
+    /// Last measured subpage. Clocked devices alternate on conversion ticks,
+    /// independently of register polling or acknowledgment.
     last_subpage: u16,
+    sample_remainder_us: u64,
+    /// Explicit clockless mathematical oracle for host decoder tests only.
+    /// Factory-created devices always sample from bus time.
+    decode_oracle: bool,
 }
 
 impl std::fmt::Debug for Mlx90640 {
@@ -290,11 +319,20 @@ impl Mlx90640 {
             alpha: vec![0; PIXELS],
             alpha_scale: 0,
             last_subpage: 1,
+            sample_remainder_us: 0,
+            decode_oracle: false,
         };
         dev.build_eeprom();
         dev.extract_alpha();
-        // Capture the first frame so a driver that reads immediately sees data
-        // with new-data armed. This advances the scene by one frame period.
+        dev
+    }
+
+    /// Clockless radiometric oracle. Not used by board manifests or firmware
+    /// simulation: acknowledgment immediately supplies the next synthetic
+    /// subpage so a host C decoder can be tested without a bus clock.
+    pub fn new_for_decode(address: u8, scene: ThermalScene) -> Self {
+        let mut dev = Self::new(address, scene);
+        dev.decode_oracle = true;
         dev.capture_frame();
         dev
     }
@@ -466,23 +504,38 @@ impl Mlx90640 {
         r as i16 as u16
     }
 
-    /// Capture a frame: advance the thermal scene, encode every pixel into RAM,
-    /// fill aux RAM, toggle the subpage and set STATUS new-data.
+    /// Publish one measured subpage. Only the explicit decoder oracle advances
+    /// time here; firmware simulation supplies elapsed time through the bus.
     fn capture_frame(&mut self) {
-        let field = self.scene.advance();
+        let field = if self.decode_oracle {
+            self.scene.advance()
+        } else {
+            self.scene.field()
+        };
+        let next = if self.control1 & 1 == 0 {
+            0
+        } else if self.control1 & 8 != 0 {
+            (self.control1 >> 4) & 1
+        } else {
+            self.last_subpage ^ 1
+        };
+        self.last_subpage = next;
         for (p, &t) in field.iter().enumerate() {
-            self.ram[p] = self.encode_raw(t);
+            let subpage = if self.control1 & (1 << 12) != 0 {
+                (p / COLS + p % COLS) & 1
+            } else {
+                (p / COLS) & 1
+            };
+            if self.decode_oracle || subpage == next as usize {
+                self.ram[p] = self.encode_raw(t);
+            }
         }
         let aux = self.aux_words();
         for (i, &w) in aux.iter().enumerate() {
             self.ram[PIXELS + i] = w;
         }
-        // Toggle subpage 0↔1; both subpages carry the same scene so either
-        // decode reconstructs its half correctly.
-        let next = self.last_subpage ^ 1;
-        self.last_subpage = next;
         // STATUS: bit3 = new-data ready, bits[2:0] = last subpage.
-        self.status = (1 << 3) | (next & 0x7);
+        self.status = (self.status & !0xf) | (1 << 3) | next;
     }
 
     // ── 16-bit register map access ──────────────────────────────────────────
@@ -506,15 +559,19 @@ impl Mlx90640 {
     fn write_word(&mut self, addr: u16, value: u16) {
         match addr {
             STATUS_REG => {
-                // Driver writes MLX90640_INIT_STATUS_VALUE (0x0030) to clear the
-                // new-data flag and request the next frame. On that clear we
-                // capture the next frame so the subsequent poll sees fresh data.
-                self.status = value & !0x0008;
-                if value & 0x0008 == 0 {
+                // Acknowledge new data while preserving the measured subpage.
+                // A clocked device's next conversion is independent of polling.
+                self.status = (value & !7) | (self.status & 7);
+                if self.decode_oracle && value & 0x0008 == 0 {
                     self.capture_frame();
                 }
             }
-            CONTROL1_REG => self.control1 = value,
+            CONTROL1_REG => {
+                if (self.control1 ^ value) & 0x380 != 0 {
+                    self.sample_remainder_us = 0;
+                }
+                self.control1 = value;
+            }
             // EEPROM/RAM are read-only over I²C in this model.
             _ => {
                 crate::census_reg!("components.mlx90640:Mlx90640", addr, "write");
@@ -524,6 +581,43 @@ impl Mlx90640 {
 }
 
 impl I2cDevice for Mlx90640 {
+    fn advance_time_us(&mut self, us: u64) {
+        if self.decode_oracle || us == 0 {
+            return;
+        }
+        // Datasheet 10.4: refresh control 000..111 = 0.5..64 Hz.
+        let period = 2_000_000_u64 >> ((self.control1 >> 7) & 7);
+        let total = u128::from(self.sample_remainder_us) + u128::from(us);
+        let mut samples = (total / u128::from(period)) as u64;
+        let mut remaining = us;
+        // Only the last two alternating subpages survive in RAM. Skip older
+        // conversions analytically to bound work even after a long idle tick.
+        if samples > 2 {
+            let skipped = samples - 2;
+            let elapsed = (period - self.sample_remainder_us) + (skipped - 1) * period;
+            self.scene.advance_by(elapsed as f64 / 1_000_000.0);
+            if self.control1 & 1 == 0 {
+                self.last_subpage = 0;
+            } else if self.control1 & 8 != 0 {
+                self.last_subpage = (self.control1 >> 4) & 1;
+            } else {
+                self.last_subpage ^= (skipped & 1) as u16;
+            }
+            remaining -= elapsed;
+            self.sample_remainder_us = 0;
+            samples = 2;
+        }
+        for _ in 0..samples {
+            let elapsed = period - self.sample_remainder_us;
+            self.scene.advance_by(elapsed as f64 / 1_000_000.0);
+            remaining -= elapsed;
+            self.sample_remainder_us = 0;
+            self.capture_frame();
+        }
+        self.scene.advance_by(remaining as f64 / 1_000_000.0);
+        self.sample_remainder_us += remaining;
+    }
+
     fn address(&self) -> u8 {
         self.address
     }
@@ -656,6 +750,66 @@ impl PeripheralKit for Mlx90640Kit {
 mod tests {
     use super::*;
 
+    #[test]
+    fn clocked_sampling_ignores_poll_frequency_and_respects_refresh_rate() {
+        let mut dev = Mlx90640::with_default_scene(MLX90640_ADDR);
+        assert_eq!(read_words(&mut dev, STATUS_REG, 1)[0] & 8, 0);
+        dev.advance_time_us(499_999);
+        assert_eq!(read_words(&mut dev, STATUS_REG, 1)[0] & 8, 0);
+        dev.advance_time_us(1);
+        assert_eq!(read_words(&mut dev, STATUS_REG, 1)[0] & 9, 8);
+        write_word_i2c(&mut dev, STATUS_REG, 0x0030);
+        for _ in 0..100 {
+            assert_eq!(read_words(&mut dev, STATUS_REG, 1)[0] & 8, 0);
+        }
+        dev.advance_time_us(500_000);
+        assert_eq!(read_words(&mut dev, STATUS_REG, 1)[0] & 9, 9);
+        write_word_i2c(&mut dev, STATUS_REG, 0x0030);
+        // 011 means a fresh subpage every 250 ms (datasheet section 10.4).
+        write_word_i2c(&mut dev, CONTROL1_REG, 0x1981);
+        dev.advance_time_us(249_999);
+        assert_eq!(read_words(&mut dev, STATUS_REG, 1)[0] & 8, 0);
+        dev.advance_time_us(1);
+        assert_eq!(read_words(&mut dev, STATUS_REG, 1)[0] & 9, 8);
+    }
+
+    #[test]
+    fn clocked_scene_is_independent_of_bus_advance_chunking() {
+        let scene =
+            ThermalScene::from_config(25.0, 12, 16, 0, 65.0, 1.0, 1.0, 0.75, Some(0.7), 0.5);
+        let mut coarse = Mlx90640::new(MLX90640_ADDR, scene.clone());
+        let mut fine = Mlx90640::new(MLX90640_ADDR, scene);
+        coarse.advance_time_us(2_250_000);
+        for _ in 0..2250 {
+            fine.advance_time_us(1000);
+        }
+        assert!((coarse.scene().hotspot_c() - fine.scene().hotspot_c()).abs() < 1e-10);
+        assert!((coarse.scene().elapsed_s() - 2.25).abs() < 1e-10);
+        assert_eq!(
+            read_words(&mut coarse, STATUS_REG, 1),
+            read_words(&mut fine, STATUS_REG, 1)
+        );
+        assert_eq!(
+            read_words(&mut coarse, RAM_BASE, RAM_WORDS),
+            read_words(&mut fine, RAM_BASE, RAM_WORDS)
+        );
+    }
+
+    #[test]
+    fn clocked_subpages_retain_the_other_half_until_its_conversion() {
+        let mut dev = Mlx90640::with_default_scene(MLX90640_ADDR);
+        dev.advance_time_us(500_000);
+        let before = read_words(&mut dev, RAM_BASE, PIXELS);
+        dev.scene.hot_target_c = 75.0;
+        dev.advance_time_us(500_000);
+        let after = read_words(&mut dev, RAM_BASE, PIXELS);
+        let hot = 12 * COLS + 16; // chess subpage 0
+        assert_eq!(before[hot], after[hot]);
+        dev.advance_time_us(500_000);
+        let refreshed = read_words(&mut dev, RAM_BASE, PIXELS);
+        assert!(refreshed[hot] as i16 > after[hot] as i16);
+    }
+
     /// Drive a 16-bit-addressed register read the way the MLX driver does:
     /// write 2 addr bytes, repeated-start, then read `n` words.
     fn read_words(dev: &mut Mlx90640, addr: u16, n: usize) -> Vec<u16> {
@@ -706,7 +860,7 @@ mod tests {
 
     #[test]
     fn status_new_data_then_clear_arms_next_frame() {
-        let mut dev = Mlx90640::with_default_scene(MLX90640_ADDR);
+        let mut dev = Mlx90640::new_for_decode(MLX90640_ADDR, ThermalScene::default());
         let st = read_words(&mut dev, STATUS_REG, 1)[0];
         assert_ne!(st & 0x0008, 0, "new-data must be set after a capture");
         // Clear it (driver writes 0x0030); a fresh frame must re-arm new-data.
@@ -727,7 +881,7 @@ mod tests {
     fn ram_pixel_block_encodes_ambient_hotspot() {
         // Without the real driver we still sanity-check that the hotspot pixel
         // encodes to a larger raw count than ambient (monotonic encoder).
-        let mut dev = Mlx90640::with_default_scene(MLX90640_ADDR);
+        let mut dev = Mlx90640::new_for_decode(MLX90640_ADDR, ThermalScene::default());
         let ram = read_words(&mut dev, RAM_BASE, PIXELS);
         let ambient_raw = ram[0] as i16;
         let hot_raw = ram[12 * 32 + 16] as i16;
@@ -754,7 +908,7 @@ mod tests {
             Some(15.0), // cooling_fault_at_s
             1.0,        // frame_period
         );
-        let mut dev = Mlx90640::new(MLX90640_ADDR, scene);
+        let mut dev = Mlx90640::new_for_decode(MLX90640_ADDR, scene);
         // Settle to the cooled steady state (well before the fault).
         for _ in 0..8 {
             write_word_i2c(&mut dev, STATUS_REG, 0x0030);
