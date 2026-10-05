@@ -79,7 +79,8 @@ saw it high.
 Edges are delivered at `t_edge + latency_ns`, to every member including the
 driver, at an exact cycle of each member (the first instruction boundary at or
 after that time), through the same `set_gpio_input` path a board button uses:
-EXTI interrupts and timer captures see a real edge.
+EXTI interrupts, AVR INT0/INT1 and pin-change interrupts, and timer captures
+see a real edge.
 
 The world runs in conservative rounds, the way a timed UART network does. A
 round is never longer than the shortest net latency, so an edge produced in a
@@ -91,6 +92,11 @@ every counter, every UART transcript and every applied delivery.
 `latency_ns` is also the speed knob. A 100 ns round is a few cycles per node,
 so a world with only 100 ns nets runs slower than a lone machine; raise
 `latency_ns` on wires that do not need to be that fast and rounds get longer.
+
+A node skips idle time (a Cortex-M in `WFI`, an ATmega328P in `SLEEP`) only
+when idle fast-forward is on for it (`set_idle_fast_forward(true)` on the
+world's machine); the results are the same either way
+(`idle_fast_forward_skips_the_avr_sleep_and_changes_nothing`).
 
 Machines on no net run unchanged; the per-step cost of a machine is the same
 with or without nets elsewhere in the world.
@@ -104,7 +110,7 @@ level. Supported today:
 |------------|---------|-------|
 | `GpioPort`, every register family (STM32 `v2` and `f1`, nRF52/54, Kinetis, EFR32 series 2, SAM, RA, i.MX RT) | push: the port reports its own edges, idle fast-forward stays on | exercised end to end on STM32 `v2` (G0B1, F401) and `f1` (F103). The EXTI raises edge interrupts for net edges on G0 and U5 (port from `EXTI_EXTICRx`), F1 (port from `AFIO_EXTICRx`) and F4 (port from `SYSCFG_EXTICRx`). Internal pulls reported: STM32 `v2` `PUPDR`, STM32 `f1` input-with-pull (`CNF = 10`, `ODR` picks the rail), nRF52 `PIN_CNF.PULL`, EFR32 `INPUTPULL`, SAM `PINCFG.PULLEN`. Kinetis, RA and i.MX RT keep their pull outside the GPIO block, so their pulls are not on the net yet. |
 | `GpioPort` pads routed to a peripheral (AF) | as above | the peripheral says what its output stage does (driving, released, input) and reads the level the net delivers; see [Buses over nets](#buses-over-nets). STM32 SPI and modern I²C only. |
-| `avr_gpio` (ATmega328P `portb`/`portc`/`portd`) | **poll**: sampled at every cycle boundary | exact, but the machine runs one instruction at a time and does not fast-forward idle time while a pad is on a net. An input with its `PORTx` bit set is a pull-up on the net. |
+| `avr_gpio` (ATmega328P `portb`/`portc`/`portd`) | push: the port reports its own edges, idle fast-forward stays on | INT0/INT1 and PCINT0..2 see external edges; a core parked in `SLEEP` is skipped until the next edge or Timer0 overflow. Exercised end to end on the Uno (`gpio-net-two-boards`). An input with its `PORTx` bit set is a pull-up on the net. |
 | ESP32 classic `gpio` (member `peripheral: gpio`, pins 0..31) | push | Drive: `GPIO_ENABLE` and `GPIO_OUT`; `GPIO_PINn.PAD_DRIVER` open drain drives only a 0 and, holding a 1, reads the wire on `GPIO_IN`. Interrupts: `GPIO_PINn.INT_TYPE` edge and level types latch `GPIO_STATUS` and raise matrix source 22 for the CPU whose INT_ENA bit is set. GPIO32..39 cannot join a net. |
 | ESP32-S3 `gpio` (`peripheral: gpio`, pins 0..31) | push | As classic; matrix source 16 (`GPIO_PCPU_INT`, INT_ENA bit 13). GPIO32..48 cannot join a net. |
 | ESP32-C3 / ESP32-C6 `gpio` (`peripheral: gpio`, pins 0..25) | push | As classic; matrix source 16 on the C3 and 30 on the C6. Edge types only (level types are not modelled on this block). Exercised end to end on the C6 (`env-esp32c6.yaml`). |
@@ -125,8 +131,10 @@ Limits worth knowing:
 - A pad that firmware drives itself does not raise its own EXTI edge for its own
   transition (the STM32 EXTI model reacts to edges from outside). It does see
   the release when the wire rises after a peer let go.
-- The ATmega328P model has no external or pin-change interrupt yet: count its
-  edges by polling `PINx`.
+- The ATmega328P samples INT0/INT1 and PCINT pads at instruction boundaries,
+  so an edge is seen at the first boundary after it arrives. Waking from
+  power-down, power-save or standby takes four cycles, as from idle: the
+  oscillator start-up time is not modelled.
 - A pad routed to a peripheral signal the model does not publish has no known
   drive and is refused. Pads start as plain GPIO, so this is checked when the
   world is built; a pad firmware later routes to such a signal keeps its last

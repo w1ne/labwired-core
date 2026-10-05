@@ -11,6 +11,13 @@
 use crate::cpu::avr::Avr;
 use crate::{Bus, SimResult};
 
+/// Registers in the SBI/CBI range where a written 1 acts and a 0 does nothing:
+/// PINB/PINC/PIND (toggle PORTx), TIFR0..2, PCIFR and EIFR (clear a flag).
+#[inline]
+fn write_one_register(data_addr: u16) -> bool {
+    matches!(data_addr, 0x23 | 0x26 | 0x29 | 0x35..=0x37 | 0x3B | 0x3C)
+}
+
 impl Avr {
     /// SBI, CBI.
     #[inline(always)]
@@ -25,7 +32,14 @@ impl Avr {
             let a = ((op >> 3) & 0x1F) as u8;
             let b = (op & 0x07) as u8;
             let data_addr = 0x20u16 + a as u16;
-            let v = self.data_read(data_addr, bus)? | (1 << b);
+            // On the ATmega328P SBI/CBI "only operate on the specified bit":
+            // on a write-one register (PINx toggles, interrupt flags clear)
+            // a read-modify-write would hit every other bit that reads 1.
+            let v = if write_one_register(data_addr) {
+                1 << b
+            } else {
+                self.data_read(data_addr, bus)? | (1 << b)
+            };
             self.data_write(data_addr, v, bus)?;
             self.pc = next;
             self.cycles += 2;
@@ -37,8 +51,11 @@ impl Avr {
             let a = ((op >> 3) & 0x1F) as u8;
             let b = (op & 0x07) as u8;
             let data_addr = 0x20u16 + a as u16;
-            let v = self.data_read(data_addr, bus)? & !(1 << b);
-            self.data_write(data_addr, v, bus)?;
+            // Writing 0 to a write-one register bit does nothing.
+            if !write_one_register(data_addr) {
+                let v = self.data_read(data_addr, bus)? & !(1 << b);
+                self.data_write(data_addr, v, bus)?;
+            }
             self.pc = next;
             self.cycles += 2;
             return Ok(Some(()));

@@ -23,11 +23,11 @@
 //! 3. A round is never longer than the shortest net latency, so a delivery
 //!    queued in step 2 is always still ahead of every node.
 //!
-//! Pads whose GPIO model pushes its edges (STM32 and the other `GpioPort`
-//! families) are read from the push tap at full speed. A model without push
-//! capture (the ATmega port until it gets one) is sampled by the machine's
-//! per-cycle poll: exact, but the machine then runs one instruction at a time
-//! and does not fast-forward idle time.
+//! Pads whose GPIO model pushes its edges (`GpioPort` families and the
+//! ATmega `avr_gpio` port) are read from the push tap at full speed. A model
+//! without push capture would be sampled by the machine's per-cycle poll:
+//! exact, but the machine then runs one instruction at a time and does not
+//! fast-forward idle time.
 
 use super::{MachineTrait, UART_NET_STEP_CYCLES};
 use crate::logic_capture::PadState;
