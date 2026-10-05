@@ -30,6 +30,22 @@ labwired test --script examples/gpio-net-two-boards/test.yaml --output-dir out
 `cargo test -p labwired-core --test world_multichip gpio_net_world`, which additionally checks
 that node order and round length change nothing.
 
+## Other chips on the same wires
+
+The STM32 firmware does not care what is on the other end:
+
+| Environment | Peer | Peer's pads | How the peer counts |
+|-------------|------|-------------|---------------------|
+| `env-rp2040.yaml` | RP2040 (`rp2040-pico`) | `sio` GP2 irq, GP3 ready, GP4 alert (open drain by `GPIO_OE`) | IO_BANK0 GPIO interrupt (`IO_IRQ_BANK0`) |
+| `env-esp32c6.yaml` | ESP32-C6 (`esp32c6-devkitc`) | `gpio` GPIO4 irq, GPIO5 ready, GPIO6 alert (open drain by `PAD_DRIVER`) | GPIO interrupt through the interrupt matrix (source 30, CPU line 9) |
+
+Each peer leaves `[ready rising, alert falling, alert rising, interrupts
+taken, done]` in SRAM (`0x20000100` on the RP2040, `0x40800100` on the C6):
+`7, 5, 5, ≥17, 1`. Sources: `src/rp2040.c`, `src/esp32c6.c` (bare metal, built
+with clang). Tests: `an_rp2040_counts_the_stm32_edges_with_gpio_interrupts`
+and `an_esp32c6_counts_the_stm32_edges_with_gpio_interrupts` in
+`crates/core/tests/world_multichip.rs`.
+
 ## Contention
 
 `env-contention.yaml` puts both boards on one push-pull wire: the AVR holds it
@@ -39,7 +55,7 @@ low, the STM32 drives it high for a few tens of microseconds. The net reports
 ## Rebuild the firmware
 
 ```bash
-examples/gpio-net-two-boards/build.sh   # arm-none-eabi-gcc, avr-gcc
+examples/gpio-net-two-boards/build.sh   # arm-none-eabi-gcc, avr-gcc, clang + lld
 ```
 
 The ELFs are committed so the tests run without a toolchain.

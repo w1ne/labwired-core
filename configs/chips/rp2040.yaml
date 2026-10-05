@@ -204,6 +204,8 @@ peripherals:
     type: "rp2040_io_bank0"
     base_address: 0x40014000
     size: "4KB"
+    # IO_IRQ_BANK0 (datasheet §2.3.2): the GPIO interrupt, PROC0_INTS != 0.
+    irq: 13
     config:
       debug_schema: "../peripherals/rp2040/io_bank0.yaml"
   - id: "sio"

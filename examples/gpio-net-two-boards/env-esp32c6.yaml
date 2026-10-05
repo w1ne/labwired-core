@@ -1,0 +1,39 @@
+# The same three wires, with an ESP32-C6 in place of the ATmega328P. The STM32
+# firmware is unchanged; the C6 counts the STM32's edges with its GPIO
+# interrupt through the interrupt matrix, and pulls the alert line with an
+# open-drain pad. Firmware: src/esp32c6.c (./build.sh).
+schema_version: "1.0"
+name: gpio-net-stm32-esp32c6
+nodes:
+  - id: stm
+    system: "../stm32g0b1re/system.yaml"
+    firmware: "firmware/stm.elf"
+  - id: c6
+    system: "../../configs/systems/esp32c6-devkitc.yaml"
+    firmware: "firmware/esp32c6.elf"
+interconnects:
+  - type: gpio_net
+    nodes: [c6, stm]
+    config:
+      name: irq
+      pull: down
+      members:
+        - { node: c6, peripheral: gpio, pin: 4 }     # GPIO4, push-pull out
+        - { node: stm, peripheral: gpiob, pin: 0 }   # EXTI line 0
+  - type: gpio_net
+    nodes: [c6, stm]
+    config:
+      name: ready
+      pull: down
+      members:
+        - { node: stm, peripheral: gpiob, pin: 1 }   # push-pull out
+        - { node: c6, peripheral: gpio, pin: 5 }     # GPIO5, rising-edge irq
+  - type: gpio_net
+    nodes: [c6, stm]
+    config:
+      name: alert
+      pull: up
+      latency_ns: 100
+      members:
+        - { node: stm, peripheral: gpiob, pin: 4 }   # open-drain
+        - { node: c6, peripheral: gpio, pin: 6 }     # GPIO6, open-drain (PAD_DRIVER)

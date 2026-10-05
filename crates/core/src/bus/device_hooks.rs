@@ -184,6 +184,13 @@ impl SystemBus {
             }
         }
         self.deliver_timer_input_edges(idx);
+        // A GPIO model whose interrupt is delivered by the event scheduler
+        // (the ESP32-family GPIO matrix line, RP2040 IO_BANK0 through the
+        // SIO's wake owner) arms it here, exactly as after an MMIO write: an
+        // edge from outside is not a write, and nothing else would.
+        if ok {
+            self.collect_scheduled_events(idx);
+        }
         ok
     }
 

@@ -503,6 +503,106 @@ mod gpio_net_world {
         assert_eq!(ready.floating_events, 0);
     }
 
+    /// The same STM32 firmware with another chip in place of the ATmega328P
+    /// (`env-rp2040.yaml`, `env-esp32c6.yaml`). The peer counts the STM32's
+    /// edges with its GPIO interrupt and leaves `[ready rising, alert
+    /// falling, alert rising, interrupts taken, done]` at `result`.
+    fn build_peer(
+        env_file: &str,
+        rewrite: impl Fn(String) -> String,
+    ) -> (World, Arc<Mutex<Vec<u8>>>) {
+        let yaml = rewrite(std::fs::read_to_string(example().join(env_file)).unwrap());
+        let manifest: EnvironmentManifest = serde_yaml::from_str(&yaml).unwrap();
+        let mut world = World::from_manifest(manifest, &example()).expect("world");
+        let stm = Arc::new(Mutex::new(Vec::new()));
+        let key = world
+            .machines
+            .keys()
+            .find(|k| k.ends_with("stm"))
+            .cloned()
+            .unwrap();
+        world
+            .machines
+            .get_mut(&key)
+            .unwrap()
+            .attach_uart_tx_sink(stm.clone(), false)
+            .unwrap();
+        (world, stm)
+    }
+
+    fn peer_result(world: &World, id: &str, at: u32) -> Vec<u32> {
+        let b = world.machines[id].read_memory(at, 20).unwrap();
+        b.chunks(4)
+            .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+            .collect()
+    }
+
+    /// One peer chip against the unchanged STM32 firmware: both sides count
+    /// every edge, the peer with GPIO interrupts, and neither node order nor
+    /// round length changes a number.
+    fn peer_counts_the_stm32_edges(env_file: &str, peer: &str, result: u32) {
+        let (mut world, stm) = build_peer(env_file, |s| s);
+        run_ms(&mut world, 30);
+        assert_eq!(text(&stm), STM_LINE, "STM32 report");
+        assert_eq!(stm_result(&world, "stm"), vec![10, 10, 3, 3, 1]);
+        let r = peer_result(&world, peer, result);
+        assert_eq!(&r[..3], &[7, 5, 5], "{peer} interrupt counts {r:?}");
+        assert!(r[3] >= 17, "at least one interrupt per edge {r:?}");
+        assert_eq!(r[4], 1, "{peer} finished {r:?}");
+        let reports = world.gpio_net_reports();
+        let by = |n: &str| reports.iter().find(|r| r.name == n).unwrap();
+        assert_eq!(by("irq").edges, 20);
+        assert_eq!(by("ready").edges, 14);
+        assert_eq!(by("alert").edges, 16);
+        for r in &reports {
+            assert_eq!(r.contention_events, 0, "{}", r.name);
+            assert_eq!(r.floating_events, 0, "{}", r.name);
+        }
+
+        let fp = |w: &World, stm: &str, p: &str, s: &Arc<Mutex<Vec<u8>>>| {
+            (
+                text(s),
+                stm_result(w, stm),
+                peer_result(w, p, result),
+                w.gpio_net_reports()
+                    .iter()
+                    .map(|n| (n.name.clone(), n.edges, n.level))
+                    .collect::<Vec<_>>(),
+            )
+        };
+        let baseline = fp(&world, "stm", peer, &stm);
+        let renamed = format!("z_{peer}");
+        let (mut w, s) = build_peer(env_file, |s| {
+            s.replace("id: stm", "id: a_stm")
+                .replace(&format!("id: {peer}"), &format!("id: {renamed}"))
+                .replace("node: stm", "node: a_stm")
+                .replace(&format!("node: {peer}"), &format!("node: {renamed}"))
+                .replace(&format!("[{peer}, stm]"), &format!("[a_stm, {renamed}]"))
+        });
+        run_ms(&mut w, 30);
+        assert_eq!(fp(&w, "a_stm", &renamed, &s), baseline, "node order");
+        let (mut w, s) = build_peer(env_file, |s| s);
+        w.set_gpio_round_ps(33_333).unwrap();
+        run_ms(&mut w, 30);
+        assert_eq!(fp(&w, "stm", peer, &s), baseline, "round length");
+    }
+
+    /// RP2040 SIO pads on the nets; IO_BANK0 `EDGE_HIGH` / `EDGE_LOW`
+    /// interrupts (IO_IRQ_BANK0, NVIC 13) count the STM32's edges, and the
+    /// alert pad is open drain by `GPIO_OE`.
+    #[test]
+    fn an_rp2040_counts_the_stm32_edges_with_gpio_interrupts() {
+        peer_counts_the_stm32_edges("env-rp2040.yaml", "rp", 0x2000_0100);
+    }
+
+    /// ESP32-C6 GPIO pads on the nets; `GPIO_PINn.INT_TYPE` interrupts through
+    /// the interrupt matrix (source 30 -> CPU line 9) count the STM32's edges,
+    /// and the alert pad is open drain by `GPIO_PIN6.PAD_DRIVER`.
+    #[test]
+    fn an_esp32c6_counts_the_stm32_edges_with_gpio_interrupts() {
+        peer_counts_the_stm32_edges("env-esp32c6.yaml", "c6", 0x4080_0100);
+    }
+
     fn build_err(env_file: &str, rewrite: impl Fn(String) -> String) -> String {
         let yaml = rewrite(std::fs::read_to_string(example().join(env_file)).unwrap());
         match serde_yaml::from_str::<EnvironmentManifest>(&yaml)
