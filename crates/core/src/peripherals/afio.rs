@@ -94,6 +94,11 @@ impl Peripheral for Afio {
         Ok(())
     }
 
+    /// AFIO_EXTICRx is the F1's EXTI line-source mux.
+    fn exti_line_source(&self, line: u8) -> Option<u8> {
+        (line < 16).then(|| self.get_exti_mapping(line))
+    }
+
     fn needs_legacy_walk(&self) -> bool {
         // AFIO is a pure configuration register bank (MAPR/EXTICR remap bits).
         // It has no `tick()` override, so its per-cycle walk callback is the
@@ -153,5 +158,17 @@ mod tests {
             // Bench F103 sweep: bit 15 (top of the 4th field) also reads 0 → 0x7FFF.
             assert_eq!(rd32(&a, off), 0x0000_7FFF, "EXTICR @ 0x{off:02X}");
         }
+    }
+
+    #[test]
+    fn exticr_is_the_exti_line_source() {
+        let mut a = Afio::new();
+        // EXTICR1: line 0 -> port B; EXTICR2: line 5 -> port C.
+        a.write_u32(0x08, 0x1).unwrap();
+        a.write_u32(0x0C, 0x2 << 4).unwrap();
+        assert_eq!(a.exti_line_source(0), Some(1));
+        assert_eq!(a.exti_line_source(5), Some(2));
+        assert_eq!(a.exti_line_source(4), Some(0), "reset: port A");
+        assert_eq!(a.exti_line_source(16), None);
     }
 }

@@ -90,6 +90,7 @@ pub mod spi;
 pub mod spi_waveform;
 pub mod stm32f4_dma;
 pub mod stub;
+pub mod syscfg;
 pub mod systick;
 pub mod timer;
 pub mod tsc;

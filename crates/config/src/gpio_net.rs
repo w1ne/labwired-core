@@ -32,12 +32,15 @@ use std::collections::HashMap;
 /// seeing it, ns.
 pub const GPIO_NET_DEFAULT_LATENCY_NS: u64 = 100;
 
-/// External pull on the net (a resistor to a rail), used when no member
-/// drives it.
+/// External pull on the net (a resistor to a rail). It is a weak level, like
+/// a member chip's internal pull: it decides the wire when no member drives
+/// it. When it disagrees with a member's internal pull, the net reports a pull
+/// conflict and this pull wins (see `docs/howto/gpio-nets.md`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum GpioNetPull {
-    /// No pull: a net nobody drives floats (reads 0 and is flagged).
+    /// No pull: a net that nobody drives and no member pulls floats (reads 0
+    /// and is flagged).
     #[default]
     None,
     Up,

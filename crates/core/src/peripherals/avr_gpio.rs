@@ -82,6 +82,33 @@ impl AvrGpioPort {
         self.ddr & self.net_isolated
     }
 
+    /// Net pads whose internal pull-up is on: an input (`DDRx` bit clear)
+    /// with its `PORTx` bit set (ATmega328P datasheet §14.2.1). `MCUCR.PUD`
+    /// lives in the CPU's IO space, which this port model does not see, so
+    /// it is not applied here.
+    #[inline]
+    fn net_pull_bits(&self) -> u8 {
+        !self.ddr & self.port & self.net_isolated
+    }
+
+    /// The drive a net pad reports: `PORTx` when `DDRx` drives it, the
+    /// internal pull-up when the input has it on, otherwise nothing. `None`
+    /// for a pad that is not on a net.
+    fn net_pad_drive(&self, pin: u8) -> Option<crate::logic_capture::PadDrive> {
+        use crate::logic_capture::PadDrive;
+        let bit = 1u8 << (pin & 7);
+        if pin >= 8 || self.net_isolated & bit == 0 {
+            return None;
+        }
+        Some(if self.ddr & bit != 0 {
+            PadDrive::Driven
+        } else if self.net_pull_bits() & bit != 0 {
+            PadDrive::PullUp
+        } else {
+            PadDrive::HighZ
+        })
+    }
+
     /// Run `mutate`, then push every watched pad whose level changed. A pad
     /// that belongs to a world `gpio_net` also reports its drive, and reports
     /// when only the drive moved (an input released to high-Z keeps its level).
@@ -96,12 +123,15 @@ impl AvrGpioPort {
         }
         let before = self.pad_bits();
         let drive_before = self.net_drive_bits();
+        let pull_before = self.net_pull_bits();
         mutate(self);
         if !self.cells.is_empty() {
             self.sync_cells();
         }
         let after = self.pad_bits();
-        let changed = (before ^ after) | (drive_before ^ self.net_drive_bits());
+        let changed = (before ^ after)
+            | (drive_before ^ self.net_drive_bits())
+            | (pull_before ^ self.net_pull_bits());
         if changed == 0 {
             return;
         }
@@ -111,12 +141,7 @@ impl AvrGpioPort {
                 if pin >= 8 || changed & bit == 0 {
                     continue;
                 }
-                if self.net_isolated & bit != 0 {
-                    let drive = if self.ddr & bit != 0 {
-                        crate::logic_capture::PadDrive::Driven
-                    } else {
-                        crate::logic_capture::PadDrive::HighZ
-                    };
+                if let Some(drive) = self.net_pad_drive(pin) {
                     t.tap.push_with_drive(ch, after & bit != 0, drive);
                 } else if (before ^ after) & bit != 0 {
                     t.tap.push(ch, after & bit != 0);
@@ -216,20 +241,13 @@ impl Peripheral for AvrGpioPort {
         self.read_gpio_pad(pin)
     }
 
-    /// A net pad: an output (`DDRx` bit set) drives `PORTx`; an input drives
-    /// nothing, whatever the net holds on it. The ATmega model keeps no
-    /// internal pull-up, so a pad that is not a net member says nothing about
-    /// its drive (`None`, as before).
+    /// A net pad: an output (`DDRx` bit set) drives `PORTx`; an input with
+    /// its `PORTx` bit set has the internal pull-up on (a weak 1 on the net);
+    /// any other input drives nothing, whatever the net holds on it. A pad
+    /// that is not a net member says nothing about its drive (`None`, as
+    /// before).
     fn read_gpio_pad_drive(&self, pin: u8) -> Option<crate::logic_capture::PadDrive> {
-        use crate::logic_capture::PadDrive;
-        if pin >= 8 || self.net_isolated & (1u8 << pin) == 0 {
-            return None;
-        }
-        Some(if self.ddr & (1u8 << pin) != 0 {
-            PadDrive::Driven
-        } else {
-            PadDrive::HighZ
-        })
+        self.net_pad_drive(pin)
     }
 
     fn set_gpio_net_isolated(&mut self, pin: u8, isolated: bool) -> bool {

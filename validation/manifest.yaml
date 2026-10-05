@@ -6563,6 +6563,7 @@ boards:
       - crates/core/src/peripherals/adc.rs
       - crates/core/src/peripherals/dbgmcu.rs
       - crates/core/src/peripherals/exti.rs
+      - crates/core/src/peripherals/syscfg.rs
       - crates/core/src/peripherals/flash.rs
       - crates/core/src/peripherals/gpio.rs
       - crates/core/src/peripherals/i2c.rs
@@ -7139,6 +7140,7 @@ boards:
       # board records no silicon capture, so there is no "silicon-verified"
       # claim for the corrected digest to invalidate — no ack is implied.
       - crates/core/src/peripherals/exti.rs
+      - crates/core/src/peripherals/syscfg.rs
       - crates/core/src/peripherals/flash.rs
       - crates/core/src/peripherals/iwdg.rs
       - crates/core/src/peripherals/pwr.rs
@@ -7303,6 +7305,7 @@ boards:
       - crates/core/src/peripherals/adc.rs
       - crates/core/src/peripherals/dbgmcu.rs
       - crates/core/src/peripherals/exti.rs
+      - crates/core/src/peripherals/syscfg.rs
       - crates/core/src/peripherals/flash.rs
       - crates/core/src/peripherals/gpio.rs
       - crates/core/src/peripherals/i2c.rs
@@ -7368,6 +7371,7 @@ boards:
       # claim for the corrected digest to invalidate — no ack is implied.
       - crates/core/src/peripherals/adc.rs
       - crates/core/src/peripherals/exti.rs
+      - crates/core/src/peripherals/syscfg.rs
       - crates/core/src/peripherals/flash.rs
       - crates/core/src/peripherals/gpio.rs
       - crates/core/src/peripherals/i2c.rs

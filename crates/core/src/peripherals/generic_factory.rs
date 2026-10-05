@@ -762,7 +762,13 @@ pub fn try_build(
         // so a read-as-zero stub keeps the enable sequence from bus-faulting.
         // No cache behaviour is modelled — the simulator has flat memory.
         "icache" | "dcache" => Box::new(crate::peripherals::stub::StubPeripheral::new(0x00)),
-        // SYSCFG — mostly EXTI source select (harmless read-0 stub), plus the H7
+        // SYSCFG on STM32F4 (`profile: stm32f4`): a real register file,
+        // because its EXTICR is the EXTI line-source mux external GPIO edges
+        // go through.
+        "syscfg" if p_cfg.config.get("profile").and_then(|v| v.as_str()) == Some("stm32f4") => {
+            Box::new(crate::peripherals::syscfg::Stm32F4Syscfg::new())
+        }
+        // SYSCFG elsewhere — mostly EXTI source select (harmless read-0 stub), plus the H7
         // I/O compensation cell the H7 HAL enables + polls during rcc.freeze:
         // CCCSR @ 0x20, READY = bit 8. Seed it so the poll exits (EN is a
         // read-modify-write the stub drops, but the READY read returns the seed).
