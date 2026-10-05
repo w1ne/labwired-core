@@ -1308,6 +1308,9 @@ pub struct GpioPort {
     /// Pads that belong to a world `gpio_net`: their drive reports the pad's
     /// own output stage only (see [`crate::Peripheral::set_gpio_net_isolated`]).
     net_isolated: u32,
+    /// Outside levels that reached a pad routed to a peripheral line since
+    /// the bus last collected them (see `sync_wire_input`).
+    wire_edges: Vec<crate::peripherals::pad_lines::WireInputEdge>,
     /// F1 USART console gates, one per bound TX pin. Refreshed from CRL/CRH
     /// on every write. Empty on every other port.
     console_af: Vec<(u8, std::sync::Arc<std::sync::atomic::AtomicBool>)>,
@@ -1440,6 +1443,7 @@ impl GpioPort {
             externally_driven: 0,
             external_levels: 0,
             net_isolated: 0,
+            wire_edges: Vec::new(),
             console_af: Vec::new(),
         }
     }
@@ -1510,13 +1514,19 @@ impl GpioPort {
             if self.capture_func(pin).is_some() {
                 return input();
             }
-            let wired = self
-                .pad_routes
-                .level(pin, |p| {
-                    Self::selected_function(&self.family, self.pad_claims.as_ref(), p)
-                })
-                .is_some();
-            if wired || ext {
+            if let Some((cell, line)) = self.pad_routes.active_line(pin, |p| {
+                Self::selected_function(&self.family, self.pad_claims.as_ref(), p)
+            }) {
+                // The peripheral says what its output stage does: a
+                // push-pull line (every publisher's default) drives the pad,
+                // a released open-drain line or a peripheral input does not.
+                return if cell.drives(line) {
+                    Some(PadDrive::Driven)
+                } else {
+                    input()
+                };
+            }
+            if ext {
                 Some(PadDrive::Driven)
             } else {
                 None
@@ -1929,10 +1939,15 @@ impl GpioPort {
     /// peripheral publishes into; every other pad falls back to the family
     /// register truth.
     fn pad_level(&self, pin: u8) -> Option<bool> {
-        if let Some(level) = self.pad_routes.level(pin, |p| {
+        if let Some((cell, line)) = self.pad_routes.active_line(pin, |p| {
             Self::selected_function(&self.family, self.pad_claims.as_ref(), p)
         }) {
-            return Some(level);
+            // A line the peripheral does not drive (released open-drain, an
+            // input) reads what the outside holds on the pad.
+            if pin < 32 && !cell.drives(line) && (self.externally_driven >> pin) & 1 != 0 {
+                return Some((self.external_levels >> pin) & 1 != 0);
+            }
+            return Some(cell.level(line));
         }
         // An AF pad the mux hands to a timer INPUT is an input: a probe on it
         // sees what the outside world holds there (HC-SR04 ECHO on TIM2_CH1),
@@ -2014,6 +2029,49 @@ impl GpioPort {
     }
 }
 
+impl GpioPort {
+    /// Hand the level the outside holds on `pin` to the peripheral line the
+    /// pad is routed to, if any, and remember the edge for the bus to
+    /// deliver (`Peripheral::take_wire_input_edges`).
+    fn sync_wire_input(&mut self, pin: u8) {
+        if self.pad_routes.is_empty() || pin >= 32 || (self.externally_driven >> pin) & 1 == 0 {
+            return;
+        }
+        let level = (self.external_levels >> pin) & 1 != 0;
+        let edge = self
+            .pad_routes
+            .active_line(pin, |p| {
+                Self::selected_function(&self.family, self.pad_claims.as_ref(), p)
+            })
+            .and_then(|(cell, line)| {
+                cell.set_input(line, level)
+                    .then(|| crate::peripherals::pad_lines::WireInputEdge {
+                        cell: cell.clone(),
+                        line,
+                        level,
+                    })
+            });
+        if let Some(edge) = edge {
+            self.wire_edges.push(edge);
+        }
+    }
+
+    /// After a register write: a pad that just became routed to a peripheral
+    /// line hands it the level the outside already holds there.
+    #[inline]
+    fn sync_wire_inputs(&mut self) {
+        if self.pad_routes.is_empty() || self.externally_driven == 0 {
+            return;
+        }
+        let mut pins = self.externally_driven;
+        while pins != 0 {
+            let pin = pins.trailing_zeros() as u8;
+            pins &= pins - 1;
+            self.sync_wire_input(pin);
+        }
+    }
+}
+
 impl crate::Peripheral for GpioPort {
     /// Not in the per-cycle walk: this model overrides neither `tick()` nor
     /// `tick_elapsed()`, so every visit ran the default no-op and returned a
@@ -2059,6 +2117,7 @@ impl crate::Peripheral for GpioPort {
         self.tap_snapshot();
         self.write_reg(reg_offset, reg_val);
         self.tap_report();
+        self.sync_wire_inputs();
         self.refresh_console_af();
         if reg_offset == self.idr_offset() {
             self.record_timer_input_edges(before);
@@ -2088,6 +2147,7 @@ impl crate::Peripheral for GpioPort {
         self.tap_snapshot();
         self.write_reg(offset & !3, value);
         self.tap_report();
+        self.sync_wire_inputs();
         self.refresh_console_af();
         if input_reg {
             self.record_timer_input_edges(before);
@@ -2203,6 +2263,9 @@ impl crate::Peripheral for GpioPort {
             }
         }
         self.tap_report();
+        if ok {
+            self.sync_wire_input(pin);
+        }
         self.record_timer_input_edges(before);
         ok
     }
@@ -2213,6 +2276,9 @@ impl crate::Peripheral for GpioPort {
         }
         if isolated {
             self.net_isolated |= 1 << pin;
+            // Every peripheral line this pad can carry now shares a wire with
+            // other chips.
+            self.pad_routes.mark_on_net(pin);
         } else {
             self.net_isolated &= !(1 << pin);
         }
@@ -2240,6 +2306,10 @@ impl crate::Peripheral for GpioPort {
 
     fn take_timer_input_edges(&mut self) -> Vec<TimerInputEdge> {
         std::mem::take(&mut self.timer_edges)
+    }
+
+    fn take_wire_input_edges(&mut self) -> Vec<crate::peripherals::pad_lines::WireInputEdge> {
+        std::mem::take(&mut self.wire_edges)
     }
 
     fn watch_pad_level(

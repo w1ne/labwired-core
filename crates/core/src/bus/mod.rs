@@ -623,6 +623,10 @@ pub struct SystemBus {
     /// feed a timer input, so the post-write hook drains timer-input edges
     /// only on buses that have any. One predictable false branch elsewhere.
     pub(crate) timer_capture_wired: bool,
+    /// Set when a world `gpio_net` puts a pad on a net (`isolate_net_pads`):
+    /// from then on the post-write and external-input hooks hand outside pad
+    /// levels to the peripheral lines they are routed to. False elsewhere.
+    pub(crate) wire_inputs_live: bool,
     /// Test/diagnostic override: force conservative resident execution
     /// even under the `event-scheduler` feature. Deadline semantics remain
     /// identical; only CPU batching changes for differential tests.

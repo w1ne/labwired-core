@@ -7,7 +7,8 @@ fn spi_line_order_matches_signal_discriminants() {
     assert_eq!(SPI_LINES[SpiSignal::Sck as usize], "SCK");
     assert_eq!(SPI_LINES[SpiSignal::Mosi as usize], "MOSI");
     assert_eq!(SPI_LINES[SpiSignal::Miso as usize], "MISO");
-    assert_eq!(SPI_LINES.len(), 3);
+    assert_eq!(SPI_LINES[SpiSignal::Nss as usize], "NSS");
+    assert_eq!(SPI_LINES.len(), 4);
 }
 
 use super::{Spi, SpiDevice, SpiRegisterLayout};

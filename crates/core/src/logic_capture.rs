@@ -504,6 +504,22 @@ impl LogicTap {
         self.shared.pending.fetch_add(1, Ordering::Relaxed);
     }
 
+    /// Record a pad level with an optional drive, stamped with `cycle` when
+    /// given and with the provisional clock otherwise. The general form of
+    /// [`push`](Self::push), [`push_at`](Self::push_at) and
+    /// [`push_with_drive`](Self::push_with_drive), for a wire whose lines know
+    /// their own drive (an open-drain line released, a peripheral input).
+    pub fn push_event(&self, ch: u32, value: bool, drive: Option<PadDrive>, cycle: Option<u64>) {
+        let cycle = cycle.unwrap_or_else(|| self.shared.clock.load(Ordering::Relaxed));
+        self.shared.queue.lock().unwrap().push(PadEvent {
+            ch,
+            value,
+            cycle,
+            drive,
+        });
+        self.shared.pending.fetch_add(1, Ordering::Relaxed);
+    }
+
     pub(crate) fn set_armed(&self, armed: bool) {
         self.shared.armed.store(armed, Ordering::Relaxed);
     }

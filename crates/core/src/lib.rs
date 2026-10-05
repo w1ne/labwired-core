@@ -1104,6 +1104,25 @@ pub trait Peripheral: std::fmt::Debug + Send {
         Vec::new()
     }
 
+    /// GPIO capability: drain the outside levels that reached pads routed to
+    /// a peripheral line (an SPI MISO, an I²C SDA) since the last drain. Each
+    /// names the line cell, which the bus maps back to the peripheral owning
+    /// it; see [`SystemBus::deliver_wire_input_edges`](crate::bus::SystemBus::deliver_wire_input_edges).
+    fn take_wire_input_edges(&mut self) -> Vec<crate::peripherals::pad_lines::WireInputEdge> {
+        Vec::new()
+    }
+
+    /// Wire capability: the level an outside driver holds on the pad routed
+    /// to line `line` of this peripheral's [`Self::wire_lines`] changed to
+    /// `level` at absolute engine cycle `cycle` (a world `gpio_net`
+    /// delivering a peer's edge). The new level is also readable from
+    /// [`PadLines::input`](crate::peripherals::pad_lines::PadLines::input).
+    /// Returns `true` when the peripheral may have work to schedule, so the
+    /// bus collects its scheduled events. Default: not a listener.
+    fn wire_input_edge(&mut self, _line: usize, _level: bool, _cycle: u64) -> bool {
+        false
+    }
+
     /// True when a READ of this peripheral can clear the status flag behind
     /// its level IRQ (STM32 input capture: reading CCRx clears CCxIF). The
     /// bus then reconciles the NVIC pend after the read, as it does after

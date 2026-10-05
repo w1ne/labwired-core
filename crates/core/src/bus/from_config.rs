@@ -308,6 +308,7 @@ impl SystemBus {
             flash_models_ops: false,
             nordic_gpio_service: false,
             timer_capture_wired: false,
+            wire_inputs_live: false,
             resident_scheduling_disabled: false,
             flash_error_flags_idx: None,
             u5_program_gate_idx: None,
@@ -568,6 +569,10 @@ impl SystemBus {
                     // 100 ms timeout to real firmware.
                     if let Some(err_irq) = p_cfg.config.get("irq_error").and_then(|v| v.as_u64()) {
                         ctl.set_error_irq(err_irq as u32);
+                    }
+                    // Which datasheet AF map routes SCL/SDA (`pad_map: stm32g0`).
+                    if let Some(pad_map) = p_cfg.config.get("pad_map").and_then(|v| v.as_str()) {
+                        ctl.set_pad_map(pad_map)?;
                     }
                     Box::new(ctl)
                 };
