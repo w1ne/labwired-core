@@ -115,6 +115,27 @@ pub struct Avr {
     pub adcsra: u8,
     pub adcl: u8,
     pub adch: u8,
+    /// External interrupts: `EICRA` (sense control), `EIMSK`, `EIFR`.
+    pub eicra: u8,
+    pub eimsk: u8,
+    pub eifr: u8,
+    /// Pin-change interrupts: `PCICR`, `PCIFR`, `PCMSK0..2`.
+    pub pcicr: u8,
+    pub pcifr: u8,
+    pub pcmsk: [u8; 3],
+    /// `SMCR`: sleep mode and sleep enable.
+    pub smcr: u8,
+    /// Stopped by `SLEEP` until an enabled interrupt wakes it.
+    pub sleeping: bool,
+    /// Pad levels of ports B, C, D at the last boundary sample
+    /// (see `avr/ext_int.rs`). Only the watched ports are kept current.
+    ext_last: [u8; 3],
+    /// Set by `SEI` and `RETI`: the next instruction runs before any pending
+    /// interrupt is taken. This is what makes `sei(); sleep_cpu();` atomic.
+    irq_shadow: bool,
+    /// Ports sampled at every boundary (bit 0 = B, 1 = C, 2 = D); zero while
+    /// no INT/PCINT is configured, which keeps the step cost unchanged.
+    ext_watch: u8,
 }
 
 impl std::fmt::Debug for Avr {
@@ -233,6 +254,17 @@ impl Avr {
             adcsra: 0,
             adcl: 0,
             adch: 0,
+            eicra: 0,
+            eimsk: 0,
+            eifr: 0,
+            pcicr: 0,
+            pcifr: 0,
+            pcmsk: [0; 3],
+            smcr: 0,
+            sleeping: false,
+            ext_last: [0; 3],
+            ext_watch: 0,
+            irq_shadow: false,
         }
     }
 
@@ -423,6 +455,13 @@ impl Avr {
             0x0079 => Ok(self.adch),
             0x007A => Ok(self.adcsra),
             0x007C => Ok(self.admux),
+            ext_int::ADDR_PCIFR..=ext_int::ADDR_EIMSK
+            | ext_int::ADDR_SMCR
+            | ext_int::ADDR_PCICR
+            | ext_int::ADDR_EICRA
+            | ext_int::ADDR_PCMSK0..=ext_int::ADDR_PCMSK2 => {
+                Ok(self.ext_read(addr).unwrap_or_default())
+            }
             0x0020..=0x00FF => Ok(self.io[(addr - 0x20) as usize]),
             a if (SRAM_START..=RAMEND).contains(&a) => Ok(self.sram[(a - SRAM_START) as usize]),
             _ => Err(SimulationError::MemoryViolation(addr as u64)),
@@ -604,6 +643,14 @@ impl Avr {
                 self.admux = value;
                 Ok(())
             }
+            ext_int::ADDR_PCIFR..=ext_int::ADDR_EIMSK
+            | ext_int::ADDR_SMCR
+            | ext_int::ADDR_PCICR
+            | ext_int::ADDR_EICRA
+            | ext_int::ADDR_PCMSK0..=ext_int::ADDR_PCMSK2 => {
+                self.ext_write(addr, value, bus);
+                Ok(())
+            }
             0x0020..=0x00FF => {
                 self.io[(addr - 0x20) as usize] = value;
                 // PORTB/PORTC/PORTD (0x23..0x2B): mirror to the high bus window
@@ -672,18 +719,29 @@ impl Avr {
         if div == 0 || cpu_cycles == 0 {
             return;
         }
-        self.t0_prescale_acc = self.t0_prescale_acc.saturating_add(cpu_cycles);
-        while self.t0_prescale_acc >= div {
-            self.t0_prescale_acc -= div;
-            let (next, overflowed) = self.tcnt0.overflowing_add(1);
-            self.tcnt0 = next;
-            if overflowed {
-                self.tifr0 |= TIFR_TOV0;
-                if self.timsk0 & TIMSK_TOIE0 != 0 {
-                    self.pending_irq |= 1u64 << VEC_TIMER0_OVF;
-                }
+        // Closed form of "one TCNT0 increment per `div` clocks": an idle
+        // fast-forward hands this millions of cycles at once.
+        let acc = u64::from(self.t0_prescale_acc) + u64::from(cpu_cycles);
+        let ticks = acc / u64::from(div);
+        self.t0_prescale_acc = (acc % u64::from(div)) as u32;
+        if ticks == 0 {
+            return;
+        }
+        let count = u64::from(self.tcnt0) + ticks;
+        self.tcnt0 = (count & 0xFF) as u8;
+        if count > 0xFF {
+            self.tifr0 |= TIFR_TOV0;
+            if self.timsk0 & TIMSK_TOIE0 != 0 {
+                self.pending_irq |= 1u64 << VEC_TIMER0_OVF;
             }
         }
+    }
+
+    /// An interrupt the core would take now: global enable set and a vector
+    /// pending. This is also what wakes a sleeping core.
+    #[inline]
+    fn wake_pending(&self) -> bool {
+        self.flag_i() && self.pending_irq & 0xFFFF_FFFE != 0
     }
 
     pub fn portb(&self) -> u8 {
@@ -914,6 +972,8 @@ impl Avr {
         if vec == VEC_TIMER0_OVF {
             self.tifr0 &= !TIFR_TOV0;
         }
+        // ... and the INTn / PCIFn flag of an external or pin-change vector.
+        self.ext_vector_entered(vec);
         self.push_pc(bus)?;
         self.pc = vec.saturating_sub(1) * 4;
         Ok(true)
@@ -1124,6 +1184,44 @@ impl Cpu for Avr {
         4
     }
 
+    /// A core stopped by `SLEEP` may be skipped until the next thing that can
+    /// wake it: a Timer0 overflow with its interrupt enabled (while clk_I/O
+    /// runs), or a pad change seen at a later boundary. Nothing to skip when an
+    /// interrupt is already takeable, or a watched pad moved since the last
+    /// sample, or a received byte is waiting for RXCIE.
+    fn idle_fast_forward_budget(&self, bus: &dyn Bus) -> Option<u64> {
+        if !self.sleeping || self.wake_pending() || self.ext_pins_moved(bus) {
+            return None;
+        }
+        if self.ucsr0b & UCSRB_RXCIE != 0
+            && Self::usart_on_bus(bus)
+            && bus.read_u8(AVR_IO_MIRROR_BASE + 0xC0).ok()? & UCSRA_RXC != 0
+        {
+            return None;
+        }
+        let div = u64::from(self.t0_prescaler());
+        if self.io_clock_running() && div != 0 && self.timsk0 & TIMSK_TOIE0 != 0 && self.flag_i() {
+            // Cycles until TCNT0 wraps: the step path ticks one clock per
+            // sleeping step and raises the overflow on exactly this one.
+            let ticks = 256 - u64::from(self.tcnt0);
+            let cycles = ticks * div - u64::from(self.t0_prescale_acc).min(div - 1);
+            return Some(cycles.max(1));
+        }
+        Some(u64::MAX)
+    }
+
+    fn fast_forward_idle_cycles(&mut self, cycles: u64) {
+        self.cycles += cycles;
+        if self.io_clock_running() {
+            let mut left = cycles;
+            while left > 0 {
+                let chunk = left.min(u64::from(u32::MAX));
+                self.tick_timer0(chunk as u32);
+                left -= chunk;
+            }
+        }
+    }
+
     fn reset(&mut self, _bus: &mut dyn Bus) -> SimResult<()> {
         self.r = [0; 32];
         self.pc = 0;
@@ -1152,6 +1250,8 @@ impl Cpu for Avr {
         self.twcr = 0;
         self.twi_phase = TwiPhase::Idle;
         self.twi_slave = None;
+        self.ext_reset();
+        self.irq_shadow = false;
         // Keep attached SPI/I2C slaves across reset (same wiring as real board).
         Ok(())
     }
@@ -1185,7 +1285,9 @@ impl Cpu for Avr {
         // and nothing at all on a sketch that never enables the interrupt.
         if self.ucsr0b & UCSRB_RXCIE != 0 {
             self.rx_poll = self.rx_poll.wrapping_add(1);
-            if self.rx_poll & 31 == 0
+            // A sleeping core looks every cycle: the step is one idle clock,
+            // and a skipped idle window must wake on the same cycle.
+            if (self.rx_poll & 31 == 0 || self.sleeping)
                 && Self::usart_on_bus(bus)
                 && bus.read_u8(AVR_IO_MIRROR_BASE + 0xC0)? & UCSRA_RXC != 0
             {
@@ -1203,7 +1305,29 @@ impl Cpu for Avr {
             self.pending_irq &= !(1u64 << VEC_USART_RX);
         }
 
-        if self.try_take_irq(bus)? {
+        // INT0/INT1 and PCINT: sample the pads at this boundary.
+        if self.ext_watch != 0 {
+            self.sample_ext_pins(bus);
+        }
+
+        if self.sleeping {
+            if !self.wake_pending() {
+                // One idle clock: nothing retires, Timer0 counts if clk_I/O runs.
+                self.cycles += 1;
+                if self.io_clock_running() {
+                    self.tick_timer0(1);
+                }
+                return Ok(());
+            }
+            // "The MCU is then halted for four cycles in addition to the
+            // start-up time" (none in idle mode; oscillator start-up after a
+            // deeper sleep is not modelled), then the vector is entered.
+            self.sleeping = false;
+            self.cycles += 4;
+        }
+
+        let shadow = std::mem::take(&mut self.irq_shadow);
+        if !shadow && self.try_take_irq(bus)? {
             self.cycles += 4;
             let delta = self.cycles.saturating_sub(before) as u32;
             self.tick_timer0(delta.max(1));
@@ -1261,6 +1385,9 @@ impl Cpu for Avr {
         let push_tap = bus.logic_tap().filter(|tap| tap.push_armed());
         let timer_stopped = self.t0_prescaler() == 0;
         let irq_takeable = self.flag_i() && self.pending_irq != 0;
+        // A sleeping core, or pads that must be sampled at every boundary for
+        // INT/PCINT, keep the one-instruction path.
+        let irq_takeable = irq_takeable || self.sleeping || self.ext_watch != 0;
         // The INC/RJMP spin touches no bus, so it can never push a pad edge:
         // it stays available under push capture, as long as the tap clock is
         // carried across the cycles it retires.
@@ -1370,6 +1497,9 @@ impl Cpu for Avr {
 
 #[path = "avr/exec/mod.rs"]
 mod exec;
+#[path = "avr/ext_int.rs"]
+mod ext_int;
+pub use ext_int::{VEC_INT0, VEC_INT1, VEC_PCINT0, VEC_PCINT1, VEC_PCINT2};
 
 #[cfg(test)]
 mod tests {
