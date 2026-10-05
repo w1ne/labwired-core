@@ -82,24 +82,66 @@ after that time), through the same `set_gpio_input` path a board button uses:
 EXTI interrupts, AVR INT0/INT1 and pin-change interrupts, and timer captures
 see a real edge.
 
-The world runs in conservative rounds, the way a timed UART network does. A
-round is never longer than the shortest net latency, so an edge produced in a
-round can never be due at a peer before the round ends. Results do not depend
-on the order nodes run in or on the round length: `world_multichip.rs` (`gpio_net_world`) runs the
-example with both node orders and with rounds from 10 ns to 100 ns and compares
-every counter, every UART transcript and every applied delivery.
+Each node keeps its own clock (conservative parallel discrete-event
+simulation). A node may run as far as its *safe horizon*: for each net it is
+on, the time the slowest member of that net has reached, plus the net's
+latency. An edge nobody has reported yet happens after its driver's current
+time, so its delivery is due after that horizon: every delivery a node needs is
+known before the node gets there, whatever order the nodes run in and however
+far apart their clocks are. After a node runs, its drive changes are merged
+into its nets up to the time all their members have reached.
 
-`latency_ns` is also the speed knob. A 100 ns round is a few cycles per node,
-so a world with only 100 ns nets runs slower than a lone machine; raise
-`latency_ns` on wires that do not need to be that fast and rounds get longer.
+Results do not depend on node order, round length or how the world is driven:
+`world_multichip.rs` (`gpio_net_world`) runs the example with both node orders,
+with rounds from 10 ns to 100 ns, round by round, in one `run_until_ps` call and
+on the old lockstep round driver (`set_gpio_lockstep`, still the driver for a
+world that also has a timed UART network), and compares every counter, every
+UART transcript, every applied delivery and every node's cycle count, part way
+through and at the end.
 
 A node skips idle time (a Cortex-M in `WFI`, an ATmega328P in `SLEEP`) only
 when idle fast-forward is on for it (`set_idle_fast_forward(true)` on the
 world's machine); the results are the same either way
 (`idle_fast_forward_skips_the_avr_sleep_and_changes_nothing`).
 
-Machines on no net run unchanged; the per-step cost of a machine is the same
-with or without nets elsewhere in the world.
+`step_all` still advances the world by one round (the shortest latency) per
+call, so a `max_steps` limit, the browser's step batches and Python's
+`run_for` keep their meaning. `World::run_until_ps(t)` runs to `t` in one call,
+and `World::step_rounds(n)` does `n` rounds in one call when that gives the
+same result (the browser's `step_batch` uses it).
+
+### Speed
+
+At the default 100 ns latency a net no longer costs a multiple of the
+machines' own time. `examples/gpio-net-two-boards`, 30 ms of simulated time,
+release build, against the same two machines each run alone for 30 ms (median
+of repeated runs on a shared machine, so treat the figures as rough):
+
+| How it is driven | Before | Now |
+|------------------|--------|-----|
+| one `run_until_ps` / `step_rounds` call | n/a | 1.16x the two machines alone |
+| `step_all` per round | 2.05x | 1.55x |
+| `labwired test --script .../test.yaml` (40 ms, per round, wall) | 0.54 s | 0.36 s |
+
+(`cargo test --release -p labwired-core --test world_multichip -- --ignored
+--nocapture gpio_net_speed` prints the first two.)
+
+What is left:
+
+- A net node still runs in pieces no longer than the shortest latency of its
+  nets, because its own edges come back to it after one latency. The world
+  nodes built today (Cortex-M, AVR) tick their peripherals every cycle anyway,
+  so the pieces cost almost nothing extra. A node that would otherwise run
+  wide batches or fast-forward idle time (an ESP32-C3 ROM-boot node) loses
+  that while it is on a net, so it runs slower than alone at 100 ns.
+- A sleeping node does not stretch the horizon yet: a node idle in `WFI` still
+  advances one latency at a time while its peers do.
+- `step_all` pays a fixed cost per call (the results map), about half the
+  machines' own time at 100 ns rounds. Drive long runs with `run_until_ps` or
+  `step_rounds`; `latency_ns` still makes rounds longer where a wire does not
+  need to be fast.
+
+Machines on no net run unchanged and are not held to any net's latency.
 
 ## Which pads can be on a net
 

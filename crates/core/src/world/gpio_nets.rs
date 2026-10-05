@@ -7,21 +7,34 @@
 //! The `gpio_net` half of a [`World`](super::World): joining pads of
 //! different nodes into nets, and moving edges between them.
 //!
-//! The method, in the order a round runs it:
+//! The method:
 //!
-//! 1. Every node runs a round. A node that has a net delivery due inside the
-//!    round stops at the delivery's cycle and drives the pad through
-//!    `set_gpio_input` (so EXTI and timer captures see a real edge), then runs
-//!    on. The cycle is the first instruction boundary at or after
-//!    `t_edge + latency`, which is the same boundary whatever the round size.
-//! 2. When the round is complete, each node's pad drive changes (four-state
-//!    ring, stamped with engine cycles) are read, put on world time, and
-//!    merged into their net in time order, but only up to the time every node
-//!    has reached: a node that is still behind may yet report an earlier
+//! 1. A node runs. A node that has a net delivery due on the way stops at the
+//!    delivery's cycle and drives the pad through `set_gpio_input` (so EXTI
+//!    and timer captures see a real edge), then runs on. The cycle is the
+//!    first instruction boundary at or after `t_edge + latency`, which is the
+//!    same boundary however the run is cut into pieces.
+//! 2. After it ran, the node's pad drive changes (four-state ring, stamped
+//!    with engine cycles) are read, put on world time, and merged into their
+//!    net in time order, but only up to the time every member node has
+//!    reached: a member that is still behind may yet report an earlier
 //!    change. The merge resolves the wire and queues a delivery for
 //!    `t_edge + latency` (see [`GpioNet`]).
-//! 3. A round is never longer than the shortest net latency, so a delivery
-//!    queued in step 2 is always still ahead of every node.
+//! 3. A node never runs past its *safe horizon*: for each net it is on, the
+//!    time the slowest member of that net has reached plus the net's latency.
+//!    An edge no node has reported yet lies after the reporting node's time,
+//!    so its delivery lies after the horizon: every delivery a node needs
+//!    is known before the node gets there, whatever order the nodes run in
+//!    and however far apart their clocks are.
+//!
+//! [`WorldGpio::run_to`] does this with one clock per node (conservative
+//! parallel discrete-event simulation): a node on no net, or only on slow
+//! nets, is not held to the shortest latency, and the bookkeeping between two
+//! runs of a node is a few array reads. [`World::step_all`](super::World::step_all)
+//! drives it one round at a time; the older lockstep driver
+//! ([`WorldGpio::advance_node`] + [`WorldGpio::merge_edges`]) remains for
+//! worlds that also have a timed UART network, and as the reference the tests
+//! compare against.
 //!
 //! Pads whose GPIO model pushes its edges (`GpioPort` families and the
 //! ATmega `avr_gpio` port) are read from the push tap at full speed. A model
@@ -33,6 +46,7 @@ use super::{MachineTrait, UART_NET_STEP_CYCLES};
 use crate::logic_capture::PadState;
 use crate::network::gpio_net::{GpioNet, Own};
 use crate::network::timed_uart::{cycles_to_ps, ps_to_cycles_ceil};
+use crate::SimResult;
 use anyhow::Context;
 use labwired_config::GpioNetConfig;
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
@@ -48,6 +62,7 @@ struct NetBinding {
 
 /// Per node: the net pads it owns and where its drive-change cursors are.
 struct NodeGpio {
+    id: String,
     hz: u64,
     /// Channels below this are marker channels (they share the watch set).
     marker_count: u32,
@@ -57,20 +72,64 @@ struct NodeGpio {
     /// reads it (otherwise the timed-UART marker pass does).
     level_cursor: u64,
     bindings: Vec<NetBinding>,
+    /// The nets this node is on, each once, ascending.
+    nets: Vec<usize>,
+    /// The earliest delivery this node must apply, on its own cycle axis;
+    /// `None` inside means none is queued. Cleared (outer `None`) whenever a
+    /// net of this node queues or hands over a delivery.
+    due: Option<Option<Due>>,
+}
+
+/// One machine of the world as the per-node scheduler sees it.
+struct Slot {
+    id: String,
+    hz: u64,
+    /// Index into [`WorldGpio::nodes`] when the machine has net pads.
+    node: Option<usize>,
+    /// World time the machine has reached (its cycle count on world time).
+    t_ps: u64,
+    /// Made no progress when asked to run in the current call (halted,
+    /// locked up): it neither holds others back nor runs again this call.
+    stalled: bool,
+    failed: bool,
+    /// This call: the cycle count it started at, the cycle the target time
+    /// is at, the cycle the call may take it to, and the first error.
+    start: u64,
+    round_goal: u64,
+    goal: u64,
+    error: Option<crate::SimulationError>,
+}
+
+/// What one [`WorldGpio::run_to`] call did.
+pub(super) struct RunOutcome {
+    /// Per machine id: the first error its run returned, else `Ok`.
+    pub(super) results: HashMap<String, SimResult<()>>,
+    /// Every machine with a clock reached the target or made no progress.
+    pub(super) all_there: bool,
 }
 
 /// The GPIO nets of a world and the drive changes not yet merged.
 pub(super) struct WorldGpio {
     pub(super) nets: Vec<GpioNet>,
-    nodes: BTreeMap<String, NodeGpio>,
+    /// Net nodes, sorted by id.
+    nodes: Vec<NodeGpio>,
+    /// Per net: the indices into `nodes` of its member nodes, each once.
+    net_nodes: Vec<Vec<usize>>,
     /// Per net, per member: drive changes `(world ps, drive)` seen but not
     /// yet merged into the net, in time order.
     pending: Vec<Vec<VecDeque<(u64, Own)>>>,
+    /// Per net: how many changes `pending` holds.
+    pending_len: Vec<usize>,
     /// One round's length: at most the shortest latency of any net, since no
     /// edge can reach a peer in less. Defaults to exactly that.
     pub(super) round_ps: u64,
-    /// Every delivery applied to a pad, in the order applied (capped).
+    /// Every delivery applied to a pad (capped), by due time, then node id.
     applied: Vec<AppliedDelivery>,
+    /// Every machine of the world in id order, for [`Self::run_to`]. Rebuilt
+    /// when the world's set of machines changes.
+    slots: Vec<Slot>,
+    /// Per net node: its index into `slots`.
+    node_slot: Vec<usize>,
 }
 
 /// Most applied deliveries kept in the log.
@@ -100,6 +159,7 @@ fn own_of(state: Option<PadState>) -> Own {
 }
 
 /// A delivery a node must apply: its cycle and where it goes.
+#[derive(Debug, Clone, Copy)]
 struct Due {
     cycle: u64,
     binding: NetBinding,
@@ -169,17 +229,23 @@ impl WorldGpio {
                 let marker_count = marker_pins.get(node).map_or(0, Vec::len) as u32;
                 let hz = node_hz[node];
                 let entry = nodes.entry(node.clone()).or_insert_with(|| NodeGpio {
+                    id: node.clone(),
                     hz,
                     marker_count,
                     state_cursor: 0,
                     level_cursor: 0,
                     bindings: Vec::new(),
+                    nets: Vec::new(),
+                    due: None,
                 });
                 entry.bindings.push(NetBinding {
                     net: ni,
                     member: mi,
                     ch: marker_count + ch_in_net_pins,
                 });
+                if !entry.nets.contains(&ni) {
+                    entry.nets.push(ni);
+                }
             }
             nets.push(GpioNet::new(label, cfg.pull, latency_ps, members));
         }
@@ -240,12 +306,25 @@ impl WorldGpio {
             .iter()
             .map(|n| vec![VecDeque::new(); n.members().len()])
             .collect();
+        // BTreeMap order: `nodes` is sorted by id.
+        let nodes: Vec<NodeGpio> = nodes.into_values().collect();
+        let net_nodes = (0..nets.len())
+            .map(|ni| {
+                (0..nodes.len())
+                    .filter(|&gi| nodes[gi].nets.contains(&ni))
+                    .collect()
+            })
+            .collect();
         Ok(Some(Self {
+            pending_len: vec![0; nets.len()],
             nets,
             nodes,
+            net_nodes,
             pending,
             round_ps,
             applied: Vec::new(),
+            slots: Vec::new(),
+            node_slot: Vec::new(),
         }))
     }
 
@@ -270,9 +349,17 @@ impl WorldGpio {
         Ok(())
     }
 
-    /// The earliest delivery node `id` must apply, on its own cycle axis.
-    fn earliest_due(&self, id: &str) -> Option<Due> {
-        let g = self.nodes.get(id)?;
+    fn node_index(&self, id: &str) -> Option<usize> {
+        self.nodes.binary_search_by(|g| g.id.as_str().cmp(id)).ok()
+    }
+
+    /// The earliest delivery net node `gi` must apply, on its own cycle axis
+    /// (cached until one of its nets queues or hands over a delivery).
+    fn earliest_due(&mut self, gi: usize) -> Option<Due> {
+        if let Some(due) = self.nodes[gi].due {
+            return due;
+        }
+        let g = &self.nodes[gi];
         let mut best: Option<Due> = None;
         for b in &g.bindings {
             let Some(d) = self.nets[b.net].next_due(b.member) else {
@@ -287,95 +374,165 @@ impl WorldGpio {
                 });
             }
         }
+        self.nodes[gi].due = Some(best);
         best
+    }
+
+    /// Every member node of net `ni` must look for its next delivery again.
+    fn forget_dues(&mut self, ni: usize) {
+        for &gi in &self.net_nodes[ni] {
+            self.nodes[gi].due = None;
+        }
     }
 
     /// Advance node `id` toward `target_cycle` (at most one step budget),
     /// applying every net delivery that falls due on the way at its cycle.
+    /// The lockstep driver's half of a round; see [`Self::run_to`] for the
+    /// per-node one.
     pub(super) fn advance_node(
         &mut self,
         id: &str,
         machine: &mut dyn MachineTrait,
         target_cycle: u64,
-    ) -> crate::SimResult<()> {
-        if !self.nodes.contains_key(id) {
-            let before = machine.total_cycles();
-            if before < target_cycle {
-                return machine.advance_to_cycle(target_cycle.min(before + UART_NET_STEP_CYCLES));
-            }
-            return Ok(());
-        }
+    ) -> SimResult<()> {
         let budget_end = target_cycle.min(machine.total_cycles() + UART_NET_STEP_CYCLES);
+        match self.node_index(id) {
+            Some(gi) => self.run_node(gi, machine, budget_end),
+            None => {
+                if machine.total_cycles() < budget_end {
+                    machine.advance_to_cycle(budget_end)
+                } else {
+                    Ok(())
+                }
+            }
+        }
+    }
+
+    /// Run net node `gi` to `limit`, applying each delivery at its cycle.
+    fn run_node(&mut self, gi: usize, machine: &mut dyn MachineTrait, limit: u64) -> SimResult<()> {
         loop {
             let now = machine.total_cycles();
-            while let Some(due) = self.earliest_due(id) {
+            while let Some(due) = self.earliest_due(gi) {
                 if due.cycle > now {
                     break;
                 }
-                let net = &self.nets[due.binding.net];
-                let m = &net.members()[due.binding.member];
-                let (periph, pin) = (m.peripheral.clone(), m.pin);
-                machine.drive_gpio_input(&periph, pin, due.level);
-                if self.applied.len() < MAX_APPLIED_LOG {
-                    self.applied.push(AppliedDelivery {
-                        node: id.to_string(),
-                        peripheral: periph,
-                        pin,
-                        cycle: now,
-                        due_ps: self.nets[due.binding.net]
-                            .next_due(due.binding.member)
-                            .map_or(0, |d| d.t_ps),
-                        level: due.level,
-                    });
-                }
-                self.nets[due.binding.net].consume(due.binding.member);
+                self.apply_due(gi, machine, due, now);
             }
-            if now >= budget_end {
+            if now >= limit {
                 return Ok(());
             }
-            let mut limit = budget_end;
-            if let Some(due) = self.earliest_due(id) {
-                if due.cycle < limit {
-                    limit = due.cycle.max(now + 1);
+            let mut stop = limit;
+            if let Some(due) = self.earliest_due(gi) {
+                if due.cycle < stop {
+                    stop = due.cycle.max(now + 1);
                 }
             }
-            machine.advance_to_cycle(limit)?;
+            machine.advance_to_cycle(stop)?;
             if machine.total_cycles() == now {
                 return Ok(());
             }
         }
     }
 
+    /// Drive the pad of `due` on node `gi` (at cycle `now`) and log it.
+    fn apply_due(&mut self, gi: usize, machine: &mut dyn MachineTrait, due: Due, now: u64) {
+        let b = due.binding;
+        let net = &self.nets[b.net];
+        let m = &net.members()[b.member];
+        machine.drive_gpio_input(&m.peripheral, m.pin, due.level);
+        if self.applied.len() < MAX_APPLIED_LOG {
+            let entry = AppliedDelivery {
+                node: self.nodes[gi].id.clone(),
+                peripheral: m.peripheral.clone(),
+                pin: m.pin,
+                cycle: now,
+                due_ps: net.next_due(b.member).map_or(0, |d| d.t_ps),
+                level: due.level,
+            };
+            // Nodes run on their own clocks, so which of two nodes applies
+            // the same edge first is a scheduling detail: keep the log in
+            // (due time, node id) order, each node's own entries in the order
+            // it applied them. Entries arrive nearly sorted.
+            let mut at = self.applied.len();
+            while at > 0 && {
+                let prev = &self.applied[at - 1];
+                (prev.due_ps, prev.node.as_str()) > (entry.due_ps, entry.node.as_str())
+            } {
+                at -= 1;
+            }
+            self.applied.insert(at, entry);
+        }
+        self.nets[b.net].consume(b.member);
+        self.forget_dues(b.net);
+    }
+
+    /// Move node `gi`'s new pad drive changes into `pending`.
+    fn collect_edges(&mut self, gi: usize, machine: &mut dyn MachineTrait) {
+        let g = &mut self.nodes[gi];
+        let (edges, next) = machine.net_pad_states(g.state_cursor);
+        g.state_cursor = next;
+        for (ch, cycle, state) in edges {
+            if let Some(b) = g.bindings.iter().find(|b| b.ch == ch) {
+                self.pending[b.net][b.member]
+                    .push_back((cycles_to_ps(cycle, g.hz), own_of(Some(state))));
+                self.pending_len[b.net] += 1;
+            }
+        }
+        if g.marker_count == 0 {
+            // Nobody else reads the level ring: acknowledge it.
+            let (_, next) = machine.marker_edges(g.level_cursor);
+            g.level_cursor = next;
+        }
+    }
+
+    /// Merge into net `ni` its pending changes at or before `horizon`, in
+    /// time order (ties: member order), queueing the deliveries.
+    fn merge_net(&mut self, ni: usize, horizon: u64) {
+        let mut merged = false;
+        loop {
+            // The earliest unmerged change across members.
+            let t = self.pending[ni]
+                .iter()
+                .filter_map(|q| q.front().map(|(t, _)| *t))
+                .min();
+            let Some(t) = t.filter(|t| *t <= horizon) else {
+                break;
+            };
+            let mut changes = Vec::new();
+            for (mi, q) in self.pending[ni].iter_mut().enumerate() {
+                while q.front().is_some_and(|(qt, _)| *qt == t) {
+                    let (_, own) = q.pop_front().expect("front checked");
+                    changes.push((mi, own));
+                }
+            }
+            self.pending_len[ni] -= changes.len();
+            self.nets[ni].apply(t, &changes);
+            merged = true;
+        }
+        if merged {
+            self.forget_dues(ni);
+        }
+    }
+
     /// Read every net node's new pad drive changes and merge into the nets all
-    /// those at or before the time every `reached` node has got to.
+    /// those at or before the time every `reached` node has got to. The
+    /// lockstep driver's end of a round.
     pub(super) fn merge_edges(
         &mut self,
         machines: &mut HashMap<String, Box<dyn MachineTrait>>,
         reached: &BTreeSet<String>,
     ) {
-        for (id, g) in self.nodes.iter_mut() {
-            let Some(machine) = machines.get_mut(id) else {
+        for gi in 0..self.nodes.len() {
+            let Some(machine) = machines.get_mut(&self.nodes[gi].id) else {
                 continue;
             };
-            let (edges, next) = machine.net_pad_states(g.state_cursor);
-            g.state_cursor = next;
-            for (ch, cycle, state) in edges {
-                if let Some(b) = g.bindings.iter().find(|b| b.ch == ch) {
-                    self.pending[b.net][b.member]
-                        .push_back((cycles_to_ps(cycle, g.hz), own_of(Some(state))));
-                }
-            }
-            if g.marker_count == 0 {
-                // Nobody else reads the level ring: acknowledge it.
-                let (_, next) = machine.marker_edges(g.level_cursor);
-                g.level_cursor = next;
-            }
+            self.collect_edges(gi, machine.as_mut());
         }
-        for (ni, net) in self.nets.iter_mut().enumerate() {
+        for ni in 0..self.nets.len() {
             // Everything at or before the time all member nodes have reached
             // is known; a node that has not reached the round end made no
             // progress and cannot report anything new.
-            let horizon = net
+            let horizon = self.nets[ni]
                 .members()
                 .iter()
                 .filter(|m| reached.contains(&m.node))
@@ -385,25 +542,188 @@ impl WorldGpio {
                         .map(|mc| cycles_to_ps(mc.total_cycles(), m.hz))
                 })
                 .min();
-            let Some(horizon) = horizon else { continue };
-            loop {
-                // The earliest unmerged change across members (ties: member order).
-                let t = self.pending[ni]
-                    .iter()
-                    .filter_map(|q| q.front().map(|(t, _)| *t))
-                    .min();
-                let Some(t) = t.filter(|t| *t <= horizon) else {
-                    break;
-                };
-                let mut changes = Vec::new();
-                for (mi, q) in self.pending[ni].iter_mut().enumerate() {
-                    while q.front().is_some_and(|(qt, _)| *qt == t) {
-                        let (_, own) = q.pop_front().expect("front checked");
-                        changes.push((mi, own));
-                    }
-                }
-                net.apply(t, &changes);
+            if let Some(horizon) = horizon {
+                self.merge_net(ni, horizon);
             }
         }
+    }
+
+    /// Make `slots` describe the world's machines.
+    fn rebuild_slots(
+        &mut self,
+        machines: &HashMap<String, Box<dyn MachineTrait>>,
+        node_hz: &HashMap<String, u64>,
+    ) {
+        let mut ids: Vec<&String> = machines.keys().collect();
+        ids.sort();
+        self.slots = ids
+            .into_iter()
+            .map(|id| Slot {
+                id: id.clone(),
+                hz: node_hz.get(id).copied().unwrap_or(0),
+                node: self.node_index(id),
+                t_ps: 0,
+                stalled: false,
+                failed: false,
+                start: 0,
+                round_goal: 0,
+                goal: 0,
+                error: None,
+            })
+            .collect();
+        self.node_slot = self
+            .nodes
+            .iter()
+            .map(|g| {
+                self.slots
+                    .iter()
+                    .position(|s| s.id == g.id)
+                    .expect("every net node is a machine of the world")
+            })
+            .collect();
+    }
+
+    /// The latest world time net node `gi` may run to: per net it is on, the
+    /// time the slowest live member has reached plus the net's latency.
+    /// Includes the node itself, whose own edges come back to it too.
+    fn horizon_ps(&self, gi: usize) -> u64 {
+        let mut h = u64::MAX;
+        for &ni in &self.nodes[gi].nets {
+            let slowest = self.net_nodes[ni]
+                .iter()
+                .map(|&m| &self.slots[self.node_slot[m]])
+                .filter(|s| !s.stalled)
+                .map(|s| s.t_ps)
+                .min();
+            if let Some(t) = slowest {
+                h = h.min(t.saturating_add(self.nets[ni].latency_ps));
+            }
+        }
+        h
+    }
+
+    /// Merge each net of node `gi` up to the time its live members reached.
+    fn merge_nets_of(&mut self, gi: usize) {
+        for k in 0..self.nodes[gi].nets.len() {
+            let ni = self.nodes[gi].nets[k];
+            if self.pending_len[ni] == 0 {
+                continue;
+            }
+            let horizon = self.net_nodes[ni]
+                .iter()
+                .map(|&m| &self.slots[self.node_slot[m]])
+                .filter(|s| !s.stalled)
+                .map(|s| s.t_ps)
+                .min();
+            if let Some(h) = horizon {
+                self.merge_net(ni, h);
+            }
+        }
+    }
+
+    /// Run every machine of the world to world time `until_ps` (each to the
+    /// first instruction boundary at or after it), never letting a net node
+    /// pass its safe horizon, and at most `step_cycles` cycles per machine
+    /// when given. Machines with no known clock do not run. Nodes are tried
+    /// in id order, each as far as it may go, until none can move.
+    pub(super) fn run_to(
+        &mut self,
+        machines: &mut HashMap<String, Box<dyn MachineTrait>>,
+        node_hz: &HashMap<String, u64>,
+        until_ps: u64,
+        step_cycles: Option<u64>,
+    ) -> RunOutcome {
+        // The machines in slot order, looked up once per call. A world
+        // whose set of machines changed since the last call gets new slots.
+        if self.slots.len() != machines.len()
+            || machines.keys().any(|id| {
+                self.slots
+                    .binary_search_by(|s| s.id.as_str().cmp(id))
+                    .is_err()
+            })
+        {
+            self.rebuild_slots(machines, node_hz);
+        }
+        let n = self.slots.len();
+        let mut ms: Vec<Option<&mut Box<dyn MachineTrait>>> = Vec::with_capacity(n);
+        ms.resize_with(n, || None);
+        for (id, m) in machines.iter_mut() {
+            if let Ok(i) = self.slots.binary_search_by(|s| s.id.as_str().cmp(id)) {
+                ms[i] = Some(m);
+            }
+        }
+        for (s, m) in self.slots.iter_mut().zip(&ms) {
+            let now = m.as_ref().map_or(0, |m| m.total_cycles());
+            s.start = now;
+            s.t_ps = cycles_to_ps(now, s.hz);
+            s.stalled = false;
+            s.failed = false;
+            s.error = None;
+            if s.hz != 0 {
+                s.round_goal = ps_to_cycles_ceil(until_ps, s.hz);
+                s.goal =
+                    step_cycles.map_or(s.round_goal, |c| s.round_goal.min(now.saturating_add(c)));
+            }
+        }
+        loop {
+            // A node that ran, or that turned out stalled, moves horizons.
+            let mut changed = false;
+            for (i, entry) in ms.iter_mut().enumerate() {
+                let Some(machine) = entry.as_mut() else {
+                    continue;
+                };
+                let machine: &mut dyn MachineTrait = &mut ***machine;
+                let (hz, node, stalled, failed) = {
+                    let s = &self.slots[i];
+                    (s.hz, s.node, s.stalled, s.failed)
+                };
+                if hz == 0 || stalled || failed {
+                    continue;
+                }
+                let now = machine.total_cycles();
+                let mut limit = self.slots[i].goal;
+                if let Some(gi) = node {
+                    let h = self.horizon_ps(gi);
+                    if h != u64::MAX {
+                        limit = limit.min(ps_to_cycles_ceil(h, hz));
+                    }
+                }
+                if limit <= now {
+                    continue;
+                }
+                let r = match node {
+                    Some(gi) => self.run_node(gi, machine, limit),
+                    None => machine.advance_to_cycle(limit),
+                };
+                let after = machine.total_cycles();
+                let s = &mut self.slots[i];
+                s.t_ps = cycles_to_ps(after, hz);
+                // A machine that made no progress (halted, locked up) cannot
+                // hold the others back.
+                s.stalled = after == now;
+                changed = true;
+                if let Err(e) = r {
+                    s.failed = true;
+                    s.error = Some(e);
+                }
+                if let Some(gi) = node {
+                    self.collect_edges(gi, machine);
+                    self.merge_nets_of(gi);
+                }
+            }
+            if !changed {
+                break;
+            }
+        }
+        let mut all_there = true;
+        let mut results = HashMap::with_capacity(n);
+        for (s, m) in self.slots.iter_mut().zip(&ms) {
+            let after = m.as_ref().map_or(0, |m| m.total_cycles());
+            if s.hz != 0 && after < s.round_goal && after > s.start {
+                all_there = false;
+            }
+            results.insert(s.id.clone(), s.error.take().map_or(Ok(()), Err));
+        }
+        RunOutcome { results, all_there }
     }
 }

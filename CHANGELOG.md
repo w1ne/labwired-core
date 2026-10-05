@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Changed
+- GPIO-net worlds (`gpio_net`) run on one clock per node instead of lockstep
+  rounds (conservative parallel discrete-event simulation): a node may run
+  until the slowest member of each of its nets plus that net's latency, and
+  the bookkeeping between runs is a few array reads. Every counter, UART
+  transcript, applied delivery cycle and net report is bit-identical to the
+  lockstep driver, which a test now compares at each step. At the default
+  100 ns latency `examples/gpio-net-two-boards` no longer runs at about half
+  the speed of its two machines run alone (see the GPIO nets how-to, Timing).
+  `World::run_until_ps` runs a round-based world to a time in one call.
+  `World::gpio_net_applied` is ordered by due time, then node id.
+
 ### Fixed
 - ESP32-C3/C6 GPIO `FUNCn_OUT_SEL_CFG` resets to 0x80 (`SIG_GPIO_OUT`, the
   matrix bypass, per `esp32c3.svd`) instead of 0, so a bare-metal output pad
