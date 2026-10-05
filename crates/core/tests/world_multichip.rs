@@ -627,7 +627,7 @@ mod gpio_net_world {
     /// same simulated time. Timing only, so ignored by default:
     /// `cargo test --release -p labwired-core --test world_multichip -- --ignored --nocapture gpio_net_speed`.
     #[test]
-    #[ignore]
+    #[ignore = "timing benchmark: run with --release --ignored --nocapture"]
     fn gpio_net_speed() {
         let ms: u64 = std::env::var("GPIO_NET_BENCH_MS")
             .ok()
