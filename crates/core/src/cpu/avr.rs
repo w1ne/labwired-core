@@ -1188,7 +1188,7 @@ impl Cpu for Avr {
     /// wake it: a Timer0 overflow with its interrupt enabled (while clk_I/O
     /// runs), or a pad change seen at a later boundary. Nothing to skip when an
     /// interrupt is already takeable, or a watched pad moved since the last
-    /// sample, or a received byte is waiting for RXCIE.
+    /// sample, or the USART receive interrupt is on.
     fn idle_fast_forward_budget(&self, bus: &dyn Bus) -> Option<u64> {
         if !self.sleeping || self.wake_pending() || self.ext_pins_moved(bus) {
             return None;
