@@ -283,28 +283,62 @@ impl Exti {
 
     /// Apply an actual GPIO edge, respecting the G0/U5 port mux and polarity.
     /// Returns true when this edge creates a pending GPIO interrupt flag.
+    /// The F1/F4 and L4 layouts keep their port mux outside EXTI; see
+    /// [`Self::gpio_edge_with_source`].
     pub fn gpio_edge(&mut self, port: u8, line: u8, before: bool, after: bool) -> bool {
-        let e = match self {
-            Self::Stm32G0(e) | Self::Stm32U5(e) => e,
-            _ => return false,
-        };
+        self.gpio_edge_with_source(port, line, before, after, None)
+    }
+
+    /// As [`Self::gpio_edge`], with the port the chip's external line-source
+    /// mux selects for `line` (`AFIO_EXTICRx` on F1, `SYSCFG_EXTICRx` on F4;
+    /// `None` when the chip has no such mux on the bus).
+    ///
+    /// G0/U5 select the port in their own `EXTI_EXTICRx` and ignore
+    /// `line_source`. The single-bank F1/F4 layout (and L4 bank 1) has no mux
+    /// of its own: the edge counts only when `line_source` names `port`, and
+    /// then sets PR for the line if RTSR (rising) or FTSR (falling) selects
+    /// it, whatever IMR says — IMR gates the interrupt, not the pending bit
+    /// (RM0008 §10.2.5, RM0090 §12.2.5). Returns true when PR was set.
+    pub fn gpio_edge_with_source(
+        &mut self,
+        port: u8,
+        line: u8,
+        before: bool,
+        after: bool,
+        line_source: Option<u8>,
+    ) -> bool {
         if line >= 16 || before == after {
             return false;
         }
-        let mux = (e.exticr[usize::from(line / 4)] >> (u32::from(line % 4) * 8)) & 0xff;
-        if mux != u32::from(port) {
+        let bit = 1u32 << line;
+        let bank = match self {
+            Self::Stm32G0(e) | Self::Stm32U5(e) => {
+                let mux = (e.exticr[usize::from(line / 4)] >> (u32::from(line % 4) * 8)) & 0xff;
+                if mux != u32::from(port) {
+                    return false;
+                }
+                if after && e.rtsr & bit != 0 {
+                    e.rpr |= bit;
+                    return true;
+                }
+                if !after && e.ftsr & bit != 0 {
+                    e.fpr |= bit;
+                    return true;
+                }
+                return false;
+            }
+            Self::Stm32F1(e) => &mut e.bank1,
+            Self::Stm32L4(e) => &mut e.bank1,
+        };
+        if line_source != Some(port) {
             return false;
         }
-        let bit = 1u32 << line;
-        if after && e.rtsr & bit != 0 {
-            e.rpr |= bit;
-            return true;
+        let selected = if after { bank.rtsr } else { bank.ftsr };
+        if selected & bit == 0 {
+            return false;
         }
-        if !after && e.ftsr & bit != 0 {
-            e.fpr |= bit;
-            return true;
-        }
-        false
+        bank.pr |= bit;
+        true
     }
 
     fn read_reg(&self, offset: u64) -> u32 {
@@ -556,14 +590,12 @@ impl Peripheral for Exti {
 
     fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
         // Arm the held-level re-emit chain the moment a write raises a masked
-        // pending line (SWIER→PR, or IMR unmasking a pending PR). Every EXTI
-        // PR-setting path today is an MMIO write (SWIER edge-detect or a direct
-        // PR/IMR write), so `take_scheduled_events` — drained after every MMIO
-        // write — always catches the activation. (`trigger_line`, the external
-        // GPIO-edge injector, has no runtime caller; were it ever wired to a bus
-        // path, that path must re-arm the chain the same way, since a `&mut`
-        // injector cannot itself return events.) delay-0 → deadline
-        // `current_cycle + 1` = the walk's next tick.
+        // pending line (SWIER→PR, or IMR unmasking a pending PR), or an
+        // external GPIO edge sets PR (`gpio_input_edge`): MMIO writes are
+        // drained after every write, and the bus drains this after an edge
+        // that returned true. (`trigger_line` has no runtime caller; were it
+        // ever wired to a bus path, that path must re-arm the chain the same
+        // way.) delay-0 → deadline `current_cycle + 1` = the walk's next tick.
         if self.scheduler_mode() && self.active() && !self.chain_live() {
             self.set_chain_live(true);
             vec![(0u64, 0u32)]
@@ -594,8 +626,15 @@ impl Peripheral for Exti {
         }
     }
 
-    fn gpio_input_edge(&mut self, port: u8, pin: u8, before: bool, after: bool) -> bool {
-        self.gpio_edge(port, pin, before, after)
+    fn gpio_input_edge(
+        &mut self,
+        port: u8,
+        pin: u8,
+        before: bool,
+        after: bool,
+        line_source: Option<u8>,
+    ) -> bool {
+        self.gpio_edge_with_source(port, pin, before, after, line_source)
     }
 
     fn as_any(&self) -> Option<&dyn Any> {
@@ -702,6 +741,148 @@ mod tests {
             0x4,
             "SWIER line 0 cleared with PR"
         );
+    }
+}
+
+// ── External GPIO edges through the F1 AFIO / F4 SYSCFG line-source mux ─────
+#[cfg(test)]
+mod external_mux {
+    use super::{Exti, ExtiRegisterLayout};
+    use crate::bus::SystemBus;
+    use crate::peripherals::gpio::{GpioPort, GpioRegisterLayout};
+    use crate::{Bus, Peripheral};
+
+    #[test]
+    fn f1_layout_counts_only_the_selected_port_and_polarity() {
+        let mut e = Exti::new_with_layout_lines(ExtiRegisterLayout::Stm32F1, 0x7FFFF);
+        e.write_u32(0x00, 1 << 3).unwrap(); // IMR line 3
+        e.write_u32(0x08, 1 << 3).unwrap(); // RTSR line 3 (rising only)
+                                            // No mux on the bus, or another port selected: nothing.
+        assert!(!e.gpio_edge_with_source(2, 3, false, true, None));
+        assert!(!e.gpio_edge_with_source(2, 3, false, true, Some(0)));
+        // Falling edge on a rising-only line: nothing.
+        assert!(!e.gpio_edge_with_source(2, 3, true, false, Some(2)));
+        assert_eq!(e.read_u32(0x14).unwrap(), 0);
+        assert!(e.gpio_edge_with_source(2, 3, false, true, Some(2)));
+        assert_eq!(e.read_u32(0x14).unwrap(), 1 << 3);
+        assert_eq!(e.tick().explicit_irqs, Some(vec![9]), "EXTI3 -> IRQ 9");
+        e.write_u32(0x14, 1 << 3).unwrap(); // rc_w1
+        assert_eq!(e.tick().explicit_irqs, None);
+    }
+
+    #[test]
+    fn pending_is_set_while_masked_and_fires_once_unmasked() {
+        // IMR gates the interrupt, not PR (RM0008 §10.2.5).
+        let mut e = Exti::new_with_layout(ExtiRegisterLayout::Stm32F1);
+        e.write_u32(0x0C, 1 << 12).unwrap(); // FTSR line 12
+        assert!(e.gpio_edge_with_source(1, 12, true, false, Some(1)));
+        assert_eq!(e.read_u32(0x14).unwrap(), 1 << 12);
+        assert_eq!(e.tick().explicit_irqs, None);
+        e.write_u32(0x00, 1 << 12).unwrap();
+        assert_eq!(e.tick().explicit_irqs, Some(vec![40]), "EXTI15_10");
+    }
+
+    #[test]
+    fn g0_ignores_an_external_line_source() {
+        let mut e = Exti::new_with_layout(ExtiRegisterLayout::Stm32G0);
+        e.write_u32(0x00, 1).unwrap(); // RTSR line 0, EXTICR1 = port A
+        assert!(!e.gpio_edge_with_source(1, 0, false, true, Some(1)));
+        assert!(e.gpio_edge_with_source(0, 0, false, true, Some(1)));
+    }
+
+    /// GPIOA/GPIOB, the line-source mux and EXTI on one bus, as a chip yaml
+    /// wires them.
+    fn bus_with(mux_name: &str, mux_base: u64, mux: Box<dyn Peripheral>, v2: bool) -> SystemBus {
+        let layout = if v2 {
+            GpioRegisterLayout::Stm32V2
+        } else {
+            GpioRegisterLayout::Stm32F1
+        };
+        let mut bus = SystemBus::empty();
+        bus.add_peripheral(
+            "gpioa",
+            0x5000_0000,
+            1024,
+            None,
+            Box::new(GpioPort::new_with_layout(layout)),
+        );
+        bus.add_peripheral(
+            "gpiob",
+            0x5000_0400,
+            1024,
+            None,
+            Box::new(GpioPort::new_with_layout(layout)),
+        );
+        bus.add_peripheral(mux_name, mux_base, 1024, None, mux);
+        bus.add_peripheral(
+            "exti",
+            0x4001_0400,
+            1024,
+            None,
+            Box::new(Exti::new_with_layout(ExtiRegisterLayout::Stm32F1)),
+        );
+        bus
+    }
+
+    /// Both edges on line 1, port B selected through the mux at `exticr1`;
+    /// count PR sets from external input changes on PA1 and PB1.
+    fn edges_reach_exti_through(mut bus: SystemBus, exticr1: u64) {
+        const EXTI: u64 = 0x4001_0400;
+        bus.write_u32(exticr1, 1 << 4).unwrap(); // line 1 -> port B
+        bus.write_u32(EXTI + 0x08, 1 << 1).unwrap(); // RTSR
+        bus.write_u32(EXTI + 0x0C, 1 << 1).unwrap(); // FTSR
+        bus.write_u32(EXTI, 1 << 1).unwrap(); // IMR
+        let pr = |bus: &SystemBus| bus.read_u32(EXTI + 0x14).unwrap();
+        // Port A is not selected.
+        bus.set_peripheral_gpio_input(0, 1, true);
+        bus.set_peripheral_gpio_input(0, 1, false);
+        assert_eq!(pr(&bus), 0);
+        // Port B rising, then falling: each sets PR and raises EXTI1 (IRQ 7).
+        bus.set_peripheral_gpio_input(1, 1, true);
+        assert_eq!(pr(&bus), 1 << 1);
+        assert_eq!(bus.tick_peripherals_fully_forced().0, vec![7]);
+        bus.write_u32(EXTI + 0x14, 1 << 1).unwrap();
+        // The same level again is no edge.
+        bus.set_peripheral_gpio_input(1, 1, true);
+        assert_eq!(pr(&bus), 0);
+        bus.set_peripheral_gpio_input(1, 1, false);
+        assert_eq!(pr(&bus), 1 << 1);
+    }
+
+    #[test]
+    fn f1_afio_exticr_routes_external_edges_to_exti() {
+        let bus = bus_with(
+            "afio",
+            0x4001_0000,
+            Box::new(crate::peripherals::afio::Afio::new()),
+            false,
+        );
+        edges_reach_exti_through(bus, 0x4001_0008);
+    }
+
+    #[test]
+    fn f4_syscfg_exticr_routes_external_edges_to_exti() {
+        let bus = bus_with(
+            "syscfg",
+            0x4001_3800,
+            Box::new(crate::peripherals::syscfg::Stm32F4Syscfg::new()),
+            true,
+        );
+        edges_reach_exti_through(bus, 0x4001_3808);
+    }
+
+    #[test]
+    fn without_a_mux_on_the_bus_the_f1_exti_stays_quiet() {
+        let bus = bus_with(
+            "stub",
+            0x4001_3800,
+            Box::new(crate::peripherals::stub::StubPeripheral::new(0)),
+            true,
+        );
+        let mut bus = bus;
+        bus.write_u32(0x4001_0408, 1).unwrap(); // RTSR line 0
+        bus.set_peripheral_gpio_input(0, 0, true);
+        assert_eq!(bus.read_u32(0x4001_0414).unwrap(), 0);
     }
 }
 

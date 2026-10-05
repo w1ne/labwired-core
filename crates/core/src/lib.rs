@@ -896,8 +896,30 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// Observe an externally driven GPIO pad transition with its explicit
     /// previous and current levels. Return true if work was latched that needs
     /// a scheduler wake. Default no-op; STM32 EXTI uses the port mux here.
-    fn gpio_input_edge(&mut self, _port: u8, _pin: u8, _before: bool, _after: bool) -> bool {
+    ///
+    /// `line_source` is the port the chip's EXTI line-source mux selects for
+    /// line `pin` when that mux lives OUTSIDE the EXTI block (AFIO_EXTICRx on
+    /// STM32F1, SYSCFG_EXTICRx on STM32F4), as answered by
+    /// [`exti_line_source`](Self::exti_line_source); `None` when no
+    /// peripheral on the bus owns one. An EXTI with its own mux (G0, U5)
+    /// ignores it.
+    fn gpio_input_edge(
+        &mut self,
+        _port: u8,
+        _pin: u8,
+        _before: bool,
+        _after: bool,
+        _line_source: Option<u8>,
+    ) -> bool {
         false
+    }
+
+    /// EXTI line-source mux: the GPIO port index (0 = A) this peripheral
+    /// routes to EXTI line `line` (0..15), for a mux that sits outside the
+    /// EXTI block (STM32F1 AFIO_EXTICRx, STM32F4 SYSCFG_EXTICRx). `None` for
+    /// every peripheral that is not such a mux.
+    fn exti_line_source(&self, _line: u8) -> Option<u8> {
+        None
     }
 
     /// Cross-peripheral GPIO change hook: bus snapshots GPIO IN registers

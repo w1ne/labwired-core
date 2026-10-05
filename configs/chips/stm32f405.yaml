@@ -183,6 +183,17 @@ peripherals:
   # implements 23 lines (0..22): 16 GPIO + PVD + RTC alarm + USB OTG FS wakeup
   # + RTC tamper/timestamp + RTC wakeup. Sits on APB2 but has no RCC enable bit
   # of its own — the SYSCFG clock gates the line *muxing*, not the EXTI block.
+  # SYSCFG (RM0090 §9 / RM0368 §7): EXTICR1..4 select the GPIO port of each
+  # EXTI line 0..15, so external edges reach EXTI only from the selected port.
+  # Clocked from RCC_APB2ENR.SYSCFGEN (bit 14).
+  - id: "syscfg"
+    type: "syscfg"
+    base_address: 0x40013800
+    size: "1KB"
+    clock: { reg: "apb2enr", bit: 14 }
+    config:
+      debug_schema: "../peripherals/stm32f405/syscfg.yaml"
+      profile: "stm32f4"
   - id: "exti"
     type: "exti"
     base_address: 0x4001_3C00

@@ -173,10 +173,23 @@ impl SystemBus {
         let after = p.dev.read_gpio_input(pin);
         if let (Some(port), Some(before), Some(after)) = (port, before, after) {
             if ok && before != after {
+                // The F1/F4 EXTI takes its port select from AFIO / SYSCFG;
+                // asked once per edge, only for pads EXTI can see.
+                let line_source = if pin < 16 {
+                    self.peripherals
+                        .iter()
+                        .find_map(|p| p.dev.exti_line_source(pin))
+                } else {
+                    None
+                };
                 for exti_idx in 0..self.peripherals.len() {
-                    let pending = self.peripherals[exti_idx]
-                        .dev
-                        .gpio_input_edge(port, pin, before, after);
+                    let pending = self.peripherals[exti_idx].dev.gpio_input_edge(
+                        port,
+                        pin,
+                        before,
+                        after,
+                        line_source,
+                    );
                     if pending {
                         self.collect_scheduled_events(exti_idx);
                     }
