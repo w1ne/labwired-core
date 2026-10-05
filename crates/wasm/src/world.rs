@@ -309,11 +309,9 @@ impl WasmWorld {
     }
 
     pub fn step_batch(&mut self, rounds: u32) -> Result<u32, JsValue> {
-        for _ in 0..rounds {
-            for (id, result) in self.world.step_all() {
-                result
-                    .map_err(|error| JsValue::from_str(&format!("node '{id}' step: {error:?}")))?;
-            }
+        // `rounds` world steps; a GPIO-net world runs them in one go.
+        for (id, result) in self.world.step_rounds(u64::from(rounds)) {
+            result.map_err(|error| JsValue::from_str(&format!("node '{id}' step: {error:?}")))?;
         }
         Ok(rounds)
     }

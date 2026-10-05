@@ -440,6 +440,80 @@ mod gpio_net_world {
         assert_eq!(text(&s.1), AVR_LINE);
     }
 
+    /// How a test drives a GPIO-net world to a time.
+    #[derive(Debug, Clone, Copy)]
+    enum Drive {
+        /// `step_all` round by round on the per-node scheduler (the default).
+        Rounds,
+        /// `step_all` on the lockstep round driver the per-node scheduler
+        /// replaced (still the one a world with a timed UART network uses).
+        Lockstep,
+        /// One `run_until_ps` call: each node in as few pieces as the nets'
+        /// latency allows.
+        RunUntil,
+        /// `step_rounds` (what the browser's `step_batch` calls), 997
+        /// rounds at a time.
+        StepRounds,
+    }
+
+    /// The per-node scheduler against the lockstep round driver it replaced,
+    /// stepped round by round and run in one call: the same run, stopped part
+    /// way through (the AVR is in its irq pulses, deliveries are in flight)
+    /// and at the end, must leave every counter, transcript, applied
+    /// delivery, net and node cycle count identical.
+    #[test]
+    fn the_per_node_scheduler_matches_the_lockstep_rounds() {
+        let run = |drive: Drive, round_ps: Option<u64>, stops: &[u64]| {
+            let (mut w, s) = build("env.yaml", |s| s);
+            w.set_gpio_lockstep(matches!(drive, Drive::Lockstep));
+            if let Some(r) = round_ps {
+                w.set_gpio_round_ps(r).unwrap();
+            }
+            let mut seen = Vec::new();
+            for &ps in stops {
+                match drive {
+                    Drive::RunUntil => {
+                        for (id, r) in w.run_until_ps(ps).unwrap() {
+                            r.unwrap_or_else(|e| panic!("node {id}: {e:?}"));
+                        }
+                    }
+                    Drive::StepRounds => {
+                        while w.round_now_ps().unwrap() < ps {
+                            let left = (ps - w.round_now_ps().unwrap()).div_ceil(100_000);
+                            for (id, r) in w.step_rounds(left.min(997)) {
+                                r.unwrap_or_else(|e| panic!("node {id}: {e:?}"));
+                            }
+                        }
+                    }
+                    Drive::Rounds | Drive::Lockstep => {
+                        while w.round_now_ps().unwrap() < ps {
+                            for (id, r) in w.step_all() {
+                                r.unwrap_or_else(|e| panic!("node {id}: {e:?}"));
+                            }
+                        }
+                    }
+                }
+                let cycles: Vec<u64> = ["avr", "stm"]
+                    .iter()
+                    .map(|id| w.machines[*id].total_cycles())
+                    .collect();
+                seen.push((fingerprint(&w, "stm", &s), cycles, w.round_now_ps()));
+            }
+            seen
+        };
+        let stops = [1_200_000_000u64, 30_000_000_000];
+        let rounds = run(Drive::Rounds, None, &stops);
+        assert!(!rounds[0].0.applied.is_empty() && rounds[0].0.nets[0].1 < 20);
+        assert_eq!(run(Drive::Lockstep, None, &stops), rounds, "lockstep");
+        assert_eq!(
+            run(Drive::Lockstep, Some(50_000), &stops),
+            rounds,
+            "lockstep, 50 ns rounds"
+        );
+        assert_eq!(run(Drive::RunUntil, None, &stops), rounds, "run_until_ps");
+        assert_eq!(run(Drive::StepRounds, None, &stops), rounds, "step_rounds");
+    }
+
     #[test]
     fn both_boards_driving_one_push_pull_wire_reports_contention() {
         let (mut world, _s) = build("env-contention.yaml", |s| s);
@@ -501,6 +575,56 @@ mod gpio_net_world {
             .find(|r| r.name == "ready")
             .unwrap();
         assert_eq!(ready.floating_events, 0);
+    }
+
+    /// Wall time of the example world against each machine run alone for the
+    /// same simulated time. Timing only, so ignored by default:
+    /// `cargo test --release -p labwired-core --test world_multichip -- --ignored --nocapture gpio_net_speed`.
+    #[test]
+    #[ignore]
+    fn gpio_net_speed() {
+        let ms: u64 = std::env::var("GPIO_NET_BENCH_MS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(30);
+        let reps: usize = std::env::var("GPIO_NET_BENCH_REPS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(3);
+        for _ in 0..reps {
+            let (mut world, _s) = build("env.yaml", |s| s);
+            let t = std::time::Instant::now();
+            run_ms(&mut world, ms);
+            let world_s = t.elapsed().as_secs_f64();
+            let (mut world, _s) = build("env.yaml", |s| s);
+            let t = std::time::Instant::now();
+            for (id, r) in world.run_until_ps(ms * 1_000_000_000).unwrap() {
+                r.unwrap_or_else(|e| panic!("node {id}: {e:?}"));
+            }
+            let until_s = t.elapsed().as_secs_f64();
+            let mut alone = Vec::new();
+            for id in ["stm", "avr"] {
+                let yaml = std::fs::read_to_string(example().join("env.yaml")).unwrap();
+                let mut manifest: EnvironmentManifest = serde_yaml::from_str(&yaml).unwrap();
+                manifest.interconnects.clear();
+                manifest.nodes.retain(|n| n.id == id);
+                let mut w = World::from_manifest(manifest, &example()).expect("world");
+                let hz = w.node_hz(id).unwrap();
+                let m = w.machines.get_mut(id).unwrap();
+                let t = std::time::Instant::now();
+                m.advance_to_cycle(hz / 1000 * ms).unwrap();
+                alone.push((id, t.elapsed().as_secs_f64()));
+            }
+            let sum: f64 = alone.iter().map(|(_, s)| s).sum();
+            println!(
+                "gpio_net_speed {ms} ms: step_all {world_s:.3} s ({:.2}x), run_until_ps {until_s:.3} s ({:.2}x), \
+                 alone stm {:.3} s + avr {:.3} s = {sum:.3} s",
+                world_s / sum,
+                until_s / sum,
+                alone[0].1,
+                alone[1].1
+            );
+        }
     }
 
     fn build_err(env_file: &str, rewrite: impl Fn(String) -> String) -> String {
