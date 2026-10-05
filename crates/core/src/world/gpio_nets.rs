@@ -93,6 +93,8 @@ fn own_of(state: Option<PadState>) -> Own {
     match state {
         Some(PadState::Low) => Own::Low,
         Some(PadState::High) => Own::High,
+        Some(PadState::WeakHigh) => Own::PullUp,
+        Some(PadState::WeakLow) => Own::PullDown,
         _ => Own::Z,
     }
 }

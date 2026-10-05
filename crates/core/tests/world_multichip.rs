@@ -547,3 +547,143 @@ mod gpio_net_world {
         );
     }
 }
+
+// STM32F1 / F4 EXTI on a net, and a chip's internal pull-up as the only pull
+// on a wire (`examples/gpio-net-f1-f4`).
+mod gpio_net_f1_f4 {
+    //! An STM32F103, an STM32F401 and an ATmega328P. The AVR puts 10 pulses
+    //! on `irq`; the F103 counts them with EXTI0 (AFIO_EXTICR1 = port B) and
+    //! the F401 with EXTI1 (SYSCFG_EXTICR1 = port C), rising and falling
+    //! separately. `alert` and `wake` have no `pull`: the F401's PUPDR
+    //! pull-up holds `alert` high while the AVR pulls it low 3 times (the F401
+    //! counts them on EXTI8), and the AVR's own pull-up (PORTD5 with DDRD5
+    //! clear) holds `wake` high while the F103 pulls it low 4 times (the AVR
+    //! polls them). Every count is the firmware's loop count.
+
+    use labwired_config::EnvironmentManifest;
+    use labwired_core::network::gpio_net::{
+        Own, GPIO_NET_CONTENTION, GPIO_NET_FLOATING, GPIO_NET_PULL_CONFLICT,
+    };
+    use labwired_core::world::World;
+    use std::path::PathBuf;
+    use std::sync::{Arc, Mutex};
+
+    fn example() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples/gpio-net-f1-f4")
+    }
+
+    fn build(rewrite: impl Fn(String) -> String) -> (World, Arc<Mutex<Vec<u8>>>) {
+        let yaml = rewrite(std::fs::read_to_string(example().join("env.yaml")).unwrap());
+        let manifest: EnvironmentManifest = serde_yaml::from_str(&yaml).unwrap();
+        let mut world = World::from_manifest(manifest, &example()).expect("world");
+        let avr = Arc::new(Mutex::new(Vec::new()));
+        world
+            .machines
+            .get_mut("avr")
+            .unwrap()
+            .attach_uart_tx_sink(avr.clone(), false)
+            .unwrap();
+        (world, avr)
+    }
+
+    fn run_ms(world: &mut World, ms: u64) {
+        let end = ms * 1_000_000_000;
+        let mut calls = 0u64;
+        while world.round_now_ps().unwrap() < end {
+            for (id, r) in world.step_all() {
+                r.unwrap_or_else(|e| panic!("node {id}: {e:?}"));
+            }
+            calls += 1;
+            assert!(calls < 50_000_000, "runaway");
+        }
+    }
+
+    fn ram(world: &World, id: &str, words: usize) -> Vec<u32> {
+        let b = world.machines[id]
+            .read_memory(0x2000_0100, words * 4)
+            .unwrap();
+        b.chunks(4)
+            .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+            .collect()
+    }
+
+    #[test]
+    fn f1_and_f4_exti_count_a_peers_edges_and_an_internal_pull_up_holds_the_wire() {
+        let (mut world, avr) = build(|s| s);
+        run_ms(&mut world, 20);
+
+        // F103: 10 rising + 10 falling irq edges through AFIO; wake done.
+        assert_eq!(ram(&world, "f1", 3), vec![10, 10, 1], "F103 EXTI0");
+        // F401: 10 + 10 irq edges through SYSCFG, 3 + 3 alert edges.
+        assert_eq!(ram(&world, "f4", 4), vec![10, 10, 3, 3], "F401 EXTI1/EXTI8");
+        // The AVR saw the F103's 4 pulses on a wire only its pull-up lifts.
+        assert_eq!(
+            String::from_utf8_lossy(&avr.lock().unwrap()),
+            "AVR wake f=4 r=4\n"
+        );
+
+        let reports = world.gpio_net_reports();
+        let by = |n: &str| reports.iter().find(|r| r.name == n).unwrap();
+        assert_eq!(by("irq").edges, 20);
+        // alert and wake float until the firmware turns the pull-up on, rise
+        // once when it does, then carry 3 and 4 pulses.
+        assert_eq!(by("alert").edges, 1 + 6);
+        assert_eq!(by("wake").edges, 1 + 8);
+        for n in ["alert", "wake"] {
+            let r = by(n);
+            assert!(r.level, "{n} rests high on the internal pull-up");
+            assert_eq!(
+                r.floating_events, 1,
+                "{n}: floating only before the pull-up"
+            );
+            let d = r
+                .diagnostics
+                .iter()
+                .find(|d| d.code == GPIO_NET_FLOATING)
+                .unwrap();
+            assert_eq!(d.t_ps, 0);
+            assert!(d.end_ps.is_some(), "{n}: the pull-up ends the float");
+        }
+        for r in &reports {
+            assert_eq!(r.contention_events, 0, "{}", r.name);
+            assert_eq!(r.pull_conflict_events, 0, "{}", r.name);
+            assert!(r.diagnostics.iter().all(|d| d.code != GPIO_NET_CONTENTION));
+        }
+        let drive = |net: &str, node: &str| {
+            by(net)
+                .members
+                .iter()
+                .find(|m| m.node == node)
+                .unwrap()
+                .drive
+        };
+        assert_eq!(drive("alert", "f4"), Own::PullUp);
+        assert_eq!(drive("alert", "avr"), Own::Z);
+        assert_eq!(drive("wake", "avr"), Own::PullUp);
+        assert_eq!(drive("wake", "f1"), Own::Z, "released open-drain");
+    }
+
+    #[test]
+    fn an_internal_pull_up_against_the_nets_pull_down_is_a_pull_conflict() {
+        let (mut world, _avr) =
+            build(|s| s.replace("      name: wake\n", "      name: wake\n      pull: down\n"));
+        run_ms(&mut world, 2);
+        let wake = world
+            .gpio_net_reports()
+            .into_iter()
+            .find(|r| r.name == "wake")
+            .unwrap();
+        assert_eq!(wake.pull, "down");
+        assert_eq!(wake.pull_conflict_events, 1, "{wake:#?}");
+        let d = wake
+            .diagnostics
+            .iter()
+            .find(|d| d.code == GPIO_NET_PULL_CONFLICT)
+            .unwrap();
+        assert!(d.end_ps.is_none(), "the divider lasts");
+        // The board resistor decides: the wire reads low and never rose.
+        assert!(!wake.level);
+        assert_eq!(wake.edges, 0);
+        assert_eq!(wake.floating_events, 0);
+    }
+}

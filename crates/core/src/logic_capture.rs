@@ -106,12 +106,23 @@ pub enum PadDrive {
     /// Two drivers disagree: the MCU drives one level while an external
     /// device holds the other.
     Contention,
+    /// Nothing drives it but the chip's own internal pull-up: a weak 1 that
+    /// any driver overrides. Reported only for pads on a world `gpio_net`
+    /// (see [`crate::Peripheral::set_gpio_net_isolated`]), where the pull
+    /// takes part in the wire's resolution; every other pad keeps reporting
+    /// [`HighZ`](Self::HighZ) for an undriven input, pulled or not.
+    PullUp,
+    /// As [`PullUp`](Self::PullUp), for an internal pull-down: a weak 0.
+    PullDown,
 }
 
-/// The four-state pad value a pin trace records: `0`, `1`, `z`, `x`.
+/// The four-state pad value a pin trace records: `0`, `1`, `z`, `x`, plus
+/// the two weak levels `h` and `l` (IEEE 1164 `H`/`L`).
 ///
 /// Serialized as the one-character string sigrok/VCD use, so a trace reads
-/// the same in `result.json`, the browser and PulseView.
+/// the same in `result.json`, the browser and PulseView. `h` and `l` appear
+/// only on pads that belong to a world `gpio_net` (see [`PadDrive::PullUp`]),
+/// where a chip's internal pull is part of the wire.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum PadState {
     #[serde(rename = "0")]
@@ -122,6 +133,12 @@ pub enum PadState {
     HighZ,
     #[serde(rename = "x")]
     Contention,
+    /// Pulled up by the chip's own internal resistor, nothing driving.
+    #[serde(rename = "h")]
+    WeakHigh,
+    /// Pulled down by the chip's own internal resistor, nothing driving.
+    #[serde(rename = "l")]
+    WeakLow,
 }
 
 impl PadState {
@@ -131,17 +148,21 @@ impl PadState {
         match drive {
             PadDrive::HighZ => Some(Self::HighZ),
             PadDrive::Contention => Some(Self::Contention),
+            PadDrive::PullUp => Some(Self::WeakHigh),
+            PadDrive::PullDown => Some(Self::WeakLow),
             PadDrive::Driven => level.map(|high| if high { Self::High } else { Self::Low }),
         }
     }
 
-    /// `'0'`, `'1'`, `'z'` or `'x'`.
+    /// `'0'`, `'1'`, `'z'`, `'x'`, `'h'` or `'l'`.
     pub fn as_char(self) -> char {
         match self {
             Self::Low => '0',
             Self::High => '1',
             Self::HighZ => 'z',
             Self::Contention => 'x',
+            Self::WeakHigh => 'h',
+            Self::WeakLow => 'l',
         }
     }
 }

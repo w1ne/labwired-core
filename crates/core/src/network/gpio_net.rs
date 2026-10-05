@@ -14,11 +14,18 @@
 //! cycle. Keeping the resolution pure is what makes it testable on its own
 //! and independent of node order and round size.
 //!
-//! Resolution, for the drives present at one instant:
+//! Resolution, for the drives present at one instant. Every member is
+//! released (`Z`), driving 0 or 1 (strong), or held by its own internal
+//! pull-up or pull-down (weak); the net's `pull` is one more weak source:
 //!
 //! * any member driving 0 -> 0, else any member driving 1 -> 1;
-//! * else the net's pull;
-//! * else the net floats: it reads 0 and is flagged.
+//! * else the weak sources (members' internal pulls and the net's `pull`):
+//!   all up -> 1, all down -> 0;
+//! * up and down together is a resistor divider, a pull conflict: it is
+//!   reported, and the wire takes the net's own `pull` (the board resistor,
+//!   normally far stronger than a chip's 30-50 kOhm internal one) or, when
+//!   the net has none, 0 (like contention);
+//! * no driver and no pull -> the net floats: it reads 0 and is flagged.
 //!
 //! Members driving 0 and 1 together are in contention: the net resolves to 0
 //! (a low-side driver usually wins on silicon) and the fight is reported,
@@ -27,14 +34,20 @@
 use labwired_config::GpioNetPull;
 use serde::Serialize;
 
-/// What one member's own output stage does to the wire.
+/// What one member's own pad does to the wire.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Own {
-    /// Released (input, open-drain high): drives nothing.
+    /// Released (input, open-drain high) with no internal pull: drives nothing.
     Z,
+    /// Output stage driving 0 (strong).
     Low,
+    /// Output stage driving 1 (strong).
     High,
+    /// Released, with the chip's internal pull-up on: a weak 1.
+    PullUp,
+    /// Released, with the chip's internal pull-down on: a weak 0.
+    PullDown,
 }
 
 /// A level change the wire carries to every member at `t_ps`.
@@ -48,11 +61,14 @@ pub struct Delivery {
 pub const GPIO_NET_CONTENTION: &str = "GPIO_NET_CONTENTION";
 /// Diagnostic code for a net nothing drives and nothing pulls.
 pub const GPIO_NET_FLOATING: &str = "GPIO_NET_FLOATING";
+/// Diagnostic code for weak pulls to opposite rails with nothing driving
+/// (a resistor divider: the wire sits between the rails).
+pub const GPIO_NET_PULL_CONFLICT: &str = "GPIO_NET_PULL_CONFLICT";
 
 /// One diagnostic on a net, on the net's own timeline.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct NetDiagnostic {
-    /// `GPIO_NET_CONTENTION` or `GPIO_NET_FLOATING`.
+    /// `GPIO_NET_CONTENTION`, `GPIO_NET_FLOATING` or `GPIO_NET_PULL_CONFLICT`.
     pub code: &'static str,
     /// World time the condition began, ps.
     pub t_ps: u64,
@@ -101,6 +117,7 @@ pub struct GpioNetReport {
     pub edges: u64,
     pub contention_events: u64,
     pub floating_events: u64,
+    pub pull_conflict_events: u64,
     pub members: Vec<NetMemberReport>,
     pub diagnostics: Vec<NetDiagnostic>,
 }
@@ -123,12 +140,14 @@ pub struct GpioNet {
     level: bool,
     contention: bool,
     floating: bool,
+    pull_conflict: bool,
     deliveries: Vec<Delivery>,
     /// Deliveries dropped from the front of `deliveries` (all members past).
     base: usize,
     edges: u64,
     contention_events: u64,
     floating_events: u64,
+    pull_conflict_events: u64,
     diagnostics: Vec<NetDiagnostic>,
 }
 
@@ -157,11 +176,13 @@ impl GpioNet {
             level: false,
             contention: false,
             floating: false,
+            pull_conflict: false,
             deliveries: Vec::new(),
             base: 0,
             edges: 0,
             contention_events: 0,
             floating_events: 0,
+            pull_conflict_events: 0,
             diagnostics: Vec::new(),
         }
     }
@@ -175,54 +196,59 @@ impl GpioNet {
         self.level
     }
 
-    /// The resolution rule, on its own.
+    /// The resolution rule, on its own (see the module docs).
     pub fn resolve(drives: impl Iterator<Item = Own>, pull: GpioNetPull) -> Resolved {
-        let (mut low, mut high) = (false, false);
+        let (mut low, mut high, mut up, mut down) = (false, false, false, false);
         for d in drives {
             match d {
                 Own::Low => low = true,
                 Own::High => high = true,
+                Own::PullUp => up = true,
+                Own::PullDown => down = true,
                 Own::Z => {}
             }
         }
-        match (low, high) {
-            (true, true) => Resolved {
-                level: false,
-                contention: true,
-                floating: false,
-            },
+        let quiet = Resolved {
+            level: false,
+            contention: false,
+            floating: false,
+            pull_conflict: false,
+        };
+        if low || high {
+            // A strong driver: weak pulls do not matter.
+            return Resolved {
+                level: !low,
+                contention: low && high,
+                ..quiet
+            };
+        }
+        match pull {
+            GpioNetPull::Up => up = true,
+            GpioNetPull::Down => down = true,
+            GpioNetPull::None => {}
+        }
+        match (up, down) {
             (true, false) => Resolved {
-                level: false,
-                contention: false,
-                floating: false,
-            },
-            (false, true) => Resolved {
                 level: true,
-                contention: false,
-                floating: false,
+                ..quiet
             },
-            (false, false) => match pull {
-                GpioNetPull::Up => Resolved {
-                    level: true,
-                    contention: false,
-                    floating: false,
-                },
-                GpioNetPull::Down => Resolved {
-                    level: false,
-                    contention: false,
-                    floating: false,
-                },
-                GpioNetPull::None => Resolved {
-                    level: false,
-                    contention: false,
-                    floating: true,
-                },
+            (false, true) => quiet,
+            // A divider: the board's own resistor wins, else read 0.
+            (true, true) => Resolved {
+                level: matches!(pull, GpioNetPull::Up),
+                pull_conflict: true,
+                ..quiet
+            },
+            (false, false) => Resolved {
+                floating: true,
+                ..quiet
             },
         }
     }
 
     /// Set every member's drive at time 0 (before any change) and return the
-    /// level the wire starts at. Records a floating net from the start.
+    /// level the wire starts at. A net that starts floating, fighting or
+    /// with conflicting pulls is recorded from time 0.
     pub fn init(&mut self, initial: &[Own]) -> bool {
         for (m, o) in self.members.iter_mut().zip(initial) {
             m.own = *o;
@@ -231,17 +257,51 @@ impl GpioNet {
         self.level = r.level;
         self.contention = r.contention;
         self.floating = r.floating;
-        if r.floating {
-            self.floating_events += 1;
-            let members = self.snapshot(0);
-            self.diagnostics.push(NetDiagnostic {
-                code: GPIO_NET_FLOATING,
-                t_ps: 0,
+        self.pull_conflict = r.pull_conflict;
+        for (on, code) in [
+            (r.contention, GPIO_NET_CONTENTION),
+            (r.floating, GPIO_NET_FLOATING),
+            (r.pull_conflict, GPIO_NET_PULL_CONFLICT),
+        ] {
+            if on {
+                *self.counter(code) += 1;
+                let members = self.snapshot(0);
+                self.push_diag(NetDiagnostic {
+                    code,
+                    t_ps: 0,
+                    end_ps: None,
+                    members,
+                });
+            }
+        }
+        self.level
+    }
+
+    fn counter(&mut self, code: &str) -> &mut u64 {
+        match code {
+            GPIO_NET_CONTENTION => &mut self.contention_events,
+            GPIO_NET_FLOATING => &mut self.floating_events,
+            _ => &mut self.pull_conflict_events,
+        }
+    }
+
+    /// Open or close the diagnostic `code` when its condition changes.
+    fn track(&mut self, code: &'static str, was: bool, now: bool, t_ps: u64) {
+        if was == now {
+            return;
+        }
+        if now {
+            *self.counter(code) += 1;
+            let members = self.snapshot(t_ps);
+            self.push_diag(NetDiagnostic {
+                code,
+                t_ps,
                 end_ps: None,
                 members,
             });
+        } else {
+            self.close_diag(code, t_ps);
         }
-        self.level
     }
 
     fn snapshot(&self, t_ps: u64) -> Vec<MemberDrive> {
@@ -266,36 +326,17 @@ impl GpioNet {
             self.members[i].own = own;
         }
         let r = Self::resolve(self.members.iter().map(|m| m.own), self.pull);
-        if r.contention != self.contention {
-            if r.contention {
-                self.contention_events += 1;
-                let members = self.snapshot(t_ps);
-                self.push_diag(NetDiagnostic {
-                    code: GPIO_NET_CONTENTION,
-                    t_ps,
-                    end_ps: None,
-                    members,
-                });
-            } else {
-                self.close_diag(GPIO_NET_CONTENTION, t_ps);
-            }
-            self.contention = r.contention;
-        }
-        if r.floating != self.floating {
-            if r.floating {
-                self.floating_events += 1;
-                let members = self.snapshot(t_ps);
-                self.push_diag(NetDiagnostic {
-                    code: GPIO_NET_FLOATING,
-                    t_ps,
-                    end_ps: None,
-                    members,
-                });
-            } else {
-                self.close_diag(GPIO_NET_FLOATING, t_ps);
-            }
-            self.floating = r.floating;
-        }
+        self.track(GPIO_NET_CONTENTION, self.contention, r.contention, t_ps);
+        self.contention = r.contention;
+        self.track(GPIO_NET_FLOATING, self.floating, r.floating, t_ps);
+        self.floating = r.floating;
+        self.track(
+            GPIO_NET_PULL_CONFLICT,
+            self.pull_conflict,
+            r.pull_conflict,
+            t_ps,
+        );
+        self.pull_conflict = r.pull_conflict;
         if r.level != self.level {
             self.level = r.level;
             self.edges += 1;
@@ -353,6 +394,7 @@ impl GpioNet {
             edges: self.edges,
             contention_events: self.contention_events,
             floating_events: self.floating_events,
+            pull_conflict_events: self.pull_conflict_events,
             members: self
                 .members
                 .iter()
@@ -374,6 +416,8 @@ pub struct Resolved {
     pub level: bool,
     pub contention: bool,
     pub floating: bool,
+    /// Weak pulls to both rails and no driver.
+    pub pull_conflict: bool,
 }
 
 #[cfg(test)]
@@ -400,7 +444,8 @@ mod tests {
             Resolved {
                 level: false,
                 contention: true,
-                floating: false
+                floating: false,
+                pull_conflict: false,
             }
         );
         let r = GpioNet::resolve([Own::High, Own::Z].into_iter(), GpioNetPull::Down);
@@ -468,5 +513,89 @@ mod tests {
         n.init(&[Own::Z, Own::Z]);
         assert_eq!(n.report().floating_events, 1);
         assert!(!n.level());
+    }
+
+    #[test]
+    fn an_internal_pull_is_a_weak_level_any_driver_overrides() {
+        // The only pull on the net is a member's own pull-up.
+        let r = GpioNet::resolve([Own::PullUp, Own::Z].into_iter(), GpioNetPull::None);
+        assert!(r.level && !r.floating && !r.pull_conflict);
+        let r = GpioNet::resolve([Own::PullDown, Own::Z].into_iter(), GpioNetPull::None);
+        assert!(!r.level && !r.floating && !r.pull_conflict);
+        // A strong driver beats any pull, internal or external, silently.
+        let r = GpioNet::resolve([Own::PullUp, Own::Low].into_iter(), GpioNetPull::Up);
+        assert!(!r.level && !r.contention && !r.pull_conflict);
+        let r = GpioNet::resolve(
+            [Own::PullDown, Own::PullUp, Own::High].into_iter(),
+            GpioNetPull::Down,
+        );
+        assert!(r.level && !r.pull_conflict);
+        // Pulls that agree, internal and external, are just that level.
+        let r = GpioNet::resolve([Own::PullUp, Own::PullUp].into_iter(), GpioNetPull::Up);
+        assert!(r.level && !r.pull_conflict);
+    }
+
+    #[test]
+    fn opposite_pulls_are_a_conflict_the_board_resistor_decides() {
+        // Internal up vs the net's pull-down: the net's own resistor wins.
+        let r = GpioNet::resolve([Own::PullUp, Own::Z].into_iter(), GpioNetPull::Down);
+        assert_eq!(
+            r,
+            Resolved {
+                level: false,
+                contention: false,
+                floating: false,
+                pull_conflict: true,
+            }
+        );
+        let r = GpioNet::resolve([Own::PullDown, Own::Z].into_iter(), GpioNetPull::Up);
+        assert!(r.level && r.pull_conflict);
+        // Two chips pulling opposite ways and no net pull: read 0, flagged.
+        let r = GpioNet::resolve([Own::PullUp, Own::PullDown].into_iter(), GpioNetPull::None);
+        assert!(!r.level && r.pull_conflict && !r.floating);
+    }
+
+    #[test]
+    fn a_pull_conflict_is_reported_with_its_time() {
+        let mut n = net(GpioNetPull::None);
+        // a pulls up, b floats: the wire is high from the start.
+        assert!(n.init(&[Own::PullUp, Own::Z]));
+        n.apply(2_000_000, &[(1, Own::PullDown)]);
+        assert!(!n.level());
+        n.apply(3_000_000, &[(1, Own::Z)]);
+        assert!(n.level());
+        let rep = n.report();
+        assert_eq!(rep.pull_conflict_events, 1);
+        assert_eq!(rep.floating_events, 0);
+        let d = rep
+            .diagnostics
+            .iter()
+            .find(|d| d.code == GPIO_NET_PULL_CONFLICT)
+            .unwrap();
+        assert_eq!((d.t_ps, d.end_ps), (2_000_000, Some(3_000_000)));
+        assert_eq!(d.members[0].drive, Own::PullUp);
+        assert_eq!(d.members[1].drive, Own::PullDown);
+        assert_eq!(rep.members[0].drive, Own::PullUp);
+        // high at init, low at 2 us, high again at 3 us
+        assert_eq!(rep.edges, 2);
+    }
+
+    #[test]
+    fn enabling_an_internal_pull_ends_floating() {
+        let mut n = net(GpioNetPull::None);
+        assert!(!n.init(&[Own::Z, Own::Z]));
+        n.apply(1_000_000, &[(0, Own::PullUp)]);
+        assert!(n.level());
+        let d = n
+            .report()
+            .diagnostics
+            .into_iter()
+            .find(|d| d.code == GPIO_NET_FLOATING)
+            .unwrap();
+        assert_eq!(d.end_ps, Some(1_000_000));
+        assert_eq!(
+            n.next_due(0).map(|d| (d.t_ps, d.level)),
+            Some((1_100_000, true))
+        );
     }
 }

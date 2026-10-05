@@ -29,17 +29,33 @@ interconnects:
 | Key | Meaning |
 |-----|---------|
 | `members` | At least two pads on at least two nodes. `peripheral` is the node's GPIO peripheral id (`gpioa`, `portd`, ...). A pad can be on one net only; merge nets that share a pad. |
-| `pull` | The resistor to a rail. Used when no member drives the wire. |
+| `pull` | The board's resistor to a rail. A weak level, like a chip's internal pull (see below). |
 | `latency_ns` | Wire delay from a pad edge to every member seeing it. Default 100 ns. Zero is refused, and so is anything below one cycle of the slowest member. |
 
 ## What the net does
 
-For the drives present at one instant, each member being driving-0, driving-1
-or released:
+For the drives present at one instant, each member being driving-0 or
+driving-1 (strong), held by its own internal pull-up or pull-down (weak), or
+released with no pull:
 
 1. any member driving 0 gives 0, else any driving 1 gives 1;
-2. else the net's `pull`;
-3. else the net floats: it reads 0 and is flagged `GPIO_NET_FLOATING`.
+2. else the weak sources, which are the members' internal pulls and the net's
+   `pull`: all of them up gives 1, all down gives 0;
+3. weak pulls to both rails with nothing driving are a resistor divider. The
+   net reports `GPIO_NET_PULL_CONFLICT` (begin and end times, every member's
+   drive) and reads the net's own `pull` (the board resistor is normally much
+   stronger than a chip's 30-50 kOhm internal one). With no net `pull` it
+   reads 0, as contention does;
+4. else the net floats: it reads 0 and is flagged `GPIO_NET_FLOATING`.
+
+A chip's internal pull is therefore part of the net. An input with
+`PUPDR = 01` on an STM32, or an ATmega pad with `DDRx = 0` and `PORTx = 1`,
+holds a wire high with no `pull:` on the net
+(`examples/gpio-net-f1-f4`). Reports show it as the member's drive:
+`pull_up` / `pull_down` next to `z`, `low` and `high`. On the pad's own
+four-state trace a pulled net pad reads `h` / `l` (the IEEE 1164 weak levels).
+Pads that are not on a net keep reporting `z` for an undriven input, pulled or
+not.
 
 Members driving 0 and 1 together are in **contention**. The wire resolves to 0
 (a low-side driver usually wins) and the net reports `GPIO_NET_CONTENTION` with
@@ -85,16 +101,17 @@ level. Supported today:
 
 | GPIO model | Capture | Notes |
 |------------|---------|-------|
-| `GpioPort`, every register family (STM32 `v2` and `f1`, nRF52/54, Kinetis, EFR32 series 2, SAM, RA, i.MX RT) | push: the port reports its own edges, idle fast-forward stays on | exercised end to end on STM32 `v2` (G0B1). EXTI sees external GPIO edges on the G0 and U5 EXTI only; the F1/F4 EXTI model does not, so count edges there by polling. |
-| `avr_gpio` (ATmega328P `portb`/`portc`/`portd`) | **poll**: sampled at every cycle boundary | exact, but the machine runs one instruction at a time and does not fast-forward idle time while a pad is on a net |
+| `GpioPort`, every register family (STM32 `v2` and `f1`, nRF52/54, Kinetis, EFR32 series 2, SAM, RA, i.MX RT) | push: the port reports its own edges, idle fast-forward stays on | exercised end to end on STM32 `v2` (G0B1, F401) and `f1` (F103). The EXTI raises edge interrupts for net edges on G0 and U5 (port from `EXTI_EXTICRx`), F1 (port from `AFIO_EXTICRx`) and F4 (port from `SYSCFG_EXTICRx`). Internal pulls reported: STM32 `v2` `PUPDR`, STM32 `f1` input-with-pull (`CNF = 10`, `ODR` picks the rail), nRF52 `PIN_CNF.PULL`, EFR32 `INPUTPULL`, SAM `PINCFG.PULLEN`. Kinetis, RA and i.MX RT keep their pull outside the GPIO block, so their pulls are not on the net yet. |
+| `avr_gpio` (ATmega328P `portb`/`portc`/`portd`) | **poll**: sampled at every cycle boundary | exact, but the machine runs one instruction at a time and does not fast-forward idle time while a pad is on a net. An input with its `PORTx` bit set is a pull-up on the net. |
 
 Any other GPIO model (ESP32 family, RP2040 SIO) is refused when the world
 is built, naming the pad.
 
 Limits worth knowing:
 
-- A chip's **internal** pull-ups and pull-downs are not part of the net; put the
-  pull on the net (`pull:`), as the external resistor it is.
+- The ATmega328P port model does not see `MCUCR.PUD` (it is in the CPU's IO
+  space), so a pad with `PORTx = 1` counts as pulled up even when firmware
+  has set `PUD`.
 - A pad that firmware drives itself does not raise its own EXTI edge for its own
   transition (the STM32 EXTI model reacts to edges from outside). It does see
   the release when the wire rises after a peer let go.

@@ -51,5 +51,6 @@ The counts are the same (`the_demo_timing_counts_the_same_as_the_fast_one`).
 
 ## Limits
 
-The ATmega328P model has no pin-change interrupt yet, so the AVR polls. A chip's
-internal pull-ups are not part of the net. See the how-to for the full list.
+The ATmega328P model has no pin-change interrupt yet, so the AVR polls. See the
+how-to for the full list. `examples/gpio-net-f1-f4` shows F1/F4 EXTI on a net
+and a wire held up by a chip's internal pull-up.

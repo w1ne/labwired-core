@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Fixed
+- STM32F1 and F4 EXTI now raise edge interrupts for external GPIO input
+  changes (`gpio_net` deliveries, board buttons), with RTSR/FTSR/IMR/PR
+  honoured and the port taken from `AFIO_EXTICRx` (F1) or `SYSCFG_EXTICRx`
+  (F4). The F4 `SYSCFG` is now a register model (`type: syscfg`,
+  `profile: stm32f4`) on the F401, F401CDU6, F405, F407 and F411CEU6. Before,
+  it was a write-dropping stub or absent.
+- `gpio_net`: a chip's internal pull-up / pull-down is part of the net as a
+  weak drive (STM32 `PUPDR` and F1 input-pull, nRF52, EFR32, SAM, ATmega
+  `PORTx` on an input). Pulls to both rails with no driver are reported as
+  `GPIO_NET_PULL_CONFLICT`, and the wire reads the net's own `pull` or 0.
+  Net reports show `pull_up` / `pull_down` member drives, and a pulled net
+  pad's four-state trace reads `h` / `l`. A net that starts in contention is
+  now also recorded from time 0.
 - AVR `BST` / `BLD` (SREG.T bit transfer). Arduino `map()` / signed division
   (`__divmodsi4`) hard-stopped prove with `DecodeError` at the BST word
   (hosted morning Uno bargraph at byte PC `0x93c`).
