@@ -1,0 +1,45 @@
+# Two STM32G071s, SPI1 to SPI1, pin to pin. Node `a` is the master (CS on a
+# GPIO), node `b` the slave (hardware NSS, RXNE interrupt). Every SPI wire is a
+# gpio_net, so the bytes cross bit by bit at the pads.
+schema_version: "1.0"
+name: gpio-net-spi
+nodes:
+  - id: a
+    system: "system.yaml"
+    firmware: "firmware/spi-master.elf"
+  - id: b
+    system: "system.yaml"
+    firmware: "firmware/spi-slave.elf"
+interconnects:
+  - type: gpio_net
+    nodes: [a, b]
+    config:
+      name: cs
+      pull: up
+      members:
+        - { node: a, peripheral: gpioa, pin: 4 }   # GPIO out
+        - { node: b, peripheral: gpioa, pin: 4 }   # SPI1_NSS
+  - type: gpio_net
+    nodes: [a, b]
+    config:
+      name: sck
+      pull: down
+      members:
+        - { node: a, peripheral: gpioa, pin: 5 }
+        - { node: b, peripheral: gpioa, pin: 5 }
+  - type: gpio_net
+    nodes: [a, b]
+    config:
+      name: miso
+      pull: down
+      members:
+        - { node: a, peripheral: gpioa, pin: 6 }
+        - { node: b, peripheral: gpioa, pin: 6 }
+  - type: gpio_net
+    nodes: [a, b]
+    config:
+      name: mosi
+      pull: down
+      members:
+        - { node: a, peripheral: gpioa, pin: 7 }
+        - { node: b, peripheral: gpioa, pin: 7 }

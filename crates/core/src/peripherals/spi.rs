@@ -87,6 +87,8 @@ impl FromStr for SpiRegisterLayout {
 const SPI_DONE_TOKEN: u32 = 0;
 /// Event token for nRF52 SPIM EasyDMA completion (delay-0 scheduler path).
 const SPI_NRF52_EASYDMA_TOKEN: u32 = 1;
+/// Event token delivering an interrupt a world `gpio_net` edge raised.
+const SPI_NET_IRQ_TOKEN: u32 = 2;
 
 /// High bit marks an H5 wire-narration wakeup. The low 31 bits carry the arm
 /// sequence, so a stale wakeup from a superseded arm is recognisable — and
@@ -141,6 +143,10 @@ pub enum SpiSignal {
     Sck,
     Mosi,
     Miso,
+    /// Hardware slave select. Only a part whose AF table routes it (the G0)
+    /// puts it on a pad, and only a controller on a world `gpio_net` drives
+    /// or reads it (see `spi_net`).
+    Nss,
 }
 
 /// Live SCK/MOSI/MISO levels of one STM32 SPI controller's wire.
@@ -161,13 +167,14 @@ pub struct SpiLineLevels {
 /// Line order for [`SpiLineLevels`]. The accessors index [`PadLines`] by
 /// `SpiSignal as usize`, so this order IS the enum's discriminant order —
 /// pinned by `spi_line_order_matches_signal_discriminants`.
-const SPI_LINES: &[&str] = &["SCK", "MOSI", "MISO"];
+const SPI_LINES: &[&str] = &["SCK", "MOSI", "MISO", "NSS"];
 
 impl SpiLineLevels {
     fn new(sck_idle: bool) -> Self {
         Self {
             // MOSI/MISO idle low; SCK idles at CPOL.
-            lines: std::sync::Arc::new(PadLines::new(SPI_LINES, &[sck_idle, false, false])),
+            // NSS idles high (deselected).
+            lines: std::sync::Arc::new(PadLines::new(SPI_LINES, &[sck_idle, false, false, true])),
         }
     }
 
@@ -197,7 +204,8 @@ impl SpiLineLevels {
     }
 
     fn set(&self, sck: bool, mosi: bool, miso: bool) {
-        self.lines.set(&[sck, mosi, miso]);
+        let nss = self.lines.level(SpiSignal::Nss as usize);
+        self.lines.set(&[sck, mosi, miso, nss]);
     }
 }
 
@@ -1123,6 +1131,12 @@ pub enum SpiPadMap {
     /// pads are PA5 SCK / PA6 MISO / PA7 MOSI / PA4 NSS, all AF5, and SPI3
     /// puts MOSI on PD6 at AF5 while every other SPI3 row is AF6.
     Stm32U5,
+    /// STM32G0 map — STM32G071 (DS12232, port A/B alternate-function tables,
+    /// AF0 column): SPI1 on PA4 NSS / PA5 SCK / PA6 MISO / PA7 MOSI, PA15
+    /// NSS, PB3 SCK / PB4 MISO / PB5 MOSI; SPI2 on PB12 NSS / PB13 SCK /
+    /// PB14 MISO / PB15 MOSI. The G0 is the only map that routes NSS: on a
+    /// world `gpio_net` the hardware slave select is a real wire.
+    Stm32G0,
 }
 
 impl FromStr for SpiPadMap {
@@ -1133,9 +1147,10 @@ impl FromStr for SpiPadMap {
             "stm32h5" | "h5" | "stm32h7" | "h7" => Ok(Self::Stm32H5),
             "stm32wba" | "wba" => Ok(Self::Stm32Wba),
             "stm32u5" | "u5" => Ok(Self::Stm32U5),
+            "stm32g0" | "g0" => Ok(Self::Stm32G0),
             "none" => Ok(Self::None),
             other => Err(anyhow::anyhow!(
-                "unsupported SPI pad_map '{other}'; supported: stm32h5, stm32wba, stm32u5, none"
+                "unsupported SPI pad_map '{other}'; supported: stm32h5, stm32wba, stm32u5, stm32g0, none"
             )),
         }
     }
@@ -1520,6 +1535,23 @@ pub struct Spi {
     /// Last sampled active-low GPIO CS level for each attached device.
     #[serde(skip)]
     selected_devices: Vec<bool>,
+
+    // ── World `gpio_net` mode (see `spi_net`) ───────────────────────────────
+    /// Slave shift state between net edges.
+    #[serde(skip)]
+    net_slave: net::NetSlave,
+    /// Master: MISO bits sampled off the net for the frame on the wire.
+    #[serde(skip)]
+    net_rx: u16,
+    /// An interrupt a net edge raised, not yet delivered.
+    #[serde(skip)]
+    net_irq_pending: bool,
+    /// The delivery event for `net_irq_pending` is armed.
+    #[serde(skip)]
+    net_irq_scheduled: bool,
+    /// Frames a net-mode slave has received.
+    #[serde(skip)]
+    net_frames: u64,
 }
 
 impl core::fmt::Debug for Spi {
@@ -2177,6 +2209,7 @@ impl Spi {
                         lines.set(cpol, lines.mosi(), lines.miso());
                     }
                 }
+                self.net_apply_drive();
             }
             0x04 => {
                 // STM32L4/F7 SPI CR2: DS[3:0] (bits 11:8) select the data
@@ -2198,6 +2231,7 @@ impl Spi {
                         r.cr2 = value & cr2_mask;
                     }
                 }
+                self.net_apply_drive();
             }
             0x08 => {
                 // SR is mostly read-only; allow clearing OVR if modelled.
@@ -2222,6 +2256,11 @@ impl Spi {
                     SpiRegs::Stm32(r) => r.cr1,
                     _ => 0,
                 };
+                if self.net_slave_active() {
+                    // A slave on a net shifts on the master's clock.
+                    self.net_slave_write_dr(value);
+                    return;
+                }
                 if (cr1 & (1 << 6)) != 0 {
                     let fifo = matches!(&self.regs, SpiRegs::Stm32(r) if r.fifo);
                     if let SpiRegs::Stm32(r) = &mut self.regs {
@@ -2840,7 +2879,17 @@ impl Spi {
                 SpiRegs::Efr32s2Usart(r) => r.ctrl & EFR_USART_CTRL_CLKPOL != 0,
                 _ => false,
             };
-            self.lines = Some(Arc::new(SpiLineLevels::new(cpol)));
+            let levels = SpiLineLevels::new(cpol);
+            // On a world net the STM32 engine states its drive per line
+            // (`spi_net`); until it has, it drives nothing.
+            if matches!(self.regs, SpiRegs::Stm32(_)) {
+                for line in 0..SPI_LINES.len() {
+                    levels
+                        .pad_lines()
+                        .set_net_idle(line, crate::peripherals::pad_lines::LineDrive::Input);
+                }
+            }
+            self.lines = Some(Arc::new(levels));
         }
         self.lines.as_ref().unwrap().clone()
     }
@@ -2972,6 +3021,7 @@ impl Spi {
                 (miso, None)
             }
         };
+        self.net_rx = 0;
         self.frame = Some(ActiveFrame {
             t,
             mosi,
@@ -2986,18 +3036,41 @@ impl Spi {
 
     /// Advance the wire by `units` peripheral-clock cycles. Returns `true`
     /// when a completed frame wants the TXE interrupt raised (CR2.TXEIE).
-    fn stm32_advance_units(&mut self, mut units: u64) -> bool {
+    fn stm32_advance_units(&mut self, units: u64) -> bool {
+        self.stm32_advance_units_from(None, units)
+    }
+
+    /// As [`Self::stm32_advance_units`], with `base` the engine cycle the
+    /// advance starts from when it is known: each boundary's wire edges are
+    /// then stamped at the boundary's own cycle, not when the event was
+    /// drained.
+    fn stm32_advance_units_from(&mut self, base: Option<u64>, mut units: u64) -> bool {
         let mut irq = false;
+        let mut t = base;
         while units > 0 {
             let Some(f) = &mut self.frame else { break };
             let step = (f.ticks_left as u64).min(units);
             f.ticks_left -= step as u32;
             units -= step;
             if f.ticks_left == 0 {
+                if let Some(t) = t.as_mut() {
+                    *t += step;
+                }
+                self.stm32_set_stamp(t);
                 self.stm32_segment_boundary(&mut irq);
+            } else if let Some(t) = t.as_mut() {
+                *t += step;
             }
         }
+        self.stm32_set_stamp(None);
         irq
+    }
+
+    /// Stamp this controller's wire reports (see `PadLines::set_stamp`).
+    fn stm32_set_stamp(&self, cycle: Option<u64>) {
+        if let Some(lines) = &self.lines {
+            lines.pad_lines().set_stamp(cycle);
+        }
     }
 
     /// The current half-period expired: drive the next segment, or complete
@@ -3012,6 +3085,10 @@ impl Spi {
             f.ticks_left = f.t.half_ticks;
             self.frame = Some(f);
             self.stm32_drive_levels();
+            // Into the second half is the sampling edge in both phases.
+            if self.net_mode() {
+                self.net_master_sample();
+            }
             return;
         }
         if f.bit_idx + 1 < f.t.bits {
@@ -3033,10 +3110,17 @@ impl Spi {
         // (`SPI.transfer()` on an unpopulated bus, which is the common case in
         // a simulator); found by the Arduino conformance sketch on F401.
         let rx_fifo = self.rx_fifo;
-        let driven = self.loopback || !self.attached_devices.is_empty();
+        // On a net, MISO is whatever the wire carried at each sampling edge:
+        // a peer slave's answer, a pull, or nothing at all.
+        let net_rx = (self.net_mode() && self.attached_devices.is_empty() && !self.loopback)
+            .then_some(self.net_rx);
+        if net_rx.is_some() && self.net_master_rx_irq() {
+            *irq = true;
+        }
+        let driven = self.loopback || !self.attached_devices.is_empty() || net_rx.is_some();
         let level = &mut self.rx_fifo_level;
         if let SpiRegs::Stm32(r) = &mut self.regs {
-            r.dr = f.miso;
+            r.dr = net_rx.unwrap_or(f.miso);
             if !rx_fifo {
                 // Classic F1/F4 port: no FIFO, RXNE on every frame.
                 r.sr |= 0x0001;
@@ -3140,11 +3224,24 @@ impl crate::Peripheral for Spi {
     /// exists to catch. `efr32_wire_flush` is what earns the names, and the
     /// match this used to need went with it.
     fn line_names(&self) -> &'static [&'static str] {
-        SPI_LINES
+        // NSS is a wire only on a world `gpio_net` (see `spi_net`); off a
+        // net nothing drives it, and naming it would promise edges never made.
+        if self.net_mode() {
+            SPI_LINES
+        } else {
+            &SPI_LINES[..3]
+        }
     }
 
     fn wire_lines(&self) -> Option<&PadLines> {
         self.lines.as_ref().map(|levels| &**levels.pad_lines())
+    }
+
+    fn wire_input_edge(&mut self, line: usize, level: bool, cycle: u64) -> bool {
+        self.stm32_set_stamp(Some(cycle));
+        let wake = self.net_slave_edge(line, level);
+        self.stm32_set_stamp(None);
+        wake
     }
 
     fn read(&self, offset: u64) -> SimResult<u8> {
@@ -3390,9 +3487,10 @@ impl crate::Peripheral for Spi {
             return;
         }
         let delta = tick_now - self.anchor_tick;
+        let base = self.anchor_tick;
         self.anchor_tick = tick_now;
         if self.frame.is_some() {
-            self.stm32_advance_units(delta);
+            self.stm32_advance_units_from(Some(base), delta);
         }
     }
 
@@ -3410,12 +3508,21 @@ impl crate::Peripheral for Spi {
         if self.nrf52_pending_start {
             return vec![(0, SPI_NRF52_EASYDMA_TOKEN)];
         }
+        let mut events = Vec::new();
+        if self.net_irq_pending && !self.net_irq_scheduled {
+            self.net_irq_scheduled = true;
+            events.push((0, SPI_NET_IRQ_TOKEN));
+        }
         if self.frame.is_some() && !self.scheduled {
             self.scheduled = true;
-            return vec![(
+            events.push((
                 self.stm32_next_transition_ticks().saturating_sub(1),
                 SPI_DONE_TOKEN,
-            )];
+            ));
+            return events;
+        }
+        if !events.is_empty() {
+            return events;
         }
         // H5 "SPI v3": no bit engine, so no frame to chase — but a buffered
         // narration burst still needs a wakeup to publish on. Arm only while a
@@ -3451,6 +3558,14 @@ impl crate::Peripheral for Spi {
                 self.do_nrf52_easydma(bus);
             }
             return crate::sched::EventResult::default();
+        }
+        if event_token == SPI_NET_IRQ_TOKEN {
+            self.net_irq_scheduled = false;
+            let raise = std::mem::take(&mut self.net_irq_pending);
+            return crate::sched::EventResult {
+                raise_own_irq: raise,
+                ..Default::default()
+            };
         }
         if event_token == SPI_EFR32_WIRE_TOKEN {
             self.efr32_wire_flush();
@@ -3507,8 +3622,9 @@ impl crate::Peripheral for Spi {
         // one call, but the boundaries' derived cycles (and the frame's total
         // wire time) are unchanged.
         let delta = now - self.anchor_tick;
+        let base = self.anchor_tick;
         self.anchor_tick = now;
-        if self.stm32_advance_units(delta) {
+        if self.stm32_advance_units_from(Some(base), delta) {
             res.raise_own_irq = true; // TXEIE at frame completion
         }
         if self.frame.is_some() {
@@ -3606,6 +3722,10 @@ impl crate::Peripheral for Spi {
         // ── STM32 SPI: bit engine clocks the frame on the wire ───────────────
         if self.frame.is_some() && self.stm32_advance_units(cycles) {
             irq = true; // TXEIE at frame completion
+        }
+        // ── World `gpio_net`: an interrupt a net edge raised ─────────────────
+        if std::mem::take(&mut self.net_irq_pending) {
+            irq = true;
         }
 
         // ── H5 "SPI v3": publish any buffered narration burst ────────────────
@@ -3879,6 +3999,9 @@ impl Spi {
         self.nrf52_wire_flush(&mosi_wire);
     }
 }
+
+#[path = "spi_net.rs"]
+mod net;
 
 #[cfg(test)]
 #[path = "spi_tests.rs"]

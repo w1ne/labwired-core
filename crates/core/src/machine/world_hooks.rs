@@ -166,6 +166,9 @@ impl<C: Cpu> Machine<C> {
     /// drive is not known yet (a pad routed to a peripheral signal the model
     /// does not publish), naming it.
     pub fn isolate_net_pads(&mut self, pins: &[(String, u8)]) -> anyhow::Result<()> {
+        // A net pad routed to a peripheral line (SPI, I²C) hands the levels
+        // the net delivers to that peripheral.
+        self.bus.wire_inputs_live = true;
         for (name, pin) in pins {
             let idx = self
                 .bus

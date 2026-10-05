@@ -32,6 +32,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `examples/gpio-net-two-boards`: `env-rp2040.yaml` and `env-esp32c6.yaml` put
   an RP2040 or an ESP32-C6 in place of the ATmega328P; both count the
   STM32's edges with GPIO interrupts.
+- Hardware SPI and I²C between chips over `gpio_net`s, bit by bit at the
+  pads. An STM32 SPI (classic/FIFO register file) whose pads are on nets is a
+  real master or slave: the master samples MISO off the net at its sampling
+  edge, the slave shifts on the SCK/MOSI/NSS edges the net delivers (all four
+  modes, RXNE/OVR, RXNEIE interrupt, hardware or software NSS) and drives
+  MISO only while selected. The STM32 modern I²C (L4/G0 `TIMINGR` file) on
+  nets is an open-drain bit-level controller (START, address, ACK/NACK,
+  repeated START, STOP, `TIMINGR` timing, clock stretching by the target,
+  arbitration loss) and target (own-address ACK, `ADDR`/`DIR`, SCL stretched
+  until firmware services it). Peripheral lines now say how they drive a pad
+  (push-pull, open drain, input) and receive the level a net applies to it;
+  the net reports and the logic analyzer see the real waveform, with
+  contention where two chips fight. The STM32G071 routes SPI1/SPI2 (with NSS)
+  and I2C1/I2C2 by its own AF tables (`pad_map: stm32g0`). Example and tests:
+  `examples/gpio-net-buses`, `tests/world_gpio_net_buses.rs`; how-to:
+  "Buses over nets" in `docs/howto/gpio-nets.md`.
 - BT201 Bluetooth module (`type: bt201`, Jieli KT1025A): a UART part from the
   BT201 V2.3 manual. AT commands with `OK` / `ER+n` replies, names and radio
   switches kept in module flash and applied at `AT+CZ`, the start-up block,

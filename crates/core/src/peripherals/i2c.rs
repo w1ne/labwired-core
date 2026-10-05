@@ -833,6 +833,12 @@ pub struct L4I2c {
     /// contiguous waveform when it completes. See [`Self::wire_flush`].
     #[serde(skip)]
     wire_frames: Vec<(u8, bool)>,
+    /// The chip yaml declared `pad_map: stm32g0` (the G0 AF6 pinout).
+    #[serde(skip)]
+    pad_map_g0: bool,
+    /// The bit-level engine used on a world `gpio_net` (see `i2c_net`).
+    #[serde(skip)]
+    net: net::I2cNet,
 }
 
 impl Default for L4I2c {
@@ -862,6 +868,8 @@ impl Default for L4I2c {
             chain_live: false,
             lines: None,
             wire_frames: Vec::new(),
+            pad_map_g0: false,
+            net: net::I2cNet::default(),
         }
     }
 }
@@ -878,7 +886,20 @@ impl L4I2c {
     /// with pull-ups idles high on both lines.
     pub(crate) fn pad_lines_arc(&mut self) -> std::sync::Arc<PadLines> {
         self.lines
-            .get_or_insert_with(|| std::sync::Arc::new(PadLines::new(I2C_LINES, &[true, true])))
+            .get_or_insert_with(|| {
+                let lines = PadLines::new(I2C_LINES, &[true, true]);
+                // On a world net both lines are open drain, released until
+                // the bit engine (`i2c_net`) pulls one low.
+                lines.set_net_idle(
+                    LINE_SCL,
+                    crate::peripherals::pad_lines::LineDrive::OpenDrain,
+                );
+                lines.set_net_idle(
+                    LINE_SDA,
+                    crate::peripherals::pad_lines::LineDrive::OpenDrain,
+                );
+                std::sync::Arc::new(lines)
+            })
             .clone()
     }
 
@@ -1071,10 +1092,17 @@ impl L4I2c {
             0x0C => self.oar2,
             0x10 => self.timingr,
             0x14 => self.timeoutr,
+            0x18 if self.net.rx_taken.get() => self.isr & !net::ISR_RXNE,
             0x18 => self.isr,
             0x1C => self.icr,
             0x20 => self.pecr,
-            0x24 => self.rxdr,
+            0x24 => {
+                if self.net_mode() {
+                    // RXDR read clears RXNE (the engine folds it in).
+                    self.net.rx_taken.set(true);
+                }
+                self.rxdr
+            }
             0x28 => self.txdr,
             _ => {
                 crate::census_reg!("i2c:L4I2c", offset, "read");
@@ -1084,6 +1112,9 @@ impl L4I2c {
     }
 
     fn write_reg(&mut self, offset: u64, value: u32) {
+        if self.net_mode() && self.net_write_reg(offset, value) {
+            return;
+        }
         match offset {
             0x00 => {
                 let was_enabled = (self.cr1 & 1) != 0;
@@ -1248,6 +1279,9 @@ impl L4I2c {
     /// IRQ should be raised. Structure mirrors `F1I2c::tick` but uses the modern
     /// ISR/ICR/CR2 register set (NACKF/STOPF/TC, START/STOP/AUTOEND in CR2).
     fn tick(&mut self) -> bool {
+        if self.net_mode() {
+            return self.net_tick();
+        }
         let mut irq = false;
         if self.state == I2cState::Idle {
             // Still re-assert level IRQs while flags are latched (IT completion).
@@ -2247,6 +2281,27 @@ impl I2c {
         Self::default()
     }
 
+    /// Select the declared alternate-function pad map (chip yaml
+    /// `config: { pad_map: stm32g0 }`). Only the modern (L4-generation)
+    /// controller on a G0 has one to declare today.
+    pub fn set_pad_map(&mut self, pad_map: &str) -> anyhow::Result<()> {
+        match (self, pad_map.to_ascii_lowercase().as_str()) {
+            (Self::Stm32L4(i), "stm32g0" | "g0") => {
+                i.pad_map_g0 = true;
+                Ok(())
+            }
+            (_, "none") => Ok(()),
+            (_, other) => Err(anyhow::anyhow!(
+                "unsupported I2C pad_map '{other}' for this controller; supported: stm32g0 (stm32l4 profile), none"
+            )),
+        }
+    }
+
+    /// `true` when this controller routes the STM32G0 AF6 pinout.
+    pub(crate) fn is_g0_pad_map(&self) -> bool {
+        matches!(self, Self::Stm32L4(i) if i.pad_map_g0)
+    }
+
     /// Forward an ERROR-line NVIC vector to the variant that models one.
     /// Only the STM32 legacy peripheral splits EV/ER this way; other families
     /// carry a single vector and ignore this.
@@ -2407,6 +2462,13 @@ impl crate::Peripheral for I2c {
             Self::Stm32L4(i) => i.wire_lines(),
             Self::Efr32s2(i) => i.wire_lines(),
             Self::Kinetis(_) => None,
+        }
+    }
+
+    fn wire_input_edge(&mut self, line: usize, level: bool, cycle: u64) -> bool {
+        match self {
+            Self::Stm32L4(i) => i.net_wire_edge(line, level, cycle),
+            _ => false,
         }
     }
 
@@ -2588,6 +2650,13 @@ impl crate::Peripheral for I2c {
                     Vec::new()
                 }
             }
+            Self::Stm32L4(i) if i.net_mode() => {
+                if i.scheduler_mode() {
+                    i.net_take_events()
+                } else {
+                    Vec::new()
+                }
+            }
             Self::Stm32L4(i) => {
                 if i.scheduler_mode() && i.active() && !i.chain_live {
                     i.chain_live = true;
@@ -2663,8 +2732,19 @@ impl crate::Peripheral for I2c {
                     ..Default::default()
                 }
             }
+            Self::Stm32L4(i) if i.net_mode() && _event_token == net::NET_TOKEN => {
+                if !i.scheduler_mode() {
+                    return crate::sched::EventResult::default();
+                }
+                i.net_on_event(sched.now())
+            }
             Self::Stm32L4(i) => {
                 if !i.scheduler_mode() {
+                    return crate::sched::EventResult::default();
+                }
+                if i.net_mode() {
+                    // A phase-model chain armed before the net took over.
+                    i.chain_live = false;
                     return crate::sched::EventResult::default();
                 }
                 let irq = i.tick();
@@ -2809,3 +2889,6 @@ mod l4_disable_tests;
 #[cfg(test)]
 #[path = "i2c_efr32s2_tests.rs"]
 mod efr32s2_tests;
+
+#[path = "i2c_net.rs"]
+mod net;
