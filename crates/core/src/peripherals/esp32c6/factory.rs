@@ -38,7 +38,10 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         // I2C-matrix signal indices differ from the C3's (I2CEXT0_SCL is 45 vs
         // 53), so the C3 I2C pad wiring does not apply — UART0/UART1 TX indices
         // (6/9) happen to match and do.
-        "esp32c6_gpio" => Box::new(crate::peripherals::esp32c3::gpio::Esp32c3Gpio::new()),
+        // Its GPIO interrupt is matrix source 30 (esp32c6.svd), not the C3's 16.
+        "esp32c6_gpio" => {
+            Box::new(crate::peripherals::esp32c3::gpio::Esp32c3Gpio::with_intr_source(30))
+        }
         // PCR — the C6's clock/reset block. Register-backed (full SVD map) and
         // the clock controller the chip yaml's `clock:` gates resolve through
         // (`Peripheral::clock_gate_reg_offset`); see super::pcr for exactly

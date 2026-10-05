@@ -1010,7 +1010,8 @@ impl SystemBus {
         // RP2040: bind I²C wires to the pads IO_BANK0's FUNCSEL can route them to.
         bus.wire_rp2040_i2c_pads();
         // Same for the RP2040 UARTs' TX/RX, so serial output is a waveform on
-        // the routed pad and not just console text.
+        // the routed pad and not just console text. This pass also pairs the
+        // SIO with IO_BANK0 for the GPIO interrupt.
         bus.wire_rp2040_uart_pads();
         // And the RP2040 SPI controllers' SCK/MOSI/CSn, so a probe on an SPI pad
         // measures the shifted bytes rather than the SIO output latch. MISO is

@@ -7,12 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Fixed
+- ESP32-C3/C6 GPIO `FUNCn_OUT_SEL_CFG` resets to 0x80 (`SIG_GPIO_OUT`, the
+  matrix bypass, per `esp32c3.svd`) instead of 0, so a bare-metal output pad
+  reads as a plain GPIO output rather than as routed to matrix signal 0.
 - AVR `BST` / `BLD` (SREG.T bit transfer). Arduino `map()` / signed division
   (`__divmodsi4`) hard-stopped prove with `DecodeError` at the BST word
   (hosted morning Uno bargraph at byte PC `0x93c`).
 
 
 ### Added
+- `gpio_net` members on ESP32-family and RP2040 chips. The classic ESP32,
+  ESP32-S3 and ESP32-C3/C6 `gpio` block (GPIO0..31; C3/C6 GPIO0..25) and the
+  RP2040 `sio` (GP0..29) report a net pad's own drive (output enable and
+  latch; `GPIO_PINn.PAD_DRIVER` open drain on the ESP family), take the net's
+  level through `set_gpio_input`, and push their edges, so idle
+  fast-forward stays on. A pad routed to a peripheral signal whose wire is
+  not published has no known drive and is refused, as on `GpioPort`.
+- GPIO interrupts from pad edges on those chips: classic ESP32
+  (`GPIO_STATUS`, `GPIO_ACPU_INT`/`GPIO_PCPU_INT`, matrix source 22), ESP32-S3
+  (`GPIO_PCPU_INT`, source 16), ESP32-C6 (source 30, the C3 stays 16), and
+  RP2040 IO_BANK0 (`INTR0..3`, `PROC0_INTE/INTF/INTS`, `IO_IRQ_BANK0` on
+  NVIC 13). An edge applied from outside (a board button, a net) now re-derives
+  the interrupt matrix on a walk-free bus.
+- `examples/gpio-net-two-boards`: `env-rp2040.yaml` and `env-esp32c6.yaml` put
+  an RP2040 or an ESP32-C6 in place of the ATmega328P; both count the
+  STM32's edges with GPIO interrupts.
 - BT201 Bluetooth module (`type: bt201`, Jieli KT1025A): a UART part from the
   BT201 V2.3 manual. AT commands with `OK` / `ER+n` replies, names and radio
   switches kept in module flash and applied at `AT+CZ`, the start-up block,

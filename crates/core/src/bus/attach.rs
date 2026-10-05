@@ -339,15 +339,13 @@ impl SystemBus {
             (28, 0, LINE_TX, "UART0_TX"),
         ];
 
-        let Some(functions) = self
-            .peripherals
-            .iter()
-            .find_map(|p| {
+        let Some((bank_idx, functions, bank_irq)) =
+            self.peripherals.iter().enumerate().find_map(|(idx, p)| {
                 p.dev
                     .as_any()
                     .and_then(|a| a.downcast_ref::<Rp2040IoBank0>())
+                    .map(|bank| (idx, bank.pad_functions(), bank.bank_irq()))
             })
-            .map(Rp2040IoBank0::pad_functions)
         else {
             return;
         };
@@ -357,13 +355,16 @@ impl SystemBus {
         let Some(sio_idx) = self.find_peripheral_index_by_name("sio") else {
             return;
         };
-        if self.peripherals[sio_idx]
+        // The GPIO interrupt rides on the same pairing: SIO reports every
+        // `GPIO_IN` change to IO_BANK0, which owns INTR/PROC0_INTE and raises
+        // IO_IRQ_BANK0, and arms that block's event chain as its wake owner.
+        match self.peripherals[sio_idx]
             .dev
             .as_any_mut()
             .and_then(|a| a.downcast_mut::<Rp2040Sio>())
-            .is_none()
         {
-            return;
+            Some(sio) => sio.attach_io_bank0(functions.clone(), bank_irq, bank_idx),
+            None => return,
         }
 
         for (instance, name) in ["uart0", "uart1"].iter().enumerate() {
