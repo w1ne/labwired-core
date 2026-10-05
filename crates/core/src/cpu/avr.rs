@@ -1193,11 +1193,13 @@ impl Cpu for Avr {
         if !self.sleeping || self.wake_pending() || self.ext_pins_moved(bus) {
             return None;
         }
-        if self.ucsr0b & UCSRB_RXCIE != 0
-            && Self::usart_on_bus(bus)
-            && bus.read_u8(AVR_IO_MIRROR_BASE + 0xC0).ok()? & UCSRA_RXC != 0
-        {
-            return None;
+        if self.ucsr0b & UCSRB_RXCIE != 0 && Self::usart_on_bus(bus) {
+            // A byte waiting for RXCIE wakes the core; a status read that fails
+            // gives no grounds to skip either, so both stay on the stepped path.
+            match bus.read_u8(AVR_IO_MIRROR_BASE + 0xC0) {
+                Ok(ucsra) if ucsra & UCSRA_RXC == 0 => {}
+                _ => return None,
+            }
         }
         let div = u64::from(self.t0_prescaler());
         if self.io_clock_running() && div != 0 && self.timsk0 & TIMSK_TOIE0 != 0 && self.flag_i() {

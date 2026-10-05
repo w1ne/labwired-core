@@ -269,7 +269,15 @@ const MAX_MODEL_SITES: usize = 178;
 /// carries. `not(...)` counts; see the module docs. The feature half asserts
 /// empty forcers + the recommended max-safe interval; the not half keeps
 /// max-safe=1.
-const MAX_HARNESS_SITES: usize = 86;
+///
+/// 86 → 87: `world_multichip::gpio_net_world::
+/// idle_fast_forward_skips_the_avr_sleep_and_changes_nothing` is one
+/// `#[cfg(feature = "event-scheduler")]` test, not a gated file: idle
+/// fast-forward only exists on the event-scheduler run, so the claim "a
+/// sleeping ATmega328P on a GPIO net skips its idle cycles and every
+/// observable stays the same" has nothing to measure without it. The rest of
+/// `world_multichip` runs in both builds. Ends with the feature.
+const MAX_HARNESS_SITES: usize = 87;
 
 // ---------------------------------------------------------------------------
 // The counter. A pure function over source text, so its definition is testable
