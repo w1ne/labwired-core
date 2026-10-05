@@ -369,6 +369,71 @@ struct TapShared {
     queue: Mutex<Vec<PadEvent>>,
 }
 
+/// What a GPIO port's pads do at one instant, one bit per pin: the level each
+/// pad reads, which pads the chip itself drives, and which pads report a drive
+/// at all (a `gpio_net` member does; a plain watched pad reports its level
+/// only). Input to [`PadPushTap::report`].
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PadSnapshot {
+    pub level: u64,
+    pub driven: u64,
+    pub drive_known: u64,
+}
+
+/// A GPIO model's push-capture watch: the shared [`LogicTap`] and the watched
+/// `(pin, channel)` pairs. Model-agnostic: a port takes a [`PadSnapshot`]
+/// before and after anything that can move a pad (a register write, an
+/// external `set_gpio_input`) and hands both to [`Self::report`], which pushes
+/// exactly the watched pads whose level, or reported drive, changed. That is
+/// all a model needs to stay off the per-cycle poll path.
+#[derive(Debug, Clone)]
+pub struct PadPushTap {
+    tap: LogicTap,
+    watched: Vec<(u8, u32)>,
+}
+
+impl PadPushTap {
+    /// `None` for an empty watch set (nothing to report).
+    pub fn new(tap: &LogicTap, watched: &[(u8, u32)]) -> Option<Self> {
+        (!watched.is_empty()).then(|| Self {
+            tap: tap.clone(),
+            watched: watched.to_vec(),
+        })
+    }
+
+    /// Push every watched pad that changed between `before` and `after`. A
+    /// pad with a known drive reports level and drive together, also when
+    /// only the drive moved (a released open-drain line keeps its pulled
+    /// level); any other pad reports its level when that moved.
+    pub fn report(&self, before: PadSnapshot, after: PadSnapshot) {
+        let level_changed = before.level ^ after.level;
+        let changed = level_changed | ((before.driven ^ after.driven) & after.drive_known);
+        if changed == 0 {
+            return;
+        }
+        for &(pin, ch) in &self.watched {
+            if pin >= 64 {
+                continue;
+            }
+            let bit = 1u64 << pin;
+            if changed & bit == 0 {
+                continue;
+            }
+            let level = after.level & bit != 0;
+            if after.drive_known & bit != 0 {
+                let drive = if after.driven & bit != 0 {
+                    PadDrive::Driven
+                } else {
+                    PadDrive::HighZ
+                };
+                self.tap.push_with_drive(ch, level, drive);
+            } else if level_changed & bit != 0 {
+                self.tap.push(ch, level);
+            }
+        }
+    }
+}
+
 /// Shared push-capture tap: the handle instrumented peripherals report pad
 /// writes into, and whose clock the CPU advances per retired instruction while
 /// push capture is armed. Owned by the bus (one per machine); cloning shares
@@ -822,17 +887,34 @@ impl LogicCapture {
             cycle,
             state,
         };
-        if let Some(last) = self.states.back_mut() {
-            if last.ch == edge.ch && last.cycle == cycle {
-                *last = edge;
-                return;
-            }
+        // A second change of this channel in a cycle already recorded (a
+        // pause-time input push and the next instruction's write land on one
+        // boundary, possibly with other channels in between) replaces the
+        // first: a boundary sampler sees only the settled state.
+        if let Some(same) = self
+            .states
+            .iter_mut()
+            .rev()
+            .take_while(|e| e.cycle == cycle)
+            .find(|e| e.ch == edge.ch)
+        {
+            *same = edge;
+            return;
         }
         if self.states.len() == LOGIC_RING_CAPACITY {
             self.states.pop_front();
             self.state_dropped += 1;
         }
-        self.states.push_back(edge);
+        // Same-cycle changes in ascending channel order, as a boundary sampler
+        // emits them, even when they arrive in separate drains.
+        let at = self.states.len()
+            - self
+                .states
+                .iter()
+                .rev()
+                .take_while(|e| e.cycle == cycle && e.ch > edge.ch)
+                .count();
+        self.states.insert(at, edge);
         self.state_next_seq += 1;
     }
 
@@ -977,7 +1059,14 @@ impl LogicCapture {
         if let Some(count) = self.counts.get_mut(edge.ch as usize) {
             *count += 1;
         }
-        self.ring.push_back(edge);
+        let at = self.ring.len()
+            - self
+                .ring
+                .iter()
+                .rev()
+                .take_while(|e| e.cycle == edge.cycle && e.ch > edge.ch)
+                .count();
+        self.ring.insert(at, edge);
         self.next_seq += 1;
     }
 
