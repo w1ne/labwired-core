@@ -10,9 +10,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - AVR `BST` / `BLD` (SREG.T bit transfer). Arduino `map()` / signed division
   (`__divmodsi4`) hard-stopped prove with `DecodeError` at the BST word
   (hosted morning Uno bargraph at byte PC `0x93c`).
+- AVR `SBI`/`CBI` on `PINx`, `TIFRn`, `PCIFR` and `EIFR` act on the named
+  bit only, as the ATmega328P datasheet specifies. `SBI PINB,5` used to toggle
+  every other `PORTB` pad that read high as well.
+- AVR `SEI` and `RETI` now let the next instruction run before a pending
+  interrupt is taken, so `sei(); sleep_cpu();` cannot lose a wake-up.
 
 
 ### Added
+- ATmega328P external interrupts INT0/INT1 (`EICRA` low level, any change,
+  falling, rising; `EIMSK`, `EIFR`) and pin-change interrupts PCINT0..2
+  (`PCICR`, `PCIFR`, `PCMSK0..2`). They fire on levels driven from outside
+  (`set_gpio_input`: a `board_io` button, a `gpio_net` delivery) and on pads
+  the firmware drives itself. Flags latch while masked, clear on a written 1
+  and on vector entry.
+- ATmega328P `SLEEP` (`SMCR`): the core stops until an enabled interrupt wakes
+  it, four cycles later, and with idle fast-forward on the sleep is skipped up
+  to the next Timer0 overflow or pad change. The `gpio-net-two-boards` Uno
+  firmware now counts `ready` with INT1 and `alert` with PCINT2 and sleeps
+  between edges instead of polling `PIND`.
 - BT201 Bluetooth module (`type: bt201`, Jieli KT1025A): a UART part from the
   BT201 V2.3 manual. AT commands with `OK` / `ER+n` replies, names and radio
   switches kept in module flash and applied at `AT+CZ`, the start-up block,

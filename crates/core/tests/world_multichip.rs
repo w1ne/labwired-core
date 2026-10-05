@@ -224,7 +224,7 @@ mod gpio_net_world {
     //! interrupt line, a ready line and a shared open-drain alert line with a
     //! pull-up (`examples/gpio-net-two-boards`).
     //!
-    //! The firmware counts edges (EXTI on the STM32, a polled PIND on the AVR) and
+    //! The firmware counts edges (EXTI on the STM32, INT1 and PCINT2 on the AVR) and
     //! reports over UART. Every count is a hand-derived number from the firmware's
     //! loops, not a measurement: 10 irq pulses, 7 ready pulses, 5 alert pulses the
     //! STM32 pulls and 3 the AVR pulls.
@@ -438,6 +438,52 @@ mod gpio_net_world {
         run_ms(&mut w, 30);
         assert_eq!(text(&s.0), STM_LINE);
         assert_eq!(text(&s.1), AVR_LINE);
+    }
+
+    /// The ATmega328P pads on the nets are captured by push, not by the
+    /// per-cycle poll, so neither node is clamped to one instruction per
+    /// batch. The AVR counts `ready` with INT1 and `alert` with PCINT2 and
+    /// sleeps between edges (src/avr.c): the right counts prove the edges
+    /// arrived as interrupts, since nothing polls PIND any more.
+    #[test]
+    fn avr_net_pads_are_push_captured_and_counted_by_interrupts() {
+        let (mut world, sinks) = build("env.yaml", |s| s);
+        for (id, m) in &world.machines {
+            assert!(
+                !m.logic_poll_active(),
+                "node {id} fell back to poll capture"
+            );
+        }
+        run_ms(&mut world, 30);
+        assert_eq!(text(&sinks.1), AVR_LINE, "AVR report");
+        assert_eq!(text(&sinks.0), STM_LINE, "STM32 report");
+    }
+
+    /// With idle fast-forward on, the sleeping AVR skips its waits and every
+    /// observable stays identical to the run that steps each idle clock.
+    #[cfg(feature = "event-scheduler")]
+    #[test]
+    fn idle_fast_forward_skips_the_avr_sleep_and_changes_nothing() {
+        let baseline = {
+            let (mut w, s) = build("env.yaml", |s| s);
+            run_ms(&mut w, 30);
+            assert_eq!(w.machines["avr"].idle_fast_forward_cycles(), 0);
+            fingerprint(&w, "stm", &s)
+        };
+        let (mut w, s) = build("env.yaml", |s| s);
+        for m in w.machines.values_mut() {
+            m.set_idle_fast_forward(true);
+        }
+        run_ms(&mut w, 30);
+        let skipped = w.machines["avr"].idle_fast_forward_cycles();
+        assert_eq!(fingerprint(&w, "stm", &s), baseline);
+        // The AVR sleeps from the end of its irq pulses until the last alert
+        // edge, about 0.9 ms (14 400 cycles at 16 MHz); a round of 100 ns is
+        // under two cycles, so most of each sleeping round is skipped.
+        assert!(
+            skipped > 5_000,
+            "the sleeping AVR must fast-forward, skipped {skipped} cycles"
+        );
     }
 
     #[test]

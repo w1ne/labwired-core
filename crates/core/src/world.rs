@@ -244,6 +244,19 @@ pub trait MachineTrait: Send {
     fn gpio_level(&self, _peripheral: &str, _pin: u8, _output: bool) -> Option<bool> {
         None
     }
+    /// Let this node skip idle time (a core parked in WFI or `SLEEP`) when
+    /// it advances. Off by default, as for a lone machine.
+    fn set_idle_fast_forward(&mut self, _enabled: bool) {}
+    /// Cycles this node skipped through idle fast-forward so far.
+    fn idle_fast_forward_cycles(&self) -> u64 {
+        0
+    }
+    /// `true` while a watched pad of this node (a marker, a `gpio_net`
+    /// member) is on the per-cycle poll capture path, which runs the node one
+    /// instruction at a time and turns idle fast-forward off.
+    fn logic_poll_active(&self) -> bool {
+        false
+    }
     /// Drive a simulated input channel (a sensor's temperature, a distance).
     fn set_input_channel(&mut self, _channel: &str, _value: f64) -> Result<(), String> {
         Err("this machine has no input channels".to_string())
@@ -455,6 +468,18 @@ impl<C: Cpu + 'static> MachineTrait for Machine<C> {
 
     fn advance_to_cycle(&mut self, target: u64) -> SimResult<()> {
         Machine::advance_to_cycle(self, target)
+    }
+
+    fn set_idle_fast_forward(&mut self, enabled: bool) {
+        self.config.idle_fast_forward_enabled = enabled;
+    }
+
+    fn idle_fast_forward_cycles(&self) -> u64 {
+        self.idle_fast_forward_cycles_skipped
+    }
+
+    fn logic_poll_active(&self) -> bool {
+        Machine::logic_poll_active(self)
     }
 
     fn attach_timed_uart(
