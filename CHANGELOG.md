@@ -15,7 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Source-level stepping in `labwired-dap`, the adapter behind hosted debug
   sessions: `next` / `stepIn` / `stepOut` step one source line (calls stepped
-  over run at engine speed with idle fast-forward), `granularity:
+  over run at engine speed with idle fast-forward, and so do lines of a
+  function inlined into the current one), `granularity:
   "instruction"` keeps the single-instruction step, a source breakpoint covers
   every address its line compiled to, `stackTrace` reports the function and
   first-statement line the browser shows, and the Locals scope reads
@@ -23,7 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `labwired_loader::source_step` over a new `SourceStepTarget` machine trait.
   The adapter now builds a board's machine through `build_machine` (AVR,
   dual-core ESP32, every family) and boots a classic-ESP32 Arduino ELF through
-  the shared Arduino fast boot.
+  the shared Arduino fast boot; its thread-local boot hooks follow the machine
+  to the thread that runs `continue`.
 - BT201 Bluetooth module (`type: bt201`, Jieli KT1025A): a UART part from the
   BT201 V2.3 manual. AT commands with `OK` / `ER+n` replies, names and radio
   switches kept in module flash and applied at `AT+CZ`, the start-up block,

@@ -1247,6 +1247,40 @@ pub fn monotonic_counter_32(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResul
     Ok(())
 }
 
+/// The thread-local ESP32-classic aids hooks of one session, as a value.
+///
+/// They are thread-local because a `Machine` runs on one thread. A host that
+/// drives one machine from two threads (the debug adapter steps on its request
+/// thread and runs `continue` on a worker) carries them across with
+/// [`esp32_thread_state`] and [`set_esp32_thread_state`]; otherwise the worker
+/// runs the firmware with the hooks unset (no `pxCurrentTCB` for
+/// `xTaskGetCurrentTaskHandle`, no pending APP_CPU release).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Esp32ThreadState {
+    px_current_tcb: Option<u32>,
+    appcpu_boot_addr: Option<u32>,
+    appcpu_reset_released: bool,
+    appcpu_up_flags: Vec<u32>,
+}
+
+/// This thread's ESP32-classic aids hooks. See [`Esp32ThreadState`].
+pub fn esp32_thread_state() -> Esp32ThreadState {
+    Esp32ThreadState {
+        px_current_tcb: PX_CURRENT_TCB_ADDR.with(|s| s.get()),
+        appcpu_boot_addr: APPCPU_BOOT_ADDR.with(|s| s.get()),
+        appcpu_reset_released: APPCPU_RESET_RELEASED.with(|s| s.get()),
+        appcpu_up_flags: APPCPU_UP_FLAGS.with(|f| f.borrow().clone()),
+    }
+}
+
+/// Install `state` as this thread's ESP32-classic aids hooks.
+pub fn set_esp32_thread_state(state: &Esp32ThreadState) {
+    PX_CURRENT_TCB_ADDR.with(|s| s.set(state.px_current_tcb));
+    APPCPU_BOOT_ADDR.with(|s| s.set(state.appcpu_boot_addr));
+    APPCPU_RESET_RELEASED.with(|s| s.set(state.appcpu_reset_released));
+    APPCPU_UP_FLAGS.with(|f| *f.borrow_mut() = state.appcpu_up_flags.clone());
+}
+
 /// Clear every process/thread-local ESP32-classic aids hook that outlives a
 /// single `Machine` / `WasmSimulator`.
 ///

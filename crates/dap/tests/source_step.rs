@@ -156,17 +156,14 @@ fn cortex_m_step_over_into_and_out() {
     let locals = adapter.source_locals().unwrap();
     let p = locals.iter().find(|l| l.name == "p").expect("local p");
     assert_eq!(p.kind, "frame_offset");
-    // Out: back in main, past the call on 224. The next statement main
-    // reaches is probe_tmp117's first line, which -Os inlined into main (it
-    // has no symbol of its own), so DWARF names the inlined function.
+    // Out: back in main, past the call on 224. probe_tmp117 (225) was
+    // inlined into main by -Os; step over runs its lines like a call, so the
+    // step lands on main's own next line.
     let (stop, _) = step(&adapter, StepKind::Out);
     assert_eq!(stop, StepStop::LineChanged);
     let (file, line, function) = here(&adapter);
-    assert_eq!(
-        (file.as_str(), function.as_str()),
-        ("main.c", "probe_tmp117")
-    );
-    assert!((195..=210).contains(&line), "probe_tmp117 body, got {line}");
+    assert_eq!((file.as_str(), function.as_str()), ("main.c", "main"));
+    assert!((225..=230).contains(&line), "main after 224, got {line}");
 }
 
 /// Arduino Uno (AVR): a breakpoint on loop()'s first line and a step over a
@@ -207,4 +204,24 @@ fn source_steps_replay_from_a_snapshot() {
     assert_eq!(step(&adapter, StepKind::Over).1, 0x2d6);
     adapter.snapshot_restore(saved.id).unwrap();
     assert_eq!(adapter.get_pc().unwrap(), 0x2ca);
+}
+
+/// The server runs `continue` on a worker thread and steps on its request
+/// thread. An Arduino-ESP32 boot leaves hooks in thread-locals; the run must
+/// reach loop() from a thread other than the one that loaded it.
+#[test]
+fn esp32_arduino_runs_to_loop_from_another_thread() {
+    let adapter = load(
+        "configs/systems/esp32-wroom-32.yaml",
+        "tests/fixtures/source-debug/esp32-arduino.elf",
+    );
+    set_line_breakpoint(&adapter, "src/main.ino", 27);
+    let worker = adapter.clone();
+    let pc = std::thread::spawn(move || run_to_breakpoint(&worker, 400_000_000))
+        .join()
+        .unwrap();
+    assert_eq!(pc, 0x400d_147a);
+    // And steps on this thread from there.
+    assert_eq!(step(&adapter, StepKind::Over).0, StepStop::LineChanged);
+    assert_eq!(here(&adapter).1, 28);
 }

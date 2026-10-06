@@ -6,6 +6,9 @@
 
 use crate::trace::TraceBuffer;
 use anyhow::{anyhow, Result};
+use labwired_core::peripherals::esp_xtensa_common::rom_thunks::{
+    esp32_thread_state, set_esp32_thread_state, Esp32ThreadState,
+};
 use labwired_core::session::machine::SessionMachine;
 use labwired_core::system::arch_policy::{machine_family, MachineFamily};
 use labwired_core::trace::{InstructionTrace, MemoryWrite};
@@ -147,6 +150,9 @@ pub struct LabwiredAdapter {
     source: Arc<Mutex<Option<SourceDebug>>>,
     /// The loaded machine's architecture family.
     family: Arc<Mutex<Option<MachineFamily>>>,
+    /// A classic-ESP32 Arduino machine's thread-local boot hooks, carried to
+    /// whichever thread runs the machine next (see [`Self::on_this_thread`]).
+    esp32_thread: Arc<Mutex<Option<Esp32ThreadState>>>,
 }
 
 #[derive(Debug, Default)]
@@ -209,6 +215,7 @@ impl LabwiredAdapter {
             console: Arc::new(Mutex::new(None)),
             source: Arc::new(Mutex::new(None)),
             family: Arc::new(Mutex::new(None)),
+            esp32_thread: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -221,6 +228,22 @@ impl LabwiredAdapter {
     /// states the firmware was ever in.
     fn forget_history(&self) {
         *self.trace_buffer.lock().unwrap() = TraceBuffer::new(100_000);
+    }
+
+    /// Run `f`, which advances the machine, with the session's thread-local
+    /// ESP32 hooks installed on this thread, and keep what it leaves there.
+    /// The server steps on its request thread and runs `continue` on a
+    /// worker; without this the worker would run an Arduino-ESP32 sketch with
+    /// the hooks its boot installed on the other thread unset.
+    fn on_this_thread<R>(&self, f: impl FnOnce() -> R) -> R {
+        let state = self.esp32_thread.lock().unwrap().clone();
+        let Some(state) = state else {
+            return f();
+        };
+        set_esp32_thread_state(&state);
+        let out = f();
+        *self.esp32_thread.lock().unwrap() = Some(esp32_thread_state());
+        out
     }
 
     pub fn get_telemetry(&self) -> Option<TelemetryData> {
@@ -293,6 +316,7 @@ impl LabwiredAdapter {
         *self.console.lock().unwrap() = None;
         *self.source.lock().unwrap() = None;
         *self.family.lock().unwrap() = None;
+        *self.esp32_thread.lock().unwrap() = None;
 
         let (mut machine, family) = match &system_path {
             Some(sys_path) => {
@@ -376,6 +400,7 @@ impl LabwiredAdapter {
             )
             .map_err(|e| anyhow!("Arduino-ESP32 boot: {e}"))?;
             *self.console.lock().unwrap() = Some(built.uart_sink);
+            *self.esp32_thread.lock().unwrap() = Some(esp32_thread_state());
             Box::new(built.machine)
         } else {
             let built = build_machine(BuildRequest {
@@ -547,6 +572,10 @@ impl LabwiredAdapter {
     }
 
     pub fn step(&self) -> Result<labwired_core::StopReason> {
+        self.on_this_thread(|| self.step_inner())
+    }
+
+    fn step_inner(&self) -> Result<labwired_core::StopReason> {
         let mut guard = self.machine.lock().unwrap();
         if let Some(machine) = guard.as_mut() {
             self.record(JournalOp::Step);
@@ -692,9 +721,11 @@ impl LabwiredAdapter {
         self.record(JournalOp::StepSource(kind, max_instructions));
         self.forget_history();
         let target: &mut dyn labwired_core::debug::SourceStepTarget = &mut **machine;
-        source_step::step(target, debug, family, kind, max_instructions, &[])
-            .map(Some)
-            .map_err(|e| anyhow!(e))
+        self.on_this_thread(|| {
+            source_step::step(target, debug, family, kind, max_instructions, &[])
+                .map(Some)
+                .map_err(|e| anyhow!(e))
+        })
     }
 
     pub fn step_over_source_line(
@@ -953,6 +984,10 @@ impl LabwiredAdapter {
     }
 
     pub fn continue_execution_chunk(&self, max_steps: u32) -> Result<labwired_core::StopReason> {
+        self.on_this_thread(|| self.continue_inner(max_steps))
+    }
+
+    fn continue_inner(&self, max_steps: u32) -> Result<labwired_core::StopReason> {
         let mut guard = self.machine.lock().unwrap();
         if let Some(machine) = guard.as_mut() {
             self.record(JournalOp::Run(max_steps));
@@ -1369,6 +1404,7 @@ impl LabwiredAdapter {
         let old_uart = std::mem::take(&mut *self.uart_sink.lock().unwrap());
         // The reload builds a new machine with its own console capture.
         let old_console = self.console.lock().unwrap().take();
+        let old_esp32_thread = self.esp32_thread.lock().unwrap().clone();
 
         let rebuilt = self.load_firmware(launch.0, launch.1).map(|()| {
             for op in ops.iter() {
@@ -1391,6 +1427,7 @@ impl LabwiredAdapter {
             *self.trace_buffer.lock().unwrap() = old_trace;
             *self.uart_sink.lock().unwrap() = old_uart;
             *self.console.lock().unwrap() = old_console;
+            *self.esp32_thread.lock().unwrap() = old_esp32_thread;
             return Err(match rebuilt {
                 Err(e) => anyhow!("restore failed reloading the firmware: {e}"),
                 Ok(()) => anyhow!(

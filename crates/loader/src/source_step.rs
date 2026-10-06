@@ -142,6 +142,13 @@ impl SourceDebug {
             .map(|(start, size, _)| *start..start + size)
     }
 
+    /// How many inlined calls deep `pc` is (0 in a function's own code).
+    pub fn inline_depth(&self, pc: u32) -> usize {
+        self.symbols
+            .inline_depth(self.map.code_address(u64::from(pc)))
+            .unwrap_or(0)
+    }
+
     /// Where `pc` is. At a function's first instruction the first statement's
     /// line is reported rather than the opening line (see
     /// [`SourceMap::location_at_entry`]).
@@ -381,6 +388,10 @@ pub fn step_source_line(
 
     let (start_pc, start_sp) = pc_sp(target, sp_id);
     let start_line = debug.map.line_key(u64::from(start_pc));
+    // Step-over also steps over INLINED calls: a line inside a function
+    // inlined deeper than where the step started is not a stop (Rust's
+    // `write_volatile`, an `-Os` helper), as a debugger's `next` treats it.
+    let start_depth = debug.inline_depth(start_pc);
     let mut frame_sp = start_sp;
     let mut frame_fn = debug.function_range(start_pc);
 
@@ -482,7 +493,9 @@ pub fn step_source_line(
         }
 
         let pc = pc_sp(target, sp_id).0;
-        if debug.map.is_statement(u64::from(pc)) && debug.map.line_key(u64::from(pc)) != start_line
+        if debug.map.is_statement(u64::from(pc))
+            && debug.map.line_key(u64::from(pc)) != start_line
+            && !(over && debug.inline_depth(pc) > start_depth)
         {
             return Ok(outcome(StepStop::LineChanged, pc, stepped, ran_through));
         }
