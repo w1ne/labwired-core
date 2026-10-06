@@ -15,8 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Source-level stepping in `labwired-dap`, the adapter behind hosted debug
   sessions: `next` / `stepIn` / `stepOut` step one source line (calls stepped
-  over run at engine speed with idle fast-forward, and so do lines of a
-  function inlined into the current one), `granularity:
+  over run at engine speed with idle fast-forward, and code inlined from
+  another file runs through as in the browser), `granularity:
   "instruction"` keeps the single-instruction step, a source breakpoint covers
   every address its line compiled to, `stackTrace` reports the function and
   first-statement line the browser shows, and the Locals scope reads

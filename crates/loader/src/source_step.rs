@@ -142,13 +142,6 @@ impl SourceDebug {
             .map(|(start, size, _)| *start..start + size)
     }
 
-    /// How many inlined calls deep `pc` is (0 in a function's own code).
-    pub fn inline_depth(&self, pc: u32) -> usize {
-        self.symbols
-            .inline_depth(self.map.code_address(u64::from(pc)))
-            .unwrap_or(0)
-    }
-
     /// Where `pc` is. At a function's first instruction the first statement's
     /// line is reported rather than the opening line (see
     /// [`SourceMap::location_at_entry`]).
@@ -368,6 +361,13 @@ fn run_through(
 /// the call, not the one recorded when the step started: a step that starts
 /// on a function's first instruction records the stack before the prologue
 /// pushes, and a return compared against it would never be seen.
+///
+/// Step-over also runs through code inlined into the stepped frame from
+/// another source file (core's `write_volatile`, a range iterator, a `nop()`
+/// delay loop): a statement in a different file, with the stack no shallower
+/// than at the start, is still part of the line being stepped. The step ends
+/// at the next statement back in the starting file (the starting line too,
+/// once it has left it), or in another file once the frame has returned.
 pub fn step_source_line(
     target: &mut dyn SourceStepTarget,
     debug: &SourceDebug,
@@ -388,10 +388,8 @@ pub fn step_source_line(
 
     let (start_pc, start_sp) = pc_sp(target, sp_id);
     let start_line = debug.map.line_key(u64::from(start_pc));
-    // Step-over also steps over INLINED calls: a line inside a function
-    // inlined deeper than where the step started is not a stop (Rust's
-    // `write_volatile`, an `-Os` helper), as a debugger's `next` treats it.
-    let start_depth = debug.inline_depth(start_pc);
+    // Set once step-over has run into code inlined from another file.
+    let mut left_file = false;
     let mut frame_sp = start_sp;
     let mut frame_fn = debug.function_range(start_pc);
 
@@ -492,12 +490,20 @@ pub fn step_source_line(
             }
         }
 
-        let pc = pc_sp(target, sp_id).0;
-        if debug.map.is_statement(u64::from(pc))
-            && debug.map.line_key(u64::from(pc)) != start_line
-            && !(over && debug.inline_depth(pc) > start_depth)
-        {
-            return Ok(outcome(StepStop::LineChanged, pc, stepped, ran_through));
+        let (pc, sp) = pc_sp(target, sp_id);
+        if debug.map.is_statement(u64::from(pc)) {
+            let key = debug.map.line_key(u64::from(pc));
+            if key != start_line || left_file {
+                let inlined_elsewhere = over
+                    && key.is_some()
+                    && start_line.is_some()
+                    && key.map(|k| k.0) != start_line.map(|k| k.0)
+                    && sp <= start_sp;
+                if !inlined_elsewhere {
+                    return Ok(outcome(StepStop::LineChanged, pc, stepped, ran_through));
+                }
+                left_file = true;
+            }
         }
     }
     let pc = pc_sp(target, sp_id).0;

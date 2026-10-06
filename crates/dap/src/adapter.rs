@@ -6,9 +6,7 @@
 
 use crate::trace::TraceBuffer;
 use anyhow::{anyhow, Result};
-use labwired_core::peripherals::esp_xtensa_common::rom_thunks::{
-    esp32_thread_state, set_esp32_thread_state, Esp32ThreadState,
-};
+use labwired_core::peripherals::esp_xtensa_common::rom_thunks;
 use labwired_core::session::machine::SessionMachine;
 use labwired_core::system::arch_policy::{machine_family, MachineFamily};
 use labwired_core::trace::{InstructionTrace, MemoryWrite};
@@ -122,6 +120,38 @@ pub struct SnapshotInfo {
     pub id: u32,
     pub label: String,
     pub cycles: u64,
+}
+
+/// The thread-local ESP32-classic boot hooks of one session, as a value.
+///
+/// `rom_thunks` keeps them thread-local because a `Machine` normally runs on
+/// one thread. This adapter steps on its request thread and runs `continue`
+/// on a worker, so it carries them across (see
+/// [`LabwiredAdapter::on_this_thread`]); otherwise the worker runs the
+/// firmware with them unset (no `pxCurrentTCB` for
+/// `xTaskGetCurrentTaskHandle`, no pending APP_CPU release).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct Esp32ThreadState {
+    px_current_tcb: Option<u32>,
+    appcpu_boot_addr: Option<u32>,
+    appcpu_reset_released: bool,
+    appcpu_up_flags: Vec<u32>,
+}
+
+fn esp32_thread_state() -> Esp32ThreadState {
+    Esp32ThreadState {
+        px_current_tcb: rom_thunks::PX_CURRENT_TCB_ADDR.with(|s| s.get()),
+        appcpu_boot_addr: rom_thunks::APPCPU_BOOT_ADDR.with(|s| s.get()),
+        appcpu_reset_released: rom_thunks::APPCPU_RESET_RELEASED.with(|s| s.get()),
+        appcpu_up_flags: rom_thunks::APPCPU_UP_FLAGS.with(|f| f.borrow().clone()),
+    }
+}
+
+fn set_esp32_thread_state(state: &Esp32ThreadState) {
+    rom_thunks::PX_CURRENT_TCB_ADDR.with(|s| s.set(state.px_current_tcb));
+    rom_thunks::APPCPU_BOOT_ADDR.with(|s| s.set(state.appcpu_boot_addr));
+    rom_thunks::APPCPU_RESET_RELEASED.with(|s| s.set(state.appcpu_reset_released));
+    rom_thunks::APPCPU_UP_FLAGS.with(|f| *f.borrow_mut() = state.appcpu_up_flags.clone());
 }
 
 /// A console capture buffer a machine builder attaches.

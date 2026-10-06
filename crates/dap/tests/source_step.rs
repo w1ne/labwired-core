@@ -156,14 +156,17 @@ fn cortex_m_step_over_into_and_out() {
     let locals = adapter.source_locals().unwrap();
     let p = locals.iter().find(|l| l.name == "p").expect("local p");
     assert_eq!(p.kind, "frame_offset");
-    // Out: back in main, past the call on 224. probe_tmp117 (225) was
-    // inlined into main by -Os; step over runs its lines like a call, so the
-    // step lands on main's own next line.
+    // Out: back in main, past the call on 224. The next statement main
+    // reaches is probe_tmp117's first line, which -Os inlined into main (it
+    // has no symbol of its own), so DWARF names the inlined function.
     let (stop, _) = step(&adapter, StepKind::Out);
     assert_eq!(stop, StepStop::LineChanged);
     let (file, line, function) = here(&adapter);
-    assert_eq!((file.as_str(), function.as_str()), ("main.c", "main"));
-    assert!((225..=230).contains(&line), "main after 224, got {line}");
+    assert_eq!(
+        (file.as_str(), function.as_str()),
+        ("main.c", "probe_tmp117")
+    );
+    assert!((195..=210).contains(&line), "probe_tmp117 body, got {line}");
 }
 
 /// Arduino Uno (AVR): a breakpoint on loop()'s first line and a step over a
@@ -224,4 +227,28 @@ fn esp32_arduino_runs_to_loop_from_another_thread() {
     // And steps on this thread from there.
     assert_eq!(step(&adapter, StepKind::Over).0, StepStop::LineChanged);
     assert_eq!(here(&adapter).1, 28);
+}
+
+/// RISC-V (riscv-rt, Rust release build): step over runs the six
+/// `write_volatile`s inlined from core in one step and lands on `loop {}`;
+/// step into stops in the inlined `ptr/mod.rs`.
+#[test]
+fn riscv_step_over_runs_through_code_inlined_from_another_file() {
+    let adapter = load(
+        "configs/systems/ci-fixture-riscv-uart1.yaml",
+        "tests/fixtures/riscv-ci-fixture.elf",
+    );
+    set_line_breakpoint(&adapter, "riscv-ci-fixture/src/main.rs", 12);
+    assert_eq!(run_to_breakpoint(&adapter, 5_000_000), 0x8000_02ec);
+    assert_eq!(step(&adapter, StepKind::Over), (StepStop::LineChanged, 0x8000_0320));
+    assert_eq!(here(&adapter).1, 24);
+
+    let adapter = load(
+        "configs/systems/ci-fixture-riscv-uart1.yaml",
+        "tests/fixtures/riscv-ci-fixture.elf",
+    );
+    set_line_breakpoint(&adapter, "riscv-ci-fixture/src/main.rs", 12);
+    run_to_breakpoint(&adapter, 5_000_000);
+    assert_eq!(step(&adapter, StepKind::Into).0, StepStop::LineChanged);
+    assert_eq!(here(&adapter).0, "mod.rs");
 }

@@ -700,21 +700,6 @@ impl SymbolProvider {
         None
     }
 
-    /// How many inlined calls deep `addr` is: 0 in a function's own code, 1
-    /// inside a function inlined into it, and so on. `None` without debug info
-    /// for `addr`.
-    pub fn inline_depth(&self, addr: u64) -> Option<usize> {
-        let mut frames = match self.context.find_frames(addr) {
-            addr2line::LookupResult::Output(Ok(frames)) => frames,
-            _ => return None,
-        };
-        let mut count = 0usize;
-        while let Ok(Some(_)) = frames.next() {
-            count += 1;
-        }
-        count.checked_sub(1)
-    }
-
     pub fn location_to_pc(&self, file_path: &str, line: u32) -> Option<u64> {
         self.location_to_pc_nearest(file_path, line)
             .map(|(addr, _line)| addr)
