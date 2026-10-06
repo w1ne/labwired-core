@@ -20,6 +20,7 @@ pub mod coverage;
 pub mod footprint;
 pub mod multi_image;
 pub mod source_map;
+pub mod source_step;
 
 pub use footprint::{elf_section_totals_v1, ElfSectionTotals, FOOTPRINT_METHOD};
 
