@@ -240,7 +240,10 @@ fn riscv_step_over_runs_through_code_inlined_from_another_file() {
     );
     set_line_breakpoint(&adapter, "riscv-ci-fixture/src/main.rs", 12);
     assert_eq!(run_to_breakpoint(&adapter, 5_000_000), 0x8000_02ec);
-    assert_eq!(step(&adapter, StepKind::Over), (StepStop::LineChanged, 0x8000_0320));
+    assert_eq!(
+        step(&adapter, StepKind::Over),
+        (StepStop::LineChanged, 0x8000_0320)
+    );
     assert_eq!(here(&adapter).1, 24);
 
     let adapter = load(
