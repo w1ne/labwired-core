@@ -847,6 +847,34 @@ mod tests {
         assert!(p.offset.is_some() && p.value.is_none());
     }
 
+    /// `twim_read_reg` (0xa8..0x12c) declares `i` in a `for` block (0xaa..0xbe
+    /// in pieces) and `spin` in a later block (0xf2..0xfc): each is a local
+    /// only inside its own block. `acked` is the function's and always is.
+    #[test]
+    fn locals_are_limited_to_the_blocks_holding_the_pc() {
+        let sim = ring();
+        let names = |pc: u32| -> Vec<String> {
+            sim.locals_s(pc)
+                .unwrap()
+                .into_iter()
+                .map(|l| l.name)
+                .collect()
+        };
+        let in_for = names(0xb6);
+        assert!(in_for.contains(&"i".into()), "{in_for:?}");
+        assert!(!in_for.contains(&"spin".into()), "{in_for:?}");
+        assert!(in_for.contains(&"acked".into()), "{in_for:?}");
+        let in_spin = names(0xf4);
+        assert!(in_spin.contains(&"spin".into()), "{in_spin:?}");
+        assert!(!in_spin.contains(&"i".into()), "{in_spin:?}");
+        assert!(in_spin.contains(&"acked".into()), "{in_spin:?}");
+        let after = names(0x110);
+        assert!(
+            !after.contains(&"i".into()) && !after.contains(&"spin".into()),
+            "{after:?}"
+        );
+    }
+
     #[test]
     fn step_batch_stops_at_engine_breakpoints() {
         let mut sim = ring();

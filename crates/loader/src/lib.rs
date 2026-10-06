@@ -787,50 +787,55 @@ impl SymbolProvider {
                 Err(_) => continue,
             };
 
-            let mut in_subprogram = false;
-            let mut subprogram_depth = 0;
-            let mut entries = unit.entries();
-
-            while let Ok(Some((depth, entry))) = entries.next_dfs() {
-                if !in_subprogram {
-                    if entry.tag() == addr2line::gimli::DW_TAG_subprogram {
-                        let mut low_pc = None;
-                        let mut high_pc = None;
-
-                        if let Some(addr2line::gimli::AttributeValue::Addr(addr)) = entry
-                            .attr_value(addr2line::gimli::DW_AT_low_pc)
-                            .ok()
-                            .flatten()
-                        {
-                            low_pc = Some(addr);
-                        }
-
-                        if let Some(attr) = entry
-                            .attr_value(addr2line::gimli::DW_AT_high_pc)
-                            .ok()
-                            .flatten()
-                        {
-                            match attr {
-                                addr2line::gimli::AttributeValue::Addr(addr) => {
-                                    high_pc = Some(addr)
-                                }
-                                addr2line::gimli::AttributeValue::Udata(size) => {
-                                    high_pc = low_pc.map(|l| l + size)
-                                }
-                                _ => {}
-                            }
-                        }
-
-                        if let (Some(low), Some(high)) = (low_pc, high_pc) {
-                            if pc >= low && pc < high {
-                                in_subprogram = true;
-                                subprogram_depth = depth;
-                            }
+            // Whether `entry`'s address ranges (low/high_pc or DW_AT_ranges) hold `pc`.
+            let covers =
+                |entry: &addr2line::gimli::DebuggingInformationEntry<'_, '_, _, _>| -> bool {
+                    let Ok(mut ranges) = self.dwarf.die_ranges(&unit, entry) else {
+                        return false;
+                    };
+                    while let Ok(Some(r)) = ranges.next() {
+                        if r.begin <= pc && pc < r.end {
+                            return true;
                         }
                     }
-                } else {
-                    if depth <= subprogram_depth {
-                        in_subprogram = false;
+                    false
+                };
+
+            // `next_dfs` reports a depth change, not a depth: keep the sum.
+            let mut depth: isize = 0;
+            // Depth of the subprogram that contains `pc`, while inside it.
+            let mut subprogram: Option<isize> = None;
+            // Lexical blocks and inlined calls inside it, with whether each
+            // holds `pc`. A variable is in scope only if all of them do: the
+            // `let`s of an earlier `unsafe {}` block are not live later on.
+            let mut scopes: Vec<(isize, bool)> = Vec::new();
+            let mut entries = unit.entries();
+
+            while let Ok(Some((delta, entry))) = entries.next_dfs() {
+                depth += delta;
+                while scopes.last().is_some_and(|(d, _)| *d >= depth) {
+                    scopes.pop();
+                }
+                if subprogram.is_some_and(|d| depth <= d) {
+                    subprogram = None;
+                }
+                let Some(_) = subprogram else {
+                    if entry.tag() == addr2line::gimli::DW_TAG_subprogram && covers(entry) {
+                        subprogram = Some(depth);
+                    }
+                    continue;
+                };
+                {
+                    if matches!(
+                        entry.tag(),
+                        addr2line::gimli::DW_TAG_lexical_block
+                            | addr2line::gimli::DW_TAG_inlined_subroutine
+                            | addr2line::gimli::DW_TAG_subprogram
+                    ) {
+                        scopes.push((depth, covers(entry)));
+                        continue;
+                    }
+                    if !scopes.iter().all(|(_, live)| *live) {
                         continue;
                     }
 
