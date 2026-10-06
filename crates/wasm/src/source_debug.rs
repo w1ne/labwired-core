@@ -371,6 +371,15 @@ impl WasmSimulator {
     /// return compared against it would never be seen. The stack pointer at a
     /// callee's first instruction is the caller's at the call, whatever the
     /// caller's prologue has done, and it is that value again on return.
+    ///
+    /// Step-over also runs through code inlined into the stepped frame from
+    /// another source file (core's `write_volatile`, a range iterator, a
+    /// `nop()` delay loop): a statement in a different file, with the stack
+    /// no shallower than at the start, is still part of the line being
+    /// stepped. The step ends at the next statement back in the starting file
+    /// (the starting line too, once it has left it), or in another file once
+    /// the frame has returned. Doing it here, not with a call back in per
+    /// inlined line, keeps a step over an inlined delay loop to one call.
     pub(crate) fn step_source_line_s(
         &mut self,
         over: bool,
@@ -391,6 +400,8 @@ impl WasmSimulator {
 
         let (start_pc, start_sp) = self.focused_pc_sp(sp_id)?;
         let start_line = debug.map.line_key(u64::from(start_pc));
+        // Set once step-over has run into code inlined from another file.
+        let mut left_file = false;
         let mut frame_sp = start_sp;
         let mut frame_fn = function_at(start_pc);
 
@@ -496,11 +507,20 @@ impl WasmSimulator {
                 }
             }
 
-            let pc = self.focused_pc_sp(sp_id)?.0;
-            if debug.map.is_statement(u64::from(pc))
-                && debug.map.line_key(u64::from(pc)) != start_line
-            {
-                return Ok(("line_changed", pc, total(stepped, ran_through)));
+            let (pc, sp) = self.focused_pc_sp(sp_id)?;
+            if debug.map.is_statement(u64::from(pc)) {
+                let key = debug.map.line_key(u64::from(pc));
+                if key != start_line || left_file {
+                    let inlined_elsewhere = over
+                        && key.is_some()
+                        && start_line.is_some()
+                        && key.map(|k| k.0) != start_line.map(|k| k.0)
+                        && sp <= start_sp;
+                    if !inlined_elsewhere {
+                        return Ok(("line_changed", pc, total(stepped, ran_through)));
+                    }
+                    left_file = true;
+                }
             }
         }
         let pc = self.focused_pc_sp(sp_id)?.0;
@@ -867,18 +887,26 @@ mod tests {
         let main = line_pc(&sim, "riscv-ci-fixture/src/main.rs", 12);
         assert_eq!(main, 0x8000_02ec);
         run_to(&mut sim, main);
-        // main.rs:12 -> the inlined write_volatile (core ptr/mod.rs).
-        let (reason, pc, _) = sim.step_source_line_s(true, 10_000, &[]).unwrap();
+        // Into: main.rs:12 -> the inlined write_volatile (core ptr/mod.rs).
+        let (reason, pc, _) = sim.step_source_line_s(false, 10_000, &[]).unwrap();
         assert_eq!(reason, "line_changed");
         let debug = sim.source_debug_s().unwrap();
         assert!(WasmSimulator::location_of(&debug, pc)
             .unwrap()
             .file
             .ends_with("ptr/mod.rs"));
-        // All six inlined writes share one line; the next step lands on `loop {}`.
-        let (reason, pc, _) = sim.step_source_line_s(true, 10_000, &[]).unwrap();
+
+        // Over runs the six writes inlined from core in one call and lands on
+        // `loop {}`, back in main.rs.
+        let mut sim = build(
+            "configs/systems/ci-fixture-riscv-uart1.yaml",
+            "tests/fixtures/riscv-ci-fixture.elf",
+        );
+        run_to(&mut sim, main);
+        let (reason, pc, n) = sim.step_source_line_s(true, 10_000, &[]).unwrap();
         assert_eq!(reason, "line_changed");
         assert_eq!((pc, line_of(&sim, pc)), (0x8000_0320, 24));
+        assert!(n > 6, "ran the inlined writes ({n} instructions)");
         // `loop {}` never leaves its line.
         let (reason, _, _) = sim.step_source_line_s(true, 50, &[]).unwrap();
         assert_eq!(reason, "cap");
