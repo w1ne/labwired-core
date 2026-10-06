@@ -845,36 +845,55 @@ impl SymbolProvider {
                                 s.to_string_lossy().ok().map(|c| c.into_owned())
                             });
 
-                        if let (Some(n), Some(addr2line::gimli::AttributeValue::Exprloc(expr))) = (
-                            name,
-                            entry
-                                .attr_value(addr2line::gimli::DW_AT_location)
-                                .ok()
-                                .flatten(),
-                        ) {
-                            let mut ops = expr.operations(unit.encoding());
-                            if let Ok(Some(op)) = ops.next() {
-                                match op {
-                                    addr2line::gimli::Operation::Register { register } => {
-                                        locals.push(LocalVariable {
-                                            name: n,
-                                            location: DwarfLocation::Register(register.0),
-                                        });
-                                    }
-                                    addr2line::gimli::Operation::FrameOffset { offset } => {
-                                        locals.push(LocalVariable {
-                                            name: n,
-                                            location: DwarfLocation::FrameRelative(offset),
-                                        });
-                                    }
-                                    _ => {
-                                        locals.push(LocalVariable {
-                                            name: n,
-                                            location: DwarfLocation::Other(format!("{:?}", op)),
-                                        });
+                        let Some(n) = name else { continue };
+                        // A single expression, or (what optimised builds emit
+                        // for nearly every local) a location list whose entry
+                        // covering `pc` holds it. A list with no entry here
+                        // means the value is gone at this point.
+                        let expr = match entry
+                            .attr_value(addr2line::gimli::DW_AT_location)
+                            .ok()
+                            .flatten()
+                        {
+                            Some(addr2line::gimli::AttributeValue::Exprloc(expr)) => Some(expr),
+                            Some(addr2line::gimli::AttributeValue::LocationListsRef(offset)) => {
+                                let Ok(mut list) = self.dwarf.locations(&unit, offset) else {
+                                    continue;
+                                };
+                                let mut found = None;
+                                while let Ok(Some(e)) = list.next() {
+                                    if e.range.begin <= pc && pc < e.range.end {
+                                        found = Some(e.data);
+                                        break;
                                     }
                                 }
+                                if found.is_none() {
+                                    locals.push(LocalVariable {
+                                        name: n,
+                                        location: DwarfLocation::Other("optimized out".into()),
+                                    });
+                                    continue;
+                                }
+                                found
                             }
+                            _ => None,
+                        };
+                        let Some(expr) = expr else { continue };
+                        let mut ops = expr.operations(unit.encoding());
+                        if let Ok(Some(op)) = ops.next() {
+                            let location = match op {
+                                addr2line::gimli::Operation::Register { register } => {
+                                    DwarfLocation::Register(register.0)
+                                }
+                                addr2line::gimli::Operation::FrameOffset { offset } => {
+                                    DwarfLocation::FrameRelative(offset)
+                                }
+                                addr2line::gimli::Operation::Address { address } => {
+                                    DwarfLocation::Address(address)
+                                }
+                                _ => DwarfLocation::Other(format!("{:?}", op)),
+                            };
+                            locals.push(LocalVariable { name: n, location });
                         }
                     }
                 }

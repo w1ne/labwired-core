@@ -74,6 +74,10 @@ pub struct SourceMap {
     rows: Vec<Row>,
     /// Addresses that start an `is_stmt` row: where a source-level step stops.
     stmt_addrs: HashSet<u64>,
+    /// Clears what a pc carries that is not part of its address: the Thumb
+    /// bit on Arm. Every other architecture's pc is the address, and on
+    /// Xtensa an odd one is an ordinary instruction start.
+    pc_mask: u64,
 }
 
 impl SourceMap {
@@ -158,11 +162,19 @@ impl SourceMap {
             .filter(|r| r.is_stmt && r.file != END_OF_SEQUENCE)
             .map(|r| r.addr)
             .collect();
+        // EM_ARM; e_machine is at byte 18 of the ELF header.
+        let arm = symbols.data.get(18..20) == Some(&[40, 0][..]);
         Self {
             files,
             rows,
             stmt_addrs,
+            pc_mask: if arm { !1 } else { !0 },
         }
+    }
+
+    /// `pc` as a code address: without the Arm Thumb bit, else unchanged.
+    pub fn code_address(&self, pc: u64) -> u64 {
+        pc & self.pc_mask
     }
 
     /// True when the ELF carries no usable line information.
@@ -172,7 +184,7 @@ impl SourceMap {
 
     /// The source position of the instruction at `pc` (Thumb bit ignored).
     pub fn location(&self, pc: u64) -> Option<SourcePos> {
-        let row = self.row_at(pc & !1)?;
+        let row = self.row_at(pc & self.pc_mask)?;
         Some(SourcePos {
             file: self.files[row.file as usize].clone(),
             line: row.line,
@@ -191,7 +203,7 @@ impl SourceMap {
     /// last row restates the first row's line: an entry whose last row names
     /// something else (an inlined callee's body) keeps it.
     pub fn location_at_entry(&self, pc: u64) -> Option<SourcePos> {
-        let pc = pc & !1;
+        let pc = pc & self.pc_mask;
         let last = self.row_at(pc)?;
         let start = self.rows.partition_point(|r| r.addr < pc);
         let end = self.rows.partition_point(|r| r.addr <= pc);
@@ -219,12 +231,12 @@ impl SourceMap {
 
     /// `(file index, line)` of `pc`, for cheap comparisons while stepping.
     pub fn line_key(&self, pc: u64) -> Option<(u32, u32)> {
-        self.row_at(pc & !1).map(|r| (r.file, r.line))
+        self.row_at(pc & self.pc_mask).map(|r| (r.file, r.line))
     }
 
     /// Whether `pc` starts a statement (an `is_stmt` row begins there).
     pub fn is_statement(&self, pc: u64) -> bool {
-        self.stmt_addrs.contains(&(pc & !1))
+        self.stmt_addrs.contains(&(pc & self.pc_mask))
     }
 
     /// The statement address for `line` of the file best matching `file`.

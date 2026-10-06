@@ -1570,14 +1570,18 @@ impl WasmSimulator {
         );
     }
 
+    /// The pc of the core a debugger follows: core 0, or the second core of a
+    /// dual-core chip after a breakpoint stopped it (see
+    /// [`source_debug::focused_cpu`]).
     #[wasm_bindgen]
     pub fn get_pc(&self) -> Result<u32, JsValue> {
-        Ok(self.machine_or_err()?.cpu.get_pc())
+        Ok(source_debug::focused_cpu(self.machine_or_err()?).get_pc())
     }
 
+    /// A register of the core `get_pc` reads.
     #[wasm_bindgen]
     pub fn get_register(&self, id: u8) -> Result<u32, JsValue> {
-        Ok(self.machine_or_err()?.cpu.get_register(id))
+        Ok(source_debug::focused_cpu(self.machine_or_err()?).get_register(id))
     }
 
     #[wasm_bindgen]
