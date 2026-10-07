@@ -1402,6 +1402,10 @@ static DESCRIPTORS: &[(&str, &str)] = &[
         include_str!("../../../../configs/peripherals/stm32f405/spi1.yaml"),
     ),
     (
+        "stm32f405/syscfg.yaml",
+        include_str!("../../../../configs/peripherals/stm32f405/syscfg.yaml"),
+    ),
+    (
         "stm32f405/tim1.yaml",
         include_str!("../../../../configs/peripherals/stm32f405/tim1.yaml"),
     ),
@@ -1512,6 +1516,10 @@ static DESCRIPTORS: &[(&str, &str)] = &[
     (
         "stm32f407/stk.yaml",
         include_str!("../../../../configs/peripherals/stm32f407/stk.yaml"),
+    ),
+    (
+        "stm32f407/syscfg.yaml",
+        include_str!("../../../../configs/peripherals/stm32f407/syscfg.yaml"),
     ),
     (
         "stm32f407/tim1.yaml",

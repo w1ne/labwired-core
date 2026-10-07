@@ -1,0 +1,38 @@
+# The same three wires, with an RP2040 (Raspberry Pi Pico) in place of the
+# ATmega328P. The STM32 firmware is unchanged; the RP2040 counts the STM32's
+# edges with IO_BANK0 GPIO interrupts. Firmware: src/rp2040.c (./build.sh).
+schema_version: "1.0"
+name: gpio-net-stm32-rp2040
+nodes:
+  - id: stm
+    system: "../stm32g0b1re/system.yaml"
+    firmware: "firmware/stm.elf"
+  - id: rp
+    system: "../../configs/systems/rp2040-pico.yaml"
+    firmware: "firmware/rp2040.elf"
+interconnects:
+  - type: gpio_net
+    nodes: [rp, stm]
+    config:
+      name: irq
+      pull: down
+      members:
+        - { node: rp, peripheral: sio, pin: 2 }      # GP2, push-pull out
+        - { node: stm, peripheral: gpiob, pin: 0 }   # EXTI line 0
+  - type: gpio_net
+    nodes: [rp, stm]
+    config:
+      name: ready
+      pull: down
+      members:
+        - { node: stm, peripheral: gpiob, pin: 1 }   # push-pull out
+        - { node: rp, peripheral: sio, pin: 3 }      # GP3, EDGE_HIGH irq
+  - type: gpio_net
+    nodes: [rp, stm]
+    config:
+      name: alert
+      pull: up
+      latency_ns: 100
+      members:
+        - { node: stm, peripheral: gpiob, pin: 4 }   # open-drain
+        - { node: rp, peripheral: sio, pin: 4 }      # GP4, OE drives the 0

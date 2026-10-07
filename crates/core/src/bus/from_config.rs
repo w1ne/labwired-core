@@ -308,6 +308,7 @@ impl SystemBus {
             flash_models_ops: false,
             nordic_gpio_service: false,
             timer_capture_wired: false,
+            wire_inputs_live: false,
             resident_scheduling_disabled: false,
             flash_error_flags_idx: None,
             u5_program_gate_idx: None,
@@ -568,6 +569,10 @@ impl SystemBus {
                     // 100 ms timeout to real firmware.
                     if let Some(err_irq) = p_cfg.config.get("irq_error").and_then(|v| v.as_u64()) {
                         ctl.set_error_irq(err_irq as u32);
+                    }
+                    // Which datasheet AF map routes SCL/SDA (`pad_map: stm32g0`).
+                    if let Some(pad_map) = p_cfg.config.get("pad_map").and_then(|v| v.as_str()) {
+                        ctl.set_pad_map(pad_map)?;
                     }
                     Box::new(ctl)
                 };
@@ -1010,7 +1015,8 @@ impl SystemBus {
         // RP2040: bind I²C wires to the pads IO_BANK0's FUNCSEL can route them to.
         bus.wire_rp2040_i2c_pads();
         // Same for the RP2040 UARTs' TX/RX, so serial output is a waveform on
-        // the routed pad and not just console text.
+        // the routed pad and not just console text. This pass also pairs the
+        // SIO with IO_BANK0 for the GPIO interrupt.
         bus.wire_rp2040_uart_pads();
         // And the RP2040 SPI controllers' SCK/MOSI/CSn, so a probe on an SPI pad
         // measures the shifted bytes rather than the SIO output latch. MISO is

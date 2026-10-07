@@ -806,4 +806,106 @@ mod logic_capture_differential_tests {
             assert_eq!(pd, qd);
         }
     }
+
+    /// Net pads report a four-state drive through the generic push tap
+    /// (`PadPushTap`). The drive stream, not just the level stream, must match
+    /// the poll reference: DDR flips on a pad the outside holds high change
+    /// only its drive.
+    #[test]
+    fn avr_net_pad_drive_stream_is_byte_identical_to_poll() {
+        let run = |force_poll: bool| {
+            let mut machine = avr_pad_machine();
+            machine.logic_force_poll_capture(force_poll);
+            machine
+                .isolate_net_pads(&[("portb".into(), 0), ("portb".into(), 5)])
+                .unwrap();
+            let idx = machine.bus.find_peripheral_index_by_name("portb").unwrap();
+            machine.logic_watch(&[
+                Some(LogicSource::pad(idx, 5)),
+                Some(LogicSource::pad(idx, 0)),
+                Some(LogicSource::pad(idx, 3)),
+            ]);
+            assert_eq!(machine.logic_poll_active(), force_poll);
+            for slice in 0..40 {
+                let dev = &mut machine.bus.peripherals[idx].dev;
+                assert!(dev.set_gpio_input(0, slice % 2 == 0));
+                assert!(dev.set_gpio_input(5, slice % 3 == 0));
+                assert!(dev.set_gpio_input(3, slice % 5 == 0));
+                machine.run(Some(17)).unwrap();
+            }
+            (
+                machine.logic_read_edges(0).edges,
+                machine.logic_read_states(0).edges,
+            )
+        };
+        let (poll_levels, poll_states) = run(true);
+        let (push_levels, push_states) = run(false);
+        assert!(poll_states.len() >= 40, "got {}", poll_states.len());
+        assert_eq!(poll_levels, push_levels);
+        assert_eq!(poll_states, push_states);
+    }
+
+    /// An ATmega328P that sleeps between pin-change interrupts keeps its idle
+    /// skip under push capture, and still produces the poll reference's
+    /// exact edges and simulated time. PB3 (PCINT3) is driven from outside;
+    /// the PCINT0 handler toggles PB5, the watched pad.
+    #[cfg(feature = "event-scheduler")]
+    #[test]
+    fn avr_sleeping_on_pcint_keeps_idle_fast_forward_under_push() {
+        let build = || {
+            let mut machine = avr_pad_machine();
+            let cpu = &mut machine.cpu;
+            cpu.flash.iter_mut().for_each(|b| *b = 0xFF);
+            cpu.load_words(0, &[0xC033]); // rjmp main (word 0x34)
+            cpu.load_words(0x0C, &[0x9A1D, 0x9518]); // PCINT0: sbi PINB,5; reti
+            cpu.load_words(
+                0x68,
+                &[
+                    0xE200, // ldi r16,0x20
+                    0xB904, // out DDRB,r16
+                    0xE008, // ldi r16,0x08
+                    0x9300, 0x006B, // sts PCMSK0,r16
+                    0xE001, // ldi r16,1
+                    0x9300, 0x0068, // sts PCICR,r16
+                    0x9300, 0x0053, // sts SMCR,r16 (idle, SE)
+                    0x9478, // sei
+                    0x9588, // sleep
+                    0xCFFD, // rjmp sei
+                ],
+            );
+            cpu.pc = 0;
+            machine.config.idle_fast_forward_enabled = true;
+            machine
+        };
+        let run = |force_poll: bool| {
+            let mut machine = build();
+            machine.logic_force_poll_capture(force_poll);
+            let idx = machine.bus.find_peripheral_index_by_name("portb").unwrap();
+            machine.logic_watch(&[Some(LogicSource::pad(idx, 5))]);
+            machine.reset_step_profile();
+            for k in 1..=20u64 {
+                let dev = &mut machine.bus.peripherals[idx].dev;
+                assert!(dev.set_gpio_input(3, k % 2 == 1));
+                machine.advance_to_cycle(k * 5_000).unwrap();
+            }
+            (
+                machine.logic_read_edges(0).edges,
+                machine.step_profile().cpu_instructions,
+                machine.total_cycles,
+                machine.idle_fast_forward_cycles_skipped,
+            )
+        };
+        let (poll_edges, _, poll_cycles, poll_skipped) = run(true);
+        let (push_edges, push_instr, push_cycles, push_skipped) = run(false);
+        // PB3 goes high at cycle 0, before PCMSK0 is set: 19 changes count.
+        assert_eq!(poll_edges.len(), 19, "one PB5 toggle per seen PB3 change");
+        assert_eq!(poll_edges, push_edges, "exact edges under fast-forward");
+        assert_eq!(poll_cycles, push_cycles, "identical simulated time");
+        assert_eq!(poll_skipped, 0, "poll capture disables the skip");
+        assert!(
+            push_skipped > push_cycles * 9 / 10,
+            "the sleeping core must be skipped: {push_skipped} of {push_cycles}"
+        );
+        assert!(push_instr < push_cycles / 20, "retired {push_instr}");
+    }
 }

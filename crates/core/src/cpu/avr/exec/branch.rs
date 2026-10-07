@@ -29,6 +29,9 @@ impl Avr {
         if op == 0x9518 {
             self.pop_pc(bus)?;
             self.set_flag_i(true);
+            // The main program runs one more instruction before any pending
+            // interrupt is served.
+            self.irq_shadow = true;
             self.cycles += 4;
             return Ok(Some(()));
         }

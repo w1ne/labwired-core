@@ -6,13 +6,89 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Changed
+- GPIO-net worlds (`gpio_net`) run on one clock per node instead of lockstep
+  rounds (conservative parallel discrete-event simulation): a node may run
+  until the slowest member of each of its nets plus that net's latency, and
+  the bookkeeping between runs is a few array reads. Every counter, UART
+  transcript, applied delivery cycle and net report is bit-identical to the
+  lockstep driver, which a test now compares at each step. At the default
+  100 ns latency `examples/gpio-net-two-boards` no longer runs at about half
+  the speed of its two machines run alone (see the GPIO nets how-to, Timing).
+  `World::run_until_ps` runs a round-based world to a time in one call.
+  `World::gpio_net_applied` is ordered by due time, then node id.
+
 ### Fixed
+- ESP32-C3/C6 GPIO `FUNCn_OUT_SEL_CFG` resets to 0x80 (`SIG_GPIO_OUT`, the
+  matrix bypass, per `esp32c3.svd`) instead of 0, so a bare-metal output pad
+  reads as a plain GPIO output rather than as routed to matrix signal 0.
+- STM32F1 and F4 EXTI now raise edge interrupts for external GPIO input
+  changes (`gpio_net` deliveries, board buttons), with RTSR/FTSR/IMR/PR
+  honoured and the port taken from `AFIO_EXTICRx` (F1) or `SYSCFG_EXTICRx`
+  (F4). The F4 `SYSCFG` is now a register model (`type: syscfg`,
+  `profile: stm32f4`) on the F401, F401CDU6, F405, F407 and F411CEU6. Before,
+  it was a write-dropping stub or absent.
+- `gpio_net`: a chip's internal pull-up / pull-down is part of the net as a
+  weak drive (STM32 `PUPDR` and F1 input-pull, nRF52, EFR32, SAM, ATmega
+  `PORTx` on an input). Pulls to both rails with no driver are reported as
+  `GPIO_NET_PULL_CONFLICT`, and the wire reads the net's own `pull` or 0.
+  Net reports show `pull_up` / `pull_down` member drives, and a pulled net
+  pad's four-state trace reads `h` / `l`. A net that starts in contention is
+  now also recorded from time 0.
 - AVR `BST` / `BLD` (SREG.T bit transfer). Arduino `map()` / signed division
   (`__divmodsi4`) hard-stopped prove with `DecodeError` at the BST word
   (hosted morning Uno bargraph at byte PC `0x93c`).
+- AVR `SBI`/`CBI` on `PINx`, `TIFRn`, `PCIFR` and `EIFR` act on the named
+  bit only, as the ATmega328P datasheet specifies. `SBI PINB,5` used to toggle
+  every other `PORTB` pad that read high as well.
+- AVR `SEI` and `RETI` now let the next instruction run before a pending
+  interrupt is taken, so `sei(); sleep_cpu();` cannot lose a wake-up.
 
 
 ### Added
+- `gpio_net` members on ESP32-family and RP2040 chips. The classic ESP32,
+  ESP32-S3 and ESP32-C3/C6 `gpio` block (GPIO0..31; C3/C6 GPIO0..25) and the
+  RP2040 `sio` (GP0..29) report a net pad's own drive (output enable and
+  latch; `GPIO_PINn.PAD_DRIVER` open drain on the ESP family), take the net's
+  level through `set_gpio_input`, and push their edges, so idle
+  fast-forward stays on. A pad routed to a peripheral signal whose wire is
+  not published has no known drive and is refused, as on `GpioPort`.
+- GPIO interrupts from pad edges on those chips: classic ESP32
+  (`GPIO_STATUS`, `GPIO_ACPU_INT`/`GPIO_PCPU_INT`, matrix source 22), ESP32-S3
+  (`GPIO_PCPU_INT`, source 16), ESP32-C6 (source 30, the C3 stays 16), and
+  RP2040 IO_BANK0 (`INTR0..3`, `PROC0_INTE/INTF/INTS`, `IO_IRQ_BANK0` on
+  NVIC 13). An edge applied from outside (a board button, a net) now re-derives
+  the interrupt matrix on a walk-free bus.
+- `examples/gpio-net-two-boards`: `env-rp2040.yaml` and `env-esp32c6.yaml` put
+  an RP2040 or an ESP32-C6 in place of the ATmega328P; both count the
+  STM32's edges with GPIO interrupts.
+- Hardware SPI and I²C between chips over `gpio_net`s, bit by bit at the
+  pads. An STM32 SPI (classic/FIFO register file) whose pads are on nets is a
+  real master or slave: the master samples MISO off the net at its sampling
+  edge, the slave shifts on the SCK/MOSI/NSS edges the net delivers (all four
+  modes, RXNE/OVR, RXNEIE interrupt, hardware or software NSS) and drives
+  MISO only while selected. The STM32 modern I²C (L4/G0 `TIMINGR` file) on
+  nets is an open-drain bit-level controller (START, address, ACK/NACK,
+  repeated START, STOP, `TIMINGR` timing, clock stretching by the target,
+  arbitration loss) and target (own-address ACK, `ADDR`/`DIR`, SCL stretched
+  until firmware services it). Peripheral lines now say how they drive a pad
+  (push-pull, open drain, input) and receive the level a net applies to it;
+  the net reports and the logic analyzer see the real waveform, with
+  contention where two chips fight. The STM32G071 routes SPI1/SPI2 (with NSS)
+  and I2C1/I2C2 by its own AF tables (`pad_map: stm32g0`). Example and tests:
+  `examples/gpio-net-buses`, `tests/world_gpio_net_buses.rs`; how-to:
+  "Buses over nets" in `docs/howto/gpio-nets.md`.
+- ATmega328P external interrupts INT0/INT1 (`EICRA` low level, any change,
+  falling, rising; `EIMSK`, `EIFR`) and pin-change interrupts PCINT0..2
+  (`PCICR`, `PCIFR`, `PCMSK0..2`). They fire on levels driven from outside
+  (`set_gpio_input`: a `board_io` button, a `gpio_net` delivery) and on pads
+  the firmware drives itself. Flags latch while masked, clear on a written 1
+  and on vector entry.
+- ATmega328P `SLEEP` (`SMCR`): the core stops until an enabled interrupt wakes
+  it, four cycles later, and with idle fast-forward on the sleep is skipped up
+  to the next Timer0 overflow or pad change. The `gpio-net-two-boards` Uno
+  firmware now counts `ready` with INT1 and `alert` with PCINT2 and sleeps
+  between edges instead of polling `PIND`.
 - Source-level stepping in `labwired-dap`, the adapter behind hosted debug
   sessions: `next` / `stepIn` / `stepOut` step one source line (calls stepped
   over run at engine speed with idle fast-forward, and code inlined from

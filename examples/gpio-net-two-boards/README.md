@@ -6,8 +6,8 @@ interconnects (see [GPIO nets](../../docs/howto/gpio-nets.md)):
 | Net | Wire | Pull | What it shows |
 |-----|------|------|---------------|
 | `irq` | AVR PD2 -> STM32 PB0 | down | The STM32 counts the AVR's pulses with an EXTI interrupt (rising and falling separately). |
-| `ready` | STM32 PB1 -> AVR PD3 | down | The AVR counts the STM32's pulses by polling PIND. |
-| `alert` | STM32 PB4 <-> AVR PD4 | up | One shared open-drain line. The STM32 pulls it low 5 times, then the AVR pulls it 3 times and the STM32 counts them. |
+| `ready` | STM32 PB1 -> AVR PD3 | down | The AVR counts the STM32's pulses with INT1 (rising edges), sleeping in between. |
+| `alert` | STM32 PB4 <-> AVR PD4 | up | One shared open-drain line. The STM32 pulls it low 5 times (the AVR counts them with the PCINT2 pin-change interrupt), then the AVR pulls it 3 times and the STM32 counts them. |
 
 Each board reports over its UART:
 
@@ -30,6 +30,22 @@ labwired test --script examples/gpio-net-two-boards/test.yaml --output-dir out
 `cargo test -p labwired-core --test world_multichip gpio_net_world`, which additionally checks
 that node order and round length change nothing.
 
+## Other chips on the same wires
+
+The STM32 firmware does not care what is on the other end:
+
+| Environment | Peer | Peer's pads | How the peer counts |
+|-------------|------|-------------|---------------------|
+| `env-rp2040.yaml` | RP2040 (`rp2040-pico`) | `sio` GP2 irq, GP3 ready, GP4 alert (open drain by `GPIO_OE`) | IO_BANK0 GPIO interrupt (`IO_IRQ_BANK0`) |
+| `env-esp32c6.yaml` | ESP32-C6 (`esp32c6-devkitc`) | `gpio` GPIO4 irq, GPIO5 ready, GPIO6 alert (open drain by `PAD_DRIVER`) | GPIO interrupt through the interrupt matrix (source 30, CPU line 9) |
+
+Each peer leaves `[ready rising, alert falling, alert rising, interrupts
+taken, done]` in SRAM (`0x20000100` on the RP2040, `0x40800100` on the C6):
+`7, 5, 5, ≥17, 1`. Sources: `src/rp2040.c`, `src/esp32c6.c` (bare metal, built
+with clang). Tests: `an_rp2040_counts_the_stm32_edges_with_gpio_interrupts`
+and `an_esp32c6_counts_the_stm32_edges_with_gpio_interrupts` in
+`crates/core/tests/world_multichip.rs`.
+
 ## Contention
 
 `env-contention.yaml` puts both boards on one push-pull wire: the AVR holds it
@@ -39,7 +55,7 @@ low, the STM32 drives it high for a few tens of microseconds. The net reports
 ## Rebuild the firmware
 
 ```bash
-examples/gpio-net-two-boards/build.sh   # arm-none-eabi-gcc, avr-gcc
+examples/gpio-net-two-boards/build.sh   # arm-none-eabi-gcc, avr-gcc, clang + lld
 ```
 
 The ELFs are committed so the tests run without a toolchain.
@@ -51,5 +67,5 @@ The counts are the same (`the_demo_timing_counts_the_same_as_the_fast_one`).
 
 ## Limits
 
-The ATmega328P model has no pin-change interrupt yet, so the AVR polls. A chip's
-internal pull-ups are not part of the net. See the how-to for the full list.
+See the how-to for the full list. `examples/gpio-net-f1-f4` shows F1/F4 EXTI on a net
+and a wire held up by a chip's internal pull-up.

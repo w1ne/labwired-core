@@ -896,8 +896,30 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// Observe an externally driven GPIO pad transition with its explicit
     /// previous and current levels. Return true if work was latched that needs
     /// a scheduler wake. Default no-op; STM32 EXTI uses the port mux here.
-    fn gpio_input_edge(&mut self, _port: u8, _pin: u8, _before: bool, _after: bool) -> bool {
+    ///
+    /// `line_source` is the port the chip's EXTI line-source mux selects for
+    /// line `pin` when that mux lives OUTSIDE the EXTI block (AFIO_EXTICRx on
+    /// STM32F1, SYSCFG_EXTICRx on STM32F4), as answered by
+    /// [`exti_line_source`](Self::exti_line_source); `None` when no
+    /// peripheral on the bus owns one. An EXTI with its own mux (G0, U5)
+    /// ignores it.
+    fn gpio_input_edge(
+        &mut self,
+        _port: u8,
+        _pin: u8,
+        _before: bool,
+        _after: bool,
+        _line_source: Option<u8>,
+    ) -> bool {
         false
+    }
+
+    /// EXTI line-source mux: the GPIO port index (0 = A) this peripheral
+    /// routes to EXTI line `line` (0..15), for a mux that sits outside the
+    /// EXTI block (STM32F1 AFIO_EXTICRx, STM32F4 SYSCFG_EXTICRx). `None` for
+    /// every peripheral that is not such a mux.
+    fn exti_line_source(&self, _line: u8) -> Option<u8> {
+        None
     }
 
     /// Cross-peripheral GPIO change hook: bus snapshots GPIO IN registers
@@ -1102,6 +1124,25 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// [`SystemBus::deliver_timer_input_edges`](crate::bus::SystemBus::deliver_timer_input_edges).
     fn take_timer_input_edges(&mut self) -> Vec<crate::peripherals::gpio::TimerInputEdge> {
         Vec::new()
+    }
+
+    /// GPIO capability: drain the outside levels that reached pads routed to
+    /// a peripheral line (an SPI MISO, an I²C SDA) since the last drain. Each
+    /// names the line cell, which the bus maps back to the peripheral owning
+    /// it; see [`SystemBus::deliver_wire_input_edges`](crate::bus::SystemBus::deliver_wire_input_edges).
+    fn take_wire_input_edges(&mut self) -> Vec<crate::peripherals::pad_lines::WireInputEdge> {
+        Vec::new()
+    }
+
+    /// Wire capability: the level an outside driver holds on the pad routed
+    /// to line `line` of this peripheral's [`Self::wire_lines`] changed to
+    /// `level` at absolute engine cycle `cycle` (a world `gpio_net`
+    /// delivering a peer's edge). The new level is also readable from
+    /// [`PadLines::input`](crate::peripherals::pad_lines::PadLines::input).
+    /// Returns `true` when the peripheral may have work to schedule, so the
+    /// bus collects its scheduled events. Default: not a listener.
+    fn wire_input_edge(&mut self, _line: usize, _level: bool, _cycle: u64) -> bool {
+        false
     }
 
     /// True when a READ of this peripheral can clear the status flag behind

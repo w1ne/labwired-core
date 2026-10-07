@@ -24,19 +24,11 @@ pub struct AvrGpioPort {
     port: u8,
     /// `Some` while the logic analyzer watches pads on this port in push mode
     /// (installed via `install_logic_tap`). Not snapshot state.
-    tap: Option<PortTap>,
+    tap: Option<crate::logic_capture::PadPushTap>,
     /// Pads that belong to a world `gpio_net`: only they report a drive.
     net_isolated: u8,
     /// Level cells kept equal to a pad (see `Peripheral::watch_pad_level`).
     cells: Vec<(u8, std::sync::Arc<std::sync::atomic::AtomicBool>)>,
-}
-
-/// Push-capture state: the shared tap, the watched `(pin, channel)` pairs and
-/// the pad levels as of the last report, so only real changes are pushed.
-#[derive(Debug)]
-struct PortTap {
-    tap: crate::logic_capture::LogicTap,
-    watched: Vec<(u8, u32)>,
 }
 
 impl Default for AvrGpioPort {
@@ -75,53 +67,57 @@ impl AvrGpioPort {
         }
     }
 
-    /// Which net pads the chip itself drives: DDR bit set on a pad that
-    /// belongs to a world `gpio_net`. Only those report a drive.
+    /// The pads as the generic push tap compares them: level, the chip's own
+    /// drive (DDR), and which pads report a drive (the `gpio_net` members).
     #[inline]
-    fn net_drive_bits(&self) -> u8 {
-        self.ddr & self.net_isolated
+    fn pad_snapshot(&self) -> crate::logic_capture::PadSnapshot {
+        crate::logic_capture::PadSnapshot {
+            level: u64::from(self.pad_bits()),
+            driven: u64::from(self.ddr),
+            drive_known: u64::from(self.net_isolated),
+            pull_up: u64::from(self.net_pull_bits()),
+            pull_down: 0,
+        }
     }
 
-    /// Run `mutate`, then push every watched pad whose level changed. A pad
-    /// that belongs to a world `gpio_net` also reports its drive, and reports
-    /// when only the drive moved (an input released to high-Z keeps its level).
+    /// Net pads whose internal pull-up is on: an input (`DDRx` bit clear)
+    /// with its `PORTx` bit set (ATmega328P datasheet §14.2.1). `MCUCR.PUD`
+    /// lives in the CPU's IO space, which this port model does not see, so
+    /// it is not applied here.
+    #[inline]
+    fn net_pull_bits(&self) -> u8 {
+        !self.ddr & self.port & self.net_isolated
+    }
+
+    /// The drive a net pad reports: `PORTx` when `DDRx` drives it, the
+    /// internal pull-up when the input has it on, otherwise nothing. `None`
+    /// for a pad that is not on a net.
+    fn net_pad_drive(&self, pin: u8) -> Option<crate::logic_capture::PadDrive> {
+        use crate::logic_capture::PadDrive;
+        let bit = 1u8 << (pin & 7);
+        if pin >= 8 || self.net_isolated & bit == 0 {
+            return None;
+        }
+        Some(if self.ddr & bit != 0 {
+            PadDrive::Driven
+        } else if self.net_pull_bits() & bit != 0 {
+            PadDrive::PullUp
+        } else {
+            PadDrive::HighZ
+        })
+    }
+
+    /// Run `mutate`, then let the generic push tap report every watched pad
+    /// whose level or (on a net pad) drive changed.
     #[inline]
     fn with_tap(&mut self, mutate: impl FnOnce(&mut Self)) {
-        if self.tap.is_none() {
-            mutate(self);
-            if !self.cells.is_empty() {
-                self.sync_cells();
-            }
-            return;
-        }
-        let before = self.pad_bits();
-        let drive_before = self.net_drive_bits();
+        let before = self.tap.as_ref().map(|_| self.pad_snapshot());
         mutate(self);
         if !self.cells.is_empty() {
             self.sync_cells();
         }
-        let after = self.pad_bits();
-        let changed = (before ^ after) | (drive_before ^ self.net_drive_bits());
-        if changed == 0 {
-            return;
-        }
-        if let Some(t) = &self.tap {
-            for &(pin, ch) in &t.watched {
-                let bit = 1u8 << (pin & 7);
-                if pin >= 8 || changed & bit == 0 {
-                    continue;
-                }
-                if self.net_isolated & bit != 0 {
-                    let drive = if self.ddr & bit != 0 {
-                        crate::logic_capture::PadDrive::Driven
-                    } else {
-                        crate::logic_capture::PadDrive::HighZ
-                    };
-                    t.tap.push_with_drive(ch, after & bit != 0, drive);
-                } else if (before ^ after) & bit != 0 {
-                    t.tap.push(ch, after & bit != 0);
-                }
-            }
+        if let (Some(tap), Some(before)) = (&self.tap, before) {
+            tap.report(before, self.pad_snapshot());
         }
     }
 }
@@ -216,20 +212,13 @@ impl Peripheral for AvrGpioPort {
         self.read_gpio_pad(pin)
     }
 
-    /// A net pad: an output (`DDRx` bit set) drives `PORTx`; an input drives
-    /// nothing, whatever the net holds on it. The ATmega model keeps no
-    /// internal pull-up, so a pad that is not a net member says nothing about
-    /// its drive (`None`, as before).
+    /// A net pad: an output (`DDRx` bit set) drives `PORTx`; an input with
+    /// its `PORTx` bit set has the internal pull-up on (a weak 1 on the net);
+    /// any other input drives nothing, whatever the net holds on it. A pad
+    /// that is not a net member says nothing about its drive (`None`, as
+    /// before).
     fn read_gpio_pad_drive(&self, pin: u8) -> Option<crate::logic_capture::PadDrive> {
-        use crate::logic_capture::PadDrive;
-        if pin >= 8 || self.net_isolated & (1u8 << pin) == 0 {
-            return None;
-        }
-        Some(if self.ddr & (1u8 << pin) != 0 {
-            PadDrive::Driven
-        } else {
-            PadDrive::HighZ
-        })
+        self.net_pad_drive(pin)
     }
 
     fn set_gpio_net_isolated(&mut self, pin: u8, isolated: bool) -> bool {
@@ -295,10 +284,7 @@ impl Peripheral for AvrGpioPort {
         tap: &crate::logic_capture::LogicTap,
         watched: &[(u8, u32)],
     ) -> bool {
-        self.tap = (!watched.is_empty()).then(|| PortTap {
-            tap: tap.clone(),
-            watched: watched.to_vec(),
-        });
+        self.tap = crate::logic_capture::PadPushTap::new(tap, watched);
         true
     }
 

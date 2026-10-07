@@ -173,10 +173,23 @@ impl SystemBus {
         let after = p.dev.read_gpio_input(pin);
         if let (Some(port), Some(before), Some(after)) = (port, before, after) {
             if ok && before != after {
+                // The F1/F4 EXTI takes its port select from AFIO / SYSCFG;
+                // asked once per edge, only for pads EXTI can see.
+                let line_source = if pin < 16 {
+                    self.peripherals
+                        .iter()
+                        .find_map(|p| p.dev.exti_line_source(pin))
+                } else {
+                    None
+                };
                 for exti_idx in 0..self.peripherals.len() {
-                    let pending = self.peripherals[exti_idx]
-                        .dev
-                        .gpio_input_edge(port, pin, before, after);
+                    let pending = self.peripherals[exti_idx].dev.gpio_input_edge(
+                        port,
+                        pin,
+                        before,
+                        after,
+                        line_source,
+                    );
                     if pending {
                         self.collect_scheduled_events(exti_idx);
                     }
@@ -184,7 +197,48 @@ impl SystemBus {
             }
         }
         self.deliver_timer_input_edges(idx);
+        // A GPIO model whose interrupt is delivered by the event scheduler
+        // (the ESP32-family GPIO matrix line, RP2040 IO_BANK0 through the
+        // SIO's wake owner) arms it here, exactly as after an MMIO write: an
+        // edge from outside is not a write, and nothing else would.
+        if ok {
+            self.collect_scheduled_events(idx);
+        }
+        self.deliver_wire_input_edges(idx);
         ok
+    }
+
+    /// Hand the outside levels GPIO port `gpio_idx` collected on pads routed
+    /// to peripheral lines to the peripherals owning those lines
+    /// ([`crate::Peripheral::wire_input_edge`]). Inert (one flag test) until
+    /// a world `gpio_net` puts a pad on a net.
+    pub fn deliver_wire_input_edges(&mut self, gpio_idx: usize) {
+        if !self.wire_inputs_live || gpio_idx >= self.peripherals.len() {
+            return;
+        }
+        let edges = self.peripherals[gpio_idx].dev.take_wire_input_edges();
+        for edge in edges {
+            let owner = self.peripherals.iter().position(|p| {
+                p.dev
+                    .wire_lines()
+                    .is_some_and(|lines| std::ptr::eq(lines, &*edge.cell))
+            });
+            let Some(owner) = owner else {
+                continue;
+            };
+            let now = self.current_cycle;
+            // A scheduler-driven owner catches up to now first. Only under the
+            // scheduler: on the walk the owner is already ticked to now, and a
+            // second advance would run its engine twice.
+            #[cfg(feature = "event-scheduler")]
+            self.sync_scheduler_peripheral(owner);
+            if self.peripherals[owner]
+                .dev
+                .wire_input_edge(edge.line, edge.level, now)
+            {
+                self.collect_scheduled_events(owner);
+            }
+        }
     }
 
     pub(crate) fn service_gpio_devices(&mut self) {
@@ -225,6 +279,9 @@ impl SystemBus {
         // `drive_idr_bit`) is an external edge like `set_gpio_input`.
         if self.timer_capture_wired {
             self.deliver_timer_input_edges(idx);
+        }
+        if self.wire_inputs_live {
+            self.deliver_wire_input_edges(idx);
         }
         if self.gpio_devices.is_empty() {
             return;

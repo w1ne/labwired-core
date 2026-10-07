@@ -2,23 +2,28 @@
  * core). Wires to the STM32 board:
  *
  *   irq    PD2  output, push-pull        -> STM32 PB0
- *   ready  PD3  input                    <- STM32 PB1
- *   alert  PD4  open-drain by DDR, shared, 10k pull-up  <-> STM32 PB4
+ *   ready  PD3  input, INT1 (rising)     <- STM32 PB1
+ *   alert  PD4  open-drain by DDR, shared, 10k pull-up, PCINT20
+ *                                        <-> STM32 PB4
  *
- * The model has no external-interrupt or pin-change interrupt for the
- * ATmega328P yet, so this side counts edges by polling PIND in a tight loop
- * (about 5 cycles per pass, far under the 20 us pulse width).
+ * Edges are counted by interrupts: INT1 on the rising edges of ready, and the
+ * PCINT2 pin-change interrupt on alert (the handler reads PIND to tell a fall
+ * from a rise). Between edges the core sleeps in idle mode, so the simulator
+ * can skip the waits instead of running a polling loop.
  *
  * Sequence:
  *   1. put 10 pulses on irq;
- *   2. count 7 rising edges on ready;
- *   3. count 5 falling and 5 rising edges on alert (the STM32 pulls it);
+ *   2. sleep until INT1 has counted 7 rising edges on ready;
+ *   3. sleep until PCINT2 has counted 5 falling and 5 rising edges on alert
+ *      (the STM32 pulls it);
  *   4. pull alert low 3 times (DDR high = drive the PORT bit, 0; DDR low =
  *      release), the STM32 counts them;
  *   5. report over USART0.
  */
 #define F_CPU 16000000UL
+#include <avr/interrupt.h>
 #include <avr/io.h>
+#include <avr/sleep.h>
 #include <util/delay.h>
 #include <stdint.h>
 
@@ -30,6 +35,30 @@
 #define IRQ   (1u << PD2)
 #define READY (1u << PD3)
 #define ALERT (1u << PD4)
+
+static volatile uint8_t ready, a_fall, a_rise, alert_prev;
+
+ISR(INT1_vect) { ++ready; }
+
+ISR(PCINT2_vect) {
+    uint8_t cur = PIND & ALERT;
+    if (cur == alert_prev) return;   /* another PORTD pad moved */
+    if (cur) ++a_rise; else ++a_fall;
+    alert_prev = cur;
+}
+
+/* Sleep until `cond` holds. SEI's next instruction runs before any
+ * interrupt, so an edge between the check and SLEEP still wakes the core. */
+#define SLEEP_UNTIL(cond)            \
+    do {                             \
+        cli();                       \
+        while (!(cond)) {            \
+            sei();                   \
+            sleep_cpu();             \
+            cli();                   \
+        }                            \
+        sei();                       \
+    } while (0)
 
 static void put(const char *s) {
     while (*s) {
@@ -55,6 +84,17 @@ int main(void) {
     DDRD |= IRQ;                         /* alert (DDR bit 0) is released */
     _delay_ms(1);                        /* let the STM32 arm EXTI */
 
+    EICRA = (1u << ISC11) | (1u << ISC10);   /* INT1 on rising edges */
+    EIFR = 1u << INTF1;
+    EIMSK = 1u << INT1;
+    alert_prev = PIND & ALERT;
+    PCMSK2 = 1u << PCINT20;                  /* PD4 */
+    PCIFR = 1u << PCIF2;
+    PCICR = 1u << PCIE2;
+    set_sleep_mode(SLEEP_MODE_IDLE);
+    sleep_enable();
+    sei();
+
     for (uint8_t i = 0; i < 10; ++i) {
         PORTD |= IRQ;
         _delay_us(20 * TIME_SCALE);
@@ -62,21 +102,12 @@ int main(void) {
         _delay_us(20 * TIME_SCALE);
     }
 
-    uint8_t ready = 0, prev = PIND & READY;
-    while (ready < 7) {
-        uint8_t cur = PIND & READY;
-        if (cur && !prev) ++ready;
-        prev = cur;
-    }
-
-    uint8_t a_fall = 0, a_rise = 0;
-    prev = PIND & ALERT;
-    while (a_fall < 5 || a_rise < 5) {
-        uint8_t cur = PIND & ALERT;
-        if (prev && !cur) ++a_fall;
-        if (!prev && cur) ++a_rise;
-        prev = cur;
-    }
+    SLEEP_UNTIL(ready >= 7);
+    SLEEP_UNTIL(a_fall >= 5 && a_rise >= 5);
+    /* Our own pulls below would count too: stop listening. */
+    PCICR = 0;
+    EIMSK = 0;
+    sleep_disable();
 
     _delay_us(100 * TIME_SCALE);
     for (uint8_t i = 0; i < 3; ++i) {

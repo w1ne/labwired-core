@@ -170,6 +170,8 @@ peripherals:
     clock: { reg: "apbenr1", bit: 20 }
 
   # --- I2C (v2 TIMINGR-based controller, shared with L4/F7) ----------------
+  # `pad_map: stm32g0` routes SCL/SDA by the G0 AF6 pinout (DS12232), not the
+  # L4 AF4 one.
   - id: "i2c1"
     type: "i2c"
     base_address: 0x40005400
@@ -177,6 +179,7 @@ peripherals:
     irq: 23
     config:
       profile: "stm32l4"
+      pad_map: "stm32g0"
     clock: { reg: "apbenr1", bit: 21 }
 
   - id: "i2c2"
@@ -186,9 +189,12 @@ peripherals:
     irq: 24
     config:
       profile: "stm32l4"
+      pad_map: "stm32g0"
     clock: { reg: "apbenr1", bit: 22 }
 
   # --- SPI (G0/Kinetis-style FIFO-less SPI; G4 uses the FIFO profile) ------
+  # `pad_map: stm32g0` routes SCK/MISO/MOSI/NSS by the G0 AF0 pinout
+  # (DS12232), not the F4 AF5 one.
   - id: "spi1"
     type: "spi"
     base_address: 0x40013000
@@ -196,6 +202,7 @@ peripherals:
     irq: 25
     config:
       profile: "stm32"
+      pad_map: "stm32g0"
     clock: { reg: "apbenr2", bit: 12 }
 
   - id: "spi2"
@@ -205,6 +212,7 @@ peripherals:
     irq: 26
     config:
       profile: "stm32"
+      pad_map: "stm32g0"
     clock: { reg: "apbenr1", bit: 14 }
 
   # --- Timers ---------------------------------------------------------------

@@ -28,6 +28,9 @@ impl Avr {
         }
         if op == 0x9478 {
             self.set_flag_i(true);
+            // "The instruction following SEI will be executed before any
+            // pending interrupts."
+            self.irq_shadow = true;
             self.pc = next;
             self.cycles += 1;
             return Ok(Some(()));
@@ -51,6 +54,7 @@ impl Avr {
         next: u32,
     ) -> SimResult<Option<()>> {
         if op == 0x9588 {
+            self.exec_sleep();
             self.pc = next;
             self.cycles += 1;
             return Ok(Some(()));

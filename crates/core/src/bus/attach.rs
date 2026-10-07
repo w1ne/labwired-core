@@ -339,15 +339,13 @@ impl SystemBus {
             (28, 0, LINE_TX, "UART0_TX"),
         ];
 
-        let Some(functions) = self
-            .peripherals
-            .iter()
-            .find_map(|p| {
+        let Some((bank_idx, functions, bank_irq)) =
+            self.peripherals.iter().enumerate().find_map(|(idx, p)| {
                 p.dev
                     .as_any()
                     .and_then(|a| a.downcast_ref::<Rp2040IoBank0>())
+                    .map(|bank| (idx, bank.pad_functions(), bank.bank_irq()))
             })
-            .map(Rp2040IoBank0::pad_functions)
         else {
             return;
         };
@@ -357,13 +355,16 @@ impl SystemBus {
         let Some(sio_idx) = self.find_peripheral_index_by_name("sio") else {
             return;
         };
-        if self.peripherals[sio_idx]
+        // The GPIO interrupt rides on the same pairing: SIO reports every
+        // `GPIO_IN` change to IO_BANK0, which owns INTR/PROC0_INTE and raises
+        // IO_IRQ_BANK0, and arms that block's event chain as its wake owner.
+        match self.peripherals[sio_idx]
             .dev
             .as_any_mut()
             .and_then(|a| a.downcast_mut::<Rp2040Sio>())
-            .is_none()
         {
-            return;
+            Some(sio) => sio.attach_io_bank0(functions.clone(), bank_irq, bank_idx),
+            None => return,
         }
 
         for (instance, name) in ["uart0", "uart1"].iter().enumerate() {
@@ -1076,7 +1077,7 @@ impl SystemBus {
     pub(crate) fn wire_stm32_spi_pads(&mut self) {
         use crate::peripherals::gpio::{GpioPort, GpioRegisterLayout};
         use crate::peripherals::spi::{Spi, SpiPadMap, SpiSignal};
-        use SpiSignal::{Miso, Mosi, Sck};
+        use SpiSignal::{Miso, Mosi, Nss, Sck};
 
         // (spi, port, pin, AF, signal, func) — V2 ports, L4 parts (DS10198
         // Table 17: SPI1-3).
@@ -1253,6 +1254,29 @@ impl SystemBus {
             ("spi3", 'g', 11, 6, Mosi, "SPI3_MOSI"),
         ];
 
+        // ── STM32G0 parts ───────────────────────────────────────────────────
+        //
+        // STM32G071 (DS12232, "Port A/Port B alternate function mapping"
+        // tables, AF0 column). The classic register file behind a V2 port
+        // would otherwise pick the F4 table, whose AF5 is not SPI on a G0.
+        // Selected by the chip yaml's `pad_map: stm32g0`. NSS is routed here
+        // (and only here) because a G0 pair on a world `gpio_net` uses it as
+        // the hardware slave select.
+        const G0: &[(&str, char, u8, u8, SpiSignal, &str)] = &[
+            ("spi1", 'a', 4, 0, Nss, "SPI1_NSS"),
+            ("spi1", 'a', 5, 0, Sck, "SPI1_SCK"),
+            ("spi1", 'a', 6, 0, Miso, "SPI1_MISO"),
+            ("spi1", 'a', 7, 0, Mosi, "SPI1_MOSI"),
+            ("spi1", 'a', 15, 0, Nss, "SPI1_NSS"),
+            ("spi1", 'b', 3, 0, Sck, "SPI1_SCK"),
+            ("spi1", 'b', 4, 0, Miso, "SPI1_MISO"),
+            ("spi1", 'b', 5, 0, Mosi, "SPI1_MOSI"),
+            ("spi2", 'b', 12, 0, Nss, "SPI2_NSS"),
+            ("spi2", 'b', 13, 0, Sck, "SPI2_SCK"),
+            ("spi2", 'b', 14, 0, Miso, "SPI2_MISO"),
+            ("spi2", 'b', 15, 0, Mosi, "SPI2_MOSI"),
+        ];
+
         for spi_name in ["spi1", "spi2", "spi3"] {
             let Some(spi_idx) = self.find_peripheral_index_by_name(spi_name) else {
                 continue;
@@ -1303,6 +1327,7 @@ impl SystemBus {
                             (true, SpiPadMap::Stm32Wba) => WBA,
                             (true, SpiPadMap::Stm32U5) => U5,
                             (true, _) => H5,
+                            (false, SpiPadMap::Stm32G0) => G0,
                             (false, _) if fifo => L4,
                             (false, _) => F4,
                         };
@@ -1466,15 +1491,31 @@ impl SystemBus {
             ("i2c2", 'b', 11, LINE_SDA, "I2C2_SDA"),
         ];
 
+        // Modern controller on an STM32G0 (`pad_map: stm32g0`): STM32G071
+        // DS12232 port A/B alternate-function tables, AF6 column. The L4
+        // table's AF4 is not I²C on a G0.
+        const G0: &[I2cPad] = &[
+            ("i2c1", 'a', 9, 6, LINE_SCL, "I2C1_SCL"),
+            ("i2c1", 'a', 10, 6, LINE_SDA, "I2C1_SDA"),
+            ("i2c1", 'b', 6, 6, LINE_SCL, "I2C1_SCL"),
+            ("i2c1", 'b', 7, 6, LINE_SDA, "I2C1_SDA"),
+            ("i2c1", 'b', 8, 6, LINE_SCL, "I2C1_SCL"),
+            ("i2c1", 'b', 9, 6, LINE_SDA, "I2C1_SDA"),
+            ("i2c2", 'b', 10, 6, LINE_SCL, "I2C2_SCL"),
+            ("i2c2", 'b', 11, 6, LINE_SDA, "I2C2_SDA"),
+            ("i2c2", 'b', 13, 6, LINE_SCL, "I2C2_SCL"),
+            ("i2c2", 'b', 14, 6, LINE_SDA, "I2C2_SDA"),
+        ];
+
         for i2c_name in ["i2c1", "i2c2", "i2c3"] {
             let Some(i2c_idx) = self.find_peripheral_index_by_name(i2c_name) else {
                 continue;
             };
-            let Some(layout) = self.peripherals[i2c_idx]
+            let Some((layout, g0)) = self.peripherals[i2c_idx]
                 .dev
                 .as_any()
                 .and_then(|a| a.downcast_ref::<I2c>())
-                .map(I2c::register_layout)
+                .map(|i2c| (i2c.register_layout(), i2c.is_g0_pad_map()))
             else {
                 continue;
             };
@@ -1506,6 +1547,7 @@ impl SystemBus {
                     continue;
                 };
                 let v2_table = match (layout, gpio_layout) {
+                    (I2cRegisterLayout::Stm32L4, GpioRegisterLayout::Stm32V2) if g0 => G0,
                     (I2cRegisterLayout::Stm32L4, GpioRegisterLayout::Stm32V2) => L4,
                     (I2cRegisterLayout::Stm32F1, GpioRegisterLayout::Stm32V2) => F4,
                     (I2cRegisterLayout::Stm32F1, GpioRegisterLayout::Stm32F1) => {

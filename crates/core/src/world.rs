@@ -54,6 +54,10 @@ pub struct World {
     marker_pins: std::collections::BTreeMap<String, Vec<(String, u8)>>,
     /// `gpio_net` configs, resolved to nets once every interconnect is built.
     pending_nets: Vec<labwired_config::GpioNetConfig>,
+    /// Step a world whose only round-based medium is GPIO nets with the
+    /// lockstep round driver instead of the per-node one. Tests compare the
+    /// two; see [`World::set_gpio_lockstep`].
+    gpio_lockstep: bool,
 }
 
 /// World time of a round-based world.
@@ -243,6 +247,19 @@ pub trait MachineTrait: Send {
     /// A GPIO pin's output latch (`output`) or input level.
     fn gpio_level(&self, _peripheral: &str, _pin: u8, _output: bool) -> Option<bool> {
         None
+    }
+    /// Let this node skip idle time (a core parked in WFI or `SLEEP`) when
+    /// it advances. Off by default, as for a lone machine.
+    fn set_idle_fast_forward(&mut self, _enabled: bool) {}
+    /// Cycles this node skipped through idle fast-forward so far.
+    fn idle_fast_forward_cycles(&self) -> u64 {
+        0
+    }
+    /// `true` while a watched pad of this node (a marker, a `gpio_net`
+    /// member) is on the per-cycle poll capture path, which runs the node one
+    /// instruction at a time and turns idle fast-forward off.
+    fn logic_poll_active(&self) -> bool {
+        false
     }
     /// Drive a simulated input channel (a sensor's temperature, a distance).
     fn set_input_channel(&mut self, _channel: &str, _value: f64) -> Result<(), String> {
@@ -457,6 +474,18 @@ impl<C: Cpu + 'static> MachineTrait for Machine<C> {
         Machine::advance_to_cycle(self, target)
     }
 
+    fn set_idle_fast_forward(&mut self, enabled: bool) {
+        self.config.idle_fast_forward_enabled = enabled;
+    }
+
+    fn idle_fast_forward_cycles(&self) -> u64 {
+        self.idle_fast_forward_cycles_skipped
+    }
+
+    fn logic_poll_active(&self) -> bool {
+        Machine::logic_poll_active(self)
+    }
+
     fn attach_timed_uart(
         &mut self,
         uart_id: &str,
@@ -558,6 +587,7 @@ impl World {
             round: RoundClock::default(),
             marker_pins: Default::default(),
             pending_nets: Vec::new(),
+            gpio_lockstep: false,
         }
     }
 
@@ -676,6 +706,9 @@ impl World {
     pub fn step_all(&mut self) -> HashMap<String, SimResult<()>> {
         if self.ble.is_some() {
             return self.step_all_time_lockstep();
+        }
+        if self.gpio.is_some() && self.uart_net.is_none() && !self.gpio_lockstep {
+            return self.step_all_gpio();
         }
         if self.uart_net.is_some() || self.gpio.is_some() {
             return self.step_all_rounds();
@@ -867,6 +900,153 @@ impl World {
         results
     }
 
+    /// One slice of a round of a world whose nets are GPIO nets only: the
+    /// same rounds, round ends and per-call step budget as
+    /// [`World::step_all_rounds`], run by the per-node scheduler
+    /// ([`gpio_nets::WorldGpio::run_to`]) with none of the lockstep driver's
+    /// per-round lookups and allocations.
+    fn step_all_gpio(&mut self) -> HashMap<String, SimResult<()>> {
+        let target = match self.round.end_ps {
+            Some(target) => target,
+            // Without a timed UART network a round start has no events, no
+            // resets and so no results of its own.
+            None => self.start_round(&[], &mut HashMap::new()),
+        };
+        let out = self.gpio.as_mut().expect("gpio world").run_to(
+            &mut self.machines,
+            &self.node_hz,
+            target,
+            Some(UART_NET_STEP_CYCLES),
+        );
+        if out.all_there {
+            self.round.now_ps = target;
+            self.round.end_ps = None;
+        }
+        for interconnect in &mut self.interconnects {
+            if let Err(e) = interconnect.tick() {
+                tracing::warn!("interconnect error: {:?}", e);
+            }
+        }
+        out.results
+    }
+
+    /// Run a round-based world (timed UART network or GPIO nets) to world
+    /// time `target_ps` in one call; `None` for a world without a round clock.
+    ///
+    /// Same results as calling [`World::step_all`] until
+    /// [`World::round_now_ps`] reaches `target_ps`. A world whose only
+    /// round-based medium is GPIO nets and that has no other interconnect to
+    /// tick runs every node to exactly `target_ps` (the first instruction
+    /// boundary at or after it) with the per-node scheduler, each node in as
+    /// few pieces as the nets' latencies allow and with no per-round call
+    /// overhead. Any other round-based world is stepped round by round and
+    /// stops at the first round end at or after `target_ps`. Stops at the
+    /// first round in which a node returns an error.
+    pub fn run_until_ps(&mut self, target_ps: u64) -> Option<HashMap<String, SimResult<()>>> {
+        if self.uart_net.is_none() && self.gpio.is_none() {
+            return None;
+        }
+        let fast = self.gpio.is_some()
+            && self.uart_net.is_none()
+            && !self.gpio_lockstep
+            && self.interconnects.is_empty();
+        if fast {
+            // Finish a round a step budget left part way, so the round clock
+            // stays on round ends, then run the rest in one go.
+            while self.round.end_ps.is_some_and(|end| end <= target_ps) {
+                let results = self.step_all_gpio();
+                if results.values().any(Result::is_err) {
+                    return Some(results);
+                }
+            }
+            if self.round.end_ps.is_none() && self.round.now_ps < target_ps {
+                let out = self.gpio.as_mut().expect("gpio world").run_to(
+                    &mut self.machines,
+                    &self.node_hz,
+                    target_ps,
+                    None,
+                );
+                if out.all_there {
+                    self.round.now_ps = target_ps;
+                }
+                return Some(out.results);
+            }
+        }
+        let mut results = HashMap::new();
+        // A round ends once every node got there or made no progress, so the
+        // round clock always moves and this ends.
+        while self.round.now_ps < target_ps {
+            results = self.step_all();
+            if results.values().any(Result::is_err) {
+                break;
+            }
+        }
+        if results.is_empty() {
+            results = self
+                .machines
+                .keys()
+                .map(|id| (id.clone(), Ok(())))
+                .collect();
+        }
+        Some(results)
+    }
+
+    /// `rounds` calls of [`World::step_all`], in one call when the world
+    /// allows: same results, same round clock. Returns the last call's
+    /// results, or the first one with an error.
+    ///
+    /// A world whose only round-based medium is GPIO nets, with no other
+    /// interconnect to tick and no round in flight, and whose rounds each
+    /// fit in one call's step budget, runs the `rounds` rounds as one
+    /// [`World::run_until_ps`]. Any other world is stepped call by call.
+    pub fn step_rounds(&mut self, rounds: u64) -> HashMap<String, SimResult<()>> {
+        if let Some(round_ps) = self.batchable_round_ps() {
+            let target = self
+                .round
+                .now_ps
+                .saturating_add(round_ps.saturating_mul(rounds));
+            if let Some(results) = self.run_until_ps(target) {
+                return results;
+            }
+        }
+        let mut results = HashMap::new();
+        for _ in 0..rounds {
+            results = self.step_all();
+            if results.values().any(Result::is_err) {
+                break;
+            }
+        }
+        results
+    }
+
+    /// The length of every round of a world in which a call of
+    /// [`World::step_all`] always completes one round and a run of rounds
+    /// can be one [`World::run_until_ps`]; `None` for any other world.
+    fn batchable_round_ps(&self) -> Option<u64> {
+        let gpio = self.gpio.as_ref()?;
+        if self.uart_net.is_some()
+            || self.gpio_lockstep
+            || !self.interconnects.is_empty()
+            || self.round.end_ps.is_some()
+        {
+            return None;
+        }
+        // The round `start_round` opens without a timed UART network.
+        let round_ps = gpio.round_ps.min(UART_NET_DEFAULT_QUANTUM_PS);
+        if round_ps < 1_000 {
+            return None;
+        }
+        // Each node gets there inside one call's step budget (with room for
+        // an instruction that overshot the last round end).
+        let max_hz = self
+            .machines
+            .keys()
+            .filter_map(|id| self.node_hz.get(id))
+            .max();
+        let cycles = crate::network::timed_uart::ps_to_cycles_ceil(round_ps, *max_hz?);
+        (cycles + 16 <= UART_NET_STEP_CYCLES).then_some(round_ps)
+    }
+
     /// Open the next round: apply the scripted events due at its start, reset
     /// nodes, fix its end at one lookahead (or the next event), and let every
     /// timed USART see the characters now on the wire. Returns the round end.
@@ -941,7 +1121,8 @@ impl World {
     }
 
     /// Every net delivery applied to a pad so far (node, pad, the cycle it
-    /// was applied at, the level), capped at 65 536. For tests and tools.
+    /// was applied at, the level), capped at 65 536, ordered by the time the
+    /// wire carried the change, then node id. For tests and tools.
     pub fn gpio_net_applied(&self) -> &[AppliedDelivery] {
         self.gpio.as_ref().map_or(&[], |g| g.applied())
     }
@@ -954,6 +1135,14 @@ impl World {
             Some(g) => g.set_round_ps(round_ps),
             None => anyhow::bail!("this world has no gpio_net"),
         }
+    }
+
+    /// Step GPIO-net worlds with the lockstep round driver (the one a world
+    /// with a timed UART network uses) instead of the per-node scheduler.
+    /// Results must not change; this exists so tests can prove it.
+    #[doc(hidden)]
+    pub fn set_gpio_lockstep(&mut self, lockstep: bool) {
+        self.gpio_lockstep = lockstep;
     }
 
     /// Every GPIO net's state, counters and diagnostics (`GPIO_NET_CONTENTION`,
