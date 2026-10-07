@@ -58,6 +58,23 @@ pub use interrupt_fabric::{
 pub use motors::MotorSnapshot;
 
 impl SystemBus {
+    /// Cycles until the earliest event an MMIO write armed in the running CPU
+    /// batch (still in `pending_schedule`, not yet on the scheduler heap), or
+    /// `None` when nothing is pending. A batch loop ends at `Some(0)` and
+    /// clamps multi-instruction chunks to the rest, so the post-batch drain
+    /// delivers the event on its own cycle. Without `event-scheduler` nothing
+    /// is ever pending, so this is inert there.
+    #[inline(always)]
+    pub(crate) fn pending_wake_left(&self) -> Option<u64> {
+        if self.pending_schedule.is_empty() {
+            return None;
+        }
+        self.pending_schedule
+            .iter()
+            .map(|&(_, deadline, _)| deadline.saturating_sub(self.current_cycle))
+            .min()
+    }
+
     /// Describe the currently active legacy per-step entries.
     ///
     /// This is intentionally a diagnostic view of the assembled bus, not a

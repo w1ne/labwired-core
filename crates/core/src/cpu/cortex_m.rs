@@ -3040,8 +3040,16 @@ impl Cpu for CortexM {
                     && self.it_state == 0
                     && max_count - executed >= 8
                 {
-                    let fast = if config.decode_cache_enabled {
-                        self.run_t16_cached_fast_paths(sysbus, max_count - executed)
+                    // Never let a multi-instruction chunk retire past an event a
+                    // write earlier in this batch armed (no MMIO runs inside a
+                    // chunk, so nothing new can be armed during one).
+                    let budget = sysbus
+                        .pending_wake_left()
+                        .map_or(max_count - executed, |left| {
+                            (max_count - executed).min(u32::try_from(left).unwrap_or(u32::MAX))
+                        });
+                    let fast = if config.decode_cache_enabled && budget >= 8 {
+                        self.run_t16_cached_fast_paths(sysbus, budget)
                     } else {
                         0
                     };
@@ -3074,6 +3082,14 @@ impl Cpu for CortexM {
                 }
                 executed += 1;
                 if sysbus.has_pending_flash_op() {
+                    break;
+                }
+                // Gap #1 (RISC-V has had this all along): a write that armed a
+                // peripheral event leaves it in `pending_schedule` until the
+                // post-batch drain. End the batch once its deadline is reached,
+                // so a delay-0 EasyDMA completion lands on the next cycle
+                // instead of after the rest of a 1024-instruction batch.
+                if sysbus.pending_wake_left() == Some(0) {
                     break;
                 }
                 // See the `!batch_mode_enabled` arm: a latched SYSRESETREQ ends

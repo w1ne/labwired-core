@@ -67,6 +67,10 @@ fn run(chip: &Path, elf: &Path, batched: bool) -> RunOut {
 }
 
 fn run_with_env(chip: &Path, elf: &Path, batched: bool, env: &[(&str, &str)]) -> RunOut {
+    run_steps(chip, elf, batched, STEPS, env)
+}
+
+fn run_steps(chip: &Path, elf: &Path, batched: bool, steps: u64, env: &[(&str, &str)]) -> RunOut {
     let mut cmd = Command::new(labwired_bin());
     cmd.arg("run")
         .arg("--chip")
@@ -74,7 +78,7 @@ fn run_with_env(chip: &Path, elf: &Path, batched: bool, env: &[(&str, &str)]) ->
         .arg("--firmware")
         .arg(elf)
         .arg("--max-steps")
-        .arg(STEPS.to_string());
+        .arg(steps.to_string());
     if batched {
         cmd.arg("--batched");
     }
@@ -394,4 +398,49 @@ fn default_arm_run_uses_scheduler_sleep_and_counts_idle_fuel() {
     assert_eq!(marker_field(&stderr, "fuel="), "65000000");
     let skipped: u64 = marker_field(&stderr, "idle_cycles=").parse().unwrap();
     assert!(skipped > 60_000_000, "{stderr}");
+}
+
+/// The batched path must keep PACE with the stepped one, not only reach the
+/// same end. A whole-transcript comparison cannot see a batched run that
+/// falls behind and catches up: a write that arms a peripheral event (an
+/// EasyDMA completion) used to leave the batch running to its planned end,
+/// so firmware polling the event spun up to a tick interval per completion.
+/// On the nRF52840 fixture that put `TIER1 adc PASS` 5 713 instructions later
+/// on the batched path (309 618 stepped vs 315 331). Cutting the transcripts
+/// at intermediate fuel budgets makes any lag visible as a shorter batched
+/// prefix.
+#[test]
+fn batched_transcript_keeps_pace_at_intermediate_cutoffs() {
+    let boards = fixtures();
+    if boards.is_empty() {
+        eprintln!("SKIP: no TIER1 ARM fixtures present");
+        return;
+    }
+    let mut lagging = Vec::new();
+    for (board, chip, elf) in boards {
+        for steps in [100_000u64, 200_000, 300_000, 400_000] {
+            let stepped = run_steps(
+                &chip,
+                &elf,
+                false,
+                steps,
+                &[
+                    ("LABWIRED_ARM_SINGLE_STEP", "1"),
+                    ("LABWIRED_IDLE_FAST_FORWARD", "0"),
+                ],
+            );
+            let batched = run_steps(&chip, &elf, true, steps, &[]);
+            if stepped.stdout != batched.stdout {
+                lagging.push(format!(
+                    "{board} @ {steps}:\n  stepped: {:?}\n  batched: {:?}",
+                    stepped.stdout, batched.stdout
+                ));
+            }
+        }
+    }
+    assert!(
+        lagging.is_empty(),
+        "the batched path diverges from the stepped one mid-run:\n{}",
+        lagging.join("\n")
+    );
 }
