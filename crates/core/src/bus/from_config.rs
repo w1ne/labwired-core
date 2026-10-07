@@ -14,18 +14,35 @@ use labwired_config::{ChipDescriptor, SystemManifest};
 use std::cell::Cell;
 use std::path::{Path, PathBuf};
 
-/// Default on-disk dumps when `image_env` is unset. Keeps copyrighted ROMs out
-/// of the repo path contract (env still wins) while letting matrix/CLI find the
-/// in-tree `crates/core/roms/esp32c3/*` copies used by e2e gates.
+/// Mask ROMs compiled into the binary. Used when `image_env` is unset so a
+/// process with no repo checkout (the browser, a lab worker whose cwd is not
+/// the workspace) still maps the window. An explicit env path still wins;
+/// an explicit empty env still opts out.
+fn embedded_region_image(env: &str) -> Option<&'static [u8]> {
+    match env {
+        // Minimal B0-compatible RP2040 bootrom. Pico `rom_func_lookup` reads
+        // the table-lookup pointer as a halfword at 0x18. If this window is
+        // absent, that read hits the stage-2 bootloader through the Cortex-M
+        // flash alias — the halfword there is a boot2 opcode (`movs r1, #0`
+        // = 0x2100 on the W25Q080 stage 2) — and the lookup branches into
+        // flash and BusFaults (PC just past that entry, e.g. 0x2106).
+        "LABWIRED_RP2040_BOOTROM" => Some(include_bytes!("../../roms/rp2040/bootrom.bin")),
+        _ => None,
+    }
+}
+
+/// Default on-disk dumps when `image_env` is unset and the image is not
+/// compiled in. Keeps copyrighted ROMs out of the repo path contract (env
+/// still wins) while letting matrix/CLI find the in-tree
+/// `crates/core/roms/esp32c3/*` copies used by e2e gates.
 fn default_region_image_path(env: &str) -> Option<PathBuf> {
     let rel = match env {
         "LABWIRED_ESP32C3_ROM" => "roms/esp32c3/esp32c3_rom.bin",
         "LABWIRED_ESP32C3_ROM_DATA" => "roms/esp32c3/esp32c3_drom.bin",
-        // In-tree minimal B0 bootrom so Arduino/Zephyr `rom_func_lookup` works
-        // on plain `labwired test` without exporting the env. Bare-metal ELFs
-        // that need the Cortex-M flash boot alias at 0 (PIO onboarding) can
-        // set LABWIRED_RP2040_BOOTROM= (empty) to skip the image — from_config
-        // then leaves the region out so flash alias wins.
+        // Same image as `embedded_region_image`; kept so an operator can
+        // still point the env var at a replacement file. Bare-metal ELFs
+        // that need the Cortex-M flash boot alias at 0 (PIO onboarding) set
+        // LABWIRED_RP2040_BOOTROM= (empty) to skip the image.
         "LABWIRED_RP2040_BOOTROM" => "roms/rp2040/bootrom.bin",
         _ => return None,
     };
@@ -140,13 +157,12 @@ impl SystemBus {
     /// mask ROM is `bootrom`). A supplied image wins over the env var and the
     /// in-tree default path.
     ///
-    /// This is how a runtime with no filesystem fills a ROM window: the
-    /// browser cannot read `LABWIRED_RP2040_BOOTROM` or `roms/rp2040/…`, so
-    /// without it the RP2040's base-0 bootrom region was dropped as empty and
-    /// every pico-sdk `rom_func_lookup` read the flash alias instead of the
-    /// ROM's function table. Only `image_env` regions are filled — the ones a
-    /// chip declares as waiting for an image — so an unrelated name in the map
-    /// cannot overwrite RAM.
+    /// This is how a runtime with no filesystem fills a ROM window. The RP2040
+    /// mask ROM is also embedded, so an unset `LABWIRED_RP2040_BOOTROM` still
+    /// maps it when the caller passes no `bootrom` bytes; a supplied image
+    /// wins over that default. Only `image_env` regions are filled — the ones
+    /// a chip declares as waiting for an image — so an unrelated name in the
+    /// map cannot overwrite RAM.
     pub fn from_config_with_region_images(
         chip: &ChipDescriptor,
         manifest: &SystemManifest,
@@ -184,17 +200,13 @@ impl SystemBus {
                 mem.data[..n].copy_from_slice(&bytes[..n]);
                 loaded_image = n > 0;
             } else if let Some(env) = &region.image_env {
-                // Env pin first; else well-known in-tree dumps so Arduino-matrix
-                // / plain `labwired test` can call C3 ROM helpers without
-                // requiring the operator to export LABWIRED_ESP32C3_ROM*.
-                // Explicit empty env → skip image (opt-out of in-tree default).
-                let path_owned = match std::env::var(env) {
-                    Ok(p) if p.is_empty() => None,
-                    Ok(p) => Some(p),
-                    Err(_) => default_region_image_path(env).map(|p| p.display().to_string()),
-                };
-                if let Some(path) = path_owned {
-                    match std::fs::read(&path) {
+                // Env pin first; else the image compiled into this binary; else
+                // a well-known on-disk dump (ESP32-C3 ROMs are not embedded).
+                // Explicit empty env → skip image (opt-out of the in-tree
+                // default, so the Cortex-M flash alias at 0 stays available).
+                match std::env::var(env) {
+                    Ok(p) if p.is_empty() => {}
+                    Ok(path) => match std::fs::read(&path) {
                         Ok(bytes) => {
                             let n = bytes.len().min(mem.data.len());
                             mem.data[..n].copy_from_slice(&bytes[..n]);
@@ -209,6 +221,32 @@ impl SystemBus {
                             "region '{}' image {path} (${env}) unreadable: {e}",
                             region.name
                         ),
+                    },
+                    Err(_) => {
+                        if let Some(bytes) = embedded_region_image(env) {
+                            let n = bytes.len().min(mem.data.len());
+                            mem.data[..n].copy_from_slice(&bytes[..n]);
+                            loaded_image = n > 0;
+                        } else if let Some(path) = default_region_image_path(env) {
+                            match std::fs::read(&path) {
+                                Ok(bytes) => {
+                                    let n = bytes.len().min(mem.data.len());
+                                    mem.data[..n].copy_from_slice(&bytes[..n]);
+                                    loaded_image = n > 0;
+                                    tracing::info!(
+                                        "loaded {n} bytes into '{}' region @ {:#010x} from {}",
+                                        region.name,
+                                        region.base,
+                                        path.display()
+                                    );
+                                }
+                                Err(e) => tracing::warn!(
+                                    "region '{}' image {} (${env}) unreadable: {e}",
+                                    region.name,
+                                    path.display()
+                                ),
+                            }
+                        }
                     }
                 }
             }
