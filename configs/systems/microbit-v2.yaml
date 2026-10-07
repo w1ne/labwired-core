@@ -21,6 +21,15 @@
 name: "microbit-v2"
 chip: "../chips/nrf52833.yaml"
 external_devices:
+  # Selected LSM303AGR-equipped v2 variant, not the alternate FXOS8700 board.
+  # Separate fixed 7-bit addresses on the internal TWIM0 bus. The shared
+  # open-drain sensor interrupt P0.25 is not connected by this bounded model.
+  - id: "accelerometer"
+    type: "lsm303agr_accel"
+    connection: "i2c0"
+  - id: "magnetometer"
+    type: "lsm303agr_mag"
+    connection: "i2c0"
   - id: "led_matrix"
     type: "led-matrix-mux"
     connection: "gpio0"

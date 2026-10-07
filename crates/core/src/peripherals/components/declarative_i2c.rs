@@ -82,6 +82,15 @@ fn crc8(data: &[u8], poly: u8, init: u8) -> u8 {
     crc
 }
 
+/// Whether `stored` (the start register after a write) leaves `rule` started:
+/// any `start_mask` bit set, or with `start_value` the masked bits equal to it.
+fn rule_started(rule: &DataReady, stored: u32) -> bool {
+    match rule.start_value {
+        Some(value) => stored & rule.start_mask == value,
+        None => stored & rule.start_mask != 0,
+    }
+}
+
 /// Where one [`DataReady`] rule's conversion currently stands. See the
 /// lifecycle on [`DataReady`]; `Converting` carries the simulated-µs deadline.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -659,7 +668,7 @@ impl GenericI2cDevice {
     /// for each reading). `stored` is the register's value AFTER the write.
     fn start_conversions(&mut self, register: &str, stored: u32) {
         for (i, rule) in self.data_ready.iter().enumerate() {
-            if rule.start_register == register && stored & rule.start_mask != 0 {
+            if rule.start_register == register && rule_started(rule, stored) {
                 self.dr_state[i] =
                     DataReadyState::Converting(self.elapsed_us.saturating_add(rule.conversion_us));
             }
@@ -679,13 +688,13 @@ impl GenericI2cDevice {
                 continue;
             }
             let rule = &self.data_ready[i];
-            let still_started = self
-                .reg_values
-                .get(&rule.start_register)
-                .copied()
-                .unwrap_or(0)
-                & rule.start_mask
-                != 0;
+            let still_started = rule_started(
+                rule,
+                self.reg_values
+                    .get(&rule.start_register)
+                    .copied()
+                    .unwrap_or(0),
+            );
             self.dr_state[i] = if still_started {
                 DataReadyState::Converting(self.elapsed_us.saturating_add(rule.conversion_us))
             } else {
@@ -2201,6 +2210,17 @@ fn validate_spec(spec: &I2cSpec) -> Result<()> {
                 dr.name
             );
         }
+        if let Some(value) = dr.start_value {
+            if value & !dr.start_mask != 0 {
+                bail!(
+                    "data_ready '{}' start_value {:#x} has bits outside start_mask {:#x} \
+                     (it could never match)",
+                    dr.name,
+                    value,
+                    dr.start_mask
+                );
+            }
+        }
         // The start bits must survive a firmware write, or the conversion could
         // never be started; the ready bits must NOT, or firmware could forge
         // readiness. Both are `write_mask` questions on the named registers.
@@ -3236,6 +3256,25 @@ pub static FXOS8700_KIT: LazyLock<DeclarativeI2cKit> = LazyLock::new(|| {
     .expect("fxos8700.yaml is a valid declarative i2c descriptor")
 });
 
+/// ST LSM303AGR accelerometer half (declarative `lsm303agr_accel.yaml`), the
+/// micro:bit V2 motion sensor. Declarative from the start.
+pub static LSM303AGR_ACCEL_KIT: LazyLock<DeclarativeI2cKit> = LazyLock::new(|| {
+    DeclarativeI2cKit::from_yaml(
+        labwired_config::embedded_device_yaml("lsm303agr_accel")
+            .expect("lsm303agr_accel descriptor is embedded"),
+    )
+    .expect("lsm303agr_accel.yaml is a valid declarative i2c descriptor")
+});
+
+/// ST LSM303AGR magnetometer half (declarative `lsm303agr_mag.yaml`).
+pub static LSM303AGR_MAG_KIT: LazyLock<DeclarativeI2cKit> = LazyLock::new(|| {
+    DeclarativeI2cKit::from_yaml(
+        labwired_config::embedded_device_yaml("lsm303agr_mag")
+            .expect("lsm303agr_mag descriptor is embedded"),
+    )
+    .expect("lsm303agr_mag.yaml is a valid declarative i2c descriptor")
+});
+
 /// Melexis MLX90614 IR thermometer (declarative `mlx90614.yaml`) — the SMBus
 /// command device: a little-endian response word and a PEC over the whole
 /// addressed transaction. Migrated from a hand-written model that answered
@@ -4021,6 +4060,12 @@ behavior:
             GOOD_REGS
         )
         .is_err());
+        // A start_value with bits outside start_mask could never match.
+        assert!(build(
+            "      - { name: m, start_register: CMD, start_mask: 0x01, start_value: 0x02, ready_register: CMD, ready_mask: 0x10, conversion_us: 100 }\n",
+            GOOD_REGS
+        )
+        .is_err());
         // A ready bit firmware COULD write would let a sketch forge readiness.
         assert!(build(
             "      - { name: m, start_register: CMD, start_mask: 0x01, ready_register: CMD, ready_mask: 0x02, conversion_us: 100 }\n",
@@ -4072,6 +4117,53 @@ metadata:
   inputs:
     - { key: distance, label: "Distance", unit: mm, min: 0, max: 2000, default: 200 }
 "#;
+
+    /// `start_value` starts on a field VALUE, including all-zero: here MD[1]
+    /// clear means measuring (the LSM303AGR magnetometer's CFG_REG_A_M shape).
+    const MODE_FIELD_FIXTURE: &str = r#"
+type: test_mode_field_data_ready_fixture
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x1E
+    registers:
+      - { name: CFG, addr: 0x60, width: 1, endian: le, access: rw, reset: 0x03 }
+      - { name: STATUS, addr: 0x67, width: 1, endian: le, access: r, reset: 0x00 }
+      - { name: OUT, addr: 0x68, width: 2, endian: le, access: r, source: x }
+    data_ready:
+      - name: xyz
+        start_register: CFG
+        start_mask: 0x02
+        start_value: 0x00
+        ready_register: STATUS
+        ready_mask: 0x08
+        conversion_us: 10000
+        clear_on_read: [OUT]
+metadata:
+  inputs:
+    - { key: x, label: "X", unit: uT, min: -100, max: 100, default: 0 }
+"#;
+
+    #[test]
+    fn start_value_starts_on_an_all_zero_mode_field() {
+        let mut d = GenericI2cDevice::from_yaml(MODE_FIELD_FIXTURE, 0).unwrap();
+        d.advance_time_us(1);
+        d.advance_time_us(20_000);
+        assert_eq!(read8(&mut d, 0x67), 0x00, "reset MD = 11 is idle");
+        write8(&mut d, 0x60, 0x8C); // MD = 00: continuous
+        d.advance_time_us(9_999);
+        assert_eq!(read8(&mut d, 0x67), 0x00, "one µs short of the period");
+        d.advance_time_us(1);
+        assert_eq!(read8(&mut d, 0x67), 0x08, "sample ready");
+        read8(&mut d, 0x68); // result read clears and, still MD = 00, restarts
+        assert_eq!(read8(&mut d, 0x67), 0x00, "cleared by the result read");
+        d.advance_time_us(10_000);
+        assert_eq!(read8(&mut d, 0x67), 0x08, "the next period completed");
+        write8(&mut d, 0x60, 0x8F); // MD = 11: idle
+        read8(&mut d, 0x68);
+        d.advance_time_us(20_000);
+        assert_eq!(read8(&mut d, 0x67), 0x00, "idle stops new samples");
+    }
 
     #[test]
     fn a_second_device_shape_adopts_data_ready_in_yaml_only() {

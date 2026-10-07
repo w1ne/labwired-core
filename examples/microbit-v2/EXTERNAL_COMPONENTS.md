@@ -13,12 +13,11 @@ The onboarding path uses on-chip peripherals only:
 
 The micro:bit v2 carrier includes:
 
-- a 5x5 LED matrix, **charlieplexed** across five row and five column lines —
-  no single pin is an LED, and the engine has no charlieplexed-matrix model, so
-  it is not attached and not claimed;
+- a 5x5 row/column-multiplexed LED matrix — attached to GPIO/GPIOTE pad
+  levels in both system manifests, with duty-integrated grayscale readback;
 - a nRF52833 radio (BLE / 802.15.4) — the RADIO window exists but BLE is not
   modelled;
-- a MEMS microphone + speaker, a combined motion and temperature sensor, a
+- an analog MEMS microphone + speaker, a combined motion sensor, a
   touch logo, and the KL27/DAPLink interface MCU — none are attached.
 
 Those are **not** required for the UART smoke path.

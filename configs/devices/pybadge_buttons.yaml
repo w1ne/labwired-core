@@ -1,0 +1,72 @@
+# SPDX-License-Identifier: MIT
+# PyBadge's GPIO-clocked SN74HC165, not the byte-SPI sn74hc165 descriptor.
+# Wiring/bit order: Adafruit-PyBadge-PCB schematic and Adafruit_Arcada_PyBadge.h.
+# Protocol: TI SN74HC165 datasheet. SH/LD low loads transparently; high shifts
+# toward QH on rising CLK. Both CLK INH and SER are grounded on this board.
+# Raw parallel bits: left/up/down/right/select/start/A/B = bits 0..7.
+# Buttons have pull-ups: host 1 means pressed, the parallel input then is LOW.
+# No contact bounce, propagation delay, or floating power-on state is modelled.
+type: pybadge_buttons
+
+behavior:
+  primitive: gpio_device
+  output_update: final_level
+  pins:
+    LATCH: latch_pin
+    CLOCK: clock_pin
+  outputs: [DATA]
+  output_pins:
+    DATA: data_pin
+  vars:
+    shift: 255
+  rules:
+    # Pin-set events also cover the first GPIO sample. While SH/LD is low,
+    # neither clock polarity can shift; every input change reloads the word.
+    - on: { pins: [LATCH, CLOCK] }
+      when: "!pin(LATCH)"
+      do: &load
+        - var:
+            name: shift
+            value: "255 ^ (input(left) | (input(up) << 1) | (input(down) << 2) | (input(right) << 3) | (input(select) << 4) | (input(start) << 5) | (input(a) << 6) | (input(b) << 7))"
+        - { pin: DATA, level: "(var(shift) >> 7) & 1" }
+    - { on: { input: left }, when: "!pin(LATCH)", do: *load }
+    - { on: { input: up }, when: "!pin(LATCH)", do: *load }
+    - { on: { input: down }, when: "!pin(LATCH)", do: *load }
+    - { on: { input: right }, when: "!pin(LATCH)", do: *load }
+    - { on: { input: select }, when: "!pin(LATCH)", do: *load }
+    - { on: { input: start }, when: "!pin(LATCH)", do: *load }
+    - { on: { input: a }, when: "!pin(LATCH)", do: *load }
+    - { on: { input: b }, when: "!pin(LATCH)", do: *load }
+    # Read H before the first pulse. Each rising pulse moves the next bit to
+    # QH. Grounded SER fills with zero, including every pulse after eight.
+    - on: { pin: CLOCK, edge: rising }
+      when: "pin(LATCH)"
+      do:
+        - { var: { name: shift, value: "(var(shift) << 1) & 255" } }
+        - { pin: DATA, level: "(var(shift) >> 7) & 1" }
+
+metadata:
+  label: "PyBadge buttons"
+  summary: "Eight active-low buttons through the board's SN74HC165."
+  detail: "GPIO latch/clock/data scan; B is read first, left last. Host channels are 0 released, 1 pressed (values >= 0.5 round to pressed). SER and clock inhibit are grounded. No bounce or propagation timing."
+  category: gpio
+  config_keys:
+    - { name: latch_pin, ty: str, doc: "SH/LD output: PyBadge PB00." }
+    - { name: clock_pin, ty: str, doc: "CLK output: PyBadge PB31." }
+    - { name: data_pin, ty: str, doc: "QH input: PyBadge PB30." }
+  inputs:
+    - { key: left, label: "Left", unit: bool, min: 0, max: 1, default: 0 }
+    - { key: up, label: "Up", unit: bool, min: 0, max: 1, default: 0 }
+    - { key: down, label: "Down", unit: bool, min: 0, max: 1, default: 0 }
+    - { key: right, label: "Right", unit: bool, min: 0, max: 1, default: 0 }
+    - { key: select, label: "Select / Menu", unit: bool, min: 0, max: 1, default: 0 }
+    - { key: start, label: "Start / Soft reset", unit: bool, min: 0, max: 1, default: 0 }
+    - { key: a, label: "A", unit: bool, min: 0, max: 1, default: 0 }
+    - { key: b, label: "B", unit: bool, min: 0, max: 1, default: 0 }
+
+emit:
+  connection: gpio
+  config:
+    - { key: latch_pin, from_part_pins: [LATCH] }
+    - { key: clock_pin, from_part_pins: [CLOCK] }
+    - { key: data_pin, from_part_pins: [DATA] }

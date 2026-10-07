@@ -7,6 +7,7 @@
 use crate::adapter::LabwiredAdapter;
 use anyhow::{anyhow, Result};
 use labwired_core::trace::InstructionTrace;
+use labwired_loader::source_step::{StepKind, StepStop};
 // use dap::requests::Request;
 // use dap::responses::ResponseBody;
 use base64::Engine;
@@ -92,6 +93,9 @@ fn profile_to_json(node: ProfileNode) -> Value {
 }
 
 const MAX_PROFILE_DEPTH: usize = 1024;
+/// Single steps a source step may take while it looks for the next line (a
+/// call stepped over runs through at up to 256 cycles per such step).
+const SOURCE_STEP_MAX_INSTRUCTIONS: u32 = 2_000_000;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -596,6 +600,126 @@ impl DapServer {
         }
     }
 
+    /// The Locals scope. With a line table, the locals the browser shows:
+    /// register-held values read from the debugged core, a static read from
+    /// memory, a frame slot or an expression described rather than guessed at.
+    /// Without one, the symbol table's locals with frame offsets read off SP.
+    fn locals_variables(&self) -> Vec<Value> {
+        if !self.adapter.has_source() {
+            return self.legacy_locals_variables();
+        }
+        let read_word = |addr: u32| {
+            self.adapter
+                .read_memory(addr as u64, 4)
+                .ok()
+                .filter(|d| d.len() == 4)
+                .map(|d| u32::from_le_bytes([d[0], d[1], d[2], d[3]]))
+        };
+        self.adapter
+            .source_locals()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|local| {
+                let value = match (local.kind, local.value) {
+                    (_, Some(v)) => format!("{:#x}", v),
+                    ("address", None) => local
+                        .address
+                        .and_then(read_word)
+                        .map(|v| format!("{:#x}", v))
+                        .unwrap_or_else(|| "not available".to_string()),
+                    ("frame_offset", None) => {
+                        format!("not available (frame offset {})", local.offset.unwrap_or(0))
+                    }
+                    _ => "not available".to_string(),
+                };
+                json!({
+                    "name": local.name,
+                    "value": value,
+                    "type": local.kind,
+                    "variablesReference": 0,
+                })
+            })
+            .collect()
+    }
+
+    fn legacy_locals_variables(&self) -> Vec<Value> {
+        let pc = self.adapter.get_pc().unwrap_or(0);
+        self.adapter
+            .get_locals(pc)
+            .into_iter()
+            .map(|local| {
+                let val = match local.location {
+                    labwired_loader::DwarfLocation::Register(r) => {
+                        let val = self.adapter.get_register(r as u8).unwrap_or(0);
+                        format!("{:#x}", val)
+                    }
+                    labwired_loader::DwarfLocation::FrameRelative(offset) => {
+                        let sp = self.adapter.get_register(13).unwrap_or(0);
+                        let addr = (sp as i64 + offset) as u32;
+                        if let Ok(data) = self.adapter.read_memory(addr as u64, 4) {
+                            let val = (data[0] as u32)
+                                | ((data[1] as u32) << 8)
+                                | ((data[2] as u32) << 16)
+                                | ((data[3] as u32) << 24);
+                            format!("{:#x}", val)
+                        } else {
+                            "error".to_string()
+                        }
+                    }
+                    _ => "not available".to_string(),
+                };
+                json!({
+                    "name": local.name,
+                    "value": val,
+                    "variablesReference": 0,
+                })
+            })
+            .collect()
+    }
+
+    /// Take one step and report it: the response, then a `stopped` event
+    /// whose reason is "breakpoint" when the step ended on one.
+    fn send_step_result<W: Write>(
+        &self,
+        req_seq: i64,
+        command: &str,
+        kind: StepKind,
+        instruction: bool,
+        sender: &MessageSender<W>,
+    ) -> Result<()> {
+        let result = if instruction {
+            self.adapter
+                .step()
+                .map(|r| matches!(r, labwired_core::StopReason::Breakpoint(_)))
+        } else {
+            match self.adapter.step_source(kind, SOURCE_STEP_MAX_INSTRUCTIONS) {
+                Ok(Some(outcome)) => Ok(outcome.stop == StepStop::Breakpoint),
+                Ok(None) => self
+                    .adapter
+                    .step()
+                    .map(|r| matches!(r, labwired_core::StopReason::Breakpoint(_))),
+                Err(e) => Err(e),
+            }
+        };
+        match result {
+            Ok(at_breakpoint) => {
+                sender.send_response(req_seq, command, None)?;
+                sender.send_event(
+                    "stopped",
+                    Some(json!({
+                        "reason": if at_breakpoint { "breakpoint" } else { "step" },
+                        "threadId": 1,
+                        "allThreadsStopped": true
+                    })),
+                )?;
+            }
+            Err(e) => {
+                sender.send_error_response(req_seq, command, &format!("Step failed: {}", e))?;
+            }
+        }
+        Ok(())
+    }
+
     fn handle_request<W: Write>(
         &self,
         req_seq: i64,
@@ -862,7 +986,17 @@ impl DapServer {
             }
             "stackTrace" => {
                 let pc = self.adapter.get_pc().unwrap_or(0);
-                let source_loc = self.adapter.lookup_source(pc as u64);
+                // The line table (function-entry rule, as the browser shows
+                // it) first; the symbol lookup for firmware without one.
+                let source_loc = self
+                    .adapter
+                    .source_location(pc)
+                    .map(|l| labwired_loader::SourceLocation {
+                        file: l.file,
+                        line: Some(l.line),
+                        function: l.function,
+                    })
+                    .or_else(|| self.adapter.lookup_source(pc as u64));
 
                 let (source, line, name) = if let Some(loc) = source_loc {
                     let mapped_file = self.apply_source_map_outgoing(&loc.file);
@@ -948,36 +1082,7 @@ impl DapServer {
                         Some(json!({ "variables": variables })),
                     )?;
                 } else if var_ref == 100 {
-                    let pc = self.adapter.get_pc().unwrap_or(0);
-                    let locals = self.adapter.get_locals(pc);
-                    let mut variables = Vec::new();
-                    for local in locals {
-                        let val = match local.location {
-                            labwired_loader::DwarfLocation::Register(r) => {
-                                let val = self.adapter.get_register(r as u8).unwrap_or(0);
-                                format!("{:#x}", val)
-                            }
-                            labwired_loader::DwarfLocation::FrameRelative(offset) => {
-                                let sp = self.adapter.get_register(13).unwrap_or(0);
-                                let addr = (sp as i64 + offset) as u32;
-                                if let Ok(data) = self.adapter.read_memory(addr as u64, 4) {
-                                    let val = (data[0] as u32)
-                                        | ((data[1] as u32) << 8)
-                                        | ((data[2] as u32) << 16)
-                                        | ((data[3] as u32) << 24);
-                                    format!("{:#x}", val)
-                                } else {
-                                    "error".to_string()
-                                }
-                            }
-                            _ => "not available".to_string(),
-                        };
-                        variables.push(json!({
-                            "name": local.name,
-                            "value": val,
-                            "variablesReference": 0,
-                        }));
-                    }
+                    let variables = self.locals_variables();
                     sender.send_response(
                         req_seq,
                         "variables",
@@ -1425,34 +1530,19 @@ impl DapServer {
                 }
             }
             "next" | "stepIn" => {
-                let result = if command == "next" {
-                    self.adapter.step_over_source_line(512)
+                // DAP steps are source-line steps unless the client asks for
+                // `granularity: "instruction"`; a firmware without a line
+                // table steps by instruction.
+                let instruction = arguments
+                    .and_then(|a| a.get("granularity"))
+                    .and_then(|g| g.as_str())
+                    == Some("instruction");
+                let kind = if command == "next" {
+                    StepKind::Over
                 } else {
-                    self.adapter.step()
+                    StepKind::Into
                 };
-                match result {
-                    Ok(reason) => {
-                        sender.send_response(req_seq, command, None)?;
-                        sender.send_event(
-                            "stopped",
-                            Some(json!({
-                                "reason": match reason {
-                                    labwired_core::StopReason::Breakpoint(_) => "breakpoint",
-                                    _ => "step",
-                                },
-                                "threadId": 1,
-                                "allThreadsStopped": true
-                            })),
-                        )?;
-                    }
-                    Err(e) => {
-                        sender.send_error_response(
-                            req_seq,
-                            command,
-                            &format!("Step failed: {}", e),
-                        )?;
-                    }
-                }
+                self.send_step_result(req_seq, command, kind, instruction, sender)?;
             }
             "stepBack" => {
                 if let Err(e) = self.adapter.step_back() {
@@ -1474,7 +1564,9 @@ impl DapServer {
                 }
             }
             "stepOut" => {
-                if let Err(e) = self.adapter.step_out() {
+                if self.adapter.has_source() {
+                    self.send_step_result(req_seq, command, StepKind::Out, false, sender)?;
+                } else if let Err(e) = self.adapter.step_out() {
                     sender.send_error_response(
                         req_seq,
                         "stepOut",
@@ -1839,8 +1931,11 @@ mod tests {
             seq: Arc::new(AtomicI64::new(1)),
         };
         let take = || String::from_utf8(std::mem::take(&mut *output.lock().unwrap())).unwrap();
+        // Reverse-step history is single instructions: a source step runs
+        // calls through and clears it.
+        let instruction = json!({"threadId": 1, "granularity": "instruction"});
 
-        server.handle_request(1, "stepIn", None, &sender)?;
+        server.handle_request(1, "stepIn", Some(&instruction), &sender)?;
         let pc_after_step = server.adapter.get_pc()?;
         server.handle_request(
             2,
@@ -1851,15 +1946,15 @@ mod tests {
         let out = take();
         assert!(out.contains("\"success\":true"), "{out}");
         assert!(out.contains("\"label\":\"one\""), "{out}");
-        server.handle_request(3, "stepIn", None, &sender)?;
+        server.handle_request(3, "stepIn", Some(&instruction), &sender)?;
         server.handle_request(4, "stepBack", None, &sender)?;
         assert_eq!(
             server.adapter.get_pc()?,
             pc_after_step,
             "stepBack undid the step"
         );
-        server.handle_request(5, "stepIn", None, &sender)?;
-        server.handle_request(6, "stepIn", None, &sender)?;
+        server.handle_request(5, "stepIn", Some(&instruction), &sender)?;
+        server.handle_request(6, "stepIn", Some(&instruction), &sender)?;
         take();
         server.handle_request(7, "labwired/restore", Some(&json!({"id": 1})), &sender)?;
         let out = take();

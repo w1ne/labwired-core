@@ -65,6 +65,8 @@ wasmtime = { version = "45", optional = true, default-features = false, features
 
 [features]
 default = []
+# Source-built executable micro:bit board qualification; requires ARM GCC.
+microbit-board-io-test = ["event-scheduler"]
 # Silent-path census (`crates/core/src/census.rs`) — MEASUREMENT ONLY.
 #
 # Counts three paths on which the simulator can be wrong and still report
@@ -445,3 +447,15 @@ required-features = ["event-scheduler"]
 [[example]]
 name = "sd_hle_radio2"
 required-features = ["event-scheduler"]
+
+[[test]]
+name = "microbit_v2_board_io_guest"
+required-features = ["microbit-board-io-test"]
+
+[[test]]
+name = "microbit_v2_motion_io_guest"
+required-features = ["microbit-board-io-test"]
+
+[[test]]
+name = "microbit_v2_adc_scan_guest"
+required-features = ["microbit-board-io-test"]

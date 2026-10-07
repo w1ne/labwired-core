@@ -448,6 +448,17 @@ pub fn build_i2c_device(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn lsm303agr_halves_are_declarative_at_their_silicon_addresses() {
+        let config = std::collections::HashMap::new();
+        for (kind, address) in [("lsm303agr_accel", 0x19), ("lsm303agr_mag", 0x1e)] {
+            let mut device = super::build_external_i2c_device(kind, "motion", &config).unwrap();
+            assert_eq!(device.address(), address);
+            let input = device.as_sim_input_mut().unwrap();
+            assert_eq!(input.component_id(), Some("motion"));
+            input.set_input("x", -1.0).unwrap();
+        }
+    }
     use super::*;
 
     #[test]

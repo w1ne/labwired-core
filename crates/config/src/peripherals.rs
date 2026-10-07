@@ -939,7 +939,8 @@ pub struct ZeroWhen {
 /// Lifecycle (`name` is for diagnostics only):
 ///  1. **idle** at power-on — the status bit reads clear.
 ///  2. A master write to `start_register` that leaves any `start_mask` bit set
-///     starts a conversion; the status bit reads clear for `conversion_us` of
+///     (or, with `start_value`, leaves the masked bits equal to it) starts a
+///     conversion; the status bit reads clear for `conversion_us` of
 ///     simulated wall-clock.
 ///  3. **ready** — the status bit reads set (OR'd over whatever the register
 ///     stores), and the result registers hold the current measurement.
@@ -968,6 +969,13 @@ pub struct DataReady {
     /// starts a conversion (level, not edge — drivers re-issue the same
     /// on-demand bit for every reading).
     pub start_mask: u32,
+    /// When set, the start condition is `stored & start_mask == start_value`
+    /// instead of "any `start_mask` bit set". For parts whose running mode is
+    /// an all-zero field: the LSM303AGR magnetometer measures while
+    /// CFG_REG_A_M.MD[1] is clear (MD = 00 continuous, 01 single) and idles
+    /// while it is set, so `start_mask: 0x02, start_value: 0x00`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start_value: Option<u32>,
     /// Register carrying the sim-driven status bit (often the same register).
     pub ready_register: String,
     /// The status bit(s) within `ready_register`, OR'd into every read of it.

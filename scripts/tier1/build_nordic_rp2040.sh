@@ -6,7 +6,9 @@
 # workspace-root target/. nrf52833 is a STANDALONE crate (own [workspace]) and
 # builds in its own target/ dir, like the stm32 fixtures.
 #
-# Usage: scripts/tier1/build_nordic_rp2040.sh [--refresh-manifest]
+# Usage: scripts/tier1/build_nordic_rp2040.sh [--refresh-manifest|--nordic-only]
+#   --nordic-only rebuild only the three Nordic blobs and update only their
+#                 manifest entries; preserve unrelated source provenance.
 #   --refresh-manifest  (default) recompute sha256 for all blobs in
 #                       tests/fixtures/tier1/MANIFEST.json, not just the
 #                       four produced here.
@@ -16,6 +18,13 @@
 #     targets installed (`rustup target add thumbv7em-none-eabi thumbv6m-none-eabi`)
 #   - run from the workspace root or any subdirectory (the script resolves ROOT)
 set -euo pipefail
+
+NORDIC_ONLY=0
+case "${1:-}" in
+  --nordic-only) NORDIC_ONLY=1 ;;
+  ''|--refresh-manifest) ;;
+  *) echo "Unknown argument: $1" >&2; exit 2 ;;
+esac
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 OUT="$ROOT/tests/fixtures/tier1"
@@ -42,15 +51,17 @@ cp "$ROOT/target/thumbv7em-none-eabi/release/tier1-fixture-nrf52840" \
    "$OUT/nrf52840.elf"
 echo "    nrf52840.elf -> $OUT/nrf52840.elf"
 
+if [ "$NORDIC_ONLY" -eq 0 ]; then
 echo "==> Building RP2040 fixture (thumbv6m-none-eabi)..."
 (cd "$ROOT/examples/tier1-fixture/rp2040" \
   && cargo build --release --target thumbv6m-none-eabi)
 cp "$ROOT/target/thumbv6m-none-eabi/release/tier1-fixture-rp2040" \
    "$OUT/rp2040.elf"
 echo "    rp2040.elf -> $OUT/rp2040.elf"
+fi
 
 echo "==> Refreshing MANIFEST.json..."
-(cd "$OUT" && python3 - <<'EOF'
+(cd "$OUT" && python3 - "$NORDIC_ONLY" <<'EOF'
 import hashlib, json, pathlib, subprocess, sys
 
 rev = subprocess.run(
@@ -65,6 +76,8 @@ else:
     manifest = {}
 
 for f in sorted(pathlib.Path(".").iterdir()):
+    if sys.argv[1] == "1" and f.name not in ("nrf52832.elf", "nrf52833.elf", "nrf52840.elf"):
+        continue
     if f.suffix in (".elf", ".bin") and f.is_file():
         manifest[f.name] = {
             "sha256": hashlib.sha256(f.read_bytes()).hexdigest(),

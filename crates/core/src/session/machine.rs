@@ -41,9 +41,12 @@ pub enum GpioInputError {
 }
 
 /// Everything a session needs from a machine, without the `C: Cpu` generic.
-pub trait SessionMachine: DebugControl + Send {
+pub trait SessionMachine: DebugControl + crate::debug::SourceStepTarget + Send {
     /// Advance the machine through its authoritative execution path.
     fn advance(&mut self, request: AdvanceRequest) -> SimResult<AdvanceReport>;
+    /// Let the run loop skip cycles the firmware spends idle (`wfi`, `waiti`,
+    /// an idle-loop budget), as the browser does. Off by default.
+    fn set_idle_fast_forward(&mut self, enabled: bool);
     /// Simulated machine cycles since construction.
     fn cycles(&self) -> u64;
     /// Drive one simulated input channel.
@@ -113,6 +116,9 @@ pub trait SessionMachine: DebugControl + Send {
 impl<C: Cpu + 'static> SessionMachine for Machine<C> {
     fn advance(&mut self, request: AdvanceRequest) -> SimResult<AdvanceReport> {
         Machine::advance(self, request)
+    }
+    fn set_idle_fast_forward(&mut self, enabled: bool) {
+        self.config.idle_fast_forward_enabled = enabled;
     }
 
     fn cycles(&self) -> u64 {

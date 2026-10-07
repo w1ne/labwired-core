@@ -1,0 +1,91 @@
+# SPDX-License-Identifier: MIT
+# ST LSM303AGR — accelerometer half (7-bit address 0x19), declarative I²C.
+# The magnetometer half is its own slave at 0x1E: `lsm303agr_mag.yaml`.
+#
+# This is the motion sensor on the BBC micro:bit V2 (internal TWIM0 bus).
+# Register map, reset values and sensitivities: ST LSM303AGR datasheet Rev 11,
+# §8 (accelerometer registers) and Table 3.
+#
+# ── Wire protocol (§6.1.1) ───────────────────────────────────────────────
+#
+# One sub-address byte. Bit 7 of it (SUB7) asks for auto-increment; bits 6:0
+# select the register. `pointer_mask: 0x7F` drops SUB7 so `0xA8` and `0x28`
+# both address OUT_X_L_A, and the pointer always walks upward.
+#
+# ── Output format (Table 3) ──────────────────────────────────────────────
+#
+# OUT_X/Y/Z are 16-bit two's complement, little-endian, left-justified. In
+# every operating mode (8-bit LP, 10-bit normal, 12-bit HR) a left-justified
+# 1 g at ±2 g is 16384 counts, so the scale depends on CTRL_REG4_A FS[1:0]
+# only: 16384 / 8192 / 4096 counts per g at ±2 / ±4 / ±8 g, and 1365 at ±16 g
+# (11.72 mg/digit in HR, 46.9 mg/digit in normal mode, ×16 / ×64).
+#
+# ── Stated approximations ────────────────────────────────────────────────
+#
+#   * The bits below the selected resolution are not zeroed: 0.3 g at ±2 g
+#     reads 4915, where 10-bit silicon reads 4864.
+#   * Data-ready is paced at 100 Hz (10 ms, the `data_ready:` rule below)
+#     whenever CTRL_REG1_A ODR[3:0] is non-zero, i.e. not power-down. The
+#     configured ODR is not decoded: 1 Hz or 400 Hz still paces at 100 Hz.
+#     Reading any OUT register clears ZYXDA/XDA/YDA/ZDA and starts the next
+#     period from that read, so the cadence drifts by the read latency where
+#     silicon keeps a fixed grid. Overrun bits never set. BDU latching is not
+#     modelled; each read reports the live stimulus.
+#   * SUB7 = 0 still auto-increments (silicon would re-read the same register).
+#   * FIFO, interrupts, click detection, the temperature sensor and the
+#     high-pass filter are not modelled. FIFO_SRC_REG_A reports an empty FIFO.
+type: lsm303agr_accel
+
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x19
+    auto_increment: true
+    pointer_mask: 0x7F
+    unmapped_byte: 0x00
+    registers:
+      - { name: STATUS_REG_AUX_A, addr: 0x07, width: 1, endian: le, access: r,  reset: 0x00 }
+      - { name: OUT_TEMP_A,       addr: 0x0C, width: 2, endian: le, access: r,  reset: 0x0000 }
+      - { name: INT_COUNTER_A,    addr: 0x0E, width: 1, endian: le, access: r,  reset: 0x00 }
+      - { name: WHO_AM_I_A,       addr: 0x0F, width: 1, endian: le, access: r,  reset: 0x33 }
+      - { name: TEMP_CFG_REG_A,   addr: 0x1F, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: CTRL_REG1_A,      addr: 0x20, width: 1, endian: le, access: rw, reset: 0x07 }
+      - { name: CTRL_REG2_A,      addr: 0x21, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: CTRL_REG3_A,      addr: 0x22, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: CTRL_REG4_A,      addr: 0x23, width: 1, endian: le, access: rw, reset: 0x00 }
+      # BOOT (bit 7) reloads trimming and clears itself.
+      - { name: CTRL_REG5_A,      addr: 0x24, width: 1, endian: le, access: rw, reset: 0x00, self_clearing: 0x80 }
+      - { name: CTRL_REG6_A,      addr: 0x25, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: REFERENCE_A,      addr: 0x26, width: 1, endian: le, access: rw, reset: 0x00 }
+      # ZYXDA/XDA/YDA/ZDA come from the `data_ready:` rule below.
+      - { name: STATUS_REG_A,     addr: 0x27, width: 1, endian: le, access: r,  reset: 0x00 }
+      - { name: OUT_X_A, addr: 0x28, width: 2, endian: le, access: r, signed: true, source: x, scale_from: { register: CTRL_REG4_A, mask: 0x03, shift: 4, map: { 0: 16384.0, 1: 8192.0, 2: 4096.0, 3: 1365.0 } } }
+      - { name: OUT_Y_A, addr: 0x2A, width: 2, endian: le, access: r, signed: true, source: y, scale_from: { register: CTRL_REG4_A, mask: 0x03, shift: 4, map: { 0: 16384.0, 1: 8192.0, 2: 4096.0, 3: 1365.0 } } }
+      - { name: OUT_Z_A, addr: 0x2C, width: 2, endian: le, access: r, signed: true, source: z, scale_from: { register: CTRL_REG4_A, mask: 0x03, shift: 4, map: { 0: 16384.0, 1: 8192.0, 2: 4096.0, 3: 1365.0 } } }
+      - { name: FIFO_CTRL_REG_A,  addr: 0x2E, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: FIFO_SRC_REG_A,   addr: 0x2F, width: 1, endian: le, access: r,  reset: 0x20 }
+
+    # 100 Hz output data rate: one new XYZ sample every 10 ms while not powered
+    # down. See "Stated approximations" above.
+    data_ready:
+      - name: xyz
+        start_register: CTRL_REG1_A
+        start_mask: 0xF0        # ODR[3:0]; 0000 is power-down
+        ready_register: STATUS_REG_A
+        ready_mask: 0x0F        # ZYXDA | ZDA | YDA | XDA
+        conversion_us: 10000    # 1 / 100 Hz
+        clear_on_read: [OUT_X_A, OUT_Y_A, OUT_Z_A]
+
+metadata:
+  label: "LSM303AGR accelerometer"
+  summary: "ST LSM303AGR accelerometer half over I2C (address 0x19)."
+  detail: "micro:bit V2 motion sensor. Stimulus channels x/y/z in g, reported as left-justified 16-bit two's complement at the full scale CTRL_REG4_A selects. Sub-address bit 7 (auto-increment) is accepted. Data-ready paces at 100 Hz while ODR is non-zero (the ODR value is not decoded); BDU, FIFO, interrupts and temperature are not modelled."
+  category: i2c
+  config_keys:
+    - name: i2c_address
+      ty: int
+      doc: "7-bit slave address. Defaults to 0x19."
+  inputs:
+    - { key: x, label: "X", unit: "g", min: -16.0, max: 16.0, default: 0.0 }
+    - { key: y, label: "Y", unit: "g", min: -16.0, max: 16.0, default: 0.0 }
+    - { key: z, label: "Z", unit: "g", min: -16.0, max: 16.0, default: 0.0 }

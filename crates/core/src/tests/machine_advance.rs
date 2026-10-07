@@ -1213,6 +1213,53 @@ fn ignored_breakpoint_does_not_block_idle_fast_forward() {
 
 #[cfg(feature = "event-scheduler")]
 #[test]
+fn honored_breakpoint_does_not_block_idle_fast_forward() {
+    // The skip moves time, not the pc, so a debugged run keeps it: a
+    // breakpoint elsewhere must not turn an idle wait into one step per cycle.
+    let mut bus = SystemBus::new();
+    bus.peripherals.clear();
+    let mut machine = Machine::new(
+        CountingCpu {
+            idle_budget: Some(3),
+            ..Default::default()
+        },
+        bus,
+    );
+    machine.config.idle_fast_forward_enabled = true;
+    machine.add_breakpoint(0x100);
+
+    let report = machine.advance(AdvanceRequest::run(Some(3))).unwrap();
+
+    assert_eq!(report.stop, AdvanceStop::FuelLimit);
+    assert_eq!(report.idle_cycles, 3);
+    assert_eq!(machine.cpu.steps, 0);
+}
+
+#[test]
+fn breakpoint_on_the_secondary_core_stops_the_run() {
+    let mut machine = counting_dual_core_machine();
+    machine.cpu_secondary.as_mut().unwrap().pc = 0x40;
+    machine.add_breakpoint(0x44);
+
+    let report = machine.advance(AdvanceRequest::run(Some(16))).unwrap();
+
+    // Lockstep: core 1 reaches 0x44 after two instructions, before running it.
+    assert_eq!(report.stop, AdvanceStop::Breakpoint(0x44));
+    assert_eq!(report.primary_steps, 2);
+    assert_eq!(machine.breakpoint_core, 1);
+    assert_eq!(machine.last_breakpoint_secondary, Some(0x44));
+    assert_eq!(machine.cpu_secondary.as_ref().unwrap().pc, 0x44);
+
+    // The next run steps past it and the primary's own breakpoint wins again.
+    machine.add_breakpoint(8);
+    let report = machine.advance(AdvanceRequest::run(Some(16))).unwrap();
+    assert_eq!(report.stop, AdvanceStop::Breakpoint(8));
+    assert_eq!(machine.breakpoint_core, 0);
+    assert_eq!(machine.last_breakpoint_secondary, None);
+}
+
+#[cfg(feature = "event-scheduler")]
+#[test]
 fn terminal_idle_skip_flushes_pending_push_observation() {
     let mut bus = SystemBus::new();
     bus.peripherals.clear();

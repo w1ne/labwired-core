@@ -7,6 +7,15 @@ name: "pybadge"
 chip: "../chips/atsamd51-pybadge.yaml"
 
 external_devices:
+  # Eight physical buttons behind the on-board SN74HC165, not direct GPIOs.
+  - id: "buttons"
+    type: "pybadge_buttons"
+    connection: "gpio"
+    config:
+      latch_pin: "PB0"
+      clock_pin: "PB31"
+      data_pin: "PB30"
+
   # Five on-board NeoPixels, BOARD_NEOPIXEL_PIN / PIN_NEOPIXEL = PA15.
   - id: "neopixels"
     type: "neopixel"
@@ -34,6 +43,5 @@ connectors:
 # Honest boundary:
 # * the ST7735 160x128 display needs SERCOM4 SPI (PB15 MOSI, PB13 SCK), which
 #   the SAM SERCOM model does not yet implement;
-# * the seven Arcade buttons are behind a parallel-in/serial-out mux on PB00
-#   latch, PB31 clock and PB30 data, not seven direct GPIO inputs;
+# * buttons support GPIO scanning, but do not imply working native display/UI;
 # * QSPI flash and native USB remain stub register windows in the chip model.

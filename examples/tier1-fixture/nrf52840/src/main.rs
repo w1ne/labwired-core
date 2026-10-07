@@ -113,7 +113,7 @@ const SPI2_TXD_AMOUNT: u32 = SPI2_BASE + 0x54C;
 // ── SAADC (nrf52840_saadc, base 0x40007000) ───────────────────────────────
 // 12-bit ADC with EasyDMA RESULT buffer. The modeled engine performs a
 // deterministic conversion: TASKS_START → STARTED, TASKS_SAMPLE writes
-// RESULT.MAXCNT samples to RESULT.PTR and fires END + RESULTDONE.
+// one enabled-channel scan per SAMPLE; END fires only at buffer-full.
 const SAADC_BASE: u32 = 0x4000_7000;
 const SAADC_TASKS_START: u32 = SAADC_BASE;
 const SAADC_TASKS_SAMPLE: u32 = SAADC_BASE + 0x004;
@@ -127,10 +127,9 @@ const SAADC_RESOLUTION: u32 = SAADC_BASE + 0x5F0;
 const SAADC_RESULT_PTR: u32 = SAADC_BASE + 0x62C;
 const SAADC_RESULT_MAXCNT: u32 = SAADC_BASE + 0x630;
 const SAADC_RESULT_AMOUNT: u32 = SAADC_BASE + 0x634;
-// Converted codes for the model's fixed internal source (V(P)=3.0 V, 3.6 V
-// full-scale): code(N) = (3.0/3.6) * 2^N, narrower resolutions drop LSBs.
-const SAADC_CODE_12BIT: u16 = 3413; // (3.0/3.6) * 2^12
-const SAADC_CODE_10BIT: u16 = 853; // (3.0/3.6) * 2^10
+// Explicit modeled VDD source: floor((3.3V/3.6V) * 2^N), default gain/ref.
+const SAADC_CODE_12BIT: u16 = 3754; // modeled VDD(3.3V)/3.6V * 2^12
+const SAADC_CODE_10BIT: u16 = 938; // modeled VDD(3.3V)/3.6V * 2^10
 
 // ── WDT (nrf52840_watchdog, base 0x40010000) ──────────────────────────────
 const WDT_BASE: u32 = 0x4001_0000;
@@ -381,13 +380,13 @@ fn check_spi() -> Result<(), &'static str> {
 }
 
 // ── adc (SAADC): real EasyDMA conversion of a fixed internal source ─────────
-// The model converts V(P)=3.0 V against a 3.6 V full-scale, scaled to the
+// The model converts explicit VDD=3.3 V against a 3.6 V full-scale, scaled to the
 // configured RESOLUTION. This fixture proves a real conversion BY VALUE at two
 // resolutions — it fails if the engine returned a constant or didn't convert.
 fn saadc_sample(res: u32) -> Result<u16, &'static str> {
     reg_write(SAADC_ENABLE, 1); // enable SAADC
     reg_write(SAADC_RESOLUTION, res);
-    reg_write(SAADC_CH0_PSELP, 1); // CH[0].PSELP = AnalogInput0
+    reg_write(SAADC_CH0_PSELP, 9); // CH[0].PSELP = explicit internal VDD
     reg_write(SAADC_CH0_CONFIG, 0x0002_0000); // CH[0].CONFIG (gain/ref defaults)
     reg_write(SAADC_EVENTS_STARTED, 0);
     reg_write(SAADC_EVENTS_END, 0);
@@ -402,7 +401,13 @@ fn saadc_sample(res: u32) -> Result<u16, &'static str> {
         return Err("adc-no-started");
     }
 
-    reg_write(SAADC_TASKS_SAMPLE, 1);
+    for _ in 0..4 {
+        reg_write(SAADC_EVENTS_RESULTDONE, 0);
+        reg_write(SAADC_TASKS_SAMPLE, 1);
+        if !poll_event(SAADC_EVENTS_RESULTDONE) {
+            return Err("adc-no-resultdone");
+        }
+    }
     if !poll_event(SAADC_EVENTS_END) {
         return Err("adc-no-end");
     }

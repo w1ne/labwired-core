@@ -6,13 +6,29 @@
 #
 # BBC micro:bit v2 (Nordic nRF52833). UART is bridged to the interface MCU
 # (KL27 / DAPLink): target TX = P0.06, target RX = P1.08
-# (tech.microbit.org/hardware/schematic/). The 5x5 LED matrix is
-# charlieplexed and is deliberately not declared here (no one pin is an LED);
-# see EXTERNAL_COMPONENTS.md.
+# (tech.microbit.org/hardware/schematic/). The display is row/column
+# multiplexed; its GPIO/GPIOTE pad levels feed the matrix model.
 
 name: "microbit-v2-example"
 chip: "../../configs/chips/nrf52833.yaml"
-external_devices: []
+external_devices:
+  # Selected LSM303AGR variant: 0x19 accelerometer / 0x1e magnetometer.
+  # Live x/y/z inputs default to zero; shared P0.25 IRQ remains unconnected.
+  - id: "accelerometer"
+    type: "lsm303agr_accel"
+    connection: "i2c0"
+  - id: "magnetometer"
+    type: "lsm303agr_mag"
+    connection: "i2c0"
+  - id: "led_matrix"
+    type: "led-matrix-mux"
+    connection: "gpio0"
+    config:
+      row_pins: ["P0.21", "P0.22", "P0.15", "P0.24", "P0.19"]
+      col_pins: ["P0.28", "P0.11", "P0.31", "P1.05", "P0.30"]
+      row_active_high: true
+      col_active_high: false
+      cpu_hz: 64000000
 board_io:
   - id: "button_a"
     kind: "button"

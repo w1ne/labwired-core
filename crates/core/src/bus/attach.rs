@@ -2038,6 +2038,26 @@ impl SystemBus {
             (0x4002_F000, "SPIM3_SCK", "SPIM3_MOSI"),
         ];
 
+        /// PWM instances by base address, as the nRF52833/nRF52840 chip yamls map them.
+        const PWM: &[(u64, [&str; 4])] = &[
+            (
+                0x4001_C000,
+                ["PWM0_OUT0", "PWM0_OUT1", "PWM0_OUT2", "PWM0_OUT3"],
+            ),
+            (
+                0x4002_1000,
+                ["PWM1_OUT0", "PWM1_OUT1", "PWM1_OUT2", "PWM1_OUT3"],
+            ),
+            (
+                0x4002_2000,
+                ["PWM2_OUT0", "PWM2_OUT1", "PWM2_OUT2", "PWM2_OUT3"],
+            ),
+            (
+                0x4002_D000,
+                ["PWM3_OUT0", "PWM3_OUT1", "PWM3_OUT2", "PWM3_OUT3"],
+            ),
+        ];
+
         // ⚠️ Resolve the GPIO ports FIRST and bail if there are none.
         // `pad_lines_arc` CREATES the wire cell, and a controller that owns a
         // cell no route reaches still buffers every byte of every transfer and
@@ -2051,7 +2071,14 @@ impl SystemBus {
                     .dev
                     .as_any()
                     .and_then(|a| a.downcast_ref::<GpioPort>())?;
-                (gpio.register_layout() == GpioRegisterLayout::Nrf52 && gpio.window_offset() == 0)
+                // nRF52833 P1 uses a compact window at its first implemented
+                // registers. It still has the nRF52 PSEL encoding; an offset
+                // alone does not make that port an nRF53/nRF54 peripheral.
+                let nrf52833_p1 = port == 1
+                    && self.peripherals[idx].base == 0x5000_0800
+                    && gpio.window_offset() == 0x500;
+                (gpio.register_layout() == GpioRegisterLayout::Nrf52
+                    && (gpio.window_offset() == 0 || nrf52833_p1))
                     .then_some((idx, port))
             })
             .collect();
@@ -2173,6 +2200,27 @@ impl SystemBus {
                 wired.push((
                     lines,
                     GPIOTE_FUNCS
+                        .iter()
+                        .enumerate()
+                        .map(|(ch, &func)| (first + ch as u32, ch, func))
+                        .collect(),
+                ));
+                continue;
+            }
+
+            if let Some(pwm) = any.downcast_mut::<crate::peripherals::nrf52::pwm::Nrf52Pwm>() {
+                let Some(&(_, funcs)) = PWM.iter().find(|&&(addr, _)| addr == base) else {
+                    continue;
+                };
+                // One claim per output channel: a playing channel owns the pad
+                // its PSEL.OUT names.
+                let first = next_token;
+                next_token += funcs.len() as u32;
+                let lines = pwm.pad_lines_arc();
+                pwm.install_pin_claims(&claims, first);
+                wired.push((
+                    lines,
+                    funcs
                         .iter()
                         .enumerate()
                         .map(|(ch, &func)| (first + ch as u32, ch, func))

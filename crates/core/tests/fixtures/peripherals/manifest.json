@@ -1939,6 +1939,84 @@
       ]
     },
     {
+      "device_type": "lsm303agr_accel",
+      "label": "LSM303AGR accelerometer",
+      "summary": "ST LSM303AGR accelerometer half over I2C (address 0x19).",
+      "detail": "micro:bit V2 motion sensor. Stimulus channels x/y/z in g, reported as left-justified 16-bit two's complement at the full scale CTRL_REG4_A selects. Sub-address bit 7 (auto-increment) is accepted. Data-ready paces at 100 Hz while ODR is non-zero (the ODR value is not decoded); BDU, FIFO, interrupts and temperature are not modelled.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x19."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "x",
+          "label": "X",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0
+        },
+        {
+          "key": "y",
+          "label": "Y",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0
+        },
+        {
+          "key": "z",
+          "label": "Z",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0
+        }
+      ]
+    },
+    {
+      "device_type": "lsm303agr_mag",
+      "label": "LSM303AGR magnetometer",
+      "summary": "ST LSM303AGR magnetometer half over I2C (address 0x1E).",
+      "detail": "micro:bit V2 compass. Stimulus channels x/y/z in µT, reported as 16-bit two's complement at 0.15 µT/LSB. Data-ready paces at 100 Hz while MD selects continuous or single mode (ODR is not decoded); BDU, offset cancellation and interrupts are not modelled.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x1E."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "x",
+          "label": "X",
+          "unit": "µT",
+          "min": -4915.2,
+          "max": 4915.2
+        },
+        {
+          "key": "y",
+          "label": "Y",
+          "unit": "µT",
+          "min": -4915.2,
+          "max": 4915.2
+        },
+        {
+          "key": "z",
+          "label": "Z",
+          "unit": "µT",
+          "min": -4915.2,
+          "max": 4915.2
+        }
+      ]
+    },
+    {
       "device_type": "led-matrix",
       "label": "MAX7219 8×8 LED Matrix",
       "summary": "8×8 LED matrix driven by a MAX7219 serial display driver over SPI.",
@@ -3352,6 +3430,90 @@
           "unit": "cm",
           "min": 2.0,
           "max": 400.0
+        }
+      ]
+    },
+    {
+      "device_type": "pybadge_buttons",
+      "label": "PyBadge buttons",
+      "summary": "Eight active-low buttons through the board's SN74HC165.",
+      "detail": "GPIO latch/clock/data scan; B is read first, left last. Host channels are 0 released, 1 pressed (values >= 0.5 round to pressed). SER and clock inhibit are grounded. No bounce or propagation timing.",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [
+        {
+          "name": "latch_pin",
+          "ty": "str",
+          "doc": "SH/LD output: PyBadge PB00."
+        },
+        {
+          "name": "clock_pin",
+          "ty": "str",
+          "doc": "CLK output: PyBadge PB31."
+        },
+        {
+          "name": "data_pin",
+          "ty": "str",
+          "doc": "QH input: PyBadge PB30."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "left",
+          "label": "Left",
+          "unit": "bool",
+          "min": 0.0,
+          "max": 1.0
+        },
+        {
+          "key": "up",
+          "label": "Up",
+          "unit": "bool",
+          "min": 0.0,
+          "max": 1.0
+        },
+        {
+          "key": "down",
+          "label": "Down",
+          "unit": "bool",
+          "min": 0.0,
+          "max": 1.0
+        },
+        {
+          "key": "right",
+          "label": "Right",
+          "unit": "bool",
+          "min": 0.0,
+          "max": 1.0
+        },
+        {
+          "key": "select",
+          "label": "Select / Menu",
+          "unit": "bool",
+          "min": 0.0,
+          "max": 1.0
+        },
+        {
+          "key": "start",
+          "label": "Start / Soft reset",
+          "unit": "bool",
+          "min": 0.0,
+          "max": 1.0
+        },
+        {
+          "key": "a",
+          "label": "A",
+          "unit": "bool",
+          "min": 0.0,
+          "max": 1.0
+        },
+        {
+          "key": "b",
+          "label": "B",
+          "unit": "bool",
+          "min": 0.0,
+          "max": 1.0
         }
       ]
     },

@@ -847,7 +847,7 @@ mod tests {
             "warmup must decode the RAM store"
         );
         assert!(
-            m.cpu.decode_cache[((0x2000_0002u32 >> 1) & 0x0fff) as usize].is_some(),
+            m.cpu.decoded_entry(0x2000_0002).is_some(),
             "RAM store was not cached"
         );
         m.bus.write_u32(0x2000_0100, 0).unwrap();

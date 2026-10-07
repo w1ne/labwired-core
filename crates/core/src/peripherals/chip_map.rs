@@ -77,6 +77,28 @@ impl<'a> ChipMap<'a> {
     pub fn ids(&self) -> impl Iterator<Item = &'a str> {
         self.entries.iter().map(|p| p.id.as_str())
     }
+
+    /// Address a register using its silicon block offset, including a compact
+    /// window's `reg_offset`. Sibling models must not add a block-relative
+    /// register offset directly to a window-relative base.
+    pub fn register_address(&self, id: &str, offset: u64) -> Option<u64> {
+        let entry = self.entries.iter().find(|p| p.id == id)?;
+        let window_offset = match entry.config.get("reg_offset") {
+            Some(value) => value.as_u64()?,
+            None => 0,
+        };
+        let relative = offset.checked_sub(window_offset)?;
+        let size = match entry.size.as_deref() {
+            Some(size) => labwired_config::parse_size(size).ok()?,
+            None => 0x1000,
+        };
+        if relative.checked_add(4)? > size {
+            return None;
+        }
+        let address = entry.base_address.checked_add(relative)?;
+        address.checked_add(3)?;
+        Some(address)
+    }
 }
 
 #[cfg(test)]
@@ -115,5 +137,38 @@ mod tests {
     fn empty_map_misses_everything() {
         assert_eq!(ChipMap::empty().base_of("gpio0"), None);
         assert_eq!(ChipMap::empty().ids().count(), 0);
+    }
+
+    #[test]
+    fn register_address_translates_compact_windows() {
+        let mut port = cfg("gpio1", 0x5000_0800);
+        port.size = Some("768B".into());
+        port.config
+            .insert("reg_offset".into(), serde_yaml::Value::from(0x500u64));
+        let entries = vec![port];
+        let map = ChipMap::new(&entries);
+        assert_eq!(map.register_address("gpio1", 0x504), Some(0x5000_0804));
+        assert_eq!(map.register_address("gpio1", 0x7F0), Some(0x5000_0AF0));
+        assert_eq!(map.register_address("gpio1", 0x400), None);
+        assert_eq!(map.register_address("gpio1", 0x800), None);
+        assert_eq!(map.register_address("gpio1", 0x7FE), None);
+        assert_eq!(map.register_address("missing", 0x504), None);
+    }
+
+    #[test]
+    fn register_address_rejects_invalid_offset_and_overflow() {
+        let mut port = cfg("gpio1", 0x5000_0800);
+        port.config
+            .insert("reg_offset".into(), serde_yaml::Value::from("invalid"));
+        let entries = vec![port];
+        assert_eq!(
+            ChipMap::new(&entries).register_address("gpio1", 0x504),
+            None
+        );
+        let entries = vec![cfg("gpio1", u64::MAX)];
+        assert_eq!(
+            ChipMap::new(&entries).register_address("gpio1", 0x504),
+            None
+        );
     }
 }

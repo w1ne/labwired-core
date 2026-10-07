@@ -41,7 +41,7 @@ pub enum SimInputError {
     UnknownChannel(String),
     /// The prospective input makes an exact derived producer fail.
     Evaluation(String),
-    /// `value` is outside the channel's `[min, max]`.
+    /// `value` is non-finite or outside the channel's `[min, max]`.
     OutOfRange {
         key: String,
         value: f64,
@@ -116,7 +116,7 @@ pub trait SimInput {
             .find(|c| c.key == key)
             .cloned()
             .ok_or_else(|| SimInputError::UnknownChannel(key.to_string()))?;
-        if value < ch.min || value > ch.max {
+        if !value.is_finite() || value < ch.min || value > ch.max {
             return Err(SimInputError::OutOfRange {
                 key: key.to_string(),
                 value,

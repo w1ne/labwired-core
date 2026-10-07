@@ -1,0 +1,23 @@
+# Original MIT descriptor. Offsets are relative to the compact MMIO window
+# at 0x50000800, not Nordic's P1 block base 0x50000300.
+peripheral: P1
+version: 0.1.0
+registers:
+  - { id: OUT, address_offset: 4, size: 32, access: READ_WRITE, reset_value: 0, fields: [] }
+  - { id: OUTSET, address_offset: 8, size: 32, access: READ_WRITE, reset_value: 0, fields: [] }
+  - { id: OUTCLR, address_offset: 12, size: 32, access: READ_WRITE, reset_value: 0, fields: [] }
+  - { id: IN, address_offset: 16, size: 32, access: READ_ONLY, reset_value: 0, fields: [] }
+  - { id: DIR, address_offset: 20, size: 32, access: READ_WRITE, reset_value: 0, fields: [] }
+  - { id: DIRSET, address_offset: 24, size: 32, access: READ_WRITE, reset_value: 0, fields: [] }
+  - { id: DIRCLR, address_offset: 28, size: 32, access: READ_WRITE, reset_value: 0, fields: [] }
+  - { id: DETECTMODE, address_offset: 36, size: 32, access: READ_WRITE, reset_value: 0, fields: [] }
+  - { id: PIN_CNF0, address_offset: 512, size: 32, access: READ_WRITE, reset_value: 2, fields: [] }
+  - { id: PIN_CNF1, address_offset: 516, size: 32, access: READ_WRITE, reset_value: 2, fields: [] }
+  - { id: PIN_CNF2, address_offset: 520, size: 32, access: READ_WRITE, reset_value: 2, fields: [] }
+  - { id: PIN_CNF3, address_offset: 524, size: 32, access: READ_WRITE, reset_value: 2, fields: [] }
+  - { id: PIN_CNF4, address_offset: 528, size: 32, access: READ_WRITE, reset_value: 2, fields: [] }
+  - { id: PIN_CNF5, address_offset: 532, size: 32, access: READ_WRITE, reset_value: 2, fields: [] }
+  - { id: PIN_CNF6, address_offset: 536, size: 32, access: READ_WRITE, reset_value: 2, fields: [] }
+  - { id: PIN_CNF7, address_offset: 540, size: 32, access: READ_WRITE, reset_value: 2, fields: [] }
+  - { id: PIN_CNF8, address_offset: 544, size: 32, access: READ_WRITE, reset_value: 2, fields: [] }
+  - { id: PIN_CNF9, address_offset: 548, size: 32, access: READ_WRITE, reset_value: 2, fields: [] }

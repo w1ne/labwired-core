@@ -178,10 +178,12 @@ fn target_quantization_ties_and_rejected_inputs_match() {
 #[test]
 fn nan_is_rejected_explicitly_instead_of_silently_becoming_an_adc_endpoint() {
     let (mut old, mut new) = models(0x76);
+    let old_before = read(&mut old, 0xf7, 8);
     let before = read(&mut new, 0xf7, 8);
-    // Deliberate difference: legacy range comparisons accidentally accept NaN.
-    assert!(old.set_input("temperature", f64::NAN).is_ok());
+    // Shared input validation now protects both the Rust and declarative models.
+    assert!(old.set_input("temperature", f64::NAN).is_err());
     assert!(new.set_input("temperature", f64::NAN).is_err());
+    assert_eq!(read(&mut old, 0xf7, 8), old_before);
     assert_eq!(read(&mut new, 0xf7, 8), before);
 }
 

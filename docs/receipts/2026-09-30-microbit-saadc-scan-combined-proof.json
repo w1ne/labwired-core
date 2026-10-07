@@ -1,0 +1,39 @@
+{
+  "schema": "labwired.microbit.saadc-scan-proof.v1",
+  "date": "2026-09-30",
+  "runId": 36720954929,
+  "runUrl": "https://github.com/CrispStrobe/labwired-core/actions/runs/36720954929",
+  "headCommit": "e734e6759e266aa71242782a3814c4bae01f8ba5",
+  "testedMergeCommit": "cfd20eb6a4d87859e47b98b4100dfaec1c63a8ea",
+  "baseCommit": "307541bdeff689115dd78fa96051a8ff6900d26c",
+  "overallResult": "success",
+  "functionalProof": {
+    "coreTestExecutions": 311,
+    "nativeWasmTestExecutions": 3,
+    "adcArmGuestTests": 1,
+    "saadcUnitTests": 26,
+    "easydmaTick512Tests": 4,
+    "allPassed": true
+  },
+  "artifact": {
+    "id": 11101055844,
+    "digest": "sha256:0ed988fa85d402ce544e36c92b58733a51779abc3a6b659097021d4e8ce91993",
+    "adcElf": "adc-guest-artifacts/adc-scan-f07e2f81dadc606e1d958c198807db291c57367804f82542c455cd3c4803ae5e.elf",
+    "adcFirmwareSha256": "f07e2f81dadc606e1d958c198807db291c57367804f82542c455cd3c4803ae5e",
+    "adcHashVerification": "SHA256 verified against downloaded actual hosted ELF; not a reconstructed local binary.",
+    "motionElf": "motion-guest-artifacts/motion-9dc55c590aa1cffe65034aeb414b6f8d5c390054d40d788b8ac02728e414dd08.elf"
+  },
+  "performance": {
+    "activeMedianRtx": 6.326196626503774,
+    "motionMedianRtx": 1.9965387804049022,
+    "motionMinimumRtx": 1.9888865870399481,
+    "motionRealtimeTargetMet": true,
+    "cpuModel": "AMD EPYC 9V45 96-Core Processor"
+  },
+  "qualification": "Native combined CPU/GPIO/SAADC candidate proof at the exact tested merge ref. Main landing and the separate whole-chip CorePerf baseline gate remain pending. Host variation precludes attributing score differences to SAADC optimization.",
+  "limitations": [
+    "Selected test execution counts include overlapping suite filters, not unique test counts.",
+    "Historical failed motion-base receipt remains preserved separately.",
+    "No browser ADC, silicon capture, microphone/audio timing, oversample/burst, timer/PPI or RUN_MIC qualification."
+  ]
+}

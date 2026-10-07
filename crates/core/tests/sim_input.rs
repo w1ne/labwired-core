@@ -42,6 +42,30 @@ fn kw41z_lcd_bus() -> SystemBus {
     SystemBus::from_config(&chip, &manifest).expect("build bus")
 }
 
+#[test]
+fn non_finite_inputs_are_rejected_without_changing_device_or_batch_state() {
+    let mut bus = kw41z_lcd_bus();
+    bus.set_input(Some("fxos8700"), "x", 0.5).unwrap();
+    bus.set_input(Some("fxos8700"), "y", 0.25).unwrap();
+    let before_x = read_axis(&mut bus, 0x01);
+    let before_y = read_axis(&mut bus, 0x03);
+    for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+        assert!(matches!(
+            bus.set_input(Some("fxos8700"), "x", value),
+            Err(SimInputError::OutOfRange { .. })
+        ));
+        assert!(matches!(
+            bus.set_inputs(&[
+                (Some("fxos8700"), "x", -0.5),
+                (Some("fxos8700"), "y", value),
+            ]),
+            Err(SimInputError::OutOfRange { .. })
+        ));
+        assert_eq!(read_axis(&mut bus, 0x01), before_x);
+        assert_eq!(read_axis(&mut bus, 0x03), before_y);
+    }
+}
+
 /// Read one 14-bit left-justified accel axis back out of the FXOS8700 over its
 /// I²C register interface — proving a driven value actually reaches the model's
 /// register file, not just an internal field.

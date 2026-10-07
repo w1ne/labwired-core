@@ -116,6 +116,18 @@ pub static EMBEDDED_DEVICES: &[(&[&str], &str)] = &[
         include_str!("../../../configs/devices/sn74hc165.yaml"),
     ),
     (
+        &["lsm303agr_accel"],
+        include_str!("../../../configs/devices/lsm303agr_accel.yaml"),
+    ),
+    (
+        &["lsm303agr_mag"],
+        include_str!("../../../configs/devices/lsm303agr_mag.yaml"),
+    ),
+    (
+        &["pybadge_buttons"],
+        include_str!("../../../configs/devices/pybadge_buttons.yaml"),
+    ),
+    (
         &["aht20"],
         include_str!("../../../configs/devices/aht20.yaml"),
     ),

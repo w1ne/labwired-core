@@ -6,8 +6,12 @@
 
 use crate::trace::TraceBuffer;
 use anyhow::{anyhow, Result};
+use labwired_core::peripherals::esp_xtensa_common::rom_thunks;
+use labwired_core::session::machine::SessionMachine;
+use labwired_core::system::arch_policy::{machine_family, MachineFamily};
 use labwired_core::trace::{InstructionTrace, MemoryWrite};
 use labwired_core::{DebugControl, Machine};
+use labwired_loader::source_step::{self, Local, SourceDebug, StepKind, StepOutcome};
 use labwired_loader::SymbolProvider;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -77,6 +81,7 @@ pub struct SourceLocation {
 #[derive(Debug, Clone)]
 enum JournalOp {
     Step,
+    StepSource(StepKind, u32),
     StepBack,
     Run(u32),
     WriteMemory(u64, Vec<u8>),
@@ -117,9 +122,44 @@ pub struct SnapshotInfo {
     pub cycles: u64,
 }
 
+/// The thread-local ESP32-classic boot hooks of one session, as a value.
+///
+/// `rom_thunks` keeps them thread-local because a `Machine` normally runs on
+/// one thread. This adapter steps on its request thread and runs `continue`
+/// on a worker, so it carries them across (see
+/// [`LabwiredAdapter::on_this_thread`]); otherwise the worker runs the
+/// firmware with them unset (no `pxCurrentTCB` for
+/// `xTaskGetCurrentTaskHandle`, no pending APP_CPU release).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct Esp32ThreadState {
+    px_current_tcb: Option<u32>,
+    appcpu_boot_addr: Option<u32>,
+    appcpu_reset_released: bool,
+    appcpu_up_flags: Vec<u32>,
+}
+
+fn esp32_thread_state() -> Esp32ThreadState {
+    Esp32ThreadState {
+        px_current_tcb: rom_thunks::PX_CURRENT_TCB_ADDR.with(|s| s.get()),
+        appcpu_boot_addr: rom_thunks::APPCPU_BOOT_ADDR.with(|s| s.get()),
+        appcpu_reset_released: rom_thunks::APPCPU_RESET_RELEASED.with(|s| s.get()),
+        appcpu_up_flags: rom_thunks::APPCPU_UP_FLAGS.with(|f| f.borrow().clone()),
+    }
+}
+
+fn set_esp32_thread_state(state: &Esp32ThreadState) {
+    rom_thunks::PX_CURRENT_TCB_ADDR.with(|s| s.set(state.px_current_tcb));
+    rom_thunks::APPCPU_BOOT_ADDR.with(|s| s.set(state.appcpu_boot_addr));
+    rom_thunks::APPCPU_RESET_RELEASED.with(|s| s.set(state.appcpu_reset_released));
+    rom_thunks::APPCPU_UP_FLAGS.with(|f| *f.borrow_mut() = state.appcpu_up_flags.clone());
+}
+
+/// A console capture buffer a machine builder attaches.
+type ConsoleSink = Arc<Mutex<Vec<u8>>>;
+
 #[derive(Clone)]
 pub struct LabwiredAdapter {
-    pub machine: Arc<Mutex<Option<Box<dyn DebugControl + Send>>>>,
+    pub machine: Arc<Mutex<Option<Box<dyn SessionMachine>>>>,
     pub symbols: Arc<Mutex<Option<SymbolProvider>>>,
     pub uart_sink: Arc<Mutex<Vec<u8>>>,
     pub last_telemetry: Arc<Mutex<(u64, Instant)>>, // cycles, time
@@ -133,6 +173,16 @@ pub struct LabwiredAdapter {
     data_breakpoints: Arc<Mutex<std::collections::HashSet<u64>>>,
     /// Every machine-changing call since the firmware loaded, for snapshots.
     journal: Arc<Mutex<Journal>>,
+    /// The console capture of a machine built from a board manifest (its
+    /// builder attaches its own); drained alongside `uart_sink`.
+    console: Arc<Mutex<Option<ConsoleSink>>>,
+    /// The firmware's line table, for source-level stepping and locals.
+    source: Arc<Mutex<Option<SourceDebug>>>,
+    /// The loaded machine's architecture family.
+    family: Arc<Mutex<Option<MachineFamily>>>,
+    /// A classic-ESP32 Arduino machine's thread-local boot hooks, carried to
+    /// whichever thread runs the machine next (see [`Self::on_this_thread`]).
+    esp32_thread: Arc<Mutex<Option<Esp32ThreadState>>>,
 }
 
 #[derive(Debug, Default)]
@@ -192,6 +242,10 @@ impl LabwiredAdapter {
             conditional_breakpoints: Arc::new(Mutex::new(std::collections::HashMap::new())),
             data_breakpoints: Arc::new(Mutex::new(std::collections::HashSet::new())),
             journal: Arc::new(Mutex::new(Journal::default())),
+            console: Arc::new(Mutex::new(None)),
+            source: Arc::new(Mutex::new(None)),
+            family: Arc::new(Mutex::new(None)),
+            esp32_thread: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -204,6 +258,22 @@ impl LabwiredAdapter {
     /// states the firmware was ever in.
     fn forget_history(&self) {
         *self.trace_buffer.lock().unwrap() = TraceBuffer::new(100_000);
+    }
+
+    /// Run `f`, which advances the machine, with the session's thread-local
+    /// ESP32 hooks installed on this thread, and keep what it leaves there.
+    /// The server steps on its request thread and runs `continue` on a
+    /// worker; without this the worker would run an Arduino-ESP32 sketch with
+    /// the hooks its boot installed on the other thread unset.
+    fn on_this_thread<R>(&self, f: impl FnOnce() -> R) -> R {
+        let state = self.esp32_thread.lock().unwrap().clone();
+        let Some(state) = state else {
+            return f();
+        };
+        set_esp32_thread_state(&state);
+        let out = f();
+        *self.esp32_thread.lock().unwrap() = Some(esp32_thread_state());
+        out
     }
 
     pub fn get_telemetry(&self) -> Option<TelemetryData> {
@@ -273,57 +343,23 @@ impl LabwiredAdapter {
         self.forget_history();
         self.cycle_count.store(0, Ordering::SeqCst);
         self.board_io_bindings.lock().unwrap().clear();
-        let image = labwired_loader::load_elf(&firmware_path)?;
+        *self.console.lock().unwrap() = None;
+        *self.source.lock().unwrap() = None;
+        *self.family.lock().unwrap() = None;
+        *self.esp32_thread.lock().unwrap() = None;
 
-        let mut resolved_board_io_bindings = Vec::new();
-        let mut bus = if let Some(sys_path) = &system_path {
-            let manifest = labwired_config::SystemManifest::from_file(sys_path)?;
-            let chip_dir = sys_path
-                .parent()
-                .unwrap_or_else(|| std::path::Path::new("."));
-            let chip = labwired_config::ChipDescriptor::resolve(&manifest.chip, chip_dir)?;
-            resolved_board_io_bindings = resolve_board_io_bindings(&chip, &manifest);
-            labwired_core::bus::SystemBus::from_config(&chip, &manifest)?
-        } else {
-            labwired_core::bus::SystemBus::new()
+        let (mut machine, family) = match &system_path {
+            Some(sys_path) => {
+                let elf = std::fs::read(&firmware_path).map_err(|e| {
+                    anyhow!("Failed to read firmware {}: {e}", firmware_path.display())
+                })?;
+                self.build_from_system(&elf, sys_path)?
+            }
+            None => self.build_on_default_bus(&firmware_path)?,
         };
-        *self.board_io_bindings.lock().unwrap() = resolved_board_io_bindings;
-
-        let arch = Self::resolve_arch(image.arch)?;
-
-        match arch {
-            labwired_core::Arch::Arm => {
-                let (cpu, _nvic) = labwired_core::system::cortex_m::configure_cortex_m(&mut bus);
-                bus.attach_uart_tx_sink(self.uart_sink.clone(), false);
-                bus.add_observer(self.mem_tracker.clone()); // Attach memory tracker
-                let mut machine = Machine::new(cpu, bus);
-                machine
-                    .load_firmware(&image)
-                    .map_err(|e| anyhow!("Failed to load firmware: {:?}", e))?;
-                *self.machine.lock().unwrap() = Some(Box::new(machine));
-            }
-            labwired_core::Arch::RiscV => {
-                let cpu = labwired_core::system::riscv::configure_riscv(&mut bus);
-                bus.attach_uart_tx_sink(self.uart_sink.clone(), false);
-                bus.add_observer(self.mem_tracker.clone()); // Attach memory tracker
-                let mut machine = Machine::new(cpu, bus);
-                machine
-                    .load_firmware(&image)
-                    .map_err(|e| anyhow!("Failed to load firmware: {:?}", e))?;
-                *self.machine.lock().unwrap() = Some(Box::new(machine));
-            }
-            labwired_core::Arch::XtensaLx7 => {
-                let cpu = labwired_core::system::xtensa::configure_xtensa(&mut bus);
-                bus.attach_uart_tx_sink(self.uart_sink.clone(), false);
-                bus.add_observer(self.mem_tracker.clone());
-                let mut machine = Machine::new(cpu, bus);
-                machine
-                    .load_firmware(&image)
-                    .map_err(|e| anyhow!("Failed to load firmware: {:?}", e))?;
-                *self.machine.lock().unwrap() = Some(Box::new(machine));
-            }
-            _ => return Err(anyhow!("Unsupported architecture: {:?}", arch)),
-        }
+        machine.add_observer(self.mem_tracker.clone()); // Attach memory tracker
+        *self.machine.lock().unwrap() = Some(machine);
+        *self.family.lock().unwrap() = Some(family);
 
         // Load symbols
         if let Ok(syms) = SymbolProvider::new(&firmware_path) {
@@ -334,8 +370,125 @@ impl LabwiredAdapter {
                 firmware_path
             );
         }
+        // The line table for source stepping; a firmware without DWARF lines
+        // still runs, and steps by instruction.
+        match std::fs::read(&firmware_path)
+            .map_err(|e| e.to_string())
+            .and_then(SourceDebug::from_elf)
+        {
+            Ok(debug) => *self.source.lock().unwrap() = Some(debug),
+            Err(e) => tracing::warn!("No source line information: {e}"),
+        }
 
         Ok(())
+    }
+
+    /// The machine a board manifest describes, built the way every other
+    /// frontend builds it (`build_machine`): any chip family, dual-core ESP32,
+    /// AVR. A classic-ESP32 Arduino sketch boots through the one Arduino fast
+    /// boot path, as in the browser. Idle fast-forward is on, as in the
+    /// browser, so a `delay()` costs no host time.
+    fn build_from_system(
+        &self,
+        elf: &[u8],
+        sys_path: &std::path::Path,
+    ) -> Result<(Box<dyn SessionMachine>, MachineFamily)> {
+        use labwired_core::system::builder::{
+            build_machine, BlobMap, BootMode, BuildOptions, BuildRequest, FirmwareSource,
+        };
+        let mut manifest = labwired_config::SystemManifest::from_file(sys_path)?;
+        let chip_dir = sys_path
+            .parent()
+            .unwrap_or_else(|| std::path::Path::new("."));
+        let chip = labwired_config::ChipDescriptor::resolve(&manifest.chip, chip_dir)?;
+        *self.board_io_bindings.lock().unwrap() = resolve_board_io_bindings(&chip, &manifest);
+        if !labwired_config::is_builtin_chip_spec(&manifest.chip) {
+            manifest.chip = chip_dir.join(&manifest.chip).to_string_lossy().into_owned();
+        }
+        let family = machine_family(&chip)?;
+
+        // An Arduino-ESP32 sketch: the core's `loopTask` (C++-mangled) and its
+        // handle.
+        let arduino_esp32 = family == MachineFamily::Xtensa
+            && !chip.is_esp32s3()
+            && SymbolProvider::from_bytes(elf.to_vec()).is_ok_and(|s| {
+                ["_Z8loopTaskPv", "loopTaskHandle"]
+                    .iter()
+                    .any(|name| s.resolve_symbol(name).is_some())
+            });
+        let mut machine: Box<dyn SessionMachine> = if arduino_esp32 {
+            use labwired_core::boot::esp32_arduino::{
+                build_arduino_elf_machine, ArduinoElfBootOpts,
+            };
+            let image = labwired_loader::load_elf_bytes(elf)?;
+            let symbols = labwired_loader::extract_arduino_esp32_thunks(elf);
+            let built = build_arduino_elf_machine(
+                &image,
+                symbols,
+                &manifest,
+                &ArduinoElfBootOpts::default(),
+            )
+            .map_err(|e| anyhow!("Arduino-ESP32 boot: {e}"))?;
+            *self.console.lock().unwrap() = Some(built.uart_sink);
+            *self.esp32_thread.lock().unwrap() = Some(esp32_thread_state());
+            Box::new(built.machine)
+        } else {
+            let built = build_machine(BuildRequest {
+                chip: &chip,
+                system: &manifest,
+                firmware: FirmwareSource::Elf(elf),
+                boot: BootMode::FastBoot,
+                blobs: &BlobMap::new(),
+                options: BuildOptions {
+                    uart_rx: manifest.debug_uart.clone(),
+                    ..Default::default()
+                },
+            })?;
+            *self.console.lock().unwrap() = Some(built.uart.sink);
+            built.machine
+        };
+        machine.set_idle_fast_forward(true);
+        Ok((machine, family))
+    }
+
+    /// No board manifest: the CPU alone on a default bus (Cortex-M, RISC-V,
+    /// Xtensa), as this adapter has always done.
+    fn build_on_default_bus(
+        &self,
+        firmware_path: &std::path::Path,
+    ) -> Result<(Box<dyn SessionMachine>, MachineFamily)> {
+        let image = labwired_loader::load_elf(firmware_path)?;
+        let mut bus = labwired_core::bus::SystemBus::new();
+        let arch = Self::resolve_arch(image.arch)?;
+        bus.attach_uart_tx_sink(self.uart_sink.clone(), false);
+        let (machine, family): (Box<dyn SessionMachine>, MachineFamily) = match arch {
+            labwired_core::Arch::Arm => {
+                let (cpu, _nvic) = labwired_core::system::cortex_m::configure_cortex_m(&mut bus);
+                let mut machine = Machine::new(cpu, bus);
+                machine
+                    .load_firmware(&image)
+                    .map_err(|e| anyhow!("Failed to load firmware: {:?}", e))?;
+                (Box::new(machine), MachineFamily::CortexM)
+            }
+            labwired_core::Arch::RiscV => {
+                let cpu = labwired_core::system::riscv::configure_riscv(&mut bus);
+                let mut machine = Machine::new(cpu, bus);
+                machine
+                    .load_firmware(&image)
+                    .map_err(|e| anyhow!("Failed to load firmware: {:?}", e))?;
+                (Box::new(machine), MachineFamily::RiscV)
+            }
+            labwired_core::Arch::XtensaLx7 => {
+                let cpu = labwired_core::system::xtensa::configure_xtensa(&mut bus);
+                let mut machine = Machine::new(cpu, bus);
+                machine
+                    .load_firmware(&image)
+                    .map_err(|e| anyhow!("Failed to load firmware: {:?}", e))?;
+                (Box::new(machine), MachineFamily::Xtensa)
+            }
+            _ => return Err(anyhow!("Unsupported architecture: {:?}", arch)),
+        };
+        Ok((machine, family))
     }
 
     fn read_board_io_state(
@@ -380,7 +533,8 @@ impl LabwiredAdapter {
     pub fn get_pc(&self) -> Result<u32> {
         let guard = self.machine.lock().unwrap();
         if let Some(machine) = guard.as_ref() {
-            Ok(machine.get_pc())
+            // The core a debugger follows: core 1 once a breakpoint stopped it.
+            Ok(machine.debug_cpu().get_pc())
         } else {
             Err(anyhow!("Machine not initialized"))
         }
@@ -389,7 +543,7 @@ impl LabwiredAdapter {
     pub fn get_register(&self, id: u8) -> Result<u32> {
         let guard = self.machine.lock().unwrap();
         if let Some(machine) = guard.as_ref() {
-            Ok(machine.read_core_reg(id))
+            Ok(machine.debug_cpu().get_register(id))
         } else {
             Err(anyhow!("Machine not initialized"))
         }
@@ -440,11 +594,18 @@ impl LabwiredAdapter {
     }
 
     pub fn poll_uart(&self) -> Vec<u8> {
-        let mut sink = self.uart_sink.lock().unwrap();
-        std::mem::take(&mut *sink)
+        let mut out = std::mem::take(&mut *self.uart_sink.lock().unwrap());
+        if let Some(console) = self.console.lock().unwrap().as_ref() {
+            out.extend(std::mem::take(&mut *console.lock().unwrap()));
+        }
+        out
     }
 
     pub fn step(&self) -> Result<labwired_core::StopReason> {
+        self.on_this_thread(|| self.step_inner())
+    }
+
+    fn step_inner(&self) -> Result<labwired_core::StopReason> {
         let mut guard = self.machine.lock().unwrap();
         if let Some(machine) = guard.as_mut() {
             self.record(JournalOp::Step);
@@ -519,6 +680,82 @@ impl LabwiredAdapter {
         } else {
             Err(anyhow!("Machine not initialized"))
         }
+    }
+
+    /// Where `pc` is in the source, with its function. At a function's first
+    /// instruction this is the first statement's line, as the browser shows it.
+    pub fn source_location(&self, pc: u32) -> Option<source_step::SourceLocation> {
+        self.source.lock().unwrap().as_ref()?.location(pc)
+    }
+
+    /// Whether the firmware carries a DWARF line table.
+    pub fn has_source(&self) -> bool {
+        self.source.lock().unwrap().is_some()
+    }
+
+    /// The code addresses of `file:line` (file matched by path suffix), and
+    /// the line they belong to.
+    pub fn source_line_pcs(&self, file: &str, line: u32) -> Option<(u32, Vec<u32>)> {
+        let hit = self
+            .source
+            .lock()
+            .unwrap()
+            .as_ref()?
+            .line_to_pc(file, line)?;
+        Some((hit.line, hit.pcs.iter().map(|p| *p as u32).collect()))
+    }
+
+    /// The locals and parameters in scope where the debugged core stopped.
+    pub fn source_locals(&self) -> Result<Vec<Local>> {
+        let source = self.source.lock().unwrap();
+        let debug = source
+            .as_ref()
+            .ok_or_else(|| anyhow!("the firmware has no DWARF line information"))?;
+        let family = self
+            .family
+            .lock()
+            .unwrap()
+            .ok_or_else(|| anyhow!("Machine not initialized"))?;
+        let guard = self.machine.lock().unwrap();
+        let machine = guard
+            .as_ref()
+            .ok_or_else(|| anyhow!("Machine not initialized"))?;
+        let pc = machine.debug_cpu().get_pc();
+        Ok(debug.locals(&**machine, family, pc))
+    }
+
+    /// One source-level step (into, over or out), the same algorithm the
+    /// browser runs: calls stepped over run at engine speed with idle
+    /// fast-forward, and the debugger follows the core a breakpoint stopped.
+    /// `None` when the firmware has no line table (the caller falls back to an
+    /// instruction step). Clears reverse-step history: a run-through is not
+    /// recorded instruction by instruction.
+    pub fn step_source(
+        &self,
+        kind: StepKind,
+        max_instructions: u32,
+    ) -> Result<Option<StepOutcome>> {
+        let source = self.source.lock().unwrap();
+        let Some(debug) = source.as_ref() else {
+            return Ok(None);
+        };
+        let family = self
+            .family
+            .lock()
+            .unwrap()
+            .ok_or_else(|| anyhow!("Machine not initialized"))?;
+        let mut guard = self.machine.lock().unwrap();
+        let machine = guard
+            .as_mut()
+            .ok_or_else(|| anyhow!("Machine not initialized"))?;
+        self.record(JournalOp::StepSource(kind, max_instructions));
+        self.forget_history();
+        let target: &mut dyn labwired_core::debug::SourceStepTarget = &mut **machine;
+        self.on_this_thread(|| {
+            source_step::step(target, debug, family, kind, max_instructions, &[])
+                .map(Some)
+                .map_err(|e| anyhow!(e))
+        })
     }
 
     pub fn step_over_source_line(
@@ -777,6 +1014,10 @@ impl LabwiredAdapter {
     }
 
     pub fn continue_execution_chunk(&self, max_steps: u32) -> Result<labwired_core::StopReason> {
+        self.on_this_thread(|| self.continue_inner(max_steps))
+    }
+
+    fn continue_inner(&self, max_steps: u32) -> Result<labwired_core::StopReason> {
         let mut guard = self.machine.lock().unwrap();
         if let Some(machine) = guard.as_mut() {
             self.record(JournalOp::Run(max_steps));
@@ -813,6 +1054,24 @@ impl LabwiredAdapter {
                 continue;
             }
 
+            // The line table first: every address the line compiled to (a
+            // line can be split, or inlined in several places), as the
+            // browser sets them.
+            if let Some((resolved_line, pcs)) = self.source_line_pcs(&path, requested_line as u32) {
+                if let Some(&first) = pcs.first() {
+                    addresses.extend(pcs.iter().map(|a| a & !1));
+                    resolutions.push(BreakpointResolution {
+                        requested_line,
+                        verified: true,
+                        resolved_line: Some(resolved_line),
+                        address: Some(first & !1),
+                        message: (resolved_line != requested_line as u32).then(|| {
+                            format!("Mapped to nearest executable line {}", resolved_line)
+                        }),
+                    });
+                    continue;
+                }
+            }
             if let Some(syms) = syms {
                 if let Some((addr, resolved_line)) =
                     syms.location_to_pc_nearest(&path, requested_line as u32)
@@ -1121,6 +1380,7 @@ impl LabwiredAdapter {
     fn replay(&self, op: &JournalOp) {
         let _ = match op {
             JournalOp::Step => self.step().map(|_| ()),
+            JournalOp::StepSource(kind, max) => self.step_source(*kind, *max).map(|_| ()),
             JournalOp::StepBack => self.step_back().map(|_| ()),
             JournalOp::Run(n) => self.continue_execution_chunk(*n).map(|_| ()),
             JournalOp::WriteMemory(a, d) => self.write_memory(*a, d),
@@ -1172,6 +1432,9 @@ impl LabwiredAdapter {
             TraceBuffer::new(100_000),
         );
         let old_uart = std::mem::take(&mut *self.uart_sink.lock().unwrap());
+        // The reload builds a new machine with its own console capture.
+        let old_console = self.console.lock().unwrap().take();
+        let old_esp32_thread = self.esp32_thread.lock().unwrap().clone();
 
         let rebuilt = self.load_firmware(launch.0, launch.1).map(|()| {
             for op in ops.iter() {
@@ -1193,6 +1456,8 @@ impl LabwiredAdapter {
             self.cycle_count.store(old_cycles, Ordering::SeqCst);
             *self.trace_buffer.lock().unwrap() = old_trace;
             *self.uart_sink.lock().unwrap() = old_uart;
+            *self.console.lock().unwrap() = old_console;
+            *self.esp32_thread.lock().unwrap() = old_esp32_thread;
             return Err(match rebuilt {
                 Err(e) => anyhow!("restore failed reloading the firmware: {e}"),
                 Ok(()) => anyhow!(
@@ -1204,6 +1469,9 @@ impl LabwiredAdapter {
         }
         // Output up to the saved point was delivered before; do not repeat it.
         self.uart_sink.lock().unwrap().clear();
+        if let Some(console) = self.console.lock().unwrap().as_ref() {
+            console.lock().unwrap().clear();
+        }
         self.forget_history();
         Ok(SnapshotInfo {
             id,

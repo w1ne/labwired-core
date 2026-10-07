@@ -244,9 +244,28 @@ impl<C: Cpu> Machine<C> {
                 let aligned = pc & !1;
                 if self.breakpoints.contains(&aligned) && self.last_breakpoint != Some(aligned) {
                     self.last_breakpoint = Some(aligned);
+                    self.breakpoint_core = 0;
                     return Ok(state.report(AdvanceStop::Breakpoint(pc), elapsed));
                 }
                 self.last_breakpoint = None;
+                // The second core of a dual-core chip runs code of its own
+                // (Arduino-ESP32 pins `loopTask` to core 1), so it stops on the
+                // same set. Lockstep keeps it at one instruction per primary
+                // one while breakpoints are honoured, so none is stepped past.
+                if !self.breakpoints.is_empty() {
+                    if let Some(secondary) = self.cpu_secondary.as_ref() {
+                        let pc = secondary.get_pc();
+                        let aligned = pc & !1;
+                        if self.breakpoints.contains(&aligned)
+                            && self.last_breakpoint_secondary != Some(aligned)
+                        {
+                            self.last_breakpoint_secondary = Some(aligned);
+                            self.breakpoint_core = 1;
+                            return Ok(state.report(AdvanceStop::Breakpoint(pc), elapsed));
+                        }
+                    }
+                }
+                self.last_breakpoint_secondary = None;
             }
 
             if request
@@ -278,12 +297,11 @@ impl<C: Cpu> Machine<C> {
                     (Some(a), None) | (None, Some(a)) => Some(a),
                     (None, None) => None,
                 };
-                let skipped = self.try_idle_fast_forward(
-                    skip_limit,
-                    0,
-                    request.breakpoint_policy() == BreakpointPolicy::Honor
-                        && !self.breakpoints.is_empty(),
-                );
+                // Breakpoints do not hold the skip back: it moves time, never
+                // a pc, and the pc it leaves was checked above. A debugged run
+                // that stepped through every idle cycle took a billion steps
+                // to get past one `delay(1000)`.
+                let skipped = self.try_idle_fast_forward(skip_limit, 0);
                 if skipped > 0 {
                     state.fuel_consumed += skipped;
                     state.idle_cycles += skipped;

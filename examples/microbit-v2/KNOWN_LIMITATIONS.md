@@ -63,15 +63,21 @@ survival gate `firmware_survival::test_nrf52833_microbit_v2_smoke_survival`.
   `PACKETPTR`, task/event round-trips). No carrier, tag protocol or peer.
 - **I²C / SPI transfers** — the tier-1 proofs are a no-slave TWIM
   address-NACK and a SPIM2 transfer with no MISO driver attached (the model's
-  floating line reads 0). Real slave/panel models exist in the engine but none
-  is wired on this board; byte-level I²C/SPI against an external component is
-  unproven here.
-- **SAADC input** — conversions read the model's fixed internal source
-  (3.0 V against a 3.6 V full scale), not a pin voltage. The EasyDMA path is
-  proven; the analog front end is not.
-- **GPIO P1 window** — exercised at the simulator's remapped window
-  (`0x50001000`), not the raw-silicon `0x50000300` base (the remap is the
-  descriptor's own memory map, documented on the board page).
+  floating line reads 0). The production system now selects separate
+  LSM303AGR accelerometer/magnetometer components on `i2c0`; this does not
+  upgrade the old tier-1 NACK scenario to a sensor proof. See the separate
+  [motion-model contract](../../docs/engineering/microbit-lsm303agr.md).
+- **SAADC input** — held millivolt levels may be injected on AIN0..7;
+  the microphone pin is P0.05/AIN3. The old fixture retains its internal source
+  before any input injection. This is a bounded digital conversion model, not
+  a microphone waveform, electrical analog front end or continuous capture.
+  See the [held-input contract](../../docs/engineering/nrf52-saadc-held-inputs.md).
+- **GPIO P1 window** — the nRF52833 descriptor now uses silicon register
+  addresses with a compact non-overlapping window; historical simulator-remap
+  firmware must be rebuilt. The separate nRF52840 descriptor is unchanged.
+- **GPIO reset fidelity** — the shared model initializes PIN_CNF to0 rather
+  than the documented disconnected-input value2. The executable board guest
+  explicitly configures its display/button pins; it is not a reset-value sweep.
 - **WDT** — the timeout signal is observed; core reset on bite is deliberately
   not triggered in the fixture (the model surfaces the event without resetting).
 - **PWM** — sequence playback and events are proven; the driven pad waveform
@@ -88,18 +94,28 @@ survival gate `firmware_survival::test_nrf52833_microbit_v2_smoke_survival`.
 
 ---
 
-## Not modelled
+## Remaining model limitations
 
 - **BLE / Bluetooth stack** and any radio medium realism (see above).
 - **USB device protocol** (enumeration, classes, CDC) — register window only.
 - **NFC tag/carrier interaction** — register window only.
-- **5×5 LED matrix** — charlieplexed across five row and five column lines
-  (no one pin is an LED); the engine has no charlieplexed-matrix model, and
-  `configs/systems/microbit-v2.yaml` deliberately declares none rather than
-  lying with a single-pin `led`.
-- **On-board components** — LSM303AGR accelerometer/magnetometer, MEMS
-  microphone (PDM), speaker (PWM), CAP1203 touch logo. None is attached in the
-  system manifest; `external_devices: []`.
+- **5×5 LED matrix** — row/column multiplexed and modeled by integrated
+  GPIO/GPIOTE pad duty. Ambient-light sensing, LED current/voltage and analog
+  brightness calibration are not modeled.
+- **Motion sensors** — the selected LSM303AGR variant exposes separate
+  `accelerometer` (`0x19`) and `magnetometer` (`0x1e`) I²C components.
+  Live `x`/`y`/`z` inputs are held acceleration in g / magnetic field in µT,
+  reported live; all inputs default to zero, with no invented gravity or
+  motion. Data-ready paces at a fixed 100 Hz while each half is measuring;
+  the configured ODR value and BDU latching are not modelled. This is not the alternative FXOS8700-equipped board. Shared
+  open-drain P0.25 sensor IRQ, FIFO, gestures,
+  self-test, temperature and physical calibration are unsupported. Full CODAL /
+  MakeCode sensor firmware and motion/audio browser-WASM qualification remain
+  pending; this does not mark CP13 complete.
+- **Audio / touch** — MEMS analog microphone capture, speaker playback (PWM)
+  and touch logo remain unattached as board-level live devices.
+  The microphone uses P0.05/AIN3, not the nRF52 PDM peripheral; see the
+  [foundation schematic pinmap](https://tech.microbit.org/hardware/schematic/).
 - **Buttons A/B** — declared as `board_io` input stubs (active-low); no
   debounce, pull-up or interrupt wiring is modelled beyond the GPIO pin level.
 - **Interface MCU (KL27/DAPLink)** — not modelled; the UART connector bridges

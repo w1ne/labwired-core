@@ -24,16 +24,16 @@
     "source_rev": "2a7e14fb217da6d7849dea0de03f60cf4d6b175b"
   },
   "nrf52832.elf": {
-    "sha256": "90d4a3bbb57d36059bc73bf60d8d824940b7edf3acaa9f759bdbf06d40792226",
-    "source_rev": "2a7e14fb217da6d7849dea0de03f60cf4d6b175b"
+    "sha256": "a81299a107e55280188fe6a83927630a4e3d2a8b998d6a6c5acdd524743602da",
+    "source_rev": "39e3518a9aa912f2dfe324fa1acd96be6b409e1d"
   },
   "nrf52833.elf": {
-    "sha256": "acdbcce045af60eb007695b6ede6c98fe6e4fbfd090c2546f6a12fbf3e033abd",
-    "source_rev": "3d458ca36adc1292af1fdbf2391286a94586b6c2"
+    "sha256": "9ec3e9893948c80c97bd7eac13912c467c6884be0c1cc3415a9a1db0cf271606",
+    "source_rev": "39e3518a9aa912f2dfe324fa1acd96be6b409e1d"
   },
   "nrf52840.elf": {
-    "sha256": "d26c3f9c2194c663845e11346795c91f2cf71f77b320a0c9bf97ffaa2f69b466",
-    "source_rev": "2a7e14fb217da6d7849dea0de03f60cf4d6b175b"
+    "sha256": "3ad78c82c230875efd48fcf2a0aff0778087c1a5fc5bcbb2ec6b2952043d6191",
+    "source_rev": "39e3518a9aa912f2dfe324fa1acd96be6b409e1d"
   },
   "rp2040.elf": {
     "sha256": "a30a7c5a9341cbd9082d443a4c461301db7bce5bb4c35a44cead853c0aa40168",

@@ -1915,6 +1915,12 @@ pub trait Peripheral: std::fmt::Debug + Send {
         false
     }
 
+    /// Release a held ADC input. Returns false for unsupported peripherals or
+    /// channels; a released input follows the peripheral's documented default.
+    fn clear_adc_channel_input(&mut self, _channel: u8) -> bool {
+        false
+    }
+
     /// How many analog input channels this ADC has: channels `0..count` are
     /// the ones [`SystemBus::seed_adc_channel`](crate::bus::SystemBus) can
     /// drive on it. `None` for a peripheral that is not an ADC LabWired can
@@ -2518,6 +2524,13 @@ pub struct Machine<C: Cpu> {
     // Debug state
     pub breakpoints: std::collections::HashSet<u32>,
     pub last_breakpoint: Option<u32>,
+    /// `last_breakpoint` for `cpu_secondary`: a dual-core run stops when
+    /// either core reaches a breakpoint (an Arduino-ESP32 sketch's `loop()`
+    /// runs on core 1).
+    pub last_breakpoint_secondary: Option<u32>,
+    /// The core the last breakpoint stop was on: 0 = `cpu`, 1 =
+    /// `cpu_secondary`. Debuggers show and step this core.
+    pub breakpoint_core: u8,
     pub total_cycles: u64,
     /// Cumulative CPU cycles advanced by idle fast-forward (WFI skip), not
     /// interpreted. Lets the browser `?perf=1` HUD prove FF is firing; 0 means
@@ -3247,6 +3260,8 @@ impl<C: Cpu> Machine<C> {
             secondary_awaits_boot_addr: false,
             breakpoints: HashSet::new(),
             last_breakpoint: None,
+            last_breakpoint_secondary: None,
+            breakpoint_core: 0,
             total_cycles: 0,
             idle_fast_forward_cycles_skipped: 0,
             config: SimulationConfig::default(),
@@ -3437,12 +3452,7 @@ impl<C: Cpu> Machine<C> {
         self.step_profile.legacy_tick_entries += legacy_tick_entries as u64;
     }
 
-    fn try_idle_fast_forward(
-        &mut self,
-        _max_steps: Option<u64>,
-        _steps: u64,
-        breakpoints_block_idle: bool,
-    ) -> u64 {
+    fn try_idle_fast_forward(&mut self, _max_steps: Option<u64>, _steps: u64) -> u64 {
         // POLLED logic capture disables the skip: a scheduler event inside the
         // skipped window could toggle a watched pad, and the per-cycle poll
         // guarantee must hold even under this opt-in acceleration. Push-only
@@ -3450,7 +3460,6 @@ impl<C: Cpu> Machine<C> {
         // instrumented peripheral code, which pushes its own edge with the
         // post-skip tap clock (seeded below before the scheduler drain).
         if !self.config.idle_fast_forward_enabled
-            || breakpoints_block_idle
             || self.bus.requires_cycle_accurate()
             || self.logic_capture.poll_active()
         {

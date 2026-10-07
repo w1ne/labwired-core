@@ -272,16 +272,30 @@ const SAADC_RESULT_AMOUNT: u64 = SAADC + 0x634;
 fn saadc_easydma_completes_within_8_cycles_at_tick_512() {
     let mut machine = machine_at_interval(RECOMMENDED_TICK_INTERVAL);
     let buf = 0x2000_1100u64;
+    plant_tx_buf(&mut machine.bus, buf, &[0xcc, 0xcc, 0xcc, 0xcc, 0xaa, 0xbb]);
 
     machine.bus.write_u32(SAADC_ENABLE, 1).unwrap();
     machine.bus.write_u32(SAADC_RESOLUTION, 2).unwrap(); // 12-bit
     machine.bus.write_u32(SAADC_RESULT_PTR, buf as u32).unwrap();
     machine.bus.write_u32(SAADC_RESULT_MAXCNT, 2).unwrap();
+    machine.bus.write_u32(SAADC + 0x510, 9).unwrap(); // explicit VDD source
+    machine.bus.write_u32(SAADC, 1).unwrap(); // START latches descriptor
     machine.bus.write_u32(SAADC_EVENTS_END, 0).unwrap();
     machine.bus.write_u32(SAADC_EVENTS_RESULTDONE, 0).unwrap();
-    machine.bus.write_u32(SAADC_TASKS_SAMPLE, 1).unwrap();
-
     const CYCLE_BUDGET: u64 = 8;
+    for amount in 1..=2 {
+        machine.bus.write_u32(SAADC_EVENTS_RESULTDONE, 0).unwrap();
+        machine.bus.write_u32(SAADC_TASKS_SAMPLE, 1).unwrap();
+        let at = advance_until(&mut machine, CYCLE_BUDGET, 1, |m| {
+            m.bus.read_u32(SAADC_EVENTS_RESULTDONE).unwrap_or(0) != 0
+        });
+        assert!(at.is_some(), "SAADC scan did not complete within 8 cycles");
+        assert_eq!(machine.bus.read_u32(SAADC_RESULT_AMOUNT).unwrap(), amount);
+        assert_eq!(
+            machine.bus.read_u32(SAADC_EVENTS_END).unwrap(),
+            u32::from(amount == 2)
+        );
+    }
     let at = advance_until(&mut machine, CYCLE_BUDGET, 1, |m| {
         m.bus.read_u32(SAADC_EVENTS_END).unwrap_or(0) != 0
             && m.bus.read_u32(SAADC_EVENTS_RESULTDONE).unwrap_or(0) != 0
@@ -293,6 +307,14 @@ fn saadc_easydma_completes_within_8_cycles_at_tick_512() {
         machine.total_cycles,
     );
     assert_eq!(machine.bus.read_u32(SAADC_RESULT_AMOUNT).unwrap(), 2);
+    let bytes: Vec<_> = (0..6)
+        .map(|i| machine.bus.read_u8(buf + i).unwrap())
+        .collect();
+    assert_eq!(
+        bytes,
+        [0xaa, 0x0e, 0xaa, 0x0e, 0xaa, 0xbb],
+        "two VDD conversions and intact sentinel"
+    );
 }
 
 // ── PWM0 SEQSTART0 @ tick 512 ───────────────────────────────────────────────

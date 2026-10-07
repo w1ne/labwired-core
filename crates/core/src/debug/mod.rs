@@ -4,3 +4,6 @@
 
 mod swd;
 pub use swd::{SwdAck, SwdDp, SwdTurn, SwdWdata};
+
+mod source_target;
+pub use source_target::SourceStepTarget;

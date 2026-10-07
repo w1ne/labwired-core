@@ -116,12 +116,12 @@ pub struct Nrf52Gpiote {
     /// Scheduler delay-0 drain chain armed.
     chain_live: bool,
 
-    /// Base address of each GPIO port, read from the chip descriptor at build
+    /// Per-pin latch address of each GPIO port, resolved from the descriptor at build
     /// time — index 0 = `gpio0`, index 1 = `gpio1`. `None` means the chip does
     /// not declare that port (nRF52832 has no P1), in which case a task
     /// targeting it drives nothing and says so, rather than writing a guessed
     /// address into whatever peripheral happens to own that window.
-    port_bases: [Option<u32>; 2],
+    port_latches: [Option<u32>; 2],
 
     /// The pad-level wires, one per channel, published into the GPIO ports'
     /// routing (bus wiring, [`Self::pad_lines_arc`]). A Task-mode channel OWNS
@@ -145,10 +145,12 @@ impl Nrf52Gpiote {
     /// valid-but-wrong address that the bus swallowed silently, and a default
     /// constructor is exactly how that constant would grow back.
     pub fn new(map: crate::peripherals::chip_map::ChipMap<'_>) -> Self {
-        let mut port_bases = [None; 2];
+        let mut port_latches = [None; 2];
         for (idx, id) in GPIO_PORT_IDS.iter().enumerate() {
-            port_bases[idx] = map.base_of(id).map(|b| b as u32);
-            if port_bases[idx].is_none() {
+            port_latches[idx] = map
+                .register_address(id, crate::peripherals::gpio::NRF52_GPIO_PAD_LATCH)
+                .and_then(|b| u32::try_from(b).ok());
+            if port_latches[idx].is_none() {
                 tracing::debug!(
                     "nRF52 GPIOTE: chip declares no '{id}'; \
                      tasks targeting PORT={idx} will drive nothing"
@@ -156,7 +158,7 @@ impl Nrf52Gpiote {
             }
         }
         Self {
-            port_bases,
+            port_latches,
             ..Self::default()
         }
     }
@@ -214,7 +216,7 @@ impl Nrf52Gpiote {
         // declare this port there is no correct address to write, so drop the
         // drive loudly instead of picking one — a wrong address is still a
         // valid address, and the bus would absorb it without complaint.
-        let Some(port_base) = self.port_bases[port_idx] else {
+        let Some(port_latch) = self.port_latches[port_idx] else {
             tracing::warn!(
                 "nRF52 GPIOTE ch{channel}: CONFIG selects PORT={port_idx} ('{}'), \
                  which this chip does not declare; pin {pin} drive dropped",
@@ -226,10 +228,8 @@ impl Nrf52Gpiote {
         // Latch only THIS pin's IN bit (engine-internal per-pin op; see
         // `gpio::NRF52_GPIO_PAD_LATCH`). A whole-word IN write from a shadow
         // reset every other pin's latched external level on the port.
-        self.pending_gpio_writes.push((
-            port_base + crate::peripherals::gpio::NRF52_GPIO_PAD_LATCH as u32,
-            pin | (u32::from(high) << 8),
-        ));
+        self.pending_gpio_writes
+            .push((port_latch, pin | (u32::from(high) << 8)));
         self.channel_out_level[channel] = high as u32;
     }
 

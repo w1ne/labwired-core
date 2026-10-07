@@ -75,6 +75,7 @@ pub struct DecodeCacheEntry {
 }
 
 const T16_FAST_BLOCK_MAX: usize = 16;
+const T16_DISCOVERY_MISS_SLOTS: usize = 64;
 
 #[derive(Debug, Clone, Copy)]
 struct T16FastBlock {
@@ -209,7 +210,11 @@ pub struct CortexM {
     /// (the only ones that read it), not on every step: the single-step
     /// loop pays for every store here.
     it_state_restored: bool,
-    pub decode_cache: Box<[Option<DecodeCacheEntry>; 4096]>,
+    decode_cache: Box<[Option<DecodeCacheEntry>; 4096]>,
+    decode_generation: u64,
+    // Bounded 1 KiB, direct-mapped (PC, generation) discovery-only memo.
+    // Register-dependent execution failures MUST NOT be recorded here.
+    t16_discovery_misses: [(u32, u64); T16_DISCOVERY_MISS_SLOTS],
     /// Last observer-free Thumb-1 RAM loop admitted by the generic block
     /// executor. This is derived execution state, never part of a snapshot.
     t16_fast_block: Option<T16FastBlock>,
@@ -315,6 +320,8 @@ impl Default for CortexM {
             lockup: None,
             it_state_restored: false,
             decode_cache: Box::new([None; 4096]),
+            decode_generation: 1,
+            t16_discovery_misses: [(0, 0); T16_DISCOVERY_MISS_SLOTS],
             t16_fast_block: None,
             fpu_s: [0u32; 32],
             fpscr: 0,
@@ -573,8 +580,80 @@ pub fn vfp_fma(a_bits: u32, b_bits: u32, c_bits: u32, neg_a: bool, neg_c: bool, 
 impl CortexM {
     #[inline(always)]
     fn cached_t16(&self, pc: u32) -> Option<u16> {
-        let entry = self.decode_cache[((pc >> 1) & 0x0fff) as usize]?;
+        let entry = self.decode_cache[((pc >> 1) & 0x0fff) as usize].as_ref()?;
         (entry.tag == pc && entry.pc_increment == 2).then_some(entry.opcode as u16)
+    }
+
+    /// Select only fast paths whose existing entry opcode admits this PC.
+    /// This is a read-only dispatch filter, not loop admission: each selected
+    /// executor still validates its complete shape and current addresses.
+    /// Cold/collided/wide entries simply use the ordinary interpreter. The
+    /// caller retains the observer/debug/IRQ/IT and scheduler-budget guards.
+    #[inline(always)]
+    fn run_t16_cached_fast_paths(&mut self, bus: &mut SystemBus, max_count: u32) -> u32 {
+        let Some(op) = self.cached_t16(self.pc) else {
+            return 0;
+        };
+        let mut fast = 0;
+        if op & 0xf800 == 0xe000 {
+            fast = self.run_t16_self_branch(max_count);
+        }
+        if fast == 0 && op & 0xf8ff == 0x3801 {
+            fast = self.run_t16_countdown(max_count);
+        }
+        if fast == 0
+            && (op & 0xf800 == 0x9000
+                || op & 0xff78 == 0x4668
+                || op & 0xfe00 == 0x1c00
+                || op & 0xf800 == 0xe000)
+        {
+            fast = self.run_t16_store_spin(bus, max_count);
+        }
+        if fast == 0 && matches!(op & 0xf800, 0x3000 | 0x6000 | 0x6800 | 0xe000) {
+            fast = self.run_t16_ram_fast(bus, max_count, true);
+        }
+        if fast == 0 {
+            fast = self.run_t16_fast_block(bus, max_count);
+        }
+        // A straight-line cached instruction need not form a backward loop.
+        // WASM can reuse the same checked executor for a bounded run instead
+        // of entering the large interpreter. Native dispatch stays unchanged.
+        #[cfg(target_arch = "wasm32")]
+        if fast == 0 {
+            fast = self.run_t16_cached_run(bus, max_count);
+        }
+        fast
+    }
+
+    /// Caller retains observer/debug/IRQ/IT/trace/tap and scheduler guards.
+    /// Execute at most 16 tagged T16 instructions using the existing block
+    /// executor. RAM addresses remain live; MMIO/unmapped/unsupported accesses
+    /// stop before retirement and take the ordinary interpreter path. Recheck
+    /// each live PC/tag/width, including after branches; never exceed the
+    /// caller's scheduler-bounded budget. No MMIO occurs within the run, so the
+    /// caller's existing aggregate cycle update precedes the next MMIO access.
+    /// Compile the same primitive in host unit tests for reference comparison.
+    #[cfg(any(target_arch = "wasm32", test))]
+    #[inline(never)]
+    fn run_t16_cached_run(&mut self, bus: &mut SystemBus, max_count: u32) -> u32 {
+        if max_count == 0 || self.sleeping || self.waiting_for_event {
+            return 0;
+        }
+        let mut retired = 0;
+        while retired < max_count.min(16) {
+            let Some(entry) = self.decode_cache[((self.pc >> 1) & 0x0fff) as usize].as_ref() else {
+                break;
+            };
+            if entry.tag != self.pc || entry.pc_increment != 2 {
+                break;
+            }
+            let instruction = entry.instruction;
+            if !self.execute_t16_fast_op(bus, instruction) {
+                break;
+            }
+            retired += 1;
+        }
+        retired
     }
 
     /// Retire an unconditional Thumb branch to itself in one scheduler-bounded
@@ -604,6 +683,53 @@ impl CortexM {
         }
     }
 
+    /// Exact scheduler-bounded retirement of SUBS Rd,#1; BNE back to SUBS.
+    /// Only a SUBS entry is admitted. The caller supplies the same observer,
+    /// debug, IRQ, IT-state and scheduler guards as the other T16 fast paths.
+    #[inline(always)]
+    fn run_t16_countdown(&mut self, max_count: u32) -> u32 {
+        if max_count == 0 {
+            return 0;
+        }
+        let start = self.pc;
+        let Some(sub) = self.cached_t16(start) else {
+            return 0;
+        };
+        if sub & 0xf8ff != 0x3801 || self.cached_t16(start.wrapping_add(2)) != Some(0xd1fd) {
+            return 0;
+        }
+        let rd = ((sub >> 8) & 7) as u8;
+        let initial = self.read_reg(rd);
+        // Zero is NOT a zero-trip loop: SUBS wraps to u32::MAX and would
+        // reach zero only after 2^32 pairs, beyond any u32 retirement budget.
+        let pairs_to_exit = if initial == 0 {
+            1u64 << 32
+        } else {
+            u64::from(initial)
+        };
+        let pairs = u64::from(max_count / 2).min(pairs_to_exit) as u32;
+        let mut retired = pairs * 2;
+        let mut value = initial.wrapping_sub(pairs);
+        if pairs != 0 {
+            let (result, carry, overflow) = sub_with_flags(value.wrapping_add(1), 1);
+            self.write_reg(rd, result);
+            self.update_nzcv(result, carry, overflow);
+            if value == 0 {
+                self.pc = start.wrapping_add(4); // Last BNE was not taken.
+                return retired;
+            }
+        }
+        if retired < max_count {
+            let (result, carry, overflow) = sub_with_flags(value, 1);
+            value = result;
+            self.write_reg(rd, value);
+            self.update_nzcv(value, carry, overflow);
+            self.pc = start.wrapping_add(2); // Odd budget: BNE not retired yet.
+            retired += 1;
+        }
+        retired
+    }
+
     #[inline(always)]
     fn fetch_t16_fast(
         &mut self,
@@ -623,7 +749,7 @@ impl CortexM {
         let op = bus.flash.read_u16(u64::from(pc))?;
         bus.note_memory_read();
         if decode_cache_enabled {
-            self.decode_cache[cache_idx] = Some(DecodeCacheEntry {
+            self.insert_decoded_entry(DecodeCacheEntry {
                 tag: pc,
                 instruction: decode_thumb_16(op),
                 opcode: u32::from(op),
@@ -1032,45 +1158,45 @@ impl CortexM {
     }
 
     fn compile_t16_fast_block(&self, start: u32) -> Option<T16FastBlock> {
-        let mut ops = [Instruction::Nop; T16_FAST_BLOCK_MAX];
-        for (i, slot) in ops.iter_mut().enumerate() {
+        // Most candidates are poll-loop tails that cannot form a block. Check
+        // their shape through borrowed cache entries before constructing the
+        // large instruction array; unsuccessful discovery needs no payload.
+        let mut end = None;
+        for i in 0..T16_FAST_BLOCK_MAX {
             let pc = start.wrapping_add((i as u32) * 2);
-            let entry = self.decode_cache[((pc >> 1) & 0x0fff) as usize]?;
+            let entry = self.decode_cache[((pc >> 1) & 0x0fff) as usize].as_ref()?;
             if entry.tag != pc || entry.pc_increment != 2 {
                 return None;
             }
             match entry.instruction {
-                Instruction::Branch { offset } => {
+                Instruction::Branch { offset } | Instruction::BranchCond { offset, .. } => {
                     let target = (pc as i32).wrapping_add(4).wrapping_add(offset) as u32;
                     if i == 0 || target != start {
                         return None;
                     }
-                    *slot = entry.instruction;
-                    return Some(T16FastBlock {
-                        start,
-                        end: pc,
-                        len: (i + 1) as u8,
-                        ops,
-                    });
+                    end = Some((pc, i + 1));
+                    break;
                 }
-                Instruction::BranchCond { offset, .. } => {
-                    let target = (pc as i32).wrapping_add(4).wrapping_add(offset) as u32;
-                    if i == 0 || target != start {
-                        return None;
-                    }
-                    *slot = entry.instruction;
-                    return Some(T16FastBlock {
-                        start,
-                        end: pc,
-                        len: (i + 1) as u8,
-                        ops,
-                    });
-                }
-                op if Self::t16_block_op_supported(op) => *slot = op,
+                op if Self::t16_block_op_supported(op) => {}
                 _ => return None,
             }
         }
-        None
+        let (end, len) = end?;
+        let mut ops = [Instruction::Nop; T16_FAST_BLOCK_MAX];
+        for (i, slot) in ops.iter_mut().enumerate().take(len) {
+            let pc = start.wrapping_add((i as u32) * 2);
+            // The immutable first pass verified every tag and width. There is
+            // no guest execution or cache mutation between the two passes.
+            *slot = self.decode_cache[((pc >> 1) & 0x0fff) as usize]
+                .as_ref()?
+                .instruction;
+        }
+        Some(T16FastBlock {
+            start,
+            end,
+            len: len as u8,
+            ops,
+        })
     }
 
     #[inline(always)]
@@ -1427,26 +1553,100 @@ impl CortexM {
         true
     }
 
+    /// Admission is structural, not a persistent negative cache: a cold or
+    /// collided entry may become eligible after ordinary decoding. Any block
+    /// spanning `pc` must contain this exact tagged, supported T16 instruction.
+    fn t16_block_entry_admitted(&self, pc: u32) -> bool {
+        let Some(entry) = self.decode_cache[((pc >> 1) & 0x0fff) as usize].as_ref() else {
+            return false;
+        };
+        entry.tag == pc
+            && entry.pc_increment == 2
+            && (Self::t16_block_op_supported(entry.instruction)
+                || matches!(
+                    entry.instruction,
+                    Instruction::Branch { .. } | Instruction::BranchCond { .. }
+                ))
+    }
+
+    /// Read-only cache inspection. Code edits must call Cpu::invalidate_code_caches;
+    /// mutable raw cache access would bypass discovery-generation invalidation.
+    pub fn decoded_entry(&self, pc: u32) -> Option<DecodeCacheEntry> {
+        self.decode_cache[((pc >> 1) & 0x0fff) as usize].filter(|entry| entry.tag == pc)
+    }
+
+    fn advance_decode_generation(&mut self) {
+        self.decode_generation = self.decode_generation.wrapping_add(1);
+        if self.decode_generation == 0 {
+            self.t16_discovery_misses.fill((0, 0));
+            self.decode_generation = 1;
+        }
+    }
+
+    fn insert_decoded_entry(&mut self, entry: DecodeCacheEntry) {
+        self.advance_decode_generation();
+        self.decode_cache[((entry.tag >> 1) & 0x0fff) as usize] = Some(entry);
+    }
+
+    fn clear_decoded_state(&mut self) {
+        self.advance_decode_generation();
+        self.decode_cache.fill(None);
+        self.t16_fast_block = None;
+    }
+
+    fn memoize_t16_discovery_miss(&mut self) {
+        let index = ((self.pc >> 1) as usize) % T16_DISCOVERY_MISS_SLOTS;
+        self.t16_discovery_misses[index] = (self.pc, self.decode_generation);
+    }
+
     fn run_t16_fast_block(&mut self, bus: &mut SystemBus, max_count: u32) -> u32 {
-        let mut block = self.t16_fast_block.filter(|block| {
+        let cached = self.t16_fast_block.as_ref().filter(|block| {
             self.pc >= block.start && self.pc <= block.end && (self.pc - block.start) % 2 == 0
         });
-        if block.is_none() {
+        let block = if let Some(block) = cached {
+            *block
+        } else {
+            // Do not copy the payload of Option::None on the common rejection
+            // path. Only successful discovery materializes a block.
+            self.t16_fast_block = None;
+            let miss_index = ((self.pc >> 1) as usize) % T16_DISCOVERY_MISS_SLOTS;
+            if self.t16_discovery_misses[miss_index] == (self.pc, self.decode_generation) {
+                return 0;
+            }
+            if !self.t16_block_entry_admitted(self.pc) {
+                self.memoize_t16_discovery_miss();
+                return 0;
+            }
+            let mut found = None;
             // Batch boundaries can land anywhere within a loop. Search the small
             // decoded window behind PC so a rotated entry still discovers the
             // canonical block start and its backward branch.
-            block = (0..T16_FAST_BLOCK_MAX).find_map(|back| {
-                let start = self.pc.checked_sub((back as u32) * 2)?;
-                self.compile_t16_fast_block(start).filter(|candidate| {
+            for back in 0..T16_FAST_BLOCK_MAX {
+                let Some(start) = self.pc.checked_sub((back as u32) * 2) else {
+                    break;
+                };
+                // An earlier candidate would also have to span this barrier.
+                // Avoid repeatedly constructing/copying 16-op blocks around
+                // T32/MMIO poll loops that cannot qualify. No guest execution,
+                // timing, MMIO observation or scheduler deadline is skipped.
+                if !self.t16_block_entry_admitted(start) {
+                    break;
+                }
+                found = self.compile_t16_fast_block(start).filter(|candidate| {
                     self.pc >= candidate.start
                         && self.pc <= candidate.end
                         && (self.pc - candidate.start) % 2 == 0
-                })
-            });
-            self.t16_fast_block = block;
-        }
-        let Some(block) = block else {
-            return 0;
+                });
+                if found.is_some() {
+                    break;
+                }
+            }
+            let Some(block) = found else {
+                self.memoize_t16_discovery_miss();
+                return 0;
+            };
+            self.t16_fast_block = Some(block);
+            block
         };
         let mut index = ((self.pc - block.start) / 2) as usize;
         let mut executed = 0;
@@ -2489,8 +2689,7 @@ impl Cpu for CortexM {
             nvic.event_register.store(false, Ordering::Relaxed);
         }
         self.set_active_exception(0);
-        self.decode_cache.fill(None);
-        self.t16_fast_block = None;
+        self.clear_decoded_state();
         self.fault_entry = None;
         self.fault_entry_regs = FaultRegs::default();
         self.lockup = None;
@@ -2569,7 +2768,7 @@ impl Cpu for CortexM {
     }
 
     fn invalidate_code_caches(&mut self) {
-        self.decode_cache.fill(None);
+        self.clear_decoded_state();
 
         #[cfg(feature = "jit")]
         if let Some(jit) = self.jit_engine.as_mut() {
@@ -2605,8 +2804,7 @@ impl Cpu for CortexM {
         // sharper because it also caches a whole BLOCK. Same rule upstream
         // applied to the RISC-V spin recovery in 23cce610 — reset AND both
         // restore paths.
-        self.decode_cache.fill(None);
-        self.t16_fast_block = None;
+        self.clear_decoded_state();
         if let crate::snapshot::CpuSnapshot::Arm(s) = snapshot {
             if s.registers.len() >= 16 {
                 self.r0 = s.registers[0];
@@ -2842,24 +3040,19 @@ impl Cpu for CortexM {
                     && self.it_state == 0
                     && max_count - executed >= 8
                 {
-                    let mut fast = if config.decode_cache_enabled {
-                        self.run_t16_self_branch(max_count - executed)
+                    // Never let a multi-instruction chunk retire past an event a
+                    // write earlier in this batch armed (no MMIO runs inside a
+                    // chunk, so nothing new can be armed during one).
+                    let budget = sysbus
+                        .pending_wake_left()
+                        .map_or(max_count - executed, |left| {
+                            (max_count - executed).min(u32::try_from(left).unwrap_or(u32::MAX))
+                        });
+                    let fast = if config.decode_cache_enabled && budget >= 8 {
+                        self.run_t16_cached_fast_paths(sysbus, budget)
                     } else {
                         0
                     };
-                    if fast == 0 && config.decode_cache_enabled {
-                        fast = self.run_t16_store_spin(sysbus, max_count - executed);
-                    }
-                    if fast == 0 {
-                        fast = self.run_t16_ram_fast(
-                            sysbus,
-                            max_count - executed,
-                            config.decode_cache_enabled,
-                        );
-                    }
-                    if fast == 0 && config.decode_cache_enabled {
-                        fast = self.run_t16_fast_block(sysbus, max_count - executed);
-                    }
                     if fast > 0 {
                         #[cfg(feature = "event-scheduler")]
                         {
@@ -2889,6 +3082,14 @@ impl Cpu for CortexM {
                 }
                 executed += 1;
                 if sysbus.has_pending_flash_op() {
+                    break;
+                }
+                // Gap #1 (RISC-V has had this all along): a write that armed a
+                // peripheral event leaves it in `pending_schedule` until the
+                // post-batch drain. End the batch once its deadline is reached,
+                // so a delay-0 EasyDMA completion lands on the next cycle
+                // instead of after the rest of a 1024-instruction batch.
+                if sysbus.pending_wake_left() == Some(0) {
                     break;
                 }
                 // See the `!batch_mode_enabled` arm: a latched SYSRESETREQ ends
@@ -3571,7 +3772,7 @@ impl CortexM {
             };
 
             if config.decode_cache_enabled {
-                self.decode_cache[cache_idx] = Some(DecodeCacheEntry {
+                self.insert_decoded_entry(DecodeCacheEntry {
                     tag: self.pc,
                     instruction: instr,
                     opcode: op,
@@ -4433,3 +4634,11 @@ fn sbc_with_flags(op1: u32, op2: u32, carry_in: u32) -> (u32, bool, bool) {
 #[cfg(test)]
 #[path = "cortex_m_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "cortex_m/t16_discovery_tests.rs"]
+mod t16_discovery_tests;
+
+#[cfg(test)]
+#[path = "cortex_m/t16_countdown_tests.rs"]
+mod t16_countdown_tests;

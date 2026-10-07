@@ -706,7 +706,11 @@ impl SystemBus {
 
             // CAN synthetic services stay Nordic/non-C3: C3 ROM-boot labs do
             // not host them and the high-frequency IRQ tick must stay lean.
-            self.service_can_bridges();
+            // Keep the common no-bridge path outside the large service body.
+            // Its own empty guard remains for callers outside this tick.
+            if !self.can_bridges.is_empty() {
+                self.service_can_bridges();
+            }
             self.service_can_diagnostic_testers();
             self.service_can_uds_testers();
             self.service_can_log_players();

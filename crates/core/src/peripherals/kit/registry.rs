@@ -81,6 +81,8 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     &components::declarative_i2c::SCD41_KIT,
     &components::declarative_i2c::SGP41_KIT,
     &components::sps30::SPS30_KIT,
+    &components::declarative_i2c::LSM303AGR_ACCEL_KIT,
+    &components::declarative_i2c::LSM303AGR_MAG_KIT,
     &components::declarative_spi::MAX7219_KIT,
     &components::lcd1602::LCD1602_KIT,
     // Declarative I²C devices — model lives entirely in configs/devices/*.yaml,

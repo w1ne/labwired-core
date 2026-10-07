@@ -39,53 +39,155 @@ fn all_chips() -> Vec<String> {
 
 #[test]
 fn every_analog_pin_names_a_real_adc_and_a_real_port() {
-    let mut problems = Vec::new();
-    for chip in all_chips() {
-        let desc = load(&chip);
-        let mut seen: BTreeMap<(String, u8), String> = BTreeMap::new();
-        for (
-            pad,
-            AdcPinFn {
-                peripheral,
-                channel,
-            },
-        ) in &desc.analog_pins
-        {
-            match desc.peripherals.iter().find(|p| &p.id == peripheral) {
-                None => problems.push(format!(
-                    "{chip}: {pad} names ADC '{peripheral}', not declared"
-                )),
-                Some(p) if p.r#type != "adc" => problems.push(format!(
-                    "{chip}: {pad} names '{peripheral}', which is type '{}', not adc",
-                    p.r#type
-                )),
-                Some(_) => {}
-            }
-            // STM32 pad labels: P<port letter><bit>. The port must be a GPIO
-            // block this descriptor declares, or the pad does not exist here.
-            let upper = pad.to_ascii_uppercase();
-            let port = upper
-                .strip_prefix('P')
-                .and_then(|rest| rest.chars().next())
-                .filter(char::is_ascii_alphabetic)
-                .map(|c| format!("gpio{}", c.to_ascii_lowercase()));
-            match port {
-                Some(port) if desc.peripherals.iter().any(|p| p.id == port) => {}
-                Some(port) => problems.push(format!("{chip}: {pad} is on {port}, not declared")),
-                None => problems.push(format!("{chip}: {pad} is not a P<port><bit> label")),
-            }
-            if let Some(other) = seen.insert((peripheral.clone(), *channel), pad.clone()) {
-                problems.push(format!(
-                    "{chip}: {pad} and {other} both claim {peripheral} channel {channel}"
-                ));
-            }
-        }
-    }
+    let problems: Vec<_> = all_chips()
+        .into_iter()
+        .flat_map(|chip| analog_pin_problems(&chip, &load(&chip)))
+        .collect();
     assert!(
         problems.is_empty(),
         "analog_pins problems:\n{}",
         problems.join("\n")
     );
+}
+
+fn analog_pin_problems(chip: &str, desc: &ChipDescriptor) -> Vec<String> {
+    let mut problems = Vec::new();
+    let mut seen: BTreeMap<(String, u8), String> = BTreeMap::new();
+    for (
+        pad,
+        AdcPinFn {
+            peripheral,
+            channel,
+        },
+    ) in &desc.analog_pins
+    {
+        match desc.peripherals.iter().find(|p| &p.id == peripheral) {
+            None => problems.push(format!(
+                "{chip}: {pad} names ADC '{peripheral}', not declared"
+            )),
+            Some(p) if !matches!(p.r#type.as_str(), "adc" | "nrf52840_saadc") => {
+                problems.push(format!(
+                    "{chip}: {pad} names '{peripheral}', which is type '{}', not adc",
+                    p.r#type
+                ))
+            }
+            Some(_) => {}
+        }
+        // Validate BOTH alphaport STM32 pads and Nordic P<port>.<bit>.
+        // Numeric labels are only accepted for the actual Nordic ADC IP.
+        let nordic = desc
+            .peripherals
+            .iter()
+            .any(|p| &p.id == peripheral && p.r#type == "nrf52840_saadc");
+        match pad_port_and_bit(pad, nordic) {
+            Some((port, bit)) => match desc
+                .peripherals
+                .iter()
+                .find(|p| p.id == port && matches!(p.r#type.as_str(), "gpio" | "stm32f4_gpio"))
+            {
+                Some(p) => {
+                    let count = p
+                        .config
+                        .get("num_pins")
+                        .and_then(serde_yaml::Value::as_u64)
+                        .unwrap_or(if nordic { 32 } else { 16 });
+                    if u64::from(bit) >= count {
+                        problems.push(format!("{chip}: {pad} is outside {port}'s {count} pins"));
+                    }
+                    if nordic
+                        && (port != "gpio0"
+                            || [2, 3, 4, 5, 28, 29, 30, 31].get(*channel as usize) != Some(&bit))
+                    {
+                        problems.push(format!(
+                            "{chip}: {pad} is not Nordic AIN{channel}'s physical pad"
+                        ));
+                    }
+                }
+                None => problems.push(format!("{chip}: {pad} is on {port}, not a declared GPIO")),
+            },
+            None => problems.push(format!("{chip}: {pad} is not a P<port><bit> label")),
+        }
+        if let Some(other) = seen.insert((peripheral.clone(), *channel), pad.clone()) {
+            problems.push(format!(
+                "{chip}: {pad} and {other} both claim {peripheral} channel {channel}"
+            ));
+        }
+    }
+    problems
+}
+
+fn pad_port_and_bit(pad: &str, nordic: bool) -> Option<(String, u8)> {
+    let upper = pad.to_ascii_uppercase();
+    let rest = upper.strip_prefix('P')?;
+    if nordic {
+        let (port, bit) = rest.split_once('.')?;
+        if port.len() != 1
+            || bit.len() != 2
+            || !port.bytes().chain(bit.bytes()).all(|c| c.is_ascii_digit())
+        {
+            return None;
+        }
+        Some((
+            format!("gpio{}", port.parse::<u8>().ok()?),
+            bit.parse().ok()?,
+        ))
+    } else {
+        let port = rest.chars().next()?;
+        if !port.is_ascii_alphabetic() {
+            return None;
+        }
+        let digits = &rest[1..];
+        if digits.is_empty() || !digits.bytes().all(|c| c.is_ascii_digit()) {
+            return None;
+        }
+        Some((
+            format!("gpio{}", port.to_ascii_lowercase()),
+            digits.parse().ok()?,
+        ))
+    }
+}
+
+#[test]
+fn nordic_analog_pins_match_physical_ain_assignment() {
+    let desc = load("nrf52833");
+    assert_eq!(desc.analog_pins.len(), 8);
+    for (channel, pin) in [2, 3, 4, 5, 28, 29, 30, 31].into_iter().enumerate() {
+        let mapping = &desc.analog_pins[&format!("P0.{pin:02}")];
+        assert_eq!(mapping.peripheral, "saadc");
+        assert_eq!(usize::from(mapping.channel), channel);
+    }
+    assert!(analog_pin_problems("nrf52833", &desc).is_empty());
+}
+
+#[test]
+fn nordic_validation_rejects_bad_models_ports_channels_and_pads() {
+    let original = load("nrf52833");
+    for bad_pad in ["P0.99", "P9.05", "P0.06", "P0.5", "P0.05oops", "PA5"] {
+        let mut desc = original.clone();
+        let mapping = desc.analog_pins.remove("P0.05").unwrap();
+        desc.analog_pins.insert(bad_pad.to_string(), mapping);
+        assert!(
+            !analog_pin_problems("bad", &desc).is_empty(),
+            "accepted {bad_pad}"
+        );
+    }
+    let mut desc = original.clone();
+    desc.analog_pins.get_mut("P0.05").unwrap().channel = 8;
+    assert!(!analog_pin_problems("bad", &desc).is_empty());
+    let mut desc = original.clone();
+    desc.peripherals
+        .iter_mut()
+        .find(|p| p.id == "saadc")
+        .unwrap()
+        .r#type = "uart".into();
+    assert!(!analog_pin_problems("bad", &desc).is_empty());
+    let mut desc = original;
+    desc.peripherals
+        .iter_mut()
+        .find(|p| p.id == "gpio0")
+        .unwrap()
+        .r#type = "uart".into();
+    assert!(!analog_pin_problems("bad", &desc).is_empty());
 }
 
 /// The regular-input assignment shared by the F1/F4/F7 parts in-tree:

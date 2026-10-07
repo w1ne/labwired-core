@@ -26,6 +26,17 @@ flash:
 ram:
   base: 0x20000000
   size: "128KB"
+# Physical AIN input indices, distinct from SAADC CH[n] converter slots.
+# Nordic nRF52833 PS pin assignments; micro:bit V2 MIC_IN is P0.05/AIN3.
+analog_pins:
+  P0.02: { peripheral: "saadc", channel: 0 }
+  P0.03: { peripheral: "saadc", channel: 1 }
+  P0.04: { peripheral: "saadc", channel: 2 }
+  P0.05: { peripheral: "saadc", channel: 3 }
+  P0.28: { peripheral: "saadc", channel: 4 }
+  P0.29: { peripheral: "saadc", channel: 5 }
+  P0.30: { peripheral: "saadc", channel: 6 }
+  P0.31: { peripheral: "saadc", channel: 7 }
 # Nordic nRF5 SDK / ArduinoCore-nRF5 errata probes read a reserved silicon
 # fingerprint window at 0xF0000FE0 (nrf52_errata_16 etc.). Map a tiny
 # zero-filled window so "not this rev" is honest — same pattern as
@@ -66,21 +77,23 @@ peripherals:
   - id: "gpio0"
     type: "gpio"
     base_address: 0x50000000
-    size: "4KB"
+    size: "2048B"
     config:
       debug_schema: "../peripherals/nrf52840/p0.yaml"
       profile: "nrf52"
   # P1 is P1.00-P1.09 on the nRF52833 (10 pins; the family total is 42 GPIOs).
-  # The sim window is remapped to 0x50001000 to avoid GPIO0's 4KB window — same
-  # simulator memory map as nrf52840.yaml.
+  # P1's silicon block base is 0x50000300, but its implemented registers
+  # start at block offset 0x500. Register only that compact window so P1's
+  # reserved space cannot hide P0 PIN_CNF at 0x50000700..0x5000077c.
   - id: "gpio1"
     type: "gpio"
-    base_address: 0x50001000
-    size: "4KB"
+    base_address: 0x50000800
+    size: "768B"
     config:
-      debug_schema: "../peripherals/nrf52840/p1.yaml"
+      debug_schema: "../peripherals/nrf52833/p1.yaml"
       profile: "nrf52"
       num_pins: 10
+      reg_offset: 0x500
   - id: "uart1"
     type: "nrf52840_uart"
     base_address: 0x40028000

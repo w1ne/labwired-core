@@ -1,0 +1,82 @@
+# SPDX-License-Identifier: MIT
+# ST LSM303AGR — magnetometer half (7-bit address 0x1E), declarative I²C.
+# The accelerometer half is its own slave at 0x19: `lsm303agr_accel.yaml`.
+#
+# Register map, reset values and sensitivity: ST LSM303AGR datasheet Rev 11,
+# §9 (magnetometer registers) and Table 3.
+#
+# ── Wire protocol ────────────────────────────────────────────────────────
+#
+# One sub-address byte; the magnetometer always auto-increments. Drivers
+# written for the accelerometer often still set bit 7 (e.g. `0xE8` for
+# OUTX_L_REG_M), so `pointer_mask: 0x7F` drops it.
+#
+# ── Output format (Table 3) ──────────────────────────────────────────────
+#
+# OUTX/Y/Z are 16-bit two's complement, little-endian, 1.5 mgauss/LSB =
+# 0.15 µT/LSB, so a stimulus in µT is multiplied by 1 / 0.15.
+#
+# ── Stated approximations ────────────────────────────────────────────────
+#
+#   * Data-ready is paced at 100 Hz (10 ms, the `data_ready:` rule below)
+#     while CFG_REG_A_M.MD[1] is clear: MD = 00 (continuous) measures, MD =
+#     1x (idle, the reset value 0x03) does not. ODR[1:0] is not decoded, so
+#     10/20/50 Hz still pace at 100 Hz. Single-shot (MD = 01) paces like
+#     continuous mode; silicon takes one sample and drops to idle. Reading
+#     any OUT register clears Zyxda/Zda/Yda/Xda and starts the next period
+#     from that read. Overrun bits never set. BDU and offset cancellation are
+#     not modelled; each read reports the live stimulus.
+#   * Hard-iron offsets are storage only; they are not subtracted.
+#   * The interrupt block and the INT_MAG_PIN output are not modelled.
+type: lsm303agr_mag
+
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x1E
+    auto_increment: true
+    pointer_mask: 0x7F
+    unmapped_byte: 0x00
+    registers:
+      - { name: OFFSET_X_REG_M, addr: 0x45, width: 2, endian: le, access: rw, reset: 0x0000 }
+      - { name: OFFSET_Y_REG_M, addr: 0x47, width: 2, endian: le, access: rw, reset: 0x0000 }
+      - { name: OFFSET_Z_REG_M, addr: 0x49, width: 2, endian: le, access: rw, reset: 0x0000 }
+      - { name: WHO_AM_I_M,     addr: 0x4F, width: 1, endian: le, access: r,  reset: 0x40 }
+      # SOFT_RST (bit 5) and REBOOT (bit 6) clear themselves.
+      - { name: CFG_REG_A_M,    addr: 0x60, width: 1, endian: le, access: rw, reset: 0x03, self_clearing: 0x60 }
+      - { name: CFG_REG_B_M,    addr: 0x61, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: CFG_REG_C_M,    addr: 0x62, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: INT_CTRL_REG_M, addr: 0x63, width: 1, endian: le, access: rw, reset: 0xE0 }
+      - { name: INT_SOURCE_REG_M, addr: 0x64, width: 1, endian: le, access: r, reset: 0x00 }
+      - { name: INT_THS_REG_M,  addr: 0x65, width: 2, endian: le, access: rw, reset: 0x0000 }
+      # Zyxda/Zda/Yda/Xda come from the `data_ready:` rule below.
+      - { name: STATUS_REG_M,   addr: 0x67, width: 1, endian: le, access: r,  reset: 0x00 }
+      - { name: OUTX_REG_M, addr: 0x68, width: 2, endian: le, access: r, signed: true, source: x, encode: { scale: 6.666666666666667 } }
+      - { name: OUTY_REG_M, addr: 0x6A, width: 2, endian: le, access: r, signed: true, source: y, encode: { scale: 6.666666666666667 } }
+      - { name: OUTZ_REG_M, addr: 0x6C, width: 2, endian: le, access: r, signed: true, source: z, encode: { scale: 6.666666666666667 } }
+
+    # One new XYZ sample every 10 ms while MD[1] is clear. See "Stated
+    # approximations" above.
+    data_ready:
+      - name: xyz
+        start_register: CFG_REG_A_M
+        start_mask: 0x02        # MD[1]
+        start_value: 0x00       # MD = 00 continuous / 01 single; 1x is idle
+        ready_register: STATUS_REG_M
+        ready_mask: 0x0F        # Zyxda | Zda | Yda | Xda
+        conversion_us: 10000    # 1 / 100 Hz
+        clear_on_read: [OUTX_REG_M, OUTY_REG_M, OUTZ_REG_M]
+
+metadata:
+  label: "LSM303AGR magnetometer"
+  summary: "ST LSM303AGR magnetometer half over I2C (address 0x1E)."
+  detail: "micro:bit V2 compass. Stimulus channels x/y/z in µT, reported as 16-bit two's complement at 0.15 µT/LSB. Data-ready paces at 100 Hz while MD selects continuous or single mode (ODR is not decoded); BDU, offset cancellation and interrupts are not modelled."
+  category: i2c
+  config_keys:
+    - name: i2c_address
+      ty: int
+      doc: "7-bit slave address. Defaults to 0x1E."
+  inputs:
+    - { key: x, label: "X", unit: "µT", min: -4915.2, max: 4915.2, default: 0.0 }
+    - { key: y, label: "Y", unit: "µT", min: -4915.2, max: 4915.2, default: 0.0 }
+    - { key: z, label: "Z", unit: "µT", min: -4915.2, max: 4915.2, default: 0.0 }

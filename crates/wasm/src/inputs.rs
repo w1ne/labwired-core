@@ -14,6 +14,43 @@ use crate::lab_tools;
 use crate::*;
 use wasm_bindgen::prelude::*;
 
+// Keep the native routing logic independent of JsValue so invalid requests can
+// be tested on the host without calling a wasm-only exception constructor.
+fn drive_adc_input(
+    peripheral: &mut dyn labwired_core::Peripheral,
+    channel: u8,
+    millivolts: Option<u16>,
+) -> Result<(), String> {
+    if let Some(count) = peripheral.adc_channel_count() {
+        if channel >= count {
+            return Err(format!("ADC input {channel} is outside 0..{count}"));
+        }
+    }
+    let accepted = match millivolts {
+        Some(value) => peripheral.set_adc_channel_input(channel, value),
+        None => peripheral.clear_adc_channel_input(channel),
+    };
+    if accepted {
+        return Ok(());
+    }
+    // Compatibility for the STM32 model that predates the generic ADC hooks.
+    let adc = peripheral
+        .as_any_mut()
+        .and_then(|any| any.downcast_mut::<Adc>())
+        .ok_or_else(|| "Peripheral does not support this held ADC input operation".to_owned())?;
+    if channel >= adc.channel_count() {
+        return Err(format!(
+            "ADC input {channel} is outside 0..{}",
+            adc.channel_count()
+        ));
+    }
+    match millivolts {
+        Some(value) => adc.set_channel_input(channel, value),
+        None => adc.clear_channel_input(channel),
+    }
+    Ok(())
+}
+
 #[derive(Debug, serde::Serialize)]
 struct MotorControlError {
     code: &'static str,
@@ -351,12 +388,14 @@ impl WasmSimulator {
         Ok(())
     }
 
-    /// Inject a held analog level into one channel of a named ADC, in
-    /// millivolts against the 3.3 V reference. Unlike [`Self::set_adc_value`],
+    /// Inject a held analog level into one input of a named ADC, in millivolts.
+    /// The peripheral's configured gain/reference determines the sample code.
+    /// Nordic SAADC channel numbers here mean physical AIN0..7, not CH[n] slots.
+    /// Unlike [`Self::set_adc_value`],
     /// which pokes the data register once and is overwritten by the very next
     /// conversion (for an un-injected channel the engine converts an
     /// incrementing counter), this holds: every later conversion of `channel`
-    /// returns the equivalent 12-bit count until [`Self::clear_adc_channel`].
+    /// uses this level at its configured resolution until [`Self::clear_adc_channel`].
     /// This is the entry point an external circuit solver needs — it knows the
     /// voltage at a pad and which ADC channel that pad carries, and must not
     /// race the conversion engine for the data register.
@@ -380,15 +419,12 @@ impl WasmSimulator {
             .bus
             .find_peripheral_index_by_name(peripheral_name)
             .ok_or_else(|| JsValue::from_str(&format!("ADC '{}' not found", peripheral_name)))?;
-        let any = machine.bus.peripherals[idx]
-            .dev
-            .as_any_mut()
-            .ok_or_else(|| JsValue::from_str("Peripheral doesn't support downcasting"))?;
-        let adc = any
-            .downcast_mut::<Adc>()
-            .ok_or_else(|| JsValue::from_str("Peripheral is not an ADC"))?;
-        adc.set_channel_input(channel, millivolts);
-        Ok(())
+        drive_adc_input(
+            machine.bus.peripherals[idx].dev.as_mut(),
+            channel,
+            Some(millivolts),
+        )
+        .map_err(|error| JsValue::from_str(&error))
     }
 
     /// Remove a held level set by [`Self::set_adc_channel_millivolts`],
@@ -404,15 +440,8 @@ impl WasmSimulator {
             .bus
             .find_peripheral_index_by_name(peripheral_name)
             .ok_or_else(|| JsValue::from_str(&format!("ADC '{}' not found", peripheral_name)))?;
-        let any = machine.bus.peripherals[idx]
-            .dev
-            .as_any_mut()
-            .ok_or_else(|| JsValue::from_str("Peripheral doesn't support downcasting"))?;
-        let adc = any
-            .downcast_mut::<Adc>()
-            .ok_or_else(|| JsValue::from_str("Peripheral is not an ADC"))?;
-        adc.clear_channel_input(channel);
-        Ok(())
+        drive_adc_input(machine.bus.peripherals[idx].dev.as_mut(), channel, None)
+            .map_err(|error| JsValue::from_str(&error))
     }
 
     /// Set the simulated temperature on an NTC thermistor.
@@ -629,6 +658,65 @@ fn for_each_i2c_slave(
                 f(name, d.borrow().as_ref());
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod adc_routing_tests {
+    use super::*;
+    use labwired_core::peripherals::nrf52::saadc::Nrf52Saadc;
+    use labwired_core::Peripheral;
+
+    fn sample(adc: &mut Nrf52Saadc) -> i16 {
+        let mut bus = SystemBus::new();
+        adc.write_u32(0x500, 1).unwrap();
+        adc.write_u32(0x510, 4).unwrap(); // slot0 selects AIN3
+        adc.write_u32(0x5f0, 2).unwrap();
+        adc.write_u32(0x62c, 0x2000_0000).unwrap();
+        adc.write_u32(0x630, 1).unwrap();
+        adc.write_u32(0x000, 1).unwrap(); // START latches buffer before SAMPLE
+        adc.write_u32(0x004, 1).unwrap();
+        adc.tick_with_bus(&mut bus);
+        i16::from_le_bytes([
+            bus.read_u8(0x2000_0000).unwrap(),
+            bus.read_u8(0x2000_0001).unwrap(),
+        ])
+    }
+
+    #[test]
+    fn generic_saadc_route_changes_conversion_and_releases_input() {
+        let mut adc = Nrf52Saadc::new();
+        drive_adc_input(&mut adc, 3, Some(1350)).unwrap();
+        assert_eq!(sample(&mut adc), 1536);
+        drive_adc_input(&mut adc, 3, Some(2700)).unwrap();
+        assert_eq!(sample(&mut adc), 3072);
+        drive_adc_input(&mut adc, 3, None).unwrap();
+        assert_eq!(sample(&mut adc), 0); // released AIN is modeled as ground
+    }
+
+    #[test]
+    fn invalid_saadc_input_is_rejected_without_legacy_downcast_or_mutation() {
+        let mut adc = Nrf52Saadc::new();
+        drive_adc_input(&mut adc, 3, Some(1350)).unwrap();
+        for invalid in [8, 15, 255] {
+            assert_eq!(
+                drive_adc_input(&mut adc, invalid, Some(0)).unwrap_err(),
+                format!("ADC input {invalid} is outside 0..8")
+            );
+            assert!(drive_adc_input(&mut adc, invalid, None)
+                .unwrap_err()
+                .contains("outside 0..8"));
+        }
+        assert_eq!(sample(&mut adc), 1536);
+    }
+
+    #[test]
+    fn legacy_stm32_route_keeps_injection_release_and_checks_its_channel_count() {
+        let mut adc = Adc::new();
+        drive_adc_input(&mut adc, 0, Some(1650)).unwrap();
+        drive_adc_input(&mut adc, 0, None).unwrap();
+        let invalid = adc.channel_count();
+        assert!(drive_adc_input(&mut adc, invalid, Some(1650)).is_err());
     }
 }
 
