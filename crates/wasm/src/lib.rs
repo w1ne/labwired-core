@@ -529,9 +529,11 @@ impl WasmSimulator {
         firmware: &[u8],
         blob_map: &std::collections::HashMap<String, Vec<u8>>,
     ) -> Result<WasmSimulator, JsValue> {
-        // A named blob fills the chip's `image_env` region of that name — the
-        // browser has no filesystem to read a ROM dump from, so this is the
-        // only way an RP2040's `bootrom` region exists here at all.
+        // A named blob fills the chip's `image_env` region of that name. The
+        // RP2040 mask ROM is also compiled into the core crate, so a browser
+        // that does not pass a `bootrom` blob still maps it at 0 (pico-sdk
+        // `rom_func_lookup` would otherwise read stage-2 through the flash
+        // alias). A supplied blob still wins over that default.
         let mut bus = SystemBus::from_config_with_region_images(chip, manifest, &[], blob_map)
             .map_err(|e| JsValue::from_str(&format!("Bus config error: {:#}", e)))?;
 
