@@ -197,7 +197,7 @@ fn lit_pixels(fb: &[u8]) -> usize {
 /// Flatten the full architectural state that must be identical between the two
 /// arms: x0..x31, pc, the CLINT `mtime`/`mtimecmp`, every M-mode CSR incl.
 /// `mip`/`mie`, and the LR/SC reservation. The cycle CSRs (0xC00/0x802/0x7E2)
-/// are a pure function of `mtime` (× CYCLE_SCALE), so comparing `mtime`
+/// are a pure function of `mtime`, so comparing `mtime`
 /// proves them identical too.
 fn arch_state(cpu: &RiscV) -> Vec<u64> {
     let mut v = Vec::with_capacity(32 + 1 + 2 + 8 + 1);
