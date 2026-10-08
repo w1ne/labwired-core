@@ -344,7 +344,7 @@ static SERVO_METADATA: KitMetadata = KitMetadata {
         ConfigKey {
             name: std::borrow::Cow::Borrowed("ledc_channel"),
             ty: ConfigType::Int,
-            doc: std::borrow::Cow::Borrowed("Optional ESP32 LEDC channel (0..15). When omitted, all 16 channels observe."),
+            doc: std::borrow::Cow::Borrowed("Optional LEDC channel (ESP32 0..15, ESP32-C3 0..5). When omitted, every channel observes."),
         },
     ]),
     labs: std::borrow::Cow::Borrowed(&[]),
@@ -380,20 +380,26 @@ impl PeripheralKit for ServoKit {
         let ledc_channel = ctx.config_i64("ledc_channel").map(|v| v as u64);
         for name in ["ledc", "LEDC"] {
             if let Some(idx) = ctx.bus.find_peripheral_index_by_name(name) {
-                if let Some(ledc) = ctx.bus.peripherals[idx]
-                    .dev
-                    .as_any_mut()
-                    .and_then(|a| a.downcast_mut::<crate::peripherals::esp32::ledc::Ledc>())
+                let Some(any) = ctx.bus.peripherals[idx].dev.as_any_mut() else {
+                    continue;
+                };
+                // Classic ESP32 (16 channels) and ESP32-C3 (6 channels) LEDC
+                // share the duty-observer hook.
+                let drivers = |channels: u64| {
+                    ledc_channel
+                        .map_or(0..channels, |ch| ch..ch + 1)
+                        .map(|ch| Arc::new(LedcServoDriver::new(ch, servo.clone())))
+                        .collect::<Vec<_>>()
+                };
+                if let Some(ledc) = any.downcast_mut::<crate::peripherals::esp32::ledc::Ledc>() {
+                    for d in drivers(16) {
+                        ledc.add_duty_observer(d);
+                    }
+                } else if let Some(ledc) =
+                    any.downcast_mut::<crate::peripherals::esp32c3::ledc::Esp32c3Ledc>()
                 {
-                    if let Some(ch) = ledc_channel {
-                        ledc.add_duty_observer(Arc::new(LedcServoDriver::new(ch, servo.clone())));
-                    } else {
-                        for ch in 0..16u64 {
-                            ledc.add_duty_observer(Arc::new(LedcServoDriver::new(
-                                ch,
-                                servo.clone(),
-                            )));
-                        }
+                    for d in drivers(6) {
+                        ledc.add_duty_observer(d);
                     }
                 }
             }

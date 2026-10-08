@@ -84,7 +84,9 @@
 //! byte-identical to the walk-driven reference at tick interval 1.
 
 use std::cell::Cell;
+use std::sync::Arc;
 
+use crate::peripherals::esp32::ledc::LedcDutyObserver;
 use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
 
 pub const LEDC_BASE: u32 = 0x6001_9000;
@@ -105,6 +107,15 @@ const NUM_CHANNELS: usize = 6;
 /// registers are pure register-backed state in this model, so seeding the reset
 /// value matches the silicon capture without changing timer behavior.
 const CH_CONF1_RESET: u32 = 0x4000_0000;
+
+/// Channel register block stride: CONF0, HPOINT, DUTY, CONF1, DUTY_R.
+const CH_STRIDE: u64 = 0x14;
+const CH_DUTY: u64 = 0x08;
+const CH_CONF1: u64 = 0x0C;
+/// `CHn_CONF1.DUTY_START`: the strobe `ledc_update_duty` sets to commit a duty.
+const CONF1_DUTY_START_BIT: u32 = 1 << 31;
+/// `CHn_CONF0.TIMER_SEL` [1:0]: which timer clocks the channel.
+const CONF0_TIMER_SEL_MASK: u32 = 0b11;
 
 /// Silicon reset value of each `LEDC_TIMERx_CONF` register (offset `0xA0 + x*8`):
 /// the `RST` bit (bit 23) is set at power-on, i.e. every timer is held in reset
@@ -266,6 +277,9 @@ pub struct Esp32c3Ledc {
     /// `force_legacy_walk`) keeps the legacy per-cycle walk. Not serialized —
     /// re-attached by the bus.
     clock: Option<CycleClock>,
+    /// Notified on each committed channel duty (`ledcWrite`), the same hook
+    /// the classic ESP32 LEDC offers, so PWM-driven parts (a servo) follow it.
+    duty_observers: Vec<Arc<dyn LedcDutyObserver>>,
 }
 
 impl Default for Esp32c3Ledc {
@@ -313,7 +327,26 @@ impl Esp32c3Ledc {
             anchor: Cell::new(0),
             arm_seq: 0,
             clock: None,
+            duty_observers: Vec::new(),
         }
+    }
+
+    /// Register an observer for committed channel duties. See
+    /// [`LedcDutyObserver`].
+    pub fn add_duty_observer(&mut self, obs: Arc<dyn LedcDutyObserver>) {
+        self.duty_observers.push(obs);
+    }
+
+    /// Channel `ch`'s duty as a fraction of its timer period:
+    /// `(DUTY >> 4) / 2^DUTY_RES` (DUTY carries 4 fractional bits).
+    pub fn channel_duty_fraction(&self, ch: u64) -> f64 {
+        let base = ch * CH_STRIDE;
+        let timer = &self.timers[(self.reg(base) & CONF0_TIMER_SEL_MASK) as usize];
+        if timer.duty_res() == 0 {
+            return 0.0; // unconfigured timer: no PWM
+        }
+        let duty = (self.reg(base + CH_DUTY) >> 4) as f64;
+        (duty / timer.period() as f64).clamp(0.0, 1.0)
     }
 
     crate::cycle_clock::scheduler_mode!();
@@ -461,6 +494,17 @@ impl Peripheral for Esp32c3Ledc {
             o => {
                 if let Some(slot) = self.regs.get_mut((o / 4) as usize) {
                     *slot = value;
+                }
+                let ch = o / CH_STRIDE;
+                if ch < NUM_CHANNELS as u64
+                    && o % CH_STRIDE == CH_CONF1
+                    && value & CONF1_DUTY_START_BIT != 0
+                    && !self.duty_observers.is_empty()
+                {
+                    let fraction = self.channel_duty_fraction(ch);
+                    for obs in &self.duty_observers {
+                        obs.on_duty_change(ch, fraction);
+                    }
                 }
             }
         }
