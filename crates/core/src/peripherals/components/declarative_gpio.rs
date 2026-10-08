@@ -681,6 +681,15 @@ impl BusResidentDevice for DeclarativeGpioDevice {
             || !(self.driven.is_empty() || self.has_grid_schedules() && self.grid_eligible)
     }
 
+    /// No timers and only pad-edge rules (`grid_eligible`) means every change
+    /// this part makes on its own is a schedule edge, and every pad edge is
+    /// serviced from the write hook. So it is idle exactly when no schedule
+    /// edge is pending: a DHT22 between reads, not during one.
+    fn idle_skip_safe(&self) -> bool {
+        !self.needs_per_cycle_service()
+            || (self.grid_eligible && self.schedule_bank.next_deadline(1).is_none())
+    }
+
     fn edge_service_addrs(&self) -> &[u64] {
         &self.edge_addrs
     }
@@ -1212,6 +1221,29 @@ metadata:
             }
         }
     }
+    #[test]
+    fn dht_is_idle_skip_safe_only_between_frames() {
+        let (mut dev, mut pads) = sensor("dht22", 1_000_000);
+        assert!(
+            dev.needs_per_cycle_service(),
+            "still one instruction per batch"
+        );
+        assert!(dev.idle_skip_safe(), "idle before a read");
+        pads.drive_idr_bit(1, 0, false);
+        dev.service(&mut pads, 10);
+        assert!(dev.idle_skip_safe(), "the start pulse is a host edge");
+        pads.drive_idr_bit(1, 0, true);
+        dev.service(&mut pads, 1010);
+        assert!(!dev.idle_skip_safe(), "a frame is in flight");
+        let mut now = 1010;
+        while let Some(at) = dev.next_edge_deadline_cycle(now, 1) {
+            now = at;
+            dev.service_scheduled_edges(&mut pads, now, 1);
+        }
+        assert!(now > 4000, "the whole frame ran: {now}");
+        assert!(dev.idle_skip_safe(), "idle again after the frame");
+    }
+
     #[test]
     fn invalid_dynamic_emission_reports_fault_and_keeps_old_generation() {
         let (mut dev, mut pads) = sensor("hc-sr04", 1_000_000);

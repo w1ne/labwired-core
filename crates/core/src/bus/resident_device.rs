@@ -223,6 +223,21 @@ pub trait BusResidentDevice: std::fmt::Debug + Send {
         true
     }
 
+    /// Whether the machine may skip an idle (WFI) window right now without
+    /// this device missing anything, even though it
+    /// [needs per-cycle service](Self::needs_per_cycle_service) while it works.
+    ///
+    /// The default is exactly that predicate negated, so no device changes
+    /// unless it opts in. A device opts in when everything it does on its own
+    /// clock is in its [scheduled edges](Self::next_edge_deadline_cycle) and
+    /// everything else is answered from the write hook: with no edge pending it
+    /// is idle, and a skip moves time it would not have used. With an edge
+    /// pending it must say `false`, so an in-flight waveform stays
+    /// cycle-accurate.
+    fn idle_skip_safe(&self) -> bool {
+        !self.needs_per_cycle_service()
+    }
+
     /// Output-register addresses whose MMIO writes must service this device
     /// **synchronously**, instead of waiting for the next peripheral tick.
     ///

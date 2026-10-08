@@ -3469,9 +3469,17 @@ impl<C: Cpu> Machine<C> {
         // watch sets keep the skip — a pad write inside the window happens in
         // instrumented peripheral code, which pushes its own edge with the
         // post-skip tap clock (seeded below before the scheduler drain).
-        if !self.config.idle_fast_forward_enabled
-            || self.bus.requires_cycle_accurate()
-            || self.logic_capture.poll_active()
+        if !self.config.idle_fast_forward_enabled || self.logic_capture.poll_active() {
+            return 0;
+        }
+        // A cycle-accurate bus still skips a WFI wait while every resident is
+        // idle (an idle DHT22 between reads). It does not coalesce timer polls:
+        // that would leap a freehand `micros()` busy-loop, which is why such a
+        // resident pins the bus in the first place.
+        let cycle_accurate = self.bus.requires_cycle_accurate();
+        if cycle_accurate
+            && (self.bus.idle_skip_requires_cycle_accurate()
+                || self.cpu.idle_fast_forward_budget(&self.bus).is_none())
         {
             return 0;
         }
@@ -3501,7 +3509,7 @@ impl<C: Cpu> Machine<C> {
             //    stays CPU-agnostic: chip register maps live in peripheral
             //    models, not SystemBus.
             let wfi_budget = self.cpu.idle_fast_forward_budget(&self.bus);
-            let timer_poll = self.bus.take_timer_poll_coalesce_eligible();
+            let timer_poll = !cycle_accurate && self.bus.take_timer_poll_coalesce_eligible();
             let mut budget = match wfi_budget {
                 Some(budget) if budget > 0 => budget,
                 _ if timer_poll => u64::MAX,
