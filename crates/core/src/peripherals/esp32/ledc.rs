@@ -324,6 +324,11 @@ impl Ledc {
 }
 
 impl Peripheral for Ledc {
+    fn add_ledc_duty_observer(&mut self, obs: Arc<dyn LedcDutyObserver>) -> bool {
+        self.add_duty_observer(obs);
+        true
+    }
+
     // Inert walk: classic-ESP32 LEDC is a config-introspection register bank — no PWM edges or timer-counter advance modeled (unlike the C3 LEDC, whose live up-counters DO real tick work); tick() is an explicit no-op.
     fn needs_legacy_walk(&self) -> bool {
         false
