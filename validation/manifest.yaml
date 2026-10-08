@@ -2104,7 +2104,7 @@ boards:
     # behaviour lives in exchange memory and the radio event path, which that
     # capture does not cover. This acknowledges model drift, NOT a recapture.
     drift_ack: 2026-09-28
-    drift_ack_digest: 415a8302a4a304b2a773b3923924d3549e79d1e6ea1542dd90df7f84424f1c3f
+    drift_ack_digest: c6e99fb5cdcd96135f58efe8bbd4b46ee50763eb57e8c4c2e9f7ef9f1190d123
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
