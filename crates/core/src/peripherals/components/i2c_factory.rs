@@ -37,7 +37,7 @@ pub fn build_external_i2c_device(
     id: &str,
     config: &HashMap<String, serde_yaml::Value>,
 ) -> Option<Box<dyn I2cDevice>> {
-    let mut dev = build_i2c_device(type_str, config)?;
+    let mut dev = build_i2c_device_named(type_str, Some(id), config)?;
     if let Some(si) = dev.as_sim_input_mut() {
         si.set_component_id(id.to_string());
     }
@@ -291,13 +291,39 @@ fn with_supply(
 }
 
 /// Resolve embedded descriptors before the remaining Rust-only construct arms.
-/// Non-I²C descriptors do not become I²C devices just because they have YAML.
+/// Non-I²C descriptors do not become I²C devices just because they have YAML:
+/// only `i2c_device` parts and control-byte (I²C) displays do.
 fn build_declarative_i2c_device(
     type_str: &str,
+    id: Option<&str>,
     config: &HashMap<String, serde_yaml::Value>,
 ) -> Option<Box<dyn I2cDevice>> {
     let yaml = labwired_config::embedded_device_yaml(type_str)?;
     let descriptor = labwired_config::DeviceDescriptor::from_yaml(yaml).ok()?;
+    if descriptor.behavior.primitive == "display" {
+        // The display kit's own constructor, so a panel behind a bus switch is
+        // the same model as one on the controller.
+        let address = config
+            .get("i2c_address")
+            .and_then(|v| v.as_u64())
+            .map(|a| a as u8);
+        return match crate::peripherals::components::declarative_display::GenericDisplay::from_descriptor_i2c(
+            &descriptor,
+            address,
+        ) {
+            Ok(dev) => dev.map(|mut d| {
+                // A panel names itself in its artifacts, as the kit stamps it.
+                if let Some(id) = id {
+                    d.set_component_id(id);
+                }
+                Box::new(d) as Box<dyn I2cDevice>
+            }),
+            Err(e) => {
+                eprintln!("declarative i2c display '{type_str}': {e}");
+                None
+            }
+        };
+    }
     if descriptor.behavior.primitive != "i2c_device" {
         return None;
     }
@@ -329,10 +355,20 @@ pub fn build_i2c_device(
     type_str: &str,
     config: &HashMap<String, serde_yaml::Value>,
 ) -> Option<Box<dyn I2cDevice>> {
+    build_i2c_device_named(type_str, None, config)
+}
+
+/// [`build_i2c_device`] for a device with an `external_devices:` id, which a
+/// display carries in its artifacts.
+fn build_i2c_device_named(
+    type_str: &str,
+    id: Option<&str>,
+    config: &HashMap<String, serde_yaml::Value>,
+) -> Option<Box<dyn I2cDevice>> {
     let lower = type_str.to_ascii_lowercase();
     let canonical = crate::peripherals::kit::registry::canonical_device_type(&lower);
     if labwired_config::embedded_device_yaml(canonical).is_some() {
-        return build_declarative_i2c_device(canonical, config);
+        return build_declarative_i2c_device(canonical, id, config);
     }
     match canonical {
         // ── Smart-ring sensor/actuator set ──────────────────────────────────

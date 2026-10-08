@@ -1098,9 +1098,8 @@ impl Peripheral for Esp32c3I2c {
         let mut pi = crate::inspect::default_inspect(self, base, name, opts);
         pi.kind = "i2c".to_string();
         for dev in self.attached_slaves() {
-            let addr = dev.address();
             pi.artifacts
-                .extend(dev.artifacts(&format!("i2c@0x{:02x}", addr), opts));
+                .extend(crate::inspect::i2c_artifacts(dev.as_ref(), opts));
         }
         pi
     }

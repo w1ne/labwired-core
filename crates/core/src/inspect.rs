@@ -792,6 +792,30 @@ pub fn visit_i2c_device(
     }
 }
 
+/// Every artifact an I²C slave shows, plus, when it is a bus switch, every
+/// artifact of the devices behind it, each labelled by its place on the wire
+/// (`i2c@0x3c`, or `i2c@0x70/ch1@0x3c` behind a switch).
+///
+/// The controller-side fold (`I2c::inspect`, the C3's) goes through this so a
+/// panel behind a TCA9548A reaches `inspect.peripherals` the same way as one
+/// wired straight to the controller.
+pub fn i2c_artifacts(
+    dev: &dyn crate::peripherals::i2c::I2cDevice,
+    opts: &InspectOpts,
+) -> Vec<Artifact> {
+    let mut out = Vec::new();
+    visit_i2c_device(dev, &mut |d| {
+        let Some(evidence) = d.evidence else { return };
+        let addr = d.address.unwrap_or(0);
+        let id = match (d.mux_address, d.channel) {
+            (Some(mux), Some(ch)) => format!("i2c@0x{mux:02x}/ch{ch}@0x{addr:02x}"),
+            _ => format!("i2c@0x{addr:02x}"),
+        };
+        out.extend(evidence.artifacts(&id, opts));
+    });
+    out
+}
+
 /// Visit one SPI device. The SPI counterpart of [`visit_i2c_device`]; SPI has
 /// no bus-switch analogue in this engine, so there is nothing to unfold.
 pub fn visit_spi_device(
