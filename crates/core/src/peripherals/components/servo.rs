@@ -377,30 +377,16 @@ impl PeripheralKit for ServoKit {
         };
         let servo = Arc::new(Servo::with_id(ctx.device_id().to_string(), cal, pin));
         ctx.install_gpio_observer(servo.clone());
-        let ledc_channel = ctx.config_i64("ledc_channel").map(|v| v as u64);
+        // Any LEDC model (classic ESP32: 16 channels, ESP32-C3: 6) reports
+        // its committed duties through the same observer.
+        let channels = ctx
+            .config_i64("ledc_channel")
+            .map_or(0..16, |ch| ch as u64..ch as u64 + 1);
         for name in ["ledc", "LEDC"] {
             if let Some(idx) = ctx.bus.find_peripheral_index_by_name(name) {
-                let Some(any) = ctx.bus.peripherals[idx].dev.as_any_mut() else {
-                    continue;
-                };
-                // Classic ESP32 (16 channels) and ESP32-C3 (6 channels) LEDC
-                // share the duty-observer hook.
-                let drivers = |channels: u64| {
-                    ledc_channel
-                        .map_or(0..channels, |ch| ch..ch + 1)
-                        .map(|ch| Arc::new(LedcServoDriver::new(ch, servo.clone())))
-                        .collect::<Vec<_>>()
-                };
-                if let Some(ledc) = any.downcast_mut::<crate::peripherals::esp32::ledc::Ledc>() {
-                    for d in drivers(16) {
-                        ledc.add_duty_observer(d);
-                    }
-                } else if let Some(ledc) =
-                    any.downcast_mut::<crate::peripherals::esp32c3::ledc::Esp32c3Ledc>()
-                {
-                    for d in drivers(6) {
-                        ledc.add_duty_observer(d);
-                    }
+                let ledc = &mut ctx.bus.peripherals[idx].dev;
+                for ch in channels.clone() {
+                    ledc.add_ledc_duty_observer(Arc::new(LedcServoDriver::new(ch, servo.clone())));
                 }
             }
         }

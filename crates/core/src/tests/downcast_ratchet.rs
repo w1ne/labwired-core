@@ -200,8 +200,11 @@ const MAX_DOWNCAST_REF: usize = 197;
 /// `clear_adc_channel`) ask the generic `set_adc_channel_input` hooks first
 /// and share one STM32 `Adc` fallback, instead of two inline downcasts.
 /// `MAX_DOWNCAST_MUT` 342 -> 341 for the same change.
-const MAX_AS_ANY_MUT: usize = 274;
-const MAX_DOWNCAST_MUT: usize = 341;
+// 274 → 273 / 341 → 340: the servo kit binds LEDC duty through
+// `Peripheral::add_ledc_duty_observer` instead of downcasting to the classic
+// ESP32 `Ledc`, so the ESP32-C3 LEDC drives a servo too.
+const MAX_AS_ANY_MUT: usize = 273;
+const MAX_DOWNCAST_MUT: usize = 340;
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

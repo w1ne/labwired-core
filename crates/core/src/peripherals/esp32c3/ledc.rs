@@ -423,6 +423,11 @@ impl Esp32c3Ledc {
 }
 
 impl Peripheral for Esp32c3Ledc {
+    fn add_ledc_duty_observer(&mut self, obs: Arc<dyn LedcDutyObserver>) -> bool {
+        self.add_duty_observer(obs);
+        true
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let w = self.read_u32(offset & !3)?;
         Ok((w >> ((offset & 3) * 8)) as u8)
