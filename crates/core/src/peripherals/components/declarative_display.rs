@@ -861,6 +861,30 @@ impl GenericDisplay {
         Self::from_descriptor(&DeviceDescriptor::from_yaml(yaml)?)
     }
 
+    /// The I²C model of a control-byte panel, answering at `address` or, when
+    /// none is given, at the descriptor's `default_address`. `Ok(None)` for a
+    /// panel that frames on a D/C line: that is an SPI part with no I²C model.
+    ///
+    /// The ONE construction of an I²C panel. [`DeclarativeDisplayKit::attach`]
+    /// uses it for a panel on a controller and `i2c_factory` for a panel behind
+    /// a TCA9548A channel, so a panel cannot be built one way on the bus and
+    /// another way behind a switch.
+    pub fn from_descriptor_i2c(
+        descriptor: &DeviceDescriptor,
+        address: Option<u8>,
+    ) -> Result<Option<Self>> {
+        let Some(spec) = descriptor.behavior.display.as_ref() else {
+            return Ok(None);
+        };
+        if spec.dc.source != DisplayDcSource::ControlByte {
+            return Ok(None);
+        }
+        let default = spec.default_address.unwrap_or(0);
+        let mut dev = Self::from_descriptor(descriptor)?;
+        dev.set_address(address.unwrap_or(default));
+        Ok(Some(dev))
+    }
+
     fn from_spec(spec: DisplaySpec) -> Self {
         let width = spec.width as usize;
         let height = spec.height as usize;
@@ -1553,6 +1577,12 @@ impl GenericDisplay {
             "generation".into(),
             serde_json::json!(crate::inspect::artifact_generation(&fb)),
         );
+        // Which panel this is. Two panels can hold the same picture (three
+        // OLEDs at 0x3C behind a TCA9548A drawing one splash), and a consumer
+        // that tells evidence apart by its contents would merge them into one.
+        if let Some(id) = &self.component_id {
+            meta.insert("device_id".into(), serde_json::json!(id));
+        }
 
         // The dominant colour is counted in a BTreeMap, not a HashMap: a tie
         // between two colours must resolve the same way on every run and in
@@ -2004,14 +2034,17 @@ impl PeripheralKit for DeclarativeDisplayKit {
 
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> Result<()> {
         let spec = self.spec();
-        let mut dev = GenericDisplay::from_descriptor(&self.descriptor)?;
         match spec.dc.source {
             DisplayDcSource::ControlByte => {
                 let address = ctx.i2c_address_or(spec.default_address.unwrap_or(0))?;
-                dev.set_address(address);
+                let mut dev = GenericDisplay::from_descriptor_i2c(&self.descriptor, Some(address))?
+                    .context("a control-byte panel always has an I²C model")?;
+                dev.set_component_id(ctx.device_id());
                 ctx.attach_i2c_device(Box::new(dev))
             }
             DisplayDcSource::Pin | DisplayDcSource::HwDcx => {
+                let mut dev = GenericDisplay::from_descriptor(&self.descriptor)?;
+                dev.set_component_id(ctx.device_id());
                 dev.set_cs_pin(ctx.config_str("cs_pin").unwrap_or("").to_string());
                 let dc_pin = ctx.config_str("dc_pin").map(|s| s.to_string());
                 // `hw_dcx` is only ever read for a panel that declares the

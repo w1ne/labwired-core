@@ -619,10 +619,11 @@ fn topology_validation_rejects_a_wiring_mistake() {
     assert!(err.to_string().contains("channel 9"), "got: {err}");
 
     // A type with no I²C model behind a switch has no fallback path, so it must
-    // fail loudly rather than silently attach straight to the controller.
+    // fail loudly rather than silently attach straight to the controller. An
+    // ILI9341 frames on a D/C pin: it is an SPI panel, with no I²C model.
     let m = manifest_with(vec![
         ext("mux", "tca9548a", "i2c1", None, &[]),
-        ext("panel", "oled-ssd1306", "mux", Some(0), &[]),
+        ext("panel", "ili9341", "mux", Some(0), &[]),
     ]);
     let err = labwired_core::peripherals::components::validate_i2c_mux_topology(&m).unwrap_err();
     assert!(err.to_string().contains("no I²C model"), "got: {err}");
@@ -650,4 +651,129 @@ fn a_manifest_without_a_switch_is_untouched() {
             .is_empty()
     );
     assert!(labwired_core::peripherals::components::i2c_mux_child_ids(&m).is_empty());
+}
+
+// ── displays behind the switch ──────────────────────────────────────────────
+
+/// Three SSD1306 OLEDs, all at their fixed 0x3C, on channels 0/1/2 — the
+/// shape the board compiler emits for a three-panel board.
+fn three_oleds_manifest() -> labwired_config::SystemManifest {
+    let at_3c = [("i2c_address", serde_yaml::Value::from(0x3c))];
+    manifest_with(vec![
+        ext("mux", "tca9548a", "i2c1", None, &[]),
+        ext("DISP1", "oled-ssd1306", "mux", Some(0), &at_3c),
+        ext("DISP2", "oled-ssd1306", "mux", Some(1), &at_3c),
+        ext("DISP3", "oled-ssd1306", "mux", Some(2), &at_3c),
+    ])
+}
+
+/// One I²C write transaction: address, then every byte, then STOP.
+fn f1_write(i2c: &mut I2c, addr: u8, bytes: &[u8]) {
+    f1_start(i2c);
+    f1_addr(i2c, addr, false);
+    for &b in bytes {
+        f1_byte(i2c, b);
+    }
+    f1_stop(i2c);
+}
+
+/// The panels' framebuffer artifacts as the controller reports them.
+fn panel_artifacts(i2c: &I2c) -> Vec<labwired_core::inspect::Artifact> {
+    i2c.inspect(0, "i2c1", &labwired_core::inspect::InspectOpts::default())
+        .artifacts
+        .into_iter()
+        .filter(labwired_core::inspect::is_display_artifact)
+        .collect()
+}
+
+#[test]
+fn three_ssd1306_at_one_address_validate_behind_the_switch() {
+    let m = three_oleds_manifest();
+    assert_eq!(
+        labwired_core::peripherals::components::validate_i2c_mux_topology(&m).unwrap(),
+        vec!["DISP1", "DISP2", "DISP3"]
+    );
+}
+
+/// A write through a channel lands on that channel's panel and nowhere else,
+/// and the controller reports every panel's framebuffer under its own id.
+#[test]
+fn each_channel_paints_only_its_own_panel() {
+    let m = three_oleds_manifest();
+    let device = labwired_core::peripherals::components::build_i2c_tree(&m, &m.external_devices[0])
+        .unwrap()
+        .unwrap();
+    let mut i2c = I2c::new_with_layout(I2cRegisterLayout::Stm32F1);
+    let trace = labwired_core::bus::bus_trace::new_log();
+    i2c.attach_traced("i2c1", &trace, device);
+
+    // Every channel off: nothing answers at 0x3C and nothing is painted.
+    f1_write_byte(&mut i2c, MUX_ADDR, 0x00);
+    f1_write(&mut i2c, 0x3c, &[0x40, 0xFF]);
+    let before = panel_artifacts(&i2c);
+    assert_eq!(before.len(), 3, "one framebuffer per panel: {before:?}");
+    assert!(
+        before.iter().all(|a| a.meta["ink_bytes"] == 0),
+        "{before:?}"
+    );
+
+    // Channel n gets n+1 data bytes, so each panel's count says who wrote it.
+    for ch in [1u8, 0, 2] {
+        f1_write_byte(&mut i2c, MUX_ADDR, 1 << ch);
+        let mut data = vec![0x40];
+        data.extend(std::iter::repeat_n(0xFF, ch as usize + 1));
+        f1_write(&mut i2c, 0x3c, &data);
+    }
+
+    let panels = panel_artifacts(&i2c);
+    assert_eq!(panels.len(), 3, "{panels:?}");
+    for (ch, a) in panels.iter().enumerate() {
+        assert_eq!(a.id, format!("i2c@0x70/ch{ch}@0x3c"));
+        assert_eq!(a.meta["device_id"], format!("DISP{}", ch + 1));
+        assert_eq!(a.meta["ink_bytes"], ch + 1, "channel {ch}: {a:?}");
+    }
+}
+
+/// On a real chip's bus, each panel answers the display door by its own id,
+/// and the machine-level device walk reports three distinct panels.
+#[test]
+fn each_panel_behind_the_switch_reports_its_own_display() {
+    let mut manifest: labwired_config::SystemManifest = serde_yaml::from_str(
+        r#"
+name: three-oleds
+chip: esp32c3.yaml
+external_devices:
+  - { id: U2, type: tca9548a, connection: i2c0, route: { sda: GPIO8, scl: GPIO9 }, config: { i2c_address: 0x70 } }
+  - { id: DISP1, type: oled-ssd1306, connection: U2, channel: 0, config: { i2c_address: 0x3c } }
+  - { id: DISP2, type: oled-ssd1306, connection: U2, channel: 1, config: { i2c_address: 0x3c } }
+  - { id: DISP3, type: oled-ssd1306, connection: U2, channel: 2, config: { i2c_address: 0x3c } }
+"#,
+    )
+    .unwrap();
+    manifest.parts = Vec::new();
+    let chip_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../configs/chips/esp32c3.yaml");
+    let chip = labwired_config::ChipDescriptor::from_file(&chip_path).unwrap();
+    let mut bus = labwired_core::bus::SystemBus::from_config(&chip, &manifest).expect("build bus");
+    let _ = labwired_core::system::riscv::configure_riscv(&mut bus);
+    bus.refresh_peripheral_index();
+
+    let opts = labwired_core::inspect::InspectOpts::default();
+    for id in ["DISP1", "DISP2", "DISP3"] {
+        let a = bus
+            .display_artifact(id, &opts)
+            .unwrap_or_else(|| panic!("'{id}' behind the switch must answer the display door"));
+        assert_eq!(a.meta["device_id"], id);
+    }
+    let shown: Vec<String> = bus
+        .inspect_devices(None, &opts)
+        .into_iter()
+        .filter(|d| {
+            d.artifacts
+                .iter()
+                .any(labwired_core::inspect::is_display_artifact)
+        })
+        .map(|d| d.id)
+        .collect();
+    assert_eq!(shown, vec!["DISP1", "DISP2", "DISP3"]);
 }

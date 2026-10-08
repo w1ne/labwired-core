@@ -2855,9 +2855,8 @@ impl crate::Peripheral for I2c {
         pi.kind = "i2c".to_string();
         for dev_cell in self.attached_devices() {
             let dev = dev_cell.borrow();
-            let addr = dev.address();
             pi.artifacts
-                .extend(dev.artifacts(&format!("i2c@0x{:02x}", addr), opts));
+                .extend(crate::inspect::i2c_artifacts(&**dev, opts));
         }
         pi
     }
