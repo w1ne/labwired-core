@@ -2097,6 +2097,71 @@ mod tests {
         );
     }
 
+    /// avr-gcc compares a 32-bit value with `cpi` plus three `sbci`. SBCI's Z
+    /// is sticky, so a zero byte result must not set Z after an earlier
+    /// mismatch. Adafruit DHT `expectPulse` treats `count == 0xFFFFFFFF` as a
+    /// timeout; a non-sticky Z made every small count look like that timeout.
+    #[test]
+    fn sbci_sticky_z_on_32bit_compare_with_minus_one() {
+        const Z: u8 = 0x02;
+        // cpi r22,0xFF; sbci r23,0xFF; sbci r24,0xFF; sbci r25,0xFF
+        const WORDS: [u16; 4] = [0x3F6F, 0x4F7F, 0x4F8F, 0x4F9F];
+
+        let z_set = |bytes: [u8; 4]| {
+            let mut cpu = Avr::new();
+            cpu.load_words(0, &WORDS);
+            cpu.r[22] = bytes[0];
+            cpu.r[23] = bytes[1];
+            cpu.r[24] = bytes[2];
+            cpu.r[25] = bytes[3];
+            let mut bus = MockBus::new();
+            let cfg = SimulationConfig::default();
+            for _ in 0..4 {
+                cpu.step(&mut bus, &[], &cfg).unwrap();
+            }
+            cpu.sreg & Z != 0
+        };
+
+        assert!(
+            z_set([0xFF, 0xFF, 0xFF, 0xFF]),
+            "0xFFFFFFFF == 0xFFFFFFFF sets Z"
+        );
+        assert!(
+            !z_set([0x05, 0x00, 0x00, 0x00]),
+            "a small count is not equal to 0xFFFFFFFF"
+        );
+        assert!(
+            !z_set([0xFF, 0xFF, 0xFF, 0x00]),
+            "a mismatch in the top byte clears Z"
+        );
+    }
+
+    /// BSET/BCLR are one-cycle SREG bit ops. Only SEI/CLI used to be decoded,
+    /// so `clt` (0x94E8) from avr-libc `__floatsisf` was a decode error.
+    #[test]
+    fn bset_bclr_round_trip_takes_one_cycle() {
+        // (BSET, BCLR, SREG mask). I is SEI/CLI and stays on its own path.
+        let pairs = [
+            (0x9408u16, 0x9488u16, 0x01u8), // SEC / CLC
+            (0x9468, 0x94E8, 0x40),         // SET / CLT
+        ];
+        let mut bus = MockBus::new();
+        let cfg = SimulationConfig::default();
+        for (bset, bclr, mask) in pairs {
+            let mut cpu = Avr::new();
+            // I stays set across the round trip; these ops must not clear it.
+            cpu.sreg = 0x80;
+            cpu.load_words(0, &[bset, bclr]);
+            cpu.step(&mut bus, &[], &cfg).unwrap();
+            assert_eq!(cpu.cycles, 1, "BSET is one cycle (op {bset:#06x})");
+            assert_eq!(cpu.sreg, 0x80 | mask, "BSET {bset:#06x}");
+            cpu.step(&mut bus, &[], &cfg).unwrap();
+            assert_eq!(cpu.cycles, 2, "BCLR is one cycle (op {bclr:#06x})");
+            assert_eq!(cpu.sreg, 0x80, "BCLR {bclr:#06x} restores SREG");
+            assert_eq!(cpu.pc, 4);
+        }
+    }
+
     /// A conversion reads the selected channel's millivolts from the bus-side
     /// `avr_adc` window, honours ADLAR, and answers the bandgap mux code
     /// without touching the bus.
