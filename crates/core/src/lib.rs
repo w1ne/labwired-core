@@ -993,7 +993,7 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// (observer dropped) for every other peripheral.
     fn add_ledc_duty_observer(
         &mut self,
-        _obs: Arc<dyn crate::peripherals::esp32::ledc::LedcDutyObserver>,
+        _obs: Arc<dyn crate::peripherals::LedcDutyObserver>,
     ) -> bool {
         false
     }

@@ -86,7 +86,7 @@
 use std::cell::Cell;
 use std::sync::Arc;
 
-use crate::peripherals::esp32::ledc::LedcDutyObserver;
+use crate::peripherals::LedcDutyObserver;
 use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
 
 pub const LEDC_BASE: u32 = 0x6001_9000;

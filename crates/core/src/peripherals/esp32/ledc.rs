@@ -71,14 +71,7 @@
 use crate::{Peripheral, PeripheralTickResult, SimResult};
 use std::sync::Arc;
 
-/// Notified when a channel commits a new duty via the `CONF1.DUTY_START`
-/// strobe (i.e. on each `ledcWrite`). Lets PWM-driven actuators — a servo,
-/// an ESC, an LED dimmer — react to the live duty without polling. The
-/// `duty_fraction` is `duty / 2^DUTY_RES` for the channel's bound timer,
-/// the same value [`Ledc::channel_duty_fraction`] returns.
-pub trait LedcDutyObserver: Send + Sync + std::fmt::Debug {
-    fn on_duty_change(&self, channel: u64, duty_fraction: f64);
-}
+pub use crate::peripherals::LedcDutyObserver;
 
 // ── Channel block geometry (TRM §14.5) ───────────────────────────────────
 /// First HS channel register block starts at offset 0.
