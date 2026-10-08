@@ -344,7 +344,7 @@ static SERVO_METADATA: KitMetadata = KitMetadata {
         ConfigKey {
             name: std::borrow::Cow::Borrowed("ledc_channel"),
             ty: ConfigType::Int,
-            doc: std::borrow::Cow::Borrowed("Optional LEDC channel (ESP32 0..15, ESP32-C3 0..5). When omitted, every channel observes."),
+            doc: std::borrow::Cow::Borrowed("Optional ESP32 LEDC channel (0..15). When omitted, all 16 channels observe."),
         },
     ]),
     labs: std::borrow::Cow::Borrowed(&[]),
