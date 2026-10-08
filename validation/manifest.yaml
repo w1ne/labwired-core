@@ -2799,6 +2799,13 @@ boards:
     # register file, reset values and bus behaviour are unchanged. ACK, NOT
     # A CAPTURE.
     drift_ack: 2026-10-08
+    # 2026-10-08: watched cpu/riscv.rs and esp32c3/ledc.rs. The cycle CSRs
+    # (PCCR 0x7E2/0x802) read `mtime`, one tick per CPU clock, instead of
+    # `mtime * 256`, so Arduino `pulseIn` times against SYSTIMER correctly.
+    # The C3 LEDC notifies duty observers on CONF1.DUTY_START (a servo
+    # follows `ledcWrite`). No reset value or register layout moves. No
+    # physical probe connected. ACK, NOT A CAPTURE.
+    drift_ack: 2026-10-08
 
   - id: nucleo-l476rg
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
