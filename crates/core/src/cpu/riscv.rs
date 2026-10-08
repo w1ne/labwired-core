@@ -8,16 +8,6 @@ use crate::decoder::riscv::{decode_rv32, Instruction};
 use crate::{Bus, Cpu, SimResult, SimulationObserver};
 use std::sync::Arc;
 
-/// Estimated CPU clocks per interpreted instruction, used to scale the
-/// free-running cycle/perf-counter CSRs (0x802/0x7E2/0xC00). Firmware busy-wait
-/// delays compute a target in CPU clocks (e.g. `us * cpu_freq_mhz`); reporting
-/// the cycle counter as `mtime * CYCLE_SCALE` lets those delays elapse in
-/// ~1/CYCLE_SCALE the interpreted instructions instead of one-per-clock. Sim
-/// delays only need to complete, not match wall-clock, so a coarse value is
-/// correct here. Kept a power of two; tuned so the C3 bootloader's entropy fill
-/// drops from ~380M instructions to a few million.
-const CYCLE_SCALE: u64 = 256;
-
 /// Chunk H: land on a basic-block entry PC this many times before compiling
 /// it to wasm. Matches the framework default; keeps one-shot init/boot code
 /// on the interpreter and only pays translation cost for genuinely hot loops.
@@ -700,21 +690,20 @@ impl RiscV {
             // The ESP32-C3 exposes its free-running counter at the custom
             // machine PCCR CSR 0x7E2, not at standard RISC-V cycle CSR 0xC00.
             //
-            // These are reported as mtime * CYCLE_SCALE so that cycle-budget
-            // delays (which the firmware computes in CPU clocks, e.g. µs*freq)
-            // elapse in ~1/CYCLE_SCALE as many interpreted instructions. Without
-            // it the bootloader's entropy fill alone burns ~380M instructions of
-            // pure delay. Delay loops only need to *complete*, not match wall
-            // time, so a coarse cycle estimate is correct in sim; the real-time
-            // CLINT timer (mtime vs mtimecmp, CSR 0xB00) stays unscaled.
+            // The cycle counters count CPU clocks. One retired instruction is
+            // one simulated CPU clock (`mtime` advances once per clock, the
+            // same clock the SYSTIMER/`esp_timer` and peripherals are paced
+            // by), so they read `mtime` directly. Firmware converts them with
+            // the chip clock (e.g. Arduino `pulseIn` timeouts, `ets_delay_us`),
+            // so any other rate would skew those against `micros()`.
             0x7E0..=0x7E2 | 0x802 if self.core_profile == RiscVCoreProfile::Esp32C3 => {
-                (self.mtime.wrapping_mul(CYCLE_SCALE) & 0xFFFFFFFF) as u32
+                (self.mtime & 0xFFFFFFFF) as u32
             }
             0xC00 if self.core_profile == RiscVCoreProfile::StandardRv32 => {
-                (self.mtime.wrapping_mul(CYCLE_SCALE) & 0xFFFFFFFF) as u32
+                (self.mtime & 0xFFFFFFFF) as u32
             }
             0xC80 if self.core_profile == RiscVCoreProfile::StandardRv32 => {
-                (self.mtime.wrapping_mul(CYCLE_SCALE) >> 32) as u32
+                (self.mtime >> 32) as u32
             }
             _ => return None,
         })
@@ -937,7 +926,7 @@ impl RiscV {
                         // without calling `step`, so it never advanced the
                         // CLINT `mtime` (the interpreter bumps it 1/instr).
                         // Advance it by exactly `actual_n` here so the cycle
-                        // CSRs (0xC00/0x802/0x7E2 = mtime*CYCLE_SCALE) and the
+                        // CSRs (0xC00/0x802/0x7E2 = mtime) and the
                         // MTIP timer edge stay identical to a per-instruction
                         // run. This is the analogue of Xtensa's CCOUNT += N-1.
                         self.update_mtime_after_elapsed_cycles(actual_n as u64);

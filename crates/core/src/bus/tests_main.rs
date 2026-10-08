@@ -881,6 +881,51 @@ board_io: []
     );
 }
 
+/// ESP32-C3 servos follow LEDC duty the same way: ESP32Servo's `write()` is a
+/// `ledcWrite` (DUTY, then `CONF1.DUTY_START`) on the C3 LEDC.
+#[test]
+fn test_from_config_c3_servo_follows_ledc_duty() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let chip = ChipDescriptor::from_file(root.join("../../configs/chips/esp32c3.yaml"))
+        .expect("read ESP32-C3 chip descriptor");
+    let manifest: SystemManifest = serde_yaml::from_str(
+        r#"
+name: "c3-servo-twin"
+chip: "../chips/esp32c3.yaml"
+external_devices:
+  - id: "M1"
+    type: "servo"
+    connection: "gpio"
+    config:
+      signal_pin: "GPIO7"
+      model: "sg90"
+board_io: []
+"#,
+    )
+    .expect("parse C3 servo manifest");
+    let mut bus = SystemBus::from_config(&chip, &manifest).expect("build C3 bus with servo");
+
+    const LEDC: u64 = 0x6001_9000;
+    // ledcSetup(ch 2, 50 Hz, 14 bit) on timer 1, channel bound to timer 1.
+    bus.write_u32(LEDC + 0xA0 + 8, 14).unwrap();
+    bus.write_u32(LEDC + 2 * 0x14, 1).unwrap();
+    // ESP32Servo write(angle) on a 500..2400 us attach: ticks = us * 2^14 / 20000.
+    for angle in [155u32, 46, 25] {
+        let us = 500 + angle * 1900 / 180;
+        let ticks = us * 16384 / 20000;
+        bus.write_u32(LEDC + 2 * 0x14 + 0x08, ticks << 4).unwrap();
+        bus.write_u32(LEDC + 2 * 0x14 + 0x0C, 1 << 31).unwrap();
+        let servos: Vec<&crate::peripherals::components::servo::Servo> =
+            bus.observed_of().collect();
+        assert_eq!(servos.len(), 1);
+        assert!(
+            (servos[0].angle_degrees() - angle as f32).abs() < 1.0,
+            "write({angle}) -> shaft {}",
+            servos[0].angle_degrees()
+        );
+    }
+}
+
 /// Parallel ILI9341 (`ili9341-16bit` / `ili9341_16bit`) attaches as a GPIO
 /// observer twin. Distinct from SPI kit type `ili9341`.
 #[test]

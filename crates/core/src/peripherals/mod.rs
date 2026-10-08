@@ -221,3 +221,12 @@ pub fn can_trace_snapshot_all(
         })
         .collect()
 }
+
+/// Notified when an LEDC (LED PWM) channel commits a new duty via the
+/// `CONF1.DUTY_START` strobe (i.e. on each `ledcWrite`). Lets PWM-driven
+/// actuators — a servo, an ESC, an LED dimmer — react to the live duty without
+/// polling. `duty_fraction` is `duty / 2^DUTY_RES` for the channel's bound
+/// timer. Chip-neutral so every ESP LEDC model can offer it.
+pub trait LedcDutyObserver: Send + Sync + std::fmt::Debug {
+    fn on_duty_change(&self, channel: u64, duty_fraction: f64);
+}

@@ -48,6 +48,8 @@ pub mod jit_translate_coverage_ratchet;
 pub mod logic_capture;
 #[cfg(test)]
 pub mod logic_capture_differential;
+#[cfg(test)]
+pub mod riscv_cycle_counter_pulse_in;
 
 #[cfg(test)]
 pub mod bench_spi_engine;

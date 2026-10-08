@@ -2104,7 +2104,7 @@ boards:
     # behaviour lives in exchange memory and the radio event path, which that
     # capture does not cover. This acknowledges model drift, NOT a recapture.
     drift_ack: 2026-09-28
-    drift_ack_digest: 50d9b91e08a10c112509777e070649a5488fafe3855f61b8958d7309a844a3db
+    drift_ack_digest: c6e99fb5cdcd96135f58efe8bbd4b46ee50763eb57e8c4c2e9f7ef9f1190d123
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
@@ -2798,6 +2798,13 @@ boards:
     # TCA9548A is reported like one on the controller. Inspect output only;
     # register file, reset values and bus behaviour are unchanged. ACK, NOT
     # A CAPTURE.
+    drift_ack: 2026-10-08
+    # 2026-10-08: watched cpu/riscv.rs and esp32c3/ledc.rs. The cycle CSRs
+    # (PCCR 0x7E2/0x802) read `mtime`, one tick per CPU clock, instead of
+    # `mtime * 256`, so Arduino `pulseIn` times against SYSTIMER correctly.
+    # The C3 LEDC notifies duty observers on CONF1.DUTY_START (a servo
+    # follows `ledcWrite`). No reset value or register layout moves. No
+    # physical probe connected. ACK, NOT A CAPTURE.
     drift_ack: 2026-10-08
 
   - id: nucleo-l476rg

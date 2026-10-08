@@ -988,6 +988,16 @@ pub trait Peripheral: std::fmt::Debug + Send {
         None
     }
 
+    /// PWM capability: notify `obs` of each duty an LEDC channel commits
+    /// (`ledcWrite`). Implemented by the ESP32-family LEDC models; `false`
+    /// (observer dropped) for every other peripheral.
+    fn add_ledc_duty_observer(
+        &mut self,
+        _obs: Arc<dyn crate::peripherals::LedcDutyObserver>,
+    ) -> bool {
+        false
+    }
+
     /// GPIO capability: read the firmware-visible input level for `pin`.
     /// Non-GPIO peripherals return `None`.
     fn read_gpio_input(&self, _pin: u8) -> Option<bool> {

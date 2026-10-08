@@ -71,14 +71,7 @@
 use crate::{Peripheral, PeripheralTickResult, SimResult};
 use std::sync::Arc;
 
-/// Notified when a channel commits a new duty via the `CONF1.DUTY_START`
-/// strobe (i.e. on each `ledcWrite`). Lets PWM-driven actuators — a servo,
-/// an ESC, an LED dimmer — react to the live duty without polling. The
-/// `duty_fraction` is `duty / 2^DUTY_RES` for the channel's bound timer,
-/// the same value [`Ledc::channel_duty_fraction`] returns.
-pub trait LedcDutyObserver: Send + Sync + std::fmt::Debug {
-    fn on_duty_change(&self, channel: u64, duty_fraction: f64);
-}
+pub use crate::peripherals::LedcDutyObserver;
 
 // ── Channel block geometry (TRM §14.5) ───────────────────────────────────
 /// First HS channel register block starts at offset 0.
@@ -324,6 +317,11 @@ impl Ledc {
 }
 
 impl Peripheral for Ledc {
+    fn add_ledc_duty_observer(&mut self, obs: Arc<dyn LedcDutyObserver>) -> bool {
+        self.add_duty_observer(obs);
+        true
+    }
+
     // Inert walk: classic-ESP32 LEDC is a config-introspection register bank — no PWM edges or timer-counter advance modeled (unlike the C3 LEDC, whose live up-counters DO real tick work); tick() is an explicit no-op.
     fn needs_legacy_walk(&self) -> bool {
         false
