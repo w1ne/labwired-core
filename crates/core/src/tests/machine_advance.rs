@@ -1970,6 +1970,84 @@ fn resident_exact_edge_inside_multicycle_instruction_waits_for_boundary() {
     );
 }
 
+/// A DHT22 between reads, or (`start_frame`) one whose response frame was just
+/// armed by a 1 ms start pulse.
+fn idle_dht22(start_frame: bool) -> Box<dyn crate::bus::BusResidentDevice> {
+    use crate::bus::{BusResidentDevice, DevicePins};
+    use crate::peripherals::components::declarative_gpio::{BoundPin, DeclarativeGpioDevice};
+    #[derive(Default)]
+    struct Pads(u32);
+    impl DevicePins for Pads {
+        fn output_bit(&self, _addr: u64, bit: u8) -> Option<bool> {
+            Some((self.0 >> bit) & 1 != 0)
+        }
+        fn drive_idr_bit(&mut self, _addr: u64, _bit: u8, _high: bool) {}
+        fn drive_input_bit(&mut self, _addr: u64, _bit: u8, _high: bool) -> bool {
+            false
+        }
+    }
+    let desc = labwired_config::DeviceDescriptor::embedded("dht22")
+        .unwrap()
+        .unwrap();
+    let pin = |addr| {
+        vec![BoundPin {
+            role: "DATA".into(),
+            addr,
+            bit: 0,
+        }]
+    };
+    let mut dht = DeclarativeGpioDevice::new(
+        "dht".into(),
+        &desc,
+        pin(0x10),
+        pin(0x20),
+        1_000_000,
+        crate::peripherals::components::declarative_i2c::owned_channels(&desc),
+    )
+    .unwrap();
+    if start_frame {
+        let mut pads = Pads(1);
+        dht.service(&mut pads, 0);
+        pads.0 = 0;
+        dht.service(&mut pads, 10);
+        pads.0 = 1;
+        dht.service(&mut pads, 1010);
+    }
+    Box::new(dht)
+}
+
+/// Idle cycles skipped over 8 steps of a CPU parked in WFI.
+fn wfi_idle_cycles(dht: Option<Box<dyn crate::bus::BusResidentDevice>>) -> u64 {
+    let mut bus = SystemBus::new();
+    bus.peripherals.clear();
+    bus.legacy_walk_disabled = true;
+    bus.gpio_devices.extend(dht);
+    let mut machine = Machine::new(
+        CountingCpu {
+            idle_budget: Some(128),
+            ..Default::default()
+        },
+        bus,
+    );
+    machine.config.idle_fast_forward_enabled = true;
+    let report = machine.advance(AdvanceRequest::run(Some(8))).unwrap();
+    report.idle_cycles
+}
+
+/// An idle DHT22 pins the bus cycle-accurate but skips WFI waits exactly as
+/// an empty bus does (both zero where the build has no idle fast-forward).
+#[test]
+fn idle_exact_schedule_resident_allows_wfi_skip() {
+    let dht = idle_dht22(false);
+    assert!(dht.needs_per_cycle_service());
+    assert_eq!(wfi_idle_cycles(Some(dht)), wfi_idle_cycles(None));
+}
+
+#[test]
+fn in_flight_exact_schedule_blocks_wfi_skip() {
+    assert_eq!(wfi_idle_cycles(Some(idle_dht22(true))), 0);
+}
+
 #[test]
 fn resident_exact_edges_disable_idle_skipping() {
     let mut bus = SystemBus::new();

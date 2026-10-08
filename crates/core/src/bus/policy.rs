@@ -69,6 +69,15 @@ impl SystemBus {
             || (self.has_grid_gpio_schedules() && !self.resident_grid_batching_enabled())
     }
 
+    /// [`Self::requires_cycle_accurate`] for an idle (WFI) skip: the same
+    /// clauses, but a resident only counts while it has timed work in flight
+    /// (see [`crate::bus::BusResidentDevice::idle_skip_safe`]). An idle DHT22 pins the bus
+    /// to one instruction per batch, but not out of idle fast-forward.
+    pub(crate) fn idle_skip_requires_cycle_accurate(&self) -> bool {
+        self.gpio_devices.iter().any(|d| !d.idle_skip_safe())
+            || (self.has_grid_gpio_schedules() && !self.resident_grid_batching_enabled())
+    }
+
     pub(crate) fn has_grid_gpio_schedules(&self) -> bool {
         self.gpio_devices
             .iter()
