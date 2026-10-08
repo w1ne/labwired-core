@@ -349,7 +349,13 @@ impl Avr {
             let v = ((self.r[rd] ^ k) & (self.r[rd] ^ res)) & 0x80 != 0;
             self.r[rd] = res;
             self.set_c(c1 || a < sub);
-            self.set_z(res);
+            // Z is sticky for SBCI: unchanged when the result is zero, cleared
+            // otherwise. Same rule as CPC and SBC below. avr-gcc's 32-bit
+            // compare is `cpi` plus three `sbci`, so setting Z from this byte
+            // alone makes a small value compare equal to 0xFFFFFFFF.
+            if res != 0 {
+                self.sreg &= !0x02;
+            }
             self.set_n(res);
             self.set_v(v);
             self.update_s_from_nv();
