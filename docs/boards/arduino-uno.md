@@ -125,7 +125,8 @@ sockets but carry no wire of their own.
 | GPIO ports B, C, D (D0-D13, A0-A5) | ✅ | Outputs reach canvas LEDs; buttons reach `digitalRead`. |
 | `INPUT_PULLUP` with nothing wired | ⚠️ | Reads LOW. A canvas button supplies the released HIGH level. |
 | Timer0 overflow (`millis`, `delay`, `micros`) | ✅ | |
-| Timer0 compare outputs, Timer1, Timer2 | ❌ | `analogWrite` PWM, `tone()` and the Servo library do not drive their pins. |
+| Timer0 compare outputs, Timer1 | ❌ | `analogWrite` PWM and the Servo library do not drive their pins. |
+| Timer2 normal and CTC (`tone`, `noTone`) | ✅ | Compare-match A/B and overflow interrupts, with Timer2's prescalers. OC2A/OC2B PWM outputs are not driven, so `analogWrite` on D3 and D11 still does not. |
 | USART0 TX (`Serial.print`) | ✅ | Transmit completes immediately. |
 | USART0 RX (`Serial.read`) | ✅ | UDR0 returns what a peer on `usart0` sends or the host injects; RXC0 and the RX-complete interrupt work. A peer is an RS-485 transceiver with its slaves, or a UART device. No framing, parity or overrun errors. |
 | SPI master | ✅ | With devices attached from the parts catalog. |
@@ -150,7 +151,7 @@ sockets but carry no wire of their own.
 `millis`-based timing; Serial output; SPI and I2C driver bring-up against catalog parts;
 `analogRead` against a knob or sensor; deterministic CI runs.
 
-**Still use the bench for:** PWM and `tone()`; interrupts on pins; serial input; EEPROM;
+**Still use the bench for:** PWM (`analogWrite`) and the Servo library; interrupts on pins; serial input; EEPROM;
 power, brown-out and analog accuracy; the bootloader and USB enumeration.
 
 ---
