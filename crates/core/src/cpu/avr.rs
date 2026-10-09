@@ -83,8 +83,8 @@ pub struct Avr {
     pub t0_prescale_acc: u32,
     /// Timer2, the counter Arduino `tone()` runs in CTC mode.
     ///
-    /// Normal and CTC only. Other waveform modes count 0..255 and do not
-    /// drive the OC2A/OC2B pins, so `analogWrite` PWM on D3/D11 stays dark.
+    /// Normal and CTC count as on silicon. The PWM modes count 0..255; their
+    /// OC2A/OC2B pad levels come from `avr/oc_pins.rs`.
     pub tcnt2: u8,
     pub tccr2a: u8,
     pub tccr2b: u8,
@@ -97,6 +97,10 @@ pub struct Avr {
     /// so the counter stops instead of pretending the CPU clock still drives it.
     pub assr: u8,
     pub t2_prescale_acc: u32,
+    /// Port B / port D pads an output-compare unit owns, and the level it
+    /// drives there, as last pushed to the bus-side port model.
+    oc_mask: [u8; 2],
+    oc_level: [u8; 2],
     pub serial_tx: Vec<u8>,
     /// Optional live sink for MachineTrait UART capture.
     pub serial_sink: Option<Arc<Mutex<Vec<u8>>>>,
@@ -331,6 +335,8 @@ impl Avr {
             tifr2: 0,
             assr: 0,
             t2_prescale_acc: 0,
+            oc_mask: [0; 2],
+            oc_level: [0; 2],
             serial_tx: Vec::new(),
             serial_sink: None,
             ucsr0a: UCSRA_UDRE,
@@ -636,14 +642,15 @@ impl Avr {
                 Ok(())
             }
             0x00B0 => {
-                // COM2A/COM2B and WGM21:0. Reserved bits read as 0. The COM
-                // bits are stored and otherwise ignored: OC2x is not driven.
+                // COM2A/COM2B and WGM21:0. Reserved bits read as 0. In the
+                // PWM modes the COM bits hand OC2A/OC2B to the waveform
+                // (`oc_pins.rs`).
                 self.tccr2a = value & 0xF3;
                 Ok(())
             }
             0x00B1 => {
-                // FOC2A/FOC2B are strobes and always read as 0. No OC2x pin
-                // to force, so the strobe is a no-op. WGM22 and CS22:0 stick.
+                // FOC2A/FOC2B are strobes and always read as 0. Force
+                // compare is not modelled, so the strobe is a no-op. WGM22 and CS22:0 stick.
                 self.tccr2b = value & 0x0F;
                 Ok(())
             }
@@ -809,7 +816,9 @@ impl Avr {
                 // there (flash@0 swallows low-address bus writes).
                 if (AVR_PINB..=AVR_PIND + 2).contains(&addr) {
                     // High-window mirror is best-effort (must not fail IN/OUT).
-                    let _mirror = bus.write_u8(AVR_IO_MIRROR_BASE + addr as u64, value);
+                    // A pad an output-compare unit owns keeps its waveform level.
+                    let pad = self.port_pad_value(addr, value);
+                    let _mirror = bus.write_u8(AVR_IO_MIRROR_BASE + addr as u64, pad);
                 } else {
                     let _mirror = bus.write_u8(addr as u64, value);
                 }
@@ -1535,6 +1544,8 @@ impl Cpu for Avr {
         self.tifr2 = 0;
         self.assr = 0;
         self.t2_prescale_acc = 0;
+        self.oc_mask = [0; 2];
+        self.oc_level = [0; 2];
         self.serial_tx.clear();
         self.ucsr0a = UCSRA_UDRE;
         self.ucsr0b = 0;
@@ -1616,6 +1627,7 @@ impl Cpu for Avr {
                 self.cycles += 1;
                 if self.io_clock_running() {
                     self.tick_io_timers(1);
+                    self.sync_oc_pins(bus);
                 }
                 return Ok(());
             }
@@ -1631,6 +1643,7 @@ impl Cpu for Avr {
             self.cycles += 4;
             let delta = self.cycles.saturating_sub(before) as u32;
             self.tick_io_timers(delta.max(1));
+            self.sync_oc_pins(bus);
             return Ok(());
         }
 
@@ -1672,6 +1685,7 @@ impl Cpu for Avr {
         }
 
         self.tick_io_timers(delta.max(1));
+        self.sync_oc_pins(bus);
         Ok(())
     }
 
@@ -1799,6 +1813,8 @@ impl Cpu for Avr {
 mod exec;
 #[path = "avr/ext_int.rs"]
 mod ext_int;
+#[path = "avr/oc_pins.rs"]
+mod oc_pins;
 pub use ext_int::{VEC_INT0, VEC_INT1, VEC_PCINT0, VEC_PCINT1, VEC_PCINT2};
 
 #[cfg(test)]
