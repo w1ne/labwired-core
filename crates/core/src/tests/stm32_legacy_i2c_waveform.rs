@@ -428,10 +428,10 @@ mod stm32_legacy_i2c_waveform_tests {
         // and the L4 one cannot: write the register pointer, repeated START,
         // read two bytes back, ACK the first and NACK the last.
         //
-        // The second data byte is the regression this test exists for: a legacy
-        // master-receive pulls it out of the slave on the `&self` DR read path,
-        // which a `&mut`-only recorder cannot see at all — the trace would
-        // decode one byte SHORT and look entirely plausible.
+        // The second data byte is the regression this test exists for: it is
+        // clocked in while the first still sits in DR, and a recorder that
+        // only saw the first byte's path would decode one byte SHORT and look
+        // entirely plausible.
         const B0: u8 = 0xE5;
         const B1: u8 = 0x1D;
         let mut machine = machine(vec![B0, B1]);
@@ -465,8 +465,10 @@ mod stm32_legacy_i2c_waveform_tests {
 
         // Clear ACK before the final byte, exactly as a driver does to tell the
         // slave to stop driving — and assert the wire shows that NACK.
+        // The final byte is already on the wire; clearing ACK now NACKs it.
         let cr1 = machine.bus.read_u32(CR1).unwrap();
         machine.bus.write_u32(CR1, cr1 & !CR1_ACK).unwrap();
+        wait_sr1(&mut machine, SR1_RXNE);
         assert_eq!(
             machine.bus.read_u32(DR).unwrap() as u8,
             B1,

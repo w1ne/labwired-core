@@ -202,6 +202,85 @@ impl ConsoleCapture {
     }
 }
 
+/// Channel index of UART0 in a [`ConsoleMerge`].
+pub const MERGE_UART0: usize = 0;
+/// Channel index of USB-Serial-JTAG in a [`ConsoleMerge`].
+pub const MERGE_USB_SERIAL_JTAG: usize = 1;
+
+/// Bytes of shared prefix a [`ConsoleMerge`] keeps before it stops looking for
+/// a mirror. The C3 ROM's whole boot log is a few hundred bytes.
+const MERGE_SHARED_CAP: usize = 8 * 1024;
+
+/// UART0 and USB-Serial-JTAG folded into ONE stream, each byte once.
+///
+/// Some run paths tap both consoles into one buffer (the hosted ESP32-C3 ROM
+/// boot with no declared console keeps native `Serial` and `Serial0` firmware
+/// both observable). The mask ROM prints its banner and segment-load log to
+/// BOTH consoles, the same bytes on each, and the two drain at different
+/// paces (UART0 at its baud rate, USB-Serial-JTAG a packet at a time). A plain
+/// shared buffer therefore rendered every ROM line twice, interleaved
+/// mid-word: `ESP-ROM:esp32c3-api1-20210207\r\nESP-ROBuild:...`.
+///
+/// This keeps the bytes the two channels have in common (the ROM's mirrored
+/// output, the same shared prefix [`ConsoleCapture::unheard_output`]
+/// subtracts) and writes each of them once, whichever channel delivers it
+/// first. The first byte on which a channel departs from that prefix ends the
+/// mirror: from then on both channels pass through unchanged.
+pub struct ConsoleMerge {
+    out: Arc<Mutex<Vec<u8>>>,
+    state: Mutex<MergeState>,
+}
+
+struct MergeState {
+    /// Bytes written to `out` while the channels still mirror each other.
+    shared: Vec<u8>,
+    /// How far into `shared` each channel has delivered.
+    pos: [usize; 2],
+    mirroring: bool,
+}
+
+impl ConsoleMerge {
+    pub fn new(out: Arc<Mutex<Vec<u8>>>) -> Arc<Self> {
+        Arc::new(Self {
+            out,
+            state: Mutex::new(MergeState {
+                shared: Vec::new(),
+                pos: [0, 0],
+                mirroring: true,
+            }),
+        })
+    }
+
+    /// Bytes channel `ch` ([`MERGE_UART0`] or [`MERGE_USB_SERIAL_JTAG`])
+    /// put on its console.
+    pub fn push(&self, ch: usize, bytes: &[u8]) {
+        let (Ok(mut st), Ok(mut out)) = (self.state.lock(), self.out.lock()) else {
+            return;
+        };
+        for &b in bytes {
+            if st.mirroring {
+                let p = st.pos[ch];
+                if p < st.shared.len() {
+                    if st.shared[p] == b {
+                        // The other channel already delivered this byte.
+                        st.pos[ch] += 1;
+                        continue;
+                    }
+                    st.mirroring = false;
+                    st.shared = Vec::new();
+                } else if st.shared.len() < MERGE_SHARED_CAP {
+                    st.shared.push(b);
+                    st.pos[ch] += 1;
+                } else {
+                    st.mirroring = false;
+                    st.shared = Vec::new();
+                }
+            }
+            out.push(b);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -317,5 +396,53 @@ mod tests {
             .extend_from_slice(b"lots of output\n");
         assert!(cap.unheard_output().is_empty());
         assert_eq!(cap.mismatch(), None);
+    }
+
+    fn merged(steps: &[(usize, &[u8])]) -> String {
+        let out = Arc::new(Mutex::new(Vec::new()));
+        let m = ConsoleMerge::new(out.clone());
+        for (ch, bytes) in steps {
+            m.push(*ch, bytes);
+        }
+        let v = out.lock().unwrap().clone();
+        String::from_utf8(v).unwrap()
+    }
+
+    /// The C3 ROM banner as the twin delivered it before the merge: the USB
+    /// channel a line at a time, UART0 a few bytes at a time behind it.
+    #[test]
+    fn rom_banner_mirrored_on_both_consoles_appears_once() {
+        let banner = b"ESP-ROM:esp32c3-api1-20210207\r\nBuild:Feb  7 2021\r\n";
+        let (u, j) = (MERGE_UART0, MERGE_USB_SERIAL_JTAG);
+        let got = merged(&[
+            (j, &banner[..31]),
+            (u, &banner[..6]),
+            (j, &banner[31..]),
+            (u, &banner[6..]),
+            (u, b"blink start\r\n"),
+        ]);
+        assert_eq!(
+            got,
+            "ESP-ROM:esp32c3-api1-20210207\r\nBuild:Feb  7 2021\r\nblink start\r\n"
+        );
+    }
+
+    #[test]
+    fn output_after_the_shared_prefix_passes_through_from_either_channel() {
+        let (u, j) = (MERGE_UART0, MERGE_USB_SERIAL_JTAG);
+        let got = merged(&[
+            (u, b"ROM\r\n"),
+            (j, b"ROM\r\n"),
+            (u, b"boot\r\n"),
+            (j, b"cdc says hi\r\n"),
+            (u, b"uart says hi\r\n"),
+        ]);
+        assert_eq!(got, "ROM\r\nboot\r\ncdc says hi\r\nuart says hi\r\n");
+    }
+
+    #[test]
+    fn a_single_console_is_passed_through_unchanged() {
+        let got = merged(&[(MERGE_UART0, b"a\r\n"), (MERGE_UART0, b"a\r\n")]);
+        assert_eq!(got, "a\r\na\r\n");
     }
 }

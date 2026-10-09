@@ -324,6 +324,7 @@ impl SystemBus {
             memory_reads: Cell::new(0),
             memory_writes: Cell::new(0),
             peripheral_accesses: Cell::new(0),
+            poll_streak: Cell::new((u32::MAX, 0, 0, 0)),
             legacy_walk_disabled: false,
             resident_tick_interval_override: None,
             gpio_devices: Vec::new(),

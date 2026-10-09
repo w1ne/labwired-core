@@ -39,6 +39,17 @@ impl SystemBus {
         )
     }
 
+    /// The peripheral register the firmware has been accessing back to back,
+    /// if any: `(peripheral name, register offset, consecutive accesses, cycle
+    /// of the latest)`. A large count whose latest access is at the end of a
+    /// run that hit its step budget is a firmware waiting on a status bit that
+    /// never changed, and this names the register it waits on.
+    pub fn mmio_poll_streak(&self) -> Option<(String, u64, u64, u64)> {
+        let (idx, off, n, cycle) = self.poll_streak.get();
+        let p = self.peripherals.get(idx as usize)?;
+        (n > 0).then(|| (p.name.clone(), u64::from(off), n, cycle))
+    }
+
     /// Snapshot and zero the run-lifetime access counters.
     #[inline]
     pub fn take_access_counts(&self) -> (u64, u64, u64) {
@@ -244,7 +255,19 @@ impl SystemBus {
         let Some(p) = self.peripherals.get(peri_idx) else {
             return;
         };
-        match p.dev.mmio_access_class(offset) {
+        let class = p.dev.mmio_access_class(offset);
+        if !matches!(class, crate::MmioAccessClass::FreerunningTimerPoll) {
+            let (i, o, n, _) = self.poll_streak.get();
+            let (idx, off) = (peri_idx as u32, offset as u32);
+            let n = if i == idx && o == off { n } else { 0 };
+            self.poll_streak.set((
+                idx,
+                off,
+                n.saturating_add(u64::from(count)),
+                self.current_cycle,
+            ));
+        }
+        match class {
             crate::MmioAccessClass::FreerunningTimerPoll => {
                 self.freerunning_timer_poll_mmio
                     .set(self.freerunning_timer_poll_mmio.get().saturating_add(count));

@@ -87,6 +87,7 @@ impl SystemBus {
             memory_reads: std::cell::Cell::new(0),
             memory_writes: std::cell::Cell::new(0),
             peripheral_accesses: std::cell::Cell::new(0),
+            poll_streak: std::cell::Cell::new((u32::MAX, 0, 0, 0)),
             legacy_walk_disabled: false,
             reset_vector_offset: 0,
             flash_boot_alias: true,
@@ -179,6 +180,7 @@ impl SystemBus {
             memory_reads: std::cell::Cell::new(0),
             memory_writes: std::cell::Cell::new(0),
             peripheral_accesses: std::cell::Cell::new(0),
+            poll_streak: std::cell::Cell::new((u32::MAX, 0, 0, 0)),
             legacy_walk_disabled: false,
             reset_vector_offset: 0,
             flash_boot_alias: true,
@@ -813,6 +815,29 @@ impl SystemBus {
                 }
             }
         }
+    }
+
+    /// Fold UART0 and the USB-Serial-JTAG block into ONE console stream in
+    /// `sink`, writing the bytes the ESP mask ROM mirrors onto both consoles
+    /// once (see [`crate::console::ConsoleMerge`]). For run paths that show
+    /// both consoles in one buffer. Returns false, attaching nothing, unless
+    /// the bus has both an ESP `uart0` and a USB-Serial-JTAG block.
+    pub fn attach_merged_esp_console(&mut self, sink: Arc<Mutex<Vec<u8>>>) -> bool {
+        use crate::console::{ConsoleMerge, MERGE_UART0, MERGE_USB_SERIAL_JTAG, USB_SERIAL_JTAG};
+        let (Some(uart0), Some(jtag)) = (
+            self.find_peripheral_index_by_name("uart0"),
+            self.find_peripheral_index_by_name(USB_SERIAL_JTAG),
+        ) else {
+            return false;
+        };
+        let merge = ConsoleMerge::new(sink);
+        // USB-Serial-JTAG first: if it cannot merge, UART0 is left untouched.
+        self.peripherals[jtag]
+            .dev
+            .set_console_merge(merge.clone(), MERGE_USB_SERIAL_JTAG)
+            && self.peripherals[uart0]
+                .dev
+                .set_console_merge(merge, MERGE_UART0)
     }
 
     /// Route the ESP32-C3/S3 USB-Serial-JTAG block's TX into `sink`.

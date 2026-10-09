@@ -228,6 +228,9 @@ pub const PICKUP_PERIOD_US: u64 = 235;
 
 pub struct UsbSerialJtag {
     sink: Option<Arc<Mutex<Vec<u8>>>>,
+    /// Set instead of `sink` when this block shares one console stream with
+    /// UART0 (see [`crate::console::ConsoleMerge`]).
+    merge: Option<(Arc<crate::console::ConsoleMerge>, usize)>,
     echo_stdout: bool,
 
     /// Interrupt-matrix source id, or `None` for a bus that has not opted in.
@@ -314,6 +317,7 @@ impl UsbSerialJtag {
     fn with_source(irq_source: Option<u32>, cpu_clock_hz: u64) -> Self {
         Self {
             sink: None,
+            merge: None,
             echo_stdout: true,
             irq_source,
             // Reset value: SERIAL_IN_EMPTY defaults to 1 (the IN endpoint is
@@ -339,6 +343,7 @@ impl UsbSerialJtag {
     /// Set or clear the byte capture sink and stdout-echo flag.
     pub fn set_sink(&mut self, sink: Option<Arc<Mutex<Vec<u8>>>>, echo_stdout: bool) {
         self.sink = sink;
+        self.merge = None;
         self.echo_stdout = echo_stdout;
     }
 
@@ -494,6 +499,8 @@ impl UsbSerialJtag {
             if let Ok(mut g) = sink.lock() {
                 g.extend_from_slice(bytes);
             }
+        } else if let Some((merge, ch)) = &self.merge {
+            merge.push(*ch, bytes);
         }
         if self.echo_stdout {
             let mut out = io::stdout();
@@ -509,6 +516,12 @@ impl UsbSerialJtag {
 }
 
 impl Peripheral for UsbSerialJtag {
+    fn set_console_merge(&mut self, merge: Arc<crate::console::ConsoleMerge>, ch: usize) -> bool {
+        self.sink = None;
+        self.merge = Some((merge, ch));
+        true
+    }
+
     /// Same shape as the shared `EspUart` on this bus: the scheduler path owns
     /// level export when it exists, and without it the walk does. An instance
     /// with no matrix source asserts nothing either way, so this costs a

@@ -189,9 +189,24 @@ fn f1_read_reg(i2c: &mut I2c, addr: u8, reg: u8) -> u8 {
         i2c.tick();
     }
     f1_addr(i2c, addr, true);
-    let b = i2c.read(0x10).unwrap();
+    let b = f1_read_data(i2c);
     f1_stop(i2c);
     b
+}
+
+/// One received byte after a read address phase: clear ADDR (SR1 then SR2)
+/// to release SCL, wait for RXNE, read DR. ACK is off, so the byte is NACKed
+/// and is the only one clocked in.
+fn f1_read_data(i2c: &mut I2c) -> u8 {
+    let _ = i2c.read(0x14).unwrap();
+    let _ = i2c.read(0x18).unwrap();
+    for _ in 0..200 {
+        if i2c.peek(0x14).unwrap() & 0x40 != 0 {
+            break;
+        }
+        i2c.tick();
+    }
+    i2c.read(0x10).unwrap()
 }
 
 /// Did the last address phase get an ACK? SR1.AF (bit 10) is the NACK flag;
@@ -293,7 +308,7 @@ fn control_register_reads_back_over_the_bus() {
     f1_start(&mut i2c);
     f1_addr(&mut i2c, MUX_ADDR, true);
     assert!(f1_acked(&i2c), "the switch must ACK its own address");
-    let readback = i2c.read(0x10).unwrap();
+    let readback = f1_read_data(&mut i2c);
     f1_stop(&mut i2c);
 
     assert_eq!(readback, 0b0000_1010);
@@ -375,7 +390,7 @@ fn a_write_with_several_channels_enabled_reaches_all_of_them() {
         f1_write_byte(&mut i2c, MUX_ADDR, 1 << ch);
         f1_start(&mut i2c);
         f1_addr(&mut i2c, SENSOR_ADDR, true);
-        let tag = i2c.read(0x10).unwrap();
+        let tag = f1_read_data(&mut i2c);
         f1_stop(&mut i2c);
         assert_eq!(
             tag,

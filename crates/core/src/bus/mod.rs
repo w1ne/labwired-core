@@ -513,6 +513,12 @@ pub struct SystemBus {
     /// Run-lifetime peripheral MMIO accesses (read or write), counted at
     /// [`Self::note_mmio_activity`]. Never double-counts memory.
     peripheral_accesses: std::cell::Cell<u64>,
+    /// The run of back-to-back MMIO accesses to ONE peripheral register that
+    /// the firmware is in now: `(peripheral index, offset, accesses, cycle of
+    /// the latest)`. Free-running timer polls do not break or extend it, so a
+    /// status-flag wait with a tick-based timeout still reads as one streak.
+    /// See [`Self::mmio_poll_streak`].
+    poll_streak: std::cell::Cell<(u32, u32, u64, u64)>,
     /// Phase 2B.3c (issue #192): when true, `tick_peripherals_phase1` skips the
     /// entire per-cycle peripheral walk — the actual ~2.4x win. Set ONLY for a
     /// config whose every peripheral is migrated (`uses_scheduler`) or inert

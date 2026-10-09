@@ -1390,6 +1390,17 @@ pub trait Peripheral: std::fmt::Debug + Send {
         None
     }
 
+    /// Deliver this console's TX bytes into a merged console stream as channel
+    /// `ch` (see [`crate::console::ConsoleMerge`]). Returns false for a
+    /// peripheral that is not a console that can be merged. Default false.
+    fn set_console_merge(
+        &mut self,
+        _merge: std::sync::Arc<crate::console::ConsoleMerge>,
+        _ch: usize,
+    ) -> bool {
+        false
+    }
+
     /// This peripheral as an inter-chip UART cross-link endpoint, if it is one.
     ///
     /// Named capability rather than a downcast: `attach_uart_stream_by_id` used

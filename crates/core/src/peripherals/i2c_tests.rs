@@ -182,6 +182,29 @@ fn f1_write_address_sets_tra_and_level_ev_stays_asserted() {
     assert!(i2c.tick().irq, "TXE keeps EV high after ADDR clear");
 }
 
+/// Legacy master receiver, silicon order (RM0090 §27.3.3): clear ADDR by
+/// reading SR1 then SR2, then wait RXNE before each DR read. `ack_last` is
+/// how the final byte is acknowledged; ACK is cleared while it is on the wire.
+fn f1_receive(i2c: &mut I2c, n: usize) -> Vec<u8> {
+    let _ = i2c.read(0x14);
+    let _ = i2c.read(0x18);
+    let mut out = Vec::new();
+    for k in 0..n {
+        if k + 1 == n {
+            // CR1 byte 1: drop ACK (bit 10), keep nothing else set.
+            i2c.write(0x01, 0x00).unwrap();
+        }
+        let mut waited = 0;
+        while i2c.peek(0x14).unwrap() & 0x40 == 0 {
+            i2c.tick();
+            waited += 1;
+            assert!(waited < 1_000, "byte {k} never arrived (RXNE)");
+        }
+        out.push(i2c.read(0x10).unwrap());
+    }
+    out
+}
+
 #[test]
 fn test_adxl345_devid_and_axis_read() {
     use crate::peripherals::components::declarative_i2c::GenericI2cDevice;
@@ -226,7 +249,7 @@ fn test_adxl345_devid_and_axis_read() {
     for _ in 0..40 {
         i2c.tick();
     }
-    assert_eq!(i2c.read(0x10).unwrap(), 0xE5);
+    assert_eq!(f1_receive(&mut i2c, 1), vec![0xE5]);
 
     i2c.write(0x01, 0x02).unwrap();
     for _ in 0..10 {
@@ -245,7 +268,8 @@ fn test_adxl345_devid_and_axis_read() {
     for _ in 0..20 {
         i2c.tick();
     }
-    i2c.write(0x01, 0x01).unwrap();
+    // START with ACK armed: a six-byte burst ACKs every byte but the last.
+    i2c.write(0x01, 0x05).unwrap();
     for _ in 0..10 {
         i2c.tick();
     }
@@ -254,12 +278,10 @@ fn test_adxl345_devid_and_axis_read() {
         i2c.tick();
     }
 
-    assert_eq!(i2c.read(0x10).unwrap(), 0x00);
-    assert_eq!(i2c.read(0x10).unwrap(), 0x01);
-    assert_eq!(i2c.read(0x10).unwrap(), 0x80);
-    assert_eq!(i2c.read(0x10).unwrap(), 0xFF);
-    assert_eq!(i2c.read(0x10).unwrap(), 0x40);
-    assert_eq!(i2c.read(0x10).unwrap(), 0x00);
+    assert_eq!(
+        f1_receive(&mut i2c, 6),
+        vec![0x00, 0x01, 0x80, 0xFF, 0x40, 0x00]
+    );
 }
 
 #[test]
@@ -277,9 +299,14 @@ fn test_i2c_single_byte_read_advances_device_once() {
     for _ in 0..40 {
         i2c.tick();
     }
+    // SCL is stretched until ADDR is cleared: no byte has moved yet.
+    assert_eq!(reads.load(Ordering::SeqCst), 0);
 
-    assert_ne!(i2c.peek(0x14).unwrap() & 0x40, 0);
-    assert_eq!(i2c.read(0x10).unwrap(), 0);
+    assert_eq!(f1_receive(&mut i2c, 1), vec![0]);
+    for _ in 0..200 {
+        i2c.tick();
+    }
+    // The NACKed byte was the last one clocked.
     assert_eq!(reads.load(Ordering::SeqCst), 1);
 }
 

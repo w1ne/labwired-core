@@ -275,6 +275,23 @@ pub(crate) struct ExecutionMetrics {
     /// Top PC histogram samples (descending by count). Empty when no samples.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub pc_samples: Vec<PcSample>,
+    /// The peripheral register a run that hit its step budget was still
+    /// polling at the end. Omitted unless the run ended in such a poll.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stalled_poll: Option<StalledPoll>,
+}
+
+/// A step-budget run that ended inside a wait loop on one peripheral register:
+/// the firmware read it back to back (free-running timer reads aside) right up
+/// to the end of the run, i.e. it waited on a status bit that never changed.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub(crate) struct StalledPoll {
+    /// Bus name of the peripheral, e.g. `i2c1`.
+    pub peripheral: String,
+    /// Register offset within the peripheral.
+    pub offset: u64,
+    /// Consecutive accesses to that register.
+    pub accesses: u64,
 }
 
 /// One hot PC from statistical sampling during the test loop.

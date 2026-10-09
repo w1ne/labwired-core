@@ -311,6 +311,9 @@ impl RegFile {
 #[derive(Default)]
 pub struct EspUart {
     sink: Option<Arc<Mutex<Vec<u8>>>>,
+    /// Set instead of `sink` when this UART shares one console stream with
+    /// USB-Serial-JTAG (see [`crate::console::ConsoleMerge`]).
+    merge: Option<(Arc<crate::console::ConsoleMerge>, usize)>,
     echo_stdout: bool,
     /// The machine's ONE bus trace and this instance's name in it. Handed over
     /// at registration by `Peripheral::attach_bus_trace`; private until then so
@@ -408,6 +411,7 @@ impl EspUart {
         }
         Self {
             sink: None,
+            merge: None,
             attached_streams: Vec::new(),
             trace: crate::bus::bus_trace::BusTrace::new(),
             trace_name: String::new(),
@@ -611,6 +615,7 @@ impl EspUart {
     /// Set or clear the byte-capture sink (does not change `echo_stdout`).
     pub fn set_sink(&mut self, sink: Option<Arc<Mutex<Vec<u8>>>>) {
         self.sink = sink;
+        self.merge = None;
     }
 
     /// Silence the host-console echo when the caller asks for capture-only
@@ -797,6 +802,8 @@ impl EspUart {
                     if let Ok(mut g) = sink.lock() {
                         g.push(byte);
                     }
+                } else if let Some((merge, ch)) = &self.merge {
+                    merge.push(*ch, &[byte]);
                 }
                 // A byte leaves the shift register exactly once, so this is the
                 // one place a peer can observe our TX — same point the sink
@@ -852,6 +859,7 @@ impl crate::peripherals::uart::UartStreamHost for EspUart {
 
     fn detach_console_sink(&mut self) {
         self.sink = None;
+        self.merge = None;
         self.echo_stdout = false;
     }
 
@@ -863,6 +871,12 @@ impl crate::peripherals::uart::UartStreamHost for EspUart {
 }
 
 impl Peripheral for EspUart {
+    fn set_console_merge(&mut self, merge: Arc<crate::console::ConsoleMerge>, ch: usize) -> bool {
+        self.sink = None;
+        self.merge = Some((merge, ch));
+        true
+    }
+
     fn line_names(&self) -> &'static [&'static str] {
         UART_LINES
     }

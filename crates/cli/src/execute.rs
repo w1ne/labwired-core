@@ -1258,6 +1258,9 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
         peripheral_accesses,
         exceptions: exception_count,
         pc_samples,
+        stalled_poll: (stop_reason == StopReason::MaxSteps)
+            .then(|| stalled_poll(&ctx.machine.bus))
+            .flatten(),
     };
 
     let memory = if let Some(session) = paint_session {
@@ -1734,4 +1737,27 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
     // The same `verdict` the artifact above was written from. Not a second
     // chain — that is the whole point of `crate::verdict`.
     verdict.exit_code()
+}
+
+/// Back-to-back accesses to one register before a run that ran out of budget
+/// counts as stalled on it. A status-flag wait loop retires a handful of
+/// instructions per poll, so a few thousand polls is well under a millisecond
+/// of simulated time, while ordinary driver code (a UART print, an I2C byte)
+/// touches a register at most a few dozen times in a row.
+const STALL_MIN_ACCESSES: u64 = 4096;
+
+/// The register the firmware was polling when the step budget ran out, if the
+/// run ended in such a poll: the streak is long and its latest access falls in
+/// the last 1% of the run.
+fn stalled_poll(bus: &labwired_core::bus::SystemBus) -> Option<artifacts::StalledPoll> {
+    let (peripheral, offset, accesses, last_cycle) = bus.mmio_poll_streak()?;
+    // The streak is stamped with the bus's own cycle counter, so "now" must
+    // come from the same counter.
+    let end_cycle = bus.current_cycle;
+    let recent = end_cycle.saturating_sub(last_cycle) <= (end_cycle / 100).max(100_000);
+    (accesses >= STALL_MIN_ACCESSES && recent).then_some(artifacts::StalledPoll {
+        peripheral,
+        offset,
+        accesses,
+    })
 }
