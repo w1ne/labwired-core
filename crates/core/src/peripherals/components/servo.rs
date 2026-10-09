@@ -302,7 +302,7 @@ impl McpwmServoDriver {
     }
 }
 
-impl crate::peripherals::esp32::mcpwm::McpwmDutyObserver for McpwmServoDriver {
+impl crate::peripherals::McpwmDutyObserver for McpwmServoDriver {
     fn on_duty_change(&self, operator: u64, duty_fraction: f64) {
         if operator == self.operator {
             self.servo.apply_duty_fraction(duty_fraction);
@@ -391,8 +391,8 @@ impl PeripheralKit for ServoKit {
                 }));
             }
         }
-        // Any LEDC model (classic ESP32: 16 channels, ESP32-C3: 6) reports
-        // its committed duties through the same observer.
+        // Any LEDC model (classic ESP32: 16 channels, ESP32-S3: 8, ESP32-C3:
+        // 6) reports its committed duties through the same observer.
         let channels = ctx
             .config_i64("ledc_channel")
             .map_or(0..16, |ch| ch as u64..ch as u64 + 1);
@@ -401,6 +401,22 @@ impl PeripheralKit for ServoKit {
                 let ledc = &mut ctx.bus.peripherals[idx].dev;
                 for ch in channels.clone() {
                     ledc.add_ledc_duty_observer(Arc::new(LedcServoDriver::new(ch, servo.clone())));
+                }
+            }
+        }
+        // Likewise any MCPWM unit's operators (`mcpwm_set_duty`; ESP32Servo
+        // prefers MCPWM on the S3), unless an explicit `ledc_channel` pins
+        // the servo to LEDC.
+        if ctx.config_i64("ledc_channel").is_none() {
+            for name in ["mcpwm", "mcpwm0", "mcpwm1", "MCPWM"] {
+                if let Some(idx) = ctx.bus.find_peripheral_index_by_name(name) {
+                    let mcpwm = &mut ctx.bus.peripherals[idx].dev;
+                    for op in 0..3 {
+                        mcpwm.add_mcpwm_duty_observer(Arc::new(McpwmServoDriver::new(
+                            op,
+                            servo.clone(),
+                        )));
+                    }
                 }
             }
         }

@@ -649,6 +649,86 @@ mod tests {
         );
     }
 
+    /// The production S3 bus with one sg90 servo on GPIO4 (no `ledc_channel`).
+    fn s3_bus_with_servo() -> SystemBus {
+        let manifest: labwired_config::SystemManifest = serde_yaml::from_str(
+            r#"
+name: "s3-servo-twin"
+chip: "esp32s3.yaml"
+external_devices:
+  - id: "M1"
+    type: "servo"
+    connection: "gpio"
+    config:
+      signal_pin: "GPIO4"
+      model: "sg90"
+board_io: []
+"#,
+        )
+        .expect("parse S3 servo manifest");
+        let mut bus = SystemBus::new();
+        let _ = configure_xtensa_esp32s3(&mut bus, &Esp32s3Opts::default());
+        attach_esp32_external_devices(&mut bus, &manifest).expect("attach servo");
+        bus
+    }
+
+    fn servo_angle(bus: &SystemBus) -> f32 {
+        let servos: Vec<&crate::peripherals::components::servo::Servo> =
+            bus.observed_of().collect();
+        assert_eq!(servos.len(), 1);
+        servos[0].angle_degrees()
+    }
+
+    /// A servo on an S3 pad follows a `ledcWrite` (DUTY, then
+    /// `CONF1.DUTY_START`) on the production S3 bus, through the same
+    /// chip-neutral LEDC duty observer as the classic ESP32 and C3.
+    #[test]
+    fn s3_servo_follows_ledc_duty() {
+        let mut bus = s3_bus_with_servo();
+        const LEDC: u64 = 0x6001_9000;
+        // ledcSetup(ch 3, 50 Hz, 14 bit) on timer 2, channel bound to timer 2.
+        bus.write_u32(LEDC + 0xA0 + 2 * 8, 14).unwrap();
+        bus.write_u32(LEDC + 3 * 0x14, 2).unwrap();
+        // write(angle) on a 500..2400 us attach: ticks = us * 2^14 / 20000.
+        for angle in [0u32, 90, 180, 33] {
+            let us = 500 + angle * 1900 / 180;
+            let ticks = us * 16384 / 20000;
+            bus.write_u32(LEDC + 3 * 0x14 + 0x08, ticks << 4).unwrap();
+            bus.write_u32(LEDC + 3 * 0x14 + 0x0C, 1 << 31).unwrap();
+            let got = servo_angle(&bus);
+            assert!(
+                (got - angle as f32).abs() < 1.0,
+                "write({angle}) -> shaft {got}"
+            );
+        }
+    }
+
+    /// ESP32Servo 3.x on the S3 prefers MCPWM: `mcpwm_init` (1 MHz, 50 Hz
+    /// up-count => PERIOD 19999, operator n on timer n) then `mcpwm_set_duty`
+    /// (compare A = peak * duty). The servo follows on either MCPWM unit.
+    #[test]
+    fn s3_servo_follows_mcpwm_duty() {
+        let mut bus = s3_bus_with_servo();
+        for (unit, timer) in [(0x6001_E000u64, 0u64), (0x6002_C000, 2)] {
+            bus.write_u32(unit, 159).unwrap(); // CLK_CFG: 160 MHz / 160
+            bus.write_u32(unit + 0x04 + timer * 0x10, 19_999 << 8)
+                .unwrap();
+            bus.write_u32(unit + 0x08 + timer * 0x10, 1 | (2 << 3))
+                .unwrap();
+            bus.write_u32(unit + 0x38, (timer as u32) << (timer * 2))
+                .unwrap();
+            for angle in [0u32, 90, 180, 33] {
+                let us = 500 + angle * 1900 / 180;
+                bus.write_u32(unit + 0x40 + timer * 0x38, us).unwrap();
+                let got = servo_angle(&bus);
+                assert!(
+                    (got - angle as f32).abs() < 1.0,
+                    "write({angle}) -> shaft {got}"
+                );
+            }
+        }
+    }
+
     /// S3 config wiring: `attach_esp32_external_devices` must also handle the
     /// ESP32-S3 GP-SPI model (`Esp32s3Spi`) — an S3 manifest wiring a device
     /// to `spi3_s3` previously errored with "not an ESP32 SPI peripheral"

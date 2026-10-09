@@ -95,7 +95,9 @@
 //! source per unit; firmware reads `INT_ST` to learn which timer/operator
 //! fired. `new(base_source_id)` takes that id (38 or 39).
 
+use crate::peripherals::McpwmDutyObserver;
 use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
+use std::sync::Arc;
 
 const MCPWM_WAKE_TOKEN: u32 = 1;
 
@@ -135,6 +137,8 @@ const OP_BLOCK_BASE: u64 = 0x03C;
 /// CMPR_VALUE0.)
 const OP_STRIDE: u64 = 0x38;
 const OP_BLOCK_END: u64 = OP_BLOCK_BASE + (NUM_OPERATORS as u64) * OP_STRIDE; // 0x0E4
+/// `OPERATOR_TIMERSEL`: 2 bits per operator selecting its timer.
+const REG_OPERATOR_TIMERSEL: u64 = 0x038;
 const OP_STMP_CFG: u64 = 0x00; // comparator update method
 const OP_CMPR_VALUE0: u64 = 0x04; // CMPRx_VALUE0 — compare value A [15:0]
 const OP_CMPR_VALUE1: u64 = 0x08; // CMPRx_VALUE1 — compare value B [15:0]
@@ -377,6 +381,9 @@ pub struct Esp32s3Mcpwm {
     clock: Option<CycleClock>,
     last_tick: u64,
     scheduled: bool,
+
+    /// Actuators notified on each compare-A commit (`mcpwm_set_duty`).
+    duty_observers: Vec<Arc<dyn McpwmDutyObserver>>,
 }
 
 impl Esp32s3Mcpwm {
@@ -412,6 +419,7 @@ impl Esp32s3Mcpwm {
             clock: None,
             last_tick: 0,
             scheduled: false,
+            duty_observers: Vec::new(),
         }
     }
 
@@ -446,6 +454,33 @@ impl Esp32s3Mcpwm {
     /// MCPWM module clock prescale: PWM_clk = MCPWM_clk / (CLK_PRESCALE + 1).
     fn clk_prescale(&self) -> u64 {
         ((self.clk_cfg & CLK_PRESCALE_MASK) as u64) + 1
+    }
+
+    /// Register an actuator notified whenever an operator commits a new
+    /// compare-A duty. See [`McpwmDutyObserver`].
+    pub fn add_duty_observer(&mut self, obs: Arc<dyn McpwmDutyObserver>) {
+        self.duty_observers.push(obs);
+    }
+
+    /// Operator `op`'s duty in `[0.0, 1.0]`: `compare_A / peak` of the timer
+    /// `OPERATOR_TIMERSEL` binds it to. The peak is `PERIOD + 1` in up / down
+    /// count (the counter spans `0..=PERIOD`) and `PERIOD` in up-down count,
+    /// which is how IDF's `mcpwm_set_duty` scales its percentage. 0 while the
+    /// timer is unconfigured.
+    pub fn operator_duty_fraction(&self, op: usize) -> f64 {
+        let Some(o) = self.operators.get(op) else {
+            return 0.0;
+        };
+        let sel = self.extra(REG_OPERATOR_TIMERSEL);
+        let timer = &self.timers[((sel >> (op * 2)) & 0x3) as usize % NUM_TIMERS];
+        let peak = match timer.mode() {
+            TIMER_MODE_UPDOWN => timer.period(),
+            _ => timer.period() + 1,
+        };
+        if timer.period() == 0 {
+            return 0.0;
+        }
+        ((o.cmpr_value0 & CMPR_VALUE_MASK) as f64 / peak as f64).clamp(0.0, 1.0)
     }
 
     /// Live counter value of timer `t` (test/inspection helper).
@@ -548,7 +583,17 @@ impl Esp32s3Mcpwm {
         if let Some((op, reg)) = Self::operator_at(offset) {
             match reg {
                 OP_STMP_CFG => self.operators[op].stmp_cfg = value & 0x0000_03FF,
-                OP_CMPR_VALUE0 => self.operators[op].cmpr_value0 = value & CMPR_VALUE_MASK,
+                OP_CMPR_VALUE0 => {
+                    self.operators[op].cmpr_value0 = value & CMPR_VALUE_MASK;
+                    // A compare-A commit is `mcpwm_set_duty`: push the duty to
+                    // bound actuators (the firmware-moves-servo path).
+                    if !self.duty_observers.is_empty() {
+                        let fraction = self.operator_duty_fraction(op);
+                        for obs in &self.duty_observers {
+                            obs.on_duty_change(op as u64, fraction);
+                        }
+                    }
+                }
                 OP_CMPR_VALUE1 => self.operators[op].cmpr_value1 = value & CMPR_VALUE_MASK,
                 OP_GEN_CFG0 => self.operators[op].gen_cfg0 = value & 0x0000_03FF,
                 OP_GEN_FORCE => self.operators[op].gen_force = value & 0x0000_FFFF,
@@ -697,6 +742,11 @@ impl std::fmt::Debug for Esp32s3Mcpwm {
 }
 
 impl Peripheral for Esp32s3Mcpwm {
+    fn add_mcpwm_duty_observer(&mut self, obs: Arc<dyn McpwmDutyObserver>) -> bool {
+        self.add_duty_observer(obs);
+        true
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let word = self.read_word(offset & !3);
         let byte_off = (offset & 3) * 8;
@@ -1164,5 +1214,44 @@ mod tests {
         p.write(timer_off(0, TIMER_CFG0) + 1, 0x12).unwrap();
         assert_eq!(p.read_u32(timer_off(0, TIMER_CFG0)).unwrap(), 0x1234);
         assert_eq!(p.read(timer_off(0, TIMER_CFG0) + 1).unwrap(), 0x12);
+    }
+
+    /// `mcpwm_set_duty` (IDF legacy driver: operator n on timer n, compare A
+    /// = peak * duty) notifies bound actuators with the committed fraction.
+    #[test]
+    fn compare_a_commit_notifies_observers_with_the_duty_fraction() {
+        #[derive(Debug, Default)]
+        struct Rec(std::sync::Mutex<Vec<(u64, f64)>>);
+        impl McpwmDutyObserver for Rec {
+            fn on_duty_change(&self, op: u64, f: f64) {
+                self.0.lock().unwrap().push((op, f));
+            }
+        }
+        let rec = Arc::new(Rec::default());
+        let mut p = new_unit();
+        assert!(p.add_mcpwm_duty_observer(rec.clone()));
+        // 50 Hz at 1 MHz resolution: up-count, peak 20000 (PERIOD 19999);
+        // operator 1 bound to timer 1.
+        p.write_u32(timer_off(1, TIMER_CFG0), cfg0(0, 19_999))
+            .unwrap();
+        p.write_u32(timer_off(1, TIMER_CFG1), cfg1(TIMER_MODE_UP, 2))
+            .unwrap();
+        p.write_u32(REG_OPERATOR_TIMERSEL, 1 << 2).unwrap();
+        p.write_u32(op_off(1, OP_CMPR_VALUE0), 1_500).unwrap(); // 7.5 %
+                                                                // Compare B and other registers are not a duty commit.
+        p.write_u32(op_off(1, OP_CMPR_VALUE1), 9_000).unwrap();
+        p.write_u32(op_off(1, OP_GEN_A), 0x12).unwrap();
+        let got = rec.0.lock().unwrap().clone();
+        assert_eq!(got.len(), 1);
+        assert_eq!(got[0].0, 1);
+        assert!((got[0].1 - 0.075).abs() < 1e-12, "{got:?}");
+        assert!((p.operator_duty_fraction(1) - 0.075).abs() < 1e-12);
+        // Up-down count: the peak is PERIOD itself.
+        p.write_u32(timer_off(1, TIMER_CFG1), cfg1(TIMER_MODE_UPDOWN, 2))
+            .unwrap();
+        p.write_u32(timer_off(1, TIMER_CFG0), cfg0(0, 10_000))
+            .unwrap();
+        p.write_u32(op_off(1, OP_CMPR_VALUE0), 2_500).unwrap();
+        assert!((rec.0.lock().unwrap()[1].1 - 0.25).abs() < 1e-12);
     }
 }
