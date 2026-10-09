@@ -83,15 +83,18 @@ fn bus_free(ins: &xtensa::Instruction) -> bool {
             | Callx4 { .. }
             | Callx8 { .. }
             | CeilS { .. }
+            | ConstS { .. }
             | Clamps { .. }
             | CmpS { .. }
             | Dsync
+            | DivnS { .. }
             | Entry { .. }
             | Esync
             | Extui { .. }
             | Extw
             | FloatS { .. }
             | FloorS { .. }
+            | FpAssist { .. }
             | Ill
             | Isync
             | J { .. }
@@ -100,6 +103,7 @@ fn bus_free(ins: &xtensa::Instruction) -> bool {
             | Loopgtz { .. }
             | Loopnez { .. }
             | MaddS { .. }
+            | MaddnS { .. }
             | Max { .. }
             | Maxu { .. }
             | Memw
@@ -186,6 +190,10 @@ fn bus_free(ins: &xtensa::Instruction) -> bool {
 /// inside this file's directory without moving the crate path.
 #[path = "xtensa_lx7/exec/mod.rs"]
 mod exec;
+
+/// Divide / square-root assist semantics (`div0.s`, `maddn.s`, `divn.s`, …).
+#[path = "xtensa_lx7/fp_assist.rs"]
+pub(crate) mod fp_assist;
 
 /// Offset of _KernelExceptionVector relative to VECBASE on ESP32-S3 LX7.
 ///
@@ -320,6 +328,12 @@ pub struct XtensaLx7 {
     /// patterns so NaN payloads and signed zeros round-trip losslessly through
     /// rfr/wfr and lsi/ssi. The Xtensa LX7 FPU is single-precision only.
     pub fp: [u32; 16],
+    /// Exact value of an FR written by `mkdadj.s` / `mksadj.s` / `addexp.s` /
+    /// `addexpm.s` when it lies outside f32 (the register holds its IEEE
+    /// rounding). Valid only while `fp[i]` still holds the recorded bits; read
+    /// back by the next assist op (`divn.s`), so a quotient that overflows or
+    /// is subnormal is rounded once. See `fp_assist`.
+    fp_wide: [Option<(u32, f64)>; 16],
     /// Boolean registers b0..b15 (Boolean Option), packed one per bit. FP
     /// compares (oeq.s/olt.s/…) write a result bit here; movf.s/movt.s and the
     /// BT/BF branches read it.
@@ -450,6 +464,7 @@ impl XtensaLx7 {
             sr: XtensaSrFile::new(),
             ur: [0u32; 256],
             fp: [0u32; 16],
+            fp_wide: [None; 16],
             br: 0,
             pc: 0x4000_0400,
             branched: false,
@@ -487,6 +502,27 @@ impl XtensaLx7 {
     #[inline]
     fn fset(&mut self, f: u8, v: f32) {
         self.fp[(f & 0xF) as usize] = v.to_bits();
+    }
+
+    /// Read FP register `f` with the extended range of the divide/sqrt
+    /// assist path (see `fp_wide`).
+    #[inline]
+    fn fget_wide(&self, f: u8) -> f64 {
+        let i = (f & 0xF) as usize;
+        match self.fp_wide[i] {
+            Some((bits, v)) if bits == self.fp[i] => v,
+            _ => f32::from_bits(self.fp[i]) as f64,
+        }
+    }
+
+    /// Write `v` to FP register `f`: its IEEE f32 rounding, plus the exact
+    /// value when that rounding is inexact (see `fp_wide`).
+    #[inline]
+    fn fset_wide(&mut self, f: u8, v: f64) {
+        let i = (f & 0xF) as usize;
+        let bits = fp_assist::to_f32_bits(v);
+        self.fp[i] = bits;
+        self.fp_wide[i] = (v.is_finite() && f32::from_bits(bits) as f64 != v).then_some((bits, v));
     }
 
     /// Void every decode-cache entry lazily. Skips 0 on wrap: generation 0
@@ -2044,6 +2080,12 @@ impl XtensaLx7 {
             // separately, so use discrete ops to match the hardware bit-for-bit.
             MaddS { fr, fs, ft } => self.exec_madd_s(bus, len, fr, fs, ft),
             MsubS { fr, fs, ft } => self.exec_msub_s(bus, len, fr, fs, ft),
+            // Divide / square-root assists (FP option, ROM/libgcc `__divsf3`,
+            // `sqrtf`): semantics in `fp_assist`.
+            MaddnS { fr, fs, ft } => self.exec_maddn_s(bus, len, fr, fs, ft),
+            DivnS { fr, fs, ft } => self.exec_divn_s(bus, len, fr, fs, ft),
+            ConstS { fr, imm } => self.exec_const_s(bus, len, fr, imm),
+            FpAssist { fr, fs, op } => self.exec_fp_assist(bus, len, fr, fs, op),
             // abs.s / neg.s operate on the sign bit only (preserve NaN payload).
             AbsS { fr, fs } => self.exec_abs_s(bus, len, fr, fs),
             NegS { fr, fs } => self.exec_neg_s(bus, len, fr, fs),
@@ -3270,6 +3312,104 @@ mod fp_tests {
             0,
             "a restored compare value still crosses"
         );
+    }
+
+    /// The FP divide/sqrt assists decode from their xtensa-esp32s3-elf-as
+    /// encodings (esp-14.2.0); `div0.s f3, f2` is the ROM `__divsf3` word
+    /// at 0x4005612d that used to decode as Unknown.
+    #[test]
+    fn decodes_divide_sqrt_assists() {
+        use crate::decoder::xtensa::{FpAssist as A, Instruction as I};
+        let assist = |fr, fs, op| I::FpAssist { fr, fs, op };
+        let cases = [
+            (0xfa3270, assist(3, 2, A::Div0)),
+            (0xfa5680, assist(5, 6, A::Recip0)),
+            (0xfa7890, assist(7, 8, A::Sqrt0)),
+            (0xfa9aa0, assist(9, 10, A::Rsqrt0)),
+            (0xfabcb0, assist(11, 12, A::Nexp01)),
+            (0xfadec0, assist(13, 14, A::Mksadj)),
+            (0xfaf1d0, assist(15, 1, A::Mkdadj)),
+            (0xfa23e0, assist(2, 3, A::Addexp)),
+            (0xfa45f0, assist(4, 5, A::Addexpm)),
+            (0xfa3130, I::ConstS { fr: 3, imm: 1 }),
+            (0xfa4330, I::ConstS { fr: 4, imm: 3 }),
+            (
+                0x6a1230,
+                I::MaddnS {
+                    fr: 1,
+                    fs: 2,
+                    ft: 3,
+                },
+            ),
+            (
+                0x7a4560,
+                I::DivnS {
+                    fr: 4,
+                    fs: 5,
+                    ft: 6,
+                },
+            ),
+        ];
+        for (w, want) in cases {
+            assert_eq!(decode(w), want, "{w:#08x}");
+        }
+        // Neighbours keep their meaning; op2=0xF t=2 stays unknown.
+        assert_eq!(decode(0xfa3260), I::NegS { fr: 3, fs: 2 });
+        assert!(matches!(decode(0xfa3220), I::Unknown(_)));
+    }
+
+    /// Execute the ESP32-S3 ROM `__divsf3` body (0x40056127 `wfr` ..
+    /// 0x40056178 `rfr`) straight from the vendored ROM image: every
+    /// representative quotient is the IEEE-754 single-precision result.
+    #[test]
+    fn rom_divsf3_body_gives_ieee_quotients() {
+        let rom = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/roms/esp32s3/esp32s3_rom.bin"
+        ))
+        .expect("vendored ESP32-S3 ROM");
+        let body = &rom[0x5_6127..0x5_617b];
+        let divide = |a: f32, b: f32| {
+            let mut cpu = XtensaLx7::new();
+            let mut bus = RamBus::new();
+            cpu.regs.write_logical(2, a.to_bits());
+            cpu.regs.write_logical(3, b.to_bits());
+            for w in body.chunks(3) {
+                run(
+                    &mut cpu,
+                    &mut bus,
+                    u32::from_le_bytes([w[0], w[1], w[2], 0]),
+                );
+            }
+            f32::from_bits(cpu.regs.read_logical(2))
+        };
+        let cases: [(f32, f32); 18] = [
+            (1.0, 3.0),
+            (2.0, 3.0),
+            (180.0, 20_000.0),
+            (50.0, 1_000_000.0),
+            (-7.0, 2.0),
+            (1.0, 1.999_999_9),
+            (0.0, 5.0),
+            (-0.0, 5.0),
+            (5.0, -0.0),
+            (1.0e38, 1.0e-3),
+            (1.0e-38, 1.0e3),
+            (f32::MIN_POSITIVE, 3.0),
+            (f32::MAX, 2.0),
+            (3.0, f32::INFINITY),
+            (f32::NEG_INFINITY, 2.0),
+            (0.0, 0.0),
+            (f32::INFINITY, f32::INFINITY),
+            (f32::NAN, 1.0),
+        ];
+        for (a, b) in cases {
+            let (got, want) = (divide(a, b), a / b);
+            assert!(
+                got.to_bits() == want.to_bits() || (got.is_nan() && want.is_nan()),
+                "{a:e} / {b:e} = {got:e}, want {want:e}"
+            );
+        }
     }
 
     #[test]

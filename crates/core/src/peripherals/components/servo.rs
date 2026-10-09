@@ -391,8 +391,8 @@ impl PeripheralKit for ServoKit {
                 }));
             }
         }
-        // Any LEDC model (classic ESP32: 16 channels, ESP32-C3: 6) reports
-        // its committed duties through the same observer.
+        // Any LEDC model (classic ESP32: 16 channels, ESP32-S3: 8, ESP32-C3:
+        // 6) reports its committed duties through the same observer.
         let channels = ctx
             .config_i64("ledc_channel")
             .map_or(0..16, |ch| ch as u64..ch as u64 + 1);

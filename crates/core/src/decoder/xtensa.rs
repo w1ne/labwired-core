@@ -30,6 +30,25 @@ pub enum FpCmp {
     Ule,
 }
 
+/// FP-option divide / square-root assist ops with two FR operands
+/// (op0=0, op1=0xA, op2=0xF; `t` selects). HW-oracle encodings
+/// (xtensa-esp32s3-elf-as, esp-14.2.0): div0.s f3,f2 → 0xfa3270 (t=7),
+/// recip0.s → t=8, sqrt0.s → t=9, rsqrt0.s → t=0xA, nexp01.s → t=0xB,
+/// mksadj.s → t=0xC, mkdadj.s → t=0xD, addexp.s → t=0xE, addexpm.s → t=0xF.
+/// Semantics: `cpu::xtensa_lx7::fp_assist`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FpAssist {
+    Div0,
+    Recip0,
+    Sqrt0,
+    Rsqrt0,
+    Nexp01,
+    Mksadj,
+    Mkdadj,
+    Addexp,
+    Addexpm,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Instruction {
     // -- ALU reg-reg (RRR) --
@@ -634,6 +653,32 @@ pub enum Instruction {
         fr: u8,
         fs: u8,
         ft: u8,
+    },
+    /// maddn.s fr, fs, ft : f[fr] = f[fr] + f[fs] * f[ft], fused, rounded
+    /// once to nearest (divide/sqrt assist).
+    MaddnS {
+        fr: u8,
+        fs: u8,
+        ft: u8,
+    },
+    /// divn.s fr, fs, ft : final divide/sqrt step, f[fr] + f[fs] * f[ft]
+    /// rounded once.
+    DivnS {
+        fr: u8,
+        fs: u8,
+        ft: u8,
+    },
+    /// const.s fr, imm : f[fr] = {0.0, 1.0, 2.0, 0.5}[imm]
+    ConstS {
+        fr: u8,
+        imm: u8,
+    },
+    /// div0.s / recip0.s / sqrt0.s / rsqrt0.s / nexp01.s / mksadj.s /
+    /// mkdadj.s / addexp.s / addexpm.s fr, fs
+    FpAssist {
+        fr: u8,
+        fs: u8,
+        op: FpAssist,
     },
     /// abs.s fr, fs : f[fr] = |f[fs]|
     AbsS {
@@ -1287,7 +1332,10 @@ fn decode_qrst(w: u32) -> Instruction {
 ///   floor.s        → 0xaa34n0 (op2=0xA) ceil.s → 0xba34n0 (op2=0xB)
 ///   utrunc.s       → 0xea34n0 (op2=0xE)
 ///   float.s f3,a4,n → 0xca34n0 (op2=0xC) ufloat.s → 0xda34n0 (op2=0xD)
-///   op2=0xF: t selects — mov.s(t=0) abs.s(t=1) rfr(t=4) wfr(t=5) neg.s(t=6).
+///   op2=0xF: t selects — mov.s(t=0) abs.s(t=1) const.s(t=3) rfr(t=4)
+///   wfr(t=5) neg.s(t=6), then the divide/sqrt assists t=7..0xF (see
+///   [`FpAssist`]); const.s fr,imm → 0xfa_r_imm_30 (s=imm).
+///   maddn.s f1,f2,f3 → 0x6a1230 (op2=6)  divn.s f4,f5,f6 → 0x7a4560 (op2=7)
 /// For float/ufloat: r=fr, s=as_, t=imm. For the int-result conversions
 /// (round/trunc/utrunc/ceil/floor): r=ar, s=fs, t=imm.
 fn decode_fp0(w: u32, op2: u8, r: u8, s: u8, t: u8) -> Instruction {
@@ -1313,6 +1361,16 @@ fn decode_fp0(w: u32, op2: u8, r: u8, s: u8, t: u8) -> Instruction {
             ft: t,
         },
         0x5 => Instruction::MsubS {
+            fr: r,
+            fs: s,
+            ft: t,
+        },
+        0x6 => Instruction::MaddnS {
+            fr: r,
+            fs: s,
+            ft: t,
+        },
+        0x7 => Instruction::DivnS {
             fr: r,
             fs: s,
             ft: t,
@@ -1357,7 +1415,23 @@ fn decode_fp0(w: u32, op2: u8, r: u8, s: u8, t: u8) -> Instruction {
             0x1 => Instruction::AbsS { fr: r, fs: s },
             0x4 => Instruction::Rfr { ar: r, fs: s },
             0x5 => Instruction::Wfr { fr: r, as_: s },
+            0x3 => Instruction::ConstS { fr: r, imm: s },
             0x6 => Instruction::NegS { fr: r, fs: s },
+            0x7..=0xF => Instruction::FpAssist {
+                fr: r,
+                fs: s,
+                op: match t {
+                    0x7 => FpAssist::Div0,
+                    0x8 => FpAssist::Recip0,
+                    0x9 => FpAssist::Sqrt0,
+                    0xA => FpAssist::Rsqrt0,
+                    0xB => FpAssist::Nexp01,
+                    0xC => FpAssist::Mksadj,
+                    0xD => FpAssist::Mkdadj,
+                    0xE => FpAssist::Addexp,
+                    _ => FpAssist::Addexpm,
+                },
+            },
             _ => Instruction::Unknown(w),
         },
         _ => Instruction::Unknown(w),
@@ -2219,6 +2293,10 @@ impl Instruction {
             | MulS { .. }
             | MaddS { .. }
             | MsubS { .. }
+            | MaddnS { .. }
+            | DivnS { .. }
+            | ConstS { .. }
+            | FpAssist { .. }
             | AbsS { .. }
             | NegS { .. }
             | MovS { .. }

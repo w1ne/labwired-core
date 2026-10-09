@@ -10,9 +10,101 @@ use crate::cpu::xtensa_lx7::XtensaLx7;
 use crate::{Bus, SimResult};
 
 use super::super::round_half_even;
+use crate::cpu::xtensa_lx7::fp_assist;
 use crate::decoder::xtensa;
-use crate::decoder::xtensa::FpCmp;
+use crate::decoder::xtensa::{FpAssist, FpCmp};
 impl XtensaLx7 {
+    #[inline(always)]
+    pub(in crate::cpu::xtensa_lx7) fn exec_maddn_s(
+        &mut self,
+        _bus: &mut dyn Bus,
+        len: u32,
+        fr: u8,
+        fs: u8,
+        ft: u8,
+    ) -> SimResult<()> {
+        let f = |i: u8| self.fp[(i & 0xF) as usize];
+        let v = fp_assist::maddn(f(fr), f(fs), f(ft));
+        self.fp[(fr & 0xF) as usize] = v;
+        self.pc = self.pc.wrapping_add(len);
+        Ok(())
+    }
+
+    #[inline(always)]
+    pub(in crate::cpu::xtensa_lx7) fn exec_divn_s(
+        &mut self,
+        _bus: &mut dyn Bus,
+        len: u32,
+        fr: u8,
+        fs: u8,
+        ft: u8,
+    ) -> SimResult<()> {
+        let v = fp_assist::divn(
+            self.fget_wide(fr),
+            self.fp[(fs & 0xF) as usize],
+            self.fget_wide(ft),
+        );
+        self.fp[(fr & 0xF) as usize] = v;
+        self.pc = self.pc.wrapping_add(len);
+        Ok(())
+    }
+
+    #[inline(always)]
+    pub(in crate::cpu::xtensa_lx7) fn exec_const_s(
+        &mut self,
+        _bus: &mut dyn Bus,
+        len: u32,
+        fr: u8,
+        imm: u8,
+    ) -> SimResult<()> {
+        self.fp[(fr & 0xF) as usize] = fp_assist::const_s(imm);
+        self.pc = self.pc.wrapping_add(len);
+        Ok(())
+    }
+
+    #[inline(always)]
+    fn finish_wide(&mut self, fr: u8, v: f64, len: u32) -> SimResult<()> {
+        self.fset_wide(fr, v);
+        self.pc = self.pc.wrapping_add(len);
+        Ok(())
+    }
+
+    #[inline(always)]
+    pub(in crate::cpu::xtensa_lx7) fn exec_fp_assist(
+        &mut self,
+        _bus: &mut dyn Bus,
+        len: u32,
+        fr: u8,
+        fs: u8,
+        op: FpAssist,
+    ) -> SimResult<()> {
+        let src = self.fp[(fs & 0xF) as usize];
+        let seed = match op {
+            FpAssist::Div0 => fp_assist::div0(src),
+            FpAssist::Recip0 => fp_assist::recip0(src),
+            FpAssist::Sqrt0 => fp_assist::sqrt0(src),
+            FpAssist::Rsqrt0 => fp_assist::rsqrt0(src),
+            FpAssist::Nexp01 => fp_assist::nexp01(src),
+            // The adjust ops keep the exact value when it leaves f32.
+            // mkdadj.s fr, fs: divisor in fr, dividend in fs.
+            FpAssist::Mkdadj => {
+                let v = fp_assist::mkdadj(self.fget_wide(fr), self.fget_wide(fs));
+                return self.finish_wide(fr, v, len);
+            }
+            FpAssist::Mksadj => {
+                let v = fp_assist::mksadj(self.fget_wide(fs));
+                return self.finish_wide(fr, v, len);
+            }
+            FpAssist::Addexp | FpAssist::Addexpm => {
+                let v = fp_assist::addexp(self.fget_wide(fr), self.fget_wide(fs));
+                return self.finish_wide(fr, v, len);
+            }
+        };
+        self.fp[(fr & 0xF) as usize] = seed;
+        self.pc = self.pc.wrapping_add(len);
+        Ok(())
+    }
+
     #[inline(always)]
     pub(in crate::cpu::xtensa_lx7) fn exec_add_s(
         &mut self,

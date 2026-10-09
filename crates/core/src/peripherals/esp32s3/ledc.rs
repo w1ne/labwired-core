@@ -46,7 +46,9 @@
 //!
 //! All other offsets accept writes silently and read 0.
 
+use crate::peripherals::LedcDutyObserver;
 use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
+use std::sync::Arc;
 
 pub const LEDC_BASE: u32 = 0x6001_9000;
 pub const LEDC_SIZE: u64 = 0x1000;
@@ -95,6 +97,10 @@ const CONF1_DUTY_START: u32 = 1 << 31;
 
 /// 19-bit DUTY / DUTY_R field mask (`LEDC_DUTY_LSCHn_V = 0x7FFFF`).
 const DUTY_FIELD_MASK: u32 = 0x0007_FFFF;
+/// CONF0 `TIMER_SEL_LSCHn` (bits 1:0): the timer driving the channel.
+const CONF0_TIMER_SEL_MASK: u32 = 0x3;
+/// LSTIMERt_CONF `DUTY_RES` (bits 3:0): duty resolution in bits.
+const TIMER_DUTY_RES_MASK: u32 = 0xF;
 /// 14-bit HPOINT field mask (`LEDC_HPOINT_LSCHn_V = 0x3FFF`).
 const HPOINT_FIELD_MASK: u32 = 0x0000_3FFF;
 
@@ -141,6 +147,11 @@ pub struct Esp32s3Ledc {
 
     /// Bus-published cycle clock (walk-free level export).
     clock: Option<CycleClock>,
+
+    /// Notified on each committed channel duty (`ledcWrite`), the hook the
+    /// classic ESP32 and ESP32-C3 LEDC offer, so PWM-driven parts (a servo)
+    /// follow it.
+    duty_observers: Vec<Arc<dyn LedcDutyObserver>>,
 }
 
 impl Esp32s3Ledc {
@@ -169,7 +180,29 @@ impl Esp32s3Ledc {
             date: DATE_RESET,
 
             clock: None,
+            duty_observers: Vec::new(),
         }
+    }
+
+    /// Register an observer for committed channel duties. See
+    /// [`LedcDutyObserver`].
+    pub fn add_duty_observer(&mut self, obs: Arc<dyn LedcDutyObserver>) {
+        self.duty_observers.push(obs);
+    }
+
+    /// Channel `ch`'s committed duty as a fraction of its timer period:
+    /// `(DUTY_R >> 4) / 2^DUTY_RES` (the duty carries 4 fractional bits).
+    /// 0 while the bound timer has no resolution configured.
+    pub fn channel_duty_fraction(&self, ch: usize) -> f64 {
+        let Some(conf0) = self.ch_conf0.get(ch) else {
+            return 0.0;
+        };
+        let res = self.timer_conf[(conf0 & CONF0_TIMER_SEL_MASK) as usize] & TIMER_DUTY_RES_MASK;
+        if res == 0 {
+            return 0.0;
+        }
+        let duty = (self.active_duty(ch) >> 4) as f64;
+        (duty / (1u64 << res) as f64).clamp(0.0, 1.0)
     }
 
     /// Active (committed) duty for channel `ch`, as exposed at DUTY_R. The
@@ -220,6 +253,11 @@ impl std::fmt::Debug for Esp32s3Ledc {
 }
 
 impl Peripheral for Esp32s3Ledc {
+    fn add_ledc_duty_observer(&mut self, obs: Arc<dyn LedcDutyObserver>) -> bool {
+        self.add_duty_observer(obs);
+        true
+    }
+
     fn read(&self, _offset: u64) -> SimResult<u8> {
         // The ESP-IDF / Arduino LEDC drivers use 32-bit accesses exclusively;
         // stray byte reads are harmless to report as 0.
@@ -290,6 +328,12 @@ impl Peripheral for Esp32s3Ledc {
                         // Gradual-change machine "completes" instantly here, so
                         // raise the per-channel duty-change-done interrupt.
                         self.int_raw |= duty_chng_end_bit(ch);
+                        if !self.duty_observers.is_empty() {
+                            let fraction = self.channel_duty_fraction(ch);
+                            for obs in &self.duty_observers {
+                                obs.on_duty_change(ch as u64, fraction);
+                            }
+                        }
                     }
                 }
                 CH_DUTY_R => {} // read-only
@@ -529,5 +573,40 @@ mod tests {
         // Header: LEDC_DUTY_INC_LSCHn default 1'b1.
         let p = Esp32s3Ledc::new();
         assert_eq!(p.read_u32(ch_off(0, CH_CONF1)).unwrap(), 1 << 30);
+    }
+
+    #[test]
+    fn duty_start_notifies_observers_with_the_committed_fraction() {
+        use crate::peripherals::components::servo::{LedcServoDriver, Servo};
+        // ledcSetup on timer 1 (14-bit), channel 5 bound to timer 1, then
+        // ledcWrite: the servo follows the committed duty, no glue.
+        let mut p = Esp32s3Ledc::new();
+        let servo = Arc::new(Servo::standard(4));
+        p.add_ledc_duty_observer(Arc::new(LedcServoDriver::new(5, Arc::clone(&servo))));
+        p.write_u32(timer_off(1, TIMER_CONF), 14).unwrap();
+        p.write_u32(ch_off(5, CH_CONF0), 1).unwrap();
+
+        // Staging DUTY alone does not move it; DUTY_START commits.
+        p.write_u32(ch_off(5, CH_DUTY), 1638u32 << 4).unwrap();
+        assert!(servo.angle_degrees() < 2.0);
+        p.write_u32(ch_off(5, CH_CONF1), CONF1_DUTY_START).unwrap();
+        assert!((p.channel_duty_fraction(5) - 0.1).abs() < 0.001);
+        assert!(
+            (servo.angle_degrees() - 180.0).abs() < 2.0,
+            "max={}",
+            servo.angle_degrees()
+        );
+
+        p.write_u32(ch_off(5, CH_DUTY), 819u32 << 4).unwrap();
+        p.write_u32(ch_off(5, CH_CONF1), CONF1_DUTY_START).unwrap();
+        assert!(servo.angle_degrees() < 2.0, "min={}", servo.angle_degrees());
+
+        // Another channel's commit is not this servo's.
+        p.write_u32(ch_off(0, CH_DUTY), 1638u32 << 4).unwrap();
+        p.write_u32(ch_off(0, CH_CONF1), CONF1_DUTY_START).unwrap();
+        assert!(servo.angle_degrees() < 2.0);
+
+        // An unconfigured timer (DUTY_RES 0) reports no PWM.
+        assert_eq!(Esp32s3Ledc::new().channel_duty_fraction(0), 0.0);
     }
 }
