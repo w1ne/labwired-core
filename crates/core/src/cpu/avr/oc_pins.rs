@@ -77,12 +77,28 @@ impl Avr {
         };
         let w0 = wave_8bit(self.tccr0a, self.tccr0b);
         let t0 = u16::from(self.tcnt0);
-        put(PORT_D, 6, oc_level(w0, self.tccr0a >> 6, t0, u16::from(self.ocr0a), 0xFF));
-        put(PORT_D, 5, oc_level(w0, self.tccr0a >> 4, t0, u16::from(self.ocr0b), 0xFF));
+        put(
+            PORT_D,
+            6,
+            oc_level(w0, self.tccr0a >> 6, t0, u16::from(self.ocr0a), 0xFF),
+        );
+        put(
+            PORT_D,
+            5,
+            oc_level(w0, self.tccr0a >> 4, t0, u16::from(self.ocr0b), 0xFF),
+        );
         let w2 = wave_8bit(self.tccr2a, self.tccr2b);
         let t2 = u16::from(self.tcnt2);
-        put(PORT_B, 3, oc_level(w2, self.tccr2a >> 6, t2, u16::from(self.ocr2a), 0xFF));
-        put(PORT_D, 3, oc_level(w2, self.tccr2a >> 4, t2, u16::from(self.ocr2b), 0xFF));
+        put(
+            PORT_B,
+            3,
+            oc_level(w2, self.tccr2a >> 6, t2, u16::from(self.ocr2a), 0xFF),
+        );
+        put(
+            PORT_D,
+            3,
+            oc_level(w2, self.tccr2a >> 4, t2, u16::from(self.ocr2b), 0xFF),
+        );
         (mask, level)
     }
 
@@ -113,7 +129,7 @@ impl Avr {
             let pad = self.port_pad_value(port_addr, latch);
             // Best-effort like every port mirror write: a chip yaml without
             // the window has no pad to drive.
-            let _ = bus.write_u8(AVR_IO_MIRROR_BASE + u64::from(port_addr), pad);
+            let _mirror = bus.write_u8(AVR_IO_MIRROR_BASE + u64::from(port_addr), pad);
         }
     }
 }
@@ -139,7 +155,9 @@ mod tests {
             .filter(|t| oc_level(Waveform::PhaseCorrect, 2, *t, 200, 0xFF) == Some(true))
             .count();
         assert_eq!(high, 200);
-        assert!((0..=255u16).all(|t| oc_level(Waveform::PhaseCorrect, 2, t, 0, 0xFF) == Some(false)));
+        assert!(
+            (0..=255u16).all(|t| oc_level(Waveform::PhaseCorrect, 2, t, 0, 0xFF) == Some(false))
+        );
     }
 
     #[test]

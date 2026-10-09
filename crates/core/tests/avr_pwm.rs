@@ -65,7 +65,10 @@ external_devices:
 
 fn pad(m: &Machine<Avr>, port: &str, pin: u8) -> bool {
     let idx = m.bus.find_peripheral_index_by_name(port).expect("port");
-    m.bus.peripherals[idx].dev.read_gpio_output(pin).unwrap_or(false)
+    m.bus.peripherals[idx]
+        .dev
+        .read_gpio_output(pin)
+        .unwrap_or(false)
 }
 
 /// High-time fraction and rising-edge count of each pad over `[from, to)`.
@@ -114,7 +117,10 @@ fn analog_write_duty_reaches_the_pads_and_turns_the_motor_forward() {
         assert!((17..=21).contains(&rises), "{name} rising edges {rises}");
     }
     let rpm = m.bus.motor_speed_rpm("M1").expect("M1");
-    assert!(rpm > 100.0, "IN1 PWM + IN2 LOW drives forward, got {rpm} rpm");
+    assert!(
+        rpm > 100.0,
+        "IN1 PWM + IN2 LOW drives forward, got {rpm} rpm"
+    );
 
     // analogWrite(3, 0) releases OC2B to the LOW latch: the pad stays low.
     let after = measure(&mut m, &pads[..1], CPU_HZ * 110 / 1000, CPU_HZ * 130 / 1000);
