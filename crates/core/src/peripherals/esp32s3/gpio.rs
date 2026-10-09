@@ -715,6 +715,11 @@ impl Esp32s3Gpio {
     /// `FUN_WPU` per pad, split into the two GPIO input banks. Pads 49..53 have
     /// no `IO_MUX_GPIOn_REG` on the S3, so they never carry a pull-up here.
     fn io_mux_pullup_mask(&self) -> [u32; 2] {
+        self.io_mux_masks(super::io_mux::FUN_WPU)
+    }
+
+    /// Per-bank mask of the pads whose IO_MUX word has `bit` set.
+    fn io_mux_masks(&self, bit: u32) -> [u32; 2] {
         let Some(controls) = &self.pad_controls else {
             return [0; 2];
         };
@@ -724,7 +729,7 @@ impl Esp32s3Gpio {
             .iter()
             .enumerate()
             .fold([0u32; 2], |mut mask, (pin, word)| {
-                if word & super::io_mux::FUN_WPU != 0 {
+                if word & bit != 0 {
                     if pin < 32 {
                         mask[0] |= 1u32 << pin;
                     } else {
@@ -733,6 +738,40 @@ impl Esp32s3Gpio {
                 }
                 mask
             })
+    }
+
+    /// `GPIO_IN`/`GPIO_IN1` as firmware reads them. A pad whose output driver
+    /// is on and whose IO_MUX `FUN_IE` input buffer is enabled reads back its
+    /// own pad level — what Arduino `digitalRead` returns for a pin set by
+    /// `pinMode(OUTPUT)`, which ESP-IDF configures as INPUT_OUTPUT. Every
+    /// other pad reads [`Self::effective_input`].
+    fn in_reg(&self, bank: usize) -> u32 {
+        let word = self.effective_input(bank);
+        let enable = if bank == 0 {
+            self.enable
+        } else {
+            self.reg(ENABLE1) & BANK1_MASK
+        };
+        if enable == 0 {
+            return word;
+        }
+        let loopback = enable & self.io_mux_masks(super::io_mux::FUN_IE)[bank];
+        if bank == 1 {
+            // Bank-1 pads have no net/matrix model: an enabled pad shows OUT1.
+            return (word & !loopback) | (self.out1 & loopback);
+        }
+        let mut word = word;
+        let mut rest = loopback;
+        while rest != 0 {
+            let pin = rest.trailing_zeros() as u8;
+            rest &= rest - 1;
+            let mask = 1u32 << pin;
+            word &= !mask;
+            if <Self as Peripheral>::read_gpio_pad(self, pin) == Some(true) {
+                word |= mask;
+            }
+        }
+        word
     }
 
     /// Firmware-visible input word for `bank` (0 = `IN`/GPIO0..31,
@@ -823,8 +862,8 @@ impl Esp32s3Gpio {
             // W1TS/W1TC views read back the primary register's value.
             OUT | OUT_W1TS | OUT_W1TC => self.out,
             ENABLE | ENABLE_W1TS | ENABLE_W1TC => self.enable,
-            IN => self.effective_input(0),
-            IN1 => self.effective_input(1),
+            IN => self.in_reg(0),
+            IN1 => self.in_reg(1),
             // OUT1 and its W1TS/W1TC views read the behavioral bank-1 latch.
             OUT1 | OUT1_W1TS | OUT1_W1TC => self.out1,
             ENABLE1_W1TS | ENABLE1_W1TC => self.reg(ENABLE1),
@@ -1760,6 +1799,43 @@ mod tests {
             assert!(gpio.set_gpio_input(5, true));
             assert_eq!(gpio.read_gpio_input(5), Some(true));
         });
+    }
+
+    /// Arduino `pinMode(pin, OUTPUT)` is ESP-IDF `GPIO_MODE_INPUT_OUTPUT`: the
+    /// output driver plus IO_MUX `FUN_IE`. `digitalRead` of that pin reads the
+    /// pad back through the input buffer, so `GPIO_IN`/`GPIO_IN1` follow the
+    /// driven level. Without `FUN_IE` the input buffer is off.
+    #[test]
+    fn esp32s3_gpio_in_reads_back_an_input_enabled_output_pad() {
+        use crate::Bus;
+        let mut bus = s3_bus();
+
+        // Bank 0: GPIO4.
+        bus.write_u32(io_mux_gpio(4), PAD_INPUT).unwrap();
+        bus.write_u32(GPIO_BASE + ENABLE_W1TS, 1 << 4).unwrap();
+        bus.write_u32(GPIO_BASE + OUT_W1TS, 1 << 4).unwrap();
+        assert_ne!(
+            bus.read_u32(GPIO_BASE + IN).unwrap() & (1 << 4),
+            0,
+            "a HIGH input-enabled output pad reads 1"
+        );
+        bus.write_u32(GPIO_BASE + OUT_W1TC, 1 << 4).unwrap();
+        assert_eq!(bus.read_u32(GPIO_BASE + IN).unwrap() & (1 << 4), 0);
+        bus.write_u32(io_mux_gpio(4), PAD_INPUT & !(1 << 9)).unwrap();
+        bus.write_u32(GPIO_BASE + OUT_W1TS, 1 << 4).unwrap();
+        assert_eq!(
+            bus.read_u32(GPIO_BASE + IN).unwrap() & (1 << 4),
+            0,
+            "FUN_IE clear: the input buffer is off"
+        );
+
+        // Bank 1: GPIO38 (bit 6 of IN1/OUT1/ENABLE1).
+        bus.write_u32(io_mux_gpio(38), PAD_INPUT).unwrap();
+        bus.write_u32(GPIO_BASE + ENABLE1_W1TS, 1 << 6).unwrap();
+        bus.write_u32(GPIO_BASE + OUT1_W1TS, 1 << 6).unwrap();
+        assert_ne!(bus.read_u32(GPIO_BASE + IN1).unwrap() & (1 << 6), 0);
+        bus.write_u32(GPIO_BASE + OUT1_W1TC, 1 << 6).unwrap();
+        assert_eq!(bus.read_u32(GPIO_BASE + IN1).unwrap() & (1 << 6), 0);
     }
 
     /// What `digitalRead` actually executes: a load from `GPIO_IN`. This is the

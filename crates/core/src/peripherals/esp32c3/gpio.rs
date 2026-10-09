@@ -311,20 +311,24 @@ impl Esp32c3Gpio {
     }
 
     fn io_mux_pullup_mask(&self) -> u32 {
+        self.io_mux_masks().0
+    }
+
+    /// Per-pad IO_MUX `(FUN_WPU, FUN_IE)` masks, read under one lock.
+    fn io_mux_masks(&self) -> (u32, u32) {
         let Some(controls) = &self.pad_controls else {
-            return 0;
+            return (0, 0);
         };
         controls
             .read()
             .expect("ESP32-C3 IO_MUX pad controls poisoned")
             .iter()
             .enumerate()
-            .fold(0, |mask, (pin, word)| {
-                if word & (1 << 8) != 0 {
-                    mask | (1 << pin)
-                } else {
-                    mask
-                }
+            .fold((0, 0), |(wpu, ie), (pin, word)| {
+                (
+                    wpu | (((word >> 8) & 1) << pin),
+                    ie | (((word >> 9) & 1) << pin),
+                )
             })
     }
 
@@ -335,6 +339,29 @@ impl Esp32c3Gpio {
         ((self.external_levels & self.external_drive_mask)
             | (self.io_mux_pullup_mask() & !self.external_drive_mask))
             & PIN_MASK
+    }
+
+    /// `GPIO_IN_REG` as firmware reads it. A pad whose output driver is on
+    /// and whose IO_MUX `FUN_IE` input buffer is enabled reads back its own
+    /// pad level — what Arduino `digitalRead` returns for a pin set by
+    /// `pinMode(OUTPUT)`, which ESP-IDF configures as INPUT_OUTPUT. Every
+    /// other pad reads [`Self::effective_input`].
+    fn in_reg(&self) -> u32 {
+        let (wpu, ie) = self.io_mux_masks();
+        let mut word = ((self.external_levels & self.external_drive_mask)
+            | (wpu & !self.external_drive_mask))
+            & PIN_MASK;
+        let mut loopback = self.enable & ie & PIN_MASK;
+        while loopback != 0 {
+            let pin = loopback.trailing_zeros() as u8;
+            loopback &= loopback - 1;
+            let mask = 1u32 << pin;
+            word &= !mask;
+            if self.pad_level(pin) == Some(true) {
+                word |= mask;
+            }
+        }
+        word
     }
 
     /// Direction-aware pad level — the single truth `read_gpio_pad` and the
@@ -559,7 +586,7 @@ impl Esp32c3Gpio {
             SDIO_SELECT => self.sdio_select,
             ENABLE | ENABLE_W1TS | ENABLE_W1TC => self.enable,
             STRAP => self.strap,
-            IN => self.effective_input(),
+            IN => self.in_reg(),
             STATUS | STATUS_W1TS | STATUS_W1TC => self.status,
             PCPU_INT => self.cpu_interrupt_status(),
             PCPU_NMI_INT | CPUSDIO_INT => self.status,
@@ -953,6 +980,56 @@ mod tests {
         assert!(r9.func.is_none());
 
         assert!(g.gpio_routing(PIN_COUNT).is_none(), "out-of-range pin");
+    }
+
+    /// Arduino `pinMode(pin, OUTPUT)` on the C3 is ESP-IDF `GPIO_MODE_INPUT_OUTPUT`
+    /// (`OUTPUT` = 0x03 = INPUT|OUTPUT): it sets the output driver *and* IO_MUX
+    /// `FUN_IE`, so `digitalRead` of a driven pin reads the pad back through
+    /// the input buffer (TRM §5.4, "GPIO_IN_REG"). Field report: an LED blink
+    /// sketch printed `GPIO4=0` after `digitalWrite(4, HIGH)`.
+    #[test]
+    fn esp32c3_gpio_in_reads_back_an_input_enabled_output_pad() {
+        const IO_MUX_GPIO4: u64 = 0x6000_9000 + 0x04 + 4 * 4;
+        const GPIO_IN: u64 = 0x6000_4000 + IN;
+        const GPIO_OUT_W1TS: u64 = 0x6000_4000 + OUT_W1TS;
+        const GPIO_OUT_W1TC: u64 = 0x6000_4000 + OUT_W1TC;
+        const GPIO_ENABLE_W1TS: u64 = 0x6000_4000 + ENABLE_W1TS;
+
+        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let chip = ChipDescriptor::from_file(root.join("../../configs/chips/esp32c3.yaml"))
+            .expect("read esp32c3 chip yaml");
+        let manifest: SystemManifest = serde_yaml::from_str(
+            r#"
+name: "esp32c3-output-readback-test"
+chip: "../chips/esp32c3.yaml"
+"#,
+        )
+        .expect("parse system yaml");
+        let mut bus = SystemBus::from_config(&chip, &manifest).expect("construct C3 bus");
+
+        // The register state the shared blink firmware leaves after
+        // pinMode(4, OUTPUT): MCU_SEL=1 (GPIO), FUN_DRV=2, FUN_IE=1, no pulls.
+        bus.write_u32(IO_MUX_GPIO4, 0x0000_1a02).unwrap();
+        bus.write_u32(GPIO_ENABLE_W1TS, 1 << 4).unwrap();
+
+        bus.write_u32(GPIO_OUT_W1TS, 1 << 4).unwrap();
+        assert_ne!(
+            bus.read_u32(GPIO_IN).unwrap() & (1 << 4),
+            0,
+            "digitalRead of a HIGH input-enabled output pad reads 1"
+        );
+        bus.write_u32(GPIO_OUT_W1TC, 1 << 4).unwrap();
+        assert_eq!(
+            bus.read_u32(GPIO_IN).unwrap() & (1 << 4),
+            0,
+            "digitalRead of a LOW input-enabled output pad reads 0"
+        );
+
+        // Without FUN_IE the input buffer is off: the driven level does not
+        // reach GPIO_IN.
+        bus.write_u32(IO_MUX_GPIO4, 0x0000_1802).unwrap();
+        bus.write_u32(GPIO_OUT_W1TS, 1 << 4).unwrap();
+        assert_eq!(bus.read_u32(GPIO_IN).unwrap() & (1 << 4), 0);
     }
 
     #[test]
