@@ -458,9 +458,11 @@ impl Esp32s3Gpio {
     /// A net pad in open drain (`PAD_DRIVER`) whose output latch holds a 1:
     /// its output stage is off. Off a net the model keeps its old reading.
     fn released_net_pad(&self, pin: u8) -> bool {
+        if pin >= 32 {
+            return false;
+        }
         let mask = 1u32 << pin;
-        pin < 32
-            && self.net_isolated & mask != 0
+        self.net_isolated & mask != 0
             && self.out & mask != 0
             && self.reg(PIN0 + (pin as u64) * 4) & crate::peripherals::esp_gpio_net::PIN_PAD_DRIVER
                 != 0
@@ -735,17 +737,72 @@ impl Esp32s3Gpio {
             })
     }
 
+    /// `FUN_IE` per pad, split into the two GPIO input banks. A pad with no
+    /// `IO_MUX_GPIOn_REG` (49..53), or a GPIO with no IO_MUX wired, has no
+    /// input-buffer control to model and counts as enabled.
+    fn io_mux_input_enable_mask(&self) -> [u32; 2] {
+        let Some(controls) = &self.pad_controls else {
+            return [u32::MAX, BANK1_MASK];
+        };
+        let controls = controls
+            .read()
+            .expect("ESP32-S3 IO_MUX pad controls poisoned");
+        (0..PAD_COUNT).fold([0u32; 2], |mut mask, pin| {
+            let enabled = controls
+                .get(pin as usize)
+                .is_none_or(|word| word & super::io_mux::FUN_IE != 0);
+            if enabled {
+                mask[(pin / 32) as usize] |= 1u32 << (pin % 32);
+            }
+            mask
+        })
+    }
+
+    /// Level the pad's own output driver forces, or `None` while the driver
+    /// is off (or released as an open-drain net pad).
+    fn driven_level(&self, pin: u8) -> Option<bool> {
+        let bit = 1u32 << (pin % 32);
+        let (enable, out) = if pin < 32 {
+            (self.enable, self.out)
+        } else {
+            (self.reg(ENABLE1), self.out1)
+        };
+        if enable & bit == 0 || self.released_net_pad(pin) {
+            return None;
+        }
+        // Output matrix: a pad handed to a peripheral carries that
+        // peripheral's wire, not the GPIO_OUT latch.
+        if let Some(level) = self.pad_routes.level(pin, |p| self.out_sel(p)) {
+            return Some(level);
+        }
+        Some(out & bit != 0)
+    }
+
     /// Firmware-visible input word for `bank` (0 = `IN`/GPIO0..31,
     /// 1 = `IN1`/GPIO32..53). An explicit external drive always beats a weak
     /// internal pull-up; otherwise the raw IO_MUX `FUN_WPU` bit supplies the
     /// released level, including its SVD-defined cold reset. Without the
     /// pull-up term a released `INPUT_PULLUP` pin reads 0 and every
-    /// button-to-GND lab reads permanently pressed.
+    /// button-to-GND lab reads permanently pressed. A pad whose output driver
+    /// is on and whose input buffer (`FUN_IE`) is enabled samples the level it
+    /// drives itself, so `digitalRead()` on an OUTPUT pin reads it back.
     fn effective_input(&self, bank: usize) -> u32 {
         let valid = if bank == 0 { u32::MAX } else { BANK1_MASK };
-        ((self.external_levels[bank] & self.external_drive_mask[bank])
-            | (self.io_mux_pullup_mask()[bank] & !self.external_drive_mask[bank]))
-            & valid
+        let mut input = (self.external_levels[bank] & self.external_drive_mask[bank])
+            | (self.io_mux_pullup_mask()[bank] & !self.external_drive_mask[bank]);
+        let ie = self.io_mux_input_enable_mask()[bank];
+        for bit in 0..32u8 {
+            let mask = 1u32 << bit;
+            if ie & mask == 0 || valid & mask == 0 {
+                continue;
+            }
+            match self.driven_level(bank as u8 * 32 + bit) {
+                Some(true) => input |= mask,
+                Some(false) => input &= !mask,
+                None => {}
+            }
+        }
+        input & valid
     }
 
     /// Internal: apply a new `out` value, fire observers for each
@@ -1031,16 +1088,12 @@ impl Peripheral for Esp32s3Gpio {
         if let Some(level) = self.pad_routes.level(pin, |p| self.out_sel(p)) {
             return Some(level);
         }
-        let mask = 1u32 << pin;
         // ENABLE is the output driver: enabled pins show the OUT latch,
         // everything else shows the (externally driven) input level. A net
         // pad in open drain holding a 1 is released and shows the wire.
         Some(
-            if (self.enable & mask) != 0 && !self.released_net_pad(pin) {
-                (self.out & mask) != 0
-            } else {
-                (self.effective_input(0) & mask) != 0
-            },
+            self.driven_level(pin)
+                .unwrap_or_else(|| (self.effective_input(0) & (1u32 << pin)) != 0),
         )
     }
 
@@ -1944,5 +1997,39 @@ mod tests {
         assert!(g.matrix_irq_sources().is_empty());
         assert_eq!(g.take_scheduled_events().len(), 1);
         assert!(tap.take_events().len() >= 2, "both external edges pushed");
+    }
+
+    /// `pinMode(p, OUTPUT)` leaves `FUN_IE` set, so `digitalRead(p)` reads the
+    /// level the pad itself drives, on both banks. With `FUN_IE` clear the
+    /// input buffer is off and the released level shows instead.
+    #[test]
+    fn esp32s3_driven_output_pad_reads_back_through_gpio_in_when_fun_ie_is_set() {
+        use crate::Bus;
+        let mut bus = s3_bus();
+        let in_ = GPIO_BASE + IN;
+        let in1 = GPIO_BASE + IN1;
+
+        bus.write_u32(io_mux_gpio(4), 0x0000_1A02).unwrap(); // IE, no WPU
+        bus.write_u32(GPIO_BASE + ENABLE_W1TS, 1 << 4).unwrap();
+        assert_eq!(bus.read_u32(in_).unwrap() & (1 << 4), 0, "driving low");
+        bus.write_u32(GPIO_BASE + OUT_W1TS, 1 << 4).unwrap();
+        assert_ne!(bus.read_u32(in_).unwrap() & (1 << 4), 0, "driving high");
+        with_gpio(&mut bus, |g| assert_eq!(g.read_gpio_input(4), Some(true)));
+        bus.write_u32(GPIO_BASE + OUT_W1TC, 1 << 4).unwrap();
+        assert_eq!(bus.read_u32(in_).unwrap() & (1 << 4), 0);
+
+        // Bank 1: GPIO33 is bit 1 of IN1 / OUT1 / ENABLE1.
+        bus.write_u32(io_mux_gpio(33), 0x0000_1A02).unwrap();
+        bus.write_u32(GPIO_BASE + ENABLE1_W1TS, 1 << 1).unwrap();
+        bus.write_u32(GPIO_BASE + OUT1_W1TS, 1 << 1).unwrap();
+        assert_ne!(bus.read_u32(in1).unwrap() & (1 << 1), 0);
+        bus.write_u32(GPIO_BASE + OUT1_W1TC, 1 << 1).unwrap();
+        assert_eq!(bus.read_u32(in1).unwrap() & (1 << 1), 0);
+
+        // FUN_IE clear: the driven level is not sampled.
+        bus.write_u32(io_mux_gpio(5), 0x0000_1802).unwrap();
+        bus.write_u32(GPIO_BASE + ENABLE_W1TS, 1 << 5).unwrap();
+        bus.write_u32(GPIO_BASE + OUT_W1TS, 1 << 5).unwrap();
+        assert_eq!(bus.read_u32(in_).unwrap() & (1 << 5), 0);
     }
 }
