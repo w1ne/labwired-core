@@ -176,6 +176,12 @@ pub(crate) struct TestResult {
     /// prove-blink `gpio_edges`/`gpio_period`/`gpio_duty` clauses.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) logic_edges: Option<labwired_core::logic_capture::LogicEdgesResult>,
+    /// End-of-run state of every `--watch-gpio` pad (same set as
+    /// `logic_edges`) read through the chip-agnostic GPIO accessors: mode,
+    /// alternate function, output/input/pad level and four-state drive. `null`
+    /// where the pad's model cannot say. Omitted when no pad was watched.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) gpio_pins: Option<Vec<labwired_core::logic_capture::GpioPinState>>,
     /// Final + peak motor evidence (omitted when the manifest declared no
     /// motors, keeping result.json byte-identical for every other run). The
     /// oracle evaluates the peak `|speed_rpm|` post-hoc: a continuous

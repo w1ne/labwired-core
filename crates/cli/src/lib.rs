@@ -1395,6 +1395,8 @@ fn handle_load_error<C: labwired_core::Cpu>(
         &[],
         None,
         None,
+        // Nor any per-pin GPIO state.
+        None,
         // Load/reset failed before a machine existed: no motor evidence either.
         Vec::new(),
         // Load/reset failed before the run loop, so no stimulus was attempted.
@@ -2911,6 +2913,7 @@ mod test_outcome_golden_tests {
             fidelity: Vec::new(),
             fault_verdict: None,
             logic_edges: None,
+            gpio_pins: None,
             motors: Vec::new(),
             stimuli: Vec::new(),
             footprint: None,
