@@ -998,6 +998,16 @@ pub trait Peripheral: std::fmt::Debug + Send {
         false
     }
 
+    /// PWM capability: notify `obs` of each duty an MCPWM operator commits
+    /// (`mcpwm_set_duty`). Implemented by the ESP32-family MCPWM models;
+    /// `false` (observer dropped) for every other peripheral.
+    fn add_mcpwm_duty_observer(
+        &mut self,
+        _obs: Arc<dyn crate::peripherals::McpwmDutyObserver>,
+    ) -> bool {
+        false
+    }
+
     /// GPIO capability: read the firmware-visible input level for `pin`.
     /// Non-GPIO peripherals return `None`.
     fn read_gpio_input(&self, _pin: u8) -> Option<bool> {

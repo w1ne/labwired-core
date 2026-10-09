@@ -33,13 +33,9 @@
 use crate::{Peripheral, PeripheralTickResult, SimResult};
 use std::sync::Arc;
 
-/// Notified when an operator commits a new compare-A (duty) value, i.e. on
-/// each `mcpwm_set_duty`. Lets PWM-driven actuators react to the live duty.
-/// `duty_fraction` is `compare_A / PERIOD` for the operator's bound timer,
-/// the same value [`Mcpwm::operator_duty_fraction`] returns.
-pub trait McpwmDutyObserver: Send + Sync + std::fmt::Debug {
-    fn on_duty_change(&self, operator: u64, duty_fraction: f64);
-}
+/// Chip-neutral duty observer; here `duty_fraction` is the value
+/// [`Mcpwm::operator_duty_fraction`] returns.
+pub use crate::peripherals::McpwmDutyObserver;
 
 /// `CLK_CFG` — group-clock prescaler.
 const CLK_CFG: u64 = 0x00;
@@ -172,6 +168,11 @@ impl Mcpwm {
 }
 
 impl Peripheral for Mcpwm {
+    fn add_mcpwm_duty_observer(&mut self, obs: Arc<dyn McpwmDutyObserver>) -> bool {
+        self.add_duty_observer(obs);
+        true
+    }
+
     // Inert walk: MCPWM register bank (duty introspection, no waveform generation modeled); tick() is an explicit no-op.
     fn needs_legacy_walk(&self) -> bool {
         false

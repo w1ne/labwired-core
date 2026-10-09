@@ -230,3 +230,11 @@ pub fn can_trace_snapshot_all(
 pub trait LedcDutyObserver: Send + Sync + std::fmt::Debug {
     fn on_duty_change(&self, channel: u64, duty_fraction: f64);
 }
+
+/// Notified when an MCPWM operator commits a new compare-A (duty) value, i.e.
+/// on each `mcpwm_set_duty`. Lets PWM-driven actuators react to the live duty.
+/// `duty_fraction` is `compare_A / timer peak` for the operator's bound timer.
+/// Chip-neutral so every ESP MCPWM model can offer it.
+pub trait McpwmDutyObserver: Send + Sync + std::fmt::Debug {
+    fn on_duty_change(&self, operator: u64, duty_fraction: f64);
+}
