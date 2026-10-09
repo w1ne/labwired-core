@@ -143,6 +143,28 @@ fn access_counts_track_memory_and_peripheral_separately() {
     assert_eq!(bus.access_counts(), (0, 0, 0));
 }
 
+/// A run stuck polling one register reports it: back-to-back accesses to one
+/// peripheral offset accumulate, any other register restarts the streak.
+#[test]
+fn mmio_poll_streak_names_the_register_being_polled() {
+    use crate::Bus;
+
+    let mut bus = SystemBus::new();
+    assert_eq!(bus.mmio_poll_streak(), None);
+    // GPIO on the default bus: 0x4001_0800. Offset 0x08 is a plain register.
+    bus.write_u32(0x4001_0800, 0x1).expect("gpio write");
+    for _ in 0..5 {
+        let _ = bus.read_u32(0x4001_0808).expect("gpio read");
+    }
+    let (name, offset, count, _) = bus.mmio_poll_streak().expect("a streak");
+    assert_eq!((name.as_str(), offset), ("gpioa", 0x08));
+    assert_eq!(count, 5);
+
+    let _ = bus.read_u32(0x4001_0800).expect("gpio read");
+    let (_, offset, count, _) = bus.mmio_poll_streak().expect("a streak");
+    assert_eq!((offset, count), (0x00, 1), "another register restarts it");
+}
+
 /// `max_safe_tick_interval`: 1 while the legacy walk is live (the default
 /// bus), the batching recommendation once the walk is deleted, and back to
 /// 1 when a non-relaxable device (test-only HC-SR04 legacy pin) is present.
@@ -3569,6 +3591,7 @@ fn test_flash_boot_alias_read_and_write() {
         memory_reads: std::cell::Cell::new(0),
         memory_writes: std::cell::Cell::new(0),
         peripheral_accesses: std::cell::Cell::new(0),
+        poll_streak: std::cell::Cell::new((u32::MAX, 0, 0, 0)),
         legacy_walk_disabled: false,
         reset_vector_offset: 0,
         flash_boot_alias: true,
@@ -3684,6 +3707,7 @@ fn h5_flash_bus(gate: bool) -> SystemBus {
         memory_reads: std::cell::Cell::new(0),
         memory_writes: std::cell::Cell::new(0),
         peripheral_accesses: std::cell::Cell::new(0),
+        poll_streak: std::cell::Cell::new((u32::MAX, 0, 0, 0)),
         legacy_walk_disabled: false,
         reset_vector_offset: 0,
         flash_boot_alias: true,
@@ -3952,6 +3976,7 @@ fn h5_rww_bus(gate: bool) -> SystemBus {
         memory_reads: std::cell::Cell::new(0),
         memory_writes: std::cell::Cell::new(0),
         peripheral_accesses: std::cell::Cell::new(0),
+        poll_streak: std::cell::Cell::new((u32::MAX, 0, 0, 0)),
         legacy_walk_disabled: false,
         reset_vector_offset: 0,
         flash_boot_alias: true,
@@ -4216,6 +4241,7 @@ fn test_peripheral_range_index_lookup() {
         memory_reads: std::cell::Cell::new(0),
         memory_writes: std::cell::Cell::new(0),
         peripheral_accesses: std::cell::Cell::new(0),
+        poll_streak: std::cell::Cell::new((u32::MAX, 0, 0, 0)),
         legacy_walk_disabled: false,
         reset_vector_offset: 0,
         flash_boot_alias: true,
@@ -4335,6 +4361,7 @@ fn test_dma_tick_executes_copy_and_raises_irq() {
         memory_reads: std::cell::Cell::new(0),
         memory_writes: std::cell::Cell::new(0),
         peripheral_accesses: std::cell::Cell::new(0),
+        poll_streak: std::cell::Cell::new((u32::MAX, 0, 0, 0)),
         legacy_walk_disabled: false,
         reset_vector_offset: 0,
         flash_boot_alias: true,

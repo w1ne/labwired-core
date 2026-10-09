@@ -65,14 +65,19 @@ fn test_mpu6050_who_am_i() {
         i2c.tick();
     }
 
-    // Wait, in read mode, after Address phase (which sets ADDR), the master starts reading data instantly?
-    // In our simplified model, when is_reading is true, we fetch the data into DR and set RXNE
-    // So RXNE should be set now!
+    // ADDR is set and SCL is stretched until firmware clears it by reading
+    // SR1 then SR2 (RM0008 §26.3.3); only then is the data byte clocked in.
+    // ACK is off (single-byte read), so the byte is NACKed and is the last.
+    let _ = i2c.read(0x14).unwrap();
+    let _ = i2c.read(0x18).unwrap();
+    for _ in 0..40 {
+        i2c.tick();
+    }
     let sr1 = i2c.peek(0x14).unwrap();
     assert_ne!(
         sr1 & 0x40,
         0,
-        "RXNE should be set after address phase in read mode"
+        "RXNE should be set once ADDR is cleared and a byte time has passed"
     );
 
     // Read the data

@@ -614,18 +614,22 @@ fn run_c3_rom_boot_no_elf(
     // undeclared. The ELF-bearing `test` path always mirrors CDC into uart_tx
     // so `uart_contains` sees Arduino Serial; this arm now does the same when
     // the yaml omitted `debug_uart` (the hosted playground shape that shipped
-    // silent C3 serial while GPIO still toggled). Mixing UART0 + CDC can
-    // duplicate the BROM banner in uart.log — substring `uart_contains` still
-    // matches; do not copy this mix onto wasm `attach_c3_flash_console`, which
-    // keeps one heard stream on purpose (undeclared = UART0 heard, CDC unheard).
+    // silent C3 serial while GPIO still toggled). Undeclared folds UART0 and
+    // CDC through one `ConsoleMerge`: the mask ROM prints its banner to both,
+    // and a plain shared buffer rendered every ROM line twice, interleaved.
+    // Do not copy this mix onto wasm `attach_c3_flash_console`, which keeps
+    // one heard stream on purpose (undeclared = UART0 heard, CDC unheard).
     // An explicit UART `debug_uart` stays UART-only so a bridge-chip board
     // does not mix CDC into the assertion buffer.
+    let merged = matches!(console, labwired_core::console::HostConsole::Undeclared)
+        && machine.bus.attach_merged_esp_console(uart_tx.clone());
     let tap_cdc = matches!(
         console,
         labwired_core::console::HostConsole::UsbSerialJtag
             | labwired_core::console::HostConsole::Undeclared
     );
     if tap_cdc
+        && !merged
         && !machine.bus.attach_usb_serial_jtag_sink(uart_tx.clone())
         && matches!(console, labwired_core::console::HostConsole::UsbSerialJtag)
     {
@@ -1841,8 +1845,11 @@ pub(crate) fn run_test(
     }
     // ESP32-C3 / S3: Arduino USB-CDC `Serial` writes USB_SERIAL_JTAG, not UART0.
     // Mirror those bytes into the same uart_tx buffer so uart_contains works for
-    // stock sketches (no dual Serial0 prints required).
-    {
+    // stock sketches (no dual Serial0 prints required). With UART0 tapped too,
+    // fold both through one `ConsoleMerge` so output the ROM mirrors onto both
+    // consoles appears once.
+    let merged = debug_uart.is_none() && bus.attach_merged_esp_console(uart_tx.clone());
+    if !merged {
         use labwired_core::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag;
         for p in bus.peripherals.iter_mut() {
             if p.name == "usb_serial_jtag" {
