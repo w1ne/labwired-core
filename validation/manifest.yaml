@@ -6736,7 +6736,7 @@ boards:
     # the generic Xtensa BB JIT emit core (#1139) — the merge of the two is one
     # digest, so it is re-stamped once here rather than twice.
     drift_ack: 2026-09-18
-    drift_ack_digest: 1e859c5e52048e78afe970292dde61ffcb524ab6cb48d938e0acff7118896773
+    drift_ack_digest: 2d79ad2af211641990e9f3223ccf4e9e0ad01a620ed46442c95ffddfc3f2b9c6
     #
     # 2026-09-18 (execute split): no execution change. The arm bodies of
     # `XtensaLx7::execute` moved verbatim into `cpu/xtensa_lx7/exec/*.rs` as
@@ -6858,10 +6858,11 @@ boards:
     # ACK, NOT A CAPTURE.
     drift_ack: 2026-10-09
     # 2026-10-09 (#1348): watched xtensa decoder + xtensa_lx7 exec and
-    # esp32s3/ledc.rs. The FP divide/sqrt assists (div0.s ... divn.s, used by
-    # ROM `__divsf3` and libgcc `sqrtf`) now decode and execute instead of
-    # raising IllegalInstruction; the S3 LEDC notifies duty observers on
-    # DUTY_START (a servo follows ledcWrite). No register map or reset value
+    # esp32s3/ledc.rs + esp32s3/mcpwm.rs. The FP divide/sqrt assists (div0.s
+    # ... divn.s, used by ROM `__divsf3` and libgcc `sqrtf`) now decode and
+    # execute instead of raising IllegalInstruction; the S3 LEDC notifies duty
+    # observers on DUTY_START and the S3 MCPWM on a compare-A commit (a servo
+    # follows ledcWrite / mcpwm_set_duty). No register map or reset value
     # changed. No physical probe connected. ACK, NOT A CAPTURE.
     drift_ack: 2026-10-09
 

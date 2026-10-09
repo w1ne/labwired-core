@@ -17,8 +17,8 @@ The models column is a content digest over everything that board's `models` list
 | `nucleo-l073rz` | 🟢 silicon-verified | 2026-08-09 | `82d223b36164c110` | ⚠ drift acked 2026-10-09, expires 2026-11-08 (re-capture pending) |
 | `stm32f103` | 🟢 silicon-verified | 2026-08-09 | `2b918ae8a9fd6c35` | ⚠ drift acked 2026-10-09, expires 2026-11-08 (re-capture pending) |
 | `stm32f407` | 🟢 silicon-smoke | 2026-06-20 | `7c48a42c2efbe978` | ⚠ drift acked 2026-10-09, expires 2026-11-08 (re-capture pending) |
-| `esp32s3` | 🟢 silicon-verified | 2026-08-09 | `1e859c5e52048e78` | ⚠ drift acked 2026-10-09, expires 2026-11-08 (re-capture pending) |
-| `esp32s3-zero` | 🔵 sim-validated (deep model, no HW diff) | — | `b74c6cebf7c7ad04` | no silicon capture |
+| `esp32s3` | 🟢 silicon-verified | 2026-08-09 | `2d79ad2af2116419` | ⚠ drift acked 2026-10-09, expires 2026-11-08 (re-capture pending) |
+| `esp32s3-zero` | 🔵 sim-validated (deep model, no HW diff) | — | `f24ba46ee888a716` | no silicon capture |
 | `stm32f401` | 🟡 smoke-manual | — | `e39e8fdaa561626e` | no silicon capture |
 | `stm32wba52` | 🟡 smoke-manual | — | `12bdee31efe4dbbb` | no silicon capture |
 | `nrf52832` | ⚪ structural | — | `b07ce24d1fa3f5c2` | no silicon capture |
@@ -32,7 +32,7 @@ The models column is a content digest over everything that board's `models` list
 | `nucleo-u545re` | 🔵 sim-validated (deep model, no HW diff) | — | `bb0f91bf37a04a27` | no silicon capture |
 | `stm32f411ceu6` | 🔵 sim-validated (deep model, no HW diff) | — | `e463218ce53ff572` | no silicon capture |
 | `brd2709a` | 🟡 smoke-manual | — | `75688bbe11bd386f` | no silicon capture |
-| `esp32` | ⚪ structural | — | `2ba997da1c8fb5c7` | no silicon capture |
+| `esp32` | ⚪ structural | — | `9c5978f8bc07ab82` | no silicon capture |
 | `mkw41z4` | 🔵 sim-validated (deep model, no HW diff) | — | `0e7438a7ee55cab4` | no silicon capture |
 | `stm32f405` | 🔵 sim-validated (deep model, no HW diff) | — | `ca9b6c5aaa8c2750` | no silicon capture |
 | `stm32f767` | 🔵 sim-validated (deep model, no HW diff) | — | `d0e10738ee0bfaed` | no silicon capture |
@@ -48,7 +48,7 @@ The models column is a content digest over everything that board's `models` list
 | `teensy-41` | 🟡 smoke-manual | — | `77582a510bfc2104` | no silicon capture |
 | `stm32f7-discovery` | 🟡 smoke-manual | — | `2fd5717c28f7065a` | no silicon capture |
 | `nucleo-g071rb` | 🟡 smoke-manual | — | `4e18b9a608f2627a` | no silicon capture |
-| `esp32c6-devkitc` | 🟡 smoke-manual | — | `3c3e7a08590a73e8` | no silicon capture |
+| `esp32c6-devkitc` | 🟡 smoke-manual | — | `403c954677a7b4bf` | no silicon capture |
 
 ## `nrf52840` — 🟢 silicon-verified
 
