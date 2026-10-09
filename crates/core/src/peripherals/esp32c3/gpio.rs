@@ -328,13 +328,65 @@ impl Esp32c3Gpio {
             })
     }
 
+    /// Pads whose input buffer (IO_MUX `FUN_IE`) is enabled. Pads without an
+    /// IO_MUX word (GPIO22..25), or a GPIO with no IO_MUX wired, have no
+    /// buffer control to model and count as enabled.
+    fn io_mux_input_enable_mask(&self) -> u32 {
+        let Some(controls) = &self.pad_controls else {
+            return PIN_MASK;
+        };
+        let controls = controls
+            .read()
+            .expect("ESP32-C3 IO_MUX pad controls poisoned");
+        (0..PIN_COUNT).fold(0, |mask, pin| {
+            let enabled = controls
+                .get(pin as usize)
+                .is_none_or(|word| word & super::io_mux::FUN_IE != 0);
+            if enabled {
+                mask | (1 << pin)
+            } else {
+                mask
+            }
+        })
+    }
+
+    /// Level the pad's own output driver forces, or `None` while the driver
+    /// is off (or released as an open-drain net pad).
+    fn driven_level(&self, pin: u8) -> Option<bool> {
+        let mask = 1u32 << pin;
+        if (self.enable & mask) == 0 || self.released_net_pad(pin) {
+            return None;
+        }
+        // Output matrix: pads routed to the I²C0 controller carry the live
+        // SDA/SCL wire the bit engine drives, not the GPIO_OUT latch.
+        if let Some(level) = self.pad_routes.level(pin, |p| self.matrix_signal(p)) {
+            return Some(level);
+        }
+        Some((self.out & mask) != 0)
+    }
+
     /// Firmware-visible input word. An explicit external drive always beats a
     /// weak internal pull-up; otherwise the raw IO_MUX `FUN_WPU` bit supplies
-    /// the released level, including its descriptor-defined cold reset.
+    /// the released level, including its descriptor-defined cold reset. A pad
+    /// whose output driver is on and whose input buffer (`FUN_IE`) is enabled
+    /// samples the level it drives itself, so `digitalRead()` on an OUTPUT pin
+    /// (Arduino sets `FUN_IE` for it) reads back the driven level.
     fn effective_input(&self) -> u32 {
-        ((self.external_levels & self.external_drive_mask)
-            | (self.io_mux_pullup_mask() & !self.external_drive_mask))
-            & PIN_MASK
+        let mut input = (self.external_levels & self.external_drive_mask)
+            | (self.io_mux_pullup_mask() & !self.external_drive_mask);
+        let ie = self.io_mux_input_enable_mask();
+        for pin in 0..PIN_COUNT {
+            let mask = 1u32 << pin;
+            if ie & mask == 0 {
+                continue;
+            }
+            match self.driven_level(pin) {
+                Some(true) => input |= mask,
+                Some(false) => input &= !mask,
+                None => {}
+            }
+        }
+        input & PIN_MASK
     }
 
     /// Direction-aware pad level — the single truth `read_gpio_pad` and the
@@ -343,19 +395,13 @@ impl Esp32c3Gpio {
         if pin >= PIN_COUNT {
             return None;
         }
-        let mask = 1u32 << pin;
         // ENABLE is the output driver: enabled pins show the driving signal,
         // everything else shows the (externally driven) input level. A net
         // pad in open drain holding a 1 is released and shows the wire.
-        if (self.enable & mask) != 0 && !self.released_net_pad(pin) {
-            // Output matrix: pads routed to the I²C0 controller carry the live
-            // SDA/SCL wire the bit engine drives, not the GPIO_OUT latch.
-            if let Some(level) = self.pad_routes.level(pin, |p| self.matrix_signal(p)) {
-                return Some(level);
-            }
-            return Some((self.out & mask) != 0);
+        if let Some(level) = self.driven_level(pin) {
+            return Some(level);
         }
-        Some((self.effective_input() & mask) != 0)
+        Some((self.effective_input() & (1u32 << pin)) != 0)
     }
 
     /// A net pad in open drain (`PAD_DRIVER`) whose output latch holds a 1:
@@ -1367,5 +1413,92 @@ chip: "../chips/esp32c3.yaml"
             assert!(gpio.matrix_irq_sources().is_empty());
             assert_eq!(gpio.take_scheduled_events().len(), 1);
         }
+    }
+
+    /// Arduino `pinMode(4, OUTPUT)` sets `FUN_IE`; `digitalRead(4)` then reads
+    /// the level the pad itself drives. Reads GPIO_IN, `read_gpio_input` and
+    /// the inspect `idr` field.
+    #[test]
+    fn driven_output_pad_reads_back_through_gpio_in_when_fun_ie_is_set() {
+        use crate::peripherals::esp32c3::io_mux::Esp32c3IoMux;
+
+        const IO_MUX_GPIO4: u64 = 0x04 + 4 * 4;
+        let mut io_mux = Esp32c3IoMux::new();
+        // FUN_IE set, FUN_WPU clear, MCU_SEL = GPIO (what OUTPUT leaves behind).
+        io_mux.write_u32(IO_MUX_GPIO4, 0x0000_1a02).unwrap();
+        let mut gpio = Esp32c3Gpio::new();
+        gpio.set_pad_controls(io_mux.pad_controls());
+
+        gpio.write_u32(ENABLE_W1TS, 1 << 4).unwrap();
+        assert_eq!(gpio.read_u32(IN).unwrap() & (1 << 4), 0, "driving low");
+        gpio.write_u32(OUT_W1TS, 1 << 4).unwrap();
+        assert_ne!(gpio.read_u32(IN).unwrap() & (1 << 4), 0, "driving high");
+        assert_eq!(gpio.read_gpio_input(4), Some(true));
+        assert_ne!(gpio.snapshot()["idr"].as_u64().unwrap() & (1 << 4), 0);
+        gpio.write_u32(OUT_W1TC, 1 << 4).unwrap();
+        assert_eq!(gpio.read_u32(IN).unwrap() & (1 << 4), 0);
+        assert_eq!(gpio.read_gpio_input(4), Some(false));
+        assert_eq!(gpio.snapshot()["idr"].as_u64().unwrap() & (1 << 4), 0);
+        assert_eq!(gpio.read_gpio_pad(4), Some(false));
+    }
+
+    #[test]
+    fn driven_output_pad_with_fun_ie_clear_keeps_the_released_input_level() {
+        use crate::peripherals::esp32c3::io_mux::Esp32c3IoMux;
+
+        const IO_MUX_GPIO4: u64 = 0x04 + 4 * 4;
+        let mut io_mux = Esp32c3IoMux::new();
+        // FUN_IE and FUN_WPU both clear: the input buffer is off.
+        io_mux.write_u32(IO_MUX_GPIO4, 0x0000_1802).unwrap();
+        let mut gpio = Esp32c3Gpio::new();
+        gpio.set_pad_controls(io_mux.pad_controls());
+
+        gpio.write_u32(ENABLE_W1TS, 1 << 4).unwrap();
+        gpio.write_u32(OUT_W1TS, 1 << 4).unwrap();
+        assert_eq!(gpio.read_u32(IN).unwrap() & (1 << 4), 0);
+        assert_eq!(gpio.read_gpio_input(4), Some(false));
+        // The pad itself still shows the driver.
+        assert_eq!(gpio.read_gpio_pad(4), Some(true));
+    }
+
+    #[test]
+    fn driven_output_pad_reads_back_without_io_mux_wired() {
+        let mut gpio = Esp32c3Gpio::new();
+        gpio.write_u32(ENABLE_W1TS, 1 << 4).unwrap();
+        gpio.write_u32(OUT_W1TS, 1 << 4).unwrap();
+        assert_eq!(gpio.read_gpio_input(4), Some(true));
+        gpio.write_u32(OUT_W1TC, 1 << 4).unwrap();
+        assert_eq!(gpio.read_gpio_input(4), Some(false));
+    }
+
+    /// Same readback through the system bus built from the chip descriptor,
+    /// driving IO_MUX and GPIO the way `pinMode(4, OUTPUT)` does.
+    #[test]
+    fn bus_gpio_in_reflects_driven_output_after_arduino_pin_mode_output() {
+        const IO_MUX_GPIO4: u64 = 0x6000_9000 + 0x04 + 4 * 4;
+        const GPIO_IN: u64 = 0x6000_4000 + IN;
+        const GPIO_OUT_W1TS: u64 = 0x6000_4000 + OUT_W1TS;
+        const GPIO_OUT_W1TC: u64 = 0x6000_4000 + OUT_W1TC;
+        const GPIO_ENABLE_W1TS: u64 = 0x6000_4000 + ENABLE_W1TS;
+
+        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let chip = ChipDescriptor::from_file(root.join("../../configs/chips/esp32c3.yaml"))
+            .expect("read esp32c3 chip yaml");
+        let manifest: SystemManifest = serde_yaml::from_str(
+            r#"
+name: "esp32c3-output-readback-test"
+chip: "../chips/esp32c3.yaml"
+"#,
+        )
+        .expect("parse system yaml");
+        let mut bus = SystemBus::from_config(&chip, &manifest).expect("construct C3 bus");
+
+        bus.write_u32(IO_MUX_GPIO4, 0x0000_1a02)
+            .expect("pinMode(4, OUTPUT) leaves FUN_IE set");
+        bus.write_u32(GPIO_ENABLE_W1TS, 1 << 4).unwrap();
+        bus.write_u32(GPIO_OUT_W1TS, 1 << 4).unwrap();
+        assert_ne!(bus.read_u32(GPIO_IN).unwrap() & (1 << 4), 0);
+        bus.write_u32(GPIO_OUT_W1TC, 1 << 4).unwrap();
+        assert_eq!(bus.read_u32(GPIO_IN).unwrap() & (1 << 4), 0);
     }
 }
