@@ -1607,7 +1607,7 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
     // the 64k ring overflowed, which the oracle treats as fail-loud. This is the
     // SAME `logic_read_edges` drain the wasm `read_logic_edges` accessor uses, so
     // the CLI `result.json` edges and the browser edges are edge-for-edge equal.
-    let logic_edges = if logic_capture_armed {
+    let (logic_edges, gpio_pins) = if logic_capture_armed {
         let now_cycle = ctx.machine.logic_now_cycle();
         let batch = ctx.machine.logic_read_edges(0);
         let mut result = labwired_core::logic_capture::build_logic_edges_result(
@@ -1621,9 +1621,14 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
         let states = ctx.machine.logic_read_states(0);
         let initial_states = ctx.machine.logic_initial_states().to_vec();
         labwired_core::logic_capture::attach_logic_states(&mut result, &initial_states, &states);
-        Some(result)
+        // End-of-run per-pad state through the chip-agnostic GPIO accessors,
+        // so an agent reads `gpio_pins` instead of raw per-family registers.
+        let pins =
+            labwired_core::logic_capture::collect_gpio_pins(&ctx.machine.bus, &logic_watch_meta);
+        labwired_core::logic_capture::attach_logic_routing(&mut result, &pins);
+        (Some(result), Some(pins))
     } else {
-        None
+        (None, None)
     };
 
     export_analog_trace_if_requested(&ctx.args.analog_trace, ctx.machine);
@@ -1715,6 +1720,7 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
         &ctx.fault_evidence,
         Some(inspect_block),
         logic_edges,
+        gpio_pins,
         ctx.machine.bus.motor_snapshots(),
         stimulus_outcomes,
         footprint,

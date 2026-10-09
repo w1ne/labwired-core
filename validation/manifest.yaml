@@ -2104,7 +2104,7 @@ boards:
     # behaviour lives in exchange memory and the radio event path, which that
     # capture does not cover. This acknowledges model drift, NOT a recapture.
     drift_ack: 2026-09-28
-    drift_ack_digest: c6e99fb5cdcd96135f58efe8bbd4b46ee50763eb57e8c4c2e9f7ef9f1190d123
+    drift_ack_digest: 2dc2317ecf1b8b2e5b0956f14e47258bbd6ce97005f33490d5c98afb07cfaf97
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
@@ -2806,6 +2806,12 @@ boards:
     # follows `ledcWrite`). No reset value or register layout moves. No
     # physical probe connected. ACK, NOT A CAPTURE.
     drift_ack: 2026-10-08
+    # 2026-10-09 (#1344): watched esp32c3/gpio.rs + io_mux.rs. GPIO_IN now shows
+    # the driven level of a pad whose output driver is on and whose IO_MUX FUN_IE
+    # is set (silicon samples the pad through its input buffer). Only reads of
+    # driven output pads change; no register map or reset value changed. No
+    # physical probe connected. ACK, NOT A CAPTURE.
+    drift_ack: 2026-10-09
 
   - id: nucleo-l476rg
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
@@ -6679,7 +6685,7 @@ boards:
     # the generic Xtensa BB JIT emit core (#1139) — the merge of the two is one
     # digest, so it is re-stamped once here rather than twice.
     drift_ack: 2026-09-18
-    drift_ack_digest: dafe6119015253898e68772d577e90949c54e6bca7dc68dafbade17244e859bf
+    drift_ack_digest: 607083bf2a518e25c34d9b777594198d1adf34e7a66344d02c6db74fc007f355
     #
     # 2026-09-18 (execute split): no execution change. The arm bodies of
     # `XtensaLx7::execute` moved verbatim into `cpu/xtensa_lx7/exec/*.rs` as
@@ -6787,6 +6793,12 @@ boards:
     # FUNCn_OUT_SEL_CFG still resets to 0x100. No register map or other reset
     # value changed. No physical probe connected. ACK, NOT A CAPTURE.
     drift_ack: 2026-10-07
+    # 2026-10-09 (#1344): watched esp32s3/gpio.rs + io_mux.rs. GPIO_IN now shows
+    # the driven level of a pad whose output driver is on and whose IO_MUX FUN_IE
+    # is set on both banks (silicon samples the pad through its input buffer). Only reads of
+    # driven output pads change; no register map or reset value changed. No
+    # physical probe connected. ACK, NOT A CAPTURE.
+    drift_ack: 2026-10-09
 
   - id: esp32s3-zero
     # Board variant of esp32s3: same silicon (LX7), 4 MiB flash / 480 KiB RAM.

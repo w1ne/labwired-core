@@ -61,6 +61,8 @@ const PAD_RESET: u32 = 0x0000_0B00;
 const DATE_RESET: u32 = 0x0190_7160;
 /// `FUN_WPU` — the pad's weak pull-up, bit 8.
 pub(crate) const FUN_WPU: u32 = 1 << 8;
+/// `FUN_IE` — the pad's input buffer enable, bit 9.
+pub(crate) const FUN_IE: u32 = 1 << 9;
 
 /// The per-pad function words, shared with the GPIO model so a `FUN_WPU` write
 /// changes the electrical level an undriven pad reports.

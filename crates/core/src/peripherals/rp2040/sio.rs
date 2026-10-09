@@ -560,6 +560,41 @@ impl Peripheral for Rp2040Sio {
         true
     }
 
+    fn read_gpio_output(&self, pin: u8) -> Option<bool> {
+        if pin >= PAD_COUNT {
+            return None;
+        }
+        // The `GPIO_OUT` latch, whether or not `OE` lets it reach the pad.
+        Some(self.gpio_out & (1u32 << pin) != 0)
+    }
+
+    /// Direction from `OE` while IO_BANK0 hands the pad to SIO (or has not
+    /// assigned it); a pad handed to a peripheral is an alternate function,
+    /// named when a wire is bound to it.
+    fn gpio_routing(&self, pin: u8) -> Option<crate::peripherals::gpio::GpioRouting> {
+        use crate::peripherals::gpio::{GpioMode, GpioRouting};
+        if pin >= PAD_COUNT {
+            return None;
+        }
+        match self.pad_function(pin) {
+            None | Some(super::io_bank0::GPIO_FUNC_SIO) => Some(GpioRouting {
+                mode: if self.gpio_oe & (1 << pin) != 0 {
+                    GpioMode::Output
+                } else {
+                    GpioMode::Input
+                },
+                func: None,
+            }),
+            Some(_) => Some(GpioRouting {
+                mode: GpioMode::Af,
+                func: self
+                    .pad_routes
+                    .func(pin, |p| self.pad_function(p))
+                    .map(str::to_string),
+            }),
+        }
+    }
+
     fn read_gpio_pad_drive(&self, pin: u8) -> Option<crate::logic_capture::PadDrive> {
         self.net_drive(pin)
     }
@@ -641,6 +676,25 @@ mod tests {
         // Clear the output → reads back low.
         sio.write_u32(GPIO_OUT_CLR, PIN25).unwrap();
         assert_eq!(sio.read_u32(GPIO_IN).unwrap() & PIN25, 0);
+    }
+
+    #[test]
+    fn gpio_output_latch_and_direction_are_readable() {
+        use crate::peripherals::gpio::GpioMode;
+        use crate::Peripheral;
+        let mut sio = Rp2040Sio::new();
+        sio.write_u32(GPIO_OUT_SET, PIN25).unwrap();
+        // The latch reads back whether or not the driver is enabled.
+        assert_eq!(sio.read_gpio_output(25), Some(true));
+        assert_eq!(sio.read_gpio_output(24), Some(false));
+        assert_eq!(sio.read_gpio_output(PAD_COUNT), None);
+        // No FUNCSEL bound yet: direction comes from OE alone.
+        assert_eq!(sio.read_gpio_is_output(25), Some(false));
+        assert_eq!(sio.gpio_routing(25).unwrap().mode, GpioMode::Input);
+        sio.write_u32(GPIO_OE_SET, PIN25).unwrap();
+        assert_eq!(sio.read_gpio_is_output(25), Some(true));
+        assert_eq!(sio.gpio_routing(25).unwrap().mode, GpioMode::Output);
+        assert_eq!(sio.gpio_routing(PAD_COUNT), None);
     }
 
     #[test]

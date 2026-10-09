@@ -510,4 +510,69 @@ mod logic_capture_tests {
         assert_eq!(batch.cursor, 0);
         assert_eq!(batch.dropped, 0);
     }
+
+    /// The universal per-pin block: one output-high pin, one input pin held
+    /// high by the outside world, one pin handed to a peripheral (AF), each
+    /// reported from the model's own accessors with `null` where it cannot say.
+    #[test]
+    fn gpio_pin_states_report_output_input_and_af_pins() {
+        use crate::logic_capture::{collect_gpio_pins, LogicChannelMeta};
+
+        let mut machine = machine_with_gpio();
+        // MODER: pin0 output, pin1 input, pin2 alternate function.
+        machine
+            .bus
+            .write_u32(GPIO_BASE + MODER, 0b10_00_01)
+            .unwrap();
+        set_pin0(&mut machine, true);
+        let idx = machine
+            .bus
+            .find_peripheral_index_by_name("gpio_test")
+            .unwrap();
+        assert!(machine.bus.peripherals[idx].dev.set_gpio_input(1, true));
+
+        let meta: Vec<LogicChannelMeta> = (0..3u8)
+            .map(|pin| LogicChannelMeta {
+                ch: u32::from(pin),
+                peripheral: "gpio_test".into(),
+                pin,
+                initial: None,
+            })
+            .chain(std::iter::once(LogicChannelMeta {
+                ch: 3,
+                peripheral: "nonexistent".into(),
+                pin: 0,
+                initial: None,
+            }))
+            .collect();
+        let pins = collect_gpio_pins(&machine.bus, &meta);
+        assert_eq!(pins.len(), 4);
+
+        assert_eq!(pins[0].pin, "CH0");
+        assert_eq!(pins[0].mode, "output");
+        assert_eq!(pins[0].output, Some(true));
+        assert_eq!(pins[0].pad, Some(true));
+        assert_eq!(pins[0].drive.as_deref(), Some("1"));
+
+        assert_eq!(pins[1].mode, "input");
+        assert_eq!(pins[1].input, Some(true));
+        assert_eq!(pins[1].pad, Some(true));
+        assert!(pins[1].drive.is_some());
+
+        assert_eq!(pins[2].mode, "af");
+
+        // A watch that never resolved to a peripheral stays honest: all null.
+        assert_eq!(pins[3].mode, "unknown");
+        assert_eq!(pins[3].func, None);
+        assert_eq!(pins[3].output, None);
+        assert_eq!(pins[3].input, None);
+        assert_eq!(pins[3].pad, None);
+        assert_eq!(pins[3].drive, None);
+
+        // The serialized shape is the contract the builder reads.
+        let v = serde_json::to_value(&pins[0]).unwrap();
+        for k in ["pin", "mode", "func", "output", "input", "pad", "drive"] {
+            assert!(v.get(k).is_some(), "missing key {k}: {v}");
+        }
+    }
 }

@@ -39,6 +39,7 @@ pub(crate) fn write_outputs<C: labwired_core::Cpu>(
     fault_evidence: &[labwired_cli::faults::FaultEvidence],
     inspect: Option<labwired_core::inspect::MachineInspect>,
     logic_edges: Option<labwired_core::logic_capture::LogicEdgesResult>,
+    gpio_pins: Option<Vec<labwired_core::logic_capture::GpioPinState>>,
     motors: Vec<labwired_core::bus::MotorSnapshot>,
     stimuli: Vec<StimulusOutcome>,
     footprint: Option<artifacts::FootprintReport>,
@@ -116,6 +117,7 @@ pub(crate) fn write_outputs<C: labwired_core::Cpu>(
         fidelity,
         fault_verdict,
         logic_edges,
+        gpio_pins,
         motors,
         stimuli,
         footprint,
@@ -470,6 +472,7 @@ pub(crate) fn write_config_error_outputs(
         fault_verdict: None,
         // Nor any logic-analyzer edges — capture never armed.
         logic_edges: None,
+        gpio_pins: None,
         // Nor any motor evidence: the run was rejected before a machine existed.
         motors: Vec::new(),
         // Nor any stimulus outcomes: the run was rejected before a machine
