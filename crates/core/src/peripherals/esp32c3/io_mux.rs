@@ -23,6 +23,8 @@ const PIN_CTRL_RESET: u32 = 0x07ff;
 const PAD_RESET: u32 = 0x0000_0b00;
 const DATE_RESET: u32 = 0x0200_6050;
 const FUN_WPU: u32 = 1 << 8;
+/// `FUN_IE` — the pad's input buffer enable, bit 9.
+pub(crate) const FUN_IE: u32 = 1 << 9;
 
 /// The behavioral model replaces the declarative peripheral, but debugger and
 /// inspect clients still need its original register contract. Keep the schema
