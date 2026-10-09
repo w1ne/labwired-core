@@ -238,6 +238,13 @@ pub trait BusResidentDevice: std::fmt::Debug + Send {
         !self.needs_per_cycle_service()
     }
 
+    /// `false` for a helper that only feeds a model the bus already lists
+    /// under the same id (a servo's pad watcher beside the servo itself), so
+    /// the attached-device walk reports that device once.
+    fn is_attached_device(&self) -> bool {
+        true
+    }
+
     /// Output-register addresses whose MMIO writes must service this device
     /// **synchronously**, instead of waiting for the next peripheral tick.
     ///

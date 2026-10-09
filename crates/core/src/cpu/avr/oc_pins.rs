@@ -63,7 +63,8 @@ const PORT_D: usize = 1;
 
 impl Avr {
     /// Pads the output-compare units own right now, as `(mask, level)` per
-    /// port (B, D). OC0A = PD6, OC0B = PD5, OC2A = PB3, OC2B = PD3.
+    /// port (B, D). OC0A = PD6, OC0B = PD5, OC1A = PB1, OC1B = PB2,
+    /// OC2A = PB3, OC2B = PD3.
     fn oc_override(&self) -> ([u8; 2], [u8; 2]) {
         let mut mask = [0u8; 2];
         let mut level = [0u8; 2];
@@ -86,6 +87,17 @@ impl Avr {
             PORT_D,
             5,
             oc_level(w0, self.tccr0a >> 4, t0, u16::from(self.ocr0b), 0xFF),
+        );
+        let (w1, top1, t1) = (self.t1.waveform(), self.t1.top(), self.t1.tcnt);
+        put(
+            PORT_B,
+            1,
+            oc_level(w1, self.t1.tccra >> 6, t1, self.t1.ocra, top1),
+        );
+        put(
+            PORT_B,
+            2,
+            oc_level(w1, self.t1.tccra >> 4, t1, self.t1.ocrb, top1),
         );
         let w2 = wave_8bit(self.tccr2a, self.tccr2b);
         let t2 = u16::from(self.tcnt2);
@@ -115,7 +127,7 @@ impl Avr {
     /// Push the waveform levels onto the pads after the timers moved. One
     /// bus write per pad change; nothing while no `COMnx` bit is set.
     pub(super) fn sync_oc_pins(&mut self, bus: &mut dyn Bus) {
-        if (self.tccr0a | self.tccr2a) & 0xF0 == 0 && self.oc_mask == [0, 0] {
+        if (self.tccr0a | self.t1.tccra | self.tccr2a) & 0xF0 == 0 && self.oc_mask == [0, 0] {
             return;
         }
         let (mask, level) = self.oc_override();

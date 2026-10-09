@@ -1207,7 +1207,8 @@ impl SystemBus {
     ///
     /// Public so kits (`Transport::GpioGroup`) and hand arms share one choke
     /// point — the same path `AttachCtx::install_gpio_observer` uses.
-    pub fn install_gpio_observer<T>(bus: &mut SystemBus, observer: std::sync::Arc<T>)
+    /// Returns whether an observer-capable GPIO block took it.
+    pub fn install_gpio_observer<T>(bus: &mut SystemBus, observer: std::sync::Arc<T>) -> bool
     where
         T: crate::peripherals::device::GpioObserver + 'static,
     {
@@ -1217,7 +1218,7 @@ impl SystemBus {
                 any.and_then(|a| a.downcast_mut::<crate::peripherals::esp32s3::gpio::Esp32s3Gpio>())
             {
                 gpio.add_observer(observer);
-                return;
+                return true;
             }
         }
         // Classic ESP32 GPIO (separate type).
@@ -1228,8 +1229,10 @@ impl SystemBus {
                 .and_then(|a| a.downcast_mut::<crate::peripherals::esp32::gpio::Esp32Gpio>())
             {
                 gpio.add_observer(observer);
+                return true;
             }
         }
+        false
     }
 
     #[allow(dead_code)] // residual GPIO helpers kept for CAN/tester arms that may re-use them

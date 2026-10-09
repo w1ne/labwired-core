@@ -25,10 +25,11 @@ ram:
   base: 0x00000100
   size: "2KB"
 peripherals:
-  # Timer0 (millis/delay) and Timer2 (tone/noTone, normal + CTC compare-match
-  # and overflow) are registers on the AVR CPU, not bus windows: TCCR2A/B,
-  # TCNT2, OCR2A/B, TIMSK2, TIFR2, ASSR. In fast/phase-correct PWM (TOP 0xFF)
-  # the COM bits drive OC0A/OC0B (PD6/PD5) and OC2A/OC2B (PB3/PD3): analogWrite.
+  # Timer0 (millis/delay), Timer1 (16-bit: Servo library, compare-match and
+  # overflow) and Timer2 (tone/noTone, normal + CTC compare-match and overflow)
+  # are registers on the AVR CPU, not bus windows: TCCR2A/B, TCNT2, OCR2A/B,
+  # TIMSK2, TIFR2, ASSR. In the PWM modes the COM bits drive OC0A/OC0B
+  # (PD6/PD5), OC1A/OC1B (PB1/PB2) and OC2A/OC2B (PB3/PD3): analogWrite.
   # Parking SPI controller for kit attach only. Hardware SPI (SPCR/SPSR/SPDR)
   # is modelled on the AVR CPU; build_avr_node / CLI drain attached slaves onto
   # the interpreter after from_config. Base is outside the 16-bit data space so
