@@ -166,17 +166,29 @@ fn read_n(i2c: &mut I2c, addr: u8, reg: u8, n: usize) -> Option<Vec<u8>> {
         return None; // nobody at this address on the selected segment
     }
     f1_byte(i2c, reg);
-    i2c.write(0x01, 0x01).unwrap(); // repeated START
+    // Repeated START, with ACK armed when more than one byte is wanted.
+    i2c.write(0x01, if n > 1 { 0x05 } else { 0x01 }).unwrap();
     for _ in 0..10 {
         i2c.tick();
     }
     f1_addr(i2c, addr, true);
+    // Clear ADDR (SR1 then SR2) to release SCL, then take each byte when RXNE
+    // says it has arrived; ACK is dropped while the last byte is on the wire
+    // (RM0008 §26.3.3).
+    let _ = i2c.read(0x14).unwrap();
+    let _ = i2c.read(0x18).unwrap();
     let mut out = Vec::with_capacity(n);
-    for _ in 0..n {
-        out.push(i2c.read(0x10).unwrap());
-        for _ in 0..20 {
+    for k in 0..n {
+        if k + 1 == n {
+            i2c.write(0x01, 0x00).unwrap();
+        }
+        for _ in 0..1_000 {
+            if i2c.peek(0x14).unwrap() & 0x40 != 0 {
+                break;
+            }
             i2c.tick();
         }
+        out.push(i2c.read(0x10).unwrap());
     }
     f1_stop(i2c);
     Some(out)
