@@ -83,8 +83,8 @@ pub struct Avr {
     pub t0_prescale_acc: u32,
     /// Timer2, the counter Arduino `tone()` runs in CTC mode.
     ///
-    /// Normal and CTC only. Other waveform modes count 0..255 and do not
-    /// drive the OC2A/OC2B pins, so `analogWrite` PWM on D3/D11 stays dark.
+    /// Normal and CTC count as on silicon. The PWM modes count 0..255; their
+    /// OC2A/OC2B pad levels come from `avr/oc_pins.rs`.
     pub tcnt2: u8,
     pub tccr2a: u8,
     pub tccr2b: u8,
@@ -97,6 +97,12 @@ pub struct Avr {
     /// so the counter stops instead of pretending the CPU clock still drives it.
     pub assr: u8,
     pub t2_prescale_acc: u32,
+    /// Timer1, the 16-bit counter (`avr/timer1.rs`).
+    t1: timer1::Timer1,
+    /// Port B / port D pads an output-compare unit owns, and the level it
+    /// drives there, as last pushed to the bus-side port model.
+    oc_mask: [u8; 2],
+    oc_level: [u8; 2],
     pub serial_tx: Vec<u8>,
     /// Optional live sink for MachineTrait UART capture.
     pub serial_sink: Option<Arc<Mutex<Vec<u8>>>>,
@@ -331,6 +337,9 @@ impl Avr {
             tifr2: 0,
             assr: 0,
             t2_prescale_acc: 0,
+            t1: timer1::Timer1::default(),
+            oc_mask: [0; 2],
+            oc_level: [0; 2],
             serial_tx: Vec::new(),
             serial_sink: None,
             ucsr0a: UCSRA_UDRE,
@@ -526,6 +535,10 @@ impl Avr {
             0x00B3 => Ok(self.ocr2a),
             0x00B4 => Ok(self.ocr2b),
             0x00B6 => Ok(self.assr),
+            timer1::ADDR_TIFR1
+            | timer1::ADDR_TIMSK1
+            | timer1::ADDR_TCCR1A..=0x0082
+            | 0x0084..=timer1::ADDR_OCR1BH => Ok(self.timer1_read(addr).unwrap_or_default()),
             // RXC0 comes from the bus-side USART model, which holds the receive
             // queue (peers and host input). A bus with no USART window reads 0.
             0x00C0 => {
@@ -636,14 +649,15 @@ impl Avr {
                 Ok(())
             }
             0x00B0 => {
-                // COM2A/COM2B and WGM21:0. Reserved bits read as 0. The COM
-                // bits are stored and otherwise ignored: OC2x is not driven.
+                // COM2A/COM2B and WGM21:0. Reserved bits read as 0. In the
+                // PWM modes the COM bits hand OC2A/OC2B to the waveform
+                // (`oc_pins.rs`).
                 self.tccr2a = value & 0xF3;
                 Ok(())
             }
             0x00B1 => {
-                // FOC2A/FOC2B are strobes and always read as 0. No OC2x pin
-                // to force, so the strobe is a no-op. WGM22 and CS22:0 stick.
+                // FOC2A/FOC2B are strobes and always read as 0. Force
+                // compare is not modelled, so the strobe is a no-op. WGM22 and CS22:0 stick.
                 self.tccr2b = value & 0x0F;
                 Ok(())
             }
@@ -661,6 +675,13 @@ impl Avr {
             }
             0x00B6 => {
                 self.assr = value & (ASSR_EXCLK | ASSR_AS2);
+                Ok(())
+            }
+            timer1::ADDR_TIFR1
+            | timer1::ADDR_TIMSK1
+            | timer1::ADDR_TCCR1A..=0x0082
+            | 0x0084..=timer1::ADDR_OCR1BH => {
+                self.timer1_write(addr, value);
                 Ok(())
             }
             0x00C0 => {
@@ -809,7 +830,9 @@ impl Avr {
                 // there (flash@0 swallows low-address bus writes).
                 if (AVR_PINB..=AVR_PIND + 2).contains(&addr) {
                     // High-window mirror is best-effort (must not fail IN/OUT).
-                    let _mirror = bus.write_u8(AVR_IO_MIRROR_BASE + addr as u64, value);
+                    // A pad an output-compare unit owns keeps its waveform level.
+                    let pad = self.port_pad_value(addr, value);
+                    let _mirror = bus.write_u8(AVR_IO_MIRROR_BASE + addr as u64, pad);
                 } else {
                     let _mirror = bus.write_u8(addr as u64, value);
                 }
@@ -976,6 +999,7 @@ impl Avr {
 
     fn tick_io_timers(&mut self, cpu_cycles: u32) {
         self.tick_timer0(cpu_cycles);
+        self.tick_timer1(cpu_cycles);
         self.tick_timer2(cpu_cycles);
     }
 
@@ -1265,6 +1289,7 @@ impl Avr {
             self.tifr2 &= !TIFR2_TOV2;
             self.sync_timer2_irq();
         }
+        self.timer1_vector_entered(vec);
         // ... and the INTn / PCIFn flag of an external or pin-change vector.
         self.ext_vector_entered(vec);
         self.push_pc(bus)?;
@@ -1478,7 +1503,7 @@ impl Cpu for Avr {
     }
 
     /// A core stopped by `SLEEP` may be skipped until the next thing that can
-    /// wake it: a Timer0 overflow or a Timer2 compare/overflow with its
+    /// wake it: a Timer0 overflow or a Timer1/Timer2 compare/overflow with its
     /// interrupt enabled (while clk_I/O runs), or a pad change seen at a later
     /// boundary. Nothing to skip when an interrupt is already takeable, or a
     /// watched pad moved since the last sample, or the USART receive interrupt
@@ -1493,12 +1518,17 @@ impl Cpu for Avr {
         if self.ucsr0b & UCSRB_RXCIE != 0 && Self::usart_on_bus(bus) {
             return None;
         }
-        match (self.timer0_wake_cycles(), self.timer2_wake_cycles()) {
-            (Some(timer0), Some(timer2)) => Some(timer0.min(timer2)),
-            (Some(timer0), None) => Some(timer0),
-            (None, Some(timer2)) => Some(timer2),
-            (None, None) => Some(u64::MAX),
-        }
+        Some(
+            [
+                self.timer0_wake_cycles(),
+                self.timer1_wake_cycles(),
+                self.timer2_wake_cycles(),
+            ]
+            .into_iter()
+            .flatten()
+            .min()
+            .unwrap_or(u64::MAX),
+        )
     }
 
     fn fast_forward_idle_cycles(&mut self, cycles: u64) {
@@ -1535,6 +1565,9 @@ impl Cpu for Avr {
         self.tifr2 = 0;
         self.assr = 0;
         self.t2_prescale_acc = 0;
+        self.t1 = timer1::Timer1::default();
+        self.oc_mask = [0; 2];
+        self.oc_level = [0; 2];
         self.serial_tx.clear();
         self.ucsr0a = UCSRA_UDRE;
         self.ucsr0b = 0;
@@ -1616,6 +1649,7 @@ impl Cpu for Avr {
                 self.cycles += 1;
                 if self.io_clock_running() {
                     self.tick_io_timers(1);
+                    self.sync_oc_pins(bus);
                 }
                 return Ok(());
             }
@@ -1631,6 +1665,7 @@ impl Cpu for Avr {
             self.cycles += 4;
             let delta = self.cycles.saturating_sub(before) as u32;
             self.tick_io_timers(delta.max(1));
+            self.sync_oc_pins(bus);
             return Ok(());
         }
 
@@ -1672,6 +1707,7 @@ impl Cpu for Avr {
         }
 
         self.tick_io_timers(delta.max(1));
+        self.sync_oc_pins(bus);
         Ok(())
     }
 
@@ -1683,7 +1719,8 @@ impl Cpu for Avr {
         max_count: u32,
     ) -> SimResult<u32> {
         let push_tap = bus.logic_tap().filter(|tap| tap.push_armed());
-        let timer_stopped = self.t0_prescaler() == 0 && self.t2_prescaler() == 0;
+        let timer_stopped =
+            self.t0_prescaler() == 0 && self.t1.prescaler() == 0 && self.t2_prescaler() == 0;
         let irq_takeable = self.flag_i() && self.pending_irq != 0;
         // A sleeping core, or pads that must be sampled at every boundary for
         // INT/PCINT, keep the one-instruction path.
@@ -1799,6 +1836,10 @@ impl Cpu for Avr {
 mod exec;
 #[path = "avr/ext_int.rs"]
 mod ext_int;
+#[path = "avr/oc_pins.rs"]
+mod oc_pins;
+#[path = "avr/timer1.rs"]
+mod timer1;
 pub use ext_int::{VEC_INT0, VEC_INT1, VEC_PCINT0, VEC_PCINT1, VEC_PCINT2};
 
 #[cfg(test)]

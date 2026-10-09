@@ -375,8 +375,22 @@ impl PeripheralKit for ServoKit {
             "mg996r" => ServoCal::mg996r(),
             _ => ServoCal::standard(),
         };
+        let pad_odr = ctx.resolve_pin_odr(pin_label);
         let servo = Arc::new(Servo::with_id(ctx.device_id().to_string(), cal, pin));
-        ctx.install_gpio_observer(servo.clone());
+        if !ctx.install_gpio_observer(servo.clone()) {
+            // No edge-reporting GPIO block (AVR, STM32, ...): watch the pad
+            // from the output-register write hook instead, so a bit-banged
+            // pulse (the AVR Servo library's Timer1 ISR) still steers it.
+            if let Some((addr, bit)) = pad_odr {
+                ctx.bus.gpio_devices.push(Box::new(ServoPadWatch {
+                    id: ctx.device_id().to_string(),
+                    servo: servo.clone(),
+                    addr: [addr],
+                    bit,
+                    level: false,
+                }));
+            }
+        }
         // Any LEDC model (classic ESP32: 16 channels, ESP32-C3: 6) reports
         // its committed duties through the same observer.
         let channels = ctx
@@ -392,6 +406,69 @@ impl PeripheralKit for ServoKit {
         }
         ctx.bus.observe_device(servo);
         Ok(())
+    }
+}
+
+/// Feeds a [`Servo`] the edges of its control pad on a chip whose GPIO block
+/// has no observer list: serviced from the bus write hook on every store to
+/// the pad's output register, so each edge carries the cycle it happened at.
+#[derive(Debug)]
+struct ServoPadWatch {
+    id: String,
+    servo: Arc<Servo>,
+    addr: [u64; 1],
+    bit: u8,
+    level: bool,
+}
+
+impl crate::bus::BusResidentDevice for ServoPadWatch {
+    fn service(&mut self, pins: &mut dyn crate::bus::DevicePins, now: u64) {
+        let level = pins.pad_bit(self.addr[0], self.bit).unwrap_or(false);
+        if level != self.level {
+            self.level = level;
+            self.servo.on_gpio_edge(self.servo.pin(), level, now);
+        }
+    }
+
+    /// The pad moves only on a store, which the write hook already services.
+    fn needs_per_cycle_service(&self) -> bool {
+        false
+    }
+
+    fn edge_service_addrs(&self) -> &[u64] {
+        &self.addr
+    }
+
+    /// The servo itself is the listed device (`observe_device` below).
+    fn is_attached_device(&self) -> bool {
+        false
+    }
+
+    fn as_sim_input(&mut self) -> &mut dyn crate::sim_input::SimInput {
+        self
+    }
+
+    fn id(&self) -> &str {
+        &self.id
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+/// A servo has no stimulus channels: it is commanded through its pad.
+impl crate::sim_input::SimInput for ServoPadWatch {
+    fn input_channels(&self) -> &[crate::sim_input::InputChannel] {
+        &[]
+    }
+
+    fn set_input(&mut self, key: &str, value: f64) -> Result<(), crate::sim_input::SimInputError> {
+        self.require_channel(key, value).map(|_| ())
     }
 }
 
