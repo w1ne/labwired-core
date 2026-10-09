@@ -653,6 +653,51 @@ mod tests {
     /// ESP32-S3 GP-SPI model (`Esp32s3Spi`) — an S3 manifest wiring a device
     /// to `spi3_s3` previously errored with "not an ESP32 SPI peripheral"
     /// because only the classic `Esp32Spi` downcast was attempted.
+    /// A servo on an S3 pad follows ESP32Servo's `write()` -- a `ledcWrite`
+    /// (DUTY, then `CONF1.DUTY_START`) -- on the production S3 bus, through
+    /// the same chip-neutral LEDC duty observer as the classic ESP32 and C3.
+    #[test]
+    fn s3_servo_follows_ledc_duty() {
+        let manifest: labwired_config::SystemManifest = serde_yaml::from_str(
+            r#"
+name: "s3-servo-twin"
+chip: "esp32s3.yaml"
+external_devices:
+  - id: "M1"
+    type: "servo"
+    connection: "gpio"
+    config:
+      signal_pin: "GPIO4"
+      model: "sg90"
+board_io: []
+"#,
+        )
+        .expect("parse S3 servo manifest");
+        let mut bus = SystemBus::new();
+        let _ = configure_xtensa_esp32s3(&mut bus, &Esp32s3Opts::default());
+        attach_esp32_external_devices(&mut bus, &manifest).expect("attach servo");
+
+        const LEDC: u64 = 0x6001_9000;
+        // ledcSetup(ch 3, 50 Hz, 14 bit) on timer 2, channel bound to timer 2.
+        bus.write_u32(LEDC + 0xA0 + 2 * 8, 14).unwrap();
+        bus.write_u32(LEDC + 3 * 0x14, 2).unwrap();
+        // write(angle) on a 500..2400 us attach: ticks = us * 2^14 / 20000.
+        for angle in [0u32, 90, 180, 33] {
+            let us = 500 + angle * 1900 / 180;
+            let ticks = us * 16384 / 20000;
+            bus.write_u32(LEDC + 3 * 0x14 + 0x08, ticks << 4).unwrap();
+            bus.write_u32(LEDC + 3 * 0x14 + 0x0C, 1 << 31).unwrap();
+            let servos: Vec<&crate::peripherals::components::servo::Servo> =
+                bus.observed_of().collect();
+            assert_eq!(servos.len(), 1);
+            assert!(
+                (servos[0].angle_degrees() - angle as f32).abs() < 1.0,
+                "write({angle}) -> shaft {}",
+                servos[0].angle_degrees()
+            );
+        }
+    }
+
     #[test]
     fn attach_esp32_external_devices_attaches_to_s3_gpspi() {
         use labwired_config::{ExternalDevice, SystemManifest};
