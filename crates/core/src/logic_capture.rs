@@ -704,6 +704,14 @@ pub struct ChannelEdgeSeries {
     /// cannot report drive.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub states: Option<Vec<StateTransition>>,
+    /// Pad routing at the end of the run (`input`/`output`/`af`/`analog`/
+    /// `unknown`), from the same [`GpioPinState`] the `gpio_pins` block carries.
+    /// Absent until [`attach_logic_routing`] runs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mode: Option<String>,
+    /// Alternate-function signal name when the model can name it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub func: Option<String>,
 }
 
 /// One four-state transition in the serialized series.
@@ -737,6 +745,96 @@ pub fn attach_logic_states(
                 })
                 .collect(),
         );
+    }
+}
+
+/// End-of-run state of one watched pad, read through the chip-agnostic GPIO
+/// accessors on [`Peripheral`](crate::Peripheral) so an agent never has to know
+/// a family's raw registers (STM32 `ODR`/`IDR`, ESP32 `IN`/`out`, AVR `PORT`).
+/// Serialized as one entry of `result.json`'s `gpio_pins`.
+///
+/// Every accessor a model cannot answer is `null`, never a guess.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct GpioPinState {
+    /// The pad's logic-analyzer channel id, as in `logic_edges` ("CH0"…).
+    pub pin: String,
+    /// Watched peripheral name (`gpioa`, `gpio`, …).
+    pub peripheral: String,
+    /// Pin number within that peripheral.
+    pub number: u8,
+    /// `input` | `output` | `af` | `analog` | `unknown`.
+    pub mode: String,
+    /// Alternate-function signal name, or `null`.
+    pub func: Option<String>,
+    /// Output latch level.
+    pub output: Option<bool>,
+    /// Firmware-visible input level.
+    pub input: Option<bool>,
+    /// Level a probe on the pad would see.
+    pub pad: Option<bool>,
+    /// Four-state pad value: `0`, `1`, `z`, `x` (`h`/`l` on a `gpio_net` pad
+    /// held only by an internal pull).
+    pub drive: Option<String>,
+}
+
+/// Read the end-of-run [`GpioPinState`] of every channel in the watch set.
+/// Channels are resolved by the same peripheral name the watch itself used
+/// (`find_peripheral_index_by_name`); one that does not resolve reports
+/// `unknown` with every reading `null`, matching the flat `logic_edges` lane.
+pub fn collect_gpio_pins(
+    bus: &crate::bus::SystemBus,
+    meta: &[LogicChannelMeta],
+) -> Vec<GpioPinState> {
+    use crate::peripherals::gpio::GpioMode;
+
+    meta.iter()
+        .map(|m| {
+            let dev = bus
+                .find_peripheral_index_by_name(&m.peripheral)
+                .and_then(|idx| bus.peripherals.get(idx))
+                .map(|p| &p.dev);
+            let routing = dev.and_then(|d| d.gpio_routing(m.pin));
+            let mode = match routing.as_ref().map(|r| r.mode) {
+                Some(GpioMode::Input) => "input",
+                Some(GpioMode::Output) => "output",
+                Some(GpioMode::Af) => "af",
+                Some(GpioMode::Analog) => "analog",
+                Some(GpioMode::Unknown) | None => {
+                    match dev.and_then(|d| d.read_gpio_is_output(m.pin)) {
+                        Some(true) => "output",
+                        Some(false) => "input",
+                        None => "unknown",
+                    }
+                }
+            };
+            let pad = dev.and_then(|d| d.read_gpio_pad(m.pin));
+            let drive = dev
+                .and_then(|d| d.read_gpio_pad_drive(m.pin))
+                .and_then(|drive| PadState::from_parts(pad, drive))
+                .map(|state| state.as_char().to_string());
+            GpioPinState {
+                pin: format!("CH{}", m.ch),
+                peripheral: m.peripheral.clone(),
+                number: m.pin,
+                mode: mode.to_string(),
+                func: routing.and_then(|r| r.func),
+                output: dev.and_then(|d| d.read_gpio_output(m.pin)),
+                input: dev.and_then(|d| d.read_gpio_input(m.pin)),
+                pad,
+                drive,
+            }
+        })
+        .collect()
+}
+
+/// Copy each pin's `mode`/`func` onto the matching `logic_edges` channel
+/// (additive fields; every existing field is untouched).
+pub fn attach_logic_routing(result: &mut LogicEdgesResult, pins: &[GpioPinState]) {
+    for lane in result.channels.iter_mut() {
+        if let Some(p) = pins.get(lane.ch as usize) {
+            lane.mode = Some(p.mode.clone());
+            lane.func = p.func.clone();
+        }
     }
 }
 
@@ -788,6 +886,8 @@ pub fn build_logic_edges_result(
             gaps: Vec::new(),
             initial_state: None,
             states: None,
+            mode: None,
+            func: None,
         })
         .collect();
     for edge in &batch.edges {
