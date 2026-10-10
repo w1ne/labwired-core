@@ -568,10 +568,48 @@ impl Esp32c3Gpio {
             self.external_levels &= !(1u32 << pin);
         }
         self.external_drive_mask |= 1u32 << pin;
-        if pin < 22 && before != level {
+        if before != level {
+            self.latch_pin_edge(pin, level);
+        }
+    }
+
+    /// Latch `GPIO_STATUS` for an edge of pad `pin` to `level` when
+    /// `PINn.INT_TYPE` selects it (1 rising, 2 falling, 3 any edge).
+    fn latch_pin_edge(&mut self, pin: u8, level: bool) {
+        if pin < 22 {
             let kind = (self.pin_cfg[pin as usize] >> 7) & 7;
             if matches!((kind, level), (1, true) | (2, false) | (3, _)) {
                 self.status |= 1 << pin;
+            }
+        }
+    }
+
+    /// Run `f` (a register write that can move the pad's own drive) and latch
+    /// the interrupts that move causes.
+    ///
+    /// ESP32-C3 TRM, GPIO "Interrupt": the interrupt logic samples the pad
+    /// through the IO_MUX input buffer, so with `FUN_IE` set a pad's own
+    /// output edge (OUT/ENABLE writes, or the output matrix handing the pad
+    /// to a driving peripheral) latches `GPIO_STATUS` exactly like an
+    /// external one; `effective_input` already gates on `FUN_IE`. Only the
+    /// writes that can move a drive pay for the before/after sample.
+    fn with_own_drive_edges(&mut self, word_off: u64, f: impl FnOnce(&mut Self)) {
+        let moves_drive = matches!(
+            word_off,
+            OUT | OUT_W1TS | OUT_W1TC | ENABLE | ENABLE_W1TS | ENABLE_W1TC
+        ) || Self::out_sel_index(word_off).is_some();
+        if !moves_drive {
+            return f(self);
+        }
+        let before = self.effective_input();
+        f(self);
+        let changed = before ^ self.effective_input();
+        if changed != 0 {
+            let after = self.effective_input();
+            for pin in 0..PIN_COUNT {
+                if changed & (1 << pin) != 0 {
+                    self.latch_pin_edge(pin, after & (1 << pin) != 0);
+                }
             }
         }
     }
@@ -715,7 +753,11 @@ impl Peripheral for Esp32c3Gpio {
         let word_off = offset & !3;
         let byte_off = offset & 3;
         self.tap_snapshot();
-        if self.write_byte_special(word_off, byte_off, value) {
+        let mut special = false;
+        self.with_own_drive_edges(word_off, |g| {
+            special = g.write_byte_special(word_off, byte_off, value);
+        });
+        if special {
             self.refresh_i2c_matrix_route();
             self.tap_report();
             return Ok(());
@@ -724,7 +766,7 @@ impl Peripheral for Esp32c3Gpio {
         let mut word = self.read_word(word_off);
         word &= !(0xFFu32 << shift);
         word |= (value as u32) << shift;
-        self.write_word(word_off, word);
+        self.with_own_drive_edges(word_off, |g| g.write_word(word_off, word));
         self.tap_report();
         Ok(())
     }
@@ -738,7 +780,9 @@ impl Peripheral for Esp32c3Gpio {
                 OUT_W1TS | OUT_W1TC | ENABLE_W1TS | ENABLE_W1TC | STATUS_W1TS | STATUS_W1TC
             ) {
                 self.tap_snapshot();
-                self.write_word(word_off, (value as u32) << shift);
+                self.with_own_drive_edges(word_off, |g| {
+                    g.write_word(word_off, (value as u32) << shift)
+                });
                 self.tap_report();
                 return Ok(());
             }
@@ -750,7 +794,7 @@ impl Peripheral for Esp32c3Gpio {
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
         if offset & 3 == 0 {
             self.tap_snapshot();
-            self.write_word(offset, value);
+            self.with_own_drive_edges(offset, |g| g.write_word(offset, value));
             self.tap_report();
             Ok(())
         } else {
@@ -1500,5 +1544,77 @@ chip: "../chips/esp32c3.yaml"
         assert_ne!(bus.read_u32(GPIO_IN).unwrap() & (1 << 4), 0);
         bus.write_u32(GPIO_OUT_W1TC, 1 << 4).unwrap();
         assert_eq!(bus.read_u32(GPIO_IN).unwrap() & (1 << 4), 0);
+    }
+
+    /// ESP32-C3 TRM, GPIO "Interrupt": with the input buffer on (`FUN_IE`) the
+    /// pad's own output edge latches `GPIO_STATUS` per `PINn.INT_TYPE`.
+    #[test]
+    fn own_output_edge_latches_status_when_fun_ie_is_set() {
+        use crate::peripherals::esp32c3::io_mux::Esp32c3IoMux;
+
+        const IO_MUX_GPIO4: u64 = 0x04 + 4 * 4;
+        let mut io_mux = Esp32c3IoMux::new();
+        io_mux.write_u32(IO_MUX_GPIO4, 0x0000_1a02).unwrap();
+        let mut gpio = Esp32c3Gpio::new();
+        gpio.set_pad_controls(io_mux.pad_controls());
+        gpio.write_u32(PIN0 + 4 * 4, (1 << 7) | (1 << 13)).unwrap(); // rising, INT_ENA
+        gpio.write_u32(ENABLE_W1TS, 1 << 4).unwrap();
+        assert_eq!(gpio.read_u32(STATUS).unwrap(), 0);
+        assert!(!gpio.irq_line());
+
+        gpio.write_u32(OUT_W1TS, 1 << 4).unwrap();
+        assert_eq!(
+            gpio.read_u32(STATUS).unwrap(),
+            1 << 4,
+            "rising edge latched"
+        );
+        assert!(gpio.irq_line());
+        assert_eq!(gpio.matrix_irq_sources(), vec![16]);
+
+        // Falling edge is not selected; byte and halfword paths agree.
+        gpio.write_u32(STATUS_W1TC, 1 << 4).unwrap();
+        gpio.write_u32(OUT_W1TC, 1 << 4).unwrap();
+        assert_eq!(gpio.read_u32(STATUS).unwrap(), 0);
+        gpio.write(OUT_W1TS, 1 << 4).unwrap();
+        assert_eq!(gpio.read_u32(STATUS).unwrap(), 1 << 4, "byte write");
+        gpio.write_u32(STATUS_W1TC, 1 << 4).unwrap();
+        gpio.write_u32(OUT_W1TC, 1 << 4).unwrap();
+        gpio.write_u16(OUT_W1TS, 1 << 4).unwrap();
+        assert_eq!(gpio.read_u32(STATUS).unwrap(), 1 << 4, "halfword write");
+    }
+
+    /// An ENABLE write that starts driving an already-high latch is an edge
+    /// on the pad too (the pad was released low, now drives high).
+    #[test]
+    fn enabling_the_driver_onto_a_high_latch_latches_a_rising_edge() {
+        use crate::peripherals::esp32c3::io_mux::Esp32c3IoMux;
+
+        const IO_MUX_GPIO4: u64 = 0x04 + 4 * 4;
+        let mut io_mux = Esp32c3IoMux::new();
+        io_mux.write_u32(IO_MUX_GPIO4, 0x0000_1a02).unwrap();
+        let mut gpio = Esp32c3Gpio::new();
+        gpio.set_pad_controls(io_mux.pad_controls());
+        gpio.write_u32(PIN0 + 4 * 4, (1 << 7) | (1 << 13)).unwrap();
+        gpio.write_u32(OUT_W1TS, 1 << 4).unwrap();
+        assert_eq!(gpio.read_u32(STATUS).unwrap(), 0, "driver still off");
+        gpio.write_u32(ENABLE_W1TS, 1 << 4).unwrap();
+        assert_eq!(gpio.read_u32(STATUS).unwrap(), 1 << 4);
+    }
+
+    #[test]
+    fn own_output_edge_does_not_latch_when_fun_ie_is_clear() {
+        use crate::peripherals::esp32c3::io_mux::Esp32c3IoMux;
+
+        const IO_MUX_GPIO4: u64 = 0x04 + 4 * 4;
+        let mut io_mux = Esp32c3IoMux::new();
+        io_mux.write_u32(IO_MUX_GPIO4, 0x0000_1802).unwrap(); // FUN_IE clear
+        let mut gpio = Esp32c3Gpio::new();
+        gpio.set_pad_controls(io_mux.pad_controls());
+        gpio.write_u32(PIN0 + 4 * 4, (3 << 7) | (1 << 13)).unwrap(); // any edge
+        gpio.write_u32(ENABLE_W1TS, 1 << 4).unwrap();
+        gpio.write_u32(OUT_W1TS, 1 << 4).unwrap();
+        gpio.write_u32(OUT_W1TC, 1 << 4).unwrap();
+        assert_eq!(gpio.read_u32(STATUS).unwrap(), 0);
+        assert!(!gpio.irq_line());
     }
 }

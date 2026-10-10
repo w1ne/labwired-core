@@ -2133,7 +2133,7 @@ boards:
     # behaviour lives in exchange memory and the radio event path, which that
     # capture does not cover. This acknowledges model drift, NOT a recapture.
     drift_ack: 2026-09-28
-    drift_ack_digest: 708c5f0fab40260fa5f767b4f6781b03ee4eaeb23d76fc2f9fd801e7b6e385fb
+    drift_ack_digest: 321b19f12ef8655a517207b225024c6ba5f7e21ff636f1d5f840d61e70d9bc7d
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
@@ -2848,6 +2848,13 @@ boards:
     # value or bus-visible behaviour changed. No physical probe connected.
     # ACK, NOT A CAPTURE.
     drift_ack: 2026-10-09
+    # 2026-10-10 (gpio gaps): watched esp32c3/gpio.rs. A pad's own OUT/ENABLE/
+    # output-matrix write that moves its sampled level now latches GPIO_STATUS
+    # per INT_TYPE when FUN_IE is set (TRM GPIO Interrupt: the interrupt logic
+    # samples the pad through the input buffer); external-edge latching is
+    # unchanged. No register map or reset value changed. No physical probe
+    # connected. ACK, NOT A CAPTURE.
+    drift_ack: 2026-10-10
 
   - id: nucleo-l476rg
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
@@ -6785,7 +6792,7 @@ boards:
     # the generic Xtensa BB JIT emit core (#1139) — the merge of the two is one
     # digest, so it is re-stamped once here rather than twice.
     drift_ack: 2026-09-18
-    drift_ack_digest: 2d79ad2af211641990e9f3223ccf4e9e0ad01a620ed46442c95ffddfc3f2b9c6
+    drift_ack_digest: 1de82a64c4694daa7ef9084a56a82ba9a3cfc5071af76a014c47f971d3144827
     #
     # 2026-09-18 (execute split): no execution change. The arm bodies of
     # `XtensaLx7::execute` moved verbatim into `cpu/xtensa_lx7/exec/*.rs` as
@@ -6914,6 +6921,12 @@ boards:
     # follows ledcWrite / mcpwm_set_duty). No register map or reset value
     # changed. No physical probe connected. ACK, NOT A CAPTURE.
     drift_ack: 2026-10-09
+    # 2026-10-10 (gpio gaps): watched esp32s3/gpio.rs. A matrix-routed
+    # peripheral driving a bank-0 pad (drive_pad_output) now latches GPIO_STATUS
+    # per INT_TYPE like the register-write path already did (TRM GPIO
+    # Interrupt, input buffer on). No register map or reset value changed. No
+    # physical probe connected. ACK, NOT A CAPTURE.
+    drift_ack: 2026-10-10
 
   - id: esp32s3-zero
     # Board variant of esp32s3: same silicon (LX7), 4 MiB flash / 480 KiB RAM.

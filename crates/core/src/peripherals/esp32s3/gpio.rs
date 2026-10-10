@@ -374,7 +374,11 @@ impl Esp32s3Gpio {
                 self.out & !mask
             };
             let states = self.state_snapshot();
+            // The pad's own drive moving is an edge the GPIO interrupt sees
+            // (TRM "GPIO Interrupt", input buffer on), same as a register write.
+            let before = self.effective_input(0);
             self.apply_out(new_out);
+            self.latch_input_edges(before);
             self.state_report(states);
         } else {
             let mask = 1u32 << (pin - 32);
@@ -2031,5 +2035,59 @@ mod tests {
         bus.write_u32(GPIO_BASE + ENABLE_W1TS, 1 << 5).unwrap();
         bus.write_u32(GPIO_BASE + OUT_W1TS, 1 << 5).unwrap();
         assert_eq!(bus.read_u32(in_).unwrap() & (1 << 5), 0);
+    }
+    /// ESP32-S3 TRM, GPIO Matrix "GPIO Interrupt": with the input buffer on
+    /// (`FUN_IE`), the interrupt logic samples the pad itself, so the pad's
+    /// own output edge latches `GPIO_STATUS` when `PINn.INT_TYPE` selects it.
+    #[test]
+    fn own_output_edge_latches_status_when_fun_ie_is_set() {
+        use crate::Bus;
+        let mut bus = s3_bus();
+        bus.write_u32(io_mux_gpio(4), 0x0000_1A02).unwrap(); // FUN_IE
+        bus.write_u32(GPIO_BASE + PIN0 + 4 * 4, (1 << 7) | (1 << 13))
+            .unwrap(); // rising, INT_ENA
+        bus.write_u32(GPIO_BASE + ENABLE_W1TS, 1 << 4).unwrap();
+        with_gpio(&mut bus, |g| {
+            assert_eq!(g.reg(STATUS), 0);
+            assert!(!g.irq_line());
+        });
+        bus.write_u32(GPIO_BASE + OUT_W1TS, 1 << 4).unwrap();
+        with_gpio(&mut bus, |g| {
+            assert_eq!(g.reg(STATUS), 1 << 4, "rising output edge latched");
+            assert!(g.irq_line());
+            assert_eq!(g.matrix_irq_sources(), vec![16]);
+        });
+    }
+
+    #[test]
+    fn own_output_edge_does_not_latch_when_fun_ie_is_clear() {
+        use crate::Bus;
+        let mut bus = s3_bus();
+        bus.write_u32(io_mux_gpio(5), 0x0000_1802).unwrap(); // no FUN_IE
+        bus.write_u32(GPIO_BASE + PIN0 + 5 * 4, (1 << 7) | (1 << 13))
+            .unwrap();
+        bus.write_u32(GPIO_BASE + ENABLE_W1TS, 1 << 5).unwrap();
+        bus.write_u32(GPIO_BASE + OUT_W1TS, 1 << 5).unwrap();
+        with_gpio(&mut bus, |g| {
+            assert_eq!(g.reg(STATUS), 0);
+            assert!(!g.irq_line());
+        });
+    }
+
+    /// A matrix-routed peripheral driving the pad (`drive_pad_output`) is the
+    /// same own-output edge.
+    #[test]
+    fn peripheral_driven_output_edge_latches_status_when_fun_ie_is_set() {
+        use crate::Bus;
+        let mut bus = s3_bus();
+        bus.write_u32(io_mux_gpio(6), 0x0000_1A02).unwrap();
+        bus.write_u32(GPIO_BASE + PIN0 + 6 * 4, (1 << 7) | (1 << 13))
+            .unwrap();
+        bus.write_u32(GPIO_BASE + ENABLE_W1TS, 1 << 6).unwrap();
+        with_gpio(&mut bus, |g| {
+            assert!(g.drive_pad_output(6, true));
+            assert_eq!(g.reg(STATUS), 1 << 6);
+            assert!(g.irq_line());
+        });
     }
 }
