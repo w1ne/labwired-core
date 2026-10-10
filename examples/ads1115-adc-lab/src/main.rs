@@ -110,37 +110,100 @@ fn uart_i32(value: i32) {
     }
 }
 
-fn i2c_wait(mask: u32) {
-    for _ in 0..128 {
+// I2C1 master, polled, following the RM0008 §26.3.3 event sequence. The
+// receive path is the part that matters: the controller only clocks a byte in
+// after ADDR is cleared (read SR1, then SR2), and the master must arrange the
+// final NACK and STOP around that clear. Every wait is bounded so an absent or
+// NACKing device ends the transfer instead of hanging the lab.
+const I2C1_SR2: *const u32 = (I2C1_BASE + 0x18) as *const u32;
+const CR1_PE: u32 = 1 << 0;
+const CR1_START: u32 = 1 << 8;
+const CR1_STOP: u32 = 1 << 9;
+const CR1_ACK: u32 = 1 << 10;
+const CR1_POS: u32 = 1 << 11;
+const SR1_SB: u32 = 1 << 0;
+const SR1_ADDR: u32 = 1 << 1;
+const SR1_BTF: u32 = 1 << 2;
+const SR1_AF: u32 = 1 << 10;
+
+fn i2c_cr1(value: u32) {
+    unsafe { core::ptr::write_volatile(I2C1_CR1, value) }
+}
+
+/// Wait for any bit in `mask`. A NACK (AF) aborts the transfer: clear AF and
+/// release the bus with STOP, as RM0008 requires of the master.
+fn i2c_wait(mask: u32) -> bool {
+    for _ in 0..10_000 {
         let sr1 = unsafe { core::ptr::read_volatile(I2C1_SR1) };
         if sr1 & mask != 0 {
-            return;
+            return true;
         }
+        if sr1 & SR1_AF != 0 {
+            unsafe { core::ptr::write_volatile(I2C1_SR1 as *mut u32, !SR1_AF) }
+            i2c_cr1(CR1_PE | CR1_STOP);
+            return false;
+        }
+    }
+    false
+}
+
+/// ADDR is cleared by reading SR1 and then SR2 (RM0008 §26.6.6).
+fn i2c_clear_addr() {
+    unsafe {
+        let _ = core::ptr::read_volatile(I2C1_SR1);
+        let _ = core::ptr::read_volatile(I2C1_SR2);
     }
 }
 
+/// (Repeated) START, then wait for SB.
 fn i2c_start() {
-    unsafe { core::ptr::write_volatile(I2C1_CR1, 0x0001 | 0x0100) }
-    i2c_wait(0x0001);
+    i2c_cr1(CR1_PE | CR1_START);
+    i2c_wait(SR1_SB);
+}
+
+/// Address the slave for writing: send SLA+W, wait for its ACK, clear ADDR.
+fn i2c_address_write(addr_w: u8) {
+    unsafe { core::ptr::write_volatile(I2C1_DR, addr_w as u32) }
+    if i2c_wait(SR1_ADDR) {
+        i2c_clear_addr();
+    }
+}
+
+/// Send one data byte and wait until it has left the shift register (BTF), so
+/// a following STOP or repeated START never cuts it off.
+fn i2c_write(byte: u8) {
+    unsafe { core::ptr::write_volatile(I2C1_DR, byte as u32) }
+    i2c_wait(SR1_BTF);
 }
 
 fn i2c_stop() {
-    unsafe { core::ptr::write_volatile(I2C1_CR1, 0x0001 | 0x0200) }
+    i2c_cr1(CR1_PE | CR1_STOP);
 }
 
-fn i2c_write(byte: u8) {
-    unsafe { core::ptr::write_volatile(I2C1_DR, byte as u32) }
-    i2c_wait(0x0080);
-}
-
-fn i2c_read_byte() -> u8 {
-    i2c_wait(0x0040);
-    unsafe { core::ptr::read_volatile(I2C1_DR) as u8 }
+/// Read two bytes after a START (RM0008 §26.3.3, "case of two bytes"): POS and
+/// ACK set before the address phase so the first byte is ACKed and the second
+/// NACKed, clear ADDR, clear ACK, wait for BTF (both bytes in), program STOP,
+/// read DR twice. Ends with the bus released and POS cleared.
+fn i2c_read_two(addr_r: u8) -> (u8, u8) {
+    i2c_cr1(CR1_PE | CR1_ACK | CR1_POS);
+    unsafe { core::ptr::write_volatile(I2C1_DR, addr_r as u32) }
+    if !i2c_wait(SR1_ADDR) {
+        i2c_cr1(CR1_PE);
+        return (0xFF, 0xFF);
+    }
+    i2c_clear_addr();
+    i2c_cr1(CR1_PE | CR1_POS);
+    i2c_wait(SR1_BTF);
+    i2c_cr1(CR1_PE | CR1_POS | CR1_STOP);
+    let first = unsafe { core::ptr::read_volatile(I2C1_DR) as u8 };
+    let second = unsafe { core::ptr::read_volatile(I2C1_DR) as u8 };
+    i2c_cr1(CR1_PE);
+    (first, second)
 }
 
 fn ads_write_u16(reg: u8, value: u16) {
     i2c_start();
-    i2c_write(ADDR_W);
+    i2c_address_write(ADDR_W);
     i2c_write(reg);
     i2c_write((value >> 8) as u8);
     i2c_write((value & 0xFF) as u8);
@@ -149,13 +212,10 @@ fn ads_write_u16(reg: u8, value: u16) {
 
 fn ads_read_u16(reg: u8) -> u16 {
     i2c_start();
-    i2c_write(ADDR_W);
+    i2c_address_write(ADDR_W);
     i2c_write(reg);
     i2c_start();
-    i2c_write(ADDR_R);
-    let hi = i2c_read_byte();
-    let lo = i2c_read_byte();
-    i2c_stop();
+    let (hi, lo) = i2c_read_two(ADDR_R);
     ((hi as u16) << 8) | (lo as u16)
 }
 

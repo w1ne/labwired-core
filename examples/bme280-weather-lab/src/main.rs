@@ -107,37 +107,93 @@ fn uart_u32(value: u32) {
     }
 }
 
-fn i2c_wait(mask: u32) {
-    for _ in 0..128 {
+// I2C1 master, polled, following the RM0008 §26.3.3 event sequence. The
+// receive path is the part that matters: the controller only clocks a byte in
+// after ADDR is cleared (read SR1, then SR2), and the master must arrange the
+// final NACK and STOP around that clear. Every wait is bounded so an absent or
+// NACKing device ends the transfer instead of hanging the lab.
+const I2C1_SR2: *const u32 = (I2C1_BASE + 0x18) as *const u32;
+const CR1_PE: u32 = 1 << 0;
+const CR1_START: u32 = 1 << 8;
+const CR1_STOP: u32 = 1 << 9;
+const SR1_SB: u32 = 1 << 0;
+const SR1_ADDR: u32 = 1 << 1;
+const SR1_BTF: u32 = 1 << 2;
+const SR1_RXNE: u32 = 1 << 6;
+const SR1_AF: u32 = 1 << 10;
+
+fn i2c_cr1(value: u32) {
+    unsafe { core::ptr::write_volatile(I2C1_CR1, value) }
+}
+
+/// Wait for any bit in `mask`. A NACK (AF) aborts the transfer: clear AF and
+/// release the bus with STOP, as RM0008 requires of the master.
+fn i2c_wait(mask: u32) -> bool {
+    for _ in 0..10_000 {
         let sr1 = unsafe { core::ptr::read_volatile(I2C1_SR1) };
         if sr1 & mask != 0 {
-            return;
+            return true;
         }
+        if sr1 & SR1_AF != 0 {
+            unsafe { core::ptr::write_volatile(I2C1_SR1 as *mut u32, !SR1_AF) }
+            i2c_cr1(CR1_PE | CR1_STOP);
+            return false;
+        }
+    }
+    false
+}
+
+/// ADDR is cleared by reading SR1 and then SR2 (RM0008 §26.6.6).
+fn i2c_clear_addr() {
+    unsafe {
+        let _ = core::ptr::read_volatile(I2C1_SR1);
+        let _ = core::ptr::read_volatile(I2C1_SR2);
     }
 }
 
+/// (Repeated) START, then wait for SB.
 fn i2c_start() {
-    unsafe { core::ptr::write_volatile(I2C1_CR1, 0x0001 | 0x0100) }
-    i2c_wait(0x0001);
+    i2c_cr1(CR1_PE | CR1_START);
+    i2c_wait(SR1_SB);
+}
+
+/// Address the slave for writing: send SLA+W, wait for its ACK, clear ADDR.
+fn i2c_address_write(addr_w: u8) {
+    unsafe { core::ptr::write_volatile(I2C1_DR, addr_w as u32) }
+    if i2c_wait(SR1_ADDR) {
+        i2c_clear_addr();
+    }
+}
+
+/// Send one data byte and wait until it has left the shift register (BTF), so
+/// a following STOP or repeated START never cuts it off.
+fn i2c_write(byte: u8) {
+    unsafe { core::ptr::write_volatile(I2C1_DR, byte as u32) }
+    i2c_wait(SR1_BTF);
 }
 
 fn i2c_stop() {
-    unsafe { core::ptr::write_volatile(I2C1_CR1, 0x0001 | 0x0200) }
+    i2c_cr1(CR1_PE | CR1_STOP);
 }
 
-fn i2c_write(byte: u8) {
-    unsafe { core::ptr::write_volatile(I2C1_DR, byte as u32) }
-    i2c_wait(0x0080);
-}
-
-fn i2c_read_byte() -> u8 {
-    i2c_wait(0x0040);
+/// Read one byte after a START: send SLA+R, NACK the byte by clearing ACK
+/// before ADDR is cleared, program STOP, then wait for RXNE (RM0008 §26.3.3,
+/// "case of a single byte to be received"). Ends with the bus released.
+fn i2c_read_one(addr_r: u8) -> u8 {
+    i2c_cr1(CR1_PE);
+    unsafe { core::ptr::write_volatile(I2C1_DR, addr_r as u32) }
+    if !i2c_wait(SR1_ADDR) {
+        return 0xFF;
+    }
+    i2c_clear_addr();
+    i2c_stop();
+    i2c_wait(SR1_RXNE);
     unsafe { core::ptr::read_volatile(I2C1_DR) as u8 }
 }
 
 fn bme280_write_register(reg: u8, value: u8) {
     i2c_start();
-    i2c_write(BME280_W);
+    i2c_address_write(BME280_W);
     i2c_write(reg);
     i2c_write(value);
     i2c_stop();
@@ -145,13 +201,10 @@ fn bme280_write_register(reg: u8, value: u8) {
 
 fn bme280_read_register(reg: u8) -> u8 {
     i2c_start();
-    i2c_write(BME280_W);
+    i2c_address_write(BME280_W);
     i2c_write(reg);
     i2c_start();
-    i2c_write(BME280_R);
-    let value = i2c_read_byte();
-    i2c_stop();
-    value
+    i2c_read_one(BME280_R)
 }
 
 fn bme280_read_u16_le(reg: u8) -> u16 {
