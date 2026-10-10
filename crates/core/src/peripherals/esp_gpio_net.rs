@@ -24,8 +24,6 @@
 //! outside (a board button, a `gpio_net`) or after firmware acknowledges the
 //! interrupt in `STATUS_W1TC`.
 
-use crate::logic_capture::PadDrive;
-
 /// `GPIO_PINn_REG.PAD_DRIVER`: open drain.
 pub(crate) const PIN_PAD_DRIVER: u32 = 1 << 2;
 
@@ -59,16 +57,6 @@ pub(crate) fn level_hits(kind: u32, level: bool) -> bool {
 #[inline]
 pub(crate) fn driving_mask(enable: u32, out: u32, open_drain: u32) -> u32 {
     enable & !(open_drain & out)
-}
-
-/// A net pad's own drive: what its output stage does, nothing else.
-#[inline]
-pub(crate) fn own_drive(driving: bool) -> PadDrive {
-    if driving {
-        PadDrive::Driven
-    } else {
-        PadDrive::HighZ
-    }
 }
 
 /// Edge detector for a GPIO model's matrix interrupt line on a walk-free bus.

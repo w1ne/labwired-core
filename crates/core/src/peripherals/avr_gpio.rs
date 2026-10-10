@@ -10,6 +10,7 @@
 //! here when the chip yaml maps the port window.
 
 use crate::peripherals::gpio::{GpioMode, GpioRouting};
+use crate::pins::{External, InputChange, PadDriver, PinPort, Pull};
 use crate::{Peripheral, SimResult};
 
 /// Offsets relative to the port base (PINB @ 0x23 ⇒ base 0x23).
@@ -22,11 +23,12 @@ pub struct AvrGpioPort {
     pin: u8,
     ddr: u8,
     port: u8,
+    /// Pads the outside world holds ([`PinPort::set_external`]); the level
+    /// on each is its `pin` bit.
+    ext_mask: u8,
     /// `Some` while the logic analyzer watches pads on this port in push mode
-    /// (installed via `install_logic_tap`). Not snapshot state.
-    tap: Option<crate::logic_capture::PadPushTap>,
-    /// Pads that belong to a world `gpio_net`: only they report a drive.
-    net_isolated: u8,
+    /// ([`PinPort::install_watch`]). Not snapshot state.
+    watch: Option<crate::pins::PadWatch>,
     /// Level cells kept equal to a pad (see `Peripheral::watch_pad_level`).
     cells: Vec<(u8, std::sync::Arc<std::sync::atomic::AtomicBool>)>,
 }
@@ -43,8 +45,8 @@ impl AvrGpioPort {
             pin: 0,
             ddr: 0,
             port: 0,
-            tap: None,
-            net_isolated: 0,
+            ext_mask: 0,
+            watch: None,
             cells: Vec::new(),
         }
     }
@@ -67,58 +69,110 @@ impl AvrGpioPort {
         }
     }
 
-    /// The pads as the generic push tap compares them: level, the chip's own
-    /// drive (DDR), and which pads report a drive (the `gpio_net` members).
+    /// Run `mutate` bracketed for push capture, then publish the pad levels
+    /// to the watching cells.
     #[inline]
-    fn pad_snapshot(&self) -> crate::logic_capture::PadSnapshot {
-        crate::logic_capture::PadSnapshot {
-            level: u64::from(self.pad_bits()),
-            driven: u64::from(self.ddr),
-            drive_known: u64::from(self.net_isolated),
-            pull_up: u64::from(self.net_pull_bits()),
-            pull_down: 0,
-        }
-    }
-
-    /// Net pads whose internal pull-up is on: an input (`DDRx` bit clear)
-    /// with its `PORTx` bit set (ATmega328P datasheet §14.2.1). `MCUCR.PUD`
-    /// lives in the CPU's IO space, which this port model does not see, so
-    /// it is not applied here.
-    #[inline]
-    fn net_pull_bits(&self) -> u8 {
-        !self.ddr & self.port & self.net_isolated
-    }
-
-    /// The drive a net pad reports: `PORTx` when `DDRx` drives it, the
-    /// internal pull-up when the input has it on, otherwise nothing. `None`
-    /// for a pad that is not on a net.
-    fn net_pad_drive(&self, pin: u8) -> Option<crate::logic_capture::PadDrive> {
-        use crate::logic_capture::PadDrive;
-        let bit = 1u8 << (pin & 7);
-        if pin >= 8 || self.net_isolated & bit == 0 {
-            return None;
-        }
-        Some(if self.ddr & bit != 0 {
-            PadDrive::Driven
-        } else if self.net_pull_bits() & bit != 0 {
-            PadDrive::PullUp
-        } else {
-            PadDrive::HighZ
-        })
-    }
-
-    /// Run `mutate`, then let the generic push tap report every watched pad
-    /// whose level or (on a net pad) drive changed.
-    #[inline]
-    fn with_tap(&mut self, mutate: impl FnOnce(&mut Self)) {
-        let before = self.tap.as_ref().map(|_| self.pad_snapshot());
-        mutate(self);
+    fn mutate_pads<R>(&mut self, mutate: impl FnOnce(&mut Self) -> R) -> R {
+        crate::pins::watch_begin(self);
+        let r = mutate(self);
+        crate::pins::watch_end(self);
         if !self.cells.is_empty() {
             self.sync_cells();
         }
-        if let (Some(tap), Some(before)) = (&self.tap, before) {
-            tap.report(before, self.pad_snapshot());
+        r
+    }
+}
+
+impl PinPort for AvrGpioPort {
+    fn pin_count(&self) -> u8 {
+        8
+    }
+
+    /// `DDRx` set: an output driving `PORTx`. Clear: an input, with the
+    /// internal pull-up on while its `PORTx` bit is set (ATmega328P datasheet
+    /// §14.2.1). `MCUCR.PUD` lives in the CPU's IO space, which this port
+    /// model does not see, so it is not applied here.
+    fn driver(&self, pin: u8) -> Option<PadDriver> {
+        if pin >= 8 {
+            return None;
         }
+        let bit = 1u8 << pin;
+        Some(if self.ddr & bit != 0 {
+            PadDriver::drive(self.port & bit != 0)
+        } else if self.port & bit != 0 {
+            PadDriver::released(Pull::Up)
+        } else {
+            PadDriver::OFF
+        })
+    }
+
+    fn external(&self, pin: u8) -> External {
+        let bit = 1u8 << (pin & 7);
+        if pin < 8 && self.ext_mask & bit != 0 {
+            External::Level(self.pin & bit != 0)
+        } else {
+            External::Released
+        }
+    }
+
+    /// A level lands in `PINx`, the input latch on this family — the register
+    /// `digitalRead` reads and the one the outside world moves. Writing it
+    /// through the MMIO `write` path instead would toggle PORT (AVR's
+    /// write-1-to-PIN toggle), which moves the OUTPUT latch, so the external
+    /// world needs this seam of its own.
+    ///
+    /// The bit is held regardless of DDR: firmware that reconfigures the pin
+    /// as an output and later releases it must find the contact's level still
+    /// there, exactly as the wiring would keep it. Releasing keeps the last
+    /// level in `PINx` (see [`level`](PinPort::level)).
+    fn set_external(&mut self, pin: u8, ext: External) -> Option<InputChange> {
+        if pin >= 8 {
+            return None;
+        }
+        let bit = 1u8 << pin;
+        let before = self.pad_bits() & bit != 0;
+        self.mutate_pads(|s| match ext {
+            External::Level(level) => {
+                s.ext_mask |= bit;
+                if level {
+                    s.pin |= bit;
+                } else {
+                    s.pin &= !bit;
+                }
+            }
+            External::Released => s.ext_mask &= !bit,
+        });
+        Some(InputChange {
+            before,
+            after: self.pad_bits() & bit != 0,
+        })
+    }
+
+    fn input(&self, pin: u8) -> Option<bool> {
+        (pin < 8).then(|| self.pad_bits() & (1u8 << pin) != 0)
+    }
+
+    /// `PORTx` on an output, `PINx` on an input. This model does not fold the
+    /// pull-up into `PINx`: an input with the pull-up on and nothing outside
+    /// reads the last level `PINx` held (0 from reset), where the shared rule
+    /// would say 1. Kept so firmware reads exactly what it always did; the
+    /// pull still shows in [`driver`](PinPort::driver), which is what a
+    /// `gpio_net` counts.
+    fn level(&self, pin: u8) -> Option<bool> {
+        self.input(pin)
+    }
+
+    fn install_watch(&mut self, watch: Option<crate::pins::PadWatch>) -> bool {
+        self.watch = watch;
+        true
+    }
+
+    fn take_watch(&mut self) -> Option<crate::pins::PadWatch> {
+        self.watch.take()
+    }
+
+    fn put_watch(&mut self, watch: crate::pins::PadWatch) {
+        self.watch = Some(watch);
     }
 }
 
@@ -153,9 +207,9 @@ impl Peripheral for AvrGpioPort {
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
         match offset {
             // Writing 1 to PIN toggles PORT (AVR toggle-on-write-1).
-            OFF_PIN => self.with_tap(|s| s.port ^= value),
-            OFF_DDR => self.with_tap(|s| s.ddr = value),
-            OFF_PORT => self.with_tap(|s| s.port = value),
+            OFF_PIN => self.mutate_pads(|s| s.port ^= value),
+            OFF_DDR => self.mutate_pads(|s| s.ddr = value),
+            OFF_PORT => self.mutate_pads(|s| s.port = value),
             _ => {}
         }
         Ok(())
@@ -195,69 +249,16 @@ impl Peripheral for AvrGpioPort {
         })
     }
 
-    fn read_gpio_pad(&self, pin: u8) -> Option<bool> {
-        // Driven outputs report PORT; undriven pads read as low.
-        if pin >= 8 {
-            return None;
-        }
-        let bit = 1u8 << pin;
-        if self.ddr & bit != 0 {
-            Some(self.port & bit != 0)
-        } else {
-            Some(self.pin & bit != 0)
-        }
+    fn pins(&self) -> Option<&dyn PinPort> {
+        Some(self)
+    }
+
+    fn pins_mut(&mut self) -> Option<&mut dyn PinPort> {
+        Some(self)
     }
 
     fn read_gpio_input(&self, pin: u8) -> Option<bool> {
-        self.read_gpio_pad(pin)
-    }
-
-    /// A net pad: an output (`DDRx` bit set) drives `PORTx`; an input with
-    /// its `PORTx` bit set has the internal pull-up on (a weak 1 on the net);
-    /// any other input drives nothing, whatever the net holds on it. A pad
-    /// that is not a net member says nothing about its drive (`None`, as
-    /// before).
-    fn read_gpio_pad_drive(&self, pin: u8) -> Option<crate::logic_capture::PadDrive> {
-        self.net_pad_drive(pin)
-    }
-
-    fn set_gpio_net_isolated(&mut self, pin: u8, isolated: bool) -> bool {
-        if pin >= 8 {
-            return false;
-        }
-        if isolated {
-            self.net_isolated |= 1u8 << pin;
-        } else {
-            self.net_isolated &= !(1u8 << pin);
-        }
-        true
-    }
-
-    /// Drive the externally controlled level for `pin` into PINx.
-    ///
-    /// PINx IS the input latch on this family — the register `digitalRead`
-    /// reads and the one the outside world moves — so a button wired to the pad
-    /// belongs in exactly that bit. Writing it through the MMIO `write` path
-    /// instead would toggle PORT (AVR's write-1-to-PIN toggle), which moves the
-    /// OUTPUT latch, so the external world needs this seam of its own.
-    ///
-    /// The bit is held regardless of DDR: firmware that reconfigures the pin as
-    /// an output and later releases it must find the contact's level still
-    /// there, exactly as the wiring would keep it. `read_gpio_pad` decides which
-    /// of the two wins per direction.
-    fn set_gpio_input(&mut self, pin: u8, level: bool) -> bool {
-        if pin >= 8 {
-            return false;
-        }
-        let bit = 1u8 << pin;
-        self.with_tap(|s| {
-            if level {
-                s.pin |= bit;
-            } else {
-                s.pin &= !bit;
-            }
-        });
-        true
+        PinPort::input(self, pin)
     }
 
     fn watch_pad_level(
@@ -273,18 +274,6 @@ impl Peripheral for AvrGpioPort {
             std::sync::atomic::Ordering::Relaxed,
         );
         self.cells.push((pin, cell));
-        true
-    }
-
-    /// Push-instrumented: every PORT/DDR/PIN write and external input change
-    /// reports watched pad-level changes through the tap, so watched AVR pins
-    /// need no per-cycle polling.
-    fn install_logic_tap(
-        &mut self,
-        tap: &crate::logic_capture::LogicTap,
-        watched: &[(u8, u32)],
-    ) -> bool {
-        self.tap = crate::logic_capture::PadPushTap::new(tap, watched);
         true
     }
 

@@ -377,6 +377,17 @@ impl SystemBus {
                 self.rp2040_sio_idx.get_or_insert(index);
             }
         }
+        // Give every pin port its `PortId`, once, here at attach: edge sinks
+        // are addressed by it, so the fan-out never looks at a name.
+        self.pin_port_ids = self
+            .peripherals
+            .iter()
+            .map(|p| {
+                p.dev
+                    .pins()
+                    .and_then(|_| crate::pins::PortId::from_port_name(&p.name))
+            })
+            .collect();
         // Cache the clock-controller peripheral index so the clock-gate check
         // on the hot read/write path is O(1).
         //

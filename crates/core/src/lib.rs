@@ -33,6 +33,7 @@ pub mod pc_coverage;
 pub mod peripheral_log;
 pub mod peripherals;
 pub mod physics;
+pub mod pins;
 pub mod plugin;
 pub mod power;
 pub mod profile;
@@ -893,9 +894,14 @@ pub trait Peripheral: std::fmt::Debug + Send {
         Vec::new()
     }
 
-    /// Observe an externally driven GPIO pad transition with its explicit
-    /// previous and current levels. Return true if work was latched that needs
-    /// a scheduler wake. Default no-op; STM32 EXTI uses the port mux here.
+    /// Edge sink: observe an externally driven GPIO pad transition with its
+    /// explicit previous and current levels. Return true if work was latched
+    /// that needs a scheduler wake. Default no-op; STM32 EXTI uses the port
+    /// mux here.
+    ///
+    /// `port` is the [`PortId`](pins::PortId) the bus gave the GPIO port when
+    /// it was attached (port A = 0); the bus calls every sink from
+    /// [`SystemBus::set_pad_external`](crate::bus::SystemBus::set_pad_external).
     ///
     /// `line_source` is the port the chip's EXTI line-source mux selects for
     /// line `pin` when that mux lives OUTSIDE the EXTI block (AFIO_EXTICRx on
@@ -1086,25 +1092,38 @@ pub trait Peripheral: std::fmt::Debug + Send {
         None
     }
 
+    /// Pin capability: this peripheral's pads, through the one pad interface
+    /// ([`pins::PinPort`]). `None` (the default) for a peripheral that owns
+    /// no pads. Every GPIO model answers `Some(self)`; the GPIO methods
+    /// below that predate the interface are shims over it.
+    fn pins(&self) -> Option<&dyn pins::PinPort> {
+        None
+    }
+
+    /// Mutable half of [`pins`](Self::pins).
+    fn pins_mut(&mut self) -> Option<&mut dyn pins::PinPort> {
+        None
+    }
+
     /// GPIO capability: the pad level a logic probe clipped to `pin` would
-    /// see — output-driven pins report the output latch, input pins report
-    /// the input level, pins routed to a peripheral (alternate function)
-    /// report `None` when the model can't know the wire state. GPIO models
-    /// with a direction register override this; the default prefers the
-    /// output latch.
+    /// see. Shim over [`pins::PinPort::level`] (kept because many callers
+    /// only want a level); a peripheral without pins falls back to the output
+    /// latch, then the input level.
     fn read_gpio_pad(&self, pin: u8) -> Option<bool> {
+        if let Some(port) = self.pins() {
+            return port.level(pin);
+        }
         self.read_gpio_output(pin)
             .or_else(|| self.read_gpio_input(pin))
     }
 
-    /// GPIO capability: who drives `pin` right now — the pad's own output
-    /// stage, an external device, both disagreeing, or nothing (high-Z). The
-    /// four-state pin trace (`0`/`1`/`z`/`x`) is built from this plus
-    /// [`read_gpio_pad`](Self::read_gpio_pad). `None` when the model cannot
-    /// say; the trace then has no four-state lane for the pad rather than a
-    /// guessed "driven".
-    fn read_gpio_pad_drive(&self, _pin: u8) -> Option<crate::logic_capture::PadDrive> {
-        None
+    /// GPIO capability: who drives `pin` as a probe sees it — the pad's own
+    /// output stage, an external device, both disagreeing, or nothing
+    /// (high-Z). Shim over [`pins::probe_drive`]. `None` when the model
+    /// cannot say; the trace then has no four-state lane for the pad rather
+    /// than a guessed "driven".
+    fn read_gpio_pad_drive(&self, pin: u8) -> Option<crate::logic_capture::PadDrive> {
+        self.pins().and_then(|port| pins::probe_drive(port, pin))
     }
 
     /// GPIO capability: the routing of `pin` — its direction/`mode` and, when
@@ -1120,20 +1139,14 @@ pub trait Peripheral: std::fmt::Debug + Send {
 
     /// GPIO capability: drive an externally controlled input level for `pin`
     /// (e.g. browser button press). Returns `false` if unsupported.
-    fn set_gpio_input(&mut self, _pin: u8, _level: bool) -> bool {
-        false
-    }
-
-    /// GPIO capability: mark `pin` as a member of a world `gpio_net`
-    /// (`isolated = true`) or release it. A net pad reports only what THIS
-    /// chip drives: [`read_gpio_pad_drive`](Self::read_gpio_pad_drive) ignores
-    /// whatever [`set_gpio_input`](Self::set_gpio_input) holds on the pin, so
-    /// the level the net feeds back into the pad is never mistaken for the
-    /// chip's own output stage (an input that has seen an external level would
-    /// otherwise read as "driven" for ever). Returns `false` when the model
-    /// cannot take part in a net.
-    fn set_gpio_net_isolated(&mut self, _pin: u8, _isolated: bool) -> bool {
-        false
+    ///
+    /// Shim over [`pins::PinPort::set_external`] with
+    /// [`External::Level`](pins::External::Level), kept for the callers that
+    /// only hold a level. It does not raise edge events: a caller with a bus
+    /// goes through [`SystemBus::set_pad_external`](crate::bus::SystemBus::set_pad_external).
+    fn set_gpio_input(&mut self, pin: u8, level: bool) -> bool {
+        self.pins_mut()
+            .is_some_and(|port| pins::set_level(port, pin, level))
     }
 
     /// GPIO capability: drain the level changes on pads the mux currently
@@ -2866,36 +2879,60 @@ impl<C: Cpu> Machine<C> {
     ) -> Vec<Option<bool>> {
         use logic_capture::LogicSource;
 
-        // Group the PAD half of the watch set per owning peripheral as
-        // (pin, channel) pairs. Wire channels are handled below, and are
-        // deliberately not offered to `install_logic_tap`: that hook is about
-        // pads, and a peripheral answering it must not have to guess which of
-        // its own lines a pin number meant.
-        let mut per_peripheral: std::collections::HashMap<usize, Vec<(u8, u32)>> =
+        // Group the PAD half of the watch set (probe and own-drive channels)
+        // per owning peripheral. Wire channels are handled below, and are
+        // deliberately not offered to the pad watch: that hook is about pads,
+        // and a peripheral answering it must not have to guess which of its
+        // own lines a pin number meant.
+        let mut per_peripheral: std::collections::HashMap<usize, Vec<pins::WatchedPad>> =
             std::collections::HashMap::new();
         if !self.logic_force_poll {
             for (ch, r) in resolved.iter().enumerate() {
-                if let Some(LogicSource::Pad { peripheral, pin }) = *r {
-                    per_peripheral
-                        .entry(peripheral)
-                        .or_default()
-                        .push((pin, ch as u32));
-                }
+                let (peripheral, pin, view) = match *r {
+                    Some(LogicSource::Pad { peripheral, pin }) => {
+                        (peripheral, pin, pins::PadView::Probe)
+                    }
+                    Some(LogicSource::Driver { peripheral, pin }) => {
+                        (peripheral, pin, pins::PadView::Driver)
+                    }
+                    _ => continue,
+                };
+                per_peripheral
+                    .entry(peripheral)
+                    .or_default()
+                    .push(pins::WatchedPad {
+                        pin,
+                        ch: ch as u32,
+                        view,
+                    });
             }
         }
 
         // Offer every peripheral its slice of the watch set (empty ⇒ clears a
-        // previously installed tap). Whether a peripheral ACCEPTS is its own
-        // declaration of push capability — no hardcoded list here.
+        // previously installed watch). Whether a peripheral ACCEPTS is its own
+        // declaration of push capability — no hardcoded list here. A pin port
+        // takes a generic `PadWatch`; anything else that owns pads (an RMT
+        // bit engine) answers the older `install_logic_tap`.
         let tap = self.bus.logic_tap.clone();
         let mut push = vec![false; resolved.len()];
-        static EMPTY: [(u8, u32); 0] = [];
+        static EMPTY: [pins::WatchedPad; 0] = [];
         for (idx, p) in self.bus.peripherals.iter_mut().enumerate() {
-            let watched: &[(u8, u32)] = per_peripheral.get(&idx).map_or(&EMPTY, |v| v.as_slice());
-            let accepted = p.dev.install_logic_tap(&tap, watched);
+            let watched: &[pins::WatchedPad] =
+                per_peripheral.get(&idx).map_or(&EMPTY, |v| v.as_slice());
+            let accepted = match p.dev.pins_mut() {
+                Some(port) => port.install_watch(pins::PadWatch::new(&tap, watched)),
+                None => {
+                    let pairs: Vec<(u8, u32)> = watched
+                        .iter()
+                        .filter(|w| w.view == pins::PadView::Probe)
+                        .map(|w| (w.pin, w.ch))
+                        .collect();
+                    p.dev.install_logic_tap(&tap, &pairs) && pairs.len() == watched.len()
+                }
+            };
             if accepted {
-                for &(_, ch) in watched {
-                    push[ch as usize] = true;
+                for w in watched {
+                    push[w.ch as usize] = true;
                 }
             }
         }
@@ -3128,8 +3165,9 @@ impl<C: Cpu> Machine<C> {
     }
 
     /// The drive one analyzer channel reads right now: a pad's model answers
-    /// through [`Peripheral::read_gpio_pad_drive`]; a peripheral WIRE is by
-    /// definition driven by that peripheral.
+    /// through [`Peripheral::read_gpio_pad_drive`] ([`pins::probe_drive`]), a
+    /// chip's own output stage through [`pins::own_drive`]; a peripheral WIRE
+    /// is by definition driven by that peripheral.
     fn read_logic_drive(
         bus: &bus::SystemBus,
         source: logic_capture::LogicSource,
@@ -3139,6 +3177,11 @@ impl<C: Cpu> Machine<C> {
                 .peripherals
                 .get(peripheral)
                 .and_then(|p| p.dev.read_gpio_pad_drive(pin)),
+            logic_capture::LogicSource::Driver { peripheral, pin } => bus
+                .peripherals
+                .get(peripheral)
+                .and_then(|p| p.dev.pins())
+                .and_then(|port| pins::own_drive(port, pin)),
             logic_capture::LogicSource::Wire { .. } => Some(logic_capture::PadDrive::Driven),
         }
     }
@@ -3157,6 +3200,11 @@ impl<C: Cpu> Machine<C> {
                 .peripherals
                 .get(peripheral)
                 .and_then(|p| p.dev.read_gpio_pad(pin)),
+            logic_capture::LogicSource::Driver { peripheral, pin } => bus
+                .peripherals
+                .get(peripheral)
+                .and_then(|p| p.dev.pins())
+                .and_then(|port| port.level(pin)),
             logic_capture::LogicSource::Wire { peripheral, line } => bus
                 .peripherals
                 .get(peripheral)

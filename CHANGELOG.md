@@ -6,7 +6,44 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+- `labwired_core::pins`: one interface between a chip's pads and the world.
+  Every GPIO model (STM32 `v2`/`f1`, nRF52/54, Kinetis, EFR32 series 2, SAM,
+  RA, i.MX RT, the ATmega port, RP2040 SIO, ESP32 classic, ESP32-C3/C6,
+  ESP32-S3, the declarative `GPIO` descriptor) implements `PinPort`:
+  `driver(pin)` (the chip's own output stage, from registers only: `Off` /
+  `Low` / `High` plus the internal pull), `external` / `set_external` (what
+  the outside world presents, returning the input before and after),
+  `input` and `level`. `pins::resolve` is the one rule combining the two
+  sides; `Peripheral::pins()` / `pins_mut()` reach it. Logic-analyzer push
+  capture (`pins::PadWatch`), the four-state trace, world `gpio_net`s and
+  EXTI edge routing are written once on top of it, and a conformance suite
+  (`pins::conformance`) runs every model through it, including push capture
+  against the per-cycle poll. See `docs/architecture/pins.md`.
+- `LogicSource::Driver { peripheral, pin }`: a logic channel on the chip's
+  own drive of a pad (`h`/`l` for an internal pull), next to `Pad`.
+- `SystemBus::set_pad_external` presents a level, or releases the pad, and
+  fans the input change out to EXTI (by the port's `PortId`, assigned when
+  the port is attached), timer captures, peripheral lines and the port's own
+  interrupt block.
+
 ### Changed
+- A world `gpio_net` watches each member's own output stage
+  (`PinPort::driver`) instead of marking the pad "net isolated" in its GPIO
+  model: `Peripheral::set_gpio_net_isolated` and every per-model isolation
+  mask are gone, and `Machine::isolate_net_pads` is `join_net_pads` (plus
+  `watch_world_pins`). Results are unchanged.
+- EXTI edge fan-out no longer parses the peripheral name at every edge.
+- The four-state pin trace (`read_gpio_pad_drive`) follows one rule on every
+  model: a pad an external level holds is driven (and `x` against the pad's
+  own opposite output), an undriven input is `z`. The ATmega port and the
+  ESP32 family used to report no four-state lane off a net, and the RP2040
+  SIO used to ignore an external level.
+- An open-drain output holding a 1 reads a level the outside world presents
+  on it (STM32 `IDR` probe level, ESP32-family `GPIO_IN`) on every pad, not
+  only on a `gpio_net` member; with nothing outside it still reads its latch.
+- The ESP32-C3/C6 and ESP32-S3 IO_MUX `FUN_WPU` pull-up counts as a weak
+  source on a `gpio_net`, as the STM32, nRF, EFR32, SAM and ATmega pulls do.
 - GPIO-net worlds (`gpio_net`) run on one clock per node instead of lockstep
   rounds (conservative parallel discrete-event simulation): a node may run
   until the slowest member of each of its nets plus that net's latency, and

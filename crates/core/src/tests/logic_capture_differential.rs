@@ -808,7 +808,7 @@ mod logic_capture_differential_tests {
     }
 
     /// Net pads report a four-state drive through the generic push tap
-    /// (`PadPushTap`). The drive stream, not just the level stream, must match
+    /// (`pins::PadWatch`). The drive stream, not just the level stream, must match
     /// the poll reference: DDR flips on a pad the outside holds high change
     /// only its drive.
     #[test]
@@ -817,12 +817,12 @@ mod logic_capture_differential_tests {
             let mut machine = avr_pad_machine();
             machine.logic_force_poll_capture(force_poll);
             machine
-                .isolate_net_pads(&[("portb".into(), 0), ("portb".into(), 5)])
+                .join_net_pads(&[("portb".into(), 0), ("portb".into(), 5)])
                 .unwrap();
             let idx = machine.bus.find_peripheral_index_by_name("portb").unwrap();
             machine.logic_watch(&[
-                Some(LogicSource::pad(idx, 5)),
-                Some(LogicSource::pad(idx, 0)),
+                Some(LogicSource::driver(idx, 5)),
+                Some(LogicSource::driver(idx, 0)),
                 Some(LogicSource::pad(idx, 3)),
             ]);
             assert_eq!(machine.logic_poll_active(), force_poll);

@@ -128,13 +128,30 @@ impl<C: Cpu> Machine<C> {
 
     /// Watch GPIO pads for marker edges: `(gpio peripheral id, pin)` each.
     pub fn watch_marker_pins(&mut self, pins: &[(String, u8)]) -> anyhow::Result<()> {
-        let mut sources = Vec::with_capacity(pins.len());
-        for (name, pin) in pins {
+        self.watch_world_pins(pins, &[])
+    }
+
+    /// Watch a world's pads: `markers` as probes on the pad (channels
+    /// `0..markers.len()`), then the `gpio_net` members `net_pads` as their
+    /// chip's own output stage ([`LogicSource::Driver`]): what this chip
+    /// drives, never the level the net holds on the pad. Call
+    /// [`Self::join_net_pads`] for the net pads first.
+    pub fn watch_world_pins(
+        &mut self,
+        markers: &[(String, u8)],
+        net_pads: &[(String, u8)],
+    ) -> anyhow::Result<()> {
+        let mut sources = Vec::with_capacity(markers.len() + net_pads.len());
+        for (k, (name, pin)) in markers.iter().chain(net_pads).enumerate() {
             let idx = self
                 .bus
                 .find_peripheral_index_by_name(name)
                 .ok_or_else(|| anyhow::anyhow!("no peripheral '{name}'"))?;
-            sources.push(Some(crate::logic_capture::LogicSource::pad(idx, *pin)));
+            sources.push(Some(if k < markers.len() {
+                LogicSource::pad(idx, *pin)
+            } else {
+                LogicSource::driver(idx, *pin)
+            }));
         }
         self.observer.world_sources = sources.clone();
         self.logic_watch(&sources);
@@ -159,13 +176,15 @@ impl<C: Cpu> Machine<C> {
         )
     }
 
-    /// Mark GPIO pads `(peripheral id, pin)` as members of a world `gpio_net`:
-    /// from now on each reports only what this chip drives. Call before the
-    /// pads are watched ([`Self::watch_marker_pins`]), which seeds each
-    /// pad's drive. Refuses a pad whose model cannot take part, or whose
-    /// drive is not known yet (a pad routed to a peripheral signal the model
-    /// does not publish), naming it.
-    pub fn isolate_net_pads(&mut self, pins: &[(String, u8)]) -> anyhow::Result<()> {
+    /// Put GPIO pads `(peripheral id, pin)` on a world `gpio_net`: each pad's
+    /// port is told the pad now shares a wire with other chips
+    /// ([`PinPort::join_wire`](crate::pins::PinPort::join_wire)). Nothing about
+    /// the pad's drive changes: the net reads each member's own output stage
+    /// ([`PinPort::driver`](crate::pins::PinPort::driver)), which never
+    /// included the level the net feeds back. Refuses a pad whose peripheral
+    /// owns no pins, or whose drive is not known (a pad routed to a
+    /// peripheral signal the model does not publish), naming it.
+    pub fn join_net_pads(&mut self, pins: &[(String, u8)]) -> anyhow::Result<()> {
         // A net pad routed to a peripheral line (SPI, I²C) hands the levels
         // the net delivers to that peripheral.
         self.bus.wire_inputs_live = true;
@@ -174,17 +193,23 @@ impl<C: Cpu> Machine<C> {
                 .bus
                 .find_peripheral_index_by_name(name)
                 .ok_or_else(|| anyhow::anyhow!("no peripheral '{name}'"))?;
-            let dev = &mut self.bus.peripherals[idx].dev;
-            if !dev.set_gpio_net_isolated(*pin, true) {
+            let Some(port) = self.bus.peripherals[idx].dev.pins_mut() else {
                 anyhow::bail!(
-                    "peripheral '{name}' cannot take part in a GPIO net (pin {pin}): its GPIO model has no net support"
+                    "peripheral '{name}' cannot take part in a GPIO net (pin {pin}): it owns no pins"
+                );
+            };
+            if *pin >= port.pin_count() {
+                anyhow::bail!(
+                    "peripheral '{name}' cannot take part in a GPIO net (pin {pin}): its port has {} pins",
+                    port.pin_count()
                 );
             }
-            if dev.read_gpio_pad_drive(*pin).is_none() {
+            if port.driver(*pin).is_none() {
                 anyhow::bail!(
                     "pad {name}.{pin} cannot be on a GPIO net: its drive is not known (is it routed to a peripheral signal the model does not publish?)"
                 );
             }
+            port.join_wire(*pin);
         }
         Ok(())
     }

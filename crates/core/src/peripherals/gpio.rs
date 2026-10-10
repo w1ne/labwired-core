@@ -1108,6 +1108,21 @@ impl GpioFamily {
         true
     }
 
+    /// Let go of the level [`set_external_input`](Self::set_external_input)
+    /// presented on `pin`: where the family applies its pull only to pads
+    /// nothing outside holds (V2, nRF), the pull takes the pad again. The
+    /// input latch keeps its last level otherwise.
+    fn release_external_input(&mut self, pin: u8) {
+        if pin >= 32 {
+            return;
+        }
+        match self {
+            Self::Stm32V2(g) => g.external &= !(1 << pin),
+            Self::Nrf52(g) => g.external &= !(1 << pin),
+            _ => {}
+        }
+    }
+
     /// Direction-aware pad level (the logic-probe truth). See
     /// [`crate::Peripheral::read_gpio_pad`]; kept on the family so the
     /// push-capture tap can read pre/post-write levels while the tap state is
@@ -1189,21 +1204,6 @@ impl GpioFamily {
     }
 }
 
-/// Push-mode logic-capture state for a [`GpioPort`]: the shared tap plus this
-/// port's watched `(pin, channel)` pairs and a pre-write level scratchpad
-/// (allocated once at install so the write hot path stays allocation-free).
-/// `line_chs` caches, per wired SPI line cell, the channel lists last
-/// registered with that cell (so registration is only re-synced when a write
-/// actually changes a watched pad's routing) — the C3 GPIO pattern.
-#[derive(Debug)]
-struct PortTap {
-    tap: crate::logic_capture::LogicTap,
-    watched: Vec<(u8, u32)>,
-    scratch: Vec<Option<bool>>,
-    /// Drive of each watched pad before the mutation (see `tap_snapshot`).
-    drive_scratch: Vec<Option<crate::logic_capture::PadDrive>>,
-}
-
 /// A pad that the mux can hand to a timer input: STM32 `TIMx_CHn` through an
 /// AF nibble (V2 ports) or the fixed F1 mapping (input-mode pad).
 #[derive(Debug, Clone)]
@@ -1241,10 +1241,11 @@ pub struct TimerInputEdge {
 pub struct GpioPort {
     family: GpioFamily,
     /// `Some` while the logic analyzer watches pads on this port in push mode
-    /// (installed via `install_logic_tap`). Every register write then reports
-    /// watched pad-level changes into the tap. Not snapshot state — the watch
-    /// is re-armed by the frontend after a resume.
-    tap: Option<PortTap>,
+    /// (installed through [`crate::pins::PinPort::install_watch`]). Every
+    /// register write and external input is bracketed with
+    /// [`crate::pins::watch_begin`] / [`crate::pins::watch_end`]. Not snapshot
+    /// state — the watch is re-armed by the frontend after a resume.
+    watch: Option<crate::pins::PadWatch>,
     /// Level cells kept equal to a pad (`Peripheral::watch_pad_level`).
     pin_cells: Vec<(u8, std::sync::Arc<std::sync::atomic::AtomicBool>)>,
     /// Peripheral pad-line cells wired to this port (deduplicated), plus the
@@ -1295,15 +1296,11 @@ pub struct GpioPort {
     capture_routes: Vec<CaptureRoute>,
     /// Timer-input edges recorded since the bus last drained them.
     timer_edges: Vec<TimerInputEdge>,
-    /// Pads the outside world has driven through `set_gpio_input`, and the
-    /// level it holds on each. The drive half of the four-state pin trace:
-    /// an input nobody drives is high-Z, and an output fighting an external
-    /// driver of the other level is contention.
+    /// What the outside world presents to each pad
+    /// ([`crate::pins::PinPort::set_external`]): the pads it holds, and the
+    /// level on each.
     externally_driven: u32,
     external_levels: u32,
-    /// Pads that belong to a world `gpio_net`: their drive reports the pad's
-    /// own output stage only (see [`crate::Peripheral::set_gpio_net_isolated`]).
-    net_isolated: u32,
     /// Outside levels that reached a pad routed to a peripheral line since
     /// the bus last collected them (see `sync_wire_input`).
     wire_edges: Vec<crate::peripherals::pad_lines::WireInputEdge>,
@@ -1428,7 +1425,7 @@ impl GpioPort {
     fn from_family(family: GpioFamily) -> Self {
         Self {
             family,
-            tap: None,
+            watch: None,
             pin_cells: Vec::new(),
             pad_routes: crate::peripherals::pad_routing::PadRoutes::new(),
             window_offset: 0,
@@ -1438,7 +1435,6 @@ impl GpioPort {
             timer_edges: Vec::new(),
             externally_driven: 0,
             external_levels: 0,
-            net_isolated: 0,
             wire_edges: Vec::new(),
             console_af: Vec::new(),
         }
@@ -1517,74 +1513,39 @@ impl GpioPort {
         }
     }
 
-    /// Who drives `pin` right now; see [`crate::Peripheral::read_gpio_pad_drive`].
+    /// The pad's own output stage, decoded from this port's registers only
+    /// ([`crate::pins::PinPort::driver`]).
     ///
     /// STM32 V2 and F1 decode the direction, output type and alternate
     /// function from their own registers. The other families answer from the
     /// shared direction model (`pad_mode`): a push-pull output, an input, or
-    /// "cannot say" for an alternate-function pad.
-    ///
-    /// A pad on a world `gpio_net` that nothing drives reports the chip's
-    /// internal pull (`PadDrive::PullUp` / `PadDrive::PullDown`) so the
-    /// net can count it as a weak source; any other pad keeps reporting
-    /// high-Z there, so ordinary pin traces are unchanged.
-    fn pad_drive(&self, pin: u8) -> Option<crate::logic_capture::PadDrive> {
-        use crate::logic_capture::PadDrive;
-        if pin >= 32 {
+    /// "cannot say" for an alternate-function pad. The pull is
+    /// [`pad_pull`](Self::pad_pull).
+    fn pad_driver(&self, pin: u8) -> Option<crate::pins::PadDriver> {
+        use crate::pins::{PadDriver, Pull};
+        if pin >= crate::pins::PinPort::pin_count(self) {
             return None;
         }
-        // A net pad reports only its own output stage: the level the net holds
-        // on the pin is not a driver of this chip.
-        let ext = ((self.externally_driven & !self.net_isolated) >> pin) & 1 != 0;
-        let ext_level = (self.external_levels >> pin) & 1 != 0;
-        let isolated = (self.net_isolated >> pin) & 1 != 0;
-        // Nothing in this chip drives the pad: an external driver, the
-        // internal pull (net pads only), or high-Z.
-        let undriven = || {
-            if ext {
-                return PadDrive::Driven;
-            }
-            match isolated.then(|| self.pad_pull(pin)).flatten() {
-                Some(true) => PadDrive::PullUp,
-                Some(false) => PadDrive::PullDown,
-                None => PadDrive::HighZ,
-            }
-        };
-        let input = || Some(undriven());
+        let pull = Pull::from_up(self.pad_pull(pin));
+        let input = || Some(PadDriver::released(pull));
         // An output stage driving `out` (open-drain drives only a 0).
-        let output = |out: bool, open_drain: bool| {
-            if open_drain && out {
-                // Released: whatever else holds the line drives it.
-                return Some(undriven());
-            }
-            Some(if ext && ext_level != out {
-                PadDrive::Contention
-            } else {
-                PadDrive::Driven
-            })
-        };
+        let output =
+            |out: bool, open_drain: bool| Some(PadDriver::output(out, open_drain).with_pull(pull));
         // An AF pad: a timer input is an input; a peripheral that publishes
-        // its wire drives the pad; anything else is not knowable here.
+        // its wire says what its output stage does (a push-pull line drives
+        // the pad, a released open-drain line or a peripheral input does
+        // not); anything else is not knowable here.
         let af = || {
             if self.capture_func(pin).is_some() {
                 return input();
             }
-            if let Some((cell, line)) = self.pad_routes.active_line(pin, |p| {
+            let (cell, line) = self.pad_routes.active_line(pin, |p| {
                 Self::selected_function(&self.family, self.pad_claims.as_ref(), p)
-            }) {
-                // The peripheral says what its output stage does: a
-                // push-pull line (every publisher's default) drives the pad,
-                // a released open-drain line or a peripheral input does not.
-                return if cell.drives(line) {
-                    Some(PadDrive::Driven)
-                } else {
-                    input()
-                };
-            }
-            if ext {
-                Some(PadDrive::Driven)
+            })?;
+            if cell.drives(line) {
+                Some(PadDriver::drive(cell.level(line)).with_pull(pull))
             } else {
-                None
+                input()
             }
         };
         match &self.family {
@@ -1608,7 +1569,14 @@ impl GpioPort {
                 }
             }
             _ => match self.pad_mode(pin)? {
-                GpioMode::Output => output(self.read_gpio_output_bit(pin)?, false),
+                GpioMode::Output => {
+                    // EFR32 Series 2 WIREDOR modes release the pad for a 1
+                    // (`Efr32s2Gpio::open_drain_mask`, the same truth DIN
+                    // reads); the other families model push-pull only.
+                    let open_drain = matches!(&self.family,
+                        GpioFamily::Efr32s2(g) if (g.open_drain_mask() >> pin) & 1 != 0);
+                    output(self.read_gpio_output_bit(pin)?, open_drain)
+                }
                 GpioMode::Input | GpioMode::Analog => input(),
                 GpioMode::Af => af(),
                 GpioMode::Unknown => None,
@@ -2009,58 +1977,42 @@ impl GpioPort {
         if !self.capture_routes.is_empty() && self.capture_func(pin).is_some() {
             return Some((self.read_reg(self.idr_offset()) >> pin) & 1 != 0);
         }
+        // A released open-drain output (latch 1) the outside world holds reads
+        // the wire, as the input register does (`pins::resolve`). With
+        // nothing outside it keeps reading its latch, standing in for the
+        // board pull-up a bare model has no other source for.
+        if pin < 32
+            && (self.externally_driven >> pin) & 1 != 0
+            && self.pad_mode(pin) == Some(GpioMode::Output)
+            && self
+                .pad_driver(pin)
+                .is_some_and(|d| d.out == crate::pins::Out::Off)
+        {
+            return Some((self.read_reg(self.idr_offset()) >> pin) & 1 != 0);
+        }
         self.family.pad_level(pin)
     }
 
-    /// Record every watched pad's current level before a mutation. No-op (one
-    /// branch) while no tap is installed.
+    /// Keep every [`watch_pad_level`](crate::Peripheral::watch_pad_level)
+    /// cell equal to its pad after a mutation.
     #[inline]
-    fn tap_snapshot(&mut self) {
-        let Some(mut t) = self.tap.take() else {
-            return;
-        };
-        for (k, &(pin, _)) in t.watched.iter().enumerate() {
-            t.scratch[k] = self.pad_level(pin);
-            t.drive_scratch[k] = self.pad_drive(pin);
+    fn sync_pin_cells(&self) {
+        for (pin, cell) in &self.pin_cells {
+            if let Some(level) = self.pad_level(*pin) {
+                cell.store(level, std::sync::atomic::Ordering::Relaxed);
+            }
         }
-        self.tap = Some(t);
     }
 
-    /// Report watched pads whose level became known-different since the
-    /// matching [`tap_snapshot`](Self::tap_snapshot), then re-sync the SPI
-    /// line-cell registration if the write changed a watched pad's routing —
-    /// so a pad handed to (or taken from) an SPI keeps pushing edges from the
-    /// correct source afterwards. A pad whose level became UNknown reports
-    /// nothing — same rule as the poll path, which keeps the last known level.
+    /// Run a pad mutation bracketed for push capture, then publish the pad
+    /// levels to the watching cells.
     #[inline]
-    fn tap_report(&mut self) {
-        if !self.pin_cells.is_empty() {
-            for (pin, cell) in &self.pin_cells {
-                if let Some(level) = self.pad_level(*pin) {
-                    cell.store(level, std::sync::atomic::Ordering::Relaxed);
-                }
-            }
-        }
-        let Some(t) = self.tap.take() else {
-            return;
-        };
-        for (k, &(pin, ch)) in t.watched.iter().enumerate() {
-            if let Some(level) = self.pad_level(pin) {
-                let drive = self.pad_drive(pin);
-                match drive {
-                    // Report the drive with the level whenever EITHER moved:
-                    // an open-drain release keeps the pulled level and only
-                    // the drive changes.
-                    Some(d) if t.scratch[k] != Some(level) || t.drive_scratch[k] != drive => {
-                        t.tap.push_with_drive(ch, level, d);
-                    }
-                    _ if t.scratch[k] != Some(level) => t.tap.push(ch, level),
-                    _ => {}
-                }
-            }
-        }
-        self.tap = Some(t);
-        self.sync_pad_line_taps();
+    fn mutate_pads<R>(&mut self, mutate: impl FnOnce(&mut Self) -> R) -> R {
+        crate::pins::watch_begin(self);
+        let r = mutate(self);
+        crate::pins::watch_end(self);
+        self.sync_pin_cells();
+        r
     }
 
     /// Re-register watched pads with the wires that drive them, so a pad that
@@ -2069,17 +2021,17 @@ impl GpioPort {
         if self.pad_routes.is_empty() {
             return;
         }
-        let Some(t) = self.tap.take() else {
+        let Some(watch) = self.watch.take() else {
             return;
         };
         // `family` is borrowed by the closure while `pad_routes` is borrowed
         // mutably; split the borrow by moving the routes out for the call.
         let mut routes = std::mem::take(&mut self.pad_routes);
-        routes.sync_taps(&t.tap, &t.watched, |pin| {
+        routes.sync_taps(watch.tap(), watch.pairs(), |pin| {
             Self::selected_function(&self.family, self.pad_claims.as_ref(), pin)
         });
         self.pad_routes = routes;
-        self.tap = Some(t);
+        self.watch = Some(watch);
     }
 }
 
@@ -2126,6 +2078,125 @@ impl GpioPort {
     }
 }
 
+impl crate::pins::PinPort for GpioPort {
+    fn pin_count(&self) -> u8 {
+        match &self.family {
+            GpioFamily::Stm32F1(_)
+            | GpioFamily::Stm32V2(_)
+            | GpioFamily::RaPort(_)
+            | GpioFamily::Efr32s2(_) => 16,
+            GpioFamily::Nrf52(g) => g.num_pins.min(32) as u8,
+            _ => 32,
+        }
+    }
+
+    fn driver(&self, pin: u8) -> Option<crate::pins::PadDriver> {
+        self.pad_driver(pin)
+    }
+
+    fn external(&self, pin: u8) -> crate::pins::External {
+        if pin < 32 && (self.externally_driven >> pin) & 1 != 0 {
+            crate::pins::External::Level((self.external_levels >> pin) & 1 != 0)
+        } else {
+            crate::pins::External::Released
+        }
+    }
+
+    /// A level lands in the family's input latch (see
+    /// `GpioFamily::set_external_input`); releasing hands the pad back to
+    /// its pull (V2 `PUPDR`, nRF `PIN_CNF.PULL`), and otherwise leaves the
+    /// latch at the last level, as a floating input keeps reading it.
+    fn set_external(
+        &mut self,
+        pin: u8,
+        ext: crate::pins::External,
+    ) -> Option<crate::pins::InputChange> {
+        if pin >= self.pin_count() {
+            return None;
+        }
+        let before = crate::Peripheral::read_gpio_input(self, pin)?;
+        let capture_before = self.capture_input_word();
+        let ok = self.mutate_pads(|s| match ext {
+            crate::pins::External::Level(level) => {
+                let ok = s.family.set_external_input(pin, level);
+                if ok {
+                    s.externally_driven |= 1 << pin;
+                    if level {
+                        s.external_levels |= 1 << pin;
+                    } else {
+                        s.external_levels &= !(1 << pin);
+                    }
+                }
+                ok
+            }
+            crate::pins::External::Released => {
+                s.family.release_external_input(pin);
+                s.externally_driven &= !(1 << pin);
+                true
+            }
+        });
+        if ok {
+            self.sync_wire_input(pin);
+        }
+        self.record_timer_input_edges(capture_before);
+        let after = crate::Peripheral::read_gpio_input(self, pin)?;
+        ok.then_some(crate::pins::InputChange { before, after })
+    }
+
+    fn input(&self, pin: u8) -> Option<bool> {
+        crate::Peripheral::read_gpio_input(self, pin)
+    }
+
+    /// The family's direction-aware probe level (`pad_level`): an output
+    /// reads its latch, a routed pad its peripheral's wire, an input the
+    /// input register. It agrees with [`crate::pins::resolve`] wherever the
+    /// driver decides the pad; it differs for an STM32 open-drain output
+    /// holding a 1, which reads its latch as before.
+    fn level(&self, pin: u8) -> Option<bool> {
+        if pin >= self.pin_count() {
+            return None;
+        }
+        self.pad_level(pin)
+    }
+
+    fn join_wire(&mut self, pin: u8) {
+        if pin < 32 {
+            // Every peripheral line this pad can carry now shares a wire with
+            // other chips.
+            self.pad_routes.mark_on_net(pin);
+        }
+    }
+
+    fn install_watch(&mut self, watch: Option<crate::pins::PadWatch>) -> bool {
+        match watch {
+            None => {
+                self.watch = None;
+                self.pad_routes.clear_taps();
+            }
+            Some(watch) => {
+                self.watch = Some(watch);
+                // Seeded stale so the sync below always installs the current
+                // routing into every wired line cell.
+                self.pad_routes.invalidate_registrations();
+                self.sync_pad_line_taps();
+            }
+        }
+        true
+    }
+
+    fn take_watch(&mut self) -> Option<crate::pins::PadWatch> {
+        self.watch.take()
+    }
+
+    fn put_watch(&mut self, watch: crate::pins::PadWatch) {
+        self.watch = Some(watch);
+    }
+
+    fn routes_changed(&mut self) {
+        self.sync_pad_line_taps();
+    }
+}
+
 impl crate::Peripheral for GpioPort {
     /// Not in the per-cycle walk: this model overrides neither `tick()` nor
     /// `tick_elapsed()`, so every visit ran the default no-op and returned a
@@ -2168,9 +2239,7 @@ impl crate::Peripheral for GpioPort {
         } else {
             0
         };
-        self.tap_snapshot();
-        self.write_reg(reg_offset, reg_val);
-        self.tap_report();
+        self.mutate_pads(|s| s.write_reg(reg_offset, reg_val));
         self.sync_wire_inputs();
         self.refresh_console_af();
         if reg_offset == self.idr_offset() {
@@ -2198,9 +2267,7 @@ impl crate::Peripheral for GpioPort {
         } else {
             0
         };
-        self.tap_snapshot();
-        self.write_reg(offset & !3, value);
-        self.tap_report();
+        self.mutate_pads(|s| s.write_reg(offset & !3, value));
         self.sync_wire_inputs();
         self.refresh_console_af();
         if input_reg {
@@ -2244,12 +2311,12 @@ impl crate::Peripheral for GpioPort {
         }
     }
 
-    fn read_gpio_pad(&self, pin: u8) -> Option<bool> {
-        self.pad_level(pin)
+    fn pins(&self) -> Option<&dyn crate::pins::PinPort> {
+        Some(self)
     }
 
-    fn read_gpio_pad_drive(&self, pin: u8) -> Option<crate::logic_capture::PadDrive> {
-        self.pad_drive(pin)
+    fn pins_mut(&mut self) -> Option<&mut dyn crate::pins::PinPort> {
+        Some(self)
     }
 
     fn gpio_routing(&self, pin: u8) -> Option<GpioRouting> {
@@ -2315,41 +2382,6 @@ impl crate::Peripheral for GpioPort {
         Some((reg & (1u32 << pin)) != 0)
     }
 
-    fn set_gpio_input(&mut self, pin: u8, level: bool) -> bool {
-        let before = self.capture_input_word();
-        self.tap_snapshot();
-        let ok = self.family.set_external_input(pin, level);
-        if ok && pin < 32 {
-            self.externally_driven |= 1 << pin;
-            if level {
-                self.external_levels |= 1 << pin;
-            } else {
-                self.external_levels &= !(1 << pin);
-            }
-        }
-        self.tap_report();
-        if ok {
-            self.sync_wire_input(pin);
-        }
-        self.record_timer_input_edges(before);
-        ok
-    }
-
-    fn set_gpio_net_isolated(&mut self, pin: u8, isolated: bool) -> bool {
-        if pin >= 32 {
-            return false;
-        }
-        if isolated {
-            self.net_isolated |= 1 << pin;
-            // Every peripheral line this pad can carry now shares a wire with
-            // other chips.
-            self.pad_routes.mark_on_net(pin);
-        } else {
-            self.net_isolated &= !(1 << pin);
-        }
-        true
-    }
-
     fn bind_timer_capture_pad(
         &mut self,
         pin: u8,
@@ -2387,29 +2419,6 @@ impl crate::Peripheral for GpioPort {
         };
         cell.store(level, std::sync::atomic::Ordering::Relaxed);
         self.pin_cells.push((pin, cell));
-        true
-    }
-
-    fn install_logic_tap(
-        &mut self,
-        tap: &crate::logic_capture::LogicTap,
-        watched: &[(u8, u32)],
-    ) -> bool {
-        if watched.is_empty() {
-            self.tap = None;
-            self.pad_routes.clear_taps();
-        } else {
-            self.tap = Some(PortTap {
-                tap: tap.clone(),
-                watched: watched.to_vec(),
-                scratch: vec![None; watched.len()],
-                drive_scratch: vec![None; watched.len()],
-            });
-            // Seeded stale so the sync below always installs the current
-            // routing into every wired line cell.
-            self.pad_routes.invalidate_registrations();
-            self.sync_pad_line_taps();
-        }
         true
     }
 
@@ -3459,15 +3468,18 @@ mod nrf52_pad_latch_tests {
     }
 }
 
-/// A chip's internal pull on a `gpio_net` pad is a weak drive the net counts
-/// (`PadDrive::PullUp` / `PullDown`); off the net the same pad stays high-Z,
-/// so ordinary pin traces do not change. The ATmega port's pull-up is checked
-/// here too, next to the other families, to keep `avr_gpio.rs` edits minimal.
+/// A chip's internal pull is part of its own output stage
+/// ([`crate::pins::PinPort::driver`]): a net member's drive
+/// ([`crate::pins::own_drive`]) shows it as a weak level, while a probe on the
+/// pad ([`crate::pins::probe_drive`], the four-state trace) keeps reporting
+/// high-Z, so ordinary pin traces do not change. The ATmega port's pull-up is
+/// checked here too, next to the other families.
 #[cfg(test)]
 mod net_pull_tests {
     use super::{GpioPort, GpioRegisterLayout};
     use crate::logic_capture::PadDrive;
     use crate::peripherals::avr_gpio::AvrGpioPort;
+    use crate::pins::own_drive;
     use crate::Peripheral;
 
     fn v2() -> GpioPort {
@@ -3475,70 +3487,62 @@ mod net_pull_tests {
     }
 
     #[test]
-    fn stm32_v2_pupdr_is_reported_on_net_pads_only() {
+    fn stm32_v2_pupdr_is_a_weak_own_drive_and_high_z_to_a_probe() {
         let mut g = v2();
         g.write_u32(0x0C, 0b01 | (0b10 << 2)).unwrap(); // PA0 up, PA1 down
-        assert_eq!(g.read_gpio_pad_drive(0), Some(PadDrive::HighZ), "off-net");
-        g.set_gpio_net_isolated(0, true);
-        g.set_gpio_net_isolated(1, true);
-        g.set_gpio_net_isolated(2, true);
-        assert_eq!(g.read_gpio_pad_drive(0), Some(PadDrive::PullUp));
-        assert_eq!(g.read_gpio_pad_drive(1), Some(PadDrive::PullDown));
-        assert_eq!(g.read_gpio_pad_drive(2), Some(PadDrive::HighZ), "no pull");
+        assert_eq!(g.read_gpio_pad_drive(0), Some(PadDrive::HighZ), "probe");
+        assert_eq!(own_drive(&g, 0), Some(PadDrive::PullUp));
+        assert_eq!(own_drive(&g, 1), Some(PadDrive::PullDown));
+        assert_eq!(own_drive(&g, 2), Some(PadDrive::HighZ), "no pull");
         // The level the net feeds back does not hide the pull.
         g.set_gpio_input(0, false);
-        assert_eq!(g.read_gpio_pad_drive(0), Some(PadDrive::PullUp));
+        assert_eq!(own_drive(&g, 0), Some(PadDrive::PullUp));
         // Analog mode disconnects the pulls.
         g.write_u32(0x00, 0b11).unwrap();
-        assert_eq!(g.read_gpio_pad_drive(0), Some(PadDrive::HighZ));
+        assert_eq!(own_drive(&g, 0), Some(PadDrive::HighZ));
     }
 
     #[test]
     fn stm32_v2_released_open_drain_shows_its_pull() {
         let mut g = v2();
-        g.set_gpio_net_isolated(4, true);
         g.write_u32(0x04, 1 << 4).unwrap(); // OTYPER: open-drain
         g.write_u32(0x0C, 0b01 << 8).unwrap(); // pull-up
         g.write_u32(0x00, 0b01 << 8).unwrap(); // output, ODR = 0
-        assert_eq!(g.read_gpio_pad_drive(4), Some(PadDrive::Driven));
+        assert_eq!(own_drive(&g, 4), Some(PadDrive::Driven));
         g.write_u32(0x14, 1 << 4).unwrap(); // release
-        assert_eq!(g.read_gpio_pad_drive(4), Some(PadDrive::PullUp));
+        assert_eq!(own_drive(&g, 4), Some(PadDrive::PullUp));
     }
 
     #[test]
     fn stm32_f1_input_pull_follows_odr() {
         let mut g = GpioPort::new_with_layout(GpioRegisterLayout::Stm32F1);
-        g.set_gpio_net_isolated(1, true);
-        g.set_gpio_net_isolated(2, true);
         // PA1 input with pull (CNF 10, MODE 00), PA2 floating input (reset).
         g.write_u32(0x00, 0x4444_4484).unwrap();
         g.write_u32(0x0C, 1 << 1).unwrap();
-        assert_eq!(g.read_gpio_pad_drive(1), Some(PadDrive::PullUp));
+        assert_eq!(own_drive(&g, 1), Some(PadDrive::PullUp));
         g.write_u32(0x0C, 0).unwrap();
-        assert_eq!(g.read_gpio_pad_drive(1), Some(PadDrive::PullDown));
-        assert_eq!(g.read_gpio_pad_drive(2), Some(PadDrive::HighZ));
+        assert_eq!(own_drive(&g, 1), Some(PadDrive::PullDown));
+        assert_eq!(own_drive(&g, 2), Some(PadDrive::HighZ));
     }
 
     #[test]
-    fn nrf52_pin_cnf_pull_on_a_net_input() {
+    fn nrf52_pin_cnf_pull_on_an_input() {
         let mut g = GpioPort::new_with_layout(GpioRegisterLayout::Nrf52);
-        g.set_gpio_net_isolated(3, true);
         g.write_u32(0x700 + 3 * 4, 3 << 2).unwrap(); // PULL = up
-        assert_eq!(g.read_gpio_pad_drive(3), Some(PadDrive::PullUp));
+        assert_eq!(own_drive(&g, 3), Some(PadDrive::PullUp));
         g.write_u32(0x700 + 3 * 4, 1 << 2).unwrap(); // PULL = down
-        assert_eq!(g.read_gpio_pad_drive(3), Some(PadDrive::PullDown));
+        assert_eq!(own_drive(&g, 3), Some(PadDrive::PullDown));
     }
 
     #[test]
     fn atmega_input_with_port_bit_set_is_a_pull_up() {
         let mut p = AvrGpioPort::new();
-        p.set_gpio_net_isolated(5, true);
-        assert_eq!(p.read_gpio_pad_drive(5), Some(PadDrive::HighZ));
+        assert_eq!(own_drive(&p, 5), Some(PadDrive::HighZ));
         p.write(2, 1 << 5).unwrap(); // PORT bit: pull-up on (DDR = 0)
-        assert_eq!(p.read_gpio_pad_drive(5), Some(PadDrive::PullUp));
+        assert_eq!(own_drive(&p, 5), Some(PadDrive::PullUp));
+        assert_eq!(p.read_gpio_pad_drive(5), Some(PadDrive::HighZ), "probe");
         p.write(1, 1 << 5).unwrap(); // DDR: now an output driving 1
-        assert_eq!(p.read_gpio_pad_drive(5), Some(PadDrive::Driven));
-        // Off the net the port says nothing, as before.
-        assert_eq!(p.read_gpio_pad_drive(4), None);
+        assert_eq!(own_drive(&p, 5), Some(PadDrive::Driven));
+        assert_eq!(own_drive(&p, 8), None, "an 8-bit port has no pad 8");
     }
 }

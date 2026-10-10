@@ -177,10 +177,18 @@ pub trait MachineTrait: Send {
     fn marker_edges(&mut self, cursor: u64) -> (Vec<(u32, u64, bool)>, u64) {
         (Vec::new(), cursor)
     }
-    /// Mark GPIO pads as members of a `gpio_net` (they then report only their
-    /// own drive). Call before [`Self::watch_marker_pins`].
-    fn isolate_net_pads(&mut self, _pins: &[(String, u8)]) -> anyhow::Result<()> {
+    /// Put GPIO pads on a `gpio_net`. Call before [`Self::watch_world_pins`].
+    fn join_net_pads(&mut self, _pins: &[(String, u8)]) -> anyhow::Result<()> {
         anyhow::bail!("machine cannot join a GPIO net")
+    }
+    /// Watch marker pads (probes, channels first) and `gpio_net` member pads
+    /// (each chip's own drive, the channels after them).
+    fn watch_world_pins(
+        &mut self,
+        _markers: &[(String, u8)],
+        _net_pads: &[(String, u8)],
+    ) -> anyhow::Result<()> {
+        anyhow::bail!("machine cannot watch GPIO net pads")
     }
     /// Four-state drive changes of the watched pads since `cursor`:
     /// `((channel, cycle, state)…, next cursor)`.
@@ -510,8 +518,15 @@ impl<C: Cpu + 'static> MachineTrait for Machine<C> {
         Machine::marker_edges(self, cursor)
     }
 
-    fn isolate_net_pads(&mut self, pins: &[(String, u8)]) -> anyhow::Result<()> {
-        Machine::isolate_net_pads(self, pins)
+    fn join_net_pads(&mut self, pins: &[(String, u8)]) -> anyhow::Result<()> {
+        Machine::join_net_pads(self, pins)
+    }
+    fn watch_world_pins(
+        &mut self,
+        markers: &[(String, u8)],
+        net_pads: &[(String, u8)],
+    ) -> anyhow::Result<()> {
+        Machine::watch_world_pins(self, markers, net_pads)
     }
 
     fn net_pad_states(
