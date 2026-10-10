@@ -162,6 +162,7 @@ impl crate::sim_input::SimInput for HcSr04 {
             unit: std::borrow::Cow::Borrowed("cm"),
             min: MIN_CM as f64,
             max: MAX_CM as f64,
+            default: None,
         }];
         CH
     }

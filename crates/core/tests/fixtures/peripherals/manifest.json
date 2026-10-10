@@ -104,21 +104,24 @@
           "label": "Latitude",
           "unit": "°",
           "min": -90.0,
-          "max": 90.0
+          "max": 90.0,
+          "default": 37.7749
         },
         {
           "key": "lon",
           "label": "Longitude",
           "unit": "°",
           "min": -180.0,
-          "max": 180.0
+          "max": 180.0,
+          "default": -122.4194
         },
         {
           "key": "fix",
           "label": "Fix",
           "unit": "level",
           "min": 0.0,
-          "max": 1.0
+          "max": 1.0,
+          "default": 1.0
         }
       ]
     },
@@ -262,21 +265,24 @@
           "label": "X",
           "unit": "g",
           "min": -16.0,
-          "max": 16.0
+          "max": 16.0,
+          "default": 0.0
         },
         {
           "key": "y",
           "label": "Y",
           "unit": "g",
           "min": -16.0,
-          "max": 16.0
+          "max": 16.0,
+          "default": 0.0
         },
         {
           "key": "z",
           "label": "Z",
           "unit": "g",
           "min": -16.0,
-          "max": 16.0
+          "max": 16.0,
+          "default": 1.0
         }
       ]
     },
@@ -301,14 +307,16 @@
           "label": "Bus voltage",
           "unit": "V",
           "min": 0.0,
-          "max": 32.0
+          "max": 32.0,
+          "default": 3.3
         },
         {
           "key": "current",
           "label": "Current",
           "unit": "A",
           "min": -3.2,
-          "max": 3.2
+          "max": 3.2,
+          "default": 0.0
         }
       ]
     },
@@ -333,28 +341,32 @@
           "label": "A0",
           "unit": "V",
           "min": -4.096,
-          "max": 4.096
+          "max": 4.096,
+          "default": 0.0
         },
         {
           "key": "a1",
           "label": "A1",
           "unit": "V",
           "min": -4.096,
-          "max": 4.096
+          "max": 4.096,
+          "default": 0.0
         },
         {
           "key": "a2",
           "label": "A2",
           "unit": "V",
           "min": -4.096,
-          "max": 4.096
+          "max": 4.096,
+          "default": 0.0
         },
         {
           "key": "a3",
           "label": "A3",
           "unit": "V",
           "min": -4.096,
-          "max": 4.096
+          "max": 4.096,
+          "default": 0.0
         }
       ]
     },
@@ -384,14 +396,16 @@
           "label": "Unix time",
           "unit": "s",
           "min": 0.0,
-          "max": 4102444800.0
+          "max": 4102444800.0,
+          "default": 1784721600.0
         },
         {
           "key": "temperature",
           "label": "Temperature",
           "unit": "C",
           "min": -40.0,
-          "max": 85.0
+          "max": 85.0,
+          "default": 25.0
         }
       ]
     },
@@ -421,14 +435,16 @@
           "label": "Weight",
           "unit": "g",
           "min": -50000.0,
-          "max": 50000.0
+          "max": 50000.0,
+          "default": 0.0
         },
         {
           "key": "raw",
           "label": "Raw counts",
           "unit": "counts",
           "min": -8388608.0,
-          "max": 8388607.0
+          "max": 8388607.0,
+          "default": 0.0
         }
       ]
     },
@@ -453,21 +469,24 @@
           "label": "Heading",
           "unit": "deg",
           "min": 0.0,
-          "max": 360.0
+          "max": 360.0,
+          "default": 0.0
         },
         {
           "key": "roll",
           "label": "Roll",
           "unit": "deg",
           "min": -180.0,
-          "max": 180.0
+          "max": 180.0,
+          "default": 0.0
         },
         {
           "key": "pitch",
           "label": "Pitch",
           "unit": "deg",
           "min": -180.0,
-          "max": 180.0
+          "max": 180.0,
+          "default": 0.0
         }
       ]
     },
@@ -571,49 +590,56 @@
           "label": "Accel X",
           "unit": "g",
           "min": -16.0,
-          "max": 16.0
+          "max": 16.0,
+          "default": 0.01776123046875
         },
         {
           "key": "ay",
           "label": "Accel Y",
           "unit": "g",
           "min": -16.0,
-          "max": 16.0
+          "max": 16.0,
+          "default": 0.0677490234375
         },
         {
           "key": "az",
           "label": "Accel Z",
           "unit": "g",
           "min": -16.0,
-          "max": 16.0
+          "max": 16.0,
+          "default": 1.0
         },
         {
           "key": "gx",
           "label": "Gyro X",
           "unit": "°/s",
           "min": -2000.0,
-          "max": 2000.0
+          "max": 2000.0,
+          "default": 0.1221374045801527
         },
         {
           "key": "gy",
           "label": "Gyro Y",
           "unit": "°/s",
           "min": -2000.0,
-          "max": 2000.0
+          "max": 2000.0,
+          "default": 0.2442748091603053
         },
         {
           "key": "gz",
           "label": "Gyro Z",
           "unit": "°/s",
           "min": -2000.0,
-          "max": 2000.0
+          "max": 2000.0,
+          "default": 0.366412213740458
         },
         {
           "key": "temp",
           "label": "Die temperature",
           "unit": "C",
           "min": -40.0,
-          "max": 85.0
+          "max": 85.0,
+          "default": 25.0
         }
       ]
     },
@@ -638,21 +664,24 @@
           "label": "Accel X",
           "unit": "g",
           "min": -8.0,
-          "max": 8.0
+          "max": 8.0,
+          "default": 0.0
         },
         {
           "key": "y",
           "label": "Accel Y",
           "unit": "g",
           "min": -8.0,
-          "max": 8.0
+          "max": 8.0,
+          "default": 0.0
         },
         {
           "key": "z",
           "label": "Accel Z",
           "unit": "g",
           "min": -8.0,
-          "max": 8.0
+          "max": 8.0,
+          "default": 0.0
         }
       ]
     },
@@ -684,21 +713,24 @@
           "label": "Temperature",
           "unit": "°C",
           "min": -40.0,
-          "max": 85.0
+          "max": 85.0,
+          "default": 25.0
         },
         {
           "key": "humidity",
           "label": "Humidity",
           "unit": "%RH",
           "min": 0.0,
-          "max": 100.0
+          "max": 100.0,
+          "default": 50.0
         },
         {
           "key": "pressure",
           "label": "Pressure",
           "unit": "hPa",
           "min": 300.0,
-          "max": 1100.0
+          "max": 1100.0,
+          "default": 1013.25
         }
       ]
     },
@@ -733,14 +765,16 @@
           "label": "Temperature",
           "unit": "°C",
           "min": -40.0,
-          "max": 85.0
+          "max": 85.0,
+          "default": 25.0
         },
         {
           "key": "humidity",
           "label": "Humidity",
           "unit": "%",
           "min": 0.0,
-          "max": 100.0
+          "max": 100.0,
+          "default": 50.0
         }
       ]
     },
@@ -827,7 +861,8 @@
           "label": "Port",
           "unit": "byte",
           "min": 0.0,
-          "max": 255.0
+          "max": 255.0,
+          "default": 255.0
         }
       ]
     },
@@ -1339,56 +1374,64 @@
           "label": "D0",
           "unit": "level",
           "min": 0.0,
-          "max": 1.0
+          "max": 1.0,
+          "default": 0.0
         },
         {
           "key": "ch1",
           "label": "D1",
           "unit": "level",
           "min": 0.0,
-          "max": 1.0
+          "max": 1.0,
+          "default": 0.0
         },
         {
           "key": "ch2",
           "label": "D2",
           "unit": "level",
           "min": 0.0,
-          "max": 1.0
+          "max": 1.0,
+          "default": 0.0
         },
         {
           "key": "ch3",
           "label": "D3",
           "unit": "level",
           "min": 0.0,
-          "max": 1.0
+          "max": 1.0,
+          "default": 0.0
         },
         {
           "key": "ch4",
           "label": "D4",
           "unit": "level",
           "min": 0.0,
-          "max": 1.0
+          "max": 1.0,
+          "default": 0.0
         },
         {
           "key": "ch5",
           "label": "D5",
           "unit": "level",
           "min": 0.0,
-          "max": 1.0
+          "max": 1.0,
+          "default": 0.0
         },
         {
           "key": "ch6",
           "label": "D6",
           "unit": "level",
           "min": 0.0,
-          "max": 1.0
+          "max": 1.0,
+          "default": 0.0
         },
         {
           "key": "ch7",
           "label": "D7",
           "unit": "level",
           "min": 0.0,
-          "max": 1.0
+          "max": 1.0,
+          "default": 0.0
         }
       ]
     },
@@ -1515,7 +1558,8 @@
           "label": "Temperature",
           "unit": "°C",
           "min": -55.0,
-          "max": 150.0
+          "max": 150.0,
+          "default": 25.0
         }
       ]
     },
@@ -1540,7 +1584,8 @@
           "label": "Position",
           "unit": "%",
           "min": 0.0,
-          "max": 100.0
+          "max": 100.0,
+          "default": 50.0
         }
       ]
     },
@@ -1565,14 +1610,16 @@
           "label": "State of charge",
           "unit": "%",
           "min": 0.0,
-          "max": 100.0
+          "max": 100.0,
+          "default": 50.0
         },
         {
           "key": "usb_present",
           "label": "Charger connected",
           "unit": "",
           "min": 0.0,
-          "max": 1.0
+          "max": 1.0,
+          "default": 0.0
         }
       ]
     },
@@ -1597,7 +1644,8 @@
           "label": "Illuminance",
           "unit": "lx",
           "min": 0.0,
-          "max": 100000.0
+          "max": 100000.0,
+          "default": 100.0
         }
       ]
     },
@@ -1622,7 +1670,8 @@
           "label": "LPG concentration",
           "unit": "ppm",
           "min": 0.0,
-          "max": 10000.0
+          "max": 10000.0,
+          "default": 0.0
         }
       ]
     },
@@ -1647,7 +1696,8 @@
           "label": "Distance",
           "unit": "mm",
           "min": 0.0,
-          "max": 800.0
+          "max": 800.0,
+          "default": 0.0
         }
       ]
     },
@@ -1672,7 +1722,8 @@
           "label": "Soil moisture",
           "unit": "%",
           "min": 0.0,
-          "max": 100.0
+          "max": 100.0,
+          "default": 40.0
         }
       ]
     },
@@ -1766,7 +1817,8 @@
           "label": "Distance",
           "unit": "mm",
           "min": 0.0,
-          "max": 4000.0
+          "max": 4000.0,
+          "default": 500.0
         }
       ]
     },
@@ -1813,21 +1865,24 @@
           "label": "CO₂",
           "unit": "ppm",
           "min": 0.0,
-          "max": 40000.0
+          "max": 40000.0,
+          "default": 450.0
         },
         {
           "key": "temperature",
           "label": "Temperature",
           "unit": "°C",
           "min": -45.0,
-          "max": 130.0
+          "max": 130.0,
+          "default": 22.0
         },
         {
           "key": "humidity",
           "label": "Humidity",
           "unit": "%RH",
           "min": 0.0,
-          "max": 100.0
+          "max": 100.0,
+          "default": 45.0
         }
       ]
     },
@@ -1869,14 +1924,16 @@
           "label": "VOC raw",
           "unit": "ticks",
           "min": 0.0,
-          "max": 65535.0
+          "max": 65535.0,
+          "default": 28000.0
         },
         {
           "key": "nox_sraw",
           "label": "NOx raw",
           "unit": "ticks",
           "min": 0.0,
-          "max": 65535.0
+          "max": 65535.0,
+          "default": 16000.0
         }
       ]
     },
@@ -1959,21 +2016,24 @@
           "label": "X",
           "unit": "g",
           "min": -16.0,
-          "max": 16.0
+          "max": 16.0,
+          "default": 0.0
         },
         {
           "key": "y",
           "label": "Y",
           "unit": "g",
           "min": -16.0,
-          "max": 16.0
+          "max": 16.0,
+          "default": 0.0
         },
         {
           "key": "z",
           "label": "Z",
           "unit": "g",
           "min": -16.0,
-          "max": 16.0
+          "max": 16.0,
+          "default": 0.0
         }
       ]
     },
@@ -1998,21 +2058,24 @@
           "label": "X",
           "unit": "µT",
           "min": -4915.2,
-          "max": 4915.2
+          "max": 4915.2,
+          "default": 0.0
         },
         {
           "key": "y",
           "label": "Y",
           "unit": "µT",
           "min": -4915.2,
-          "max": 4915.2
+          "max": 4915.2,
+          "default": 0.0
         },
         {
           "key": "z",
           "label": "Z",
           "unit": "µT",
           "min": -4915.2,
-          "max": 4915.2
+          "max": 4915.2,
+          "default": 0.0
         }
       ]
     },
@@ -2076,14 +2139,16 @@
           "label": "Temperature",
           "unit": "°C",
           "min": -40.0,
-          "max": 125.0
+          "max": 125.0,
+          "default": 22.0
         },
         {
           "key": "humidity",
           "label": "Relative humidity",
           "unit": "%",
           "min": 0.0,
-          "max": 100.0
+          "max": 100.0,
+          "default": 45.0
         }
       ]
     },
@@ -2108,7 +2173,8 @@
           "label": "Temperature",
           "unit": "°C",
           "min": 0.0,
-          "max": 125.0
+          "max": 125.0,
+          "default": 25.0
         }
       ]
     },
@@ -2133,7 +2199,8 @@
           "label": "Illuminance",
           "unit": "lx",
           "min": 0.0,
-          "max": 65535.0
+          "max": 65535.0,
+          "default": 450.0
         }
       ]
     },
@@ -2170,7 +2237,8 @@
           "label": "Illuminance",
           "unit": "lx",
           "min": 0.0,
-          "max": 120000.0
+          "max": 120000.0,
+          "default": 450.0
         }
       ]
     },
@@ -2239,14 +2307,16 @@
           "label": "Proximity",
           "unit": "counts",
           "min": 0.0,
-          "max": 65535.0
+          "max": 65535.0,
+          "default": 2000.0
         },
         {
           "key": "ambient",
           "label": "Ambient",
           "unit": "counts",
           "min": 0.0,
-          "max": 65535.0
+          "max": 65535.0,
+          "default": 1000.0
         }
       ]
     },
@@ -2276,7 +2346,8 @@
           "label": "Distance",
           "unit": "mm",
           "min": 0.0,
-          "max": 2000.0
+          "max": 2000.0,
+          "default": 200.0
         }
       ]
     },
@@ -2306,7 +2377,8 @@
           "label": "Angle",
           "unit": "deg",
           "min": 0.0,
-          "max": 360.0
+          "max": 360.0,
+          "default": 0.0
         }
       ]
     },
@@ -2331,14 +2403,16 @@
           "label": "Temperature",
           "unit": "°C",
           "min": -40.0,
-          "max": 125.0
+          "max": 125.0,
+          "default": 25.0
         },
         {
           "key": "humidity",
           "label": "Relative humidity",
           "unit": "%",
           "min": 0.0,
-          "max": 100.0
+          "max": 100.0,
+          "default": 50.0
         }
       ]
     },
@@ -2380,7 +2454,8 @@
           "label": "Temperature",
           "unit": "°C",
           "min": -55.0,
-          "max": 150.0
+          "max": 150.0,
+          "default": 0.0
         }
       ]
     },
@@ -2405,21 +2480,24 @@
           "label": "X",
           "unit": "g",
           "min": -8.0,
-          "max": 8.0
+          "max": 8.0,
+          "default": 0.0
         },
         {
           "key": "y",
           "label": "Y",
           "unit": "g",
           "min": -8.0,
-          "max": 8.0
+          "max": 8.0,
+          "default": 0.0
         },
         {
           "key": "z",
           "label": "Z",
           "unit": "g",
           "min": -8.0,
-          "max": 8.0
+          "max": 8.0,
+          "default": 1.0
         }
       ]
     },
@@ -2461,14 +2539,16 @@
           "label": "Surface temperature",
           "unit": "°C",
           "min": -70.0,
-          "max": 380.0
+          "max": 380.0,
+          "default": 18.0
         },
         {
           "key": "ambient_temp",
           "label": "Ambient temperature",
           "unit": "°C",
           "min": -40.0,
-          "max": 125.0
+          "max": 125.0,
+          "default": 22.0
         }
       ]
     },
@@ -2498,21 +2578,24 @@
           "label": "Accel X",
           "unit": "g",
           "min": -16.0,
-          "max": 16.0
+          "max": 16.0,
+          "default": 0.0
         },
         {
           "key": "accel_y",
           "label": "Accel Y",
           "unit": "g",
           "min": -16.0,
-          "max": 16.0
+          "max": 16.0,
+          "default": 0.0
         },
         {
           "key": "accel_z",
           "label": "Accel Z",
           "unit": "g",
           "min": -16.0,
-          "max": 16.0
+          "max": 16.0,
+          "default": 1.0
         }
       ]
     },
@@ -2549,14 +2632,16 @@
           "label": "Thermocouple temp",
           "unit": "°C",
           "min": -270.0,
-          "max": 1372.0
+          "max": 1372.0,
+          "default": 25.0
         },
         {
           "key": "internal",
           "label": "Internal (cold-junction) temp",
           "unit": "°C",
           "min": -40.0,
-          "max": 125.0
+          "max": 125.0,
+          "default": 22.0
         }
       ]
     },
@@ -2608,56 +2693,64 @@
           "label": "Accel X",
           "unit": "g",
           "min": -16.0,
-          "max": 16.0
+          "max": 16.0,
+          "default": 0.0
         },
         {
           "key": "ay",
           "label": "Accel Y",
           "unit": "g",
           "min": -16.0,
-          "max": 16.0
+          "max": 16.0,
+          "default": 0.0
         },
         {
           "key": "az",
           "label": "Accel Z",
           "unit": "g",
           "min": -16.0,
-          "max": 16.0
+          "max": 16.0,
+          "default": 0.0
         },
         {
           "key": "gx",
           "label": "Gyro X",
           "unit": "°/s",
           "min": -2000.0,
-          "max": 2000.0
+          "max": 2000.0,
+          "default": 0.0
         },
         {
           "key": "gy",
           "label": "Gyro Y",
           "unit": "°/s",
           "min": -2000.0,
-          "max": 2000.0
+          "max": 2000.0,
+          "default": 0.0
         },
         {
           "key": "gz",
           "label": "Gyro Z",
           "unit": "°/s",
           "min": -2000.0,
-          "max": 2000.0
+          "max": 2000.0,
+          "default": 0.0
         },
         {
           "key": "temp",
           "label": "Temperature",
           "unit": "°C",
           "min": -41.0,
-          "max": 87.0
+          "max": 87.0,
+          "default": 23.0
         },
         {
           "key": "steps",
           "label": "Step count",
           "unit": "steps",
           "min": 0.0,
-          "max": 4294967295.0
+          "max": 4294967295.0,
+          "default": 0.0
         }
       ]
     },
@@ -2729,56 +2822,64 @@
           "label": "Touch CS1",
           "unit": "%",
           "min": 0.0,
-          "max": 100.0
+          "max": 100.0,
+          "default": 0.0
         },
         {
           "key": "touch2",
           "label": "Touch CS2",
           "unit": "%",
           "min": 0.0,
-          "max": 100.0
+          "max": 100.0,
+          "default": 0.0
         },
         {
           "key": "touch3",
           "label": "Touch CS3",
           "unit": "%",
           "min": 0.0,
-          "max": 100.0
+          "max": 100.0,
+          "default": 0.0
         },
         {
           "key": "touch4",
           "label": "Touch CS4",
           "unit": "%",
           "min": 0.0,
-          "max": 100.0
+          "max": 100.0,
+          "default": 0.0
         },
         {
           "key": "touch5",
           "label": "Touch CS5",
           "unit": "%",
           "min": 0.0,
-          "max": 100.0
+          "max": 100.0,
+          "default": 0.0
         },
         {
           "key": "touch6",
           "label": "Touch CS6",
           "unit": "%",
           "min": 0.0,
-          "max": 100.0
+          "max": 100.0,
+          "default": 0.0
         },
         {
           "key": "touch7",
           "label": "Touch CS7",
           "unit": "%",
           "min": 0.0,
-          "max": 100.0
+          "max": 100.0,
+          "default": 0.0
         },
         {
           "key": "touch8",
           "label": "Touch CS8",
           "unit": "%",
           "min": 0.0,
-          "max": 100.0
+          "max": 100.0,
+          "default": 0.0
         }
       ]
     },
@@ -3156,7 +3257,8 @@
           "label": "Position",
           "unit": "detents",
           "min": -1000.0,
-          "max": 1000.0
+          "max": 1000.0,
+          "default": 0.0
         }
       ]
     },
@@ -3175,7 +3277,8 @@
           "label": "Key",
           "unit": "index",
           "min": -1.0,
-          "max": 15.0
+          "max": 15.0,
+          "default": -1.0
         }
       ]
     },
@@ -3377,14 +3480,16 @@
           "label": "Temperature",
           "unit": "°C",
           "min": -40.0,
-          "max": 80.0
+          "max": 80.0,
+          "default": 22.0
         },
         {
           "key": "humidity",
           "label": "Humidity",
           "unit": "%",
           "min": 0.0,
-          "max": 100.0
+          "max": 100.0,
+          "default": 50.0
         }
       ]
     },
@@ -3403,14 +3508,16 @@
           "label": "Temperature",
           "unit": "°C",
           "min": -40.0,
-          "max": 80.0
+          "max": 80.0,
+          "default": 22.0
         },
         {
           "key": "humidity",
           "label": "Humidity",
           "unit": "%",
           "min": 0.0,
-          "max": 100.0
+          "max": 100.0,
+          "default": 50.0
         }
       ]
     },
@@ -3429,7 +3536,8 @@
           "label": "Distance",
           "unit": "cm",
           "min": 2.0,
-          "max": 400.0
+          "max": 400.0,
+          "default": 50.0
         }
       ]
     },
@@ -3464,56 +3572,64 @@
           "label": "Left",
           "unit": "bool",
           "min": 0.0,
-          "max": 1.0
+          "max": 1.0,
+          "default": 0.0
         },
         {
           "key": "up",
           "label": "Up",
           "unit": "bool",
           "min": 0.0,
-          "max": 1.0
+          "max": 1.0,
+          "default": 0.0
         },
         {
           "key": "down",
           "label": "Down",
           "unit": "bool",
           "min": 0.0,
-          "max": 1.0
+          "max": 1.0,
+          "default": 0.0
         },
         {
           "key": "right",
           "label": "Right",
           "unit": "bool",
           "min": 0.0,
-          "max": 1.0
+          "max": 1.0,
+          "default": 0.0
         },
         {
           "key": "select",
           "label": "Select / Menu",
           "unit": "bool",
           "min": 0.0,
-          "max": 1.0
+          "max": 1.0,
+          "default": 0.0
         },
         {
           "key": "start",
           "label": "Start / Soft reset",
           "unit": "bool",
           "min": 0.0,
-          "max": 1.0
+          "max": 1.0,
+          "default": 0.0
         },
         {
           "key": "a",
           "label": "A",
           "unit": "bool",
           "min": 0.0,
-          "max": 1.0
+          "max": 1.0,
+          "default": 0.0
         },
         {
           "key": "b",
           "label": "B",
           "unit": "bool",
           "min": 0.0,
-          "max": 1.0
+          "max": 1.0,
+          "default": 0.0
         }
       ]
     },
@@ -3597,14 +3713,16 @@
           "label": "Temperature",
           "unit": "C",
           "min": -40.0,
-          "max": 60.0
+          "max": 60.0,
+          "default": 21.5
         },
         {
           "key": "humidity",
           "label": "Humidity",
           "unit": "%RH",
           "min": 0.0,
-          "max": 100.0
+          "max": 100.0,
+          "default": 48.0
         }
       ]
     },
@@ -4299,21 +4417,24 @@
           "label": "Vout setpoint",
           "unit": "V",
           "min": 1.25,
-          "max": 36.0
+          "max": 36.0,
+          "default": 5.0
         },
         {
           "key": "vin_v",
           "label": "Input voltage",
           "unit": "V",
           "min": 4.0,
-          "max": 38.0
+          "max": 38.0,
+          "default": 12.0
         },
         {
           "key": "ilim_a",
           "label": "Current limit (note only)",
           "unit": "A",
           "min": 0.0,
-          "max": 5.0
+          "max": 5.0,
+          "default": 5.0
         }
       ]
     },

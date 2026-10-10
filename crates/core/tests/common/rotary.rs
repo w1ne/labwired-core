@@ -27,6 +27,7 @@ pub fn rotary(id: &str, a: (u64, u8), b: (u64, u8), cpu_hz: u64) -> DeclarativeG
             unit: "detents".into(),
             min: -1000.0,
             max: 1000.0,
+            default: None,
         }]),
     )
     .unwrap()

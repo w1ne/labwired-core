@@ -224,6 +224,7 @@ pub const INPUT_CHANNELS: &[crate::sim_input::InputChannel] = &[crate::sim_input
     unit: std::borrow::Cow::Borrowed("lx"),
     min: 0.0,
     max: 120000.0,
+    default: None,
 }];
 
 impl crate::sim_input::SimInput for Veml7700 {

@@ -2644,6 +2644,7 @@ pub(crate) fn owned_channels(
             unit: std::borrow::Cow::Owned(i.unit.clone()),
             min: i.min,
             max: i.max,
+            default: Some(i.default.unwrap_or(0.0)),
         })
         .collect();
     std::borrow::Cow::Owned(channels)

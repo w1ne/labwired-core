@@ -254,3 +254,23 @@ fn every_response_word_carries_a_sensirion_crc8() {
         }
     }
 }
+
+/// The power-on frame must report exactly the default the manifest declares for
+/// each channel, so a UI seeded from the manifest shows what the device reads.
+#[test]
+fn sht31_power_on_frame_matches_declared_defaults() {
+    let got = run_i2c(
+        &mut dev("sht31", 0x44),
+        &script([
+            send_cmd16(0x2400),
+            vec![Step::AdvanceUs(15_000)],
+            read_stream(6),
+        ]),
+    );
+    let t_word = f64::from(u16::from(got.bytes[0]) << 8 | u16::from(got.bytes[1]));
+    let h_word = f64::from(u16::from(got.bytes[3]) << 8 | u16::from(got.bytes[4]));
+    let t_c = t_word / 65535.0 * 175.0 - 45.0;
+    let rh = h_word / 65535.0 * 100.0;
+    assert!((t_c - 22.0).abs() < 0.01, "power-on temperature {t_c}");
+    assert!((rh - 45.0).abs() < 0.01, "power-on humidity {rh}");
+}
