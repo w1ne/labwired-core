@@ -2386,4 +2386,129 @@ mod tests {
             }
         );
     }
+
+    /// VMOV between two core registers and a D register (or an S pair) lives
+    /// in the extension-register load/store space with opcode 0b0010x
+    /// (P=0, U=0, D=1, W=0; ARMv7-M ARM A7.9). It is not a VSTM/VLDM: the
+    /// stock STM32duino `Print::print(float)` (`vmov d0, r0, r1` after
+    /// `__aeabi_f2d`) was executed as `vstmdb r1, {..}` and BusFaulted at
+    /// `r1 - 0x40`. Encodings from arm-none-eabi-as (-mcpu=cortex-m4).
+    #[test]
+    fn test_decode_vmov_two_core_regs() {
+        // vmov d0, r0, r1
+        assert_eq!(
+            decode_thumb_32(0xEC41, 0x0B10),
+            Instruction::VmovDRtRt2 {
+                dm: 0,
+                rt: 0,
+                rt2: 1
+            }
+        );
+        // vmov r0, r1, d0
+        assert_eq!(
+            decode_thumb_32(0xEC51, 0x0B10),
+            Instruction::VmovRtRt2D {
+                rt: 0,
+                rt2: 1,
+                dm: 0
+            }
+        );
+        // vmov d5, r7, r8
+        assert_eq!(
+            decode_thumb_32(0xEC48, 0x7B15),
+            Instruction::VmovDRtRt2 {
+                dm: 10,
+                rt: 7,
+                rt2: 8
+            }
+        );
+        // vmov r4, r9, d7
+        assert_eq!(
+            decode_thumb_32(0xEC59, 0x4B17),
+            Instruction::VmovRtRt2D {
+                rt: 4,
+                rt2: 9,
+                dm: 14
+            }
+        );
+        // vmov s0, s1, r0, r1 (single-precision pair, coproc 10)
+        assert_eq!(
+            decode_thumb_32(0xEC41, 0x0A10),
+            Instruction::VmovDRtRt2 {
+                dm: 0,
+                rt: 0,
+                rt2: 1
+            }
+        );
+        // vmov r2, r3, s4, s5
+        assert_eq!(
+            decode_thumb_32(0xEC53, 0x2A12),
+            Instruction::VmovRtRt2D {
+                rt: 2,
+                rt2: 3,
+                dm: 4
+            }
+        );
+    }
+
+    /// The register-list forms next to the 64-bit transfers keep decoding as
+    /// load/store multiple.
+    #[test]
+    fn test_decode_vfp_load_store_multiple_unchanged() {
+        // vpush {d8}
+        assert_eq!(
+            decode_thumb_32(0xED2D, 0x8B02),
+            Instruction::VfpStoreMultiple {
+                rn: 13,
+                s_first: 16,
+                count: 2,
+                add: false,
+                wback: true
+            }
+        );
+        // vpop {d8}
+        assert_eq!(
+            decode_thumb_32(0xECBD, 0x8B02),
+            Instruction::VfpLoadMultiple {
+                rn: 13,
+                s_first: 16,
+                count: 2,
+                add: true,
+                wback: true
+            }
+        );
+        // vstmia r0!, {s0-s3}
+        assert_eq!(
+            decode_thumb_32(0xECA0, 0x0A04),
+            Instruction::VfpStoreMultiple {
+                rn: 0,
+                s_first: 0,
+                count: 4,
+                add: true,
+                wback: true
+            }
+        );
+        // vldmdb r1!, {s2-s3}
+        assert_eq!(
+            decode_thumb_32(0xED31, 0x1A02),
+            Instruction::VfpLoadMultiple {
+                rn: 1,
+                s_first: 2,
+                count: 2,
+                add: false,
+                wback: true
+            }
+        );
+        // vstmia r2, {d1-d2}
+        assert_eq!(
+            decode_thumb_32(0xEC82, 0x1B04),
+            Instruction::VfpStoreMultiple {
+                rn: 2,
+                s_first: 2,
+                count: 4,
+                add: true,
+                wback: false
+            }
+        );
+    }
 }

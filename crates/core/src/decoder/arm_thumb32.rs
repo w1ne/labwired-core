@@ -529,9 +529,36 @@ pub(super) fn decode_vfp_double(h1: u16, h2: u16) -> Option<Instruction> {
             add: u != 0,
         });
     }
+    // 64-bit transfers between two core registers and the FP bank
+    // (ARMv7-M ARM A7.9, opcode 0b0010x: P=0, U=0, D=1, W=0):
+    //   VMOV Dm,Rt,Rt2 / VMOV Rt,Rt2,Dm  1110 1100 010L tttt tttt 1011 00M1 mmmm
+    //   VMOV Sm,Sm1,Rt,Rt2 / reverse     1110 1100 010L tttt tttt 1010 00M1 mmmm
+    // These share h1[15:9] with VLDM/VSTM and must be matched first; the
+    // load/store-multiple matcher below would otherwise read them as
+    // `vstmdb Rt2, {..}` (P=0, U=0 is not a load/store multiple at all).
+    // The double form names S-pair (2*Dm, 2*Dm+1); the single form names
+    // S-pair (Sm, Sm+1) with Sm = Vm:M — both are a low S-index.
+    if (h1 & 0xFFE0) == 0xEC40 && (h2 & 0x0ED0) == 0x0A10 {
+        let l = (h1 >> 4) & 1;
+        let rt2 = (h1 & 0xF) as u8;
+        let rt = ((h2 >> 12) & 0xF) as u8;
+        let m = ((h2 >> 5) & 1) as u8;
+        let vm = (h2 & 0xF) as u8;
+        let dm = if (h2 >> 8) & 1 == 1 {
+            ((m << 4) | vm) << 1
+        } else {
+            (vm << 1) | m
+        };
+        return Some(if l == 1 {
+            Instruction::VmovRtRt2D { rt, rt2, dm }
+        } else {
+            Instruction::VmovDRtRt2 { dm, rt, rt2 }
+        });
+    }
     // VLDM/VSTM/VPUSH/VPOP (register list), single (S=0) or double (S=1):
     //   1110 110P UDWL nnnn dddd 101S imm8   (imm8 = number of 32-bit words)
-    // The P=1,W=0 offset form is VLDR/VSTR (single-register), matched above.
+    // The P=1,W=0 offset form is VLDR/VSTR (single-register), matched above;
+    // P=0,U=0 is the 64-bit transfer space (VMOV two-register, matched above).
     if (h1 & 0xFE00) == 0xEC00 && (h2 & 0x0E00) == 0x0A00 {
         let p = (h1 >> 8) & 1;
         let u = (h1 >> 7) & 1;
@@ -542,7 +569,9 @@ pub(super) fn decode_vfp_double(h1: u16, h2: u16) -> Option<Instruction> {
         let vd = ((h2 >> 12) & 0xF) as u8;
         let s = (h2 >> 8) & 1;
         let imm8 = (h2 & 0xFF) as u8;
-        if !(p == 1 && w == 0) {
+        // P=1,W=0 is VLDR/VSTR; P=0,U=0 is the 64-bit transfer / undefined
+        // space, never a register list.
+        if !(p == 1 && w == 0) && (p | u) != 0 {
             let s_first = if s == 0 {
                 (vd << 1) | (d as u8)
             } else {
@@ -578,21 +607,6 @@ pub(super) fn decode_vfp_double(h1: u16, h2: u16) -> Option<Instruction> {
         let dd = (((d as u8) << 4) | vd) << 1;
         let dm = (((m as u8) << 4) | vm) << 1;
         return Some(Instruction::VmovF64Reg { dd, dm });
-    }
-    // VMOV Dm,Rt,Rt2 (L=0) / VMOV Rt,Rt2,Dm (L=1):
-    //   1110 1100 010L tttt tttt 1011 00M1 mmmm
-    if (h1 & 0xFFE0) == 0xEC40 && (h2 & 0x0FD0) == 0x0B10 {
-        let l = (h1 >> 4) & 1;
-        let rt2 = (h1 & 0xF) as u8;
-        let rt = ((h2 >> 12) & 0xF) as u8;
-        let m = (h2 >> 5) & 1;
-        let vm = (h2 & 0xF) as u8;
-        let dm = (((m as u8) << 4) | vm) << 1;
-        return Some(if l == 1 {
-            Instruction::VmovRtRt2D { rt, rt2, dm }
-        } else {
-            Instruction::VmovDRtRt2 { dm, rt, rt2 }
-        });
     }
     // VMUL.F64 / VADD.F64 / VSUB.F64 / VDIV.F64 — three-register double arithmetic.
     if (h1 & 0xFFB0) == 0xEE20 && (h2 & 0x0F50) == 0x0B00 {

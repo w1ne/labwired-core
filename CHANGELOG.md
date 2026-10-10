@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `World::gpio_net_applied` is ordered by due time, then node id.
 
 ### Fixed
+- Cortex-M4F/M7: `VMOV Dm, Rt, Rt2`, `VMOV Rt, Rt2, Dm` and their single-precision pair forms decode as register moves. They used to run as a 16-word VSTM/VLDM below `Rt2`, so `Serial.print(float)` on STM32duino 3 (NUCLEO-L476RG, -F401RE) HardFaulted with a BusFault at an address made of the float's high word.
 - The RISC-V cycle counter (ESP32-C3 `PCCR` CSR 0x7E2/0x802, standard `cycle`) counts one tick per simulated CPU clock, the clock SYSTIMER and `micros()` run on. It counted 256 per clock, so Arduino `pulseIn` on the ESP32-C3 gave up after about 117 µs and an HC-SR04 always read 0 (timeout).
 - A `servo` on the ESP32-C3 follows the C3 LEDC duty (`ledcWrite`, ESP32Servo `write()`), as it already did on the classic ESP32. Before, the shaft stayed at its minimum angle.
 - ATmega328P Timer2 now counts in normal and CTC modes (`TCCR2A`/`TCCR2B`/`TCNT2`/`OCR2A`/`OCR2B`/`TIMSK2`/`TIFR2`/`ASSR`, including the `/32` and `/128` prescalers). Compare-match A/B and overflow raise the datasheet vectors, so Arduino `tone()` / `noTone()` on an Uno toggles the requested pin. OC2A/OC2B PWM outputs and Timer1 are still not driven.
