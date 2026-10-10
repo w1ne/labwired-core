@@ -181,16 +181,17 @@ impl Rp2040Sio {
         }
     }
 
-    /// The drive of a `gpio_net` pad: what the SIO output stage does (`OE`),
-    /// while IO_BANK0 selects SIO for the pad (or selects nothing yet: this
-    /// model has always let the SIO latch drive an unassigned pad, and the
-    /// level firmware reads back on `GPIO_IN` says the same). A pad handed to
-    /// a peripheral that publishes its wire is driven by it; one handed to a
+    /// The pad's own drive: what the SIO output stage does (`OE`) while
+    /// IO_BANK0 selects SIO for the pad (or selects nothing yet: this model
+    /// has always let the SIO latch drive an unassigned pad, and the level
+    /// firmware reads back on `GPIO_IN` says the same). A pad handed to a
+    /// peripheral that publishes its wire is driven by it; one handed to a
     /// peripheral that publishes nothing (PWM, PIO, ...) has no known drive
-    /// (`None`), so a world refuses it. `None` for pads off a net.
-    fn net_drive(&self, pin: u8) -> Option<crate::logic_capture::PadDrive> {
+    /// (`None`), so a world refuses it. The SIO does not model the PADS_BANK0
+    /// pulls, so an undriven pad reports `HighZ` (never a weak level).
+    fn own_drive(&self, pin: u8) -> Option<crate::logic_capture::PadDrive> {
         use crate::logic_capture::PadDrive;
-        if pin >= PAD_COUNT || self.net_isolated & (1 << pin) == 0 {
+        if pin >= PAD_COUNT {
             return None;
         }
         match self.pad_function(pin) {
@@ -206,6 +207,15 @@ impl Rp2040Sio {
                 .level(pin, |p| self.pad_function(p))
                 .map(|_| PadDrive::Driven),
         }
+    }
+
+    /// The drive of a `gpio_net` pad: its own output stage only. `None` for
+    /// pads off a net (the capture tap only needs the net lane).
+    fn net_drive(&self, pin: u8) -> Option<crate::logic_capture::PadDrive> {
+        if pin >= PAD_COUNT || self.net_isolated & (1 << pin) == 0 {
+            return None;
+        }
+        self.own_drive(pin)
     }
 
     /// Share IO_BANK0's live pad-function state and bind a peripheral wire to
@@ -596,7 +606,7 @@ impl Peripheral for Rp2040Sio {
     }
 
     fn read_gpio_pad_drive(&self, pin: u8) -> Option<crate::logic_capture::PadDrive> {
-        self.net_drive(pin)
+        self.own_drive(pin)
     }
 
     fn set_gpio_net_isolated(&mut self, pin: u8, isolated: bool) -> bool {
@@ -854,7 +864,6 @@ mod tests {
         let mut bank = Rp2040IoBank0::new();
         let mut sio = Rp2040Sio::new();
         sio.attach_io_bank0(bank.pad_functions(), bank.bank_irq(), 0);
-        assert_eq!(sio.read_gpio_pad_drive(4), None, "off a net");
         assert!(sio.set_gpio_net_isolated(4, true));
         assert!(!sio.set_gpio_net_isolated(30, true));
         sio.set_gpio_input(4, true);
@@ -868,5 +877,24 @@ mod tests {
         <Rp2040IoBank0 as Peripheral>::write_u32(&mut bank, 8 * 4 + 4, 4).unwrap();
         assert_eq!(sio.read_gpio_pad_drive(4), None);
         assert_eq!(sio.scheduler_wake_owner(), Some(0));
+    }
+
+    /// Off a net the pad still reports its own drive, so `gpio_pins` gets
+    /// `1` / `0` / `z` from the SIO output stage (`OE`, `OUT`).
+    #[test]
+    fn an_off_net_pad_reports_its_own_drive_state() {
+        use crate::logic_capture::{PadDrive, PadState};
+        use crate::Peripheral;
+        let mut sio = Rp2040Sio::new();
+        let state = |sio: &Rp2040Sio| {
+            PadState::from_parts(sio.read_gpio_pad(4), sio.read_gpio_pad_drive(4).unwrap()).unwrap()
+        };
+        assert_eq!(sio.read_gpio_pad_drive(4), Some(PadDrive::HighZ));
+        assert_eq!(state(&sio), PadState::HighZ, "!OE: z");
+        sio.write_u32(GPIO_OE_SET, 1 << 4).unwrap();
+        assert_eq!(state(&sio), PadState::Low, "OE, OUT=0: 0");
+        sio.write_u32(GPIO_OUT_SET, 1 << 4).unwrap();
+        assert_eq!(state(&sio), PadState::High, "OE, OUT=1: 1");
+        assert_eq!(sio.read_gpio_pad_drive(PAD_COUNT), None, "no such pad");
     }
 }
