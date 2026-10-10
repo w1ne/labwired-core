@@ -18,7 +18,7 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-cd "$ROOT"
+cd "$ROOT" || exit 2
 
 TARGET=thumbv7m-none-eabi
 # The F103 I2C sensor labs shipped as playground demos. Add a lab here when it
