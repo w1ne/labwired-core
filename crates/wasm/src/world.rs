@@ -944,6 +944,214 @@ interconnects:
         );
     }
 
+    /// An ESP32 node of a browser world is built by the same node factory the
+    /// native world uses: the `env-esp32c6.yaml` lab (an ESP32-C6 in place of
+    /// the ATmega328P) counts every edge through the C6's GPIO interrupts and
+    /// interrupt matrix exactly as `world_multichip.rs` does natively.
+    #[test]
+    fn a_wasm_world_runs_an_esp32c6_on_gpio_nets_with_an_stm32() {
+        let example = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../examples/gpio-net-two-boards");
+        let environment: EnvironmentManifest = serde_yaml::from_str(
+            &std::fs::read_to_string(example.join("env-esp32c6.yaml")).expect("env-esp32c6.yaml"),
+        )
+        .expect("environment manifest");
+        let fw = |name: &str| std::fs::read(example.join("firmware").join(name)).expect("elf");
+        let mut world = WasmWorld::from_node_inputs(
+            environment,
+            vec![
+                ResolvedNodeInput {
+                    id: "stm".into(),
+                    system_yaml: include_str!("../../../examples/stm32g0b1re/system.yaml").into(),
+                    chip_yaml: include_str!("../../../configs/chips/stm32g0b1re.yaml").into(),
+                    firmware: fw("stm.elf"),
+                },
+                ResolvedNodeInput {
+                    id: "c6".into(),
+                    system_yaml: include_str!("../../../configs/systems/esp32c6-devkitc.yaml")
+                        .into(),
+                    chip_yaml: include_str!("../../../configs/chips/esp32c6.yaml").into(),
+                    firmware: fw("esp32c6.elf"),
+                },
+            ],
+        )
+        .expect("world");
+        assert!(world.has_gpio_nets().unwrap());
+        while world.world.round_now_ps().unwrap() < 30_000_000_000 {
+            world.step_batch(1).map_err(|_| "step").unwrap();
+        }
+        let words = |id: &str, at: u32| -> Vec<u32> {
+            world
+                .world
+                .machines
+                .get(id)
+                .unwrap()
+                .read_memory(at, 20)
+                .unwrap()
+                .chunks(4)
+                .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+                .collect()
+        };
+        assert_eq!(words("stm", 0x2000_0100), vec![10, 10, 3, 3, 1]);
+        // [ready rising, alert falling, alert rising, interrupts taken, done]
+        let c6 = words("c6", 0x4080_0100);
+        assert_eq!(&c6[..3], &[7, 5, 5], "C6 interrupt counts {c6:?}");
+        assert!(c6[3] >= 17, "at least one interrupt per edge {c6:?}");
+        assert_eq!(c6[4], 1, "C6 finished {c6:?}");
+        let nets = world.world.gpio_net_reports();
+        let edges: Vec<(&str, u64)> = nets.iter().map(|n| (n.name.as_str(), n.edges)).collect();
+        assert_eq!(edges, vec![("irq", 20), ("ready", 14), ("alert", 16)]);
+        assert_eq!(
+            String::from_utf8_lossy(&world.drain_uart_output("stm").unwrap()),
+            "STM irq r=10 f=10 alert r=3 f=3\n"
+        );
+    }
+
+    /// Two ESP32-C3 nodes of a browser world rally `PING`/`PONG` over a
+    /// cross-linked UART1 (`examples/ci-two-c3-link`, the native
+    /// `world_esp32c3_pingpong.rs` fixture), and each node's console is its
+    /// own: the link's octets never reach the page's per-node UART sink.
+    #[test]
+    fn a_wasm_world_rallies_two_esp32c3_nodes_over_uart1() {
+        let root =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/ci-two-c3-link");
+        let environment: EnvironmentManifest = serde_yaml::from_str(
+            &std::fs::read_to_string(root.join("env.yaml")).expect("env.yaml"),
+        )
+        .expect("environment manifest");
+        let node = |id: &str| ResolvedNodeInput {
+            id: id.into(),
+            system_yaml: include_str!("../../../configs/systems/esp32c3-devkit.yaml").into(),
+            chip_yaml: include_str!("../../../configs/chips/esp32c3.yaml").into(),
+            firmware: std::fs::read(root.join("firmware").join(format!("{id}.elf"))).expect("elf"),
+        };
+        let mut world =
+            WasmWorld::from_node_inputs(environment, vec![node("server"), node("client")])
+                .expect("world");
+        let (mut server, mut client) = (String::new(), String::new());
+        let mut rounds = 0u32;
+        // Run until the server is done, then as long again for the client to
+        // finish printing its last line (its console is slower than the link).
+        let mut done_at = None;
+        while rounds < 20_000_000 && done_at.is_none_or(|at| rounds < 2 * at) {
+            world.step_batch(100_000).map_err(|_| "step").unwrap();
+            rounds += 100_000;
+            server += &String::from_utf8_lossy(&world.drain_uart_output("server").unwrap());
+            client += &String::from_utf8_lossy(&world.drain_uart_output("client").unwrap());
+            if done_at.is_none() && server.contains("server done") {
+                done_at = Some(rounds);
+            }
+        }
+        assert!(
+            server.contains("rally 3") && server.contains("server done"),
+            "no three round trips in {rounds} rounds; server console:\n{server}"
+        );
+        assert!(!server.contains("no PONG"), "{server}");
+        assert_eq!(client.matches("client: returned").count(), 3, "{client}");
+        for (id, text) in [("server", &server), ("client", &client)] {
+            assert!(text.contains(&format!("{id} up")), "{id}: {text}");
+            assert!(
+                !text.contains("PING\n") && !text.contains("PONG\n"),
+                "link octets leaked into {id}'s console:\n{text}"
+            );
+        }
+    }
+
+    /// The browser's C3 flash-image node: the page registers the mask ROM it
+    /// fetched, and a world node built from a merged flash image boots it from
+    /// the reset vector (the hosted world's path for a hosted C3 build). The
+    /// ROM's own banner on the node's UART0, and its hand-off to the 2nd-stage
+    /// bootloader it read from this node's image, prove the registered ROM ran;
+    /// the sketch's own `loop()` output proves the whole chain reached the app.
+    #[test]
+    fn a_wasm_world_boots_an_esp32c3_flash_image_through_the_registered_rom() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        WasmWorld::register_esp32c3_rom(
+            std::fs::read(root.join("crates/core/roms/esp32c3/esp32c3_rom.bin")).unwrap(),
+            std::fs::read(root.join("crates/core/roms/esp32c3/esp32c3_drom.bin")).unwrap(),
+        )
+        .map_err(|_| "rom")
+        .unwrap();
+        let environment: EnvironmentManifest = serde_yaml::from_str(
+            r#"
+schema_version: "1.0"
+name: c3-flash-and-stm
+nodes:
+  - { id: c3, system: s.yaml, firmware: f.bin }
+  - { id: stm, system: s.yaml, firmware: f.elf }
+interconnects:
+  - type: gpio_net
+    nodes: [c3, stm]
+    config:
+      name: line
+      pull: down
+      members:
+        - { node: c3, peripheral: gpio, pin: 4 }
+        - { node: stm, peripheral: gpiob, pin: 0 }
+"#,
+        )
+        .expect("environment manifest");
+        let flash = std::fs::read(
+            root.join("crates/core/tests/fixtures/esp32c3-uart0-console-control-flash.bin"),
+        )
+        .expect("flash fixture");
+        assert!(
+            !flash.starts_with(b"\x7fELF"),
+            "the fixture is a flash image"
+        );
+        let mut world = WasmWorld::from_node_inputs(
+            environment,
+            vec![
+                ResolvedNodeInput {
+                    id: "c3".into(),
+                    system_yaml: include_str!("../../../configs/systems/esp32c3-devkit.yaml")
+                        .into(),
+                    chip_yaml: include_str!("../../../configs/chips/esp32c3.yaml").into(),
+                    firmware: flash,
+                },
+                ResolvedNodeInput {
+                    id: "stm".into(),
+                    system_yaml: include_str!("../../../examples/stm32g0b1re/system.yaml").into(),
+                    chip_yaml: include_str!("../../../configs/chips/stm32g0b1re.yaml").into(),
+                    firmware: std::fs::read(
+                        root.join("examples/gpio-net-two-boards/firmware/stm.elf"),
+                    )
+                    .unwrap(),
+                },
+            ],
+        )
+        .expect("world");
+        // The mask ROM starts at its reset vector, not at an app entry point.
+        assert_eq!(world.get_pc("c3").map_err(|_| "pc").unwrap(), 0x4000_0000);
+        let mut c3 = String::new();
+        let mut rounds = 0u32;
+        while rounds < 2_000_000 && !c3.contains("entry 0x") {
+            world.step_batch(1).map_err(|_| "step").unwrap();
+            rounds += 1;
+            if rounds.is_multiple_of(1_000) {
+                c3 += &String::from_utf8_lossy(&world.drain_uart_output("c3").unwrap());
+            }
+        }
+        // The ROM printed its banner, read the 2nd-stage bootloader out of
+        // this node's flash image and jumped to it.
+        assert!(
+            c3.starts_with("ESP-ROM:esp32c3") && c3.contains("load:0x") && c3.contains("entry 0x"),
+            "the ROM did not load the bootloader in {rounds} rounds: {c3:?}"
+        );
+        // ... and the bootloader started this node's Arduino app.
+        while rounds < 40_000_000 && !c3.contains("LW_CDC_LOOP 1\r\n") {
+            world.step_batch(1).map_err(|_| "step").unwrap();
+            rounds += 1;
+            if rounds.is_multiple_of(10_000) {
+                c3 += &String::from_utf8_lossy(&world.drain_uart_output("c3").unwrap());
+            }
+        }
+        assert!(
+            c3.contains("LW_CDC_SETUP") && c3.contains("LW_CDC_LOOP 1\r\n"),
+            "the app did not reach its second loop() in {rounds} rounds: {c3:?}"
+        );
+    }
+
     /// A world steps its nodes without a co-simulation session, so a node that
     /// declares `cosim_models` must refuse to build rather than run with its
     /// models silently absent.
