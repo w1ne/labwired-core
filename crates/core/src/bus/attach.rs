@@ -948,8 +948,6 @@ impl SystemBus {
     /// otherwise miss the edge. The returned GPIO index is passed to
     /// [`Self::finish_esp32c3_io_mux_write`] after the MMIO write succeeds.
     pub(crate) fn begin_esp32c3_io_mux_write(&mut self, io_mux_idx: usize) -> Option<usize> {
-        use crate::peripherals::esp32c3::gpio::Esp32c3Gpio;
-
         // Called on EVERY peripheral write, so the "not my peripheral" answer
         // has to be a compare rather than a downcast — and on a bus with no
         // C3 IO_MUX at all, `esp32c3_io_mux_idx` is `None` and nothing can
@@ -974,12 +972,7 @@ impl SystemBus {
         // `position()`, so a stale one would panic here where the old code
         // simply found nothing. Degrading to "no bracket" matches what
         // `dport_cross_core_pending` does with its cached index.
-        self.peripherals
-            .get_mut(gpio_idx)?
-            .dev
-            .as_any_mut()
-            .and_then(|any| any.downcast_mut::<Esp32c3Gpio>())?
-            .tap_snapshot();
+        crate::pins::watch_begin(self.peripherals.get_mut(gpio_idx)?.dev.pins_mut()?);
         Some(gpio_idx)
     }
 
@@ -990,13 +983,12 @@ impl SystemBus {
         let Some(gpio_idx) = gpio_idx else {
             return;
         };
-        if let Some(gpio) = self
+        if let Some(port) = self
             .peripherals
             .get_mut(gpio_idx)
-            .and_then(|p| p.dev.as_any_mut())
-            .and_then(|any| any.downcast_mut::<crate::peripherals::esp32c3::gpio::Esp32c3Gpio>())
+            .and_then(|p| p.dev.pins_mut())
         {
-            gpio.tap_report();
+            crate::pins::watch_end(port);
         }
     }
 
@@ -1009,8 +1001,6 @@ impl SystemBus {
     /// the pad to UART/SPI/I²C — the playground arms before firmware runs, so
     /// that is the normal order. Mirrors [`Self::begin_esp32c3_io_mux_write`].
     pub(crate) fn begin_rp2040_io_bank0_write(&mut self, io_bank0_idx: usize) -> Option<usize> {
-        use crate::peripherals::rp2040::sio::Rp2040Sio;
-
         // See `begin_esp32c3_io_mux_write`: a compare, not a downcast.
         if self.rp2040_io_bank0_idx != Some(io_bank0_idx) {
             return None;
@@ -1029,12 +1019,7 @@ impl SystemBus {
         // `position()`, so a stale one would panic here where the old code
         // simply found nothing. Degrading to "no bracket" matches what
         // `dport_cross_core_pending` does with its cached index.
-        self.peripherals
-            .get_mut(sio_idx)?
-            .dev
-            .as_any_mut()
-            .and_then(|any| any.downcast_mut::<Rp2040Sio>())?
-            .tap_snapshot();
+        crate::pins::watch_begin(self.peripherals.get_mut(sio_idx)?.dev.pins_mut()?);
         Some(sio_idx)
     }
 
@@ -1045,13 +1030,12 @@ impl SystemBus {
         let Some(sio_idx) = sio_idx else {
             return;
         };
-        if let Some(sio) = self
+        if let Some(port) = self
             .peripherals
             .get_mut(sio_idx)
-            .and_then(|p| p.dev.as_any_mut())
-            .and_then(|any| any.downcast_mut::<crate::peripherals::rp2040::sio::Rp2040Sio>())
+            .and_then(|p| p.dev.pins_mut())
         {
-            sio.tap_report();
+            crate::pins::watch_end(port);
         }
     }
 

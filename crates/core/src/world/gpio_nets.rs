@@ -249,21 +249,22 @@ impl WorldGpio {
             }
             nets.push(GpioNet::new(label, cfg.pull, latency_ps, members));
         }
-        // Watch: markers, then net pads. Isolate the net pads first so the
-        // watch seeds their own drive.
+        // Watch: markers (probes on the pad), then net pads (each chip's own
+        // output stage, `PinPort::driver`). Join the net pads first so their
+        // peripheral lines know they share a wire before the watch arms.
         let mut watch_nodes: BTreeSet<&String> = net_pins.keys().collect();
         watch_nodes.extend(marker_pins.keys());
         for node in watch_nodes {
             let machine = machines.get_mut(node).expect("validated");
-            let mut all: Vec<(String, u8)> = marker_pins.get(node).cloned().unwrap_or_default();
-            if let Some(pins) = net_pins.get(node) {
+            let markers: Vec<(String, u8)> = marker_pins.get(node).cloned().unwrap_or_default();
+            let pads: &[(String, u8)] = net_pins.get(node).map_or(&[], Vec::as_slice);
+            if !pads.is_empty() {
                 machine
-                    .isolate_net_pads(pins)
+                    .join_net_pads(pads)
                     .with_context(|| format!("gpio_net on node '{node}'"))?;
-                all.extend(pins.iter().cloned());
             }
             machine
-                .watch_marker_pins(&all)
+                .watch_world_pins(&markers, pads)
                 .with_context(|| format!("pad watch on node '{node}'"))?;
         }
         // Initial drives, initial levels.

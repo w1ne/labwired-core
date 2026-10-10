@@ -17,8 +17,9 @@
 //!   [`Peripheral::install_logic_tap`](crate::Peripheral::install_logic_tap)).
 //!   Pad state only changes when code writes it, so the write sites themselves
 //!   report the new level into a shared [`LogicTap`]: GPIO out-latch /
-//!   direction / matrix updates, externally driven input-pad updates
-//!   (`set_gpio_input` / sim-input), and bit-engine line drivers (the ESP32-C3
+//!   direction / matrix updates and externally driven input-pad updates
+//!   (`PinPort::set_external`, through the generic [`crate::pins::PadWatch`]
+//!   every pin port brackets its mutations with), and bit-engine line drivers (the ESP32-C3
 //!   I²C `I2cLineLevels` cell). The run loop keeps its full instruction batch
 //!   width and idle fast-forward stays available — probing costs (almost)
 //!   nothing.
@@ -107,10 +108,11 @@ pub enum PadDrive {
     /// device holds the other.
     Contention,
     /// Nothing drives it but the chip's own internal pull-up: a weak 1 that
-    /// any driver overrides. Reported only for pads on a world `gpio_net`
-    /// (see [`crate::Peripheral::set_gpio_net_isolated`]), where the pull
-    /// takes part in the wire's resolution; every other pad keeps reporting
-    /// [`HighZ`](Self::HighZ) for an undriven input, pulled or not.
+    /// any driver overrides. Reported only for a chip's own output stage
+    /// ([`crate::pins::own_drive`], a [`LogicSource::Driver`] channel such as
+    /// a world `gpio_net` member), where the pull takes part in the wire's
+    /// resolution; a probe on the pad ([`crate::pins::probe_drive`]) keeps
+    /// reporting [`HighZ`](Self::HighZ) for an undriven input, pulled or not.
     PullUp,
     /// As [`PullUp`](Self::PullUp), for an internal pull-down: a weak 0.
     PullDown,
@@ -121,8 +123,8 @@ pub enum PadDrive {
 ///
 /// Serialized as the one-character string sigrok/VCD use, so a trace reads
 /// the same in `result.json`, the browser and PulseView. `h` and `l` appear
-/// only on pads that belong to a world `gpio_net` (see [`PadDrive::PullUp`]),
-/// where a chip's internal pull is part of the wire.
+/// only on [`LogicSource::Driver`] channels (a world `gpio_net` member, see
+/// [`PadDrive::PullUp`]), where a chip's internal pull is part of the wire.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum PadState {
     #[serde(rename = "0")]
@@ -215,6 +217,18 @@ pub enum LogicSource {
         /// Pin within that peripheral's port.
         pin: u8,
     },
+    /// A chip's own output stage on a pad, through
+    /// [`PinPort::driver`](crate::pins::PinPort::driver): the pad's level,
+    /// with the drive of [`crate::pins::own_drive`] — what the chip itself
+    /// does, never what the outside world presents. A world `gpio_net`
+    /// watches its members this way, so the level the net feeds back into
+    /// a pad is never mistaken for that chip driving it.
+    Driver {
+        /// Bus index of the peripheral that owns the pad.
+        peripheral: usize,
+        /// Pin within that peripheral's port.
+        pin: u8,
+    },
     /// A peripheral's own wire line: bus index of the peripheral plus an index
     /// into its [`Peripheral::line_names`](crate::Peripheral::line_names).
     Wire {
@@ -231,6 +245,11 @@ impl LogicSource {
         Self::Pad { peripheral, pin }
     }
 
+    /// A chip's own output stage on a pad.
+    pub fn driver(peripheral: usize, pin: u8) -> Self {
+        Self::Driver { peripheral, pin }
+    }
+
     /// A wire channel, by line INDEX. Prefer resolving a name through
     /// [`Machine::resolve_wire_source`](crate::Machine::resolve_wire_source):
     /// an index chosen by hand cannot be checked, and a wrong one draws a
@@ -242,7 +261,9 @@ impl LogicSource {
     /// Bus index of the peripheral this channel reads, whichever kind it is.
     pub fn peripheral(&self) -> usize {
         match *self {
-            Self::Pad { peripheral, .. } | Self::Wire { peripheral, .. } => peripheral,
+            Self::Pad { peripheral, .. }
+            | Self::Driver { peripheral, .. }
+            | Self::Wire { peripheral, .. } => peripheral,
         }
     }
 }
@@ -388,83 +409,6 @@ struct TapShared {
     /// the mutex exists because `Peripheral: Send` forces shared handles to be
     /// `Send + Sync`, mirroring `bus_trace::BusTrace`.
     queue: Mutex<Vec<PadEvent>>,
-}
-
-/// What a GPIO port's pads do at one instant, one bit per pin: the level each
-/// pad reads, which pads the chip itself drives, and which pads report a drive
-/// at all (a `gpio_net` member does; a plain watched pad reports its level
-/// only). Input to [`PadPushTap::report`].
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct PadSnapshot {
-    pub level: u64,
-    pub driven: u64,
-    pub drive_known: u64,
-    /// Pads whose internal pull-up is on (a weak 1 on a `gpio_net`). Only
-    /// read for `drive_known` pads the chip does not drive.
-    pub pull_up: u64,
-    /// As `pull_up`, for an internal pull-down (a weak 0).
-    pub pull_down: u64,
-}
-
-/// A GPIO model's push-capture watch: the shared [`LogicTap`] and the watched
-/// `(pin, channel)` pairs. Model-agnostic: a port takes a [`PadSnapshot`]
-/// before and after anything that can move a pad (a register write, an
-/// external `set_gpio_input`) and hands both to [`Self::report`], which pushes
-/// exactly the watched pads whose level, or reported drive, changed. That is
-/// all a model needs to stay off the per-cycle poll path.
-#[derive(Debug, Clone)]
-pub struct PadPushTap {
-    tap: LogicTap,
-    watched: Vec<(u8, u32)>,
-}
-
-impl PadPushTap {
-    /// `None` for an empty watch set (nothing to report).
-    pub fn new(tap: &LogicTap, watched: &[(u8, u32)]) -> Option<Self> {
-        (!watched.is_empty()).then(|| Self {
-            tap: tap.clone(),
-            watched: watched.to_vec(),
-        })
-    }
-
-    /// Push every watched pad that changed between `before` and `after`. A
-    /// pad with a known drive reports level and drive together, also when
-    /// only the drive moved (a released open-drain line keeps its pulled
-    /// level); any other pad reports its level when that moved.
-    pub fn report(&self, before: PadSnapshot, after: PadSnapshot) {
-        let level_changed = before.level ^ after.level;
-        let drive_changed = (before.driven ^ after.driven)
-            | (before.pull_up ^ after.pull_up)
-            | (before.pull_down ^ after.pull_down);
-        let changed = level_changed | (drive_changed & after.drive_known);
-        if changed == 0 {
-            return;
-        }
-        for &(pin, ch) in &self.watched {
-            if pin >= 64 {
-                continue;
-            }
-            let bit = 1u64 << pin;
-            if changed & bit == 0 {
-                continue;
-            }
-            let level = after.level & bit != 0;
-            if after.drive_known & bit != 0 {
-                let drive = if after.driven & bit != 0 {
-                    PadDrive::Driven
-                } else if after.pull_up & bit != 0 {
-                    PadDrive::PullUp
-                } else if after.pull_down & bit != 0 {
-                    PadDrive::PullDown
-                } else {
-                    PadDrive::HighZ
-                };
-                self.tap.push_with_drive(ch, level, drive);
-            } else if level_changed & bit != 0 {
-                self.tap.push(ch, level);
-            }
-        }
-    }
 }
 
 /// Shared push-capture tap: the handle instrumented peripherals report pad

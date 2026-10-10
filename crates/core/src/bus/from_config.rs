@@ -301,6 +301,7 @@ impl SystemBus {
             esp32c3_gpio_idx: None,
             rp2040_io_bank0_idx: None,
             rp2040_sio_idx: None,
+            pin_port_ids: Vec::new(),
             rcc_idx: None,
             clock_gating_bypass: false,
             fault_unclocked: std::collections::HashMap::new(),

@@ -422,6 +422,10 @@ pub struct SystemBus {
     esp32c3_gpio_idx: Option<usize>,
     rp2040_io_bank0_idx: Option<usize>,
     rp2040_sio_idx: Option<usize>,
+    /// Per bus index: the [`PortId`](crate::pins::PortId) of a pin port,
+    /// assigned when the port is attached (`rebuild_peripheral_ranges`). Edge
+    /// sinks are addressed by it; `None` for everything else.
+    pub(crate) pin_port_ids: Vec<Option<crate::pins::PortId>>,
     /// Cached index of the "rcc" peripheral, if one is registered. Recomputed in
     /// `rebuild_peripheral_ranges` (same staleness contract as `dport_idx`). Lets
     /// the clock-gate check on the hot read/write path resolve the RCC peripheral
@@ -646,7 +650,7 @@ pub struct SystemBus {
     /// feed a timer input, so the post-write hook drains timer-input edges
     /// only on buses that have any. One predictable false branch elsewhere.
     pub(crate) timer_capture_wired: bool,
-    /// Set when a world `gpio_net` puts a pad on a net (`isolate_net_pads`):
+    /// Set when a world `gpio_net` puts a pad on a net (`join_net_pads`):
     /// from then on the post-write and external-input hooks hand outside pad
     /// levels to the peripheral lines they are routed to. False elsewhere.
     pub(crate) wire_inputs_live: bool,
