@@ -32,6 +32,9 @@
 
 use crate::logic_capture::{LogicTap, PadDrive};
 
+#[cfg(test)]
+mod conformance;
+
 /// What a chip's output stage does with a pad.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Out {
