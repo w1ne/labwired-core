@@ -253,6 +253,18 @@ impl GenericPeripheral {
             .map(|r| r.address_offset as usize)
     }
 
+    /// Whether the descriptor's `ENABLE` register has the output driver of
+    /// `pin` on. `None` when the descriptor has no `ENABLE` register (or the
+    /// pin is out of range), i.e. the direction is not derivable.
+    fn gpio_pad_driven(&self, pin: u8) -> Option<bool> {
+        if pin >= 32 {
+            return None;
+        }
+        let offset = self.gpio_reg_offset("ENABLE")?;
+        let value = self.read_register_storage_u32(offset)?;
+        Some(value & (1u32 << pin) != 0)
+    }
+
     fn read_register_storage_u32(&self, offset: usize) -> Option<u32> {
         let data = self.data.borrow();
         if offset + 3 >= data.len() {
@@ -695,6 +707,38 @@ impl Peripheral for GenericPeripheral {
         Some((value & (1u32 << pin)) != 0)
     }
 
+    /// The pad level, derived from the descriptor's own registers: where the
+    /// descriptor declares an `ENABLE` output-enable register (ESP32-family
+    /// `GPIO_ENABLE`, 1 = driver on), a driven pad shows its `OUT` bit and any
+    /// other pad shows `IN`. Without an `ENABLE` register the direction is not
+    /// derivable, so the model reports nothing rather than guessing.
+    fn read_gpio_pad(&self, pin: u8) -> Option<bool> {
+        if self.gpio_pad_driven(pin)? {
+            self.read_gpio_output(pin)
+        } else {
+            self.read_gpio_input(pin)
+        }
+    }
+
+    fn gpio_routing(&self, pin: u8) -> Option<crate::peripherals::gpio::GpioRouting> {
+        use crate::peripherals::gpio::{GpioMode, GpioRouting};
+        let mode = if self.gpio_pad_driven(pin)? {
+            GpioMode::Output
+        } else {
+            GpioMode::Input
+        };
+        Some(GpioRouting { mode, func: None })
+    }
+
+    fn read_gpio_pad_drive(&self, pin: u8) -> Option<crate::logic_capture::PadDrive> {
+        use crate::logic_capture::PadDrive;
+        Some(if self.gpio_pad_driven(pin)? {
+            PadDrive::Driven
+        } else {
+            PadDrive::HighZ
+        })
+    }
+
     fn set_gpio_input(&mut self, pin: u8, level: bool) -> bool {
         if pin >= 32 {
             return false;
@@ -1121,5 +1165,58 @@ mod tests {
         // Tick 4: 0 -> fired
         p.tick();
         assert_eq!(p.read(0x10).unwrap(), 0x01);
+    }
+
+    fn gpio_descriptor(with_enable: bool) -> PeripheralDescriptor {
+        let reg = |id: &str, off: u64| RegisterDescriptor {
+            id: id.to_string(),
+            address_offset: off,
+            size: 32,
+            access: Access::ReadWrite,
+            reset_value: 0,
+            fields: vec![],
+            side_effects: None,
+        };
+        let mut registers = vec![reg("OUT", 0x04), reg("IN", 0x3C)];
+        if with_enable {
+            registers.push(reg("ENABLE", 0x20));
+        }
+        PeripheralDescriptor {
+            peripheral: "GPIO".to_string(),
+            version: "1.0".to_string(),
+            registers,
+            interrupts: None,
+            timing: None,
+        }
+    }
+
+    /// An `ENABLE` register makes the pad derivable: a driven pad shows its
+    /// `OUT` bit, any other pad the `IN` level.
+    #[test]
+    fn declarative_gpio_pad_follows_enable_out_and_in() {
+        use crate::logic_capture::PadDrive;
+        let mut p = GenericPeripheral::new(gpio_descriptor(true));
+        assert_eq!(p.read_gpio_pad(3), Some(false));
+        assert_eq!(p.read_gpio_pad_drive(3), Some(PadDrive::HighZ));
+        assert!(p.set_gpio_input(3, true));
+        assert_eq!(p.read_gpio_pad(3), Some(true), "input shows IN");
+        p.write_u32(0x20, 1 << 3).unwrap(); // ENABLE: driver on
+        assert_eq!(p.read_gpio_pad(3), Some(false), "driven pad shows OUT");
+        assert_eq!(p.read_gpio_pad_drive(3), Some(PadDrive::Driven));
+        p.write_u32(0x04, 1 << 3).unwrap(); // OUT
+        assert_eq!(p.read_gpio_pad(3), Some(true));
+        let routing = p.gpio_routing(3).unwrap();
+        assert_eq!(routing.mode, crate::peripherals::gpio::GpioMode::Output);
+        assert_eq!(p.read_gpio_pad(32), None);
+    }
+
+    /// No `ENABLE` register: direction is not derivable, so nothing is
+    /// invented.
+    #[test]
+    fn declarative_gpio_without_enable_reports_no_pad() {
+        let p = GenericPeripheral::new(gpio_descriptor(false));
+        assert_eq!(p.read_gpio_pad(3), None);
+        assert_eq!(p.read_gpio_pad_drive(3), None);
+        assert!(p.gpio_routing(3).is_none());
     }
 }
