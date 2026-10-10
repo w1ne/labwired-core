@@ -371,14 +371,18 @@ peripherals:
     clock: { reg: "ahbenr", bit: 12 }
 
   # --- EXTI / SYSCFG --------------------------------------------------------
-  # G0 EXTI is single-bank (<32 lines) → stm32f1-style register file for the
-  # EXTI0_1/EXTI2_3/EXTI4_15 cascades (RM0444 §13.3).
+  # G0 EXTI is the split-pending register file (RM0444 EXTI: RTSR1 0x00,
+  # FTSR1 0x04, RPR1 0x0C, FPR1 0x10, EXTICR1..4 0x60, IMR1 0x80) routed to the
+  # EXTI0_1 / EXTI2_3 / EXTI4_15 cascades (IRQ 5 / 6 / 7, RM0444 vector table) — the
+  # same `stm32g0` profile as the G0B1. The F1 register file it used to name
+  # put IMR at 0x00 and PR at 0x14, so G0 firmware never armed a line, and
+  # routed line 0 to IRQ 6 (EXTI2_3 here).
   - id: "exti"
     type: "exti"
     base_address: 0x40021800
     size: "1KB"
     config:
-      profile: "stm32f1"
+      profile: "stm32g0"
 
   - id: "syscfg"
     type: "syscfg"
