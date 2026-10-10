@@ -53,10 +53,12 @@ A chip's internal pull is therefore part of the net. An input with
 `PUPDR = 01` on an STM32, or an ATmega pad with `DDRx = 0` and `PORTx = 1`,
 holds a wire high with no `pull:` on the net
 (`examples/gpio-net-f1-f4`). Reports show it as the member's drive:
-`pull_up` / `pull_down` next to `z`, `low` and `high`. On the pad's own
-four-state trace a pulled net pad reads `h` / `l` (the IEEE 1164 weak levels).
-Pads that are not on a net keep reporting `z` for an undriven input, pulled or
-not.
+`pull_up` / `pull_down` next to `z`, `low` and `high`. The world watches each
+member's own output stage (a `LogicSource::Driver` channel), on which a pulled
+pad reads `h` / `l` (the IEEE 1164 weak levels). A probe on the pad
+(`LogicSource::Pad`, the ordinary four-state pin trace) shows the wire as the
+pad sees it: `z` for an undriven input, pulled or not, the level a peer
+drives, and `x` where the pad's own output fights it.
 
 Members driving 0 and 1 together are in **contention**. The wire resolves to 0
 (a low-side driver usually wins) and the net reports `GPIO_NET_CONTENTION` with
@@ -69,18 +71,20 @@ joins and then the first lets go, the wire stays low until the second releases:
 one low pulse, not two (`open_drain_with_pull_up_is_a_wired_and` in
 `crates/core/src/network/gpio_net.rs`).
 
-A member's drive is what *its own* output stage does. What the net feeds back
-into the pad (the level firmware reads from `IDR` or `PIND`) is never counted
-as the pad's own drive, so a pad cannot hold a wire up just because it once
-saw it high.
+A member's drive is what *its own* output stage does
+([`PinPort::driver`](../architecture/pins.md), decoded from the chip's
+registers only). What the net feeds back into the pad (the level firmware
+reads from `IDR` or `PIND`) is never part of it, so a pad cannot hold a wire up
+just because it once saw it high.
 
 ## Timing
 
 Edges are delivered at `t_edge + latency_ns`, to every member including the
 driver, at an exact cycle of each member (the first instruction boundary at or
-after that time), through the same `set_gpio_input` path a board button uses:
-EXTI interrupts, AVR INT0/INT1 and pin-change interrupts, and timer captures
-see a real edge.
+after that time), through the same `PinPort::set_external` path a board button
+uses (`SystemBus::set_pad_external`): EXTI interrupts, AVR INT0/INT1 and
+pin-change interrupts, the ESP32-family and RP2040 GPIO interrupts, and timer
+captures see a real edge.
 
 Each node keeps its own clock (conservative parallel discrete-event
 simulation). A node may run as far as its *safe horizon*: for each net it is
@@ -145,17 +149,19 @@ Machines on no net run unchanged and are not held to any net's latency.
 
 ## Which pads can be on a net
 
-A net member's GPIO model has to report what it drives and accept an external
-level. Supported today:
+A net member's GPIO model has to implement the pin interface
+([`docs/architecture/pins.md`](../architecture/pins.md)): report what it
+drives and accept an external level. Every GPIO model in tree does:
 
 | GPIO model | Capture | Notes |
 |------------|---------|-------|
 | `GpioPort`, every register family (STM32 `v2` and `f1`, nRF52/54, Kinetis, EFR32 series 2, SAM, RA, i.MX RT) | push: the port reports its own edges, idle fast-forward stays on | exercised end to end on STM32 `v2` (G0B1, F401) and `f1` (F103). The EXTI raises edge interrupts for net edges on G0 and U5 (port from `EXTI_EXTICRx`), F1 (port from `AFIO_EXTICRx`) and F4 (port from `SYSCFG_EXTICRx`). Internal pulls reported: STM32 `v2` `PUPDR`, STM32 `f1` input-with-pull (`CNF = 10`, `ODR` picks the rail), nRF52 `PIN_CNF.PULL`, EFR32 `INPUTPULL`, SAM `PINCFG.PULLEN`. Kinetis, RA and i.MX RT keep their pull outside the GPIO block, so their pulls are not on the net yet. |
 | `GpioPort` pads routed to a peripheral (AF) | as above | the peripheral says what its output stage does (driving, released, input) and reads the level the net delivers; see [Buses over nets](#buses-over-nets). STM32 SPI and modern I²C only. |
 | `avr_gpio` (ATmega328P `portb`/`portc`/`portd`) | push: the port reports its own edges, idle fast-forward stays on | INT0/INT1 and PCINT0..2 see external edges; a core parked in `SLEEP` is skipped until the next edge or Timer0 overflow. Exercised end to end on the Uno (`gpio-net-two-boards`). An input with its `PORTx` bit set is a pull-up on the net. |
-| ESP32 classic `gpio` (member `peripheral: gpio`, pins 0..31) | push | Drive: `GPIO_ENABLE` and `GPIO_OUT`; `GPIO_PINn.PAD_DRIVER` open drain drives only a 0 and, holding a 1, reads the wire on `GPIO_IN`. Interrupts: `GPIO_PINn.INT_TYPE` edge and level types latch `GPIO_STATUS` and raise matrix source 22 for the CPU whose INT_ENA bit is set. GPIO32..39 cannot join a net. |
-| ESP32-S3 `gpio` (`peripheral: gpio`, pins 0..31) | push | As classic; matrix source 16 (`GPIO_PCPU_INT`, INT_ENA bit 13). GPIO32..48 cannot join a net. |
-| ESP32-C3 / ESP32-C6 `gpio` (`peripheral: gpio`, pins 0..25) | push | As classic; matrix source 16 on the C3 and 30 on the C6. Edge types only (level types are not modelled on this block). Exercised end to end on the C6 (`env-esp32c6.yaml`). |
+| ESP32 classic `gpio` (member `peripheral: gpio`, pins 0..31) | push | Drive: `GPIO_ENABLE` and `GPIO_OUT`; `GPIO_PINn.PAD_DRIVER` open drain drives only a 0 and, holding a 1, reads the wire on `GPIO_IN`. Interrupts: `GPIO_PINn.INT_TYPE` edge and level types latch `GPIO_STATUS` and raise matrix source 22 for the CPU whose INT_ENA bit is set. GPIO32..39 cannot join a net. The IO_MUX pulls are not modelled on this part. |
+| ESP32-S3 `gpio` (`peripheral: gpio`, pins 0..31) | push | As classic; matrix source 16 (`GPIO_PCPU_INT`, INT_ENA bit 13). The IO_MUX `FUN_WPU` pull-up is on the net. GPIO32..48 cannot join a net. |
+| ESP32-C3 / ESP32-C6 `gpio` (`peripheral: gpio`, pins 0..25) | push | As classic; matrix source 16 on the C3 and 30 on the C6. The IO_MUX `FUN_WPU` pull-up is on the net where the IO_MUX is wired. Edge types only (level types are not modelled on this block). Exercised end to end on the C6 (`env-esp32c6.yaml`). |
+| Declarative `GPIO` descriptor (`ENABLE` / `OUT` / `IN` registers) | poll | Drive from `ENABLE` and `OUT`; no pulls. |
 | RP2040 `sio` (`peripheral: sio`, pins 0..29 = GP0..GP29) | push | Drive: `GPIO_OE` and `GPIO_OUT` while IO_BANK0 selects SIO for the pad (or nothing yet); open drain is firmware toggling `GPIO_OE` with the latch at 0. Interrupts: IO_BANK0 `INTRn` / `PROC0_INTEn` edge and level bits raise `IO_IRQ_BANK0` (NVIC 13) from any change of `GPIO_IN`, the pad's own output included. Exercised end to end (`env-rp2040.yaml`). |
 
 On the ESP32 family and the RP2040 the GPIO interrupt sees the pad as
@@ -163,7 +169,8 @@ On the ESP32 family and the RP2040 the GPIO interrupt sees the pad as
 pad's own output; on the C3/C6 and S3 `GPIO_IN` is the external level only,
 so a pad does not interrupt on its own output there.
 
-Any other GPIO model is refused when the world is built, naming the pad.
+A peripheral that owns no pins, or a pad whose drive is unknown, is refused
+when the world is built, naming the pad.
 
 Limits worth knowing:
 
@@ -184,6 +191,35 @@ Limits worth knowing:
 - The RP2040 `GPIOn_CTRL` override fields (`OUTOVER`, `OEOVER`, `INOVER`,
   `IRQOVER`) are stored but not applied, and only PROC0's interrupt is
   raised (the model is single-core).
+
+## Adding net support to a GPIO model
+
+There is nothing net-specific to add: a GPIO model that implements
+`pins::PinPort` is on nets, the logic analyzer, board buttons and EXTI at
+once. The steps are in
+[`docs/architecture/pins.md`](../architecture/pins.md#implementing-a-new-gpio-model);
+for a net the parts that matter are:
+
+1. `driver(pin)`: the pad's own output stage, decoded from the direction,
+   output, open-drain and pull registers. Registers only. An open-drain
+   output holding a 1 is `Out::Off`; an internal pull is `pull`, which the
+   net counts as a weak source. A pad handed to a peripheral signal whose
+   drive the model cannot see is `None`, and the world refuses it.
+2. `set_external(pin, External::Level(l))`: the level the net settles on.
+   Store it beside the registers (never in them, so `driver()` cannot see
+   it), fold it into the input register firmware reads, latch whatever
+   interrupt the block raises from that register, and return the input
+   before and after. The bus fans the change out to EXTI and timer captures
+   by the port's `PortId`.
+3. Push capture, so a net does not force the node onto the per-cycle poll:
+   keep the `PadWatch` `install_watch` hands you and bracket every register
+   write and `set_external` with `pins::watch_begin(self)` /
+   `pins::watch_end(self)`.
+4. If peripheral lines can be routed to the pad, implement `join_wire`
+   (mark the line as shared, `PadLines::mark_on_net`) and `routes_changed`.
+5. Register the model in `crates/core/src/pins/conformance.rs`. The suite
+   checks the driver never echoes the net's level, open drain, pulls, the
+   input round trip, and that push capture equals the poll.
 
 ## Buses over nets
 
