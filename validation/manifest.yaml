@@ -3293,7 +3293,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: feacbf14f26b7b2b11ce3c484652c34965c346251a4494bdc2b486593ed575e1
+    drift_ack_digest: 24bc98636d9e62c7ca14a231bde43588c2d3ffb1f515a75f53d8a705e4e129d5
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -3731,6 +3731,13 @@ boards:
     # below Rt2 (STM32duino 3 Serial.print(float) BusFault on L476/F401).
     # VLDM/VSTM/VPUSH/VPOP decode unchanged. No register map or reset value
     # changed. No physical probe connected. ACK, NOT A CAPTURE.
+    drift_ack: 2026-10-10
+    # 2026-10-10 (EXTI once per edge): watched exti.rs, bus/tick.rs, lib.rs
+    # moved. EXTI now reports the level of each NVIC line it owns
+    # exclusively, so a pend is dropped when firmware clears PR instead of
+    # re-entering the handler. Register maps and reset values unchanged;
+    # pinned by exti_handler_once_per_edge. Approved by the maintainer.
+    # ACK, NOT A CAPTURE.
     drift_ack: 2026-10-10
   - id: nucleo-l073rz
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
@@ -4966,7 +4973,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: b4594bd951de64d0232e193bed3977243320b2cefebc6137867304b179293652
+    drift_ack_digest: b928d6fc46ba2217e53b1ab7371c87bea3d0bf3f09f3bb67042a6fd6d97d5558
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5410,6 +5417,13 @@ boards:
     # below Rt2 (STM32duino 3 Serial.print(float) BusFault on L476/F401).
     # VLDM/VSTM/VPUSH/VPOP decode unchanged. No register map or reset value
     # changed. No physical probe connected. ACK, NOT A CAPTURE.
+    drift_ack: 2026-10-10
+    # 2026-10-10 (EXTI once per edge): watched exti.rs, bus/tick.rs, lib.rs
+    # moved. EXTI now reports the level of each NVIC line it owns
+    # exclusively, so a pend is dropped when firmware clears PR instead of
+    # re-entering the handler. Register maps and reset values unchanged;
+    # pinned by exti_handler_once_per_edge. Approved by the maintainer.
+    # ACK, NOT A CAPTURE.
     drift_ack: 2026-10-10
   - id: stm32f407
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.

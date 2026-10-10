@@ -13,9 +13,9 @@ The models column is a content digest over everything that board's `models` list
 | `seeed-xiao-nrf52840-sense` | 🟢 silicon-verified | 2026-08-09 | `29da0f59cc35734b` | ⚠ drift acked 2026-10-10, expires 2026-11-09 (re-capture pending) |
 | `stm32h563` | 🟢 silicon-verified | 2026-08-10 | `646be82cff0bb650` | ⚠ drift acked 2026-10-10, expires 2026-11-09 (re-capture pending) |
 | `esp32c3` | 🟢 silicon-verified | 2026-08-09 | `321b19f12ef8655a` | ⚠ drift acked 2026-10-10, expires 2026-11-09 (re-capture pending) |
-| `nucleo-l476rg` | 🟢 silicon-verified | 2026-08-09 | `24bc98636d9e62c7` | ✖ DRIFT — model 2026-10-10 > capture; RE-CAPTURE |
+| `nucleo-l476rg` | 🟢 silicon-verified | 2026-08-09 | `24bc98636d9e62c7` | ⚠ drift acked 2026-10-10, expires 2026-11-09 (re-capture pending) |
 | `nucleo-l073rz` | 🟢 silicon-verified | 2026-08-09 | `c5c3c59f1460e39e` | ⚠ drift acked 2026-10-10, expires 2026-11-09 (re-capture pending) |
-| `stm32f103` | 🟢 silicon-verified | 2026-08-09 | `b928d6fc46ba2217` | ✖ DRIFT — model 2026-10-10 > capture; RE-CAPTURE |
+| `stm32f103` | 🟢 silicon-verified | 2026-08-09 | `b928d6fc46ba2217` | ⚠ drift acked 2026-10-10, expires 2026-11-09 (re-capture pending) |
 | `stm32f407` | 🟢 silicon-smoke | 2026-06-20 | `eb04df0f46dec341` | ⚠ drift acked 2026-10-10, expires 2026-11-09 (re-capture pending) |
 | `esp32s3` | 🟢 silicon-verified | 2026-08-09 | `1de82a64c4694daa` | ⚠ drift acked 2026-10-10, expires 2026-11-09 (re-capture pending) |
 | `esp32s3-zero` | 🔵 sim-validated (deep model, no HW diff) | — | `92588cce7657b3f6` | no silicon capture |
@@ -90,7 +90,7 @@ The models column is a content digest over everything that board's `models` list
 - Silicon: **2026-08-09** on STLINK-V2.1 (USB 0483:374b serial 0670FF…1747, NUCLEO-L476RG onboard) — re-captured live 2026-08-09 with L476_STRICT=1: l476_mmio_diff 15/15 and l476_parity_diff 104/104, 0 divergence — identical to the 2026-06-20 figures. Clean on arrival; nothing to fix. SAME physical board as that baseline, established by probe serial 0670FF535155878281121747 being recorded in both (the L073 entry could not make that claim, having no serial on file before today). Scope unchanged and still partial: the mmio+parity set, not a full-chip sweep.
   - offline (CI): l476_mmio_diff::{l476_mmio_sim_only,l476_parity_sim_only}
   - offline (CI): firmware_survival L476 cases (UART byte stream)
-- Drift status: **✖ DRIFT — model 2026-10-10 > capture; RE-CAPTURE**
+- Drift status: **⚠ drift acked 2026-10-10, expires 2026-11-09 (re-capture pending)**
 
 ## `nucleo-l073rz` — 🟢 silicon-verified
 
@@ -108,7 +108,7 @@ The models column is a content digest over everything that board's `models` list
 - Silicon: **2026-08-09** on ST-LINK V2.1 (V2J43S28, serial 066CFF534951775087071123, USB 0483:374b), genuine STM32F103 — chipid 0x410 STM32F1xx_MD, 128K flash / 20K SRAM — re-captured live 2026-08-09 with F103_STRICT=1: stm32f1_mmio_diff 102/102 (24 reset + 26 R/W + 52 sweep), 0 divergence, and f103_conformance reports no sim-vs-silicon gaps — identical to the 2026-06-20 figures. Clean on arrival; nothing to fix. f103_conformance needed firmware-f103-conformance built for thumbv7m-none-eabi first; without it the test panics in 0.00s, which reads like a failure but is a missing prerequisite. Probe serial recorded from this run on, so a future capture can tell whether it is the same physical board (the earlier entry named none). (Earlier capture caught + fixed a classic SPI CR1 bug masking CRCNEXT bit 12 — 0xEFFF vs silicon 0xFFFF.)
   - offline (CI): stm32f1_mmio_diff::{f1_reset_sim_only,f1_mmio_sim_only,f1_parity_sim_only,f1_sweep_sim_only}
   - offline (CI): f103_conformance::conformance_sim (digest)
-- Drift status: **✖ DRIFT — model 2026-10-10 > capture; RE-CAPTURE**
+- Drift status: **⚠ drift acked 2026-10-10, expires 2026-11-09 (re-capture pending)**
 
 ## `stm32f407` — 🟢 silicon-smoke
 
