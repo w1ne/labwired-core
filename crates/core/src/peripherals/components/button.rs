@@ -104,6 +104,7 @@ const fn ch(key: &'static str, label: &'static str) -> crate::sim_input::InputCh
         unit: std::borrow::Cow::Borrowed("bool"),
         min: 0.0,
         max: 1.0,
+        default: None,
     }
 }
 

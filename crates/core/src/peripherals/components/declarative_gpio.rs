@@ -1124,6 +1124,7 @@ metadata:
             unit: std::borrow::Cow::Borrowed("g"),
             min: 0.0,
             max: 10.0,
+            default: None,
         }];
         let dev = DeclarativeGpioDevice::new(
             "scale".into(),

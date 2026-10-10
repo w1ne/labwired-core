@@ -51,6 +51,7 @@ const RX_INPUTS: &[InputChannel] = &[
         unit: std::borrow::Cow::Borrowed("lsb"),
         min: -32767.0,
         max: 32767.0,
+        default: None,
     },
     InputChannel {
         key: std::borrow::Cow::Borrowed("rx_hz"),
@@ -58,6 +59,7 @@ const RX_INPUTS: &[InputChannel] = &[
         unit: std::borrow::Cow::Borrowed("Hz"),
         min: 0.0,
         max: 20_000.0,
+        default: None,
     },
 ];
 

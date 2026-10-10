@@ -160,6 +160,7 @@ mod legacy {
                     unit: std::borrow::Cow::Borrowed("g"),
                     min: -8.0,
                     max: 8.0,
+                    default: None,
                 },
                 InputChannel {
                     key: std::borrow::Cow::Borrowed("y"),
@@ -167,6 +168,7 @@ mod legacy {
                     unit: std::borrow::Cow::Borrowed("g"),
                     min: -8.0,
                     max: 8.0,
+                    default: None,
                 },
                 InputChannel {
                     key: std::borrow::Cow::Borrowed("z"),
@@ -174,6 +176,7 @@ mod legacy {
                     unit: std::borrow::Cow::Borrowed("g"),
                     min: -8.0,
                     max: 8.0,
+                    default: None,
                 },
             ];
             CH

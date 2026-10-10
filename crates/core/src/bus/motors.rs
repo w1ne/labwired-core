@@ -14,6 +14,7 @@ pub(super) const MOTOR_STALL_INPUT: crate::sim_input::InputChannel =
         unit: std::borrow::Cow::Borrowed("boolean"),
         min: 0.0,
         max: 1.0,
+        default: None,
     };
 
 /// Maximum production gap between motor services. This bounds exact PWM edge

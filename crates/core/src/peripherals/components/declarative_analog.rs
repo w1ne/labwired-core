@@ -488,6 +488,7 @@ fn owned_channels(descriptor: &DeviceDescriptor) -> std::borrow::Cow<'static, [I
             unit: std::borrow::Cow::Owned(i.unit.clone()),
             min: i.min,
             max: i.max,
+            default: Some(i.default.unwrap_or(0.0)),
         })
         .collect();
     std::borrow::Cow::Owned(channels)
@@ -705,6 +706,7 @@ behavior:
         unit: std::borrow::Cow::Borrowed("mm"),
         min: 0.0,
         max: 800.0,
+        default: None,
     }];
 
     fn device() -> DeclarativeAnalogDevice {

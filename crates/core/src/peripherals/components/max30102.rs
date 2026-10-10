@@ -648,6 +648,7 @@ pub const INPUT_CHANNELS: &[crate::sim_input::InputChannel] = &[
         unit: std::borrow::Cow::Borrowed("bpm"),
         min: 20.0,
         max: 250.0,
+        default: None,
     },
     crate::sim_input::InputChannel {
         key: std::borrow::Cow::Borrowed("perfusion"),
@@ -655,6 +656,7 @@ pub const INPUT_CHANNELS: &[crate::sim_input::InputChannel] = &[
         unit: std::borrow::Cow::Borrowed("%"),
         min: 0.0,
         max: 20.0,
+        default: None,
     },
 ];
 

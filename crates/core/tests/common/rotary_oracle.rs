@@ -213,6 +213,7 @@ impl crate::sim_input::SimInput for RotaryEncoder {
             unit: std::borrow::Cow::Borrowed("detents"),
             min: -1_000.0,
             max: 1_000.0,
+            default: None,
         }];
         CH
     }

@@ -48,6 +48,7 @@ const CH_PROXIMITY: &[InputChannel] = &[InputChannel {
     unit: std::borrow::Cow::Borrowed("count"),
     min: 0.0,
     max: 65535.0,
+    default: None,
 }];
 
 impl FakeProximity {

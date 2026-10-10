@@ -436,3 +436,45 @@ fn the_declarative_gpio_family_is_in_the_manifest() {
         );
     }
 }
+
+#[test]
+fn declared_input_defaults_are_inside_their_range() {
+    for kit in registry::kits() {
+        let m = kit.metadata();
+        for ch in m.inputs.iter() {
+            if let Some(d) = ch.default {
+                assert!(
+                    d >= ch.min && d <= ch.max,
+                    "kit '{}' channel '{}' default {d} is outside [{}, {}]",
+                    m.device_type,
+                    ch.key,
+                    ch.min,
+                    ch.max
+                );
+            }
+        }
+    }
+}
+
+/// A descriptor's `metadata.inputs[].default` seeds the device's measurement
+/// slot (what firmware reads on power-on). The manifest the UI builds its
+/// slider from must carry that same number, or the slider shows a hand-kept
+/// preset while the device reports something else (SHT31: slider 50 %, device
+/// 45 %).
+#[test]
+fn descriptor_input_defaults_reach_the_manifest() {
+    let kit = registry::kits()
+        .iter()
+        .find(|k| k.metadata().device_type == "sht31")
+        .expect("sht31 kit");
+    let m = kit.metadata();
+    let get = |key: &str| {
+        m.inputs
+            .iter()
+            .find(|c| c.key == key)
+            .unwrap_or_else(|| panic!("sht31 has no '{key}' channel"))
+            .default
+    };
+    assert_eq!(get("temperature"), Some(22.0));
+    assert_eq!(get("humidity"), Some(45.0));
+}
