@@ -728,7 +728,9 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
     let mut cached_all_pass = false;
 
     let mut step = 0;
+    let mut heartbeat = Heartbeat::new(ctx.args.heartbeat_file.clone());
     while step < max_steps {
+        heartbeat.tick(step, ctx.machine.total_cycles);
         // JIT-eligible path: mirror the machine's authoritative counters into
         // `metrics` BEFORE the cycle-sensitive checks below (stimulus
         // `after_cycles`, `max_cycles`), so they fire at exactly the same batch
@@ -1766,4 +1768,68 @@ fn stalled_poll(bus: &labwired_core::bus::SystemBus) -> Option<artifacts::Stalle
         offset,
         accesses,
     })
+}
+
+/// Liveness beacon for a supervising process (`--heartbeat-file`).
+///
+/// The first tick writes at once, so the supervisor can tell "the loop never
+/// started" from "the loop is slow". After that the clock is read only once the
+/// run has advanced 64Ki steps or 1Mi cycles since the last read, and the file
+/// is rewritten at most once a second: in single-step mode that is one clock
+/// read per ~10 ms, and in the wide idle-skip batches every iteration is
+/// already past the threshold. Absent a path, `tick` is one `Option` test.
+struct Heartbeat {
+    path: Option<std::path::PathBuf>,
+    checked_steps: u64,
+    checked_cycles: u64,
+    last_write: Option<std::time::Instant>,
+}
+
+impl Heartbeat {
+    const STEP_STRIDE: u64 = 1 << 16;
+    const CYCLE_STRIDE: u64 = 1 << 20;
+
+    fn new(path: Option<std::path::PathBuf>) -> Self {
+        Self {
+            path,
+            checked_steps: 0,
+            checked_cycles: 0,
+            last_write: None,
+        }
+    }
+
+    #[inline]
+    fn tick(&mut self, steps: u64, cycles: u64) {
+        if self.path.is_none() {
+            return;
+        }
+        if self.last_write.is_some()
+            && steps.wrapping_sub(self.checked_steps) < Self::STEP_STRIDE
+            && cycles.wrapping_sub(self.checked_cycles) < Self::CYCLE_STRIDE
+        {
+            return;
+        }
+        self.checked_steps = steps;
+        self.checked_cycles = cycles;
+        let now = std::time::Instant::now();
+        if self
+            .last_write
+            .is_some_and(|t| now.duration_since(t).as_millis() < 1000)
+        {
+            return;
+        }
+        self.last_write = Some(now);
+        self.write(steps, cycles);
+    }
+
+    #[cold]
+    fn write(&self, steps: u64, cycles: u64) {
+        let Some(path) = &self.path else { return };
+        let tmp = path.with_extension("tmp");
+        let body = format!("{{\"steps\":{steps},\"cycles\":{cycles}}}");
+        // Best effort: a supervisor reading a stale file just sees no progress.
+        if std::fs::write(&tmp, body).is_ok() {
+            let _ = std::fs::rename(&tmp, path);
+        }
+    }
 }
