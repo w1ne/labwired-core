@@ -1114,6 +1114,7 @@ pub const INPUT_CHANNELS: &[crate::sim_input::InputChannel] = &[
         // UE ↔ cell distance for path loss. 0 = co-located (strong CSQ).
         min: 0.0,
         max: 50_000.0,
+        default: None,
     },
     crate::sim_input::InputChannel {
         key: std::borrow::Cow::Borrowed("ber"),
@@ -1121,6 +1122,7 @@ pub const INPUT_CHANNELS: &[crate::sim_input::InputChannel] = &[
         unit: std::borrow::Cow::Borrowed("CSQ"),
         min: 0.0,
         max: 99.0,
+        default: None,
     },
 ];
 

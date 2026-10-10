@@ -28,6 +28,7 @@ pub fn keypad(id: &str, rows: [(u64, u8); ROWS], cols: [(u64, u8); COLS]) -> Dec
             unit: "index".into(),
             min: -1.0,
             max: 15.0,
+            default: None,
         }]),
     )
     .unwrap()

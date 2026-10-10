@@ -32,6 +32,12 @@ pub struct InputChannel {
     pub min: f64,
     /// Inclusive maximum accepted value, in `unit`.
     pub max: f64,
+    /// Value the device reports on power-on, before any `set_input`, in
+    /// `unit`. UIs must seed their control from this, never from a
+    /// hand-kept preset, or the control and the device disagree until the
+    /// first drag. `None` means the model does not declare one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default: Option<f64>,
 }
 
 /// Why a [`SimInput::set_input`] / [`crate::Machine::set_input`] call failed.

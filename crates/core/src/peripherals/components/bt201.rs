@@ -154,6 +154,7 @@ const INPUT_CHANNELS: &[InputChannel] = &[
         unit: std::borrow::Cow::Borrowed("state"),
         min: 0.0,
         max: 3.0,
+        default: None,
     },
     InputChannel {
         key: std::borrow::Cow::Borrowed("ble_link"),
@@ -161,6 +162,7 @@ const INPUT_CHANNELS: &[InputChannel] = &[
         unit: std::borrow::Cow::Borrowed("on/off"),
         min: 0.0,
         max: 1.0,
+        default: None,
     },
 ];
 

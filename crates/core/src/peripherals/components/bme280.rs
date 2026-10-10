@@ -418,6 +418,7 @@ pub const INPUT_CHANNELS: &[crate::sim_input::InputChannel] = &[
         unit: std::borrow::Cow::Borrowed("°C"),
         min: -40.0,
         max: 85.0,
+        default: None,
     },
     crate::sim_input::InputChannel {
         key: std::borrow::Cow::Borrowed("humidity"),
@@ -425,6 +426,7 @@ pub const INPUT_CHANNELS: &[crate::sim_input::InputChannel] = &[
         unit: std::borrow::Cow::Borrowed("%RH"),
         min: 0.0,
         max: 100.0,
+        default: None,
     },
     crate::sim_input::InputChannel {
         key: std::borrow::Cow::Borrowed("pressure"),
@@ -432,6 +434,7 @@ pub const INPUT_CHANNELS: &[crate::sim_input::InputChannel] = &[
         unit: std::borrow::Cow::Borrowed("hPa"),
         min: 300.0,
         max: 1100.0,
+        default: None,
     },
 ];
 

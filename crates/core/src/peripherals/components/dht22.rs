@@ -415,6 +415,7 @@ pub const INPUT_CHANNELS: &[crate::sim_input::InputChannel] = &[
         unit: std::borrow::Cow::Borrowed("°C"),
         min: MIN_TEMP_C as f64,
         max: MAX_TEMP_C as f64,
+        default: None,
     },
     crate::sim_input::InputChannel {
         key: std::borrow::Cow::Borrowed("humidity"),
@@ -422,6 +423,7 @@ pub const INPUT_CHANNELS: &[crate::sim_input::InputChannel] = &[
         unit: std::borrow::Cow::Borrowed("%RH"),
         min: MIN_HUMIDITY_PCT as f64,
         max: MAX_HUMIDITY_PCT as f64,
+        default: None,
     },
 ];
 

@@ -265,6 +265,7 @@ pub const INPUT_CHANNELS: &[crate::sim_input::InputChannel] = &[
         unit: std::borrow::Cow::Borrowed("µg/m³"),
         min: 0.0,
         max: 1000.0,
+        default: None,
     },
     crate::sim_input::InputChannel {
         key: std::borrow::Cow::Borrowed("pm2_5"),
@@ -272,6 +273,7 @@ pub const INPUT_CHANNELS: &[crate::sim_input::InputChannel] = &[
         unit: std::borrow::Cow::Borrowed("µg/m³"),
         min: 0.0,
         max: 1000.0,
+        default: None,
     },
     crate::sim_input::InputChannel {
         key: std::borrow::Cow::Borrowed("pm4_0"),
@@ -279,6 +281,7 @@ pub const INPUT_CHANNELS: &[crate::sim_input::InputChannel] = &[
         unit: std::borrow::Cow::Borrowed("µg/m³"),
         min: 0.0,
         max: 1000.0,
+        default: None,
     },
     crate::sim_input::InputChannel {
         key: std::borrow::Cow::Borrowed("pm10"),
@@ -286,6 +289,7 @@ pub const INPUT_CHANNELS: &[crate::sim_input::InputChannel] = &[
         unit: std::borrow::Cow::Borrowed("µg/m³"),
         min: 0.0,
         max: 1000.0,
+        default: None,
     },
 ];
 

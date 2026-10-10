@@ -112,6 +112,7 @@ mod oracle {
                 unit: std::borrow::Cow::Borrowed("index"),
                 min: -1.0,
                 max: (ROWS * COLS - 1) as f64,
+                default: None,
             }];
             CH
         }
@@ -233,6 +234,7 @@ fn device(desc: &DeviceDescriptor) -> DeclarativeGpioDevice {
             unit: "index".into(),
             min: -1.0,
             max: 15.0,
+            default: None,
         }]),
     )
     .unwrap()
