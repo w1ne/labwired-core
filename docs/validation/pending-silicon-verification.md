@@ -52,6 +52,35 @@ capture from silicon confirms or corrects it.
      must read 0.
 - Oracle test: `stm32duino_i2c_multibyte_bme280` (L476).
 
+## Cortex-M4F/M7 Thumb decode: VMOV between two core registers and D/S-pair
+
+- Change: `VMOV Dm, Rt, Rt2` / `VMOV Rt, Rt2, Dm` and the single-precision
+  pair forms `VMOV Sm, Sm1, Rt, Rt2` / `VMOV Rt, Rt2, Sm, Sm1` (ARMv7-M ARM
+  A7.9, extension register load/store opcode 0b0010x: P=0, U=0, D=1, W=0)
+  now decode as register moves. Before, the VLDM/VSTM matcher claimed them
+  first, so `vmov d0, r0, r1` (`ec41 0b10`) ran as a 16-word store descending
+  from `r1`, and the P=0,U=0 space (UNDEFINED apart from these moves) was
+  treated as a register-list transfer.
+- Field report: production run 2026-10-10, stock Adafruit_BME280 sketch on
+  NUCLEO-L476RG (STM32duino 3, `framework-arduinoststm32` 4.30000.0) printed
+  `T=` then HardFaulted: precise BusFault at 0x403F_7FC0 in
+  `arduino::Print::print(float, int)`, which runs `vmov d0, r0, r1` after
+  `__aeabi_f2d` (r1 = 0x403F_8000, the high word of 31.5). F401 the same;
+  F103 (Cortex-M3, soft-float) never emits it.
+- Hardware recipe (NUCLEO-L476RG or NUCLEO-F401RE, BME280 at 0x76 on
+  D14/D15):
+  1. Build and flash `tests/fixtures/stm32duino-print-float/main.ino`
+     (`pio run -e l476` / `-e f401`); capture USART2 at 115200 and expect
+     `BME280 ok` followed by `T=<temperature> C` lines and no fault.
+  2. SWD, FPU enabled (CPACR CP10/CP11 = full): fill the 64 bytes below
+     0x20001000 with 0xA5, set r0 = 0x9999999A, r1 = 0x20001000, step
+     `vmov d0, r0, r1` then `vmov r2, r3, d0`. Expect S0 = 0x9999999A,
+     S1 = 0x20001000, r2/r3 equal to r0/r1, and the 0xA5 fill unchanged.
+- Oracle tests: `test_decode_vmov_two_core_regs`,
+  `test_decode_vfp_load_store_multiple_unchanged` (decoder),
+  `vmov_two_core_registers_moves_and_stores_nothing` (CPU), and
+  `stm32duino_print_float_vmov` (full sketch on L476/F401/F103).
+
 ## ESP32-C3: mask ROM mirrors its boot log to UART0 and USB-Serial-JTAG
 
 - Change: none in the peripheral models. Run paths that show both consoles in

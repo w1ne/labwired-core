@@ -3565,3 +3565,33 @@ fn it_block_survives_an_exception_between_its_instructions() {
     assert_eq!(cpu.read_reg(0), 1, "ldrheq ran: the ELSE slots saw Z=1");
     assert_eq!(cpu.pc, 0x100C);
 }
+
+/// `vmov d0, r0, r1` packs two core registers into a D register and touches
+/// no memory. STM32duino 3's `Print::print(float)` runs it right after
+/// `__aeabi_f2d`; it used to execute as `vstmdb r1, {16 words}` and BusFault
+/// at `r1 - 0x40` (0x403F_7FC0 for 31.5).
+#[test]
+fn vmov_two_core_registers_moves_and_stores_nothing() {
+    let mut cpu = CortexM::new();
+    let mut bus = MockBus::new();
+    cpu.pc = 0x2000;
+    let v = 31.3f64.to_bits(); // both halves non-zero
+    cpu.r0 = v as u32;
+    cpu.r1 = (v >> 32) as u32;
+    run_test_instr(&mut cpu, &mut bus, 0xEC410B10, true); // vmov d0, r0, r1
+    assert_eq!(cpu.pc, 0x2004);
+    assert_eq!(cpu.fpu_s[0], v as u32);
+    assert_eq!(cpu.fpu_s[1], (v >> 32) as u32);
+    // Only the two instruction halfwords are in memory: nothing was stored.
+    assert_eq!(bus.mem.len(), 4, "vmov wrote memory: {:x?}", bus.mem.keys());
+    run_test_instr(&mut cpu, &mut bus, 0xEC532B10, true); // vmov r2, r3, d0
+    assert_eq!(((cpu.r3 as u64) << 32) | cpu.r2 as u64, v);
+
+    // Single-precision pair form: vmov s4, s5, r0, r1 / vmov r2, r3, s4, s5.
+    cpu.r0 = 0x1111_2222;
+    cpu.r1 = 0x3333_4444;
+    run_test_instr(&mut cpu, &mut bus, 0xEC410A12, true);
+    assert_eq!((cpu.fpu_s[4], cpu.fpu_s[5]), (0x1111_2222, 0x3333_4444));
+    run_test_instr(&mut cpu, &mut bus, 0xEC532A12, true);
+    assert_eq!((cpu.r2, cpu.r3), (0x1111_2222, 0x3333_4444));
+}
