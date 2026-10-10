@@ -56,6 +56,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `World::gpio_net_applied` is ordered by due time, then node id.
 
 ### Fixed
+- STM32 EXTI (F1, F4, L4, G0, U5): an EXTI interrupt handler runs once per
+  edge. The NVIC kept a pend the held EXTI level raised while the handler was
+  running after the handler cleared `EXTI_PR` (`RPR1`/`FPR1` on G0/U5), so a
+  handler that cleared the pending bit without re-checking it ran twice per
+  edge. A peripheral that drives several NVIC lines can now report a level
+  per line (`Peripheral::irq_line_levels`), and the NVIC drops each line's
+  pend when it deasserts, as a single-line level source already did. A byte
+  store (`STRB`) to a level source's register now reconciles its line too.
+- STM32G071: the EXTI uses the G0 register file and IRQ routing
+  (`profile: stm32g0`, as on the G0B1). It used the F1 one, so G0 firmware
+  never armed an EXTI line and line 0 was routed to the EXTI2_3 IRQ.
 - Cortex-M4F/M7: `VMOV Dm, Rt, Rt2`, `VMOV Rt, Rt2, Dm` and their single-precision pair forms decode as register moves. They used to run as a 16-word VSTM/VLDM below `Rt2`, so `Serial.print(float)` on STM32duino 3 (NUCLEO-L476RG, -F401RE) HardFaulted with a BusFault at an address made of the float's high word.
 - The RISC-V cycle counter (ESP32-C3 `PCCR` CSR 0x7E2/0x802, standard `cycle`) counts one tick per simulated CPU clock, the clock SYSTIMER and `micros()` run on. It counted 256 per clock, so Arduino `pulseIn` on the ESP32-C3 gave up after about 117 µs and an HC-SR04 always read 0 (timeout).
 - A `servo` on the ESP32-C3 follows the C3 LEDC duty (`ledcWrite`, ESP32Servo `write()`), as it already did on the classic ESP32. Before, the shaft stayed at its minimum angle.

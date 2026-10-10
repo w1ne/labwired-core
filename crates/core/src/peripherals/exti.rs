@@ -120,6 +120,18 @@ fn route_bank1_irqs(active1: u32, irqs: &mut Vec<u32>) {
     }
 }
 
+/// Bank-1 GPIO-group NVIC line LEVELS (the level twin of
+/// [`route_bank1_irqs`]): EXTI0..4 → IRQ 6..10, EXTI9_5 → 23, EXTI15_10 → 40.
+/// Lines 16+ (PVD, RTC, USB/OTG wakeup, …) route to IRQs another peripheral may
+/// also drive, so they are not reported and keep pulse semantics.
+fn report_bank1_levels(active1: u32, report: &mut dyn FnMut(u32, bool)) {
+    for i in 0..5 {
+        report(6 + i, active1 & (1 << i) != 0);
+    }
+    report(23, active1 & 0x0000_03E0 != 0);
+    report(40, active1 & 0x0000_FC00 != 0);
+}
+
 // ── STM32F1 / F4: single bank ────────────────────────────────────────────────
 // The implemented-line count is part-specific (F103 = 19 lines, F4-class = more),
 // so the mask is per-instance, set from the chip config's `lines` field. Default
@@ -623,6 +635,32 @@ impl Peripheral for Exti {
             explicit_irqs: self.pending_irqs(),
             reschedule_delay: active.then_some(1),
             ..Default::default()
+        }
+    }
+
+    /// Per-NVIC-line levels of the GPIO EXTI groups, so the bus drops the
+    /// NVIC pend the held level raised while the handler ran once firmware
+    /// clears the pending latch (rc_w1). Without it a handler that clears PR
+    /// without re-checking it ran twice per edge. Only the lines EXTI owns
+    /// exclusively are reported (see [`report_bank1_levels`]); the L4 bank-2
+    /// wakeup lines share their IRQ with the UART / I2C they wake and stay
+    /// pulse-delivered.
+    fn irq_line_levels(&self, report: &mut dyn FnMut(u32, bool)) {
+        match self {
+            Self::Stm32U5(e) => {
+                let active = e.active();
+                for line in 0..16 {
+                    report(11 + line, active & (1 << line) != 0);
+                }
+            }
+            Self::Stm32G0(e) => {
+                let active = e.active();
+                for (mask, irq) in [(0x3, 5), (0xc, 6), (0xfff0, 7)] {
+                    report(irq, active & mask != 0);
+                }
+            }
+            Self::Stm32F1(e) => report_bank1_levels(e.bank1.pr & e.bank1.imr, report),
+            Self::Stm32L4(e) => report_bank1_levels(e.bank1.pr & e.bank1.imr, report),
         }
     }
 

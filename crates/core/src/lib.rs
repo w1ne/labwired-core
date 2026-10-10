@@ -1894,6 +1894,29 @@ pub trait Peripheral: std::fmt::Debug + Send {
         None
     }
 
+    /// Multi-line twin of [`Self::irq_line_level`], for a LEVEL source that
+    /// drives SEVERAL NVIC lines from one model (the STM32 EXTI: EXTI0..4,
+    /// EXTI9_5, EXTI15_10 on F1/F4/L4; EXTI0_1/2_3/4_15 on G0; EXTI0..15 on
+    /// U5). `irq_line_level` keys on the entry's single `irq`, so such a
+    /// model cannot use it; it reports here instead, calling
+    /// `report(nvic_irq, level)` once for EVERY line it owns, asserted or not.
+    ///
+    /// The bus keeps each reported line's NVIC pending bit in step with its
+    /// level exactly as for `irq_line_level`: the walk / event path marks the
+    /// pend it raises (`NvicState::level_pended`), and the MMIO write choke
+    /// drops a marked pend once the line reads low. Without it, the per-cycle
+    /// re-pend raised while the handler was still running survived the
+    /// handler's write-1-to-clear of EXTI_PR, and a handler that clears PR
+    /// without re-checking it ran twice per edge.
+    ///
+    /// Report ONLY lines this model owns exclusively: a deasserted report
+    /// drops any marked pend on that NVIC line, including one another level
+    /// source raised. Lines shared with another peripheral keep pulse
+    /// semantics (deliver them through `explicit_irqs` only).
+    ///
+    /// Default: reports nothing (pulse semantics on every explicit IRQ).
+    fn irq_line_levels(&self, _report: &mut dyn FnMut(u32, bool)) {}
+
     /// True for a device that only stores and serves bytes: it does not use
     /// the scheduler, has no scheduler wake owner, no SPI-attached devices, no
     /// IRQ line level, no bus tick and no legacy tick. `SystemBus`'s MMIO
@@ -4239,6 +4262,13 @@ impl<C: Cpu> Machine<C> {
         if !self.bus.deliver_scheduled_irq_levels() {
             for irq in &result.explicit_irqs {
                 self.bus.pend_irq_for_event(*irq, &mut fallthrough);
+            }
+            // A multi-line LEVEL source (STM32 EXTI) marks the pends its event
+            // chain raises — scheduler-driven models never pass through the
+            // walk's reconcile — so the MMIO write choke can drop them when
+            // the handler clears the pending latch.
+            if !result.explicit_irqs.is_empty() {
+                self.bus.mark_multi_irq_levels(peripheral_idx);
             }
         }
         // Phase 2B.3b: route DMA signals exactly as the legacy tick path does.

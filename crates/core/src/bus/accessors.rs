@@ -137,6 +137,9 @@ impl SystemBus {
             p.dev.irq_line_level().is_none(),
             "{name}: plain memory drives an IRQ level"
         );
+        let mut multi_level = false;
+        p.dev.irq_line_levels(&mut |_, _| multi_level = true);
+        debug_assert!(!multi_level, "{name}: plain memory drives IRQ levels");
         // Index-identity hooks: pad brackets, S3 intmatrix, C3 PMS, C3 INTC cache.
         debug_assert!(
             self.esp32c3_io_mux_idx != Some(idx),
@@ -629,6 +632,9 @@ impl crate::Bus for SystemBus {
                 self.peripherals[idx].ticks_remaining = 0;
                 self.refresh_legacy_tick_index(idx);
                 self.refresh_bus_tick_index(idx);
+                // Same level reconcile as the 16/32-bit chokes: a byte store
+                // (STRB of EXTI_PR, a timer SR) deasserts a line just as well.
+                self.reconcile_irq_levels_after_write(idx);
             }
 
             // Trigger observers, with the address the firmware actually issued
@@ -972,16 +978,9 @@ impl crate::Bus for SystemBus {
                 self.sync_esp32c3_pms_write(idx, mmio_addr - base);
                 self.refresh_legacy_tick_index(idx);
                 self.refresh_bus_tick_index(idx);
-                // Level reconcile at the write choke: for a LEVEL source, the
-                // store that clears its status flag IS the deassert, and the
-                // pend must drop before the handler returns — otherwise the
-                // stale pend re-enters the handler once per event (measured
-                // 1.95 entries/update on the F0 timer against an exact grid).
-                if let Some(irq_line) = self.peripherals[idx].irq {
-                    if let Some(level) = self.peripherals[idx].dev.irq_line_level() {
-                        super::reconcile_nvic_level(&self.nvic, irq_line, level);
-                    }
-                }
+                // Level reconcile at the write choke (single- and multi-line
+                // level sources): see `reconcile_irq_levels_after_write`.
+                self.reconcile_irq_levels_after_write(idx);
                 self.notify_peripheral_store(addr, &value.to_le_bytes());
             }
             return r;
@@ -1141,16 +1140,9 @@ impl crate::Bus for SystemBus {
                 self.sync_esp32c3_pms_write(idx, mmio_addr - base);
                 self.refresh_legacy_tick_index(idx);
                 self.refresh_bus_tick_index(idx);
-                // Level reconcile at the write choke: for a LEVEL source, the
-                // store that clears its status flag IS the deassert, and the
-                // pend must drop before the handler returns — otherwise the
-                // stale pend re-enters the handler once per event (measured
-                // 1.95 entries/update on the F0 timer against an exact grid).
-                if let Some(irq_line) = self.peripherals[idx].irq {
-                    if let Some(level) = self.peripherals[idx].dev.irq_line_level() {
-                        super::reconcile_nvic_level(&self.nvic, irq_line, level);
-                    }
-                }
+                // Level reconcile at the write choke (single- and multi-line
+                // level sources): see `reconcile_irq_levels_after_write`.
+                self.reconcile_irq_levels_after_write(idx);
                 self.notify_peripheral_store(addr, &value.to_le_bytes());
             }
             return r;
