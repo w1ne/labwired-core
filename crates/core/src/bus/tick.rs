@@ -56,6 +56,18 @@ pub(crate) fn reconcile_nvic_level(
     }
 }
 
+/// Which direction(s) of a multi-line level source's lines a reconcile applies.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum LevelSync {
+    /// Pend-and-mark asserted lines, drop marked pends of deasserted ones.
+    Both,
+    /// Only drop marked pends of deasserted lines. The MMIO write choke uses
+    /// this so a store that RAISES an EXTI line (SWIER, IMR unmask) is still
+    /// delivered at the next walk tick / event, as before — only the
+    /// deassert, which must land before the handler returns, is immediate.
+    DropOnly,
+}
+
 fn pend_nvic(
     nvic: &Option<Arc<crate::peripherals::nvic::NvicState>>,
     interrupts: &mut Vec<u32>,
@@ -73,6 +85,55 @@ fn pend_nvic(
 }
 
 impl SystemBus {
+    /// Reconcile every NVIC line peripheral `idx` reports through
+    /// [`Peripheral::irq_line_levels`] (multi-line level sources: the STM32
+    /// EXTI). One call per choke: the walk and the event path after they
+    /// deliver the model's non-empty `explicit_irqs` (`Both`), the MMIO write choke after
+    /// a store (`DropOnly`). Inert without an NVIC, and for every model that
+    /// keeps the default (reports nothing).
+    #[inline]
+    fn reconcile_multi_irq_levels(&self, idx: usize, sync: LevelSync) {
+        if self.nvic.is_none() {
+            return;
+        }
+        self.peripherals[idx]
+            .dev
+            .irq_line_levels(&mut |irq, level| {
+                if level && sync == LevelSync::DropOnly {
+                    return;
+                }
+                reconcile_nvic_level(&self.nvic, irq, level);
+            });
+    }
+
+    /// [`Self::reconcile_multi_irq_levels`] in both directions: the walk and
+    /// the event path call it right after delivering a model's non-empty
+    /// `explicit_irqs`, so the pends a multi-line level source raises are
+    /// marked as level pends. (A multi-line source must therefore deliver
+    /// through `explicit_irqs`; the bus-tick pass does not call it.)
+    #[inline]
+    pub(crate) fn mark_multi_irq_levels(&self, idx: usize) {
+        self.reconcile_multi_irq_levels(idx, LevelSync::Both);
+    }
+
+    /// The MMIO write-choke level reconcile for peripheral `idx`: its single
+    /// configured line ([`Peripheral::irq_line_level`], both directions) and
+    /// any multi-line levels ([`Peripheral::irq_line_levels`], drops only).
+    /// For a LEVEL source the store that clears its status flag IS the
+    /// deassert, and the pend must drop before the handler returns —
+    /// otherwise the stale pend re-enters the handler once per event
+    /// (measured 1.95 entries/update on the F0 timer against an exact grid;
+    /// two entries per edge on the STM32 EXTI).
+    #[inline]
+    pub(crate) fn reconcile_irq_levels_after_write(&self, idx: usize) {
+        if let Some(irq_line) = self.peripherals[idx].irq {
+            if let Some(level) = self.peripherals[idx].dev.irq_line_level() {
+                reconcile_nvic_level(&self.nvic, irq_line, level);
+            }
+        }
+        self.reconcile_multi_irq_levels(idx, LevelSync::DropOnly);
+    }
+
     /// Config-time derivation of walk-deletability (issue: browser-perf chain).
     ///
     /// Returns `true` iff EVERY peripheral currently on the bus is provably
@@ -528,6 +589,12 @@ impl SystemBus {
                 }
                 // Plan 3: stash source IDs for pass-2 intmatrix routing.
                 explicit_source_ids.extend(irqs);
+                // A multi-line LEVEL source (STM32 EXTI) marks the pends it
+                // just raised, so the write choke can drop them when firmware
+                // clears the pending latch inside the handler. Only after an
+                // emission: a line is asserted only while it emits, and the
+                // drop belongs to the write choke.
+                self.mark_multi_irq_levels(peripheral_index);
             }
 
             // System exceptions (SysTick = 15, etc) bypass NVIC and are
