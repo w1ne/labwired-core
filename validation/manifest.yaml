@@ -1507,7 +1507,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: 646be82cff0bb650874759bccfd940177938d373646f6447b55d2499544c31f1
+    drift_ack_digest: 685e83b519c24b4c297bd03b502c88fb31225a7deb8a16fc6d14393ca5562f6b
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -1970,6 +1970,12 @@ boards:
     # VLDM/VSTM/VPUSH/VPOP decode unchanged. No register map or reset value
     # changed. No physical probe connected. ACK, NOT A CAPTURE.
     drift_ack: 2026-10-10
+    # 2026-10-10 (#1355 PinPort): watched GPIO models moved onto one PinPort
+    # interface (driver/set_external, generic PadWatch push capture, EXTI
+    # fan-out by PortId). Register maps and reset values unchanged; pinned
+    # by the pins::conformance suite and the existing net/EXTI/pin-trace
+    # tests. Approved by the maintainer. ACK, NOT A CAPTURE.
+    drift_ack: 2026-10-10
   - id: esp32c3
     # 2026-09-15 (#932): SPI edge sampling is opt-in (`SpiSampling::Byte` default). Byte-level golden pins the pre-feature path. Controllers without a bit engine reject opt-in at config time.
     doc: docs/boards/esp32c3.md
@@ -2133,7 +2139,7 @@ boards:
     # behaviour lives in exchange memory and the radio event path, which that
     # capture does not cover. This acknowledges model drift, NOT a recapture.
     drift_ack: 2026-09-28
-    drift_ack_digest: 321b19f12ef8655a517207b225024c6ba5f7e21ff636f1d5f840d61e70d9bc7d
+    drift_ack_digest: 2dc767598fd8a4e8ae4fab09e53c66dcbb44ff5636aff05d49170d1d3995d891
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
@@ -2855,6 +2861,12 @@ boards:
     # unchanged. No register map or reset value changed. No physical probe
     # connected. ACK, NOT A CAPTURE.
     drift_ack: 2026-10-10
+    # 2026-10-10 (#1355 PinPort): watched GPIO models moved onto one PinPort
+    # interface (driver/set_external, generic PadWatch push capture, EXTI
+    # fan-out by PortId). Register maps and reset values unchanged; pinned
+    # by the pins::conformance suite and the existing net/EXTI/pin-trace
+    # tests. Approved by the maintainer. ACK, NOT A CAPTURE.
+    drift_ack: 2026-10-10
 
   - id: nucleo-l476rg
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
@@ -3293,7 +3305,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: 24bc98636d9e62c7ca14a231bde43588c2d3ffb1f515a75f53d8a705e4e129d5
+    drift_ack_digest: 41994873d6027c5a033c51a468a9333bf86021eaa606132525954e73ba4888f4
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -3739,6 +3751,12 @@ boards:
     # pinned by exti_handler_once_per_edge. Approved by the maintainer.
     # ACK, NOT A CAPTURE.
     drift_ack: 2026-10-10
+    # 2026-10-10 (#1355 PinPort): watched GPIO models moved onto one PinPort
+    # interface (driver/set_external, generic PadWatch push capture, EXTI
+    # fan-out by PortId). Register maps and reset values unchanged; pinned
+    # by the pins::conformance suite and the existing net/EXTI/pin-trace
+    # tests. Approved by the maintainer. ACK, NOT A CAPTURE.
+    drift_ack: 2026-10-10
   - id: nucleo-l073rz
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
     # 2026-09-16 (#1125): Cortex-M JIT follow-ups (block chaining, floor 4, IT-predicated ALU, VFP S-ALU, VLDR/VSTR, LDR.W PC), plus two model fixes that ride along: the bit-band alias decode no longer swallows peripherals vendors place inside 0x4200_0000 (SAMD51 QSPI/SERCOM), and the STM32 timer's scheduled compare pend lands on the latch tick like the walk. JIT is opt-in (`cortex_m_jit_enabled` default off); interpreter path unchanged, JIT-on vs off lockstep in cortex_m_jit_nrf_differential; both fixes pinned by bus-level gates. No silicon capture pins JIT.
@@ -4135,7 +4153,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: c5c3c59f1460e39e783fe6d2bbe899022bd781a163598fc947713f80ce99b580
+    drift_ack_digest: f64e5056df0b2cefa0e3be38518ce280ac861bc6e17c3b8a862765867b38bec8
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4522,6 +4540,12 @@ boards:
     # below Rt2 (STM32duino 3 Serial.print(float) BusFault on L476/F401).
     # VLDM/VSTM/VPUSH/VPOP decode unchanged. No register map or reset value
     # changed. No physical probe connected. ACK, NOT A CAPTURE.
+    drift_ack: 2026-10-10
+    # 2026-10-10 (#1355 PinPort): watched GPIO models moved onto one PinPort
+    # interface (driver/set_external, generic PadWatch push capture, EXTI
+    # fan-out by PortId). Register maps and reset values unchanged; pinned
+    # by the pins::conformance suite and the existing net/EXTI/pin-trace
+    # tests. Approved by the maintainer. ACK, NOT A CAPTURE.
     drift_ack: 2026-10-10
   - id: stm32f103
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
@@ -4973,7 +4997,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: b928d6fc46ba2217e53b1ab7371c87bea3d0bf3f09f3bb67042a6fd6d97d5558
+    drift_ack_digest: 52a55ef3adad4610e9f5bb5a996ed192eed8545e4e2d94c436cde527fa127e43
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5425,6 +5449,12 @@ boards:
     # pinned by exti_handler_once_per_edge. Approved by the maintainer.
     # ACK, NOT A CAPTURE.
     drift_ack: 2026-10-10
+    # 2026-10-10 (#1355 PinPort): watched GPIO models moved onto one PinPort
+    # interface (driver/set_external, generic PadWatch push capture, EXTI
+    # fan-out by PortId). Register maps and reset values unchanged; pinned
+    # by the pins::conformance suite and the existing net/EXTI/pin-trace
+    # tests. Approved by the maintainer. ACK, NOT A CAPTURE.
+    drift_ack: 2026-10-10
   - id: stm32f407
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
     # 2026-09-16 (#1125): Cortex-M JIT follow-ups (block chaining, floor 4, IT-predicated ALU, VFP S-ALU, VLDR/VSTR, LDR.W PC), plus two model fixes that ride along: the bit-band alias decode no longer swallows peripherals vendors place inside 0x4200_0000 (SAMD51 QSPI/SERCOM), and the STM32 timer's scheduled compare pend lands on the latch tick like the walk. JIT is opt-in (`cortex_m_jit_enabled` default off); interpreter path unchanged, JIT-on vs off lockstep in cortex_m_jit_nrf_differential; both fixes pinned by bus-level gates. No silicon capture pins JIT.
@@ -5839,7 +5869,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: eb04df0f46dec3418cdfef4c04395bec4dc351aa5a0388418acd0f8844de97bd
+    drift_ack_digest: 6c3f92fb33634aca3b862eb6e5afe44e6502eccf555ae56f1b65c87f861cc07a
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6236,6 +6266,12 @@ boards:
     # below Rt2 (STM32duino 3 Serial.print(float) BusFault on L476/F401).
     # VLDM/VSTM/VPUSH/VPOP decode unchanged. No register map or reset value
     # changed. No physical probe connected. ACK, NOT A CAPTURE.
+    drift_ack: 2026-10-10
+    # 2026-10-10 (#1355 PinPort): watched GPIO models moved onto one PinPort
+    # interface (driver/set_external, generic PadWatch push capture, EXTI
+    # fan-out by PortId). Register maps and reset values unchanged; pinned
+    # by the pins::conformance suite and the existing net/EXTI/pin-trace
+    # tests. Approved by the maintainer. ACK, NOT A CAPTURE.
     drift_ack: 2026-10-10
   - id: esp32s3
     # 2026-09-16 (#jit-xtensa-browser): generic Xtensa BB emit core + browser adapter. `xtensa_lx7.rs` gains only `invalidate_for_data_write` — a public forwarder to the existing `maybe_invalidate_for_write` so JIT-committed stores run the same SMC invalidation the S8i/S32i interpreter arms run (no interpreter behavior change; the existing sub-word rules are reused). Hot-block dispatch and every interpreter arm are untouched; the new shapes are browser-only and refused when unsafe. Native interpreter-identity tests in `xtensa_jit/variable.rs`. No silicon capture pins the browser JIT.
@@ -6806,7 +6842,7 @@ boards:
     # the generic Xtensa BB JIT emit core (#1139) — the merge of the two is one
     # digest, so it is re-stamped once here rather than twice.
     drift_ack: 2026-09-18
-    drift_ack_digest: 1de82a64c4694daa7ef9084a56a82ba9a3cfc5071af76a014c47f971d3144827
+    drift_ack_digest: 2bd458035e83c220facc7eed3500bd65b41e61ff29a064947b8b2d102715140a
     #
     # 2026-09-18 (execute split): no execution change. The arm bodies of
     # `XtensaLx7::execute` moved verbatim into `cpu/xtensa_lx7/exec/*.rs` as
@@ -6940,6 +6976,12 @@ boards:
     # per INT_TYPE like the register-write path already did (TRM GPIO
     # Interrupt, input buffer on). No register map or reset value changed. No
     # physical probe connected. ACK, NOT A CAPTURE.
+    drift_ack: 2026-10-10
+    # 2026-10-10 (#1355 PinPort): watched GPIO models moved onto one PinPort
+    # interface (driver/set_external, generic PadWatch push capture, EXTI
+    # fan-out by PortId). Register maps and reset values unchanged; pinned
+    # by the pins::conformance suite and the existing net/EXTI/pin-trace
+    # tests. Approved by the maintainer. ACK, NOT A CAPTURE.
     drift_ack: 2026-10-10
 
   - id: esp32s3-zero
