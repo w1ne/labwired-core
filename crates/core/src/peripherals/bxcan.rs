@@ -25,6 +25,29 @@
 //!
 //! Register reset values are silicon-pinned over SWD on an actual
 //! STM32F103 (IDCODE 0x2003_6410, RM0008 §24.9.2).
+//!
+//! ## Timed CAN bus mode
+//!
+//! On a world's timed bus ([`crate::network::timed_can`], `attach_timed`) a
+//! transmission takes wire time and can fail. A TXRQ leaves the mailbox
+//! pending (TSR.TMEx clear) and stamps the request cycle; the world reads
+//! the highest-priority pending mailbox (`timed_poll`) and later applies the
+//! outcome (`timed_apply`), with RM0008 §24.9.2 semantics:
+//!
+//! - success: TXRQ clears, RQCPx | TXOKx; ALSTx / TERRx clear;
+//! - lost arbitration: ALSTx, error: TERRx, TXOKx clear; the mailbox stays
+//!   pending and is retried, unless MCR.NART, which releases it with RQCPx;
+//! - ESR carries the bus's REC/TEC, LEC, BOFF, EPVF, EWGF (warning at 96);
+//!   MSR.ERRI is set when an ESR flag is set whose IER enable is on;
+//! - bus-off recovery (RM0008 §24.7.6) is counted by the bus once armed:
+//!   at once with MCR.ABOM, otherwise when firmware leaves initialization;
+//! - the four bxCAN interrupt lines are level sources: TX (RQCPx & TMEIE),
+//!   RX0 (FMP0 & FMPIE0, FULL0 & FFIE0), RX1 (never: FIFO1 is not queued),
+//!   SCE (ERRI & ERRIE).
+//!
+//! Not modelled in timed mode: TSR.LOWx, ABRQ of a frame already on the bus
+//! (it aborts at the next attempt), silent mode (SILM: treated as off the
+//! bus, it neither receives nor acknowledges), wake-up and sleep interrupts.
 
 use crate::network::CanFrame;
 use crate::peripherals::fdcan::FdcanTraceFrame;
@@ -76,7 +99,45 @@ const FMR_FORCED_MASK: u32 = 0x2A1C_0E00;
 
 const MCR_INRQ: u32 = 1 << 0;
 const MCR_SLEEP: u32 = 1 << 1;
+/// Transmit FIFO priority: mailboxes go out in request order, not by
+/// identifier (RM0008 §24.7.1).
+const MCR_TXFP: u32 = 1 << 2;
+/// No automatic retransmission.
+const MCR_NART: u32 = 1 << 4;
+/// Automatic bus-off management.
+const MCR_ABOM: u32 = 1 << 6;
 const MCR_RESET: u32 = 1 << 15;
+
+const MSR_ERRI: u32 = 1 << 2;
+
+const TSR_RQCP: u32 = 1 << 0;
+const TSR_TXOK: u32 = 1 << 1;
+const TSR_ALST: u32 = 1 << 2;
+const TSR_TERR: u32 = 1 << 3;
+const TSR_ABRQ: u32 = 1 << 7;
+const TSR_CODE_SHIFT: u32 = 24;
+
+const IER_TMEIE: u32 = 1 << 0;
+const IER_FMPIE0: u32 = 1 << 1;
+const IER_FFIE0: u32 = 1 << 2;
+const IER_EWGIE: u32 = 1 << 8;
+const IER_EPVIE: u32 = 1 << 9;
+const IER_BOFIE: u32 = 1 << 10;
+const IER_LECIE: u32 = 1 << 11;
+const IER_ERRIE: u32 = 1 << 15;
+
+const ESR_EWGF: u32 = 1 << 0;
+const ESR_EPVF: u32 = 1 << 1;
+const ESR_BOFF: u32 = 1 << 2;
+
+/// bxCAN1 interrupt vectors: USB_HP_CAN_TX, USB_LP_CAN_RX0, CAN_RX1,
+/// CAN_SCE (RM0008 Table 63; the same positions on the F4, RM0090 Table 61,
+/// and the L4, RM0351 Table 57). On the F103, TX and RX0 share their lines
+/// with the USB device, which is not modelled.
+const IRQ_TX: u32 = 19;
+const IRQ_RX0: u32 = 20;
+const IRQ_RX1: u32 = 21;
+const IRQ_SCE: u32 = 22;
 
 const TI_TXRQ: u32 = 1 << 0;
 const TI_RTR: u32 = 1 << 1;
@@ -85,6 +146,7 @@ const TI_IDE: u32 = 1 << 2;
 const RF_RFOM: u32 = 1 << 5; // release output mailbox (w1)
 
 const BTR_LBKM: u32 = 1 << 30; // loopback mode
+const BTR_SILM: u32 = 1 << 31; // silent mode
 /// BTR bit 23 is a forced-0 reserved bit on this silicon (captured write
 /// 0x40DC_0009 reads back 0x405C_0009). Mask it out of every BTR write.
 const BTR_WRITE_MASK: u32 = 0xC37F_03FF & !(1 << 23);
@@ -146,6 +208,24 @@ pub struct BxCan {
     bus_tx: Option<Sender<CanFrame>>,
     #[serde(skip)]
     bus_rx: Option<Receiver<CanFrame>>,
+    /// The bus's cycle clock, which stamps TX requests and recovery arming.
+    #[serde(skip)]
+    clock: Option<crate::CycleClock>,
+    /// On a world's timed CAN bus (see the module docs).
+    #[serde(skip)]
+    timed: bool,
+    /// Timed mode: the cycle each mailbox's TXRQ was set at, and its place in
+    /// request order (for MCR.TXFP).
+    #[serde(skip)]
+    tx_requested: [(u64, u64); 3],
+    #[serde(skip)]
+    next_request: u64,
+    /// Timed mode: the bus has this controller bus-off.
+    #[serde(skip)]
+    bus_off: bool,
+    /// Timed mode: bus-off recovery may count from this cycle.
+    #[serde(skip)]
+    recovery_armed: Option<u64>,
 }
 
 impl BxCan {
@@ -175,6 +255,12 @@ impl BxCan {
             trace_name: String::new(),
             bus_tx: None,
             bus_rx: None,
+            timed: false,
+            clock: None,
+            tx_requested: [(0, 0); 3],
+            next_request: 0,
+            bus_off: false,
+            recovery_armed: None,
         }
     }
 
@@ -199,6 +285,219 @@ impl BxCan {
         self.bus_tx = Some(tx);
         self.bus_rx = Some(rx);
         Ok(())
+    }
+
+    /// Put this controller on a world's timed CAN bus
+    /// ([`crate::network::timed_can`]).
+    pub fn attach_timed(&mut self) -> anyhow::Result<()> {
+        if self.timed || self.bus_tx.is_some() || self.bus_rx.is_some() {
+            anyhow::bail!("bxCAN is already attached to a CAN bus");
+        }
+        self.timed = true;
+        Ok(())
+    }
+
+    /// `true` once on a timed CAN bus.
+    pub fn is_timed(&self) -> bool {
+        self.timed
+    }
+
+    fn now(&self) -> u64 {
+        self.clock.as_ref().map_or(0, |c| c.now())
+    }
+
+    fn mailbox_pending(&self, mb: usize) -> bool {
+        self.tx_mb[mb * 4] & TI_TXRQ != 0
+    }
+
+    /// The pending mailbox that goes out next: lowest identifier first
+    /// (lower mailbox number on a tie), or request order with MCR.TXFP
+    /// (RM0008 §24.7.1).
+    fn next_mailbox(&self) -> Option<usize> {
+        let pending = (0..3).filter(|&mb| self.mailbox_pending(mb));
+        if self.mcr & MCR_TXFP != 0 {
+            pending.min_by_key(|&mb| self.tx_requested[mb].1)
+        } else {
+            pending.min_by_key(|&mb| {
+                let frame = self
+                    .decode_tx_mailbox(mb * 4)
+                    .expect("mailbox index in range");
+                (crate::network::timed_can::arbitration_key(&frame), mb)
+            })
+        }
+    }
+
+    /// The controller as the timed bus needs it; `pclk_hz` is its APB clock.
+    ///
+    /// Bit time (RM0008 §24.7.7): tq = (BRP + 1) / f_PCLK and one bit is
+    /// 1 + (TS1 + 1) + (TS2 + 1) quanta.
+    pub fn timed_poll(&self, pclk_hz: u64) -> crate::network::timed_can::CanNodePoll {
+        use crate::network::timed_can::{CanNodePoll, CanTxRequest, ISO_RECOVERY_OCCURRENCES};
+        let brp = u128::from(self.btr & 0x3FF) + 1;
+        let ts1 = u128::from((self.btr >> BTR_TS1_SHIFT) & 0xF);
+        let ts2 = u128::from((self.btr >> BTR_TS2_SHIFT) & 0x7);
+        let bit_ps = (self.timing_valid() && pclk_hz > 0).then(|| {
+            (brp * (3 + ts1 + ts2) * crate::network::timed_uart::PS_PER_SEC / u128::from(pclk_hz))
+                as u64
+        });
+        let tx = self.next_mailbox().map(|mb| CanTxRequest {
+            tag: mb as u32,
+            frame: self
+                .decode_tx_mailbox(mb * 4)
+                .expect("mailbox index in range"),
+            requested_cycle: self.tx_requested[mb].0,
+        });
+        CanNodePoll {
+            bit_ps,
+            clock_hz: pclk_hz,
+            on_bus: self.running()
+                && self.mcr & MCR_SLEEP == 0
+                && self.btr & (BTR_LBKM | BTR_SILM) == 0,
+            fd_capable: false,
+            tx,
+            recovery_armed_cycle: self.recovery_armed,
+            recovery_occurrences: ISO_RECOVERY_OCCURRENCES,
+        }
+    }
+
+    /// Apply what the timed bus decided for this controller.
+    pub fn timed_apply(&mut self, update: &crate::network::timed_can::CanNodeUpdate) {
+        use crate::network::timed_can::{CanErrorState, CanTxOutcome, ERROR_WARNING_LIMIT};
+        // ESR (RM0008 §24.9.2): REC[31:24], TEC[23:16], LEC[6:4], BOFF,
+        // EPVF, EWGF. LEC keeps its value unless the bus reports a new one.
+        let old = self.esr;
+        let lec = update.lec.map_or((old >> 4) & 0x7, u32::from);
+        let warning = u16::from(update.tec) >= ERROR_WARNING_LIMIT
+            || u16::from(update.rec) >= ERROR_WARNING_LIMIT;
+        let mut flags = 0;
+        if warning {
+            flags |= ESR_EWGF;
+        }
+        if update.state != CanErrorState::Active {
+            flags |= ESR_EPVF;
+        }
+        if update.state == CanErrorState::BusOff {
+            flags |= ESR_BOFF;
+        }
+        self.esr =
+            (u32::from(update.rec) << 24) | (u32::from(update.tec) << 16) | (lec << 4) | flags;
+        // MSR.ERRI: an ESR error flag got set and its interrupt is enabled.
+        let rising = flags & !old;
+        let lec_error = update.lec.is_some_and(|l| l != 0);
+        if (rising & ESR_EWGF != 0 && self.ier & IER_EWGIE != 0)
+            || (rising & ESR_EPVF != 0 && self.ier & IER_EPVIE != 0)
+            || (rising & ESR_BOFF != 0 && self.ier & IER_BOFIE != 0)
+            || (lec_error && self.ier & IER_LECIE != 0)
+        {
+            self.msr |= MSR_ERRI;
+        }
+        // Bus-off entry and exit. With ABOM the recovery sequence starts at
+        // once; without it firmware must enter and leave initialization
+        // (RM0008 §24.7.6).
+        let off = update.state == CanErrorState::BusOff;
+        if off && !self.bus_off {
+            self.recovery_armed = (self.mcr & MCR_ABOM != 0 && self.running()).then(|| self.now());
+        } else if !off {
+            self.recovery_armed = None;
+        }
+        self.bus_off = off;
+        if let Some((tag, outcome)) = update.tx {
+            let mb = tag as usize;
+            if mb < 3 && self.mailbox_pending(mb) {
+                let shift = mb as u32 * 8;
+                self.tsr &= !((TSR_TXOK | TSR_ALST | TSR_TERR) << shift);
+                let done = match outcome {
+                    CanTxOutcome::Ok => {
+                        self.tsr |= (TSR_RQCP | TSR_TXOK) << shift;
+                        if let Some(frame) = self.decode_tx_mailbox(mb * 4) {
+                            self.push_trace("tx", &frame);
+                        }
+                        true
+                    }
+                    CanTxOutcome::LostArbitration => {
+                        self.tsr |= TSR_ALST << shift;
+                        self.mcr & MCR_NART != 0
+                    }
+                    CanTxOutcome::Error | CanTxOutcome::NoAck => {
+                        self.tsr |= TSR_TERR << shift;
+                        self.mcr & MCR_NART != 0
+                    }
+                };
+                if done {
+                    self.tx_mb[mb * 4] &= !TI_TXRQ;
+                    self.tsr |= TSR_RQCP << shift;
+                }
+            }
+        }
+        if let Some(frame) = &update.rx {
+            let _ = self.try_deliver_rx(frame.clone());
+        }
+    }
+
+    /// TSR as firmware reads it in timed mode: TMEx follows the mailbox's
+    /// TXRQ, CODE names the next free mailbox, or with all three pending the
+    /// one that goes out last (RM0008 §24.9.2).
+    fn timed_tsr(&self) -> u32 {
+        let mut tsr = self.tsr & !(TSR_TME_ALL | (0x3 << TSR_CODE_SHIFT));
+        for mb in 0..3 {
+            if !self.mailbox_pending(mb) {
+                tsr |= 1 << (26 + mb);
+            }
+        }
+        let code = match (0..3).find(|&mb| !self.mailbox_pending(mb)) {
+            Some(free) => free as u32,
+            None => {
+                if self.mcr & MCR_TXFP != 0 {
+                    (0..3)
+                        .max_by_key(|&mb| self.tx_requested[mb].1)
+                        .unwrap_or(0) as u32
+                } else {
+                    (0..3)
+                        .max_by_key(|&mb| {
+                            let frame = self.decode_tx_mailbox(mb * 4).expect("in range");
+                            (crate::network::timed_can::arbitration_key(&frame), mb)
+                        })
+                        .unwrap_or(0) as u32
+                }
+            }
+        };
+        tsr | (code << TSR_CODE_SHIFT)
+    }
+
+    /// TSR writes in timed mode: RQCPx/TXOKx/ALSTx/TERRx are rc_w1, and
+    /// clearing RQCPx clears the mailbox's other status bits with it;
+    /// ABRQx aborts a pending request.
+    fn timed_write_tsr(&mut self, value: u32) {
+        for mb in 0..3u32 {
+            let shift = mb * 8;
+            let w = (value >> shift) & 0xFF;
+            if w & TSR_RQCP != 0 {
+                self.tsr &= !((TSR_RQCP | TSR_TXOK | TSR_ALST | TSR_TERR) << shift);
+            } else {
+                self.tsr &= !((w & (TSR_TXOK | TSR_ALST | TSR_TERR)) << shift);
+            }
+            if w & TSR_ABRQ != 0 && self.mailbox_pending(mb as usize) {
+                self.tx_mb[mb as usize * 4] &= !TI_TXRQ;
+                self.tsr &= !(TSR_TXOK << shift);
+                self.tsr |= TSR_RQCP << shift;
+            }
+        }
+    }
+
+    /// Timed mode: TX (19), RX0 (20), RX1 (21) and SCE (22) as levels.
+    fn timed_irq_levels(&self) -> [(u32, bool); 4] {
+        let rqcp = TSR_RQCP | (TSR_RQCP << 8) | (TSR_RQCP << 16);
+        let tx = self.ier & IER_TMEIE != 0 && self.tsr & rqcp != 0;
+        let fill = self.rx_fifo0.len();
+        let rx0 = (self.ier & IER_FMPIE0 != 0 && fill > 0)
+            || (self.ier & IER_FFIE0 != 0 && fill >= FIFO0_DEPTH);
+        let sce = self.ier & IER_ERRIE != 0 && self.msr & MSR_ERRI != 0;
+        [
+            (IRQ_TX, tx),
+            (IRQ_RX0, rx0),
+            (IRQ_RX1, false),
+            (IRQ_SCE, sce),
+        ]
     }
 
     /// Frame-level trace for the logic analyzer; mirrors the FDCAN shape so the
@@ -312,6 +611,7 @@ impl BxCan {
         match offset {
             REG_MCR => self.mcr,
             REG_MSR => self.msr,
+            REG_TSR if self.timed => self.timed_tsr(),
             REG_TSR => self.tsr,
             REG_RF0R => self.rf0r(),
             REG_RF1R => self.rf1r,
@@ -359,6 +659,7 @@ impl BxCan {
     fn write_reg(&mut self, offset: u64, value: u32) {
         match offset {
             REG_MCR => {
+                let was_init = self.mcr & MCR_INRQ != 0;
                 self.mcr = value & 0x0001_FF7F;
                 if (self.mcr & MCR_INRQ) != 0 {
                     self.msr |= 1; // INAK
@@ -373,8 +674,16 @@ impl BxCan {
                     self.msr &= !(1 << 1);
                 }
                 self.mcr &= !MCR_RESET; // RESET self-clears
+                let in_init = self.mcr & MCR_INRQ != 0;
+                if self.timed && self.bus_off && was_init != in_init {
+                    // Without ABOM, recovery needs an INRQ cycle; in
+                    // initialization the controller does not monitor the
+                    // bus and cannot count (RM0008 §24.7.6).
+                    self.recovery_armed = self.running().then(|| self.now());
+                }
             }
             REG_MSR => self.msr &= !(value & 0x0000_001C), // rc_w1 flags
+            REG_TSR if self.timed => self.timed_write_tsr(value),
             REG_TSR => {
                 // rc_w1 for RQCP/TXOK/ALST/TERR; TME bits stay asserted.
                 self.tsr &= !(value & 0x0F0F_0F0F);
@@ -414,6 +723,16 @@ impl BxCan {
     }
 
     fn request_tx(&mut self, mailbox: u64) {
+        if self.timed {
+            // The bus decides when and whether it goes out; TXRQ stays set
+            // and a new request clears the mailbox's status (RM0008 §24.9.2,
+            // RQCPx "cleared by hardware on transmission request").
+            let mb = mailbox as usize;
+            self.tsr &= !((TSR_RQCP | TSR_TXOK | TSR_ALST | TSR_TERR) << (mb * 8));
+            self.tx_requested[mb] = (self.now(), self.next_request);
+            self.next_request += 1;
+            return;
+        }
         if !self.running() {
             return;
         }
@@ -565,7 +884,33 @@ impl Peripheral for BxCan {
         Ok(())
     }
 
+    fn attach_cycle_clock(&mut self, clock: crate::CycleClock) {
+        self.clock = Some(clock);
+    }
+
+    fn irq_line_levels(&self, report: &mut dyn FnMut(u32, bool)) {
+        if self.timed {
+            for (irq, level) in self.timed_irq_levels() {
+                report(irq, level);
+            }
+        }
+    }
+
     fn tick(&mut self) -> PeripheralTickResult {
+        if self.timed {
+            // The world applies the bus's outcomes; the walk only holds the
+            // interrupt lines at their levels.
+            let irqs: Vec<u32> = self
+                .timed_irq_levels()
+                .into_iter()
+                .filter(|(_, level)| *level)
+                .map(|(irq, _)| irq)
+                .collect();
+            return PeripheralTickResult {
+                explicit_irqs: (!irqs.is_empty()).then_some(irqs),
+                ..Default::default()
+            };
+        }
         // Drain the interconnect into the receiver (subject to filtering).
         if let Some(rx) = self.bus_rx.take() {
             while let Ok(frame) = rx.try_recv() {
@@ -592,7 +937,10 @@ impl Peripheral for BxCan {
         // must stay on to poll it, and this reports `true` at that instant. The
         // interconnect is attached at construction (`new_with_bus`), before the
         // bus derives walk-deletion, so the derivation always sees the truth.
-        self.bus_rx.is_some()
+        //
+        // On a timed bus the walk holds the four interrupt lines at their
+        // levels, so it stays on there too.
+        self.bus_rx.is_some() || self.timed
     }
 
     fn snapshot(&self) -> serde_json::Value {
@@ -880,5 +1228,294 @@ mod tests {
         dev.tick();
         assert_eq!(rd(&dev, REG_RF0R) & 0x3, 1, "only 0x111 accepted");
         assert_eq!((rd(&dev, RX_FIFO0_BASE) >> 21) & 0x7FF, 0x111);
+    }
+
+    // ---- Timed CAN bus mode ----
+
+    use crate::network::timed_can::{lec, CanErrorState, CanNodeUpdate, CanTxOutcome};
+
+    /// BTR for 500 kbit/s from a 36 MHz APB1: BRP = 3 (tq = 4 / 36 MHz),
+    /// TS1 = 13 (14 tq), TS2 = 2 (3 tq): 1 + 14 + 3 = 18 tq per bit.
+    const BTR_500K_AT_36M: u32 = (2 << BTR_TS2_SHIFT) | (13 << BTR_TS1_SHIFT) | 3;
+    /// The same with BRP = 7: 250 kbit/s, the field bug.
+    const BTR_250K_AT_36M: u32 = (2 << BTR_TS2_SHIFT) | (13 << BTR_TS1_SHIFT) | 7;
+
+    const IER_TMEIE: u32 = 1 << 0;
+    const IER_FMPIE0: u32 = 1 << 1;
+    const IER_EWGIE: u32 = 1 << 8;
+    const IER_EPVIE: u32 = 1 << 9;
+    const IER_BOFIE: u32 = 1 << 10;
+    const IER_LECIE: u32 = 1 << 11;
+    const IER_ERRIE: u32 = 1 << 15;
+    const MSR_ERRI: u32 = 1 << 2;
+
+    fn timed(btr: u32) -> BxCan {
+        let mut dev = BxCan::new();
+        dev.attach_timed().unwrap();
+        dev.attach_cycle_clock(crate::CycleClock::default());
+        wr(&mut dev, REG_MCR, MCR_INRQ);
+        wr(&mut dev, REG_BTR, btr);
+        wr(&mut dev, REG_MCR, 0);
+        dev
+    }
+
+    fn send_mb(dev: &mut BxCan, mb: u64, id: u32, data: &[u8]) {
+        let base = TX_MB_BASE + mb * 0x10;
+        wr(dev, base + 0x08, word_from_bytes(data, 0));
+        wr(dev, base + 0x0C, word_from_bytes(data, 4));
+        wr(dev, base + 0x04, data.len() as u32);
+        wr(dev, base, (id & 0x7FF) << 21 | TI_TXRQ);
+    }
+
+    fn update(
+        tx: Option<(u32, CanTxOutcome)>,
+        tec: u8,
+        rec: u8,
+        state: CanErrorState,
+    ) -> CanNodeUpdate {
+        CanNodeUpdate {
+            tx,
+            rx: None,
+            tec,
+            rec,
+            state,
+            lec: None,
+        }
+    }
+
+    #[test]
+    fn timed_bit_time_comes_from_btr_and_the_apb_clock() {
+        // RM0008 §24.7.7: tq = (BRP+1) / f_PCLK, bit = tq x (1 + (TS1+1) + (TS2+1)).
+        let dev = timed(BTR_500K_AT_36M);
+        let poll = dev.timed_poll(36_000_000);
+        assert_eq!(poll.bit_ps, Some(2_000_000), "500 kbit/s");
+        assert_eq!(poll.clock_hz, 36_000_000);
+        assert!(poll.on_bus);
+        assert_eq!(
+            timed(BTR_250K_AT_36M).timed_poll(36_000_000).bit_ps,
+            Some(4_000_000)
+        );
+        // The silicon-pinned degenerate BTR (TS1 or TS2 = 0) has no bit time.
+        let mut bad = timed(BTR_500K_AT_36M);
+        wr(&mut bad, REG_MCR, MCR_INRQ);
+        wr(&mut bad, REG_BTR, 3);
+        assert!(!bad.timed_poll(36_000_000).on_bus, "in init: off the bus");
+        wr(&mut bad, REG_MCR, 0);
+        assert_eq!(bad.timed_poll(36_000_000).bit_ps, None);
+        // Loopback keeps the controller off the shared bus.
+        let mut lb = timed(BTR_500K_AT_36M | BTR_LBKM);
+        assert!(!lb.timed_poll(36_000_000).on_bus);
+        wr(&mut lb, REG_MCR, MCR_INRQ);
+    }
+
+    #[test]
+    fn timed_tx_stays_pending_until_the_bus_reports_it() {
+        let mut dev = timed(BTR_500K_AT_36M);
+        dev.clock.as_ref().unwrap().publish(1234);
+        send_mb(&mut dev, 0, 0x100, &[0x0F, 0xA0]);
+        // RM0008 §24.9.2 TSR: TME0 clears while TXRQ0 is pending; no RQCP yet.
+        assert_eq!(rd(&dev, REG_TSR) & (1 << 26), 0, "TME0 clear");
+        assert_eq!(rd(&dev, REG_TSR) & 0x3, 0, "no RQCP0/TXOK0");
+        assert_eq!(rd(&dev, TX_MB_BASE) & TI_TXRQ, TI_TXRQ);
+        let tx = dev.timed_poll(36_000_000).tx.expect("pending request");
+        assert_eq!((tx.tag, tx.frame.id, tx.requested_cycle), (0, 0x100, 1234));
+        assert_eq!(tx.frame.data, vec![0x0F, 0xA0]);
+        dev.timed_apply(&update(
+            Some((0, CanTxOutcome::Ok)),
+            0,
+            0,
+            CanErrorState::Active,
+        ));
+        assert_ne!(rd(&dev, REG_TSR) & (1 << 26), 0, "TME0 set again");
+        assert_eq!(rd(&dev, REG_TSR) & 0x3, 0x3, "RQCP0 | TXOK0");
+        assert_eq!(rd(&dev, TX_MB_BASE) & TI_TXRQ, 0);
+        assert!(dev.timed_poll(36_000_000).tx.is_none());
+        assert!(dev.tx_frames.is_empty(), "the bus carried it");
+    }
+
+    #[test]
+    fn timed_failed_attempts_set_terr_or_alst_and_retry_unless_nart() {
+        let mut dev = timed(BTR_500K_AT_36M);
+        send_mb(&mut dev, 1, 0x200, &[1]);
+        dev.timed_apply(&update(
+            Some((1, CanTxOutcome::Error)),
+            8,
+            0,
+            CanErrorState::Active,
+        ));
+        let tsr = rd(&dev, REG_TSR);
+        assert_eq!((tsr >> 8) & 0xF, 0b1000, "TERR1, no RQCP1/TXOK1");
+        assert!(
+            dev.timed_poll(36_000_000).tx.is_some(),
+            "auto-retransmission"
+        );
+        dev.timed_apply(&update(
+            Some((1, CanTxOutcome::LostArbitration)),
+            8,
+            1,
+            CanErrorState::Active,
+        ));
+        assert_eq!(
+            (rd(&dev, REG_TSR) >> 8) & 0xF,
+            0b0100,
+            "ALST1 for the last attempt"
+        );
+        dev.timed_apply(&update(
+            Some((1, CanTxOutcome::Ok)),
+            7,
+            1,
+            CanErrorState::Active,
+        ));
+        assert_eq!((rd(&dev, REG_TSR) >> 8) & 0xF, 0b0011, "RQCP1 | TXOK1");
+
+        // NART (MCR bit 4): one attempt, then the mailbox is released.
+        let mut dev = timed(BTR_500K_AT_36M);
+        wr(&mut dev, REG_MCR, 1 << 4);
+        send_mb(&mut dev, 0, 0x200, &[1]);
+        dev.timed_apply(&update(
+            Some((0, CanTxOutcome::NoAck)),
+            8,
+            0,
+            CanErrorState::Active,
+        ));
+        assert_eq!(
+            rd(&dev, REG_TSR) & 0xF,
+            0b1001,
+            "RQCP0 | TERR0, TXOK0 clear"
+        );
+        assert!(dev.timed_poll(36_000_000).tx.is_none());
+        assert_ne!(rd(&dev, REG_TSR) & (1 << 26), 0, "TME0");
+    }
+
+    #[test]
+    fn timed_mailbox_priority_follows_the_identifier_or_txfp() {
+        let mut dev = timed(BTR_500K_AT_36M);
+        send_mb(&mut dev, 0, 0x300, &[]);
+        send_mb(&mut dev, 1, 0x100, &[]);
+        // RM0008 §24.7.1: by identifier when TXFP = 0.
+        assert_eq!(dev.timed_poll(36_000_000).tx.unwrap().tag, 1);
+        // TSR.CODE names the next free mailbox: 2.
+        assert_eq!((rd(&dev, REG_TSR) >> 24) & 0x3, 2);
+        let mut dev = timed(BTR_500K_AT_36M);
+        wr(&mut dev, REG_MCR, 1 << 2); // TXFP: request order
+        send_mb(&mut dev, 0, 0x300, &[]);
+        send_mb(&mut dev, 1, 0x100, &[]);
+        assert_eq!(dev.timed_poll(36_000_000).tx.unwrap().tag, 0);
+    }
+
+    #[test]
+    fn timed_esr_mirrors_the_bus_counters_and_state() {
+        let mut dev = timed(BTR_500K_AT_36M);
+        let mut u = update(None, 136, 5, CanErrorState::Passive);
+        u.lec = Some(lec::BIT_RECESSIVE);
+        dev.timed_apply(&u);
+        // RM0008 §24.9.2 ESR: REC[31:24], TEC[23:16], LEC[6:4], BOFF, EPVF, EWGF.
+        assert_eq!(
+            rd(&dev, REG_ESR),
+            (5 << 24) | (136 << 16) | (4 << 4) | 0b011
+        );
+        let mut u = update(None, 248, 5, CanErrorState::BusOff);
+        u.lec = Some(lec::BIT_RECESSIVE);
+        dev.timed_apply(&u);
+        assert_eq!(
+            rd(&dev, REG_ESR) & 0x00FF_00FF,
+            0x00F8_0047,
+            "BOFF|EPVF|EWGF, TEC 248"
+        );
+        // Success clears LEC (RM0008: "cleared to 0 when a message has been
+        // transferred without error").
+        let mut u = update(None, 0, 0, CanErrorState::Active);
+        u.lec = Some(lec::NO_ERROR);
+        dev.timed_apply(&u);
+        assert_eq!(rd(&dev, REG_ESR), 0);
+    }
+
+    #[test]
+    fn timed_interrupts_follow_ier() {
+        let mut dev = timed(BTR_500K_AT_36M);
+        install_std_accept_filter(&mut dev, 0x111);
+        let irqs = |dev: &mut BxCan| dev.tick().explicit_irqs.unwrap_or_default();
+        assert!(irqs(&mut dev).is_empty());
+        wr(
+            &mut dev,
+            REG_IER,
+            IER_TMEIE | IER_FMPIE0 | IER_ERRIE | IER_EPVIE | IER_LECIE,
+        );
+        // RX0 (USB_LP_CAN_RX0, IRQ 20) while FIFO0 holds a message.
+        let mut u = update(None, 0, 0, CanErrorState::Active);
+        u.rx = Some(CanFrame::classic(0x111, vec![9]));
+        dev.timed_apply(&u);
+        assert_eq!(irqs(&mut dev), vec![20]);
+        wr(&mut dev, REG_RF0R, RF_RFOM);
+        assert!(irqs(&mut dev).is_empty());
+        // TX (USB_HP_CAN_TX, IRQ 19) on RQCPx.
+        send_mb(&mut dev, 0, 0x100, &[]);
+        dev.timed_apply(&update(
+            Some((0, CanTxOutcome::Ok)),
+            0,
+            0,
+            CanErrorState::Active,
+        ));
+        assert_eq!(irqs(&mut dev), vec![19]);
+        wr(&mut dev, REG_TSR, 1); // RQCP0 w1c
+        assert!(irqs(&mut dev).is_empty());
+        // SCE (CAN_SCE, IRQ 22): ERRI on an enabled ESR flag.
+        dev.timed_apply(&update(None, 128, 0, CanErrorState::Passive));
+        assert_ne!(rd(&dev, REG_MSR) & MSR_ERRI, 0);
+        assert_eq!(irqs(&mut dev), vec![22]);
+        wr(&mut dev, REG_MSR, MSR_ERRI);
+        assert!(irqs(&mut dev).is_empty());
+        // A flag whose enable is off sets no ERRI: EWGF without EWGIE.
+        let mut quiet = timed(BTR_500K_AT_36M);
+        wr(&mut quiet, REG_IER, IER_ERRIE | IER_BOFIE);
+        quiet.timed_apply(&update(None, 100, 0, CanErrorState::Active));
+        assert_eq!(rd(&quiet, REG_MSR) & MSR_ERRI, 0);
+        let _ = IER_EWGIE;
+        // Levels are reported for all four bxCAN lines.
+        let mut lines = Vec::new();
+        quiet.irq_line_levels(&mut |irq, level| lines.push((irq, level)));
+        assert_eq!(
+            lines,
+            vec![(19, false), (20, false), (21, false), (22, false)]
+        );
+    }
+
+    #[test]
+    fn timed_bus_off_recovery_is_armed_by_abom_or_an_init_cycle() {
+        // RM0008 §24.7.6: with ABOM the recovery starts at bus-off; without
+        // it, firmware must enter and leave initialization mode.
+        let mut dev = timed(BTR_500K_AT_36M);
+        dev.clock.as_ref().unwrap().publish(500);
+        dev.timed_apply(&update(None, 248, 0, CanErrorState::BusOff));
+        assert_eq!(dev.timed_poll(36_000_000).recovery_armed_cycle, None);
+        dev.clock.as_ref().unwrap().publish(900);
+        wr(&mut dev, REG_MCR, MCR_INRQ);
+        assert_eq!(
+            dev.timed_poll(36_000_000).recovery_armed_cycle,
+            None,
+            "not in init"
+        );
+        wr(&mut dev, REG_MCR, 0);
+        assert_eq!(dev.timed_poll(36_000_000).recovery_armed_cycle, Some(900));
+        assert_eq!(dev.timed_poll(36_000_000).recovery_occurrences, 128);
+        dev.timed_apply(&update(None, 0, 0, CanErrorState::Active));
+        assert_eq!(dev.timed_poll(36_000_000).recovery_armed_cycle, None);
+        assert_eq!(rd(&dev, REG_ESR) & 0b111, 0);
+
+        let mut abom = timed(BTR_500K_AT_36M);
+        wr(&mut abom, REG_MCR, 1 << 6);
+        abom.clock.as_ref().unwrap().publish(700);
+        abom.timed_apply(&update(None, 248, 0, CanErrorState::BusOff));
+        assert_eq!(abom.timed_poll(36_000_000).recovery_armed_cycle, Some(700));
+    }
+
+    #[test]
+    fn timed_mode_keeps_the_walk_on() {
+        let mut dev = BxCan::new();
+        assert!(!dev.needs_legacy_walk());
+        dev.attach_timed().unwrap();
+        assert!(dev.needs_legacy_walk());
+        assert!(dev.is_timed());
+        assert!(dev.attach_timed().is_err(), "attached once");
     }
 }

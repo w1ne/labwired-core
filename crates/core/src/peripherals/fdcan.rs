@@ -65,6 +65,27 @@
 //!   dual-lane walk@1 ≡ sched@512 fidelity gate) is a follow-up; until then
 //!   multi-node is an honest interim, not a certificate.
 //!   Feature-off builds also use the walk for TX + IRQ.
+//!
+//! ## Timed CAN bus mode
+//!
+//! On a world's timed bus ([`crate::network::timed_can`], `attach_timed`) a
+//! TXBAR request stays pending (TXBRP) until the bus reports the attempt:
+//! success completes it as above; a failed attempt leaves it pending for
+//! automatic retransmission, or with CCCR.DAR cancels it (TXBRP clear,
+//! TXBCF set). The bus's counters show in ECR (TEC, REC, RP, CEL) and PSR
+//! (LEC, EP, EW, BO), with IR.EP / IR.EW / IR.BO on each change and IR.PEA
+//! on each protocol error. Bus-off sets CCCR.INIT; once firmware clears it
+//! the bus counts the recovery (RM0481: 129 occurrences of 11 recessive
+//! bits). The walk stays on to hold the interrupt line at its level.
+//!
+//! The nominal bit time comes from NBTP and the kernel clock divided by
+//! CKDIV. The kernel clock is the HSE: the RCC model does not hold
+//! CCIPR5.FDCANSEL, whose reset value selects HSE, and HSE is taken as
+//! 8 MHz (the NUCLEO-H563ZI, clocked from the ST-LINK MCO). With that clock
+//! the reset NBTP is exactly 500 kbit/s. A PLL-sourced kernel clock is not
+//! modelled. The data-phase bit rate (DBTP) is not used: an FD frame is
+//! timed at the nominal rate.
+//!
 //! - interrupt line 1 (ILS routing, FDCAN1_IT1) is not modeled; all
 //!   enabled interrupts assert the configured line (FDCAN1_IT0) when
 //!   ILE.EINT0 is set.
@@ -139,6 +160,12 @@ const FIFO_DEPTH: u32 = 3;
 // ---- Bit fields ----
 const CCCR_INIT: u32 = 1 << 0;
 const CCCR_CCE: u32 = 1 << 1;
+/// Clock stop request: the controller leaves the bus.
+const CCCR_CSR: u32 = 1 << 4;
+/// Bus monitoring (silent) mode.
+const CCCR_MON: u32 = 1 << 5;
+/// Disable automatic retransmission.
+const CCCR_DAR: u32 = 1 << 6;
 // CCCR.MON (bit 5) needs no dedicated handling: external loopback
 // (LBCK without MON) also delivers the frame to the own receiver, so
 // the model's loopback path is keyed on TEST.LBCK alone.
@@ -156,6 +183,8 @@ const IR_TFE: u32 = 1 << 9;
 const IR_EP: u32 = 1 << 17;
 const IR_EW: u32 = 1 << 18;
 const IR_BO: u32 = 1 << 19;
+/// Protocol error in the arbitration (nominal) phase.
+const IR_PEA: u32 = 1 << 21;
 
 // PSR error-state bits (RM0481 FDCAN_PSR).
 const PSR_EP: u32 = 1 << 5;
@@ -163,6 +192,12 @@ const PSR_EW: u32 = 1 << 6;
 const PSR_BO: u32 = 1 << 7;
 
 const ILE_EINT0: u32 = 1 << 0;
+
+/// FDCAN kernel clock in timed mode: HSE, 8 MHz (see the module docs).
+pub const DEFAULT_KERNEL_CLOCK_HZ: u64 = 8_000_000;
+/// M_CAN leaves bus-off after 129 occurrences of 11 recessive bits
+/// (RM0481 §60.4.2 "Bus-off recovery").
+const MCAN_RECOVERY_OCCURRENCES: u32 = 129;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct FdcanTraceFrame {
@@ -255,6 +290,28 @@ pub struct Fdcan {
     /// Scheduler mode: one live TX/IRQ event chain is outstanding.
     #[serde(skip)]
     chain_live: bool,
+    /// The bus's cycle clock, which stamps TX requests and recovery arming.
+    #[serde(skip)]
+    clock: Option<crate::CycleClock>,
+    /// On a world's timed CAN bus (see the module docs).
+    #[serde(skip)]
+    timed: bool,
+    /// Timed mode: the cycle each TX buffer's request was made at.
+    #[serde(skip)]
+    tx_requested: [u64; 3],
+    /// Timed mode: kernel clock before CKDIV, Hz.
+    #[serde(skip)]
+    kernel_clock_hz: u64,
+    /// Timed mode: PSR.LEC, EW and EP as the bus last reported them.
+    #[serde(default)]
+    timed_lec: u8,
+    #[serde(default)]
+    error_warning: bool,
+    #[serde(default)]
+    error_passive: bool,
+    /// Timed mode: bus-off recovery may count from this cycle.
+    #[serde(skip)]
+    recovery_armed: Option<u64>,
 }
 
 impl Fdcan {
@@ -300,6 +357,14 @@ impl Fdcan {
             bus_rx: None,
             pending_tx: VecDeque::new(),
             chain_live: false,
+            timed: false,
+            clock: None,
+            tx_requested: [0; 3],
+            kernel_clock_hz: DEFAULT_KERNEL_CLOCK_HZ,
+            timed_lec: 0,
+            error_warning: false,
+            error_passive: false,
+            recovery_armed: None,
         }
     }
 
@@ -309,7 +374,7 @@ impl Fdcan {
         // An attached CanBus interconnect still needs the walk to poll
         // `bus_rx` (bxCAN pattern). Do not clear this gate to chase
         // walk-free multi-node — mpsc RX is not event-driven yet.
-        cfg!(feature = "event-scheduler") && self.bus_rx.is_none()
+        cfg!(feature = "event-scheduler") && self.bus_rx.is_none() && !self.timed
     }
 
     #[inline]
@@ -319,7 +384,9 @@ impl Fdcan {
 
     /// One tick of TX completion + interconnect RX + level IRQ.
     fn service_once(&mut self) -> bool {
-        self.drain_pending_tx();
+        if !self.timed {
+            self.drain_pending_tx();
+        }
         if let Some(rx) = self.bus_rx.take() {
             while let Ok(frame) = rx.try_recv() {
                 self.receive_frame(frame);
@@ -356,6 +423,123 @@ impl Fdcan {
         self.bus_tx = Some(tx);
         self.bus_rx = Some(rx);
         Ok(())
+    }
+
+    /// Put this controller on a world's timed CAN bus
+    /// ([`crate::network::timed_can`]).
+    pub fn attach_timed(&mut self) -> anyhow::Result<()> {
+        if self.timed || self.bus_tx.is_some() || self.bus_rx.is_some() {
+            anyhow::bail!("FDCAN is already attached to a CAN bus");
+        }
+        self.timed = true;
+        Ok(())
+    }
+
+    /// `true` once on a timed CAN bus.
+    pub fn is_timed(&self) -> bool {
+        self.timed
+    }
+
+    fn now(&self) -> u64 {
+        self.clock.as_ref().map_or(0, |c| c.now())
+    }
+
+    /// Kernel clock after the CKDIV.PDIV divider: 0 divides by 1, n by 2n
+    /// (RM0481 FDCAN_CKDIV).
+    fn divided_kernel_clock_hz(&self) -> u64 {
+        let pdiv = u64::from(self.ckdiv & 0xF);
+        self.kernel_clock_hz / if pdiv == 0 { 1 } else { 2 * pdiv }
+    }
+
+    /// The controller as the timed bus needs it.
+    ///
+    /// Nominal bit time (RM0481 §60.4.1, FDCAN_NBTP): tq = (NBRP + 1) /
+    /// f_kernel and one bit is 1 + (NTSEG1 + 1) + (NTSEG2 + 1) quanta.
+    pub fn timed_poll(&self) -> crate::network::timed_can::CanNodePoll {
+        use crate::network::timed_can::{CanNodePoll, CanTxRequest};
+        let clock = self.divided_kernel_clock_hz();
+        let nbrp = u128::from((self.nbtp >> 16) & 0x1FF) + 1;
+        let ntseg1 = u128::from((self.nbtp >> 8) & 0xFF);
+        let ntseg2 = u128::from(self.nbtp & 0x7F);
+        let bit_ps = (clock > 0).then(|| {
+            (nbrp * (3 + ntseg1 + ntseg2) * crate::network::timed_uart::PS_PER_SEC
+                / u128::from(clock)) as u64
+        });
+        let tx = self.pending_tx.front().map(|(bit, frame)| CanTxRequest {
+            tag: *bit,
+            frame: frame.clone(),
+            requested_cycle: self.tx_requested[bit.trailing_zeros() as usize % 3],
+        });
+        CanNodePoll {
+            bit_ps,
+            clock_hz: clock,
+            on_bus: self.running() && !self.loopback() && self.cccr & (CCCR_MON | CCCR_CSR) == 0,
+            fd_capable: true,
+            tx,
+            recovery_armed_cycle: self.recovery_armed,
+            recovery_occurrences: MCAN_RECOVERY_OCCURRENCES,
+        }
+    }
+
+    /// Apply what the timed bus decided for this controller.
+    pub fn timed_apply(&mut self, update: &crate::network::timed_can::CanNodeUpdate) {
+        use crate::network::timed_can::{CanErrorState, CanTxOutcome, ERROR_WARNING_LIMIT};
+        let protocol_error = update.lec.is_some_and(|l| l != 0);
+        // ECR (RM0481 FDCAN_ECR): CEL[23:16] counts protocol errors and
+        // saturates; RP[15] with REC[14:8] (7 bits) above 127; TEC[7:0].
+        let mut cel = (self.ecr >> 16) & 0xFF;
+        if protocol_error {
+            cel = (cel + 1).min(0xFF);
+            self.ir |= IR_PEA;
+        }
+        let rec = u32::from(update.rec);
+        self.ecr = (cel << 16)
+            | (u32::from(rec > 127) << 15)
+            | (rec.min(127) << 8)
+            | u32::from(update.tec);
+        if let Some(lec) = update.lec {
+            self.timed_lec = lec & 0x7;
+        }
+        let warning = u16::from(update.tec) >= ERROR_WARNING_LIMIT
+            || u16::from(update.rec) >= ERROR_WARNING_LIMIT;
+        let passive = update.state != CanErrorState::Active;
+        let off = update.state == CanErrorState::BusOff;
+        // IR.EW / EP / BO flag each status change (RM0481 FDCAN_IR).
+        if warning != self.error_warning {
+            self.ir |= IR_EW;
+        }
+        if passive != self.error_passive {
+            self.ir |= IR_EP;
+        }
+        if off != self.bus_off {
+            self.ir |= IR_BO;
+        }
+        self.error_warning = warning;
+        self.error_passive = passive;
+        if off && !self.bus_off {
+            // Bus-off: the controller sets CCCR.INIT and stays off the bus
+            // until firmware clears it.
+            self.cccr |= CCCR_INIT;
+            self.recovery_armed = None;
+        } else if !off {
+            self.recovery_armed = None;
+        }
+        self.bus_off = off;
+        if let Some((tag, outcome)) = update.tx {
+            if self.pending_tx.front().is_some_and(|(bit, _)| *bit == tag) {
+                if outcome == CanTxOutcome::Ok {
+                    let (bit, frame) = self.pending_tx.pop_front().expect("checked");
+                    self.complete_tx(bit, frame);
+                } else if self.cccr & CCCR_DAR != 0 {
+                    let (bit, _) = self.pending_tx.pop_front().expect("checked");
+                    self.txbrp &= !bit;
+                    self.txbcf |= bit;
+                }
+            }
+        }
+        if let Some(frame) = &update.rx {
+            let _ = self.try_receive_frame(frame.clone());
+        }
     }
 
     /// This controller's frames from the shared trace, oldest first. Derived
@@ -405,6 +589,18 @@ impl Fdcan {
         // Reset: LEC = DLEC = 7 (no change). After the protocol has
         // run: LEC = 0, ACT = 01 idle — capture13 read 0x708.
         let base = if self.bus_active { 0x708 } else { 0x707 };
+        if self.timed {
+            let lec = if self.bus_active {
+                u32::from(self.timed_lec)
+            } else {
+                7
+            };
+            return (base & !0x7)
+                | lec
+                | if self.bus_off { PSR_BO } else { 0 }
+                | if self.error_warning { PSR_EW } else { 0 }
+                | if self.error_passive { PSR_EP } else { 0 };
+        }
         if self.bus_off {
             base | PSR_BO | PSR_EW | PSR_EP
         } else {
@@ -526,7 +722,13 @@ impl Fdcan {
         if next & CCCR_INIT == 0 {
             next &= !CCCR_CCE;
             self.bus_active = true;
-            if self.bus_off {
+            if self.timed {
+                if self.bus_off && self.cccr & CCCR_INIT != 0 {
+                    // Recovery: the bus counts 129 x 11 recessive bits from
+                    // here (RM0481 §60.4.2); counters reset when it is done.
+                    self.recovery_armed = Some(self.now());
+                }
+            } else if self.bus_off {
                 // Bus-off recovery: error counters reset, BO clears.
                 self.bus_off = false;
                 self.ecr &= 0x00FF_0000;
@@ -534,6 +736,7 @@ impl Fdcan {
         } else if self.cccr & CCCR_INIT == 0 {
             // INIT being set: CCE in the same write doesn't take yet.
             next &= !CCCR_CCE;
+            self.recovery_armed = None;
         }
         self.cccr = next;
     }
@@ -564,6 +767,7 @@ impl Fdcan {
             // matching real M_CAN behavior (TXBRP clears only after the
             // frame has left the node on the physical bus).
             self.txbrp |= bit;
+            self.tx_requested[idx as usize] = self.now();
             self.pending_tx.push_back((bit, frame));
         }
     }
@@ -578,27 +782,38 @@ impl Fdcan {
             return;
         }
         while let Some((bit, frame)) = self.pending_tx.pop_front() {
-            self.txbrp &= !bit;
-            self.txbto |= bit;
-            self.txfq_put = (self.txfq_put + 1) % FIFO_DEPTH;
-            self.txfq_get = self.txfq_put;
-            // TFE always; TC only for TXBTIE-enabled buffers —
-            // capture13 pinned TC clear with TXBTIE = 0.
-            self.ir |= IR_TFE;
-            if self.txbtie & bit != 0 {
-                self.ir |= IR_TC;
+            self.complete_tx(bit, frame);
+        }
+    }
+
+    /// One transmission done: TXBRP clears, TXBTO and IR.TFE (IR.TC for
+    /// TXBTIE-enabled buffers) are set, and the frame goes to the loopback
+    /// receiver, the interconnect or the local list. On a timed bus the
+    /// bus has already delivered it.
+    fn complete_tx(&mut self, bit: u32, frame: CanFrame) {
+        self.txbrp &= !bit;
+        self.txbto |= bit;
+        self.txfq_put = (self.txfq_put + 1) % FIFO_DEPTH;
+        self.txfq_get = self.txfq_put;
+        // TFE always; TC only for TXBTIE-enabled buffers —
+        // capture13 pinned TC clear with TXBTIE = 0.
+        self.ir |= IR_TFE;
+        if self.txbtie & bit != 0 {
+            self.ir |= IR_TC;
+        }
+        self.push_trace("tx", &frame);
+        if self.timed {
+            return;
+        }
+        if self.loopback() {
+            self.receive_frame(frame);
+        } else if let Some(tx) = &self.bus_tx {
+            let _ = tx.send(frame);
+        } else {
+            if self.tx_frames.len() >= 64 {
+                self.tx_frames.pop_front();
             }
-            self.push_trace("tx", &frame);
-            if self.loopback() {
-                self.receive_frame(frame);
-            } else if let Some(tx) = &self.bus_tx {
-                let _ = tx.send(frame);
-            } else {
-                if self.tx_frames.len() >= 64 {
-                    self.tx_frames.pop_front();
-                }
-                self.tx_frames.push_back(frame);
-            }
+            self.tx_frames.push_back(frame);
         }
     }
 
@@ -787,6 +1002,10 @@ impl Peripheral for Fdcan {
 
     fn uses_scheduler(&self) -> bool {
         self.scheduler_mode()
+    }
+
+    fn attach_cycle_clock(&mut self, clock: crate::CycleClock) {
+        self.clock = Some(clock);
     }
 
     fn needs_legacy_walk(&self) -> bool {
@@ -1215,5 +1434,163 @@ mod tests {
         assert_eq!((rd(&dev, RAM_BASE + 0xB0) >> 18) & 0x7FF, 0x456);
         assert_eq!(rd(&dev, RAM_BASE + 0xB8) & 0xFFFF, 0xFECA);
         assert_ne!(rd(&dev, REG_IR) & IR_RF0N, 0);
+    }
+
+    // ---- Timed CAN bus mode ----
+
+    use crate::network::timed_can::{lec, CanErrorState, CanNodeUpdate, CanTxOutcome};
+
+    const IR_PEA: u32 = 1 << 21;
+    const CCCR_DAR: u32 = 1 << 6;
+
+    fn timed() -> Fdcan {
+        let mut dev = Fdcan::new();
+        dev.attach_timed().unwrap();
+        dev.attach_cycle_clock(crate::CycleClock::default());
+        wr(&mut dev, REG_CCCR, 0x0);
+        dev
+    }
+
+    fn queue(dev: &mut Fdcan, id: u32) {
+        wr(dev, RAM_BASE + 0x278, id << 18);
+        wr(dev, RAM_BASE + 0x27C, 1 << 16);
+        wr(dev, RAM_BASE + 0x280, 0x5A);
+        wr(dev, REG_TXBAR, 1);
+    }
+
+    fn update(
+        tx: Option<(u32, CanTxOutcome)>,
+        tec: u8,
+        rec: u8,
+        state: CanErrorState,
+    ) -> CanNodeUpdate {
+        CanNodeUpdate {
+            tx,
+            rx: None,
+            tec,
+            rec,
+            state,
+            lec: None,
+        }
+    }
+
+    #[test]
+    fn timed_bit_time_comes_from_nbtp_and_the_kernel_clock() {
+        // RM0481 §60.4.1: tq = (NBRP+1) / f_fdcan_ker_ck, bit = tq x
+        // (1 + (NTSEG1+1) + (NTSEG2+1)). Reset NBTP (NBRP 0, NTSEG1 10,
+        // NTSEG2 3) is 16 tq: 500 kbit/s from the 8 MHz HSE kernel clock.
+        let dev = timed();
+        let poll = dev.timed_poll();
+        assert_eq!(poll.bit_ps, Some(2_000_000));
+        assert_eq!(poll.clock_hz, 8_000_000);
+        assert!(poll.on_bus && poll.fd_capable);
+        assert_eq!(poll.recovery_occurrences, 129, "M_CAN waits 129 x 11 bits");
+        // CKDIV.PDIV = 1 divides the kernel clock by 2.
+        let mut dev = Fdcan::new();
+        dev.attach_timed().unwrap();
+        wr(&mut dev, REG_CCCR, 0x3);
+        wr(&mut dev, REG_CKDIV, 1);
+        assert!(!dev.timed_poll().on_bus, "INIT: off the bus");
+        wr(&mut dev, REG_CCCR, 0x0);
+        assert_eq!(dev.timed_poll().bit_ps, Some(4_000_000));
+    }
+
+    #[test]
+    fn timed_tx_completes_when_the_bus_says_so() {
+        let mut dev = timed();
+        dev.clock.as_ref().unwrap().publish(77);
+        queue(&mut dev, 0x321);
+        dev.tick();
+        assert_eq!(rd(&dev, REG_TXBRP), 1, "still pending after a tick");
+        let tx = dev.timed_poll().tx.expect("request");
+        assert_eq!((tx.tag, tx.frame.id, tx.requested_cycle), (1, 0x321, 77));
+        dev.timed_apply(&update(
+            Some((1, CanTxOutcome::Error)),
+            8,
+            0,
+            CanErrorState::Active,
+        ));
+        assert_eq!(rd(&dev, REG_TXBRP), 1, "retransmitted");
+        dev.timed_apply(&update(
+            Some((1, CanTxOutcome::Ok)),
+            7,
+            0,
+            CanErrorState::Active,
+        ));
+        assert_eq!(rd(&dev, REG_TXBRP), 0);
+        assert_eq!(rd(&dev, REG_TXBTO), 1);
+        assert_ne!(rd(&dev, REG_IR) & IR_TFE, 0);
+        assert!(dev.tx_frames.is_empty());
+        // DAR: one attempt; a failed one is cancelled (TXBCF).
+        let mut dev = timed();
+        wr(&mut dev, REG_CCCR, 0x3);
+        wr(&mut dev, REG_CCCR, CCCR_DAR);
+        queue(&mut dev, 0x321);
+        dev.timed_apply(&update(
+            Some((1, CanTxOutcome::NoAck)),
+            8,
+            0,
+            CanErrorState::Active,
+        ));
+        assert_eq!(rd(&dev, REG_TXBRP), 0);
+        assert_eq!(rd(&dev, REG_TXBCF), 1);
+        assert_eq!(rd(&dev, REG_TXBTO), 0);
+    }
+
+    #[test]
+    fn timed_ecr_psr_and_ir_mirror_the_bus_counters() {
+        let mut dev = timed();
+        let mut u = update(None, 136, 5, CanErrorState::Passive);
+        u.lec = Some(lec::BIT_RECESSIVE);
+        dev.timed_apply(&u);
+        // RM0481 FDCAN_ECR: CEL[23:16], RP[15], REC[14:8], TEC[7:0].
+        assert_eq!(rd(&dev, REG_ECR), (1 << 16) | (5 << 8) | 136);
+        // FDCAN_PSR: BO[7], EW[6], EP[5], ACT[4:3], LEC[2:0].
+        let psr = rd(&dev, REG_PSR);
+        assert_eq!(psr & 0xE7, PSR_EP | PSR_EW | 4);
+        assert_eq!(
+            rd(&dev, REG_IR) & (IR_EP | IR_EW | IR_PEA),
+            IR_EP | IR_EW | IR_PEA
+        );
+        // REC above 127 shows as RP with REC saturated at 127.
+        dev.timed_apply(&update(None, 0, 200, CanErrorState::Passive));
+        assert_eq!(rd(&dev, REG_ECR) & 0xFF00, (1 << 15) | (127 << 8));
+        // Bus-off: PSR.BO, IR.BO, and the controller sets CCCR.INIT.
+        wr(&mut dev, REG_IR, 0xFFFF_FFFF);
+        dev.timed_apply(&update(None, 248, 0, CanErrorState::BusOff));
+        assert_ne!(rd(&dev, REG_PSR) & PSR_BO, 0);
+        assert_ne!(rd(&dev, REG_IR) & IR_BO, 0);
+        assert_eq!(rd(&dev, REG_CCCR) & CCCR_INIT, CCCR_INIT);
+        assert_eq!(dev.timed_poll().recovery_armed_cycle, None);
+        // Firmware clears INIT: recovery counts from then (and only then).
+        dev.clock.as_ref().unwrap().publish(4242);
+        wr(&mut dev, REG_CCCR, 0x0);
+        assert!(dev.is_bus_off(), "the 129 x 11 bit wait is the bus's");
+        assert_eq!(dev.timed_poll().recovery_armed_cycle, Some(4242));
+        dev.timed_apply(&update(None, 0, 0, CanErrorState::Active));
+        assert!(!dev.is_bus_off());
+        assert_eq!(rd(&dev, REG_PSR) & (PSR_BO | PSR_EP | PSR_EW), 0);
+        assert_eq!(rd(&dev, REG_ECR) & 0xFFFF, 0);
+    }
+
+    #[test]
+    fn timed_rx_goes_to_fifo0() {
+        let mut dev = timed();
+        let mut u = update(None, 0, 0, CanErrorState::Active);
+        u.rx = Some(CanFrame::classic(0x7E8, vec![1, 2]));
+        u.lec = Some(lec::NO_ERROR);
+        dev.timed_apply(&u);
+        assert_eq!(rd(&dev, REG_RXF0S) & 0x7F, 1);
+        assert_eq!((rd(&dev, RAM_BASE + 0xB0) >> 18) & 0x7FF, 0x7E8);
+    }
+
+    #[test]
+    fn timed_mode_forces_the_walk() {
+        let mut dev = Fdcan::new();
+        dev.attach_timed().unwrap();
+        assert!(dev.is_timed());
+        assert!(dev.needs_legacy_walk());
+        assert!(!dev.uses_scheduler());
+        assert!(dev.attach_timed().is_err());
     }
 }
