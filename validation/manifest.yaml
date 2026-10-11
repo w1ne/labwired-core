@@ -1507,7 +1507,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: 97722f3c0ae1f2154c6e0371d342c182da434c44c0c652b454e70841c331718e
+    drift_ack_digest: 9bc548f7791e9d354fc155249060a7e4f14ca43557e3145c4ce5eec53c82e645
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -1982,6 +1982,15 @@ boards:
     # real SYSCFG. Register maps unchanged except where the old model was wrong;
     # pinned by the pins conformance suite and new tests. Approved by the
     # maintainer. ACK, NOT A CAPTURE.
+    drift_ack: 2026-10-11
+    # 2026-10-11 (timed CAN world): watched fdcan.rs moved. A new timed mode,
+    # entered only when a world puts the controller on a timed can_bus
+    # (attach_timed), keeps TXBAR requests pending until the bus reports the
+    # attempt and mirrors the bus's TEC/REC/state in ECR/PSR/IR. Outside that
+    # mode the only change is that completion moved into one helper
+    # (complete_tx) shared by the old path; register map, reset values and the
+    # capture13 loopback behaviour are unchanged and still pinned by the fdcan
+    # unit tests. Pending maintainer review. ACK, NOT A CAPTURE.
     drift_ack: 2026-10-11
   - id: esp32c3
     # 2026-09-15 (#932): SPI edge sampling is opt-in (`SpiSampling::Byte` default). Byte-level golden pins the pre-feature path. Controllers without a bit engine reject opt-in at config time.
@@ -5018,7 +5027,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: ce98c090b5c833b73183901f37b14f489e7a1ee2b25f227f6236fb7824392603
+    drift_ack_digest: 43bce0a2fa39768d8827ec4edce05453897c48fda9e6e1c79ee3f2b72a06678a
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5482,6 +5491,14 @@ boards:
     # real SYSCFG. Register maps unchanged except where the old model was wrong;
     # pinned by the pins conformance suite and new tests. Approved by the
     # maintainer. ACK, NOT A CAPTURE.
+    drift_ack: 2026-10-11
+    # 2026-10-11 (timed CAN world): watched bxcan.rs moved. A new timed mode,
+    # entered only when a world puts the controller on a timed can_bus
+    # (attach_timed), keeps TXRQ pending until the bus reports the attempt and
+    # mirrors it in TSR/ESR/MSR.ERRI with the TX/RX0/RX1/SCE lines as levels.
+    # Outside that mode reads, writes, reset values and the captured
+    # degenerate-BTR bus-off ESR are unchanged and still pinned by the bxcan
+    # unit tests. Pending maintainer review. ACK, NOT A CAPTURE.
     drift_ack: 2026-10-11
   - id: stm32f407
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
