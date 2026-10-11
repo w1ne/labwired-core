@@ -44,6 +44,7 @@ mod resident_device;
 mod routing;
 pub mod sim_inputs;
 mod tick;
+mod timed_can;
 pub(crate) use tick::reconcile_nvic_level;
 
 pub use can_devices::*;

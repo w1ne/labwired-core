@@ -868,8 +868,19 @@ pub(crate) fn validate_environment_interconnect_config(
                 index,
                 kind,
                 &interconnect.config,
-                &["peripheral", "endpoints"],
+                &["peripheral", "endpoints", "bitrate", "id"],
             )?;
+            optional_nonempty_interconnect_string(index, kind, &interconnect.config, "id")?;
+            if let Some(bitrate) = interconnect.config.get("bitrate") {
+                // Classic CAN runs from 10 kbit/s up to 1 Mbit/s
+                // (ISO 11898-2 high-speed physical layer).
+                match bitrate.as_u64() {
+                    Some(b) if (10_000..=1_000_000).contains(&b) => {}
+                    _ => anyhow::bail!(
+                        "interconnects[{index}]: can_bus config.bitrate must be an integer bit rate from 10000 to 1000000"
+                    ),
+                }
+            }
             let has_peripheral = interconnect
                 .config
                 .get("peripheral")

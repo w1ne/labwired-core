@@ -268,9 +268,30 @@ interconnects:
     nodes: [tester, ecu]
     config:
       peripheral: fdcan1
-      bitrate: 500000
+      bit_rate: 500000
 "#,
-            "interconnects[0].config.bitrate is not supported for can_bus",
+            "interconnects[0].config.bit_rate is not supported for can_bus",
+        ),
+        (
+            "can-bitrate-out-of-range",
+            r#"
+schema_version: "1.0"
+name: two-node
+nodes:
+  - id: tester
+    system: tester.yaml
+    firmware: tester.elf
+  - id: ecu
+    system: ecu.yaml
+    firmware: ecu.elf
+interconnects:
+  - type: can_bus
+    nodes: [tester, ecu]
+    config:
+      peripheral: fdcan1
+      bitrate: 5000000
+"#,
+            "can_bus config.bitrate must be an integer bit rate from 10000 to 1000000",
         ),
         (
             "egress-unknown-key",

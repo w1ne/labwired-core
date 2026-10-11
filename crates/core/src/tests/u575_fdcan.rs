@@ -251,13 +251,16 @@ mod u575_fdcan_tests {
         write_u32(tester, FDCAN_BASE + FDCAN_RAM + 0x280, 0xA5);
         write_u32(tester, FDCAN_BASE + REG_TXBAR, 1);
 
-        for _ in 0..2 {
-            let results = world.step_all();
-            assert!(
-                results.values().all(Result::is_ok),
-                "world round failed: {results:?}"
-            );
-        }
+        // The bus is timed: the frame (0x321, one byte, 500 kbit/s from the
+        // reset NBTP and the 8 MHz kernel clock) takes about 100 µs on the
+        // wire. Run the world 1 ms.
+        let results = world
+            .run_until_ps(1_000_000_000)
+            .expect("a timed CAN world");
+        assert!(
+            results.values().all(Result::is_ok),
+            "world round failed: {results:?}"
+        );
 
         let sender = world.machines.get("tester").unwrap();
         assert_eq!(

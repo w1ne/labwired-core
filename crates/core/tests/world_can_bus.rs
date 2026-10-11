@@ -8,9 +8,7 @@ const RCC_APB1HENR: u64 = 0x0A0;
 const FDCAN_BASE: u64 = 0x4000_A400;
 const FDCAN_RAM: u64 = 0x800;
 const FDCAN_CCCR: u64 = 0x018;
-const FDCAN_RXF0S: u64 = 0x090;
 const FDCAN_TXBAR: u64 = 0x0CC;
-const FDCAN_RX_FIFO0_ELEMENT_BYTES: u64 = 18 * 4;
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -145,12 +143,36 @@ fn queue_fdcan_tx(machine: &mut dyn MachineTrait, id: u32, payload: u8) {
     write_u32(machine, FDCAN_BASE + FDCAN_TXBAR, 1);
 }
 
-fn rx_fifo0_frame(machine: &dyn MachineTrait, slot: u64) -> (u32, u8) {
-    let base = FDCAN_BASE + FDCAN_RAM + 0xB0 + slot * FDCAN_RX_FIFO0_ELEMENT_BYTES;
-    (
-        (read_u32(machine, base) >> 18) & 0x7FF,
-        (read_u32(machine, base + 8) & 0xFF) as u8,
-    )
+/// Run a timed-CAN world for 1 ms of world time.
+fn run_world(world: &mut World) {
+    let results = world
+        .run_until_ps(1_000_000_000)
+        .expect("a world with a timed can_bus has a round clock");
+    assert!(
+        results.values().all(Result::is_ok),
+        "world round failed: {results:?}"
+    );
+}
+
+/// CAN frames a node's controller took into its receive FIFO, from the
+/// node's bus trace, as `(id, first payload byte)`. The nodes' UDS firmware
+/// polls and releases RX FIFO0 itself, so the FIFO registers cannot show
+/// what arrived once the world has run for a while.
+fn received(world: &World, id: &str) -> Vec<(u32, u8)> {
+    use labwired_core::bus::bus_trace::{BusDir, BusPayload};
+    world.machines[id]
+        .bus_trace_snapshot()
+        .into_iter()
+        .filter_map(|event| match event.payload {
+            BusPayload::Can {
+                direction: BusDir::Rx,
+                id,
+                data,
+                ..
+            } => Some((id, data.first().copied().unwrap_or(0))),
+            _ => None,
+        })
+        .collect()
 }
 
 #[test]
@@ -161,7 +183,11 @@ fn from_manifest_wires_can_bus_to_each_named_fdcan_and_configures_cortex_m() {
     )
     .expect("a two-node FDCAN bus should build");
 
-    assert_eq!(world.interconnects.len(), 1);
+    // Two FDCANs: the bus is timed, not an untimed fan-out interconnect.
+    assert!(world.interconnects.is_empty());
+    let buses = world.can_bus_reports();
+    assert_eq!(buses.len(), 1);
+    assert!(buses[0].timed);
     for id in ["tester", "ecu"] {
         // SCB.CPUID low byte proves from_manifest used configure_cortex_m()
         // rather than a bare CortexM::new() with an unmapped system-control
@@ -255,30 +281,19 @@ fn manifest_can_bus_routes_a_known_fdcan_frame_without_sender_echo() {
         0xA5,
     );
 
-    // Round 1 drains the sender into the manifest-wired CanBus. In round 2 the
-    // lexical-first ECU drains the endpoint before the tester takes its turn.
-    for _ in 0..2 {
-        let results = world.step_all();
-        assert!(
-            results.values().all(Result::is_ok),
-            "world round failed: {results:?}"
-        );
-    }
+    // The bus is timed: the frame takes its wire time (about 100 µs at the
+    // 500 kbit/s the reset NBTP gives from the 8 MHz kernel clock).
+    run_world(&mut world);
 
-    let sender = world.machines.get("tester").unwrap();
-    assert_eq!(
-        read_u32(sender.as_ref(), FDCAN_BASE + FDCAN_RXF0S) & 0x7F,
-        0,
+    assert!(
+        received(&world, "tester").is_empty(),
         "the transmitting node must not receive its own frame"
     );
-
-    let receiver = world.machines.get("ecu").unwrap();
     assert_eq!(
-        read_u32(receiver.as_ref(), FDCAN_BASE + FDCAN_RXF0S) & 0x7F,
-        1,
+        received(&world, "ecu"),
+        vec![(0x321, 0xA5)],
         "the distinct manifest-connected node receives exactly one frame"
     );
-    assert_eq!(rx_fifo0_frame(receiver.as_ref(), 0), (0x321, 0xA5));
 }
 
 #[test]
@@ -309,28 +324,20 @@ fn manifest_can_bus_keeps_fdcan_reset_until_its_rcc_gate_is_enabled() {
         0x456,
         0x5A,
     );
-    for _ in 0..2 {
-        let results = world.step_all();
-        assert!(
-            results.values().all(Result::is_ok),
-            "world round failed: {results:?}"
-        );
-    }
+    run_world(&mut world);
 
-    let receiver = world.machines.get("ecu").unwrap();
     assert_eq!(
-        read_u32(receiver.as_ref(), FDCAN_BASE + FDCAN_RXF0S) & 0x7F,
-        1,
+        received(&world, "ecu"),
+        vec![(0x456, 0x5A)],
         "the real FDCAN wiring routes once firmware enables its RCC gate"
     );
-    assert_eq!(rx_fifo0_frame(receiver.as_ref(), 0), (0x456, 0x5A));
 }
 
 #[test]
-fn manifest_can_bus_delivery_order_is_lexical_not_yaml_order() {
+fn manifest_can_bus_delivery_order_is_arbitration_order_not_yaml_order() {
     // The bus membership is deliberately reversed. The two transmitters queue
-    // in the same World round and the observer must receive them in lexical
-    // node-ID order, not the incidental `nodes:` order in this manifest.
+    // at the same instant, so the frames contend for the bus and the lower
+    // identifier wins arbitration, whatever the `nodes:` order says.
     let mut world = World::from_manifest(
         quiet_can_environment_with_nodes(
             &["alpha", "observer", "zeta"],
@@ -355,29 +362,12 @@ fn manifest_can_bus_delivery_order_is_lexical_not_yaml_order() {
         0xB2,
     );
 
-    for _ in 0..2 {
-        let results = world.step_all();
-        assert!(
-            results.values().all(Result::is_ok),
-            "world round failed: {results:?}"
-        );
-    }
+    run_world(&mut world);
 
-    let observer = world.machines.get("observer").unwrap();
     assert_eq!(
-        read_u32(observer.as_ref(), FDCAN_BASE + FDCAN_RXF0S) & 0x7F,
-        2,
-        "the passive observer receives both simultaneous sender frames"
-    );
-    assert_eq!(
-        rx_fifo0_frame(observer.as_ref(), 0),
-        (0x111, 0xA1),
-        "the lexical-first sender is delivered first"
-    );
-    assert_eq!(
-        rx_fifo0_frame(observer.as_ref(), 1),
-        (0x222, 0xB2),
-        "the lexical-last sender is delivered second"
+        received(&world, "observer"),
+        vec![(0x111, 0xA1), (0x222, 0xB2)],
+        "the lower identifier wins arbitration; the loser retransmits after it"
     );
 }
 
