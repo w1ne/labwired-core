@@ -208,7 +208,12 @@ impl<C: Cpu> Machine<C> {
                     // 200020".
                     if let (Some(fill), Some(before)) = (window.fill, clock_before) {
                         let worst = u64::from(self.cpu.max_step_cycles().max(1));
-                        while retired > 0 && retired < fill.max_steps {
+                        // A batch a net pad push ended stays ended
+                        // (`LogicTap::set_batch_stop_channels`).
+                        while retired > 0
+                            && retired < fill.max_steps
+                            && !self.bus.logic_tap.batch_stop_hit()
+                        {
                             let spent = self.cpu.clock_cycles().saturating_sub(before);
                             let Some(left) =
                                 fill.to_cycles.checked_sub(spent).filter(|l| *l >= worst)

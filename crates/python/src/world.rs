@@ -6,7 +6,7 @@
 //! console captured the way the CLI captures it. Nothing here models anything.
 
 use labwired_core::machine::world_hooks::ObserverRef;
-use labwired_core::world::World;
+use labwired_core::world::{StepResults, World};
 use pyo3::{
     exceptions::{PyRuntimeError, PyValueError},
     prelude::*,
@@ -35,6 +35,8 @@ impl Console {
 pub struct NativeWorld {
     world: Option<World>,
     consoles: BTreeMap<String, Console>,
+    /// One round's results, reused from round to round.
+    step: StepResults,
 }
 
 impl NativeWorld {
@@ -68,10 +70,15 @@ impl NativeWorld {
             .unwrap_or(0))
     }
     fn step_once(&mut self) -> PyResult<()> {
-        for (id, result) in self.world_mut()?.step_all() {
-            result.map_err(|e| PyRuntimeError::new_err(format!("node '{id}' step: {e:?}")))?;
+        let world = self
+            .world
+            .as_mut()
+            .ok_or_else(|| PyRuntimeError::new_err("World is closed"))?;
+        world.step_all_into(&mut self.step);
+        match self.step.first_error() {
+            Some((id, e)) => Err(PyRuntimeError::new_err(format!("node '{id}' step: {e:?}"))),
+            None => Ok(()),
         }
-        Ok(())
     }
     fn machine(
         &mut self,
@@ -112,6 +119,7 @@ impl NativeWorld {
         Ok(Self {
             world: Some(world),
             consoles,
+            step: StepResults::new(),
         })
     }
     fn close(&mut self) {

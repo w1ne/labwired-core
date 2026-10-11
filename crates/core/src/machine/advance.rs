@@ -307,6 +307,12 @@ impl<C: Cpu> Machine<C> {
                     state.idle_cycles += skipped;
                     self.logic_observe(self.total_cycles);
                     self.pace_realtime(start_cycles, start_wall);
+                    if self.net_drive_stop_hit {
+                        return Ok(state.report(
+                            AdvanceStop::NetDriveChange,
+                            self.total_cycles - start_cycles,
+                        ));
+                    }
                     continue;
                 }
             }
@@ -395,6 +401,14 @@ impl<C: Cpu> Machine<C> {
             state.secondary_steps += u64::from(progress.secondary_steps);
             state.cpu_batches += 1;
             self.pace_realtime(start_cycles, start_wall);
+            // A world running this node until its next net pad drive change
+            // stops at the boundary the change was recorded at.
+            if self.net_drive_stop_hit {
+                return Ok(state.report(
+                    AdvanceStop::NetDriveChange,
+                    self.total_cycles - start_cycles,
+                ));
+            }
         }
     }
 }

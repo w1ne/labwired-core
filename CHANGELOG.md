@@ -82,6 +82,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the speed of its two machines run alone (see the GPIO nets how-to, Timing).
   `World::run_until_ps` runs a round-based world to a time in one call.
   `World::gpio_net_applied` is ordered by due time, then node id.
+- The GPIO-net per-node scheduler no longer holds a node to one latency past
+  its own time. A node runs until its own next net pad drive change (a push
+  on a net pad ends the CPU batch it happens in, and
+  `Machine::advance_to_cycle_or_net_drive_change` stops at that boundary), so
+  a node on a net keeps its wide batches and idle fast-forward; and a node
+  asleep until a scheduled event with idle fast-forward on
+  (`Machine::idle_quiet_until`) lets its peers run up to that event, or to
+  whatever input could wake it first. Every counter, UART transcript, applied
+  delivery cycle, net report and node cycle count stays bit-identical to the
+  lockstep driver, now also with idle fast-forward on and in the ESP32-C6
+  world and the SPI/I²C bus worlds. `World::step_all_into` steps one round
+  into a reused `StepResults` (no map of node ids per round); `labwired test`
+  and the Python world step with it. `World::gpio_net_scheduler_stats` counts
+  the pieces the scheduler cut a run into. Figures and what is still slower
+  than the machines alone: the GPIO nets how-to, Speed.
 
 ### Fixed
 - STM32 EXTI (F1, F4, L4, G0, U5): an EXTI interrupt handler runs once per
