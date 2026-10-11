@@ -2977,6 +2977,7 @@ impl Cpu for CortexM {
                 if self.sysreset_latched()
                     || self.debug_batch_break()
                     || self.firmware_exit_latched()
+                    || tap.as_ref().is_some_and(|t| t.batch_stop_hit())
                 {
                     return Ok(i + 1);
                 }
@@ -3097,6 +3098,7 @@ impl Cpu for CortexM {
                 if self.sysreset_latched()
                     || self.debug_batch_break()
                     || self.firmware_exit_latched()
+                    || tap.as_ref().is_some_and(|t| t.batch_stop_hit())
                 {
                     break;
                 }
@@ -3141,6 +3143,7 @@ impl Cpu for CortexM {
                 if self.sysreset_latched()
                     || self.debug_batch_break()
                     || self.firmware_exit_latched()
+                    || tap.as_ref().is_some_and(|t| t.batch_stop_hit())
                 {
                     break;
                 }

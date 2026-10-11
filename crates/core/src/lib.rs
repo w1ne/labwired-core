@@ -363,6 +363,11 @@ where
         if config.idle_fast_forward_enabled && cpu.idle_fast_forward_budget(bus).is_some() {
             return Ok(i + 1);
         }
+        // A world's net pad changed drive: end the batch on this instruction
+        // (`LogicTap::set_batch_stop_channels`).
+        if tap.as_ref().is_some_and(|t| t.batch_stop_hit()) {
+            return Ok(i + 1);
+        }
     }
     Ok(max_count)
 }
@@ -2772,6 +2777,14 @@ pub struct Machine<C: Cpu> {
     /// Whether [`crate::fidelity::record_unpowered_rail_assumed`] has run for
     /// this machine: once, on the first advance with no routed supply.
     unpowered_rail_noted: bool,
+    /// While a world runs this node until its next net pad drive change
+    /// ([`Machine::advance_to_cycle_or_net_drive_change`]): the four-state
+    /// ring's sequence number at the start, so the advance loop stops once
+    /// it moves. `u64::MAX` otherwise.
+    pub(crate) net_drive_stop_from: u64,
+    /// Set by [`Machine::logic_observe`] once the ring moved past
+    /// `net_drive_stop_from`; the advance loop stops on it.
+    pub(crate) net_drive_stop_hit: bool,
 }
 
 impl<C: Cpu> Machine<C> {
@@ -3162,6 +3175,11 @@ impl<C: Cpu> Machine<C> {
                 |source| Self::read_logic_drive(bus, source),
             );
         }
+        // A world running this node until its next net pad drive change
+        // (`advance_to_cycle_or_net_drive_change`) stops here.
+        if self.logic_capture.state_seq() > self.net_drive_stop_from {
+            self.net_drive_stop_hit = true;
+        }
     }
 
     /// The drive one analyzer channel reads right now: a pad's model answers
@@ -3395,6 +3413,8 @@ impl<C: Cpu> Machine<C> {
             last_i2c_time_us: u64::MAX,
             derived_device_time_noted: false,
             unpowered_rail_noted: false,
+            net_drive_stop_from: u64::MAX,
+            net_drive_stop_hit: false,
         }
     }
 
@@ -4565,7 +4585,9 @@ impl<C: Cpu> DebugControl for Machine<C> {
         Ok(match report.stop {
             AdvanceStop::Breakpoint(pc) => StopReason::Breakpoint(pc),
             AdvanceStop::FuelLimit => StopReason::MaxStepsReached,
-            AdvanceStop::CycleLimit | AdvanceStop::NoProgress => StopReason::StepDone,
+            AdvanceStop::CycleLimit | AdvanceStop::NoProgress | AdvanceStop::NetDriveChange => {
+                StopReason::StepDone
+            }
             AdvanceStop::FirmwareExit { code } => StopReason::FirmwareExit(code),
         })
     }

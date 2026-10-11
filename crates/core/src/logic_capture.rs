@@ -65,7 +65,7 @@
 //! transition is actually recorded).
 
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 /// Maximum number of edges retained in the ring buffer. On overflow the oldest
@@ -409,6 +409,13 @@ struct TapShared {
     /// the mutex exists because `Peripheral: Send` forces shared handles to be
     /// `Send + Sync`, mirroring `bus_trace::BusTrace`.
     queue: Mutex<Vec<PadEvent>>,
+    /// Channels `stop_lo..stop_hi` end a CPU batch when pushed (a world's
+    /// `gpio_net` pads, see [`LogicTap::set_batch_stop_channels`]). Empty by
+    /// default.
+    stop_lo: AtomicU32,
+    stop_hi: AtomicU32,
+    /// A push on a stop channel is queued and not yet drained.
+    stop_hit: AtomicBool,
 }
 
 /// Shared push-capture tap: the handle instrumented peripherals report pad
@@ -501,6 +508,7 @@ impl LogicTap {
             drive: None,
         });
         self.shared.pending.fetch_add(1, Ordering::Relaxed);
+        self.note_stop(ch);
     }
 
     /// Number of pad events currently queued. A core whose instructions cost
@@ -544,6 +552,7 @@ impl LogicTap {
             drive: Some(drive),
         });
         self.shared.pending.fetch_add(1, Ordering::Relaxed);
+        self.note_stop(ch);
     }
 
     /// Record a pad level with an optional drive, stamped with `cycle` when
@@ -560,6 +569,34 @@ impl LogicTap {
             drive,
         });
         self.shared.pending.fetch_add(1, Ordering::Relaxed);
+        self.note_stop(ch);
+    }
+
+    /// Flag a push on a batch-stop channel.
+    #[inline]
+    fn note_stop(&self, ch: u32) {
+        if ch >= self.shared.stop_lo.load(Ordering::Relaxed)
+            && ch < self.shared.stop_hi.load(Ordering::Relaxed)
+        {
+            self.shared.stop_hit.store(true, Ordering::Relaxed);
+        }
+    }
+
+    /// Make a push on channels `lo..hi` end the CPU batch it happens in, at
+    /// the instruction that made it (`lo == hi` turns it off). A world sets
+    /// its `gpio_net` pads here: the per-node scheduler runs a node until its
+    /// next own drive change, and a change found only at the end of a wide
+    /// batch could already be due back at the node.
+    pub fn set_batch_stop_channels(&self, lo: u32, hi: u32) {
+        self.shared.stop_lo.store(lo, Ordering::Relaxed);
+        self.shared.stop_hi.store(hi, Ordering::Relaxed);
+    }
+
+    /// A push on a batch-stop channel is queued and not yet drained: a CPU
+    /// batch loop ends after the instruction it is in.
+    #[inline]
+    pub fn batch_stop_hit(&self) -> bool {
+        self.shared.stop_hit.load(Ordering::Relaxed)
     }
 
     pub(crate) fn set_armed(&self, armed: bool) {
@@ -574,11 +611,13 @@ impl LogicTap {
             return Vec::new();
         }
         self.shared.pending.store(0, Ordering::Relaxed);
+        self.shared.stop_hit.store(false, Ordering::Relaxed);
         std::mem::take(&mut *self.shared.queue.lock().unwrap())
     }
 
     pub(crate) fn clear_events(&self) {
         self.shared.pending.store(0, Ordering::Relaxed);
+        self.shared.stop_hit.store(false, Ordering::Relaxed);
         self.shared.queue.lock().unwrap().clear();
     }
 }
@@ -1033,6 +1072,13 @@ impl LogicCapture {
             }
             self.refresh_state(i, now);
         }
+    }
+
+    /// Four-state transitions recorded since the watch set was installed:
+    /// the cursor a [`Self::read_states`] call made now would return.
+    #[inline]
+    pub fn state_seq(&self) -> u64 {
+        self.state_next_seq
     }
 
     /// Read four-state transitions newer than `cursor` — the same contract as

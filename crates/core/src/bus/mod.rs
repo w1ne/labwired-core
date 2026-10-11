@@ -105,7 +105,6 @@ impl SystemBus {
     /// inert or currently-inactive legacy peripherals have no tick output to
     /// lose. Active non-scheduler legacy work blocks fast-forward until the
     /// normal tick path drains it.
-    #[cfg(feature = "event-scheduler")]
     pub(crate) fn idle_fast_forward_legacy_safe(&self) -> bool {
         self.legacy_walk_disabled
             || self

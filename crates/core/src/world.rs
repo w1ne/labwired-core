@@ -9,8 +9,85 @@ use crate::{Bus, Cpu, Machine, SimResult};
 use std::collections::HashMap;
 
 mod gpio_nets;
-pub use gpio_nets::AppliedDelivery;
 use gpio_nets::WorldGpio;
+pub use gpio_nets::{AppliedDelivery, GpioSchedulerStats};
+
+/// Per-machine results of one [`World::step_all_into`] call, in machine id
+/// order. Reused across calls: the ids are copied only when the world's set
+/// of machines changes.
+#[derive(Debug, Default)]
+pub struct StepResults {
+    ids: Vec<String>,
+    results: Vec<SimResult<()>>,
+}
+
+impl StepResults {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn len(&self) -> usize {
+        self.results.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.results.is_empty()
+    }
+
+    /// `(machine id, result)`, in id order.
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &SimResult<()>)> {
+        self.ids.iter().map(String::as_str).zip(&self.results)
+    }
+
+    /// The result of machine `id`, if it was stepped.
+    pub fn get(&self, id: &str) -> Option<&SimResult<()>> {
+        let i = self.ids.binary_search_by(|k| k.as_str().cmp(id)).ok()?;
+        self.results.get(i)
+    }
+
+    /// The first machine, in id order, whose step returned an error.
+    pub fn first_error(&self) -> Option<(&str, &crate::SimulationError)> {
+        self.iter()
+            .find_map(|(id, r)| r.as_ref().err().map(|e| (id, e)))
+    }
+
+    /// The same results as the map [`World::step_all`] returns.
+    pub fn into_map(self) -> HashMap<String, SimResult<()>> {
+        let mut map = HashMap::with_capacity(self.ids.len());
+        for (id, r) in self.ids.into_iter().zip(self.results) {
+            map.insert(id, r);
+        }
+        map
+    }
+
+    /// [`Self::into_map`] that keeps the ids for the next call.
+    fn drain_to_map(&mut self) -> HashMap<String, SimResult<()>> {
+        let mut map = HashMap::with_capacity(self.ids.len());
+        for (id, r) in self.ids.iter().zip(self.results.drain(..)) {
+            map.insert(id.clone(), r);
+        }
+        map
+    }
+
+    /// Start a call's results: these ids, in this (ascending) order.
+    pub(crate) fn set_ids<'a>(&mut self, ids: impl ExactSizeIterator<Item = &'a str> + Clone) {
+        self.results.clear();
+        if self.ids.len() != ids.len() || self.ids.iter().zip(ids.clone()).any(|(a, b)| a != b) {
+            self.ids = ids.map(str::to_string).collect();
+        }
+    }
+
+    fn fill_from_map(&mut self, map: HashMap<String, SimResult<()>>) {
+        let mut pairs: Vec<(String, SimResult<()>)> = map.into_iter().collect();
+        pairs.sort_by(|a, b| a.0.cmp(&b.0));
+        self.results.clear();
+        self.ids.clear();
+        for (id, r) in pairs {
+            self.ids.push(id);
+            self.results.push(r);
+        }
+    }
+}
 
 /// The orchestrator for a multi-node simulation environment.
 ///
@@ -58,6 +135,9 @@ pub struct World {
     /// lockstep round driver instead of the per-node one. Tests compare the
     /// two; see [`World::set_gpio_lockstep`].
     gpio_lockstep: bool,
+    /// [`World::step_all`]'s results before they become its map, kept from
+    /// call to call.
+    step_buf: StepResults,
 }
 
 /// World time of a round-based world.
@@ -153,6 +233,28 @@ pub trait MachineTrait: Send {
             }
         }
         Ok(())
+    }
+    /// Run toward `target` like [`Self::advance_to_cycle`], stopping at the
+    /// first boundary at which a `gpio_net` pad of this machine records a
+    /// drive change; `true` when it stopped for one. Only a machine whose
+    /// [`Self::net_drive_stop_exact`] holds is run this way; the default
+    /// never stops early.
+    fn advance_to_cycle_or_net_drive_change(&mut self, target: u64) -> SimResult<bool> {
+        self.advance_to_cycle(target).map(|()| false)
+    }
+    /// Whether [`Self::advance_to_cycle_or_net_drive_change`] stops exactly
+    /// at the boundary a net pad change is recorded at. A node that cannot is
+    /// held to one net latency past its own time, as its own edges come back
+    /// to it after that. Default `false`.
+    fn net_drive_stop_exact(&self) -> bool {
+        false
+    }
+    /// The cycle before which this machine changes no pad unless one of its
+    /// inputs does: its next scheduled event while it sleeps with idle
+    /// fast-forward on. `None` (the default) when it may change one at any
+    /// time.
+    fn idle_quiet_until(&self) -> Option<u64> {
+        None
     }
     /// Put the named UART on a timed network link. Default: unsupported.
     fn attach_timed_uart(
@@ -482,6 +584,18 @@ impl<C: Cpu + 'static> MachineTrait for Machine<C> {
         Machine::advance_to_cycle(self, target)
     }
 
+    fn advance_to_cycle_or_net_drive_change(&mut self, target: u64) -> SimResult<bool> {
+        Machine::advance_to_cycle_or_net_drive_change(self, target)
+    }
+
+    fn net_drive_stop_exact(&self) -> bool {
+        Machine::net_drive_stop_exact(self)
+    }
+
+    fn idle_quiet_until(&self) -> Option<u64> {
+        Machine::idle_quiet_until(self)
+    }
+
     fn set_idle_fast_forward(&mut self, enabled: bool) {
         self.config.idle_fast_forward_enabled = enabled;
     }
@@ -603,6 +717,7 @@ impl World {
             marker_pins: Default::default(),
             pending_nets: Vec::new(),
             gpio_lockstep: false,
+            step_buf: StepResults::new(),
         }
     }
 
@@ -722,8 +837,12 @@ impl World {
         if self.ble.is_some() {
             return self.step_all_time_lockstep();
         }
-        if self.gpio.is_some() && self.uart_net.is_none() && !self.gpio_lockstep {
-            return self.step_all_gpio();
+        if self.gpio_per_node() {
+            let mut results = std::mem::take(&mut self.step_buf);
+            self.step_all_gpio(&mut results);
+            let map = results.drain_to_map();
+            self.step_buf = results;
+            return map;
         }
         if self.uart_net.is_some() || self.gpio.is_some() {
             return self.step_all_rounds();
@@ -745,6 +864,25 @@ impl World {
             }
         }
         results
+    }
+
+    /// [`World::step_all`] into `results`, which keeps its storage from one
+    /// call to the next: the same per-machine results in machine id order,
+    /// without a map and a copy of every id per call. A front end that steps
+    /// a world round by round (`labwired test`, Python) reuses one.
+    pub fn step_all_into(&mut self, results: &mut StepResults) {
+        if self.ble.is_none() && self.gpio_per_node() {
+            self.step_all_gpio(results);
+        } else {
+            let map = self.step_all();
+            results.fill_from_map(map);
+        }
+    }
+
+    /// GPIO nets and no timed UART network: `step_all` runs the per-node
+    /// scheduler.
+    fn gpio_per_node(&self) -> bool {
+        self.gpio.is_some() && self.uart_net.is_none() && !self.gpio_lockstep
     }
 
     /// One round of a BLE world: step every node that is not more than
@@ -920,7 +1058,7 @@ impl World {
     /// [`World::step_all_rounds`], run by the per-node scheduler
     /// ([`gpio_nets::WorldGpio::run_to`]) with none of the lockstep driver's
     /// per-round lookups and allocations.
-    fn step_all_gpio(&mut self) -> HashMap<String, SimResult<()>> {
+    fn step_all_gpio(&mut self, results: &mut StepResults) {
         let target = match self.round.end_ps {
             Some(target) => target,
             // Without a timed UART network a round start has no events, no
@@ -932,6 +1070,7 @@ impl World {
             &self.node_hz,
             target,
             Some(UART_NET_STEP_CYCLES),
+            results,
         );
         if out.all_there {
             self.round.now_ps = target;
@@ -942,7 +1081,6 @@ impl World {
                 tracing::warn!("interconnect error: {:?}", e);
             }
         }
-        out.results
     }
 
     /// Run a round-based world (timed UART network or GPIO nets) to world
@@ -968,10 +1106,11 @@ impl World {
         if fast {
             // Finish a round a step budget left part way, so the round clock
             // stays on round ends, then run the rest in one go.
+            let mut results = StepResults::new();
             while self.round.end_ps.is_some_and(|end| end <= target_ps) {
-                let results = self.step_all_gpio();
-                if results.values().any(Result::is_err) {
-                    return Some(results);
+                self.step_all_gpio(&mut results);
+                if results.first_error().is_some() {
+                    return Some(results.into_map());
                 }
             }
             if self.round.end_ps.is_none() && self.round.now_ps < target_ps {
@@ -980,11 +1119,12 @@ impl World {
                     &self.node_hz,
                     target_ps,
                     None,
+                    &mut results,
                 );
                 if out.all_there {
                     self.round.now_ps = target_ps;
                 }
-                return Some(out.results);
+                return Some(results.into_map());
             }
         }
         let mut results = HashMap::new();
@@ -1140,6 +1280,13 @@ impl World {
     /// wire carried the change, then node id. For tests and tools.
     pub fn gpio_net_applied(&self) -> &[AppliedDelivery] {
         self.gpio.as_ref().map_or(&[], |g| g.applied())
+    }
+
+    /// How the per-node GPIO-net scheduler has cut the run so far: how many
+    /// pieces the net nodes ran in, and how many of those ended at the node's
+    /// own drive change. For tests and tools; `None` without GPIO nets.
+    pub fn gpio_net_scheduler_stats(&self) -> Option<GpioSchedulerStats> {
+        self.gpio.as_ref().map(|g| g.stats)
     }
 
     /// Run GPIO-net rounds shorter than the shortest latency. Results must
