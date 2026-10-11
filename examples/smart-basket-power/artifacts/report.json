@@ -1,0 +1,500 @@
+{
+  "passed": true,
+  "evidence_boundary": "power-only; no firmware/Linux/RF/thermal/physical hardware",
+  "parameter_source": "documented default assumptions",
+  "parameters": {
+    "capacity_mah": 2000.0,
+    "initial_soc": 0.6,
+    "usb_limit_a": 1.5,
+    "charge_limit_a": 0.5,
+    "boost_efficiency": 0.9,
+    "buck_efficiency": 0.9,
+    "low_battery_v": 3.4,
+    "cutoff_v": 3.1,
+    "shutdown_timeout_s": 5.0
+  },
+  "scenario_overrides": {
+    "low_ack/low_timeout": {
+      "initial_soc": 0.08,
+      "shutdown_timeout_s": 1.0
+    },
+    "undervoltage": {
+      "initial_soc": 0.0
+    },
+    "full_charge": {
+      "initial_soc": 1.0
+    }
+  },
+  "scenario_count": 7,
+  "waveform_rows": 420,
+  "assertions": [
+    {
+      "name": "usb_detach.deterministic_replay",
+      "passed": true,
+      "detail": "same JSONL replayed in two fresh model processes"
+    },
+    {
+      "name": "usb_detach.finite_and_bounded",
+      "passed": true,
+      "detail": "finite outputs, SOC 0..1, USB input limit, bus power residual < 1e-10 W"
+    },
+    {
+      "name": "radio_burst.deterministic_replay",
+      "passed": true,
+      "detail": "same JSONL replayed in two fresh model processes"
+    },
+    {
+      "name": "radio_burst.finite_and_bounded",
+      "passed": true,
+      "detail": "finite outputs, SOC 0..1, USB input limit, bus power residual < 1e-10 W"
+    },
+    {
+      "name": "low_ack.deterministic_replay",
+      "passed": true,
+      "detail": "same JSONL replayed in two fresh model processes"
+    },
+    {
+      "name": "low_ack.finite_and_bounded",
+      "passed": true,
+      "detail": "finite outputs, SOC 0..1, USB input limit, bus power residual < 1e-10 W"
+    },
+    {
+      "name": "low_timeout.deterministic_replay",
+      "passed": true,
+      "detail": "same JSONL replayed in two fresh model processes"
+    },
+    {
+      "name": "low_timeout.finite_and_bounded",
+      "passed": true,
+      "detail": "finite outputs, SOC 0..1, USB input limit, bus power residual < 1e-10 W"
+    },
+    {
+      "name": "short.deterministic_replay",
+      "passed": true,
+      "detail": "same JSONL replayed in two fresh model processes"
+    },
+    {
+      "name": "short.finite_and_bounded",
+      "passed": true,
+      "detail": "finite outputs, SOC 0..1, USB input limit, bus power residual < 1e-10 W"
+    },
+    {
+      "name": "undervoltage.deterministic_replay",
+      "passed": true,
+      "detail": "same JSONL replayed in two fresh model processes"
+    },
+    {
+      "name": "undervoltage.finite_and_bounded",
+      "passed": true,
+      "detail": "finite outputs, SOC 0..1, USB input limit, bus power residual < 1e-10 W"
+    },
+    {
+      "name": "full_charge.deterministic_replay",
+      "passed": true,
+      "detail": "same JSONL replayed in two fresh model processes"
+    },
+    {
+      "name": "full_charge.finite_and_bounded",
+      "passed": true,
+      "detail": "finite outputs, SOC 0..1, USB input limit, bus power residual < 1e-10 W"
+    },
+    {
+      "name": "usb_detach.charging_on_usb",
+      "passed": true,
+      "detail": {
+        "battery_current_a": -0.4999999999999982,
+        "battery_power_w": -1.9425260416666597,
+        "battery_terminal_interval_v": 3.885052083333333,
+        "battery_v": 3.8850572916666666,
+        "charge_current_a": 0.4999999999999982,
+        "cutoff_latched": false,
+        "delivered_load_w": 2.1,
+        "delivered_rail_input_w": 2.111111111111111,
+        "fault_reason": "none",
+        "power_balance_error_w": 4.440892098500626e-16,
+        "rail_3v3": 3.3,
+        "rail_5v": 5.0,
+        "rail_input_load_w": 2.111111111111111,
+        "requested_load_w": 2.1,
+        "shutdown_request": false,
+        "soc": 0.6000763888888894,
+        "usb_current_a": 0.8749211295783305,
+        "usb_input_power_w": 4.374605647891652
+      }
+    },
+    {
+      "name": "usb_detach.battery_supplies_detached",
+      "passed": true,
+      "detail": {
+        "battery_current_a": 0.6255127250760576,
+        "battery_power_w": 2.345679012345679,
+        "battery_terminal_interval_v": 3.7500100610430627,
+        "battery_v": 3.75000354528551,
+        "charge_current_a": 0.0,
+        "cutoff_latched": false,
+        "delivered_load_w": 2.1,
+        "delivered_rail_input_w": 2.111111111111111,
+        "fault_reason": "none",
+        "power_balance_error_w": 0.0,
+        "rail_3v3": 3.3,
+        "rail_5v": 5.0,
+        "rail_input_load_w": 2.111111111111111,
+        "requested_load_w": 2.1,
+        "shutdown_request": false,
+        "soc": 0.6000867630595157,
+        "usb_current_a": 0.0,
+        "usb_input_power_w": 0.0
+      }
+    },
+    {
+      "name": "usb_detach.rails_survive",
+      "passed": true,
+      "detail": "all 60 steps"
+    },
+    {
+      "name": "radio_burst.more_current",
+      "passed": true,
+      "detail": {
+        "idle_a": 0.6255360017278665,
+        "burst_a": 1.2427375754792045
+      }
+    },
+    {
+      "name": "radio_burst.cell_sag",
+      "passed": true,
+      "detail": {
+        "idle_v": 3.749864004427909,
+        "burst_v": 3.675663500671954
+      }
+    },
+    {
+      "name": "low_ack.requests_before_cutoff",
+      "passed": true,
+      "detail": {
+        "battery_current_a": 0.7130962250323951,
+        "battery_power_w": 2.345679012345679,
+        "battery_terminal_interval_v": 3.2894284529961126,
+        "battery_v": 3.289403692710521,
+        "charge_current_a": 0.0,
+        "cutoff_latched": false,
+        "delivered_load_w": 2.1,
+        "delivered_rail_input_w": 2.111111111111111,
+        "fault_reason": "none",
+        "power_balance_error_w": 0.0,
+        "rail_3v3": 3.3,
+        "rail_5v": 5.0,
+        "rail_input_load_w": 2.111111111111111,
+        "requested_load_w": 2.1,
+        "shutdown_request": true,
+        "soc": 0.07999009588576345,
+        "usb_current_a": 0.0,
+        "usb_input_power_w": 0.0
+      }
+    },
+    {
+      "name": "low_ack.disables_rails",
+      "passed": true,
+      "detail": {
+        "battery_current_a": 0.0,
+        "battery_power_w": 0.0,
+        "battery_terminal_interval_v": 3.3749257185691537,
+        "battery_v": 3.3749257185691537,
+        "charge_current_a": 0.0,
+        "cutoff_latched": true,
+        "delivered_load_w": 0.0,
+        "delivered_rail_input_w": 0.0,
+        "fault_reason": "shutdown_ack",
+        "power_balance_error_w": 0.0,
+        "rail_3v3": 0.0,
+        "rail_5v": 0.0,
+        "rail_input_load_w": 2.111111111111111,
+        "requested_load_w": 2.1,
+        "shutdown_request": true,
+        "soc": 0.07997028742766156,
+        "usb_current_a": 0.0,
+        "usb_input_power_w": 0.0
+      }
+    },
+    {
+      "name": "low_ack.no_automatic_restart",
+      "passed": true,
+      "detail": {
+        "battery_current_a": 0.0,
+        "battery_power_w": 0.0,
+        "battery_terminal_interval_v": 3.3749257185691537,
+        "battery_v": 3.3749257185691537,
+        "charge_current_a": 0.0,
+        "cutoff_latched": true,
+        "delivered_load_w": 0.0,
+        "delivered_rail_input_w": 0.0,
+        "fault_reason": "shutdown_ack",
+        "power_balance_error_w": 0.0,
+        "rail_3v3": 0.0,
+        "rail_5v": 0.0,
+        "rail_input_load_w": 2.111111111111111,
+        "requested_load_w": 2.1,
+        "shutdown_request": true,
+        "soc": 0.07997028742766156,
+        "usb_current_a": 0.0,
+        "usb_input_power_w": 0.0
+      }
+    },
+    {
+      "name": "low_timeout.cuts_without_ack",
+      "passed": true,
+      "detail": {
+        "battery_current_a": 0.0,
+        "battery_power_w": 0.0,
+        "battery_terminal_interval_v": 3.374752388532533,
+        "battery_v": 3.374752388532533,
+        "charge_current_a": 0.0,
+        "cutoff_latched": true,
+        "delivered_load_w": 0.0,
+        "delivered_rail_input_w": 0.0,
+        "fault_reason": "shutdown_timeout",
+        "power_balance_error_w": 0.0,
+        "rail_3v3": 0.0,
+        "rail_5v": 0.0,
+        "rail_input_load_w": 2.111111111111111,
+        "requested_load_w": 2.1,
+        "shutdown_request": true,
+        "soc": 0.0799009554130132,
+        "usb_current_a": 0.0,
+        "usb_input_power_w": 0.0
+      }
+    },
+    {
+      "name": "short.immediate_disconnect",
+      "passed": true,
+      "detail": {
+        "battery_current_a": 0.0,
+        "battery_power_w": 0.0,
+        "battery_terminal_interval_v": 3.825104166666667,
+        "battery_v": 3.825104166666667,
+        "charge_current_a": 0.0,
+        "cutoff_latched": true,
+        "delivered_load_w": 0.0,
+        "delivered_rail_input_w": 0.0,
+        "fault_reason": "short",
+        "power_balance_error_w": 0.0,
+        "rail_3v3": 0.0,
+        "rail_5v": 0.0,
+        "rail_input_load_w": 2.111111111111111,
+        "requested_load_w": 2.1,
+        "shutdown_request": false,
+        "soc": 0.6001388888888898,
+        "usb_current_a": 0.0,
+        "usb_input_power_w": 0.0
+      }
+    },
+    {
+      "name": "short.stays_off_after_fault_clears",
+      "passed": true,
+      "detail": {
+        "battery_current_a": -0.4999999999999982,
+        "battery_power_w": -1.94256510416666,
+        "battery_terminal_interval_v": 3.885130208333334,
+        "battery_v": 3.885135416666667,
+        "charge_current_a": 0.4999999999999982,
+        "cutoff_latched": true,
+        "delivered_load_w": 0.0,
+        "delivered_rail_input_w": 0.0,
+        "fault_reason": "short",
+        "power_balance_error_w": 0.0,
+        "rail_3v3": 0.0,
+        "rail_5v": 0.0,
+        "rail_input_load_w": 2.111111111111111,
+        "requested_load_w": 2.1,
+        "shutdown_request": false,
+        "soc": 0.6001805555555567,
+        "usb_current_a": 0.43048534164358127,
+        "usb_input_power_w": 2.1524267082179063
+      }
+    },
+    {
+      "name": "short.explicit_reset_recovers",
+      "passed": true,
+      "detail": {
+        "battery_current_a": -0.4999999999999982,
+        "battery_power_w": -1.9425911458333267,
+        "battery_terminal_interval_v": 3.885182291666667,
+        "battery_v": 3.8851875000000007,
+        "charge_current_a": 0.4999999999999982,
+        "cutoff_latched": false,
+        "delivered_load_w": 2.1,
+        "delivered_rail_input_w": 2.111111111111111,
+        "fault_reason": "none",
+        "power_balance_error_w": 4.440892098500626e-16,
+        "rail_3v3": 3.3,
+        "rail_5v": 5.0,
+        "rail_input_load_w": 2.111111111111111,
+        "requested_load_w": 2.1,
+        "shutdown_request": false,
+        "soc": 0.6002500000000016,
+        "usb_current_a": 0.8749355570944892,
+        "usb_input_power_w": 4.374677785472446
+      }
+    },
+    {
+      "name": "undervoltage.independent_cutoff",
+      "passed": true,
+      "detail": {
+        "battery_current_a": 0.0,
+        "battery_power_w": 0.0,
+        "battery_terminal_interval_v": 3.0,
+        "battery_v": 3.0,
+        "charge_current_a": 0.0,
+        "cutoff_latched": true,
+        "delivered_load_w": 0.0,
+        "delivered_rail_input_w": 0.0,
+        "fault_reason": "undervoltage",
+        "power_balance_error_w": 0.0,
+        "rail_3v3": 0.0,
+        "rail_5v": 0.0,
+        "rail_input_load_w": 2.111111111111111,
+        "requested_load_w": 2.1,
+        "shutdown_request": true,
+        "soc": 0.0,
+        "usb_current_a": 0.0,
+        "usb_input_power_w": 0.0
+      }
+    },
+    {
+      "name": "full_charge.charge_terminated",
+      "passed": true,
+      "detail": "full cell receives no charging current"
+    },
+    {
+      "name": "divider_rc.ngspice_matches_closed_form",
+      "passed": true,
+      "detail": "100k/100k divider, 100nF, 4V step: max absolute error < 10mV"
+    },
+    {
+      "name": "native.usb.routes_and_steps",
+      "passed": true,
+      "detail": {
+        "basket.power.battery_current_a": -0.20574773732871843,
+        "basket.power.battery_power_w": -0.8074999999999969,
+        "basket.power.battery_terminal_interval_v": 3.924709017382158,
+        "basket.power.battery_v": 3.924711160587755,
+        "basket.power.charge_current_a": 0.20574773732871843,
+        "basket.power.cutoff_latched": false,
+        "basket.power.delivered_load_w": 2.0,
+        "basket.power.delivered_rail_input_w": 2.0,
+        "basket.power.fault_reason": "none",
+        "basket.power.power_balance_error_w": 2.220446049250313e-16,
+        "basket.power.rail_3v3": 3.3,
+        "basket.power.rail_5v": 5.0,
+        "basket.power.rail_input_load_w": 2.0,
+        "basket.power.requested_load_w": 2.0,
+        "basket.power.shutdown_request": false,
+        "basket.power.soc": 0.7000285761444122,
+        "basket.power.usb_current_a": 0.5999999999999994,
+        "basket.power.usb_input_power_w": 2.999999999999997
+      }
+    },
+    {
+      "name": "native.battery.routes_and_steps",
+      "passed": true,
+      "detail": {
+        "basket.power.battery_current_a": 0.5801653320387324,
+        "basket.power.battery_power_w": 2.2222222222222223,
+        "basket.power.battery_terminal_interval_v": 3.830325770092489,
+        "basket.power.battery_v": 3.8303197267036135,
+        "basket.power.charge_current_a": 0.0,
+        "basket.power.cutoff_latched": false,
+        "basket.power.delivered_load_w": 2.0,
+        "basket.power.delivered_rail_input_w": 2.0,
+        "basket.power.fault_reason": "none",
+        "basket.power.power_balance_error_w": 0.0,
+        "basket.power.rail_3v3": 3.3,
+        "basket.power.rail_5v": 5.0,
+        "basket.power.rail_input_load_w": 2.0,
+        "basket.power.requested_load_w": 2.0,
+        "basket.power.shutdown_request": false,
+        "basket.power.soc": 0.6999194220643489,
+        "basket.power.usb_current_a": 0.0,
+        "basket.power.usb_input_power_w": 0.0
+      }
+    }
+  ],
+  "divider_rc": {
+    "passed": true,
+    "samples": [
+      {
+        "time_ns": 5000000,
+        "ngspice_adc_v": 1.2709411311617953,
+        "analytic_adc_v": 1.2642411176571153,
+        "error_v": 0.006700013504679969
+      },
+      {
+        "time_ns": 10000000,
+        "ngspice_adc_v": 1.7318501220911757,
+        "analytic_adc_v": 1.7293294335267746,
+        "error_v": 0.00252068856440113
+      },
+      {
+        "time_ns": 15000000,
+        "ngspice_adc_v": 1.9013737297550444,
+        "analytic_adc_v": 1.900425863264272,
+        "error_v": 0.0009478664907722756
+      },
+      {
+        "time_ns": 20000000,
+        "ngspice_adc_v": 1.963724983735629,
+        "analytic_adc_v": 1.9633687222225316,
+        "error_v": 0.00035626151309742227
+      },
+      {
+        "time_ns": 25000000,
+        "ngspice_adc_v": 1.9866579482148896,
+        "analytic_adc_v": 1.986524106001829,
+        "error_v": 0.00013384221306056432
+      }
+    ]
+  },
+  "native_runner": [
+    {
+      "command": [
+        "/home/andrii/projects/labwired-core-qemu-arm/target/debug/labwired",
+        "cosim-step",
+        "/home/andrii/projects/labwired-core-qemu-arm/examples/smart-basket-power/system.yaml",
+        "--steps",
+        "10",
+        "--json",
+        "--set",
+        "basket.usb_present=true",
+        "--set",
+        "basket.host_load_w=2.0",
+        "--set",
+        "basket.config.initial_soc=0.7",
+        "--set",
+        "basket.config.usb_limit_a=0.6"
+      ],
+      "output": "native_usb.json",
+      "step_count": 10
+    },
+    {
+      "command": [
+        "/home/andrii/projects/labwired-core-qemu-arm/target/debug/labwired",
+        "cosim-step",
+        "/home/andrii/projects/labwired-core-qemu-arm/examples/smart-basket-power/system.yaml",
+        "--steps",
+        "10",
+        "--json",
+        "--set",
+        "basket.usb_present=false",
+        "--set",
+        "basket.host_load_w=2.0",
+        "--set",
+        "basket.config.initial_soc=0.7",
+        "--set",
+        "basket.config.usb_limit_a=0.6"
+      ],
+      "output": "native_battery.json",
+      "step_count": 10
+    }
+  ],
+  "model_sha256": "f2bdb20fcf20c8c1a1df9a31ac56f0a0a9365cd56ba816a9b76c419045f575ca",
+  "native_cli_sha256": "2863b626c9f4295f7a42dd21e04bda484d76ee8c4ca9c09158730988e0698c87"
+}

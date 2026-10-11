@@ -1,0 +1,49 @@
+# Power-only native external-process demo; chip is a manifest fixture, no firmware runs.
+name: smart-basket-power
+chip: ../../configs/chips/stm32f103.yaml
+cosim_models:
+  - id: basket_power
+    adapter: external_process
+    model: ./models/power.py
+    step_ns: 100000000 # 100 ms, bounded power/control observation interval
+    inputs:
+      config.capacity_mah: basket.config.capacity_mah
+      config.initial_soc: basket.config.initial_soc
+      config.usb_limit_a: basket.config.usb_limit_a
+      config.charge_limit_a: basket.config.charge_limit_a
+      config.boost_efficiency: basket.config.boost_efficiency
+      config.buck_efficiency: basket.config.buck_efficiency
+      config.low_battery_v: basket.config.low_battery_v
+      config.cutoff_v: basket.config.cutoff_v
+      config.shutdown_timeout_s: basket.config.shutdown_timeout_s
+      usb_present: basket.usb_present
+      host_load_w: basket.host_load_w
+      radio_load_w: basket.radio_load_w
+      sensor_load_w: basket.sensor_load_w
+      shutdown_ack: basket.shutdown_ack
+      enable: basket.enable
+      fault_short: basket.fault_short
+      reset: basket.reset
+    outputs:
+      soc: basket.power.soc
+      battery_v: basket.power.battery_v
+      battery_terminal_interval_v: basket.power.battery_terminal_interval_v
+      battery_current_a: basket.power.battery_current_a
+      charge_current_a: basket.power.charge_current_a
+      battery_power_w: basket.power.battery_power_w
+      usb_current_a: basket.power.usb_current_a
+      usb_input_power_w: basket.power.usb_input_power_w
+      rail_5v: basket.power.rail_5v
+      rail_3v3: basket.power.rail_3v3
+      requested_load_w: basket.power.requested_load_w
+      rail_input_load_w: basket.power.rail_input_load_w
+      delivered_load_w: basket.power.delivered_load_w
+      delivered_rail_input_w: basket.power.delivered_rail_input_w
+      shutdown_request: basket.power.shutdown_request
+      cutoff_latched: basket.power.cutoff_latched
+      fault_reason: basket.power.fault_reason
+      power_balance_error_w: basket.power.power_balance_error_w
+    config:
+      protocol: jsonl
+      purpose: "Reduced-order power-only assumptions; parameters route through inputs"
+external_devices: []

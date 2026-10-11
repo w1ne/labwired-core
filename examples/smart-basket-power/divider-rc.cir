@@ -1,0 +1,6 @@
+* Assumed 1:2 battery measurement divider plus input RC filter
+Vbattery battery 0 dc 0
+Rtop battery adc 100k
+Rbottom adc 0 100k
+Cfilter adc 0 100n
+.end
