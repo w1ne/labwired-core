@@ -482,4 +482,54 @@ impl SystemBus {
         };
         Ok(layout)
     }
+
+    /// The pad-control block a GPIO port names for its pulls, from
+    /// `config: { pad_control: <block id>, … }` (see
+    /// [`crate::pins::PadControl`]). Kinetis needs nothing more (`PCRn` at
+    /// `4·n`); RA needs `pad_control_port` (the `m` of `PmnPFS`); i.MX RT needs
+    /// `pad_control_offset` (pin 0's `SW_PAD_CTL_PAD` offset in IOMUXC). A
+    /// layout whose pulls live in its own registers refuses the key.
+    pub(crate) fn gpio_pad_control_for(
+        p_cfg: &PeripheralConfig,
+        layout: crate::peripherals::gpio::GpioRegisterLayout,
+    ) -> anyhow::Result<Option<(String, crate::pins::PadControl)>> {
+        use crate::peripherals::gpio::GpioRegisterLayout;
+        use crate::pins::PadControl;
+        let Some(block) = p_cfg.config.get("pad_control") else {
+            return Ok(None);
+        };
+        let block = block.as_str().ok_or_else(|| {
+            anyhow::anyhow!(
+                "GPIO peripheral '{}': `pad_control` must name a peripheral id",
+                p_cfg.id
+            )
+        })?;
+        let number = |key: &str| {
+            p_cfg
+                .config
+                .get(key)
+                .and_then(|v| v.as_u64())
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "GPIO peripheral '{}': `pad_control` on this layout needs `{key}`",
+                        p_cfg.id
+                    )
+                })
+        };
+        let control = match layout {
+            GpioRegisterLayout::Kinetis => PadControl::KinetisPcr,
+            GpioRegisterLayout::RaPort => PadControl::RaPfs {
+                port: u8::try_from(number("pad_control_port")?)?,
+            },
+            GpioRegisterLayout::Imxrt => PadControl::ImxrtPadCtl {
+                base: number("pad_control_offset")?,
+            },
+            other => anyhow::bail!(
+                "GPIO peripheral '{}': layout {other:?} keeps its pulls in its own registers; \
+                 `pad_control` applies to kinetis, ra_port and imxrt only",
+                p_cfg.id
+            ),
+        };
+        Ok(Some((block.to_string(), control)))
+    }
 }

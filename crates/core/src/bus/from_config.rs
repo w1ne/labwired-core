@@ -301,6 +301,7 @@ impl SystemBus {
             esp32c3_gpio_idx: None,
             rp2040_io_bank0_idx: None,
             rp2040_sio_idx: None,
+            pad_control_links: Vec::new(),
             pin_port_ids: Vec::new(),
             rcc_idx: None,
             clock_gating_bypass: false,
@@ -708,7 +709,9 @@ impl SystemBus {
                     // For nRF52 ports, an optional `num_pins` config key caps the
                     // valid-pin range (e.g. 16 for nRF52840 P1 which has P1.0–P1.15).
                     // Writes outside that range are discarded; reads return 0.
-                    if layout == GpioRegisterLayout::Nrf52 || layout == GpioRegisterLayout::Nrf54l {
+                    let port = if layout == GpioRegisterLayout::Nrf52
+                        || layout == GpioRegisterLayout::Nrf54l
+                    {
                         let num_pins: u32 = p_cfg
                             .config
                             .get("num_pins")
@@ -720,7 +723,7 @@ impl SystemBus {
                         } else {
                             crate::peripherals::gpio::GpioPort::new_nrf52(num_pins)
                         };
-                        Box::new(port.with_window_offset(window_offset))
+                        port.with_window_offset(window_offset)
                     } else if layout == GpioRegisterLayout::Stm32V2
                         && p_cfg.config.contains_key("reset_moder")
                     {
@@ -734,19 +737,22 @@ impl SystemBus {
                                 .map(|n| n as u32)
                                 .unwrap_or(0)
                         };
-                        Box::new(
-                            crate::peripherals::gpio::GpioPort::new_stm32v2_with_resets(
-                                cfg_u32("reset_moder"),
-                                cfg_u32("reset_ospeedr"),
-                                cfg_u32("reset_pupdr"),
-                            )
-                            .with_window_offset(window_offset),
+                        crate::peripherals::gpio::GpioPort::new_stm32v2_with_resets(
+                            cfg_u32("reset_moder"),
+                            cfg_u32("reset_ospeedr"),
+                            cfg_u32("reset_pupdr"),
                         )
+                        .with_window_offset(window_offset)
                     } else {
-                        Box::new(
-                            crate::peripherals::gpio::GpioPort::new_with_layout(layout)
-                                .with_window_offset(window_offset),
-                        )
+                        crate::peripherals::gpio::GpioPort::new_with_layout(layout)
+                            .with_window_offset(window_offset)
+                    };
+                    // Optional `pad_control`: the id of the block that keeps
+                    // this port's pulls (Kinetis PORTx, RA PFS, i.MX RT
+                    // IOMUXC). See `crate::pins::PadControl`.
+                    match Self::gpio_pad_control_for(p_cfg, layout)? {
+                        Some((block, control)) => Box::new(port.with_pad_control(block, control)),
+                        None => Box::new(port),
                     }
                 }
                 // ESP32-C3 behavioral GP-SPI2 controller (CPU/W-buffer
