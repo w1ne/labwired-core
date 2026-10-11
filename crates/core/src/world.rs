@@ -434,6 +434,9 @@ pub trait MachineTrait: Send {
         _update: &crate::network::timed_can::CanNodeUpdate,
     ) {
     }
+    /// Run with the widest peripheral-tick batch the bus declares safe and
+    /// idle fast-forward, as the single-chip front ends do. Default no-op.
+    fn use_widest_safe_tick(&mut self) {}
 }
 
 impl<C: Cpu + 'static> MachineTrait for Machine<C> {
@@ -575,6 +578,17 @@ impl<C: Cpu + 'static> MachineTrait for Machine<C> {
 
     fn can_timed_apply(&mut self, can_id: &str, update: &crate::network::timed_can::CanNodeUpdate) {
         self.bus.can_timed_apply(can_id, update);
+    }
+
+    fn use_widest_safe_tick(&mut self) {
+        // What the CLI and the browser's single-chip engine give a Cortex-M
+        // board (and a world's ROM-booted C3 node): `max_safe_tick_interval`
+        // is 1 unless the walk is deleted under the event scheduler, where
+        // scheduler-driven peripherals keep exact timing at any interval.
+        let interval = Machine::max_safe_tick_interval(self);
+        self.config.peripheral_tick_interval = interval;
+        self.bus.config.peripheral_tick_interval = interval;
+        self.config.idle_fast_forward_enabled = true;
     }
 
     fn advance_to_cycle(&mut self, target: u64) -> SimResult<()> {
@@ -925,8 +939,9 @@ impl World {
     }
 
     /// One slice of a conservative synchronisation round of a round-based
-    /// world (a timed UART network, GPIO nets, or both): every node advances
-    /// at most [`UART_NET_STEP_CYCLES`] toward the round end, and the round
+    /// world (a timed UART network, GPIO nets, timed CAN buses): every node
+    /// advances at most [`UART_NET_STEP_CYCLES`] toward the round end (the
+    /// whole way in a world whose only medium is timed CAN), and the round
     /// completes when all have reached it.
     ///
     /// Every node runs to the same world time `T + Δ`, where `Δ` is at most
@@ -945,6 +960,16 @@ impl World {
         let mut ids: Vec<_> = self.machines.keys().cloned().collect();
         ids.sort();
         let mut results = HashMap::new();
+        // A world whose only round-based medium is timed CAN and that has no
+        // other interconnect to tick runs every node to the round end in one
+        // call: nothing passes between nodes inside a round, so slicing it
+        // only costs calls.
+        let budget =
+            if self.uart_net.is_none() && self.gpio.is_none() && self.interconnects.is_empty() {
+                u64::MAX
+            } else {
+                UART_NET_STEP_CYCLES
+            };
         let target = match self.round.end_ps {
             Some(target) => target,
             None => self.start_round(&ids, &mut results),
@@ -966,7 +991,7 @@ impl World {
             let r = match self.gpio.as_mut() {
                 None => {
                     if before < cycle {
-                        machine.advance_to_cycle(cycle.min(before + UART_NET_STEP_CYCLES))
+                        machine.advance_to_cycle(cycle.min(before.saturating_add(budget)))
                     } else {
                         Ok(())
                     }
@@ -1433,6 +1458,14 @@ impl World {
                 .expect("all can_bus nodes were validated above")
                 .attach_timed_can(endpoint)
                 .with_context(|| format!("can_bus node '{node_id}'"))?;
+            // The timed controllers leave the walk deleted under the event
+            // scheduler, so the node can run in wide batches; a TX request is
+            // still stamped with its instruction's cycle (the bus clock is
+            // advanced per instruction inside a batch).
+            self.machines
+                .get_mut(node_id)
+                .expect("all can_bus nodes were validated above")
+                .use_widest_safe_tick();
             nodes.push((node_id.clone(), endpoint.clone(), hz));
         }
         let bus = crate::network::timed_can::TimedCanBus::new(&id, bitrate, nodes);
