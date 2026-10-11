@@ -75,9 +75,11 @@ fn datasheet_transcriptions() {
 /// voltage route to its pads a build error instead of a guess.
 #[test]
 fn an_untranscribed_chip_declares_nothing() {
-    let desc = load("rp2040");
-    assert_eq!(desc.io_voltage_v, None);
-    assert_eq!(desc.gpio_input_thresholds, None);
+    for chip in ["rp2040", "rv1103"] {
+        let desc = load(chip);
+        assert_eq!(desc.io_voltage_v, None, "{chip}");
+        assert_eq!(desc.gpio_input_thresholds, None, "{chip}");
+    }
 }
 
 fn parse_levels(block: &str) -> Result<ChipDescriptor, serde_yaml::Error> {

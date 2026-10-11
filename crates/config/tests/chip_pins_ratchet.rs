@@ -22,6 +22,10 @@
 //! inventing a single pin number — the numbers themselves are datasheet work,
 //! one chip at a time, and a wrong one is worse than the guess it replaces
 //! because it looks authoritative.
+//!
+//! RV1103 is declared CPU/memory geometry only. It has no modeled GPIO or pin
+//! resolver to exercise, so it is explicitly accounted for separately from
+//! parse fallback. This exception expires when pins or peripherals are added.
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;
@@ -101,14 +105,34 @@ fn shippable_chips() -> BTreeSet<String> {
         .collect()
 }
 
-fn declares_pins(chip: &str) -> bool {
+fn chip_doc(chip: &str) -> serde_yaml::Value {
     let text = std::fs::read_to_string(chips_dir().join(format!("{chip}.yaml")))
         .unwrap_or_else(|e| panic!("read {chip}.yaml: {e}"));
-    let doc: serde_yaml::Value =
-        serde_yaml::from_str(&text).unwrap_or_else(|e| panic!("parse {chip}.yaml: {e}"));
+    serde_yaml::from_str(&text).unwrap_or_else(|e| panic!("parse {chip}.yaml: {e}"))
+}
+
+fn declares_pins(chip: &str) -> bool {
+    let doc = chip_doc(chip);
     doc.get("pins")
         .and_then(|p| p.as_mapping())
         .is_some_and(|m| !m.is_empty())
+}
+
+/// A classification of this exact unmodeled SoC, not modeled-pin coverage.
+fn declared_only(chip: &str, doc: &serde_yaml::Value) -> bool {
+    chip == "rv1103"
+        && doc.get("name").and_then(|v| v.as_str()) == Some("rv1103")
+        && doc.get("arch").and_then(|v| v.as_str()) == Some("arm")
+        && doc.get("core").and_then(|v| v.as_str()) == Some("cortex-a7")
+        && doc
+            .get("peripherals")
+            .and_then(|v| v.as_sequence())
+            .is_some_and(|p| p.is_empty())
+        && (doc.get("pins").is_none()
+            || doc
+                .get("pins")
+                .and_then(|v| v.as_mapping())
+                .is_some_and(|p| p.is_empty()))
 }
 
 #[test]
@@ -118,14 +142,50 @@ fn every_chip_is_accounted_for() {
 
     let unaccounted: Vec<&String> = chips
         .iter()
-        .filter(|c| !declares_pins(c) && !listed.contains(*c))
+        .filter(|c| !declares_pins(c) && !listed.contains(*c) && !declared_only(c, &chip_doc(c)))
         .collect();
     assert!(
         unaccounted.is_empty(),
-        "these chips declare no `pins:` and are not recorded as parse-fallback: {unaccounted:?}.\n\
+        "these chips declare no `pins:` and are not recorded as parse-fallback or declared-only: {unaccounted:?}.\n\
          Either transcribe the pin map from the datasheet (preferred — the parse is a guess),\n\
          or add the name to PARSE_FALLBACK_CHIPS with the rest."
     );
+}
+
+#[test]
+fn declared_only_does_not_claim_pins_or_hide_a_new_model() {
+    let doc = chip_doc("rv1103");
+    assert!(shippable_chips().contains("rv1103"));
+    assert!(!PARSE_FALLBACK_CHIPS.contains(&"rv1103"));
+    assert!(
+        declared_only("rv1103", &doc),
+        "RV1103 has gained pins/peripherals or changed identity; review its declared-only classification"
+    );
+    assert!(!declared_only("another-cortex-a7", &doc));
+    for (field, value) in [
+        ("name", "another-cortex-a7"),
+        ("arch", "xtensa"),
+        ("core", "cortex-m3"),
+    ] {
+        let mut changed = doc.clone();
+        changed[field] = serde_yaml::Value::String(value.into());
+        assert!(!declared_only("rv1103", &changed), "changed {field}");
+    }
+    let mut missing_core = doc.clone();
+    missing_core["core"] = serde_yaml::Value::Null;
+    assert!(!declared_only("rv1103", &missing_core));
+
+    let mut modeled_gpio = doc.clone();
+    modeled_gpio["peripherals"] =
+        serde_yaml::from_str("[{ name: gpio1, base_address: 0xff538000, size: 4096, kind: gpio }]")
+            .unwrap();
+    assert!(!declared_only("rv1103", &modeled_gpio));
+
+    let mut mapped_pin = doc.clone();
+    mapped_pin["pins"] = serde_yaml::from_str("{ GPIO1_B2: { gpio: gpio1, bit: 10 } }").unwrap();
+    assert!(!declared_only("rv1103", &mapped_pin));
+
+    assert!(!declared_only("stm32f103", &chip_doc("stm32f103")));
 }
 
 #[test]

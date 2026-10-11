@@ -17,7 +17,8 @@
 //!
 //! The required coverage classes (policy)
 //! ======================================
-//! For every SHIPPED chip:
+//! For every SHIPPED modeled chip (declared-only platforms are explicitly
+//! classified below and receive no board-coverage credit):
 //!
 //! (a) RESET / BOOT CONFORMANCE — a `*conformance*` / `*clock_boot*` / `*reset*`
 //! test that references the chip (the fleet-wide `chip_conformance.rs`
@@ -53,6 +54,7 @@
 //! then delete the matching `KNOWN_GAPS` row. Do NOT add rows to make a red gate
 //! green — that re-opens the exact hole this file exists to close.
 
+use labwired_config::{Arch, ChipDescriptor};
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -214,6 +216,82 @@ const KNOWN_GAPS: &[(&str, Class)] = &[
     // model: RP2040 DMA (issue #577) and STM32F407 DMA (issue #578) have no block in
     // their chip descriptors. F401 cold-reset value divergences vs RM0368: issue #576.
 ];
+
+/// Platform declarations are not modeled boards or coverage-gap waivers.
+/// Promotion to a modeled board must remove this entry and classify coverage.
+const DECLARED_ONLY: &[(&str, &str)] = &[(
+    "rv1103",
+    "CPU/memory declaration only; no RV1103 firmware/platform CI gate. Peripherals, boot chain and Linux/BSP execution are unimplemented. Generic Cortex-A7 CPU subset tests supply no RV1103 board coverage.",
+)];
+
+fn is_declared_only_platform(stem: &str, chip: &ChipDescriptor) -> bool {
+    stem == "rv1103"
+        && chip.name == "rv1103"
+        && chip.arch == Arch::Arm
+        && chip.core.as_deref() == Some("cortex-a7")
+        && chip.peripherals.is_empty()
+        && chip.flash.size == 0
+        && chip.flash.base == 0
+}
+
+#[test]
+fn declared_only_classification_rejects_other_or_modeled_platforms() {
+    assert_eq!(DECLARED_ONLY.len(), 1);
+    assert_eq!(DECLARED_ONLY[0].0, "rv1103");
+    assert!(!SHIPPED.iter().any(|board| board.yaml_stem == "rv1103"));
+    let chip = ChipDescriptor::from_file(core_crate_root().join("../../configs/chips/rv1103.yaml"))
+        .unwrap();
+    assert!(is_declared_only_platform("rv1103", &chip));
+    assert!(!is_declared_only_platform("another-prototype", &chip));
+    let mut changed = chip.clone();
+    changed.name = "another-prototype".into();
+    assert!(!is_declared_only_platform("rv1103", &changed));
+    changed = chip.clone();
+    changed.arch = Arch::RiscV;
+    assert!(!is_declared_only_platform("rv1103", &changed));
+    changed = chip.clone();
+    changed.core = Some("cortex-m7".into());
+    assert!(!is_declared_only_platform("rv1103", &changed));
+    changed = chip.clone();
+    changed.flash.size = 4096;
+    assert!(!is_declared_only_platform("rv1103", &changed));
+    changed = chip.clone();
+    changed.flash.base = 0x2000_0000;
+    assert!(!is_declared_only_platform("rv1103", &changed));
+    changed = chip;
+    changed.peripherals =
+        ChipDescriptor::from_file(core_crate_root().join("../../configs/chips/stm32f103.yaml"))
+            .unwrap()
+            .peripherals;
+    assert!(!is_declared_only_platform("rv1103", &changed));
+}
+
+#[test]
+fn generic_cpu_tests_do_not_supply_rv1103_board_coverage() {
+    let board = Board {
+        chip: "rv1103",
+        aliases: &["rv1103"],
+        yaml_stem: "rv1103",
+        display_lab: false,
+    };
+    let corpus = Corpus {
+        files: vec![
+            (
+                "cpu_trace_conformance.rs".into(),
+                "generic cortex-a7 cpu subset".into(),
+            ),
+            (
+                "cortex_a7_golden.rs".into(),
+                "generic cortex-a7 cpu subset".into(),
+            ),
+        ],
+    };
+    assert_eq!(required_classes(&board), vec![Class::Reset, Class::Exec]);
+    assert!(!corpus.covers(&board, Class::Reset));
+    assert!(!corpus.covers(&board, Class::Exec));
+    assert!(!is_allowlisted(board.chip, Class::Reset));
+    assert!(!is_allowlisted(board.chip, Class::Exec));
+}
 
 fn core_crate_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -395,7 +473,7 @@ fn board_coverage_ratchet() {
     assert!(msg.is_empty(), "{msg}");
 }
 
-/// A shipped chip descriptor must be represented in `SHIPPED`, so no board can
+/// A shipped modeled chip descriptor must be represented in `SHIPPED`, so no board can
 /// bypass the ratchet by simply not being listed. (Non-shipped / template /
 /// in-progress descriptors are excluded explicitly.)
 #[test]
@@ -541,6 +619,7 @@ fn every_shipped_descriptor_is_ratcheted() {
     let not_shipped: BTreeSet<&str> = NOT_SHIPPED.iter().copied().collect();
 
     let mut unaccounted = Vec::new();
+    let mut declared_seen = BTreeSet::new();
     for entry in fs::read_dir(&chips_dir)
         .expect("read configs/chips")
         .flatten()
@@ -557,12 +636,35 @@ fn every_shipped_descriptor_is_ratcheted() {
             continue;
         }
         let id = to_ratchet_id(stem);
+        if let Some((_, reason)) = DECLARED_ONLY.iter().find(|(name, _)| *name == stem) {
+            assert!(
+                !shipped_ids.contains(id) && !not_shipped.contains(stem),
+                "{stem}: declaration must not overlap modeled board classifications"
+            );
+            let chip = ChipDescriptor::from_file(&path).expect("load declared platform");
+            assert!(
+                is_declared_only_platform(stem, &chip),
+                "{stem}: platform no longer matches the declared-only prototype; classify its board coverage explicitly"
+            );
+            assert!(!reason.is_empty());
+            declared_seen.insert(stem.to_string());
+            eprintln!("board-coverage ratchet: DECLARED ONLY {stem}: {reason}");
+            continue;
+        }
         if !shipped_ids.contains(id) && !not_shipped.contains(stem) {
             unaccounted.push(format!(
-                "  {stem}: neither in SHIPPED nor in NOT_SHIPPED — decide and list it"
+                "  {stem}: neither in SHIPPED, NOT_SHIPPED nor validated DECLARED_ONLY — decide and list it"
             ));
         }
     }
+    assert_eq!(
+        declared_seen,
+        DECLARED_ONLY
+            .iter()
+            .map(|(name, _)| name.to_string())
+            .collect(),
+        "stale declared-only classification: every entry must have its descriptor"
+    );
     assert!(
         unaccounted.is_empty(),
         "chip descriptor(s) escape the coverage ratchet:\n{}",

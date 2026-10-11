@@ -10,6 +10,9 @@
 //! test asserts BOTH that every non-`NEEDS` chip builds and that every
 //! `NEEDS` chip still fails to build, so the list cannot go stale and hide a
 //! real regression.
+//! Construction alone does not prove firmware execution or board support:
+//! in particular, the optional Cortex-A7 adapter loading an ARM ELF does not
+//! establish RV1103 boot, peripherals, or Cortex-M firmware compatibility.
 
 mod common;
 
@@ -20,10 +23,17 @@ use labwired_core::system::builder::FirmwareSource;
 /// Chips that cannot build a machine from a committed ELF fixture alone, and
 /// why. Every entry here must still fail today; anything not listed must
 /// succeed.
-const NEEDS: &[(&str, &str)] = &[(
-    "ci-fixture-unknown-arch",
-    "declares no known architecture (arch: unknown)",
-)];
+const NEEDS: &[(&str, &str)] = &[
+    (
+        "ci-fixture-unknown-arch",
+        "declares no known architecture (arch: unknown)",
+    ),
+    #[cfg(not(all(feature = "qemu-arm", not(target_arch = "wasm32"))))]
+    (
+        "rv1103",
+        "Cortex-A7 construction needs a native build with --features qemu-arm",
+    ),
+];
 
 #[test]
 fn every_catalog_chip_builds_or_is_listed_in_needs() {
@@ -35,8 +45,8 @@ fn every_catalog_chip_builds_or_is_listed_in_needs() {
     );
     assert_eq!(
         names.len(),
-        45,
-        "expected 45 chips under configs/chips/*.yaml; got {names:?}. If a chip \
+        46,
+        "expected 46 chips under configs/chips/*.yaml; got {names:?}. If a chip \
          was added or removed, update this test's expectation and its NEEDS list."
     );
 
@@ -58,7 +68,7 @@ fn every_catalog_chip_builds_or_is_listed_in_needs() {
         let (chip, _) = match cat.resolve(name) {
             Ok(x) => x,
             Err(e) => {
-                if needs_reason.is_none() {
+                if needs_reason.is_none() || name == "rv1103" {
                     unexpected_failures.push(format!("{name}: resolve failed: {e}"));
                 }
                 continue;
@@ -95,7 +105,16 @@ fn every_catalog_chip_builds_or_is_listed_in_needs() {
                 unexpected_successes.push(format!("{name} (listed NEEDS reason: {reason})"))
             }
             (Err(e), None) => unexpected_failures.push(format!("{name}: {e}")),
-            (Err(_), Some(_)) => {}
+            (Err(e), Some(_)) => {
+                if name == "rv1103" {
+                    assert!(
+                        e.to_string().contains(
+                            "Cortex-A7 needs a native build with --features qemu-arm"
+                        ),
+                        "rv1103 must fail for its disabled native adapter, not an unrelated error: {e}"
+                    );
+                }
+            }
         }
     }
 

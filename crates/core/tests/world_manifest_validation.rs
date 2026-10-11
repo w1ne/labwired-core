@@ -239,17 +239,21 @@ fn world_rejects_nodes_whose_chip_declares_no_known_architecture() {
 
 #[test]
 fn world_rejects_non_cortex_m_arm_cores_before_constructing_a_cortex_m_machine() {
-    for (name, core) in [("missing-core", None), ("cortex-a9", Some("cortex-a9"))] {
+    for (name, core, expected_error) in [
+        ("missing-core", None, "only Cortex-M cores are modelled"),
+        (
+            "cortex-a9",
+            Some("cortex-a9"),
+            "unsupported ARM application core 'cortex-a9'",
+        ),
+    ] {
         let (dir, manifest) = temporary_arm_world(core, 0x0800_0009);
         let error = match World::from_manifest(manifest, dir.path()) {
             Ok(_) => panic!("World::from_manifest accepted {name} as Cortex-M"),
             Err(error) => format!("{error:#}"),
         };
 
-        assert!(
-            error.contains("only Cortex-M cores are modelled"),
-            "{name}: {error}"
-        );
+        assert!(error.contains(expected_error), "{name}: {error}");
     }
 }
 

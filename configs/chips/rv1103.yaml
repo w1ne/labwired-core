@@ -13,7 +13,9 @@ registers_count: 17
 # Vendor advertised maximum; native adapter uses one scheduling tick per
 # instruction, not measured Cortex-A7 cycle timings or DVFS.
 cpu_hz: 1_200_000_000
-io_voltage_v: 3.3
+# The carrier catalog records the Mini A's 3.3 V pad domain separately.
+# No silicon GPIO thresholds are transcribed here; neither pad-electrical
+# key is declared until the GPIO model and cited thresholds are onboarded.
 # No embedded flash is invented: Mini A boots from external MicroSD.
 # Boot ROM, storage, DDR initialization, MMU, GIC, CRU, pinmux and all I/O
 # controllers remain absent. This descriptor establishes no board L0/L1.
