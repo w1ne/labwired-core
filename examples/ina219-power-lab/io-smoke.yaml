@@ -1,13 +1,32 @@
 # LabWired - INA219 Power Lab smoke test
-schema_version: "1.0"
+#
+# Asserts VALUES, not labels. `CFG=` / `Vbus_mV=` / `I_mA=` matched any number.
+#   * Configuration register (00h) POR value is 0x399F = 14751 (INA219
+#     datasheet SBOS448G, §8.6.2.1 Table 5: 32 V range, PGA /8, 12-bit ADCs,
+#     continuous shunt+bus).
+#   * Bus voltage register (02h): bits 15:3 are the reading, LSB = 4 mV
+#     (§8.6.2.3). Default simulated bus is 3.3 V -> 3300 mV; after the host
+#     drives 12.0 V -> 12000 mV.
+#   * Current register (04h) is 0 until the calibration register is written
+#     (§8.6.2.5, "Cal reset value 0"), so the first reading is I_mA=0; after the
+#     host drives 1.5 A the model reports 1500 mA (0.1 mA/count).
+schema_version: "1.2"
 inputs:
   firmware: "../../target/thumbv7m-none-eabi/release/ina219-power-lab"
   system: "./system.yaml"
 limits:
-  max_steps: 500000
+  max_steps: 2000000
 assertions:
   - uart_contains: "INA219 Power Lab"
-  - uart_contains: "CFG="
-  - uart_contains: "Vbus_mV="
-  - uart_contains: "I_mA="
+  - uart_contains: "CFG=14751\n"
+  - uart_ordered:
+      - "Vbus_mV=3300 I_mA=0\n"
+      - "Vbus_mV=12000 I_mA=1500\n"
   - expected_stop_reason: max_steps
+stimuli:
+  - target: { component: "ina219", channel: "current" }
+    trigger: !after_cycles { cycles: 50000 }
+    value: 1.5
+  - target: { component: "ina219", channel: "bus_voltage" }
+    trigger: !after_cycles { cycles: 50000 }
+    value: 12.0
