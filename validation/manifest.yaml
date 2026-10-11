@@ -1990,8 +1990,7 @@ boards:
     # mode the only change is that completion moved into one helper
     # (complete_tx) shared by the old path; register map, reset values and the
     # capture13 loopback behaviour are unchanged and still pinned by the fdcan
-    # unit tests. Pending maintainer review. ACK, NOT A CAPTURE.
-    drift_ack: 2026-10-11
+    # unit tests. ACK, NOT A CAPTURE.
   - id: esp32c3
     # 2026-09-15 (#932): SPI edge sampling is opt-in (`SpiSampling::Byte` default). Byte-level golden pins the pre-feature path. Controllers without a bit engine reject opt-in at config time.
     doc: docs/boards/esp32c3.md
@@ -5498,8 +5497,7 @@ boards:
     # mirrors it in TSR/ESR/MSR.ERRI with the TX/RX0/RX1/SCE lines as levels.
     # Outside that mode reads, writes, reset values and the captured
     # degenerate-BTR bus-off ESR are unchanged and still pinned by the bxcan
-    # unit tests. Pending maintainer review. ACK, NOT A CAPTURE.
-    drift_ack: 2026-10-11
+    # unit tests. ACK, NOT A CAPTURE.
   - id: stm32f407
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
     # 2026-09-16 (#1125): Cortex-M JIT follow-ups (block chaining, floor 4, IT-predicated ALU, VFP S-ALU, VLDR/VSTR, LDR.W PC), plus two model fixes that ride along: the bit-band alias decode no longer swallows peripherals vendors place inside 0x4200_0000 (SAMD51 QSPI/SERCOM), and the STM32 timer's scheduled compare pend lands on the latch tick like the walk. JIT is opt-in (`cortex_m_jit_enabled` default off); interpreter path unchanged, JIT-on vs off lockstep in cortex_m_jit_nrf_differential; both fixes pinned by bus-level gates. No silicon capture pins JIT.
