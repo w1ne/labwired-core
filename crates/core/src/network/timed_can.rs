@@ -182,6 +182,20 @@ pub struct CanNodeUpdate {
     pub lec: Option<u8>,
 }
 
+/// An on-chip CAN controller that can take part in a timed bus. Reached
+/// through [`crate::Peripheral::timed_can`] / `timed_can_mut`, so the bus
+/// needs no knowledge of the concrete controller types.
+pub trait TimedCanController {
+    /// Enter timed mode; fails if the controller is already on a bus.
+    fn attach_timed(&mut self) -> anyhow::Result<()>;
+    /// The controller as the bus needs it. `apb_clock_hz` is the APB clock the
+    /// bus derived for it; a controller clocked from elsewhere (the FDCAN
+    /// kernel clock) ignores it.
+    fn timed_poll(&self, apb_clock_hz: u64) -> CanNodePoll;
+    /// Apply what the bus decided.
+    fn timed_apply(&mut self, update: &CanNodeUpdate);
+}
+
 /// One frame (or one transmitter's attempt at one) in the report.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct CanFrameRecord {

@@ -304,12 +304,12 @@ fn three_f103_can_world_throughput() {
     );
 }
 
-/// The structural half of the fix, pinned without timing: a timed bxCAN
-/// leaves the F103 bus walk-deleted under the event scheduler, so its node
-/// keeps the widest tick batch. A controller that put the walk back would
-/// pin the whole node to one instruction per batch (the 2026-10-11 state,
-/// ~10x slower in this world).
-#[cfg(feature = "event-scheduler")]
+/// The structural half of the fix, pinned without timing: putting bxCAN on
+/// a timed bus does not narrow the widest safe tick batch of its node. Under
+/// the event scheduler the F103 bus is walk-deleted and stays so; a
+/// controller that put the walk back would pin the whole node to one
+/// instruction per batch (the 2026-10-11 state, ~10x slower in this world).
+/// Without the scheduler the interval is 1 either way.
 #[test]
 fn a_timed_bxcan_keeps_the_walk_deleted() {
     let system_path = repo_root().join("crates/core/tests/fixtures/f103-can-world-system.yaml");
@@ -320,7 +320,6 @@ fn a_timed_bxcan_keeps_the_walk_deleted() {
     .unwrap();
     let mut bus = labwired_core::bus::SystemBus::from_config(&chip, &system).unwrap();
     let before = bus.max_safe_tick_interval();
-    assert!(before > 1, "the F103 bus is walk-free to begin with");
     bus.attach_timed_can_by_id("bxcan1").unwrap();
     assert_eq!(bus.max_safe_tick_interval(), before);
 }
@@ -328,9 +327,10 @@ fn a_timed_bxcan_keeps_the_walk_deleted() {
 /// The timed bus costs little over the nodes themselves: a three-node world
 /// with CAN traffic and a wrong-bit-rate node within 2x of the same nodes
 /// with no bus (measured 1.07x idle, 1.13x with traffic on 2026-10-11; it
-/// was 3.8x before the controllers left the walk). A ratio, so it holds on
-/// any machine speed.
-#[cfg(all(feature = "event-scheduler", not(debug_assertions)))]
+/// was 3.8x before the controllers left the walk; 1.3x in a build without
+/// the event scheduler, where both pay the walk). A ratio, so it holds on any
+/// machine speed.
+#[cfg(not(debug_assertions))]
 #[test]
 fn timed_can_overhead_stays_small() {
     const SIM_MS: u64 = 30;
