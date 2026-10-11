@@ -33,12 +33,10 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
                 .get("cpu_clock_hz")
                 .and_then(|v| v.as_u64())
                 .unwrap_or(160_000_000) as u32;
-            Box::new(
-                crate::peripherals::esp32s3::systimer::Systimer::new_with_source(
-                    cpu_clock_hz,
-                    SYSTIMER_TARGET0_SOURCE,
-                ),
-            )
+            Box::new(crate::peripherals::esp_systimer::Systimer::new_with_source(
+                cpu_clock_hz,
+                SYSTIMER_TARGET0_SOURCE,
+            ))
         }
         // Real ESP-IDF UART register map + TX FIFO + interrupts. UART0 is the
         // Arduino `Serial` console and echoes to stdout; UART1 is

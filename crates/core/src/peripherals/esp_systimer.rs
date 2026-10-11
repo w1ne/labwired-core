@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! SYSTIMER peripheral for ESP32-S3.
+//! SYSTIMER peripheral, shared by the ESP32-S3 and the ESP32-C3.
 //!
 //! Two 64-bit free-running counters (UNIT0, UNIT1), each clocked at 16 MHz
 //! independently of CPU frequency.  Plan 2 implemented the counter + the
@@ -112,7 +112,7 @@ const CONF_TARGET1_WORK_EN: u32 = 1 << 23;
 const CONF_TARGET2_WORK_EN: u32 = 1 << 22;
 
 /// SVD-derived register offsets (`scripts/gen_esp_systimer_regs.py`).
-#[path = "systimer_regs.rs"]
+#[path = "esp32s3/systimer_regs.rs"]
 mod regs;
 
 /// UNIT*_OP bit 30 — trigger snapshot update.

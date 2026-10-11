@@ -2185,7 +2185,7 @@ boards:
     # behaviour lives in exchange memory and the radio event path, which that
     # capture does not cover. This acknowledges model drift, NOT a recapture.
     drift_ack: 2026-09-28
-    drift_ack_digest: 5cd2753662bf01fbe2968053c612e9264fe8aadece8d2c7f0f34d88cf4272dd8
+    drift_ack_digest: 3f989544e9112335e504be70b2067457c3a0543264bba88b5c41555d8d146f94
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
@@ -2200,6 +2200,7 @@ boards:
       # peripherals/esp_uart.rs — the register map itself lives there. Without
       # this entry a change to the C3's real UART layout could not trip drift.
       - crates/core/src/peripherals/esp_uart.rs
+      - crates/core/src/peripherals/esp_systimer.rs
       # RISC-V core: listed at the top of this models list (cpu/riscv.rs +
       # decoder/riscv.rs) so the digest sees the core, not only peripherals.
       - configs/chips/esp32c3.yaml
@@ -6993,7 +6994,7 @@ boards:
     # the generic Xtensa BB JIT emit core (#1139) — the merge of the two is one
     # digest, so it is re-stamped once here rather than twice.
     drift_ack: 2026-09-18
-    drift_ack_digest: 67230c859ab46d3638ebd303747ecc660e21f00472ea48fb44291ce1d9a01239
+    drift_ack_digest: cf1db40eb9111ed2070ba9085f129c2cf1676c3a756a5a973de12f62a2e72e21
     #
     # 2026-09-18 (execute split): no execution change. The arm bodies of
     # `XtensaLx7::execute` moved verbatim into `cpu/xtensa_lx7/exec/*.rs` as
@@ -7078,6 +7079,7 @@ boards:
       # (moved 2026-07-28 when the C3 started using the same IP), so the S3's
       # UART register map lived outside its own watch list from that date.
       - crates/core/src/peripherals/esp_uart.rs
+      - crates/core/src/peripherals/esp_systimer.rs
       - crates/core/src/cpu/xtensa_jit
       # The S3's peripheral registration itself. The models above can be
       # perfectly correct and still not be on the bus: this file decides which
@@ -7163,6 +7165,7 @@ boards:
       - crates/core/src/peripherals/esp_xtensa_common
       - crates/core/src/system/xtensa/esp32s3.rs
       - crates/core/src/peripherals/esp_uart.rs
+      - crates/core/src/peripherals/esp_systimer.rs
       - crates/core/src/cpu/xtensa_jit
       - configs/chips/esp32s3-zero.yaml
       - configs/peripherals/esp32s3
