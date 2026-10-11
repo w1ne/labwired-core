@@ -151,6 +151,20 @@ struct CoreUnderTest {
 /// `every_cpu_core_is_covered_by_this_file`, not by reviewer diligence.
 fn cores() -> Vec<CoreUnderTest> {
     vec![
+        #[cfg(all(feature = "qemu-arm", not(target_arch = "wasm32")))]
+        CoreUnderTest {
+            name: "CortexA7",
+            entry: 0x100,
+            program: std::iter::repeat_n(0xe3a00001u32, 4)
+                .flat_map(u32::to_le_bytes)
+                .collect(),
+            step_len: 4,
+            build: |_entry, _program| {
+                let mut cpu = labwired_core::cpu::CortexA7::new().unwrap();
+                cpu.set_sp(0x8000);
+                Box::new(cpu)
+            },
+        },
         CoreUnderTest {
             name: "CortexM",
             entry: 0x100,
@@ -346,6 +360,14 @@ fn every_cpu_core_is_covered_by_this_file() {
                     // Blanket impls over references/boxes forward to the
                     // concrete core and have nothing of their own to trace.
                     if name.starts_with('&') || name.starts_with("Box<") {
+                        continue;
+                    }
+                    // This implementation is compiled only by the native
+                    // qemu-arm feature. With that feature enabled it must
+                    // appear in cores() and pass the same trace assertions.
+                    if name == "CortexA7"
+                        && !cfg!(all(feature = "qemu-arm", not(target_arch = "wasm32")))
+                    {
                         continue;
                     }
                     found.push(name.to_string());

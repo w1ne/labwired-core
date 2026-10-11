@@ -1,0 +1,70 @@
+name: Native QEMU-derived ARM core
+
+on:
+  pull_request:
+    paths:
+      - "Cargo.*"
+      - "crates/core/**"
+      - "crates/cli/**"
+      - "crates/config/**"
+      - "crates/loader/**"
+      - "configs/chips/rv1103.yaml"
+      - "configs/systems/luckfox-pico-mini-a.yaml"
+      - "examples/cortex-a7-core/**"
+      - "tests/fixtures/cortex-a7-core-smoke.elf"
+      - ".github/workflows/core-qemu-arm.yml"
+  push:
+    branches: [main]
+    paths:
+      - "Cargo.*"
+      - "crates/core/**"
+      - "crates/cli/**"
+      - "crates/config/**"
+      - "crates/loader/**"
+      - "configs/chips/rv1103.yaml"
+      - "configs/systems/luckfox-pico-mini-a.yaml"
+      - "examples/cortex-a7-core/**"
+      - "tests/fixtures/cortex-a7-core-smoke.elf"
+      - ".github/workflows/core-qemu-arm.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qemu-arm-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-arm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CARGO_BUILD_JOBS: "2"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: native-qemu-arm
+      - name: Install native build tools
+        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build clang
+      - name: Check CPU, bus, builder and trace contracts
+        run: cargo test --locked -p labwired-core --features qemu-arm,event-scheduler --test qemu_arm_core --test cpu_trace_conformance --test luckfox_declaration --test cpu_runtime_snapshot_honesty --test observer_store_visibility
+      - name: Check native CLI execution
+        run: cargo test --locked -p labwired-cli --features qemu-arm --test cortex_a_cli
+  default-cli:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CARGO_BUILD_JOBS: "2"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: default-cortex-a-refusal
+      - name: Check default CLI refuses application cores
+        run: cargo test --locked -p labwired-cli --test cortex_a_cli

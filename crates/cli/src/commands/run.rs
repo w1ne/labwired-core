@@ -1687,7 +1687,23 @@ pub(crate) fn run_interactive(
                     chip_dir,
                     &crate::plugin_chip_yaml(plugins),
                 ) {
-                    Ok(c) => c.arch,
+                    Ok(c) => match labwired_core::system::arch_policy::machine_family(&c) {
+                        Ok(labwired_core::system::arch_policy::MachineFamily::CortexA) => {
+                            emit_error(cli.json, "ConfigError", "Cortex-A7 needs the system-aware run command: run --firmware <ELF> --system <manifest> (native --features qemu-arm)".into(), None, EXIT_CONFIG_ERROR);
+                            return ExitCode::from(EXIT_CONFIG_ERROR);
+                        }
+                        Err(error) => {
+                            emit_error(
+                                cli.json,
+                                "ConfigError",
+                                error.to_string(),
+                                None,
+                                EXIT_CONFIG_ERROR,
+                            );
+                            return ExitCode::from(EXIT_CONFIG_ERROR);
+                        }
+                        _ => c.arch,
+                    },
                     Err(e) => {
                         emit_error(
                             cli.json,
@@ -1784,6 +1800,18 @@ pub(crate) fn run_firmware_arm(
             return ExitCode::from(EXIT_CONFIG_ERROR);
         }
     };
+
+    match labwired_core::system::arch_policy::machine_family(&chip) {
+        Ok(labwired_core::system::arch_policy::MachineFamily::CortexM) => {}
+        Ok(_) => {
+            eprintln!("error: this --chip driver runs Cortex-M; Cortex-A7 uses run --firmware <ELF> --system <manifest> with native --features qemu-arm");
+            return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
+        Err(error) => {
+            eprintln!("error: {error}");
+            return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
+    }
 
     // Synthesise a minimal system manifest (no external devices) so the bus
     // builder has something to work with.  The chip path is already absolute

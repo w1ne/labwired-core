@@ -163,6 +163,15 @@ fn each_declared_architecture_reaches_its_own_family() {
 }
 
 #[test]
+fn cortex_a7_never_routes_to_cortex_m() {
+    let mut chip = chip_with_arch(Arch::Arm);
+    chip.core = Some("cortex-a7".into());
+    assert_eq!(machine_family(&chip).unwrap(), MachineFamily::CortexA);
+    chip.core = Some("cortex-a53".into());
+    assert!(machine_family(&chip).is_err());
+}
+
+#[test]
 fn the_elf_machine_table_is_the_only_one() {
     assert_eq!(
         elf_arch(goblin::elf::header::EM_ARM),

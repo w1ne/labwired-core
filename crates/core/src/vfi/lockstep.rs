@@ -58,13 +58,14 @@ impl Isa {
     }
 
     /// The ISA a machine family executes.
-    pub fn from_family(family: crate::system::arch_policy::MachineFamily) -> Isa {
+    pub fn from_family(family: crate::system::arch_policy::MachineFamily) -> Option<Isa> {
         use crate::system::arch_policy::MachineFamily;
         match family {
-            MachineFamily::CortexM => Isa::Thumb,
-            MachineFamily::RiscV => Isa::RiscV,
-            MachineFamily::Xtensa => Isa::Xtensa,
-            MachineFamily::Avr => Isa::Avr,
+            MachineFamily::CortexM => Some(Isa::Thumb),
+            MachineFamily::CortexA => None, // ARM/Thumb state needs a mode-aware fault decoder.
+            MachineFamily::RiscV => Some(Isa::RiscV),
+            MachineFamily::Xtensa => Some(Isa::Xtensa),
+            MachineFamily::Avr => Some(Isa::Avr),
         }
     }
 

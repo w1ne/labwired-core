@@ -831,7 +831,9 @@ impl Session {
     ) -> SessionResult<crate::vfi::FaultReport> {
         let family = crate::system::arch_policy::machine_family(&self.build.chip)
             .map_err(|e| SessionError::Other(format!("{e:#}")))?;
-        let isa = crate::vfi::Isa::from_family(family);
+        let isa = crate::vfi::Isa::from_family(family).ok_or_else(|| {
+            SessionError::Other("fault experiments for Cortex-A7 are not implemented".into())
+        })?;
         let mut golden = self.fork()?;
         let mut faulted = self.fork()?;
         crate::vfi::run_lockstep(&mut golden, &mut faulted, plan, isa).map_err(SessionError::Other)

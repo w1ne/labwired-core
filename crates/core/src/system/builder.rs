@@ -184,6 +184,7 @@ pub fn build_esp32_system(system_path: &Path) -> anyhow::Result<(SystemBus, Xten
 
 mod arm;
 mod avr;
+mod cortex_a;
 mod riscv;
 mod xtensa;
 
@@ -297,6 +298,7 @@ pub struct BuiltMachine {
 pub fn build_machine(req: BuildRequest<'_>) -> anyhow::Result<BuiltMachine> {
     match machine_family(req.chip)? {
         MachineFamily::CortexM => arm::build(req),
+        MachineFamily::CortexA => cortex_a::build(req),
         MachineFamily::RiscV => riscv::build(req),
         MachineFamily::Xtensa => xtensa::build(req),
         MachineFamily::Avr => avr::build(req),

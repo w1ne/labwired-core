@@ -470,6 +470,9 @@ impl WasmSimulator {
         let family = machine_family(&chip)
             .map_err(|e| JsValue::from_str(&format!("Chip architecture error: {e:#}")))?;
         let mut sim = match family {
+            MachineFamily::CortexA => return Err(JsValue::from_str(
+                "Cortex-A7 requires the native qemu-arm backend; browser execution is unavailable",
+            )),
             MachineFamily::CortexM => {
                 Self::new_from_config_arm(&chip, &manifest, firmware, blob_map)
             }

@@ -255,7 +255,10 @@ short-circuit hardware, and where we hold up. One e-paper panel matches silicon 
 ## Boards and examples
 
 ARM Cortex-M and RISC-V have the deepest coverage. Some ESP32/Xtensa paths exist for
-specific examples.
+specific examples. The optional native [QEMU-derived Cortex-A7 backend](docs/qemu-arm-core.md)
+runs bounded instruction fixtures through the same CPU and bus interfaces. The
+[Luckfox Pico Mini A dossier](docs/boards/luckfox-pico-mini-a.md) includes vendor assets,
+pins and declared memory geometry; RV1103 peripherals and Linux boot remain unimplemented.
 
 Check the per-board status before you assume a peripheral is modeled. It is in
 [docs/boards](docs/boards/), the

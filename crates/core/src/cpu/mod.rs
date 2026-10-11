@@ -18,8 +18,13 @@
 // and catches the `is_err()` / `.ok()` discard shapes clippy cannot see).
 #[deny(clippy::let_underscore_must_use)]
 pub mod avr;
+#[cfg(all(feature = "qemu-arm", not(target_arch = "wasm32")))]
+#[deny(clippy::let_underscore_must_use)]
+pub mod cortex_a;
 #[deny(clippy::let_underscore_must_use)]
 pub mod cortex_m;
+#[cfg(all(feature = "qemu-arm", not(target_arch = "wasm32")))]
+pub use cortex_a::CortexA7;
 #[deny(clippy::let_underscore_must_use)]
 pub mod riscv;
 pub mod xtensa_lockstep;

@@ -16,6 +16,22 @@ fn itm_capture_enabled(itm_flag: bool, assertions: &[TestAssertion]) -> bool {
             .any(|a| matches!(a, TestAssertion::ItmContains(_)))
 }
 
+fn arm_test_family(
+    system: Option<&labwired_config::ResolvedSystem>,
+    plugins: &[&dyn labwired_core::plugin::ChipPlugin],
+) -> anyhow::Result<labwired_core::system::arch_policy::MachineFamily> {
+    use labwired_core::system::arch_policy::{machine_family, MachineFamily};
+    let Some(system) = system else {
+        return Ok(MachineFamily::CortexM);
+    };
+    let chip = system.chip_with_plugins(&crate::plugin_chip_yaml(plugins))?;
+    let family = machine_family(&chip)?;
+    if !matches!(family, MachineFamily::CortexM | MachineFamily::CortexA) {
+        anyhow::bail!("ARM ELF does not match chip '{}' ({family:?})", chip.name);
+    }
+    Ok(family)
+}
+
 /// Turn on scheduler-safe CPU idle fast-forward for this `labwired test` run.
 ///
 /// `SimulationConfig::idle_fast_forward_enabled` stays **false** in core's
@@ -1900,6 +1916,39 @@ pub(crate) fn run_test(
         }
     };
 
+    if let Some(system) = &resolved_system {
+        let declaration = system
+            .chip_with_plugins(&crate::plugin_chip_yaml(plugins))
+            .and_then(|chip| labwired_core::system::arch_policy::machine_family(&chip));
+        match declaration {
+            Ok(labwired_core::system::arch_policy::MachineFamily::CortexA)
+                if program.arch != labwired_core::Arch::Arm =>
+            {
+                write_config_error_outputs(
+                    &args,
+                    Some(&firmware_path),
+                    system_path.as_ref(),
+                    Some(&firmware_bytes),
+                    Some(&resolved_limits),
+                    "Cortex-A7 requires a 32-bit ARM ELF; firmware architecture does not match the declared chip".into(),
+                );
+                return ExitCode::from(EXIT_CONFIG_ERROR);
+            }
+            Err(error) => {
+                write_config_error_outputs(
+                    &args,
+                    Some(&firmware_path),
+                    system_path.as_ref(),
+                    Some(&firmware_bytes),
+                    Some(&resolved_limits),
+                    error.to_string(),
+                );
+                return ExitCode::from(EXIT_CONFIG_ERROR);
+            }
+            _ => {}
+        }
+    }
+
     let metrics = std::sync::Arc::new(labwired_core::metrics::PerformanceMetrics::new());
 
     macro_rules! run_machine {
@@ -2215,8 +2264,67 @@ pub(crate) fn run_test(
 
     let exit_code = match program.arch {
         labwired_core::Arch::Arm => {
-            let (cpu, _nvic) = labwired_core::system::cortex_m::configure_cortex_m(&mut bus);
-            setup_and_run!(cpu)
+            use labwired_core::system::arch_policy::MachineFamily;
+            let family = match arm_test_family(resolved_system.as_ref(), plugins) {
+                Ok(family) => family,
+                Err(error) => {
+                    write_config_error_outputs(
+                        &args,
+                        Some(&firmware_path),
+                        system_path.as_ref(),
+                        Some(&firmware_bytes),
+                        Some(&resolved_limits),
+                        error.to_string(),
+                    );
+                    return ExitCode::from(EXIT_CONFIG_ERROR);
+                }
+            };
+            if family == MachineFamily::CortexA {
+                if args.rom_boot || args.resume_snapshot.is_some() {
+                    write_config_error_outputs(
+                        &args,
+                        Some(&firmware_path),
+                        system_path.as_ref(),
+                        Some(&firmware_bytes),
+                        Some(&resolved_limits),
+                        "Cortex-A7 ROM/Linux boot and snapshot resume are not implemented; use an initialized-memory ELF without --rom-boot or --resume-snapshot".into(),
+                    );
+                    return ExitCode::from(EXIT_CONFIG_ERROR);
+                }
+                #[cfg(feature = "qemu-arm")]
+                {
+                    let cpu = match labwired_core::cpu::CortexA7::new() {
+                        Ok(cpu) => cpu,
+                        Err(error) => {
+                            write_config_error_outputs(
+                                &args,
+                                Some(&firmware_path),
+                                system_path.as_ref(),
+                                Some(&firmware_bytes),
+                                Some(&resolved_limits),
+                                error.to_string(),
+                            );
+                            return ExitCode::from(EXIT_CONFIG_ERROR);
+                        }
+                    };
+                    setup_and_run!(cpu)
+                }
+                #[cfg(not(feature = "qemu-arm"))]
+                {
+                    write_config_error_outputs(
+                        &args,
+                        Some(&firmware_path),
+                        system_path.as_ref(),
+                        Some(&firmware_bytes),
+                        Some(&resolved_limits),
+                        "Cortex-A7 needs a native build with --features qemu-arm".into(),
+                    );
+                    ExitCode::from(EXIT_CONFIG_ERROR)
+                }
+            } else {
+                let (cpu, _nvic) = labwired_core::system::cortex_m::configure_cortex_m(&mut bus);
+                setup_and_run!(cpu)
+            }
         }
         labwired_core::Arch::RiscV => {
             if let Some(snap_path) = &args.resume_snapshot {

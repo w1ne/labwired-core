@@ -1,0 +1,11 @@
+schema_version: "1.0"
+inputs:
+  firmware: ../../tests/fixtures/cortex-a7-core-smoke.elf
+  system: ./system.yaml
+limits:
+  max_steps: 10
+assertions:
+  - memory_value:
+      address: 0x20000000
+      expected_value: 12
+      size: 32

@@ -459,6 +459,19 @@ pub trait Cpu: Send {
     fn snapshot(&self) -> snapshot::CpuSnapshot;
     fn apply_snapshot(&mut self, snapshot: &snapshot::CpuSnapshot);
 
+    /// Application cores start a loaded ELF at e_entry, without the Cortex-M
+    /// vector-table interpretation used by the legacy load path.
+    fn uses_elf_entry_point(&self) -> bool {
+        false
+    }
+
+    /// Fallible restore entry point for machines. Cores with diagnostic-only
+    /// snapshots must override this rather than report a successful resume.
+    fn try_apply_snapshot(&mut self, snapshot: &snapshot::CpuSnapshot) -> SimResult<()> {
+        self.apply_snapshot(snapshot);
+        Ok(())
+    }
+
     /// Full mid-flight CPU state for binary runtime snapshots: the arch tag
     /// plus an opaque blob the matching CPU type knows how to parse, or
     /// `None` when this core models no runtime snapshot at all.
@@ -725,6 +738,12 @@ impl Cpu for Box<dyn Cpu> {
     }
     fn apply_snapshot(&mut self, s: &snapshot::CpuSnapshot) {
         (**self).apply_snapshot(s)
+    }
+    fn uses_elf_entry_point(&self) -> bool {
+        (**self).uses_elf_entry_point()
+    }
+    fn try_apply_snapshot(&mut self, s: &snapshot::CpuSnapshot) -> SimResult<()> {
+        (**self).try_apply_snapshot(s)
     }
     fn runtime_snapshot(&self) -> Option<(runtime_snapshot::CpuKind, Vec<u8>)> {
         (**self).runtime_snapshot()
@@ -3869,6 +3888,9 @@ impl<C: Cpu> Machine<C> {
                 }
             }
             if !all_written {
+                if self.cpu.uses_elf_entry_point() {
+                    return Err(SimulationError::MemoryViolation(segment.start_addr));
+                }
                 tracing::warn!(
                     "Failed to load segment at {:#x} - outside of memory map",
                     segment.start_addr
@@ -3880,6 +3902,13 @@ impl<C: Cpu> Machine<C> {
             observer.on_simulation_start();
         }
         self.reset()?;
+
+        if self.cpu.uses_elf_entry_point() {
+            let entry = u32::try_from(image.entry_point)
+                .map_err(|_| SimulationError::MemoryViolation(image.entry_point))?;
+            self.cpu.set_pc(entry);
+            return Ok(());
+        }
 
         // Resolve the reset vector.
         //
@@ -4495,7 +4524,7 @@ impl<C: Cpu> Machine<C> {
                 got: snapshot.schema_version,
             });
         }
-        self.cpu.apply_snapshot(&snapshot.cpu);
+        self.cpu.try_apply_snapshot(&snapshot.cpu)?;
         for p in &mut self.bus.peripherals {
             if let Some(state) = snapshot.peripherals.get(&p.name) {
                 p.dev.restore(state.clone())?;

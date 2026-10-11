@@ -1,0 +1,4 @@
+name: cortex-a7-core-example
+chip: chip.yaml
+external_devices: []
+board_io: []

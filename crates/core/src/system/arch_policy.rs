@@ -31,6 +31,7 @@ use labwired_config::{Arch, ChipDescriptor};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MachineFamily {
     CortexM,
+    CortexA,
     RiscV,
     Xtensa,
     Avr,
@@ -43,7 +44,14 @@ pub enum MachineFamily {
 /// browser, producing confident output about silicon nobody had modelled.
 pub fn machine_family(chip: &ChipDescriptor) -> anyhow::Result<MachineFamily> {
     match chip.arch {
-        Arch::Arm => Ok(MachineFamily::CortexM),
+        Arch::Arm => match chip.core.as_deref().map(|core| core.trim().to_ascii_lowercase()) {
+            Some(core) if core == "cortex-a7" => Ok(MachineFamily::CortexA),
+            Some(core) if core.starts_with("cortex-a") => anyhow::bail!(
+                "chip '{}': unsupported ARM application core '{core}'; only cortex-a7 has an experimental native adapter",
+                chip.name
+            ),
+            _ => Ok(MachineFamily::CortexM),
+        },
         Arch::RiscV => Ok(MachineFamily::RiscV),
         Arch::Xtensa => Ok(MachineFamily::Xtensa),
         Arch::Avr => Ok(MachineFamily::Avr),

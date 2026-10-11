@@ -63,8 +63,14 @@ pio-parser.workspace = true
 # JS/wasm builds keep their lean dependency tree.
 wasmtime = { version = "45", optional = true, default-features = false, features = ["cranelift", "runtime", "std", "wat"] }
 
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# QEMU-derived native CPU library; GPL-2.0, never part of default/browser builds.
+unicorn-engine = { version = "=2.1.5", optional = true, default-features = false, features = ["arch_arm"] }
+
 [features]
 default = []
+# Experimental embedded Cortex-A7 CPU. See docs/qemu-arm-core.md for scope.
+qemu-arm = ["dep:unicorn-engine"]
 # Source-built executable micro:bit board qualification; requires ARM GCC.
 microbit-board-io-test = ["event-scheduler"]
 # Silent-path census (`crates/core/src/census.rs`) — MEASUREMENT ONLY.
@@ -142,6 +148,10 @@ required-features = ["mlx90640-decode-test"]
 labwired-loader = { path = "../loader" }
 svd-ingestor = { path = "../svd-ingestor" }
 svd-parser = "0.14"
+
+[[test]]
+name = "qemu_arm_core"
+required-features = ["qemu-arm"]
 
 # ── ZERO-TEST TARGETS CANNOT REPORT GREEN ────────────────────────────────────
 # Every target below is an integration test whose ENTIRE body sits behind an

@@ -46,6 +46,8 @@ goblin = { workspace = true }
 
 [features]
 default = ["event-scheduler"]
+# Experimental embedded QEMU-derived Cortex-A7 (native only, GPL dependency).
+qemu-arm = ["labwired-core/qemu-arm"]
 # Silent-path census — pass-through to labwired-core's `silent-census`.
 # Measurement only; see the note on that feature. Build the measuring binary
 # with `cargo build -p labwired-cli --features silent-census` and point

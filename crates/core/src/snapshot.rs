@@ -46,9 +46,18 @@ pub struct MachineSnapshot {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum CpuSnapshot {
     Arm(ArmCpuSnapshot),
+    /// Diagnostic visible state only; native Cortex-A restore is unsupported.
+    CortexA(CortexACpuSnapshot),
     RiscV(RiscVCpuSnapshot),
     XtensaLx7(XtensaLx7CpuSnapshot),
     Avr(AvrCpuSnapshot),
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct CortexACpuSnapshot {
+    pub registers: Vec<u32>,
+    pub pc: u32,
+    pub cpsr: u32,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

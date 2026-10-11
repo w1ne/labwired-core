@@ -65,6 +65,7 @@ pub(crate) fn decode_at(sim: &WasmSimulator, pc: u32) -> String {
                 Err(_) => "?? (Error reading Xtensa instruction)".to_string(),
             }
         }
+        MachineFamily::CortexA => "Cortex-A disassembly unavailable in the browser".to_owned(),
         MachineFamily::CortexM => {
             let pc = pc & !1;
             match machine.bus.read_u16(pc as u64) {

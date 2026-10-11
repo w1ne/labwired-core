@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: MIT
+# Declared-only; use examples/cortex-a7-core for the native CPU smoke fixture.
+name: luckfox-pico-mini-a
+chip: ../../configs/chips/rv1103.yaml
+external_devices: []
+board_io: []

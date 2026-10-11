@@ -8,7 +8,7 @@
 //! a SystemManifest, drive the firmware with the generic `Machine` loop, and
 //! apply `--stimulus` entries through the shared `StimulusTrack`.
 //!
-//! Phase 1 supports ARM (Cortex-M) manifests only. RISC-V and Xtensa boot
+//! Supports Cortex-M and the optional native Cortex-A7 CPU adapter. RISC-V and Xtensa boot
 //! preparation lives in the test runner and is an explicit follow-up; an
 //! unsupported arch fails fast instead of running a partially-booted system.
 
@@ -196,7 +196,56 @@ pub(crate) fn run_firmware_with_system(
             return ExitCode::from(EXIT_CONFIG_ERROR);
         }
     };
-    let (cpu, _nvic) = configure_cortex_m(&mut bus);
+    use labwired_core::system::arch_policy::{machine_family, MachineFamily};
+    let family = match machine_family(&chip) {
+        Ok(family) => family,
+        Err(error) => {
+            emit_error(
+                json,
+                "ConfigError",
+                error.to_string(),
+                None,
+                EXIT_CONFIG_ERROR,
+            );
+            return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
+    };
+    if family == MachineFamily::CortexA && program.arch != labwired_core::Arch::Arm {
+        emit_error(json, "ConfigError", "Cortex-A7 requires a 32-bit ARM ELF; firmware architecture does not match the declared chip".into(), None, EXIT_CONFIG_ERROR);
+        return ExitCode::from(EXIT_CONFIG_ERROR);
+    }
+    let cpu: Box<dyn Cpu> = if family == MachineFamily::CortexA {
+        #[cfg(feature = "qemu-arm")]
+        {
+            match labwired_core::cpu::CortexA7::new() {
+                Ok(cpu) => Box::new(cpu),
+                Err(error) => {
+                    emit_error(
+                        json,
+                        "ConfigError",
+                        error.to_string(),
+                        None,
+                        EXIT_CONFIG_ERROR,
+                    );
+                    return ExitCode::from(EXIT_CONFIG_ERROR);
+                }
+            }
+        }
+        #[cfg(not(feature = "qemu-arm"))]
+        {
+            emit_error(
+                json,
+                "ConfigError",
+                "Cortex-A7 needs a native build with --features qemu-arm".into(),
+                None,
+                EXIT_CONFIG_ERROR,
+            );
+            return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
+    } else {
+        let (cpu, _nvic) = configure_cortex_m(&mut bus);
+        Box::new(cpu)
+    };
     let mut machine = Machine::new(cpu, bus);
     machine.config.host_time_mode = args.time_mode;
     machine.config.idle_fast_forward_enabled =

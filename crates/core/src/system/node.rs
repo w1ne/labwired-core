@@ -176,6 +176,19 @@ pub fn build_node_with_options(
     }
     match family {
         MachineFamily::CortexM => build_cortex_m_node(id, chip, system, firmware, opts.plugins),
+        MachineFamily::CortexA => {
+            #[cfg(all(feature = "qemu-arm", not(target_arch = "wasm32")))]
+            {
+                let NodeFirmware::Elf(bytes) = firmware else {
+                    anyhow::bail!("node '{id}': Cortex-A7 currently takes a bare-metal ELF");
+                };
+                let bus =
+                    crate::bus::SystemBus::from_config_with_plugins(chip, system, opts.plugins)?;
+                Ok(Box::new(crate::system::cortex_a::load_elf(bus, &bytes)?))
+            }
+            #[cfg(not(all(feature = "qemu-arm", not(target_arch = "wasm32"))))]
+            anyhow::bail!("node '{id}': Cortex-A7 needs a native build with --features qemu-arm; browser execution is unavailable")
+        }
         MachineFamily::RiscV => {
             build_riscv_node(id, chip, system, firmware, opts.plugins, opts.fab, blobs)
         }

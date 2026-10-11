@@ -182,7 +182,7 @@ impl SourceDebug {
         // DWARF numbers these files from 0 in register order: r0-r15,
         // x0-x31, the current window's a0-a15, AVR r0-r31.
         let reg_count: u16 = match family {
-            MachineFamily::CortexM | MachineFamily::Xtensa => 16,
+            MachineFamily::CortexM | MachineFamily::CortexA | MachineFamily::Xtensa => 16,
             MachineFamily::RiscV | MachineFamily::Avr => 32,
         };
         let cpu = target.debug_cpu();
@@ -224,7 +224,7 @@ impl SourceDebug {
 /// The stack pointer's id for `get_register`.
 fn stack_register(family: MachineFamily) -> u8 {
     match family {
-        MachineFamily::CortexM => 13,
+        MachineFamily::CortexM | MachineFamily::CortexA => 13,
         MachineFamily::RiscV => 2,
         // a1 of the current register window.
         MachineFamily::Xtensa => 1,
@@ -379,7 +379,7 @@ pub fn step_source_line(
     let sp_id = stack_register(family);
     // Cortex-M and RISC-V find a call by its return-address register.
     let ra_id = match family {
-        MachineFamily::CortexM => Some(14),
+        MachineFamily::CortexM | MachineFamily::CortexA => Some(14),
         MachineFamily::RiscV => Some(1),
         _ => None,
     };

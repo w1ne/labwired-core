@@ -477,7 +477,8 @@ impl WasmSimulator {
         });
         let mut golden = self.rebuild_s(&journal, None)?;
         let mut faulted = self.rebuild_s(&journal, None)?;
-        let isa = labwired_core::vfi::Isa::from_family(self.arch);
+        let isa = labwired_core::vfi::Isa::from_family(self.arch)
+            .ok_or("fault experiments for Cortex-A7 are not implemented")?;
         let report = labwired_core::vfi::run_lockstep(
             &mut Side(&mut golden),
             &mut Side(&mut faulted),
