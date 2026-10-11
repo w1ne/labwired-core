@@ -52,6 +52,8 @@ const RELEASE_LANE_TARGETS: &[&str] = &[
     "tests/world_esp32c3_ble_pong.rs",
     // `--test esp32c3_pms_shipped_firmware`
     "tests/esp32c3_pms_shipped_firmware.rs",
+    // `--test world_can_perf`
+    "tests/world_can_perf.rs",
 ];
 
 /// The marker that makes code invisible to a debug build.
