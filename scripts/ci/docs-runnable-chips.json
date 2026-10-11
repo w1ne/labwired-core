@@ -15,6 +15,10 @@
   ],
   "firmware_release": "firmware-demos-v3",
   "chips": {
+    "rv1103": {
+      "how": "needs-build",
+      "why": "Declared Luckfox Pico Mini A platform only. The optional native qemu-arm build executes a generic Cortex-A7 CPU fixture; RV1103 peripherals, boot chain and Linux/BSP execution are not implemented, and the released CLI cannot run this board"
+    },
     "esp32": {
       "how": "committed",
       "firmware": "tests/fixtures/tier1/esp32.elf",

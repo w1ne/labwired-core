@@ -450,3 +450,7 @@ _No tier-1 target (absent from TIER1_TARGETS and tier1-matrix.json). Firmware th
 ### `nrf51822`
 
 _S110 application-region descriptor (micro:bit V1 / Calliope mini 1): flash from 0x18000 only, the MBR/SoftDevice range an empty hole, the SoftDevice API served by crates/nrf-softdevice-hle. Every block is a reused nRF52 model (legacy-UART personality for UART0, 1 KiB NVMC pages) plus an nRF51 FICR. No beyond-rubric content is recorded: the only gated firmware is the bare legacy-UART smoke (PR-gated as firmware_survival::test_nrf51822_microbit_v1_smoke_survival, rebuilt by the nightly coverage-matrix cell examples/microbit-v1/io-smoke.yaml); official MakeCode images (radio, Bluetooth bonding + Nordic UART round trip) run under crates/core/examples/sd_hle_run.rs and renode-spike-prime's e2e_bond_uart.py, which no labwired-core lane runs._
+
+### `rv1103`
+
+_No beyond-rubric board firmware content is recorded. The descriptor declares CPU/memory geometry only, with no modeled RV1103 peripherals or boot path. The generic Cortex-A7 CPU smoke does not exercise RV1103 board firmware; Luckfox Pico Mini A/Linux execution remains unsupported._
