@@ -68,6 +68,11 @@ def main():
     parser.add_argument('--native-cli', type=Path, default=ROOT / 'target/debug/labwired')
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
+    # Invalidate old success before parameters, adapters or runner can fail.
+    (args.output / 'report.json').write_text(json.dumps({
+        'passed': False, 'status': 'started; not completed',
+        'evidence_boundary': 'no successful evidence for this invocation; older traces may remain',
+    }, indent=2)+'\n')
     params = dict(DEFAULTS)
     if args.parameters:
         supplied = json.loads(args.parameters.read_text())

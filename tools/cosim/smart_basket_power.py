@@ -140,6 +140,8 @@ class PowerModel:
         if enabled and not self.cutoff and loaded_v <= cfg['cutoff_v']:
             self.request = True
             self._latch('undervoltage')
+        if enabled and battery_path and self.soc <= 0 and not self.cutoff:
+            self._latch('source_depleted')
         if self.request and not self.cutoff:
             self.request_elapsed_s += dt
             if inputs.get('shutdown_ack', False):
@@ -154,7 +156,7 @@ class PowerModel:
         battery_power = max(0.0, bus_load-usb_to_load) / cfg['boost_efficiency']
         discharge = (2*battery_power / (cell_ocv + math.sqrt(cell_ocv**2-4*CELL_R_OHM*battery_power))) if battery_power else 0.0
         capacity_as = cfg['capacity_mah'] * 3.6
-        # Zero SOC is caught by UV protection; remaining charge cannot go negative.
+        # Remaining charge cannot go negative, even below the OCV-floor cutoff.
         discharge = min(discharge, self.soc * capacity_as / dt)
         battery_power = discharge * (cell_ocv - discharge*CELL_R_OHM)
         charge = 0.0
@@ -182,6 +184,8 @@ class PowerModel:
             self.request = True
         if powered and final_v <= cfg['cutoff_v']:
             self._latch('undervoltage')
+        elif powered and battery_path and self.soc <= 0:
+            self._latch('source_depleted')
         usb_bus_power = usb_to_load + charge_power / CHARGE_EFFICIENCY
         usb_power = usb_bus_power / USB_PATH_EFFICIENCY
         delivered_bus_power = usb_to_load + battery_power*cfg['boost_efficiency']

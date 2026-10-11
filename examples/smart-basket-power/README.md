@@ -42,7 +42,8 @@ byte-for-byte. It writes requests, actual output JSONL, a 420-row CSV, and a JSO
 report containing every assertion. Any failed assertion or adapter/runner error
 returns nonzero. Assertion failures produce `report.json` with `passed: false`.
 A missing binary/library or malformed adapter response produces an error on
-stderr and nonzero exit; no success report is fabricated.
+stderr and nonzero exit. Each invocation first invalidates any previous success
+receipt with `passed: false`; older traces may remain but are not current evidence.
 
 Two independent native CLI processes run supplied-USB and battery-only cases
 through manifest routing and the real `CosimRunner`/`ExternalProcessAdapter`
@@ -124,7 +125,9 @@ in an interval whose final battery voltage trips the cutoff. `usb_current_a`,
 
 The piecewise-linear cell open-circuit curve uses `(SOC, volts)` points
 `(0,3.0), (0.05,3.3), (0.15,3.55), (0.5,3.75), (0.9,4.05), (1,4.2)`.
-Series resistance is fixed at 0.12 Ω. Battery current comes from the stable
+Series resistance is fixed at 0.12 Ω. If the battery path exhausts SOC,
+`source_depleted` latches off final rails even when the selected cutoff is below
+the assumed cell OCV floor. Battery current comes from the stable
 quadratic solution to `P = I * (OCV - I*R)` during discharge. A requested draw
 above 4 A or beyond the source's constant-power capability trips
 `source_overload`; these are assumed protective limits, not a component rating.

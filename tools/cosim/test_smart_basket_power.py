@@ -281,3 +281,35 @@ def test_dl33_dl30_fixture_thresholds_route_as_inputs():
                                   'config.low_battery_v': 3.3,
                                   'config.cutoff_v': 3.0})
     assert out['shutdown_request'] and not out['cutoff_latched']
+
+
+def test_empty_source_cannot_report_regulated_rails_below_ocv_cutoff():
+    out = step(model(), host_load_w=2, **{'config.initial_soc': 0,
+                                       'config.cutoff_v': 2.5})
+    assert out['cutoff_latched'] and out['rail_5v'] == 0
+    assert out['fault_reason'] == 'source_depleted'
+
+
+def test_source_exhaustion_turns_off_end_of_interval_rails():
+    m = model()
+    out = m.step({'time_ns': 60_000_000_000, 'dt_ns': 60_000_000_000,
+                  'inputs': {'host_load_w': 2, 'config.initial_soc': 0.005,
+                             'config.capacity_mah': 100, 'config.cutoff_v': 2.5,
+                             'config.shutdown_timeout_s': 120}})
+    assert out['soc'] == 0 and out['rail_5v'] == 0
+    assert out['fault_reason'] == 'source_depleted'
+
+
+def test_failed_rerun_invalidates_previous_success_receipt(tmp_path):
+    output = tmp_path / 'artifacts'
+    output.mkdir()
+    report = output / 'report.json'
+    report.write_text('{"passed": true}')
+    parameters = tmp_path / 'invalid.json'
+    parameters.write_text('{"unknown_key": 1}')
+    root = HERE.parents[1]
+    result = subprocess.run([sys.executable, str(root / 'examples/smart-basket-power/run_scenarios.py'),
+                             '--parameters', str(parameters), '--output', str(output)],
+                            capture_output=True, text=True, timeout=30)
+    assert result.returncode == 1
+    assert not json.loads(report.read_text())['passed']
