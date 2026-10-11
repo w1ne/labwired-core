@@ -12,6 +12,8 @@ on:
       - "configs/systems/luckfox-pico-mini-a.yaml"
       - "examples/cortex-a7-core/**"
       - "tests/fixtures/cortex-a7-core-smoke.elf"
+      - "tools/cosim/**"
+      - "examples/smart-basket-power/**"
       - ".github/workflows/core-qemu-arm.yml"
   push:
     branches: [main]
@@ -25,6 +27,8 @@ on:
       - "configs/systems/luckfox-pico-mini-a.yaml"
       - "examples/cortex-a7-core/**"
       - "tests/fixtures/cortex-a7-core-smoke.elf"
+      - "tools/cosim/**"
+      - "examples/smart-basket-power/**"
       - ".github/workflows/core-qemu-arm.yml"
   workflow_dispatch:
 
@@ -49,11 +53,16 @@ jobs:
         with:
           shared-key: native-qemu-arm
       - name: Install native build tools
-        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build clang
+        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build clang libngspice0 python3-pytest
       - name: Check CPU, bus, builder and trace contracts
         run: cargo test --locked -p labwired-core --features qemu-arm,event-scheduler --test qemu_arm_core --test cpu_trace_conformance --test luckfox_declaration --test cpu_runtime_snapshot_honesty --test observer_store_visibility
       - name: Check native CLI execution
         run: cargo test --locked -p labwired-cli --features qemu-arm --test cortex_a_cli
+      - name: Check behavioral power and real ngspice adapters
+        run: |
+          cargo build --locked -p labwired-cli --features qemu-arm
+          /usr/bin/python3 -m pytest tools/cosim/test_smart_basket_power.py tools/cosim/test_labwired_ngspice.py -q
+          /usr/bin/python3 examples/smart-basket-power/run_scenarios.py --output "$RUNNER_TEMP/smart-basket-power"
   default-cli:
     runs-on: ubuntu-latest
     timeout-minutes: 25
