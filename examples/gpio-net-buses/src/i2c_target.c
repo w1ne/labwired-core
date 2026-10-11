@@ -4,10 +4,18 @@
  * Interrupt driven (ADDR, RXNE, TXIS, STOPF); the controller's SCL is
  * stretched while the handler runs.
  *
+ * Built with -DSLOW=1 the handler waits about 15 us before it answers ADDR
+ * or TXIS, longer than an SCL low period, so the controller must be held by
+ * the stretch.
+ *
  * RESULT[0] transfers ended by STOP, RESULT[1..2] regs[0x10..0x11],
  * RESULT[3] bytes received, RESULT[4] bytes sent.
  */
 #include "g0.h"
+
+#ifndef SLOW
+#define SLOW 0
+#endif
 
 void i2c1_handler(void);
 
@@ -26,6 +34,11 @@ static uint32_t have_ptr;
 
 void i2c1_handler(void) {
     uint32_t isr = I2C1_ISR;
+#if SLOW
+    if (isr & ((1u << 3) | (1u << 1))) {
+        delay(400);
+    }
+#endif
     if (isr & (1u << 3)) {                  /* ADDR */
         if (isr & (1u << 16)) {             /* DIR: we transmit */
             I2C1_ISR = 1u;                  /* flush TXDR */

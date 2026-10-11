@@ -113,6 +113,9 @@ pub struct Rp2040Sio {
     div_signed: bool,
     /// DIRTY: set on any operand write, cleared when QUOTIENT is read.
     div_dirty: bool,
+    /// Outside levels that reached a pad routed to a peripheral line since
+    /// the bus last collected them (see `sync_wire_input`).
+    wire_edges: Vec<crate::peripherals::pad_lines::WireInputEdge>,
 }
 
 impl Rp2040Sio {
@@ -186,10 +189,57 @@ impl Rp2040Sio {
                     PadDriver::OFF
                 })
             }
+            // The peripheral says what its output stage does: a line it
+            // drives drives the pad, a released line or an input does not.
             Some(_) => self
                 .pad_routes
-                .level(pin, |p| self.pad_function(p))
-                .map(PadDriver::drive),
+                .active_line(pin, |p| self.pad_function(p))
+                .map(|(cell, line)| {
+                    if cell.drives(line) {
+                        PadDriver::drive(cell.level(line))
+                    } else {
+                        PadDriver::OFF
+                    }
+                }),
+        }
+    }
+
+    /// Hand the level the outside holds on `pin` to the peripheral line the
+    /// pad is routed to, if any, and remember the edge for the bus to
+    /// deliver (`Peripheral::take_wire_input_edges`).
+    fn sync_wire_input(&mut self, pin: u8) {
+        if self.pad_routes.is_empty() || pin >= PAD_COUNT || self.ext_mask & (1 << pin) == 0 {
+            return;
+        }
+        let level = self.ext_in & (1 << pin) != 0;
+        let functions = self.pad_functions.clone();
+        let edge = self
+            .pad_routes
+            .active_line(pin, |p| functions.as_ref().and_then(|f| f.function(p)))
+            .and_then(|(cell, line)| {
+                cell.set_input(line, level)
+                    .then(|| crate::peripherals::pad_lines::WireInputEdge {
+                        cell: cell.clone(),
+                        line,
+                        level,
+                    })
+            });
+        if let Some(edge) = edge {
+            self.wire_edges.push(edge);
+        }
+    }
+
+    /// After a FUNCSEL change: a pad that just became routed to a peripheral
+    /// line hands it the level the outside already holds there.
+    fn sync_wire_inputs(&mut self) {
+        if self.pad_routes.is_empty() || self.ext_mask == 0 {
+            return;
+        }
+        let mut pins = self.ext_mask;
+        while pins != 0 {
+            let pin = pins.trailing_zeros() as u8;
+            pins &= pins - 1;
+            self.sync_wire_input(pin);
         }
     }
 
@@ -235,8 +285,13 @@ impl Rp2040Sio {
         // A pad IO_BANK0 has handed to a peripheral is driven by that
         // peripheral's wire, not by the SIO output latch. Resolving it through
         // the shared routing seam is what makes an RP2040 bus measurable.
-        if let Some(level) = self.pad_routes.level(pin, |p| self.pad_function(p)) {
-            return Some(level);
+        if let Some((cell, line)) = self.pad_routes.active_line(pin, |p| self.pad_function(p)) {
+            // A line the peripheral does not drive (an input) reads what is
+            // outside the pad.
+            if !cell.drives(line) {
+                return Some(self.gpio_in() & (1u32 << pin) != 0);
+            }
+            return Some(cell.level(line));
         }
         // ONE definition of "pad level": whatever firmware reads on GPIO_IN is
         // what a probe clipped to the pad sees, so a host-driven input and a
@@ -345,6 +400,10 @@ impl Peripheral for Rp2040Sio {
     /// Dropping SIO from the walk is byte-identical (logic taps fire on write).
     fn needs_legacy_walk(&self) -> bool {
         false
+    }
+
+    fn take_wire_input_edges(&mut self) -> Vec<crate::peripherals::pad_lines::WireInputEdge> {
+        std::mem::take(&mut self.wire_edges)
     }
 
     fn read_u32(&self, offset: u64) -> SimResult<u32> {
@@ -586,10 +645,17 @@ impl PinPort for Rp2040Sio {
                 s.ext_in &= !bit;
             }
         });
+        self.sync_wire_input(pin);
         Some(InputChange {
             before,
             after: self.gpio_in() & bit != 0,
         })
+    }
+
+    /// `pin` joined a world `gpio_net`: every peripheral line it can carry
+    /// shares a wire with other chips now.
+    fn join_wire(&mut self, pin: u8) {
+        self.pad_routes.mark_on_net(pin);
     }
 
     fn input(&self, pin: u8) -> Option<bool> {
@@ -627,9 +693,12 @@ impl PinPort for Rp2040Sio {
         self.watch = Some(watch);
     }
 
-    /// An IO_BANK0 `FUNCSEL` write may have handed a pad to another source.
+    /// An IO_BANK0 `FUNCSEL` write may have handed a pad to another source:
+    /// re-register watched channels, and give a peripheral line that just
+    /// took a pad the level the outside holds there.
     fn routes_changed(&mut self) {
         self.sync_pad_routes();
+        self.sync_wire_inputs();
     }
 }
 

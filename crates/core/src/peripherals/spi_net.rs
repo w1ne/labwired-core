@@ -72,6 +72,14 @@ pub(super) struct NetSlave {
     rx: u16,
     /// The word being shifted out on MISO, once loaded.
     tx: Option<u16>,
+    /// What the shift register holds between frames: the last frame shifted
+    /// in. A frame that starts with nothing written to DR shifts this out
+    /// (an underrun), as a single shift register does.
+    hold: u16,
+    /// Frames that started with an empty transmit buffer.
+    underruns: u64,
+    /// An underrun was already logged (one warning per controller).
+    underrun_logged: bool,
 }
 
 impl Spi {
@@ -139,7 +147,22 @@ impl Spi {
         }
         if spe && !master {
             self.net_slave_update_select();
+            // TXEIE is a level: enabling it while the transmit buffer is
+            // empty interrupts at once (the usual way a slave primes its
+            // first answer).
+            let txe = matches!(&self.regs, SpiRegs::Stm32(r) if r.sr & SR_TXE != 0);
+            if cr2 & CR2_TXEIE != 0 && txe {
+                self.net_irq_pending = true;
+            }
         }
+    }
+
+    /// `true` when a DR write belongs to the net slave path: a slave on a
+    /// net (MSTR=0), enabled or not. A slave's DR write fills the transmit
+    /// buffer even while SPE=0, as on silicon.
+    pub(super) fn net_slave_owns_dr(&self) -> bool {
+        let (cr1, _) = self.net_cr();
+        self.net_mode() && cr1 & CR1_MSTR == 0
     }
 
     /// The master's MISO sample for the bit now on the wire: the level the
@@ -197,13 +220,35 @@ impl Spi {
         }
     }
 
+    /// The first edge of a frame: the transmit word is committed. With
+    /// nothing written to DR the shift register shifts out what it holds
+    /// (the previous frame received, 0 after enable): an underrun, counted
+    /// and logged once.
+    fn net_slave_begin_frame(&mut self) {
+        self.net_slave_load_tx();
+        if self.net_slave.tx.is_none() {
+            self.net_slave.tx = Some(self.net_slave.hold);
+            self.net_slave.underruns += 1;
+            if !std::mem::replace(&mut self.net_slave.underrun_logged, true) {
+                tracing::warn!(
+                    "SPI slave on a gpio_net: a frame started with nothing written to DR; \
+                     it shifts out the shift register's content (0x{:04X}, the previous frame received)",
+                    self.net_slave.hold
+                );
+            }
+        }
+    }
+
     /// Put bit `index` of the transmit word on MISO (while selected).
     fn net_slave_present(&mut self, index: u8) {
         if !self.net_slave.selected {
             return;
         }
         let (bits, _, _, lsb) = self.net_frame_shape();
-        let word = self.net_slave.tx.unwrap_or(0);
+        // Before the frame's first edge commits a word, MISO shows what the
+        // shift register would send: the DR word once loaded, else its
+        // content.
+        let word = self.net_slave.tx.unwrap_or(self.net_slave.hold);
         let level = Self::net_bit_of(word, index, bits, lsb);
         if let Some(pads) = self.net_lines() {
             pads.drive_line(MISO, LineDrive::PushPull, level);
@@ -252,6 +297,7 @@ impl Spi {
     /// lost to OVR while the previous one is still unread.
     fn net_slave_complete(&mut self) {
         let rx = self.net_slave.rx;
+        self.net_slave.hold = rx;
         self.net_slave.rx = 0;
         self.net_slave.bits = 0;
         self.net_slave.tx = None;
@@ -292,6 +338,9 @@ impl Spi {
                 // CPHA=0 samples on the leading edge, CPHA=1 on the trailing.
                 let sample = leading != cpha;
                 if sample {
+                    if self.net_slave.bits == 0 && self.net_slave.tx.is_none() {
+                        self.net_slave_begin_frame();
+                    }
                     let bit = self.net_lines().is_some_and(|p| p.wire_level(MOSI));
                     let idx = self.net_slave.bits;
                     let pos = if lsb { idx } else { bits - 1 - idx };
@@ -309,7 +358,11 @@ impl Spi {
                     // The shift edge: the next bit goes out. A CPHA=1 frame
                     // takes its word at its first edge if none was loaded.
                     if self.net_slave.bits == 0 {
-                        self.net_slave_load_tx();
+                        if cpha {
+                            self.net_slave_begin_frame();
+                        } else {
+                            self.net_slave_load_tx();
+                        }
                     }
                     self.net_slave_present(self.net_slave.bits);
                 }
@@ -352,6 +405,12 @@ impl Spi {
     /// Frames a net-mode slave has received (diagnostics and tests).
     pub fn net_slave_frames(&self) -> u64 {
         self.net_frames
+    }
+
+    /// Frames a net-mode slave started with nothing written to DR (each
+    /// shifted out the shift register's content instead).
+    pub fn net_slave_underruns(&self) -> u64 {
+        self.net_slave.underruns
     }
 }
 
@@ -442,6 +501,50 @@ mod tests {
         assert_eq!(spi.read(0x0C).unwrap(), 0xC3);
         spi.write_u16(0x00, CR1_SPE | CR1_SSM | CR1_SSI).unwrap();
         assert!(!spi.net_slave.selected);
+    }
+
+    #[test]
+    fn an_empty_transmit_buffer_shifts_out_the_previous_frame() {
+        let mut spi = slave(CR1_SPE);
+        spi.write_u16(0x0C, 0x3C).unwrap();
+        select(&mut spi, true);
+        let first = clock_byte(&mut spi, 0xA5, false);
+        assert_eq!(first.iter().fold(0u8, |a, &b| (a << 1) | u8::from(b)), 0x3C);
+        assert_eq!(spi.net_slave_underruns(), 0);
+        spi.read(0x0C).unwrap();
+        // Nothing written since: the shift register still holds 0xA5.
+        let second = clock_byte(&mut spi, 0x11, false);
+        assert_eq!(
+            second.iter().fold(0u8, |a, &b| (a << 1) | u8::from(b)),
+            0xA5
+        );
+        assert_eq!(spi.net_slave_underruns(), 1);
+        assert_eq!(spi.read(0x0C).unwrap(), 0x11);
+    }
+
+    #[test]
+    fn txeie_interrupts_while_the_transmit_buffer_is_empty() {
+        let mut spi = slave(CR1_SPE);
+        assert!(!spi.net_irq_pending);
+        spi.write_u16(0x04, CR2_TXEIE).unwrap();
+        assert!(spi.net_irq_pending, "TXE is set: enabling TXEIE interrupts");
+        spi.net_irq_pending = false;
+        spi.write_u16(0x0C, 0x55).unwrap();
+        assert_eq!(spi.read(0x08).unwrap() & (SR_TXE as u8), 0);
+        select(&mut spi, true);
+        assert!(spi.net_irq_pending, "the word moved to the shift register");
+        assert_ne!(spi.read(0x08).unwrap() & (SR_TXE as u8), 0);
+    }
+
+    #[test]
+    fn a_disabled_net_slave_still_takes_its_first_word() {
+        let mut spi = slave(0);
+        spi.write_u16(0x0C, 0x96).unwrap();
+        spi.write_u16(0x00, CR1_SPE).unwrap();
+        select(&mut spi, true);
+        let miso = clock_byte(&mut spi, 0, false);
+        assert_eq!(miso.iter().fold(0u8, |a, &b| (a << 1) | u8::from(b)), 0x96);
+        assert_eq!(spi.net_slave_underruns(), 0);
     }
 
     #[test]

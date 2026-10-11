@@ -1,0 +1,6 @@
+# STM32F401 with nothing on the board: every pad these examples use goes to a
+# gpio_net in the environment file.
+name: "stm32f401-bare"
+chip: "../../configs/chips/stm32f401.yaml"
+external_devices: []
+board_io: []

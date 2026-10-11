@@ -1,0 +1,29 @@
+# The legacy STM32 I2C (CR1/SR1/SR2/CCR) between two families: an STM32F103
+# controller (node `a`) and an STM32F401 target at 0x42 (node `b`), I2C1 to
+# I2C1 on PB6/PB7, open-drain gpio_nets with the bus pull-up on the net.
+schema_version: "1.0"
+name: gpio-net-i2c-legacy
+nodes:
+  - id: a
+    system: "system-f103.yaml"
+    firmware: "firmware/f1-legacy-i2c-controller.elf"
+  - id: b
+    system: "system-f401.yaml"
+    firmware: "firmware/f4-legacy-i2c-target.elf"
+interconnects:
+  - type: gpio_net
+    nodes: [a, b]
+    config:
+      name: scl
+      pull: up
+      members:
+        - { node: a, peripheral: gpiob, pin: 6 }
+        - { node: b, peripheral: gpiob, pin: 6 }
+  - type: gpio_net
+    nodes: [a, b]
+    config:
+      name: sda
+      pull: up
+      members:
+        - { node: a, peripheral: gpiob, pin: 7 }
+        - { node: b, peripheral: gpiob, pin: 7 }

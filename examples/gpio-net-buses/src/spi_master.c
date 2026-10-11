@@ -1,5 +1,6 @@
 /* STM32G071 SPI1 master on gpio nets. Mode 0, MSB first, 8-bit frames,
- * SCK = f/128 (BR=6). Chip select is a plain GPIO (PA4), as most firmware
+ * SCK = f/128 (BR=6). Built once per frame shape: -DCPOL=1 / -DCPHA=1 /
+ * -DLSBFIRST=1 select SPI mode 1-3 and LSB-first (build.sh). Chip select is a plain GPIO (PA4), as most firmware
  * does it; the slave's PA4 is its hardware NSS input.
  *
  *   PA4 CS (GPIO push-pull)   PA5 SCK (AF0)   PA6 MISO (AF0)   PA7 MOSI (AF0)
@@ -17,6 +18,17 @@ const uintptr_t vectors[16 + 32] = {
     [3] = (uintptr_t)default_handler,
 };
 
+#ifndef CPOL
+#define CPOL 0
+#endif
+#ifndef CPHA
+#define CPHA 0
+#endif
+#ifndef LSBFIRST
+#define LSBFIRST 0
+#endif
+#define SHAPE ((CPOL << 1) | CPHA | (LSBFIRST << 7))
+
 static const uint8_t tx[4] = {0xA5, 0x3C, 0x5A, 0xC3};
 
 int main(void) {
@@ -28,8 +40,9 @@ int main(void) {
         set_af_low(&GPIOA_AFRL, pin, 0);
         set_mode(&GPIOA_MODER, pin, 2);
     }
-    /* MSTR, BR=6, SSM+SSI (the master's own NSS is not used), SPE. */
-    SPI1_CR1 = (1u << 2) | (6u << 3) | (1u << 9) | (1u << 8);
+    /* MSTR, BR=6, SSM+SSI (the master's own NSS is not used), the frame
+     * shape, then SPE. */
+    SPI1_CR1 = (1u << 2) | (6u << 3) | (1u << 9) | (1u << 8) | SHAPE;
     SPI1_CR1 |= 1u << 6;
 
     delay(400);                 /* let the slave come up */

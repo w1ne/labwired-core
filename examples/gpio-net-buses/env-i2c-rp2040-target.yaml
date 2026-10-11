@@ -1,0 +1,28 @@
+# An STM32G071 I2C1 controller (the `env-i2c.yaml` controller firmware) and
+# an RP2040 I2C0 (DW_apb_i2c) target at 0x42.
+schema_version: "1.0"
+name: gpio-net-i2c-rp2040-target
+nodes:
+  - id: a
+    system: "system.yaml"
+    firmware: "firmware/i2c-controller.elf"
+  - id: rp
+    system: "../../configs/systems/rp2040-pico.yaml"
+    firmware: "firmware/rp2040-i2c-target.elf"
+interconnects:
+  - type: gpio_net
+    nodes: [a, rp]
+    config:
+      name: scl
+      pull: up
+      members:
+        - { node: a, peripheral: gpiob, pin: 6 }
+        - { node: rp, peripheral: sio, pin: 5 }     # I2C0_SCL
+  - type: gpio_net
+    nodes: [a, rp]
+    config:
+      name: sda
+      pull: up
+      members:
+        - { node: a, peripheral: gpiob, pin: 7 }
+        - { node: rp, peripheral: sio, pin: 4 }     # I2C0_SDA

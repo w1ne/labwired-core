@@ -1,0 +1,29 @@
+# An RP2040 I2C0 (DW_apb_i2c) controller and an STM32G071 I2C1 target at
+# 0x42 (the `env-i2c.yaml` target firmware). SCL and SDA are open-drain
+# gpio_nets with the bus pull-up on the net.
+schema_version: "1.0"
+name: gpio-net-i2c-rp2040
+nodes:
+  - id: rp
+    system: "../../configs/systems/rp2040-pico.yaml"
+    firmware: "firmware/rp2040-i2c-controller.elf"
+  - id: b
+    system: "system.yaml"
+    firmware: "firmware/i2c-target.elf"
+interconnects:
+  - type: gpio_net
+    nodes: [rp, b]
+    config:
+      name: scl
+      pull: up
+      members:
+        - { node: rp, peripheral: sio, pin: 5 }     # I2C0_SCL
+        - { node: b, peripheral: gpiob, pin: 6 }
+  - type: gpio_net
+    nodes: [rp, b]
+    config:
+      name: sda
+      pull: up
+      members:
+        - { node: rp, peripheral: sio, pin: 4 }     # I2C0_SDA
+        - { node: b, peripheral: gpiob, pin: 7 }

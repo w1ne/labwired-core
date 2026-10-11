@@ -1,4 +1,4 @@
-/* STM32G071: SRAM 0x20000000..0x20001000 is left to the result block the
+/* STM32G071 (and STM32F401, same layout here): SRAM 0x20000000..0x20001000 is left to the result block the
  * firmware writes by address; .bss starts above it. */
 ENTRY(reset)
 MEMORY {

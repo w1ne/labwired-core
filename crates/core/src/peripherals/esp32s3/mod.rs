@@ -33,7 +33,9 @@ pub mod sens;
 pub mod sha;
 pub mod spi_mem_flash;
 pub mod system;
-pub mod systimer;
+// The SYSTIMER model is shared with the ESP32-C3; it lives in the
+// chip-neutral `peripherals::esp_systimer`.
+pub use super::esp_systimer as systimer;
 pub mod timer_group;
 pub mod tmp102;
 pub mod twai;

@@ -24,6 +24,7 @@
 #define I2C1_CR1     REG(0x40005400u)
 #define I2C1_CR2     REG(0x40005404u)
 #define I2C1_OAR1    REG(0x40005408u)
+#define I2C1_OAR2    REG(0x4000540Cu)
 #define I2C1_TIMINGR REG(0x40005410u)
 #define I2C1_ISR     REG(0x40005418u)
 #define I2C1_ICR     REG(0x4000541Cu)

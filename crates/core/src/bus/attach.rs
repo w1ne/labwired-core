@@ -508,10 +508,21 @@ impl SystemBus {
     pub(crate) fn wire_rp2040_spi_pads(&mut self) {
         use crate::peripherals::rp2040::io_bank0::{Rp2040IoBank0, GPIO_FUNC_SPI};
         use crate::peripherals::rp2040::sio::Rp2040Sio;
-        use crate::peripherals::rp2040::spi::{Rp2040Spi, LINE_CSN, LINE_MOSI, LINE_SCK};
+        use crate::peripherals::rp2040::spi::{Rp2040Spi, LINE_CSN, LINE_MOSI, LINE_RX, LINE_SCK};
 
         /// `(pad, spi instance, line, function name)` — straight from the SVD.
+        /// The RX pads (`SPIn_RX`, FUNCSEL 1 on GP0/4/16/20 and GP8/12/24/28)
+        /// carry the one line the controller only reads: an input, so the
+        /// pad keeps reading what is outside it.
         const PADS: &[(u8, usize, usize, &str)] = &[
+            (0, 0, LINE_RX, "SPI0_RX"),
+            (4, 0, LINE_RX, "SPI0_RX"),
+            (8, 1, LINE_RX, "SPI1_RX"),
+            (12, 1, LINE_RX, "SPI1_RX"),
+            (16, 0, LINE_RX, "SPI0_RX"),
+            (20, 0, LINE_RX, "SPI0_RX"),
+            (24, 1, LINE_RX, "SPI1_RX"),
+            (28, 1, LINE_RX, "SPI1_RX"),
             (1, 0, LINE_CSN, "SPI0_CSn"),
             (2, 0, LINE_SCK, "SPI0_SCK"),
             (3, 0, LINE_MOSI, "SPI0_TX"),
@@ -1146,6 +1157,18 @@ impl SystemBus {
             .and_then(|p| p.dev.pins_mut())
         {
             crate::pins::watch_end(port);
+        }
+        // A pad on a world net that FUNCSEL just handed to a peripheral line
+        // gives that line the level the net holds there.
+        if self.wire_inputs_live {
+            if let Some(port) = self
+                .peripherals
+                .get_mut(sio_idx)
+                .and_then(|p| p.dev.pins_mut())
+            {
+                port.routes_changed();
+            }
+            self.deliver_wire_input_edges(sio_idx);
         }
     }
 

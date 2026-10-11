@@ -1,0 +1,45 @@
+# An RP2040 (PL022 SPI0) master and an STM32G071 SPI1 slave, mode 0. The
+# PL022 frames every byte with its hardware chip select (CSn pulses high
+# between frames at SPH = 0), which the G071 takes as its hardware NSS.
+schema_version: "1.0"
+name: gpio-net-spi-rp2040
+nodes:
+  - id: rp
+    system: "../../configs/systems/rp2040-pico.yaml"
+    firmware: "firmware/rp2040-spi-master.elf"
+  - id: b
+    system: "system.yaml"
+    firmware: "firmware/spi-slave.elf"
+interconnects:
+  - type: gpio_net
+    nodes: [rp, b]
+    config:
+      name: cs
+      pull: up
+      members:
+        - { node: rp, peripheral: sio, pin: 5 }     # SPI0_CSn
+        - { node: b, peripheral: gpioa, pin: 4 }    # SPI1_NSS
+  - type: gpio_net
+    nodes: [rp, b]
+    config:
+      name: sck
+      pull: down
+      members:
+        - { node: rp, peripheral: sio, pin: 2 }     # SPI0_SCK
+        - { node: b, peripheral: gpioa, pin: 5 }
+  - type: gpio_net
+    nodes: [rp, b]
+    config:
+      name: miso
+      pull: down
+      members:
+        - { node: rp, peripheral: sio, pin: 4 }     # SPI0_RX
+        - { node: b, peripheral: gpioa, pin: 6 }
+  - type: gpio_net
+    nodes: [rp, b]
+    config:
+      name: mosi
+      pull: down
+      members:
+        - { node: rp, peripheral: sio, pin: 3 }     # SPI0_TX
+        - { node: b, peripheral: gpioa, pin: 7 }

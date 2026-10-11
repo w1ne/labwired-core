@@ -216,6 +216,10 @@ pub struct F1I2c {
     /// flush, which then publishes nothing.
     #[serde(skip)]
     wire_overflow: Cell<bool>,
+    /// The bit-level engine used on a world `gpio_net` (see
+    /// `i2c_legacy_net`).
+    #[serde(skip)]
+    net: legacy_net::LegacyNet,
 }
 
 impl Default for F1I2c {
@@ -252,6 +256,7 @@ impl Default for F1I2c {
             lines: None,
             wire_events: RefCell::new(Vec::new()),
             wire_overflow: Cell::new(false),
+            net: legacy_net::LegacyNet::default(),
         }
     }
 }
@@ -262,7 +267,15 @@ impl F1I2c {
     /// with pull-ups idles high on both lines. Mirrors [`L4I2c::pad_lines_arc`].
     pub(crate) fn pad_lines_arc(&mut self) -> std::sync::Arc<PadLines> {
         self.lines
-            .get_or_insert_with(|| std::sync::Arc::new(PadLines::new(I2C_LINES, &[true, true])))
+            .get_or_insert_with(|| {
+                let lines = PadLines::new(I2C_LINES, &[true, true]);
+                // On a world net both lines are open drain, released until
+                // the bit engine (`i2c_legacy_net`) pulls one low.
+                for line in [LINE_SCL, LINE_SDA] {
+                    lines.set_net_idle(line, crate::peripherals::pad_lines::LineDrive::OpenDrain);
+                }
+                std::sync::Arc::new(lines)
+            })
             .clone()
     }
 
@@ -556,6 +569,9 @@ impl F1I2c {
     }
 
     fn write_reg(&mut self, offset: u64, value: u16) {
+        if self.net_mode() && self.lnet_write_reg(offset, value) {
+            return;
+        }
         match offset {
             0x00 => {
                 // CR1 writable mask 0xBFFB (bits 2,14 reserved) — silicon-
@@ -710,6 +726,9 @@ impl F1I2c {
     /// One tick of the transaction state machine. Returns whether an IRQ
     /// should be raised. Logic relocated verbatim from the pre-split model.
     fn tick(&mut self) -> bool {
+        if self.net_mode() {
+            return self.lnet_tick();
+        }
         let mut irq = false;
 
         // Master receiver: clock the next byte in once ADDR is cleared and the
@@ -2548,6 +2567,7 @@ impl crate::Peripheral for I2c {
 
     fn wire_input_edge(&mut self, line: usize, level: bool, cycle: u64) -> bool {
         match self {
+            Self::Stm32F1(i) => i.lnet_wire_edge(line, level, cycle),
             Self::Stm32L4(i) => i.net_wire_edge(line, level, cycle),
             _ => false,
         }
@@ -2723,6 +2743,13 @@ impl crate::Peripheral for I2c {
             // an event themselves (their re-arm is caught by the already-live
             // chain's next `on_event`, exactly as the walk's next tick would).
             // delay-0 → deadline `current_cycle + 1` = the walk's next tick.
+            Self::Stm32F1(i) if i.net_mode() => {
+                if i.scheduler_mode() {
+                    i.lnet_take_events()
+                } else {
+                    Vec::new()
+                }
+            }
             Self::Stm32F1(i) => {
                 if i.scheduler_mode() && i.active() && !i.chain_live {
                     i.chain_live = true;
@@ -2800,6 +2827,14 @@ impl crate::Peripheral for I2c {
             // engage. An extra idle cycle would be inert, so the tight stop is
             // safe. The `on_event` runs at the same per-cycle cadence as the walk,
             // so the countdown timing and IRQ edges are identical.
+            Self::Stm32F1(i) if i.net_mode() => {
+                if !i.scheduler_mode() || _event_token != legacy_net::LEGACY_NET_TOKEN {
+                    // A phase-model chain armed before the net took over.
+                    i.chain_live = false;
+                    return crate::sched::EventResult::default();
+                }
+                i.lnet_on_event(sched.now())
+            }
             Self::Stm32F1(i) => {
                 if !i.scheduler_mode() {
                     return crate::sched::EventResult::default();
@@ -2972,3 +3007,6 @@ mod efr32s2_tests;
 
 #[path = "i2c_net.rs"]
 mod net;
+
+#[path = "i2c_legacy_net.rs"]
+mod legacy_net;

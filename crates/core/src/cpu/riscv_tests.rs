@@ -1440,3 +1440,230 @@ mod scheduler {
         assert_eq!(cpu.mtime, 65);
     }
 }
+
+// ---------------------------------------------------------------------------
+// Debug trigger module (tselect / tdata1 / tdata2 / tinfo / tcontrol).
+// ---------------------------------------------------------------------------
+
+mod trigger_module {
+    use super::*;
+
+    const RAM: u32 = 0x2000_0000;
+    const WATCHED: u32 = RAM + 0x10;
+    const HANDLER: u32 = 0x100;
+    const TCONTROL_MTE: u32 = 1 << 3;
+    const TCONTROL_MPTE: u32 = 1 << 7;
+    /// tdata1: m | store | match = NAPOT — what esp-hal's `set_watchpoint` writes.
+    const STORE_WATCH: u32 = (1 << 6) | (1 << 1) | (1 << 7);
+    const LOAD_WATCH: u32 = (1 << 6) | (1 << 0) | (1 << 7);
+    const HIT: u32 = 1 << 20;
+
+    fn lui(rd: u32, imm20: u32) -> u32 {
+        (imm20 << 12) | (rd << 7) | 0x37
+    }
+    fn addi(rd: u32, rs1: u32, imm: i32) -> u32 {
+        (((imm as u32) & 0xFFF) << 20) | (rs1 << 15) | (rd << 7) | 0x13
+    }
+    fn csrrw(rd: u32, csr: u32, rs1: u32) -> u32 {
+        (csr << 20) | (rs1 << 15) | (0b001 << 12) | (rd << 7) | 0x73
+    }
+    fn sw(rs2: u32, imm: i32, rs1: u32) -> u32 {
+        let imm = imm as u32;
+        (((imm >> 5) & 0x7F) << 25)
+            | (rs2 << 20)
+            | (rs1 << 15)
+            | (0b010 << 12)
+            | ((imm & 0x1F) << 7)
+            | 0x23
+    }
+    fn lw(rd: u32, imm: i32, rs1: u32) -> u32 {
+        (((imm as u32) & 0xFFF) << 20) | (rs1 << 15) | (0b010 << 12) | (rd << 7) | 0x03
+    }
+    fn jal(rd: u32, imm: i32) -> u32 {
+        let imm = imm as u32;
+        (((imm >> 20) & 1) << 31)
+            | (((imm >> 1) & 0x3FF) << 21)
+            | (((imm >> 11) & 1) << 20)
+            | (((imm >> 12) & 0xFF) << 12)
+            | (rd << 7)
+            | 0x6f
+    }
+    const MRET: u32 = 0x3020_0073;
+
+    /// Arm trigger 0 through the CSR instructions themselves, then run `body`.
+    /// x5 = RAM base, x6 = 0x55. Returns the program and the PC of `body`.
+    fn program(tcontrol: u32, tdata1: u32, body: &[u32]) -> (Vec<u32>, u32) {
+        let mut p = vec![
+            lui(5, RAM >> 12),
+            addi(6, 0, 0x55),
+            csrrw(0, 0x7A0, 0), // tselect = 0
+            addi(7, 0, tcontrol as i32),
+            csrrw(0, 0x7A5, 7), // tcontrol
+            lui(7, tdata1 >> 12),
+            addi(7, 7, (tdata1 & 0xFFF) as i32),
+            csrrw(0, 0x7A1, 7), // tdata1
+            addi(7, 5, 0x11),   // NAPOT 4-byte region at WATCHED
+            csrrw(0, 0x7A2, 7), // tdata2
+        ];
+        let body_pc = (p.len() * 4) as u32;
+        p.extend_from_slice(body);
+        (p, body_pc)
+    }
+
+    fn machine(prog: &[u32], handler: &[u32]) -> Machine<RiscV> {
+        let mut bus = SystemBus::new();
+        bus.flash.data = vec![0; 0x200];
+        for (i, w) in prog.iter().enumerate() {
+            bus.write_u32((i * 4) as u64, *w).unwrap();
+        }
+        for (i, w) in handler.iter().enumerate() {
+            bus.write_u32(u64::from(HANDLER) + (i * 4) as u64, *w)
+                .unwrap();
+        }
+        let mut cpu = RiscV::new();
+        cpu.pc = 0;
+        cpu.mtvec = HANDLER;
+        Machine::new(cpu, bus)
+    }
+
+    fn step_n(m: &mut Machine<RiscV>, n: usize) {
+        for _ in 0..n {
+            m.step().unwrap();
+        }
+    }
+
+    #[test]
+    fn csr_instructions_read_back_through_the_module() {
+        let (prog, _) = program(TCONTROL_MTE, STORE_WATCH, &[]);
+        let mut m = machine(&prog, &[]);
+        step_n(&mut m, prog.len());
+        assert_eq!(m.cpu.read_csr(0x7A0), Some(0));
+        assert_eq!(
+            m.cpu.read_csr(0x7A1),
+            Some(0x2000_0000 | (31 << 21) | STORE_WATCH)
+        );
+        assert_eq!(m.cpu.read_csr(0x7A2), Some(WATCHED | 1));
+        assert_eq!(m.cpu.read_csr(0x7A4), Some(1 << 2), "tinfo: mcontrol only");
+        assert_eq!(m.cpu.read_csr(0x7A5), Some(TCONTROL_MTE));
+        assert_eq!(m.cpu.mcause, 0, "no CSR access trapped");
+        assert!(m.cpu.triggers.armed());
+    }
+
+    #[test]
+    fn standard_profile_has_no_trigger_module() {
+        let cpu = RiscV::new_for(RiscVCoreProfile::StandardRv32);
+        assert_eq!(cpu.read_csr(0x7A0), None);
+    }
+
+    #[test]
+    fn watched_store_raises_a_breakpoint_before_the_store() {
+        let (prog, body) = program(TCONTROL_MTE, STORE_WATCH, &[sw(6, 0x10, 5)]);
+        let mut m = machine(&prog, &[jal(0, 0)]);
+        step_n(&mut m, prog.len());
+        assert_eq!(m.cpu.pc, HANDLER);
+        assert_eq!(m.cpu.mcause, 3, "breakpoint exception");
+        assert_eq!(m.cpu.mepc, body, "mepc names the storing instruction");
+        assert_eq!(m.cpu.mtval, WATCHED, "mtval is the watched data address");
+        assert_eq!(
+            m.bus.read_u32(u64::from(WATCHED)).unwrap(),
+            0,
+            "timing=0: the store never reached memory"
+        );
+        assert_eq!(m.cpu.read_csr(0x7A1).unwrap() & HIT, HIT, "hit latched");
+        assert_eq!(
+            m.cpu.read_csr(0x7A5),
+            Some(TCONTROL_MPTE),
+            "trap entry saves mte to mpte and clears it"
+        );
+    }
+
+    #[test]
+    fn handler_can_disarm_and_mret_retries_the_store() {
+        let (prog, body) = program(
+            TCONTROL_MTE,
+            STORE_WATCH,
+            &[sw(6, 0x10, 5), addi(8, 0, 1), jal(0, 0)],
+        );
+        // Handler: clear tdata1, MRET.
+        let mut m = machine(&prog, &[csrrw(0, 0x7A1, 0), MRET]);
+        // Setup, the trapping store, then the two handler instructions.
+        step_n(&mut m, body as usize / 4 + 1 + 2);
+        assert_eq!(m.cpu.pc, body, "MRET returns to the store");
+        assert_eq!(m.cpu.read_csr(0x7A5), Some(TCONTROL_MTE | TCONTROL_MPTE));
+        step_n(&mut m, 2);
+        assert_eq!(m.bus.read_u32(u64::from(WATCHED)).unwrap(), 0x55);
+        assert_eq!(m.cpu.read_reg(8), 1);
+    }
+
+    #[test]
+    fn disabled_trigger_does_not_trap() {
+        // mte = 0: configured but not enabled in M-mode.
+        let (prog, _) = program(0, STORE_WATCH, &[sw(6, 0x10, 5), lw(9, 0x10, 5)]);
+        let mut m = machine(&prog, &[jal(0, 0)]);
+        step_n(&mut m, prog.len());
+        assert_eq!(m.cpu.mcause, 0);
+        assert_eq!(m.cpu.read_reg(9), 0x55);
+        assert_eq!(m.cpu.read_csr(0x7A1).unwrap() & HIT, 0);
+        // A store-only watch ignores loads, and neighbouring stores pass.
+        let (prog, _) = program(
+            TCONTROL_MTE,
+            STORE_WATCH,
+            &[lw(9, 0x10, 5), sw(6, 0x14, 5), sw(6, 0x0C, 5)],
+        );
+        let mut m = machine(&prog, &[jal(0, 0)]);
+        step_n(&mut m, prog.len());
+        assert_eq!(m.cpu.mcause, 0);
+        assert_eq!(m.bus.read_u32(u64::from(WATCHED + 4)).unwrap(), 0x55);
+    }
+
+    #[test]
+    fn watched_load_traps_with_the_load_address() {
+        let (prog, body) = program(TCONTROL_MTE, LOAD_WATCH, &[addi(9, 0, 7), lw(9, 0x12, 5)]);
+        let mut m = machine(&prog, &[jal(0, 0)]);
+        step_n(&mut m, prog.len());
+        assert_eq!(m.cpu.mcause, 3);
+        assert_eq!(m.cpu.mepc, body + 4);
+        assert_eq!(m.cpu.mtval, WATCHED + 2);
+        assert_eq!(m.cpu.read_reg(9), 7, "the load did not retire");
+    }
+
+    #[test]
+    fn store_spin_fast_path_does_not_skip_an_armed_watch() {
+        // `sw; addi; j` is the shape `try_store_spin_window` aggregates; with a
+        // watch armed on its address the batch must still trap on the first trip.
+        let (prog, body) = program(
+            TCONTROL_MTE,
+            STORE_WATCH,
+            &[sw(6, 0x10, 5), addi(6, 6, 1), jal(0, -8)],
+        );
+        let mut m = machine(&prog, &[jal(0, 0)]);
+        m.run(Some(10_000)).unwrap();
+        assert_eq!(m.cpu.mcause, 3);
+        assert_eq!(m.cpu.mepc, body);
+        assert_eq!(m.bus.read_u32(u64::from(WATCHED)).unwrap(), 0);
+        assert_eq!(m.cpu.pc, HANDLER);
+    }
+
+    #[test]
+    fn execute_breakpoint_traps_before_the_instruction() {
+        let target = 0x40u32;
+        let mut prog = vec![
+            csrrw(0, 0x7A0, 0),
+            addi(7, 0, TCONTROL_MTE as i32),
+            csrrw(0, 0x7A5, 7),
+            addi(7, 0, (1 << 6) | (1 << 2)), // m | execute, exact match
+            csrrw(0, 0x7A1, 7),
+            addi(7, 0, target as i32),
+            csrrw(0, 0x7A2, 7),
+            jal(0, target as i32 - 7 * 4),
+        ];
+        prog.resize((target / 4) as usize, 0);
+        prog.push(addi(10, 0, 1));
+        let mut m = machine(&prog, &[jal(0, 0)]);
+        step_n(&mut m, 9);
+        assert_eq!(m.cpu.mcause, 3);
+        assert_eq!(m.cpu.mepc, target);
+        assert_eq!(m.cpu.mtval, target);
+        assert_eq!(m.cpu.read_reg(10), 0);
+    }
+}

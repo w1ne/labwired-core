@@ -1,0 +1,45 @@
+# An STM32G071 SPI1 master (CS on a GPIO) and an RP2040 (PL022 SPI0) slave,
+# mode 3. As a slave the PL022's TX pad (GP3) is MISO and its RX pad (GP4)
+# MOSI.
+schema_version: "1.0"
+name: gpio-net-spi-rp2040-slave
+nodes:
+  - id: a
+    system: "system.yaml"
+    firmware: "firmware/spi-master-mode3.elf"
+  - id: rp
+    system: "../../configs/systems/rp2040-pico.yaml"
+    firmware: "firmware/rp2040-spi-slave.elf"
+interconnects:
+  - type: gpio_net
+    nodes: [a, rp]
+    config:
+      name: cs
+      pull: up
+      members:
+        - { node: a, peripheral: gpioa, pin: 4 }    # GPIO out
+        - { node: rp, peripheral: sio, pin: 5 }     # SPI0_CSn in
+  - type: gpio_net
+    nodes: [a, rp]
+    config:
+      name: sck
+      pull: down
+      members:
+        - { node: a, peripheral: gpioa, pin: 5 }
+        - { node: rp, peripheral: sio, pin: 2 }     # SPI0_SCK in
+  - type: gpio_net
+    nodes: [a, rp]
+    config:
+      name: miso
+      pull: down
+      members:
+        - { node: a, peripheral: gpioa, pin: 6 }
+        - { node: rp, peripheral: sio, pin: 3 }     # SPI0_TX
+  - type: gpio_net
+    nodes: [a, rp]
+    config:
+      name: mosi
+      pull: down
+      members:
+        - { node: a, peripheral: gpioa, pin: 7 }
+        - { node: rp, peripheral: sio, pin: 4 }     # SPI0_RX

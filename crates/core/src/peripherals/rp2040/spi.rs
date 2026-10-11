@@ -88,6 +88,12 @@ pub(crate) const SPI_LINES: &[&str] = &["SCK", "MOSI", "CSn"];
 pub(crate) const LINE_SCK: usize = 0;
 pub(crate) const LINE_MOSI: usize = 1;
 pub(crate) const LINE_CSN: usize = 2;
+/// The lines on a world `gpio_net` (`spi_net`): the three above plus RX
+/// (`SSPRXD`), the one line this controller only ever reads. It is MISO for
+/// a master and MOSI for a slave, and is driven by the chip at the other
+/// end, so it is named only on a net, where something does drive it.
+pub(crate) const SPI_NET_LINES: &[&str] = &["SCK", "MOSI", "CSn", "RX"];
+pub(crate) const LINE_RX: usize = 3;
 
 /// Words a narration may hold waiting for the wire before it is published
 /// anyway, compressed.
@@ -135,6 +141,8 @@ pub struct Rp2040Spi {
     /// True while a flush wakeup is in flight, so a burst of writes arms
     /// exactly one chain rather than one per write.
     scheduled: bool,
+    /// The bit-level engine used on a world `gpio_net` (see `spi_net`).
+    net: net::Pl022Net,
 }
 
 impl std::fmt::Debug for Rp2040Spi {
@@ -169,6 +177,7 @@ impl Rp2040Spi {
             clock: None,
             arm_seq: 0,
             scheduled: false,
+            net: net::Pl022Net::default(),
         }
     }
 
@@ -213,7 +222,16 @@ impl Rp2040Spi {
     pub(crate) fn pad_lines_arc(&mut self) -> Arc<PadLines> {
         let cpol = self.cr0 & CR0_SPO != 0;
         self.lines
-            .get_or_insert_with(|| Arc::new(PadLines::new(SPI_LINES, &[cpol, false, true])))
+            .get_or_insert_with(|| {
+                let lines = PadLines::new(SPI_NET_LINES, &[cpol, false, true, false]);
+                // RX is an input on every pad it reaches; on a net the other
+                // lines drive nothing until the engine (`spi_net`) says so.
+                lines.set_mode(LINE_RX, crate::peripherals::pad_lines::LineDrive::Input);
+                for line in [LINE_SCK, LINE_MOSI, LINE_CSN] {
+                    lines.set_net_idle(line, crate::peripherals::pad_lines::LineDrive::Input);
+                }
+                Arc::new(lines)
+            })
             .clone()
     }
 
@@ -395,7 +413,15 @@ impl Peripheral for Rp2040Spi {
     }
 
     fn line_names(&self) -> &'static [&'static str] {
-        SPI_LINES
+        if self.net_mode() {
+            SPI_NET_LINES
+        } else {
+            SPI_LINES
+        }
+    }
+
+    fn wire_input_edge(&mut self, line: usize, level: bool, cycle: u64) -> bool {
+        self.net_edge(line, level, cycle)
     }
 
     fn wire_lines(&self) -> Option<&PadLines> {
@@ -449,6 +475,9 @@ impl Peripheral for Rp2040Spi {
     }
 
     fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        if self.net_mode() {
+            return self.net_take_events();
+        }
         // Only arm while a burst is actually held, and only once per chain.
         if self.wire_words.is_empty() || self.scheduled {
             return Vec::new();
@@ -466,6 +495,9 @@ impl Peripheral for Rp2040Spi {
         _sched: &mut crate::sched::EventScheduler,
         _bus: &mut dyn crate::Bus,
     ) -> crate::sched::EventResult {
+        if event_token == net::NET_TOKEN {
+            return self.net_on_event(_sched.now());
+        }
         if event_token != self.arm_seq {
             // Stale token from a superseded arm; the live chain owns publication.
             return crate::sched::EventResult::default();
@@ -490,6 +522,10 @@ impl Peripheral for Rp2040Spi {
     /// check — on every bus that has not routed an SPI pad, which is every
     /// RP2040 lab that existed before this change.
     fn tick(&mut self) -> PeripheralTickResult {
+        if self.net_mode() {
+            self.net_tick();
+            return PeripheralTickResult::default();
+        }
         self.wire_flush(self.wire_words.len() >= WIRE_BURST_CAP);
         PeripheralTickResult::default()
     }
@@ -515,6 +551,7 @@ impl Peripheral for Rp2040Spi {
             SSPCR0 => self.cr0,
             SSPCR1 => self.cr1,
             SSPDR => self.pop_dr(), // reading SSPDR drains the RX FIFO
+            SSPSR if self.net_mode() => self.net_status(),
             SSPSR => self.status(),
             SSPCPSR => self.cpsr,
             _ => {
@@ -526,6 +563,9 @@ impl Peripheral for Rp2040Spi {
     }
 
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        if self.net_mode() && self.net_write(offset, value) {
+            return Ok(());
+        }
         match offset {
             SSPCR0 => self.cr0 = value & CR0_MASK,
             SSPCR1 => self.cr1 = value,
@@ -733,3 +773,6 @@ mod tests {
         );
     }
 }
+
+#[path = "spi_net.rs"]
+mod net;

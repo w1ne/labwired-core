@@ -530,7 +530,11 @@ pub fn build_rom_boot_machine<C: crate::Cpu, F: FnOnce(crate::cpu::RiscV) -> C>(
     // drops in: it asserts VALUE_VALID, advances the counter, and supports
     // the alarm/IRQ path FreeRTOS needs. Clocked relative to the 160 MHz
     // CPU (10 CPU cycles per 16 MHz tick).
-    bus.add_peripheral(
+    //
+    // The chip YAML already declares this model (`esp32c3_systimer`), so this
+    // replaces that entry in place rather than stacking a second "systimer"
+    // that name lookups would miss.
+    bus.replace_or_add_peripheral(
         "systimer",
         0x6002_3000,
         0x100,

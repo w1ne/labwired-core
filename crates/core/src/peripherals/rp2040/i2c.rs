@@ -90,6 +90,10 @@ pub struct Rp2040I2c {
     /// True while an event for this model is in flight, so a burst of writes
     /// arms exactly one chain rather than one per write.
     scheduled: bool,
+    /// Bus cycle clock (the net engine's time base).
+    clock: Option<crate::CycleClock>,
+    /// The bit-level engine used on a world `gpio_net` (see `i2c_net`).
+    net: net::DwNet,
 }
 
 impl std::fmt::Debug for Rp2040I2c {
@@ -117,7 +121,15 @@ impl Rp2040I2c {
     ) -> std::sync::Arc<crate::peripherals::pad_lines::PadLines> {
         use crate::peripherals::pad_lines::PadLines;
         self.lines
-            .get_or_insert_with(|| std::sync::Arc::new(PadLines::new(I2C_LINES, &[true, true])))
+            .get_or_insert_with(|| {
+                let lines = PadLines::new(I2C_LINES, &[true, true]);
+                // On a world net both lines are open drain, released until
+                // the bit engine (`i2c_net`) pulls one low.
+                for line in [LINE_SCL, LINE_SDA] {
+                    lines.set_net_idle(line, crate::peripherals::pad_lines::LineDrive::OpenDrain);
+                }
+                std::sync::Arc::new(lines)
+            })
             .clone()
     }
 
@@ -195,7 +207,12 @@ impl Rp2040I2c {
     }
 
     fn irq_pending(&self) -> bool {
-        (self.raw_intr.get() & self.intr_mask) != 0
+        let raw = if self.net_mode() {
+            self.net_raw()
+        } else {
+            self.raw_intr.get()
+        };
+        (raw & self.intr_mask) != 0
     }
 }
 
@@ -228,6 +245,14 @@ impl Peripheral for Rp2040I2c {
 
     fn line_names(&self) -> &'static [&'static str] {
         I2C_LINES
+    }
+
+    fn wire_input_edge(&mut self, line: usize, level: bool, cycle: u64) -> bool {
+        self.net_edge(line, level, cycle)
+    }
+
+    fn attach_cycle_clock(&mut self, clock: crate::CycleClock) {
+        self.clock = Some(clock);
     }
 
     fn wire_lines(&self) -> Option<&crate::peripherals::pad_lines::PadLines> {
@@ -284,15 +309,22 @@ impl Peripheral for Rp2040I2c {
     }
 
     fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        // On a net the wire engine keeps its own timed steps armed.
+        let mut events = if self.net_mode() {
+            self.net_take_events()
+        } else {
+            Vec::new()
+        };
         // Only arm while a level is actually up, and only once per chain.
         if !self.irq_pending() || self.scheduled {
-            return Vec::new();
+            return events;
         }
         self.arm_seq = self.arm_seq.wrapping_add(1);
         self.scheduled = true;
         // delay 0 → deadline `current_cycle + 1`: the cycle the legacy walk's
         // next tick would have serviced this.
-        vec![(0, self.arm_seq)]
+        events.push((0, self.arm_seq));
+        events
     }
 
     fn on_event(
@@ -301,6 +333,9 @@ impl Peripheral for Rp2040I2c {
         _sched: &mut crate::sched::EventScheduler,
         _bus: &mut dyn crate::Bus,
     ) -> crate::sched::EventResult {
+        if event_token == net::NET_TOKEN {
+            return self.net_on_event(_sched.now());
+        }
         if event_token != self.arm_seq {
             // Stale token from a superseded arm; the live chain owns delivery.
             return crate::sched::EventResult::default();
@@ -330,6 +365,20 @@ impl Peripheral for Rp2040I2c {
     }
 
     fn read_u32(&self, offset: u64) -> SimResult<u32> {
+        if self.net_mode() {
+            let val = match offset {
+                IC_DATA_CMD => Some(self.net_pop_rx()),
+                IC_STATUS => Some(self.net_status()),
+                IC_RAW_INTR_STAT => Some(self.net_raw()),
+                IC_INTR_STAT => Some(self.net_raw() & self.intr_mask),
+                _ => self
+                    .net_read_clear(offset)
+                    .or_else(|| self.net_read_reg(offset)),
+            };
+            if let Some(val) = val {
+                return Ok(val);
+            }
+        }
         let val = match offset {
             IC_CON => self.con,
             IC_SS_SCL_HCNT => self.ss_scl_hcnt,
@@ -379,6 +428,9 @@ impl Peripheral for Rp2040I2c {
     }
 
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        if self.net_mode() && self.net_write(offset, value) {
+            return Ok(());
+        }
         match offset {
             IC_CON => self.con = value,
             IC_SS_SCL_HCNT => self.ss_scl_hcnt = value & 0xFFFF,
@@ -482,6 +534,9 @@ impl Peripheral for Rp2040I2c {
     /// the event chain owns delivery. Without the feature the walk still runs
     /// and this keeps the pre-migration behaviour byte-identical.
     fn tick(&mut self) -> PeripheralTickResult {
+        if self.net_mode() {
+            self.net_tick();
+        }
         PeripheralTickResult {
             irq: self.irq_pending(),
             ..Default::default()
@@ -620,3 +675,6 @@ mod tests {
         assert_eq!(i2c.read_u32(IC_RAW_INTR_STAT).unwrap() & INTR_TX_ABRT, 0);
     }
 }
+
+#[path = "i2c_net.rs"]
+mod net;

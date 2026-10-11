@@ -93,7 +93,7 @@ fn diag_c3_first_yield() {
         None,
         Box::new(labwired_core::peripherals::esp32c3::cache::Esp32c3Cache::new()),
     );
-    bus.add_peripheral(
+    bus.replace_or_add_peripheral(
         "systimer",
         0x6002_3000,
         0x100,

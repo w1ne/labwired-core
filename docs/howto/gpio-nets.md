@@ -217,7 +217,7 @@ drives and accept an external level. Every GPIO model in tree does:
 | GPIO model | Capture | Notes |
 |------------|---------|-------|
 | `GpioPort`, every register family (STM32 `v2` and `f1`, nRF52/54, Kinetis, EFR32 series 2, SAM, RA, i.MX RT) | push: the port reports its own edges, idle fast-forward stays on | exercised end to end on STM32 `v2` (G0B1, F401) and `f1` (F103). The EXTI raises edge interrupts for net edges on G0 and U5 (port from `EXTI_EXTICRx`), F1 (port from `AFIO_EXTICRx`), F4 and L0 (port from `SYSCFG_EXTICRx`). Internal pulls on the net, and read by an input nothing outside drives: STM32 `v2` `PUPDR`, STM32 `f1` input-with-pull (`CNF = 10`, `ODR` picks the rail), nRF52 `PIN_CNF.PULL`, EFR32 `INPUTPULL`, SAM `PINCFG.PULLEN`, and, from the block that keeps them outside the GPIO port (the port's `pad_control:` in the chip yaml), Kinetis `PORTx_PCRn.PE/PS`, RA `PmnPFS.PCR` and i.MX RT IOMUXC `SW_PAD_CTL` `PKE/PUE/PUS`. |
-| `GpioPort` pads routed to a peripheral (AF) | as above | the peripheral says what its output stage does (driving, released, input) and reads the level the net delivers; see [Buses over nets](#buses-over-nets). STM32 SPI and modern I²C only. |
+| `GpioPort` pads routed to a peripheral (AF) | as above | the peripheral says what its output stage does (driving, released, input) and reads the level the net delivers; see [Buses over nets](#buses-over-nets). STM32 SPI, modern I²C and legacy (F1/F2/F4) I²C; the RP2040 SIO does the same for SPI and I²C pads (`FUNCSEL`). |
 | `avr_gpio` (ATmega328P `portb`/`portc`/`portd`) | push: the port reports its own edges, idle fast-forward stays on | INT0/INT1 and PCINT0..2 see external edges; a core parked in `SLEEP` is skipped until the next edge or Timer0 overflow. Exercised end to end on the Uno (`gpio-net-two-boards`). An input with its `PORTx` bit set is a pull-up on the net, unless firmware sets `MCUCR.PUD`, which takes every pull-up off. |
 | ESP32 classic `gpio` (member `peripheral: gpio`, pins 0..31) | push | Drive: `GPIO_ENABLE` and `GPIO_OUT`; `GPIO_PINn.PAD_DRIVER` open drain drives only a 0 and, holding a 1, reads the wire on `GPIO_IN`. Interrupts: `GPIO_PINn.INT_TYPE` edge and level types latch `GPIO_STATUS` and raise matrix source 22 for the CPU whose INT_ENA bit is set. GPIO32..39 cannot join a net. The IO_MUX pulls are not modelled on this part. |
 | ESP32-S3 `gpio` (`peripheral: gpio`, pins 0..31) | push | As classic; matrix source 16 (`GPIO_PCPU_INT`, INT_ENA bit 13). The IO_MUX `FUN_WPU` pull-up is on the net. GPIO32..48 cannot join a net. |
@@ -290,8 +290,10 @@ A hardware SPI or I²C peripheral whose pads are on nets talks to the other
 chip bit by bit, at the pads. There is no byte-level shortcut between the
 peripherals: the bits are the net's edges, so the net reports, a logic
 analyzer on either board and the timing all show the real waveform, and the
-bus behaves like wires. Runnable example:
-[`examples/gpio-net-buses`](../../examples/gpio-net-buses) (two STM32G071s).
+bus behaves like wires. Runnable examples:
+[`examples/gpio-net-buses`](../../examples/gpio-net-buses) (STM32G071 pairs,
+an STM32F401 pair, STM32F103 / STM32F401 / STM32G071 mixed I²C, and an
+RP2040 against a G071 on SPI and on I²C).
 
 One net per wire, as for any other signal:
 
@@ -306,36 +308,127 @@ One net per wire, as for any other signal:
         - { node: b, peripheral: gpiob, pin: 7 }
 ```
 
-**SPI** (STM32 classic/FIFO SPI, `pad_map: stm32g0` routing on the G071):
-SCK, MOSI, MISO and NSS are push-pull nets. A master (`MSTR=1`, `SPE=1`)
-drives SCK and MOSI and samples the level the net delivers to its MISO pad at
-its own sampling edge; that is what lands in `DR`. A slave (`MSTR=0`) has no
-clock of its own: it reacts to the SCK, MOSI and NSS edges the net delivers,
-shifts MOSI in on its sampling edge, puts its `DR` word out on MISO on its
-shift edge (any CPOL/CPHA, MSB or LSB first, 8 or 16 bits; the example and
-tests exercise mode 0, MSB first, 8 bits), sets
-RXNE with the SPI interrupt when `RXNEIE` is set, and OVR when a frame arrives
-before `DR` was read. It drives MISO only while selected: `SSM=1, SSI=0`, or
-`SSM=0` with its NSS pad low. A master with `SSOE=1` drives NSS low while
-enabled. A disabled SPI drives nothing.
+| Peripheral | Register file | Pads (chip yaml) | Roles |
+|------------|---------------|------------------|-------|
+| STM32 SPI | classic / FIFO (`CR1`/`CR2`/`SR`/`DR`) | G071 AF0 incl. NSS (`pad_map: stm32g0`); F4 AF5 (SCK/MISO/MOSI, no NSS) | master, slave |
+| STM32 I²C, modern | L4/G0 `TIMINGR` (`ISR`/`ICR`) | G071 AF6 (`pad_map: stm32g0`); L4 AF4 | controller, target |
+| STM32 I²C, legacy | F1/F2/F4 (`SR1`/`SR2`/`CCR`/`TRISE`) | F103 default mapping (PB6/PB7, PB10/PB11); F401 AF4 | master, slave |
+| RP2040 SPI | PL022 (`SSPCR0`/`SSPCR1`/`SSPDR`/`SSPSR`/`SSPCPSR`) | IO_BANK0 `FUNCSEL` 1: SCK, TX, RX, CSn | master, slave |
+| RP2040 I²C | DW_apb_i2c (`IC_CON`/`IC_TAR`/`IC_SAR`/`IC_DATA_CMD`/...) | IO_BANK0 `FUNCSEL` 3: SDA, SCL | master, slave |
 
-**I²C** (STM32 modern I²C, the L4/G0 `TIMINGR` register file, `pad_map:
-stm32g0` on the G071): SCL and SDA are open-drain nets; put `pull: up` on
-them. The controller generates START, the 7-bit address, data, ACK/NACK,
-repeated START and STOP with `SCLL`/`SCLH`/`SDADEL` timing, and counts the SCL
-high period from when it *sees* SCL high, so a target holding SCL low stretches
-the clock. A NACK sets `NACKF` and sends STOP; `AUTOEND` sends STOP after
-`NBYTES`, otherwise `TC` holds SCL low for a repeated START. A released SDA
-read back low is arbitration lost (`ARLO`). A target (`OAR1.OA1EN`) watches
-START/STOP and its address on the wire, ACKs its own address only (`ADDR`,
-`DIR`, `ADDCODE`), and stretches SCL until firmware clears `ADDR`, reads
-`RXDR` or writes `TXDR`. A transfer to an address nobody owns is the pull-up
-reading 1 in the ACK slot.
+**SPI** (STM32 classic/FIFO SPI): SCK, MOSI, MISO and NSS are push-pull
+nets. A master (`MSTR=1`, `SPE=1`) drives SCK and MOSI and samples the level
+the net delivers to its MISO pad at its own sampling edge; that is what lands
+in `DR`. A slave (`MSTR=0`) has no clock of its own: it reacts to the SCK,
+MOSI and NSS edges the net delivers, shifts MOSI in on its sampling edge and
+puts its transmit word out on MISO on its shift edge. Any CPOL/CPHA, MSB or
+LSB first, 8 or 16 bits (`DFF`): modes 0-3, LSB-first and 16-bit frames each
+have an end-to-end test. A slave sets RXNE with the SPI interrupt when
+`RXNEIE` is set, and OVR when a frame arrives before `DR` was read; `TXEIE`
+interrupts whenever the transmit buffer is empty (enabling it with TXE set
+interrupts at once), so a slave can feed every answer from its TXE interrupt.
+A `DR` write fills the slave's transmit buffer even while `SPE=0`. A frame
+that starts with nothing written to `DR` is an underrun: the shift register
+goes out as it is, which is the previous frame received (0 after reset),
+and `Spi::net_slave_underruns()` counts it (logged once). It drives MISO only
+while selected: `SSM=1, SSI=0`, or `SSM=0` with its NSS pad low. A master
+with `SSOE=1` drives NSS low while enabled. A disabled SPI drives nothing. A
+word store to `DR` is one frame (bits 31:16 are not part of the register).
+
+**I²C, modern** (STM32 L4/G0 `TIMINGR` register file): SCL and SDA are
+open-drain nets; put `pull: up` on them. The controller generates START, the
+address, data, ACK/NACK, repeated START and STOP with `SCLL`/`SCLH`/`SDADEL`
+timing, and counts the SCL high period from when it *sees* SCL high, so a
+target holding SCL low stretches the clock. A NACK sets `NACKF` and sends
+STOP; `AUTOEND` sends STOP after `NBYTES`, otherwise `TC` holds SCL low for a
+repeated START. With `RELOAD`, `TCR` holds SCL low after `NBYTES` until
+firmware writes the next `NBYTES` (transfers above 255 bytes; the last byte
+of a chunk is ACKed). `ADD10` sends the 10-bit sequence: write header and low
+byte, and for a read a repeated START with the read header (only the read
+header with `HEAD10R`). A released SDA read back low is arbitration lost
+(`ARLO`). A target watches START/STOP and its address on the wire: `OAR1`
+(7-bit, or 10-bit with `OA1MODE`), `OAR2` with `OA2MSK`, and the general call
+with `GCEN`; it ACKs those only, sets `ADDR`, `DIR` and `ADDCODE` (`11110xx`
+for a 10-bit match), and stretches SCL until firmware clears `ADDR`, reads
+`RXDR` or writes `TXDR`. With `NOSTRETCH=1` it does not stretch: an empty
+`TXDR` goes out as it is and a byte arriving while `RXDR` is full is NACKed
+and lost, both with `OVR`. A transfer to an address nobody owns is the
+pull-up reading 1 in the ACK slot.
+
+**I²C, legacy** (STM32 F1/F2/F4 `CR1`/`CR2`/`OAR1`/`OAR2`/`DR`/`SR1`/`SR2`/
+`CCR`/`TRISE`): the same open-drain wire, driven by the register sequences of
+RM0008/RM0368. Master: `START` sets SB/MSL/BUSY once START is on the wire;
+the `DR` write after it is the address byte, whose ACK sets `ADDR` (`TRA`
+from R/W) and whose NACK sets `AF`. A transmitter takes `DR` after `ADDR` is
+cleared (SR1 then SR2 read) and holds SCL low with `BTF` while `DR` is empty;
+a receiver ACKs by `CR1.ACK` (with `POS`, the value in force one byte
+earlier) and holds SCL low with `BTF` while a byte waits behind a full `DR`.
+`STOP` goes out at once from a held bus, otherwise after the byte in flight.
+Slave: it ACKs `OAR1` (7-bit), `OAR2` with `ENDUAL` and the general call
+with `ENGC` while `CR1.ACK` is set, stretches SCL while `ADDR` is up and
+while `DR` is full (receiver) or empty (transmitter), sets `AF` when the
+master NACKs what it sent and `STOPF` when a write ends with STOP. A byte
+loaded into `DR` that never went out stays there and is the first one the
+next read gets. `NOSTRETCH` skips the stretch after the address. Timing is
+`CCR`'s (standard mode, fast mode, `DUTY`) in PCLK1 periods taken as core
+cycles. Event and error interrupts (`ITEVTEN`/`ITBUFEN`/`ITERREN`, separate
+error vector where the chip yaml gives `irq_error`) are raised when a flag
+is set and when an enable is written while its flag is up.
+
+**SPI, RP2040** (PL022, Motorola frame format): SCK, TX, RX and CSn. A
+master (`SSPCR1.MS = 0`) clocks the words queued in its 8-deep TX FIFO at
+`CPSDVSR × (1 + SCR)` core cycles per bit with SCK idling at `SPO` and the
+edges `SPH` gives; TX is MOSI and RX (sampled at each sampling edge) is MISO,
+and each word lands in the 8-deep RX FIFO. CSn is low for a frame; with
+`SPH = 0` it goes high for one SCK period between back-to-back frames, with
+`SPH = 1` it stays low until the FIFO runs dry. A slave (`MS = 1`) reacts to
+the CSn, SCK and RX (MOSI) edges the net delivers, drives TX (MISO) only
+while CSn is low and `SOD` is clear, and answers from its TX FIFO; a frame
+with the TX FIFO empty sends zeros and is counted
+(`Rp2040Spi::net_underruns`). `SSPSR` follows the FIFOs and the shift engine.
+Tested against an STM32G071 both ways round (RP2040 master in mode 0 with
+hardware CSn, RP2040 slave in mode 3). Not on a net: the PL022 interrupt
+registers, DMA, TI/Microwire formats and loopback.
+
+**I²C, RP2040** (DW_apb_i2c): the same open-drain wire. A master
+(`IC_CON.MASTER_MODE`) works through its 16-deep command FIFO
+(`IC_DATA_CMD`: a byte to write or a read, with `STOP` and `RESTART`):
+START and the `IC_TAR` 7-bit address when the FIFO has a command, a
+repeated START with the address again on a change of direction or
+`RESTART`, STOP after a command that asks for it, and SCL held low while the
+FIFO is empty without one (the RP2040's `IC_EMPTYFIFO_HOLD_MASTER_EN`). A
+read is ACKed unless it carries `STOP`. A NACKed address or byte aborts with
+`TX_ABRT` (`ABRT_7B_ADDR_NOACK` / `ABRT_TXDATA_NOACK`), flushes the FIFO and
+sends STOP. Timing is `IC_SS/FS_SCL_LCNT`/`HCNT` with `IC_SDA_HOLD`. A slave
+(`MASTER_MODE = 0`, `IC_SLAVE_DISABLE = 0`) ACKs `IC_SAR`, fills the RX FIFO
+(`FIRST_DATA_BYTE` on the first byte after the address), answers a read from
+its TX FIFO and otherwise holds SCL low with `RD_REQ` until firmware writes
+`IC_DATA_CMD`; the master's NACK ends a read with `RX_DONE`. `STOP_DET`,
+`START_DET`, `RX_FULL`/`IC_RX_TL`, `TX_EMPTY`/`IC_TX_TL` and the `IC_CLR_*`
+registers follow the DW names; the tests poll `IC_RAW_INTR_STAT`. Tested
+against an STM32G071 both ways round, including a slave that answers too
+slowly for the clock. Not on a net: 10-bit addressing, the general call,
+SMBus, DMA and `RX_FIFO_FULL_HLD_CTRL` (a full RX FIFO drops the byte with
+`RX_OVER`).
+
+Clock stretching is tested on every target: an STM32G071 (modern), an
+STM32F401 (legacy) and an RP2040 slave whose firmware answers several SCL low
+periods late each hold the controller, and the bytes and clock count come
+out the same. A target that ends a stretch with a new bit on SDA releases
+SCL a data setup time later (`SDADEL`-style, one quarter of its own SCL low
+period on the legacy and RP2040 engines), so the change is never read as
+START or STOP.
+
+The legacy and modern controllers meet only on the wire, so an F103 target
+answers a G071 controller as it answers an F401 one (tested both ways round
+between F103 and F401, and G071 → F103).
 
 Everything is event-scheduled: a master's bits run at their exact cycles, a
-slave or target runs when the net delivers an edge. The one poll is a target
-or controller stretching SCL until firmware reads `RXDR` (a register read
-cannot wake the model), at a quarter of the SCL low period.
+slave or target runs when the net delivers an edge. The one poll is a chip
+holding SCL low until firmware does something with a register *read*, which
+cannot wake the model: reading `RXDR` (modern), or clearing `ADDR` and
+reading `DR` (legacy). It looks every quarter SCL low period, and at every
+register write.
 
 Two physical limits come with the wires:
 
@@ -346,11 +439,15 @@ Two physical limits come with the wires:
 - Give SCL and SDA (and SCK and MOSI) the same `latency_ns`. The receiver
   tells data from START/STOP by the order the two wires change in.
 
-Not modelled on a net yet: other SPI/I²C families (nRF, ESP32, RP2040, the
-STM32 F1/F4 legacy I²C, the H5 SPI v3), I²C 10-bit addressing, OAR2, general
-call, `RELOAD` (more than 255 bytes), SMBus/PEC, `NOSTRETCH=1`, the I²C
-filters and timeouts, SPI CRC, TI mode and DMA on a slave. Such a peripheral
-on a net keeps its usual behaviour and drives its lines push-pull as before.
+The results do not depend on node order or on the world's round size; each
+example's tests run every exchange three ways (as written, nodes swapped,
+37 ns rounds) and compare what every pad saw, cycle by cycle.
+
+Not modelled on a net yet: other SPI/I²C families (nRF52 SPIM/SPIS and
+TWIM/TWIS, ESP32 SPI/I²C, the H5 SPI v3), the hardware NSS pad of the F4 SPI, legacy-I²C 10-bit addressing,
+SMBus/PEC, modern-I²C slave byte control (`SBC`), the I²C filters and
+timeouts, SPI CRC, TI mode and DMA on a slave. Such a peripheral on a net
+keeps its usual behaviour and drives its lines push-pull as before.
 
 ## Reports
 

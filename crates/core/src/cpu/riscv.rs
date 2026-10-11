@@ -8,6 +8,9 @@ use crate::decoder::riscv::{decode_rv32, Instruction};
 use crate::{Bus, Cpu, SimResult, SimulationObserver};
 use std::sync::Arc;
 
+#[path = "riscv_trigger.rs"]
+pub mod trigger;
+
 /// Chunk H: land on a basic-block entry PC this many times before compiling
 /// it to wasm. Matches the framework default; keeps one-shot init/boot code
 /// on the interpreter and only pays translation cost for genuinely hot loops.
@@ -56,6 +59,10 @@ pub struct RiscV {
     /// hart any intervening store (including any AMO*) invalidates the
     /// reservation per RISC-V ISA §8.2.
     pub reservation: Option<u32>,
+
+    /// Debug trigger module (`tselect`/`tdata1`/`tdata2`/`tinfo`/`tcontrol`):
+    /// hardware breakpoints and watchpoints. ESP32-C3 profile only.
+    pub triggers: trigger::TriggerModule,
 
     waiting_for_interrupt: bool,
     decode_cache: Box<[Option<RiscVDecodeCacheEntry>; 4096]>,
@@ -137,6 +144,7 @@ impl RiscV {
             mtime: 0,
             mtimecmp: 0,
             reservation: None,
+            triggers: trigger::TriggerModule::default(),
             waiting_for_interrupt: false,
             decode_cache: Box::new([None; 4096]),
             fetch_base: 0,
@@ -348,6 +356,8 @@ impl RiscV {
     /// store or restored code. Cold/non-code/cross-window PCs stay interpreted.
     fn try_spin_window(&mut self, bus: &dyn Bus, budget: u32) -> u32 {
         if budget < 8
+            // An armed trigger must see every access and fetch individually.
+            || self.triggers.armed()
             || self.waiting_for_interrupt
             || (self.mstatus & (1 << 3)) != 0
             || bus.external_irq_lines() != 0
@@ -407,6 +417,8 @@ impl RiscV {
     ) -> SimResult<u32> {
         const LOOP_INSNS: u32 = 4;
         if budget < LOOP_INSNS
+            // An armed trigger must see every access and fetch individually.
+            || self.triggers.armed()
             || self.waiting_for_interrupt
             || (self.mstatus & (1 << 3)) != 0
             || bus.external_irq_lines() != 0
@@ -531,6 +543,8 @@ impl RiscV {
     /// would leave behind. Any uncertainty returns zero before mutating state.
     fn try_store_spin_window(&mut self, bus: &mut dyn Bus, budget: u32) -> u32 {
         if budget < 6
+            // An armed trigger must see every access and fetch individually.
+            || self.triggers.armed()
             || self.waiting_for_interrupt
             || (self.mstatus & (1 << 3)) != 0
             || bus.external_irq_lines() != 0
@@ -674,6 +688,10 @@ impl RiscV {
             0x800 | 0x801 if self.core_profile == RiscVCoreProfile::Esp32C3 => 0,
             // This emulator exposes one hart, whose architectural ID is zero.
             0xF14 => 0,
+            // Debug trigger module (hardware breakpoints / watchpoints).
+            0x7A0..=0x7A5 if self.core_profile == RiscVCoreProfile::Esp32C3 => {
+                return self.triggers.read_csr(csr)
+            }
             0x300 => self.mstatus,
             0x304 => self.mie,
             0x344 => self.mip,
@@ -715,6 +733,9 @@ impl RiscV {
             0x000 if self.core_profile == RiscVCoreProfile::Esp32C3 => {}
             // See read_csr: accept the ROM-init writes and discard their values.
             0x800 | 0x801 if self.core_profile == RiscVCoreProfile::Esp32C3 => {}
+            0x7A0..=0x7A5 if self.core_profile == RiscVCoreProfile::Esp32C3 => {
+                return self.triggers.write_csr(csr, val)
+            }
             0x300 => self.mstatus = val & 0x0000_1888, // Minimal mstatus (MIE, MPP)
             0x304 => self.mie = val,
             0x344 => self.mip = val,
@@ -782,6 +803,51 @@ impl RiscV {
         self.mstatus |= mie << 7; // MPIE <- MIE
         self.mstatus &= !(1 << 3); // MIE <- 0
         self.mstatus |= 0b11 << 11; // MPP <- M-mode
+                                    // tcontrol: mpte <- mte, mte <- 0, so no trigger fires in the handler.
+        self.triggers.on_trap_entry();
+    }
+
+    /// The trigger-module check for the instruction about to execute
+    /// (`timing = 0`: before it has any effect). Execute triggers match the
+    /// instruction's own bytes; load/store triggers the effective address the
+    /// instruction is about to access. Only called while a trigger is armed.
+    fn trigger_check(&mut self, instruction: &Instruction, inst_len: u32) -> Option<u32> {
+        use trigger::AccessKind::{Load, LoadStore, Store};
+        if let Some(hit) = self.triggers.check_execute(self.pc, inst_len) {
+            return Some(hit.address);
+        }
+        let ea = |base: u32, off: u32| base.wrapping_add(off);
+        let (addr, len, kind) = match *instruction {
+            Instruction::Lb { rs1, imm, .. } | Instruction::Lbu { rs1, imm, .. } => {
+                (ea(self.read_reg(rs1), imm as u32), 1, Load)
+            }
+            Instruction::Lh { rs1, imm, .. } | Instruction::Lhu { rs1, imm, .. } => {
+                (ea(self.read_reg(rs1), imm as u32), 2, Load)
+            }
+            Instruction::Lw { rs1, imm, .. } => (ea(self.read_reg(rs1), imm as u32), 4, Load),
+            Instruction::CLw { rs1, imm, .. } => (ea(self.read_reg(rs1), imm), 4, Load),
+            Instruction::CLwsp { imm, .. } => (ea(self.read_reg(2), imm), 4, Load),
+            Instruction::Sb { rs1, imm, .. } => (ea(self.read_reg(rs1), imm as u32), 1, Store),
+            Instruction::Sh { rs1, imm, .. } => (ea(self.read_reg(rs1), imm as u32), 2, Store),
+            Instruction::Sw { rs1, imm, .. } => (ea(self.read_reg(rs1), imm as u32), 4, Store),
+            Instruction::CSw { rs1, imm, .. } => (ea(self.read_reg(rs1), imm), 4, Store),
+            Instruction::CSwsp { imm, .. } => (ea(self.read_reg(2), imm), 4, Store),
+            Instruction::LrW { rs1, .. } => (self.read_reg(rs1), 4, Load),
+            Instruction::ScW { rs1, .. } => (self.read_reg(rs1), 4, Store),
+            Instruction::AmoSwapW { rs1, .. }
+            | Instruction::AmoAddW { rs1, .. }
+            | Instruction::AmoXorW { rs1, .. }
+            | Instruction::AmoOrW { rs1, .. }
+            | Instruction::AmoAndW { rs1, .. }
+            | Instruction::AmoMinW { rs1, .. }
+            | Instruction::AmoMaxW { rs1, .. }
+            | Instruction::AmoMinuW { rs1, .. }
+            | Instruction::AmoMaxuW { rs1, .. } => (self.read_reg(rs1), 4, LoadStore),
+            _ => return None,
+        };
+        self.triggers
+            .check_data(addr, len, kind)
+            .map(|hit| hit.address)
     }
 }
 
@@ -906,8 +972,12 @@ impl RiscV {
                     // Never retire past the batch budget (preserves the
                     // event/IRQ clamp `Machine::run` already applied), and
                     // never let a block cross a mid-block interrupt deadline.
-                    let must_interpret =
-                        n == 0 || retired + n > max_count || self.block_would_cross_irq(bus, n);
+                    // Compiled blocks bypass the trigger check, so an armed
+                    // trigger (possibly armed mid-batch) forces interpretation.
+                    let must_interpret = n == 0
+                        || retired + n > max_count
+                        || self.triggers.armed()
+                        || self.block_would_cross_irq(bus, n);
                     if must_interpret {
                         self.step(bus, observers, config)?;
                         engine.note_interpreted();
@@ -1052,6 +1122,16 @@ impl Cpu for RiscV {
         );
 
         let mut next_pc = self.pc.wrapping_add(inst_len);
+
+        // Debug trigger module: a matching breakpoint/watchpoint raises a
+        // breakpoint exception before the instruction has any effect.
+        if self.triggers.armed() {
+            if let Some(addr) = self.trigger_check(&instruction, inst_len) {
+                self.mtval = addr;
+                self.handle_trap(3, self.pc);
+                return Ok(());
+            }
+        }
 
         match instruction {
             Instruction::Lui { rd, imm } => {
@@ -1277,6 +1357,7 @@ impl Cpu for RiscV {
                 self.mstatus &= !(1 << 3); // clear MIE
                 self.mstatus |= mpie << 3; // MIE <- MPIE
                 self.mstatus |= 1 << 7; // MPIE <- 1
+                self.triggers.on_mret();
                 return Ok(());
             }
             Instruction::Csrrw { rd, rs1, csr } => {
@@ -1700,7 +1781,11 @@ impl Cpu for RiscV {
         #[cfg(feature = "jit")]
         {
             self.jit_enabled = config.riscv_jit_enabled;
-            if self.jit_enabled && max_count > 1 && self.jit_gate_allows(bus, observers) {
+            if self.jit_enabled
+                && max_count > 1
+                && !self.triggers.armed()
+                && self.jit_gate_allows(bus, observers)
+            {
                 return self.step_batch_jit(bus, observers, config, max_count);
             }
         }

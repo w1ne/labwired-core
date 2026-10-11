@@ -107,6 +107,9 @@ pub const MODEL_TYPES: &[&str] = &[
     "esp32c3_apb_saradc",
     "esp32c3_ledc",
     "esp32c3_rmt",
+    // MUST be listed: the fuzzy `contains("timer")` fallback would coerce the
+    // SYSTIMER onto an unrelated timer register map.
+    "esp32c3_systimer",
     // MUST be listed: the fuzzy fallback matches `contains("uart")`, which
     // would coerce the C3's UART onto the STM32 register map — the silently
     // wrong model that wedged every `Serial.print` over 128 bytes.

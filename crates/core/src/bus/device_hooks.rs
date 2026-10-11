@@ -255,6 +255,19 @@ impl SystemBus {
             return;
         }
         let edges = self.peripherals[gpio_idx].dev.take_wire_input_edges();
+        if edges.is_empty() {
+            return;
+        }
+        // An owner may answer an edge on the same pad within this cycle (an
+        // I²C master starting on a bus it just saw go free, a target
+        // stretching the SCL it just saw fall). The port has already
+        // reported the pad's new input at the tap's provisional clock, which
+        // can be a cycle past `now`; bracket the answers so the port
+        // reports the pad's drive again after them, or the net would take
+        // the earlier report as the last word.
+        if let Some(port) = self.peripherals[gpio_idx].dev.pins_mut() {
+            crate::pins::watch_begin(port);
+        }
         for edge in edges {
             let owner = self.peripherals.iter().position(|p| {
                 p.dev
@@ -276,6 +289,9 @@ impl SystemBus {
             {
                 self.collect_scheduled_events(owner);
             }
+        }
+        if let Some(port) = self.peripherals[gpio_idx].dev.pins_mut() {
+            crate::pins::watch_end(port);
         }
     }
 

@@ -2256,7 +2256,7 @@ impl Spi {
                     SpiRegs::Stm32(r) => r.cr1,
                     _ => 0,
                 };
-                if self.net_slave_active() {
+                if self.net_slave_owns_dr() {
                     // A slave on a net shifts on the master's clock.
                     self.net_slave_write_dr(value);
                     return;
@@ -3422,6 +3422,13 @@ impl crate::Peripheral for Spi {
         if let SpiRegs::KinetisDspi(_) = &self.regs {
             self.write_kinetis_dspi_reg(offset & !3, value);
             return Ok(());
+        }
+        // STM32 classic/FIFO DR: a word store is ONE bus access, so ONE
+        // frame (bits 31:16 are not part of the register). Splitting it into
+        // byte writes re-wrote DR four times and clocked four frames, which a
+        // 16-bit (`DFF`) master on a net made visible.
+        if matches!(self.regs, SpiRegs::Stm32(_)) && offset == 0x0C {
+            return self.write_u16(0x0C, value as u16);
         }
         // STM32 default: four byte writes.
         self.write(offset, (value & 0xFF) as u8)?;

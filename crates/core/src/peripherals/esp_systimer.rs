@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! SYSTIMER peripheral for ESP32-S3.
+//! SYSTIMER peripheral, shared by the ESP32-S3 and the ESP32-C3.
 //!
 //! Two 64-bit free-running counters (UNIT0, UNIT1), each clocked at 16 MHz
 //! independently of CPU frequency.  Plan 2 implemented the counter + the
@@ -16,7 +16,7 @@
 //! | Offset | Name                | Reset        | Behaviour |
 //! |-------:|---------------------|--------------|-----------|
 //! |  0x00  | CONF                | 0x46000000   | bit 31 clk_en, bit 30 unit0_work_en, bit 29 unit1_work_en, bit 24 target0_work_en, bit 23 target1_work_en, bit 22 target2_work_en; writable mask 0xFFC00001 |
-//! |  0x04  | UNIT0_OP            | 0            | write 1<<30 to trigger snapshot of UNIT0; reads bit 29 (VALUE_VALID) set |
+//! |  0x04  | UNIT0_OP            | 0            | write 1<<30 to trigger snapshot of UNIT0; bit 29 (VALUE_VALID) reads 0 until the first snapshot, then 1 (snapshots are instant) |
 //! |  0x08  | UNIT1_OP            | 0            | same for UNIT1 |
 //! |  0x0C  | UNIT0_LOAD_HI       | 0            | high 20 bits of pending load (mask 0x000FFFFF) |
 //! |  0x10  | UNIT0_LOAD_LO       | 0            | low 32 bits of pending load |
@@ -112,7 +112,7 @@ const CONF_TARGET1_WORK_EN: u32 = 1 << 23;
 const CONF_TARGET2_WORK_EN: u32 = 1 << 22;
 
 /// SVD-derived register offsets (`scripts/gen_esp_systimer_regs.py`).
-#[path = "systimer_regs.rs"]
+#[path = "esp32s3/systimer_regs.rs"]
 mod regs;
 
 /// UNIT*_OP bit 30 — trigger snapshot update.
@@ -186,6 +186,11 @@ pub struct Systimer {
     /// DATE register (0xFC). Silicon-validated reset = 0x02012251.
     /// RW storage; firmware may write but reset value is the revision ID.
     date: u32,
+    /// UNIT0/UNIT1 `VALUE_VALID` (UNITx_OP bit 29). Silicon reads 0 out of
+    /// reset (C3 cold-reset capture: UNIT0_OP = UNIT1_OP = 0) and asserts it
+    /// once an UPDATE has latched a snapshot. The model latches instantly, so
+    /// the bit is set by the first UPDATE and stays set.
+    value_valid: [bool; 2],
     /// Interrupt-matrix source ID emitted for TARGET0 (TARGET1/2 follow at
     /// +1/+2). Defaults to the ESP32-S3 PAC value (57); the ESP32-C3 reuses
     /// this same IP but its matrix source IDs are 37/38/39, so the C3 wiring
@@ -208,6 +213,12 @@ pub struct Systimer {
     /// re-attached by the bus on restore.
     #[serde(skip)]
     clock: Option<CycleClock>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct SystimerSnapshotV3 {
+    v2: SystimerSnapshotV2,
+    value_valid: [bool; 2],
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -265,6 +276,9 @@ impl SystimerSnapshotV2 {
             date: self.date,
             target0_source: self.target0_source,
             last_tick: self.last_tick,
+            // A V2 snapshot came from a model whose VALUE_VALID always read
+            // 1; keep that so a resume inside a poll loop still exits it.
+            value_valid: [true; 2],
             scheduler_enabled: true,
             clock: None,
         }
@@ -284,6 +298,7 @@ impl SystimerSnapshotV1 {
             date: self.date,
             target0_source: self.target0_source,
             last_tick: 0,
+            value_valid: [true; 2],
             scheduler_enabled: true,
             clock: None,
         }
@@ -321,6 +336,7 @@ impl Systimer {
             int_ena: 0,
             // Silicon-validated date/revision register (read via OpenOCD).
             date: 0x0201_2251,
+            value_valid: [false; 2],
             target0_source,
             last_tick: 0,
             scheduler_enabled: true,
@@ -535,7 +551,9 @@ impl Systimer {
         match offset {
             CONF => self.conf,
             // OP: silicon asserts VALUE_VALID after snapshot; we model instant.
-            UNIT0_OP | UNIT1_OP => OP_VALUE_VALID_BIT,
+            UNIT0_OP if self.value_valid[0] => OP_VALUE_VALID_BIT,
+            UNIT1_OP if self.value_valid[1] => OP_VALUE_VALID_BIT,
+            UNIT0_OP | UNIT1_OP => 0,
 
             UNIT0_LOAD_HI => self.unit0.load_hi,
             UNIT0_LOAD_LO => self.unit0.load_lo,
@@ -636,10 +654,12 @@ impl Systimer {
             UNIT0_OP if value & OP_UPDATE_BIT != 0 => {
                 self.sync_counters_from_clock();
                 self.unit0.snapshot = self.unit0.counter;
+                self.value_valid[0] = true;
             }
             UNIT1_OP if value & OP_UPDATE_BIT != 0 => {
                 self.sync_counters_from_clock();
                 self.unit1.snapshot = self.unit1.counter;
+                self.value_valid[1] = true;
             }
 
             UNIT0_LOAD_HI => self.unit0.load_hi = value,
@@ -876,13 +896,25 @@ impl Peripheral for Systimer {
     /// not restore it would print different IDF log timestamps than the cold
     /// boot — the counter must carry across the snapshot for byte-exact serial.
     fn runtime_snapshot(&self) -> Vec<u8> {
-        bincode::serialize(&SystimerSnapshotV2::from_systimer(self))
-            .expect("bincode serialize Systimer")
+        bincode::serialize(&SystimerSnapshotV3 {
+            v2: SystimerSnapshotV2::from_systimer(self),
+            value_valid: self.value_valid,
+        })
+        .expect("bincode serialize Systimer")
     }
 
     fn restore_runtime_snapshot(&mut self, bytes: &[u8]) -> SimResult<()> {
         let scheduler_enabled = self.scheduler_enabled;
         let clock = self.clock.clone();
+        // Newest first: an older, shorter layout cannot decode as a newer one,
+        // but a newer one does decode as an older prefix.
+        if let Ok(restored) = bincode::deserialize::<SystimerSnapshotV3>(bytes) {
+            *self = restored.v2.into_systimer();
+            self.value_valid = restored.value_valid;
+            self.scheduler_enabled = scheduler_enabled;
+            self.reanchor_after_restore(clock);
+            return Ok(());
+        }
         if let Ok(restored) = bincode::deserialize::<SystimerSnapshotV2>(bytes) {
             *self = restored.into_systimer();
             self.scheduler_enabled = scheduler_enabled;
@@ -1081,13 +1113,37 @@ mod tests {
 
     #[test]
     fn op_read_asserts_value_valid_bit() {
-        // esp-hal's Delay polls UNIT0_OP bit 29 (VALUE_VALID) before reading
-        // the VALUE registers.  We model snapshots as instantaneous and
-        // always assert bit 29 so the busy-wait exits.  Plan 2 hello-world
-        // depends on this.
-        let s = Systimer::new(80_000_000);
+        // esp-hal's Delay writes UPDATE then polls UNIT0_OP bit 29
+        // (VALUE_VALID) before reading the VALUE registers. Silicon reads 0
+        // out of reset; the model latches the snapshot instantly, so the bit
+        // is set by the first UPDATE and the busy-wait exits at once.
+        let mut s = Systimer::new(80_000_000);
+        assert_eq!(s.read_word(0x04), 0, "cold reset: no snapshot yet");
+        assert_eq!(s.read_word(0x08), 0, "cold reset: no snapshot yet");
+        s.write_word(0x04, 1 << 30);
         assert_eq!(s.read_word(0x04) & (1 << 29), 1 << 29);
+        assert_eq!(s.read_word(0x08), 0, "UNIT1 has its own flag");
+        s.write_word(0x08, 1 << 30);
         assert_eq!(s.read_word(0x08) & (1 << 29), 1 << 29);
+    }
+
+    #[test]
+    fn value_valid_survives_a_snapshot_round_trip() {
+        let mut s = Systimer::new_with_source(160_000_000, 37);
+        s.write_word(0x04, 1 << 30);
+        let bytes = s.runtime_snapshot();
+        let mut r = Systimer::new_with_source(160_000_000, 37);
+        r.restore_runtime_snapshot(&bytes).unwrap();
+        assert_eq!(r.read_word(0x04) & (1 << 29), 1 << 29);
+        assert_eq!(r.read_word(0x08), 0);
+        // A pre-flag (V2) snapshot restores as valid, matching the old model.
+        let v2 = bincode::serialize(&SystimerSnapshotV2::from_systimer(&Systimer::new(
+            80_000_000,
+        )))
+        .unwrap();
+        let mut r = Systimer::new(80_000_000);
+        r.restore_runtime_snapshot(&v2).unwrap();
+        assert_eq!(r.read_word(0x04) & (1 << 29), 1 << 29);
     }
 
     #[test]

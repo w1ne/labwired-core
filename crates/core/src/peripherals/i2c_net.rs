@@ -37,10 +37,22 @@
 //! waiting for firmware to read RXDR (a register read cannot wake the model),
 //! at a quarter of the SCL low period.
 //!
-//! Not modelled on a net: 10-bit addressing, OAR2, general call, RELOAD
-//! (NBYTES above 255), SMBus/PEC, NOSTRETCH=1, the analog/digital filters and
-//! timeouts. A transfer the engine cannot do is refused by doing nothing
-//! (the controller stays idle) rather than by inventing a waveform.
+//! Addressing: the controller sends 7-bit addresses or, with `CR2.ADD10`,
+//! the 10-bit sequence (write header and low byte; for a read a repeated
+//! START and the read header, or the read header alone with `HEAD10R`). The
+//! target answers OAR1 (7- or 10-bit, `OA1MODE`), OAR2 with `OA2MSK`, and the
+//! general call with `CR1.GCEN`, and reports ADDCODE as RM0444 gives it
+//! (`11110xx` for a 10-bit match). With `CR2.RELOAD` the controller holds SCL
+//! low with TCR after NBYTES and goes on when firmware writes the next NBYTES
+//! (transfers above 255 bytes; the last byte of a chunk is ACKed). With
+//! `CR1.NOSTRETCH` the target does not stretch: ADDR is not waited for, an
+//! empty TXDR goes out as it is with OVR, and a byte arriving while RXDR is
+//! full is NACKed and lost with OVR.
+//!
+//! Not modelled on a net: SMBus/PEC, slave byte control (SBC), the
+//! analog/digital filters and timeouts. A transfer the engine cannot do is
+//! refused by doing nothing (the controller stays idle) rather than by
+//! inventing a waveform.
 
 use std::cell::Cell;
 
@@ -56,12 +68,20 @@ const CR1_STOPIE: u32 = 1 << 5;
 const CR1_TCIE: u32 = 1 << 6;
 const CR1_ERRIE: u32 = 1 << 7;
 
+const CR1_NOSTRETCH: u32 = 1 << 17;
+const CR1_GCEN: u32 = 1 << 19;
+
 const CR2_RD_WRN: u32 = 1 << 10;
+const CR2_ADD10: u32 = 1 << 11;
+const CR2_HEAD10R: u32 = 1 << 12;
 const CR2_START: u32 = 1 << 13;
 const CR2_STOP: u32 = 1 << 14;
+const CR2_RELOAD: u32 = 1 << 24;
 const CR2_AUTOEND: u32 = 1 << 25;
 
+const OAR1_MODE10: u32 = 1 << 10;
 const OAR1_EN: u32 = 1 << 15;
+const OAR2_EN: u32 = 1 << 15;
 
 pub(super) const ISR_TXE: u32 = 1 << 0;
 pub(super) const ISR_TXIS: u32 = 1 << 1;
@@ -70,7 +90,9 @@ const ISR_ADDR: u32 = 1 << 3;
 const ISR_NACKF: u32 = 1 << 4;
 const ISR_STOPF: u32 = 1 << 5;
 const ISR_TC: u32 = 1 << 6;
+const ISR_TCR: u32 = 1 << 7;
 const ISR_ARLO: u32 = 1 << 9;
+const ISR_OVR: u32 = 1 << 10;
 const ISR_BUSY: u32 = 1 << 15;
 const ISR_DIR: u32 = 1 << 16;
 const ISR_ADDCODE_SHIFT: u32 = 17;
@@ -111,6 +133,23 @@ enum MPhase {
     WaitRxRead,
     /// SCL held low after NBYTES (TC): waiting for START or STOP.
     WaitCmd,
+    /// SCL held low after NBYTES with RELOAD (TCR): waiting for a CR2
+    /// write with the next NBYTES.
+    WaitReload,
+}
+
+/// Which address byte of a 10-bit address the controller is sending.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+enum Addr10 {
+    /// 7-bit addressing.
+    #[default]
+    None,
+    /// `11110 A9 A8 0`.
+    HeaderWrite,
+    /// `A7..A0`.
+    Low,
+    /// `11110 A9 A8 1`, after a repeated START.
+    HeaderRead,
 }
 
 /// Where the target (slave) is.
@@ -119,6 +158,8 @@ enum TPhase {
     #[default]
     Idle,
     Addr,
+    /// The second address byte of a 10-bit write address.
+    AddrLow,
     Rx,
     Tx,
     /// Addressed someone else, or NACKed: wait for STOP or a new START.
@@ -153,6 +194,8 @@ pub(super) struct I2cNet {
     count: u32,
     nbytes: u32,
     autoend: bool,
+    reload: bool,
+    addr10: Addr10,
     // ── target ──
     t: TPhase,
     t_bits: u8,
@@ -160,6 +203,11 @@ pub(super) struct I2cNet {
     t_reading: bool,
     /// This target ACKed its address since the last START.
     t_addressed: bool,
+    /// This target ACKed a 10-bit header (write) and expects the low byte.
+    t_header10: bool,
+    /// Its full 10-bit address was matched since the last STOP: a repeated
+    /// START with the read header selects it.
+    t_selected10: bool,
     t_master_acked: bool,
     t_tx: u8,
     stretch: Stretch,
@@ -210,7 +258,8 @@ impl L4I2c {
             ISR_ADDR => CR1_ADDRIE,
             ISR_NACKF => CR1_NACKIE,
             ISR_STOPF => CR1_STOPIE,
-            ISR_TC => CR1_TCIE,
+            ISR_TC | ISR_TCR => CR1_TCIE,
+            ISR_OVR => CR1_ERRIE,
             ISR_ARLO => CR1_ERRIE,
             _ => 0,
         };
@@ -253,7 +302,22 @@ impl L4I2c {
             }
             0x04 => {
                 self.cr2 = value & !(CR2_START | CR2_STOP);
-                if value & CR2_START != 0 && self.cr1 & CR1_PE != 0 {
+                let nbytes = (value >> 16) & 0xFF;
+                if self.net.m == MPhase::WaitReload && value & CR2_START == 0 && nbytes != 0 {
+                    // TCR is cleared by writing a non-zero NBYTES: the next
+                    // chunk of the same transfer.
+                    self.isr &= !ISR_TCR;
+                    self.net.nbytes = nbytes;
+                    self.net.count = 0;
+                    self.net.reload = value & CR2_RELOAD != 0;
+                    self.net.autoend = value & CR2_AUTOEND != 0;
+                    let now = self.net_now();
+                    if self.net.reading {
+                        self.net_begin_byte(now, None, false);
+                    } else {
+                        self.net_master_next_tx(now);
+                    }
+                } else if value & CR2_START != 0 && self.cr1 & CR1_PE != 0 {
                     self.cr2 |= CR2_START;
                     self.net_master_start();
                 } else if value & CR2_STOP != 0 && self.net.m == MPhase::WaitCmd {
@@ -308,8 +372,17 @@ impl L4I2c {
         self.net.reading = self.cr2 & CR2_RD_WRN != 0;
         self.net.nbytes = (self.cr2 >> 16) & 0xFF;
         self.net.autoend = self.cr2 & CR2_AUTOEND != 0;
+        self.net.reload = self.cr2 & CR2_RELOAD != 0;
         self.net.count = 0;
-        self.isr &= !(ISR_TC | ISR_NACKF);
+        // 10-bit: the full sequence (write header, low byte, and for a read
+        // a repeated START with the read header), or with HEAD10R only the
+        // read header.
+        self.net.addr10 = match (self.cr2 & CR2_ADD10 != 0, self.net.reading) {
+            (false, _) => Addr10::None,
+            (true, true) if self.cr2 & CR2_HEAD10R != 0 => Addr10::HeaderRead,
+            (true, _) => Addr10::HeaderWrite,
+        };
+        self.isr &= !(ISR_TC | ISR_TCR | ISR_NACKF);
         match self.net.m {
             // Repeated START from a TC hold: SCL is low.
             MPhase::WaitCmd => self.net_begin_low(now, Pulse::Restart),
@@ -347,7 +420,13 @@ impl L4I2c {
     }
 
     fn net_address_byte(&self) -> u8 {
-        ((((self.cr2 >> 1) & 0x7F) as u8) << 1) | u8::from(self.net.reading)
+        let hi = ((self.cr2 >> 8) & 0x3) as u8;
+        match self.net.addr10 {
+            Addr10::None => ((((self.cr2 >> 1) & 0x7F) as u8) << 1) | u8::from(self.net.reading),
+            Addr10::HeaderWrite => 0xF0 | (hi << 1),
+            Addr10::HeaderRead => 0xF1 | (hi << 1),
+            Addr10::Low => self.cr2 as u8,
+        }
     }
 
     /// The SDA level this controller puts out for the bit in flight.
@@ -360,8 +439,9 @@ impl L4I2c {
                 // ACK slot while sending: release for the receiver's ACK.
                 (Some(_), _) => true,
                 (None, b) if b < 8 => true,
-                // ACK slot while receiving: ACK all but the last byte.
-                (None, _) => self.net.count + 1 >= self.net.nbytes,
+                // ACK slot while receiving: ACK all but the last byte (the
+                // last of a RELOAD chunk is not the last of the transfer).
+                (None, _) => !self.net.reload && self.net.count + 1 >= self.net.nbytes,
             },
         }
     }
@@ -387,6 +467,23 @@ impl L4I2c {
                 self.net_begin_low(now, Pulse::Stop);
                 return;
             }
+            match self.net.addr10 {
+                Addr10::HeaderWrite => {
+                    // The low address byte follows the write header.
+                    self.net.addr10 = Addr10::Low;
+                    let low = self.net_address_byte();
+                    self.net_begin_byte(now, Some(low), true);
+                    return;
+                }
+                Addr10::Low if self.net.reading => {
+                    // A read turns round with a repeated START and the read
+                    // header.
+                    self.net.addr10 = Addr10::HeaderRead;
+                    self.net_begin_low(now, Pulse::Restart);
+                    return;
+                }
+                _ => {}
+            }
             self.cr2 &= !CR2_START;
         } else if self.net.tx.is_some() {
             if !acked {
@@ -402,7 +499,11 @@ impl L4I2c {
             self.net_flag(ISR_RXNE);
         }
         if self.net.count >= self.net.nbytes {
-            if self.net.autoend {
+            if self.net.reload {
+                self.net.m = MPhase::WaitReload;
+                self.net.deadline = None;
+                self.net_flag(ISR_TCR);
+            } else if self.net.autoend {
                 self.net_begin_low(now, Pulse::Stop);
             } else {
                 self.net.m = MPhase::WaitCmd;
@@ -529,6 +630,16 @@ impl L4I2c {
     /// The transmitter needs its next byte with SCL low: load it, or
     /// stretch until firmware writes TXDR.
     fn net_target_need_tx(&mut self) {
+        if self.cr1 & CR1_NOSTRETCH != 0 {
+            // No stretching: an empty TXDR is an underrun (OVR) and the old
+            // content goes out.
+            if self.isr & ISR_TXE != 0 {
+                self.net_flag(ISR_OVR);
+                self.isr &= !ISR_TXE;
+            }
+            self.net_target_load_tx();
+            return;
+        }
         if self.isr & ISR_TXE == 0 {
             self.net_target_load_tx();
             self.net_drive(LINE_SCL, true);
@@ -560,7 +671,7 @@ impl L4I2c {
     fn net_target_scl_rise(&mut self) {
         let sda = self.net.sda.unwrap_or(true);
         match self.net.t {
-            TPhase::Addr | TPhase::Rx if self.net.t_bits < 8 => {
+            TPhase::Addr | TPhase::AddrLow | TPhase::Rx if self.net.t_bits < 8 => {
                 self.net.t_shift = (self.net.t_shift << 1) | u8::from(sda);
                 self.net.t_bits += 1;
             }
@@ -568,7 +679,7 @@ impl L4I2c {
                 self.net.t_master_acked = !sda;
                 self.net.t_bits += 1;
             }
-            TPhase::Addr | TPhase::Rx | TPhase::Tx => self.net.t_bits += 1,
+            TPhase::Addr | TPhase::AddrLow | TPhase::Rx | TPhase::Tx => self.net.t_bits += 1,
             _ => {}
         }
     }
@@ -576,23 +687,39 @@ impl L4I2c {
     fn net_target_scl_fall(&mut self, now: u64) {
         match (self.net.t, self.net.t_bits) {
             (TPhase::Addr, 8) => {
-                let addr = self.net.t_shift >> 1;
-                let own = ((self.oar1 >> 1) & 0x7F) as u8;
-                if addr == own {
-                    self.net.t_reading = self.net.t_shift & 1 != 0;
-                    self.net.t_addressed = true;
-                    self.net_drive(LINE_SDA, false);
-                    self.isr = (self.isr & !(ISR_DIR | (0x7F << ISR_ADDCODE_SHIFT)))
-                        | (u32::from(addr) << ISR_ADDCODE_SHIFT)
-                        | if self.net.t_reading { ISR_DIR } else { 0 }
-                        | ISR_BUSY;
-                    self.net_flag(ISR_ADDR);
+                let byte = self.net.t_shift;
+                let read = byte & 1 != 0;
+                match self.net_target_match(byte) {
+                    Some(Match::Header10) => {
+                        // 10-bit write header: ACK, the low byte decides.
+                        self.net.t_header10 = true;
+                        self.net_drive(LINE_SDA, false);
+                    }
+                    Some(Match::Address(addcode)) => {
+                        self.net_target_ack_address(addcode, read);
+                    }
+                    None => self.net.t = TPhase::Ignore,
+                }
+            }
+            (TPhase::AddrLow, 8) => {
+                let own = (self.oar1 & 0xFF) as u8;
+                if self.net.t_shift == own {
+                    self.net.t_selected10 = true;
+                    let addcode = 0x78 | ((self.oar1 >> 8) & 0x3);
+                    self.net_target_ack_address(addcode, false);
                 } else {
                     self.net.t = TPhase::Ignore;
                 }
             }
-            (TPhase::Addr, 9) => {
-                // After the address ACK: stretch until ADDR is cleared.
+            (TPhase::Addr, 9) if std::mem::take(&mut self.net.t_header10) => {
+                self.net_drive(LINE_SDA, true);
+                self.net.t = TPhase::AddrLow;
+                self.net.t_bits = 0;
+                self.net.t_shift = 0;
+            }
+            (TPhase::Addr | TPhase::AddrLow, 9) => {
+                // After the address ACK: stretch until ADDR is cleared
+                // (unless NOSTRETCH).
                 self.net.t = if self.net.t_reading {
                     TPhase::Tx
                 } else {
@@ -601,7 +728,7 @@ impl L4I2c {
                 self.net.t_bits = 0;
                 self.net.t_shift = 0;
                 self.net_drive(LINE_SDA, true);
-                if self.isr & ISR_ADDR != 0 {
+                if self.isr & ISR_ADDR != 0 && self.cr1 & CR1_NOSTRETCH == 0 {
                     self.net.stretch = Stretch::Addr;
                     self.net_drive(LINE_SCL, false);
                 } else {
@@ -610,7 +737,10 @@ impl L4I2c {
             }
             (TPhase::Rx, 8) => {
                 self.net_sync_rx();
-                if self.isr & ISR_RXNE != 0 {
+                if self.isr & ISR_RXNE != 0 && self.cr1 & CR1_NOSTRETCH != 0 {
+                    // No stretching: the byte is lost and NACKed (OVR).
+                    self.net_flag(ISR_OVR);
+                } else if self.isr & ISR_RXNE != 0 {
                     // Previous byte unread: stretch until it is.
                     self.net.stretch = Stretch::RxRead;
                     self.net_drive(LINE_SCL, false);
@@ -644,8 +774,57 @@ impl L4I2c {
         }
     }
 
+    /// What an address byte (address << 1 | R/W) selects in this target:
+    /// OAR1 (7- or 10-bit), OAR2 (with its mask) or the general call.
+    fn net_target_match(&self, byte: u8) -> Option<Match> {
+        let addr = byte >> 1;
+        let read = byte & 1 != 0;
+        if self.oar1 & OAR1_EN != 0 {
+            if self.oar1 & OAR1_MODE10 != 0 {
+                let header =
+                    byte & 0xF8 == 0xF0 && u32::from((byte >> 1) & 3) == (self.oar1 >> 8) & 3;
+                if header && !read {
+                    return Some(Match::Header10);
+                }
+                if header && read && self.net.t_selected10 {
+                    return Some(Match::Address(0x78 | ((self.oar1 >> 8) & 0x3)));
+                }
+            } else if u32::from(addr) == (self.oar1 >> 1) & 0x7F {
+                return Some(Match::Address(u32::from(addr)));
+            }
+        }
+        if self.oar2 & OAR2_EN != 0 {
+            // OA2MSK masks 0..=7 low bits of the compare; 7 matches every
+            // address but the reserved ones (0000xxx, 1111xxx).
+            let msk = (self.oar2 >> 8) & 7;
+            let keep = (0x7Fu32 << msk) & 0x7F;
+            let reserved = addr & 0x78 == 0 || addr & 0x78 == 0x78;
+            if !reserved && u32::from(addr) & keep == (self.oar2 >> 1) & keep {
+                return Some(Match::Address(u32::from(addr)));
+            }
+        }
+        if addr == 0 && !read && self.cr1 & CR1_GCEN != 0 {
+            return Some(Match::Address(0));
+        }
+        None
+    }
+
+    /// ACK an address that selects this target and raise ADDR.
+    fn net_target_ack_address(&mut self, addcode: u32, read: bool) {
+        self.net.t_reading = read;
+        self.net.t_addressed = true;
+        self.net_drive(LINE_SDA, false);
+        self.isr = (self.isr & !(ISR_DIR | (0x7F << ISR_ADDCODE_SHIFT)))
+            | ((addcode & 0x7F) << ISR_ADDCODE_SHIFT)
+            | if read { ISR_DIR } else { 0 }
+            | ISR_BUSY;
+        self.net_flag(ISR_ADDR);
+    }
+
     fn net_target_stop(&mut self) {
         let was_ours = std::mem::take(&mut self.net.t_addressed);
+        self.net.t_selected10 = false;
+        self.net.t_header10 = false;
         self.net.t = TPhase::Idle;
         self.net.stretch = Stretch::None;
         if self.net.m == MPhase::Idle {
@@ -700,6 +879,7 @@ impl L4I2c {
                     // START (or repeated START).
                     self.net.t = TPhase::Addr;
                     self.net.t_addressed = false;
+                    self.net.t_header10 = false;
                     self.net.t_bits = 0;
                     self.net.t_shift = 0;
                     self.isr |= ISR_BUSY;
@@ -793,6 +973,15 @@ impl L4I2c {
         }
         res
     }
+}
+
+/// What an address byte selected.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Match {
+    /// A 10-bit write header matching OAR1's two high bits.
+    Header10,
+    /// This target, with the ADDCODE to report.
+    Address(u32),
 }
 
 /// Scheduler token for the net engine (the phase model's chain uses 0).

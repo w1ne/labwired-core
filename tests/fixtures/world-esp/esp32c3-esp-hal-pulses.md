@@ -16,17 +16,17 @@ It is the `examples/esp32c3-hello-world` crate (same `Cargo.toml` /
 * `Output` drives GPIO4 through the GPIO matrix: ten pulses, one console line
   per pulse, then `C3 PULSES DONE`.
 
-The waits are busy loops, not `esp_hal::delay::Delay`: `Delay` reads the
-SYSTIMER, which on the bare-ELF fast boot is the chip YAML's register stub (the
-behavioural model is installed only on the mask-ROM boot), so it never sees
-time pass there. That is a gap of the C3 bare-ELF fast boot itself, single-chip
-and world alike.
+The waits are busy loops, not `esp_hal::delay::Delay`. When this fixture was
+built, the bare-ELF fast boot had only the chip YAML's SYSTIMER register stub,
+so `Delay` never saw time pass. The C3 YAML now carries the behavioural
+SYSTIMER (`esp32c3_systimer`), so `Delay` works on fast boot and in worlds; see
+`tests/fixtures/esp32c3-esp-hal-guard-delay.md`. The fixture is kept as built.
 
 Built with the workspace's pinned stable toolchain (1.95.0) for
 `riscv32imc-unknown-none-elf`, with the example's `[unstable] build-std` table
-removed and esp-hal's stack-guard watchpoint off — the RISC-V model does not
-implement the debug trigger CSRs (`tselect` / `tdata1`) that watchpoint
-programs, so esp-hal's default build traps on its first `csrw tselect`:
+removed and esp-hal's stack-guard watchpoint off. At the time the RISC-V model
+did not implement the debug trigger CSRs (`tselect` / `tdata1`) the watchpoint
+programs; it does now, so a default esp-hal build also runs:
 
 ```sh
 ESP_HAL_CONFIG_STACK_GUARD_MONITORING=false cargo +1.95.0 build --release

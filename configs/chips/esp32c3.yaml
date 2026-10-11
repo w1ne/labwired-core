@@ -125,14 +125,16 @@ peripherals:
     base_address: 0x60026000
     config:
       path: "../peripherals/esp32c3/apb_ctrl.yaml"
-  # Declared declarative, but at runtime the bus carries the NATIVE
-  # `peripherals::esp32s3::systimer::Systimer` at this base (the C3 and S3
+  # The NATIVE `peripherals::esp32s3::systimer::Systimer` (the C3 and S3
   # SYSTIMER are the same IP: all 30 C3 registers agree offset-for-offset with
-  # the S3 SVD, which adds 6 REAL_TARGETn_* the C3 does not have). The native
-  # model advertises no registers, so name them from the C3 descriptor — the
-  # part we are actually simulating.
+  # the S3 SVD, which adds 6 REAL_TARGETn_* the C3 does not have), built by the
+  # C3 factory with the C3's matrix sources (TARGET0..2 = 37..39). Every path
+  # gets the live 16 MHz counter -- bare-ELF fast boot and world nodes as well
+  # as ROM boot -- so esp-hal's `Delay` sees time pass. The native model
+  # advertises no registers, so name them from the C3 descriptor -- the part
+  # we are actually simulating.
   - id: "systimer"
-    type: "declarative"
+    type: "esp32c3_systimer"
     base_address: 0x60023000
     config:
       path: "../peripherals/esp32c3/systimer.yaml"
