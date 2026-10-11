@@ -93,13 +93,6 @@ const ALLOWED_VACUOUS: &[(&str, &str, &str)] = &[];
 /// each one is named here with where it actually runs.
 const RELEASE_ONLY: &[(&str, &str)] = &[
     (
-        "world_can_dashboard_demo",
-        "Release-only by construction: it runs three real STM32F103 firmwares \
-         (engine, OLED dashboard, sensor) on a timed CAN bus for several \
-         simulated seconds, which is minutes in debug. It RUNS in \
-         core-ci.yml's `--release ... --features event-scheduler` step.",
-    ),
-    (
         "world_esp32c3_ble_pong",
         "Release-only by construction (it plays a two-node BLE election out \
          over ~180M cycles; debug is minutes per assertion). It RUNS in \
