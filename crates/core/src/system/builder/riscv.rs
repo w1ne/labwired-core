@@ -28,7 +28,8 @@
 
 use super::{BootMode, BuildRequest, BuiltMachine, FirmwareSource, UartWires};
 use crate::boot::esp32c3_rom::{
-    build_rom_boot_machine, c3_rom_data_init_writes, inject_rom_regions, RomBootOpts,
+    build_rom_boot_machine, c3_rom_data_init_writes, inject_rom_regions, install_fast_boot_rom,
+    RomBootOpts,
 };
 use crate::boot::esp32s3_rom::RomImages;
 use crate::bus::SystemBus;
@@ -81,80 +82,24 @@ fn build_program_image(
         SystemBus::from_config(chip, manifest).map_err(|e| anyhow!("Bus config error: {e:#}"))?;
 
     // Inject the on-demand ESP32-C3 boot ROM blobs into the chip's still
-    // zero-filled `rom`/`rom_data` regions, matching how the native `--rom-boot`
-    // path provisions them. Absent blobs (non-C3 RISC-V chips, or a caller not
-    // supplying them) leave the regions zero, preserving the fast-boot path.
-    let faithful_c3_rom = {
-        use crate::boot::esp32c3_rom::{DROM_BASE, IROM_BASE};
-        let mut injected_irom: Option<Vec<u8>> = None;
-        for mem in bus.extra_mem.iter_mut() {
-            let src = if mem.base_addr == IROM_BASE as u64 {
-                blobs.get("esp32c3_irom")
-            } else if mem.base_addr == DROM_BASE as u64 {
-                blobs.get("esp32c3_drom")
-            } else {
-                None
-            };
-            if let Some(src) = src {
-                let n = src.len().min(mem.data.len());
-                mem.data[..n].copy_from_slice(&src[..n]);
-                if mem.base_addr == IROM_BASE as u64 {
-                    injected_irom = Some(src.clone());
-                }
-            }
-        }
-        // Fast boot skips the ROM reset's own `.data` copy, so replicate it:
-        // land the ROM's DRAM globals (ROM function tables esp-hal calls
-        // dispatch through) exactly as silicon does — otherwise those calls
-        // jump through a null/garbage pointer.
-        if let Some(irom) = injected_irom {
-            for (dst, bytes) in c3_rom_data_init_writes(&irom) {
-                for (i, b) in bytes.iter().enumerate() {
-                    let _ = bus.write_u8(dst as u64 + i as u64, *b);
-                }
-            }
-            // With the real ROM present, esp-hal's clock bring-up runs the
-            // genuine `rom_i2c_*Reg` helpers, which drive the analog I²C master
-            // / ANA_CONFIG block (0x6000_E000) for the PLL. That block is not in
-            // the chip YAML, so add it on the faithful path — otherwise the
-            // first ROM PLL transaction faults on an unmapped access.
-            bus.add_peripheral(
-                "rtc_i2c_ana",
-                0x6000_E000,
-                0x400,
-                None,
-                Box::new(crate::peripherals::esp32c3::ana_i2c::Esp32c3AnaI2c::new()),
-            );
-            bus.refresh_peripheral_index();
-            // A peripheral added after bus assembly changes the input to
-            // `derive_walk_deletable`; re-derive rather than rely on this model
-            // happening to be inert.
-            bus.recompute_walk_deletable();
-            true
-        } else {
-            false
-        }
+    // zero-filled `rom`/`rom_data` regions, replay the ROM's `.data` copy, and
+    // add the two blocks the real ROM's helpers and esp-println need — the one
+    // sequence a world node runs too (`install_fast_boot_rom`). Absent blobs
+    // (non-C3 RISC-V chips, or a caller not supplying them) leave the regions
+    // zero, preserving the plain fast-boot path.
+    let faithful_c3_rom = match blobs.get("esp32c3_irom") {
+        Some(irom) => install_fast_boot_rom(
+            &mut bus,
+            &RomImages {
+                irom: irom.clone(),
+                drom: blobs.get("esp32c3_drom").cloned().unwrap_or_default(),
+            },
+        ),
+        None => false,
     };
 
     let console = ConsoleCapture::for_manifest(manifest);
     let uart_sink = console.heard_sink();
-    // On the faithful C3 ROM path, esp-println's `jtag-serial` feature prints
-    // through USB_SERIAL_JTAG (0x6004_3000), not UART0. The chip YAML only has
-    // a declarative register stub there, which never drains bytes, so install
-    // the real behavioural model; a narrower, later-registered window overrides
-    // the stub. `new_esp32c3()` so the CDC interrupt reaches the matrix.
-    if faithful_c3_rom {
-        use crate::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag;
-        bus.add_peripheral(
-            "usb_serial_jtag",
-            0x6004_3000,
-            0x100,
-            None,
-            Box::new(UsbSerialJtag::new_esp32c3()),
-        );
-        bus.refresh_peripheral_index();
-        bus.recompute_walk_deletable();
-    }
     // No mask ROM executes on this bare-ELF path, so nothing writes the same
     // bytes to both consoles: an undeclared manifest keeps capturing both into
     // one pane. A manifest that declares the board's console selects it.

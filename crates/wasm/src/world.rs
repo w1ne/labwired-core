@@ -12,12 +12,23 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use wasm_bindgen::prelude::*;
 
+/// One node as the page hands it to [`WasmWorld::new_from_resolved`].
 #[derive(Deserialize)]
 struct ResolvedNodeInput {
     id: String,
     system_yaml: String,
     chip_yaml: String,
     firmware: Vec<u8>,
+    /// Optional `{ name: Uint8Array }` — the same named-blob channel, under the
+    /// same names, as the single-chip `new_from_config(system, chip,
+    /// firmware, blobs)`: `esp32c3_irom` / `esp32c3_drom` and `esp32s3_irom` /
+    /// `esp32s3_drom` carry the mask ROM an ESP node boots against. The
+    /// browser bundle carries no ROM, so an ESP32-S3 flash-image node needs
+    /// these, an S3 ELF node without them falls back to the thunk harness
+    /// exactly as the single-chip S3 fast boot does, and a C3 node falls back
+    /// to an image registered with `register_esp32c3_rom`.
+    #[serde(default)]
+    blobs: HashMap<String, Vec<u8>>,
 }
 
 #[wasm_bindgen]
@@ -293,6 +304,12 @@ impl WasmWorld {
 
 #[wasm_bindgen]
 impl WasmWorld {
+    /// Build a world from the environment YAML and the page's resolved nodes:
+    /// `[{ id, system_yaml, chip_yaml, firmware: Uint8Array, blobs? }]`, where
+    /// `blobs` is an optional `{ name: Uint8Array }` map with the single-chip
+    /// `new_from_config` names (an ESP node's mask ROM). A node's boot profile
+    /// (`profile: arduino-esp32` for a classic-ESP32 Arduino sketch) is read
+    /// from the environment YAML.
     #[wasm_bindgen(js_name = new_from_resolved)]
     pub fn new_from_resolved(environment_yaml: &str, nodes: JsValue) -> Result<WasmWorld, JsValue> {
         let manifest: EnvironmentManifest = serde_yaml::from_str(environment_yaml)
@@ -427,9 +444,13 @@ impl WasmWorld {
     }
 
     /// Hand the page's ESP32-C3 mask ROM (IROM 384 KiB, DROM 128 KiB) to the
-    /// engine before building a world with C3 flash-image nodes. The browser
-    /// has no filesystem and no vendored copy; the single-chip path takes the
-    /// same two blobs as `esp32c3_irom` / `esp32c3_drom`.
+    /// engine for every C3 node built afterwards in this worker. The browser
+    /// has no filesystem and no vendored copy.
+    ///
+    /// Kept for pages that already call it. The general mechanism is a node's
+    /// own `blobs` in [`Self::new_from_resolved`] (`esp32c3_irom` /
+    /// `esp32c3_drom`, the names the single-chip path takes), which covers the
+    /// ESP32-S3 too and wins over this registration.
     #[wasm_bindgen(js_name = register_esp32c3_rom)]
     pub fn register_esp32c3_rom(irom: Vec<u8>, drom: Vec<u8>) -> Result<(), JsValue> {
         labwired_core::boot::esp32c3_rom::register_rom_images(irom, drom)
@@ -588,6 +609,7 @@ impl WasmWorld {
                     system,
                     chip,
                     firmware: NodeFirmware::from_bytes(input.firmware),
+                    blobs: input.blobs,
                 })
             })
             .collect::<Result<Vec<_>, String>>()?;
@@ -675,6 +697,7 @@ interconnects:
             system_yaml: include_str!("../../../configs/systems/esp32c3-devkit.yaml").into(),
             chip_yaml: include_str!("../../../configs/chips/esp32c3.yaml").into(),
             firmware: flash,
+            blobs: HashMap::new(),
         };
         let mut world = WasmWorld::from_node_inputs(environment, vec![node]).expect("world");
         let mut batches = 0;
@@ -750,6 +773,7 @@ interconnects:
             system_yaml: include_str!("../../../configs/systems/nucleo-f401re.yaml").to_string(),
             chip_yaml: include_str!("../../../configs/chips/stm32f401.yaml").to_string(),
             firmware: fixture(fw),
+            blobs: HashMap::new(),
         };
         let mut world = WasmWorld::from_node_inputs(
             environment,
@@ -810,12 +834,14 @@ interconnects:
                     system_yaml: include_str!("../../../examples/stm32g0b1re/system.yaml").into(),
                     chip_yaml: include_str!("../../../configs/chips/stm32g0b1re.yaml").into(),
                     firmware: fw("stm.elf"),
+                    blobs: HashMap::new(),
                 },
                 ResolvedNodeInput {
                     id: "avr".into(),
                     system_yaml: include_str!("../../../configs/systems/arduino-uno.yaml").into(),
                     chip_yaml: include_str!("../../../configs/chips/atmega328p.yaml").into(),
                     firmware: fw("avr.elf"),
+                    blobs: HashMap::new(),
                 },
             ],
         )
@@ -867,12 +893,14 @@ interconnects:
                     system_yaml: include_str!("../../../examples/stm32g0b1re/system.yaml").into(),
                     chip_yaml: include_str!("../../../configs/chips/stm32g0b1re.yaml").into(),
                     firmware: fw("stm.elf"),
+                    blobs: HashMap::new(),
                 },
                 ResolvedNodeInput {
                     id: "avr".into(),
                     system_yaml: include_str!("../../../configs/systems/arduino-uno.yaml").into(),
                     chip_yaml: include_str!("../../../configs/chips/atmega328p.yaml").into(),
                     firmware: fw("avr.elf"),
+                    blobs: HashMap::new(),
                 },
             ],
         )
@@ -965,6 +993,7 @@ interconnects:
                     system_yaml: include_str!("../../../examples/stm32g0b1re/system.yaml").into(),
                     chip_yaml: include_str!("../../../configs/chips/stm32g0b1re.yaml").into(),
                     firmware: fw("stm.elf"),
+                    blobs: HashMap::new(),
                 },
                 ResolvedNodeInput {
                     id: "c6".into(),
@@ -972,6 +1001,7 @@ interconnects:
                         .into(),
                     chip_yaml: include_str!("../../../configs/chips/esp32c6.yaml").into(),
                     firmware: fw("esp32c6.elf"),
+                    blobs: HashMap::new(),
                 },
             ],
         )
@@ -1024,6 +1054,7 @@ interconnects:
             system_yaml: include_str!("../../../configs/systems/esp32c3-devkit.yaml").into(),
             chip_yaml: include_str!("../../../configs/chips/esp32c3.yaml").into(),
             firmware: std::fs::read(root.join("firmware").join(format!("{id}.elf"))).expect("elf"),
+            blobs: HashMap::new(),
         };
         let mut world =
             WasmWorld::from_node_inputs(environment, vec![node("server"), node("client")])
@@ -1108,6 +1139,7 @@ interconnects:
                         .into(),
                     chip_yaml: include_str!("../../../configs/chips/esp32c3.yaml").into(),
                     firmware: flash,
+                    blobs: HashMap::new(),
                 },
                 ResolvedNodeInput {
                     id: "stm".into(),
@@ -1117,6 +1149,7 @@ interconnects:
                         root.join("examples/gpio-net-two-boards/firmware/stm.elf"),
                     )
                     .unwrap(),
+                    blobs: HashMap::new(),
                 },
             ],
         )
@@ -1191,6 +1224,7 @@ cosim_models:
             .to_string(),
             chip_yaml: include_str!("../../../configs/chips/stm32f401.yaml").to_string(),
             firmware: include_bytes!("../../../tests/fixtures/stm32f401-blinky.elf").to_vec(),
+            blobs: HashMap::new(),
         };
 
         let error = match WasmWorld::from_node_inputs(environment, vec![node]) {
@@ -1203,5 +1237,223 @@ cosim_models:
             ),
             "{error}"
         );
+    }
+
+    /// ESP nodes in the browser's world path, built exactly as the page builds
+    /// them: chip and system YAML as text, firmware bytes, and the node's mask
+    /// ROM passed in its `blobs` under the single-chip names (the wasm bundle
+    /// carries no ROM). Each ESP node drives the `irq` net of an STM32G0B1
+    /// running the gpio-net-two-boards firmware, which counts the edges.
+    mod esp_nodes {
+        use super::*;
+
+        fn repo(rel: &str) -> std::path::PathBuf {
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../..")
+                .join(rel)
+        }
+
+        fn bytes(rel: &str) -> Vec<u8> {
+            std::fs::read(repo(rel)).unwrap_or_else(|e| panic!("{rel}: {e}"))
+        }
+
+        fn text(rel: &str) -> String {
+            std::fs::read_to_string(repo(rel)).unwrap_or_else(|e| panic!("{rel}: {e}"))
+        }
+
+        fn rom_blobs(chip: &str) -> HashMap<String, Vec<u8>> {
+            HashMap::from([
+                (
+                    format!("{chip}_irom"),
+                    bytes(&format!("crates/core/roms/{chip}/{chip}_rom.bin")),
+                ),
+                (
+                    format!("{chip}_drom"),
+                    bytes(&format!("crates/core/roms/{chip}/{chip}_drom.bin")),
+                ),
+            ])
+        }
+
+        fn stm() -> ResolvedNodeInput {
+            ResolvedNodeInput {
+                id: "stm".into(),
+                system_yaml: text("examples/stm32g0b1re/system.yaml"),
+                chip_yaml: text("configs/chips/stm32g0b1re.yaml"),
+                firmware: bytes("examples/gpio-net-two-boards/firmware/stm.elf"),
+                blobs: HashMap::new(),
+            }
+        }
+
+        fn world(
+            esp: ResolvedNodeInput,
+            pin: u8,
+            profile: Option<&str>,
+        ) -> Result<WasmWorld, String> {
+            let profile = profile
+                .map(|p| format!(", profile: {p}"))
+                .unwrap_or_default();
+            let environment: EnvironmentManifest = serde_yaml::from_str(&format!(
+                r#"
+schema_version: "1.0"
+name: esp-node
+nodes:
+  - {{ id: stm, system: s.yaml, firmware: f.elf }}
+  - {{ id: esp, system: s.yaml, firmware: f.elf{profile} }}
+interconnects:
+  - type: gpio_net
+    nodes: [esp, stm]
+    config:
+      name: irq
+      pull: down
+      members:
+        - {{ node: esp, peripheral: gpio, pin: {pin} }}
+        - {{ node: stm, peripheral: gpiob, pin: 0 }}
+"#
+            ))
+            .expect("environment manifest");
+            WasmWorld::from_node_inputs(environment, vec![stm(), esp])
+        }
+
+        struct Run {
+            world: WasmWorld,
+            console: String,
+        }
+
+        impl Run {
+            /// Step 1 µs rounds (as the page does) until `done` or `max_ms`.
+            fn until(&mut self, max_ms: u64, done: impl Fn(&Run) -> bool) {
+                while self.world.world.round_now_ps().unwrap() < max_ms * 1_000_000_000 {
+                    self.world.step_batch(50).map_err(|_| "step").unwrap();
+                    let out = self.world.drain_uart_output("esp").unwrap();
+                    self.console.push_str(&String::from_utf8_lossy(&out));
+                    if done(self) {
+                        return;
+                    }
+                }
+            }
+
+            fn stm_irq(&self) -> [u32; 2] {
+                let b = self.world.read_memory("stm", 0x2000_0100, 8).unwrap();
+                [
+                    u32::from_le_bytes([b[0], b[1], b[2], b[3]]),
+                    u32::from_le_bytes([b[4], b[5], b[6], b[7]]),
+                ]
+            }
+        }
+
+        fn run(world: WasmWorld) -> Run {
+            Run {
+                world,
+                console: String::new(),
+            }
+        }
+
+        #[test]
+        fn an_esp32s3_elf_node() {
+            let esp = ResolvedNodeInput {
+                id: "esp".into(),
+                system_yaml: text("configs/systems/esp32s3.yaml"),
+                chip_yaml: text("configs/chips/esp32s3.yaml"),
+                firmware: bytes("tests/fixtures/tier1/esp32s3.elf"),
+                blobs: rom_blobs("esp32s3"),
+            };
+            let mut r = run(world(esp, 4, None).expect("world"));
+            r.until(500, |r| r.console.contains("TIER1 done"));
+            assert!(r.console.contains("TIER1 gpio PASS"), "{}", r.console);
+            assert!(r.console.contains("TIER1 done"), "{}", r.console);
+            assert_eq!(r.stm_irq(), [1, 1], "{}", r.console);
+        }
+
+        /// The hosted S3 build path: a merged flash image through the real
+        /// mask ROM, which the browser can only supply as blobs.
+        #[test]
+        fn an_esp32s3_flash_image_node() {
+            let esp = ResolvedNodeInput {
+                id: "esp".into(),
+                system_yaml: text("configs/systems/esp32s3.yaml"),
+                chip_yaml: text("configs/chips/esp32s3.yaml"),
+                firmware: bytes("tests/fixtures/source-debug/esp32s3-arduino-flash.bin"),
+                blobs: rom_blobs("esp32s3"),
+            };
+            let mut r = run(world(esp, 2, None).expect("world"));
+            r.until(3_000, |r| {
+                r.stm_irq()[1] >= 1 && r.console.lines().any(|l| l.trim() == "1")
+            });
+            assert!(r.console.contains("ESP-ROM:esp32s3"), "{}", r.console);
+            assert!(!r.console.contains("Detected size"), "{}", r.console);
+            let [rise, fall] = r.stm_irq();
+            assert!(rise >= 1 && fall >= 1, "{rise}/{fall}: {}", r.console);
+        }
+
+        /// A classic-ESP32 Arduino sketch on the node profile the environment
+        /// YAML names (`profile: arduino-esp32`).
+        #[test]
+        fn a_classic_esp32_arduino_node() {
+            let esp = ResolvedNodeInput {
+                id: "esp".into(),
+                system_yaml: text("configs/systems/esp32-wroom-32.yaml"),
+                chip_yaml: text("configs/chips/esp32.yaml"),
+                firmware: bytes("tests/fixtures/source-debug/esp32-arduino.elf"),
+                blobs: HashMap::new(),
+            };
+            let mut r = run(world(esp, 2, Some("arduino-esp32")).expect("world"));
+            r.until(3_000, |r| {
+                r.stm_irq()[1] >= 3
+                    && r.console.lines().filter(|l| !l.trim().is_empty()).count() >= 3
+            });
+            let printed: Vec<&str> = r
+                .console
+                .lines()
+                .map(str::trim)
+                .filter(|l| l.parse::<u32>().is_ok())
+                .take(3)
+                .collect();
+            assert_eq!(printed, ["1", "3", "9"], "{:?}", r.console);
+            let [rise, fall] = r.stm_irq();
+            assert!(rise >= 3 && fall >= 3, "{rise}/{fall}");
+        }
+
+        fn c3(blobs: HashMap<String, Vec<u8>>) -> ResolvedNodeInput {
+            ResolvedNodeInput {
+                id: "esp".into(),
+                system_yaml: text("configs/systems/esp32c3-devkit.yaml"),
+                chip_yaml: text("configs/chips/esp32c3.yaml"),
+                firmware: bytes("tests/fixtures/world-esp/esp32c3-esp-hal-pulses.elf"),
+                blobs,
+            }
+        }
+
+        #[test]
+        fn an_esp32c3_esp_hal_elf_node() {
+            let mut r = run(world(c3(rom_blobs("esp32c3")), 4, None).expect("world"));
+            r.until(200, |r| r.console.contains("C3 PULSES DONE"));
+            assert!(r.console.contains("C3 ESP-HAL BOOT"), "{}", r.console);
+            assert!(r.console.contains("C3 PULSES DONE"), "{}", r.console);
+            assert_eq!(r.stm_irq(), [10, 10], "{}", r.console);
+        }
+
+        /// The node's blobs are what it boots against: a zeroed "ROM" there
+        /// wins over every fallback, and the esp-hal app, whose clock bring-up
+        /// calls into the ROM, never gets to print.
+        #[test]
+        fn a_c3_node_boots_against_its_own_rom_blobs() {
+            let zeroed = HashMap::from([
+                ("esp32c3_irom".to_string(), vec![0u8; 0x6_0000]),
+                ("esp32c3_drom".to_string(), vec![0u8; 0x2_0000]),
+            ]);
+            let mut w = world(c3(zeroed), 4, None).expect("world");
+            let mut failed = false;
+            // `step_batch` builds a `JsValue` error, which only a wasm host
+            // can; step the world underneath it, as `step_batch` does.
+            while w.world.round_now_ps().unwrap() < 20_000_000_000 {
+                if w.world.step_rounds(50).values().any(Result::is_err) {
+                    failed = true;
+                    break;
+                }
+            }
+            let out = String::from_utf8_lossy(&w.drain_uart_output("esp").unwrap()).into_owned();
+            assert!(!out.contains("C3 PULSES DONE"), "{out}");
+            assert!(failed || w.read_memory("stm", 0x2000_0100, 4).unwrap() == [0; 4]);
+        }
     }
 }

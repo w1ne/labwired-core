@@ -125,6 +125,11 @@ pub struct ResolvedWorldNode {
     pub system: labwired_config::SystemManifest,
     pub chip: labwired_config::ChipDescriptor,
     pub firmware: crate::system::node::NodeFirmware,
+    /// Named binary blobs for this node, under the names the single-chip
+    /// engine takes them (`esp32c3_irom`, `esp32s3_drom`, ...). Empty for a
+    /// hosted world, whose ESP nodes provision their mask ROMs themselves;
+    /// the browser, which has no filesystem, passes them here.
+    pub blobs: crate::system::builder::BlobMap,
 }
 
 /// Type-erased trait for machines to allow heterogeneous machines in the world.
@@ -1444,6 +1449,7 @@ impl World {
                 system: sysman,
                 chip,
                 firmware,
+                blobs: Default::default(),
             });
         }
         Self::from_resolved_with_plugins(manifest, resolved, plugins)
@@ -1500,14 +1506,48 @@ impl World {
         // two C3s get ...:04 and ...:05, as they did from the process-wide fab
         // in a fresh process).
         let fab = crate::system::efuse::FactoryMacAllocator::new();
+        // A node's boot profile is part of the topology the manifest
+        // describes, so it is read from there (already validated) rather than
+        // carried a second time on the resolved node.
+        let mut profiles = std::collections::HashMap::new();
+        for node in &manifest.nodes {
+            if let Some(name) = &node.profile {
+                let profile = crate::system::node::NodeProfile::parse(name)
+                    .with_context(|| format!("node '{}'", node.id))?;
+                profiles.insert(node.id.clone(), profile);
+            }
+        }
+        // The Arduino-ESP32 profile's thunks keep state per thread (the
+        // `pxCurrentTCB` address, the monotonic tick), and every node of a
+        // world steps on one thread: a second such node would read the
+        // first's. Refuse rather than run two sketches that share it.
+        let arduino: Vec<&str> = manifest
+            .nodes
+            .iter()
+            .filter(|n| {
+                profiles.get(&n.id) == Some(&crate::system::node::NodeProfile::ArduinoEsp32)
+            })
+            .map(|n| n.id.as_str())
+            .collect();
+        if arduino.len() > 1 {
+            anyhow::bail!(
+                "nodes {arduino:?} all use profile '{}', whose boot thunks keep per-thread state; \
+                 a world can run one such node",
+                labwired_config::NODE_PROFILE_ARDUINO_ESP32
+            );
+        }
         for node in nodes {
-            let mut machine = crate::system::node::build_node_in_fab(
+            let mut machine = crate::system::node::build_node_with_options(
                 &node.id,
                 &node.chip,
                 &node.system,
                 node.firmware,
-                plugins,
-                Some(&fab),
+                &crate::system::node::NodeBuildOptions {
+                    plugins,
+                    fab: Some(&fab),
+                    blobs: Some(&node.blobs),
+                    profile: profiles.get(&node.id).copied(),
+                },
             )?;
             // Label each node's UART console with its id so the shared stdout
             // stays readable (line-buffered per node instead of byte-interleaved

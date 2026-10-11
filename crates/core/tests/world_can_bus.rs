@@ -22,6 +22,7 @@ fn node(id: &str) -> NodeConfig {
         system: "examples/h563-uds-ecu/system.yaml".to_string(),
         firmware: "examples/h563-uds-ecu/firmware/h563_uds_ecu.elf".to_string(),
         config_overrides: HashMap::new(),
+        profile: None,
     }
 }
 
@@ -34,6 +35,7 @@ fn quiet_can_node(id: &str) -> NodeConfig {
         system: "crates/core/tests/fixtures/h563-can-world-system.yaml".to_string(),
         firmware: "examples/h563-uds-ecu/firmware/h563_uds_ecu.elf".to_string(),
         config_overrides: HashMap::new(),
+        profile: None,
     }
 }
 
@@ -208,12 +210,14 @@ external_devices:
                 system: scanner_system.to_string_lossy().into_owned(),
                 firmware: firmware.to_string_lossy().into_owned(),
                 config_overrides: HashMap::new(),
+                profile: None,
             },
             NodeConfig {
                 id: "ecu".to_string(),
                 system: "examples/f103-j1939-monitor/system.yaml".to_string(),
                 firmware: "examples/f103-fidelity-bench/firmware/build/gpiobug.elf".to_string(),
                 config_overrides: HashMap::new(),
+                profile: None,
             },
         ],
         interconnects: vec![can_bus_with_endpoints(

@@ -318,10 +318,19 @@ fn built(
     }
 }
 
-/// Flash backing for the S3 flash boot: the part's declared capacity, never
-/// less than the image (a chip YAML that understates the part cannot truncate
-/// the image) and never under the 4 MiB floor.
-fn esp32s3_flash_backing_size(chip_flash_size: u64, image_len: usize) -> u32 {
+/// Flash backing size for an ESP32-S3 merged-image (`--rom-boot`) run: the
+/// part's declared capacity from the chip descriptor, never less than the image
+/// (a chip YAML that understates the part cannot truncate the image), and never
+/// under the 4 MiB floor.
+///
+/// The descriptor is the authority because the model publishes the backing
+/// size as the JEDEC RDID capacity byte (`spi_mem_flash.rs`,
+/// `log2(backing.len())`), and `esp_flash` aborts the boot when that disagrees
+/// with the size in the app image header. Sizing from the image made an
+/// 8,455,860-byte N16R8 image publish an 8 MiB part against its own 16 MB
+/// header. One function, so the single-chip engine, the browser and a world
+/// node all size the part the same way.
+pub fn esp32s3_flash_backing_size(chip_flash_size: u64, image_len: usize) -> u32 {
     let declared = u32::try_from(chip_flash_size).unwrap_or(u32::MAX);
     let image = u32::try_from(image_len).unwrap_or(u32::MAX);
     declared.max(image).max(4 * 1024 * 1024)
