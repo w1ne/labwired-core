@@ -12,12 +12,12 @@ implementation, the commands below returned exit 0:
 
 ```bash
 python3 -m pytest tools/cosim/test_smart_basket_power.py tools/cosim/test_labwired_ngspice.py -q
-# 44 passed
+# 48 passed
 python3 examples/smart-basket-power/run_scenarios.py
 # passed: true, assertions: 31, waveform_rows: 420
 ```
 
-The 40 power tests cover JSONL success/error handling, finite/bounded input
+The 44 power tests cover JSONL success/error handling, finite/bounded input
 validation, immutable routed parameters, duplicate/backward/gapped time,
 USB load-first charging budget, battery supplementation, radio load effect,
 signed coulomb balance, independent power ledger, empty-cell cutoff,
@@ -41,7 +41,12 @@ behavior only. They contain no firmware execution, QEMU/Linux boot, physical
 carrier, RF link, switching-converter stability, or thermal acceptance evidence.
 No push, merge or deployment was performed.
 
-The timeout is assumed software policy, not an implemented circuit timer. The
-proposed CT delays recovery. Depleted cell protection blocks USB output rails;
+Follow-up checks at `b856cf278` added regressions for source exhaustion below
+the OCV floor, stale-success invalidation, and carrier buck loss for radio loads.
+The current test total above includes these changes; the stored scenario outputs
+were regenerated after them.
+
+The timeout is assumed software policy, not an implemented circuit timer. Exact
+supervisor recovery timing is not modeled. Depleted cell protection blocks USB output rails;
 USB may charge the cell until explicit reset has a recovered battery source.
 Supervisor tolerance and startup KILL-ignore timing remain outside this model.
