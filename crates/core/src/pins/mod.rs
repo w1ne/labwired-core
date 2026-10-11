@@ -34,6 +34,9 @@ use crate::logic_capture::{LogicTap, PadDrive};
 
 #[cfg(test)]
 mod conformance;
+mod pad_control;
+
+pub use pad_control::PadControl;
 
 /// What a chip's output stage does with a pad.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -285,6 +288,32 @@ pub trait PinPort {
     /// channels with the peripheral lines that now drive them. Called by
     /// [`watch_end`]. Default: no routed pads.
     fn routes_changed(&mut self) {}
+
+    /// The pad-control block that keeps this port's pulls, when the GPIO
+    /// block does not (Kinetis `PORTx_PCRn`, RA `PmnPFS`, i.MX RT IOMUXC):
+    /// the block's peripheral id on the bus and how it encodes them. Default:
+    /// the port keeps its own pulls.
+    fn pad_control(&self) -> Option<(&str, PadControl)> {
+        None
+    }
+
+    /// Take the pull the [`pad_control`](Self::pad_control) block configures
+    /// on `pin`. The bus calls it for every pad after each write to that
+    /// block, bracketed with [`watch_begin`] / [`watch_end`]; the port
+    /// reports it in [`driver`](Self::driver) and folds it into its input
+    /// register like a pull of its own. `false`: the port keeps its own
+    /// pulls and ignored it.
+    fn set_config_pull(&mut self, _pin: u8, _pull: Pull) -> bool {
+        false
+    }
+
+    /// A chip-wide switch outside the port disables every internal pull-up
+    /// (AVR `MCUCR.PUD`, owned by the CPU; see
+    /// [`crate::Bus::set_pull_ups_disabled`]). The caller brackets for push
+    /// capture. `false`: this port has no such switch and ignored it.
+    fn set_pull_ups_disabled(&mut self, _disabled: bool) -> bool {
+        false
+    }
 }
 
 /// A pad's level and drive after [`resolve`].

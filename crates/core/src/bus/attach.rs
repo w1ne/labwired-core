@@ -939,7 +939,117 @@ impl SystemBus {
     /// `Option` tests, and on a bus with neither peripheral all four calls go.
     #[inline]
     pub(crate) fn pad_brackets_present(&self) -> bool {
-        self.esp32c3_io_mux_idx.is_some() || self.rp2040_io_bank0_idx.is_some()
+        self.esp32c3_io_mux_idx.is_some()
+            || self.rp2040_io_bank0_idx.is_some()
+            || !self.pad_control_links.is_empty()
+    }
+
+    /// Resolve every pin port's [`pad_control`](crate::pins::PinPort::pad_control)
+    /// block by name and hand each port the pulls its block holds now (the
+    /// block's reset values on a fresh bus). Called from
+    /// `rebuild_peripheral_ranges`, so the indices follow the peripheral list.
+    pub(crate) fn rebuild_pad_control_links(&mut self) {
+        let mut links = Vec::new();
+        for (port, p) in self.peripherals.iter().enumerate() {
+            let Some((name, control)) = p.dev.pins().and_then(|pins| pins.pad_control()) else {
+                continue;
+            };
+            match self.peripherals.iter().position(|b| b.name == name) {
+                Some(block) => links.push(PadControlLink {
+                    block,
+                    port,
+                    control,
+                }),
+                None => tracing::warn!(
+                    "GPIO port '{}' names pad-control block '{name}', which is not on the \
+                     bus; its pulls stay off",
+                    p.name
+                ),
+            }
+        }
+        self.pad_control_links = links;
+        for k in 0..self.pad_control_links.len() {
+            let link = self.pad_control_links[k];
+            if let Some(port) = self
+                .peripherals
+                .get_mut(link.port)
+                .and_then(|p| p.dev.pins_mut())
+            {
+                crate::pins::watch_begin(port);
+            }
+            self.apply_pad_control(link);
+        }
+    }
+
+    /// Decode every pad's pull from `link`'s block and hand it to the port,
+    /// then close the push-capture bracket the caller opened.
+    fn apply_pad_control(&mut self, link: PadControlLink) {
+        let mut pulls = [crate::pins::Pull::None; 32];
+        let count = {
+            let (Some(block), Some(port)) = (
+                self.peripherals.get(link.block),
+                self.peripherals.get(link.port),
+            ) else {
+                return;
+            };
+            let Some(pins) = port.dev.pins() else {
+                return;
+            };
+            let count = usize::from(pins.pin_count()).min(pulls.len());
+            for (pin, pull) in pulls.iter_mut().enumerate().take(count) {
+                *pull = link.control.pull(&*block.dev, pin as u8);
+            }
+            count
+        };
+        let Some(port) = self
+            .peripherals
+            .get_mut(link.port)
+            .and_then(|p| p.dev.pins_mut())
+        else {
+            return;
+        };
+        for (pin, pull) in pulls.iter().enumerate().take(count) {
+            port.set_config_pull(pin as u8, *pull);
+        }
+        crate::pins::watch_end(port);
+    }
+
+    /// Bracket a write to a pad-control block (Kinetis PORTx, RA PFS, i.MX RT
+    /// IOMUXC): a PE/PCR/PUE write moves the linked port's pads without
+    /// touching the GPIO block. Snapshots every linked port; `true` when
+    /// `idx` is a linked block, for [`Self::finish_pad_control_write`].
+    pub(crate) fn begin_pad_control_write(&mut self, idx: usize) -> bool {
+        let mut hit = false;
+        for k in 0..self.pad_control_links.len() {
+            let link = self.pad_control_links[k];
+            if link.block != idx {
+                continue;
+            }
+            hit = true;
+            if let Some(port) = self
+                .peripherals
+                .get_mut(link.port)
+                .and_then(|p| p.dev.pins_mut())
+            {
+                crate::pins::watch_begin(port);
+            }
+        }
+        hit
+    }
+
+    /// Complete a successful pad-control write started by
+    /// [`Self::begin_pad_control_write`]: hand every linked port its pulls as
+    /// the block now holds them, and push what moved.
+    pub(crate) fn finish_pad_control_write(&mut self, idx: usize, begun: bool) {
+        if !begun {
+            return;
+        }
+        for k in 0..self.pad_control_links.len() {
+            let link = self.pad_control_links[k];
+            if link.block == idx {
+                self.apply_pad_control(link);
+            }
+        }
     }
 
     /// Bracket a C3 IO_MUX write with GPIO push-capture sampling. A `FUN_WPU`

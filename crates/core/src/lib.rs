@@ -2132,6 +2132,13 @@ pub trait Bus {
         false
     }
 
+    /// A CPU-owned switch that disables every internal pull-up of the chip's
+    /// pin ports (AVR `MCUCR.PUD`, ATmega328P datasheet §14.4.1). The CPU
+    /// calls it when the bit changes; the bus hands it to each port
+    /// ([`crate::pins::PinPort::set_pull_ups_disabled`]). Default: a bus with
+    /// no pin ports.
+    fn set_pull_ups_disabled(&mut self, _disabled: bool) {}
+
     /// Is an instruction fetch at `pc` permitted by a memory-protection unit
     /// the bus models? Called by the core only when its 256-byte fetch window
     /// does not already cover `pc`, i.e. once per window refill. That is exact

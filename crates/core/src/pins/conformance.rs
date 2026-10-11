@@ -16,9 +16,9 @@
 //! 4. `set_external` round-trips to the input register, and reports the
 //!    input before and after.
 //! 5. The probe level agrees with [`resolve`] wherever the rule determines
-//!    it. The one documented exception: a model whose input register does
-//!    not fold the pull in ([`Rig::input_ignores_pull`]) reads its latch on a
-//!    pulled input nothing outside holds.
+//!    it, and the input register reads the pull's rail on a pulled input
+//!    nothing outside holds: on silicon the pull drives the pad. No model is
+//!    exempt.
 //! 6. Push capture equals the per-cycle poll exactly, levels and four-state
 //!    drives, for a probe channel and an own-drive channel on the same pad
 //!    (`Machine::logic_force_poll_capture`).
@@ -58,12 +58,6 @@ trait Rig {
     /// The pad exercised.
     fn pin(&self) -> u8 {
         3
-    }
-    /// The model's input register leaves the pull out: a pulled input with
-    /// nothing outside reads the last latched level (see each model's
-    /// `PinPort::level` doc).
-    fn input_ignores_pull(&self) -> bool {
-        false
     }
     /// The model reports its pads through push capture.
     fn pushes(&self) -> bool {
@@ -146,10 +140,6 @@ impl Rig for StmF1 {
         rmw(port, 0x00, 0xF << (pin * 4), nibble << (pin * 4));
         true
     }
-    /// F1 IDR keeps the latched level on a pulled input (`F1Gpio::effective_idr`).
-    fn input_ignores_pull(&self) -> bool {
-        true
-    }
 }
 
 struct Nrf52;
@@ -183,24 +173,70 @@ impl Rig for Nrf52 {
     }
 }
 
-struct Kinetis;
+/// A write to a pad-control block that keeps a port's pulls, done the way
+/// the bus does it (`SystemBus::begin_pad_control_write` /
+/// `finish_pad_control_write`): bracketed, then the decoded pull handed over.
+fn pad_control_write(
+    block: &mut dyn Peripheral,
+    port: &mut dyn Peripheral,
+    control: PadControl,
+    pin: u8,
+    word: u32,
+) {
+    assert_eq!(
+        port_mut(port).pad_control().map(|(_, c)| c),
+        Some(control),
+        "the port names its pad-control block"
+    );
+    watch_begin(port_mut(port));
+    w32(block, control.offset(pin), word);
+    let pull = control.pull(block, pin);
+    assert!(port_mut(port).set_config_pull(pin, pull), "pull taken");
+    watch_end(port_mut(port));
+}
+
+/// A sticky word register bank standing in for a pad-control block (the
+/// declarative Kinetis `PORTx`, the i.MX RT IOMUXC stub).
+fn sticky_block() -> crate::peripherals::imx_iomuxc::ImxIomuxc {
+    crate::peripherals::imx_iomuxc::ImxIomuxc::new()
+}
+
+#[derive(Default)]
+struct Kinetis {
+    port_block: Option<crate::peripherals::imx_iomuxc::ImxIomuxc>,
+}
 impl Rig for Kinetis {
     fn name(&self) -> &'static str {
         "GpioPort kinetis"
     }
     fn build(&mut self) -> Box<dyn Peripheral> {
-        Box::new(crate::peripherals::gpio::GpioPort::new_with_layout(
-            crate::peripherals::gpio::GpioRegisterLayout::Kinetis,
-        ))
+        self.port_block = Some(sticky_block());
+        Box::new(
+            crate::peripherals::gpio::GpioPort::new_with_layout(
+                crate::peripherals::gpio::GpioRegisterLayout::Kinetis,
+            )
+            .with_pad_control("portc", PadControl::KinetisPcr),
+        )
     }
     fn set_mode(&mut self, port: &mut dyn Peripheral, pin: u8, mode: Mode) -> bool {
+        let block = self.port_block.as_mut().expect("built");
+        // PORTx_PCRn: MUX = 1 (GPIO), PE (bit 1), PS (bit 0).
+        let pcr = match mode {
+            Mode::Input(Pull::Up) => 0x103,
+            Mode::Input(Pull::Down) => 0x102,
+            _ => 0x100,
+        };
         match mode {
-            Mode::Input(Pull::None) => bit_to(port, 0x14, pin, false),
+            Mode::Input(_) => {
+                pad_control_write(block, port, PadControl::KinetisPcr, pin, pcr);
+                bit_to(port, 0x14, pin, false);
+            }
             Mode::PushPull(level) => {
+                pad_control_write(block, port, PadControl::KinetisPcr, pin, pcr);
                 bit_to(port, 0x00, pin, level);
                 bit_to(port, 0x14, pin, true);
             }
-            _ => return false,
+            Mode::OpenDrain(_) => return false,
         }
         true
     }
@@ -228,10 +264,6 @@ impl Rig for Efr32 {
         };
         bit_to(port, 0x10, pin, dout);
         rmw(port, 0x04, 0xF << (pin * 4), nibble << (pin * 4));
-        true
-    }
-    /// DIN keeps the latched level on a pulled input (`effective_din`).
-    fn input_ignores_pull(&self) -> bool {
         true
     }
 }
@@ -268,59 +300,95 @@ impl Rig for Sam {
         }
         true
     }
-    /// IN keeps the latched level on a pulled input.
-    fn input_ignores_pull(&self) -> bool {
-        true
-    }
 }
 
-struct RaPort;
+#[derive(Default)]
+struct RaPort {
+    pfs: Option<crate::peripherals::ra_pfs::RaPfs>,
+}
 impl Rig for RaPort {
     fn name(&self) -> &'static str {
         "GpioPort ra"
     }
     fn build(&mut self) -> Box<dyn Peripheral> {
-        Box::new(crate::peripherals::gpio::GpioPort::new_with_layout(
-            crate::peripherals::gpio::GpioRegisterLayout::RaPort,
-        ))
+        let mut pfs = crate::peripherals::ra_pfs::RaPfs::new();
+        // R_BSP_PinAccessEnable: PWPR = 0, then PFSWE.
+        pfs.write(0x503, 0x00).unwrap();
+        pfs.write(0x503, 0x40).unwrap();
+        self.pfs = Some(pfs);
+        Box::new(
+            crate::peripherals::gpio::GpioPort::new_with_layout(
+                crate::peripherals::gpio::GpioRegisterLayout::RaPort,
+            )
+            .with_pad_control("pfs", PadControl::RaPfs { port: 1 }),
+        )
     }
     fn set_mode(&mut self, port: &mut dyn Peripheral, pin: u8, mode: Mode) -> bool {
-        // PCNTR1: PDR [15:0], PODR [31:16].
+        let pfs = self.pfs.as_mut().expect("built");
+        let control = PadControl::RaPfs { port: 1 };
+        // PCNTR1: PDR [15:0], PODR [31:16]. PmnPFS.PCR (bit 4) is the pull-up.
         match mode {
-            Mode::Input(Pull::None) => bit_to(port, 0x00, pin, false),
+            Mode::Input(Pull::Down) | Mode::OpenDrain(_) => return false,
+            Mode::Input(pull) => {
+                let pcr = if pull == Pull::Up { 1 << 4 } else { 0 };
+                pad_control_write(pfs, port, control, pin, pcr);
+                bit_to(port, 0x00, pin, false);
+            }
             Mode::PushPull(level) => {
+                pad_control_write(pfs, port, control, pin, 0);
                 bit_to(port, 0x00, pin + 16, level);
                 bit_to(port, 0x00, pin, true);
             }
-            _ => return false,
         }
         true
     }
 }
 
-struct Imxrt;
+#[derive(Default)]
+struct Imxrt {
+    iomuxc: Option<crate::peripherals::imx_iomuxc::ImxIomuxc>,
+}
 impl Rig for Imxrt {
     fn name(&self) -> &'static str {
         "GpioPort imxrt"
     }
     fn build(&mut self) -> Box<dyn Peripheral> {
-        Box::new(crate::peripherals::gpio::GpioPort::new_with_layout(
-            crate::peripherals::gpio::GpioRegisterLayout::Imxrt,
-        ))
+        self.iomuxc = Some(sticky_block());
+        Box::new(
+            crate::peripherals::gpio::GpioPort::new_with_layout(
+                crate::peripherals::gpio::GpioRegisterLayout::Imxrt,
+            )
+            .with_pad_control("iomuxc", IMXRT_GPIO2_PADS),
+        )
     }
     fn set_mode(&mut self, port: &mut dyn Peripheral, pin: u8, mode: Mode) -> bool {
+        let iomuxc = self.iomuxc.as_mut().expect("built");
+        // SW_PAD_CTL: PKE (12) + PUE (13) select the pull, PUS (15:14) 00
+        // down, 10 the 100k up. 0x10B0 is the reset keeper.
+        let pad = match mode {
+            Mode::Input(Pull::Up) => 0xB0B0,
+            Mode::Input(Pull::Down) => 0x30B0,
+            _ => 0x10B0,
+        };
         // DR 0x00, GDIR 0x04.
         match mode {
-            Mode::Input(Pull::None) => bit_to(port, 0x04, pin, false),
+            Mode::Input(_) => {
+                pad_control_write(iomuxc, port, IMXRT_GPIO2_PADS, pin, pad);
+                bit_to(port, 0x04, pin, false);
+            }
             Mode::PushPull(level) => {
+                pad_control_write(iomuxc, port, IMXRT_GPIO2_PADS, pin, pad);
                 bit_to(port, 0x00, pin, level);
                 bit_to(port, 0x04, pin, true);
             }
-            _ => return false,
+            Mode::OpenDrain(_) => return false,
         }
         true
     }
 }
+
+/// GPIO2 on the i.MX RT1064: `SW_PAD_CTL_PAD_GPIO_B0_00` and on.
+const IMXRT_GPIO2_PADS: PadControl = PadControl::ImxrtPadCtl { base: 0x32C };
 
 // ── ATmega ───────────────────────────────────────────────────────────────────
 
@@ -354,10 +422,6 @@ impl Rig for Avr {
                 set(port, 1, true);
             }
         }
-        true
-    }
-    /// PINx keeps the latched level on a pulled-up input.
-    fn input_ignores_pull(&self) -> bool {
         true
     }
 }
@@ -558,11 +622,11 @@ fn rigs() -> Vec<Box<dyn Rig>> {
         Box::new(StmV2),
         Box::new(StmF1),
         Box::new(Nrf52),
-        Box::new(Kinetis),
+        Box::new(Kinetis::default()),
         Box::new(Efr32),
         Box::new(Sam),
-        Box::new(RaPort),
-        Box::new(Imxrt),
+        Box::new(RaPort::default()),
+        Box::new(Imxrt::default()),
         Box::new(Avr),
         Box::new(Rp2040),
         Box::new(Esp32),
@@ -688,17 +752,23 @@ fn every_model_probe_level_follows_the_shared_rule() {
                 port_mut(&mut *dev).set_external(pin, ext);
                 let driver = port(&*dev).driver(pin).expect("known");
                 let rule = resolve(driver, ext);
-                let quirk = rig.input_ignores_pull()
-                    && ext == External::Released
-                    && driver.out == Out::Off
-                    && driver.pull != Pull::None;
-                if let (Some(level), false) = (rule.level, quirk) {
+                if let Some(level) = rule.level {
                     assert_eq!(
                         port(&*dev).level(pin),
                         Some(level),
                         "{name} {mode:?} {ext:?}: probe level vs resolve"
                     );
                     assert_eq!(dev.read_gpio_pad(pin), Some(level), "{name}: shim");
+                }
+                // A pulled input nothing outside holds: the pull drives the
+                // pad, so the input register reads its rail.
+                if let (Mode::Input(Pull::Up | Pull::Down), External::Released) = (mode, ext) {
+                    assert_eq!(
+                        port(&*dev).input(pin),
+                        rule.level,
+                        "{name} {mode:?}: the input register reads the pull"
+                    );
+                    assert_eq!(dev.read_gpio_input(pin), rule.level, "{name}: shim");
                 }
                 let probe = probe_drive(port(&*dev), pin);
                 let expect = match rule.drive {
@@ -710,6 +780,60 @@ fn every_model_probe_level_follows_the_shared_rule() {
             }
         }
     }
+}
+
+#[test]
+fn every_model_input_register_reads_its_pull() {
+    let mut pulled_models = 0;
+    for mut rig in rigs() {
+        let name = rig.name();
+        let mut pulled = false;
+        for pull in [Pull::Up, Pull::Down] {
+            let mut dev = rig.build();
+            let pin = rig.pin();
+            if !rig.set_mode(&mut *dev, pin, Mode::Input(pull)) {
+                continue;
+            }
+            pulled = true;
+            let rail = pull.level().expect("a pull has a rail");
+            // Nothing was ever connected: the pull alone decides.
+            assert_eq!(
+                port(&*dev).input(pin),
+                Some(rail),
+                "{name} {pull:?}: a fresh pulled input reads the rail"
+            );
+            // The outside wins over the weak pull, and letting go hands the
+            // pad back to it.
+            let change = port_mut(&mut *dev)
+                .set_external(pin, External::Level(!rail))
+                .expect("taken");
+            assert_eq!(
+                change,
+                InputChange {
+                    before: rail,
+                    after: !rail
+                },
+                "{name} {pull:?}: driven against the pull"
+            );
+            let change = port_mut(&mut *dev)
+                .set_external(pin, External::Released)
+                .expect("taken");
+            assert_eq!(
+                change,
+                InputChange {
+                    before: !rail,
+                    after: rail
+                },
+                "{name} {pull:?}: released to the pull"
+            );
+        }
+        pulled_models += usize::from(pulled);
+    }
+    // STM32 v2/f1, nRF52, Kinetis, EFR32, SAM, RA, i.MX RT, ATmega, ESP32-C3/S3.
+    assert!(
+        pulled_models >= 11,
+        "pulls exercised on {pulled_models} models"
+    );
 }
 
 const RAM_BASE: u64 = 0x2000_0000;

@@ -143,6 +143,7 @@ peripherals:
   # line from a GPIOC output here, and the SPI bus latches that pin's level into
   # the display model (command vs data). A passive declarative bank has no
   # readable output level for the bus to latch, so this must be behavioural.
+  # Its pulls are PORTC_PCRn.PE/PS (`pad_control`), counted in PDIR and on nets.
   - id: "gpioc"
     type: "gpio"
     base_address: 0x400FF080
@@ -150,6 +151,7 @@ peripherals:
     config:
       debug_schema: "../peripherals/mkw41z4/gpioc.yaml"
       profile: "kinetis"
+      pad_control: "portc"
   # --- Sensor buses ---
   - id: "i2c0"
     type: "declarative"
