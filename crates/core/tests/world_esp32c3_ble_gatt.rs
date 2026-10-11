@@ -105,6 +105,7 @@ fn node(id: &str, firmware: Vec<u8>) -> ResolvedWorldNode {
         chip: ChipDescriptor::from_file(root.join("configs/chips/esp32c3.yaml"))
             .expect("esp32c3 chip"),
         firmware: NodeFirmware::FlashImage(firmware),
+        blobs: Default::default(),
     }
 }
 

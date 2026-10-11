@@ -677,6 +677,74 @@ pub fn inject_rom_regions(bus: &mut crate::bus::SystemBus, images: &RomImages) -
     irom_present
 }
 
+/// Make a C3 bus ready for a bare-ELF **fast boot** with the real mask ROM
+/// behind it: the one sequence the single-chip engine (`system::builder`) and a
+/// world node (`system::node`) both run, so the two cannot drift.
+///
+///  1. the IROM / DROM images go into their windows ([`inject_rom_regions`]);
+///  2. the ROM's reset-time `.data` copy is replayed
+///     ([`c3_rom_data_init_writes`]) — fast boot skips the ROM's own
+///     `unpackloop`, and without the copy every ROM function table esp-hal
+///     dispatches through reads zero;
+///  3. the analog I²C master / ANA_CONFIG block (0x6000_E000) is added — with
+///     the real ROM present, esp-hal's PLL bring-up runs the genuine
+///     `rom_i2c_*Reg` helpers against it, and it is not in the chip YAML;
+///  4. the behavioural USB-Serial-JTAG console replaces the YAML's register
+///     stub at 0x6004_3000 — esp-println's `jtag-serial` prints there, and
+///     the stub never drains a byte.
+///
+/// Returns `false` (and changes nothing beyond the windows) when the IROM image
+/// is empty, i.e. there is no ROM to boot against.
+pub fn install_fast_boot_rom(bus: &mut crate::bus::SystemBus, images: &RomImages) -> bool {
+    if images.irom.is_empty() || !inject_rom_regions(bus, images) {
+        return false;
+    }
+    for (dst, bytes) in c3_rom_data_init_writes(&images.irom) {
+        for (i, b) in bytes.iter().enumerate() {
+            let _ = bus.write_u8(dst as u64 + i as u64, *b);
+        }
+    }
+    bus.add_peripheral(
+        "rtc_i2c_ana",
+        0x6000_E000,
+        0x400,
+        None,
+        Box::new(crate::peripherals::esp32c3::ana_i2c::Esp32c3AnaI2c::new()),
+    );
+    // `new_esp32c3()`, not `new()`: the latter leaves irq_source None, so the
+    // CDC interrupt never reaches the matrix. A narrower, later-registered
+    // window overrides the declarative stub.
+    bus.add_peripheral(
+        crate::console::USB_SERIAL_JTAG,
+        0x6004_3000,
+        0x100,
+        None,
+        Box::new(crate::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag::new_esp32c3()),
+    );
+    bus.refresh_peripheral_index();
+    // Peripherals added after bus assembly change the input to
+    // `derive_walk_deletable`; re-derive rather than rely on these models
+    // happening to be inert.
+    bus.recompute_walk_deletable();
+    true
+}
+
+/// The C3 mask ROM a node or machine should boot against: the caller's named
+/// blobs (`esp32c3_irom` / `esp32c3_drom`, the browser's names) when supplied,
+/// else [`provision_rom_images`] (a registered image, env pins, the installed
+/// toolchain, or — native only — the vendored copy).
+pub fn rom_images_from_blobs_or_provisioned(
+    blobs: &std::collections::HashMap<String, Vec<u8>>,
+) -> Option<RomImages> {
+    match (blobs.get("esp32c3_irom"), blobs.get("esp32c3_drom")) {
+        (Some(irom), Some(drom)) => Some(RomImages {
+            irom: irom.clone(),
+            drom: drom.clone(),
+        }),
+        _ => provision_rom_images(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

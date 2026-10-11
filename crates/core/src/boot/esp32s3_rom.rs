@@ -338,6 +338,22 @@ pub fn provision_rom_images() -> Option<RomImages> {
     vendored_rom_images()
 }
 
+/// The S3 mask ROM a node or machine should boot against: the caller's named
+/// blobs (`esp32s3_irom` / `esp32s3_drom`, the browser's names) when supplied,
+/// else [`provision_rom_images`] (env pins, the installed toolchain, or —
+/// native only — the vendored copy; `None` under `LABWIRED_ESP32S3_FASTBOOT`).
+pub fn rom_images_from_blobs_or_provisioned(
+    blobs: &std::collections::HashMap<String, Vec<u8>>,
+) -> Option<RomImages> {
+    match (blobs.get("esp32s3_irom"), blobs.get("esp32s3_drom")) {
+        (Some(irom), Some(drom)) => Some(RomImages {
+            irom: irom.clone(),
+            drom: drom.clone(),
+        }),
+        _ => provision_rom_images(),
+    }
+}
+
 /// Vendored flat ROM images, embedded at build time. Extracted from
 /// Espressif's published `esp32s3_rev0_rom.elf` by
 /// `scripts/make_esp32s3_rom_bins.py` — see `crates/core/roms/esp32s3/`.

@@ -167,7 +167,19 @@ pub struct NodeConfig {
     pub firmware: String, // Path to ELF
     #[serde(default)]
     pub config_overrides: HashMap<String, serde_yaml::Value>,
+    /// Optional boot profile for this node, with the same meaning as a test
+    /// script's `inputs.profile`. Omitted (the default) boots the node on its
+    /// faithful path. [`NODE_PROFILE_ARDUINO_ESP32`] selects the classic-ESP32
+    /// Arduino fast boot (the shared `install_arduino_esp32_profile` thunks),
+    /// which an Arduino-ESP32 sketch ELF needs to reach `setup()`; it is
+    /// refused on any other chip.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile: Option<String>,
 }
+
+/// The one boot profile a world node can name: the classic-ESP32 Arduino
+/// fast boot. Same string as a test script's `inputs.profile`.
+pub const NODE_PROFILE_ARDUINO_ESP32: &str = "arduino-esp32";
 
 /// Optional shared RF medium for a multi-node world (path loss / RSSI floor).
 /// Positions are planar metres; co-located (default 0,0) keeps lossless links
@@ -293,6 +305,14 @@ impl EnvironmentManifest {
                 anyhow::bail!(
                     "Environment manifest nodes[{index}].config_overrides is unsupported in environment schema 1.0"
                 );
+            }
+            if let Some(profile) = &node.profile {
+                if profile != NODE_PROFILE_ARDUINO_ESP32 {
+                    anyhow::bail!(
+                        "Environment manifest nodes[{index}].profile '{profile}' is unknown; \
+                         the only node profile is '{NODE_PROFILE_ARDUINO_ESP32}'"
+                    );
+                }
             }
         }
 

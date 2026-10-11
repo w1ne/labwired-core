@@ -139,6 +139,15 @@ Thumb reset vector at `flash.base + reset_vector_offset` (SP in RAM and
 Thumb-bit reset handler in flash). See the [CI Test Runner](ci_test_runner.md)
 for the closed world-interconnect schema.
 
+A node may set `profile: arduino-esp32`, the same boot profile a test script
+names in `inputs.profile`: a classic-ESP32 (Xtensa LX6) node running an
+Arduino-ESP32 sketch ELF then takes the Arduino fast boot
+(`install_arduino_esp32_profile`). Any other value, or the profile on any other
+chip, is refused, and a world admits one such node (the profile's boot thunks
+keep per-thread state). ESP32-S3 and ESP32-C3 nodes need no profile; their mask
+ROMs are provisioned like the single-chip engine's (in the browser, passed as
+the node's `blobs`).
+
 World completion stays in the `inputs.env` test script, not the manifest. Set
 `limits.stop_when_assertions_pass: true` to opt into a durable early completion:
 all node-qualified assertions must pass at or after the optional

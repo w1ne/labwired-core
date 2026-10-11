@@ -110,6 +110,7 @@ nodes:
             system: system.clone(),
             chip: chip.clone(),
             firmware: NodeFirmware::from_bytes(elf(fw)),
+            blobs: Default::default(),
         })
         .collect();
     World::from_resolved(manifest, resolved).expect("world")
