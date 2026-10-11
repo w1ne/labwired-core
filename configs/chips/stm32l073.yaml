@@ -395,22 +395,29 @@ peripherals:
     config:
       debug_schema: "../peripherals/stm32l073/rng.yaml"
 
-  # --- EXTI (single-bank, <32 lines on L0 → stm32f1-style register file) ----
+  # --- EXTI (single-bank, <32 lines on L0 → F1-style register file) --------
+  # The register file is the F1 one (IMR/EMR/RTSR/FTSR/SWIER/PR at 0x00..0x14,
+  # port mux in SYSCFG_EXTICRx); the vectors are the Cortex-M0+ groups:
+  # EXTI0_1 = IRQ 5, EXTI2_3 = 6, EXTI4_15 = 7 (RM0367 vector table).
   - id: "exti"
     type: "exti"
     base_address: 0x40010400
     size: "1KB"
     config:
       debug_schema: "../peripherals/stm32l073/exti.yaml"
-      profile: "stm32f1"
+      profile: "stm32l0"
 
-  # SYSCFG + COMP window — modeled as a stub (RM0367 §10).
+  # SYSCFG + COMP window (RM0367 §10). SYSCFG_EXTICR1..4 pick the GPIO port of
+  # each EXTI line, so external edges reach EXTI only through this block.
+  # Clocked by RCC_APB2ENR.SYSCFGEN.
   - id: "syscfg"
-    type: "stub"
+    type: "syscfg"
     base_address: 0x40010000
     size: "1KB"
+    clock: { reg: "apb2enr", bit: 0 }
     config:
       debug_schema: "../peripherals/stm32l073/syscfg_comp.yaml"
+      profile: "stm32l0"
 
   # --- USB FS device (not modeled — stub so reads/writes don't fault) -------
   - id: "usb_fs"

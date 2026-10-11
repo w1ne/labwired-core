@@ -65,6 +65,9 @@ pub trait PinPort {
     fn take_watch(&mut self) -> Option<PadWatch> { None }
     fn put_watch(&mut self, w: PadWatch) {}
     fn routes_changed(&mut self) {}                     // re-register line taps
+    fn pad_control(&self) -> Option<(&str, PadControl)> { None } // pulls kept elsewhere
+    fn set_config_pull(&mut self, pin: u8, pull: Pull) -> bool { false }
+    fn set_pull_ups_disabled(&mut self, disabled: bool) -> bool { false } // AVR PUD
 }
 ```
 
@@ -80,6 +83,21 @@ Three methods more than the first sketch, each for a reason the code made:
 - `level()`: what a probe reads. It defaults to the shared rule; a model
   overrides it only where its input register has a documented quirk the
   probe must keep agreeing with (below).
+
+Two more, for pulls a GPIO port does not keep itself:
+
+- `pad_control()` / `set_config_pull(pin, pull)`: Kinetis (`PORTx_PCRn`),
+  Renesas RA (`PmnPFS`) and i.MX RT (IOMUXC `SW_PAD_CTL_PAD_*`) configure a
+  pad's pull in a pad-control block, not in the GPIO port. The port names
+  that block (`pad_control:` in the chip yaml, a `pins::PadControl` encoding);
+  the bus links the two when the port is attached, and after every write to
+  the block decodes each pad's pull and hands it over, bracketed for push
+  capture like a write to the port itself. The port reports it in
+  `driver().pull` and folds it into its input register.
+- `set_pull_ups_disabled(bool)`: a chip-wide switch outside the port. The
+  ATmega CPU owns `MCUCR`; when firmware changes `PUD` it calls
+  `Bus::set_pull_ups_disabled`, and the bus hands it to every port
+  (bracketed). The ATmega port drops every pull-up while it is set.
 
 ### The shared rule: `pins::resolve(driver, external)`
 
@@ -120,10 +138,14 @@ Two views are built on it and nothing else:
 2. Store the external level per pad (a mask and the levels) and fold it into
    your input register in `set_external`; return the input before and after.
    Answer `external(pin)` from that storage. `Released` hands the pad back to
-   its pull (or leaves a floating input at its last level).
+   its pull (or leaves a floating input at its last level). An input with a
+   pull and nothing outside reads the pull's rail in the input register: the
+   pull drives the pad on silicon.
 3. `input()` is your input register; leave `level()` defaulted unless your
    input register has a quirk (document it on the override).
-4. Implement `pins()` / `pins_mut()` on your `Peripheral`.
+4. Implement `pins()` / `pins_mut()` on your `Peripheral`. If the pull lives
+   in another block, return it from `pad_control()` (adding a `PadControl`
+   encoding if yours is new) and take it in `set_config_pull`.
 5. For push capture: store the `PadWatch` (`install_watch`, `take_watch`,
    `put_watch`) and bracket each register write and `set_external` with
    `pins::watch_begin(self)` / `pins::watch_end(self)`.
@@ -145,7 +167,11 @@ through its own registers:
   presented;
 - an input is `Off`, a push-pull output drives its latch, an open-drain 1 is
   `Off`, an open-drain 0 is `Low`;
-- a pull shows up in `driver()` and as a weak `own_drive`;
+- a pull shows up in `driver()` and as a weak `own_drive`, and the input
+  register reads its rail while nothing outside holds the pad (from reset,
+  and again after the outside lets go); a pull configured in a pad-control
+  block (Kinetis, RA, i.MX RT) is written there and handed over the way the
+  bus does it;
 - `set_external` round-trips to the input register and reports the input
   before and after; a pin past the port is refused;
 - `level()` agrees with `resolve` wherever the rule determines a level, and
@@ -154,17 +180,17 @@ through its own registers:
   drives, a probe channel and an own-drive channel on the same pad), run in a
   machine with `logic_force_poll_capture`.
 
-### Documented model quirks the suite allows
+### Model choices the rule leaves open
 
-The input registers of the STM32 `f1`, EFR32 series 2, SAM and ATmega models
-do not fold the internal pull in: a pulled input with nothing outside reads
-its last latched level (0 from reset), where `resolve` says the pull's level.
-Changing that changes what firmware reads, so it is left as it was; the pull
-does show in `driver()`, which is what a net counts. Everything else agrees
-with the rule.
+Every model folds its internal pull into the input register: a pulled input
+nothing outside holds reads the pull's level, from reset on, as `resolve`
+says. No model is exempt. (Until this was enforced, the STM32 `f1`, EFR32
+series 2, SAM and ATmega input registers read the last latched level there,
+0 from reset, so `INPUT_PULLUP` with nothing attached read 0.) The ATmega
+port drops its pull-ups while `MCUCR.PUD` is set.
 
-Two more model choices, consistent with the rule (it leaves a floating pad to
-the model):
+Two choices consistent with the rule (it leaves a floating pad to the
+model):
 
 - An open-drain output holding a 1 that nothing outside holds keeps reading
   its latch (STM32, ESP32 family), standing in for the board pull-up these
@@ -172,6 +198,19 @@ the model):
   (a net always does) it reads that level.
 - ESP32-S3: the interface covers bank 0 (GPIO0..31), the pads with input
   storage and a probe level in the model.
+
+What the pull models leave out:
+
+- Kinetis: the pull acts only on a pin with a digital `MUX` (non-zero); the
+  GPIO port does not otherwise model `MUX`.
+- Renesas RA: `PmnPFS.PCR` is the only `PmnPFS` field with an effect.
+  `PDR`/`PODR` there are the same flip-flops as `PCNTR1` on silicon but are
+  stored only, and `PIDR` reads 0.
+- i.MX RT: the port's pads must be contiguous in IOMUXC from pin 0 (GPIO1,
+  GPIO2, GPIO4); the keeper (`PUE = 0`) is not modelled and counts as no
+  pull.
+- EFR32 series 2: only `INPUTPULL` / `INPUTPULLFILTER` carry a pull; the
+  `WIREDOR`/`WIREDAND` pull variants are not decoded.
 
 ## Shims that remain
 

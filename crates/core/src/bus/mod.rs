@@ -135,6 +135,17 @@ impl SystemBus {
     }
 }
 
+/// A pin port whose pulls a pad-control block keeps (see
+/// [`crate::pins::PadControl`]): both bus indices and the encoding.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct PadControlLink {
+    /// Bus index of the pad-control block (PORTx, PFS, IOMUXC).
+    pub(crate) block: usize,
+    /// Bus index of the pin port.
+    pub(crate) port: usize,
+    pub(crate) control: crate::pins::PadControl,
+}
+
 /// One clock-enable bit a peripheral's clock depends on, resolved to a concrete
 /// controller index + register offset at bus-build time (the symbolic `reg`
 /// name from the yaml is mapped via [`Peripheral::clock_gate_reg_offset`]).
@@ -421,6 +432,12 @@ pub struct SystemBus {
     esp32c3_gpio_idx: Option<usize>,
     rp2040_io_bank0_idx: Option<usize>,
     rp2040_sio_idx: Option<usize>,
+    /// Pin ports whose pulls live in another block (Kinetis PORTx, RA PFS,
+    /// i.MX RT IOMUXC; [`crate::pins::PadControl`]), resolved by name in
+    /// `rebuild_peripheral_ranges`. A write to a linked block is bracketed
+    /// like the C3 IO_MUX one, and the port takes the decoded pulls. Empty
+    /// on every other bus.
+    pad_control_links: Vec<PadControlLink>,
     /// Per bus index: the [`PortId`](crate::pins::PortId) of a pin port,
     /// assigned when the port is attached (`rebuild_peripheral_ranges`). Edge
     /// sinks are addressed by it; `None` for everything else.

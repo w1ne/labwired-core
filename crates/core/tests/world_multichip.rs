@@ -58,12 +58,14 @@ fn from_manifest_builds_two_cortexm_nodes_and_uart_link() {
                 system: "sensor/system.yaml".into(),
                 firmware: DEVICE_FW.into(),
                 config_overrides: HashMap::new(),
+                profile: None,
             },
             NodeConfig {
                 id: "n2".into(),
                 system: "sensor/system.yaml".into(),
                 firmware: DEVICE_FW.into(),
                 config_overrides: HashMap::new(),
+                profile: None,
             },
         ],
         interconnects: vec![InterconnectConfig {

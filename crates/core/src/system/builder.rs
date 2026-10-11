@@ -187,6 +187,8 @@ mod avr;
 mod riscv;
 mod xtensa;
 
+pub use xtensa::esp32s3_flash_backing_size;
+
 /// Named binary blobs a board references (mask ROM images, merged flash, ...).
 pub type BlobMap = HashMap<String, Vec<u8>>;
 

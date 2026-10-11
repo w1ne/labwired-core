@@ -87,6 +87,13 @@ fn u545_exti_handler_runs_once_per_edge() {
     assert_eq!(entries("stm32u545.yaml", "exti-once-u5.elf"), EDGES);
 }
 
+/// STM32L0: the F1 register file behind the Cortex-M0+ grouped vectors
+/// (EXTI0_1 = IRQ 5), with the port select in `SYSCFG_EXTICR1`.
+#[test]
+fn l073_exti_handler_runs_once_per_edge() {
+    assert_eq!(entries("stm32l073.yaml", "exti-once-l0.elf"), EDGES);
+}
+
 #[test]
 fn g071_exti_handler_runs_once_per_edge() {
     assert_eq!(entries("stm32g071.yaml", "exti-once-g0.elf"), EDGES);

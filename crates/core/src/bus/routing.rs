@@ -388,6 +388,9 @@ impl SystemBus {
                     .and_then(|_| crate::pins::PortId::from_port_name(&p.name))
             })
             .collect();
+        // Pin ports whose pulls another block keeps: link them, and hand each
+        // the pulls its block holds now.
+        self.rebuild_pad_control_links();
         // Cache the clock-controller peripheral index so the clock-gate check
         // on the hot read/write path is O(1).
         //

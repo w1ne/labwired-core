@@ -134,6 +134,12 @@ pub struct F1Gpio {
     idr: u32,  // 0x08
     odr: u32,  // 0x0C
     lckr: u32, // 0x18
+    /// Pins the outside world is holding. The input pull (CNF = 10, ODR picks
+    /// the rail) applies only where this bit is clear, so a button on the pad
+    /// wins over the weak resistor. Not a register: snapshots stay the
+    /// register file they were.
+    #[serde(skip)]
+    external: u32,
 }
 
 impl F1Gpio {
@@ -176,14 +182,29 @@ impl F1Gpio {
         mask
     }
 
+    /// Mask of pins in input-with-pull mode (MODE = 00, CNF = 10; RM0008
+    /// §9.1.1 table 20). ODR picks the rail: 1 pull-up, 0 pull-down.
+    fn pull_mask(&self) -> u32 {
+        let mut mask = 0u32;
+        for pin in 0..16u32 {
+            let cr = if pin < 8 { self.crl } else { self.crh };
+            if (cr >> ((pin % 8) * 4)) & 0xF == 0b1000 {
+                mask |= 1 << pin;
+            }
+        }
+        mask
+    }
+
     /// IDR as silicon presents it: the *pin* level, not a separate latch.
     ///
     /// A push-pull output drives its pin, so reading IDR returns what ODR is
     /// driving. Returning a bare latch instead makes `digitalRead()` on an
     /// OUTPUT pin — one of the most common Arduino idioms — read 0 forever.
     /// Open-drain outputs only pull LOW; driving a 1 releases the pin, so the
-    /// level is whatever the external world / pull-up decides, which is what
-    /// the latched `idr` represents here.
+    /// level is whatever the external world decides, which is what the
+    /// latched `idr` represents here. An input with its pull on (CNF = 10)
+    /// that nothing outside holds reads the pull's rail, as the pull drives
+    /// the pad on silicon; an external driver wins over the weak pull.
     fn effective_idr(&self) -> u32 {
         let out = self.output_mask();
         let od = self.open_drain_mask();
@@ -191,7 +212,9 @@ impl F1Gpio {
         // Open-drain pins read as driven only while ODR is 0.
         let od_driven_low = od & !self.odr;
         let driven = push_pull | od_driven_low;
-        ((self.odr & push_pull) | (self.idr & !driven)) & 0xFFFF
+        let from_pull = self.pull_mask() & !self.external;
+        let from_latch = !driven & !from_pull;
+        ((self.odr & push_pull) | (self.odr & from_pull) | (self.idr & from_latch)) & 0xFFFF
     }
 
     fn read_reg(&self, offset: u64) -> u32 {
@@ -514,21 +537,89 @@ impl Nrf52Gpio {
     }
 }
 
+/// Pulls configured by a pad-control block outside the GPIO block (Kinetis
+/// `PORTx_PCRn`, RA `PmnPFS`, i.MX RT IOMUXC `SW_PAD_CTL`), as the bus last
+/// handed them to the port ([`crate::pins::PinPort::set_config_pull`]). Not
+/// registers of this block, so never serialized.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct ConfigPulls {
+    /// Pins with a pull enabled.
+    apply: u32,
+    /// The rail of each enabled pull (1 up).
+    level: u32,
+}
+
+impl ConfigPulls {
+    /// The pull on `pin`.
+    fn get(self, pin: u8) -> crate::pins::Pull {
+        if pin >= 32 || (self.apply >> pin) & 1 == 0 {
+            crate::pins::Pull::None
+        } else if (self.level >> pin) & 1 != 0 {
+            crate::pins::Pull::Up
+        } else {
+            crate::pins::Pull::Down
+        }
+    }
+
+    /// Set the pull on `pin`.
+    fn set(&mut self, pin: u8, pull: crate::pins::Pull) {
+        if pin >= 32 {
+            return;
+        }
+        let bit = 1u32 << pin;
+        self.apply &= !bit;
+        self.level &= !bit;
+        match pull {
+            crate::pins::Pull::None => {}
+            crate::pins::Pull::Up => {
+                self.apply |= bit;
+                self.level |= bit;
+            }
+            crate::pins::Pull::Down => self.apply |= bit,
+        }
+    }
+
+    /// `latch` with every pin of `undriven` that has a pull and is not in
+    /// `external` replaced by the pull's rail.
+    #[inline]
+    fn fold(self, latch: u32, undriven: u32, external: u32) -> u32 {
+        let from_pull = undriven & self.apply & !external;
+        (latch & !from_pull) | (self.level & from_pull)
+    }
+}
+
 // ── NXP Kinetis (KW41Z GPIOA/B/C) ────────────────────────────────────────────
 // PDOR @0x0 (data output), PSOR @0x4 (set, w1s), PCOR @0x8 (clear, w1c),
 // PTOR @0xC (toggle), PDIR @0x10 (data input), PDDR @0x14 (data direction).
+//
+// The pull is not a GPIO register on Kinetis: PORTx_PCRn.PE/PS hold it. The
+// bus hands it over through `PinPort::set_config_pull` after every PORT write
+// (`crate::pins::PadControl::KinetisPcr`), and PDIR reads the pull's rail on
+// an input nothing outside holds.
 #[derive(Debug, Default, serde::Serialize)]
 pub struct KinetisGpio {
     pdor: u32, // 0x00 output
     pdir: u32, // 0x10 input
     pddr: u32, // 0x14 direction
+    /// Pins the outside world is holding. Not a register.
+    #[serde(skip)]
+    external: u32,
+    /// The PORT block's pull per pin, as the bus last handed it over.
+    #[serde(skip)]
+    pulls: ConfigPulls,
 }
 
 impl KinetisGpio {
+    /// PDIR: the latched input, with an input's pull (PORTx_PCRn) on the pads
+    /// nothing outside holds. Output pins read the latch as before.
+    fn pdir_view(&self) -> u32 {
+        self.pulls.fold(self.pdir, !self.pddr, self.external)
+    }
+
     fn read_reg(&self, offset: u64) -> u32 {
         match offset {
             0x00 => self.pdor,
-            0x10 => self.pdir,
+            0x10 => self.pdir_view(),
             0x14 => self.pddr,
             _ => {
                 crate::census_reg!("gpio:KinetisGpio", offset, "read");
@@ -583,6 +674,14 @@ pub struct Efr32s2Gpio {
     cached_output: u32,
     #[serde(skip)]
     cached_open_drain: u32,
+    /// Pins in INPUTPULL / INPUTPULLFILTER (DOUT picks the rail), decoded
+    /// with the drive masks.
+    #[serde(skip)]
+    cached_pull: u32,
+    /// Pins the outside world is holding; the pull applies only where this
+    /// bit is clear. Not a register.
+    #[serde(skip)]
+    external: u32,
 }
 
 impl Default for Efr32s2Gpio {
@@ -596,6 +695,8 @@ impl Default for Efr32s2Gpio {
             din: 0,
             cached_output: 0,
             cached_open_drain: 0,
+            cached_pull: 0,
+            external: 0,
         }
     }
 }
@@ -612,6 +713,7 @@ impl Efr32s2Gpio {
     fn recompute_drive_masks(&mut self) {
         let mut output = 0u32;
         let mut open_drain = 0u32;
+        let mut pull = 0u32;
         for pin in 0..16u32 {
             let mode = self.mode_nibble(pin);
             if mode >= 0x4 {
@@ -620,9 +722,13 @@ impl Efr32s2Gpio {
             if matches!(mode, 0x6 | 0x7) {
                 open_drain |= 1 << pin;
             }
+            if matches!(mode, 0x2 | 0x3) {
+                pull |= 1 << pin;
+            }
         }
         self.cached_output = output;
         self.cached_open_drain = open_drain;
+        self.cached_pull = pull;
     }
 
     /// Mask of pins configured as an output (any drive mode, nibble >= 4).
@@ -638,15 +744,19 @@ impl Efr32s2Gpio {
 
     /// DIN as silicon presents it: the *pin* level, not a bare latch. A
     /// push-pull output drives its pin, so reading DIN returns what DOUT is
-    /// driving; a released open-drain pin and every input take the latched
-    /// external level. Same contract as V2Gpio::effective_idr.
+    /// driving; an INPUTPULL / INPUTPULLFILTER pin nothing outside holds reads
+    /// the rail DOUT selects; a released open-drain pin and every other input
+    /// take the latched external level. Same contract as
+    /// V2Gpio::effective_idr.
     fn effective_din(&self) -> u32 {
         let out = self.output_mask();
         let od = self.open_drain_mask();
         let push_pull = out & !od;
         let od_driven_low = od & !self.dout;
         let driven = push_pull | od_driven_low;
-        ((self.dout & push_pull) | (self.din & !driven)) & 0xFFFF
+        let from_pull = self.cached_pull & !self.external;
+        let from_latch = !driven & !from_pull;
+        ((self.dout & push_pull) | (self.dout & from_pull) | (self.din & from_latch)) & 0xFFFF
     }
 
     fn read_reg(&self, offset: u64) -> u32 {
@@ -710,9 +820,12 @@ impl Efr32s2Gpio {
 // its reset config while the firmware believed it had muxed SERCOM onto them —
 // silent, and the same shape as the RP2040 IO_BANK0 gap.
 //
+// PINCFG.PULLEN on an input pulls the pad to the rail OUT selects; IN reads
+// that rail while nothing outside holds the pad (`SamGpio::effective_in`).
+//
 // NOT modelled, deliberately: CTRL.SAMPLING (continuous input sampling — this
-// model samples on read), PINCFG.DRVSTR and PULLEN's pull direction (stored,
-// read back, no electrical effect), and the PORT_IOBUS alias window at
+// model samples on read), PINCFG.DRVSTR (stored, read back, no electrical
+// effect), INEN gating the input buffer, and the PORT_IOBUS alias window at
 // 0x6000_0000 (a second, single-cycle view of the same registers; it is a
 // separate bus window and belongs in the chip YAML if a firmware needs it).
 #[derive(Debug, Default, serde::Serialize)]
@@ -728,6 +841,10 @@ pub struct SamGpio {
     pmux: [u8; 16],
     /// PINCFG[32]: PMUXEN bit 0, INEN bit 1, PULLEN bit 2, DRVSTR bit 6.
     pincfg: [u8; 32],
+    /// Pins the outside world is holding; a PULLEN pull applies only where
+    /// this bit is clear. Not a register.
+    #[serde(skip)]
+    external: u32,
 }
 
 impl SamGpio {
@@ -749,14 +866,29 @@ impl SamGpio {
         self.dir & !self.pmuxen_mask()
     }
 
+    /// Mask of input pins (DIR clear) with PINCFG.PULLEN set: OUT picks the
+    /// rail (1 up, 0 down; SAM D21 datasheet §23.6.3.1, table 23-2).
+    fn pull_mask(&self) -> u32 {
+        let mut mask = 0u32;
+        for (pin, cfg) in self.pincfg.iter().enumerate() {
+            if cfg & 0x4 != 0 {
+                mask |= 1u32 << pin;
+            }
+        }
+        mask & !self.dir
+    }
+
     /// IN as silicon presents it: the *pin* level, not a bare latch. A pin the
     /// port drives reads back what OUT is driving — `digitalRead()` on an
-    /// OUTPUT pin is a common Arduino idiom and must not read 0 forever. Every
-    /// other pin reads the latched external level. Same contract as
-    /// `V2Gpio::effective_idr` and `Efr32s2Gpio::effective_din`.
+    /// OUTPUT pin is a common Arduino idiom and must not read 0 forever. An
+    /// input with PULLEN that nothing outside holds reads the rail OUT
+    /// selects. Every other pin reads the latched external level. Same
+    /// contract as `V2Gpio::effective_idr` and `Efr32s2Gpio::effective_din`.
     fn effective_in(&self) -> u32 {
         let driven = self.output_mask();
-        (self.out & driven) | (self.in_latch & !driven)
+        let from_pull = self.pull_mask() & !driven & !self.external;
+        let from_latch = !driven & !from_pull;
+        (self.out & driven) | (self.out & from_pull) | (self.in_latch & from_latch)
     }
 
     /// Pack four consecutive 8-bit registers into the word at `base + n*4`.
@@ -875,6 +1007,10 @@ impl SamGpio {
 // ICR1 @0x0C / ICR2 @0x10 (interrupt configuration, 2 bits per pin),
 // IMR @0x14, ISR @0x18 (write-1-to-clear), EDGE_SEL @0x1C,
 // DR_SET @0x84, DR_CLEAR @0x88, DR_TOGGLE @0x8C (write-only w1s variants).
+//
+// The pull lives in IOMUXC `SW_PAD_CTL_PAD_*` (PKE/PUE/PUS), handed over by the
+// bus (`crate::pins::PadControl::ImxrtPadCtl`); PSR reads it on an input pad
+// nothing outside holds.
 #[derive(Debug, Default, serde::Serialize)]
 pub struct ImxrtGpio {
     dr: u32,       // 0x00 data output
@@ -885,11 +1021,18 @@ pub struct ImxrtGpio {
     imr: u32,      // 0x14
     isr: u32,      // 0x18 (w1c)
     edge_sel: u32, // 0x1C
+    /// Pins the outside world is holding. Not a register.
+    #[serde(skip)]
+    external: u32,
+    /// The IOMUXC pad pulls, as the bus last handed them over.
+    #[serde(skip)]
+    pulls: ConfigPulls,
 }
 
 impl ImxrtGpio {
     fn psr_view(&self) -> u32 {
-        (self.dr & self.gdir) | (self.psr & !self.gdir)
+        let input = self.pulls.fold(self.psr, !self.gdir, self.external);
+        (self.dr & self.gdir) | (input & !self.gdir)
     }
 
     fn read_reg(&self, offset: u64) -> u32 {
@@ -966,16 +1109,31 @@ impl ImxrtGpio {
 //   PCNTR1 @0x00: PDR[15:0] direction, PODR[31:16] output data
 //   PCNTR2 @0x04: PIDR[15:0] input (EIDR[31:16] unused here)
 //   PCNTR3 @0x08: POSR[15:0] set PODR, PORR[31:16] clear PODR (write-only)
+//
+// The input pull-up is PmnPFS.PCR, outside this block; the bus hands it over
+// (`crate::pins::PadControl::RaPfs`) and PIDR reads it on an input pad nothing
+// outside holds.
 #[derive(Debug, Default, serde::Serialize)]
 pub struct RaPortGpio {
     pdr: u16,  // direction (1 = output)
     podr: u16, // output data
     pidr: u16, // input latch (host/button injection)
+    /// Pins the outside world is holding. Not a register.
+    #[serde(skip)]
+    external: u16,
+    /// The PFS pull-ups, as the bus last handed them over.
+    #[serde(skip)]
+    pulls: ConfigPulls,
 }
 
 impl RaPortGpio {
     fn pidr_view(&self) -> u16 {
-        (self.podr & self.pdr) | (self.pidr & !self.pdr)
+        let input = self.pulls.fold(
+            u32::from(self.pidr),
+            u32::from(!self.pdr),
+            u32::from(self.external),
+        ) as u16;
+        (self.podr & self.pdr) | (input & !self.pdr)
     }
 
     fn read_reg(&self, offset: u64) -> u32 {
@@ -1070,24 +1228,35 @@ impl GpioFamily {
                 *idr &= !(1u32 << pin);
             }
         };
+        let bit = 1u32 << pin;
         match self {
-            Self::Stm32F1(g) => apply(&mut g.idr),
+            Self::Stm32F1(g) => {
+                apply(&mut g.idr);
+                g.external |= bit & 0xFFFF;
+            }
             Self::Stm32V2(g) => {
                 apply(&mut g.idr);
-                if pin < 16 {
-                    g.external |= 1 << pin;
-                }
+                g.external |= bit & 0xFFFF;
             }
             Self::Nrf52(g) => {
                 apply(&mut g.idr);
-                g.external |= 1 << pin;
+                g.external |= bit;
             }
             // Kinetis names its input latch PDIR.
-            Self::Kinetis(g) => apply(&mut g.pdir),
+            Self::Kinetis(g) => {
+                apply(&mut g.pdir);
+                g.external |= bit;
+            }
             // Series-2 EFR32 names it DIN.
-            Self::Efr32s2(g) => apply(&mut g.din),
+            Self::Efr32s2(g) => {
+                apply(&mut g.din);
+                g.external |= bit & 0xFFFF;
+            }
             // SAM PORT names it IN, and it is read-only to firmware.
-            Self::SamPort(g) => apply(&mut g.in_latch),
+            Self::SamPort(g) => {
+                apply(&mut g.in_latch);
+                g.external |= bit;
+            }
             Self::RaPort(g) => {
                 if pin >= 16 {
                     return false;
@@ -1097,10 +1266,12 @@ impl GpioFamily {
                 } else {
                     g.pidr &= !(1u16 << pin);
                 }
+                g.external |= 1u16 << pin;
             }
             Self::Imxrt(g) => {
                 let before = g.psr_view();
                 apply(&mut g.psr);
+                g.external |= bit;
                 let after = g.psr_view();
                 g.latch_interrupts(before, after);
             }
@@ -1109,17 +1280,62 @@ impl GpioFamily {
     }
 
     /// Let go of the level [`set_external_input`](Self::set_external_input)
-    /// presented on `pin`: where the family applies its pull only to pads
-    /// nothing outside holds (V2, nRF), the pull takes the pad again. The
-    /// input latch keeps its last level otherwise.
+    /// presented on `pin`: an internal pull takes the pad again (every
+    /// family applies its pull only to pads nothing outside holds). The
+    /// input latch keeps its last level, which a floating input reads.
     fn release_external_input(&mut self, pin: u8) {
         if pin >= 32 {
             return;
         }
+        let bit = 1u32 << pin;
         match self {
-            Self::Stm32V2(g) => g.external &= !(1 << pin),
-            Self::Nrf52(g) => g.external &= !(1 << pin),
-            _ => {}
+            Self::Stm32F1(g) => g.external &= !bit,
+            Self::Stm32V2(g) => g.external &= !bit,
+            Self::Nrf52(g) => g.external &= !bit,
+            Self::Kinetis(g) => g.external &= !bit,
+            Self::Efr32s2(g) => g.external &= !bit,
+            Self::SamPort(g) => g.external &= !bit,
+            Self::RaPort(g) => g.external &= !(bit as u16),
+            Self::Imxrt(g) => {
+                let before = g.psr_view();
+                g.external &= !bit;
+                let after = g.psr_view();
+                g.latch_interrupts(before, after);
+            }
+        }
+    }
+
+    /// Take the pull a pad-control block outside the GPIO block configures
+    /// on `pin` ([`crate::pins::PinPort::set_config_pull`]). `false` for the
+    /// families that keep their pull in their own registers.
+    fn set_config_pull(&mut self, pin: u8, pull: crate::pins::Pull) -> bool {
+        match self {
+            Self::Kinetis(g) => g.pulls.set(pin, pull),
+            Self::RaPort(g) => {
+                if pin >= 16 {
+                    return false;
+                }
+                g.pulls.set(pin, pull);
+            }
+            Self::Imxrt(g) => {
+                let before = g.psr_view();
+                g.pulls.set(pin, pull);
+                let after = g.psr_view();
+                g.latch_interrupts(before, after);
+            }
+            _ => return false,
+        }
+        true
+    }
+
+    /// The pull a pad-control block configures on `pin`, for the families
+    /// that keep it outside (see [`Self::set_config_pull`]).
+    fn config_pull(&self, pin: u8) -> crate::pins::Pull {
+        match self {
+            Self::Kinetis(g) => g.pulls.get(pin),
+            Self::RaPort(g) => g.pulls.get(pin),
+            Self::Imxrt(g) => g.pulls.get(pin),
+            _ => crate::pins::Pull::None,
         }
     }
 
@@ -1307,6 +1523,10 @@ pub struct GpioPort {
     /// F1 USART console gates, one per bound TX pin. Refreshed from CRL/CRH
     /// on every write. Empty on every other port.
     console_af: Vec<(u8, std::sync::Arc<std::sync::atomic::AtomicBool>)>,
+    /// The block that keeps this port's pulls when the GPIO block does not
+    /// (Kinetis PORTx, RA PFS, i.MX RT IOMUXC): its peripheral id and the
+    /// encoding. Chip yaml `config: { pad_control: … }`.
+    pad_control: Option<(String, crate::pins::PadControl)>,
 }
 
 impl Default for GpioPort {
@@ -1437,7 +1657,19 @@ impl GpioPort {
             external_levels: 0,
             wire_edges: Vec::new(),
             console_af: Vec::new(),
+            pad_control: None,
         }
+    }
+
+    /// Name the block that keeps this port's pulls (see
+    /// [`crate::pins::PadControl`]). Config-build time.
+    pub fn with_pad_control(
+        mut self,
+        block: impl Into<String>,
+        control: crate::pins::PadControl,
+    ) -> Self {
+        self.pad_control = Some((block.into(), control));
+        self
     }
 
     /// Publish this pin's alternate-function state into `gate` on every
@@ -1471,9 +1703,10 @@ impl GpioPort {
     /// STM32 F1: input mode with CNF = 10, ODR picks up (1) or down (0)
     /// (RM0008 §9.1.1, table 20). nRF52: PIN_CNF.PULL (1 down, 3 up).
     /// EFR32 series 2: INPUTPULL / INPUTPULLFILTER, DOUT picks the rail.
-    /// SAM: PINCFG.PULLEN on an input, OUT picks the rail. The other
-    /// families keep their pull outside the GPIO block (Kinetis PORT_PCR,
-    /// RA PFS, i.MX IOMUXC) and report none.
+    /// SAM: PINCFG.PULLEN on an input, OUT picks the rail. Kinetis, RA and
+    /// i.MX RT keep their pull outside the GPIO block (PORTx_PCRn, PmnPFS,
+    /// IOMUXC SW_PAD_CTL); the bus hands it over
+    /// ([`crate::pins::PinPort::set_config_pull`]) and it is reported here.
     fn pad_pull(&self, pin: u8) -> Option<bool> {
         if pin >= 32 {
             return None;
@@ -1509,7 +1742,9 @@ impl GpioPort {
             GpioFamily::SamPort(g) => {
                 (g.pincfg[usize::from(pin)] & 0x4 != 0 && !bit(g.dir)).then(|| bit(g.out))
             }
-            _ => None,
+            GpioFamily::Kinetis(_) | GpioFamily::RaPort(_) | GpioFamily::Imxrt(_) => {
+                self.family.config_pull(pin).level()
+            }
         }
     }
 
@@ -2194,6 +2429,27 @@ impl crate::pins::PinPort for GpioPort {
 
     fn routes_changed(&mut self) {
         self.sync_pad_line_taps();
+    }
+
+    fn pad_control(&self) -> Option<(&str, crate::pins::PadControl)> {
+        self.pad_control
+            .as_ref()
+            .map(|(block, control)| (block.as_str(), *control))
+    }
+
+    /// Kinetis, RA and i.MX RT take the pull their pad-control block
+    /// configures; the other families keep theirs in their own registers.
+    /// The caller brackets for push capture; the watching level cells are
+    /// brought up to date here.
+    fn set_config_pull(&mut self, pin: u8, pull: crate::pins::Pull) -> bool {
+        if pin >= self.pin_count() {
+            return false;
+        }
+        let taken = self.family.set_config_pull(pin, pull);
+        if taken {
+            self.sync_pin_cells();
+        }
+        taken
     }
 }
 

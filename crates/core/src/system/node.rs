@@ -101,12 +101,132 @@ pub fn build_node_in_fab(
     plugins: &[&dyn crate::plugin::ChipPlugin],
     fab: Option<&crate::system::efuse::FactoryMacAllocator>,
 ) -> anyhow::Result<Box<dyn MachineTrait>> {
-    match machine_family(chip).with_context(|| format!("node '{id}'"))? {
-        MachineFamily::CortexM => build_cortex_m_node(id, chip, system, firmware, plugins),
-        MachineFamily::RiscV => build_riscv_node(id, chip, system, firmware, plugins, fab),
-        MachineFamily::Xtensa => build_xtensa_node(id, chip, system, firmware),
-        MachineFamily::Avr => build_avr_node(id, chip, system, firmware, plugins),
+    build_node_with_options(
+        id,
+        chip,
+        system,
+        firmware,
+        &NodeBuildOptions {
+            plugins,
+            fab,
+            ..NodeBuildOptions::default()
+        },
+    )
+}
+
+/// A node's boot profile: a named, opt-in departure from the faithful boot,
+/// spelled the same as a test script's `inputs.profile`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NodeProfile {
+    /// The classic-ESP32 Arduino fast boot: the ELF's entry is entered
+    /// directly and the shared `install_arduino_esp32_profile` seeds the boot
+    /// state the skipped ROM would have left and installs its flash thunks —
+    /// the path `labwired test` takes for `profile: arduino-esp32` and the
+    /// debugger takes for an Arduino sketch. An Arduino-ESP32 sketch ELF does
+    /// not reach `setup()` on a classic ESP32 without it.
+    ArduinoEsp32,
+}
+
+impl NodeProfile {
+    /// Parse a manifest's `profile:` string.
+    pub fn parse(name: &str) -> anyhow::Result<Self> {
+        if name == labwired_config::NODE_PROFILE_ARDUINO_ESP32 {
+            Ok(Self::ArduinoEsp32)
+        } else {
+            anyhow::bail!(
+                "unknown node profile '{name}'; the only node profile is '{}'",
+                labwired_config::NODE_PROFILE_ARDUINO_ESP32
+            )
+        }
     }
+}
+
+/// Everything a node build takes beyond (chip, system, firmware).
+#[derive(Default)]
+pub struct NodeBuildOptions<'a> {
+    /// Out-of-tree chip plugins, offered each peripheral type first.
+    pub plugins: &'a [&'a dyn crate::plugin::ChipPlugin],
+    /// The world's eFuse fab; `None` takes the process-wide allocator.
+    pub fab: Option<&'a crate::system::efuse::FactoryMacAllocator>,
+    /// Named binary blobs, under the names the single-chip engine takes them
+    /// (`crate::system::builder::BlobMap`): `esp32c3_irom` / `esp32c3_drom` and
+    /// `esp32s3_irom` / `esp32s3_drom` for the mask ROMs. A node whose blobs
+    /// carry no ROM falls back to the provisioned one (a registered image, env
+    /// pins, the installed toolchain or — native only — the vendored copy), so
+    /// a hosted world needs none; the browser has no filesystem and passes
+    /// them here.
+    pub blobs: Option<&'a crate::system::builder::BlobMap>,
+    /// Opt-in boot profile; `None` is the faithful path.
+    pub profile: Option<NodeProfile>,
+}
+
+/// [`build_node`] with every per-node input spelled out.
+pub fn build_node_with_options(
+    id: &str,
+    chip: &ChipDescriptor,
+    system: &SystemManifest,
+    firmware: NodeFirmware,
+    opts: &NodeBuildOptions<'_>,
+) -> anyhow::Result<Box<dyn MachineTrait>> {
+    let no_blobs = crate::system::builder::BlobMap::new();
+    let blobs = opts.blobs.unwrap_or(&no_blobs);
+    let family = machine_family(chip).with_context(|| format!("node '{id}'"))?;
+    if let Some(profile) = opts.profile {
+        check_profile(id, chip, family, profile)?;
+    }
+    match family {
+        MachineFamily::CortexM => build_cortex_m_node(id, chip, system, firmware, opts.plugins),
+        MachineFamily::RiscV => {
+            build_riscv_node(id, chip, system, firmware, opts.plugins, opts.fab, blobs)
+        }
+        MachineFamily::Xtensa => build_xtensa_node(id, chip, system, firmware, blobs, opts.profile),
+        MachineFamily::Avr => build_avr_node(id, chip, system, firmware, opts.plugins),
+    }
+}
+
+/// A profile names one chip's boot path; on any other chip it would be
+/// silently meaningless, so it is refused.
+fn check_profile(
+    id: &str,
+    chip: &ChipDescriptor,
+    family: MachineFamily,
+    profile: NodeProfile,
+) -> anyhow::Result<()> {
+    match profile {
+        NodeProfile::ArduinoEsp32 => {
+            if family != MachineFamily::Xtensa || is_esp32s3(chip) {
+                anyhow::bail!(
+                    "node '{id}': profile '{}' is the classic-ESP32 (Xtensa LX6) Arduino fast \
+                     boot, and chip '{}' is not a classic ESP32",
+                    labwired_config::NODE_PROFILE_ARDUINO_ESP32,
+                    chip.name
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+/// An ESP32-S3 (Xtensa LX7). Recognised by the predicate the single-chip
+/// engine dispatches on ([`ChipDescriptor::is_esp32s3`]): the in-tree S3 chip
+/// YAMLs spell the core in `arch: xtensa-lx7`, which parses to plain
+/// `Arch::Xtensa` with no `core:`, so a `core`-only test sent every S3 node
+/// down the classic-ESP32 (LX6) path. A descriptor that does declare an LX7
+/// `core:` is accepted too.
+fn is_esp32s3(chip: &ChipDescriptor) -> bool {
+    chip.is_esp32s3()
+        || chip
+            .core
+            .as_deref()
+            .unwrap_or("")
+            .to_ascii_lowercase()
+            .contains("lx7")
+}
+
+/// The ESP32-C3 is the RISC-V chip whose mask ROM is modelled (see
+/// `boot::esp32c3_rom`).
+fn is_esp32c3(chip: &ChipDescriptor) -> bool {
+    chip.name.to_ascii_lowercase().contains("esp32c3")
 }
 
 fn build_avr_node(
@@ -195,6 +315,7 @@ fn build_riscv_node(
     firmware: NodeFirmware,
     plugins: &[&dyn crate::plugin::ChipPlugin],
     fab: Option<&crate::system::efuse::FactoryMacAllocator>,
+    blobs: &crate::system::builder::BlobMap,
 ) -> anyhow::Result<Box<dyn MachineTrait>> {
     let mut bus = crate::bus::SystemBus::from_config_with_plugins(chip, system, plugins)
         .with_context(|| format!("node '{id}': build bus"))?;
@@ -209,18 +330,18 @@ fn build_riscv_node(
             // applied to RISC-V generally. The ESP32-C3 is the RISC-V chip whose
             // mask ROM is modelled (see `boot::esp32c3_rom`); the ESP32-S3 has
             // its own in `boot::esp32s3_rom`, reached through the Xtensa arm.
-            if !chip.name.to_ascii_lowercase().contains("esp32c3") {
+            if !is_esp32c3(chip) {
                 anyhow::bail!(
                     "node '{id}': flash-image ROM boot is modelled per chip, and chip '{}' is not \
                      one of them; supply an ELF instead",
                     chip.name
                 );
             }
-            let images = c3rom::provision_rom_images().with_context(|| {
+            let images = c3rom::rom_images_from_blobs_or_provisioned(blobs).with_context(|| {
                 format!(
                     "node '{id}': chip '{}' needs the real ESP32-C3 boot ROM to run a flash image; \
-                     install an ESP toolchain (esp32c3_rev3_rom.elf) or set \
-                     LABWIRED_ESP32C3_ROM / LABWIRED_ESP32C3_ROM_DATA",
+                     pass the node esp32c3_irom + esp32c3_drom blobs, install an ESP toolchain \
+                     (esp32c3_rev3_rom.elf) or set LABWIRED_ESP32C3_ROM / LABWIRED_ESP32C3_ROM_DATA",
                     chip.name
                 )
             })?;
@@ -254,6 +375,21 @@ fn build_riscv_node(
             let image = parse_elf_image(&bytes)
                 .with_context(|| format!("node '{id}': parse firmware ELF"))?;
             use crate::Cpu as _;
+            // The single-chip engine's C3 bare-ELF path, step for step
+            // (`builder::riscv`, the browser's `new_from_config_riscv`): the
+            // real mask ROM in its windows, its reset-time `.data` copy
+            // replayed, and the analog-I2C and USB-Serial-JTAG models an
+            // esp-hal app's ROM calls and console need. Without them an app
+            // that calls into the ROM jumps through a zeroed function table.
+            // No ROM resolvable (the browser with no blobs) leaves the windows
+            // zero, exactly as the single-chip engine does then.
+            if is_esp32c3(chip) {
+                if let Some(images) =
+                    crate::boot::esp32c3_rom::rom_images_from_blobs_or_provisioned(blobs)
+                {
+                    crate::boot::esp32c3_rom::install_fast_boot_rom(&mut bus, &images);
+                }
+            }
             let cpu = crate::system::riscv::configure_riscv(&mut bus);
             let mut machine = Machine::new(cpu, bus);
             machine
@@ -265,6 +401,7 @@ fn build_riscv_node(
             let ram_size = chip.ram.size;
             let sp_top = (chip.ram.base + ram_size) as u32;
             machine.cpu.set_sp(sp_top & !0xF);
+            machine.cpu.set_pc(image.entry_point as u32);
             Ok(Box::new(machine))
         }
     }
@@ -275,10 +412,11 @@ fn build_xtensa_node(
     chip: &ChipDescriptor,
     system: &SystemManifest,
     firmware: NodeFirmware,
+    blobs: &crate::system::builder::BlobMap,
+    profile: Option<NodeProfile>,
 ) -> anyhow::Result<Box<dyn MachineTrait>> {
-    let core = chip.core.as_deref().unwrap_or("").to_ascii_lowercase();
-    if core.contains("lx7") {
-        return build_esp32s3_node(id, chip, system, firmware);
+    if is_esp32s3(chip) {
+        return build_esp32s3_node(id, chip, system, firmware, blobs);
     }
 
     let NodeFirmware::Elf(bytes) = firmware else {
@@ -289,6 +427,10 @@ fn build_xtensa_node(
     };
     let image =
         parse_elf_image(&bytes).with_context(|| format!("node '{id}': parse firmware ELF"))?;
+
+    if profile == Some(NodeProfile::ArduinoEsp32) {
+        return build_esp32_arduino_node(id, chip, system, &bytes, &image);
+    }
 
     // Classic ESP32 (LX6): the Rust peripheral bank is authoritative, and the
     // second core starts halted until PRO releases it — the same construction
@@ -313,6 +455,42 @@ fn build_xtensa_node(
     Ok(Box::new(machine))
 }
 
+/// A classic-ESP32 node on the Arduino fast boot ([`NodeProfile::ArduinoEsp32`]).
+///
+/// Built by `boot::esp32_arduino::build_arduino_elf_machine` — the one home of
+/// that recipe, shared with the debugger and the end-to-end tests — with the
+/// symbols resolved by `arduino_esp32_symbols`, the same set the CLI's
+/// `profile: arduino-esp32` resolves. Real dual core: Arduino's `loopTask` is
+/// pinned to core 1, and the firmware drives the APP_CPU rendezvous itself.
+///
+/// The profile's helpers keep a little state per thread (the APP_CPU boot
+/// mailbox, `pxCurrentTCB`), and a world steps every node on one thread, so a
+/// world admits one node on this profile; `World::from_resolved` enforces it.
+fn build_esp32_arduino_node(
+    id: &str,
+    chip: &ChipDescriptor,
+    system: &SystemManifest,
+    elf: &[u8],
+    image: &crate::memory::ProgramImage,
+) -> anyhow::Result<Box<dyn MachineTrait>> {
+    use crate::boot::esp32_arduino::{
+        arduino_esp32_symbols, build_arduino_elf_machine, ArduinoElfBootOpts,
+    };
+    // Start from a clean slate of the profile's per-thread state, exactly as
+    // the single-chip engines do before installing it.
+    crate::peripherals::esp_xtensa_common::rom_thunks::reset_esp32_session_state();
+    let mut built = build_arduino_elf_machine(
+        image,
+        arduino_esp32_symbols(elf),
+        system,
+        &ArduinoElfBootOpts::default(),
+    )
+    .map_err(|e| anyhow::anyhow!("node '{id}': Arduino-ESP32 boot: {e}"))?;
+    built.machine.bus.attach_debug_schemas(chip, system);
+    built.machine.bus.refresh_peripheral_index();
+    Ok(Box::new(built.machine))
+}
+
 /// Build an ESP32-S3 (Xtensa LX7) node.
 ///
 /// Both boot paths are real: a flash image runs the genuine mask ROM from the
@@ -334,26 +512,58 @@ fn build_esp32s3_node(
     chip: &ChipDescriptor,
     system: &SystemManifest,
     firmware: NodeFirmware,
+    blobs: &crate::system::builder::BlobMap,
 ) -> anyhow::Result<Box<dyn MachineTrait>> {
     use crate::cpu::xtensa_lx7::XtensaLx7;
     use crate::system::xtensa::{configure_xtensa_esp32s3, Esp32s3BootMode, Esp32s3Opts};
 
-    let rom_boot = matches!(firmware, NodeFirmware::FlashImage(_));
     let flash_image = match &firmware {
         NodeFirmware::FlashImage(bytes) => Some(bytes.clone()),
         NodeFirmware::Elf(_) => None,
     };
+    // The chip descriptor is authoritative, exactly as on the single-chip
+    // engine (`builder::xtensa`, the browser's S3 constructors): its `cpu_hz`
+    // clocks the SYSTIMER, and on the flash path its flash size is the part's
+    // capacity the model reports over RDID — a 16 MiB module booted on a
+    // 4 MiB backing fails `esp_flash`'s size check before `app_main`.
+    let base = Esp32s3Opts::for_chip(chip);
+    let opts = match &flash_image {
+        Some(image) => Esp32s3Opts {
+            real_reset_boot: true,
+            flash_size: crate::system::builder::esp32s3_flash_backing_size(
+                chip.flash.size,
+                image.len(),
+            ),
+            flash_image: flash_image.clone(),
+            rom_images: crate::boot::esp32s3_rom::rom_images_from_blobs_or_provisioned(blobs),
+            ..base
+        },
+        // Fast boot keeps the single-chip engine's default backing (identity
+        // XIP, filled from the ELF's segments). A ROM the caller supplied wins;
+        // otherwise `configure_xtensa_esp32s3` provisions one itself.
+        None => Esp32s3Opts {
+            rom_images: match (blobs.get("esp32s3_irom"), blobs.get("esp32s3_drom")) {
+                (Some(irom), Some(drom)) => Some(crate::boot::esp32s3_rom::RomImages {
+                    irom: irom.clone(),
+                    drom: drom.clone(),
+                }),
+                _ => None,
+            },
+            ..base
+        },
+    };
 
     let mut bus = crate::bus::SystemBus::new();
-    let opts = Esp32s3Opts {
-        real_reset_boot: rom_boot,
-        flash_image,
-        ..Esp32s3Opts::default()
-    };
     let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
+    // Devices the board manifest wires (an OLED on i2c0, a panel on SPI) — the
+    // same factory the single-chip S3 paths call; a node without it silently
+    // dropped every `external_devices` entry.
+    crate::system::xtensa::attach_esp32_external_devices(&mut bus, system)
+        .with_context(|| format!("node '{id}': attach external devices"))?;
     // Debugger register names still come from the chip YAML even though the
     // peripheral bank is programmatic — see `SystemBus::attach_debug_schemas`.
     bus.attach_debug_schemas(chip, system);
+    bus.refresh_peripheral_index();
     let boot_mode = wiring.boot_mode;
     let mut cpu = wiring.cpu;
 
@@ -362,8 +572,9 @@ fn build_esp32s3_node(
             if boot_mode != Esp32s3BootMode::Faithful {
                 anyhow::bail!(
                     "node '{id}': chip '{}' needs the real ESP32-S3 boot ROM to run a flash image, \
-                     but none was found; install an ESP toolchain (PlatformIO/ESP-IDF) or set \
-                     LABWIRED_ESP32S3_ROM_ELF (or pin LABWIRED_ESP32S3_ROM/_DROM)",
+                     but none was found; pass the node esp32s3_irom + esp32s3_drom blobs, install \
+                     an ESP toolchain (PlatformIO/ESP-IDF) or set LABWIRED_ESP32S3_ROM_ELF (or pin \
+                     LABWIRED_ESP32S3_ROM/_DROM)",
                     chip.name
                 );
             }

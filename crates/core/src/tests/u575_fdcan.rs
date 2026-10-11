@@ -209,6 +209,7 @@ mod u575_fdcan_tests {
                 system: "crates/core/tests/fixtures/u575-can-world-system.yaml".to_string(),
                 firmware: "tests/fixtures/stm32u575-arduino-serial.elf".to_string(),
                 config_overrides: HashMap::new(),
+                profile: None,
             }
         }
 
