@@ -1,0 +1,11 @@
+# Engine node: a Blue Pill with the throttle potentiometer on PA0 (ADC1 channel 0).
+# The wiper position is the `position` input channel (0..100 %), 3.3 V at 100 %.
+name: "f103-can-engine"
+chip: "../../configs/chips/stm32f103.yaml"
+external_devices:
+  - id: "throttle"
+    type: "potentiometer"
+    connection: "adc1"
+    config:
+      channel: 0
+board_io: []

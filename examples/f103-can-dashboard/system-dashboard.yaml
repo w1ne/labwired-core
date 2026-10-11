@@ -1,0 +1,10 @@
+# Dashboard node: a Blue Pill with a 128x64 SSD1306 OLED on I2C1 (PB6 SCL, PB7 SDA).
+name: "f103-can-dashboard"
+chip: "../../configs/chips/stm32f103.yaml"
+external_devices:
+  - id: "oled"
+    type: "oled-ssd1306"
+    connection: "i2c1"
+    config:
+      i2c_address: 0x3C
+board_io: []

@@ -1904,6 +1904,7 @@ jobs:
           --test esp32c3_usb_cdc_console
           --test esp32c3_pms_shipped_firmware
           --test world_can_perf
+          --test world_can_dashboard_demo
 
       # `esp32_classic_walk_differential` is BOTH arms here, and both arms are
       # covered pre-merge as well — do not read this step as their only lane.

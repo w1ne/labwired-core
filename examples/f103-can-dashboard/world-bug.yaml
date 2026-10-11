@@ -1,0 +1,20 @@
+# Three Blue Pills on one 500 kbit/s CAN bus; the sensor firmware is built for 250k.
+# Run from the repository root.
+schema_version: "1.0"
+name: "f103-can-dashboard-bug"
+nodes:
+  - id: engine
+    system: "examples/f103-can-dashboard/system-engine.yaml"
+    firmware: "examples/f103-can-dashboard/prebuilt/engine.elf"
+  - id: dashboard
+    system: "examples/f103-can-dashboard/system-dashboard.yaml"
+    firmware: "examples/f103-can-dashboard/prebuilt/dashboard.elf"
+  - id: sensor
+    system: "examples/f103-can-dashboard/system-sensor.yaml"
+    firmware: "examples/f103-can-dashboard/prebuilt/sensor_250k.elf"
+interconnects:
+  - type: can_bus
+    nodes: [engine, dashboard, sensor]
+    config:
+      peripheral: bxcan1
+      bitrate: 500000

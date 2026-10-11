@@ -436,6 +436,11 @@ required-features = ["event-scheduler"]
 name = "world_esp32c3_ble_pong"
 required-features = ["event-scheduler"]
 
+# #![cfg(all(feature = "event-scheduler", not(debug_assertions)))]
+[[test]]
+name = "world_can_dashboard_demo"
+required-features = ["event-scheduler"]
+
 [[test]]
 name = "world_esp32c3_ble_gatt"
 required-features = ["event-scheduler"]
