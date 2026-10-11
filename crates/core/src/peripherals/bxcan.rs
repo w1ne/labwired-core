@@ -226,6 +226,10 @@ pub struct BxCan {
     /// Timed mode: bus-off recovery may count from this cycle.
     #[serde(skip)]
     recovery_armed: Option<u64>,
+    /// Timed mode on the event scheduler: one interrupt-level event chain is
+    /// outstanding.
+    #[serde(skip)]
+    chain_live: bool,
 }
 
 impl BxCan {
@@ -261,6 +265,7 @@ impl BxCan {
             next_request: 0,
             bus_off: false,
             recovery_armed: None,
+            chain_live: false,
         }
     }
 
@@ -304,6 +309,24 @@ impl BxCan {
 
     fn now(&self) -> u64 {
         self.clock.as_ref().map_or(0, |c| c.now())
+    }
+
+    /// Timed mode drives its interrupt lines from the event scheduler, with
+    /// the walk deleted: the lines only change when firmware writes a
+    /// register or the world applies a bus update, and both hand the bus a
+    /// chance to arm the level chain (`take_scheduled_events`). Without the
+    /// scheduler, or without the bus clock (a hand-built bus), the walk holds
+    /// the levels instead.
+    fn scheduler_mode(&self) -> bool {
+        cfg!(feature = "event-scheduler") && self.timed && self.clock.is_some()
+    }
+
+    fn timed_irqs_asserted(&self) -> Vec<u32> {
+        self.timed_irq_levels()
+            .into_iter()
+            .filter(|(_, level)| *level)
+            .map(|(irq, _)| irq)
+            .collect()
     }
 
     fn mailbox_pending(&self, mb: usize) -> bool {
@@ -900,12 +923,7 @@ impl Peripheral for BxCan {
         if self.timed {
             // The world applies the bus's outcomes; the walk only holds the
             // interrupt lines at their levels.
-            let irqs: Vec<u32> = self
-                .timed_irq_levels()
-                .into_iter()
-                .filter(|(_, level)| *level)
-                .map(|(irq, _)| irq)
-                .collect();
+            let irqs = self.timed_irqs_asserted();
             return PeripheralTickResult {
                 explicit_irqs: (!irqs.is_empty()).then_some(irqs),
                 ..Default::default()
@@ -938,9 +956,46 @@ impl Peripheral for BxCan {
         // interconnect is attached at construction (`new_with_bus`), before the
         // bus derives walk-deletion, so the derivation always sees the truth.
         //
-        // On a timed bus the walk holds the four interrupt lines at their
-        // levels, so it stays on there too.
-        self.bus_rx.is_some() || self.timed
+        // On a timed bus the event scheduler holds the four interrupt lines
+        // at their levels; only without it does the walk stay on for them.
+        self.bus_rx.is_some() || (self.timed && !self.scheduler_mode())
+    }
+
+    fn uses_scheduler(&self) -> bool {
+        self.scheduler_mode()
+    }
+
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        // Arm the level chain when a write or a bus update raised a line;
+        // delay 0 is the walk's next tick.
+        if self.scheduler_mode() && !self.chain_live && !self.timed_irqs_asserted().is_empty() {
+            self.chain_live = true;
+            vec![(0, 0)]
+        } else {
+            Vec::new()
+        }
+    }
+
+    fn on_event(
+        &mut self,
+        _event_token: u32,
+        _sched: &mut crate::sched::EventScheduler,
+        _bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        if !self.scheduler_mode() {
+            self.chain_live = false;
+            return crate::sched::EventResult::default();
+        }
+        // Re-emit the asserted lines every cycle while any is held, as the
+        // walk at interval 1 would; stop once firmware clears the source.
+        let irqs = self.timed_irqs_asserted();
+        let active = !irqs.is_empty();
+        self.chain_live = active;
+        crate::sched::EventResult {
+            explicit_irqs: irqs,
+            reschedule_delay: active.then_some(1),
+            ..Default::default()
+        }
     }
 
     fn snapshot(&self) -> serde_json::Value {
@@ -1510,12 +1565,49 @@ mod tests {
     }
 
     #[test]
-    fn timed_mode_keeps_the_walk_on() {
+    fn timed_mode_needs_the_walk_only_without_the_scheduler() {
         let mut dev = BxCan::new();
         assert!(!dev.needs_legacy_walk());
         dev.attach_timed().unwrap();
-        assert!(dev.needs_legacy_walk());
         assert!(dev.is_timed());
         assert!(dev.attach_timed().is_err(), "attached once");
+        // A hand-built bus hands out no cycle clock: the walk holds the lines.
+        assert!(dev.needs_legacy_walk());
+        dev.attach_cycle_clock(crate::CycleClock::default());
+        let scheduled = cfg!(feature = "event-scheduler");
+        assert_eq!(dev.uses_scheduler(), scheduled);
+        assert_eq!(dev.needs_legacy_walk(), !scheduled);
+    }
+
+    #[cfg(feature = "event-scheduler")]
+    #[test]
+    fn timed_interrupt_levels_ride_the_event_scheduler() {
+        let mut dev = timed(BTR_500K_AT_36M);
+        install_std_accept_filter(&mut dev, 0x111);
+        wr(&mut dev, REG_IER, IER_FMPIE0);
+        assert!(dev.take_scheduled_events().is_empty(), "no line asserted");
+        let mut u = update(None, 0, 0, CanErrorState::Active);
+        u.rx = Some(CanFrame::classic(0x111, vec![1]));
+        dev.timed_apply(&u);
+        assert_eq!(
+            dev.take_scheduled_events(),
+            vec![(0, 0)],
+            "RX0 arms the chain"
+        );
+        assert!(
+            dev.take_scheduled_events().is_empty(),
+            "one chain at a time"
+        );
+        let mut sched = crate::sched::EventScheduler::new();
+        let mut bus = crate::bus::SystemBus::new();
+        let r = dev.on_event(0, &mut sched, &mut bus);
+        assert_eq!((r.explicit_irqs, r.reschedule_delay), (vec![20], Some(1)));
+        wr(&mut dev, REG_RF0R, RF_RFOM);
+        let r = dev.on_event(0, &mut sched, &mut bus);
+        assert_eq!(
+            (r.explicit_irqs.len(), r.reschedule_delay),
+            (0, None),
+            "chain stops"
+        );
     }
 }

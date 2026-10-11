@@ -76,7 +76,9 @@
 //! (LEC, EP, EW, BO), with IR.EP / IR.EW / IR.BO on each change and IR.PEA
 //! on each protocol error. Bus-off sets CCCR.INIT; once firmware clears it
 //! the bus counts the recovery (RM0481: 129 occurrences of 11 recessive
-//! bits). The walk stays on to hold the interrupt line at its level.
+//! bits). Under the event scheduler the interrupt level rides the same
+//! delay-0/1 chain as single-node mode, so the walk stays deleted; without
+//! the scheduler the walk holds it.
 //!
 //! The nominal bit time comes from NBTP and the kernel clock divided by
 //! CKDIV. The kernel clock is the HSE: the RCC model does not hold
@@ -374,7 +376,13 @@ impl Fdcan {
         // An attached CanBus interconnect still needs the walk to poll
         // `bus_rx` (bxCAN pattern). Do not clear this gate to chase
         // walk-free multi-node — mpsc RX is not event-driven yet.
-        cfg!(feature = "event-scheduler") && self.bus_rx.is_none() && !self.timed
+        cfg!(feature = "event-scheduler") && self.bus_rx.is_none()
+    }
+
+    /// The scheduler chain has work: a frame to complete (not in timed mode,
+    /// where the bus completes it) or a level interrupt to hold.
+    fn chain_has_work(&self) -> bool {
+        (!self.timed && !self.pending_tx.is_empty() && !self.bus_off) || self.irq_level_held()
     }
 
     #[inline]
@@ -1023,7 +1031,7 @@ impl Peripheral for Fdcan {
         }
         // Arm delay-0 when TX is pending or a level IRQ is held — bus
         // converts to deadline `current_cycle + 1` (one tick after TXBAR).
-        if (!self.pending_tx.is_empty() && !self.bus_off) || self.irq_level_held() {
+        if self.chain_has_work() {
             self.chain_live = true;
             vec![(0, 0)]
         } else {
@@ -1042,7 +1050,7 @@ impl Peripheral for Fdcan {
             return crate::sched::EventResult::default();
         }
         let irq = self.service_once();
-        let reschedule = (!self.pending_tx.is_empty() && !self.bus_off) || self.irq_level_held();
+        let reschedule = self.chain_has_work();
         self.chain_live = reschedule;
         crate::sched::EventResult {
             raise_own_irq: irq,
@@ -1585,12 +1593,17 @@ mod tests {
     }
 
     #[test]
-    fn timed_mode_forces_the_walk() {
+    fn timed_mode_needs_the_walk_only_without_the_scheduler() {
         let mut dev = Fdcan::new();
         dev.attach_timed().unwrap();
         assert!(dev.is_timed());
-        assert!(dev.needs_legacy_walk());
-        assert!(!dev.uses_scheduler());
+        let scheduled = cfg!(feature = "event-scheduler");
+        assert_eq!(dev.uses_scheduler(), scheduled);
+        assert_eq!(dev.needs_legacy_walk(), !scheduled);
         assert!(dev.attach_timed().is_err());
+        // A pending frame is the bus's to complete: it arms no chain.
+        wr(&mut dev, REG_CCCR, 0x0);
+        queue(&mut dev, 0x123);
+        assert!(dev.take_scheduled_events().is_empty());
     }
 }
