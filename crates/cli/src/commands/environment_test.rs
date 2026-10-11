@@ -466,6 +466,9 @@ fn run_world(
 
     // The node set is fixed for the run; sort it once, not twice a round.
     let node_ids = sorted_node_ids(world);
+    // One result buffer for the whole run: a round's results without a map
+    // and a copy of every node id per round.
+    let mut outcomes = labwired_core::world::StepResults::new();
     while rounds < limits.max_steps {
         let cycles = max_cycles(world);
         let uart_bytes = total_uart_bytes(uart_sinks);
@@ -474,7 +477,7 @@ fn run_world(
             break;
         }
 
-        let outcomes = world.step_all();
+        world.step_all_into(&mut outcomes);
         rounds += 1;
         // `instructions` is the total number of successful individual machine
         // steps, not the number of world rounds. This makes a heterogeneous

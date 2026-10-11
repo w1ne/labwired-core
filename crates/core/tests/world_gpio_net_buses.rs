@@ -35,6 +35,46 @@ fn run_us(world: &mut World, us: u64) {
     }
 }
 
+/// The same run on the other drivers: the lockstep round driver, one
+/// `run_until_ps` call, and the per-node scheduler with idle fast-forward on.
+/// Each must leave `fingerprint` as `run_us` on the default driver does.
+fn same_on_every_driver<T: PartialEq + std::fmt::Debug>(
+    env_file: &str,
+    us: u64,
+    fingerprint: impl Fn(&World) -> T,
+) {
+    let mut reference = build(env_file, |s| s);
+    run_us(&mut reference, us);
+    let want = fingerprint(&reference);
+
+    let mut lockstep = build(env_file, |s| s);
+    lockstep.set_gpio_lockstep(true);
+    run_us(&mut lockstep, us);
+    assert_eq!(fingerprint(&lockstep), want, "lockstep rounds");
+
+    for ff in [false, true] {
+        let mut until = build(env_file, |s| s);
+        for m in until.machines.values_mut() {
+            m.set_idle_fast_forward(ff);
+        }
+        for (id, r) in until.run_until_ps(us * 1_000_000).unwrap() {
+            r.unwrap_or_else(|e| panic!("node {id}: {e:?}"));
+        }
+        assert_eq!(
+            fingerprint(&until),
+            want,
+            "run_until_ps, idle fast-forward {ff}"
+        );
+    }
+
+    let mut ff = build(env_file, |s| s);
+    for m in ff.machines.values_mut() {
+        m.set_idle_fast_forward(true);
+    }
+    run_us(&mut ff, us);
+    assert_eq!(fingerprint(&ff), want, "rounds, idle fast-forward");
+}
+
 fn result(world: &World, id: &str, words: usize) -> Vec<u32> {
     let b = world.machines[id]
         .read_memory(0x2000_0100, words * 4)
@@ -168,6 +208,15 @@ mod spi {
         short.set_gpio_round_ps(37_000).unwrap();
         run_us(&mut short, 400);
         assert_eq!(fingerprint(&short), want, "37 ns rounds");
+
+        // Each node runs until its own pad drive changes, or its peer's
+        // horizon: the same exchange on every driver.
+        same_on_every_driver("env-spi.yaml", 400, |w| {
+            (
+                fingerprint(w),
+                ["a", "b"].map(|id| w.machines[id].total_cycles()),
+            )
+        });
     }
 
     #[test]
@@ -279,5 +328,12 @@ mod i2c {
         short.set_gpio_round_ps(23_000).unwrap();
         run_us(&mut short, 1500);
         assert_eq!(fingerprint(&short), fingerprint(&reference));
+
+        same_on_every_driver("env-i2c.yaml", 1500, |w| {
+            (
+                fingerprint(w),
+                ["a", "b"].map(|id| w.machines[id].total_cycles()),
+            )
+        });
     }
 }

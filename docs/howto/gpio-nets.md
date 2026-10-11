@@ -88,20 +88,43 @@ captures see a real edge.
 
 Each node keeps its own clock (conservative parallel discrete-event
 simulation). A node may run as far as its *safe horizon*: for each net it is
-on, the time the slowest member of that net has reached, plus the net's
-latency. An edge nobody has reported yet happens after its driver's current
-time, so its delivery is due after that horizon: every delivery a node needs is
-known before the node gets there, whatever order the nodes run in and however
-far apart their clocks are. After a node runs, its drive changes are merged
-into its nets up to the time all their members have reached.
+on, the earliest time a change it has not been told about can have happened,
+plus the net's latency. Three things bound that time:
+
+- each other member's *known time*: the time it has reached, since everything
+  it drove before then is already reported;
+- for a member asleep until a scheduled event (a Cortex-M in `WFI`, an
+  ATmega328P in `SLEEP`, with idle fast-forward on), that event instead: it
+  drives nothing before it unless an input wakes it, so the bound is the
+  earliest of the event, a delivery already queued for it, an edge not yet
+  merged into one of its nets (one latency later), and a peer's own known
+  time plus one latency;
+- the earliest edge not yet merged into the net.
+
+A node's own edges come back to it too, one latency later. Rather than hold a
+node to one latency past its own time, the scheduler runs it until its next
+own drive change: a push of a net pad ends the CPU batch it happens in
+(`LogicTap::set_batch_stop_channels`), the machine stops at that boundary
+(`Machine::advance_to_cycle_or_net_drive_change`), and the edge bounds the
+node's horizon before it runs on. A node that cannot stop there (two cores, or
+a pad on the per-cycle poll) keeps its own time in its horizon.
+
+An edge nobody has reported yet happens after its driver's known time, so its
+delivery is due after the horizon: every delivery a node needs is known before
+the node gets there, whatever order the nodes run in and however far apart
+their clocks are. After a node runs, its drive changes are merged into its nets
+up to the time all their members have reached.
 
 Results do not depend on node order, round length or how the world is driven:
 `world_multichip.rs` (`gpio_net_world`) runs the example with both node orders,
 with rounds from 10 ns to 100 ns, round by round, in one `run_until_ps` call and
 on the old lockstep round driver (`set_gpio_lockstep`, still the driver for a
-world that also has a timed UART network), and compares every counter, every
-UART transcript, every applied delivery and every node's cycle count, part way
-through and at the end.
+world that also has a timed UART network), with idle fast-forward off and on,
+and compares every counter, every UART transcript, every applied delivery and
+every node's cycle count, part way through and at the end
+(`the_per_node_scheduler_matches_the_lockstep_rounds`); the same for the
+ESP32-C6 world (`the_esp32c6_world_is_the_same_on_every_driver`) and the SPI
+and I²C buses over nets (`world_gpio_net_buses.rs`).
 
 A node skips idle time (a Cortex-M in `WFI`, an ATmega328P in `SLEEP`) only
 when idle fast-forward is on for it (`set_idle_fast_forward(true)` on the
@@ -110,40 +133,78 @@ world's machine); the results are the same either way
 
 `step_all` still advances the world by one round (the shortest latency) per
 call, so a `max_steps` limit, the browser's step batches and Python's
-`run_for` keep their meaning. `World::run_until_ps(t)` runs to `t` in one call,
-and `World::step_rounds(n)` does `n` rounds in one call when that gives the
-same result (the browser's `step_batch` uses it).
+`run_for` keep their meaning. `World::step_all_into(&mut results)` is the same
+call with a result buffer (`StepResults`) kept from round to round instead of a
+new map of node ids each time; `labwired test` and Python step with it.
+`World::run_until_ps(t)` runs to `t` in one call, and `World::step_rounds(n)`
+does `n` rounds in one call when that gives the same result (the browser's
+`step_batch` uses it).
 
 ### Speed
 
-At the default 100 ns latency a net no longer costs a multiple of the
-machines' own time. `examples/gpio-net-two-boards`, 30 ms of simulated time,
-release build, against the same two machines each run alone for 30 ms (median
-of repeated runs on a shared machine, so treat the figures as rough):
+`examples/gpio-net-two-boards`, 30 ms of simulated time, release build with
+the event scheduler, against the same two machines each run alone for 30 ms.
+Instruction counts (callgrind, millions, deterministic; the ratio is to the
+two machines alone, 1023 M) say more than wall time on a shared machine:
 
 | How it is driven | Before | Now |
 |------------------|--------|-----|
-| one `run_until_ps` / `step_rounds` call | n/a | 1.16x the two machines alone |
-| `step_all` per round | 2.05x | 1.55x |
-| `labwired test --script .../test.yaml` (40 ms, per round, wall) | 0.54 s | 0.36 s |
+| one `run_until_ps` / `step_rounds` call | 1303 M (1.27x) | 1015 M (0.99x) |
+| the same, idle fast-forward on | 1395 M | 1104 M |
+| `step_all` per round | 2284 M (2.23x) | 1985 M (1.94x) |
+| `step_all_into` per round (`labwired test`, Python) | n/a | 1556 M (1.52x) |
+| `labwired test --script .../test.yaml` (40 ms, per round, whole process) | 3516 M, 0.32 s wall | 2335 M, 0.26 s wall |
 
-(`cargo test --release -p labwired-core --test world_multichip -- --ignored
---nocapture gpio_net_speed` prints the first two.)
+Wall time agrees within its noise (median of 6 runs, ±15% on a loaded
+4-core machine): `run_until_ps` 0.124 s before, 0.083 s now, against 0.077 s
+for the two machines alone. With idle fast-forward on there is no fair
+"alone" figure: alone, the AVR sleeps through the whole run waiting for a peer
+that is not there. The ESP32-C6 world (`env-esp32c6.yaml`, 2 ms, instruction
+counts) costs what its C6 costs: `run_until_ps` is 1.01x the two machines
+alone (1.04x before), `step_all` 1.09x (1.11x).
 
-What is left:
+(`cargo test --release -p labwired-core --features event-scheduler --test
+world_multichip -- --ignored --nocapture gpio_net_speed` prints the wall
+times and how many pieces the scheduler cut the run into;
+`GPIO_NET_BENCH_ENV=env-esp32c6.yaml` and `GPIO_NET_BENCH_FF=1` pick the
+other cases.)
 
-- A net node still runs in pieces no longer than the shortest latency of its
-  nets, because its own edges come back to it after one latency. The world
-  nodes built today (Cortex-M, AVR) tick their peripherals every cycle anyway,
-  so the pieces cost almost nothing extra. A node that would otherwise run
-  wide batches or fast-forward idle time (an ESP32-C3 ROM-boot node) loses
-  that while it is on a net, so it runs slower than alone at 100 ns.
-- A sleeping node does not stretch the horizon yet: a node idle in `WFI` still
-  advances one latency at a time while its peers do.
-- `step_all` pays a fixed cost per call (the results map), about half the
-  machines' own time at 100 ns rounds. Drive long runs with `run_until_ps` or
-  `step_rounds`; `latency_ns` still makes rounds longer where a wire does not
-  need to be fast.
+What made the difference:
+
+- A node runs until its own next net pad drive change, not one latency past
+  its own time, and its pad state is read only when it stopped for one. On a
+  net it keeps whatever batch width and idle fast-forward it has alone, and two
+  busy nodes leapfrog by two latencies instead of one.
+- A node asleep until its next event, with idle fast-forward on, holds its
+  peers back only as far as that event, or whatever input could wake it first.
+- A call that ends within one latency of the slowest node (a `step_all`
+  round) skips the horizons altogether, and `step_all_into` reuses its result
+  buffer instead of building a map of node ids per round.
+
+What is still slower than the machines alone, and why:
+
+- `step_all` stops every node at every round end: at 100 ns and 16 MHz that is
+  one or two instructions per node per call, so the per-call cost (and the map
+  `step_all` returns) dominates. Drive long runs with `run_until_ps` or
+  `step_rounds`; `latency_ns` makes rounds longer where a wire does not need
+  to be fast.
+- Two busy nodes cannot run far apart: neither can know when the other will
+  next drive a pad, so each runs at most about two latencies ahead of the
+  other (the example's 30 ms run is 240 000 pieces, both firmware spinning in
+  their final loops). Here the pieces cost about nothing in instructions and
+  some 10% in wall time; a node whose every stop is expensive pays per piece.
+- A sleeping node stretches its peers only with idle fast-forward on, and only
+  until something can wake it: an edge a peer drives brings its horizon back
+  to that edge plus one latency.
+- A node with two cores (ESP32, ESP32-S3) or with a net pad on the per-cycle
+  poll cannot stop at its own drive change, so it is still held to one latency
+  past its own time.
+- A node with push capture armed (every net node) does not use the CPU fast
+  paths that skip the tap (the RISC-V spin and poll windows, the Cortex-M
+  Thumb RAM chunks); that is the cost of stamping every pad write.
+- An ESP32-C3 node booting through its ROM was not measured (the ROM image is
+  not in this tree); its wide batches now end at its own net pad pushes
+  rather than every latency, which is the case the batch stop exists for.
 
 Machines on no net run unchanged and are not held to any net's latency.
 

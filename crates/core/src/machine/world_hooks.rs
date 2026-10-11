@@ -74,7 +74,9 @@ impl<C: Cpu> Machine<C> {
                 .advance(AdvanceRequest::run(None).with_cycle_limit(target - self.total_cycles))?;
             if matches!(
                 report.stop,
-                AdvanceStop::NoProgress | AdvanceStop::FirmwareExit { .. }
+                AdvanceStop::NoProgress
+                    | AdvanceStop::FirmwareExit { .. }
+                    | AdvanceStop::NetDriveChange
             ) {
                 break;
             }
@@ -84,6 +86,97 @@ impl<C: Cpu> Machine<C> {
             }
         }
         Ok(())
+    }
+
+    /// Like [`Self::advance_to_cycle`], but stop at the first boundary at
+    /// which one of this machine's watched pads records a four-state change
+    /// (a world's `gpio_net` pads, see [`Self::watch_world_pins`]): `true`
+    /// when it stopped for one. A push already queued (a pad driven while
+    /// paused) ends the run after one instruction, when it is recorded.
+    ///
+    /// Exact only where every CPU batch ends at a batch-stop push
+    /// ([`crate::logic_capture::LogicTap::set_batch_stop_channels`]): one core.
+    /// See [`Self::net_drive_stop_exact`].
+    pub fn advance_to_cycle_or_net_drive_change(&mut self, target: u64) -> SimResult<bool> {
+        if self.total_cycles >= target {
+            return Ok(false);
+        }
+        let from = self.logic_capture.state_seq();
+        self.net_drive_stop_from = from;
+        // A queued push is recorded only after the next instruction; a fast
+        // path that does not look at the tap (the AVR INC/RJMP spin) must not
+        // run past it.
+        let first = if self.bus.logic_tap.batch_stop_hit() {
+            target.min(self.total_cycles + 1)
+        } else {
+            target
+        };
+        let r = self.advance_to_cycle(first).and_then(|()| {
+            if first < target && self.logic_capture.state_seq() == from {
+                self.advance_to_cycle(target)
+            } else {
+                Ok(())
+            }
+        });
+        self.net_drive_stop_from = u64::MAX;
+        self.net_drive_stop_hit = false;
+        r.map(|()| self.logic_capture.state_seq() > from)
+    }
+
+    /// Whether [`Self::advance_to_cycle_or_net_drive_change`] stops exactly at
+    /// the boundary a net pad change is recorded at: push capture only (a
+    /// polled pad is sampled at the boundary anyway, but this keeps the
+    /// promise simple) and one core (a dual-core window steps its parked
+    /// core between peripheral ticks without looking at the tap).
+    pub fn net_drive_stop_exact(&self) -> bool {
+        self.cpu_secondary.is_none() && !self.logic_capture.poll_active()
+    }
+
+    /// The cycle before which this machine changes no pad unless an input
+    /// does: `Some` only while the core sleeps (`WFI`, `SLEEP`) with idle
+    /// fast-forward on and would skip straight to its next scheduled event,
+    /// which is the cycle returned. Every condition under which
+    /// `try_idle_fast_forward` would not skip, or would stop early, answers
+    /// `None`.
+    pub fn idle_quiet_until(&self) -> Option<u64> {
+        // The core's own answer first: a busy core is the common case.
+        let budget = self
+            .config
+            .idle_fast_forward_enabled
+            .then(|| self.cpu.idle_fast_forward_budget(&self.bus))
+            .flatten()?;
+        // Only an event-scheduler machine fast-forwards, and only one whose
+        // scheduler has started (`drain_scheduler_events` sets the flag, and
+        // only in that build).
+        if budget == 0
+            || !self.scheduler_bootstrapped
+            || self.logic_capture.poll_active()
+            || self.cpu_secondary.is_some()
+            || self.bus.requires_cycle_accurate()
+            || self.bus.supply.is_routed()
+            || self.bus.idle_poll_bus_tick_active()
+            || self.bus.logic_tap.pending_len() != 0
+            || !self.bus.idle_fast_forward_legacy_safe()
+        {
+            return None;
+        }
+        let now = self.total_cycles;
+        let mut wake = now.saturating_add(budget);
+        for deadline in [
+            self.sched.next_event_deadline(),
+            self.bus.pending_schedule.iter().map(|(_, d, _)| *d).min(),
+            self.bus.next_motor_service_deadline_cycle(),
+            self.bus.next_resident_edge_deadline_cycle(),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            if deadline <= now {
+                return None;
+            }
+            wake = wake.min(deadline);
+        }
+        Some(wake)
     }
 
     /// Hand every timed USART a chance to schedule a wake for a character a
@@ -155,6 +248,12 @@ impl<C: Cpu> Machine<C> {
         }
         self.observer.world_sources = sources.clone();
         self.logic_watch(&sources);
+        // A push on a net pad ends the CPU batch it happens in, so a run to
+        // the next drive change stops on that instruction.
+        let lo = markers.len() as u32;
+        self.bus
+            .logic_tap
+            .set_batch_stop_channels(lo, lo + net_pads.len() as u32);
         Ok(())
     }
 

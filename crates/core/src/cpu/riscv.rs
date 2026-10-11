@@ -1796,6 +1796,11 @@ impl Cpu for RiscV {
             {
                 return Ok(i);
             }
+            // A world's net pad changed drive: end the batch here
+            // (`LogicTap::set_batch_stop_channels`).
+            if tap.as_ref().is_some_and(|t| t.batch_stop_hit()) {
+                return Ok(i);
+            }
             #[cfg(feature = "event-scheduler")]
             if exact_clock && bus.has_pending_schedule() {
                 if let Some(dl) = bus.earliest_pending_deadline() {

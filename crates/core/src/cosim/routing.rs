@@ -1390,6 +1390,7 @@ impl CosimSession {
                 }
                 AdvanceStop::Breakpoint(_)
                 | AdvanceStop::NoProgress
+                | AdvanceStop::NetDriveChange
                 | AdvanceStop::FirmwareExit { .. } => true,
             };
             let made_no_progress = chunk_report.primary_steps == 0 && chunk_report.idle_cycles == 0;

@@ -395,8 +395,8 @@ impl SystemBus {
     /// [`Peripheral::idle_poll_bus_tick`]) — currently a medium-mode WiFi MAC.
     /// Only the tiny `bus_tick_indices` set is scanned (empty on every non-WiFi
     /// bus, so this is ~free on the idle-fast-forward hot check). Only the
-    /// event-scheduler fast-forward path consults it.
-    #[cfg(feature = "event-scheduler")]
+    /// event-scheduler fast-forward path, and a world asking whether a
+    /// sleeping node is quiet, consult it.
     pub(crate) fn idle_poll_bus_tick_active(&self) -> bool {
         self.bus_tick_indices
             .iter()
