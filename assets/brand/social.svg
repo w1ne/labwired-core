@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1280" height="640" viewBox="0 0 1280 640">
+  <defs>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0"    stop-color="#4d9fff"/>
+      <stop offset="0.55" stop-color="#7c5cff"/>
+      <stop offset="1"    stop-color="#ff5c8a"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1280" height="640" fill="#14151a"/>
+  <rect width="1280" height="6" fill="url(#accent)"/>
+
+  <!-- Outlined wordmark from the canonical brand kit -->
+  <image x="72" y="80" width="360" height="56" xlink:href="labwired-logo-dark.svg"/>
+
+  <text x="72" y="238" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="52" font-weight="700" fill="#ffffff">Run your firmware on a</text>
+  <text x="72" y="300" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="52" font-weight="700" fill="#ffffff">virtual instance of a real chip.</text>
+
+  <text x="72" y="356" font-family="Menlo, Monaco, monospace" font-size="23" fill="#8b93a1">register-accurate · deterministic · no board on your desk</text>
+
+  <!-- Terminal card: the real output of the committed quickstart -->
+  <rect x="72" y="404" width="1136" height="180" rx="12" fill="#0e0f13" stroke="#262a33" stroke-width="1.5"/>
+  <text x="100" y="444" font-family="Menlo, Monaco, monospace" font-size="21" fill="#6b7280">$ <tspan fill="#e6e8eb">labwired test --script examples/nrf54l15-dk/io-smoke.yaml</tspan></text>
+  <text x="100" y="478" font-family="Menlo, Monaco, monospace" font-size="21" fill="#c3c9d4">nRF54L15 boot OK</text>
+  <text x="100" y="510" font-family="Menlo, Monaco, monospace" font-size="21" fill="#c3c9d4">core=cortex-m33 rram=1524K ram=256K</text>
+  <text x="100" y="548" xml:space="preserve" font-family="Menlo, Monaco, monospace" font-size="21" font-weight="700" fill="#51cf66">PASS<tspan fill="#8b93a1" font-weight="400">  4/4 checks · io-smoke · 200000 steps · 0.04s</tspan></text>
+
+  <text x="1208" y="128" text-anchor="end" font-family="Menlo, Monaco, monospace" font-size="20" fill="#4d9fff">MIT · Cortex-M · RISC-V · ESP32</text>
+</svg>

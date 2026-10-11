@@ -1,0 +1,38 @@
+{
+  "schema": "labwired.microbit.saadc-scan-proof.v1",
+  "date": "2026-09-30",
+  "runId": 36716508399,
+  "runUrl": "https://github.com/CrispStrobe/labwired-core/actions/runs/36716508399",
+  "headCommit": "ee80c19b83df1a846a90e27ec33347bbc038ee39",
+  "testedMergeCommit": "5aa78fd4e391c4e54239ad5b7614ac7109c2905b",
+  "baseCommit": "3456c048894f194bbabc9c414932a752d89da999",
+  "overallResult": "failed: motion benchmark only",
+  "functionalProof": {
+    "coreTestExecutions": 294,
+    "nativeWasmTestExecutions": 3,
+    "adcArmGuestTests": 1,
+    "saadcUnitTests": 26,
+    "easydmaTick512Tests": 4,
+    "allPassed": true
+  },
+  "artifact": {
+    "id": 11097610878,
+    "digest": "sha256:37cdce06693c237d61a01a370982ebab2ae0b86a4c2f6ccf3e8740a71e51beb5",
+    "adcElf": "adc-guest-artifacts/adc-scan-3875d7473117d105a34abf561c37e1a087915ea775fa99c7eb687d32d3cbc5b0.elf",
+    "adcFirmwareSha256": "3875d7473117d105a34abf561c37e1a087915ea775fa99c7eb687d32d3cbc5b0",
+    "adcHashVerification": "SHA256 verified against downloaded actual hosted ELF; not a reconstructed local binary.",
+    "motionElf": "motion-guest-artifacts/motion-0a5abac54af47ac7e4141dfec7772a4afafd94b2db7a0137096467f8cd73f8cf.elf"
+  },
+  "performance": {
+    "activeMedianRtx": 2.4623974184934636,
+    "motionMedianRtx": 0.8652049613147006,
+    "motionMinimumRtx": 0.862686597806292,
+    "motionRealtimeTargetMet": false,
+    "cpuModel": null
+  },
+  "qualification": "Native source functional proof at the older CPU base only. Rebased combined CPU/GPIO candidate must qualify separately; this failed performance result is preserved, not hidden by another host's green score.",
+  "limitations": [
+    "No runner CPU fingerprint in this historical workflow.",
+    "No browser ADC, silicon capture, microphone/audio timing, oversample/burst, timer/PPI or RUN_MIC qualification."
+  ]
+}
