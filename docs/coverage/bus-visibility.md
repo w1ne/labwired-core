@@ -85,6 +85,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | ra4m1 | — | — | — |
 | rp2040 | ✓ | ✓ | ✓ |
 | rp2350 | — | — | — |
+| rv1103 | — | — | — |
 | stm32f103 | ✓ | ✓ | ✓ |
 | stm32f401 | ✓ | ✓ | ✓ |
 | stm32f401cdu6 | ✓ | ✓ | ✓ |

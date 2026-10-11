@@ -3,11 +3,12 @@
 
 //! Standardized per-chip conformance scoreboard + ratchet.
 //!
-//! ONE uniform battery, run for EVERY chip, so coverage is comparable across the
-//! fleet and can never silently regress. This sits *on top of* the existing
+//! ONE uniform battery, run for EVERY modeled chip, so coverage is comparable
+//! across the fleet and can never silently regress. Declared-only prototypes
+//! appear separately without a conformance level. This sits *on top of* the existing
 //! mechanisms rather than replacing them:
 //!
-//!   * **Estate** (all chips, always): the chip descriptor loads and every wired
+//!   * **Estate** (all modeled chips, always): the chip descriptor loads and every wired
 //!     peripheral window is reachable (a read at its base faults nowhere).
 //!   * **Registers vs silicon** (chips with a committed capture): the fraction of
 //!     a real-silicon reset capture (`reg_oracle.json`) the sim reproduces. The
@@ -53,8 +54,16 @@ struct ChipConf {
     behavior_gate: Option<&'static str>,
 }
 
-/// The fleet. Every chip with a descriptor MUST appear here (enforced below), so
-/// a new chip can't be added without landing on the board.
+/// Explicit declarations that have no modeled platform to measure. This is a
+/// closed shortlist, validated against the descriptor before rendering; it
+/// never contributes an estate checkmark, conformance level or ratchet record.
+const DECLARED_ONLY_CHIPS: &[(&str, &str)] = &[(
+    "rv1103",
+    "CPU/memory declaration only. No RV1103 firmware/platform CI gate; peripherals, boot chain and Linux/BSP execution are unimplemented. The optional generic Cortex-A7 CPU subset does not establish board L0/L1.",
+)];
+
+/// The modeled fleet. Every descriptor MUST appear here or in the explicitly
+/// validated declaration table (enforced below), so new chips cannot disappear.
 const CHIPS: &[ChipConf] = &[
     ChipConf {
         name: "esp32c3",
@@ -1361,9 +1370,59 @@ fn level(r: &Record) -> u8 {
     }
 }
 
+fn is_declared_only_prototype(chip: &ChipDescriptor) -> bool {
+    chip.name == "rv1103"
+        && matches!(chip.arch, labwired_config::Arch::Arm)
+        && chip.core.as_deref() == Some("cortex-a7")
+        && chip.peripherals.is_empty()
+        && chip.flash.size == 0
+}
+
+#[test]
+fn declared_only_classification_rejects_other_chips_or_modeled_platforms() {
+    assert_eq!(DECLARED_ONLY_CHIPS.len(), 1);
+    assert_eq!(DECLARED_ONLY_CHIPS[0].0, "rv1103");
+    let chip = ChipDescriptor::from_file(root("configs/chips/rv1103.yaml")).unwrap();
+    assert!(is_declared_only_prototype(&chip));
+    let mut changed = chip.clone();
+    changed.name = "another-prototype".into();
+    assert!(!is_declared_only_prototype(&changed));
+    changed = chip.clone();
+    changed.core = Some("cortex-m7".into());
+    assert!(!is_declared_only_prototype(&changed));
+    changed = chip.clone();
+    changed.flash.size = 1;
+    assert!(!is_declared_only_prototype(&changed));
+    changed = chip;
+    changed.peripherals = ChipDescriptor::from_file(root("configs/chips/stm32f103.yaml"))
+        .unwrap()
+        .peripherals;
+    assert!(!is_declared_only_prototype(&changed));
+}
+
+#[test]
+fn rv1103_declaration_is_visible_without_model_conformance() {
+    let chip = ChipDescriptor::from_file(root("configs/chips/rv1103.yaml")).unwrap();
+    assert_eq!(chip.core.as_deref(), Some("cortex-a7"));
+    assert!(chip.peripherals.is_empty());
+    assert!(!CHIPS.iter().any(|chip| chip.name == "rv1103"));
+    let board = std::fs::read_to_string(root("docs/coverage/chip-conformance.md")).unwrap();
+    assert!(board.contains("| rv1103 | Declared only |"));
+    assert!(!board.contains("| rv1103 | **L"));
+    let baseline: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(root("docs/coverage/chip-conformance.json")).unwrap(),
+    )
+    .unwrap();
+    assert!(!baseline
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|row| row["name"] == "rv1103"));
+}
+
 #[test]
 fn chip_conformance_ratchet() {
-    // Every chip with a descriptor must be on the board.
+    // Every descriptor must be accounted for in exactly one visible class.
     let configured: Vec<String> = std::fs::read_dir(root("configs/chips"))
         .expect("configs/chips")
         .filter_map(|e| e.ok())
@@ -1373,9 +1432,21 @@ fn chip_conformance_ratchet() {
         .filter(|n| !n.contains("ci-fixture"))
         .collect();
     for chip in &configured {
+        let modeled = CHIPS.iter().any(|c| c.name == chip);
+        let declared = DECLARED_ONLY_CHIPS.iter().any(|(name, _)| name == chip);
         assert!(
-            CHIPS.iter().any(|c| c.name == chip),
-            "chip '{chip}' has a config but is not in the conformance board — add it to CHIPS"
+            modeled ^ declared,
+            "chip '{chip}' must have exactly one modeled conformance row or validated declaration"
+        );
+    }
+    for (name, reason) in DECLARED_ONLY_CHIPS {
+        assert!(configured.iter().any(|chip| chip == name));
+        assert!(!reason.is_empty());
+        let chip = ChipDescriptor::from_file(root(&format!("configs/chips/{name}.yaml")))
+            .unwrap_or_else(|error| panic!("{name}: load declared prototype: {error}"));
+        assert!(
+            is_declared_only_prototype(&chip),
+            "{name}: declaration no longer matches the CPU-only unmodeled prototype; classify its platform explicitly"
         );
     }
 
@@ -1419,6 +1490,18 @@ fn chip_conformance_ratchet() {
             beh,
         ));
         rows.push((c.name.to_string(), lvl, r));
+    }
+    if !DECLARED_ONLY_CHIPS.is_empty() {
+        board.push_str(
+            "\n## Declared platforms without a model\n\n\
+             These descriptors carry declarations only. They receive no estate checkmark, \
+             conformance level or measured ratchet record.\n\n\
+             | Chip | State | Evidence boundary |\n\
+             |------|-------|-------------------|\n",
+        );
+        for (name, reason) in DECLARED_ONLY_CHIPS {
+            board.push_str(&format!("| {name} | Declared only | {reason} |\n"));
+        }
     }
 
     // The board is a COMMITTED artifact, so regenerate it only when explicitly

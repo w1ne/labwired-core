@@ -329,6 +329,24 @@
         "gap": "no fixture loads configs/chips/rp2350.yaml and completes an I2C transaction; the descriptor reuses the RP2040 i2c model on RP2350 bases but per-chip evidence does not transfer - a pico2 I2C fixture is follow-up work"
       }
     },
+    "rv1103": {
+      "in_boards": true,
+      "uart": {
+        "state": "none",
+        "gap": "The RV1103 descriptor declares CPU/memory geometry only, with no UART controller or RV1103 board firmware proof. Generic Cortex-A7 CPU smoke does not exercise UART; Luckfox Pico Mini A/Linux execution remains unsupported.",
+        "lane": "none"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "No RV1103 SPI controller is modeled or mapped, and no RV1103 firmware transfers SPI data.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "No RV1103 I2C controller is modeled or mapped, and no RV1103 firmware completes an I2C transaction.",
+        "lane": "none"
+      }
+    },
     "stm32f103": {
       "in_boards": true,
       "uart": {

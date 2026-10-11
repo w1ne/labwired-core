@@ -153,7 +153,18 @@ def test_waivers_are_explicit():
     assert "atmega328p" not in waived, (
         "the AVR spin fixture exists now; atmega328p must be measured, not waived"
     )
-    assert waived == {}, f"unexpected waivers (add a fixture): {waived}"
+    assert set(waived) == {"rv1103"}, f"unexpected waivers (add a fixture): {waived}"
+
+
+def test_rv1103_cpu_subset_is_waived_without_claiming_platform_performance():
+    """A generic Cortex-A7 smoke ELF is not an RV1103 throughput fixture."""
+    covered, waived = bp.plan_coverage({"rv1103": bp.discover_chips()["rv1103"]})
+    assert covered == {}
+    reason = waived["rv1103"]
+    assert "Cortex-A7 CPU subset" in reason
+    assert "RV1103 platform" in reason
+    assert "boot" in reason and "Linux" in reason
+    assert "representative perf fixture" in reason
 
 
 def test_real_chip_tree_is_fully_classified():

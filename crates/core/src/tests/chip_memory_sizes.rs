@@ -31,14 +31,16 @@
 //!   is the only one that catches a byte count typed straight in
 //!   (`size: 4000000`), where there is no unit to object to.
 //!
-//! Scope: `configs/chips/*.yaml`, the chips this engine ships and models — the
-//! same corpus `cpu_hz_single_source.rs` gates. `configs/chips/onboarding/`
+//! Scope: `configs/chips/*.yaml`, the chip descriptors this engine ships — the
+//! same corpus `cpu_hz_single_source.rs` gates, including declared-only SoC
+//! geometry. This checks memory sizes, not modeled board/peripheral support.
+//! `configs/chips/onboarding/`
 //! is deliberately excluded: it is a generated Renode-derived catalogue that
 //! states every size as a bare byte count, so the `MB` spelling cannot arise
 //! there, and it carries placeholder geometry (one entry declares a 4-byte
 //! flash) that this invariant would fail for unrelated reasons.
 
-use labwired_config::ChipDescriptor;
+use labwired_config::{Arch, ChipDescriptor};
 use std::path::PathBuf;
 
 fn chips_dir() -> PathBuf {
@@ -147,6 +149,9 @@ fn no_chip_declares_a_size_in_decimal_mb() {
 ///   multiples of it. A flash size that is not a whole number of 4 KiB sectors
 ///   is not a part size — and every decimal-MB spelling from 1MB to 32MB
 ///   lands there, because 10^6 = 2^6 · 5^6 carries only six factors of two.
+///   RV1103/Cortex-A7 is the explicit exception to a positive flash size: the
+///   Luckfox Mini A boots from external MicroSD, not internal flash. Its zero
+///   flash placeholder maps no storage; RAM/window checks still apply.
 /// * RAM and the extra CPU-visible windows are whole KiB. Erase granularity
 ///   does not apply to them (the ATmega328P has 2 KiB of SRAM), but no part
 ///   exposes a window that stops part-way through a KiB.
@@ -155,7 +160,6 @@ fn no_chip_declares_a_size_in_decimal_mb() {
 /// spelled as a bare byte count reaches the same wrong number by hand.
 #[test]
 fn declared_memory_sizes_are_real_part_sizes() {
-    const SECTOR: u64 = 4096;
     let mut offenders: Vec<String> = Vec::new();
     let mut checked = 0usize;
 
@@ -165,7 +169,7 @@ fn declared_memory_sizes_are_real_part_sizes() {
         let name = path.file_name().unwrap().to_string_lossy().into_owned();
 
         checked += 1;
-        if chip.flash.size == 0 || chip.flash.size % SECTOR != 0 {
+        if !flash_geometry_is_valid(&chip) {
             offenders.push(format!(
                 "{name}: flash.size = {} bytes = {:.3} KiB — not a whole number of \
                  4 KiB erase sectors",
@@ -201,4 +205,54 @@ fn declared_memory_sizes_are_real_part_sizes() {
          1_000_000 — 48_576 bytes short of 1 MiB); write the binary size \
          instead (\"1024KB\", \"2048KB\", \"4096KB\"). Offenders: {offenders:#?}"
     );
+}
+
+/// Zero is an honest absence of internal flash only for this declared SoC.
+/// The base must also be zero: the placeholder must not imply a storage map.
+fn flash_geometry_is_valid(chip: &ChipDescriptor) -> bool {
+    const SECTOR: u64 = 4096;
+    if chip.flash.size != 0 {
+        return chip.flash.size % SECTOR == 0;
+    }
+    chip.name == "rv1103"
+        && chip.arch == Arch::Arm
+        && chip.core.as_deref() == Some("cortex-a7")
+        && chip.flash.base == 0
+}
+
+#[test]
+fn zero_internal_flash_is_only_allowed_for_the_declared_rv1103_soc() {
+    let chip = ChipDescriptor::from_file(chips_dir().join("rv1103.yaml")).unwrap();
+    assert_eq!(chip.flash.size, 0);
+    assert_eq!(chip.flash.base, 0);
+    assert!(flash_geometry_is_valid(&chip));
+
+    let mut other_model = chip.clone();
+    other_model.name = "another-cortex-a7".into();
+    assert!(!flash_geometry_is_valid(&other_model));
+
+    let mut other_core = chip.clone();
+    other_core.core = Some("cortex-m3".into());
+    assert!(!flash_geometry_is_valid(&other_core));
+
+    let mut undeclared_core = chip.clone();
+    undeclared_core.core = None;
+    assert!(!flash_geometry_is_valid(&undeclared_core));
+
+    let mut other_arch = chip.clone();
+    other_arch.arch = Arch::RiscV;
+    assert!(!flash_geometry_is_valid(&other_arch));
+
+    let mut mapped_storage = chip.clone();
+    mapped_storage.flash.base = 0x2000_0000;
+    assert!(!flash_geometry_is_valid(&mapped_storage));
+
+    let mut mcu = ChipDescriptor::from_file(chips_dir().join("stm32f103.yaml")).unwrap();
+    assert!(flash_geometry_is_valid(&mcu));
+    mcu.flash.size = 0;
+    assert!(!flash_geometry_is_valid(&mcu));
+    mcu.flash.size = 4_000_000;
+    assert!(!flash_geometry_is_valid(&mcu));
+    mcu.flash.size = 4096 * 1024;
+    assert!(flash_geometry_is_valid(&mcu));
 }

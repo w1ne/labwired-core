@@ -351,6 +351,21 @@ def test_ci_fixture_descriptors_are_not_graded(tmp_path):
     assert code == 0, out
 
 
+def test_committed_debt_only_waives_the_declared_rv1103_prototype():
+    """CPU-only smoke coverage must not claim an RV1103 firmware CI gate."""
+    cc.set_root(REPO_ROOT)
+    entries, ceiling = cc.load_ledger()
+    assert ceiling == 1
+    assert set(entries) == {"rv1103"}
+    assert entries["rv1103"]["kind"] == "waived"
+    reason = entries["rv1103"]["reason"]
+    assert "No CI gate executes firmware on the RV1103 platform" in reason
+    assert "generic Cortex-A7" in reason
+    descriptor = cc.load_yaml(cc.chip_dir() / "rv1103.yaml")
+    assert descriptor["core"] == "cortex-a7"
+    assert descriptor["peripherals"] == []
+
+
 def test_the_committed_tree_passes_its_own_gate():
     """The repo's real ledger must match the repo's real workflows."""
     cc.set_root(REPO_ROOT)
