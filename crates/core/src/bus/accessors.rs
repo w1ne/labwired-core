@@ -150,6 +150,10 @@ impl SystemBus {
             "{name}: plain memory is RP2040 IO_BANK0"
         );
         debug_assert!(
+            !self.pad_control_links.iter().any(|l| l.block == idx),
+            "{name}: plain memory is a pad-control block"
+        );
+        debug_assert!(
             self.irq_fabric.esp32s3.intmatrix_idx != Some(idx),
             "{name}: plain memory is the S3 intmatrix"
         );
@@ -582,13 +586,14 @@ impl crate::Bus for SystemBus {
                 self.maybe_latch_dc(idx);
                 // One test instead of four calls. See `pad_brackets_present`.
                 let brackets = self.pad_brackets_present();
-                let (c3_io_mux_capture, rp_io_bank0_capture) = if brackets {
+                let (c3_io_mux_capture, rp_io_bank0_capture, pad_control_capture) = if brackets {
                     (
                         self.begin_esp32c3_io_mux_write(idx),
                         self.begin_rp2040_io_bank0_write(idx),
+                        self.begin_pad_control_write(idx),
                     )
                 } else {
-                    (None, None)
+                    (None, None, false)
                 };
                 let r = {
                     let p = &mut self.peripherals[idx];
@@ -597,6 +602,7 @@ impl crate::Bus for SystemBus {
                 if r.is_ok() && brackets {
                     self.finish_esp32c3_io_mux_write(c3_io_mux_capture);
                     self.finish_rp2040_io_bank0_write(rp_io_bank0_capture);
+                    self.finish_pad_control_write(idx, pad_control_capture);
                 }
 
                 self.maybe_service_edge_driven_gpio_devices(idx);
@@ -943,13 +949,14 @@ impl crate::Bus for SystemBus {
             self.maybe_latch_dc(idx);
             // One test instead of four calls. See `pad_brackets_present`.
             let brackets = self.pad_brackets_present();
-            let (c3_io_mux_capture, rp_io_bank0_capture) = if brackets {
+            let (c3_io_mux_capture, rp_io_bank0_capture, pad_control_capture) = if brackets {
                 (
                     self.begin_esp32c3_io_mux_write(idx),
                     self.begin_rp2040_io_bank0_write(idx),
+                    self.begin_pad_control_write(idx),
                 )
             } else {
-                (None, None)
+                (None, None, false)
             };
             let r = {
                 let p = &mut self.peripherals[idx];
@@ -959,6 +966,7 @@ impl crate::Bus for SystemBus {
             if r.is_ok() && brackets {
                 self.finish_esp32c3_io_mux_write(c3_io_mux_capture);
                 self.finish_rp2040_io_bank0_write(rp_io_bank0_capture);
+                self.finish_pad_control_write(idx, pad_control_capture);
             }
 
             self.maybe_service_edge_driven_gpio_devices(idx);
@@ -1105,13 +1113,14 @@ impl crate::Bus for SystemBus {
             self.maybe_latch_dc(idx);
             // One test instead of four calls. See `pad_brackets_present`.
             let brackets = self.pad_brackets_present();
-            let (c3_io_mux_capture, rp_io_bank0_capture) = if brackets {
+            let (c3_io_mux_capture, rp_io_bank0_capture, pad_control_capture) = if brackets {
                 (
                     self.begin_esp32c3_io_mux_write(idx),
                     self.begin_rp2040_io_bank0_write(idx),
+                    self.begin_pad_control_write(idx),
                 )
             } else {
-                (None, None)
+                (None, None, false)
             };
             let r = {
                 let p = &mut self.peripherals[idx];
@@ -1121,6 +1130,7 @@ impl crate::Bus for SystemBus {
             if r.is_ok() && brackets {
                 self.finish_esp32c3_io_mux_write(c3_io_mux_capture);
                 self.finish_rp2040_io_bank0_write(rp_io_bank0_capture);
+                self.finish_pad_control_write(idx, pad_control_capture);
             }
 
             self.maybe_service_edge_driven_gpio_devices(idx);
@@ -1295,6 +1305,20 @@ impl crate::Bus for SystemBus {
 
     fn has_mmio_window(&self, addr: u64) -> bool {
         self.find_peripheral_index(addr).is_some()
+    }
+
+    /// Hand the CPU-owned pull-up-disable switch to every pin port, each
+    /// change bracketed for push capture (a pulled input that nothing outside
+    /// holds moves, and so does a `gpio_net` member's own drive).
+    fn set_pull_ups_disabled(&mut self, disabled: bool) {
+        for p in &mut self.peripherals {
+            let Some(port) = p.dev.pins_mut() else {
+                continue;
+            };
+            crate::pins::watch_begin(port);
+            port.set_pull_ups_disabled(disabled);
+            crate::pins::watch_end(port);
+        }
     }
 
     fn tick_peripherals(&mut self) -> Vec<u32> {

@@ -181,6 +181,10 @@ impl std::fmt::Debug for Avr {
 /// Where the chip descriptor maps the bus-side mirror of the CPU's IO
 /// registers: data-space address `a` is mirrored at `AVR_IO_MIRROR_BASE + a`.
 pub const AVR_IO_MIRROR_BASE: u64 = 0x0001_0000;
+/// `MCUCR` in data space (I/O 0x35), ATmega328P datasheet §14.4.1.
+pub const ADDR_MCUCR: u16 = 0x0055;
+/// `MCUCR.PUD`: pull-up disable for every port.
+pub const MCUCR_PUD: u8 = 1 << 4;
 /// `PINB` data-space address; `DDRB`/`PORTB` follow it.
 pub const AVR_PINB: u16 = 0x0023;
 /// `PINC` data-space address; `DDRC`/`PORTC` follow it.
@@ -819,6 +823,18 @@ impl Avr {
             | ext_int::ADDR_EICRA
             | ext_int::ADDR_PCMSK0..=ext_int::ADDR_PCMSK2 => {
                 self.ext_write(addr, value, bus);
+                Ok(())
+            }
+            ADDR_MCUCR => {
+                // MCUCR: the CPU owns it (IVSEL/IVCE, BODS/BODSE are stored
+                // only), but PUD (bit 4) switches off every pull-up of every
+                // port, so a change goes to the bus-side ports.
+                let old = self.io[usize::from(ADDR_MCUCR - 0x20)];
+                self.io[usize::from(ADDR_MCUCR - 0x20)] = value;
+                if (old ^ value) & MCUCR_PUD != 0 {
+                    bus.set_pull_ups_disabled(value & MCUCR_PUD != 0);
+                }
+                let _mirror = bus.write_u8(addr as u64, value);
                 Ok(())
             }
             0x0020..=0x00FF => {
@@ -1543,7 +1559,13 @@ impl Cpu for Avr {
         }
     }
 
-    fn reset(&mut self, _bus: &mut dyn Bus) -> SimResult<()> {
+    fn reset(&mut self, bus: &mut dyn Bus) -> SimResult<()> {
+        // MCUCR resets to 0: PUD clear, so the ports' pull-ups come back.
+        let mcucr = &mut self.io[usize::from(ADDR_MCUCR - 0x20)];
+        if *mcucr & MCUCR_PUD != 0 {
+            bus.set_pull_ups_disabled(false);
+        }
+        *mcucr = 0;
         self.r = [0; 32];
         self.pc = 0;
         self.sp = RAMEND;

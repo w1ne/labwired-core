@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- Pulls kept outside the GPIO block reach the pad: a GPIO port names its
+  pad-control block (`pad_control:` in the chip yaml, `pins::PadControl`)
+  and the bus hands it the decoded pull after every write there, bracketed
+  for push capture (`PinPort::pad_control` / `set_config_pull`). Wired on
+  `mkw41z4` (`gpioc` ← `PORTC_PCRn` PE/PS), `ra4m1` (`port1`/`port3` ←
+  `PmnPFS.PCR`, new `ra_pfs` block with `PWPR` write protection) and
+  `imxrt1064` (`gpio2` ← IOMUXC `SW_PAD_CTL_PAD_GPIO_B0/B1` PKE/PUE/PUS).
+  Those pulls now count on `gpio_net`s and in PDIR / PIDR / PSR.
+- ATmega `MCUCR.PUD`: the AVR CPU hands it to the bus-side ports
+  (`Bus::set_pull_ups_disabled`, `PinPort::set_pull_ups_disabled`), which
+  drop every pull-up while it is set, on nets too. `MCUCR` resets with the
+  CPU.
+- EXTI layout `stm32l0` and SYSCFG profile `stm32l0`: the F1 register file
+  with the Cortex-M0+ grouped vectors (EXTI0_1 = IRQ 5, EXTI2_3 = 6,
+  EXTI4_15 = 7), and an L0 SYSCFG whose `EXTICR1..4` select the port of each
+  line.
 - `labwired_core::pins`: one interface between a chip's pads and the world.
   Every GPIO model (STM32 `v2`/`f1`, nRF52/54, Kinetis, EFR32 series 2, SAM,
   RA, i.MX RT, the ATmega port, RP2040 SIO, ESP32 classic, ESP32-C3/C6,
@@ -28,6 +44,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   interrupt block.
 
 ### Changed
+- A pulled input that nothing outside drives now reads the pull's level in
+  the input register on every GPIO model, as on silicon: STM32 `f1` IDR
+  (input with pull, `CNF = 10`), EFR32 series 2 DIN (`INPUTPULL`), SAM IN
+  (`PINCFG.PULLEN`) and ATmega `PINx` (`PORTx` set on an input) used to read
+  the last latched level, 0 from reset, so `INPUT_PULLUP` with nothing
+  attached read LOW. Firmware now reads HIGH there (LOW for a pull-down). The
+  conformance suite no longer allows the old behaviour for any model.
+- `stm32l073`: EXTI uses the `stm32l0` routing (it used the F1 profile, whose
+  6..10/23/40 vectors are not the L0's), and SYSCFG is a register file
+  (`profile: stm32l0`, gated by `RCC_APB2ENR.SYSCFGEN`) instead of a stub, so
+  GPIO edges reach EXTI through `SYSCFG_EXTICRx`. Before, no external edge
+  reached the L0 EXTI at all.
 - A world `gpio_net` watches each member's own output stage
   (`PinPort::driver`) instead of marking the pad "net isolated" in its GPIO
   model: `Peripheral::set_gpio_net_isolated` and every per-model isolation

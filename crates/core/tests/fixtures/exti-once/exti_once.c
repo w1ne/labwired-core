@@ -9,7 +9,8 @@
  * SRAM 0x20000100 (the test reads it):
  *   [0] handler entries   [1] 0x600DF00D once EXTI and the NVIC are armed
  *
- * Built by build.sh with one of -DCHIP_F1 / -DCHIP_F4 / -DCHIP_G0 / -DCHIP_U5.
+ * Built by build.sh with one of -DCHIP_F1 / -DCHIP_F4 / -DCHIP_G0 / -DCHIP_L0 /
+ * -DCHIP_U5.
  */
 #include <stdint.h>
 
@@ -36,6 +37,15 @@ static void clocks(void) {
 #define EXTI_IRQ 5
 #define SPLIT_PENDING 1
 static void clocks(void) { REG(0x40021034u) |= 1u << 0; } /* IOPENR.GPIOAEN */
+#elif defined(CHIP_L0)
+/* RM0367: SYSCFG_EXTICR1 reset = port A; EXTI0_1 is IRQ 5. The register
+ * file is the F1 one (PR at 0x14), the vectors the Cortex-M0+ groups. */
+#define EXTI 0x40010400u
+#define EXTI_IRQ 5
+static void clocks(void) {
+    REG(0x4002102Cu) |= 1u << 0; /* IOPENR.IOPAEN */
+    REG(0x40021034u) |= 1u << 0; /* APB2ENR.SYSCFGEN */
+}
 #elif defined(CHIP_U5)
 /* RM0456: EXTI_EXTICR1 reset = port A; EXTI0 is IRQ 11. */
 #define EXTI 0x46022000u
@@ -43,7 +53,7 @@ static void clocks(void) { REG(0x40021034u) |= 1u << 0; } /* IOPENR.GPIOAEN */
 #define SPLIT_PENDING 1
 static void clocks(void) { REG(0x46020C8Cu) |= 1u << 0; } /* AHB2ENR1.GPIOAEN */
 #else
-#error "build with -DCHIP_F1, -DCHIP_F4, -DCHIP_G0 or -DCHIP_U5"
+#error "build with -DCHIP_F1, -DCHIP_F4, -DCHIP_G0, -DCHIP_L0 or -DCHIP_U5"
 #endif
 
 #ifdef SPLIT_PENDING

@@ -1,4 +1,16 @@
 # LabWired - BME280 Weather Lab smoke test
+#
+# Asserts VALUES, not labels. A label-only check passed for weeks while the
+# firmware printed `ChipID=0xED ERR` (it read back its own I2C address byte).
+#   * ChipID: register 0xD0 reads 0x60 (BME280 datasheet BST-BME280-DS002,
+#     §5.4.1 "Register 0xD0 id", Table 27). The firmware appends "BME280
+#     detected" only on 0x60 and " ERR" otherwise, so the full-line match fails
+#     on any wrong id.
+#   * Calibration: dig_T2 = 26435 (the Bosch reference calibration set; §4.2.2
+#     trimming parameters).
+#   * Raw ADC words at the sensor defaults (25 degC / 1013.25 hPa / 50 %RH), in
+#     the 20-bit (T, P) and 16-bit (H) ranges of §5.4.8-5.4.10: all non-zero,
+#     T_raw in the 5xxxxx band that 25 degC maps to with the coefficients above.
 schema_version: "1.0"
 inputs:
   firmware: "../../target/thumbv7m-none-eabi/release/bme280-weather-lab"
@@ -7,5 +19,7 @@ limits:
   max_steps: 200000
 assertions:
   - uart_contains: "BME280 Weather Lab"
-  - uart_contains: "ChipID=0x"
+  - uart_contains: "ChipID=0x60 BME280 detected\n"
+  - uart_contains: "T_cal: T1=28528 T2=26435 "
+  - uart_regex: "T_raw=5[0-9]{5} P_raw=[2-4][0-9]{5} H_raw=[1-4][0-9]{4}\n"
   - expected_stop_reason: max_steps

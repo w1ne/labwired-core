@@ -33,19 +33,31 @@ peripherals:
     type: "ra_sysc"
     base_address: 0x4001E000
     size: "256B"
-  # PORT n @ 0x40040000 + n*0x20 (R01UH0887 §19 / FSP IOPORT).
+  # PORT n @ 0x40040000 + n*0x20 (R01UH0887 §19 / FSP IOPORT). The input
+  # pull-up is PmnPFS.PCR in the PFS block, so each port names it.
   - id: "port1"
     type: "gpio"
     base_address: 0x40040020
     size: "32B"
     config:
       profile: "ra_port"
+      pad_control: "pfs"
+      pad_control_port: 1
   - id: "port3"
     type: "gpio"
     base_address: 0x40040060
     size: "32B"
     config:
       profile: "ra_port"
+      pad_control: "pfs"
+      pad_control_port: 3
+  # PFS @ 0x40040800: PmnPFS at 0x40*m + 4*n, PWPR at +0x503 (R01UH0887
+  # §19.2.5, §19.5). Pull-up (PCR) and write protection are modelled; the
+  # PODR/PDR aliases of PCNTR1 and the peripheral mux are stored only.
+  - id: "pfs"
+    type: "ra_pfs"
+    base_address: 0x40040800
+    size: "1536B"
   - id: "systick"
     type: "systick"
     base_address: 0xE000E010

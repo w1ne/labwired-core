@@ -1,11 +1,27 @@
 # LabWired - DS3231 RTC Lab smoke test
-schema_version: "1.0"
+#
+# Asserts VALUES, not labels. `TIME=` alone matched any digits at all.
+#   * Time registers 00h-02h are BCD seconds 00-59, minutes 00-59, hours 00-23
+#     in 24-hour mode (DS3231 datasheet 19-5170 Rev 10, Table 1 "Timekeeping
+#     Registers"). Every TIME line must be a valid wall-clock time.
+#   * The device boots at its documented power-on instant, 12:00:00 (the
+#     `unix_time` input default 1784721600 = 2026-07-22 12:00:00 UTC), and
+#     after the host sets unix_time to 1767225600 (2026-01-01 00:00:00 UTC) the
+#     firmware must read back hour 00, minute 00.
+schema_version: "1.2"
 inputs:
   firmware: "../../target/thumbv7m-none-eabi/release/ds3231-rtc-lab"
   system: "./system.yaml"
 limits:
-  max_steps: 500000
+  max_steps: 2000000
 assertions:
   - uart_contains: "DS3231 RTC Lab"
-  - uart_contains: "TIME="
+  - uart_regex: "TIME=([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]\n"
+  - uart_ordered:
+      - "TIME=12:00:0"
+      - "TIME=00:00:"
   - expected_stop_reason: max_steps
+stimuli:
+  - target: { component: "ds3231", channel: "unix_time" }
+    trigger: !after_cycles { cycles: 50000 }
+    value: 1767225600

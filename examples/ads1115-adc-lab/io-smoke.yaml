@@ -1,11 +1,26 @@
 # LabWired - ADS1115 ADC Lab smoke test
-schema_version: "1.0"
+#
+# Asserts VALUES, not labels. `A0_raw=` matched the garbage `A0_raw=-28271`.
+# Firmware config 0xC383: AIN0 single-ended, PGA +/-4.096 V (ADS1115 datasheet
+# SBAS444E, §9.6.3 Config register, Table 8). Full scale is +/-FSR over
+# +/-32768 counts (§9.3.3), so:
+#   * no input driven      -> 0 V    -> A0_raw=0
+#   * host drives A0=2.048 -> 2.048/4.096 * 32768 = 16384 counts (exactly)
+# The firmware prints nothing but the banner and these readings; a read-sequence
+# fault shows as a different number and fails the ordered match.
+schema_version: "1.2"
 inputs:
   firmware: "../../target/thumbv7m-none-eabi/release/ads1115-adc-lab"
   system: "./system.yaml"
 limits:
-  max_steps: 500000
+  max_steps: 2000000
 assertions:
   - uart_contains: "ADS1115 ADC Lab"
-  - uart_contains: "A0_raw="
+  - uart_ordered:
+      - "A0_raw=0\n"
+      - "A0_raw=16384\n"
   - expected_stop_reason: max_steps
+stimuli:
+  - target: { component: "ads1115", channel: "a0" }
+    trigger: !after_cycles { cycles: 50000 }
+    value: 2.048

@@ -1453,6 +1453,80 @@ jobs:
   # otherwise return early with a skip notice, and an early return is a pass.
   # cargo-test-nonvacuous.sh covers the other half — a feature-gated file built
   # without its feature executes zero tests and reports ok.
+  # ── Demo labs built FROM SOURCE against the simulator in this PR ───────────
+  #
+  # labwired-core#1346 made STM32F1 I2C receive require clearing ADDR (as
+  # silicon does). Seven F103 sensor-lab demo firmwares never cleared it and read
+  # garbage. Core CI was green, because no job built those labs and ran their
+  # smoke scripts against the PR's simulator; the break surfaced as a blocked
+  # playground deploy in the superproject a day later. This lane closes that.
+  #
+  # COST / TRADE-OFF. It is a SEPARATE job, so it runs in parallel with pr-gate
+  # and adds nothing to the ~2-4 min gate's critical path. It builds the CLI in
+  # the dev profile (opt-level 1, with event-scheduler) rather than release: the
+  # smoke scripts run 0.2-2M steps each, which is well under a second either
+  # way, and the dev build is the cheaper compile. The seven labs are tiny
+  # no_std crates (~6s cold for all of them).
+  #
+  # It is NOT path-filtered at the workflow level: a filtered workflow emits no
+  # check at all on PRs that miss the filter, which would make this impossible
+  # to ever require. The job always runs and reports; the expensive steps are
+  # skipped INSIDE it when the PR touches nothing a lab can observe (docs-only
+  # and the like), so the context is always present and green in that case.
+  # It is not in branch protection yet: add `lab-smoke-from-source` to the
+  # required contexts once a few runs have confirmed its wall time.
+  lab-smoke-from-source:
+    name: lab-smoke-from-source
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      # Full history so the changed-path check can diff against the base.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Does this change touch anything a demo lab can observe?
+        id: scope
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" != "pull_request" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          # Simulator, device descriptors, chip/system configs, the labs, this
+          # lane's own script and this workflow. Anything else cannot change what
+          # a lab firmware sees.
+          changed="$(git diff --name-only "$BASE_SHA"...HEAD)"
+          if printf '%s\n' "$changed" | grep -Eq '^(crates/|configs/|examples/|Cargo\.(toml|lock)$|rust-toolchain\.toml$|scripts/ci/lab-smoke-from-source\.sh$|\.github/workflows/core-ci\.yml$)'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "No simulator, config or example paths changed; lab smoke not needed."
+          fi
+
+      - name: Install Rust
+        if: steps.scope.outputs.run == 'true'
+        uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          targets: thumbv7m-none-eabi
+
+      - uses: Swatinem/rust-cache@v2
+        if: steps.scope.outputs.run == 'true'
+        with:
+          shared-key: core-lab-smoke
+          workspaces: . -> target
+
+      - name: Build the simulator under test
+        if: steps.scope.outputs.run == 'true'
+        run: cargo build -p labwired-cli --features event-scheduler
+
+      - name: Build demo-lab firmware from source and run every lab smoke script
+        if: steps.scope.outputs.run == 'true'
+        run: scripts/ci/lab-smoke-from-source.sh target/debug/labwired
+
   xtensa-flash-boot:
     name: xtensa-flash-boot
     runs-on: ubuntu-latest

@@ -40,12 +40,16 @@ peripherals:
     base_address: 0x401F8000
     size: "16KB"
   # GPIO2 @ 0x401BC000 — DR/GDIR + DR_TOGGLE@0x8C (IMXRT1060RM §12).
+  # Pulls: IOMUXC SW_PAD_CTL_PAD_GPIO_B0_00..B1_15 (0x32C + 4*n) carry
+  # GPIO2_IO00..31's PKE/PUE/PUS (`pad_control`).
   - id: "gpio2"
     type: "gpio"
     base_address: 0x401BC000
     size: "256B"
     config:
       profile: "imxrt"
+      pad_control: "iomuxc"
+      pad_control_offset: 0x32C
   # LPUART6 @ 0x40198000 — Teensy Serial1 (MIMXRT1062.h LPUART6_BASE).
   # DATA @ +0x0C (Kinetis / nxp_lpuart layout).
   - id: "lpuart6"
