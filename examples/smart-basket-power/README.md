@@ -105,8 +105,8 @@ Boolean inputs are `usb_present`, `shutdown_ack`, `enable`, `fault_short`, and
 `reset`; numbers and strings are not accepted as booleans. Defaults are false,
 except `enable`, which defaults true. Load inputs default to zero:
 `host_load_w` (0–20 W), `radio_load_w` (0–10 W), and `sensor_load_w` (0–5 W).
-Host and radio loads are measured at the assumed 5 V output; sensor load is
-measured at the 3.3 V output. Nonfinite numbers, boolean loads and unknown keys
+Host load is measured at the assumed 5 V output; radio and sensor loads
+are measured at the buck-fed 3.3 V output, matching the draft carrier. Nonfinite numbers, boolean loads and unknown keys
 fail instead of being silently coerced or ignored. Omitted ordinary inputs
 return to their defaults each interval; they are not retained.
 

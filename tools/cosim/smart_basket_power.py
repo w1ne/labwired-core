@@ -110,7 +110,7 @@ class PowerModel:
         radio = inputs.get('radio_load_w', 0.0)
         sensor = inputs.get('sensor_load_w', 0.0)
         requested = host + radio + sensor
-        rail_load = host + radio + sensor / cfg['buck_efficiency']
+        rail_load = host + (radio + sensor) / cfg['buck_efficiency']
         usb_budget = USB_V * cfg['usb_limit_a'] * USB_PATH_EFFICIENCY if usb else 0.0
         cell_ocv = ocv(self.soc)
         battery_needed = max(0.0, rail_load - usb_budget) / cfg['boost_efficiency']

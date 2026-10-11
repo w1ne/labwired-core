@@ -313,3 +313,12 @@ def test_failed_rerun_invalidates_previous_success_receipt(tmp_path):
                             capture_output=True, text=True, timeout=30)
     assert result.returncode == 1
     assert not json.loads(report.read_text())['passed']
+
+
+def test_wifi_load_crosses_the_carrier_buck_conversion():
+    half_efficiency = step(model(), radio_load_w=2,
+                           **{'config.buck_efficiency': 0.5})
+    unity_efficiency = step(model(), radio_load_w=4,
+                            **{'config.buck_efficiency': 1.0})
+    assert math.isclose(half_efficiency['battery_current_a'],
+                        unity_efficiency['battery_current_a'], rel_tol=1e-12)

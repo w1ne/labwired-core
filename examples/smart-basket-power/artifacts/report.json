@@ -156,7 +156,7 @@
       "passed": true,
       "detail": {
         "idle_a": 0.6255360017278665,
-        "burst_a": 1.2427375754792045
+        "burst_a": 1.3129222120916362
       }
     },
     {
@@ -164,7 +164,7 @@
       "passed": true,
       "detail": {
         "idle_v": 3.749864004427909,
-        "burst_v": 3.675663500671954
+        "burst_v": 3.6672369578252733
       }
     },
     {
@@ -495,6 +495,6 @@
       "step_count": 10
     }
   ],
-  "model_sha256": "dba4e8788acf587df58c15b08a36375ee5248bf1435fa98299c5e20395666a2e",
+  "model_sha256": "9f86ffe8b065cbc56d400ae70266743da624827a2f2f702189dbb7de521ae55e",
   "native_cli_sha256": "2863b626c9f4295f7a42dd21e04bda484d76ee8c4ca9c09158730988e0698c87"
 }
