@@ -18,13 +18,14 @@
 //! (a system input), reads the OLED framebuffer, the UART, the GPIO output
 //! latch and ESR the way a probe would.
 //!
-//! Release + `event-scheduler` only: without the scheduler a timed-CAN world
+//! Release only; `required-features` in Cargo.toml supplies
+//! `event-scheduler`. Without the scheduler a timed-CAN world
 //! walks every node each cycle (about 190 s per simulated second here).
 //!
 //! Run: `cargo test --release -p labwired-core --features event-scheduler
 //! --test world_can_dashboard_demo`.
 
-#![cfg(all(feature = "event-scheduler", not(debug_assertions)))]
+#![cfg(not(debug_assertions))]
 
 use labwired_config::EnvironmentManifest;
 use labwired_core::network::timed_can::{CanFrameRecord, CanTxOutcome};
