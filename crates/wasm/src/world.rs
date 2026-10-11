@@ -513,6 +513,26 @@ impl WasmWorld {
             .map_err(|error| JsValue::from_str(&format!("GPIO net report: {error}")))
     }
 
+    /// Every `can_bus`, manifest order, as
+    /// `{ buses: [{ id, bitrate, timed, now_ps, nodes, frames, frames_dropped,
+    /// totals }] }`: per node its derived bit rate, TEC/REC and
+    /// `active | passive | bus_off` state; the most recent frames (at most
+    /// 512) with SOF and end times in picoseconds, payload as hex and
+    /// `ok | error | no_ack | lost_arbitration`; frame totals by result. See
+    /// `labwired_core::network::timed_can::CanBusReport`. `{ buses: [] }`
+    /// without a `can_bus`.
+    pub fn can_bus_report(&self) -> Result<JsValue, JsValue> {
+        #[derive(Serialize)]
+        struct Report {
+            buses: Vec<labwired_core::network::timed_can::CanBusReport>,
+        }
+        Report {
+            buses: self.world.can_bus_reports(),
+        }
+        .serialize(&serde_wasm_bindgen::Serializer::json_compatible())
+        .map_err(|error| JsValue::from_str(&format!("CAN bus report: {error}")))
+    }
+
     pub fn drain_uart_output(&self, node_id: &str) -> Result<Vec<u8>, JsValue> {
         let sink = self
             .uart_sinks
