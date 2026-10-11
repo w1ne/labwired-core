@@ -1521,7 +1521,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: c971dd47233759f3843c2e93088b82daec913bf0fd9b361f5133bf1b03a24e38
+    drift_ack_digest: 38a6730193e9d8544764d4a4cb6e73aadbad9b1fdcda45dd5771f98f8086cdf6
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -2006,7 +2006,9 @@ boards:
     # capture13 loopback behaviour are unchanged and still pinned by the fdcan
     # unit tests. Later the same day: in timed mode under the event scheduler
     # the interrupt level rides the scheduler chain instead of the walk (a
-    # perf change; world CAN reports byte-identical). ACK, NOT A CAPTURE.
+    # perf change; world CAN reports byte-identical).
+    # Then the bus reaches the controller through Peripheral::timed_can
+    # instead of a downcast (no behaviour change). ACK, NOT A CAPTURE.
     # 2026-10-11 (#1360 gpio-net scheduler): CPU batch loops (Cortex-M, RISC-V,
     # shared loop, AVR fill) now end a batch on a net-pad write so the world
     # scheduler can stop a node at its own drive change; logic capture and
@@ -5070,7 +5072,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: 5998f571634f7243897de27b6031ae7e9cabe57d148064b59faf2f09cd398b46
+    drift_ack_digest: a4a884fbe0ba4ecf40e8aa11dcf4550b86c6860dbbd951bd9b96f55410c8d582
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5543,7 +5545,9 @@ boards:
     # degenerate-BTR bus-off ESR are unchanged and still pinned by the bxcan
     # unit tests. Later the same day: in timed mode under the event scheduler
     # the four interrupt levels ride a scheduler chain instead of the walk (a
-    # perf change; world CAN reports byte-identical). ACK, NOT A CAPTURE.
+    # perf change; world CAN reports byte-identical).
+    # Then the bus reaches the controller through Peripheral::timed_can
+    # instead of a downcast (no behaviour change). ACK, NOT A CAPTURE.
     # 2026-10-11 (#1360 gpio-net scheduler): CPU batch loops (Cortex-M, RISC-V,
     # shared loop, AVR fill) now end a batch on a net-pad write so the world
     # scheduler can stop a node at its own drive change; logic capture and

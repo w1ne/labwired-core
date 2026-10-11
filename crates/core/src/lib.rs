@@ -1633,6 +1633,18 @@ pub trait Peripheral: std::fmt::Debug + Send {
         None
     }
 
+    /// This peripheral as a controller that can join a world's timed CAN bus
+    /// ([`crate::network::timed_can`]). Default: none — a bus with such an
+    /// endpoint stays on the untimed fan-out.
+    fn timed_can(&self) -> Option<&dyn crate::network::timed_can::TimedCanController> {
+        None
+    }
+
+    /// Mutable twin of [`Self::timed_can`].
+    fn timed_can_mut(&mut self) -> Option<&mut dyn crate::network::timed_can::TimedCanController> {
+        None
+    }
+
     /// Optional source register descriptor for debugger clients that need the
     /// config-level layout (including reset values and descriptions), rather
     /// than the display-oriented [`Self::describe_registers`] schema.

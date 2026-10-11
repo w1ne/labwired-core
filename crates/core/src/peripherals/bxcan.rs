@@ -317,9 +317,11 @@ impl BxCan {
     /// chance to arm the level chain (`take_scheduled_events`). Without the
     /// scheduler, or without the bus clock (a hand-built bus), the walk holds
     /// the levels instead.
-    fn scheduler_mode(&self) -> bool {
-        cfg!(feature = "event-scheduler") && self.timed && self.clock.is_some()
+    fn timed_scheduled(&self) -> bool {
+        self.timed && self.scheduler_mode()
     }
+
+    crate::cycle_clock::scheduler_mode!();
 
     fn timed_irqs_asserted(&self) -> Vec<u32> {
         self.timed_irq_levels()
@@ -871,7 +873,27 @@ impl Default for BxCan {
     }
 }
 
+impl crate::network::timed_can::TimedCanController for BxCan {
+    fn attach_timed(&mut self) -> anyhow::Result<()> {
+        BxCan::attach_timed(self)
+    }
+    fn timed_poll(&self, apb_clock_hz: u64) -> crate::network::timed_can::CanNodePoll {
+        BxCan::timed_poll(self, apb_clock_hz)
+    }
+    fn timed_apply(&mut self, update: &crate::network::timed_can::CanNodeUpdate) {
+        BxCan::timed_apply(self, update)
+    }
+}
+
 impl Peripheral for BxCan {
+    fn timed_can(&self) -> Option<&dyn crate::network::timed_can::TimedCanController> {
+        Some(self)
+    }
+
+    fn timed_can_mut(&mut self) -> Option<&mut dyn crate::network::timed_can::TimedCanController> {
+        Some(self)
+    }
+
     fn bus_trace_handle(&self) -> Option<crate::bus::bus_trace::BusTrace> {
         Some(self.trace.clone())
     }
@@ -958,17 +980,17 @@ impl Peripheral for BxCan {
         //
         // On a timed bus the event scheduler holds the four interrupt lines
         // at their levels; only without it does the walk stay on for them.
-        self.bus_rx.is_some() || (self.timed && !self.scheduler_mode())
+        self.bus_rx.is_some() || (self.timed && !self.timed_scheduled())
     }
 
     fn uses_scheduler(&self) -> bool {
-        self.scheduler_mode()
+        self.timed_scheduled()
     }
 
     fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
         // Arm the level chain when a write or a bus update raised a line;
         // delay 0 is the walk's next tick.
-        if self.scheduler_mode() && !self.chain_live && !self.timed_irqs_asserted().is_empty() {
+        if self.timed_scheduled() && !self.chain_live && !self.timed_irqs_asserted().is_empty() {
             self.chain_live = true;
             vec![(0, 0)]
         } else {
@@ -982,7 +1004,7 @@ impl Peripheral for BxCan {
         _sched: &mut crate::sched::EventScheduler,
         _bus: &mut dyn crate::Bus,
     ) -> crate::sched::EventResult {
-        if !self.scheduler_mode() {
+        if !self.timed_scheduled() {
             self.chain_live = false;
             return crate::sched::EventResult::default();
         }
@@ -1573,13 +1595,16 @@ mod tests {
         assert!(dev.attach_timed().is_err(), "attached once");
         // A hand-built bus hands out no cycle clock: the walk holds the lines.
         assert!(dev.needs_legacy_walk());
+        assert!(!dev.uses_scheduler());
+        // With the clock, exactly one of the two holds the lines: the event
+        // scheduler where the build has it, the walk otherwise.
         dev.attach_cycle_clock(crate::CycleClock::default());
-        let scheduled = cfg!(feature = "event-scheduler");
-        assert_eq!(dev.uses_scheduler(), scheduled);
-        assert_eq!(dev.needs_legacy_walk(), !scheduled);
+        assert_eq!(dev.needs_legacy_walk(), !dev.uses_scheduler());
     }
 
-    #[cfg(feature = "event-scheduler")]
+    /// Under the event scheduler a raised line arms one level chain that
+    /// re-emits it each cycle until firmware clears the source; in a build
+    /// without the scheduler nothing is armed (the walk holds the lines).
     #[test]
     fn timed_interrupt_levels_ride_the_event_scheduler() {
         let mut dev = timed(BTR_500K_AT_36M);
@@ -1589,6 +1614,15 @@ mod tests {
         let mut u = update(None, 0, 0, CanErrorState::Active);
         u.rx = Some(CanFrame::classic(0x111, vec![1]));
         dev.timed_apply(&u);
+        if !dev.uses_scheduler() {
+            assert!(dev.take_scheduled_events().is_empty());
+            assert_eq!(
+                dev.tick().explicit_irqs,
+                Some(vec![20]),
+                "the walk holds RX0"
+            );
+            return;
+        }
         assert_eq!(
             dev.take_scheduled_events(),
             vec![(0, 0)],

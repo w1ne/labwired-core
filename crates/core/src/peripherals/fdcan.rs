@@ -939,7 +939,28 @@ impl Default for Fdcan {
     }
 }
 
+impl crate::network::timed_can::TimedCanController for Fdcan {
+    fn attach_timed(&mut self) -> anyhow::Result<()> {
+        Fdcan::attach_timed(self)
+    }
+    /// The FDCAN runs from its kernel clock, not the APB clock.
+    fn timed_poll(&self, _apb_clock_hz: u64) -> crate::network::timed_can::CanNodePoll {
+        Fdcan::timed_poll(self)
+    }
+    fn timed_apply(&mut self, update: &crate::network::timed_can::CanNodeUpdate) {
+        Fdcan::timed_apply(self, update)
+    }
+}
+
 impl Peripheral for Fdcan {
+    fn timed_can(&self) -> Option<&dyn crate::network::timed_can::TimedCanController> {
+        Some(self)
+    }
+
+    fn timed_can_mut(&mut self) -> Option<&mut dyn crate::network::timed_can::TimedCanController> {
+        Some(self)
+    }
+
     fn bus_trace_handle(&self) -> Option<crate::bus::bus_trace::BusTrace> {
         Some(self.trace.clone())
     }
@@ -1597,9 +1618,9 @@ mod tests {
         let mut dev = Fdcan::new();
         dev.attach_timed().unwrap();
         assert!(dev.is_timed());
-        let scheduled = cfg!(feature = "event-scheduler");
-        assert_eq!(dev.uses_scheduler(), scheduled);
-        assert_eq!(dev.needs_legacy_walk(), !scheduled);
+        // Exactly one of the event scheduler (where the build has it) and
+        // the walk holds the interrupt level.
+        assert_eq!(dev.needs_legacy_walk(), !dev.uses_scheduler());
         assert!(dev.attach_timed().is_err());
         // A pending frame is the bus's to complete: it arms no chain.
         wr(&mut dev, REG_CCCR, 0x0);
