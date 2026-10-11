@@ -1507,7 +1507,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: 9bc548f7791e9d354fc155249060a7e4f14ca43557e3145c4ce5eec53c82e645
+    drift_ack_digest: 35bab88352a64514a58cc536e1285254574c2d4d886c924f4e43f2e1af6300f1
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -1990,7 +1990,9 @@ boards:
     # mode the only change is that completion moved into one helper
     # (complete_tx) shared by the old path; register map, reset values and the
     # capture13 loopback behaviour are unchanged and still pinned by the fdcan
-    # unit tests. ACK, NOT A CAPTURE.
+    # unit tests. Later the same day: in timed mode under the event scheduler
+    # the interrupt level rides the scheduler chain instead of the walk (a
+    # perf change; world CAN reports byte-identical). ACK, NOT A CAPTURE.
   - id: esp32c3
     # 2026-09-15 (#932): SPI edge sampling is opt-in (`SpiSampling::Byte` default). Byte-level golden pins the pre-feature path. Controllers without a bit engine reject opt-in at config time.
     doc: docs/boards/esp32c3.md
@@ -5026,7 +5028,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: 43bce0a2fa39768d8827ec4edce05453897c48fda9e6e1c79ee3f2b72a06678a
+    drift_ack_digest: e9bd59197b6e9635ce8f4d33ac5d9559c65a878b7bf615ca9509d2f531ea6570
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5497,7 +5499,9 @@ boards:
     # mirrors it in TSR/ESR/MSR.ERRI with the TX/RX0/RX1/SCE lines as levels.
     # Outside that mode reads, writes, reset values and the captured
     # degenerate-BTR bus-off ESR are unchanged and still pinned by the bxcan
-    # unit tests. ACK, NOT A CAPTURE.
+    # unit tests. Later the same day: in timed mode under the event scheduler
+    # the four interrupt levels ride a scheduler chain instead of the walk (a
+    # perf change; world CAN reports byte-identical). ACK, NOT A CAPTURE.
   - id: stm32f407
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
     # 2026-09-16 (#1125): Cortex-M JIT follow-ups (block chaining, floor 4, IT-predicated ALU, VFP S-ALU, VLDR/VSTR, LDR.W PC), plus two model fixes that ride along: the bit-band alias decode no longer swallows peripherals vendors place inside 0x4200_0000 (SAMD51 QSPI/SERCOM), and the STM32 timer's scheduled compare pend lands on the latch tick like the walk. JIT is opt-in (`cortex_m_jit_enabled` default off); interpreter path unchanged, JIT-on vs off lockstep in cortex_m_jit_nrf_differential; both fixes pinned by bus-level gates. No silicon capture pins JIT.
