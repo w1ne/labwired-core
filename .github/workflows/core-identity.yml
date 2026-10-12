@@ -44,6 +44,10 @@ on:
         description: "Also build and execute Cortex-M frozen digest oracles at exact head SHA"
         type: boolean
         default: false
+      qualify_cortex_m_perf:
+        description: "Also measure exact base/head three-board Cortex-M Ir/step (not full CorePerf)"
+        type: boolean
+        default: false
 
 concurrency:
   group: core-identity-${{ inputs.head }}
@@ -53,6 +57,126 @@ permissions:
   contents: read
 
 jobs:
+  cortex-m-perf:
+    needs: [run, compare]
+    if: ${{ always() && inputs.qualify_cortex_m_perf && needs.run.result == 'success' && needs.compare.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      RUSTUP_TOOLCHAIN: 1.95.0
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check Cortex-M performance evidence controls
+        run: python3 scripts/ci/test_cortex_m_perf_evidence.py
+      - name: Fence exact Cortex-M performance sources
+        env:
+          BASE_SHA: ${{ inputs.base }}
+          HEAD_SHA: ${{ inputs.head }}
+          IDENTITY_SUITE: ${{ inputs.suite }}
+          STEP_COUNTS: ${{ inputs.steps }}
+        run: |
+          set -euo pipefail
+          [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$IDENTITY_SUITE" = cortex-m || "$IDENTITY_SUITE" = all ]]
+          [ "$STEP_COUNTS" = '5000000 40000000' ]
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.base }}
+          path: perf-base
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.head }}
+          path: perf-head
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          targets: thumbv6m-none-eabi
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: core-perf
+          save-if: false
+          workspaces: |
+            perf-base -> target
+            perf-head -> target
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install and record one Cortex-M performance toolchain
+        run: |
+          set -euo pipefail
+          mkdir perf-build-evidence
+          sudo apt-get update -qq
+          version=$(apt-cache policy valgrind | sed -n 's/^  Candidate: //p')
+          [[ -n "$version" && "$version" != '(none)' ]]
+          sudo apt-get install -y "valgrind=$version"
+          python -m pip install --quiet pyyaml
+          dpkg-query -W -f '${Version}\n' valgrind > perf-build-evidence/valgrind-package.txt
+          valgrind --version > perf-build-evidence/valgrind-version.txt
+          rustc --version > perf-build-evidence/rustc-version.txt
+          cargo --version > perf-build-evidence/cargo-version.txt
+          python --version > perf-build-evidence/python-version.txt
+          uname -sr > perf-build-evidence/host.txt
+          cp /etc/os-release perf-build-evidence/os-release.txt
+          grep -q '^rustc 1\.95\.0 ' perf-build-evidence/rustc-version.txt
+      - uses: actions/download-artifact@v4
+        with:
+          name: identity-base
+          path: perf-identity/identity-base
+      - uses: actions/download-artifact@v4
+        with:
+          name: identity-head
+          path: perf-identity/identity-head
+      - name: Build exact Cortex-M performance CLIs
+        env:
+          BASE_SHA: ${{ inputs.base }}
+          HEAD_SHA: ${{ inputs.head }}
+        run: |
+          set -euo pipefail
+          [ -z "${RUSTFLAGS:-}" ]
+          [ -z "${CARGO_ENCODED_RUSTFLAGS:-}" ]
+          [ -z "${CARGO_TARGET_DIR:-}" ]
+          unset LABWIRED_ARM_SINGLE_STEP
+          helper="$GITHUB_WORKSPACE/scripts/ci/cortex_m_perf_evidence.py"
+          for side in base head; do
+            expected="$BASE_SHA"
+            if [ "$side" = head ]; then expected="$HEAD_SHA"; fi
+            [ "$(git -C "perf-$side" rev-parse HEAD)" = "$expected" ]
+            (
+              cd "perf-$side"
+              python "$helper" collect --timeout 900 \
+                --output "$GITHUB_WORKSPACE/perf-build-evidence/$side-build" \
+                -- cargo build --locked --release -p labwired-cli --features event-scheduler
+            )
+          done
+      - name: Qualify three-board Cortex-M performance evidence
+        env:
+          BASE_SHA: ${{ inputs.base }}
+          HEAD_SHA: ${{ inputs.head }}
+          IDENTITY_SUITE: ${{ inputs.suite }}
+          STEP_COUNTS: ${{ inputs.steps }}
+        run: |
+          set -euo pipefail
+          unset LABWIRED_ARM_SINGLE_STEP
+          valgrind --version > perf-build-evidence/valgrind-version-after.txt
+          cmp perf-build-evidence/valgrind-version.txt perf-build-evidence/valgrind-version-after.txt
+          python scripts/ci/cortex_m_perf_evidence.py qualify \
+            --base-dir perf-base --head-dir perf-head \
+            --base-sha "$BASE_SHA" --head-sha "$HEAD_SHA" \
+            --identity-dir perf-identity --steps "$STEP_COUNTS" --suite "$IDENTITY_SUITE" \
+            --output perf-evidence
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cortex-m-perf-evidence
+          retention-days: 7
+          path: |
+            perf-evidence/
+            perf-build-evidence/
+
   cortex-m-oracles:
     if: ${{ inputs.qualify_cortex_m_oracles }}
     runs-on: ubuntu-latest
