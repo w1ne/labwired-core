@@ -3823,6 +3823,19 @@ impl<C: Cpu> Machine<C> {
                         "apply_runtime_snapshot: peripheral '{name}' not on bus"
                     ))
                 })?;
+            // Older ROM-boot captures could contain an empty declarative
+            // placeholder followed by the behavioral device under the same
+            // name. After that bus entry is replaced in place, only the real
+            // state belongs to it. Keep singleton-empty and malformed state
+            // validation, and still require even a placeholder's device above.
+            if blob.is_empty()
+                && snap
+                    .peripherals
+                    .iter()
+                    .any(|(other_name, other_blob)| other_name == name && !other_blob.is_empty())
+            {
+                continue;
+            }
             entry.dev.restore_runtime_snapshot(blob)?;
         }
         // Restore flat linear windows (RISC-V SRAM/IRAM; empty for other

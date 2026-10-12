@@ -12,7 +12,94 @@ use labwired_core::peripherals::components::{ssd1680_tricolor_290, GenericDispla
 use labwired_core::peripherals::esp32::spi::Esp32Spi;
 use labwired_core::runtime_snapshot::{CpuKind, MachineRuntimeSnapshot};
 use labwired_core::system::xtensa::configure_xtensa_esp32;
-use labwired_core::{Bus, Cpu, Machine};
+use labwired_core::{Bus, Cpu, Machine, Peripheral};
+
+const SYSTIMER_BASE: u64 = 0x6002_3000;
+
+fn systimer_machine() -> Machine<labwired_core::cpu::RiscV> {
+    let mut bus = SystemBus::new();
+    let cpu = labwired_core::system::riscv::configure_riscv(&mut bus);
+    bus.add_peripheral(
+        "systimer",
+        SYSTIMER_BASE,
+        0x100,
+        None,
+        Box::new(
+            labwired_core::peripherals::esp_systimer::Systimer::new_with_source(160_000_000, 37),
+        ),
+    );
+    Machine::new(cpu, bus)
+}
+
+#[test]
+fn machine_runtime_snapshot_restores_state_beside_an_empty_duplicate_placeholder() {
+    // Historical C3 ROM-boot snapshots captured both a declarative SYSTIMER
+    // placeholder (empty) and its behavioral replacement (real timer state).
+    let mut timer =
+        labwired_core::peripherals::esp_systimer::Systimer::new_with_source(160_000_000, 37);
+    timer.tick_elapsed(250);
+    timer.write_u32(0x04, 1 << 30).unwrap();
+    timer.write_u32(0x64, 5).unwrap();
+    let state = timer.runtime_snapshot();
+
+    for placeholder_first in [true, false] {
+        let mut machine = systimer_machine();
+        let mut snapshot = machine.take_runtime_snapshot().unwrap();
+        snapshot.peripherals = vec![
+            ("systimer".into(), Vec::new()),
+            ("systimer".into(), state.clone()),
+        ];
+        if !placeholder_first {
+            snapshot.peripherals.reverse();
+        }
+        machine.apply_runtime_snapshot(&snapshot).unwrap();
+
+        assert_eq!(
+            machine
+                .bus
+                .peripherals
+                .iter()
+                .filter(|entry| entry.name == "systimer")
+                .count(),
+            1
+        );
+        assert_eq!(machine.bus.read_u32(SYSTIMER_BASE + 0x44).unwrap(), 25);
+        assert_eq!(machine.bus.read_u32(SYSTIMER_BASE + 0x04).unwrap(), 1 << 29);
+        assert_eq!(machine.bus.read_u32(SYSTIMER_BASE + 0x64).unwrap(), 5);
+    }
+}
+
+#[test]
+fn machine_runtime_snapshot_rejects_empty_state_without_a_nonempty_duplicate() {
+    let mut machine = systimer_machine();
+    let mut snapshot = machine.take_runtime_snapshot().unwrap();
+    snapshot.peripherals = vec![("systimer".into(), Vec::new())];
+    let error = machine.apply_runtime_snapshot(&snapshot).unwrap_err();
+    assert!(error.to_string().contains("Systimer snapshot decode"));
+}
+
+#[test]
+fn machine_runtime_snapshot_rejects_truncated_state_beside_an_empty_placeholder() {
+    let mut machine = systimer_machine();
+    let mut snapshot = machine.take_runtime_snapshot().unwrap();
+    snapshot.peripherals = vec![
+        ("systimer".into(), Vec::new()),
+        ("systimer".into(), vec![0; 3]),
+    ];
+    let error = machine.apply_runtime_snapshot(&snapshot).unwrap_err();
+    assert!(error.to_string().contains("Systimer snapshot decode"));
+}
+
+#[test]
+fn machine_runtime_snapshot_rejects_missing_device_even_with_empty_placeholder() {
+    let mut machine = systimer_machine();
+    let mut snapshot = machine.take_runtime_snapshot().unwrap();
+    snapshot.peripherals = vec![("missing".into(), Vec::new()), ("missing".into(), vec![1])];
+    let error = machine.apply_runtime_snapshot(&snapshot).unwrap_err();
+    assert!(error
+        .to_string()
+        .contains("peripheral 'missing' not on bus"));
+}
 
 #[test]
 fn cpu_runtime_snapshot_roundtrips_full_state() {
