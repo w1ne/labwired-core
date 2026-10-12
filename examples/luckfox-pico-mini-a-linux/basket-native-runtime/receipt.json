@@ -1,0 +1,314 @@
+{
+  "schema": "labwired.smart-basket-native-runtime/v1",
+  "scope": "local projection; Linux guest acceptance NOT_RUN; physical hardware UNAVAILABLE",
+  "roles": {
+    "host": {
+      "id": "host",
+      "type": "luckfox-pico-mini-a",
+      "chip": "rv1103"
+    },
+    "accelerometer": {
+      "id": "accelerometer",
+      "type": "basket:adxl345-bare",
+      "alias": "adxl345"
+    },
+    "wifi": {
+      "id": "wifi",
+      "type": "basket:esp32-c3-mini-1u",
+      "alias": "esp32c3_esp_at"
+    }
+  },
+  "routes": {
+    "sda": {
+      "pin": "GPIO1_D2",
+      "header_pad": 14,
+      "controller": "i2c3"
+    },
+    "scl": {
+      "pin": "GPIO1_D3",
+      "header_pad": 15,
+      "controller": "i2c3"
+    },
+    "tx": {
+      "pin": "GPIO1_C4",
+      "header_pad": 10,
+      "controller": "uart4"
+    },
+    "rx": {
+      "pin": "GPIO1_C5",
+      "header_pad": 11,
+      "controller": "uart4"
+    },
+    "cts": {
+      "pin": "GPIO1_C7",
+      "header_pad": 17,
+      "controller": "uart4"
+    },
+    "rts": {
+      "pin": "GPIO1_C6",
+      "header_pad": 16,
+      "controller": "uart4"
+    }
+  },
+  "sources": [
+    {
+      "path": "circuit.json",
+      "sha256": "38778604c2ae6b4f370de0849409abaf6e7884359b180094681ef68edfcd79f4"
+    },
+    {
+      "path": "circuit.ts",
+      "sha256": "c99dad2a72b4456295234885d129d377f821ab3a57c50e5e7d8f627e2cd8f1d1"
+    },
+    {
+      "path": "parts.json",
+      "sha256": "de9f100a04fa4d355333c9ce3f83104e632b12dddea82b8913b48dbd6766d75f"
+    },
+    {
+      "path": "footprints.json",
+      "sha256": "b269f33fc501e3b87e24b5a99c6dab55760ec10ec2902fbc316a366727d4799a"
+    },
+    {
+      "path": "native-runtime.ts",
+      "sha256": "1435a41ae44f76a585693af3d2a756bb01c18e58fb109003049b22ca1d46eebe"
+    },
+    {
+      "path": "export-native-runtime.ts",
+      "sha256": "7356ecb899e220c3035cd82ff968cbc8d37d58643ed1fa98cc549e71c667a839"
+    },
+    {
+      "path": "package.json",
+      "sha256": "3710b0976d5de6f2a3b2c67b0b3f032ba5579c593491889f0424336ea39759cf"
+    },
+    {
+      "path": "tsconfig.native-runtime.json",
+      "sha256": "dc9cd4e03c344d98803fc49b20495ced84795edb1584a37f1adfe2522777433d"
+    },
+    {
+      "path": "footprints/Capacitor_SMD.pretty/C_0805_2012Metric.kicad_mod",
+      "sha256": "1e9871a31457c9d9932d22edb68ed91c275a6270066239b08d192eead990c301"
+    },
+    {
+      "path": "footprints/Capacitor_SMD.pretty/C_1210_3225Metric.kicad_mod",
+      "sha256": "dc1d0a7bce3d19e41856e1e02896abcc84ef4ee752999c7f4162f4519df9d5f8"
+    },
+    {
+      "path": "footprints/Capacitor_Tantalum_SMD.pretty/CP_EIA-3216-18_Kemet-A.kicad_mod",
+      "sha256": "0f9a3a1b0ded9b6607b2a6d415614e54eafaebac5ac92c72e50a210bed0794e9"
+    },
+    {
+      "path": "footprints/Connector_PinHeader_2.54mm.pretty/PinHeader_1x02_P2.54mm_Vertical.kicad_mod",
+      "sha256": "5a656ff149fccf131618c4f56ab3c7f72c2a14c2d763fbfaacd61a8581e3b4c5"
+    },
+    {
+      "path": "footprints/Connector_PinHeader_2.54mm.pretty/PinHeader_1x03_P2.54mm_Vertical.kicad_mod",
+      "sha256": "05fa5e02cf58c822430aaccc2d4e048b704caa95316b6c44d50f635608ee9093"
+    },
+    {
+      "path": "footprints/Espressif.pretty/ESP32-C3-MINI-1U.kicad_mod",
+      "sha256": "9c46d503b1a097df6e61406f4300573d2d3854eaa068dcfef7a09b8cc774f290"
+    },
+    {
+      "path": "footprints/Inductor_SMD.pretty/L_Coilcraft_XAL4020-XXX.kicad_mod",
+      "sha256": "9b8f28b14473fc1dbb28fa0040c2c4c9888bd9272bf01726fc9d12262242edff"
+    },
+    {
+      "path": "footprints/Package_DFN_QFN.pretty/VQFN-16-1EP_3x3mm_P0.5mm_EP1.68x1.68mm_ThermalVias.kicad_mod",
+      "sha256": "d315a507212207d6c6227e88c89df198b83d5037a824c3c396e2b9f82d1427b3"
+    },
+    {
+      "path": "footprints/Package_LGA.pretty/LGA-14_3x5mm_P0.8mm_LayoutBorder1x6y.kicad_mod",
+      "sha256": "c987ba551c81b12c8ef97a9f06d104cf758be8599f77feeb95f1e4b6aecce203"
+    },
+    {
+      "path": "footprints/Package_SON.pretty/Texas_DSG0008A_WSON-8-1EP_2x2mm_P0.5mm_EP0.9x1.6mm_ThermalVias.kicad_mod",
+      "sha256": "efaa3ee249e2fec0acc27f5ba4849a3cc8c7c7593df8a7ca6d63a42333072939"
+    },
+    {
+      "path": "footprints/Package_TO_SOT_SMD.pretty/SOT-23.kicad_mod",
+      "sha256": "5fbcd830e62b2a7096210c50f4507b6110c79a844412200da276e0ee2e27ed14"
+    },
+    {
+      "path": "footprints/Package_TO_SOT_SMD.pretty/SOT-23-5.kicad_mod",
+      "sha256": "2a5c9e030fb192cd2393b5f95872fe796deb29ae7570c83050e19f7b78ceea71"
+    },
+    {
+      "path": "footprints/Package_TO_SOT_SMD.pretty/SOT-563.kicad_mod",
+      "sha256": "2c07d06af184dae343dfbfee0529e68a272306468a17a4a878d857a3637ec9ef"
+    },
+    {
+      "path": "footprints/Package_TO_SOT_SMD.pretty/TSOT-23-8.kicad_mod",
+      "sha256": "83ca7234bd3a01a8d67534e078d388bf5fd0dc037b2f51b2bb3be0a47fcac749"
+    },
+    {
+      "path": "footprints/Resistor_SMD.pretty/R_0603_1608Metric.kicad_mod",
+      "sha256": "32e6f926b4be772aeabae6060210133fbf78854a3fe12ca7011b4916ed49f134"
+    },
+    {
+      "path": "../../packages/board-config/src/mcu-profiles.ts",
+      "sha256": "38aa3c93e97be7da9d7c64bb14250dbd4d3d4b414f8ac120415055a4f560ef48"
+    },
+    {
+      "path": "../../packages/board-config/src/boards.ts",
+      "sha256": "adb80eb948585365ceb269e6d2e291b089f627b813a81e4ed57861db8b02442e"
+    },
+    {
+      "path": "../../packages/board-config/src/pin-mapping.ts",
+      "sha256": "f38222f2c874984e6a5c0822a57c76cbe66d7ae628670d6422547c7d51f6336a"
+    },
+    {
+      "path": "../../packages/board-config/src/catalog.data.json",
+      "sha256": "842ce3dd2ffb4e6814726a53be7b7638c46a14034d54687043a1d8ec666a3345"
+    },
+    {
+      "path": "../../packages/board-config/src/export/netlist.ts",
+      "sha256": "afca7c97fc1254bf37c124f70800333ea63facb0a9cc0feae98695c00b7a4248"
+    }
+  ],
+  "circuit_sha256": "38778604c2ae6b4f370de0849409abaf6e7884359b180094681ef68edfcd79f4",
+  "canonical_projection_sha256": "8c7edf3aa668a6a9b3eb379fb067c59117e17f543fa579995291500d26c5c8da",
+  "manifest_sha256": "4d64b484b515a0cb11e8941d3a849d8e0abb70141d36ce313008cccf925732a8",
+  "parameters_sha256": "c2b13132c5e7cb402f2461cdd357ad3fa9cf4875887512b409bf96463635e136",
+  "parameters": {
+    "capacity_mah": 2000,
+    "initial_soc": 0.8,
+    "usb_limit_a": 0.5,
+    "charge_limit_a": 0.445,
+    "boost_efficiency": 0.9,
+    "buck_efficiency": 0.9,
+    "low_battery_v": 3.3,
+    "cutoff_v": 3,
+    "shutdown_timeout_s": 5
+  },
+  "loads": {
+    "host_load_w": 2,
+    "radio_idle_load_w": 0.1,
+    "radio_burst_load_w": 2,
+    "sensor_load_w": 0.001
+  },
+  "core_root": "../../..",
+  "canonical_root": "../../../../labwired-luckfox-onboarding/examples/smart-basket",
+  "core_sources": [
+    {
+      "path": "examples/smart-basket-power/system.yaml",
+      "sha256": "9fa1786907e2825e3116ed82d74ff479e25b5bf5a4b1bf491bb6d47a21d80f08"
+    },
+    {
+      "path": "examples/smart-basket-power/models/power.py",
+      "sha256": "8209a68c80c9dc6011928e1ee5787da0453aae998d412633993101699cd8f66e"
+    },
+    {
+      "path": "tools/cosim/smart_basket_power.py",
+      "sha256": "9f86ffe8b065cbc56d400ae70266743da624827a2f2f702189dbb7de521ae55e"
+    },
+    {
+      "path": "configs/chips/rv1103.yaml",
+      "sha256": "e90e2b75d8571b435ff36b81b2508b076b3043b4f5bbcbdc3707b9bc68deb12e"
+    },
+    {
+      "path": "configs/devices/adxl345.yaml",
+      "sha256": "925c8ca1a96d0714dc12d279282d2e3067472bfd8e7f92e3b2a27a74f190d7fc"
+    },
+    {
+      "path": "crates/core/src/peripherals/components/esp32c3_esp_at.rs",
+      "sha256": "e53d2a5c92268d94b2f0e68207c28c1580498cce92cf59c7df3b39cc97fc8eab"
+    },
+    {
+      "path": "crates/core/src/cosim/external_process.rs",
+      "sha256": "0199578e6b5bd4d75a1967e2e481b61eadb5a959524bef25545ded7f83ec7a7a"
+    }
+  ],
+  "load_schedule": {
+    "initial": "radio_idle",
+    "choices": {
+      "idle": 0.1,
+      "burst": 2
+    },
+    "automatic_rf_inference": false
+  },
+  "supply_contract": {
+    "raw5v": "basket.power.rail_5v",
+    "execution_proxy": "distinct synthetic domain configured by native loader",
+    "raw3v3": "basket.power.rail_3v3",
+    "component_domain": "external3v3",
+    "functional_min_v": 2.7
+  },
+  "initial_signals": {
+    "basket.config.capacity_mah": {
+      "kind": "F64",
+      "value": 2000
+    },
+    "basket.config.initial_soc": {
+      "kind": "F64",
+      "value": 0.8
+    },
+    "basket.config.usb_limit_a": {
+      "kind": "F64",
+      "value": 0.5
+    },
+    "basket.config.charge_limit_a": {
+      "kind": "F64",
+      "value": 0.445
+    },
+    "basket.config.boost_efficiency": {
+      "kind": "F64",
+      "value": 0.9
+    },
+    "basket.config.buck_efficiency": {
+      "kind": "F64",
+      "value": 0.9
+    },
+    "basket.config.low_battery_v": {
+      "kind": "F64",
+      "value": 3.3
+    },
+    "basket.config.cutoff_v": {
+      "kind": "F64",
+      "value": 3
+    },
+    "basket.config.shutdown_timeout_s": {
+      "kind": "F64",
+      "value": 5
+    },
+    "basket.host_load_w": {
+      "kind": "F64",
+      "value": 2
+    },
+    "basket.radio_load_w": {
+      "kind": "F64",
+      "value": 0.1
+    },
+    "basket.sensor_load_w": {
+      "kind": "F64",
+      "value": 0.001
+    },
+    "basket.usb_present": {
+      "kind": "Bool",
+      "value": false
+    },
+    "basket.shutdown_ack": {
+      "kind": "Bool",
+      "value": false
+    },
+    "basket.enable": {
+      "kind": "Bool",
+      "value": true
+    },
+    "basket.fault_short": {
+      "kind": "Bool",
+      "value": false
+    },
+    "basket.reset": {
+      "kind": "Bool",
+      "value": false
+    }
+  },
+  "assumptions": [
+    "LOCAL opt-in native Linux loader required; ordinary browser compiler remains unavailable.",
+    "Only canonical accelerometer and wifi use existing runtime kits; remaining physical silicon/passives use the existing reduced power plant, not 50 silicon models.",
+    "ESP32-C3 ESP-AT is a behavioral byte-stream peer; no ESP firmware or RF simulation. EN/strap/reset timing and accelerometer interrupt pins are not modeled by this projection.",
+    "Raw basket.power.rail_5v represents carrier VBUS; later loader maps it to a distinct disclosed synthetic execution-supply proxy, never silicon CPU VDD.",
+    "Raw basket.power.rail_3v3 gates external3v3 at functional 2.7 V; pinmux/clock/electrical waveforms are not simulated.",
+    "Load schedule is explicit from circuit attrs; radio idle initially, burst only by explicit intervention; no load inferred from mock connection state.",
+    "One persistent battery plant, 100 ms steps; fault recovery needs explicit healthy latch-reset intervention, no plant restart or time rewind."
+  ]
+}

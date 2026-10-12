@@ -9,7 +9,7 @@ mod registry;
 pub mod routing;
 pub mod shm;
 
-pub use external_process::ExternalProcessCosimAdapter;
+pub use external_process::{ExternalProcessCosimAdapter, ExternalProcessCosimOptions};
 pub use registry::{
     build_cosim_adapter, build_cosim_adapter_with_base, validate_analog_models, CosimModelStep,
     CosimRoutedModelStep, CosimRunner, CosimRunnerModel,

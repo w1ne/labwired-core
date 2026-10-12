@@ -43,3 +43,13 @@ The separate [matching driver preparation](DRIVER_MODULES.md) builds optional
 RK3x/stock i2c-dev modules and a deterministic modules-only cpio payload. Its host
 receipt records guest insertion as `NOT_RUN`; the strict base boot fixture stays
 unchanged.
+
+The canonical smart-basket bridge is retained separately in
+[`basket-native-runtime/`](basket-native-runtime/). Its generated manifest and
+receipt preserve the app circuit's `host`, `accelerometer` and `wifi` identities,
+normal kit attachment routes and reduced power model source hashes. Regenerate
+with the app's explicit `export:native-runtime` command using this core root and
+that output directory; it runs no EDA tools. The persistent plant uses the
+[bounded Unix IPC adapter](../../docs/cosim-external-process.md). Host-only
+manifest/attachment/plant checks pass separately from the still-pending strict
+same-circuit Linux guest and physical acceptance gates.

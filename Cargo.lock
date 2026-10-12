@@ -2319,6 +2319,7 @@ dependencies = [
  "labwired-hw-trace",
  "labwired-ir",
  "labwired-loader",
+ "libc",
  "libm",
  "memmap2 0.9.10",
  "nrf-softdevice-hle",
