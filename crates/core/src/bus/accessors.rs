@@ -346,6 +346,46 @@ impl crate::Bus for SystemBus {
         }
     }
 
+    fn arm_code_identity(&self) -> Option<u64> {
+        self.irq_fabric.armv7.as_ref().map(|f| f.code_identity())
+    }
+    fn arm_irq_fiq_levels(&self) -> Option<(bool, bool)> {
+        self.irq_fabric.armv7.as_ref().map(|f| {
+            // The existing RX queue capability may be filled by host input
+            // between instructions. Reconcile its live level before sampling
+            // GIC pins; UART entries have no legacy NVIC IRQ number.
+            if let Some(level) = f
+                .uart2_index
+                .and_then(|i| self.peripherals.get(i))
+                .and_then(|p| p.dev.irq_line_level())
+            {
+                f.gic.lock().unwrap().set_level(59, level);
+            }
+            f.gic.lock().unwrap().levels()
+        })
+    }
+    fn arm_cp15_read(&self, key: u32, wide: bool) -> SimResult<u64> {
+        self.irq_fabric
+            .armv7
+            .as_ref()
+            .ok_or_else(|| SimulationError::NotImplemented("ARMv7 fabric".into()))?
+            .timer
+            .read(key, wide)
+    }
+    fn arm_cp15_write(&mut self, key: u32, wide: bool, value: u64) -> SimResult<()> {
+        let f = self
+            .irq_fabric
+            .armv7
+            .as_mut()
+            .ok_or_else(|| SimulationError::NotImplemented("ARMv7 fabric".into()))?;
+        f.synchronize(self.current_cycle, self.cpu_hz);
+        f.timer.write(key, wide, value)?;
+        f.sync_levels();
+        Ok(())
+    }
+    fn next_cpu_interrupt_deadline_cycle(&self) -> Option<u64> {
+        self.irq_fabric.armv7.as_ref()?.timer.next_deadline()
+    }
     fn read_u8(&self, addr: u64) -> SimResult<u8> {
         // RAM is always first (hot path, never overlaps a peripheral window).
         if let Some(val) = self.ram.read_u8(addr) {

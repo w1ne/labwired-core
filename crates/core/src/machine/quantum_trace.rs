@@ -40,6 +40,7 @@ pub mod clause {
     pub const FUEL_LIMIT: &str = "fuel_limit";
     pub const CYCLE_LIMIT: &str = "cycle_limit";
     pub const BATCH_POLICY: &str = "batch_policy";
+    pub const CPU_INTERRUPT_DEADLINE: &str = "cpu_interrupt_deadline";
     pub const MOTOR_DEADLINE: &str = "motor_deadline";
     pub const RESET_FIDELITY: &str = "reset_fidelity";
     pub const SECONDARY_LOCKSTEP: &str = "secondary_lockstep";

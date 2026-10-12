@@ -52,6 +52,8 @@
 /// the flag reads its predicates already made as loose bools.
 #[derive(Debug, Clone, Default)]
 pub struct InterruptFabric {
+    /// Optional single-CPU ARMv7 GIC and architectural timer.
+    pub armv7: Option<crate::peripherals::armv7::Armv7Fabric>,
     /// ESP32-C3 (RISC-V `INTERRUPT_CORE0` matrix).
     pub esp32c3: Esp32c3Fabric,
     /// ESP32-S3 (dual-core Xtensa interrupt matrix).

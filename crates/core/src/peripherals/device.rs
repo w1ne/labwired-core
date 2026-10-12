@@ -357,6 +357,16 @@ pub trait SpiDevice: Send {
 /// "is not a UART" and two C3s could not be wired together at all. A new UART
 /// model now joins by implementing this trait, not by editing the seam.
 pub trait UartStreamHost {
+    /// Optional console capture capability. False keeps existing family-specific
+    /// attachment behavior; models may accept a bounded functional capture.
+    fn attach_console_sink(
+        &mut self,
+        _sink: Option<std::sync::Arc<std::sync::Mutex<Vec<u8>>>>,
+        _echo: bool,
+    ) -> bool {
+        false
+    }
+
     /// Bind a peer to this UART's RX/TX paths.
     fn attach_stream_device(&mut self, dev: Box<dyn UartStreamDevice>);
 

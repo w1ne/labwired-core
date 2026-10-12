@@ -239,6 +239,9 @@ impl SystemBus {
     pub fn set_current_cycle(&mut self, cycle: u64) {
         self.current_cycle = cycle;
         self.cycle_clock.publish(cycle);
+        if let Some(fabric) = self.irq_fabric.armv7.as_mut() {
+            fabric.synchronize(cycle, self.cpu_hz);
+        }
     }
 
     /// Append a peripheral to the bus at runtime. Useful for tests and
@@ -455,6 +458,12 @@ impl SystemBus {
             if p.dev
                 .as_uart_stream_host()
                 .is_some_and(|u| u.hosts_protocol_peer())
+            {
+                continue;
+            }
+            if p.dev
+                .as_uart_stream_host()
+                .is_some_and(|u| u.attach_console_sink(Some(sink.clone()), echo_stdout))
             {
                 continue;
             }
@@ -886,6 +895,12 @@ impl SystemBus {
         echo_stdout: bool,
     ) -> bool {
         for p in &mut self.peripherals {
+            if p.dev
+                .as_uart_stream_host()
+                .is_some_and(|u| u.attach_console_sink(None, false))
+            {
+                continue;
+            }
             let Some(any) = p.dev.as_any_mut() else {
                 continue;
             };
@@ -915,6 +930,11 @@ impl SystemBus {
                 .and_then(|[programmatic, _]| self.find_peripheral_index_by_name(programmatic))
         });
         if let Some(p) = index.map(|i| &mut self.peripherals[i]) {
+            if p.dev.as_uart_stream_host().is_some_and(|u| {
+                !u.hosts_protocol_peer() && u.attach_console_sink(Some(sink.clone()), echo_stdout)
+            }) {
+                return true;
+            }
             let Some(any) = p.dev.as_any_mut() else {
                 return false;
             };
@@ -957,6 +977,10 @@ impl SystemBus {
     pub fn attach_uart_rx_source(&self) -> Vec<Arc<Mutex<VecDeque<u8>>>> {
         let mut sources = Vec::new();
         for p in &self.peripherals {
+            if let Some(rx) = p.dev.uart_rx_source() {
+                sources.push(rx);
+                continue;
+            }
             let Some(any) = p.dev.as_any() else {
                 continue;
             };
