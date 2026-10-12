@@ -18,11 +18,21 @@ Create a bounded RK3x v1 controller implementing the registers and interrupt han
 
 ## Task 3: UART4 and ESP-AT peer
 
+Completed and independently reviewed on 2026-10-12 in commit `5e2d292c1`: default104 and native/event112 focused tests pass, plus16 existing generic UART attachment tests. The three reproduced attachment panic paths now return errors before changing peer or console state. Shared power domains, transaction epochs and the disclosed functional receive timeout are verified. Linux basket guest and plant acceptance remain NOT_RUN.
+
 Reuse the verified DW UART model at ff4e0000/SPI29 (INTID61), with UART stream-host capability attachment. Implement a new bounded ESP-AT component: AT, AT+GMR and agreed explicit mock connection/status commands, CRLF framing, bounded input buffers and deterministic RX. No SIM800L substitution and no claim of executing ESP firmware or modeling RF. Tests require bytes to pass from DW TX to component input and component RX back through UART FIFO/IRQ. Power-disabled peers consume no commands and emit no responses. Advertise unknown command behavior explicitly.
 
 ## Task 4: Shared basket guest and power acceptance
 
 Extend the direct-boot DT with real I2C3 compatible `rockchip,rv1106-i2c`, `rockchip,rk3399-i2c`, IRQ and disclosed fixed clocks; add UART4/serial4. Include a small ARM userspace helper using actual i2c-dev I2C_RDWR and termios UART syscalls. The acceptance guest loads the strict modules, reads ADXL345 DEVID0xe5, and verifies stimulus x/y/z values through Linux transfers, then exchanges AT/GMR over ttyS4. Host assertions confirm controller and component transaction traces from the shared bus, not only matching console strings. Stimulus and battery rails use existing circuit attachment/power contracts. A power-cut scenario must suppress component transactions and document whether it halts the Linux machine or requires reloading direct boot. Do not invent ROM reboot behavior.
+
+Execute this integration in three sequential slices, with a fresh implementer, SPEC review and QUALITY review for each:
+
+- **4A — strict guest preparation:** Create the separate exact basket DT/initramfs profile and reproducible freestanding ARM helper using matching modules and pinned syscall ABI. Preserve the base ten-node fixture and its guards. Prove actual two-directory artifact equality; guest execution stays pending.
+- **4B — canonical circuit and plant bridge:** Export the existing canonical basket through normal attachment metadata with actual `host`, `accelerometer` and `wifi` identities. Reuse its power parameters and one persistent existing plant. Bound external-process requests, responses, deadlines and owned cleanup before relying on plant IPC for a bounded acceptance gate.
+- **4C — live Linux acceptance:** Validate the distinct prepared profile, attach canonical parts and plant, and run actual Linux I2C/UART phases with independent bounded traces. Verify external-rail disconnect, actual plant fault and zero host retirement while held. Recovery uses a fresh strict machine with explicit monotonic plant-time accounting. Record current source/binary/artifact/circuit identities and full failure output.
+
+The native fixture uses the disclosed functional24MHz CPU/timer configuration. The plant's raw5V is separate from a synthetic execution-supply proxy; raw3.3V drives the component domain. Supply startup must consume its legitimate release/reset before initializing the validated Linux entry, with no silent guest repair. Linux recovery is a fresh direct-boot fixture, without claiming RV1103 ROM reboot or real-time performance.
 
 ## Task 5: Circuit/tooling release
 
