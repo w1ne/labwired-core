@@ -5,12 +5,19 @@ on:
     paths:
       - "Cargo.*"
       - "crates/core/**"
+      - "crates/arm-system/**"
+      - "crates/arm-core/**"
+      - "third_party/tlib/**"
+      - "third_party/tlib-PROVENANCE.md"
       - "crates/cli/**"
       - "crates/config/**"
       - "crates/loader/**"
       - "configs/chips/rv1103.yaml"
       - "configs/systems/luckfox-pico-mini-a.yaml"
       - "examples/cortex-a7-core/**"
+      - "examples/luckfox-pico-mini-a-linux/**"
+      - "scripts/prepare-rv1103-linux.py"
+      - "scripts/tests/test_prepare_rv1103_linux.py"
       - "tests/fixtures/cortex-a7-core-smoke.elf"
       - "tools/cosim/**"
       - "examples/smart-basket-power/**"
@@ -20,17 +27,30 @@ on:
     paths:
       - "Cargo.*"
       - "crates/core/**"
+      - "crates/arm-system/**"
+      - "crates/arm-core/**"
+      - "third_party/tlib/**"
+      - "third_party/tlib-PROVENANCE.md"
       - "crates/cli/**"
       - "crates/config/**"
       - "crates/loader/**"
       - "configs/chips/rv1103.yaml"
       - "configs/systems/luckfox-pico-mini-a.yaml"
       - "examples/cortex-a7-core/**"
+      - "examples/luckfox-pico-mini-a-linux/**"
+      - "scripts/prepare-rv1103-linux.py"
+      - "scripts/tests/test_prepare_rv1103_linux.py"
       - "tests/fixtures/cortex-a7-core-smoke.elf"
       - "tools/cosim/**"
       - "examples/smart-basket-power/**"
       - ".github/workflows/core-qemu-arm.yml"
   workflow_dispatch:
+    inputs:
+      linux_acceptance:
+        description: "Run the bounded real RV1103 zImage/PID1 acceptance gate"
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -76,4 +96,99 @@ jobs:
         with:
           shared-key: default-cortex-a-refusal
       - name: Check default CLI refuses application cores
-        run: cargo test --locked -p labwired-cli --test cortex_a_cli
+        run: cargo test --locked -p labwired-cli --test cortex_a_cli --test rv1103_linux_cli
+      - name: Check default and browser dependency independence
+        run: |
+          cargo tree --locked -p labwired-cli > "$RUNNER_TEMP/default-cli-tree.txt"
+          cargo tree --locked -p labwired-wasm --target wasm32-unknown-unknown > "$RUNNER_TEMP/browser-tree.txt"
+          if grep -E 'labwired-arm-(core|system)' "$RUNNER_TEMP/default-cli-tree.txt" "$RUNNER_TEMP/browser-tree.txt"; then
+            echo 'Optional native ARM backend leaked into default/browser dependencies' >&2
+            exit 1
+          fi
+      - name: Check standalone system backend stays default off
+        run: scripts/ci/cargo-test-nonvacuous.sh --locked -p labwired-arm-system --lib
+      - name: Install compiled-DTB fixture tools
+        run: sudo apt-get update && sudo apt-get install -y device-tree-compiler
+      - name: Check default loader refusal and device contracts
+        run: cargo test --locked -p labwired-core --test rv1103_linux_loader --test rv1103_devices --test cpu_runtime_snapshot_honesty
+
+  native-system:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CARGO_BUILD_JOBS: "2"
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_DEV_PANIC: unwind
+      CARGO_PROFILE_DEV_DEBUG: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: native-arm-system
+      - name: Install native and compiled-DTB build tools
+        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build clang device-tree-compiler
+      - name: Check native architectural backend and compiled binary identity
+        run: scripts/ci/cargo-test-nonvacuous.sh --locked -p labwired-arm-system --features native --lib --test architecture
+      - name: Check real SystemBus backend, MMU, devices, retirement and snapshot refusal
+        run: >
+          scripts/ci/cargo-test-nonvacuous.sh --locked -p labwired-core --features qemu-arm-system,event-scheduler
+          --test qemu_arm_system --test rv1103_devices --test rv1103_linux_loader
+          --test cpu_runtime_snapshot_honesty --test event_scheduler
+      - name: Check explicit native CLI surface
+        run: cargo test --locked -p labwired-cli --features qemu-arm-system,event-scheduler --test rv1103_linux_cli
+
+  linux-acceptance:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.linux_acceptance }}
+    runs-on: ubuntu-latest
+    # Build plus the strict 1800-second guest wall limit; no automatic PR boot.
+    timeout-minutes: 75
+    env:
+      CARGO_BUILD_JOBS: "2"
+      CARGO_INCREMENTAL: "0"
+      LABWIRED_RV1103_CLI: ${{ github.workspace }}/target/native-system/labwired
+    steps:
+      - uses: actions/checkout@v4
+      - name: Initialize fresh Linux artifact and receipt paths
+        run: |
+          {
+            printf 'LABWIRED_RV1103_ARTIFACTS=%s/rv1103-linux\n' "$RUNNER_TEMP"
+            printf 'LABWIRED_RV1103_BOOT_RECEIPT=%s/rv1103-linux-boot.json\n' "$RUNNER_TEMP"
+            printf 'LABWIRED_RV1103_FAILURE_RECEIPT=%s/rv1103-linux-bounded-failure.json\n' "$RUNNER_TEMP"
+          } >> "$GITHUB_ENV"
+      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: native-arm-system
+      - name: Install native and artifact preparation tools
+        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build clang device-tree-compiler python3
+      - name: Check strict preparation (Python standard library only)
+        run: python3 -m unittest discover -s scripts/tests -p test_prepare_rv1103_linux.py
+      - name: Prepare fresh pinned official artifacts
+        run: python3 scripts/prepare-rv1103-linux.py --cache "$RUNNER_TEMP/rv1103-apk-cache" --output "$LABWIRED_RV1103_ARTIFACTS"
+      - name: Build the shipped optimized panic-unwind native CLI
+        run: cargo build --locked -p labwired-cli --profile native-system --features qemu-arm-system,event-scheduler
+      - name: Check optimized architectural backend and native containment
+        run: >
+          scripts/ci/cargo-test-nonvacuous.sh --locked -p labwired-arm-system --profile native-system
+          --features native --lib --test architecture
+      - name: Check 32 real zImage instructions refuse guest acceptance
+        run: >
+          scripts/ci/cargo-test-nonvacuous.sh --locked -p labwired-cli --profile native-system --features qemu-arm-system,event-scheduler
+          --test rv1103_linux_cli -- --ignored --nocapture
+      - name: Run production zImage acceptance exactly once (24 MHz functional calibration)
+        run: >
+          scripts/ci/cargo-test-nonvacuous.sh --locked -p labwired-core --profile native-system --features qemu-arm-system,event-scheduler
+          --test rv1103_linux_boot -- --ignored --nocapture
+      - name: Preserve preparation and complete success/failure boot receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rv1103-linux-acceptance-${{ github.run_id }}
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            ${{ runner.temp }}/rv1103-linux/artifact-manifest.json
+            ${{ runner.temp }}/rv1103-linux-boot.json
+            ${{ runner.temp }}/rv1103-linux-boot.gate.json
+            ${{ runner.temp }}/rv1103-linux-bounded-failure.json

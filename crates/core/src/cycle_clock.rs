@@ -48,6 +48,14 @@ pub struct CycleClock {
 }
 
 impl CycleClock {
+    /// Whether this clock can drive event-scheduled time in the compiled core.
+    /// Frontends must query the core rather than their own Cargo feature flags,
+    /// which can differ after workspace feature unification.
+    #[inline]
+    pub fn scheduler_enabled(&self) -> bool {
+        cfg!(feature = "event-scheduler")
+    }
+
     /// The most recently published CPU cycle (the batch-start cycle during a
     /// CPU batch — see the module docs for the freshness bound).
     #[inline]
@@ -108,7 +116,9 @@ macro_rules! scheduler_mode {
     () => {
         #[inline]
         fn scheduler_mode(&self) -> bool {
-            cfg!(feature = "event-scheduler") && self.clock.is_some()
+            self.clock
+                .as_ref()
+                .is_some_and($crate::cycle_clock::CycleClock::scheduler_enabled)
         }
     };
 }

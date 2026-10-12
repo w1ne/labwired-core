@@ -264,6 +264,49 @@ impl SystemBus {
 }
 
 impl crate::Bus for SystemBus {
+    fn read_u64(&self, addr: u64) -> SimResult<u64> {
+        let offset =
+            addr.checked_sub(self.ram.base_addr)
+                .and_then(|v| usize::try_from(v).ok())
+                .filter(|v| *v < self.ram.data.len())
+                .ok_or_else(|| {
+                    SimulationError::NotImplemented(format!(
+                "eight-byte physical access at {addr:#x} requires RAM; MMIO64 is unsupported"))
+                })?;
+        let bytes = offset
+            .checked_add(8)
+            .and_then(|end| self.ram.data.get(offset..end))
+            .ok_or(SimulationError::MemoryViolation(addr))?;
+        self.note_memory_read();
+        Ok(u64::from_le_bytes(bytes.try_into().unwrap()))
+    }
+
+    fn write_u64(&mut self, addr: u64, value: u64) -> SimResult<()> {
+        let offset =
+            addr.checked_sub(self.ram.base_addr)
+                .and_then(|v| usize::try_from(v).ok())
+                .filter(|v| *v < self.ram.data.len())
+                .ok_or_else(|| {
+                    SimulationError::NotImplemented(format!(
+                "eight-byte physical access at {addr:#x} requires RAM; MMIO64 is unsupported"))
+                })?;
+        // Validate the complete transaction before mutating any byte. Never
+        // route an eight-byte device transaction through two 32-bit registers.
+        let bytes = offset
+            .checked_add(8)
+            .and_then(|end| self.ram.data.get_mut(offset..end))
+            .ok_or(SimulationError::MemoryViolation(addr))?;
+        let old: [u8; 8] = bytes.try_into().unwrap();
+        bytes.copy_from_slice(&value.to_le_bytes());
+        self.note_memory_write();
+        for (i, (old, new)) in old.into_iter().zip(value.to_le_bytes()).enumerate() {
+            for observer in &self.observers {
+                observer.on_memory_write(addr + i as u64, old, new);
+            }
+        }
+        Ok(())
+    }
+
     fn logic_tap(&self) -> Option<crate::logic_capture::LogicTap> {
         Some(self.logic_tap.clone())
     }
@@ -303,6 +346,46 @@ impl crate::Bus for SystemBus {
         }
     }
 
+    fn arm_code_identity(&self) -> Option<u64> {
+        self.irq_fabric.armv7.as_ref().map(|f| f.code_identity())
+    }
+    fn arm_irq_fiq_levels(&self) -> Option<(bool, bool)> {
+        self.irq_fabric.armv7.as_ref().map(|f| {
+            // The existing RX queue capability may be filled by host input
+            // between instructions. Reconcile its live level before sampling
+            // GIC pins; UART entries have no legacy NVIC IRQ number.
+            if let Some(level) = f
+                .uart2_index
+                .and_then(|i| self.peripherals.get(i))
+                .and_then(|p| p.dev.irq_line_level())
+            {
+                f.gic.lock().unwrap().set_level(59, level);
+            }
+            f.gic.lock().unwrap().levels()
+        })
+    }
+    fn arm_cp15_read(&self, key: u32, wide: bool) -> SimResult<u64> {
+        self.irq_fabric
+            .armv7
+            .as_ref()
+            .ok_or_else(|| SimulationError::NotImplemented("ARMv7 fabric".into()))?
+            .timer
+            .read(key, wide)
+    }
+    fn arm_cp15_write(&mut self, key: u32, wide: bool, value: u64) -> SimResult<()> {
+        let f = self
+            .irq_fabric
+            .armv7
+            .as_mut()
+            .ok_or_else(|| SimulationError::NotImplemented("ARMv7 fabric".into()))?;
+        f.synchronize(self.current_cycle, self.cpu_hz);
+        f.timer.write(key, wide, value)?;
+        f.sync_levels();
+        Ok(())
+    }
+    fn next_cpu_interrupt_deadline_cycle(&self) -> Option<u64> {
+        self.irq_fabric.armv7.as_ref()?.timer.next_deadline()
+    }
     fn read_u8(&self, addr: u64) -> SimResult<u8> {
         // RAM is always first (hot path, never overlaps a peripheral window).
         if let Some(val) = self.ram.read_u8(addr) {

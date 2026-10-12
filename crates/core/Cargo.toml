@@ -63,6 +63,8 @@ pio-parser.workspace = true
 # JS/wasm builds keep their lean dependency tree.
 wasmtime = { version = "45", optional = true, default-features = false, features = ["cranelift", "runtime", "std", "wat"] }
 
+labwired-arm-system = { path = "../arm-system", optional = true }
+
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # QEMU-derived native CPU library; GPL-2.0, never part of default/browser builds.
 unicorn-engine = { version = "=2.1.5", optional = true, default-features = false, features = ["arch_arm"] }
@@ -71,6 +73,7 @@ unicorn-engine = { version = "=2.1.5", optional = true, default-features = false
 default = []
 # Experimental embedded Cortex-A7 CPU. See docs/qemu-arm-core.md for scope.
 qemu-arm = ["dep:unicorn-engine"]
+qemu-arm-system = ["dep:labwired-arm-system", "labwired-arm-system/native"]
 # Source-built executable micro:bit board qualification; requires ARM GCC.
 microbit-board-io-test = ["event-scheduler"]
 # Silent-path census (`crates/core/src/census.rs`) — MEASUREMENT ONLY.
@@ -474,3 +477,13 @@ required-features = ["microbit-board-io-test"]
 [[test]]
 name = "microbit_v2_adc_scan_guest"
 required-features = ["microbit-board-io-test"]
+
+[[test]]
+name = "qemu_arm_system"
+required-features = ["qemu-arm-system"]
+
+# Explicitly opt in with --ignored and provide the shipped native CLI/artifacts.
+# Required features prevent a disabled backend from reporting a green 0-test gate.
+[[test]]
+name = "rv1103_linux_boot"
+required-features = ["qemu-arm-system", "event-scheduler"]

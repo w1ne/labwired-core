@@ -1,0 +1,3 @@
+[submodule "softfloat-3"]
+	path = softfloat-3
+	url = https://github.com/antmicro/berkeley-softfloat-3.git

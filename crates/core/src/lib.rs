@@ -184,7 +184,9 @@ impl PeripheralTickResult {
 /// Every CPU core MUST emit, for each retired instruction, in this order:
 ///
 ///   1. `on_step_start(pc, opcode)` — before execution, `pc` is the address
-///      being executed and `opcode` its raw little-endian encoding.
+///      being executed and `opcode` its raw little-endian encoding. Native
+///      Cortex-A delivers this notification after execution, in the same event
+///      order, because zero-retirement exception entry must emit no event.
 ///   2. `TraceEvent::InstructionRetired { pc, opcode }` via [`emit_trace_event`].
 ///   3. `on_step_end(cycles, registers)` — after execution.
 ///
@@ -430,6 +432,17 @@ pub trait Cpu: Send {
         observers: &[Arc<dyn SimulationObserver>],
         config: &SimulationConfig,
     ) -> SimResult<()>;
+    /// Retire one instruction, or report zero while architecturally waiting.
+    /// Existing MCU cores retain their one-instruction step contract.
+    fn step_retired(
+        &mut self,
+        bus: &mut dyn Bus,
+        observers: &[Arc<dyn SimulationObserver>],
+        config: &SimulationConfig,
+    ) -> SimResult<u32> {
+        self.step(bus, observers, config)?;
+        Ok(1)
+    }
     fn step_batch(
         &mut self,
         bus: &mut dyn Bus,
@@ -688,6 +701,14 @@ impl Cpu for Box<dyn Cpu> {
         config: &SimulationConfig,
     ) -> SimResult<()> {
         (**self).step(bus, observers, config)
+    }
+    fn step_retired(
+        &mut self,
+        bus: &mut dyn Bus,
+        observers: &[Arc<dyn SimulationObserver>],
+        config: &SimulationConfig,
+    ) -> SimResult<u32> {
+        (**self).step_retired(bus, observers, config)
     }
     fn step_batch(
         &mut self,
@@ -2144,6 +2165,40 @@ pub enum FetchPermission {
 }
 
 pub trait Bus {
+    /// ARM application-core interrupt levels, including deassertion.
+    fn arm_irq_fiq_levels(&self) -> Option<(bool, bool)> {
+        None
+    }
+    /// Stable allocation-unique physical code identity. Native ARM execution
+    /// refuses buses that cannot supply one.
+    fn arm_code_identity(&self) -> Option<u64> {
+        None
+    }
+    fn arm_cp15_read(&self, register_key: u32, wide: bool) -> SimResult<u64> {
+        Err(SimulationError::NotImplemented(format!(
+            "ARM CP15 read {register_key:#x} (wide={wide})"
+        )))
+    }
+    fn arm_cp15_write(&mut self, register_key: u32, wide: bool, _value: u64) -> SimResult<()> {
+        Err(SimulationError::NotImplemented(format!(
+            "ARM CP15 write {register_key:#x} (wide={wide})"
+        )))
+    }
+    fn next_cpu_interrupt_deadline_cycle(&self) -> Option<u64> {
+        None
+    }
+    /// An eight-byte transaction must remain one transaction. In particular,
+    /// splitting an MMIO access can duplicate or consume register side effects.
+    fn read_u64(&self, addr: u64) -> SimResult<u64> {
+        Err(SimulationError::NotImplemented(format!(
+            "eight-byte bus read at {addr:#x}"
+        )))
+    }
+    fn write_u64(&mut self, addr: u64, _value: u64) -> SimResult<()> {
+        Err(SimulationError::NotImplemented(format!(
+            "eight-byte bus write at {addr:#x}"
+        )))
+    }
     fn read_u8(&self, addr: u64) -> SimResult<u8>;
     fn write_u8(&mut self, addr: u64, value: u8) -> SimResult<()>;
     fn tick_peripherals(&mut self) -> Vec<u32>; // Returns list of pending exception numbers
@@ -3672,6 +3727,9 @@ impl<C: Cpu> Machine<C> {
                 return 0;
             }
             budget = budget.min(remaining);
+            if let Some(deadline) = self.bus.next_cpu_interrupt_deadline_cycle() {
+                budget = budget.min(deadline.saturating_sub(self.total_cycles));
+            }
             if let Some(deadline) = self.bus.next_motor_service_deadline_cycle() {
                 budget = budget.min(deadline.saturating_sub(self.total_cycles).max(1));
             }

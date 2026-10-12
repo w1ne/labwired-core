@@ -667,6 +667,11 @@ jobs:
       - name: Clippy (default-members)
         run: cargo clippy --all-targets -- -D warnings
 
+      - name: Native ARM backend remains inert without its opt-in feature
+        run: |
+          cargo clippy --locked -p labwired-arm-system --all-targets -- -D warnings
+          scripts/ci/cargo-test-nonvacuous.sh --locked -p labwired-arm-system --lib
+
       - name: Unit tests (default-members lib)
         run: cargo test --lib
 
@@ -754,6 +759,7 @@ jobs:
         run: >
           scripts/ci/cargo-test-nonvacuous.sh
           -p labwired-core --test esp32_classic_walk_differential
+          --test ordered_debug_metadata
 
       # THE SHARED-MODEL NET THAT NEVER GATED A MERGE.
       #
@@ -1627,7 +1633,8 @@ jobs:
       - name: Add the C cross-compiler (OBD2 ECU firmware)
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-arm-none-eabi
+          # Workspace integration suites also compile/tamper actual RV1103 DTBs.
+          sudo apt-get install -y gcc-arm-none-eabi device-tree-compiler
 
       # READ-ONLY. This lane restores main's `core-ci` target dir; it must not
       # write one back, for a reason that is easy to miss: GitHub scopes caches
@@ -2163,7 +2170,8 @@ jobs:
       - name: Add the C cross-compiler (OBD2 ECU firmware)
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-arm-none-eabi
+          # Both default workspace and feature integration suites need dtc/fdtput.
+          sudo apt-get install -y gcc-arm-none-eabi device-tree-compiler
 
       # ubuntu-latest ships ~14 GB free, and this job builds the workspace test
       # binaries twice — once on default features, once on `jit,event-scheduler`

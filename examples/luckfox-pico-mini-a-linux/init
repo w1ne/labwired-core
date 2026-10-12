@@ -1,0 +1,23 @@
+#!/bin/busybox sh
+export PATH=/bin
+fail() { echo "LW_LINUX_BOOT_FAILURE: $1"; exit 1; }
+mount -t proc proc /proc || fail proc
+mount -t sysfs sysfs /sys || fail sysfs
+mount -t devtmpfs devtmpfs /dev || fail devtmpfs
+echo "LW_LINUX_MOUNTS proc=ok sysfs=ok devtmpfs=ok"
+[ "$$" = 1 ] || fail pid1
+release=$(uname -r) || fail uname_release
+[ "$release" = 6.18.56-0-lts ] || fail kernel_identity
+machine=$(uname -m) || fail uname_machine
+[ "$machine" = armv7l ] || fail architecture
+echo "LW_LINUX_PID1 pid=$$ kernel=$release machine=$machine"
+cat /proc/cpuinfo || fail cpuinfo
+head -n 4 /proc/meminfo || fail meminfo
+read before ignored < /proc/uptime || fail uptime_before
+echo "LW_LINUX_UPTIME_BEFORE=$before"
+sleep 1 || fail sleep_syscall
+read after ignored < /proc/uptime || fail uptime_after
+echo "LW_LINUX_UPTIME_AFTER=$after"
+awk -v a="$after" -v b="$before" 'BEGIN { exit !(a > b && a - b >= 0.8) }' || fail timer_advance
+echo LW_LINUX_BOOT_ACCEPTED
+while :; do sleep 3600 || fail parked_sleep; done

@@ -1,6 +1,6 @@
 //! Owns safe batch-width and idle-fast-forward planning.
 
-use crate::{AdvanceRequest, BatchPolicy, BreakpointPolicy, Cpu, Machine};
+use crate::{AdvanceRequest, BatchPolicy, BreakpointPolicy, Bus, Cpu, Machine};
 
 /// Narrows the planned batch width, remembering which clause did it.
 ///
@@ -150,6 +150,16 @@ impl<C: Cpu> Machine<C> {
                 count_untick,
                 binder,
                 clause::MOTOR_DEADLINE,
+                steps_within(deadline.saturating_sub(self.total_cycles))
+            );
+        }
+
+        if let Some(deadline) = self.bus.next_cpu_interrupt_deadline_cycle() {
+            clamp!(
+                count,
+                count_untick,
+                binder,
+                clause::CPU_INTERRUPT_DEADLINE,
                 steps_within(deadline.saturating_sub(self.total_cycles))
             );
         }

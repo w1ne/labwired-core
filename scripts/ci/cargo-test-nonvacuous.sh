@@ -109,7 +109,33 @@ artifacts="$(mktemp)"
 trap 'rm -f "$artifacts"' EXIT
 
 echo "==> cargo test ${cargo_args[*]} --no-run (enumerating test targets)"
-cargo test "${cargo_args[@]}" --no-run --message-format=json >"$artifacts"
+if cargo test "${cargo_args[@]}" --no-run --message-format=json >"$artifacts"; then
+    :
+else
+    compile_status=$?
+    # Cargo puts rendered compiler errors in JSON stdout for this invocation.
+    # Emit the original text before EXIT cleanup; reader failure must not mask
+    # Cargo's original status or cause a second compile/test invocation.
+    python3 - "$artifacts" <<'PY' >&2 || true
+import json, sys
+
+with open(sys.argv[1], encoding="utf-8", errors="replace") as fh:
+    for line in fh:
+        try:
+            msg = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(msg, dict) or msg.get("reason") != "compiler-message":
+            continue
+        message = msg.get("message")
+        if not isinstance(message, dict) or message.get("level") not in ("error", "error: internal compiler error"):
+            continue
+        rendered = message.get("rendered")
+        if isinstance(rendered, str):
+            sys.stderr.write(rendered)
+PY
+    exit "$compile_status"
+fi
 
 # Pull the test executables out of cargo's JSON. `"test": true` in the profile
 # is what marks a compiler-artifact as a libtest binary; it excludes build

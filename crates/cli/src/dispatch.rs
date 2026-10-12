@@ -93,6 +93,9 @@ pub(crate) enum Commands {
     /// time.
     Run(RunArgs),
 
+    /// Reduced RV1103 Linux direct boot with strict artifacts and a guest acceptance receipt.
+    Rv1103Linux(commands::rv1103_linux::Rv1103LinuxArgs),
+
     /// Capture a binary runtime snapshot of a firmware mid-flight, for
     /// fast-replay in the playground. Produces an `.lwrs` blob that
     /// `WasmSimulator::apply_runtime_snapshot` can restore.
@@ -219,6 +222,7 @@ pub fn run_with_plugins(plugins: &[&dyn labwired_core::plugin::ChipPlugin]) -> E
         Some(Commands::Machine(args)) => run_machine(args, plugins),
         Some(Commands::Asset(args)) => run_asset(args, plugins),
         Some(Commands::Run(args)) => commands::run::run_firmware(args, plugins, cli.json),
+        Some(Commands::Rv1103Linux(args)) => commands::rv1103_linux::run(args),
         Some(Commands::Snapshot(args)) => commands::snapshot::run_snapshot(args, plugins),
         Some(Commands::Coverage(args)) => commands::coverage::run_coverage(args),
         Some(Commands::Tier1Matrix(args)) => commands::tier1::run_tier1_matrix(args),

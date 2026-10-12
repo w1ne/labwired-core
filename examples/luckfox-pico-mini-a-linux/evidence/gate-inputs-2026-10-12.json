@@ -1,0 +1,9 @@
+{
+  "artifacts_directory": "/tmp/labwired-rv1103-strict-artifacts-root-physical-20261012",
+  "boot_receipt": "/tmp/labwired-rv1103-production-optimized-zimage-receipt-20261012.json",
+  "cli_path": "/tmp/labwired-rv1103-native-system-cli-20261012",
+  "cli_sha256": "d2d11eef64c9879ab97adf164e7cae0b45fa08c5556ea19f55f1da7b490c0055",
+  "gate": "production_zimage_reaches_pid1_and_advancing_guest_uptime",
+  "guest_boot": "NOT_RUN",
+  "schema": 1
+}

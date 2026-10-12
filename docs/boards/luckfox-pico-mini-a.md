@@ -2,7 +2,7 @@
 
 Source-grounded onboarding dossier for the RV1103 board and a battery-powered smart basket prototype.
 
-> **Experimental, below L0.** The RV1103 chip and Mini A system descriptors declare CPU/memory geometry only; no board smoke firmware or peripheral implementation exists here. The native Cortex-A7 core prototype is a separate instruction fixture. It does not boot Linux or establish board support. See the [support rubric](../target_support_rubric.md), [chip scoreboard](../coverage/chip-conformance.md), and [validation record](../../examples/luckfox-pico-mini-a/VALIDATION.md).
+> **Experimental, below L0.** The generic RV1103 chip and Mini A system descriptors declare CPU/memory geometry only. The separate optional `rv1103-linux` native CLI passed a reduced direct zImage boot to real PID1 on 2026-10-12, using privileged Cortex-A7/MMU, SystemBus, GIC400, architectural timer and DW UART2. This leaves board reset, SD/vendor BSP and physical acceptance open. The older `qemu-arm` ELF adapter remains an instruction fixture. See the [Linux receipt and scope](../../examples/luckfox-pico-mini-a-linux/VALIDATION.md), [support rubric](../target_support_rubric.md), and [validation record](../../examples/luckfox-pico-mini-a/VALIDATION.md).
 
 ## Status at a glance
 
@@ -12,8 +12,8 @@ Source-grounded onboarding dossier for the RV1103 board and a battery-powered sm
 | Vendor silicon | RV1103; Cortex-A7, up to 1.2 GHz; 64 MB DDR2 |
 | Storage | MicroSD boot; Mini A has no populated SPI NAND |
 | Mechanical reference | 21.00 × 28.14 mm; 2.54 mm side-pin pitch |
-| Local emulator | Optional native `qemu-arm` Cortex-A7 core experiment |
-| Mini A target support | Below L0; Linux, peripherals and physical checks pending |
+| Local emulator | Optional `qemu-arm-system` reduced Linux CLI; separate `qemu-arm` ELF fixture |
+| Mini A target support | Below L0; reduced virtual Linux boot passed, board/BSP and physical checks pending |
 
 Hardware facts are from the [vendor variant overview](https://wiki.luckfox.com/Luckfox-Pico/Luckfox-Pico-RV1103/), [flash guide](https://wiki.luckfox.com/Luckfox-Pico-Plus-Mini/Flash-image/), and the drawings below.
 
@@ -77,21 +77,25 @@ Shared vendor mechanical reference, not a manufactured carrier-board footprint. 
 | Official pin / dimension / population references | ✅ | Documents and images, not electrical testing |
 | Cortex-A7 arithmetic, ARM/Thumb and shared Bus access | ⚠️ | Native core fixture only; [prototype scope](../qemu-arm-core.md) |
 | RV1103 reset, boot ROM and DDR initialization | ❌ | No board model |
-| MMU, exceptions and interrupt delivery | ❌ | Not implemented by the core prototype |
-| RV1103 clock, reset, GPIO, UART, timer and DMA | ❌ | No silicon-specific register models |
+| MMU, exceptions and interrupt delivery | ⚠️ | Native system fixtures and real Linux boot through GIC400; separate from old ELF adapter |
+| UART2 and architectural timer | ⚠️ | Real guest console and advancing uptime through reduced SystemBus platform; functional timing |
+| RV1103 CRU, reset, GPIO, pinmux and DMA | ❌ | Not modeled |
 | RV1103 I2C3 connected to ADXL345 | ❌ | ADXL345 register kit exists; RV1103 controller and board transaction path absent |
 | ESP-AT Wi-Fi bridge | ❌ | Selected UART architecture; no simulated or physical integration proof |
-| MicroSD controller / Linux boot / NPU / camera | ❌ | No board execution evidence |
+| Reduced direct Linux zImage boot | ✅ | Pinned Alpine kernel/PID1/proc/mount/uname/sleep receipt; native host only |
+| MicroSD controller / vendor BSP / NPU / camera | ❌ | No execution evidence |
 | Battery, charging, RF and enclosure | ❌ | Engineering proposal; no bench results |
 | Browser / Playground / MCP execution | ❌ | Native core experiment has no browser support |
 
 ## What it catches vs bench
 
-The separate core fixture can exercise a bounded instruction stream and shared memory-bus plumbing. It cannot validate an RV1103 Linux driver, boot sequence, serial FIFO timing, real Wi-Fi association, motion sensing, charging behavior or battery runtime. Those require the missing device models plus independent hardware measurements.
+The reduced Linux platform catches privileged CPU, MMU, GIC/timer/console and real guest syscall integration failures. Its receipt proves cold direct zImage decompression and PID1 sleep with advancing uptime. It does not measure physical serial timing, Wi-Fi association, motion sensing, charging or battery runtime. The separate older ELF fixture exercises bounded instructions and shared memory-bus plumbing; it does not provide this Linux route.
 
 ## How to run (CLI · Playground · MCP)
 
 The [chip descriptor](../../configs/chips/rv1103.yaml), [system manifest](../../configs/systems/luckfox-pico-mini-a.yaml) and [example manifest](../../examples/luckfox-pico-mini-a/system.yaml) declare CPU and memory geometry. They do **not** provide a Mini A boot/run command. For the instruction-only experiment, use the native-feature commands and receipts in [QEMU ARM core prototype](../qemu-arm-core.md) with [`examples/cortex-a7-core`](../../examples/cortex-a7-core/). Its synthetic memory map is not the RV1103 memory map. Playground and MCP board execution remain unavailable.
+
+For the separate reduced Linux platform, follow the [native zImage preparation/build/gate commands](../../examples/luckfox-pico-mini-a-linux/README.md). Its backend is optional, Linux x86_64 GNU only, and requires panic unwind; default CLI and browser builds remain independent of it.
 
 ## Related systems & examples
 

@@ -161,8 +161,12 @@ impl LinearMemory {
 
     pub fn load_from_segment(&mut self, segment: &Segment) -> bool {
         // Simple overlap check
-        let end_addr = segment.start_addr + segment.data.len() as u64;
-        let mem_end = self.base_addr + self.data.len() as u64;
+        let Some(end_addr) = segment.start_addr.checked_add(segment.data.len() as u64) else {
+            return false;
+        };
+        let Some(mem_end) = self.base_addr.checked_add(self.data.len() as u64) else {
+            return false;
+        };
 
         if segment.start_addr >= self.base_addr && end_addr <= mem_end {
             let offset = (segment.start_addr - self.base_addr) as usize;
