@@ -38,3 +38,8 @@ DDR is 64 MiB at physical zero. zImage loads at `0x02000000`, DTB at `0x03000000
 The root DT compatibility is only `rockchip,rv1103`. Linux's genuine Generic DT machine fallback handles this reduced platform without claiming another SoC. CRU/reset, pinctrl, DMA, FIQ debugger, SD and unsupported devices are omitted. EVTSTREAM is explicitly disabled because the timer model refuses EVNTEN. Components can attach later to the same SystemBus; they have no acceptance claim here.
 
 See [required references](REQUIRED_DOCS.md), [external components](EXTERNAL_COMPONENTS.md) and [validation boundaries](VALIDATION.md).
+
+The separate [matching driver preparation](DRIVER_MODULES.md) builds optional
+RK3x/stock i2c-dev modules and a deterministic modules-only cpio payload. Its host
+receipt records guest insertion as `NOT_RUN`; the strict base boot fixture stays
+unchanged.
