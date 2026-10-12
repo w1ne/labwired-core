@@ -338,17 +338,27 @@ class DiagnosticsControls(unittest.TestCase):
         self.assertEqual(proof['total_ir'],10);self.assertEqual(proof['function_count'],2)
         self.assertEqual(proof['input_sha256'],hashlib.sha256(path.read_bytes()).hexdigest())
 
-    def test_defaults_workflow_tool_and_strict_guards_are_unchanged(self):
-        original=subprocess.check_output(['git','show','393b5310:scripts/ci/cortex_m_perf_evidence.py'],cwd=ROOT,text=True)
-        current=(ROOT/'scripts/ci/cortex_m_perf_evidence.py').read_text()
+    def assert_preservation(self, root):
+        # This committed contract works in checkout@v4's default shallow source.
+        manifest = json.loads((root / 'scripts/ci/fixtures/cortex_m_perf_preservation_393b5310.json').read_text())
+        self.assertEqual(manifest['source_commit'], '393b53104f64b5e4abc31bc5a7148d56d9717093')
+        paths = ('scripts/ci/cortex_m_perf_evidence.py', '.github/workflows/core-identity.yml',
+                 'scripts/perf/board_perf.py', 'scripts/perf/baselines.json')
+        names = ('collect', 'validate_identity', 'validate_records', 'validate_status', 'source_contract')
+        self.assertEqual(set(manifest['source_sha256']), set(paths))
+        self.assertEqual(set(manifest['function_ast_sha256']), set(names))
+        for digest in (*manifest['source_sha256'].values(), *manifest['function_ast_sha256'].values()):
+            self.assertRegex(digest, r'^[0-9a-f]{64}$')
+        current=(root/'scripts/ci/cortex_m_perf_evidence.py').read_text()
         def functions(source):
             return {n.name:ast.dump(n,include_attributes=False) for n in ast.parse(source).body if isinstance(n,ast.FunctionDef)}
-        old,new=functions(original),functions(current)
-        for name in ('collect','validate_identity','validate_records','validate_status','source_contract'):
-            self.assertEqual(old[name],new[name],name)
+        current_functions=functions(current)
+        for name in names:
+            digest = hashlib.sha256(current_functions[name].encode()).hexdigest()
+            self.assertEqual(manifest['function_ast_sha256'][name], digest, name)
         for path in ('scripts/perf/board_perf.py','scripts/perf/baselines.json'):
-            self.assertEqual((ROOT/path).read_bytes(),subprocess.check_output(['git','show','393b5310:'+path],cwd=ROOT))
-        workflow=(ROOT/'.github/workflows/core-identity.yml').read_text()
+            self.assertEqual(manifest['source_sha256'][path], hashlib.sha256((root/path).read_bytes()).hexdigest(), path)
+        workflow=(root/'.github/workflows/core-identity.yml').read_text()
         # Permit only the reviewed opt-in input/env/argument routing. Reversing
         # those additions must reproduce every byte of the previous workflow.
         additions=(
@@ -367,9 +377,57 @@ class DiagnosticsControls(unittest.TestCase):
         for addition in additions:
             self.assertEqual(workflow.count(addition),1)
             workflow=workflow.replace(addition,'',1)
-        self.assertEqual(workflow,subprocess.check_output(['git','show','393b5310:.github/workflows/core-identity.yml'],cwd=ROOT,text=True))
+        self.assertEqual(manifest['source_sha256']['.github/workflows/core-identity.yml'], hashlib.sha256(workflow.encode()).hexdigest(), 'workflow')
         self.assertIn('action="store_true"',current)
         self.assertIn('budget = Budget(5 * 1024 * 1024)',current)
+
+    def test_defaults_workflow_tool_and_strict_guards_are_unchanged(self):
+        self.assert_preservation(ROOT)
+
+    def preservation_copy(self):
+        import shutil
+        cold = self.path / 'source-only'
+        paths = ('scripts/ci/cortex_m_perf_evidence.py', '.github/workflows/core-identity.yml',
+                 'scripts/perf/board_perf.py', 'scripts/perf/baselines.json',
+                 'scripts/ci/fixtures/cortex_m_perf_preservation_393b5310.json')
+        for path in paths:
+            target = cold / path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(ROOT / path, target)
+        return cold
+
+    def test_preservation_accepts_source_checkout_without_historical_commit(self):
+        cold = self.preservation_copy()
+        subprocess.run(['git', 'init', '-q'], cwd=cold, check=True, capture_output=True)
+        absent = subprocess.run(['git', 'cat-file', '-e', '393b53104f64b5e4abc31bc5a7148d56d9717093^{commit}'],
+                                cwd=cold, capture_output=True)
+        self.assertNotEqual(absent.returncode, 0)
+        # The actual preservation check must perform no history/process reads.
+        with mock.patch.object(subprocess, 'check_output', side_effect=AssertionError('history read')):
+            self.assert_preservation(cold)
+
+    def test_preservation_rejects_each_guard_tool_baseline_and_workflow_mutation(self):
+        cold = self.preservation_copy()
+        source = cold / 'scripts/ci/cortex_m_perf_evidence.py'
+        original = source.read_text()
+        for name in ('collect', 'validate_identity', 'validate_records', 'validate_status', 'source_contract'):
+            with self.subTest(function=name):
+                tree = ast.parse(original)
+                function = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == name)
+                function.body.insert(0, ast.parse('raise ValueError("unreviewed guard change")').body[0])
+                source.write_text(ast.unparse(tree))
+                with self.assertRaisesRegex(AssertionError, name):
+                    self.assert_preservation(cold)
+                source.write_text(original)
+        for path in ('scripts/perf/board_perf.py', 'scripts/perf/baselines.json', '.github/workflows/core-identity.yml'):
+            with self.subTest(path=path):
+                target = cold / path
+                original_bytes = target.read_bytes()
+                target.write_bytes(original_bytes + b'\n# unreviewed contract change\n')
+                with self.assertRaises(AssertionError):
+                    self.assert_preservation(cold)
+                target.write_bytes(original_bytes)
+        self.assert_preservation(cold)
 
     def test_real_optional_wrapper_completes_all_48_with_common_inputs(self):
         import shutil
