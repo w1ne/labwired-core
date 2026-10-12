@@ -4,6 +4,7 @@ import importlib.util
 import pathlib
 import os
 import subprocess
+import sys
 import struct
 import tempfile
 import unittest
@@ -125,8 +126,28 @@ class EvidenceControls(unittest.TestCase):
             with self.subTest(text=text, code=code), self.assertRaises(ValueError):
                 self.verifier.verify_log(self.log(text), "f103_conformance", code)
 
+    def test_streaming_collector_retains_cap_and_stops_owned_overflow_producer(self):
+        self.assertTrue(hasattr(self.verifier, "collect_log"), "streaming collector missing")
+        log = self.root / "overflow.log"
+        result = self.verifier.collect_log([sys.executable, "-c", "import sys,time;sys.stdout.buffer.write(b'x'*1000002);sys.stdout.flush();time.sleep(10)"], log)
+        self.assertEqual(result["exit_code"], 125)
+        self.assertTrue(result["overflow"])
+        self.assertEqual(log.stat().st_size, 1000000)
+        self.assertIsNotNone(result["producer_exit_code"])
+
+    def test_streaming_collector_propagates_nonzero_and_timeout(self):
+        self.assertTrue(hasattr(self.verifier, "collect_log"), "streaming collector missing")
+        log = self.root / "producer.log"
+        result = self.verifier.collect_log([sys.executable, "-c", "import sys;print('diagnostic');sys.exit(7)"], log)
+        self.assertEqual(result["exit_code"], 7)
+        self.assertFalse(result["overflow"])
+        result = self.verifier.collect_log([sys.executable, "-c", "import time;print('running',flush=True);time.sleep(10)"], log, timeout_seconds=0.1)
+        self.assertEqual(result["exit_code"], 124)
+        self.assertTrue(result["timed_out"])
+        self.assertLessEqual(log.stat().st_size, 1000000)
+
     def test_literal_job_shell_has_complete_two_mode_route_and_fails_closed(self):
-        workflow = (ROOT / ".github/workflows/core-identity.yml").read_text()
+        workflow = pathlib.Path(os.environ.get("CORE_ORACLE_WORKFLOW", ROOT / ".github/workflows/core-identity.yml")).read_text()
         self.assertIn("qualify_cortex_m_oracles:", workflow, "optional qualification route missing")
         source = literal_run(workflow, "Record exact Cortex-M oracle source")
         build = literal_run(workflow, "Build Cortex-M oracle firmware")
@@ -135,7 +156,7 @@ class EvidenceControls(unittest.TestCase):
         mock_bin.mkdir()
         cargo = mock_bin / "cargo"
         cargo.write_text('''#!/usr/bin/env python3
-import os,pathlib,sys
+import os,pathlib,sys,time
 sys.path.insert(0,os.environ['CONTROL_DIR'])
 from test_cortex_m_oracle_evidence import fixture_bytes,positive_log
 args=sys.argv[1:]
@@ -153,7 +174,9 @@ else:
  mode='scheduler' if '--features' in args else 'feature-off'
  if mode=='scheduler': assert args[args.index('--features')+1]=='labwired-core/event-scheduler'
  with open('calls','a') as f:f.write(mode+' '+oracle+'\\n')
- if os.environ.get('FAKE_PASS'):
+ if os.environ.get('OVERFLOW'):
+  sys.stdout.buffer.write(b'x'*1000002);sys.stdout.flush();time.sleep(1)
+ elif os.environ.get('FAKE_PASS'):
   print('test '+test+' ... ok\\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s')
  else: print(positive_log(oracle))
 ''')
@@ -185,6 +208,11 @@ else:
         bad = subprocess.run(["bash", "-c", run], cwd=self.root, env=dict(env, FAKE_PASS="1"), text=True, capture_output=True, timeout=15)
         self.assertNotEqual(bad.returncode, 0)
         self.assertIn("FAIL-ORACLE-EVIDENCE", bad.stderr)
+        bad = subprocess.run(["bash", "-c", run], cwd=self.root, env=dict(env, OVERFLOW="1"), text=True, capture_output=True, timeout=15)
+        self.assertNotEqual(bad.returncode, 0)
+        oversized = self.root / "oracle-evidence/feature-off-nrf52_conformance.log"
+        self.assertLessEqual(oversized.stat().st_size, 1000000, "oversized evidence must not survive for always-upload")
+        self.assertEqual((self.root / "oracle-evidence/feature-off-nrf52_conformance.exit").read_text().strip(), "125")
         fixture = self.root / "target/thumbv7em-none-eabi/release/firmware-nrf52840-conformance"
         fixture.unlink()
         bad = subprocess.run(["bash", "-c", run], cwd=self.root, env=env, text=True, capture_output=True, timeout=15)

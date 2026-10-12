@@ -2,10 +2,68 @@
 
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
+import selectors
+import signal
 import struct
+import subprocess
 import sys
+import time
+
+
+def collect_log(command, path, max_bytes=1000000, timeout_seconds=300):
+    """Bound output as it arrives; own and terminate the producer's process group."""
+    if not command or max_bytes < 1 or timeout_seconds <= 0:
+        raise ValueError("invalid bounded producer configuration")
+    overflow = timed_out = False
+    retained = 0
+    with Path(path).open("wb") as log:
+        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, start_new_session=True)
+        selector = selectors.DefaultSelector()
+        selector.register(process.stdout, selectors.EVENT_READ)
+        deadline = time.monotonic() + timeout_seconds
+        try:
+            while selector.get_map() or process.poll() is None:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    timed_out = True
+                    break
+                for key, _ in selector.select(min(remaining, 0.1)):
+                    chunk = os.read(key.fd, 16384)
+                    if not chunk:
+                        selector.unregister(key.fileobj)
+                        continue
+                    available = max_bytes - retained
+                    log.write(chunk[:available])
+                    retained += min(len(chunk), available)
+                    if len(chunk) > available:
+                        overflow = True
+                        break
+                if overflow:
+                    break
+        finally:
+            # This session was created by Popen above. Kill no pre-existing
+            # processes; descendants must also stop if the producer exits early.
+            for sig in (signal.SIGTERM, signal.SIGKILL):
+                try:
+                    os.killpg(process.pid, sig)
+                except ProcessLookupError:
+                    pass
+                if sig == signal.SIGTERM:
+                    try:
+                        process.wait(timeout=0.2)
+                    except subprocess.TimeoutExpired:
+                        pass
+            process.wait()
+            process.stdout.close()
+            selector.close()
+    code = 125 if overflow else 124 if timed_out else process.returncode
+    if code < 0:
+        code = 128 - code
+    return {"exit_code": code, "producer_exit_code": process.returncode,
+            "overflow": overflow, "timed_out": timed_out, "bytes": retained}
 
 
 def read_file(path):
@@ -59,12 +117,16 @@ def verify_log(path, oracle, exit_code):
 
 def main(argv):
     try:
-        if len(argv) == 3 and argv[1] == "fixture":
+        if len(argv) >= 5 and argv[1] == "collect" and argv[3] == "--":
+            evidence = collect_log(argv[4:], argv[2])
+            print(json.dumps(evidence))
+            return evidence["exit_code"]
+        elif len(argv) == 3 and argv[1] == "fixture":
             evidence = verify_fixture(argv[2])
         elif len(argv) == 5 and argv[1] == "log":
             evidence = verify_log(argv[3], argv[2], int(argv[4]))
         else:
-            raise ValueError("usage: fixture PATH | log ORACLE PATH EXIT_CODE")
+            raise ValueError("usage: fixture PATH | log ORACLE PATH EXIT_CODE | collect PATH -- COMMAND")
         print(json.dumps(evidence))
         return 0
     except (ValueError, OSError, UnicodeError) as error:

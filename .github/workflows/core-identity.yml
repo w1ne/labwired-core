@@ -118,10 +118,10 @@ jobs:
               [ "$oracle" != nrf52_cpu_conformance ] || test=cpu_conformance_sim
               log="oracle-evidence/$mode-$oracle.log"
               status=0
-              timeout 300 cargo test -p labwired-hw-oracle "${flags[@]}" \
-                --test "$oracle" "$test" -- --exact --nocapture > "$log" 2>&1 || status=$?
+              python3 "$EVIDENCE_VERIFIER" collect "$log" -- \
+                cargo test -p labwired-hw-oracle "${flags[@]}" \
+                --test "$oracle" "$test" -- --exact --nocapture > "$log.collector.json" || status=$?
               printf '%s\n' "$status" > "oracle-evidence/$mode-$oracle.exit"
-              [ "$(wc -c < "$log")" -le 1000000 ]
               python3 "$EVIDENCE_VERIFIER" log "$oracle" "$log" "$status" >> oracle-evidence/oracles.jsonl
             done
           done
