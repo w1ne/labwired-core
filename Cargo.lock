@@ -2247,6 +2247,7 @@ name = "labwired-arm-system"
 version = "0.25.0"
 dependencies = [
  "libloading",
+ "sha2",
  "tempfile",
 ]
 

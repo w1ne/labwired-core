@@ -101,3 +101,37 @@ mod tests {
             .contains("native feature"));
     }
 }
+
+/// Pinned upstream source lineage is separate from compiled binary identity.
+pub const SOURCE_REVISION: &str = "167decf9129758829762e582939128c0694e90d6";
+/// SHA256 of the actual embedded native shared-library bytes; feature-off
+/// builds have no compiled backend and return None.
+pub fn compiled_backend_sha256() -> Option<String> {
+    #[cfg(feature = "native")]
+    {
+        use sha2::{Digest, Sha256};
+        Some(format!(
+            "{:x}",
+            Sha256::digest(include_bytes!(env!("LABWIRED_ARM_SYSTEM_LIBRARY")))
+        ))
+    }
+    #[cfg(not(feature = "native"))]
+    {
+        None
+    }
+}
+#[cfg(test)]
+mod identity_tests {
+    #[test]
+    fn embedded_binary_identity_is_feature_scoped() {
+        let identity = super::compiled_backend_sha256();
+        #[cfg(feature = "native")]
+        {
+            let hash = identity.expect("native build must identify its embedded binary");
+            assert_eq!(hash.len(), 64);
+            assert!(hash.bytes().all(|c| c.is_ascii_hexdigit()));
+        }
+        #[cfg(not(feature = "native"))]
+        assert!(identity.is_none());
+    }
+}

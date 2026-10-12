@@ -51,6 +51,29 @@ impl CortexA7System {
             .executable_range(start, length)
             .map_err(native_error)
     }
+    /// Checked reset-state Linux entry: ARM/SVC, IRQ+FIQ masked, MMU/cache
+    /// remain off from a freshly created native engine. Failures are returned
+    /// immediately so callers can keep RAM unchanged.
+    pub fn initialize_linux(&mut self, entry: u32, dtb: u32) -> SimResult<()> {
+        // Reset privileged state synchronously, even when the caller has used
+        // the CPU before. Linux requires MMU/cache off at this entry point.
+        self.state.get_mut().cpu.reset().map_err(native_error)?;
+        self.waiting = false;
+        self.halted = false;
+        self.cp15_written = false;
+        let s = self.state.get_mut();
+        s.pending_error = None;
+        for (id, value) in [(16, 0xd3), (0, 0), (1, u32::MAX), (2, dtb), (15, entry)] {
+            s.cpu.set_register(id, value).map_err(native_error)?;
+            s.registers[id as usize] = s.cpu.register(id).map_err(native_error)?;
+            if s.registers[id as usize] != value {
+                return Err(native_error(
+                    "Linux entry register readback mismatch".into(),
+                ));
+            }
+        }
+        Ok(())
+    }
     fn defer(&mut self, error: SimulationError) {
         let s = self.state.get_mut();
         if s.pending_error.is_none() {

@@ -1,0 +1,148 @@
+{
+  "archive_statistics": {
+    "busybox-static": {
+      "bounds": {
+        "expanded_tar_bytes": 2000000,
+        "individual_metadata_bytes": 512,
+        "individual_payload_bytes": 1000000,
+        "physical_records": 32,
+        "total_metadata_bytes": 8192,
+        "total_payload_bytes": 1000000
+      },
+      "expanded_tar_bytes": 895488,
+      "extension_metadata_bytes": 156,
+      "extension_records": 4,
+      "largest_extension_metadata_bytes": 90,
+      "members": 4,
+      "physical_payload_bytes": 887424,
+      "physical_records": 8,
+      "total_member_bytes": 887424
+    },
+    "linux-lts": {
+      "bounds": {
+        "expanded_tar_bytes": 100000000,
+        "individual_metadata_bytes": 512,
+        "individual_payload_bytes": 10000000,
+        "physical_records": 8000,
+        "total_metadata_bytes": 512000,
+        "total_payload_bytes": 90000000
+      },
+      "expanded_tar_bytes": 87126528,
+      "extension_metadata_bytes": 300872,
+      "extension_records": 3717,
+      "largest_extension_metadata_bytes": 204,
+      "members": 3717,
+      "physical_payload_bytes": 80605004,
+      "physical_records": 7434,
+      "total_member_bytes": 80605004
+    }
+  },
+  "artifacts": {
+    "init": {
+      "address": null,
+      "bytes": 1003,
+      "sha256": "5d1d1e1cd5d6b0e37ee352feeef4d998548d1ecd98ffee0d67a0b797c044663c"
+    },
+    "initramfs.cpio": {
+      "address": 51380224,
+      "bytes": 889544,
+      "sha256": "b13962b76edb327b89cec464014cd2565694d88a7f0f86ccc361317cf879ccce"
+    },
+    "kernel.config": {
+      "address": null,
+      "bytes": 269493,
+      "sha256": "4e64812402b287e13fd7513aa830432782a1ae94a5461bfe579999d1e18432fb"
+    },
+    "rv1103-direct.dtb": {
+      "address": 50331648,
+      "bytes": 1537,
+      "sha256": "5069562faf959fad32ce34db1dcc0f76f7721382abe6d0d713c033a6d0f83a75"
+    },
+    "rv1103-direct.dts": {
+      "address": null,
+      "bytes": 1671,
+      "sha256": "b8070cb0682cc69aecc34ba70f595d157e30f4a104999f4b3083fac9e6d88287"
+    },
+    "zImage": {
+      "address": 33554432,
+      "bytes": 8524288,
+      "sha256": "eac9582162e912bdb577bba6ea224d98a29c997e52ee891383ea836aa704680a"
+    }
+  },
+  "board": "luckfox-pico-mini-a-rv1103",
+  "bootargs": "mem=64M cma=0 maxcpus=1 earlycon=uart8250,mmio32,0xff4c0000,115200n8 console=ttyS2,115200n8 rdinit=/init loglevel=8 panic=-1 clocksource.arm_arch_timer.evtstrm=0",
+  "cpu_hz_default": 1200000000,
+  "decompression_end": 24008784,
+  "decompression_start": 32768,
+  "guest_boot": "NOT_RUN",
+  "packages": {
+    "busybox-static": {
+      "count": 16,
+      "individual": 1000000,
+      "license": "GPL-2.0-only",
+      "members": {
+        ".PKGINFO": [
+          568,
+          null
+        ],
+        "bin/busybox.static": [
+          886344,
+          "1c0ed2db00c0bbdd796e4bdb4de58c564a3df8e61afc716652004b3ce0ee50f2"
+        ]
+      },
+      "sha256": "fb023d6a1e2dce9069b11b302e674c273b9e17d04d17b03ee16526475b0971e6",
+      "size": 628018,
+      "source_revision": "1e823a60eb85606954b3a5af5f8e5bbd1ea680cf",
+      "tar_bounds": {
+        "expanded_limit": 2000000,
+        "metadata_limit": 512,
+        "metadata_total_limit": 8192,
+        "physical_count_limit": 32
+      },
+      "total": 1000000,
+      "version": "1.37.0-r30"
+    },
+    "linux-lts": {
+      "count": 4000,
+      "individual": 10000000,
+      "license": "GPL-2.0-only",
+      "members": {
+        ".PKGINFO": [
+          535,
+          null
+        ],
+        "boot/config-6.18.56-0-lts": [
+          269493,
+          "4e64812402b287e13fd7513aa830432782a1ae94a5461bfe579999d1e18432fb"
+        ],
+        "boot/vmlinuz-lts": [
+          8524288,
+          "eac9582162e912bdb577bba6ea224d98a29c997e52ee891383ea836aa704680a"
+        ]
+      },
+      "sha256": "00059546e63df3dbadb80ff08f577dce1ef871b8cd800665d6404936a956eade",
+      "size": 53474254,
+      "source_revision": "b599422f9f640e35932a995ceedf52ec76b66963",
+      "tar_bounds": {
+        "expanded_limit": 100000000,
+        "metadata_limit": 512,
+        "metadata_total_limit": 512000,
+        "physical_count_limit": 8000
+      },
+      "total": 90000000,
+      "version": "6.18.56-r0"
+    }
+  },
+  "physical_acceptance": "UNAVAILABLE",
+  "preparation": "VERIFIED",
+  "ram_base": 0,
+  "ram_bytes": 67108864,
+  "reductions": [
+    "direct zImage boot; no boot ROM or SD/BSP",
+    "one CPU; no CRU/reset/pinctrl/DMA/FIQ debugger",
+    "instruction ticks are functional simulation, not hardware timing",
+    "no I2C, ESP, RF or smartbasket application acceptance"
+  ],
+  "schema": 1,
+  "timer_hz": 24000000
+}

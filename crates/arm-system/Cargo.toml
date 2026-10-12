@@ -6,7 +6,9 @@ license.workspace = true
 publish = false
 [features]
 default = []
-native = ["dep:libloading", "dep:tempfile"]
+native = ["dep:libloading", "dep:tempfile", "dep:sha2"]
 [dependencies]
 libloading = { version = "0.8.9", optional = true }
 tempfile = { version = "3.27", optional = true }
+
+sha2 = { workspace = true, optional = true }
