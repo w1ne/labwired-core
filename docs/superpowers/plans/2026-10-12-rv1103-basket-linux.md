@@ -6,6 +6,8 @@
 
 ## Task 1: Strict matching driver artifacts
 
+Completed and independently reviewed on 2026-10-12: 52 preparation tests pass and two independent actual module/helper builds match. Preparation is verified; guest insertion remains NOT_RUN. See `examples/luckfox-pico-mini-a-linux/DRIVER_MODULES.md` for pins, bounds and compiler limitations.
+
 Implement deterministic preparation of the matching Linux6.18.56 external RK3x module. Reuse the pinned upstream source SHA256 `cee9b45dfee3fb4a7168585603c88df5e3422493425ac1bd35046d509d910423`, Alpine dev package SHA256 `a2fd3f3a675e5e1c68b4dbea544fa7fe3e1ebbc0403bf1f8de6130ed6cdb1b80`, generated headers and Module.symvers. Build native host helpers from the included sources; never execute extracted ARM host utilities. Keep original .config and symbol versions unchanged. Record the compiler version and GCC plugin override, and require matching vermagic and strict guest insmod without forced version/symbol bypasses. Add the matching stock i2c-dev module to initramfs. Verify hashes, extraction path bounds and reproducible archive metadata.
 
 ## Task 2: Rockchip I2C3 controller
@@ -22,4 +24,4 @@ Extend the direct-boot DT with real I2C3 compatible `rockchip,rv1106-i2c`, `rock
 
 ## Task 5: Circuit/tooling release
 
-Run the existing PCB ERC/DRC/routing and reduced power tests only if circuit inputs change. Add native Linux basket acceptance to the opt-in CI job, with complete console and hash receipts on failure. Update model/backend availability and example documentation to distinguish direct boot, shared circuit behavior, behavioral Wi-Fi and reduced power from SD/BSP, radio, and hardware acceptance. Review default/browser independence, protect required checks, and merge current tested heads. Complete app/build/API deployment readback separately. Physical board/power/footprint/thermal/RF gates stay pending while the user has no hardware.
+Run the existing PCB ERC/DRC/routing and reduced power tests only if circuit inputs change. Add native Linux basket acceptance to the opt-in CI job, with complete console and hash receipts on failure. Update model/backend availability and example documentation to distinguish direct boot, shared circuit behavior, behavioral Wi-Fi and reduced power from SD/BSP, radio, and hardware acceptance. Review default/browser independence, protect required checks, and merge current tested heads. Use the packed board-config package locally: the user explicitly skipped publication and chose local dogfooding, so no npm publication or manual deployment is required. Physical board/power/footprint/thermal/RF gates stay pending while the user has no hardware.
