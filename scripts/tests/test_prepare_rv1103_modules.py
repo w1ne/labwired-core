@@ -82,6 +82,16 @@ class ModulePreparationTests(unittest.TestCase):
     def headers(self, entries, **bounds):
         return self.prep.read_headers(apk(entries), **bounds)
 
+    def owned_child_gone(self, proc):
+        # One read avoids the exists/read TOCTOU while an owned child exits.
+        try:
+            with proc.open('r') as status:
+                state = status.read(4097)
+        except (FileNotFoundError, ProcessLookupError):
+            return True
+        self.assertLessEqual(len(state), 4096, 'owned child stat exceeded bound')
+        return state.rsplit(')', 1)[1].split()[0] == 'Z'
+
     def test_only_header_tree_is_selected_and_unselected_absolute_link_is_ignored(self):
         entries, pkg, stats = self.headers([
             (HEADER + '/include/a.h', tarfile.REGTYPE, b'header'),
@@ -229,6 +239,22 @@ class ModulePreparationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'license'):
             self.prep.verify_module(module_elf(license='Proprietary'), symvers, 'i2c_rk3x')
 
+    def test_owned_child_liveness_distinguishes_gone_zombie_live_and_other_errors(self):
+        self.assertTrue(callable(getattr(self, 'owned_child_gone', None)), 'bounded owned-child liveness helper missing')
+        self.assertFalse(self.owned_child_gone(Path(f'/proc/{os.getpid()}/stat')), 'live test process must remain live')
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertTrue(self.owned_child_gone(Path(tmp) / 'absent'))
+            proc = Path(tmp) / 'stat'
+            for state, expected in [('R', False), ('S', False), ('Z', True)]:
+                proc.write_text(f'123 (name with spaces) {state} 1 0\n')
+                self.assertEqual(self.owned_child_gone(proc), expected)
+        for error in (FileNotFoundError(), ProcessLookupError()):
+            with mock.patch.object(Path, 'open', side_effect=error):
+                self.assertTrue(self.owned_child_gone(Path('/proc/owned/stat')))
+        for error in (PermissionError(), OSError('other proc read error')):
+            with mock.patch.object(Path, 'open', side_effect=error), self.assertRaises(type(error)):
+                self.owned_child_gone(Path('/proc/owned/stat'))
+
     def test_timeout_terminates_owned_build_children(self):
         child = None
         try:
@@ -239,10 +265,13 @@ class ModulePreparationTests(unittest.TestCase):
                     self.prep.run_command(command, Path(tmp), dict(os.environ), log, timeout=0.3)
                 child = int(path.read_text().splitlines()[1])
                 proc = Path(f'/proc/{child}/stat')
+                gone = False
                 for _ in range(20):
-                    if not proc.exists() or proc.read_text().split()[2] == 'Z': break
+                    if self.owned_child_gone(proc):
+                        gone = True
+                        break
                     time.sleep(0.05)
-                self.assertTrue(not proc.exists() or proc.read_text().split()[2] == 'Z', 'timed-out build left a live owned child')
+                self.assertTrue(gone, 'timed-out build left a live owned child')
         finally:
             if child is not None:
                 try: os.kill(child, signal.SIGKILL)
@@ -296,10 +325,13 @@ class ModulePreparationTests(unittest.TestCase):
                 result = self.prep.tool_identity(str(tool))
                 child = int(result['version'].strip())
                 proc = Path(f'/proc/{child}/stat')
+                gone = False
                 for _ in range(20):
-                    if not proc.exists() or proc.read_text().split()[2] == 'Z': break
+                    if self.owned_child_gone(proc):
+                        gone = True
+                        break
                     time.sleep(0.05)
-                self.assertTrue(not proc.exists() or proc.read_text().split()[2] == 'Z', 'version identity left a live owned descendant')
+                self.assertTrue(gone, 'version identity left a live owned descendant')
         finally:
             if child is not None:
                 try: os.kill(child, signal.SIGKILL)
@@ -323,7 +355,7 @@ class ModulePreparationTests(unittest.TestCase):
                 child = int(result['version'].strip())
                 self.assertLess(time.monotonic() - started, 3)
                 proc = Path(f'/proc/{child}/stat')
-                self.assertTrue(not proc.exists() or proc.read_text().split()[2] == 'Z')
+                self.assertTrue(self.owned_child_gone(proc))
                 if pid_file.exists(): pid_file.unlink()
         finally:
             if child is None and pid_file is not None and pid_file.exists(): child = int(pid_file.read_text())
@@ -340,10 +372,13 @@ class ModulePreparationTests(unittest.TestCase):
                 with mock.patch.object(self.prep, 'TOOL_VERSION_TIMEOUT', 0.3, create=True), self.assertRaisesRegex(ValueError, 'identify|timeout'):
                     self.prep.tool_identity(str(tool))
                 child = int(pid_file.read_text()); proc = Path(f'/proc/{child}/stat')
+                gone = False
                 for _ in range(20):
-                    if not proc.exists() or proc.read_text().split()[2] == 'Z': break
+                    if self.owned_child_gone(proc):
+                        gone = True
+                        break
                     time.sleep(0.05)
-                self.assertTrue(not proc.exists() or proc.read_text().split()[2] == 'Z', 'timed-out version tool left a live owned child')
+                self.assertTrue(gone, 'timed-out version tool left a live owned child')
             finally:
                 if pid_file.exists():
                     try: os.kill(int(pid_file.read_text()), signal.SIGKILL)
