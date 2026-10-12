@@ -34,6 +34,8 @@ Execute this integration in three sequential slices, with a fresh implementer, S
 
 Task4A completed and independently reviewed on 2026-10-12 in commit `aaf63eef5`: 68 preparation tests pass, including the causal kernel serial-port ancestry correction and bounded owned-child liveness regressions. Two retained independent helper/DT/initramfs builds match. The closed basket profile has initrd end `0x0322b140`; preparation remains separate from pending Task4B bridge and Task4C guest execution. Original base/kernel/module/helper guards and historical evidence are preserved.
 
+Task4B completed and independently reviewed on 2026-10-12 in core commit `195b1dd95` and app commit `9e2814208`: default27/native27 focused Rust tests and 14 canonical export tests pass, alongside strict TypeScript, native Clippy and browser compilation. The exporter retains the canonical component identities and validates all six supply-domain pairs through the existing netlist. Persistent plant IPC now bounds frames and deadlines and rejects replies already queued after a complete frame or before a new request; causal regressions preserve valid sequential and EOF behavior. Original failure evidence and test binaries are retained. Task4C actual shared Linux guest, plant fault and fresh-fixture recovery remain pending.
+
 The native fixture uses the disclosed functional24MHz CPU/timer configuration. The plant's raw5V is separate from a synthetic execution-supply proxy; raw3.3V drives the component domain. Supply startup must consume its legitimate release/reset before initializing the validated Linux entry, with no silent guest repair. Linux recovery is a fresh direct-boot fixture, without claiming RV1103 ROM reboot or real-time performance.
 
 ## Task 5: Circuit/tooling release
