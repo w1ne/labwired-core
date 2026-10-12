@@ -759,6 +759,7 @@ jobs:
         run: >
           scripts/ci/cargo-test-nonvacuous.sh
           -p labwired-core --test esp32_classic_walk_differential
+          --test ordered_debug_metadata
 
       # THE SHARED-MODEL NET THAT NEVER GATED A MERGE.
       #
