@@ -10,6 +10,8 @@
 # itself exists to close. Wired into pr-gate's pytest line in core-ci.yml.
 
 import json
+import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -256,3 +258,155 @@ def test_known_red_whose_target_never_ran_fails(tmp_path):
         _write_report(tmp_path, k, [_target("p", f"t{k}")])
     failures, _, _, _ = agg.aggregate(tmp_path, _cfg([entry]))
     assert any("ghost" in f and "did not run" in f for f in failures)
+
+
+# Literal nonvacuous-wrapper subprocess controls. Only the owned fake cargo and
+# fake libtest executable run: no Rust compiler, package install or firmware.
+@pytest.fixture
+def nonvacuous_fixture(tmp_path):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    artifacts = tmp_path / "artifacts"
+    artifacts.mkdir()
+    calls = tmp_path / "cargo-calls.jsonl"
+    lists = tmp_path / "list-calls.jsonl"
+    exe = tmp_path / "metadata-fixture-0123456789abcdef"
+    exe.write_text(f"#!{sys.executable}\n" + r'''
+import json, os, sys
+with open(os.environ["FAKE_LIST_CALLS"], "a") as fh:
+    fh.write(json.dumps(sys.argv[1:]) + "\n")
+count = int(os.environ["FAKE_IGNORED"] if "--ignored" in sys.argv else os.environ["FAKE_DECLARED"])
+for index in range(count):
+    print(f"fixture_{index}: test")
+''')
+    exe.chmod(0o700)
+    cargo = bin_dir / "cargo"
+    cargo.write_text(f"#!{sys.executable}\n" + r'''
+import json, os, sys
+with open(os.environ["FAKE_CARGO_CALLS"], "a") as fh:
+    fh.write(json.dumps(sys.argv[1:]) + "\n")
+if "--no-run" in sys.argv:
+    sys.stdout.write(os.environ["FAKE_MESSAGES"])
+    sys.stderr.write("original cargo stderr\n")
+    sys.exit(int(os.environ["FAKE_COMPILE_STATUS"]))
+print("fake real test execution")
+sys.exit(int(os.environ["FAKE_RUN_STATUS"]))
+''')
+    cargo.chmod(0o700)
+    wrapper = Path(__file__).with_name("cargo-test-nonvacuous.sh")
+
+    def invoke(*, messages=None, compile_status=0, run_status=0, declared=2, ignored=0,
+               harness=("--nocapture",), reader_failure=False):
+        if messages is None:
+            messages = json.dumps({"reason": "compiler-artifact", "profile": {"test": True},
+                                   "executable": str(exe)}) + "\n"
+        if reader_failure:
+            reader = bin_dir / "python3"
+            reader.write_text("#!/usr/bin/env bash\necho 'owned diagnostic reader failed' >&2\nexit 7\n")
+            reader.chmod(0o700)
+        env = {**os.environ, "PATH": str(bin_dir) + os.pathsep + os.environ.get("PATH", ""),
+               "TMPDIR": str(artifacts), "GITHUB_STEP_SUMMARY": "",
+               "FAKE_CARGO_CALLS": str(calls), "FAKE_LIST_CALLS": str(lists),
+               "FAKE_MESSAGES": messages, "FAKE_COMPILE_STATUS": str(compile_status),
+               "FAKE_RUN_STATUS": str(run_status), "FAKE_DECLARED": str(declared),
+               "FAKE_IGNORED": str(ignored)}
+        args = ["--locked", "-p", "metadata-fixture", "--test", "ordered_debug_metadata"]
+        result = subprocess.run(["bash", str(wrapper), *args, "--", *harness], env=env,
+                                capture_output=True, text=True, timeout=5)
+        read = lambda path: [json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
+        return result, read(calls), read(lists), list(artifacts.iterdir()), args
+
+    return invoke
+
+
+def test_nonvacuous_compile_failure_retains_original_rendered_error_and_status(nonvacuous_fixture):
+    rendered = "\x1b[1merror[E0308]: mismatched types\x1b[0m\n --> ordered_debug_metadata.rs:25:50\n expected BTreeMap, found HashMap; Ω\n"
+    messages = json.dumps({"reason": "compiler-message", "message": {"level": "error", "rendered": rendered}}) + "\n"
+    result, calls, lists, artifacts, args = nonvacuous_fixture(messages=messages, compile_status=101)
+    assert result.returncode == 101
+    assert result.stderr == "original cargo stderr\n" + rendered
+    assert calls == [["test", *args, "--no-run", "--message-format=json"]]
+    assert lists == []
+    assert artifacts == []
+
+
+@pytest.mark.parametrize("status", [17, 130, 143])
+def test_nonvacuous_diagnostics_never_replace_compile_failure_status(nonvacuous_fixture, status):
+    result, calls, lists, artifacts, _ = nonvacuous_fixture(messages="not JSON\n", compile_status=status)
+    assert result.returncode == status
+    assert result.stderr == "original cargo stderr\n"
+    assert len(calls) == 1 and lists == [] and artifacts == []
+
+
+def test_nonvacuous_success_preserves_enumeration_roster_and_final_argv(nonvacuous_fixture):
+    result, calls, lists, _, args = nonvacuous_fixture()
+    assert result.returncode == 0
+    assert calls == [["test", *args, "--no-run", "--message-format=json"],
+                     ["test", *args, "--", "--nocapture"]]
+    assert lists == [["--list", "--format", "terse"], ["--list", "--ignored", "--format", "terse"]]
+    assert "2 declared, 2 executed by this invocation (0 ignored, run mode: default)" in result.stdout
+    assert "fake real test execution" in result.stdout
+    assert result.stderr == "original cargo stderr\n"
+
+
+@pytest.mark.parametrize("declared,ignored,phrase", [(0, 0, "contain ZERO tests"), (2, 2, "EXECUTE NONE")])
+def test_nonvacuous_empty_and_allignored_still_reject_before_execution(nonvacuous_fixture, declared, ignored, phrase):
+    result, calls, lists, artifacts, _ = nonvacuous_fixture(declared=declared, ignored=ignored)
+    assert result.returncode == 1
+    assert phrase in result.stderr
+    assert len(calls) == 1 and len(lists) == 2 and artifacts == []
+
+
+def test_nonvacuous_missing_executable_still_fails_closed(nonvacuous_fixture):
+    result, calls, lists, artifacts, _ = nonvacuous_fixture(messages="{}\n")
+    assert result.returncode == 1
+    assert "NO test executables" in result.stderr
+    assert len(calls) == 1 and lists == [] and artifacts == []
+
+
+def test_nonvacuous_success_still_propagates_final_test_status(nonvacuous_fixture):
+    result, calls, _, _, _ = nonvacuous_fixture(run_status=23)
+    assert result.returncode == 23
+    assert len(calls) == 2
+
+
+
+def test_nonvacuous_only_original_rendered_errors_are_emitted_in_order(nonvacuous_fixture):
+    messages = [[], None, {"reason": "compiler-message", "message": []},
+                {"reason": "compiler-message", "message": {"level": "warning", "rendered": "warning payload"}},
+                {"reason": "compiler-artifact", "message": {"level": "error", "rendered": "unrelated payload"}},
+                {"reason": "compiler-message", "message": {"level": "error", "rendered": None}},
+                {"reason": "compiler-message", "message": {"level": "error", "rendered": "first original error\n"}},
+                {"reason": "compiler-message", "message": {"level": "error", "rendered": "second original error\n"}}]
+    text = "invalid JSON\n" + "\n".join(json.dumps(msg) for msg in messages) + "\n"
+    result, calls, lists, artifacts, _ = nonvacuous_fixture(messages=text, compile_status=19)
+    assert result.returncode == 19
+    assert result.stderr == "original cargo stderr\nfirst original error\nsecond original error\n"
+    assert len(calls) == 1 and lists == [] and artifacts == []
+
+
+def test_nonvacuous_reader_failure_never_masks_original_cargo_failure(nonvacuous_fixture):
+    result, calls, lists, artifacts, _ = nonvacuous_fixture(messages="{}\n", compile_status=41, reader_failure=True)
+    assert result.returncode == 41
+    assert "owned diagnostic reader failed" in result.stderr
+    assert len(calls) == 1 and lists == [] and artifacts == []
+
+
+@pytest.mark.parametrize("harness,executed,mode", [(("--ignored",), 1, "ignored"),
+                        (("--include-ignored",), 2, "include-ignored"),
+                        (("--ignored", "--include-ignored"), 2, "include-ignored")])
+def test_nonvacuous_success_preserves_harness_modes(nonvacuous_fixture, harness, executed, mode):
+    result, calls, _, _, args = nonvacuous_fixture(declared=2, ignored=1, harness=harness)
+    assert result.returncode == 0
+    assert calls[-1] == ["test", *args, "--", *harness]
+    assert f"2 declared, {executed} executed by this invocation (1 ignored, run mode: {mode})" in result.stdout
+
+
+
+def test_nonvacuous_original_internal_compiler_error_is_also_retained(nonvacuous_fixture):
+    rendered = "error: internal compiler error: original compiler report\n"
+    messages = json.dumps({"reason": "compiler-message", "message": {
+        "level": "error: internal compiler error", "rendered": rendered}}) + "\n"
+    result, calls, lists, artifacts, _ = nonvacuous_fixture(messages=messages, compile_status=101)
+    assert result.returncode == 101 and result.stderr == "original cargo stderr\n" + rendered
+    assert len(calls) == 1 and lists == [] and artifacts == []
