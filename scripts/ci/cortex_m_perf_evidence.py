@@ -4,6 +4,7 @@ No baseline updates, global performance verdict or physical capture claims.
 """
 
 import argparse
+from contextlib import nullcontext
 import hashlib
 import importlib.util
 import itertools
@@ -235,9 +236,10 @@ def validate_status(status, side, measurements, code):
 
 
 class BoundedRunner:
-    def __init__(self, module, side, output, rows, budget):
+    def __init__(self, module, side, output, rows, budget, common=None):
         self.module, self.side, self.output, self.rows, self.budget = module, side, Path(output), rows, budget
         self.ordinal = 0
+        self.common = common
 
     def run(self, command, **kwargs):
         if set(kwargs) - {"cwd", "env", "capture_output", "text"} or not kwargs.get("capture_output"):
@@ -246,14 +248,41 @@ class BoundedRunner:
         argv = bounded_argv(command) if valgrind else None
         cwd = str(Path(kwargs.get("cwd") or os.getcwd()).resolve())
         environment = kwargs.get("env") if kwargs.get("env") is not None else os.environ
-        result = collect(command, cwd=kwargs.get("cwd"), env=kwargs.get("env"), timeout=300 if valgrind else 900, budget=self.budget)
+        fixture_before = fixture_after = fixture_error = None
+        if valgrind and self.common is not None:
+            fixture = Path(command[command.index("--firmware") + 1])
+            chip = Path(command[command.index("--chip") + 1]).stem
+            if chip not in BOARDS or fixture.resolve() != self.common.paths["nrf" if chip == "nrf52840" else "stm32"]:
+                raise ValueError("board did not receive its exact common memory-map fixture")
+            fixture_before = self.common.verify(fixture)
+        try:
+            result = collect(command, cwd=kwargs.get("cwd"), env=kwargs.get("env"), timeout=300 if valgrind else 900, budget=self.budget)
+        finally:
+            if fixture_before is not None:
+                try:
+                    fixture_after = self.common.verify(fixture)
+                except (ValueError,OSError) as error:
+                    fixture_error = error
         self.ordinal += 1
         prefix = self.output / f"{self.side}-child-{self.ordinal:02}"
         prefix.with_suffix(".stdout").write_bytes(result.stdout)
         prefix.with_suffix(".stderr").write_bytes(result.stderr)
-        prefix.with_suffix(".json").write_text(json.dumps(dict(exit_code=result.returncode, producer_exit_code=result.producer_exit_code, stdout_bytes=len(result.stdout), stderr_bytes=len(result.stderr))) + "\n")
+        child_proof = dict(exit_code=result.returncode, producer_exit_code=result.producer_exit_code, stdout_bytes=len(result.stdout), stderr_bytes=len(result.stderr))
+        if fixture_before is not None:
+            def file_identity(proof):
+                return {key:proof[key] for key in ("path","bytes","sha256")} if proof is not None else None
+            child_proof.update(fixture_before=file_identity(fixture_before), fixture_after=file_identity(fixture_after))
+            if fixture_error is not None:
+                child_proof['fixture_validation_error']=str(fixture_error)[:1024]
+        data=json.dumps(child_proof)+"\n"
+        if self.common is not None:
+            from cortex_m_perf_diagnostics import reserve
+            reserve(self.budget,len(data.encode()))
+        prefix.with_suffix(".json").write_text(data)
         if result.returncode != 0:
             raise ValueError(f"owned perf child failed: {self.side}/{self.ordinal} exit={result.returncode}")
+        if fixture_error is not None:
+            raise ValueError("common fixture failed post-invocation full-file validation") from fixture_error
         if valgrind:
             chip = Path(command[command.index("--chip") + 1]).stem
             count = int(command[command.index("--max-steps") + 1])
@@ -278,19 +307,25 @@ class BoundedRunner:
                 batches=int(proof.group(2)) if proof else None, steps_per_batch=float(proof.group(3)) if proof else None,
                 tick_interval=int(proof.group(4)) if proof else None, fixture_sha256=fixture_proof["sha256"],
                 cli_sha256=sha256(cli), log_prefix=prefix.name))
+            if self.common is not None:
+                self.rows[-1].update(fixture_before_sha256=fixture_before["sha256"],fixture_after_sha256=fixture_after["sha256"])
+                if chip == "stm32l476" and mode == "batch":
+                    from cortex_m_perf_diagnostics import annotate_call
+                    self.rows[-1]["callgrind_annotation"] = annotate_call(command,self.rows[-1]["ir"],prefix,collect,self.budget,sha256)
         if kwargs.get("text"):
             result.stdout, result.stderr = result.stdout.decode(), result.stderr.decode()
         return result
 
 
-def invoke_tool(module, source, cli, side, output, rows, budget):
+def invoke_tool(module, source, cli, side, output, rows, budget, common=None):
     original = module.subprocess, sys.argv[:], os.getcwd(), dict(os.environ)
     try:
-        module.subprocess = BoundedRunner(module, side, output, rows, budget)
+        module.subprocess = BoundedRunner(module, side, output, rows, budget, common)
         sys.argv = ["board_perf.py", "--boards", ",".join(BOARDS), "--modes", ",".join(MODES), "--cli", str(Path(cli).resolve()), "--status-json", str(Path(output).resolve() / f"{side}-status.json")]
         os.environ.pop("LABWIRED_ARM_SINGLE_STEP", None)
         os.chdir(source)
-        return module.main()
+        with common.install(module) if common is not None else nullcontext():
+            return module.main()
     finally:
         module.subprocess, sys.argv = original[0], original[1]
         os.chdir(original[2])
@@ -325,7 +360,7 @@ def qualify(args):
             raise ValueError("fixture/tool/config/lock/baseline contract bytes differ between sources")
         evidence["contracts"] = contracts
         evidence["identity"] = validate_identity(args.identity_dir, args.steps, args.base_sha, args.head_sha, args.suite)
-        for side in SIDES:
+        def load_side(side):
             source = Path(getattr(args, side + "_dir")).resolve()
             cli = source / "target/release/labwired"
             if not cli.is_file() or not os.access(cli, os.X_OK) or cli.stat().st_size == 0:
@@ -337,11 +372,30 @@ def qualify(args):
             try:
                 spec.loader.exec_module(module)
                 modules[side] = module
-                codes[side] = invoke_tool(module, source, cli, side, output, rows, budget)
-            finally:
+                return module, source, cli
+            except Exception:
                 sys.modules.pop(name, None)
+                raise
+        common = None
+        if getattr(args,"diagnose_common_fixtures",False):
+            from cortex_m_perf_diagnostics import prepare_common_fixtures
+            loaded = {side: load_side(side) for side in SIDES}
+            cargo_contract = {side:sha256(Path(getattr(args,side+"_dir"))/"Cargo.toml") for side in SIDES}
+            if len(set(cargo_contract.values())) != 1:
+                raise ValueError("workspace Cargo profile bytes differ for common-input diagnostics")
+            evidence["diagnostic_cargo_contract"] = cargo_contract
+            common = prepare_common_fixtures(modules,{side:row[1] for side,row in loaded.items()},output,budget,BoundedRunner)
+            evidence["common_fixtures"] = common.evidence
+        for side in SIDES:
+            module,source,cli = loaded[side] if common is not None else load_side(side)
+            try:
+                codes[side] = invoke_tool(module,source,cli,side,output,rows,budget,common)
+            finally:
+                sys.modules.pop(f"board_perf_{side}",None)
         if contracts != {side: source_contract(getattr(args, side + "_dir"), getattr(args, side + "_sha")) for side in SIDES}:
             raise ValueError("source contracts changed during qualification")
+        if common is not None and cargo_contract != {side:sha256(Path(getattr(args,side+"_dir"))/"Cargo.toml") for side in SIDES}:
+            raise ValueError("workspace Cargo profile changed during diagnostic qualification")
         proof = validate_records(rows, modules["head"].MIN_RECOMMENDED_TICK_INTERVAL)
         evidence.update(proof)
         evidence["baseline_verdicts"] = {side: validate_status(small_json(output / f"{side}-status.json"), side, proof["measurements"], codes[side]) for side in SIDES}
@@ -358,6 +412,8 @@ def qualify(args):
         evidence["failure_reason"] = str(error)[:1024]
         raise
     finally:
+        for side in modules:
+            sys.modules.pop(f"board_perf_{side}",None)
         evidence["raw_invocations"] = rows
         evidence.setdefault("qualified", False)
         data = json.dumps(evidence, indent=2, allow_nan=False) + "\n"
@@ -374,6 +430,7 @@ def main():
     collect_parser.add_argument("--timeout", type=float, default=900)
     collect_parser.add_argument("producer", nargs=argparse.REMAINDER)
     q = sub.add_parser("qualify")
+    q.add_argument("--diagnose-common-fixtures",action="store_true",help="Preserve independently built ELFs, verify/freeze common inputs and retain L476 Callgrind diagnostics")
     for name in ("base-dir", "head-dir", "base-sha", "head-sha", "identity-dir", "steps", "suite", "output"):
         q.add_argument("--" + name, required=True)
     args = parser.parse_args()

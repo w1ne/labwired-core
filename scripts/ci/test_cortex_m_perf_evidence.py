@@ -393,5 +393,12 @@ if batch:print('[batched] instructions='+str(count)+' batches='+str(count//1000)
         self.assertEqual(evidence['raw_invocations'],[])
 
 
+def load_tests(loader, tests, pattern):
+    # This file is named by the existing hosted lane; no new workflow/default.
+    from test_cortex_m_perf_diagnostics import DiagnosticsControls
+    tests.addTests(loader.loadTestsFromTestCase(DiagnosticsControls))
+    return tests
+
+
 if __name__ == "__main__":
     unittest.main()
