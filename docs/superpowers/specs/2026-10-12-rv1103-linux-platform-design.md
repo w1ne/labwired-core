@@ -18,7 +18,7 @@ Retain the existing optional Unicorn instruction fixture. Add an independent nat
 
 ## Native system CPU
 
-Integrate the upstream ARMv7-A Cortex-A7 model through Cpu, Machine, Bus and observer boundaries. Reuse upstream decoding, MMU/TLB and exceptions rather than translating ARM instructions in Rust. Support ARM/Thumb-2, CP15 translation, banked state, SVC and fault vectors, IRQ level assertion/deassertion, WFI wake, and explicit executed-instruction accounting. Scheduling ticks are modeled time, not measured silicon cycles.
+Integrate the upstream ARMv7-A Cortex-A7 model through Cpu, Machine, Bus and observer boundaries. Reuse upstream decoding, MMU/TLB and exceptions rather than translating ARM instructions in Rust. Support ARM/Thumb-2, ARMv7 short-descriptor CP15 translation, banked state, SVC and fault vectors, IRQ level assertion/deassertion, WFI wake, and explicit executed-instruction accounting. The pinned upstream LPAE walker documents only limited identity mappings and fault handling; the initial kernel requires CONFIG_ARM_LPAE=n, and LPAE support must not be claimed. Scheduling ticks are modeled time, not measured silicon cycles.
 
 Map authoritative RAM through a lifetime-safe native memory interface or width-preserving callbacks. Native code/data invalidation must follow guest and host writes. Physical MMIO callbacks must observe translations made by the CPU. Unsupported native host configurations, unresolved callbacks, inaccessible physical addresses and guest faults must yield explicit outcomes; they cannot silently become successful zero reads.
 
