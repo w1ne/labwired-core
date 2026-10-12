@@ -28,6 +28,7 @@ struct Selection {
     index: usize,
     address: u8,
     reading: bool,
+    generation: Option<u64>,
 }
 pub struct Rk3xI2c {
     // CON..FCNT. FCNT is our last successfully completed chunk's byte count
@@ -109,8 +110,10 @@ impl Rk3xI2c {
         self.pending(NAK);
     }
     fn live(&self) -> bool {
-        self.selected
-            .is_some_and(|s| self.slaves[s.index].claims_address(s.address))
+        self.selected.is_some_and(|s| {
+            self.slaves[s.index].transaction_generation() == s.generation
+                && self.slaves[s.index].claims_address(s.address)
+        })
     }
     fn start_selected(&mut self) -> bool {
         if !self.live() {
@@ -131,6 +134,7 @@ impl Rk3xI2c {
             index,
             address,
             reading: false,
+            generation: self.slaves[index].transaction_generation(),
         });
         if !self.live() {
             self.nak();
@@ -150,7 +154,7 @@ impl Rk3xI2c {
         true
     }
     fn transmit(&mut self, count: usize) {
-        if self.failed {
+        if self.failed || (self.selected.is_some() && !self.live()) {
             self.nak();
             return;
         }
@@ -173,7 +177,7 @@ impl Rk3xI2c {
         self.pending(MBTF);
     }
     fn receive(&mut self, count: usize) {
-        if self.failed {
+        if self.failed || (self.selected.is_some() && !self.live()) {
             self.nak();
             return;
         }

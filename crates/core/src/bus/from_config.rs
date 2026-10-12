@@ -361,6 +361,7 @@ impl SystemBus {
             io_voltage_v: None,
             gpio_input_thresholds: None,
             supply: crate::power::SupplySupervisor::default(),
+            supply_domains: Default::default(),
         };
         bus.record_external_devices(manifest);
 

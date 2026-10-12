@@ -128,6 +128,7 @@ impl SystemBus {
             io_voltage_v: None,
             gpio_input_thresholds: None,
             supply: crate::power::SupplySupervisor::default(),
+            supply_domains: Default::default(),
             external_device_decls: Vec::new(),
             semihost: SemihostState::new(),
         };
@@ -223,6 +224,7 @@ impl SystemBus {
             io_voltage_v: None,
             gpio_input_thresholds: None,
             supply: crate::power::SupplySupervisor::default(),
+            supply_domains: Default::default(),
             external_device_decls: Vec::new(),
             semihost: SemihostState::new(),
         };

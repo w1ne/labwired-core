@@ -1189,3 +1189,14 @@ mod tests {
         );
     }
 }
+
+/// UART peer adapter for the common attached-device inspection visitor.
+pub(crate) struct UartEvidence<'a>(pub &'a dyn crate::peripherals::device::UartStreamDevice);
+impl DeviceEvidence for UartEvidence<'_> {
+    fn artifacts(&self, id: &str, opts: &InspectOpts) -> Vec<Artifact> {
+        self.0.artifacts(id, opts)
+    }
+    fn evidence_logs(&self) -> Vec<crate::peripheral_log::PeripheralLog> {
+        self.0.logs()
+    }
+}

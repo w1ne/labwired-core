@@ -268,6 +268,7 @@ pub(crate) fn with_clr_alias_write<R>(f: impl FnOnce() -> R) -> R {
 }
 
 pub struct SystemBus {
+    pub(crate) supply_domains: crate::peripherals::components::supply_domain::SupplyDomains,
     pub flash: LinearMemory,
     pub ram: LinearMemory,
     /// Extra CPU-visible RAM/ROM windows beyond `flash`/`ram` (e.g. ESP32 IRAM

@@ -343,6 +343,9 @@ impl TracingI2cDevice {
 }
 
 impl I2cDevice for TracingI2cDevice {
+    fn transaction_generation(&self) -> Option<u64> {
+        self.inner.transaction_generation()
+    }
     fn address(&self) -> u8 {
         self.inner.address()
     }

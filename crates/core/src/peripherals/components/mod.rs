@@ -41,6 +41,7 @@ pub mod gpio_schedule;
 #[allow(dead_code)]
 pub mod dht22;
 pub mod drv2605;
+pub mod esp32c3_esp_at;
 pub mod h_bridge_motor;
 pub mod i2c_factory;
 pub mod i80_panel;
@@ -72,6 +73,7 @@ pub mod shm_i2c;
 pub mod sps30;
 pub mod step_dir_motor;
 pub mod supply;
+pub mod supply_domain;
 pub mod tca9548a;
 pub mod unipolar_stepper;
 /// Hand-written VEML7700 model, retained only as the byte-parity oracle the

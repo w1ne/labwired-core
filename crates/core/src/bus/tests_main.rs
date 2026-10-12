@@ -3631,6 +3631,7 @@ fn test_flash_boot_alias_read_and_write() {
         io_voltage_v: None,
         gpio_input_thresholds: None,
         supply: crate::power::SupplySupervisor::default(),
+        supply_domains: Default::default(),
     };
 
     bus.flash.write_u8(0x0800_0000, 0x12);
@@ -3749,6 +3750,7 @@ fn h5_flash_bus(gate: bool) -> SystemBus {
         io_voltage_v: None,
         gpio_input_thresholds: None,
         supply: crate::power::SupplySupervisor::default(),
+        supply_domains: Default::default(),
     };
     bus.rebuild_peripheral_ranges();
     bus
@@ -4020,6 +4022,7 @@ fn h5_rww_bus(gate: bool) -> SystemBus {
         io_voltage_v: None,
         gpio_input_thresholds: None,
         supply: crate::power::SupplySupervisor::default(),
+        supply_domains: Default::default(),
     };
     bus.rebuild_peripheral_ranges();
     bus
@@ -4287,6 +4290,7 @@ fn test_peripheral_range_index_lookup() {
         io_voltage_v: None,
         gpio_input_thresholds: None,
         supply: crate::power::SupplySupervisor::default(),
+        supply_domains: Default::default(),
     };
 
     bus.rebuild_peripheral_ranges();
@@ -4409,6 +4413,7 @@ fn test_dma_tick_executes_copy_and_raises_irq() {
         io_voltage_v: None,
         gpio_input_thresholds: None,
         supply: crate::power::SupplySupervisor::default(),
+        supply_domains: Default::default(),
     };
     bus.rebuild_peripheral_ranges();
 

@@ -20,6 +20,7 @@ fn unique_id() -> u64 {
 pub struct Armv7Fabric {
     identity: u64,
     pub(crate) uart2_index: Option<usize>,
+    pub(crate) uart4_index: Option<usize>,
     pub gic: Arc<Mutex<gic::Gic>>,
     pub timer: timer::ArchTimer,
 }
@@ -28,6 +29,7 @@ impl Default for Armv7Fabric {
         Self {
             identity: unique_id(),
             uart2_index: None,
+            uart4_index: None,
             gic: Arc::new(Mutex::new(gic::Gic::default())),
             timer: timer::ArchTimer::default(),
         }
@@ -38,6 +40,7 @@ impl Clone for Armv7Fabric {
         Self {
             identity: unique_id(),
             uart2_index: None,
+            uart4_index: None,
             gic: Arc::new(Mutex::new(self.gic.lock().unwrap().clone())),
             timer: self.timer.clone(),
         }
@@ -95,6 +98,47 @@ impl crate::bus::SystemBus {
             None,
             Box::new(rk3x_i2c::Rk3xI2c::new(gic, 53)),
         );
+        self.recompute_walk_deletable();
+        Ok(())
+    }
+    /// Opt in to the functional RV1103 UART4 slice after installing ARMv7.
+    /// This does not alter the foundation boot tree or configure any external part.
+    pub fn configure_armv7_rv1103_uart4(&mut self) -> SimResult<()> {
+        const BASE: u64 = 0xff4e0000;
+        const SIZE: u64 = 0x100;
+        let fabric = self
+            .irq_fabric
+            .armv7
+            .as_ref()
+            .ok_or_else(|| SimulationError::Other("UART4 requires ARMv7 fabric".into()))?;
+        if self.peripherals.iter().any(|p| {
+            p.name == "uart4" || (p.base < BASE + SIZE && p.base.saturating_add(p.size) > BASE)
+        }) {
+            return Err(SimulationError::Other(
+                "UART4 name or MMIO window already mapped".into(),
+            ));
+        }
+        if std::iter::once(&self.flash)
+            .chain(std::iter::once(&self.ram))
+            .chain(self.extra_mem.iter())
+            .any(|m| {
+                m.base_addr < BASE + SIZE && m.base_addr.saturating_add(m.data.len() as u64) > BASE
+            })
+        {
+            return Err(SimulationError::Other(
+                "UART4 MMIO window overlaps CPU memory".into(),
+            ));
+        }
+        let gic = fabric.gic.clone();
+        let index = self.peripherals.len();
+        self.add_peripheral(
+            "uart4",
+            BASE,
+            SIZE,
+            None,
+            Box::new(dw_uart::DwUart::new(gic, 61)),
+        );
+        self.irq_fabric.armv7.as_mut().unwrap().uart4_index = Some(index);
         self.recompute_walk_deletable();
         Ok(())
     }

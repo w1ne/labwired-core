@@ -47,8 +47,9 @@ register reads, recording overrun. The existing host queue is an input staging
 queue and callers must bound their enqueues; the emulated FIFO is bounded.
 Console capture retains the latest 64 KiB. DLAB divisor writes are never TX.
 Logical MCR loopback implements modem status and internal RX. IIR implements
-line status, RX threshold, latched THRE and modem interrupts. DMA, physical
-baud/busy/modem timing and RX timeout interrupts are unsupported. UCV/CPR/DLF
+line status, RX threshold, functional RX timeout, latched THRE and modem
+interrupts. DMA and physical baud/busy/modem timing remain unsupported.
+The RX timeout uses the fixed functional interval described below. UCV/CPR/DLF
 report zero. Linux's exact DLF all-ones probe and RE_EN 1/0 probe writes are
 ignored and read back zero; real fractional-divisor/RS485 requests are refused.
 
@@ -56,8 +57,9 @@ Console/RX attachment uses the existing UART capabilities, and stream peers
 attach through `attach_uart_stream_by_id`. Attaching a protocol peer detaches
 console capture. Peer polling uses the machine's existing central device-time
 drive, including its initial time anchor, with a maximum 16 polls per peer per
-slice. The seam supports later UART4/ESP-AT work; timed peer wake scheduling,
-power behavior and a real ESP-AT peer are separate tasks.
+slice. The optional UART4 slice, behavioral ESP-AT peer and external supply gates
+are described below. Timed peer wake scheduling, ESP firmware and RF remain
+unsupported.
 
 Focused tests cover actual native Machine retirement and timer IRQ/WFI edges,
 masked wake, no-progress waits, programming boundaries, code-identity swaps,
@@ -122,3 +124,68 @@ SHA256 `cee9b45dfee3fb4a7168585603c88df5e3422493425ac1bd35046d509d910423`.
 The SDK's genuine `rockchip,rv1106-i2c`/`rockchip,rk3399-i2c` fallback selects
 v1 timing. Any later basket DT must preserve those identities and disclose
 its synthetic fixed functional clocks; the accepted foundation stays separate.
+
+`configure_armv7_rv1103_uart4()` separately installs UART4 at
+`ff4e0000/100`, named `uart4`, with SPI29 / GIC INTID61. It applies the same
+atomic fabric/name/window/memory checks as the I2C3 opt-in. CPU IRQ sampling
+reconciles only the two registered ARM UART indices, including UART4 epochs
+before reading GIC pins, without scanning peripherals. UART2 and the base
+Linux fixture remain independent. DW UART RX interrupt priority is line
+status, FIFO threshold, receive timeout, THRE, modem status. Below-threshold
+nonempty RX interrupts after a fixed **functional 4000us** idle interval;
+this is not physical divisor/baud timing. Real accepted arrivals, RBR reads,
+and RX clear reset the interval; DLL reads and peeks do not. Shared legacy RX
+queue changes are detected by a bounded content signature at actual service.
+
+The `esp32c3_esp_at` kit attaches through the ordinary UART stream-host
+capability. It is an explicitly **behavioral mock**, with no ESP firmware,
+Wi-Fi networking, RF, or inferred radio power load. Strict CRLF frames accept
+`AT`, `AT+GMR`, `AT+LABMOCKSTATUS?`, `AT+LABMOCKCONNECT`, and
+`AT+LABMOCKDISCONNECT`. GMR names the LabWired mock, and connection/status are
+mock state only. Malformed/unknown frames return `ERROR\r\n`. Payloads hold at
+most 256 bytes; overflow drains to the next CRLF and yields one ERROR. The
+single reply queue holds at most 1024 bytes. A saturated queue emits ERROR
+when it fits or drops a complete frame, with a bounded log; rejected frames
+cannot change mock connection state. At most one reply byte is released per
+poll with >=1000us accumulated elapsed time. Excess credit is discarded.
+Service intervals and guest FIFO drains must prevent 16-byte RX overrun;
+this is functional pacing rather than baud accuracy. Common input, logs,
+inspection and shared BusTrace report the actual peer/host state.
+
+Before attaching routed parts, register one external functional domain:
+`bus.register_supply_domain("external3v3", 2.7)?`. Set both ADXL345 and ESP
+placement config to `supply_domain: external3v3, supply_min_v: 2.7`. The
+threshold is a disclosed functional gate assumption, not silicon behavior.
+Domains start off and accept `bus.update_supply_domain(name, voltage_v)?`
+only for known names and finite nonnegative voltages. Incompatible domain
+registration/placement thresholds are errors. Task4 must feed the existing
+plant output before each guest window; these gates contain no battery model
+and do not replace the host execution SupplySupervisor.
+
+Unrouted legacy parts remain on; `powered: false` stays off permanently.
+I2C input/identity/log/inspection forwarding survives cutoff, while all inner
+bus, clock and pin operations are suppressed. Sensor registers are retained
+across cutoff as an explicit functional assumption. Off/on domain transitions
+change a shared generation, while healthy voltage updates do not. RK3x
+checks the selected device generation on every transaction phase/chunk,
+including a cut+restore with no intervening controller service.
+
+A routed ESP requires the optional **exclusive generation-aware UART host**
+contract. DW accepts it only on an empty UART/RX FIFO, detaches console
+capture, refuses additional kit peers and console capture, and exposes no
+shared RX injection handle while exclusive. Normal fallible bus and kit
+attachment paths reject exclusive-host conflicts and generation-aware peers
+requiring explicit exclusive attachment before changing console capture or
+peer state. Direct low-level callers must
+use the exclusive attach method and cannot mix host injections with this
+protocol FIFO. This restriction makes it safe to invalidate already delivered
+host RX on any domain generation change at actual RX/IRQ/poll service.
+Peeks observe invalidation without mutating queues, timers or IRQ state.
+Cutoff discards ESP partial frames, queued replies and mock connection state.
+
+The focused component/controller tests establish these shared functional
+contracts. **Basket Linux guest exchanges remain NOT_RUN in Task3**; real
+module insertion/helper execution and plant/full-host-power acceptance are
+Task4 gates. Physical board, rail, footprint, thermal and RF gates remain
+pending while hardware is unavailable. Local dogfood requires no npm
+publication or manual deployment.

@@ -20,6 +20,7 @@ use crate::peripherals::components;
 /// Peripherals not listed here still use the legacy hand-written arms in
 /// `bus/mod.rs` — both paths coexist during migration.
 pub static KITS: &[&'static dyn PeripheralKit] = &[
+    &components::esp32c3_esp_at::ESP_AT_KIT,
     &components::bg770a::BG770A_KIT,
     &components::declarative_uart::NEO6M_KIT,
     &components::ydlidar::YDLIDAR_KIT,

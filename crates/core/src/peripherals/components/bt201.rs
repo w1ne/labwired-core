@@ -878,7 +878,8 @@ impl PeripheralKit for Bt201Kit {
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
         let module = bt201_from_config(ctx);
         ctx.uart_stream_host()?
-            .attach_stream_device(Box::new(module));
+            .try_attach_stream_device(Box::new(module))
+            .map_err(anyhow::Error::msg)?;
         Ok(())
     }
 }

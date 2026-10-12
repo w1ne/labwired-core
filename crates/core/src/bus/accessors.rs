@@ -354,12 +354,14 @@ impl crate::Bus for SystemBus {
             // The existing RX queue capability may be filled by host input
             // between instructions. Reconcile its live level before sampling
             // GIC pins; UART entries have no legacy NVIC IRQ number.
-            if let Some(level) = f
-                .uart2_index
-                .and_then(|i| self.peripherals.get(i))
-                .and_then(|p| p.dev.irq_line_level())
-            {
-                f.gic.lock().unwrap().set_level(59, level);
+            // Only the two registered ARM UART sources, never a peripheral scan.
+            for (index, intid) in [(f.uart2_index, 59), (f.uart4_index, 61)] {
+                if let Some(level) = index
+                    .and_then(|i| self.peripherals.get(i))
+                    .and_then(|p| p.dev.irq_line_level())
+                {
+                    f.gic.lock().unwrap().set_level(intid, level);
+                }
             }
             f.gic.lock().unwrap().levels()
         })

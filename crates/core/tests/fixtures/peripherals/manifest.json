@@ -2,6 +2,42 @@
   "schema_version": 2,
   "peripherals": [
     {
+      "device_type": "esp32c3_esp_at",
+      "label": "ESP32-C3 behavioral ESP-AT",
+      "summary": "Bounded AT peer with explicit mock connection state",
+      "detail": "Behavioral mock only; no ESP firmware or RF. Strict CRLF. AT, AT+GMR, AT+LABMOCKSTATUS?, AT+LABMOCKCONNECT, AT+LABMOCKDISCONNECT; unknown/malformed frames return ERROR. Commands 256 bytes, replies 1024 bytes; saturation drops complete frames before mock-state changes. One reply byte per >=1000us poll; no baud accuracy.",
+      "transport": "uart",
+      "category": "uart",
+      "config_keys": [
+        {
+          "name": "powered",
+          "ty": "bool",
+          "doc": "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered part -- ABSENT MEANS POWERED, because curated labs state signals and leave the rails implicit. Only an explicit `false`, which the diagram compiler emits when it can see the supply pins are on no net, changes anything: the part then ignores its bus entirely and reports the dark/idle state it has on a bench."
+        },
+        {
+          "name": "supply_domain",
+          "ty": "str",
+          "doc": "Explicit pre-registered external supply domain; starts off until a finite voltage update."
+        },
+        {
+          "name": "supply_min_v",
+          "ty": "float",
+          "doc": "Functional gate threshold, must match domain registration; no silicon threshold claim."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "mock_connected",
+          "label": "Mock connection",
+          "unit": "boolean",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.0
+        }
+      ]
+    },
+    {
       "device_type": "bg770a-cellular",
       "label": "Quectel BG770A Cellular",
       "summary": "LTE-M / NB-IoT cellular modem with the full Quectel AT command surface.",

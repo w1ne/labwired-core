@@ -1200,7 +1200,8 @@ impl SystemBus {
     /// UART peripheral registered under `uart_id`. This is the post-build
     /// counterpart to `AttachCtx::uart().attach_stream(..)`, used by
     /// `World::from_manifest` to wire cross-link endpoints between nodes.
-    /// Errors if no such peripheral exists or it is not a UART.
+    /// Errors if no such peripheral exists, it is not a UART, its host is
+    /// exclusive, or the peer requires explicit exclusive attachment.
     pub fn attach_uart_stream_by_id(
         &mut self,
         uart_id: &str,
@@ -1217,8 +1218,9 @@ impl SystemBus {
             .dev
             .as_uart_stream_host()
             .ok_or_else(|| anyhow::anyhow!("peripheral '{uart_id}' is not a UART"))?;
+        uart.try_attach_stream_device(dev)
+            .map_err(|e| anyhow::anyhow!("peripheral '{uart_id}': {e}"))?;
         uart.detach_console_sink();
-        uart.attach_stream_device(dev);
         // Stream attach can flip models that force walk when a peer is wired
         // (CanBus-style). Rebuild tick indices and recompute walk-deletion —
         // same seam as `attach_can_bus_by_id`. EspUart under event-scheduler
