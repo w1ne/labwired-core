@@ -249,6 +249,12 @@ class BoundedRunner:
         cwd = str(Path(kwargs.get("cwd") or os.getcwd()).resolve())
         environment = kwargs.get("env") if kwargs.get("env") is not None else os.environ
         fixture_before = fixture_after = fixture_error = None
+        metadata_capacity = 8192
+        if self.common is not None:
+            # The collector may consume every remaining byte. Reserve the
+            # original exit and fixture proof before starting that producer.
+            from cortex_m_perf_diagnostics import reserve
+            reserve(self.budget, metadata_capacity)
         if valgrind and self.common is not None:
             fixture = Path(command[command.index("--firmware") + 1])
             chip = Path(command[command.index("--chip") + 1]).stem
@@ -275,9 +281,8 @@ class BoundedRunner:
             if fixture_error is not None:
                 child_proof['fixture_validation_error']=str(fixture_error)[:1024]
         data=json.dumps(child_proof)+"\n"
-        if self.common is not None:
-            from cortex_m_perf_diagnostics import reserve
-            reserve(self.budget,len(data.encode()))
+        if self.common is not None and len(data.encode()) > metadata_capacity:
+            raise ValueError("oversized reserved diagnostic child metadata")
         prefix.with_suffix(".json").write_text(data)
         if result.returncode != 0:
             raise ValueError(f"owned perf child failed: {self.side}/{self.ordinal} exit={result.returncode}")

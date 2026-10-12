@@ -271,6 +271,33 @@ class DiagnosticsControls(unittest.TestCase):
             self.diag.prepare_common_fixtures(modules,sources,out,self.perf.Budget(100),self.perf.BoundedRunner)
         self.assertFalse((out/'fixtures/common').exists())
 
+    def test_exhausted_collector_retains_original_exit_and_fixture_proof(self):
+        common,modules,sources,calls,out=self.prepare()
+        runner=self.perf.BoundedRunner(types.SimpleNamespace(),'base',out,[],self.perf.Budget(10000),common)
+        fixture=common.paths['nrf']
+        def exhaust(command,**kwargs):
+            kwargs['budget'].remaining=0
+            result=subprocess.CompletedProcess(command,125,b'capped stdout',b'capped stderr')
+            result.producer_exit_code=-15
+            return result
+        cmd=['valgrind','cli','run','--chip','configs/chips/nrf52840.yaml','--firmware',str(fixture),'--max-steps','200000']
+        with mock.patch.object(self.perf,'collect',side_effect=exhaust),self.assertRaisesRegex(ValueError,'exit=125'):
+            runner.run(cmd,capture_output=True)
+        child=json.loads((out/'base-child-01.json').read_text())
+        self.assertEqual((child['exit_code'],child['producer_exit_code']),(125,-15))
+        self.assertEqual(child['fixture_before'],child['fixture_after'])
+        self.assertEqual((out/'base-child-01.stdout').read_bytes(),b'capped stdout')
+        self.assertEqual((out/'base-child-01.stderr').read_bytes(),b'capped stderr')
+
+    def test_insufficient_metadata_budget_rejects_before_producer(self):
+        common,modules,sources,calls,out=self.prepare()
+        runner=self.perf.BoundedRunner(types.SimpleNamespace(),'base',out,[],self.perf.Budget(1),common)
+        cmd=['valgrind','cli','run','--chip','configs/chips/nrf52840.yaml','--firmware',str(common.paths['nrf']),'--max-steps','200000']
+        result=subprocess.CompletedProcess(cmd,125,b'',b'');result.producer_exit_code=-15
+        with mock.patch.object(self.perf,'collect',return_value=result) as collect,self.assertRaises(ValueError):
+            runner.run(cmd,capture_output=True)
+        collect.assert_not_called()
+
     def test_builder_exception_restores_cwd_argv_environment_and_subprocess(self):
         modules,sources,calls=self.modules();out=self.path/'evidence';out.mkdir()
         before=(os.getcwd(),sys.argv[:],dict(os.environ),modules['base'].subprocess)
