@@ -31,6 +31,20 @@ pub struct Execution {
     pub waiting: bool,
 }
 
+/// Encoding captured from the instruction's native translated physical pages.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Instruction {
+    pub pc: u32,
+    pub opcode: u32,
+}
+
+/// Diagnostic JIT allocation state; this is not restorable CPU state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TranslationCacheStatus {
+    pub size_bytes: u64,
+    pub allocations: u64,
+}
+
 #[cfg(feature = "native")]
 mod native;
 #[cfg(feature = "native")]
@@ -58,7 +72,16 @@ impl ArmCpu {
     pub fn execute(&mut self, _: &mut dyn PhysicalBus, _: u32) -> Result<Execution, String> {
         Self::disabled()
     }
+    pub fn execute_traced(
+        &mut self,
+        _: &mut dyn PhysicalBus,
+    ) -> Result<(Execution, Option<Instruction>), String> {
+        Self::disabled()
+    }
     pub fn invalidate_code(&mut self) -> Result<(), String> {
+        Self::disabled()
+    }
+    pub fn translation_cache_status(&mut self) -> Result<TranslationCacheStatus, String> {
         Self::disabled()
     }
     pub fn reset(&mut self) -> Result<(), String> {

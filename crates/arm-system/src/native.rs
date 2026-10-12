@@ -1,4 +1,4 @@
-use crate::{Execution, PhysicalBus};
+use crate::{Execution, Instruction, PhysicalBus, TranslationCacheStatus};
 use libloading::os::unix::{Library, RTLD_LOCAL, RTLD_NOW};
 use std::{
     cell::Cell,
@@ -172,6 +172,22 @@ impl ArmCpu {
         self.invoke(5, irq as u64, fiq as u64).map(|_| ())
     }
     pub fn execute(&mut self, bus: &mut dyn PhysicalBus, count: u32) -> Result<Execution, String> {
+        self.execute_inner(bus, count, false).map(|(e, _)| e)
+    }
+    /// Single native instruction with its actual translated PC and encoding.
+    /// Zero-retirement exception entry and parked WFI return no instruction.
+    pub fn execute_traced(
+        &mut self,
+        bus: &mut dyn PhysicalBus,
+    ) -> Result<(Execution, Option<Instruction>), String> {
+        self.execute_inner(bus, 1, true)
+    }
+    fn execute_inner(
+        &mut self,
+        bus: &mut dyn PhysicalBus,
+        count: u32,
+        traced: bool,
+    ) -> Result<(Execution, Option<Instruction>), String> {
         if count == 0 {
             return Err("execution budget must be nonzero".into());
         }
@@ -185,19 +201,41 @@ impl ArmCpu {
         let mut ctx = Context { bus, error: None };
         unsafe { (self.bind)(&mut ctx as *mut _ as *mut c_void, Some(callback)) };
         let binding = Binding { bind: self.bind };
-        let result = self.invoke(6, count as u64, 0);
+        let result = self.invoke(if traced { 12 } else { 6 }, count as u64, 0);
         drop(binding);
         if let Some(error) = ctx.error {
             self.poisoned = true;
             return Err(error);
         }
-        result.map(|(retired, waiting)| Execution {
-            retired,
-            waiting: waiting != 0,
-        })
+        let (retired, waiting) = result?;
+        let instruction = if traced && retired != 0 {
+            let (pc, opcode) = self.invoke(13, 0, 0)?;
+            Some(Instruction {
+                pc: pc as u32,
+                opcode: opcode as u32,
+            })
+        } else {
+            None
+        };
+        Ok((
+            Execution {
+                retired,
+                waiting: waiting != 0,
+            },
+            instruction,
+        ))
     }
     pub fn invalidate_code(&mut self) -> Result<(), String> {
         self.invoke(7, 0, 0).map(|_| ())
+    }
+    /// Current bounded JIT cache size and allocation count, including growth
+    /// and reuse at the cap. Querying it does not access guest memory.
+    pub fn translation_cache_status(&mut self) -> Result<TranslationCacheStatus, String> {
+        let (size_bytes, allocations) = self.invoke(14, 0, 0)?;
+        Ok(TranslationCacheStatus {
+            size_bytes,
+            allocations,
+        })
     }
     pub fn reset(&mut self) -> Result<(), String> {
         // Recreate after faults rather than reuse partially unwound translator state.

@@ -46,11 +46,13 @@ The crate defaults to no native feature. Enabling `native` on an unsupported hos
 
 Files: modify `crates/core/{Cargo.toml,src/cpu/mod.rs}`; create `crates/core/src/cpu/cortex_a_system.rs`, `crates/core/tests/qemu_arm_system.rs`; modify `crates/core/src/lib.rs` only for additive IRQ/FIQ level capability with default behavior preserving existing CPUs.
 
-- [ ] Add a feature-required integration test that loads the architectural instruction fixture through an actual Bus and calls Cpu::step_batch. Require translated physical accesses, real retired counts, observers only for retired instructions and explicit snapshot refusal.
-- [ ] Run `cargo test -p labwired-core --features qemu-arm-system --test qemu_arm_system`; retain the missing-adapter failure.
-- [ ] Add optional dependency `labwired-arm-system` and feature `qemu-arm-system = ["dep:labwired-arm-system", "labwired-arm-system/native"]`. Gate exports on native feature and keep the existing Unicorn backend unchanged.
-- [ ] Implement `CortexA7System` with scoped PhysicalBus forwarding and exact-width Bus reads/writes. CP15 timer callbacks must reach the RV1103 timer owner, never a second private timer. Forward IRQ/FIQ levels, including deassertion. Record errors from infallible Cpu register setters and return them on the next fallible execution call. Refuse incomplete banked/CP15 runtime snapshot restoration.
-- [ ] Verify feature-on architecture tests plus existing feature-off/default/browser compilation and the original qemu-arm fixture. Root commits only after both reviews.
+- [x] Add a feature-required integration test that loads the architectural instruction fixture through an actual Bus and calls Cpu::step_batch. Require translated physical accesses, real retired counts, observers only for retired instructions and explicit snapshot refusal.
+- [x] Run `cargo test -p labwired-core --features qemu-arm-system --test qemu_arm_system`; retain the missing-adapter failure.
+- [x] Add optional dependency `labwired-arm-system` and feature `qemu-arm-system = ["dep:labwired-arm-system", "labwired-arm-system/native"]`. Gate exports on native feature and keep the existing Unicorn backend unchanged.
+- [x] Implement `CortexA7System` with scoped PhysicalBus forwarding and exact-width Bus reads/writes. CP15 timer callbacks must reach the RV1103 timer owner, never a second private timer. Forward IRQ/FIQ levels, including deassertion. Record errors from infallible Cpu register setters and return them on the next fallible execution call. Refuse incomplete banked/CP15 runtime snapshot restoration.
+- [x] Verify feature-on architecture tests plus existing feature-off/default/browser compilation and the original qemu-arm fixture. Root commits only after both reviews.
+
+Task 2 verification passed: native architecture 27 plus unit 4, core adapter 17, shared trace 3, scheduler 76, legacy Unicorn 15, transaction-state refusal and feature-off tests, default core and browser compilation. The native integration includes translated trace capture, genuine branch-self retirement, bounded exception diagnostics, safe 8–16 MiB cache configuration and generated-source cleanup after failed cache growth; vendor bytes remain unchanged. These fixtures do not establish Linux machine acceptance.
 
 ## Subsequent integration plans
 

@@ -264,6 +264,49 @@ impl SystemBus {
 }
 
 impl crate::Bus for SystemBus {
+    fn read_u64(&self, addr: u64) -> SimResult<u64> {
+        let offset =
+            addr.checked_sub(self.ram.base_addr)
+                .and_then(|v| usize::try_from(v).ok())
+                .filter(|v| *v < self.ram.data.len())
+                .ok_or_else(|| {
+                    SimulationError::NotImplemented(format!(
+                "eight-byte physical access at {addr:#x} requires RAM; MMIO64 is unsupported"))
+                })?;
+        let bytes = offset
+            .checked_add(8)
+            .and_then(|end| self.ram.data.get(offset..end))
+            .ok_or(SimulationError::MemoryViolation(addr))?;
+        self.note_memory_read();
+        Ok(u64::from_le_bytes(bytes.try_into().unwrap()))
+    }
+
+    fn write_u64(&mut self, addr: u64, value: u64) -> SimResult<()> {
+        let offset =
+            addr.checked_sub(self.ram.base_addr)
+                .and_then(|v| usize::try_from(v).ok())
+                .filter(|v| *v < self.ram.data.len())
+                .ok_or_else(|| {
+                    SimulationError::NotImplemented(format!(
+                "eight-byte physical access at {addr:#x} requires RAM; MMIO64 is unsupported"))
+                })?;
+        // Validate the complete transaction before mutating any byte. Never
+        // route an eight-byte device transaction through two 32-bit registers.
+        let bytes = offset
+            .checked_add(8)
+            .and_then(|end| self.ram.data.get_mut(offset..end))
+            .ok_or(SimulationError::MemoryViolation(addr))?;
+        let old: [u8; 8] = bytes.try_into().unwrap();
+        bytes.copy_from_slice(&value.to_le_bytes());
+        self.note_memory_write();
+        for (i, (old, new)) in old.into_iter().zip(value.to_le_bytes()).enumerate() {
+            for observer in &self.observers {
+                observer.on_memory_write(addr + i as u64, old, new);
+            }
+        }
+        Ok(())
+    }
+
     fn logic_tap(&self) -> Option<crate::logic_capture::LogicTap> {
         Some(self.logic_tap.clone())
     }

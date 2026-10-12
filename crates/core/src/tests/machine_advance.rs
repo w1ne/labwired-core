@@ -29,6 +29,7 @@ pub(crate) struct CountingCpu {
     push_level: Option<bool>,
     // Non-architectural execution probes; intentionally omitted from snapshots.
     zero_batch: bool,
+    idle_budget_after_zero: Option<u64>,
     // Non-architectural WAITI-park injection (dual-core coalesced-idle batching).
     parked: bool,
     // Non-architectural APP-release injection: publish an APPCPU boot address
@@ -91,6 +92,23 @@ impl Cpu for CountingCpu {
         Ok(())
     }
 
+    fn step_retired(
+        &mut self,
+        bus: &mut dyn Bus,
+        observers: &[Arc<dyn SimulationObserver>],
+        config: &SimulationConfig,
+    ) -> SimResult<u32> {
+        if self.zero_batch {
+            if let Some(budget) = self.idle_budget_after_zero {
+                self.parked = true;
+                self.idle_budget = Some(budget);
+            }
+            return Ok(0);
+        }
+        self.step(bus, observers, config)?;
+        Ok(1)
+    }
+
     fn step_batch(
         &mut self,
         bus: &mut dyn Bus,
@@ -99,6 +117,10 @@ impl Cpu for CountingCpu {
         max_count: u32,
     ) -> SimResult<u32> {
         if self.zero_batch {
+            if let Some(budget) = self.idle_budget_after_zero {
+                self.parked = true;
+                self.idle_budget = Some(budget);
+            }
             return Ok(0);
         }
         let tap = bus.logic_tap().filter(|tap| tap.push_armed());
@@ -2068,4 +2090,101 @@ fn resident_exact_edges_disable_idle_skipping() {
     assert_eq!(report.primary_steps, 8);
     assert_eq!(report.idle_cycles, 0);
     assert_eq!(*seen.lock().unwrap(), vec![(3, 64)]);
+}
+
+#[test]
+fn zero_retirement_single_restores_time_and_has_no_tick_or_profile() {
+    let mut machine = Machine::new(
+        CountingCpu {
+            zero_batch: true,
+            parked: true,
+            ..Default::default()
+        },
+        SystemBus::new(),
+    );
+    machine.total_cycles = 9;
+    machine.bus.set_current_cycle(9);
+    arm_synthetic_push_channel(&mut machine);
+    let report = machine.advance(AdvanceRequest::single()).unwrap();
+    assert_eq!(report.stop, AdvanceStop::NoProgress);
+    assert_eq!(report.primary_steps, 0);
+    assert_eq!(report.elapsed_cycles, 0);
+    assert_eq!(machine.total_cycles, 9);
+    assert_eq!(machine.bus.current_cycle, 9);
+    assert_eq!(machine.cpu.steps, 0);
+    assert_eq!(machine.bus.logic_tap.clock(), 9);
+    assert!(machine.logic_read_edges(0).edges.is_empty());
+    assert_eq!(machine.step_profile(), StepProfile::default());
+}
+
+#[test]
+fn waiting_without_deadline_never_charges_single_or_batch() {
+    for single in [true, false] {
+        for enabled in [true, false] {
+            let mut machine = Machine::new(
+                CountingCpu {
+                    zero_batch: true,
+                    parked: true,
+                    ..Default::default()
+                },
+                SystemBus::new(),
+            );
+            machine.config.idle_fast_forward_enabled = enabled;
+            machine.bus.config.idle_fast_forward_enabled = enabled;
+            let report = machine
+                .advance(if single {
+                    AdvanceRequest::single()
+                } else {
+                    AdvanceRequest::run(Some(4))
+                })
+                .unwrap();
+            assert_eq!(report.stop, AdvanceStop::NoProgress);
+            assert_eq!(
+                (
+                    report.primary_steps,
+                    report.elapsed_cycles,
+                    report.fuel_consumed
+                ),
+                (0, 0, 0)
+            );
+            assert_eq!(machine.step_profile(), StepProfile::default());
+        }
+    }
+}
+
+#[cfg(feature = "event-scheduler")]
+#[test]
+fn newly_waiting_zero_retirement_can_advance_only_configured_idle_time() {
+    // The empty bus permits the existing idle path. STM32 defaults retain
+    // active legacy work, which must continue to block fast-forward.
+    for safe in [false, true] {
+        let mut machine = Machine::new(
+            CountingCpu {
+                zero_batch: true,
+                idle_budget_after_zero: Some(12),
+                ..Default::default()
+            },
+            if safe {
+                SystemBus::empty()
+            } else {
+                SystemBus::new()
+            },
+        );
+        machine.config.idle_fast_forward_enabled = true;
+        machine.bus.config.idle_fast_forward_enabled = true;
+        let report = machine.advance(AdvanceRequest::run(Some(4))).unwrap();
+        assert_eq!(
+            report.stop,
+            if safe {
+                AdvanceStop::FuelLimit
+            } else {
+                AdvanceStop::NoProgress
+            }
+        );
+        assert_eq!(report.primary_steps, 0);
+        assert_eq!(report.elapsed_cycles, if safe { 4 } else { 0 });
+        assert_eq!(report.idle_cycles, if safe { 4 } else { 0 });
+        assert_eq!(machine.cpu.steps, 0);
+        assert_eq!(report.cpu_batches, 0);
+    }
 }

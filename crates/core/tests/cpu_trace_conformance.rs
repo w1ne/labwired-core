@@ -26,6 +26,7 @@ use labwired_core::{
 };
 use labwired_hw_trace::TraceEvent;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 // ── Harness ──────────────────────────────────────────────────────────────────
@@ -34,15 +35,18 @@ use std::sync::{Arc, Mutex};
 /// what the CPU *emits*, so the bus must not be able to influence the outcome.
 #[derive(Debug)]
 struct RamBus {
+    identity: u64,
     mem: Vec<u8>,
     config: SimulationConfig,
 }
 
 impl RamBus {
     fn with_program(entry: u64, program: &[u8]) -> Self {
+        static NEXT_IDENTITY: AtomicU64 = AtomicU64::new(1);
         let mut mem = vec![0u8; 0x1_0000];
         mem[entry as usize..entry as usize + program.len()].copy_from_slice(program);
         Self {
+            identity: NEXT_IDENTITY.fetch_add(1, Ordering::Relaxed),
             mem,
             config: SimulationConfig::default(),
         }
@@ -50,6 +54,9 @@ impl RamBus {
 }
 
 impl Bus for RamBus {
+    fn arm_code_identity(&self) -> Option<u64> {
+        Some(self.identity)
+    }
     fn read_u8(&self, addr: u64) -> SimResult<u8> {
         Ok(self.mem.get(addr as usize).copied().unwrap_or(0))
     }
@@ -151,6 +158,21 @@ struct CoreUnderTest {
 /// `every_cpu_core_is_covered_by_this_file`, not by reviewer diligence.
 fn cores() -> Vec<CoreUnderTest> {
     vec![
+        #[cfg(feature = "qemu-arm-system")]
+        CoreUnderTest {
+            name: "CortexA7System",
+            entry: 0x100,
+            program: std::iter::repeat_n(0xe3a00001u32, 4)
+                .flat_map(u32::to_le_bytes)
+                .collect(),
+            step_len: 4,
+            build: |_entry, _program| {
+                let mut cpu = labwired_core::cpu::CortexA7System::new().unwrap();
+                cpu.executable_range(0, 0x10000).unwrap();
+                cpu.set_sp(0x8000);
+                Box::new(cpu)
+            },
+        },
         #[cfg(all(feature = "qemu-arm", not(target_arch = "wasm32")))]
         CoreUnderTest {
             name: "CortexA7",
@@ -368,6 +390,9 @@ fn every_cpu_core_is_covered_by_this_file() {
                     if name == "CortexA7"
                         && !cfg!(all(feature = "qemu-arm", not(target_arch = "wasm32")))
                     {
+                        continue;
+                    }
+                    if name == "CortexA7System" && !cfg!(feature = "qemu-arm-system") {
                         continue;
                     }
                     found.push(name.to_string());

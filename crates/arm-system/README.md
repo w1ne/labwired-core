@@ -18,6 +18,13 @@ native fatal errors (including locally bound native abort/assert paths) poison
 the CPU. This is not containment of memory corruption or operating-system faults. `reset` recreates native state and restores
 registered executable ranges. Guest architectural exceptions remain normal
 execution results; an IRQ entry can retire zero instructions without waiting.
+The interrupt-begin hook bounds consecutive exception entries without actual
+retirement: the ninth entry fails explicitly instead of allowing an unmapped
+abort vector to loop indefinitely inside one native execution call. Retirement
+resets the count, so recurring SVCs and valid handlers remain executable. Before
+poisoning, the error records both the first and current PC, exception index,
+IFAR/IFSR, DFAR/DFSR, SCTLR, TTBR0/1 and DACR. These diagnostics preserve the
+original fault even when later abort-vector faults overwrite the live registers.
 
 All instruction fetches, MMU page-table reads, RAM and MMIO use `PhysicalBus`.
 The bridge never maps a host RAM pointer. Register IDs 0..15 are R0..PC; 16 is
@@ -38,6 +45,31 @@ translation (`CONFIG_ARM_LPAE=n`).
 Executable ranges are checked against the 32-bit physical space, then rounded
 outward to native page boundaries (1 KiB in this pinned backend).
 
+`execute_traced` executes one native instruction and returns its actual PC and
+encoding only when an instruction retires. It reads through the physical pages
+already resolved for the current translation block, including a Thumb-2
+instruction crossing a native page boundary. It does not treat a virtual PC as
+a physical address or invoke a speculative translation. Ordinary `execute`
+does not perform these additional trace reads. Zero-retirement IRQ entry and
+parked WFI return no instruction trace.
+
+The pinned ARM decoder treats the ARM `0xeafffffe` and Thumb `0xe7fe`
+unconditional branches to themselves as WFI. The native CMake wrapper preserves
+their architectural branch behavior by generating a decoder copy in the build
+directory (Cargo `OUT_DIR`). It requires exactly one occurrence of each
+`if(insn == ...)` predicate, then disables only those two special cases; the
+ordinary upstream branch decoder handles the instructions. A predicate-count
+change fails the build. Vendored bytes remain unchanged, other instruction hints
+are unaffected, and real WFI still parks the CPU.
+
+The wrapper also generates an `exec.c` copy that clears the block-table pointer
+after its real release in `code_gen_free`. Upstream leaves that pointer dangling;
+if cache growth and its old-size fallback both fail, guarded execution returns
+an error but subsequent disposal frees the table again. The generated copy
+requires exactly one matching release and retains upstream license headers.
+Subprocess regressions check both safe poisoned-CPU disposal after two failed
+allocations and continued retirement after successful old-size fallback.
+
 Each CPU owns a unique shared-library file inode in a private TempDir, loaded
 with RTLD_LOCAL and built with -Bsymbolic. Loading one inode multiple times
 would share native CPU globals and is deliberately avoided. Idle CPUs may move
@@ -49,6 +81,17 @@ CPU can reallocate that address between the two calls and lose its new JIT
 buffer. The wrapper unmaps aliases once, distinct mappings separately, and
 clears owned pointers before releasing memory. This fixes allocator ownership
 without serializing execution or changing vendored source.
+Before `tlib_init`, the bridge configures the JIT translation cache to a minimum
+of 8 MiB and a maximum of 16 MiB. The pinned 1 MiB default is smaller than its
+3 MiB maximum generated-block reserve plus 0.9 MiB search-data reserve. That
+causes the high-water calculation to underflow and lets guest translations
+overwrite the native JIT prologue. The bridge checks the pinned reserve constants
+before initialization and fails explicitly if the minimum becomes insufficient.
+Upstream cache growth and flushing operate within the configured bound; the
+disposal wrapper also applies during growth and reuse. The diagnostic
+`translation_cache_status` query reports the current size and allocation count,
+including initial allocation, growth and reuse at the cap. It does not fetch
+guest memory or provide restorable CPU state.
 Each native CPU registers a private, initially zeroed exclusive-monitor state
 with tlib. That storage belongs to its unique library; the bridge destroys the
 native mutex and condition variable after native disposal, before unloading the
@@ -73,6 +116,15 @@ new host thread, and clearing reservations on reset or physical bus replacement.
 A deterministic subprocess preload probe reallocates a just-released JIT address
 and verifies that disposal preserves its new owner. Eight threads repeatedly
 create, execute and dispose native CPUs to exercise concurrent mapping ownership.
+Additional regressions verify translated MMU trace encodings, cross-page Thumb-2
+traces, repeated ARM/Thumb self-branch retirement with unchanged PC and no waiting,
+and real WFI parking. An owned subprocess with a timeout verifies that an unmapped
+abort vector returns a poisoning error with first/current fault diagnostics;
+repeated retiring SVCs and the valid guest-abort test verify the bound's recovery
+behavior. A cache-pressure subprocess retires 200,000 distinct-PC single
+instructions, checks the final PC/register state, and requires growth from 8 to
+16 MiB plus reuse at the cap. The same stream reproduces a native SIGSEGV with
+the unsafe upstream cache default.
 These tests establish architecture integration, not a complete Linux boot or
 physical hardware acceptance.
 

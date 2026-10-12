@@ -245,7 +245,7 @@ impl<C: Cpu> Machine<C> {
                     self.bus.set_current_cycle(self.total_cycles);
                     self.bus.bus_trace.set_cycle(self.total_cycles);
                     if self.logic_capture.push_active() {
-                        self.bus.logic_tap.set_clock(self.total_cycles + 1);
+                        self.bus.logic_tap.set_clock(self.total_cycles);
                     }
                 }
                 // Dual-core: primary batch while secondary is WAITI-parked.
@@ -282,8 +282,25 @@ impl<C: Cpu> Machine<C> {
                 .instruction_cycles_are_time()
                 .then(|| self.cpu.clock_cycles());
             let provisional = self.total_cycles;
-            self.cpu
-                .step(&mut self.bus, &self.observers, &self.config)?;
+            let retired = self
+                .cpu
+                .step_retired(&mut self.bus, &self.observers, &self.config)?;
+            if retired == 0 {
+                // Undo the provisional single-instruction charge. Waiting and
+                // exception entry alone do not advance the machine clock.
+                self.total_cycles -= 1;
+                self.bus.set_current_cycle(self.total_cycles);
+                self.bus.bus_trace.set_cycle(self.total_cycles);
+                if self.logic_capture.push_active() {
+                    self.bus.logic_tap.set_clock(self.total_cycles);
+                }
+                return Ok(CoreProgress {
+                    primary_steps: 0,
+                    secondary_steps: 0,
+                    timed_cycles: clock_before.map(|_| 0),
+                    internally_committed_cycles: false,
+                });
+            }
             let timed_cycles =
                 clock_before.map(|before| self.cpu.clock_cycles().saturating_sub(before));
             if let Some(taken) = timed_cycles {
@@ -300,7 +317,7 @@ impl<C: Cpu> Machine<C> {
                 }
             }
             return Ok(CoreProgress {
-                primary_steps: 1,
+                primary_steps: retired,
                 secondary_steps: 0,
                 timed_cycles,
                 internally_committed_cycles: false,

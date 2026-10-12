@@ -38,3 +38,52 @@ source bytes remain unchanged. A subprocess preload probe deterministically
 reallocates the released address and checks that the replacement survives;
 concurrent CPU construction/execution/disposal and repeated parallel architecture
 runs test the host allocator ownership boundary.
+
+The external CMake wrapper also builds a derived ARM decoder in its build
+directory (Cargo `OUT_DIR`), leaving `third_party/tlib/arch/arm/translate.c`
+byte-for-byte unchanged. The pinned decoder recognizes ARM `0xeafffffe` and
+Thumb `0xe7fe` branches to themselves and substitutes WFI. The wrapper requires
+exactly one `if(insn == 0xeafffffe)` and one `if(insn == 0xe7fe)` predicate,
+replacing each with `if(0 /* LabWired: branch-self retires; it is not WFI */)`.
+Only these special cases are disabled; the existing ordinary branch decoder
+preserves retirement and the unchanged PC. Real WFI and other hint decoding
+remain upstream behavior. A source-list or predicate-count mismatch fails the
+build. The generated decoder retains upstream copyright/license headers and
+remains derived from the LGPL source; it is not covered solely by the bridge's
+MIT license. ARM/Thumb branch-self and real-WFI regressions verify this adaptation.
+
+Before upstream initialization, the external bridge calls
+`tlib_set_translation_cache_configuration` with an 8 MiB minimum and 16 MiB
+maximum. The pinned 1 MiB default cannot contain `TCG_MAX_CODE_SIZE` (3 MiB)
+plus `TCG_MAX_SEARCH_SIZE` (0.9 MiB); the resulting high-water underflow allows
+translations to overwrite the JIT prologue. A compile-time check against the
+maximum generated-block size and a guarded initialization check against the
+full code/search reserve reject future incompatible constants. Upstream cache
+allocation, growth and flushing are retained within the configured bound.
+The size-change hook supplies the diagnostic `translation_cache_status` query
+(current bytes and allocation count). An owned, timeout-bounded cache-pressure
+subprocess checks 200,000 distinct-PC retirements, PC/register correctness,
+8-to-16 MiB growth and capped-cache reuse; the unconfigured default reproduces
+a native SIGSEGV. This corrects the allocation configuration rather than claiming
+general containment of native memory corruption or operating-system faults.
+
+The external CMake wrapper additionally generates an `exec.c` copy in `OUT_DIR`.
+It requires exactly one `tlib_free(tbs)` call and adds `tbs = NULL` immediately
+after the real release in `code_gen_free`. Without that ownership correction,
+failure of both cache growth and its old-size fallback returns a guarded error,
+but subsequent disposal frees the dangling table again. The generated source
+retains upstream copyright/license headers and LGPL lineage; vendored bytes
+remain unchanged. Timeout-bounded subprocess regressions exercise both failed
+allocations with safe poisoned-CPU disposal, and successful old-size fallback
+with correct subsequent retirement. This is a specific cleanup correction,
+not a claim of general out-of-memory containment.
+
+The external bridge enables the upstream interrupt-begin hook to bound repeated
+exception entry without retirement. The ninth consecutive entry returns a native
+fatal error and poisons the CPU instead of hanging within one execution call;
+actual retirement resets the count. The error captures first-entry and current
+PC/exception, IFAR/IFSR, DFAR/DFSR, SCTLR, TTBR0/1 and DACR before poisoning hides
+the native register interface. An unmapped-abort-vector subprocess regression
+checks the bound, diagnostics, poison and reset; valid abort handling and repeated
+retiring SVCs remain covered. The hook and unwind stay in the authored C bridge;
+fatal unwinding occurs after Rust physical-bus callbacks return.

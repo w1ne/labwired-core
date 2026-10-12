@@ -552,3 +552,300 @@ fn concurrent_creation_execution_and_disposal() {
         thread.join().unwrap();
     }
 }
+
+#[test]
+fn translated_trace_records_real_irq_instruction_and_mmu_fetch() {
+    let mut b = Bus::new();
+    let mut c = cpu(&mut b, &[0xe3a0002a]);
+    b.words(0x18, &[0xe3a0600d]);
+    c.set_register(16, 0x13).unwrap();
+    c.interrupt_levels(true, false).unwrap();
+    let (e, t) = c.execute_traced(&mut b).unwrap();
+    assert_eq!(e.retired, 0);
+    assert_eq!(t, None);
+    c.interrupt_levels(false, false).unwrap();
+    let (e, t) = c.execute_traced(&mut b).unwrap();
+    assert_eq!(e.retired, 1);
+    let t = t.unwrap();
+    assert_eq!((t.pc, t.opcode), (0x18, 0xe3a0600d));
+    let mut b = Bus::new();
+    let mut c = cpu(
+        &mut b,
+        &[0xee020f10, 0xee031f10, 0xee112f10, 0xe3822001, 0xee012f10],
+    );
+    b.words(0x300, &[0xe3a0402a]);
+    b.words(0x4000, &[0xc02]);
+    b.words(0x6000, &[0xc02]);
+    c.set_register(0, 0x4000).unwrap();
+    c.set_register(1, 3).unwrap();
+    c.execute(&mut b, 5).unwrap();
+    c.set_register(15, 0x80000300).unwrap();
+    let (e, t) = c.execute_traced(&mut b).unwrap();
+    assert_eq!(e.retired, 1);
+    let t = t.unwrap();
+    assert_eq!((t.pc, t.opcode), (0x80000300, 0xe3a0402a));
+    assert_eq!(c.register(4).unwrap(), 42);
+    assert!(!b.accesses.iter().any(|x| x.1 == 0x80000300));
+}
+
+#[test]
+fn traced_thumb32_crosses_physical_native_page_boundary() {
+    let mut b = Bus::new();
+    b.ram[0x3fe..0x402].copy_from_slice(&[0x40, 0xf2, 0x2a, 0x00]);
+    let mut c = ArmCpu::new().unwrap();
+    c.executable_range(0, 0x10000).unwrap();
+    c.set_register(16, 0x33).unwrap();
+    c.set_register(15, 0x3fe).unwrap();
+    let (e, t) = c.execute_traced(&mut b).unwrap();
+    assert_eq!(e.retired, 1);
+    let t = t.unwrap();
+    assert_eq!((t.pc, t.opcode), (0x3fe, 0x002af240));
+    assert_eq!(c.register(0).unwrap(), 42);
+    assert!(b.accesses.iter().any(|x| x.1 == 0x400 && x.2 == 2));
+}
+
+#[test]
+fn arm_and_thumb_self_branches_retire_without_waiting() {
+    for thumb in [false, true] {
+        let mut b = Bus::new();
+        let mut c = cpu(&mut b, &[if thumb { 0xe7fee7fe } else { 0xeafffffe }]);
+        if thumb {
+            c.set_register(16, 0x33).unwrap();
+        }
+        for _ in 0..8 {
+            let e = c.execute(&mut b, 1).unwrap();
+            assert_eq!(e.retired, 1);
+            assert!(!e.waiting);
+            assert_eq!(c.register(15).unwrap(), 0x100);
+        }
+        assert_eq!(c.execute(&mut b, 8).unwrap().retired, 8);
+        assert!(!c.execute(&mut b, 1).unwrap().waiting);
+        // A real WFI retains architectural wait after fixing only branch loops.
+        b.words(0x100, &[if thumb { 0xbf00bf30 } else { 0xe320f003 }]);
+        c.invalidate_code().unwrap();
+        assert_eq!(c.execute(&mut b, 1).unwrap().retired, 1);
+        let e = c.execute(&mut b, 1).unwrap();
+        assert_eq!(e.retired, 0);
+        assert!(e.waiting);
+    }
+}
+
+#[test]
+fn unmapped_abort_vector_fails_without_native_livelock() {
+    if std::env::var_os("LABWIRED_NATIVE_VECTOR_PROBE").is_some() {
+        let mut b = Bus::new();
+        let mut c = cpu(
+            &mut b,
+            &[0xee020f10, 0xee031f10, 0xee112f10, 0xe3822001, 0xee012f10],
+        );
+        c.set_register(0, 0x4000).unwrap();
+        c.set_register(1, 3).unwrap();
+        // Zero table entries leave both the running VA and abort vector unmapped.
+        assert_eq!(c.execute(&mut b, 5).unwrap().retired, 5);
+        let error = c.execute(&mut b, 1).unwrap_err();
+        assert!(error.contains("without retirement"), "{error}");
+        for field in [
+            "pc=0xc",
+            "first_pc=0x114",
+            "first_ifar=0x114",
+            "first_ttbr0=0x4000",
+            "ifsr=",
+            "dfar=",
+            "dfsr=",
+            "sctlr=",
+            "ttbr1=",
+            "dacr=",
+        ] {
+            assert!(error.contains(field), "missing {field}: {error}");
+        }
+        assert!(c.register(0).is_err());
+        c.reset().unwrap();
+        assert_eq!(c.register(0).unwrap(), 0);
+        return;
+    }
+    let mut child = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "unmapped_abort_vector_fails_without_native_livelock",
+        ])
+        .env("LABWIRED_NATIVE_VECTOR_PROBE", "1")
+        .spawn()
+        .unwrap();
+    let until = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    loop {
+        if let Some(status) = child.try_wait().unwrap() {
+            assert!(status.success(), "native vector probe exited {status}");
+            break;
+        }
+        if std::time::Instant::now() >= until {
+            child.kill().unwrap();
+            child.wait().unwrap();
+            panic!("native execution hung on unmapped abort vector");
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+}
+#[test]
+fn repeated_svc_retirement_does_not_trigger_exception_livelock_guard() {
+    let mut b = Bus::new();
+    let mut c = cpu(&mut b, &[0xef000000]);
+    b.words(8, &[0xef000000]);
+    assert_eq!(c.execute(&mut b, 64).unwrap().retired, 64);
+    assert_eq!(c.register(15).unwrap(), 8);
+    assert!(!c.execute(&mut b, 1).unwrap().waiting);
+}
+
+#[test]
+fn translation_cache_pressure_preserves_jit_prologue_and_retirement() {
+    if std::env::var_os("LABWIRED_NATIVE_CACHE_PROBE").is_some() {
+        let instructions = 200_000u32;
+        let mut b = Bus::new();
+        b.ram.resize(0x100000, 0);
+        b.words(0x100, &vec![0xe2800001; instructions as usize]);
+        let mut c = ArmCpu::new().unwrap();
+        c.executable_range(0, b.ram.len() as u64).unwrap();
+        c.set_register(15, 0x100).unwrap();
+        let initial = c.translation_cache_status().unwrap();
+        assert_eq!(initial.size_bytes, 8 * 1024 * 1024);
+        assert_eq!(initial.allocations, 1);
+        for n in 0..instructions {
+            let e = c.execute(&mut b, 1).unwrap();
+            assert_eq!(e.retired, 1, "instruction {n}");
+            assert!(!e.waiting, "instruction {n}");
+            if n % 1024 == 0 {
+                b.accesses.clear();
+            }
+        }
+        assert_eq!(c.register(0).unwrap(), instructions);
+        assert_eq!(c.register(15).unwrap(), 0x100 + 4 * instructions);
+        let final_cache = c.translation_cache_status().unwrap();
+        assert_eq!(final_cache.size_bytes, 16 * 1024 * 1024);
+        assert!(
+            final_cache.allocations >= 3,
+            "cache must grow and reuse its cap: {final_cache:?}"
+        );
+        return;
+    }
+    let mut child = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "translation_cache_pressure_preserves_jit_prologue_and_retirement",
+        ])
+        .env("LABWIRED_NATIVE_CACHE_PROBE", "1")
+        .spawn()
+        .unwrap();
+    let until = std::time::Instant::now() + std::time::Duration::from_secs(20);
+    loop {
+        if let Some(status) = child.try_wait().unwrap() {
+            assert!(status.success(), "native cache probe exited {status}");
+            break;
+        }
+        if std::time::Instant::now() >= until {
+            child.kill().unwrap();
+            child.wait().unwrap();
+            panic!("native execution hung under translation cache pressure");
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+}
+
+fn cache_allocation_failure_probe(mode: &str, test_name: &str) {
+    if std::env::var_os("LABWIRED_NATIVE_CACHE_FAILURE").is_some() {
+        let this = libloading::os::unix::Library::this();
+        let failures = unsafe {
+            this.get::<unsafe extern "C" fn() -> u32>(b"lw_cache_failure_count\0")
+                .unwrap()
+        };
+        let mut b = Bus::new();
+        let instructions = 200_000u32;
+        b.ram.resize(0x100000, 0);
+        b.words(0x100, &vec![0xe2800001; instructions as usize]);
+        let mut c = ArmCpu::new().unwrap();
+        c.executable_range(0, b.ram.len() as u64).unwrap();
+        c.set_register(15, 0x100).unwrap();
+        for n in 0..instructions {
+            match c.execute(&mut b, 1) {
+                Ok(e) => {
+                    assert_eq!(e.retired, 1, "instruction {n}");
+                    assert!(!e.waiting);
+                }
+                Err(error) => {
+                    assert_eq!(mode, "double", "{error}");
+                    assert!(
+                        error.contains("Failed to reallocate code_gen_buffer"),
+                        "{error}"
+                    );
+                    assert_eq!(unsafe { failures() }, 2);
+                    assert!(c.register(0).is_err(), "failed growth must poison the CPU");
+                    eprintln!("Both growth mappings failed; execution returned an error and poisoned the CPU; dropping it now");
+                    drop(c);
+                    return;
+                }
+            }
+            if n % 1024 == 0 {
+                b.accesses.clear();
+            }
+        }
+        assert_eq!(
+            mode, "fallback",
+            "both failed mappings must return an error"
+        );
+        assert_eq!(unsafe { failures() }, 1);
+        assert_eq!(c.register(0).unwrap(), instructions);
+        assert_eq!(c.register(15).unwrap(), 0x100 + instructions * 4);
+        assert!(c.translation_cache_status().unwrap().allocations >= 3);
+        drop(c);
+        return;
+    }
+    let directory = tempfile::tempdir().unwrap();
+    let source = directory.path().join("cache_failure_probe.c");
+    let library = directory.path().join("cache_failure_probe.so");
+    std::fs::write(&source, include_bytes!("cache_failure_probe.c")).unwrap();
+    assert!(std::process::Command::new("cc")
+        .args(["-shared", "-fPIC", "-O2", "-o"])
+        .arg(&library)
+        .arg(&source)
+        .status()
+        .unwrap()
+        .success());
+    let mut child = std::process::Command::new("sh")
+        .args(["-c", "ulimit -c 0; exec \"$@\"", "--"])
+        .arg(std::env::current_exe().unwrap())
+        .args(["--exact", test_name])
+        .env("LABWIRED_NATIVE_CACHE_FAILURE", mode)
+        .env("LD_PRELOAD", library)
+        .spawn()
+        .unwrap();
+    let until = std::time::Instant::now() + std::time::Duration::from_secs(20);
+    loop {
+        if let Some(status) = child.try_wait().unwrap() {
+            assert!(
+                status.success(),
+                "native {mode} cache probe exited {status}"
+            );
+            break;
+        }
+        if std::time::Instant::now() >= until {
+            child.kill().unwrap();
+            child.wait().unwrap();
+            panic!("native execution hung during {mode} cache allocation failure");
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+}
+
+#[test]
+fn failed_cache_growth_and_fallback_poison_then_drop_safely() {
+    cache_allocation_failure_probe(
+        "double",
+        "failed_cache_growth_and_fallback_poison_then_drop_safely",
+    );
+}
+
+#[test]
+fn failed_cache_growth_can_retire_after_old_size_fallback() {
+    cache_allocation_failure_probe(
+        "fallback",
+        "failed_cache_growth_can_retire_after_old_size_fallback",
+    );
+}

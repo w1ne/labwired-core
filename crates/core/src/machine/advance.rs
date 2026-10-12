@@ -367,6 +367,39 @@ impl<C: Cpu> Machine<C> {
                 _ => self.execute_cpu_window(mode, window)?,
             };
             if progress.primary_steps == 0 {
+                // A native call can enter architectural wait without retiring
+                // anything. Only the existing configured idle path may move
+                // time; a parked CPU without a deadline returns NoProgress.
+                if self.cpu.is_parked_idle() && request.idle_policy() == IdlePolicy::Configured {
+                    let fuel_remaining = request
+                        .limits()
+                        .fuel
+                        .map(|limit| limit.saturating_sub(state.fuel_consumed));
+                    let cycle_remaining = request
+                        .limits()
+                        .simulated_cycles
+                        .map(|limit| limit.saturating_sub(self.total_cycles - start_cycles));
+                    let limit = match (fuel_remaining, cycle_remaining) {
+                        (Some(a), Some(b)) => Some(a.min(b)),
+                        (Some(a), None) | (None, Some(a)) => Some(a),
+                        (None, None) => None,
+                    };
+                    let before = self.total_cycles;
+                    let skipped = self.try_idle_fast_forward(limit, 0);
+                    if skipped > 0 && self.total_cycles > before {
+                        state.fuel_consumed += skipped;
+                        state.idle_cycles += skipped;
+                        self.logic_observe(self.total_cycles);
+                        self.pace_realtime(start_cycles, start_wall);
+                        if self.net_drive_stop_hit {
+                            return Ok(state.report(
+                                AdvanceStop::NetDriveChange,
+                                self.total_cycles - start_cycles,
+                            ));
+                        }
+                        continue;
+                    }
+                }
                 return Ok(state.report(AdvanceStop::NoProgress, self.total_cycles - start_cycles));
             }
 
