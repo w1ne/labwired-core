@@ -6,6 +6,7 @@ from pathlib import Path
 import re
 import stat
 import shutil
+import types
 
 PROFILE_CAP = 1024 * 1024
 SCRIPT_CAP = 256 * 1024
@@ -21,7 +22,7 @@ VERSION_COMMANDS = (
 )
 
 
-def identity(path, cap):
+def read_regular(path, cap, retain=False):
     path = Path(path)
     fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     try:
@@ -30,21 +31,36 @@ def identity(path, cap):
             raise ValueError('nonregular/empty/oversized raw evidence')
         digest = hashlib.sha256()
         size = 0
+        retained = []
         while True:
             data = os.read(fd, 65536)
             if not data: break
             size += len(data)
             if size > cap: raise ValueError('raw evidence grew beyond cap')
             digest.update(data)
+            if retain:retained.append(data)
         after = os.fstat(fd)
         stamp = lambda s: (s.st_dev, s.st_ino, s.st_size, s.st_mtime_ns, s.st_ctime_ns)
         if size != before.st_size or stamp(before) != stamp(after) or stamp(after) != stamp(path.lstat()):
             raise ValueError('raw evidence changed during read')
-        return dict(bytes=size, sha256=digest.hexdigest(), device=before.st_dev,
+        proof=dict(bytes=size, sha256=digest.hexdigest(), device=before.st_dev,
                     inode=before.st_ino, mtime_ns=before.st_mtime_ns, ctime_ns=before.st_ctime_ns)
+        return proof,b''.join(retained) if retain else None
     finally:
         os.close(fd)
 
+
+def identity(path, cap):
+    return read_regular(path,cap)[0]
+
+def temp_identity(path):
+    path=Path(path)
+    if not path.is_absolute() or path.resolve()!=path:
+        raise ValueError("temporary directory has symlink/relative components")
+    current=path.lstat()
+    if not stat.S_ISDIR(current.st_mode) or current.st_uid!=os.geteuid() or stat.S_IMODE(current.st_mode)!=0o700:
+        raise ValueError("temporary directory is not owned/private")
+    return dict(device=current.st_dev,inode=current.st_ino,uid=current.st_uid,mode=stat.S_IMODE(current.st_mode))
 
 def copy_exact(source, destination, cap):
     before = identity(source, cap)
@@ -53,6 +69,11 @@ def copy_exact(source, destination, cap):
     try:
         fd = os.open(source, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
         try:
+            current=os.fstat(fd)
+            stamp=dict(device=current.st_dev,inode=current.st_ino,bytes=current.st_size,
+                       mtime_ns=current.st_mtime_ns,ctime_ns=current.st_ctime_ns)
+            if not stat.S_ISREG(current.st_mode) or any(stamp[k]!=before[k] for k in stamp):
+                raise ValueError('raw source descriptor changed before copy')
             with Path(destination).open('xb') as output:
                 created = True
                 os.fchmod(output.fileno(), 0o600)
@@ -92,6 +113,7 @@ class RawProfiles:
         self.directory.mkdir(mode=0o700)
         self.manifest = self.directory / 'manifest.json'
         self.manifest_hash = None
+        self.pending = None
         self.report = dict(protocol='immutable-base-l476-200k-batch-v1', qualified=False, complete=False,
             profiles=[], reserved_bytes=allocation, profile_cap_bytes=PROFILE_CAP,
             shared_retention_budget_bytes=5*1024*1024, tool={}, failure_reason=None,
@@ -144,15 +166,34 @@ class RawProfiles:
         self.report['failure_reason']=str(error)[:1024]
         self.checkpoint()
 
-    def preflight(self, command, environment):
+    def preflight(self, command, environment, module=None, caller=None):
         if command[0]!='valgrind':raise ValueError('unexpected raw-mode native command')
         resolved=shutil.which('valgrind',path=environment.get('PATH'))
         if resolved is None or Path(resolved).resolve()!=TOOL_PATHS['valgrind'].resolve():
             raise ValueError('PATH substituted the pinned Valgrind executable')
         if identity(TOOL_PATHS['valgrind'],32*1024*1024)!=self.report['tool']['originals']['valgrind']:
             raise ValueError('pinned Valgrind executable changed')
+        function=getattr(module,'measure_once',None)
+        if not isinstance(function,types.FunctionType) or caller is None or caller.f_code is not function.__code__ or caller.f_globals is not function.__globals__:
+            raise ValueError('raw profile caller is not the loaded unchanged measure_once')
+        temporary=caller.f_locals.get('tmp')
+        if not isinstance(temporary,str) or '..' in Path(temporary).parts:
+            raise ValueError('missing exact current TemporaryDirectory')
+        paths=[arg.split('=',1)[1] for arg in command if arg.startswith('--callgrind-out-file=')]
+        if paths != [temporary+'/cg.out']:
+            raise ValueError('raw source is outside current owned TemporaryDirectory')
+        self.pending=dict(command=tuple(command),temporary=temporary,source=paths[0],directory_identity=temp_identity(temporary))
+
+    def verify_pending(self,command):
+        pending=self.pending
+        if pending is None or tuple(command)!=pending['command'] or temp_identity(pending['temporary'])!=pending['directory_identity']:
+            raise ValueError('raw invocation/current temporary directory identity changed')
+        if [arg.split('=',1)[1] for arg in command if arg.startswith('--callgrind-out-file=')] != [pending['source']]:
+            raise ValueError('raw source does not match registered current invocation')
+        return pending
 
     def capture(self, command, row):
+        pending=self.verify_pending(command)
         selected=(row['side'],row['board'],row['mode'],row['steps'])==('base','stm32l476','batch',200000)
         if not selected: return None
         try:
@@ -164,7 +205,9 @@ class RawProfiles:
                 raise ValueError('ambiguous/failed raw profile invocation')
             source=Path(paths[0])
             original=identity(source,PROFILE_CAP)
-            with source.open('rb') as stream: data=stream.read(PROFILE_CAP+1)
+            header_proof,data=read_regular(source,PROFILE_CAP,retain=True)
+            if header_proof!=original:raise ValueError('raw source changed before protected header read')
+            self.verify_pending(command)
             text=data.decode('utf-8')
             target=' '.join(command[command.index('run')-1:])
             def field(name): return re.findall(r'^'+name+r':\s*([^\r\n]+)$',text,re.M)
@@ -176,7 +219,9 @@ class RawProfiles:
             proof=copy_exact(source,destination,PROFILE_CAP)
             if identity(source,PROFILE_CAP)!=original or (proof['bytes'],proof['sha256'])!=(original['bytes'],original['sha256']):
                 raise ValueError('raw profile changed before copy')
+            self.verify_pending(command)
             proof.update(repeat=repeat,raw_invocation=dict(row),source_identity=original,
+                         temporary_directory=pending['temporary'],temporary_identity=pending['directory_identity'],
                          source_path=str(source),source_preserved=True)
             self.report['profiles'].append(proof)
             self.checkpoint()

@@ -42,16 +42,24 @@ class RawProfileControls(unittest.TestCase):
         self.version_collect=versions
     def prepare(self,budget=None):
         output=self.path/'output';output.mkdir(exist_ok=True)
-        return self.raw.RawProfiles(output,budget or self.perf.Budget(5*1024*1024),self.version_collect)
+        self.active_raw=self.raw.RawProfiles(output,budget or self.perf.Budget(5*1024*1024),self.version_collect)
+        return self.active_raw
     def row(self,repeat=0,ir=10):
         row=next(copy.deepcopy(x) for x in records() if x['side']=='base' and x['board']=='stm32l476' and x['mode']=='batch' and x['steps']==200000 and x['repeat']==repeat)
         row['ir']=ir;return row
     def source(self,row,extra=b''):
-        p=self.path/'owned-temp'/f'cg-{row["repeat"]}.out';p.parent.mkdir(exist_ok=True)
+        p=self.path/'owned-temp'/f'r{row["repeat"]}'/'cg.out';p.parent.mkdir(parents=True,exist_ok=True,mode=0o700)
         cmd=' '.join(row['argv'][row['argv'].index('run')-1:])
         p.write_bytes(f'version: 1\ncreator: callgrind-3.22.0\ncmd: {cmd}\nevents: Ir\nsummary: {row["ir"]}\nfn=(1) synthetic\n1 {row["ir"]}\n'.encode()+extra)
         command=['valgrind',f'--callgrind-out-file={p}','--cache-sim=no','--branch-sim=no',*row['argv'][1:]]
-        row['argv']=command;return p,command
+        row['argv']=command
+        if hasattr(self,'active_raw'):
+            def measure_once():
+                tmp=str(p.parent)
+                self.active_raw.preflight(command,os.environ,module,sys._getframe())
+            module=types.SimpleNamespace(measure_once=measure_once)
+            measure_once()
+        return p,command
     def test_three_distinct_profiles_survive_exact_copy_and_guard_still_fails(self):
         raw=self.prepare();allrows=records()
         for repeat,ir in enumerate((10,11,12)):
@@ -149,6 +157,45 @@ class RawProfileControls(unittest.TestCase):
                 r=subprocess.CompletedProcess(argv,code,out,b'');r.producer_exit_code=code;return r
             with mock.patch.object(self,'version_collect',side_effect=fail),self.assertRaises(ValueError):self.prepare()
             shutil.rmtree(self.path/'output')
+    def test_unregistered_arbitrary_relative_traversal_and_replaced_parent_reject(self):
+        raw=self.prepare();row=self.row();source,cmd=self.source(row)
+        source2=self.path/'arbitrary-retained-source.callgrind';source.rename(source2)
+        for path in (str(source2),'relative.callgrind',str(source.parent/'..'/'cg.out')):
+            altered=list(cmd);altered[1]='--callgrind-out-file='+path;row['argv']=altered
+            with self.subTest(path=path),self.assertRaises(ValueError):raw.capture(altered,row)
+        source2.rename(source)
+        moved=source.parent.with_name('replaced-parent');source.parent.rename(moved);source.parent.mkdir(mode=0o700)
+        (source.parent/'cg.out').write_bytes((moved/'cg.out').read_bytes())
+        row['argv']=cmd
+        with self.assertRaises(ValueError):raw.capture(cmd,row)
+    def test_header_swap_to_fifo_is_rejected_without_unprotected_reopen(self):
+        raw=self.prepare();row=self.row();source,cmd=self.source(row)
+        original=self.raw.identity
+        def swap(path,cap):
+            result=original(path,cap)
+            if Path(path)==source and not source.is_fifo():source.unlink();os.mkfifo(source)
+            return result
+        # An unsafe Path.open must never occur, including after a safe stat/hash.
+        real_open=Path.open
+        def protected(path,*args,**kwargs):
+            if path==source:raise AssertionError('unsafe header reopen would block on FIFO')
+            return real_open(path,*args,**kwargs)
+        with mock.patch.object(self.raw,'identity',side_effect=swap),mock.patch.object(Path,'open',new=protected):
+            with self.assertRaises((ValueError,OSError)):raw.capture(cmd,row)
+
+    def test_copy_descriptor_replacement_rejects_before_destination_creation(self):
+        row=self.row();source,cmd=self.source(row);destination=self.path/'copy-target'
+        original=self.raw.identity;created=[];real_open=Path.open
+        def swap(path,cap):
+            result=original(path,cap)
+            if Path(path)==source and not source.is_fifo():source.unlink();os.mkfifo(source)
+            return result
+        def observe(path,*args,**kwargs):
+            if path==destination:created.append(path)
+            return real_open(path,*args,**kwargs)
+        with mock.patch.object(self.raw,'identity',side_effect=swap),mock.patch.object(Path,'open',new=observe):
+            with self.assertRaises(ValueError):self.raw.copy_exact(source,destination,1048576)
+        self.assertEqual(created,[])
     def test_fixed_artifact_cap_includes_build_logs_and_final_receipt(self):
         raw=self.prepare();build=self.path/'perf-build-evidence';build.mkdir()
         f=build/'bounded.stdout'
@@ -184,6 +231,11 @@ def main():""")
             text=text.replace('measured={}\n',"measured={}\n    firmware,_=build_fixtures({'nrf','stm32'})\n")
             text=text.replace("'fixture.elf'","str(firmware['nrf' if board=='nrf52840' else 'stm32'])")
             text=text.replace('subprocess.run(cmd,capture_output=True,text=True,env=env)',"with tempfile.TemporaryDirectory() as temp:\n                        cmd[1:1]=['--tool=callgrind','--callgrind-out-file='+temp+'/cg.out','--cache-sim=no','--branch-sim=no']\n                        subprocess.run(cmd,capture_output=True,text=True,env=env)")
+            original_node=next(n for n in ast.parse((ROOT/'scripts/perf/board_perf.py').read_text()).body if isinstance(n,ast.FunctionDef) and n.name=='measure_once')
+            original_function=ast.unparse(original_node)
+            text=text.replace('from pathlib import Path','from pathlib import Path\nfrom collections import namedtuple')
+            text=text.replace('def main():',"Run=namedtuple('Run','irefs instructions steps_per_batch tick_interval',defaults=(None,None,None))\nMODE_BATCH='batch'\nMODE_STEP='step'\nModeNotTakenError=ValueError\n"+original_function+'\ndef main():')
+            text=text.replace("with tempfile.TemporaryDirectory() as temp:\n                        cmd[1:1]=['--tool=callgrind','--callgrind-out-file='+temp+'/cg.out','--cache-sim=no','--branch-sim=no']\n                        subprocess.run(cmd,capture_output=True,text=True,env=env)","measure_once(Path(cli),Path('configs/chips/'+board+'.yaml'),firmware['nrf' if board=='nrf52840' else 'stm32'],count,mode)")
             tool.write_text(text);(source/'Cargo.toml').write_text('[workspace]\n')
             for name,address in (('nrf',0),('stm32',0x08000000)):(source/('perf-spin-'+name)).write_bytes(elf_bytes(side.encode(),address=address))
             subprocess.run(['git','add','.'],cwd=source,check=True,capture_output=True)
@@ -226,6 +278,7 @@ def main():""")
         node=next(n for n in ast.parse((ROOT/'scripts/perf/board_perf.py').read_text()).body if isinstance(n,ast.FunctionDef) and n.name=='measure_once')
         ns=dict(Path=Path,Run=namedtuple('Run','irefs instructions steps_per_batch tick_interval',defaults=(None,None,None)),os=os,tempfile=tempfile,subprocess=runner,MODE_BATCH='batch',MODE_STEP='step',IREFS_RE=module.IREFS_RE,BATCHED_RE=module.BATCHED_RE,ModeNotTakenError=ValueError)
         exec(compile(ast.Module(body=[node],type_ignores=[]),'original-measure-once','exec'),ns)
+        module.measure_once=ns['measure_once']
         with mock.patch.object(self.perf,'collect',side_effect=producer):
             for _ in range(3):ns['measure_once'](cli,self.path/'stm32l476.yaml',common_path,200000,'batch')
         self.assertTrue(all(not p.exists() for p in paths));self.assertEqual(len(rows),3);self.assertTrue(raw.finish()['complete'])

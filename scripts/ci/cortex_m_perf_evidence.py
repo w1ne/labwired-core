@@ -263,7 +263,7 @@ class BoundedRunner:
                 raise ValueError("board did not receive its exact common memory-map fixture")
             fixture_before = self.common.verify(fixture)
         if valgrind and self.raw_profiles is not None:
-            self.raw_profiles.preflight(command,environment)
+            self.raw_profiles.preflight(command,environment,self.module,sys._getframe(1))
         try:
             result = collect(command, cwd=kwargs.get("cwd"), env=kwargs.get("env"), timeout=300 if valgrind else 900, budget=self.budget)
         finally:
