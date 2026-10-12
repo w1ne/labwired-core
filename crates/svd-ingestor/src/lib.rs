@@ -6,7 +6,7 @@
 //! This crate provides the core logic for parsing and conversion.
 
 use labwired_config::{Access, FieldDescriptor, PeripheralDescriptor, RegisterDescriptor};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 use svd_parser::svd::{Access as SvdAccess, Device, Field, Peripheral, Register, RegisterCluster};
 use thiserror::Error;
@@ -74,7 +74,7 @@ pub fn process_peripheral(
     peripheral: &Peripheral,
 ) -> Result<PeripheralDescriptor> {
     let mut registers = Vec::new();
-    let mut interrupts = HashMap::new();
+    let mut interrupts = BTreeMap::new();
 
     let p_info = match peripheral {
         Peripheral::Single(info) => info,

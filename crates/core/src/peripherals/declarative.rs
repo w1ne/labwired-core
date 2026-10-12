@@ -1102,7 +1102,7 @@ mod tests {
             side_effects: None,
         });
         desc.interrupts = Some({
-            let mut h = std::collections::HashMap::new();
+            let mut h = std::collections::BTreeMap::new();
             h.insert("INT1".to_string(), 42);
             h
         });
