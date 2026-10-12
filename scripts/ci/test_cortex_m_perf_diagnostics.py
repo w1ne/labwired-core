@@ -311,14 +311,89 @@ class DiagnosticsControls(unittest.TestCase):
 
     def test_annotation_overflow_retains_bounded_output_and_failure_status(self):
         executable=self.path/'callgrind_annotate'
-        executable.write_text('#!/usr/bin/env python3\nimport os\nos.write(1,b"x"*100000)\n');executable.chmod(0o755)
+        executable.write_text('#!/usr/bin/env python3\nimport os\nos.write(1,b"x"*300000)\nimport time;time.sleep(5)\n');executable.chmod(0o755)
         raw=self.path/'cg.out';raw.write_text('synthetic input')
         with mock.patch.dict(os.environ,PATH=str(self.path)+os.pathsep+os.environ['PATH']),self.assertRaises(ValueError):
             self.diag.annotate_call(['valgrind','--callgrind-out-file='+str(raw)],10,self.path/'failed',self.perf.collect,self.perf.Budget(),self.perf.sha256)
-        self.assertLessEqual((self.path/'failed.callgrind.stdout').stat().st_size,65536)
+        self.assertEqual((self.path/'failed.callgrind.stdout').stat().st_size,262144)
         metadata=self.path/'failed.callgrind.json'
         self.assertTrue(metadata.exists(),'annotation failure lost collector metadata')
-        self.assertEqual(json.loads(metadata.read_text())['exit_code'],125)
+        self.assertEqual((json.loads(metadata.read_text())['exit_code'],json.loads(metadata.read_text())['producer_exit_code']),(125,-15))
+
+    def large_official_annotation(self):
+        import shutil
+        executable = shutil.which('callgrind_annotate')
+        if executable is None:self.skipTest('official annotator absent; no large-table proof')
+        raw = self.path/'large.cg.out'
+        text = 'version: 1\npositions: line\nevents: Ir\nsummary: 700\nob=/synthetic/cli\nfl=src/qualification.rs\n'
+        for index in range(700):
+            text += f'fn=unique_function_{index:04d}_' + 'x'*120 + '\n1 1\n'
+        raw.write_text(text+'totals: 700\n')
+        argv = [executable,'--show=Ir','--sort=Ir','--threshold=100','--show-percs=no',
+                '--auto=no','--inclusive=no','--tree=none',str(raw)]
+        reference = self.perf.collect(argv,timeout=30,stream_limit=262144,budget=self.perf.Budget())
+        self.assertEqual(reference.returncode,0)
+        self.assertEqual(reference.stderr,b'')
+        self.assertGreater(len(reference.stdout),65536)
+        self.assertLessEqual(len(reference.stdout),262144)
+        return raw,reference.stdout
+
+    def test_official_complete_table_above_64k_retains_exact_self_costs(self):
+        raw,reference = self.large_official_annotation()
+        prefix = self.path/'large'
+        proof = None
+        with mock.patch.object(self.perf,'collect',wraps=self.perf.collect) as collect:
+            try:
+                proof = self.diag.annotate_call(['valgrind','--callgrind-out-file='+str(raw)],700,
+                    prefix,collect,self.perf.Budget(5*1024*1024),self.perf.sha256)
+            except ValueError:
+                pass  # Assert actual retained status before requiring the complete proof.
+        self.assertEqual(collect.call_count,1,'annotation must never retry or raise caps automatically')
+        metadata = json.loads((self.path/'large.callgrind.json').read_text())
+        self.assertEqual(metadata['exit_code'],0,'valid official table was truncated by the annotation cap')
+        self.assertIsNotNone(proof)
+        self.assertEqual((proof['total_ir'],proof['self_cost_sum'],proof['function_count']),(700,700,700))
+        self.assertEqual((self.path/'large.callgrind.stdout').read_bytes(),reference)
+        self.assertEqual(proof['annotation_sha256'],hashlib.sha256(reference).hexdigest())
+        self.assertEqual(proof['input_sha256'],hashlib.sha256(raw.read_bytes()).hexdigest())
+        self.assertEqual(collect.call_args.kwargs['timeout'],30)
+        self.assertEqual(collect.call_args.kwargs['stream_limit'],262144)
+
+    def test_large_official_table_still_fails_when_shared_5m_budget_is_consumed(self):
+        raw,reference = self.large_official_annotation()
+        self.assertGreater(len(reference),70*1024)
+        budget = self.perf.Budget(5*1024*1024)
+        budget.remaining = 8192+70*1024  # Prior observations consumed the rest of the same shared budget.
+        with mock.patch.object(self.perf,'collect',wraps=self.perf.collect) as collect,self.assertRaises(ValueError):
+            self.diag.annotate_call(['valgrind','--callgrind-out-file='+str(raw)],700,
+                self.path/'budget',collect,budget,self.perf.sha256)
+        self.assertEqual(collect.call_count,1)
+        self.assertIs(collect.call_args.kwargs['budget'],budget)
+        self.assertEqual(budget.remaining,0)
+        self.assertEqual((self.path/'budget.callgrind.stdout').stat().st_size,70*1024)
+        metadata = json.loads((self.path/'budget.callgrind.json').read_text())
+        self.assertEqual(metadata['exit_code'],125)
+        self.assertIsInstance(metadata['producer_exit_code'],int)
+        self.assertLessEqual((self.path/'budget.callgrind.json').stat().st_size,8192)
+
+    def test_annotation_metadata_reservation_fails_before_starting_producer(self):
+        raw = self.path/'cg.out';raw.write_text('synthetic input')
+        with mock.patch.object(self.perf,'collect') as collect,self.assertRaises(ValueError):
+            self.diag.annotate_call(['valgrind','--callgrind-out-file='+str(raw)],10,
+                self.path/'not-started',collect,self.perf.Budget(8191),self.perf.sha256)
+        collect.assert_not_called()
+        self.assertFalse((self.path/'not-started.callgrind.stdout').exists())
+
+    def test_annotation_new_cap_row_count_and_name_bounds_remain_strict(self):
+        prefix = 'Events shown: Ir\n4097 PROGRAM TOTALS\nIr file:function\n'
+        rows = ''.join(f'1 src/a.rs:function_{index}\n' for index in range(4097))
+        over_rows = (prefix+rows).encode()
+        self.assertLess(len(over_rows),262144)
+        long_name = ('Events shown: Ir\n1 PROGRAM TOTALS\nIr file:function\n1 src:'+'x'*2045+'\n').encode()
+        over_cap = annotation().encode()+b' '*262144
+        for data,total in ((over_rows,4097),(long_name,1),(over_cap,10)):
+            with self.subTest(length=len(data)),self.assertRaises(ValueError):
+                self.diag.parse_annotation(data,total)
 
     def test_missing_or_sparse_oversized_callgrind_input_never_starts_annotator(self):
         for huge in (False,True):
