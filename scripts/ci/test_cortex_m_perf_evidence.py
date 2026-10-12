@@ -192,8 +192,26 @@ class PerformanceControls(unittest.TestCase):
         try:
             state = Path(f"/proc/{pid}/stat").read_text().split()[2]
             self.assertEqual(state, "Z")
-        except FileNotFoundError:
+        except (FileNotFoundError, ProcessLookupError):
             pass
+
+    def test_timeout_proc_read_race_accepts_only_disappeared_or_zombie_child(self):
+        original=Path.read_text
+        def stopped(*args,**kwargs):
+            (self.path/'child.pid').write_text('999999')
+            return types.SimpleNamespace(returncode=124)
+        for state in (FileNotFoundError(),ProcessLookupError(),'1 (child) Z',PermissionError(),'1 (child) R'):
+            def read(path,*args,**kwargs):
+                if str(path)=='/proc/999999/stat':
+                    if isinstance(state,Exception):raise state
+                    return state
+                return original(path,*args,**kwargs)
+            with mock.patch.object(self.helper,'collect',side_effect=stopped),mock.patch.object(Path,'read_text',read):
+                if isinstance(state,PermissionError):
+                    with self.assertRaises(PermissionError):self.test_owned_child_is_stopped_on_timeout()
+                elif isinstance(state,str) and state.endswith(' R'):
+                    with self.assertRaises(AssertionError):self.test_owned_child_is_stopped_on_timeout()
+                else:self.test_owned_child_is_stopped_on_timeout()
 
     def test_wrapper_restores_module_argv_cwd_and_environment_on_error(self):
         module = types.SimpleNamespace(subprocess=subprocess, main=lambda: (_ for _ in ()).throw(ValueError("failure")))
