@@ -41,7 +41,7 @@ Implement GIC distributor and CPU-interface enable, priorities, routing, acknowl
 
 A minimal vendor-derived tree can use disclosed fixed clocks and initramfs to prove the CPU/GIC/timer/UART path before CRU and SD dependencies. An ARM multiplatform kernel can use its generic DT fallback with an honest RV1103 compatible; record this configuration and the omitted vendor initialization. Do not introduce another SoC compatible that executes initialization at incorrect physical addresses.
 
-The first boot artifact is Alpine v3.23 armv7 linux-lts 6.18.55-r0, whose inspected configuration enables short-descriptor MMU, GIC, architectural timer, 8250/DW console and initramfs. I2C_RK3X is disabled, so this artifact cannot satisfy basket I2C acceptance. A separate driver-enabled kernel is required for that gate. Use cma=0 for 64 MiB RAM. Verified load positions are zImage 0x02000000, DTB 0x03000000 and initramfs 0x03100000, with decompressed kernel/BSS reserved through 0x016e5850.
+The first boot artifact is Alpine v3.23 armv7 linux-lts 6.18.56-r0, whose inspected configuration enables short-descriptor MMU, GIC, architectural timer, 8250/DW console and initramfs. I2C_RK3X is disabled, so this artifact cannot satisfy basket I2C acceptance. The real I2C_RK3X driver must be built against the matching headers and symbol versions and loaded successfully by the guest for that gate. Use cma=0 for 64 MiB RAM. Proposed load positions are zImage 0x02000000, DTB 0x03000000 and initramfs 0x03100000, with decompressed kernel/BSS reserved through 0x016e5850.
 
 ## Linux artifacts and loader
 

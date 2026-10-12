@@ -18,10 +18,11 @@ Files: create `crates/arm-system/{Cargo.toml,build.rs,src/lib.rs,native/CMakeLis
 
 ```rust
 pub trait PhysicalBus {
+    fn code_identity(&self) -> u64;
     fn read(&mut self, address: u64, width: u32, state: u64) -> Result<u64, String>;
     fn write(&mut self, address: u64, width: u32, value: u64, state: u64) -> Result<(), String>;
-    fn cp15_read(&mut self, instruction: u32, wide: bool) -> Result<u64, String>;
-    fn cp15_write(&mut self, instruction: u32, wide: bool, value: u64) -> Result<(), String>;
+    fn cp15_read(&mut self, register_key: u32, wide: bool) -> Result<u64, String>;
+    fn cp15_write(&mut self, register_key: u32, wide: bool, value: u64) -> Result<(), String>;
 }
 pub struct Execution { pub retired: u64, pub waiting: bool }
 // ArmCpu owns its library and file. CPSR uses public index 16, mapped to tlib 25.
@@ -32,7 +33,7 @@ pub struct Execution { pub retired: u64, pub waiting: bool }
 // invalidate_code() -> Result<(),String>; reset() -> Result<(),String>.
 ```
 
-Use `tlib_register_access_flags_for_range(start,length,1)` for executable callback memory; do not call `tlib_map_range` or expose Rust RAM pointers. Reads/writes preserve widths 1/2/4/8 and native security state. CP15 callbacks forward to PhysicalBus rather than returning zero. Reject null/unbound callbacks and unexpected host RAM pointer requests. `execute` installs a stack callback context, catches Rust panic, stores the first error, and clears all native callback pointers on every return. The C thunk checks that error after Rust returns and unwinds inside C. Native init/reset/register/range/invalidate/dispose operations also run inside a C fatal-error guard. Never longjmp across a Rust callback. A failed native call poisons the CPU; refuse execution until reset/recreation. LPAE is outside the supported capability.
+Use `tlib_register_access_flags_for_range(start,length,1)` for executable callback memory; do not call `tlib_map_range` or expose Rust RAM pointers. Reads/writes preserve widths 1/2/4/8 and native security state. CP15 callbacks forward canonical keys to PhysicalBus rather than returning zero: 32-bit `(opc1 << 21) | (CRn << 16) | (opc2 << 5) | CRm`; 64-bit `(opc1 << 4) | CRm`. Native reservation state is private, initialized and disposed per library; reservations cannot cross bus identities. Reject null/unbound callbacks and unexpected host RAM pointer requests. `execute` installs a stack callback context, catches Rust panic, stores the first error, and clears all native callback pointers on every return. The C thunk checks that error after Rust returns and unwinds inside C. Native init/reset/register/range/invalidate/dispose operations also run inside a C fatal-error guard. Never longjmp across a Rust callback. A failed native call poisons the CPU; refuse execution until reset/recreation. LPAE is outside the supported capability.
 
 The crate defaults to no native feature. Enabling `native` on an unsupported host produces an explicit build error. Build the vendored library with CMake, HOST_ARCH=i386, HOST_WORD_SIZE=64, TARGET_ARCH=arm, TARGET_WORD_SIZE=32, `-Bsymbolic`; embed bytes from OUT_DIR. Retain all licenses and the verified source archive SHA `8db4d1fe0a316eec5dcae83bd4d2757b5172332493d6fdecfd9d4b81cb7a77a3`. No build-time network access.
 
