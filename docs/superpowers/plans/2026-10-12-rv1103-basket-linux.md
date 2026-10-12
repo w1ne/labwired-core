@@ -12,6 +12,8 @@ Implement deterministic preparation of the matching Linux6.18.56 external RK3x m
 
 ## Task 2: Rockchip I2C3 controller
 
+Completed and independently reviewed on 2026-10-12 in commit `a94b78e11`: 23 new controller tests pass in default and native/event configurations, alongside 20/28 existing device tests and 8 inspection tests. Read-only register rejection is covered. Shared ADXL345 attachment, stimulus, traces and inspection are verified; Linux basket guest execution remains NOT_RUN.
+
 Create a bounded RK3x v1 controller implementing the registers and interrupt handshake used by the pinned real driver. Write transaction and error tests before implementation: START/address/ACK, RX/TX FIFO counts, repeated-start register read, STOP, pending/enable interrupt bits, NACK and reset. Attach existing I2cDevice implementations through the normal bus attachment seam. Route I2C3 SPI21 to GIC INTID53. Controller transfers must invoke existing select/start/write/read/stop methods on the same ADXL345 instance; do not keep duplicate axis/register state. Respect the existing unpowered-I2C wrapper so power loss produces NACK. Unsupported DMA or clock/pinmux timing must be disclosed.
 
 ## Task 3: UART4 and ESP-AT peer
