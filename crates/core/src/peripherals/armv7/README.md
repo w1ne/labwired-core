@@ -65,3 +65,60 @@ and single/batch equivalence. They do not establish Linux boot or hardware
 acceptance. Driver evidence is pinned Linux 6.18.56 irq-gic.c, arm_arch_timer.c,
 proc-v7.S and 8250 sources; register mapping follows the pinned RV1106-family
 vendor dtsi, with actual RV1103 compatibility retained for the board fixture.
+
+`configure_armv7_rv1103_i2c3()` separately opts in to RK3x v1 at
+`ff460000/1000`, named `i2c3`, driving GIC INTID53 (SPI21). It requires the
+existing ARM fabric and refuses duplicate names or overlapping peripheral or
+CPU memory mappings. It changes no foundation DT, manifest, or artifact pin.
+After controller installation, `attach_manifest_external_devices()` uses the
+existing manifest part-pack → PeripheralKit → declarative resolver, recording
+placements before kits resolve them. Duplicate IDs and repeated attachment
+are errors. A failed attachment can leave earlier parts attached: discard the
+incomplete bus. The normal `attach_i2c_slave_with_route` funnel trace-wraps the
+canonical ADXL345 kit; no RV-specific sensor register or axis state exists.
+SDA/SCL routes are accepted as fixed-controller placement metadata; this slice
+does not simulate pinmux or physical pads.
+
+The RK3x model accepts only aligned little-endian 32-bit MMIO. CON, CLKDIV,
+MRXADDR, MRXRADDR, MTXCNT, MRXCNT, IEN and W1C IPD follow the bounded upstream
+sequence; mode3, reserved CON bits and MRXADDR lanes other than valid lane0
+are errors. The eight-word TX/RX buffers hold at most 32 bytes. FCNT reports
+the last successful chunk's completed byte count (including the first TX
+address); its synthetic reset-to-zero is not a hardware reset-value claim.
+START raises pending START only. Count writes execute chunks, strip the first
+TX address, and continue the same selected slave without restarting. Combined
+reads send zero to three valid register-prefix bytes once, then start the read
+phase on the same instance. Plain RX continuations preserve the read cursor.
+LASTACK is a terminal master NACK and does not set NAKRCV. Successful chunks
+set only MBTF/MBRF; byte-level BTF/BRF are omitted.
+
+Pending interrupts survive masking, and level `(IPD & IEN & 0x7f) != 0`
+is reconciled with the GIC on writes and events. START/STOP conditions are
+processed once per rising request bit. STOP releases a live selected slave
+once and raises STOP even without a target or with IEN=0. CON.EN=0 abandons
+internal selection for the driver's restart sequence without fabricating an
+inner STOP. Full controller reset clears its registers, buffers, IRQ and
+selection while preserving the sensor's state. Address claims are checked
+before select/start/write/read/stop and on continuations. Absent/static-off
+parts generate only NAKRCV with no target calls or completion; a failed
+transaction remains failed until STOP/restart. ACTACK=0 deliberately retains
+this bounded stop-on-NACK behavior: Linux I2C_M_IGNORE_NAK is unsupported,
+with no synthesized target success. The latest 256 controller diagnostic
+entries include START/STOP/NAK and IRQ transitions; successful component
+traffic remains in the existing canonical bus trace.
+
+Slaves forward nested stimulus discovery, inspect artifacts, named logs and
+pin queues through the established helpers. Each slave receives central
+device time exactly once per elapsed microsecond; MMIO and peek do not
+advance it. CLKDIV/tuning only store functional clock configuration. DMA,
+CRU/reset/pinmux programming, physical clock/SCL/baud timing, arbitration and
+clock stretching are unsupported. Host protocol tests exercise the unchanged
+Linux driver sequence, canonical ADXL345 DEVID/register/axis traffic and two
+runtime stimuli. They are not a Linux guest module-load or hardware proof.
+
+The unchanged driver reference is Linux 6.18.56
+[`i2c-rk3x.c`](https://raw.githubusercontent.com/gregkh/linux/v6.18.56/drivers/i2c/busses/i2c-rk3x.c),
+SHA256 `cee9b45dfee3fb4a7168585603c88df5e3422493425ac1bd35046d509d910423`.
+The SDK's genuine `rockchip,rv1106-i2c`/`rockchip,rk3399-i2c` fallback selects
+v1 timing. Any later basket DT must preserve those identities and disclose
+its synthetic fixed functional clocks; the accepted foundation stays separate.

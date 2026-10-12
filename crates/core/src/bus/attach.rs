@@ -51,6 +51,8 @@ impl SystemBus {
         })?;
         if let Some(c) = any.downcast_mut::<crate::peripherals::i2c::I2c>() {
             c.push_slave(wrapped);
+        } else if let Some(c) = any.downcast_mut::<crate::peripherals::armv7::rk3x_i2c::Rk3xI2c>() {
+            c.push_slave(wrapped);
         } else if let Some(c) = any.downcast_mut::<crate::peripherals::imxrt::lpi2c::ImxrtLpi2c>() {
             c.push_slave(wrapped);
         } else if let Some(c) = any.downcast_mut::<crate::peripherals::esp32c3::i2c::Esp32c3I2c>() {
