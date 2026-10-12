@@ -148,6 +148,8 @@ fn run_native(args: Rv1103LinuxArgs) -> ExitCode {
     use std::sync::{Arc, Mutex};
     use std::time::Instant;
     let started = Instant::now();
+    let mut bus = SystemBus::empty();
+    let event_scheduler = bus.cycle_clock.scheduler_enabled();
     let mut receipt = serde_json::json!({
         "schema":1, "board":BOARD, "mode":"reduced-direct-zImage",
         "status":"FAIL", "guest_boot":"NOT_ACCEPTED", "physical_acceptance":"UNAVAILABLE",
@@ -155,13 +157,13 @@ fn run_native(args: Rv1103LinuxArgs) -> ExitCode {
         "compiled_backend_sha256":compiled_backend_sha256(),
         "cpu_hz":args.cpu_hz, "cpu_hz_default":CPU_HZ, "cpu_hz_override":args.cpu_hz != CPU_HZ,
         "timing":"one retired instruction tick; functional calibration, not physical timing",
-        "timer_hz":TIMER_HZ, "idle_fast_forward":true, "event_scheduler":cfg!(feature="event-scheduler"),
+        "timer_hz":TIMER_HZ, "idle_fast_forward":true, "event_scheduler":event_scheduler,
         "limits":{"cycles":args.max_cycles,"retirements":args.max_retirements,"fuel":args.max_fuel,"wall_seconds":args.wall_seconds,"console_bytes":args.console_bytes,"advance_window":4096,"batch_cap":64},
         "reductions":["direct zImage; no ROM, SD or vendor BSP boot", "single Cortex-A7; no CRU, reset, pinctrl, DMA or FIQ debugger", "no I2C, ESP, RF or smartbasket application acceptance"],
         "console":"", "cycles":0, "retirements_completed_windows":0, "fuel_completed_windows":0, "last_pc":null
     });
     let outcome = (|| -> Result<(), String> {
-        if !cfg!(feature = "event-scheduler") {
+        if !event_scheduler {
             return Err(
                 "RV1103 Linux requires event-scheduler for explicit idle fast-forward".into(),
             );
@@ -179,7 +181,6 @@ fn run_native(args: Rv1103LinuxArgs) -> ExitCode {
         let artifacts = LinuxArtifacts::read(&args.artifacts).map_err(|e| e.to_string())?;
         receipt["artifacts"] = serde_json::to_value(&artifacts.manifest.artifacts).unwrap();
         receipt["actual_input_sha256"] = serde_json::json!({"zImage":sha256(&artifacts.kernel),"rv1103-direct.dtb":sha256(&artifacts.dtb),"initramfs.cpio":sha256(&artifacts.initramfs),"kernel.config":sha256(&artifacts.config)});
-        let mut bus = SystemBus::empty();
         bus.ram = LinearMemory::new(RAM_BYTES as usize, 0);
         bus.cpu_hz = args.cpu_hz;
         let loaded = load_linux(&mut bus, artifacts).map_err(|e| e.to_string())?;

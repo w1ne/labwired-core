@@ -7,6 +7,8 @@ on:
       - "crates/core/**"
       - "crates/arm-system/**"
       - "crates/arm-core/**"
+      - "third_party/tlib/**"
+      - "third_party/tlib-PROVENANCE.md"
       - "crates/cli/**"
       - "crates/config/**"
       - "crates/loader/**"
@@ -27,6 +29,8 @@ on:
       - "crates/core/**"
       - "crates/arm-system/**"
       - "crates/arm-core/**"
+      - "third_party/tlib/**"
+      - "third_party/tlib-PROVENANCE.md"
       - "crates/cli/**"
       - "crates/config/**"
       - "crates/loader/**"
@@ -142,12 +146,16 @@ jobs:
     env:
       CARGO_BUILD_JOBS: "2"
       CARGO_INCREMENTAL: "0"
-      LABWIRED_RV1103_ARTIFACTS: ${{ runner.temp }}/rv1103-linux
       LABWIRED_RV1103_CLI: ${{ github.workspace }}/target/native-system/labwired
-      LABWIRED_RV1103_BOOT_RECEIPT: ${{ runner.temp }}/rv1103-linux-boot.json
-      LABWIRED_RV1103_FAILURE_RECEIPT: ${{ runner.temp }}/rv1103-linux-bounded-failure.json
     steps:
       - uses: actions/checkout@v4
+      - name: Initialize fresh Linux artifact and receipt paths
+        run: |
+          {
+            printf 'LABWIRED_RV1103_ARTIFACTS=%s/rv1103-linux\n' "$RUNNER_TEMP"
+            printf 'LABWIRED_RV1103_BOOT_RECEIPT=%s/rv1103-linux-boot.json\n' "$RUNNER_TEMP"
+            printf 'LABWIRED_RV1103_FAILURE_RECEIPT=%s/rv1103-linux-bounded-failure.json\n' "$RUNNER_TEMP"
+          } >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@1.95.0
       - uses: Swatinem/rust-cache@v2
         with:

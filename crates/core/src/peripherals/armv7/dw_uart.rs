@@ -10,6 +10,7 @@ use std::{
 };
 const FIFO: usize = 16;
 const CONSOLE: usize = 64 * 1024;
+#[derive(Default)]
 struct State {
     dll: u8,
     dlm: u8,
@@ -24,25 +25,6 @@ struct State {
     sink: Option<Arc<Mutex<Vec<u8>>>>,
     echo: bool,
     streams: Vec<Box<dyn UartStreamDevice>>,
-}
-impl Default for State {
-    fn default() -> Self {
-        Self {
-            dll: 0,
-            dlm: 0,
-            lcr: 0,
-            mcr: 0,
-            scr: 0,
-            ier: 0,
-            fcr: 0,
-            thre: false,
-            overrun: false,
-            modem_delta: 0,
-            sink: None,
-            echo: false,
-            streams: vec![],
-        }
-    }
 }
 pub struct DwUart {
     state: Mutex<State>,

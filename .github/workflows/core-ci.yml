@@ -667,6 +667,11 @@ jobs:
       - name: Clippy (default-members)
         run: cargo clippy --all-targets -- -D warnings
 
+      - name: Native ARM backend remains inert without its opt-in feature
+        run: |
+          cargo clippy --locked -p labwired-arm-system --all-targets -- -D warnings
+          scripts/ci/cargo-test-nonvacuous.sh --locked -p labwired-arm-system --lib
+
       - name: Unit tests (default-members lib)
         run: cargo test --lib
 
