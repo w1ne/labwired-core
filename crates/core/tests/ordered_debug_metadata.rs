@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT
-// Baseline value contracts; real Rust execution is qualified by CoreCI.
+// Ordered assertions: expected compiler RED until the admitted production migration.
 
 use labwired_config::{ChipDescriptor, SystemManifest};
-use labwired_core::bus::SystemBus;
+use labwired_core::{bus::SystemBus, inspect::RegisterSchema};
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -15,6 +16,12 @@ fn inputs() -> (ChipDescriptor, SystemManifest) {
     ))
     .unwrap();
     (chip, manifest)
+}
+
+#[test]
+fn public_ordered_type_contract() {
+    let bus = SystemBus::new();
+    let _: &BTreeMap<String, Vec<RegisterSchema>> = &bus.debug_schemas;
 }
 
 #[test]
@@ -48,6 +55,8 @@ fn all_58_descriptors_and_949_registers_match_frozen_source_golden() {
             serde_json::to_value(&bus.debug_schemas).unwrap(),
             expected["schemas"]
         );
+        let ids = bus.debug_schemas.keys().collect::<Vec<_>>();
+        assert!(ids.windows(2).all(|pair| pair[0] < pair[1]));
     }
 }
 

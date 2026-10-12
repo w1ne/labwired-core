@@ -1,12 +1,57 @@
 // SPDX-License-Identifier: MIT
-// Baseline value contracts; real Rust execution is qualified by CoreCI.
+// Ordered assertions: expected compiler RED until the admitted production migration.
 
 use labwired_config::PeripheralDescriptor;
 use labwired_ir::{IrInterrupt, IrPeripheral};
+use std::collections::BTreeMap;
 
 const HEADER: &str = "peripheral: ORDER\nversion: v1\nregisters: []\n";
 fn parse(tail: &str) -> PeripheralDescriptor {
     PeripheralDescriptor::from_yaml(&format!("{HEADER}{tail}")).unwrap()
+}
+
+#[test]
+fn public_ordered_type_contract() {
+    let d = parse("interrupts: {Z: 2, A: 1}\n");
+    let _: &Option<BTreeMap<String, u32>> = &d.interrupts;
+}
+
+#[test]
+fn input_order_does_not_change_serialized_interrupts() {
+    let names = [
+        "z", "A", "irq10", "irq2", "a", "é", "Ω", "Z", "B", "b", "n", "M", "m", "C", "c", "IRQ",
+    ];
+    let expected = BTreeMap::from_iter(
+        names
+            .iter()
+            .enumerate()
+            .map(|(i, s)| (s.to_string(), i as u32)),
+    );
+    let mut outputs = Vec::new();
+    for shift in 0..names.len() {
+        let mut indices: Vec<usize> = (0..names.len()).collect();
+        indices.rotate_left(shift);
+        if shift % 2 == 1 {
+            indices.reverse();
+        }
+        let mut text = String::from("interrupts:\n");
+        for i in indices {
+            text.push_str(&format!("  {}: {}\n", names[i], i));
+        }
+        let d = parse(&text);
+        let actual = d.interrupts.as_ref().unwrap();
+        assert_eq!(
+            actual.keys().collect::<Vec<_>>(),
+            expected.keys().collect::<Vec<_>>()
+        );
+        for (name, number) in &expected {
+            assert_eq!(actual.get(name), Some(number));
+        }
+        outputs.push(serde_yaml::to_string(&d).unwrap());
+    }
+    assert!(outputs.windows(2).all(|pair| pair[0] == pair[1]));
+    let restored = PeripheralDescriptor::from_yaml(&outputs[0]).unwrap();
+    assert_eq!(restored.interrupts.as_ref().unwrap(), &expected);
 }
 
 #[test]
@@ -73,6 +118,10 @@ fn ir_duplicate_and_empty_interrupt_semantics_stay_exact() {
     assert!(d.registers.is_empty());
     assert!(d.timing.is_none());
     let m = d.interrupts.unwrap();
+    assert_eq!(
+        m.keys().map(String::as_str).collect::<Vec<_>>(),
+        vec!["A", "DUP", "Z"]
+    );
     assert_eq!(m.get("DUP"), Some(&9));
     assert!(PeripheralDescriptor::from(make(vec![]))
         .interrupts

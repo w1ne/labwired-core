@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Baseline value contracts; real Rust execution is qualified by CoreCI.
+// Ordered assertions: expected compiler RED until the admitted production migration.
 
 use svd_ingestor::{parse_svd, process_peripheral};
 
@@ -24,6 +24,7 @@ fn derived_interrupts_override_base_without_changing_register_goldens() {
         </peripherals></device>"#
         )
     };
+    let mut serialized = Vec::new();
     for reverse in [false, true] {
         let device = parse_svd(&make(reverse)).unwrap();
         let p = device
@@ -33,6 +34,10 @@ fn derived_interrupts_override_base_without_changing_register_goldens() {
             .unwrap();
         let d = process_peripheral(&device, p).unwrap();
         let m = d.interrupts.as_ref().unwrap();
+        assert_eq!(
+            m.keys().map(String::as_str).collect::<Vec<_>>(),
+            vec!["A", "DUP", "Z"]
+        );
         assert_eq!(m.get("A"), Some(&1));
         assert_eq!(m.get("DUP"), Some(&9));
         assert_eq!(m.get("Z"), Some(&3));
@@ -50,6 +55,7 @@ fn derived_interrupts_override_base_without_changing_register_goldens() {
                 .collect::<Vec<_>>(),
             vec![("CR", 0, 32, "rw", 0, 0), ("SR", 4, 32, "ro", 0, 0)]
         );
+        serialized.push(serde_yaml::to_string(&d).unwrap());
         let empty = device
             .peripherals
             .iter()
@@ -60,6 +66,7 @@ fn derived_interrupts_override_base_without_changing_register_goldens() {
             .interrupts
             .is_none());
     }
+    assert_eq!(serialized[0], serialized[1]);
 }
 
 fn access_label(access: &labwired_config::Access) -> &'static str {
