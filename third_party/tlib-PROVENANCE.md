@@ -87,3 +87,14 @@ the native register interface. An unmapped-abort-vector subprocess regression
 checks the bound, diagnostics, poison and reset; valid abort handling and repeated
 retiring SVCs remain covered. The hook and unwind stay in the authored C bridge;
 fatal unwinding occurs after Rust physical-bus callbacks return.
+
+The external CMake wrapper also generates `arm-helper.c` in `OUT_DIR`. It matches
+exactly one complete original Cortex-A7 case, adds VFP3/FP16 decoder feature
+prerequisites to the existing NEON/VFP4 declaration, and replaces that case's
+FPU-only MVFR0/MVFR1 with the NEON MPE values `0x10110222`/`0x11111111`.
+It preserves the r0p0 MIDR/FPSID and all other CPU cases, requiring the original
+helper in the target source list. Vendored bytes and upstream license/copyright
+headers remain unchanged; the generated helper retains the same LGPL lineage.
+Primary evidence is [ARM DDI 0462E](https://documentation-service.arm.com/static/5fa6919ab1a7c5445f2929ec?token=),
+section 1.1 and tables 2-2/2-3/2-6/2-7, and the [RV1103 datasheet](../docs/assets/luckfox-pico-mini-a/rv1103-datasheet.pdf),
+sections 1.1/1.2.1. See the native crate README for tested capabilities and limits.

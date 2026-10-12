@@ -269,6 +269,7 @@ mod machine {
         m.add_observer(t.clone());
         (m, t)
     }
+    #[cfg(feature = "event-scheduler")]
     #[test]
     fn machine_wfi_wakes_at_actual_timer_cycle_without_fabricated_retirement() {
         for masked in [false, true] {
@@ -286,6 +287,7 @@ mod machine {
             assert_eq!(m.cpu.get_register(if masked { 0 } else { 6 }), 42);
         }
     }
+    #[cfg(feature = "event-scheduler")]
     #[test]
     fn machine_virtual_timer_wfi_wakes_across_offset_underflow() {
         for masked in [false, true] {
@@ -309,6 +311,40 @@ mod machine {
             assert_eq!(m.cpu.get_register(if masked { 0 } else { 6 }), 42);
             assert_eq!(m.bus.arm_cp15_read(cp(14, 3, 1), false).unwrap(), 5);
             assert_eq!(m.bus.read_u32(C + 0xc).unwrap(), 27);
+        }
+    }
+    #[cfg(not(feature = "event-scheduler"))]
+    #[test]
+    fn machine_scheduler_disabled_wfi_stops_without_fabricated_time_or_retirement() {
+        for virtual_timer in [false, true] {
+            for masked in [false, true] {
+                let (mut m, t) = fixture(true, masked, 20);
+                let deadline = if virtual_timer {
+                    m.bus.arm_cp15_write(cp(14, 2, 1), false, 0).unwrap();
+                    enable(&mut m.bus, 27, false);
+                    m.bus.arm_cp15_write(0x4e, true, 20).unwrap();
+                    m.bus.arm_cp15_write(cp(14, 3, 0), false, 25).unwrap();
+                    m.bus.arm_cp15_write(cp(14, 3, 1), false, 1).unwrap();
+                    25
+                } else {
+                    20
+                };
+                assert_eq!(m.bus.next_cpu_interrupt_deadline_cycle(), Some(deadline));
+                let report = m
+                    .advance(AdvanceRequest::run(None).with_cycle_limit(deadline + 2))
+                    .unwrap();
+                // A reachable timer does not authorize a scheduler-off time jump.
+                assert_eq!(report.stop, labwired_core::AdvanceStop::NoProgress);
+                assert_eq!(report.primary_steps, 1);
+                assert_eq!(m.total_cycles, 1);
+                assert_eq!(m.idle_fast_forward_cycles_skipped, 0);
+                assert_eq!(*t.1.lock().unwrap(), [(0, 0x100, 0xe320f003)]);
+                assert_eq!(m.cpu.get_register(15), 0x104);
+                assert_eq!(m.cpu.get_register(0), 0);
+                assert_eq!(m.cpu.get_register(6), 0);
+                assert_eq!(m.bus.arm_irq_fiq_levels(), Some((false, false)));
+                assert_eq!(m.bus.next_cpu_interrupt_deadline_cycle(), Some(deadline));
+            }
         }
     }
     #[test]

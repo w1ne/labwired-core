@@ -849,3 +849,206 @@ fn failed_cache_growth_can_retire_after_old_size_fallback() {
         "failed_cache_growth_can_retire_after_old_size_fallback",
     );
 }
+
+// Real guest instructions with CP10/11 access granted and ASEDIS/D32DIS clear.
+// These profile fixtures do not establish general CPACR enforcement/conformance.
+fn vfp_cpu(b: &mut Bus, body: &[u32], enabled: bool) -> ArmCpu {
+    b.words(4, &[0xe320f003]); // WFI at the UND vector, never a success sentinel.
+    let mut code = vec![0xee010f50, 0xeee80a10]; // MCR CPACR; VMSR FPEXC.
+    code.extend_from_slice(body);
+    code.push(0xe3a0c05a); // MOV r12, #90: reached only after the tested instructions.
+    let mut c = cpu(b, &code);
+    prepare_vfp(&mut c, b, enabled);
+    c
+}
+fn prepare_vfp(c: &mut ArmCpu, b: &mut Bus, enabled: bool) {
+    c.set_register(16, 0x13).unwrap(); // SVC, ARM, reset MMU remains off.
+    c.set_register(15, 0x100).unwrap();
+    c.set_register(0, 0x00f00000).unwrap(); // Full CP10/11, ASEDIS/D32DIS=0.
+    c.execute(b, 1).unwrap();
+    c.set_register(0, if enabled { 0x40000000 } else { 0 })
+        .unwrap();
+    c.execute(b, 1).unwrap();
+    c.set_register(12, 0).unwrap();
+    assert_eq!(c.register(15).unwrap(), 0x108);
+    assert_eq!(c.register(16).unwrap() & 31, 0x13);
+}
+fn finish_vfp(c: &mut ArmCpu, b: &mut Bus, instructions: u32) {
+    c.execute(b, instructions + 1).unwrap();
+    // A faulting instruction can report retirement, so check architectural effects.
+    assert_eq!(
+        c.register(16).unwrap() & 31,
+        0x13,
+        "unexpected exception mode"
+    );
+    assert_eq!(c.register(15).unwrap(), 0x108 + (instructions + 1) * 4);
+    assert_eq!(
+        c.register(12).unwrap(),
+        90,
+        "success sentinel was not reached"
+    );
+}
+fn ram_words(b: &Bus, address: usize, count: usize) -> Vec<u32> {
+    b.ram[address..address + count * 4]
+        .chunks_exact(4)
+        .map(|bytes| u32::from_le_bytes(bytes.try_into().unwrap()))
+        .collect()
+}
+#[test]
+fn cortex_a7_privileged_vfp_ids_with_fpexc_disabled_enabled_and_reset() {
+    // FPSID, MVFR0, MVFR1, MIDR; retain the pinned model's r0p0 revision.
+    let body = [0xeef04a10, 0xeef71a10, 0xeef62a10, 0xee103f10, 0xeef60a10];
+    for enabled in [false, true] {
+        let mut b = Bus::new();
+        let mut c = vfp_cpu(&mut b, &body, enabled);
+        for reset in [false, true] {
+            if reset {
+                c.reset().unwrap();
+                prepare_vfp(&mut c, &mut b, enabled);
+            }
+            finish_vfp(&mut c, &mut b, body.len() as u32);
+            for (r, expected) in [
+                (4, 0x41023070),
+                (0, 0x11111111),
+                (1, 0x10110222),
+                (2, 0x11111111),
+                (3, 0x410fc070),
+            ] {
+                assert_eq!(
+                    c.register(r).unwrap(),
+                    expected,
+                    "register {r}, EN={enabled}, reset={reset}"
+                );
+            }
+        }
+    }
+}
+#[test]
+fn cortex_a7_user_vfp_ids_trap_with_fpexc_disabled_and_enabled() {
+    for enabled in [false, true] {
+        for opcode in [0xeef00a10, 0xeef70a10, 0xeef60a10] {
+            let mut b = Bus::new();
+            let mut c = vfp_cpu(&mut b, &[opcode], enabled);
+            c.set_register(0, 0xdeadbeef).unwrap();
+            c.set_register(16, 0x10).unwrap(); // User mode with CP10/11 still granted.
+            c.execute(&mut b, 1).unwrap();
+            assert_eq!(
+                c.register(16).unwrap() & 31,
+                0x1b,
+                "opcode {opcode:x}, EN={enabled}"
+            );
+            assert_eq!(c.register(15).unwrap(), 4);
+            assert_eq!(c.register(0).unwrap(), 0xdeadbeef);
+            assert_eq!(c.register(12).unwrap(), 0);
+            assert!(c.execute(&mut b, 1).unwrap().waiting);
+            assert_eq!(c.register(12).unwrap(), 0);
+        }
+    }
+}
+#[test]
+fn cortex_a7_vfp3_immediate_executes() {
+    let mut b = Bus::new();
+    // VMOV.F32 s0, #1.0; VMOV r1, s0.
+    let mut c = vfp_cpu(&mut b, &[0xeeb70a00, 0xee101a10], true);
+    finish_vfp(&mut c, &mut b, 2);
+    assert_eq!(c.register(1).unwrap(), 0x3f800000);
+}
+#[test]
+fn cortex_a7_d16_load_store_roundtrips_64_bits() {
+    let mut b = Bus::new();
+    b.words(0x300, &[0x01234567, 0x89abcdef]);
+    let mut c = vfp_cpu(&mut b, &[0xedd10b00, 0xedc30b00], true);
+    c.set_register(1, 0x300).unwrap();
+    c.set_register(3, 0x400).unwrap();
+    finish_vfp(&mut c, &mut b, 2);
+    assert_eq!(ram_words(&b, 0x400, 2), [0x01234567, 0x89abcdef]);
+}
+#[test]
+fn cortex_a7_q8_copy_roundtrips_128_bits() {
+    let mut b = Bus::new();
+    let input = [0x01234567, 0x89abcdef, 0x76543210, 0xfedcba98];
+    b.words(0x300, &input);
+    // VLDR d0/d1; VMOV q8, q0; VSTR d16/d17.
+    let mut c = vfp_cpu(
+        &mut b,
+        &[0xed910b00, 0xed911b02, 0xf2600150, 0xedc30b00, 0xedc31b02],
+        true,
+    );
+    c.set_register(1, 0x300).unwrap();
+    c.set_register(3, 0x400).unwrap();
+    finish_vfp(&mut c, &mut b, 5);
+    assert_eq!(ram_words(&b, 0x400, 4), input);
+}
+fn neon_binary(opcode: u32, input: &[u32], expected: &[u32]) {
+    let mut b = Bus::new();
+    b.words(0x300, input);
+    // VLDR d0..d5 (q0/q1 inputs and q2 accumulator); operation; VSTR q2.
+    let mut c = vfp_cpu(
+        &mut b,
+        &[
+            0xed910b00, 0xed911b02, 0xed912b04, 0xed913b06, 0xed914b08, 0xed915b0a, opcode,
+            0xed834b00, 0xed835b02,
+        ],
+        true,
+    );
+    c.set_register(1, 0x300).unwrap();
+    c.set_register(3, 0x400).unwrap();
+    finish_vfp(&mut c, &mut b, 9);
+    assert_eq!(ram_words(&b, 0x400, 4), expected);
+}
+#[test]
+fn cortex_a7_neon_integer_add_executes_all_lanes() {
+    neon_binary(0xf2204842, &[1, 2, 3, 4, 10, 20, 30, 40], &[11, 22, 33, 44]);
+}
+#[test]
+fn cortex_a7_neon_float_add_executes_all_lanes() {
+    let input = [1.0f32, -2.0, 0.5, 4.0, 10.0, 20.0, -0.25, -8.0].map(f32::to_bits);
+    let expected = [11.0f32, 18.0, 0.25, -4.0].map(f32::to_bits);
+    neon_binary(0xf2004d42, &input, &expected);
+}
+#[test]
+fn cortex_a7_neon_fma_uses_fused_rounding() {
+    // (1 + 2^-23) * (1 - 2^-23) - 1 = -2^-46; separate MUL/ADD rounds to 0.
+    let mut input = [0; 12];
+    input[..4].fill(0x3f800001);
+    input[4..8].fill(0x3f7ffffe);
+    input[8..].fill(0xbf800000);
+    neon_binary(0xf2004c52, &input, &[0xa8800000; 4]);
+}
+#[test]
+fn cortex_a7_scalar_half_conversions_preserve_unused_half() {
+    for (to_half, to_float, input, intermediate) in [
+        (0xeeb30a40, 0xeeb20a40, 0x3fc00000, 0x3fc03e00), // VCVTB: preserve upper half.
+        (0xeeb30ac0, 0xeeb20ac0, 0x3fc00123, 0x3e000123), // VCVTT: preserve lower half.
+    ] {
+        let mut b = Bus::new();
+        let mut c = vfp_cpu(
+            &mut b,
+            &[0xee000a10, to_half, 0xee101a10, to_float, 0xee102a10],
+            true,
+        );
+        c.set_register(0, input).unwrap(); // Both round to 1.5 (0x3e00 half).
+        finish_vfp(&mut c, &mut b, 5);
+        assert_eq!(c.register(1).unwrap(), intermediate);
+        assert_eq!(c.register(2).unwrap(), 0x3fc00000);
+    }
+}
+#[test]
+fn cortex_a7_neon_half_conversion_roundtrips_all_lanes() {
+    let mut b = Bus::new();
+    let input = [0x3fc00000, 0xc0000000, 0x3e800000, 0x00000000]; // 1.5, -2, .25, 0.
+    b.words(0x300, &input);
+    // Q0 -> packed D2 half -> Q2 float; store both representations.
+    let mut c = vfp_cpu(
+        &mut b,
+        &[
+            0xed910b00, 0xed911b02, 0xf3b62600, 0xf3b64702, 0xed832b00, 0xed834b02, 0xed835b04,
+        ],
+        true,
+    );
+    c.set_register(1, 0x300).unwrap();
+    c.set_register(3, 0x400).unwrap();
+    finish_vfp(&mut c, &mut b, 7);
+    assert_eq!(ram_words(&b, 0x400, 2), [0xc0003e00, 0x00003400]);
+    assert_eq!(ram_words(&b, 0x408, 4), input);
+}

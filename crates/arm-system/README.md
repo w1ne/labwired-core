@@ -62,6 +62,28 @@ ordinary upstream branch decoder handles the instructions. A predicate-count
 change fails the build. Vendored bytes remain unchanged, other instruction hints
 are unaffected, and real WFI still parks the CPU.
 
+The native wrapper builds a derived `arm-helper.c` in `OUT_DIR` to correct the
+pinned Cortex-A7 capability declaration. Its A7 case enables NEON and VFP4 but
+omits the VFP3 and FP16 decoder prerequisites, and reports the FPU-only D16
+profile. The generated case adds `ARM_FEATURE_VFP3` and `ARM_FEATURE_VFP_FP16`,
+retains VFP/VFP4/NEON, and sets MVFR0/MVFR1 to `0x10110222`/`0x11111111`.
+The complete original A7 case must occur exactly once and its original helper
+must be in the target source list; otherwise configuration fails. Only that
+case changes. Vendor bytes and upstream headers/licenses are preserved.
+
+This NEON MPE profile follows [ARM DDI 0462E, section 1.1 and tables 2-2, 2-3,
+2-6 and 2-7](https://documentation-service.arm.com/static/5fa6919ab1a7c5445f2929ec?token=).
+The [RV1103 datasheet](../../docs/assets/luckfox-pico-mini-a/rv1103-datasheet.pdf),
+sections 1.1 and 1.2.1, identifies its Cortex-A7 as including NEON and FPU.
+The pinned model's r0p0 MIDR/FPSID (`0x410fc070`/`0x41023070`) remain unchanged;
+the reference manual's later r0p4 revision is not substituted for them.
+Native instruction fixtures check privileged IDs with FPEXC.EN clear/set and
+after reset, forbidden user ID reads, VFP3 immediates, D16/Q8 data paths, SIMD
+integer/float addition and fused FMA, and scalar/SIMD half conversions. They
+explicitly grant CP10/11 access with ASEDIS/D32DIS clear. These tests do not
+establish complete Cortex-A7 conformance, general CPACR/ASEDIS/D32DIS enforcement,
+deprecated VFP short-vector behavior, Linux userspace boot or physical acceptance.
+
 The wrapper also generates an `exec.c` copy that clears the block-table pointer
 after its real release in `code_gen_free`. Upstream leaves that pointer dangling;
 if cache growth and its old-size fallback both fail, guarded execution returns
