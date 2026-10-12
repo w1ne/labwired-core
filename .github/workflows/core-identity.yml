@@ -35,6 +35,11 @@ on:
         description: "Space-separated --max-steps values"
         required: false
         default: "5000000 40000000"
+      suite:
+        description: "Firmware family to compare"
+        type: choice
+        options: [esp32s3, cortex-m, all]
+        default: esp32s3
 
 concurrency:
   group: core-identity-${{ inputs.head }}
@@ -88,6 +93,7 @@ jobs:
         env:
           STEP_COUNTS: ${{ inputs.steps }}
           SIDE: ${{ matrix.side }}
+          IDENTITY_SUITE: ${{ inputs.suite }}
         run: |
           set -uo pipefail
           mkdir -p out
@@ -103,9 +109,28 @@ jobs:
           for steps in "${step_counts[@]}"; do
             for mode in step batched; do
               for pass in $(seq 1 $passes); do
-                cell="esp32s3-romboot-${steps}-${mode}-p${pass}"
                 flags=()
                 [ "$mode" = batched ] && flags+=(--batched)
+                single_step=0
+                [ "$mode" = step ] && single_step=1
+                if [ "$IDENTITY_SUITE" = cortex-m ] || [ "$IDENTITY_SUITE" = all ]; then
+                  for chip in nrf52840 stm32f405 stm32l476; do
+                    cell="cortex-m-${chip}-${steps}-${mode}-p${pass}"
+                    LABWIRED_ARM_SINGLE_STEP="$single_step" \
+                      timeout 1200 target/release/labwired run \
+                      --chip "configs/chips/$chip.yaml" \
+                      --firmware "tests/fixtures/tier1/$chip.elf" \
+                      --allow-sim-error --max-steps "$steps" "${flags[@]}" \
+                      --bus-trace-out "out/$cell.bus.json" \
+                      > "out/$cell.stdout" 2> "out/$cell.stderr"
+                    echo "$?" > "out/$cell.exit"
+                    printf '%-44s exit=%s stdout=%s bus=%s\n' "$cell" "$(cat "out/$cell.exit")" \
+                      "$(sha256sum < "out/$cell.stdout" | cut -c1-16)" \
+                      "$(sha256sum < "out/$cell.bus.json" | cut -c1-16)"
+                  done
+                fi
+                [ "$IDENTITY_SUITE" = cortex-m ] && continue
+                cell="esp32s3-romboot-${steps}-${mode}-p${pass}"
                 LABWIRED_ESP32S3_FLASH=tests/fixtures/tier1/esp32s3-flash.bin \
                   timeout 1200 target/release/labwired run \
                     --chip configs/chips/esp32s3.yaml \
@@ -163,11 +188,54 @@ jobs:
           printf '%-38s %-7s %-17s %-17s %s\n' cell stream base head verdict | tee report.txt
           for f in identity-base/*-p1.exit; do
             cell=$(basename "$f" -p1.exit)
-            for stream in exit stdout stderr; do
+            streams=(exit stdout stderr)
+            if [[ "$cell" = cortex-m-* ]]; then
+              streams+=(bus.json)
+              # These fixtures speak TIER1 over UART. Require real, cycle-stamped
+              # firmware traffic on BOTH base controls and head before hashing.
+              # .json is essential: other export extensions select VCD.
+              if ! python3 - "$cell" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          cell = sys.argv[1]
+          for root, run in [("identity-base", "p1"), ("identity-base", "p2"), ("identity-head", "p1")]:
+              prefix = Path(root) / f"{cell}-{run}"
+              try:
+                  assert Path(f"{prefix}.exit").read_text().strip() == "0", "invalid exit"
+                  assert b"TIER1 " in Path(f"{prefix}.stdout").read_bytes(), "no firmware UART stdout"
+                  events = json.loads(Path(f"{prefix}.bus.json").read_text())
+                  assert isinstance(events, list) and events, "empty/non-list bus trace"
+                  uart = bytearray()
+                  for event in events:
+                      assert isinstance(event, dict), "invalid event"
+                      assert type(event.get("seq")) is int and event["seq"] >= 0, "invalid sequence"
+                      assert type(event.get("cycle")) is int and event["cycle"] >= 0, "invalid cycle"
+                      assert isinstance(event.get("bus"), str) and event["bus"], "invalid bus"
+                      payload = event.get("payload")
+                      assert isinstance(payload, dict), "invalid payload"
+                      assert payload.get("protocol") in ("i2c", "spi", "uart", "can"), "invalid protocol"
+                      if payload["protocol"] == "uart":
+                          assert payload.get("direction") in ("tx", "rx"), "invalid UART direction"
+                          assert type(payload.get("byte")) is int and 0 <= payload["byte"] <= 255, "invalid UART byte"
+                          if payload["direction"] == "tx" and event["cycle"] > 0:
+                              uart.append(payload["byte"])
+                  assert b"TIER1 " in uart, "no cycle-stamped firmware UART events"
+              except (AssertionError, OSError, ValueError) as error:
+                  print(f"FAIL-EXECUTION {prefix}: {error}")
+                  sys.exit(1)
+          PY
+              then
+                bad=1
+                continue
+              fi
+            fi
+            for stream in "${streams[@]}"; do
               b1=$(h "identity-base/$cell-p1.$stream")
               b2=$(h "identity-base/$cell-p2.$stream")
               hd=$(h "identity-head/$cell-p1.$stream")
-              if [ "$b1" = MISSING ] || [ "$hd" = MISSING ]; then
+              if [ "$b1" = MISSING ] || [ "$b2" = MISSING ] || [ "$hd" = MISSING ]; then
                 v=FAIL-MISSING; bad=1
               elif [ "$(cat "identity-base/$cell-p1.exit")" = 2 ] \
                 || [ ! -s "identity-base/$cell-p1.stdout" ]; then
@@ -177,6 +245,10 @@ jobs:
                 v=FAIL-DIDNOTRUN; bad=1
               elif [ "$b1" != "$b2" ]; then
                 v=UNSTABLE      # the control: base disagrees with itself
+                # Exit-only agreement cannot certify Cortex-M behavior.
+                if [[ "$cell" = cortex-m-* ]] && [[ "$stream" = stdout || "$stream" = bus.json ]]; then
+                  bad=1
+                fi
               elif [ "$b1" = "$hd" ]; then
                 v=identical; judged=$((judged + 1))
               else
