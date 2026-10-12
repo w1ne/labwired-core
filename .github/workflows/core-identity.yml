@@ -48,6 +48,10 @@ on:
         description: "Also measure exact base/head three-board Cortex-M Ir/step (not full CorePerf)"
         type: boolean
         default: false
+      diagnose_cortex_m_common_fixtures:
+        description: "Optional perf only: preserve original ELF and common-input Callgrind diagnostics"
+        type: boolean
+        default: false
 
 concurrency:
   group: core-identity-${{ inputs.head }}
@@ -158,12 +162,19 @@ jobs:
           HEAD_SHA: ${{ inputs.head }}
           IDENTITY_SUITE: ${{ inputs.suite }}
           STEP_COUNTS: ${{ inputs.steps }}
+          DIAGNOSE_COMMON_FIXTURES: ${{ inputs.diagnose_cortex_m_common_fixtures }}
         run: |
           set -euo pipefail
           unset LABWIRED_ARM_SINGLE_STEP
           valgrind --version > perf-build-evidence/valgrind-version-after.txt
           cmp perf-build-evidence/valgrind-version.txt perf-build-evidence/valgrind-version-after.txt
-          python scripts/ci/cortex_m_perf_evidence.py qualify \
+          diagnostic_args=()
+          case "${DIAGNOSE_COMMON_FIXTURES:-false}" in
+            false) ;;
+            true) diagnostic_args+=(--diagnose-common-fixtures) ;;
+            *) echo 'Invalid diagnostic toggle' >&2; exit 1 ;;
+          esac
+          python scripts/ci/cortex_m_perf_evidence.py qualify "${diagnostic_args[@]}" \
             --base-dir perf-base --head-dir perf-head \
             --base-sha "$BASE_SHA" --head-sha "$HEAD_SHA" \
             --identity-dir perf-identity --steps "$STEP_COUNTS" --suite "$IDENTITY_SUITE" \

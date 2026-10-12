@@ -346,8 +346,28 @@ class DiagnosticsControls(unittest.TestCase):
         old,new=functions(original),functions(current)
         for name in ('collect','validate_identity','validate_records','validate_status','source_contract'):
             self.assertEqual(old[name],new[name],name)
-        for path in ('.github/workflows/core-identity.yml','scripts/perf/board_perf.py','scripts/perf/baselines.json'):
+        for path in ('scripts/perf/board_perf.py','scripts/perf/baselines.json'):
             self.assertEqual((ROOT/path).read_bytes(),subprocess.check_output(['git','show','393b5310:'+path],cwd=ROOT))
+        workflow=(ROOT/'.github/workflows/core-identity.yml').read_text()
+        # Permit only the reviewed opt-in input/env/argument routing. Reversing
+        # those additions must reproduce every byte of the previous workflow.
+        additions=(
+            '      diagnose_cortex_m_common_fixtures:\n'
+            '        description: "Optional perf only: preserve original ELF and common-input Callgrind diagnostics"\n'
+            '        type: boolean\n        default: false\n',
+            '          DIAGNOSE_COMMON_FIXTURES: ${{ inputs.diagnose_cortex_m_common_fixtures }}\n',
+            '          diagnostic_args=()\n'
+            '          case "${DIAGNOSE_COMMON_FIXTURES:-false}" in\n'
+            '            false) ;;\n'
+            '            true) diagnostic_args+=(--diagnose-common-fixtures) ;;\n'
+            "            *) echo 'Invalid diagnostic toggle' >&2; exit 1 ;;\n"
+            '          esac\n',
+            ' "${diagnostic_args[@]}"',
+        )
+        for addition in additions:
+            self.assertEqual(workflow.count(addition),1)
+            workflow=workflow.replace(addition,'',1)
+        self.assertEqual(workflow,subprocess.check_output(['git','show','393b5310:.github/workflows/core-identity.yml'],cwd=ROOT,text=True))
         self.assertIn('action="store_true"',current)
         self.assertIn('budget = Budget(5 * 1024 * 1024)',current)
 

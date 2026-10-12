@@ -240,6 +240,32 @@ class PerformanceControls(unittest.TestCase):
         self.assertIn('permissions:\n  contents: read\n', workflow)
         self.assertNotIn('issues: write', workflow)
 
+    def test_literal_diagnostic_toggle_preserves_default_argv_and_rejects_invalid(self):
+        workflow=(ROOT/'.github/workflows/core-identity.yml').read_text()
+        self.assertRegex(workflow,r'diagnose_cortex_m_common_fixtures:\n(?:.*\n){1,3}\s+default: false')
+        self.assertIn('DIAGNOSE_COMMON_FIXTURES: ${{ inputs.diagnose_cortex_m_common_fixtures }}',workflow)
+        shell=literal_run(workflow,'Qualify three-board Cortex-M performance evidence')
+        binary=self.path/'bin';binary.mkdir()
+        for name,body in (('valgrind','#!/bin/sh\nprintf "synthetic version\\n"\n'),
+                          ('python','#!/usr/bin/env python3\nimport json,os,sys\nfrom pathlib import Path\nPath(os.environ["CAPTURE_ARGV"]).write_text(json.dumps(sys.argv[1:]))\n')):
+            target=binary/name;target.write_text(body);target.chmod(0o755)
+        folder=self.path/'perf-build-evidence';folder.mkdir()
+        (folder/'valgrind-version.txt').write_text('synthetic version\n')
+        expected=['scripts/ci/cortex_m_perf_evidence.py','qualify','--base-dir','perf-base','--head-dir','perf-head',
+                  '--base-sha','a'*40,'--head-sha','b'*40,'--identity-dir','perf-identity','--steps',
+                  '5000000 40000000','--suite','cortex-m','--output','perf-evidence']
+        for toggle in ('false','true','invalid'):
+            capture=self.path/('argv-'+toggle+'.json')
+            env=dict(os.environ,PATH=str(binary)+os.pathsep+os.environ['PATH'],BASE_SHA='a'*40,HEAD_SHA='b'*40,
+                     IDENTITY_SUITE='cortex-m',STEP_COUNTS='5000000 40000000',DIAGNOSE_COMMON_FIXTURES=toggle,CAPTURE_ARGV=str(capture))
+            result=subprocess.run(['bash','-c',shell],cwd=self.path,env=env,capture_output=True)
+            if toggle=='invalid':
+                self.assertNotEqual(result.returncode,0);self.assertFalse(capture.exists())
+            else:
+                self.assertEqual(result.returncode,0,result.stderr.decode())
+                wanted=expected[:2]+(['--diagnose-common-fixtures'] if toggle=='true' else [])+expected[2:]
+                self.assertEqual(json.loads(capture.read_text()),wanted)
+
     def test_literal_build_route_uses_both_exact_sources_and_required_feature(self):
         sources, binpath = self.synthetic_sources()
         (binpath / 'python').symlink_to(sys.executable)
