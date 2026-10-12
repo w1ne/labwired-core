@@ -62,6 +62,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Exercise the workflow's literal shell with mock artifacts before
+      # switching to either ref; the old base need not contain this test.
+      - name: Check identity harness controls
+        run: python3 scripts/ci/test_core_identity_harness.py
+
       - name: Check out the ref under test
         env:
           REF: ${{ matrix.side == 'base' && inputs.base || inputs.head }}
@@ -161,6 +166,9 @@ jobs:
           pattern: identity-*
 
       - name: Compare
+        env:
+          STEP_COUNTS: ${{ inputs.steps }}
+          IDENTITY_SUITE: ${{ inputs.suite }}
         run: |
           set -uo pipefail
           echo "base $(cat identity-base/sha)"
@@ -185,6 +193,45 @@ jobs:
             else sha256sum < "$1" | cut -c1-16; fi
           }
           bad=0; judged=0
+          # Derive the complete inventory from dispatch inputs, never from
+          # files that happened to upload. A missing first-base exit otherwise
+          # removes its entire cell from the comparison below.
+          if ! python3 - <<'PY_INVENTORY'
+          import os
+          import re
+          import sys
+          from pathlib import Path
+
+          suite = os.environ["IDENTITY_SUITE"]
+          steps = os.environ["STEP_COUNTS"].split()
+          if suite not in ("esp32s3", "cortex-m", "all") or not steps or any(
+              re.fullmatch(r"[1-9][0-9]*", count) is None for count in steps
+          ) or len(steps) != len(set(steps)):
+              print("FAIL-INVENTORY invalid suite/step inputs")
+              sys.exit(1)
+          cells = []
+          for count in steps:
+              for mode in ("step", "batched"):
+                  if suite in ("cortex-m", "all"):
+                      cells.extend(f"cortex-m-{chip}-{count}-{mode}" for chip in
+                                   ("nrf52840", "stm32f405", "stm32l476"))
+                  if suite in ("esp32s3", "all"):
+                      cells.append(f"esp32s3-romboot-{count}-{mode}")
+          for root, passes in (("identity-base", (1, 2)), ("identity-head", (1,))):
+              expected = {"sha"}
+              for cell in cells:
+                  streams = ("exit", "stdout", "stderr", "bus.json") if cell.startswith("cortex-m-") else ("exit", "stdout", "stderr")
+                  expected.update(f"{cell}-p{run}.{stream}" for run in passes for stream in streams)
+              path = Path(root)
+              actual = {entry.name for entry in path.iterdir() if entry.is_file()} if path.is_dir() else set()
+              if actual != expected:
+                  print(f"FAIL-INVENTORY {root}: missing={sorted(expected - actual)} unexpected={sorted(actual - expected)}")
+                  sys.exit(1)
+          print(f"inventory complete: {len(cells)} cells, base twice, head once")
+          PY_INVENTORY
+          then
+            bad=1
+          fi
           printf '%-38s %-7s %-17s %-17s %s\n' cell stream base head verdict | tee report.txt
           for f in identity-base/*-p1.exit; do
             cell=$(basename "$f" -p1.exit)
