@@ -263,6 +263,22 @@ class OracleCollectorOwnershipControls(unittest.TestCase):
                 if phase=="read":self.assertIs(error,original)
                 else:self.assertIsNotNone(error)
 
+    def test_failed_ownership_proof_is_sticky_even_if_later_reads_recover(self):
+        for ownership in ("group-once", "session-once", "group-error-once", "session-error-once", "terminal-once", "wait-error-once"):
+            for phase in ("read", "success"):
+                with self.subTest(ownership=ownership, phase=phase):
+                    events,error,result,original,_,producer=self.probe(phase=phase,ownership=ownership)
+                    self.assertFalse(any(isinstance(e,tuple) and e[0]=="signal" for e in events), events)
+                    self.assertEqual(events.count("pipe.close"),1);self.assertIn("selector.close",events)
+                    self.assertIsNone(result)
+                    if phase=="read":self.assertIs(error,original)
+                    else:self.assertIsNotNone(error)
+                    waits=[e for e in events if isinstance(e,tuple) and e[0]=="wait"]
+                    if ownership.startswith(("group", "session")):
+                        self.assertEqual(waits,[("wait",0.2)]);self.assertTrue(producer.reaped)
+                    else:
+                        self.assertEqual(waits,[]);self.assertFalse(producer.reaped)
+
     def test_unsupported_platform_and_sigchld_autoreap_reject_before_birth(self):
         for obj,name,value in ((self.module.sys,"platform","darwin"),(self.module.os,"waitid",None),(self.module.os,"getpgid",None),(self.module.os,"getsid",None)):
             with mock.patch.object(obj,name,value),mock.patch.object(self.module.subprocess,"Popen") as birth:

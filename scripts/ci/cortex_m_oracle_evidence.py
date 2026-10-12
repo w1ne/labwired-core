@@ -30,6 +30,7 @@ def collect_log(command, path, max_bytes=1000000, timeout_seconds=300):
     original_error = None
     cleanup_errors = []
     ownership_lost = False
+    group_lost = False
     observed_exit = None
 
     def exited():
@@ -38,7 +39,7 @@ def collect_log(command, path, max_bytes=1000000, timeout_seconds=300):
             raise RuntimeError("owned producer lifetime was lost")
         try:
             state = os.waitid(os.P_PID, process.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT)
-        except ChildProcessError:
+        except BaseException:
             ownership_lost = True
             raise
         if state is not None and state.si_pid != process.pid:
@@ -50,6 +51,7 @@ def collect_log(command, path, max_bytes=1000000, timeout_seconds=300):
             elif state.si_code in (os.CLD_KILLED, os.CLD_DUMPED):
                 observed_exit = -state.si_status
             else:
+                ownership_lost = True
                 raise RuntimeError("invalid owned producer terminal state")
         return state is not None
 
@@ -60,10 +62,18 @@ def collect_log(command, path, max_bytes=1000000, timeout_seconds=300):
             process.wait(timeout=0.2)
 
     def signal_owned(sig):
-        # waitid also rejects ECHILD/auto-reap; no signal follows lost ownership.
+        nonlocal group_lost
+        # A failed group/session proof is sticky even if later reads recover.
+        # It blocks group signals, but a valid lifetime still permits direct reap.
+        if group_lost:
+            raise RuntimeError("owned producer session/group proof was lost")
         exited()
-        if os.getpgid(process.pid) != process.pid or os.getsid(process.pid) != process.pid:
-            raise RuntimeError("owned producer session/group changed")
+        try:
+            if os.getpgid(process.pid) != process.pid or os.getsid(process.pid) != process.pid:
+                raise RuntimeError("owned producer session/group changed")
+        except BaseException:
+            group_lost = True
+            raise
         try:
             os.killpg(process.pid, sig)
         except ProcessLookupError:

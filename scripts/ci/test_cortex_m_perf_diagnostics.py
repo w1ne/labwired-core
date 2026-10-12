@@ -421,7 +421,7 @@ class DiagnosticsControls(unittest.TestCase):
         manifest = json.loads(fixture.read_text())
         # Exact382034f4ec62bd66154f0675001bde3894a73c12 retains original393 collect AST.
         predecessor_collect_382 = '6649690b5fee77f69af0174dd3a8d1ba6472e09463f354b0cfd4ac6f9b395529'
-        successor_collect_task6 = 'f7020e0c4d110f963898378fdffe582b880329716f20a04a66b09028a93280ad'
+        successor_collect_task6 = '8056ad23782ff91a69f8b0c822d3719628eae785a9feed48de2de806915afb7a'
         self.assertEqual(manifest['function_ast_sha256']['collect'], predecessor_collect_382)
 
         self.assertEqual(manifest['source_commit'], '393b53104f64b5e4abc31bc5a7148d56d9717093')

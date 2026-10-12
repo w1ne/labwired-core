@@ -491,12 +491,26 @@ def collector_ownership_probe(module, invoke, phase="read", cleanup=None, status
         events.append("spawn")
         if phase == "spawn": raise original
         return producer
+    observations = 0
     def observe(kind, pid, flags):
+        nonlocal observations
+        observations += 1
         events.append("waitid-unreaped")
         assert not producer.reaped, "observation after reap"
         assert (kind, pid, flags) == (os.P_PID, producer.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT)
         if ownership == "lost": raise ChildProcessError("ownership lost")
-        return types.SimpleNamespace(si_pid=producer.pid + int(ownership == "pid"), si_code=os.CLD_EXITED, si_status=status)
+        if ownership == "wait-error-once" and observations == 1:
+            raise PermissionError("unproved owned lifetime")
+        code = os.CLD_STOPPED if ownership == "terminal-once" and observations == 1 else os.CLD_EXITED
+        return types.SimpleNamespace(si_pid=producer.pid + int(ownership == "pid"), si_code=code, si_status=status)
+    group_reads = {"group": 0, "session": 0}
+    def group_identity(kind):
+        group_reads[kind] += 1
+        events.append(kind + ".proof")
+        if ownership == kind + "-error-once" and group_reads[kind] == 1:
+            raise PermissionError("unproved owned " + kind)
+        mismatch = ownership == kind or ownership == kind + "-once" and group_reads[kind] == 1
+        return producer.pid + int(mismatch)
     def signal_group(pid, sig):
         events.append(("signal", sig))
         assert not producer.reaped, "group signalled after leader reap"
@@ -507,8 +521,8 @@ def collector_ownership_probe(module, invoke, phase="read", cleanup=None, status
         for obj, name, effect in ((module.subprocess,"Popen",spawn), (module.selectors,"DefaultSelector",create_selector),
                                   (module.os,"waitid",observe), (module.os,"killpg",signal_group)):
             stack.enter_context(mock.patch.object(obj,name,side_effect=effect))
-        stack.enter_context(mock.patch.object(module.os,"getpgid",return_value=producer.pid + int(ownership == "group")))
-        stack.enter_context(mock.patch.object(module.os,"getsid",return_value=producer.pid + int(ownership == "session")))
+        stack.enter_context(mock.patch.object(module.os,"getpgid",side_effect=lambda pid: group_identity("group")))
+        stack.enter_context(mock.patch.object(module.os,"getsid",side_effect=lambda pid: group_identity("session")))
         try: result = invoke()
         except BaseException as caught: error = caught
     return events, error, result, original, cleanup_error, producer
@@ -590,6 +604,22 @@ class CollectorOwnershipControls(unittest.TestCase):
                 self.assertEqual(events.count("pipe.close"),2);self.assertIn("selector.close",events)
                 if phase=="read":self.assertIs(error,original)
                 else:self.assertIsNotNone(error)
+
+    def test_failed_ownership_proof_is_sticky_even_if_later_reads_recover(self):
+        for ownership in ("group-once", "session-once", "group-error-once", "session-error-once", "terminal-once", "wait-error-once"):
+            for phase in ("read", "success"):
+                with self.subTest(ownership=ownership, phase=phase):
+                    events,error,result,original,_,producer=self.probe(phase=phase,ownership=ownership)
+                    self.assertFalse(any(isinstance(e,tuple) and e[0]=="signal" for e in events), events)
+                    self.assertEqual(events.count("pipe.close"),2);self.assertIn("selector.close",events)
+                    self.assertIsNone(result)
+                    if phase=="read":self.assertIs(error,original)
+                    else:self.assertIsNotNone(error)
+                    waits=[e for e in events if isinstance(e,tuple) and e[0]=="wait"]
+                    if ownership.startswith(("group", "session")):
+                        self.assertEqual(waits,[("wait",0.2)]);self.assertTrue(producer.reaped)
+                    else:
+                        self.assertEqual(waits,[]);self.assertFalse(producer.reaped)
 
     def test_unsupported_platform_and_sigchld_autoreap_reject_before_birth(self):
         for obj,name,value in ((self.module.sys,"platform","darwin"),(self.module.os,"waitid",None),(self.module.os,"getpgid",None),(self.module.os,"getsid",None)):
