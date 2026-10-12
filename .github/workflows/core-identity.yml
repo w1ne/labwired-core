@@ -40,6 +40,10 @@ on:
         type: choice
         options: [esp32s3, cortex-m, all]
         default: esp32s3
+      qualify_cortex_m_oracles:
+        description: "Also build and execute Cortex-M frozen digest oracles at exact head SHA"
+        type: boolean
+        default: false
 
 concurrency:
   group: core-identity-${{ inputs.head }}
@@ -49,6 +53,84 @@ permissions:
   contents: read
 
 jobs:
+  cortex-m-oracles:
+    if: ${{ inputs.qualify_cortex_m_oracles }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      # Keep the verifier at the reviewed workflow ref even when inputs.head
+      # predates it. The second checkout contains only the source under test.
+      - uses: actions/checkout@v4
+      - name: Check Cortex-M oracle evidence controls
+        run: python3 scripts/ci/test_cortex_m_oracle_evidence.py
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.head }}
+          path: oracle-source
+          persist-credentials: false
+      - name: Record exact Cortex-M oracle source
+        working-directory: oracle-source
+        env:
+          EXPECTED_SOURCE_SHA: ${{ inputs.head }}
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          actual=$(git rev-parse HEAD)
+          [ "$actual" = "$EXPECTED_SOURCE_SHA" ]
+          mkdir -p oracle-evidence
+          printf '{"source_sha":"%s"}\n' "$actual" > oracle-evidence/source.json
+      - uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          targets: thumbv7em-none-eabi,thumbv7m-none-eabi
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: core-perf
+          save-if: false
+          workspaces: |
+            oracle-source -> target
+      - name: Build Cortex-M oracle firmware
+        working-directory: oracle-source
+        run: |
+          set -euo pipefail
+          cargo build -p firmware-nrf52840-conformance -p firmware-nrf52840-cpu-conformance \
+            --target thumbv7em-none-eabi --release
+          cargo build -p firmware-f103-conformance --target thumbv7m-none-eabi --release
+      - name: Run Cortex-M digest oracles
+        working-directory: oracle-source
+        env:
+          EVIDENCE_VERIFIER: ${{ github.workspace }}/scripts/ci/cortex_m_oracle_evidence.py
+        run: |
+          set -euo pipefail
+          mkdir -p oracle-evidence
+          : > oracle-evidence/fixtures.jsonl
+          for fixture in \
+            target/thumbv7em-none-eabi/release/firmware-nrf52840-conformance \
+            target/thumbv7em-none-eabi/release/firmware-nrf52840-cpu-conformance \
+            target/thumbv7m-none-eabi/release/firmware-f103-conformance; do
+            python3 "$EVIDENCE_VERIFIER" fixture "$fixture" >> oracle-evidence/fixtures.jsonl
+          done
+          : > oracle-evidence/oracles.jsonl
+          for mode in feature-off scheduler; do
+            flags=()
+            [ "$mode" != scheduler ] || flags+=(--features labwired-core/event-scheduler)
+            for oracle in nrf52_conformance nrf52_cpu_conformance f103_conformance; do
+              test=conformance_sim
+              [ "$oracle" != nrf52_cpu_conformance ] || test=cpu_conformance_sim
+              log="oracle-evidence/$mode-$oracle.log"
+              status=0
+              timeout 300 cargo test -p labwired-hw-oracle "${flags[@]}" \
+                --test "$oracle" "$test" -- --exact --nocapture > "$log" 2>&1 || status=$?
+              printf '%s\n' "$status" > "oracle-evidence/$mode-$oracle.exit"
+              [ "$(wc -c < "$log")" -le 1000000 ]
+              python3 "$EVIDENCE_VERIFIER" log "$oracle" "$log" "$status" >> oracle-evidence/oracles.jsonl
+            done
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cortex-m-oracle-evidence
+          path: oracle-source/oracle-evidence/
+
   run:
     name: run (${{ matrix.side }})
     runs-on: ubuntu-latest
