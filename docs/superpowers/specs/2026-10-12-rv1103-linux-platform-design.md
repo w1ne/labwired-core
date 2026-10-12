@@ -39,11 +39,15 @@ Vendor source: LuckfoxTECH/luckfox-pico revision 824b817f889c2cbff1d48fcdb18ab49
 
 Implement GIC distributor and CPU-interface enable, priorities, routing, acknowledge and EOI behavior needed by a single Cortex-A7 Linux guest. Implement the architectural timer's counter, compare, control/mask and IRQ behavior. UART models must include register-width/stride, DLAB, FIFOs, line status and interrupt behavior. The Rockchip I2C controller must execute address/data transfers and generate completion/error interrupts; a probe-only register stub is insufficient.
 
-A minimal vendor-derived tree can use disclosed fixed clocks and initramfs to prove the CPU/GIC/timer/UART path before CRU and SD dependencies. Upstream mainline does not automatically match an RV1103 compatible, so the kernel machine/configuration must be explicitly supported and recorded. Do not introduce another SoC compatible that executes initialization at incorrect physical addresses.
+A minimal vendor-derived tree can use disclosed fixed clocks and initramfs to prove the CPU/GIC/timer/UART path before CRU and SD dependencies. An ARM multiplatform kernel can use its generic DT fallback with an honest RV1103 compatible; record this configuration and the omitted vendor initialization. Do not introduce another SoC compatible that executes initialization at incorrect physical addresses.
+
+The first boot artifact is Alpine v3.23 armv7 linux-lts 6.18.55-r0, whose inspected configuration enables short-descriptor MMU, GIC, architectural timer, 8250/DW console and initramfs. I2C_RK3X is disabled, so this artifact cannot satisfy basket I2C acceptance. A separate driver-enabled kernel is required for that gate. Use cma=0 for 64 MiB RAM. Verified load positions are zImage 0x02000000, DTB 0x03000000 and initramfs 0x03100000, with decompressed kernel/BSS reserved through 0x016e5850.
 
 ## Linux artifacts and loader
 
 Use pinned kernel source/configuration, device-tree source and initramfs construction with hashes and licenses. The boot receipt identifies every input byte sequence and the native backend version. ARM boot entry initializes r0=0, r1 to the documented machine identifier or DT-only value, r2 to the physical DTB address, SVC mode, masked interrupts and disabled MMU, following the kernel ARM boot ABI. Validate image format, memory bounds and non-overlapping kernel, DTB and initramfs placement before loading.
+
+Production native builds use the explicit native-system profile with panic unwinding so Rust bus panics can be contained before returning to C. The backend refuses panic=abort builds. Native state lives in a separate shared-library inode per CPU; callback executable memory has no retained host RAM pointer. A stable bus identity and explicit host-code invalidation preserve translation-cache coherence without flushing every instruction.
 
 The acceptance guest emits a boot identity and a userspace sentinel, executes a syscall, and demonstrates a timer interrupt/wakeup. The basket guest additionally reads ADXL345 device identity and stimulated axis values through the Linux I2C driver, and sends AT commands through UART4 to the attached behavioral module. Stubbed devices and reduced-order power assumptions appear in the receipt and UI capability report.
 
