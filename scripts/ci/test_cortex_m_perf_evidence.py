@@ -29,7 +29,11 @@ def records():
     ):
         for repeat in range(3 if mode == "batch" else 1):
             result.append(dict(side=side, board=board, mode=mode, steps=steps,
-                repeat=repeat, exit_code=0, ir=steps * (100 if mode == "step" else 2) + 1000,
+                repeat=repeat, exit_code=0, producer_exit_code=0,
+                argv=['valgrind',f'/fixture/{side}/target/release/labwired','run','--chip',f'configs/chips/{board}.yaml','--firmware','fixture.elf','--max-steps',str(steps)] + (['--batched'] if mode=='batch' else []),
+                cwd=f'/fixture/{side}', selected_flags=['--batched'] if mode=='batch' else [],
+                mode_environment={'LABWIRED_ARM_SINGLE_STEP':{'present':mode=='step','value':'1' if mode=='step' else None}},
+                ir=steps * (100 if mode == "step" else 2) + 1000,
                 instructions=steps if mode == "batch" else None,
                 batches=steps // 1000 if mode == "batch" else None,
                 steps_per_batch=1000.0 if mode == "batch" else None,
@@ -82,6 +86,21 @@ class PerformanceControls(unittest.TestCase):
             with self.subTest(field=field), self.assertRaises(ValueError):
                 self.helper.validate_records(rows, 1024)
 
+    def test_raw_invocation_tampering_or_oversized_arguments_fail(self):
+        mutations = [lambda row: row.update(producer_exit_code=7),
+            lambda row: row.update(cwd='relative'),
+            lambda row: row.update(mode_environment={'LABWIRED_ARM_SINGLE_STEP':{'present':False,'value':None}}),
+            lambda row: row.update(selected_flags=['--batched']),
+            lambda row: row['argv'].__setitem__(row['argv'].index('--max-steps')+1,'1'),
+            lambda row: row['argv'].__setitem__(row['argv'].index('--chip')+1,'other.yaml'),
+            lambda row: row['argv'].append('x'*2049)]
+        for mutation in mutations:
+            rows = records(); mutation(rows[0])
+            with self.subTest(mutation=mutation), self.assertRaises(ValueError):
+                self.helper.validate_records(rows,1024)
+        with self.assertRaises(ValueError):
+            self.helper.bounded_argv(['valgrind'] + ['x'*1000]*9)
+
     def test_batch_instability_or_changed_fixture_fails(self):
         for field, value in (("ir", 1234567), ("fixture_sha256", "d" * 64)):
             rows = records(); next(row for row in rows if row["mode"] == "batch" and row["repeat"] == 2)[field] = value
@@ -114,10 +133,36 @@ class PerformanceControls(unittest.TestCase):
         self.assertEqual(proof["positive_execution_cells"], 36)
         self.assertEqual(proof["stable_identical_streams"], 48)
 
+    def test_mixed_zero_startup_and_positive_uart_cycles_are_valid(self):
+        self.identity()
+        for path in self.path.glob('identity-*/*.bus.json'):
+            events = json.loads(path.read_text())
+            events.insert(0, dict(seq=0, cycle=0, bus='gpioa', payload=dict(pin=0, level=0)))
+            path.write_text(json.dumps(events))
+        proof = self.helper.validate_identity(self.path, '5000000 40000000', 'a'*40, 'b'*40)
+        self.assertEqual(proof['positive_execution_cells'], 36)
+
+    def test_zero_uart_positive_non_uart_negative_noninteger_cycles_fail(self):
+        self.identity()
+        path = next((self.path/'identity-head').glob('*.bus.json'))
+        original = json.loads(path.read_text())
+        variants = []
+        zero = copy.deepcopy(original)
+        for event in zero:
+            event['cycle'] = 0
+        variants.append(zero)
+        variants.append(zero + [dict(seq=100,cycle=1,bus='gpioa',payload={})])
+        for cycle in (-1, 1.5, True, '1'):
+            events = copy.deepcopy(original); events[0]['cycle'] = cycle; variants.append(events)
+        for events in variants:
+            path.write_text(json.dumps(events))
+            with self.subTest(events=events), self.assertRaises(ValueError):
+                self.helper.validate_identity(self.path, '5000000 40000000', 'a'*40, 'b'*40)
+
     def test_missing_identity_cell_invalid_json_no_cycles_or_uart_fails(self):
         self.identity()
         file = next((self.path / "identity-head").glob("*.bus.json")); original = file.read_bytes()
-        for value in (b"", b"{}", b"[]", b"not json", original.replace(b'"cycle": 1', b'"cycle": 0')):
+        for value in (b"", b"{}", b"[]", b"not json", original.replace(b'"cycle": 1', b'"cycle": -1')):
             file.write_bytes(value)
             with self.subTest(value=value), self.assertRaises(ValueError):
                 self.helper.validate_identity(self.path, "5000000 40000000", "a" * 40, "b" * 40)
@@ -290,13 +335,22 @@ if batch:print('[batched] instructions='+str(count)+' batches='+str(count//1000)
             (identity / f"identity-{side}/sha").write_text(sha)
         args = types.SimpleNamespace(base_dir=str(sources['base'][0]),head_dir=str(sources['head'][0]),
             base_sha=sources['base'][1],head_sha=sources['head'][1],identity_dir=str(identity),steps='5000000 40000000',suite='cortex-m',output=str(self.path/'evidence'))
-        with mock.patch.dict(os.environ, PATH=str(binpath)+os.pathsep+os.environ['PATH'], LABWIRED_ARM_SINGLE_STEP="1"):
+        with mock.patch.dict(os.environ, PATH=str(binpath)+os.pathsep+os.environ['PATH'], LABWIRED_ARM_SINGLE_STEP="1", UNRELATED_FIXTURE_VALUE='must-stay-out-of-receipt'):
             self.assertEqual(self.helper.qualify(args), 0)
             self.assertEqual(os.environ['LABWIRED_ARM_SINGLE_STEP'], "1")
         evidence = json.loads((self.path/'evidence/qualification.json').read_text())
+        self.assertNotIn('must-stay-out-of-receipt',(self.path/'evidence/qualification.json').read_text())
         self.assertEqual(len(evidence['raw_invocations']),48)
         self.assertTrue(evidence['qualified'])
         self.assertFalse(evidence['step_repeated_stability_proven'])
+        for row in evidence['raw_invocations']:
+            self.assertEqual(row['argv'][0],'valgrind')
+            self.assertEqual(row['cwd'],str(sources[row['side']][0].resolve()))
+            self.assertEqual(row['producer_exit_code'],0)
+            expected = {'present':True,'value':'1'} if row['mode']=='step' else {'present':False,'value':None}
+            self.assertEqual(row['mode_environment'],{'LABWIRED_ARM_SINGLE_STEP':expected})
+            self.assertEqual(row['selected_flags'],['--batched'] if row['mode']=='batch' else [])
+            self.assertEqual(row['argv'][row['argv'].index('--max-steps')+1],str(row['steps']))
 
     def test_changed_contract_or_wrong_checkout_fails_before_measurement(self):
         sources, _ = self.synthetic_sources()

@@ -111,6 +111,12 @@ def normalize_stderr(data):
     return b"\n".join(line for line in text.splitlines() if not line.startswith(b"[batched] instructions="))
 
 
+def bounded_argv(command):
+    if not isinstance(command, (list, tuple)) or not 1 <= len(command) <= 24 or any(not isinstance(arg, str) or "\0" in arg or len(arg.encode()) > 2048 for arg in command) or sum(len(arg.encode()) for arg in command) > 8192:
+        raise ValueError("oversized/invalid performance invocation arguments")
+    return list(command)
+
+
 def validate_identity(folder, steps, base_sha, head_sha, suite="cortex-m"):
     counts = steps.split()
     if suite not in ("cortex-m", "all") or counts != ["5000000", "40000000"]:
@@ -134,17 +140,20 @@ def validate_identity(folder, steps, base_sha, head_sha, suite="cortex-m"):
             if not isinstance(events, list) or not events:
                 raise ValueError("empty/non-list JSON bus trace")
             uart = bytearray()
+            positive_uart = bytearray()
             for event in events:
-                if not isinstance(event, dict) or type(event.get("cycle")) is not int or event["cycle"] <= 0:
-                    raise ValueError("missing positive bus cycle")
+                if not isinstance(event, dict) or type(event.get("cycle")) is not int or event["cycle"] < 0:
+                    raise ValueError("invalid negative/noninteger bus cycle")
                 payload = event.get("payload", {})
                 if event.get("bus", "").startswith("uart") and payload.get("protocol") == "uart" and payload.get("direction") == "tx":
                     byte = payload.get("byte")
                     if type(byte) is not int or not 0 <= byte <= 255:
                         raise ValueError("invalid UART byte")
                     uart.append(byte)
-            if b"TIER1 " not in uart:
-                raise ValueError("no actual TIER1 UART bus traffic")
+                    if event["cycle"] > 0:
+                        positive_uart.append(byte)
+            if b"TIER1 " not in uart or b"TIER1 " not in positive_uart:
+                raise ValueError("no positive-cycle TIER1 UART bus traffic")
             positive += 1
     for cell, stream in itertools.product(cells, ("exit", "stdout", "stderr", "bus.json")):
         values = [(Path(folder) / f"identity-{side}" / f"{cell}-p{repeat}.{stream}").read_bytes() for side, repeat in (("base", 1), ("base", 2), ("head", 1))]
@@ -168,8 +177,20 @@ def validate_records(rows, min_tick):
         raise ValueError("incomplete/duplicate/unexpected 48-invocation inventory")
     measurements = []
     for row in rows:
-        if row["exit_code"] != 0 or type(row["ir"]) is not int or row["ir"] <= 0:
+        if row["exit_code"] != 0 or row["producer_exit_code"] != 0 or type(row["ir"]) is not int or row["ir"] <= 0:
             raise ValueError("failed child or invalid Callgrind instruction count")
+        argv = bounded_argv(row["argv"])
+        if argv[0] != "valgrind" or not Path(row["cwd"]).is_absolute() or str(Path(row["cwd"]).resolve()) != row["cwd"]:
+            raise ValueError("missing resolved invocation working directory")
+        for flag in ("--chip", "--firmware", "--max-steps", "run"):
+            if argv.count(flag) != 1 or argv.index(flag) + 1 >= len(argv):
+                raise ValueError("invalid raw invocation flags")
+        if Path(argv[argv.index("--chip") + 1]).stem != row["board"] or argv[argv.index("--max-steps") + 1] != str(row["steps"]):
+            raise ValueError("raw invocation disagrees with board/work inventory")
+        batch = row["mode"] == "batch"
+        expected_env = {"present": not batch, "value": None if batch else "1"}
+        if row["mode_environment"] != {"LABWIRED_ARM_SINGLE_STEP": expected_env} or row["selected_flags"] != (["--batched"] if batch else []) or argv.count("--batched") != int(batch):
+            raise ValueError("raw mode environment/flags disagree with execution mode")
         for field in ("fixture_sha256", "cli_sha256"):
             if re.fullmatch("[0-9a-f]{64}", row[field]) is None:
                 raise ValueError("missing immutable binary evidence")
@@ -222,6 +243,9 @@ class BoundedRunner:
         if set(kwargs) - {"cwd", "env", "capture_output", "text"} or not kwargs.get("capture_output"):
             raise ValueError("unexpected subprocess contract in unchanged perf tool")
         valgrind = command[0] == "valgrind"
+        argv = bounded_argv(command) if valgrind else None
+        cwd = str(Path(kwargs.get("cwd") or os.getcwd()).resolve())
+        environment = kwargs.get("env") if kwargs.get("env") is not None else os.environ
         result = collect(command, cwd=kwargs.get("cwd"), env=kwargs.get("env"), timeout=300 if valgrind else 900, budget=self.budget)
         self.ordinal += 1
         prefix = self.output / f"{self.side}-child-{self.ordinal:02}"
@@ -234,7 +258,7 @@ class BoundedRunner:
             chip = Path(command[command.index("--chip") + 1]).stem
             count = int(command[command.index("--max-steps") + 1])
             mode = "batch" if "--batched" in command else "step"
-            single_step = (kwargs.get("env") or os.environ).get("LABWIRED_ARM_SINGLE_STEP")
+            single_step = environment.get("LABWIRED_ARM_SINGLE_STEP")
             if chip not in BOARDS or count not in COUNTS or (mode == "step" and single_step != "1") or (mode == "batch" and single_step is not None):
                 raise ValueError("unexpected selected board/work/mode environment")
             ir = self.module.IREFS_RE.search(result.stderr.decode())
@@ -247,6 +271,9 @@ class BoundedRunner:
             fixture_proof = verify_fixture(fixture)
             cli = Path(command[command.index("run") - 1])
             self.rows.append(dict(side=self.side, board=chip, mode=mode, steps=count, repeat=len(same), exit_code=result.returncode,
+                producer_exit_code=result.producer_exit_code, argv=argv, cwd=cwd,
+                mode_environment={"LABWIRED_ARM_SINGLE_STEP": {"present": "LABWIRED_ARM_SINGLE_STEP" in environment, "value": single_step}},
+                selected_flags=["--batched"] if mode == "batch" else [],
                 ir=int(ir.group(1).replace(",", "")), instructions=int(proof.group(1)) if proof else None,
                 batches=int(proof.group(2)) if proof else None, steps_per_batch=float(proof.group(3)) if proof else None,
                 tick_interval=int(proof.group(4)) if proof else None, fixture_sha256=fixture_proof["sha256"],
