@@ -90,12 +90,15 @@ CLI tests in both feature configurations; local evidence does not claim CI ran.
 
 ## Linux and Luckfox follow-on
 
-First prove ARMv7 MMU/page-table behavior and exception entry/return with small
-guest fixtures. Add ARM interrupt-controller and timer integration, then boot a
-minimal generic Cortex-A Linux platform with serial output as the acceptance
-test. Only after that add RV1103 clock/reset, pinmux, UART, I2C, SD/eMMC and
-other devices required by the vendor device tree. A generic Linux boot is not
-evidence that a stock Luckfox image boots.
+The separate optional `qemu-arm-system` backend now implements privileged
+Cortex-A7/MMU and physical SystemBus access, GIC400, architectural timer and DW
+UART2. On 2026-10-12 its optimized panic-unwind CLI passed a real reduced RV1103
+direct zImage boot to PID1, mounted proc/sys/devtmpfs and completed guest sleep
+with advancing uptime. See the [exact acceptance receipt and commands](../examples/luckfox-pico-mini-a-linux/VALIDATION.md).
+This does not extend the older `qemu-arm` ELF adapter's MMU/sleep contract above.
+CRU/reset, pinmux, GPIO, I2C, SD/eMMC, external modules and vendor BSP remain
+later work. A reduced native Linux boot does not prove that a stock Luckfox
+image boots, and the browser cannot execute this native backend.
 
 The smart basket carrier connects ESP32-C3 UART Wi-Fi, an ADXL345 I2C sensor,
 and a protected single-cell battery with charger/regulators. Its schematic,

@@ -2,6 +2,37 @@
 
 Preparation, loader qualification, guest boot, publication and physical acceptance are separate results.
 
+Production direct zImage acceptance **passed locally on 2026-10-12** through the shipped optimized native CLI. The complete [UART/boot receipt](evidence/production-boot-2026-10-12.json), [independent CLI identity](evidence/cli-identity-2026-10-12.json) and [gate input provenance](evidence/gate-inputs-2026-10-12.json) are retained. Input provenance is written before launch and deliberately says `guest_boot: NOT_RUN`; only the separate boot receipt records `ACCEPTED`.
+
+| Accepted production run | Evidence |
+|---|---|
+| Source HEAD | `28bb66c5dbcc52ead1311664551d400db51026ec` |
+| Build | `native-system`, release optimization with mandatory panic unwind; `qemu-arm-system` and default `event-scheduler` |
+| Actual CLI SHA256 | `d2d11eef64c9879ab97adf164e7cae0b45fa08c5556ea19f55f1da7b490c0055` |
+| Actual embedded DLL SHA256 | `fcef17db34d797231fbcb0d6f2b88b24a1fd4f3c0df37eff24505a0b11628ce0` |
+| CPU / timer | CPU 24 MHz explicit functional override; default 1.2 GHz; architectural timer 24 MHz |
+| Actual retired instructions | `730226752` |
+| Cycles / Machine fuel | `754102272` each; includes `23875520` idle cycles |
+| Wall elapsed / bound | `589.026260905` seconds / `1800` seconds |
+| Kernel and userspace | `6.18.56-0-lts`, real PID1 `/init`, `armv7l`, mounted proc/sysfs/devtmpfs, cpuinfo and meminfo |
+| Guest sleep / uptime | Actual guest `sleep 1`; `12.33` to `13.36`, delta `1.03` seconds |
+| Last PC / stop | `0x801bef6c` / `userspace acceptance`; one UART acceptance marker |
+
+The boot receipt rehashes zImage `eac9582162e912bdb577bba6ea224d98a29c997e52ee891383ea836aa704680a`, compiled DTB `5069562faf959fad32ce34db1dcc0f76f7721382abe6d0d713c033a6d0f83a75`, initramfs `b13962b76edb327b89cec464014cd2565694d88a7f0f86ccc361317cf879ccce` and kernel config `4e64812402b287e13fd7513aa830432782a1ae94a5461bfe579999d1e18432fb`. Official kernel/config/BusyBox and pinned `/init`/newc bytes were unchanged; no VFP, trace or kernel guard was bypassed.
+
+The exact local gate used the debug test harness `target/debug/deps/rv1103_linux_boot-2afb81fe4604fcd0` to invoke the preserved **optimized production CLI**. The harness profile does not change the CLI being executed:
+
+```sh
+LABWIRED_RV1103_CLI=/tmp/labwired-rv1103-native-system-cli-20261012 \
+LABWIRED_RV1103_ARTIFACTS=/tmp/labwired-rv1103-strict-artifacts-root-physical-20261012 \
+LABWIRED_RV1103_BOOT_RECEIPT=/tmp/labwired-rv1103-production-optimized-zimage-receipt-20261012.json \
+target/debug/deps/rv1103_linux_boot-2afb81fe4604fcd0 --ignored --exact production_zimage_reaches_pid1_and_advancing_guest_uptime --nocapture
+```
+
+That command executed **1 test: 1 passed, 0 failed**, in `595.33` harness seconds. Its original gate log is `/tmp/labwired-rv1103-production-optimized-zimage-gate-20261012.log`; rerunning requires a fresh receipt and provenance sidecar path. The gate validates CLI exit status, exact mode/board/kernel/PID1 identity, real UART proc/mount/uname evidence, unique finite uptime stamps and delta >=0.8, artifact hashes, compiled DLL SHA syntax and source lineage, explicit CPU/timer calibration, event/idle configuration, last PC, and exact limits. It checks `retirements + idle = cycles = fuel`, no partial failed window, wall <=1800 seconds, console <=64 KiB, retirement <=2 billion and cycles/fuel <=24 billion. It preserves failure console/last PC/stop/receipt instead of accepting a prior receipt, a raw Image diagnostic, a marker fixture or static RAM text.
+
+The earlier debug production zImage run remains **FAIL**, at wall timeout `1800.04` seconds with `557223936` retired instructions and last PC `0x80c5fd70`; its receipt is `/tmp/labwired-rv1103-production-zimage-receipt-20261012.json`. A separate raw decompressed Image diagnostic reached userspace but cannot satisfy production zImage acceptance. The optimized production run above required no CPU/device/loader changes after that failed debug run. These results do not identify the debug timeout's cause or establish physical timing.
+
 The deterministic pinned artifacts were prepared locally on 2026-10-12. Preparation independently rehashed official APK cache bytes; checked package identity, selected regular members, archive bounds, extracted hashes and kernel builtins; generated newc before final DTB compilation; and verified actual compiled DT geometry, references, bootargs and exact initrd end. The committed manifest contains these reproducible input identities. It says `guest_boot: NOT_RUN`; it is not a boot receipt.
 
 Focused tests:

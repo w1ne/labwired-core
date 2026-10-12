@@ -1,0 +1,12 @@
+{
+  "cli": "/tmp/labwired-rv1103-native-system-cli-20261012",
+  "sha256": "d2d11eef64c9879ab97adf164e7cae0b45fa08c5556ea19f55f1da7b490c0055",
+  "bytes": 56807416,
+  "source_head": "28bb66c5dbcc52ead1311664551d400db51026ec",
+  "profile": "native-system",
+  "features": "qemu-arm-system",
+  "build_log": "/tmp/labwired-rv1103-native-system-build-20261012.log",
+  "build_exit": 0,
+  "task4_runtime_rust_changes": false,
+  "preserved_at": "2026-10-12T16:56:21.298569+00:00"
+}

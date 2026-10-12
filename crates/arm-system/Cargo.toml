@@ -12,3 +12,7 @@ libloading = { version = "0.8.9", optional = true }
 tempfile = { version = "3.27", optional = true }
 
 sha2 = { workspace = true, optional = true }
+
+[[test]]
+name = "architecture"
+required-features = ["native"]

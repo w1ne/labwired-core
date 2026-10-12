@@ -1,5 +1,9 @@
 # SPDX-License-Identifier: MIT
-# Declared CPU/memory geometry ONLY; RV1103 devices and boot are unmodeled.
+# This generic YAML descriptor declares CPU/memory geometry only.
+# The separate optional native rv1103-linux CLI passed reduced direct zImage
+# boot using MMU/exceptions, GIC400, architectural timer and DW UART2:
+# examples/luckfox-pico-mini-a-linux/VALIDATION.md. These devices are not
+# instantiated by this descriptor or the older qemu-arm ELF adapter.
 # Mini A uses RV1103G1 with 512 Mbit (64 MiB) SIP DDR2:
 # docs/assets/luckfox-pico-mini-a/rv1103-datasheet.pdf, section 1.2.2.
 # DDR physical base: Luckfox SDK sysdrv/source/uboot/u-boot/include/configs/
@@ -17,8 +21,8 @@ cpu_hz: 1_200_000_000
 # No silicon GPIO thresholds are transcribed here; neither pad-electrical
 # key is declared until the GPIO model and cited thresholds are onboarded.
 # No embedded flash is invented: Mini A boots from external MicroSD.
-# Boot ROM, storage, DDR initialization, MMU, GIC, CRU, pinmux and all I/O
-# controllers remain absent. This descriptor establishes no board L0/L1.
+# Boot ROM, storage, DDR initialization, CRU, pinmux, GPIO, DMA, I2C and
+# external modules remain absent. This descriptor establishes no board L0/L1.
 flash: { base: 0, size: 0 }
 ram: { base: 0, size: "64MiB" }
 memory_regions:

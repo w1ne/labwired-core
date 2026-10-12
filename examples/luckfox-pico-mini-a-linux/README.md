@@ -13,11 +13,23 @@ The output must be fresh. A hash-addressed cache is rehashed on every use; `--of
 Build and run the explicit optional native mode (x86_64 Linux GNU, panic unwind):
 
 ```sh
-CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 cargo +1.95.0 build -p labwired-cli --profile native-system --features qemu-arm-system,event-scheduler
-./target/native-system/labwired rv1103-linux --artifacts /tmp/rv1103-linux --receipt /tmp/rv1103-boot.json --wall-seconds 1800
+CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 cargo +1.95.0 build --locked -p labwired-cli --profile native-system --features qemu-arm-system,event-scheduler
+./target/native-system/labwired rv1103-linux --artifacts /tmp/rv1103-linux --receipt /tmp/rv1103-boot.json --cpu-hz 24000000 --wall-seconds 1800
 ```
 
-CPU Hz defaults to 1.2 GHz. One retired instruction advances one functional CPU tick; this is not physical timing. `--cpu-hz 24000000` is an explicit calibration override for local functional boot experiments and is recorded in the receipt. The architectural timer remains 24 MHz in both cases. Idle fast-forward and the existing event scheduler are enabled explicitly; the runner uses small bounded `Machine::advance` windows.
+CPU Hz defaults to 1.2 GHz; boot at that default has not been verified here. One retired instruction advances one functional CPU tick; this is not physical timing. The accepted run and reproduction command explicitly use `--cpu-hz 24000000`, a functional calibration override recorded in the receipt. The architectural timer remains 24 MHz in both cases. Idle fast-forward and the existing event scheduler are enabled explicitly; the runner uses small bounded `Machine::advance` windows.
+
+The [2026-10-12 production receipt](evidence/production-boot-2026-10-12.json) passed with the explicit 24 MHz CPU calibration. To reproduce that bounded acceptance gate, use a fresh receipt path and the actual shipped optimized CLI:
+
+```sh
+LABWIRED_RV1103_ARTIFACTS=/tmp/rv1103-linux \
+LABWIRED_RV1103_CLI="$PWD/target/native-system/labwired" \
+LABWIRED_RV1103_BOOT_RECEIPT=/tmp/rv1103-boot-new.json \
+CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 \
+cargo +1.95.0 test --locked -p labwired-core --profile native-system --features qemu-arm-system,event-scheduler --test rv1103_linux_boot -- --ignored --nocapture
+```
+
+This explicitly ignored, feature-required test fails on missing prerequisites. It invokes the CLI once, independently rehashes all inputs and the executable, and checks the complete fresh receipt. The [native workflow](../../.github/workflows/core-qemu-arm.yml) offers the same production gate only through the manual `linux_acceptance` boolean; its structural/default-off suites run separately. Local acceptance does not claim that CI has run.
 
 A PASS requires the actual UART console's Linux identity, PID1 `/init`, mounted proc/sys/devtmpfs, ARMv7 uname, cpuinfo and meminfo, and a real guest sleep whose `/proc/uptime` delta is at least 0.8 seconds. The userspace acceptance marker alone is insufficient. Failure receipts contain the full bounded console, exact loaded-artifact hashes, compiled native DLL hash, separate upstream source lineage, last PC, limits and stop reason. Receipts are create-new and never overwrite an earlier result.
 

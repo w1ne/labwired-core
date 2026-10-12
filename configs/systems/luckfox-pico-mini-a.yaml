@@ -1,5 +1,8 @@
 # SPDX-License-Identifier: MIT
-# Declared-only board: no Linux, reset/boot ROM, GPIO, UART or I2C models.
+# Generic declared-only system; it does not invoke the reduced Linux platform.
+# Separate optional rv1103-linux native CLI has real direct-zImage/PID1 proof
+# with MMU/GIC/timer/UART2; see examples/luckfox-pico-mini-a-linux/VALIDATION.md.
+# No reset/boot ROM, SD/BSP, GPIO, I2C or physical board acceptance; below L0.
 name: luckfox-pico-mini-a
 chip: ../chips/rv1103.yaml
 external_devices: []
