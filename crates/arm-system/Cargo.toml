@@ -1,0 +1,12 @@
+[package]
+name = "labwired-arm-system"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+[features]
+default = []
+native = ["dep:libloading", "dep:tempfile"]
+[dependencies]
+libloading = { version = "0.8.9", optional = true }
+tempfile = { version = "3.27", optional = true }

@@ -12,9 +12,9 @@
 
 Files: create `crates/arm-system/{Cargo.toml,build.rs,src/lib.rs,native/CMakeLists.txt,native/bridge.c,native/bridge.h,tests/architecture.rs}`; add workspace member in `Cargo.toml`; update `Cargo.lock`; vendor `third_party/tlib/` and `third_party/tlib-PROVENANCE.md`.
 
-- [ ] Write architectural tests using the public API below before the implementation. Begin with `MOV r0,#42; STR r0,[r1]; LDR r2,[r1]`, assert exactly three retired instructions and a single width-4 physical read/write at `0x100000`. Retain red output from the missing backend.
-- [ ] Run `cargo test -p labwired-arm-system --features native --test architecture -- --nocapture`; expected initial failure because the API is absent.
-- [ ] Implement this API (all errors are owned strings):
+- [x] Write architectural tests using the public API below before the implementation. Begin with `MOV r0,#42; STR r0,[r1]; LDR r2,[r1]`, assert exactly three retired instructions and a single width-4 physical read/write at `0x100000`. Retain red output from the missing backend.
+- [x] Run `cargo test -p labwired-arm-system --features native --test architecture -- --nocapture`; expected initial failure because the API is absent.
+- [x] Implement this API (all errors are owned strings):
 
 ```rust
 pub trait PhysicalBus {
@@ -37,10 +37,10 @@ Use `tlib_register_access_flags_for_range(start,length,1)` for executable callba
 
 The crate defaults to no native feature. Enabling `native` on an unsupported host produces an explicit build error. Build the vendored library with CMake, HOST_ARCH=i386, HOST_WORD_SIZE=64, TARGET_ARCH=arm, TARGET_WORD_SIZE=32, `-Bsymbolic`; embed bytes from OUT_DIR. Retain all licenses and the verified source archive SHA `8db4d1fe0a316eec5dcae83bd4d2757b5172332493d6fdecfd9d4b81cb7a77a3`. No build-time network access.
 
-- [ ] Add and execute separate tests for SVC vector 8/SVC mode, unmapped short-descriptor translation to guest data abort, real VA `0x80000300` to PA `0x300` page-table walk, IRQ vector 24/IRQ mode with deassertion, Thumb-2, WFI, callback errors, callback panic, self-modifying code, explicit host-write invalidation and swapped buses.
-- [ ] Interleave two CPUs with different memory/register values, drop one and continue the other; repeat concurrently on two threads. Move an idle CPU to another thread and resume it. All tests use genuine guest instructions and physical memory callbacks.
-- [ ] Verify `cargo test -p labwired-arm-system --features native --test architecture`, `cargo test -p labwired-arm-system`, formatting and diff checks. Keep test builds single-job and bounded because disk is constrained.
-- [ ] Root reviews and commits `feat: embed isolated QEMU-derived ARM system backend` after spec and quality review.
+- [x] Add and execute separate tests for SVC vector 8/SVC mode, unmapped short-descriptor translation to guest data abort, real VA `0x80000300` to PA `0x300` page-table walk, IRQ vector 24/IRQ mode with deassertion, Thumb-2, WFI, callback errors, callback panic, self-modifying code, explicit host-write invalidation and swapped buses.
+- [x] Interleave two CPUs with different memory/register values, drop one and continue the other; repeat concurrently on two threads. Move an idle CPU to another thread and resume it. All tests use genuine guest instructions and physical memory callbacks.
+- [x] Verify `cargo test -p labwired-arm-system --features native --test architecture`, `cargo test -p labwired-arm-system`, formatting and diff checks. Keep test builds single-job and bounded because disk is constrained.
+- [x] Root reviews and commits `feat: embed isolated QEMU-derived ARM system backend` after spec and quality review.
 
 ## Task 2: LabWired Cpu adapter
 

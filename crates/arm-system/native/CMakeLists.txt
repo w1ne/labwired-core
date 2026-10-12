@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.18)
+project(labwired_arm_system C)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../../third_party/tlib tlib)
+target_sources(tlib PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/bridge.c)
+target_include_directories(tlib PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../../third_party/tlib/include)
+target_link_options(tlib PRIVATE -Wl,-Bsymbolic -Wl,--wrap=free_code_gen_buf)

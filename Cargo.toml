@@ -7,6 +7,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/arm-system",
     "crates/cli",
     "crates/codegen",
     "crates/config",
@@ -454,3 +455,9 @@ opt-level = "s"
 [profile.release.package.labwired-wasm]
 codegen-units = 1
 opt-level = "s"
+
+# Production native ARM callbacks require panic containment at the FFI boundary.
+[profile.native-system]
+inherits = "release"
+panic = "unwind"
+debug = 0
