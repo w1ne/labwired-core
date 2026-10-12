@@ -52,6 +52,10 @@ on:
         description: "Optional perf only: preserve original ELF and common-input Callgrind diagnostics"
         type: boolean
         default: false
+      diagnose_cortex_m_raw_profiles:
+        description: "Optional common-fixture perf only: retain three original base L476 raw profiles"
+        type: boolean
+        default: false
 
 concurrency:
   group: core-identity-${{ inputs.head }}
@@ -163,6 +167,7 @@ jobs:
           IDENTITY_SUITE: ${{ inputs.suite }}
           STEP_COUNTS: ${{ inputs.steps }}
           DIAGNOSE_COMMON_FIXTURES: ${{ inputs.diagnose_cortex_m_common_fixtures }}
+          DIAGNOSE_RAW_PROFILES: ${{ inputs.diagnose_cortex_m_raw_profiles }}
         run: |
           set -euo pipefail
           unset LABWIRED_ARM_SINGLE_STEP
@@ -173,6 +178,15 @@ jobs:
             false) ;;
             true) diagnostic_args+=(--diagnose-common-fixtures) ;;
             *) echo 'Invalid diagnostic toggle' >&2; exit 1 ;;
+          esac
+          case "${DIAGNOSE_RAW_PROFILES:-false}" in
+            false) ;;
+            true)
+              if [ "${DIAGNOSE_COMMON_FIXTURES:-false}" != true ] || [ "$IDENTITY_SUITE" != cortex-m ]; then
+                echo 'Raw diagnosis requires common fixtures and Cortex-M' >&2; exit 1
+              fi
+              diagnostic_args+=(--diagnose-raw-l476-repeats) ;;
+            *) echo 'Invalid raw diagnostic toggle' >&2; exit 1 ;;
           esac
           python scripts/ci/cortex_m_perf_evidence.py qualify "${diagnostic_args[@]}" \
             --base-dir perf-base --head-dir perf-head \

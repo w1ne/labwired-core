@@ -236,10 +236,11 @@ def validate_status(status, side, measurements, code):
 
 
 class BoundedRunner:
-    def __init__(self, module, side, output, rows, budget, common=None):
+    def __init__(self, module, side, output, rows, budget, common=None, raw_profiles=None):
         self.module, self.side, self.output, self.rows, self.budget = module, side, Path(output), rows, budget
         self.ordinal = 0
         self.common = common
+        self.raw_profiles = raw_profiles
 
     def run(self, command, **kwargs):
         if set(kwargs) - {"cwd", "env", "capture_output", "text"} or not kwargs.get("capture_output"):
@@ -261,6 +262,8 @@ class BoundedRunner:
             if chip not in BOARDS or fixture.resolve() != self.common.paths["nrf" if chip == "nrf52840" else "stm32"]:
                 raise ValueError("board did not receive its exact common memory-map fixture")
             fixture_before = self.common.verify(fixture)
+        if valgrind and self.raw_profiles is not None:
+            self.raw_profiles.preflight(command,environment)
         try:
             result = collect(command, cwd=kwargs.get("cwd"), env=kwargs.get("env"), timeout=300 if valgrind else 900, budget=self.budget)
         finally:
@@ -314,7 +317,9 @@ class BoundedRunner:
                 cli_sha256=sha256(cli), log_prefix=prefix.name))
             if self.common is not None:
                 self.rows[-1].update(fixture_before_sha256=fixture_before["sha256"],fixture_after_sha256=fixture_after["sha256"])
-                if chip == "stm32l476" and mode == "batch":
+                if self.raw_profiles is not None:
+                    self.raw_profiles.capture(command,self.rows[-1])
+                elif chip == "stm32l476" and mode == "batch":
                     from cortex_m_perf_diagnostics import annotate_call
                     self.rows[-1]["callgrind_annotation"] = annotate_call(command,self.rows[-1]["ir"],prefix,collect,self.budget,sha256)
         if kwargs.get("text"):
@@ -322,10 +327,10 @@ class BoundedRunner:
         return result
 
 
-def invoke_tool(module, source, cli, side, output, rows, budget, common=None):
+def invoke_tool(module, source, cli, side, output, rows, budget, common=None, raw_profiles=None):
     original = module.subprocess, sys.argv[:], os.getcwd(), dict(os.environ)
     try:
-        module.subprocess = BoundedRunner(module, side, output, rows, budget, common)
+        module.subprocess = BoundedRunner(module, side, output, rows, budget, common, raw_profiles)
         sys.argv = ["board_perf.py", "--boards", ",".join(BOARDS), "--modes", ",".join(MODES), "--cli", str(Path(cli).resolve()), "--status-json", str(Path(output).resolve() / f"{side}-status.json")]
         os.environ.pop("LABWIRED_ARM_SINGLE_STEP", None)
         os.chdir(source)
@@ -351,12 +356,16 @@ def source_contract(source, expected):
 
 
 def qualify(args):
+    raw_mode = getattr(args,"diagnose_raw_l476_repeats",False)
+    if raw_mode and (not getattr(args,"diagnose_common_fixtures",False) or args.suite != "cortex-m"):
+        raise ValueError("raw L476 diagnosis requires common fixtures and Cortex-M suite")
     output = Path(args.output).resolve()
     output.mkdir(exist_ok=False)
     # Leave room under the job's 8MiB artifact bound for two build captures,
     # status JSON, metadata and the final receipt.
     budget = Budget(5 * 1024 * 1024)
     rows, codes, modules = [], {}, {}
+    raw_profiles = None
     evidence = dict(scope="three-board Cortex-M A/B only; full CorePerf/RV1103 and silicon capture remain open", base_sha=args.base_sha, head_sha=args.head_sha)
     try:
         validate_sha(args.base_sha); validate_sha(args.head_sha)
@@ -391,16 +400,23 @@ def qualify(args):
             evidence["diagnostic_cargo_contract"] = cargo_contract
             common = prepare_common_fixtures(modules,{side:row[1] for side,row in loaded.items()},output,budget,BoundedRunner)
             evidence["common_fixtures"] = common.evidence
+        if raw_mode:
+            from cortex_m_raw_profiles import RawProfiles
+            raw_profiles = RawProfiles(output,budget,collect,provenance=dict(
+                base_sha=args.base_sha,head_sha=args.head_sha,contracts=contracts,
+                common_fixtures={key:common.evidence[key] for key in ("common","originals")}))
         for side in SIDES:
             module,source,cli = loaded[side] if common is not None else load_side(side)
             try:
-                codes[side] = invoke_tool(module,source,cli,side,output,rows,budget,common)
+                codes[side] = invoke_tool(module,source,cli,side,output,rows,budget,common,raw_profiles)
             finally:
                 sys.modules.pop(f"board_perf_{side}",None)
         if contracts != {side: source_contract(getattr(args, side + "_dir"), getattr(args, side + "_sha")) for side in SIDES}:
             raise ValueError("source contracts changed during qualification")
         if common is not None and cargo_contract != {side:sha256(Path(getattr(args,side+"_dir"))/"Cargo.toml") for side in SIDES}:
             raise ValueError("workspace Cargo profile changed during diagnostic qualification")
+        if raw_profiles is not None:
+            evidence["raw_profile_diagnosis"] = raw_profiles.finish()
         proof = validate_records(rows, modules["head"].MIN_RECOMMENDED_TICK_INTERVAL)
         evidence.update(proof)
         evidence["baseline_verdicts"] = {side: validate_status(small_json(output / f"{side}-status.json"), side, proof["measurements"], codes[side]) for side in SIDES}
@@ -419,11 +435,24 @@ def qualify(args):
     finally:
         for side in modules:
             sys.modules.pop(f"board_perf_{side}",None)
+        if raw_profiles is not None:
+            evidence["raw_profile_diagnosis"] = raw_profiles.report
         evidence["raw_invocations"] = rows
         evidence.setdefault("qualified", False)
         data = json.dumps(evidence, indent=2, allow_nan=False) + "\n"
         if len(data.encode()) > 1024 * 1024:
             raise ValueError("oversized final qualification evidence")
+        if raw_profiles is not None:
+            try:
+                raw_profiles.artifact_bytes(len(data.encode()))
+            except (ValueError,OSError) as error:
+                evidence["qualified"] = False
+                evidence["artifact_failure_reason"] = str(error)[:1024]
+                evidence.setdefault("failure_reason",str(error)[:1024])
+                data=json.dumps(evidence,indent=2,allow_nan=False)+"\n"
+                if len(data.encode())>1024*1024:raise ValueError("oversized final qualification evidence")
+                (output / "qualification.json").write_text(data)
+                raise
         (output / "qualification.json").write_text(data)
 
 
@@ -435,6 +464,7 @@ def main():
     collect_parser.add_argument("--timeout", type=float, default=900)
     collect_parser.add_argument("producer", nargs=argparse.REMAINDER)
     q = sub.add_parser("qualify")
+    q.add_argument("--diagnose-raw-l476-repeats",action="store_true",help="Retain three immutable base L476200k batch profiles without runtime annotation; requires common fixtures")
     q.add_argument("--diagnose-common-fixtures",action="store_true",help="Preserve independently built ELFs, verify/freeze common inputs and retain L476 Callgrind diagnostics")
     for name in ("base-dir", "head-dir", "base-sha", "head-sha", "identity-dir", "steps", "suite", "output"):
         q.add_argument("--" + name, required=True)

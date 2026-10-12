@@ -441,6 +441,8 @@ def load_tests(loader, tests, pattern):
     # This file is named by the existing hosted lane; no new workflow/default.
     from test_cortex_m_perf_diagnostics import DiagnosticsControls
     tests.addTests(loader.loadTestsFromTestCase(DiagnosticsControls))
+    from test_cortex_m_raw_profiles import RawProfileControls
+    tests.addTests(loader.loadTestsFromTestCase(RawProfileControls))
     return tests
 
 

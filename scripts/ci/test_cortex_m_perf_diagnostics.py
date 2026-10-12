@@ -449,6 +449,24 @@ class DiagnosticsControls(unittest.TestCase):
             '          esac\n',
             ' "${diagnostic_args[@]}"',
         )
+        raw_additions=(
+            '      diagnose_cortex_m_raw_profiles:\n'
+            '        description: "Optional common-fixture perf only: retain three original base L476 raw profiles"\n'
+            '        type: boolean\n        default: false\n',
+            '          DIAGNOSE_RAW_PROFILES: ${{ inputs.diagnose_cortex_m_raw_profiles }}\n',
+            '          case "${DIAGNOSE_RAW_PROFILES:-false}" in\n'
+            '            false) ;;\n'
+            '            true)\n'
+            '              if [ "${DIAGNOSE_COMMON_FIXTURES:-false}" != true ] || [ "$IDENTITY_SUITE" != cortex-m ]; then\n'
+            "                echo 'Raw diagnosis requires common fixtures and Cortex-M' >&2; exit 1\n"
+            '              fi\n'
+            '              diagnostic_args+=(--diagnose-raw-l476-repeats) ;;\n'
+            "            *) echo 'Invalid raw diagnostic toggle' >&2; exit 1 ;;\n"
+            '          esac\n',
+        )
+        for addition in raw_additions:
+            self.assertEqual(workflow.count(addition),1)
+            workflow=workflow.replace(addition,'',1)
         for addition in additions:
             self.assertEqual(workflow.count(addition),1)
             workflow=workflow.replace(addition,'',1)
