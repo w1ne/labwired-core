@@ -42,15 +42,73 @@ def collect(command, *, cwd=None, env=None, timeout=300, stream_limit=262144, bu
         raise ValueError("invalid bounded command")
     budget = budget if budget is not None else Budget()
     buffers = {"stdout": bytearray(), "stderr": bytearray()}
-    process = subprocess.Popen(command, cwd=cwd, env=env, stdout=subprocess.PIPE,
-                               stderr=subprocess.PIPE, start_new_session=True)
-    selector = selectors.DefaultSelector()
-    selector.register(process.stdout, selectors.EVENT_READ, "stdout")
-    selector.register(process.stderr, selectors.EVENT_READ, "stderr")
+    # Linux WNOWAIT keeps the directly owned leader unreaped, reserving its PID
+    # and session/group identity until every signal is finished. Popen.poll/wait
+    # must not run earlier. Reject unsupported/auto-reaping hosts before birth;
+    # no portable fallback can safely signal a nominal, possibly reused PGID.
+    if (sys.platform != "linux" or not callable(getattr(os, "waitid", None))
+            or not all(hasattr(os, name) for name in ("P_PID", "WEXITED", "WNOHANG", "WNOWAIT", "CLD_EXITED", "CLD_KILLED", "CLD_DUMPED"))
+            or not all(callable(getattr(os, name, None)) for name in ("getpgid", "getsid"))
+            or signal.getsignal(signal.SIGCHLD) != signal.SIG_DFL):
+        raise ValueError("bounded collection requires Linux unreaped-child ownership")
+    process = selector = None
+    original_error = None
+    cleanup_errors = []
+    ownership_lost = False
+    observed_exit = None
+
+    def exited():
+        nonlocal ownership_lost, observed_exit
+        if ownership_lost:
+            raise RuntimeError("owned producer lifetime was lost")
+        try:
+            state = os.waitid(os.P_PID, process.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT)
+        except ChildProcessError:
+            ownership_lost = True
+            raise
+        if state is not None and state.si_pid != process.pid:
+            ownership_lost = True
+            raise RuntimeError("owned producer identity changed")
+        if state is not None:
+            if state.si_code == os.CLD_EXITED:
+                observed_exit = state.si_status
+            elif state.si_code in (os.CLD_KILLED, os.CLD_DUMPED):
+                observed_exit = -state.si_status
+            else:
+                raise RuntimeError("invalid owned producer terminal state")
+        return state is not None
+
+    def reap():
+        # Never attach a direct wait to a PID after ECHILD/identity loss.
+        if not ownership_lost:
+            exited()
+            process.wait(timeout=0.2)
+
+    def signal_owned(sig):
+        # waitid also rejects ECHILD/auto-reap; no signal follows lost ownership.
+        exited()
+        if os.getpgid(process.pid) != process.pid or os.getsid(process.pid) != process.pid:
+            raise RuntimeError("owned producer session/group changed")
+        try:
+            os.killpg(process.pid, sig)
+        except ProcessLookupError:
+            # An unreaped, verified leader can have no remaining signalable peers.
+            pass
+
+    def attempt(cleanup):
+        try:
+            cleanup()
+        except BaseException as error:
+            cleanup_errors.append(error)
     forced = None
-    deadline = time.monotonic() + timeout
     try:
-        while selector.get_map() or process.poll() is None:
+        selector = selectors.DefaultSelector()
+        process = subprocess.Popen(command, cwd=cwd, env=env, stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE, start_new_session=True)
+        selector.register(process.stdout, selectors.EVENT_READ, "stdout")
+        selector.register(process.stderr, selectors.EVENT_READ, "stderr")
+        deadline = time.monotonic() + timeout
+        while selector.get_map() or not exited():
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 forced = 124
@@ -70,24 +128,37 @@ def collect(command, *, cwd=None, env=None, timeout=300, stream_limit=262144, bu
                     break
             if forced is not None:
                 break
+    except BaseException as error:
+        original_error = error
+        raise
     finally:
-        for sig in (signal.SIGTERM, signal.SIGKILL):
-            try:
-                os.killpg(process.pid, sig)
-            except ProcessLookupError:
-                pass
-            if sig == signal.SIGTERM:
-                try:
-                    process.wait(timeout=0.2)
-                except subprocess.TimeoutExpired:
-                    pass
-        process.wait()
-        selector.close()
-        process.stdout.close()
-        process.stderr.close()
-    result = subprocess.CompletedProcess(command, forced if forced is not None else process.returncode,
+        if process is not None:
+            attempt(lambda: signal_owned(signal.SIGTERM))
+            # The existing TERM grace is bounded, but does not reap the leader.
+            def grace():
+                if not exited():
+                    time.sleep(0.2)
+            attempt(grace)
+            attempt(lambda: signal_owned(signal.SIGKILL))
+            # Only after all group signals: bounded direct-child reap.
+            attempt(reap)
+        if selector is not None:
+            attempt(selector.close)
+        if process is not None:
+            attempt(process.stdout.close)
+            attempt(process.stderr.close)
+        # WNOWAIT terminal status remains original evidence even if reap fails.
+        producer_exit = process.returncode if process is not None and process.returncode is not None else observed_exit
+        if cleanup_errors:
+            if original_error is not None:
+                original_error.add_note("Owned cleanup also failed: " + ", ".join(type(e).__name__ for e in cleanup_errors))
+            elif forced is None and producer_exit in (None, 0):
+                raise cleanup_errors[0]
+            # A pre-existing producer/timeout/overflow failure keeps its exact
+            # status. Cleanup can never turn that failure into a success.
+    result = subprocess.CompletedProcess(command, forced if forced is not None else producer_exit,
                                          bytes(buffers["stdout"]), bytes(buffers["stderr"]))
-    result.producer_exit_code = process.returncode
+    result.producer_exit_code = producer_exit
     return result
 
 

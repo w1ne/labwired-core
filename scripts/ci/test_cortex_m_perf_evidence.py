@@ -437,6 +437,173 @@ if batch:print('[batched] instructions='+str(count)+' batches='+str(count//1000)
         self.assertEqual(evidence['raw_invocations'],[])
 
 
+def collector_ownership_probe(module, invoke, phase="read", cleanup=None, status=0, ownership=None):
+    """Model an unreaped direct session leader; never spawn or signal anything."""
+    from contextlib import ExitStack
+    events = []
+    original = RuntimeError("original operation failure")
+    cleanup_error = RuntimeError("owned cleanup failure")
+    class Pipe:
+        def close(self):
+            events.append("pipe.close")
+            if cleanup == "pipe" and events.count("pipe.close") == 1:
+                raise cleanup_error
+    class Producer:
+        pid = 999999999
+        stdout, stderr = Pipe(), Pipe()
+        returncode = None
+        reaped = False
+        def poll(self):
+            events.append("poll-reaps")
+            self.reaped = True
+            self.returncode = status
+            return status
+        def wait(self, timeout=None):
+            events.append(("wait", timeout))
+            if cleanup == "wait":
+                raise cleanup_error
+            self.reaped = True
+            self.returncode = status
+            return status
+    producer = Producer()
+    class Selector:
+        registered = 0
+        def register(self, *args):
+            self.registered += 1
+            events.append("register")
+            if phase == "register" or phase == "register-second" and self.registered == 2:
+                raise original
+        def get_map(self):
+            return {} if phase == "success" else {"pipe": 1}
+        def select(self, *args):
+            events.append("read")
+            raise original
+        def close(self):
+            events.append("selector.close")
+            if cleanup == "selector":
+                raise cleanup_error
+    selector = Selector()
+    def create_selector():
+        events.append("selector")
+        if phase == "constructor": raise original
+        return selector
+    def spawn(*args, **kwargs):
+        events.append("spawn")
+        if phase == "spawn": raise original
+        return producer
+    def observe(kind, pid, flags):
+        events.append("waitid-unreaped")
+        assert not producer.reaped, "observation after reap"
+        assert (kind, pid, flags) == (os.P_PID, producer.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT)
+        if ownership == "lost": raise ChildProcessError("ownership lost")
+        return types.SimpleNamespace(si_pid=producer.pid + int(ownership == "pid"), si_code=os.CLD_EXITED, si_status=status)
+    def signal_group(pid, sig):
+        events.append(("signal", sig))
+        assert not producer.reaped, "group signalled after leader reap"
+        if cleanup == "signal" and sig == module.signal.SIGTERM:
+            raise cleanup_error
+    result = error = None
+    with ExitStack() as stack:
+        for obj, name, effect in ((module.subprocess,"Popen",spawn), (module.selectors,"DefaultSelector",create_selector),
+                                  (module.os,"waitid",observe), (module.os,"killpg",signal_group)):
+            stack.enter_context(mock.patch.object(obj,name,side_effect=effect))
+        stack.enter_context(mock.patch.object(module.os,"getpgid",return_value=producer.pid + int(ownership == "group")))
+        stack.enter_context(mock.patch.object(module.os,"getsid",return_value=producer.pid + int(ownership == "session")))
+        try: result = invoke()
+        except BaseException as caught: error = caught
+    return events, error, result, original, cleanup_error, producer
+
+
+def assert_collector_early_parent_exit(test, module, invoke, directory):
+    """Real short Python children; kernel proves leader remains unreaped at signal."""
+    pidfile = directory / "early-child.pid"
+    script = ("import subprocess,sys,pathlib;"
+              "child=subprocess.Popen([sys.executable,'-c','import time;time.sleep(1)'],"
+              "stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL);"
+              f"pathlib.Path({str(pidfile)!r}).write_text(str(child.pid));"
+              "print('parent done',flush=True)")
+    signals = []
+    actual_kill = module.os.killpg
+    actual_waitid = module.os.waitid
+    def checked_signal(pid, sig):
+        state = actual_waitid(os.P_PID, pid, os.WEXITED | os.WNOHANG | os.WNOWAIT)
+        test.assertIsNotNone(state, "early parent should be exited but unreaped")
+        test.assertEqual(state.si_pid, pid)
+        test.assertEqual(os.getpgid(pid), pid)
+        test.assertEqual(os.getsid(pid), pid)
+        signals.append((pid, sig))
+        return actual_kill(pid, sig)
+    with mock.patch.object(module.os,"killpg",side_effect=checked_signal):
+        result = invoke([sys.executable,"-c",script])
+    test.assertEqual(result.returncode if hasattr(result,"returncode") else result["exit_code"],0)
+    test.assertEqual([sig for _,sig in signals],[module.signal.SIGTERM,module.signal.SIGKILL])
+    for pid, _ in signals:
+        with test.assertRaises(ChildProcessError): actual_waitid(os.P_PID,pid,os.WEXITED|os.WNOHANG|os.WNOWAIT)
+    import time
+    deadline = time.monotonic() + 0.5
+    while True:
+        try:
+            state = Path('/proc/'+pidfile.read_text()+'/stat').read_text().split()[2]
+        except (FileNotFoundError, ProcessLookupError):
+            break
+        if state == "Z": break
+        test.assertLess(time.monotonic(), deadline, "owned descendant remains live")
+        time.sleep(0.01)
+
+
+class CollectorOwnershipControls(unittest.TestCase):
+    def setUp(self):
+        spec=importlib.util.spec_from_file_location("perf_owned_lifetime",HELPER)
+        self.module=importlib.util.module_from_spec(spec);spec.loader.exec_module(self.module)
+        self.temp=tempfile.TemporaryDirectory(prefix="cortex-perf-owned-")
+        self.addCleanup(self.temp.cleanup);self.path=Path(self.temp.name)
+
+    def probe(self, **kwargs):
+        return collector_ownership_probe(self.module,lambda:self.module.collect(["synthetic-never-started"]),**kwargs)
+
+    def test_setup_read_and_cleanup_failures_preserve_original_and_attempt_remaining_closes(self):
+        for phase, cleanup in (("constructor",None),("spawn",None),("register",None),("register-second",None),
+                               ("read",None),("read","selector"),("read","pipe"),("read","signal"),("read","wait")):
+            with self.subTest(phase=phase,cleanup=cleanup):
+                events,error,_,original,_,producer=self.probe(phase=phase,cleanup=cleanup)
+                self.assertIs(error,original)
+                if "spawn" in events and phase!="spawn":
+                    self.assertIn("selector.close",events);self.assertEqual(events.count("pipe.close"),2)
+                    self.assertTrue(any(isinstance(e,tuple) and e[0]=="wait" and e[1] is not None for e in events))
+                    self.assertNotIn("poll-reaps",events)
+                elif phase=="spawn":self.assertIn("selector.close",events)
+                else:self.assertNotIn("spawn",events)
+
+    def test_cleanup_failure_rejects_success_but_preserves_original_producer_failure(self):
+        for cleanup in ("selector","pipe","signal","wait"):
+            events,error,result,_,fault,_=self.probe(phase="success",cleanup=cleanup)
+            self.assertIs(error,fault);self.assertIsNone(result)
+        for cleanup in ("selector","pipe","signal","wait"):
+            _,error,result,_,_,_=self.probe(phase="success",cleanup=cleanup,status=7)
+            self.assertIsNone(error);self.assertEqual(result.returncode,7);self.assertEqual(result.producer_exit_code,7)
+
+    def test_ownership_loss_never_signals_and_keeps_original_failure(self):
+        for ownership in ("lost","pid","group","session"):
+            for phase in ("read","success"):
+                events,error,_,original,_,_=self.probe(phase=phase,ownership=ownership)
+                self.assertFalse(any(isinstance(e,tuple) and e[0]=="signal" for e in events))
+                self.assertEqual(events.count("pipe.close"),2);self.assertIn("selector.close",events)
+                if phase=="read":self.assertIs(error,original)
+                else:self.assertIsNotNone(error)
+
+    def test_unsupported_platform_and_sigchld_autoreap_reject_before_birth(self):
+        for obj,name,value in ((self.module.sys,"platform","darwin"),(self.module.os,"waitid",None),(self.module.os,"getpgid",None),(self.module.os,"getsid",None)):
+            with mock.patch.object(obj,name,value),mock.patch.object(self.module.subprocess,"Popen") as birth:
+                with self.assertRaises(ValueError):self.module.collect(["never-started"])
+                birth.assert_not_called()
+        with mock.patch.object(self.module.signal,"getsignal",return_value=self.module.signal.SIG_IGN),mock.patch.object(self.module.subprocess,"Popen") as birth:
+            with self.assertRaises(ValueError):self.module.collect(["never-started"])
+            birth.assert_not_called()
+
+    def test_real_early_exit_leader_stays_unreaped_until_owned_descendants_stop(self):
+        assert_collector_early_parent_exit(self,self.module,self.module.collect,self.path)
+
+
 def load_tests(loader, tests, pattern):
     # This file is named by the existing hosted lane; no new workflow/default.
     from test_cortex_m_perf_diagnostics import DiagnosticsControls

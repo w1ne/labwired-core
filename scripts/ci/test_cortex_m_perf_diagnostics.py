@@ -415,7 +415,15 @@ class DiagnosticsControls(unittest.TestCase):
 
     def assert_preservation(self, root):
         # This committed contract works in checkout@v4's default shallow source.
-        manifest = json.loads((root / 'scripts/ci/fixtures/cortex_m_perf_preservation_393b5310.json').read_text())
+        fixture = root / 'scripts/ci/fixtures/cortex_m_perf_preservation_393b5310.json'
+        # Historical393 is immutable provenance, never relabelled as successor.
+        self.assertEqual(hashlib.sha256(fixture.read_bytes()).hexdigest(), 'b57fdb968038261edd7e9619fb4134e37fdd3bbf9033828b396255ab41cfe4a6', 'historical393 fixture')
+        manifest = json.loads(fixture.read_text())
+        # Exact382034f4ec62bd66154f0675001bde3894a73c12 retains original393 collect AST.
+        predecessor_collect_382 = '6649690b5fee77f69af0174dd3a8d1ba6472e09463f354b0cfd4ac6f9b395529'
+        successor_collect_task6 = 'f7020e0c4d110f963898378fdffe582b880329716f20a04a66b09028a93280ad'
+        self.assertEqual(manifest['function_ast_sha256']['collect'], predecessor_collect_382)
+
         self.assertEqual(manifest['source_commit'], '393b53104f64b5e4abc31bc5a7148d56d9717093')
         paths = ('scripts/ci/cortex_m_perf_evidence.py', '.github/workflows/core-identity.yml',
                  'scripts/perf/board_perf.py', 'scripts/perf/baselines.json')
@@ -430,7 +438,8 @@ class DiagnosticsControls(unittest.TestCase):
         current_functions=functions(current)
         for name in names:
             digest = hashlib.sha256(current_functions[name].encode()).hexdigest()
-            self.assertEqual(manifest['function_ast_sha256'][name], digest, name)
+            expected = successor_collect_task6 if name == 'collect' else manifest['function_ast_sha256'][name]
+            self.assertEqual(expected, digest, name)
         for path in ('scripts/perf/board_perf.py','scripts/perf/baselines.json'):
             self.assertEqual(manifest['source_sha256'][path], hashlib.sha256((root/path).read_bytes()).hexdigest(), path)
         workflow=(root/'.github/workflows/core-identity.yml').read_text()
@@ -521,6 +530,15 @@ class DiagnosticsControls(unittest.TestCase):
                     self.assert_preservation(cold)
                 target.write_bytes(original_bytes)
         self.assert_preservation(cold)
+
+    def test_preservation_rejects_relabelled_historical_collector_fixture(self):
+        cold = self.preservation_copy()
+        fixture = cold / 'scripts/ci/fixtures/cortex_m_perf_preservation_393b5310.json'
+        manifest = json.loads(fixture.read_text())
+        manifest['function_ast_sha256']['collect'] = '0' * 64
+        fixture.write_text(json.dumps(manifest))
+        with self.assertRaisesRegex(AssertionError, 'historical393 fixture'):
+            self.assert_preservation(cold)
 
     def test_real_optional_wrapper_completes_all_48_with_common_inputs(self):
         import shutil

@@ -8,6 +8,7 @@ import sys
 import struct
 import tempfile
 import unittest
+from unittest import mock
 
 from test_core_identity_harness import literal_run
 
@@ -219,6 +220,81 @@ else:
         self.assertNotEqual(bad.returncode, 0)
         self.assertIn("missing evidence", bad.stderr)
 
+
+
+class OracleCollectorOwnershipControls(unittest.TestCase):
+    def setUp(self):
+        spec=importlib.util.spec_from_file_location("oracle_owned_lifetime",VERIFIER)
+        self.module=importlib.util.module_from_spec(spec);spec.loader.exec_module(self.module)
+        self.temp=tempfile.TemporaryDirectory(prefix="cortex-oracle-owned-")
+        self.addCleanup(self.temp.cleanup);self.path=pathlib.Path(self.temp.name)
+
+    def probe(self, **kwargs):
+        from test_cortex_m_perf_evidence import collector_ownership_probe
+        return collector_ownership_probe(self.module,lambda:self.module.collect_log(["synthetic-never-started"],self.path/"owned.log"),**kwargs)
+
+    def test_setup_read_and_cleanup_failures_preserve_original_and_attempt_remaining_closes(self):
+        for phase, cleanup in (("constructor",None),("spawn",None),("register",None),("read",None),
+                               ("read","selector"),("read","pipe"),("read","signal"),("read","wait")):
+            with self.subTest(phase=phase,cleanup=cleanup):
+                events,error,_,original,_,_=self.probe(phase=phase,cleanup=cleanup)
+                self.assertIs(error,original)
+                if "spawn" in events and phase!="spawn":
+                    self.assertIn("selector.close",events);self.assertEqual(events.count("pipe.close"),1)
+                    self.assertTrue(any(isinstance(e,tuple) and e[0]=="wait" and e[1] is not None for e in events))
+                    self.assertNotIn("poll-reaps",events)
+                elif phase=="spawn":self.assertIn("selector.close",events)
+                else:self.assertNotIn("spawn",events)
+
+    def test_cleanup_failure_rejects_success_but_preserves_original_producer_failure(self):
+        for cleanup in ("selector","pipe","signal","wait"):
+            _,error,result,_,fault,_=self.probe(phase="success",cleanup=cleanup)
+            self.assertIs(error,fault);self.assertIsNone(result)
+        for cleanup in ("selector","pipe","signal","wait"):
+            _,error,result,_,_,_=self.probe(phase="success",cleanup=cleanup,status=7)
+            self.assertIsNone(error);self.assertEqual(result["exit_code"],7);self.assertEqual(result["producer_exit_code"],7)
+
+    def test_ownership_loss_never_signals_and_keeps_original_failure(self):
+        for ownership in ("lost","pid","group","session"):
+            for phase in ("read","success"):
+                events,error,_,original,_,_=self.probe(phase=phase,ownership=ownership)
+                self.assertFalse(any(isinstance(e,tuple) and e[0]=="signal" for e in events))
+                self.assertEqual(events.count("pipe.close"),1);self.assertIn("selector.close",events)
+                if phase=="read":self.assertIs(error,original)
+                else:self.assertIsNotNone(error)
+
+    def test_unsupported_platform_and_sigchld_autoreap_reject_before_birth(self):
+        for obj,name,value in ((self.module.sys,"platform","darwin"),(self.module.os,"waitid",None),(self.module.os,"getpgid",None),(self.module.os,"getsid",None)):
+            with mock.patch.object(obj,name,value),mock.patch.object(self.module.subprocess,"Popen") as birth:
+                with self.assertRaises(ValueError):self.module.collect_log(["never-started"],self.path/"owned.log")
+                birth.assert_not_called()
+        with mock.patch.object(self.module.signal,"getsignal",return_value=self.module.signal.SIG_IGN),mock.patch.object(self.module.subprocess,"Popen") as birth:
+            with self.assertRaises(ValueError):self.module.collect_log(["never-started"],self.path/"owned.log")
+            birth.assert_not_called()
+
+    def test_log_open_failure_closes_selector_before_child_birth(self):
+        original = OSError("owned log open failed")
+        with mock.patch.object(self.module.Path,"open",side_effect=original),mock.patch.object(self.module.selectors,"DefaultSelector") as selectors,mock.patch.object(self.module.subprocess,"Popen") as birth:
+            with self.assertRaises(OSError) as caught:self.module.collect_log(["never-started"],self.path/"owned.log")
+            self.assertIs(caught.exception,original);birth.assert_not_called();selectors.return_value.close.assert_called_once()
+
+    def test_log_close_failure_preserves_read_error_and_rejects_success(self):
+        class Log:
+            closed = False
+            def close(self):
+                self.closed = True
+                raise OSError("owned log close failed")
+        for phase in ("read","success"):
+            log=Log()
+            with mock.patch.object(self.module.Path,"open",return_value=log):
+                _,error,result,original,_,_=self.probe(phase=phase)
+            self.assertTrue(log.closed);self.assertIsNone(result)
+            if phase=="read":self.assertIs(error,original)
+            else:self.assertIsInstance(error,OSError)
+
+    def test_real_early_exit_leader_stays_unreaped_until_owned_descendants_stop(self):
+        from test_cortex_m_perf_evidence import assert_collector_early_parent_exit
+        assert_collector_early_parent_exit(self,self.module,lambda command:self.module.collect_log(command,self.path/"early.log"),self.path)
 
 if __name__ == "__main__":
     unittest.main()
