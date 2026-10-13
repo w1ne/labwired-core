@@ -220,8 +220,11 @@ pub struct PeripheralDescriptor {
     pub peripheral: String,
     pub version: String,
     pub registers: Vec<RegisterDescriptor>,
+    /// Keys iterate in lexical String order. Duplicate input names retain the
+    /// existing last-inserted value. This concrete ordered map type replaces
+    /// HashMap; explicit downstream HashMap assignments must migrate.
     #[serde(default)]
-    pub interrupts: Option<std::collections::HashMap<String, u32>>,
+    pub interrupts: Option<std::collections::BTreeMap<String, u32>>,
     #[serde(default)]
     pub timing: Option<Vec<TimingDescriptor>>,
 }
@@ -4330,7 +4333,7 @@ impl PeripheralDescriptor {
 
 impl From<labwired_ir::IrPeripheral> for PeripheralDescriptor {
     fn from(ir: labwired_ir::IrPeripheral) -> Self {
-        let mut interrupts = std::collections::HashMap::new();
+        let mut interrupts = std::collections::BTreeMap::new();
         for int in ir.interrupts {
             interrupts.insert(int.name, int.value);
         }

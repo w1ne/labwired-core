@@ -293,7 +293,10 @@ pub struct SystemBus {
     /// It confers NO fidelity. Nothing here changes what the bus does, and the
     /// `register_coverage` gate measures live bus behaviour, not schema.
     /// See [`crate::inspect::inspect_with_schema`].
-    pub debug_schemas: std::collections::HashMap<String, Vec<crate::inspect::RegisterSchema>>,
+    /// Keys iterate in lexical String order. Duplicate input names retain the
+    /// existing last-inserted value. This concrete ordered map type replaces
+    /// HashMap; explicit downstream HashMap assignments must migrate.
+    pub debug_schemas: std::collections::BTreeMap<String, Vec<crate::inspect::RegisterSchema>>,
     pub nvic: Option<Arc<NvicState>>,
     pub observers: Vec<Arc<dyn crate::SimulationObserver>>,
     pub config: crate::SimulationConfig,
