@@ -18,6 +18,10 @@ on:
       - "examples/luckfox-pico-mini-a-linux/**"
       - "scripts/prepare-rv1103-linux.py"
       - "scripts/tests/test_prepare_rv1103_linux.py"
+      - "scripts/prepare-rv1103-basket.py"
+      - "scripts/tests/test_prepare_rv1103_basket.py"
+      - "scripts/tests/test_basket_ci.py"
+      - "scripts/ci/validate-basket-ci-inputs.py"
       - "tests/fixtures/cortex-a7-core-smoke.elf"
       - "tools/cosim/**"
       - "examples/smart-basket-power/**"
@@ -40,6 +44,10 @@ on:
       - "examples/luckfox-pico-mini-a-linux/**"
       - "scripts/prepare-rv1103-linux.py"
       - "scripts/tests/test_prepare_rv1103_linux.py"
+      - "scripts/prepare-rv1103-basket.py"
+      - "scripts/tests/test_prepare_rv1103_basket.py"
+      - "scripts/tests/test_basket_ci.py"
+      - "scripts/ci/validate-basket-ci-inputs.py"
       - "tests/fixtures/cortex-a7-core-smoke.elf"
       - "tools/cosim/**"
       - "examples/smart-basket-power/**"
@@ -51,6 +59,17 @@ on:
         type: boolean
         required: false
         default: false
+
+      basket_acceptance:
+        description: "Run actual joint Linux/I2C/UART/persistent-plant acceptance (private app read secret required)"
+        type: boolean
+        required: false
+        default: false
+      basket_app_commit:
+        description: "Explicit full 40-hex commit in private w1ne/labwired; required only for basket opt-in"
+        type: string
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -127,7 +146,11 @@ jobs:
         with:
           shared-key: native-arm-system
       - name: Install native and compiled-DTB build tools
-        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build clang device-tree-compiler
+        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build clang device-tree-compiler busybox
+      - name: Check strict joint preparation, historical modules and CI input contracts
+        run: |
+          python3 -m unittest discover -s scripts/tests -p test_prepare_rv1103_basket.py
+          python3 -m unittest discover -s scripts/tests -p test_basket_ci.py
       - name: Check native architectural backend and compiled binary identity
         run: scripts/ci/cargo-test-nonvacuous.sh --locked -p labwired-arm-system --features native --lib --test architecture
       - name: Check real SystemBus backend, MMU, devices, retirement and snapshot refusal
@@ -135,6 +158,14 @@ jobs:
           scripts/ci/cargo-test-nonvacuous.sh --locked -p labwired-core --features qemu-arm-system,event-scheduler
           --test qemu_arm_system --test rv1103_devices --test rv1103_linux_loader
           --test cpu_runtime_snapshot_honesty --test event_scheduler
+          --test rv1103_basket_loader --test rv1103_rk3x_i2c --test dw_uart_timeout --test rv1103_uart4_esp_at --test cosim_canonical_basket --test ordered_debug_metadata
+      - name: Check exact interrupt metadata ordering and duplicate-value goldens
+        run: scripts/ci/cargo-test-nonvacuous.sh --locked -p labwired-config --test ordered_interrupt_metadata
+      - name: Check native basket parser and evidence unit contracts
+        run: |
+          set -o pipefail
+          scripts/ci/cargo-test-nonvacuous.sh --locked -p labwired-cli --features qemu-arm-system,event-scheduler --lib basket 2>&1 | tee "$RUNNER_TEMP/native-basket-units.log"
+          grep -Eq '^test result: ok\. [1-9][0-9]* passed;' "$RUNNER_TEMP/native-basket-units.log"
       - name: Check explicit native CLI surface
         run: cargo test --locked -p labwired-cli --features qemu-arm-system,event-scheduler --test rv1103_linux_cli
 
@@ -167,7 +198,7 @@ jobs:
       - name: Prepare fresh pinned official artifacts
         run: python3 scripts/prepare-rv1103-linux.py --cache "$RUNNER_TEMP/rv1103-apk-cache" --output "$LABWIRED_RV1103_ARTIFACTS"
       - name: Build the shipped optimized panic-unwind native CLI
-        run: cargo build --locked -p labwired-cli --profile native-system --features qemu-arm-system,event-scheduler
+        run: cargo build --locked -p labwired-cli --bin labwired --profile native-system --features qemu-arm-system,event-scheduler
       - name: Check optimized architectural backend and native containment
         run: >
           scripts/ci/cargo-test-nonvacuous.sh --locked -p labwired-arm-system --profile native-system
@@ -192,3 +223,99 @@ jobs:
             ${{ runner.temp }}/rv1103-linux-boot.json
             ${{ runner.temp }}/rv1103-linux-boot.gate.json
             ${{ runner.temp }}/rv1103-linux-bounded-failure.json
+
+  basket-acceptance:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.basket_acceptance }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    env:
+      CARGO_BUILD_JOBS: "2"
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Initialize evidence before any opt-in failure
+        env:
+          PINNED_APP_COMMIT: ${{ inputs.basket_app_commit }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/basket-evidence"
+          printf '%s\n' "$PINNED_APP_COMMIT" > "$RUNNER_TEMP/basket-evidence/requested-app-commit.txt"
+          git rev-parse HEAD > "$RUNNER_TEMP/basket-evidence/core-head.txt"
+      - name: Validate explicit app pin and private checkout authorization
+        env:
+          LABWIRED_BASKET_APP_COMMIT: ${{ inputs.basket_app_commit }}
+          LABWIRED_BASKET_APP_READ_TOKEN: ${{ secrets.LABWIRED_BASKET_APP_READ_TOKEN }}
+        run: python3 scripts/ci/validate-basket-ci-inputs.py
+      - uses: actions/checkout@v4
+        with:
+          repository: w1ne/labwired
+          ref: ${{ inputs.basket_app_commit }}
+          token: ${{ secrets.LABWIRED_BASKET_APP_READ_TOKEN }}
+          persist-credentials: false
+          path: basket-app
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.22.0"
+      - uses: dtolnay/rust-toolchain@1.95.0
+      - name: Install exact reviewed helper compiler and native tools
+        run: >
+          sudo apt-get update && sudo apt-get install -y
+          gcc-arm-none-eabi=15:13.2.rel1-2 device-tree-compiler=1.7.0-2build1
+          cmake ninja-build clang busybox python3
+      - name: Record pinned inputs and tools
+        run: |
+          mkdir -p "$RUNNER_TEMP/basket-evidence"
+          git rev-parse HEAD > "$RUNNER_TEMP/basket-evidence/core-head.txt"
+          git -C basket-app rev-parse HEAD > "$RUNNER_TEMP/basket-evidence/app-head.txt"
+          test "$(git -C basket-app rev-parse HEAD)" = "${{ inputs.basket_app_commit }}"
+          arm-none-eabi-gcc --version > "$RUNNER_TEMP/basket-evidence/compiler.txt"
+          dtc --version > "$RUNNER_TEMP/basket-evidence/dtc.txt"
+          sha256sum examples/luckfox-pico-mini-a-linux/basket/reviewed-modules/* > "$RUNNER_TEMP/basket-evidence/historical-module-bundle.sha256"
+      - name: Export pinned app against this core BEFORE compiling
+        run: |
+          npm install --prefix "$RUNNER_TEMP/basket-node" --ignore-scripts --no-audit --no-fund tsx@4.19.0 yaml@2.9.0 zod@4.3.6
+          ln -s "$RUNNER_TEMP/basket-node/node_modules" basket-app/node_modules
+          node "$RUNNER_TEMP/basket-node/node_modules/tsx/dist/cli.mjs" --tsconfig basket-app/examples/smart-basket/tsconfig.json             basket-app/examples/smart-basket/export-native-runtime.ts --core "$GITHUB_WORKSPACE"             --out "$GITHUB_WORKSPACE/examples/luckfox-pico-mini-a-linux/basket-native-runtime"
+          cp examples/luckfox-pico-mini-a-linux/basket-native-runtime/*.json "$RUNNER_TEMP/basket-evidence/"
+      - name: Check strict preparation and actual BusyBox sysctl regression
+        run: |
+          python3 -m unittest discover -s scripts/tests -p test_prepare_rv1103_basket.py
+          python3 -m unittest discover -s scripts/tests -p test_basket_ci.py
+      - name: Fresh base and basket preparation using exact HISTORICAL reviewed modules
+        run: |
+          python3 scripts/prepare-rv1103-linux.py --cache "$RUNNER_TEMP/basket-apk-cache" --output "$RUNNER_TEMP/basket-base"
+          python3 - "$RUNNER_TEMP/basket-apk-cache" <<'PY'
+          import importlib.util, pathlib, sys
+          spec=importlib.util.spec_from_file_location('modules','scripts/prepare-rv1103-modules.py')
+          modules=importlib.util.module_from_spec(spec); spec.loader.exec_module(modules)
+          cache=pathlib.Path(sys.argv[1])
+          modules.base.cached_apk(cache,modules.DEV['url'],modules.DEV['sha256'],modules.DEV['size'])
+          modules.cached_source(cache)
+          PY
+          python3 scripts/prepare-rv1103-basket.py --cache "$RUNNER_TEMP/basket-apk-cache"             --base-artifacts "$RUNNER_TEMP/basket-base"             --module-artifacts examples/luckfox-pico-mini-a-linux/basket/reviewed-modules             --output "$RUNNER_TEMP/basket-prepared"
+      - name: Build unchanged shipped optimized native profile after current export
+        run: |
+          cargo build --locked -p labwired-cli --bin labwired --profile native-system --features qemu-arm-system,event-scheduler 2>&1 | tee "$RUNNER_TEMP/basket-evidence/build.log"
+          sha256sum target/native-system/labwired > "$RUNNER_TEMP/basket-evidence/cli.sha256"
+          find target/native-system/build -name libtlib.so -exec sha256sum {} + > "$RUNNER_TEMP/basket-evidence/backend.sha256"
+      - name: Check actual persistent plant startup and fresh recovery epoch (opt-in only)
+        env:
+          LABWIRED_RV1103_BASKET_ARTIFACTS: ${{ runner.temp }}/basket-prepared
+        run: |
+          set -o pipefail
+          scripts/ci/cargo-test-nonvacuous.sh --locked -p labwired-cli --profile native-system --features qemu-arm-system,event-scheduler --lib actual_persistent_plant_startup_hold_release_and_fresh_epoch_keep_one_child_and_time -- --ignored --nocapture 2>&1 | tee "$RUNNER_TEMP/basket-evidence/startup-unit.log"
+          grep -Eq '^test result: ok\. [1-9][0-9]* passed;' "$RUNNER_TEMP/basket-evidence/startup-unit.log"
+      - name: Run actual joint guest once with explicit positive bounds
+        run: |
+          target/native-system/labwired rv1103-basket --artifacts "$RUNNER_TEMP/basket-prepared"             --receipt "$RUNNER_TEMP/basket-evidence/actual-basket.json"             --max-cycles 4000000000 --max-fuel 4000000000 --max-retirements 2000000000             --wall-seconds 3600 --console-bytes 65536             > "$RUNNER_TEMP/basket-evidence/guest-stdout.log" 2> "$RUNNER_TEMP/basket-evidence/guest-stderr.log"
+      - name: Archive complete success/failure console, receipts, hashes and preparation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rv1103-linux-basket-${{ github.run_id }}
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            ${{ runner.temp }}/basket-evidence/
+            ${{ runner.temp }}/basket-prepared/
+            ${{ runner.temp }}/basket-base/artifact-manifest.json
+            examples/luckfox-pico-mini-a-linux/basket/reviewed-modules/

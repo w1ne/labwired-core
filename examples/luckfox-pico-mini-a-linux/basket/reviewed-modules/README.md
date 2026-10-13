@@ -1,0 +1,7 @@
+# Exact historical reviewed module bundle
+
+These immutable bytes preserve the reviewed original module preparation, not a fresh CI module rebuild. `module-manifest.json` SHA256 is `f5fab55c5d3cecb9713d277b9c19f3b215d781467ad91971219e35cf8e503ab6` (64,632 bytes). `i2c-rk3x.ko` is 300,952 bytes / `1b3404627ffae4a66d0d126bc14c0fee76127609455c52d44137d7db82257efa`; `i2c-dev.ko` is 21,719 bytes / `6381d4a9b257a836ce7f14a80ad1386ae5471e82a0b23715c848ba5362c159aa`. Build-a/b logs and recorded paths/tool observations are historical.
+
+The basket preparer pins the complete original receipt before separately checking KO ELF, vermagic, kernel CRCs, signature state and source/package/preparer identities. Fresh module build receipts have fresh observational paths/logs and cannot satisfy this entire-receipt pin, even with identical KO bytes. Do not overwrite fresh provenance, weaken the loader or claim these historical logs came from the current CI job. CI freshly prepares the base kernel archive and basket helper/DTB/archive using these exact modules. Preparation still says guest NOT_RUN; acceptance requires the actual native guest.
+
+Both kernel modules are GPL-2.0-only. Exact matching upstream source URL/hash, Alpine Linux-lts-dev package/source revision, headers and build commands are in this manifest and `scripts/prepare-rv1103-modules.py`; reproduction uses `prepare-rv1103-modules.py` separately and produces a distinct fresh manifest.

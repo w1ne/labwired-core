@@ -59,7 +59,7 @@ struct ChipConf {
 /// never contributes an estate checkmark, conformance level or ratchet record.
 const DECLARED_ONLY_CHIPS: &[(&str, &str)] = &[(
     "rv1103",
-    "CPU/memory declaration only. No RV1103 firmware/platform CI gate; peripherals, boot chain and Linux/BSP execution are unimplemented. The optional generic Cortex-A7 CPU subset does not establish board L0/L1.",
+    "Normal descriptor is CPU/memory only. Optional native reduced Linux direct boot and joint I2C3/UART4 basket acceptance pass separately with functional timing and a persistent reduced plant; this does not establish full board L0/L1, vendor BSP/SD/ROM boot or physical qualification. The older generic Cortex-A7 CPU subset is separate.",
 )];
 
 /// The modeled fleet. Every descriptor MUST appear here or in the explicitly

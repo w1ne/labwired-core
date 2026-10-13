@@ -323,10 +323,13 @@ FIXTURES = {
 # fixture must not stand in for an unimplemented board platform.
 WAIVED: dict[str, str] = {
     "rv1103": (
-        "Optional native Cortex-A7 CPU subset only; RV1103 platform peripherals, "
-        "boot chain and Linux/BSP execution are unimplemented. No representative "
-        "perf fixture can run this board; the generic Cortex-A7 CPU smoke ELF "
-        "does not establish RV1103 throughput."
+        "The old Cortex-A7 CPU subset fixture is not representative perf evidence. "
+        "Optional native reduced Linux direct boot and joint I2C3/UART4 basket "
+        "acceptance now pass through Machine/SystemBus/CosimSession at fixed "
+        "functional 24MHz with a persistent reduced plant. The actual run took "
+        "644 wall seconds for 89 functional-clock seconds; no 1x or physical "
+        "RV1103 platform throughput claim. Vendor BSP/SD/ROM boot remains "
+        "unimplemented and no representative perf fixture qualifies this board."
     ),
 }
 

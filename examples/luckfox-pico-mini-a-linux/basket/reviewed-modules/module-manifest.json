@@ -1,0 +1,1288 @@
+{
+  "archive_statistics": {
+    "linux-lts": {
+      "bounds": {
+        "expanded_tar_bytes": 100000000,
+        "individual_metadata_bytes": 512,
+        "individual_payload_bytes": 10000000,
+        "physical_records": 8000,
+        "total_metadata_bytes": 512000,
+        "total_payload_bytes": 90000000
+      },
+      "expanded_tar_bytes": 87126528,
+      "extension_metadata_bytes": 300872,
+      "extension_records": 3717,
+      "largest_extension_metadata_bytes": 204,
+      "members": 3717,
+      "physical_payload_bytes": 80605004,
+      "physical_records": 7434,
+      "total_member_bytes": 80605004
+    },
+    "linux-lts-dev": {
+      "bounds": {
+        "expanded_tar_bytes": 110000000,
+        "individual_metadata_bytes": 512,
+        "individual_payload_bytes": 4000000,
+        "physical_records": 46000,
+        "total_metadata_bytes": 2000000,
+        "total_payload_bytes": 72000000
+      },
+      "expanded_tar_bytes": 108446208,
+      "extension_metadata_bytes": 1749396,
+      "extension_records": 22261,
+      "largest_extension_metadata_bytes": 213,
+      "members": 22261,
+      "physical_payload_bytes": 70605705,
+      "physical_records": 44522,
+      "total_member_bytes": 70605705
+    }
+  },
+  "artifacts": {
+    "build-a.log": {
+      "bytes": 5916,
+      "sha256": "2706d98218883221e6a6226a9a763631eb9c3f6b2bb99fd72e0ceaf25ed54801"
+    },
+    "build-b.log": {
+      "bytes": 5916,
+      "sha256": "b78194395e669670d914f1f8bac89a5c90e10152bb8ecf0094609e97a40e3b94"
+    },
+    "i2c-dev.ko": {
+      "bytes": 21719,
+      "sha256": "6381d4a9b257a836ce7f14a80ad1386ae5471e82a0b23715c848ba5362c159aa"
+    },
+    "i2c-rk3x.ko": {
+      "bytes": 300952,
+      "sha256": "1b3404627ffae4a66d0d126bc14c0fee76127609455c52d44137d7db82257efa"
+    },
+    "modules.cpio": {
+      "bytes": 323580,
+      "sha256": "e6cf5e66657e4d3b252fbd1f9f0c83193784c456f412c135c1c2b81c61ac6750"
+    }
+  },
+  "build_overrides": {
+    "ARCH": "arm",
+    "CONFIG_GCC_PLUGINS": "",
+    "environment": {
+      "KBUILD_BUILD_HOST": "rv1103",
+      "KBUILD_BUILD_TIMESTAMP": "1970-01-01 00:00:00 +0000",
+      "KBUILD_BUILD_USER": "labwired",
+      "KBUILD_BUILD_VERSION": "1",
+      "LC_ALL": "C",
+      "SOURCE_DATE_EPOCH": "0",
+      "TZ": "UTC"
+    },
+    "jobs": 1
+  },
+  "builds": [
+    {
+      "commands": [
+        [
+          "/usr/bin/x86_64-linux-gnu-gcc-13",
+          "-O2",
+          "-fdebug-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-a=/rv1103-build",
+          "-ffile-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-a=/rv1103-build",
+          "-fmacro-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-a=/rv1103-build",
+          "-I/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/include",
+          "-I/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/genksyms",
+          "-I/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/mod",
+          "-o",
+          "/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/basic/fixdep",
+          "/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/basic/fixdep.c"
+        ],
+        [
+          "/usr/bin/x86_64-linux-gnu-gcc-13",
+          "-O2",
+          "-fdebug-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-a=/rv1103-build",
+          "-ffile-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-a=/rv1103-build",
+          "-fmacro-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-a=/rv1103-build",
+          "-I/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/include",
+          "-I/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/genksyms",
+          "-I/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/mod",
+          "-o",
+          "/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/genksyms/genksyms",
+          "/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/genksyms/genksyms.c",
+          "/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/genksyms/parse.tab.c",
+          "/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/genksyms/lex.lex.c"
+        ],
+        [
+          "/usr/bin/x86_64-linux-gnu-gcc-13",
+          "-O2",
+          "-fdebug-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-a=/rv1103-build",
+          "-ffile-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-a=/rv1103-build",
+          "-fmacro-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-a=/rv1103-build",
+          "-I/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/include",
+          "-I/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/genksyms",
+          "-I/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/mod",
+          "-o",
+          "/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/mod/modpost",
+          "/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/mod/modpost.c",
+          "/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/mod/file2alias.c",
+          "/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/mod/sumversion.c",
+          "/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/mod/symsearch.c"
+        ],
+        [
+          "/usr/bin/x86_64-linux-gnu-gcc-13",
+          "-O2",
+          "-fdebug-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-a=/rv1103-build",
+          "-ffile-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-a=/rv1103-build",
+          "-fmacro-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-a=/rv1103-build",
+          "-I/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/include",
+          "-I/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/genksyms",
+          "-I/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/mod",
+          "-o",
+          "/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/recordmcount",
+          "/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/recordmcount.c"
+        ],
+        [
+          "/usr/bin/make",
+          "-j1",
+          "-C",
+          "/tmp/.rv1103-module-build-wz7fvagl/build-a/headers",
+          "M=/tmp/.rv1103-module-build-wz7fvagl/build-a/module",
+          "ARCH=arm",
+          "CROSS_COMPILE=/usr/bin/arm-none-eabi-",
+          "HOSTCC=/usr/bin/x86_64-linux-gnu-gcc-13",
+          "CONFIG_GCC_PLUGINS=",
+          "KCFLAGS=-fdebug-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-a=/rv1103-build -ffile-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-a=/rv1103-build -fmacro-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-a=/rv1103-build",
+          "HOSTCFLAGS=-O2 -fdebug-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-a=/rv1103-build -ffile-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-a=/rv1103-build -fmacro-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-a=/rv1103-build",
+          "modules"
+        ]
+      ],
+      "directory": "/tmp/.rv1103-module-build-wz7fvagl/build-a",
+      "environment": {
+        "KBUILD_BUILD_HOST": "rv1103",
+        "KBUILD_BUILD_TIMESTAMP": "1970-01-01 00:00:00 +0000",
+        "KBUILD_BUILD_USER": "labwired",
+        "KBUILD_BUILD_VERSION": "1",
+        "LC_ALL": "C",
+        "PATH": "/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/bin:/home/andrii/.codex/packages/app-server-daemon/releases/0.162.1-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0GZAWAg:/home/andrii/.codex/tmp/arg0/codex-arg070dqba:/home/andrii/.codex/packages/app-server-daemon/releases/0.162.0-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0DcqWuG:/home/andrii/.codex/packages/app-server-daemon/releases/0.161.0-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0fg7LVI:/home/andrii/.codex/packages/app-server-daemon/releases/0.160.1-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0lE0C9E:/home/andrii/.nvm/versions/node/v20.20.2/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/codex-path:/home/andrii/.opencode/bin:/home/andrii/.local/google-cloud-sdk/bin:/home/andrii/.grok/bin:/home/andrii/.local/bin:/home/andrii/.nvm/versions/node/v20.20.2/bin:/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/bin:/home/andrii/.local/bin:/home/andrii/.deno/bin:/home/andrii/.cargo/bin:/home/andrii/.local/bin:/home/andrii/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin",
+        "SOURCE_DATE_EPOCH": "0",
+        "TZ": "UTC"
+      },
+      "helpers": {
+        "scripts/basic/fixdep": {
+          "bytes": 16984,
+          "elf": "native host",
+          "host_architecture": "x86_64",
+          "sha256": "e1dd38ae935055b10326c041dcfe24355b35350b14c59a77e3364f025d2fbb58",
+          "sources": {
+            "scripts/basic/fixdep.c": {
+              "bytes": 10854,
+              "sha256": "512a85c24ca2cdd44d1d652e071abc6650cf4776e21979e0a08b421178f59590"
+            }
+          }
+        },
+        "scripts/genksyms/genksyms": {
+          "bytes": 68536,
+          "elf": "native host",
+          "host_architecture": "x86_64",
+          "sha256": "17f1e688feac36bc584aa47f5af7d29162eedc836d9807e236f87f15d3e2615d",
+          "sources": {
+            "scripts/genksyms/genksyms.c": {
+              "bytes": 21230,
+              "sha256": "4e0b45fa6b85c88677a933d13eb4e9a9fc5a21c89c12a066053aa56fbc88adb8"
+            },
+            "scripts/genksyms/lex.lex.c": {
+              "bytes": 59606,
+              "sha256": "c56e60b00b6c9720bc4f151793677a7d2ffcf9cd3a659f91c5a744a887dd5330"
+            },
+            "scripts/genksyms/parse.tab.c": {
+              "bytes": 81881,
+              "sha256": "06d5057eb2dbe8e3214b7b7681f36c649de9d24dae5d024f06b1c664a48e9515"
+            }
+          }
+        },
+        "scripts/mod/modpost": {
+          "bytes": 93312,
+          "elf": "native host",
+          "host_architecture": "x86_64",
+          "sha256": "d8663248c15873b461849ac533da03517c85879245d16fc22f0c46122e889279",
+          "sources": {
+            "scripts/mod/file2alias.c": {
+              "bytes": 46004,
+              "sha256": "a498965061e8c93156225412b047165561a81e776d7c7a06068c409761f3c3fe"
+            },
+            "scripts/mod/modpost.c": {
+              "bytes": 60909,
+              "sha256": "669dc2916360744bf1c7bb8c478b6774e3e3e6084b993afe872876daf339927b"
+            },
+            "scripts/mod/sumversion.c": {
+              "bytes": 9568,
+              "sha256": "5d87b4a90d49573edd17f9d7dba4b0730f5cdbf7842a4fdbe13508c10cf9213d"
+            },
+            "scripts/mod/symsearch.c": {
+              "bytes": 5912,
+              "sha256": "f3a9410d9892b8fa7d96dd3c6a135168eb8dc65e5f83dcadd73a871e5347a190"
+            }
+          }
+        },
+        "scripts/recordmcount": {
+          "bytes": 32352,
+          "elf": "native host",
+          "host_architecture": "x86_64",
+          "sha256": "3840d40ee0b2af7eae548442a37f7ee88d1f3b75c57f6d928fc1d7c0c730e597",
+          "sources": {
+            "scripts/recordmcount.c": {
+              "bytes": 17934,
+              "sha256": "59b1a8ffc2cac2b9b64946824f4650db6665f0876a8beb3c952987dd3fc09424"
+            }
+          }
+        }
+      },
+      "protected_headers": {
+        ".config": {
+          "bytes": 269494,
+          "sha256": "4f33c7f3043a3d3e49794bd31aa4f7dce39951f2919e64ea11dfc1fbed0bcd17"
+        },
+        "Module.symvers": {
+          "bytes": 1382573,
+          "sha256": "1db6b87e8f410f2b865e5fb37700c614d13f96852edd7dcfb8f952a2b96c03cb"
+        },
+        "arch/arm/include/generated/asm/cfi.h": {
+          "bytes": 29,
+          "sha256": "14dd5beda8a59a8b3160e78cfd2b3a29aed753ef6bf96841895f0c093be772a1"
+        },
+        "arch/arm/include/generated/asm/compat.h": {
+          "bytes": 32,
+          "sha256": "4232258bf75085bdd0f0da270ae417926539f37fc3dfc2c575b3412031527344"
+        },
+        "arch/arm/include/generated/asm/dma-mapping.h": {
+          "bytes": 37,
+          "sha256": "baeec6773c94f0636f44de880eeeba13691e5a20e8b96ad545f9b1a93d10c3ec"
+        },
+        "arch/arm/include/generated/asm/early_ioremap.h": {
+          "bytes": 39,
+          "sha256": "b1a54c24a12ce2c0f283661121974436cdb09ae91822497458072f5f97447c5d"
+        },
+        "arch/arm/include/generated/asm/emergency-restart.h": {
+          "bytes": 43,
+          "sha256": "5642952058f28bed9a4d77ad962165c563ff729160442e64ee0f1ff3fb60fc4f"
+        },
+        "arch/arm/include/generated/asm/exec.h": {
+          "bytes": 30,
+          "sha256": "9522a36f281574ddc377e1303903bc6cc9e4950e0d126bf0f311bef6a62e4b38"
+        },
+        "arch/arm/include/generated/asm/extable.h": {
+          "bytes": 33,
+          "sha256": "8df85897a300d36bb85c7c1a8551c98e41f80c8eb33e8210dfed460f52d1eec9"
+        },
+        "arch/arm/include/generated/asm/flat.h": {
+          "bytes": 30,
+          "sha256": "7beae0f535c870caff0461512f7c957c27481f5482b76b7ab41ce84f59bac268"
+        },
+        "arch/arm/include/generated/asm/irq_regs.h": {
+          "bytes": 34,
+          "sha256": "436a9c327f7568c64cbdb7f7083365fe5ca2bb2ce3dd0d718bef9483efdf6ae5"
+        },
+        "arch/arm/include/generated/asm/kdebug.h": {
+          "bytes": 32,
+          "sha256": "c1478466e40ef29d7d9ba8396fb15f73f9223e69e40e445500251852121bc76d"
+        },
+        "arch/arm/include/generated/asm/kmap_size.h": {
+          "bytes": 35,
+          "sha256": "7245ee3b42b2e5df950a01ce7c2374db7b971a5a4304646d5a4e9ccfa76395ee"
+        },
+        "arch/arm/include/generated/asm/local.h": {
+          "bytes": 31,
+          "sha256": "31f22d5b78e1510bc885571c49556f4d9a7ca49ead96deb0dd22c04ca903d99d"
+        },
+        "arch/arm/include/generated/asm/local64.h": {
+          "bytes": 33,
+          "sha256": "60fcbd6c2f3f7207d61791f97406e59efeb90d071c82492f56a386ee54ab8c5e"
+        },
+        "arch/arm/include/generated/asm/mach-types.h": {
+          "bytes": 208751,
+          "sha256": "b05b40816b7a711d3644c8c4dffca6ae792665ac03ac63709c87d5fd83135808"
+        },
+        "arch/arm/include/generated/asm/mmiowb.h": {
+          "bytes": 32,
+          "sha256": "562185c822e79d362de4f9f76a1a7016e1529a01d88a7da9552140f666c6a947"
+        },
+        "arch/arm/include/generated/asm/msi.h": {
+          "bytes": 29,
+          "sha256": "1bb3801c1b6cf9d36bef650e297aff61dc1cbbb9789d0e667fea057a262e39e8"
+        },
+        "arch/arm/include/generated/asm/parport.h": {
+          "bytes": 33,
+          "sha256": "5a0c506d76807836a6be8de40a88a4a09bdd96b87ae3df209c851e3e8cf539d1"
+        },
+        "arch/arm/include/generated/asm/preempt.h": {
+          "bytes": 33,
+          "sha256": "6100b67666a4d14507fd43f105a251be7d713303af0581a5bd3b0d787c0a2aa9"
+        },
+        "arch/arm/include/generated/asm/ring_buffer.h": {
+          "bytes": 37,
+          "sha256": "1806ee1b89e1ecd2ab8ccfde94058c13611bfb174162bd039ff73cfb0269e47f"
+        },
+        "arch/arm/include/generated/asm/rqspinlock.h": {
+          "bytes": 36,
+          "sha256": "335a6ddcb31b8a362e7e4e23d2498af773d6cd3421d2b9c85e208288ba1a0241"
+        },
+        "arch/arm/include/generated/asm/runtime-const.h": {
+          "bytes": 39,
+          "sha256": "ea2c69274ba66c47c4acd9d4c4c94c0d6f5a1da98bb41eb766761516aed3d7ca"
+        },
+        "arch/arm/include/generated/asm/rwonce.h": {
+          "bytes": 32,
+          "sha256": "e65428b6b0334c3fa3b08c940356e87132ccb205a984bb0d561110b122738963"
+        },
+        "arch/arm/include/generated/asm/serial.h": {
+          "bytes": 32,
+          "sha256": "f067f37ff479b7ac377ecf62081ad12e684a64fdf4bab16de9cdc1e46f90352c"
+        },
+        "arch/arm/include/generated/asm/softirq_stack.h": {
+          "bytes": 39,
+          "sha256": "a5777abcb217beabc6b1a529629c03cb5c6fd0823479ee09c5ab65e3b58700de"
+        },
+        "arch/arm/include/generated/asm/trace_clock.h": {
+          "bytes": 37,
+          "sha256": "70c29b678515c2c164b72a070538d1569a09354f7c3aacf9a7184806a9532281"
+        },
+        "arch/arm/include/generated/asm/unistd-nr.h": {
+          "bytes": 263,
+          "sha256": "8bc50874d07ea1e2217360405786cba1819f8b0da74dfba8a6ac2987afd8c987"
+        },
+        "arch/arm/include/generated/asm/unwind_user.h": {
+          "bytes": 37,
+          "sha256": "d4d2cac7dfb2e3f75dc72b5f02910288acf79683d636409553a887d9de04caff"
+        },
+        "arch/arm/include/generated/asm/video.h": {
+          "bytes": 31,
+          "sha256": "ad1ec8ae95f3588e4192e0796ece5e0346de0ec4a4c31c0b910faccf627620f4"
+        },
+        "arch/arm/include/generated/calls-eabi.S": {
+          "bytes": 14881,
+          "sha256": "d90fd9c6a2caac7403b4082532e71dc4a8c8150d383faea37a1275e4f8410be7"
+        },
+        "arch/arm/include/generated/calls-oabi.S": {
+          "bytes": 14916,
+          "sha256": "bda5315863c5c3b83b01e9d407647260924b1db327ebad5e30e8aae49e343107"
+        },
+        "arch/arm/include/generated/uapi/asm/bitsperlong.h": {
+          "bytes": 37,
+          "sha256": "07cfe8e5f1188e41649907f107c4ed411a61102c2a53ca50a5b954b5644befb6"
+        },
+        "arch/arm/include/generated/uapi/asm/bpf_perf_event.h": {
+          "bytes": 40,
+          "sha256": "bfb40dfccf983dce09e3ee0f570f3bcc969d4bab8c1f3d4572ecf3b5da7f936d"
+        },
+        "arch/arm/include/generated/uapi/asm/errno.h": {
+          "bytes": 31,
+          "sha256": "4ee384515a4325315992e61dd957f0fa91f3858fe7c079de59f56edded51de86"
+        },
+        "arch/arm/include/generated/uapi/asm/ioctl.h": {
+          "bytes": 31,
+          "sha256": "9c6ca9e365296a6b66747cbebdcf76972b8cce7aab91e55bf4ab1f3581df9c2a"
+        },
+        "arch/arm/include/generated/uapi/asm/ipcbuf.h": {
+          "bytes": 32,
+          "sha256": "7d7b26fc15cfa914dc6e03d976570242ea37377491f3619ab287e6169025df66"
+        },
+        "arch/arm/include/generated/uapi/asm/kvm_para.h": {
+          "bytes": 34,
+          "sha256": "e2bc44e87ae07d97aa6a00572733f32973fa22a08f2ce0c9ecdb85255c1afe57"
+        },
+        "arch/arm/include/generated/uapi/asm/msgbuf.h": {
+          "bytes": 32,
+          "sha256": "832154fea591ff628377c8622f8d87a4b673afe06c3d8737d3c1692dcb1e9091"
+        },
+        "arch/arm/include/generated/uapi/asm/param.h": {
+          "bytes": 31,
+          "sha256": "6bf1865f0ddba5c80877463ad6650d7fee66931486956a07884f53deaa13e2b8"
+        },
+        "arch/arm/include/generated/uapi/asm/poll.h": {
+          "bytes": 30,
+          "sha256": "0b6ca981303acc042195061225039c080c900169b231ab343c7e9ec6530864ea"
+        },
+        "arch/arm/include/generated/uapi/asm/resource.h": {
+          "bytes": 34,
+          "sha256": "6d9c7f1ca98f275aafe3c5533d274aec702ea6029f8036bdb577b0c53e08f7d9"
+        },
+        "arch/arm/include/generated/uapi/asm/sembuf.h": {
+          "bytes": 32,
+          "sha256": "1b9471b621e0c1a31cafca4a94dfa01cf27aaba40391ffd744be455aa37de5b3"
+        },
+        "arch/arm/include/generated/uapi/asm/shmbuf.h": {
+          "bytes": 32,
+          "sha256": "c1f17a01e81ed720ebd0c5c18afb0d43c4c1b1928b4583595c4ca35df07645a7"
+        },
+        "arch/arm/include/generated/uapi/asm/siginfo.h": {
+          "bytes": 33,
+          "sha256": "175b80f0fd759d48de2f33001630dc4905ee3786cc6097fce981632661195691"
+        },
+        "arch/arm/include/generated/uapi/asm/socket.h": {
+          "bytes": 32,
+          "sha256": "48e0940e8a6e8861eaaaf90853a685fa803c4e039166060a3c921c8d79001e3c"
+        },
+        "arch/arm/include/generated/uapi/asm/sockios.h": {
+          "bytes": 33,
+          "sha256": "ac496b3bcc37452f0caa104b2205a8a19dde0196a7791988b3b74e23c2174c1e"
+        },
+        "arch/arm/include/generated/uapi/asm/termbits.h": {
+          "bytes": 34,
+          "sha256": "cba6faa5749f84248b3e73894fb6731dc558af01f8f5a626d8f44ba6fad46977"
+        },
+        "arch/arm/include/generated/uapi/asm/termios.h": {
+          "bytes": 33,
+          "sha256": "0c0899ba44a3545c5e137ead0f121480c1d6d3851c8d481f1d6822e39a4cc60d"
+        },
+        "arch/arm/include/generated/uapi/asm/unistd-eabi.h": {
+          "bytes": 20935,
+          "sha256": "b3568fb2ee2f71be55325285ce226b7c8e8a17b0cd302e13008db2c1b97a6979"
+        },
+        "arch/arm/include/generated/uapi/asm/unistd-oabi.h": {
+          "bytes": 21477,
+          "sha256": "765cc98ffb21a2a135fa22a607d14ea3f86569d3fae4733e97f2cbbb2caf28bc"
+        },
+        "include/generated/asm-offsets.h": {
+          "bytes": 5162,
+          "sha256": "75853e4f1136df73e8762d0ac797ae25def88d12d61709640bcdae456b909619"
+        },
+        "include/generated/autoconf.h": {
+          "bytes": 161382,
+          "sha256": "7ed06fb03128668300de92766488fde92e890d7bc73ef514527cf258d3dc323d"
+        },
+        "include/generated/bounds.h": {
+          "bytes": 434,
+          "sha256": "4d1601467c2c7b6a952195c817cdf2af5f6e77534607b15770ca9a0313030ee7"
+        },
+        "include/generated/compile.h": {
+          "bytes": 188,
+          "sha256": "6e046c606fb411db9a01398714e5755bbcfd1fc1de8be42ffe5b14c77356b95c"
+        },
+        "include/generated/gcc-plugins.h": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "include/generated/rq-offsets.h": {
+          "bytes": 187,
+          "sha256": "1900b24cd8b32d8265232e02df457f31d5a61b4258ec2c47112f10c6b4de8847"
+        },
+        "include/generated/rustc_cfg": {
+          "bytes": 267400,
+          "sha256": "aa68c3a0bfb4cd7f07061ea25095b0d4013316992f9833a26ea8e6415b9ebfc8"
+        },
+        "include/generated/timeconst.h": {
+          "bytes": 1100,
+          "sha256": "da0ba6765f2969482bf8eaf21249552557fe4d6831749d9cfe4c25f4661f8726"
+        },
+        "include/generated/uapi/linux/version.h": {
+          "bytes": 217,
+          "sha256": "463e4ccf1ad1b44363ad29315771940338f6bfe8b0a57293fed5e5b5067efc95"
+        },
+        "include/generated/utsrelease.h": {
+          "bytes": 36,
+          "sha256": "b296ad00da41ceb45b387c295c4d0ccdd610fb5d1b3c43604e852bce16da2bd1"
+        }
+      },
+      "protected_headers_unchanged": true
+    },
+    {
+      "commands": [
+        [
+          "/usr/bin/x86_64-linux-gnu-gcc-13",
+          "-O2",
+          "-fdebug-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-b=/rv1103-build",
+          "-ffile-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-b=/rv1103-build",
+          "-fmacro-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-b=/rv1103-build",
+          "-I/tmp/.rv1103-module-build-wz7fvagl/build-b/headers/scripts/include",
+          "-I/tmp/.rv1103-module-build-wz7fvagl/build-b/headers/scripts/genksyms",
+          "-I/tmp/.rv1103-module-build-wz7fvagl/build-b/headers/scripts/mod",
+          "-o",
+          "/tmp/.rv1103-module-build-wz7fvagl/build-b/headers/scripts/basic/fixdep",
+          "/tmp/.rv1103-module-build-wz7fvagl/build-b/headers/scripts/basic/fixdep.c"
+        ],
+        [
+          "/usr/bin/x86_64-linux-gnu-gcc-13",
+          "-O2",
+          "-fdebug-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-b=/rv1103-build",
+          "-ffile-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-b=/rv1103-build",
+          "-fmacro-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-b=/rv1103-build",
+          "-I/tmp/.rv1103-module-build-wz7fvagl/build-b/headers/scripts/include",
+          "-I/tmp/.rv1103-module-build-wz7fvagl/build-b/headers/scripts/genksyms",
+          "-I/tmp/.rv1103-module-build-wz7fvagl/build-b/headers/scripts/mod",
+          "-o",
+          "/tmp/.rv1103-module-build-wz7fvagl/build-b/headers/scripts/genksyms/genksyms",
+          "/tmp/.rv1103-module-build-wz7fvagl/build-b/headers/scripts/genksyms/genksyms.c",
+          "/tmp/.rv1103-module-build-wz7fvagl/build-b/headers/scripts/genksyms/parse.tab.c",
+          "/tmp/.rv1103-module-build-wz7fvagl/build-b/headers/scripts/genksyms/lex.lex.c"
+        ],
+        [
+          "/usr/bin/x86_64-linux-gnu-gcc-13",
+          "-O2",
+          "-fdebug-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-b=/rv1103-build",
+          "-ffile-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-b=/rv1103-build",
+          "-fmacro-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-b=/rv1103-build",
+          "-I/tmp/.rv1103-module-build-wz7fvagl/build-b/headers/scripts/include",
+          "-I/tmp/.rv1103-module-build-wz7fvagl/build-b/headers/scripts/genksyms",
+          "-I/tmp/.rv1103-module-build-wz7fvagl/build-b/headers/scripts/mod",
+          "-o",
+          "/tmp/.rv1103-module-build-wz7fvagl/build-b/headers/scripts/mod/modpost",
+          "/tmp/.rv1103-module-build-wz7fvagl/build-b/headers/scripts/mod/modpost.c",
+          "/tmp/.rv1103-module-build-wz7fvagl/build-b/headers/scripts/mod/file2alias.c",
+          "/tmp/.rv1103-module-build-wz7fvagl/build-b/headers/scripts/mod/sumversion.c",
+          "/tmp/.rv1103-module-build-wz7fvagl/build-b/headers/scripts/mod/symsearch.c"
+        ],
+        [
+          "/usr/bin/x86_64-linux-gnu-gcc-13",
+          "-O2",
+          "-fdebug-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-b=/rv1103-build",
+          "-ffile-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-b=/rv1103-build",
+          "-fmacro-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-b=/rv1103-build",
+          "-I/tmp/.rv1103-module-build-wz7fvagl/build-b/headers/scripts/include",
+          "-I/tmp/.rv1103-module-build-wz7fvagl/build-b/headers/scripts/genksyms",
+          "-I/tmp/.rv1103-module-build-wz7fvagl/build-b/headers/scripts/mod",
+          "-o",
+          "/tmp/.rv1103-module-build-wz7fvagl/build-b/headers/scripts/recordmcount",
+          "/tmp/.rv1103-module-build-wz7fvagl/build-b/headers/scripts/recordmcount.c"
+        ],
+        [
+          "/usr/bin/make",
+          "-j1",
+          "-C",
+          "/tmp/.rv1103-module-build-wz7fvagl/build-b/headers",
+          "M=/tmp/.rv1103-module-build-wz7fvagl/build-b/module",
+          "ARCH=arm",
+          "CROSS_COMPILE=/usr/bin/arm-none-eabi-",
+          "HOSTCC=/usr/bin/x86_64-linux-gnu-gcc-13",
+          "CONFIG_GCC_PLUGINS=",
+          "KCFLAGS=-fdebug-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-b=/rv1103-build -ffile-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-b=/rv1103-build -fmacro-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-b=/rv1103-build",
+          "HOSTCFLAGS=-O2 -fdebug-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-b=/rv1103-build -ffile-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-b=/rv1103-build -fmacro-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-b=/rv1103-build",
+          "modules"
+        ]
+      ],
+      "directory": "/tmp/.rv1103-module-build-wz7fvagl/build-b",
+      "environment": {
+        "KBUILD_BUILD_HOST": "rv1103",
+        "KBUILD_BUILD_TIMESTAMP": "1970-01-01 00:00:00 +0000",
+        "KBUILD_BUILD_USER": "labwired",
+        "KBUILD_BUILD_VERSION": "1",
+        "LC_ALL": "C",
+        "PATH": "/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/bin:/home/andrii/.codex/packages/app-server-daemon/releases/0.162.1-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0GZAWAg:/home/andrii/.codex/tmp/arg0/codex-arg070dqba:/home/andrii/.codex/packages/app-server-daemon/releases/0.162.0-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0DcqWuG:/home/andrii/.codex/packages/app-server-daemon/releases/0.161.0-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0fg7LVI:/home/andrii/.codex/packages/app-server-daemon/releases/0.160.1-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0lE0C9E:/home/andrii/.nvm/versions/node/v20.20.2/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/codex-path:/home/andrii/.opencode/bin:/home/andrii/.local/google-cloud-sdk/bin:/home/andrii/.grok/bin:/home/andrii/.local/bin:/home/andrii/.nvm/versions/node/v20.20.2/bin:/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/bin:/home/andrii/.local/bin:/home/andrii/.deno/bin:/home/andrii/.cargo/bin:/home/andrii/.local/bin:/home/andrii/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin",
+        "SOURCE_DATE_EPOCH": "0",
+        "TZ": "UTC"
+      },
+      "helpers": {
+        "scripts/basic/fixdep": {
+          "bytes": 16984,
+          "elf": "native host",
+          "host_architecture": "x86_64",
+          "sha256": "e1dd38ae935055b10326c041dcfe24355b35350b14c59a77e3364f025d2fbb58",
+          "sources": {
+            "scripts/basic/fixdep.c": {
+              "bytes": 10854,
+              "sha256": "512a85c24ca2cdd44d1d652e071abc6650cf4776e21979e0a08b421178f59590"
+            }
+          }
+        },
+        "scripts/genksyms/genksyms": {
+          "bytes": 68536,
+          "elf": "native host",
+          "host_architecture": "x86_64",
+          "sha256": "17f1e688feac36bc584aa47f5af7d29162eedc836d9807e236f87f15d3e2615d",
+          "sources": {
+            "scripts/genksyms/genksyms.c": {
+              "bytes": 21230,
+              "sha256": "4e0b45fa6b85c88677a933d13eb4e9a9fc5a21c89c12a066053aa56fbc88adb8"
+            },
+            "scripts/genksyms/lex.lex.c": {
+              "bytes": 59606,
+              "sha256": "c56e60b00b6c9720bc4f151793677a7d2ffcf9cd3a659f91c5a744a887dd5330"
+            },
+            "scripts/genksyms/parse.tab.c": {
+              "bytes": 81881,
+              "sha256": "06d5057eb2dbe8e3214b7b7681f36c649de9d24dae5d024f06b1c664a48e9515"
+            }
+          }
+        },
+        "scripts/mod/modpost": {
+          "bytes": 93312,
+          "elf": "native host",
+          "host_architecture": "x86_64",
+          "sha256": "d8663248c15873b461849ac533da03517c85879245d16fc22f0c46122e889279",
+          "sources": {
+            "scripts/mod/file2alias.c": {
+              "bytes": 46004,
+              "sha256": "a498965061e8c93156225412b047165561a81e776d7c7a06068c409761f3c3fe"
+            },
+            "scripts/mod/modpost.c": {
+              "bytes": 60909,
+              "sha256": "669dc2916360744bf1c7bb8c478b6774e3e3e6084b993afe872876daf339927b"
+            },
+            "scripts/mod/sumversion.c": {
+              "bytes": 9568,
+              "sha256": "5d87b4a90d49573edd17f9d7dba4b0730f5cdbf7842a4fdbe13508c10cf9213d"
+            },
+            "scripts/mod/symsearch.c": {
+              "bytes": 5912,
+              "sha256": "f3a9410d9892b8fa7d96dd3c6a135168eb8dc65e5f83dcadd73a871e5347a190"
+            }
+          }
+        },
+        "scripts/recordmcount": {
+          "bytes": 32352,
+          "elf": "native host",
+          "host_architecture": "x86_64",
+          "sha256": "3840d40ee0b2af7eae548442a37f7ee88d1f3b75c57f6d928fc1d7c0c730e597",
+          "sources": {
+            "scripts/recordmcount.c": {
+              "bytes": 17934,
+              "sha256": "59b1a8ffc2cac2b9b64946824f4650db6665f0876a8beb3c952987dd3fc09424"
+            }
+          }
+        }
+      },
+      "protected_headers": {
+        ".config": {
+          "bytes": 269494,
+          "sha256": "4f33c7f3043a3d3e49794bd31aa4f7dce39951f2919e64ea11dfc1fbed0bcd17"
+        },
+        "Module.symvers": {
+          "bytes": 1382573,
+          "sha256": "1db6b87e8f410f2b865e5fb37700c614d13f96852edd7dcfb8f952a2b96c03cb"
+        },
+        "arch/arm/include/generated/asm/cfi.h": {
+          "bytes": 29,
+          "sha256": "14dd5beda8a59a8b3160e78cfd2b3a29aed753ef6bf96841895f0c093be772a1"
+        },
+        "arch/arm/include/generated/asm/compat.h": {
+          "bytes": 32,
+          "sha256": "4232258bf75085bdd0f0da270ae417926539f37fc3dfc2c575b3412031527344"
+        },
+        "arch/arm/include/generated/asm/dma-mapping.h": {
+          "bytes": 37,
+          "sha256": "baeec6773c94f0636f44de880eeeba13691e5a20e8b96ad545f9b1a93d10c3ec"
+        },
+        "arch/arm/include/generated/asm/early_ioremap.h": {
+          "bytes": 39,
+          "sha256": "b1a54c24a12ce2c0f283661121974436cdb09ae91822497458072f5f97447c5d"
+        },
+        "arch/arm/include/generated/asm/emergency-restart.h": {
+          "bytes": 43,
+          "sha256": "5642952058f28bed9a4d77ad962165c563ff729160442e64ee0f1ff3fb60fc4f"
+        },
+        "arch/arm/include/generated/asm/exec.h": {
+          "bytes": 30,
+          "sha256": "9522a36f281574ddc377e1303903bc6cc9e4950e0d126bf0f311bef6a62e4b38"
+        },
+        "arch/arm/include/generated/asm/extable.h": {
+          "bytes": 33,
+          "sha256": "8df85897a300d36bb85c7c1a8551c98e41f80c8eb33e8210dfed460f52d1eec9"
+        },
+        "arch/arm/include/generated/asm/flat.h": {
+          "bytes": 30,
+          "sha256": "7beae0f535c870caff0461512f7c957c27481f5482b76b7ab41ce84f59bac268"
+        },
+        "arch/arm/include/generated/asm/irq_regs.h": {
+          "bytes": 34,
+          "sha256": "436a9c327f7568c64cbdb7f7083365fe5ca2bb2ce3dd0d718bef9483efdf6ae5"
+        },
+        "arch/arm/include/generated/asm/kdebug.h": {
+          "bytes": 32,
+          "sha256": "c1478466e40ef29d7d9ba8396fb15f73f9223e69e40e445500251852121bc76d"
+        },
+        "arch/arm/include/generated/asm/kmap_size.h": {
+          "bytes": 35,
+          "sha256": "7245ee3b42b2e5df950a01ce7c2374db7b971a5a4304646d5a4e9ccfa76395ee"
+        },
+        "arch/arm/include/generated/asm/local.h": {
+          "bytes": 31,
+          "sha256": "31f22d5b78e1510bc885571c49556f4d9a7ca49ead96deb0dd22c04ca903d99d"
+        },
+        "arch/arm/include/generated/asm/local64.h": {
+          "bytes": 33,
+          "sha256": "60fcbd6c2f3f7207d61791f97406e59efeb90d071c82492f56a386ee54ab8c5e"
+        },
+        "arch/arm/include/generated/asm/mach-types.h": {
+          "bytes": 208751,
+          "sha256": "b05b40816b7a711d3644c8c4dffca6ae792665ac03ac63709c87d5fd83135808"
+        },
+        "arch/arm/include/generated/asm/mmiowb.h": {
+          "bytes": 32,
+          "sha256": "562185c822e79d362de4f9f76a1a7016e1529a01d88a7da9552140f666c6a947"
+        },
+        "arch/arm/include/generated/asm/msi.h": {
+          "bytes": 29,
+          "sha256": "1bb3801c1b6cf9d36bef650e297aff61dc1cbbb9789d0e667fea057a262e39e8"
+        },
+        "arch/arm/include/generated/asm/parport.h": {
+          "bytes": 33,
+          "sha256": "5a0c506d76807836a6be8de40a88a4a09bdd96b87ae3df209c851e3e8cf539d1"
+        },
+        "arch/arm/include/generated/asm/preempt.h": {
+          "bytes": 33,
+          "sha256": "6100b67666a4d14507fd43f105a251be7d713303af0581a5bd3b0d787c0a2aa9"
+        },
+        "arch/arm/include/generated/asm/ring_buffer.h": {
+          "bytes": 37,
+          "sha256": "1806ee1b89e1ecd2ab8ccfde94058c13611bfb174162bd039ff73cfb0269e47f"
+        },
+        "arch/arm/include/generated/asm/rqspinlock.h": {
+          "bytes": 36,
+          "sha256": "335a6ddcb31b8a362e7e4e23d2498af773d6cd3421d2b9c85e208288ba1a0241"
+        },
+        "arch/arm/include/generated/asm/runtime-const.h": {
+          "bytes": 39,
+          "sha256": "ea2c69274ba66c47c4acd9d4c4c94c0d6f5a1da98bb41eb766761516aed3d7ca"
+        },
+        "arch/arm/include/generated/asm/rwonce.h": {
+          "bytes": 32,
+          "sha256": "e65428b6b0334c3fa3b08c940356e87132ccb205a984bb0d561110b122738963"
+        },
+        "arch/arm/include/generated/asm/serial.h": {
+          "bytes": 32,
+          "sha256": "f067f37ff479b7ac377ecf62081ad12e684a64fdf4bab16de9cdc1e46f90352c"
+        },
+        "arch/arm/include/generated/asm/softirq_stack.h": {
+          "bytes": 39,
+          "sha256": "a5777abcb217beabc6b1a529629c03cb5c6fd0823479ee09c5ab65e3b58700de"
+        },
+        "arch/arm/include/generated/asm/trace_clock.h": {
+          "bytes": 37,
+          "sha256": "70c29b678515c2c164b72a070538d1569a09354f7c3aacf9a7184806a9532281"
+        },
+        "arch/arm/include/generated/asm/unistd-nr.h": {
+          "bytes": 263,
+          "sha256": "8bc50874d07ea1e2217360405786cba1819f8b0da74dfba8a6ac2987afd8c987"
+        },
+        "arch/arm/include/generated/asm/unwind_user.h": {
+          "bytes": 37,
+          "sha256": "d4d2cac7dfb2e3f75dc72b5f02910288acf79683d636409553a887d9de04caff"
+        },
+        "arch/arm/include/generated/asm/video.h": {
+          "bytes": 31,
+          "sha256": "ad1ec8ae95f3588e4192e0796ece5e0346de0ec4a4c31c0b910faccf627620f4"
+        },
+        "arch/arm/include/generated/calls-eabi.S": {
+          "bytes": 14881,
+          "sha256": "d90fd9c6a2caac7403b4082532e71dc4a8c8150d383faea37a1275e4f8410be7"
+        },
+        "arch/arm/include/generated/calls-oabi.S": {
+          "bytes": 14916,
+          "sha256": "bda5315863c5c3b83b01e9d407647260924b1db327ebad5e30e8aae49e343107"
+        },
+        "arch/arm/include/generated/uapi/asm/bitsperlong.h": {
+          "bytes": 37,
+          "sha256": "07cfe8e5f1188e41649907f107c4ed411a61102c2a53ca50a5b954b5644befb6"
+        },
+        "arch/arm/include/generated/uapi/asm/bpf_perf_event.h": {
+          "bytes": 40,
+          "sha256": "bfb40dfccf983dce09e3ee0f570f3bcc969d4bab8c1f3d4572ecf3b5da7f936d"
+        },
+        "arch/arm/include/generated/uapi/asm/errno.h": {
+          "bytes": 31,
+          "sha256": "4ee384515a4325315992e61dd957f0fa91f3858fe7c079de59f56edded51de86"
+        },
+        "arch/arm/include/generated/uapi/asm/ioctl.h": {
+          "bytes": 31,
+          "sha256": "9c6ca9e365296a6b66747cbebdcf76972b8cce7aab91e55bf4ab1f3581df9c2a"
+        },
+        "arch/arm/include/generated/uapi/asm/ipcbuf.h": {
+          "bytes": 32,
+          "sha256": "7d7b26fc15cfa914dc6e03d976570242ea37377491f3619ab287e6169025df66"
+        },
+        "arch/arm/include/generated/uapi/asm/kvm_para.h": {
+          "bytes": 34,
+          "sha256": "e2bc44e87ae07d97aa6a00572733f32973fa22a08f2ce0c9ecdb85255c1afe57"
+        },
+        "arch/arm/include/generated/uapi/asm/msgbuf.h": {
+          "bytes": 32,
+          "sha256": "832154fea591ff628377c8622f8d87a4b673afe06c3d8737d3c1692dcb1e9091"
+        },
+        "arch/arm/include/generated/uapi/asm/param.h": {
+          "bytes": 31,
+          "sha256": "6bf1865f0ddba5c80877463ad6650d7fee66931486956a07884f53deaa13e2b8"
+        },
+        "arch/arm/include/generated/uapi/asm/poll.h": {
+          "bytes": 30,
+          "sha256": "0b6ca981303acc042195061225039c080c900169b231ab343c7e9ec6530864ea"
+        },
+        "arch/arm/include/generated/uapi/asm/resource.h": {
+          "bytes": 34,
+          "sha256": "6d9c7f1ca98f275aafe3c5533d274aec702ea6029f8036bdb577b0c53e08f7d9"
+        },
+        "arch/arm/include/generated/uapi/asm/sembuf.h": {
+          "bytes": 32,
+          "sha256": "1b9471b621e0c1a31cafca4a94dfa01cf27aaba40391ffd744be455aa37de5b3"
+        },
+        "arch/arm/include/generated/uapi/asm/shmbuf.h": {
+          "bytes": 32,
+          "sha256": "c1f17a01e81ed720ebd0c5c18afb0d43c4c1b1928b4583595c4ca35df07645a7"
+        },
+        "arch/arm/include/generated/uapi/asm/siginfo.h": {
+          "bytes": 33,
+          "sha256": "175b80f0fd759d48de2f33001630dc4905ee3786cc6097fce981632661195691"
+        },
+        "arch/arm/include/generated/uapi/asm/socket.h": {
+          "bytes": 32,
+          "sha256": "48e0940e8a6e8861eaaaf90853a685fa803c4e039166060a3c921c8d79001e3c"
+        },
+        "arch/arm/include/generated/uapi/asm/sockios.h": {
+          "bytes": 33,
+          "sha256": "ac496b3bcc37452f0caa104b2205a8a19dde0196a7791988b3b74e23c2174c1e"
+        },
+        "arch/arm/include/generated/uapi/asm/termbits.h": {
+          "bytes": 34,
+          "sha256": "cba6faa5749f84248b3e73894fb6731dc558af01f8f5a626d8f44ba6fad46977"
+        },
+        "arch/arm/include/generated/uapi/asm/termios.h": {
+          "bytes": 33,
+          "sha256": "0c0899ba44a3545c5e137ead0f121480c1d6d3851c8d481f1d6822e39a4cc60d"
+        },
+        "arch/arm/include/generated/uapi/asm/unistd-eabi.h": {
+          "bytes": 20935,
+          "sha256": "b3568fb2ee2f71be55325285ce226b7c8e8a17b0cd302e13008db2c1b97a6979"
+        },
+        "arch/arm/include/generated/uapi/asm/unistd-oabi.h": {
+          "bytes": 21477,
+          "sha256": "765cc98ffb21a2a135fa22a607d14ea3f86569d3fae4733e97f2cbbb2caf28bc"
+        },
+        "include/generated/asm-offsets.h": {
+          "bytes": 5162,
+          "sha256": "75853e4f1136df73e8762d0ac797ae25def88d12d61709640bcdae456b909619"
+        },
+        "include/generated/autoconf.h": {
+          "bytes": 161382,
+          "sha256": "7ed06fb03128668300de92766488fde92e890d7bc73ef514527cf258d3dc323d"
+        },
+        "include/generated/bounds.h": {
+          "bytes": 434,
+          "sha256": "4d1601467c2c7b6a952195c817cdf2af5f6e77534607b15770ca9a0313030ee7"
+        },
+        "include/generated/compile.h": {
+          "bytes": 188,
+          "sha256": "6e046c606fb411db9a01398714e5755bbcfd1fc1de8be42ffe5b14c77356b95c"
+        },
+        "include/generated/gcc-plugins.h": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "include/generated/rq-offsets.h": {
+          "bytes": 187,
+          "sha256": "1900b24cd8b32d8265232e02df457f31d5a61b4258ec2c47112f10c6b4de8847"
+        },
+        "include/generated/rustc_cfg": {
+          "bytes": 267400,
+          "sha256": "aa68c3a0bfb4cd7f07061ea25095b0d4013316992f9833a26ea8e6415b9ebfc8"
+        },
+        "include/generated/timeconst.h": {
+          "bytes": 1100,
+          "sha256": "da0ba6765f2969482bf8eaf21249552557fe4d6831749d9cfe4c25f4661f8726"
+        },
+        "include/generated/uapi/linux/version.h": {
+          "bytes": 217,
+          "sha256": "463e4ccf1ad1b44363ad29315771940338f6bfe8b0a57293fed5e5b5067efc95"
+        },
+        "include/generated/utsrelease.h": {
+          "bytes": 36,
+          "sha256": "b296ad00da41ceb45b387c295c4d0ccdd610fb5d1b3c43604e852bce16da2bd1"
+        }
+      },
+      "protected_headers_unchanged": true
+    }
+  ],
+  "config": {
+    "allowed_difference": "only the exact observed CONFIG_CC_VERSION_TEXT line; neither original config edited",
+    "headers": "CONFIG_CC_VERSION_TEXT=\"gcc (Alpine 15.2.0) 15.2.0\"",
+    "headers_identity": {
+      "bytes": 269494,
+      "sha256": "4f33c7f3043a3d3e49794bd31aa4f7dce39951f2919e64ea11dfc1fbed0bcd17"
+    },
+    "stock": "CONFIG_CC_VERSION_TEXT=\"cc (Alpine 15.2.0) 15.2.0\"",
+    "stock_identity": {
+      "bytes": 269493,
+      "sha256": "4e64812402b287e13fd7513aa830432782a1ae94a5461bfe579999d1e18432fb"
+    }
+  },
+  "guest_load_policy": {
+    "external_signed": false,
+    "original_module_sig_force": false,
+    "required": "ordinary strict insmod for both modules; no force/modversion/CRC/signature bypass",
+    "stock_signed": true,
+    "taint": "unsigned/out-of-tree external module may taint kernel; actual guest taint NOT_RUN"
+  },
+  "guest_status": "NOT_RUN",
+  "kernel_release": "6.18.56-0-lts",
+  "limitations": [
+    "host preparation/ELF ABI checks only; guest insertion and I2C transactions NOT_RUN",
+    "cross compiler differs from stock Alpine GCC15.2 unless explicitly supplied matching toolchain; actual version recorded",
+    "CONFIG_GCC_PLUGINS= build override omits original GCC plugin hardening; original config unchanged",
+    "GCC13 lacks GCC15 counted_by support; vermagic/CRC equality does not prove equivalent compiler hardening",
+    "optional modules-only cpio; base pinned fixture and loader unchanged; later deliberate basket profile required"
+  ],
+  "modules": {
+    "i2c-dev.ko": {
+      "bytes": 21719,
+      "crc_validation": "actual ELF __versions against untouched matching Module.symvers",
+      "dependencies": [],
+      "elf": "ELF32 little-endian ARM ET_REL EABI5",
+      "import_count": 47,
+      "imports": {
+        "__aeabi_unwind_cpp_pr0": "0xefd6cf06",
+        "__aeabi_unwind_cpp_pr1": "0x2e5810c6",
+        "__check_object_size": "0x88db9f48",
+        "__dynamic_dev_dbg": "0xbc8cb606",
+        "__dynamic_pr_debug": "0x8b1106f3",
+        "__fortify_panic": "0x5e35dc80",
+        "__gnu_mcount_nc": "0xb1ad28e0",
+        "__kmalloc_cache_noprof": "0xbeeb94bd",
+        "__kmalloc_noprof": "0xd3402d66",
+        "__msecs_to_jiffies": "0x7f02188f",
+        "__put_user_4": "0xbc10dd97",
+        "__stack_chk_fail": "0xf0fdf6cb",
+        "_printk": "0x92997ed8",
+        "_raw_spin_lock": "0xae577d60",
+        "arm_copy_from_user": "0xae353d77",
+        "arm_copy_to_user": "0x51a910c0",
+        "bus_register_notifier": "0x89afd137",
+        "bus_unregister_notifier": "0x55d75890",
+        "cdev_device_add": "0xfd99ecc3",
+        "cdev_device_del": "0x7c6ec38b",
+        "cdev_init": "0x147d9e52",
+        "class_register": "0x4f035703",
+        "class_unregister": "0xb82f5c4f",
+        "dev_set_name": "0xfc3cd93f",
+        "device_for_each_child": "0x3a9bd983",
+        "device_initialize": "0xb0d7350e",
+        "i2c_adapter_type": "0x86d3f2bf",
+        "i2c_bus_type": "0xe57e7ebf",
+        "i2c_for_each_dev": "0x633dde72",
+        "i2c_get_adapter": "0xbf37bdd8",
+        "i2c_put_adapter": "0x94e35b0e",
+        "i2c_smbus_xfer": "0xd17cb1dc",
+        "i2c_transfer": "0x367b94c2",
+        "i2c_transfer_buffer_flags": "0x7d72b1b0",
+        "i2c_verify_client": "0x3fe23c3a",
+        "kfree": "0x037a0cba",
+        "kmalloc_caches": "0x58d8037a",
+        "latent_entropy": "0xeba5e097",
+        "memdup_user": "0x0b235e7e",
+        "memset": "0x5f754e5a",
+        "module_layout": "0x5d091da5",
+        "put_device": "0xd76471a3",
+        "register_chrdev_region": "0x3fd78f3b",
+        "snprintf": "0xc358aaf8",
+        "sysfs_emit": "0xe783e261",
+        "unregister_chrdev_region": "0x6091b333",
+        "validate_usercopy_range": "0x92526a12"
+      },
+      "license": "GPL",
+      "name": "i2c_dev",
+      "sha256": "6381d4a9b257a836ce7f14a80ad1386ae5471e82a0b23715c848ba5362c159aa",
+      "signature_present": true,
+      "vermagic": "6.18.56-0-lts SMP mod_unload modversions ARMv7 p2v8 "
+    },
+    "i2c-rk3x.ko": {
+      "bytes": 300952,
+      "crc_validation": "actual ELF __versions against untouched matching Module.symvers",
+      "dependencies": [],
+      "elf": "ELF32 little-endian ARM ET_REL EABI5",
+      "import_count": 48,
+      "imports": {
+        "__aeabi_uidiv": "0xe707d823",
+        "__aeabi_uidivmod": "0xf7802486",
+        "__aeabi_unwind_cpp_pr0": "0xefd6cf06",
+        "__cond_resched": "0x0800473f",
+        "__do_div64": "0x59e5070d",
+        "__dynamic_dev_dbg": "0xbc8cb606",
+        "__gnu_mcount_nc": "0xb1ad28e0",
+        "__init_waitqueue_head": "0x5bbe49f4",
+        "__platform_driver_register": "0xb51f808c",
+        "__stack_chk_fail": "0xf0fdf6cb",
+        "__wake_up": "0x637493f3",
+        "_dev_err": "0xc659018e",
+        "_dev_warn": "0xb9731d3e",
+        "_raw_spin_lock": "0xae577d60",
+        "_raw_spin_lock_irqsave": "0xde55e795",
+        "_raw_spin_unlock_irqrestore": "0xf3d0b495",
+        "arm_delay_ops": "0x8e865d3c",
+        "arm_heavy_mb": "0x822137e2",
+        "clk_disable": "0xb6e6d99d",
+        "clk_enable": "0x815588a6",
+        "clk_get_rate": "0x556e4390",
+        "clk_notifier_register": "0x60091316",
+        "clk_notifier_unregister": "0x719e17ff",
+        "clk_prepare": "0x7c9a7371",
+        "clk_unprepare": "0xb077e70a",
+        "dev_err_probe": "0x0f2b915f",
+        "devm_clk_get": "0x0a9c2dd5",
+        "devm_kmalloc": "0x708cf98e",
+        "devm_platform_ioremap_resource": "0xdcb63a0d",
+        "devm_request_threaded_irq": "0xc09df3fc",
+        "disable_irq": "0x3ce4ca6f",
+        "enable_irq": "0xfcec0987",
+        "finish_wait": "0x49970de8",
+        "i2c_add_adapter": "0x5c2c0a73",
+        "i2c_del_adapter": "0x61b12732",
+        "i2c_parse_fw_timings": "0xec595934",
+        "init_wait_entry": "0xfe487975",
+        "ktime_get": "0xb43f9365",
+        "module_layout": "0x5d091da5",
+        "of_alias_get_id": "0x4d5df4f3",
+        "of_match_node": "0x3d923b63",
+        "platform_driver_unregister": "0xd995b120",
+        "platform_get_irq": "0xafa38075",
+        "prepare_to_wait_event": "0x647af474",
+        "regmap_write": "0xf3067b85",
+        "schedule_timeout": "0x8ddd8aad",
+        "syscon_regmap_lookup_by_phandle": "0x0e85fa85",
+        "warn_slowpath_fmt": "0x2cfde9a2"
+      },
+      "license": "GPL v2",
+      "name": "i2c_rk3x",
+      "sha256": "1b3404627ffae4a66d0d126bc14c0fee76127609455c52d44137d7db82257efa",
+      "signature_present": false,
+      "vermagic": "6.18.56-0-lts SMP mod_unload modversions ARMv7 p2v8 "
+    }
+  },
+  "original_header_tree": {
+    "entries": 22252,
+    "sha256": "605463ef025f9399b50446d331666eecc8b80e6dca23211e0fb94b4df33285b2",
+    "unchanged": true
+  },
+  "packages": {
+    "linux-lts": {
+      "count": 4000,
+      "individual": 10000000,
+      "license": "GPL-2.0-only",
+      "members": {
+        ".PKGINFO": [
+          535,
+          null
+        ],
+        "boot/config-6.18.56-0-lts": [
+          269493,
+          "4e64812402b287e13fd7513aa830432782a1ae94a5461bfe579999d1e18432fb"
+        ],
+        "boot/vmlinuz-lts": [
+          8524288,
+          "eac9582162e912bdb577bba6ea224d98a29c997e52ee891383ea836aa704680a"
+        ]
+      },
+      "sha256": "00059546e63df3dbadb80ff08f577dce1ef871b8cd800665d6404936a956eade",
+      "size": 53474254,
+      "source_revision": "b599422f9f640e35932a995ceedf52ec76b66963",
+      "tar_bounds": {
+        "expanded_limit": 100000000,
+        "metadata_limit": 512,
+        "metadata_total_limit": 512000,
+        "physical_count_limit": 8000
+      },
+      "total": 90000000,
+      "version": "6.18.56-r0"
+    },
+    "linux-lts-dev": {
+      "license": "GPL-2.0-only",
+      "sha256": "a2fd3f3a675e5e1c68b4dbea544fa7fe3e1ebbc0403bf1f8de6130ed6cdb1b80",
+      "size": 18028271,
+      "source_revision": "b599422f9f640e35932a995ceedf52ec76b66963",
+      "url": "https://dl-cdn.alpinelinux.org/alpine/v3.23/main/armv7/linux-lts-dev-6.18.56-r0.apk",
+      "version": "6.18.56-r0"
+    }
+  },
+  "physical_acceptance": "UNAVAILABLE",
+  "preparation": "VERIFIED",
+  "preparer": {
+    "base_script": {
+      "bytes": 19719,
+      "sha256": "3ba61d718f917ec53c04c729a8f0369611a87b10eaca7fb05d4bce72d57310f1"
+    },
+    "script": {
+      "bytes": 35021,
+      "sha256": "1375b1f16a903a2df3b6140fda9328f69358acb18ec0f7550753a9aeec4cb86d"
+    }
+  },
+  "profile": "rv1103-linux-optional-matching-modules",
+  "reproducibility": {
+    "cpio_metadata": "sorted newc, fixed inode/uid/gid/mode/nlink/mtime/devices; module files only",
+    "independent_builds": 2,
+    "module_bytes_equal": true,
+    "native_helper_bytes_equal": true,
+    "second_module": {
+      "bytes": 300952,
+      "crc_validation": "actual ELF __versions against untouched matching Module.symvers",
+      "dependencies": [],
+      "elf": "ELF32 little-endian ARM ET_REL EABI5",
+      "import_count": 48,
+      "imports": {
+        "__aeabi_uidiv": "0xe707d823",
+        "__aeabi_uidivmod": "0xf7802486",
+        "__aeabi_unwind_cpp_pr0": "0xefd6cf06",
+        "__cond_resched": "0x0800473f",
+        "__do_div64": "0x59e5070d",
+        "__dynamic_dev_dbg": "0xbc8cb606",
+        "__gnu_mcount_nc": "0xb1ad28e0",
+        "__init_waitqueue_head": "0x5bbe49f4",
+        "__platform_driver_register": "0xb51f808c",
+        "__stack_chk_fail": "0xf0fdf6cb",
+        "__wake_up": "0x637493f3",
+        "_dev_err": "0xc659018e",
+        "_dev_warn": "0xb9731d3e",
+        "_raw_spin_lock": "0xae577d60",
+        "_raw_spin_lock_irqsave": "0xde55e795",
+        "_raw_spin_unlock_irqrestore": "0xf3d0b495",
+        "arm_delay_ops": "0x8e865d3c",
+        "arm_heavy_mb": "0x822137e2",
+        "clk_disable": "0xb6e6d99d",
+        "clk_enable": "0x815588a6",
+        "clk_get_rate": "0x556e4390",
+        "clk_notifier_register": "0x60091316",
+        "clk_notifier_unregister": "0x719e17ff",
+        "clk_prepare": "0x7c9a7371",
+        "clk_unprepare": "0xb077e70a",
+        "dev_err_probe": "0x0f2b915f",
+        "devm_clk_get": "0x0a9c2dd5",
+        "devm_kmalloc": "0x708cf98e",
+        "devm_platform_ioremap_resource": "0xdcb63a0d",
+        "devm_request_threaded_irq": "0xc09df3fc",
+        "disable_irq": "0x3ce4ca6f",
+        "enable_irq": "0xfcec0987",
+        "finish_wait": "0x49970de8",
+        "i2c_add_adapter": "0x5c2c0a73",
+        "i2c_del_adapter": "0x61b12732",
+        "i2c_parse_fw_timings": "0xec595934",
+        "init_wait_entry": "0xfe487975",
+        "ktime_get": "0xb43f9365",
+        "module_layout": "0x5d091da5",
+        "of_alias_get_id": "0x4d5df4f3",
+        "of_match_node": "0x3d923b63",
+        "platform_driver_unregister": "0xd995b120",
+        "platform_get_irq": "0xafa38075",
+        "prepare_to_wait_event": "0x647af474",
+        "regmap_write": "0xf3067b85",
+        "schedule_timeout": "0x8ddd8aad",
+        "syscon_regmap_lookup_by_phandle": "0x0e85fa85",
+        "warn_slowpath_fmt": "0x2cfde9a2"
+      },
+      "license": "GPL v2",
+      "name": "i2c_rk3x",
+      "sha256": "1b3404627ffae4a66d0d126bc14c0fee76127609455c52d44137d7db82257efa",
+      "signature_present": false,
+      "vermagic": "6.18.56-0-lts SMP mod_unload modversions ARMv7 p2v8 "
+    }
+  },
+  "schema": 1,
+  "selected_stock_compressed": {
+    "bytes": 8580,
+    "sha256": "d8287b5b3234089627e4c250b00df77da366b2405767187b01b0d6f54057918d"
+  },
+  "tools": {
+    "assembler": {
+      "bytes": 2128064,
+      "path": "/usr/bin/arm-none-eabi-as",
+      "sha256": "ec839647452c629c6b26b35c8e29b56cd5be8d9bbf5221d01947451395bb7689",
+      "version": "GNU assembler (2.42-1ubuntu1+23) 2.42\nCopyright (C) 2024 Free Software Foundation, Inc.\nThis program is free software; you may redistribute it under the terms of\nthe GNU General Public License version 3 or later.\nThis program has absolutely no warranty.\nThis assembler was configured for a target of `arm-none-eabi'.\n",
+      "version_byte_limit": 65536,
+      "version_capture": "combined stdout/stderr",
+      "version_command": [
+        "/usr/bin/arm-none-eabi-as",
+        "--version"
+      ],
+      "version_environment": {
+        "LC_ALL": "C",
+        "PATH": "/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/bin:/home/andrii/.codex/packages/app-server-daemon/releases/0.162.1-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0GZAWAg:/home/andrii/.codex/tmp/arg0/codex-arg070dqba:/home/andrii/.codex/packages/app-server-daemon/releases/0.162.0-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0DcqWuG:/home/andrii/.codex/packages/app-server-daemon/releases/0.161.0-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0fg7LVI:/home/andrii/.codex/packages/app-server-daemon/releases/0.160.1-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0lE0C9E:/home/andrii/.nvm/versions/node/v20.20.2/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/codex-path:/home/andrii/.opencode/bin:/home/andrii/.local/google-cloud-sdk/bin:/home/andrii/.grok/bin:/home/andrii/.local/bin:/home/andrii/.nvm/versions/node/v20.20.2/bin:/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/bin:/home/andrii/.local/bin:/home/andrii/.deno/bin:/home/andrii/.cargo/bin:/home/andrii/.local/bin:/home/andrii/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin",
+        "TZ": "UTC"
+      },
+      "version_output": {
+        "bytes": 317,
+        "sha256": "8ec0a3aee74d5c9a582f21905f68b8537293f8a1cabf86b8ddba6fb13ba83841"
+      },
+      "version_timeout_seconds": 10
+    },
+    "cross_prefix": "/usr/bin/arm-none-eabi-",
+    "gcc": {
+      "bytes": 1280856,
+      "path": "/usr/bin/arm-none-eabi-gcc",
+      "sha256": "38fc178604a84beb10f9adb8ea243bd5e0475a9e6e31c9270f53e2fcaa79ec59",
+      "version": "arm-none-eabi-gcc (15:13.2.rel1-2) 13.2.1 20231009\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+      "version_byte_limit": 65536,
+      "version_capture": "combined stdout/stderr",
+      "version_command": [
+        "/usr/bin/arm-none-eabi-gcc",
+        "--version"
+      ],
+      "version_environment": {
+        "LC_ALL": "C",
+        "PATH": "/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/bin:/home/andrii/.codex/packages/app-server-daemon/releases/0.162.1-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0GZAWAg:/home/andrii/.codex/tmp/arg0/codex-arg070dqba:/home/andrii/.codex/packages/app-server-daemon/releases/0.162.0-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0DcqWuG:/home/andrii/.codex/packages/app-server-daemon/releases/0.161.0-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0fg7LVI:/home/andrii/.codex/packages/app-server-daemon/releases/0.160.1-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0lE0C9E:/home/andrii/.nvm/versions/node/v20.20.2/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/codex-path:/home/andrii/.opencode/bin:/home/andrii/.local/google-cloud-sdk/bin:/home/andrii/.grok/bin:/home/andrii/.local/bin:/home/andrii/.nvm/versions/node/v20.20.2/bin:/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/bin:/home/andrii/.local/bin:/home/andrii/.deno/bin:/home/andrii/.cargo/bin:/home/andrii/.local/bin:/home/andrii/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin",
+        "TZ": "UTC"
+      },
+      "version_output": {
+        "bytes": 253,
+        "sha256": "b54e2bdf7dd076e6040d0a556d352f8e921ba39555d189e92adcbc35cd917660"
+      },
+      "version_timeout_seconds": 10
+    },
+    "hostcc": {
+      "bytes": 1023032,
+      "path": "/usr/bin/x86_64-linux-gnu-gcc-13",
+      "sha256": "1b99826121ae6682a634e5efe09bd3e3df58ce58e0b28f849114ab5b89139c26",
+      "version": "x86_64-linux-gnu-gcc-13 (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+      "version_byte_limit": 65536,
+      "version_capture": "combined stdout/stderr",
+      "version_command": [
+        "/usr/bin/x86_64-linux-gnu-gcc-13",
+        "--version"
+      ],
+      "version_environment": {
+        "LC_ALL": "C",
+        "PATH": "/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/bin:/home/andrii/.codex/packages/app-server-daemon/releases/0.162.1-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0GZAWAg:/home/andrii/.codex/tmp/arg0/codex-arg070dqba:/home/andrii/.codex/packages/app-server-daemon/releases/0.162.0-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0DcqWuG:/home/andrii/.codex/packages/app-server-daemon/releases/0.161.0-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0fg7LVI:/home/andrii/.codex/packages/app-server-daemon/releases/0.160.1-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0lE0C9E:/home/andrii/.nvm/versions/node/v20.20.2/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/codex-path:/home/andrii/.opencode/bin:/home/andrii/.local/google-cloud-sdk/bin:/home/andrii/.grok/bin:/home/andrii/.local/bin:/home/andrii/.nvm/versions/node/v20.20.2/bin:/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/bin:/home/andrii/.local/bin:/home/andrii/.deno/bin:/home/andrii/.cargo/bin:/home/andrii/.local/bin:/home/andrii/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin",
+        "TZ": "UTC"
+      },
+      "version_output": {
+        "bytes": 266,
+        "sha256": "ae487f55927d605284a32711e4ecf6bc3be2bcd5a9de414ace0936264b741f85"
+      },
+      "version_timeout_seconds": 10
+    },
+    "linker": {
+      "bytes": 1747136,
+      "path": "/usr/bin/arm-none-eabi-ld",
+      "sha256": "3a45f0f6cd20f341f56efcbc408774ca7894721547a1e79712a268d8aa36b490",
+      "version": "GNU ld (2.42-1ubuntu1+23) 2.42\nCopyright (C) 2024 Free Software Foundation, Inc.\nThis program is free software; you may redistribute it under the terms of\nthe GNU General Public License version 3 or (at your option) a later version.\nThis program has absolutely no warranty.\n",
+      "version_byte_limit": 65536,
+      "version_capture": "combined stdout/stderr",
+      "version_command": [
+        "/usr/bin/arm-none-eabi-ld",
+        "--version"
+      ],
+      "version_environment": {
+        "LC_ALL": "C",
+        "PATH": "/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/bin:/home/andrii/.codex/packages/app-server-daemon/releases/0.162.1-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0GZAWAg:/home/andrii/.codex/tmp/arg0/codex-arg070dqba:/home/andrii/.codex/packages/app-server-daemon/releases/0.162.0-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0DcqWuG:/home/andrii/.codex/packages/app-server-daemon/releases/0.161.0-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0fg7LVI:/home/andrii/.codex/packages/app-server-daemon/releases/0.160.1-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0lE0C9E:/home/andrii/.nvm/versions/node/v20.20.2/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/codex-path:/home/andrii/.opencode/bin:/home/andrii/.local/google-cloud-sdk/bin:/home/andrii/.grok/bin:/home/andrii/.local/bin:/home/andrii/.nvm/versions/node/v20.20.2/bin:/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/bin:/home/andrii/.local/bin:/home/andrii/.deno/bin:/home/andrii/.cargo/bin:/home/andrii/.local/bin:/home/andrii/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin",
+        "TZ": "UTC"
+      },
+      "version_output": {
+        "bytes": 274,
+        "sha256": "9d5a93d1c8dc4479b2a3aafcca4adf7df52b612994b3e868319d1e7105bdba15"
+      },
+      "version_timeout_seconds": 10
+    },
+    "make": {
+      "bytes": 259808,
+      "path": "/usr/bin/make",
+      "sha256": "d78b8f1d099fbcfb6f2f49ab87223b9b68fb3956642f92d6ec6de812e8afa965",
+      "version": "GNU Make 4.3\nBuilt for x86_64-pc-linux-gnu\nCopyright (C) 1988-2020 Free Software Foundation, Inc.\nLicense GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>\nThis is free software: you are free to change and redistribute it.\nThere is NO WARRANTY, to the extent permitted by law.\n",
+      "version_byte_limit": 65536,
+      "version_capture": "combined stdout/stderr",
+      "version_command": [
+        "/usr/bin/make",
+        "--version"
+      ],
+      "version_environment": {
+        "LC_ALL": "C",
+        "PATH": "/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/bin:/home/andrii/.codex/packages/app-server-daemon/releases/0.162.1-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0GZAWAg:/home/andrii/.codex/tmp/arg0/codex-arg070dqba:/home/andrii/.codex/packages/app-server-daemon/releases/0.162.0-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0DcqWuG:/home/andrii/.codex/packages/app-server-daemon/releases/0.161.0-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0fg7LVI:/home/andrii/.codex/packages/app-server-daemon/releases/0.160.1-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0lE0C9E:/home/andrii/.nvm/versions/node/v20.20.2/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/codex-path:/home/andrii/.opencode/bin:/home/andrii/.local/google-cloud-sdk/bin:/home/andrii/.grok/bin:/home/andrii/.local/bin:/home/andrii/.nvm/versions/node/v20.20.2/bin:/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/bin:/home/andrii/.local/bin:/home/andrii/.deno/bin:/home/andrii/.cargo/bin:/home/andrii/.local/bin:/home/andrii/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin",
+        "TZ": "UTC"
+      },
+      "version_output": {
+        "bytes": 297,
+        "sha256": "8ee498ee2fc27e8dcdf99191b454077df95e3840d841ec94321748b6d7f36819"
+      },
+      "version_timeout_seconds": 10
+    }
+  },
+  "upstream_source": {
+    "bytes": 37582,
+    "license": "GPL-2.0-only",
+    "sha256": "cee9b45dfee3fb4a7168585603c88df5e3422493425ac1bd35046d509d910423",
+    "url": "https://raw.githubusercontent.com/gregkh/linux/v6.18.56/drivers/i2c/busses/i2c-rk3x.c"
+  }
+}

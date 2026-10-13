@@ -359,7 +359,7 @@ def test_committed_debt_only_waives_the_declared_rv1103_prototype():
     assert set(entries) == {"rv1103"}
     assert entries["rv1103"]["kind"] == "waived"
     reason = entries["rv1103"]["reason"]
-    assert "No CI gate executes firmware on the RV1103 platform" in reason
+    assert "No CI gate qualifies full RV1103 platform coverage" in reason
     assert "generic Cortex-A7" in reason
     descriptor = cc.load_yaml(cc.chip_dir() / "rv1103.yaml")
     assert descriptor["core"] == "cortex-a7"

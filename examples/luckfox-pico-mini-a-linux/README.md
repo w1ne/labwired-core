@@ -13,7 +13,7 @@ The output must be fresh. A hash-addressed cache is rehashed on every use; `--of
 Build and run the explicit optional native mode (x86_64 Linux GNU, panic unwind):
 
 ```sh
-CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 cargo +1.95.0 build --locked -p labwired-cli --profile native-system --features qemu-arm-system,event-scheduler
+CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 cargo +1.95.0 build --locked -p labwired-cli --bin labwired --profile native-system --features qemu-arm-system,event-scheduler
 ./target/native-system/labwired rv1103-linux --artifacts /tmp/rv1103-linux --receipt /tmp/rv1103-boot.json --cpu-hz 24000000 --wall-seconds 1800
 ```
 
@@ -35,7 +35,7 @@ A PASS requires the actual UART console's Linux identity, PID1 `/init`, mounted 
 
 DDR is 64 MiB at physical zero. zImage loads at `0x02000000`, DTB at `0x03000000`, and initramfs at `0x03100000`. The loader reserves `0x00008000..0x016e5850` for decompression/BSS and checks every range before modifying RAM. Entry is ARM/SVC, IRQ/FIQ masked, MMU/cache off, `r0=0`, `r1=0xffffffff`, `r2=DTB`.
 
-The root DT compatibility is only `rockchip,rv1103`. Linux's genuine Generic DT machine fallback handles this reduced platform without claiming another SoC. CRU/reset, pinctrl, DMA, FIQ debugger, SD and unsupported devices are omitted. EVTSTREAM is explicitly disabled because the timer model refuses EVNTEN. Components can attach later to the same SystemBus; they have no acceptance claim here.
+The root DT compatibility is only `rockchip,rv1103`. Linux's genuine Generic DT machine fallback handles this reduced platform without claiming another SoC. CRU/reset, pinctrl, DMA, FIQ debugger, SD and unsupported devices are omitted. EVTSTREAM is explicitly disabled because the timer model refuses EVNTEN. This base boot fixture excludes external components. The separate [joint basket profile](BASKET.md) attaches shared kits to the same SystemBus and records accepted native Linux evidence; that does not relabel this base receipt.
 
 See [required references](REQUIRED_DOCS.md), [external components](EXTERNAL_COMPONENTS.md) and [validation boundaries](VALIDATION.md).
 
@@ -51,5 +51,7 @@ normal kit attachment routes and reduced power model source hashes. Regenerate
 with the app's explicit `export:native-runtime` command using this core root and
 that output directory; it runs no EDA tools. The persistent plant uses the
 [bounded Unix IPC adapter](../../docs/cosim-external-process.md). Host-only
-manifest/attachment/plant checks pass separately from the still-pending strict
-same-circuit Linux guest and physical acceptance gates.
+manifest/attachment/plant checks remain separate from the later [accepted strict
+same-circuit native Linux joint run](BASKET.md). Its eight phases, fault and fresh
+fixture recovery are recorded evidence, with physical acceptance unavailable
+and default/browser Linux execution refused.

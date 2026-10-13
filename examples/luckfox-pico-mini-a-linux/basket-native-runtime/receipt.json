@@ -145,7 +145,7 @@
     },
     {
       "path": "../../packages/board-config/src/mcu-profiles.ts",
-      "sha256": "38aa3c93e97be7da9d7c64bb14250dbd4d3d4b414f8ac120415055a4f560ef48"
+      "sha256": "2243deaf00c3532fbb3fff5941e28f33587c1422ae67bb8fe304f7e30e224711"
     },
     {
       "path": "../../packages/board-config/src/boards.ts",

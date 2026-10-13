@@ -1,0 +1,34 @@
+["/usr/bin/x86_64-linux-gnu-gcc-13", "-O2", "-fdebug-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-a=/rv1103-build", "-ffile-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-a=/rv1103-build", "-fmacro-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-a=/rv1103-build", "-I/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/include", "-I/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/genksyms", "-I/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/mod", "-o", "/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/basic/fixdep", "/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/basic/fixdep.c"]
+["/usr/bin/x86_64-linux-gnu-gcc-13", "-O2", "-fdebug-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-a=/rv1103-build", "-ffile-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-a=/rv1103-build", "-fmacro-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-a=/rv1103-build", "-I/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/include", "-I/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/genksyms", "-I/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/mod", "-o", "/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/genksyms/genksyms", "/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/genksyms/genksyms.c", "/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/genksyms/parse.tab.c", "/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/genksyms/lex.lex.c"]
+["/usr/bin/x86_64-linux-gnu-gcc-13", "-O2", "-fdebug-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-a=/rv1103-build", "-ffile-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-a=/rv1103-build", "-fmacro-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-a=/rv1103-build", "-I/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/include", "-I/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/genksyms", "-I/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/mod", "-o", "/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/mod/modpost", "/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/mod/modpost.c", "/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/mod/file2alias.c", "/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/mod/sumversion.c", "/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/mod/symsearch.c"]
+["/usr/bin/x86_64-linux-gnu-gcc-13", "-O2", "-fdebug-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-a=/rv1103-build", "-ffile-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-a=/rv1103-build", "-fmacro-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-a=/rv1103-build", "-I/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/include", "-I/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/genksyms", "-I/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/mod", "-o", "/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/recordmcount", "/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/scripts/recordmcount.c"]
+["/usr/bin/make", "-j1", "-C", "/tmp/.rv1103-module-build-wz7fvagl/build-a/headers", "M=/tmp/.rv1103-module-build-wz7fvagl/build-a/module", "ARCH=arm", "CROSS_COMPILE=/usr/bin/arm-none-eabi-", "HOSTCC=/usr/bin/x86_64-linux-gnu-gcc-13", "CONFIG_GCC_PLUGINS=", "KCFLAGS=-fdebug-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-a=/rv1103-build -ffile-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-a=/rv1103-build -fmacro-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-a=/rv1103-build", "HOSTCFLAGS=-O2 -fdebug-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-a=/rv1103-build -ffile-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-a=/rv1103-build -fmacro-prefix-map=/tmp/.rv1103-module-build-wz7fvagl/build-a=/rv1103-build", "modules"]
+make: Entering directory '/tmp/.rv1103-module-build-wz7fvagl/build-a/headers'
+make[1]: Entering directory '/tmp/.rv1103-module-build-wz7fvagl/build-a/module'
+warning: the compiler differs from the one used to build the kernel
+  The kernel was built by: gcc (Alpine 15.2.0) 15.2.0
+  You are using:           arm-none-eabi-gcc (15:13.2.rel1-2) 13.2.1 20231009
+  CC [M]  i2c-rk3x.o
+In file included from /tmp/.rv1103-module-build-wz7fvagl/build-a/headers/include/linux/cgroup.h:17,
+                 from /tmp/.rv1103-module-build-wz7fvagl/build-a/headers/include/linux/memcontrol.h:13,
+                 from /tmp/.rv1103-module-build-wz7fvagl/build-a/headers/include/linux/swap.h:9,
+                 from /tmp/.rv1103-module-build-wz7fvagl/build-a/headers/include/linux/suspend.h:5,
+                 from /tmp/.rv1103-module-build-wz7fvagl/build-a/headers/include/linux/regulator/consumer.h:35,
+                 from /tmp/.rv1103-module-build-wz7fvagl/build-a/headers/include/linux/i2c.h:19,
+                 from i2c-rk3x.c:11:
+/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/include/linux/fs.h:1258:9: warning: 'counted_by' attribute directive ignored [-Wattributes]
+ 1258 |         unsigned char f_handle[] __counted_by(handle_bytes);
+      |         ^~~~~~~~
+/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/include/linux/memcontrol.h:136:16: warning: 'counted_by' attribute directive ignored [-Wattributes]
+  136 |         struct mem_cgroup_threshold entries[] __counted_by(size);
+      |                ^~~~~~~~~~~~~~~~~~~~
+In file included from /tmp/.rv1103-module-build-wz7fvagl/build-a/headers/include/linux/i2c.h:21:
+/tmp/.rv1103-module-build-wz7fvagl/build-a/headers/include/linux/irqdomain.h:175:16: warning: 'counted_by' attribute directive ignored [-Wattributes]
+  175 |         struct irq_data __rcu           *revmap[] __counted_by(revmap_size);
+      |                ^~~~~~~~
+  MODPOST Module.symvers
+  CC [M]  i2c-rk3x.mod.o
+  CC [M]  .module-common.o
+  LD [M]  i2c-rk3x.ko
+make[1]: Leaving directory '/tmp/.rv1103-module-build-wz7fvagl/build-a/module'
+make: Leaving directory '/tmp/.rv1103-module-build-wz7fvagl/build-a/headers'

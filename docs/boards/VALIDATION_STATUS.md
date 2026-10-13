@@ -48,7 +48,7 @@ The models column is a content digest over everything that board's `models` list
 | `teensy-41` | 🟡 smoke-manual | — | `a8351858ab9da5fc` | no silicon capture |
 | `stm32f7-discovery` | 🟡 smoke-manual | — | `620f02ebafdddb39` | no silicon capture |
 | `nucleo-g071rb` | 🟡 smoke-manual | — | `fe2ce565df7c54a4` | no silicon capture |
-| `esp32c6-devkitc` | 🟡 smoke-manual | — | `354c5a0437ddb0fc` | no silicon capture |
+| `esp32c6-devkitc` | 🟡 smoke-manual | — | `3eefd22732debec5` | no silicon capture |
 
 ## `nrf52840` — 🟢 silicon-verified
 

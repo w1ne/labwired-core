@@ -122,7 +122,10 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           # Authenticated: the shared-runner IP exhausts the anonymous 60/h quota.
-          $tag = (Invoke-RestMethod 'https://api.github.com/repos/w1ne/labwired-core/releases/latest' -Headers @{ Authorization = "Bearer $env:GH_TOKEN" }).tag_name
+          # Firmware demo releases share this repository; only stable CLI semver tags qualify.
+          $releases = Invoke-RestMethod 'https://api.github.com/repos/w1ne/labwired-core/releases?per_page=100' -Headers @{ Authorization = "Bearer $env:GH_TOKEN" }
+          $tag = ($releases | ConvertTo-Json -AsArray -Depth 20 -Compress | python scripts/ci/cli-release-tag.py)
+          if ($LASTEXITCODE -ne 0 -or -not $tag) { throw 'No stable CLI release could be selected' }
           Write-Host "latest release: $tag"
           $asset = "labwired-$tag-windows-x86_64.tar.gz"
           Invoke-WebRequest "https://github.com/w1ne/labwired-core/releases/download/$tag/$asset" -OutFile labwired.tar.gz

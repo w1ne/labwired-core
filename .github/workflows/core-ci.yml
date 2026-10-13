@@ -587,6 +587,7 @@ jobs:
             scripts/test_generate_validation_status.py \
             scripts/test_labwired_audit.py \
             validation/matrix_lib/test_invoke.py
+          python3 -m unittest discover -s scripts/tests -p test_cli_release_tag.py
 
       # Mixed-signal co-sim: the ngspice wrapper (tools/cosim) is pure Python
       # over libngspice and steps a real RC circuit; seconds, no cargo. It is a

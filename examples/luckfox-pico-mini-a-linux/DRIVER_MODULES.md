@@ -74,7 +74,10 @@ RK3x declares `GPL v2` and is unsigned. Actual guest loading must use ordinary
 strict `insmod` for both modules, with no force/version/CRC/symbol bypass or
 signature-enforcement changes. The unsigned out-of-tree module may taint the
 kernel. Actual loader exits, taint, adapter registration and transactions are
-future guest evidence, not preparation evidence.
+not preparation evidence: this preparation receipt remains `NOT_RUN`. The later
+[accepted native joint basket](BASKET.md) records ordinary strict insertion and
+actual shared I2C3 transactions separately, without changing the preparation
+receipt or bypassing these ABI guards.
 
 The output contains the two `.ko` files, `modules.cpio`, both build logs, and
 `module-manifest.json`. The sorted deterministic newc payload contains only fixed
@@ -101,8 +104,12 @@ and cpio323580 bytes, SHA256
 `e6cf5e66657e4d3b252fbd1f9f0c83193784c456f412c135c1c2b81c61ac6750`.
 These identify that verified host build, not arbitrary compatible modules or
 the earlier ad-hoc experiment. Downloaded inputs, generated headers and binaries
-stay outside the repository. Physical hardware is unavailable and guest module
-insertion and shared circuit acceptance remain pending.
+stay outside the repository for fresh preparation. The exact reviewed historical
+module receipt/payload is also retained in [basket/reviewed-modules/](basket/reviewed-modules/README.md),
+with its historical build provenance preserved. This host preparation receipt
+still records guest insertion `NOT_RUN`; later [native joint acceptance](BASKET.md)
+records successful guest insertion and shared-circuit evidence separately.
+Physical hardware remains unavailable.
 
 Run the focused preparation guards (including the unchanged base tests):
 
