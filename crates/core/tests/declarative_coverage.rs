@@ -208,7 +208,18 @@ const YAML_DEVICES_BASELINE: usize = 89;
 /// the test script, BLE data cut into 128-byte packets, and bytes injected
 /// from the phone side (`uart_injections` `device:`). The UART declarative
 /// path answers fixed request/response pairs only.
-const RUST_DEVICES_BASELINE: usize = 25;
+/// 25 → 26: `esp32c3_esp_at.rs`, an explicitly behavioral ESP-AT peer (no
+/// ESP firmware / RF). The existing `uart_device` table and vars can express
+/// its commands, but cannot preserve this bounded transport contract:
+/// strict CRLF and overflow rejection (rather than CR-or-LF/truncation),
+/// bounded reply-capacity checks BEFORE mock-state mutation, power-generation
+/// reset of command/reply/state, >=1000us non-catchup polling that discards
+/// excess credit, and typed `uart_peer` power/mock-state/queue artifacts.
+/// A descriptor-only substitution would silently change those behaviors.
+/// The port path is to add these reusable options to the existing UART
+/// primitive, prove parity against the current bounded host contracts, add
+/// the ESP-AT descriptor, and delete this Rust part / lower this count again.
+const RUST_DEVICES_BASELINE: usize = 26;
 
 /// Files in `components/` that are NOT a device model, with the reason. Listed
 /// here rather than pattern-matched so every exemption is a line someone wrote
@@ -274,6 +285,12 @@ const EXCLUDED: &[(&str, &str)] = &[
          `UnpoweredI2cDevice` decorator, `mark_unpowered`). It models no device \
          — every I2C kit, both declarative primitives and nine display models \
          read it",
+    ),
+    (
+        "supply_domain.rs",
+        "ENGINE INFRASTRUCTURE, not a part: named voltage/power-generation gates \
+         and a transparent gated I2C decorator shared by kits/controllers; no \
+         PeripheralKit or device_type. Like supply.rs, it models no device",
     ),
     (
         "rule_machine.rs",

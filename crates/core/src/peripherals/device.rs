@@ -51,6 +51,12 @@ use std::any::Any;
 use std::sync::mpsc::{Receiver, Sender};
 
 // ── I²C ─────────────────────────────────────────────────────────────────────
+/// Controller capability for attaching a slave to a fixed-pin I2C host.
+/// Routing-aware controller families retain their existing attachment path.
+pub trait I2cSlaveHost {
+    fn attach_slave(&mut self, device: Box<dyn I2cDevice>);
+}
+
 pub trait I2cDevice: Send {
     /// Optional transaction epoch. A change invalidates a controller selection.
     fn transaction_generation(&self) -> Option<u64> {
@@ -140,11 +146,19 @@ pub trait I2cDevice: Send {
             None => false,
         }
     }
-    fn as_any(&self) -> Option<&dyn std::any::Any> {
+    /// Readback through a transparent decorator. Wire operations, mutable
+    /// inputs and power gating still belong to the decorator itself.
+    fn wrapped_device(&self) -> Option<&dyn I2cDevice> {
         None
     }
-    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+    fn wrapped_device_mut(&mut self) -> Option<&mut dyn I2cDevice> {
         None
+    }
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        self.wrapped_device()?.as_any()
+    }
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        self.wrapped_device_mut()?.as_any_mut()
     }
     /// Runtime-drivable view of this device, if it accepts simulated input.
     /// Overridden by input devices (accelerometers, …) so the generic

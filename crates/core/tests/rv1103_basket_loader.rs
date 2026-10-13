@@ -216,7 +216,7 @@ fn native_startup_holds_releases_then_initializes_entry_without_rewind_or_ram_er
         assert_eq!(b.ram.data, before);
         assert!(b.irq_fabric.armv7.is_none());
     }
-    #[cfg(all(feature = "qemu-arm-system", feature = "event-scheduler"))]
+    #[cfg(feature = "qemu-arm-system")]
     {
         use labwired_core::{AdvanceRequest, Cpu, Machine};
         let loaded = load_basket(&mut b, artifacts).unwrap();

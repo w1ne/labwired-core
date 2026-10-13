@@ -209,14 +209,9 @@ fn read_register(b: &mut SystemBus, prefix: &[u8], count: usize) -> Vec<u8> {
     stop(b);
     out
 }
-fn controller(b: &mut SystemBus) -> &mut Rk3xI2c {
+fn controller(b: &mut SystemBus) -> &mut dyn Peripheral {
     let i = b.find_peripheral_index_by_name("i2c3").unwrap();
-    b.peripherals[i]
-        .dev
-        .as_any_mut()
-        .unwrap()
-        .downcast_mut()
-        .unwrap()
+    b.peripherals[i].dev.as_mut()
 }
 fn canonical_manifest(powered: bool) -> labwired_config::SystemManifest {
     serde_yaml::from_str(&format!("name: basket\nchip: rv1103\nexternal_devices:\n  - id: basket:adxl\n    type: adxl345\n    connection: i2c3\n    route: {{sda: GPIO1_C2, scl: GPIO1_C3}}\n    config: {{i2c_address: 0x53, powered: {powered}}}\n")).unwrap()
@@ -491,7 +486,7 @@ fn stop_requests_once_and_en_disable_restart_and_full_reset_preserve_sensor_stat
             .count(),
         1
     );
-    controller(&mut b).reset();
+    controller(&mut b).on_node_reset();
     for o in [0, 4, 8, 12, 16, 20, 24, 28, 32, 0x100, 0x200] {
         assert_eq!(get(&mut b, o), 0);
     }
@@ -499,7 +494,7 @@ fn stop_requests_once_and_en_disable_restart_and_full_reset_preserve_sensor_stat
     let mut b = bus();
     attach_canonical(&mut b, true);
     tx(&mut b, &[0x31, 0x0b]);
-    controller(&mut b).reset();
+    controller(&mut b).on_node_reset();
     assert_eq!(read_register(&mut b, &[0x31], 1), [0x0b]);
 }
 #[test]
@@ -720,8 +715,7 @@ fn machine_cycle_derived_device_time_reaches_slave_exactly_once() {
     );
     assert!(calls.iter().all(|c| matches!(c, Call::Time(_))));
 
-    #[cfg(feature = "event-scheduler")]
-    {
+    if m.bus.cycle_clock.scheduler_enabled() {
         // Real masked WFI, then a masked pending SysTick wakes the CPU without
         // entering a handler. Device time must cover both idle and active work
         // exactly once through the same central clock.
@@ -782,6 +776,31 @@ fn machine_cycle_derived_device_time_reaches_slave_exactly_once() {
             .calls
             .iter()
             .all(|c| matches!(c, Call::Time(_))));
+    } else {
+        // Feature-off still executes actual CPU work and clocks the slave,
+        // with no architectural idle coalescing to invent elapsed time.
+        p.lock().unwrap().calls.clear();
+        let before = m.total_cycles / 24;
+        let active = m.advance(AdvanceRequest::run(Some(240))).unwrap();
+        assert_eq!(active.primary_steps, 240);
+        assert_eq!(active.idle_cycles, 0);
+        let elapsed = m.total_cycles / 24 - before;
+        assert!(elapsed > 0);
+        assert_eq!(
+            p.lock()
+                .unwrap()
+                .calls
+                .iter()
+                .filter_map(|call| {
+                    if let Call::Time(us) = call {
+                        Some(*us)
+                    } else {
+                        None
+                    }
+                })
+                .sum::<u64>(),
+            elapsed
+        );
     }
 }
 #[test]

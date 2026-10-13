@@ -129,10 +129,10 @@ jobs:
       - name: Install compiled-DTB fixture tools
         run: sudo apt-get update && sudo apt-get install -y device-tree-compiler
       - name: Check default loader refusal and device contracts
-        run: cargo test --locked -p labwired-core --test rv1103_linux_loader --test rv1103_devices --test cpu_runtime_snapshot_honesty
+        run: cargo test --locked -p labwired-core --test rv1103_linux_loader --test rv1103_devices --test cpu_runtime_snapshot_honesty --test rv1103_basket_loader --test rv1103_rk3x_i2c --test rv1103_uart4_esp_at
 
   native-system:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
       CARGO_BUILD_JOBS: "2"
@@ -146,7 +146,7 @@ jobs:
         with:
           shared-key: native-arm-system
       - name: Install native and compiled-DTB build tools
-        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build clang device-tree-compiler busybox
+        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build clang device-tree-compiler busybox gcc-arm-none-eabi=15:13.2.rel1-2
       - name: Check strict joint preparation, historical modules and CI input contracts
         run: |
           python3 -m unittest discover -s scripts/tests -p test_prepare_rv1103_basket.py

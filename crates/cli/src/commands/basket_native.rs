@@ -688,6 +688,54 @@ fn record_sources(receipt: &mut Value) -> Result<PathBuf, String> {
         .map_err(|e| e.to_string())?;
     let compiled_sources = [
         (
+            "crates/core/src/bus/attach.rs",
+            include_bytes!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../crates/core/src/bus/attach.rs"
+            ))
+            .as_slice(),
+        ),
+        (
+            "crates/core/src/peripherals/device.rs",
+            include_bytes!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../crates/core/src/peripherals/device.rs"
+            ))
+            .as_slice(),
+        ),
+        (
+            "crates/core/src/bus/bus_trace.rs",
+            include_bytes!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../crates/core/src/bus/bus_trace.rs"
+            ))
+            .as_slice(),
+        ),
+        (
+            "crates/core/src/bus/accessors.rs",
+            include_bytes!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../crates/core/src/bus/accessors.rs"
+            ))
+            .as_slice(),
+        ),
+        (
+            "crates/core/src/peripherals/armv7/mod.rs",
+            include_bytes!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../crates/core/src/peripherals/armv7/mod.rs"
+            ))
+            .as_slice(),
+        ),
+        (
+            "configs/chips/rv1103.yaml",
+            include_bytes!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../configs/chips/rv1103.yaml"
+            ))
+            .as_slice(),
+        ),
+        (
             "crates/cli/src/commands/rv1103_basket.rs",
             include_bytes!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
@@ -973,7 +1021,7 @@ pub(super) fn execute(args: &Rv1103BasketArgs, receipt: &mut Value) -> Result<()
     let mut session: Option<CosimSession> = None;
     let mut fixtures = Vec::new();
     let result = (|| {
-        if !cfg!(feature = "event-scheduler") {
+        if !labwired_core::CycleClock::default().scheduler_enabled() {
             return Err("RV1103 basket requires event-scheduler native feature".into());
         }
         let root = record_sources(receipt)?;

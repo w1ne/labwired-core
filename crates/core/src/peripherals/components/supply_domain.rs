@@ -206,11 +206,11 @@ impl I2cDevice for GatedI2cDevice {
     fn logs(&self) -> Vec<crate::peripheral_log::PeripheralLog> {
         self.inner.logs()
     }
-    fn as_any(&self) -> Option<&dyn std::any::Any> {
-        self.inner.as_any()
+    fn wrapped_device(&self) -> Option<&dyn I2cDevice> {
+        Some(self.inner.as_ref())
     }
-    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
-        self.inner.as_any_mut()
+    fn wrapped_device_mut(&mut self) -> Option<&mut dyn crate::peripherals::device::I2cDevice> {
+        Some(self.inner.as_mut())
     }
     fn as_sim_input_mut(&mut self) -> Option<&mut dyn crate::sim_input::SimInput> {
         self.inner.as_sim_input_mut()

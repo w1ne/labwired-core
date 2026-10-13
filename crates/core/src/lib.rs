@@ -1548,6 +1548,12 @@ pub trait Peripheral: std::fmt::Debug + Send {
         None
     }
 
+    /// Optional fixed-pin I2C attachment capability. Other controllers retain
+    /// their existing routing-aware factory dispatch.
+    fn i2c_slave_host(&mut self) -> Option<&mut dyn peripherals::device::I2cSlaveHost> {
+        None
+    }
+
     /// True if this controller hosts I²C slaves whose data-ready clocks the
     /// machine's central time drive should advance (see
     /// [`Self::advance_attached_i2c_us`]). Default `false`.

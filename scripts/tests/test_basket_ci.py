@@ -17,6 +17,15 @@ class BasketCi(unittest.TestCase):
         text=(ROOT/'.github/workflows/core-qemu-arm.yml').read_text()
         for item in ['rv1103_basket_loader','rv1103_rk3x_i2c','dw_uart_timeout','cosim_canonical_basket','test_prepare_rv1103_basket.py','busybox']:
             self.assertIn(item,text)
+    def test_native_preparation_installs_reviewed_actual_compiler_before_tests(self):
+        text=(ROOT/'.github/workflows/core-qemu-arm.yml').read_text()
+        job=text.split('  native-system:',1)[1].split('  linux-acceptance:',1)[0]
+        pins=json.loads((ROOT/'examples/luckfox-pico-mini-a-linux/basket/pins.json').read_text())
+        package_version=pins['compiler_version'].split('(',1)[1].split(')',1)[0]
+        compiler_package='gcc-arm-none-eabi='+package_version
+        self.assertIn(compiler_package,job,'the two actual helper builds require the pinned compiler, not a mock or skipped test')
+        self.assertIn('runs-on: ubuntu-24.04',job,'the reviewed compiler package belongs to the fixed Ubuntu 24.04 runner')
+        self.assertLess(job.index(compiler_package),job.index('test_prepare_rv1103_basket.py'))
     def test_filtered_cargo_lanes_require_actual_positive_execution(self):
         text=(ROOT/'.github/workflows/core-qemu-arm.yml').read_text()
         guards=[line.strip() for line in text.splitlines() if "grep -Eq '^test result: ok" in line]

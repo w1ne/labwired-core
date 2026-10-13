@@ -202,7 +202,7 @@
     },
     {
       "path": "configs/chips/rv1103.yaml",
-      "sha256": "e90e2b75d8571b435ff36b81b2508b076b3043b4f5bbcbdc3707b9bc68deb12e"
+      "sha256": "b76fa8f9137feba468b05323624fbd509078c7c31eae7d84714ed04010e9bdf6"
     },
     {
       "path": "configs/devices/adxl345.yaml",

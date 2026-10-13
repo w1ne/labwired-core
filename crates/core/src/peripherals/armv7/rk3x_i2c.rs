@@ -329,7 +329,18 @@ impl Rk3xI2c {
         Ok(())
     }
 }
+impl crate::peripherals::device::I2cSlaveHost for Rk3xI2c {
+    fn attach_slave(&mut self, device: Box<dyn I2cDevice>) {
+        self.push_slave(device);
+    }
+}
 impl Peripheral for Rk3xI2c {
+    fn i2c_slave_host(&mut self) -> Option<&mut dyn crate::peripherals::device::I2cSlaveHost> {
+        Some(self)
+    }
+    fn on_node_reset(&mut self) {
+        self.reset();
+    }
     fn read(&self, offset: u64) -> SimResult<u8> {
         Self::check(offset, 1)?;
         Ok(0)

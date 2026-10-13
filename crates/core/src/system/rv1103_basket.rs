@@ -24,6 +24,36 @@ pub const CANONICAL_EXPORT: &str = include_str!(
 fn invalid(message: impl Into<String>) -> SimulationError {
     SimulationError::Other(format!("RV1103 basket: {}", message.into()))
 }
+fn validate_basket_controller_map(
+    tree: &BTreeMap<String, BTreeMap<String, Vec<u8>>>,
+    yaml: &str,
+) -> SimResult<()> {
+    use crate::peripherals::armv7::native_basket_windows;
+    let windows = native_basket_windows(yaml)?;
+    for (path, window) in ["/i2c@ff460000", "/serial@ff4e0000"]
+        .into_iter()
+        .zip(windows)
+    {
+        let node = tree
+            .get(path)
+            .ok_or_else(|| invalid("missing basket controller"))?;
+        let reg: Vec<u8> = (window.base as u32)
+            .to_be_bytes()
+            .into_iter()
+            .chain((window.size as u32).to_be_bytes())
+            .collect();
+        let interrupts: Vec<u8> = [0, window.irq - 32, 4]
+            .into_iter()
+            .flat_map(u32::to_be_bytes)
+            .collect();
+        if node.get("reg") != Some(&reg) || node.get("interrupts") != Some(&interrupts) {
+            return Err(invalid(format!(
+                "{path} differs from native chip peripheral map"
+            )));
+        }
+    }
+    Ok(())
+}
 fn regular_read(path: &Path, limit: u64) -> SimResult<Vec<u8>> {
     use std::io::Read;
     let meta = std::fs::symlink_metadata(path).map_err(|e| invalid(e.to_string()))?;
@@ -199,6 +229,7 @@ impl BasketArtifacts {
                 "basket DT nodes differ from closed twelve-node profile",
             ));
         }
+        validate_basket_controller_map(&tree, crate::peripherals::armv7::RV1103_DESCRIPTOR)?;
         let end = checked_range(
             INITRD_ADDRESS,
             self.artifacts["initramfs.cpio"].len() as u64,
@@ -389,5 +420,44 @@ pub fn load_basket(bus: &mut SystemBus, artifacts: BasketArtifacts) -> SimResult
                 .expect("validated artifacts"),
         };
         Ok(LoadedLinux { cpu, manifest })
+    }
+}
+
+#[cfg(test)]
+mod basket_controller_map_tests {
+    use super::*;
+    #[test]
+    fn controller_map_requires_matching_decoded_dt_windows_and_spis() {
+        let yaml = crate::peripherals::armv7::RV1103_DESCRIPTOR;
+        let mut tree = BTreeMap::new();
+        for (path, window) in ["/i2c@ff460000", "/serial@ff4e0000"]
+            .into_iter()
+            .zip(crate::peripherals::armv7::native_basket_windows(yaml).unwrap())
+        {
+            let reg = [window.base as u32, window.size as u32]
+                .into_iter()
+                .flat_map(u32::to_be_bytes)
+                .collect();
+            let interrupts = [0, window.irq - 32, 4]
+                .into_iter()
+                .flat_map(u32::to_be_bytes)
+                .collect();
+            tree.insert(
+                path.to_string(),
+                BTreeMap::from([("reg".into(), reg), ("interrupts".into(), interrupts)]),
+            );
+        }
+        validate_basket_controller_map(&tree, yaml).unwrap();
+        for altered in [
+            yaml.replace("0xff460000", "0xff470000"),
+            yaml.replace("irq: 61", "irq: 62"),
+        ] {
+            assert!(validate_basket_controller_map(&tree, &altered).is_err());
+        }
+        for key in ["reg", "interrupts"] {
+            let mut bad = tree.clone();
+            bad.get_mut("/serial@ff4e0000").unwrap().remove(key);
+            assert!(validate_basket_controller_map(&bad, yaml).is_err());
+        }
     }
 }

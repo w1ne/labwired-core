@@ -502,7 +502,6 @@ fn normal_attachment_legacy_multipeer_and_console_remain_supported() {
     assert_eq!(*tx_b.lock().unwrap(), b"XY");
 }
 
-#[cfg(feature = "event-scheduler")]
 #[test]
 fn machine_idle_windows_advance_peer_pacing_and_rx_timeout() {
     use labwired_core::{
@@ -513,6 +512,7 @@ fn machine_idle_windows_advance_peer_pacing_and_rx_timeout() {
     let mut b = basket("");
     b.ram = LinearMemory::new(0x10000, 0);
     b.write_u16(0, 0xbf30).unwrap(); // WFI
+    b.write_u16(2, 0xe7fe).unwrap(); // B .: bounded PC after WFI in scheduler-OFF mode.
     let mut cpu = CortexM::new();
     cpu.set_pc(0);
     cpu.set_sp(0x8000);
@@ -524,15 +524,27 @@ fn machine_idle_windows_advance_peer_pacing_and_rx_timeout() {
     machine.bus.write_u32(0xff4e0004, 1).unwrap(); // RX interrupts
     send(&mut machine.bus, b"AT\r\n");
     let before = machine.total_cycles;
+    let scheduler = machine.bus.cycle_clock.scheduler_enabled();
+    let mut elapsed = 0;
     // Same bounded 4096-cycle windows used by the actual basket runner.
     // 11ms covers four >=1ms peer polls and the functional4ms RX timeout.
     for _ in 0..64 {
         let advanced = machine.advance(AdvanceRequest::run(Some(4096))).unwrap();
-        assert_eq!(advanced.primary_steps, 0);
-        assert_eq!(advanced.idle_cycles, 4096);
-        assert_eq!(advanced.elapsed_cycles, 4096);
+        if scheduler {
+            assert_eq!(advanced.primary_steps, 0);
+            assert_eq!(advanced.idle_cycles, 4096);
+            assert_eq!(advanced.elapsed_cycles, 4096);
+        } else {
+            assert!(advanced.primary_steps > 0);
+            assert_eq!(advanced.idle_cycles, 0);
+            assert!(advanced.elapsed_cycles > 0);
+        }
+        elapsed += advanced.elapsed_cycles;
     }
-    assert_eq!(machine.total_cycles - before, 64 * 4096);
+    assert_eq!(machine.total_cycles - before, elapsed);
+    if scheduler {
+        assert_eq!(elapsed, 64 * 4096);
+    }
     let trace = machine.bus.bus_trace.snapshot();
     use labwired_core::bus::bus_trace::{BusDir, BusPayload};
     let received: Vec<_> = trace

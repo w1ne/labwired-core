@@ -355,12 +355,14 @@ impl crate::Bus for SystemBus {
             // between instructions. Reconcile its live level before sampling
             // GIC pins; UART entries have no legacy NVIC IRQ number.
             // Only the two registered ARM UART sources, never a peripheral scan.
-            for (index, intid) in [(f.uart2_index, 59), (f.uart4_index, 61)] {
-                if let Some(level) = index
-                    .and_then(|i| self.peripherals.get(i))
-                    .and_then(|p| p.dev.irq_line_level())
-                {
-                    f.gic.lock().unwrap().set_level(intid, level);
+            for (index, intid) in [(f.uart2_index, Some(59)), (f.uart4_index, f.uart4_irq)] {
+                if let (Some(intid), Some(level)) = (
+                    intid,
+                    index
+                        .and_then(|i| self.peripherals.get(i))
+                        .and_then(|p| p.dev.irq_line_level()),
+                ) {
+                    f.gic.lock().unwrap().set_level(intid as usize, level);
                 }
             }
             f.gic.lock().unwrap().levels()

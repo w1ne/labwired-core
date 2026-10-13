@@ -46,12 +46,14 @@ impl SystemBus {
         let idx = self
             .find_peripheral_index_by_name(controller)
             .ok_or_else(|| anyhow::anyhow!("attach_i2c_slave: no peripheral '{controller}'"))?;
+        if let Some(host) = self.peripherals[idx].dev.i2c_slave_host() {
+            host.attach_slave(wrapped);
+            return Ok(());
+        }
         let any = self.peripherals[idx].dev.as_any_mut().ok_or_else(|| {
             anyhow::anyhow!("attach_i2c_slave: '{controller}' is not downcastable")
         })?;
         if let Some(c) = any.downcast_mut::<crate::peripherals::i2c::I2c>() {
-            c.push_slave(wrapped);
-        } else if let Some(c) = any.downcast_mut::<crate::peripherals::armv7::rk3x_i2c::Rk3xI2c>() {
             c.push_slave(wrapped);
         } else if let Some(c) = any.downcast_mut::<crate::peripherals::imxrt::lpi2c::ImxrtLpi2c>() {
             c.push_slave(wrapped);
