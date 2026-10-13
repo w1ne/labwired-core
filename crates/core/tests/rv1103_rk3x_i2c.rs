@@ -686,12 +686,18 @@ fn slave_artifact_and_pin_queue_forward_through_controller_inspection() {
 #[test]
 fn machine_cycle_derived_device_time_reaches_slave_exactly_once() {
     use labwired_core::{AdvanceRequest, Cpu};
-    let mut b = bus();
+    // A closed RV1103 bus permits genuine architectural idle; the generic
+    // SystemBus::new test fixture also contains unrelated STM32 legacy models.
+    let mut b = SystemBus::empty();
+    b.cpu_hz = 24_000_000;
+    b.ram = labwired_core::memory::LinearMemory::new(0x10000, 0);
+    b.configure_armv7_rv1103().unwrap();
+    b.configure_armv7_rv1103_i2c3().unwrap();
     let (s, p, _) = counted();
     b.attach_i2c_slave("i2c3", s).unwrap();
-    b.flash.data[..2].copy_from_slice(&0xe7feu16.to_le_bytes());
+    b.ram.data[..2].copy_from_slice(&0xe7feu16.to_le_bytes());
     let mut cpu = labwired_core::cpu::cortex_m::CortexM::new();
-    cpu.set_pc(b.flash.base_addr as u32);
+    cpu.set_pc(b.ram.base_addr as u32);
     let mut m = Machine::new(cpu, b);
     m.config.peripheral_tick_interval = 24;
     m.advance(AdvanceRequest::run(Some(1))).unwrap(); // time drive anchors its initial slice
@@ -713,6 +719,70 @@ fn machine_cycle_derived_device_time_reaches_slave_exactly_once() {
         elapsed
     );
     assert!(calls.iter().all(|c| matches!(c, Call::Time(_))));
+
+    #[cfg(feature = "event-scheduler")]
+    {
+        // Real masked WFI, then a masked pending SysTick wakes the CPU without
+        // entering a handler. Device time must cover both idle and active work
+        // exactly once through the same central clock.
+        let code = m.bus.ram.base_addr;
+        m.bus.write_u16(code, 0xb672).unwrap(); // CPSID i
+        m.bus.write_u16(code + 2, 0xbf30).unwrap(); // WFI
+        m.bus.write_u16(code + 4, 0xbf00).unwrap(); // NOP
+        m.bus.write_u16(code + 6, 0xe7fe).unwrap(); // B .
+        m.cpu.invalidate_code_caches();
+        m.cpu.set_pc(code as u32);
+        m.config.idle_fast_forward_enabled = true;
+        let entering = m.advance(AdvanceRequest::run(Some(2))).unwrap();
+        assert_eq!(entering.primary_steps, 2);
+        assert_eq!(m.cpu.get_pc(), code as u32 + 4);
+        p.lock().unwrap().calls.clear();
+        let start_us = m.total_cycles / 24;
+        for _ in 0..8 {
+            let idle = m.advance(AdvanceRequest::run(Some(4096))).unwrap();
+            assert_eq!(idle.primary_steps, 0);
+            assert_eq!(idle.idle_cycles, 4096);
+        }
+        let idle_us = m.total_cycles / 24 - start_us;
+        let time_sum = || {
+            p.lock()
+                .unwrap()
+                .calls
+                .iter()
+                .filter_map(|call| {
+                    if let Call::Time(us) = call {
+                        Some(*us)
+                    } else {
+                        None
+                    }
+                })
+                .sum::<u64>()
+        };
+        assert_eq!(
+            time_sum(),
+            idle_us,
+            "idle time must reach the slave exactly once"
+        );
+        m.cpu.set_exception_pending(15);
+        let wake = m.advance(AdvanceRequest::run(Some(1))).unwrap();
+        assert_eq!(wake.primary_steps, 1);
+        assert_eq!(wake.idle_cycles, 0);
+        assert_eq!(m.cpu.get_pc(), code as u32 + 6);
+        let active = m.advance(AdvanceRequest::run(Some(240))).unwrap();
+        assert_eq!(active.primary_steps, 240);
+        assert_eq!(active.idle_cycles, 0);
+        assert_eq!(
+            time_sum(),
+            m.total_cycles / 24 - start_us,
+            "idle-to-active transition must neither lose nor double device time"
+        );
+        assert!(p
+            .lock()
+            .unwrap()
+            .calls
+            .iter()
+            .all(|c| matches!(c, Call::Time(_))));
+    }
 }
 #[test]
 fn manifest_funnel_rejects_unknown_missing_controller_duplicate_ids_and_repeated_attach() {

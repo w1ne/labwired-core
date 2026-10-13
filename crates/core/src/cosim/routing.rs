@@ -1005,6 +1005,9 @@ pub struct CosimSession {
     /// Every apply-time routing failure [`Self::advance`] has already handed
     /// back, by message, so each distinct one is reported once per run.
     reported_errors: BTreeSet<String>,
+    configs: Vec<CosimModelConfig>,
+    epoch_cycles: u64,
+    last_global_cycles: u64,
 }
 
 /// What one lockstep advance did: the machine's report, and what happened at
@@ -1075,6 +1078,44 @@ fn chain_reports(total: AdvanceReport, next: AdvanceReport) -> AdvanceReport {
 }
 
 impl CosimSession {
+    /// Rebind a fresh machine whose local cycle0 is exactly the last global
+    /// cycle reached. Keeps the runner, child process, signals and model time.
+    /// Rejects clock changes, skipped/backward epochs and unbound destinations
+    /// before mutating any session state. The caller supplies a fresh machine,
+    /// never writes its counters and must discard the old fixture.
+    pub fn rebind_fixture_epoch(&mut self, bus: &SystemBus, epoch_cycles: u64) -> SimResult<()> {
+        if self.fallback_clock
+            || bus.current_cycle != 0
+            || bus.cpu_hz != self.cpu_hz
+            || epoch_cycles != self.last_global_cycles
+        {
+            return Err(SimulationError::Other(
+                "co-sim fixture epoch requires compatible explicit clock and exact monotonic cycle"
+                    .into(),
+            ));
+        }
+        let (router, errors) = SignalRouter::bind(&self.configs, bus);
+        if !errors.is_empty() {
+            return Err(SimulationError::Other(
+                "co-sim fresh fixture has unbound destinations".into(),
+            ));
+        }
+        self.router = router;
+        self.epoch_cycles = epoch_cycles;
+        self.binding_errors = errors;
+        self.reported_errors.clear();
+        Ok(())
+    }
+    /// Monotonic model clock corresponding to a fixture's local cycles.
+    pub fn global_cycles(&self, local_cycles: u64) -> SimResult<u64> {
+        self.epoch_cycles
+            .checked_add(local_cycles)
+            .filter(|n| *n >= self.last_global_cycles)
+            .ok_or_else(|| {
+                SimulationError::Other("co-sim fixture clock overflow or backward time".into())
+            })
+    }
+
     /// Build a session for `configs`, resolving relative `model:` paths against
     /// `base_dir` and every board path against `bus`.
     ///
@@ -1133,6 +1174,9 @@ impl CosimSession {
             fallback_clock,
             binding_errors,
             reported_errors: BTreeSet::new(),
+            configs: configs.to_vec(),
+            epoch_cycles: 0,
+            last_global_cycles: 0,
         }))
     }
 
@@ -1239,7 +1283,9 @@ impl CosimSession {
     /// progress.
     pub fn cycles_until_boundary(&self, total_cycles: u64) -> u64 {
         let boundary = ns_to_cycles(self.next_boundary_ns, self.cpu_hz);
-        boundary.saturating_sub(total_cycles).max(1)
+        boundary
+            .saturating_sub(self.epoch_cycles.saturating_add(total_cycles))
+            .max(1)
     }
 
     /// Step every model whose boundary `total_cycles` has reached, sampling the
@@ -1252,6 +1298,8 @@ impl CosimSession {
         total_cycles: u64,
         bus: &mut SystemBus,
     ) -> SimResult<(Vec<CosimRoutedModelStep>, Vec<RoutingError>)> {
+        let total_cycles = self.global_cycles(total_cycles)?;
+        self.last_global_cycles = total_cycles;
         if self.router.routes_supply() {
             bus.supply.attach();
         }
@@ -1293,6 +1341,8 @@ impl CosimSession {
         machine: &mut Machine<C>,
         request: AdvanceRequest,
     ) -> Result<CosimAdvance, CosimAdvanceError> {
+        self.global_cycles(machine.total_cycles)
+            .map_err(CosimAdvanceError::Machine)?;
         // A routed VDD holds the core in reset from its very first cycle, not
         // from the first model boundary: the circuit has not delivered yet.
         if self.router.routes_supply() {
@@ -1310,6 +1360,9 @@ impl CosimSession {
         let stopped_for_good = matches!(report.stop, AdvanceStop::FirmwareExit { .. });
         let made_no_progress = report.primary_steps == 0 && report.idle_cycles == 0;
         if stopped_for_good || made_no_progress {
+            self.last_global_cycles = self
+                .global_cycles(machine.total_cycles)
+                .map_err(CosimAdvanceError::Machine)?;
             return Ok(report.into());
         }
 

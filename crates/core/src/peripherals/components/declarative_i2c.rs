@@ -1630,6 +1630,28 @@ impl GenericI2cDevice {
 }
 
 impl I2cDevice for GenericI2cDevice {
+    fn artifacts(
+        &self,
+        id: &str,
+        _: &crate::inspect::InspectOpts,
+    ) -> Vec<crate::inspect::Artifact> {
+        let registers: std::collections::BTreeMap<_, _> = self
+            .registers
+            .iter()
+            .map(|r| (r.name.as_str(), self.register_word(&r.name)))
+            .collect();
+        let inputs: std::collections::BTreeMap<_, _> = self
+            .channels
+            .iter()
+            .map(|channel| (channel.key.as_ref(), self.input_value(&channel.key)))
+            .collect();
+        vec![crate::inspect::Artifact {
+            kind: "i2c_registers".into(),
+            id: id.into(),
+            meta: serde_json::json!({"registers":registers,"inputs":inputs}),
+            bytes: None,
+        }]
+    }
     fn address(&self) -> u8 {
         self.address
     }

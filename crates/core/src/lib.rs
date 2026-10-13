@@ -3511,9 +3511,9 @@ impl<C: Cpu> Machine<C> {
         }
     }
 
-    /// Advance every centrally-driven off-chip device's clock — I²C slave or
-    /// SPI device — to the chip's simulated-µs "now". Called once per scheduler
-    /// slice from [`Self::commit_advance_boundary`].
+    /// Advance every centrally-driven off-chip device's clock — I²C, SPI or
+    /// UART peer — to the chip's simulated-µs "now". Called after each committed
+    /// CPU boundary and each committed architectural idle fast-forward boundary.
     ///
     /// **Two sources, in strict preference order.**
     ///
@@ -3521,7 +3521,7 @@ impl<C: Cpu> Machine<C> {
     ///    ([`Peripheral::sim_time_us`] — the ESP32 SYSTIMER). An absolute
     ///    counter beats anything derived: it already accounts for its own
     ///    clock tree, so the ESP32 path is byte-identical to before.
-    /// 2. Otherwise, DERIVED from the executed cycle count and the system's
+    /// 2. Otherwise, DERIVED from the committed cycle count (including idle) and the system's
     ///    declared core clock: `cycles * 1_000_000 / cpu_hz`, integer, monotonic
     ///    (`total_cycles` only grows, `cpu_hz` is fixed for the life of the
     ///    bus). This is what makes a declarative `data_ready` / `delay_us`
@@ -3794,6 +3794,10 @@ impl<C: Cpu> Machine<C> {
             if idle_poll {
                 self.bus.run_idle_poll_bus_tick();
             }
+            // Architectural idle still advances off-chip time. Without this
+            // shared clock boundary a sleeping guest starves paced UART peers
+            // and RX timeouts until unrelated CPU work resumes.
+            self.advance_central_i2c_time();
             u64::from(skipped)
         }
     }

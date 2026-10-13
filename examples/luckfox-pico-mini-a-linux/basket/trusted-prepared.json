@@ -1,0 +1,588 @@
+{
+  "archive_whitelist": [
+    ".",
+    "bin",
+    "bin/awk",
+    "bin/basket-helper",
+    "bin/busybox",
+    "bin/cat",
+    "bin/head",
+    "bin/insmod",
+    "bin/mount",
+    "bin/readlink",
+    "bin/sh",
+    "bin/sleep",
+    "bin/uname",
+    "dev",
+    "dev/console",
+    "dev/null",
+    "init",
+    "lib",
+    "lib/modules",
+    "lib/modules/6.18.56-0-lts",
+    "lib/modules/6.18.56-0-lts/i2c-dev.ko",
+    "lib/modules/6.18.56-0-lts/i2c-rk3x.ko",
+    "proc",
+    "sys",
+    "tmp"
+  ],
+  "artifacts": {
+    "basket-helper": {
+      "address": null,
+      "bytes": 9600,
+      "sha256": "3aac2073b75cae9a951868146b31298c4953505f3ca6da3c0c611f9973bb74b6"
+    },
+    "build-a-dtc.log": {
+      "address": null,
+      "bytes": 165,
+      "sha256": "ee4b1b5f8958705d0d6a63abb1a43fa9a4405399cfbbe7ff5aaf54d67fc95185"
+    },
+    "build-a.log": {
+      "address": null,
+      "bytes": 660,
+      "sha256": "aa51073672df7a0f718933a67787945ae635c8a6922cce50a1e3f0c4d90d8ff8"
+    },
+    "build-b-dtc.log": {
+      "address": null,
+      "bytes": 165,
+      "sha256": "c87ce75a3f84b52b4401261609c0f754046d7fe7067107dd84cb472ab7f8c478"
+    },
+    "build-b.log": {
+      "address": null,
+      "bytes": 660,
+      "sha256": "ea94688e97323c03804177e29bccd42c608ce460d1bd28d93d0e7badc141a1f0"
+    },
+    "i2c-dev.ko": {
+      "address": null,
+      "bytes": 21719,
+      "sha256": "6381d4a9b257a836ce7f14a80ad1386ae5471e82a0b23715c848ba5362c159aa"
+    },
+    "i2c-rk3x.ko": {
+      "address": null,
+      "bytes": 300952,
+      "sha256": "1b3404627ffae4a66d0d126bc14c0fee76127609455c52d44137d7db82257efa"
+    },
+    "init": {
+      "address": null,
+      "bytes": 3146,
+      "sha256": "4245c9d4a5aaab7f30b8f54b6ffd7c9be9e120e0daba7cad0c2fbe92b27d24d9"
+    },
+    "initramfs.cpio": {
+      "address": 51380224,
+      "bytes": 1225024,
+      "sha256": "b718eb872e4a87aece01468d3c0364d6cac5080cce6d42e2439bfa6e3ddb4cf5"
+    },
+    "kernel.config": {
+      "address": null,
+      "bytes": 269493,
+      "sha256": "4e64812402b287e13fd7513aa830432782a1ae94a5461bfe579999d1e18432fb"
+    },
+    "phases.json": {
+      "address": null,
+      "bytes": 2000,
+      "sha256": "17ff08ae818a8477eb0bd26bb51f15c83d2946f06bc6589449ddebf75c5eeac6"
+    },
+    "rv1103-basket.dtb": {
+      "address": 50331648,
+      "bytes": 2062,
+      "sha256": "d83aacde44192069b04f33c7b2980464d475ba8e362b5d925f6c85e7bbc1efab"
+    },
+    "rv1103-basket.dts": {
+      "address": null,
+      "bytes": 2348,
+      "sha256": "b8626e6de1542730cf6c3f4aa0587164e515378cff9fc05cc6a8a00388cda54c"
+    },
+    "zImage": {
+      "address": 33554432,
+      "bytes": 8524288,
+      "sha256": "eac9582162e912bdb577bba6ea224d98a29c997e52ee891383ea836aa704680a"
+    }
+  },
+  "bootargs": "mem=64M cma=0 maxcpus=1 earlycon=uart8250,mmio32,0xff4c0000,115200n8 console=ttyS2,115200n8 rdinit=/init loglevel=8 panic=-1 clocksource.arm_arch_timer.evtstrm=0",
+  "builds": [
+    {
+      "command": [
+        "/usr/bin/arm-none-eabi-gcc",
+        "-std=c11",
+        "-Os",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-marm",
+        "-mcpu=cortex-a7",
+        "-mfloat-abi=soft",
+        "-nostdlib",
+        "-static",
+        "-ffreestanding",
+        "-fno-builtin",
+        "-fno-stack-protector",
+        "-fno-unwind-tables",
+        "-fno-asynchronous-unwind-tables",
+        "-fno-ident",
+        "-ffile-prefix-map=/tmp/.rv1103-basket-50w23lsv/build-a=/rv1103-basket",
+        "-fdebug-prefix-map=/tmp/.rv1103-basket-50w23lsv/build-a=/rv1103-basket",
+        "-fmacro-prefix-map=/tmp/.rv1103-basket-50w23lsv/build-a=/rv1103-basket",
+        "-Wl,--build-id=none,-e,_start,-Ttext=0x10000",
+        "-o",
+        "/tmp/.rv1103-basket-50w23lsv/build-a/basket-helper",
+        "/tmp/.rv1103-basket-50w23lsv/build-a/helper.c"
+      ],
+      "command_identity": {
+        "bytes": 659,
+        "sha256": "1a72839e29556037c68c11f4ae02953f66fd52ac389a7fb7e83d06347468a977"
+      },
+      "compiler": {
+        "binary_byte_limit": 67108864,
+        "bytes": 1280856,
+        "path": "/usr/bin/arm-none-eabi-gcc",
+        "sha256": "38fc178604a84beb10f9adb8ea243bd5e0475a9e6e31c9270f53e2fcaa79ec59",
+        "version": "arm-none-eabi-gcc (15:13.2.rel1-2) 13.2.1 20231009\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+        "version_byte_limit": 65536,
+        "version_capture": "combined stdout/stderr",
+        "version_command": [
+          "/usr/bin/arm-none-eabi-gcc",
+          "--version"
+        ],
+        "version_environment": {
+          "LC_ALL": "C",
+          "PATH": "/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/bin:/home/andrii/.codex/packages/app-server-daemon/releases/0.162.1-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0GZAWAg:/home/andrii/.codex/tmp/arg0/codex-arg070dqba:/home/andrii/.codex/packages/app-server-daemon/releases/0.162.0-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0DcqWuG:/home/andrii/.codex/packages/app-server-daemon/releases/0.161.0-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0fg7LVI:/home/andrii/.codex/packages/app-server-daemon/releases/0.160.1-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0lE0C9E:/home/andrii/.nvm/versions/node/v20.20.2/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/codex-path:/home/andrii/.opencode/bin:/home/andrii/.local/google-cloud-sdk/bin:/home/andrii/.grok/bin:/home/andrii/.local/bin:/home/andrii/.nvm/versions/node/v20.20.2/bin:/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/bin:/home/andrii/.local/bin:/home/andrii/.deno/bin:/home/andrii/.cargo/bin:/home/andrii/.local/bin:/home/andrii/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin",
+          "TZ": "UTC"
+        },
+        "version_output": {
+          "bytes": 253,
+          "sha256": "b54e2bdf7dd076e6040d0a556d352f8e921ba39555d189e92adcbc35cd917660"
+        },
+        "version_timeout_seconds": 10
+      },
+      "directory": "/tmp/.rv1103-basket-50w23lsv/build-a",
+      "dtb": {
+        "bytes": 2062,
+        "sha256": "d83aacde44192069b04f33c7b2980464d475ba8e362b5d925f6c85e7bbc1efab"
+      },
+      "dtc": {
+        "binary_byte_limit": 67108864,
+        "bytes": 144760,
+        "path": "/usr/bin/dtc",
+        "sha256": "0ef74efe9f0de6c50a9792050247e55a18e0f674219bd4bb09927cd3c653f388",
+        "version": "Version: DTC 1.7.0\n",
+        "version_byte_limit": 65536,
+        "version_capture": "combined stdout/stderr",
+        "version_command": [
+          "/usr/bin/dtc",
+          "--version"
+        ],
+        "version_environment": {
+          "LC_ALL": "C",
+          "PATH": "/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/bin:/home/andrii/.codex/packages/app-server-daemon/releases/0.162.1-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0GZAWAg:/home/andrii/.codex/tmp/arg0/codex-arg070dqba:/home/andrii/.codex/packages/app-server-daemon/releases/0.162.0-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0DcqWuG:/home/andrii/.codex/packages/app-server-daemon/releases/0.161.0-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0fg7LVI:/home/andrii/.codex/packages/app-server-daemon/releases/0.160.1-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0lE0C9E:/home/andrii/.nvm/versions/node/v20.20.2/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/codex-path:/home/andrii/.opencode/bin:/home/andrii/.local/google-cloud-sdk/bin:/home/andrii/.grok/bin:/home/andrii/.local/bin:/home/andrii/.nvm/versions/node/v20.20.2/bin:/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/bin:/home/andrii/.local/bin:/home/andrii/.deno/bin:/home/andrii/.cargo/bin:/home/andrii/.local/bin:/home/andrii/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin",
+          "TZ": "UTC"
+        },
+        "version_output": {
+          "bytes": 19,
+          "sha256": "200955e4847db1abc36419a960a9aa95649d279d0d84a8d6021ea544efd7c3b1"
+        },
+        "version_timeout_seconds": 10
+      },
+      "dtc_command": [
+        "/usr/bin/dtc",
+        "-I",
+        "dts",
+        "-O",
+        "dtb",
+        "-o",
+        "/tmp/.rv1103-basket-50w23lsv/build-a/rv1103-basket.dtb",
+        "/tmp/.rv1103-basket-50w23lsv/build-a/rv1103-basket.dts"
+      ],
+      "environment": {
+        "LC_ALL": "C",
+        "PATH": "/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/bin:/home/andrii/.codex/packages/app-server-daemon/releases/0.162.1-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0GZAWAg:/home/andrii/.codex/tmp/arg0/codex-arg070dqba:/home/andrii/.codex/packages/app-server-daemon/releases/0.162.0-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0DcqWuG:/home/andrii/.codex/packages/app-server-daemon/releases/0.161.0-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0fg7LVI:/home/andrii/.codex/packages/app-server-daemon/releases/0.160.1-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0lE0C9E:/home/andrii/.nvm/versions/node/v20.20.2/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/codex-path:/home/andrii/.opencode/bin:/home/andrii/.local/google-cloud-sdk/bin:/home/andrii/.grok/bin:/home/andrii/.local/bin:/home/andrii/.nvm/versions/node/v20.20.2/bin:/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/bin:/home/andrii/.local/bin:/home/andrii/.deno/bin:/home/andrii/.cargo/bin:/home/andrii/.local/bin:/home/andrii/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin",
+        "SOURCE_DATE_EPOCH": "0",
+        "TZ": "UTC"
+      },
+      "generated_header": {
+        "bytes": 985,
+        "sha256": "2649bdfa748028f8b825ae12c75f39ab0782f26a0ad952bc53d783e0464df446"
+      },
+      "initramfs": {
+        "bytes": 1225024,
+        "sha256": "b718eb872e4a87aece01468d3c0364d6cac5080cce6d42e2439bfa6e3ddb4cf5"
+      },
+      "output": {
+        "bytes": 9600,
+        "dynamic": false,
+        "elf": "ELF32 little-endian ARM ET_EXEC EABI5 static",
+        "entry": 68512,
+        "interpreter": false,
+        "load_segments": 1,
+        "sha256": "3aac2073b75cae9a951868146b31298c4953505f3ca6da3c0c611f9973bb74b6",
+        "undefined_symbols": 0
+      },
+      "source": {
+        "bytes": 8292,
+        "sha256": "b4310e8527bf97032d215af174a34c1a322c8c43b12649308dbd52a8a4bf95d3"
+      }
+    },
+    {
+      "command": [
+        "/usr/bin/arm-none-eabi-gcc",
+        "-std=c11",
+        "-Os",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-marm",
+        "-mcpu=cortex-a7",
+        "-mfloat-abi=soft",
+        "-nostdlib",
+        "-static",
+        "-ffreestanding",
+        "-fno-builtin",
+        "-fno-stack-protector",
+        "-fno-unwind-tables",
+        "-fno-asynchronous-unwind-tables",
+        "-fno-ident",
+        "-ffile-prefix-map=/tmp/.rv1103-basket-50w23lsv/build-b=/rv1103-basket",
+        "-fdebug-prefix-map=/tmp/.rv1103-basket-50w23lsv/build-b=/rv1103-basket",
+        "-fmacro-prefix-map=/tmp/.rv1103-basket-50w23lsv/build-b=/rv1103-basket",
+        "-Wl,--build-id=none,-e,_start,-Ttext=0x10000",
+        "-o",
+        "/tmp/.rv1103-basket-50w23lsv/build-b/basket-helper",
+        "/tmp/.rv1103-basket-50w23lsv/build-b/helper.c"
+      ],
+      "command_identity": {
+        "bytes": 659,
+        "sha256": "acfeac20fc34a0663e78e8030499b42534d72c00b0d9f444e5cb2d7b2bd384a1"
+      },
+      "compiler": {
+        "binary_byte_limit": 67108864,
+        "bytes": 1280856,
+        "path": "/usr/bin/arm-none-eabi-gcc",
+        "sha256": "38fc178604a84beb10f9adb8ea243bd5e0475a9e6e31c9270f53e2fcaa79ec59",
+        "version": "arm-none-eabi-gcc (15:13.2.rel1-2) 13.2.1 20231009\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+        "version_byte_limit": 65536,
+        "version_capture": "combined stdout/stderr",
+        "version_command": [
+          "/usr/bin/arm-none-eabi-gcc",
+          "--version"
+        ],
+        "version_environment": {
+          "LC_ALL": "C",
+          "PATH": "/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/bin:/home/andrii/.codex/packages/app-server-daemon/releases/0.162.1-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0GZAWAg:/home/andrii/.codex/tmp/arg0/codex-arg070dqba:/home/andrii/.codex/packages/app-server-daemon/releases/0.162.0-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0DcqWuG:/home/andrii/.codex/packages/app-server-daemon/releases/0.161.0-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0fg7LVI:/home/andrii/.codex/packages/app-server-daemon/releases/0.160.1-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0lE0C9E:/home/andrii/.nvm/versions/node/v20.20.2/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/codex-path:/home/andrii/.opencode/bin:/home/andrii/.local/google-cloud-sdk/bin:/home/andrii/.grok/bin:/home/andrii/.local/bin:/home/andrii/.nvm/versions/node/v20.20.2/bin:/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/bin:/home/andrii/.local/bin:/home/andrii/.deno/bin:/home/andrii/.cargo/bin:/home/andrii/.local/bin:/home/andrii/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin",
+          "TZ": "UTC"
+        },
+        "version_output": {
+          "bytes": 253,
+          "sha256": "b54e2bdf7dd076e6040d0a556d352f8e921ba39555d189e92adcbc35cd917660"
+        },
+        "version_timeout_seconds": 10
+      },
+      "directory": "/tmp/.rv1103-basket-50w23lsv/build-b",
+      "dtb": {
+        "bytes": 2062,
+        "sha256": "d83aacde44192069b04f33c7b2980464d475ba8e362b5d925f6c85e7bbc1efab"
+      },
+      "dtc": {
+        "binary_byte_limit": 67108864,
+        "bytes": 144760,
+        "path": "/usr/bin/dtc",
+        "sha256": "0ef74efe9f0de6c50a9792050247e55a18e0f674219bd4bb09927cd3c653f388",
+        "version": "Version: DTC 1.7.0\n",
+        "version_byte_limit": 65536,
+        "version_capture": "combined stdout/stderr",
+        "version_command": [
+          "/usr/bin/dtc",
+          "--version"
+        ],
+        "version_environment": {
+          "LC_ALL": "C",
+          "PATH": "/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/bin:/home/andrii/.codex/packages/app-server-daemon/releases/0.162.1-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0GZAWAg:/home/andrii/.codex/tmp/arg0/codex-arg070dqba:/home/andrii/.codex/packages/app-server-daemon/releases/0.162.0-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0DcqWuG:/home/andrii/.codex/packages/app-server-daemon/releases/0.161.0-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0fg7LVI:/home/andrii/.codex/packages/app-server-daemon/releases/0.160.1-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0lE0C9E:/home/andrii/.nvm/versions/node/v20.20.2/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/codex-path:/home/andrii/.opencode/bin:/home/andrii/.local/google-cloud-sdk/bin:/home/andrii/.grok/bin:/home/andrii/.local/bin:/home/andrii/.nvm/versions/node/v20.20.2/bin:/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/bin:/home/andrii/.local/bin:/home/andrii/.deno/bin:/home/andrii/.cargo/bin:/home/andrii/.local/bin:/home/andrii/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin",
+          "TZ": "UTC"
+        },
+        "version_output": {
+          "bytes": 19,
+          "sha256": "200955e4847db1abc36419a960a9aa95649d279d0d84a8d6021ea544efd7c3b1"
+        },
+        "version_timeout_seconds": 10
+      },
+      "dtc_command": [
+        "/usr/bin/dtc",
+        "-I",
+        "dts",
+        "-O",
+        "dtb",
+        "-o",
+        "/tmp/.rv1103-basket-50w23lsv/build-b/rv1103-basket.dtb",
+        "/tmp/.rv1103-basket-50w23lsv/build-b/rv1103-basket.dts"
+      ],
+      "environment": {
+        "LC_ALL": "C",
+        "PATH": "/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/bin:/home/andrii/.codex/packages/app-server-daemon/releases/0.162.1-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0GZAWAg:/home/andrii/.codex/tmp/arg0/codex-arg070dqba:/home/andrii/.codex/packages/app-server-daemon/releases/0.162.0-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0DcqWuG:/home/andrii/.codex/packages/app-server-daemon/releases/0.161.0-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0fg7LVI:/home/andrii/.codex/packages/app-server-daemon/releases/0.160.1-x86_64-unknown-linux-musl/codex-path:/home/andrii/.codex/tmp/arg0/codex-arg0lE0C9E:/home/andrii/.nvm/versions/node/v20.20.2/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/codex-path:/home/andrii/.opencode/bin:/home/andrii/.local/google-cloud-sdk/bin:/home/andrii/.grok/bin:/home/andrii/.local/bin:/home/andrii/.nvm/versions/node/v20.20.2/bin:/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/.local/bin:/home/andrii/bin:/home/andrii/.local/bin:/home/andrii/.deno/bin:/home/andrii/.cargo/bin:/home/andrii/.local/bin:/home/andrii/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin",
+        "SOURCE_DATE_EPOCH": "0",
+        "TZ": "UTC"
+      },
+      "generated_header": {
+        "bytes": 985,
+        "sha256": "2649bdfa748028f8b825ae12c75f39ab0782f26a0ad952bc53d783e0464df446"
+      },
+      "initramfs": {
+        "bytes": 1225024,
+        "sha256": "b718eb872e4a87aece01468d3c0364d6cac5080cce6d42e2439bfa6e3ddb4cf5"
+      },
+      "output": {
+        "bytes": 9600,
+        "dynamic": false,
+        "elf": "ELF32 little-endian ARM ET_EXEC EABI5 static",
+        "entry": 68512,
+        "interpreter": false,
+        "load_segments": 1,
+        "sha256": "3aac2073b75cae9a951868146b31298c4953505f3ca6da3c0c611f9973bb74b6",
+        "undefined_symbols": 0
+      },
+      "source": {
+        "bytes": 8292,
+        "sha256": "b4310e8527bf97032d215af174a34c1a322c8c43b12649308dbd52a8a4bf95d3"
+      }
+    }
+  ],
+  "decompression_end": 24008784,
+  "decompression_start": 32768,
+  "guest_load_policy": "ordinary Busybox insmod; no signature/CRC/version bypass; real exit status and taint required",
+  "guest_status": "NOT_RUN",
+  "initrd_end": 52605248,
+  "limitations": [
+    "preparation and static ELF/UAPI checks only; guest execution NOT_RUN",
+    "functional24MHz window; no hardware UART/RF or silicon power-threshold claim",
+    "carrier disconnect and full plant cut/retirement/fresh fixture recovery are future host gates"
+  ],
+  "module_provenance": {
+    "bytes": 64632,
+    "sha256": "f5fab55c5d3cecb9713d277b9c19f3b215d781467ad91971219e35cf8e503ab6"
+  },
+  "modules": {
+    "i2c-dev.ko": {
+      "bytes": 21719,
+      "sha256": "6381d4a9b257a836ce7f14a80ad1386ae5471e82a0b23715c848ba5362c159aa"
+    },
+    "i2c-rk3x.ko": {
+      "bytes": 300952,
+      "sha256": "1b3404627ffae4a66d0d126bc14c0fee76127609455c52d44137d7db82257efa"
+    }
+  },
+  "phase_contract": {
+    "address": 83,
+    "axis_register": 50,
+    "configuration": [
+      {
+        "register": 45,
+        "value": 8
+      },
+      {
+        "register": 49,
+        "value": 8
+      }
+    ],
+    "console_limit_bytes": 65536,
+    "devid": 229,
+    "encoding_source": "configs/devices/adxl345.yaml DATA_FORMAT=0x08 scale256 signed16 LE bypass",
+    "phases": [
+      {
+        "expected_raw": [
+          256,
+          -128,
+          64
+        ],
+        "external_power": true,
+        "id": "stimulus_a",
+        "input_g": [
+          1,
+          -0.5,
+          0.25
+        ],
+        "sequence": 1
+      },
+      {
+        "expected_raw": [
+          -64,
+          128,
+          -256
+        ],
+        "external_power": true,
+        "id": "stimulus_b",
+        "input_g": [
+          -0.25,
+          0.5,
+          -1
+        ],
+        "sequence": 2
+      },
+      {
+        "expected_i2c_errno": 6,
+        "expected_uart_bytes": 0,
+        "external_power": false,
+        "id": "external_off",
+        "sequence": 3
+      },
+      {
+        "expected_raw": [
+          -64,
+          128,
+          -256
+        ],
+        "external_power": true,
+        "id": "external_restored",
+        "input_g": [
+          -0.25,
+          0.5,
+          -1
+        ],
+        "sequence": 4
+      }
+    ],
+    "profile": "rv1103-linux-basket-v1",
+    "ready_wait_ms": 100,
+    "schema": 1,
+    "sensor_id": "accelerometer",
+    "uart_deadline_ms": 500,
+    "uart_exchanges": [
+      {
+        "command": "AT",
+        "reply": "OK\r\n"
+      },
+      {
+        "command": "AT+GMR",
+        "reply": "LabWired behavioral ESP32-C3 ESP-AT mock\r\nOK\r\n"
+      },
+      {
+        "command": "AT+LABMOCKSTATUS?",
+        "reply": "+LABMOCKSTATUS:DISCONNECTED\r\nOK\r\n"
+      },
+      {
+        "command": "AT+LABMOCKCONNECT",
+        "reply": "OK\r\n"
+      },
+      {
+        "command": "AT+LABMOCKSTATUS?",
+        "reply": "+LABMOCKSTATUS:CONNECTED\r\nOK\r\n"
+      },
+      {
+        "command": "AT+LABMOCKDISCONNECT",
+        "reply": "OK\r\n"
+      },
+      {
+        "command": "AT+LABMOCKSTATUS?",
+        "reply": "+LABMOCKSTATUS:DISCONNECTED\r\nOK\r\n"
+      }
+    ],
+    "uart_id": "wifi"
+  },
+  "physical_acceptance": "UNAVAILABLE",
+  "pins": {
+    "bytes": 4069,
+    "sha256": "bf424f914ae4c9fc4ccbd932da966ed81bb9a1857282bc87fbdd556ef10cf1ee"
+  },
+  "preparation": "VERIFIED",
+  "preparer": {
+    "bytes": 26754,
+    "sha256": "a003760acf7dd36150755f89ff3f04629809d78dfe5e2c6f6d59e74ae1ced182"
+  },
+  "profile": "rv1103-linux-basket-v1",
+  "ram_base": 0,
+  "ram_bytes": 67108864,
+  "reproducibility": {
+    "archive_bytes_equal": true,
+    "dtb_bytes_equal": true,
+    "helper_bytes_equal": true,
+    "independent_builds": 2
+  },
+  "schema": 1,
+  "sources": {
+    "helper.c": {
+      "bytes": 8292,
+      "sha256": "b4310e8527bf97032d215af174a34c1a322c8c43b12649308dbd52a8a4bf95d3"
+    },
+    "init": {
+      "bytes": 3146,
+      "sha256": "4245c9d4a5aaab7f30b8f54b6ffd7c9be9e120e0daba7cad0c2fbe92b27d24d9"
+    },
+    "phases.json": {
+      "bytes": 2000,
+      "sha256": "17ff08ae818a8477eb0bd26bb51f15c83d2946f06bc6589449ddebf75c5eeac6"
+    },
+    "rv1103-basket.dts": {
+      "bytes": 2350,
+      "sha256": "91805fcba051a69004658d27f8aee43df850d1469a4e8d82fb13176e3bb0fedc"
+    }
+  },
+  "timer_hz": 24000000,
+  "uapi": {
+    "executed_extracted_helpers": false,
+    "files": {
+      "arch/arm/include/generated/uapi/asm/termbits.h": {
+        "bytes": 34,
+        "sha256": "cba6faa5749f84248b3e73894fb6731dc558af01f8f5a626d8f44ba6fad46977"
+      },
+      "arch/arm/include/generated/uapi/asm/unistd-eabi.h": {
+        "bytes": 20935,
+        "sha256": "b3568fb2ee2f71be55325285ce226b7c8e8a17b0cd302e13008db2c1b97a6979"
+      },
+      "arch/arm/include/uapi/asm/ioctls.h": {
+        "bytes": 183,
+        "sha256": "19970612f5a7f7f71226d50527d8267411958e4dcc9f2e9c3b29a5de060524e1"
+      },
+      "include/uapi/asm-generic/fcntl.h": {
+        "bytes": 5563,
+        "sha256": "08449ed601f650b5f6afbf8a4cfd7129242107e3d1c46c1f0c0abfedb44a21a4"
+      },
+      "include/uapi/asm-generic/ioctls.h": {
+        "bytes": 3983,
+        "sha256": "867644cd4a20815b7d8be14902b594bb6e30a81ea159aa5c67f24212c92cbab6"
+      },
+      "include/uapi/asm-generic/poll.h": {
+        "bytes": 863,
+        "sha256": "800ec73ce21e427587fda77b35a804f522d9e4a18eef87d516e10d1b28fc8b90"
+      },
+      "include/uapi/asm-generic/termbits-common.h": {
+        "bytes": 2214,
+        "sha256": "b022fb7a77f70ad67237b4f2091d17e0189ea7cc6c7d6632c1030326f887949c"
+      },
+      "include/uapi/asm-generic/termbits.h": {
+        "bytes": 3654,
+        "sha256": "6769d652b4178463ed74ac4848a851abe5e457ee0623eb56f331d77c1e1863b9"
+      },
+      "include/uapi/asm-generic/termios.h": {
+        "bytes": 1392,
+        "sha256": "ced65a437336762b4e795389f5bcb26461e5c940624567f0f880eaa53082ff63"
+      },
+      "include/uapi/linux/i2c-dev.h": {
+        "bytes": 1931,
+        "sha256": "5779095287ae32d17f3524a7a7a2d3a1ddfe6ad1345929ec6f2f4a442ff41312"
+      },
+      "include/uapi/linux/i2c.h": {
+        "bytes": 6963,
+        "sha256": "8b4f0e08de273edb14e2ae289c8988fac2f025564cdda7d9323ef6a90ca0cbaa"
+      },
+      "include/uapi/linux/time_types.h": {
+        "bytes": 1292,
+        "sha256": "45f5bd4a2412fe6c1f1415a1e00e8521ad45f37117ab7dd1e9fafd7f922b224a"
+      }
+    },
+    "package_sha256": "a2fd3f3a675e5e1c68b4dbea544fa7fe3e1ebbc0403bf1f8de6130ed6cdb1b80",
+    "statistics": {
+      "bounds": {
+        "expanded_tar_bytes": 110000000,
+        "individual_metadata_bytes": 512,
+        "individual_payload_bytes": 4000000,
+        "physical_records": 46000,
+        "total_metadata_bytes": 2000000,
+        "total_payload_bytes": 72000000
+      },
+      "expanded_tar_bytes": 108446208,
+      "extension_metadata_bytes": 1749396,
+      "extension_records": 22261,
+      "largest_extension_metadata_bytes": 213,
+      "members": 22261,
+      "physical_payload_bytes": 70605705,
+      "physical_records": 44522,
+      "total_member_bytes": 70605705
+    }
+  }
+}

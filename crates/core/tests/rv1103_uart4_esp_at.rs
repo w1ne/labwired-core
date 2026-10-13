@@ -501,3 +501,64 @@ fn normal_attachment_legacy_multipeer_and_console_remain_supported() {
     assert_eq!(*tx_a.lock().unwrap(), b"XY");
     assert_eq!(*tx_b.lock().unwrap(), b"XY");
 }
+
+#[cfg(feature = "event-scheduler")]
+#[test]
+fn machine_idle_windows_advance_peer_pacing_and_rx_timeout() {
+    use labwired_core::{
+        cpu::cortex_m::CortexM, memory::LinearMemory, AdvanceRequest, Cpu, Machine,
+    };
+    // A real WFI instruction exercises the generic Machine idle boundary.
+    // This is a host boundary regression, not native Linux acceptance.
+    let mut b = basket("");
+    b.ram = LinearMemory::new(0x10000, 0);
+    b.write_u16(0, 0xbf30).unwrap(); // WFI
+    let mut cpu = CortexM::new();
+    cpu.set_pc(0);
+    cpu.set_sp(0x8000);
+    let mut machine = Machine::new(cpu, b);
+    machine.config.idle_fast_forward_enabled = true;
+    let entered = machine.advance(AdvanceRequest::run(Some(1))).unwrap();
+    assert_eq!(entered.primary_steps, 1);
+    machine.bus.write_u32(0xff4e0008, 0xc1).unwrap(); // FIFO, trigger14
+    machine.bus.write_u32(0xff4e0004, 1).unwrap(); // RX interrupts
+    send(&mut machine.bus, b"AT\r\n");
+    let before = machine.total_cycles;
+    // Same bounded 4096-cycle windows used by the actual basket runner.
+    // 11ms covers four >=1ms peer polls and the functional4ms RX timeout.
+    for _ in 0..64 {
+        let advanced = machine.advance(AdvanceRequest::run(Some(4096))).unwrap();
+        assert_eq!(advanced.primary_steps, 0);
+        assert_eq!(advanced.idle_cycles, 4096);
+        assert_eq!(advanced.elapsed_cycles, 4096);
+    }
+    assert_eq!(machine.total_cycles - before, 64 * 4096);
+    let trace = machine.bus.bus_trace.snapshot();
+    use labwired_core::bus::bus_trace::{BusDir, BusPayload};
+    let received: Vec<_> = trace
+        .iter()
+        .filter_map(|e| match e.payload {
+            BusPayload::Uart {
+                direction: BusDir::Rx,
+                byte,
+            } if e.bus == "uart4" => Some((e.cycle, byte)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        received.iter().map(|(_, b)| *b).collect::<Vec<_>>(),
+        b"OK\r\n",
+        "architectural idle must not starve the same persistent UART peer clock"
+    );
+    assert!(received.windows(2).all(|w| w[1].0 > w[0].0));
+    assert_eq!(machine.bus.read_u32(0xff4e0008).unwrap(), 0xcc);
+    assert_eq!(
+        machine.bus.read_u32(0xff1f1204).unwrap() & (1 << 29),
+        1 << 29
+    );
+    let bytes: Vec<_> = (0..4)
+        .map(|_| machine.bus.read_u32(0xff4e0000).unwrap() as u8)
+        .collect();
+    assert_eq!(bytes, b"OK\r\n");
+    assert_eq!(machine.bus.read_u32(0xff4e0008).unwrap(), 0xc1);
+}

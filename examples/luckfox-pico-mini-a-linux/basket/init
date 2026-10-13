@@ -46,7 +46,7 @@ for module in i2c-rk3x i2c-dev; do
     echo "LW_BASKET_INSMOD module=$module exit=$status"
     [ "$status" = 0 ] || fail module_load
  done
-read taint < /proc/sys/kernel/tainted || fail taint
+taint=$(cat /proc/sys/kernel/tainted) || fail taint
 case "$taint" in ''|*[!0-9]*) fail taint_format;; esac
 echo "LW_BASKET_TAINT=$taint"
 i2cpath=$(readlink -f /sys/class/i2c-dev/i2c-3/device) || fail i2c_sysfs

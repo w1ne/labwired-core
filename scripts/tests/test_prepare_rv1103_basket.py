@@ -3,6 +3,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import shutil
 import stat
 import struct
 import subprocess
@@ -158,6 +159,39 @@ class BasketPreparationTests(unittest.TestCase):
             script='fail() { return 1; }\nuartpath=$1\n'+old+'\n'
         result=subprocess.run(['/bin/sh','-c',script,'uart-validator',path,dt],capture_output=True,timeout=2)
         return result.returncode
+
+    def taint_status(self, path):
+        busybox = shutil.which('busybox')
+        if not busybox:
+            self.skipTest('native BusyBox is required for the sysctl read regression')
+        init = (FIXTURE/'init').read_text()
+        lines = init.splitlines()
+        start = next(i for i, line in enumerate(lines) if '/proc/sys/kernel/tainted' in line)
+        end = next(i for i, line in enumerate(lines) if line.startswith('i2cpath='))
+        block = '\n'.join(lines[start:end]).replace('/proc/sys/kernel/tainted', '"$1"')
+        # Use the same BusyBox cat applet as the guest, not a host GNU cat.
+        script = 'fail() { echo "failure=$1"; exit 77; }\nbusybox=$2\ncat() { "$busybox" cat "$@"; }\n' + block
+        return subprocess.run([busybox, 'sh', '-c', script, 'taint-validator', str(path), busybox], capture_output=True, timeout=2)
+
+    def test_taint_read_consumes_complete_native_sysctl_value_with_busybox(self):
+        path = Path('/proc/sys/kernel/tainted')
+        if not path.is_file():
+            self.skipTest('read-only Linux taint sysctl is required')
+        expected = path.read_bytes().strip()
+        self.assertTrue(expected.isdigit())
+        result = self.taint_status(path)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stdout, b'LW_BASKET_TAINT=' + expected + b'\n')
+
+    def test_taint_read_preserves_format_and_read_failure_guards(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp)/'tainted'
+            for bad in (b'', b'-1\n', b'12x\n', b'12\n34\n'):
+                path.write_bytes(bad)
+                with self.subTest(value=bad):
+                    self.assertEqual(self.taint_status(path).returncode, 77)
+            path.unlink()
+            self.assertEqual(self.taint_status(path).returncode, 77)
 
     def test_uart_identity_accepts_pinned_kernel_serial_ancestry_with_independent_dt(self):
         physical='/sys/devices/platform/ff4e0000.serial'

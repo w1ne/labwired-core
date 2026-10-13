@@ -30,12 +30,12 @@ pub struct Rv1103LinuxArgs {
 
 #[cfg(any(feature = "qemu-arm-system", test))]
 #[derive(Debug, PartialEq)]
-struct GuestEvidence {
-    uptime_before: f64,
-    uptime_after: f64,
+pub(super) struct GuestEvidence {
+    pub(super) uptime_before: f64,
+    pub(super) uptime_after: f64,
 }
 #[cfg(any(feature = "qemu-arm-system", test))]
-fn acceptance(console: &str) -> Option<GuestEvidence> {
+pub(super) fn acceptance(console: &str) -> Option<GuestEvidence> {
     if console.contains("Kernel panic") || console.contains("LW_LINUX_BOOT_FAILURE") {
         return None;
     }

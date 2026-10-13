@@ -43,7 +43,7 @@
   "outputs": {
     "initramfs.cpio": {
       "bytes": 1225024,
-      "sha256": "8cb423962ff0391618e0801d8aca43bce69c11939eaa677429c2cb1ed2aba159"
+      "sha256": "b718eb872e4a87aece01468d3c0364d6cac5080cce6d42e2439bfa6e3ddb4cf5"
     },
     "rv1103-basket.dtb": {
       "bytes": 2062,
@@ -59,7 +59,7 @@
     },
     "init": {
       "bytes": 3146,
-      "sha256": "b89193da244d79979c74e564339f5306b48930c817173cd9dc47cca268d4bea1"
+      "sha256": "4245c9d4a5aaab7f30b8f54b6ffd7c9be9e120e0daba7cad0c2fbe92b27d24d9"
     },
     "phases.json": {
       "bytes": 2000,

@@ -85,6 +85,61 @@ fn build_session(bus: &SystemBus, models: &[CosimModelConfig]) -> CosimSession {
     session
 }
 
+#[test]
+fn fresh_fixture_epoch_preserves_global_time_and_rebinds_actual_board_destinations() {
+    let mut old = f401_bus();
+    let models = [mock_model(
+        100_000,
+        &[],
+        &[("v", "board.analog.pa0_volts")],
+        &[("v", serde_yaml::Value::from(1.8))],
+    )];
+    let mut session = build_session(&old, &models);
+    session.advance_to(8_400, &mut old).unwrap();
+    session.advance_to(9_000, &mut old).unwrap();
+    let mut fresh = f401_bus();
+    // Different peripheral indices: rebinding must resolve the fresh owners,
+    // not silently carry a destination cached against the old bus.
+    fresh.peripherals.rotate_left(1);
+    session
+        .rebind_fixture_epoch(&fresh, 9_000)
+        .expect("compatible monotonic fresh fixture");
+    assert_eq!(session.cycles_until_boundary(0), 7_800);
+    let (steps, errors) = session.advance_to(7_800, &mut fresh).unwrap();
+    assert_eq!(
+        steps.len(),
+        1,
+        "fresh local cycles advance the existing global plant"
+    );
+    assert!(errors.is_empty());
+    assert_eq!(adc_channel_count(&mut fresh, 0), 2233);
+    assert_eq!(session.cycles_until_boundary(7_800), 8_400);
+    let mut nonfresh = f401_bus();
+    nonfresh.set_current_cycle(1);
+    assert!(
+        session.rebind_fixture_epoch(&nonfresh, 16_800).is_err(),
+        "fixture rebind must refuse an already advanced bus before mutation"
+    );
+    let signals = session.signals().clone();
+    let mut wrong_clock = f401_bus();
+    wrong_clock.cpu_hz = 1;
+    assert!(session.rebind_fixture_epoch(&wrong_clock, 16_800).is_err());
+    assert!(session.rebind_fixture_epoch(&fresh, 9_000).is_err());
+    let mut unbound = SystemBus::empty();
+    unbound.cpu_hz = session.cpu_hz();
+    assert_eq!(unbound.current_cycle, 0);
+    assert!(
+        session.rebind_fixture_epoch(&unbound, 16_800).is_err(),
+        "fresh compatible clock cannot authorize an unbound actual ADC destination"
+    );
+    assert_eq!(
+        session.signals(),
+        &signals,
+        "invalid epochs cannot mutate the persistent plant"
+    );
+    assert_eq!(session.cycles_until_boundary(7_800), 8_400);
+}
+
 /// The injected 12-bit count the next conversion on `channel` would return.
 /// `0xFFFF` means nothing has been injected.
 fn adc_channel_count(bus: &mut SystemBus, channel: u8) -> u16 {
