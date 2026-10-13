@@ -847,6 +847,17 @@ pub fn artifact_generation(bytes: &[u8]) -> u64 {
     hash
 }
 
+/// UART peer adapter for the common attached-device inspection visitor.
+pub(crate) struct UartEvidence<'a>(pub &'a dyn crate::peripherals::device::UartStreamDevice);
+impl DeviceEvidence for UartEvidence<'_> {
+    fn artifacts(&self, id: &str, opts: &InspectOpts) -> Vec<Artifact> {
+        self.0.artifacts(id, opts)
+    }
+    fn evidence_logs(&self) -> Vec<crate::peripheral_log::PeripheralLog> {
+        self.0.logs()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1187,16 +1198,5 @@ mod tests {
             .is_err(),
             "an empty region could only ever pass vacuously"
         );
-    }
-}
-
-/// UART peer adapter for the common attached-device inspection visitor.
-pub(crate) struct UartEvidence<'a>(pub &'a dyn crate::peripherals::device::UartStreamDevice);
-impl DeviceEvidence for UartEvidence<'_> {
-    fn artifacts(&self, id: &str, opts: &InspectOpts) -> Vec<Artifact> {
-        self.0.artifacts(id, opts)
-    }
-    fn evidence_logs(&self) -> Vec<crate::peripheral_log::PeripheralLog> {
-        self.0.logs()
     }
 }
