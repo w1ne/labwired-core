@@ -2928,6 +2928,10 @@ boards:
     # esp32c3_trigger_systimer and chip_conformance. Approved by the maintainer.
     # ACK, NOT A CAPTURE.
     drift_ack: 2026-10-11
+    # 2026-10-14 (esp32 LACT timebase): timg.rs is shared, but only the classic-only
+    # LACT counter (with_lact) changed — it now converts CPU cycles to APB at 80/240.
+    # C3/C6 TIMG/MWDT paths untouched. No register map or reset value changed. ACK, NOT A CAPTURE.
+    drift_ack: 2026-10-14
 
   - id: nucleo-l476rg
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
