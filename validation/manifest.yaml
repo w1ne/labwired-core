@@ -7124,7 +7124,6 @@ boards:
     # reads VALUE_VALID as 0 until the first update (C3 cold-reset capture);
     # snapshot format V3, older snapshots still load. No other S3 register map or
     # reset value changed. Approved by the maintainer. ACK, NOT A CAPTURE.
-    drift_ack: 2026-10-11
     # 2026-10-14 (integer MOVF/MOVT): the Xtensa decoder gains the Boolean-option
     # integer conditional moves (RST3 op2=0xC/0xD), which previously raised
     # IllegalInstruction. No register map, reset value or existing instruction
