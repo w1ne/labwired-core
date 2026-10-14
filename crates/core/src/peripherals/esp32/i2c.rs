@@ -160,10 +160,11 @@ pub struct Esp32I2c {
     /// The command list's waveform, narrated onto the pads when the list
     /// finishes (this engine charges no wire time as it runs).
     wire: EspI2cWire,
-    /// Scheduler mode: an MMIO write changed the interrupt level
-    /// (`int_raw & int_ena != 0`). Nothing re-derives a classic DPORT level
-    /// except a scheduler event, so the change is handed to the scheduler as
-    /// a zero-delay wake (see `take_scheduled_events`).
+    /// Scheduler mode: an MMIO write changed the interrupt level, or clock
+    /// attachment found it already asserted
+    /// (`int_raw & int_ena != 0`). A scheduler event re-derives the classic
+    /// DPORT level, so the change requests a zero-delay wake (see
+    /// `take_scheduled_events`).
     level_wake: bool,
 }
 
@@ -174,10 +175,10 @@ const I2C_LEVEL_WAKE_TOKEN: u32 = 0x12C0_0001;
 /// writes here instead of the APB DATA register at `0x3FF5_301c`.
 pub struct Esp32I2cAhbFifo {
     tx_fifo: std::sync::Arc<std::sync::Mutex<std::collections::VecDeque<u8>>>,
-    /// Bus index of the `Esp32I2c` that owns this FIFO. `Esp32I2c` has no event
-    /// chain today, so the harvest through it is a no-op — wired anyway so the
-    /// alias cannot become the silent-console bug `uart0_ahb_fifo` was the day
-    /// this controller grows one.
+    /// Bus index of the `Esp32I2c` that owns this FIFO. Alias writes harvest
+    /// the owner's pending events too. FIFO pushes do not change its IRQ level;
+    /// TRANS_START on the APB controller completes the command list and can
+    /// request a level wake.
     owner: usize,
 }
 
@@ -498,11 +499,10 @@ impl Peripheral for Esp32I2c {
 
     /// The same level, for the DPORT scheduler arm.
     ///
-    /// `deliver_scheduled_irq_levels` POLLS this on every re-derivation, which
-    /// is the whole reason this model needs no `on_event` and no WAKE token:
-    /// `tick()` above mutates nothing, it only reports a level computed from
-    /// `int_raw & int_ena`. A poll reproduces it exactly, and a pure level has
-    /// nothing to schedule.
+    /// `deliver_scheduled_irq_levels` polls this when an event fires. Like
+    /// `tick()`, this only reports the current `int_raw & int_ena` level. The
+    /// MMIO edge wake triggers re-derivation even when no other peripheral
+    /// has scheduled work; its handler does not mutate or reschedule the level.
     fn matrix_irq_sources_into(&self, out: &mut Vec<u32>) {
         if self.int_raw & self.int_ena != 0 {
             out.push(self.intr_source_id);
@@ -526,6 +526,9 @@ impl Peripheral for Esp32I2c {
     /// `cfg!` of its own.
     fn attach_cycle_clock(&mut self, clock: crate::cycle_clock::CycleClock) {
         self.clock = Some(clock);
+        // A caller may configure an asserted level before bus attachment.
+        // Bootstrap must export it even if no subsequent MMIO write occurs.
+        self.level_wake |= self.scheduler_mode() && self.int_raw & self.int_ena != 0;
     }
 
     fn uses_scheduler(&self) -> bool {
@@ -941,8 +944,8 @@ mod tests {
 
     /// Scheduler mode: an MMIO write that flips the interrupt level hands the
     /// scheduler exactly one zero-delay wake, so the classic DPORT route is
-    /// re-derived at the write instead of at the next unrelated event (the
-    /// loop task otherwise waits out the whole Wire timeout per transaction).
+    /// re-derived at the write's scheduled deadline without an unrelated
+    /// event (the loop task otherwise waits out the whole Wire timeout).
     #[test]
     fn level_edge_from_mmio_write_requests_one_scheduler_wake() {
         let mut p = Esp32I2c::new();
@@ -974,6 +977,50 @@ mod tests {
         p.int_raw = INT_TRANS_COMPLETE;
         p.write_u32(REG_INT_ENA, INT_TRANS_COMPLETE).unwrap();
         assert!(p.take_scheduled_events().is_empty());
+    }
+
+    #[test]
+    fn attaching_clock_exports_an_already_asserted_level_once() {
+        let mut p = Esp32I2c::new();
+        p.write_u32(REG_CMD0, cmd(CMD_STOP, 0)).unwrap();
+        p.write_u32(REG_CTR, CTR_TRANS_START_BIT).unwrap();
+        p.write_u32(REG_INT_ENA, INT_TRANS_COMPLETE).unwrap();
+        assert!(p.take_scheduled_events().is_empty(), "still on the walk");
+        p.attach_cycle_clock(crate::cycle_clock::CycleClock::default());
+        assert_eq!(
+            p.take_scheduled_events().len(),
+            usize::from(p.scheduler_mode()),
+            "bootstrap must export the preconfigured IRQ level"
+        );
+        assert!(p.take_scheduled_events().is_empty());
+    }
+
+    #[test]
+    fn unharvested_level_edges_coalesce_and_masked_changes_do_not_wake() {
+        let mut p = Esp32I2c::new();
+        p.attach_cycle_clock(crate::cycle_clock::CycleClock::default());
+        p.write_u32(REG_CMD0, cmd(CMD_STOP, 0)).unwrap();
+        p.write_u32(REG_CTR, CTR_TRANS_START_BIT).unwrap();
+        assert!(p.take_scheduled_events().is_empty(), "masked completion");
+        p.write_u32(REG_INT_ENA, INT_TRANS_COMPLETE).unwrap();
+        p.write_u32(REG_INT_ENA, 0).unwrap();
+        p.write_u32(REG_INT_ENA, INT_TRANS_COMPLETE).unwrap();
+        assert_eq!(
+            p.take_scheduled_events().len(),
+            usize::from(p.scheduler_mode())
+        );
+        assert!(p.take_scheduled_events().is_empty());
+        // Adding an enabled cause while already asserted is not a level edge.
+        p.write_u32(REG_CMD0, cmd(CMD_END, 0)).unwrap();
+        p.write_u32(REG_CTR, CTR_TRANS_START_BIT).unwrap();
+        p.write_u32(REG_INT_ENA, INT_TRANS_COMPLETE | INT_END_DETECT)
+            .unwrap();
+        assert!(p.take_scheduled_events().is_empty());
+        p.write_u32(REG_INT_CLR, INT_END_DETECT).unwrap();
+        assert!(
+            p.take_scheduled_events().is_empty(),
+            "another enabled cause remains"
+        );
     }
 
     #[test]

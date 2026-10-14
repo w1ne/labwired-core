@@ -215,3 +215,99 @@ fn an_active_matrix_fabric_still_owns_the_routed_output() {
         "the C3 fabric owns pending_cpu_irqs; classic routing must defer"
     );
 }
+
+/// Drive the real I2C through the MMIO harvest and Machine event path, with
+/// no UART or timer event available to hide a missing wake.
+#[test]
+fn classic_i2c_mmio_edges_route_and_drain_without_other_events() {
+    use crate::peripherals::esp32::i2c::{Esp32I2c, I2C0_BASE, INT_TRANS_COMPLETE};
+    use crate::peripherals::esp_i2c_core::{
+        CTR_TRANS_START_BIT, REG_CMD0, REG_CTR, REG_INT_CLR, REG_INT_ENA, REG_INT_RAW,
+    };
+
+    for source in [49, 50] {
+        let mut bus = dport_bus();
+        bind(&mut bus, source, SLOT);
+        bus.add_peripheral(
+            "i2c",
+            I2C0_BASE as u64,
+            0x1000,
+            None,
+            Box::new(Esp32I2c::with_intr_source(source)),
+        );
+        let mut m = crate::Machine::new(crate::cpu::CortexM::new(), bus);
+        let base = I2C0_BASE as u64;
+        m.bus.write_u32(base + REG_CMD0, 3 << 11).unwrap(); // classic STOP
+        m.bus
+            .write_u32(base + REG_CTR, CTR_TRANS_START_BIT)
+            .unwrap();
+        assert_ne!(
+            m.bus.read_u32(base + REG_INT_RAW).unwrap() & INT_TRANS_COMPLETE,
+            0
+        );
+        assert!(
+            m.bus.pending_schedule.is_empty(),
+            "masked completion must not wake"
+        );
+        m.bus
+            .write_u32(base + REG_INT_ENA, INT_TRANS_COMPLETE)
+            .unwrap();
+        assert_eq!(m.bus.pending_schedule.len(), 1);
+        assert_eq!(
+            m.bus.pending_schedule[0].1, 1,
+            "zero delay uses the MMIO deadline"
+        );
+        m.total_cycles = 1;
+        m.drain_scheduler_events();
+        assert_eq!(m.bus.pending_cpu_irqs, [1 << SLOT, 0]);
+        assert!(m.sched.is_empty(), "a held level must not self-reschedule");
+
+        for clear in [REG_INT_ENA, REG_INT_CLR] {
+            m.bus
+                .write_u32(
+                    base + clear,
+                    if clear == REG_INT_ENA {
+                        0
+                    } else {
+                        INT_TRANS_COMPLETE
+                    },
+                )
+                .unwrap();
+            assert_eq!(m.bus.pending_schedule.len(), 1, "fall must wake");
+            m.total_cycles += 1;
+            m.bus.set_current_cycle(m.total_cycles);
+            m.drain_scheduler_events();
+            assert_eq!(m.bus.pending_cpu_irqs, [0, 0]);
+            assert!(m.sched.is_empty());
+            // Re-enable/start with no unrelated scheduler activity.
+            m.bus
+                .write_u32(base + REG_INT_ENA, INT_TRANS_COMPLETE)
+                .unwrap();
+            m.bus
+                .write_u32(base + REG_CTR, CTR_TRANS_START_BIT)
+                .unwrap();
+            m.total_cycles += 1;
+            m.bus.set_current_cycle(m.total_cycles);
+            m.drain_scheduler_events();
+            assert_eq!(m.bus.pending_cpu_irqs, [1 << SLOT, 0]);
+            assert!(m.sched.is_empty());
+        }
+        // Opposite edges queued before delivery must poll the final level.
+        m.bus.write_u32(base + REG_INT_ENA, 0).unwrap();
+        m.bus
+            .write_u32(base + REG_INT_ENA, INT_TRANS_COMPLETE)
+            .unwrap();
+        m.bus
+            .write_u32(base + REG_INT_CLR, INT_TRANS_COMPLETE)
+            .unwrap();
+        assert_eq!(m.bus.pending_schedule.len(), 3);
+        m.total_cycles += 1;
+        m.bus.set_current_cycle(m.total_cycles);
+        m.drain_scheduler_events();
+        assert_eq!(m.bus.pending_cpu_irqs, [0, 0]);
+        assert!(m.sched.is_empty());
+        assert!(m.bus.pending_schedule.is_empty());
+        m.drain_scheduler_events();
+        assert!(m.sched.is_empty());
+    }
+}
