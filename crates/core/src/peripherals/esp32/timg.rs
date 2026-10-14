@@ -138,6 +138,12 @@ const LACT_DIVIDER_BITS: u32 = 16;
 /// APB clock in MHz. `tick()` runs once per simulated microsecond, so this
 /// is exactly how many APB cycles elapse per tick.
 const APB_MHZ: u32 = 80;
+/// ESP32-classic CPU clock in MHz (`configs/chips/esp32.yaml` `cpu_hz`).
+/// Both the legacy walk (`tick()`) and the scheduler (`sync_to`) advance this
+/// model in CPU cycles, so LACT converts CPU cycles to APB cycles at
+/// `APB_MHZ / LACT_CPU_MHZ` — otherwise `esp_timer_get_time()` (and with it
+/// Arduino `millis()`/`micros()`/`delayMicroseconds()`) runs 240x fast.
+const LACT_CPU_MHZ: u32 = 240;
 
 // Watchdog. The module's default layout is the ESP32-classic one: five config
 // registers WDTCONFIG0..4 @0x48..0x58, WDTFEED @0x5C, WDTWPROTECT @0x60.
@@ -482,17 +488,22 @@ impl Timg {
         }
     }
 
-    /// Advance LACT by one simulated microsecond's worth of APB cycles.
-    fn advance_lact(&mut self, ticks: u64) {
+    /// Advance LACT by `cpu_cycles` CPU cycles (the unit both `tick()` and
+    /// `sync_to` deliver). One CPU cycle is `APB_MHZ / LACT_CPU_MHZ` APB
+    /// cycles; the fractional APB remainder is carried in `lact_rem`, scaled
+    /// by `LACT_CPU_MHZ`, so no time is lost across calls.
+    fn advance_lact(&mut self, cpu_cycles: u64) {
         let Some(div) = self.lact_divider() else {
             return;
         };
-        // Accumulate undivided APB cycles, then convert whole quotients.
-        // Saturating rather than wrapping: a run long enough to overflow
-        // this has bigger problems than a timer glitch.
-        let cycles = (ticks.saturating_mul(APB_MHZ as u64)).saturating_add(self.lact_rem as u64);
-        self.counter_lact = self.counter_lact.wrapping_add(cycles / div as u64);
-        self.lact_rem = (cycles % div as u64) as u32;
+        // Units: APB cycles x LACT_CPU_MHZ. Saturating rather than wrapping:
+        // a run long enough to overflow this has bigger problems.
+        let scaled = cpu_cycles
+            .saturating_mul(APB_MHZ as u64)
+            .saturating_add(self.lact_rem as u64);
+        let per_tick = div as u64 * LACT_CPU_MHZ as u64;
+        self.counter_lact = self.counter_lact.wrapping_add(scaled / per_tick);
+        self.lact_rem = (scaled % per_tick) as u32;
     }
 
     /// Latch the live LACT counter into LACT_LO/LACT_HI. Real silicon
@@ -1196,7 +1207,8 @@ mod tests {
         // LACT_EN | divider 40 at bits [28:13] — what esp_timer programs for
         // the 2 MHz tick esp_timer_get_time() halves into microseconds.
         write_u32(&mut t, 0x70, (1 << 31) | (40 << 13));
-        for _ in 0..1000 {
+        // tick() is one CPU cycle: 1000 us at 240 MHz is 240_000 cycles.
+        for _ in 0..240_000 {
             t.tick();
         }
         // 1000 us at APB 80 MHz / 40 = 2 ticks per us.
@@ -1204,6 +1216,29 @@ mod tests {
         write_u32(&mut t, 0x80, 1); // LACT_UPDATE latches LO/HI
         assert_eq!(read_u32(&t, 0x78), 2000);
         assert_eq!(read_u32(&t, 0x7C), 0);
+    }
+
+    /// esp_timer must run at wall rate against the CPU clock: one simulated
+    /// second (240 M CPU cycles, scheduler `sync_to`) is exactly 1 s of LACT
+    /// time (2 M ticks at the 2 MHz esp_timer programs), including when the
+    /// span arrives in odd-sized pieces that do not divide the APB ratio.
+    #[test]
+    fn lact_sync_to_tracks_cpu_clock_not_cycles_as_microseconds() {
+        let mut t = Timg::new(0x3FF5_F000).with_lact();
+        write_u32(&mut t, 0x70, (1 << 31) | (40 << 13));
+        let mut now = 0u64;
+        for step in [1u64, 7, 239, 1_000, 123_457].iter().cycle() {
+            if now >= 240_000_000 {
+                break;
+            }
+            now = (now + step).min(240_000_000);
+            t.sync_to(now);
+        }
+        assert_eq!(
+            t.counter_lact(),
+            2_000_000,
+            "1 s of CPU cycles = 1 s of esp_timer"
+        );
     }
 
     // ── C3/C6 MWDT (with_mwdt) ──────────────────────────────────────────────
