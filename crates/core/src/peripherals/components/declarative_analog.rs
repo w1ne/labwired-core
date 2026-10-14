@@ -79,6 +79,9 @@ pub struct DeclarativeAnalogDevice {
     formula: Option<CompiledExpr>,
     last_good_mv: std::cell::Cell<u16>,
     v_ref_mv: f32,
+    /// `supply_mv / ratiometric_ref_mv` for a ratiometric part placed on a
+    /// stated supply; 1.0 otherwise.
+    supply_scale: f64,
     /// system.yaml `external_devices` id, stamped at attach (see
     /// [`crate::sim_input::SimInput::component_id`]).
     component_id: Option<String>,
@@ -146,6 +149,7 @@ impl DeclarativeAnalogDevice {
             formula,
             last_good_mv: std::cell::Cell::new(0),
             v_ref_mv: 3300.0,
+            supply_scale: 1.0,
             component_id: None,
         };
         if device.derived.iter().any(CompiledDerived::is_exact) {
@@ -154,6 +158,20 @@ impl DeclarativeAnalogDevice {
                 .context("invalid default input evaluation")?;
         }
         Ok(device)
+    }
+
+    /// Put a ratiometric part on a supply of `supply_mv`: the output scales
+    /// with it and may reach it. Refused for a part whose curve is absolute.
+    pub fn set_supply_mv(&mut self, supply_mv: f64, ratiometric_ref_mv: Option<f32>) -> Result<()> {
+        let Some(reference) = ratiometric_ref_mv else {
+            bail!("supply_mv is only meaningful for a ratiometric part (behavior.analog.ratiometric_ref_mv)");
+        };
+        if !(supply_mv.is_finite() && supply_mv > 0.0 && supply_mv <= 65535.0) {
+            bail!("supply_mv must be in (0, 65535], got {supply_mv}");
+        }
+        self.supply_scale = supply_mv / f64::from(reference);
+        self.v_ref_mv = supply_mv as f32;
+        Ok(())
     }
 
     pub fn channel(&self) -> u8 {
@@ -202,7 +220,7 @@ impl DeclarativeAnalogDevice {
             Some(f) => f.eval_with(&slots),
             None => self.curve_mv(&slots),
         };
-        let value = self.quantise(mv);
+        let value = self.quantise(mv * self.supply_scale);
         self.last_good_mv.set(value);
         Ok(value)
     }
@@ -594,6 +612,17 @@ impl PeripheralKit for DeclarativeAnalogKit {
                 })?;
             }
         }
+        if let Some(supply_mv) = ctx.config_f64("supply_mv") {
+            let reference = self
+                .descriptor
+                .behavior
+                .analog
+                .as_ref()
+                .and_then(|a| a.ratiometric_ref_mv);
+            device
+                .set_supply_mv(supply_mv, reference)
+                .map_err(|e| anyhow::anyhow!("device '{}': {e}", ctx.device_id()))?;
+        }
         ctx.attach_analog_source(channel, Box::new(device))?;
         Ok(())
     }
@@ -784,6 +813,47 @@ behavior:
         assert_eq!(s.output_mv(), 3100);
         s.set_input("distance", 0.0).unwrap();
         assert_eq!(s.output_mv(), 3100);
+    }
+
+    fn analog_ref(stem: &str) -> Option<f32> {
+        let kit = DeclarativeAnalogKit::from_yaml(
+            labwired_config::embedded_device_yaml(stem).expect("embedded"),
+        )
+        .expect("valid descriptor");
+        kit.descriptor
+            .behavior
+            .analog
+            .as_ref()
+            .and_then(|a| a.ratiometric_ref_mv)
+    }
+
+    #[test]
+    fn a_potentiometer_on_a_5v_supply_spans_the_whole_rail() {
+        let mut pot = kit_device("potentiometer");
+        pot.set_supply_mv(5000.0, analog_ref("potentiometer"))
+            .expect("ratiometric");
+        for (pct, mv) in [(0.0, 0u16), (50.0, 2500), (100.0, 5000)] {
+            pot.set_input("position", pct).unwrap();
+            assert_eq!(pot.output_mv(), mv, "position {pct} %");
+        }
+    }
+
+    #[test]
+    fn a_potentiometer_with_no_supply_keeps_the_3v3_curve() {
+        let mut pot = kit_device("potentiometer");
+        pot.set_input("position", 100.0).unwrap();
+        assert_eq!(pot.output_mv(), 3300);
+    }
+
+    #[test]
+    fn supply_mv_is_refused_for_an_absolute_curve_and_out_of_range() {
+        let mut ir = kit_device("gp2y0a21");
+        assert!(ir.set_supply_mv(5000.0, analog_ref("gp2y0a21")).is_err());
+        let mut pot = kit_device("potentiometer");
+        assert!(pot.set_supply_mv(0.0, analog_ref("potentiometer")).is_err());
+        assert!(pot
+            .set_supply_mv(f64::NAN, analog_ref("potentiometer"))
+            .is_err());
     }
 
     #[test]

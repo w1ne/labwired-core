@@ -3191,6 +3191,14 @@ pub struct AnalogSpec {
     /// or hold the last point's voltage (`hold_last`).
     #[serde(default)]
     pub above_last: AnalogAboveLast,
+    /// A RATIOMETRIC part (a potentiometer, a divider across the supply)
+    /// outputs a fraction of whatever rail its ends sit on. The curve is then
+    /// written at this reference supply in mV, and a placed part's
+    /// `config.supply_mv` rescales it: a pot on a 5 V Uno reaches 5000 mV,
+    /// not the curve's 3300. Absent: the curve is absolute and `supply_mv`
+    /// is refused.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ratiometric_ref_mv: Option<f32>,
 }
 
 /// How an `analog_source`'s real millivolt value becomes the integer count the
