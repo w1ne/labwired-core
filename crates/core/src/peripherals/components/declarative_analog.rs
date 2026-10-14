@@ -148,7 +148,7 @@ impl DeclarativeAnalogDevice {
             evaluation_fault: std::cell::RefCell::new(None),
             formula,
             last_good_mv: std::cell::Cell::new(0),
-            v_ref_mv: 3300.0,
+            v_ref_mv: curve_rail_mv(spec),
             supply_scale: 1.0,
             component_id: None,
         };
@@ -299,7 +299,18 @@ impl DeclarativeAnalogDevice {
 /// `formula:`; a curve of at least two points, strictly ascending in input,
 /// with voltages inside the 3.3 V rail; and a `source:` whenever the part has
 /// more than one stimulus channel to choose between.
+/// The rail a curve is written against: a ratiometric part's
+/// `ratiometric_ref_mv` (a 5 V pot curve is authored at 5000), else 3.3 V.
+fn curve_rail_mv(spec: &AnalogSpec) -> f32 {
+    spec.ratiometric_ref_mv.unwrap_or(3300.0)
+}
+
 fn validate_spec(spec: &AnalogSpec, input_count: usize) -> Result<()> {
+    if let Some(r) = spec.ratiometric_ref_mv {
+        if !(r.is_finite() && r > 0.0 && r <= 65535.0) {
+            bail!("ratiometric_ref_mv must be in (0, 65535], got {r}");
+        }
+    }
     match (spec.curve.is_empty(), spec.formula.is_some()) {
         (true, false) => bail!(
             "behavior.analog states neither `curve:` nor `formula:` — an analog_source with no \
@@ -343,14 +354,15 @@ fn validate_spec(spec: &AnalogSpec, input_count: usize) -> Result<()> {
             );
         }
     }
+    let rail = curve_rail_mv(spec);
     for &(d, v) in &spec.curve {
-        if !(0.0..=3300.0).contains(&v) {
-            bail!("analog curve point ({d}, {v}) has a voltage outside 0..3300 mV");
+        if !(0.0..=rail).contains(&v) {
+            bail!("analog curve point ({d}, {v}) has a voltage outside 0..{rail} mV");
         }
     }
     if let Some(floor) = spec.above_last.floor_mv {
-        if !(0.0..=3300.0).contains(&floor) {
-            bail!("analog above_last floor {floor} is outside 0..3300 mV");
+        if !(0.0..=rail).contains(&floor) {
+            bail!("analog above_last floor {floor} is outside 0..{rail} mV");
         }
     }
     if input_count > 1 && spec.source.is_none() {
@@ -854,6 +866,34 @@ behavior:
         assert!(pot
             .set_supply_mv(f64::NAN, analog_ref("potentiometer"))
             .is_err());
+    }
+
+    const POT_5V: &str = "type: pot5\nbehavior:\n  primitive: analog_source\n  analog:\n    ratiometric_ref_mv: 5000\n    curve:\n      - [0, 0]\n      - [100, 5000]\nmetadata:\n  inputs:\n    - { key: position, label: Position, unit: '%', min: 0, max: 100 }\n";
+
+    #[test]
+    fn a_pot_curve_written_at_5v_loads_and_reads_the_whole_rail() {
+        let kit = DeclarativeAnalogKit::from_yaml(POT_5V).expect("5 V ratiometric curve loads");
+        let reference = kit
+            .descriptor
+            .behavior
+            .analog
+            .as_ref()
+            .unwrap()
+            .ratiometric_ref_mv;
+        let mut pot = DeclarativeAnalogDevice::from_descriptor(&kit.descriptor, 0, kit.channels)
+            .expect("device builds");
+        pot.set_input("position", 100.0).unwrap();
+        assert_eq!(pot.output_mv(), 5000);
+        pot.set_supply_mv(3300.0, reference).unwrap();
+        assert_eq!(pot.output_mv(), 3300);
+    }
+
+    #[test]
+    fn an_absolute_curve_above_3v3_is_still_rejected() {
+        assert!(DeclarativeAnalogKit::from_yaml(
+            &POT_5V.replace("    ratiometric_ref_mv: 5000\n", "")
+        )
+        .is_err());
     }
 
     #[test]
