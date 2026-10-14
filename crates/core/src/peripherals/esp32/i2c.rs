@@ -160,7 +160,15 @@ pub struct Esp32I2c {
     /// The command list's waveform, narrated onto the pads when the list
     /// finishes (this engine charges no wire time as it runs).
     wire: EspI2cWire,
+    /// Scheduler mode: an MMIO write changed the interrupt level
+    /// (`int_raw & int_ena != 0`). Nothing re-derives a classic DPORT level
+    /// except a scheduler event, so the change is handed to the scheduler as
+    /// a zero-delay wake (see `take_scheduled_events`).
+    level_wake: bool,
 }
+
+/// Event token for the zero-delay level re-derivation wake.
+const I2C_LEVEL_WAKE_TOKEN: u32 = 0x12C0_0001;
 
 /// AHB-bus TX FIFO alias (`I2C0` at `0x6001_301c`). esp-idf `i2c_ll_write_txfifo`
 /// writes here instead of the APB DATA register at `0x3FF5_301c`.
@@ -202,6 +210,7 @@ impl Esp32I2c {
             intr_source_id: I2C0_INTR_SOURCE_ID,
             wire: EspI2cWire::new(),
             other: BTreeMap::new(),
+            level_wake: false,
         }
     }
 
@@ -438,50 +447,38 @@ impl Peripheral for Esp32I2c {
     }
 
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
-        if i2c_trace_enabled() {
-            eprintln!("ESP32 I2C W [0x{offset:02x}] = 0x{value:08x}");
+        let before = self.int_raw & self.int_ena != 0;
+        let out = self.write_u32_regs(offset, value);
+        if self.scheduler_mode() && (self.int_raw & self.int_ena != 0) != before {
+            self.level_wake = true;
         }
-        match offset {
-            REG_CTR => {
-                self.ctr = value;
-                if value & CTR_TRANS_START_BIT != 0 {
-                    self.run_command_list();
-                    // Auto-clear TRANS_START like real silicon.
-                    self.ctr &= !CTR_TRANS_START_BIT;
-                }
-            }
-            REG_SLAVE_ADDR => self.slave_addr = value,
-            REG_DATA => {
-                let mut tx = self.tx_fifo.lock().unwrap();
-                if tx.len() < FIFO_CAPACITY {
-                    tx.push_back((value & 0xFF) as u8);
-                }
-            }
-            REG_FIFO_CONF => {
-                self.fifo_conf = value;
-                // Bit 12 = RX_FIFO_RST; bit 13 = TX_FIFO_RST. Self-clearing.
-                if value & FIFO_CONF_RX_RST != 0 {
-                    self.core.rx_clear();
-                }
-                if value & FIFO_CONF_TX_RST != 0 {
-                    self.tx_fifo.lock().unwrap().clear();
-                    self.tx_pop_count = 0;
-                }
-                self.fifo_conf &= !(FIFO_CONF_RX_RST | FIFO_CONF_TX_RST);
-            }
-            REG_INT_CLR => self.int_raw &= !value,
-            REG_INT_ENA => self.int_ena = value,
-            REG_CMD0..=REG_CMD15 => {
-                let idx = ((offset - REG_CMD0) / 4) as usize;
-                if let Some(slot) = self.cmds.get_mut(idx) {
-                    *slot = value;
-                }
-            }
-            other => {
-                self.other.insert(other, value);
-            }
+        out
+    }
+
+    /// A level edge caused by an MMIO write (TRANS_START completing the
+    /// command list, INT_ENA, INT_CLR) must reach the DPORT matrix now. On a
+    /// classic bus the scheduler re-derives levels only when an event fires
+    /// (`apply_event_result` -> `deliver_scheduled_irq_levels`); without this
+    /// wake, a loop task that blocks on the I2C ISR with no other scheduled
+    /// activity (no UART TX in flight) waits out the driver's whole timeout
+    /// (Arduino `Wire`: ~1 s per transaction, e.g. `LiquidCrystal_I2C::init`).
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        if std::mem::take(&mut self.level_wake) {
+            vec![(0, I2C_LEVEL_WAKE_TOKEN)]
+        } else {
+            Vec::new()
         }
-        Ok(())
+    }
+
+    /// The wake carries no work: firing it is what makes the event path
+    /// re-poll `matrix_irq_sources_into` and route the current level.
+    fn on_event(
+        &mut self,
+        _event_token: u32,
+        _sched: &mut crate::sched::EventScheduler,
+        _bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        crate::sched::EventResult::default()
     }
 
     fn tick(&mut self) -> PeripheralTickResult {
@@ -584,6 +581,55 @@ impl Peripheral for Esp32I2c {
 }
 
 impl Esp32I2c {
+    /// The register-file write itself; `Peripheral::write_u32` wraps it to
+    /// notice interrupt-level edges.
+    fn write_u32_regs(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        if i2c_trace_enabled() {
+            eprintln!("ESP32 I2C W [0x{offset:02x}] = 0x{value:08x}");
+        }
+        match offset {
+            REG_CTR => {
+                self.ctr = value;
+                if value & CTR_TRANS_START_BIT != 0 {
+                    self.run_command_list();
+                    // Auto-clear TRANS_START like real silicon.
+                    self.ctr &= !CTR_TRANS_START_BIT;
+                }
+            }
+            REG_SLAVE_ADDR => self.slave_addr = value,
+            REG_DATA => {
+                let mut tx = self.tx_fifo.lock().unwrap();
+                if tx.len() < FIFO_CAPACITY {
+                    tx.push_back((value & 0xFF) as u8);
+                }
+            }
+            REG_FIFO_CONF => {
+                self.fifo_conf = value;
+                // Bit 12 = RX_FIFO_RST; bit 13 = TX_FIFO_RST. Self-clearing.
+                if value & FIFO_CONF_RX_RST != 0 {
+                    self.core.rx_clear();
+                }
+                if value & FIFO_CONF_TX_RST != 0 {
+                    self.tx_fifo.lock().unwrap().clear();
+                    self.tx_pop_count = 0;
+                }
+                self.fifo_conf &= !(FIFO_CONF_RX_RST | FIFO_CONF_TX_RST);
+            }
+            REG_INT_CLR => self.int_raw &= !value,
+            REG_INT_ENA => self.int_ena = value,
+            REG_CMD0..=REG_CMD15 => {
+                let idx = ((offset - REG_CMD0) / 4) as usize;
+                if let Some(slot) = self.cmds.get_mut(idx) {
+                    *slot = value;
+                }
+            }
+            other => {
+                self.other.insert(other, value);
+            }
+        }
+        Ok(())
+    }
+
     /// Walk COMD0..COMD15 from the start, executing each command. A WRITE whose
     /// first byte follows an RSTART is interpreted as `(addr<<1)|R/W` and selects
     /// the active slave by address bits [7:1]. Subsequent WRITE bytes are
@@ -891,6 +937,43 @@ mod tests {
         p.int_raw = INT_TRANS_COMPLETE | INT_NACK;
         p.write_u32(REG_INT_CLR, INT_NACK).unwrap();
         assert_eq!(p.read_u32(REG_INT_RAW).unwrap(), INT_TRANS_COMPLETE);
+    }
+
+    /// Scheduler mode: an MMIO write that flips the interrupt level hands the
+    /// scheduler exactly one zero-delay wake, so the classic DPORT route is
+    /// re-derived at the write instead of at the next unrelated event (the
+    /// loop task otherwise waits out the whole Wire timeout per transaction).
+    #[test]
+    fn level_edge_from_mmio_write_requests_one_scheduler_wake() {
+        let mut p = Esp32I2c::new();
+        p.attach_cycle_clock(crate::cycle_clock::CycleClock::default());
+        let sched = cfg!(feature = "event-scheduler");
+        p.int_raw = INT_TRANS_COMPLETE;
+        assert!(p.take_scheduled_events().is_empty(), "no write, no wake");
+        p.write_u32(REG_INT_ENA, INT_TRANS_COMPLETE).unwrap(); // level rises
+        assert_eq!(
+            p.take_scheduled_events(),
+            if sched {
+                vec![(0, I2C_LEVEL_WAKE_TOKEN)]
+            } else {
+                vec![]
+            }
+        );
+        assert!(p.take_scheduled_events().is_empty(), "one wake per edge");
+        p.write_u32(REG_INT_ENA, INT_TRANS_COMPLETE).unwrap(); // level unchanged
+        assert!(p.take_scheduled_events().is_empty(), "no edge, no wake");
+        p.write_u32(REG_INT_CLR, INT_TRANS_COMPLETE).unwrap(); // level falls
+        assert_eq!(p.take_scheduled_events().len(), usize::from(sched));
+    }
+
+    /// Without a clock (legacy walk) the walk's `tick()` carries the level, so
+    /// no wake is requested.
+    #[test]
+    fn walk_mode_requests_no_level_wake() {
+        let mut p = Esp32I2c::new();
+        p.int_raw = INT_TRANS_COMPLETE;
+        p.write_u32(REG_INT_ENA, INT_TRANS_COMPLETE).unwrap();
+        assert!(p.take_scheduled_events().is_empty());
     }
 
     #[test]
