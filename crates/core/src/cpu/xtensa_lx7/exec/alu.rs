@@ -291,6 +291,26 @@ impl XtensaLx7 {
         Ok(())
     }
 
+    /// MOVF (`when_set == false`) / MOVT (`when_set == true`): move as -> ar
+    /// when BR[bt] equals `when_set`.
+    #[inline(always)]
+    pub(in crate::cpu::xtensa_lx7) fn exec_movbool(
+        &mut self,
+        _bus: &mut dyn Bus,
+        len: u32,
+        ar: u8,
+        as_: u8,
+        bt: u8,
+        when_set: bool,
+    ) -> SimResult<()> {
+        if ((self.br >> (bt & 0xF)) & 1 == 1) == when_set {
+            let v = self.regs.read_logical(as_);
+            self.regs.write_logical(ar, v);
+        }
+        self.pc = self.pc.wrapping_add(len);
+        Ok(())
+    }
+
     #[inline(always)]
     pub(in crate::cpu::xtensa_lx7) fn exec_addi(
         &mut self,

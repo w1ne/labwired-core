@@ -586,6 +586,18 @@ pub enum Instruction {
         as_: u8,
         at: u8,
     },
+    /// movf ar, as, bt : if BR[bt] == 0 then ar = as (Boolean option)
+    Movf {
+        ar: u8,
+        as_: u8,
+        bt: u8,
+    },
+    /// movt ar, as, bt : if BR[bt] == 1 then ar = as (Boolean option)
+    Movt {
+        ar: u8,
+        as_: u8,
+        bt: u8,
+    },
     // -- Misc --
     Nop,
     Break {
@@ -1215,6 +1227,19 @@ fn decode_qrst(w: u32) -> Instruction {
                     ar: r,
                     as_: s,
                     at: t,
+                },
+                // MOVF/MOVT (Boolean option, op2=0xC/0xD): t names a BR bit,
+                // not an AR. gcc emits `movf aX, aY, b0` after a float
+                // compare (e.g. `x >= 0 ? a : b`); c34800 = movf a4, a8, b0.
+                0xC => Instruction::Movf {
+                    ar: r,
+                    as_: s,
+                    bt: t,
+                },
+                0xD => Instruction::Movt {
+                    ar: r,
+                    as_: s,
+                    bt: t,
                 },
                 0xE => {
                     let ur = ((s as u16) << 4) | (t as u16);
@@ -2284,6 +2309,7 @@ impl Instruction {
             | Movnez { ar, as_, at }
             | Movltz { ar, as_, at }
             | Movgez { ar, as_, at } => ar.max(as_).max(at),
+            Movf { ar, as_, .. } | Movt { ar, as_, .. } => ar.max(as_),
             Rsil { at, .. } => at,
             Extui { ar, at, .. } => ar.max(at),
             // FP ops: the FR file is separate from the AR window, so only the

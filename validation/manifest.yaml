@@ -6978,7 +6978,7 @@ boards:
     # the generic Xtensa BB JIT emit core (#1139) — the merge of the two is one
     # digest, so it is re-stamped once here rather than twice.
     drift_ack: 2026-09-18
-    drift_ack_digest: cf1db40eb9111ed2070ba9085f129c2cf1676c3a756a5a973de12f62a2e72e21
+    drift_ack_digest: cbc85aacf7771a4da4d4f589fc21ca0474d3b80b7f4b8495a61c6842a16222ec
     #
     # 2026-09-18 (execute split): no execution change. The arm bodies of
     # `XtensaLx7::execute` moved verbatim into `cpu/xtensa_lx7/exec/*.rs` as
@@ -7125,6 +7125,11 @@ boards:
     # snapshot format V3, older snapshots still load. No other S3 register map or
     # reset value changed. Approved by the maintainer. ACK, NOT A CAPTURE.
     drift_ack: 2026-10-11
+    # 2026-10-14 (integer MOVF/MOVT): the Xtensa decoder gains the Boolean-option
+    # integer conditional moves (RST3 op2=0xC/0xD), which previously raised
+    # IllegalInstruction. No register map, reset value or existing instruction
+    # changed; pinned by integer_movf_movt_select_on_boolean_register. ACK, NOT A CAPTURE.
+    drift_ack: 2026-10-14
 
   - id: esp32s3-zero
     # Board variant of esp32s3: same silicon (LX7), 4 MiB flash / 480 KiB RAM.

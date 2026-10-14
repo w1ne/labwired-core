@@ -113,6 +113,7 @@ fn bus_free(ins: &xtensa::Instruction) -> bool {
             | Moveqz { .. }
             | MoveqzS { .. }
             | MovfS { .. }
+            | Movf { .. }
             | Movgez { .. }
             | MovgezS { .. }
             | Movi { .. }
@@ -121,6 +122,7 @@ fn bus_free(ins: &xtensa::Instruction) -> bool {
             | Movnez { .. }
             | MovnezS { .. }
             | Movsp { .. }
+            | Movt { .. }
             | MovtS { .. }
             | MsubS { .. }
             | Mul16s { .. }
@@ -1479,6 +1481,8 @@ impl XtensaLx7 {
             Movnez { ar, as_, at } => self.exec_movnez(bus, len, ar, as_, at),
             Movltz { ar, as_, at } => self.exec_movltz(bus, len, ar, as_, at),
             Movgez { ar, as_, at } => self.exec_movgez(bus, len, ar, as_, at),
+            Movf { ar, as_, bt } => self.exec_movbool(bus, len, ar, as_, bt, false),
+            Movt { ar, as_, bt } => self.exec_movbool(bus, len, ar, as_, bt, true),
             Waiti { level } => self.exec_waiti(bus, len, level),
             // Xtensa Zero Overhead Loops (LOOP / LOOPNEZ / LOOPGTZ).
             // ISA RM §4.3.2: LCOUNT = as_ - 1, LBEG = PC + 3 (after LOOP),
@@ -3269,6 +3273,46 @@ mod fp_tests {
     fn run(cpu: &mut XtensaLx7, bus: &mut RamBus, word: u32) {
         let ins = decode(word);
         cpu.execute(ins, bus, 3).expect("exec");
+    }
+
+    /// Integer MOVF/MOVT (Boolean option). 0xc34800 is `movf a4, a8, b0`,
+    /// taken verbatim from an arduino-esp32 2.0.17 image (gcc's lowering of a
+    /// float-compare select), which raised IllegalInstruction before.
+    #[test]
+    fn integer_movf_movt_select_on_boolean_register() {
+        assert_eq!(
+            decode(0xc34800),
+            crate::decoder::xtensa::Instruction::Movf {
+                ar: 4,
+                as_: 8,
+                bt: 0
+            }
+        );
+        assert_eq!(
+            decode(0xd34800),
+            crate::decoder::xtensa::Instruction::Movt {
+                ar: 4,
+                as_: 8,
+                bt: 0
+            }
+        );
+        let mut bus = RamBus::new();
+        for (word, b0, moves) in [
+            (0xc34800u32, 0u32, true), // movf, b0 clear -> move
+            (0xc34800, 1, false),      // movf, b0 set   -> keep
+            (0xd34800, 1, true),       // movt, b0 set   -> move
+            (0xd34800, 0, false),      // movt, b0 clear -> keep
+        ] {
+            let mut cpu = XtensaLx7::new();
+            cpu.br = b0 as u16;
+            cpu.regs.write_logical(4, 1);
+            cpu.regs.write_logical(8, 0xdead_beef);
+            let pc = cpu.pc;
+            run(&mut cpu, &mut bus, word);
+            let want = if moves { 0xdead_beef } else { 1 };
+            assert_eq!(cpu.regs.read_logical(4), want, "word {word:#x} b0={b0}");
+            assert_eq!(cpu.pc, pc.wrapping_add(3));
+        }
     }
 
     #[test]

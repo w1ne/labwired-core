@@ -420,6 +420,10 @@ const XTENSA: ArchCoverage = ArchCoverage {
         ("Min", "min/max ALU op, not in the JIT hot-block op set"),
         ("Minu", "min/max ALU op, not in the JIT hot-block op set"),
         ("MovS", "FPU (single-precision) move, not translated"),
+        (
+            "Movf",
+            "Boolean conditional move, not in the JIT hot-block op set",
+        ),
         ("MovfS", "FPU conditional move, not translated"),
         ("MovgezS", "FPU conditional move, not translated"),
         (
@@ -442,6 +446,10 @@ const XTENSA: ArchCoverage = ArchCoverage {
         ),
         ("MoveqzS", "FPU conditional move, not translated"),
         ("Movsp", "windowed-ABI stack-pointer move, interpreter only"),
+        (
+            "Movt",
+            "Boolean conditional move, not in the JIT hot-block op set",
+        ),
         ("MovtS", "FPU conditional move, not translated"),
         (
             "MsubS",
