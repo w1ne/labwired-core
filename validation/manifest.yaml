@@ -2182,7 +2182,7 @@ boards:
     # reset value the reset-conformance capture asserts is touched: the new
     # behaviour lives in exchange memory and the radio event path, which that
     # capture does not cover. This acknowledges model drift, NOT a recapture.
-    drift_ack_digest: d64027ef2a8aec682852ec6d086d7e41dccb4f41ab448f8dab9f370456bd00c7
+    drift_ack_digest: d43aec647c455db7357a464ba2dc9d26abdf97ab70293fa6dc5dd25f24b24ebb
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
@@ -2911,6 +2911,9 @@ boards:
     # 2026-10-14 (esp32 LACT timebase): timg.rs is shared, but only the classic-only
     # LACT counter (with_lact) changed — it now converts CPU cycles to APB at 80/240.
     # C3/C6 TIMG/MWDT paths untouched. No register map or reset value changed. ACK, NOT A CAPTURE.
+    # 2026-10-14 (classic BROM libgcc soft-float thunks): rom_thunks.rs gains
+    # IEEE thunks registered only by the classic ESP32 builder; no thunk this
+    # board registers changed. ACK, NOT A CAPTURE.
     drift_ack: 2026-10-14
 
   - id: nucleo-l476rg
@@ -6978,7 +6981,7 @@ boards:
     # the generic Xtensa BB JIT emit core (#1139) — the merge of the two is one
     # digest, so it is re-stamped once here rather than twice.
     drift_ack: 2026-09-18
-    drift_ack_digest: cbc85aacf7771a4da4d4f589fc21ca0474d3b80b7f4b8495a61c6842a16222ec
+    drift_ack_digest: 0cd45ae55dc83cb06ddaf35f68704fba592344a60e5ebd3cce7e1a57c6f8c68d
     #
     # 2026-09-18 (execute split): no execution change. The arm bodies of
     # `XtensaLx7::execute` moved verbatim into `cpu/xtensa_lx7/exec/*.rs` as
@@ -7128,6 +7131,9 @@ boards:
     # integer conditional moves (RST3 op2=0xC/0xD), which previously raised
     # IllegalInstruction. No register map, reset value or existing instruction
     # changed; pinned by integer_movf_movt_select_on_boolean_register. ACK, NOT A CAPTURE.
+    # 2026-10-14 (classic BROM libgcc soft-float thunks): rom_thunks.rs gains
+    # IEEE thunks registered only by the classic ESP32 builder; no thunk this
+    # board registers changed. ACK, NOT A CAPTURE.
     drift_ack: 2026-10-14
 
   - id: esp32s3-zero
