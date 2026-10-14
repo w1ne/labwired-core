@@ -281,10 +281,17 @@ impl DeclarativeAnalogDevice {
         }
     }
 
-    /// Convert `output_mv` to a 12-bit ADC count (0..4095) for 3.3 V Vref.
-    pub fn adc_count(&self) -> u16 {
-        let mv = self.output_mv() as u32;
-        ((mv * 4095) / 3300).min(4095) as u16
+    /// `output_mv` as a count on an ADC with reference `vref_mv` and `bits` of
+    /// resolution (an Uno: 5000 mV, 10 bits; an ESP32: 3300 mV, 12 bits),
+    /// clamped to that converter's range. The reference is the MCU's, not the
+    /// part's curve rail, so a 5 V ratiometric pot reads full scale on a 5 V ADC.
+    pub fn adc_count(&self, vref_mv: u32, bits: u8) -> u16 {
+        let full = (1u32 << bits.clamp(1, 16)) - 1;
+        if vref_mv == 0 {
+            return 0;
+        }
+        let mv = u64::from(self.output_mv());
+        ((mv * u64::from(full)) / u64::from(vref_mv)).min(u64::from(full)) as u16
     }
 
     pub fn as_any(&self) -> &dyn Any {
@@ -884,6 +891,7 @@ behavior:
             .expect("device builds");
         pot.set_input("position", 100.0).unwrap();
         assert_eq!(pot.output_mv(), 5000);
+        assert_eq!(pot.adc_count(5000, 10), 1023);
         pot.set_supply_mv(3300.0, reference).unwrap();
         assert_eq!(pot.output_mv(), 3300);
     }
@@ -900,7 +908,10 @@ behavior:
     fn adc_count_scales_with_voltage() {
         let mut s = device();
         s.set_input("distance", 100.0).unwrap();
-        assert_eq!(s.adc_count(), (3100u32 * 4095 / 3300) as u16);
+        assert_eq!(s.adc_count(3300, 12), (3100u32 * 4095 / 3300) as u16);
+        // Same 3.1 V on a 5 V, 10-bit converter; and clamped to its range.
+        assert_eq!(s.adc_count(5000, 10), (3100u32 * 1023 / 5000) as u16);
+        assert_eq!(s.adc_count(1000, 10), 1023);
     }
 
     #[test]
