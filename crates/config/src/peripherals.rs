@@ -2046,6 +2046,12 @@ pub struct I2cCommand {
     /// word plus CRC on the wire). Accepted and ignored.
     #[serde(default)]
     pub params_words: u8,
+    /// Continuous-measurement command: once dispatched, every later read phase
+    /// re-samples the response from the current inputs (BH1750 `0x10`, where
+    /// the master writes the mode once and then only reads). Default false:
+    /// the response is latched at dispatch, as for a one-shot measurement.
+    #[serde(default)]
+    pub continuous: bool,
 }
 
 /// One word of a command response — either a live measurement (`source`) or a

@@ -133,6 +133,9 @@ pub struct GenericI2cDevice {
     write_buf: Vec<u8>,
     /// Bytes queued for the master to read; drained by `read`.
     read_buf: Vec<u8>,
+    /// The last dispatched command, when it is `continuous`: each new read
+    /// phase rebuilds `read_buf` from the current inputs.
+    continuous_cmd: Option<u16>,
     read_idx: usize,
     /// Register mode: whether `read_buf` has been latched for this read phase.
     latched: bool,
@@ -352,6 +355,7 @@ impl GenericI2cDevice {
             pointer: (spec.pointer_bytes == 0).then_some(0),
             write_buf: Vec::with_capacity(8),
             read_buf: Vec::new(),
+            continuous_cmd: None,
             read_idx: 0,
             latched: false,
             response_failed: false,
@@ -1176,12 +1180,14 @@ impl GenericI2cDevice {
         self.read_buf.clear();
         self.read_idx = 0;
         self.pending = None;
+        self.continuous_cmd = None;
         let Some(cmd) = self.find_command(code) else {
             // Unknown command: no response queued (reads return 0xFF), matching
             // the Sensirion reference (scd41).
             return;
         };
         let cmd = cmd.clone();
+        self.continuous_cmd = cmd.continuous.then_some(code);
         // One observation per dispatched command: the whole response frame
         // (every word + CRC) is computed from a single noise-applied slot view.
         let Ok(slots) = self.observed_slots() else {
@@ -1758,6 +1764,16 @@ impl I2cDevice for GenericI2cDevice {
             if self.pending.is_some() && self.elapsed_us >= self.ready_at_us {
                 self.read_buf = self.pending.take().unwrap();
                 self.read_idx = 0;
+            }
+            // Continuous mode: the first byte of a read phase samples afresh.
+            if self.read_idx == 0 && self.pending.is_none() {
+                if let Some(code) = self.continuous_cmd {
+                    if let Some(cmd) = self.find_command(code).cloned() {
+                        if let Ok(slots) = self.observed_slots() {
+                            self.read_buf = self.build_response(&cmd, code, &slots);
+                        }
+                    }
+                }
             }
             // `not_ready_byte` — the byte the part answers while a delayed
             // response is still cooking. Absent ⇒ 0xFF (open bus), which is what

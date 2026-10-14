@@ -25,14 +25,17 @@ behavior:
         code: 0x07
       # Continuous measurement modes.
       - name: cont_h_res
+        continuous: true
         code: 0x10
         response:
           - { source: lux, width: 2, encode: { scale: 1.2 } }
       - name: cont_h_res2
+        continuous: true
         code: 0x11
         response:
           - { source: lux, width: 2, encode: { scale: 1.2 } }
       - name: cont_l_res
+        continuous: true
         code: 0x13
         response:
           - { source: lux, width: 2, encode: { scale: 1.2 } }

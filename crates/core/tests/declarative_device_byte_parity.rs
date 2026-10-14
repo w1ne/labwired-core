@@ -348,3 +348,29 @@ fn max31855_transcript_is_unchanged() {
 const MAX31855_GOLDEN: &[u8] = &[
     0x01, 0x90, 0x16, 0x00, 0x55, 0xC0, 0xD8, 0x00, 0xEF, 0x20, 0x7D, 0x00,
 ];
+
+/// Continuous H-res mode (`0x10`): the master writes the opcode once and then
+/// only reads. Each read phase must sample the CURRENT lux, not replay the
+/// value latched when the opcode was written (BH1750 library `readLightLevel`).
+#[test]
+fn bh1750_continuous_mode_tracks_a_lux_change_without_a_new_opcode() {
+    let mut d = i2c_device("bh1750");
+    let steps = script([
+        vec![Step::Input("lux", 450.0)],
+        send_cmd8(0x10),
+        read_stream(2),
+        vec![Step::Input("lux", 1200.0)],
+        read_stream(2),  // no opcode in between
+        send_cmd8(0x20), // one-shot latches...
+        vec![Step::Input("lux", 100.0)],
+        read_stream(2), // ...and does not re-sample
+    ]);
+    let t = run_i2c(&mut d, &steps);
+    // 450 * 1.2 = 540 = 0x021C; 1200 * 1.2 = 1440 = 0x05A0.
+    assert_eq!(&t.bytes[..4], &[0x02, 0x1C, 0x05, 0xA0]);
+    assert_eq!(
+        &t.bytes[4..6],
+        &[0x05, 0xA0],
+        "one-shot keeps the dispatch-time value"
+    );
+}
