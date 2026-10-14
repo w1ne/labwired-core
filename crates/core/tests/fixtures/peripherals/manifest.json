@@ -1611,6 +1611,11 @@
           "name": "channel",
           "ty": "int",
           "doc": "ADC channel index (0..N). Defaults to 0."
+        },
+        {
+          "name": "supply_mv",
+          "ty": "float",
+          "doc": "Rail across the pot ends, in mV (default 3300). The wiper spans 0..supply_mv."
         }
       ],
       "labs": [],
