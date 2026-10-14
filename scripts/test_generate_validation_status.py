@@ -447,3 +447,15 @@ def test_write_ack_digests_leaves_undrifted_boards_alone(tmp_path, monkeypatch):
     gvs.write_ack_digests({"boards": boards}, stamp_all=True)
     lines = [ln for ln in manifest_file.read_text().splitlines() if "drift_ack_digest" in ln]
     assert all("newdigest" in ln for ln in lines), "--all must stamp both"
+
+
+def test_esp32c3_manifest_has_one_drift_ack():
+    # Inspect the syntax tree: safe_load silently discards duplicate keys.
+    root = yaml.compose(gvs.MANIFEST.read_text())
+    boards = next(value for key, value in root.value if key.value == "boards")
+    board = next(
+        node for node in boards.value
+        if any(key.value == "id" and value.value == "esp32c3"
+               for key, value in node.value)
+    )
+    assert sum(key.value == "drift_ack" for key, _ in board.value) == 1

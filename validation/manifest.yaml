@@ -2138,7 +2138,6 @@ boards:
     # Ran: labwired-core --lib 3260 pass / 0 fail, and nrf52_timer_walk_differential,
     # stm32f401/stm32l476_walk_differential, kw41z_walk_free_differential. This is an
     # ack, not a capture — no live re-capture was made.
-    drift_ack: 2026-09-15
     # 2026-09-17 (#1142): no model change. The inline `#[cfg(test)] mod tests`
     # blocks were moved out of 13 model source files (spi.rs, i2c.rs, tick.rs,
     # cortex_m.rs, esp32c3/{i2c,bt,virtual_wifi}.rs, esp32s3/gdma.rs, ...) into
@@ -2147,7 +2146,6 @@ boards:
     # `#[test]` counts before and after match exactly. The digest moves because
     # it hashes the whole file. This is an ACK, NOT A CAPTURE — a live
     # re-capture is still owed.
-    drift_ack: 2026-09-17
       #
       # Re-stamped 2026-08-22 for the EspI2cCore extraction in this branch: the ESP
       # I2C models moved wholesale into a shared core, so every digest over them
@@ -2184,8 +2182,7 @@ boards:
     # reset value the reset-conformance capture asserts is touched: the new
     # behaviour lives in exchange memory and the radio event path, which that
     # capture does not cover. This acknowledges model drift, NOT a recapture.
-    drift_ack: 2026-09-28
-    drift_ack_digest: d5dc508e063846d761e23dbc307c92d1e8ccdf18075c589eaf34b8176d920066
+    drift_ack_digest: d64027ef2a8aec682852ec6d086d7e41dccb4f41ab448f8dab9f370456bd00c7
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
@@ -2817,7 +2814,6 @@ boards:
     # C3 tier-1 fixture transcript is unchanged, and the C3 silicon
     # conformance tests pass. This is an ACK, not a capture — a live
     # re-capture is still owed.
-    drift_ack: 2026-09-20
     # 2026-09-20 (merge of main's RISC-V spin-loop recovery, PR #1206):
     # re-acked. The watched CPU sources moved again — riscv.rs and
     # decoder/riscv.rs gain the recovered bounded ADDI/back-branch
@@ -2825,7 +2821,6 @@ boards:
     # branch's additive I2C accessor. Nothing the C3 reset capture pins
     # moved: esp32c3_reset_conformance and the C3 tier-1 fixture transcript
     # are unchanged. This is an ACK, not a capture — re-capture still owed.
-    drift_ack: 2026-09-20
     # 2026-09-21 (feat/c6-irq-wdt-depth): two watched SHARED ESP files moved.
     # `esp_uart.rs` gained `matrix_irq_source_id()` — an additive accessor that
     # returns the source id the descriptor already declared; no register map,
@@ -2836,36 +2831,30 @@ boards:
     # (87-reg reset oracle vs the 2026-08-09 capture) and the C3 tier-1 fixture
     # still passes every cell. ACK, NOT A CAPTURE — the live re-capture owed
     # above is still owed.
-    drift_ack: 2026-09-21
     # 2026-09-23 (#1226): mapped-flash instruction fetch windowing in riscv.rs
     # — resolve the mapped-flash peripheral window once per region instead of
     # once per fetch. Decode/execution/register state unchanged. Watched
     # cpu/riscv.rs digest moves; ACK, NOT A CAPTURE. The live re-capture owed
     # above is still owed.
-    drift_ack: 2026-09-23
     # 2026-09-25: Esp32c3Spi grows `spi_attached_devices` so the write path
     # stops probing TypeId. No register map, reset value, or SPI programming
     # model changed.
     # ACK, NOT A CAPTURE. The live re-capture owed above is still owed.
-    drift_ack: 2026-09-25
     # 2026-09-27 (four-state pin trace, feat/timer-input-capture-hiz): watched
     # esp32c3/gpio.rs moved, TEST CODE ONLY: `PadEvent` gained a `drive` field,
     # so the `#[cfg(test)]` push-tap assertions spell `drive: None`. No model
     # line changed. Ran: cargo test -p labwired-core --lib.
     # ACK, NOT A CAPTURE.
-    drift_ack: 2026-09-27
     # 2026-09-30: RISC-V store-spin loops collapse into one plain RAM write, and
     # a stable UART status poll repeats without taking the lock. The recommended
     # scheduler interval is 1024. No register map or reset value changed.
     # ACK, NOT A CAPTURE. The live re-capture owed above is still owed.
-    drift_ack: 2026-09-30
 
     # 2026-10-01: C3 GPIO now latches configured rising/falling/any-edge
     # input events, gates PCPU status per pin and exports matrix source16.
     # Focused GPIO tests and actual ESP-IDF customer ROM boot/OL ISR/COM2
     # assertions pass. Level/NMI/light-sleep remain unsupported.
     # ACK, NOT A CAPTURE: physical re-capture and electrical IO-Link pending.
-    drift_ack: 2026-10-01
     # 2026-10-07 (#1326 GPIO nets): watched esp32c3/gpio.rs. A net-isolated pad
     # reports its own drive (matrix bypass, or open-drain release) and an
     # external edge latches the configured GPIO interrupt and arms one
@@ -2873,61 +2862,52 @@ boards:
     # matrix bypass, per esp32c3.svd) instead of 0, which had routed every
     # enabled pad to matrix signal 0. That register is not in the 2026-08-09
     # reset oracle. No physical probe connected. ACK, NOT A CAPTURE.
-    drift_ack: 2026-10-07
     # 2026-10-08 (I2C displays behind a TCA9548A): watched esp32c3/i2c.rs. Its
     # inspect() now folds the artifacts of devices behind an I2C bus switch
     # through the existing visit_i2c_device walk, so a panel behind a
     # TCA9548A is reported like one on the controller. Inspect output only;
     # register file, reset values and bus behaviour are unchanged. ACK, NOT
     # A CAPTURE.
-    drift_ack: 2026-10-08
     # 2026-10-08: watched cpu/riscv.rs and esp32c3/ledc.rs. The cycle CSRs
     # (PCCR 0x7E2/0x802) read `mtime`, one tick per CPU clock, instead of
     # `mtime * 256`, so Arduino `pulseIn` times against SYSTIMER correctly.
     # The C3 LEDC notifies duty observers on CONF1.DUTY_START (a servo
     # follows `ledcWrite`). No reset value or register layout moves. No
     # physical probe connected. ACK, NOT A CAPTURE.
-    drift_ack: 2026-10-08
     # 2026-10-09 (#1344): watched esp32c3/gpio.rs + io_mux.rs. GPIO_IN now shows
     # the driven level of a pad whose output driver is on and whose IO_MUX FUN_IE
     # is set (silicon samples the pad through its input buffer). Only reads of
     # driven output pads change; no register map or reset value changed. No
     # physical probe connected. ACK, NOT A CAPTURE.
-    drift_ack: 2026-10-09
     # 2026-10-09 (MCP audit P1-14): watched esp_uart.rs, usb_serial_jtag.rs,
     # i2c.rs and bus/*. UART0 and USB-Serial-JTAG can deliver TX bytes into one
     # merged console stream (host-side capture only), and the bus counts
     # back-to-back MMIO accesses (run diagnosis only). No register, reset
     # value or bus-visible behaviour changed. No physical probe connected.
     # ACK, NOT A CAPTURE.
-    drift_ack: 2026-10-09
     # 2026-10-10 (gpio gaps): watched esp32c3/gpio.rs. A pad's own OUT/ENABLE/
     # output-matrix write that moves its sampled level now latches GPIO_STATUS
     # per INT_TYPE when FUN_IE is set (TRM GPIO Interrupt: the interrupt logic
     # samples the pad through the input buffer); external-edge latching is
     # unchanged. No register map or reset value changed. No physical probe
     # connected. ACK, NOT A CAPTURE.
-    drift_ack: 2026-10-10
     # 2026-10-10 (#1355 PinPort): watched GPIO models moved onto one PinPort
     # interface (driver/set_external, generic PadWatch push capture, EXTI
     # fan-out by PortId). Register maps and reset values unchanged; pinned
     # by the pins::conformance suite and the existing net/EXTI/pin-trace
     # tests. Approved by the maintainer. ACK, NOT A CAPTURE.
-    drift_ack: 2026-10-10
     # 2026-10-11 (#1360 gpio-net scheduler): CPU batch loops (Cortex-M, RISC-V,
     # shared loop, AVR fill) now end a batch on a net-pad write so the world
     # scheduler can stop a node at its own drive change; logic capture and
     # machine world hooks gained a read-only idle query. No register map, reset
     # value or instruction semantics changed; pinned by the lockstep-vs-scheduler
     # equivalence tests. Approved by the maintainer. ACK, NOT A CAPTURE.
-    drift_ack: 2026-10-11
     # 2026-10-11 (C3 trigger CSRs + SYSTIMER): RISC-V debug trigger CSRs
     # 0x7A0-0x7A5 for the C3 profile (esp-hal stack-guard watchpoint); the C3 YAML
     # now uses the behavioural SYSTIMER instead of the register stub. VALUE_VALID
     # reads 0 until the first update, matching the C3 cold-reset capture. Pinned by
     # esp32c3_trigger_systimer and chip_conformance. Approved by the maintainer.
     # ACK, NOT A CAPTURE.
-    drift_ack: 2026-10-11
     # 2026-10-14 (esp32 LACT timebase): timg.rs is shared, but only the classic-only
     # LACT counter (with_lact) changed — it now converts CPU cycles to APB at 80/240.
     # C3/C6 TIMG/MWDT paths untouched. No register map or reset value changed. ACK, NOT A CAPTURE.
