@@ -2317,6 +2317,68 @@ mod tests {
         assert!(bank.get(0x4000_2000).is_some());
     }
 
+    /// Classic-ESP32 libgcc soft-float ROM exports compute the IEEE result
+    /// instead of falling back to `nop_return_zero` (which made every
+    /// `printf("%.1f")` print 0.0).
+    #[test]
+    fn esp32_rom_libgcc_fp_thunks_compute_ieee_results() {
+        let mut bus = SystemBus::new();
+        let call = |f: RomThunkFn, args: &[u32], bus: &mut SystemBus| -> (u32, u32) {
+            let mut cpu = XtensaLx7::new();
+            cpu.reset(bus).unwrap();
+            cpu.regs.write_logical(0, 0x4037_0010);
+            for (i, a) in args.iter().enumerate() {
+                cpu.regs.write_logical(2 + i as u8, *a);
+            }
+            f(&mut cpu, bus).unwrap();
+            assert_eq!(cpu.get_pc(), 0x4037_0010);
+            (cpu.regs.read_logical(2), cpu.regs.read_logical(3))
+        };
+        let d = |v: f64| [v.to_bits() as u32, (v.to_bits() >> 32) as u32];
+        let as_f64 = |(lo, hi): (u32, u32)| f64::from_bits(((hi as u64) << 32) | lo as u64);
+        assert_eq!(
+            as_f64(call(rom_extendsfdf2, &[24.0f32.to_bits()], &mut bus)),
+            24.0
+        );
+        let (a, b) = (d(24.0), d(10.0));
+        assert_eq!(
+            as_f64(call(rom_muldf3, &[a[0], a[1], b[0], b[1]], &mut bus)),
+            240.0
+        );
+        assert_eq!(
+            as_f64(call(rom_divdf3, &[a[0], a[1], b[0], b[1]], &mut bus)),
+            2.4
+        );
+        assert_eq!(
+            as_f64(call(rom_subdf3, &[a[0], a[1], b[0], b[1]], &mut bus)),
+            14.0
+        );
+        assert_eq!(call(rom_fixdfsi, &d(-2.9), &mut bus).0 as i32, -2);
+        assert_eq!(
+            f32::from_bits(call(rom_truncdfsf2, &d(0.5), &mut bus).0),
+            0.5
+        );
+        assert_eq!(
+            as_f64(call(rom_floatsidf, &[(-7i32) as u32], &mut bus)),
+            -7.0
+        );
+        assert_eq!(
+            call(rom_ltdf2, &[b[0], b[1], a[0], a[1]], &mut bus).0 as i32,
+            -1
+        );
+        let nan = d(f64::NAN);
+        assert!((call(rom_ltdf2, &[nan[0], nan[1], a[0], a[1]], &mut bus).0 as i32) >= 0);
+        assert!((call(rom_gedf2, &[nan[0], nan[1], a[0], a[1]], &mut bus).0 as i32) < 0);
+        assert_ne!(
+            call(rom_eqdf2, &[nan[0], nan[1], nan[0], nan[1]], &mut bus).0,
+            0
+        );
+        // Every export sits inside the classic BROM bank.
+        for &(addr, _) in ESP32_ROM_LIBGCC_FP {
+            assert!((0x4000_0000..0x4007_0000).contains(&addr), "{addr:#x}");
+        }
+    }
+
     #[test]
     fn return_with_sets_a2_and_pc() {
         let mut bus = SystemBus::new();
@@ -2406,3 +2468,253 @@ mod tests {
         }
     }
 }
+
+// ─── libgcc soft-float ROM exports (ESP32-classic BROM) ─────────────────────
+//
+// The classic ESP32 links every double operation (and the float↔int/u64
+// conversions the FPU lacks) to mask-ROM libgcc (`esp32.rom.libgcc.ld`). The
+// ROM bank pre-fills its range with BREAK 1,14 and falls back to
+// `nop_return_zero`, so before these were registered `(double)24.0f` read back
+// as 0 and every `printf("%.1f")` / `Serial.print(float)` printed `0.0`.
+// Rust's f32/f64 ops are IEEE-754 round-to-nearest, the same contract libgcc's
+// soft-float implements. Args: a2(:a3) first, a4(:a5) second; results in a2(:a3).
+
+fn arg_u32(cpu: &XtensaLx7, r: u8) -> u32 {
+    let n = cpu.ps.callinc() * 4;
+    cpu.regs.read_logical(n + r)
+}
+fn arg_f64(cpu: &XtensaLx7, lo: u8) -> f64 {
+    f64::from_bits(read_u64_args(cpu, lo, lo + 1))
+}
+fn arg_f32(cpu: &XtensaLx7, r: u8) -> f32 {
+    f32::from_bits(arg_u32(cpu, r))
+}
+fn ret_f64(cpu: &mut XtensaLx7, v: f64) {
+    return_u64(cpu, v.to_bits());
+}
+fn ret_u32(cpu: &mut XtensaLx7, v: u32) {
+    RomThunkBank::return_with(cpu, v);
+}
+
+macro_rules! rom_fp_thunk {
+    ($(#[$m:meta])* $name:ident, |$cpu:ident| $body:expr) => {
+        $(#[$m])*
+        pub fn $name($cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
+            $body;
+            Ok(())
+        }
+    };
+}
+
+rom_fp_thunk!(rom_adddf3, |c| {
+    let v = arg_f64(c, 2) + arg_f64(c, 4);
+    ret_f64(c, v)
+});
+rom_fp_thunk!(rom_subdf3, |c| {
+    let v = arg_f64(c, 2) - arg_f64(c, 4);
+    ret_f64(c, v)
+});
+rom_fp_thunk!(rom_muldf3, |c| {
+    let v = arg_f64(c, 2) * arg_f64(c, 4);
+    ret_f64(c, v)
+});
+rom_fp_thunk!(rom_divdf3, |c| {
+    let v = arg_f64(c, 2) / arg_f64(c, 4);
+    ret_f64(c, v)
+});
+rom_fp_thunk!(rom_negdf2, |c| {
+    let v = -arg_f64(c, 2);
+    ret_f64(c, v)
+});
+rom_fp_thunk!(rom_powidf2, |c| {
+    let v = arg_f64(c, 2).powi(arg_u32(c, 4) as i32);
+    ret_f64(c, v)
+});
+rom_fp_thunk!(rom_addsf3, |c| {
+    let v = arg_f32(c, 2) + arg_f32(c, 3);
+    ret_u32(c, v.to_bits())
+});
+rom_fp_thunk!(rom_subsf3, |c| {
+    let v = arg_f32(c, 2) - arg_f32(c, 3);
+    ret_u32(c, v.to_bits())
+});
+rom_fp_thunk!(rom_mulsf3, |c| {
+    let v = arg_f32(c, 2) * arg_f32(c, 3);
+    ret_u32(c, v.to_bits())
+});
+rom_fp_thunk!(rom_negsf2, |c| {
+    let v = -arg_f32(c, 2);
+    ret_u32(c, v.to_bits())
+});
+rom_fp_thunk!(rom_extendsfdf2, |c| {
+    let v = arg_f32(c, 2) as f64;
+    ret_f64(c, v)
+});
+rom_fp_thunk!(rom_truncdfsf2, |c| {
+    let v = arg_f64(c, 2) as f32;
+    ret_u32(c, v.to_bits())
+});
+rom_fp_thunk!(rom_fixdfsi, |c| {
+    let v = arg_f64(c, 2) as i32;
+    ret_u32(c, v as u32)
+});
+rom_fp_thunk!(rom_fixunsdfsi, |c| {
+    let v = arg_f64(c, 2) as u32;
+    ret_u32(c, v)
+});
+rom_fp_thunk!(rom_fixdfdi, |c| {
+    let v = arg_f64(c, 2) as i64;
+    return_u64(c, v as u64)
+});
+rom_fp_thunk!(rom_fixsfsi, |c| {
+    let v = arg_f32(c, 2) as i32;
+    ret_u32(c, v as u32)
+});
+rom_fp_thunk!(rom_fixunssfsi, |c| {
+    let v = arg_f32(c, 2) as u32;
+    ret_u32(c, v)
+});
+rom_fp_thunk!(rom_fixsfdi, |c| {
+    let v = arg_f32(c, 2) as i64;
+    return_u64(c, v as u64)
+});
+rom_fp_thunk!(rom_fixunssfdi, |c| {
+    let v = arg_f32(c, 2) as u64;
+    return_u64(c, v)
+});
+rom_fp_thunk!(rom_floatsidf, |c| {
+    let v = arg_u32(c, 2) as i32 as f64;
+    ret_f64(c, v)
+});
+rom_fp_thunk!(rom_floatunsidf, |c| {
+    let v = arg_u32(c, 2) as f64;
+    ret_f64(c, v)
+});
+rom_fp_thunk!(rom_floatdidf, |c| {
+    let v = read_u64_args(c, 2, 3) as i64 as f64;
+    ret_f64(c, v)
+});
+rom_fp_thunk!(rom_floatundidf, |c| {
+    let v = read_u64_args(c, 2, 3) as f64;
+    ret_f64(c, v)
+});
+rom_fp_thunk!(rom_floatsisf, |c| {
+    let v = arg_u32(c, 2) as i32 as f32;
+    ret_u32(c, v.to_bits())
+});
+rom_fp_thunk!(rom_floatunsisf, |c| {
+    let v = arg_u32(c, 2) as f32;
+    ret_u32(c, v.to_bits())
+});
+rom_fp_thunk!(rom_floatdisf, |c| {
+    let v = read_u64_args(c, 2, 3) as i64 as f32;
+    ret_u32(c, v.to_bits())
+});
+rom_fp_thunk!(rom_floatundisf, |c| {
+    let v = read_u64_args(c, 2, 3) as f32;
+    ret_u32(c, v.to_bits())
+});
+
+/// libgcc comparison result. `unordered` is what the routine returns when
+/// either operand is NaN, chosen so the caller's test comes out false.
+fn fp_cmp(a: f64, b: f64, unordered: i32) -> u32 {
+    (match a.partial_cmp(&b) {
+        Some(std::cmp::Ordering::Less) => -1,
+        Some(std::cmp::Ordering::Equal) => 0,
+        Some(std::cmp::Ordering::Greater) => 1,
+        None => unordered,
+    }) as u32
+}
+// __eqdf2/__nedf2 share one ROM address: 0 iff equal, nonzero otherwise.
+rom_fp_thunk!(rom_eqdf2, |c| {
+    let v = fp_cmp(arg_f64(c, 2), arg_f64(c, 4), 1);
+    ret_u32(c, v)
+});
+rom_fp_thunk!(rom_gtdf2, |c| {
+    let v = fp_cmp(arg_f64(c, 2), arg_f64(c, 4), -1);
+    ret_u32(c, v)
+});
+rom_fp_thunk!(rom_gedf2, |c| {
+    let v = fp_cmp(arg_f64(c, 2), arg_f64(c, 4), -1);
+    ret_u32(c, v)
+});
+rom_fp_thunk!(rom_ltdf2, |c| {
+    let v = fp_cmp(arg_f64(c, 2), arg_f64(c, 4), 1);
+    ret_u32(c, v)
+});
+rom_fp_thunk!(rom_ledf2, |c| {
+    let v = fp_cmp(arg_f64(c, 2), arg_f64(c, 4), 1);
+    ret_u32(c, v)
+});
+rom_fp_thunk!(rom_unorddf2, |c| {
+    let v = (arg_f64(c, 2).is_nan() || arg_f64(c, 4).is_nan()) as u32;
+    ret_u32(c, v)
+});
+rom_fp_thunk!(rom_eqsf2, |c| {
+    let v = fp_cmp(arg_f32(c, 2) as f64, arg_f32(c, 3) as f64, 1);
+    ret_u32(c, v)
+});
+rom_fp_thunk!(rom_gtsf2, |c| {
+    let v = fp_cmp(arg_f32(c, 2) as f64, arg_f32(c, 3) as f64, -1);
+    ret_u32(c, v)
+});
+rom_fp_thunk!(rom_gesf2, |c| {
+    let v = fp_cmp(arg_f32(c, 2) as f64, arg_f32(c, 3) as f64, -1);
+    ret_u32(c, v)
+});
+rom_fp_thunk!(rom_ltsf2, |c| {
+    let v = fp_cmp(arg_f32(c, 2) as f64, arg_f32(c, 3) as f64, 1);
+    ret_u32(c, v)
+});
+rom_fp_thunk!(rom_lesf2, |c| {
+    let v = fp_cmp(arg_f32(c, 2) as f64, arg_f32(c, 3) as f64, 1);
+    ret_u32(c, v)
+});
+rom_fp_thunk!(rom_unordsf2, |c| {
+    let v = (arg_f32(c, 2).is_nan() || arg_f32(c, 3).is_nan()) as u32;
+    ret_u32(c, v)
+});
+
+/// `(address, thunk)` for every ESP32-classic BROM libgcc soft-float export
+/// (ESP-IDF `esp32.rom.libgcc.ld`).
+pub const ESP32_ROM_LIBGCC_FP: &[(u32, RomThunkFn)] = &[
+    (0x4000_2590, rom_adddf3),
+    (0x4000_26e4, rom_subdf3),
+    (0x4006_358c, rom_muldf3),
+    (0x4000_2954, rom_divdf3),
+    (0x4006_34a0, rom_negdf2),
+    (0x4006_38e4, rom_powidf2),
+    (0x4000_20e8, rom_addsf3),
+    (0x4000_21d0, rom_subsf3),
+    (0x4006_32c8, rom_mulsf3),
+    (0x4000_20c0, rom_negsf2),
+    (0x4000_2c34, rom_extendsfdf2),
+    (0x4000_2b90, rom_truncdfsf2),
+    (0x4000_2a78, rom_fixdfsi),
+    (0x4000_2b30, rom_fixunsdfsi),
+    (0x4000_2ac4, rom_fixdfdi),
+    (0x4000_240c, rom_fixsfsi),
+    (0x4000_24ac, rom_fixunssfsi),
+    (0x4000_244c, rom_fixsfdi),
+    (0x4000_2504, rom_fixunssfdi),
+    (0x4000_c944, rom_floatsidf),
+    (0x4000_c938, rom_floatunsidf),
+    (0x4000_c988, rom_floatdidf),
+    (0x4000_c978, rom_floatundidf),
+    (0x4000_c870, rom_floatsisf),
+    (0x4000_c864, rom_floatunsisf),
+    (0x4000_c8c0, rom_floatdisf),
+    (0x4000_c8b0, rom_floatundisf),
+    (0x4006_36a8, rom_eqdf2),
+    (0x4006_36dc, rom_gtdf2),
+    (0x4006_3768, rom_gedf2),
+    (0x4006_3790, rom_ltdf2),
+    (0x4006_3704, rom_ledf2),
+    (0x4006_37f4, rom_unorddf2),
+    (0x4006_3374, rom_eqsf2),
+    (0x4006_33a0, rom_gtsf2),
+    (0x4006_340c, rom_gesf2),
+    (0x4006_342c, rom_ltsf2),
+    (0x4006_33c0, rom_lesf2),
+    (0x4006_3478, rom_unordsf2),
+];

@@ -392,8 +392,12 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
     rom_bank.register(0x4000_d280, rom_thunks::rom_umoddi3); // __umoddi3
     rom_bank.register(0x4000_c7e8, rom_thunks::rom_clzsi2); // __clzsi2
     rom_bank.register(0x4000_c7f0, rom_thunks::rom_ctzsi2); // __ctzsi2
-                                                            // esp_crc8 — used by get_efuse_factory_mac to validate the MAC blob
-                                                            // against the stored CRC byte. Dallas/Maxim 1-Wire CRC-8 algorithm.
+                                                            // libgcc soft-float: every double op on classic ESP32 lives in mask ROM.
+    for &(addr, thunk) in rom_thunks::ESP32_ROM_LIBGCC_FP {
+        rom_bank.register(addr, thunk);
+    }
+    // esp_crc8 — used by get_efuse_factory_mac to validate the MAC blob
+    // against the stored CRC byte. Dallas/Maxim 1-Wire CRC-8 algorithm.
     rom_bank.register(0x4005_d144, rom_thunks::rom_esp_crc8);
     // esp_rom_crc32_le — core dump / image helpers (not in all ld scripts as a
     // named export; address from ESP-IDF rom/esp32.rom.ld + nm of app that calls it).
