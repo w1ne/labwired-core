@@ -3739,6 +3739,21 @@ impl<C: Cpu> Machine<C> {
             if let Some(deadline) = self.bus.next_motor_service_deadline_cycle() {
                 budget = budget.min(deadline.saturating_sub(self.total_cycles).max(1));
             }
+            // Dual core: the skip moves machine time for BOTH cores. A running
+            // secondary cannot be skipped over at all, and a parked one must
+            // see its own CCOMPARE edge on time and keep CCOUNT in step (see
+            // `fast_forward_idle_cycles` on it below). Before this, only the
+            // primary's CCOUNT moved, so the APP core's tick fell behind by
+            // every skipped cycle and an Arduino `loop()` on core 1 stalled for
+            // ~0.5 s at a time, swallowing a 100 ms button press.
+            if let Some(sec) = self.cpu_secondary.as_ref() {
+                if !sec.is_parked_idle() {
+                    return 0;
+                }
+                if let Some(until) = sec.parked_wake_deadline_cycles() {
+                    budget = budget.min(until.max(1));
+                }
+            }
             if let Some(deadline) = self.bus.next_resident_edge_deadline_cycle() {
                 budget = budget.min(deadline.saturating_sub(self.total_cycles).max(1));
             }
@@ -3773,6 +3788,9 @@ impl<C: Cpu> Machine<C> {
             }
             let skipped = budget.min(u32::MAX as u64) as u32;
             self.cpu.fast_forward_idle_cycles(skipped as u64);
+            if let Some(sec) = self.cpu_secondary.as_mut() {
+                sec.fast_forward_idle_cycles(skipped as u64);
+            }
             self.total_cycles += skipped as u64;
             self.idle_fast_forward_cycles_skipped += skipped as u64;
             self.bus.set_current_cycle(self.total_cycles);
