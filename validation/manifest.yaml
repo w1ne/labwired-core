@@ -6981,7 +6981,7 @@ boards:
     # the generic Xtensa BB JIT emit core (#1139) — the merge of the two is one
     # digest, so it is re-stamped once here rather than twice.
     drift_ack: 2026-09-18
-    drift_ack_digest: 0cd45ae55dc83cb06ddaf35f68704fba592344a60e5ebd3cce7e1a57c6f8c68d
+    drift_ack_digest: e3242f531262e1590ca1e4d3972669441ebda57afd6dc30257c21c3cd535d6fd
     #
     # 2026-09-18 (execute split): no execution change. The arm bodies of
     # `XtensaLx7::execute` moved verbatim into `cpu/xtensa_lx7/exec/*.rs` as
@@ -7134,7 +7134,10 @@ boards:
     # 2026-10-14 (classic BROM libgcc soft-float thunks): rom_thunks.rs gains
     # IEEE thunks registered only by the classic ESP32 builder; no thunk this
     # board registers changed. ACK, NOT A CAPTURE.
-    drift_ack: 2026-10-14
+    # 2026-10-15 (Xtensa preserve-pane spill): spill_call_preserve_to_stack places
+    # a chain frame's a0..a3 at its chain callee SP instead of a stale pane SP.
+    # Window spill plumbing only; no register map or reset value changed. ACK, NOT A CAPTURE.
+    drift_ack: 2026-10-15
 
   - id: esp32s3-zero
     # Board variant of esp32s3: same silicon (LX7), 4 MiB flash / 480 KiB RAM.
