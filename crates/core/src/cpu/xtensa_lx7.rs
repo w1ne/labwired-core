@@ -1195,7 +1195,23 @@ impl XtensaLx7 {
             // restored a bogus frame and RETW'd to pc=0. There is no safe
             // fallback: with no known callee we cannot place the record, and
             // guessing is what corrupted the stack, so skip the pane instead.
-            let Some(&callee_sp) = all_sps.iter().rev().find(|&&s| s < a1) else {
+            //
+            // When the pane IS a preserve-chain frame, its callee is the next
+            // chain SP below it. Only fall back to every known SP (which also
+            // holds the a1 of stale panes left by frames that have since
+            // returned) when the chain cannot answer: a stale a1 between a
+            // frame and its real callee points the record into the callee's
+            // live locals. grow.ino: readSensors (sp 0x..2200) -> printf (sp
+            // 0x..2160) with a dead pane at 0x..21e0 put a3 on printf's
+            // stack canary at 0x..21dc, and the next RETW panicked with
+            // "Stack smashing protect failure!".
+            let chain_callee = if frame_sps.contains(&a1) {
+                frame_sps.iter().rev().find(|&&s| s < a1)
+            } else {
+                None
+            };
+            let Some(&callee_sp) = chain_callee.or_else(|| all_sps.iter().rev().find(|&&s| s < a1))
+            else {
                 continue;
             };
             write4(bus, callee_sp, 16, a0, a1, a2, a3)?;
