@@ -267,4 +267,54 @@ mod tests {
              (a1 = SP) so a WindowUnderflow reload restores the real values"
         );
     }
+
+    /// A stale window pane must not pick a chain frame's save area.
+    ///
+    /// The leftover-pane pass used to place a pane's `a0..a3` at the next SP
+    /// below it among *every* known SP, including the `a1` of a dead pane.
+    /// grow.ino: `readSensors` (sp ..2200) -> `Print::printf` (sp ..2160) with
+    /// a stale pane at ..21e0 sent readSensors' record to ..21d0..21e0, whose
+    /// last word is printf's stack canary (sp+124 = ..21dc), and the next
+    /// RETW panicked with "Stack smashing protect failure!".
+    #[test]
+    fn stale_pane_sp_does_not_redirect_a_chain_frame_spill_into_its_callee() {
+        const PARENT_SP: u32 = 0x3FFB_8300;
+        const FRAME_SP: u32 = 0x3FFB_8200; // readSensors
+        const CALLEE_SP: u32 = 0x3FFB_8160; // printf (live, current a1)
+        const STALE_SP: u32 = 0x3FFB_81E0; // a pane left by a returned frame
+        const CANARY: u32 = CALLEE_SP + 124; // printf's guard slot
+        const GUARD: u32 = 0x5EED_CAFE;
+
+        let mut bus = SystemBus::empty();
+        let mut cpu = configure_xtensa_esp32(&mut bus);
+        cpu.reset(&mut bus).expect("reset");
+        bus.write_u32(CANARY as u64, GUARD).unwrap();
+
+        cpu.call_preserve_stack = vec![
+            vec![(0, [0x800D_0001, PARENT_SP, 1, 2]), (1, [3, 4, 5, 6])],
+            vec![(4, [0x800D_1946, FRAME_SP, 7, 8]), (5, [9, 10, 11, 12])],
+        ];
+        cpu.regs.set_windowbase(0);
+        cpu.regs.write_logical(1, CALLEE_SP);
+        // Pane for the chain frame (slot 4) and a stale pane (slot 8).
+        for (slot, regs) in [
+            (4usize, [0x800D_1BE9, FRAME_SP, 0x10, 0x1800]),
+            (8, [0x4B, STALE_SP, 0, 0]),
+        ] {
+            for (k, v) in regs.into_iter().enumerate() {
+                cpu.regs.set_physical(slot * 4 + k, v);
+            }
+        }
+        cpu.regs.set_windowstart((1 << 0) | (1 << 4) | (1 << 8));
+
+        cpu.spill_call_preserve_to_stack(&mut bus)
+            .expect("mapped spill");
+
+        assert_eq!(
+            bus.read_u32(CANARY as u64).unwrap(),
+            GUARD,
+            "the readSensors pane was spilled at the stale pane SP - 16 and \
+             overwrote printf's stack canary at 0x{CANARY:08X}"
+        );
+    }
 }
