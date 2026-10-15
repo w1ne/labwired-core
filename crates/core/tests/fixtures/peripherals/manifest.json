@@ -3577,7 +3577,7 @@
           "label": "Distance",
           "unit": "cm",
           "min": 2.0,
-          "max": 400.0,
+          "max": 1000.0,
           "default": 50.0
         }
       ]
