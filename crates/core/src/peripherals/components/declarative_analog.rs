@@ -79,6 +79,9 @@ pub struct DeclarativeAnalogDevice {
     formula: Option<CompiledExpr>,
     last_good_mv: std::cell::Cell<u16>,
     v_ref_mv: f32,
+    /// `supply_mv / ratiometric_ref_mv` for a ratiometric part placed on a
+    /// stated supply; 1.0 otherwise.
+    supply_scale: f64,
     /// system.yaml `external_devices` id, stamped at attach (see
     /// [`crate::sim_input::SimInput::component_id`]).
     component_id: Option<String>,
@@ -145,7 +148,8 @@ impl DeclarativeAnalogDevice {
             evaluation_fault: std::cell::RefCell::new(None),
             formula,
             last_good_mv: std::cell::Cell::new(0),
-            v_ref_mv: 3300.0,
+            v_ref_mv: curve_rail_mv(spec),
+            supply_scale: 1.0,
             component_id: None,
         };
         if device.derived.iter().any(CompiledDerived::is_exact) {
@@ -154,6 +158,20 @@ impl DeclarativeAnalogDevice {
                 .context("invalid default input evaluation")?;
         }
         Ok(device)
+    }
+
+    /// Put a ratiometric part on a supply of `supply_mv`: the output scales
+    /// with it and may reach it. Refused for a part whose curve is absolute.
+    pub fn set_supply_mv(&mut self, supply_mv: f64, ratiometric_ref_mv: Option<f32>) -> Result<()> {
+        let Some(reference) = ratiometric_ref_mv else {
+            bail!("supply_mv is only meaningful for a ratiometric part (behavior.analog.ratiometric_ref_mv)");
+        };
+        if !(supply_mv.is_finite() && supply_mv > 0.0 && supply_mv <= 65535.0) {
+            bail!("supply_mv must be in (0, 65535], got {supply_mv}");
+        }
+        self.supply_scale = supply_mv / f64::from(reference);
+        self.v_ref_mv = supply_mv as f32;
+        Ok(())
     }
 
     pub fn channel(&self) -> u8 {
@@ -202,7 +220,7 @@ impl DeclarativeAnalogDevice {
             Some(f) => f.eval_with(&slots),
             None => self.curve_mv(&slots),
         };
-        let value = self.quantise(mv);
+        let value = self.quantise(mv * self.supply_scale);
         self.last_good_mv.set(value);
         Ok(value)
     }
@@ -263,10 +281,17 @@ impl DeclarativeAnalogDevice {
         }
     }
 
-    /// Convert `output_mv` to a 12-bit ADC count (0..4095) for 3.3 V Vref.
-    pub fn adc_count(&self) -> u16 {
-        let mv = self.output_mv() as u32;
-        ((mv * 4095) / 3300).min(4095) as u16
+    /// `output_mv` as a count on an ADC with reference `vref_mv` and `bits` of
+    /// resolution (an Uno: 5000 mV, 10 bits; an ESP32: 3300 mV, 12 bits),
+    /// clamped to that converter's range. The reference is the MCU's, not the
+    /// part's curve rail, so a 5 V ratiometric pot reads full scale on a 5 V ADC.
+    pub fn adc_count(&self, vref_mv: u32, bits: u8) -> u16 {
+        let full = (1u32 << bits.clamp(1, 16)) - 1;
+        if vref_mv == 0 {
+            return 0;
+        }
+        let mv = u64::from(self.output_mv());
+        ((mv * u64::from(full)) / u64::from(vref_mv)).min(u64::from(full)) as u16
     }
 
     pub fn as_any(&self) -> &dyn Any {
@@ -281,7 +306,18 @@ impl DeclarativeAnalogDevice {
 /// `formula:`; a curve of at least two points, strictly ascending in input,
 /// with voltages inside the 3.3 V rail; and a `source:` whenever the part has
 /// more than one stimulus channel to choose between.
+/// The rail a curve is written against: a ratiometric part's
+/// `ratiometric_ref_mv` (a 5 V pot curve is authored at 5000), else 3.3 V.
+fn curve_rail_mv(spec: &AnalogSpec) -> f32 {
+    spec.ratiometric_ref_mv.unwrap_or(3300.0)
+}
+
 fn validate_spec(spec: &AnalogSpec, input_count: usize) -> Result<()> {
+    if let Some(r) = spec.ratiometric_ref_mv {
+        if !(r.is_finite() && r > 0.0 && r <= 65535.0) {
+            bail!("ratiometric_ref_mv must be in (0, 65535], got {r}");
+        }
+    }
     match (spec.curve.is_empty(), spec.formula.is_some()) {
         (true, false) => bail!(
             "behavior.analog states neither `curve:` nor `formula:` — an analog_source with no \
@@ -325,14 +361,15 @@ fn validate_spec(spec: &AnalogSpec, input_count: usize) -> Result<()> {
             );
         }
     }
+    let rail = curve_rail_mv(spec);
     for &(d, v) in &spec.curve {
-        if !(0.0..=3300.0).contains(&v) {
-            bail!("analog curve point ({d}, {v}) has a voltage outside 0..3300 mV");
+        if !(0.0..=rail).contains(&v) {
+            bail!("analog curve point ({d}, {v}) has a voltage outside 0..{rail} mV");
         }
     }
     if let Some(floor) = spec.above_last.floor_mv {
-        if !(0.0..=3300.0).contains(&floor) {
-            bail!("analog above_last floor {floor} is outside 0..3300 mV");
+        if !(0.0..=rail).contains(&floor) {
+            bail!("analog above_last floor {floor} is outside 0..{rail} mV");
         }
     }
     if input_count > 1 && spec.source.is_none() {
@@ -594,6 +631,17 @@ impl PeripheralKit for DeclarativeAnalogKit {
                 })?;
             }
         }
+        if let Some(supply_mv) = ctx.config_f64("supply_mv") {
+            let reference = self
+                .descriptor
+                .behavior
+                .analog
+                .as_ref()
+                .and_then(|a| a.ratiometric_ref_mv);
+            device
+                .set_supply_mv(supply_mv, reference)
+                .map_err(|e| anyhow::anyhow!("device '{}': {e}", ctx.device_id()))?;
+        }
         ctx.attach_analog_source(channel, Box::new(device))?;
         Ok(())
     }
@@ -786,11 +834,84 @@ behavior:
         assert_eq!(s.output_mv(), 3100);
     }
 
+    fn analog_ref(stem: &str) -> Option<f32> {
+        let kit = DeclarativeAnalogKit::from_yaml(
+            labwired_config::embedded_device_yaml(stem).expect("embedded"),
+        )
+        .expect("valid descriptor");
+        kit.descriptor
+            .behavior
+            .analog
+            .as_ref()
+            .and_then(|a| a.ratiometric_ref_mv)
+    }
+
+    #[test]
+    fn a_potentiometer_on_a_5v_supply_spans_the_whole_rail() {
+        let mut pot = kit_device("potentiometer");
+        pot.set_supply_mv(5000.0, analog_ref("potentiometer"))
+            .expect("ratiometric");
+        for (pct, mv) in [(0.0, 0u16), (50.0, 2500), (100.0, 5000)] {
+            pot.set_input("position", pct).unwrap();
+            assert_eq!(pot.output_mv(), mv, "position {pct} %");
+        }
+    }
+
+    #[test]
+    fn a_potentiometer_with_no_supply_keeps_the_3v3_curve() {
+        let mut pot = kit_device("potentiometer");
+        pot.set_input("position", 100.0).unwrap();
+        assert_eq!(pot.output_mv(), 3300);
+    }
+
+    #[test]
+    fn supply_mv_is_refused_for_an_absolute_curve_and_out_of_range() {
+        let mut ir = kit_device("gp2y0a21");
+        assert!(ir.set_supply_mv(5000.0, analog_ref("gp2y0a21")).is_err());
+        let mut pot = kit_device("potentiometer");
+        assert!(pot.set_supply_mv(0.0, analog_ref("potentiometer")).is_err());
+        assert!(pot
+            .set_supply_mv(f64::NAN, analog_ref("potentiometer"))
+            .is_err());
+    }
+
+    const POT_5V: &str = "type: pot5\nbehavior:\n  primitive: analog_source\n  analog:\n    ratiometric_ref_mv: 5000\n    curve:\n      - [0, 0]\n      - [100, 5000]\nmetadata:\n  inputs:\n    - { key: position, label: Position, unit: '%', min: 0, max: 100 }\n";
+
+    #[test]
+    fn a_pot_curve_written_at_5v_loads_and_reads_the_whole_rail() {
+        let kit = DeclarativeAnalogKit::from_yaml(POT_5V).expect("5 V ratiometric curve loads");
+        let reference = kit
+            .descriptor
+            .behavior
+            .analog
+            .as_ref()
+            .unwrap()
+            .ratiometric_ref_mv;
+        let mut pot = DeclarativeAnalogDevice::from_descriptor(&kit.descriptor, 0, kit.channels)
+            .expect("device builds");
+        pot.set_input("position", 100.0).unwrap();
+        assert_eq!(pot.output_mv(), 5000);
+        assert_eq!(pot.adc_count(5000, 10), 1023);
+        pot.set_supply_mv(3300.0, reference).unwrap();
+        assert_eq!(pot.output_mv(), 3300);
+    }
+
+    #[test]
+    fn an_absolute_curve_above_3v3_is_still_rejected() {
+        assert!(DeclarativeAnalogKit::from_yaml(
+            &POT_5V.replace("    ratiometric_ref_mv: 5000\n", "")
+        )
+        .is_err());
+    }
+
     #[test]
     fn adc_count_scales_with_voltage() {
         let mut s = device();
         s.set_input("distance", 100.0).unwrap();
-        assert_eq!(s.adc_count(), (3100u32 * 4095 / 3300) as u16);
+        assert_eq!(s.adc_count(3300, 12), (3100u32 * 4095 / 3300) as u16);
+        // Same 3.1 V on a 5 V, 10-bit converter; and clamped to its range.
+        assert_eq!(s.adc_count(5000, 10), (3100u32 * 1023 / 5000) as u16);
+        assert_eq!(s.adc_count(1000, 10), 1023);
     }
 
     #[test]

@@ -461,7 +461,7 @@ fn the_rails_each_model_documented_still_hold() {
     assert_eq!(pot.output_mv(), 0);
     pot.set_input("position", 100.0).unwrap();
     assert_eq!(pot.output_mv(), 3300);
-    assert_eq!(pot.adc_count(), 4095);
+    assert_eq!(pot.adc_count(3300, 12), 4095);
 
     let mut ntc = device("ntc-thermistor");
     ntc.set_input("temperature", 25.0).unwrap();
@@ -480,12 +480,12 @@ fn the_rails_each_model_documented_still_hold() {
     assert_eq!(mq6.output_mv(), 0, "clean air is the ground rail");
     mq6.set_input("ppm", 10_000.0).unwrap();
     assert_eq!(mq6.output_mv(), 3300);
-    assert_eq!(mq6.adc_count(), 4095);
+    assert_eq!(mq6.adc_count(3300, 12), 4095);
 
     let mut soil = device("soil-moisture");
     soil.set_input("moisture", 0.0).unwrap();
     assert_eq!(soil.output_mv(), 3300, "bone-dry is Vref");
-    assert_eq!(soil.adc_count(), 4095);
+    assert_eq!(soil.adc_count(3300, 12), 4095);
     soil.set_input("moisture", 100.0).unwrap();
     assert_eq!(soil.output_mv(), 0, "saturated is the ground rail");
 }
