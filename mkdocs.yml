@@ -156,6 +156,8 @@ nav:
     - 74HC4051: parts/74hc4051.md
     - MAX485: parts/max485.md
     - XY-MD02: parts/xy-md02.md
+    - BT201 Bluetooth: parts/bt201.md
+    - NAU88L21 audio codec: parts/nau88l21.md
 
   - Operations:
     - Release Strategy: release_strategy.md
