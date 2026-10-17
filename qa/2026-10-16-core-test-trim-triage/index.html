@@ -1,0 +1,5676 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
+      
+      
+      
+        <link rel="canonical" href="https://docs.labwired.com/qa/2026-10-16-core-test-trim-triage/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>labwired-core test-suite trim triage — 2026-10-16 - LabWired docs</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    <meta property="og:type" content="website">
+  <meta property="og:site_name" content="LabWired docs">
+  <meta property="og:title" content="labwired-core test-suite trim triage — 2026-10-16 - LabWired docs">
+  <meta property="og:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
+  <meta property="og:url" content="https://docs.labwired.com/qa/2026-10-16-core-test-trim-triage/">
+  <meta property="og:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="labwired-core test-suite trim triage — 2026-10-16 - LabWired docs">
+  <meta name="twitter:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
+  <meta name="twitter:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
+
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#labwired-core-test-suite-trim-triage-2026-10-16" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="LabWired docs" class="md-header__button md-logo" aria-label="LabWired docs" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            LabWired docs
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              labwired-core test-suite trim triage — 2026-10-16
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/w1ne/labwired-core" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    w1ne/labwired-core
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="LabWired docs" class="md-nav__button md-logo" aria-label="LabWired docs" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    LabWired docs
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/w1ne/labwired-core" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    w1ne/labwired-core
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../fidelity/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fidelity
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture Internals
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../golden_reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware-Sim Parity
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Agent
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../agent/mcp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Connect MCP
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../agent/tools/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tool reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../agent/first-run/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    First agent run
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing (engine agents)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tutorials
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/playground/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Playground first run
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting_started_firmware/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Run firmware (CLI)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/i2c_sensor_example/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    I2C sensor example (TMP102)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/dma_exti_example/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DMA & Interrupts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/integrated_test_walkthrough/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Integrated Test Walkthrough
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How-To Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How-To Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/onboard-hardware/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Onboard hardware
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/onboard-part/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Onboard a part (I2C/SPI/actuators)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../board_onboarding_playbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Board onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../target_support_rubric/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Target support levels
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/multi-node/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-node worlds
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/timed-uart-network/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Timed UART networks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/gpio-nets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GPIO nets between machines
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/segger-rtt/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SEGGER RTT logging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/firmware-coverage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Firmware coverage (lines, branches, CI)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ci_integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CI integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../peripherals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Peripheral modeling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../hardware_interaction_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware Interaction Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../vscode_debugging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Debugging with VS Code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../gdb_integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GDB Integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../debugging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Debugging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../platformio_integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PlatformIO Integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cosimulation_plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Co-simulation Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../integration-templates/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CI Integration Templates
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration_reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration (YAML)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../declarative_registers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Declarative Registers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli_reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../python-sdk/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python SDK
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ci_test_runner/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test Script Schema
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference_client_flows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Client Flows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../isa_coverage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ISA Coverage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../schema_compatibility/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Schema Compatibility
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../catalog_validation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Catalog Validation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../target_support_rubric/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Target support levels
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Boards
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Boards
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/arduino-uno/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Arduino Uno R3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/esp32c3/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ESP32-C3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/esp32c6-devkitc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ESP32-C6
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/esp32s3/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ESP32-S3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/nrf52840/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    nRF52840
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/microbit-v1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    micro:bit V1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/microbit-v2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    micro:bit v2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/seeed-xiao-nrf52840-sense/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    XIAO nRF52840 Sense
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/rp2040/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RP2040
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/rp2350/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RP2350
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/rp2350-zero/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RP2350-Zero
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/stm32f103/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F103
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/stm32f401/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F401
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/stm32f405/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F405
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/stm32f407/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F407
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/stm32f411/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F411
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/stm32f767/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F767
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/nucleo-l476rg/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NUCLEO-L476RG
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/nucleo-l073rz/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NUCLEO-L073RZ
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/nucleo-g071rb/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NUCLEO-G071RB
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/stm32g0b1re/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32G0B1RE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/stm32h563/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32H563
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/stm32h735/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32H735
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/stm32u575/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32U575
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/nucleo-u545re/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NUCLEO-U545RE-Q
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/stm32wba52/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32WBA52
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/nrf52832/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    nRF52832
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/nrf5340/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    nRF5340
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/nrf54l15/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    nRF54L15
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/atsamd21g18a/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ATSAMD21G18A
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Parts
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Parts
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/mcp9808/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP9808
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/mma8451q/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MMA8451Q
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/mpu6050/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MPU-6050
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/bmp280/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    BMP280
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/ssd1306/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SSD1306 OLED
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/lcd1602/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LCD1602
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/apa102/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    APA102
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/servo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Servo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/button/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Button
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/buzzer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Buzzer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/seven-segment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Seven-segment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/segment-display-mux/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multiplexed segment display
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/led-matrix-mux/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multiplexed LED matrix
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/74hc4051/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    74HC4051
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/max485/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MAX485
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/xy-md02/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    XY-MD02
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release_strategy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Strategy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../RELEASE_DETERMINISM/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Determinism
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../labwired_audit_protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Verification Audit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../coverage_scoreboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coverage Scoreboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../coverage/chip-conformance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Chip Conformance (live)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../coverage/tier1-scoreboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tier-1 Matrix (live)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../coverage/arduino-scoreboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Arduino Scoreboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../coverage/zephyr-scoreboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Zephyr Scoreboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../engineering/test_harness/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test Harness
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../limits/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Run Limits
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../demos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Demos
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../case_study_stm32/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Case Study (STM32)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_12" >
+        
+          
+          <label class="md-nav__link" for="__nav_12" id="__nav_12_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Explanation
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Explanation
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture_overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../simulation_protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Simulation Protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#pass-1-method-and-counting-corrections" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pass-1 method and counting corrections
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#global-signals-pass-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Global signals (pass 1)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Global signals (pass 1)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ignored-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ignored tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#duplicate-test-names" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Duplicate test names
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#single-trivial-test-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Single-trivial-test files
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#hw-oracle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        hw-oracle
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#maybe-global-not-approved-by-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Maybe (global, not approved by default)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#verified-audit-false-positives-all-marked-keep-above" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verified audit false positives (all marked KEEP above)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#self-review-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Self-review notes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cratescoretests-pass-2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        crates/core/tests (pass 2)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="crates/core/tests (pass 2)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#maybe-coretests-not-approved-by-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Maybe (core/tests, not approved by default)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cratescoresrc-unit-tests-pass-3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        crates/core/src unit tests (pass 3)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="crates/core/src unit tests (pass 3)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#maybe-coresrc-not-approved-by-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Maybe (core/src, not approved by default)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#other-crates-pass-4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Other crates (pass 4)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Other crates (pass 4)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#maybe-other-crates-not-approved-by-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Maybe (other crates, not approved by default)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="labwired-core-test-suite-trim-triage-2026-10-16">labwired-core test-suite trim triage — 2026-10-16</h1>
+<p>Scope: crates/** (firmware-* demo crates out of scope for pass 1-3; their tests are build-oriented).
+Base: origin/main 249da54a6. Audit: 1,036 test files, 8,409 tests, 216 <code>#[ignore]</code>, 157 dup-name groups, 22 single-trivial-test files.
+Verdicts: DELETE / STRIP / CONSOLIDATE / FIX (test-side only) / KEEP-RED / KEEP. Low-confidence rows live in section Maybe subsections.
+The user approves or vetoes each row before execution. Nothing is deleted until then.</p>
+<h2 id="pass-1-method-and-counting-corrections">Pass-1 method and counting corrections</h2>
+<ul>
+<li>Static, read-only review of the worktree at 249da54a6. No cargo commands were run (baseline <code>cargo test</code> holds the target-dir lock). All line refs are to files in this worktree.</li>
+<li>The audit's 216 <code>#[ignore]</code> is an occurrence count over raw text, not test count. Verified: <strong>146 are real <code>#[ignore]</code> attributes across 81 files; the other 70 occurrences are mentions inside doc comments, regular comments, or raw-string fixtures</strong> (<code>chip_conformance.rs</code> alone contributes 14, incl. one line with two mentions). Files whose only mentions are non-attributes: chip_conformance.rs, scheduler_lane_coverage.rs, no_vacuous_test_targets.rs, bus_proof_matrix.rs, e2e_labwired_ereader.rs, esp32c3_bt_event_residency_gate.rs, hw-oracle-macros/tests/cases/add_oracle.rs, hw-oracle riscv_oracles.rs / stm32f1_exec_oracle.rs / thumb_oracles.rs / rp2040_timer_exec_oracle.rs (the last four get ignored tests only via <code>#[riscv_oracle_test]</code> / <code>#[thumb_oracle_test]</code> expansion, whose <code>#[ignore]</code> lives in hw-oracle-macros/src/lib.rs).</li>
+<li>The audit also cannot see macro-generated ignores: hw-oracle annotates 118 oracle fns with the three oracle macros; each expands to <code>_sim</code> (runs) + <code>_hw</code> + <code>_diff</code> (<code>#[ignore]</code>), i.e. up to 236 generated ignored tests when the hw features are on, invisible to a text scan.</li>
+<li>Real counts by crate: core 93, hw-oracle 30, hw-oracle-macros 6, wasm 11, cli 6.</li>
+</ul>
+<h2 id="global-signals-pass-1">Global signals (pass 1)</h2>
+<h3 id="ignored-tests">Ignored tests</h3>
+<table>
+<thead>
+<tr>
+<th>file &gt; test(s)</th>
+<th>verdict</th>
+<th>reason</th>
+<th>est. lines</th>
+<th>conf</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>crates/core/tests/e2e_nokia5110_invaders.rs &gt; dump_splash_framebuffer, firmware_draws_and_ship_tracks_distance, splash_framebuffer_matches_across_tick_intervals, derived_and_explicit_walk_flag_are_output_identical, firmware_tracks_minimum_hcsr04_distance</td>
+<td>KEEP</td>
+<td>5 real attrs, all "slow: builds + runs the Space Invaders firmware in-sim" (L111/135/182/238/301); audit counted 7, 2 are doc mentions (L180/236 describing a past stale constant)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/firmware_survival.rs &gt; capture_l4periphs2_sim_output, capture_r12_sim_output, capture_r11_sim_output, capture_tim1_advanced_sim_output, capture_cubemx_hal_sim_output</td>
+<td>DELETE</td>
+<td>one-shot UART capture helpers (L2737-2814); their stated purpose "audit before locking the bytes into a survival case" is complete: locked-in cases <code>nucleo_l476rg_l4periphs2/cubemx_hal/tim1_advanced/r11/r12</code> with <code>expected_uart_output</code> exist (L845-1036) and run as non-ignored gates (L2566-2582, L2714); helpers assert nothing</td>
+<td>78</td>
+<td>medium</td>
+</tr>
+<tr>
+<td>crates/core/src/tests/scheduler_lane_coverage.rs</td>
+<td>KEEP</td>
+<td>audit FP: 0 real attrs; the 6 matches are NIGHTLY_ONLY reason strings (L80-109) that name other files' ignored tests</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/esp32c3_walk_differential.rs &gt; oled_lab_walk_on_vs_scheduler_* (5), framebuffer/tick-interval gates (2), oled_lab_native_mips_probe, oled_lab_walk_pinners_after_rtc_migration, oled_lab_sim_serial_vs_silicon_report</td>
+<td>KEEP</td>
+<td>10 real attrs; all "runs the real C3 bootloader + app (~2x-4x30M steps); run with --release --ignored" or wall-clock/operator probes</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/esp32c3_ble_pong_perf_probe.rs &gt; probe_ble_pong_*(4), probe_air_step_batch_fixed_cost, probe_air_peer_isolation_rounds</td>
+<td>KEEP</td>
+<td>7 real attrs "measurement probe, not a gate"; module header L2 states it asserts nothing by design and that real properties belong in esp32c3_shipped_lab_batch_gate.rs; audit counted 8 (1 module doc)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/esp32c3_oled_profile.rs &gt; esp32c3_uart0_active_work_arms</td>
+<td>DELETE</td>
+<td>test self-labels "TEMP DIAGNOSTIC: which has_active_work() arm keeps uart0 re-arming?" (L517); the investigation closed in commit a5a1cd723 "stop uart0 waking the scheduler every cycle (12.2x)"; one-off diagnostic, asserts nothing</td>
+<td>36</td>
+<td>medium</td>
+</tr>
+<tr>
+<td>crates/core/tests/esp32c3_oled_profile.rs &gt; esp32c3_oled_native_baseline, phase_decomposition, sample_target, boot_loop_sample_target, guest_pc_attribution</td>
+<td>KEEP</td>
+<td>5 remaining attrs are "run with --release --ignored" benchmarks/diagnostics (L177-519)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/esp32s3_doom_frame_oracle.rs &gt; esp32s3_doom_frame1_matches_hardware_oracle, esp32s3_doom_steady_state_matches_recorded_oracle</td>
+<td>KEEP</td>
+<td>2 real attrs: 160M / 1.80B steps + monorepo Doom flash image (L661/728); tracked as NIGHTLY_ONLY in scheduler_lane_coverage.rs</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/jit_lockstep.rs &gt; lockstep_noop, lockstep_detects_register_corruption, lockstep_windowed_call_long_run, lockstep_multi_op_hot_bb_aligned</td>
+<td>KEEP</td>
+<td>4 real attrs "needs labwired-ereader ELF"; header L8-11 says the ELF is an Arduino sketch no CI lane builds; test panics if run without it</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/rv1103_basket_loader.rs &gt; reviewed_prepared_profile_is_accepted, same_reviewed_profile_accepts_independent_build_location, exact_archive_rejects_mode_body_duplicate, artifact_and_clock_preflight_fail_without_mutating_ram, native_startup_holds_releases_then_initializes_entry, closed_fresh_bus_refuses_shadow_flash</td>
+<td>KEEP</td>
+<td>all 6 "requires reviewed pinned artifacts in LABWIRED_RV1103_BASKET_ARTIFACTS"</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/capture_nokia5110_frames.rs &gt; collects_animated_frames, paddle_renders_full_width, write_frames_bin</td>
+<td>KEEP</td>
+<td>"slow: builds + runs the firmware in-sim" / "writes invaders-frames.bin from a real sim run"; recording tools</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/e2e_labwired_ereader.rs</td>
+<td>KEEP</td>
+<td>audit FP: 0 real attrs; L44-48 explicitly says the test is "NOT <code>#[ignore]</code>d" after a real blank-demo bug shipped behind a green board</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/esp32c3_bt_active_walk_pinners.rs &gt; ble_pong_advertising_node_walk_pinners</td>
+<td>KEEP</td>
+<td>1 real attr: "boots the real C3 BLE Pong image (~60M steps); run with --release --ignored" (L196); audit counted 3 (2 doc)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/esp32c3_clamped_full_state_differential.rs &gt; diag_first_divergence_point_interval_1_vs_64, diag_measure_tick_costs_interval_1_and_64, oled_lab_full_state_byte_identical_interval_1_vs_64</td>
+<td>KEEP</td>
+<td>2 diagnostics + 1 "runs the real C3 bootloader + app (~2x30M steps)" gate (L182-264)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/esp32s3_irq_cache_differential.rs &gt; doom_lab_rom_boot_routing_is_identical_to_a_full_repoll</td>
+<td>KEEP</td>
+<td>1 real attr; needs monorepo Doom image via LABWIRED_ESP32S3_DOOM_FLASH (L553); audit counted 3 (2 doc)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/xtensa_exec.rs &gt; test_exec_entry_window_overflow_of4, test_exec_entry_window_overflow_of8, test_exec_entry_window_overflow_of12</td>
+<td>DELETE</td>
+<td>dead by design: ENTRY overflow vectoring does not exist in any mode — <code>exec_entry</code> (call_window.rs:169-214) rotates WB and writes the callee SP with no overflow check, and the live per-instruction F5 path <code>window_overflow_vectored</code> (xtensa_lx7.rs:1419-1454, runtime-gated on <code>faithful_windows</code>, set by the S3 builder at system/builder/xtensa.rs:175) explicitly skips <code>Entry</code> (xtensa_lx7.rs:1424-1429); the <code>#[cfg(any())]</code> phrasing survives only in a stale comment (xtensa_lx7.rs:1480). Tests assert OF12 vector dispatch that cannot happen; <code>setup_entry_overflow</code> (L4035-4045) and OF*_VECOFS consts (L4027-4030) are used only by these 3 tests</td>
+<td>145</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/e2e_esp32c3_snapshot_resume.rs &gt; resume_is_byte_equivalent_to_cold_boot_and_far_cheaper</td>
+<td>KEEP</td>
+<td>1 real attr "boots the real C3 mask ROM (~150M steps); run with --release --ignored"; audit counted 2 (1 doc)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/e2e_labwired_wifi.rs &gt; labwired_wifi_fixture_connects_and_gets</td>
+<td>KEEP</td>
+<td>1 real attr: "loads the arduino-esp32 WiFi fixture ELF and runs up to 200M cycles" (L44); audit counted 2 (1 doc)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/esp32c3_bt_event_residency_gate.rs</td>
+<td>KEEP</td>
+<td>audit FP: 0 real attrs; L216 says "Deliberately NOT <code>#[ignore]</code>d: the whole defect it covers is a metric that no lane checked"</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/esp32c3_shipped_lab_batch_gate.rs &gt; shipped_labs_keep_batching</td>
+<td>KEEP</td>
+<td>1 real attr "runs real shipped bootloaders (~30M steps/lab); run with --release --ignored" (L415)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/riscv_jit_c3_oled_differential.rs &gt; jit_vs_interpreter_c3_oled_is_byte_identical_and_non_vacuous</td>
+<td>KEEP</td>
+<td>1 real attr: real C3 bootloader + app, ~30M steps x2, needs jit+event-scheduler (module doc L29-32)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/world_esp32c3_ble_gatt.rs &gt; two_c3_nodes_connect_discover_read_write_and_notify, a_scripted_phone_connects_to_the_c3_gatt_server</td>
+<td>KEEP</td>
+<td>both "two faithful C3 ROM boots in lockstep; release + fetched fixtures" (L196/281)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/src/tests/bench_spi_engine.rs &gt; bench_default_byte_level_path, bench_edge_sampling_cost</td>
+<td>KEEP</td>
+<td>"host wall-clock probe; run with --release -- --ignored --nocapture" (L137/169)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/src/tests/no_vacuous_test_targets.rs</td>
+<td>KEEP</td>
+<td>audit FP: 0 real attrs; 1 doc mention + 1 string in the NIGHTLY_ONLY-style table (L61/110)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/src/tests/bus_proof_matrix.rs</td>
+<td>KEEP</td>
+<td>audit FP: 0 real attrs; the single match is module doc L33 describing the <code>shallow</code> class</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/src/tests/spi_byte_level_golden.rs &gt; print_golden</td>
+<td>KEEP</td>
+<td>"recording generator; run with --ignored --nocapture to recapture WIRE/DR" (L168)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/bench_walk_free_kw41z.rs &gt; kw41z_walk_free_mips</td>
+<td>KEEP</td>
+<td>"manual perf probe" (L77); also NIGHTLY_ONLY-listed in scheduler_lane_coverage.rs</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/c3_reference_firmware.rs &gt; customer_c3_esp_idf_firmware_initializes_its_gpio_and_uart_driver</td>
+<td>KEEP</td>
+<td>"requires the ESP-IDF customer ELF and sibling flash images in IOLINKI_C3_ELF" (L12)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/diag_c3_yield.rs &gt; diag_c3_first_yield</td>
+<td>KEEP</td>
+<td>"diagnostic probe, not a gate"; needs validation/arduino-matrix/out/esp32c3/L0_serial_boot/firmware.elf, a PlatformIO matrix output not in the tree (see Maybe)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/diag_esp32_dual_core_boot.rs &gt; diag_app_cpu_boot_progress</td>
+<td>KEEP</td>
+<td>"diagnostic only" (L13); 1201-line harness (see Maybe)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/diag_esp32c3_boot.rs &gt; diag_c3_boot_progress</td>
+<td>KEEP</td>
+<td>"diagnostic probe, not a gate"; matrix output not in tree (see Maybe)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/diag_esp32c3_panic.rs &gt; diag_c3_panic_message</td>
+<td>KEEP</td>
+<td>"diagnostic probe, not a gate"; matrix output not in tree (see Maybe)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/diag_esp32s3_boot.rs &gt; diag_s3_boot</td>
+<td>KEEP</td>
+<td>"diagnostic probe, not a gate"; matrix output not in tree (see Maybe)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/diag_esp32s3_l2.rs &gt; diag_s3_l2</td>
+<td>KEEP</td>
+<td>"diagnostic probe, not a gate"; matrix output not in tree (see Maybe)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/e2e_esp32_epaper.rs &gt; firmware_drives_panel_to_ereader_bitmap</td>
+<td>KEEP</td>
+<td>"needs +esp-built epaper ELF; NO CI lane builds it yet — manual only" (L60) (see Maybe)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/e2e_external_arduino_esp32_in_sim.rs &gt; external_arduino_esp32_firmware_drives_panel_in_sim</td>
+<td>KEEP</td>
+<td>only runs when LABWIRED_EXTERNAL_ARDUINO_ESP32_ELF is set (L30)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/e2e_nrf52840_proximity.rs &gt; alarm_tracks_target_distance</td>
+<td>KEEP</td>
+<td>"slow: builds + runs the proximity firmware in-sim" (L81)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/esp32s3_oled_profile.rs &gt; esp32s3_oled_native_baseline</td>
+<td>KEEP</td>
+<td>"native S3 workload benchmark; run explicitly with --release --ignored" (L209)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/g0_reference_firmware.rs &gt; customer_g0_firmware_initializes_and_handles_external_wake</td>
+<td>KEEP</td>
+<td>"requires the built customer G0 ELF in IOLINKI_G0_ELF" (L7)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/inspect_device_binding_universal.rs &gt; dump_devices_json</td>
+<td>KEEP</td>
+<td>"diagnostic dump, not an assertion" (L166); documented reproducer paired with 5 active assert-tests in the same file</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/logic_capture_bench.rs &gt; bench_logic_capture_overhead</td>
+<td>KEEP</td>
+<td>"manual timing harness, run with --release --nocapture" (L167)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/microbit_v2_board_io_guest.rs &gt; active_display_button_workload_throughput</td>
+<td>KEEP</td>
+<td>"explicit release-mode active-workload performance qualification" (L142)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/microbit_v2_motion_io_guest.rs &gt; active_motion_display_button_workload_throughput</td>
+<td>KEEP</td>
+<td>"explicit release-mode active-motion performance qualification" (L176)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/nucleo_u545re.rs &gt; cube_hal_firmware_reaches_160mhz_blinks_ld2_and_reports_b1</td>
+<td>KEEP</td>
+<td>"20M-step Cube HAL run (~1 min); run with --ignored" (L156)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/riscv_jit_alu_lockstep.rs &gt; bench_alu_loop_beats_interpreter</td>
+<td>KEEP</td>
+<td>"micro-benchmark; run with --ignored --nocapture" (L308)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/riscv_jit_combined_bench.rs &gt; bench_combined_loop_beats_interpreter</td>
+<td>KEEP</td>
+<td>"micro-benchmark; run with --ignored --nocapture" (L106)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/runtime_snapshot.rs &gt; agentdeck_snapshot_file_restores_post_paint_panel</td>
+<td>KEEP</td>
+<td>"needs /tmp/agentdeck-postpaint.lwrs from a manual capture" (L286) (see Maybe)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/rv1103_devices.rs &gt; gic_level_sampling_benchmark</td>
+<td>KEEP</td>
+<td>"explicit performance measurement, no wall-clock pass threshold" (L652)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/rv1103_linux_boot.rs &gt; production_zimage_reaches_pid1_and_advancing_guest_uptime</td>
+<td>KEEP</td>
+<td>"requires LABWIRED_RV1103_CLI and LABWIRED_RV1103_ARTIFACTS; up to 1800 seconds" (L182)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/rv1103_linux_loader.rs &gt; pinned_artifacts_load_or_backend_refusal_is_atomic</td>
+<td>KEEP</td>
+<td>"requires independently prepared pinned Alpine artifacts in LABWIRED_RV1103_ARTIFACTS" (L207)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/u5_reference_firmware.rs &gt; customer_u5_firmware_initializes_and_handles_external_wake</td>
+<td>KEEP</td>
+<td>"requires the built customer U5 ELF in IOLINKI_U5_ELF" (L7)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/world_can_dashboard_demo.rs &gt; the_demo_world_runs_faster_than_real_time</td>
+<td>KEEP</td>
+<td>"wall-clock probe; run with --release -- --ignored --nocapture" (L473)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/world_can_perf.rs &gt; three_f103_can_world_throughput</td>
+<td>KEEP</td>
+<td>"manual perf probe" (L287)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/world_multichip.rs &gt; gpio_net_speed</td>
+<td>KEEP</td>
+<td>"timing benchmark: run with --release --ignored --nocapture" (L701)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/hw-oracle/tests/oracles.rs &gt; entry_window_overflow_of4_sim</td>
+<td>DELETE</td>
+<td>dead by design: the ENTRY-driven overflow case cannot pass in any mode — <code>exec_entry</code> has no overflow-vector path (call_window.rs:169-214) and the live F5 check <code>window_overflow_vectored</code> skips <code>Entry</code> (xtensa_lx7.rs:1424); the case's own L924-930 comment says F5 vectoring is "intentionally disabled", which is stale — it is Entry-skipped, not disabled; the spec fn stays for the <code>_hw</code> variant</td>
+<td>6</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/hw-oracle/tests/oracles.rs &gt; entry_window_overflow_of4_hw + 47 other hw_oracle_test _hw/_diff variants</td>
+<td>KEEP</td>
+<td>every case's hardware/diff variants are <code>#[ignore = "hw-oracle: requires connected ESP32-S3 board"]</code> by macro construction</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/hw-oracle/src/flash.rs &gt; test_target_board_detect, flash_and_halt_minimal_elf</td>
+<td>KEEP</td>
+<td>"requires a physically connected ESP32-S3 enumerating as USB 303a:1001"; one is declared ahead of a fixture that does not exist yet, on purpose (L260-267)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/hw-oracle/src/openocd.rs &gt; openocd_halts_and_reads_reg, openocd_read_write_memory, openocd_write_read_register</td>
+<td>KEEP</td>
+<td>"requires a USB-JTAG-attached ESP32-S3 and a working OpenOCD" (L650/664/687)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/hw-oracle/tests/h563_mmio_diff.rs &gt; h563_mmio_diff, h563_parity_diff, h563_class_diff</td>
+<td>KEEP</td>
+<td>"requires connected NUCLEO-H563ZI" (L1220/1281/1344)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/hw-oracle/tests/l476_mmio_diff.rs &gt; l476_mmio_diff, l476_parity_diff</td>
+<td>KEEP</td>
+<td>"requires connected NUCLEO-L476RG" (L569/632)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/hw-oracle/tests/nrf52_full_register_conformance.rs &gt; nrf52840_full_register_conformance</td>
+<td>KEEP</td>
+<td>"sweeps every remaining nRF52840 peripheral register against real silicon... over SWD" (L2178); 1 audit match is doc L8</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/hw-oracle/tests/nrf52_spim_easydma_conformance.rs &gt; nrf52_spim0_easydma_swd_triggered</td>
+<td>KEEP</td>
+<td>"triggers a real SPIM0 EasyDMA transfer on an attached nRF52840 over SWD" (L169); audit matched a comment too (L198)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/hw-oracle/tests/riscv_oracles.rs</td>
+<td>KEEP</td>
+<td>audit FP: 0 real in-file attrs; 16 <code>#[riscv_oracle_test]</code> cases get <code>_hw</code>/<code>_diff</code> ignores from the macro body (hw-oracle-macros L90/97)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/hw-oracle/tests/stm32f1_exec_oracle.rs</td>
+<td>KEEP</td>
+<td>audit FP: 0 real in-file attrs; 15 <code>#[thumb_oracle_test]</code> cases, ignores generated by macro (hw-oracle-macros L138/145)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/hw-oracle/tests/thumb_oracles.rs</td>
+<td>KEEP</td>
+<td>audit FP: 0 real in-file attrs; 30 <code>#[thumb_oracle_test]</code> cases, macro-generated ignores</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/hw-oracle/tests/rp2040_timer_exec_oracle.rs</td>
+<td>KEEP</td>
+<td>audit FP: 0 real in-file attrs; 3 <code>#[thumb_oracle_test]</code> cases, macro-generated ignores</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/hw-oracle/tests/f103_conformance.rs &gt; conformance_diff</td>
+<td>KEEP</td>
+<td>"requires an SWD-attached STM32F103 driven by OpenOCD, plus a built fixture" (L170)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/hw-oracle/tests/f103_fuzz_hil_confirm.rs &gt; fuzz_then_confirm_on_silicon</td>
+<td>KEEP</td>
+<td>"fuzzes in sim and then replays every crash on an SWD-attached STM32F103" (L94)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/hw-oracle/tests/f103_fuzz_phase0.rs &gt; fuzz_oracle_hw</td>
+<td>KEEP</td>
+<td>"requires an SWD-attached STM32F103 driven by OpenOCD, plus a built fixture" (L171)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/hw-oracle/tests/foreign_firmware_probe.rs &gt; probe_foreign_firmware</td>
+<td>KEEP</td>
+<td>"manual probe harness — needs FOREIGN_ELF env" (L19)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/hw-oracle/tests/nrf52_ccm_conformance.rs &gt; nrf52840_ccm_register_surface</td>
+<td>KEEP</td>
+<td>"requires connected nRF52840 at LABWIRED_STLINK_LOCATION=1-2" (L162)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/hw-oracle/tests/nrf52_conformance.rs &gt; conformance_diff</td>
+<td>KEEP</td>
+<td>"requires an SWD-attached nRF52840 driven by OpenOCD, plus a built fixture" (L228)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/hw-oracle/tests/nrf52_cpu_conformance.rs &gt; cpu_conformance_diff</td>
+<td>KEEP</td>
+<td>same SWD/OpenOCD gate (L275)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/hw-oracle/tests/nrf52_gpio_conformance.rs &gt; nrf52840_gpio_conformance</td>
+<td>KEEP</td>
+<td>"sweeps the nRF52840 P0/P1 GPIO register map against real silicon over SWD" (L581)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/hw-oracle/tests/nrf52_mmio_diff.rs &gt; nrf52840_mmio_diff</td>
+<td>KEEP</td>
+<td>"diffs every MMIO register the production nRF52840 yaml models against real silicon over SWD" (L302)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/hw-oracle/tests/nrf52_onboarding_diff.rs &gt; nrf52840_onboarding_diff</td>
+<td>KEEP</td>
+<td>"probes the 24 peripherals the onboarding nRF52840 yaml claims against real silicon" (L449)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/hw-oracle/tests/nrf52_power_conformance.rs &gt; nrf52840_power_conformance</td>
+<td>KEEP</td>
+<td>"sweeps the nRF52840 POWER register surface against real silicon over SWD" (L214)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/hw-oracle/tests/nrf52_spis_twis_conformance.rs &gt; nrf52840_spis_twis_conformance</td>
+<td>KEEP</td>
+<td>"sweeps SPIS0/TWIS1 register surface against real silicon" (L580)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/hw-oracle/tests/nrf52_timer_rtc_conformance.rs &gt; nrf52840_timer_rtc_conformance</td>
+<td>KEEP</td>
+<td>"sweeps the full TIMER0/RTC0 register set against real silicon over SWD" (L340)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/hw-oracle/tests/stm32f1_mmio_diff.rs &gt; f1_mmio_diff</td>
+<td>KEEP</td>
+<td>"requires connected STM32F103" (L1330)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/hw-oracle/tests/stm32f4_mmio_diff.rs &gt; f4_mmio_diff</td>
+<td>KEEP</td>
+<td>"requires connected STM32F407 (LABWIRED_STLINK_LOCATION)" (L583)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/hw-oracle/tests/stm32l0_mmio_diff.rs &gt; l0_mmio_diff</td>
+<td>KEEP</td>
+<td>"requires connected NUCLEO-L073RZ" (L522)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/hw-oracle-macros/src/lib.rs</td>
+<td>KEEP</td>
+<td>12 audit matches = 6 real attrs inside the three macro bodies (L42/49/90/97/138/145, all hardware gates) + 6 doc mentions; the "9 tests with 0 asserts" are <code>quote!</code> bodies whose generated tests live downstream</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/hw-oracle-macros/tests/cases/add_oracle.rs</td>
+<td>KEEP</td>
+<td>audit FP: 2 doc-comment lines (L6-7) describing the generated test shapes; no real attrs</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/wasm/src/lib.rs &gt; wasm_romboot_reaches_app_main, wasm_romboot_oled_paints, wasm_c3_flash_fast_start_oled_paints_quickly, wasm_c3_browser_path_runs_few_device_seconds, servo_trajectory_browser_path, native_usb_board_shows_the_usb_console, bridge_console_board_still_shows_uart0, output_on_the_untapped_console_is_reported_not_lost</td>
+<td>KEEP</td>
+<td>8 real attrs; 6 are "boots the real C3 mask ROM (~150M steps); run with --release --ignored", 1 needs LABWIRED_SERVO_TRAJECTORY_ELF (measurement harness), 1 is a browser-path smoke; audit counted 11 (3 doc)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/wasm/src/cosim_tests.rs &gt; step_batch_throughput, touch_lab_step_batch_throughput</td>
+<td>KEEP</td>
+<td>"throughput measurement; run in release with --ignored --nocapture" (L377/603)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/wasm/src/world.rs &gt; a_wasm_world_runs_a_scripted_phone_against_a_c3_gatt_server</td>
+<td>KEEP</td>
+<td>"faithful C3 ROM boot; release + fetched fixture" (L670)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/cli/src/commands/basket_native.rs &gt; actual_persistent_plant_startup_hold_release_and_fresh_epoch_keep_one_child_and_time</td>
+<td>KEEP</td>
+<td>"requires LABWIRED_RV1103_BASKET_ARTIFACTS reviewed prepared inputs" (L1188)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/cli/tests/e2e_esp32c3_ble_adv_republish.rs &gt; an_application_republishes_advertising_data_and_the_peer_reads_every_value</td>
+<td>KEEP</td>
+<td>"two faithful C3 ROM boots...; run with --release --ignored" (L182)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/cli/tests/e2e_esp32c3_ble_arduino.rs &gt; esp32c3_ble_arduino_reaches_ble_init_and_advertising</td>
+<td>KEEP</td>
+<td>"faithful C3 ROM boot of a real Arduino BLE binary (~360M steps)" (L190); audit counted 2 (1 doc L57)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/cli/tests/e2e_esp32c3_ble_two_node.rs &gt; two_c3_nodes_exchange_advertising_data_at_the_application_level</td>
+<td>KEEP</td>
+<td>"two faithful C3 ROM boots stepping in lockstep over the shared BLE air" (L167)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/cli/tests/h5_demo.rs &gt; test_h5_demo_uart_output</td>
+<td>KEEP</td>
+<td>"requires thumbv7em-none-eabihf fixture; run in nightly validation" (L8)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/cli/tests/rv1103_linux_cli.rs &gt; bounded_native_zimage_run_returns_failure_receipt</td>
+<td>KEEP</td>
+<td>"requires independently prepared pinned artifacts in LABWIRED_RV1103_ARTIFACTS" (L49)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+</tbody>
+</table>
+<p>Excluded: <code>crates/core/tests/chip_conformance.rs</code> — all 14 audit matches are inside doc comments and <code>r#"..."#</code> fixture strings (L749, 809, 936, 1030, 1047, 1055, 1074, 1119, 1134, 1154, 1159, 1185, 1189); 0 real attributes. That file is the ratchet that <em>detects</em> ignored tests; its own tests run normally.</p>
+<p>Totals (ignored section): DELETE 10 tests in 4 file rows (~265 lines); KEEP 89 rows covering the other 87 files (93 rows = 91 files + 2 split rows for esp32c3_oled_profile.rs and hw-oracle oracles.rs); STRIP 0; CONSOLIDATE 0; FIX 0; KEEP-RED 0. Counting correction: 146 real attrs / 81 files vs audit 216 occurrences / 92 files (chip_conformance.rs excluded as false positive and noted at the end of the table).</p>
+<h3 id="duplicate-test-names">Duplicate test names</h3>
+<table>
+<thead>
+<tr>
+<th>files &gt; test</th>
+<th>verdict</th>
+<th>reason</th>
+<th>est. lines</th>
+<th>conf</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>crates/core/src/peripherals/esp32/i2c.rs + esp32s3/i2c.rs + esp32c3/i2c_tests.rs &gt; control_register_reads_back_over_the_bus, switching_channels_changes_which_sensor_answers, a_sensor_on_a_disabled_channel_does_not_answer, a_write_reaches_only_the_selected_channel, four_sensors_at_one_address_answer_independently + 10 more shared names</td>
+<td>CONSOLIDATE</td>
+<td>15 same-named tests across the three ESP32-family I2C suites; 5 bodies are byte-identical after comment/whitespace normalization and 8 more are &gt;=0.97 between esp32 and esp32s3; the c3 copy lives in a <code>#[path = "i2c_tests.rs"] mod tests</code> (esp32c3/i2c.rs:1805). A shared macro taking the per-chip controller/register map removes the copies without losing per-SUT coverage</td>
+<td>~400</td>
+<td>medium</td>
+</tr>
+<tr>
+<td>crates/core/src/peripherals/esp32/{dport,efuse,ledc,rtc_cntl,sha,syscon}.rs &gt; base_is_esp32_classic_canonical_address</td>
+<td>KEEP</td>
+<td>same name, different constant per peripheral (e.g. efuse.rs:459-463 asserts Efuse::new().base() == 0x3FF5_A000); real per-device MMIO pinning, name collision only</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/src/peripherals/{dma,dwt,esp32c3/ledc,esp32c3/rtc_timer,esp32c6/lp_timer,nrf52/rtc,nrf54l/grtc_tests,systick,timer}.rs &gt; without_clock_stays_on_legacy_tick_path</td>
+<td>KEEP</td>
+<td>9 occurrences; bodies 0.83-0.97 similar but each drives its own peripheral type (largest pair dwt&lt;-&gt;systick 0.97, still distinct SUTs); no cross-file identity; consolidation would couple unrelated modules</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/src/peripherals/{esp32c3/apb_saradc,esp32c3/ledc,esp32c3/spi,esp32s3/gdma_tests,esp32s3/gpspi,esp32s3/sar_adc,esp32s3/timer_group}.rs &gt; int_clr_is_w1c</td>
+<td>KEEP</td>
+<td>per-peripheral write-one-to-clear semantics on different register maps; closest pair c3 spi &lt;-&gt; s3 gpspi (0.98) are sibling controllers, not copies to strip under this pass — superseded for the c3-spi &lt;-&gt; s3-gpspi copy only by the pass-3 SPI-family CONSOLIDATE row; the other five files stay KEEP</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/src/peripherals/{esp32/uart,esp32s3/lcd_cam,esp32s3/sar_adc,esp32s3/sdmmc,esp_uart,nrf54l/uarte}.rs &gt; config_registers_round_trip/config_registers_roundtrip</td>
+<td>KEEP</td>
+<td>per-peripheral register round-trips; esp32/uart &lt;-&gt; esp_uart 0.86 (sibling driver families); coincidence of naming, coverage differs per device</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/src/peripherals/{dma,dwt,i2c_kinetis_scheduler,nrf54l/grtc_tests,systick,timer}.rs &gt; clock_attach_flips_to_scheduler_and_walk_tick_is_inert</td>
+<td>KEEP</td>
+<td>same pattern family, per-SUT scheduler-vs-walk gates; no byte-identical bodies across files</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/src/peripherals/esp32s3/{gpio,gpspi,rmt,sar_adc,sdmmc,sens}.rs &gt; reset_defaults_seeded</td>
+<td>KEEP</td>
+<td>per-peripheral reset-value tables; bodies diverge with register map size (555-1380 chars) — superseded for the s3/gpspi copy only by the pass-3 SPI-family CONSOLIDATE row; the other five files stay KEEP</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/src/peripherals/esp32/{dport,efuse,ledc,rtc_cntl,sha,syscon}.rs &gt; runtime_snapshot_round_trip_preserves_state</td>
+<td>KEEP</td>
+<td>per-peripheral state sets; no identity; each pins its own snapshot surface</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/src/peripherals/{esp32/sar_adc,esp32c3/ana_i2c,esp32c3/apb_saradc,esp32c3/rtc_timer,esp32c3/sar_adc,esp32c6/lp_timer}.rs &gt; other_registers_are_register_backed</td>
+<td>KEEP</td>
+<td>0.86-0.95 similar but different register maps and reset values per chip</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/src/tests/{downcast_ratchet,event_scheduler_cfg_ratchet,no_vacuous_test_targets,one_arch_policy,one_arduino_boot_path}.rs &gt; the_scan_is_not_vacuous</td>
+<td>KEEP</td>
+<td>each scans its own policy corpus (774-2097 chars, different targets); same anti-vacuity name by convention</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/src/decoder/arm_tests_extra.rs &gt; test_decode_bfc, test_decode_bfi, test_decode_ubfx, test_decode_misc_rev</td>
+<td>DELETE</td>
+<td>orphan file: no <code>mod</code>/<code>#[path]</code>/<code>include!</code> reference anywhere in the repo (whole-tree grep: 0 hits), untouched since initial commit 2d695ae9c, so it never compiles; 4 bodies ~0.98 similar to the live tests in decoder/arm.rs (same names), but its encodings diverge from the live ones (orphan BFI h2 0x002F vs live 0x100F, arm.rs:1551-1552; orphan BFC 0x0257 vs live 0x2217, arm.rs:1574-1575), so it would also fail if it ever were compiled</td>
+<td>95</td>
+<td>high</td>
+</tr>
+</tbody>
+</table>
+<p>Totals (duplicates): DELETE 1 row / 95 lines; CONSOLIDATE 1 row (~400 lines); KEEP-note 9 rows. Accounting of the audit's 157 groups: 58 are explicitly rowed or re-measured in this doc — 28 in the pass-1 table above (the I2C trio row's 15 shared names, 5 listed plus 10 more; the nine single-group rows <code>baseisesp…</code>, <code>withoutclock…</code>, <code>intclriswc</code>, <code>configregisters…</code>, <code>clockattach…</code>, <code>resetdefaultsseeded</code>, <code>runtimesnapshot…</code>, <code>otherregisters…</code>, <code>thescan…</code>; and the orphan-file row's 4 decode groups <code>test_decode_bfc</code>/<code>bfi</code>/<code>ubfx</code>/<code>misc_rev</code>), 3 in pass 2 (<code>the_wire_transcript_is_byte_identical_to_the_deleted_model</code>; <code>atsamdfromconfigbuilds</code>, covered by the six-file <code>*_config.rs</code> CONSOLIDATE row; <code>stmlzephyrbootwalkvsschedulerisbyteidentical</code>, via the pass-1 single-trivial rows for the L073/L476 walk files), 22 in pass 3 (10 new groups in the SPI-family row — <code>scheduler_arms_recurring_external_can_poll</code>, <code>config_registers_store_under_write_mask</code>, <code>unmapped_offsets_read_zero_and_ignore_writes</code>, <code>cmd_update_bit_self_clears</code>, <code>dma_conf_afifo_rst_strobes_self_clear</code>, <code>slave_soft_reset_self_clears</code>, <code>w_buffer_round_trips</code>, <code>usr_start_auto_clears_and_latches_trans_done</code>, <code>miso_fills_0xff_for_no_device</code>, <code>int_st_masks_with_ena_and_emits_source</code> — plus <code>scl_runs_at_the_rate_the_timing_registers_program</code>, <code>readonly_registers_ignore_writes</code>, <code>tx_fifo_fills_then_drains_to_sink</code>, the seven nRF convention names <code>enable_mask</code> / <code>maxcnt_masks_to_8_bits</code> / <code>orc_masks_to_8_bits</code> / <code>tasks_read_as_zero</code> / <code>psel_round_trip</code> / <code>events_write_1_ignored</code> / <code>intenset_intenclr</code>, <code>attaching_a_clock_leaves_the_walk</code>, <code>readout_frozen_until_next_update</code>), and 5 in pass 4 (<code>publicorderedtypecontract</code>, <code>fipsappendixb</code>, <code>deterministicandrestoreequivalent</code>, <code>restorethenrunmatchesastraightrun</code>, <code>alatersnapshotrestoresafterrollingbacktoanearlierone</code>). The remaining 99 groups were not investigated by name in any pass (no body comparison) — the honest reading is "not ruled on", not "coincidental", though the spot checks that exist (<code>hfclkstartraisesstartedevent</code> spans the nrf5340/nrf54l15 boot tests) point at same-name/different-SUT families.</p>
+<h3 id="single-trivial-test-files">Single-trivial-test files</h3>
+<table>
+<thead>
+<tr>
+<th>file</th>
+<th>verdict</th>
+<th>reason</th>
+<th>est. lines</th>
+<th>conf</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>crates/hw-oracle-macros/src/lib.rs</td>
+<td>KEEP</td>
+<td>audit FP: the 9 "tests" are <code>#[test]</code> tokens inside <code>quote!</code> macro bodies (0 asserts by nature); the 12 "ignores" = 6 real hardware-gated macro attrs + 6 doc mentions</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/hw-oracle/tests/oracles.rs</td>
+<td>KEEP</td>
+<td>assertions live in <code>.expect(...)</code> closures of 48 OracleCases, which the audit's assert regex cannot see; the only dead test is the rowed F5 sim variant</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/src/tests/bench_spi_engine.rs</td>
+<td>KEEP</td>
+<td>2 ignored wall-clock probes printing ns/frame; docs L137-169 explain the measurement design; asserts are not the point</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/bench_walk_free_kw41z.rs</td>
+<td>KEEP</td>
+<td>ignored MIPS probe printing before/after; NIGHTLY_ONLY-listed</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/diag_c3_yield.rs</td>
+<td>KEEP</td>
+<td>env-gated diagnostic (matrix output not in tree); see Maybe</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/diag_esp32s3_boot.rs</td>
+<td>KEEP</td>
+<td>env-gated diagnostic (matrix output not in tree); see Maybe</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/diag_esp32s3_l2.rs</td>
+<td>KEEP</td>
+<td>env-gated diagnostic (matrix output not in tree); see Maybe</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/hw-oracle/tests/foreign_firmware_probe.rs</td>
+<td>KEEP</td>
+<td>FOREIGN_ELF-gated PC-histogram triage harness; meaningful when pointed at a foreign ELF</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/egress-relay/src/build.rs</td>
+<td>KEEP</td>
+<td>3 tests; the 2 is_err() cases assert real rejection paths (missing mqtt topic, unknown transport), only builds_tcp_transport is thin construction</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/stm32l073_walk_differential.rs</td>
+<td>KEEP</td>
+<td>calls harness::assert_walk_free_boot_identical with chip-specific args; asserts live in tests/stm32_walk_free/mod.rs</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/stm32l476_walk_differential.rs</td>
+<td>KEEP</td>
+<td>same harness, L476 args</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/stm32f401_walk_differential.rs</td>
+<td>KEEP</td>
+<td>same harness, F401 args</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/e2e_hello_world.rs</td>
+<td>KEEP</td>
+<td>feature-gated (esp32s3-fixtures) e2e; builds firmware and panics unless 2+ banners seen</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/config/src/embedded.rs</td>
+<td>KEEP</td>
+<td>every_type_spelling_names_exactly_one_descriptor panics on duplicate type spellings; panic-based gate, zero assert! macros</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/src/system/rv1103_basket.rs</td>
+<td>KEEP</td>
+<td>controller_map_requires_matching_decoded_dt_windows_and_spis asserts mutation rejection (assert! on validate_* results)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/avr_nano_machine_run.rs</td>
+<td>KEEP</td>
+<td>runs the Nano ELF until "nano-ok", panics otherwise; panic-based golden</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/e2e_blinky.rs</td>
+<td>KEEP</td>
+<td>feature-gated e2e recording GPIO2 transitions; panics unless &gt;=4 toggles</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/intmatrix_alarm.rs</td>
+<td>KEEP</td>
+<td>hand-assembled ISR drives the full IRQ chain; panics unless 3+ GPIO2 transitions</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/register_compliance.rs</td>
+<td>KEEP</td>
+<td>scans every chip YAML and fails on MemoryViolation at each peripheral base; panic/anyhow-based</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/strict_onboarding.rs</td>
+<td>KEEP</td>
+<td>per-chip strict onboarding sweep with allowlist-staleness detection; panic-based</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/hw-oracle-macros/tests/expand.rs</td>
+<td>KEEP</td>
+<td>trybuild compile-pass test; its assertion is the trybuild harness itself</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/svd-ingestor/tests/fuzz_test.rs</td>
+<td>KEEP</td>
+<td>proptest never-panics property over SVD register conversion; assertions are the proptest framework</td>
+<td>0</td>
+<td>high</td>
+</tr>
+</tbody>
+</table>
+<p>Totals (single-trivial): 22 KEEP, 0 DELETE/STRIP/CONSOLIDATE/FIX. Every file here is an audit regex false positive (assert-count == 0 but the tests use panics, cross-fn harness asserts, trybuild, proptest, or closure asserts).</p>
+<h3 id="hw-oracle">hw-oracle</h3>
+<table>
+<thead>
+<tr>
+<th>file &gt; test(s)</th>
+<th>verdict</th>
+<th>reason</th>
+<th>est. lines</th>
+<th>conf</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>crates/hw-oracle (23 files) &gt; 30 real <code>#[ignore]</code> attrs (nrf52_* conformance/mmio/power/gpio/spis_twis/timer_rtc/full_register/spim_easydma/onboarding/ccm, h563, l476, stm32f1/f4/l0 mmio, f103_conformance/fuzz_hil/fuzz_phase0, oracles hw variant, flash, openocd)</td>
+<td>KEEP</td>
+<td>every one is a hardware gate: "requires connected <board>" / "against real silicon over SWD" / "USB-JTAG-attached... OpenOCD"; this crate IS the sim-vs-silicon oracle. Deleting removes the only path that validates models against real hardware; keeping costs nothing in CI (ignored by default, features off).</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/hw-oracle/tests/oracles.rs &gt; entry_window_overflow_of4_sim</td>
+<td>DELETE</td>
+<td>dead sim variant — the ENTRY-driven overflow case cannot pass (live F5 check skips <code>Entry</code>; <code>exec_entry</code> has no vector path — see ignored table row); 48 oracle cases otherwise remain</td>
+<td>6</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/hw-oracle/tests/oracles.rs &gt; 48 <code>#[hw_oracle_test]</code> cases</td>
+<td>KEEP</td>
+<td><code>_sim</code> variants run in CI and assert inside <code>.expect</code> closures; <code>_hw</code>/<code>_diff</code> are generated <code>#[ignore]</code>d and need an attached ESP32-S3</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/hw-oracle-macros/src/lib.rs</td>
+<td>KEEP</td>
+<td>source of the generated <code>_hw</code>/<code>_diff</code> ignores for 118 oracle cases across 7 test files (up to 236 generated ignored tests); deleting this macro system would strip hardware variants from every oracle bank</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/hw-oracle-macros/tests/cases/add_oracle.rs</td>
+<td>KEEP</td>
+<td>trybuild fixture; its 2 "ignores" are doc mentions, no real attrs</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/hw-oracle/tests/{riscv_oracles,stm32f1_exec_oracle,thumb_oracles,rp2040_timer_exec_oracle}.rs</td>
+<td>KEEP</td>
+<td>files with 0 real in-file ignores whose tests are hardware-gated through the macro bodies (audit FPs)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+</tbody>
+</table>
+<p>Why 53% ignored (audit view): the 43 textual occurrences = 30 real attrs + 13 doc/comment mentions (oracles.rs 3, stm32f1_exec 2, thumb 2, riscv 2, rp2040_timer 1, flash 1, full_register 1, spim_easydma 1). Because the crate is an on-silicon comparison suite, every oracle case is <em>supposed</em> to have an ignored hardware twin; the visible ignored fraction is higher still after macro expansion (236 generated <code>_hw</code>/<code>_diff</code> tests when hw features are enabled). Keep/delete consequences: keep = self-hosted HW runners can still execute <code>--ignored --features hw-oracle*</code>; delete = no in-tree way to re-validate model-vs-silicon claims (NRF52_STRICT etc.). No CI cost today since the features are off by default.</p>
+<p>Totals (hw-oracle): DELETE 1 test / 6 lines; KEEP 5 rows (crate-wide).</p>
+<h3 id="maybe-global-not-approved-by-default">Maybe (global, not approved by default)</h3>
+<p>Low-confidence delete candidates; listed as KEEP in the main tables per the classification rules (diagnostics/probes are "legitimately gated"), but flagged here if the owner wants a deeper cut.</p>
+<table>
+<thead>
+<tr>
+<th>file &gt; test(s)</th>
+<th>verdict</th>
+<th>reason</th>
+<th>est. lines</th>
+<th>conf</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>crates/core/tests/diag_{c3_yield,esp32_dual_core_boot,esp32c3_boot,esp32c3_panic,esp32s3_boot,esp32s3_l2}.rs &gt; the 6 diag_* tests</td>
+<td>DELETE (low)</td>
+<td>all six are <code>#[ignore]</code>d eprintln-only diagnostics for past investigations, and their inputs (<code>validation/arduino-matrix/out/**</code> PlatformIO builds) are not in the tree, so they cannot run without rebuilding the matrix; largest is diag_esp32_dual_core_boot.rs at 1,201 lines</td>
+<td>~2,705</td>
+<td>low</td>
+</tr>
+<tr>
+<td>crates/core/tests/e2e_esp32_epaper.rs &gt; firmware_drives_panel_to_ereader_bitmap</td>
+<td>DELETE (low)</td>
+<td>ignore reason itself: "needs +esp-built epaper ELF; NO CI lane builds it yet — manual only"</td>
+<td>172</td>
+<td>low</td>
+</tr>
+<tr>
+<td>crates/core/tests/runtime_snapshot.rs &gt; agentdeck_snapshot_file_restores_post_paint_panel</td>
+<td>DELETE (low)</td>
+<td>depends on /tmp/agentdeck-postpaint.lwrs from a manual capture; the file has no in-tree producer (L286-360)</td>
+<td>75</td>
+<td>low</td>
+</tr>
+</tbody>
+</table>
+<p>Totals (Maybe): 3 low-confidence DELETE rows (if approved: +~2,950 lines — diag cluster 2,705 + e2e_esp32_epaper 172 + runtime_snapshot 75, mostly the two big diag harnesses).</p>
+<h2 id="verified-audit-false-positives-all-marked-keep-above">Verified audit false positives (all marked KEEP above)</h2>
+<ol>
+<li><code>crates/core/tests/chip_conformance.rs</code> — 14/14 mentions inside comments and <code>r#"..."#</code> fixtures; 0 real attrs (excluded from the ignored rows per instructions).</li>
+<li><code>crates/hw-oracle-macros/src/lib.rs</code> — 6 of 12 are doc mentions; the 6 real ones are macro bodies that generate hardware-gated tests; its "tests with 0 asserts" are <code>quote!</code> bodies.</li>
+<li><code>crates/hw-oracle-macros/tests/cases/add_oracle.rs</code> — 2/2 doc mentions.</li>
+<li><code>hw-oracle</code> doc/comment mentions: oracles.rs (3), stm32f1_exec_oracle.rs (2), thumb_oracles.rs (2), riscv_oracles.rs (2), rp2040_timer_exec_oracle.rs (1), nrf52_spim_easydma_conformance.rs (1), nrf52_full_register_conformance.rs (1), src/flash.rs (1) = 13.</li>
+<li>Core comment/string mentions: scheduler_lane_coverage.rs (6, NIGHTLY_ONLY strings), no_vacuous_test_targets.rs (2), bus_proof_matrix.rs (1), e2e_labwired_ereader.rs (3, "NOT ignored" doc), esp32c3_bt_event_residency_gate.rs (2, "Deliberately NOT ignored"), plus in-file doc mentions elsewhere (e.g. esp32c3_ble_pong_perf_probe.rs module header, esp32s3_doom_frame_oracle.rs docs, jit_lockstep.rs L161) — these files' real attrs are rowed normally.</li>
+<li><code>crates/core/src/decoder/arm_tests_extra.rs</code> — not an ignore FP but an orphan-file FP: it is counted by the audit as a test file yet is referenced by no module, so it never compiles (rowed as DELETE).</li>
+</ol>
+<h2 id="self-review-notes">Self-review notes</h2>
+<ul>
+<li>No cargo commands were run; all findings are from static reading of the worktree files (Read tool plus read-only greps).</li>
+<li>Every DELETE/CONSOLIDATE row cites the attribute text, source lines, or commit it rests on; no upstream-behavior speculation is used.</li>
+<li>Ignored rows cover all 92 audit files (chip_conformance excluded and noted; hw-oracle per-file rows live in this doc's ignored table).</li>
+<li>Duplicate section covers the five worst groups (<code>withoutclockstaysonlegacytickpath</code> 9 files / 9 occurrences, <code>intclriswc</code> 7 / 7, <code>baseisespclassiccanonicaladdress</code> 6 / 6, <code>controlregisterreadsbackoverthebus</code> 7 occurrences across 6 distinct files, <code>configregistersroundtrip</code> 6 / 6 — the audit's group counters are occurrences, and its names are lowercased with digits stripped) plus every group the 0.8-similarity scan surfaced; the pass-1 duplicates totals line lists the 58 doc-covered groups and the 99 never investigated by name.</li>
+<li>Pass-1 verdict impact if all main-table rows approved: 10 ignored tests deleted + 1 orphan file deleted (4 more tests, arm_tests_extra.rs) = ~360 lines total (xtensa 145, firmware_survival 78, arm_tests_extra 95, esp32c3_oled_profile 36, hw-oracle/oracles 6), plus 1 consolidation (~400 lines of duplicated text, no coverage loss); all other rows KEEP. The big line reductions for this audit must come from passes 2-4 (trivial-assert stripping, generic ratchet/nightly policy files, giant multi-purpose files).</li>
+</ul>
+<h2 id="cratescoretests-pass-2">crates/core/tests (pass 2)</h2>
+<p>Scope check first: two of the priority paths are <strong>not</strong> under <code>crates/core/tests/</code> — the audit resolves <code>bus/tests_main.rs</code> to <code>crates/core/src/bus/tests_main.rs</code> (5,933 lines / 105 <code>#[test]</code>s, a flat file with no submodules), <code>declarative_i2c.rs</code> to <code>crates/core/src/peripherals/components/declarative_i2c.rs</code> and <code>cortex_m_tests.rs</code> to <code>crates/core/src/cpu/cortex_m_tests.rs</code>. All three are pass-3 scope; pass 3 should note the bus file is flat (the "submodules duplicating each other" question is moot at file level) and run a within-file body-similarity scan. What remains in pass 2 is 360 top-level <code>tests/*.rs</code> files plus helper dirs (<code>common/</code>, <code>display_oracle/</code>, <code>led_strip_oracle/</code>, <code>stm32_walk_free/</code>, <code>fixtures/</code>) that are infrastructure, not test deliverables, and were read only to judge the files that use them.</p>
+<p>Method: read the priority files fully or nearly so (<code>xtensa_exec.rs</code>, <code>firmware_survival.rs</code>, <code>world_gpio_net_buses.rs</code>, <code>chip_conformance.rs</code>, <code>bus_visibility.rs</code>, <code>xtensa_decode.rs</code>, <code>display_migration_parity.rs</code>, <code>cortex_m_jit_alu_lockstep.rs</code>, <code>esp32c3_walk_differential.rs</code>, <code>esp32c3_oled_profile.rs</code>, <code>esp32c3_ble_pong_perf_probe.rs</code>, <code>e2e_nokia5110_invaders.rs</code>, <code>rv1103_basket_loader.rs</code>, and the small config/AVR files); all other <code>core/tests</code> files were scanned at head/describe level (module docs, every test name, file-size outliers) plus two scripted sweeps over all 380 files: (a) normalized per-test body similarity within the giant files, (b) cross-file shingle (Jaccard) similarity plus an inline-legacy-model comparison across the 33 <code>*_migration_parity.rs</code> files. No pass-1 row is repeated below: the ignored-test table (esp32c3_walk_differential 10 × KEEP, ble_pong 7 probes, chip_conformance FP, oled_profile uart0 DELETE + 5 KEEP, firmware_survival × 5 capture helpers DELETE, xtensa F3/F5 overflow × 3 DELETE, e2e_nokia5110 × 5 slow gates, rv1103 basket × 6 artifact gates) and the pass-1 single-trivial KEEPs for the AVR/walk-differential files all stand and are referenced, not re-rowed.</p>
+<table>
+<thead>
+<tr>
+<th>file &gt; test(s)</th>
+<th>verdict</th>
+<th>reason</th>
+<th>est. lines</th>
+<th>conf</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>crates/core/tests/xtensa_exec.rs &gt; test_exec_retw_window_underflow_uf4 / uf8 / uf12</td>
+<td>STRIP</td>
+<td>three normalized-identical bodies (0.99-1.0 similarity): same six-assert shape — PC = VECBASE+{0x040,0x0C0,0x140}, EPC1 = faulting PC, PS.EXCM set, WB rotates to 0, OWB saves N, WindowStart unchanged — with only N (=1/2/3) and the vector offset varying; <code>exec_retw</code> (src/cpu/xtensa_lx7/exec/call_window.rs:217) picks all three offsets in one code path. Collapse to one table-driven test over [(1,0x040),(2,0x0C0),(3,0x140)]; <code>setup_retw_underflow</code> (L4234) stays as the shared setup</td>
+<td>~90</td>
+<td>med</td>
+</tr>
+<tr>
+<td>crates/core/tests/xtensa_exec.rs &gt; test_exec_rotw_pos / rotw_neg / rotw_neg_wraparound / rotw_max_pos / rotw_max_neg / rotw_does_not_change_windowstart</td>
+<td>STRIP</td>
+<td>five tests assert the same shape on one code path (<code>exec_rotw</code>, call_window.rs:353): WB == (old+n)&amp;0xF, WindowStart unchanged, PC+3, differing only in (WB, n) = (3,+1),(5,-1),(0,-1),(2,+7),(5,-8); pos↔neg bodies are 0.99 similar and the WS-invariance assert is repeated in all five plus its own test. Collapse rotations into one table loop, keep one dedicated WS-untouched assertion, keep the HW-oracle byte notes as table comments</td>
+<td>~115</td>
+<td>med</td>
+</tr>
+<tr>
+<td>crates/core/tests/xtensa_exec.rs &gt; test_general_exception_movsp_alloca_redirects_pc</td>
+<td>STRIP</td>
+<td>duplicates the F6 test <code>test_exec_movsp_overflow_raises_exception</code> (L4794): both set <code>faithful_windows</code>, WB=0/WS[1] live, run <code>movsp a3,a4</code>, and assert EXCCAUSE=5 + EPC1=TEST_PC + PS.EXCM + PC=VECBASE+0x300 (0.83 body overlap); the G1 copy's only delta is clearing EXCM first. Keep the F6 gate (it also pins the "step returns Ok like silicon" contract the G1 doc points back to)</td>
+<td>~40</td>
+<td>med</td>
+</tr>
+<tr>
+<td>crates/core/tests/firmware_survival.rs &gt; 72 one-line <code>run_survival_case(case_by_name(...))</code> wrappers (test_stm32f103_blinky_survival … test_stm32h735_tier1_survival)</td>
+<td>CONSOLIDATE</td>
+<td>72 of the 92 tests are exactly <code>run_survival_case(case_by_name("…"))</code> (356 lines incl. blanks, e.g. L1949-1952, L2510-2513, L2826-2829); a <code>macro_rules!</code> emitting <code>#[test] fn $name() { run_survival_case(case_by_name($case)) }</code> keeps every CI-visible test name/failure attribution and collapses the boilerplate. Doc-commented regression wrappers (e.g. L2636-2642 CRC-&gt;POL, L2725-2729 PLLSAI1RDY) keep their comments at the invocation; the SURVIVAL_CASES table and the ~15 special/ratchet tests are untouched</td>
+<td>~270</td>
+<td>med</td>
+</tr>
+<tr>
+<td>crates/core/tests/{systick,stm32_timer,stm32_dma,stm32f103_dma,nrf54l15_grtc,efr32mg26,stm32h563,esp32s3}_walk_differential.rs + kw41z_walk_free_differential.rs + nrf52_timer_walk_differential.rs</td>
+<td>CONSOLIDATE</td>
+<td><code>common/walk_differential.rs</code> (L25-39) already states it: "Eleven <code>*_walk_differential</code> tests already exist, totalling 6207 lines, and each hand-rolls the same four pieces: a Probe struct, a probe() ... run_probed() ... assert_probes_identical()". Only 3 files migrated (nrf54l15_uarte L2 uses, nrf54l15_twim, atsamd21_sercom); the rest still copy it: systick L228-276, kw41z L186-220, stm32_timer L343-407, stm32_dma L206-263, stm32f103_dma L132-168, nrf54l15_grtc L330-373, efr32mg26 L228-332, nrf52_timer (CycleCpu L55-208 + PollingCpu L923-989), stm32h563 (GpdmaProbe L239 / RtcProbe L475), esp32s3 (IrqProbe L191). Measured scaffolding alone ≈ 473 lines; migrate onto the harness, keeping each peripheral's caller-supplied observables (the harness contract at L47-58 explicitly supports that)</td>
+<td>~400</td>
+<td>med</td>
+</tr>
+<tr>
+<td>crates/core/tests/{atsamd21,atsamd51,ra4m1,imxrt1064,stm32f746,stm32g071}_config.rs &gt; *_from_config_builds</td>
+<td>CONSOLIDATE</td>
+<td>six single-test files (35+43+45+69+62+54 = 308 lines) copy the same skeleton verbatim — workspace_root() + SystemManifest::from_file → ChipDescriptor::from_file → SystemBus::from_config — and differ only in board path and per-peripheral presence asserts; pairwise normalized Jaccard 0.85-0.89 for atsamd21/51/ra4m1 and 0.54-0.65 for the rest; <code>tests/common/mod.rs:33</code> already exposes <code>root()</code>. One file with a shared loader + six named tests (names kept for CI attribution) removes the copies; per-board asserts stay per-board</td>
+<td>~190</td>
+<td>med</td>
+</tr>
+<tr>
+<td>crates/core/tests/world_gpio_net_buses.rs</td>
+<td>KEEP</td>
+<td>104 tests in bus-family modules; the 20 <code>*do_not_depend_on_node_order_or_round_size</code> tests are 1-3-line calls to the shared helpers <code>assert_order_and_round_independent</code> (L180) / <code>same_on_every_driver</code> (L41) over distinct env fixtures (node-order + 37 ns round + driver matrix) — no prod motion in the helpers; primary per-family tests assert hand-derived bytes/edge counts (e.g. spi L254-288 checks DR contents, CS/MOSI/MISO edge counts). Two inline fingerprint blocks (L292, L1042) exist because those tests also invoke <code>same_on_every_driver</code> with extra <code>total_cycles</code> observables; neither is a stale copy</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/chip_conformance.rs</td>
+<td>KEEP</td>
+<td>verified pass-1 FP: 14/14 audit ignore matches are doc/<code>r#"…"#</code> mentions; its 29 <code>#[test]</code> occurrences include the detector fixtures (<code>discards_comments_and_literals</code> cases at L1043-1193). Real tests are the behavior-gate resolver + fleet ratchet; no trim candidates</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/display_migration_parity.rs</td>
+<td>KEEP</td>
+<td>per-panel old-vs-descriptor parity (SSD1306/ST7789/SH1107/PCD8544/ILI9341/RM67162/SSD1680/UC8151D); repeated names across panels (madctl/unpowered/artifact/top-colour) are distinct SUTs, not copies; the deliberate SSD1306 0x20 fix is asserted in both directions (L291-356) so neither half can be removed; cross-file legacy copies measured — display_oracle/ vs other migration files never exceed 0.5 similarity</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/cortex_m_jit_alu_lockstep.rs</td>
+<td>KEEP</td>
+<td>47 tests are distinct JIT lockstep scenarios (IT-mask permutations, out-of-window resume, VFP); within-file similarity scan found only 6-line delegating calls to a shared f32 helper (vsub/vmul/vdiv L984-1003) and no body ≥0.9 duplication otherwise</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/bus_visibility.rs</td>
+<td>KEEP</td>
+<td>3 tests (fleet ratchet, classifier contract L1964, exclusion uniqueness L1980) sitting on a 1.9k-line measurement harness that drives UART/SPI/I2C through real CPU execution per chip; the ratchet is the only gate that catches a bus silently losing decodable edges. Giant single-purpose harness, not padding</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/xtensa_decode.rs</td>
+<td>KEEP</td>
+<td>99 per-opcode decoder tests; each wide/narrow opcode is its own decoder arm (narrow l32i.n…ill.n each a separate form); similarity scan shows shape repeats but no identical-body families; no ignored/dead tests here</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/*_migration_parity.rs (33 files, 16,113 lines)</td>
+<td>KEEP</td>
+<td>each file embeds the deleted hand model (inline <code>mod legacy</code> or the shared oracle dir) and drives old + new through <code>common::transcript</code>; the 11 inline legacy copies compared pairwise: none &gt; 0.5 similarity, so no duplicated oracles; same-named tests across files (<code>the_wire_transcript_is_byte_identical_to_the_deleted_model</code> in adxl345/ds3231/mpu6050/pcf8574) assert per-device goldens. This family is the surviving evidence for the deletions</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/firmware_survival.rs (table + special tests; see CONSOLIDATE row for the wrappers)</td>
+<td>KEEP</td>
+<td>76-case table with per-fixture markers and two ratchet tests (<code>session_cases_carry_no_pc_ranges</code> L2862, <code>session_tier1_class_gating_matches_the_marker</code> L2886), plus real end-to-end tests: pixel-level KW41Z cow checks (L2148-2322), nRF54L15 P2.09 GPIO readback (L2077), bus-trace capture (L2415), tier-1 transcript scan negative controls (L2917-2941). Duplicate fixtures: <code>tier1/esp32s3.elf</code> twice is the esp32s3_tier1 vs esp32s3_zero_tier1 pair (different boot state)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/{tick_interval_inventory,board_coverage_ratchet,register_coverage,strict_onboarding,model_paths_drift_gate,uart_parity_ratchet,undecoded_register_ratchet,svd_conformance}.rs</td>
+<td>KEEP</td>
+<td>policy ratchets: each measures the real fleet (walk-free families, per-chip coverage map, register sweeps) and fails on drift; <code>tick_interval_inventory</code> builds every family's shipped bus (L335-587); <code>board_coverage_ratchet</code> keeps declared-only chips un-expandable (L238-480). Generic by design — deleting one re-opens the hole it was written for</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/{logic_analyzer_lab_pad_visibility,logic_analyzer_f1_rp2040_pad_visibility,logic_wire_channels_cross_family}.rs</td>
+<td>KEEP</td>
+<td>pad-vs-wire visibility proofs per family with paired negative controls (<code>diagnostic_*_alone_is_not_enough_without_brr/pad_mux/funcsel</code>, e.g. L272-313 and L331-363 in the F1/RP2040 file) that catch the "probe shows nothing" class; distinct SUTs per lab</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/{esp32c3_walk_differential,esp32c3_oled_profile,esp32c3_ble_pong_perf_probe,e2e_nokia5110_invaders,rv1103_basket_loader}.rs</td>
+<td>KEEP</td>
+<td>all five are pass-1 rows (10 ignored walk gates / uart0 DELETE + 5 profiles / 7 probes / 5 slow invaders gates / 6 artifact gates); pass 2 verified no additional candidates: walk_differential's one active test <code>esp32c3_irq_choke_reaggregates_on_write</code> (L628-697) is a real gate, basket_loader's 2 non-ignored tests cover distinct surfaces (L21 register/input exposure, L256 caller-manifest tamper/extra-key rejection)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/tests/{world_multichip,world_uart_network,cosim_pin_routing,nrf52_bus_waveform,vcnl4010_bay_occupancy,tier2_device_pins,panel_artifact_evidence,part_pack_contract,sim_input,rs485_modbus,i2c_mux_tca9548a,motor_models,gpio_artifact_migration_parity}.rs</td>
+<td>KEEP</td>
+<td>scenario-level review: per-scenario asserts plus negative controls (e.g. world_uart_network <code>negative_control_instant_delivery_fails_the_latency_golden</code> L344, <code>a_cut_link_loses_exactly_the_messages_on_it</code> L528; i2c_mux's same-named tests are the four-sensors-behind-a-TCA9548A SUT, not copies of the src I2C suites); no repeated-shape clusters beyond per-SUT naming</td>
+<td>0</td>
+<td>med</td>
+</tr>
+</tbody>
+</table>
+<p>Totals: DELETE 0 files/0 lines in the main table · STRIP 3 rows / ~245 lines · CONSOLIDATE 3 rows / ~860 lines · KEEP 12 rows (plus the pass-1 core/tests rows, which carry 9 deleted tests / ~259 lines: firmware_survival capture helpers 5 tests / 78 lines, esp32c3_oled_profile uart0 1 test / 36 lines, xtensa F5 overflow trio 3 tests / 145 lines). If everything in both passes is approved, this pass adds no whole-file deletes; the line reduction lives in the two consolidation stacks (walk-differential scaffolding, config gates, survival wrappers) and the three xtensa strip rows.</p>
+<h3 id="maybe-coretests-not-approved-by-default">Maybe (core/tests, not approved by default)</h3>
+<p>Low-confidence rows, kept as KEEP elsewhere per the classification rules; for owners who want a deeper cut.</p>
+<table>
+<thead>
+<tr>
+<th>file &gt; test(s)</th>
+<th>verdict</th>
+<th>reason</th>
+<th>est. lines</th>
+<th>conf</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>crates/core/tests/xtensa_exec.rs &gt; test_exec_call4_sets_callinc, test_exec_call8_sets_callinc, test_exec_call12_sets_callinc</td>
+<td>STRIP (low)</td>
+<td>1.0-similar bodies (L2279-2358) differing only in callinc/return-register; wrappers exec_call4/8/12 (call_window.rs:57-103) are three copies of one body differing only in <code>1/2/3</code>, so one loop keeps all three wrapper paths</td>
+<td>~55</td>
+<td>low</td>
+</tr>
+<tr>
+<td>crates/core/tests/xtensa_exec.rs &gt; test_exec_rfe_round_trip_via_epc1</td>
+<td>STRIP (low)</td>
+<td>its two asserts (PC==EPC1, EXCM==0) are strict subsets of <code>test_exec_rfe_clears_excm_and_jumps</code> (L5222-5244, which adds the INTLEVEL-pinned check); only the EPC1 value differs</td>
+<td>~20</td>
+<td>low</td>
+</tr>
+<tr>
+<td>crates/core/tests/xtensa_exec.rs &gt; test_exec_s32e_negative_offset</td>
+<td>STRIP (low)</td>
+<td>0.91-similar to <code>test_exec_s32e_in_excm_writes</code> (L4464), same store-at-EA shape; its only delta is imm=-64 (the encoding boundary), which the enc_s32e helper already exercises elsewhere. Borderline — keep if the -64 encoding edge is considered load-bearing</td>
+<td>~23</td>
+<td>low</td>
+</tr>
+<tr>
+<td>crates/core/tests/{avr_uno_machine_run,avr_nano_machine_run}.rs &gt; machine_path_runs_{uno,nano}_ok</td>
+<td>CONSOLIDATE (low)</td>
+<td>0.71-similar near-clone files (52+50 lines): same ChipDescriptor/SystemManifest read + build_node + UART-sink wait for the board marker, differing only in board yaml/fixture/marker; one file with two tests (or a table) removes the scaffold. Different boards, so not a coverage cut</td>
+<td>~40</td>
+<td>low</td>
+</tr>
+<tr>
+<td>crates/core/tests/avr_nano_live_run.rs &gt; live_run_arduino_nano_blinky_sketch</td>
+<td>DELETE (low)</td>
+<td>same raw Avr + MockBus seam and the same golden ELF (arduino-nano-blinky.elf) as avr_nano_golden_survival.rs, asserting the same observables (serial contains "nano-ok", PB5 toggles); golden_survival additionally pins resets==0 and the SP floor (L127-153). The live-run file's extra value is its printed evidence block, which is why this is a low-confidence delete rather than a main-table row</td>
+<td>~100</td>
+<td>low</td>
+</tr>
+</tbody>
+</table>
+<p>Totals (Maybe): 5 rows / ~238 lines if approved (1 whole-file DELETE ~100, 3 STRIPs ~98, 1 CONSOLIDATE ~40); not counted in any headline number. No overlaps with pass-1 Maybe rows (diag_*, e2e_esp32_epaper, runtime_snapshot) or pass-1 DELETE rows.</p>
+<p>Pass-2 method notes:</p>
+<ul>
+<li>The audit's per-file <code>score</code> for <code>core/tests</code> files ≥8 keys almost entirely off ignored-test count; pass 1 rowed every one of those files (<code>esp32c3_walk_differential.rs</code> 50.0, <code>firmware_survival.rs</code> 44.9, <code>esp32c3_ble_pong_perf_probe.rs</code> 40.0, <code>e2e_nokia5110_invaders.rs</code> 35.0, <code>rv1103_basket_loader.rs</code> 30.2, <code>esp32c3_oled_profile.rs</code> 30.0, <code>xtensa_exec.rs</code> 25.7, <code>esp32s3_doom_frame_oracle.rs</code> 25.0, <code>jit_lockstep.rs</code> 25.0, plus the 15.0/13.0/10.0/9.5/8.x tier). Pass 2 verified each file's non-ignored remainder and found no unrowed candidates in them, so they are covered by the KEEP row above or by their pass-1 rows.</li>
+<li>The audit's <code>trivial</code> counter is unreliable in <code>core/tests</code>: the high-trivial files (<code>rv1103_rk3x_i2c.rs</code> 18, <code>cortex_m_event_sleep.rs</code> 17, <code>rv1103_devices.rs</code> 12, <code>rv1103_uart4_esp_at.rs</code> 8, <code>cosim_external_process_bounds.rs</code> 7) turned out to be rejection-path asserts (<code>assert!(...is_err())</code> on unaligned MMIO, invalid configs, bad manifests) or API-presence checks (WFE sleep budget <code>is_some()/is_none()</code> at cortex_m_event_sleep.rs L65-175, which is the only observable the API exposes). None of these are strip candidates; a stricter "trivial" definition than the audit's regex is needed before pass 3/4 use this column.</li>
+<li>Cross-file duplicate scan (normalized shingles, Jaccard, all 380 files) surfaced exactly one file-level clone cluster that wasn't already a pass-1 row: the six <code>*_config.rs</code> gates (rowed above). The next clusters are the walk-differential family (rowed), the legacy-oracle display copies (KEEP by design), and diag_* files (pass-1 Maybe).</li>
+<li>Not reviewed (out of pass-2 scope): <code>crates/core/src/**</code> (incl. <code>bus/tests_main.rs</code>, <code>declarative_i2c.rs</code>, <code>cortex_m_tests.rs</code> — pass 3) and all other crates (pass 4). Flagged for pass 3: <code>src/bus/tests_main.rs</code> is a flat 5,933-line file with 105 tests and no submodules; it needs a within-file body-similarity pass rather than a module-vs-module comparison.</li>
+</ul>
+<h2 id="cratescoresrc-unit-tests-pass-3">crates/core/src unit tests (pass 3)</h2>
+<p>Scope: <code>crates/core/src/**</code> <code>#[cfg(test)]</code> unit tests only (686 files, 4,731 audit test attrs; other crates = pass 4, <code>tests/xtensa_exec.rs</code> = pass 2). Pass-1/pass-2 rows are referenced, never repeated; the two partial disagreements with pass-1 KEEP notes are the SPI-family pair supersession in the main table (c3 <code>spi.rs</code> / s3 <code>gpspi.rs</code> copies of <code>int_clr_is_w1c</code> and <code>reset_defaults_seeded</code> only) and the <code>without_clock_stays_on_legacy_tick_path</code> body-sharing proposal in the Maybe table.</p>
+<p>Coverage accounting — read fully: <code>peripherals/components/declarative_i2c.rs</code> tests mod (L3329-4730), <code>peripherals/i2c_tests.rs</code> (973/973), the <code>esp32c3/spi.rs</code> and <code>esp32s3/gpspi.rs</code> tests mods, <code>nrf52/spis.rs</code> tests mod, the <code>declarative_i2c</code> fixture/FLOSS sections. Read in substantial part: <code>bus/tests_main.rs</code> (~1.5k of 5,933 lines across the esp32-wiring, H5-RWW, CAN/UDS, motor and pad-bracket sections), <code>cpu/cortex_m_tests.rs</code> (~700 of 3,597), <code>decoder/arm.rs</code> (all high-similarity regions), <code>tests/integration.rs</code> (profile + CPU sections), <code>peripherals/adc.rs</code> (all ADCAL/RES regions), <code>nrf54l/twim.rs</code>, <code>nrf52/twim.rs</code>, the <code>src/tests/*i2c_waveform*</code> family. Everything else was skimmed via test names, module docs and two scripted sweeps: (a) within-file normalized body similarity for every src file with ≥10 tests (112 files); (b) cross-file normalized-name-group bodies over all 686 files / 4,683 extracted tests (4,462 name groups — 40 groups beyond the pass-1 rows showed any pair ≥0.9).</p>
+<table>
+<thead>
+<tr>
+<th>file &gt; test(s)</th>
+<th>verdict</th>
+<th>reason</th>
+<th>est. lines</th>
+<th>conf</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>crates/core/src/peripherals/esp32c3/spi.rs + esp32s3/gpspi.rs &gt; scheduler_arms_recurring_external_can_poll, config_registers_store_under_write_mask, reset_defaults_*, unmapped_offsets_read_zero_and_ignore_writes, cmd_update_bit_self_clears, dma_conf_afifo_rst_strobes_self_clear, slave_soft_reset_self_clears, w_buffer_round_trips, usr_start_auto_clears_and_latches_trans_done, miso_fills_0xff_for_no_device, int_clr_is_w1c, int_st_masks_with_ena_and_emits_source</td>
+<td>CONSOLIDATE</td>
+<td>Same IP block, two per-chip copies: 14 cross-file pairs ≥0.8, seven ≥0.97 — 0.99 scheduler_arms (c3:964-989 ↔ s3:917-942), 0.98 usr_start (c3:1086-1097 ↔ s3:1073-1087), 0.98 unmapped_offsets (c3:1032-1039 ↔ s3:985-994), 0.98 slave_soft_reset (c3:1063-1072 ↔ s3:1020-1029), 0.98 int_clr_is_w1c (c3:1145-1157 ↔ s3:1136-1149), 0.97 cmd_update (c3:1041-1050 ↔ s3:996-1007), 0.97 dma_conf (c3:1052-1061 ↔ s3:1009-1018); per-chip deltas are constants only (source 19 vs 21, reset tables, C3 0x44 hole, S3 INT_SET). This is the SPI-family instance of the pass-1 I2C CONSOLIDATE design: a macro/fixture taking (controller type, irq-source const, reset table, hole list) removes the copy. Reciprocal to pass 1: this row supersedes the pass-1 KEEP notes for the c3-spi &lt;-&gt; s3-gpspi copies of <code>int_clr_is_w1c</code> and <code>reset_defaults_seeded</code> only; the other files in those pass-1 groups (nrf52/nrf54l serial peripherals; s3 gpio/rmt/sar_adc/sdmmc/sens) stay KEEP</td>
+<td>~300</td>
+<td>med</td>
+</tr>
+<tr>
+<td>crates/core/src/bus/tests_main.rs &gt; test_from_config_attaches_bmp280_to_esp32c3_i2c0 (1559-1709) + test_from_config_attaches_mlx90640_to_esp32c3_i2c0_and_reads_eeprom (1718-1869)</td>
+<td>CONSOLIDATE</td>
+<td>151-line bodies at 0.95 normalized similarity: byte-identical ChipDescriptor, manifest skeleton, GPIO-matrix <code>Wire.begin</code> writes (L1650-1657 ↔ L1811-1818), downcast and <code>tick_elapsed</code> drain loop; only the device config (0x76 vs 0x33), the transaction program (8-bit reg read vs 16-bit-addressed EEPROM word) and the final asserts differ. Extract <code>esp32c3_i2c0_chip()</code>, <code>manifest_with_external_device()</code>, <code>gpio_matrix_wire_begin()</code>, <code>drive_c3_i2c()</code>; coverage per device is unchanged</td>
+<td>~150</td>
+<td>med</td>
+</tr>
+<tr>
+<td>crates/core/src/tests/esp32_i2c_waveform.rs + esp32s3_i2c_waveform.rs &gt; scl_runs_at_the_rate_the_timing_registers_program; logic_capture_sees_a_decodable_*</td>
+<td>CONSOLIDATE</td>
+<td>scl-rate bodies are 1.00-identical (esp32:296-325 ↔ s3:224-259) and the decode tests 0.99 (esp32:188-219 ↔ s3:170-202); only per-chip <code>machine()</code>/<code>configure()</code> differ (sampled in full). A shared <code>decode(edges)</code> + <code>assert_scl_rate(machine, expected_bit_time)</code> helper (the rp2040/stm32 waveform files already carry the same shapes under different names) removes the copies without touching the per-chip setup</td>
+<td>~60</td>
+<td>med</td>
+</tr>
+<tr>
+<td>crates/core/src/decoder/arm.rs &gt; test_decode_rev_t1_16bit (1763-1770) vs test_decode_rev_t1 (1850-1855); test_decode_memory_ops (1650-1674) vs test_decode_ldr_str (2048-2072); test_decode_push_pop (1677-1699) vs test_decode_stack_control (2089-2113)</td>
+<td>STRIP</td>
+<td>Within-file assertion duplication on the same encodings: REV/REV16/REVSH 0xBA1B/0xBA6D/0xBAC8 asserted twice with only the operand registers varying; LDR imm 0x6848/0x601A and STR imm 0x601A/0x681A re-assert the same two arms with operands swapped (memory_ops ≡ ldr_str); PUSH {R0,LR} 0xB501 / POP {R1,PC} 0xBD02 asserted identically in both (stack_control adds BX 0x4770). Keep one of each (the later fns carry the extra variants) and delete the duplicate fn; the remaining 41 per-encoding tests stay — same idiom pass 2 KEEP'd in <code>xtensa_decode.rs</code></td>
+<td>~60</td>
+<td>med</td>
+</tr>
+<tr>
+<td>crates/core/src/tests/integration.rs &gt; test_from_config_gpio_profile_stm32v2 (760-835), test_from_config_uart_profile_stm32v2 (838-910), test_from_config_rcc_profile_stm32v2 (1079-1151), test_from_config_rcc_profile_stm32f4 (1154-1226), test_from_config_profile_register_layout_alias_still_supported (1229-1294)</td>
+<td>CONSOLIDATE</td>
+<td>Five 67-77-line tests whose first ~60 lines are the same ChipDescriptor+SystemManifest scaffolding (only <code>test-chip-&lt;x&gt;-v2</code>/<code>test-system-&lt;x&gt;-v2</code> names change; pairwise Jaccard 0.85-0.91) before the per-profile register pokes; add <code>chip_with_peripheral(ty, profile, base)</code> / <code>manifest_for(chip_name)</code> helpers (the module already has <code>create_machine()</code>); per-profile assertions stay per-test</td>
+<td>~250</td>
+<td>med</td>
+</tr>
+<tr>
+<td>crates/core/src/bus/tests_main.rs (remaining 103 tests)</td>
+<td>KEEP</td>
+<td>Within-file scan of all 105 tests: only 6 pairs ≥0.85, and two ≥0.9 — the bmp/mlx row above and the RWW 2×2 matrix (<code>rww_gate_on_other_bank_erase_proceeds</code> 4084-4103 vs <code>rww_gate_off_same_bank_erase_succeeds_silently</code> 4176-4195, opposite gate cells). H5 quadword (3779-3864), UDS scripts (5044-5933), motor models (2624-3262) and pad brackets (5576-5692) assert per-scenario behavior. The flat 5,933-line layout is a maintainability note, not a trim: no submodule duplicates exist to strip</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/src/cpu/cortex_m_tests.rs (113 tests)</td>
+<td>KEEP</td>
+<td>Per-instruction regression suite; the 4 pairs ≥0.85 (ldrsb pos/neg 2182-2208, strexb/strexh 220-301, WFI/PRIMASK 2561-2635, LDR T4 pre/post 1078-1109) each pin an opcode or a different PRIMASK/EXCM state; T16 coalescing tests (3269-3380) property-check the fast path against the interpreter across prefixes×budgets; reservation tests loop the none/address/write invalidation matrix. Table-ifying the three sign-extend cases is possible (see Maybe), nothing else is duplicate</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/src/peripherals/components/declarative_i2c.rs (72 tests)</td>
+<td>KEEP</td>
+<td>Full read of the tests module: the 10 pairs ≥0.85 are distinct paths or rules, not copies — code_width-1 vs 16-bit dispatch (<code>code_width_1_source_reflects_set_input</code> 3786-3792 vs <code>command_source_reflects_set_input</code> 3722-3728), known write-only vs unknown opcode (3731-3744), distinct load-time rejections (<code>a_timer_needs_a_named_register_map</code> 4526-4535 vs <code>a_sixteen_bit_register_address_needs_the_wider_pointer</code> 4617-4626), distinct data_ready shapes (VCNL4010 3926-4047, split-register TOF 4208-4234, mode-field 4187-4205). The 8 audit-<code>trivial</code> lines are rejection-path asserts (<code>is_err()</code> on bad specs at 3416-3420/3687-3688/3822-3833, <code>evaluation_fault</code> negative controls) = real contract checks (see method notes)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/src/peripherals/i2c_tests.rs (24 tests)</td>
+<td>KEEP</td>
+<td><code>mod mux_stm32l4</code> (690-838) and <code>mod mux_kinetis</code> (840-972) carry five 1.00-identical test bodies on purpose: L683-689 states the L4 and Kinetis engines are separate state machines with their own address-resolution sites, so each needs the same promise driven through its own register interface. The L4 preload/IT/TXIS ordering tests (497-645) and the Kinetis trace wrap (648-681) are distinct engines. (Optional macro in Maybe.)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/src/peripherals/components/declarative_{display,spi,analog,regs,expr,led_strip_tests}.rs rejection/sabotage suites</td>
+<td>KEEP</td>
+<td>declarative_display's 57 pairs ≥0.85 are all <code>*_is_refused</code> tests (sampled 2618-2725, 3016-3087): each sabotages a different descriptor key and asserts a different error text (<code>gates nothing</code>, <code>backlight</code>, <code>ram_write</code>, <code>artifact_meta is empty</code>, <code>dc_source</code>…). declarative_spi/analog's audit-<code>trivial</code> hits are the same class (<code>set_input</code> rejection 1698-1699, <code>evaluation_fault</code> negative controls declarative_spi:1516-1531). Shared shape is the fixture scaffold; the rule under test differs every time</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/src/peripherals/{esp32s3,esp32c3,esp32}/{gpio,ledc,timg,timer_group,rmt,sens,sdmmc,sar_adc}.rs per-chip register suites</td>
+<td>KEEP</td>
+<td>Cross-chip scan of the sibling families found no further twin suites after the SPI pair: gpio c3↔s3 0 pairs ≥0.8, ledc c3↔s3 0, timg↔timer_group 0, uart esp32↔esp_c3 0 (<code>tx_fifo_fills_then_drains_to_sink</code> 0.91 is one 13-line case), c3↔c6 rtc/lp_timer only 2 small pairs (Maybe). <code>esp32s3/gpio.rs</code> (40 tests, highest non-ignored score 16.5) has 1 internal pair (enable_w1ts/w1tc 1835-1848); its 9 dup names are shared conventions (<code>reset_defaults_seeded</code>, <code>readonly_registers_ignore_writes</code>)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/src/peripherals/{nrf52,nrf54l}/* + spi_tests.rs nRF sections &gt; enable_mask, maxcnt_masks_to_8_bits, orc_masks_to_8_bits, tasks_read_as_zero, psel_round_trip, events_write_1_ignored, intenset_intenclr…</td>
+<td>KEEP</td>
+<td>nrf52 spis:400-514 vs twis:371-474 are 0.87-0.97 similar on 5-8-line mask/round-trip tests, each on its own register map (<code>enable_mask</code> 400-405↔371-376, <code>maxcnt_masks_to_8_bits</code> 466-473↔443-450); twim/uarte and the spi_tests.rs nrf52_spim section (1007-1179) repeat the convention per peripheral type. Same verdict class as pass-1's <code>intclriswc</code> KEEP; a macro is possible (Maybe) but per-SUT assertions stay</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/src/tests/{machine_advance.rs (78), cortex_m_fault_escalation.rs (25), nrf52.rs (15), esp32.rs (11), logic_capture*.rs, yaml_owned_base_contract.rs, nrf52_nvmc.rs, u575_*.rs}</td>
+<td>KEEP</td>
+<td>machine_advance's scan shows 2 pairs ≥0.85 (resident idle-clamp 1965-1985 vs 2130-2150; arm/riscv/xtensa step adapters 1487-1505) and its 78 tests each pin a distinct advance/limit/idle/debug contract (L387-2214); the rest are contract/ratchet files of the class pass 1 KEEP'd wholesale with no duplicated bodies</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/src/{sched/event_scheduler.rs, bus/bus_trace.rs, decoder/xtensa.rs, decoder/riscv.rs, cpu/riscv_tests.rs}</td>
+<td>KEEP</td>
+<td>Scheduler suite (602-967): dedup/promotion/demotion/reference-hash-set equivalence, no duplicate bodies. bus_trace 5 tests. xtensa.rs has 3 real <code>#[test]</code>s (the audit's 17 is a miscount — <code>decoding salt/saltu/bt-bf</code> at 2363-2411); riscv decoder tests live in cpu/riscv_tests.rs (2 pairs ≥0.85: spin-restore variants 1137-1174) and bus/bus_trace.rs. No trim candidates</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/core/src/peripherals/{esp32/uart,esp32s3/lcd_cam,esp32s3/sar_adc,esp32s3/sdmmc,esp_uart,nrf54l/uarte}.rs &gt; config_registers_round_trip / config_registers_roundtrip (pass-1 dup group)</td>
+<td>KEEP</td>
+<td>Re-measured all 15 pairs: max 0.79 (esp32/uart:991-998 ↔ esp_uart:1275-1283), everything else 0.09-0.32. Explicit agreement with pass-1's KEEP: naming coincidence, no consolidation design survives the per-device register maps</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>(pass-1 reference, not re-rowed) <code>esp32/i2c.rs + esp32s3/i2c.rs + esp32c3/i2c_tests.rs</code></td>
+<td>KEEP (reference)</td>
+<td>Pass-3 scan adds evidence FOR the pass-1 CONSOLIDATE row rather than a new row: 11 more groups at 0.99-1.00 (end_opcode esp32:1252-1268↔s3:1141-1160; write_unmatched_addr 1290-1304↔1357-1371; srtx_fifo_cnt c3:585-597↔s3:1099-1113; ctr_roundtrip c3:562-567↔s3:1069-1074; slave_addr 569-574↔1076-1081; int_clr_clear 609-615↔1125-1131; trans_start 1282-1288↔1174-1180; int_st_masks 1244-1250↔1133-1139; rstart_then_stop 1270-1280↔1162-1172; cmd_register c3:576-583↔s3:1083-1090; fifo_reset 599-607↔1115-1123). The mux promise also exists in nrf54l/twim.rs (1105-1185, 0.64-0.83 — different engine, KEEP) and i2c_tests.rs (KEEP row above). No re-row; no contradiction</td>
+<td>0</td>
+<td>high</td>
+</tr>
+</tbody>
+</table>
+<p>Totals: DELETE 0 · STRIP 1 row (~60 lines) · CONSOLIDATE 4 rows (~760 lines) · KEEP 10 rows + 1 KEEP (reference) row (0 lines). All four CONSOLIDATE rows remove text duplication without dropping a SUT or an assertion family; the STRIP row merges duplicate decode assertions.</p>
+<h3 id="maybe-coresrc-not-approved-by-default">Maybe (core/src, not approved by default)</h3>
+<p>Low-confidence rows; listed as KEEP in the main table per the classification rules, flagged here for owners who want a deeper cut.</p>
+<table>
+<thead>
+<tr>
+<th>file &gt; test(s)</th>
+<th>verdict</th>
+<th>reason</th>
+<th>est. lines</th>
+<th>conf</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>crates/core/src/peripherals/{dma.rs:824-832, dwt.rs:333-341, esp32c3/ledc.rs:816-825, esp32c3/rtc_timer.rs:411-419, esp32c6/lp_timer.rs:306-310, nrf52/rtc.rs:744-748, nrf54l/grtc_tests.rs:536-544, systick.rs:661-669, timer.rs:1620-1629} &gt; without_clock_stays_on_legacy_tick_path ×9 (pass-1 dup group)</td>
+<td>CONSOLIDATE (low)</td>
+<td>Pass-1 KEEP'd this group as per-SUT; that still holds — the proposal is only to share the 2-assert body via a <code>macro_rules! legacy_tick_without_clock!(Type)</code> invoked in each <code>mod tests</code>, keeping all nine named tests and their one-line constructions (bodies measured 0.75-0.94; the top pairs dma↔timer, dwt↔systick, c3_rtc_timer↔nrf52_rtc and c3_rtc_timer↔c6_lp_timer are 0.91-0.94 identical but for the type). Partial disagreement with the pass-1 note "consolidation would couple unrelated modules": a macro invocation shares the body, not the modules</td>
+<td>~60</td>
+<td>low</td>
+</tr>
+<tr>
+<td>crates/core/src/peripherals/nrf52/{spis.rs:400-514, twis.rs:371-474, twim.rs:1178-1239, uarte.rs} + crates/core/src/peripherals/spi_tests.rs:1007-1179 &gt; mask/round-trip micro-suite</td>
+<td>CONSOLIDATE (low)</td>
+<td>~35 5-8-line register-convention tests duplicated at 0.87-0.97 across the sibling serial peripherals; a <code>serial_regmap_suite!</code> macro over (type, offset consts, mask specs) would slice ~150 lines. Risk: the offsets differ per peripheral, so the macro parameters grow; owner may prefer the current per-file readability</td>
+<td>~150</td>
+<td>low</td>
+</tr>
+<tr>
+<td>crates/core/src/peripherals/i2c_tests.rs &gt; mux_stm32l4 (759-837) + mux_kinetis (904-972) five tests</td>
+<td>CONSOLIDATE (low)</td>
+<td>The five bodies are 1.00 identical and each module already has the seams (<code>bus()</code>, <code>write_one</code>, <code>read_one</code>, <code>probe_acked</code>); a macro over those hooks would generate the 5 tests per engine. Deliberately low: L683-689 documents the duplication as the point (two state machines, neither ever driven through the switch before) — veto-friendly</td>
+<td>~110</td>
+<td>low</td>
+</tr>
+<tr>
+<td>crates/core/src/peripherals/nrf52/ccm.rs &gt; tamper_ciphertext_mic_fails (692-699), tamper_mic_fails (702-708), tamper_header_mic_fails (711-717)</td>
+<td>STRIP (low)</td>
+<td>Three 8-line cases of one invariant (tamper class → MIC failure) differing only in the tampered field; a table over (name, mutation) keeps all three cases in one fn</td>
+<td>~12</td>
+<td>low</td>
+</tr>
+<tr>
+<td>crates/core/src/peripherals/gpdma.rs &gt; test_handling_byte_to_half_zero_pad (983), …_sign_extend (989), half_to_byte_left_trunc (995), right_trunc (1001), src_byte_exchange (1007), dest_byte_exchange (1013), dest_halfword_exchange (1019)</td>
+<td>CONSOLIDATE (low)</td>
+<td>Seven 5-line <code>assert_eq!(convert(...), expected)</code> cases over the transfer-width matrix; one table-driven test over (src_w, dest_w, mode, expected) collapses ~20 lines of boilerplate, no case lost</td>
+<td>~20</td>
+<td>low</td>
+</tr>
+<tr>
+<td>crates/core/src/peripherals/components/bg770a/at/mod.rs &gt; parse_at_{test,read,write,exec,bare_at,empty_write_args} (246-285) + crates/core/src/peripherals/components/bg770a.rs command responses (1332-1416)</td>
+<td>CONSOLIDATE (low)</td>
+<td>Six 5-6 line parser-form tests at 0.87-0.96 (input suffix + expected form vary) plus ~10 one-line command-response tests at 0.86-0.94; a <code>(input, expected)</code> table per form/section is the natural rewrite. The forms are distinct grammar branches, so this is text-only</td>
+<td>~60</td>
+<td>low</td>
+</tr>
+<tr>
+<td>crates/core/src/peripherals/esp32s3/gdma_tests.rs &gt; in_peri_sel_{round_trip,mask_enforced,reset_value} (462-491) vs out_peri_sel_* (494-523), coupled_in/out (541-579), unbound_in/out (655-682)</td>
+<td>CONSOLIDATE (low)</td>
+<td>Mirrored IN/OUT register banks tested by 0.92-0.97-identical bodies (only the bank offset const changes); a helper/table over (bank, offset) keeps both banks covered with half the text. Careful: the banks are separate state — keep both loops</td>
+<td>~30</td>
+<td>low</td>
+</tr>
+<tr>
+<td>crates/core/src/cpu/cortex_m_tests.rs &gt; test_exec_ldrsb_reg_offset_positive (2182-2194), ..._negative (2196-2208), test_exec_ldrh_reg_offset (2210-2222), test_exec_ldrsh_reg_offset_negative (2263-2276)</td>
+<td>STRIP (low)</td>
+<td>Four 13-line cases asserting sign/zero extension for two encodings (0x5688/0x5A88/0x5E88) on one decoder arm each; a table over (encoding, data, expected) keeps the boundary values</td>
+<td>~35</td>
+<td>low</td>
+</tr>
+<tr>
+<td>crates/core/src/bus/tests_main.rs &gt; uds_tester_did_write_sf_completes (5233-5240), uds_tester_routine_reply_with_output_byte (5245-5250), uds_tester_io_control_reply_completes (5254-5259)</td>
+<td>CONSOLIDATE (low)</td>
+<td>Three 7-9 line tests of the same SF-request/prefix-match promise differing only in service payload (0x2E/0x31/0x2F) and assertion <code>state == Done</code>; they post-date the shared helpers (<code>bus_with_script</code>/<code>inject_ecu_reply</code>) so a table keeps the per-service replies</td>
+<td>~15</td>
+<td>low</td>
+</tr>
+<tr>
+<td>crates/core/src/peripherals/esp32c3/rtc_timer.rs + esp32c6/lp_timer.rs &gt; without_clock_stays_on_legacy_tick_path (411-419 ↔ 306-310), readout_frozen_until_next_update (384-396 ↔ 259-271)</td>
+<td>CONSOLIDATE (low)</td>
+<td>Two 0.94/0.89 pairs between the C3 RTC-timer and C6 LP-timer twins; both files are small (10/8 tests) and the SUTs are the same IP generation — one shared macro or a per-chip table would remove ~25 lines; low because the whole files are only 553/345 lines</td>
+<td>~25</td>
+<td>low</td>
+</tr>
+</tbody>
+</table>
+<p>Totals (Maybe): 10 low-confidence rows / ~520 lines if approved; not counted in any headline number. No overlaps with pass-1 Maybe rows (diag_*, e2e_esp32_epaper, runtime_snapshot) or pass-2 Maybe rows (xtensa strips, AVR pair).</p>
+<p>Pass-3 method notes:</p>
+<ul>
+<li>Static, read-only review of the worktree at 249da54a6; no cargo commands (baseline <code>cargo test</code> holds the lock); no non-test code was touched, and this pass only appends.</li>
+<li>The audit's <code>trivial</code> column is unusable in core/src (item C confirmed): every sampled hit is a rejection-path assert or a negative control — <code>declarative_i2c.rs:3416-3688</code> (<code>is_err()</code> on bad specs), <code>declarative_spi.rs:1504-1531</code>, <code>declarative_analog.rs:727-961</code>, <code>bus/tests_main.rs:510-3857</code> (<code>observe_ecu_frame(...).is_none()</code>, <code>flash_error_flags_idx.is_some()</code>). None is a strip signal.</li>
+<li>Pass-1 dup cross-check (item D): <code>configregistersroundtrip</code> ×6 — measured max 0.79, agree KEEP, no consolidation design exists. <code>withoutclockstaysonlegacytickpath</code> ×9 — measured 0.75-0.94, agree the nine SUTs are distinct; the only concrete proposal is the body-sharing macro in Maybe, which does not contradict the pass-1 note. <code>clock_attach_flips_to_scheduler…</code> ×6 (pass-1 KEEP) was re-measured together with <code>attaching_a_clock_leaves_the_walk</code> (nrf54l trio + sam sercom, 0.85-0.91) — same per-SUT verdict, no row.</li>
+<li>The audit's per-file scores in core/src are driven by <code>ignored</code> (pass-1 rows) and file size; the highest-score non-pass-1 file, <code>esp32s3/gpspi.rs</code> (20.2), is the SPI twin rowed above, and <code>esp32c3/spi.rs</code> (18.7) is its other half. Nothing else in the ≥15 score band stayed unexamined.</li>
+<li>Test-name-based duplication is exhaustive over every line-parseable test in src (4,683 of the audit's 4,731 attrs; the ~48 difference is attrs the line parser cannot see, e.g. nested/oddly formatted — none in a candidate file); shape-only similarity (Jaccard on normalized bodies below 0.85, or below 0.9 cross-file) was not rowed by design — the owner's bar is "duplicate or trivial", not "verbose".</li>
+</ul>
+<h2 id="other-crates-pass-4">Other crates (pass 4)</h2>
+<p>Scope: every workspace crate except <code>crates/core</code>, and excluding the pass-1-reviewed <code>hw-oracle</code> / <code>hw-oracle-macros</code> (referenced, never re-rowed): <code>cli</code>, <code>config</code>, <code>wasm</code>, <code>loader</code>, <code>dap</code>, <code>arm-system</code>, <code>svd-ingestor</code>, <code>validation-report</code>, <code>nrf-softdevice-hle</code>, <code>gdbstub</code>, <code>ir</code>, <code>hw-trace</code>, <code>labwired-fuzz</code>, <code>codegen</code>, <code>egress-relay</code>, the 73 <code>firmware-*</code> crates, and the shared <code>firmware</code> lib. <code>examples/**</code> crates are workspace members (25 of them, Cargo.toml:103-127); the only test-bearing example, <code>examples/esp32s3-doomlike-lab</code>, is in the <code>exclude</code> list (Cargo.toml:135-148, +esp toolchain), so its 4 test files / 12 audit attrs never build under the workspace and are outside this audit's scope; flagged in the method notes. Pass-1/2/3 rows are referenced, not repeated.</p>
+<p>Coverage accounting: 184 in-scope files carry tests (the audit's 218 non-core test-bearing files minus 28 <code>hw-oracle</code>, 2 <code>hw-oracle-macros</code>, 4 <code>examples</code>): cli 97, config 26, wasm 17, loader 10, dap 7, arm-system 3, small crates 24. I read the test bodies end to end in ~65 files, in substantial part (most bodies, remainder by name) in ~25 more; the remaining ~94 were covered by full test-name enumeration (1,033 extracted names) plus two scripted sweeps over all in-scope files: (a) normalized-body similarity within every file at 0.85; (b) cross-file normalized-body similarity inside each crate at 0.90. No row below rests on a file whose test names and bodies were not at least machine-compared.</p>
+<table>
+<thead>
+<tr>
+<th>crate/file &gt; test(s)</th>
+<th>verdict</th>
+<th>reason</th>
+<th>est. lines</th>
+<th>conf</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>crates/dap/src/adapter.rs &gt; test_resolve_board_io_bindings_uses_default_gpio_offsets, ..._uses_stm32v2_gpio_offsets, ..._uses_sam_port_gpio_offsets, ..._register_layout_alias_still_supported</td>
+<td>CONSOLIDATE</td>
+<td>four 70-86 line tests (L1783-2099) at 0.86-0.98 normalized similarity: byte-identical <code>ChipDescriptor</code> + <code>SystemManifest</code> scaffolding, differing only in the gpio <code>config</code> key (<code>profile</code> vs <code>register_layout</code>), peripheral id/base/pins and the expected offset (<code>GPIO_F1_ODR_OFFSET</code>; V2 ODR/IDR; SAM OUT 0x10 / IN 0x20; alias repeats V2). One table over (config key/value, base, pins, expected offsets) keeps all four profiles and drops ~200 lines of scaffold</td>
+<td>~200</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/dap/tests/evaluation.rs &gt; test_adapter_resolve_and_evaluate, test_adapter_locals_evaluation</td>
+<td>DELETE</td>
+<td>both copy the server's evaluation logic into the test instead of calling it: the register loop is re-implemented at L28-47 and the frame-relative read at L66-93, so the assertions test the test's own copy. The production path is covered by <code>server.rs::test_handle_evaluate_fallback</code> (L1963-2003), which asserts both <code>R0</code> and <code>my_var</code> through <code>handle_request</code></td>
+<td>98</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/dap/src/adapter.rs &gt; test_adapter_breakpoints</td>
+<td>DELETE</td>
+<td>no assertions beyond <code>.expect</code> on the call itself (<code>let _ = adapter.set_breakpoints(...).expect(...)</code>, L2119-2122) and no check of <code>verified</code>/<code>resolved_line</code>; it also returns early when the build-artifact fixture is absent (L2105-2111), the vacuous-pass pattern the file's own comment at L2366-2372 warns about. Breakpoint resolution is asserted for real in <code>tests/source_step.rs</code> (<code>set_line_breakpoint</code>, L66-75)</td>
+<td>22</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/gdbstub/src/lib.rs &gt; test_target_memory_access</td>
+<td>DELETE</td>
+<td>writes 4 bytes and discards the result: <code>let _ = target.write_addrs(0x2000_0000, &amp;data)</code> (L483-492); no readback, no assertion, no panic path (the other two tests in the module do assert register round-trips)</td>
+<td>10</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/wasm/src/playground_repro.rs &gt; matrix</td>
+<td>DELETE</td>
+<td>print-only 2x2 diagnostic (L141-152): calls <code>run_playground_path</code> for four (idle_ff, auto_tick) combinations and <code>println!</code>s boot3/key; asserts nothing. The two real gates below it (<code>playground_path_reaches_boot_three</code> L155, <code>browser_tick_interval_reaches_boot_three</code> L178) do the assertions</td>
+<td>12</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/cli/src/tier1.rs &gt; manifest_verification_happy_path</td>
+<td>DELETE</td>
+<td>strict subset of <code>run_all_style_manifest_listing_is_enforced</code> (L1647-1664): both build the same MANIFEST.json + blob, call <code>verify_fixture_manifest</code> and assert <code>verified.contains("esp32s3.elf")</code> (L1617-1632); the listing test adds the <code>!verified.contains("esp32s3-flash.bin")</code> assert (0.90 similarity)</td>
+<td>16</td>
+<td>med</td>
+</tr>
+<tr>
+<td>crates/cli/tests/run_exit_code.rs (10 tests)</td>
+<td>KEEP</td>
+<td>ARM and RISC-V halves are deliberate mirrors, stated in the module doc L18-21 ("The RISC-V half of this file repeats the same cases ... the two carried their own copies of the decision and had already drifted apart"); the RISC-V half (L152-247) additionally separates the batched default loop from the <code>LABWIRED_DHCP_TRACE</code> single-step loop (L174-206), which each had its own <code>Err</code> arm. 0.87-0.95 pairs are per-arch parity, not duplicated SUTs</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/cli/tests/{e2e_itm,e2e_semihost,e2e_segger_rtt,e2e_segger_rtt_arch}.rs</td>
+<td>KEEP</td>
+<td>parallel 4-5 test matrices over four different sinks, not copies: ITM's RISC-V case asserts the stream is not observable (L234-267), semihosting's non-Cortex-M case exits nonzero (L242-288), RTT's arch file splits riscv/xtensa/stripped symbol resolution (L400-526), and RTT stops early without the UART cache (L222-267). Shared runner plumbing, distinct transport per file</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/cli/src/lib.rs (36 tests in a 3,370-line file)</td>
+<td>KEEP</td>
+<td>giant multi-purpose file, but the tests are distinct contract groups: shutdown-latency occurrence/batch policy (L2506-2698), display/JIT batching (L2704-2776), UDS evaluation (L2778-2816), snapshot/serde tags (L2818-2848), resource budgets (L3097-3216), golden result.json/junit (L2988-3057, separate mod), time-mode values (L3318-3369). Only 0.92 pairs are the three time-mode spellings, each a different clap value; no duplicated bodies</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/cli/src/tier1.rs (remaining 45 tests)</td>
+<td>KEEP</td>
+<td>distinct parser/resolver/ratchet/ack baselines: missing-done degradation (L965-975), implicit-UART rule vs explicit FAIL (L996-1010), NA precedence (L1141-1150), snapshot-regeneration vs baseline (L1270-1286), one test per ack rejection mode (L1339-1417), shallow-clone refusal (L1450-1475), target/manifest cross-registry checks (L1569-1664). Only the happy-path row above is redundant</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/cli/tests/environment_runner.rs (27 tests)</td>
+<td>KEEP</td>
+<td>world runner matrix: artifact set (L447-543), durable assertion stop (L545-591), final-round cycle/UART limits (L593-630, L1246-1328), metering (L632-689), provenance on parser failures (L691-794), hash order-independence (L871-921), fast-boot vs rom-boot ceilings (L1493-1571), UART assertions from every node plus negative control (L1580-1642), cosim refusal (L1651-1728). The ≥0.9 pairs are the malformed-script provenance trio (see Maybe), not duplicates</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/cli/tests/{no_elf_c3_rom_boot,no_elf_s3_rom_boot,no_elf_c3_cdc_console,no_elf_c3_merged_console}.rs</td>
+<td>KEEP</td>
+<td>each pins a different ELF-less claim: C3 app-level OLED marker at 32M steps (L56/79), S3 2nd-stage-banner at 5M and deliberately not repeated at app level (L54/96), C3 CDC-vs-UART0 tap selection (L63, L171), C3 merged console banner exactly once (L39). Different images, assertions and failure modes</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/config/src/lib_tests.rs (44) + crates/config/tests/config_tests.rs (31)</td>
+<td>KEEP</td>
+<td>schema contract coverage: fault-schema 1.1 gates, duplicate ids and trigger refusal (lib_tests L178-307), env-vs-single-node/legacy selection and null-node round-trips (L385-449, L860-976), motor parse/round-trip/field-qualified validation (config_tests L342-780), include merge/missing/cycle (L826-940), cosim/analog manifest validation (L174-320). ≥0.9 pairs are bad-schema tests with different diagnostics (see Maybe for the env-cluster consolidation)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/config/src/{expr,rules,logic,uart,uart_binary}.rs</td>
+<td>KEEP</td>
+<td>expression evaluator (12: operators, precedence, short-circuit, div-zero, wrapping, token-offset errors), rule compiler (10: event/action round-trips, slot-qualified errors, indexed pins), logic truth tables + spec validation (22), UART text templates/NMEA (20), binary frames/CRCs (11 catalogue check values + pattern/template errors). Short shared shapes are rejection tests with different rules, the same per-SUT pattern pass 3 KEEP'd</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/config/tests/{chip_analog_pins,chip_pins_ratchet,chip_io_levels,chip_cortex_m_systick}.rs + src/uart_network.rs</td>
+<td>KEEP</td>
+<td>fleet/data ratchets over <code>configs/chips</code>: analog pin maps vs declared ADC/port/channel (chip_analog_pins L41-162), parse-fallback list only shrinks (chip_pins_ratchet L139-230), io_voltage/threshold pairing + datasheet transcriptions (chip_io_levels L27-125), SysTick on every Cortex-M descriptor (chip_cortex_m_systick L19-60), gpio_net one-action/zero-delay/unknown-key rejection (uart_network L139-185). Each scans a different corpus and fails on drift</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/config/tests/ordered_interrupt_metadata.rs (pass-1 <code>publicorderedtypecontract</code> group)</td>
+<td>KEEP</td>
+<td>re-measured against <code>crates/core/tests/ordered_debug_metadata.rs</code>: only the name matches. This file pins <code>PeripheralDescriptor.interrupts: Option&lt;BTreeMap&gt;</code> across 16 input permutations plus IR duplicate semantics (L13-129); a different struct and surface. Explicit agreement with pass 1's coincidence note</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/wasm/src/lib.rs (21 non-ignored tests; pass-1 rows cover the 11 ignores)</td>
+<td>KEEP</td>
+<td>boundary fixtures are distinct SUTs: the three 4-line batch wrappers call the shared <code>assert_batch_matches_32_singles</code> with arm/riscv/xtensa simulators (L2555-2587), configured-arm adds real peripherals (L2560-2577); flash-capacity trio pins 16MiB part, oversized image and 4MiB floor (L2386-2411); USB-console cases drive S3-flash, S3-fast-boot, C3-program-image and undeclared-manifest constructors through one helper (L4002-4071). No duplicated fixture found</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/wasm/src/source_debug.rs (20 tests)</td>
+<td>KEEP</td>
+<td>per-arch/per-fixture source-debug coverage, no giant test: ARM C smart-ring (L802-975), ARM Rust nokia incl. <code>rust_frame_variables_and_call_stack</code> (L1050-1106, a 56-line test — the 490-line span a naive brace scan reports is a raw-string artifact), RISC-V (L1108-1175), ESP32 classic dual-core (L1255-1331, locals/frames L1503-1531), ESP32-S3/C3 flash boot (L1397-1440), AVR (L1451-1501). Shared <code>breakpoint_step_flow</code> helper, distinct SUTs</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/wasm/src/{inputs,cosim_tests,world,lab_tools,source_debug}.rs (remaining)</td>
+<td>KEEP</td>
+<td>per-SUT/per-binding: NTC vs potentiometer exercise the same SimInput channel through different device ids/asserted ids (L1024-1101, 0.95 shape only); cosim constructor errors are distinct refusals (external_process L193, netlist file L220, unroutable pad L250, ADC-route matrix L276-302); world node tests are one constructor each (S3 elf/flash, classic Arduino, C3 esp-hal/own-ROM L1371-1477); source_debug adds AVR/ESP32/RISC-V stepping; lab_tools is the wasm binding of the journal invariant (next row)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/wasm/src/lab_tools.rs + crates/dap/tests/snapshot_reverse.rs (pass-1 same-name groups)</td>
+<td>KEEP</td>
+<td>same test names (<code>restore_then_run_matches_a_straight_run</code>, <code>a_later_snapshot_restores_after_rolling_back_to_an_earlier_one</code>) over two public bindings: wasm <code>step_batch</code>/<code>digest_s</code>/<code>feed_uart_input</code> + tools journal (lab_tools L713-812) vs dap adapter <code>step</code>/<code>continue_execution_chunk</code>/<code>poll_uart</code> (snapshot_reverse L50-177); normalized bodies 0.10-0.25. Same invariant, but neither copy can catch the other binding's bug</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/loader/src/{branch_sites,coverage,lcov,source_map,multi_image}.rs + tests</td>
+<td>KEEP</td>
+<td>expected-heavy tests are transcriptions with provenance, not duplicates: branch counts pinned to <code>llvm-objdump</code> (16/472/14/6469 sites, branch_sites_fixtures L35-132), smart-ring coverage through its own DWARF (coverage_run L62-180), lcov emit/parse/merge round-trips (lcov L532-670), source-map expecteds from objdump (source_map L566-649), parse-offset accept/reject quartets (multi_image L264-285). No within-file pair ≥0.9 except two 4-line offset rejections</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/dap/tests/source_step.rs + crates/dap/src/server.rs &gt; test_stack_trace_and_typed_variables</td>
+<td>KEEP</td>
+<td>the ~76-line server test (L1824-1900) pins the DAP request/response path (stackTrace/scopes/variables handles and child references) on the same nokia fixture the adapter-level source_step tests use (L268-302, L376-453); the overlapping frame/game assertions are input to different output contracts, and source_step additionally covers inlined-call stepping, AVR, ESP32 and cross-thread stepping. Not a copy to delete</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/arm-system/tests/architecture.rs (37) + src/native.rs (4)</td>
+<td>KEEP</td>
+<td>native JIT suite: exact-width MMIO (L94-119), MMU/abort/IRQ (L121-177), poison-until-reset (L179-194), code modification/bus swap/cache identity (L196-278), CP15/VFP/NEON (L280-1050), plus child-process probes for abort/livelock/cache growth (L410-850). Each test pins a different native contract; <code>required-features = ["native"]</code> in Cargo.toml prevents an empty green target</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/{svd-ingestor,validation-report,nrf-softdevice-hle,gdbstub,ir,hw-trace,labwired-fuzz,codegen,egress-relay} (remaining tests)</td>
+<td>KEEP</td>
+<td>small suites are distinct: SVD conversion/round-trip + CLI e2e + fixtures (svd-ingestor lib L477-661, parsing_test, e2e), authority merging tier1/hw-oracle/SVD/vendor (validation-report 11), AES/C1/S1/keyset-pointer/GATT-handle semantics (nrf-softdevice-hle 7), ARM/RISC-V register round-trips (gdbstub 2 after the row above) plus an RSP e2e, flatten/inheritance (ir 3), evidence contract (hw-trace 2), planted-overflow gate (labwired-fuzz, pass-1 row), keyword vs reserved-name escaping (codegen: 0.99 shape, different mechanism), transport/allowlist/conn tests (egress-relay; its <code>build.rs</code> row is pass 1). No duplicate bodies ≥0.9 except codegen's shape pair and svd-ingestor's two bit-range cases (different widths)</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/firmware-nrf52840-obd2-scanner/src/lib.rs (31 tests)</td>
+<td>KEEP</td>
+<td>the only firmware crate with tests, and a real protocol suite: OBD2 decoders incl. negative/short/length errors (L391-470), SAE DTC mapping (L445-470), ISO-TP VIN reassembly + flow control + sequence/oversize negatives (L472-650), BLE payload layout/status bits (L274-314), display formatting (L203-341), state/failure persistence (L48-260). No duplicated suite inside</td>
+<td>0</td>
+<td>high</td>
+</tr>
+<tr>
+<td>crates/firmware-* (73 audit crates) + <code>crates/firmware</code></td>
+<td>KEEP</td>
+<td>zero tests in every firmware crate except <code>firmware-nrf52840-obd2-scanner</code> (whole-tree <code>#[test]</code> grep: one file). They are cross-compiled firmware artifacts exercised by the simulator's own e2e/tier1 tests, not test sources; one summary row instead of per-crate rows</td>
+<td>0</td>
+<td>high</td>
+</tr>
+</tbody>
+</table>
+<p>Totals: DELETE 5 rows / 6 tests (~158 lines) · STRIP 0 · CONSOLIDATE 1 row (~200 lines) · KEEP 20 rows (0 lines) · FIX 0.</p>
+<p>Firmware-crates sweep: the 73 <code>firmware-*</code> crates plus the shared <code>firmware</code> lib in the audit (78 <code>firmware-*</code> directories on disk; five are non-package SDK project dirs without a <code>Cargo.toml</code>) contain exactly one test-bearing source file, <code>firmware-nrf52840-obd2-scanner/src/lib.rs</code> (31 tests). All others have no <code>#[test]</code>/<code>#[cfg(test)]</code> at all, so there are no per-crate build/emit smoke suites to keep or duplicate; their coverage lives in the core/cli e2e and tier1 tests that boot the artifacts. The obd2 scanner is the exception that proves the pattern: its 31 tests are host-run protocol/decoder/state tests (<code>#![cfg_attr(not(test), no_std)]</code>), not build smoke, and contain no duplicated suite.</p>
+<h3 id="maybe-other-crates-not-approved-by-default">Maybe (other crates, not approved by default)</h3>
+<p>Low-confidence rows; listed as KEEP elsewhere where the file also has real coverage. Not counted in the main totals.</p>
+<table>
+<thead>
+<tr>
+<th>crate/file &gt; test(s)</th>
+<th>verdict</th>
+<th>reason</th>
+<th>est. lines</th>
+<th>conf</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>crates/cli/tests/runner.rs &gt; test_cli_help, test_cli_version_flag, test_cli_invalid_flag</td>
+<td>STRIP (low)</td>
+<td>three clap-surface smokes, 11-12 lines each: <code>--help</code> asserts only <code>stdout.contains("LabWired Simulator")</code> (L23-33), <code>--version</code> asserts <code>starts_with("labwired")</code> (L169-180), unknown flag asserts clap's own error text (L182-192). One argv-surface test over [help, version, bad flag] keeps the contracts and cuts ~20 lines; low because these are the only checks of those three flags</td>
+<td>~20</td>
+<td>low</td>
+</tr>
+<tr>
+<td>crates/cli/tests/environment_runner.rs &gt; malformed_environment_script_with_recognizable_env_keeps_environment_artifacts, malformed_inline_environment_script_keeps_environment_artifacts, malformed_script_without_a_direct_inputs_env_keeps_legacy_artifacts</td>
+<td>CONSOLIDATE (low)</td>
+<td>three ~34-42 line bodies (L1035-1148, top pair 0.94 similar) asserting the same provenance contract on three YAML shapes: block <code>inputs.env</code>, inline <code>{ env: ... }</code>, and a scalar that merely mentions <code>inputs.env</code>. A table over (yaml, run_type, snapshot type) saves ~60 lines; the shapes are deliberately distinct encodings, so no coverage cut</td>
+<td>~60</td>
+<td>low</td>
+</tr>
+<tr>
+<td>crates/config/src/lib_tests.rs &gt; env-script unsupported-field/round-trip cluster (seven tests, L526-678, L694-818, L1168-1229)</td>
+<td>CONSOLIDATE (low)</td>
+<td>seven tests, ~335 lines, all assert the same "env-script field X is unsupported / must not be null" contract through three entry points (load-from-file, direct serde, public mutation), and the tables already overlap field sets. One table over (entry point, field, representation, expected substring) keeps every case and all three seams</td>
+<td>~120</td>
+<td>low</td>
+</tr>
+<tr>
+<td>crates/config/src/lib_uart_injection_tests.rs &gt; rtt/itm/semihosting contains trio (L207-281)</td>
+<td>CONSOLIDATE (low)</td>
+<td>nine 8-11 line tests at 0.93-0.99 similarity: per variant parse/typo/empty rejection for RTT, ITM and semihosting. A macro or table over (field, variant) keeps all three assertion types and the deny-unknown-fields checks with ~35 fewer lines</td>
+<td>~35</td>
+<td>low</td>
+</tr>
+<tr>
+<td>crates/dap/tests/step_operations.rs (5 tests)</td>
+<td>DELETE (low)</td>
+<td>all five exercise <code>Machine</code>/CortexM directly, never <code>LabwiredAdapter</code> (module comment: "core stepping behavior that step-out and step-back rely on"): MOVS PC advance L26-43, MOVS x3 L45-75, LSLS/STRB L77-113, PUSH/POP SP L115-159, PUSH {LR}/POP {PC} L161-205. Core's CPU/integration suites cover the ISA and stack paths; DAP step-back is separately covered in adapter.rs L2181-2336 and snapshot_reverse.rs. Low because the two stack tests are the most specific PUSH/POP-to-SP checks</td>
+<td>205</td>
+<td>low</td>
+</tr>
+<tr>
+<td>crates/wasm/src/playground_repro.rs &gt; browser_tick_interval_reaches_boot_three</td>
+<td>FIX (low)</td>
+<td>the doc comment says "KNOWN BUG, ignored so it documents rather than blocks" (L161-177) but there is no <code>#[ignore]</code> (L178-179). Either the bug was fixed (comment stale) or the test is red, or <code>recommended_tick_interval()</code> stays 1 and the auto-tick branch is a no-op; the comment and attribute need reconciling. Not a trim</td>
+<td>0</td>
+<td>low</td>
+</tr>
+</tbody>
+</table>
+<p>Totals (Maybe): DELETE 1 row / 5 tests (~205 lines) · STRIP 1 row (~20) · CONSOLIDATE 3 rows (~215) · FIX 1 row (0); not counted in the main totals.</p>
+<p>Pass-4 method notes:</p>
+<ul>
+<li>Static, read-only review of the worktree at 249da54a6; no cargo commands; no non-test code touched, and this pass only appends.</li>
+<li>Pass-1 rows referenced, not repeated: all cli/wasm ignored tests, <code>cli/src/commands/basket_native.rs</code> (artifact-gated), <code>egress-relay/src/build.rs</code> and <code>svd-ingestor/tests/fuzz_test.rs</code> (single-trivial KEEPs), and the hw-oracle/hw-oracle-macros rows. No verdict changes; the wasm ignores are slow ROM/measurement gates, not a dead-feature cluster, so no summary row was needed.</li>
+<li>User's <code>configregistersroundtrip</code> question: that group does not exist in <code>crates/config</code> (<code>rg</code> over the crate returns zero hits). The six-way group lives entirely under <code>crates/core/src/peripherals</code> (esp32/uart, esp32s3/lcd_cam, esp32s3/sar_adc, esp32s3/sdmmc, esp_uart, nrf54l/uarte); pass 3 re-measured it at max 0.79 and KEEP'd it, and this pass agrees.</li>
+<li>Pass-1 duplicate-name groups touched by this scope, all re-measured and KEEP: <code>publicorderedtypecontract</code> (config vs core, different structs), <code>fipsappendixb</code> (nrf-softdevice-hle software AES vs core nrf52 ECB peripheral; one FIPS vector, two independent implementations), <code>deterministicandrestoreequivalent</code> (loader coverage vs core fault lockstep), <code>restorethenrunmatchesastraightrun</code> and <code>alatersnapshotrestoresafterrollingbacktoanearlierone</code> (dap adapter vs wasm tools; bodies 0.10-0.25). No consolidation design survives any of them.</li>
+<li>The audit's <code>trivial</code> column was again unusable in this scope: sampled hits are rejection-path asserts and contract checks (<code>config/src/uart_network.rs</code> event/unknown-key <code>is_err()</code>, <code>cli/tests/environment_runner.rs</code> JSON <code>is_some()</code>, <code>arm-system/tests/architecture.rs</code> <code>is_err()</code> poisoning, <code>cli/src/commands/basket_evidence.rs</code> six mutation negative controls). Only the two zero-assert tests rowed above were genuinely trivial.</li>
+<li>Cross-file clone scan (0.90, within each crate): 160 cli/config/wasm/loader/dap/arm-system files + 24 small-crate files produced no file-level clone cluster left unrowed; the only hits were the dap board_io quartet (rowed CONSOLIDATE), the malformed-env trio (Maybe), the config RTT/ITM/semihosting matrix (Maybe), the config <code>lib_stimuli_tests</code> vs <code>lib_uart_injection_tests</code> schema/empty-field pair (two different features, KEEP), and the cli runner/stop-conditions shape pairs (same spawn-and-assert scaffold, different stop conditions, KEEP).</li>
+<li>Out of scope / un-reviewed audit signals remaining: <code>examples/esp32s3-doomlike-lab</code> (the only test-bearing example; excluded from the workspace at Cargo.toml:135-148 for the +esp toolchain — 4 files / 12 tests: display/game/render/input unit tests), and the pass-1 <code>hw-oracle</code> hardware rows (deliberately skipped per instructions). Within <code>crates/</code>, every audit test-bearing file outside <code>core</code> is accounted for above.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.expand", "navigation.top", "toc.follow", "search.suggest", "search.highlight", "content.code.copy"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
