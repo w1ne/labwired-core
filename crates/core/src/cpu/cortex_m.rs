@@ -3784,22 +3784,17 @@ impl CortexM {
             // Fall through and execute the current instruction normally.
         }
         // Fetch/Decode with optional Cache
+        // Check the tag through a borrow before copying the cached payload.
         let cache_idx = ((self.pc >> 1) & 0xFFF) as usize;
-        let entry = if config.decode_cache_enabled {
-            if let Some(e) = self.decode_cache[cache_idx] {
-                if e.tag == self.pc {
-                    Some(e)
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        } else {
-            None
-        };
+        let cache_hit = config.decode_cache_enabled
+            && self.decode_cache[cache_idx]
+                .as_ref()
+                .is_some_and(|e| e.tag == self.pc);
 
-        let (instruction, opcode, mut pc_increment, _cycles) = if let Some(e) = entry {
+        let (instruction, opcode, mut pc_increment, _cycles) = if cache_hit {
+            let e = self.decode_cache[cache_idx]
+                .as_ref()
+                .expect("cache_hit implies a populated slot");
             (e.instruction, e.opcode, e.pc_increment as u32, e.cycles)
         } else {
             let fetch_pc = self.pc & !1;
