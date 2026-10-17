@@ -349,15 +349,17 @@ impl SystemBus {
                 let _ = self.read_u8(req.addr)?;
             }
             crate::DmaDirection::Write => {
-                self.write_u8(req.addr, req.val)?;
+                self.with_memory_policy_bypass(|bus| bus.write_u8(req.addr, req.val))?;
             }
             crate::DmaDirection::Copy => {
-                if let Some(t) = req.transform {
-                    self.dma_copy_unit(req.src_addr, req.addr, t)?;
-                } else {
-                    let val = self.read_u8(req.src_addr)?;
-                    self.write_u8(req.addr, val)?;
-                }
+                self.with_memory_policy_bypass(|bus| {
+                    if let Some(t) = req.transform {
+                        bus.dma_copy_unit(req.src_addr, req.addr, t)
+                    } else {
+                        let val = bus.read_u8(req.src_addr)?;
+                        bus.write_u8(req.addr, val)
+                    }
+                })?;
             }
             crate::DmaDirection::Load => {
                 let w = req.transform.map_or(1, |t| t.src_width);

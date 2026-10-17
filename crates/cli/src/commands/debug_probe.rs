@@ -512,6 +512,7 @@ fn fault_verdict_of(
     labwired_core::fault_verdict::decode_fault(
         &machine.fault_capture()?,
         symbols.map(|s| s as &dyn labwired_core::fault_verdict::FaultSymbolizer),
+        None,
     )
 }
 

@@ -1,0 +1,4 @@
+name: "readonly-flash"
+chip: "../../configs/chips/ci-fixture-stm32l476-readonly.yaml"
+external_devices: []
+board_io: []

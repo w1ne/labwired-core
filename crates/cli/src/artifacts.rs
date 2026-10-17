@@ -226,6 +226,10 @@ pub(crate) struct TestResult {
     /// Main-stack paint / high-water report. Absent when not collected.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) memory: Option<labwired_core::stack_paint::MainStackReport>,
+    /// CPU-write policy violations (`cpu_writes: warn|fault` regions). Present
+    /// only when a policy is non-default, so default runs stay byte-identical.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) memory_policy: Option<labwired_core::bus::MemoryPolicyReport>,
     /// Always-on cheap execution metrics (cycles, bus accesses, PC samples).
     /// Present on successful machine runs; omitted on config-error paths that
     /// never built a machine. Top-level `cycles` / `instructions` /

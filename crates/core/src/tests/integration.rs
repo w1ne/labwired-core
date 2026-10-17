@@ -47,10 +47,12 @@ pub mod integration_tests {
             flash: MemoryRange {
                 base: 0x0,
                 size: 125 * 1024,
+                cpu_writes: labwired_config::CpuWritePolicy::Allow,
             },
             ram: MemoryRange {
                 base: 0x2000_0000,
                 size: 20000,
+                cpu_writes: labwired_config::CpuWritePolicy::Allow,
             },
             reset_vector_offset: 0,
             flash_boot_alias: true,
@@ -481,10 +483,12 @@ pub mod integration_tests {
             flash: MemoryRange {
                 base: 0x0,
                 size: 125 * 1024,
+                cpu_writes: labwired_config::CpuWritePolicy::Allow,
             },
             ram: MemoryRange {
                 base: 0x2000_0000,
                 size: 20000,
+                cpu_writes: labwired_config::CpuWritePolicy::Allow,
             },
             reset_vector_offset: 0,
             flash_boot_alias: true,
@@ -679,10 +683,12 @@ pub mod integration_tests {
             flash: MemoryRange {
                 base: 0x0,
                 size: 125 * 1024,
+                cpu_writes: labwired_config::CpuWritePolicy::Allow,
             },
             ram: MemoryRange {
                 base: 0x2000_0000,
                 size: 20000,
+                cpu_writes: labwired_config::CpuWritePolicy::Allow,
             },
             reset_vector_offset: 0,
             flash_boot_alias: true,
@@ -775,10 +781,12 @@ pub mod integration_tests {
             flash: MemoryRange {
                 base: 0x0,
                 size: 125 * 1024,
+                cpu_writes: labwired_config::CpuWritePolicy::Allow,
             },
             ram: MemoryRange {
                 base: 0x2000_0000,
                 size: 20000,
+                cpu_writes: labwired_config::CpuWritePolicy::Allow,
             },
             reset_vector_offset: 0,
             flash_boot_alias: true,
@@ -979,10 +987,12 @@ pub mod integration_tests {
             flash: MemoryRange {
                 base: 0x0,
                 size: 125 * 1024,
+                cpu_writes: labwired_config::CpuWritePolicy::Allow,
             },
             ram: MemoryRange {
                 base: 0x2000_0000,
                 size: 20000,
+                cpu_writes: labwired_config::CpuWritePolicy::Allow,
             },
             memory_regions: Vec::new(),
             peripherals: vec![
@@ -2303,10 +2313,12 @@ pub mod integration_tests {
             flash: MemoryRange {
                 base: 0x4200_0000,
                 size: 4000000,
+                cpu_writes: labwired_config::CpuWritePolicy::Allow,
             },
             ram: MemoryRange {
                 base: 0x3FC8_0000,
                 size: 400000,
+                cpu_writes: labwired_config::CpuWritePolicy::Allow,
             },
             reset_vector_offset: 0,
             flash_boot_alias: true,
@@ -2405,10 +2417,12 @@ pub mod integration_tests {
             flash: MemoryRange {
                 base: 0x4200_0000,
                 size: 4000000,
+                cpu_writes: labwired_config::CpuWritePolicy::Allow,
             },
             ram: MemoryRange {
                 base: 0x3FC8_0000,
                 size: 400000,
+                cpu_writes: labwired_config::CpuWritePolicy::Allow,
             },
             reset_vector_offset: 0,
             flash_boot_alias: true,
@@ -2480,10 +2494,12 @@ pub mod integration_tests {
             flash: MemoryRange {
                 base: 0x4200_0000,
                 size: 4000000,
+                cpu_writes: labwired_config::CpuWritePolicy::Allow,
             },
             ram: MemoryRange {
                 base: 0x3FC8_0000,
                 size: 400000,
+                cpu_writes: labwired_config::CpuWritePolicy::Allow,
             },
             reset_vector_offset: 0,
             flash_boot_alias: true,
@@ -2701,10 +2717,12 @@ pub mod integration_tests {
             flash: MemoryRange {
                 base: 0x4200_0000,
                 size: 4000000,
+                cpu_writes: labwired_config::CpuWritePolicy::Allow,
             },
             ram: MemoryRange {
                 base: 0x3FC8_0000,
                 size: 400000,
+                cpu_writes: labwired_config::CpuWritePolicy::Allow,
             },
             reset_vector_offset: 0,
             flash_boot_alias: true,
@@ -2845,10 +2863,12 @@ pub mod integration_tests {
                 flash: MemoryRange {
                     base: 0x4200_0000,
                     size: 4000000,
+                    cpu_writes: labwired_config::CpuWritePolicy::Allow,
                 },
                 ram: MemoryRange {
                     base: 0x3FC8_0000,
                     size: 400000,
+                    cpu_writes: labwired_config::CpuWritePolicy::Allow,
                 },
                 reset_vector_offset: 0,
                 flash_boot_alias: true,
@@ -2924,10 +2944,12 @@ pub mod integration_tests {
                 flash: MemoryRange {
                     base: 0x4200_0000,
                     size: 4000000,
+                    cpu_writes: labwired_config::CpuWritePolicy::Allow,
                 },
                 ram: MemoryRange {
                     base: 0x4080_0000,
                     size: 400000,
+                    cpu_writes: labwired_config::CpuWritePolicy::Allow,
                 },
                 reset_vector_offset: 0,
                 flash_boot_alias: true,
@@ -3046,10 +3068,12 @@ pub mod integration_tests {
                 flash: MemoryRange {
                     base: 0x4200_0000,
                     size: 4000000,
+                    cpu_writes: labwired_config::CpuWritePolicy::Allow,
                 },
                 ram: MemoryRange {
                     base: 0x3FC8_0000,
                     size: 400000,
+                    cpu_writes: labwired_config::CpuWritePolicy::Allow,
                 },
                 reset_vector_offset: 0,
                 flash_boot_alias: true,

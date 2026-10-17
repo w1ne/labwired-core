@@ -393,6 +393,9 @@ impl crate::Bus for SystemBus {
 
     fn write_u64(&mut self, addr: u64, value: u64) -> SimResult<()> {
         self.batch_stop.note_store(addr, 8);
+        if let Some(r) = self.memory_policy_gate_store(addr) {
+            return r;
+        }
         let offset =
             addr.checked_sub(self.ram.base_addr)
                 .and_then(|v| usize::try_from(v).ok())
@@ -617,6 +620,9 @@ impl crate::Bus for SystemBus {
 
     fn write_u8(&mut self, addr: u64, value: u8) -> SimResult<()> {
         self.batch_stop.note_store(addr, 1);
+        if let Some(r) = self.memory_policy_gate_store(addr) {
+            return r;
+        }
         // ESP32-C3 permission control (PMS): a store into a region the
         // SENSITIVE PMS marks non-writable is blocked on silicon and raises
         // ETS_CORE0_{I,D}RAM0_PMS_INTR_SOURCE. Inert (one bool test) unless
@@ -1057,6 +1063,9 @@ impl crate::Bus for SystemBus {
 
     fn write_u16(&mut self, addr: u64, value: u16) -> SimResult<()> {
         self.batch_stop.note_store(addr, 2);
+        if let Some(r) = self.memory_policy_gate_store(addr) {
+            return r;
+        }
         // ESP32-C3 permission control (PMS): a store into a region the
         // SENSITIVE PMS marks non-writable is blocked on silicon and raises
         // ETS_CORE0_{I,D}RAM0_PMS_INTR_SOURCE. Inert (one bool test) unless
@@ -1178,6 +1187,9 @@ impl crate::Bus for SystemBus {
 
     fn write_u32(&mut self, addr: u64, value: u32) -> SimResult<()> {
         self.batch_stop.note_store(addr, 4);
+        if let Some(r) = self.memory_policy_gate_store(addr) {
+            return r;
+        }
         // ESP32-C3 permission control (PMS): a store into a region the
         // SENSITIVE PMS marks non-writable is blocked on silicon and raises
         // ETS_CORE0_{I,D}RAM0_PMS_INTR_SOURCE. Inert (one bool test) unless

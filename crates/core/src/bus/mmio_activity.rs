@@ -165,12 +165,17 @@ impl SystemBus {
     /// [`crate::Bus::commit_ram_store_spin`] for `SystemBus`. The refusals
     /// and their order are the ones the RISC-V coalescer made itself when it
     /// reached this bus by downcast: an armed ESP32-C3 PMS or any observer
-    /// refuses first, then an address whose 4-byte store is not wholly inside
-    /// the flat `ram` window. Only after every check passes is anything
-    /// written, so a refusal leaves the bus exactly as it was.
+    /// refuses first, then a non-default RAM `cpu_writes` policy (the caller
+    /// falls back to un-collapsed stores, which the gate then handles), then
+    /// an address whose 4-byte store is not wholly inside the flat `ram`
+    /// window. Only after every check passes is anything written, so a
+    /// refusal leaves the bus exactly as it was.
     #[inline]
     pub(crate) fn commit_ram_store_spin(&mut self, addr: u32, value: u32, stores: u64) -> bool {
         if self.esp32c3_pms_armed() || !self.observers.is_empty() || self.batch_stop.armed() {
+            return false;
+        }
+        if self.ram_cpu_writes_blocked(u64::from(addr)) {
             return false;
         }
         let Some(ram_off) = u64::from(addr).checked_sub(self.ram.base_addr) else {

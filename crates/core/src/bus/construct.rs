@@ -12,6 +12,8 @@ impl SystemBus {
         let mut bus = Self {
             flash_thunks: std::collections::HashMap::new(),
             flash: LinearMemory::new_erased(1024 * 1024, 0x0),
+            memory_policy: crate::bus::memory_policy::MemoryPolicyState::default(),
+            memory_policy_bypass: false,
             ram: LinearMemory::new(1024 * 1024, 0x2000_0000),
             extra_mem: Vec::new(),
             peripherals: vec![
@@ -148,6 +150,8 @@ impl SystemBus {
         let mut bus = Self {
             flash_thunks: std::collections::HashMap::new(),
             flash: LinearMemory::new_erased(0, 0),
+            memory_policy: crate::bus::memory_policy::MemoryPolicyState::default(),
+            memory_policy_bypass: false,
             ram: LinearMemory::new(0, 0),
             extra_mem: Vec::new(),
             peripherals: Vec::new(),
@@ -246,6 +250,7 @@ impl SystemBus {
     #[inline]
     pub fn set_current_cycle(&mut self, cycle: u64) {
         self.current_cycle = cycle;
+        self.memory_policy.cycle = cycle;
         self.cycle_clock.publish(cycle);
         if let Some(fabric) = self.irq_fabric.armv7.as_mut() {
             fabric.synchronize(cycle, self.cpu_hz);

@@ -206,10 +206,12 @@ mod from_declaration {
             flash: MemoryRange {
                 base: 0x0,
                 size: 125 * 1024,
+                cpu_writes: labwired_config::CpuWritePolicy::Allow,
             },
             ram: MemoryRange {
                 base: 0x2000_0000,
                 size: 20000,
+                cpu_writes: labwired_config::CpuWritePolicy::Allow,
             },
             reset_vector_offset: 0,
             flash_boot_alias: true,

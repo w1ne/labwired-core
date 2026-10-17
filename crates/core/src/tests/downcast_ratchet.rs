@@ -156,9 +156,18 @@ use std::path::{Path, PathBuf};
 /// 198 → 197: `SystemBus::wire_esp32s3_spi_pads` binds GP-SPI3 beside GP-SPI2,
 /// and resolving both by name through one `is_spi` check retired the two
 /// separate `as_any()` type tests the SPI2-only lookup carried.
-const MAX_AS_ANY: usize = 194;
+///
+/// 194 → 195: the Cortex-M JIT gate asks the concrete `SystemBus` whether a
+/// non-default RAM `cpu_writes` policy is in force (`ram_cpu_writes_gated`).
+/// Compiled blocks write `bus.ram.data` directly, so they must refuse while
+/// the interpreter's store gate owns RAM stores — the same reach the RISC-V
+/// JIT gate already pays. It is one downcast on the per-batch gate check
+/// (`jit_gate_allows`), not a per-instruction path. A `Bus` capability method
+/// would retire both JIT-gate reaches at once; until then this ceiling records
+/// the second one rather than leaving it uncounted.
+const MAX_AS_ANY: usize = 195;
 // GPIO schedule migration removes four concrete sensor downcasts.
-const MAX_DOWNCAST_REF: usize = 194;
+const MAX_DOWNCAST_REF: usize = 195;
 
 /// The MUTABLE half of the same reach, counted from the day it started being
 /// counted. Until then the scan matched only `as_any()` and `downcast_ref`,

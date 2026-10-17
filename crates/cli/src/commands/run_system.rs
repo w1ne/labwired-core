@@ -308,7 +308,11 @@ pub(crate) fn run_firmware_with_system(
                     &machine.bus,
                 );
                 let elf = std::fs::read(&args.firmware).ok();
-                let verdict = crate::fault_report::fault_verdict(&machine.cpu, elf.as_deref());
+                let verdict = crate::fault_report::fault_verdict(
+                    &machine.cpu,
+                    elf.as_deref(),
+                    machine.bus.memory_policy_report().as_ref(),
+                );
                 if let (Some(v), false) = (&verdict, json) {
                     crate::fault_report::eprint(v);
                 }
@@ -337,7 +341,11 @@ pub(crate) fn run_firmware_with_system(
         eprintln!("labwired-cli run (system): warning: {list} never fired before the run ended");
     }
     let elf = std::fs::read(&args.firmware).ok();
-    if let Some(v) = crate::fault_report::fault_verdict(&machine.cpu, elf.as_deref()) {
+    if let Some(v) = crate::fault_report::fault_verdict(
+        &machine.cpu,
+        elf.as_deref(),
+        machine.bus.memory_policy_report().as_ref(),
+    ) {
         crate::fault_report::eprint(&v);
     }
     let pc = machine.cpu.get_pc();

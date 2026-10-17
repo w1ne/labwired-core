@@ -1785,10 +1785,12 @@ mod tests {
             flash: labwired_config::MemoryRange {
                 base: flash.0,
                 size: flash.1,
+                cpu_writes: labwired_config::CpuWritePolicy::Allow,
             },
             ram: labwired_config::MemoryRange {
                 base: ram.0,
                 size: ram.1,
+                cpu_writes: labwired_config::CpuWritePolicy::Allow,
             },
             peripherals: vec![labwired_config::PeripheralConfig {
                 id: id.to_string(),

@@ -1962,7 +1962,11 @@ pub(crate) fn run_firmware_arm(
     // Flush stdout.
     let _ = std::io::stdout().flush();
     let elf = std::fs::read(&args.firmware).ok();
-    if let Some(v) = crate::fault_report::fault_verdict(&machine.cpu, elf.as_deref()) {
+    if let Some(v) = crate::fault_report::fault_verdict(
+        &machine.cpu,
+        elf.as_deref(),
+        machine.bus.memory_policy_report().as_ref(),
+    ) {
         crate::fault_report::eprint(&v);
     }
     export_bus_trace_if_requested(&args.bus_trace_out, &machine.bus);

@@ -1461,6 +1461,8 @@ fn handle_load_error<C: labwired_core::Cpu>(
         // Load failed: no successful machine run for footprint/paint/metrics.
         None,
         None,
+        // No machine: no policy report either.
+        None,
         None,
         // No machine: no CAN bridges ran.
         Vec::new(),
@@ -2976,6 +2978,7 @@ mod test_outcome_golden_tests {
             stimuli: Vec::new(),
             footprint: None,
             memory: None,
+            memory_policy: None,
             metrics: None,
             rtt: None,
             semihosting: None,
@@ -3026,6 +3029,44 @@ mod test_outcome_golden_tests {
             }
         });
         assert_eq!(json, expected);
+    }
+
+    /// The `memory_policy` block's on-disk shape: lowercase modes, a numeric
+    /// `addr`/`cycle`/`pc`, and no `first` key for a region with no violation.
+    /// The e2e asserts this same shape through a real `labwired test` run.
+    #[test]
+    fn golden_memory_policy_block() {
+        let mut outcome = synthetic_outcome();
+        outcome.memory_policy = Some(labwired_core::bus::MemoryPolicyReport {
+            flash: labwired_core::bus::RegionPolicyStats {
+                mode: labwired_core::bus::CpuWritePolicy::Fault,
+                violations: 2,
+                first: Some(labwired_core::bus::RegionViolation {
+                    addr: 0x0800_1234,
+                    cycle: 77,
+                    pc: Some(0x0800_0001),
+                }),
+            },
+            ram: labwired_core::bus::RegionPolicyStats {
+                mode: labwired_core::bus::CpuWritePolicy::Allow,
+                violations: 0,
+                first: None,
+            },
+        });
+
+        let json = serde_json::to_value(&outcome).expect("outcome should serialize");
+        assert_eq!(
+            json["memory_policy"],
+            serde_json::json!({
+                "flash": {
+                    "mode": "fault",
+                    "violations": 2,
+                    "first": {"addr": 0x0800_1234u64, "cycle": 77, "pc": 0x0800_0001u64}
+                },
+                "ram": {"mode": "allow", "violations": 0}
+            })
+        );
+        assert!(json["memory_policy"]["flash"]["first"]["addr"].is_number());
     }
 
     #[test]

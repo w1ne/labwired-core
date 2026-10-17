@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- Read-only memory regions: `cpu_writes: allow|warn|fault` on a chip YAML
+  `flash:` / `ram:` region (default `allow`). A CPU store into a `fault`
+  region raises the existing precise BusFault and the fault verdict names the
+  reason (`data access at 0x0800_1000 (BFAR valid; store to read-only
+  flash)`); `warn` commits the store, counts it and logs once per region.
+  Violation records land in `result.json` under `memory_policy` (absent on
+  default configs, so existing runs stay byte-identical; the record names the
+  store address plus the boundary PC and cycle). The Cortex-M RAM store fast
+  paths, the RISC-V coalesced-store fold and the JIT lanes defer while a
+  non-default RAM policy is in force, so the interpreter's gate owns every
+  store; loader writes bypass by construction and the generic DMA request
+  path bypasses (it is hardware, not the CPU). Proven end-to-end by
+  `crates/cli/tests/readonly_flash_e2e.rs` on a CI fixture chip whose flash
+  is `fault`, and runnable via `examples/readonly-flash/` (renode#787).
 - Firmware branch coverage that counts every conditional branch, measured on
   the unmodified ELF (`docs/howto/firmware-coverage.md`,
   `examples/coverage-brake-ecu`). The branch list comes from decoding the ELF

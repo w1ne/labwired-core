@@ -32,6 +32,7 @@ mod faults;
 mod from_config;
 pub mod interrupt_fabric;
 pub mod known_stubs;
+mod memory_policy;
 mod mmio_activity;
 mod mmio_words;
 mod motors;
@@ -56,6 +57,7 @@ pub use interrupt_fabric::{
     Esp32c3Fabric, Esp32c3IntcCache, Esp32s3Fabric, Esp32s3IrqAudit, Esp32s3IrqDivergence,
     InterruptFabric,
 };
+pub use memory_policy::{CpuWritePolicy, MemoryPolicyReport, RegionPolicyStats, RegionViolation};
 pub use motors::MotorSnapshot;
 
 impl SystemBus {
@@ -351,6 +353,19 @@ impl BatchStop {
 pub struct SystemBus {
     pub(crate) supply_domains: crate::peripherals::components::supply_domain::SupplyDomains,
     pub flash: LinearMemory,
+    /// Violation record + counts + mirrored PC/cycle for the policy gate.
+    pub(crate) memory_policy: crate::bus::memory_policy::MemoryPolicyState,
+    /// Scoped bypass for the CPU-write policy gate. Set only by the generic
+    /// DMA request path (`execute_dma_request`), which is hardware, not CPU.
+    /// NOT yet covered: peripheral-internal DMA models that write through
+    /// `&mut dyn Bus` (nrf52/rp2040/imxrt/esp gdma, RTT host writes, …) —
+    /// scoped deferral, revisit if a chip ships a non-default `cpu_writes`
+    /// RAM policy. Loader writes bypass by construction (direct
+    /// `LinearMemory`); debugger/session writes through the bus ARE gated.
+    /// JIT lanes refuse to run while the RAM policy is non-default
+    /// (`jit_gate_allows`), so they cannot bypass the gate.
+    /// See [`SystemBus::with_memory_policy_bypass`].
+    pub(crate) memory_policy_bypass: bool,
     pub ram: LinearMemory,
     /// Extra CPU-visible RAM/ROM windows beyond `flash`/`ram` (e.g. ESP32 IRAM
     /// `0x4037C000` and flash-DROM `0x3C000000`), from the chip's
