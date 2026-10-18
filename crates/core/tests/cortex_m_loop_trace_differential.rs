@@ -90,8 +90,19 @@ fn a_traced_counted_loop_retires_the_same_machine() {
     }
 
     // Non-vacuous: the trace path must have actually retired iterations.
+    // The 50-arrival hot threshold warms the loop up on the interpreter, so
+    // exactly the remaining 200 of the fixture's 250 iterations run traced,
+    // in one dispatch (cap 4096 > 200). Asserting the exact count pins the
+    // iterations-done read-back (a natural exit must count its last body).
     let stats = on.cpu.jit_stats().expect("jit engine present");
-    assert!(stats.trace_iters > 0, "the loop trace never ran: {stats:?}");
+    assert_eq!(
+        stats.trace_iters, 200,
+        "iterations-done accounting: {stats:?}"
+    );
+    assert_eq!(
+        stats.trace_runs, 1,
+        "one dispatch retires the loop: {stats:?}"
+    );
     let off_stats = off.cpu.jit_stats().expect("jit engine present");
     assert_eq!(off_stats.trace_iters, 0, "traces off must not trace");
 }
