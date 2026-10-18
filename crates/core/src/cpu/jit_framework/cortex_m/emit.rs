@@ -53,6 +53,8 @@ pub const RES_FLAG_SLOT: u32 = 76;
 /// middle of an IT body does not replay that instruction unpredicated.
 pub const IT_STATE_SLOT: u32 = 80;
 /// Runtime-staged iteration cap for a counted loop trace.
+/// The runtime MUST stage a value >= 1; the emitted loop cannot terminate
+/// once started with 0.
 pub const ITERS_CAP_SLOT: u32 = 84;
 /// Iterations actually retired by the trace, written back by the wasm body.
 pub const ITERS_DONE_SLOT: u32 = 88;
@@ -504,11 +506,19 @@ pub fn emit_loop_trace(pc: Pc, code: &CodeView<'_>) -> Option<EmittedBlock> {
     body.buf.push(op::END);
     body.buf.push(op::END);
 
-    // iterations_done = cap - iters.
+    // iterations_done = cap - iters, plus one when the loop left on a false
+    // condition: the do-while body runs before the decrement, and the
+    // decrement only happens on the taken (cond true) path.
+    // - cap exit: cond true at exit -> +0, done == cap == bodies run.
+    // - natural exit: cond false at exit -> +1, done == decrements + 1 ==
+    //   bodies run.
     body.i32_const(ITERS_DONE_SLOT as i32);
     body.local_get(CAP_LOCAL);
     body.local_get(ITERS_LOCAL);
     body.buf.push(op::I32_SUB);
+    body.push_condition(cond);
+    body.buf.push(op::I32_EQZ);
+    body.buf.push(op::I32_ADD);
     body.buf.push(op::I32_STORE);
     enc::uleb(&mut body.buf, 2);
     enc::uleb(&mut body.buf, 0);

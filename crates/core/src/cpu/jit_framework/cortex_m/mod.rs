@@ -589,6 +589,51 @@ mod tests {
         assert!(emit::emit_loop_trace(BASE, &view).is_none());
     }
 
+    #[cfg(feature = "jit")]
+    #[test]
+    fn emit_loop_trace_reports_retired_iterations() {
+        use wasmtime::{Engine, Instance, Memory, MemoryType, Module, Store};
+
+        let mut prog = Vec::new();
+        h(&mut prog, 0x24FA); // not traced: pre-head movs r4, #250
+        h(&mut prog, 0x2000); // not traced: pre-head movs r0, #0
+        let head = BASE + 4;
+        h(&mut prog, 0xBF00); // nop @ head
+        h(&mut prog, 0x3001); // adds r0, #1
+        h(&mut prog, 0x3C01); // subs r4, #1
+        h(&mut prog, 0xD1FB); // bne head
+        let view = CodeView::new(BASE, &prog);
+        let trace = emit::emit_loop_trace(head, &view).unwrap();
+
+        let engine = Engine::default();
+        let module = Module::new(&engine, &trace.code).unwrap();
+        // (cap, retired iterations, next pc): natural exit, then cap exit.
+        for (cap, done, next_pc) in [(250u32, 250u32, BASE + 0xC), (2, 2, head)] {
+            let mut store = Store::new(&engine, ());
+            let regs = Memory::new(&mut store, MemoryType::new(1, None)).unwrap();
+            let instance = Instance::new(&mut store, &module, &[regs.into()]).unwrap();
+            let run = instance
+                .get_typed_func::<(), i32>(&mut store, "run")
+                .unwrap();
+            regs.write(&mut store, 0, &0u32.to_le_bytes()).unwrap();
+            regs.write(&mut store, 16, &250u32.to_le_bytes()).unwrap();
+            regs.write(
+                &mut store,
+                emit::ITERS_CAP_SLOT as usize,
+                &cap.to_le_bytes(),
+            )
+            .unwrap();
+            assert_eq!(run.call(&mut store, ()).unwrap(), emit::WIRE_CHAIN_DYNAMIC);
+            let mut word = [0u8; 4];
+            regs.read(&store, emit::ITERS_DONE_SLOT as usize, &mut word)
+                .unwrap();
+            assert_eq!(u32::from_le_bytes(word), done, "cap {cap}");
+            regs.read(&store, emit::NEXT_PC_SLOT as usize, &mut word)
+                .unwrap();
+            assert_eq!(u64::from(u32::from_le_bytes(word)), next_pc, "cap {cap}");
+        }
+    }
+
     #[test]
     fn it_body_bail_names_every_refusal() {
         use emit::{it_body_bail, ItBodyBail};
