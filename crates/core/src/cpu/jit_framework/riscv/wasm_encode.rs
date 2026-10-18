@@ -72,9 +72,6 @@ pub mod op {
     pub const T_I32: u8 = 0x7f;
     /// Empty block type (`if`/`block` producing no value): `0x40`.
     pub const T_EMPTY: u8 = 0x40;
-    /// Void block type — the `T_EMPTY` value under the name used by the
-    /// loop-trace emitter (`block`/`loop` headers yielding no value).
-    pub const T_VOID: u8 = 0x40;
 
     // ── locals / constants ─────────────────────────────────────────────
     pub const LOCAL_GET: u8 = 0x20;
@@ -442,7 +439,7 @@ mod tests {
         assert_eq!(op::LOOP, 0x03);
         assert_eq!(op::BR, 0x0c);
         assert_eq!(op::BR_IF, 0x0d);
-        assert_eq!(op::T_VOID, 0x40);
+        assert_eq!(op::T_EMPTY, 0x40);
     }
 
     #[test]
