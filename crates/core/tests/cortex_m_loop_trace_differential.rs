@@ -3,7 +3,10 @@
 // SPDX-License-Identifier: MIT
 
 //! Loop traces must retire exactly the cycles, and end in exactly the
-//! machine state, the interpreter produces for the same period.
+//! machine state, the untraced basic-block JIT produces for the same
+//! period. The invariant chain is: traced path == untraced JIT path
+//! here, and untraced JIT path == interpreter is pinned separately by
+//! `cortex_m_jit_nrf_differential.rs`.
 //!
 //! The fixture is the shipped RP2040 demo's hot shape, hand-assembled:
 //! a counted loop whose body is pure ALU (`nop; adds; subs; bne head`).
@@ -62,11 +65,14 @@ fn counted_loop_machine(jit: bool, traces: bool) -> Machine<CortexM> {
 
 #[test]
 fn a_traced_counted_loop_retires_the_same_machine() {
-    let cycles = 20_000; // >> hot threshold (50 arrivals) and >> the loop
+    // `DebugControl::run` takes a STEP budget. The loop retires ~1005 steps
+    // (4 loop ops × 250 iterations, plus preamble, marker and park), so this
+    // is >> the 50-arrival hot threshold and >2x margin over the loop.
+    let steps = 20_000;
     let mut off = counted_loop_machine(true, false);
     let mut on = counted_loop_machine(true, true);
-    off.run(Some(cycles)).unwrap();
-    on.run(Some(cycles)).unwrap();
+    off.run(Some(steps)).unwrap();
+    on.run(Some(steps)).unwrap();
 
     assert_eq!(
         snapshot_state(&off.cpu),
@@ -92,9 +98,9 @@ fn a_traced_counted_loop_retires_the_same_machine() {
 
 #[test]
 fn a_trace_stops_at_a_partial_window_and_resumes_at_the_head() {
-    // Budget smaller than one natural run (250 iters * 4 instrs = 1000
-    // cycles): the trace must stop mid-loop, report its iterations, and
-    // the next dispatch must resume at the head — final state equal.
+    // Per-slice step budget smaller than one natural run (~1005 steps): the
+    // trace must stop mid-loop, report its iterations, and the next dispatch
+    // must resume at the head — final state and RAM equal.
     let mut off = counted_loop_machine(true, false);
     let mut on = counted_loop_machine(true, true);
     for _ in 0..40 {
@@ -104,4 +110,7 @@ fn a_trace_stops_at_a_partial_window_and_resumes_at_the_head() {
     }
     assert_eq!(snapshot_state(&off.cpu), snapshot_state(&on.cpu));
     assert_eq!(off.total_cycles, on.total_cycles);
+    if let Some(d) = compare_memory(off.total_cycles, off.cpu.pc, &off.bus, &on.bus) {
+        panic!("trace RAM mismatch: {d:?}");
+    }
 }
