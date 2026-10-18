@@ -72,6 +72,9 @@ pub mod op {
     pub const T_I32: u8 = 0x7f;
     /// Empty block type (`if`/`block` producing no value): `0x40`.
     pub const T_EMPTY: u8 = 0x40;
+    /// Void block type — the `T_EMPTY` value under the name used by the
+    /// loop-trace emitter (`block`/`loop` headers yielding no value).
+    pub const T_VOID: u8 = 0x40;
 
     // ── locals / constants ─────────────────────────────────────────────
     pub const LOCAL_GET: u8 = 0x20;
@@ -82,9 +85,13 @@ pub mod op {
     pub const DROP: u8 = 0x1a;
 
     // ── structured control flow ────────────────────────────────────────
+    pub const BLOCK: u8 = 0x02;
+    pub const LOOP: u8 = 0x03;
     pub const IF: u8 = 0x04;
     pub const ELSE: u8 = 0x05;
     pub const END: u8 = 0x0b;
+    pub const BR: u8 = 0x0c;
+    pub const BR_IF: u8 = 0x0d;
     /// Early function return with the current stack as the result.
     pub const RETURN: u8 = 0x0f;
 
@@ -427,6 +434,15 @@ mod tests {
         b.clear();
         enc::sleb(&mut b, i32::MIN as i64);
         assert_eq!(b, vec![0x80, 0x80, 0x80, 0x80, 0x78]);
+    }
+
+    #[test]
+    fn control_flow_and_void_block_type_opcodes() {
+        assert_eq!(op::BLOCK, 0x02);
+        assert_eq!(op::LOOP, 0x03);
+        assert_eq!(op::BR, 0x0c);
+        assert_eq!(op::BR_IF, 0x0d);
+        assert_eq!(op::T_VOID, 0x40);
     }
 
     #[test]
