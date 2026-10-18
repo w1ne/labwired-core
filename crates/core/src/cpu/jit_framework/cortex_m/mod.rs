@@ -327,6 +327,7 @@ impl CortexMFrontend {
                 entry_pc: pc,
                 end_pc: blk.end_pc,
                 instr_count: blk.instr_count,
+                iter_instr_count: None,
                 code: blk.code,
                 exits: blk.exits,
             };
@@ -340,6 +341,7 @@ impl CortexMFrontend {
             entry_pc: walk.entry_pc,
             end_pc: walk.end_pc,
             instr_count: walk.instr_count,
+            iter_instr_count: None,
             code: Vec::new(),
             exits: vec![ExitEdge {
                 wire_code: 0,
@@ -347,6 +349,34 @@ impl CortexMFrontend {
             }],
         };
         Ok((plan, None))
+    }
+
+    /// [`Self::translate_block_thumb`], but a qualifying counted ALU loop
+    /// compiles to a loop TRACE first; everything else falls through to the
+    /// basic-block path unchanged. Only called when
+    /// `SimulationConfig::cortex_m_jit_loop_traces` is set.
+    pub fn translate_block_thumb_traced(
+        &self,
+        pc: Pc,
+        code: &CodeView<'_>,
+    ) -> Result<(BlockPlan, Option<MemBinding>), FrontendRefusal> {
+        // Try the trace first. `emit_loop_trace` returns `None` for anything
+        // it cannot decode at `pc`, so an out-of-range pc falls through to the
+        // block path and keeps its exact `PcOutOfRange` refusal.
+        if let Some(blk) = emit::emit_loop_trace(pc, code) {
+            return Ok((
+                BlockPlan {
+                    entry_pc: pc,
+                    end_pc: blk.end_pc,
+                    instr_count: blk.instr_count,
+                    iter_instr_count: blk.iter_instr_count,
+                    code: blk.code,
+                    exits: blk.exits,
+                },
+                blk.binding,
+            ));
+        }
+        self.translate_block_thumb(pc, code)
     }
 }
 
@@ -480,6 +510,39 @@ mod tests {
     #[test]
     fn isa_name_is_thumb2() {
         assert_eq!(CortexMFrontend::new().isa_name(), "thumb2");
+    }
+
+    #[test]
+    fn translate_block_thumb_traced_prefers_loops_and_matches_plain_path() {
+        // Counted ALU loop -> trace plan.
+        let mut prog = Vec::new();
+        h(&mut prog, 0x24FA); // movs r4, #250
+        h(&mut prog, 0x2000); // movs r0, #0
+        let head = BASE + 4;
+        h(&mut prog, 0xBF00); // nop @ head
+        h(&mut prog, 0x3001); // adds r0, #1
+        h(&mut prog, 0x3C01); // subs r4, #1
+        h(&mut prog, 0xD1FB); // bne head
+        let view = CodeView::new(BASE, &prog);
+        let frontend = CortexMFrontend::new();
+        let (plan, binding) = frontend.translate_block_thumb_traced(head, &view).unwrap();
+        assert_eq!(plan.iter_instr_count, Some(4));
+        assert!(binding.is_none());
+
+        // Non-loop block -> identical to the untraced basic-block path.
+        let mut prog = Vec::new();
+        h(&mut prog, 0x2001); // movs r0, #1
+        h(&mut prog, 0xE7FE); // b .
+        let view = CodeView::new(BASE, &prog);
+        let (traced, traced_binding) = frontend.translate_block_thumb_traced(BASE, &view).unwrap();
+        let (plain, plain_binding) = frontend.translate_block_thumb(BASE, &view).unwrap();
+        assert_eq!(traced.iter_instr_count, None);
+        assert_eq!(traced.entry_pc, plain.entry_pc);
+        assert_eq!(traced.end_pc, plain.end_pc);
+        assert_eq!(traced.instr_count, plain.instr_count);
+        assert_eq!(traced.code, plain.code);
+        assert_eq!(traced.exits, plain.exits);
+        assert_eq!(traced_binding.is_none(), plain_binding.is_none());
     }
 
     #[test]

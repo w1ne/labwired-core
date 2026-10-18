@@ -352,6 +352,7 @@ impl RiscVFrontend {
                 entry_pc: pc,
                 end_pc: blk.end_pc,
                 instr_count: blk.instr_count,
+                iter_instr_count: None,
                 code: blk.code,
                 exits: blk.exits,
             };
@@ -369,6 +370,7 @@ impl RiscVFrontend {
             entry_pc: walk.entry_pc,
             end_pc: walk.end_pc,
             instr_count: walk.instr_count,
+            iter_instr_count: None,
             code: Vec::new(),
             exits: vec![ExitEdge {
                 wire_code: 0,
