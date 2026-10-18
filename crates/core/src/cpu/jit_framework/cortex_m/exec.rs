@@ -319,6 +319,10 @@ pub struct EngineStats {
     pub ram_bytes_synced: u64,
     /// Compiled block→block transitions that skipped `observe()`.
     pub chained: u64,
+    /// Loop-trace runs dispatched (a run is one entry of a traced loop).
+    pub trace_runs: u64,
+    /// Loop-trace iterations retired inside those runs.
+    pub trace_iters: u64,
 }
 
 pub struct CortexMJitEngine {
