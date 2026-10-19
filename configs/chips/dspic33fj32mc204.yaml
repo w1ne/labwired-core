@@ -4,7 +4,8 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 #
-# dsPIC33FJ32MC204 (DS70283H). M0: boot + UART1 TX. M1a: timers T1/T2/T3 + interrupts.
+# dsPIC33FJ32MC204 (DS70283H). M0: boot + UART1 TX. M1a: timers T1/T2/T3 +
+# interrupts. M1b: GPIO ports, PPS, input capture 1/2, output compare 1/2.
 # - flash 32 KB, data SRAM 2 KB at 0x0800 (X 0x0800-0x0BFF, Y 0x0C00-0x0FFF)
 # - UART1 SFRs: U1MODE 0x0220, U1STA 0x0222, U1TXREG 0x0224
 # - CPU clock: part rated to 40 MIPS; boards override via the system manifest.
@@ -18,4 +19,26 @@ flash:
 ram:
   base: 0x000800
   size: "2KB"
-peripherals: []
+# M1b: the three port models behind the CPU's mirror window
+# (base = PIC24_IO_MIRROR_BASE + TRISA + 16*port; the 16-byte stride keeps
+# the window's non-silicon Output Compare drive registers clear of the next
+# port). The core owns the registers and mirrors TRIS/LAT/ODC plus its
+# Output Compare drive here; `PORTx` reads and input-capture edges come from
+# the same model. `config.port` picks the package mask
+# (RA0-4/RA7-10, RB0-15, RC0-9).
+peripherals:
+  - id: "gpioa"
+    type: "pic24_gpio"
+    base_address: 0x000102C0
+    size: "12"
+    config: { port: "a" }
+  - id: "gpiob"
+    type: "pic24_gpio"
+    base_address: 0x000102D0
+    size: "12"
+    config: { port: "b" }
+  - id: "gpioc"
+    type: "pic24_gpio"
+    base_address: 0x000102E0
+    size: "12"
+    config: { port: "c" }
