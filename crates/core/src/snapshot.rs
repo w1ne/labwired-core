@@ -123,6 +123,36 @@ pub struct Pic24CpuSnapshot {
     pub acc_a: i64,
     #[serde(default)]
     pub acc_b: i64,
+    #[serde(default)]
+    pub tris: [u16; 3],
+    #[serde(default)]
+    pub lat: [u16; 3],
+    #[serde(default)]
+    pub odc: [u16; 3],
+    #[serde(default)]
+    pub pad_in: [u16; 3],
+    #[serde(default)]
+    pub rpinr7: u16,
+    #[serde(default)]
+    pub rpor: Vec<u16>,
+    #[serde(default)]
+    pub ic_con: [u16; 2],
+    #[serde(default)]
+    pub ic_fifo: [Vec<u16>; 2],
+    #[serde(default)]
+    pub ic_prescale: [u8; 2],
+    #[serde(default)]
+    pub ic_ici_count: [u8; 2],
+    #[serde(default)]
+    pub oc_con: [u16; 2],
+    #[serde(default)]
+    pub oc_r: [u16; 2],
+    #[serde(default)]
+    pub oc_rs: [u16; 2],
+    #[serde(default)]
+    pub oc_level: [Option<bool>; 2],
+    #[serde(default)]
+    pub oc_halted: [bool; 2],
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

@@ -426,6 +426,51 @@ impl Rig for Avr {
     }
 }
 
+// ── dsPIC33F/PIC24 ───────────────────────────────────────────────────────────
+
+struct Pic24;
+impl Rig for Pic24 {
+    fn name(&self) -> &'static str {
+        "Pic24GpioPort"
+    }
+    fn build(&mut self) -> Box<dyn Peripheral> {
+        // PORTB of the 44-pin dsPIC33FJ32MC204: RB0-RB15.
+        Box::new(crate::peripherals::pic24_gpio::Pic24GpioPort::new(0xFFFF))
+    }
+    fn set_mode(&mut self, port: &mut dyn Peripheral, pin: u8, mode: Mode) -> bool {
+        use crate::peripherals::pic24_gpio::{OFF_LAT, OFF_ODC, OFF_TRIS};
+        let set = |port: &mut dyn Peripheral, off: u64, on: bool| {
+            let cur = port.read(off).unwrap();
+            let next = if on {
+                cur | (1 << pin)
+            } else {
+                cur & !(1 << pin)
+            };
+            port.write(off, next).unwrap();
+        };
+        match mode {
+            // CNPU internal pull-ups are not modelled (M1b scope): the pull
+            // input modes are refused rather than faked.
+            Mode::Input(Pull::Up) | Mode::Input(Pull::Down) => return false,
+            Mode::Input(Pull::None) => {
+                set(port, OFF_TRIS, true);
+                set(port, OFF_LAT, false);
+            }
+            Mode::PushPull(level) => {
+                set(port, OFF_LAT, level);
+                set(port, OFF_ODC, false);
+                set(port, OFF_TRIS, false);
+            }
+            Mode::OpenDrain(level) => {
+                set(port, OFF_LAT, level);
+                set(port, OFF_ODC, true);
+                set(port, OFF_TRIS, false);
+            }
+        }
+        true
+    }
+}
+
 // ── RP2040 SIO ───────────────────────────────────────────────────────────────
 
 struct Rp2040;
@@ -753,6 +798,7 @@ fn rigs() -> Vec<Box<dyn Rig>> {
         Box::new(RaPort::default()),
         Box::new(Imxrt::default()),
         Box::new(Avr),
+        Box::new(Pic24),
         Box::new(Rp2040),
         Box::new(Esp32(3)),
         Box::new(Esp32(33)),
