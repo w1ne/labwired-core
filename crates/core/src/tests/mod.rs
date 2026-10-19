@@ -65,6 +65,8 @@ pub mod esp_spi_uart_waveform;
 #[cfg(test)]
 pub mod i2c_waveform_common;
 #[cfg(test)]
+pub mod loader_host_bypass;
+#[cfg(test)]
 pub mod machine_advance;
 #[cfg(test)]
 pub mod no_vacuous_test_targets;

@@ -568,10 +568,12 @@ impl ImxrtUsb {
                 (bitpos as u8, false)
             };
             let q = self.dqh(ep, dir_in);
-            let next = bus.read_u32(q + 8).unwrap_or(DTD_T);
+            let next =
+                crate::with_device_write_bypass(bus, |bus| bus.read_u32(q + 8)).unwrap_or(DTD_T);
             if next & DTD_T == 0 {
                 self.stat |= 1 << bitpos;
-                let _ = bus.write_u32(q + 4, next & !0x1F);
+                let _ =
+                    crate::with_device_write_bypass(bus, |bus| bus.write_u32(q + 4, next & !0x1F));
             }
             self.prime &= !(1 << bitpos);
         }
@@ -583,31 +585,32 @@ impl ImxrtUsb {
             return None;
         }
         let q = self.dqh(ep, dir_in);
-        let cur = bus.read_u32(q + 4).ok()? & !0x1F;
+        let cur = crate::with_device_write_bypass(bus, |bus| bus.read_u32(q + 4)).ok()? & !0x1F;
         if cur == 0 {
             return None;
         }
-        let token = bus.read_u32(cur as u64 + 4).ok()?;
+        let token =
+            crate::with_device_write_bypass(bus, |bus| bus.read_u32(cur as u64 + 4)).ok()?;
         (token & DTD_ACTIVE != 0).then_some(cur as u64)
     }
 
     /// Complete the head dTD after `moved` bytes; advance the endpoint.
     fn retire(&mut self, bus: &mut dyn Bus, ep: u8, dir_in: bool, dtd: u64, remaining: u32) {
-        let token = bus.read_u32(dtd + 4).unwrap_or(0);
+        let token = crate::with_device_write_bypass(bus, |bus| bus.read_u32(dtd + 4)).unwrap_or(0);
         let new_token = (token & !(0x7FFF << 16) & !0xFF) | ((remaining & 0x7FFF) << 16);
-        let _ = bus.write_u32(dtd + 4, new_token);
+        let _ = crate::with_device_write_bypass(bus, |bus| bus.write_u32(dtd + 4, new_token));
         let q = self.dqh(ep, dir_in);
-        let _ = bus.write_u32(q + 0xC, new_token);
+        let _ = crate::with_device_write_bypass(bus, |bus| bus.write_u32(q + 0xC, new_token));
         if token & (1 << 15) != 0 {
             self.complete |= Self::bit(ep, dir_in);
             self.usbsts |= STS_UI;
         }
-        let next = bus.read_u32(dtd).unwrap_or(DTD_T);
+        let next = crate::with_device_write_bypass(bus, |bus| bus.read_u32(dtd)).unwrap_or(DTD_T);
         if next & DTD_T == 0 {
-            let _ = bus.write_u32(q + 4, next & !0x1F);
-            let _ = bus.write_u32(q + 8, next);
+            let _ = crate::with_device_write_bypass(bus, |bus| bus.write_u32(q + 4, next & !0x1F));
+            let _ = crate::with_device_write_bypass(bus, |bus| bus.write_u32(q + 8, next));
         } else {
-            let _ = bus.write_u32(q + 8, DTD_T);
+            let _ = crate::with_device_write_bypass(bus, |bus| bus.write_u32(q + 8, DTD_T));
             self.stat &= !Self::bit(ep, dir_in);
         }
     }
@@ -615,7 +618,7 @@ impl ImxrtUsb {
     /// Device -> host: read the head dTD's data (at most `max`).
     fn take_in(&mut self, bus: &mut dyn Bus, ep: u8, max: usize) -> Option<Vec<u8>> {
         let dtd = self.head_dtd(bus, ep, true)?;
-        let token = bus.read_u32(dtd + 4).ok()?;
+        let token = crate::with_device_write_bypass(bus, |bus| bus.read_u32(dtd + 4)).ok()?;
         let total = ((token >> 16) & 0x7FFF) as usize;
         let n = total.min(max);
         let data = read_dtd_buffer(bus, dtd, n);
@@ -626,7 +629,7 @@ impl ImxrtUsb {
     /// Host -> device: write `data` into the head dTD.
     fn give_out(&mut self, bus: &mut dyn Bus, ep: u8, data: &[u8]) -> Option<usize> {
         let dtd = self.head_dtd(bus, ep, false)?;
-        let token = bus.read_u32(dtd + 4).ok()?;
+        let token = crate::with_device_write_bypass(bus, |bus| bus.read_u32(dtd + 4)).ok()?;
         let total = ((token >> 16) & 0x7FFF) as usize;
         let n = total.min(data.len());
         write_dtd_buffer(bus, dtd, &data[..n]);
@@ -644,8 +647,12 @@ impl ImxrtUsb {
         }
         let q = self.dqh(0, false);
         let b = setup.bytes();
-        let _ = bus.write_u32(q + 0x28, u32::from_le_bytes([b[0], b[1], b[2], b[3]]));
-        let _ = bus.write_u32(q + 0x2C, u32::from_le_bytes([b[4], b[5], b[6], b[7]]));
+        let _ = crate::with_device_write_bypass(bus, |bus| {
+            bus.write_u32(q + 0x28, u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+        });
+        let _ = crate::with_device_write_bypass(bus, |bus| {
+            bus.write_u32(q + 0x2C, u32::from_le_bytes([b[4], b[5], b[6], b[7]]))
+        });
         // A SETUP flushes whatever EP0 had primed (RM §42.5.6.4).
         self.stat &= !(Self::bit(0, false) | Self::bit(0, true));
         self.setupstat |= 1;
@@ -889,7 +896,8 @@ impl ImxrtUsb {
 }
 
 fn dtd_page(bus: &mut dyn Bus, dtd: u64, k: usize) -> u64 {
-    bus.read_u32(dtd + 8 + 4 * k as u64).unwrap_or(0) as u64
+    crate::with_device_write_bypass(bus, |bus| bus.read_u32(dtd + 8 + 4 * k as u64)).unwrap_or(0)
+        as u64
 }
 
 /// Byte `i` of a dTD's buffer (page 0 carries the start offset).
@@ -906,19 +914,23 @@ fn dtd_addr(bus: &mut dyn Bus, dtd: u64, i: usize) -> u64 {
 }
 
 fn read_dtd_buffer(bus: &mut dyn Bus, dtd: u64, n: usize) -> Vec<u8> {
-    (0..n)
-        .map(|i| {
-            let a = dtd_addr(bus, dtd, i);
-            bus.read_u8(a).unwrap_or(0)
-        })
-        .collect()
+    crate::with_device_write_bypass(bus, |bus| {
+        (0..n)
+            .map(|i| {
+                let a = dtd_addr(bus, dtd, i);
+                bus.read_u8(a).unwrap_or(0)
+            })
+            .collect()
+    })
 }
 
 fn write_dtd_buffer(bus: &mut dyn Bus, dtd: u64, data: &[u8]) {
-    for (i, b) in data.iter().enumerate() {
-        let a = dtd_addr(bus, dtd, i);
-        let _ = bus.write_u8(a, *b);
-    }
+    crate::with_device_write_bypass(bus, |bus| {
+        for (i, b) in data.iter().enumerate() {
+            let a = dtd_addr(bus, dtd, i);
+            let _ = bus.write_u8(a, *b);
+        }
+    });
 }
 
 impl ImxrtUsb {

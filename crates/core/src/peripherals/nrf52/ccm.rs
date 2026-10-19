@@ -273,17 +273,21 @@ pub fn ccm_decrypt(
 // ── EasyDMA helpers ───────────────────────────────────────────────────────────
 
 /// Read `n` bytes from `bus` starting at `addr`.
-fn read_bytes(bus: &dyn Bus, addr: u32, n: usize) -> Vec<u8> {
-    (0..n)
-        .map(|i| bus.read_u8(addr as u64 + i as u64).unwrap_or(0))
-        .collect()
+fn read_bytes(bus: &mut dyn Bus, addr: u32, n: usize) -> Vec<u8> {
+    crate::with_device_write_bypass(bus, |bus| {
+        (0..n)
+            .map(|i| bus.read_u8(addr as u64 + i as u64).unwrap_or(0))
+            .collect()
+    })
 }
 
 /// Write a byte slice to `bus` starting at `addr`.
 fn write_bytes(bus: &mut dyn Bus, addr: u32, data: &[u8]) {
-    for (i, &b) in data.iter().enumerate() {
-        let _ = bus.write_u8(addr as u64 + i as u64, b);
-    }
+    crate::with_device_write_bypass(bus, |bus| {
+        for (i, &b) in data.iter().enumerate() {
+            let _ = bus.write_u8(addr as u64 + i as u64, b);
+        }
+    });
 }
 
 // ── Peripheral struct ─────────────────────────────────────────────────────────
@@ -334,7 +338,8 @@ impl Nrf52Ccm {
         let cnf = self.cnfptr;
         let key_bytes = read_bytes(bus, cnf, 16);
         let pc_bytes = read_bytes(bus, cnf + 16, 5);
-        let dir_byte = bus.read_u8(cnf as u64 + 21).unwrap_or(0);
+        let dir_byte =
+            crate::with_device_write_bypass(bus, |bus| bus.read_u8(cnf as u64 + 21)).unwrap_or(0);
         let iv_bytes = read_bytes(bus, cnf + 22, 8);
 
         let mut key = [0u8; 16];
@@ -348,10 +353,13 @@ impl Nrf52Ccm {
 
         // Read input packet: byte0=S0, byte1=LENGTH, byte2=S1/RFU, then payload.
         let inp = self.inptr;
-        let s0_byte = bus.read_u8(inp as u64).unwrap_or(0);
-        let length = bus.read_u8(inp as u64 + 1).unwrap_or(0) as usize;
+        let s0_byte =
+            crate::with_device_write_bypass(bus, |bus| bus.read_u8(inp as u64)).unwrap_or(0);
+        let length = crate::with_device_write_bypass(bus, |bus| bus.read_u8(inp as u64 + 1))
+            .unwrap_or(0) as usize;
         // byte2 (S1/RFU) is carried through unchanged.
-        let s1_byte = bus.read_u8(inp as u64 + 2).unwrap_or(0);
+        let s1_byte =
+            crate::with_device_write_bypass(bus, |bus| bus.read_u8(inp as u64 + 2)).unwrap_or(0);
 
         let mode_encrypt = (self.mode & 1) == 0; // MODE bit0: 0=encrypt, 1=decrypt
 
@@ -365,9 +373,12 @@ impl Nrf52Ccm {
             let (ciphertext, mic) = ccm_encrypt(&key, &nonce, s0_byte, &plaintext);
 
             // Write output packet: S0, LENGTH+4 (cipher+MIC), S1, ciphertext, MIC.
-            let _ = bus.write_u8(out as u64, s0_byte);
-            let _ = bus.write_u8(out as u64 + 1, (length + 4) as u8);
-            let _ = bus.write_u8(out as u64 + 2, s1_byte);
+            let _ = crate::with_device_write_bypass(bus, |bus| bus.write_u8(out as u64, s0_byte));
+            let _ = crate::with_device_write_bypass(bus, |bus| {
+                bus.write_u8(out as u64 + 1, (length + 4) as u8)
+            });
+            let _ =
+                crate::with_device_write_bypass(bus, |bus| bus.write_u8(out as u64 + 2, s1_byte));
             write_bytes(bus, out + 3, &ciphertext);
             write_bytes(bus, out + 3 + ciphertext.len() as u32, &mic);
         } else {
@@ -385,9 +396,12 @@ impl Nrf52Ccm {
             let (plaintext, mic_ok) = ccm_decrypt(&key, &nonce, s0_byte, &ciphertext, &mic);
 
             // Write output packet: S0, plaintext length, S1, plaintext.
-            let _ = bus.write_u8(out as u64, s0_byte);
-            let _ = bus.write_u8(out as u64 + 1, ct_len as u8);
-            let _ = bus.write_u8(out as u64 + 2, s1_byte);
+            let _ = crate::with_device_write_bypass(bus, |bus| bus.write_u8(out as u64, s0_byte));
+            let _ = crate::with_device_write_bypass(bus, |bus| {
+                bus.write_u8(out as u64 + 1, ct_len as u8)
+            });
+            let _ =
+                crate::with_device_write_bypass(bus, |bus| bus.write_u8(out as u64 + 2, s1_byte));
             write_bytes(bus, out + 3, &plaintext);
 
             // Update MICSTATUS.
