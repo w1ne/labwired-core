@@ -241,6 +241,11 @@ required-features = ["esp32s3-fixtures"]
 
 # #![cfg(feature = "esp32s3-fixtures")]
 [[test]]
+name = "smart_basket_handle"
+required-features = ["esp32s3-fixtures"]
+
+# #![cfg(feature = "esp32s3-fixtures")]
+[[test]]
 name = "e2e_i2c_tmp102"
 required-features = ["esp32s3-fixtures"]
 

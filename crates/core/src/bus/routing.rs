@@ -279,7 +279,9 @@ impl SystemBus {
             return Some((bus.peripherals[idx].base + offsets.input, bit));
         }
         // ESP32 / ESP32-C3 / ESP32-S3: "GPIO5", "gpio5", "IO5", or bare "5"
-        // → the gpio peripheral's IN register.
+        // → the gpio peripheral's IN register. One `as_any()` call detects
+        // whichever model owns the block, then picks that part's parser and
+        // bank layout; the S3's bank 1 (pads 32..=48) lives in GPIO_IN1.
         if let Some(idx) = bus.find_peripheral_index_by_name("gpio") {
             let any = bus.peripherals[idx].dev.as_any();
             let is_s3 = any
@@ -288,30 +290,7 @@ impl SystemBus {
                         .is_some()
                 })
                 .unwrap_or(false);
-            // The S3's bank 1 (pads 32..=48) lives in GPIO_IN1 at +0x40 and
-            // takes pad labels up to 48; classic ESP32/C3 stop at pad 39/21
-            // and have no second IN register.
-            let bit = if is_s3 {
-                Self::parse_esp32s3_gpio_pin(pin)
-            } else {
-                Self::parse_esp32_gpio_pin(pin)
-            };
-            if let Some(bit) = bit {
-                if is_s3 {
-                    let (offset, bit) = if bit >= 32 {
-                        (0x40, bit - 32)
-                    } else {
-                        (0x3C, bit)
-                    };
-                    return Some((bus.peripherals[idx].base + offset, bit));
-                }
-            }
-        }
-        if let Some(bit) = Self::parse_esp32_gpio_pin(pin) {
-            let idx = bus.find_peripheral_index_by_name("gpio")?;
-            let is_esp32 = bus.peripherals[idx]
-                .dev
-                .as_any()
+            let is_classic_or_c3 = any
                 .map(|a| {
                     a.downcast_ref::<crate::peripherals::esp32::gpio::Esp32Gpio>()
                         .is_some()
@@ -319,21 +298,23 @@ impl SystemBus {
                             .is_some()
                 })
                 .unwrap_or(false);
-            if is_esp32 {
-                // TRM: GPIO_IN_REG at base+0x3C on classic ESP32; C3 uses the same
-                // Esp32c3Gpio path — prefer the peripheral's idr_offset when present.
-                if let Some(idr_off) = bus.peripherals[idx]
-                    .dev
-                    .as_any()
-                    .and_then(|a| a.downcast_ref::<crate::peripherals::gpio::GpioPort>())
-                    .map(|g| g.idr_offset())
-                {
-                    return Some((bus.peripherals[idx].base + idr_off, bit));
+            if is_s3 {
+                if let Some(bit) = Self::parse_esp32s3_gpio_pin(pin) {
+                    let (offset, bit) = if bit >= 32 {
+                        (0x40, bit - 32)
+                    } else {
+                        (0x3C, bit)
+                    };
+                    return Some((bus.peripherals[idx].base + offset, bit));
                 }
-                // Esp32c3Gpio is not GpioPort — use known IN register offset (0x3C / matches ODR+delta style).
-                // Esp32c3 GPIO_IN_REG is at 0x3C from GPIO base (TRM); OUT is 0x04.
-                const GPIO_IN_REG_OFFSET: u64 = 0x3C;
-                return Some((bus.peripherals[idx].base + GPIO_IN_REG_OFFSET, bit));
+            } else if is_classic_or_c3 {
+                if let Some(bit) = Self::parse_esp32_gpio_pin(pin) {
+                    // Classic ESP32 and C3 both put GPIO_IN_REG at base+0x3C
+                    // (TRM); each has a single input bank and neither model is
+                    // a generic `GpioPort`.
+                    const GPIO_IN_REG_OFFSET: u64 = 0x3C;
+                    return Some((bus.peripherals[idx].base + GPIO_IN_REG_OFFSET, bit));
+                }
             }
         }
         None

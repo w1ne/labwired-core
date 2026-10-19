@@ -30,7 +30,6 @@
 mod common;
 use labwired_core::boot::esp32s3::{fast_boot, BootOpts};
 use labwired_core::bus::SystemBus;
-use labwired_core::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag;
 use labwired_core::system::xtensa::{
     attach_esp32_external_devices, configure_xtensa_esp32s3, Esp32s3Opts,
 };
@@ -78,13 +77,10 @@ impl Rig {
         bus.refresh_peripheral_index();
 
         let jtag = Arc::new(Mutex::new(Vec::<u8>::new()));
-        for p in bus.peripherals.iter_mut() {
-            if let Some(any) = p.dev.as_any_mut() {
-                if let Some(uj) = any.downcast_mut::<UsbSerialJtag>() {
-                    uj.set_sink(Some(jtag.clone()), false);
-                }
-            }
-        }
+        assert!(
+            bus.attach_usb_serial_jtag_sink(jtag.clone()),
+            "the S3 bus must expose USB-Serial-JTAG for the device console"
+        );
 
         let icache_backing = wiring.icache_backing.clone();
         let dcache_backing = wiring.dcache_backing.clone();

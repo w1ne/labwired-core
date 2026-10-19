@@ -156,7 +156,12 @@ use std::path::{Path, PathBuf};
 /// 198 → 197: `SystemBus::wire_esp32s3_spi_pads` binds GP-SPI3 beside GP-SPI2,
 /// and resolving both by name through one `is_spi` check retired the two
 /// separate `as_any()` type tests the SPI2-only lookup carried.
-const MAX_AS_ANY: usize = 194;
+///
+/// 197 → 193: the ESP32-S3 IDR resolution shares the one ESP GPIO model check
+/// with the classic/C3 path (instead of adding a second reach), and the
+/// smart-basket handle fixture uses the bus console-sink API rather than a
+/// mutable downcast of its own.
+const MAX_AS_ANY: usize = 193;
 // GPIO schedule migration removes four concrete sensor downcasts.
 const MAX_DOWNCAST_REF: usize = 194;
 
