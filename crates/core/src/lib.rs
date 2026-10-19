@@ -2507,9 +2507,12 @@ pub enum FetchPermission {
     DeniedUndeliverable,
 }
 
-/// Runs `f` with the device-transfer bypass set, restoring the previous state
-/// (nesting-safe). Device engines wrap their guest-memory transfers in this;
-/// CPU-visible writes must NOT be wrapped.
+/// Runs `f` with the device-transfer bypass set, restoring the previous state.
+/// Nesting-safe with itself; it must NOT be nested inside a scope that sets
+/// only ONE of the two gates (the restore writes both — the getter is the OR
+/// of the policy and watch bypasses, and no current one-gate scope calls a
+/// device engine synchronously). Device engines wrap their guest-memory
+/// transfers in this; CPU-visible writes must NOT be wrapped.
 pub fn with_device_write_bypass<R>(bus: &mut dyn Bus, f: impl FnOnce(&mut dyn Bus) -> R) -> R {
     let prev = bus.device_write_bypass();
     bus.set_device_write_bypass(true);
