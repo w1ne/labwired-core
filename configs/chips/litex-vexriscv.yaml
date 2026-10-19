@@ -1,0 +1,76 @@
+# LabWired - LiteX VexRiscv SoC chip configuration
+#
+# Sources (retrieved 2026-10-19):
+# - LiteX (litex.readthedocs.io) — the SoC memory-map conventions this
+#   descriptor follows: integrated ROM at 0x0, SRAM at 0x10000000, main RAM at
+#   0x40000000, and a memory-mapped SPI-flash window. `litex/soc/cores/cpu/
+#   vexriscv/core.py` carries the VexRiscv CPU's mem_map (rom / sram /
+#   main_ram / csr); `litex/soc/cores/uart.py` the UART core's 32-bit CSR
+#   layout (rxtx @ +0x00, txfull @ +0x04, rxempty @ +0x08).
+# - The public `litex-hub/zephyr-on-litex-vexriscv` gateware (Digilent Arty
+#   target) — VexRiscv CPU, 100 MHz system clock, UART external IRQ 2,
+#   timer0 external IRQ 1, and the CSR page assignment (uart @ +0x1800,
+#   timer0 @ +0x2800, MMCM @ +0x4800) that this descriptor's CSR base
+#   reproduces. LiteX makes the CSR base a gateware parameter (0x60000000 /
+#   0xE0000000 / 0xF0000000 all appear across builds); this chip pins the
+#   0x60000000-based map its CSR addresses are written against and documents
+#   the 0xE0000000 shadow rather than modelling a second alias.
+# - VexRiscv (SpinalHDL) — CPU variant rv32im_zicsr_zifencei: no compressed,
+#   no atomic extension, so firmware is built for `riscv32im-unknown-none-elf`.
+#
+# Modelled: CPU + memory + the LiteX UART (polled console path — the engine
+# polls txfull @ +0x04, writes rxtx @ +0x00).
+# Declared, not modelled (`type: stub` — reads answer zeros, writes are
+# absorbed): the LiteX timer / SPI-flash / Ethernet / MMCM CSRs. The
+# integrated ROM window is mapped but its contents (the LiteX BIOS) are not:
+# the example boots its ELF directly (fast boot), skipping BIOS + flash load.
+# Main RAM (0x40000000, 256 MB on the SoC) is declared here but not mapped —
+# the engine allocates memory regions densely and a 256 MB window is not
+# useful to the smoke; see examples/litex-vexriscv/VALIDATION.md.
+#
+# Tier: L1 smoke — boot + UART byte path on the modelled CSR map.
+
+name: "litex-vexriscv"
+arch: "riscv"
+core: "rv32im"
+cpu_hz: 100_000_000
+
+# The SPI-flash memory-mapped window (the board's code storage). Untouched
+# flash reads 0xFF, as silicon does.
+flash: { base: 0x20000000, size: "32MiB" }
+# The SoC's integrated SRAM. The smoke firmware links into it and runs there.
+ram: { base: 0x10000000, size: "256KB" }
+# 0x0 is the SoC's own integrated ROM window, not an alias of the SPI flash.
+flash_boot_alias: false
+memory_regions:
+  - { name: "rom", base: 0x0, size: "256KB" }
+peripherals:
+  # Console. 0xE0001800 is the same block through the CSR shadow window.
+  - id: "uart"
+    type: "litex_uart"
+    base_address: 0x60001800
+    size: "2KB"
+    irq: 2
+  # Unmodelled LiteX blocks. Addresses are the primary CSR map; each has an
+  # 0xE0000000-window shadow the engine does not model (one address per
+  # peripheral). IRQ numbers are the gateware's external-interrupt inputs;
+  # the engine does not deliver peripheral IRQs to RISC-V cores yet.
+  - id: "timer"
+    type: "stub"
+    base_address: 0x60002800
+    size: "2KB"
+    irq: 1
+  - id: "spi_flash_ctrl"
+    type: "stub"
+    base_address: 0x60005000
+    size: "2KB"
+    irq: 9
+  - id: "eth"
+    type: "stub"
+    base_address: 0x60007800
+    size: "2KB"
+    irq: 3
+  - id: "clock0"
+    type: "stub"
+    base_address: 0xE0004800
+    size: "2KB"

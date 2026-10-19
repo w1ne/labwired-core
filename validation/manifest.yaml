@@ -2277,7 +2277,7 @@ boards:
     # reset value the reset-conformance capture asserts is touched: the new
     # behaviour lives in exchange memory and the radio event path, which that
     # capture does not cover. This acknowledges model drift, NOT a recapture.
-    drift_ack_digest: b757a4d9d73ec47b89de6d388054690422cbf8cb5a17c947ca1ea592c2aeeb47
+    drift_ack_digest: 942a3a3df4fb2e13da95a95065dc47bbca8442f3d085c37cc352487b0e650589
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
@@ -3054,7 +3054,18 @@ boards:
     # pinned by the six RSP conformance scenarios, the debug_watch suites and
     # the determinism guard.
     # ACK, NOT A CAPTURE — physical re-capture remains owed.
-    drift_ack: 2026-10-18
+    # 2026-10-19, first RISC-V soft-core promotion (LiteX VexRiscv):
+    # `crates/core/src/cpu/riscv.rs` gained `RiscVCoreProfile::for_chip` — the
+    # core profile is now selected from the chip descriptor instead of being
+    # hardcoded to the C3 in `configure_riscv`. The C3's own selection is
+    # unchanged by construction: the resolver returns Esp32C3 for any chip
+    # whose name contains `esp32` (and for a descriptor with no `core:`), so
+    # every ESP32 chip — C3 included — keeps exactly the profile it ran before.
+    # Pinned by the profile-selection unit test and the C3 survival /
+    # reset-conformance gates. No register map, reset value or default-config
+    # readback changes.
+    # ACK, NOT A CAPTURE — physical re-capture remains owed.
+    drift_ack: 2026-10-19
 
   - id: nucleo-l476rg
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
@@ -8705,3 +8716,28 @@ boards:
       # claim for the corrected digest to invalidate — no ack is implied.
       - crates/core/src/peripherals/esp32c6/gdma.rs
       - crates/core/src/peripherals/esp32c6/pcr.rs
+  - id: litex-vexriscv
+    # 2026-10-19: first RISC-V soft-core SoC in the engine (LiteX VexRiscv,
+    # RV32IM). SIM-DERIVED — no silicon capture and no executing-fidelity
+    # differential: the modelled surface is CPU + memory + the LiteX UART
+    # console path, and the timer/SPI/Ethernet/MMCM CSR windows are declared
+    # stubs (the smoke prints one of those readbacks). See
+    # docs/boards/litex-vexriscv.md and examples/litex-vexriscv/VALIDATION.md.
+    doc: docs/boards/litex-vexriscv.md
+    chip: configs/chips/litex-vexriscv.yaml
+    tier: smoke-manual
+    offline_tests:
+      - "firmware_survival::test_litex_vexriscv_smoke_survival"
+    models:
+      - crates/core/src/cpu/riscv.rs
+      - crates/core/src/decoder/riscv.rs
+      - crates/core/src/peripherals/uart.rs
+      - crates/core/src/peripherals/stub.rs
+      - crates/core/src/bus/from_config.rs
+      - crates/core/src/bus/profiles.rs
+      - crates/core/src/peripherals/generic_factory.rs
+      - crates/core/src/system/riscv.rs
+      - crates/core/src/system/builder/riscv.rs
+      - crates/firmware-litex-vexriscv-smoke
+      - configs/chips/litex-vexriscv.yaml
+      - configs/systems/litex-vexriscv.yaml

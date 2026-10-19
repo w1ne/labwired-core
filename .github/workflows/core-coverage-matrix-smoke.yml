@@ -341,6 +341,20 @@ jobs:
           - id: dspic33fj32mc204-uart
             script: examples/dspic33fj32mc204/io-smoke.yaml
             system: examples/dspic33fj32mc204/system.yaml
+          # LiteX VexRiscv SoC — first RISC-V soft-core cell. The smoke links
+          # into the SoC's integrated SRAM (0x10000000) and prints over the
+          # LiteX UART; one assertion reads back a declared-stub CSR window
+          # (zeros), so the "declared, not modelled" boundary is pinned on the
+          # wire. No build_dir needed: this crate's link args come from its
+          # build.rs, which cargo reads from the package regardless of the
+          # working directory.
+          - id: litex-vexriscv-smoke
+            target: riscv32im-unknown-none-elf
+            crate: firmware-litex-vexriscv-smoke
+            profile: release
+            profile_dir: release
+            script: examples/litex-vexriscv/io-smoke.yaml
+            system: examples/litex-vexriscv/system.yaml
 
     steps:
       - uses: actions/checkout@v4
@@ -348,7 +362,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.95.0
         with:
-          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,thumbv8m.main-none-eabi,riscv32i-unknown-none-elf,riscv32imc-unknown-none-elf
+          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,thumbv8m.main-none-eabi,riscv32i-unknown-none-elf,riscv32imc-unknown-none-elf,riscv32im-unknown-none-elf
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
