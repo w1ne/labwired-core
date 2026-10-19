@@ -322,6 +322,13 @@ FIXTURES = {
 # their own chip config and get their own baseline. A generic CPU-only smoke
 # fixture must not stand in for an unimplemented board platform.
 WAIVED: dict[str, str] = {
+    "dspic33fj32mc204": (
+        "PIC24 M0 bring-up: boot + UART1 TX only, with the UART modelled on the "
+        "CPU (not a bus peripheral), so this gate's MMIO spin fixture cannot "
+        "represent it. A perf fixture needs M1+ peripherals and proven timing; "
+        "no throughput claim is made for this part yet "
+        "(docs/pic24-m0-reference.md)."
+    ),
     "rv1103": (
         "The old Cortex-A7 CPU subset fixture is not representative perf evidence. "
         "Optional native reduced Linux direct boot and joint I2C3/UART4 basket "

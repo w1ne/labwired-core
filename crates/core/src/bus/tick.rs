@@ -344,31 +344,40 @@ impl SystemBus {
                 }
             }
         }
-        match req.direction {
+        // The DMA controller is its own bus master, not the CPU: DWT-style
+        // debug watches compare CPU accesses, so nothing here may latch. The
+        // wrapper covers every arm, including the multi-unit load/store
+        // helpers below; the memory-policy bypass nests inside it cleanly.
+        self.with_debug_watch_bypass(|bus| match req.direction {
             crate::DmaDirection::Read => {
-                let _ = self.read_u8(req.addr)?;
+                let _ = bus.read_u8(req.addr)?;
+                Ok(None)
             }
             crate::DmaDirection::Write => {
-                self.write_u8(req.addr, req.val)?;
+                bus.with_memory_policy_bypass(|bus| bus.write_u8(req.addr, req.val))?;
+                Ok(None)
             }
             crate::DmaDirection::Copy => {
-                if let Some(t) = req.transform {
-                    self.dma_copy_unit(req.src_addr, req.addr, t)?;
-                } else {
-                    let val = self.read_u8(req.src_addr)?;
-                    self.write_u8(req.addr, val)?;
-                }
+                bus.with_memory_policy_bypass(|bus| {
+                    if let Some(t) = req.transform {
+                        bus.dma_copy_unit(req.src_addr, req.addr, t)
+                    } else {
+                        let val = bus.read_u8(req.src_addr)?;
+                        bus.write_u8(req.addr, val)
+                    }
+                })?;
+                Ok(None)
             }
             crate::DmaDirection::Load => {
                 let w = req.transform.map_or(1, |t| t.src_width);
-                return self.dma_load_unit(req.src_addr, w).map(Some);
+                bus.dma_load_unit(req.src_addr, w).map(Some)
             }
             crate::DmaDirection::Store(value) => {
                 let w = req.transform.map_or(1, |t| t.dst_width);
-                self.dma_store_unit(req.addr, w, value)?;
+                bus.dma_store_unit(req.addr, w, value)?;
+                Ok(None)
             }
-        }
-        Ok(None)
+        })
     }
 
     /// Execute one DMA item on behalf of the controller at `issuer`: a FIFO

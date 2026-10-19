@@ -375,6 +375,13 @@ impl SystemBus {
 
 impl crate::Bus for SystemBus {
     fn read_u64(&self, addr: u64) -> SimResult<u64> {
+        // Watched like every other width: a 64-bit load is a CPU access on
+        // cores that have one (Cortex-A7 `w=8`), so the latch is uniform.
+        // Taken before routing, like the narrower reads; the machine discards
+        // the latch if the access faults (see `Machine::advance`).
+        if !self.debug_watches.is_empty() && !self.debug_watch_host_bypass.get() {
+            self.note_debug_watch_read(addr);
+        }
         let offset =
             addr.checked_sub(self.ram.base_addr)
                 .and_then(|v| usize::try_from(v).ok())
@@ -393,6 +400,20 @@ impl crate::Bus for SystemBus {
 
     fn write_u64(&mut self, addr: u64, value: u64) -> SimResult<()> {
         self.batch_stop.note_store(addr, 8);
+        // Latch the watch BEFORE the memory-policy gate below: an attempted
+        // store is what the debugger watches for, so a store a gate rejects
+        // still latches — uniformly across all four widths. Unlike the
+        // byte/half/word stores there is no C3 PMS gate on the 64-bit path.
+        // An attempt-latch is delivered as the watch stop: on an erroring
+        // step path `Machine::advance` discards the pending hit, but a CPU
+        // that escalates the fault to a handler keeps it and the stop fires
+        // on the window boundary (PC on the faulting store).
+        if !self.debug_watches.is_empty() && !self.debug_watch_host_bypass.get() {
+            self.note_debug_watch_store(addr);
+        }
+        if let Some(r) = self.memory_policy_gate_store(addr) {
+            return r;
+        }
         let offset =
             addr.checked_sub(self.ram.base_addr)
                 .and_then(|v| usize::try_from(v).ok())
@@ -510,6 +531,9 @@ impl crate::Bus for SystemBus {
         self.irq_fabric.armv7.as_ref()?.timer.next_deadline()
     }
     fn read_u8(&self, addr: u64) -> SimResult<u8> {
+        if !self.debug_watches.is_empty() && !self.debug_watch_host_bypass.get() {
+            self.note_debug_watch_read(addr);
+        }
         // RAM is always first (hot path, never overlaps a peripheral window).
         if let Some(val) = self.ram.read_u8(addr) {
             self.note_memory_read();
@@ -617,6 +641,16 @@ impl crate::Bus for SystemBus {
 
     fn write_u8(&mut self, addr: u64, value: u8) -> SimResult<()> {
         self.batch_stop.note_store(addr, 1);
+        // Latch BEFORE the memory-policy and PMS gates below: uniform attempt
+        // semantics across all four write widths — a store a gate rejects is
+        // still an attempted access and latches; the machine discards the
+        // latch if the step faults (see `Machine::advance`).
+        if !self.debug_watches.is_empty() && !self.debug_watch_host_bypass.get() {
+            self.note_debug_watch_store(addr);
+        }
+        if let Some(r) = self.memory_policy_gate_store(addr) {
+            return r;
+        }
         // ESP32-C3 permission control (PMS): a store into a region the
         // SENSITIVE PMS marks non-writable is blocked on silicon and raises
         // ETS_CORE0_{I,D}RAM0_PMS_INTR_SOURCE. Inert (one bool test) unless
@@ -818,6 +852,9 @@ impl crate::Bus for SystemBus {
     }
 
     fn read_u16(&self, addr: u64) -> SimResult<u16> {
+        if !self.debug_watches.is_empty() && !self.debug_watch_host_bypass.get() {
+            self.note_debug_watch_read(addr);
+        }
         if let Some(val) = self.ram.read_u16(addr) {
             self.note_memory_read();
             return Ok(val);
@@ -902,6 +939,9 @@ impl crate::Bus for SystemBus {
     }
 
     fn read_u32(&self, addr: u64) -> SimResult<u32> {
+        if !self.debug_watches.is_empty() && !self.debug_watch_host_bypass.get() {
+            self.note_debug_watch_read(addr);
+        }
         // Debug (env-gated): trace the driver's reads of a freshly-injected RX
         // buffer, to RE the rx-control header format the RX callback parses.
         if crate::peripherals::esp32c3::wifi_mac::rxbuf_trace_enabled() {
@@ -1057,6 +1097,16 @@ impl crate::Bus for SystemBus {
 
     fn write_u16(&mut self, addr: u64, value: u16) -> SimResult<()> {
         self.batch_stop.note_store(addr, 2);
+        // Latch BEFORE the memory-policy and PMS gates below: uniform attempt
+        // semantics across all four write widths — a store a gate rejects is
+        // still an attempted access and latches; the machine discards the
+        // latch if the step faults (see `Machine::advance`).
+        if !self.debug_watches.is_empty() && !self.debug_watch_host_bypass.get() {
+            self.note_debug_watch_store(addr);
+        }
+        if let Some(r) = self.memory_policy_gate_store(addr) {
+            return r;
+        }
         // ESP32-C3 permission control (PMS): a store into a region the
         // SENSITIVE PMS marks non-writable is blocked on silicon and raises
         // ETS_CORE0_{I,D}RAM0_PMS_INTR_SOURCE. Inert (one bool test) unless
@@ -1178,6 +1228,16 @@ impl crate::Bus for SystemBus {
 
     fn write_u32(&mut self, addr: u64, value: u32) -> SimResult<()> {
         self.batch_stop.note_store(addr, 4);
+        // Latch BEFORE the memory-policy and PMS gates below: uniform attempt
+        // semantics across all four write widths — a store a gate rejects is
+        // still an attempted access and latches; the machine discards the
+        // latch if the step faults (see `Machine::advance`).
+        if !self.debug_watches.is_empty() && !self.debug_watch_host_bypass.get() {
+            self.note_debug_watch_store(addr);
+        }
+        if let Some(r) = self.memory_policy_gate_store(addr) {
+            return r;
+        }
         // ESP32-C3 permission control (PMS): a store into a region the
         // SENSITIVE PMS marks non-writable is blocked on silicon and raises
         // ETS_CORE0_{I,D}RAM0_PMS_INTR_SOURCE. Inert (one bool test) unless

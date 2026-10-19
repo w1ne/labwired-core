@@ -211,12 +211,22 @@ impl<C: Cpu> Machine<C> {
         // Honored breakpoints must be observed before executing past their PC.
         let honored_breakpoints =
             request.breakpoint_policy() == BreakpointPolicy::Honor && !self.breakpoints.is_empty();
+        // An armed debug watch must be observed before the instruction AFTER
+        // the watched access retires: the latch lives on the bus and
+        // `advance_inner` consumes it at the next window boundary, so the
+        // window has to be the access's own instruction. Without this clamp
+        // `run(Some(n))` would retire the whole n-wide window (and stop a
+        // batch later) before the latch was ever read. Watches are an
+        // interactive debugger facility; the throughput cost is acceptable and
+        // mirrors the honored-breakpoint clause above.
+        let armed_watchpoints = !self.bus.debug_watches.is_empty();
 
         if reset_fidelity
             || secondary_lockstep
             || cycle_accurate_bus
             || poll_sampling
             || honored_breakpoints
+            || armed_watchpoints
         {
             // Attribute to the specific arm, not the disjunction: "something in
             // this `if` fired" is the answer that made #835 an elimination
@@ -230,6 +240,8 @@ impl<C: Cpu> Machine<C> {
                 clause::CYCLE_ACCURATE_BUS
             } else if poll_sampling {
                 clause::POLL_SAMPLING
+            } else if armed_watchpoints {
+                clause::HONORED_WATCHPOINTS
             } else {
                 clause::HONORED_BREAKPOINTS
             };

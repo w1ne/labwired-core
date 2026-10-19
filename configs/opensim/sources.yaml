@@ -1,0 +1,835 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+#
+# Open-source simulator device facts for LabWired onboarding.
+# Extracted 2026-10-18; names and memory geometry only (no upstream code).
+# Consumed by scripts/onboard_opensim_targets.py.
+# Regeneration notes: docs/strategy/ingestion/opensim-report.md.
+comment: 'Open-source simulator device facts for LabWired onboarding. Extracted 2026-10-18; names/geometry
+  only (no upstream code). Consumed by scripts/onboard_opensim_targets.py. Regeneration notes: docs/strategy/ingestion/opensim-report.md.'
+sources:
+  simavr:
+    repo: https://github.com/buserror/simavr
+    commit: 5b08da60497f7564f50941f74a549fe2851db030
+    license: GPL-3.0
+    kind: core-model
+    retrieved: '2026-10-18'
+    method: flash/ram/eeprom parsed from vendored avr-libc device headers (FLASHEND/RAMSTART/RAMEND/E2END)
+  mspsim:
+    repo: https://github.com/contiki-ng/mspsim
+    commit: c8169c98ad6696b0e2ad2e0f926a371499dacd8f
+    license: BSD-3-Clause
+    kind: chip-config
+    retrieved: '2026-10-18'
+    method: mainFlashConfig/ramConfig values from se/sics/mspsim/config/MSP430*Config.java
+  gpsim:
+    url: https://gpsim.sourceforge.net/
+    license: GPL-2.0
+    kind: processor-list
+    retrieved: '2026-10-18'
+    method: processor list from project site
+    geometry: unavailable in list (parse gpsim device sources when a PIC core is onboarded)
+  ucsim:
+    url: https://sourceforge.net/projects/sdcc/
+    license: GPL-2.0-or-later
+    kind: generic-cores
+    retrieved: '2026-10-18'
+    method: instruction-set cores only; no fixed device geometry
+  avr8js:
+    repo: https://github.com/wokwi/avr8js
+    commit: bee6f0a94e0e27786f6bc21aee3c775849fb50fd
+    license: MIT
+    kind: subset
+    retrieved: '2026-10-18'
+    method: AVR8 only (Arduino UNO class); covered by simavr entries
+  rp2040js:
+    repo: https://github.com/wokwi/rp2040js
+    license: MIT
+    kind: partial
+    retrieved: '2026-10-18'
+    method: RP2040 partial; LabWired already models RP2040 (configs/chips/rp2040.yaml)
+chips:
+- id: simavr-atmega128
+  source: simavr
+  canonical: atmega128
+  aliases:
+  - atmega128
+  - atmega128L
+  arch: avr
+  core: avr8
+  family: Atmel AVR
+  flash:
+    base: 0
+    size: 131072
+  ram:
+    base: 256
+    size: 4096
+  eeprom: 4096
+  source_path: simavr/cores/sim_mega128.c
+  memory_source: avr/iom128.h
+- id: simavr-atmega1280
+  source: simavr
+  canonical: atmega1280
+  aliases:
+  - atmega1280
+  arch: avr
+  core: avr8
+  family: Atmel AVR
+  flash:
+    base: 0
+    size: 131072
+  ram:
+    base: 512
+    size: 8192
+  eeprom: 4096
+  source_path: simavr/cores/sim_mega1280.c
+  memory_source: avr/iom1280.h
+- id: simavr-atmega1281
+  source: simavr
+  canonical: atmega1281
+  aliases:
+  - atmega1281
+  arch: avr
+  core: avr8
+  family: Atmel AVR
+  flash:
+    base: 0
+    size: 131072
+  ram:
+    base: 512
+    size: 8192
+  eeprom: 4096
+  source_path: simavr/cores/sim_mega1281.c
+  memory_source: avr/iom1281.h
+- id: simavr-atmega1284p
+  source: simavr
+  canonical: atmega1284p
+  aliases:
+  - atmega1284p
+  - atmega1284
+  arch: avr
+  core: avr8
+  family: Atmel AVR
+  flash:
+    base: 0
+    size: 131072
+  ram:
+    base: 256
+    size: 16384
+  eeprom: 4096
+  source_path: simavr/cores/sim_mega1284.c
+  memory_source: avr/iom1284p.h
+- id: simavr-atmega128rfa1
+  source: simavr
+  canonical: atmega128rfa1
+  aliases:
+  - atmega128rfa1
+  arch: avr
+  core: avr8
+  family: Atmel AVR
+  flash:
+    base: 0
+    size: 131072
+  ram:
+    base: 512
+    size: 16384
+  eeprom: 4096
+  source_path: simavr/cores/sim_mega128rfa1.c
+  memory_source: avr/iom128rfa1.h
+- id: simavr-atmega128rfr2
+  source: simavr
+  canonical: atmega128rfr2
+  aliases:
+  - atmega128rfr2
+  arch: avr
+  core: avr8
+  family: Atmel AVR
+  flash:
+    base: 0
+    size: 131072
+  ram:
+    base: 512
+    size: 16384
+  eeprom: 4096
+  source_path: simavr/cores/sim_mega128rfr2.c
+  memory_source: avr/iom128rfr2.h
+- id: simavr-atmega16
+  source: simavr
+  canonical: atmega16
+  aliases:
+  - atmega16
+  arch: avr
+  core: avr8
+  family: Atmel AVR
+  flash:
+    base: 0
+    size: 16384
+  ram:
+    base: 96
+    size: 1024
+  eeprom: 512
+  source_path: simavr/cores/sim_mega16.c
+  memory_source: avr/iom16.h
+- id: simavr-atmega164
+  source: simavr
+  canonical: atmega164
+  aliases:
+  - atmega164
+  - atmega164p
+  - atmega164pa
+  arch: avr
+  core: avr8
+  family: Atmel AVR
+  flash:
+    base: 0
+    size: 16384
+  ram:
+    base: 256
+    size: 1024
+  eeprom: 512
+  source_path: simavr/cores/sim_mega164.c
+  memory_source: avr/iom164.h
+- id: simavr-atmega168
+  source: simavr
+  canonical: atmega168
+  aliases:
+  - atmega168
+  - atmega168p
+  - atmega168pa
+  arch: avr
+  core: avr8
+  family: Atmel AVR
+  flash:
+    base: 0
+    size: 16384
+  ram:
+    base: 256
+    size: 1024
+  eeprom: 512
+  source_path: simavr/cores/sim_mega168.c
+  memory_source: avr/iom168.h
+- id: simavr-atmega169p
+  source: simavr
+  canonical: atmega169p
+  aliases:
+  - atmega169p
+  arch: avr
+  core: avr8
+  family: Atmel AVR
+  flash:
+    base: 0
+    size: 16384
+  ram:
+    base: 256
+    size: 1024
+  eeprom: 512
+  source_path: simavr/cores/sim_mega169.c
+  memory_source: avr/iom169p.h
+- id: simavr-atmega16m1
+  source: simavr
+  canonical: atmega16m1
+  aliases:
+  - atmega16m1
+  arch: avr
+  core: avr8
+  family: Atmel AVR
+  flash:
+    base: 0
+    size: 16384
+  ram:
+    base: 256
+    size: 1024
+  eeprom: 512
+  source_path: simavr/cores/sim_mega16m1.c
+  memory_source: avr/iom16m1.h
+- id: simavr-atmega2560
+  source: simavr
+  canonical: atmega2560
+  aliases:
+  - atmega2560
+  - atmega2561
+  arch: avr
+  core: avr8
+  family: Atmel AVR
+  flash:
+    base: 0
+    size: 262144
+  ram:
+    base: 512
+    size: 8192
+  eeprom: 4096
+  source_path: simavr/cores/sim_mega2560.c
+  memory_source: avr/iom2560.h
+- id: simavr-atmega32
+  source: simavr
+  canonical: atmega32
+  aliases:
+  - atmega32
+  arch: avr
+  core: avr8
+  family: Atmel AVR
+  flash:
+    base: 0
+    size: 32768
+  ram:
+    base: 96
+    size: 2048
+  eeprom: 1024
+  source_path: simavr/cores/sim_mega32.c
+  memory_source: avr/iom32.h
+- id: simavr-atmega324
+  source: simavr
+  canonical: atmega324
+  aliases:
+  - atmega324
+  - atmega324p
+  - atmega324a
+  - atmega324pa
+  arch: avr
+  core: avr8
+  family: Atmel AVR
+  flash:
+    base: 0
+    size: 32768
+  ram:
+    base: 256
+    size: 2048
+  eeprom: 1024
+  source_path: simavr/cores/sim_mega324a.c
+  memory_source: avr/iom324pa.h
+- id: simavr-atmega328
+  source: simavr
+  canonical: atmega328
+  aliases:
+  - atmega328
+  - atmega328p
+  arch: avr
+  core: avr8
+  family: Atmel AVR
+  flash:
+    base: 0
+    size: 32768
+  ram:
+    base: 256
+    size: 2048
+  eeprom: 1024
+  source_path: simavr/cores/sim_mega328.c
+  memory_source: avr/iom328p.h
+- id: simavr-atmega328pb
+  source: simavr
+  canonical: atmega328pb
+  aliases:
+  - atmega328pb
+  arch: avr
+  core: avr8
+  family: Atmel AVR
+  flash:
+    base: 0
+    size: 32768
+  ram:
+    base: 256
+    size: 2048
+  eeprom: 1024
+  source_path: simavr/cores/sim_mega328pb.c
+  memory_source: avr/iom328pb.h
+- id: simavr-atmega32u4
+  source: simavr
+  canonical: atmega32u4
+  aliases:
+  - atmega32u4
+  arch: avr
+  core: avr8
+  family: Atmel AVR
+  flash:
+    base: 0
+    size: 32768
+  ram:
+    base: 256
+    size: 2560
+  eeprom: 1024
+  source_path: simavr/cores/sim_mega32u4.c
+  memory_source: avr/iom32u4.h
+- id: simavr-atmega48
+  source: simavr
+  canonical: atmega48
+  aliases:
+  - atmega48
+  - atmega48p
+  - atmega48pa
+  arch: avr
+  core: avr8
+  family: Atmel AVR
+  flash:
+    base: 0
+    size: 4096
+  ram:
+    base: 256
+    size: 512
+  eeprom: 256
+  source_path: simavr/cores/sim_mega48.c
+  memory_source: avr/iom48.h
+- id: simavr-atmega644
+  source: simavr
+  canonical: atmega644
+  aliases:
+  - atmega644
+  - atmega644p
+  arch: avr
+  core: avr8
+  family: Atmel AVR
+  flash:
+    base: 0
+    size: 65536
+  ram:
+    base: 256
+    size: 4096
+  eeprom: 2048
+  source_path: simavr/cores/sim_mega644.c
+  memory_source: avr/iom644.h
+- id: simavr-atmega64m1
+  source: simavr
+  canonical: atmega64m1
+  aliases:
+  - atmega64m1
+  arch: avr
+  core: avr8
+  family: Atmel AVR
+  flash:
+    base: 0
+    size: 65536
+  ram:
+    base: 256
+    size: 4096
+  eeprom: 2048
+  source_path: simavr/cores/sim_mega64m1.c
+  memory_source: avr/iom64m1.h
+- id: simavr-atmega8
+  source: simavr
+  canonical: atmega8
+  aliases:
+  - atmega8
+  - atmega8l
+  arch: avr
+  core: avr8
+  family: Atmel AVR
+  flash:
+    base: 0
+    size: 8192
+  ram:
+    base: 96
+    size: 1024
+  eeprom: 512
+  source_path: simavr/cores/sim_mega8.c
+  memory_source: avr/iom8.h
+- id: simavr-atmega88
+  source: simavr
+  canonical: atmega88
+  aliases:
+  - atmega88
+  - atmega88p
+  - atmega88pa
+  arch: avr
+  core: avr8
+  family: Atmel AVR
+  flash:
+    base: 0
+    size: 8192
+  ram:
+    base: 256
+    size: 1024
+  eeprom: 512
+  source_path: simavr/cores/sim_mega88.c
+  memory_source: avr/iom88.h
+- id: simavr-attiny13
+  source: simavr
+  canonical: attiny13
+  aliases:
+  - attiny13
+  - attiny13a
+  arch: avr
+  core: avr8
+  family: Atmel AVR
+  flash:
+    base: 0
+    size: 1024
+  ram:
+    base: 96
+    size: 64
+  eeprom: 64
+  source_path: simavr/cores/sim_tiny13.c
+  memory_source: avr/iotn13.h
+- id: simavr-attiny1634
+  source: simavr
+  canonical: attiny1634
+  aliases:
+  - attiny1634
+  arch: avr
+  core: avr8
+  family: Atmel AVR
+  flash:
+    base: 0
+    size: 16384
+  ram:
+    base: 256
+    size: 1024
+  eeprom: 256
+  source_path: simavr/cores/sim_tiny1634.c
+  memory_source: avr/iotn1634.h
+- id: simavr-attiny2313
+  source: simavr
+  canonical: attiny2313
+  aliases:
+  - attiny2313
+  - attiny2313v
+  arch: avr
+  core: avr8
+  family: Atmel AVR
+  flash:
+    base: 0
+    size: 2048
+  ram:
+    base: 96
+    size: 128
+  eeprom: 128
+  source_path: simavr/cores/sim_tiny2313.c
+  memory_source: avr/iotn2313.h
+- id: simavr-attiny2313a
+  source: simavr
+  canonical: attiny2313a
+  aliases:
+  - attiny2313a
+  arch: avr
+  core: avr8
+  family: Atmel AVR
+  flash:
+    base: 0
+    size: 2048
+  ram:
+    base: 96
+    size: 128
+  eeprom: 128
+  source_path: simavr/cores/sim_tiny2313a.c
+  memory_source: avr/iotn2313a.h
+- id: simavr-attiny24
+  source: simavr
+  canonical: attiny24
+  aliases:
+  - attiny24
+  arch: avr
+  core: avr8
+  family: Atmel AVR
+  flash:
+    base: 0
+    size: 2048
+  ram:
+    base: 96
+    size: 128
+  eeprom: 128
+  source_path: simavr/cores/sim_tiny24.c
+  memory_source: avr/iotn24.h
+- id: simavr-attiny25
+  source: simavr
+  canonical: attiny25
+  aliases:
+  - attiny25
+  arch: avr
+  core: avr8
+  family: Atmel AVR
+  flash:
+    base: 0
+    size: 2048
+  ram:
+    base: 96
+    size: 128
+  eeprom: 128
+  source_path: simavr/cores/sim_tiny25.c
+  memory_source: avr/iotn25.h
+- id: simavr-attiny4313
+  source: simavr
+  canonical: attiny4313
+  aliases:
+  - attiny4313
+  arch: avr
+  core: avr8
+  family: Atmel AVR
+  flash:
+    base: 0
+    size: 4096
+  ram:
+    base: 96
+    size: 256
+  eeprom: 256
+  source_path: simavr/cores/sim_tiny4313.c
+  memory_source: avr/iotn4313.h
+- id: simavr-attiny44
+  source: simavr
+  canonical: attiny44
+  aliases:
+  - attiny44
+  arch: avr
+  core: avr8
+  family: Atmel AVR
+  flash:
+    base: 0
+    size: 4096
+  ram:
+    base: 96
+    size: 256
+  eeprom: 256
+  source_path: simavr/cores/sim_tiny44.c
+  memory_source: avr/iotn44.h
+- id: simavr-attiny45
+  source: simavr
+  canonical: attiny45
+  aliases:
+  - attiny45
+  arch: avr
+  core: avr8
+  family: Atmel AVR
+  flash:
+    base: 0
+    size: 4096
+  ram:
+    base: 96
+    size: 256
+  eeprom: 256
+  source_path: simavr/cores/sim_tiny45.c
+  memory_source: avr/iotn45.h
+- id: simavr-attiny84
+  source: simavr
+  canonical: attiny84
+  aliases:
+  - attiny84
+  arch: avr
+  core: avr8
+  family: Atmel AVR
+  flash:
+    base: 0
+    size: 8192
+  ram:
+    base: 96
+    size: 512
+  eeprom: 512
+  source_path: simavr/cores/sim_tiny84.c
+  memory_source: avr/iotn84.h
+- id: simavr-attiny85
+  source: simavr
+  canonical: attiny85
+  aliases:
+  - attiny85
+  arch: avr
+  core: avr8
+  family: Atmel AVR
+  flash:
+    base: 0
+    size: 8192
+  ram:
+    base: 96
+    size: 512
+  eeprom: 512
+  source_path: simavr/cores/sim_tiny85.c
+  memory_source: avr/iotn85.h
+- id: simavr-at90usb162
+  source: simavr
+  canonical: at90usb162
+  aliases:
+  - at90usb162
+  arch: avr
+  core: avr8
+  family: Atmel AVR
+  flash:
+    base: 0
+    size: 16384
+  ram:
+    base: 256
+    size: 512
+  eeprom: 512
+  source_path: simavr/cores/sim_usb162.c
+  memory_source: avr/iousb162.h
+- id: mspsim-msp430f149
+  source: mspsim
+  canonical: msp430f149
+  aliases:
+  - msp430f149
+  arch: unknown
+  family: Texas Instruments MSP430
+  flash:
+    base: 4352
+    size: 61440
+  ram:
+    base: 512
+    size: 2048
+  source_path: se/sics/mspsim/config/MSP430f149Config.java
+  memory_source: se/sics/mspsim/config/MSP430f149Config.java
+- id: mspsim-msp430f1611
+  source: mspsim
+  canonical: msp430f1611
+  aliases:
+  - msp430f1611
+  arch: unknown
+  family: Texas Instruments MSP430
+  flash:
+    base: 16384
+    size: 49152
+  ram:
+    base: 4352
+    size: 10240
+  source_path: se/sics/mspsim/config/MSP430f1611Config.java
+  memory_source: se/sics/mspsim/config/MSP430f1611Config.java
+- id: mspsim-msp430f2617
+  source: mspsim
+  canonical: msp430f2617
+  aliases:
+  - msp430f2617
+  arch: unknown
+  family: Texas Instruments MSP430
+  flash:
+    base: 12544
+    size: 94208
+  ram:
+    base: 4352
+    size: 8192
+  source_path: se/sics/mspsim/config/MSP430f2617Config.java
+  memory_source: se/sics/mspsim/config/MSP430f2617Config.java
+- id: mspsim-msp430f5437
+  source: mspsim
+  canonical: msp430f5437
+  aliases:
+  - msp430f5437
+  arch: unknown
+  family: Texas Instruments MSP430
+  flash:
+    base: 23552
+    size: 262144
+  ram:
+    base: 7168
+    size: 16384
+  source_path: se/sics/mspsim/config/MSP430f5437Config.java
+  memory_source: se/sics/mspsim/config/MSP430f5437Config.java
+lists:
+  gpsim_processors:
+  - pic10f200
+  - pic10f202
+  - pic10f204
+  - pic10f220
+  - pic10f222
+  - pic12c508
+  - pic12c509
+  - pic12ce518
+  - pic12ce519
+  - pic12f1822
+  - pic12f1840
+  - pic12f508
+  - pic12f509
+  - pic12f510
+  - pic12f629
+  - pic12f675
+  - pic12f683
+  - pic16c54
+  - pic16c55
+  - pic16c56
+  - pic16c61
+  - pic16c62
+  - pic16c62a
+  - pic16c63
+  - pic16c64
+  - pic16c65
+  - pic16c65a
+  - pic16c71
+  - pic16c712
+  - pic16c716
+  - pic16c72
+  - pic16c73
+  - pic16c74
+  - pic16c84
+  - pic16cr62
+  - pic16cr83
+  - pic16cr84
+  - pic16f1788
+  - pic16f1823
+  - pic16f1825
+  - pic16f505
+  - pic16f627
+  - pic16f627a
+  - pic16f628
+  - pic16f628a
+  - pic16f630
+  - pic16f631
+  - pic16f648
+  - pic16f648a
+  - pic16f676
+  - pic16f677
+  - pic16f684
+  - pic16f685
+  - pic16f687
+  - pic16f689
+  - pic16f690
+  - pic16f716
+  - pic16f73
+  - pic16f74
+  - pic16f818
+  - pic16f819
+  - pic16f83
+  - pic16f84
+  - pic16f87
+  - pic16f871
+  - pic16f873
+  - pic16f873a
+  - pic16f874
+  - pic16f874a
+  - pic16f876
+  - pic16f876a
+  - pic16f877
+  - pic16f877a
+  - pic16f88
+  - pic16f882
+  - pic16f883
+  - pic16f884
+  - pic16f886
+  - pic16f887
+  - pic16f913
+  - pic16f914
+  - pic16f916
+  - pic16f917
+  - pic18c242
+  - pic18c252
+  - pic18c442
+  - pic18c452
+  - pic18f1220
+  - pic18f1320
+  - pic18f14k22
+  - pic18f2221
+  - pic18f2321
+  - pic18f242
+  - pic18f2420
+  - pic18f248
+  - pic18f252
+  - pic18f2520
+  - pic18f2525
+  - pic18f2550
+  - pic18f258
+  - pic18f2620
+  - pic18f26k22
+  - pic18f4221
+  - pic18f4321
+  - pic18f442
+  - pic18f4420
+  - pic18f448
+  - pic18f452
+  - pic18f4520
+  - pic18f4550
+  - pic18f458
+  - pic18f4620
+  - pic18f6520
+  ucsim_cores:
+  - mcs51
+  - z80
+  - hc08
+  - stm8
+  avr8js:
+  - arduino-uno-class (ATmega328p)
+  rp2040js:
+  - rp2040 (partial)

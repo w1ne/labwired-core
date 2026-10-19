@@ -77,6 +77,7 @@ impl<C: Cpu> Machine<C> {
                 AdvanceStop::NoProgress
                     | AdvanceStop::FirmwareExit { .. }
                     | AdvanceStop::NetDriveChange
+                    | AdvanceStop::Watchpoint(_)
             ) {
                 break;
             }

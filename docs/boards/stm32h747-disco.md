@@ -1,0 +1,93 @@
+# Validation Report: stm32h747-disco
+
+**Architecture:** ARM Cortex-M.
+
+## 1. Dynamic Simulation Validation
+**Status:** ✅ Passed (simulation-ok)
+
+```text
+[2m2026-10-18T14:40:30.193311Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting LabWired Simulator
+[2m2026-10-18T14:40:30.198207Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/stm32h747-disco.yaml
+[2m2026-10-18T14:40:30.768976Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Loading firmware: "/home/andrii/Projects/labwired-renode/core/tests/fixtures/uart-ok-thumbv7m.elf"
+[2m2026-10-18T14:40:30.769090Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
+[2m2026-10-18T14:40:30.769105Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Firmware Loaded Successfully!
+[2m2026-10-18T14:40:30.769110Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Entry Point: 0x401
+[2m2026-10-18T14:40:30.771275Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting Simulation (ARM Cortex-M)...
+[2m2026-10-18T14:40:30.771285Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Initial PC: 0x400, SP: 0x20020000
+[2m2026-10-18T14:40:30.771291Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Running for 20000 steps...
+[2m2026-10-18T14:40:30.771362Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Simulation Error at step 2: Memory access violation at 0x2001ffe0
+[2m2026-10-18T14:40:30.771380Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Simulation loop finished.
+[2m2026-10-18T14:40:30.771384Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Final PC: 0x45c
+[2m2026-10-18T14:40:30.771388Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Instructions: 2
+[2m2026-10-18T14:40:30.771392Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Cycles: 2
+[2m2026-10-18T14:40:30.771397Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Average IPS: 876.41
+```
+
+
+## Hardware Coverage Report
+
+| Peripheral ID | Base Address | Type |
+|---|---|---|
+| `touchscreen` | `0x00000038` | `ft5336` |
+| `dwt` | `0xe0001000` | `dwt` |
+| `flashController` | `0x52002000` | `stm32h7_flashcontroller` |
+| `adc3` | `0x58026000` | `stm32h7_adc` |
+| `bdma` | `0x58025400` | `stm32ldma` |
+| `rtc` | `0x58004000` | `stm32f4_rtc` |
+| `spi4` | `0x40013400` | `stm32h7_spi` |
+| `i2c4` | `0x58001c00` | `stm32f7_i2c` |
+| `lpuart1` | `0x58000c00` | `stm32f7_usart` |
+| `syscfg` | `0x58000400` | `stm32_syscfg` |
+| `dma2d` | `0x52001000` | `stm32dma2d` |
+| `ltdc` | `0x50001000` | `stm32ltdc` |
+| `adcM1S2` | `0x40022000` | `stm32h7_adc` |
+| `rng` | `0x48021800` | `stm32_rng` |
+| `dma2` | `0x40020400` | `stm32dma` |
+| `dma1` | `0x40020000` | `stm32dma` |
+| `dmamux1` | `0x40020800` | `stm32_dmamux` |
+| `timer17` | `0x40014800` | `stm32_timer` |
+| `timer16` | `0x40014400` | `stm32_timer` |
+| `timer15` | `0x40014000` | `stm32_timer` |
+| `usart6` | `0x40011400` | `stm32f7_usart` |
+| `usart1` | `0x40011000` | `stm32f7_usart` |
+| `timer8` | `0x40010400` | `stm32_timer` |
+| `timer1` | `0x40010000` | `stm32_timer` |
+| `uart8` | `0x40007c00` | `stm32f7_usart` |
+| `uart7` | `0x40007800` | `stm32f7_usart` |
+| `i2c3` | `0x40005c00` | `stm32f7_i2c` |
+| `i2c2` | `0x40005800` | `stm32f7_i2c` |
+| `i2c1` | `0x40005400` | `stm32f7_i2c` |
+| `uart5` | `0x40005000` | `stm32f7_usart` |
+| `uart4` | `0x40004c00` | `stm32f7_usart` |
+| `usart3` | `0x40004800` | `stm32f7_usart` |
+| `usart2` | `0x40004400` | `stm32f7_usart` |
+| `timer14` | `0x40002000` | `stm32_timer` |
+| `timer13` | `0x40001c00` | `stm32_timer` |
+| `timer12` | `0x40001800` | `stm32_timer` |
+| `timer7` | `0x40001400` | `stm32_timer` |
+| `timer6` | `0x40001000` | `stm32_timer` |
+| `timer5` | `0x40000c00` | `stm32_timer` |
+| `timer4` | `0x40000800` | `stm32_timer` |
+| `timer3` | `0x40000400` | `stm32_timer` |
+| `timer2` | `0x40000000` | `stm32_timer` |
+| `fdcan1` | `0x4000a000` | `mcan` |
+| `fdcan2` | `0x4000a400` | `mcan` |
+| `canMessageRAM` | `0x4000ac00` | `arraymemory` |
+| `rcc` | `0x58024400` | `stm32h7_rcc` |
+| `crc` | `0x58024c00` | `stm32_crc` |
+| `lptimer1` | `0x40002400` | `stm32l0_lptimer` |
+| `lptimer2` | `0x58002400` | `stm32l0_lptimer` |
+| `lptimer3` | `0x58002800` | `stm32l0_lptimer` |
+| `lptimer4` | `0x58002c00` | `stm32l0_lptimer` |
+| `lptimer5` | `0x58003000` | `stm32l0_lptimer` |
+| `watchdog` | `0x58004800` | `stm32_independentwatchdog` |
+| `hsem` | `0x58026400` | `stm32h7_hardwaresemaphore` |
+| `ethernet` | `0x40028000` | `synopsysdwcethernetqualityofservice` |
+| `qspi` | `0x52005000` | `stm32h7_quadspi` |
+| `sdmmc` | `0x52007000` | `stm32hsdmmc` |
+| `pwr` | `0x58024800` | `pythonperipheral` |
+| `fmc` | `0x52004000` | `pythonperipheral` |
+| `usb1` | `0x40040000` | `designware_usb_otg` |
+| `usb2` | `0x40080000` | `designware_usb_otg` |
+
+**Total Peripherals:** 61

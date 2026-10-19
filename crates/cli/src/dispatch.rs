@@ -201,9 +201,21 @@ pub fn run_with_plugins(plugins: &[&dyn labwired_core::plugin::ChipPlugin]) -> E
     let default_level = if cli.trace { "debug" } else { "info" };
     let log_filter = tracing_subscriber::EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(default_level));
+
+    // The timestamp mode must be known before the subscriber is built: parse
+    // it out of the command, then let the formatter consult the global
+    // context (empty prefix unless a mode was requested).
+    let log_mode = match &cli.command {
+        Some(Commands::Run(a)) => a.log_timestamps,
+        Some(Commands::Test(a)) => a.log_timestamps,
+        _ => crate::log_ts::LogTimestamps::None,
+    };
+    crate::log_ts::init(log_mode);
+
     tracing_subscriber::fmt()
         .with_writer(std::io::stderr)
         .with_env_filter(log_filter)
+        .event_format(crate::log_ts::LogTsFormat)
         .init();
 
     match cli.command {

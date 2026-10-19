@@ -1,0 +1,44 @@
+# LabWired - STM32F4-Discovery system manifest (MB997, STM32F407VGT6)
+#
+# Board facts (UM1467; Zephyr `stm32f4_disco`):
+#   PD12..PD15 — four user LEDs (LD4 green / LD3 orange / LD5 red / LD6 blue)
+#   PA0        — USER button
+#   PA2/PA3    — USART2 TX/RX (console pins; on this board the ST-LINK VCP is
+#                NOT wired to the MCU UART)
+#
+# Bare board: the smoke firmware exercises CPU + RCC + GPIO + USART2 only.
+
+name: "stm32f4-discovery"
+chip: "../chips/stm32f407.yaml"
+external_devices: []
+board_io:
+  - id: "led_ld4"
+    kind: "led"
+    peripheral: "gpiod"
+    pin: 12
+    signal: "output"
+    active_high: true
+  - id: "led_ld3"
+    kind: "led"
+    peripheral: "gpiod"
+    pin: 13
+    signal: "output"
+    active_high: true
+  - id: "led_ld5"
+    kind: "led"
+    peripheral: "gpiod"
+    pin: 14
+    signal: "output"
+    active_high: true
+  - id: "led_ld6"
+    kind: "led"
+    peripheral: "gpiod"
+    pin: 15
+    signal: "output"
+    active_high: true
+  - id: "button_user"
+    kind: "button"
+    peripheral: "gpioa"
+    pin: 0
+    signal: "input"
+    active_high: false

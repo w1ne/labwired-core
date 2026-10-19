@@ -23,12 +23,22 @@ cargo clippy -p labwired-core -p labwired-cli --all-targets -- -D warnings
 
 echo "Walk-deletion + RP2040 vector tests (event-scheduler feature)..."
 cargo test -p labwired-core --features event-scheduler --lib \
-  event_clr_deasserts_on_walk_deleted \
-  tests::rp2040 \
-  -- --quiet
+  event_clr_deasserts_on_walk_deleted -- --quiet
+cargo test -p labwired-core --features event-scheduler --lib \
+  tests::rp2040 -- --quiet
 
 echo "LogicTap unit smokes..."
 cargo test -p labwired-core --lib logic_tap_sees -- --quiet
+
+# The class of failure that burned a CI round: a data refresh that clobbers
+# curated descriptors (IRQs, register-layout profiles, memory bases) loads fine
+# and validates fine, but breaks the onboarding contracts. These four suites are
+# the ones that caught it; they run in seconds once the test binaries exist.
+echo "Onboarding descriptor integrity (unknown types + curated-data contracts)..."
+cargo test -p labwired-core --test unknown_peripheral_type -- --quiet
+cargo test -p labwired-core --lib tests::nrf52 -- --quiet
+cargo test -p labwired-core --lib tests::peripheral_reachability -- --quiet
+cargo test -p labwired-core --lib tests::yaml_owned_base_contract -- --quiet
 
 if [[ "${LABWIRED_PREPUSH_FULL:-}" == "1" ]]; then
   echo "--- [LABWIRED_PREPUSH_FULL=1: workspace tests] ---"

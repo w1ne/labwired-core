@@ -30,11 +30,13 @@ peripherals:
   bus: sysbus
   base_address: 437264896
 - id: i2c0
-  type: pulp_udma_i2c
+  type: stub
+  renode_type: pulp_udma_i2c
   bus: sysbus
   base_address: 437264768
 - id: spi
-  type: pulp_udma_spi
+  type: stub
+  renode_type: pulp_udma_spi
   bus: sysbus
   base_address: 437264512
 - id: camera_controller

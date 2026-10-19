@@ -1,0 +1,18 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+#
+# M0 IO smoke: boot the fixture and receive the 'H' the program sends
+# through U1TXREG (0x0224). The program then BRA $-1 loops, so the run ends
+# at max_steps with the byte already captured.
+schema_version: "1.0"
+inputs:
+  firmware: "./firmware/dspic33fj32mc204-uart-smoke.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 64
+assertions:
+  - uart_contains: "H"
+  - expected_stop_reason: max_steps

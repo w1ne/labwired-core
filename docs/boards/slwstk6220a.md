@@ -1,0 +1,51 @@
+# Validation Report: slwstk6220a
+
+**Architecture:** ARM Cortex-M4F.
+
+## 1. Dynamic Simulation Validation
+**Status:** ✅ Passed (simulation-ok)
+
+```text
+[2m2026-10-18T14:40:24.905032Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting LabWired Simulator
+[2m2026-10-18T14:40:24.905558Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/slwstk6220a.yaml
+[2m2026-10-18T14:40:24.906885Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Loading firmware: "/home/andrii/Projects/labwired-renode/core/tests/fixtures/uart-ok-thumbv7m.elf"
+[2m2026-10-18T14:40:24.906988Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
+[2m2026-10-18T14:40:24.907001Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Firmware Loaded Successfully!
+[2m2026-10-18T14:40:24.907006Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Entry Point: 0x401
+[2m2026-10-18T14:40:24.907964Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting Simulation (ARM Cortex-M)...
+[2m2026-10-18T14:40:24.907978Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Initial PC: 0x400, SP: 0x20020000
+[2m2026-10-18T14:40:24.907992Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Running for 20000 steps...
+[2m2026-10-18T14:40:24.908069Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Simulation Error at step 2: Memory access violation at 0x2001ffe0
+[2m2026-10-18T14:40:24.908098Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Simulation loop finished.
+[2m2026-10-18T14:40:24.908103Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Final PC: 0x45c
+[2m2026-10-18T14:40:24.908107Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Instructions: 2
+[2m2026-10-18T14:40:24.908112Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Cycles: 2
+[2m2026-10-18T14:40:24.908116Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Average IPS: 1809.22
+```
+
+
+## Hardware Coverage Report
+
+| Peripheral ID | Base Address | Type |
+|---|---|---|
+| `led0` | `0x00000042` | `led` |
+| `led1` | `0x00000043` | `led` |
+| `button0` | `0x00000040` | `button` |
+| `button1` | `0x00000041` | `button` |
+| `si7021` | `0x00000080` | `si70xx` |
+| `i2c0` | `0x4000a000` | `efm32ggi2ccontroller` |
+| `i2c1` | `0x4000a400` | `efm32ggi2ccontroller` |
+| `timer0` | `0x40010000` | `efm32timer` |
+| `timer1` | `0x40010400` | `efm32timer` |
+| `timer2` | `0x40010800` | `efm32timer` |
+| `timer3` | `0x40010c00` | `efm32timer` |
+| `uart0` | `0x4000e000` | `efm32_uart` |
+| `uart1` | `0x4000e400` | `efm32_uart` |
+| `usart1` | `0x4000c400` | `efm32_uart` |
+| `usart2` | `0x4000c800` | `efm32_uart` |
+| `leUart0` | `0x40084000` | `leuart` |
+| `leUart1` | `0x40084400` | `leuart` |
+| `gpioPort` | `0x40006000` | `efmgpioport` |
+| `bitband` | `0x42000000` | `bitbanding` |
+
+**Total Peripherals:** 19

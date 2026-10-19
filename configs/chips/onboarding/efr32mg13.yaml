@@ -18,7 +18,8 @@ peripherals:
   bus: sysbus
   base_address: 1074012160
 - id: i2c1
-  type: efr32_i2ccontroller
+  type: stub
+  renode_type: efr32_i2ccontroller
   bus: sysbus
   base_address: 1073792000
 - id: usart2
@@ -30,15 +31,20 @@ peripherals:
   bus: sysbus
   base_address: 1073810432
 - id: flashCtrl
-  type: efr32xg13flashcontroller
+  type: stub
+  renode_type: efr32xg13flashcontroller
   bus: sysbus
   base_address: 1074659328
 - id: wtimer0
   type: efr32_timer
+  config:
+    counter_bits: 16
   bus: sysbus
   base_address: 1073848320
 - id: wtimer1
   type: efr32_timer
+  config:
+    counter_bits: 16
   bus: sysbus
   base_address: 1073849344
 - id: emu_pwrcfg
@@ -50,7 +56,8 @@ peripherals:
   bus: sysbus
   base_address: 1074671652
 - id: i2c0
-  type: efr32_i2ccontroller
+  type: stub
+  renode_type: efr32_i2ccontroller
   bus: sysbus
   base_address: 1073790976
 - id: usart0
@@ -74,11 +81,13 @@ peripherals:
   bus: sysbus
   base_address: 1107296256
 - id: bitclear
-  type: bitaccess
+  type: stub
+  renode_type: bitaccess
   bus: sysbus
   base_address: 1140850688
 - id: bitset
-  type: bitaccess
+  type: stub
+  renode_type: bitaccess
   bus: sysbus
   base_address: 1174405120
 - id: bitband_sram
@@ -87,14 +96,19 @@ peripherals:
   base_address: 570425344
 - id: timer0
   type: efr32_timer
+  config:
+    counter_bits: 16
   bus: sysbus
   base_address: 1073840128
 - id: timer1
   type: efr32_timer
+  config:
+    counter_bits: 16
   bus: sysbus
   base_address: 1073841152
 - id: cmu
-  type: efr32_cmu
+  type: stub
+  renode_type: efr32_cmu
   bus: sysbus
   base_address: 1074675712
 - id: ldma

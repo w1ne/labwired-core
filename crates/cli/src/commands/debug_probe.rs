@@ -168,6 +168,7 @@ pub fn parse_address(s: &str) -> Option<u32> {
 pub fn stop_reason_str(r: &labwired_core::StopReason) -> &'static str {
     match r {
         labwired_core::StopReason::Breakpoint(_) => "breakpoint",
+        labwired_core::StopReason::Watchpoint(_) => "watchpoint",
         labwired_core::StopReason::StepDone => "step_done",
         labwired_core::StopReason::MaxStepsReached => "max_steps",
         labwired_core::StopReason::ManualStop => "halt",
@@ -512,6 +513,7 @@ fn fault_verdict_of(
     labwired_core::fault_verdict::decode_fault(
         &machine.fault_capture()?,
         symbols.map(|s| s as &dyn labwired_core::fault_verdict::FaultSymbolizer),
+        None,
     )
 }
 
@@ -777,6 +779,10 @@ mod tests {
         assert_eq!(
             stop_reason_str(&labwired_core::StopReason::Breakpoint(0x0800_0100)),
             "breakpoint"
+        );
+        assert_eq!(
+            stop_reason_str(&labwired_core::StopReason::Watchpoint(0x2000_0100)),
+            "watchpoint"
         );
         assert_eq!(
             stop_reason_str(&labwired_core::StopReason::StepDone),

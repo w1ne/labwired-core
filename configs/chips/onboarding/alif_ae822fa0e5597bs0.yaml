@@ -1,0 +1,144 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: alif_ae822fa0e5597bs0
+arch: arm
+flash:
+  base: 0
+  size: 262144B
+ram:
+  base: 33554432
+  size: 4194304B
+peripherals:
+- id: gpio0
+  type: designware_apb_gpio
+  bus: sysbus
+  base_address: 1224736768
+- id: gpio1
+  type: designware_apb_gpio
+  bus: sysbus
+  base_address: 1224740864
+- id: gpio2
+  type: designware_apb_gpio
+  bus: sysbus
+  base_address: 1224744960
+- id: gpio3
+  type: designware_apb_gpio
+  bus: sysbus
+  base_address: 1224749056
+- id: gpio4
+  type: designware_apb_gpio
+  bus: sysbus
+  base_address: 1224753152
+- id: gpio5
+  type: designware_apb_gpio
+  bus: sysbus
+  base_address: 1224757248
+- id: gpio6
+  type: designware_apb_gpio
+  bus: sysbus
+  base_address: 1224761344
+- id: gpio7
+  type: designware_apb_gpio
+  bus: sysbus
+  base_address: 1224765440
+- id: gpio8
+  type: designware_apb_gpio
+  bus: sysbus
+  base_address: 1224769536
+- id: gpio9
+  type: designware_apb_gpio
+  bus: sysbus
+  base_address: 1224773632
+- id: gpio10
+  type: designware_apb_gpio
+  bus: sysbus
+  base_address: 1224777728
+- id: gpio11
+  type: designware_apb_gpio
+  bus: sysbus
+  base_address: 1224781824
+- id: gpio12
+  type: designware_apb_gpio
+  bus: sysbus
+  base_address: 1224785920
+- id: gpio13
+  type: designware_apb_gpio
+  bus: sysbus
+  base_address: 1224790016
+- id: gpio14
+  type: designware_apb_gpio
+  bus: sysbus
+  base_address: 1224794112
+- id: lpgpio
+  type: designware_apb_gpio
+  bus: sysbus
+  base_address: 1107304448
+- id: i2c0
+  type: stub
+  renode_type: designware_apb_i2c
+  bus: sysbus
+  base_address: 1224802304
+- id: i2c1
+  type: stub
+  renode_type: designware_apb_i2c
+  bus: sysbus
+  base_address: 1224806400
+- id: i2c2
+  type: stub
+  renode_type: designware_apb_i2c
+  bus: sysbus
+  base_address: 1224810496
+- id: i2c3
+  type: stub
+  renode_type: designware_apb_i2c
+  bus: sysbus
+  base_address: 1224814592
+- id: uart0
+  type: ns16550
+  bus: sysbus
+  base_address: 1224835072
+- id: uart1
+  type: ns16550
+  bus: sysbus
+  base_address: 1224839168
+- id: uart2
+  type: ns16550
+  bus: sysbus
+  base_address: 1224843264
+- id: uart3
+  type: ns16550
+  bus: sysbus
+  base_address: 1224847360
+- id: uart4
+  type: ns16550
+  bus: sysbus
+  base_address: 1224851456
+- id: uart5
+  type: ns16550
+  bus: sysbus
+  base_address: 1224855552
+- id: uart6
+  type: ns16550
+  bus: sysbus
+  base_address: 1224859648
+- id: uart7
+  type: ns16550
+  bus: sysbus
+  base_address: 1224863744
+- id: fdcan
+  type: stub
+  renode_type: cast_canctrl
+  bus: sysbus
+  base_address: 1224957952
+- id: dwt
+  type: dwt
+  bus: sysbus
+  base_address: 3758100480
+provenance:
+  generated_by: scripts/onboard_hw_targets.py
+  parse_fallbacks:
+  - flash=itcm

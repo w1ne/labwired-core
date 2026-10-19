@@ -50,17 +50,28 @@ __attribute__((noinline)) uint32_t sensor_read(uint32_t channel)
     int32_t scaled = (int32_t)(1000 + channel) / (int32_t)g_divisor; /* faults */
     g_last = (uint32_t)scaled;
     return g_last;
-#else
+#elif FAULT_KIND != 6
     volatile uint32_t *reg = (volatile uint32_t *)(UNMAPPED_ADDR + channel * 0u);
     uint32_t raw = *reg; /* faults */
     g_last = raw;
     return g_last;
+#else
+    /* 0x0800_1000 is inside flash; the fixture chip sets cpu_writes: fault. */
+    (void)channel;
+    *(volatile uint32_t *)0x08001000u = 0xDEADBEEFu; /* faults */
+    return 0;
 #endif
+/* FAULT_KIND 6 is appended after the old branches so the old kinds keep
+ * their exact source lines: the committed old-kind ELFs and their golden
+ * sentences pin them (e.g. the faulting load in `sensor_read` is line 55).
+ * The #line restores the numbering the new branch pushed down, which keeps
+ * rebuilding this file from churning those ELFs. */
+#line 59 "fault_fixture.c"
 }
 
 int main(void)
 {
-#if FAULT_KIND == 2
+#if FAULT_KIND == 2 || FAULT_KIND == 6
     SCB_SHCSR |= SHCSR_BUSFAULTENA;
 #elif FAULT_KIND == 4
     SCB_CCR |= CCR_DIV_0_TRP;

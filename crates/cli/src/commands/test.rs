@@ -94,7 +94,7 @@ fn apply_run_speed_opts<C: labwired_core::Cpu>(machine: &mut labwired_core::Mach
     // Only say so when the setting can actually do something, so the line is
     // never a claim the build cannot honour.
     if cfg!(feature = "event-scheduler") {
-        eprintln!(
+        crate::log_ts::eventln!(
             "labwired-cli test: idle_ff={} (event_scheduler=on{})",
             if opted_out { "off" } else { "on" },
             if opted_out {
@@ -339,6 +339,7 @@ fn run_s3_rom_boot_no_elf(
     let mut app_cpu = labwired_core::cpu::xtensa_lx7::XtensaLx7::new_app_cpu();
     app_cpu.faithful_windows = true;
     let mut machine = labwired_core::Machine::new(cpu, bus).with_secondary_cpu(app_cpu);
+    crate::log_ts::set_hz(machine.bus.cpu_hz);
     // BOTH consoles, because the boot and the sketch do not share one. The mask
     // ROM and the 2nd-stage bootloader talk on UART0 (attached above); an
     // Arduino sketch built with ARDUINO_USB_CDC_ON_BOOT=1 — which is every
@@ -614,6 +615,7 @@ fn run_c3_rom_boot_no_elf(
             Err(code) => return code,
         }
     };
+    crate::log_ts::set_hz(machine.bus.cpu_hz);
 
     // Universal WiFi adapter: if the diagram carries a `wifi_ap`, attach every
     // real WiFi MAC to a per-lab virtual-WiFi medium so the device associates →
@@ -1322,6 +1324,7 @@ pub(crate) fn run_test(
                     cpu.faithful_windows = true;
                     bus.attach_uart_tx_sink(uart_tx.clone(), !args.no_uart_stdout);
                     let mut machine = labwired_core::Machine::new(cpu, bus);
+                    crate::log_ts::set_hz(machine.bus.cpu_hz);
                     machine.add_observer(metrics.clone());
                     machine
                 } else {
@@ -1565,6 +1568,7 @@ pub(crate) fn run_test(
                     app_cpu.set_sp(0x3FCD_8000);
                     let mut machine =
                         labwired_core::Machine::new(pro_cpu, bus).with_secondary_cpu(app_cpu);
+                    crate::log_ts::set_hz(machine.bus.cpu_hz);
                     // Fast boot: the mask ROM is a thunk harness, so core 1's
                     // reset vector holds no startup code. Wait for
                     // `ets_set_appcpu_boot_addr`.
@@ -1637,6 +1641,7 @@ pub(crate) fn run_test(
                 // flash-thunks, no forged s_cpu_up — APP_CPU runs call_start_cpu1.
                 let mut machine =
                     labwired_core::Machine::new(pro_cpu, esp_bus).with_secondary_cpu(app_cpu);
+                crate::log_ts::set_hz(machine.bus.cpu_hz);
                 // Idle and CCOUNT poll-loop skips, as every other `test` path
                 // (opt out with LABWIRED_IDLE_FAST_FORWARD=0). No per-step
                 // observer: `counter_metrics` below.
@@ -2012,7 +2017,7 @@ pub(crate) fn run_test(
                 if wide > 1 && machine.bus.per_cycle_tick_is_trivial() {
                     machine.config.peripheral_tick_interval = wide;
                     machine.exact_batch_boundaries = true;
-                    eprintln!(
+                    crate::log_ts::eventln!(
                         "labwired-cli test: hosted fast path (exact windows up to {wide} cycles)"
                     );
                 }
@@ -2054,6 +2059,7 @@ pub(crate) fn run_test(
     macro_rules! setup_and_run {
         ($cpu:expr) => {{
             let mut machine = labwired_core::Machine::new($cpu, bus);
+            crate::log_ts::set_hz(machine.bus.cpu_hz);
             // FreeRTOS on ESP32-C3 is interrupt-driven (yield + SYSTIMER tick).
             // Instruction batching freezes peripheral tick / IRQ delivery
             // across large step batches and strands the scheduler — same
@@ -2435,6 +2441,7 @@ pub(crate) fn run_test(
                     Ok(m) => m,
                     Err(code) => return code,
                 };
+                crate::log_ts::set_hz(machine.bus.cpu_hz);
                 if let Err(e) = machine.apply_runtime_snapshot(&snap) {
                     // The snapshot self-keyed clean (same chip + firmware) but is
                     // structurally incompatible with the freshly-built machine —
@@ -2467,6 +2474,7 @@ pub(crate) fn run_test(
                     Ok(m) => m,
                     Err(code) => return code,
                 };
+                crate::log_ts::set_hz(machine.bus.cpu_hz);
                 run_machine!(machine)
             } else {
                 let mut cpu = labwired_core::system::riscv::configure_riscv(&mut bus);
@@ -2504,6 +2512,16 @@ pub(crate) fn run_test(
                     cpu.push_i2c_slave(dev);
                 }
             }
+            let machine = labwired_core::Machine::new(cpu, bus);
+            crate::log_ts::set_hz(machine.bus.cpu_hz);
+            run_machine!(machine)
+        }
+        labwired_core::Arch::Pic24 => {
+            // PIC24 is Harvard: code lives in the CPU flash image.
+            // UART1 TX is on the CPU, not a bus UART peripheral.
+            let mut cpu = labwired_core::cpu::Pic24::new();
+            cpu.load_program_image(&program);
+            cpu.set_serial_sink(uart_tx.clone());
             let machine = labwired_core::Machine::new(cpu, bus);
             run_machine!(machine)
         }

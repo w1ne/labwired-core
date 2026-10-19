@@ -90,31 +90,38 @@ peripherals:
   bus: sysbus
   base_address: 1077231616
 - id: lpspi0
-  type: imxrt_lpspi
+  type: stub
+  renode_type: imxrt_lpspi
   bus: sysbus
   base_address: 1077248000
 - id: lpspi1
-  type: imxrt_lpspi
+  type: stub
+  renode_type: imxrt_lpspi
   bus: sysbus
   base_address: 1077264384
 - id: lpspi2
-  type: imxrt_lpspi
+  type: stub
+  renode_type: imxrt_lpspi
   bus: sysbus
   base_address: 1077280768
 - id: lpspi3
-  type: imxrt_lpspi
+  type: stub
+  renode_type: imxrt_lpspi
   bus: sysbus
   base_address: 1077297152
 - id: lpspi4
-  type: imxrt_lpspi
+  type: stub
+  renode_type: imxrt_lpspi
   bus: sysbus
   base_address: 1078706176
 - id: lpspi5
-  type: imxrt_lpspi
+  type: stub
+  renode_type: imxrt_lpspi
   bus: sysbus
   base_address: 1078722560
 - id: flex_io
-  type: s32k3xx_flexio
+  type: stub
+  renode_type: s32k3xx_flexio
   bus: sysbus
   base_address: 1077035008
 - id: lpuart0
@@ -262,11 +269,13 @@ peripherals:
   bus: sysbus
   base_address: 1076725700
 - id: gmac0
-  type: s32k3xx_gmac
+  type: stub
+  renode_type: s32k3xx_gmac
   bus: sysbus
   base_address: 1078476800
 - id: gmac1
-  type: s32k3xx_gmac
+  type: stub
+  renode_type: s32k3xx_gmac
   bus: sysbus
   base_address: 1078493184
 - id: dma_channels0_11
@@ -286,6 +295,7 @@ peripherals:
   bus: sysbus
   base_address: 1076379648
 - id: xrdc
-  type: nxp_xrdc
+  type: stub
+  renode_type: nxp_xrdc
   bus: sysbus
   base_address: 1076330496

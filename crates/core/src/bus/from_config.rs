@@ -276,6 +276,11 @@ impl SystemBus {
         let mut bus = Self {
             flash_thunks: std::collections::HashMap::new(),
             flash: LinearMemory::new_erased(flash_size as usize, chip.flash.base),
+            memory_policy: crate::bus::memory_policy::MemoryPolicyState::for_chip(chip),
+            memory_policy_bypass: false,
+            debug_watches: Vec::new(),
+            debug_watch_hit: Cell::new(None),
+            debug_watch_host_bypass: std::cell::Cell::new(false),
             ram: LinearMemory::new(ram_size as usize, chip.ram.base),
             extra_mem,
             peripherals: Vec::new(),

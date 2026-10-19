@@ -317,7 +317,9 @@ impl SystemBus {
             }
         } else if has("pl011") {
             Pl011
-        } else if has("16550") {
+        } else if has("16550") || has("lpc_usart") {
+            // `lpc_usart` is the LPC/Flexcomm USART, which NXP documents as
+            // 16C550-compatible (LPC17xx UM10360 §14; i.MX RT500 Flexcomm).
             Ns16550
         } else if has("da14") {
             // Dialog/Renesas DA1469x = Synopsys DW_apb_uart (16550, 4-byte stride).
@@ -350,7 +352,9 @@ impl SystemBus {
             Sam
         } else if has("samd5") || has("same5") || has("sercom") {
             Sercom
-        } else if has("imx") {
+        } else if has("imx") || has("mxcuart") {
+            // NXP i.MX UART (`imxrt_*` and the i.MX8 `mxcuart` spelling share
+            // the UTXD@0x40 / URXD@0x00 / USR1@0x94 register map).
             Imx
         } else if has("sifive") {
             Sifive

@@ -47,6 +47,7 @@ pub mod clause {
     pub const CYCLE_ACCURATE_BUS: &str = "cycle_accurate_bus";
     pub const POLL_SAMPLING: &str = "poll_sampling";
     pub const HONORED_BREAKPOINTS: &str = "honored_breakpoints";
+    pub const HONORED_WATCHPOINTS: &str = "honored_watchpoints";
     pub const SECONDARY_PARKED: &str = "secondary_parked";
     pub const SECONDARY_WAKE_DEADLINE: &str = "secondary_wake_deadline";
     pub const TICK_BOUNDARY: &str = "tick_boundary";

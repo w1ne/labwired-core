@@ -149,6 +149,12 @@ impl<C: Cpu> Machine<C> {
             return Ok(report);
         }
         let report = self.advance_inner(request, None);
+        if report.is_err() {
+            // A faulted access must not leave its attempt-latch behind to
+            // stop some later run at a stale address. See `bus/debug_watch.rs`
+            // for the attempt-latch contract.
+            let _ = self.bus.take_debug_watch_hit();
+        }
         // A deferred secondary never outlives the call: whoever looks at the
         // machine next sees the core where lockstep would have left it.
         self.end_secondary_defer(self.total_cycles);
@@ -189,6 +195,11 @@ impl<C: Cpu> Machine<C> {
             return Ok(report);
         }
         let report = self.advance_inner(request, Some(&mut run_window));
+        if report.is_err() {
+            // Same rule as [`Self::advance`]: a faulted access discards its
+            // attempt-latch so it cannot stop a later run at a stale address.
+            let _ = self.bus.take_debug_watch_hit();
+        }
         self.end_secondary_defer(self.total_cycles);
         report
     }
@@ -242,6 +253,22 @@ impl<C: Cpu> Machine<C> {
             {
                 if let Some(cpu1) = self.cpu_secondary.as_mut() {
                     cpu1.unhalt();
+                }
+            }
+
+            // A debug watch that latched during the previous window stops the
+            // run BEFORE anything else this iteration would report. The
+            // watched access already committed (the boundary commit above is
+            // what made it real), so the event wins over the fuel and cycle
+            // limits checked below and over a breakpoint at the new pc.
+            // `plan_cpu_window` pins the window to one instruction while any
+            // watch is armed, so at most the access's own instruction retired
+            // between the latch and here. With no watch armed, a latch a
+            // removed watch left behind is dropped instead of reported — a
+            // stale stop must never end a later run.
+            if let Some(addr) = self.bus.take_debug_watch_hit() {
+                if !self.bus.debug_watches.is_empty() {
+                    return Ok(state.report(AdvanceStop::Watchpoint(addr), elapsed));
                 }
             }
 

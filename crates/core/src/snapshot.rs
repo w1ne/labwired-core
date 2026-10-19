@@ -51,6 +51,7 @@ pub enum CpuSnapshot {
     RiscV(RiscVCpuSnapshot),
     XtensaLx7(XtensaLx7CpuSnapshot),
     Avr(AvrCpuSnapshot),
+    Pic24(Pic24CpuSnapshot),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -66,6 +67,17 @@ pub struct AvrCpuSnapshot {
     pub pc: u32,
     pub sp: u16,
     pub sreg: u8,
+}
+
+/// PIC24/dsPIC33 M0 visible state (word-addressed PC; W0–W15; UART1 latches).
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Pic24CpuSnapshot {
+    pub registers: Vec<u16>,
+    pub pc: u32,
+    pub sr: u16,
+    pub cycles: u64,
+    pub u1mode: u16,
+    pub u1sta: u16,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

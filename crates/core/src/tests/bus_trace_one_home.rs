@@ -74,7 +74,7 @@ fn repo_root(rel: &str) -> PathBuf {
         .join(rel)
 }
 
-fn dummy_manifest(chip_path: &str) -> SystemManifest {
+pub(crate) fn dummy_manifest(chip_path: &str) -> SystemManifest {
     SystemManifest {
         parts: Vec::new(),
         walk_deleted: Some(false),

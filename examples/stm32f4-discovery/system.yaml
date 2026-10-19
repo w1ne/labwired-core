@@ -1,0 +1,38 @@
+# LabWired - STM32F4-Discovery example system (MB997, STM32F407VGT6)
+#
+# Same board manifest as configs/systems/stm32f4-discovery.yaml, kept beside the
+# example so the package is self-contained.
+name: "stm32f4-discovery"
+chip: "../../configs/chips/stm32f407.yaml"
+external_devices: []
+board_io:
+  - id: "led_ld4"
+    kind: "led"
+    peripheral: "gpiod"
+    pin: 12
+    signal: "output"
+    active_high: true
+  - id: "led_ld3"
+    kind: "led"
+    peripheral: "gpiod"
+    pin: 13
+    signal: "output"
+    active_high: true
+  - id: "led_ld5"
+    kind: "led"
+    peripheral: "gpiod"
+    pin: 14
+    signal: "output"
+    active_high: true
+  - id: "led_ld6"
+    kind: "led"
+    peripheral: "gpiod"
+    pin: 15
+    signal: "output"
+    active_high: true
+  - id: "button_user"
+    kind: "button"
+    peripheral: "gpioa"
+    pin: 0
+    signal: "input"
+    active_high: false

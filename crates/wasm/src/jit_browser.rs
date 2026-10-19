@@ -900,7 +900,17 @@ struct ThumbHost {
 
 struct CortexMBrowserBlock {
     run: Function,
-    memory: WebAssembly::Memory,
+    /// Kept alive for the block instance; the view below is the working handle.
+    _memory: WebAssembly::Memory,
+    /// Persistent view over the register-staging window at offset 0.
+    ///
+    /// Built once at compile time. The block's memory has `maximum = 1` page,
+    /// so the buffer can never detach and the view stays valid. `run()` stages
+    /// registers with `copy_from`/`copy_to` on this view — the `mem_write`/
+    /// `mem_read` pair it replaces created two `Uint8Array` wrappers plus a
+    /// byte-at-a-time `get_index` loop PER BLOCK HIT (the browser JIT's hot
+    /// cost, measured at ~2 µs/hit on the RP2040 demo).
+    regs_view: Uint8Array,
     host: Rc<RefCell<ThumbHost>>,
     end_pc: u32,
     instr_count: u32,
@@ -928,8 +938,11 @@ impl CortexMBrowserBlock {
 
         let desc = Object::new();
         Reflect::set(&desc, &JsValue::from_str("initial"), &JsValue::from(1))?;
+        // `maximum` pins the buffer: a view created below must never detach.
+        Reflect::set(&desc, &JsValue::from_str("maximum"), &JsValue::from(1))?;
         let memory = WebAssembly::Memory::new(&desc)
             .map_err(|e| JsValue::from_str(&format!("Thumb Memory: {e:?}")))?;
+        let regs_view = Uint8Array::new(&memory.buffer()).subarray(0, THUMB_REG_BYTES as u32);
 
         let host = Rc::new(RefCell::new(ThumbHost {
             ram: std::ptr::null_mut(),
@@ -1018,7 +1031,8 @@ impl CortexMBrowserBlock {
 
         Ok(Self {
             run,
-            memory,
+            _memory: memory,
+            regs_view,
             host,
             end_pc,
             instr_count,
@@ -1046,7 +1060,7 @@ impl CortexMBrowserBlock {
         for (i, w) in x.iter().enumerate() {
             bytes[i * 4..i * 4 + 4].copy_from_slice(&w.to_le_bytes());
         }
-        mem_write(&self.memory, 0, &bytes);
+        self.regs_view.copy_from(&bytes);
         {
             let mut h = self.host.borrow_mut();
             h.ram = ram.as_mut_ptr();
@@ -1063,7 +1077,7 @@ impl CortexMBrowserBlock {
         }
         let result = result?;
         let wire = result.as_f64().unwrap_or(0.0) as i32;
-        mem_read(&self.memory, 0, &mut bytes);
+        self.regs_view.copy_to(&mut bytes);
         for (i, w) in x.iter_mut().enumerate() {
             *w = u32::from_le_bytes([
                 bytes[i * 4],
@@ -1107,20 +1121,6 @@ impl CortexMBrowserBlock {
             fault_retired,
             fault_it_state,
         ))
-    }
-}
-
-fn mem_write(memory: &WebAssembly::Memory, offset: u32, bytes: &[u8]) {
-    let view = Uint8Array::new(&memory.buffer());
-    let src = Uint8Array::new_with_length(bytes.len() as u32);
-    src.copy_from(bytes);
-    view.set(&src, offset);
-}
-
-fn mem_read(memory: &WebAssembly::Memory, offset: u32, bytes: &mut [u8]) {
-    let view = Uint8Array::new(&memory.buffer());
-    for (i, b) in bytes.iter_mut().enumerate() {
-        *b = view.get_index(offset + i as u32);
     }
 }
 

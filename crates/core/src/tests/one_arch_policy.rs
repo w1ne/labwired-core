@@ -132,6 +132,7 @@ fn chip_with_arch(arch: Arch) -> ChipDescriptor {
             Arch::RiscV => "riscv",
             Arch::Xtensa => "xtensa",
             Arch::Avr => "avr",
+            Arch::Pic24 => "pic24",
             Arch::Unknown => "unknown",
         }
     );
@@ -156,6 +157,7 @@ fn each_declared_architecture_reaches_its_own_family() {
         (Arch::RiscV, MachineFamily::RiscV),
         (Arch::Xtensa, MachineFamily::Xtensa),
         (Arch::Avr, MachineFamily::Avr),
+        (Arch::Pic24, MachineFamily::Pic24),
     ] {
         let got = machine_family(&chip_with_arch(arch)).expect("declared arch must be accepted");
         assert_eq!(got, want, "chip arch {arch:?} reached the wrong family");
@@ -188,6 +190,8 @@ fn the_elf_machine_table_is_the_only_one() {
     // 94 is EM_XTENSA. The loader used to hard-code it; if goblin's constant
     // ever stopped being 94 the two copies would have silently disagreed.
     assert_eq!(goblin::elf::header::EM_XTENSA, 94);
+    // 118 is EM_DSPIC30F (binutils) — Microchip's 16-bit MCU/DSC machine.
+    assert_eq!(elf_arch(118), Some(crate::Arch::Pic24));
     // An unrecognised machine has exactly one answer: None. Callers decide
     // whether that is fatal, but they no longer decide what it *means*.
     assert_eq!(elf_arch(0), None);

@@ -404,6 +404,13 @@ pub struct FrameHex {
     pub xpsr: String,
 }
 
+/// Why a data fault happened, when the engine knows more than the registers.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DataFaultReason {
+    /// The store targeted a region with `cpu_writes: fault`.
+    ReadOnlyRegion { region: &'static str },
+}
+
 /// The verdict: why and where the firmware faulted.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FaultVerdict {
@@ -511,13 +518,21 @@ fn origin_name(origin: &str, regs: &FaultRegs) -> &'static str {
 }
 
 /// The cause clause: what went wrong, with the address when it is valid.
-fn cause_clause(regs: &FaultRegs, origin: Option<&str>) -> String {
+fn cause_clause(
+    regs: &FaultRegs,
+    origin: Option<&str>,
+    reason: Option<&DataFaultReason>,
+) -> String {
     let mut parts: Vec<String> = Vec::new();
     for d in set_flags(regs.cfsr, CFSR_FLAGS) {
         let part = match d.flag {
-            "PRECISERR" if regs.cfsr & BFARVALID != 0 => {
-                format!("data access at {} (BFAR valid)", hex_grouped(regs.bfar))
-            }
+            "PRECISERR" if regs.cfsr & BFARVALID != 0 => match reason {
+                Some(DataFaultReason::ReadOnlyRegion { region }) => format!(
+                    "data access at {} (BFAR valid; store to read-only {region})",
+                    hex_grouped(regs.bfar)
+                ),
+                None => format!("data access at {} (BFAR valid)", hex_grouped(regs.bfar)),
+            },
             "PRECISERR" => "data access (address not captured)".to_string(),
             "IMPRECISERR" => "a buffered write failed; the fault address is not known".to_string(),
             "DACCVIOL" if regs.cfsr & MMARVALID != 0 => format!(
@@ -572,10 +587,13 @@ fn where_clause(
 
 /// Decode a fault into a verdict. `None` when `capture` records no fault.
 ///
+/// `reason` carries what the engine saw that the registers cannot name.
+///
 /// Pure: the same inputs always give the same verdict and sentence.
 pub fn decode_fault(
     capture: &FaultCapture,
     symbolizer: Option<&dyn FaultSymbolizer>,
+    reason: Option<&DataFaultReason>,
 ) -> Option<FaultVerdict> {
     if !capture.is_fault() {
         return None;
@@ -629,7 +647,7 @@ pub fn decode_fault(
         .filter(|c| location.as_ref().and_then(|l| l.function.as_ref()) != c.function.as_ref());
 
     // ---- The sentence ----
-    let cause = cause_clause(regs, origin);
+    let cause = cause_clause(regs, origin, reason);
     let head = match (kind, entered) {
         ("lockup", _) => {
             let during = capture
@@ -783,7 +801,10 @@ mod tests {
 
     #[test]
     fn nothing_faulted_is_no_verdict() {
-        assert_eq!(decode_fault(&FaultCapture::default(), Some(&Syms)), None);
+        assert_eq!(
+            decode_fault(&FaultCapture::default(), Some(&Syms), None),
+            None
+        );
     }
 
     #[test]
@@ -798,7 +819,7 @@ mod tests {
             entry: Some(entry(3, 0x0800_1234, 0x0800_1305)),
             lockup: None,
         };
-        let v = decode_fault(&cap, Some(&Syms)).unwrap();
+        let v = decode_fault(&cap, Some(&Syms), None).unwrap();
         assert_eq!(
             v.summary,
             "HardFault escalated from a precise BusFault: data access at 0x2002_0004 (BFAR valid), \
@@ -818,6 +839,37 @@ mod tests {
     }
 
     #[test]
+    fn read_only_region_store_names_the_region() {
+        // The same capture as `escalated_precise_busfault_sentence`: the
+        // registers alone cannot say why the store failed.
+        let cap = FaultCapture {
+            regs: FaultRegs {
+                hfsr: HFSR_FORCED,
+                cfsr: PRECISERR | BFARVALID,
+                bfar: 0x2002_0004,
+                mmfar: 0,
+            },
+            entry: Some(entry(3, 0x0800_1234, 0x0800_1305)),
+            lockup: None,
+        };
+        let v = decode_fault(
+            &cap,
+            Some(&Syms),
+            Some(&DataFaultReason::ReadOnlyRegion { region: "flash" }),
+        )
+        .unwrap();
+        assert!(
+            v.summary.contains("(BFAR valid; store to read-only flash)"),
+            "{}",
+            v.summary
+        );
+
+        let plain = decode_fault(&cap, Some(&Syms), None).unwrap();
+        assert!(plain.summary.contains("(BFAR valid)"), "{}", plain.summary);
+        assert!(!plain.summary.contains("read-only"), "{}", plain.summary);
+    }
+
+    #[test]
     fn imprecise_busfault_never_claims_an_address() {
         let cap = FaultCapture {
             // BFAR holds junk but BFARVALID is clear: it must not be reported.
@@ -830,7 +882,7 @@ mod tests {
             entry: Some(entry(3, 0x0800_1240, 0x0800_1305)),
             lockup: None,
         };
-        let v = decode_fault(&cap, Some(&Syms)).unwrap();
+        let v = decode_fault(&cap, Some(&Syms), None).unwrap();
         assert_eq!(
             v.summary,
             "HardFault escalated from an imprecise BusFault: a buffered write failed; the fault \
@@ -851,7 +903,7 @@ mod tests {
             entry: Some(entry(6, 0x0800_1250, 0xFFFF_FFF9)),
             lockup: None,
         };
-        let v = decode_fault(&cap, Some(&Syms)).unwrap();
+        let v = decode_fault(&cap, Some(&Syms), None).unwrap();
         // LR is an EXC_RETURN, so there is no caller hint.
         assert_eq!(
             v.summary,
@@ -877,7 +929,7 @@ mod tests {
                 active_exception: 3,
             }),
         };
-        let v = decode_fault(&cap, Some(&Syms)).unwrap();
+        let v = decode_fault(&cap, Some(&Syms), None).unwrap();
         assert_eq!(v.kind, "lockup");
         assert_eq!(
             v.summary,
@@ -899,7 +951,7 @@ mod tests {
             entry: Some(entry(3, 0x0800_1234, 0x0800_1211)),
             lockup: None,
         };
-        let v = decode_fault(&cap, Some(&Syms)).unwrap();
+        let v = decode_fault(&cap, Some(&Syms), None).unwrap();
         assert!(v.caller.is_none());
         assert!(
             v.summary.ends_with("in `sensor_read` (main.c:42)."),

@@ -1,0 +1,20 @@
+name: stm32h747
+description: 'stm32h747 (fragment platform, STM32). Architecture: ARM Cortex-M.'
+family: STM32
+code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
+  \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
+pass_rate: 100
+verified: true
+system: systems/onboarding/stm32h747.yaml
+provenance:
+  generated_by: scripts/onboard_hw_targets.py
+validation:
+  method: ci-arm-fixture-simulation
+  reason: simulation-ok
+  checks:
+    system_manifest: true
+    chip_descriptor: true
+    simulation: true
+  timestamp_utc: '2026-10-18T14:40:31.837892+00:00'
+  run_url: ''
+  artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/stm32h747.md

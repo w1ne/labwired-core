@@ -30,7 +30,8 @@ peripherals:
   bus: sysbus
   base_address: 1073750016
 - id: adc
-  type: caes_adc
+  type: stub
+  renode_type: caes_adc
   bus: sysbus
   base_address: 1073803264
 - id: gpio0
@@ -46,10 +47,12 @@ peripherals:
   bus: sysbus
   base_address: 1073881088
 - id: can0
-  type: ut32_can
+  type: stub
+  renode_type: ut32_can
   bus: sysbus
   base_address: 1073885184
 - id: can1
-  type: ut32_can
+  type: stub
+  renode_type: ut32_can
   bus: sysbus
   base_address: 1073889280

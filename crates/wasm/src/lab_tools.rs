@@ -541,6 +541,7 @@ impl WasmSimulator {
             symbols
                 .as_ref()
                 .map(|s| s as &dyn labwired_core::fault_verdict::FaultSymbolizer),
+            None,
         );
         let json = verdict
             .map(|v| serde_json::to_string(&v))

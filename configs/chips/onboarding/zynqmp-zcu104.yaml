@@ -50,11 +50,13 @@ peripherals:
   bus: sysbus
   base_address: 4278255616
 - id: i2c0
-  type: cadence_i2c
+  type: stub
+  renode_type: cadence_i2c
   bus: sysbus
   base_address: 4278321152
 - id: i2c1
-  type: cadence_i2c
+  type: stub
+  renode_type: cadence_i2c
   bus: sysbus
   base_address: 4278386688
 - id: ttc0
@@ -98,15 +100,18 @@ peripherals:
   bus: sysbus
   base_address: 4278845440
 - id: ipi
-  type: zynqmp_ipi
+  type: stub
+  renode_type: zynqmp_ipi
   bus: sysbus
   base_address: 4281335808
 - id: rtc
-  type: zynqmp_rtc
+  type: stub
+  renode_type: zynqmp_rtc
   bus: sysbus
   base_address: 4289069056
 - id: platformManagementUnit
-  type: zynqmp_platformmanagementunit
+  type: stub
+  renode_type: zynqmp_platformmanagementunit
   bus: ipi
   base_address: 10
 - id: L1_PLL_STATUS_READ_1_SERDES_REGISTER
@@ -126,6 +131,7 @@ peripherals:
   bus: sysbus
   base_address: 4289003584
 - id: qspi
-  type: zynqmp_gqspi
+  type: stub
+  renode_type: zynqmp_gqspi
   bus: sysbus
   base_address: 4279173120

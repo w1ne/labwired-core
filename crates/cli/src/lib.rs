@@ -37,6 +37,8 @@ mod dispatch;
 /// `execute_test_loop` and the `TestExecutionContext` it takes.
 mod execute;
 mod gpio_observer;
+/// `--log-timestamps` prefix state ([`log_ts::prefix`] / the `eventln!` macro).
+pub(crate) mod log_ts;
 /// The three run-outcome writers (`write_outputs`, `write_config_error_outputs`,
 /// `write_junit_xml`), all deriving from `artifacts::TestOutcome`.
 mod outputs;
@@ -424,12 +426,11 @@ pub struct RunArgs {
     /// uses, instead of the one-instruction-per-call `Machine::step()` loop.
     ///
     /// This is an assertion, not a hint: the flag fails the run rather than
-    /// falling back, on any chip family or option combination that cannot take
-    /// the batched path. ARM and RISC-V use batching by default for ordinary
-    /// runs. On RISC-V the flag refuses the
-    /// per-instruction instrumentation (`--break-at`, the WiFi bridge, the DHCP
-    /// trace) that would silently turn it back into single-stepping; on Xtensa
-    /// this flag is not supported, so it is rejected outright.
+    /// falling back when per-instruction instrumentation (`--break-at`,
+    /// `--watch-mem`, `--stop-on`; on RISC-V also the WiFi bridge and the DHCP
+    /// trace) would pin the CPU quantum to one instruction. ARM and RISC-V use
+    /// batching by default for ordinary runs; Xtensa (ESP32 / ESP32-S3) takes
+    /// its batched path only with this flag.
     ///
     /// Keeps throughput measurements explicit even when instrumentation would
     /// otherwise select single-stepping. It also prints a `[batched] ...`
@@ -442,6 +443,13 @@ pub struct RunArgs {
     /// sleeps when virtual time (`cycles/cpu_hz`) is at least 1 ms ahead of wall.
     #[arg(long = "time-mode", value_name = "MODE", default_value_t = labwired_core::HostTimeMode::MaxSpeed)]
     pub time_mode: labwired_core::HostTimeMode,
+
+    /// Prefix human-readable stderr event/log lines with virtual and/or real
+    /// timestamps: `[t=virt=<sim time>|real=<wall since start>]`. Virtual time
+    /// is deterministic (cycles / cpu_hz); real time is not. Default `none`
+    /// leaves all outputs byte-identical.
+    #[arg(long, value_enum, default_value_t = crate::log_ts::LogTimestamps::None)]
+    pub log_timestamps: crate::log_ts::LogTimestamps,
 }
 
 impl RunArgs {
@@ -744,6 +752,13 @@ struct TestArgs {
     /// advancing from one that is hung. No flag → no writes, no clock reads.
     #[arg(long = "heartbeat-file", value_name = "PATH")]
     heartbeat_file: Option<PathBuf>,
+
+    /// Prefix human-readable stderr event/log lines with virtual and/or real
+    /// timestamps: `[t=virt=<sim time>|real=<wall since start>]`. Virtual time
+    /// is deterministic (cycles / cpu_hz); real time is not. Default `none`
+    /// leaves all outputs byte-identical.
+    #[arg(long, value_enum, default_value_t = crate::log_ts::LogTimestamps::None)]
+    pub log_timestamps: crate::log_ts::LogTimestamps,
 }
 
 /// Unified error response for agent consumption
@@ -1459,6 +1474,11 @@ fn handle_load_error<C: labwired_core::Cpu>(
         // Load/reset failed before the run loop, so no stimulus was attempted.
         Vec::new(),
         // Load failed: no successful machine run for footprint/paint/metrics.
+        None,
+        None,
+        // No machine: no policy report either.
+        None,
+        // No machine: no run-level times either.
         None,
         None,
         None,
@@ -2976,6 +2996,9 @@ mod test_outcome_golden_tests {
             stimuli: Vec::new(),
             footprint: None,
             memory: None,
+            memory_policy: None,
+            virtual_time_ns: None,
+            host_time_ns: None,
             metrics: None,
             rtt: None,
             semihosting: None,
@@ -3026,6 +3049,62 @@ mod test_outcome_golden_tests {
             }
         });
         assert_eq!(json, expected);
+    }
+
+    /// The `memory_policy` block's on-disk shape: lowercase modes, a numeric
+    /// `addr`/`cycle`/`pc`, and no `first` key for a region with no violation.
+    /// The e2e asserts this same shape through a real `labwired test` run.
+    #[test]
+    fn golden_memory_policy_block() {
+        let mut outcome = synthetic_outcome();
+        outcome.memory_policy = Some(labwired_core::bus::MemoryPolicyReport {
+            flash: labwired_core::bus::RegionPolicyStats {
+                mode: labwired_core::bus::CpuWritePolicy::Fault,
+                violations: 2,
+                first: Some(labwired_core::bus::RegionViolation {
+                    addr: 0x0800_1234,
+                    cycle: 77,
+                    pc: Some(0x0800_0001),
+                }),
+            },
+            ram: labwired_core::bus::RegionPolicyStats {
+                mode: labwired_core::bus::CpuWritePolicy::Allow,
+                violations: 0,
+                first: None,
+            },
+        });
+
+        let json = serde_json::to_value(&outcome).expect("outcome should serialize");
+        assert_eq!(
+            json["memory_policy"],
+            serde_json::json!({
+                "flash": {
+                    "mode": "fault",
+                    "violations": 2,
+                    "first": {"addr": 0x0800_1234u64, "cycle": 77, "pc": 0x0800_0001u64}
+                },
+                "ram": {"mode": "allow", "violations": 0}
+            })
+        );
+        assert!(json["memory_policy"]["flash"]["first"]["addr"].is_number());
+    }
+
+    /// The run-level `--log-timestamps` pair on disk: both keys present and
+    /// numeric when set, both absent (not null) when `None`, so a default run
+    /// stays byte-identical to the pre-`--log-timestamps` artifact.
+    #[test]
+    fn golden_log_timestamp_block() {
+        let mut outcome = synthetic_outcome();
+        outcome.virtual_time_ns = Some(1_500_000_000);
+        outcome.host_time_ns = Some(123_456_789);
+        let json = serde_json::to_value(&outcome).unwrap();
+        assert_eq!(json["virtual_time_ns"], 1_500_000_000u64);
+        assert_eq!(json["host_time_ns"], 123_456_789u64);
+        outcome.virtual_time_ns = None;
+        outcome.host_time_ns = None;
+        let json = serde_json::to_value(&outcome).unwrap();
+        assert!(json.get("virtual_time_ns").is_none());
+        assert!(json.get("host_time_ns").is_none());
     }
 
     #[test]

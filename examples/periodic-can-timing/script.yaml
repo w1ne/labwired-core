@@ -1,0 +1,7 @@
+schema_version: "1.0"
+inputs:
+  system: "./system.yaml"
+  firmware: "../f103-can-dashboard/prebuilt/engine.elf"
+limits:
+  max_steps: 44500000
+assertions: []

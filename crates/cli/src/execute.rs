@@ -65,6 +65,10 @@ pub(crate) struct TestExecutionContext<'a, C: labwired_core::Cpu> {
 pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
     ctx: &mut TestExecutionContext<C>,
 ) -> ExitCode {
+    // The test loop runs the machine its caller already built; publish the
+    // declared core clock here so every `test` machine reports a virtual time
+    // (mirrors the per-run-path `set_hz` calls on `run`).
+    crate::log_ts::set_hz(ctx.machine.bus.cpu_hz);
     // ── Resource metrics: footprint + main-stack paint (load/reset-time) ────
     // Paint is not a SimulationObserver: fill unused stack RAM now, scan after
     // the run. Footprint is pure ELF section math and does not touch the bus.
@@ -740,6 +744,7 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
     let mut step = 0;
     let mut heartbeat = Heartbeat::new(ctx.args.heartbeat_file.clone());
     while step < max_steps {
+        crate::log_ts::refresh_cycles(ctx.machine.total_cycles);
         heartbeat.tick(step, ctx.machine.total_cycles);
         // JIT-eligible path: mirror the machine's authoritative counters into
         // `metrics` BEFORE the cycle-sensitive checks below (stimulus
@@ -947,6 +952,7 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
                 .map(labwired_core::cosim::CosimAdvance::from)
                 .map_err(labwired_core::cosim::CosimAdvanceError::Machine),
         };
+        crate::log_ts::refresh_cycles(ctx.machine.total_cycles);
         let (report, boundary) = match advanced {
             Ok(advance) => (
                 advance.report,
@@ -1229,11 +1235,16 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
     // whose JIT engine was created, `None` otherwise (interpreter-only).
     if ctx.jit_eligible && std::env::var("LABWIRED_JIT_STATS").is_ok() {
         match ctx.machine.cpu.jit_engine_stats() {
-            Some(s) => eprintln!(
+            Some(s) => crate::log_ts::eventln!(
                 "[jit-stats] compiled={} block_runs={} block_instrs={} interpreted={}",
-                s.compiled, s.block_runs, s.block_instrs, s.interpreted
+                s.compiled,
+                s.block_runs,
+                s.block_instrs,
+                s.interpreted
             ),
-            None => eprintln!("[jit-stats] JIT engine never created (interpreter-only run)"),
+            None => crate::log_ts::eventln!(
+                "[jit-stats] JIT engine never created (interpreter-only run)"
+            ),
         }
     }
 
@@ -1244,7 +1255,7 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
     // clamped to nothing, which is indistinguishable from working unless the
     // number is visible. `steps_executed + skipped == machine.total_cycles`.
     if ctx.machine.idle_fast_forward_cycles_skipped > 0 {
-        eprintln!(
+        crate::log_ts::eventln!(
             "labwired-cli test: idle_ff skipped {} of {} device cycles ({} interpreted)",
             ctx.machine.idle_fast_forward_cycles_skipped,
             ctx.machine.total_cycles,
@@ -1699,7 +1710,7 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
             .or_else(|| ctx.firmware_path.file_stem())
             .map(|s| s.to_string_lossy().to_string())
             .unwrap_or_else(|| "run".to_string());
-        eprintln!(
+        crate::log_ts::eventln!(
             "{label}  {passed}/{checked} checks · {subject} · {steps_executed} steps · {:.2}s",
             duration.as_secs_f64()
         );
@@ -1707,8 +1718,11 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
 
     // Why and where the firmware faulted, if it did. Same stderr rule as the
     // banner above. `write_outputs` puts the same verdict in `result.json`.
-    if let Some(v) = crate::fault_report::fault_verdict(&ctx.machine.cpu, Some(ctx.firmware_bytes))
-    {
+    if let Some(v) = crate::fault_report::fault_verdict(
+        &ctx.machine.cpu,
+        Some(ctx.firmware_bytes),
+        ctx.machine.bus.memory_policy_report().as_ref(),
+    ) {
         crate::fault_report::eprint(&v);
     }
 
@@ -1723,6 +1737,8 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
             observable: ctx.machine.cpu.supports_semihosting(),
             bytes_drained: ctx.machine.bus.semihost_bytes_appended(),
         });
+    let (virtual_time_ns, host_time_ns) =
+        crate::log_ts::result_times(ctx.machine.total_cycles, ctx.machine.bus.cpu_hz, duration);
     write_outputs(
         ctx.args,
         verdict,
@@ -1765,6 +1781,9 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
         stimulus_outcomes,
         footprint,
         Some(memory),
+        ctx.machine.bus.memory_policy_report(),
+        virtual_time_ns,
+        host_time_ns,
         Some(execution_metrics),
         ctx.machine
             .bus

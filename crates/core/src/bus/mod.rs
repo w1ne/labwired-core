@@ -24,6 +24,7 @@ pub mod bus_trace;
 mod can_bridge_service;
 mod can_devices;
 mod construct;
+mod debug_watch;
 mod declarative_device;
 mod device_hooks;
 pub(crate) mod embedded_descriptors;
@@ -32,6 +33,7 @@ mod faults;
 mod from_config;
 pub mod interrupt_fabric;
 pub mod known_stubs;
+mod memory_policy;
 mod mmio_activity;
 mod mmio_words;
 mod motors;
@@ -56,6 +58,7 @@ pub use interrupt_fabric::{
     Esp32c3Fabric, Esp32c3IntcCache, Esp32s3Fabric, Esp32s3IrqAudit, Esp32s3IrqDivergence,
     InterruptFabric,
 };
+pub use memory_policy::{CpuWritePolicy, MemoryPolicyReport, RegionPolicyStats, RegionViolation};
 pub use motors::MotorSnapshot;
 
 impl SystemBus {
@@ -351,6 +354,29 @@ impl BatchStop {
 pub struct SystemBus {
     pub(crate) supply_domains: crate::peripherals::components::supply_domain::SupplyDomains,
     pub flash: LinearMemory,
+    /// Violation record + counts + mirrored PC/cycle for the policy gate.
+    pub(crate) memory_policy: crate::bus::memory_policy::MemoryPolicyState,
+    /// Scoped bypass for the CPU-write policy gate. Set only by the generic
+    /// DMA request path (`execute_dma_request`), which is hardware, not CPU.
+    /// NOT yet covered: peripheral-internal DMA models that write through
+    /// `&mut dyn Bus` (nrf52/rp2040/imxrt/esp gdma, RTT host writes, …) —
+    /// scoped deferral, revisit if a chip ships a non-default `cpu_writes`
+    /// RAM policy. Loader writes bypass by construction (direct
+    /// `LinearMemory`); debugger/session writes through the bus ARE gated.
+    /// JIT lanes refuse to run while the RAM policy is non-default
+    /// (`jit_gate_allows`), so they cannot bypass the gate.
+    /// See [`SystemBus::with_memory_policy_bypass`].
+    pub(crate) memory_policy_bypass: bool,
+    /// Software debug watch ranges (GDB watchpoints) checked by the memory
+    /// accessors. Empty on every bus with no debugger — one `is_empty` branch.
+    pub(crate) debug_watches: Vec<crate::bus::debug_watch::DebugWatch>,
+    /// Address of the first watched access since the last
+    /// [`SystemBus::take_debug_watch_hit`]. `Cell` because loads run on `&self`.
+    pub(crate) debug_watch_hit: Cell<Option<u64>>,
+    /// While true the accessors skip watch tracking: the watches are DWT-style
+    /// comparators for CPU accesses, so host, debugger and DMA transfers must
+    /// not fire them. `Cell` because debugger memory reads run on `&self`.
+    pub(crate) debug_watch_host_bypass: Cell<bool>,
     pub ram: LinearMemory,
     /// Extra CPU-visible RAM/ROM windows beyond `flash`/`ram` (e.g. ESP32 IRAM
     /// `0x4037C000` and flash-DROM `0x3C000000`), from the chip's

@@ -194,6 +194,7 @@ pub fn build_node_with_options(
         }
         MachineFamily::Xtensa => build_xtensa_node(id, chip, system, firmware, blobs, opts.profile),
         MachineFamily::Avr => build_avr_node(id, chip, system, firmware, opts.plugins),
+        MachineFamily::Pic24 => build_pic24_node(id, chip, system, firmware, opts.plugins),
     }
 }
 
@@ -273,6 +274,37 @@ fn build_avr_node(
             cpu.push_i2c_slave(dev);
         }
     }
+    let machine = Machine::new(cpu, bus);
+    Ok(Box::new(machine))
+}
+
+/// PIC24/dsPIC33 node (M0): ELF in, CPU-internal UART1 out.
+fn build_pic24_node(
+    id: &str,
+    chip: &ChipDescriptor,
+    system: &SystemManifest,
+    firmware: NodeFirmware,
+    plugins: &[&dyn crate::plugin::ChipPlugin],
+) -> anyhow::Result<Box<dyn MachineTrait>> {
+    let NodeFirmware::Elf(bytes) = firmware else {
+        anyhow::bail!(
+            "node '{id}': chip '{}' boots from an ELF, but the firmware is not an ELF file",
+            chip.name
+        );
+    };
+    let image =
+        parse_elf_image(&bytes).with_context(|| format!("node '{id}': parse firmware ELF"))?;
+    if image.arch != crate::Arch::Pic24 {
+        anyhow::bail!(
+            "node '{id}': firmware architecture {:?} is incompatible with PIC24 chip '{}'",
+            image.arch,
+            chip.name
+        );
+    }
+    let bus = crate::bus::SystemBus::from_config_with_plugins(chip, system, plugins)
+        .with_context(|| format!("node '{id}': build bus"))?;
+    let mut cpu = crate::cpu::Pic24::new();
+    cpu.load_program_image(&image);
     let machine = Machine::new(cpu, bus);
     Ok(Box::new(machine))
 }

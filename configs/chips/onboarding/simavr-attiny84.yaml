@@ -1,0 +1,24 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: simavr-attiny84
+arch: avr
+core: avr8
+flash:
+  base: 0
+  size: 8KB
+ram:
+  base: 96
+  size: 512B
+peripherals: []
+provenance:
+  source: simavr
+  repo: https://github.com/buserror/simavr
+  commit: 5b08da60497f7564f50941f74a549fe2851db030
+  path: simavr/cores/sim_tiny84.c
+  kind: core-model
+  license: GPL-3.0
+  retrieved: '2026-10-18'

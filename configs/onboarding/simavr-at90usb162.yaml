@@ -1,0 +1,23 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: simavr-at90usb162
+description: 'at90usb162 (Atmel AVR). Declared from the simavr core-model - metadata-only T3 entry, not
+  runnable. Memory geometry: flash 16KB @ 0x0, ram 512B @ 0x100.'
+family: Atmel AVR
+code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize hardware...\n\
+  \    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
+pass_rate: 0
+verified: false
+system: systems/onboarding/simavr-at90usb162.yaml
+provenance:
+  source: simavr
+  repo: https://github.com/buserror/simavr
+  commit: 5b08da60497f7564f50941f74a549fe2851db030
+  path: simavr/cores/sim_usb162.c
+  kind: core-model
+  license: GPL-3.0
+  retrieved: '2026-10-18'

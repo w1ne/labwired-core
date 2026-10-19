@@ -1075,7 +1075,7 @@ mod tests {
         assert_eq!(cap.regs.bfar, UNMAPPED);
         assert_eq!(cap.lockup, None);
 
-        let v = decode_fault(&cap, None).unwrap();
+        let v = decode_fault(&cap, None, None).unwrap();
         assert_eq!(
             v.summary,
             "HardFault escalated from a precise BusFault: data access at 0x9000_0000 \
@@ -1087,7 +1087,7 @@ mod tests {
         machine.bus.write_u32(CFSR, 0xFFFF_FFFF).unwrap();
         machine.bus.write_u32(HFSR, 0xFFFF_FFFF).unwrap();
         assert_eq!(machine.bus.read_u32(CFSR).unwrap(), 0);
-        let again = decode_fault(&machine.cpu.fault_capture().unwrap(), None).unwrap();
+        let again = decode_fault(&machine.cpu.fault_capture().unwrap(), None, None).unwrap();
         assert_eq!(again.summary, v.summary);
     }
 
@@ -1158,7 +1158,7 @@ mod tests {
             0xAAAA_AAAA,
             "the divide did not retire"
         );
-        let v = crate::fault_verdict::decode_fault(&cap, None).unwrap();
+        let v = crate::fault_verdict::decode_fault(&cap, None, None).unwrap();
         assert_eq!(
             v.summary,
             "HardFault escalated from a UsageFault: divide by zero (CCR.DIV_0_TRP is set), \

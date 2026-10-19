@@ -43,7 +43,9 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build firmware
-        run: # your normal firmware build; produce an ELF or flash image
+        # Replace with your normal firmware build; it must produce the ELF or
+        # flash image your test script boots.
+        run: make
 
       - id: labwired
         name: Run LabWired
@@ -139,11 +141,44 @@ comment, and the unproven gate — copy the `azure/` directory from
 
 ---
 
+## Bounded time: fail fast
+
+Every run is bounded: the script's `limits` set step, cycle, UART-byte, wall
+time and no-progress budgets, and CI gets a machine-readable outcome from the
+exit code — `0` pass, `1` assertion failure, `2` script/config error, `3`
+simulation error ([exit-code table](ci_test_runner.md#exit-codes)). For one job,
+override a budget on the command line: `--max-steps` (the overall budget),
+`--max-cycles`, `--max-uart-bytes`, and `--detect-stuck <N>` (alias
+`--no-progress`) as the hang detector. The audited flags are in the
+[CLI Reference](cli_reference.md#test).
+
+A `wall_time` / `max_uart_bytes` / `no_progress` stop fails the run unless the
+script asserts the matching `expected_stop_reason`, so pin those stop reasons
+where a stall must fail fast instead of eating the job timeout. Long runs
+watched by an outer supervisor can write a liveness file with
+`--heartbeat-file <PATH>` (rewritten at most once a second).
+
+---
+
+## Coverage gate
+
+`labwired test --coverage` collects line, branch and function coverage from the
+unmodified ELF and writes `coverage.info` (LCOV), `coverage.cobertura.xml` and
+`coverage.json` into `--output-dir`; `labwired coverage merge` with
+`--fail-under-lines` / `--fail-under-branches` turns them into a build gate.
+Recipe, branch semantics and CI wiring live in
+[Firmware coverage](howto/firmware-coverage.md) — this page does not repeat
+them. In-repo proof of the CLI surface:
+`crates/cli/tests/fault_inject_and_coverage.rs`.
+
+---
+
 ## Artifacts
 
 Use `--output-dir` everywhere. A run writes `result.json`, `uart.log`, and JUnit
 under that directory. The GitHub action always uploads the directory; other CI
-systems should retain it on failure.
+systems should retain it on failure. The full audited file set and stdout rules
+are in [CI artifacts and stdout rules](ci_test_runner.md#ci-artifacts-and-stdout-rules).
 
 ---
 

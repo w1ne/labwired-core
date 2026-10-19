@@ -779,6 +779,11 @@ fn chip_windows() -> Vec<(String, Vec<Window>)> {
     yaml_files_under(&dir, &mut files);
     let mut out = Vec::new();
     for path in files {
+        let stem = path.file_stem().unwrap().to_string_lossy().into_owned();
+        // `ci-fixture-*` are internal harness fixtures, not silicon we offer.
+        if stem.starts_with("ci-fixture-") {
+            continue;
+        }
         let Ok(text) = std::fs::read_to_string(&path) else {
             continue;
         };

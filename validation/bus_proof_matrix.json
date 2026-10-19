@@ -3,6 +3,26 @@
   "chip_set_derived_from": "configs/chips/*.yaml minus ci-fixture-* (same rule as crates/core/src/tests/builtin_chip_self_contained.rs). This is a SUPERSET of the `chip:` values in the superproject's packages/board-config/src/boards.ts BOARDS array, which is why a new BOARDS chip cannot dodge this gate: it cannot ship without its chip yaml. `in_boards` records BOARDS membership as of 2026-08-03 and is informational only.",
   "surveyed": "2026-08-03",
   "chips": {
+    "dspic33fj32mc204": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/pic24_m0_smoke.rs",
+        "test": "pic24_fixture_boots_and_writes_h_to_uart",
+        "signal": "the committed fixture ELF writes 'H' through U1TXREG (0x0224) and the test asserts the console sink receives it; `labwired run --chip configs/chips/dspic33fj32mc204.yaml --firmware ...` prints `UART: H`",
+        "lane": "pr-workspace-tests shards - cargo test -p labwired-core --test pic24_m0_smoke; io-smoke via strict_onboarding"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "PIC24 M0 does not model SPI; it lands in M3 per docs/pic24-m0-reference.md.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "PIC24 M0 does not model I2C; it lands in M3 per docs/pic24-m0-reference.md.",
+        "lane": "none"
+      }
+    },
     "atmega328p": {
       "in_boards": true,
       "uart": {

@@ -92,6 +92,8 @@ pub enum StopReason {
     Halted,
     /// Execution reached a breakpoint at this PC.
     Breakpoint(u32),
+    /// A debug watch range matched a CPU load/store at this address.
+    Watchpoint(u64),
     Error,
 }
 
@@ -354,6 +356,12 @@ impl Session {
             match advanced {
                 Ok(report) => match report.stop {
                     AdvanceStop::Breakpoint(pc) => return Ok(StopReason::Breakpoint(pc)),
+                    // A watch stop ends the session run exactly like a
+                    // breakpoint does: return NOW, with the access already
+                    // committed and no further batch run. Falling through to
+                    // `_ => {}` would swallow the consumed latch and keep
+                    // running past the watched access.
+                    AdvanceStop::Watchpoint(addr) => return Ok(StopReason::Watchpoint(addr)),
                     AdvanceStop::NoProgress | AdvanceStop::FirmwareExit { .. } => {
                         return Ok(StopReason::Halted)
                     }
@@ -401,6 +409,18 @@ impl Session {
                         return Ok(m);
                     }
                     return Err(crate::SimulationError::BreakpointHit(pc).into());
+                }
+                StopReason::Watchpoint(addr) => {
+                    // Same shape as the breakpoint arm: output already arrived
+                    // still satisfies the expect, otherwise the debug stop
+                    // surfaces as an error rather than a misleading timeout.
+                    if let Some(m) = self.take_match(&re) {
+                        return Ok(m);
+                    }
+                    return Err(crate::SimulationError::Other(format!(
+                        "watchpoint hit at {addr:#x} while expecting /{pattern}/"
+                    ))
+                    .into());
                 }
                 StopReason::Halted | StopReason::Error => {
                     if let Some(m) = self.take_match(&re) {

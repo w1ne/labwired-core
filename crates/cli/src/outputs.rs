@@ -45,6 +45,9 @@ pub(crate) fn write_outputs<C: labwired_core::Cpu>(
     stimuli: Vec<StimulusOutcome>,
     footprint: Option<artifacts::FootprintReport>,
     memory: Option<labwired_core::stack_paint::MainStackReport>,
+    memory_policy: Option<labwired_core::bus::MemoryPolicyReport>,
+    virtual_time_ns: Option<u64>,
+    host_time_ns: Option<u64>,
     metrics_block: Option<artifacts::ExecutionMetrics>,
     can_bridges: Vec<(
         labwired_core::network::can_bridge::CanBridgeReport,
@@ -67,7 +70,8 @@ pub(crate) fn write_outputs<C: labwired_core::Cpu>(
 
     // The Cortex-M fault verdict, symbolized against the firmware ELF. `None`
     // on a clean run (and on non-ARM cores), so the block stays absent.
-    let fault_verdict = crate::fault_report::fault_verdict(cpu, Some(firmware_bytes));
+    let fault_verdict =
+        crate::fault_report::fault_verdict(cpu, Some(firmware_bytes), memory_policy.as_ref());
 
     // Silent-path census (measurement only). Compiled to an empty function
     // unless `--features silent-census`, and even then writes nothing unless
@@ -124,6 +128,9 @@ pub(crate) fn write_outputs<C: labwired_core::Cpu>(
         stimuli,
         footprint,
         memory,
+        memory_policy,
+        virtual_time_ns,
+        host_time_ns,
         metrics: metrics_block,
         rtt: rtt_status,
         semihosting: semihost_status.clone(),
@@ -506,6 +513,11 @@ pub(crate) fn write_config_error_outputs(
         // Config error: no firmware footprint or stack paint collected.
         footprint: None,
         memory: None,
+        // Config error: no machine ran, so no CPU-write policy was exercised.
+        memory_policy: None,
+        // Config error: no machine ran, so there are no run-level times either.
+        virtual_time_ns: None,
+        host_time_ns: None,
         metrics: None,
         // Config error: no machine, so no RTT model and no diagnostics.
         rtt: None,

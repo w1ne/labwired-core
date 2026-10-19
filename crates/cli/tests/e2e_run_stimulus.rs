@@ -335,3 +335,96 @@ fn system_run_resolves_descriptor_paths_against_the_chip_file() {
     );
     assert_eq!(out.status.code(), Some(0), "{}", stderr_of(&out));
 }
+
+/// A manifest that names a BUILT-IN chip id — the shape `prepareRunTarget`
+/// emits for the hosted builder (`chip: stm32f103`, no path) — must resolve
+/// through the built-in registry, exactly as `labwired test` resolves it.
+///
+/// This driver used to join the chip spec as a file path, so every generated
+/// manifest died with "cannot parse chip descriptor <dir>/stm32f103" — which
+/// also hid the fail-fast channel inventory from `--stimulus` callers, the way
+/// the inventory is meant to be read before a run.
+#[test]
+fn system_run_resolves_a_builtin_chip_id() {
+    let dir =
+        std::env::temp_dir().join(format!("labwired-run-builtin-chip-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join("system.yaml"),
+        "name: \"builtin-chip\"\nchip: \"stm32f411ceu6\"\nexternal_devices: []\n",
+    )
+    .unwrap();
+    let firmware = repo_root().join("tests/fixtures/uart-ok-thumbv7m.elf");
+    // Run from a directory that is neither the repo nor the manifest's, so a
+    // resolution that leans on the CWD cannot pass by accident.
+    let out = Command::new(env!("CARGO_BIN_EXE_labwired"))
+        .current_dir(&dir)
+        .args([
+            "run",
+            "--system",
+            dir.join("system.yaml").to_str().unwrap(),
+            "--firmware",
+            firmware.to_str().unwrap(),
+            "--max-steps",
+            "1000",
+        ])
+        .output()
+        .expect("execute labwired");
+    let _ = std::fs::remove_dir_all(&dir);
+    assert!(
+        !stderr_of(&out).contains("cannot load chip descriptor"),
+        "{}",
+        stderr_of(&out)
+    );
+    assert_eq!(out.status.code(), Some(0), "{}", stderr_of(&out));
+}
+
+/// The fail-fast inventory — the answer to "what can `--stimulus` drive?" —
+/// must be reachable for a manifest that names a built-in chip, which is the
+/// shape the node generator emits.
+#[test]
+fn builtin_chip_manifest_fails_fast_with_the_available_inventory() {
+    let dir = std::env::temp_dir().join(format!(
+        "labwired-run-builtin-inventory-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join("system.yaml"),
+        "name: \"builtin-inventory\"\nchip: \"stm32f103\"\nexternal_devices:\n  - id: \"ntc\"\n    type: \"ntc-thermistor\"\n    connection: \"adc1\"\n    config:\n      channel: 0\n",
+    )
+    .unwrap();
+    let firmware = repo_root().join("tests/fixtures/uart-ok-thumbv7m.elf");
+    let out = Command::new(env!("CARGO_BIN_EXE_labwired"))
+        .current_dir(repo_root())
+        .args([
+            "run",
+            "--system",
+            dir.join("system.yaml").to_str().unwrap(),
+            "--firmware",
+            firmware.to_str().unwrap(),
+            "--max-steps",
+            "10",
+            "--json",
+            "--stimulus",
+            r#"{"channel":"nope","value":1.0}"#,
+        ])
+        .output()
+        .expect("execute labwired");
+    let _ = std::fs::remove_dir_all(&dir);
+    assert_eq!(out.status.code(), Some(2), "{}", stderr_of(&out));
+    let parsed: serde_json::Value =
+        serde_json::from_str(&stdout_of(&out)).expect("--json error payload on stdout");
+    let available = parsed["details"]["available"]
+        .as_array()
+        .expect("available inventory");
+    assert!(
+        available
+            .iter()
+            .any(|e| e["component"] == "ntc" && e["channel"] == "temperature"),
+        "{}",
+        stdout_of(&out)
+    );
+}

@@ -1442,6 +1442,7 @@ impl CosimSession {
                     cycles_left.is_some_and(|left| chunk_report.elapsed_cycles >= left)
                 }
                 AdvanceStop::Breakpoint(_)
+                | AdvanceStop::Watchpoint(_)
                 | AdvanceStop::NoProgress
                 | AdvanceStop::NetDriveChange
                 | AdvanceStop::FirmwareExit { .. } => true,

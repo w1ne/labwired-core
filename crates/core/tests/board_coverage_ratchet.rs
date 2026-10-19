@@ -493,6 +493,11 @@ fn every_shipped_descriptor_is_ratcheted() {
         "esp32",         // classic Xtensa, separate e2e lane, not a catalog board
         "esp32s3-zero",  // board variant of esp32s3 (covered by esp32s3)
         "stm32f401cdu6", // BlackPill variant of stm32f401 (covered by stm32f401)
+        // First 16-bit PIC/dsPIC target, M0 bring-up (boot + UART1 TX). Has a
+        // chip descriptor, an example with an io-smoke, unit + integration
+        // tests — but not a bundled-configs.ts catalog board and no silicon
+        // oracle. Promote when peripheral milestones land.
+        "dspic33fj32mc204",
         // Descriptor-level derivative of the F401 lane (shared F4 profiles,
         // DEV_ID 0x413), smoke-validated via the feather-f405 example only:
         // no catalog board, no silicon oracle, no executing-fidelity

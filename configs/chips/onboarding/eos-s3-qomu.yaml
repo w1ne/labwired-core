@@ -38,19 +38,23 @@ peripherals:
   bus: sysbus
   base_address: 1073765376
 - id: adc
-  type: eoss3_adc
+  type: stub
+  renode_type: eoss3_adc
   bus: sysbus
   base_address: 1073764864
 - id: spi
-  type: designware_spi
+  type: stub
+  renode_type: designware_spi
   bus: sysbus
   base_address: 1073770496
 - id: dmaSpi
-  type: eoss3_spi_dma
+  type: stub
+  renode_type: eoss3_spi_dma
   bus: sysbus
   base_address: 1073771520
 - id: packetFifo
-  type: eoss3_packetfifo
+  type: stub
+  renode_type: eoss3_packetfifo
   bus: sysbus
   base_address: 1073750016
 - id: systemDma
@@ -62,7 +66,8 @@ peripherals:
   bus: sysbus
   base_address: 1073795072
 - id: ffe
-  type: eoss3_flexiblefusionengine
+  type: stub
+  renode_type: eoss3_flexiblefusionengine
   bus: sysbus
   base_address: 1074044928
 - id: i2cMaster0
@@ -74,7 +79,8 @@ peripherals:
   bus: ffe
   base_address: 1
 - id: voice
-  type: eoss3_voice
+  type: stub
+  renode_type: eoss3_voice
   bus: sysbus
   base_address: 1073827840
 - id: powerMgmt

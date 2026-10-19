@@ -143,6 +143,10 @@ impl<C: Cpu> Machine<C> {
                         // Same pre-charge publication as the quantum-1 arm.
                         self.bus.set_current_cycle(self.total_cycles);
                         self.bus.bus_trace.set_cycle(self.total_cycles);
+                        // Batch entry: the recorded PC is the batch-start PC (accepted granularity).
+                        if self.bus.memory_policy.active() {
+                            self.bus.memory_policy.note_pc(self.cpu.get_pc());
+                        }
                         let retired =
                             self.cpu
                                 .step_batch(&mut self.bus, &self.observers, &self.config, 1)?;
@@ -198,6 +202,9 @@ impl<C: Cpu> Machine<C> {
                                 for obs in &self.observers {
                                     obs.on_core_switch(1);
                                 }
+                                if self.bus.memory_policy.active() {
+                                    self.bus.memory_policy.note_pc(sec.get_pc());
+                                }
                                 let stepped =
                                     sec.step(&mut self.bus, &self.observers, &self.config);
                                 for obs in &self.observers {
@@ -241,6 +248,9 @@ impl<C: Cpu> Machine<C> {
                 let executed = if parked_secondary && self.rtc_cntl_index.is_some() {
                     let mut n = 0u32;
                     for _ in 0..count {
+                        if self.bus.memory_policy.active() {
+                            self.bus.memory_policy.note_pc(self.cpu.get_pc());
+                        }
                         self.cpu
                             .step(&mut self.bus, &self.observers, &self.config)?;
                         n += 1;
@@ -255,6 +265,10 @@ impl<C: Cpu> Machine<C> {
                     }
                     n
                 } else {
+                    // Batch entry: the recorded PC is the batch-start PC (accepted granularity).
+                    if self.bus.memory_policy.active() {
+                        self.bus.memory_policy.note_pc(self.cpu.get_pc());
+                    }
                     // See `Machine::exact_batch_boundaries`. Armed only for a
                     // batch that can span more than one cycle of tick work.
                     let exact = self.exact_batch_boundaries
@@ -305,6 +319,10 @@ impl<C: Cpu> Machine<C> {
                             if more == 0 {
                                 break;
                             }
+                            // Batch entry: the recorded PC is the batch-start PC (accepted granularity).
+                            if self.bus.memory_policy.active() {
+                                self.bus.memory_policy.note_pc(self.cpu.get_pc());
+                            }
                             let n = self.cpu.step_batch(
                                 &mut self.bus,
                                 &self.observers,
@@ -342,6 +360,9 @@ impl<C: Cpu> Machine<C> {
                             if ff > 0 {
                                 sec.fast_forward_idle_cycles(ff);
                             }
+                            if self.bus.memory_policy.active() {
+                                self.bus.memory_policy.note_pc(sec.get_pc());
+                            }
                             for obs in &self.observers {
                                 obs.on_core_switch(1);
                             }
@@ -370,6 +391,10 @@ impl<C: Cpu> Machine<C> {
                 .instruction_cycles_are_time()
                 .then(|| self.cpu.clock_cycles());
             let provisional = self.total_cycles;
+            // Boundary-fresh PC: the entry PC of this single step.
+            if self.bus.memory_policy.active() {
+                self.bus.memory_policy.note_pc(self.cpu.get_pc());
+            }
             let retired = self
                 .cpu
                 .step_retired(&mut self.bus, &self.observers, &self.config)?;
@@ -412,9 +437,18 @@ impl<C: Cpu> Machine<C> {
             });
         }
 
+        if self.bus.memory_policy.active() {
+            self.bus.memory_policy.note_pc(self.cpu.get_pc());
+        }
         self.cpu
             .step(&mut self.bus, &self.observers, &self.config)?;
         self.release_secondary_cpu_if_requested();
+        // On purpose after release: stamp boot PC, not reset PC.
+        if let Some(sec) = self.cpu_secondary.as_mut() {
+            if self.bus.memory_policy.active() {
+                self.bus.memory_policy.note_pc(sec.get_pc());
+            }
+        }
         if let Err(error) =
             self.cpu_secondary
                 .as_mut()

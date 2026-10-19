@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import os
 import json
+import re
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -102,6 +103,18 @@ def architecture_from_description(desc: str) -> str:
     return desc.split(marker, 1)[1].strip()
 
 
+def size_bytes(value) -> int:
+    """Parse a chip YAML memory size ('131072B', '64KB', or a plain int)."""
+    if isinstance(value, (int, float)):
+        return int(value)
+    if isinstance(value, str):
+        m = re.match(r"^(\d+)\s*([KkMm]?)[Bb]?$", value.strip())
+        if m:
+            mult = {"": 1, "k": 1024, "m": 1024 * 1024}[m.group(2).lower()]
+            return int(m.group(1)) * mult
+    return 0
+
+
 def structural_checks(chip_path: Path, system_exists: bool) -> tuple[dict[str, bool], bool]:
     chip_exists = chip_path.exists()
     chip = {}
@@ -109,8 +122,13 @@ def structural_checks(chip_path: Path, system_exists: bool) -> tuple[dict[str, b
         chip = yaml.safe_load(chip_path.read_text(encoding="utf-8")) or {}
     flash = chip.get("flash", {}) if isinstance(chip, dict) else {}
     ram = chip.get("ram", {}) if isinstance(chip, dict) else {}
-    has_flash = bool((flash.get("base", 0) or 0) > 0)
-    has_ram = bool((ram.get("base", 0) or 0) > 0)
+    # A base of 0 is legitimate silicon geometry (Silabs EFM32 maps flash at
+    # 0x00000000; x86 targets boot from 0). The old gate required base > 0 and
+    # the importer compensated by fabricating 0x08000000 — honest data must not
+    # be failed for the address it actually uses. Presence now means: a declared
+    # base and a non-zero size.
+    has_flash = flash.get("base") is not None and size_bytes(flash.get("size", 0)) > 0
+    has_ram = ram.get("base") is not None and size_bytes(ram.get("size", 0)) > 0
     checks = {
         "system_manifest": system_exists,
         "chip_descriptor": chip_exists,

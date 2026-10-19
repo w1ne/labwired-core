@@ -1,0 +1,7 @@
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/fault-verdict/fault-readonly-flash.elf"
+limits:
+  max_steps: 5000
+assertions:
+  - expected_stop_reason: max_steps

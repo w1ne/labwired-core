@@ -1,0 +1,23 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: mspsim-msp430f5437
+description: 'msp430f5437 (Texas Instruments MSP430). Declared from the mspsim chip-config - metadata-only
+  T3 entry, not runnable. Memory geometry: flash 256KB @ 0x5c00, ram 16KB @ 0x1c00.'
+family: Texas Instruments MSP430
+code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize hardware...\n\
+  \    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
+pass_rate: 0
+verified: false
+system: systems/onboarding/mspsim-msp430f5437.yaml
+provenance:
+  source: mspsim
+  repo: https://github.com/contiki-ng/mspsim
+  commit: c8169c98ad6696b0e2ad2e0f926a371499dacd8f
+  path: se/sics/mspsim/config/MSP430f5437Config.java
+  kind: chip-config
+  license: BSD-3-Clause
+  retrieved: '2026-10-18'

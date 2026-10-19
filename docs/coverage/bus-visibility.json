@@ -20,6 +20,10 @@
     "name": "atsamd51-pybadge"
   },
   {
+    "buses": [],
+    "name": "dspic33fj32mc204"
+  },
+  {
     "buses": [
       "I2C",
       "SPI"

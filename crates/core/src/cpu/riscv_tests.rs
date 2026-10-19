@@ -1759,3 +1759,48 @@ mod trigger_module {
         assert_eq!(m.cpu.read_reg(10), 0);
     }
 }
+
+#[test]
+fn store_spin_window_refuses_an_armed_debug_watch() {
+    let config = crate::SimulationConfig::default();
+    let (mut cpu, mut bus) = store_spin_fixture();
+    for _ in 0..3 {
+        cpu.step(&mut bus, &[], &config).unwrap();
+    }
+    let watched = u64::from(STORE_SPIN_RAM + 0x88);
+    assert!(bus.add_debug_watch(watched, 4, false, true));
+    assert_eq!(
+        cpu.try_store_spin_window(&mut bus, 64),
+        0,
+        "an armed debug watch must refuse the collapsed store"
+    );
+    // The refused loop falls back to the interpreter, where the store reaches
+    // the accessors and latches like any other watched store.
+    cpu.step(&mut bus, &[], &config).unwrap();
+    assert_eq!(bus.take_debug_watch_hit(), Some(watched));
+}
+
+#[cfg(feature = "jit")]
+#[test]
+fn jit_gate_refuses_non_default_ram_policy() {
+    let cpu = RiscV::new();
+    let mut bus = SystemBus::new();
+    assert!(cpu.jit_gate_allows(&bus, &[]));
+    bus.memory_policy.ram = crate::bus::CpuWritePolicy::Warn;
+    assert!(!cpu.jit_gate_allows(&bus, &[]));
+    bus.memory_policy.ram = crate::bus::CpuWritePolicy::Fault;
+    assert!(!cpu.jit_gate_allows(&bus, &[]));
+}
+
+#[cfg(feature = "jit")]
+#[test]
+fn jit_gate_refuses_an_armed_debug_watch() {
+    let cpu = RiscV::new();
+    let mut bus = SystemBus::new();
+    assert!(cpu.jit_gate_allows(&bus, &[]));
+    assert!(bus.add_debug_watch(0x2000_0100, 4, false, true));
+    assert!(
+        !cpu.jit_gate_allows(&bus, &[]),
+        "a compiled block writes raw RAM and must not bypass a watch"
+    );
+}

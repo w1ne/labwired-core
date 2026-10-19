@@ -1,0 +1,23 @@
+name: riscv_verilated_uartlite
+description: 'riscv_verilated_uartlite (root platform, Generic). Architecture: RISC-V.'
+family: Generic
+code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
+  \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
+pass_rate: 100
+verified: false
+system: systems/onboarding/riscv_verilated_uartlite.yaml
+provenance:
+  generated_by: scripts/onboard_hw_targets.py
+  parse_fallbacks:
+  - flash=ram
+validation:
+  method: ci-structural
+  reason: structural-ok
+  checks:
+    system_manifest: true
+    chip_descriptor: true
+    flash_base_present: true
+    ram_base_present: true
+  timestamp_utc: '2026-10-18T14:40:21.743781+00:00'
+  run_url: ''
+  artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/riscv_verilated_uartlite.md

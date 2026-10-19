@@ -1,0 +1,15 @@
+{
+  "serial": [
+    { "contains": "NODE boot" },
+    { "contains": "BME280 ok" },
+    { "contains": "OLED painted" },
+    { "matches": "NTC iter=0 adc=2047 mV=1649\\.6 temp_c=24\\.99" },
+    { "matches": "LDR adc=3413 lux=99\\.8" },
+    { "matches": "NTC iter=[1-9][0-9]* adc=3633 mV=2927\\.7 temp_c=79\\.97" },
+    { "matches": "LDR adc=3912 lux=794\\.2" },
+    { "matches": "BME t=31\\.00 p=1002\\.0 h=60\\.0" },
+    { "contains": "ALARM 1" }
+  ],
+  "display": { "panel": "oled-ssd1306", "painted": true, "min_ink_bytes": 1 },
+  "gpio": [{ "pin": "PA5", "state": "toggled" }]
+}

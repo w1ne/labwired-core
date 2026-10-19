@@ -15,6 +15,11 @@
   ],
   "firmware_release": "firmware-demos-v3",
   "chips": {
+    "dspic33fj32mc204": {
+      "how": "committed",
+      "firmware": "examples/dspic33fj32mc204/firmware/dspic33fj32mc204-uart-smoke.elf",
+      "expect": "UART: H"
+    },
     "rv1103": {
       "how": "needs-build",
       "why": "Optional source-built qemu-arm-system reduced Linux direct boot and joint I2C3/UART4 basket acceptance exist at functional 24MHz; default/released CLI cannot run this board. Vendor BSP/SD/ROM boot, complete RV1103 and physical qualification remain unavailable; this is not an installed CLI command"

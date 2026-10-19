@@ -73,6 +73,8 @@ pub enum Arch {
     XtensaLx7,
     /// AVR8 (ATmega328P-class).
     Avr,
+    /// PIC24 / dsPIC33 (dsPIC33FJ32MC204-class, M0 subset).
+    Pic24,
     Unknown,
 }
 
@@ -2965,7 +2967,31 @@ pub trait DebugControl {
     fn remove_breakpoint(&mut self, addr: u32);
     fn clear_breakpoints(&mut self);
 
-    /// Run until breakpoint or steps limit
+    /// Arm a debug watch range `[base, base + len)` reporting on the access
+    /// kinds selected; false when the range is empty, wider than 4 KiB, or the
+    /// watch cap is reached. The bus-side contract — what latches, when, and
+    /// which access widths are watched — is the module `crates/core/src/bus/debug_watch.rs`.
+    fn add_watchpoint(&mut self, _base: u64, _len: u64, _on_read: bool, _on_store: bool) -> bool {
+        false
+    }
+
+    /// Disarm the exact watch [`Self::add_watchpoint`] armed; false when
+    /// absent. See `crates/core/src/bus/debug_watch.rs` for the contract.
+    fn remove_watchpoint(
+        &mut self,
+        _base: u64,
+        _len: u64,
+        _on_read: bool,
+        _on_store: bool,
+    ) -> bool {
+        false
+    }
+
+    /// Drop every watch range and any hit that has not been reported yet.
+    /// See `crates/core/src/bus/debug_watch.rs` for the contract.
+    fn clear_watchpoints(&mut self) {}
+
+    /// Run until breakpoint, watchpoint, or steps limit
     fn run(&mut self, max_steps: Option<u32>) -> SimResult<StopReason>;
 
     /// Step a single instruction
@@ -3025,6 +3051,8 @@ pub enum PeripheralResetCause {
 #[derive(Debug, Clone, PartialEq)]
 pub enum StopReason {
     Breakpoint(u32),
+    /// A debug watch range matched a CPU load/store at this address.
+    Watchpoint(u64),
     StepDone,
     MaxStepsReached,
     ManualStop,
@@ -5412,9 +5440,36 @@ impl<C: Cpu> DebugControl for Machine<C> {
         self.breakpoints.clear();
     }
 
+    fn add_watchpoint(&mut self, base: u64, len: u64, on_read: bool, on_store: bool) -> bool {
+        self.bus.add_debug_watch(base, len, on_read, on_store)
+    }
+
+    fn remove_watchpoint(&mut self, base: u64, len: u64, on_read: bool, on_store: bool) -> bool {
+        self.bus.remove_debug_watch(base, len, on_read, on_store)
+    }
+
+    fn clear_watchpoints(&mut self) {
+        self.bus.clear_debug_watches();
+    }
+
     fn run(&mut self, max_steps: Option<u32>) -> SimResult<StopReason> {
+        // Defensive: a watch the host removed can leave its last latch behind
+        // (only `clear_watchpoints` drops a pending hit); with no watch armed
+        // it must not stop this run.
+        if self.bus.debug_watches.is_empty() {
+            let _ = self.bus.take_debug_watch_hit();
+        }
         let report = self.advance(AdvanceRequest::run(max_steps.map(u64::from)))?;
+        // `advance_inner` consumes the latch into `AdvanceStop::Watchpoint` at
+        // the window boundary. This catches a hit latched by a window that
+        // ended the run for another reason (firmware exit, net drive change)
+        // before the next boundary could see it — the access happened, so the
+        // watch is the stop.
+        if let Some(addr) = self.bus.take_debug_watch_hit() {
+            return Ok(StopReason::Watchpoint(addr));
+        }
         Ok(match report.stop {
+            AdvanceStop::Watchpoint(addr) => StopReason::Watchpoint(addr),
             AdvanceStop::Breakpoint(pc) => StopReason::Breakpoint(pc),
             AdvanceStop::FuelLimit => StopReason::MaxStepsReached,
             AdvanceStop::CycleLimit | AdvanceStop::NoProgress | AdvanceStop::NetDriveChange => {
@@ -5424,8 +5479,17 @@ impl<C: Cpu> DebugControl for Machine<C> {
         })
     }
     fn step_single(&mut self) -> SimResult<StopReason> {
-        self.step()?;
-        Ok(StopReason::StepDone)
+        if self.bus.debug_watches.is_empty() {
+            let _ = self.bus.take_debug_watch_hit();
+        }
+        let report = self.advance(AdvanceRequest::single())?;
+        if let Some(addr) = self.bus.take_debug_watch_hit() {
+            return Ok(StopReason::Watchpoint(addr));
+        }
+        Ok(match report.stop {
+            AdvanceStop::Watchpoint(addr) => StopReason::Watchpoint(addr),
+            _ => StopReason::StepDone,
+        })
     }
 
     fn read_core_reg(&self, id: u8) -> u32 {
@@ -5437,19 +5501,35 @@ impl<C: Cpu> DebugControl for Machine<C> {
     }
 
     fn read_memory(&self, addr: u32, len: usize) -> SimResult<Vec<u8>> {
+        // Debugger-context read: it must not latch a read watch — a GDB `x`
+        // must not fire a watchpoint. The flag is restored on every path
+        // (the `try_for_each` collects the first error and the restore runs
+        // after it), and the `Cell` is what makes this possible on `&self`.
+        // The loader reads flash directly, never through this function.
+        let prev = self.bus.debug_watch_host_bypass.replace(true);
         let mut data = Vec::with_capacity(len);
-        for i in 0..len {
+        let result = (0..len).try_for_each(|i| {
             let byte = self.bus.read_u8((addr as u64) + (i as u64))?;
             data.push(byte);
-        }
-        Ok(data)
+            Ok(())
+        });
+        self.bus.debug_watch_host_bypass.set(prev);
+        result.map(|()| data)
     }
 
     fn write_memory(&mut self, addr: u32, data: &[u8]) -> SimResult<()> {
-        for (i, byte) in data.iter().enumerate() {
-            self.bus.write_u8((addr as u64) + (i as u64), *byte)?;
-        }
-        Ok(())
+        // Debugger-context write: it must not latch a store watch. The flag
+        // is restored on every path (the `try_for_each` collects the first
+        // error and the restore runs after it), and the loader
+        // (`load_firmware`) never goes through this function — it writes
+        // LinearMemory directly.
+        let prev = self.bus.debug_watch_host_bypass.replace(true);
+        let result = data
+            .iter()
+            .enumerate()
+            .try_for_each(|(i, byte)| self.bus.write_u8((addr as u64) + (i as u64), *byte));
+        self.bus.debug_watch_host_bypass.set(prev);
+        result
     }
 
     // Both forward to the inherent methods of the same name. Exposing them on

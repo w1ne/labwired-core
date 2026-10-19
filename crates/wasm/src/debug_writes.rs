@@ -89,6 +89,8 @@ pub(crate) fn decode_at(sim: &WasmSimulator, pc: u32) -> String {
             Ok(word) => format!("AVR {word:#06x}"),
             Err(_) => "?? (Error reading AVR instruction)".to_string(),
         },
+        // PIC24 (M0): instruction words live in the CPU's flash, not the bus.
+        MachineFamily::Pic24 => "PIC24 (no wasm disassembly yet)".to_string(),
     }
 }
 

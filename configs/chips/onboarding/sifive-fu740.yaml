@@ -30,15 +30,18 @@ peripherals:
   bus: sysbus
   base_address: 268636160
 - id: qspi0
-  type: hifive_spi
+  type: stub
+  renode_type: hifive_spi
   bus: sysbus
   base_address: 268697600
 - id: qspi1
-  type: hifive_spi
+  type: stub
+  renode_type: hifive_spi
   bus: sysbus
   base_address: 268701696
 - id: qspi2
-  type: hifive_spi
+  type: stub
+  renode_type: hifive_spi
   bus: sysbus
   base_address: 268763136
 - id: gpio
