@@ -1,8 +1,9 @@
-# dsPIC33FJ32MC204 — LabWired Example (M0 + M1a)
+# dsPIC33FJ32MC204 — LabWired Example (M0 + M1a + M1b)
 
-The first 16-bit PIC/dsPIC target in LabWired, brought up to **M0 + M1a**: boot
-from a committed ELF, transmit over UART1, and run Timers T1/T2/T3 with the
-interrupt path (IFS0/IEC0/IPC, vector frame, RETFIE) — deterministically.
+The first 16-bit PIC/dsPIC target in LabWired, brought up to **M0 + M1a +
+M1b**: boot from a committed ELF, transmit over UART1, run Timers T1/T2/T3
+with the interrupt path, and drive/sense the real GPIO pads with input
+capture and output compare — deterministically.
 
 | Item | Value |
 | :--- | :--- |
@@ -42,10 +43,14 @@ real XC16 toolchain is available — see `docs/pic24-m0-reference.md`.
 Modelled: reset/boot, `NOP`, `MOV #lit16`, `MOV Wns, f`, `MOV f, Wnd`,
 `BRA Expr`, `RETFIE`, UART1 TX (`U1MODE`/`U1STA`/`U1TXREG`), Timers T1/T2/T3
 (`TMR`/`PR`/`TCON`, TCKPS prescaler, 32-bit T2/T3 pair), interrupts
-(`IFS0`/`IEC0`/`IPC0-2`, DISI/NSTDIS, two-word exception frame), `ACCA*`/`ACCB*`
-SFR storage, 2 KB data SRAM, SFR shadow latch. Not modelled (each has its own
-milestone): IC/OC (needs a pin model, M1b), DSP MAC (M1c), PWM, QEI, ADC, SPI,
-I2C, PSV/EDS windows. Unsupported opcodes return a decode error — they are
-never skipped silently.
+(`IFS0`/`IEC0`/`IPC0-2`, DISI/NSTDIS, two-word exception frame), GPIO ports
+A/B/C (`TRIS`/`PORT`/`LAT`/`ODC`), the PPS slice for IC1/IC2 + OC1/OC2
+(`RPINR7`, `RPOR0-12`), input capture (edge/prescaler modes, 4-deep FIFO,
+ICI, ICOV/ICBNE), output compare (one-shot/toggle/delayed/continuous
+pulse/PWM driving the routed pin), `ACCA*`/`ACCB*` SFR storage, 2 KB data
+SRAM, SFR shadow latch. Not modelled (each has its own milestone): CNPU
+pull-ups, DSP MAC (M1c), Motor Control PWM/QEI (M2), ADC/SPI/I2C (M3),
+PSV/EDS windows. Unsupported opcodes return a decode error — they are never
+skipped silently.
 
 See `VALIDATION.md` for the evidence and `REQUIRED_DOCS.md` for sources.
