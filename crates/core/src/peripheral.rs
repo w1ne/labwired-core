@@ -139,10 +139,6 @@ impl PeripheralTickResult {
     }
 }
 
-/// Trait for observing simulation events in a modular way.
-///
-/// # The per-instruction trace contract
-
 // ── MMIO access classification ───────────────────────────────────────────
 
 /// Host-side classification of one MMIO access for idle/coalesce policy.
