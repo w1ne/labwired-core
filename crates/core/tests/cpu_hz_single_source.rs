@@ -98,7 +98,7 @@ fn system_manifests_declare_no_key_the_engine_ignores() {
     // and it is the only shape allowed here — a scalar typo like the
     // `clock: {cpu_hz: …}` this test was written for still fails.
     //
-    // `connectors` — the nine maker-five system manifests (nano-33-iot,
+    // `connectors` — the nine maker-board manifests (including nano-33-iot,
     // metro-m4, arduino-uno-r4-minima, teensy-41, stm32f7-discovery) carry a
     // `connectors: [{type: uart, peripheral: …, endpoint: host_console}]`
     // block. It is specified in `docs/configuration_reference.md`

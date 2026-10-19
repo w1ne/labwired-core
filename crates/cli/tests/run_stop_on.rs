@@ -47,7 +47,7 @@ fn s3_rom_boot(stop_on: Option<&str>, max_steps: u64) -> std::process::Output {
 
 #[test]
 fn stop_on_match_does_not_claim_the_step_budget_ran_out() {
-    let out = s3_rom_boot(Some("ESP-ROM"), 200_000_000);
+    let out = s3_rom_boot(Some("ESP-ROM"), 2_000_000);
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert_eq!(
         out.status.code(),

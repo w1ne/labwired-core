@@ -5531,9 +5531,10 @@ impl<C: Cpu> DebugControl for Machine<C> {
     fn write_memory(&mut self, addr: u32, data: &[u8]) -> SimResult<()> {
         // Debugger-context write: it must not latch a store watch. The flag
         // is restored on every path (the `try_for_each` collects the first
-        // error and the restore runs after it), and the loader
-        // (`load_firmware`) never goes through this function — it writes
-        // LinearMemory directly.
+        // error and the restore runs after it). The loader (`load_firmware`)
+        // does not go through this function: its direct paths write
+        // LinearMemory and its peripheral-backed fallback walks the bus under
+        // its own bypass flags.
         let prev = self.bus.debug_watch_host_bypass.replace(true);
         let result = data
             .iter()
