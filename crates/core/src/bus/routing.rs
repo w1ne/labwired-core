@@ -278,7 +278,35 @@ impl SystemBus {
         if let Some((idx, bit, offsets)) = Self::resolve_avr_port_pin(bus, pin) {
             return Some((bus.peripherals[idx].base + offsets.input, bit));
         }
-        // ESP32 / ESP32-C3: "GPIO5", "gpio5", "IO5", or bare "5" → gpio peripheral IN reg.
+        // ESP32 / ESP32-C3 / ESP32-S3: "GPIO5", "gpio5", "IO5", or bare "5"
+        // → the gpio peripheral's IN register.
+        if let Some(idx) = bus.find_peripheral_index_by_name("gpio") {
+            let any = bus.peripherals[idx].dev.as_any();
+            let is_s3 = any
+                .map(|a| {
+                    a.downcast_ref::<crate::peripherals::esp32s3::gpio::Esp32s3Gpio>()
+                        .is_some()
+                })
+                .unwrap_or(false);
+            // The S3's bank 1 (pads 32..=48) lives in GPIO_IN1 at +0x40 and
+            // takes pad labels up to 48; classic ESP32/C3 stop at pad 39/21
+            // and have no second IN register.
+            let bit = if is_s3 {
+                Self::parse_esp32s3_gpio_pin(pin)
+            } else {
+                Self::parse_esp32_gpio_pin(pin)
+            };
+            if let Some(bit) = bit {
+                if is_s3 {
+                    let (offset, bit) = if bit >= 32 {
+                        (0x40, bit - 32)
+                    } else {
+                        (0x3C, bit)
+                    };
+                    return Some((bus.peripherals[idx].base + offset, bit));
+                }
+            }
+        }
         if let Some(bit) = Self::parse_esp32_gpio_pin(pin) {
             let idx = bus.find_peripheral_index_by_name("gpio")?;
             let is_esp32 = bus.peripherals[idx]

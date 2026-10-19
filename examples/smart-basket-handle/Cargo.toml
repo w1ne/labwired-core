@@ -1,0 +1,23 @@
+[package]
+name = "smart-basket-handle"
+version = "0.1.0"
+edition = "2021"
+authors = ["Andrii Shylenko"]
+license = "MIT"
+description = "SmartBasket handle POC firmware: event-triggered camera capture, load-cell weight, battery gauge, session dump (LabWired simulator + real ESP32-S3)."
+
+[[bin]]
+name = "smart-basket-handle"
+path = "src/main.rs"
+
+[dependencies]
+esp-hal       = { version = "1.1", features = ["esp32s3", "unstable"] }
+esp-println   = { version = "0.17", default-features = false, features = ["esp32s3", "jtag-serial", "colors", "critical-section"] }
+esp-backtrace = { version = "0.19", features = ["esp32s3", "panic-handler", "println"] }
+critical-section = "1.2"
+
+[profile.release]
+opt-level     = "s"
+lto           = "thin"
+codegen-units = 1
+debug         = true   # keep DWARF so the simulator can resolve symbols

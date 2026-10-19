@@ -302,6 +302,33 @@ fn esp32_high_bank_pads_resolve_to_the_out1_register() {
     assert!(SystemBus::resolve_pin_odr_pub(&bus, "GPIO40").is_none());
 }
 
+// The SmartBasket handle puts an HX711's DOUT on GPIO21 and a HX711 SCK on
+// GPIO47 — one pad per bank. `resolve_pin_odr` grew the S3 high-bank arm, but
+// `resolve_pin_idr` never did: it only recognised classic ESP32 / C3, so a
+// `gpio_device` output pin on an S3 resolved to nothing and the whole
+// external-device attach failed with "could not be resolved to a GPIO input".
+// Both S3 banks must resolve, to the register that actually holds the pad.
+#[test]
+fn esp32s3_pads_resolve_to_the_in_registers_for_device_outputs() {
+    use crate::system::xtensa::{configure_xtensa_esp32s3, Esp32s3Opts};
+
+    let mut bus = SystemBus::new();
+    let _wiring = configure_xtensa_esp32s3(&mut bus, &Esp32s3Opts::default());
+    let gpio_base = {
+        let idx = bus.find_peripheral_index_by_name("gpio").expect("gpio");
+        bus.peripherals[idx].base
+    };
+
+    let low = SystemBus::resolve_pin_idr(&bus, "GPIO21").expect("low bank resolves");
+    assert_eq!(low, (gpio_base + 0x3C, 21), "GPIO21 -> GPIO_IN bit 21");
+
+    let high = SystemBus::resolve_pin_idr(&bus, "GPIO47").expect("high bank must resolve");
+    assert_eq!(high, (gpio_base + 0x40, 15), "GPIO47 -> GPIO_IN1 bit 15");
+
+    // Pads stop at 48 on the S3; 49 is not a pin.
+    assert!(SystemBus::resolve_pin_idr(&bus, "GPIO49").is_none());
+}
+
 #[test]
 fn esp32_uart0_ahb_fifo_emits_to_sink() {
     // Classic ESP32 IDF writes TX via UART_FIFO_AHB_REG(0)=0x6000_0000, not APB.

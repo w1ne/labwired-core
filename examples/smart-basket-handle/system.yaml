@@ -1,0 +1,38 @@
+# SmartBasket handle POC board: an ESP32-S3 clip-on handle module.
+#
+#   OV3660 camera   SCCB on I2C1 (SIOD GPIO4 / SIOC GPIO5), DVP on LCD_CAM.
+#                   Same pin map as the esp32s3-ov3660-camera example, so the
+#                   `ov3660` kit binds the sensor to LCD_CAM unchanged.
+#   ADXL345 IMU     I2C0 at 0x53 (SDA GPIO1 / SCL GPIO2).
+#   INA219 gauge    I2C0 at 0x40; bus voltage = battery terminal, ÷4 mV/LSB.
+#   HX711 scale     bit-banged: SCK GPIO47 (host out), DT GPIO21 (host in),
+#                   weight stimulus in grams at 100 counts/g.
+#   DOCK input      GPIO48: high while the handle sits on a checkout station.
+#
+# The camera kit's `route:` scopes the SCCB pads: the sensor answers I2C1 only
+# while the GPIO matrix carries I2C1's SCL/SDA to GPIO5/GPIO4, exactly as on
+# silicon (see the core camera tests).
+name: "smart-basket-handle"
+chip: "../../configs/chips/esp32s3.yaml"
+
+external_devices:
+  - id: "cam"
+    type: "ov3660"
+    connection: "i2c1"
+    route:
+      sda: "GPIO4"
+      scl: "GPIO5"
+  - id: "imu"
+    type: "adxl345"
+    connection: "i2c0"
+  - id: "batt"
+    type: "ina219"
+    connection: "i2c0"
+  - id: "scale"
+    type: "hx711"
+    connection: "gpio"
+    config:
+      sck_pin: "GPIO47"
+      dt_pin: "GPIO21"
+
+board_io: []
