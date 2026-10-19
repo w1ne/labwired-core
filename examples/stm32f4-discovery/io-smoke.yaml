@@ -1,0 +1,21 @@
+# LabWired - STM32F4-Discovery IO smoke
+#
+# Build: cargo build -p firmware-f4-discovery-smoke --release --target thumbv7em-none-eabi
+#
+# The firmware runs a light over PD12..PD15 (LD4/LD3/LD5/LD6) and prints a
+# heartbeat on USART2 (PA2) whose `odr=` field is READ BACK from GPIOD_ODR
+# after each write, so the assertions check the pad the firmware drove.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-f4-discovery-smoke"
+  system: "./system.yaml"
+limits:
+  max_steps: 4000000
+assertions:
+  - uart_contains: "F4-DISCO SMOKE"
+  - uart_ordered:
+      - "hb=0 ld4=on odr=00001000"
+      - "hb=1 ld4=off odr=00000000"
+      - "hb=2 ld3=on odr=00002000"
+      - "hb=3 ld3=off odr=00000000"
+  - expected_stop_reason: max_steps
