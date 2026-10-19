@@ -111,10 +111,12 @@ impl FlashArray for BusArray<'_> {
         self.size
     }
     fn get(&mut self, addr: usize) -> u8 {
-        self.bus.read_u8(self.base + addr as u64).unwrap_or(0xFF)
+        let at = self.base + addr as u64;
+        crate::with_device_write_bypass(self.bus, |bus| bus.read_u8(at)).unwrap_or(0xFF)
     }
     fn set(&mut self, addr: usize, value: u8) {
-        let _ = self.bus.write_u8(self.base + addr as u64, value);
+        let at = self.base + addr as u64;
+        let _ = crate::with_device_write_bypass(self.bus, |bus| bus.write_u8(at, value));
     }
 }
 

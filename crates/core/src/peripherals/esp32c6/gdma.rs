@@ -283,13 +283,19 @@ struct Desc {
 
 impl Desc {
     fn read(bus: &mut dyn Bus, addr: u64) -> Self {
-        let dw0 = bus.read_u32(addr).unwrap_or(0);
+        let (dw0, buf, next) = crate::with_device_write_bypass(bus, |bus| {
+            (
+                bus.read_u32(addr).unwrap_or(0),
+                bus.read_u32(addr + 4).unwrap_or(0) as u64,
+                bus.read_u32(addr + 8).unwrap_or(0) as u64,
+            )
+        });
         Self {
             dw0,
             len: (dw0 >> 12) & 0xFFF,
             size: dw0 & 0xFFF,
-            buf: bus.read_u32(addr + 4).unwrap_or(0) as u64,
-            next: bus.read_u32(addr + 8).unwrap_or(0) as u64,
+            buf,
+            next,
         }
     }
 
@@ -308,7 +314,7 @@ impl Desc {
             Some(n) => (self.dw0 & !(DESC_OWNER_BIT | DESC_LEN_MASK)) | (n << 12),
             None => self.dw0 & !DESC_OWNER_BIT,
         };
-        let _ = bus.write_u32(addr, dw0);
+        let _ = crate::with_device_write_bypass(bus, |bus| bus.write_u32(addr, dw0));
     }
 }
 
@@ -675,9 +681,11 @@ impl Esp32c6Gdma {
             if check_owner && !d.dma_owned() {
                 break;
             }
-            for i in 0..d.len {
-                bytes.push(bus.read_u8(d.buf + u64::from(i)).unwrap_or(0));
-            }
+            crate::with_device_write_bypass(bus, |bus| {
+                for i in 0..d.len {
+                    bytes.push(bus.read_u8(d.buf + u64::from(i)).unwrap_or(0));
+                }
+            });
             last = addr as u32;
             if auto_wrback {
                 d.write_back_owner(bus, addr, None);
@@ -706,9 +714,11 @@ impl Esp32c6Gdma {
                 break;
             }
             let to_write = remaining.len().min(d.size as usize);
-            for (i, &b) in remaining[..to_write].iter().enumerate() {
-                let _ = bus.write_u8(d.buf + i as u64, b);
-            }
+            crate::with_device_write_bypass(bus, |bus| {
+                for (i, &b) in remaining[..to_write].iter().enumerate() {
+                    let _ = bus.write_u8(d.buf + i as u64, b);
+                }
+            });
             remaining = &remaining[to_write..];
             d.write_back_owner(bus, addr, Some(to_write as u32));
             last = addr as u32;

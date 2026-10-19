@@ -234,18 +234,24 @@ pub const MODELLED_FLASH_SIZE: u32 = 4 * 1024 * 1024;
 /// browser, `labwired snapshot capture` and `labwired test`'s arduino profile;
 /// `cli::commands::esp32_boot_state::seed_esp32_post_brom_dram` covers the
 /// CLI's non-profile ESP32 path. Both call this.
-pub fn seed_rom_flashchip(bus: &mut dyn Bus, addr: u32) {
+pub fn seed_rom_flashchip(bus: &mut crate::bus::SystemBus, addr: u32) {
     let base = addr as u64;
-    for (off, val) in [
-        (0u64, 0x0016_40EFu32),   // device_id — Winbond W25Q32
-        (4, MODELLED_FLASH_SIZE), // chip_size
-        (8, 64 * 1024),           // block_size
-        (12, 4 * 1024),           // sector_size
-        (16, 256),                // page_size
-        (20, 0xFFFF),             // status_mask
-    ] {
-        let _ = bus.write_u32(base + off, val);
-    }
+    // Host boot seed, not a CPU store: bypass the CPU-write policy and
+    // debug-watch latching like `Machine::load_firmware` and `fast_boot`.
+    bus.with_debug_watch_bypass(|bus| {
+        bus.with_memory_policy_bypass(|bus| {
+            for (off, val) in [
+                (0u64, 0x0016_40EFu32),   // device_id — Winbond W25Q32
+                (4, MODELLED_FLASH_SIZE), // chip_size
+                (8, 64 * 1024),           // block_size
+                (12, 4 * 1024),           // sector_size
+                (16, 256),                // page_size
+                (20, 0xFFFF),             // status_mask
+            ] {
+                let _ = bus.write_u32(base + off, val);
+            }
+        })
+    });
 }
 
 #[cfg(test)]
