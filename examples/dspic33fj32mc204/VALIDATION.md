@@ -1,4 +1,4 @@
-# Validation — dsPIC33FJ32MC204 (M0)
+# Validation — dsPIC33FJ32MC204 (M0 + M1a)
 
 Claims, evidence, and what is explicitly **not** claimed yet.
 
@@ -7,10 +7,13 @@ Claims, evidence, and what is explicitly **not** claimed yet.
 | Capability | Tier | Evidence |
 | :--- | :--- | :--- |
 | Boot from ELF at entry 0 | smoke-tested | `crates/core/tests/pic24_m0_smoke.rs` |
-| `NOP` / `MOV #lit16` / `MOV Wns,f` / `MOV f,Wnd` / `BRA Expr` decode | unit-tested | `crates/core/src/cpu/pic24.rs` (`#[cfg(test)]`) |
+| `NOP` / `MOV #lit16` / `MOV Wns,f` / `MOV f,Wnd` / `BRA Expr` / `RETFIE` decode | unit-tested | `crates/core/src/cpu/pic24.rs` (`#[cfg(test)]`) |
 | UART1 TX (`U1TXREG`) → console sink | smoke-tested | unit test `mov_w0_to_u1txreg_reaches_sink`, integration test, io-smoke |
 | Determinism (same inputs → same output) | smoke-tested | integration test runs the fixture twice and compares sink + PC |
-| Interrupts, timers, PWM, QEI, ADC, SPI, I2C, MAC | **not modelled** | decode error on unsupported opcodes; no claims |
+| Timers T1/T2/T3: TON, TCKPS 1:1–1:256, `TMR > PR` match, 32-bit T2/T3 pair (M1a) | unit-tested | `timer1_counts_to_period_and_raises_flag`, `timer1_prescaler_1_to_8`, `timer23_pair_counts_32_bit_and_flags_timer3` |
+| Interrupts: IFS0/IEC0/IPC0-2, DISI/NSTDIS gating, vector `0x4+2*N`, two-word frame, RETFIE (M1a) | unit-tested | `timer1_interrupt_vectors_frames_and_returns`, `disabled_source_does_not_vector` |
+| `ACCA*` / `ACCB*` 40-bit SFR storage (M1a) | unit-tested | `accumulator_sfr_words_round_trip` |
+| IC/OC (M1b), DSP MAC (M1c), PWM, QEI, ADC, SPI, I2C | **not modelled** | decode error on unsupported opcodes; no claims |
 
 ## Commands and evidence (verified 2026-10-18, branch `feat/pic24-m0`)
 
@@ -63,6 +66,35 @@ python3 scripts/generate_firmware_exercise_matrix.py --check   # clean (entry ad
 (Environment note: strict_onboarding also builds firmware for every other chip;
 those builds need cross-targets not installed in the authoring sandbox — the
 failures listed there are environmental and do not involve this chip.)
+
+## M1a evidence (timers + interrupts, verified 2026-10-19, branch `feat/pic24-m1a`)
+
+```bash
+# 1. Unit tests — 14 passed (6 new M1a tests)
+cargo test -p labwired-core --lib pic24
+#   test cpu::pic24::tests::timer1_counts_to_period_and_raises_flag ... ok
+#   test cpu::pic24::tests::timer1_prescaler_1_to_8 ... ok
+#   test cpu::pic24::tests::timer23_pair_counts_32_bit_and_flags_timer3 ... ok
+#   test cpu::pic24::tests::timer1_interrupt_vectors_frames_and_returns ... ok
+#   test cpu::pic24::tests::disabled_source_does_not_vector ... ok
+#   test cpu::pic24::tests::accumulator_sfr_words_round_trip ... ok
+#   test result: ok. 14 passed; 0 failed
+
+# 2. Integration + trace gates unaffected
+cargo test -p labwired-core --test pic24_m0_smoke        # 2 passed (fixture unchanged)
+cargo test -p labwired-core --test cpu_trace_conformance # 3 passed (per-instruction trace contract kept)
+
+# 3. fmt / clippy
+cargo fmt --all -- --check                              # clean
+cargo clippy -p labwired-core --tests -- -D warnings    # clean
+```
+
+M1a scope: `T1CON/T2CON/T3CON` (TON, TCKPS, T32), `TMR1/2/3`, `PR1/2/3`,
+`IFS0/IEC0/IPC0-2`, `INTCON1.NSTDIS`, `INTCON2.DISI`, exception entry with the
+DS70283H two-word frame, vector `0x4 + 2*N`, `RETFIE`, and `ACCA*`/`ACCB*` SFR
+storage. Encodings and addresses pinned to DS70000157G / DS70283H. IC/OC (M1b,
+needs a pin/GPIO model) and the DSP MAC (M1c, PRM field tables) remain
+unmodelled; unsupported opcodes still raise `DecodeError`, never a silent skip.
 
 ## Unsupported-instruction audit
 

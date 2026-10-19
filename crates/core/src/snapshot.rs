@@ -69,7 +69,8 @@ pub struct AvrCpuSnapshot {
     pub sreg: u8,
 }
 
-/// PIC24/dsPIC33 M0 visible state (word-addressed PC; W0–W15; UART1 latches).
+/// PIC24/dsPIC33 visible state (word-addressed PC; W0–W15; UART1 latches;
+/// M1a timers, interrupt latches and accumulators).
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Pic24CpuSnapshot {
     pub registers: Vec<u16>,
@@ -78,6 +79,50 @@ pub struct Pic24CpuSnapshot {
     pub cycles: u64,
     pub u1mode: u16,
     pub u1sta: u16,
+    #[serde(default)]
+    pub t1con: u16,
+    #[serde(default)]
+    pub tmr1: u16,
+    #[serde(default)]
+    pub pr1: u16,
+    #[serde(default)]
+    pub t1_frac: u16,
+    #[serde(default)]
+    pub t2con: u16,
+    #[serde(default)]
+    pub tmr2: u16,
+    #[serde(default)]
+    pub pr2: u16,
+    #[serde(default)]
+    pub t2_frac: u16,
+    #[serde(default)]
+    pub t3con: u16,
+    #[serde(default)]
+    pub tmr3: u16,
+    #[serde(default)]
+    pub pr3: u16,
+    #[serde(default)]
+    pub t3_frac: u16,
+    #[serde(default)]
+    pub ifs0: u16,
+    #[serde(default)]
+    pub iec0: u16,
+    #[serde(default)]
+    pub ipc0: u16,
+    #[serde(default)]
+    pub ipc1: u16,
+    #[serde(default)]
+    pub ipc2: u16,
+    #[serde(default)]
+    pub intcon1: u16,
+    #[serde(default)]
+    pub intcon2: u16,
+    #[serde(default)]
+    pub corcon: u16,
+    #[serde(default)]
+    pub acc_a: i64,
+    #[serde(default)]
+    pub acc_b: i64,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
