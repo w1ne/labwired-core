@@ -2507,6 +2507,17 @@ pub enum FetchPermission {
     DeniedUndeliverable,
 }
 
+/// Runs `f` with the device-transfer bypass set, restoring the previous state
+/// (nesting-safe). Device engines wrap their guest-memory transfers in this;
+/// CPU-visible writes must NOT be wrapped.
+pub fn with_device_write_bypass<R>(bus: &mut dyn Bus, f: impl FnOnce(&mut dyn Bus) -> R) -> R {
+    let prev = bus.device_write_bypass();
+    bus.set_device_write_bypass(true);
+    let r = f(bus);
+    bus.set_device_write_bypass(prev);
+    r
+}
+
 pub trait Bus {
     /// ARM application-core interrupt levels, including deassertion.
     fn arm_irq_fiq_levels(&self) -> Option<(bool, bool)> {
@@ -2553,6 +2564,15 @@ pub trait Bus {
     fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
         None
     }
+    /// True while a device-originated transfer (DMA engine, host RTT write)
+    /// bypasses the CPU-store gates (`cpu_writes` policy, debug watches).
+    /// Default: no bypass. See [`with_device_write_bypass`].
+    fn device_write_bypass(&self) -> bool {
+        false
+    }
+    /// Set the device-transfer bypass. Implementations that own gates must
+    /// honour this; default is a no-op.
+    fn set_device_write_bypass(&mut self, _on: bool) {}
     /// Run `f` on the peripheral with id `name` and let the bus see what it
     /// changed (its legacy-walk membership, the events it wants scheduled) —
     /// how one peripheral's bus-aware pass reaches another's state (a GDMA
