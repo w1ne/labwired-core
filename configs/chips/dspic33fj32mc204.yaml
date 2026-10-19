@@ -4,7 +4,7 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 #
-# dsPIC33FJ32MC204 (DS70283H). M0: boot + UART1 TX.
+# dsPIC33FJ32MC204 (DS70283H). M0: boot + UART1 TX. M1a: timers T1/T2/T3 + interrupts.
 # - flash 32 KB, data SRAM 2 KB at 0x0800 (X 0x0800-0x0BFF, Y 0x0C00-0x0FFF)
 # - UART1 SFRs: U1MODE 0x0220, U1STA 0x0222, U1TXREG 0x0224
 # - CPU clock: part rated to 40 MIPS; boards override via the system manifest.
