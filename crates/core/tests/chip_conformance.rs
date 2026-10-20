@@ -88,8 +88,9 @@ const CHIPS: &[ChipConf] = &[
         // LiteX VexRiscv SoC (RV32IM — the descriptor declares `core: rv32im`,
         // so runs select the standard RV32 profile). SIM-DERIVED: nothing here
         // has been diffed against a silicon capture, so no reset_oracle. The
-        // modelled surface is CPU + memory + the LiteX UART; the timer / SPI /
-        // Ethernet / MMCM CSR windows are declared stubs — see
+        // modelled surface is CPU + memory + the LiteX UART and countdown
+        // timer; the SPI-flash / Ethernet / MMCM CSR windows are declared
+        // stubs — see
         // examples/litex-vexriscv/VALIDATION.md.
         name: "litex-vexriscv",
         yaml: "configs/chips/litex-vexriscv.yaml",

@@ -262,6 +262,10 @@
       "script": "examples/stm32g0b1re/io-smoke.yaml",
       "expect": "exti0 port=B falling imr=1",
       "note": "In-repo USART1 PA9 AF1, TIM2 PSC, and G0 EXTI examples. The customer IO-Link ELF is still built by iolinki-reference.yml; see docs/iolinki-g0-prerequisites.md."
+    },
+    "litex-vexriscv": {
+      "how": "needs-build",
+      "why": "The LiteX VexRiscv model (RV32IM profile, LiteX UART and timer) is newer than the released CLI this gate installs. The committed smoke tests/fixtures/litex-vexriscv-smoke.elf prints 'LITEX VEXRISCV SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
     }
   }
 }

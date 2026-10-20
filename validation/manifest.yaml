@@ -8760,8 +8760,9 @@ boards:
     # 2026-10-19: first RISC-V soft-core SoC in the engine (LiteX VexRiscv,
     # RV32IM). SIM-DERIVED — no silicon capture and no executing-fidelity
     # differential: the modelled surface is CPU + memory + the LiteX UART
-    # console path, and the timer/SPI/Ethernet/MMCM CSR windows are declared
-    # stubs (the smoke prints one of those readbacks). See
+    # console path and the LiteX countdown timer; the SPI-flash, Ethernet and
+    # MMCM CSR windows are declared stubs (the smoke prints one of those
+    # readbacks). See
     # docs/boards/litex-vexriscv.md and examples/litex-vexriscv/VALIDATION.md.
     doc: docs/boards/litex-vexriscv.md
     chip: configs/chips/litex-vexriscv.yaml

@@ -804,7 +804,7 @@
         "state": "proven",
         "file": "crates/core/tests/strict_onboarding.rs",
         "test": "test_strict_board_onboarding",
-        "signal": "firmware-samd21-demo brings SERCOM0 up the way a driver does \u2014 NVMCTRL wait states, the SYSCTRL.PCLKSR ready-flag poll, three GCLK SYNCBUSY spins, PM.APBCMASK, a WRCONFIG pad mux, then CTRLB before CTRLA.ENABLE \u2014 and its bytes reach the capture sink through the DRE poll. Two separate lines are asserted, so a model that sets DRE once and forgets fails: it emits one byte and then spins in putc forever.",
+        "signal": "firmware-samd21-demo brings SERCOM0 up the way a driver does — NVMCTRL wait states, the SYSCTRL.PCLKSR ready-flag poll, three GCLK SYNCBUSY spins, PM.APBCMASK, a WRCONFIG pad mux, then CTRLB before CTRLA.ENABLE — and its bytes reach the capture sink through the DRE poll. Two separate lines are asserted, so a model that sets DRE once and forgets fails: it emits one byte and then spins in putc forever.",
         "lane": "core-ci: cargo test -p labwired-core --test strict_onboarding (the gate EXECUTES examples/samd21-smoke/io-smoke.yaml through the CLI and fails the board if any assertion fails)"
       },
       "spi": {
@@ -980,6 +980,26 @@
       "i2c": {
         "state": "none",
         "gap": "The descriptor declares i2c0 (SPI0/TWI0 mux) and twi1 (shared nRF52 TWIM model), but no firmware or harness on this chip drives I2C.",
+        "lane": "none"
+      }
+    },
+    "litex-vexriscv": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_litex_vexriscv_smoke_survival",
+        "signal": "committed ELF fixture tests/fixtures/litex-vexriscv-smoke.elf booted in-sim; the survival gate asserts 'LITEX VEXRISCV SMOKE\\n' on the LiteX UART TX sink. Fixture absence is a hard assert!, not a skip.",
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "The LiteX SPI-flash controller is a declared `type: stub` (docs/boards/litex-vexriscv.md).",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "No I2C controller is modelled on the LiteX VexRiscv SoC.",
         "lane": "none"
       }
     }

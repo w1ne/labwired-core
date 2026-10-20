@@ -202,6 +202,13 @@ impl crate::Peripheral for LitexTimer {
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
         let reg = offset & !3;
         let byte = (offset % 4) as u32;
+        // W1C: only the bits this byte writes count. A read-modify-write would
+        // write the latched 1 back and clear the event on a write of 0 (and on
+        // every byte of a 32-bit store, which arrives here byte by byte).
+        if reg == EV_PENDING {
+            self.write_reg(reg, (value as u32) << (byte * 8));
+            return Ok(());
+        }
         let mut v = self.read_reg(reg);
         let mask: u32 = 0xFF << (byte * 8);
         v = (v & !mask) | ((value as u32) << (byte * 8));
@@ -284,6 +291,27 @@ mod tests {
         assert_eq!(t.read_u32(EV_PENDING).unwrap(), 1);
 
         // W1C clears it.
+        t.write_u32(EV_PENDING, 1).unwrap();
+        assert_eq!(t.read_u32(EV_PENDING).unwrap(), 0);
+    }
+
+    #[test]
+    fn ev_pending_clears_only_on_a_written_one() {
+        let mut t = armed(10, 0);
+        let _ = t.tick_elapsed(10);
+        assert_eq!(t.read_u32(EV_PENDING).unwrap(), 1);
+        t.write_u32(EV_PENDING, 0).unwrap();
+        assert_eq!(
+            t.read_u32(EV_PENDING).unwrap(),
+            1,
+            "writing 0 leaves the event"
+        );
+        t.write(EV_PENDING + 1, 0).unwrap();
+        assert_eq!(
+            t.read_u32(EV_PENDING).unwrap(),
+            1,
+            "an upper byte holds no bit 0"
+        );
         t.write_u32(EV_PENDING, 1).unwrap();
         assert_eq!(t.read_u32(EV_PENDING).unwrap(), 0);
     }
