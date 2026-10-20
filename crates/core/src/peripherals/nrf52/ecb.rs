@@ -344,17 +344,23 @@ impl Nrf52Ecb {
         self.pending_start = false;
         let base = self.ecbdataptr as u64;
         let mut key = [0u8; 16];
-        for (i, byte) in key.iter_mut().enumerate() {
-            *byte = bus.read_u8(base + i as u64).unwrap_or(0);
-        }
+        crate::with_device_write_bypass(bus, |bus| {
+            for (i, byte) in key.iter_mut().enumerate() {
+                *byte = bus.read_u8(base + i as u64).unwrap_or(0);
+            }
+        });
         let mut cleartext = [0u8; 16];
-        for (i, byte) in cleartext.iter_mut().enumerate() {
-            *byte = bus.read_u8(base + 16 + i as u64).unwrap_or(0);
-        }
+        crate::with_device_write_bypass(bus, |bus| {
+            for (i, byte) in cleartext.iter_mut().enumerate() {
+                *byte = bus.read_u8(base + 16 + i as u64).unwrap_or(0);
+            }
+        });
         let ciphertext = aes128_encrypt(&cleartext, &key);
-        for (i, byte) in ciphertext.iter().enumerate() {
-            let _ = bus.write_u8(base + 32 + i as u64, *byte);
-        }
+        crate::with_device_write_bypass(bus, |bus| {
+            for (i, byte) in ciphertext.iter().enumerate() {
+                let _ = bus.write_u8(base + 32 + i as u64, *byte);
+            }
+        });
         self.events_endecb = 1;
     }
 }

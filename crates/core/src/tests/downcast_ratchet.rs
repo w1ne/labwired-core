@@ -228,8 +228,14 @@ const MAX_DOWNCAST_REF: usize = 195;
 // 338 → 337 (`downcast_mut` only): the ESP32-S3 I²C controller attaches slaves
 // through `Peripheral::i2c_slave_host` (it also hosts GPIO-matrix twins), so
 // `attach_i2c_slave_with_route` lost its `Esp32s3I2c` arm.
-const MAX_AS_ANY_MUT: usize = 271;
-const MAX_DOWNCAST_MUT: usize = 336;
+// Raised 271 -> 272 and 336 -> 337 by the `Box<dyn Cpu>` forwarding gate
+// (`crates/core/tests/cpu_dyn_forwarding.rs`). The test calls `as_any_mut()`
+// and `downcast_mut::<SpyCpu>()` deliberately: that is the behaviour it pins,
+// and it is the only way to prove the boxed call reaches the concrete core
+// rather than the trait default. This is test-only verification; no production
+// bus plumbing gained a reach.
+const MAX_AS_ANY_MUT: usize = 272;
+const MAX_DOWNCAST_MUT: usize = 337;
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

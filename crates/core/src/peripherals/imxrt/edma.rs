@@ -432,45 +432,49 @@ impl ImxrtEdma {
         // Gather source units, scatter destination units.
         let mut buf = Vec::with_capacity(nbytes);
         let mut s = t.saddr;
-        while buf.len() < nbytes {
-            match ssize {
-                1 => buf.push(bus.read_u8(s as u64).unwrap_or(0)),
-                2 => buf.extend(bus.read_u16(s as u64).unwrap_or(0).to_le_bytes()),
-                _ => {
-                    let mut k = 0;
-                    while k < ssize {
-                        buf.extend(bus.read_u32((s + k) as u64).unwrap_or(0).to_le_bytes());
-                        k += 4;
+        crate::with_device_write_bypass(bus, |bus| {
+            while buf.len() < nbytes {
+                match ssize {
+                    1 => buf.push(bus.read_u8(s as u64).unwrap_or(0)),
+                    2 => buf.extend(bus.read_u16(s as u64).unwrap_or(0).to_le_bytes()),
+                    _ => {
+                        let mut k = 0;
+                        while k < ssize {
+                            buf.extend(bus.read_u32((s + k) as u64).unwrap_or(0).to_le_bytes());
+                            k += 4;
+                        }
                     }
                 }
+                s = advance(s, t.soff as i32, smod);
             }
-            s = advance(s, t.soff as i32, smod);
-        }
+        });
         buf.truncate(nbytes);
         let mut d = t.daddr;
         let mut k = 0usize;
-        while k < nbytes {
-            match dsize {
-                1 => {
-                    let _ = bus.write_u8(d as u64, buf[k]);
-                }
-                2 => {
-                    let v = u16::from_le_bytes([buf[k], *buf.get(k + 1).unwrap_or(&0)]);
-                    let _ = bus.write_u16(d as u64, v);
-                }
-                _ => {
-                    let mut j = 0;
-                    while j < dsize as usize {
-                        let w = |i: usize| *buf.get(k + j + i).unwrap_or(&0);
-                        let v = u32::from_le_bytes([w(0), w(1), w(2), w(3)]);
-                        let _ = bus.write_u32((d + j as u32) as u64, v);
-                        j += 4;
+        crate::with_device_write_bypass(bus, |bus| {
+            while k < nbytes {
+                match dsize {
+                    1 => {
+                        let _ = bus.write_u8(d as u64, buf[k]);
+                    }
+                    2 => {
+                        let v = u16::from_le_bytes([buf[k], *buf.get(k + 1).unwrap_or(&0)]);
+                        let _ = bus.write_u16(d as u64, v);
+                    }
+                    _ => {
+                        let mut j = 0;
+                        while j < dsize as usize {
+                            let w = |i: usize| *buf.get(k + j + i).unwrap_or(&0);
+                            let v = u32::from_le_bytes([w(0), w(1), w(2), w(3)]);
+                            let _ = bus.write_u32((d + j as u32) as u64, v);
+                            j += 4;
+                        }
                     }
                 }
+                k += dsize as usize;
+                d = advance(d, t.doff as i32, dmod);
             }
-            k += dsize as usize;
-            d = advance(d, t.doff as i32, dmod);
-        }
+        });
         if let Some(off) = mloff {
             if t.nbytes & (1 << 31) != 0 {
                 s = s.wrapping_add(off as u32);

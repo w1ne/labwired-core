@@ -137,30 +137,32 @@ pub(crate) fn walk_out(
 ) -> OutWalk {
     let mut out = OutWalk::default();
     let mut desc = first;
-    for _ in 0..MAX_CHAIN {
-        if desc == 0 {
-            break;
+    crate::with_device_write_bypass(bus, |bus| {
+        for _ in 0..MAX_CHAIN {
+            if desc == 0 {
+                break;
+            }
+            let Some(d) = read_desc(bus, desc, check_owner, ram) else {
+                out.dscr_err = true;
+                break;
+            };
+            let len = (d.dw0 & DESC_LEN_MASK) >> 12;
+            for k in 0..len {
+                out.bytes
+                    .push(bus.read_u8(u64::from(d.buf + k)).unwrap_or(0));
+            }
+            if auto_wrback {
+                let _ = bus.write_u32(u64::from(desc), d.dw0 & !DESC_OWNER);
+            }
+            out.last_desc = desc;
+            out.descs += 1;
+            if d.dw0 & DESC_SUC_EOF != 0 {
+                out.eof = true;
+                break;
+            }
+            desc = d.next;
         }
-        let Some(d) = read_desc(bus, desc, check_owner, ram) else {
-            out.dscr_err = true;
-            break;
-        };
-        let len = (d.dw0 & DESC_LEN_MASK) >> 12;
-        for k in 0..len {
-            out.bytes
-                .push(bus.read_u8(u64::from(d.buf + k)).unwrap_or(0));
-        }
-        if auto_wrback {
-            let _ = bus.write_u32(u64::from(desc), d.dw0 & !DESC_OWNER);
-        }
-        out.last_desc = desc;
-        out.descs += 1;
-        if d.dw0 & DESC_SUC_EOF != 0 {
-            out.eof = true;
-            break;
-        }
-        desc = d.next;
-    }
+    });
     out
 }
 
@@ -180,35 +182,38 @@ pub(crate) fn fill_in(
     };
     let mut desc = first;
     let mut at = 0usize;
-    for _ in 0..MAX_CHAIN {
-        if desc == 0 {
-            fill.dscr_empty = true;
-            break;
+    crate::with_device_write_bypass(bus, |bus| {
+        for _ in 0..MAX_CHAIN {
+            if desc == 0 {
+                fill.dscr_empty = true;
+                break;
+            }
+            let Some(d) = read_desc(bus, desc, check_owner, ram) else {
+                fill.dscr_err = true;
+                break;
+            };
+            let size = (d.dw0 & 0xFFF) as usize;
+            let n = size.min(data.len() - at);
+            for (k, b) in data[at..at + n].iter().enumerate() {
+                let _ = bus.write_u8(u64::from(d.buf) + k as u64, *b);
+            }
+            at += n;
+            let done = at == data.len();
+            let mut wb =
+                (d.dw0 & !(DESC_OWNER | DESC_SUC_EOF | DESC_LEN_MASK)) | ((n as u32) << 12);
+            if done {
+                wb |= DESC_SUC_EOF;
+            }
+            let _ = bus.write_u32(u64::from(desc), wb);
+            fill.last_desc = desc;
+            fill.descs += 1;
+            if done {
+                fill.suc_eof = true;
+                break;
+            }
+            desc = d.next;
         }
-        let Some(d) = read_desc(bus, desc, check_owner, ram) else {
-            fill.dscr_err = true;
-            break;
-        };
-        let size = (d.dw0 & 0xFFF) as usize;
-        let n = size.min(data.len() - at);
-        for (k, b) in data[at..at + n].iter().enumerate() {
-            let _ = bus.write_u8(u64::from(d.buf) + k as u64, *b);
-        }
-        at += n;
-        let done = at == data.len();
-        let mut wb = (d.dw0 & !(DESC_OWNER | DESC_SUC_EOF | DESC_LEN_MASK)) | ((n as u32) << 12);
-        if done {
-            wb |= DESC_SUC_EOF;
-        }
-        let _ = bus.write_u32(u64::from(desc), wb);
-        fill.last_desc = desc;
-        fill.descs += 1;
-        if done {
-            fill.suc_eof = true;
-            break;
-        }
-        desc = d.next;
-    }
+    });
     fill
 }
 

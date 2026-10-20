@@ -1054,6 +1054,9 @@ pub(crate) fn run_firmware(
             None
         });
     let mut stop_scanned: usize = 0;
+    // A run ended by `--stop-on` did not exhaust its budget; the epilogue
+    // below must not tell the user it did.
+    let mut stopped_by_pattern = false;
 
     let mut cpu = wiring.cpu;
 
@@ -1403,6 +1406,7 @@ pub(crate) fn run_firmware(
                             crate::log_ts::eventln!(
                                 "labwired-cli run: --stop-on {pat:?} matched at step {steps}"
                             );
+                            stopped_by_pattern = true;
                             break;
                         }
                         stop_scanned = buf.len();
@@ -1481,15 +1485,17 @@ pub(crate) fn run_firmware(
             );
         }
     }
-    let cpu1_pc = machine
-        .cpu_secondary
-        .as_ref()
-        .map(|c| format!(" appcpu_pc=0x{:08x}", c.get_pc()))
-        .unwrap_or_default();
-    crate::log_ts::eventln!(
-        "labwired-cli run: reached --max-steps {limit}; pc=0x{:08x}{cpu1_pc}",
-        machine.cpu.get_pc(),
-    );
+    if !stopped_by_pattern {
+        let cpu1_pc = machine
+            .cpu_secondary
+            .as_ref()
+            .map(|c| format!(" appcpu_pc=0x{:08x}", c.get_pc()))
+            .unwrap_or_default();
+        crate::log_ts::eventln!(
+            "labwired-cli run: reached --max-steps {limit}; pc=0x{:08x}{cpu1_pc}",
+            machine.cpu.get_pc(),
+        );
+    }
     export_bus_trace_if_requested(&args.bus_trace_out, &machine.bus);
     crate::export_analog_trace_if_requested(&args.analog_trace, &machine);
     export_display_if_requested(&args.display_out, &machine.bus);

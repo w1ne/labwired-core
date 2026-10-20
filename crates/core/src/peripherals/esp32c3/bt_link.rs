@@ -522,7 +522,7 @@ impl Esp32c3Bt {
     /// The advertising PDU a TX descriptor describes: the header word, the
     /// device address from the control structure, then the descriptor's
     /// buffer — the same assembly [`Self::transmit_event`] measured.
-    fn adv_desc_pdu(&self, bus: &dyn Bus, cs: u32, desc: u32) -> Option<Vec<u8>> {
+    fn adv_desc_pdu(&self, bus: &mut dyn Bus, cs: u32, desc: u32) -> Option<Vec<u8>> {
         let hdr_word = self.em_read_u16(bus, desc + TXD_HEADER)?;
         let len = hdr_word >> 8;
         if len < TXD_ADDR_PREFIX_LEN {
@@ -539,7 +539,7 @@ impl Esp32c3Bt {
         Some(pdu)
     }
 
-    fn cs_bdaddr(&self, bus: &dyn Bus, cs: u32) -> [u8; 6] {
+    fn cs_bdaddr(&self, bus: &mut dyn Bus, cs: u32) -> [u8; 6] {
         let mut a = [0u8; 6];
         for (i, b) in a.iter_mut().enumerate() {
             *b = self.em_read_u8(bus, cs + CS_BDADDR + i as u32).unwrap_or(0);
@@ -683,7 +683,7 @@ impl Esp32c3Bt {
     /// The data channel for this event: CSA #2 from the event counter when
     /// `HOP_SEL` is set, else CSA #1 (previous index + hop increment)
     /// remapped through the channel map.
-    fn data_channel(&self, bus: &dyn Bus, cs: u32, hop: u16) -> u8 {
+    fn data_channel(&self, bus: &mut dyn Bus, cs: u32, hop: u16) -> u8 {
         let mut map = [false; 37];
         let m0 = self.em_read_u16(bus, cs + CS_CHMAP0).unwrap_or(0xFFFF);
         let m1 = self.em_read_u16(bus, cs + CS_CHMAP0 + 2).unwrap_or(0xFFFF);
@@ -883,7 +883,7 @@ impl Esp32c3Bt {
         self.link.as_ref().map(|l| l.deadline)
     }
 
-    fn tx_ready(&self, bus: &dyn Bus, cs: u32) -> bool {
+    fn tx_ready(&self, bus: &mut dyn Bus, cs: u32) -> bool {
         let desc = u32::from(self.em_read_u16(bus, cs + CS_TX_DESC_PTR).unwrap_or(0));
         desc != 0
             && self
@@ -948,7 +948,7 @@ impl Esp32c3Bt {
             let Some(addr) = self.em_cpu_addr(u32::from(data_ptr) + i as u32) else {
                 return false;
             };
-            if bus.write_u8(addr, *b).is_err() {
+            if crate::with_device_write_bypass(bus, |bus| bus.write_u8(addr, *b)).is_err() {
                 return false;
             }
         }

@@ -292,10 +292,12 @@ impl SamDmacByte {
         d: Descriptor,
     ) -> SimResult<()> {
         let start = u64::from(self.writeback) + index as u64 * 16;
-        for (byte, value) in d.encode().into_iter().enumerate() {
-            bus.write_u8(start + byte as u64, value)?;
-        }
-        Ok(())
+        crate::with_device_write_bypass(bus, |bus| {
+            for (byte, value) in d.encode().into_iter().enumerate() {
+                bus.write_u8(start + byte as u64, value)?;
+            }
+            Ok(())
+        })
     }
 
     fn error(&mut self, bus: &mut dyn Bus, index: usize) {
@@ -326,15 +328,17 @@ impl SamDmacByte {
         if self.channels[index].descriptor.is_none() {
             let start = table;
             let mut raw = [0; 16];
-            for (byte, value) in raw.iter_mut().enumerate() {
-                match bus.read_u8(start + byte as u64) {
-                    Ok(read) => *value = read,
-                    Err(_) => {
-                        self.error(bus, index);
-                        return;
+            crate::with_device_write_bypass(bus, |bus| {
+                for (byte, value) in raw.iter_mut().enumerate() {
+                    match bus.read_u8(start + byte as u64) {
+                        Ok(read) => *value = read,
+                        Err(_) => {
+                            self.error(bus, index);
+                            return;
+                        }
                     }
                 }
-            }
+            });
             let d = Descriptor::decode(raw);
             if let Some(reason) = d.refusal() {
                 self.refusal = Some(reason);
@@ -371,7 +375,7 @@ impl SamDmacByte {
                     return;
                 }
             }
-            let value = match bus.read_u8(source) {
+            let value = match crate::with_device_write_bypass(bus, |bus| bus.read_u8(source)) {
                 Ok(value) => value,
                 Err(_) => {
                     self.error(bus, index);
@@ -391,9 +395,10 @@ impl SamDmacByte {
                 }
             }
         } else {
-            let transferred = bus
-                .read_u8(source)
-                .and_then(|value| bus.write_u8(destination, value));
+            let transferred = crate::with_device_write_bypass(bus, |bus| {
+                bus.read_u8(source)
+                    .and_then(|value| bus.write_u8(destination, value))
+            });
             if transferred.is_err() {
                 self.error(bus, index);
                 return;
