@@ -189,9 +189,11 @@ impl Nrf52Twim {
         pads.set_stamp(Some(now));
         if std::mem::take(&mut self.net.rx_dirty) {
             let ptr = u64::from(self.rxd_ptr);
-            for (i, &b) in self.net.rx.iter().enumerate() {
-                let _ = bus.write_u8(ptr + i as u64, b);
-            }
+            crate::with_device_write_bypass(bus, |bus| {
+                for (i, &b) in self.net.rx.iter().enumerate() {
+                    let _ = bus.write_u8(ptr + i as u64, b);
+                }
+            });
             self.rxd_amount = self.net.rx.len() as u32;
         }
         if std::mem::take(&mut self.net.deferred_stopped) {
@@ -219,9 +221,11 @@ impl Nrf52Twim {
             Task::Tx => {
                 let ptr = u64::from(self.txd_ptr);
                 let n = (self.txd_maxcnt & MAXCNT_MASK) as usize;
-                self.net.tx = (0..n)
-                    .map(|i| bus.read_u8(ptr + i as u64).unwrap_or(0))
-                    .collect();
+                self.net.tx = crate::with_device_write_bypass(bus, |bus| {
+                    (0..n)
+                        .map(|i| bus.read_u8(ptr + i as u64).unwrap_or(0))
+                        .collect()
+                });
                 self.net.tx_sent = 0;
                 self.txd_amount = 0;
                 self.net.reading = false;

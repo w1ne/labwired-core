@@ -271,6 +271,12 @@ fn every_core_implements_both_snapshot_halves_or_neither() {
                 continue;
             }
             let src = std::fs::read_to_string(&path).expect("read cpu source");
+            // The trait's default methods live in `cpu/trait_def.rs`. They are
+            // the contract, not a core implementation, so they must not enter
+            // the capture/restore pairing below.
+            if src.contains("pub trait Cpu") {
+                continue;
+            }
             files_read += 1;
             let name = path
                 .strip_prefix(&cpu_dir)

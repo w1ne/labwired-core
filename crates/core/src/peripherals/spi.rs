@@ -4606,7 +4606,8 @@ impl Spi {
         for i in 0..n_clocks {
             // Read MOSI byte: TX buffer while available, else ORC.
             let mosi: u8 = if i < txd_maxcnt {
-                bus.read_u8(txd_ptr + i as u64).unwrap_or(0)
+                let at = txd_ptr + i as u64;
+                crate::with_device_write_bypass(bus, |bus| bus.read_u8(at)).unwrap_or(0)
             } else {
                 orc
             };
@@ -4648,7 +4649,8 @@ impl Spi {
 
             // Write MISO byte to RX buffer if there is still capacity.
             if i < rxd_maxcnt {
-                let _ = bus.write_u8(rxd_ptr + i as u64, miso);
+                let at = rxd_ptr + i as u64;
+                let _ = crate::with_device_write_bypass(bus, |bus| bus.write_u8(at, miso));
                 rxd_amount += 1;
             }
         }

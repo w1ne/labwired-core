@@ -291,14 +291,17 @@ impl Esp32c3WifiMac {
         // PLCP0 low-20 bits point at a TX lldesc (word0=flags, word1=buffer
         // pointer, word2=next), not the frame itself. Follow word1 to the frame.
         let desc = DRAM_BASE | (plcp0 & 0x000F_FFFF);
-        let bufptr = bus.read_u32(desc as u64 + 4).unwrap_or(0);
+        let bufptr =
+            crate::with_device_write_bypass(bus, |bus| bus.read_u32(desc as u64 + 4)).unwrap_or(0);
         if !(DRAM_BASE..DRAM_BASE + 0x10_0000).contains(&bufptr) {
             return; // not a resolvable DRAM frame pointer
         }
         let mut raw = vec![0u8; 1600];
-        for (i, b) in raw.iter_mut().enumerate() {
-            *b = bus.read_u8(bufptr as u64 + i as u64).unwrap_or(0);
-        }
+        crate::with_device_write_bypass(bus, |bus| {
+            for (i, b) in raw.iter_mut().enumerate() {
+                *b = bus.read_u8(bufptr as u64 + i as u64).unwrap_or(0);
+            }
+        });
         let len = Self::tx_frame_len(&raw);
         raw.truncate(len);
         if std::env::var("LABWIRED_MAC_TRACE").is_ok() {
@@ -376,9 +379,13 @@ impl Esp32c3WifiMac {
             if desc == 0 || !(0x3fc0_0000..0x3fd0_0000).contains(&desc) {
                 break;
             }
-            let w0 = bus.read_u32(desc as u64).unwrap_or(0);
-            let buf = bus.read_u32(desc as u64 + 4).unwrap_or(0);
-            let next = bus.read_u32(desc as u64 + 8).unwrap_or(0);
+            let (w0, buf, next) = crate::with_device_write_bypass(bus, |bus| {
+                (
+                    bus.read_u32(desc as u64).unwrap_or(0),
+                    bus.read_u32(desc as u64 + 4).unwrap_or(0),
+                    bus.read_u32(desc as u64 + 8).unwrap_or(0),
+                )
+            });
             let cap = (w0 & 0xFFF) as usize; // lldesc size field (buffer capacity)
             if w0 & DESC_OWNER != 0 && buf != 0 && cap > 0 {
                 let frame = self.pending_rx.pop_front().unwrap();
@@ -400,18 +407,21 @@ impl Esp32c3WifiMac {
                 hdr[44] = 0xC4; // rssi ≈ -60 dBm (signed)
                 hdr[45] = 0x0B; // rate (11 Mbps CCK)
                                 // hdr[47] left 0 (the driver special-cases 0xF5).
-                for (i, b) in hdr.iter().enumerate() {
-                    let _ = bus.write_u8(buf as u64 + i as u64, *b);
-                }
-                for (i, b) in frame.iter().take(total - RX_CTRL_HDR_LEN).enumerate() {
-                    let _ = bus.write_u8(buf as u64 + (RX_CTRL_HDR_LEN + i) as u64, *b);
-                }
+                crate::with_device_write_bypass(bus, |bus| {
+                    for (i, b) in hdr.iter().enumerate() {
+                        let _ = bus.write_u8(buf as u64 + i as u64, *b);
+                    }
+                    for (i, b) in frame.iter().take(total - RX_CTRL_HDR_LEN).enumerate() {
+                        let _ = bus.write_u8(buf as u64 + (RX_CTRL_HDR_LEN + i) as u64, *b);
+                    }
+                });
                 // Write back the lldesc as HW does on RX completion: owner
                 // cleared, eof set, length[23:12] = TOTAL DMA bytes (the driver
                 // subtracts the 48-byte header to get the 802.11 length), size
                 // preserved.
                 let new_w0 = DESC_EOF | (((total as u32) & 0xFFF) << 12) | (w0 & 0xFFF);
-                let _ = bus.write_u32(desc as u64, new_w0);
+                let _ =
+                    crate::with_device_write_bypass(bus, |bus| bus.write_u32(desc as u64, new_w0));
                 // RX status registers the driver reads to locate the filled
                 // descriptor: 0x90 = last-filled (low 20 bits) + 0xc64 upper,
                 // 0x8c = next descriptor (HW's write head).

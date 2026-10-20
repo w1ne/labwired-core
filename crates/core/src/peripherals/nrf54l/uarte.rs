@@ -321,7 +321,8 @@ impl Nrf54lUarte {
         if let Ok(mut q) = self.rx_source.lock() {
             while n < max {
                 let Some(b) = q.pop_front() else { break };
-                if bus.write_u8(self.dma_rx_ptr as u64 + n as u64, b).is_ok() {
+                let addr = self.dma_rx_ptr as u64 + n as u64;
+                if crate::with_device_write_bypass(bus, |bus| bus.write_u8(addr, b)).is_ok() {
                     n += 1;
                 }
             }
@@ -383,12 +384,14 @@ impl Nrf54lUarte {
         // loop below simply runs zero times and the completion events fire
         // exactly as they do for a non-empty buffer.
         let len = (self.dma_tx_maxcnt & 0xFFFF) as usize;
-        for i in 0..len {
-            let addr = self.dma_tx_ptr as u64 + i as u64;
-            if let Ok(b) = bus.read_u8(addr) {
-                self.emit_byte(b);
+        crate::with_device_write_bypass(bus, |bus| {
+            for i in 0..len {
+                let addr = self.dma_tx_ptr as u64 + i as u64;
+                if let Ok(b) = bus.read_u8(addr) {
+                    self.emit_byte(b);
+                }
             }
-        }
+        });
         self.dma_tx_amount = len as u32;
 
         // Events still fire together. Per-character TXDRDY during the buffer
