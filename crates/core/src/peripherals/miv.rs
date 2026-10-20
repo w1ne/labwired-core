@@ -261,6 +261,15 @@ impl crate::Peripheral for MivCoreGpio {
         Ok(())
     }
 
+    /// A node reset clears the chip-side configuration, output levels and
+    /// latches. The external levels stay: those are the world's connections
+    /// (a button holds its level), not register state.
+    fn on_node_reset(&mut self) {
+        let external = self.external;
+        *self = Self::new();
+        self.external = external;
+    }
+
     /// The block's interrupt line is an OR of the enabled pins (the reference
     /// design routes one source to the controller).
     fn irq_line_level(&self) -> Option<bool> {
@@ -624,6 +633,13 @@ impl crate::Peripheral for MivCoreTimer {
             irq: self.raw_irq && self.irq_enabled,
             ..Default::default()
         }
+    }
+
+    /// A node reset returns the timer to its reset state: disabled, interrupt
+    /// cleared, counter at the datasheet's all-ones reset value. Restarted
+    /// firmware must not inherit a running timer or a stale interrupt.
+    fn on_node_reset(&mut self) {
+        *self = Self::new();
     }
 
     /// The timer drives a LEVEL interrupt (CoreTimer handbook): the line
@@ -1080,6 +1096,42 @@ peripherals:
         from_bytes.restore_runtime_snapshot(&bytes).unwrap();
         let _ = from_bytes.tick_elapsed(2);
         assert_eq!(from_bytes.read_u32(TIMER_VALUE).unwrap(), 89);
+    }
+
+    #[test]
+    fn node_reset_returns_both_models_to_their_reset_state() {
+        let mut timer = MivCoreTimer::new();
+        timer.write_u32(TIMER_PRESCALE, 0).unwrap();
+        timer.write_u32(TIMER_LOAD, 3).unwrap();
+        timer.write_u32(TIMER_CONTROL, 0b011).unwrap();
+        let _ = timer.tick_elapsed(6);
+        assert_eq!(timer.read_u32(TIMER_RAW_STATUS).unwrap(), 1);
+
+        timer.on_node_reset();
+        assert_eq!(timer.read_u32(TIMER_CONTROL).unwrap(), 0, "disabled");
+        assert_eq!(timer.read_u32(TIMER_RAW_STATUS).unwrap(), 0, "irq cleared");
+        assert_eq!(timer.read_u32(TIMER_VALUE).unwrap(), 0xFFFF_FFFF);
+
+        let mut gpio = MivCoreGpio::new();
+        gpio.write_u32(0x00, (1 << 0) | (1 << 2) | (1 << 3) | (2 << 5))
+            .unwrap();
+        gpio.write_u32(GPIO_OUTPUT, 1).unwrap();
+        gpio.set_external(0, External::Level(true));
+        assert_eq!(gpio.irq_line_level(), Some(true));
+
+        gpio.on_node_reset();
+        assert_eq!(gpio.read_u32(0x00).unwrap(), 0, "configuration cleared");
+        assert_eq!(
+            gpio.driver(0).unwrap().out,
+            crate::pins::Out::Off,
+            "output released"
+        );
+        assert_eq!(gpio.irq_line_level(), Some(false), "latch cleared");
+        assert_eq!(
+            gpio.external(0),
+            External::Level(true),
+            "the world's connection survives the node reset"
+        );
     }
 
     #[test]
