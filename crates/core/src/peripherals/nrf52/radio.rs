@@ -1266,12 +1266,14 @@ impl Peripheral for Nrf52Radio {
 
             // Read header bytes into a small staging buffer first.
             let mut header = Vec::new();
-            for i in 0..desc.payload_offset() {
-                header.push(
-                    bus.read_u8((base as u64).wrapping_add(i as u64))
-                        .unwrap_or(0),
-                );
-            }
+            crate::with_device_write_bypass(bus, |bus| {
+                for i in 0..desc.payload_offset() {
+                    header.push(
+                        bus.read_u8((base as u64).wrapping_add(i as u64))
+                            .unwrap_or(0),
+                    );
+                }
+            });
 
             // LENGTH is the byte at offset s0len (right after S0).
             let length = if desc.lflen == 0 {
@@ -1292,12 +1294,14 @@ impl Peripheral for Nrf52Radio {
             // Read the payload right after the header bytes.
             let payload_off = desc.payload_offset();
             let mut packet = header.clone();
-            for i in 0..length as usize {
-                packet.push(
-                    bus.read_u8((base as u64).wrapping_add((payload_off + i) as u64))
-                        .unwrap_or(0),
-                );
-            }
+            crate::with_device_write_bypass(bus, |bus| {
+                for i in 0..length as usize {
+                    packet.push(
+                        bus.read_u8((base as u64).wrapping_add((payload_off + i) as u64))
+                            .unwrap_or(0),
+                    );
+                }
+            });
 
             // Whiten (in place — symmetric, so RX reverses by applying
             // the same routine).
@@ -1450,9 +1454,11 @@ impl Peripheral for Nrf52Radio {
                 }
 
                 let base = self.packetptr;
-                for (i, b) in pkt.iter().enumerate() {
-                    let _ = bus.write_u8((base as u64).wrapping_add(i as u64), *b);
-                }
+                crate::with_device_write_bypass(bus, |bus| {
+                    for (i, b) in pkt.iter().enumerate() {
+                        let _ = bus.write_u8((base as u64).wrapping_add(i as u64), *b);
+                    }
+                });
 
                 // ── DEVMATCH / DEVMISS via DAB / DAP whitelist ─────────
                 // Only when we actually consumed a frame from the global

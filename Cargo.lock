@@ -1215,6 +1215,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-f4-discovery-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-f401-demo"
 version = "0.25.0"
 dependencies = [

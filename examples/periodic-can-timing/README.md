@@ -35,8 +35,10 @@ period: 720003 cycles = 10.000042 ms (constant to the cycle)
   `idle_ff skipped … of … device cycles` on stderr), while the virtual
   timeline stays exact — the frames arrive at the cycles silicon would put
   them on.
-- `can-bus.jsonl` also carries `t_us` per frame (10012.85 µs, 20012.89 µs, …)
-  for readers who prefer microseconds; both derive from the same cycle count.
+- The first frame leaves at cycle 720,925 and the second at 1,440,928 — at
+  72 MHz those instants are 10,012.85 µs and 20,012.89 µs. (`can-bus.jsonl`
+  carries the cycles; `result.json`'s `can_bridges[0].timeline[]` carries the
+  same instants as `t_us` for readers who prefer microseconds.)
 
 ## Re-running against another firmware
 

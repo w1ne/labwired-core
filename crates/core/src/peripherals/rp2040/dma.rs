@@ -403,17 +403,21 @@ impl Rp2040Dma {
 
         // Read `width` bytes from the source.
         let mut buf = [0u8; 4];
-        for (i, b) in buf.iter_mut().take(width as usize).enumerate() {
-            *b = bus.read_u8(c.read_addr as u64 + i as u64).unwrap_or(0);
-        }
+        crate::with_device_write_bypass(bus, |bus| {
+            for (i, b) in buf.iter_mut().take(width as usize).enumerate() {
+                *b = bus.read_u8(c.read_addr as u64 + i as u64).unwrap_or(0);
+            }
+        });
         // BSWAP reverses the bytes within a (half-word / word) beat.
         if bswap && width > 1 {
             buf[..width as usize].reverse();
         }
         // Write them to the destination.
-        for (i, &b) in buf.iter().take(width as usize).enumerate() {
-            let _ = bus.write_u8(c.write_addr as u64 + i as u64, b);
-        }
+        crate::with_device_write_bypass(bus, |bus| {
+            for (i, &b) in buf.iter().take(width as usize).enumerate() {
+                let _ = bus.write_u8(c.write_addr as u64 + i as u64, b);
+            }
+        });
 
         if c.ctrl & CTRL_INCR_READ != 0 {
             c.read_addr = c.advance(c.read_addr, false);
@@ -638,6 +642,46 @@ mod tests {
             Rp2040Dma::decode_channel(ch(3) + CTRL_TRIG).map(|(c, _, _)| c),
             Some(3)
         );
+    }
+
+    #[test]
+    fn dma_transfer_bypasses_cpu_store_policy_and_watches() {
+        let mut bus = ram_bus();
+        let src = 0x2000_1000u32;
+        let dst = 0x2000_2000u32;
+        for i in 0..8u32 {
+            bus.write_u8(src as u64 + i as u64, i as u8).unwrap();
+        }
+        let mut dma = Rp2040Dma::new();
+        dma.write_word(READ_ADDR, src);
+        dma.write_word(WRITE_ADDR, dst);
+        dma.write_word(TRANS_COUNT, 8);
+        dma.write_word(CTRL_TRIG, ctrl(true, 0, true, true, 0));
+
+        bus.memory_policy.ram = crate::bus::CpuWritePolicy::Fault;
+        assert!(bus.add_debug_watch(dst as u64, 8, false, true));
+        assert!(bus.add_debug_watch(src as u64, 8, true, false));
+
+        drain(&mut dma, &mut bus);
+
+        for i in 0..8u64 {
+            assert_eq!(bus.read_u8(dst as u64 + i).unwrap(), i as u8);
+        }
+        assert_eq!(
+            bus.memory_policy.violations_ram, 0,
+            "DMA stores must bypass the cpu_writes policy"
+        );
+        assert_eq!(
+            bus.take_debug_watch_hit(),
+            None,
+            "neither a DMA store nor a DMA load may latch a watch"
+        );
+
+        // A direct CPU store is still gated and still latches.
+        let err = bus.write_u8(dst as u64, 0xAA).unwrap_err();
+        assert!(matches!(err, crate::SimulationError::MemoryViolation(_)));
+        assert_eq!(bus.memory_policy.violations_ram, 1);
+        assert_eq!(bus.take_debug_watch_hit(), Some(dst as u64));
     }
 
     #[test]

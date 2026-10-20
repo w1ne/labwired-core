@@ -226,16 +226,27 @@ impl crate::bus::SystemBus {
         )
     }
 
-    /// Runs `f` with the CPU-write policy gate bypassed (non-CPU hardware
-    /// writes: DMA engines). Nesting-safe; restores the previous state.
-    /// Currently used only by the generic DMA request path; peripheral-internal
-    /// DMA models writing through `&mut dyn Bus` are a recorded deferral.
+    /// Runs `f` with the CPU-write policy gate bypassed (non-CPU writes: DMA
+    /// engines, the loader's peripheral-backed byte walk, and boot seeds).
+    /// Nesting-safe; restores the previous state.
     pub(crate) fn with_memory_policy_bypass<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
         let saved = self.memory_policy_bypass;
         self.memory_policy_bypass = true;
         let r = f(self);
         self.memory_policy_bypass = saved;
         r
+    }
+
+    /// True while a device-originated transfer bypasses the CPU-store gates.
+    pub(crate) fn device_write_bypass(&self) -> bool {
+        self.memory_policy_bypass || self.debug_watch_host_bypass.get()
+    }
+
+    /// Set the device-transfer bypass on BOTH gates: a device transfer is not
+    /// a CPU store, so neither the policy gate nor the watches may see it.
+    pub(crate) fn set_device_write_bypass(&mut self, on: bool) {
+        self.memory_policy_bypass = on;
+        self.debug_watch_host_bypass.set(on);
     }
 
     /// True when a non-default RAM `cpu_writes` policy is in force — the

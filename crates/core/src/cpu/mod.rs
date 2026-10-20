@@ -16,6 +16,11 @@
 // still carries four discarded stores (see the shrink-only allowlist in
 // `crate::tests::cortex_m_memory_contract`, which covers the whole `cpu/` tree
 // and catches the `is_err()` / `.ok()` discard shapes clippy cannot see).
+mod trait_def;
+
+pub(crate) use trait_def::{advance_batch_cycle, default_step_batch, default_step_batch_with};
+pub use trait_def::{Cpu, CpuJitStats, SecondaryExecutionState};
+
 #[deny(clippy::let_underscore_must_use)]
 pub mod avr;
 #[cfg(all(feature = "qemu-arm", not(target_arch = "wasm32")))]

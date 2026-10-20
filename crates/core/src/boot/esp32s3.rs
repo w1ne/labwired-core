@@ -134,14 +134,22 @@ pub fn fast_boot(
             }
             return Err(BootError::SegmentOutsideMap { addr: vaddr, size });
         }
-        for (i, &b) in bytes.iter().enumerate() {
-            let addr = vaddr.wrapping_add(i as u32) as u64;
-            bus.write_u8(addr, b)
-                .map_err(|_| BootError::SegmentOutsideMap {
-                    addr: addr as u32,
-                    size: size - i,
-                })?;
-        }
+        // Boot-time placement is a host write, not a CPU store: it must
+        // neither be rejected by a CPU-write policy nor latch a debug watch.
+        let placed: Result<(), BootError> = bus.with_debug_watch_bypass(|bus| {
+            bus.with_memory_policy_bypass(|bus| {
+                for (i, &b) in bytes.iter().enumerate() {
+                    let addr = vaddr.wrapping_add(i as u32) as u64;
+                    bus.write_u8(addr, b)
+                        .map_err(|_| BootError::SegmentOutsideMap {
+                            addr: addr as u32,
+                            size: size - i,
+                        })?;
+                }
+                Ok(())
+            })
+        });
+        placed?;
         segments_loaded += 1;
     }
 
@@ -224,7 +232,13 @@ pub fn seed_factory_mmu_for_cache2phys(bus: &mut SystemBus, irom_pages: u32, dro
                 continue;
             }
             let phys = FACTORY_PAGE.wrapping_add(p);
-            let _ = bus.write_u32(MMU_TABLE + (entry as u64) * 4, phys);
+            // Host boot seed, not a CPU store: same bypass contract as
+            // `fast_boot`'s segment placement.
+            bus.with_debug_watch_bypass(|bus| {
+                bus.with_memory_policy_bypass(|bus| {
+                    let _ = bus.write_u32(MMU_TABLE + (entry as u64) * 4, phys);
+                })
+            });
             seeded += 1;
         }
     }
@@ -254,13 +268,18 @@ pub fn seed_esp32s3_rom_flashchip(bus: &mut SystemBus, flash_size: u32) {
     const ROM_SPIFLASH_LEGACY_DATA: u64 = 0x3FCE_FFE4;
     const CHIP: u32 = 0x3FCE_FF00;
     // esp_rom_spiflash_chip_t — Winbond W25Q-class (matches the SPI RDID model).
-    let _ = bus.write_u32(CHIP as u64, 0x0016_40EF); // device_id
-    let _ = bus.write_u32(CHIP as u64 + 4, flash_size); // chip_size
-    let _ = bus.write_u32(CHIP as u64 + 8, 64 * 1024); // block_size
-    let _ = bus.write_u32(CHIP as u64 + 12, 4 * 1024); // sector_size
-    let _ = bus.write_u32(CHIP as u64 + 16, 256); // page_size
-    let _ = bus.write_u32(CHIP as u64 + 20, 0xFFFF); // status_mask
-    let _ = bus.write_u32(ROM_SPIFLASH_LEGACY_DATA, CHIP);
+    // Host boot seed, not a CPU store: bypass both gates like `fast_boot`.
+    bus.with_debug_watch_bypass(|bus| {
+        bus.with_memory_policy_bypass(|bus| {
+            let _ = bus.write_u32(CHIP as u64, 0x0016_40EF); // device_id
+            let _ = bus.write_u32(CHIP as u64 + 4, flash_size); // chip_size
+            let _ = bus.write_u32(CHIP as u64 + 8, 64 * 1024); // block_size
+            let _ = bus.write_u32(CHIP as u64 + 12, 4 * 1024); // sector_size
+            let _ = bus.write_u32(CHIP as u64 + 16, 256); // page_size
+            let _ = bus.write_u32(CHIP as u64 + 20, 0xFFFF); // status_mask
+            let _ = bus.write_u32(ROM_SPIFLASH_LEGACY_DATA, CHIP);
+        })
+    });
     tracing::info!(
         "esp32s3: seeded rom_spiflash_legacy_data -> chip@{CHIP:#010x} (chip_size={flash_size:#x})"
     );

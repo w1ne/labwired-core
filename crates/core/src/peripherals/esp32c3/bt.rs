@@ -2074,17 +2074,18 @@ impl Esp32c3Bt {
         Some((EM_RAM_WINDOW | addr_lo) + u64::from(em_off - covered))
     }
 
-    fn em_read_u8(&self, bus: &dyn Bus, em_off: u32) -> Option<u8> {
-        bus.read_u8(self.em_cpu_addr(em_off)?).ok()
+    fn em_read_u8(&self, bus: &mut dyn Bus, em_off: u32) -> Option<u8> {
+        let addr = self.em_cpu_addr(em_off)?;
+        crate::with_device_write_bypass(bus, |bus| bus.read_u8(addr)).ok()
     }
 
-    fn em_read_u16(&self, bus: &dyn Bus, em_off: u32) -> Option<u16> {
+    fn em_read_u16(&self, bus: &mut dyn Bus, em_off: u32) -> Option<u16> {
         let lo = u16::from(self.em_read_u8(bus, em_off)?);
         let hi = u16::from(self.em_read_u8(bus, em_off + 1)?);
         Some(lo | (hi << 8))
     }
 
-    fn em_read_u32(&self, bus: &dyn Bus, em_off: u32) -> Option<u32> {
+    fn em_read_u32(&self, bus: &mut dyn Bus, em_off: u32) -> Option<u32> {
         let lo = u32::from(self.em_read_u16(bus, em_off)?);
         let hi = u32::from(self.em_read_u16(bus, em_off + 2)?);
         Some(lo | (hi << 16))
@@ -2092,8 +2093,8 @@ impl Esp32c3Bt {
 
     fn em_write_u16(&self, bus: &mut dyn Bus, em_off: u32, value: u16) -> Option<()> {
         let addr = self.em_cpu_addr(em_off)?;
-        bus.write_u8(addr, value as u8).ok()?;
-        bus.write_u8(addr + 1, (value >> 8) as u8).ok()
+        crate::with_device_write_bypass(bus, |bus| bus.write_u8(addr, value as u8)).ok()?;
+        crate::with_device_write_bypass(bus, |bus| bus.write_u8(addr + 1, (value >> 8) as u8)).ok()
     }
 
     /// Byte offset of exchange-table entry `idx`.
@@ -2104,7 +2105,7 @@ impl Esp32c3Bt {
     /// Absolute elapsed cycle at which the exchange-table entry says its event
     /// starts, and how long it runs, or `None` while exchange memory is not
     /// mapped yet.
-    fn read_et_schedule(&self, bus: &dyn Bus, idx: u32) -> Option<(u64, u64)> {
+    fn read_et_schedule(&self, bus: &mut dyn Bus, idx: u32) -> Option<(u64, u64)> {
         let et = Self::et_entry(idx);
         let lo = u32::from(self.em_read_u16(bus, et + ET_START_LO)?);
         let hi = u32::from(self.em_read_u16(bus, et + ET_START_HI)?) & 0x0FFF;
@@ -2321,7 +2322,7 @@ impl Esp32c3Bt {
             let Some(addr) = self.em_cpu_addr(data_off + i as u32) else {
                 return false;
             };
-            if bus.write_u8(addr, *b).is_err() {
+            if crate::with_device_write_bypass(bus, |bus| bus.write_u8(addr, *b)).is_err() {
                 return false;
             }
         }
