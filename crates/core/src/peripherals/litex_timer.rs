@@ -244,6 +244,36 @@ impl crate::Peripheral for LitexTimer {
         Ok(())
     }
 
+    /// A word store must land as ONE register write.
+    ///
+    /// The trait's default decomposes it into four byte writes; for `LOAD`
+    /// that would rewrite the counter four times and could latch a false zero
+    /// event (writing 256 from 1 passes through 0 in the low byte). The
+    /// counters are 32-bit CSRs — the bus's word write is the accurate one.
+    fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        if offset % 4 == 0 {
+            self.write_reg(offset, value);
+            return Ok(());
+        }
+        // Unaligned stores keep the byte-lane contract.
+        for (i, byte) in value.to_le_bytes().iter().enumerate() {
+            self.write(offset + i as u64, *byte)?;
+        }
+        Ok(())
+    }
+
+    /// A half-word store is likewise one write of the low 16 bits.
+    fn write_u16(&mut self, offset: u64, value: u16) -> SimResult<()> {
+        if offset % 4 == 0 {
+            let mut v = self.read_reg(offset);
+            v = (v & 0xFFFF_0000) | u32::from(value);
+            self.write_reg(offset, v);
+            return Ok(());
+        }
+        self.write(offset, value as u8)?;
+        self.write(offset + 1, (value >> 8) as u8)
+    }
+
     /// A countdown must see every elapsed cycle; the counter is the model.
     fn needs_legacy_walk(&self) -> bool {
         true
@@ -423,6 +453,24 @@ mod tests {
             t.read_u32(EV_PENDING).unwrap(),
             1,
             "a disabled load rewrite to zero is a zero event"
+        );
+    }
+
+    /// A word store to `LOAD` must land atomically: the trait's default
+    /// four byte writes would pass through zero in the low byte and latch a
+    /// false expiry (1 -> 256).
+    #[test]
+    fn word_write_to_load_is_atomic() {
+        let mut t = LitexTimer::new();
+        t.write_u32(LOAD, 1).unwrap();
+        t.write_u32(EV_PENDING, 1).unwrap();
+        assert_eq!(t.read_u32(EV_PENDING).unwrap(), 0);
+        t.write_u32(LOAD, 256).unwrap();
+        assert_eq!(t.read_u32(EV_STATUS).unwrap(), 0);
+        assert_eq!(
+            t.read_u32(EV_PENDING).unwrap(),
+            0,
+            "atomic LOAD store must not latch a transient zero"
         );
     }
 
