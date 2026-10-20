@@ -192,7 +192,18 @@ impl LitexTimer {
                 }
             }
             RELOAD => self.reload = value,
-            EN => self.en = value & 1 != 0,
+            EN => {
+                let was_enabled = self.en;
+                self.en = value & 1 != 0;
+                if was_enabled && !self.en {
+                    // The RTL's disabled branch loads `value` from `load` on
+                    // the next clock; applying it on the disable write keeps a
+                    // load -> disable -> enable re-arm working even when the
+                    // bus batches ticks and no tick falls between the stores.
+                    self.counter = self.load;
+                    self.update_zero_level();
+                }
+            }
             // Any write is the latch strobe; the data is kept in the storage bit.
             UPDATE_VALUE => {
                 self.update_value = value & 1 != 0;
@@ -533,6 +544,29 @@ mod tests {
             0,
             "writing bit 0 as 1 clears it"
         );
+    }
+
+    /// The datasheet's one-shot re-arm sequence (disable, load, enable) must
+    /// work even when the bus batches ticks and no tick falls between the
+    /// stores: the disable write reloads the counter from `load`.
+    #[test]
+    fn one_shot_rearms_across_a_disable_enable_pair_without_a_tick() {
+        let mut t = armed(10, 0);
+        let _ = t.tick_elapsed(10); // one-shot expires
+        assert_eq!(t.read_u32(EV_PENDING).unwrap(), 1);
+        t.write_u32(EV_PENDING, 1).unwrap();
+
+        t.write_u32(EN, 0).unwrap();
+        t.write_u32(LOAD, 10).unwrap();
+        t.write_u32(EN, 1).unwrap();
+        let _ = t.tick_elapsed(5);
+        t.write_u32(UPDATE_VALUE, 0).unwrap();
+        assert_eq!(
+            t.read_u32(VALUE).unwrap(),
+            5,
+            "the countdown restarted from load"
+        );
+        assert_eq!(t.read_u32(EV_STATUS).unwrap(), 0);
     }
 
     /// A resume must continue the countdown, not restart it: both snapshot
