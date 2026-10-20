@@ -94,8 +94,27 @@ pub const INSTR_SLOT_BYTES: usize = 4;
 /// PC units per instruction: the PC advances by 2 (DS70283H §4; the
 /// "Program Counter Unit" in DS50002071F).
 pub const PC_UNITS_PER_INSTRUCTION: u32 = 2;
+/// End of user program flash in PC units: 0x000000–0x0057FE on the
+/// dsPIC33FJ32MC204 (DS70283H Figure 4-1), i.e. 11264 instructions — the full
+/// 32 KB of 3-byte packed code.
+pub const PROGRAM_PC_END: u32 = 0x5800;
 /// Instruction slots available in flash.
-pub const INSTR_SLOTS: usize = FLASH_BYTES / INSTR_SLOT_BYTES;
+pub const INSTR_SLOTS: usize = (PROGRAM_PC_END / PC_UNITS_PER_INSTRUCTION) as usize;
+/// Internal flash storage: one 4-byte slot per instruction. Larger than
+/// [`FLASH_BYTES`] because each 3-byte instruction occupies a 4-byte slot.
+pub const FLASH_STORAGE_BYTES: usize = INSTR_SLOTS * INSTR_SLOT_BYTES;
+
+/// Reject an odd XC16 program address. Program addresses are PC units and an
+/// instruction always starts on an even one (DS70283H §4); rounding an odd
+/// address down would silently load or start one instruction early.
+pub fn check_xc16_pc_address(what: &str, addr: u64) -> Result<(), String> {
+    if addr % u64::from(PC_UNITS_PER_INSTRUCTION) != 0 {
+        return Err(format!(
+            "PIC24 {what} {addr:#x} is odd; XC16 program addresses are even PC units (DS70283H §4)"
+        ));
+    }
+    Ok(())
+}
 
 /// Expand an XC16 executable section into this CPU's internal slots.
 ///
@@ -376,7 +395,7 @@ impl Pic24 {
             pc: 0,
             sr: 0,
             cycles: 0,
-            flash: vec![0xFF; FLASH_BYTES],
+            flash: vec![0xFF; FLASH_STORAGE_BYTES],
             sfr: vec![0; SFR_BYTES],
             ram: vec![0; RAM_BYTES],
             u1mode: 0,
@@ -439,7 +458,10 @@ impl Pic24 {
     /// are already in this CPU's 4-byte slot form.
     pub fn load_flash(&mut self, addr_pc: u32, bytes: &[u8]) {
         let off = (addr_pc as usize / PC_UNITS_PER_INSTRUCTION as usize) * INSTR_SLOT_BYTES;
-        assert!(off + bytes.len() <= FLASH_BYTES, "fixture exceeds flash");
+        assert!(
+            off + bytes.len() <= FLASH_STORAGE_BYTES,
+            "fixture exceeds flash"
+        );
         self.flash[off..off + bytes.len()].copy_from_slice(bytes);
     }
 
@@ -450,8 +472,10 @@ impl Pic24 {
         for seg in &image.segments {
             let slot = (seg.start_addr / u64::from(PC_UNITS_PER_INSTRUCTION)) as usize;
             let start = slot.saturating_mul(INSTR_SLOT_BYTES);
-            let end = start.saturating_add(seg.data.len()).min(FLASH_BYTES);
-            if start < FLASH_BYTES {
+            let end = start
+                .saturating_add(seg.data.len())
+                .min(FLASH_STORAGE_BYTES);
+            if start < FLASH_STORAGE_BYTES {
                 self.flash[start..end].copy_from_slice(&seg.data[..end - start]);
             }
         }
@@ -969,7 +993,7 @@ impl Pic24 {
             return Err(SimulationError::DecodeError(self.pc as u64));
         }
         let off = (self.pc as usize / PC_UNITS_PER_INSTRUCTION as usize) * INSTR_SLOT_BYTES;
-        if off + INSTR_SLOT_BYTES > FLASH_BYTES {
+        if off + INSTR_SLOT_BYTES > FLASH_STORAGE_BYTES {
             return Err(SimulationError::MemoryViolation(off as u64));
         }
         Ok(u32::from_le_bytes([
@@ -1508,6 +1532,35 @@ mod tests {
 
     fn step<B: Bus>(cpu: &mut Pic24, bus: &mut B) {
         cpu.step(bus, &[], &SimulationConfig::default()).unwrap();
+    }
+
+    #[test]
+    fn full_program_flash_loads_through_the_last_instruction() {
+        // 32 KB of 3-byte packed XC16 code: every instruction up to 0x57FE.
+        let packed: Vec<u8> = (0..INSTR_SLOTS)
+            .flat_map(|_| mov_lit_w0(0x48).to_le_bytes()[..3].to_vec())
+            .collect();
+        let mut image = crate::memory::ProgramImage::new(0, crate::Arch::Pic24);
+        image.add_segment(0, xc16_executable_slots(&packed).unwrap());
+        let mut cpu = Pic24::new();
+        cpu.load_program_image(&image);
+        let mut bus = SystemBus::new();
+        cpu.set_pc(PROGRAM_PC_END - PC_UNITS_PER_INSTRUCTION);
+        step(&mut cpu, &mut bus);
+        assert_eq!(
+            cpu.w[0], 0x48,
+            "the last instruction slot was loaded, not truncated"
+        );
+        assert!(
+            cpu.fetch().is_err(),
+            "nothing past the end of program flash"
+        );
+    }
+
+    #[test]
+    fn odd_program_addresses_are_rejected() {
+        assert!(check_xc16_pc_address("entry point", 0x201).is_err());
+        assert!(check_xc16_pc_address("entry point", 0x200).is_ok());
     }
 
     #[test]

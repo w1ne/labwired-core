@@ -739,6 +739,10 @@ pub fn parse_elf_image(bytes: &[u8]) -> anyhow::Result<crate::memory::ProgramIma
     let machine = elf.header.e_machine;
     let arch = elf_arch(machine)
         .ok_or_else(|| anyhow::anyhow!("unsupported ELF machine type {machine}"))?;
+    if arch == crate::Arch::Pic24 {
+        crate::cpu::pic24::check_xc16_pc_address("entry point", elf.entry)
+            .map_err(anyhow::Error::msg)?;
+    }
     let mut image = crate::memory::ProgramImage::new(elf.entry, arch);
     for ph in &elf.program_headers {
         if ph.p_type != PT_LOAD || ph.p_filesz == 0 {
@@ -765,6 +769,8 @@ pub fn parse_elf_image(bytes: &[u8]) -> anyhow::Result<crate::memory::ProgramIma
                     n
                 );
             };
+            crate::cpu::pic24::check_xc16_pc_address("executable segment", ph.p_paddr)
+                .map_err(anyhow::Error::msg)?;
             image.add_segment(ph.p_paddr, slots);
             continue;
         }

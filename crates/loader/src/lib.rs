@@ -94,6 +94,10 @@ pub fn load_elf_bytes(buffer: &[u8]) -> Result<ProgramImage> {
             labwired_core::Arch::Unknown
         });
 
+    if arch == labwired_core::Arch::Pic24 {
+        labwired_core::cpu::pic24::check_xc16_pc_address("entry point", elf.entry)
+            .map_err(|e| anyhow!(e))?;
+    }
     let mut program_image = ProgramImage::new(elf.entry, arch);
 
     for ph in elf.program_headers {
@@ -170,6 +174,11 @@ pub fn load_elf_bytes(buffer: &[u8]) -> Result<ProgramImage> {
                                 size
                             )
                         })?;
+                    labwired_core::cpu::pic24::check_xc16_pc_address(
+                        "executable segment",
+                        start_addr,
+                    )
+                    .map_err(|e| anyhow!(e))?;
                     program_image.add_segment(start_addr, slots);
                 } else {
                     program_image.add_segment(start_addr, segment_data);
