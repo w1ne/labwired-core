@@ -24,10 +24,11 @@
 //! The pin-side behaviour is exposed through the engine's [`PinPort`]: a pin
 //! configured as an output drives the level in the OutputRegister; a pin
 //! configured as an input reports the level the outside world presents.
-//! Interrupt *generation* is not modelled yet (the INTENABLE/INTTYPE fields
-//! are readable/writable register state; the interrupt-clear register is
-//! absorbed) — the Mi-V promotion that consumes this model checks the
-//! pending path when a board uses interrupts.
+//! Per-pin interrupts are generated from the pad level according to INTTYPE
+//! (level high / level low / rising / falling / both edges) and gated by
+//! INTENABLE; edge triggers latch until `InterruptClear` writes their bit.
+//! The block reports one OR'd interrupt line, which is how the reference
+//! design routes it to the interrupt controller.
 //!
 //! ## CoreTimer (0x1C bytes)
 //!
@@ -80,6 +81,10 @@ pub struct MivCoreGpio {
     /// `None` = released (nothing connected). Stored as `Option<bool>` so the
     /// model derives serde; `External` is the pin-layer spelling.
     external: [Option<bool>; GPIO_PINS],
+    /// Latched per-pin interrupt bits (edge triggers). Level triggers are
+    /// evaluated from the pad level; both are cleared by InterruptClear.
+    #[serde(default)]
+    irq_latched: u32,
 }
 
 impl MivCoreGpio {
@@ -88,6 +93,7 @@ impl MivCoreGpio {
             cfg: [0; GPIO_PINS],
             output: 0,
             external: [None; GPIO_PINS],
+            irq_latched: 0,
         }
     }
 
@@ -113,6 +119,49 @@ impl MivCoreGpio {
     /// Firmware-visible input level of `pin` (InputRegister bit).
     fn input_level(&self, pin: usize) -> bool {
         self.external_level(pin)
+    }
+
+    /// INTENABLE bits (CONFIG_X[3]).
+    fn int_enable_mask(&self) -> u32 {
+        self.cfg
+            .iter()
+            .enumerate()
+            .fold(0u32, |m, (i, c)| if bit(*c, 3) { m | (1 << i) } else { m })
+    }
+
+    /// INTTYPE field (CONFIG_X[7:5]): 0 level high, 1 level low, 2 rising
+    /// edge, 3 falling edge, 4 both edges, 7 disabled.
+    fn int_type(&self, pin: usize) -> u32 {
+        (self.cfg[pin] >> 5) & 0x7
+    }
+
+    /// Latch an edge-triggered interrupt for `pin` (levels are evaluated live).
+    fn update_irq(&mut self, pin: usize, before: bool, after: bool) {
+        let fired = match self.int_type(pin) {
+            2 => !before && after,
+            3 => before && !after,
+            4 => before != after,
+            _ => false,
+        };
+        if fired {
+            self.irq_latched |= 1 << pin;
+        }
+    }
+
+    /// Is any enabled pin's interrupt active (level condition or latched edge)?
+    fn any_irq_active(&self) -> bool {
+        let enables = self.int_enable_mask();
+        (0..GPIO_PINS).any(|pin| {
+            if !bit(enables, pin) {
+                return false;
+            }
+            match self.int_type(pin) {
+                0 => self.external[pin] == Some(true),
+                1 => self.external[pin] == Some(false),
+                2..=4 => bit(self.irq_latched, pin),
+                _ => false, // 7 = disabled
+            }
+        })
     }
 
     fn read_reg(&self, offset: u64) -> u32 {
@@ -146,9 +195,8 @@ impl MivCoreGpio {
 
     fn write_reg(&mut self, offset: u64, value: u32) {
         match offset {
-            // InterruptClear: no latched interrupts are modelled yet; the write
-            // is absorbed so firmware's clear-before-enable sequence is silent.
-            GPIO_IRQ_CLEAR => {}
+            // InterruptClear: write 1 to each bit to clear its latch.
+            GPIO_IRQ_CLEAR => self.irq_latched &= !value,
             GPIO_INPUT => {} // read-only
             GPIO_OUTPUT => {
                 let mask = self.out_mask();
@@ -190,6 +238,19 @@ impl crate::Peripheral for MivCoreGpio {
         v = (v & !mask) | ((value as u32) << (byte * 8));
         self.write_reg(reg, v);
         Ok(())
+    }
+
+    /// The block's interrupt line is an OR of the enabled pins (the reference
+    /// design routes one source to the controller).
+    fn irq_line_level(&self) -> Option<bool> {
+        Some(self.any_irq_active())
+    }
+
+    fn tick_elapsed(&mut self, _cycles: u64) -> crate::PeripheralTickResult {
+        crate::PeripheralTickResult {
+            irq: self.any_irq_active(),
+            ..Default::default()
+        }
     }
 
     fn pins(&self) -> Option<&dyn PinPort> {
@@ -334,6 +395,7 @@ impl PinPort for MivCoreGpio {
         let before = self.input_level(pin);
         self.external[pin] = ext.level();
         let after = self.input_level(pin);
+        self.update_irq(pin, before, after);
         Some(InputChange { before, after })
     }
 
@@ -810,6 +872,86 @@ peripherals:
             Some((0x7000_5000 + GPIO_OUTPUT, 1)),
             "the output latch offset is published through gpio_port_offsets"
         );
+    }
+
+    #[test]
+    fn gpio_edge_interrupts_latch_and_clear() {
+        let mut gpio = MivCoreGpio::new();
+        // pin 0: INREG(1) | INTENABLE(3) | INTTYPE=2 rising edge (bits 5..7).
+        gpio.write_u32(0x00, (1 << 1) | (1 << 3) | (2 << 5))
+            .unwrap();
+        gpio.set_external(0, External::Level(false));
+        assert_eq!(gpio.irq_line_level(), Some(false));
+        gpio.set_external(0, External::Level(true)); // rising edge
+        assert_eq!(gpio.irq_line_level(), Some(true), "rising edge latched");
+        gpio.set_external(0, External::Level(false));
+        assert_eq!(
+            gpio.irq_line_level(),
+            Some(true),
+            "an edge interrupt stays latched"
+        );
+        gpio.write_u32(GPIO_IRQ_CLEAR, 1).unwrap();
+        assert_eq!(
+            gpio.irq_line_level(),
+            Some(false),
+            "InterruptClear drops the latch"
+        );
+    }
+
+    #[test]
+    fn gpio_level_interrupts_track_the_pad_and_the_enable() {
+        let mut gpio = MivCoreGpio::new();
+        // pin 0: INREG | INTENABLE | INTTYPE=0 level high.
+        gpio.write_u32(0x00, (1 << 1) | (1 << 3)).unwrap();
+        gpio.set_external(0, External::Level(true));
+        assert_eq!(gpio.irq_line_level(), Some(true), "level high is live");
+        gpio.set_external(0, External::Level(false));
+        assert_eq!(gpio.irq_line_level(), Some(false), "level low drops it");
+        gpio.set_external(0, External::Level(true));
+        gpio.write_u32(0x00, 1 << 1).unwrap(); // clear INTENABLE
+        assert_eq!(gpio.irq_line_level(), Some(false), "masked pin");
+    }
+
+    /// The configured IRQ line is delivered through the bus on an edge and
+    /// stops after InterruptClear.
+    #[test]
+    fn gpio_interrupt_is_delivered_through_the_bus() {
+        use crate::Bus;
+        use labwired_config::{ChipDescriptor, SystemManifest};
+
+        let chip_yaml = r#"
+name: "miv-gpio-irq-test"
+arch: "riscv"
+core: "rv32im"
+cpu_hz: 1_000_000
+flash: { base: 0x60000000, size: "256KB" }
+ram: { base: 0x80000000, size: "64KB" }
+peripherals:
+  - id: "gpioInputs"
+    type: "miv_coregpio"
+    base_address: 0x70002000
+    size: "1KB"
+    irq: 5
+"#;
+        let manifest_yaml = "name: \"miv-gpio-irq-test\"\nchip: \"miv-gpio-irq-test.yaml\"\n";
+        let chip: ChipDescriptor = serde_yaml::from_str(chip_yaml).unwrap();
+        let manifest: SystemManifest = serde_yaml::from_str(manifest_yaml).unwrap();
+        let mut bus = crate::bus::SystemBus::from_config(&chip, &manifest).unwrap();
+        // pin 0: INREG | INTENABLE | rising edge.
+        bus.write_u32(0x7000_2000, (1 << 1) | (1 << 3) | (2 << 5))
+            .unwrap();
+        assert!(bus.set_peripheral_gpio_input(0, 0, false));
+        let (irqs, _) = bus.tick_peripherals_fully();
+        assert!(!irqs.contains(&5));
+        assert!(bus.set_peripheral_gpio_input(0, 0, true));
+        let (irqs, _) = bus.tick_peripherals_fully();
+        assert!(
+            irqs.contains(&5),
+            "the edge is delivered on the configured IRQ line"
+        );
+        bus.write_u32(0x7000_2080, 1).unwrap(); // InterruptClear
+        let (irqs, _) = bus.tick_peripherals_fully();
+        assert!(!irqs.contains(&5), "cleared interrupts are not delivered");
     }
 
     #[test]
