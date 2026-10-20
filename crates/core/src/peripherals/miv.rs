@@ -248,7 +248,14 @@ impl MivCoreGpio {
             _ if (GPIO_CFG_BASE..GPIO_IRQ_CLEAR).contains(&offset) && offset % 4 == 0 => {
                 let index = (offset / 4) as usize;
                 if index < GPIO_PINS {
+                    let before = self.pad_level(index);
                     self.cfg[index] = value & CFG_WRITABLE_MASK;
+                    let after = self.pad_level(index);
+                    // Enabling OUTBUFF/OUTREG can move the pad: that is an
+                    // edge like any other, evaluated under the new config.
+                    if before != after {
+                        self.update_irq(index, before, after);
+                    }
                 } else {
                     crate::census_reg!("miv:CoreGPIO", offset, "write");
                 }
@@ -332,10 +339,9 @@ impl crate::Peripheral for MivCoreGpio {
         if pin >= GPIO_PINS {
             return None;
         }
-        match self.external[pin] {
-            Some(level) => Some(level),
-            None => Some(bit(self.in_mask(), pin) && self.input_level(pin)),
-        }
+        // Consistent with the InputRegister and the PinPort: the pad level
+        // (own drive when buffered, external otherwise).
+        Some(self.pad_level(pin))
     }
 
     fn read_gpio_input_word(&self) -> u32 {
@@ -812,11 +818,16 @@ mod tests {
 
         assert_eq!(gpio.read_gpio_input(1), Some(true));
         assert_eq!(
-            gpio.read_gpio_input(0),
-            Some(false),
-            "an output pin's input register bit is forced to 0"
+            gpio.read_u32(GPIO_INPUT).unwrap() & 1,
+            0,
+            "the InputRegister masks non-input pins"
         );
-        assert_eq!(gpio.read_gpio_input_word(), 0b10);
+        assert_eq!(
+            gpio.read_gpio_input(0),
+            Some(true),
+            "the pad capability reports the level the output stage drives"
+        );
+        assert_eq!(gpio.read_gpio_input_word(), 0b11);
         assert_eq!(gpio.read_gpio_output(0), Some(true));
         assert_eq!(gpio.read_gpio_output(1), Some(false));
         assert_eq!(gpio.read_gpio_is_output(0), Some(true));
@@ -1011,6 +1022,39 @@ peripherals:
         );
         gpio.set_external(0, External::Level(true)); // a real edge now latches
         assert_eq!(gpio.irq_line_level(), Some(true));
+    }
+
+    #[test]
+    fn gpio_enabling_the_output_buffer_latches_the_edge() {
+        let mut gpio = MivCoreGpio::new();
+        // pin 0: OUTREG + INTENABLE + rising edge; buffer off for now.
+        gpio.write_u32(0x00, (1 << 0) | (1 << 3) | (2 << 5))
+            .unwrap();
+        gpio.write_u32(GPIO_OUTPUT, 1).unwrap(); // latch high, pad still low
+        assert_eq!(gpio.irq_line_level(), Some(false));
+        // Enabling OUTBUFF moves the pad high -> a rising edge.
+        gpio.write_u32(0x00, (1 << 0) | (1 << 2) | (1 << 3) | (2 << 5))
+            .unwrap();
+        assert_eq!(
+            gpio.irq_line_level(),
+            Some(true),
+            "the OUTBUFF-enable rise latched"
+        );
+    }
+
+    #[test]
+    fn gpio_capability_hooks_agree_with_the_pad_when_drives_conflict() {
+        let mut gpio = MivCoreGpio::new();
+        gpio.write_u32(0x00, 0b111).unwrap(); // INREG | OUTREG | OUTBUFF
+        gpio.write_u32(GPIO_OUTPUT, 1).unwrap();
+        gpio.set_external(0, External::Level(false)); // conflicting drive
+        assert_eq!(gpio.read_gpio_input(0), Some(true), "capability hook");
+        assert_eq!(gpio.input(0), Some(true), "PinPort input");
+        assert_eq!(
+            gpio.read_u32(GPIO_INPUT).unwrap(),
+            1,
+            "the firmware-visible register"
+        );
     }
 
     #[test]
