@@ -1424,6 +1424,9 @@ mod tests {
         use crate::peripherals::stub::StubPeripheral;
 
         let mut bus = SystemBus::new();
+        // `SystemBus::new()` seeds four test peripherals; only the delta
+        // matters here.
+        let before = bus.peripherals.len();
         bus.add_peripheral(
             "placeholder",
             0x4000_0000,
@@ -1431,7 +1434,7 @@ mod tests {
             None,
             Box::new(StubPeripheral::new(0)),
         );
-        assert_eq!(bus.peripherals.len(), 1);
+        assert_eq!(bus.peripherals.len(), before + 1);
 
         // The core-tied ARM blocks are matched by architectural address even
         // when an earlier builder gave them another name. A block that merely
@@ -1447,14 +1450,16 @@ mod tests {
 
         assert_eq!(
             bus.peripherals.len(),
-            1,
+            before + 1,
             "base match must replace, not append"
         );
-        assert_eq!(bus.peripherals[0].name, "renamed");
-        assert_eq!(bus.peripherals[0].size, 0x200);
-        assert_eq!(bus.peripherals[0].irq, Some(7));
+        let idx = bus
+            .find_peripheral_index_by_name("renamed")
+            .expect("the replacement kept its name");
+        assert_eq!(bus.peripherals[idx].size, 0x200);
+        assert_eq!(bus.peripherals[idx].irq, Some(7));
         // The widened window is only visible if `rebuild_peripheral_ranges`
         // ran after the replacement.
-        assert_eq!(bus.find_peripheral_index(0x4000_01F0), Some(0));
+        assert_eq!(bus.find_peripheral_index(0x4000_01F0), Some(idx));
     }
 }
