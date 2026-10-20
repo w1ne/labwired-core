@@ -7,7 +7,7 @@
 use crate::memory::LinearMemory;
 use crate::peripherals::nvic::NvicState;
 use crate::peripherals::uart::Uart;
-use crate::{Bus, Peripheral, SimResult};
+use crate::{Peripheral, SimResult};
 use labwired_config::{parse_size, ChipDescriptor, PeripheralConfig, SystemManifest};
 use std::cell::Cell;
 use std::collections::VecDeque;
@@ -18,6 +18,9 @@ use std::sync::Mutex;
 
 mod accessors;
 mod analog_mux;
+mod trait_def;
+
+pub use trait_def::{Bus, FetchPermission};
 mod attach;
 mod attached_devices;
 pub mod bus_trace;
