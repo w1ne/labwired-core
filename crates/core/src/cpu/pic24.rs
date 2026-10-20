@@ -95,8 +95,8 @@ pub const INSTR_SLOT_BYTES: usize = 4;
 /// "Program Counter Unit" in DS50002071F).
 pub const PC_UNITS_PER_INSTRUCTION: u32 = 2;
 /// End of user program flash in PC units: 0x000000–0x0057FE on the
-/// dsPIC33FJ32MC204 (DS70283H Figure 4-1), i.e. 11264 instructions — the full
-/// 32 KB of 3-byte packed code.
+/// dsPIC33FJ32MC204 (DS70283H Figure 4-1), i.e. 11264 instructions, which
+/// XC16 packs into 33,792 bytes (3 bytes each).
 pub const PROGRAM_PC_END: u32 = 0x5800;
 /// Instruction slots available in flash.
 pub const INSTR_SLOTS: usize = (PROGRAM_PC_END / PC_UNITS_PER_INSTRUCTION) as usize;
@@ -111,6 +111,23 @@ pub fn check_xc16_pc_address(what: &str, addr: u64) -> Result<(), String> {
     if addr % u64::from(PC_UNITS_PER_INSTRUCTION) != 0 {
         return Err(format!(
             "PIC24 {what} {addr:#x} is odd; XC16 program addresses are even PC units (DS70283H §4)"
+        ));
+    }
+    Ok(())
+}
+
+/// Reject an XC16 executable segment that is odd, starts past program flash,
+/// or runs off its end (0x0057FE, DS70283H Figure 4-1). `slots` is the
+/// slot-expanded segment from [`xc16_executable_slots`]. Loading would
+/// otherwise truncate it silently.
+pub fn check_xc16_segment(addr: u64, slots: &[u8]) -> Result<(), String> {
+    check_xc16_pc_address("executable segment", addr)?;
+    let instructions = (slots.len() / INSTR_SLOT_BYTES) as u64;
+    let end = addr.saturating_add(instructions * u64::from(PC_UNITS_PER_INSTRUCTION));
+    if addr >= u64::from(PROGRAM_PC_END) || end > u64::from(PROGRAM_PC_END) {
+        return Err(format!(
+            "PIC24 executable segment {addr:#x}..{end:#x} does not fit program flash \
+             0x0..{PROGRAM_PC_END:#x} (DS70283H Figure 4-1)"
         ));
     }
     Ok(())
@@ -1536,7 +1553,8 @@ mod tests {
 
     #[test]
     fn full_program_flash_loads_through_the_last_instruction() {
-        // 32 KB of 3-byte packed XC16 code: every instruction up to 0x57FE.
+        // 11264 instructions (33,792 bytes of 3-byte packed XC16 code): every
+        // instruction up to 0x57FE.
         let packed: Vec<u8> = (0..INSTR_SLOTS)
             .flat_map(|_| mov_lit_w0(0x48).to_le_bytes()[..3].to_vec())
             .collect();
@@ -1561,6 +1579,75 @@ mod tests {
     fn odd_program_addresses_are_rejected() {
         assert!(check_xc16_pc_address("entry point", 0x201).is_err());
         assert!(check_xc16_pc_address("entry point", 0x200).is_ok());
+    }
+
+    /// A minimal little-endian ELF32 for EM_DSPIC30F (118) with one
+    /// executable PT_LOAD per segment, XC16 3-byte packed.
+    fn pic24_elf(entry: u32, segments: &[(u32, Vec<u8>)]) -> Vec<u8> {
+        let phoff = 52u32;
+        let mut data_off = phoff + 32 * segments.len() as u32;
+        let mut out = vec![0x7f, b'E', b'L', b'F', 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        out.extend_from_slice(&2u16.to_le_bytes()); // ET_EXEC
+        out.extend_from_slice(&118u16.to_le_bytes()); // EM_DSPIC30F
+        out.extend_from_slice(&1u32.to_le_bytes());
+        out.extend_from_slice(&entry.to_le_bytes());
+        out.extend_from_slice(&phoff.to_le_bytes());
+        out.extend_from_slice(&0u32.to_le_bytes()); // e_shoff
+        out.extend_from_slice(&0u32.to_le_bytes()); // e_flags
+        for half in [52u16, 32, segments.len() as u16, 40, 0, 0] {
+            out.extend_from_slice(&half.to_le_bytes());
+        }
+        for (paddr, bytes) in segments {
+            let len = bytes.len() as u32;
+            // p_type PT_LOAD, offset, vaddr, paddr, filesz, memsz, flags R|X, align
+            for word in [1u32, data_off, *paddr, *paddr, len, len, 5, 2] {
+                out.extend_from_slice(&word.to_le_bytes());
+            }
+            data_off += len;
+        }
+        for (_, bytes) in segments {
+            out.extend_from_slice(bytes);
+        }
+        out
+    }
+
+    #[test]
+    fn segments_past_program_flash_are_rejected() {
+        let one = xc16_executable_slots(&[0, 0, 0]).unwrap();
+        let end = u64::from(PROGRAM_PC_END);
+        assert!(
+            check_xc16_segment(end - 2, &one).is_ok(),
+            "the last instruction fits"
+        );
+        assert!(
+            check_xc16_segment(end, &one).is_err(),
+            "starts at the end of flash"
+        );
+        assert!(
+            check_xc16_segment(end + 0x100, &one).is_err(),
+            "starts beyond flash"
+        );
+        let two = xc16_executable_slots(&[0; 6]).unwrap();
+        assert!(
+            check_xc16_segment(end - 2, &two).is_err(),
+            "runs one instruction past the end"
+        );
+    }
+
+    #[test]
+    fn parse_elf_image_rejects_malformed_xc16_elves() {
+        use crate::system::node::parse_elf_image;
+        let code = vec![0u8; 6];
+        assert!(parse_elf_image(&pic24_elf(0x200, &[(0x200, code.clone())])).is_ok());
+        let odd_entry = parse_elf_image(&pic24_elf(0x201, &[(0x200, code.clone())])).unwrap_err();
+        assert!(odd_entry.to_string().contains("entry point"), "{odd_entry}");
+        let odd_segment = parse_elf_image(&pic24_elf(0x200, &[(0x201, code.clone())])).unwrap_err();
+        assert!(odd_segment.to_string().contains("is odd"), "{odd_segment}");
+        let past = parse_elf_image(&pic24_elf(0x200, &[(PROGRAM_PC_END - 2, code)])).unwrap_err();
+        assert!(
+            past.to_string().contains("does not fit program flash"),
+            "{past}"
+        );
     }
 
     #[test]

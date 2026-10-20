@@ -769,7 +769,7 @@ pub fn parse_elf_image(bytes: &[u8]) -> anyhow::Result<crate::memory::ProgramIma
                     n
                 );
             };
-            crate::cpu::pic24::check_xc16_pc_address("executable segment", ph.p_paddr)
+            crate::cpu::pic24::check_xc16_segment(ph.p_paddr, &slots)
                 .map_err(anyhow::Error::msg)?;
             image.add_segment(ph.p_paddr, slots);
             continue;
