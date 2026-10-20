@@ -239,12 +239,16 @@ impl crate::Peripheral for MivCoreGpio {
         Some(bit(self.out_mask(), pin) && bit(self.output, pin))
     }
 
+    /// Is the pad actively driving? That is OUTBUFF (the output enable), not
+    /// OUTREG: with OUTREG clear and the buffer on, the pad drives 0; with the
+    /// buffer off it is released even though the output latch may be set. This
+    /// matches `driver()` and the logic-capture direction it feeds.
     fn read_gpio_is_output(&self, pin: u8) -> Option<bool> {
         let pin = pin as usize;
         if pin >= GPIO_PINS {
             return None;
         }
-        Some(bit(self.cfg[pin], 0))
+        Some(bit(self.cfg[pin], 2))
     }
 
     fn snapshot(&self) -> serde_json::Value {
@@ -672,6 +676,37 @@ mod tests {
         assert_eq!(gpio.read_gpio_output(1), Some(false));
         assert_eq!(gpio.read_gpio_is_output(0), Some(true));
         assert_eq!(gpio.read_gpio_is_output(1), Some(false));
+    }
+
+    /// Direction capability, pad drive and latch read must agree for every
+    /// OUTREG/OUTBUFF combination.
+    #[test]
+    fn gpio_direction_capability_matches_the_pad_drive() {
+        for (cfg, drives, level) in [
+            (0b000u32, false, crate::pins::Out::Off),
+            (0b001, false, crate::pins::Out::Off), // OUTREG only: buffer off
+            (0b100, true, crate::pins::Out::Low),  // buffer on, data forced 0
+            (0b101, true, crate::pins::Out::High), // buffer on + OUTREG, latch 1
+        ] {
+            let mut gpio = MivCoreGpio::new();
+            gpio.write_u32(0x00, cfg).unwrap();
+            gpio.write_u32(GPIO_OUTPUT, 1).unwrap();
+            assert_eq!(
+                gpio.read_gpio_is_output(0),
+                Some(drives),
+                "cfg {cfg:#05b}: direction follows the output enable"
+            );
+            assert_eq!(
+                gpio.driver(0).unwrap().out,
+                level,
+                "cfg {cfg:#05b}: pad drive"
+            );
+            assert_eq!(
+                gpio.read_gpio_output(0),
+                Some(cfg & 1 != 0),
+                "cfg {cfg:#05b}: the latch read masks by OUTREG"
+            );
+        }
     }
 
     /// The board_io attach path drives the released level and proves it with
