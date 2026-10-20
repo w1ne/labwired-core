@@ -539,7 +539,8 @@ impl Nrf52Twim {
 
         let mut amount: u32 = 0;
         for i in 0..txd_maxcnt {
-            let byte = bus.read_u8(txd_ptr + i as u64).unwrap_or(0);
+            let addr = txd_ptr + i as u64;
+            let byte = crate::with_device_write_bypass(bus, |bus| bus.read_u8(addr)).unwrap_or(0);
             self.attached_devices[idx].borrow_mut().write(byte);
             // A slave that accepted the address ACKs its data; this model has
             // no per-byte NACK to report, and says so by never inventing one.
@@ -575,7 +576,8 @@ impl Nrf52Twim {
             self.events_error = 1;
             // Fill RX buffer with 0xFF (bus release / NACK default).
             for i in 0..rxd_maxcnt {
-                let _ = bus.write_u8(rxd_ptr + i as u64, 0xFF);
+                let addr = rxd_ptr + i as u64;
+                let _ = crate::with_device_write_bypass(bus, |bus| bus.write_u8(addr, 0xFF));
             }
             self.rxd_amount = rxd_maxcnt as u32;
             self.events_lastrx = 1;
@@ -589,7 +591,8 @@ impl Nrf52Twim {
         let mut amount: u32 = 0;
         for i in 0..rxd_maxcnt {
             let byte = self.attached_devices[idx].borrow_mut().read();
-            let _ = bus.write_u8(rxd_ptr + i as u64, byte);
+            let addr = rxd_ptr + i as u64;
+            let _ = crate::with_device_write_bypass(bus, |bus| bus.write_u8(addr, byte));
             // On a read the MASTER acknowledges, and it NACKs the last byte to
             // tell the slave to release SDA. A decoder that never sees that
             // NACK reads the transfer as still running.

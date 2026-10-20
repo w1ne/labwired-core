@@ -889,11 +889,13 @@ impl Nrf52Uarte {
             return;
         }
         let mut bytes = Vec::with_capacity(self.tx_active_len as usize);
-        for i in 0..self.tx_active_len {
-            if let Ok(byte) = bus.read_u8(u64::from(self.tx_active_ptr) + u64::from(i)) {
-                bytes.push(byte);
+        crate::with_device_write_bypass(bus, |bus| {
+            for i in 0..self.tx_active_len {
+                if let Ok(byte) = bus.read_u8(u64::from(self.tx_active_ptr) + u64::from(i)) {
+                    bytes.push(byte);
+                }
             }
-        }
+        });
         self.tx_snapshot = Some(bytes);
     }
 
@@ -988,7 +990,8 @@ impl Nrf52Uarte {
         if let Ok(mut q) = self.rx_source.lock() {
             while n < max {
                 let Some(b) = q.pop_front() else { break };
-                if bus.write_u8(self.rxd_ptr as u64 + n as u64, b).is_ok() {
+                let addr = self.rxd_ptr as u64 + n as u64;
+                if crate::with_device_write_bypass(bus, |bus| bus.write_u8(addr, b)).is_ok() {
                     n += 1;
                 }
             }
@@ -1690,6 +1693,86 @@ mod tests {
         assert_eq!(u.read_u32(OFF_EVENTS_RXSTARTED).unwrap(), 1);
         assert_eq!(u.rx_queued(), 1, "one byte beyond MAXCNT stays queued");
         assert!(!u.rx_pending, "drain consumes pending");
+    }
+
+    #[test]
+    fn easydma_rx_bypasses_cpu_store_policy_and_store_watch() {
+        use crate::bus::SystemBus;
+        use crate::memory::LinearMemory;
+        use crate::Bus;
+
+        let mut bus = SystemBus::empty();
+        bus.ram = LinearMemory::new(256, 0x2000_0000);
+
+        let mut u = Nrf52Uarte::new();
+        u.rx_buffer().lock().unwrap().extend([0xDE, 0xAD, 0xBE]);
+
+        u.write_u32(OFF_ENABLE, ENABLE_UARTE).unwrap();
+        u.write_u32(OFF_RXD_PTR, 0x2000_0020).unwrap();
+        u.write_u32(OFF_RXD_MAXCNT, 3).unwrap();
+        u.write_u32(OFF_TASKS_STARTRX, 1).unwrap();
+
+        // The device transfer must not see the CPU-store gates.
+        bus.memory_policy.ram = crate::bus::CpuWritePolicy::Fault;
+        assert!(bus.add_debug_watch(0x2000_0020, 3, false, true));
+
+        u.tick_with_bus(&mut bus);
+
+        assert_eq!(bus.read_u8(0x2000_0020).unwrap(), 0xDE);
+        assert_eq!(bus.read_u8(0x2000_0021).unwrap(), 0xAD);
+        assert_eq!(bus.read_u8(0x2000_0022).unwrap(), 0xBE);
+        assert_eq!(u.read_u32(OFF_RXD_AMOUNT).unwrap(), 3);
+        assert_eq!(
+            bus.memory_policy.violations_ram, 0,
+            "EasyDMA RX must bypass the cpu_writes policy"
+        );
+        assert_eq!(
+            bus.take_debug_watch_hit(),
+            None,
+            "EasyDMA RX must not latch a store watch"
+        );
+
+        // A direct CPU store is still gated and still latches.
+        let err = bus.write_u8(0x2000_0020, 0xAA).unwrap_err();
+        assert!(matches!(
+            err,
+            crate::SimulationError::MemoryViolation(0x2000_0020)
+        ));
+        assert_eq!(bus.memory_policy.violations_ram, 1);
+        assert_eq!(bus.take_debug_watch_hit(), Some(0x2000_0020));
+    }
+
+    #[test]
+    fn easydma_tx_read_bypasses_a_read_watch() {
+        use crate::bus::SystemBus;
+        use crate::memory::LinearMemory;
+        use crate::Bus;
+
+        let mut bus = SystemBus::empty();
+        bus.ram = LinearMemory::new(256, 0x2000_0000);
+        bus.write_u8(0x2000_0010, b'H').unwrap();
+        bus.write_u8(0x2000_0011, b'i').unwrap();
+
+        let mut u = Nrf52Uarte::new();
+        let sink = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        u.set_sink(Some(sink.clone()), false);
+        u.write_u32(OFF_ENABLE, ENABLE_UARTE).unwrap();
+        u.write_u32(OFF_TXD_PTR, 0x2000_0010).unwrap();
+        u.write_u32(OFF_TXD_MAXCNT, 2).unwrap();
+        u.write_u32(OFF_TASKS_STARTTX, 1).unwrap();
+
+        assert!(bus.add_debug_watch(0x2000_0010, 2, true, false));
+        u.tick_with_bus(&mut bus);
+
+        assert_eq!(&*sink.lock().unwrap(), b"Hi");
+        assert_eq!(
+            bus.take_debug_watch_hit(),
+            None,
+            "EasyDMA TX must not latch a read watch"
+        );
+        // Control: a CPU read of the same range still latches.
+        let _ = bus.read_u8(0x2000_0010).unwrap();
+        assert_eq!(bus.take_debug_watch_hit(), Some(0x2000_0010));
     }
 
     #[test]

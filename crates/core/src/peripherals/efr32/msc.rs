@@ -340,8 +340,10 @@ impl Peripheral for Efr32s2Msc {
                 // ⚠️ Flash programming can only CLEAR bits. An unerased word
                 // ANDs rather than replaces; a model that replaced it would let
                 // a driver pass in the twin and corrupt on the bench.
-                let existing = bus.read_u32(addr as u64).unwrap_or(0xFFFF_FFFF);
-                let _ = bus.write_u32(addr as u64, existing & data);
+                crate::with_device_write_bypass(bus, |bus| {
+                    let existing = bus.read_u32(addr as u64).unwrap_or(0xFFFF_FFFF);
+                    let _ = bus.write_u32(addr as u64, existing & data);
+                });
                 self.addrb = addr.wrapping_add(4);
                 self.status &= !(STATUS_BUSY | STATUS_PENDING);
                 self.status |= STATUS_WDATAREADY;
@@ -349,9 +351,11 @@ impl Peripheral for Efr32s2Msc {
             }
             PendingOp::ErasePage { addr } => {
                 let page = addr & !(PAGE_BYTES - 1);
-                for w in (0..PAGE_BYTES).step_by(4) {
-                    let _ = bus.write_u32((page + w) as u64, 0xFFFF_FFFF);
-                }
+                crate::with_device_write_bypass(bus, |bus| {
+                    for w in (0..PAGE_BYTES).step_by(4) {
+                        let _ = bus.write_u32((page + w) as u64, 0xFFFF_FFFF);
+                    }
+                });
                 self.status &= !(STATUS_BUSY | STATUS_PENDING);
                 self.iflag |= IF_ERASE;
             }

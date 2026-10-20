@@ -687,14 +687,16 @@ impl Nrf52Pwm {
         let cnt = (self.seq[n * 8 + 1] & 0x7FFF) as usize;
 
         // Read each 16-bit duty value out of the EasyDMA buffer.
-        let halfwords: Vec<u16> = (0..cnt)
-            .map(|i| {
-                let base = ptr + (i as u64) * 2;
-                let lo = bus.read_u8(base).unwrap_or(0);
-                let hi = bus.read_u8(base + 1).unwrap_or(0);
-                u16::from_le_bytes([lo, hi])
-            })
-            .collect();
+        let halfwords: Vec<u16> = crate::with_device_write_bypass(bus, |bus| {
+            (0..cnt)
+                .map(|i| {
+                    let base = ptr + (i as u64) * 2;
+                    let lo = bus.read_u8(base).unwrap_or(0);
+                    let hi = bus.read_u8(base + 1).unwrap_or(0);
+                    u16::from_le_bytes([lo, hi])
+                })
+                .collect()
+        });
 
         self.events_seqstarted[n] = 1;
         self.events_seqend[n] = 1;

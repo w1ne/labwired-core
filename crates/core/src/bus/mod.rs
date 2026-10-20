@@ -7,7 +7,7 @@
 use crate::memory::LinearMemory;
 use crate::peripherals::nvic::NvicState;
 use crate::peripherals::uart::Uart;
-use crate::{Bus, Peripheral, SimResult};
+use crate::{Peripheral, SimResult};
 use labwired_config::{parse_size, ChipDescriptor, PeripheralConfig, SystemManifest};
 use std::cell::Cell;
 use std::collections::VecDeque;
@@ -18,6 +18,9 @@ use std::sync::Mutex;
 
 mod accessors;
 mod analog_mux;
+mod trait_def;
+
+pub use trait_def::{Bus, FetchPermission};
 mod attach;
 mod attached_devices;
 pub mod bus_trace;
@@ -356,12 +359,10 @@ pub struct SystemBus {
     pub flash: LinearMemory,
     /// Violation record + counts + mirrored PC/cycle for the policy gate.
     pub(crate) memory_policy: crate::bus::memory_policy::MemoryPolicyState,
-    /// Scoped bypass for the CPU-write policy gate. Set only by the generic
-    /// DMA request path (`execute_dma_request`), which is hardware, not CPU.
-    /// NOT yet covered: peripheral-internal DMA models that write through
-    /// `&mut dyn Bus` (nrf52/rp2040/imxrt/esp gdma, RTT host writes, …) —
-    /// scoped deferral, revisit if a chip ships a non-default `cpu_writes`
-    /// RAM policy. Loader writes bypass by construction (direct
+    /// Scoped bypass for the CPU-write policy gate. Set by the generic DMA
+    /// request path (`execute_dma_request`) and by device engines/host RTT
+    /// transfers through [`crate::with_device_write_bypass`], which are
+    /// hardware, not CPU. Loader writes bypass by construction (direct
     /// `LinearMemory`); debugger/session writes through the bus ARE gated.
     /// JIT lanes refuse to run while the RAM policy is non-default
     /// (`jit_gate_allows`), so they cannot bypass the gate.

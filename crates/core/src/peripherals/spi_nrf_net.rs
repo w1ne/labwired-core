@@ -373,15 +373,17 @@ impl Spi {
         match self.nrf_net.phase {
             Phase::Starting => {
                 let n = txd_max.max(rxd_max);
-                self.nrf_net.tx = (0..n)
-                    .map(|i| {
-                        if i < txd_max {
-                            bus.read_u8(txd_ptr + i as u64).unwrap_or(0)
-                        } else {
-                            orc
-                        }
-                    })
-                    .collect();
+                self.nrf_net.tx = crate::with_device_write_bypass(bus, |bus| {
+                    (0..n)
+                        .map(|i| {
+                            if i < txd_max {
+                                bus.read_u8(txd_ptr + i as u64).unwrap_or(0)
+                            } else {
+                                orc
+                            }
+                        })
+                        .collect()
+                });
                 self.nrf_net.rx.clear();
                 if let SpiRegs::Nrf52(r) = &mut self.regs {
                     r.events_started = 1;
@@ -411,9 +413,11 @@ impl Spi {
             }
             Phase::Finishing => {
                 let done = self.nrf_net.rx.len();
-                for (i, &b) in self.nrf_net.rx.iter().take(rxd_max).enumerate() {
-                    let _ = bus.write_u8(rxd_ptr + i as u64, b);
-                }
+                crate::with_device_write_bypass(bus, |bus| {
+                    for (i, &b) in self.nrf_net.rx.iter().take(rxd_max).enumerate() {
+                        let _ = bus.write_u8(rxd_ptr + i as u64, b);
+                    }
+                });
                 let stopped = std::mem::take(&mut self.nrf_net.stop);
                 let complete = done >= self.nrf_net.tx.len();
                 if let SpiRegs::Nrf52(r) = &mut self.regs {

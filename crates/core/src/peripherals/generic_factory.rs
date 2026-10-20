@@ -41,6 +41,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "gpio",
     "avr_gpio",
     "avr_adc",
+    "pic24_gpio",
     "rcc",
     "systick",
     "timer",
@@ -557,6 +558,23 @@ pub fn try_build(
             }
         }
         "avr_gpio" => Box::new(crate::peripherals::avr_gpio::AvrGpioPort::new()),
+        "pic24_gpio" => {
+            // The dsPIC33FJ32MC204 has no uniform port width: PORTA presents
+            // RA0-4/RA7-10, PORTB RB0-15, PORTC RC0-9 (DS70283H pin diagrams,
+            // Table 4-20/21/22). The package mask comes from the instance.
+            let mask = match p_cfg.config.get("port").and_then(|v| v.as_str()) {
+                Some("a") => 0x079F,
+                Some("b") => 0xFFFF,
+                Some("c") => 0x03FF,
+                other => {
+                    return Err(anyhow::anyhow!(
+                        "pic24_gpio '{}': config.port must be \"a\", \"b\" or \"c\", got {other:?}",
+                        p_cfg.id
+                    ))
+                }
+            };
+            Box::new(crate::peripherals::pic24_gpio::Pic24GpioPort::new(mask))
+        }
         "avr_adc" => Box::new(crate::peripherals::avr_adc::AvrAdcInputs::new()),
         "sam_sercom_usart" => {
             Box::new(crate::peripherals::sam::sercom_usart::SamSercomUsart::new())

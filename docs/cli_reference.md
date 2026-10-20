@@ -175,19 +175,17 @@ LABWIRED_ESP32S3_FLASH=tests/fixtures/source-debug/esp32s3-arduino-flash.bin \
 
 ```text
 81labwired-cli run: --stop-on "81" matched at step 101700000
-labwired-cli run: reached --max-steps 200000000; pc=0x42020cd6 appcpu_pc=0x42020cd6
 ```
 
 Two caveats:
 
-- The `reached --max-steps` line is the stepping loop's unconditional epilogue; it prints after any stop, including a match. The `--stop-on ... matched` line is the real stop reason.
+- The `reached --max-steps` epilogue is printed only when the stepping loop actually exhausts the budget; a run stopped by `--stop-on` prints only the match line.
 - A marker that occurs in boot output matches during boot. `--stop-on 27` matches the ROM banner `ESP-ROM:esp32s3-20210327` at step 100000, not application output:
 
 ```text
 ESP-ROM:esp32s3-20210327
 ESP-ROM:1
 labwired-cli run: --stop-on "27" matched at step 100000
-labwired-cli run: reached --max-steps 200000000; pc=0x40048839 appcpu_pc=0x40000400
 ```
 
 Pick a marker unique to the point you care about. The hook surface and the shared observation story are in [Hook surfaces](howto/extend/hooks.md).

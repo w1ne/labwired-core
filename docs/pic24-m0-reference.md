@@ -18,7 +18,7 @@ Sources (retrieved 2026-10-18, facts only):
 
 ## 2. Instruction encodings (DS70000157G, verbatim extraction)
 
-`k` = literal, `s` = source Wn, `d` = destination Wn. 24-bit words, little-endian in the fixture.
+`k` = literal, `s` = source Wn, `d` = destination Wn. 24-bit words, stored as 3 little-endian bytes per instruction in an XC16 executable section (the loader adds the internal slot pad — see §3.1).
 
 | Instruction | Encoding |
 | :--- | :--- |
@@ -47,15 +47,45 @@ Sources (retrieved 2026-10-18, facts only):
 
 ## 3. M0 smoked sequence (fixture program)
 
+Addresses are PC units (2 per instruction), user flash as XC16 lays it out:
+
 ```
-0x000000: GOTO 0x000004          ; reset trampoline (device convention)
-0x000004: GOTO 0x000100          ; jump to init
-0x000100: MOV  #0x48, W0         ; 'H'
-0x000102: MOV  W0, 0x0224        ; U1TXREG
-0x000104: GOTO 0x000100          ; loop
+0x000200: MOV  #0x48, W0         ; 'H'
+0x000202: MOV  W0, 0x0224        ; U1TXREG
+0x000204: NOP ×6
+0x000210: BRA  $-1               ; self-loop (PC = PC + 2 + 2*(-1))
 ```
 
+The fixture ELF's entry is `0x200`; the reset trampoline at `0x0` is not part
+of the fixture — the model starts at `e_entry`.
+
 Acceptance: UART sink receives `H`; PC/SP initialization deterministic; repeat runs identical.
+
+### 3.1 XC16 ELF layout (verified 2026-10-19, DS50002071F)
+
+The earlier M0 note called the layout "provisional: one instruction per
+4-byte slot with the PC indexing slots". The XC16 compiler guide's "Program
+Counter Unit" definition settles it:
+
+- the PC increments by **2** per instruction word (24-bit instructions);
+- **in an executable section, 2 program counter units are equivalent to
+  3 bytes** — the ELF stores 3 bytes per instruction;
+- in a read-only (data) section, 2 PC units are 2 bytes;
+- "phantom bytes" (a 4th pad byte) appear in **HEX** files, not in ELF.
+
+The model therefore:
+
+- keeps `pc` in PC units (`PC_UNITS_PER_INSTRUCTION = 2`; interrupt vectors
+  stay `0x4 + 2*N`, as on silicon);
+- expands XC16 3-byte executable segments into its internal 4-byte slots at
+  load (`cpu::pic24::xc16_executable_slots`) and places them at `addr / 2`;
+- rejects an executable segment whose size is not a multiple of 3 rather
+  than guessing;
+- skips non-executable PIC24 program-memory segments (PSV/table reads are
+  not modelled).
+
+This matches the datasheet wording "addresses are incremented or decremented
+by two during code execution" (DS70283H §4.2.3).
 
 ## 4. Engine integration map (M0 wiring)
 

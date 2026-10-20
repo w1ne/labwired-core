@@ -440,13 +440,19 @@ struct Desc {
 impl Desc {
     /// Read and decode the three descriptor words at `addr`.
     fn read(bus: &mut dyn Bus, addr: u64) -> Self {
-        let dw0 = bus.read_u32(addr).unwrap_or(0);
+        let (dw0, buf, next) = crate::with_device_write_bypass(bus, |bus| {
+            (
+                bus.read_u32(addr).unwrap_or(0),
+                bus.read_u32(addr + 4).unwrap_or(0) as u64,
+                bus.read_u32(addr + 8).unwrap_or(0) as u64,
+            )
+        });
         Self {
             dw0,
             len: (dw0 >> 12) & 0xFFF,
             size: dw0 & 0xFFF,
-            buf: bus.read_u32(addr + 4).unwrap_or(0) as u64,
-            next: bus.read_u32(addr + 8).unwrap_or(0) as u64,
+            buf,
+            next,
         }
     }
 
@@ -474,7 +480,7 @@ impl Desc {
             Some(n) => (self.dw0 & !(DESC_OWNER_BIT | DESC_LEN_MASK)) | (n << 12),
             None => self.dw0 & !DESC_OWNER_BIT,
         };
-        let _ = bus.write_u32(addr, dw0);
+        let _ = crate::with_device_write_bypass(bus, |bus| bus.write_u32(addr, dw0));
     }
 }
 
@@ -801,9 +807,11 @@ impl Esp32s3Gdma {
                 break;
             }
 
-            for i in 0..d.len {
-                bytes.push(bus.read_u8(d.buf + i as u64).unwrap_or(0));
-            }
+            crate::with_device_write_bypass(bus, |bus| {
+                for i in 0..d.len {
+                    bytes.push(bus.read_u8(d.buf + i as u64).unwrap_or(0));
+                }
+            });
 
             // Descriptor returned to CPU (owner cleared) — only when the
             // channel opted in via OUT_AUTO_WRBACK.
@@ -840,9 +848,11 @@ impl Esp32s3Gdma {
             }
 
             let to_write = remaining.len().min(d.size as usize);
-            for (i, &b) in remaining[..to_write].iter().enumerate() {
-                let _ = bus.write_u8(d.buf + i as u64, b);
-            }
+            crate::with_device_write_bypass(bus, |bus| {
+                for (i, &b) in remaining[..to_write].iter().enumerate() {
+                    let _ = bus.write_u8(d.buf + i as u64, b);
+                }
+            });
             remaining = &remaining[to_write..];
 
             // Owner bit cleared, length field set to bytes written.
@@ -913,9 +923,8 @@ impl Esp32s3Gdma {
             let to_send = remaining.min(budget);
 
             for i in 0..to_send {
-                let byte = bus
-                    .read_u8(d.buf + (dir.coupled_buf_offset as u64) + i as u64)
-                    .unwrap_or(0);
+                let at = d.buf + (dir.coupled_buf_offset as u64) + i as u64;
+                let byte = crate::with_device_write_bypass(bus, |bus| bus.read_u8(at)).unwrap_or(0);
                 let _ = bus.write_u8(UART0_FIFO_ADDR, byte);
             }
             budget -= to_send;
@@ -994,7 +1003,8 @@ impl Esp32s3Gdma {
 
             for i in 0..to_recv {
                 let byte = bus.read_u8(UART0_FIFO_ADDR).unwrap_or(0);
-                let _ = bus.write_u8(d.buf + (dir.coupled_buf_offset as u64) + i as u64, byte);
+                let at = d.buf + (dir.coupled_buf_offset as u64) + i as u64;
+                let _ = crate::with_device_write_bypass(bus, |bus| bus.write_u8(at, byte));
             }
             budget -= to_recv;
             rx_avail -= to_recv;
@@ -1079,12 +1089,14 @@ impl Esp32s3Gdma {
 
             let remaining = d.len.saturating_sub(dir.coupled_buf_offset) as usize;
             let to_read = remaining.min(budget - out.len());
-            for i in 0..to_read {
-                out.push(
-                    bus.read_u8(d.buf + dir.coupled_buf_offset as u64 + i as u64)
-                        .unwrap_or(0),
-                );
-            }
+            crate::with_device_write_bypass(bus, |bus| {
+                for i in 0..to_read {
+                    out.push(
+                        bus.read_u8(d.buf + dir.coupled_buf_offset as u64 + i as u64)
+                            .unwrap_or(0),
+                    );
+                }
+            });
             dir.coupled_buf_offset += to_read as u32;
 
             if dir.coupled_buf_offset >= d.len {
@@ -1135,12 +1147,14 @@ impl Esp32s3Gdma {
 
             let cap = d.size.saturating_sub(dir.coupled_buf_offset) as usize;
             let n = cap.min(bytes.len() - written);
-            for i in 0..n {
-                let _ = bus.write_u8(
-                    d.buf + dir.coupled_buf_offset as u64 + i as u64,
-                    bytes[written + i],
-                );
-            }
+            crate::with_device_write_bypass(bus, |bus| {
+                for i in 0..n {
+                    let _ = bus.write_u8(
+                        d.buf + dir.coupled_buf_offset as u64 + i as u64,
+                        bytes[written + i],
+                    );
+                }
+            });
             written += n;
             dir.coupled_buf_offset += n as u32;
 
@@ -1683,7 +1697,7 @@ impl Esp32s3Gdma {
         let dw0 = (d.dw0 & !(DESC_OWNER_BIT | DESC_LEN_MASK))
             | (dir.coupled_buf_offset << 12)
             | DESC_SUC_EOF_BIT;
-        let _ = bus.write_u32(addr, dw0);
+        let _ = crate::with_device_write_bypass(bus, |bus| bus.write_u32(addr, dw0));
         dir.coupled_buf_offset = 0;
         dir.coupled_desc_ptr = d.next;
     }

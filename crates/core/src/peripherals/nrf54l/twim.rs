@@ -298,7 +298,8 @@ impl Nrf54lTwim {
         self.advance_slave_to_now(idx, bus);
         self.slaves[idx].start();
         for i in 0..len {
-            if let Ok(b) = bus.read_u8(self.dma_tx_ptr as u64 + i as u64) {
+            let addr = self.dma_tx_ptr as u64 + i as u64;
+            if let Ok(b) = crate::with_device_write_bypass(bus, |bus| bus.read_u8(addr)) {
                 self.slaves[idx].write(b);
             }
         }
@@ -342,7 +343,8 @@ impl Nrf54lTwim {
         self.slaves[idx].start();
         for i in 0..len {
             let b = self.slaves[idx].read();
-            let _ = bus.write_u8(self.dma_rx_ptr as u64 + i as u64, b);
+            let addr = self.dma_rx_ptr as u64 + i as u64;
+            let _ = crate::with_device_write_bypass(bus, |bus| bus.write_u8(addr, b));
         }
         self.dma_rx_amount = len as u32;
         self.events_dma_rx_end = 1;

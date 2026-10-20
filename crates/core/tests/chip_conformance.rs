@@ -62,10 +62,6 @@ const DECLARED_ONLY_CHIPS: &[(&str, &str)] = &[
         "rv1103",
         "Normal descriptor is CPU/memory only. Optional native reduced Linux direct boot and joint I2C3/UART4 basket acceptance pass separately with functional timing and a persistent reduced plant; this does not establish full board L0/L1, vendor BSP/SD/ROM boot or physical qualification. The older generic Cortex-A7 CPU subset is separate.",
     ),
-    (
-        "dspic33fj32mc204",
-        "M0 bring-up: descriptor declares memory + cpu_hz only; the PIC24 core models boot and UART1 TX (NOP/MOV/BRA subset). No timers, interrupts, PWM, QEI, ADC, SPI, I2C or MAC, and no silicon capture. Promote as peripheral milestones land.",
-    ),
 ];
 
 /// The modeled fleet. Every descriptor MUST appear here or in the explicitly
@@ -466,6 +462,16 @@ const CHIPS: &[ChipConf] = &[
         yaml: "configs/chips/stm32g071.yaml",
         reset_oracle: None,
         behavior_gate: Some("firmware_survival::test_nucleo_g071rb_smoke_survival"),
+    },
+    ChipConf {
+        // First PIC24/dsPIC33F target. SIM-DERIVED: no silicon capture yet,
+        // so no reset_oracle; the behavior gate is the committed
+        // hand-assembled UART smoke. M1a added timers + interrupts, M1b the
+        // GPIO ports, PPS, input capture and output compare.
+        name: "dspic33fj32mc204",
+        yaml: "configs/chips/dspic33fj32mc204.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("pic24_m0_smoke::pic24_fixture_boots_and_writes_h_to_uart"),
     },
 ];
 
@@ -1420,25 +1426,14 @@ fn is_declared_only_prototype(name: &str, chip: &ChipDescriptor) -> bool {
                 && chip.peripherals.is_empty()
                 && chip.flash.size == 0
         }
-        "dspic33fj32mc204" => {
-            chip.name == "dspic33fj32mc204"
-                && matches!(chip.arch, labwired_config::Arch::Pic24)
-                && chip.core.as_deref() == Some("dspic33f")
-                && chip.peripherals.is_empty()
-                && chip.flash.size == 32 * 1024
-                && chip.ram.size == 2 * 1024
-        }
         _ => false,
     }
 }
 
 #[test]
 fn declared_only_classification_rejects_other_chips_or_modeled_platforms() {
-    assert_eq!(DECLARED_ONLY_CHIPS.len(), 2);
+    assert_eq!(DECLARED_ONLY_CHIPS.len(), 1);
     assert!(DECLARED_ONLY_CHIPS.iter().any(|(n, _)| *n == "rv1103"));
-    assert!(DECLARED_ONLY_CHIPS
-        .iter()
-        .any(|(n, _)| *n == "dspic33fj32mc204"));
     let chip = ChipDescriptor::from_file(root("configs/chips/rv1103.yaml")).unwrap();
     assert!(is_declared_only_prototype("rv1103", &chip));
     let mut changed = chip.clone();
