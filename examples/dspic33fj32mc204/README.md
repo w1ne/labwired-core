@@ -34,9 +34,10 @@ BRA  $-1             ; 0037 FFFF  → run ends at max_steps
 ```
 
 Regenerate it with `python3 firmware/make-fixture-elf.py`. The ELF is a minimal
-ELF32 (`e_machine = 118`, `EM_DSPIC30F`) with one `PT_LOAD` segment. The
-"one instruction per 4-byte little-endian slot" layout is provisional until a
-real XC16 toolchain is available — see `docs/pic24-m0-reference.md`.
+ELF32 (`e_machine = 118`, `EM_DSPIC30F`) with one executable `PT_LOAD`
+segment. It follows the XC16 layout verified in DS50002071F: **3 bytes per
+instruction** in the section, PC-unit addresses (2 per instruction), entry
+`0x200` — see `docs/pic24-m0-reference.md` §3.1.
 
 ## Scope and limitations
 
