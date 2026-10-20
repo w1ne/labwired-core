@@ -1515,6 +1515,73 @@ chip: "miv-timer-test.yaml"
     }
 
     #[test]
+    fn timer_zero_load_never_advances_or_fires() {
+        let mut timer = MivCoreTimer::new();
+        timer.write_u32(TIMER_PRESCALE, 0).unwrap(); // divide by 2
+        timer.write_u32(TIMER_LOAD, 0).unwrap();
+        timer.write_u32(TIMER_CONTROL, 0b011).unwrap(); // enable + irq
+        let _ = timer.tick_elapsed(10_000);
+        assert_eq!(timer.read_u32(TIMER_VALUE).unwrap(), 0);
+        assert_eq!(timer.read_u32(TIMER_RAW_STATUS).unwrap(), 0);
+        assert_eq!(timer.irq_line_level(), Some(false));
+    }
+
+    /// One large advance must equal the same span stepped a cycle at a time.
+    #[test]
+    fn timer_batched_advance_matches_single_cycle_ticks() {
+        let mut batched = MivCoreTimer::new();
+        batched.write_u32(TIMER_PRESCALE, 0).unwrap(); // divide by 2
+        batched.write_u32(TIMER_LOAD, 7).unwrap();
+        batched.write_u32(TIMER_CONTROL, 0b011).unwrap(); // continuous + irq
+        let mut stepped = MivCoreTimer::new();
+        stepped.write_u32(TIMER_PRESCALE, 0).unwrap();
+        stepped.write_u32(TIMER_LOAD, 7).unwrap();
+        stepped.write_u32(TIMER_CONTROL, 0b011).unwrap();
+
+        let _ = batched.tick_elapsed(100);
+        for _ in 0..100 {
+            let _ = stepped.tick_elapsed(1);
+        }
+        for reg in [
+            TIMER_LOAD,
+            TIMER_VALUE,
+            TIMER_CONTROL,
+            TIMER_PRESCALE,
+            TIMER_RAW_STATUS,
+            TIMER_MASKED_STATUS,
+        ] {
+            assert_eq!(
+                batched.read_u32(reg).unwrap(),
+                stepped.read_u32(reg).unwrap(),
+                "register {reg:#04x} agrees"
+            );
+        }
+        assert_eq!(
+            batched.irq_line_level(),
+            stepped.irq_line_level(),
+            "the interrupt level agrees"
+        );
+
+        // One-shot: both paths reach zero and latch.
+        let mut batched = MivCoreTimer::new();
+        batched.write_u32(TIMER_PRESCALE, 0).unwrap();
+        batched.write_u32(TIMER_LOAD, 10).unwrap();
+        batched.write_u32(TIMER_CONTROL, 0b111).unwrap(); // one-shot + enable + irq
+        let mut stepped = MivCoreTimer::new();
+        stepped.write_u32(TIMER_PRESCALE, 0).unwrap();
+        stepped.write_u32(TIMER_LOAD, 10).unwrap();
+        stepped.write_u32(TIMER_CONTROL, 0b111).unwrap();
+        let _ = batched.tick_elapsed(1000);
+        for _ in 0..1000 {
+            let _ = stepped.tick_elapsed(1);
+        }
+        assert_eq!(batched.read_u32(TIMER_VALUE).unwrap(), 0);
+        assert_eq!(stepped.read_u32(TIMER_VALUE).unwrap(), 0);
+        assert_eq!(batched.read_u32(TIMER_RAW_STATUS).unwrap(), 1);
+        assert_eq!(stepped.read_u32(TIMER_RAW_STATUS).unwrap(), 1);
+    }
+
+    #[test]
     fn timer_irq_is_a_level_that_follows_clear_and_mask() {
         let mut timer = MivCoreTimer::new();
         timer.write_u32(TIMER_PRESCALE, 0).unwrap(); // divide by 2
