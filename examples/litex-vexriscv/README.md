@@ -1,14 +1,16 @@
 # LiteX VexRiscv SoC — smoke example
 
 Runs a bare-metal RV32IM firmware on the LiteX VexRiscv SoC: the firmware
-boots from the SoC's integrated SRAM, prints over the LiteX UART, and its
-heartbeat reports the UART `txfull` register it actually observed.
+boots from the SoC's integrated SRAM, prints over the LiteX UART, runs the
+LiteX timer as a one-shot, and its heartbeat reports the UART `txfull`
+register it actually observed.
 
 This is the first RISC-V soft-core target in the engine. The modelled
-surface is deliberately small — CPU, memory map, and the LiteX UART console
-path — and everything else is declared, not faked: unmodelled CSR windows
-are `type: stub` and answer zeros, and the smoke prints one of those
-readbacks (`timer=00000000`) so the omission is visible on the wire.
+surface is deliberately small — CPU, memory map, the LiteX UART console path
+and the LiteX countdown timer — and everything else is declared, not faked:
+unmodelled CSR windows are `type: stub` and answer zeros, and the smoke
+prints one of those readbacks (`spi=00000000`) so the omission is visible on
+the wire.
 
 ## Build
 
@@ -33,11 +35,17 @@ Expected console output (prefix):
 ```
 LITEX VEXRISCV SMOKE
 cpu=rv32im uart=litex
-timer=00000000
+spi=00000000
+timer=running
+timer=zero
 hb=0 txfull=00000000
 hb=1 txfull=00000000
 ...
 ```
+
+`timer=running` is `ev_status` reporting a live countdown; `timer=zero` is
+the zero event latching after the one-shot's 100,000 cycles — both only
+appear if the timer actually counts.
 
 ## Smoke test
 
@@ -57,7 +65,8 @@ cd core
 | SPI-flash window (0x20000000, 32 MB) | mapped (reads 0xFF untouched) |
 | Integrated ROM window (0x0, 256 KB) | mapped; contents (LiteX BIOS) not modelled |
 | LiteX UART (0x60001800) | modelled — polled console path |
-| LiteX timer / SPI / Ethernet / MMCM CSRs | `type: stub` — zeros |
+| LiteX timer (0x60002800) | modelled — countdown, `update_value` latch, zero-event status/pending |
+| LiteX SPI / Ethernet / MMCM CSRs | `type: stub` — zeros |
 | Main RAM (0x40000000, 256 MB on the SoC) | not mapped — see `VALIDATION.md` |
 | LEDs / switches / buttons | not modelled — see `EXTERNAL_COMPONENTS.md` |
 

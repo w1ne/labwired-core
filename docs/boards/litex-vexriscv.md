@@ -2,7 +2,7 @@
 
 The LiteX **VexRiscv** soft-core SoC: a 32-bit RISC-V CPU (`rv32im_zicsr_zifencei` — no compressed, no atomic extension) in a LiteX SoC, as built for FPGA carrier boards such as the Digilent Arty A7. LabWired's target runs a bare-metal ELF from the SoC's integrated SRAM and captures the LiteX UART console.
 
-This is an **L1 (smoke)** target: boot + the UART byte path are proven by a committed smoke fixture and an `io-smoke.yaml`. The CPU, memory map and UART are modelled; everything else is *declared, not faked* — unmodelled CSR windows are `type: stub` and answer zeros, and the smoke prints one of those readbacks (`timer=00000000`) so the omission is visible on the wire. No silicon capture exists: **SIM-DERIVED**, no executing-fidelity differential yet.
+This is an **L1 (smoke)** target: boot, the UART byte path and the timer one-shot are proven by a committed smoke fixture and an `io-smoke.yaml`. The CPU, memory map, UART and the LiteX countdown timer are modelled; everything else is *declared, not faked* — unmodelled CSR windows are `type: stub` and answer zeros, and the smoke prints one of those readbacks (`spi=00000000`) so the omission is visible on the wire. No silicon capture exists: **SIM-DERIVED**, no executing-fidelity differential yet.
 
 !!! tip "Live status"
     The tables below are a maintained snapshot. Authoritative automation:
@@ -21,7 +21,7 @@ This is an **L1 (smoke)** target: boot + the UART byte path are proven by a comm
 | Example | [`examples/litex-vexriscv/`](../../examples/litex-vexriscv/) |
 | Committed artifact | `tests/fixtures/litex-vexriscv-smoke.elf` (`LITEX VEXRISCV SMOKE`) |
 | Build target | `riscv32im-unknown-none-elf` |
-| Tier (snapshot) | **L1** — smoke (CPU + memory + UART); SIM-DERIVED |
+| Tier (snapshot) | **L1** — smoke (CPU + memory + UART + timer one-shot); SIM-DERIVED |
 
 ---
 
@@ -40,10 +40,15 @@ This is an **L1 (smoke)** target: boot + the UART byte path are proven by a comm
 | Block | Address | State |
 |-------|---------|-------|
 | LiteX UART | `0x6000_1800` | modelled — `rxtx` @ +0x00, `txfull` @ +0x04 (polled console path) |
-| LiteX timer | `0x6000_2800` | `type: stub` — answers zeros |
-| LiteX SPI-flash controller | `0x6000_5000` | `type: stub` |
+| LiteX timer | `0x6000_2800` | modelled — 32-bit countdown (`load`/`reload`/`en`/`update_value`/`value`) + zero-event `ev_status`/`ev_pending`/`ev_enable` |
+| LiteX SPI-flash controller | `0x6000_5000` | `type: stub` — answers zeros |
 | LiteX Ethernet MAC | `0x6000_7800` | `type: stub` |
 | LiteX MMCM | `0xE000_4800` | `type: stub` |
+
+The timer counts down at the SoC clock and advances from the bus's elapsed
+cycles; `reload = 0` is a one-shot, `reload > 0` re-arms every `reload + 1`
+cycles. IRQ delivery into the RISC-V core is not wired yet, so firmware uses
+the status/pending registers (the smoke does exactly that).
 
 The CSR base is a gateware parameter, not a chip constant: LiteX builds in the wild place the CSR region at `0x6000_0000`, `0xE000_0000` or `0xF000_0000`. This descriptor pins the `0x6000_0000`-based map its CSR addresses are written against.
 

@@ -50,7 +50,9 @@ impl RiscVCoreProfile {
             return Self::Esp32C3;
         }
         match chip.core.as_deref() {
-            Some(core) if core.trim().to_ascii_lowercase().starts_with("rv32") => Self::StandardRv32,
+            Some(core) if core.trim().to_ascii_lowercase().starts_with("rv32") => {
+                Self::StandardRv32
+            }
             _ => Self::Esp32C3,
         }
     }

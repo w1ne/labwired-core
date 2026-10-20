@@ -8732,6 +8732,7 @@ boards:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
       - crates/core/src/peripherals/uart.rs
+      - crates/core/src/peripherals/litex_timer.rs
       - crates/core/src/peripherals/stub.rs
       - crates/core/src/bus/from_config.rs
       - crates/core/src/bus/profiles.rs

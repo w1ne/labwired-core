@@ -323,6 +323,11 @@ pub const MODEL_TYPES: &[&str] = &[
     "imxrt_gpt",
     "imxrt_flexio",
     "imxrt_sai",
+    // LiteX countdown timer (first modelled LiteX peripheral besides the UART
+    // profile). Its type carries the `litex` prefix, so it must be a canonical
+    // type or the fuzzy `contains("timer")` fallback would coerce it onto the
+    // STM32 timer map.
+    "litex_timer",
 ];
 
 /// True if `t` is already a canonical model-type name (see [`MODEL_TYPES`]).
@@ -1057,6 +1062,9 @@ pub fn try_build(
                 .unwrap_or(crate::peripherals::imxrt::lpuart::DEFAULT_UART_CLK_HZ);
             Box::new(crate::peripherals::imxrt::lpuart::ImxrtLpuart::new(clk))
         }
+        // LiteX countdown timer (`litex/soc/cores/timer.py`): 32-bit CSRs
+        // load/reload/en/update_value/value plus the zero-event manager.
+        "litex_timer" => Box::new(crate::peripherals::litex_timer::LitexTimer::new()),
         _ => return Ok(None),
     };
     Ok(Some(dev))

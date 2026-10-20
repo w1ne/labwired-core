@@ -19,16 +19,18 @@
 #   no atomic extension, so firmware is built for `riscv32im-unknown-none-elf`.
 #
 # Modelled: CPU + memory + the LiteX UART (polled console path — the engine
-# polls txfull @ +0x04, writes rxtx @ +0x00).
+# polls txfull @ +0x04, writes rxtx @ +0x00) + the LiteX countdown timer
+# (load/reload/en/update_value/value + the zero-event status/pending CSRs).
 # Declared, not modelled (`type: stub` — reads answer zeros, writes are
-# absorbed): the LiteX timer / SPI-flash / Ethernet / MMCM CSRs. The
-# integrated ROM window is mapped but its contents (the LiteX BIOS) are not:
-# the example boots its ELF directly (fast boot), skipping BIOS + flash load.
+# absorbed): the LiteX SPI-flash / Ethernet / MMCM CSRs. The integrated ROM
+# window is mapped but its contents (the LiteX BIOS) are not: the example
+# boots its ELF directly (fast boot), skipping BIOS + flash load.
 # Main RAM (0x40000000, 256 MB on the SoC) is declared here but not mapped —
 # the engine allocates memory regions densely and a 256 MB window is not
 # useful to the smoke; see examples/litex-vexriscv/VALIDATION.md.
 #
-# Tier: L1 smoke — boot + UART byte path on the modelled CSR map.
+# Tier: L1 smoke — boot + UART byte path + timer one-shot on the modelled
+# CSR map.
 
 name: "litex-vexriscv"
 arch: "riscv"
@@ -55,8 +57,10 @@ peripherals:
   # 0xE0000000-window shadow the engine does not model (one address per
   # peripheral). IRQ numbers are the gateware's external-interrupt inputs;
   # the engine does not deliver peripheral IRQs to RISC-V cores yet.
+  # Modelled timer: 32-bit countdown with the zero-event status/pending CSRs.
+  # 0xE0002800 is the same block through the CSR shadow window (not modelled).
   - id: "timer"
-    type: "stub"
+    type: "litex_timer"
     base_address: 0x60002800
     size: "2KB"
     irq: 1

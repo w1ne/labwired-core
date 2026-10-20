@@ -17,6 +17,8 @@ descriptor pins the 0x60000000-based map its CSR addresses are written
 against and documents the 0xE0000000 shadow window in the chip comments
 rather than modelling two aliases of the same block.
 
-Open items: the timer, SPI-flash controller, Ethernet MAC and MMCM are
-declared stubs (see `EXTERNAL_COMPONENTS.md` and `VALIDATION.md`); the
-LiteX BIOS and flash-load boot flow are out of scope for fast boot.
+Open items: the SPI-flash controller, Ethernet MAC and MMCM are declared
+stubs (see `EXTERNAL_COMPONENTS.md` and `VALIDATION.md`); the LiteX BIOS and
+flash-load boot flow are out of scope for fast boot. The timer is modelled
+(countdown + zero-event status/pending); its IRQ is not delivered into the
+RISC-V core yet.
