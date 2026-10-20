@@ -223,6 +223,7 @@ labwired test --script <YAML> [OVERRIDES]
 | `--resume-snapshot <PATH>` | Resume from a `.lwrs` snapshot instead of cold-booting, after validating its chip + firmware self-key against the current inputs. |
 | `--no-key` | Explicitly do not send `LABWIRED_API_KEY`, even when it is set. |
 | `--watch-gpio <PERIPHERAL:PIN>` | Logic-analyzer edge capture for a pad, e.g. `gpio8:8`. Repeatable; channels land in `result.json`'s `logic_edges` block. |
+| `--inspect-bytes-max <BYTES>` | Include complete inspect artifact payloads within a cumulative raw-byte limit (0 by default; maximum 1 MiB). Over-budget payloads are omitted, with `meta.bytes_omitted_reason: "inspect_bytes_limit"` and `meta.byte_length`; image bytes are never truncated. |
 | `--heartbeat-file <PATH>` | Supervisor liveness file, rewritten atomically at most once a second with `{"steps":N,"cycles":C}`. |
 | `--log-timestamps <MODE>` | `none`, `virtual`, `real`, or `both`. See [`--log-timestamps`](#-log-timestamps-run-and-test) above. |
 
