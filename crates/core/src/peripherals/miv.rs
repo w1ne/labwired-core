@@ -968,6 +968,7 @@ peripherals:
     type: "miv_coretimer"
     base_address: 0x70003000
     size: "1KB"
+    irq: 5
 "#;
         let manifest_yaml = r#"
 name: "miv-timer-test"
@@ -982,13 +983,18 @@ chip: "miv-timer-test.yaml"
         bus.write_u32(0x7000_3008, 0b011).unwrap(); // enable + irq enable
                                                     // 18 cycles -> 9 pulses; the counter is at 1.
         for _ in 0..18 {
-            let _ = bus.tick_peripherals_fully();
+            let (irqs, _) = bus.tick_peripherals_fully();
+            assert!(!irqs.contains(&5), "no IRQ before expiry");
         }
         assert_eq!(bus.read_u32(0x7000_3004).unwrap(), 1);
-        // Two more cycles -> the tenth pulse reaches zero and latches.
+        // Two more cycles -> the tenth pulse reaches zero and the bus delivers
+        // the configured IRQ line.
+        let mut delivered = false;
         for _ in 0..2 {
-            let _ = bus.tick_peripherals_fully();
+            let (irqs, _) = bus.tick_peripherals_fully();
+            delivered |= irqs.contains(&5);
         }
+        assert!(delivered, "the configured IRQ is delivered through the bus");
         assert_eq!(bus.read_u32(0x7000_3014).unwrap(), 1, "raw status");
         assert_eq!(bus.read_u32(0x7000_3018).unwrap(), 1, "masked status");
         assert_eq!(
@@ -999,10 +1005,15 @@ chip: "miv-timer-test.yaml"
         bus.write_u32(0x7000_3010, 1).unwrap(); // InterruptClear
         assert_eq!(bus.read_u32(0x7000_3014).unwrap(), 0);
         assert_eq!(bus.peripherals[0].dev.irq_line_level(), Some(false));
+        let (irqs, _) = bus.tick_peripherals_fully();
+        assert!(!irqs.contains(&5), "a cleared interrupt is not delivered");
 
         // Masking also deasserts the level while raw stays set.
+        let _ = bus.tick_peripherals_fully();
         bus.write_u32(0x7000_3008, 0b001).unwrap(); // clear irq enable
         assert_eq!(bus.peripherals[0].dev.irq_line_level(), Some(false));
+        let (irqs, _) = bus.tick_peripherals_fully();
+        assert!(!irqs.contains(&5), "a masked interrupt is not delivered");
     }
 
     /// A snapshot taken mid-prescaler-period and with a latched interrupt must
