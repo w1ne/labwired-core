@@ -62,8 +62,8 @@ fn run_fixture() -> (Vec<u8>, u32) {
 fn pic24_fixture_boots_and_writes_h_to_uart() {
     let (bytes, pc) = run_fixture();
     assert_eq!(bytes, b"H", "U1TXREG must deliver the fixture byte");
-    // MOV, MOV, 6×NOP, BRA self-loop → PC sits at the BRA (slot 8).
-    assert_eq!(pc, 8, "self-loop must hold the PC");
+    // MOV, MOV, 6×NOP, BRA self-loop → PC sits at the BRA (0x210).
+    assert_eq!(pc, 0x210, "self-loop must hold the PC");
 }
 
 #[test]

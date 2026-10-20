@@ -40,13 +40,22 @@
 //! * IC mode 111 (sleep/idle wake only, DS70198D Register 12-1) is stored
 //!   but never captures — there is no sleep mode to wake from.
 //!
-//! Conventions (provisional until verified against an XC16 ELF):
-//! * `pc` is a **word address**; each 24-bit instruction occupies one 4-byte
-//!   little-endian slot in flash (`INSTR_SLOT_BYTES`). The mapping of real
-//!   XC16 ELF code sections onto this layout is an open item (see
-//!   `docs/pic24-m0-reference.md`).
-//! * Data space: `0x0000–0x07FF` SFR (UART1 registers modelled, the rest is a
-//!   shadow latch), `0x0800–0x0FFF` 2 KB SRAM. Anything else is a
+//! Conventions (XC16 ELF layout verified against DS50002071F):
+//! * `pc` is a **PC-unit address**: two units per instruction, so
+//!   instructions sit at even addresses and the PC advances by 2. This is
+//!   the datasheet's addressing (`PC<0>` always 0; interrupt vectors at
+//!   `0x4 + 2*N`) and the XC16 guide's "Program Counter Unit".
+//! * Internally each instruction occupies one 4-byte little-endian slot
+//!   (`INSTR_SLOT_BYTES`, slot index = `pc / 2`). XC16 executable sections
+//!   pack instructions as **3 bytes each** ("2 program counter units are
+//!   equivalent to 3 bytes", DS50002071F); the ELF parsers expand them into
+//!   slots with [`xc16_executable_slots`]. Phantom bytes are a HEX-file
+//!   concept, not an ELF one.
+//! * Non-executable PIC24 program-memory segments (read-only data reached
+//!   through PSV/table reads) are skipped at load — PSV is not modelled.
+//! * Data space: `0x0000–0x07FF` SFR (UART1, timers, interrupt registers,
+//!   ports, capture/compare modelled; the rest is a shadow latch),
+//!   `0x0800–0x0FFF` 2 KB SRAM. Anything else is a
 //!   [`SimulationError::MemoryViolation`] — never silently dropped.
 //! * Instruction encodings are transcribed from DS70000157G (16-Bit MCU and
 //!   DSC Programmer's Reference Manual); see the reference doc for the table.
@@ -78,10 +87,37 @@ use std::sync::{Arc, Mutex};
 
 /// Flash size of the dsPIC33FJ32MC204 (DS70283H): 32 KB.
 pub const FLASH_BYTES: usize = 32 * 1024;
-/// One instruction slot: 24-bit word in a 4-byte little-endian slot (provisional).
+/// Internal storage per instruction: 24-bit word in a 4-byte little-endian
+/// slot. **Not** the XC16 ELF layout — executable sections pack 3 bytes per
+/// instruction and the parsers expand them ([`xc16_executable_slots`]).
 pub const INSTR_SLOT_BYTES: usize = 4;
+/// PC units per instruction: the PC advances by 2 (DS70283H §4; the
+/// "Program Counter Unit" in DS50002071F).
+pub const PC_UNITS_PER_INSTRUCTION: u32 = 2;
 /// Instruction slots available in flash.
 pub const INSTR_SLOTS: usize = FLASH_BYTES / INSTR_SLOT_BYTES;
+
+/// Expand an XC16 executable section into this CPU's internal slots.
+///
+/// XC16 addresses executable code in PC units (2 per instruction) while
+/// storing **3 bytes per instruction** in the ELF file ("In an executable
+/// section, 2 program counter units are equivalent to 3 bytes",
+/// DS50002071F "Program Counter Unit"). Each 24-bit little-endian
+/// instruction becomes one 4-byte slot with a zero pad byte. `None` when
+/// `data` is not a whole number of instructions — callers reject such a
+/// segment rather than guess (the 4-byte "phantom" layout belongs to HEX
+/// files, not ELF).
+pub fn xc16_executable_slots(data: &[u8]) -> Option<Vec<u8>> {
+    if data.is_empty() || data.len() % 3 != 0 {
+        return None;
+    }
+    let mut slots = Vec::with_capacity(data.len() / 3 * INSTR_SLOT_BYTES);
+    for insn in data.chunks_exact(3) {
+        slots.extend_from_slice(insn);
+        slots.push(0);
+    }
+    Some(slots)
+}
 /// Data-space SRAM base (X RAM), DS70283H Figure 4-3.
 pub const RAM_BASE: u32 = 0x0800;
 /// 2 KB SRAM.
@@ -398,19 +434,22 @@ impl Pic24 {
         }
     }
 
-    /// Load raw instruction-slot bytes at a word address (Harvard flash), the
-    /// PIC24 counterpart of `Avr::load_flash` for fixture harnesses.
-    pub fn load_flash(&mut self, addr_word: u32, bytes: &[u8]) {
-        let off = addr_word as usize * INSTR_SLOT_BYTES;
+    /// Load raw instruction-slot bytes at a PC address (Harvard flash), the
+    /// PIC24 counterpart of `Avr::load_flash` for fixture harnesses. `bytes`
+    /// are already in this CPU's 4-byte slot form.
+    pub fn load_flash(&mut self, addr_pc: u32, bytes: &[u8]) {
+        let off = (addr_pc as usize / PC_UNITS_PER_INSTRUCTION as usize) * INSTR_SLOT_BYTES;
         assert!(off + bytes.len() <= FLASH_BYTES, "fixture exceeds flash");
         self.flash[off..off + bytes.len()].copy_from_slice(bytes);
     }
 
-    /// Load a program image (engine path). Segments are copied into flash at
-    /// their start address; the entry point becomes the reset PC.
+    /// Load a program image (engine path). XC16 addresses are PC units and
+    /// the parsers hand over slot-expanded executable segments; place each
+    /// slot at `addr / 2`, then start at the ELF entry point.
     pub fn load_program_image(&mut self, image: &crate::memory::ProgramImage) {
         for seg in &image.segments {
-            let start = seg.start_addr as usize;
+            let slot = (seg.start_addr / u64::from(PC_UNITS_PER_INSTRUCTION)) as usize;
+            let start = slot.saturating_mul(INSTR_SLOT_BYTES);
             let end = start.saturating_add(seg.data.len()).min(FLASH_BYTES);
             if start < FLASH_BYTES {
                 self.flash[start..end].copy_from_slice(&seg.data[..end - start]);
@@ -925,7 +964,11 @@ impl Pic24 {
     }
 
     fn fetch(&self) -> SimResult<u32> {
-        let off = self.pc as usize * INSTR_SLOT_BYTES;
+        if self.pc & (PC_UNITS_PER_INSTRUCTION - 1) != 0 {
+            // PC<0> is always 0 on silicon (DS70283H §4).
+            return Err(SimulationError::DecodeError(self.pc as u64));
+        }
+        let off = (self.pc as usize / PC_UNITS_PER_INSTRUCTION as usize) * INSTR_SLOT_BYTES;
         if off + INSTR_SLOT_BYTES > FLASH_BYTES {
             return Err(SimulationError::MemoryViolation(off as u64));
         }
@@ -1109,7 +1152,7 @@ impl Pic24 {
     fn execute(&mut self, word: u32) -> SimResult<u32> {
         // NOP — DS70000157G: 0000 0000 xxxx xxxx xxxx xxxx.
         if word & 0x00FFFF == 0 && word >> 16 == 0 {
-            self.pc = self.pc.wrapping_add(1);
+            self.pc = self.pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
             return Ok(1);
         }
 
@@ -1118,7 +1161,7 @@ impl Pic24 {
             let k = ((word >> 4) & 0xFFFF) as u16;
             let d = (word & 0xF) as usize;
             self.w[d] = k;
-            self.pc = self.pc.wrapping_add(1);
+            self.pc = self.pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
             return Ok(1);
         }
 
@@ -1128,7 +1171,7 @@ impl Pic24 {
             let f = (((word >> 4) & 0x7FFF) << 1) as u16;
             let s = (word & 0xF) as usize;
             self.data_write(f, self.w[s])?;
-            self.pc = self.pc.wrapping_add(1);
+            self.pc = self.pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
             return Ok(1);
         }
 
@@ -1138,7 +1181,7 @@ impl Pic24 {
             let d = (word & 0xF) as usize;
             let v = self.data_read(f)?;
             self.w[d] = v;
-            self.pc = self.pc.wrapping_add(1);
+            self.pc = self.pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
             return Ok(1);
         }
 
@@ -1164,9 +1207,7 @@ impl Pic24 {
         }
 
         // Everything else is deliberately unimplemented (see module scope).
-        Err(SimulationError::DecodeError(
-            (self.pc as u64) * INSTR_SLOT_BYTES as u64,
-        ))
+        Err(SimulationError::DecodeError(self.pc as u64))
     }
 }
 
@@ -1484,7 +1525,7 @@ mod tests {
         let mut bus = SystemBus::new();
         step(&mut cpu, &mut bus);
         assert_eq!(cpu.w[0], 0x48);
-        assert_eq!(cpu.get_pc(), 1);
+        assert_eq!(cpu.get_pc(), 2, "PC advances by 2 per instruction");
         assert_eq!(cpu.clock_cycles(), 1);
     }
 
@@ -1497,7 +1538,7 @@ mod tests {
         step(&mut cpu, &mut bus);
         step(&mut cpu, &mut bus);
         assert_eq!(*sink.lock().unwrap(), vec![b'H']);
-        assert_eq!(cpu.get_pc(), 2);
+        assert_eq!(cpu.get_pc(), 4);
     }
 
     #[test]
@@ -1505,7 +1546,7 @@ mod tests {
         let mut cpu = cpu_with(&[0x0000_0000]);
         let mut bus = SystemBus::new();
         step(&mut cpu, &mut bus);
-        assert_eq!(cpu.get_pc(), 1);
+        assert_eq!(cpu.get_pc(), 2);
     }
 
     #[test]
@@ -1636,7 +1677,7 @@ mod tests {
         assert_ne!(cpu.data_read(SFR_IFS0).unwrap() & (1 << IRQ_T1.0), 0);
 
         step(&mut cpu, &mut bus); // vector + first handler instruction
-        assert_eq!(cpu.get_pc(), 0x1B, "handler began at the T1 vector");
+        assert_eq!(cpu.get_pc(), 0x1C, "handler began at the T1 vector");
         assert_eq!(
             (cpu.data_read(SFR_SR).unwrap() >> 5) & 0x7,
             1,
@@ -1681,7 +1722,7 @@ mod tests {
         for _ in 0..4 {
             step(&mut cpu, &mut bus);
         }
-        assert_eq!(cpu.get_pc(), 4, "kept executing linearly");
+        assert_eq!(cpu.get_pc(), 8, "kept executing linearly (4 × 2 units)");
         assert_eq!(cpu.w[15], 0x1000);
     }
 

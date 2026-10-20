@@ -250,7 +250,9 @@ fn cores() -> Vec<CoreUnderTest> {
             program: std::iter::repeat_n(0x00200010u32, 4)
                 .flat_map(u32::to_le_bytes)
                 .collect(),
-            step_len: 1,
+            // PC units: the dsPIC33F PC advances by 2 per instruction
+            // (DS50002071F "Program Counter Unit").
+            step_len: 2,
             opcode_bytes: 4,
             build: |entry, program| {
                 let mut cpu = Pic24::new();
