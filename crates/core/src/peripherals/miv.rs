@@ -33,18 +33,21 @@
 //!
 //! | Offset | Name | Access | Meaning |
 //! | --- | --- | --- | --- |
-//! | 0x00 | Load | R/W | the limit the counter counts up to; writing it also enables the timer in one-shot mode |
-//! | 0x04 | Value | R | current counter |
-//! | 0x08 | Control | R/W | bit0 enable, bit1 interrupt enable, bit2 mode (0 periodic, 1 one-shot) |
-//! | 0x0C | ClockPrescale | R/W | bits 3:0 select a divider of `2 << n` clock cycles per count |
+//! | 0x00 | Load | R/W | the value the counter is loaded from; writing it loads the counter **immediately** (while running, the count restarts at the new value) |
+//! | 0x04 | Value | R | current counter (reset value all-ones on silicon) |
+//! | 0x08 | Control | R/W | bit0 enable, bit1 interrupt enable, bit2 mode (0 continuous, 1 one-shot) |
+//! | 0x0C | ClockPrescale | R/W | bits 3:0 select a divider of `2 << n` PCLK cycles per count (`0000` = /2 … `1001` = /1024) |
 //! | 0x10 | InterruptClear | W | clears the raw interrupt latch |
-//! | 0x14 | RawInterruptStatus | R | bit0: the zero/limit event occurred |
+//! | 0x14 | RawInterruptStatus | R | bit0: the counter reached zero |
 //! | 0x18 | MaskedInterruptStatus | R | bit0: raw status AND interrupt enable |
 //!
-//! The counter advances from the bus's elapsed cycles (closed-form through
-//! the prescaler), latches the raw status at the limit, and either wraps
-//! (periodic) or stops (one-shot). The IRQ level is `raw && enable` through
-//! the normal `PeripheralTickResult` path.
+//! The counter is a **decrementing** counter (CoreTimer datasheet, v3.1): it
+//! loads from `Load` and, while enabled, counts down to zero at the prescaled
+//! rate. Continuous mode reloads from `Load` at zero and keeps counting;
+//! one-shot mode halts at zero until the mode is deselected or a new load is
+//! written. Writing `Load` loads the counter immediately but does **not**
+//! enable the timer — firmware still has to set Timer Enable. The raw
+//! interrupt latches at zero and is cleared only by `InterruptClear`.
 
 use crate::pins::{External, InputChange, PadDriver, PinPort};
 use crate::{PeripheralTickResult, SimResult};
@@ -212,7 +215,11 @@ impl PinPort for MivCoreGpio {
         if pin >= GPIO_PINS {
             return None;
         }
-        Some(if bit(self.out_mask(), pin) {
+        // The pad drives only when the pin is an output (OUTREG, bit 0) AND
+        // its output buffer is enabled (OUTBUFF, bit 2). Clearing OUTBUFF
+        // releases the pad to high impedance (GPIO_OE = 0 in the handbook),
+        // which is what makes bidirectional pins work.
+        Some(if bit(self.out_mask(), pin) && bit(self.cfg[pin], 2) {
             PadDriver::drive(bit(self.output, pin))
         } else {
             PadDriver::OFF
@@ -278,7 +285,9 @@ impl MivCoreTimer {
     pub fn new() -> Self {
         Self {
             load: 0,
-            value: 0,
+            // The datasheet's TimerValue reset value is all-ones (32-bit);
+            // the counter itself is disabled and the interrupt is clear.
+            value: u32::MAX,
             enabled: false,
             irq_enabled: false,
             one_shot: false,
@@ -288,54 +297,55 @@ impl MivCoreTimer {
         }
     }
 
-    /// Clock divider: `2 << prescale` cycles per count (2..=1024).
+    /// Clock divider: `2 << prescale` PCLK cycles per count (2..=1024).
     fn divider(&self) -> u64 {
         2u64 << u32::from(self.prescale.min(9))
     }
 
-    /// Advance the counter by `cycles` clock cycles, closed-form through the
-    /// prescaler.
+    /// Advance the decrementing counter by `cycles` PCLK cycles, closed-form
+    /// through the prescaler and the continuous-mode reload.
     fn advance(&mut self, cycles: u64) {
-        if !self.enabled || self.load == 0 {
+        if cycles == 0 {
             return;
         }
-        let divider = self.divider();
         let total = self.phase + cycles;
-        let counts = total / divider;
-        self.phase = total % divider;
-        if counts == 0 {
+        let pulses = total / self.divider();
+        self.phase = total % self.divider();
+        if pulses == 0 || !self.enabled {
             return;
         }
-        let limit = u64::from(self.load);
+
+        let load = u64::from(self.load);
         let mut value = u64::from(self.value);
-        let mut remaining = counts;
-        while remaining > 0 {
-            if value >= limit {
-                // The limit event: latch the raw status and either wrap or
-                // stop (one-shot).
-                self.raw_irq = true;
-                if self.one_shot {
-                    self.enabled = false;
-                    self.value = 0;
-                    self.phase = 0;
-                    return;
-                }
-                value = 0;
-            }
-            let step = remaining.min(limit - value);
-            value += step;
-            remaining -= step;
+        let mut remaining = pulses;
+
+        // A halted one-shot (or a zero load) stays put: the counter only
+        // moves again after a new Load write or leaving one-shot mode.
+        if value == 0 {
+            return;
         }
-        if value >= limit {
+
+        // First leg: from the current value down to zero.
+        if remaining < value {
+            self.value = (value - remaining) as u32;
+            return;
+        }
+        remaining -= value;
+        value = 0;
+
+        if self.one_shot || load == 0 {
+            // Halt at zero. The enable bit is NOT cleared: the datasheet says
+            // the counter halts, and a new Load write restarts it.
             self.raw_irq = true;
-            if self.one_shot {
-                self.enabled = false;
-                self.value = 0;
-                self.phase = 0;
-                return;
-            }
-            value = 0;
+            self.value = 0;
+            return;
         }
+
+        // Continuous: the counter reloads from Load at the zero boundary and
+        // keeps decrementing, so a period is exactly `load` pulses.
+        let rest = remaining % load;
+        value = if rest == 0 { load } else { load - rest };
+        self.raw_irq = true;
         self.value = value as u32;
     }
 
@@ -362,11 +372,11 @@ impl MivCoreTimer {
     fn write_reg(&mut self, offset: u64, value: u32) {
         match offset {
             TIMER_LOAD => {
+                // Writing Load loads the counter immediately (and restarts a
+                // running count at the new value). It does NOT enable the
+                // timer: counting starts only when Timer Enable is set.
                 self.load = value;
-                // The block enables itself when a one-shot duration is loaded.
-                if self.one_shot {
-                    self.enabled = true;
-                }
+                self.value = value;
             }
             TIMER_VALUE => {} // read-only
             TIMER_CONTROL => {
@@ -430,31 +440,62 @@ mod tests {
     use crate::Peripheral;
 
     #[test]
-    fn gpio_direction_and_output_register_drive_the_pads() {
+    fn gpio_config_writable_bits_match_the_block() {
         let mut gpio = MivCoreGpio::new();
-        // Pin 0 as output, pin 1 as input.
-        gpio.write_u32(0x00, 1).unwrap();
-        gpio.write_u32(0x04, 2).unwrap();
-        gpio.write_u32(GPIO_OUTPUT, 0b11).unwrap();
-        // Only the output pin's level is stored and driven.
-        assert_eq!(gpio.read_u32(GPIO_OUTPUT).unwrap(), 0b01);
+        gpio.write_u32(0x00, 0xFFFF_FFFF).unwrap();
+        assert_eq!(
+            gpio.read_u32(0x00).unwrap(),
+            CFG_WRITABLE_MASK,
+            "reserved bit 4 and the upper bits do not store"
+        );
+    }
+
+    #[test]
+    fn gpio_outbuff_gates_the_pad_drive() {
+        let mut gpio = MivCoreGpio::new();
+        // OUTREG (bit 0) alone selects the output register but leaves the
+        // output buffer disabled: the pad is released (GPIO_OE = 0).
+        gpio.write_u32(0x00, 0b001).unwrap();
+        gpio.write_u32(GPIO_OUTPUT, 1).unwrap();
+        assert_eq!(
+            gpio.driver(0).unwrap().out,
+            crate::pins::Out::Off,
+            "OUTREG without OUTBUFF must not drive"
+        );
+        // Enable the output buffer: the written level reaches the pad.
+        gpio.write_u32(0x00, 0b101).unwrap();
         assert_eq!(
             gpio.driver(0).unwrap().out,
             crate::pins::Out::High,
-            "output pin drives the written level"
+            "OUTREG + OUTBUFF drives the written level"
         );
+        // Clearing OUTBUFF releases a previously driven pin.
+        gpio.write_u32(0x00, 0b001).unwrap();
         assert_eq!(
-            gpio.driver(1).unwrap().out,
+            gpio.driver(0).unwrap().out,
             crate::pins::Out::Off,
-            "input pin does not drive"
+            "clearing OUTBUFF releases the pad"
+        );
+    }
+
+    #[test]
+    fn gpio_output_register_masks_by_direction() {
+        let mut gpio = MivCoreGpio::new();
+        gpio.write_u32(0x00, 0b101).unwrap(); // pin 0 output + buffer enabled
+        gpio.write_u32(0x04, 0b010).unwrap(); // pin 1 input
+        gpio.write_u32(GPIO_OUTPUT, 0b11).unwrap();
+        assert_eq!(
+            gpio.read_u32(GPIO_OUTPUT).unwrap(),
+            0b01,
+            "only the output-configured pin's bit is stored/read"
         );
     }
 
     #[test]
     fn gpio_input_register_reports_external_levels_on_input_pins_only() {
         let mut gpio = MivCoreGpio::new();
-        gpio.write_u32(0x00, 1).unwrap(); // pin0 output
-        gpio.write_u32(0x04, 2).unwrap(); // pin1 input
+        gpio.write_u32(0x00, 0b101).unwrap(); // pin0 output
+        gpio.write_u32(0x04, 0b010).unwrap(); // pin1 input
         gpio.set_external(0, External::Level(true));
         gpio.set_external(1, External::Level(true));
         assert_eq!(
@@ -467,26 +508,33 @@ mod tests {
     }
 
     #[test]
-    fn gpio_config_writable_bits_match_the_block() {
-        let mut gpio = MivCoreGpio::new();
-        gpio.write_u32(0x00, 0xFFFF_FFFF).unwrap();
+    fn timer_reset_value_is_all_ones_and_disabled() {
+        let timer = MivCoreTimer::new();
         assert_eq!(
-            gpio.read_u32(0x00).unwrap(),
-            CFG_WRITABLE_MASK,
-            "reserved bit 4 and the upper bits do not store"
+            timer.read_u32(TIMER_VALUE).unwrap(),
+            0xFFFF_FFFF,
+            "TimerValue resets to all-ones (datasheet)"
         );
+        assert_eq!(timer.read_u32(TIMER_CONTROL).unwrap() & 1, 0, "disabled");
+        assert_eq!(timer.read_u32(TIMER_PRESCALE).unwrap(), 0, "divide by 2");
+        assert_eq!(timer.read_u32(TIMER_RAW_STATUS).unwrap(), 0);
     }
 
     #[test]
-    fn timer_counts_up_and_latches_the_raw_status() {
+    fn timer_counts_down_and_latches_the_raw_status() {
         let mut timer = MivCoreTimer::new();
-        timer.write_u32(TIMER_PRESCALE, 0).unwrap(); // divider 2
-        timer.write_u32(TIMER_CONTROL, 0b011).unwrap(); // enable + irq enable
+        timer.write_u32(TIMER_PRESCALE, 0).unwrap(); // divide by 2
         timer.write_u32(TIMER_LOAD, 10).unwrap();
-        let _ = timer.tick_elapsed(18); // 9 counts, one short of 10
-        assert_eq!(timer.read_u32(TIMER_VALUE).unwrap(), 9);
+        timer.write_u32(TIMER_CONTROL, 0b011).unwrap(); // enable + irq enable
+        let _ = timer.tick_elapsed(18); // 9 pulses: 10 -> 1
+        assert_eq!(timer.read_u32(TIMER_VALUE).unwrap(), 1);
         assert_eq!(timer.read_u32(TIMER_RAW_STATUS).unwrap(), 0);
-        let r = timer.tick_elapsed(2); // 10th count reaches the limit
+        let r = timer.tick_elapsed(2); // 10th pulse reaches zero
+        assert_eq!(
+            timer.read_u32(TIMER_VALUE).unwrap(),
+            10,
+            "continuous mode reloads from Load at the zero boundary"
+        );
         assert_eq!(timer.read_u32(TIMER_RAW_STATUS).unwrap(), 1);
         assert_eq!(timer.read_u32(TIMER_MASKED_STATUS).unwrap(), 1);
         assert!(r.irq, "raw status + interrupt enable raises the IRQ");
@@ -498,32 +546,89 @@ mod tests {
     #[test]
     fn timer_prescaler_divides_the_clock() {
         let mut timer = MivCoreTimer::new();
-        timer.write_u32(TIMER_PRESCALE, 2).unwrap(); // divider 8
-        timer.write_u32(TIMER_CONTROL, 0b001).unwrap();
+        timer.write_u32(TIMER_PRESCALE, 2).unwrap(); // divide by 8
         timer.write_u32(TIMER_LOAD, 100).unwrap();
+        timer.write_u32(TIMER_CONTROL, 0b001).unwrap();
         let _ = timer.tick_elapsed(7);
-        assert_eq!(timer.read_u32(TIMER_VALUE).unwrap(), 0, "7 cycles < 8");
+        assert_eq!(
+            timer.read_u32(TIMER_VALUE).unwrap(),
+            100,
+            "7 cycles < 8: no pulse yet"
+        );
         let _ = timer.tick_elapsed(1);
-        assert_eq!(timer.read_u32(TIMER_VALUE).unwrap(), 1);
+        assert_eq!(timer.read_u32(TIMER_VALUE).unwrap(), 99);
     }
 
     #[test]
-    fn timer_one_shot_stops_at_the_limit_and_periodic_wraps() {
+    fn timer_load_is_immediate_and_does_not_enable() {
         let mut timer = MivCoreTimer::new();
-        timer.write_u32(TIMER_PRESCALE, 0).unwrap(); // divider 2
-        timer.write_u32(TIMER_CONTROL, 0b101).unwrap(); // one-shot + enable
+        timer.write_u32(TIMER_PRESCALE, 0).unwrap();
+        // One-shot selected, timer left disabled.
+        timer.write_u32(TIMER_CONTROL, 0b100).unwrap();
+        timer.write_u32(TIMER_LOAD, 10).unwrap();
+        assert_eq!(
+            timer.read_u32(TIMER_CONTROL).unwrap() & 1,
+            0,
+            "a Load write must not set Timer Enable"
+        );
+        assert_eq!(
+            timer.read_u32(TIMER_VALUE).unwrap(),
+            10,
+            "Load writes the counter immediately"
+        );
+        let _ = timer.tick_elapsed(1000);
+        assert_eq!(
+            timer.read_u32(TIMER_VALUE).unwrap(),
+            10,
+            "a disabled counter does not move"
+        );
+
+        // A running counter restarts at the new value on a Load write.
+        timer.write_u32(TIMER_CONTROL, 0b001).unwrap();
+        let _ = timer.tick_elapsed(4); // two pulses: 10 -> 8
+        assert_eq!(timer.read_u32(TIMER_VALUE).unwrap(), 8);
+        timer.write_u32(TIMER_LOAD, 50).unwrap();
+        assert_eq!(timer.read_u32(TIMER_VALUE).unwrap(), 50);
+        let _ = timer.tick_elapsed(2);
+        assert_eq!(timer.read_u32(TIMER_VALUE).unwrap(), 49);
+    }
+
+    #[test]
+    fn timer_one_shot_halts_and_continuous_reloads() {
+        let mut timer = MivCoreTimer::new();
+        timer.write_u32(TIMER_PRESCALE, 0).unwrap(); // divide by 2
         timer.write_u32(TIMER_LOAD, 3).unwrap();
-        let _ = timer.tick_elapsed(8); // 4 counts: reaches the limit and stops
-        assert_eq!(timer.read_u32(TIMER_CONTROL).unwrap() & 1, 0, "stopped");
+        timer.write_u32(TIMER_CONTROL, 0b101).unwrap(); // one-shot + enable
+        let _ = timer.tick_elapsed(8); // 4 pulses: 3 -> 0 and halt
+        assert_eq!(timer.read_u32(TIMER_VALUE).unwrap(), 0);
         assert_eq!(timer.read_u32(TIMER_RAW_STATUS).unwrap(), 1);
+        assert_eq!(
+            timer.read_u32(TIMER_CONTROL).unwrap() & 1,
+            1,
+            "the datasheet halts the counter; the enable bit stays set"
+        );
+        let _ = timer.tick_elapsed(100);
+        assert_eq!(
+            timer.read_u32(TIMER_VALUE).unwrap(),
+            0,
+            "a halted one-shot does not move"
+        );
+        // A new Load write restarts it.
+        timer.write_u32(TIMER_LOAD, 3).unwrap();
+        let _ = timer.tick_elapsed(2);
+        assert_eq!(timer.read_u32(TIMER_VALUE).unwrap(), 2);
 
         let mut periodic = MivCoreTimer::new();
         periodic.write_u32(TIMER_PRESCALE, 0).unwrap();
-        periodic.write_u32(TIMER_CONTROL, 0b001).unwrap();
         periodic.write_u32(TIMER_LOAD, 3).unwrap();
-        let _ = periodic.tick_elapsed(8); // 4 counts: limit at 3, wraps, one past it
-        assert_eq!(periodic.read_u32(TIMER_CONTROL).unwrap() & 1, 1, "running");
-        assert_eq!(periodic.read_u32(TIMER_VALUE).unwrap(), 1);
+        periodic.write_u32(TIMER_CONTROL, 0b001).unwrap(); // continuous
+        let _ = periodic.tick_elapsed(8); // 4 pulses: 3 -> 0 (reload) -> 2
+        assert_eq!(periodic.read_u32(TIMER_VALUE).unwrap(), 2);
         assert_eq!(periodic.read_u32(TIMER_RAW_STATUS).unwrap(), 1);
+        assert_eq!(
+            periodic.read_u32(TIMER_CONTROL).unwrap() & 1,
+            1,
+            "continuous keeps running"
+        );
     }
 }
