@@ -148,25 +148,38 @@ impl MivCoreGpio {
         }
     }
 
-    /// Is any enabled pin's interrupt active (level condition or latched edge)?
-    fn any_irq_active(&self) -> bool {
-        let enables = self.int_enable_mask();
-        (0..GPIO_PINS).any(|pin| {
-            if !bit(enables, pin) {
-                return false;
-            }
-            match self.int_type(pin) {
-                0 => self.external[pin] == Some(true),
-                1 => self.external[pin] == Some(false),
-                2..=4 => bit(self.irq_latched, pin),
-                _ => false, // 7 = disabled
+    /// Is `pin`'s interrupt condition active (level condition or latched edge)?
+    fn irq_condition(&self, pin: usize) -> bool {
+        match self.int_type(pin) {
+            0 => self.external[pin] == Some(true),
+            1 => self.external[pin] == Some(false),
+            2..=4 => bit(self.irq_latched, pin),
+            _ => false, // 7 = disabled
+        }
+    }
+
+    /// Interrupt-status bitmap (register 0x80 on read): every pin whose
+    /// condition is active, before the INTENABLE mask.
+    fn irq_status(&self) -> u32 {
+        (0..GPIO_PINS).fold(0u32, |m, pin| {
+            if self.irq_condition(pin) {
+                m | (1 << pin)
+            } else {
+                m
             }
         })
     }
 
+    /// Is any enabled pin's interrupt active (level condition or latched edge)?
+    fn any_irq_active(&self) -> bool {
+        self.irq_status() & self.int_enable_mask() != 0
+    }
+
     fn read_reg(&self, offset: u64) -> u32 {
         match offset {
-            GPIO_IRQ_CLEAR => 0, // write-only
+            // 0x80 reads the interrupt-status bitmap and writes it as W1C
+            // (Microchip release note for issue 26094).
+            GPIO_IRQ_CLEAR => self.irq_status(),
             GPIO_INPUT => {
                 let mut v = 0u32;
                 for pin in 0..GPIO_PINS {
@@ -233,6 +246,12 @@ impl crate::Peripheral for MivCoreGpio {
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
         let reg = offset & !3;
         let byte = (offset % 4) as u32;
+        // 0x80 is W1C on write and status on read: a read-modify-write would
+        // feed the pending bits back and clear the ones this byte never wrote.
+        if reg == GPIO_IRQ_CLEAR {
+            self.write_reg(reg, (value as u32) << (byte * 8));
+            return Ok(());
+        }
         let mut v = self.read_reg(reg);
         let mask: u32 = 0xFF << (byte * 8);
         v = (v & !mask) | ((value as u32) << (byte * 8));
@@ -895,6 +914,31 @@ peripherals:
             gpio.irq_line_level(),
             Some(false),
             "InterruptClear drops the latch"
+        );
+    }
+
+    #[test]
+    fn gpio_interrupt_status_reads_the_pending_bitmap() {
+        let mut gpio = MivCoreGpio::new();
+        // pins 0 and 1: INREG | INTENABLE | rising edge.
+        let cfg = (1 << 1) | (1 << 3) | (2 << 5);
+        gpio.write_u32(0x00, cfg).unwrap();
+        gpio.write_u32(0x04, cfg).unwrap();
+        gpio.set_external(0, External::Level(false));
+        gpio.set_external(1, External::Level(false));
+        assert_eq!(gpio.read_u32(GPIO_IRQ_CLEAR).unwrap(), 0, "nothing pending");
+        gpio.set_external(0, External::Level(true));
+        gpio.set_external(1, External::Level(true));
+        assert_eq!(
+            gpio.read_u32(GPIO_IRQ_CLEAR).unwrap(),
+            0b11,
+            "the status register reports both pending pins"
+        );
+        gpio.write_u32(GPIO_IRQ_CLEAR, 0b01).unwrap();
+        assert_eq!(
+            gpio.read_u32(GPIO_IRQ_CLEAR).unwrap(),
+            0b10,
+            "W1C clears only the written bit"
         );
     }
 
