@@ -1001,6 +1001,28 @@ peripherals:
         );
     }
 
+    /// A byte store to the W1C status register clears only its own byte; a
+    /// read-modify-write would take the other pending bits down with it.
+    #[test]
+    fn gpio_byte_write_clears_only_its_own_pending_byte() {
+        let mut gpio = MivCoreGpio::new();
+        let cfg = (1 << 1) | (1 << 3) | (2 << 5); // INREG | INTENABLE | rising
+        gpio.write_u32(0x00, cfg).unwrap(); // pin 0
+        gpio.write_u32(8 * 4, cfg).unwrap(); // pin 8 (byte 1)
+        gpio.set_external(0, External::Level(false));
+        gpio.set_external(8, External::Level(false));
+        gpio.set_external(0, External::Level(true));
+        gpio.set_external(8, External::Level(true));
+        assert_eq!(gpio.read_u32(GPIO_IRQ_CLEAR).unwrap(), 0b1_0000_0001);
+
+        gpio.write(GPIO_IRQ_CLEAR, 0x01).unwrap(); // byte 0 only
+        assert_eq!(
+            gpio.read_u32(GPIO_IRQ_CLEAR).unwrap(),
+            0b1_0000_0000,
+            "the byte store left pin 8 pending"
+        );
+    }
+
     #[test]
     fn gpio_disabled_level_sources_are_not_reported_pending() {
         let mut gpio = MivCoreGpio::new();
