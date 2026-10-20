@@ -200,6 +200,53 @@ impl crate::Peripheral for MivCoreGpio {
         Some(self)
     }
 
+    /// GPIO capability: the **pad** level for `pin`.
+    ///
+    /// The InputRegister itself masks bits whose INREG (CONFIG_X[1]) is clear
+    /// (handbook: forced to 0 via a MUX), and `read_reg(GPIO_INPUT)` keeps
+    /// that behaviour. This capability is what board integration asks — "did
+    /// the level a button drives land on the pin?" — so a pin with an
+    /// externally presented level reports it even before firmware enables
+    /// INREG; otherwise it falls back to the masked register bit.
+    fn read_gpio_input(&self, pin: u8) -> Option<bool> {
+        let pin = pin as usize;
+        if pin >= GPIO_PINS {
+            return None;
+        }
+        match self.external[pin] {
+            Some(level) => Some(level),
+            None => Some(bit(self.in_mask(), pin) && self.input_level(pin)),
+        }
+    }
+
+    fn read_gpio_input_word(&self) -> u32 {
+        let mut word = 0u32;
+        for pin in 0..GPIO_PINS {
+            if self.read_gpio_input(pin as u8) == Some(true) {
+                word |= 1 << pin;
+            }
+        }
+        word
+    }
+
+    /// Firmware-visible output latch: the OutputRegister masks non-output
+    /// pins to 0 while keeping the written value internally.
+    fn read_gpio_output(&self, pin: u8) -> Option<bool> {
+        let pin = pin as usize;
+        if pin >= GPIO_PINS {
+            return None;
+        }
+        Some(bit(self.out_mask(), pin) && bit(self.output, pin))
+    }
+
+    fn read_gpio_is_output(&self, pin: u8) -> Option<bool> {
+        let pin = pin as usize;
+        if pin >= GPIO_PINS {
+            return None;
+        }
+        Some(bit(self.cfg[pin], 0))
+    }
+
     fn snapshot(&self) -> serde_json::Value {
         serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
     }
@@ -604,6 +651,70 @@ mod tests {
         );
         assert_eq!(gpio.input(1), Some(true));
         assert_eq!(gpio.input(0), None, "an output pin is not an input");
+    }
+
+    #[test]
+    fn gpio_exposes_the_board_io_capability_hooks() {
+        let mut gpio = MivCoreGpio::new();
+        gpio.write_u32(0x00, 0b101).unwrap(); // pin 0 output + buffer
+        gpio.write_u32(0x04, 0b010).unwrap(); // pin 1 input
+        gpio.write_u32(GPIO_OUTPUT, 1).unwrap();
+        gpio.set_external(1, External::Level(true));
+
+        assert_eq!(gpio.read_gpio_input(1), Some(true));
+        assert_eq!(
+            gpio.read_gpio_input(0),
+            Some(false),
+            "an output pin's input register bit is forced to 0"
+        );
+        assert_eq!(gpio.read_gpio_input_word(), 0b10);
+        assert_eq!(gpio.read_gpio_output(0), Some(true));
+        assert_eq!(gpio.read_gpio_output(1), Some(false));
+        assert_eq!(gpio.read_gpio_is_output(0), Some(true));
+        assert_eq!(gpio.read_gpio_is_output(1), Some(false));
+    }
+
+    /// The board_io attach path drives the released level and proves it with
+    /// `read_gpio_input`; without the capability hooks the button is silently
+    /// dropped. Build a real bus from a descriptor + manifest and check it.
+    #[test]
+    fn gpio_button_binding_attaches_through_the_bus() {
+        use labwired_config::{ChipDescriptor, SystemManifest};
+
+        let chip_yaml = r#"
+name: "miv-gpio-test"
+arch: "riscv"
+core: "rv32im"
+cpu_hz: 1_000_000
+flash: { base: 0x60000000, size: "256KB" }
+ram: { base: 0x80000000, size: "64KB" }
+peripherals:
+  - id: "gpioInputs"
+    type: "miv_coregpio"
+    base_address: 0x70002000
+    size: "1KB"
+"#;
+        let manifest_yaml = r#"
+name: "miv-gpio-test"
+chip: "miv-gpio-test.yaml"
+board_io:
+  - id: "user_switch_0"
+    kind: "button"
+    peripheral: "gpioInputs"
+    pin: 0
+    signal: "input"
+    active_high: false
+"#;
+        let chip: ChipDescriptor = serde_yaml::from_str(chip_yaml).unwrap();
+        let manifest: SystemManifest = serde_yaml::from_str(manifest_yaml).unwrap();
+        let mut bus = crate::bus::SystemBus::from_config(&chip, &manifest).unwrap();
+        assert_eq!(
+            bus.gpio_devices.len(),
+            1,
+            "the button binding must attach through read_gpio_input"
+        );
+        assert!(bus.set_peripheral_gpio_input(0, 0, true));
+        assert_eq!(bus.peripherals[0].dev.read_gpio_input(0), Some(true));
     }
 
     #[test]
