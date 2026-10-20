@@ -746,9 +746,29 @@ pub fn parse_elf_image(bytes: &[u8]) -> anyhow::Result<crate::memory::ProgramIma
         }
         let off = ph.p_offset as usize;
         let n = ph.p_filesz as usize;
-        if off + n <= bytes.len() {
-            image.add_segment(ph.p_paddr, bytes[off..off + n].to_vec());
+        if off + n > bytes.len() {
+            continue;
         }
+        if arch == crate::Arch::Pic24 {
+            use goblin::elf::program_header::PF_X;
+            if ph.p_flags & PF_X == 0 {
+                // Read-only program-space data (reached through PSV/table
+                // reads) is not modelled: skip it rather than misread it as
+                // instructions. XC16 packs it 2 bytes per PC unit.
+                continue;
+            }
+            let Some(slots) = crate::cpu::pic24::xc16_executable_slots(&bytes[off..off + n]) else {
+                anyhow::bail!(
+                    "PIC24 executable segment at {:#x} is not XC16 3-byte packed ({} bytes); \
+                     re-check the ELF layout (DS50002071F)",
+                    ph.p_paddr,
+                    n
+                );
+            };
+            image.add_segment(ph.p_paddr, slots);
+            continue;
+        }
+        image.add_segment(ph.p_paddr, bytes[off..off + n].to_vec());
     }
     Ok(image)
 }
