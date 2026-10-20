@@ -2382,6 +2382,13 @@ impl CortexM {
 #[cfg(feature = "jit")]
 const CORTEX_M_JIT_HOT_THRESHOLD: u32 = 50;
 
+/// Maximum loop-trace iterations per dispatch. Bounds the work one block run
+/// can do so the wasm cache stays warm and a dispatch still returns to the
+/// scheduler; far below any useful window's cycle budget for a small ALU
+/// loop.
+#[cfg(feature = "jit")]
+const MAX_TRACE_ITERS: u32 = 4096;
+
 /// Thumb batch gates shared by the in-tree JIT (`jit`) and out-of-tree
 /// compiled backends (`jit-framework`: the browser adapter). A backend that
 /// dispatches its own blocks asks these before running one, so an exception
@@ -2480,6 +2487,7 @@ impl CortexM {
             }
             e
         });
+        engine.set_loop_traces(config.cortex_m_jit_loop_traces);
         let out = self.run_jit_loop(&mut engine, bus, observers, config, max_count);
         self.jit_engine = Some(engine);
         out
@@ -2544,10 +2552,30 @@ impl CortexM {
                         if self.debug_batch_break() {
                             break;
                         }
-                        let block_n = engine.ready_instr_count(pc).unwrap_or(0);
-                        let must_interpret = block_n == 0
-                            || retired + block_n > max_count
-                            || self.block_would_cross_irq(bus, block_n);
+                        let per_iter = engine.ready_iter_instr_count(pc);
+                        let mut cap = None;
+                        let must_interpret = if let Some(per) = per_iter {
+                            // Counted loop trace: cap iterations so this run
+                            // fits the batch budget and does not cross a
+                            // SysTick edge inside one block.
+                            let remaining = max_count.saturating_sub(retired);
+                            let mut cap_budget = u64::from(remaining / per);
+                            if let Some(h) = bus.systick_ticks_until_fire() {
+                                cap_budget = cap_budget.min(h.saturating_sub(1) / u64::from(per));
+                            }
+                            let c = cap_budget.min(u64::from(MAX_TRACE_ITERS)) as u32;
+                            cap = Some(c);
+                            // The emitted do-while cannot terminate once
+                            // started with cap 0: interpret one instruction
+                            // instead, exactly like a block that does not fit
+                            // the budget.
+                            c == 0
+                        } else {
+                            let block_n = engine.ready_instr_count(pc).unwrap_or(0);
+                            block_n == 0
+                                || retired + block_n > max_count
+                                || self.block_would_cross_irq(bus, block_n)
+                        };
                         if must_interpret {
                             self.step(bus, observers, config)?;
                             engine.note_interpreted();
@@ -2556,7 +2584,7 @@ impl CortexM {
                                 bus.as_any_mut().and_then(|a| a.downcast_mut::<SystemBus>())
                             {
                                 let (actual_n, next_pc, clear_exclusive, needs_interp) =
-                                    engine.run_ready(pc, self, &mut sb.ram.data);
+                                    engine.run_ready(pc, self, &mut sb.ram.data, cap);
                                 if clear_exclusive {
                                     self.exclusive_subword = None;
                                 }
@@ -2568,7 +2596,23 @@ impl CortexM {
                             match ran {
                                 Some((actual_n, needs_interp)) => {
                                     n = actual_n;
-                                    if actual_n == 0 && needs_interp {
+                                    if per_iter.is_some() {
+                                        if actual_n == 0 {
+                                            // A trace that retired nothing
+                                            // must not charge or advance the
+                                            // pc; rewind and interpret one.
+                                            self.pc = pc as u32;
+                                            self.step(bus, observers, config)?;
+                                            engine.note_interpreted();
+                                            n = 1;
+                                        } else {
+                                            bus.systick_consume_cycles(u64::from(actual_n));
+                                            // No chaining: re-dispatch at
+                                            // NEXT_PC (the head on cap exit)
+                                            // so the cap is recomputed
+                                            // against the remaining budget.
+                                        }
+                                    } else if actual_n == 0 && needs_interp {
                                         self.step(bus, observers, config)?;
                                         engine.note_interpreted();
                                         n = 1;
@@ -2603,6 +2647,7 @@ impl CortexM {
                                                         npc,
                                                         self,
                                                         &mut sb.ram.data,
+                                                        None,
                                                     );
                                                     if clear_exclusive {
                                                         self.exclusive_subword = None;

@@ -81,6 +81,7 @@ pub(crate) enum Op {
     SetIdleFastForward(bool),
     SetTickInterval(u32),
     SetJit(bool),
+    SetJitLoopTraces(bool),
     InstallEsp32Quirks(Vec<u8>),
     ApplyRuntimeSnapshot(Vec<u8>),
     WatchLogic(serde_json::Value),
@@ -262,6 +263,7 @@ impl WasmSimulator {
                 self.set_jit_enabled(*on);
                 Ok(())
             }
+            Op::SetJitLoopTraces(on) => self.set_jit_loop_traces_enabled(*on),
             Op::InstallEsp32Quirks(elf) => self.install_arduino_esp32_quirks(elf),
             Op::CanBridgeAttach(id, c, cfg) => self.can_bridge_attach(id, c, cfg),
             Op::CanBridgeOffer(id, f, t) => self.can_bridge_offer(id, f, *t).map(|_| ()),

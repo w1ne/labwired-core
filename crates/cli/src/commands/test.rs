@@ -91,6 +91,12 @@ fn apply_run_speed_opts<C: labwired_core::Cpu>(machine: &mut labwired_core::Mach
     let arm_jit = std::env::var("LABWIRED_CORTEX_M_JIT").as_deref() == Ok("1");
     machine.config.cortex_m_jit_enabled = arm_jit;
     machine.bus.config.cortex_m_jit_enabled = arm_jit;
+    // Loop traces ride on top of the JIT and are opt-in too: the differential
+    // in `crates/cli/tests/cortex_m_loop_trace_lab.rs` runs both sides of
+    // LABWIRED_CORTEX_M_JIT_TRACES. Without the JIT armed they are inert.
+    let arm_traces = arm_jit && std::env::var("LABWIRED_CORTEX_M_JIT_TRACES").as_deref() == Ok("1");
+    machine.config.cortex_m_jit_loop_traces = arm_traces;
+    machine.bus.config.cortex_m_jit_loop_traces = arm_traces;
     // Only say so when the setting can actually do something, so the line is
     // never a claim the build cannot honour.
     if cfg!(feature = "event-scheduler") {

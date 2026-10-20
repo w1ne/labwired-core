@@ -11,8 +11,9 @@ use super::super::frontend::BlockPlan;
 use super::super::side_exit::{BailReason, SideExit};
 use super::super::{CodeView, Pc};
 use super::emit::{
-    MemBinding, FAULT_PC_SLOT, FAULT_RETIRED_SLOT, IT_STATE_SLOT, NEXT_PC_SLOT, RES_FLAG_SLOT,
-    WIRE_CHAIN_DYNAMIC, WIRE_FALL_THROUGH, WIRE_MEM_FAULT, WIRE_UNSUPPORTED,
+    MemBinding, FAULT_PC_SLOT, FAULT_RETIRED_SLOT, ITERS_CAP_SLOT, ITERS_DONE_SLOT, IT_STATE_SLOT,
+    NEXT_PC_SLOT, RES_FLAG_SLOT, WIRE_CHAIN_DYNAMIC, WIRE_FALL_THROUGH, WIRE_MEM_FAULT,
+    WIRE_UNSUPPORTED,
 };
 use super::host::{pack_regs, unpack_regs};
 use super::CortexMFrontend;
@@ -21,7 +22,7 @@ use crate::cpu::cortex_m::{vfp_binop, VfpBinOp};
 use crate::cpu::CortexM;
 use crate::Machine;
 
-const REG_SYNC_BYTES: usize = NEXT_PC_SLOT as usize + 4;
+const REG_SYNC_BYTES: usize = ITERS_DONE_SLOT as usize + 4;
 
 struct RamHost {
     ptr: *mut u8,
@@ -121,6 +122,9 @@ pub struct CompiledBlock {
     regs: Memory,
     end_pc: Pc,
     instr_count: u32,
+    /// `Some(n)` for a counted loop trace: `instr_count` is `n` per-iteration
+    /// instructions and each call runs as many iterations as the staged cap.
+    iter_instr_count: Option<u32>,
     ram_len: usize,
     has_store: bool,
 }
@@ -145,13 +149,20 @@ impl CompiledBlock {
     /// reinstall in the core when control returns to the interpreter: `Some`
     /// exactly on `WIRE_MEM_FAULT` / `WIRE_UNSUPPORTED`, where the block may
     /// have stopped mid-IT (the emitter wrote the pre-fault state), and
-    /// `None` on chain/fall-through exits, which never carry one.
+    /// `None` on chain/fall-through exits, which never carry one. The fifth
+    /// element is the loop-trace iteration count reported through
+    /// [`ITERS_DONE_SLOT`] (`0` for a non-traced block).
+    ///
+    /// `cap` stages the loop-trace iteration cap before the call. A
+    /// non-traced block ignores the slot; a traced block always stages at
+    /// least 1 so the emitted do-while cannot spin forever.
     pub fn run(
         &mut self,
         x: &mut [u32; 16],
         ram: &mut [u8],
         fpu: &mut [u32; 32],
-    ) -> (SideExit, u32, bool, Option<u8>) {
+        cap: Option<u32>,
+    ) -> (SideExit, u32, bool, Option<u8>, u32) {
         let mut bytes = [0u8; REG_SYNC_BYTES];
         for (i, w) in x.iter().enumerate() {
             bytes[i * 4..i * 4 + 4].copy_from_slice(&w.to_le_bytes());
@@ -167,6 +178,19 @@ impl CompiledBlock {
             self.regs
                 .write(&mut self.store, RES_FLAG_SLOT as usize, &[0u8; 4])
                 .expect("reservation-flag clear");
+        }
+        // A counted loop must never be entered with cap 0 (the emitted
+        // do-while cannot terminate), and a caller that forgets to stage one
+        // must still make progress. Non-traced blocks never read the slot.
+        let cap = if self.iter_instr_count.is_some() {
+            Some(cap.unwrap_or(1).max(1))
+        } else {
+            cap
+        };
+        if let Some(cap) = cap {
+            self.regs
+                .write(&mut self.store, ITERS_CAP_SLOT as usize, &cap.to_le_bytes())
+                .expect("iteration-cap staging");
         }
 
         let wire = self
@@ -188,6 +212,13 @@ impl CompiledBlock {
                 bytes[i * 4 + 3],
             ]);
         }
+        let done_slot = ITERS_DONE_SLOT as usize;
+        let iters_done = u32::from_le_bytes([
+            bytes[done_slot],
+            bytes[done_slot + 1],
+            bytes[done_slot + 2],
+            bytes[done_slot + 3],
+        ]);
 
         let mut clear_exclusive = false;
         if self.has_store {
@@ -206,7 +237,12 @@ impl CompiledBlock {
                 let s = NEXT_PC_SLOT as usize;
                 let next_pc =
                     u32::from_le_bytes([bytes[s], bytes[s + 1], bytes[s + 2], bytes[s + 3]]) as Pc;
-                (SideExit::Chain { next_pc }, self.instr_count, None)
+                // A trace charges the iterations it actually retired.
+                let n = match self.iter_instr_count {
+                    Some(per) => per.saturating_mul(iters_done),
+                    None => self.instr_count,
+                };
+                (SideExit::Chain { next_pc }, n, None)
             }
             WIRE_MEM_FAULT | WIRE_UNSUPPORTED => {
                 let resume_pc = self.read_slot(FAULT_PC_SLOT) as Pc;
@@ -231,7 +267,7 @@ impl CompiledBlock {
                 None,
             ),
         };
-        (exit, n, clear_exclusive, it_state)
+        (exit, n, clear_exclusive, it_state, iters_done)
     }
 }
 
@@ -300,6 +336,7 @@ impl CortexMWasmJit {
             regs,
             end_pc: plan.end_pc,
             instr_count: plan.instr_count,
+            iter_instr_count: plan.iter_instr_count,
             ram_len,
             has_store,
         })
@@ -319,6 +356,10 @@ pub struct EngineStats {
     pub ram_bytes_synced: u64,
     /// Compiled block→block transitions that skipped `observe()`.
     pub chained: u64,
+    /// Loop-trace runs dispatched (a run is one entry of a traced loop).
+    pub trace_runs: u64,
+    /// Loop-trace iterations retired inside those runs.
+    pub trace_iters: u64,
 }
 
 pub struct CortexMJitEngine {
@@ -327,6 +368,9 @@ pub struct CortexMJitEngine {
     cache: BlockCache<CompiledBlock>,
     stats: EngineStats,
     min_profitable: u32,
+    /// Compile qualifying counted loops as loop traces
+    /// (`SimulationConfig::cortex_m_jit_loop_traces`).
+    loop_traces: bool,
 }
 
 impl std::fmt::Debug for CortexMJitEngine {
@@ -346,11 +390,17 @@ impl CortexMJitEngine {
             cache: BlockCache::new(hot_threshold),
             stats: EngineStats::default(),
             min_profitable: MIN_PROFITABLE_BLOCK_INSTRS,
+            loop_traces: false,
         }
     }
 
     pub fn set_min_profitable(&mut self, n: u32) {
         self.min_profitable = n.max(1);
+    }
+
+    /// Mirror `SimulationConfig::cortex_m_jit_loop_traces` for this engine.
+    pub fn set_loop_traces(&mut self, enabled: bool) {
+        self.loop_traces = enabled;
     }
 
     pub fn stats(&self) -> EngineStats {
@@ -365,23 +415,36 @@ impl CortexMJitEngine {
         self.cache.peek(pc).map(|b| b.instr_count)
     }
 
+    /// Per-iteration instruction count when the compiled block at `pc` is a
+    /// loop trace, `None` for an ordinary basic block.
+    pub fn ready_iter_instr_count(&self, pc: Pc) -> Option<u32> {
+        self.cache.peek(pc).and_then(|b| b.iter_instr_count)
+    }
+
     pub fn run_ready(
         &mut self,
         pc: Pc,
         cpu: &mut CortexM,
         ram: &mut [u8],
+        cap: Option<u32>,
     ) -> (u32, Pc, bool, bool) {
         let block = self.cache.run_artifact(pc).expect("run_ready on a hot PC");
         let mut x = [0u32; 16];
         pack_regs(cpu, &mut x);
         block.set_fpscr(cpu.fpscr);
-        let (exit, n, clear_exclusive, it_state) = block.run(&mut x, ram, &mut cpu.fpu_s);
+        let iter = block.iter_instr_count;
+        let (exit, n, clear_exclusive, it_state, iters_done) =
+            block.run(&mut x, ram, &mut cpu.fpu_s, cap);
         unpack_regs(cpu, &x);
         if let Some(it) = it_state {
             cpu.it_state = it;
         }
         self.stats.block_runs += 1;
         self.stats.block_instrs += n as u64;
+        if iter.is_some() && iters_done > 0 {
+            self.stats.trace_runs += 1;
+            self.stats.trace_iters += u64::from(iters_done);
+        }
         (
             n,
             exit.continuation_pc(),
@@ -406,7 +469,12 @@ impl CortexMJitEngine {
             return;
         }
         let view = CodeView::new(pc, &code);
-        let Ok((plan, binding)) = self.frontend.translate_block_thumb(pc, &view) else {
+        let translated = if self.loop_traces {
+            self.frontend.translate_block_thumb_traced(pc, &view)
+        } else {
+            self.frontend.translate_block_thumb(pc, &view)
+        };
+        let Ok((plan, binding)) = translated else {
             return;
         };
         if plan.instr_count < self.min_profitable {
@@ -439,8 +507,12 @@ impl CortexMJitEngine {
                 let mut x = [0u32; 16];
                 pack_regs(&machine.cpu, &mut x);
                 block.set_fpscr(machine.cpu.fpscr);
-                let (exit, n, clear_exclusive, it_state) =
-                    block.run(&mut x, &mut machine.bus.ram.data, &mut machine.cpu.fpu_s);
+                let (exit, n, clear_exclusive, it_state, _iters_done) = block.run(
+                    &mut x,
+                    &mut machine.bus.ram.data,
+                    &mut machine.cpu.fpu_s,
+                    None,
+                );
                 unpack_regs(&mut machine.cpu, &x);
                 if let Some(it) = it_state {
                     machine.cpu.it_state = it;

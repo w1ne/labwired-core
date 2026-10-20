@@ -37,7 +37,11 @@ const OP2_LOCAL: u32 = 18;
 /// by the `DataProc32` logical flag path. Kept beside OP2 because the
 /// interpreter computes it from the *unshifted* Rm after the result.
 const SHIFTER_CARRY_LOCAL: u32 = 19;
-const LOCAL_COUNT: u32 = 20;
+/// Counted-loop iteration cap staged by the runtime before entry.
+const CAP_LOCAL: u32 = 20;
+/// Remaining iterations; counted down by the emitted loop.
+const ITERS_LOCAL: u32 = 21;
+const LOCAL_COUNT: u32 = 22;
 
 pub const NEXT_PC_SLOT: i32 = 16 * 4;
 pub const FAULT_PC_SLOT: u32 = 68;
@@ -48,6 +52,12 @@ pub const RES_FLAG_SLOT: u32 = 76;
 /// re-applied by the runtime on an interpreter resume, so a side-exit in the
 /// middle of an IT body does not replay that instruction unpredicated.
 pub const IT_STATE_SLOT: u32 = 80;
+/// Runtime-staged iteration cap for a counted loop trace.
+/// The runtime MUST stage a value >= 1; the emitted loop cannot terminate
+/// once started with 0.
+pub const ITERS_CAP_SLOT: u32 = 84;
+/// Iterations actually retired by the trace, written back by the wasm body.
+pub const ITERS_DONE_SLOT: u32 = 88;
 pub const RAM_WINDOW_OFF: u32 = 256;
 
 pub type RamWindow = (u32, u32);
@@ -225,6 +235,9 @@ pub struct EmittedBlock {
     pub code: Vec<u8>,
     pub end_pc: Pc,
     pub instr_count: u32,
+    /// For a counted loop trace: guest instructions retired per iteration
+    /// (body + backedge). `None` for an ordinary straight-line block.
+    pub iter_instr_count: Option<u32>,
     pub exits: Vec<ExitEdge>,
     pub binding: Option<MemBinding>,
 }
@@ -295,8 +308,247 @@ pub fn emit_block(pc: Pc, code: &CodeView<'_>, window: Option<RamWindow>) -> Opt
         code: code_bytes,
         end_pc,
         instr_count,
+        iter_instr_count: None,
         exits,
         binding,
+    })
+}
+
+/// A loop-trace body op: [`is_alu_emittable`] minus the cases that are not
+/// pure register-only arithmetic (literal loads and VFP reach host state or
+/// memory).
+fn is_trace_alu(inst: &Instruction) -> bool {
+    use Instruction::*;
+    if matches!(
+        inst,
+        LdrLit { .. }
+            | VaddF32 { .. }
+            | VsubF32 { .. }
+            | VmulF32 { .. }
+            | VdivF32 { .. }
+            | VmovF32Reg { .. }
+            | VmovF32Imm { .. }
+            | VmovSnRt { .. }
+            | VmovRtSn { .. }
+    ) {
+        return false;
+    }
+    is_alu_emittable(inst)
+}
+
+/// Conservative "writes APSR" predicate for the loop-trace backedge gate.
+/// Every op here routes through `update_nz`/`update_nzcv` in
+/// [`Body::emit_instruction`] unless the decoded `set_flags` bit is clear.
+fn sets_flags_of(inst: &Instruction) -> bool {
+    use Instruction::*;
+    matches!(
+        inst,
+        MovImm { .. }
+            | AddReg { .. }
+            | AddImm3 { .. }
+            | AddImm8 { .. }
+            | SubReg { .. }
+            | SubImm3 { .. }
+            | SubImm8 { .. }
+            | CmpImm { .. }
+            | CmpReg { .. }
+            | Cmn { .. }
+            | Tst { .. }
+            | And { .. }
+            | Orr { .. }
+            | Eor { .. }
+            | Bic { .. }
+            | Mvn { .. }
+            | Lsl { .. }
+            | Lsr { .. }
+            | Asr { .. }
+            | LslReg { .. }
+            | LsrReg { .. }
+            | AsrReg { .. }
+            | Ror { .. }
+            | Adc { .. }
+            | Sbc { .. }
+            | Rsbs { .. }
+            | Mul { .. }
+    ) || matches!(
+        inst,
+        DataProcImm32 {
+            set_flags: true,
+            ..
+        } | DataProc32 {
+            set_flags: true,
+            ..
+        }
+    )
+}
+
+/// Compile a counted loop whose conditional backedge targets its own entry
+/// into a single wasm `loop`.
+///
+/// The body is the maximal straight-line run of pure-ALU ops from `pc`
+/// (with `Bl` to a leaf callee inlined one level), followed by one
+/// `BranchCond` that jumps back to `pc`. The runtime stages an iteration cap
+/// in [`ITERS_CAP_SLOT`]; the trace counts down and writes the number of
+/// retired iterations to [`ITERS_DONE_SLOT`]. It exits to the fall-through
+/// pc when the condition fails, or back to the head (with `NEXT_PC` = head)
+/// when the cap is exhausted, so the dispatcher simply re-enters.
+pub fn emit_loop_trace(pc: Pc, code: &CodeView<'_>) -> Option<EmittedBlock> {
+    let mut body = Body::default();
+    let mut cur = pc;
+    let mut counted: u32 = 0;
+    let mut any_flags = false;
+
+    while let Some((inst, len)) = decode_at(cur, code) {
+        if let Instruction::Bl { offset } = inst {
+            let bl_pc = cur as u32;
+            let ret = cur.wrapping_add(4);
+            // Identical to `emit_terminator`'s Bl arm.
+            body.i32_const((bl_pc.wrapping_add(4) | 1) as i32);
+            body.write(14);
+            counted += 1;
+
+            // Inline the leaf callee one level. `writes[14]` is masked while
+            // walking it so a callee that clobbers LR (making `bx lr` return
+            // somewhere else) is refused rather than mis-inlined.
+            let callee_entry = bl_pc.wrapping_add(4).wrapping_add(offset as u32) as u64;
+            let mut callee_pc = callee_entry;
+            let lr_was_written = body.writes[14];
+            body.writes[14] = false;
+            let mut callee_wrote_lr = false;
+            while let Some((callee_inst, callee_len)) = decode_at(callee_pc, code) {
+                if !is_trace_alu(&callee_inst) {
+                    break;
+                }
+                body.emit_instruction(callee_pc as u32, &callee_inst, code);
+                callee_wrote_lr |= body.writes[14];
+                any_flags |= sets_flags_of(&callee_inst);
+                counted += 1;
+                callee_pc += callee_len;
+                if counted > super::MAX_TRACE_INSTRS {
+                    return None;
+                }
+            }
+            body.writes[14] = lr_was_written;
+            if callee_wrote_lr {
+                return None;
+            }
+            // A leaf return is the only thing that may follow the callee's
+            // straight line.
+            let (ret_inst, _) = decode_at(callee_pc, code)?;
+            if !matches!(ret_inst, Instruction::Bx { rm: 14 }) {
+                return None;
+            }
+            counted += 1;
+            cur = ret;
+            continue;
+        }
+        if !is_trace_alu(&inst) {
+            break;
+        }
+        body.emit_instruction(cur as u32, &inst, code);
+        any_flags |= sets_flags_of(&inst);
+        counted += 1;
+        cur += len;
+        if counted > super::MAX_TRACE_INSTRS {
+            return None;
+        }
+    }
+
+    let (backedge, backedge_len) = decode_at(cur, code)?;
+    let Instruction::BranchCond { cond, offset } = backedge else {
+        return None;
+    };
+    // Mirror `emit_terminator`'s BranchCond target arithmetic (32-bit wrap).
+    let target = (cur as u32).wrapping_add(4).wrapping_add(offset as u32) as u64;
+    if target != pc || !any_flags || counted == 0 {
+        return None;
+    }
+    let per_iter = counted + 1;
+    if per_iter > super::MAX_TRACE_INSTRS {
+        return None;
+    }
+    let fallthrough_pc = cur + backedge_len;
+
+    let body_code = std::mem::take(&mut body.buf);
+
+    // cap = *ITERS_CAP_SLOT; iters = cap;
+    body.i32_const(ITERS_CAP_SLOT as i32);
+    body.buf.push(op::I32_LOAD);
+    enc::uleb(&mut body.buf, 2);
+    enc::uleb(&mut body.buf, 0);
+    body.local_set(CAP_LOCAL);
+    body.local_get(CAP_LOCAL);
+    body.local_set(ITERS_LOCAL);
+
+    body.buf.push(op::BLOCK);
+    body.buf.push(op::T_EMPTY);
+    body.buf.push(op::LOOP);
+    body.buf.push(op::T_EMPTY);
+    body.buf.extend_from_slice(&body_code);
+    // Natural exit: backedge condition false.
+    body.push_condition(cond);
+    body.buf.push(op::I32_EQZ);
+    body.buf.push(op::BR_IF);
+    enc::uleb(&mut body.buf, 1);
+    // Counted exit: branch while the decremented counter is non-zero.
+    body.local_get(ITERS_LOCAL);
+    body.i32_const(1);
+    body.buf.push(op::I32_SUB);
+    body.local_tee(ITERS_LOCAL);
+    body.buf.push(op::BR_IF);
+    enc::uleb(&mut body.buf, 0);
+    body.buf.push(op::END);
+    body.buf.push(op::END);
+
+    // iterations_done = cap - iters, plus one when the loop left on a false
+    // condition: the do-while body runs before the decrement, and the
+    // decrement only happens on the taken (cond true) path.
+    // - cap exit: cond true at exit -> +0, done == cap == bodies run.
+    // - natural exit: cond false at exit -> +1, done == decrements + 1 ==
+    //   bodies run.
+    body.i32_const(ITERS_DONE_SLOT as i32);
+    body.local_get(CAP_LOCAL);
+    body.local_get(ITERS_LOCAL);
+    body.buf.push(op::I32_SUB);
+    body.push_condition(cond);
+    body.buf.push(op::I32_EQZ);
+    body.buf.push(op::I32_ADD);
+    body.buf.push(op::I32_STORE);
+    enc::uleb(&mut body.buf, 2);
+    enc::uleb(&mut body.buf, 0);
+
+    // Flags still hold the last iteration's result: taken => cap exit at the
+    // head, not-taken => natural fall-through after the backedge.
+    body.i32_const(NEXT_PC_SLOT);
+    body.push_condition(cond);
+    body.buf.push(op::IF);
+    body.buf.push(op::T_I32);
+    body.i32_const(pc as i32);
+    body.buf.push(op::ELSE);
+    body.i32_const(fallthrough_pc as i32);
+    body.buf.push(op::END);
+    body.store_next_pc();
+
+    let mut expr = Vec::with_capacity(body.buf.len() + 256);
+    body.emit_prologue(&mut expr);
+    expr.extend_from_slice(&body.buf);
+    body.emit_epilogue(&mut expr);
+    expr.push(op::I32_CONST);
+    enc::sleb(&mut expr, WIRE_CHAIN_DYNAMIC as i64);
+
+    // Register-only trace: no imports beyond the register memory.
+    let code_bytes = build_module(LOCAL_COUNT, 1, &expr);
+
+    Some(EmittedBlock {
+        code: code_bytes,
+        end_pc: fallthrough_pc,
+        instr_count: per_iter,
+        iter_instr_count: Some(per_iter),
+        exits: vec![ExitEdge {
+            wire_code: WIRE_CHAIN_DYNAMIC,
+            reason: BailReason::PartialBlock,
+        }],
+        binding: None,
     })
 }
 

@@ -1392,6 +1392,7 @@ jobs:
           scripts/ci/cargo-test-nonvacuous.sh
           -p labwired-core --features event-scheduler,jit
           --test cortex_m_jit_nrf_differential
+          --test cortex_m_loop_trace_differential
 
   # ── Workspace tests on PRs (sharded; advisory for now) ─────────────────────
   #
