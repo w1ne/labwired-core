@@ -273,8 +273,15 @@ impl crate::Peripheral for LitexTimer {
             } else {
                 (0xFFFF_0000u32, 16u32)
             };
+            let written = u32::from(value) << shift;
+            if reg == EV_PENDING {
+                // W1C: a read-modify-write would feed the latched bit back and
+                // clear the event on a store that never wrote bit 0.
+                self.write_reg(reg, written);
+                return Ok(());
+            }
             let mut v = self.read_reg(reg);
-            v = (v & !mask) | (u32::from(value) << shift);
+            v = (v & !mask) | written;
             self.write_reg(reg, v);
             return Ok(());
         }
@@ -497,6 +504,34 @@ mod tests {
             t.read_u32(EV_PENDING).unwrap(),
             0,
             "upper-halfword store must not latch a transient zero"
+        );
+    }
+
+    /// W1C must survive halfword stores: writing the upper half (or a zero
+    /// low half) must not clear the event; only writing bit 0 as 1 does.
+    #[test]
+    fn halfword_writes_respect_w1c_on_ev_pending() {
+        let mut t = armed(10, 0);
+        let _ = t.tick_elapsed(10);
+        assert_eq!(t.read_u32(EV_PENDING).unwrap(), 1);
+
+        t.write_u16(EV_PENDING + 2, 0).unwrap();
+        assert_eq!(
+            t.read_u32(EV_PENDING).unwrap(),
+            1,
+            "an upper-halfword store must not clear the event"
+        );
+        t.write_u16(EV_PENDING, 0).unwrap();
+        assert_eq!(
+            t.read_u32(EV_PENDING).unwrap(),
+            1,
+            "writing 0 to the low half leaves the event"
+        );
+        t.write_u16(EV_PENDING, 1).unwrap();
+        assert_eq!(
+            t.read_u32(EV_PENDING).unwrap(),
+            0,
+            "writing bit 0 as 1 clears it"
         );
     }
 
