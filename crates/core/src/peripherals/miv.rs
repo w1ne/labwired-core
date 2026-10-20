@@ -319,10 +319,15 @@ impl MivCoreTimer {
         let mut value = u64::from(self.value);
         let mut remaining = pulses;
 
-        // A halted one-shot (or a zero load) stays put: the counter only
-        // moves again after a new Load write or leaving one-shot mode.
+        // A halted one-shot stays put until a new Load write — or until
+        // one-shot mode is deselected, in which case continuous operation
+        // resumes from Load (datasheet: "halts ... until One-Shot Timer mode
+        // is deselected or a new load value is written").
         if value == 0 {
-            return;
+            if self.one_shot || load == 0 {
+                return;
+            }
+            value = load;
         }
 
         // First leg: from the current value down to zero.
@@ -331,7 +336,6 @@ impl MivCoreTimer {
             return;
         }
         remaining -= value;
-        value = 0;
 
         if self.one_shot || load == 0 {
             // Halt at zero. The enable bit is NOT cleared: the datasheet says
@@ -380,9 +384,21 @@ impl MivCoreTimer {
             }
             TIMER_VALUE => {} // read-only
             TIMER_CONTROL => {
+                let was_one_shot = self.one_shot;
                 self.enabled = value & 1 != 0;
                 self.irq_enabled = value & 2 != 0;
                 self.one_shot = value & 4 != 0;
+                // Deselecting one-shot resumes an expired timer from Load
+                // (datasheet: the counter halts "until One-Shot Timer mode is
+                // deselected or a new load value is written").
+                if was_one_shot
+                    && !self.one_shot
+                    && self.enabled
+                    && self.value == 0
+                    && self.load > 0
+                {
+                    self.value = self.load;
+                }
             }
             TIMER_PRESCALE => self.prescale = (value & 0xF) as u8,
             TIMER_IRQ_CLEAR => self.raw_irq = false,
@@ -591,6 +607,31 @@ mod tests {
         assert_eq!(timer.read_u32(TIMER_VALUE).unwrap(), 50);
         let _ = timer.tick_elapsed(2);
         assert_eq!(timer.read_u32(TIMER_VALUE).unwrap(), 49);
+    }
+
+    #[test]
+    fn deselecting_one_shot_resumes_an_expired_timer() {
+        let mut timer = MivCoreTimer::new();
+        timer.write_u32(TIMER_PRESCALE, 0).unwrap(); // divide by 2
+        timer.write_u32(TIMER_LOAD, 3).unwrap();
+        timer.write_u32(TIMER_CONTROL, 0b101).unwrap(); // one-shot + enable
+        let _ = timer.tick_elapsed(8); // 4 pulses: 3 -> 0 and halt
+        assert_eq!(timer.read_u32(TIMER_VALUE).unwrap(), 0);
+        timer.write_u32(TIMER_IRQ_CLEAR, 1).unwrap();
+
+        // Select continuous without rewriting Load: the counter reloads and
+        // keeps producing zero events (datasheet: deselecting one-shot
+        // resumes the timer).
+        timer.write_u32(TIMER_CONTROL, 0b001).unwrap();
+        assert_eq!(
+            timer.read_u32(TIMER_VALUE).unwrap(),
+            3,
+            "deselecting one-shot reloads the counter from Load"
+        );
+        let _ = timer.tick_elapsed(2); // one pulse
+        assert_eq!(timer.read_u32(TIMER_VALUE).unwrap(), 2);
+        let _ = timer.tick_elapsed(4); // two more pulses: zero at the second
+        assert_eq!(timer.read_u32(TIMER_RAW_STATUS).unwrap(), 1);
     }
 
     #[test]
