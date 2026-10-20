@@ -474,6 +474,14 @@ impl crate::Peripheral for MivCoreTimer {
         }
     }
 
+    /// The timer drives a LEVEL interrupt (CoreTimer handbook): the line
+    /// tracks the latched raw status AND the enable. Declaring the level lets
+    /// the bus drop a pending NVIC bit when firmware clears or masks the
+    /// interrupt, instead of delivering a second handler entry.
+    fn irq_line_level(&self) -> Option<bool> {
+        Some(self.raw_irq && self.irq_enabled)
+    }
+
     fn snapshot(&self) -> serde_json::Value {
         serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
     }
@@ -764,6 +772,35 @@ mod tests {
         assert_eq!(timer.read_u32(TIMER_VALUE).unwrap(), 2);
         let _ = timer.tick_elapsed(4); // two more pulses: zero at the second
         assert_eq!(timer.read_u32(TIMER_RAW_STATUS).unwrap(), 1);
+    }
+
+    #[test]
+    fn timer_irq_is_a_level_that_follows_clear_and_mask() {
+        let mut timer = MivCoreTimer::new();
+        timer.write_u32(TIMER_PRESCALE, 0).unwrap(); // divide by 2
+        timer.write_u32(TIMER_LOAD, 3).unwrap();
+        timer.write_u32(TIMER_CONTROL, 0b011).unwrap(); // enable + irq enable
+        let _ = timer.tick_elapsed(6); // 3 pulses -> zero
+        assert_eq!(timer.read_u32(TIMER_RAW_STATUS).unwrap(), 1);
+        assert_eq!(timer.irq_line_level(), Some(true));
+
+        // Clearing the raw status drops the line (a level, not a pulse).
+        timer.write_u32(TIMER_IRQ_CLEAR, 1).unwrap();
+        assert_eq!(
+            timer.irq_line_level(),
+            Some(false),
+            "clearing the interrupt drops the level"
+        );
+
+        // Fire again, then mask: the line drops even though raw is set.
+        let _ = timer.tick_elapsed(6); // another period: 3 -> 0 (reload 3)
+        assert_eq!(timer.read_u32(TIMER_RAW_STATUS).unwrap(), 1);
+        timer.write_u32(TIMER_CONTROL, 0b001).unwrap(); // clear irq enable
+        assert_eq!(
+            timer.irq_line_level(),
+            Some(false),
+            "masking the interrupt drops the level"
+        );
     }
 
     #[test]
