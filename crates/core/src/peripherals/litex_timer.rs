@@ -262,14 +262,23 @@ impl crate::Peripheral for LitexTimer {
         Ok(())
     }
 
-    /// A half-word store is likewise one write of the low 16 bits.
+    /// A half-word store is likewise one write, at either aligned half-word
+    /// position: a split byte store could pass through zero and latch a false
+    /// event.
     fn write_u16(&mut self, offset: u64, value: u16) -> SimResult<()> {
-        if offset % 4 == 0 {
-            let mut v = self.read_reg(offset);
-            v = (v & 0xFFFF_0000) | u32::from(value);
-            self.write_reg(offset, v);
+        if offset % 2 == 0 {
+            let reg = offset & !3;
+            let (mask, shift) = if offset % 4 == 0 {
+                (0x0000_FFFFu32, 0u32)
+            } else {
+                (0xFFFF_0000u32, 16u32)
+            };
+            let mut v = self.read_reg(reg);
+            v = (v & !mask) | (u32::from(value) << shift);
+            self.write_reg(reg, v);
             return Ok(());
         }
+        // Odd offsets keep the byte-lane contract.
         self.write(offset, value as u8)?;
         self.write(offset + 1, (value >> 8) as u8)
     }
@@ -471,6 +480,23 @@ mod tests {
             t.read_u32(EV_PENDING).unwrap(),
             0,
             "atomic LOAD store must not latch a transient zero"
+        );
+    }
+
+    /// An upper-halfword store to `LOAD` must not transiently zero the low
+    /// half (0x0001_0000 -> 0x0100_0000 passes through 0 in a byte split).
+    #[test]
+    fn upper_halfword_write_to_load_is_atomic() {
+        let mut t = LitexTimer::new();
+        t.write_u32(LOAD, 0x0001_0000).unwrap();
+        t.write_u32(EV_PENDING, 1).unwrap();
+        assert_eq!(t.read_u32(EV_PENDING).unwrap(), 0);
+        t.write_u16(LOAD + 2, 0x0100).unwrap();
+        assert_eq!(t.read_u32(LOAD).unwrap(), 0x0100_0000);
+        assert_eq!(
+            t.read_u32(EV_PENDING).unwrap(),
+            0,
+            "upper-halfword store must not latch a transient zero"
         );
     }
 
