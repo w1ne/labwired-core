@@ -949,6 +949,92 @@ board_io:
         );
     }
 
+    /// Bus-level: programming through MMIO, ticking the bus, expiry and the
+    /// level deasserting on clear all work through the real register path.
+    #[test]
+    fn timer_advances_and_raises_irq_through_the_bus() {
+        use crate::Bus;
+        use labwired_config::{ChipDescriptor, SystemManifest};
+
+        let chip_yaml = r#"
+name: "miv-timer-test"
+arch: "riscv"
+core: "rv32im"
+cpu_hz: 1_000_000
+flash: { base: 0x60000000, size: "256KB" }
+ram: { base: 0x80000000, size: "64KB" }
+peripherals:
+  - id: "timer0"
+    type: "miv_coretimer"
+    base_address: 0x70003000
+    size: "1KB"
+"#;
+        let manifest_yaml = r#"
+name: "miv-timer-test"
+chip: "miv-timer-test.yaml"
+"#;
+        let chip: ChipDescriptor = serde_yaml::from_str(chip_yaml).unwrap();
+        let manifest: SystemManifest = serde_yaml::from_str(manifest_yaml).unwrap();
+        let mut bus = crate::bus::SystemBus::from_config(&chip, &manifest).unwrap();
+
+        bus.write_u32(0x7000_300C, 0).unwrap(); // divide by 2
+        bus.write_u32(0x7000_3000, 10).unwrap(); // load
+        bus.write_u32(0x7000_3008, 0b011).unwrap(); // enable + irq enable
+                                                    // 18 cycles -> 9 pulses; the counter is at 1.
+        for _ in 0..18 {
+            let _ = bus.tick_peripherals_fully();
+        }
+        assert_eq!(bus.read_u32(0x7000_3004).unwrap(), 1);
+        // Two more cycles -> the tenth pulse reaches zero and latches.
+        for _ in 0..2 {
+            let _ = bus.tick_peripherals_fully();
+        }
+        assert_eq!(bus.read_u32(0x7000_3014).unwrap(), 1, "raw status");
+        assert_eq!(bus.read_u32(0x7000_3018).unwrap(), 1, "masked status");
+        assert_eq!(
+            bus.peripherals[0].dev.irq_line_level(),
+            Some(true),
+            "the bus-visible interrupt level is asserted"
+        );
+        bus.write_u32(0x7000_3010, 1).unwrap(); // InterruptClear
+        assert_eq!(bus.read_u32(0x7000_3014).unwrap(), 0);
+        assert_eq!(bus.peripherals[0].dev.irq_line_level(), Some(false));
+
+        // Masking also deasserts the level while raw stays set.
+        bus.write_u32(0x7000_3008, 0b001).unwrap(); // clear irq enable
+        assert_eq!(bus.peripherals[0].dev.irq_line_level(), Some(false));
+    }
+
+    /// A snapshot taken mid-prescaler-period and with a latched interrupt must
+    /// resume the same timing and the same IRQ state.
+    #[test]
+    fn timer_snapshot_preserves_partial_prescale_and_a_latched_irq() {
+        let mut timer = MivCoreTimer::new();
+        timer.write_u32(TIMER_PRESCALE, 1).unwrap(); // divide by 4
+        timer.write_u32(TIMER_LOAD, 5).unwrap();
+        timer.write_u32(TIMER_CONTROL, 0b011).unwrap(); // enable + irq
+        let _ = timer.tick_elapsed(6); // one pulse, phase 2
+        let json = timer.snapshot();
+        let mut restored = MivCoreTimer::new();
+        restored.restore(json).unwrap();
+        assert_eq!(restored.read_u32(TIMER_VALUE).unwrap(), 4);
+        let _ = restored.tick_elapsed(2); // 2 + 2 cycles -> one more pulse
+        assert_eq!(
+            restored.read_u32(TIMER_VALUE).unwrap(),
+            3,
+            "the partial prescaler phase survived the round trip"
+        );
+
+        // Latched IRQ: expire and snapshot with raw set.
+        let _ = restored.tick_elapsed(100);
+        assert_eq!(restored.read_u32(TIMER_RAW_STATUS).unwrap(), 1);
+        let mut pending = MivCoreTimer::new();
+        pending.restore(restored.snapshot()).unwrap();
+        assert_eq!(pending.read_u32(TIMER_RAW_STATUS).unwrap(), 1);
+        assert_eq!(pending.read_u32(TIMER_MASKED_STATUS).unwrap(), 1);
+        assert_eq!(pending.irq_line_level(), Some(true));
+    }
+
     #[test]
     fn timer_irq_is_a_level_that_follows_clear_and_mask() {
         let mut timer = MivCoreTimer::new();
