@@ -915,6 +915,12 @@ const MAX_TRACE_ITERS: u32 = 4096;
 /// back through the same window the registers use.
 const THUMB_REG_BYTES: usize = 96;
 
+/// What one dispatch of an emitted Thumb block reports to the dispatcher:
+/// `(wire, next_pc, clear_exclusive, fault_pc, fault_retired, fault_it_state,
+/// iters_done)`. Named so `clippy::type_complexity` stays quiet and the field
+/// order is documented once.
+type ThumbRun = (i32, u32, bool, u32, u32, u8, u32);
+
 type ThumbLoadClosure = Closure<dyn FnMut(i32, i32, i32) -> i32>;
 type ThumbStoreClosure = Closure<dyn FnMut(i32, i32, i32)>;
 type ThumbVfpGetClosure = Closure<dyn FnMut(i32) -> i32>;
@@ -1084,9 +1090,9 @@ impl CortexMBrowserBlock {
         })
     }
 
-    /// Returns `(wire, next_pc, clear_exclusive, fault_pc, fault_retired,
-    /// fault_it_state, iters_done)`; the last is the pre-fault IT state the
-    /// caller must reinstall before the interpreter resumes mid-IT, and
+    /// `(wire, next_pc, clear_exclusive, fault_pc, fault_retired,
+    /// fault_it_state, iters_done)`; `fault_it_state` is the pre-fault IT state
+    /// the caller must reinstall before the interpreter resumes mid-IT, and
     /// `iters_done` is the loop-trace iteration count the emitted body wrote
     /// back (0 for an ordinary block).
     fn run(
@@ -1094,7 +1100,7 @@ impl CortexMBrowserBlock {
         cpu: &mut CortexM,
         ram: &mut [u8],
         iters_cap: Option<u32>,
-    ) -> Result<(i32, u32, bool, u32, u32, u8, u32), JsValue> {
+    ) -> Result<ThumbRun, JsValue> {
         let mut x = [0u32; 16];
         pack_regs(cpu, &mut x);
         let mut bytes = [0u8; THUMB_REG_BYTES];

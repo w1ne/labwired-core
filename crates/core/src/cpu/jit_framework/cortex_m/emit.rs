@@ -398,10 +398,7 @@ pub fn emit_loop_trace(pc: Pc, code: &CodeView<'_>) -> Option<EmittedBlock> {
     let mut counted: u32 = 0;
     let mut any_flags = false;
 
-    loop {
-        let Some((inst, len)) = decode_at(cur, code) else {
-            break;
-        };
+    while let Some((inst, len)) = decode_at(cur, code) {
         if let Instruction::Bl { offset } = inst {
             let bl_pc = cur as u32;
             let ret = cur.wrapping_add(4);
@@ -418,10 +415,7 @@ pub fn emit_loop_trace(pc: Pc, code: &CodeView<'_>) -> Option<EmittedBlock> {
             let lr_was_written = body.writes[14];
             body.writes[14] = false;
             let mut callee_wrote_lr = false;
-            loop {
-                let Some((callee_inst, callee_len)) = decode_at(callee_pc, code) else {
-                    break;
-                };
+            while let Some((callee_inst, callee_len)) = decode_at(callee_pc, code) {
                 if !is_trace_alu(&callee_inst) {
                     break;
                 }
