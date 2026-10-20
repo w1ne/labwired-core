@@ -68,6 +68,7 @@ pub mod kit;
 pub mod litex_timer;
 pub mod lptim;
 pub mod mcg;
+pub mod miv;
 pub mod noise;
 pub mod nrf52;
 pub mod nrf54l;
