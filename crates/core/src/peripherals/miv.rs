@@ -177,10 +177,12 @@ impl MivCoreGpio {
     }
 
     /// Interrupt-status bitmap (register 0x80 on read): every pin whose
-    /// condition is active, before the INTENABLE mask.
+    /// condition is active AND whose interrupt generation is enabled.
+    /// INTENABLE=0 disables generation entirely, so a disabled source must not
+    /// show up as pending.
     fn irq_status(&self) -> u32 {
         (0..GPIO_PINS).fold(0u32, |m, pin| {
-            if self.irq_condition(pin) {
+            if bit(self.cfg[pin], 3) && self.irq_condition(pin) {
                 m | (1 << pin)
             } else {
                 m
@@ -188,9 +190,9 @@ impl MivCoreGpio {
         })
     }
 
-    /// Is any enabled pin's interrupt active (level condition or latched edge)?
+    /// Is any pin's interrupt active (level condition or latched edge)?
     fn any_irq_active(&self) -> bool {
-        self.irq_status() & self.int_enable_mask() != 0
+        self.irq_status() != 0
     }
 
     fn read_reg(&self, offset: u64) -> u32 {
@@ -997,6 +999,24 @@ peripherals:
             0b10,
             "W1C clears only the written bit"
         );
+    }
+
+    #[test]
+    fn gpio_disabled_level_sources_are_not_reported_pending() {
+        let mut gpio = MivCoreGpio::new();
+        // Reset configuration (INTENABLE clear), pin 0 held high externally.
+        gpio.set_external(0, External::Level(true));
+        assert_eq!(
+            gpio.read_u32(GPIO_IRQ_CLEAR).unwrap(),
+            0,
+            "a disabled level source is not pending"
+        );
+        // Enable generation with level-high: the status reports it, and the
+        // bit drops again when generation is disabled.
+        gpio.write_u32(0x00, (1 << 1) | (1 << 3)).unwrap();
+        assert_eq!(gpio.read_u32(GPIO_IRQ_CLEAR).unwrap(), 1);
+        gpio.write_u32(0x00, 1 << 1).unwrap();
+        assert_eq!(gpio.read_u32(GPIO_IRQ_CLEAR).unwrap(), 0);
     }
 
     #[test]
