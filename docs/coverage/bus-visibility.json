@@ -67,6 +67,10 @@
   },
   {
     "buses": [],
+    "name": "litex-vexriscv"
+  },
+  {
+    "buses": [],
     "name": "mkw41z4"
   },
   {
