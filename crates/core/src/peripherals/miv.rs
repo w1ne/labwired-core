@@ -116,9 +116,20 @@ impl MivCoreGpio {
         self.external[pin].unwrap_or(false)
     }
 
+    /// The pad level the input buffer sees: the chip's own drive wins when
+    /// the output buffer is enabled (a bidirectional pin reads back what it
+    /// drives), otherwise whatever the outside world presents.
+    fn pad_level(&self, pin: usize) -> bool {
+        if bit(self.cfg[pin], 2) {
+            bit(self.out_mask(), pin) && bit(self.output, pin)
+        } else {
+            self.external_level(pin)
+        }
+    }
+
     /// Firmware-visible input level of `pin` (InputRegister bit).
     fn input_level(&self, pin: usize) -> bool {
-        self.external_level(pin)
+        self.pad_level(pin)
     }
 
     /// INTENABLE bits (CONFIG_X[3]).
@@ -153,11 +164,16 @@ impl MivCoreGpio {
     /// Is `pin`'s interrupt condition active (level condition or latched edge)?
     fn irq_condition(&self, pin: usize) -> bool {
         match self.int_type(pin) {
-            0 => self.external[pin] == Some(true),
-            1 => self.external[pin] == Some(false),
+            0 => self.pad_level(pin),
+            1 => !self.pad_level(pin) && self.pad_is_connected(pin),
             2..=4 => bit(self.irq_latched, pin),
             _ => false, // 7 = disabled
         }
+    }
+
+    /// Is the pad's level determined (driven by the chip or the outside world)?
+    fn pad_is_connected(&self, pin: usize) -> bool {
+        bit(self.cfg[pin], 2) || self.external[pin].is_some()
     }
 
     /// Interrupt-status bitmap (register 0x80 on read): every pin whose
@@ -215,7 +231,19 @@ impl MivCoreGpio {
             GPIO_INPUT => {} // read-only
             GPIO_OUTPUT => {
                 let mask = self.out_mask();
+                let before = self.output;
                 self.output = (self.output & !mask) | (value & mask);
+                // A bidirectional pin's pad moves with the output stage, so
+                // edge interrupts must see that transition too.
+                for pin in 0..GPIO_PINS {
+                    if bit(self.cfg[pin], 2) && bit(mask, pin) {
+                        let now = bit(self.output, pin);
+                        let was = bit(before, pin);
+                        if now != was {
+                            self.update_irq(pin, was, now);
+                        }
+                    }
+                }
             }
             _ if (GPIO_CFG_BASE..GPIO_IRQ_CLEAR).contains(&offset) && offset % 4 == 0 => {
                 let index = (offset / 4) as usize;
@@ -983,6 +1011,30 @@ peripherals:
         );
         gpio.set_external(0, External::Level(true)); // a real edge now latches
         assert_eq!(gpio.irq_line_level(), Some(true));
+    }
+
+    #[test]
+    fn gpio_bidirectional_pin_reads_back_its_own_drive() {
+        let mut gpio = MivCoreGpio::new();
+        // pin 0: INREG | OUTREG | OUTBUFF.
+        gpio.write_u32(0x00, 0b111).unwrap();
+        gpio.write_u32(GPIO_OUTPUT, 1).unwrap();
+        assert_eq!(
+            gpio.read_u32(GPIO_INPUT).unwrap(),
+            1,
+            "the input register sees the pad the output stage drives"
+        );
+        gpio.write_u32(GPIO_OUTPUT, 0).unwrap();
+        assert_eq!(gpio.read_u32(GPIO_INPUT).unwrap(), 0);
+
+        // An output-driven edge also raises an edge interrupt.
+        gpio.write_u32(0x00, 0b111 | (1 << 3) | (2 << 5)).unwrap();
+        gpio.write_u32(GPIO_OUTPUT, 1).unwrap();
+        assert_eq!(
+            gpio.irq_line_level(),
+            Some(true),
+            "the output-driven rising edge latched"
+        );
     }
 
     #[test]
