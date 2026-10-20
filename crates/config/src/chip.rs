@@ -19,6 +19,9 @@ pub enum Arch {
     /// AVR8 (ATmega328P / classic Arduino Nano).
     #[serde(alias = "avr8", alias = "atmega328p")]
     Avr,
+    /// PIC24 / dsPIC33 16-bit MCU & DSC family (24-bit instruction words).
+    #[serde(alias = "dspic33", alias = "pic24f", alias = "dspic33f")]
+    Pic24,
     Unknown,
 }
 

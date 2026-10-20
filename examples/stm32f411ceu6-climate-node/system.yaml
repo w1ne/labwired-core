@@ -1,0 +1,85 @@
+name: "playground-board"
+chip: "stm32f411ceu6"
+external_devices:
+  - id: "u2"
+    type: "bme280"
+    connection: "i2c1"
+    route:
+      sda: "PB7"
+      scl: "PB6"
+    config:
+      i2c_address: 0x76
+  - id: "oled1"
+    type: "oled-ssd1306"
+    connection: "i2c1"
+    route:
+      sda: "PB7"
+      scl: "PB6"
+    config:
+      i2c_address: 0x3C
+  - id: "th1"
+    type: "ntc-thermistor"
+    connection: "adc1"
+    config:
+      channel: 0
+  - id: "ldr1"
+    type: "ldr"
+    connection: "adc1"
+    config:
+      channel: 1
+board_io:
+  - id: "th1"
+    kind: "adc_input"
+    peripheral: "adc1"
+    pin: 0
+    signal: "input"
+    active_high: true
+    device_type: "ntc-thermistor"
+  - id: "ldr1"
+    kind: "adc_input"
+    peripheral: "adc1"
+    pin: 1
+    signal: "input"
+    active_high: true
+    device_type: "ldr"
+  - id: "d1"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true
+  - id: "bz1"
+    kind: "pwm_output"
+    peripheral: "gpioa"
+    pin: 6
+    signal: "output"
+    active_high: true
+cosim_models:
+  - id: "circuit"
+    adapter: "analog"
+    step_ns: 100000
+    inputs:
+      drv_ph0: "board.gpio.ph0"
+      ctl_ph0: "board.gpio_output.ph0"
+      drv_ph1: "board.gpio.ph1"
+      ctl_ph1: "board.gpio_output.ph1"
+    outputs:
+      in_ph0: "board.gpio_in.ph0"
+      in_ph1: "board.gpio_in.ph1"
+    config:
+      vdd: 3.3
+      netlist_text: |
+        Cc7 v_net_c7_1 0 15p
+        Cc8 v_net_c8_1 0 15p
+        Vdrv_ph0 d_ph0 0 dc 0
+        Sdrv_ph0 d_ph0 v_net_c7_1 ctl_ph0 ron=25 roff=1e12
+        Rleak_ph0 v_net_c7_1 0 1e9
+        Vdrv_ph1 d_ph1 0 dc 0
+        Sdrv_ph1 d_ph1 v_net_c8_1 ctl_ph1 ron=25 roff=1e12
+        Rleak_ph1 v_net_c8_1 0 1e9
+      probes:
+        in_ph0: "v(v_net_c7_1)"
+        in_ph1: "v(v_net_c8_1)"
+      sources:
+        drv_ph0: "Vdrv_ph0"
+        drv_ph1: "Vdrv_ph1"

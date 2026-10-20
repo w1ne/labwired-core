@@ -14,7 +14,7 @@ ram:
   size: 20480B
 peripherals:
 - id: rng
-  type: stm32f4_rng
+  type: stm32_rng
   bus: sysbus
   base_address: 1073893376
 - id: adc1

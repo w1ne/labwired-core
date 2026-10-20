@@ -46,11 +46,13 @@ peripherals:
   bus: sysbus
   base_address: 1073905664
 - id: adc
-  type: sam4s_adc
+  type: stub
+  renode_type: sam4s_adc
   bus: sysbus
   base_address: 1073971200
 - id: dacc
-  type: sam4s_dacc
+  type: stub
+  renode_type: sam4s_dacc
   bus: sysbus
   base_address: 1073987584
 - id: PMC_SR
@@ -66,15 +68,18 @@ peripherals:
   bus: sysbus
   base_address: 1074661376
 - id: eefc
-  type: sam4s_eefc
+  type: stub
+  renode_type: sam4s_eefc
   bus: sysbus
   base_address: 1074661888
 - id: rstc
-  type: sam4s_rstc
+  type: stub
+  renode_type: sam4s_rstc
   bus: sysbus
   base_address: 1074664448
 - id: wdt
-  type: sam4s_wdt
+  type: stub
+  renode_type: sam4s_wdt
   bus: sysbus
   base_address: 1074664528
 - id: peripheral_bb
@@ -82,7 +87,8 @@ peripherals:
   bus: sysbus
   base_address: 1107296256
 - id: crc
-  type: sam4s_crccu
+  type: stub
+  renode_type: sam4s_crccu
   bus: sysbus
   base_address: 1074020352
 - id: pioA
@@ -98,14 +104,17 @@ peripherals:
   bus: sysbus
   base_address: 1074663936
 - id: spi
-  type: sam_spi
+  type: stub
+  renode_type: sam_spi
   bus: sysbus
   base_address: 1073774592
 - id: twi1
-  type: sam4s_twi
+  type: stub
+  renode_type: sam4s_twi
   bus: sysbus
   base_address: 1073856512
 - id: twi0
-  type: sam4s_twi
+  type: stub
+  renode_type: sam4s_twi
   bus: sysbus
   base_address: 1073840128

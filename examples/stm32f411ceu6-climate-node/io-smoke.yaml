@@ -1,0 +1,79 @@
+# LabWired — STM32F411CEU6 climate node stimulus smoke
+#
+# The node: NTC (th1) and LDR (ldr1) as the top legs of 10 kΩ pull-down
+# dividers on ADC1 ch0/ch1, a BME280 (u2) at 0x76 and the SSD1306 module
+# (oled1, on the J3 header) at 0x3C sharing I2C1, LED PWM on PA5, buzzer PA6.
+#
+# Measured numbers, not guesses (see ../README.md for the recording command):
+#   * 25 °C on the model's NTC is exactly Vref/2 = 1650 mV = 2047 counts, and
+#     the firmware's Steinhart-Hart (R0 = 10k, B = 3950) prints 24.99 °C.
+#   * 100 lux (the model's default) is 2751 mV = 3413 counts; the firmware's
+#     inversion of the model's R(lux) = 10k * (lux/10)^-0.7 prints 99.8 lux.
+#   * 80 °C is 2928 mV = 3633 counts -> 79.97 °C.
+#   * 800 lux is 3153 mV = 3912 counts -> 794.2 lux.
+#   * the BME280 stimulus is read back through the Adafruit library's own
+#     compensation: 31.00 °C / 1002.0 hPa / 60.0 %RH.
+#   * OVER_TEMP_C is 45 °C, so the alarm line is 0 at boot and 1 after.
+#
+# The stimuli fire at 15,000,000 cycles because Arduino bring-up (Wire,
+# BME280 begin with its power-on delay, the OLED init frame) plus the first
+# loop iteration and its serial output land at ~10-12M cycles; the first three
+# iterations are the 25 °C boot state and the trigger then moves all three
+# modeled parts at once.
+#
+# Assertion vocabulary used here (core/crates/config/src/test_script.rs):
+# uart_contains / uart_regex / display_region / expected_stop_reason. The LED
+# PWM DUTY is NOT script-assertable (`gpio_duty` is an oracle clause, not a
+# test-script assertion); that claim belongs to the verify receipt in the
+# stage plan, not to this smoke. `gpio_edges` exists but the busy-loop sketch
+# never leaves PA5/PA6 still, so a toggling pin proves nothing here.
+schema_version: "1.2"
+inputs:
+  firmware: "./firmware/.pio/build/blackpill_f411ce/firmware.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 24000000
+stimuli:
+  - target: { component: "th1", channel: "temperature" }
+    trigger: !after_cycles { cycles: 15000000 }
+    value: 80.0
+  - target: { component: "ldr1", channel: "lux" }
+    trigger: !after_cycles { cycles: 15000000 }
+    value: 800.0
+  - target: { component: "u2", channel: "temperature" }
+    trigger: !after_cycles { cycles: 15000000 }
+    value: 31.0
+  - target: { component: "u2", channel: "pressure" }
+    trigger: !after_cycles { cycles: 15000000 }
+    value: 1002.0
+  - target: { component: "u2", channel: "humidity" }
+    trigger: !after_cycles { cycles: 15000000 }
+    value: 60.0
+assertions:
+  - uart_contains: "NODE boot"
+  - uart_contains: "BME280 ok"
+  - uart_contains: "OLED painted"
+  # iter 0 is the boot conversion: 25 °C is exactly the Vref/2 midpoint of the
+  # top-leg divider. A dead ADC (unseeded channel, or the island half-model
+  # writing 0 V) can never print this line.
+  - uart_regex: "NTC iter=0 adc=2047 mV=1649\\.6 temp_c=24\\.99"
+  - uart_regex: "LDR adc=3413 lux=99\\.8"
+  # After the stimulus: the same two channels through the same math, and the
+  # BME280 read back by the Adafruit compensation.
+  - uart_regex: "NTC iter=[1-9][0-9]* adc=3633 mV=2927\\.7 temp_c=79\\.97"
+  - uart_regex: "LDR adc=3912 lux=794\\.2"
+  - uart_regex: "BME t=31\\.00 p=1002\\.0 h=60\\.0"
+  # 80 °C is over the 45 °C alarm threshold; the boot state was under it.
+  - uart_contains: "ALARM 1"
+  # The panel: a solid 128x8 header band is repainted every iteration, so the
+  # end-of-run framebuffer must be fully inked there. A declared-but-undriven
+  # panel (zero ink) and a desynchronised command stream (holes in the band)
+  # both fail this floor.
+  - display_region:
+      id: "oled1"
+      x: 0
+      y: 0
+      w: 128
+      h: 8
+      min_ink: 1.0
+  - expected_stop_reason: max_steps

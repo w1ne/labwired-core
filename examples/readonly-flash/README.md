@@ -37,8 +37,8 @@ FAULT  Precise BusFault: data access at 0x0800_1000 (BFAR valid; store to read-o
       "violations": 1,
       "first": {
         "addr": 134221824,
-        "cycle": 11,
-        "pc": 134217836
+        "cycle": 7,
+        "pc": 134217870
       }
     },
     "ram": {

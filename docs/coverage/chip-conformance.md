@@ -48,6 +48,7 @@ Reg match = verifiable cold-reset registers reproduced. "Excluded" = registers a
 | imxrt1064 | **L1** | ✓ | 6 | — | — | firmware_survival::test_imxrt1064_teensy41_smoke_survival |
 | stm32f746 | **L1** | ✓ | 17 | — | — | firmware_survival::test_stm32f746_discovery_smoke_survival |
 | stm32g071 | **L1** | ✓ | 41 | — | — | firmware_survival::test_nucleo_g071rb_smoke_survival |
+| dspic33fj32mc204 | **L1** | ✓ | 3 | — | — | pic24_m0_smoke::pic24_fixture_boots_and_writes_h_to_uart |
 
 ## Declared platforms without a model
 

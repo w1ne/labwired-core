@@ -2522,6 +2522,15 @@ pub(crate) fn run_test(
             crate::log_ts::set_hz(machine.bus.cpu_hz);
             run_machine!(machine)
         }
+        labwired_core::Arch::Pic24 => {
+            // PIC24 is Harvard: code lives in the CPU flash image.
+            // UART1 TX is on the CPU, not a bus UART peripheral.
+            let mut cpu = labwired_core::cpu::Pic24::new();
+            cpu.load_program_image(&program);
+            cpu.set_serial_sink(uart_tx.clone());
+            let machine = labwired_core::Machine::new(cpu, bus);
+            run_machine!(machine)
+        }
         _ => {
             let msg = format!("Unsupported architecture: {:?}", program.arch);
             error!("{}", msg);

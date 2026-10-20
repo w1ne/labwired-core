@@ -38,7 +38,8 @@ peripherals:
   bus: sysbus
   base_address: 1342308608
 - id: gpadc
-  type: renesasda14_gpadc
+  type: stub
+  renode_type: renesasda14_gpadc
   bus: sysbus
   base_address: 1342441728
 - id: gpio
@@ -50,22 +51,27 @@ peripherals:
   bus: sysbus
   base_address: 1342571008
 - id: i2c
-  type: renesasda_i2c
+  type: stub
+  renode_type: renesasda_i2c
   bus: sysbus
   base_address: 1342309120
 - id: clock_gen
-  type: renesasda14_clockgenerationcontroller
+  type: stub
+  renode_type: renesasda14_clockgenerationcontroller
   bus: sysbus
   base_address: 1342177280
 - id: xtal32m_regs
-  type: renesasda14_xtal32mregisters
+  type: stub
+  renode_type: renesasda14_xtal32mregisters
   bus: sysbus
   base_address: 1342242816
 - id: spi
-  type: renesasda_spi
+  type: stub
+  renode_type: renesasda_spi
   bus: sysbus
   base_address: 1342308864
 - id: gp_regs
-  type: renesasda14_generalpurposeregisters
+  type: stub
+  renode_type: renesasda14_generalpurposeregisters
   bus: sysbus
   base_address: 1342505728

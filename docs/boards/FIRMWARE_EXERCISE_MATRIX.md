@@ -454,3 +454,7 @@ _S110 application-region descriptor (micro:bit V1 / Calliope mini 1): flash from
 ### `rv1103`
 
 _No beyond-rubric board firmware content is recorded. The descriptor declares CPU/memory geometry only, with no modeled RV1103 peripherals or boot path. The generic Cortex-A7 CPU smoke does not exercise RV1103 board firmware; Luckfox Pico Mini A/Linux execution remains unsupported._
+
+### `dspic33fj32mc204`
+
+_M0 bring-up; no beyond-rubric content. Boot + UART1 TX run in the PR shards (crates/core/tests/pic24_m0_smoke.rs) and through examples/dspic33fj32mc204/io-smoke.yaml in strict_onboarding; UART1 TX is also console-proven by `labwired run --chip ...` printing `UART: H`. Timers, interrupts, PWM, QEI, ADC, SPI, I2C and the DSP MAC are unmodeled at M0 (docs/pic24-m0-reference.md), so no advanced blocks exist to list._

@@ -90,14 +90,17 @@ peripherals:
   bus: sysbus
   base_address: 1074269440
 - id: iic0
-  type: renesasra_iic
+  type: stub
+  renode_type: renesasra_iic
   bus: sysbus
   base_address: 1074393088
 - id: iic1
-  type: renesasra_iic
+  type: stub
+  renode_type: renesasra_iic
   bus: sysbus
   base_address: 1074393344
 - id: iic2
-  type: renesasra_iic
+  type: stub
+  renode_type: renesasra_iic
   bus: sysbus
   base_address: 1074393600

@@ -482,6 +482,133 @@ a valid Thumb reset vector, and unknown, mistyped, or invalid interconnect
 configuration; these produce `status: "error"` with `stop_reason:
 "config_error"` without changing the result-union arm.
 
+## Deterministic reruns: trace hashing
+
+`--trace` (global, also `-t`) makes `test` write `trace.json` into
+`--output-dir`: one JSON object per traced instruction, each stamped with its
+virtual `cycle`; `--trace-max <N>` caps how many are kept. The trace is a
+function of the firmware, config and emulator build only — no wall clock, no
+host entropy — so runs of the same script are byte-identical. The shipped
+harness `crates/cli/tests/determinism.rs` pins that: five runs must produce
+equal `result.json`, the same trace SHA-256 and the same stdout SHA-256, then
+three more must keep them stable under `--log-timestamps virtual`.
+
+The CI recipe is a checksum pair. On the committed UART fixture, with a script
+whose inputs are absolute (the script lives outside the repo, so relative
+inputs would resolve against its own directory):
+
+```yaml
+# /tmp/ci-docs/script.yaml
+schema_version: "1.0"
+inputs:
+  firmware: "/path/to/repo/tests/fixtures/uart-ok-thumbv7m.elf"
+  system: "/path/to/repo/configs/systems/ci-fixture-uart1.yaml"
+limits:
+  max_steps: 1000
+assertions: []
+```
+
+```bash
+cargo build -p labwired-cli
+
+./target/debug/labwired test --script /tmp/ci-docs/script.yaml --trace --output-dir /tmp/ci-docs/det-a
+./target/debug/labwired test --script /tmp/ci-docs/script.yaml --trace --output-dir /tmp/ci-docs/det-b
+sha256sum /tmp/ci-docs/det-a/trace.json /tmp/ci-docs/det-b/trace.json
+```
+
+```text
+40909dab280765cc06c7bb6d0edd12ae3bec1c2fe5882605d972ea5f9ea6b0dc  /tmp/ci-docs/det-a/trace.json
+40909dab280765cc06c7bb6d0edd12ae3bec1c2fe5882605d972ea5f9ea6b0dc  /tmp/ci-docs/det-b/trace.json
+```
+
+The same two runs hash stdout — the fixture's `OK` echo — to
+`a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87`. Judge
+determinism on the files, not the log: stderr carries wall-clock timestamps
+and the verdict's elapsed time (`PASS … · 0.01s`). That is the D3 round
+receipt as well: 10 idle and 10 loaded runs of this fixture shared one trace
+hash (`40909dab…`) and one stdout hash (`a12b7cb4…`). Gate on the trace hash
+to prove the simulator itself is reproducible; diff two `trace.json` files to
+find the first instruction where behavior changed.
+
+## Replaying a failed run (CAN)
+
+A `can-bridge` can record every frame a run exchanges and replay the recording
+later on the virtual time axis, which turns an intermittent bench or field
+failure into a committed regression. The committed H563 UDS fixture
+(`examples/h563-can-replay/`) is the receipt:
+
+```bash
+cargo run -p labwired-cli -- test \
+  --script examples/h563-can-replay/record.yaml \
+  --no-uart-stdout --output-dir /tmp/ci-docs/rec
+cargo run -p labwired-cli -- test \
+  --script examples/h563-can-replay/replay.yaml \
+  --no-uart-stdout --output-dir /tmp/ci-docs/rep
+```
+
+```text
+PASS  3/3 checks · record · 2000000 steps · 2.10s
+PASS  2/2 checks · replay · 2000000 steps · 2.20s
+```
+
+The record run's bridge writes `can-bus.jsonl` (native replay format) and
+`can-bus.candump.log` into its `--output-dir`; the replay run injects the
+recorded tester requests at their recorded cycles and compares every answer the
+ECU transmits. Its verdict is in `result.json`:
+
+```bash
+jq '.can_bridges[0].replay' /tmp/ci-docs/rep/result.json
+```
+
+```json
+{
+  "expected_tx": 22,
+  "matched_tx": 22,
+  "max_cycle_skew": 0,
+  "observed_tx": 22,
+  "rx_injected": 14,
+  "rx_rejected": 0,
+  "rx_total": 14,
+  "verdict": "match"
+}
+```
+
+`max_cycle_skew: 0` means every answer landed on exactly the recorded cycle.
+Workflow: record on failure (or in a nightly job), commit the recording beside
+the replay system manifest, point the bridge's `recording_path:` at it, and
+replay in CI — a replay runs on virtual time, which does not move while paused,
+so it is identical every run, and a `can_bridge` assertion can require
+`replay: match` with `max_dropped: 0`. Bridge schema, pause modes and formats:
+`examples/h563-can-replay/README.md`.
+
+## CI artifacts and stdout rules
+
+CI log viewers are the wrong place for firmware console output: a talkative
+firmware can drown the runner's verdict, and raw control bytes can scramble
+annotations. `--no-uart-stdout` disables only the stdout echo — UART bytes are
+still captured for `uart_contains` assertions and still written to `uart.log`:
+
+```text
+$ ./target/debug/labwired test --script /tmp/ci-docs/script.yaml --no-uart-stdout \
+    --output-dir /tmp/ci-docs/art > /tmp/ci-docs/art.stdout 2>/dev/null
+$ wc -c < /tmp/ci-docs/art.stdout
+0
+$ cat /tmp/ci-docs/art/uart.log
+OK
+```
+
+(Without the flag the same run writes the fixture's `OK` to stdout — 3 bytes.)
+
+`--output-dir` is the artifact root. The audited file set is in the
+[CLI Reference](cli_reference.md#test): `result.json`, `snapshot.json`,
+`uart.log`, `rtt.log`, `semihosting.log`, `itm.log`, and `junit.xml`, plus
+`trace.json` when `--trace` is set and the coverage, run-manifest and fault
+artifacts when those flags are requested. `junit.xml` (also mirrorable with
+`--junit <PATH>`) is the file CI UIs consume — GitLab's `reports: junit`,
+Azure's `PublishTestResults@2`, or any JUnit viewer; platform wiring is in
+[CI integration](ci_integration.md). Keep the whole directory as the job's
+artifact, retained on failure.
+
 ## CI release runners
 
 Use the pinned v0.23.0 release runner in CI. It runs the same `labwired test`

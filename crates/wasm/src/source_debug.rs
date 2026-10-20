@@ -177,6 +177,8 @@ impl WasmSimulator {
         let reg_count: u16 = match self.arch {
             MachineFamily::CortexM | MachineFamily::CortexA | MachineFamily::Xtensa => 16,
             MachineFamily::RiscV | MachineFamily::Avr => 32,
+            // W0-W15, PC (16), SR (17) — provisional (see loader).
+            MachineFamily::Pic24 => 18,
         };
         let cpu = focused_cpu(machine);
         let locals: Vec<Local> = debug
@@ -247,6 +249,8 @@ impl WasmSimulator {
             MachineFamily::Xtensa => 1,
             // SP, after r0..r31.
             MachineFamily::Avr => 32,
+            // W15 is the stack pointer.
+            MachineFamily::Pic24 => 15,
         }
     }
 

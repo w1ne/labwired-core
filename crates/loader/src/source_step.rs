@@ -345,6 +345,9 @@ impl SourceDebug {
         let reg_count: u16 = match family {
             MachineFamily::CortexM | MachineFamily::CortexA | MachineFamily::Xtensa => 16,
             MachineFamily::RiscV | MachineFamily::Avr => 32,
+            // W0-W15, PC (16), SR (17) — provisional until XC16 DWARF numbers
+            // are verified.
+            MachineFamily::Pic24 => 18,
         };
         let cpu = target.debug_cpu();
         self.symbols
@@ -463,6 +466,15 @@ fn abi(family: MachineFamily) -> Abi {
             unwind: false,
             exc_return: false,
         },
+        MachineFamily::Pic24 => Abi {
+            // W15 is the stack pointer.
+            sp: 15,
+            callee_saved: Vec::new(),
+            code_mask: !0,
+            register_size: 2,
+            unwind: false,
+            exc_return: false,
+        },
     }
 }
 
@@ -475,6 +487,8 @@ fn live_registers(target: &dyn SourceStepTarget, family: MachineFamily) -> Regis
         MachineFamily::CortexM | MachineFamily::CortexA | MachineFamily::Xtensa => 16,
         MachineFamily::RiscV => 32,
         MachineFamily::Avr => 33,
+        // W0-W15, PC (16), SR (17).
+        MachineFamily::Pic24 => 18,
     };
     for r in 0..count {
         regs.set(u16::from(r), Some(u64::from(cpu.get_register(r))));
@@ -643,6 +657,8 @@ fn stack_register(family: MachineFamily) -> u8 {
         MachineFamily::Xtensa => 1,
         // SP, after r0..r31.
         MachineFamily::Avr => 32,
+        // W15 is the stack pointer.
+        MachineFamily::Pic24 => 15,
     }
 }
 

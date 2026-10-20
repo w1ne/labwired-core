@@ -24,7 +24,8 @@ peripherals:
   bus: sysbus
   base_address: 4026531840
 - id: cpu
-  type: cosimulatedriscv32
+  type: stub
+  renode_type: cosimulatedriscv32
   bus: sysbus
   base_address: 12
 - id: ctrl

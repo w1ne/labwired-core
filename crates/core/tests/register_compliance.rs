@@ -107,6 +107,14 @@ fn validate_chip(path: &PathBuf) -> anyhow::Result<()> {
                 path
             );
         }
+        Arch::Pic24 => {
+            // M0 PIC24 has no SVD-backed peripheral list on the chip yaml yet
+            // (peripherals: []). Nothing to validate beyond load.
+            println!(
+                "Skipping PIC24 register compliance for {:?} (no SVD map)",
+                path
+            );
+        }
         Arch::Unknown => {
             println!("Skipping unknown architecture for {:?}", path);
         }

@@ -142,7 +142,7 @@ peripherals:
   bus: sysbus
   base_address: 1073887232
 - id: rng
-  type: stm32f4_rng
+  type: stm32_rng
   bus: sysbus
   base_address: 1342572544
 - id: pwrCr1

@@ -57,10 +57,12 @@ struct ChipConf {
 /// Explicit declarations that have no modeled platform to measure. This is a
 /// closed shortlist, validated against the descriptor before rendering; it
 /// never contributes an estate checkmark, conformance level or ratchet record.
-const DECLARED_ONLY_CHIPS: &[(&str, &str)] = &[(
-    "rv1103",
-    "Normal descriptor is CPU/memory only. Optional native reduced Linux direct boot and joint I2C3/UART4 basket acceptance pass separately with functional timing and a persistent reduced plant; this does not establish full board L0/L1, vendor BSP/SD/ROM boot or physical qualification. The older generic Cortex-A7 CPU subset is separate.",
-)];
+const DECLARED_ONLY_CHIPS: &[(&str, &str)] = &[
+    (
+        "rv1103",
+        "Normal descriptor is CPU/memory only. Optional native reduced Linux direct boot and joint I2C3/UART4 basket acceptance pass separately with functional timing and a persistent reduced plant; this does not establish full board L0/L1, vendor BSP/SD/ROM boot or physical qualification. The older generic Cortex-A7 CPU subset is separate.",
+    ),
+];
 
 /// The modeled fleet. Every descriptor MUST appear here or in the explicitly
 /// validated declaration table (enforced below), so new chips cannot disappear.
@@ -448,6 +450,16 @@ const CHIPS: &[ChipConf] = &[
         yaml: "configs/chips/stm32g071.yaml",
         reset_oracle: None,
         behavior_gate: Some("firmware_survival::test_nucleo_g071rb_smoke_survival"),
+    },
+    ChipConf {
+        // First PIC24/dsPIC33F target. SIM-DERIVED: no silicon capture yet,
+        // so no reset_oracle; the behavior gate is the committed
+        // hand-assembled UART smoke. M1a added timers + interrupts, M1b the
+        // GPIO ports, PPS, input capture and output compare.
+        name: "dspic33fj32mc204",
+        yaml: "configs/chips/dspic33fj32mc204.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("pic24_m0_smoke::pic24_fixture_boots_and_writes_h_to_uart"),
     },
 ];
 
@@ -1393,34 +1405,39 @@ fn level(r: &Record) -> u8 {
     }
 }
 
-fn is_declared_only_prototype(chip: &ChipDescriptor) -> bool {
-    chip.name == "rv1103"
-        && matches!(chip.arch, labwired_config::Arch::Arm)
-        && chip.core.as_deref() == Some("cortex-a7")
-        && chip.peripherals.is_empty()
-        && chip.flash.size == 0
+fn is_declared_only_prototype(name: &str, chip: &ChipDescriptor) -> bool {
+    match name {
+        "rv1103" => {
+            chip.name == "rv1103"
+                && matches!(chip.arch, labwired_config::Arch::Arm)
+                && chip.core.as_deref() == Some("cortex-a7")
+                && chip.peripherals.is_empty()
+                && chip.flash.size == 0
+        }
+        _ => false,
+    }
 }
 
 #[test]
 fn declared_only_classification_rejects_other_chips_or_modeled_platforms() {
     assert_eq!(DECLARED_ONLY_CHIPS.len(), 1);
-    assert_eq!(DECLARED_ONLY_CHIPS[0].0, "rv1103");
+    assert!(DECLARED_ONLY_CHIPS.iter().any(|(n, _)| *n == "rv1103"));
     let chip = ChipDescriptor::from_file(root("configs/chips/rv1103.yaml")).unwrap();
-    assert!(is_declared_only_prototype(&chip));
+    assert!(is_declared_only_prototype("rv1103", &chip));
     let mut changed = chip.clone();
     changed.name = "another-prototype".into();
-    assert!(!is_declared_only_prototype(&changed));
+    assert!(!is_declared_only_prototype("rv1103", &changed));
     changed = chip.clone();
     changed.core = Some("cortex-m7".into());
-    assert!(!is_declared_only_prototype(&changed));
+    assert!(!is_declared_only_prototype("rv1103", &changed));
     changed = chip.clone();
     changed.flash.size = 1;
-    assert!(!is_declared_only_prototype(&changed));
+    assert!(!is_declared_only_prototype("rv1103", &changed));
     changed = chip;
     changed.peripherals = ChipDescriptor::from_file(root("configs/chips/stm32f103.yaml"))
         .unwrap()
         .peripherals;
-    assert!(!is_declared_only_prototype(&changed));
+    assert!(!is_declared_only_prototype("rv1103", &changed));
 }
 
 #[test]
@@ -1468,8 +1485,8 @@ fn chip_conformance_ratchet() {
         let chip = ChipDescriptor::from_file(root(&format!("configs/chips/{name}.yaml")))
             .unwrap_or_else(|error| panic!("{name}: load declared prototype: {error}"));
         assert!(
-            is_declared_only_prototype(&chip),
-            "{name}: declaration no longer matches the CPU-only unmodeled prototype; classify its platform explicitly"
+            is_declared_only_prototype(name, &chip),
+            "{name}: declaration no longer matches the declared-only prototype; classify its platform explicitly"
         );
     }
 

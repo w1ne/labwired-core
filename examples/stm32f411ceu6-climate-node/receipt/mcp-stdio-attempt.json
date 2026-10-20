@@ -1,0 +1,70 @@
+{
+  "firmware_ref": "sha256:8210df4c47ef9086ea9c4f6c1b5c4783689f697290f2366ac1757b9e6d505806",
+  "hosted": {
+    "attempted": false,
+    "reason": "hosted not attempted: no token in this environment"
+  },
+  "labwired_list": {
+    "boards": 67,
+    "f411_targets": [],
+    "note": "no runnable F411/climate target exists in the stdio board catalog"
+  },
+  "labwired_run": {
+    "error": "INVALID_BOARD",
+    "message": "Unknown target \"stm32f411ceu6-climate-node\". Call labwired_list to see available ids."
+  },
+  "labwired_verify": {
+    "ok": false,
+    "proven": false,
+    "status": "inconclusive",
+    "run_status": "",
+    "gaps": [
+      {
+        "code": "observation_missing",
+        "scope": "oracle",
+        "detail": "stdio verification did not collect register/GPIO evidence required by the oracle"
+      }
+    ],
+    "verification": "",
+    "stop_reason": "",
+    "assertions": [],
+    "oracle_results": [
+      {
+        "kind": "serial",
+        "passed": false,
+        "detail": "serial does NOT contain \"NODE boot\""
+      },
+      {
+        "kind": "serial",
+        "passed": false,
+        "detail": "serial does NOT contain \"OLED painted\""
+      },
+      {
+        "kind": "serial",
+        "passed": false,
+        "detail": "serial does NOT match /temp_c=8[0-9]\\.[0-9]{2}/"
+      },
+      {
+        "kind": "display",
+        "passed": false,
+        "detail": "no panel \"oled-ssd1306\" in run peripherals"
+      },
+      {
+        "kind": "gpio",
+        "passed": false,
+        "detail": "no state evidence for PA5: nothing in this run reports that pad's level"
+      }
+    ],
+    "unevaluable_clauses": "register/gpio clauses require the hosted /run peripheral-inspect block; the stdio verify path only observes serial (UART) + display. Those clauses were evaluated against an empty peripheral set and cannot pass here - use the hosted verify for them.",
+    "verdict_lines": [],
+    "uart_excerpt": "",
+    "display": {
+      "painted": false,
+      "panel": null,
+      "refresh_generation": 0,
+      "ink_bytes": 0,
+      "readout": "(no panel readout — firmware may not drive a display)"
+    },
+    "error": "No builder URL configured. Set LABWIRED_COMPILE_URL (or LABWIRED_BUILDER_URL) to the labwired-builder base URL so the build can run server-side."
+  }
+}

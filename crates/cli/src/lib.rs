@@ -426,12 +426,11 @@ pub struct RunArgs {
     /// uses, instead of the one-instruction-per-call `Machine::step()` loop.
     ///
     /// This is an assertion, not a hint: the flag fails the run rather than
-    /// falling back, on any chip family or option combination that cannot take
-    /// the batched path. ARM and RISC-V use batching by default for ordinary
-    /// runs. On RISC-V the flag refuses the
-    /// per-instruction instrumentation (`--break-at`, the WiFi bridge, the DHCP
-    /// trace) that would silently turn it back into single-stepping; on Xtensa
-    /// this flag is not supported, so it is rejected outright.
+    /// falling back when per-instruction instrumentation (`--break-at`,
+    /// `--watch-mem`, `--stop-on`; on RISC-V also the WiFi bridge and the DHCP
+    /// trace) would pin the CPU quantum to one instruction. ARM and RISC-V use
+    /// batching by default for ordinary runs; Xtensa (ESP32 / ESP32-S3) takes
+    /// its batched path only with this flag.
     ///
     /// Keeps throughput measurements explicit even when instrumentation would
     /// otherwise select single-stepping. It also prints a `[batched] ...`

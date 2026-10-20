@@ -334,6 +334,13 @@ jobs:
             profile_dir: release
             script: examples/samd21-smoke/io-smoke.yaml
             system: examples/samd21-smoke/system.yaml
+          # dsPIC33FJ32MC204 — first 16-bit PIC/dsPIC cell. The firmware is a
+          # committed hand-assembled ELF (generator in the example), so this
+          # cell needs no cross toolchain; M0 scope is boot + UART1 TX on the
+          # CPU, judged by the UART bytes and the max-steps stop reason.
+          - id: dspic33fj32mc204-uart
+            script: examples/dspic33fj32mc204/io-smoke.yaml
+            system: examples/dspic33fj32mc204/system.yaml
 
     steps:
       - uses: actions/checkout@v4

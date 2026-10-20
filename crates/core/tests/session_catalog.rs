@@ -45,14 +45,17 @@ fn every_catalog_chip_builds_or_is_listed_in_needs() {
     );
     assert_eq!(
         names.len(),
-        47,
-        "expected 47 chips under configs/chips/*.yaml; got {names:?}. If a chip \
+        48,
+        "expected 48 chips under configs/chips/*.yaml; got {names:?}. If a chip \
          was added or removed, update this test's expectation and its NEEDS list."
     );
 
     let arm_fw = common::committed("tests/fixtures/uart-ok-thumbv7m.elf");
     let riscv_fw = common::committed("tests/fixtures/riscv-ci-fixture.elf");
     let avr_fw = common::committed("tests/fixtures/avr/arduino-nano-blinky.elf");
+    // PIC24 M0 fixture: hand-assembled ELF (see examples/dspic33fj32mc204).
+    let pic24_fw =
+        common::committed("examples/dspic33fj32mc204/firmware/dspic33fj32mc204-uart-smoke.elf");
     // Committed Tier-1 Xtensa fixtures (same ones session_builder_xtensa.rs
     // uses): esp32.elf for the classic dual-core part, esp32s3.elf for both
     // S3 SKUs (esp32s3 and esp32s3-zero share the same silicon).
@@ -79,6 +82,7 @@ fn every_catalog_chip_builds_or_is_listed_in_needs() {
             labwired_config::Arch::Arm => &arm_fw,
             labwired_config::Arch::RiscV => &riscv_fw,
             labwired_config::Arch::Avr => &avr_fw,
+            labwired_config::Arch::Pic24 => &pic24_fw,
             labwired_config::Arch::Xtensa => {
                 if name == "esp32" {
                     &esp32_fw

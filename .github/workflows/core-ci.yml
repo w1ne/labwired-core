@@ -497,6 +497,11 @@ jobs:
       - name: Every `#[ignore]` says why
         run: python3 scripts/ci/ignore_reasons.py --check
 
+      # Renders the 116-row catalog from the generated manifest, so the doc copy
+      # cannot drift from the kit registry. Pure Python, no toolchain, sub-second.
+      - name: Device catalog in the configuration reference is generated
+        run: python3 scripts/ci/device_catalog_doc.py --check
+
       # A doubled `-Tlink.x` duplicates memory.x's MEMORY block and the link
       # dies with "region 'FLASH' already defined". It is invisible on a warm
       # `target/` — cargo does not relink a cached artifact — so the build step

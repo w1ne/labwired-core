@@ -153,7 +153,7 @@ def test_waivers_are_explicit():
     assert "atmega328p" not in waived, (
         "the AVR spin fixture exists now; atmega328p must be measured, not waived"
     )
-    assert set(waived) == {"rv1103"}, f"unexpected waivers (add a fixture): {waived}"
+    assert set(waived) == {"rv1103", "dspic33fj32mc204"}, f"unexpected waivers (add a fixture): {waived}"
 
 
 def test_rv1103_cpu_subset_is_waived_without_claiming_platform_performance():
@@ -165,6 +165,19 @@ def test_rv1103_cpu_subset_is_waived_without_claiming_platform_performance():
     assert "RV1103 platform" in reason
     assert "boot" in reason and "Linux" in reason
     assert "representative perf fixture" in reason
+
+
+def test_dspic33_m0_is_waived_without_claiming_timing():
+    """A boot + UART M0 twin is not a PIC24 throughput fixture."""
+    covered, waived = bp.plan_coverage(
+        {"dspic33fj32mc204": bp.discover_chips()["dspic33fj32mc204"]}
+    )
+    assert covered == {}
+    reason = waived["dspic33fj32mc204"]
+    assert "M0" in reason
+    assert "UART1" in reason
+    assert "spin fixture" in reason
+    assert "throughput claim" in reason
 
 
 def test_real_chip_tree_is_fully_classified():

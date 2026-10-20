@@ -20,7 +20,7 @@
 //! emissions against what the core actually did, and it derives the core list
 //! from the source tree rather than trusting the list below.
 
-use labwired_core::cpu::{Avr, CortexM, RiscV, XtensaLx7};
+use labwired_core::cpu::{Avr, CortexM, Pic24, RiscV, XtensaLx7};
 use labwired_core::{
     trace_sp_pc, Bus, Cpu, DmaRequest, SimResult, SimulationConfig, SimulationObserver,
 };
@@ -146,6 +146,10 @@ struct CoreUnderTest {
     program: Vec<u8>,
     /// Bytes each instruction advances PC by.
     step_len: u32,
+    /// Bytes between instructions in `program` (the opcode fetch width).
+    /// Usually equal to `step_len`; PIC24 advances one *word* per instruction
+    /// while each 24-bit opcode occupies a 4-byte slot.
+    opcode_bytes: u32,
     /// Build the core with `program` already loaded at `entry`.
     ///
     /// Takes the program because not every core fetches from the bus. AVR is a
@@ -166,6 +170,7 @@ fn cores() -> Vec<CoreUnderTest> {
                 .flat_map(u32::to_le_bytes)
                 .collect(),
             step_len: 4,
+            opcode_bytes: 4,
             build: |_entry, _program| {
                 let mut cpu = labwired_core::cpu::CortexA7System::new().unwrap();
                 cpu.executable_range(0, 0x10000).unwrap();
@@ -181,6 +186,7 @@ fn cores() -> Vec<CoreUnderTest> {
                 .flat_map(u32::to_le_bytes)
                 .collect(),
             step_len: 4,
+            opcode_bytes: 4,
             build: |_entry, _program| {
                 let mut cpu = labwired_core::cpu::CortexA7::new().unwrap();
                 cpu.set_sp(0x8000);
@@ -193,6 +199,7 @@ fn cores() -> Vec<CoreUnderTest> {
             // `movs r0, #1` ×4 (Thumb, 2 bytes each).
             program: vec![0x01, 0x20, 0x01, 0x20, 0x01, 0x20, 0x01, 0x20],
             step_len: 2,
+            opcode_bytes: 2,
             build: |_entry, _program| {
                 let mut cpu = CortexM::new();
                 cpu.set_sp(0x8000);
@@ -207,6 +214,7 @@ fn cores() -> Vec<CoreUnderTest> {
                 .flat_map(u32::to_le_bytes)
                 .collect(),
             step_len: 4,
+            opcode_bytes: 4,
             build: |_entry, _program| {
                 let mut cpu = RiscV::new();
                 cpu.set_sp(0x8000);
@@ -224,9 +232,29 @@ fn cores() -> Vec<CoreUnderTest> {
             // produced by accident.
             program: vec![0x01, 0xE0, 0x01, 0xE0, 0x01, 0xE0, 0x01, 0xE0],
             step_len: 2,
+            opcode_bytes: 2,
             build: |entry, program| {
                 let mut cpu = Avr::new();
                 // Harvard: instructions come from flash, not from the bus.
+                cpu.load_flash(entry, program);
+                cpu.set_sp(0x8000);
+                Box::new(cpu)
+            },
+        },
+        CoreUnderTest {
+            name: "Pic24",
+            entry: 0x100,
+            // `MOV #1, W0` ×4 (24-bit words in 4-byte little-endian slots).
+            // A real encoding on purpose, so a hard-coded zero opcode cannot
+            // satisfy the assertions.
+            program: std::iter::repeat_n(0x00200010u32, 4)
+                .flat_map(u32::to_le_bytes)
+                .collect(),
+            step_len: 1,
+            opcode_bytes: 4,
+            build: |entry, program| {
+                let mut cpu = Pic24::new();
+                // Harvard: instructions come from the CPU's own flash.
                 cpu.load_flash(entry, program);
                 cpu.set_sp(0x8000);
                 Box::new(cpu)
@@ -238,6 +266,7 @@ fn cores() -> Vec<CoreUnderTest> {
             // `movi.n a2, 1` ×4 (narrow, 2 bytes each).
             program: vec![0x0C, 0x12, 0x0C, 0x12, 0x0C, 0x12, 0x0C, 0x12],
             step_len: 2,
+            opcode_bytes: 2,
             build: |_entry, _program| {
                 let mut cpu = XtensaLx7::new();
                 cpu.set_sp(0x8000);
@@ -288,7 +317,7 @@ fn every_core_emits_the_full_per_instruction_trace() {
             // The opcode must be the real encoding. A core that passes 0 (or a
             // decoded-enum discriminant) here produces a trace that cannot be
             // disassembled, which is most of what a trace is for.
-            let width = core.step_len as usize;
+            let width = core.opcode_bytes as usize;
             let mut expected_opcode = 0u32;
             for b in (0..width).rev() {
                 expected_opcode = (expected_opcode << 8) | core.program[i * width + b] as u32;

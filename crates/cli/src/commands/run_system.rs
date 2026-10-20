@@ -121,20 +121,24 @@ pub(crate) fn run_firmware_with_system(
             return ExitCode::from(EXIT_CONFIG_ERROR);
         }
     };
-    let chip_path = system_path
-        .parent()
-        .unwrap_or_else(|| Path::new("."))
-        .join(&manifest.chip);
-    let chip = match ChipDescriptor::from_file(&chip_path) {
+    // Resolve the chip the way every other manifest consumer does: a bare id
+    // through the built-in registry (then plugins), a path-shaped spec against
+    // the manifest's directory. Joining the spec as a file path first refused
+    // every GENERATED manifest — `prepareRunTarget` emits `chip: stm32f103`
+    // for the hosted builder — with "cannot parse chip descriptor
+    // <dir>/stm32f103", which also hid the fail-fast channel inventory from
+    // `--stimulus` callers.
+    let chip = match ChipDescriptor::resolve_with(
+        &manifest.chip,
+        system_path.parent().unwrap_or_else(|| Path::new(".")),
+        &crate::plugin_chip_yaml(plugins),
+    ) {
         Ok(c) => c,
         Err(e) => {
             emit_error(
                 json,
                 "ConfigError",
-                format!(
-                    "cannot parse chip descriptor {}: {e:#}",
-                    chip_path.display()
-                ),
+                format!("cannot load chip descriptor '{}': {e:#}", manifest.chip),
                 None,
                 EXIT_CONFIG_ERROR,
             );
@@ -146,10 +150,9 @@ pub(crate) fn run_firmware_with_system(
             json,
             "ConfigError",
             format!(
-                "run --system currently supports ARM manifests only; got arch {:?} from {} \
+                "run --system currently supports ARM manifests only; got arch {:?} from chip '{}' \
                  (RISC-V and Xtensa boot paths are a follow-up)",
-                chip.arch,
-                chip_path.display()
+                chip.arch, manifest.chip
             ),
             None,
             EXIT_CONFIG_ERROR,

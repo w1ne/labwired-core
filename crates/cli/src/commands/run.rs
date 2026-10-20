@@ -889,6 +889,10 @@ pub(crate) fn run_firmware(
         return run_firmware_avr(&args, &chip_yaml, plugins);
     }
 
+    if chip_yaml.contains("arch: \"pic24\"") || chip_yaml.contains("arch: pic24") {
+        return run_firmware_pic24(&args, &chip_yaml, plugins);
+    }
+
     // RISC-V fast-boot path: load peripherals from the chip YAML and run the
     // RV32I core. This is the path used by Tier-1 fixtures for RISC-V chips
     // (e.g. ESP32-C3) which cannot go through the Xtensa boot sequence.
@@ -1050,6 +1054,9 @@ pub(crate) fn run_firmware(
             None
         });
     let mut stop_scanned: usize = 0;
+    // A run ended by `--stop-on` did not exhaust its budget; the epilogue
+    // below must not tell the user it did.
+    let mut stopped_by_pattern = false;
 
     let mut cpu = wiring.cpu;
 
@@ -1399,6 +1406,7 @@ pub(crate) fn run_firmware(
                             crate::log_ts::eventln!(
                                 "labwired-cli run: --stop-on {pat:?} matched at step {steps}"
                             );
+                            stopped_by_pattern = true;
                             break;
                         }
                         stop_scanned = buf.len();
@@ -1477,15 +1485,17 @@ pub(crate) fn run_firmware(
             );
         }
     }
-    let cpu1_pc = machine
-        .cpu_secondary
-        .as_ref()
-        .map(|c| format!(" appcpu_pc=0x{:08x}", c.get_pc()))
-        .unwrap_or_default();
-    crate::log_ts::eventln!(
-        "labwired-cli run: reached --max-steps {limit}; pc=0x{:08x}{cpu1_pc}",
-        machine.cpu.get_pc(),
-    );
+    if !stopped_by_pattern {
+        let cpu1_pc = machine
+            .cpu_secondary
+            .as_ref()
+            .map(|c| format!(" appcpu_pc=0x{:08x}", c.get_pc()))
+            .unwrap_or_default();
+        crate::log_ts::eventln!(
+            "labwired-cli run: reached --max-steps {limit}; pc=0x{:08x}{cpu1_pc}",
+            machine.cpu.get_pc(),
+        );
+    }
     export_bus_trace_if_requested(&args.bus_trace_out, &machine.bus);
     crate::export_analog_trace_if_requested(&args.analog_trace, &machine);
     export_display_if_requested(&args.display_out, &machine.bus);
@@ -1639,6 +1649,99 @@ fn run_firmware_avr(
     ExitCode::from(EXIT_PASS)
 }
 
+/// The PIC24 (dsPIC33) fast path for `labwired run` and the audit harness:
+/// bus from the chip YAML, UART1 on the CPU, run to `--max-steps`, then the
+/// standard trace/display exports. Same shape as [`run_firmware_avr`] minus
+/// the SPI/I2C kit take-over (PIC24 M0 has no bus kits yet).
+fn run_firmware_pic24(
+    args: &RunArgs,
+    chip_yaml: &str,
+    plugins: &[&dyn labwired_core::plugin::ChipPlugin],
+) -> ExitCode {
+    use labwired_config::{ChipDescriptor, SystemManifest};
+    use labwired_core::{AdvanceRequest, AdvanceStop, Cpu, Machine};
+
+    let chip = match serde_yaml::from_str::<ChipDescriptor>(chip_yaml) {
+        Ok(chip) => chip,
+        Err(e) => {
+            eprintln!("error: cannot parse chip YAML: {e}");
+            return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
+    };
+    let manifest_yaml = format!(
+        "name: \"perf-pic24-run\"\nchip: \"{}\"\nexternal_devices: []\n",
+        args.chip_path().display()
+    );
+    let manifest = match serde_yaml::from_str::<SystemManifest>(&manifest_yaml) {
+        Ok(manifest) => manifest,
+        Err(e) => {
+            eprintln!("error: cannot build PIC24 manifest: {e}");
+            return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
+    };
+    let bus =
+        match labwired_core::bus::SystemBus::from_config_with_plugins(&chip, &manifest, plugins) {
+            Ok(bus) => bus,
+            Err(e) => {
+                eprintln!("error: cannot build PIC24 bus: {e}");
+                return ExitCode::from(EXIT_CONFIG_ERROR);
+            }
+        };
+    let image = match labwired_loader::load_elf(&args.firmware) {
+        Ok(image) => image,
+        Err(e) => {
+            eprintln!("error: cannot load PIC24 firmware {:?}: {e}", args.firmware);
+            return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
+    };
+    let mut cpu = labwired_core::cpu::Pic24::new();
+    cpu.load_program_image(&image);
+    // UART1 TX is on the CPU: buffer it and print the console at the end.
+    let uart_sink: std::sync::Arc<std::sync::Mutex<Vec<u8>>> =
+        std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    cpu.set_serial_sink(uart_sink.clone());
+
+    let limit = args.max_steps.unwrap_or(u64::MAX);
+    let mut machine = Machine::new(cpu, bus);
+    if args.batched {
+        let interval = machine.bus.max_safe_tick_interval();
+        machine.config.peripheral_tick_interval = interval;
+        machine.bus.config.peripheral_tick_interval = interval;
+        let report = match machine.advance(AdvanceRequest::run(Some(limit))) {
+            Ok(report) => report,
+            Err(e) => {
+                eprintln!("labwired run (pic24, batched): simulator error: {e}");
+                return ExitCode::from(EXIT_RUNTIME_ERROR);
+            }
+        };
+        if let AdvanceStop::FirmwareExit { code } = report.stop {
+            eprintln!("[firmware] {}", crate::firmware_exit_message(code));
+        }
+        print_batched_summary(machine.step_profile(), interval, "");
+    } else {
+        for _ in 0..limit {
+            if let Err(e) = machine.step() {
+                eprintln!("labwired run (pic24): simulator error: {e}");
+                return ExitCode::from(EXIT_RUNTIME_ERROR);
+            }
+        }
+    }
+    if let Ok(bytes) = uart_sink.lock() {
+        if !bytes.is_empty() {
+            println!("UART: {}", String::from_utf8_lossy(&bytes));
+        }
+    }
+
+    eprintln!(
+        "labwired-cli run (pic24{}): reached --max-steps {limit}; pc=0x{:08x}",
+        if args.batched { ", batched" } else { "" },
+        machine.cpu.get_pc(),
+    );
+    export_bus_trace_if_requested(&args.bus_trace_out, &machine.bus);
+    export_display_if_requested(&args.display_out, &machine.bus);
+    ExitCode::from(EXIT_PASS)
+}
+
 pub(crate) fn run_interactive(
     cli: Cli,
     plugins: &[&dyn labwired_core::plugin::ChipPlugin],
@@ -1780,6 +1883,7 @@ pub(crate) fn run_interactive(
             labwired_core::Arch::RiscV => labwired_config::Arch::RiscV,
             labwired_core::Arch::XtensaLx7 => labwired_config::Arch::Xtensa,
             labwired_core::Arch::Avr => labwired_config::Arch::Avr,
+            labwired_core::Arch::Pic24 => labwired_config::Arch::Pic24,
             _ => labwired_config::Arch::Unknown,
         };
 
@@ -1796,6 +1900,7 @@ pub(crate) fn run_interactive(
         labwired_config::Arch::Arm => run_interactive_arm(cli, bus, program, metrics),
         labwired_config::Arch::RiscV => run_interactive_riscv(cli, bus, program, metrics),
         labwired_config::Arch::Xtensa => run_interactive_xtensa(cli, bus, program, metrics),
+        labwired_config::Arch::Pic24 => run_interactive_pic24(cli, bus, program, metrics),
         _ => {
             emit_error(
                 cli.json,
@@ -2407,6 +2512,59 @@ fn note_itm_echo_suppressed(cli: &Cli) {
     if cli.itm && cli.json {
         eprintln!("note: --itm echo is suppressed under --json (no structured ITM channel yet)");
     }
+}
+
+/// PIC24/dsPIC33 interactive run (M0).
+///
+/// UART1 lives on the CPU, so there is no RTT/GDB/bus-UART wiring yet; the
+/// shared simulation loop and metrics reporting run as for every other core.
+pub(crate) fn run_interactive_pic24(
+    cli: Cli,
+    bus: labwired_core::bus::SystemBus,
+    program: labwired_core::memory::ProgramImage,
+    metrics: Arc<labwired_core::metrics::PerformanceMetrics>,
+) -> ExitCode {
+    let mut cpu = labwired_core::cpu::Pic24::new();
+    cpu.load_program_image(&program);
+    // UART1 TX is on the CPU; keep the bytes so the console can be shown.
+    let uart_sink: Arc<Mutex<Vec<u8>>> = Arc::new(Mutex::new(Vec::new()));
+    cpu.set_serial_sink(uart_sink.clone());
+    let mut machine = labwired_core::Machine::new(cpu, bus);
+    machine.add_observer(metrics.clone());
+
+    info!("Starting Simulation (PIC24/dsPIC33 M0)...");
+
+    let result = run_simulation_loop(&cli, &mut machine, &metrics);
+
+    if !cli.json {
+        if let Ok(bytes) = uart_sink.lock() {
+            if !bytes.is_empty() {
+                println!("UART: {}", String::from_utf8_lossy(&bytes));
+            }
+        }
+    }
+
+    if let Some(path) = &cli.snapshot {
+        let firmware_path = cli.firmware.as_ref().expect("Firmware path required");
+        let system_path = cli.system.as_ref();
+
+        write_interactive_snapshot(
+            path,
+            &metrics,
+            &machine,
+            InteractiveSnapshotInputs {
+                firmware_path,
+                system_path,
+                max_steps: cli.max_steps,
+                steps_executed: result.steps_executed,
+                stop_reason: result.stop_reason,
+                message: result.stop_message,
+            },
+        );
+    }
+
+    crate::report::report_metrics(cli.json, &machine.cpu, &metrics);
+    ExitCode::from(EXIT_PASS)
 }
 
 pub(crate) fn run_interactive_riscv(

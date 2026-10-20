@@ -51,6 +51,7 @@ pub enum CpuSnapshot {
     RiscV(RiscVCpuSnapshot),
     XtensaLx7(XtensaLx7CpuSnapshot),
     Avr(AvrCpuSnapshot),
+    Pic24(Pic24CpuSnapshot),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -66,6 +67,92 @@ pub struct AvrCpuSnapshot {
     pub pc: u32,
     pub sp: u16,
     pub sreg: u8,
+}
+
+/// PIC24/dsPIC33 visible state (word-addressed PC; W0–W15; UART1 latches;
+/// M1a timers, interrupt latches and accumulators).
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Pic24CpuSnapshot {
+    pub registers: Vec<u16>,
+    pub pc: u32,
+    pub sr: u16,
+    pub cycles: u64,
+    pub u1mode: u16,
+    pub u1sta: u16,
+    #[serde(default)]
+    pub t1con: u16,
+    #[serde(default)]
+    pub tmr1: u16,
+    #[serde(default)]
+    pub pr1: u16,
+    #[serde(default)]
+    pub t1_frac: u16,
+    #[serde(default)]
+    pub t2con: u16,
+    #[serde(default)]
+    pub tmr2: u16,
+    #[serde(default)]
+    pub pr2: u16,
+    #[serde(default)]
+    pub t2_frac: u16,
+    #[serde(default)]
+    pub t3con: u16,
+    #[serde(default)]
+    pub tmr3: u16,
+    #[serde(default)]
+    pub pr3: u16,
+    #[serde(default)]
+    pub t3_frac: u16,
+    #[serde(default)]
+    pub ifs0: u16,
+    #[serde(default)]
+    pub iec0: u16,
+    #[serde(default)]
+    pub ipc0: u16,
+    #[serde(default)]
+    pub ipc1: u16,
+    #[serde(default)]
+    pub ipc2: u16,
+    #[serde(default)]
+    pub intcon1: u16,
+    #[serde(default)]
+    pub intcon2: u16,
+    #[serde(default)]
+    pub corcon: u16,
+    #[serde(default)]
+    pub acc_a: i64,
+    #[serde(default)]
+    pub acc_b: i64,
+    #[serde(default)]
+    pub tris: [u16; 3],
+    #[serde(default)]
+    pub lat: [u16; 3],
+    #[serde(default)]
+    pub odc: [u16; 3],
+    #[serde(default)]
+    pub pad_in: [u16; 3],
+    #[serde(default)]
+    pub rpinr7: u16,
+    #[serde(default)]
+    pub rpor: Vec<u16>,
+    #[serde(default)]
+    pub ic_con: [u16; 2],
+    #[serde(default)]
+    pub ic_fifo: [Vec<u16>; 2],
+    #[serde(default)]
+    pub ic_prescale: [u8; 2],
+    #[serde(default)]
+    pub ic_ici_count: [u8; 2],
+    #[serde(default)]
+    pub oc_con: [u16; 2],
+    #[serde(default)]
+    pub oc_r: [u16; 2],
+    #[serde(default)]
+    pub oc_rs: [u16; 2],
+    #[serde(default)]
+    pub oc_level: [Option<bool>; 2],
+    #[serde(default)]
+    pub oc_halted: [bool; 2],
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

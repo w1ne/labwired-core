@@ -18,11 +18,13 @@ peripherals:
   bus: sysbus
   base_address: 4026535936
 - id: spi
-  type: litex_spi
+  type: stub
+  renode_type: litex_spi
   bus: sysbus
   base_address: 4026562560
 - id: i2c
-  type: litex_i2c
+  type: stub
+  renode_type: litex_i2c
   bus: sysbus
   base_address: 4026564608
 - id: si7021
@@ -46,6 +48,7 @@ peripherals:
   bus: sysbus
   base_address: 4026531840
 - id: mmcm
-  type: litex_mmcm
+  type: stub
+  renode_type: litex_mmcm
   bus: sysbus
   base_address: 4026570752

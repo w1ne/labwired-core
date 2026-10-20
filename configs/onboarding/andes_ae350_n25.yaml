@@ -1,0 +1,23 @@
+name: andes_ae350_n25
+description: 'andes_ae350_n25 (root platform, Andes). Architecture: RISC-V.'
+family: Andes
+code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
+  \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
+pass_rate: 100
+verified: false
+system: systems/onboarding/andes_ae350_n25.yaml
+provenance:
+  generated_by: scripts/onboard_hw_targets.py
+  parse_fallbacks:
+  - flash=dram
+validation:
+  method: ci-structural
+  reason: structural-ok
+  checks:
+    system_manifest: true
+    chip_descriptor: true
+    flash_base_present: true
+    ram_base_present: true
+  timestamp_utc: '2026-10-18T14:39:50.146269+00:00'
+  run_url: ''
+  artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/andes_ae350_n25.md
