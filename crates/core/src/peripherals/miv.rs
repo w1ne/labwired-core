@@ -203,6 +203,34 @@ impl crate::Peripheral for MivCoreGpio {
     fn snapshot(&self) -> serde_json::Value {
         serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
     }
+
+    /// Restore the JSON snapshot the determinism/replay tools carry.
+    fn restore(&mut self, state: serde_json::Value) -> SimResult<()> {
+        let restored: Self = serde_json::from_value(state).map_err(|error| {
+            crate::SimulationError::NotImplemented(format!("MivCoreGpio snapshot decode: {error}"))
+        })?;
+        *self = restored;
+        Ok(())
+    }
+
+    /// Binary mid-flight snapshot: configuration, directions, output levels
+    /// and the external levels the pins see.
+    fn runtime_snapshot(&self) -> Vec<u8> {
+        bincode::serialize(self).expect("bincode serialize MivCoreGpio")
+    }
+
+    fn restore_runtime_snapshot(&mut self, bytes: &[u8]) -> SimResult<()> {
+        if bytes.is_empty() {
+            return Ok(());
+        }
+        let restored: Self = bincode::deserialize(bytes).map_err(|error| {
+            crate::SimulationError::NotImplemented(format!(
+                "MivCoreGpio runtime snapshot decode: {error}"
+            ))
+        })?;
+        *self = restored;
+        Ok(())
+    }
 }
 
 impl PinPort for MivCoreGpio {
@@ -215,12 +243,13 @@ impl PinPort for MivCoreGpio {
         if pin >= GPIO_PINS {
             return None;
         }
-        // The pad drives only when the pin is an output (OUTREG, bit 0) AND
-        // its output buffer is enabled (OUTBUFF, bit 2). Clearing OUTBUFF
-        // releases the pad to high impedance (GPIO_OE = 0 in the handbook),
-        // which is what makes bidirectional pins work.
-        Some(if bit(self.out_mask(), pin) && bit(self.cfg[pin], 2) {
-            PadDriver::drive(bit(self.output, pin))
+        // OUTBUFF (bit 2) is the output enable: while it is clear the pad is
+        // released (GPIO_OE = 0, high impedance). While it is set the pad
+        // drives the output data — and the data is forced to zero when OUTREG
+        // (bit 0) is clear, with the written value retained in the register
+        // (handbook, Output Registers section).
+        Some(if bit(self.cfg[pin], 2) {
+            PadDriver::drive(bit(self.out_mask(), pin) && bit(self.output, pin))
         } else {
             PadDriver::OFF
         })
@@ -448,6 +477,34 @@ impl crate::Peripheral for MivCoreTimer {
     fn snapshot(&self) -> serde_json::Value {
         serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
     }
+
+    /// Restore the JSON snapshot the determinism/replay tools carry.
+    fn restore(&mut self, state: serde_json::Value) -> SimResult<()> {
+        let restored: Self = serde_json::from_value(state).map_err(|error| {
+            crate::SimulationError::NotImplemented(format!("MivCoreTimer snapshot decode: {error}"))
+        })?;
+        *self = restored;
+        Ok(())
+    }
+
+    /// Binary mid-flight snapshot: the live countdown, prescaler phase and
+    /// interrupt flags, so a resume continues the same interval.
+    fn runtime_snapshot(&self) -> Vec<u8> {
+        bincode::serialize(self).expect("bincode serialize MivCoreTimer")
+    }
+
+    fn restore_runtime_snapshot(&mut self, bytes: &[u8]) -> SimResult<()> {
+        if bytes.is_empty() {
+            return Ok(());
+        }
+        let restored: Self = bincode::deserialize(bytes).map_err(|error| {
+            crate::SimulationError::NotImplemented(format!(
+                "MivCoreTimer runtime snapshot decode: {error}"
+            ))
+        })?;
+        *self = restored;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -492,6 +549,24 @@ mod tests {
             crate::pins::Out::Off,
             "clearing OUTBUFF releases the pad"
         );
+
+        // Clearing OUTREG while the buffer stays enabled forces the output
+        // data to 0 (drive low) — it does NOT release the pad — and the
+        // written level is retained for when OUTREG comes back.
+        gpio.write_u32(0x00, 0b101).unwrap();
+        assert_eq!(gpio.driver(0).unwrap().out, crate::pins::Out::High);
+        gpio.write_u32(0x00, 0b100).unwrap();
+        assert_eq!(
+            gpio.driver(0).unwrap().out,
+            crate::pins::Out::Low,
+            "OUTREG clear forces the output data to zero, buffer still enabled"
+        );
+        gpio.write_u32(0x00, 0b101).unwrap();
+        assert_eq!(
+            gpio.driver(0).unwrap().out,
+            crate::pins::Out::High,
+            "the written level was retained while OUTREG was clear"
+        );
     }
 
     #[test]
@@ -521,6 +596,63 @@ mod tests {
         );
         assert_eq!(gpio.input(1), Some(true));
         assert_eq!(gpio.input(0), None, "an output pin is not an input");
+    }
+
+    #[test]
+    fn gpio_snapshot_restores_direction_levels_and_inputs() {
+        let mut gpio = MivCoreGpio::new();
+        gpio.write_u32(0x00, 0b101).unwrap(); // pin 0 output + buffer
+        gpio.write_u32(0x04, 0b010).unwrap(); // pin 1 input
+        gpio.write_u32(GPIO_OUTPUT, 1).unwrap();
+        gpio.set_external(1, External::Level(true));
+        let json = gpio.snapshot();
+        let bytes = gpio.runtime_snapshot();
+
+        // Mutate the live model so the restore is what brings the state back.
+        gpio.write_u32(0x00, 0).unwrap();
+        gpio.set_external(1, External::Level(false));
+
+        let mut from_json = MivCoreGpio::new();
+        from_json.restore(json).unwrap();
+        assert_eq!(from_json.read_u32(0x00).unwrap(), 0b101);
+        assert_eq!(
+            from_json.driver(0).unwrap().out,
+            crate::pins::Out::High,
+            "the restored output level drives again"
+        );
+        assert_eq!(from_json.input(1), Some(true), "the restored input level");
+
+        let mut from_bytes = MivCoreGpio::new();
+        from_bytes.restore_runtime_snapshot(&bytes).unwrap();
+        assert_eq!(from_bytes.read_u32(0x00).unwrap(), 0b101);
+        assert_eq!(from_bytes.read_u32(GPIO_OUTPUT).unwrap(), 1);
+    }
+
+    #[test]
+    fn timer_snapshot_restores_the_countdown_and_flags() {
+        let mut timer = MivCoreTimer::new();
+        timer.write_u32(TIMER_PRESCALE, 0).unwrap(); // divide by 2
+        timer.write_u32(TIMER_LOAD, 100).unwrap();
+        timer.write_u32(TIMER_CONTROL, 0b011).unwrap(); // enable + irq
+        let _ = timer.tick_elapsed(20); // 10 pulses: 100 -> 90
+        let json = timer.snapshot();
+        let bytes = timer.runtime_snapshot();
+
+        // The live model keeps counting; the restore must resume at 90.
+        let _ = timer.tick_elapsed(40); // 20 more pulses: 90 -> 70
+        assert_eq!(timer.read_u32(TIMER_VALUE).unwrap(), 70);
+
+        let mut from_json = MivCoreTimer::new();
+        from_json.restore(json).unwrap();
+        assert_eq!(from_json.read_u32(TIMER_VALUE).unwrap(), 90);
+        let _ = from_json.tick_elapsed(2); // one pulse
+        assert_eq!(from_json.read_u32(TIMER_VALUE).unwrap(), 89);
+        assert_eq!(from_json.read_u32(TIMER_CONTROL).unwrap() & 3, 3, "enabled");
+
+        let mut from_bytes = MivCoreTimer::new();
+        from_bytes.restore_runtime_snapshot(&bytes).unwrap();
+        let _ = from_bytes.tick_elapsed(2);
+        assert_eq!(from_bytes.read_u32(TIMER_VALUE).unwrap(), 89);
     }
 
     #[test]
