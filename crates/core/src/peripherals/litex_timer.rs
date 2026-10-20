@@ -67,6 +67,13 @@ pub struct LitexTimer {
     counter: u32,
     ev_pending: bool,
     ev_enable: bool,
+    /// The zero-event level at the end of the previous observation. The RTL's
+    /// trigger is `value == 0` and the event manager latches its rising edge,
+    /// independently of `en` — so the level is tracked across disabled ticks
+    /// and `load` rewrites too. Starts `false`: at reset the counter is zero,
+    /// so the first observation is the rising edge the event manager sees.
+    #[serde(default)]
+    zero_level: bool,
 }
 
 impl LitexTimer {
@@ -80,7 +87,21 @@ impl LitexTimer {
             counter: 0,
             ev_pending: false,
             ev_enable: false,
+            zero_level: false,
         }
+    }
+
+    /// Latch the zero event on the rising edge of `counter == 0`.
+    ///
+    /// The event detector runs off the counter level, not off `en`: a disabled
+    /// timer whose `load` is rewritten to zero (or which resets at zero) still
+    /// produces the event on silicon.
+    fn update_zero_level(&mut self) {
+        let zero = self.counter == 0;
+        if zero && !self.zero_level {
+            self.ev_pending = true;
+        }
+        self.zero_level = zero;
     }
 
     /// Advance the countdown by `cycles` SoC clocks.
@@ -89,6 +110,11 @@ impl LitexTimer {
     /// cycles (one cycle parked at zero, then `reload` decrements), so a large
     /// idle-fast-forward window does not walk the counter cycle by cycle.
     fn advance(&mut self, cycles: u64) {
+        self.advance_counter(cycles);
+        self.update_zero_level();
+    }
+
+    fn advance_counter(&mut self, cycles: u64) {
         if !self.en {
             // The RTL's disabled branch continuously reloads from `load`.
             self.counter = self.load;
@@ -159,8 +185,10 @@ impl LitexTimer {
                 // The RTL's disabled branch continuously loads `value` from
                 // `load`; reflect that immediately so a write-then-enable
                 // sequence (no intervening tick) starts from the staged value.
+                // A rewrite to zero is a zero-event edge even while disabled.
                 if !self.en {
                     self.counter = self.load;
+                    self.update_zero_level();
                 }
             }
             RELOAD => self.reload = value,
@@ -231,6 +259,36 @@ impl crate::Peripheral for LitexTimer {
 
     fn snapshot(&self) -> serde_json::Value {
         serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+    }
+
+    /// Restore the JSON snapshot the determinism/replay tools carry.
+    fn restore(&mut self, state: serde_json::Value) -> SimResult<()> {
+        let restored: Self = serde_json::from_value(state).map_err(|error| {
+            crate::SimulationError::NotImplemented(format!("LitexTimer snapshot decode: {error}"))
+        })?;
+        *self = restored;
+        Ok(())
+    }
+
+    /// Binary mid-flight snapshot: the whole countdown state, so a resume
+    /// continues the same count instead of restarting from `load`.
+    fn runtime_snapshot(&self) -> Vec<u8> {
+        bincode::serialize(self).expect("bincode serialize LitexTimer")
+    }
+
+    fn restore_runtime_snapshot(&mut self, bytes: &[u8]) -> SimResult<()> {
+        // Empty is the trait default from a snapshot taken before this model
+        // overrode the hook. Leave the live timer alone.
+        if bytes.is_empty() {
+            return Ok(());
+        }
+        let restored: Self = bincode::deserialize(bytes).map_err(|error| {
+            crate::SimulationError::NotImplemented(format!(
+                "LitexTimer runtime snapshot decode: {error}"
+            ))
+        })?;
+        *self = restored;
+        Ok(())
     }
 }
 
@@ -336,6 +394,71 @@ mod tests {
         let _ = t.tick_elapsed(1);
         t.write_u32(UPDATE_VALUE, 0).unwrap();
         assert_eq!(t.read_u32(VALUE).unwrap(), 3);
+    }
+
+    /// The zero-event detector follows the counter level, not `en`: a
+    /// disabled timer still latches the event when its load is rewritten to
+    /// zero, and the reset zero level is the event manager's first rising edge.
+    #[test]
+    fn zero_event_latches_while_disabled_and_at_reset() {
+        let mut t = LitexTimer::new();
+        assert_eq!(t.read_u32(EV_PENDING).unwrap(), 0, "no event before a tick");
+        // Reset: counter == 0, so the first observation is the rising edge.
+        let _ = t.tick_elapsed(1);
+        assert_eq!(t.read_u32(EV_PENDING).unwrap(), 1, "reset zero level");
+        t.write_u32(EV_PENDING, 1).unwrap();
+        let _ = t.tick_elapsed(1);
+        assert_eq!(
+            t.read_u32(EV_PENDING).unwrap(),
+            0,
+            "a level held at zero is not a new edge"
+        );
+
+        // Disabled, load rewritten nonzero -> zero: a rising edge.
+        t.write_u32(LOAD, 5).unwrap();
+        assert_eq!(t.read_u32(EV_STATUS).unwrap(), 0);
+        assert_eq!(t.read_u32(EV_PENDING).unwrap(), 0);
+        t.write_u32(LOAD, 0).unwrap();
+        assert_eq!(
+            t.read_u32(EV_PENDING).unwrap(),
+            1,
+            "a disabled load rewrite to zero is a zero event"
+        );
+    }
+
+    /// A resume must continue the countdown, not restart it: both snapshot
+    /// paths carry the live counter, flags, and a latched event.
+    #[test]
+    fn snapshot_round_trip_preserves_a_running_countdown() {
+        let mut running = armed(1_000, 0);
+        let _ = running.tick_elapsed(300);
+        let json = running.snapshot();
+        let bytes = running.runtime_snapshot();
+
+        let mut from_json = LitexTimer::new();
+        from_json.restore(json).unwrap();
+        let _ = from_json.tick_elapsed(200);
+        from_json.write_u32(UPDATE_VALUE, 0).unwrap();
+        assert_eq!(
+            from_json.read_u32(VALUE).unwrap(),
+            500,
+            "the JSON restore resumed at 700 and counted 200 more"
+        );
+        assert_eq!(from_json.read_u32(EN).unwrap(), 1, "still enabled");
+
+        let mut from_bytes = LitexTimer::new();
+        from_bytes.restore_runtime_snapshot(&bytes).unwrap();
+        let _ = from_bytes.tick_elapsed(200);
+        from_bytes.write_u32(UPDATE_VALUE, 0).unwrap();
+        assert_eq!(from_bytes.read_u32(VALUE).unwrap(), 500);
+
+        // A latched event survives the round trip too.
+        let _ = running.tick_elapsed(700);
+        assert_eq!(running.read_u32(EV_PENDING).unwrap(), 1);
+        let mut pending = LitexTimer::new();
+        pending.restore(running.snapshot()).unwrap();
+        assert_eq!(pending.read_u32(EV_PENDING).unwrap(), 1);
+        assert_eq!(pending.read_u32(EV_STATUS).unwrap(), 1);
     }
 
     #[test]
