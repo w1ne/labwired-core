@@ -1887,14 +1887,25 @@ impl<C: Cpu> Machine<C> {
             //    Peripheral rather than living in bus.flash/bus.ram).
             //    Walk the segment byte-by-byte through the bus dispatcher.
             //    Slow path, but only runs once at load time.
-            let mut all_written = true;
-            for (i, byte) in segment.data.iter().enumerate() {
-                let addr = segment.start_addr + i as u64;
-                if self.bus.write_u8(addr, *byte).is_err() {
-                    all_written = false;
-                    break;
-                }
-            }
+            //
+            //    This is a host/loader write, not a CPU store: the same
+            //    contract the direct flash/ram paths already satisfy. A CPU
+            //    store policy (`cpu_writes: fault`) or an armed debug watch
+            //    must not reject or record it — a boot-alias image linked at
+            //    0 on a chip whose flash lives at `0x0800_0000` lands here.
+            let all_written = self.bus.with_debug_watch_bypass(|bus| {
+                bus.with_memory_policy_bypass(|bus| {
+                    let mut all_written = true;
+                    for (i, byte) in segment.data.iter().enumerate() {
+                        let addr = segment.start_addr + i as u64;
+                        if bus.write_u8(addr, *byte).is_err() {
+                            all_written = false;
+                            break;
+                        }
+                    }
+                    all_written
+                })
+            });
             if !all_written {
                 if self.cpu.uses_elf_entry_point() {
                     return Err(SimulationError::MemoryViolation(segment.start_addr));
@@ -2747,9 +2758,10 @@ impl<C: Cpu> DebugControl for Machine<C> {
     fn write_memory(&mut self, addr: u32, data: &[u8]) -> SimResult<()> {
         // Debugger-context write: it must not latch a store watch. The flag
         // is restored on every path (the `try_for_each` collects the first
-        // error and the restore runs after it), and the loader
-        // (`load_firmware`) never goes through this function — it writes
-        // LinearMemory directly.
+        // error and the restore runs after it). The loader (`load_firmware`)
+        // does not go through this function: its direct paths write
+        // LinearMemory and its peripheral-backed fallback walks the bus under
+        // its own bypass flags.
         let prev = self.bus.debug_watch_host_bypass.replace(true);
         let result = data
             .iter()
