@@ -243,6 +243,15 @@ impl crate::Peripheral for MivCoreGpio {
     /// OUTREG: with OUTREG clear and the buffer on, the pad drives 0; with the
     /// buffer off it is released even though the output latch may be set. This
     /// matches `driver()` and the logic-capture direction it feeds.
+    /// Output latch @0xA0, input register @0x90; register bit n is pad n, so
+    /// chip-declared pin labels resolve without a GpioPort downcast.
+    fn gpio_port_offsets(&self) -> Option<crate::peripherals::gpio::GpioPortOffsets> {
+        Some(crate::peripherals::gpio::GpioPortOffsets {
+            output: GPIO_OUTPUT,
+            input: GPIO_INPUT,
+        })
+    }
+
     fn read_gpio_is_output(&self, pin: u8) -> Option<bool> {
         let pin = pin as usize;
         if pin >= GPIO_PINS {
@@ -759,6 +768,48 @@ board_io:
         );
         assert!(bus.set_peripheral_gpio_input(0, 0, true));
         assert_eq!(bus.peripherals[0].dev.read_gpio_input(0), Some(true));
+    }
+
+    /// Chip-declared pin labels (`pins:`) must resolve to the Mi-V output
+    /// latch and input register without a GpioPort downcast.
+    #[test]
+    fn chip_declared_pin_labels_resolve_through_the_gpio_offsets() {
+        use labwired_config::{ChipDescriptor, SystemManifest};
+
+        let chip_yaml = r#"
+name: "miv-pins-test"
+arch: "riscv"
+core: "rv32im"
+cpu_hz: 1_000_000
+flash: { base: 0x60000000, size: "256KB" }
+ram: { base: 0x80000000, size: "64KB" }
+pins:
+  SW0: { gpio: "gpioInputs", bit: 0 }
+  LED0: { gpio: "gpioOutputs", bit: 1 }
+peripherals:
+  - id: "gpioInputs"
+    type: "miv_coregpio"
+    base_address: 0x70002000
+    size: "1KB"
+  - id: "gpioOutputs"
+    type: "miv_coregpio"
+    base_address: 0x70005000
+    size: "1KB"
+"#;
+        let manifest_yaml = "name: \"miv-pins-test\"\nchip: \"miv-pins-test.yaml\"\n";
+        let chip: ChipDescriptor = serde_yaml::from_str(chip_yaml).unwrap();
+        let manifest: SystemManifest = serde_yaml::from_str(manifest_yaml).unwrap();
+        let bus = crate::bus::SystemBus::from_config(&chip, &manifest).unwrap();
+        assert_eq!(
+            crate::bus::SystemBus::resolve_pin_idr_pub(&bus, "SW0"),
+            Some((0x7000_2000 + GPIO_INPUT, 0)),
+            "the input register offset is published through gpio_port_offsets"
+        );
+        assert_eq!(
+            crate::bus::SystemBus::resolve_pin_odr_pub(&bus, "LED0"),
+            Some((0x7000_5000 + GPIO_OUTPUT, 1)),
+            "the output latch offset is published through gpio_port_offsets"
+        );
     }
 
     #[test]
