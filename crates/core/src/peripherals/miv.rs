@@ -143,7 +143,9 @@ impl MivCoreGpio {
             4 => before != after,
             _ => false,
         };
-        if fired {
+        // INTENABLE=0 disables interrupt generation (handbook Table 8), so an
+        // edge while disabled must not leave a stale latch to fire later.
+        if fired && bit(self.int_enable_mask(), pin) {
             self.irq_latched |= 1 << pin;
         }
     }
@@ -940,6 +942,31 @@ peripherals:
             0b10,
             "W1C clears only the written bit"
         );
+    }
+
+    #[test]
+    fn gpio_edges_while_disabled_do_not_latch_a_stale_interrupt() {
+        let mut gpio = MivCoreGpio::new();
+        // pin 0: INREG | rising edge, INTENABLE clear.
+        gpio.write_u32(0x00, (1 << 1) | (2 << 5)).unwrap();
+        gpio.set_external(0, External::Level(false));
+        gpio.set_external(0, External::Level(true)); // edge while disabled
+        gpio.set_external(0, External::Level(false));
+        assert_eq!(
+            gpio.read_u32(GPIO_IRQ_CLEAR).unwrap(),
+            0,
+            "no latch while generation is disabled"
+        );
+        // Enabling now must not deliver the past edge.
+        gpio.write_u32(0x00, (1 << 1) | (1 << 3) | (2 << 5))
+            .unwrap();
+        assert_eq!(
+            gpio.irq_line_level(),
+            Some(false),
+            "no stale interrupt after enabling"
+        );
+        gpio.set_external(0, External::Level(true)); // a real edge now latches
+        assert_eq!(gpio.irq_line_level(), Some(true));
     }
 
     #[test]
