@@ -480,7 +480,16 @@ impl MivCoreTimer {
                     self.value = self.load;
                 }
             }
-            TIMER_PRESCALE => self.prescale = (value & 0xF) as u8,
+            TIMER_PRESCALE => {
+                self.prescale = (value & 0xF) as u8;
+                // The phase counts PCLK cycles toward the next prescaled
+                // pulse. A divider change must not replay the old span as new
+                // pulses: clamp it into the new counter range (highest state
+                // before the pulse), so at most one catch-up pulse is
+                // produced, exactly like the hardware's compare reset.
+                let divider = self.divider();
+                self.phase = self.phase.min(divider - 1);
+            }
             TIMER_IRQ_CLEAR => self.raw_irq = false,
             TIMER_RAW_STATUS | TIMER_MASKED_STATUS => {} // read-only
             _ => {
@@ -918,6 +927,26 @@ board_io:
         assert_eq!(timer.read_u32(TIMER_VALUE).unwrap(), 2);
         let _ = timer.tick_elapsed(4); // two more pulses: zero at the second
         assert_eq!(timer.read_u32(TIMER_RAW_STATUS).unwrap(), 1);
+    }
+
+    #[test]
+    fn changing_the_prescaler_does_not_replay_stale_phase() {
+        let mut timer = MivCoreTimer::new();
+        timer.write_u32(TIMER_PRESCALE, 9).unwrap(); // divide by 1024
+        timer.write_u32(TIMER_LOAD, 100).unwrap();
+        timer.write_u32(TIMER_CONTROL, 0b001).unwrap();
+        let _ = timer.tick_elapsed(1000); // no pulse; 1000 cycles of phase
+        assert_eq!(timer.read_u32(TIMER_VALUE).unwrap(), 100);
+
+        // Reconfigure to divide-by-2: the accumulated phase must not be
+        // replayed as ~500 pulses. At most one catch-up pulse fires.
+        timer.write_u32(TIMER_PRESCALE, 0).unwrap();
+        let _ = timer.tick_elapsed(2);
+        assert_eq!(
+            timer.read_u32(TIMER_VALUE).unwrap(),
+            99,
+            "one catch-up pulse, not the old span replayed"
+        );
     }
 
     #[test]
