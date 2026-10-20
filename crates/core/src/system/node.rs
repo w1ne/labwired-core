@@ -740,8 +740,7 @@ pub fn parse_elf_image(bytes: &[u8]) -> anyhow::Result<crate::memory::ProgramIma
     let arch = elf_arch(machine)
         .ok_or_else(|| anyhow::anyhow!("unsupported ELF machine type {machine}"))?;
     if arch == crate::Arch::Pic24 {
-        crate::cpu::pic24::check_xc16_pc_address("entry point", elf.entry)
-            .map_err(anyhow::Error::msg)?;
+        crate::cpu::pic24::check_xc16_entry(elf.entry).map_err(anyhow::Error::msg)?;
     }
     let mut image = crate::memory::ProgramImage::new(elf.entry, arch);
     for ph in &elf.program_headers {

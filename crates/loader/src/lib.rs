@@ -95,8 +95,7 @@ pub fn load_elf_bytes(buffer: &[u8]) -> Result<ProgramImage> {
         });
 
     if arch == labwired_core::Arch::Pic24 {
-        labwired_core::cpu::pic24::check_xc16_pc_address("entry point", elf.entry)
-            .map_err(|e| anyhow!(e))?;
+        labwired_core::cpu::pic24::check_xc16_entry(elf.entry).map_err(|e| anyhow!(e))?;
     }
     let mut program_image = ProgramImage::new(elf.entry, arch);
 
@@ -978,6 +977,10 @@ mod tests {
         assert!(odd_entry.to_string().contains("entry point"), "{odd_entry}");
         let odd_segment = load_elf_bytes(&pic24_elf(0x200, &[(0x201, code.clone())])).unwrap_err();
         assert!(odd_segment.to_string().contains("is odd"), "{odd_segment}");
+        for entry in [end, end + 0x100] {
+            let far = load_elf_bytes(&pic24_elf(entry, &[(0x200, code.clone())])).unwrap_err();
+            assert!(far.to_string().contains("entry point"), "{far}");
+        }
         let beyond = load_elf_bytes(&pic24_elf(0x200, &[(end + 0x100, code.clone())])).unwrap_err();
         assert!(
             beyond.to_string().contains("does not fit program flash"),

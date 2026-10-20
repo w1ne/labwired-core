@@ -116,6 +116,19 @@ pub fn check_xc16_pc_address(what: &str, addr: u64) -> Result<(), String> {
     Ok(())
 }
 
+/// Reject an XC16 entry point that is odd or not in program flash
+/// (0x0..0x5800, DS70283H Figure 4-1): the CPU would start fetching nothing.
+pub fn check_xc16_entry(addr: u64) -> Result<(), String> {
+    check_xc16_pc_address("entry point", addr)?;
+    if addr >= u64::from(PROGRAM_PC_END) {
+        return Err(format!(
+            "PIC24 entry point {addr:#x} is past program flash 0x0..{PROGRAM_PC_END:#x} \
+             (DS70283H Figure 4-1)"
+        ));
+    }
+    Ok(())
+}
+
 /// Reject an XC16 executable segment that is odd, starts past program flash,
 /// or runs off its end (0x0057FE, DS70283H Figure 4-1). `slots` is the
 /// slot-expanded segment from [`xc16_executable_slots`]. Loading would
@@ -1581,6 +1594,15 @@ mod tests {
         assert!(check_xc16_pc_address("entry point", 0x200).is_ok());
     }
 
+    #[test]
+    fn entry_points_outside_program_flash_are_rejected() {
+        let end = u64::from(PROGRAM_PC_END);
+        assert!(check_xc16_entry(end - 2).is_ok());
+        assert!(check_xc16_entry(end).is_err());
+        assert!(check_xc16_entry(end + 0x100).is_err());
+        assert!(check_xc16_entry(0x201).is_err());
+    }
+
     /// A minimal little-endian ELF32 for EM_DSPIC30F (118) with one
     /// executable PT_LOAD per segment, XC16 3-byte packed.
     fn pic24_elf(entry: u32, segments: &[(u32, Vec<u8>)]) -> Vec<u8> {
@@ -1643,6 +1665,10 @@ mod tests {
         assert!(odd_entry.to_string().contains("entry point"), "{odd_entry}");
         let odd_segment = parse_elf_image(&pic24_elf(0x200, &[(0x201, code.clone())])).unwrap_err();
         assert!(odd_segment.to_string().contains("is odd"), "{odd_segment}");
+        for entry in [PROGRAM_PC_END, PROGRAM_PC_END + 0x100] {
+            let far = parse_elf_image(&pic24_elf(entry, &[(0x200, code.clone())])).unwrap_err();
+            assert!(far.to_string().contains("entry point"), "{far}");
+        }
         let past = parse_elf_image(&pic24_elf(0x200, &[(PROGRAM_PC_END - 2, code)])).unwrap_err();
         assert!(
             past.to_string().contains("does not fit program flash"),
