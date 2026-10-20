@@ -319,12 +319,11 @@ Real output (tail; the `81` is the firmware line):
 
 ```text
 81labwired-cli run: --stop-on "81" matched at step 101700000
-labwired-cli run: reached --max-steps 200000000; pc=0x42020cd6 appcpu_pc=0x42020cd6
 ```
 
-The run ended at the matched step; the second line is the stepping loop's
-unconditional epilogue (`crates/cli/src/commands/run.rs:1486`), so ignore its
-"reached --max-steps" wording when `--stop-on` fired. Pick a marker that does
+The run ended at the matched step and printed no `reached --max-steps`
+epilogue: that line is emitted only when the stepping loop actually exhausts
+the budget (`crates/cli/src/commands/run.rs:1488`). Pick a marker that does
 not occur in boot output: `--stop-on 27` matches inside the ROM banner
 `ESP-ROM:esp32s3-20210327` at step 100000.
 

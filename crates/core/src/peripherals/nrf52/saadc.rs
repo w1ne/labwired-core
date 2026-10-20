@@ -410,13 +410,15 @@ impl Nrf52Saadc {
         if remaining == 0 {
             return;
         }
-        for sample in samples.iter().take(remaining as usize) {
-            let sample = sample.to_le_bytes();
-            let base = ptr + u64::from(self.result_amount) * 2;
-            let _ = bus.write_u8(base, sample[0]);
-            let _ = bus.write_u8(base + 1, sample[1]);
-            self.result_amount += 1;
-        }
+        crate::with_device_write_bypass(bus, |bus| {
+            for sample in samples.iter().take(remaining as usize) {
+                let sample = sample.to_le_bytes();
+                let base = ptr + u64::from(self.result_amount) * 2;
+                let _ = bus.write_u8(base, sample[0]);
+                let _ = bus.write_u8(base + 1, sample[1]);
+                self.result_amount += 1;
+            }
+        });
         self.events_done = 1;
         self.events_resultdone = 1;
         if self.result_amount == self.active_maxcnt {

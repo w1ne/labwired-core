@@ -1557,6 +1557,14 @@ impl crate::Bus for SystemBus {
         Some(self)
     }
 
+    fn device_write_bypass(&self) -> bool {
+        Self::device_write_bypass(self)
+    }
+
+    fn set_device_write_bypass(&mut self, on: bool) {
+        Self::set_device_write_bypass(self, on)
+    }
+
     fn read_gpio_output_by_label(&self, pin: &str) -> Option<bool> {
         let (addr, bit) = Self::resolve_pin_odr(self, pin)?;
         let peripheral = self.peripherals.iter().find(|peripheral| {

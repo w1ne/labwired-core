@@ -263,9 +263,11 @@ impl Nrf52Twis {
     pub(super) fn net_dma(&mut self, bus: &mut dyn crate::Bus) {
         if std::mem::take(&mut self.net.rx_dirty) {
             let ptr = u64::from(self.rxd_ptr);
-            for (i, &b) in self.net.rx.iter().enumerate() {
-                let _ = bus.write_u8(ptr + i as u64, b);
-            }
+            crate::with_device_write_bypass(bus, |bus| {
+                for (i, &b) in self.net.rx.iter().enumerate() {
+                    let _ = bus.write_u8(ptr + i as u64, b);
+                }
+            });
             self.rxd_amount = self.net.rx.len() as u32;
         }
         if std::mem::take(&mut self.net.deferred_stopped) {
@@ -274,9 +276,11 @@ impl Nrf52Twis {
         if std::mem::take(&mut self.net.prefetch) {
             let ptr = u64::from(self.txd_ptr);
             let n = (self.txd_maxcnt & MAXCNT_MASK) as usize;
-            self.net.tx = (0..n)
-                .map(|i| bus.read_u8(ptr + i as u64).unwrap_or(0))
-                .collect();
+            self.net.tx = crate::with_device_write_bypass(bus, |bus| {
+                (0..n)
+                    .map(|i| bus.read_u8(ptr + i as u64).unwrap_or(0))
+                    .collect()
+            });
             self.net.tx_prepared = true;
             if self.net.wait == Wait::Tx && !self.net.suspended {
                 if let Some(pads) = self.net_pads() {
