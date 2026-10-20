@@ -569,6 +569,54 @@ mod tests {
         assert_eq!(t.read_u32(EV_STATUS).unwrap(), 0);
     }
 
+    /// One large advance must equal the same span stepped one cycle at a
+    /// time: multiple periodic expirations, a nonzero remainder, and a
+    /// cleared event that stays clear.
+    #[test]
+    fn batched_advance_matches_single_cycle_ticks() {
+        let mut batched = armed(0, 7);
+        let mut stepped = armed(0, 7);
+        let _ = batched.tick_elapsed(100);
+        for _ in 0..100 {
+            let _ = stepped.tick_elapsed(1);
+        }
+        for reg in [LOAD, RELOAD, EN, EV_STATUS, EV_PENDING, EV_ENABLE] {
+            assert_eq!(
+                batched.read_u32(reg).unwrap(),
+                stepped.read_u32(reg).unwrap(),
+                "register {reg:#04x} agrees"
+            );
+        }
+        batched.write_u32(UPDATE_VALUE, 0).unwrap();
+        stepped.write_u32(UPDATE_VALUE, 0).unwrap();
+        assert_eq!(
+            batched.read_u32(VALUE).unwrap(),
+            stepped.read_u32(VALUE).unwrap(),
+            "the latched countdown agrees"
+        );
+
+        // One-shot: both paths reach zero and latch; a cleared event stays
+        // clear through the remaining span.
+        let mut batched = armed(10, 0);
+        let mut stepped = armed(10, 0);
+        let _ = batched.tick_elapsed(1000);
+        for _ in 0..1000 {
+            let _ = stepped.tick_elapsed(1);
+        }
+        assert_eq!(batched.read_u32(EV_STATUS).unwrap(), 1);
+        assert_eq!(stepped.read_u32(EV_STATUS).unwrap(), 1);
+        assert_eq!(batched.read_u32(EV_PENDING).unwrap(), 1);
+        assert_eq!(stepped.read_u32(EV_PENDING).unwrap(), 1);
+        batched.write_u32(EV_PENDING, 1).unwrap();
+        stepped.write_u32(EV_PENDING, 1).unwrap();
+        let _ = batched.tick_elapsed(100);
+        for _ in 0..100 {
+            let _ = stepped.tick_elapsed(1);
+        }
+        assert_eq!(batched.read_u32(EV_PENDING).unwrap(), 0);
+        assert_eq!(stepped.read_u32(EV_PENDING).unwrap(), 0);
+    }
+
     /// A resume must continue the countdown, not restart it: both snapshot
     /// paths carry the live counter, flags, and a latched event.
     #[test]
