@@ -85,6 +85,19 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_esp32c6_demo_survival"),
     },
     ChipConf {
+        // LiteX VexRiscv SoC (RV32IM — the descriptor declares `core: rv32im`,
+        // so runs select the standard RV32 profile). SIM-DERIVED: nothing here
+        // has been diffed against a silicon capture, so no reset_oracle. The
+        // modelled surface is CPU + memory + the LiteX UART and countdown
+        // timer; the SPI-flash / Ethernet / MMCM CSR windows are declared
+        // stubs — see
+        // examples/litex-vexriscv/VALIDATION.md.
+        name: "litex-vexriscv",
+        yaml: "configs/chips/litex-vexriscv.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("firmware_survival::test_litex_vexriscv_smoke_survival"),
+    },
+    ChipConf {
         name: "nrf54l15",
         yaml: "configs/chips/nrf54l15.yaml",
         // No silicon capture: nothing here has been diffed against a real

@@ -65,6 +65,7 @@ pub mod itm;
 pub mod iwdg;
 pub mod jpeg_baseline;
 pub mod kit;
+pub mod litex_timer;
 pub mod lptim;
 pub mod mcg;
 pub mod noise;

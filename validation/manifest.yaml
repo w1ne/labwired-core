@@ -2293,7 +2293,7 @@ boards:
     # reset value the reset-conformance capture asserts is touched: the new
     # behaviour lives in exchange memory and the radio event path, which that
     # capture does not cover. This acknowledges model drift, NOT a recapture.
-    drift_ack_digest: dc653b8932aae47ba9c993ab8ed9c63589fac183604851d297f7a7035fa4c587
+    drift_ack_digest: 705efa0bce5458a39552b7ed7a83dc89656ef3c0ed850de01f7fbc19d6bef2e1
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
@@ -3074,6 +3074,17 @@ boards:
     # transfers and the shared GDMA walk are wrapped in
     # `with_device_write_bypass` (hardware-originated guest-memory transfers
     # only). CPU-visible register/reset paths are unchanged. ACK, NOT A CAPTURE.
+    # 2026-10-19, first RISC-V soft-core promotion (LiteX VexRiscv):
+    # `crates/core/src/cpu/riscv.rs` gained `RiscVCoreProfile::for_chip` — the
+    # core profile is now selected from the chip descriptor instead of being
+    # hardcoded to the C3 in `configure_riscv`. The C3's own selection is
+    # unchanged by construction: the resolver returns Esp32C3 for any chip
+    # whose name contains `esp32` (and for a descriptor with no `core:`), so
+    # every ESP32 chip — C3 included — keeps exactly the profile it ran before.
+    # Pinned by the profile-selection unit test and the C3 survival /
+    # reset-conformance gates. No register map, reset value or default-config
+    # readback changes.
+    # ACK, NOT A CAPTURE — physical re-capture remains owed.
     drift_ack: 2026-10-19
 
   - id: nucleo-l476rg
@@ -8745,3 +8756,30 @@ boards:
       # claim for the corrected digest to invalidate — no ack is implied.
       - crates/core/src/peripherals/esp32c6/gdma.rs
       - crates/core/src/peripherals/esp32c6/pcr.rs
+  - id: litex-vexriscv
+    # 2026-10-19: first RISC-V soft-core SoC in the engine (LiteX VexRiscv,
+    # RV32IM). SIM-DERIVED — no silicon capture and no executing-fidelity
+    # differential: the modelled surface is CPU + memory + the LiteX UART
+    # console path and the LiteX countdown timer; the SPI-flash, Ethernet and
+    # MMCM CSR windows are declared stubs (the smoke prints one of those
+    # readbacks). See
+    # docs/boards/litex-vexriscv.md and examples/litex-vexriscv/VALIDATION.md.
+    doc: docs/boards/litex-vexriscv.md
+    chip: configs/chips/litex-vexriscv.yaml
+    tier: smoke-manual
+    offline_tests:
+      - "firmware_survival::test_litex_vexriscv_smoke_survival"
+    models:
+      - crates/core/src/cpu/riscv.rs
+      - crates/core/src/decoder/riscv.rs
+      - crates/core/src/peripherals/uart.rs
+      - crates/core/src/peripherals/litex_timer.rs
+      - crates/core/src/peripherals/stub.rs
+      - crates/core/src/bus/from_config.rs
+      - crates/core/src/bus/profiles.rs
+      - crates/core/src/peripherals/generic_factory.rs
+      - crates/core/src/system/riscv.rs
+      - crates/core/src/system/builder/riscv.rs
+      - crates/firmware-litex-vexriscv-smoke
+      - configs/chips/litex-vexriscv.yaml
+      - configs/systems/litex-vexriscv.yaml

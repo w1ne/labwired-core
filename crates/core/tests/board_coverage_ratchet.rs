@@ -498,6 +498,14 @@ fn every_shipped_descriptor_is_ratcheted() {
         // tests — but not a bundled-configs.ts catalog board and no silicon
         // oracle. Promote when peripheral milestones land.
         "dspic33fj32mc204",
+        // First RISC-V soft-core SoC in the engine (LiteX VexRiscv, RV32IM).
+        // Has a chip descriptor, a system manifest, an example with an
+        // io-smoke, a committed smoke fixture and a firmware-survival gate —
+        // but not a bundled-configs.ts catalog board, no silicon capture (no
+        // bench bitstream diff), and no executing-fidelity differential of
+        // its own. Promote when the browser board lands AND a differential
+        // exists.
+        "litex-vexriscv",
         // Descriptor-level derivative of the F401 lane (shared F4 profiles,
         // DEV_ID 0x413), smoke-validated via the feather-f405 example only:
         // no catalog board, no silicon oracle, no executing-fidelity
