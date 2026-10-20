@@ -1008,9 +1008,23 @@ chip: "miv-timer-test.yaml"
         let (irqs, _) = bus.tick_peripherals_fully();
         assert!(!irqs.contains(&5), "a cleared interrupt is not delivered");
 
-        // Masking also deasserts the level while raw stays set.
-        let _ = bus.tick_peripherals_fully();
+        // Reach ANOTHER expiry, then mask: raw stays set while delivery stops.
+        let mut fired_again = false;
+        for _ in 0..40 {
+            let (irqs, _) = bus.tick_peripherals_fully();
+            if irqs.contains(&5) {
+                fired_again = true;
+                break;
+            }
+        }
+        assert!(fired_again, "the periodic timer delivers again");
+        assert_eq!(bus.read_u32(0x7000_3014).unwrap(), 1, "raw latched again");
         bus.write_u32(0x7000_3008, 0b001).unwrap(); // clear irq enable
+        assert_eq!(
+            bus.read_u32(0x7000_3014).unwrap(),
+            1,
+            "masking leaves the raw status latched"
+        );
         assert_eq!(bus.peripherals[0].dev.irq_line_level(), Some(false));
         let (irqs, _) = bus.tick_peripherals_fully();
         assert!(!irqs.contains(&5), "a masked interrupt is not delivered");
