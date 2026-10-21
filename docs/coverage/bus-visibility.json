@@ -1,6 +1,10 @@
 [
   {
     "buses": [],
+    "name": "atmega2560"
+  },
+  {
+    "buses": [],
     "name": "atmega328p"
   },
   {

@@ -413,6 +413,14 @@ const CHIPS: &[ChipConf] = &[
         reset_oracle: None,
         behavior_gate: Some("avr_nano_golden_survival::arduino_nano_golden_prints_and_blinks"),
     },
+    // Behavior: Arduino-core Mega 2560 sketch (LED pins on ports E/G/F/B/H,
+    // A8/A9 via MUX5, millis, Serial). No silicon capture → below L2.
+    ChipConf {
+        name: "atmega2560",
+        yaml: "configs/chips/atmega2560.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("avr_mega2560_io::each_led_lands_on_its_mega_port_pin"),
+    },
     ChipConf {
         name: "atsamd21",
         yaml: "configs/chips/atsamd21.yaml",
