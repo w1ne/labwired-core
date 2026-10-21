@@ -477,7 +477,6 @@ mod tests {
         assert_eq!(t.read_u32(TIMERAWH).unwrap(), 1);
     }
 
-    #[cfg(feature = "event-scheduler")]
     #[test]
     fn configured_lazy_reads_and_alarm_deadlines_share_fractional_phase() {
         let mut t = Rp2040Timer::new();
@@ -485,12 +484,14 @@ mod tests {
         t.attach_cpu_hz(125_000_000);
         t.attach_cycle_clock(clock.clone());
         clock.publish(124);
+        t.tick_elapsed(124); // Walk advances here; scheduler mode advances on read.
         assert_eq!(t.read_u32(TIMERAWL).unwrap(), 0);
         assert_eq!(t.read_u32(TIMERAWL).unwrap(), 0, "read must be idempotent");
         t.write_u32(ALARM0, 1).unwrap();
         assert_eq!(t.cycles_until_next_alarm(), Some(1));
         clock.publish(125);
         t.sync_to(125);
+        t.tick_elapsed(1);
         assert_eq!(t.read_u32(TIMERAWL).unwrap(), 1);
         assert_eq!(t.read_u32(INTR).unwrap(), 1);
         assert_eq!(t.read_u32(ARMED).unwrap(), 0);
@@ -498,7 +499,6 @@ mod tests {
         assert_eq!(t.read_u32(TIMERAWL).unwrap(), 1);
     }
 
-    #[cfg(feature = "event-scheduler")]
     #[test]
     fn a_lazy_read_cannot_consume_an_alarm_before_the_event_handler() {
         let mut t = Rp2040Timer::new();
@@ -506,17 +506,30 @@ mod tests {
         t.attach_cycle_clock(clock.clone());
         t.write_u32(INTE, 1).unwrap();
         t.write_u32(ALARM0, 2).unwrap();
-        let token = t.take_scheduled_events()[0].1;
+        let events = t.take_scheduled_events();
         clock.publish(2);
+        t.tick_elapsed(2); // A scheduler-driven timer leaves this to the lazy read.
         assert_eq!(t.read_u32(TIMERAWL).unwrap(), 2);
-        let mut scheduler = crate::sched::EventScheduler::new();
-        scheduler.advance_to(2);
-        let mut bus = crate::bus::SystemBus::new();
+        if t.uses_scheduler() {
+            let mut scheduler = crate::sched::EventScheduler::new();
+            scheduler.advance_to(2);
+            let mut bus = crate::bus::SystemBus::new();
+            assert_eq!(
+                t.on_event(events[0].1, &mut scheduler, &mut bus)
+                    .explicit_irqs,
+                vec![0]
+            );
+        } else {
+            assert!(
+                events.is_empty(),
+                "walk mode must not schedule alarm events"
+            );
+        }
+        let settle_cycles = u64::from(t.uses_scheduler());
         assert_eq!(
-            t.on_event(token, &mut scheduler, &mut bus).explicit_irqs,
-            vec![0]
+            t.tick_elapsed_forced(settle_cycles).explicit_irqs,
+            Some(vec![0])
         );
-        assert_eq!(t.tick_elapsed_forced(1).explicit_irqs, Some(vec![0]));
         assert_eq!(t.read_u32(INTR).unwrap(), 1);
         assert_eq!(
             t.read_u32(TIMERAWL).unwrap(),
@@ -524,7 +537,7 @@ mod tests {
             "same-cycle event must not add time"
         );
         t.write_u32(INTR, 1).unwrap();
-        assert!(t.tick_elapsed_forced(1).explicit_irqs.is_none());
+        assert!(t.tick_elapsed_forced(settle_cycles).explicit_irqs.is_none());
     }
 
     #[test]
