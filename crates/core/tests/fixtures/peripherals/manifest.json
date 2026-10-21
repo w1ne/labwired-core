@@ -3656,6 +3656,17 @@
       ]
     },
     {
+      "device_type": "dfplayer_mini",
+      "label": "DFPlayer Mini",
+      "summary": "MP3 player module: serial commands in, BUSY low while playing",
+      "detail": "Decodes the DFPlayer Mini 10-byte serial frames (9600 8N1, checksum checked) from the RX pad, so hardware UART and SoftwareSerial both work. Play (0x03) drives BUSY LOW for a constant 1 s clip, volume (0x06) is stored, pause/stop release BUSY. NOT modelled: SD card, MP3 decoding and audio output, replies on TX (it stays idle HIGH), power-on delay and the other commands.",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [],
+      "labs": [],
+      "inputs": []
+    },
+    {
       "device_type": "pybadge_buttons",
       "label": "PyBadge buttons",
       "summary": "Eight active-low buttons through the board's SN74HC165.",
