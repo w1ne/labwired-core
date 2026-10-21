@@ -692,9 +692,7 @@ pub fn parse_avr_elf_image(bytes: &[u8]) -> anyhow::Result<crate::memory::Progra
             continue;
         }
         let (off, n) = (ph.p_offset as usize, ph.p_filesz as usize);
-        if off + n > bytes.len() {
-            anyhow::bail!("Segment out of bounds in ELF file");
-        }
+        check_load_segment(ph, bytes.len())?;
         let data = bytes[off..off + n].to_vec();
         let vma = if ph.p_vaddr != 0 {
             ph.p_vaddr
@@ -726,6 +724,28 @@ pub fn parse_avr_elf_image(bytes: &[u8]) -> anyhow::Result<crate::memory::Progra
     Ok(image)
 }
 
+/// A nonempty PT_LOAD segment's header is checked before it is loaded or
+/// skipped: its bytes must lie inside the file, and it cannot carry more file
+/// bytes than it occupies in memory.
+fn check_load_segment(ph: &goblin::elf::ProgramHeader, file_len: usize) -> anyhow::Result<()> {
+    if ph.p_filesz > ph.p_memsz {
+        anyhow::bail!(
+            "ELF segment at {:#x} has p_filesz {:#x} > p_memsz {:#x}",
+            ph.p_paddr,
+            ph.p_filesz,
+            ph.p_memsz
+        );
+    }
+    let end = (ph.p_offset as usize).checked_add(ph.p_filesz as usize);
+    if end.is_none_or(|end| end > file_len) {
+        anyhow::bail!(
+            "ELF segment at {:#x} runs past the end of the file",
+            ph.p_paddr
+        );
+    }
+    Ok(())
+}
+
 /// Parse ELF bytes into a [`crate::memory::ProgramImage`].
 ///
 /// Core cannot depend on the `loader` crate (that crate depends on core), so
@@ -740,6 +760,9 @@ pub fn parse_elf_image(bytes: &[u8]) -> anyhow::Result<crate::memory::ProgramIma
     let machine = elf.header.e_machine;
     let arch = elf_arch(machine)
         .ok_or_else(|| anyhow::anyhow!("unsupported ELF machine type {machine}"))?;
+    if arch == crate::Arch::Pic24 {
+        crate::cpu::pic24::check_xc16_entry(elf.entry).map_err(anyhow::Error::msg)?;
+    }
     let mut image = crate::memory::ProgramImage::new(elf.entry, arch);
     for ph in &elf.program_headers {
         if ph.p_type != PT_LOAD || ph.p_filesz == 0 {
@@ -747,9 +770,13 @@ pub fn parse_elf_image(bytes: &[u8]) -> anyhow::Result<crate::memory::ProgramIma
         }
         let off = ph.p_offset as usize;
         let n = ph.p_filesz as usize;
-        if off + n > bytes.len() {
-            continue;
+        if arch == crate::Arch::Pic24 && ph.p_flags & goblin::elf::program_header::PF_X != 0 {
+            // Checked from the header first: an executable segment past
+            // program flash is a bad ELF, not one to load in part.
+            crate::cpu::pic24::check_xc16_span(ph.p_paddr, ph.p_filesz / 3)
+                .map_err(anyhow::Error::msg)?;
         }
+        check_load_segment(ph, bytes.len())?;
         if arch == crate::Arch::Pic24 {
             use goblin::elf::program_header::PF_X;
             if ph.p_flags & PF_X == 0 {
@@ -766,6 +793,8 @@ pub fn parse_elf_image(bytes: &[u8]) -> anyhow::Result<crate::memory::ProgramIma
                     n
                 );
             };
+            crate::cpu::pic24::check_xc16_segment(ph.p_paddr, &slots)
+                .map_err(anyhow::Error::msg)?;
             image.add_segment(ph.p_paddr, slots);
             continue;
         }
