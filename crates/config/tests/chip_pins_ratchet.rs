@@ -51,6 +51,9 @@ const PARSE_FALLBACK_CHIPS: &[&str] = &[
     "esp32c6",
     "esp32s3",
     "esp32s3-zero",
+    // The LiteX VexRiscv SoC models a UART and a timer and no GPIO bank, so
+    // there are no pads to read, by parse or by map.
+    "litex-vexriscv",
     "nrf52832",
     "nrf52833",
     "nrf52840",

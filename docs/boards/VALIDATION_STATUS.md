@@ -12,7 +12,7 @@ The models column is a content digest over everything that board's `models` list
 | `nrf52840` | 🟢 silicon-verified | 2026-08-09 | `a089c16151ad03e4` | ⚠ drift acked 2026-10-19, expires 2026-11-18 (re-capture pending) |
 | `seeed-xiao-nrf52840-sense` | 🟢 silicon-verified | 2026-08-09 | `a089c16151ad03e4` | ⚠ drift acked 2026-10-19, expires 2026-11-18 (re-capture pending) |
 | `stm32h563` | 🟢 silicon-verified | 2026-08-10 | `accfb123b9b3e4d4` | ⚠ drift acked 2026-10-19, expires 2026-11-18 (re-capture pending) |
-| `esp32c3` | 🟢 silicon-verified | 2026-08-09 | `dc653b8932aae47b` | ⚠ drift acked 2026-10-19, expires 2026-11-18 (re-capture pending) |
+| `esp32c3` | 🟢 silicon-verified | 2026-08-09 | `705efa0bce5458a3` | ⚠ drift acked 2026-10-19, expires 2026-11-18 (re-capture pending) |
 | `nucleo-l476rg` | 🟢 silicon-verified | 2026-08-09 | `f1f97225721537df` | ⚠ drift acked 2026-10-19, expires 2026-11-18 (re-capture pending) |
 | `nucleo-l073rz` | 🟢 silicon-verified | 2026-08-09 | `926ba8b0248152a6` | ⚠ drift acked 2026-10-19, expires 2026-11-18 (re-capture pending) |
 | `stm32f103` | 🟢 silicon-verified | 2026-08-09 | `8e6af0ca123118db` | ⚠ drift acked 2026-10-19, expires 2026-11-18 (re-capture pending) |
@@ -41,14 +41,15 @@ The models column is a content digest over everything that board's `models` list
 | `nrf54l15` | 🔵 sim-validated (deep model, no HW diff) | — | `bb0758aa1cb91d5b` | no silicon capture |
 | `stm32g474re` | 🔵 sim-validated (deep model, no HW diff) | — | `d4b2d62e44fa2d3d` | no silicon capture |
 | `stm32wb55` | 🔵 sim-validated (deep model, no HW diff) | — | `7899bdffb366fa36` | no silicon capture |
-| `ci-fixture-riscv` | ⚪ structural | — | `1493d9bc642c09c8` | no silicon capture |
+| `ci-fixture-riscv` | ⚪ structural | — | `0282a3b1fb6b2117` | no silicon capture |
 | `nano-33-iot` | 🟡 smoke-manual | — | `9429089a06b07710` | no silicon capture |
 | `metro-m4` | 🟡 smoke-manual | — | `0783332be100ed75` | no silicon capture |
 | `arduino-uno-r4-minima` | 🟡 smoke-manual | — | `17cf9611712f6a5e` | no silicon capture |
 | `teensy-41` | 🟡 smoke-manual | — | `17608f4d8f9162c5` | no silicon capture |
 | `stm32f7-discovery` | 🟡 smoke-manual | — | `6ba3e2270e8012cd` | no silicon capture |
 | `nucleo-g071rb` | 🟡 smoke-manual | — | `354776217a6e438d` | no silicon capture |
-| `esp32c6-devkitc` | 🟡 smoke-manual | — | `37ed3a24c9e601b8` | no silicon capture |
+| `esp32c6-devkitc` | 🟡 smoke-manual | — | `9a2bcda0ad6f2363` | no silicon capture |
+| `litex-vexriscv` | 🟡 smoke-manual | — | `a4f1a9e59bf550ef` | no silicon capture |
 
 ## `nrf52840` — 🟢 silicon-verified
 
@@ -390,4 +391,11 @@ The models column is a content digest over everything that board's `models` list
 - Silicon: none — not validated against real hardware.
   - offline (CI): firmware_survival::test_esp32c6_demo_survival
   - offline (CI): svd_conformance::chip_configs_match_their_svd (configs/chips/esp32c6.yaml vs tests/fixtures/real_world/esp32c6.svd)
+- Drift status: **no silicon capture**
+
+## `litex-vexriscv` — 🟡 smoke-manual
+
+- Doc: [`docs/boards/litex-vexriscv.md`](litex-vexriscv.md)  ·  Chip: `configs/chips/litex-vexriscv.yaml`
+- Silicon: none — not validated against real hardware.
+  - offline (CI): firmware_survival::test_litex_vexriscv_smoke_survival
 - Drift status: **no silicon capture**

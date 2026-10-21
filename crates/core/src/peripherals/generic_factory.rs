@@ -324,6 +324,17 @@ pub const MODEL_TYPES: &[&str] = &[
     "imxrt_gpt",
     "imxrt_flexio",
     "imxrt_sai",
+    // LiteX countdown timer (first modelled LiteX peripheral besides the UART
+    // profile). Its type carries the `litex` prefix, so it must be a canonical
+    // type or the fuzzy `contains("timer")` fallback would coerce it onto the
+    // STM32 timer map.
+    "litex_timer",
+    // Microchip Mi-V reference-design peripherals. MUST be listed: without
+    // membership the fuzzy fallbacks would coerce `miv_coregpio` onto the
+    // STM32 GPIO map (it was doing exactly that for the staged descriptors)
+    // and `miv_coretimer` onto the STM32 timer map — silently wrong models.
+    "miv_coregpio",
+    "miv_coretimer",
 ];
 
 /// True if `t` is already a canonical model-type name (see [`MODEL_TYPES`]).
@@ -1075,6 +1086,12 @@ pub fn try_build(
                 .unwrap_or(crate::peripherals::imxrt::lpuart::DEFAULT_UART_CLK_HZ);
             Box::new(crate::peripherals::imxrt::lpuart::ImxrtLpuart::new(clk))
         }
+        // LiteX countdown timer (`litex/soc/cores/timer.py`): 32-bit CSRs
+        // load/reload/en/update_value/value plus the zero-event manager.
+        "litex_timer" => Box::new(crate::peripherals::litex_timer::LitexTimer::new()),
+        // Microchip Mi-V reference-design peripherals.
+        "miv_coregpio" => Box::new(crate::peripherals::miv::MivCoreGpio::new()),
+        "miv_coretimer" => Box::new(crate::peripherals::miv::MivCoreTimer::new()),
         _ => return Ok(None),
     };
     Ok(Some(dev))

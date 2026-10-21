@@ -1,0 +1,9 @@
+# LabWired - LiteX VexRiscv example system
+#
+# Same SoC manifest as configs/systems/litex-vexriscv.yaml, kept beside the
+# example so the package is self-contained.
+name: "litex-vexriscv"
+chip: "../../configs/chips/litex-vexriscv.yaml"
+debug_uart: "uart"
+external_devices: []
+board_io: []
