@@ -153,6 +153,27 @@ impl Avr {
         _pc: u32,
         next: u32,
     ) -> SimResult<Option<()>> {
+        // ELPM (R0), ELPM Rd,Z, ELPM Rd,Z+: flash at RAMPZ:Z (ATmega2560; on
+        // a part without RAMPZ the I/O byte stays 0 and this is LPM).
+        if op == 0x95D8 || (op & 0xFE0E) == 0x9006 {
+            let rd = if op == 0x95D8 {
+                0
+            } else {
+                ((op >> 4) & 0x1F) as usize
+            };
+            let z = (self.rampz() << 16) | u32::from(u16::from_le_bytes([self.r[30], self.r[31]]));
+            self.r[rd] = self.flash.get(z as usize).copied().unwrap_or(0xFF);
+            if op != 0x95D8 && op & 1 != 0 {
+                let z2 = z.wrapping_add(1);
+                self.r[30] = (z2 & 0xFF) as u8;
+                self.r[31] = ((z2 >> 8) & 0xFF) as u8;
+                self.set_rampz(((z2 >> 16) & 0xFF) as u8);
+            }
+            self.pc = next;
+            self.cycles += 3;
+            return Ok(Some(()));
+        }
+
         // LPM
         if op == 0x95C8 {
             let z = u16::from_le_bytes([self.r[30], self.r[31]]) as usize;

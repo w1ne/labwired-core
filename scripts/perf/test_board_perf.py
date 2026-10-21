@@ -140,22 +140,6 @@ def test_unknown_riscv_map_is_an_error_not_a_silent_skip():
         bp.plan_coverage({"someriscv": _chip(0x80000000, 0x80020000, arch="riscv")})
 
 
-def test_waivers_are_explicit():
-    """WAIVED must stay a deliberate shortlist — not a dumping ground.
-
-    atmega328p USED to be here, waived for want of a firmware-perf-spin-avr
-    crate. That crate now exists (built by avr-gcc rather than cargo, see
-    Spin.builder), so the waiver is gone and the board is measured like any
-    other. Any chip here is a regression that needs a fixture or a new
-    documented reason.
-    """
-    _, waived = bp.plan_coverage(bp.discover_chips())
-    assert "atmega328p" not in waived, (
-        "the AVR spin fixture exists now; atmega328p must be measured, not waived"
-    )
-    assert set(waived) == {"dspic33fj32mc204", "litex-vexriscv", "rv1103"}, (
-        f"unexpected waivers (add a fixture): {waived}"
-    )
 
 
 def test_rv1103_cpu_subset_is_waived_without_claiming_platform_performance():

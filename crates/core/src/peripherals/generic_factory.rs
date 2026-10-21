@@ -581,7 +581,17 @@ pub fn try_build(
             };
             Box::new(crate::peripherals::pic24_gpio::Pic24GpioPort::new(mask))
         }
-        "avr_adc" => Box::new(crate::peripherals::avr_adc::AvrAdcInputs::new()),
+        "avr_adc" => {
+            // `config.channels`: 8 on the ATmega328P (default), 16 on the ATmega2560.
+            let channels = p_cfg
+                .config
+                .get("channels")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(crate::peripherals::avr_adc::AVR_ADC_CHANNELS as u64);
+            Box::new(crate::peripherals::avr_adc::AvrAdcInputs::with_channels(
+                channels as usize,
+            ))
+        }
         "sam_sercom_usart" => {
             Box::new(crate::peripherals::sam::sercom_usart::SamSercomUsart::new())
         }

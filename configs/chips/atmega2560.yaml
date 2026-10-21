@@ -1,0 +1,95 @@
+name: "atmega2560"
+arch: "avr"
+core: "avr8"
+registers_count: 32
+# ATmega2560 (Arduino Mega 2560): the ATmega328P core model (cpu/avr.rs) with
+# AvrModel::Atmega2560: 256 KB flash and a 3-byte PC (EIND/EIJMP/EICALL,
+# RAMPZ/ELPM), 8 KB SRAM at 0x0200, ports A..L, a 16-channel ADC (ADCSRB.MUX5
+# selects ADC8..15 = A8..A15) and the 2560 vector table. Timer0 (millis/delay),
+# Timer1/Timer2 and USART0 (Serial) are the 328P models at the same addresses.
+# Not modelled here: INTn/PCINT, PWM pads (analogWrite), Timer3/4/5, USART1..3.
+# Microchip DS2549 (ATmega640/1280/1281/2560/2561), 16 MHz on the Arduino Mega.
+cpu_hz: 16_000_000
+io_voltage_v: 5.0
+gpio_input_thresholds:
+  vil: 0.3
+  vih: 0.6
+
+flash:
+  base: 0x00000000
+  size: "256KB"
+ram:
+  base: 0x00000200
+  size: "8KB"
+peripherals:
+  # Parking SPI / I2C controllers for kit attach (SPDR/TWCR live on the CPU).
+  - id: "spi"
+    type: "spi"
+    base_address: 0x00010000
+    size: "16"
+  - id: "i2c"
+    type: "i2c"
+    base_address: 0x00010010
+    size: "16"
+  # Port mirrors: PINx/DDRx/PORTx at data-space base, mirrored at 0x1_0000 + base.
+  # A..G sit at 0x20..0x34, H..L in extended I/O at 0x100..0x10B (below).
+  # Windows are listed in address order.
+  - id: "porta"
+    type: "avr_gpio"
+    base_address: 0x00010020
+    size: "3"
+  - id: "portb"
+    type: "avr_gpio"
+    base_address: 0x00010023
+    size: "3"
+  - id: "portc"
+    type: "avr_gpio"
+    base_address: 0x00010026
+    size: "3"
+  - id: "portd"
+    type: "avr_gpio"
+    base_address: 0x00010029
+    size: "3"
+  - id: "porte"
+    type: "avr_gpio"
+    base_address: 0x0001002C
+    size: "3"
+  - id: "portf"
+    type: "avr_gpio"
+    base_address: 0x0001002F
+    size: "3"
+  - id: "portg"
+    type: "avr_gpio"
+    base_address: 0x00010032
+    size: "3"
+  # USART0 host for peers (Serial); same registers as the 328P (UCSR0A 0xC0..UDR0 0xC6).
+  - id: "usart0"
+    type: "uart"
+    base_address: 0x000100C0
+    size: "8"
+    config:
+      profile: "avr"
+  - id: "porth"
+    type: "avr_gpio"
+    base_address: 0x00010100
+    size: "3"
+  - id: "portj"
+    type: "avr_gpio"
+    base_address: 0x00010103
+    size: "3"
+  - id: "portk"
+    type: "avr_gpio"
+    base_address: 0x00010106
+    size: "3"
+  - id: "portl"
+    type: "avr_gpio"
+    base_address: 0x00010109
+    size: "3"
+  # ADC input side: millivolts on ADC0..ADC15, two bytes per channel. Moved past
+  # the port mirrors (the 328P window at 0x1_0030 would overlap PINF..PING).
+  - id: "adc"
+    type: "avr_adc"
+    base_address: 0x00010200
+    size: "32"
+    config:
+      channels: 16

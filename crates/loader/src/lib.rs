@@ -94,6 +94,9 @@ pub fn load_elf_bytes(buffer: &[u8]) -> Result<ProgramImage> {
             labwired_core::Arch::Unknown
         });
 
+    if arch == labwired_core::Arch::Pic24 {
+        labwired_core::cpu::pic24::check_xc16_entry(elf.entry).map_err(|e| anyhow!(e))?;
+    }
     let mut program_image = ProgramImage::new(elf.entry, arch);
 
     for ph in elf.program_headers {
@@ -106,7 +109,18 @@ pub fn load_elf_bytes(buffer: &[u8]) -> Result<ProgramImage> {
                 continue;
             }
 
-            if offset + size > buffer.len() {
+            if ph.p_filesz > ph.p_memsz {
+                return Err(anyhow!(
+                    "ELF segment at {:#x} has p_filesz {:#x} > p_memsz {:#x}",
+                    ph.p_paddr,
+                    ph.p_filesz,
+                    ph.p_memsz
+                ));
+            }
+            if offset
+                .checked_add(size)
+                .is_none_or(|end| end > buffer.len())
+            {
                 return Err(anyhow!("Segment out of bounds in ELF file"));
             }
 
@@ -134,7 +148,8 @@ pub fn load_elf_bytes(buffer: &[u8]) -> Result<ProgramImage> {
                     labwired_core::cpu::avr::AvrLoadSpace::Data
                     | labwired_core::cpu::avr::AvrLoadSpace::Eeprom => {
                         // Flash LMA holds the initializer image (for LPM / __do_copy_data).
-                        if ph.p_paddr < 0x8000 {
+                        // Below 256 KB: the largest modelled AVR flash (ATmega2560).
+                        if ph.p_paddr < 0x4_0000 {
                             debug!("AVR data LMA flash {:#x} size {}", ph.p_paddr, size);
                             program_image.add_segment(ph.p_paddr, segment_data.clone());
                         }
@@ -170,6 +185,8 @@ pub fn load_elf_bytes(buffer: &[u8]) -> Result<ProgramImage> {
                                 size
                             )
                         })?;
+                    labwired_core::cpu::pic24::check_xc16_segment(start_addr, &slots)
+                        .map_err(|e| anyhow!(e))?;
                     program_image.add_segment(start_addr, slots);
                 } else {
                     program_image.add_segment(start_addr, segment_data);
@@ -933,6 +950,65 @@ fn joined_file_path<R: gimli::Reader>(
 
 #[cfg(test)]
 mod tests {
+    /// A minimal little-endian ELF32 for EM_DSPIC30F (118) with one
+    /// executable PT_LOAD per segment, XC16 3-byte packed.
+    fn pic24_elf(entry: u32, segments: &[(u32, Vec<u8>)]) -> Vec<u8> {
+        let phoff = 52u32;
+        let mut data_off = phoff + 32 * segments.len() as u32;
+        let mut out = vec![0x7f, b'E', b'L', b'F', 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        out.extend_from_slice(&2u16.to_le_bytes()); // ET_EXEC
+        out.extend_from_slice(&118u16.to_le_bytes()); // EM_DSPIC30F
+        out.extend_from_slice(&1u32.to_le_bytes());
+        out.extend_from_slice(&entry.to_le_bytes());
+        out.extend_from_slice(&phoff.to_le_bytes());
+        out.extend_from_slice(&0u32.to_le_bytes()); // e_shoff
+        out.extend_from_slice(&0u32.to_le_bytes()); // e_flags
+        for half in [52u16, 32, segments.len() as u16, 40, 0, 0] {
+            out.extend_from_slice(&half.to_le_bytes());
+        }
+        for (paddr, bytes) in segments {
+            let len = bytes.len() as u32;
+            // p_type PT_LOAD, offset, vaddr, paddr, filesz, memsz, flags R|X, align
+            for word in [1u32, data_off, *paddr, *paddr, len, len, 5, 2] {
+                out.extend_from_slice(&word.to_le_bytes());
+            }
+            data_off += len;
+        }
+        for (_, bytes) in segments {
+            out.extend_from_slice(bytes);
+        }
+        out
+    }
+
+    #[test]
+    fn load_elf_bytes_rejects_malformed_xc16_elves() {
+        let end = labwired_core::cpu::pic24::PROGRAM_PC_END;
+        let code = vec![0u8; 6];
+        assert!(load_elf_bytes(&pic24_elf(0x200, &[(0x200, code.clone())])).is_ok());
+        let odd_entry = load_elf_bytes(&pic24_elf(0x201, &[(0x200, code.clone())])).unwrap_err();
+        assert!(odd_entry.to_string().contains("entry point"), "{odd_entry}");
+        let odd_segment = load_elf_bytes(&pic24_elf(0x200, &[(0x201, code.clone())])).unwrap_err();
+        assert!(odd_segment.to_string().contains("is odd"), "{odd_segment}");
+        for entry in [end, end + 0x100] {
+            let far = load_elf_bytes(&pic24_elf(entry, &[(0x200, code.clone())])).unwrap_err();
+            assert!(far.to_string().contains("entry point"), "{far}");
+        }
+        let beyond = load_elf_bytes(&pic24_elf(0x200, &[(end + 0x100, code.clone())])).unwrap_err();
+        assert!(
+            beyond.to_string().contains("does not fit program flash"),
+            "{beyond}"
+        );
+        let mut short = pic24_elf(0x200, &[(0x200, code.clone())]);
+        short[52 + 20..52 + 24].copy_from_slice(&3u32.to_le_bytes()); // p_memsz < p_filesz
+        let short = load_elf_bytes(&short).unwrap_err().to_string();
+        assert!(short.contains("p_filesz"), "{short}");
+        let past = load_elf_bytes(&pic24_elf(0x200, &[(end - 2, code)])).unwrap_err();
+        assert!(
+            past.to_string().contains("does not fit program flash"),
+            "{past}"
+        );
+    }
+
     use super::*;
 
     #[test]
