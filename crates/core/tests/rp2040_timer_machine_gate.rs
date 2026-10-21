@@ -169,8 +169,8 @@ fn rp2040_machine_timer_alarm0_fires_at_recommended_interval() {
     const INTE: u64 = TIMER + 0x38;
     const TIMERAWL: u64 = TIMER + 0x28;
 
-    // Short alarm: target low==8. Counter starts at 0 and advances 1 per CPU
-    // cycle under the scheduler path. INTE arms alarm-0 → TIMER_IRQ_0; CycleCpu
+    // Short alarm: target low==8 microseconds, or 1000 CPU cycles at 125 MHz.
+    // INTE arms alarm-0 → TIMER_IRQ_0; CycleCpu
     // does not model NVIC dispatch, so INTR is the observe surface.
     machine.bus.write_u32(INTE, 1).unwrap();
     machine.bus.write_u32(ALARM0, 8).unwrap();
@@ -205,14 +205,71 @@ fn rp2040_machine_timer_alarm0_fires_at_recommended_interval() {
         machine.bus.legacy_walk_disabled,
     );
     let at = cycles_at_fire.expect("cycles_at_fire set when alarm_fired");
+    assert!(at >= 1_000, "8us alarm fired early at CPU cycle {at}");
     assert!(
         at <= CYCLE_BUDGET,
         "ALARM0 fired at cycle {at}, beyond budget {CYCLE_BUDGET}"
     );
     // Sanity: short alarm must not need the full budget.
     assert!(
-        at <= RECOMMENDED_TICK_INTERVAL as u64,
-        "ALARM0 with target=8 should fire within one recommended interval \
+        at <= 1_000 + RECOMMENDED_TICK_INTERVAL as u64,
+        "ALARM0 with target=8us should be observed within one interval of cycle1000 \
          ({RECOMMENDED_TICK_INTERVAL}; got total_cycles={at})"
     );
+}
+
+#[test]
+fn fractional_clock_alarm_fires_on_the_first_complete_microsecond() {
+    use labwired_core::peripherals::rp2040::timer::Rp2040Timer;
+    use labwired_core::{CycleClock, Peripheral};
+
+    let mut timer = Rp2040Timer::new();
+    let clock = CycleClock::default();
+    timer.attach_cpu_hz(125_500_000);
+    timer.attach_cycle_clock(clock.clone());
+    clock.publish(125);
+    assert_eq!(timer.read_u32(0x28).unwrap(), 0);
+    timer.write_u32(0x38, 1).unwrap();
+    timer.write_u32(0x10, 1).unwrap();
+    let (delay, token) = timer.take_scheduled_events()[0];
+    assert_eq!(delay, 0, "one remaining CPU cycle uses the next-tick delay");
+    let mut scheduler = labwired_core::sched::EventScheduler::new();
+    let mut bus = SystemBus::new();
+    scheduler.advance_to(125);
+    assert!(timer
+        .on_event(token, &mut scheduler, &mut bus)
+        .explicit_irqs
+        .is_empty());
+    assert_eq!(
+        timer.read_u32(0x34).unwrap(),
+        0,
+        "125 cycles are less than1us"
+    );
+    clock.publish(126);
+    scheduler.advance_to(126);
+    assert_eq!(
+        timer
+            .on_event(token, &mut scheduler, &mut bus)
+            .explicit_irqs,
+        vec![0]
+    );
+    assert_eq!(timer.read_u32(0x28).unwrap(), 1);
+}
+
+#[test]
+fn pause_retains_fractional_counter_phase_as_a_model_policy() {
+    use labwired_core::peripherals::rp2040::timer::Rp2040Timer;
+    use labwired_core::Peripheral;
+
+    let mut timer = Rp2040Timer::new();
+    timer.attach_cpu_hz(125_000_000);
+    timer.tick_elapsed(124);
+    timer.write_u32(0x30, 1).unwrap();
+    // This nonmultiple distinguishes retained counter phase from a running
+    // oscillator. The model does not claim watchdog oscillator phase fidelity.
+    timer.tick_elapsed(10_001);
+    assert_eq!(timer.read_u32(0x28).unwrap(), 0);
+    timer.write_u32(0x30, 0).unwrap();
+    timer.tick_elapsed(1);
+    assert_eq!(timer.read_u32(0x28).unwrap(), 1);
 }
