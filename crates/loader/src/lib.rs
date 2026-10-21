@@ -148,7 +148,8 @@ pub fn load_elf_bytes(buffer: &[u8]) -> Result<ProgramImage> {
                     labwired_core::cpu::avr::AvrLoadSpace::Data
                     | labwired_core::cpu::avr::AvrLoadSpace::Eeprom => {
                         // Flash LMA holds the initializer image (for LPM / __do_copy_data).
-                        if ph.p_paddr < 0x8000 {
+                        // Below 256 KB: the largest modelled AVR flash (ATmega2560).
+                        if ph.p_paddr < 0x4_0000 {
                             debug!("AVR data LMA flash {:#x} size {}", ph.p_paddr, size);
                             program_image.add_segment(ph.p_paddr, segment_data.clone());
                         }

@@ -23,6 +23,26 @@
         "lane": "none"
       }
     },
+    "atmega2560": {
+      "in_boards": true,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/avr_mega2560_io.rs",
+        "test": "serial_banner_comes_out_of_usart0",
+        "signal": "the committed arduino-cli Mega ELF (tests/fixtures/avr/arduino-mega-2560-io.elf) prints `MEGA READY` through USART0 UDR0 and the test asserts the console sink receives it; examples/arduino-mega-2560-io/io-smoke.yaml asserts the `k=1 a8=512 a9=512 a0=512 ms=200 f=6` line under `labwired test`",
+        "lane": "pr-workspace-tests shards - cargo test -p labwired-core --test avr_mega2560_io; configs/ci/boards.yml arduino-mega-2560-io (sim-validate, gate)"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "No SPI controller model on the ATmega2560 (same AVR P0 model as the 328P).",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "No TWI model on the ATmega2560 (same AVR P0 model as the 328P).",
+        "lane": "none"
+      }
+    },
     "atmega328p": {
       "in_boards": true,
       "uart": {

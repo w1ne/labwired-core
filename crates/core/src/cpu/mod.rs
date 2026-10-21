@@ -70,7 +70,7 @@ pub mod xtensa_jit_bytes;
 #[cfg(any(feature = "jit", feature = "jit-framework"))]
 pub mod jit_framework;
 
-pub use avr::Avr;
+pub use avr::{Avr, AvrModel};
 pub use cortex_m::CortexM;
 pub use pic24::Pic24;
 pub use riscv::{RiscV, RiscVCoreProfile};

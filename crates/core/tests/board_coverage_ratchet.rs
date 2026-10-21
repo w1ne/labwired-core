@@ -481,6 +481,13 @@ fn every_shipped_descriptor_is_ratcheted() {
     // Chip descriptors that exist in configs/chips but are NOT in the canonical
     // shipped catalog (bundled-configs.ts). They are intentionally not ratcheted.
     const NOT_SHIPPED: &[&str] = &[
+        // ATmega2560 (Arduino Mega 2560) on the 328P AVR model. Has a chip
+        // descriptor, a system manifest, a gated sim-validate example with an
+        // io-smoke and the avr_mega2560_io integration tests. It is not a
+        // bundled-configs.ts catalog board yet (the superproject board is a
+        // separate PR) and it has no executing-fidelity differential of its own.
+        // Promote when the catalog board lands AND a differential exists.
+        "atmega2560",
         // First Microchip part in the engine. Has a chip descriptor, an
         // io-smoke executed by the coverage matrix and the strict-onboarding
         // gate, and a peripheral-estate test — but it is NOT a

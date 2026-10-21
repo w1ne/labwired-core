@@ -322,6 +322,12 @@ FIXTURES = {
 # their own chip config and get their own baseline. A generic CPU-only smoke
 # fixture must not stand in for an unimplemented board platform.
 WAIVED: dict[str, str] = {
+    "atmega2560": (
+        "Runs on the same AVR interpreter as atmega328p (AvrModel::Atmega2560: "
+        "3-byte PC, RAM at 0x200), but the AVR spin fixture is linked with "
+        "-mmcu=atmega328p for RAM at 0x100 and no avr6 build of it exists yet. "
+        "No separate throughput claim is made for the Mega 2560."
+    ),
     "dspic33fj32mc204": (
         "PIC24 M0 bring-up: boot + UART1 TX only, with the UART modelled on the "
         "CPU (not a bus peripheral), so this gate's MMIO spin fixture cannot "
