@@ -34,8 +34,14 @@ struct Player {
 
 impl Player {
     fn new() -> Self {
-        let desc = DeviceDescriptor::embedded("dfplayer-mini").unwrap().unwrap();
-        let pin = |role: &str, bit| BoundPin { role: role.into(), addr: 0x100, bit };
+        let desc = DeviceDescriptor::embedded("dfplayer-mini")
+            .unwrap()
+            .unwrap();
+        let pin = |role: &str, bit| BoundPin {
+            role: role.into(),
+            addr: 0x100,
+            bit,
+        };
         let dev = DeclarativeGpioDevice::new(
             "U2".into(),
             &desc,
@@ -45,7 +51,11 @@ impl Player {
             std::borrow::Cow::Owned(vec![]),
         )
         .unwrap();
-        let mut p = Self { dev, line: Line { rx: true }, now: 0 };
+        let mut p = Self {
+            dev,
+            line: Line { rx: true },
+            now: 0,
+        };
         p.idle_us(100);
         p
     }
@@ -88,7 +98,18 @@ impl Player {
 
 /// The frame a DFPlayer library builds: checksum = 0 - sum(bytes 1..=6).
 fn frame(cmd: u8, arg: u16) -> [u8; 10] {
-    let mut f = [0x7E, 0xFF, 0x06, cmd, 0x00, (arg >> 8) as u8, arg as u8, 0, 0, 0xEF];
+    let mut f = [
+        0x7E,
+        0xFF,
+        0x06,
+        cmd,
+        0x00,
+        (arg >> 8) as u8,
+        arg as u8,
+        0,
+        0,
+        0xEF,
+    ];
     let sum: u16 = f[1..7].iter().map(|&b| u16::from(b)).sum();
     let cs = 0u16.wrapping_sub(sum);
     f[7] = (cs >> 8) as u8;
@@ -98,8 +119,14 @@ fn frame(cmd: u8, arg: u16) -> [u8; 10] {
 
 #[test]
 fn checksums_match_the_manual_examples() {
-    assert_eq!(frame(0x03, 1), [0x7E, 0xFF, 0x06, 0x03, 0x00, 0x00, 0x01, 0xFE, 0xF7, 0xEF]);
-    assert_eq!(frame(0x06, 20), [0x7E, 0xFF, 0x06, 0x06, 0x00, 0x00, 0x14, 0xFE, 0xE1, 0xEF]);
+    assert_eq!(
+        frame(0x03, 1),
+        [0x7E, 0xFF, 0x06, 0x03, 0x00, 0x00, 0x01, 0xFE, 0xF7, 0xEF]
+    );
+    assert_eq!(
+        frame(0x06, 20),
+        [0x7E, 0xFF, 0x06, 0x06, 0x00, 0x00, 0x14, 0xFE, 0xE1, 0xEF]
+    );
 }
 
 #[test]
