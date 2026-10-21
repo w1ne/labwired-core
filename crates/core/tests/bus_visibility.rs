@@ -110,6 +110,15 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         "no nRF51 legacy-UART bring-up in this harness (the nRF52 arm drives UARTE \
          EasyDMA); bytes are proven by the microbit-v1 survival smoke",
     ),
+    // LiteX VexRiscv: the LiteX UART (RXTX/TXFULL/EV_*) is its own register
+    // personality; no drive exists here for it. Bytes are proven by
+    // firmware_survival::test_litex_vexriscv_smoke_survival instead.
+    (
+        "litex-vexriscv",
+        BusKind::Uart,
+        "no LiteX UART bring-up in this harness; bytes are proven by the \
+         litex-vexriscv survival smoke",
+    ),
     // ATmega328P: USART0 is mirrored from the AVR CPU, which owns UCSR0x/UBRR0
     // and forwards each register write and UDR0 byte to the bus-side host. The
     // harness drives bus MMIO directly, so it never programs the baud divisor the

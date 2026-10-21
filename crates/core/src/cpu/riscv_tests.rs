@@ -1804,3 +1804,45 @@ fn jit_gate_refuses_an_armed_debug_watch() {
         "a compiled block writes raw RAM and must not bypass a watch"
     );
 }
+
+/// The profile a chip runs is selected from its descriptor, not hardcoded:
+/// an ESP32 part keeps the C3's vendor CSR set, a chip that declares a
+/// generic `rv32*` core runs the standard profile, and an undeclared core
+/// keeps the historical C3 default.
+#[test]
+fn riscv_profile_is_selected_from_the_chip_descriptor() {
+    fn chip(name: &str, core: Option<&str>) -> labwired_config::ChipDescriptor {
+        let core_line = core.map(|c| format!("core: \"{c}\"\n")).unwrap_or_default();
+        let yaml = format!(
+            "name: \"{name}\"\n\
+             arch: \"riscv\"\n\
+             cpu_hz: 100_000_000\n\
+             {core_line}\
+             flash:\n  base: 0x20000000\n  size: \"32MB\"\n\
+             ram:\n  base: 0x10000000\n  size: \"256KB\"\n\
+             peripherals: []\n"
+        );
+        serde_yaml::from_str(&yaml).expect("fixture chip must parse")
+    }
+
+    assert_eq!(
+        RiscVCoreProfile::for_chip(&chip("esp32c3", None)),
+        RiscVCoreProfile::Esp32C3,
+        "the C3 has no `core:` and must keep its vendor profile"
+    );
+    assert_eq!(
+        RiscVCoreProfile::for_chip(&chip("esp32c6", Some("rv32imac"))),
+        RiscVCoreProfile::Esp32C3,
+        "ESP32 parts keep the vendor profile regardless of the ISA string"
+    );
+    assert_eq!(
+        RiscVCoreProfile::for_chip(&chip("arty-litex-vexriscv", Some("rv32im"))),
+        RiscVCoreProfile::StandardRv32,
+        "a generic rv32 core runs the standard profile"
+    );
+    assert_eq!(
+        RiscVCoreProfile::for_chip(&chip("mystery-riscv", None)),
+        RiscVCoreProfile::Esp32C3,
+        "an undeclared core keeps the historical default"
+    );
+}

@@ -458,3 +458,7 @@ _No beyond-rubric board firmware content is recorded. The descriptor declares CP
 ### `dspic33fj32mc204`
 
 _M0 bring-up; no beyond-rubric content. Boot + UART1 TX run in the PR shards (crates/core/tests/pic24_m0_smoke.rs) and through examples/dspic33fj32mc204/io-smoke.yaml in strict_onboarding; UART1 TX is also console-proven by `labwired run --chip ...` printing `UART: H`. Timers, interrupts, PWM, QEI, ADC, SPI, I2C and the DSP MAC are unmodeled at M0 (docs/pic24-m0-reference.md), so no advanced blocks exist to list._
+
+### `litex-vexriscv`
+
+_L1 smoke, SIM-DERIVED; no beyond-rubric content. Boot, the LiteX UART console and the countdown-timer one-shot are proven by tests/fixtures/litex-vexriscv-smoke.elf and examples/litex-vexriscv/io-smoke.yaml. SPI flash, Ethernet and MMCM are declared stubs and timer IRQ delivery is not wired (examples/litex-vexriscv/VALIDATION.md), so no advanced blocks exist to list._
