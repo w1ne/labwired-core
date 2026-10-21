@@ -134,8 +134,13 @@ pub fn check_xc16_entry(addr: u64) -> Result<(), String> {
 /// slot-expanded segment from [`xc16_executable_slots`]. Loading would
 /// otherwise truncate it silently.
 pub fn check_xc16_segment(addr: u64, slots: &[u8]) -> Result<(), String> {
+    check_xc16_span(addr, (slots.len() / INSTR_SLOT_BYTES) as u64)
+}
+
+/// [`check_xc16_segment`] from the instruction count alone, so a segment can
+/// be checked from its program header before its bytes are read.
+pub fn check_xc16_span(addr: u64, instructions: u64) -> Result<(), String> {
     check_xc16_pc_address("executable segment", addr)?;
-    let instructions = (slots.len() / INSTR_SLOT_BYTES) as u64;
     let end = addr.saturating_add(instructions * u64::from(PC_UNITS_PER_INSTRUCTION));
     if addr >= u64::from(PROGRAM_PC_END) || end > u64::from(PROGRAM_PC_END) {
         return Err(format!(
@@ -1669,6 +1674,20 @@ mod tests {
             let far = parse_elf_image(&pic24_elf(entry, &[(0x200, code.clone())])).unwrap_err();
             assert!(far.to_string().contains("entry point"), "{far}");
         }
+        // A segment whose bytes lie outside the file is still range-checked,
+        // and is an error rather than a silent skip.
+        let out_of_file = |paddr: u32| {
+            let mut elf = pic24_elf(0x200, &[(paddr, code.clone())]);
+            elf[52 + 4..52 + 8].copy_from_slice(&0x10_0000u32.to_le_bytes()); // p_offset
+            parse_elf_image(&elf).unwrap_err().to_string()
+        };
+        let far = out_of_file(PROGRAM_PC_END + 0x100);
+        assert!(far.contains("does not fit program flash"), "{far}");
+        let truncated = out_of_file(0x200);
+        assert!(
+            truncated.contains("past the end of the file"),
+            "{truncated}"
+        );
         let past = parse_elf_image(&pic24_elf(0x200, &[(PROGRAM_PC_END - 2, code)])).unwrap_err();
         assert!(
             past.to_string().contains("does not fit program flash"),

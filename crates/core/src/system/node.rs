@@ -749,6 +749,19 @@ pub fn parse_elf_image(bytes: &[u8]) -> anyhow::Result<crate::memory::ProgramIma
         }
         let off = ph.p_offset as usize;
         let n = ph.p_filesz as usize;
+        if arch == crate::Arch::Pic24 && ph.p_flags & goblin::elf::program_header::PF_X != 0 {
+            // Checked from the header before anything is skipped: an
+            // executable segment past program flash, or past the end of the
+            // file, is a bad ELF, not one to load in part.
+            crate::cpu::pic24::check_xc16_span(ph.p_paddr, ph.p_filesz / 3)
+                .map_err(anyhow::Error::msg)?;
+            if off.checked_add(n).is_none_or(|end| end > bytes.len()) {
+                anyhow::bail!(
+                    "PIC24 executable segment at {:#x} runs past the end of the file",
+                    ph.p_paddr
+                );
+            }
+        }
         if off + n > bytes.len() {
             continue;
         }
