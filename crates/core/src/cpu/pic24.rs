@@ -1688,6 +1688,16 @@ mod tests {
             truncated.contains("past the end of the file"),
             "{truncated}"
         );
+        // Every nonempty segment is range-checked, not only executable ones.
+        let mut data = pic24_elf(0x200, &[(0x200, code.clone())]);
+        data[52 + 24..52 + 28].copy_from_slice(&4u32.to_le_bytes()); // p_flags R
+        data[52 + 4..52 + 8].copy_from_slice(&0x10_0000u32.to_le_bytes()); // p_offset
+        let data = parse_elf_image(&data).unwrap_err().to_string();
+        assert!(data.contains("past the end of the file"), "{data}");
+        let mut short = pic24_elf(0x200, &[(0x200, code.clone())]);
+        short[52 + 20..52 + 24].copy_from_slice(&3u32.to_le_bytes()); // p_memsz < p_filesz
+        let short = parse_elf_image(&short).unwrap_err().to_string();
+        assert!(short.contains("p_filesz"), "{short}");
         let past = parse_elf_image(&pic24_elf(0x200, &[(PROGRAM_PC_END - 2, code)])).unwrap_err();
         assert!(
             past.to_string().contains("does not fit program flash"),

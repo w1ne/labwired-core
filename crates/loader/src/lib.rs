@@ -109,7 +109,18 @@ pub fn load_elf_bytes(buffer: &[u8]) -> Result<ProgramImage> {
                 continue;
             }
 
-            if offset + size > buffer.len() {
+            if ph.p_filesz > ph.p_memsz {
+                return Err(anyhow!(
+                    "ELF segment at {:#x} has p_filesz {:#x} > p_memsz {:#x}",
+                    ph.p_paddr,
+                    ph.p_filesz,
+                    ph.p_memsz
+                ));
+            }
+            if offset
+                .checked_add(size)
+                .is_none_or(|end| end > buffer.len())
+            {
                 return Err(anyhow!("Segment out of bounds in ELF file"));
             }
 
@@ -986,6 +997,10 @@ mod tests {
             beyond.to_string().contains("does not fit program flash"),
             "{beyond}"
         );
+        let mut short = pic24_elf(0x200, &[(0x200, code.clone())]);
+        short[52 + 20..52 + 24].copy_from_slice(&3u32.to_le_bytes()); // p_memsz < p_filesz
+        let short = load_elf_bytes(&short).unwrap_err().to_string();
+        assert!(short.contains("p_filesz"), "{short}");
         let past = load_elf_bytes(&pic24_elf(0x200, &[(end - 2, code)])).unwrap_err();
         assert!(
             past.to_string().contains("does not fit program flash"),
