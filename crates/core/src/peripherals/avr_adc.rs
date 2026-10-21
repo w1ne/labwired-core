@@ -15,8 +15,11 @@
 use crate::{Peripheral, SimResult};
 
 /// ADC0..ADC7. ADC6/ADC7 exist only on the TQFP/QFN part (Nano), not the
-/// DIP-28 on the Uno; the converter still has the mux positions.
+/// DIP-28 on the Uno; the converter still has the mux positions. This is the
+/// default; a chip yaml sets `config.channels` (the ATmega2560 has 16).
 pub const AVR_ADC_CHANNELS: usize = 8;
+/// Most channels any modelled AVR has (ATmega2560: ADC0..ADC15).
+pub const AVR_ADC_MAX_CHANNELS: usize = 16;
 
 /// An input nothing drives. Mid-rail at 5 V AVcc converts to 512, which is
 /// what every conversion returned before inputs were modelled, so a sketch
@@ -25,7 +28,7 @@ pub const AVR_ADC_UNDRIVEN_MV: u16 = 2500;
 
 #[derive(Debug)]
 pub struct AvrAdcInputs {
-    millivolts: [u16; AVR_ADC_CHANNELS],
+    millivolts: Vec<u16>,
 }
 
 impl Default for AvrAdcInputs {
@@ -36,8 +39,13 @@ impl Default for AvrAdcInputs {
 
 impl AvrAdcInputs {
     pub fn new() -> Self {
+        Self::with_channels(AVR_ADC_CHANNELS)
+    }
+
+    /// `channels` inputs (clamped to 1..=[`AVR_ADC_MAX_CHANNELS`]).
+    pub fn with_channels(channels: usize) -> Self {
         Self {
-            millivolts: [AVR_ADC_UNDRIVEN_MV; AVR_ADC_CHANNELS],
+            millivolts: vec![AVR_ADC_UNDRIVEN_MV; channels.clamp(1, AVR_ADC_MAX_CHANNELS)],
         }
     }
 }
@@ -83,7 +91,7 @@ impl Peripheral for AvrAdcInputs {
     }
 
     fn adc_channel_count(&self) -> Option<u8> {
-        Some(AVR_ADC_CHANNELS as u8)
+        Some(self.millivolts.len() as u8)
     }
 }
 

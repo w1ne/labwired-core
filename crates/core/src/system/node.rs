@@ -260,7 +260,7 @@ fn build_avr_node(
         parse_elf_image(&bytes).with_context(|| format!("node '{id}': parse firmware ELF"))?;
     let mut bus = crate::bus::SystemBus::from_config_with_plugins(chip, system, plugins)
         .with_context(|| format!("node '{id}': build bus"))?;
-    let mut cpu = crate::cpu::Avr::new();
+    let mut cpu = crate::cpu::Avr::for_chip_name(&chip.name);
     cpu.load_program_image(&image);
     // SPI/I2C kits park on bus controllers; the AVR interpreter owns
     // transfers via SPDR / TWCR, so move slaves onto the CPU.
@@ -713,7 +713,8 @@ pub fn parse_avr_elf_image(bytes: &[u8]) -> anyhow::Result<crate::memory::Progra
             }
             AvrLoadSpace::Data | AvrLoadSpace::Eeprom => {
                 // Flash LMA holds the initializer image.
-                if ph.p_paddr < 0x8000 {
+                // Below 256 KB: the largest modelled AVR flash (ATmega2560).
+                if ph.p_paddr < 0x4_0000 {
                     image.add_segment(ph.p_paddr, data.clone());
                 }
                 // Keep the biased VMA so `load_program_image` can tell data
