@@ -1684,13 +1684,14 @@ fn run_survival_case(case: &SurvivalCase) {
 }
 
 /// Per-case cycle budget. Most firmwares emit their banner within the default
-/// window; the RP2040 Arduino Mbed-OS sketch prints over **USB CDC**, and its
-/// `loop()` only sends once per `delay(200)` — so it needs a wider window for a
-/// loop iteration to land after the simulated host finishes USB enumeration and
-/// asserts CDC DTR.
+/// window. The RP2040 Arduino ELF first calls `busy_wait_us(100_000)` from
+/// `_GLOBAL__sub_I.00101_dt`, before `main`: at its declared 125 MHz clock that
+/// constructor alone needs 12.5M cycles. Allow 500 ms for that boot delay,
+/// peripheral/USB setup and the sketch's 200 ms loop delay. The old 2M-cycle
+/// window covered only 16 ms once TIMER runs at its correct 1 MHz rate.
 fn case_cycles(case: &SurvivalCase) -> u32 {
     if case.name == "rp2040_arduino_serial" {
-        2_000_000
+        125_000_000 / 2
     } else {
         SURVIVAL_CYCLES
     }
@@ -2020,9 +2021,8 @@ survival_gate!(
     /// enumerates the device and asserts DTR, then captures the sketch's bulk-IN
     /// bytes into the UART sink.
     ///
-    /// Uses a wider cycle budget (see `case_cycles`) because the sketch's `loop()`
-    /// only transmits once per `delay(200)`, so a loop iteration must land after the
-    /// simulated host finishes enumeration.
+    /// Uses a wider cycle budget (see `case_cycles`) for the ELF's 100 ms global
+    /// constructor delay before `main`, peripheral/USB setup and 200 ms loop delay.
     test_rp2040_arduino_serial_survival,
     "rp2040_arduino_serial"
 );
