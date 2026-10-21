@@ -2966,7 +2966,7 @@ mod tests {
     fn mega_call_and_ret_move_a_three_byte_pc() {
         // CALL 0x000100 (word 0x80); at 0x100: RET.
         let prog = [0x940E, 0x0080];
-        let mut run = |mut cpu: Avr| {
+        let run = |mut cpu: Avr| {
             let mut bus = MockBus::new();
             cpu.load_words(0, &prog);
             cpu.load_words(0x100, &[0x9508]);
@@ -3066,7 +3066,7 @@ mod tests {
         put(&mut bus, 8, 5000);
         put(&mut bus, 9, 2000);
         put(&mut bus, 15, 250);
-        let mut convert = |cpu: &mut Avr, bus: &mut MockBus, mux5: bool, mux: u8| {
+        let convert = |cpu: &mut Avr, bus: &mut MockBus, mux5: bool, mux: u8| {
             cpu.data_write(0x7B, if mux5 { 0x08 } else { 0 }, bus)
                 .unwrap();
             cpu.data_write(0x7C, 0x40 | mux, bus).unwrap();

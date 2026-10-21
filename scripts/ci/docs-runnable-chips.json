@@ -205,6 +205,12 @@
       "firmware": "tests/fixtures/nucleo-u545re-blinky.elf",
       "expect": "OK"
     },
+    "atmega2560": {
+      "how": "example",
+      "script": "examples/arduino-mega-2560-io/io-smoke.yaml",
+      "expect": "2/2 checks",
+      "note": "AVR runs through a system manifest, not `labwired run`, and `labwired test` does not echo the AVR console, so the expectation is the script verdict line: it asserts the USART0 banner and a report line with A8/A9 read through ADCSRB.MUX5."
+    },
     "atmega328p": {
       "how": "example",
       "script": "examples/arduino-nano-blinky/io-smoke.yaml",
