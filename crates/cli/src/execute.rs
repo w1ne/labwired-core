@@ -1637,16 +1637,20 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
         duration,
         0, // vcd_bytes - will be updated below
     );
-    // Final-state universal inspect block (summary mode: decoded registers +
-    // artifact metadata, framebuffer bytes omitted/hashed). This is the
-    // agent-facing oracle payload — after a run the caller sees the decoded
+    // Final-state universal inspect block (summary mode by default: decoded
+    // registers + artifact metadata, with optional bounded byte payloads).
+    // This is the agent-facing oracle payload — after a run the caller sees the decoded
     // final register state and which artifacts exist.
-    let inspect_block = ctx.machine.inspect(
+    let mut inspect_block = ctx.machine.inspect(
         None,
         &labwired_core::inspect::InspectOpts {
-            include_bytes: false,
+            include_bytes: ctx.args.inspect_bytes_max > 0,
             peripheral: None,
         },
+    );
+    crate::inspect_export::bound_inspect_bytes(
+        &mut inspect_block,
+        ctx.args.inspect_bytes_max as usize,
     );
 
     // Drain the deterministic logic-analyzer edge capture for THIS run and shape
