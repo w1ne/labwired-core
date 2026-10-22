@@ -174,7 +174,17 @@ impl SystemBus {
         // parse with `from_yaml`. Validating at load time only would mean two
         // of our three runtimes silently accept documents the third rejects.
         super::part_pack::validate_manifest(manifest)?;
-        let flash_size = chip.flash.size;
+        // AVR is Harvard: the CPU keeps the program in its own flash (sized by
+        // `AvrModel`), and the bus-side flash window is only nominal. Data-space
+        // I/O is mirrored on the bus at 0x1_0000 (`AVR_IO_MIRROR_BASE`), so a
+        // part with more than 64 KB of flash (ATmega2560: 256 KB) must not map
+        // its whole flash there, or the window would shadow the port, USART and
+        // ADC mirrors (reads of 0x1_00C7 came back as erased 0xFF).
+        let flash_size = if chip.arch == labwired_config::Arch::Avr {
+            chip.flash.size.min(crate::cpu::avr::AVR_IO_MIRROR_BASE)
+        } else {
+            chip.flash.size
+        };
         let ram_size = chip.ram.size;
 
         let mut extra_mem = Vec::with_capacity(chip.memory_regions.len());
@@ -295,6 +305,7 @@ impl SystemBus {
             // never configures the PLL, so it really does run its 80 MHz part
             // at the 4 MHz MSI reset rate and says so in its manifest.
             cpu_hz: manifest.cpu_hz.unwrap_or(chip.cpu_hz),
+            riscv_profile: crate::cpu::RiscVCoreProfile::for_chip(chip),
             bit_band_enabled: Self::chip_has_bit_band(chip),
             reset_vector_offset: chip.reset_vector_offset,
             flash_boot_alias: chip.flash_boot_alias,

@@ -175,19 +175,17 @@ LABWIRED_ESP32S3_FLASH=tests/fixtures/source-debug/esp32s3-arduino-flash.bin \
 
 ```text
 81labwired-cli run: --stop-on "81" matched at step 101700000
-labwired-cli run: reached --max-steps 200000000; pc=0x42020cd6 appcpu_pc=0x42020cd6
 ```
 
 Two caveats:
 
-- The `reached --max-steps` line is the stepping loop's unconditional epilogue; it prints after any stop, including a match. The `--stop-on ... matched` line is the real stop reason.
+- The `reached --max-steps` epilogue is printed only when the stepping loop actually exhausts the budget; a run stopped by `--stop-on` prints only the match line.
 - A marker that occurs in boot output matches during boot. `--stop-on 27` matches the ROM banner `ESP-ROM:esp32s3-20210327` at step 100000, not application output:
 
 ```text
 ESP-ROM:esp32s3-20210327
 ESP-ROM:1
 labwired-cli run: --stop-on "27" matched at step 100000
-labwired-cli run: reached --max-steps 200000000; pc=0x40048839 appcpu_pc=0x40000400
 ```
 
 Pick a marker unique to the point you care about. The hook surface and the shared observation story are in [Hook surfaces](howto/extend/hooks.md).
@@ -223,6 +221,7 @@ labwired test --script <YAML> [OVERRIDES]
 | `--resume-snapshot <PATH>` | Resume from a `.lwrs` snapshot instead of cold-booting, after validating its chip + firmware self-key against the current inputs. |
 | `--no-key` | Explicitly do not send `LABWIRED_API_KEY`, even when it is set. |
 | `--watch-gpio <PERIPHERAL:PIN>` | Logic-analyzer edge capture for a pad, e.g. `gpio8:8`. Repeatable; channels land in `result.json`'s `logic_edges` block. |
+| `--inspect-bytes-max <BYTES>` | Include complete inspect artifact payloads within a cumulative raw-byte limit (0 by default; maximum 1 MiB). Over-budget payloads are omitted, with `meta.bytes_omitted_reason: "inspect_bytes_limit"` and `meta.byte_length`; image bytes are never truncated. |
 | `--heartbeat-file <PATH>` | Supervisor liveness file, rewritten atomically at most once a second with `{"steps":N,"cycles":C}`. |
 | `--log-timestamps <MODE>` | `none`, `virtual`, `real`, or `both`. See [`--log-timestamps`](#-log-timestamps-run-and-test) above. |
 

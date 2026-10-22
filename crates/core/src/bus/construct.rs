@@ -62,6 +62,9 @@ impl SystemBus {
             observers: Vec::new(),
             config: crate::SimulationConfig::default(),
             cpu_hz: 0,
+            // A bare test bus has no chip descriptor; the historical default
+            // profile is the ESP32-C3's (the engine's `RiscV::new` default).
+            riscv_profile: crate::cpu::RiscVCoreProfile::Esp32C3,
             bit_band_enabled: true,
             pending_cpu_irqs: [0; 2],
             dport_idx: None,
@@ -166,6 +169,7 @@ impl SystemBus {
             observers: Vec::new(),
             config: crate::SimulationConfig::default(),
             cpu_hz: 0,
+            riscv_profile: crate::cpu::RiscVCoreProfile::Esp32C3,
             bit_band_enabled: false,
             pending_cpu_irqs: [0; 2],
             dport_idx: None,
@@ -312,23 +316,58 @@ impl SystemBus {
         base: u64,
         size: u64,
         irq: Option<u32>,
+        dev: Box<dyn Peripheral>,
+    ) {
+        self.upsert_peripheral(name, base, size, irq, dev, false);
+    }
+
+    /// Replace the first peripheral with `name` **or** `base`, or append when
+    /// neither exists.
+    ///
+    /// The core-tied ARM blocks (SCB, NVIC, DWT, ITM) are discovered either by
+    /// the name a previous builder gave them or by their architectural
+    /// address. Matching both here keeps that decision in one place instead of
+    /// repeating `iter_mut().find(...)` + `p.dev = ...` at every call site,
+    /// where forgetting `rebuild_peripheral_ranges` leaves the routing and
+    /// tick indices pointing at the old device.
+    pub fn replace_or_add_peripheral_at(
+        &mut self,
+        name: &str,
+        base: u64,
+        size: u64,
+        irq: Option<u32>,
+        dev: Box<dyn Peripheral>,
+    ) {
+        self.upsert_peripheral(name, base, size, irq, dev, true);
+    }
+
+    fn upsert_peripheral(
+        &mut self,
+        name: &str,
+        base: u64,
+        size: u64,
+        irq: Option<u32>,
         mut dev: Box<dyn Peripheral>,
+        match_base: bool,
     ) {
         dev.attach_cycle_clock(self.cycle_clock.clone());
         dev.attach_irq_line(irq);
         dev.attach_cpu_hz(self.cpu_hz);
         dev.attach_bus_trace(name, &self.bus_trace);
-        if let Some(idx) = self.peripherals.iter().position(|p| p.name == name) {
+        if let Some(idx) = self
+            .peripherals
+            .iter()
+            .position(|p| p.name == name || (match_base && p.base == base))
+        {
             let e = &mut self.peripherals[idx];
+            e.name = name.to_string();
             e.base = base;
             e.size = size;
             e.irq = irq;
             e.dev = dev;
             e.ticks_remaining = 0;
             e.clock_gate = None;
-            self.rebuild_peripheral_ranges();
         } else {
-            // attach already done; push without double-attach
             self.peripherals.push(PeripheralEntry {
                 name: name.to_string(),
                 base,
@@ -338,8 +377,11 @@ impl SystemBus {
                 ticks_remaining: 0,
                 clock_gate: None,
             });
-            self.rebuild_peripheral_ranges();
         }
+        // One rebuild for both branches: an upsert always changes the device
+        // set the MMIO router, tick walk and scheduler indices were derived
+        // from.
+        self.rebuild_peripheral_ranges();
     }
 
     /// Look up a registered ROM thunk by absolute PC.
@@ -1379,5 +1421,49 @@ mod tests {
         sink.lock().unwrap().extend_from_slice(b"rtt");
         assert_eq!(bus.drain_rtt_output(), b"rtt");
         assert!(bus.drain_rtt_output().is_empty());
+    }
+
+    #[test]
+    fn replace_or_add_peripheral_at_replaces_by_base_and_rebuilds_routing() {
+        use crate::peripherals::stub::StubPeripheral;
+
+        let mut bus = SystemBus::new();
+        // `SystemBus::new()` seeds four test peripherals; only the delta
+        // matters here.
+        let before = bus.peripherals.len();
+        bus.add_peripheral(
+            "placeholder",
+            0x4000_0000,
+            0x100,
+            None,
+            Box::new(StubPeripheral::new(0)),
+        );
+        assert_eq!(bus.peripherals.len(), before + 1);
+
+        // The core-tied ARM blocks are matched by architectural address even
+        // when an earlier builder gave them another name. A block that merely
+        // appends would leave two devices on one window and the routing cache
+        // pointing at the first.
+        bus.replace_or_add_peripheral_at(
+            "renamed",
+            0x4000_0000,
+            0x200,
+            Some(7),
+            Box::new(StubPeripheral::new(0xAA)),
+        );
+
+        assert_eq!(
+            bus.peripherals.len(),
+            before + 1,
+            "base match must replace, not append"
+        );
+        let idx = bus
+            .find_peripheral_index_by_name("renamed")
+            .expect("the replacement kept its name");
+        assert_eq!(bus.peripherals[idx].size, 0x200);
+        assert_eq!(bus.peripherals[idx].irq, Some(7));
+        // The widened window is only visible if `rebuild_peripheral_ranges`
+        // ran after the replacement.
+        assert_eq!(bus.find_peripheral_index(0x4000_01F0), Some(idx));
     }
 }

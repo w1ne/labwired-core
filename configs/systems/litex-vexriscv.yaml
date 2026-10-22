@@ -1,0 +1,13 @@
+# LabWired - LiteX VexRiscv SoC system manifest
+#
+# The SoC's console is the LiteX UART at 0x60001800 (see the chip descriptor
+# for the CSR map and its sources). The modelled surface has no discrete
+# board I/O: LEDs, switches and buttons on LiteX boards sit on gateware-
+# specific control/status CSRs that this chip does not model yet, so no
+# board_io bindings are declared. See examples/litex-vexriscv/
+# EXTERNAL_COMPONENTS.md for what a LiteX board carries beyond this SoC.
+name: "litex-vexriscv"
+chip: "../chips/litex-vexriscv.yaml"
+debug_uart: "uart"
+external_devices: []
+board_io: []

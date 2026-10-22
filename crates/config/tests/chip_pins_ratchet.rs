@@ -36,6 +36,9 @@ use std::path::PathBuf;
 /// below fails if an entry no longer needs to be here, so the list cannot rot
 /// into a set of excuses for chips that have since been transcribed.
 const PARSE_FALLBACK_CHIPS: &[&str] = &[
+    // ATmega2560 rides the same AVR P<port><bit> label parse as the 328P
+    // (PB7 = portb bit 7, PK0 = portk bit 0); its config declares no `pins:`.
+    "atmega2560",
     "atmega328p",
     // PIC24 M0 declares no `pins:` yet — the 44-pin map transcription is an
     // M1 item (docs/pic24-m0-reference.md). The M0 fixture drives no GPIO, so
@@ -51,6 +54,9 @@ const PARSE_FALLBACK_CHIPS: &[&str] = &[
     "esp32c6",
     "esp32s3",
     "esp32s3-zero",
+    // The LiteX VexRiscv SoC models a UART and a timer and no GPIO bank, so
+    // there are no pads to read, by parse or by map.
+    "litex-vexriscv",
     "nrf52832",
     "nrf52833",
     "nrf52840",

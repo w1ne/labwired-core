@@ -390,8 +390,10 @@ Anything still unclaimed fails the build with the manifest id and type named.
 The catalog is generated from the kit registry into
 `crates/core/tests/fixtures/peripherals/manifest.json` (regenerate with
 `cargo run -p labwired-cli --bin gen-peripherals-manifest`). One line per
-canonical `type:`:
+canonical `type:`; the table below is rendered from that file by
+`python3 scripts/ci/device_catalog_doc.py --write` and checked in CI:
 
+<!-- device-catalog:start -->
 | `type` | Bus | Model |
 |---|---|---|
 | `bg770a-cellular` | UART | LTE-M / NB-IoT cellular modem with the full Quectel AT command surface |
@@ -464,9 +466,9 @@ canonical `type:`:
 | `pcd8544` | SPI | Nokia 5110 (PCD8544) monochrome 84×48 LCD over SPI |
 | `rc522` | SPI | MFRC522 SPI RFID reader register shell (no RF) |
 | `sn74hc165` | SPI | 8-bit parallel-in / serial-out shift register over SPI |
-| `ssd1680_tricolor_290` | SPI | 2.9" tri-color e-paper over SPI (GxEPD2_290_C90c; WeAct / Waveshare B/W/R module) |
+| `ssd1680_tricolor_290` | SPI | 2.9" tri-color (black/white/red) e-paper over SPI. Driver class GxEPD2_290_C90c -- the WeAct / Waveshare 2.9" B/W/R module. Not interchangeable with the UC8151D part |
 | `st7789-170x320` | SPI | 1.9in 170x320 IPS TFT on a Sitronix ST7789V, 4-wire SPI |
-| `uc8151d_tricolor_290` | SPI | 2.9" tri-color e-paper over SPI (GxEPD2_290_Z13c; pick by the driver class your firmware instantiates) |
+| `uc8151d_tricolor_290` | SPI | 2.9" tri-color (black/white/red) e-paper over SPI. Driver class GxEPD2_290_Z13c. Different command set from the SSD1680 part -- pick by the driver class your firmware instantiates, not by how the panel looks |
 | `74cbtlv3257` | GPIO | Four 1-of-2 bus switches; S picks the A or B side, OE opens all four |
 | `74hc00` | GPIO | Four independent 2-input NAND gates, 9 ns propagation delay |
 | `74hc04` | GPIO | Six independent inverting buffers, 7 ns propagation delay |
@@ -480,6 +482,7 @@ canonical `type:`:
 | `bldc-motor` | GPIO | Configurable deterministic three-phase BLDC motor plant |
 | `bldc_hall_driver` | GPIO | PWM/DIR/ENABLE in; 6-step Hall pattern out. Duty→RPM not modelled |
 | `dc-motor` | GPIO | Configurable deterministic brushed DC motor plant |
+| `dfplayer_mini` | GPIO | MP3 player module: serial commands in, BUSY low while playing |
 | `dht11` | GPIO | One-wire temperature + humidity sensor |
 | `dht22` | GPIO | One-wire temperature + humidity sensor |
 | `hc-sr04` | GPIO | Ultrasonic distance sensor (trigger / echo) |
@@ -487,7 +490,7 @@ canonical `type:`:
 | `ili9341-16bit` | GPIO | 240×320 RGB565 TFT over Intel 8080 16-bit GPIO bit-bang |
 | `keypad` | GPIO | 4×4 membrane keypad (row-drive / column-read) |
 | `l298n` | GPIO | L298N/TB6612/L293D-class dual H-bridge twin (direction + enable effort) |
-| `led-matrix-mux` | GPIO | Row/column LED matrix (micro:bit 5x5, bare 8x8) multiplexed by GPIO row and column lines |
+| `led-matrix-mux` | GPIO | Row/column LED matrix (micro:bit 5x5, bare 8x8) multiplexed by GPIO row and column lines, with per-pixel brightness |
 | `logic_level_shifter_4ch` | GPIO | BSS138-class 4-channel bidirectional shifter; DIR is a sim strap (not on the PCB) |
 | `neopixel` | GPIO | Addressable RGB LED strip on one data pin (edge-timed bit stream) |
 | `pybadge_buttons` | GPIO | Eight active-low buttons through the board's SN74HC165 |
@@ -510,6 +513,7 @@ canonical `type:`:
 | `can-diagnostic-tester` | CAN | One-shot single-frame UDS-style request injector on bxCAN/FDCAN |
 | `can-player` | CAN | Replays candump-format traffic into a bxCAN/FDCAN controller |
 | `uds-tester` | CAN | Stateful multi-frame UDS tester (SecurityAccess-class handshakes) |
+<!-- device-catalog:end -->
 
 Legacy and alternate spellings resolve to the same canonical models:
 `sn74cbtlv3257` = `74cbtlv3257`; `74ls00`/`74hct00` = `74hc00`;

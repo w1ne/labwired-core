@@ -497,6 +497,11 @@ jobs:
       - name: Every `#[ignore]` says why
         run: python3 scripts/ci/ignore_reasons.py --check
 
+      # Renders the 116-row catalog from the generated manifest, so the doc copy
+      # cannot drift from the kit registry. Pure Python, no toolchain, sub-second.
+      - name: Device catalog in the configuration reference is generated
+        run: python3 scripts/ci/device_catalog_doc.py --check
+
       # A doubled `-Tlink.x` duplicates memory.x's MEMORY block and the link
       # dies with "region 'FLASH' already defined". It is invisible on a warm
       # `target/` — cargo does not relink a cached artifact — so the build step
@@ -2198,6 +2203,11 @@ jobs:
         # Without the target, that build dies in a dependency with E0463
         # "can't find crate for `core`" and the job reports esp32c6 firmware
         # build failed. The ARM targets above do not provide it.
+        # riscv32im-unknown-none-elf is required by firmware-litex-vexriscv-smoke:
+        # strict_onboarding builds examples/litex-vexriscv/io-smoke.yaml, whose
+        # firmware path is target/riscv32im-unknown-none-elf/release/firmware-litex-vexriscv-smoke
+        # (the VexRiscv variant has no compressed/atomic extensions, so the C6's
+        # riscv32imc target is not a substitute).
         run: |
           rustup target add thumbv6m-none-eabi
           rustup target add thumbv7m-none-eabi
@@ -2205,6 +2215,7 @@ jobs:
           rustup target add thumbv7em-none-eabihf
           rustup target add thumbv8m.main-none-eabi
           rustup target add riscv32imc-unknown-none-elf
+          rustup target add riscv32im-unknown-none-elf
 
       # `pr-workspace-tests` installs this and this job did not, so the same
       # OBD2 end-to-end passed on every PR and failed here — the ECU half is C,

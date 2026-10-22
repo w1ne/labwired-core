@@ -201,9 +201,7 @@ unknown opcode silently: anything outside the modelled subset raises a
 instruction. Per-instruction telemetry for the audit's `instructions_executed`
 field is not emitted by the M0 core yet (M1 item).
 
-## Console evidence (`labwired run`)
-
-# Console evidence (`labwired run`, re-verified 2026-10-19 after the XC16 layout fix)
+## Console evidence (`labwired run`, re-verified 2026-10-19 after the XC16 layout fix)
 
 ```bash
 labwired run --chip configs/chips/dspic33fj32mc204.yaml --firmware <elf> --max-steps 200

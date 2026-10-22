@@ -1,0 +1,11 @@
+name: arduino-mega-2560
+chip: ../chips/atmega2560.yaml
+# Arduino Mega 2560 R3: ATmega2560, 16 MHz crystal, LED on D13 (PB7).
+cpu_hz: 16000000
+board_io:
+  - id: "status_led"
+    kind: "led"
+    peripheral: "portb"
+    pin: 7          # PB7 / Arduino Mega D13 LED_BUILTIN
+    signal: "output"
+    active_high: true

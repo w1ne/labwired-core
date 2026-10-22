@@ -113,25 +113,81 @@ use std::sync::{Arc, Mutex};
 /// Flash size of the dsPIC33FJ32MC204 (DS70283H): 32 KB.
 pub const FLASH_BYTES: usize = 32 * 1024;
 /// Internal storage per instruction: 24-bit word in a 4-byte little-endian
-/// slot. **Not** the XC16 ELF layout — executable sections pack 3 bytes per
-/// instruction and the parsers expand them ([`xc16_executable_slots`]).
+/// slot. This **is** the XC16 ELF layout: executable sections store one such
+/// slot per instruction and the parsers copy them verbatim
+/// ([`check_xc16_section`]).
 pub const INSTR_SLOT_BYTES: usize = 4;
 /// PC units per instruction: the PC advances by 2 (DS70283H §4; the
 /// "Program Counter Unit" in DS50002071F).
 pub const PC_UNITS_PER_INSTRUCTION: u32 = 2;
+/// End of user program flash in PC units: 0x000000–0x0057FE on the
+/// dsPIC33FJ32MC204 (DS70283H Figure 4-1), i.e. 11264 instructions, which
+/// XC16 packs into 33,792 bytes (3 bytes each).
+pub const PROGRAM_PC_END: u32 = 0x5800;
 /// Instruction slots available in flash.
-pub const INSTR_SLOTS: usize = FLASH_BYTES / INSTR_SLOT_BYTES;
+pub const INSTR_SLOTS: usize = (PROGRAM_PC_END / PC_UNITS_PER_INSTRUCTION) as usize;
+/// Internal flash storage: one 4-byte slot per instruction (the XC16 ELF
+/// form). Larger than [`FLASH_BYTES`]: program space is 0x5800 PC units =
+/// 11264 instructions, and each occupies a 4-byte slot here.
+pub const FLASH_STORAGE_BYTES: usize = INSTR_SLOTS * INSTR_SLOT_BYTES;
 
-/// Check that an XC16 **ELF** executable section is in the CPU's slot form:
-/// a whole number of 4-byte slots (24-bit word + one pad byte). Returns
-/// `None` when the section is not slot-aligned — callers reject such a
-/// section rather than guess.
+/// Reject an odd XC16 program address. Program addresses are PC units and an
+/// instruction always starts on an even one (DS70283H §4); rounding an odd
+/// address down would silently load or start one instruction early.
+pub fn check_xc16_pc_address(what: &str, addr: u64) -> Result<(), String> {
+    if addr % u64::from(PC_UNITS_PER_INSTRUCTION) != 0 {
+        return Err(format!(
+            "PIC24 {what} {addr:#x} is odd; XC16 program addresses are even PC units (DS70283H §4)"
+        ));
+    }
+    Ok(())
+}
+
+/// Reject an XC16 entry point that is odd or not in program flash
+/// (0x0..0x5800, DS70283H Figure 4-1): the CPU would start fetching nothing.
+pub fn check_xc16_entry(addr: u64) -> Result<(), String> {
+    check_xc16_pc_address("entry point", addr)?;
+    if addr >= u64::from(PROGRAM_PC_END) {
+        return Err(format!(
+            "PIC24 entry point {addr:#x} is past program flash 0x0..{PROGRAM_PC_END:#x} \
+             (DS70283H Figure 4-1)"
+        ));
+    }
+    Ok(())
+}
+
+/// Reject an XC16 executable **section** that is not a whole number of
+/// 4-byte slots, is odd, starts past program flash, or runs off its end
+/// (0x0057FE, DS70283H Figure 4-1). `data` is the raw section from the ELF
+/// (already in the CPU's slot form — see [`INSTR_SLOT_BYTES`]). Loading would
+/// otherwise truncate it silently.
 ///
 /// Verified against a real XC16 v1.70 ELF: every executable section
 /// (`.text`, `.reset`, `.ivt.*`, `.aivt.*`) has a size that is a multiple
 /// of 4, and the 24-bit word sits in the low three bytes of each slot.
-pub fn xc16_section_is_slot_aligned(data: &[u8]) -> bool {
-    !data.is_empty() && data.len() % INSTR_SLOT_BYTES == 0
+pub fn check_xc16_section(addr: u64, data: &[u8]) -> Result<(), String> {
+    if data.is_empty() || data.len() % INSTR_SLOT_BYTES != 0 {
+        return Err(format!(
+            "PIC24 executable section at {addr:#x} is {} bytes — not a whole number of \
+             4-byte XC16 slots (DS50002071F)",
+            data.len()
+        ));
+    }
+    check_xc16_span(addr, (data.len() / INSTR_SLOT_BYTES) as u64)
+}
+
+/// [`check_xc16_section`] from the instruction count alone, so a section can
+/// be checked from its header before its bytes are read.
+pub fn check_xc16_span(addr: u64, instructions: u64) -> Result<(), String> {
+    check_xc16_pc_address("executable section", addr)?;
+    let end = addr.saturating_add(instructions * u64::from(PC_UNITS_PER_INSTRUCTION));
+    if addr >= u64::from(PROGRAM_PC_END) || end > u64::from(PROGRAM_PC_END) {
+        return Err(format!(
+            "PIC24 executable section {addr:#x}..{end:#x} does not fit program flash \
+             0x0..{PROGRAM_PC_END:#x} (DS70283H Figure 4-1)"
+        ));
+    }
+    Ok(())
 }
 /// Data-space SRAM base (X RAM), DS70283H Figure 4-3.
 pub const RAM_BASE: u32 = 0x0800;
@@ -427,7 +483,7 @@ impl Pic24 {
             pc: 0,
             sr: 0,
             cycles: 0,
-            flash: vec![0xFF; FLASH_BYTES],
+            flash: vec![0xFF; FLASH_STORAGE_BYTES],
             sfr: vec![0; SFR_BYTES],
             ram: vec![0; RAM_BYTES],
             u1mode: 0,
@@ -490,7 +546,10 @@ impl Pic24 {
     /// are already in this CPU's 4-byte slot form.
     pub fn load_flash(&mut self, addr_pc: u32, bytes: &[u8]) {
         let off = (addr_pc as usize / PC_UNITS_PER_INSTRUCTION as usize) * INSTR_SLOT_BYTES;
-        assert!(off + bytes.len() <= FLASH_BYTES, "fixture exceeds flash");
+        assert!(
+            off + bytes.len() <= FLASH_STORAGE_BYTES,
+            "fixture exceeds flash"
+        );
         self.flash[off..off + bytes.len()].copy_from_slice(bytes);
     }
 
@@ -505,8 +564,10 @@ impl Pic24 {
         for seg in &image.segments {
             let slot = (seg.start_addr / u64::from(PC_UNITS_PER_INSTRUCTION)) as usize;
             let start = slot.saturating_mul(INSTR_SLOT_BYTES);
-            let end = start.saturating_add(seg.data.len()).min(FLASH_BYTES);
-            if start < FLASH_BYTES {
+            let end = start
+                .saturating_add(seg.data.len())
+                .min(FLASH_STORAGE_BYTES);
+            if start < FLASH_STORAGE_BYTES {
                 self.flash[start..end].copy_from_slice(&seg.data[..end - start]);
             }
         }
@@ -972,7 +1033,7 @@ impl Pic24 {
             return Err(SimulationError::DecodeError(u64::from(addr_pc)));
         }
         let off = (addr_pc as usize / PC_UNITS_PER_INSTRUCTION as usize) * INSTR_SLOT_BYTES;
-        if off + 3 > FLASH_BYTES {
+        if off + 3 > FLASH_STORAGE_BYTES {
             return Err(SimulationError::MemoryViolation(off as u64));
         }
         Ok(u32::from_le_bytes([
@@ -1060,7 +1121,7 @@ impl Pic24 {
             return Err(SimulationError::DecodeError(self.pc as u64));
         }
         let off = (self.pc as usize / PC_UNITS_PER_INSTRUCTION as usize) * INSTR_SLOT_BYTES;
-        if off + INSTR_SLOT_BYTES > FLASH_BYTES {
+        if off + INSTR_SLOT_BYTES > FLASH_STORAGE_BYTES {
             return Err(SimulationError::MemoryViolation(off as u64));
         }
         Ok(u32::from_le_bytes([
@@ -2239,6 +2300,158 @@ mod tests {
 
     fn step<B: Bus>(cpu: &mut Pic24, bus: &mut B) {
         cpu.step(bus, &[], &SimulationConfig::default()).unwrap();
+    }
+
+    #[test]
+    fn full_program_flash_loads_through_the_last_instruction() {
+        // 11264 instructions, each in its own 4-byte XC16 slot: every
+        // instruction up to 0x57FE.
+        let slots: Vec<u8> = (0..INSTR_SLOTS)
+            .flat_map(|_| mov_lit_w0(0x48).to_le_bytes().to_vec())
+            .collect();
+        let mut image = crate::memory::ProgramImage::new(0, crate::Arch::Pic24);
+        image.add_segment(0, slots);
+        let mut cpu = Pic24::new();
+        cpu.load_program_image(&image);
+        let mut bus = SystemBus::new();
+        cpu.set_pc(PROGRAM_PC_END - PC_UNITS_PER_INSTRUCTION);
+        step(&mut cpu, &mut bus);
+        assert_eq!(
+            cpu.w[0], 0x48,
+            "the last instruction slot was loaded, not truncated"
+        );
+        assert!(
+            cpu.fetch().is_err(),
+            "nothing past the end of program flash"
+        );
+    }
+
+    #[test]
+    fn odd_program_addresses_are_rejected() {
+        assert!(check_xc16_pc_address("entry point", 0x201).is_err());
+        assert!(check_xc16_pc_address("entry point", 0x200).is_ok());
+    }
+
+    #[test]
+    fn entry_points_outside_program_flash_are_rejected() {
+        let end = u64::from(PROGRAM_PC_END);
+        assert!(check_xc16_entry(end - 2).is_ok());
+        assert!(check_xc16_entry(end).is_err());
+        assert!(check_xc16_entry(end + 0x100).is_err());
+        assert!(check_xc16_entry(0x201).is_err());
+    }
+
+    /// A minimal little-endian ELF32 for EM_DSPIC30F (118) with one
+    /// executable section per entry, in the XC16 4-byte slot form. Returns
+    /// the bytes and each section header's file offset, so tests can corrupt
+    /// individual fields.
+    fn pic24_elf(entry: u32, sections: &[(u32, Vec<u8>)]) -> (Vec<u8>, Vec<usize>) {
+        let shstr = b"\x00.text\x00.shstrtab\x00";
+        let n = sections.len() as u16;
+        let mut data_off = 52u32;
+        let mut sec_off = Vec::new();
+        for (_, bytes) in sections {
+            sec_off.push(data_off);
+            data_off += bytes.len() as u32;
+        }
+        let shstr_off = data_off;
+        data_off += shstr.len() as u32;
+        let shoff = data_off;
+
+        let mut out = vec![0x7f, b'E', b'L', b'F', 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        out.extend_from_slice(&2u16.to_le_bytes()); // ET_EXEC
+        out.extend_from_slice(&118u16.to_le_bytes()); // EM_DSPIC30F
+        out.extend_from_slice(&1u32.to_le_bytes());
+        out.extend_from_slice(&entry.to_le_bytes());
+        out.extend_from_slice(&0u32.to_le_bytes()); // e_phoff
+        out.extend_from_slice(&shoff.to_le_bytes());
+        out.extend_from_slice(&0u32.to_le_bytes()); // e_flags
+        for half in [52u16, 0, 0, 40, n + 2, n + 1] {
+            out.extend_from_slice(&half.to_le_bytes());
+        }
+        for (_, bytes) in sections {
+            out.extend_from_slice(bytes);
+        }
+        out.extend_from_slice(shstr);
+        let mut shdr_off = Vec::new();
+        let mut sh =
+            |out: &mut Vec<u8>, name: u32, typ: u32, flags: u32, addr: u32, off: u32, size: u32| {
+                shdr_off.push(out.len());
+                for w in [name, typ, flags, addr, off, size, 0u32, 0, 2, 0] {
+                    out.extend_from_slice(&w.to_le_bytes());
+                }
+            };
+        sh(&mut out, 0, 0, 0, 0, 0, 0);
+        for (i, (addr, bytes)) in sections.iter().enumerate() {
+            sh(&mut out, 1, 1, 0x6, *addr, sec_off[i], bytes.len() as u32);
+        }
+        sh(&mut out, 8, 3, 0, 0, shstr_off, shstr.len() as u32);
+        (out, shdr_off)
+    }
+
+    #[test]
+    fn sections_past_program_flash_are_rejected() {
+        let one = [0u8; 4];
+        let end = u64::from(PROGRAM_PC_END);
+        assert!(
+            check_xc16_section(end - 2, &one).is_ok(),
+            "the last instruction fits"
+        );
+        assert!(
+            check_xc16_section(end, &one).is_err(),
+            "starts at the end of flash"
+        );
+        assert!(
+            check_xc16_section(end + 0x100, &one).is_err(),
+            "starts beyond flash"
+        );
+        let two = [0u8; 8];
+        assert!(
+            check_xc16_section(end - 2, &two).is_err(),
+            "runs one instruction past the end"
+        );
+        assert!(
+            check_xc16_section(0x200, &[0u8; 6]).is_err(),
+            "not a whole number of slots"
+        );
+    }
+
+    #[test]
+    fn parse_elf_image_rejects_malformed_xc16_elves() {
+        use crate::system::node::parse_elf_image;
+        let code = vec![0u8; 8]; // two 4-byte slots
+        assert!(parse_elf_image(&pic24_elf(0x200, &[(0x200, code.clone())]).0).is_ok());
+
+        let odd_entry = parse_elf_image(&pic24_elf(0x201, &[(0x200, code.clone())]).0).unwrap_err();
+        assert!(odd_entry.to_string().contains("entry point"), "{odd_entry}");
+        let odd_section =
+            parse_elf_image(&pic24_elf(0x200, &[(0x201, code.clone())]).0).unwrap_err();
+        assert!(odd_section.to_string().contains("is odd"), "{odd_section}");
+        for entry in [PROGRAM_PC_END, PROGRAM_PC_END + 0x100] {
+            let far = parse_elf_image(&pic24_elf(entry, &[(0x200, code.clone())]).0).unwrap_err();
+            assert!(far.to_string().contains("entry point"), "{far}");
+        }
+        // A section whose bytes lie outside the file is range-checked before
+        // anything is loaded, and is an error rather than a silent skip.
+        let (mut elf, shdrs) = pic24_elf(0x200, &[(0x200, code.clone())]);
+        elf[shdrs[1] + 16..shdrs[1] + 20].copy_from_slice(&0x10_0000u32.to_le_bytes()); // sh_offset
+        let err = parse_elf_image(&elf).unwrap_err().to_string();
+        assert!(err.contains("runs past the end of the ELF file"), "{err}");
+        // Every section is range-checked, not only executable ones.
+        let (mut data, shdrs) = pic24_elf(0x200, &[(0x200, code.clone())]);
+        data[shdrs[1] + 8..shdrs[1] + 12].copy_from_slice(&4u32.to_le_bytes()); // SHF_ALLOC only
+        data[shdrs[1] + 16..shdrs[1] + 20].copy_from_slice(&0x10_0000u32.to_le_bytes());
+        let err = parse_elf_image(&data).unwrap_err().to_string();
+        assert!(err.contains("runs past the end of the ELF file"), "{err}");
+        // A section that is not a whole number of 4-byte slots is rejected.
+        let bad = parse_elf_image(&pic24_elf(0x200, &[(0x200, vec![0u8; 6])]).0).unwrap_err();
+        assert!(bad.to_string().contains("not a whole number"), "{bad}");
+        // A section that runs off program flash is rejected.
+        let past = parse_elf_image(&pic24_elf(0x200, &[(PROGRAM_PC_END - 2, code)]).0).unwrap_err();
+        assert!(
+            past.to_string().contains("does not fit program flash"),
+            "{past}"
+        );
     }
 
     #[test]

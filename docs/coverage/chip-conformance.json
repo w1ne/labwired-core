@@ -17,6 +17,13 @@
     "behavior": true,
     "excluded": 0,
     "level": 1,
+    "name": "litex-vexriscv",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
     "name": "nrf54l15",
     "reg_match": 0
   },
@@ -242,6 +249,13 @@
     "excluded": 0,
     "level": 1,
     "name": "atmega328p",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "atmega2560",
     "reg_match": 0
   },
   {

@@ -1,0 +1,25 @@
+name: arduino-mega-2560-io
+# Same board as configs/systems/arduino-mega-2560.yaml, plus two 5 V pots on
+# A8 (ADC8) and A9 (ADC9), the analog-only inputs of the Mega.
+chip: ../../configs/chips/atmega2560.yaml
+cpu_hz: 16000000
+external_devices:
+  - id: "pot_a8"
+    type: "potentiometer"
+    connection: "adc"
+    config:
+      channel: 8
+      supply_mv: 5000
+  - id: "pot_a9"
+    type: "potentiometer"
+    connection: "adc"
+    config:
+      channel: 9
+      supply_mv: 5000
+board_io:
+  - id: "status_led"
+    kind: "led"
+    peripheral: "portb"
+    pin: 7          # PB7 / Mega D13 LED_BUILTIN
+    signal: "output"
+    active_high: true
