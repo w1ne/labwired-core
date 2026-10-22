@@ -62,6 +62,8 @@ struct OpenLine {
 #[derive(Debug, Default)]
 pub(crate) struct UartLineRecorder {
     seen: usize,
+    /// The sink's byte at `seen - 1`, to tell a rewritten sink from a grown one.
+    last_byte: Option<u8>,
     last_cycle: u64,
     open: Option<OpenLine>,
     lines: Vec<UartLine>,
@@ -74,9 +76,16 @@ impl UartLineRecorder {
     }
 
     /// Stamp every byte past the last observation with `(last, now]`.
+    ///
+    /// The run loop's sink only grows. Should it ever be cleared (shorter than
+    /// seen, or a different byte where the last seen one was), the recorder
+    /// restarts from its new contents rather than splicing old and new text.
+    /// Only `\n` ends a line: a bare `\r` stays in the text (a `\r` right
+    /// before the `\n` is dropped), so a progress line redrawn with `\r` is one
+    /// line, stamped when it began.
     pub(crate) fn observe(&mut self, accumulated: &[u8], now: u64) {
-        if accumulated.len() < self.seen {
-            // The sink was cleared under us: restart from its new contents.
+        let rewritten = self.seen > 0 && accumulated.get(self.seen - 1).copied() != self.last_byte;
+        if accumulated.len() < self.seen || rewritten {
             self.seen = 0;
         }
         let lo = self.last_cycle;
@@ -98,6 +107,7 @@ impl UartLineRecorder {
             }
         }
         self.seen = accumulated.len();
+        self.last_byte = accumulated.last().copied();
         self.last_cycle = now;
     }
 
@@ -108,6 +118,15 @@ impl UartLineRecorder {
         }
         if line.bytes.last() == Some(&b'\r') {
             line.bytes.pop();
+        }
+        if line.truncated {
+            // Cut at a character boundary: a split UTF-8 sequence would become
+            // a 3-byte replacement character and push the text past the cap.
+            if let Err(e) = std::str::from_utf8(&line.bytes) {
+                if e.error_len().is_none() {
+                    line.bytes.truncate(e.valid_up_to());
+                }
+            }
         }
         self.lines.push(UartLine {
             text: String::from_utf8_lossy(&line.bytes).into_owned(),
@@ -137,6 +156,47 @@ impl UartLineRecorder {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_truncated_line_is_cut_at_a_character_boundary() {
+        let mut r = UartLineRecorder::new();
+        let mut sink = vec![b'x'; MAX_UART_LINE_TEXT - 1];
+        sink.extend_from_slice("\u{e9}\u{e9}\n".as_bytes());
+        r.observe(&sink, 10);
+        let line = &r.finish().unwrap().lines[0];
+        assert!(line.text_truncated);
+        assert!(line.text.len() <= MAX_UART_LINE_TEXT);
+        assert!(!line.text.contains('\u{fffd}'));
+    }
+
+    #[test]
+    fn a_bare_cr_does_not_end_a_line() {
+        let mut r = UartLineRecorder::new();
+        r.observe(b"10%\r50%\r\n", 10);
+        let texts: Vec<_> = r
+            .finish()
+            .unwrap()
+            .lines
+            .into_iter()
+            .map(|l| l.text)
+            .collect();
+        assert_eq!(texts, ["10%\r50%"]);
+    }
+
+    #[test]
+    fn a_sink_rewritten_past_its_old_length_restarts_cleanly() {
+        let mut r = UartLineRecorder::new();
+        r.observe(b"OLD\n", 10);
+        r.observe(b"NEW LINE\n", 20);
+        let texts: Vec<_> = r
+            .finish()
+            .unwrap()
+            .lines
+            .into_iter()
+            .map(|l| l.text)
+            .collect();
+        assert_eq!(texts, ["OLD", "NEW LINE"]);
+    }
 
     #[test]
     fn a_silent_run_has_no_block() {
