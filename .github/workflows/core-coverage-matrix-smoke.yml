@@ -355,6 +355,17 @@ jobs:
             profile_dir: release
             script: examples/litex-vexriscv/io-smoke.yaml
             system: examples/litex-vexriscv/system.yaml
+          # Digilent Arty A7-35T on the same LiteX VexRiscv SoC, plus the
+          # board's Control-and-Status block: the smoke walks the LEDs with CSR
+          # readback, reports the switch/button levels and the pending/enable
+          # registers, and runs the timer one-shot.
+          - id: arty-litex-smoke
+            target: riscv32im-unknown-none-elf
+            crate: firmware-arty-litex-smoke
+            profile: release
+            profile_dir: release
+            script: examples/arty-litex-vexriscv/io-smoke.yaml
+            system: examples/arty-litex-vexriscv/system.yaml
 
     steps:
       - uses: actions/checkout@v4

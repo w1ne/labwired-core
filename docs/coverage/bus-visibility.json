@@ -1,6 +1,10 @@
 [
   {
     "buses": [],
+    "name": "arty-litex-vexriscv"
+  },
+  {
+    "buses": [],
     "name": "atmega2560"
   },
   {

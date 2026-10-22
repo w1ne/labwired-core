@@ -574,6 +574,22 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output: b"LITEX VEXRISCV SMOKE\n",
     },
     SurvivalCase {
+        // Digilent Arty A7-35T (LiteX VexRiscv SoC, RV32IM): the smoke links
+        // into the SoC's integrated SRAM, walks the control-and-status LEDs,
+        // and prints over the LiteX UART. The chip declares `core: rv32im`, so
+        // runs select the standard RV32 profile. SIM-DERIVED — no bitstream
+        // diff exists.
+        name: "arty_litex_smoke",
+        core: "rv32im",
+        family: CpuFamily::RiscV,
+        hal: Hal::Bare,
+        chip: "arty-litex-vexriscv",
+        system: "arty-litex-vexriscv",
+        fixture: "arty-litex-smoke.elf",
+        valid_pc_ranges: &[(0x1000_0000, 0x1003_FFFF)],
+        expected_uart_output: b"ARTY LITEX SMOKE\n",
+    },
+    SurvivalCase {
         // Hardware-validated against real NUCLEO-L476RG silicon: the
         // exact byte stream below was captured from /dev/ttyACM1 with the
         // J-Link OB Virtual COM Port at 115200 baud. The simulator must
@@ -2476,6 +2492,8 @@ survival_gate!(test_esp32c3_demo_survival, "esp32c3_demo");
 survival_gate!(test_esp32c6_demo_survival, "esp32c6_demo");
 
 survival_gate!(test_litex_vexriscv_smoke_survival, "litex_vexriscv_smoke");
+
+survival_gate!(test_arty_litex_smoke_survival, "arty_litex_smoke");
 
 survival_gate!(test_nucleo_l476rg_smoke_survival, "nucleo_l476rg_smoke");
 

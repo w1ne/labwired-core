@@ -98,6 +98,16 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_litex_vexriscv_smoke_survival"),
     },
     ChipConf {
+        // Digilent Arty A7-35T (LiteX VexRiscv SoC, RV32IM). SIM-DERIVED: no
+        // bitstream capture exists. Modelled: CPU + memory + LiteX UART, timer
+        // and the control-and-status LED/switch/button CSR; SPI/Ethernet/MMCM
+        // are declared stubs — see examples/arty-litex-vexriscv/VALIDATION.md.
+        name: "arty-litex-vexriscv",
+        yaml: "configs/chips/arty-litex-vexriscv.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("firmware_survival::test_arty_litex_smoke_survival"),
+    },
+    ChipConf {
         name: "nrf54l15",
         yaml: "configs/chips/nrf54l15.yaml",
         // No silicon capture: nothing here has been diffed against a real
