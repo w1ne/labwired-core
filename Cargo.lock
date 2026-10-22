@@ -1617,6 +1617,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-riscv-virt-smoke"
+version = "0.1.0"
+dependencies = [
+ "panic-halt",
+ "riscv-rt",
+]
+
+[[package]]
 name = "firmware-rp2040-demo"
 version = "0.1.0"
 dependencies = [

@@ -579,3 +579,10 @@ chips:
     advanced_unit_only: []
     advanced_dead: []
     shim: []
+  - id: riscv-virt
+    arch: riscv32imac
+    headline: "L1 smoke, SIM-DERIVED; no beyond-rubric content. Boot, the RV32IMC core (a real multiply is asserted) and the NS16550 UART console are proven by tests/fixtures/riscv-virt-smoke.elf and examples/riscv-virt/io-smoke.yaml. The PLIC and CLINT are declared stubs (examples/riscv-virt/VALIDATION.md), so no advanced blocks exist to list."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []

@@ -1,0 +1,10 @@
+# LabWired - RISC-V `virt` machine system manifest
+#
+# The machine's console is the NS16550 UART0 at 0x10000000 (see the chip
+# descriptor for the memory map and its sources). The modelled surface has no
+# board I/O: this is the generic RISC-V `virt` machine, not a specific board.
+name: "riscv-virt"
+chip: "../chips/riscv-virt.yaml"
+debug_uart: "uart0"
+external_devices: []
+board_io: []

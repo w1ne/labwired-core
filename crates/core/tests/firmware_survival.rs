@@ -574,6 +574,22 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output: b"LITEX VEXRISCV SMOKE\n",
     },
     SurvivalCase {
+        // RISC-V `virt` machine (RV32IMAC, flat RAM at 0x80000000, NS16550
+        // UART0 at 0x10000000): the smoke loads into the code window and prints
+        // over the UART. The chip declares `core: rv32imac`, so runs select the
+        // standard RV32 profile; the PLIC/CLINT remain declared stubs.
+        // SIM-DERIVED.
+        name: "riscv_virt_smoke",
+        core: "rv32imac",
+        family: CpuFamily::RiscV,
+        hal: Hal::Bare,
+        chip: "riscv-virt",
+        system: "riscv-virt",
+        fixture: "riscv-virt-smoke.elf",
+        valid_pc_ranges: &[(0x8000_0000, 0x801F_FFFF)],
+        expected_uart_output: b"RISCV VIRT SMOKE\n",
+    },
+    SurvivalCase {
         // Hardware-validated against real NUCLEO-L476RG silicon: the
         // exact byte stream below was captured from /dev/ttyACM1 with the
         // J-Link OB Virtual COM Port at 115200 baud. The simulator must
@@ -2476,6 +2492,8 @@ survival_gate!(test_esp32c3_demo_survival, "esp32c3_demo");
 survival_gate!(test_esp32c6_demo_survival, "esp32c6_demo");
 
 survival_gate!(test_litex_vexriscv_smoke_survival, "litex_vexriscv_smoke");
+
+survival_gate!(test_riscv_virt_smoke_survival, "riscv_virt_smoke");
 
 survival_gate!(test_nucleo_l476rg_smoke_survival, "nucleo_l476rg_smoke");
 

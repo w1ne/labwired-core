@@ -1,3 +1,9 @@
+# LabWired - RISC-V `virt` machine example system
+#
+# Same machine manifest as configs/systems/riscv-virt.yaml, kept beside the
+# example so the package is self-contained.
 name: "riscv-virt"
-chip: mcu.yaml
+chip: "../../configs/chips/riscv-virt.yaml"
+debug_uart: "uart0"
 external_devices: []
+board_io: []

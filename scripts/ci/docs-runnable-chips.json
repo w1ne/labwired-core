@@ -272,6 +272,10 @@
     "litex-vexriscv": {
       "how": "needs-build",
       "why": "The LiteX VexRiscv model (RV32IM profile, LiteX UART and timer) is newer than the released CLI this gate installs. The committed smoke tests/fixtures/litex-vexriscv-smoke.elf prints 'LITEX VEXRISCV SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
+    },
+    "riscv-virt": {
+      "how": "needs-build",
+      "why": "The RISC-V virt machine model is newer than the released CLI this gate installs. The committed smoke tests/fixtures/riscv-virt-smoke.elf prints 'RISCV VIRT SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
     }
   }
 }

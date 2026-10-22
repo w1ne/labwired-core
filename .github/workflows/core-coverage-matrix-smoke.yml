@@ -355,6 +355,15 @@ jobs:
             profile_dir: release
             script: examples/litex-vexriscv/io-smoke.yaml
             system: examples/litex-vexriscv/system.yaml
+          # RISC-V virt machine: NS16550 console + a real multiply; PLIC/CLINT
+          # stay declared stubs.
+          - id: riscv-virt-smoke
+            target: riscv32imc-unknown-none-elf
+            crate: firmware-riscv-virt-smoke
+            profile: release
+            profile_dir: release
+            script: examples/riscv-virt/io-smoke.yaml
+            system: examples/riscv-virt/system.yaml
 
     steps:
       - uses: actions/checkout@v4

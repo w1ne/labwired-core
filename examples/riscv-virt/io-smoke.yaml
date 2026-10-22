@@ -1,0 +1,24 @@
+# LabWired - RISC-V `virt` machine IO smoke
+#
+# Build: cargo build -p firmware-riscv-virt-smoke --release --target riscv32imc-unknown-none-elf
+#
+# The firmware boots from the flat RAM window and prints over the NS16550
+# UART. It proves the RV32IMC core with a real multiply, reads back the
+# declared-stub PLIC/CLINT windows, and its heartbeat's `lsr=` field is read
+# back from the line-status register (0x60 = THRE|TEMT idle).
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv32imc-unknown-none-elf/release/firmware-riscv-virt-smoke"
+  system: "./system.yaml"
+limits:
+  max_steps: 4000000
+assertions:
+  - uart_contains: "RISCV VIRT SMOKE"
+  - uart_ordered:
+      - "cpu=rv32imac uart=ns16550"
+      - "mul=0000002a"
+      - "plic=00000000 clint=00000000"
+      - "hb=0 lsr=60"
+      - "hb=1 lsr=60"
+      - "hb=2 lsr=60"
+  - expected_stop_reason: max_steps

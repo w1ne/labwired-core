@@ -1,0 +1,49 @@
+# LabWired - RISC-V `virt` machine chip configuration
+#
+# Sources (retrieved 2026-10-23):
+# - The pinned upstream RISC-V `virt` platform: RiscV32 CPU (`rv32imac`,
+#   privileged 1.10, CLINT time provider, hart 0), one flat DRAM window at
+#   0x80000000, NS16550 UART0 at 0x10000000 (PLIC source 3), the PLIC at
+#   0x0C000000 (52 sources, CPU context 11) and the CLINT at 0x02000000
+#   (10 MHz timebase, software/timer interrupts on CPU 3/7).
+# - The QEMU `virt` machine documentation and the RISC-V `virt` device-tree
+#   convention: the same memory map (RAM at 0x80000000, UART0 at 0x10000000,
+#   CLINT at 0x02000000, PLIC at 0x0C000000) with machine parameters for the
+#   RAM size. This descriptor models an 8 MiB RAM window, split into a 1 MiB
+#   code window (`flash`) and a 7 MiB data/stack window (`ram`).
+# - PC16550D datasheet: THR/RBR @ +0x00, LSR @ +0x05 with THRE bit 5.
+#
+# Modelled: CPU + memory + the NS16550 UART (polled console path).
+# Declared, not modelled (`type: stub`): the PLIC and CLINT windows — the
+# engine has no platform-level interrupt-controller model yet, so firmware
+# polls; the smoke prints both readbacks. The CLINT timebase is available to
+# firmware through the CPU's `time` CSR, not through the MMIO window.
+#
+# Tier: L1 smoke — boot + UART byte path on the virt memory map.
+
+name: "riscv-virt"
+arch: "riscv"
+core: "rv32imac"
+# The virt machine has no fixed CPU clock; 10 MHz is its CLINT timebase, the
+# only clock the platform itself defines.
+cpu_hz: 10_000_000
+
+# The virt machine's RAM is one flat window at 0x80000000, sized by a machine
+# parameter. This descriptor models 8 MiB, split for the loader:
+flash: { base: 0x80000000, size: "1MiB" }
+ram: { base: 0x80100000, size: "7MiB" }
+flash_boot_alias: false
+peripherals:
+  - id: "uart0"
+    type: "ns16550"
+    base_address: 0x10000000
+    size: "4KB"
+  # Platform interrupt controllers: declared, not modelled (the smoke polls).
+  - id: "clint"
+    type: "stub"
+    base_address: 0x02000000
+    size: "64KB"
+  - id: "plic"
+    type: "stub"
+    base_address: 0x0C000000
+    size: "4MiB"

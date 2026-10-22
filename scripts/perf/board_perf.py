@@ -342,6 +342,12 @@ WAIVED: dict[str, str] = {
         "0x20000000, RAM 0x10000000), and no throughput claim is made for this SoC "
         "(docs/boards/litex-vexriscv.md)."
     ),
+    "riscv-virt": (
+        "L1 smoke, SIM-DERIVED: CPU + flat RAM + the NS16550 UART console only, "
+        "with no silicon capture and no executing-fidelity differential. No perf "
+        "fixture is built for the virt memory map (0x80000000/0x10000000), and no "
+        "throughput claim is made for this machine (docs/boards/riscv-virt.md)."
+    ),
     "rv1103": (
         "The old Cortex-A7 CPU subset fixture is not representative perf evidence. "
         "Optional native reduced Linux direct boot and joint I2C3/UART4 basket "

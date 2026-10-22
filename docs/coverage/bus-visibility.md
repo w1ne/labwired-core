@@ -61,6 +61,8 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * UART: nRF54L pad claims unwired: PSEL.PORT is 3 bits on this family and the claim engine decodes the nRF52840 1-bit field only, so no PadLines cell is installed and no wire waveform is narrated
 * **ra4m1**
   * UART: Uno R4 Minima SCI2 uses generic type:uart (sci layout); no UART bring-up for this chip family in the edge gate yet
+* **riscv-virt**
+  * UART: no virt-machine NS16550 bring-up in this harness; bytes are proven by the riscv-virt survival smoke
 * **rp2350**
   * I2C: rp2350 from_config bus not yet edge-gated (no line cells)
   * SPI: rp2350 from_config bus not yet edge-gated (no line cells)
@@ -92,6 +94,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | nrf54l15 | — | — | — |
 | nrf54lm20a | — | — | — |
 | ra4m1 | — | — | — |
+| riscv-virt | — | — | — |
 | rp2040 | ✓ | ✓ | ✓ |
 | rp2350 | — | — | — |
 | rv1103 | — | — | — |

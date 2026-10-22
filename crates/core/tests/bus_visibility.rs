@@ -119,6 +119,14 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         "no LiteX UART bring-up in this harness; bytes are proven by the \
          litex-vexriscv survival smoke",
     ),
+    // RISC-V virt machine: the NS16550 bring-up needs a programmed divisor and
+    // the harness has no virt-machine arm; bytes are proven by the survival smoke.
+    (
+        "riscv-virt",
+        BusKind::Uart,
+        "no virt-machine NS16550 bring-up in this harness; bytes are proven by \
+         the riscv-virt survival smoke",
+    ),
     // ATmega328P: USART0 is mirrored from the AVR CPU, which owns UCSR0x/UBRR0
     // and forwards each register write and UDR0 byte to the bus-side host. The
     // harness drives bus MMIO directly, so it never programs the baud divisor the

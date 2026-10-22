@@ -98,6 +98,15 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_litex_vexriscv_smoke_survival"),
     },
     ChipConf {
+        // RISC-V `virt` machine (RV32IMAC). SIM-DERIVED: no silicon capture.
+        // Modelled: CPU + flat RAM + the NS16550 UART; the PLIC and CLINT are
+        // declared stubs — see examples/riscv-virt/VALIDATION.md.
+        name: "riscv-virt",
+        yaml: "configs/chips/riscv-virt.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("firmware_survival::test_riscv_virt_smoke_survival"),
+    },
+    ChipConf {
         name: "nrf54l15",
         yaml: "configs/chips/nrf54l15.yaml",
         // No silicon capture: nothing here has been diffed against a real

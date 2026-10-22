@@ -1022,6 +1022,26 @@
         "gap": "No I2C controller is modelled on the LiteX VexRiscv SoC.",
         "lane": "none"
       }
+    },
+    "riscv-virt": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_riscv_virt_smoke_survival",
+        "signal": "committed ELF fixture tests/fixtures/riscv-virt-smoke.elf booted in-sim; the survival gate asserts 'RISCV VIRT SMOKE\\n' on the NS16550 UART TX sink. Fixture absence is a hard assert!, not a skip.",
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "The virt machine has no SPI controller.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "The virt machine has no I2C controller.",
+        "lane": "none"
+      }
     }
   }
 }

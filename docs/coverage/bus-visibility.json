@@ -122,6 +122,10 @@
     "name": "ra4m1"
   },
   {
+    "buses": [],
+    "name": "riscv-virt"
+  },
+  {
     "buses": [
       "I2C",
       "SPI",
