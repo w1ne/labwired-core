@@ -1673,6 +1673,11 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
         let states = ctx.machine.logic_read_states(0);
         let initial_states = ctx.machine.logic_initial_states().to_vec();
         labwired_core::logic_capture::attach_logic_states(&mut result, &initial_states, &states);
+        // Exact per-pad totals: the retained `transitions` are a 64k window.
+        labwired_core::logic_capture::attach_logic_edge_counts(
+            &mut result,
+            ctx.machine.logic_channel_edge_counts(),
+        );
         // End-of-run per-pad state through the chip-agnostic GPIO accessors,
         // so an agent reads `gpio_pins` instead of raw per-family registers.
         let pins =
