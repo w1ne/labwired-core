@@ -71,6 +71,10 @@
   },
   {
     "buses": [],
+    "name": "litex-picorv32"
+  },
+  {
+    "buses": [],
     "name": "litex-vexriscv"
   },
   {

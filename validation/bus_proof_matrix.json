@@ -1022,6 +1022,26 @@
         "gap": "No I2C controller is modelled on the LiteX VexRiscv SoC.",
         "lane": "none"
       }
+    },
+    "litex-picorv32": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_litex_picorv32_smoke_survival",
+        "signal": "committed ELF fixture tests/fixtures/litex-picorv32-smoke.elf booted in-sim; the survival gate asserts 'PICORV32 LITEX SMOKE\\n' on the LiteX UART TX sink. Fixture absence is a hard assert!, not a skip.",
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "The LiteX SPI-flash controller is a declared `type: stub` (docs/boards/litex-picorv32.md).",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "No I2C controller is modelled on the LiteX PicoRV32 SoC.",
+        "lane": "none"
+      }
     }
   }
 }

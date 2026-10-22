@@ -574,6 +574,21 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output: b"LITEX VEXRISCV SMOKE\n",
     },
     SurvivalCase {
+        // LiteX PicoRV32 SoC (RV32IMC): the smoke links into the SoC's
+        // integrated SRAM and prints over the LiteX UART. The chip declares
+        // `core: rv32imc`, so runs select the standard RV32 profile; the timer
+        // (8-bit-CSR variant) stays a declared stub. SIM-DERIVED.
+        name: "litex_picorv32_smoke",
+        core: "rv32imc",
+        family: CpuFamily::RiscV,
+        hal: Hal::Bare,
+        chip: "litex-picorv32",
+        system: "litex-picorv32",
+        fixture: "litex-picorv32-smoke.elf",
+        valid_pc_ranges: &[(0x1000_0000, 0x1003_FFFF)],
+        expected_uart_output: b"PICORV32 LITEX SMOKE\n",
+    },
+    SurvivalCase {
         // Hardware-validated against real NUCLEO-L476RG silicon: the
         // exact byte stream below was captured from /dev/ttyACM1 with the
         // J-Link OB Virtual COM Port at 115200 baud. The simulator must
@@ -2476,6 +2491,8 @@ survival_gate!(test_esp32c3_demo_survival, "esp32c3_demo");
 survival_gate!(test_esp32c6_demo_survival, "esp32c6_demo");
 
 survival_gate!(test_litex_vexriscv_smoke_survival, "litex_vexriscv_smoke");
+
+survival_gate!(test_litex_picorv32_smoke_survival, "litex_picorv32_smoke");
 
 survival_gate!(test_nucleo_l476rg_smoke_survival, "nucleo_l476rg_smoke");
 

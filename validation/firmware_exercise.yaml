@@ -579,3 +579,10 @@ chips:
     advanced_unit_only: []
     advanced_dead: []
     shim: []
+  - id: litex-picorv32
+    arch: riscv32imc
+    headline: "L1 smoke, SIM-DERIVED; no beyond-rubric content. Boot, the RV32IMC core (a real multiply is asserted) and the LiteX UART console are proven by tests/fixtures/litex-picorv32-smoke.elf and examples/litex-picorv32/io-smoke.yaml. The timer (8-bit-CSR variant), SPI and Ethernet are declared stubs (examples/litex-picorv32/VALIDATION.md), so no advanced blocks exist to list."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []

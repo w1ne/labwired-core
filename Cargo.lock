@@ -1329,6 +1329,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-litex-picorv32-smoke"
+version = "0.1.0"
+dependencies = [
+ "panic-halt",
+ "riscv-rt",
+]
+
+[[package]]
 name = "firmware-litex-vexriscv-smoke"
 version = "0.1.0"
 dependencies = [

@@ -513,6 +513,10 @@ fn every_shipped_descriptor_is_ratcheted() {
         // its own. Promote when the browser board lands AND a differential
         // exists.
         "litex-vexriscv",
+        // LiteX PicoRV32 SoC (RV32IMC): chip + system + example with an
+        // io-smoke, a committed fixture and a survival gate; no catalog board,
+        // no silicon capture and no executing-fidelity differential.
+        "litex-picorv32",
         // Descriptor-level derivative of the F401 lane (shared F4 profiles,
         // DEV_ID 0x413), smoke-validated via the feather-f405 example only:
         // no catalog board, no silicon oracle, no executing-fidelity

@@ -355,6 +355,15 @@ jobs:
             profile_dir: release
             script: examples/litex-vexriscv/io-smoke.yaml
             system: examples/litex-vexriscv/system.yaml
+          # LiteX PicoRV32 SoC (RV32IMC): UART console + a real multiply; the
+          # 8-bit-CSR timer variant stays a declared stub.
+          - id: litex-picorv32-smoke
+            target: riscv32imc-unknown-none-elf
+            crate: firmware-litex-picorv32-smoke
+            profile: release
+            profile_dir: release
+            script: examples/litex-picorv32/io-smoke.yaml
+            system: examples/litex-picorv32/system.yaml
 
     steps:
       - uses: actions/checkout@v4

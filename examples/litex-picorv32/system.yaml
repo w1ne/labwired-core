@@ -1,0 +1,9 @@
+# LabWired - LiteX PicoRV32 SoC example system
+#
+# Same SoC manifest as configs/systems/litex-picorv32.yaml, kept beside the
+# example so the package is self-contained.
+name: "litex-picorv32"
+chip: "../../configs/chips/litex-picorv32.yaml"
+debug_uart: "uart"
+external_devices: []
+board_io: []

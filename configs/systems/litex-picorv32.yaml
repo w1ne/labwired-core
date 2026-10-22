@@ -1,0 +1,11 @@
+# LabWired - LiteX PicoRV32 SoC system manifest
+#
+# The SoC's console is the LiteX UART at 0x60001800 (see the chip descriptor
+# for the CSR map and its sources). The modelled surface has no board I/O:
+# this is the generic LiteX PicoRV32 CPU platform, not a specific carrier
+# board.
+name: "litex-picorv32"
+chip: "../chips/litex-picorv32.yaml"
+debug_uart: "uart"
+external_devices: []
+board_io: []

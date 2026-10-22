@@ -50,6 +50,7 @@ The models column is a content digest over everything that board's `models` list
 | `nucleo-g071rb` | 🟡 smoke-manual | — | `354776217a6e438d` | no silicon capture |
 | `esp32c6-devkitc` | 🟡 smoke-manual | — | `10b8c5606329a0c7` | no silicon capture |
 | `litex-vexriscv` | 🟡 smoke-manual | — | `669c6e8a626b9f33` | no silicon capture |
+| `litex-picorv32` | 🟡 smoke-manual | — | `fe1dc8065cadaed5` | no silicon capture |
 
 ## `nrf52840` — 🟢 silicon-verified
 
@@ -398,4 +399,11 @@ The models column is a content digest over everything that board's `models` list
 - Doc: [`docs/boards/litex-vexriscv.md`](litex-vexriscv.md)  ·  Chip: `configs/chips/litex-vexriscv.yaml`
 - Silicon: none — not validated against real hardware.
   - offline (CI): firmware_survival::test_litex_vexriscv_smoke_survival
+- Drift status: **no silicon capture**
+
+## `litex-picorv32` — 🟡 smoke-manual
+
+- Doc: [`docs/boards/litex-picorv32.md`](litex-picorv32.md)  ·  Chip: `configs/chips/litex-picorv32.yaml`
+- Silicon: none — not validated against real hardware.
+  - offline (CI): firmware_survival::test_litex_picorv32_smoke_survival
 - Drift status: **no silicon capture**

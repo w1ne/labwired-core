@@ -8783,3 +8783,27 @@ boards:
       - crates/firmware-litex-vexriscv-smoke
       - configs/chips/litex-vexriscv.yaml
       - configs/systems/litex-vexriscv.yaml
+  - id: litex-picorv32
+    # 2026-10-22: LiteX PicoRV32 SoC (RV32IMC). Modelled: CPU + memory + the
+    # LiteX UART console path; the timer (8-bit-CSR variant), SPI-flash
+    # controller and Ethernet MAC are declared stubs, and the smoke prints the
+    # timer readback. SIM-DERIVED — no silicon capture. See
+    # docs/boards/litex-picorv32.md and examples/litex-picorv32/VALIDATION.md.
+    doc: docs/boards/litex-picorv32.md
+    chip: configs/chips/litex-picorv32.yaml
+    tier: smoke-manual
+    offline_tests:
+      - "firmware_survival::test_litex_picorv32_smoke_survival"
+    models:
+      - crates/core/src/cpu/riscv.rs
+      - crates/core/src/decoder/riscv.rs
+      - crates/core/src/peripherals/uart.rs
+      - crates/core/src/peripherals/stub.rs
+      - crates/core/src/bus/from_config.rs
+      - crates/core/src/bus/profiles.rs
+      - crates/core/src/peripherals/generic_factory.rs
+      - crates/core/src/system/riscv.rs
+      - crates/core/src/system/builder/riscv.rs
+      - crates/firmware-litex-picorv32-smoke
+      - configs/chips/litex-picorv32.yaml
+      - configs/systems/litex-picorv32.yaml
