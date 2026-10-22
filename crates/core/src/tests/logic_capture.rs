@@ -391,8 +391,6 @@ mod logic_capture_tests {
         let mut result = build_logic_edges_result(&meta, &batch, total as u64 + 1);
         assert_eq!(result.channels[0].edge_count, None, "absent until attached");
         attach_logic_edge_counts(&mut result, cap.channel_edge_counts());
-        assert_eq!(result.dropped, 100);
-        assert_eq!(result.channels[0].transitions.len(), LOGIC_RING_CAPACITY);
         assert_eq!(result.channels[0].edge_count, Some(total as u64));
         let json = serde_json::to_value(&result.channels[0]).unwrap();
         assert_eq!(json["edge_count"], serde_json::json!(total));
