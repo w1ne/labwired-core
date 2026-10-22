@@ -40,18 +40,27 @@
 //! * IC mode 111 (sleep/idle wake only, DS70198D Register 12-1) is stored
 //!   but never captures — there is no sleep mode to wake from.
 //!
-//! Conventions (XC16 ELF layout verified against DS50002071F):
-//! * `pc` is a **PC-unit address**: two units per instruction, so
+//! Conventions (verified against a real XC16 v1.70-built ELF, committed at
+//! `examples/dspic33fj32mc204/firmware/dspic33fj32mc204-xc16-uart-smoke.elf`):
+//! * `pc` is a **PC-unit address**: two units per instruction word, so
 //!   instructions sit at even addresses and the PC advances by 2. This is
 //!   the datasheet's addressing (`PC<0>` always 0; interrupt vectors at
 //!   `0x4 + 2*N`) and the XC16 guide's "Program Counter Unit".
 //! * Internally each instruction occupies one 4-byte little-endian slot
-//!   (`INSTR_SLOT_BYTES`, slot index = `pc / 2`). XC16 executable sections
-//!   pack instructions as **3 bytes each** ("2 program counter units are
-//!   equivalent to 3 bytes", DS50002071F); the ELF parsers expand them into
-//!   slots with [`xc16_executable_slots`]. Phantom bytes are a HEX-file
-//!   concept, not an ELF one.
-//! * Non-executable PIC24 program-memory segments (read-only data reached
+//!   (`INSTR_SLOT_BYTES`, slot index = `pc / 2`). XC16 **ELF executable
+//!   sections store exactly this 4-byte slot form** — the 24-bit word plus
+//!   one pad byte per instruction — and the parsers copy them verbatim
+//!   (verified: every executable section of the real ELF has a size that is
+//!   a multiple of 4, and the disassembler decodes with a 4-byte stride).
+//!   DS50002071F's "in an executable section, 2 program counter units are
+//!   equivalent to 3 bytes" describes the 16-bit assembler's *conceptual*
+//!   address arithmetic, not ELF file storage; "phantom bytes" are the pad
+//!   bytes of that 4-byte container (DS50002071F glossary).
+//! * Interrupt vectors are **data**: each vector location holds the 24-bit
+//!   starting address of its ISR (DS70283H §7.1: "Each interrupt vector
+//!   contains a 24-bit-wide address"). Exception entry loads the PC *from*
+//!   the vector; it does not execute code placed at the vector address.
+//! * Non-executable PIC24 program-memory sections (read-only data reached
 //!   through PSV/table reads) are skipped at load — PSV is not modelled.
 //! * Data space: `0x0000–0x07FF` SFR (UART1, timers, interrupt registers,
 //!   ports, capture/compare modelled; the rest is a shadow latch),
@@ -70,14 +79,30 @@
 //!
 //! ## Modelled instructions
 //!
-//! | Instruction | Encoding source |
+//! Base integer ISA needed by real XC16 code (encodings transcribed from
+//! DS70000157G; `MOV #lit16`/`MOV Ws,f`/`MOV f,Wd` predate this list):
+//!
+//! | Instruction | Notes |
 //! | :--- | :--- |
-//! | `NOP` | DS70000157G |
-//! | `MOV #lit16, Wnd` | DS70000157G |
-//! | `MOV Wns, f` | DS70000157G |
-//! | `MOV f, Wnd` | DS70000157G |
-//! | `BRA Expr` (slit16) | DS70000157G |
-//! | `RETFIE` | DS70000157G |
+//! | `NOP`, `MOV #lit16,Wn`, `MOV Ws,f`, `MOV f,Wn` | M0 |
+//! | `MOV.B #lit8,Wn`, `MOV{.B} Ws,Wd` | all ggg/hhh modes except `[Ws+Wb]` |
+//! | `CLR{.B} f`, `SETM{.B} f` | D=0/1 (WREG or file register) |
+//! | `ADD{.B} Wb,#lit5,Wd`, `ADD{.B} Wb,Ws,Wd` | |
+//! | `AND{.B} Wb,#lit5,Wd`, `AND{.B} Wb,Ws,Wd`, `AND #lit10,Wn` | |
+//! | `IOR{.B} Wb,#lit5,Wd`, `IOR{.B} Wb,Ws,Wd`, `IOR #lit10,Wn` | |
+//! | `CP0{.B} Ws`, `CP0{.B} f` | |
+//! | `BSET/BCLR/BTG{.B} f,#bit`, `BSET/BCLR/BTG{.B} Ws,#bit` | |
+//! | `SE [Ws],Wd` (and register form) | |
+//! | `LSR Wb,#lit4,Wnd` | |
+//! | `BRA cond,Expr` (all 15 condition codes), `RCALL Expr` | |
+//! | `CALL Expr`, `GOTO Expr` | 2-word instructions, PC advances by 4 |
+//! | `RETURN`, `RETLW{.B} #lit10,Wn`, `LNK #lit14`, `ULNK` | |
+//! | `RETFIE` | M1a |
+//!
+//! Not yet implemented — these return [`SimulationError::DecodeError`]:
+//! `TBLRD*`/`TBLW*` (PSV is not modelled), `ADDC`/`SUBB`/`CPB` and their
+//! sticky Z flag, the `[Ws+Wb]` register-offset mode, DSP/MAC (M1c),
+//! `REPEAT`/`DO`, `PUSH`/`POP`, `RESET`/`BREAK`.
 //!
 //! UART1 registers (DS70283H): `U1MODE 0x0220`, `U1STA 0x0222`, `U1TXREG 0x0224`.
 
@@ -97,26 +122,16 @@ pub const PC_UNITS_PER_INSTRUCTION: u32 = 2;
 /// Instruction slots available in flash.
 pub const INSTR_SLOTS: usize = FLASH_BYTES / INSTR_SLOT_BYTES;
 
-/// Expand an XC16 executable section into this CPU's internal slots.
+/// Check that an XC16 **ELF** executable section is in the CPU's slot form:
+/// a whole number of 4-byte slots (24-bit word + one pad byte). Returns
+/// `None` when the section is not slot-aligned — callers reject such a
+/// section rather than guess.
 ///
-/// XC16 addresses executable code in PC units (2 per instruction) while
-/// storing **3 bytes per instruction** in the ELF file ("In an executable
-/// section, 2 program counter units are equivalent to 3 bytes",
-/// DS50002071F "Program Counter Unit"). Each 24-bit little-endian
-/// instruction becomes one 4-byte slot with a zero pad byte. `None` when
-/// `data` is not a whole number of instructions — callers reject such a
-/// segment rather than guess (the 4-byte "phantom" layout belongs to HEX
-/// files, not ELF).
-pub fn xc16_executable_slots(data: &[u8]) -> Option<Vec<u8>> {
-    if data.is_empty() || data.len() % 3 != 0 {
-        return None;
-    }
-    let mut slots = Vec::with_capacity(data.len() / 3 * INSTR_SLOT_BYTES);
-    for insn in data.chunks_exact(3) {
-        slots.extend_from_slice(insn);
-        slots.push(0);
-    }
-    Some(slots)
+/// Verified against a real XC16 v1.70 ELF: every executable section
+/// (`.text`, `.reset`, `.ivt.*`, `.aivt.*`) has a size that is a multiple
+/// of 4, and the 24-bit word sits in the low three bytes of each slot.
+pub fn xc16_section_is_slot_aligned(data: &[u8]) -> bool {
+    !data.is_empty() && data.len() % INSTR_SLOT_BYTES == 0
 }
 /// Data-space SRAM base (X RAM), DS70283H Figure 4-3.
 pub const RAM_BASE: u32 = 0x0800;
@@ -202,8 +217,25 @@ pub const EXCEPTION_ENTRY_CYCLES: u32 = 2;
 /// RETFIE takes three instruction cycles (DS70000157G).
 pub const RETFIE_CYCLES: u32 = 3;
 
-/// RETFIE — 0000 0110 0100 0000 0000 0000 (DS70000157G).
-pub const INSN_RETFIE: u32 = 0x0064_0000;
+/// RETFIE — 0000 0110 0100 0000 0000 0000 (DS70000157G): bits 19-16 = 0110,
+/// bits 15-12 = 0100, i.e. `0x0006_4000` as a 24-bit word.
+pub const INSN_RETFIE: u32 = 0x0006_4000;
+
+// ── SR flags (DS70283H Register 7-1 / DS70000157G §2.16) ────────────────────
+
+/// SR.C — carry (for subtracts: 1 = no borrow, DS70000157G Table 4-8).
+pub const SR_C: u16 = 0x0001;
+/// SR.Z — zero.
+pub const SR_Z: u16 = 0x0002;
+/// SR.OV — overflow.
+pub const SR_OV: u16 = 0x0004;
+/// SR.N — negative.
+pub const SR_N: u16 = 0x0008;
+/// SR.DC — digit carry.
+pub const SR_DC: u16 = 0x0100;
+
+/// INTCON2.ALTIVT — use the Alternate IVT at `0x104` (DS70283H §7.1).
+pub const INTCON2_ALTIVT: u16 = 0x8000;
 
 // ── DS70283H / DS70190D / DS70198D / DS70209A (M1b additions) ───────────────
 
@@ -300,6 +332,25 @@ struct OcChannel {
     level: Option<bool>,
     /// A finished one-shot waits for the next `OCxCON` write.
     halted: bool,
+}
+
+/// The shared fields of the 3-operand MCU form
+/// (`0www wBqq qddd dxxx xxxx`, DS70000157G `ADD Wb,Ws,Wd` and friends).
+struct ThreeOp {
+    /// `B` — byte operation.
+    byte: bool,
+    /// `Wb` — base register (4 bits).
+    wb: usize,
+    /// `qqq` — destination addressing mode.
+    qqq: u32,
+    /// `Wd` — destination register.
+    wd: usize,
+    /// `#lit5` when bits 6-5 select the literal form.
+    lit: Option<u16>,
+    /// `ppp` — source addressing mode (0 when `lit` is present).
+    ppp: u32,
+    /// `Ws` — source register.
+    ws: usize,
 }
 
 /// dsPIC33F CPU core (M0 + M1a + M1b subset).
@@ -444,8 +495,12 @@ impl Pic24 {
     }
 
     /// Load a program image (engine path). XC16 addresses are PC units and
-    /// the parsers hand over slot-expanded executable segments; place each
-    /// slot at `addr / 2`, then start at the ELF entry point.
+    /// the parsers hand over executable sections already in 4-byte slot
+    /// form; place each slot at `addr / 2`.
+    ///
+    /// The PC starts at 0: dsPIC33F reset vectors through the GOTO at
+    /// address 0 (`Reset – GOTO Instruction`/`Reset – GOTO Address`,
+    /// DS70283H Figure 7-1), which real XC16 images contain.
     pub fn load_program_image(&mut self, image: &crate::memory::ProgramImage) {
         for seg in &image.segments {
             let slot = (seg.start_addr / u64::from(PC_UNITS_PER_INSTRUCTION)) as usize;
@@ -455,7 +510,7 @@ impl Pic24 {
                 self.flash[start..end].copy_from_slice(&seg.data[..end - start]);
             }
         }
-        self.pc = image.entry_point as u32;
+        self.pc = 0;
     }
 
     /// Attach the console sink that receives UART1 TX bytes (same type the AVR
@@ -878,29 +933,54 @@ impl Pic24 {
     }
 
     /// Push one 16-bit word on the W15 stack (SRAM only, as on silicon).
+    ///
+    /// DS70283H Figure 4-4: "PUSH: [W15++]" — the stack grows toward higher
+    /// addresses.
     fn push_word(&mut self, val: u16) -> SimResult<()> {
-        self.w[15] = self.w[15].wrapping_sub(2);
         let a = self.w[15];
         let end = RAM_BASE as u16 + RAM_BYTES as u16;
         if a >= RAM_BASE as u16 && a + 2 <= end {
             let o = a as usize - RAM_BASE as usize;
             self.ram[o..o + 2].copy_from_slice(&val.to_le_bytes());
+            self.w[15] = self.w[15].wrapping_add(2);
             Ok(())
         } else {
             Err(SimulationError::MemoryViolation(u64::from(a)))
         }
     }
 
+    /// Pop one 16-bit word from the W15 stack.
+    ///
+    /// DS70283H Figure 4-4: "POP: [--W15]".
     fn pop_word(&mut self) -> SimResult<u16> {
+        self.w[15] = self.w[15].wrapping_sub(2);
         let a = self.w[15];
         let end = RAM_BASE as u16 + RAM_BYTES as u16;
         if a < RAM_BASE as u16 || a + 2 > end {
             return Err(SimulationError::MemoryViolation(u64::from(a)));
         }
         let o = a as usize - RAM_BASE as usize;
-        let val = u16::from_le_bytes([self.ram[o], self.ram[o + 1]]);
-        self.w[15] = self.w[15].wrapping_add(2);
-        Ok(val)
+        Ok(u16::from_le_bytes([self.ram[o], self.ram[o + 1]]))
+    }
+
+    /// Read the 24-bit instruction word at a PC-unit address (program space).
+    ///
+    /// Used for the interrupt vector table, which stores ISR addresses as
+    /// data (DS70283H §7.1).
+    fn program_word(&self, addr_pc: u32) -> SimResult<u32> {
+        if addr_pc & (PC_UNITS_PER_INSTRUCTION - 1) != 0 {
+            return Err(SimulationError::DecodeError(u64::from(addr_pc)));
+        }
+        let off = (addr_pc as usize / PC_UNITS_PER_INSTRUCTION as usize) * INSTR_SLOT_BYTES;
+        if off + 3 > FLASH_BYTES {
+            return Err(SimulationError::MemoryViolation(off as u64));
+        }
+        Ok(u32::from_le_bytes([
+            self.flash[off],
+            self.flash[off + 1],
+            self.flash[off + 2],
+            0,
+        ]))
     }
 
     /// Current CPU priority level: IPL<2:0> (SR<7:5>) plus IPL<3> (CORCON<3>).
@@ -947,19 +1027,30 @@ impl Pic24 {
         None
     }
 
-    /// Take the pending interrupt, if any: push the DS70283H frame
-    /// (PC<15:0>, then SR<7:0>|IPL3|PC<22:16>), raise IPL, jump the vector.
+    /// Take the pending interrupt, if any: push the DS70283H §7 frame
+    /// (PC<15:0>, then SR<7:0>|IPL3|PC<22:16>), raise IPL, then load the PC
+    /// from the vector table.
+    ///
+    /// The vector location holds the 24-bit ISR address as **data**
+    /// (DS70283H §7.1) — it is not executed. `INTCON2.ALTIVT` selects the
+    /// Alternate IVT at `0x104` (DS70283H Figure 7-1).
     fn take_interrupt(&mut self) -> SimResult<bool> {
         let Some((vector, prio)) = self.pending_interrupt() else {
             return Ok(false);
         };
+        let base = if self.intcon2 & INTCON2_ALTIVT != 0 {
+            0x104
+        } else {
+            0x4
+        };
+        let target = self.program_word(base + 2 * vector)?;
         self.push_word(self.pc as u16)?;
         let packed = ((self.sr & 0x00FF) << 8)
             | (((self.corcon >> 3) & 1) << 7)
             | ((self.pc >> 16) as u16 & 0x007F);
         self.push_word(packed)?;
         self.sr = (self.sr & !0x00E0) | ((prio & 0x7) << 5);
-        self.pc = 0x4 + 2 * vector;
+        self.pc = target;
         Ok(true)
     }
 
@@ -1148,11 +1239,240 @@ impl Pic24 {
         }
     }
 
+    // ── Base ISA helpers (DS70000157G) ──────────────────────────────────────
+
+    /// Set N/Z from a word or byte result. DS70000157G §4.4: for byte
+    /// operations "the STATUS Register is updated to reflect the result of
+    /// the byte operation".
+    fn set_nz(&mut self, value: u16, byte: bool) {
+        let v = if byte { value & 0x00FF } else { value };
+        let sign = if byte { 0x0080 } else { 0x8000 };
+        self.sr &= !(SR_N | SR_Z);
+        if v & sign != 0 {
+            self.sr |= SR_N;
+        }
+        if v == 0 {
+            self.sr |= SR_Z;
+        }
+    }
+
+    /// Add with the MCU ALU flags (DS70000157G §2.16.1); returns the result.
+    fn alu_add(&mut self, a: u16, b: u16, cin: u16, byte: bool) -> u16 {
+        let (a32, b32, mask, sign) = if byte {
+            (u32::from(a & 0xFF), u32::from(b & 0xFF), 0xFF, 0x80)
+        } else {
+            (u32::from(a), u32::from(b), 0xFFFF, 0x8000)
+        };
+        let c32 = u32::from(cin);
+        let sum = a32 + b32 + c32;
+        let res = (sum & mask) as u16;
+        let carry = sum > mask;
+        let digit = (a32 & 0xF) + (b32 & 0xF) + c32 > 0xF;
+        let ov = ((a32 ^ b32) & sign == 0) && ((a32 ^ u32::from(res)) & sign != 0);
+        self.sr &= !(SR_C | SR_DC | SR_OV);
+        if carry {
+            self.sr |= SR_C;
+        }
+        if digit {
+            self.sr |= SR_DC;
+        }
+        if ov {
+            self.sr |= SR_OV;
+        }
+        self.set_nz(res, byte);
+        res
+    }
+
+    /// Subtract with the MCU ALU flags; returns the result. C reads as
+    /// "Carry (not Borrow)": it is **set when no borrow occurred**
+    /// (DS70000157G Table 4-8; CPB example: `0x20 - 0x20` leaves C = 1).
+    fn alu_sub(&mut self, a: u16, b: u16, cin: u16, byte: bool) -> u16 {
+        let (a32, b32, mask, sign) = if byte {
+            (u32::from(a & 0xFF), u32::from(b & 0xFF), 0xFF, 0x80)
+        } else {
+            (u32::from(a), u32::from(b), 0xFFFF, 0x8000)
+        };
+        let c32 = u32::from(cin);
+        let borrow_in = b32 + c32;
+        let res = (a32.wrapping_sub(borrow_in) & mask) as u16;
+        let no_borrow = a32 >= borrow_in;
+        let digit = (a32 & 0xF) >= (b32 & 0xF) + c32;
+        let ov = ((a32 ^ b32) & sign != 0) && ((a32 ^ u32::from(res)) & sign != 0);
+        self.sr &= !(SR_C | SR_DC | SR_OV);
+        if no_borrow {
+            self.sr |= SR_C;
+        }
+        if digit {
+            self.sr |= SR_DC;
+        }
+        if ov {
+            self.sr |= SR_OV;
+        }
+        self.set_nz(res, byte);
+        res
+    }
+
+    /// Evaluate a `BRA` condition code (DS70000157G Table 4-8). Codes
+    /// `0x1`/`0x9` are the `GEU`/`LTU` aliases of `C`/`NC`.
+    fn branch_taken(&self, cond: u32) -> bool {
+        let c = self.sr & SR_C != 0;
+        let z = self.sr & SR_Z != 0;
+        let n = self.sr & SR_N != 0;
+        let ov = self.sr & SR_OV != 0;
+        match cond {
+            0x0 => ov,
+            0x1 => c,
+            0x2 => z,
+            0x3 => n,
+            0x4 => z || (n != ov),
+            0x5 => n != ov,
+            0x6 => c || z,
+            0x8 => !ov,
+            0x9 => !c,
+            0xA => !z,
+            0xB => !n,
+            0xC => !z && (n == ov),
+            0xD => n == ov,
+            0xE => c && !z,
+            _ => false,
+        }
+    }
+
+    /// Resolve a `ppp`/`ggg` source operand (DS70000157G Tables 5-2/5-5).
+    /// Post/pre-modified registers step by 1 for byte operations and 2 for
+    /// word operations (DS70000157G Example 4-4).
+    fn read_operand(&mut self, reg: usize, mode: u32, byte: bool) -> SimResult<u16> {
+        let step = if byte { 1 } else { 2 };
+        match mode {
+            0 => Ok(self.w[reg]),
+            1 => self.read_indirect(self.w[reg], byte),
+            2 => {
+                let v = self.read_indirect(self.w[reg], byte)?;
+                self.w[reg] = self.w[reg].wrapping_sub(step);
+                Ok(v)
+            }
+            3 => {
+                let v = self.read_indirect(self.w[reg], byte)?;
+                self.w[reg] = self.w[reg].wrapping_add(step);
+                Ok(v)
+            }
+            4 => {
+                self.w[reg] = self.w[reg].wrapping_sub(step);
+                self.read_indirect(self.w[reg], byte)
+            }
+            5 => {
+                self.w[reg] = self.w[reg].wrapping_add(step);
+                self.read_indirect(self.w[reg], byte)
+            }
+            _ => Err(SimulationError::DecodeError(u64::from(self.pc))),
+        }
+    }
+
+    /// Store a `qqq`/`hhh` destination operand (DS70000157G Tables 5-3/5-6).
+    fn write_operand(&mut self, reg: usize, mode: u32, val: u16, byte: bool) -> SimResult<()> {
+        let step = if byte { 1 } else { 2 };
+        match mode {
+            0 => {
+                if byte {
+                    self.w[reg] = (self.w[reg] & 0xFF00) | (val & 0x00FF);
+                } else {
+                    self.w[reg] = val;
+                }
+                Ok(())
+            }
+            1 => self.write_indirect(self.w[reg], val, byte),
+            2 => {
+                let a = self.w[reg];
+                self.write_indirect(a, val, byte)?;
+                self.w[reg] = self.w[reg].wrapping_sub(step);
+                Ok(())
+            }
+            3 => {
+                let a = self.w[reg];
+                self.write_indirect(a, val, byte)?;
+                self.w[reg] = self.w[reg].wrapping_add(step);
+                Ok(())
+            }
+            4 => {
+                self.w[reg] = self.w[reg].wrapping_sub(step);
+                let a = self.w[reg];
+                self.write_indirect(a, val, byte)
+            }
+            5 => {
+                self.w[reg] = self.w[reg].wrapping_add(step);
+                let a = self.w[reg];
+                self.write_indirect(a, val, byte)
+            }
+            _ => Err(SimulationError::DecodeError(u64::from(self.pc))),
+        }
+    }
+
+    fn read_indirect(&mut self, addr: u16, byte: bool) -> SimResult<u16> {
+        if byte {
+            Ok(u16::from(self.data_read_byte(addr)?))
+        } else {
+            self.data_read(addr)
+        }
+    }
+
+    fn write_indirect(&mut self, addr: u16, val: u16, byte: bool) -> SimResult<()> {
+        if byte {
+            self.data_write_byte(addr, val as u8)
+        } else {
+            self.data_write(addr, val)
+        }
+    }
+
+    /// Byte read at a data-space byte address (little-endian: even = low).
+    pub fn data_read_byte(&mut self, addr: u16) -> SimResult<u8> {
+        let word = self.data_read(addr & !1)?;
+        Ok(if addr & 1 == 0 {
+            word as u8
+        } else {
+            (word >> 8) as u8
+        })
+    }
+
+    /// Byte write at a data-space byte address. File registers are updated
+    /// with a read-modify-write of the containing word, so word-only side
+    /// effects (U1STA's status reads, ICxBUF pops) keep their semantics.
+    pub fn data_write_byte(&mut self, addr: u16, val: u8) -> SimResult<()> {
+        let word_addr = addr & !1;
+        let word = self.data_read(word_addr)?;
+        let new = if addr & 1 == 0 {
+            (word & 0xFF00) | u16::from(val)
+        } else {
+            (word & 0x00FF) | (u16::from(val) << 8)
+        };
+        self.data_write(word_addr, new)
+    }
+
+    /// The `0www wBqq qddd dxxx xxxx` fields shared by the 3-operand
+    /// MCU instructions (DS70000157G: `ADD Wb,Ws,Wd` and friends).
+    fn decode_3op(word: u32) -> ThreeOp {
+        let lit = if (word >> 5) & 0x3 == 0b11 {
+            Some((word & 0x1F) as u16)
+        } else {
+            None
+        };
+        ThreeOp {
+            byte: word & 0x0000_4000 != 0,
+            wb: ((word >> 15) & 0xF) as usize,
+            qqq: (word >> 11) & 0x7,
+            wd: ((word >> 7) & 0xF) as usize,
+            lit,
+            ppp: (word >> 4) & 0x7,
+            ws: (word & 0xF) as usize,
+        }
+    }
+
     /// Execute one decoded word. Returns the instruction cycles consumed.
     fn execute(&mut self, word: u32) -> SimResult<u32> {
+        let pc = self.pc;
+
         // NOP — DS70000157G: 0000 0000 xxxx xxxx xxxx xxxx.
-        if word & 0x00FFFF == 0 && word >> 16 == 0 {
-            self.pc = self.pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+        if word & 0x00FF_FFFF == 0 {
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
             return Ok(1);
         }
 
@@ -1161,17 +1481,25 @@ impl Pic24 {
             let k = ((word >> 4) & 0xFFFF) as u16;
             let d = (word & 0xF) as usize;
             self.w[d] = k;
-            self.pc = self.pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
             return Ok(1);
         }
 
-        // MOV Wns, f — 1000 1fff ffff ffff ffff ssss (f is a 16-bit even address:
-        // 15 stored bits, LSB implied 0 — DS70000157G).
+        // MOV.B #lit8, Wnd — 1011 0011 1100 kkkk kkkk dddd.
+        if word & 0x00FF_F000 == 0x00B3_C000 {
+            let k = ((word >> 4) & 0xFF) as u16;
+            let d = (word & 0xF) as usize;
+            self.w[d] = k;
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            return Ok(1);
+        }
+
+        // MOV Wns, f — 1000 1fff ffff ffff ffff ssss.
         if word >> 19 == 0b1_0001 {
             let f = (((word >> 4) & 0x7FFF) << 1) as u16;
             let s = (word & 0xF) as usize;
             self.data_write(f, self.w[s])?;
-            self.pc = self.pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
             return Ok(1);
         }
 
@@ -1181,29 +1509,432 @@ impl Pic24 {
             let d = (word & 0xF) as usize;
             let v = self.data_read(f)?;
             self.w[d] = v;
-            self.pc = self.pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
             return Ok(1);
         }
 
-        // BRA Expr — 0011 0111 nnnn nnnn nnnn nnnn (slit16 words: PC = PC + 2 + 2*offset).
-        if word >> 16 == 0x0037 {
+        // MOV{.B} Ws, Wd — 0111 1www wBhh hddd dggg ssss (all modes).
+        if word & 0x00F8_0000 == 0x0078_0000 {
+            let byte = word & 0x0000_4000 != 0;
+            let hhh = (word >> 11) & 0x7;
+            let d = ((word >> 7) & 0xF) as usize;
+            let ggg = (word >> 4) & 0x7;
+            let s = (word & 0xF) as usize;
+            let val = self.read_operand(s, ggg, byte)?;
+            self.write_operand(d, hhh, val, byte)?;
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            return Ok(1);
+        }
+
+        // MOV{.B} f {,WREG} — 1011 1111 1BDf ffff ffff ffff.
+        if word & 0x00FF_8000 == 0x00BF_8000 {
+            let byte = word & 0x0000_4000 != 0;
+            let to_file = word & 0x0000_2000 != 0;
+            let f = (word & 0x1FFF) as u16;
+            let val = self.read_indirect(f, byte)?;
+            if to_file {
+                self.write_indirect(f, val, byte)?;
+            } else if byte {
+                self.w[0] = (self.w[0] & 0xFF00) | (val & 0x00FF);
+                self.set_nz(self.w[0], true);
+            } else {
+                self.w[0] = val;
+                self.set_nz(val, false);
+            }
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            return Ok(1);
+        }
+
+        // MOV{.B} WREG, f — 1011 0111 1B1f ffff ffff ffff.
+        if word & 0x00FF_A000 == 0x00B7_A000 {
+            let byte = word & 0x0000_4000 != 0;
+            let f = (word & 0x1FFF) as u16;
+            let val = if byte { self.w[0] & 0x00FF } else { self.w[0] };
+            self.write_indirect(f, val, byte)?;
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            return Ok(1);
+        }
+
+        // ADD{.B} f {,WREG} — 1011 0100 0BDf ffff ffff ffff.
+        if word & 0x00FF_8000 == 0x00B4_0000 {
+            let byte = word & 0x0000_4000 != 0;
+            let to_file = word & 0x0000_2000 != 0;
+            let f = (word & 0x1FFF) as u16;
+            let a = self.read_indirect(f, byte)?;
+            let r = self.alu_add(a, self.w[0], 0, byte);
+            if to_file {
+                self.write_indirect(f, r, byte)?;
+            } else if byte {
+                self.w[0] = (self.w[0] & 0xFF00) | (r & 0x00FF);
+            } else {
+                self.w[0] = r;
+            }
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            return Ok(1);
+        }
+
+        // AND{.B} f {,WREG} — 1011 0110 0BDf ffff ffff ffff.
+        if word & 0x00FF_8000 == 0x00B6_0000 {
+            let byte = word & 0x0000_4000 != 0;
+            let to_file = word & 0x0000_2000 != 0;
+            let f = (word & 0x1FFF) as u16;
+            let a = self.read_indirect(f, byte)?;
+            let r = a & self.w[0];
+            self.set_nz(r, byte);
+            if to_file {
+                self.write_indirect(f, r, byte)?;
+            } else if byte {
+                self.w[0] = (self.w[0] & 0xFF00) | (r & 0x00FF);
+            } else {
+                self.w[0] = r;
+            }
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            return Ok(1);
+        }
+
+        // IOR{.B} f {,WREG} — 1011 0111 0BDf ffff ffff ffff.
+        if word & 0x00FF_8000 == 0x00B7_0000 {
+            let byte = word & 0x0000_4000 != 0;
+            let to_file = word & 0x0000_2000 != 0;
+            let f = (word & 0x1FFF) as u16;
+            let a = self.read_indirect(f, byte)?;
+            let r = a | self.w[0];
+            self.set_nz(r, byte);
+            if to_file {
+                self.write_indirect(f, r, byte)?;
+            } else if byte {
+                self.w[0] = (self.w[0] & 0xFF00) | (r & 0x00FF);
+            } else {
+                self.w[0] = r;
+            }
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            return Ok(1);
+        }
+
+        // AND/IOR #lit10, Wn — 1011 001x 0Bkk kkkk kkkk dddd.
+        if word & 0x00FF_8000 == 0x00B2_0000 || word & 0x00FF_8000 == 0x00B3_0000 {
+            let k = ((word >> 4) & 0x3FF) as u16;
+            let d = (word & 0xF) as usize;
+            let r = if word & 0x0001_0000 == 0 {
+                k & self.w[d]
+            } else {
+                k | self.w[d]
+            };
+            self.set_nz(r, false);
+            self.w[d] = r;
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            return Ok(1);
+        }
+
+        // ADD #lit10, Wn — 1011 0000 0Bkk kkkk kkkk dddd.
+        if word & 0x00FF_8000 == 0x00B0_0000 {
+            let k = ((word >> 4) & 0x3FF) as u16;
+            let d = (word & 0xF) as usize;
+            let r = self.alu_add(k, self.w[d], 0, false);
+            self.w[d] = r;
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            return Ok(1);
+        }
+
+        // AND{.B} Wb,#lit5,Wd / Wb,Ws,Wd — 0110 0www wBqq qddd dxxx xxxx.
+        if word & 0x00F8_0000 == 0x0060_0000 {
+            let op = Self::decode_3op(word);
+            let rhs = match op.lit {
+                Some(k) => k,
+                None => self.read_operand(op.ws, op.ppp, op.byte)?,
+            };
+            let r = self.w[op.wb] & rhs;
+            self.set_nz(r, op.byte);
+            self.write_operand(op.wd, op.qqq, r, op.byte)?;
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            return Ok(1);
+        }
+
+        // IOR{.B} Wb,#lit5,Wd / Wb,Ws,Wd — 0111 0www wBqq qddd dxxx xxxx.
+        if word & 0x00F8_0000 == 0x0070_0000 {
+            let op = Self::decode_3op(word);
+            let rhs = match op.lit {
+                Some(k) => k,
+                None => self.read_operand(op.ws, op.ppp, op.byte)?,
+            };
+            let r = self.w[op.wb] | rhs;
+            self.set_nz(r, op.byte);
+            self.write_operand(op.wd, op.qqq, r, op.byte)?;
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            return Ok(1);
+        }
+
+        // ADD{.B} Wb,#lit5,Wd / Wb,Ws,Wd — 0100 0www wBqq qddd dxxx xxxx.
+        if word & 0x00F8_0000 == 0x0040_0000 {
+            let op = Self::decode_3op(word);
+            let rhs = match op.lit {
+                Some(k) => k,
+                None => self.read_operand(op.ws, op.ppp, op.byte)?,
+            };
+            let r = self.alu_add(self.w[op.wb], rhs, 0, op.byte);
+            self.write_operand(op.wd, op.qqq, r, op.byte)?;
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            return Ok(1);
+        }
+
+        // BSET/BCLR/BTG{.B} f,#bit — 1010 100x bbbf ffff ffff ffff.
+        if matches!(word >> 16, 0xA8..=0xAA) {
+            let bit = ((word >> 13) & 0x7) as u8;
+            let f = (word & 0x1FFF) as u16;
+            let mut b = self.data_read_byte(f)?;
+            b = match word >> 16 {
+                0xA8 => b | (1 << bit),
+                0xA9 => b & !(1 << bit),
+                _ => b ^ (1 << bit),
+            };
+            self.data_write_byte(f, b)?;
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            return Ok(1);
+        }
+
+        // BSET/BCLR/BTG{.B} Ws,#bit — 1010 000x bbbb 0B00 0ppp ssss.
+        if matches!(word >> 16, 0xA0..=0xA2) {
+            let byte = word & 0x0000_0400 != 0;
+            let bit = (word >> 12) & 0xF;
+            let reg = (word & 0xF) as usize;
+            let mode = (word >> 4) & 0x7;
+            let step = if byte { 1 } else { 2 };
+            // Source and destination are the same operand: resolve the
+            // effective address with a single post/pre-modification.
+            let (val, addr) = match mode {
+                0 => (self.w[reg], None),
+                1 => (self.read_indirect(self.w[reg], byte)?, Some(self.w[reg])),
+                2 => {
+                    let a = self.w[reg];
+                    let v = self.read_indirect(a, byte)?;
+                    self.w[reg] = self.w[reg].wrapping_sub(step);
+                    (v, Some(a))
+                }
+                3 => {
+                    let a = self.w[reg];
+                    let v = self.read_indirect(a, byte)?;
+                    self.w[reg] = self.w[reg].wrapping_add(step);
+                    (v, Some(a))
+                }
+                4 => {
+                    self.w[reg] = self.w[reg].wrapping_sub(step);
+                    let a = self.w[reg];
+                    (self.read_indirect(a, byte)?, Some(a))
+                }
+                5 => {
+                    self.w[reg] = self.w[reg].wrapping_add(step);
+                    let a = self.w[reg];
+                    (self.read_indirect(a, byte)?, Some(a))
+                }
+                _ => return Err(SimulationError::DecodeError(u64::from(pc))),
+            };
+            let r = match word >> 16 {
+                0xA0 => val | (1 << bit),
+                0xA1 => val & !(1 << bit),
+                _ => val ^ (1 << bit),
+            };
+            match addr {
+                None => {
+                    if byte {
+                        self.w[reg] = (self.w[reg] & 0xFF00) | (r & 0x00FF);
+                    } else {
+                        self.w[reg] = r;
+                    }
+                }
+                Some(a) => self.write_indirect(a, r, byte)?,
+            }
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            return Ok(1);
+        }
+
+        // CP0{.B} Ws — 1110 0000 0000 0B00 0ppp ssss.
+        if word & 0x00FF_F800 == 0x00E0_0000 {
+            let byte = word & 0x0000_0400 != 0;
+            let reg = (word & 0xF) as usize;
+            let mode = (word >> 4) & 0x7;
+            let v = self.read_operand(reg, mode, byte)?;
+            self.alu_sub(v, 0, 0, byte);
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            return Ok(1);
+        }
+
+        // CP0{.B} f — 1110 0010 0B0f ffff ffff ffff.
+        if word & 0x00FF_A000 == 0x00E2_0000 {
+            let byte = word & 0x0000_4000 != 0;
+            let f = (word & 0x1FFF) as u16;
+            let v = self.read_indirect(f, byte)?;
+            self.alu_sub(v, 0, 0, byte);
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            return Ok(1);
+        }
+
+        // CLR/SETM{.B} f (or WREG) — 1110 111x 0BDf ffff ffff ffff.
+        if word & 0x00FF_0000 == 0x00EF_0000 {
+            let byte = word & 0x0000_4000 != 0;
+            let to_file = word & 0x0000_2000 != 0;
+            let set = word & 0x0000_8000 != 0;
+            let f = (word & 0x1FFF) as u16;
+            let val = if set {
+                if byte {
+                    0x00FF
+                } else {
+                    0xFFFF
+                }
+            } else {
+                0
+            };
+            if to_file {
+                self.write_indirect(f, val, byte)?;
+            } else if byte {
+                self.w[0] = (self.w[0] & 0xFF00) | (val & 0x00FF);
+            } else {
+                self.w[0] = val;
+            }
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            return Ok(1);
+        }
+
+        // SE [Ws], Wnd / SE Ws, Wnd — 1111 1011 0000 0ddd dppp ssss.
+        if word & 0x00FF_F800 == 0x00FB_0000 {
+            let d = ((word >> 7) & 0xF) as usize;
+            let mode = (word >> 4) & 0x7;
+            let s = (word & 0xF) as usize;
+            let v = self.read_operand(s, mode, true)?;
+            let ext = if v & 0x0080 != 0 {
+                v | 0xFF00
+            } else {
+                v & 0x00FF
+            };
+            self.w[d] = ext;
+            self.set_nz(ext, false);
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            return Ok(1);
+        }
+
+        // LSR Wb, #lit4, Wnd — 1101 1110 0www wddd d100 kkkk.
+        if word & 0x00FF_8000 == 0x00DE_0000 {
+            let wb = ((word >> 11) & 0xF) as usize;
+            let wd = ((word >> 7) & 0xF) as usize;
+            let k = word & 0xF;
+            let r = self.w[wb] >> k.min(15);
+            self.w[wd] = r;
+            self.set_nz(r, false);
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            return Ok(1);
+        }
+
+        // LNK #lit14 — 1111 1010 00kk kkkk kkkk kkk0 (DS70000157G §5.4).
+        if word & 0x00FF_C000 == 0x00FA_0000 {
+            // The 13 stored bits are lit14/2 (bit 0 is fixed 0).
+            let lit14 = (((word >> 1) & 0x3FFF) as u16) << 1;
+            self.push_word(self.w[14])?;
+            self.w[14] = self.w[15];
+            self.w[15] = self.w[15].wrapping_add(lit14);
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            return Ok(1);
+        }
+
+        // ULNK — 1111 1010 1000 0000 0000 0000.
+        if word == 0x00FA_8000 {
+            self.w[15] = self.w[14];
+            let v = self.pop_word()?;
+            self.w[14] = v;
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            return Ok(1);
+        }
+
+        // RETLW{.B} #lit10, Wn — 0000 0101 0Bkk kkkk kkkk dddd.
+        if word & 0x00FF_8000 == 0x0005_0000 {
+            let byte = word & 0x0000_4000 != 0;
+            let k = ((word >> 4) & 0x3FF) as u16;
+            let d = (word & 0xF) as usize;
+            let hi = self.pop_word()?;
+            let lo = self.pop_word()?;
+            self.pc = (u32::from(hi & 0x007F) << 16) | u32::from(lo);
+            if byte {
+                self.w[d] = (self.w[d] & 0xFF00) | (k & 0x00FF);
+            } else {
+                self.w[d] = k;
+            }
+            return Ok(3);
+        }
+
+        // RETURN — 0000 0110 0000 0000 0000 0000.
+        if word & 0x00FF_FFFF == 0x0006_0000 {
+            let hi = self.pop_word()?;
+            let lo = self.pop_word()?;
+            self.pc = (u32::from(hi & 0x007F) << 16) | u32::from(lo);
+            return Ok(3);
+        }
+
+        // RETFIE — 0000 0110 0100 0000 0000 0000 (DS70000157G).
+        if word == INSN_RETFIE {
+            let packed = self.pop_word()?;
+            let low = self.pop_word()?;
+            self.sr = (self.sr & 0xFF00) | ((packed >> 8) & 0x00FF);
+            self.corcon = (self.corcon & !0x0008) | (((packed >> 7) & 1) << 3);
+            self.pc = (u32::from(packed & 0x007F) << 16) | u32::from(low);
+            return Ok(RETFIE_CYCLES);
+        }
+
+        // RCALL Expr — 0000 0111 nnnn nnnn nnnn nnnn.
+        if word >> 16 == 0x07 {
             let off = (word & 0xFFFF) as u16 as i16;
-            let next = self.pc as i64 + 2 + 2 * i64::from(off);
+            let ret = pc.wrapping_add(2);
+            self.push_word(ret as u16)?;
+            self.push_word(((ret >> 16) & 0x7F) as u16)?;
+            let next = pc as i64 + 2 + 2 * i64::from(off);
             if next < 0 {
-                return Err(SimulationError::DecodeError(self.pc as u64));
+                return Err(SimulationError::DecodeError(u64::from(pc)));
             }
             self.pc = next as u32;
             return Ok(2);
         }
 
-        // RETFIE — 0000 0110 0100 0000 0000 0000 (DS70000157G).
-        if word == INSN_RETFIE {
-            let low = self.pop_word()?;
-            let packed = self.pop_word()?;
-            self.sr = (self.sr & 0xFF00) | ((packed >> 8) & 0x00FF);
-            self.corcon = (self.corcon & !0x0008) | (((packed >> 7) & 1) << 3);
-            self.pc = (u32::from(packed & 0x007F) << 16) | u32::from(low);
-            return Ok(RETFIE_CYCLES);
+        // CALL Expr — 2 words, 0000 0010 nnnn... (DS70000157G).
+        if word >> 16 == 0x02 {
+            let word2 = self.program_word(pc + 2)?;
+            let n = ((word >> 1) & 0x7FFF) | ((word2 & 0x7F) << 15);
+            let ret = pc.wrapping_add(4);
+            self.push_word(ret as u16)?;
+            self.push_word(((ret >> 16) & 0x7F) as u16)?;
+            self.pc = n << 1;
+            return Ok(2);
+        }
+
+        // GOTO Expr — 2 words, 0000 0100 nnnn... (DS70000157G).
+        if word >> 16 == 0x04 {
+            let word2 = self.program_word(pc + 2)?;
+            let n = ((word >> 1) & 0x7FFF) | ((word2 & 0x7F) << 15);
+            self.pc = n << 1;
+            return Ok(2);
+        }
+
+        // BRA Expr — 0011 0111 nnnn nnnn nnnn nnnn (slit16 words).
+        if word >> 16 == 0x37 {
+            let off = (word & 0xFFFF) as u16 as i16;
+            let next = pc as i64 + 2 + 2 * i64::from(off);
+            if next < 0 {
+                return Err(SimulationError::DecodeError(u64::from(pc)));
+            }
+            self.pc = next as u32;
+            return Ok(2);
+        }
+
+        // BRA cond, Expr — 0011 cccc nnnn... (DS70000157G Table 4-8).
+        if word & 0x00F0_0000 == 0x0030_0000 {
+            let cond = (word >> 16) & 0xF;
+            let off = (word & 0xFFFF) as u16 as i16;
+            if self.branch_taken(cond) {
+                let next = pc as i64 + 2 + 2 * i64::from(off);
+                if next < 0 {
+                    return Err(SimulationError::DecodeError(u64::from(pc)));
+                }
+                self.pc = next as u32;
+                return Ok(2);
+            }
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            return Ok(1);
         }
 
         // Everything else is deliberately unimplemented (see module scope).
@@ -1520,6 +2251,77 @@ mod tests {
     }
 
     #[test]
+    fn call_and_return_use_the_upward_stack() {
+        // 0x000: CALL 0x008 (2 words, return to 0x004)
+        // 0x008: MOV #0x11, W0 ; 0x00A: RETURN
+        let mut cpu = cpu_with(&[
+            0x0002_0008,
+            0x0000_0000,
+            0x0000_0000,
+            0x0000_0000,
+            mov_lit_w0(0x11),
+            0x0006_0000,
+        ]);
+        cpu.set_sp(0x0800);
+        let mut bus = SystemBus::new();
+
+        step(&mut cpu, &mut bus); // CALL
+        assert_eq!(cpu.get_pc(), 8, "CALL jumps to its 23-bit target");
+        assert_eq!(cpu.w[15], 0x0804, "CALL pushes two words, growing up");
+        assert_eq!(cpu.data_read(0x0800).unwrap(), 0x0004, "PC+4 low word");
+        assert_eq!(cpu.data_read(0x0802).unwrap(), 0x0000, "PC+4 high word");
+
+        step(&mut cpu, &mut bus); // MOV #0x11, W0
+        assert_eq!(cpu.w[0], 0x11);
+
+        step(&mut cpu, &mut bus); // RETURN
+        assert_eq!(cpu.get_pc(), 4, "RETURN pops the stacked PC");
+        assert_eq!(cpu.w[15], 0x0800, "stack unwound");
+    }
+
+    #[test]
+    fn lnk_and_ulnk_allocate_a_frame() {
+        let mut cpu = cpu_with(&[0x00FA_0004, 0x00FA_8000]);
+        cpu.set_sp(0x0800);
+        cpu.w[14] = 0x1234;
+        let mut bus = SystemBus::new();
+
+        step(&mut cpu, &mut bus); // LNK #4
+        assert_eq!(cpu.w[14], 0x0802, "W14 points at the saved frame pointer");
+        assert_eq!(cpu.w[15], 0x0806, "frame of 4 bytes allocated");
+        assert_eq!(cpu.data_read(0x0800).unwrap(), 0x1234, "W14 saved");
+
+        step(&mut cpu, &mut bus); // ULNK
+        assert_eq!(cpu.w[15], 0x0800, "W15 restored from W14");
+        assert_eq!(cpu.w[14], 0x1234, "frame pointer popped");
+    }
+
+    #[test]
+    fn goto_is_a_two_word_jump() {
+        let mut cpu = cpu_with(&[0x0004_0200, 0x0000_0000]);
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.get_pc(), 0x200, "GOTO loads the 23-bit target");
+    }
+
+    #[test]
+    fn byte_moves_and_sign_extend() {
+        // 0x000: MOV.B #0x80, W0 ; 0x002: MOV.B W0, [W1] ; 0x004: SE [W1], W2
+        let mut cpu = cpu_with(&[0x00B3_C800, 0x0078_4880, 0x00FB_0111]);
+        cpu.w[1] = 0x0900;
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        step(&mut cpu, &mut bus);
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.data_read_byte(0x0900).unwrap(), 0x80);
+        assert_eq!(cpu.w[2], 0xFF80, "SE sign-extends the byte");
+
+        // Byte addressing keeps the neighbouring byte intact.
+        cpu.data_write_byte(0x0901, 0x5A).unwrap();
+        assert_eq!(cpu.data_read(0x0900).unwrap(), 0x5A80);
+    }
+
+    #[test]
     fn mov_literal_loads_w0() {
         let mut cpu = cpu_with(&[mov_lit_w0(0x48)]);
         let mut bus = SystemBus::new();
@@ -1654,7 +2456,7 @@ mod tests {
     #[test]
     fn timer1_interrupt_vectors_frames_and_returns() {
         let mut cpu = cpu_with(&[0x0037_FFFF]); // slot 0: BRA $-1
-                                                // Handler at the T1 vector (number 11 -> address 0x1A):
+                                                // Handler at PC 0x100:
                                                 //   MOV #0, W0 ; MOV W0, T1CON ; MOV W0, IFS0 ; RETFIE
                                                 // The timer is stopped first: with PR1 = 0 a tick re-sets the flag in
                                                 // the very same step that clears it — correct silicon behaviour, but
@@ -1664,9 +2466,14 @@ mod tests {
         handler.extend(enc(mov_w0_to_f(SFR_T1CON)));
         handler.extend(enc(mov_w0_to_f(SFR_IFS0)));
         handler.extend(enc(INSN_RETFIE));
-        cpu.load_flash(0x1A, &handler);
+        cpu.load_flash(0x100, &handler);
+        // The T1 vector (number 11) lives at PC 0x1A and holds the 24-bit ISR
+        // address as data (DS70283H §7.1).
+        cpu.load_flash(0x1A, &enc(0x000100));
 
-        cpu.set_sp(0x1000);
+        // The stack grows toward higher addresses (DS70283H Figure 4-4), so
+        // it starts at the bottom of the 2 KB SRAM.
+        cpu.set_sp(0x0800);
         write_sfr(&mut cpu, SFR_PR1, 0); // flag after every tick
         write_sfr(&mut cpu, SFR_T1CON, TCON_TON);
         write_sfr(&mut cpu, SFR_IEC0, 1 << IRQ_T1.0);
@@ -1676,18 +2483,23 @@ mod tests {
         step(&mut cpu, &mut bus); // BRA; the timer ticks -> T1IF
         assert_ne!(cpu.data_read(SFR_IFS0).unwrap() & (1 << IRQ_T1.0), 0);
 
-        step(&mut cpu, &mut bus); // vector + first handler instruction
-        assert_eq!(cpu.get_pc(), 0x1C, "handler began at the T1 vector");
+        step(&mut cpu, &mut bus); // vector fetch + first handler instruction
+        assert_eq!(
+            cpu.get_pc(),
+            0x102,
+            "handler began at the vector's ISR address"
+        );
         assert_eq!(
             (cpu.data_read(SFR_SR).unwrap() >> 5) & 0x7,
             1,
             "IPL raised to the source priority"
         );
 
-        // DS70283H frame: [SP] = SR<7:0>|IPL3|PC<22:16>, [SP+2] = PC<15:0>.
+        // DS70283H frame, stack growing up (Figure 4-4): [SP] = PC<15:0>,
+        // [SP+2] = SR<7:0>|IPL3|PC<22:16>.
         let sp = cpu.w[15];
-        assert_eq!(cpu.data_read(sp).unwrap(), 0x0000, "packed frame word");
-        assert_eq!(cpu.data_read(sp + 2).unwrap(), 0x0000, "saved PC (was 0)");
+        assert_eq!(cpu.data_read(sp - 2).unwrap(), 0x0000, "packed frame word");
+        assert_eq!(cpu.data_read(sp - 4).unwrap(), 0x0000, "saved PC (was 0)");
 
         step(&mut cpu, &mut bus); // MOV W0, T1CON stops the timer
         assert_eq!(
@@ -1703,7 +2515,7 @@ mod tests {
         );
         step(&mut cpu, &mut bus); // RETFIE
         assert_eq!(cpu.get_pc(), 0, "returned to the interrupted loop");
-        assert_eq!(cpu.w[15], 0x1000, "stack fully unwound");
+        assert_eq!(cpu.w[15], 0x0800, "stack fully unwound");
         assert_eq!(
             (cpu.data_read(SFR_SR).unwrap() >> 5) & 0x7,
             0,

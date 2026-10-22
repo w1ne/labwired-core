@@ -740,6 +740,15 @@ pub fn parse_elf_image(bytes: &[u8]) -> anyhow::Result<crate::memory::ProgramIma
     let arch = elf_arch(machine)
         .ok_or_else(|| anyhow::anyhow!("unsupported ELF machine type {machine}"))?;
     let mut image = crate::memory::ProgramImage::new(elf.entry, arch);
+    if arch == crate::Arch::Pic24 {
+        // XC16 executable sections are already in the CPU's 4-byte slot form
+        // (24-bit word + pad) and addresses are PC units. Program headers can
+        // cover several sections at once, so walk the sections to keep every
+        // section at its own address (the real toolchain puts `.reset`,
+        // `.ivt.*`/`.aivt.*` and `.text` at non-contiguous PC addresses).
+        parse_pic24_sections(&elf, bytes, &mut image)?;
+        return Ok(image);
+    }
     for ph in &elf.program_headers {
         if ph.p_type != PT_LOAD || ph.p_filesz == 0 {
             continue;
@@ -749,28 +758,53 @@ pub fn parse_elf_image(bytes: &[u8]) -> anyhow::Result<crate::memory::ProgramIma
         if off + n > bytes.len() {
             continue;
         }
-        if arch == crate::Arch::Pic24 {
-            use goblin::elf::program_header::PF_X;
-            if ph.p_flags & PF_X == 0 {
-                // Read-only program-space data (reached through PSV/table
-                // reads) is not modelled: skip it rather than misread it as
-                // instructions. XC16 packs it 2 bytes per PC unit.
-                continue;
-            }
-            let Some(slots) = crate::cpu::pic24::xc16_executable_slots(&bytes[off..off + n]) else {
-                anyhow::bail!(
-                    "PIC24 executable segment at {:#x} is not XC16 3-byte packed ({} bytes); \
-                     re-check the ELF layout (DS50002071F)",
-                    ph.p_paddr,
-                    n
-                );
-            };
-            image.add_segment(ph.p_paddr, slots);
-            continue;
-        }
         image.add_segment(ph.p_paddr, bytes[off..off + n].to_vec());
     }
     Ok(image)
+}
+
+/// Load a PIC24 XC16 ELF from its **section** table (see [`parse_elf_image`]).
+///
+/// Only executable sections are loaded; non-executable program-space data
+/// (PSV/table reads) is not modelled and is skipped. Every loaded section
+/// must be a whole number of 4-byte slots — the parsers reject anything else
+/// instead of guessing (verified against XC16 v1.70 output).
+pub fn parse_pic24_sections(
+    elf: &goblin::elf::Elf<'_>,
+    bytes: &[u8],
+    image: &mut crate::memory::ProgramImage,
+) -> anyhow::Result<()> {
+    use goblin::elf::section_header::{SHF_EXECINSTR, SHT_PROGBITS};
+    let mut loaded = 0usize;
+    for sh in &elf.section_headers {
+        if sh.sh_type != SHT_PROGBITS || sh.sh_flags & u64::from(SHF_EXECINSTR) == 0 {
+            continue;
+        }
+        let (off, n) = (sh.sh_offset as usize, sh.sh_size as usize);
+        if n == 0 {
+            continue;
+        }
+        if off + n > bytes.len() {
+            anyhow::bail!(
+                "PIC24 section at {:#x} runs past the end of the ELF file",
+                sh.sh_addr
+            );
+        }
+        let data = &bytes[off..off + n];
+        if !crate::cpu::pic24::xc16_section_is_slot_aligned(data) {
+            anyhow::bail!(
+                "PIC24 executable section at {:#x} is {n} bytes — not a whole number of \
+                 4-byte XC16 slots; re-check the ELF layout (DS50002071F)",
+                sh.sh_addr
+            );
+        }
+        image.add_segment(sh.sh_addr, data.to_vec());
+        loaded += 1;
+    }
+    if loaded == 0 {
+        anyhow::bail!("PIC24 ELF has no executable sections to load");
+    }
+    Ok(())
 }
 
 /// A Cortex-M image must carry a usable reset vector, or the machine boots to

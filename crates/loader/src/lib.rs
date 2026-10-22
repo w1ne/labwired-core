@@ -96,7 +96,16 @@ pub fn load_elf_bytes(buffer: &[u8]) -> Result<ProgramImage> {
 
     let mut program_image = ProgramImage::new(elf.entry, arch);
 
-    for ph in elf.program_headers {
+    if arch == labwired_core::Arch::Pic24 {
+        // XC16 executable sections are already in the CPU's 4-byte slot form
+        // and their addresses are PC units; load them from the section table
+        // (program headers can span several non-contiguous sections). Shared
+        // with the core parser.
+        labwired_core::system::node::parse_pic24_sections(&elf, buffer, &mut program_image)?;
+        return Ok(program_image);
+    }
+
+    for ph in &elf.program_headers {
         if ph.p_type == PT_LOAD {
             // We only care about loadable segments
             let size = ph.p_filesz as usize;
@@ -150,30 +159,7 @@ pub fn load_elf_bytes(buffer: &[u8]) -> Result<ProgramImage> {
                     "Found Loadable Segment: Addr={:#x}, Size={} bytes, Offset={:#x}",
                     start_addr, size, offset
                 );
-                if arch == labwired_core::Arch::Pic24 {
-                    use goblin::elf::program_header::PF_X;
-                    if ph.p_flags & PF_X == 0 {
-                        // Read-only program-space data (PSV/table reads) is
-                        // not modelled; skipping beats misreading it as code.
-                        debug!(
-                            "PIC24: skipping non-executable segment {:#x} ({} bytes)",
-                            ph.p_paddr, size
-                        );
-                        continue;
-                    }
-                    let slots = labwired_core::cpu::pic24::xc16_executable_slots(&segment_data)
-                        .ok_or_else(|| {
-                            anyhow!(
-                                "PIC24 executable segment at {:#x} is not XC16 3-byte \
-                                 packed ({} bytes)",
-                                ph.p_paddr,
-                                size
-                            )
-                        })?;
-                    program_image.add_segment(start_addr, slots);
-                } else {
-                    program_image.add_segment(start_addr, segment_data);
-                }
+                program_image.add_segment(start_addr, segment_data);
             }
         }
     }
