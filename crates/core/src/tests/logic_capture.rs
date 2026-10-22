@@ -368,6 +368,36 @@ mod logic_capture_tests {
         assert_eq!(cap.channel_edge_counts(), &[0]);
     }
 
+    /// `result.json` carries the exact per-pad total beside the bounded
+    /// window, so an edge count read from the result survives an overflow.
+    #[test]
+    fn edge_result_carries_exact_totals_past_ring_overflow() {
+        use crate::logic_capture::{
+            attach_logic_edge_counts, build_logic_edges_result, LogicChannelMeta,
+        };
+        let mut cap = LogicCapture::new();
+        cap.install(&[Some(LogicSource::pad(0, 0))], &[Some(false)], &[false]);
+        let total = LOGIC_RING_CAPACITY + 100;
+        for i in 0..total {
+            cap.sample(i as u64 + 1, |_| Some(i % 2 == 0));
+        }
+        let batch = cap.read_edges(0);
+        let meta = [LogicChannelMeta {
+            ch: 0,
+            peripheral: "gpio".into(),
+            pin: 9,
+            initial: Some(false),
+        }];
+        let mut result = build_logic_edges_result(&meta, &batch, total as u64 + 1);
+        assert_eq!(result.channels[0].edge_count, None, "absent until attached");
+        attach_logic_edge_counts(&mut result, cap.channel_edge_counts());
+        assert_eq!(result.dropped, 100);
+        assert_eq!(result.channels[0].transitions.len(), LOGIC_RING_CAPACITY);
+        assert_eq!(result.channels[0].edge_count, Some(total as u64));
+        let json = serde_json::to_value(&result.channels[0]).unwrap();
+        assert_eq!(json["edge_count"], serde_json::json!(total));
+    }
+
     #[test]
     fn acknowledged_reads_free_ring_capacity_for_continuous_capture() {
         let mut cap = LogicCapture::new();
