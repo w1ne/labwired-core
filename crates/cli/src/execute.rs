@@ -741,6 +741,9 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
     let mut cached_uart_len = usize::MAX;
     let mut cached_all_pass = false;
 
+    // Simulated-time stamps for every UART line (`result.json` `uart_lines`).
+    let mut uart_lines = crate::uart_lines::UartLineRecorder::new();
+
     let mut step = 0;
     let mut heartbeat = Heartbeat::new(ctx.args.heartbeat_file.clone());
     while step < max_steps {
@@ -1090,6 +1093,12 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
                 stuck_counter = 0;
                 prev_pc = current_pc;
             }
+        }
+
+        // One uncontended lock per advance; only bytes past the last
+        // observation are read, and the window edge always moves forward.
+        if let Ok(g) = ctx.uart_tx.lock() {
+            uart_lines.observe(&g, ctx.machine.total_cycles);
         }
 
         if !uart_milestone_cycles.occurrences.is_empty() {
@@ -1690,6 +1699,12 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
 
     export_analog_trace_if_requested(&ctx.args.analog_trace, ctx.machine);
 
+    // A loop exit between an advance and its observation must not lose the
+    // last bytes' stamps.
+    if let Ok(g) = ctx.uart_tx.lock() {
+        uart_lines.observe(&g, ctx.machine.total_cycles);
+    }
+
     // ── THE VERDICT ──────────────────────────────────────────────────────────
     //
     // `labwired test` is the deterministic gate, and until now a PASSING run
@@ -1783,6 +1798,7 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
         Some(inspect_block),
         logic_edges,
         gpio_pins,
+        uart_lines.finish(),
         ctx.machine.bus.motor_snapshots(),
         ctx.machine
             .analog_series()

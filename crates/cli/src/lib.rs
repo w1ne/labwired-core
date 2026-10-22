@@ -46,6 +46,7 @@ mod outputs;
 mod resource_report;
 mod size_limited_writer;
 mod stimuli;
+mod uart_lines;
 mod vcd_trace;
 mod wifi_frames;
 
@@ -1474,6 +1475,8 @@ fn handle_load_error<C: labwired_core::Cpu>(
         None,
         None,
         // Nor any per-pin GPIO state.
+        None,
+        // Nor any UART line stamps.
         None,
         // Load/reset failed before a machine existed: no motor evidence either.
         Vec::new(),
@@ -2998,6 +3001,7 @@ mod test_outcome_golden_tests {
             fault_verdict: None,
             logic_edges: None,
             gpio_pins: None,
+            uart_lines: None,
             motors: Vec::new(),
             analog_series: None,
             stimuli: Vec::new(),
