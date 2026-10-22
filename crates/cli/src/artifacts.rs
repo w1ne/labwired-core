@@ -182,6 +182,12 @@ pub(crate) struct TestResult {
     /// where the pad's model cannot say. Omitted when no pad was watched.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) gpio_pins: Option<Vec<labwired_core::logic_capture::GpioPinState>>,
+    /// Every UART capture line with the simulated-time window its first byte
+    /// (and its newline) appeared in, so an oracle can anchor pin evidence on
+    /// "when the firmware printed X". Additive: absent when nothing was
+    /// printed. See `crate::uart_lines` for the resolution contract.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) uart_lines: Option<crate::uart_lines::UartLinesResult>,
     /// Final + peak motor evidence (omitted when the manifest declared no
     /// motors, keeping result.json byte-identical for every other run). The
     /// oracle evaluates the peak `|speed_rpm|` post-hoc: a continuous
