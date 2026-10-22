@@ -482,6 +482,30 @@ a valid Thumb reset vector, and unknown, mistyped, or invalid interconnect
 configuration; these produce `status: "error"` with `stop_reason:
 "config_error"` without changing the result-union arm.
 
+### `uart_lines` (optional)
+
+A single-machine run whose firmware printed anything over the UART capture
+also carries `uart_lines`: every line of `uart.log`, in order, stamped on the
+engine-cycle axis, so a check can ask what a pin did when a line printed.
+
+```json
+"uart_lines": {
+  "lines": [
+    { "text": "READY", "cycle_lo": 8158720, "cycle": 8178134, "end_cycle": 8179210 }
+  ],
+  "dropped_lines": 0
+}
+```
+
+`text` is the line without its `\r\n`. Its first byte appeared after
+`cycle_lo` and by `cycle`; the window is the observation step the byte landed
+in (up to one execution batch), so read `cycle` as "certainly printed by" and
+`cycle_lo` as "certainly not before". `end_cycle` is when the newline had
+appeared; the last line has none when the run stopped mid-line. Lines past
+20,000 are counted in `dropped_lines`, and text past 512 bytes is cut and flagged
+`text_truncated: true`. Silent runs omit the block, and older consumers can
+ignore it.
+
 ## Deterministic reruns: trace hashing
 
 `--trace` (global, also `-t`) makes `test` write `trace.json` into
