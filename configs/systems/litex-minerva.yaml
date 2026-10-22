@@ -1,0 +1,10 @@
+# LabWired - LiteX Minerva SoC system manifest
+#
+# The SoC's console is the LiteX UART at 0xE0001800 (see the chip descriptor
+# for the CSR map and its sources). The modelled surface has no board I/O:
+# this is the generic LiteX Minerva CPU platform, not a specific carrier board.
+name: "litex-minerva"
+chip: "../chips/litex-minerva.yaml"
+debug_uart: "uart"
+external_devices: []
+board_io: []

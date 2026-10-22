@@ -71,6 +71,10 @@
   },
   {
     "buses": [],
+    "name": "litex-minerva"
+  },
+  {
+    "buses": [],
     "name": "litex-vexriscv"
   },
   {

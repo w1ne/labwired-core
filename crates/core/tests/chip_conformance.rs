@@ -98,6 +98,16 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_litex_vexriscv_smoke_survival"),
     },
     ChipConf {
+        // LiteX Minerva SoC (RV32I soft core). SIM-DERIVED: no silicon capture.
+        // Modelled: CPU + memory + the LiteX UART; the timer (8-bit-CSR
+        // variant) and Ethernet MAC are declared stubs — see
+        // examples/litex-minerva/VALIDATION.md.
+        name: "litex-minerva",
+        yaml: "configs/chips/litex-minerva.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("firmware_survival::test_litex_minerva_smoke_survival"),
+    },
+    ChipConf {
         name: "nrf54l15",
         yaml: "configs/chips/nrf54l15.yaml",
         // No silicon capture: nothing here has been diffed against a real

@@ -1,0 +1,59 @@
+# LabWired - LiteX Minerva SoC chip configuration
+#
+# Sources (retrieved 2026-10-22):
+# - LiteX (litex.readthedocs.io) — the SoC memory-map conventions: the
+#   integrated ROM/SRAM windows, the main RAM region, and the CSR space.
+#   `litex/soc/cores/uart.py` carries the UART core's 32-bit CSR layout
+#   (rxtx @ +0x00, txfull @ +0x04), which the engine's Litex UART profile
+#   models.
+# - The public LiteX Minerva platform (`platforms/cpus/litex_minerva.repl` in
+#   the pinned upstream tree): Minerva RV32I soft core, 100 MHz, UART at
+#   0xE0001800 (IRQ 0), timer at 0xE0002800 (IRQ 1), Ethernet at 0xE0003800
+#   (IRQ 2); ROM 0x20020000 (32 KiB) and the SPI boot flash window 0x20228000
+#   (1 MiB), integrated memory at 0x0 (256 KiB), SRAM at 0x10000000 (256 KiB),
+#   DRAM at 0x40000000.
+# - Minerva (SpinalHDL) — RV32I core: no multiply/divide, no compressed
+#   instructions, so firmware is built for `riscv32i-unknown-none-elf`.
+#
+# Modelled: CPU + memory + the LiteX UART (polled console path).
+# Declared, not modelled (`type: stub`): the timer (this platform uses the
+# 8-bit-CSR `LiteX_Timer` variant, not the 32-bit CSR timer modelled for the
+# VexRiscv SoC) and the Ethernet MAC. The ROM and boot-flash windows are
+# mapped but their contents are not: the example boots its ELF directly.
+# Main RAM (0x40000000, 256 MiB) is not mapped — dense allocation, not needed
+# by the smoke.
+#
+# Tier: L1 smoke — boot + UART byte path on the modelled CSR map.
+
+name: "litex-minerva"
+arch: "riscv"
+core: "rv32i"
+cpu_hz: 100_000_000
+
+# The SPI boot-flash window (the SoC's code storage). Untouched flash reads
+# 0xFF, as silicon does.
+flash: { base: 0x20228000, size: "1MiB" }
+# The SoC's integrated SRAM. The smoke firmware links into it and runs there.
+ram: { base: 0x10000000, size: "256KB" }
+# 0x0 is the SoC's integrated memory window, not an alias of the boot flash.
+flash_boot_alias: false
+memory_regions:
+  - { name: "rom", base: 0x20020000, size: "32KB" }
+  - { name: "mem", base: 0x0, size: "256KB" }
+peripherals:
+  - id: "uart"
+    type: "litex_uart"
+    base_address: 0xE0001800
+    size: "2KB"
+    irq: 0
+  # The 8-bit-CSR LiteX timer variant: declared, not modelled.
+  - id: "timer0"
+    type: "stub"
+    base_address: 0xE0002800
+    size: "2KB"
+    irq: 1
+  - id: "eth"
+    type: "stub"
+    base_address: 0xE0003800
+    size: "2KB"
+    irq: 2

@@ -38,6 +38,8 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * UART: esp32s3-zero.yaml inherits the S3 address-map stub
 * **imxrt1064**
   * UART: no edge bring-up path for i.MX LPUART in this gate yet
+* **litex-minerva**
+  * UART: no LiteX UART bring-up in this harness; bytes are proven by the litex-minerva survival smoke
 * **litex-vexriscv**
   * UART: no LiteX UART bring-up in this harness; bytes are proven by the litex-vexriscv survival smoke
 * **mkw41z4**
@@ -82,6 +84,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | esp32s3 | — | — | — |
 | esp32s3-zero | — | — | — |
 | imxrt1064 | — | — | — |
+| litex-minerva | — | — | — |
 | litex-vexriscv | — | — | — |
 | mkw41z4 | — | — | — |
 | nrf51822 | — | — | — |

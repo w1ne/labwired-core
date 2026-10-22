@@ -579,3 +579,10 @@ chips:
     advanced_unit_only: []
     advanced_dead: []
     shim: []
+  - id: litex-minerva
+    arch: riscv32i
+    headline: "L1 smoke, SIM-DERIVED; no beyond-rubric content. Boot, the RV32I core and the LiteX UART console are proven by tests/fixtures/litex-minerva-smoke.elf and examples/litex-minerva/io-smoke.yaml. The timer (8-bit-CSR variant) and Ethernet MAC are declared stubs (examples/litex-minerva/VALIDATION.md), so no advanced blocks exist to list."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []

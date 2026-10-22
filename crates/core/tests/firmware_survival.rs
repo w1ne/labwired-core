@@ -574,6 +574,21 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output: b"LITEX VEXRISCV SMOKE\n",
     },
     SurvivalCase {
+        // LiteX Minerva SoC (RV32I soft core): the smoke links into the SoC's
+        // integrated SRAM and prints over the LiteX UART. The chip declares
+        // `core: rv32i`, so runs select the standard RV32 profile; the timer
+        // is the 8-bit-CSR variant and stays a declared stub. SIM-DERIVED.
+        name: "litex_minerva_smoke",
+        core: "rv32i",
+        family: CpuFamily::RiscV,
+        hal: Hal::Bare,
+        chip: "litex-minerva",
+        system: "litex-minerva",
+        fixture: "litex-minerva-smoke.elf",
+        valid_pc_ranges: &[(0x1000_0000, 0x1003_FFFF)],
+        expected_uart_output: b"MINERVA LITEX SMOKE\n",
+    },
+    SurvivalCase {
         // Hardware-validated against real NUCLEO-L476RG silicon: the
         // exact byte stream below was captured from /dev/ttyACM1 with the
         // J-Link OB Virtual COM Port at 115200 baud. The simulator must
@@ -2476,6 +2491,8 @@ survival_gate!(test_esp32c3_demo_survival, "esp32c3_demo");
 survival_gate!(test_esp32c6_demo_survival, "esp32c6_demo");
 
 survival_gate!(test_litex_vexriscv_smoke_survival, "litex_vexriscv_smoke");
+
+survival_gate!(test_litex_minerva_smoke_survival, "litex_minerva_smoke");
 
 survival_gate!(test_nucleo_l476rg_smoke_survival, "nucleo_l476rg_smoke");
 

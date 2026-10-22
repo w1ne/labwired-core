@@ -1,0 +1,9 @@
+# LabWired - LiteX Minerva SoC example system
+#
+# Same SoC manifest as configs/systems/litex-minerva.yaml, kept beside the
+# example so the package is self-contained.
+name: "litex-minerva"
+chip: "../../configs/chips/litex-minerva.yaml"
+debug_uart: "uart"
+external_devices: []
+board_io: []

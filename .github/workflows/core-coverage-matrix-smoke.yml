@@ -355,6 +355,15 @@ jobs:
             profile_dir: release
             script: examples/litex-vexriscv/io-smoke.yaml
             system: examples/litex-vexriscv/system.yaml
+          # LiteX Minerva SoC (RV32I): UART console + an add/shift-only core
+          # proof; the 8-bit-CSR timer variant stays a declared stub.
+          - id: litex-minerva-smoke
+            target: riscv32i-unknown-none-elf
+            crate: firmware-litex-minerva-smoke
+            profile: release
+            profile_dir: release
+            script: examples/litex-minerva/io-smoke.yaml
+            system: examples/litex-minerva/system.yaml
 
     steps:
       - uses: actions/checkout@v4

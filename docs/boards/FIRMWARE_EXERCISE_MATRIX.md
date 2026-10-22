@@ -466,3 +466,7 @@ _M0 bring-up; no beyond-rubric content. Boot + UART1 TX run in the PR shards (cr
 ### `litex-vexriscv`
 
 _L1 smoke, SIM-DERIVED; no beyond-rubric content. Boot, the LiteX UART console and the countdown-timer one-shot are proven by tests/fixtures/litex-vexriscv-smoke.elf and examples/litex-vexriscv/io-smoke.yaml. SPI flash, Ethernet and MMCM are declared stubs and timer IRQ delivery is not wired (examples/litex-vexriscv/VALIDATION.md), so no advanced blocks exist to list._
+
+### `litex-minerva`
+
+_L1 smoke, SIM-DERIVED; no beyond-rubric content. Boot, the RV32I core and the LiteX UART console are proven by tests/fixtures/litex-minerva-smoke.elf and examples/litex-minerva/io-smoke.yaml. The timer (8-bit-CSR variant) and Ethernet MAC are declared stubs (examples/litex-minerva/VALIDATION.md), so no advanced blocks exist to list._

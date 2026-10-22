@@ -119,6 +119,14 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         "no LiteX UART bring-up in this harness; bytes are proven by the \
          litex-vexriscv survival smoke",
     ),
+    // LiteX Minerva SoC: no LiteX UART bring-up here either; bytes are proven
+    // by the litex-minerva survival smoke.
+    (
+        "litex-minerva",
+        BusKind::Uart,
+        "no LiteX UART bring-up in this harness; bytes are proven by the \
+         litex-minerva survival smoke",
+    ),
     // ATmega328P: USART0 is mirrored from the AVR CPU, which owns UCSR0x/UBRR0
     // and forwards each register write and UDR0 byte to the bus-side host. The
     // harness drives bus MMIO directly, so it never programs the baud divisor the
