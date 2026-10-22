@@ -16,7 +16,9 @@ Claims, evidence, and what is explicitly **not** claimed yet.
 | Timers T1/T2/T3: TON, TCKPS 1:1–1:256, `TMR > PR` match, 32-bit T2/T3 pair (M1a) | unit-tested | `timer1_counts_to_period_and_raises_flag`, `timer1_prescaler_1_to_8`, `timer23_pair_counts_32_bit_and_flags_timer3` |
 | Interrupts: IFS0/IEC0/IPC0-2, DISI/NSTDIS gating, **IVT/AIVT vector fetch of the 24-bit ISR address**, two-word frame, RETFIE (M1a) | unit-tested | `timer1_interrupt_vectors_frames_and_returns`, `disabled_source_does_not_vector` |
 | `ACCA*` / `ACCB*` 40-bit SFR storage (M1a) | unit-tested | `accumulator_sfr_words_round_trip` |
-| DSP MAC (M1c), PWM/QEI (M2), ADC/SPI/I2C (M3) | **not modelled** | decode error on unsupported opcodes; no claims |
+| **DSP MAC class (M1c)**: `MAC`/`MPY`/`MPY.N`/`MSC` (incl. squares), `CLR`, `MOVSAC`, `LAC`, `SAC`, `SAC.R`, X/Y prefetch + W12 offset, write-back, CORCON modes, OA/OB/SA/SB | unit + integration | `dsp_*` tests (PRM golden vectors); `crates/core/tests/pic24_xc16_dsp.rs` (real XC16 firmware) |
+| DSP accumulator arithmetic (`ADD`/`SUB`/`MAX`/`MIN`/`SFTAC`/`FBCL` on ACCA/ACCB) | **not modelled** | decode error on unsupported opcodes; no claims |
+| PWM/QEI (M2), ADC/SPI/I2C (M3) | **not modelled** | decode error on unsupported opcodes; no claims |
 | GPIO ports A/B/C: TRISx/PORTx/LATx/ODCx, 44-pin masks (M1b) | unit-tested | `gpio_output_drives_the_pad_model`, `port_read_sees_external_levels_and_own_latch`; `peripherals::pic24_gpio` tests |
 | PPS slice: RPINR7 inputs, RPOR0-12 outputs, RP0-15 = RB0-15 / RP16-25 = RC0-9 (M1b) | unit-tested | exercised by the OC/IC tests below |
 | Input capture 1/2: edge modes, prescalers, 4-deep FIFO, ICI, ICOV/ICBNE (M1b) | unit-tested | `ic1_captures_tmr2_on_a_rising_edge_of_rp0`, `ic_interrupt_divider_and_overflow_rules` |
@@ -158,9 +160,9 @@ the stock `p33FJ32MC204.gld` linker script. It exercises the compiler's own
 startup code and the base ISA, not a hand-written fixture.
 
 ```bash
-# 1. Unit tests — 31 passed (base ISA + stack + M0/M1a/M1b tests)
+# 1. Unit tests — 55 passed (base ISA + stack + M0/M1a/M1b/M1c tests)
 cargo test -p labwired-core --lib pic24
-#   test result: ok. 31 passed; 0 failed
+#   test result: ok. 55 passed; 0 failed
 
 # 2. The real XC16 ELF boots — 3 passed
 cargo test -p labwired-core --test pic24_xc16_elf_boot
@@ -183,6 +185,35 @@ Scope added by this milestone: the base integer ISA the XC16 startup and
 `main` use, the corrected stack direction (`PUSH [W15++]`), the corrected
 exception entry (PC loaded from the IVT/AIVT entry as a 24-bit address),
 section-based PIC24 ELF loading, and the boot-at-0 reset path.
+
+## M1c evidence (DSP MAC class, verified 2026-10-23, branch `feat/pic24-m1c-dsp-mac`)
+
+The DSP MAC class is implemented from DS70000157G §4.15/§5.4 and verified
+two ways: the PRM's own worked examples as golden unit vectors, and a real
+XC16 v1.70 firmware (`firmware/xc16-dsp-mac.c` → `...-xc16-dsp-mac.elf`)
+whose body is a fixed MAC-class sequence from those examples.
+
+```bash
+# 1. Unit tests — the PRM examples plus mode/prefetch coverage
+cargo test -p labwired-core --lib pic24
+#   test result: ok. 55 passed; 0 failed
+
+# 2. The real XC16 DSP firmware boots and lands its expected state
+cargo test -p labwired-core --test pic24_xc16_dsp
+#   xc16_dsp_firmware_runs_the_mac_class_and_saturates ... ok
+```
+
+The DSP firmware checks: `LAC` load, a prefetched `MAC` (PRM example 1,
+ACCA = 0x472D_2400 with W4/W5 prefetched and W8/W10 advanced), `MPY` then
+`MSC` cancelling exactly, `MSC`'s write-back of the rounded ACCA to W13
+(0x472D), `SAC` (0x0472), `SAC.R` rounding (0x0121), and a normal-saturation
+clamp of +2^31 to 0x7FFF_FFFF with SA/SAB set.
+
+Every instruction encoding used in the tests and firmware is cross-checked
+against `xc16-as` output (`dsp_words_match_xc16_as`).
+
+Approximations are listed in `docs/pic24-m0-reference.md` §3.2 and the
+module docs; nothing else is guessed — the PRM examples pin the semantics.
 
 ## Unsupported-instruction audit
 
