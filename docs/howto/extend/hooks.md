@@ -76,8 +76,7 @@ declarative GPIO interpreter keeps the schedule table
 (`crates/core/src/peripherals/components/declarative_gpio.rs:68`) and drains
 `Emit`/`Cancel` requests at `crates/core/src/peripherals/components/declarative_gpio.rs:333`.
 The hand-written Rust DHT model still exists, but only as a waveform parity
-oracle — production attachment uses the YAML
-(`crates/core/tests/declarative_coverage.rs:252`).
+oracle — production attachment uses the YAML.
 
 ### Worked example: a DHT22 response latched on a qualified release
 
