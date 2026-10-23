@@ -387,6 +387,28 @@ mod tests {
     }
 
     #[test]
+    fn snapshot_and_runtime_snapshot_round_trip_the_wiring() {
+        let mut cas = LitexControlStatus::new().with_buttons_active_low(true);
+        cas.write_u32(REG_LEDS, 0b101).unwrap();
+        cas.set_external(LEDS as u8, External::Level(true)); // switch 0 held
+        cas.set_external((LEDS + SWITCHES) as u8, External::Level(true)); // button 0 released
+
+        let json = cas.snapshot();
+        let mut from_json = LitexControlStatus::new();
+        from_json.restore(json).unwrap();
+        assert_eq!(from_json.read_u32(REG_LEDS).unwrap(), 0b101);
+        assert_eq!(from_json.read_u32(REG_SWITCHES).unwrap(), 0b1);
+        assert!(from_json.buttons_active_low);
+
+        let bytes = cas.runtime_snapshot();
+        let mut from_bytes = LitexControlStatus::new();
+        from_bytes.restore_runtime_snapshot(&bytes).unwrap();
+        assert_eq!(from_bytes.read_u32(REG_LEDS).unwrap(), 0b101);
+        assert_eq!(from_bytes.read_u32(REG_BUTTONS).unwrap(), 0b1);
+        assert!(from_bytes.buttons_active_low);
+    }
+
+    #[test]
     fn active_low_buttons_latch_pending_on_the_press_edge_and_clear_w1c() {
         let mut cas = LitexControlStatus::new().with_buttons_active_low(true);
         cas.write_u32(REG_ENABLED, 0b1).unwrap();
