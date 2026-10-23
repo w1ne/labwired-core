@@ -329,6 +329,8 @@ pub const MODEL_TYPES: &[&str] = &[
     // type or the fuzzy `contains("timer")` fallback would coerce it onto the
     // STM32 timer map.
     "litex_timer",
+    // LiteX Control-and-Status (LED/switch/button CSR block).
+    "litex_controlandstatus",
     // Microchip Mi-V reference-design peripherals. MUST be listed: without
     // membership the fuzzy fallbacks would coerce `miv_coregpio` onto the
     // STM32 GPIO map (it was doing exactly that for the staged descriptors)
@@ -1099,6 +1101,17 @@ pub fn try_build(
         // LiteX countdown timer (`litex/soc/cores/timer.py`): 32-bit CSRs
         // load/reload/en/update_value/value plus the zero-event manager.
         "litex_timer" => Box::new(crate::peripherals::litex_timer::LitexTimer::new()),
+        "litex_controlandstatus" => {
+            let active_low = p_cfg
+                .config
+                .get("buttons_active_low")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            Box::new(
+                crate::peripherals::litex_control_status::LitexControlStatus::new()
+                    .with_buttons_active_low(active_low),
+            )
+        }
         // Microchip Mi-V reference-design peripherals.
         "miv_coregpio" => Box::new(crate::peripherals::miv::MivCoreGpio::new()),
         "miv_coretimer" => Box::new(crate::peripherals::miv::MivCoreTimer::new()),
