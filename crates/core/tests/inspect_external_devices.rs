@@ -360,6 +360,10 @@ fn record_external_devices_has_one_home() {
         vec![
             "src/bus/external_devices.rs".to_string(),
             "src/bus/from_config.rs".to_string(),
+            // PIC24 SPI1/I2C1 are CPU-internal: the builder strips the
+            // manifest for the bus and attaches the devices to the CPU, but
+            // still records the declarations for inspection.
+            "src/system/builder/pic24.rs".to_string(),
             "src/system/xtensa/esp32.rs".to_string(),
         ],
         "a new external-device attach path must record its declarations too, \
