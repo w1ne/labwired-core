@@ -348,6 +348,13 @@ WAIVED: dict[str, str] = {
         "is built for the Vega SoC map (flash 0x0, RAM 0x20000000), and no "
         "throughput claim is made for this board (docs/boards/vegaboard-ri5cy.md)."
     ),
+    "sam4s16c": (
+        "L1 smoke, SIM-DERIVED: Cortex-M4 + flash/SRAM + UART0 and the SAM4S "
+        "PIO LED/button path only, with no silicon capture and no "
+        "executing-fidelity differential. No perf fixture is built for the "
+        "SAM4S map (flash 0x00400000, RAM 0x20000000), and no throughput claim "
+        "is made for this board (docs/boards/sam4s-xplained.md)."
+    ),
     "rv1103": (
         "The old Cortex-A7 CPU subset fixture is not representative perf evidence. "
         "Optional native reduced Linux direct boot and joint I2C3/UART4 basket "

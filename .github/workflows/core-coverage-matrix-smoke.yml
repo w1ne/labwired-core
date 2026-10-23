@@ -357,6 +357,15 @@ jobs:
             profile_dir: release
             script: examples/arduino-nano-33-ble/io-smoke.yaml
             system: examples/arduino-nano-33-ble/system.yaml
+          # SAM4S Xplained: Cortex-M4, UART0 console + the SAM4S PIO LED/button
+          # path; TC/SPI/TWI/EEFC and the system controller stay stubs.
+          - id: sam4s-xplained-smoke
+            target: thumbv7em-none-eabi
+            crate: firmware-sam4s-xplained-smoke
+            profile: release
+            profile_dir: release
+            script: examples/sam4s-xplained/io-smoke.yaml
+            system: examples/sam4s-xplained/system.yaml
           - id: litex-vexriscv-smoke
             target: riscv32im-unknown-none-elf
             crate: firmware-litex-vexriscv-smoke
