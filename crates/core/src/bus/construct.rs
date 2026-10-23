@@ -62,6 +62,9 @@ impl SystemBus {
             observers: Vec::new(),
             config: crate::SimulationConfig::default(),
             cpu_hz: 0,
+            // A bare test bus has no chip descriptor; the historical default
+            // profile is the ESP32-C3's (the engine's `RiscV::new` default).
+            riscv_profile: crate::cpu::RiscVCoreProfile::Esp32C3,
             bit_band_enabled: true,
             pending_cpu_irqs: [0; 2],
             dport_idx: None,
@@ -166,6 +169,7 @@ impl SystemBus {
             observers: Vec::new(),
             config: crate::SimulationConfig::default(),
             cpu_hz: 0,
+            riscv_profile: crate::cpu::RiscVCoreProfile::Esp32C3,
             bit_band_enabled: false,
             pending_cpu_irqs: [0; 2],
             dport_idx: None,

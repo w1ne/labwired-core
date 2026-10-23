@@ -5,10 +5,13 @@
 // See the LICENSE file in the project root for full license information.
 
 use crate::bus::SystemBus;
-use crate::cpu::{RiscV, RiscVCoreProfile};
+use crate::cpu::RiscV;
 
-pub fn configure_riscv(_bus: &mut SystemBus) -> RiscV {
-    // For now, no specific peripherals (PLIC/CLINT) are mandated for the basic RV32I simulation loop.
-    // Future iterations will add them here.
-    RiscV::new_for(RiscVCoreProfile::Esp32C3)
+pub fn configure_riscv(bus: &mut SystemBus) -> RiscV {
+    // The profile is resolved once, at bus build, from the chip descriptor
+    // (`RiscVCoreProfile::for_chip`): a generic `rv32*` core runs the standard
+    // profile, an ESP32 part keeps the C3's vendor CSR set, and a descriptor
+    // without a `core:` keeps the historical C3 default. Every caller — CLI,
+    // browser, debugger, tests — shares this one resolution.
+    RiscV::new_for(bus.riscv_profile)
 }

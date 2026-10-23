@@ -10,6 +10,10 @@ This is NOT a pad-binding board. Binding answers the static question "what could
 
 Chips that cannot yet produce edges for a bus are listed here with a reason — never silently skipped.
 
+* **atmega2560**
+  * UART: USART0 registers live on the AVR CPU and are forwarded to the bus-side host; this harness drives bus MMIO, not the CPU, so no bring-up exists here
+  * I2C: AVR from_config I2C is generic type:i2c without PadLines cell
+  * SPI: AVR from_config SPI is generic type:spi without PadLines cell
 * **atmega328p**
   * UART: USART0 registers live on the AVR CPU and are forwarded to the bus-side host; this harness drives bus MMIO, not the CPU, so no bring-up exists here
   * I2C: AVR from_config I2C is generic type:i2c without PadLines cell
@@ -34,6 +38,8 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * UART: esp32s3-zero.yaml inherits the S3 address-map stub
 * **imxrt1064**
   * UART: no edge bring-up path for i.MX LPUART in this gate yet
+* **litex-vexriscv**
+  * UART: no LiteX UART bring-up in this harness; bytes are proven by the litex-vexriscv survival smoke
 * **mkw41z4**
   * I2C: Kinetis I2C publishes no line_names / wire_lines (honest empty)
   * SPI: no edge bring-up path for Kinetis DSPI in this gate yet
@@ -62,6 +68,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 
 | Chip | I2C | SPI | UART |
 |------|-----|-----|------|
+| atmega2560 | — | — | — |
 | atmega328p | — | — | — |
 | atsamd21 | — | — | — |
 | atsamd21g18a | — | — | — |
@@ -75,6 +82,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | esp32s3 | — | — | — |
 | esp32s3-zero | — | — | — |
 | imxrt1064 | — | — | — |
+| litex-vexriscv | — | — | — |
 | mkw41z4 | — | — | — |
 | nrf51822 | — | — | — |
 | nrf52832 | ✓ | ✓ | ✓ |

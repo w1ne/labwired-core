@@ -695,6 +695,12 @@ pub struct ChannelEdgeSeries {
     /// Alternate-function signal name when the model can name it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub func: Option<String>,
+    /// Every transition of this pad since capture was armed, the ones the
+    /// ring overflowed away included. `transitions` is the retained window;
+    /// this is the exact count (the same total the `gpio_edges` assertion
+    /// latches on). Absent until [`attach_logic_edge_counts`] runs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub edge_count: Option<u64>,
 }
 
 /// One four-state transition in the serialized series.
@@ -702,6 +708,15 @@ pub struct ChannelEdgeSeries {
 pub struct StateTransition {
     pub cycle: u64,
     pub state: PadState,
+}
+
+/// Stamp each channel with its exact transition total (`counts[ch]`, from
+/// [`LogicCapture::channel_edge_counts`]), so an edge count stays exact after
+/// the ring overflows. A channel with no total is left `None`.
+pub fn attach_logic_edge_counts(result: &mut LogicEdgesResult, counts: &[u64]) {
+    for lane in &mut result.channels {
+        lane.edge_count = counts.get(lane.ch as usize).copied();
+    }
 }
 
 /// Fold a drained four-state batch into an already-built edge result: each
@@ -871,6 +886,7 @@ pub fn build_logic_edges_result(
             states: None,
             mode: None,
             func: None,
+            edge_count: None,
         })
         .collect();
     for edge in &batch.edges {

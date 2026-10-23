@@ -1,0 +1,168 @@
+# DFPlayer Mini (DFRobot DFR0299) MP3 module: serial command decoder + BUSY.
+#
+# Source: DFRobot "DFPlayer Mini Manual" (DFR0299) section 3, serial
+# communication: 9600 baud 8N1, every command is the 10-byte frame
+#   7E FF 06 CMD FB PARA_H PARA_L CHK_H CHK_L EF
+# where CHK = 0 - (FF + 06 + CMD + FB + PARA_H + PARA_L) as a 16-bit word,
+# and BUSY (pin 16) is LOW while a track is playing, HIGH when idle.
+#
+# What this part IS
+#   * A UART receiver on RX, decoded from the pad itself (start bit, eight data
+#     bits LSB first, sampled mid-bit), so it works with a hardware UART and
+#     with a bit-banged SoftwareSerial TX alike.
+#   * A frame validator: start, version, length, end byte and checksum are all
+#     checked; a frame that fails any check is counted in `bad` and ignored.
+#   * Commands 0x03 (play track N), 0x06 (volume N, clamped to 30), 0x0E
+#     (pause) and 0x16 (stop). Play drives BUSY LOW for `PLAY_US` of simulated
+#     time and then releases it HIGH; a new play restarts that window; pause
+#     and stop release BUSY at once.
+#
+# What this part IS NOT (named, not faked)
+#   * There is no SD card, no file system and no MP3 decoder, so no audio
+#     reaches SPK_1/SPK_2 or DAC_L/DAC_R. The play window is a CONSTANT
+#     nominal clip length (1 s), not the length of the file on a card.
+#   * TX stays idle HIGH: no replies, no 0x41 ACK when the feedback byte asks
+#     for one, no 0x3D "track finished" and no 0x3F power-on report.
+#   * The other commands (next/previous, EQ, folders, ADKEY, IO_1/IO_2) are
+#     accepted as valid frames (counted in `frames`) and change nothing.
+#   * Power-on time is not modelled: the module accepts frames at once.
+type: dfplayer_mini
+
+behavior:
+  primitive: gpio_device
+  timer_clock: cycles_floor
+  pins: {RX: rx_pin}
+  outputs: [BUSY, TX]
+  output_pins: {BUSY: busy_pin, TX: tx_pin}
+  pin_config_defaults: {rx_pin: PA0, busy_pin: PA1, tx_pin: PA2}
+  pin_defaults: {RX: true, BUSY: true, TX: true}
+  params:
+    cpu_hz: {key: cpu_hz, default: 16000000}
+  # rx/bit/byte: the UART receiver. b0..b9: the last ten bytes received (b9 is
+  # the newest), so a frame is found wherever it starts. got: a byte just
+  # completed. ok: the window holds a valid frame. frames/bad: counters.
+  vars:
+    rx: 0
+    bit: 0
+    byte: 0
+    got: 0
+    ok: 0
+    b0: 0
+    b1: 0
+    b2: 0
+    b3: 0
+    b4: 0
+    b5: 0
+    b6: 0
+    b7: 0
+    b8: 0
+    b9: 0
+    cmd: 0
+    arg: 0
+    frames: 0
+    bad: 0
+    volume: 30
+    track: 0
+    plays: 0
+  timers:
+    # 9600 baud: one bit is 104.17 us. The first sample is 1.5 bits after the
+    # start edge (the middle of data bit 0), then one sample per bit.
+    - {name: first_bit, after_us: 156, start: manual}
+    - {name: next_bit, period_us: 104, start: manual}
+    # Nominal clip length while BUSY is LOW (PLAY_US).
+    - {name: play, after_us: 1000000, start: manual}
+  rules:
+    # Start bit: a falling edge on an idle line.
+    - on: {pin: RX, edge: falling}
+      when: "var(rx) == 0"
+      do:
+        - {var: rx, value: 1}
+        - {var: bit, value: 0}
+        - {var: byte, value: 0}
+        - {timer: first_bit, start: true}
+    - on: {timer: first_bit}
+      do:
+        - {var: byte, value: "pin(RX)"}
+        - {var: bit, value: 1}
+        - {timer: next_bit, start: true}
+    # Data bit 7 ends the byte: shift it into the frame window.
+    - on: {timer: next_bit}
+      when: "var(bit) == 7"
+      do:
+        - {var: byte, value: "var(byte) | (pin(RX) << 7)"}
+        - {timer: next_bit, start: false}
+        - {var: bit, value: 8}
+        - {var: rx, value: 0}
+        - {var: b0, value: "var(b1)"}
+        - {var: b1, value: "var(b2)"}
+        - {var: b2, value: "var(b3)"}
+        - {var: b3, value: "var(b4)"}
+        - {var: b4, value: "var(b5)"}
+        - {var: b5, value: "var(b6)"}
+        - {var: b6, value: "var(b7)"}
+        - {var: b7, value: "var(b8)"}
+        - {var: b8, value: "var(b9)"}
+        - {var: b9, value: "var(byte)"}
+        - {var: got, value: 1}
+    - on: {timer: next_bit}
+      when: "var(bit) < 7"
+      do:
+        - {var: byte, value: "var(byte) | (pin(RX) << var(bit))"}
+        - {var: bit, value: "var(bit) + 1"}
+    # A complete frame: 7E FF 06 .. EF with a matching checksum.
+    - on: {timer: next_bit}
+      when: "(var(got) == 1) && (var(b0) == 0x7E) && (var(b1) == 0xFF) && (var(b2) == 6) && (var(b9) == 0xEF) && ((((var(b1) + var(b2) + var(b3) + var(b4) + var(b5) + var(b6)) + ((var(b7) << 8) | var(b8))) & 0xFFFF) == 0)"
+      do:
+        - {var: ok, value: 1}
+        - {var: frames, value: "var(frames) + 1"}
+        - {var: cmd, value: "var(b3)"}
+        - {var: arg, value: "(var(b5) << 8) | var(b6)"}
+    - on: {timer: next_bit}
+      when: "(var(got) == 1) && (var(ok) == 0) && (var(b0) == 0x7E) && (var(b1) == 0xFF) && (var(b2) == 6) && (var(b9) == 0xEF)"
+      do:
+        - {var: bad, value: "var(bad) + 1"}
+    - on: {timer: next_bit}
+      when: "(var(ok) == 1) && (var(cmd) == 0x03)"
+      do:
+        - {var: track, value: "var(arg)"}
+        - {var: plays, value: "var(plays) + 1"}
+        - {pin: BUSY, level: 0}
+        - {timer: play, start: true}
+    - on: {timer: next_bit}
+      when: "(var(ok) == 1) && (var(cmd) == 0x06)"
+      do:
+        - {var: volume, value: "var(arg) - ((var(arg) > 30) * (var(arg) - 30))"}
+    - on: {timer: next_bit}
+      when: "(var(ok) == 1) && ((var(cmd) == 0x0E) || (var(cmd) == 0x16))"
+      do:
+        - {timer: play, start: false}
+        - {pin: BUSY, level: 1}
+    # Consume the frame so a later byte cannot match it again.
+    - on: {timer: next_bit}
+      when: "var(ok) == 1"
+      do:
+        - {var: b0, value: 0}
+    - on: {timer: next_bit}
+      when: "var(got) == 1"
+      do:
+        - {var: got, value: 0}
+        - {var: ok, value: 0}
+    # The clip ends: BUSY back HIGH.
+    - on: {timer: play}
+      do:
+        - {pin: BUSY, level: 1}
+
+metadata:
+  label: "DFPlayer Mini"
+  summary: "MP3 player module: serial commands in, BUSY low while playing"
+  detail: "Decodes the DFPlayer Mini 10-byte serial frames (9600 8N1, checksum checked) from the RX pad, so hardware UART and SoftwareSerial both work. Play (0x03) drives BUSY LOW for a constant 1 s clip, volume (0x06) is stored, pause/stop release BUSY. NOT modelled: SD card, MP3 decoding and audio output, replies on TX (it stays idle HIGH), power-on delay and the other commands."
+  category: gpio
+
+emit:
+  device_type: dfplayer-mini
+  connection: gpio
+  config:
+    - { key: rx_pin, from_part_pin: [RX] }
+    - { key: busy_pin, from_part_pin: [BUSY] }
+    - { key: tx_pin, from_part_pin: [TX] }
+    - { key: cpu_hz, from: sim_cpu_hz }

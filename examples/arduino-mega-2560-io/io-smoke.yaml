@@ -1,0 +1,15 @@
+# LabWired — Arduino Mega 2560 I/O smoke test.
+#
+# Boots the Mega sketch through this example's system.yaml (5 V pots on A8 and
+# A9, both centred) and asserts its banner and second report line: A8/A9 read
+# 512 through ADCSRB.MUX5, and the `f=` field came back through an EICALL. The
+# per-pin and timing behaviour is proven in crates/core/tests/avr_mega2560_io.rs.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/avr/arduino-mega-2560-io.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 3000000
+assertions:
+  - uart_contains: "MEGA READY"
+  - uart_contains: "k=1 a8=512 a9=512 a0=512 ms=200 f=6"
