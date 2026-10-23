@@ -83,14 +83,10 @@ jobs:
 
       - name: Install apt packages
         if: matrix.apt != ''
-        env:
-          DEBIAN_FRONTEND: noninteractive
-          APT: ${{ matrix.apt }}
-        run: |
-          sudo apt-get update -qq
-          # shellcheck disable=SC2086  # APT is a space-separated package list
-          # from the board matrix; the word splitting is the point.
-          sudo apt-get install -y --no-install-recommends $APT
+        timeout-minutes: 10
+        uses: ./.github/actions/apt-install-cached
+        with:
+          packages: ${{ matrix.apt }}
 
       - name: Add rust targets
         if: matrix.rust_targets != ''
