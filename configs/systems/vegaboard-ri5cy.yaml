@@ -1,0 +1,10 @@
+# LabWired - Vega board (RI5CY) system manifest
+#
+# The board's console is LPUART0 at 0x40042000 (see the chip descriptor for
+# the SoC map and its sources). The modelled surface has no user I/O: the Vega
+# board's LEDs/buttons are not wired in this platform definition.
+name: "vegaboard-ri5cy"
+chip: "../chips/vegaboard-ri5cy.yaml"
+debug_uart: "lpuart0"
+external_devices: []
+board_io: []

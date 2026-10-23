@@ -50,6 +50,7 @@ The models column is a content digest over everything that board's `models` list
 | `nucleo-g071rb` | 🟡 smoke-manual | — | `354776217a6e438d` | no silicon capture |
 | `esp32c6-devkitc` | 🟡 smoke-manual | — | `10b8c5606329a0c7` | no silicon capture |
 | `litex-vexriscv` | 🟡 smoke-manual | — | `669c6e8a626b9f33` | no silicon capture |
+| `vegaboard-ri5cy` | 🟡 smoke-manual | — | `c2bad1bf3ae94bfa` | no silicon capture |
 
 ## `nrf52840` — 🟢 silicon-verified
 
@@ -398,4 +399,11 @@ The models column is a content digest over everything that board's `models` list
 - Doc: [`docs/boards/litex-vexriscv.md`](litex-vexriscv.md)  ·  Chip: `configs/chips/litex-vexriscv.yaml`
 - Silicon: none — not validated against real hardware.
   - offline (CI): firmware_survival::test_litex_vexriscv_smoke_survival
+- Drift status: **no silicon capture**
+
+## `vegaboard-ri5cy` — 🟡 smoke-manual
+
+- Doc: [`docs/boards/vegaboard-ri5cy.md`](vegaboard-ri5cy.md)  ·  Chip: `configs/chips/vegaboard-ri5cy.yaml`
+- Silicon: none — not validated against real hardware.
+  - offline (CI): firmware_survival::test_vegaboard_ri5cy_smoke_survival
 - Drift status: **no silicon capture**

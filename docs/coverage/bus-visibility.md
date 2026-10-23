@@ -65,6 +65,8 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * I2C: rp2350 from_config bus not yet edge-gated (no line cells)
   * SPI: rp2350 from_config bus not yet edge-gated (no line cells)
   * UART: rp2350 from_config bus not yet edge-gated (no line cells)
+* **vegaboard-ri5cy**
+  * UART: no LPUART bring-up in this harness; bytes are proven by the vegaboard-ri5cy survival smoke
 
 | Chip | I2C | SPI | UART |
 |------|-----|-----|------|
@@ -114,3 +116,4 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | stm32u575 | ✓ | ✓ | ✓ |
 | stm32wb55 | ✓ | ✓ | ✓ |
 | stm32wba52 | ✓ | ✓ | ✓ |
+| vegaboard-ri5cy | — | — | — |
