@@ -1319,17 +1319,20 @@ impl Pic24 {
                             (self.acc_b & !0x00FF_0000_0000) | (i64::from(val & 0x00FF) << 32)
                     }
                     SFR_SR => {
-                        // SA/SB/OA/OB are set by hardware and can only be
-                        // cleared by software; OAB/SAB are derived and
-                        // clearing SAB clears both SA and SB
-                        // (DS70000157G §2.16.4).
+                        // SA/SB/OA/OB are sticky, set by hardware and cleared
+                        // only by software: a written 0 clears a flag, a
+                        // written 1 keeps its old value (a write cannot set
+                        // it). SAB/OAB are derived; writing 0 to SAB also
+                        // clears SA and SB (DS70000157G §2.16.4 Notes 2-3).
                         let old = self.sr;
-                        let mut v = val & !(SR_SA | SR_SB | SR_OA | SR_OB | SR_OAB | SR_SAB);
-                        if val & SR_SAB != 0 {
-                            v |= old & (SR_SA | SR_SB);
+                        let keep = |bit: u16| if val & bit != 0 { old & bit } else { 0 };
+                        let mut v = val & !(SR_OA | SR_OB | SR_SA | SR_SB | SR_OAB | SR_SAB);
+                        v |= keep(SR_OA) | keep(SR_OB) | keep(SR_SA) | keep(SR_SB);
+                        if val & SR_SAB == 0 {
+                            v &= !(SR_SA | SR_SB);
                         }
-                        if val & SR_OAB != 0 {
-                            v |= old & (SR_OA | SR_OB);
+                        if val & SR_OAB == 0 {
+                            v &= !(SR_OA | SR_OB);
                         }
                         self.sr = v;
                         self.refresh_dsp_status();
@@ -1677,6 +1680,10 @@ impl Pic24 {
         let super_sat = self.corcon & CORCON_ACCSAT != 0;
         let fits32 = fits_signed32(value);
         let fits40 = fits_signed40(value);
+        // OA/OB report a *guard-bit* overflow (the exact result no longer
+        // fits the signed 32-bit range) while SA/SB report *saturation* (the
+        // result left the active accumulator range). That is why the two
+        // flags use different predicates (DS70000157G §2.16.4).
         let (stored, saturated, guard_overflow) = if !sat_enabled {
             (wrap40(value), !fits40, !fits32)
         } else if super_sat {
@@ -1776,6 +1783,10 @@ impl Pic24 {
         let value = if acc == 0 { self.acc_b } else { self.acc_a };
         let hi = ((value >> 16) & 0xFFFF) as u16;
         let lo = (value & 0xFFFF) as u16;
+        // The accumulator is 40-bit and the rounding carry adds at most
+        // 2^16, so `rounded` still fits 41 bits: SATDW compares the true
+        // value (a value above 2^39 is positive and saturates to 0x7FFF) and
+        // the stored word is its ACCxH extract.
         let rounded = if self.dsp_round_up(hi, lo) {
             value.wrapping_add(0x1_0000)
         } else {
@@ -2466,6 +2477,7 @@ impl Pic24 {
 
         // ── DSP MAC class (DS70000157G §4.15, §5.4) ─────────────────────────
         // Square MAC/MPY — 1111 00mm A0xx yyii iijj jj0b.
+        // 0b1x in bits 19-18 is an unimplemented encoding (DecodeError).
         if word & 0x00F0_0000 == 0x00F0_0000 {
             if word & 0x000C_0000 == 0 {
                 self.exec_dsp_mac(word, true)?;
@@ -4107,6 +4119,94 @@ mod tests {
         // Writing SAB = 1 cannot set SA/SB (read-only).
         cpu.data_write(SFR_SR, SR_SAB).unwrap();
         assert_eq!(cpu.data_read(SFR_SR).unwrap() & (SR_SA | SR_SB | SR_SAB), 0);
+    }
+
+    #[test]
+    fn dsp_individual_status_bits_clear_independently() {
+        // Saturate both accumulators: MPY W4*W4, A and MPY W4*W4, B with
+        // W4 = 0x8000 produce +2^31 (the 1.31 clamp).
+        let mut cpu = cpu_with(&[0xF00111, 0xF08111]); // MPY sq A, MPY sq B
+        cpu.corcon = CORCON_SATA | CORCON_SATB;
+        cpu.w[4] = 0x8000;
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        step(&mut cpu, &mut bus);
+        let sr = cpu.data_read(SFR_SR).unwrap();
+        assert_ne!(sr & SR_SA, 0, "ACCA saturated");
+        assert_ne!(sr & SR_SB, 0, "ACCB saturated");
+
+        // A read-modify-write that clears SA alone: the SAB bit reads back
+        // as 1, and the write must still clear SA while keeping SB
+        // (DS70000157G §2.16.4 Note 2).
+        let sr = cpu.data_read(SFR_SR).unwrap();
+        cpu.data_write(SFR_SR, (sr & !SR_SA) | SR_SB | SR_SAB)
+            .unwrap();
+        let sr = cpu.data_read(SFR_SR).unwrap();
+        assert_eq!(sr & SR_SA, 0, "SA cleared on its own");
+        assert_ne!(sr & SR_SB, 0, "SB kept");
+        assert_ne!(sr & SR_SAB, 0, "SAB follows SB");
+
+        // Clearing SB alone works the same way; a written 1 to SA cannot
+        // set a flag that is 0.
+        let sr = cpu.data_read(SFR_SR).unwrap();
+        cpu.data_write(SFR_SR, (sr & !SR_SB) | SR_SA | SR_SAB)
+            .unwrap();
+        let sr = cpu.data_read(SFR_SR).unwrap();
+        assert_eq!(sr & (SR_SA | SR_SB), 0);
+        assert_eq!(sr & SR_SAB, 0);
+    }
+
+    #[test]
+    fn dsp_clr_b_clears_only_accb_and_its_flags() {
+        // CLR B, [W8]+=2, W4, W13 (xc16-as 0xC38050).
+        let mut cpu = cpu_with(&[0x00C3_8050]);
+        cpu.corcon = 0x0000;
+        cpu.w[8] = 0x0A00;
+        cpu.w[13] = 0x0020;
+        cpu.acc_a = 0x3290_5968;
+        cpu.acc_b = 0x1234_5678;
+        cpu.sr |= SR_OA | SR_SA | SR_OB | SR_SB;
+        cpu.refresh_dsp_status();
+        cpu.data_write(0x0A00, 0x4321).unwrap();
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.acc_b, 0, "ACCB cleared");
+        assert_eq!(cpu.acc_a, 0x3290_5968, "ACCA untouched");
+        assert_eq!(cpu.w[4], 0x4321, "X prefetch");
+        assert_eq!(cpu.w[8], 0x0A02);
+        assert_eq!(cpu.w[13], 0x3290, "rounded ACCA write-back");
+        let sr = cpu.data_read(SFR_SR).unwrap();
+        assert_eq!(sr & (SR_OB | SR_SB), 0, "ACCB flags cleared");
+        assert_ne!(sr & (SR_OA | SR_SA), 0, "ACCA flags untouched");
+        assert_ne!(sr & SR_OAB, 0, "OAB still follows OA");
+        assert_ne!(sr & SR_SAB, 0, "SAB still follows SA");
+    }
+
+    #[test]
+    fn dsp_lac_and_sac_register_offset_mode() {
+        // lac [W4+W5], A (xc16-as 0xCA2864): EA = 0x0B00.
+        let mut cpu = cpu_with(&[0x00CA_2864]);
+        cpu.corcon = 0x0000;
+        cpu.w[4] = 0x0A00;
+        cpu.w[5] = 0x0100;
+        cpu.data_write(0x0B00, 0x1234).unwrap();
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.acc_a, 0x1234_0000);
+        assert_eq!(cpu.w[4], 0x0A00, "register-offset mode does not update Ws");
+        assert_eq!(cpu.w[5], 0x0100, "nor Wb");
+
+        // sac A, [W5+W6] (xc16-as 0xCC3065): EA = 0x0D00.
+        let mut cpu = cpu_with(&[0x00CC_3065]);
+        cpu.corcon = 0x0000;
+        cpu.acc_a = 0x1234_0000;
+        cpu.w[5] = 0x0C00;
+        cpu.w[6] = 0x0100;
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.data_read(0x0D00).unwrap(), 0x1234);
+        assert_eq!(cpu.w[5], 0x0C00, "register-offset mode does not update Wd");
+        assert_eq!(cpu.w[6], 0x0100);
     }
 
     #[test]
