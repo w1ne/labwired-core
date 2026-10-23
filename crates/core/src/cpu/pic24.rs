@@ -4,7 +4,7 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
-//! PIC24 / dsPIC33F CPU — **M0 + M1a + M1b subset** for the
+//! PIC24 / dsPIC33F CPU — **M0 + M1a + M1b + M1c + M2 subset** for the
 //! dsPIC33FJ32MC204 class.
 //!
 //! Scope:
@@ -21,14 +21,59 @@
 //!   prescaler capture modes, 4-deep FIFO, ICI interrupt divider,
 //!   ICOV/ICBNE) and Output Compare 1/2 (one-shot, toggle, delayed
 //!   one-shot, continuous pulse, PWM modes driving their routed RPn pin).
+//! * **M1c** — the DSP MAC class: `MAC`/`MPY`/`MPY.N`/`MSC` (incl. the
+//!   same-register square forms), `CLR`, `MOVSAC`, `LAC`, `SAC`, `SAC.R`,
+//!   the X/Y prefetches (Tables 5-7…5-10), accumulator write-back
+//!   (Table 5-13), CORCON fractional/integer, signed/unsigned, rounding and
+//!   saturation modes, and the OA/OB/SA/SB/OAB/SAB status bits. Verified
+//!   against the DS70000157G worked examples and real XC16 firmware.
+//! * **M2** — Motor Control PWM 1 (free-running/single-event/up-down time
+//!   base, PTOPS/PTCKPS, three duty generators with buffering and IUE, the
+//!   complementary/independent output pairs on PWM1H1/L1 = RB14/RB15,
+//!   PWM1H2/L2 = RB12/RB13, PWM1H3/L3 = RB10/RB11, dead-time units A/B,
+//!   P1OVDCON override, FLTA1 fault states with latched/cycle-by-cycle
+//!   restore, PWM1IF postscaling) and the Quadrature Encoder Interface 1
+//!   (x2/x4 decoding, POS1CNT/MAX1CNT, match and index resets with IMV,
+//!   UPDN/UPDN pin, CNTERR/CEID, the digital filter and the 16-bit
+//!   timer/counter mode). IFS3/IEC3/IPC14/IPC15 are wired into the interrupt
+//!   fabric (PWM1 = vector 65, QEI = 66, FLTA1 = 71).
 //!
 //! Not yet modelled — unsupported opcodes return
-//! [`SimulationError::DecodeError`] rather than guessing: PWM/QEI (M2), ADC/
-//! SPI/I2C (M3), DSP MAC (field tables pending, M1c), PSV/EDS windows.
-//! Status-flag arithmetic (SR N/Z/C/OV) is not evaluated yet. Change
+//! [`SimulationError::DecodeError`] rather than guessing: ADC/SPI/I2C (M3),
+//! PSV/EDS windows, the DSP *accumulator* arithmetic
+//! (`ADD`/`SUB`/`MAX`/`MIN`/`SFTAC`/`FBCL` on ACCA/ACCB). Change
 //! notification (CNENx/CNPUx) and the remaining PPS functions (UART/SPI/
 //! INT/QEI routing) are not modelled: the PPS registers store values, but
-//! only the IC1/IC2 inputs and OC1/OC2 outputs are consumed.
+//! only the IC1/IC2 inputs, OC1/OC2 outputs, PWM outputs, QEI inputs and the
+//! UPDN output are consumed.
+//!
+//! Known M2 approximations (documented, not guessed; the PWM/QEI state
+//! machines follow DS70187E §14 and DS70208C §15):
+//! * PWM output polarity is active-high and PWMPIN = 1 is assumed (the
+//!   erased-device FPOR values), so PWM1CON1 resets to 0 and the pins are
+//!   GPIO until PENyH/PENyL are set.
+//! * Center-aligned counting keeps both endpoint ticks (the 2*(PTPER+1)
+//!   period of Equation 14-2); the compare is evaluated with the phase
+//!   direction before the endpoint flip. The FRM's text does not pin the
+//!   exact endpoint tick order.
+//! * QEI index recognition uses the rising edge of the filtered INDX input
+//!   with the IMV match, rather than latching a quadrature-state transition
+//!   (DS70208C §15.5.3.1); diagonal (illegal) quadrature transitions are
+//!   ignored.
+//! * The QEI digital filter advances once per instruction cycle with the
+//!   QECK divider and accepts a level after three equal samples.
+//! * PWM/QEI inputs are sampled once per retired instruction step (the same
+//!   granularity as the M1b capture units).
+//!
+//! Known M1c approximations (documented, not guessed; every other M1c
+//! behaviour is pinned by a DS70000157G example — see the tests):
+//! * `LAC`'s shifter is 32-bit, which the PRM's examples 1-2 pin exactly;
+//!   with super saturation enabled and an overflowing left shift the exact
+//!   40-bit result is kept (no PRM example covers this combination).
+//! * `MPY.N` lists only OA/OB/OAB as affected, so it stores the negated
+//!   product without saturation or SA/SB (the page is followed literally).
+//! * Accumulator write-back applies SATDW like `SAC.R` (the PRM mentions
+//!   saturation only for SAC/SAC.R; no write-back example saturates).
 //!
 //! Known M1b approximations (documented, not guessed):
 //! * IC capture latency (2 instruction cycles, DS70198D Figure 12-2) is not
@@ -40,18 +85,27 @@
 //! * IC mode 111 (sleep/idle wake only, DS70198D Register 12-1) is stored
 //!   but never captures — there is no sleep mode to wake from.
 //!
-//! Conventions (XC16 ELF layout verified against DS50002071F):
-//! * `pc` is a **PC-unit address**: two units per instruction, so
+//! Conventions (verified against a real XC16 v1.70-built ELF, committed at
+//! `examples/dspic33fj32mc204/firmware/dspic33fj32mc204-xc16-uart-smoke.elf`):
+//! * `pc` is a **PC-unit address**: two units per instruction word, so
 //!   instructions sit at even addresses and the PC advances by 2. This is
 //!   the datasheet's addressing (`PC<0>` always 0; interrupt vectors at
 //!   `0x4 + 2*N`) and the XC16 guide's "Program Counter Unit".
 //! * Internally each instruction occupies one 4-byte little-endian slot
-//!   (`INSTR_SLOT_BYTES`, slot index = `pc / 2`). XC16 executable sections
-//!   pack instructions as **3 bytes each** ("2 program counter units are
-//!   equivalent to 3 bytes", DS50002071F); the ELF parsers expand them into
-//!   slots with [`xc16_executable_slots`]. Phantom bytes are a HEX-file
-//!   concept, not an ELF one.
-//! * Non-executable PIC24 program-memory segments (read-only data reached
+//!   (`INSTR_SLOT_BYTES`, slot index = `pc / 2`). XC16 **ELF executable
+//!   sections store exactly this 4-byte slot form** — the 24-bit word plus
+//!   one pad byte per instruction — and the parsers copy them verbatim
+//!   (verified: every executable section of the real ELF has a size that is
+//!   a multiple of 4, and the disassembler decodes with a 4-byte stride).
+//!   DS50002071F's "in an executable section, 2 program counter units are
+//!   equivalent to 3 bytes" describes the 16-bit assembler's *conceptual*
+//!   address arithmetic, not ELF file storage; "phantom bytes" are the pad
+//!   bytes of that 4-byte container (DS50002071F glossary).
+//! * Interrupt vectors are **data**: each vector location holds the 24-bit
+//!   starting address of its ISR (DS70283H §7.1: "Each interrupt vector
+//!   contains a 24-bit-wide address"). Exception entry loads the PC *from*
+//!   the vector; it does not execute code placed at the vector address.
+//! * Non-executable PIC24 program-memory sections (read-only data reached
 //!   through PSV/table reads) are skipped at load — PSV is not modelled.
 //! * Data space: `0x0000–0x07FF` SFR (UART1, timers, interrupt registers,
 //!   ports, capture/compare modelled; the rest is a shadow latch),
@@ -70,16 +124,48 @@
 //!
 //! ## Modelled instructions
 //!
-//! | Instruction | Encoding source |
+//! Base integer ISA needed by real XC16 code (encodings transcribed from
+//! DS70000157G; `MOV #lit16`/`MOV Ws,f`/`MOV f,Wd` predate this list):
+//!
+//! | Instruction | Notes |
 //! | :--- | :--- |
-//! | `NOP` | DS70000157G |
-//! | `MOV #lit16, Wnd` | DS70000157G |
-//! | `MOV Wns, f` | DS70000157G |
-//! | `MOV f, Wnd` | DS70000157G |
-//! | `BRA Expr` (slit16) | DS70000157G |
-//! | `RETFIE` | DS70000157G |
+//! | `NOP`, `MOV #lit16,Wn`, `MOV Ws,f`, `MOV f,Wn` | M0 |
+//! | `MOV.B #lit8,Wn`, `MOV{.B} Ws,Wd` | all ggg/hhh modes except `[Ws+Wb]` |
+//! | `CLR{.B} f`, `SETM{.B} f` | D=0/1 (WREG or file register) |
+//! | `ADD{.B} Wb,#lit5,Wd`, `ADD{.B} Wb,Ws,Wd` | |
+//! | `AND{.B} Wb,#lit5,Wd`, `AND{.B} Wb,Ws,Wd`, `AND #lit10,Wn` | |
+//! | `IOR{.B} Wb,#lit5,Wd`, `IOR{.B} Wb,Ws,Wd`, `IOR #lit10,Wn` | |
+//! | `CP0{.B} Ws`, `CP0{.B} f` | |
+//! | `BSET/BCLR/BTG{.B} f,#bit`, `BSET/BCLR/BTG{.B} Ws,#bit` | |
+//! | `SE [Ws],Wd` (and register form) | |
+//! | `LSR Wb,#lit4,Wnd` | |
+//! | `BRA cond,Expr` (all 15 condition codes), `RCALL Expr` | |
+//! | `CALL Expr`, `GOTO Expr` | 2-word instructions, PC advances by 4 |
+//! | `RETURN`, `RETLW{.B} #lit10,Wn`, `LNK #lit14`, `ULNK` | |
+//! | `RETFIE` | M1a |
+//!
+//! DSP MAC class (M1c, DS70000157G §4.15/§5.4), all with the X/Y prefetch
+//! tables, write-back table and CORCON modes:
+//!
+//! | Instruction | Notes |
+//! | :--- | :--- |
+//! | `MAC/MPY/MPY.N/MSC Wm*Wn, Acc {,AWB}` | `1100 0mmm`, Tables 5-12/5-13 |
+//! | `MAC/MPY Wm*Wm, Acc` | `1111 00mm`, Table 5-11, no write-back |
+//! | `CLR Acc {,AWB}` | clears the accumulator and its OA/SA or OB/SB |
+//! | `MOVSAC Acc {,AWB}` | prefetch + write-back only, no status |
+//! | `LAC Ws/[...], {#Slit4,} Acc` | 32-bit shifter (PRM examples 1-2) |
+//! | `SAC`/`SAC.R Acc, {#Slit4,} Wd/[...]` | 40-bit shift, SATDW, RND |
+//!
+//! Not yet implemented — these return [`SimulationError::DecodeError`]:
+//! `TBLRD*`/`TBLW*` (PSV is not modelled), `ADDC`/`SUBB`/`CPB` and their
+//! sticky Z flag, the `[Ws+Wb]` register-offset mode for the base ISA, the
+//! DSP accumulator arithmetic (`ADD`/`SUB`/`MAX`/`MIN`/`SFTAC`/`FBCL`),
+//! `REPEAT`/`DO`, `PUSH`/`POP`, `RESET`/`BREAK`.
 //!
 //! UART1 registers (DS70283H): `U1MODE 0x0220`, `U1STA 0x0222`, `U1TXREG 0x0224`.
+//! M2 peripherals (DS70283H Tables 4-8/4-10): `P1TCON 0x01C0` …
+//! `P1DC3 0x01DA`, `QEI1CON 0x01E0` … `MAX1CNT 0x01E6`; the QEI inputs are
+//! mapped by `RPINR14/15` and the FLTA1 fault input by `RPINR12`.
 
 use crate::snapshot::{CpuSnapshot, Pic24CpuSnapshot};
 use crate::{Bus, Cpu, SimResult, SimulationConfig, SimulationError, SimulationObserver};
@@ -88,8 +174,9 @@ use std::sync::{Arc, Mutex};
 /// Flash size of the dsPIC33FJ32MC204 (DS70283H): 32 KB.
 pub const FLASH_BYTES: usize = 32 * 1024;
 /// Internal storage per instruction: 24-bit word in a 4-byte little-endian
-/// slot. **Not** the XC16 ELF layout — executable sections pack 3 bytes per
-/// instruction and the parsers expand them ([`xc16_executable_slots`]).
+/// slot. This **is** the XC16 ELF layout: executable sections store one such
+/// slot per instruction and the parsers copy them verbatim
+/// ([`check_xc16_section`]).
 pub const INSTR_SLOT_BYTES: usize = 4;
 /// PC units per instruction: the PC advances by 2 (DS70283H §4; the
 /// "Program Counter Unit" in DS50002071F).
@@ -100,8 +187,9 @@ pub const PC_UNITS_PER_INSTRUCTION: u32 = 2;
 pub const PROGRAM_PC_END: u32 = 0x5800;
 /// Instruction slots available in flash.
 pub const INSTR_SLOTS: usize = (PROGRAM_PC_END / PC_UNITS_PER_INSTRUCTION) as usize;
-/// Internal flash storage: one 4-byte slot per instruction. Larger than
-/// [`FLASH_BYTES`] because each 3-byte instruction occupies a 4-byte slot.
+/// Internal flash storage: one 4-byte slot per instruction (the XC16 ELF
+/// form). Larger than [`FLASH_BYTES`]: program space is 0x5800 PC units =
+/// 11264 instructions, and each occupies a 4-byte slot here.
 pub const FLASH_STORAGE_BYTES: usize = INSTR_SLOTS * INSTR_SLOT_BYTES;
 
 /// Reject an odd XC16 program address. Program addresses are PC units and an
@@ -129,48 +217,38 @@ pub fn check_xc16_entry(addr: u64) -> Result<(), String> {
     Ok(())
 }
 
-/// Reject an XC16 executable segment that is odd, starts past program flash,
-/// or runs off its end (0x0057FE, DS70283H Figure 4-1). `slots` is the
-/// slot-expanded segment from [`xc16_executable_slots`]. Loading would
+/// Reject an XC16 executable **section** that is not a whole number of
+/// 4-byte slots, is odd, starts past program flash, or runs off its end
+/// (0x0057FE, DS70283H Figure 4-1). `data` is the raw section from the ELF
+/// (already in the CPU's slot form — see [`INSTR_SLOT_BYTES`]). Loading would
 /// otherwise truncate it silently.
-pub fn check_xc16_segment(addr: u64, slots: &[u8]) -> Result<(), String> {
-    check_xc16_span(addr, (slots.len() / INSTR_SLOT_BYTES) as u64)
+///
+/// Verified against a real XC16 v1.70 ELF: every executable section
+/// (`.text`, `.reset`, `.ivt.*`, `.aivt.*`) has a size that is a multiple
+/// of 4, and the 24-bit word sits in the low three bytes of each slot.
+pub fn check_xc16_section(addr: u64, data: &[u8]) -> Result<(), String> {
+    if data.is_empty() || data.len() % INSTR_SLOT_BYTES != 0 {
+        return Err(format!(
+            "PIC24 executable section at {addr:#x} is {} bytes — not a whole number of \
+             4-byte XC16 slots (DS50002071F)",
+            data.len()
+        ));
+    }
+    check_xc16_span(addr, (data.len() / INSTR_SLOT_BYTES) as u64)
 }
 
-/// [`check_xc16_segment`] from the instruction count alone, so a segment can
-/// be checked from its program header before its bytes are read.
+/// [`check_xc16_section`] from the instruction count alone, so a section can
+/// be checked from its header before its bytes are read.
 pub fn check_xc16_span(addr: u64, instructions: u64) -> Result<(), String> {
-    check_xc16_pc_address("executable segment", addr)?;
+    check_xc16_pc_address("executable section", addr)?;
     let end = addr.saturating_add(instructions * u64::from(PC_UNITS_PER_INSTRUCTION));
     if addr >= u64::from(PROGRAM_PC_END) || end > u64::from(PROGRAM_PC_END) {
         return Err(format!(
-            "PIC24 executable segment {addr:#x}..{end:#x} does not fit program flash \
+            "PIC24 executable section {addr:#x}..{end:#x} does not fit program flash \
              0x0..{PROGRAM_PC_END:#x} (DS70283H Figure 4-1)"
         ));
     }
     Ok(())
-}
-
-/// Expand an XC16 executable section into this CPU's internal slots.
-///
-/// XC16 addresses executable code in PC units (2 per instruction) while
-/// storing **3 bytes per instruction** in the ELF file ("In an executable
-/// section, 2 program counter units are equivalent to 3 bytes",
-/// DS50002071F "Program Counter Unit"). Each 24-bit little-endian
-/// instruction becomes one 4-byte slot with a zero pad byte. `None` when
-/// `data` is not a whole number of instructions — callers reject such a
-/// segment rather than guess (the 4-byte "phantom" layout belongs to HEX
-/// files, not ELF).
-pub fn xc16_executable_slots(data: &[u8]) -> Option<Vec<u8>> {
-    if data.is_empty() || data.len() % 3 != 0 {
-        return None;
-    }
-    let mut slots = Vec::with_capacity(data.len() / 3 * INSTR_SLOT_BYTES);
-    for insn in data.chunks_exact(3) {
-        slots.extend_from_slice(insn);
-        slots.push(0);
-    }
-    Some(slots)
 }
 /// Data-space SRAM base (X RAM), DS70283H Figure 4-3.
 pub const RAM_BASE: u32 = 0x0800;
@@ -236,15 +314,26 @@ pub const TCON_TCKPS_SHIFT: u16 = 4;
 /// T2CON.T32 — Timer2/3 32-bit pair mode.
 pub const T2CON_T32: u16 = 0x0008;
 
-/// IFS0 flag bit and vector number for each modelled source (DS70283H §7.3.1).
+/// IFS0 flag bit and vector number for each modelled source (DS70283H
+/// Table 7-1). The vector number is the table's *Vector Number* column
+/// (`IRQ + 8`); IFS0 bit 4 is reserved, so IC2/OC2/T2/T3 are one vector
+/// higher than the bit index + 7 (fixed in M2: the previous table was off
+/// by one for those four sources).
 pub const IRQ_INT0: (u16, u32) = (0, 8);
 pub const IRQ_IC1: (u16, u32) = (1, 9);
 pub const IRQ_OC1: (u16, u32) = (2, 10);
 pub const IRQ_T1: (u16, u32) = (3, 11);
-pub const IRQ_IC2: (u16, u32) = (5, 12);
-pub const IRQ_OC2: (u16, u32) = (6, 13);
-pub const IRQ_T2: (u16, u32) = (7, 14);
-pub const IRQ_T3: (u16, u32) = (8, 15);
+pub const IRQ_IC2: (u16, u32) = (5, 13);
+pub const IRQ_OC2: (u16, u32) = (6, 14);
+pub const IRQ_T2: (u16, u32) = (7, 15);
+pub const IRQ_T3: (u16, u32) = (8, 16);
+
+/// IFS3 flag bit and vector number for the M2 sources (DS70283H Table 7-1:
+/// PWM1 = vector 65, QEI = vector 66, FLTA1 = vector 71). Their IRQ numbers
+/// (57/58/63) drive the IPC mapping: IPC14 fields 1/2 and IPC15 field 3.
+pub const IRQ_PWM1: (u16, u32) = (8, 65);
+pub const IRQ_QEI: (u16, u32) = (9, 66);
+pub const IRQ_FLTA1: (u16, u32) = (15, 71);
 
 /// INTCON1.NSTDIS — nesting disable (bit 15).
 pub const INTCON1_NSTDIS: u16 = 0x8000;
@@ -256,8 +345,85 @@ pub const EXCEPTION_ENTRY_CYCLES: u32 = 2;
 /// RETFIE takes three instruction cycles (DS70000157G).
 pub const RETFIE_CYCLES: u32 = 3;
 
-/// RETFIE — 0000 0110 0100 0000 0000 0000 (DS70000157G).
-pub const INSN_RETFIE: u32 = 0x0064_0000;
+/// RETFIE — 0000 0110 0100 0000 0000 0000 (DS70000157G): bits 19-16 = 0110,
+/// bits 15-12 = 0100, i.e. `0x0006_4000` as a 24-bit word.
+pub const INSN_RETFIE: u32 = 0x0006_4000;
+
+// ── SR flags (DS70283H Register 7-1 / DS70000157G §2.16) ────────────────────
+
+/// SR.C — carry (for subtracts: 1 = no borrow, DS70000157G Table 4-8).
+pub const SR_C: u16 = 0x0001;
+/// SR.Z — zero.
+pub const SR_Z: u16 = 0x0002;
+/// SR.OV — overflow.
+pub const SR_OV: u16 = 0x0004;
+/// SR.N — negative.
+pub const SR_N: u16 = 0x0008;
+/// SR.DC — digit carry.
+pub const SR_DC: u16 = 0x0100;
+
+/// INTCON2.ALTIVT — use the Alternate IVT at `0x104` (DS70283H §7.1).
+pub const INTCON2_ALTIVT: u16 = 0x8000;
+
+// ── CORCON (DS70283H Register 3-2) ──────────────────────────────────────────
+
+/// CORCON.IF — 1 = integer multiplies, 0 = fractional (left-shifted by one,
+/// DS70000157G §4.12.1).
+pub const CORCON_IF: u16 = 0x0001;
+/// CORCON.RND — 1 = biased (conventional) rounding, 0 = unbiased
+/// (convergent) rounding.
+pub const CORCON_RND: u16 = 0x0002;
+/// CORCON.ACCSAT — 1 = 9.31 super saturation, 0 = 1.31 normal saturation.
+pub const CORCON_ACCSAT: u16 = 0x0010;
+/// CORCON.SATDW — data-space write saturation from the DSP engine.
+pub const CORCON_SATDW: u16 = 0x0020;
+/// CORCON.SATB / CORCON.SATA — per-accumulator saturation enables.
+pub const CORCON_SATB: u16 = 0x0040;
+pub const CORCON_SATA: u16 = 0x0080;
+/// CORCON.US — 1 = unsigned multiplies.
+pub const CORCON_US: u16 = 0x1000;
+
+// ── DSP ALU status bits, SR high byte (DS70000157G §2.16.4) ─────────────────
+
+/// SR.OA — accumulator A overflowed into the guard bits.
+pub const SR_OA: u16 = 0x8000;
+/// SR.OB — accumulator B overflowed into the guard bits.
+pub const SR_OB: u16 = 0x4000;
+/// SR.SA — accumulator A saturated (sticky).
+pub const SR_SA: u16 = 0x2000;
+/// SR.SB — accumulator B saturated (sticky).
+pub const SR_SB: u16 = 0x1000;
+/// SR.OAB — OA || OB (derived).
+pub const SR_OAB: u16 = 0x0800;
+/// SR.SAB — SA || SB (derived; clearing it clears SA and SB).
+pub const SR_SAB: u16 = 0x0400;
+
+/// Signed 32-bit range — the 1.31 normal-saturation limits.
+const ACC32_MAX: i64 = (1 << 31) - 1;
+const ACC32_MIN: i64 = -(1 << 31);
+/// Signed 40-bit range — the 9.31 super-saturation limits.
+const ACC40_MAX: i64 = (1 << 39) - 1;
+const ACC40_MIN: i64 = -(1 << 39);
+
+/// `true` when `value` fits the signed 32-bit range.
+fn fits_signed32(value: i64) -> bool {
+    (ACC32_MIN..=ACC32_MAX).contains(&value)
+}
+
+/// `true` when `value` fits the signed 40-bit range.
+fn fits_signed40(value: i64) -> bool {
+    (ACC40_MIN..=ACC40_MAX).contains(&value)
+}
+
+/// Wrap an i64 to the 40-bit accumulator width, sign-extended.
+fn wrap40(value: i64) -> i64 {
+    let masked = value & 0xFF_FFFF_FFFF;
+    if masked >= (1 << 39) {
+        masked - (1 << 40)
+    } else {
+        masked
+    }
+}
 
 // ── DS70283H / DS70190D / DS70198D / DS70209A (M1b additions) ───────────────
 
@@ -324,6 +490,81 @@ pub const OCCON_OCM_MASK: u16 = 0x0007;
 /// PPS output function codes (DS70283H Table 10-2).
 pub const PPS_OUT_OC1: u16 = 0b1_0010;
 pub const PPS_OUT_OC2: u16 = 0b1_0011;
+/// UPDN (QEI direction) output function (DS70283H Table 10-2: 11010).
+pub const PPS_OUT_UPDN: u16 = 0b1_1010;
+
+// ── M2: Motor Control PWM (DS70283H Table 4-8) ──────────────────────────────
+
+pub const SFR_P1TCON: u16 = 0x01C0;
+pub const SFR_P1TMR: u16 = 0x01C2;
+pub const SFR_P1TPER: u16 = 0x01C4;
+pub const SFR_P1SECMP: u16 = 0x01C6;
+pub const SFR_PWM1CON1: u16 = 0x01C8;
+pub const SFR_PWM1CON2: u16 = 0x01CA;
+pub const SFR_P1DTCON1: u16 = 0x01CC;
+pub const SFR_P1DTCON2: u16 = 0x01CE;
+pub const SFR_P1FLTACON: u16 = 0x01D0;
+pub const SFR_P1OVDCON: u16 = 0x01D4;
+pub const SFR_P1DC1: u16 = 0x01D6;
+pub const SFR_P1DC2: u16 = 0x01D8;
+pub const SFR_P1DC3: u16 = 0x01DA;
+
+/// P1TCON bits (DS70187E Register 14-1).
+pub const PTCON_PTEN: u16 = 0x8000;
+pub const PTCON_PTSIDL: u16 = 0x2000;
+pub const PTCON_PTOPS_MASK: u16 = 0x00F0;
+pub const PTCON_PTCKPS_MASK: u16 = 0x000C;
+pub const PTCON_PTMOD_MASK: u16 = 0x0003;
+
+/// PWM1CON2 bits (DS70187E Register 14-6).
+pub const PWM2CON_IUE: u16 = 0x0004;
+pub const PWM2CON_OSYNC: u16 = 0x0002;
+pub const PWM2CON_UDIS: u16 = 0x0001;
+
+/// The six PWM1 output pins on the 44-pin package (DS70283H Table 1-1):
+/// (port index, bit) for pairs 1-3, high then low.
+pub const PWM1_PINS: [((usize, u8), (usize, u8)); 3] = [
+    ((1, 14), (1, 15)), // PWM1H1/L1 = RB14/RB15
+    ((1, 12), (1, 13)), // PWM1H2/L2 = RB12/RB13
+    ((1, 10), (1, 11)), // PWM1H3/L3 = RB10/RB11
+];
+
+// ── M2: Quadrature Encoder Interface (DS70283H Table 4-10) ─────────────────
+
+pub const SFR_QEI1CON: u16 = 0x01E0;
+pub const SFR_DFLT1CON: u16 = 0x01E2;
+pub const SFR_POS1CNT: u16 = 0x01E4;
+pub const SFR_MAX1CNT: u16 = 0x01E6;
+
+/// QEI1CON bits (DS70208C Register 15-1).
+pub const QEICON_CNTERR: u16 = 0x8000;
+pub const QEICON_INDEX: u16 = 0x1000;
+pub const QEICON_UPDN: u16 = 0x0800;
+pub const QEICON_QEIM_MASK: u16 = 0x0700;
+pub const QEICON_SWPAB: u16 = 0x0080;
+pub const QEICON_PCDOUT: u16 = 0x0040;
+pub const QEICON_TQGATE: u16 = 0x0020;
+pub const QEICON_TQCKPS_MASK: u16 = 0x0018;
+pub const QEICON_POSRES: u16 = 0x0004;
+pub const QEICON_TQCS: u16 = 0x0002;
+pub const QEICON_UDSRC: u16 = 0x0001;
+
+/// DFLT1CON bits (DS70208C Register 15-2).
+pub const DFLT_IMV_MASK: u16 = 0x0600;
+pub const DFLT_CEID: u16 = 0x0100;
+pub const DFLT_QEOUT: u16 = 0x0080;
+pub const DFLT_QECK_MASK: u16 = 0x0070;
+
+/// PPS inputs used by M2 (DS70283H Table 4-2).
+pub const SFR_RPINR12: u16 = 0x0698; // FLTA1R<4:0>
+pub const SFR_RPINR14: u16 = 0x069C; // QEB1R<12:8>, QEA1R<4:0>
+pub const SFR_RPINR15: u16 = 0x069E; // INDX1R<4:0>
+
+/// IFS3/IEC3/IPC14/IPC15 (DS70283H Table 7-2).
+pub const SFR_IFS3: u16 = 0x008A;
+pub const SFR_IEC3: u16 = 0x009A;
+pub const SFR_IPC14: u16 = 0x00C0;
+pub const SFR_IPC15: u16 = 0x00C2;
 
 /// Input capture FIFO depth (DS70198D §12.4: four levels).
 pub const IC_FIFO_DEPTH: usize = 4;
@@ -354,6 +595,25 @@ struct OcChannel {
     level: Option<bool>,
     /// A finished one-shot waits for the next `OCxCON` write.
     halted: bool,
+}
+
+/// The shared fields of the 3-operand MCU form
+/// (`0www wBqq qddd dxxx xxxx`, DS70000157G `ADD Wb,Ws,Wd` and friends).
+struct ThreeOp {
+    /// `B` — byte operation.
+    byte: bool,
+    /// `Wb` — base register (4 bits).
+    wb: usize,
+    /// `qqq` — destination addressing mode.
+    qqq: u32,
+    /// `Wd` — destination register.
+    wd: usize,
+    /// `#lit5` when bits 6-5 select the literal form.
+    lit: Option<u16>,
+    /// `ppp` — source addressing mode (0 when `lit` is present).
+    ppp: u32,
+    /// `Ws` — source register.
+    ws: usize,
 }
 
 /// dsPIC33F CPU core (M0 + M1a + M1b subset).
@@ -411,6 +671,68 @@ pub struct Pic24 {
     rpor: [u16; RPOR_COUNT],
     ic: [IcChannel; 2],
     oc: [OcChannel; 2],
+    // M2: Motor Control PWM (MCPWM1) and QEI1.
+    p1tcon: u16,
+    /// P1TMR: bit 15 = PTDIR (read-only), bits 14-0 = the count.
+    p1tmr: u16,
+    /// P1TPER buffer (loaded into `p1tper_active` at the period boundary).
+    p1tper: u16,
+    p1tper_active: u16,
+    p1secmp: u16,
+    pwm1con1: u16,
+    pwm1con2: u16,
+    p1dtcon1: u16,
+    p1dtcon2: u16,
+    p1fltacon: u16,
+    p1ovdcon: u16,
+    /// P1DC1-3 buffers.
+    p1dc: [u16; 3],
+    p1dc_active: [u16; 3],
+    /// PWM input-prescaler phase (TCY counts).
+    p1_frac: u16,
+    /// PWM output postscaler counter.
+    p1_post: u8,
+    /// Generator levels (logical active), one per complementary/independent pair.
+    p1_gen: [bool; 3],
+    /// Remaining dead-time cycles before the high/low pin may go active.
+    p1_dt_hi: [u16; 3],
+    p1_dt_lo: [u16; 3],
+    /// FLTA1 currently forces the programmed fault states.
+    p1_fault_force: bool,
+    /// Latched-mode fault that has not been cleared yet.
+    p1_fault_latched: bool,
+    /// Fault released; the outputs resume at the next period/half boundary.
+    p1_fault_release: bool,
+    /// Last sampled FLTA1 *asserted* state (the pin is active low).
+    flta_prev: bool,
+    /// `RPINR12/14/15`: FLTA1 / QEB1,QEA1 / INDX1 input maps.
+    rpinr12: u16,
+    rpinr14: u16,
+    rpinr15: u16,
+    /// IFS3/IEC3/IPC14/IPC15 — PWM1, QEI and FLTA1 interrupts.
+    ifs3: u16,
+    iec3: u16,
+    ipc14: u16,
+    ipc15: u16,
+    qei1con: u16,
+    dflt1con: u16,
+    pos1cnt: u16,
+    max1cnt: u16,
+    /// Last decoded filtered (A<<1)|B quadrature state.
+    qei_prev_ab: u8,
+    /// Last filtered index level (rising-edge detection).
+    qei_index_prev: bool,
+    /// Digital filter: 3-bit histories, clock-divider counters and outputs
+    /// for QEA, QEB and INDX.
+    qei_filt: [u8; 3],
+    qei_filt_cnt: [u16; 3],
+    qei_filt_out: [bool; 3],
+    /// QEI timer-mode input prescaler phase.
+    qei_frac: u16,
+    /// Last raw QEA level (timer external clock / gate edge detection).
+    qei_timer_prev: bool,
+    /// QEI external-clock prescaler counter.
+    qei_ext_psc: u16,
     /// Port state changed and must be pushed to the pad models.
     pads_dirty: bool,
     serial_sink: Option<Arc<Mutex<Vec<u8>>>>,
@@ -468,6 +790,49 @@ impl Pic24 {
             rpor: [0; RPOR_COUNT],
             ic: [IcChannel::default(), IcChannel::default()],
             oc: [OcChannel::default(), OcChannel::default()],
+            p1tcon: 0,
+            p1tmr: 0,
+            p1tper: 0,
+            p1tper_active: 0,
+            p1secmp: 0,
+            // PWMPIN = 1, HPOL = LPOL = 1 (erased-device configuration):
+            // PWM pins are GPIO until PEN is set, and active is high.
+            pwm1con1: 0,
+            pwm1con2: 0,
+            p1dtcon1: 0,
+            p1dtcon2: 0,
+            p1fltacon: 0,
+            p1ovdcon: 0x3F00,
+            p1dc: [0; 3],
+            p1dc_active: [0; 3],
+            p1_frac: 0,
+            p1_post: 0,
+            p1_gen: [false; 3],
+            p1_dt_hi: [0; 3],
+            p1_dt_lo: [0; 3],
+            p1_fault_force: false,
+            p1_fault_latched: false,
+            p1_fault_release: false,
+            flta_prev: false,
+            rpinr12: 0x001F,
+            rpinr14: 0x1F1F,
+            rpinr15: 0x001F,
+            ifs3: 0,
+            iec3: 0,
+            ipc14: 0,
+            ipc15: 0x4000,
+            qei1con: 0,
+            dflt1con: 0,
+            pos1cnt: 0,
+            max1cnt: 0xFFFF,
+            qei_prev_ab: 0,
+            qei_index_prev: false,
+            qei_filt: [0; 3],
+            qei_filt_cnt: [0; 3],
+            qei_filt_out: [false; 3],
+            qei_frac: 0,
+            qei_timer_prev: false,
+            qei_ext_psc: 0,
             pads_dirty: true,
             serial_sink: None,
             exception_pending: None,
@@ -501,8 +866,12 @@ impl Pic24 {
     }
 
     /// Load a program image (engine path). XC16 addresses are PC units and
-    /// the parsers hand over slot-expanded executable segments; place each
-    /// slot at `addr / 2`, then start at the ELF entry point.
+    /// the parsers hand over executable sections already in 4-byte slot
+    /// form; place each slot at `addr / 2`.
+    ///
+    /// The PC starts at 0: dsPIC33F reset vectors through the GOTO at
+    /// address 0 (`Reset – GOTO Instruction`/`Reset – GOTO Address`,
+    /// DS70283H Figure 7-1), which real XC16 images contain.
     pub fn load_program_image(&mut self, image: &crate::memory::ProgramImage) {
         for seg in &image.segments {
             let slot = (seg.start_addr / u64::from(PC_UNITS_PER_INSTRUCTION)) as usize;
@@ -514,7 +883,7 @@ impl Pic24 {
                 self.flash[start..end].copy_from_slice(&seg.data[..end - start]);
             }
         }
-        self.pc = image.entry_point as u32;
+        self.pc = 0;
     }
 
     /// Attach the console sink that receives UART1 TX bytes (same type the AVR
@@ -660,6 +1029,11 @@ impl Pic24 {
     /// (DS70283H Table 10-2: 10010 = OC1, 10011 = OC2).
     fn oc_rp(&self, ch: usize) -> Option<u8> {
         let code = if ch == 0 { PPS_OUT_OC1 } else { PPS_OUT_OC2 };
+        self.pps_out_rp(code)
+    }
+
+    /// Find the RPn whose RPOR field carries `code`.
+    fn pps_out_rp(&self, code: u16) -> Option<u8> {
         for (i, reg) in self.rpor.iter().enumerate() {
             if reg & 0x1F == code {
                 return Some((2 * i) as u8);
@@ -704,6 +1078,23 @@ impl Pic24 {
                 pdrv[port] |= 1 << bit;
             }
         }
+        let (pwm_levels, pwm_mask) = self.pwm_pad_state();
+        for port in 0..3 {
+            pdrv[port] = (pdrv[port] & !pwm_mask[port]) | pwm_levels[port];
+            mask[port] |= pwm_mask[port];
+        }
+        if self.qei1con & QEICON_PCDOUT != 0 {
+            if let Some(rp) = self.pps_out_rp(PPS_OUT_UPDN) {
+                if let Some((port, bit)) = Self::rp_pin(rp) {
+                    mask[port] |= 1 << bit;
+                    if self.qei1con & QEICON_UPDN != 0 {
+                        pdrv[port] |= 1 << bit;
+                    } else {
+                        pdrv[port] &= !(1 << bit);
+                    }
+                }
+            }
+        }
         self.pdrv = pdrv;
         self.pdrv_mask = mask;
         for port in 0..3 {
@@ -718,7 +1109,7 @@ impl Pic24 {
 
     /// Sample the ports once per retired step and run the input capture
     /// channels on the edges (see the module-level latency note).
-    fn sample_capture(&mut self, bus: &dyn Bus) {
+    fn sample_capture(&mut self, bus: &dyn Bus, cycles: u32) {
         let mut sampled = [0u16; 3];
         for (port, slot) in sampled.iter_mut().enumerate() {
             let addr = PIC24_IO_MIRROR_BASE + u64::from(Self::port_base(port)) + 0x02;
@@ -763,6 +1154,664 @@ impl Pic24 {
             if fire {
                 self.ic_capture(ch);
             }
+        }
+        self.sample_qei(cycles);
+    }
+
+    // ── M2: Motor Control PWM (DS70187E §14) ────────────────────────────────
+
+    /// Dead time for unit A (`a = true`) or unit B, in TCY: a 6-bit count
+    /// times the 1/2/4/8 prescaler (DS70187E Register 14-7).
+    fn pwm_dead_time(&self, a: bool) -> u16 {
+        let (ps, val) = if a {
+            ((self.p1dtcon1 >> 6) & 0x3, self.p1dtcon1 & 0x3F)
+        } else {
+            ((self.p1dtcon1 >> 14) & 0x3, (self.p1dtcon1 >> 8) & 0x3F)
+        };
+        val.saturating_mul(1u16 << ps)
+    }
+
+    /// `true` when the pair's active-edge dead time comes from unit A.
+    fn pwm_dt_unit_a(&self, pair: usize, active_edge: bool) -> bool {
+        let bit = if active_edge { 2 * pair + 1 } else { 2 * pair };
+        self.p1dtcon2 & (1 << bit) == 0
+    }
+
+    fn pwm_pair_complementary(&self, pair: usize) -> bool {
+        self.pwm1con1 & (1 << (8 + pair)) == 0
+    }
+
+    fn pwm_pair_enabled(&self, pair: usize) -> (bool, bool) {
+        (
+            self.pwm1con1 & (1 << (4 + pair)) != 0,
+            self.pwm1con1 & (1 << pair) != 0,
+        )
+    }
+
+    /// Drive one generator and arm the dead-time counter for the pin that is
+    /// about to go active (complementary pairs only, DS70187E §14.14).
+    fn pwm_drive(&mut self, pair: usize, active: bool) {
+        if self.p1_gen[pair] == active {
+            return;
+        }
+        self.p1_gen[pair] = active;
+        if !self.pwm_pair_complementary(pair) {
+            return;
+        }
+        if active {
+            let a = self.pwm_dt_unit_a(pair, true);
+            self.p1_dt_hi[pair] = self.pwm_dead_time(a);
+            self.p1_dt_lo[pair] = 0;
+        } else {
+            let a = self.pwm_dt_unit_a(pair, false);
+            self.p1_dt_lo[pair] = self.pwm_dead_time(a);
+            self.p1_dt_hi[pair] = 0;
+        }
+    }
+
+    /// PWM1IF with the PTOPS postscaler (DS70187E §14.9). Single-event and
+    /// double-update modes ignore the postscaler.
+    fn pwm_interrupt(&mut self) {
+        let mode = self.p1tcon & PTCON_PTMOD_MASK;
+        if mode == 1 || mode == 3 {
+            self.ifs3 |= 1 << IRQ_PWM1.0;
+            return;
+        }
+        let post = ((self.p1tcon & PTCON_PTOPS_MASK) >> 4) + 1;
+        self.p1_post = self.p1_post.wrapping_add(1);
+        if u16::from(self.p1_post) >= post {
+            self.p1_post = 0;
+            self.ifs3 |= 1 << IRQ_PWM1.0;
+        }
+    }
+
+    /// A period/zero boundary: latch the buffered period and duty values and
+    /// resume from a fault (DS70187E §14.12, §14.15.3.2).
+    fn pwm_boundary(&mut self) {
+        self.p1tper_active = self.p1tper;
+        if self.pwm1con2 & PWM2CON_UDIS == 0 {
+            self.p1dc_active = self.p1dc;
+        }
+        if self.p1_fault_release {
+            self.p1_fault_release = false;
+            self.p1_fault_force = false;
+        }
+    }
+
+    /// Apply the duty-cycle special cases: 0 is inactive for the whole
+    /// period, values above PxTPER are active for the whole period.
+    fn pwm_apply_duty_extremes(&mut self, tper: u16) {
+        for pair in 0..3 {
+            let dc = self.p1dc_active[pair];
+            if dc == 0 {
+                self.pwm_drive(pair, false);
+            } else if dc > tper {
+                self.pwm_drive(pair, true);
+            }
+        }
+    }
+
+    /// One PWM time-base tick (DS70187E §14.7/§14.8/§14.11).
+    fn pwm_tick(&mut self) {
+        let mode = self.p1tcon & PTCON_PTMOD_MASK;
+        let tper = self.p1tper_active & 0x7FFF;
+        let mut count = self.p1tmr & 0x7FFF;
+        let mut down = self.p1tmr & 0x8000 != 0;
+        self.pwm_apply_duty_extremes(tper);
+        match mode {
+            0 | 1 => {
+                if count == tper {
+                    count = 0;
+                    self.pwm_boundary();
+                    self.pwm_interrupt();
+                    for pair in 0..3 {
+                        let dc = self.p1dc_active[pair];
+                        self.pwm_drive(pair, dc != 0);
+                    }
+                    if mode == 1 {
+                        self.p1tcon &= !PTCON_PTEN;
+                        for pair in 0..3 {
+                            self.pwm_drive(pair, false);
+                        }
+                    }
+                } else {
+                    count += 1;
+                    for pair in 0..3 {
+                        let dc = self.p1dc_active[pair];
+                        if dc != 0 && dc <= tper && count == dc {
+                            self.pwm_drive(pair, false);
+                        }
+                    }
+                }
+            }
+            2 | 3 => {
+                if !down {
+                    for pair in 0..3 {
+                        let dc = self.p1dc_active[pair];
+                        if dc != 0 && dc <= tper && count == dc {
+                            self.pwm_drive(pair, false);
+                        }
+                    }
+                    if count >= tper {
+                        down = true;
+                        if mode == 3 {
+                            self.pwm_boundary();
+                            self.pwm_interrupt();
+                        }
+                    } else {
+                        count += 1;
+                    }
+                } else {
+                    for pair in 0..3 {
+                        let dc = self.p1dc_active[pair];
+                        if dc != 0 && count == dc {
+                            self.pwm_drive(pair, true);
+                        }
+                    }
+                    if count == 0 {
+                        down = false;
+                        self.pwm_boundary();
+                        self.pwm_interrupt();
+                    } else {
+                        count -= 1;
+                    }
+                }
+            }
+            _ => {}
+        }
+        self.p1tmr = (if down { 0x8000 } else { 0 }) | (count & 0x7FFF);
+    }
+
+    /// Sample FLTA1 (active low) and update the fault force/latch state.
+    fn pwm_fault_sample(&mut self, bus: &dyn Bus) {
+        let old_force = self.p1_fault_force;
+        let level = self.rp_input_level(bus, self.rpinr12 & 0x1F);
+        let asserted = !level;
+        let enabled = self.p1fltacon & 0x7 != 0;
+        let latched_mode = self.p1fltacon & 0x0080 == 0;
+        if enabled && asserted && !self.flta_prev {
+            self.ifs3 |= 1 << IRQ_FLTA1.0;
+            if latched_mode {
+                self.p1_fault_latched = true;
+            }
+        }
+        if asserted {
+            // A new fault cancels a pending boundary release.
+            self.p1_fault_release = false;
+        } else if self.p1_fault_latched && self.ifs3 & (1 << IRQ_FLTA1.0) == 0 {
+            // Latched mode: pin high and flag cleared → release at the next
+            // period/half-period boundary.
+            self.p1_fault_latched = false;
+            self.p1_fault_release = true;
+        } else if !self.p1_fault_latched && self.p1_fault_force {
+            // Cycle-by-cycle: released when the pin goes high.
+            self.p1_fault_release = true;
+        }
+        self.p1_fault_force = if !enabled {
+            false
+        } else {
+            asserted || self.p1_fault_latched || self.p1_fault_release
+        };
+        if !enabled {
+            self.p1_fault_latched = false;
+            self.p1_fault_release = false;
+        }
+        if self.p1tcon & PTCON_PTEN == 0 {
+            self.p1_fault_force = false;
+            self.p1_fault_latched = false;
+            self.p1_fault_release = false;
+        }
+        self.flta_prev = asserted;
+        if self.p1_fault_force != old_force {
+            self.pads_dirty = true;
+        }
+    }
+
+    /// Advance the PWM time base by `cycles` TCY (called once per retired
+    /// step, before the pad drive is published).
+    fn advance_mcpwm(&mut self, cycles: u32, bus: &dyn Bus) {
+        self.pwm_fault_sample(bus);
+        if self.p1tcon & PTCON_PTEN == 0 {
+            for pair in 0..3 {
+                self.p1_gen[pair] = false;
+                self.p1_dt_hi[pair] = 0;
+                self.p1_dt_lo[pair] = 0;
+            }
+            return;
+        }
+        let psc = 1u32 << (2 * u32::from((self.p1tcon & PTCON_PTCKPS_MASK) >> 2));
+        for _ in 0..cycles {
+            for pair in 0..3 {
+                self.p1_dt_hi[pair] = self.p1_dt_hi[pair].saturating_sub(1);
+                self.p1_dt_lo[pair] = self.p1_dt_lo[pair].saturating_sub(1);
+            }
+            self.p1_frac += 1;
+            if u32::from(self.p1_frac) >= psc {
+                self.p1_frac = 0;
+                self.pwm_tick();
+            }
+        }
+        // The generator/dead-time state may have changed this step.
+        self.pads_dirty = true;
+    }
+
+    /// The six PWM pin levels and their driver mask, after dead time,
+    /// override and fault logic (DS70187E §14.10/§14.11/§14.15).
+    fn pwm_pad_state(&self) -> ([u16; 3], [u16; 3]) {
+        let mut levels = [0u16; 3];
+        let mut mask = [0u16; 3];
+        for (pair, (high_pin, low_pin)) in PWM1_PINS.iter().enumerate() {
+            let (en_h, en_l) = self.pwm_pair_enabled(pair);
+            if !en_h && !en_l {
+                continue;
+            }
+            let complementary = self.pwm_pair_complementary(pair);
+            let gen = self.p1_gen[pair];
+            let running = self.p1tcon & PTCON_PTEN != 0;
+            // With the time base disabled both pins are inactive; only an
+            // override or fault can still drive them (DS70187E §14.11.1).
+            let mut act_h = running && gen;
+            let mut act_l = running && if complementary { !gen } else { gen };
+            if complementary && running {
+                if gen {
+                    act_h = self.p1_dt_hi[pair] == 0;
+                    act_l = false;
+                } else {
+                    act_l = self.p1_dt_lo[pair] == 0;
+                    act_h = false;
+                }
+            }
+            // Override: POVD = 0 drives the pin from POUT.
+            if self.p1ovdcon & (1 << (9 + 2 * pair)) == 0 {
+                act_h = self.p1ovdcon & (1 << (1 + 2 * pair)) != 0;
+            }
+            if self.p1ovdcon & (1 << (8 + 2 * pair)) == 0 {
+                act_l = self.p1ovdcon & (1 << (2 * pair)) != 0;
+            }
+            // Fault A has priority over override and the generator.
+            if self.p1_fault_force && self.p1fltacon & (1 << pair) != 0 {
+                act_h = self.p1fltacon & (1 << (9 + 2 * pair)) != 0;
+                act_l = self.p1fltacon & (1 << (8 + 2 * pair)) != 0;
+                if complementary && act_h && act_l {
+                    act_l = false;
+                }
+            }
+            let (hp, hb) = *high_pin;
+            let (lp, lb) = *low_pin;
+            if en_h {
+                mask[hp] |= 1 << hb;
+                if act_h {
+                    levels[hp] |= 1 << hb;
+                }
+            }
+            if en_l {
+                mask[lp] |= 1 << lb;
+                if act_l {
+                    levels[lp] |= 1 << lb;
+                }
+            }
+        }
+        (levels, mask)
+    }
+
+    /// `P1TCON` write: enable/disable, mode and prescaler changes restart
+    /// the time-base counters (DS70187E §14.8.2).
+    fn pwm_configure_tcon(&mut self, val: u16) {
+        let old = self.p1tcon;
+        let new = val
+            & (PTCON_PTEN | PTCON_PTSIDL | PTCON_PTOPS_MASK | PTCON_PTCKPS_MASK | PTCON_PTMOD_MASK);
+        self.p1tcon = new;
+        self.p1_frac = 0;
+        self.p1_post = 0;
+        if new & PTCON_PTEN == 0 {
+            for pair in 0..3 {
+                self.p1_gen[pair] = false;
+                self.p1_dt_hi[pair] = 0;
+                self.p1_dt_lo[pair] = 0;
+            }
+            self.p1tper_active = self.p1tper;
+            self.p1dc_active = self.p1dc;
+            self.p1_fault_force = false;
+            self.p1_fault_latched = false;
+            self.p1_fault_release = false;
+        } else if old & PTCON_PTEN == 0 && new & PTCON_PTMOD_MASK <= 1 {
+            // Edge-aligned modes start the period (and the active outputs)
+            // when the time base is enabled at TMR = 0.
+            for pair in 0..3 {
+                let dc = self.p1dc_active[pair];
+                self.pwm_drive(pair, dc != 0);
+            }
+        }
+        self.pads_dirty = true;
+    }
+
+    /// `P1DCy` write: the buffer updates immediately when the time base is
+    /// off or IUE = 1, otherwise at the next duty update point (§14.12).
+    fn pwm_duty_write(&mut self, pair: usize, val: u16) {
+        self.p1dc[pair] = val;
+        if self.p1tcon & PTCON_PTEN == 0 || self.pwm1con2 & PWM2CON_IUE != 0 {
+            self.p1dc_active[pair] = val;
+        }
+    }
+
+    /// `QEI1CON` write: INDEX is read-only, UPDN is read-only in QEI modes,
+    /// and a mode change clears the edge/filter state (DS70208C Register 15-1).
+    fn qei_configure(&mut self, val: u16) {
+        let old_mode = (self.qei1con >> 8) & 7;
+        let mut new = (val & !QEICON_INDEX) | (self.qei1con & QEICON_INDEX);
+        if (new & QEICON_QEIM_MASK) >> 8 >= 4 {
+            // QEI modes: UPDN is the read-only direction status.
+            new = (new & !QEICON_UPDN) | (self.qei1con & QEICON_UPDN);
+        }
+        self.qei1con = new;
+        let new_mode = (new >> 8) & 7;
+        if new_mode != old_mode {
+            self.qei_prev_ab = 0;
+            self.qei_index_prev = false;
+            self.qei_filt = [0; 3];
+            self.qei_filt_cnt = [0; 3];
+            self.qei_frac = 0;
+            self.qei_ext_psc = 0;
+            self.qei_timer_prev = false;
+        }
+        // TQCS = TQGATE = 1: no counting, one interrupt on configuration.
+        if new_mode == 1 && new & (QEICON_TQCS | QEICON_TQGATE) == (QEICON_TQCS | QEICON_TQGATE) {
+            self.qei_interrupt();
+        }
+        self.pads_dirty = true;
+    }
+
+    // ── M2: Quadrature Encoder Interface (DS70208C §15) ─────────────────────
+
+    fn qei_interrupt(&mut self) {
+        self.ifs3 |= 1 << IRQ_QEI.0;
+    }
+
+    fn pad_level(&self, rp: u16) -> bool {
+        Self::rp_field(rp)
+            .and_then(Self::rp_pin)
+            .map(|(p, b)| self.pad_in[p] & (1 << b) != 0)
+            .unwrap_or(false)
+    }
+
+    fn rp_field(field: u16) -> Option<u8> {
+        (field <= 25).then_some(field as u8)
+    }
+
+    /// Read one external pad level from the bus pad mirror (used for FLTA1,
+    /// which is sampled before `sample_capture` runs).
+    fn rp_input_level(&self, bus: &dyn Bus, rp: u16) -> bool {
+        let Some((port, bit)) = Self::rp_field(rp).and_then(Self::rp_pin) else {
+            return false;
+        };
+        let addr = PIC24_IO_MIRROR_BASE + u64::from(Self::port_base(port)) + 0x02;
+        bus.read_u16(addr)
+            .map(|v| v & (1 << bit) != 0)
+            .unwrap_or(self.pad_in[port] & (1 << bit) != 0)
+    }
+
+    fn qei_raw_inputs(&self) -> [bool; 3] {
+        [
+            self.pad_level(self.rpinr14 & 0x1F),
+            self.pad_level((self.rpinr14 >> 8) & 0x1F),
+            self.pad_level(self.rpinr15 & 0x1F),
+        ]
+    }
+
+    /// Digital filter: a level is accepted after three consecutive equal
+    /// filter clocks (`FCY / QECK`, DS70208C §15.3). Returns the filtered
+    /// QEA, QEB and INDX levels.
+    fn qei_filter(&mut self, raw: [bool; 3], cycles: u32) -> [bool; 3] {
+        if self.dflt1con & DFLT_QEOUT == 0 {
+            self.qei_filt = [0; 3];
+            self.qei_filt_cnt = [0; 3];
+            self.qei_filt_out = raw;
+            return raw;
+        }
+        let div = match (self.dflt1con & DFLT_QECK_MASK) >> 4 {
+            0 => 1u16,
+            1 => 2,
+            2 => 4,
+            3 => 16,
+            4 => 32,
+            5 => 64,
+            6 => 128,
+            _ => 256,
+        };
+        let added = cycles.min(u32::from(u16::MAX)) as u16;
+        for (ch, &raw_ch) in raw.iter().enumerate() {
+            self.qei_filt_cnt[ch] = self.qei_filt_cnt[ch].saturating_add(added);
+            while self.qei_filt_cnt[ch] >= div {
+                self.qei_filt_cnt[ch] -= div;
+                self.qei_filt[ch] = ((self.qei_filt[ch] << 1) | u8::from(raw_ch)) & 0x7;
+                if self.qei_filt[ch] == 0b111 {
+                    self.qei_filt_out[ch] = true;
+                } else if self.qei_filt[ch] == 0 {
+                    self.qei_filt_out[ch] = false;
+                }
+            }
+        }
+        self.qei_filt_out
+    }
+
+    /// x2/x4 quadrature decoding (DS70208C §15.4, Table 15-1). State is
+    /// `(A << 1) | B`; forward is 00→10→11→01→00.
+    fn qei_decode(&mut self, old_ab: u8, new_ab: u8) {
+        let qeim = (self.qei1con >> 8) & 7;
+        if qeim < 4 {
+            return;
+        }
+        let swap = self.qei1con & QEICON_SWPAB != 0;
+        let map = |ab: u8| -> u8 {
+            if swap {
+                ((ab & 1) << 1) | ((ab >> 1) & 1)
+            } else {
+                ab
+            }
+        };
+        let old = map(old_ab);
+        let new = map(new_ab);
+        let delta = if qeim & 2 != 0 {
+            // x4: every edge; diagonal transitions are ignored.
+            const QUAD: [i8; 16] = [0, -1, 1, 0, 1, 0, 0, -1, -1, 0, 0, 1, 0, 1, -1, 0];
+            QUAD[usize::from((old << 2) | new)]
+        } else if (old & 2) != (new & 2) {
+            // x2: count on Phase A edges only (Phase B gives the direction).
+            let a = (new >> 1) & 1;
+            let b = new & 1;
+            if a != b {
+                1
+            } else {
+                -1
+            }
+        } else {
+            0
+        };
+        if delta != 0 {
+            self.qei_count(delta);
+        }
+    }
+
+    /// Apply one quadrature count to POS1CNT, including the match-reset and
+    /// index-mode count-error rules (DS70208C §15.5.2/§15.5.3.4).
+    fn qei_count(&mut self, delta: i8) {
+        let qeim = (self.qei1con >> 8) & 7;
+        let up = delta > 0;
+        self.qei1con = if up {
+            self.qei1con | QEICON_UPDN
+        } else {
+            self.qei1con & !QEICON_UPDN
+        };
+        let index_mode = qeim & 1 == 0; // 100 or 110
+        if index_mode {
+            self.pos1cnt = if up {
+                self.pos1cnt.wrapping_add(1)
+            } else {
+                self.pos1cnt.wrapping_sub(1)
+            };
+            if self.qei1con & QEICON_CNTERR == 0 {
+                let error = if up {
+                    self.pos1cnt == self.max1cnt.wrapping_add(1)
+                } else {
+                    self.pos1cnt == 0xFFFF
+                };
+                if error {
+                    // CNTERR is set even when CEID masks the interrupt
+                    // (DS70208C §15.5.3.4); further errors are ignored until
+                    // the flag is cleared by software.
+                    self.qei1con |= QEICON_CNTERR;
+                    if self.dflt1con & DFLT_CEID == 0 {
+                        self.qei_interrupt();
+                    }
+                }
+            }
+        } else if up {
+            if self.pos1cnt == self.max1cnt {
+                self.pos1cnt = 0;
+                self.qei_interrupt();
+            } else {
+                self.pos1cnt = self.pos1cnt.wrapping_add(1);
+            }
+        } else if self.pos1cnt == 0 {
+            self.pos1cnt = self.max1cnt;
+            self.qei_interrupt();
+        } else {
+            self.pos1cnt = self.pos1cnt.wrapping_sub(1);
+        }
+    }
+
+    /// A filtered index rising edge: apply the IMV match and reset POS1CNT
+    /// in the index modes (DS70208C §15.5.3).
+    fn qei_index_event(&mut self, a: bool, b: bool) {
+        let qeim = (self.qei1con >> 8) & 7;
+        if qeim < 4 {
+            return;
+        }
+        let imv = (self.dflt1con & DFLT_IMV_MASK) >> 9;
+        let matched = if qeim & 2 != 0 {
+            // x4: IMV1 = required B, IMV0 = required A.
+            (u16::from(b) == (imv >> 1)) && (u16::from(a) == (imv & 1))
+        } else {
+            // x2: IMV1 selects the phase (0 = A, 1 = B), IMV0 is its state.
+            let value = if imv & 2 != 0 { b } else { a };
+            u16::from(value) == (imv & 1)
+        };
+        if !matched {
+            return;
+        }
+        self.qei_interrupt();
+        if self.qei1con & QEICON_POSRES != 0 {
+            let up = self.qei1con & QEICON_UPDN != 0;
+            self.pos1cnt = if up { 0 } else { self.max1cnt };
+        }
+    }
+
+    /// QEI timer/counter mode (QEIM = 001, DS70208C §15.6).
+    fn qei_timer_step(&mut self, cycles: u32, qea: bool, qeb: bool) {
+        let tqcs = self.qei1con & QEICON_TQCS != 0;
+        let tqgate = self.qei1con & QEICON_TQGATE != 0;
+        if tqcs && tqgate {
+            // The timer does not increment; the interrupt is raised when the
+            // configuration is written (qei_configure).
+            self.qei_timer_prev = qea;
+            return;
+        }
+        let up = if self.qei1con & QEICON_UDSRC != 0 {
+            qeb
+        } else {
+            self.qei1con & QEICON_UPDN != 0
+        };
+        let psc = match (self.qei1con & QEICON_TQCKPS_MASK) >> 3 {
+            0 => 1u16,
+            1 => 8,
+            2 => 64,
+            _ => 256,
+        };
+        if tqcs {
+            if qea && !self.qei_timer_prev {
+                self.qei_ext_psc = self.qei_ext_psc.wrapping_add(1);
+                if self.qei_ext_psc >= psc {
+                    self.qei_ext_psc = 0;
+                    self.qei_timer_count(up);
+                }
+            }
+            self.qei_timer_prev = qea;
+            return;
+        }
+        if tqgate {
+            if self.qei_timer_prev && !qea {
+                self.qei_interrupt();
+            }
+            self.qei_timer_prev = qea;
+            if !qea {
+                return;
+            }
+        }
+        self.qei_frac = self
+            .qei_frac
+            .saturating_add(cycles.min(u32::from(u16::MAX)) as u16);
+        while self.qei_frac >= psc {
+            self.qei_frac -= psc;
+            self.qei_timer_count(up);
+        }
+    }
+
+    fn qei_timer_count(&mut self, up: bool) {
+        self.qei1con = if up {
+            self.qei1con | QEICON_UPDN
+        } else {
+            self.qei1con & !QEICON_UPDN
+        };
+        if up {
+            let next = u32::from(self.pos1cnt) + 1;
+            if next > u32::from(self.max1cnt) {
+                self.pos1cnt = 0;
+                self.qei_interrupt();
+            } else {
+                self.pos1cnt = next as u16;
+            }
+        } else {
+            let next = self.pos1cnt.wrapping_sub(1);
+            if next == self.max1cnt {
+                self.pos1cnt = 0;
+                self.qei_interrupt();
+            } else {
+                self.pos1cnt = next;
+            }
+        }
+    }
+
+    /// Sample the QEI inputs once per retired step and run the decoder or
+    /// timer (DS70208C §15.3-§15.6).
+    fn sample_qei(&mut self, cycles: u32) {
+        let raw = self.qei_raw_inputs();
+        let qeim = (self.qei1con >> 8) & 7;
+        if qeim == 1 {
+            // Timer mode: the digital filter is inactive (§15.6).
+            self.qei1con = (self.qei1con & !QEICON_INDEX) | if raw[2] { QEICON_INDEX } else { 0 };
+            self.qei_timer_step(cycles, raw[0], raw[1]);
+            return;
+        }
+        if qeim < 4 {
+            self.qei_prev_ab = (u8::from(raw[0]) << 1) | u8::from(raw[1]);
+            self.qei_index_prev = raw[2];
+            return;
+        }
+        let filt = self.qei_filter(raw, cycles);
+        self.qei1con = (self.qei1con & !QEICON_INDEX) | if filt[2] { QEICON_INDEX } else { 0 };
+        let ab = (u8::from(filt[0]) << 1) | u8::from(filt[1]);
+        let old_ab = self.qei_prev_ab;
+        self.qei_prev_ab = ab;
+        if ab != old_ab {
+            self.qei_decode(old_ab, ab);
+        }
+        if filt[2] && !self.qei_index_prev {
+            self.qei_index_event(filt[0], filt[1]);
+        }
+        self.qei_index_prev = filt[2];
+        if self.qei1con & QEICON_PCDOUT != 0 {
+            // The UPDN output pin follows the direction status.
+            self.pads_dirty = true;
         }
     }
 
@@ -937,29 +1986,54 @@ impl Pic24 {
     }
 
     /// Push one 16-bit word on the W15 stack (SRAM only, as on silicon).
+    ///
+    /// DS70283H Figure 4-4: "PUSH: [W15++]" — the stack grows toward higher
+    /// addresses.
     fn push_word(&mut self, val: u16) -> SimResult<()> {
-        self.w[15] = self.w[15].wrapping_sub(2);
         let a = self.w[15];
         let end = RAM_BASE as u16 + RAM_BYTES as u16;
         if a >= RAM_BASE as u16 && a + 2 <= end {
             let o = a as usize - RAM_BASE as usize;
             self.ram[o..o + 2].copy_from_slice(&val.to_le_bytes());
+            self.w[15] = self.w[15].wrapping_add(2);
             Ok(())
         } else {
             Err(SimulationError::MemoryViolation(u64::from(a)))
         }
     }
 
+    /// Pop one 16-bit word from the W15 stack.
+    ///
+    /// DS70283H Figure 4-4: "POP: [--W15]".
     fn pop_word(&mut self) -> SimResult<u16> {
+        self.w[15] = self.w[15].wrapping_sub(2);
         let a = self.w[15];
         let end = RAM_BASE as u16 + RAM_BYTES as u16;
         if a < RAM_BASE as u16 || a + 2 > end {
             return Err(SimulationError::MemoryViolation(u64::from(a)));
         }
         let o = a as usize - RAM_BASE as usize;
-        let val = u16::from_le_bytes([self.ram[o], self.ram[o + 1]]);
-        self.w[15] = self.w[15].wrapping_add(2);
-        Ok(val)
+        Ok(u16::from_le_bytes([self.ram[o], self.ram[o + 1]]))
+    }
+
+    /// Read the 24-bit instruction word at a PC-unit address (program space).
+    ///
+    /// Used for the interrupt vector table, which stores ISR addresses as
+    /// data (DS70283H §7.1).
+    fn program_word(&self, addr_pc: u32) -> SimResult<u32> {
+        if addr_pc & (PC_UNITS_PER_INSTRUCTION - 1) != 0 {
+            return Err(SimulationError::DecodeError(u64::from(addr_pc)));
+        }
+        let off = (addr_pc as usize / PC_UNITS_PER_INSTRUCTION as usize) * INSTR_SLOT_BYTES;
+        if off + 3 > FLASH_STORAGE_BYTES {
+            return Err(SimulationError::MemoryViolation(off as u64));
+        }
+        Ok(u32::from_le_bytes([
+            self.flash[off],
+            self.flash[off + 1],
+            self.flash[off + 2],
+            0,
+        ]))
     }
 
     /// Current CPU priority level: IPL<2:0> (SR<7:5>) plus IPL<3> (CORCON<3>).
@@ -971,6 +2045,22 @@ impl Pic24 {
     ///
     /// Natural order = IFS0 bit order (DS70283H §7.3.1). Simplified gating:
     /// DISI blocks everything we model (levels 1-6), NSTDIS blocks nesting.
+    /// The priority field for `irq` from IPC0-2 or IPC14/15
+    /// (DS70283H §7.3: four priority fields per register).
+    fn ipc_priority(&self, irq: u32) -> u16 {
+        let reg = irq / 4;
+        let shift = 4 * (irq % 4);
+        let ipc = match reg {
+            0 => self.ipc0,
+            1 => self.ipc1,
+            2 => self.ipc2,
+            14 => self.ipc14,
+            15 => self.ipc15,
+            _ => 0,
+        };
+        (ipc >> shift) & 0x7
+    }
+
     fn pending_interrupt(&self) -> Option<(u32, u16)> {
         if self.intcon2 & INTCON2_DISI != 0 {
             return None;
@@ -979,46 +2069,71 @@ impl Pic24 {
         if self.intcon1 & INTCON1_NSTDIS != 0 && ipl > 0 {
             return None;
         }
-        let sources: [(u16, u32, u8); 8] = [
-            (IRQ_INT0.0, IRQ_INT0.1, 0),
-            (IRQ_IC1.0, IRQ_IC1.1, 4),
-            (IRQ_OC1.0, IRQ_OC1.1, 8),
-            (IRQ_T1.0, IRQ_T1.1, 12),
-            (IRQ_IC2.0, IRQ_IC2.1, 4),
-            (IRQ_OC2.0, IRQ_OC2.1, 8),
-            (IRQ_T2.0, IRQ_T2.1, 12),
-            (IRQ_T3.0, IRQ_T3.1, 12),
+        // (IFS register index, flag bit, IRQ number, vector number).
+        let sources: [(u8, u16, u32, u32); 11] = [
+            (0, IRQ_INT0.0, 0, IRQ_INT0.1),
+            (0, IRQ_IC1.0, 1, IRQ_IC1.1),
+            (0, IRQ_OC1.0, 2, IRQ_OC1.1),
+            (0, IRQ_T1.0, 3, IRQ_T1.1),
+            (0, IRQ_IC2.0, 5, IRQ_IC2.1),
+            (0, IRQ_OC2.0, 6, IRQ_OC2.1),
+            (0, IRQ_T2.0, 7, IRQ_T2.1),
+            (0, IRQ_T3.0, 8, IRQ_T3.1),
+            (3, IRQ_PWM1.0, 57, IRQ_PWM1.1),
+            (3, IRQ_QEI.0, 58, IRQ_QEI.1),
+            (3, IRQ_FLTA1.0, 63, IRQ_FLTA1.1),
         ];
-        for (i, (bit, vector, shift)) in sources.iter().enumerate() {
-            if self.ifs0 & (1 << bit) == 0 || self.iec0 & (1 << bit) == 0 {
+        let mut best: Option<(u32, u16)> = None;
+        for (reg, bit, irq, vector) in sources {
+            let (flags, enables) = if reg == 0 {
+                (self.ifs0, self.iec0)
+            } else {
+                (self.ifs3, self.iec3)
+            };
+            if flags & (1 << bit) == 0 || enables & (1 << bit) == 0 {
                 continue;
             }
-            let ipc = match i {
-                0..=3 => self.ipc0,
-                4..=6 => self.ipc1,
-                _ => self.ipc2,
-            };
-            let prio = (ipc >> shift) & 0x7;
-            if prio != 0 && prio > ipl {
-                return Some((*vector, prio));
+            let prio = self.ipc_priority(irq);
+            if prio == 0 || prio <= ipl {
+                continue;
+            }
+            // Highest priority wins; on a tie the lower vector number wins
+            // (the hardware's fixed priority order).
+            match best {
+                None => best = Some((vector, prio)),
+                Some((bv, bp)) if prio > bp || (prio == bp && vector < bv) => {
+                    best = Some((vector, prio));
+                }
+                _ => {}
             }
         }
-        None
+        best
     }
 
-    /// Take the pending interrupt, if any: push the DS70283H frame
-    /// (PC<15:0>, then SR<7:0>|IPL3|PC<22:16>), raise IPL, jump the vector.
+    /// Take the pending interrupt, if any: push the DS70283H §7 frame
+    /// (PC<15:0>, then SR<7:0>|IPL3|PC<22:16>), raise IPL, then load the PC
+    /// from the vector table.
+    ///
+    /// The vector location holds the 24-bit ISR address as **data**
+    /// (DS70283H §7.1) — it is not executed. `INTCON2.ALTIVT` selects the
+    /// Alternate IVT at `0x104` (DS70283H Figure 7-1).
     fn take_interrupt(&mut self) -> SimResult<bool> {
         let Some((vector, prio)) = self.pending_interrupt() else {
             return Ok(false);
         };
+        let base = if self.intcon2 & INTCON2_ALTIVT != 0 {
+            0x104
+        } else {
+            0x4
+        };
+        let target = self.program_word(base + 2 * vector)?;
         self.push_word(self.pc as u16)?;
         let packed = ((self.sr & 0x00FF) << 8)
             | (((self.corcon >> 3) & 1) << 7)
             | ((self.pc >> 16) as u16 & 0x007F);
         self.push_word(packed)?;
         self.sr = (self.sr & !0x00E0) | ((prio & 0x7) << 5);
-        self.pc = 0x4 + 2 * vector;
+        self.pc = target;
         Ok(true)
     }
 
@@ -1085,6 +2200,30 @@ impl Pic24 {
                 SFR_OC1RS => Ok(self.oc[0].rs),
                 SFR_OC2RS => Ok(self.oc[1].rs),
                 SFR_RPINR7 => Ok(self.rpinr7),
+                SFR_P1TCON => Ok(self.p1tcon),
+                SFR_P1TMR => Ok(self.p1tmr),
+                SFR_P1TPER => Ok(self.p1tper),
+                SFR_P1SECMP => Ok(self.p1secmp),
+                SFR_PWM1CON1 => Ok(self.pwm1con1),
+                SFR_PWM1CON2 => Ok(self.pwm1con2),
+                SFR_P1DTCON1 => Ok(self.p1dtcon1),
+                SFR_P1DTCON2 => Ok(self.p1dtcon2),
+                SFR_P1FLTACON => Ok(self.p1fltacon),
+                SFR_P1OVDCON => Ok(self.p1ovdcon),
+                SFR_P1DC1 => Ok(self.p1dc[0]),
+                SFR_P1DC2 => Ok(self.p1dc[1]),
+                SFR_P1DC3 => Ok(self.p1dc[2]),
+                SFR_QEI1CON => Ok(self.qei1con),
+                SFR_DFLT1CON => Ok(self.dflt1con & 0x07F0),
+                SFR_POS1CNT => Ok(self.pos1cnt),
+                SFR_MAX1CNT => Ok(self.max1cnt),
+                SFR_RPINR12 => Ok(self.rpinr12),
+                SFR_RPINR14 => Ok(self.rpinr14),
+                SFR_RPINR15 => Ok(self.rpinr15),
+                SFR_IFS3 => Ok(self.ifs3),
+                SFR_IEC3 => Ok(self.iec3),
+                SFR_IPC14 => Ok(self.ipc14),
+                SFR_IPC15 => Ok(self.ipc15),
                 a if (SFR_RPOR0..SFR_RPOR0 + 2 * RPOR_COUNT as u16).contains(&a) => {
                     Ok(self.rpor[((a - SFR_RPOR0) / 2) as usize])
                 }
@@ -1136,7 +2275,25 @@ impl Pic24 {
                         self.acc_b =
                             (self.acc_b & !0x00FF_0000_0000) | (i64::from(val & 0x00FF) << 32)
                     }
-                    SFR_SR => self.sr = val,
+                    SFR_SR => {
+                        // SA/SB/OA/OB are sticky, set by hardware and cleared
+                        // only by software: a written 0 clears a flag, a
+                        // written 1 keeps its old value (a write cannot set
+                        // it). SAB/OAB are derived; writing 0 to SAB also
+                        // clears SA and SB (DS70000157G §2.16.4 Notes 2-3).
+                        let old = self.sr;
+                        let keep = |bit: u16| if val & bit != 0 { old & bit } else { 0 };
+                        let mut v = val & !(SR_OA | SR_OB | SR_SA | SR_SB | SR_OAB | SR_SAB);
+                        v |= keep(SR_OA) | keep(SR_OB) | keep(SR_SA) | keep(SR_SB);
+                        if val & SR_SAB == 0 {
+                            v &= !(SR_SA | SR_SB);
+                        }
+                        if val & SR_OAB == 0 {
+                            v &= !(SR_OA | SR_OB);
+                        }
+                        self.sr = v;
+                        self.refresh_dsp_status();
+                    }
                     SFR_CORCON => self.corcon = val,
                     SFR_INTCON1 => self.intcon1 = val,
                     SFR_INTCON2 => self.intcon2 = val,
@@ -1175,6 +2332,59 @@ impl Pic24 {
                     SFR_OC1RS => self.oc[0].rs = val,
                     SFR_OC2RS => self.oc[1].rs = val,
                     SFR_RPINR7 => self.rpinr7 = val & 0x1F1F,
+                    SFR_P1TCON => self.pwm_configure_tcon(val),
+                    SFR_P1TMR => {
+                        self.p1tmr = (self.p1tmr & 0x8000) | (val & 0x7FFF);
+                        self.p1_frac = 0;
+                        self.p1_post = 0;
+                    }
+                    SFR_P1TPER => {
+                        self.p1tper = val & 0x7FFF;
+                        if self.p1tcon & PTCON_PTEN == 0 {
+                            self.p1tper_active = self.p1tper;
+                        }
+                    }
+                    SFR_P1SECMP => self.p1secmp = val & 0x7FFF,
+                    SFR_PWM1CON1 => {
+                        self.pwm1con1 = val & 0x0777;
+                        self.pads_dirty = true;
+                    }
+                    SFR_PWM1CON2 => self.pwm1con2 = val & 0x0F07,
+                    SFR_P1DTCON1 => self.p1dtcon1 = val,
+                    SFR_P1DTCON2 => self.p1dtcon2 = val & 0x003F,
+                    SFR_P1FLTACON => {
+                        let old = self.p1fltacon;
+                        self.p1fltacon = val & 0x3F87;
+                        // A fault already asserted when FAEN is first enabled
+                        // is a new fault event (the flagged edge happened
+                        // while the input was disabled).
+                        if self.p1fltacon & 0x7 != 0 && old & 0x7 == 0 && self.flta_prev {
+                            self.ifs3 |= 1 << IRQ_FLTA1.0;
+                            if self.p1fltacon & 0x0080 == 0 {
+                                self.p1_fault_latched = true;
+                            }
+                            self.p1_fault_force = true;
+                            self.pads_dirty = true;
+                        }
+                    }
+                    SFR_P1OVDCON => {
+                        self.p1ovdcon = val & 0x3FFF;
+                        self.pads_dirty = true;
+                    }
+                    SFR_P1DC1 => self.pwm_duty_write(0, val),
+                    SFR_P1DC2 => self.pwm_duty_write(1, val),
+                    SFR_P1DC3 => self.pwm_duty_write(2, val),
+                    SFR_QEI1CON => self.qei_configure(val),
+                    SFR_DFLT1CON => self.dflt1con = val & 0x07F0,
+                    SFR_POS1CNT => self.pos1cnt = val,
+                    SFR_MAX1CNT => self.max1cnt = val,
+                    SFR_RPINR12 => self.rpinr12 = val & 0x001F,
+                    SFR_RPINR14 => self.rpinr14 = val & 0x1F1F,
+                    SFR_RPINR15 => self.rpinr15 = val & 0x001F,
+                    SFR_IFS3 => self.ifs3 = val,
+                    SFR_IEC3 => self.iec3 = val,
+                    SFR_IPC14 => self.ipc14 = val,
+                    SFR_IPC15 => self.ipc15 = val,
                     a if (SFR_RPOR0..SFR_RPOR0 + 2 * RPOR_COUNT as u16).contains(&a) => {
                         self.rpor[((a - SFR_RPOR0) / 2) as usize] = val;
                         self.pads_dirty = true;
@@ -1207,11 +2417,610 @@ impl Pic24 {
         }
     }
 
+    // ── Base ISA helpers (DS70000157G) ──────────────────────────────────────
+
+    /// Set N/Z from a word or byte result. DS70000157G §4.4: for byte
+    /// operations "the STATUS Register is updated to reflect the result of
+    /// the byte operation".
+    fn set_nz(&mut self, value: u16, byte: bool) {
+        let v = if byte { value & 0x00FF } else { value };
+        let sign = if byte { 0x0080 } else { 0x8000 };
+        self.sr &= !(SR_N | SR_Z);
+        if v & sign != 0 {
+            self.sr |= SR_N;
+        }
+        if v == 0 {
+            self.sr |= SR_Z;
+        }
+    }
+
+    /// Add with the MCU ALU flags (DS70000157G §2.16.1); returns the result.
+    fn alu_add(&mut self, a: u16, b: u16, cin: u16, byte: bool) -> u16 {
+        let (a32, b32, mask, sign) = if byte {
+            (u32::from(a & 0xFF), u32::from(b & 0xFF), 0xFF, 0x80)
+        } else {
+            (u32::from(a), u32::from(b), 0xFFFF, 0x8000)
+        };
+        let c32 = u32::from(cin);
+        let sum = a32 + b32 + c32;
+        let res = (sum & mask) as u16;
+        let carry = sum > mask;
+        let digit = (a32 & 0xF) + (b32 & 0xF) + c32 > 0xF;
+        let ov = ((a32 ^ b32) & sign == 0) && ((a32 ^ u32::from(res)) & sign != 0);
+        self.sr &= !(SR_C | SR_DC | SR_OV);
+        if carry {
+            self.sr |= SR_C;
+        }
+        if digit {
+            self.sr |= SR_DC;
+        }
+        if ov {
+            self.sr |= SR_OV;
+        }
+        self.set_nz(res, byte);
+        res
+    }
+
+    /// Subtract with the MCU ALU flags; returns the result. C reads as
+    /// "Carry (not Borrow)": it is **set when no borrow occurred**
+    /// (DS70000157G Table 4-8; CPB example: `0x20 - 0x20` leaves C = 1).
+    fn alu_sub(&mut self, a: u16, b: u16, cin: u16, byte: bool) -> u16 {
+        let (a32, b32, mask, sign) = if byte {
+            (u32::from(a & 0xFF), u32::from(b & 0xFF), 0xFF, 0x80)
+        } else {
+            (u32::from(a), u32::from(b), 0xFFFF, 0x8000)
+        };
+        let c32 = u32::from(cin);
+        let borrow_in = b32 + c32;
+        let res = (a32.wrapping_sub(borrow_in) & mask) as u16;
+        let no_borrow = a32 >= borrow_in;
+        let digit = (a32 & 0xF) >= (b32 & 0xF) + c32;
+        let ov = ((a32 ^ b32) & sign != 0) && ((a32 ^ u32::from(res)) & sign != 0);
+        self.sr &= !(SR_C | SR_DC | SR_OV);
+        if no_borrow {
+            self.sr |= SR_C;
+        }
+        if digit {
+            self.sr |= SR_DC;
+        }
+        if ov {
+            self.sr |= SR_OV;
+        }
+        self.set_nz(res, byte);
+        res
+    }
+
+    /// Evaluate a `BRA` condition code (DS70000157G Table 4-8). Codes
+    /// `0x1`/`0x9` are the `GEU`/`LTU` aliases of `C`/`NC`.
+    fn branch_taken(&self, cond: u32) -> bool {
+        let c = self.sr & SR_C != 0;
+        let z = self.sr & SR_Z != 0;
+        let n = self.sr & SR_N != 0;
+        let ov = self.sr & SR_OV != 0;
+        match cond {
+            0x0 => ov,
+            0x1 => c,
+            0x2 => z,
+            0x3 => n,
+            0x4 => z || (n != ov),
+            0x5 => n != ov,
+            0x6 => c || z,
+            0x8 => !ov,
+            0x9 => !c,
+            0xA => !z,
+            0xB => !n,
+            0xC => !z && (n == ov),
+            0xD => n == ov,
+            0xE => c && !z,
+            _ => false,
+        }
+    }
+
+    /// Resolve a `ppp`/`ggg` source operand (DS70000157G Tables 5-2/5-5).
+    /// Post/pre-modified registers step by 1 for byte operations and 2 for
+    /// word operations (DS70000157G Example 4-4).
+    fn read_operand(&mut self, reg: usize, mode: u32, byte: bool) -> SimResult<u16> {
+        let step = if byte { 1 } else { 2 };
+        match mode {
+            0 => Ok(self.w[reg]),
+            1 => self.read_indirect(self.w[reg], byte),
+            2 => {
+                let v = self.read_indirect(self.w[reg], byte)?;
+                self.w[reg] = self.w[reg].wrapping_sub(step);
+                Ok(v)
+            }
+            3 => {
+                let v = self.read_indirect(self.w[reg], byte)?;
+                self.w[reg] = self.w[reg].wrapping_add(step);
+                Ok(v)
+            }
+            4 => {
+                self.w[reg] = self.w[reg].wrapping_sub(step);
+                self.read_indirect(self.w[reg], byte)
+            }
+            5 => {
+                self.w[reg] = self.w[reg].wrapping_add(step);
+                self.read_indirect(self.w[reg], byte)
+            }
+            _ => Err(SimulationError::DecodeError(u64::from(self.pc))),
+        }
+    }
+
+    /// Store a `qqq`/`hhh` destination operand (DS70000157G Tables 5-3/5-6).
+    fn write_operand(&mut self, reg: usize, mode: u32, val: u16, byte: bool) -> SimResult<()> {
+        let step = if byte { 1 } else { 2 };
+        match mode {
+            0 => {
+                if byte {
+                    self.w[reg] = (self.w[reg] & 0xFF00) | (val & 0x00FF);
+                } else {
+                    self.w[reg] = val;
+                }
+                Ok(())
+            }
+            1 => self.write_indirect(self.w[reg], val, byte),
+            2 => {
+                let a = self.w[reg];
+                self.write_indirect(a, val, byte)?;
+                self.w[reg] = self.w[reg].wrapping_sub(step);
+                Ok(())
+            }
+            3 => {
+                let a = self.w[reg];
+                self.write_indirect(a, val, byte)?;
+                self.w[reg] = self.w[reg].wrapping_add(step);
+                Ok(())
+            }
+            4 => {
+                self.w[reg] = self.w[reg].wrapping_sub(step);
+                let a = self.w[reg];
+                self.write_indirect(a, val, byte)
+            }
+            5 => {
+                self.w[reg] = self.w[reg].wrapping_add(step);
+                let a = self.w[reg];
+                self.write_indirect(a, val, byte)
+            }
+            _ => Err(SimulationError::DecodeError(u64::from(self.pc))),
+        }
+    }
+
+    fn read_indirect(&mut self, addr: u16, byte: bool) -> SimResult<u16> {
+        if byte {
+            Ok(u16::from(self.data_read_byte(addr)?))
+        } else {
+            self.data_read(addr)
+        }
+    }
+
+    fn write_indirect(&mut self, addr: u16, val: u16, byte: bool) -> SimResult<()> {
+        if byte {
+            self.data_write_byte(addr, val as u8)
+        } else {
+            self.data_write(addr, val)
+        }
+    }
+
+    /// Byte read at a data-space byte address (little-endian: even = low).
+    pub fn data_read_byte(&mut self, addr: u16) -> SimResult<u8> {
+        let word = self.data_read(addr & !1)?;
+        Ok(if addr & 1 == 0 {
+            word as u8
+        } else {
+            (word >> 8) as u8
+        })
+    }
+
+    /// Byte write at a data-space byte address. File registers are updated
+    /// with a read-modify-write of the containing word, so word-only side
+    /// effects (U1STA's status reads, ICxBUF pops) keep their semantics.
+    pub fn data_write_byte(&mut self, addr: u16, val: u8) -> SimResult<()> {
+        let word_addr = addr & !1;
+        let word = self.data_read(word_addr)?;
+        let new = if addr & 1 == 0 {
+            (word & 0xFF00) | u16::from(val)
+        } else {
+            (word & 0x00FF) | (u16::from(val) << 8)
+        };
+        self.data_write(word_addr, new)
+    }
+
+    /// The `0www wBqq qddd dxxx xxxx` fields shared by the 3-operand
+    /// MCU instructions (DS70000157G: `ADD Wb,Ws,Wd` and friends).
+    fn decode_3op(word: u32) -> ThreeOp {
+        let lit = if (word >> 5) & 0x3 == 0b11 {
+            Some((word & 0x1F) as u16)
+        } else {
+            None
+        };
+        ThreeOp {
+            byte: word & 0x0000_4000 != 0,
+            wb: ((word >> 15) & 0xF) as usize,
+            qqq: (word >> 11) & 0x7,
+            wd: ((word >> 7) & 0xF) as usize,
+            lit,
+            ppp: (word >> 4) & 0x7,
+            ws: (word & 0xF) as usize,
+        }
+    }
+
+    /// Keep the derived OAB/SAB bits equal to OA|OB and SA|SB
+    /// (DS70000157G §2.16.4).
+    fn refresh_dsp_status(&mut self) {
+        let oab = self.sr & (SR_OA | SR_OB) != 0;
+        let sab = self.sr & (SR_SA | SR_SB) != 0;
+        self.sr = (self.sr & !(SR_OAB | SR_SAB))
+            | if oab { SR_OAB } else { 0 }
+            | if sab { SR_SAB } else { 0 };
+    }
+
+    // ── DSP engine: MAC class (DS70000157G §4.15, §5.4) ─────────────────────
+
+    /// The DSP multiplier result for `Wm*Wn`: signed or unsigned per
+    /// CORCON.US, left-shifted by one in fractional mode (CORCON.IF = 0)
+    /// because the 2.30 product of two 1.15 values is kept in the 1.31
+    /// accumulator format (DS70000157G §4.12.1).
+    fn dsp_multiply(&self, wm: u16, wn: u16) -> i64 {
+        let product = if self.corcon & CORCON_US != 0 {
+            i64::from(wm) * i64::from(wn)
+        } else {
+            i64::from(wm as i16) * i64::from(wn as i16)
+        };
+        if self.corcon & CORCON_IF == 0 {
+            product << 1
+        } else {
+            product
+        }
+    }
+
+    /// Store a result to an accumulator with the CORCON saturation rules and
+    /// the OA/OB/SA/SB status updates (DS70000157G §2.16.4, §4.12.1, §4.13):
+    ///
+    /// * saturation disabled — the 40-bit adder result is kept, a guard-bit
+    ///   overflow (outside the signed 32-bit range) sets OA/OB, an overflow
+    ///   out of the accumulator MSb sets SA/SB;
+    /// * normal (1.31) — a result outside signed 32-bit clamps to
+    ///   0x7FFF_FFFF / 0x8000_0000 and sets SA/SB (no OA/OB: the clamped
+    ///   value never uses the guard bits);
+    /// * super (9.31) — a result outside signed 40-bit clamps to
+    ///   0x7F_FFFF_FFFF / 0x80_0000_0000 and sets SA/SB; guard-bit overflow
+    ///   sets OA/OB.
+    fn dsp_store_acc(&mut self, acc: usize, value: i64) {
+        let sat_enabled = self.corcon & if acc == 0 { CORCON_SATA } else { CORCON_SATB } != 0;
+        let super_sat = self.corcon & CORCON_ACCSAT != 0;
+        let fits32 = fits_signed32(value);
+        let fits40 = fits_signed40(value);
+        // OA/OB report a *guard-bit* overflow (the exact result no longer
+        // fits the signed 32-bit range) while SA/SB report *saturation* (the
+        // result left the active accumulator range). That is why the two
+        // flags use different predicates (DS70000157G §2.16.4).
+        let (stored, saturated, guard_overflow) = if !sat_enabled {
+            (wrap40(value), !fits40, !fits32)
+        } else if super_sat {
+            let stored = value.clamp(ACC40_MIN, ACC40_MAX);
+            (stored, !fits40, !fits32)
+        } else {
+            let stored = value.clamp(ACC32_MIN, ACC32_MAX);
+            (stored, !fits32, false)
+        };
+        if guard_overflow {
+            self.sr |= if acc == 0 { SR_OA } else { SR_OB };
+        }
+        if saturated {
+            self.sr |= if acc == 0 { SR_SA } else { SR_SB };
+        }
+        self.refresh_dsp_status();
+        if acc == 0 {
+            self.acc_a = stored;
+        } else {
+            self.acc_b = stored;
+        }
+    }
+
+    /// One X or Y data prefetch (DS70000157G Tables 5-7/5-9, §4.15.1-4.15.2).
+    /// The X path uses W8/W9, the Y path W10/W11; `op == 0b1100` is the
+    /// W12 register-offset mode (16-bit signed offset, no updates).
+    fn dsp_prefetch(&mut self, x_space: bool, op: u32, dest: usize) -> SimResult<()> {
+        if op == 0b0100 {
+            return Ok(());
+        }
+        let base = match (x_space, op & 0b1000 != 0) {
+            (true, false) => 8,
+            (true, true) => 9,
+            (false, false) => 10,
+            (false, true) => 11,
+        };
+        let (ea, delta) = if op == 0b1100 {
+            let offset = i32::from(self.w[12] as i16);
+            ((i32::from(self.w[base]) + offset) as u16, 0i32)
+        } else {
+            let delta = match op & 0b111 {
+                0 => 0,
+                1 => 2,
+                2 => 4,
+                3 => 6,
+                5 => -6,
+                6 => -4,
+                _ => -2,
+            };
+            (self.w[base], delta)
+        };
+        let value = self.data_read(ea)?;
+        self.w[dest] = value;
+        if delta != 0 {
+            self.w[base] = (i32::from(self.w[base]) + delta) as u16;
+        }
+        Ok(())
+    }
+
+    /// Rounding decision for SAC.R and accumulator write-back
+    /// (DS70000157G CORCON.RND; Microchip "Rounding" note): conventional
+    /// (biased) rounds up when the low word is >= 0x8000; convergent
+    /// (unbiased) rounds a 0x8000 tie to even.
+    fn dsp_round_up(&self, hi: u16, lo: u16) -> bool {
+        if self.corcon & CORCON_RND != 0 {
+            lo >= 0x8000
+        } else {
+            lo > 0x8000 || (lo == 0x8000 && hi & 1 == 1)
+        }
+    }
+
+    /// SATDW (CORCON<5>): a DSP data-space store saturates to 0x7FFF/0x8000
+    /// when the stored value needs the guard bits. The PRM's SAC examples
+    /// pin the test: `FF C891 8F4C << 4` (40-bit `FC 8918 F4C0`) stores
+    /// 0x8000, while a value whose bits 39:32 are sign extension keeps its
+    /// high word (`00 120F FF00 >> 4` stores 0x0120).
+    fn dsp_satdw(&self, value: i64, stored: u16) -> u16 {
+        if self.corcon & CORCON_SATDW != 0 && !fits_signed32(value) {
+            if value < 0 {
+                0x8000
+            } else {
+                0x7FFF
+            }
+        } else {
+            stored
+        }
+    }
+
+    /// Accumulator write-back of the *other* accumulator (DS70000157G
+    /// Table 5-13): `00` stores the rounded ACCxH to W13, `01` to [W13] with
+    /// a post-increment of two, `10`/`11` do nothing (no write-back).
+    fn dsp_write_back(&mut self, acc: usize, awb: u32) -> SimResult<()> {
+        if awb >= 2 {
+            return Ok(());
+        }
+        // The operation uses `acc`; the write-back stores the other one.
+        let value = if acc == 0 { self.acc_b } else { self.acc_a };
+        let hi = ((value >> 16) & 0xFFFF) as u16;
+        let lo = (value & 0xFFFF) as u16;
+        // The accumulator is 40-bit and the rounding carry adds at most
+        // 2^16, so `rounded` still fits 41 bits: SATDW compares the true
+        // value (a value above 2^39 is positive and saturates to 0x7FFF) and
+        // the stored word is its ACCxH extract.
+        let rounded = if self.dsp_round_up(hi, lo) {
+            value.wrapping_add(0x1_0000)
+        } else {
+            value
+        };
+        let stored = self.dsp_satdw(rounded, ((rounded >> 16) & 0xFFFF) as u16);
+        if awb == 0 {
+            self.w[13] = stored;
+        } else {
+            let ea = self.w[13];
+            self.data_write(ea, stored)?;
+            self.w[13] = self.w[13].wrapping_add(2);
+        }
+        Ok(())
+    }
+
+    /// MAC / MPY / MPY.N / MSC (DS70000157G §5.4). `square` selects the
+    /// same-register form (`1111 00mm ...`, no write-back).
+    fn exec_dsp_mac(&mut self, word: u32, square: bool) -> SimResult<()> {
+        let acc = ((word >> 15) & 1) as usize;
+        let (wm, wn) = if square {
+            let w = 4 + ((word >> 16) & 0x3) as usize;
+            (self.w[w], self.w[w])
+        } else {
+            let (a, b) = match (word >> 16) & 0x7 {
+                0 => (4, 5),
+                1 => (4, 6),
+                2 => (4, 7),
+                4 => (5, 6),
+                5 => (5, 7),
+                6 => (6, 7),
+                _ => return Err(SimulationError::DecodeError(u64::from(self.pc))),
+            };
+            (self.w[a], self.w[b])
+        };
+        let negate = word & 0x0000_4000 != 0;
+        let store = if square {
+            word & 0x3 == 0b01
+        } else {
+            word & 0x3 == 0b11
+        };
+        let product = self.dsp_multiply(wm, wn);
+        if store && negate {
+            // MPY.N lists OA/OB/OAB only (DS70000157G MPY.N page): the
+            // negated product is stored without saturation and without SA/SB.
+            let negated = -product;
+            if !fits_signed32(negated) {
+                self.sr |= if acc == 0 { SR_OA } else { SR_OB };
+            }
+            self.refresh_dsp_status();
+            if acc == 0 {
+                self.acc_a = wrap40(negated);
+            } else {
+                self.acc_b = wrap40(negated);
+            }
+        } else if store {
+            self.dsp_store_acc(acc, product);
+        } else {
+            let current = if acc == 0 { self.acc_a } else { self.acc_b };
+            // MAC adds the product, MSC subtracts it.
+            let result = if negate {
+                current - product
+            } else {
+                current + product
+            };
+            self.dsp_store_acc(acc, result);
+        }
+        let x_op = (word >> 6) & 0xF;
+        let y_op = (word >> 2) & 0xF;
+        let x_dest = 4 + ((word >> 12) & 0x3) as usize;
+        let y_dest = 4 + ((word >> 10) & 0x3) as usize;
+        self.dsp_prefetch(true, x_op, x_dest)?;
+        self.dsp_prefetch(false, y_op, y_dest)?;
+        if !square {
+            self.dsp_write_back(acc, word & 0x3)?;
+        }
+        Ok(())
+    }
+
+    /// `CLR Acc {,prefetch} {,AWB}` (DS70000157G): clear the 40-bit
+    /// accumulator and its OA/SA (or OB/SB) status bits, optionally
+    /// prefetching and writing back the other accumulator.
+    fn exec_dsp_clr(&mut self, word: u32) -> SimResult<()> {
+        let acc = ((word >> 15) & 1) as usize;
+        if acc == 0 {
+            self.acc_a = 0;
+            self.sr &= !(SR_OA | SR_SA);
+        } else {
+            self.acc_b = 0;
+            self.sr &= !(SR_OB | SR_SB);
+        }
+        self.refresh_dsp_status();
+        let x_op = (word >> 6) & 0xF;
+        let y_op = (word >> 2) & 0xF;
+        let x_dest = 4 + ((word >> 12) & 0x3) as usize;
+        let y_dest = 4 + ((word >> 10) & 0x3) as usize;
+        self.dsp_prefetch(true, x_op, x_dest)?;
+        self.dsp_prefetch(false, y_op, y_dest)?;
+        self.dsp_write_back(acc, word & 0x3)?;
+        Ok(())
+    }
+
+    /// `MOVSAC Acc {,prefetch} {,AWB}` — prefetches and write-back only; no
+    /// accumulator operation and no status (DS70000157G).
+    fn exec_dsp_movsac(&mut self, word: u32) -> SimResult<()> {
+        let acc = ((word >> 15) & 1) as usize;
+        let x_op = (word >> 6) & 0xF;
+        let y_op = (word >> 2) & 0xF;
+        let x_dest = 4 + ((word >> 12) & 0x3) as usize;
+        let y_dest = 4 + ((word >> 10) & 0x3) as usize;
+        self.dsp_prefetch(true, x_op, x_dest)?;
+        self.dsp_prefetch(false, y_op, y_dest)?;
+        self.dsp_write_back(acc, word & 0x3)?;
+        Ok(())
+    }
+
+    /// `LAC Ws|[...], {#Slit4,} Acc` (DS70000157G): load a 1.15 value into
+    /// the accumulator with an optional shift (negative = left).
+    ///
+    /// The PRM's examples 1-2 pin the shifter as **32-bit**: the value is
+    /// placed in ACCxH:ACCxL, the shift wraps/extends within 32 bits and
+    /// ACCxU is the sign extension of the result — example 1 (`0x1221 << 3`)
+    /// stores `FF 9108 0000` with OB set, not the 40-bit `00 9108 0000`.
+    /// The overflow test uses the exact shifted value, so a right shift never
+    /// flags (example 2 has SR = 0).
+    fn exec_dsp_lac(&mut self, word: u32) -> SimResult<()> {
+        let acc = ((word >> 15) & 1) as usize;
+        let wb = ((word >> 11) & 0xF) as usize;
+        let shift = ((word >> 7) & 0xF) as u8;
+        let mode = (word >> 4) & 0x7;
+        let ws = (word & 0xF) as usize;
+        let src = match mode {
+            0 => self.w[ws],
+            6 => {
+                let ea = self.w[ws].wrapping_add(self.w[wb]);
+                self.data_read(ea)?
+            }
+            _ => self.read_operand(ws, mode, false)?,
+        };
+        let slit = i32::from(shift) - if shift >= 8 { 16 } else { 0 }; // -8..=7
+        let base = i64::from(src as i16) << 16;
+        let true_value = if slit < 0 {
+            base << (-slit)
+        } else {
+            base >> slit
+        };
+        let shifted32 = if slit < 0 {
+            (base as i32).wrapping_shl((-slit) as u32)
+        } else {
+            (base as i32) >> slit
+        };
+        let sat_enabled = self.corcon & if acc == 0 { CORCON_SATA } else { CORCON_SATB } != 0;
+        let super_sat = self.corcon & CORCON_ACCSAT != 0;
+        let fits32 = fits_signed32(true_value);
+        let stored = if !fits32 && sat_enabled && !super_sat {
+            if true_value > 0 {
+                ACC32_MAX
+            } else {
+                ACC32_MIN
+            }
+        } else if !fits32 && sat_enabled && super_sat {
+            // Super saturation keeps the guard bits: store the exact 40-bit
+            // result (a 32-bit source shifted by at most 8 always fits).
+            true_value
+        } else {
+            i64::from(shifted32)
+        };
+        if !fits32 && (!sat_enabled || super_sat) {
+            self.sr |= if acc == 0 { SR_OA } else { SR_OB };
+        }
+        if !fits32 && sat_enabled && !super_sat {
+            self.sr |= if acc == 0 { SR_SA } else { SR_SB };
+        }
+        self.refresh_dsp_status();
+        if acc == 0 {
+            self.acc_a = stored;
+        } else {
+            self.acc_b = stored;
+        }
+        Ok(())
+    }
+
+    /// `SAC`/`SAC.R` (DS70000157G): store ACCxH after an optional 40-bit
+    /// arithmetic shift, with SATDW saturation (status is not affected).
+    fn exec_dsp_sac(&mut self, word: u32, rounded: bool) -> SimResult<()> {
+        let acc = ((word >> 15) & 1) as usize;
+        let wb = ((word >> 11) & 0xF) as usize;
+        let shift = ((word >> 7) & 0xF) as u8;
+        let mode = (word >> 4) & 0x7;
+        let wd = (word & 0xF) as usize;
+        let value = if acc == 0 { self.acc_a } else { self.acc_b };
+        let slit = i32::from(shift) - if shift >= 8 { 16 } else { 0 };
+        let shifted = wrap40(if slit < 0 {
+            value << (-slit)
+        } else {
+            value >> slit
+        });
+        let hi = ((shifted >> 16) & 0xFFFF) as u16;
+        let lo = (shifted & 0xFFFF) as u16;
+        let store_value = if rounded && self.dsp_round_up(hi, lo) {
+            shifted + 0x1_0000
+        } else {
+            shifted
+        };
+        let stored = self.dsp_satdw(store_value, ((store_value >> 16) & 0xFFFF) as u16);
+        match mode {
+            0 => self.w[wd] = stored,
+            1..=5 => self.write_operand(wd, mode, stored, false)?,
+            6 => {
+                let ea = self.w[wd].wrapping_add(self.w[wb]);
+                self.data_write(ea, stored)?;
+            }
+            _ => return Err(SimulationError::DecodeError(u64::from(self.pc))),
+        }
+        Ok(())
+    }
+
     /// Execute one decoded word. Returns the instruction cycles consumed.
     fn execute(&mut self, word: u32) -> SimResult<u32> {
+        let pc = self.pc;
+
         // NOP — DS70000157G: 0000 0000 xxxx xxxx xxxx xxxx.
-        if word & 0x00FFFF == 0 && word >> 16 == 0 {
-            self.pc = self.pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+        if word & 0x00FF_FFFF == 0 {
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
             return Ok(1);
         }
 
@@ -1220,17 +3029,25 @@ impl Pic24 {
             let k = ((word >> 4) & 0xFFFF) as u16;
             let d = (word & 0xF) as usize;
             self.w[d] = k;
-            self.pc = self.pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
             return Ok(1);
         }
 
-        // MOV Wns, f — 1000 1fff ffff ffff ffff ssss (f is a 16-bit even address:
-        // 15 stored bits, LSB implied 0 — DS70000157G).
+        // MOV.B #lit8, Wnd — 1011 0011 1100 kkkk kkkk dddd.
+        if word & 0x00FF_F000 == 0x00B3_C000 {
+            let k = ((word >> 4) & 0xFF) as u16;
+            let d = (word & 0xF) as usize;
+            self.w[d] = k;
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            return Ok(1);
+        }
+
+        // MOV Wns, f — 1000 1fff ffff ffff ffff ssss.
         if word >> 19 == 0b1_0001 {
             let f = (((word >> 4) & 0x7FFF) << 1) as u16;
             let s = (word & 0xF) as usize;
             self.data_write(f, self.w[s])?;
-            self.pc = self.pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
             return Ok(1);
         }
 
@@ -1240,29 +3057,462 @@ impl Pic24 {
             let d = (word & 0xF) as usize;
             let v = self.data_read(f)?;
             self.w[d] = v;
-            self.pc = self.pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
             return Ok(1);
         }
 
-        // BRA Expr — 0011 0111 nnnn nnnn nnnn nnnn (slit16 words: PC = PC + 2 + 2*offset).
-        if word >> 16 == 0x0037 {
+        // MOV{.B} Ws, Wd — 0111 1www wBhh hddd dggg ssss (all modes).
+        if word & 0x00F8_0000 == 0x0078_0000 {
+            let byte = word & 0x0000_4000 != 0;
+            let hhh = (word >> 11) & 0x7;
+            let d = ((word >> 7) & 0xF) as usize;
+            let ggg = (word >> 4) & 0x7;
+            let s = (word & 0xF) as usize;
+            let val = self.read_operand(s, ggg, byte)?;
+            self.write_operand(d, hhh, val, byte)?;
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            return Ok(1);
+        }
+
+        // MOV{.B} f {,WREG} — 1011 1111 1BDf ffff ffff ffff.
+        if word & 0x00FF_8000 == 0x00BF_8000 {
+            let byte = word & 0x0000_4000 != 0;
+            let to_file = word & 0x0000_2000 != 0;
+            let f = (word & 0x1FFF) as u16;
+            let val = self.read_indirect(f, byte)?;
+            if to_file {
+                self.write_indirect(f, val, byte)?;
+            } else if byte {
+                self.w[0] = (self.w[0] & 0xFF00) | (val & 0x00FF);
+                self.set_nz(self.w[0], true);
+            } else {
+                self.w[0] = val;
+                self.set_nz(val, false);
+            }
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            return Ok(1);
+        }
+
+        // MOV{.B} WREG, f — 1011 0111 1B1f ffff ffff ffff.
+        if word & 0x00FF_A000 == 0x00B7_A000 {
+            let byte = word & 0x0000_4000 != 0;
+            let f = (word & 0x1FFF) as u16;
+            let val = if byte { self.w[0] & 0x00FF } else { self.w[0] };
+            self.write_indirect(f, val, byte)?;
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            return Ok(1);
+        }
+
+        // ADD{.B} f {,WREG} — 1011 0100 0BDf ffff ffff ffff.
+        if word & 0x00FF_8000 == 0x00B4_0000 {
+            let byte = word & 0x0000_4000 != 0;
+            let to_file = word & 0x0000_2000 != 0;
+            let f = (word & 0x1FFF) as u16;
+            let a = self.read_indirect(f, byte)?;
+            let r = self.alu_add(a, self.w[0], 0, byte);
+            if to_file {
+                self.write_indirect(f, r, byte)?;
+            } else if byte {
+                self.w[0] = (self.w[0] & 0xFF00) | (r & 0x00FF);
+            } else {
+                self.w[0] = r;
+            }
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            return Ok(1);
+        }
+
+        // AND{.B} f {,WREG} — 1011 0110 0BDf ffff ffff ffff.
+        if word & 0x00FF_8000 == 0x00B6_0000 {
+            let byte = word & 0x0000_4000 != 0;
+            let to_file = word & 0x0000_2000 != 0;
+            let f = (word & 0x1FFF) as u16;
+            let a = self.read_indirect(f, byte)?;
+            let r = a & self.w[0];
+            self.set_nz(r, byte);
+            if to_file {
+                self.write_indirect(f, r, byte)?;
+            } else if byte {
+                self.w[0] = (self.w[0] & 0xFF00) | (r & 0x00FF);
+            } else {
+                self.w[0] = r;
+            }
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            return Ok(1);
+        }
+
+        // IOR{.B} f {,WREG} — 1011 0111 0BDf ffff ffff ffff.
+        if word & 0x00FF_8000 == 0x00B7_0000 {
+            let byte = word & 0x0000_4000 != 0;
+            let to_file = word & 0x0000_2000 != 0;
+            let f = (word & 0x1FFF) as u16;
+            let a = self.read_indirect(f, byte)?;
+            let r = a | self.w[0];
+            self.set_nz(r, byte);
+            if to_file {
+                self.write_indirect(f, r, byte)?;
+            } else if byte {
+                self.w[0] = (self.w[0] & 0xFF00) | (r & 0x00FF);
+            } else {
+                self.w[0] = r;
+            }
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            return Ok(1);
+        }
+
+        // AND/IOR #lit10, Wn — 1011 001x 0Bkk kkkk kkkk dddd.
+        if word & 0x00FF_8000 == 0x00B2_0000 || word & 0x00FF_8000 == 0x00B3_0000 {
+            let k = ((word >> 4) & 0x3FF) as u16;
+            let d = (word & 0xF) as usize;
+            let r = if word & 0x0001_0000 == 0 {
+                k & self.w[d]
+            } else {
+                k | self.w[d]
+            };
+            self.set_nz(r, false);
+            self.w[d] = r;
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            return Ok(1);
+        }
+
+        // ADD #lit10, Wn — 1011 0000 0Bkk kkkk kkkk dddd.
+        if word & 0x00FF_8000 == 0x00B0_0000 {
+            let k = ((word >> 4) & 0x3FF) as u16;
+            let d = (word & 0xF) as usize;
+            let r = self.alu_add(k, self.w[d], 0, false);
+            self.w[d] = r;
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            return Ok(1);
+        }
+
+        // AND{.B} Wb,#lit5,Wd / Wb,Ws,Wd — 0110 0www wBqq qddd dxxx xxxx.
+        if word & 0x00F8_0000 == 0x0060_0000 {
+            let op = Self::decode_3op(word);
+            let rhs = match op.lit {
+                Some(k) => k,
+                None => self.read_operand(op.ws, op.ppp, op.byte)?,
+            };
+            let r = self.w[op.wb] & rhs;
+            self.set_nz(r, op.byte);
+            self.write_operand(op.wd, op.qqq, r, op.byte)?;
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            return Ok(1);
+        }
+
+        // IOR{.B} Wb,#lit5,Wd / Wb,Ws,Wd — 0111 0www wBqq qddd dxxx xxxx.
+        if word & 0x00F8_0000 == 0x0070_0000 {
+            let op = Self::decode_3op(word);
+            let rhs = match op.lit {
+                Some(k) => k,
+                None => self.read_operand(op.ws, op.ppp, op.byte)?,
+            };
+            let r = self.w[op.wb] | rhs;
+            self.set_nz(r, op.byte);
+            self.write_operand(op.wd, op.qqq, r, op.byte)?;
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            return Ok(1);
+        }
+
+        // ADD{.B} Wb,#lit5,Wd / Wb,Ws,Wd — 0100 0www wBqq qddd dxxx xxxx.
+        if word & 0x00F8_0000 == 0x0040_0000 {
+            let op = Self::decode_3op(word);
+            let rhs = match op.lit {
+                Some(k) => k,
+                None => self.read_operand(op.ws, op.ppp, op.byte)?,
+            };
+            let r = self.alu_add(self.w[op.wb], rhs, 0, op.byte);
+            self.write_operand(op.wd, op.qqq, r, op.byte)?;
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            return Ok(1);
+        }
+
+        // BSET/BCLR/BTG{.B} f,#bit — 1010 100x bbbf ffff ffff ffff.
+        if matches!(word >> 16, 0xA8..=0xAA) {
+            let bit = ((word >> 13) & 0x7) as u8;
+            let f = (word & 0x1FFF) as u16;
+            let mut b = self.data_read_byte(f)?;
+            b = match word >> 16 {
+                0xA8 => b | (1 << bit),
+                0xA9 => b & !(1 << bit),
+                _ => b ^ (1 << bit),
+            };
+            self.data_write_byte(f, b)?;
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            return Ok(1);
+        }
+
+        // BSET/BCLR/BTG{.B} Ws,#bit — 1010 000x bbbb 0B00 0ppp ssss.
+        if matches!(word >> 16, 0xA0..=0xA2) {
+            let byte = word & 0x0000_0400 != 0;
+            let bit = (word >> 12) & 0xF;
+            let reg = (word & 0xF) as usize;
+            let mode = (word >> 4) & 0x7;
+            let step = if byte { 1 } else { 2 };
+            // Source and destination are the same operand: resolve the
+            // effective address with a single post/pre-modification.
+            let (val, addr) = match mode {
+                0 => (self.w[reg], None),
+                1 => (self.read_indirect(self.w[reg], byte)?, Some(self.w[reg])),
+                2 => {
+                    let a = self.w[reg];
+                    let v = self.read_indirect(a, byte)?;
+                    self.w[reg] = self.w[reg].wrapping_sub(step);
+                    (v, Some(a))
+                }
+                3 => {
+                    let a = self.w[reg];
+                    let v = self.read_indirect(a, byte)?;
+                    self.w[reg] = self.w[reg].wrapping_add(step);
+                    (v, Some(a))
+                }
+                4 => {
+                    self.w[reg] = self.w[reg].wrapping_sub(step);
+                    let a = self.w[reg];
+                    (self.read_indirect(a, byte)?, Some(a))
+                }
+                5 => {
+                    self.w[reg] = self.w[reg].wrapping_add(step);
+                    let a = self.w[reg];
+                    (self.read_indirect(a, byte)?, Some(a))
+                }
+                _ => return Err(SimulationError::DecodeError(u64::from(pc))),
+            };
+            let r = match word >> 16 {
+                0xA0 => val | (1 << bit),
+                0xA1 => val & !(1 << bit),
+                _ => val ^ (1 << bit),
+            };
+            match addr {
+                None => {
+                    if byte {
+                        self.w[reg] = (self.w[reg] & 0xFF00) | (r & 0x00FF);
+                    } else {
+                        self.w[reg] = r;
+                    }
+                }
+                Some(a) => self.write_indirect(a, r, byte)?,
+            }
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            return Ok(1);
+        }
+
+        // CP0{.B} Ws — 1110 0000 0000 0B00 0ppp ssss.
+        if word & 0x00FF_F800 == 0x00E0_0000 {
+            let byte = word & 0x0000_0400 != 0;
+            let reg = (word & 0xF) as usize;
+            let mode = (word >> 4) & 0x7;
+            let v = self.read_operand(reg, mode, byte)?;
+            self.alu_sub(v, 0, 0, byte);
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            return Ok(1);
+        }
+
+        // CP0{.B} f — 1110 0010 0B0f ffff ffff ffff.
+        if word & 0x00FF_A000 == 0x00E2_0000 {
+            let byte = word & 0x0000_4000 != 0;
+            let f = (word & 0x1FFF) as u16;
+            let v = self.read_indirect(f, byte)?;
+            self.alu_sub(v, 0, 0, byte);
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            return Ok(1);
+        }
+
+        // CLR/SETM{.B} f (or WREG) — 1110 111x 0BDf ffff ffff ffff.
+        if word & 0x00FF_0000 == 0x00EF_0000 {
+            let byte = word & 0x0000_4000 != 0;
+            let to_file = word & 0x0000_2000 != 0;
+            let set = word & 0x0000_8000 != 0;
+            let f = (word & 0x1FFF) as u16;
+            let val = if set {
+                if byte {
+                    0x00FF
+                } else {
+                    0xFFFF
+                }
+            } else {
+                0
+            };
+            if to_file {
+                self.write_indirect(f, val, byte)?;
+            } else if byte {
+                self.w[0] = (self.w[0] & 0xFF00) | (val & 0x00FF);
+            } else {
+                self.w[0] = val;
+            }
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            return Ok(1);
+        }
+
+        // SE [Ws], Wnd / SE Ws, Wnd — 1111 1011 0000 0ddd dppp ssss.
+        if word & 0x00FF_F800 == 0x00FB_0000 {
+            let d = ((word >> 7) & 0xF) as usize;
+            let mode = (word >> 4) & 0x7;
+            let s = (word & 0xF) as usize;
+            let v = self.read_operand(s, mode, true)?;
+            let ext = if v & 0x0080 != 0 {
+                v | 0xFF00
+            } else {
+                v & 0x00FF
+            };
+            self.w[d] = ext;
+            self.set_nz(ext, false);
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            return Ok(1);
+        }
+
+        // LSR Wb, #lit4, Wnd — 1101 1110 0www wddd d100 kkkk.
+        if word & 0x00FF_8000 == 0x00DE_0000 {
+            let wb = ((word >> 11) & 0xF) as usize;
+            let wd = ((word >> 7) & 0xF) as usize;
+            let k = word & 0xF;
+            let r = self.w[wb] >> k.min(15);
+            self.w[wd] = r;
+            self.set_nz(r, false);
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            return Ok(1);
+        }
+
+        // LNK #lit14 — 1111 1010 00kk kkkk kkkk kkk0 (DS70000157G §5.4).
+        if word & 0x00FF_C000 == 0x00FA_0000 {
+            // The 13 stored bits are lit14/2 (bit 0 is fixed 0).
+            let lit14 = (((word >> 1) & 0x3FFF) as u16) << 1;
+            self.push_word(self.w[14])?;
+            self.w[14] = self.w[15];
+            self.w[15] = self.w[15].wrapping_add(lit14);
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            return Ok(1);
+        }
+
+        // ULNK — 1111 1010 1000 0000 0000 0000.
+        if word == 0x00FA_8000 {
+            self.w[15] = self.w[14];
+            let v = self.pop_word()?;
+            self.w[14] = v;
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            return Ok(1);
+        }
+
+        // RETLW{.B} #lit10, Wn — 0000 0101 0Bkk kkkk kkkk dddd.
+        if word & 0x00FF_8000 == 0x0005_0000 {
+            let byte = word & 0x0000_4000 != 0;
+            let k = ((word >> 4) & 0x3FF) as u16;
+            let d = (word & 0xF) as usize;
+            let hi = self.pop_word()?;
+            let lo = self.pop_word()?;
+            self.pc = (u32::from(hi & 0x007F) << 16) | u32::from(lo);
+            if byte {
+                self.w[d] = (self.w[d] & 0xFF00) | (k & 0x00FF);
+            } else {
+                self.w[d] = k;
+            }
+            return Ok(3);
+        }
+
+        // RETURN — 0000 0110 0000 0000 0000 0000.
+        if word & 0x00FF_FFFF == 0x0006_0000 {
+            let hi = self.pop_word()?;
+            let lo = self.pop_word()?;
+            self.pc = (u32::from(hi & 0x007F) << 16) | u32::from(lo);
+            return Ok(3);
+        }
+
+        // RETFIE — 0000 0110 0100 0000 0000 0000 (DS70000157G).
+        if word == INSN_RETFIE {
+            let packed = self.pop_word()?;
+            let low = self.pop_word()?;
+            self.sr = (self.sr & 0xFF00) | ((packed >> 8) & 0x00FF);
+            self.corcon = (self.corcon & !0x0008) | (((packed >> 7) & 1) << 3);
+            self.pc = (u32::from(packed & 0x007F) << 16) | u32::from(low);
+            return Ok(RETFIE_CYCLES);
+        }
+
+        // RCALL Expr — 0000 0111 nnnn nnnn nnnn nnnn.
+        if word >> 16 == 0x07 {
             let off = (word & 0xFFFF) as u16 as i16;
-            let next = self.pc as i64 + 2 + 2 * i64::from(off);
+            let ret = pc.wrapping_add(2);
+            self.push_word(ret as u16)?;
+            self.push_word(((ret >> 16) & 0x7F) as u16)?;
+            let next = pc as i64 + 2 + 2 * i64::from(off);
             if next < 0 {
-                return Err(SimulationError::DecodeError(self.pc as u64));
+                return Err(SimulationError::DecodeError(u64::from(pc)));
             }
             self.pc = next as u32;
             return Ok(2);
         }
 
-        // RETFIE — 0000 0110 0100 0000 0000 0000 (DS70000157G).
-        if word == INSN_RETFIE {
-            let low = self.pop_word()?;
-            let packed = self.pop_word()?;
-            self.sr = (self.sr & 0xFF00) | ((packed >> 8) & 0x00FF);
-            self.corcon = (self.corcon & !0x0008) | (((packed >> 7) & 1) << 3);
-            self.pc = (u32::from(packed & 0x007F) << 16) | u32::from(low);
-            return Ok(RETFIE_CYCLES);
+        // CALL Expr — 2 words, 0000 0010 nnnn... (DS70000157G).
+        if word >> 16 == 0x02 {
+            let word2 = self.program_word(pc + 2)?;
+            let n = ((word >> 1) & 0x7FFF) | ((word2 & 0x7F) << 15);
+            let ret = pc.wrapping_add(4);
+            self.push_word(ret as u16)?;
+            self.push_word(((ret >> 16) & 0x7F) as u16)?;
+            self.pc = n << 1;
+            return Ok(2);
+        }
+
+        // GOTO Expr — 2 words, 0000 0100 nnnn... (DS70000157G).
+        if word >> 16 == 0x04 {
+            let word2 = self.program_word(pc + 2)?;
+            let n = ((word >> 1) & 0x7FFF) | ((word2 & 0x7F) << 15);
+            self.pc = n << 1;
+            return Ok(2);
+        }
+
+        // BRA Expr — 0011 0111 nnnn nnnn nnnn nnnn (slit16 words).
+        if word >> 16 == 0x37 {
+            let off = (word & 0xFFFF) as u16 as i16;
+            let next = pc as i64 + 2 + 2 * i64::from(off);
+            if next < 0 {
+                return Err(SimulationError::DecodeError(u64::from(pc)));
+            }
+            self.pc = next as u32;
+            return Ok(2);
+        }
+
+        // BRA cond, Expr — 0011 cccc nnnn... (DS70000157G Table 4-8).
+        if word & 0x00F0_0000 == 0x0030_0000 {
+            let cond = (word >> 16) & 0xF;
+            let off = (word & 0xFFFF) as u16 as i16;
+            if self.branch_taken(cond) {
+                let next = pc as i64 + 2 + 2 * i64::from(off);
+                if next < 0 {
+                    return Err(SimulationError::DecodeError(u64::from(pc)));
+                }
+                self.pc = next as u32;
+                return Ok(2);
+            }
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            return Ok(1);
+        }
+
+        // ── DSP MAC class (DS70000157G §4.15, §5.4) ─────────────────────────
+        // Square MAC/MPY — 1111 00mm A0xx yyii iijj jj0b.
+        // 0b1x in bits 19-18 is an unimplemented encoding (DecodeError).
+        if word & 0x00F0_0000 == 0x00F0_0000 {
+            if word & 0x000C_0000 == 0 {
+                self.exec_dsp_mac(word, true)?;
+                self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+                return Ok(1);
+            }
+        } else if word & 0x00F0_0000 == 0x00C0_0000 {
+            if word & 0x0008_0000 == 0 {
+                // MAC/MPY/MPY.N/MSC/CLR/MOVSAC — 1100 0mmm ...
+                match (word >> 16) & 0x7 {
+                    0b011 => self.exec_dsp_clr(word)?,
+                    0b111 => self.exec_dsp_movsac(word)?,
+                    _ => self.exec_dsp_mac(word, false)?,
+                }
+            } else {
+                // LAC/SAC/SAC.R — 1100 1010 / 1100 1100 / 1100 1101.
+                match (word >> 16) & 0xF {
+                    0xA => self.exec_dsp_lac(word)?,
+                    0xC => self.exec_dsp_sac(word, false)?,
+                    0xD => self.exec_dsp_sac(word, true)?,
+                    _ => return Err(SimulationError::DecodeError(u64::from(pc))),
+                }
+            }
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            return Ok(1);
         }
 
         // Everything else is deliberately unimplemented (see module scope).
@@ -1310,6 +3560,47 @@ impl Cpu for Pic24 {
         self.rpor = [0; RPOR_COUNT];
         self.ic = [IcChannel::default(), IcChannel::default()];
         self.oc = [OcChannel::default(), OcChannel::default()];
+        self.p1tcon = 0;
+        self.p1tmr = 0;
+        self.p1tper = 0;
+        self.p1tper_active = 0;
+        self.p1secmp = 0;
+        self.pwm1con1 = 0;
+        self.pwm1con2 = 0;
+        self.p1dtcon1 = 0;
+        self.p1dtcon2 = 0;
+        self.p1fltacon = 0;
+        self.p1ovdcon = 0x3F00;
+        self.p1dc = [0; 3];
+        self.p1dc_active = [0; 3];
+        self.p1_frac = 0;
+        self.p1_post = 0;
+        self.p1_gen = [false; 3];
+        self.p1_dt_hi = [0; 3];
+        self.p1_dt_lo = [0; 3];
+        self.p1_fault_force = false;
+        self.p1_fault_latched = false;
+        self.p1_fault_release = false;
+        self.flta_prev = false;
+        self.rpinr12 = 0x001F;
+        self.rpinr14 = 0x1F1F;
+        self.rpinr15 = 0x001F;
+        self.ifs3 = 0;
+        self.iec3 = 0;
+        self.ipc14 = 0;
+        self.ipc15 = 0x4000;
+        self.qei1con = 0;
+        self.dflt1con = 0;
+        self.pos1cnt = 0;
+        self.max1cnt = 0xFFFF;
+        self.qei_prev_ab = 0;
+        self.qei_index_prev = false;
+        self.qei_filt = [0; 3];
+        self.qei_filt_cnt = [0; 3];
+        self.qei_filt_out = [false; 3];
+        self.qei_frac = 0;
+        self.qei_timer_prev = false;
+        self.qei_ext_psc = 0;
         self.pads_dirty = true;
         self.exception_pending = None;
         Ok(())
@@ -1345,11 +3636,11 @@ impl Cpu for Pic24 {
         self.cycles += u64::from(used);
         crate::advance_batch_cycle(bus, u64::from(used));
         self.advance_timers(used);
-        // M1b: publish the port/OC drive to the pad models, then sample the
-        // pads for input capture (order: what this step drives is what it
-        // samples).
+        // M2: run the PWM time base (and sample FLTA1) before publishing the
+        // pad drive, then sample the QEI inputs with the input capture units.
+        self.advance_mcpwm(used, bus);
         self.sync_pads(bus);
-        self.sample_capture(bus);
+        self.sample_capture(bus, used);
 
         if observed {
             // W0-W15, then the standard trailer: SP (W15), then PC.
@@ -1485,6 +3776,47 @@ impl Cpu for Pic24 {
             oc_rs: [self.oc[0].rs, self.oc[1].rs],
             oc_level: [self.oc[0].level, self.oc[1].level],
             oc_halted: [self.oc[0].halted, self.oc[1].halted],
+            p1tcon: self.p1tcon,
+            p1tmr: self.p1tmr,
+            p1tper: self.p1tper,
+            p1tper_active: self.p1tper_active,
+            p1secmp: self.p1secmp,
+            pwm1con1: self.pwm1con1,
+            pwm1con2: self.pwm1con2,
+            p1dtcon1: self.p1dtcon1,
+            p1dtcon2: self.p1dtcon2,
+            p1fltacon: self.p1fltacon,
+            p1ovdcon: self.p1ovdcon,
+            p1dc: self.p1dc,
+            p1dc_active: self.p1dc_active,
+            p1_frac: self.p1_frac,
+            p1_post: self.p1_post,
+            p1_gen: self.p1_gen,
+            p1_dt_hi: self.p1_dt_hi,
+            p1_dt_lo: self.p1_dt_lo,
+            p1_fault_force: self.p1_fault_force,
+            p1_fault_latched: self.p1_fault_latched,
+            p1_fault_release: self.p1_fault_release,
+            flta_prev: self.flta_prev,
+            rpinr12: self.rpinr12,
+            rpinr14: self.rpinr14,
+            rpinr15: self.rpinr15,
+            ifs3: self.ifs3,
+            iec3: self.iec3,
+            ipc14: self.ipc14,
+            ipc15: self.ipc15,
+            qei1con: self.qei1con,
+            dflt1con: self.dflt1con,
+            pos1cnt: self.pos1cnt,
+            max1cnt: self.max1cnt,
+            qei_prev_ab: self.qei_prev_ab,
+            qei_index_prev: self.qei_index_prev,
+            qei_filt: self.qei_filt,
+            qei_filt_cnt: self.qei_filt_cnt,
+            qei_filt_out: self.qei_filt_out,
+            qei_frac: self.qei_frac,
+            qei_timer_prev: self.qei_timer_prev,
+            qei_ext_psc: self.qei_ext_psc,
         })
     }
 
@@ -1539,6 +3871,47 @@ impl Cpu for Pic24 {
                 self.oc[ch].level = s.oc_level[ch];
                 self.oc[ch].halted = s.oc_halted[ch];
             }
+            self.p1tcon = s.p1tcon;
+            self.p1tmr = s.p1tmr;
+            self.p1tper = s.p1tper;
+            self.p1tper_active = s.p1tper_active;
+            self.p1secmp = s.p1secmp;
+            self.pwm1con1 = s.pwm1con1;
+            self.pwm1con2 = s.pwm1con2;
+            self.p1dtcon1 = s.p1dtcon1;
+            self.p1dtcon2 = s.p1dtcon2;
+            self.p1fltacon = s.p1fltacon;
+            self.p1ovdcon = s.p1ovdcon;
+            self.p1dc = s.p1dc;
+            self.p1dc_active = s.p1dc_active;
+            self.p1_frac = s.p1_frac;
+            self.p1_post = s.p1_post;
+            self.p1_gen = s.p1_gen;
+            self.p1_dt_hi = s.p1_dt_hi;
+            self.p1_dt_lo = s.p1_dt_lo;
+            self.p1_fault_force = s.p1_fault_force;
+            self.p1_fault_latched = s.p1_fault_latched;
+            self.p1_fault_release = s.p1_fault_release;
+            self.flta_prev = s.flta_prev;
+            self.rpinr12 = s.rpinr12;
+            self.rpinr14 = s.rpinr14;
+            self.rpinr15 = s.rpinr15;
+            self.ifs3 = s.ifs3;
+            self.iec3 = s.iec3;
+            self.ipc14 = s.ipc14;
+            self.ipc15 = s.ipc15;
+            self.qei1con = s.qei1con;
+            self.dflt1con = s.dflt1con;
+            self.pos1cnt = s.pos1cnt;
+            self.max1cnt = s.max1cnt;
+            self.qei_prev_ab = s.qei_prev_ab;
+            self.qei_index_prev = s.qei_index_prev;
+            self.qei_filt = s.qei_filt;
+            self.qei_filt_cnt = s.qei_filt_cnt;
+            self.qei_filt_out = s.qei_filt_out;
+            self.qei_frac = s.qei_frac;
+            self.qei_timer_prev = s.qei_timer_prev;
+            self.qei_ext_psc = s.qei_ext_psc;
             // The pad models take the restored state on the next sync.
             self.pads_dirty = true;
         }
@@ -1565,19 +3938,24 @@ mod tests {
         0b1_0001 << 19 | (u32::from(f >> 1) << 4)
     }
 
+    /// A signed 40-bit accumulator value from its ACCxU/H/L bytes.
+    fn acc40(u: i64, h: i64, l: i64) -> i64 {
+        wrap40((u << 32) | (h << 16) | l)
+    }
+
     fn step<B: Bus>(cpu: &mut Pic24, bus: &mut B) {
         cpu.step(bus, &[], &SimulationConfig::default()).unwrap();
     }
 
     #[test]
     fn full_program_flash_loads_through_the_last_instruction() {
-        // 11264 instructions (33,792 bytes of 3-byte packed XC16 code): every
+        // 11264 instructions, each in its own 4-byte XC16 slot: every
         // instruction up to 0x57FE.
-        let packed: Vec<u8> = (0..INSTR_SLOTS)
-            .flat_map(|_| mov_lit_w0(0x48).to_le_bytes()[..3].to_vec())
+        let slots: Vec<u8> = (0..INSTR_SLOTS)
+            .flat_map(|_| mov_lit_w0(0x48).to_le_bytes().to_vec())
             .collect();
         let mut image = crate::memory::ProgramImage::new(0, crate::Arch::Pic24);
-        image.add_segment(0, xc16_executable_slots(&packed).unwrap());
+        image.add_segment(0, slots);
         let mut cpu = Pic24::new();
         cpu.load_program_image(&image);
         let mut bus = SystemBus::new();
@@ -1609,96 +3987,112 @@ mod tests {
     }
 
     /// A minimal little-endian ELF32 for EM_DSPIC30F (118) with one
-    /// executable PT_LOAD per segment, XC16 3-byte packed.
-    fn pic24_elf(entry: u32, segments: &[(u32, Vec<u8>)]) -> Vec<u8> {
-        let phoff = 52u32;
-        let mut data_off = phoff + 32 * segments.len() as u32;
+    /// executable section per entry, in the XC16 4-byte slot form. Returns
+    /// the bytes and each section header's file offset, so tests can corrupt
+    /// individual fields.
+    fn pic24_elf(entry: u32, sections: &[(u32, Vec<u8>)]) -> (Vec<u8>, Vec<usize>) {
+        let shstr = b"\x00.text\x00.shstrtab\x00";
+        let n = sections.len() as u16;
+        let mut data_off = 52u32;
+        let mut sec_off = Vec::new();
+        for (_, bytes) in sections {
+            sec_off.push(data_off);
+            data_off += bytes.len() as u32;
+        }
+        let shstr_off = data_off;
+        data_off += shstr.len() as u32;
+        let shoff = data_off;
+
         let mut out = vec![0x7f, b'E', b'L', b'F', 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         out.extend_from_slice(&2u16.to_le_bytes()); // ET_EXEC
         out.extend_from_slice(&118u16.to_le_bytes()); // EM_DSPIC30F
         out.extend_from_slice(&1u32.to_le_bytes());
         out.extend_from_slice(&entry.to_le_bytes());
-        out.extend_from_slice(&phoff.to_le_bytes());
-        out.extend_from_slice(&0u32.to_le_bytes()); // e_shoff
+        out.extend_from_slice(&0u32.to_le_bytes()); // e_phoff
+        out.extend_from_slice(&shoff.to_le_bytes());
         out.extend_from_slice(&0u32.to_le_bytes()); // e_flags
-        for half in [52u16, 32, segments.len() as u16, 40, 0, 0] {
+        for half in [52u16, 0, 0, 40, n + 2, n + 1] {
             out.extend_from_slice(&half.to_le_bytes());
         }
-        for (paddr, bytes) in segments {
-            let len = bytes.len() as u32;
-            // p_type PT_LOAD, offset, vaddr, paddr, filesz, memsz, flags R|X, align
-            for word in [1u32, data_off, *paddr, *paddr, len, len, 5, 2] {
-                out.extend_from_slice(&word.to_le_bytes());
-            }
-            data_off += len;
-        }
-        for (_, bytes) in segments {
+        for (_, bytes) in sections {
             out.extend_from_slice(bytes);
         }
-        out
+        out.extend_from_slice(shstr);
+        let mut shdr_off = Vec::new();
+        let mut sh =
+            |out: &mut Vec<u8>, name: u32, typ: u32, flags: u32, addr: u32, off: u32, size: u32| {
+                shdr_off.push(out.len());
+                for w in [name, typ, flags, addr, off, size, 0u32, 0, 2, 0] {
+                    out.extend_from_slice(&w.to_le_bytes());
+                }
+            };
+        sh(&mut out, 0, 0, 0, 0, 0, 0);
+        for (i, (addr, bytes)) in sections.iter().enumerate() {
+            sh(&mut out, 1, 1, 0x6, *addr, sec_off[i], bytes.len() as u32);
+        }
+        sh(&mut out, 8, 3, 0, 0, shstr_off, shstr.len() as u32);
+        (out, shdr_off)
     }
 
     #[test]
-    fn segments_past_program_flash_are_rejected() {
-        let one = xc16_executable_slots(&[0, 0, 0]).unwrap();
+    fn sections_past_program_flash_are_rejected() {
+        let one = [0u8; 4];
         let end = u64::from(PROGRAM_PC_END);
         assert!(
-            check_xc16_segment(end - 2, &one).is_ok(),
+            check_xc16_section(end - 2, &one).is_ok(),
             "the last instruction fits"
         );
         assert!(
-            check_xc16_segment(end, &one).is_err(),
+            check_xc16_section(end, &one).is_err(),
             "starts at the end of flash"
         );
         assert!(
-            check_xc16_segment(end + 0x100, &one).is_err(),
+            check_xc16_section(end + 0x100, &one).is_err(),
             "starts beyond flash"
         );
-        let two = xc16_executable_slots(&[0; 6]).unwrap();
+        let two = [0u8; 8];
         assert!(
-            check_xc16_segment(end - 2, &two).is_err(),
+            check_xc16_section(end - 2, &two).is_err(),
             "runs one instruction past the end"
+        );
+        assert!(
+            check_xc16_section(0x200, &[0u8; 6]).is_err(),
+            "not a whole number of slots"
         );
     }
 
     #[test]
     fn parse_elf_image_rejects_malformed_xc16_elves() {
         use crate::system::node::parse_elf_image;
-        let code = vec![0u8; 6];
-        assert!(parse_elf_image(&pic24_elf(0x200, &[(0x200, code.clone())])).is_ok());
-        let odd_entry = parse_elf_image(&pic24_elf(0x201, &[(0x200, code.clone())])).unwrap_err();
+        let code = vec![0u8; 8]; // two 4-byte slots
+        assert!(parse_elf_image(&pic24_elf(0x200, &[(0x200, code.clone())]).0).is_ok());
+
+        let odd_entry = parse_elf_image(&pic24_elf(0x201, &[(0x200, code.clone())]).0).unwrap_err();
         assert!(odd_entry.to_string().contains("entry point"), "{odd_entry}");
-        let odd_segment = parse_elf_image(&pic24_elf(0x200, &[(0x201, code.clone())])).unwrap_err();
-        assert!(odd_segment.to_string().contains("is odd"), "{odd_segment}");
+        let odd_section =
+            parse_elf_image(&pic24_elf(0x200, &[(0x201, code.clone())]).0).unwrap_err();
+        assert!(odd_section.to_string().contains("is odd"), "{odd_section}");
         for entry in [PROGRAM_PC_END, PROGRAM_PC_END + 0x100] {
-            let far = parse_elf_image(&pic24_elf(entry, &[(0x200, code.clone())])).unwrap_err();
+            let far = parse_elf_image(&pic24_elf(entry, &[(0x200, code.clone())]).0).unwrap_err();
             assert!(far.to_string().contains("entry point"), "{far}");
         }
-        // A segment whose bytes lie outside the file is still range-checked,
-        // and is an error rather than a silent skip.
-        let out_of_file = |paddr: u32| {
-            let mut elf = pic24_elf(0x200, &[(paddr, code.clone())]);
-            elf[52 + 4..52 + 8].copy_from_slice(&0x10_0000u32.to_le_bytes()); // p_offset
-            parse_elf_image(&elf).unwrap_err().to_string()
-        };
-        let far = out_of_file(PROGRAM_PC_END + 0x100);
-        assert!(far.contains("does not fit program flash"), "{far}");
-        let truncated = out_of_file(0x200);
-        assert!(
-            truncated.contains("past the end of the file"),
-            "{truncated}"
-        );
-        // Every nonempty segment is range-checked, not only executable ones.
-        let mut data = pic24_elf(0x200, &[(0x200, code.clone())]);
-        data[52 + 24..52 + 28].copy_from_slice(&4u32.to_le_bytes()); // p_flags R
-        data[52 + 4..52 + 8].copy_from_slice(&0x10_0000u32.to_le_bytes()); // p_offset
-        let data = parse_elf_image(&data).unwrap_err().to_string();
-        assert!(data.contains("past the end of the file"), "{data}");
-        let mut short = pic24_elf(0x200, &[(0x200, code.clone())]);
-        short[52 + 20..52 + 24].copy_from_slice(&3u32.to_le_bytes()); // p_memsz < p_filesz
-        let short = parse_elf_image(&short).unwrap_err().to_string();
-        assert!(short.contains("p_filesz"), "{short}");
-        let past = parse_elf_image(&pic24_elf(0x200, &[(PROGRAM_PC_END - 2, code)])).unwrap_err();
+        // A section whose bytes lie outside the file is range-checked before
+        // anything is loaded, and is an error rather than a silent skip.
+        let (mut elf, shdrs) = pic24_elf(0x200, &[(0x200, code.clone())]);
+        elf[shdrs[1] + 16..shdrs[1] + 20].copy_from_slice(&0x10_0000u32.to_le_bytes()); // sh_offset
+        let err = parse_elf_image(&elf).unwrap_err().to_string();
+        assert!(err.contains("runs past the end of the ELF file"), "{err}");
+        // Every section is range-checked, not only executable ones.
+        let (mut data, shdrs) = pic24_elf(0x200, &[(0x200, code.clone())]);
+        data[shdrs[1] + 8..shdrs[1] + 12].copy_from_slice(&4u32.to_le_bytes()); // SHF_ALLOC only
+        data[shdrs[1] + 16..shdrs[1] + 20].copy_from_slice(&0x10_0000u32.to_le_bytes());
+        let err = parse_elf_image(&data).unwrap_err().to_string();
+        assert!(err.contains("runs past the end of the ELF file"), "{err}");
+        // A section that is not a whole number of 4-byte slots is rejected.
+        let bad = parse_elf_image(&pic24_elf(0x200, &[(0x200, vec![0u8; 6])]).0).unwrap_err();
+        assert!(bad.to_string().contains("not a whole number"), "{bad}");
+        // A section that runs off program flash is rejected.
+        let past = parse_elf_image(&pic24_elf(0x200, &[(PROGRAM_PC_END - 2, code)]).0).unwrap_err();
         assert!(
             past.to_string().contains("does not fit program flash"),
             "{past}"
@@ -1712,6 +4106,77 @@ mod tests {
         cpu.reset(&mut bus).unwrap();
         assert_eq!(cpu.get_pc(), 0);
         assert_eq!(cpu.clock_cycles(), 0);
+    }
+
+    #[test]
+    fn call_and_return_use_the_upward_stack() {
+        // 0x000: CALL 0x008 (2 words, return to 0x004)
+        // 0x008: MOV #0x11, W0 ; 0x00A: RETURN
+        let mut cpu = cpu_with(&[
+            0x0002_0008,
+            0x0000_0000,
+            0x0000_0000,
+            0x0000_0000,
+            mov_lit_w0(0x11),
+            0x0006_0000,
+        ]);
+        cpu.set_sp(0x0800);
+        let mut bus = SystemBus::new();
+
+        step(&mut cpu, &mut bus); // CALL
+        assert_eq!(cpu.get_pc(), 8, "CALL jumps to its 23-bit target");
+        assert_eq!(cpu.w[15], 0x0804, "CALL pushes two words, growing up");
+        assert_eq!(cpu.data_read(0x0800).unwrap(), 0x0004, "PC+4 low word");
+        assert_eq!(cpu.data_read(0x0802).unwrap(), 0x0000, "PC+4 high word");
+
+        step(&mut cpu, &mut bus); // MOV #0x11, W0
+        assert_eq!(cpu.w[0], 0x11);
+
+        step(&mut cpu, &mut bus); // RETURN
+        assert_eq!(cpu.get_pc(), 4, "RETURN pops the stacked PC");
+        assert_eq!(cpu.w[15], 0x0800, "stack unwound");
+    }
+
+    #[test]
+    fn lnk_and_ulnk_allocate_a_frame() {
+        let mut cpu = cpu_with(&[0x00FA_0004, 0x00FA_8000]);
+        cpu.set_sp(0x0800);
+        cpu.w[14] = 0x1234;
+        let mut bus = SystemBus::new();
+
+        step(&mut cpu, &mut bus); // LNK #4
+        assert_eq!(cpu.w[14], 0x0802, "W14 points at the saved frame pointer");
+        assert_eq!(cpu.w[15], 0x0806, "frame of 4 bytes allocated");
+        assert_eq!(cpu.data_read(0x0800).unwrap(), 0x1234, "W14 saved");
+
+        step(&mut cpu, &mut bus); // ULNK
+        assert_eq!(cpu.w[15], 0x0800, "W15 restored from W14");
+        assert_eq!(cpu.w[14], 0x1234, "frame pointer popped");
+    }
+
+    #[test]
+    fn goto_is_a_two_word_jump() {
+        let mut cpu = cpu_with(&[0x0004_0200, 0x0000_0000]);
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.get_pc(), 0x200, "GOTO loads the 23-bit target");
+    }
+
+    #[test]
+    fn byte_moves_and_sign_extend() {
+        // 0x000: MOV.B #0x80, W0 ; 0x002: MOV.B W0, [W1] ; 0x004: SE [W1], W2
+        let mut cpu = cpu_with(&[0x00B3_C800, 0x0078_4880, 0x00FB_0111]);
+        cpu.w[1] = 0x0900;
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        step(&mut cpu, &mut bus);
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.data_read_byte(0x0900).unwrap(), 0x80);
+        assert_eq!(cpu.w[2], 0xFF80, "SE sign-extends the byte");
+
+        // Byte addressing keeps the neighbouring byte intact.
+        cpu.data_write_byte(0x0901, 0x5A).unwrap();
+        assert_eq!(cpu.data_read(0x0900).unwrap(), 0x5A80);
     }
 
     #[test]
@@ -1849,7 +4314,7 @@ mod tests {
     #[test]
     fn timer1_interrupt_vectors_frames_and_returns() {
         let mut cpu = cpu_with(&[0x0037_FFFF]); // slot 0: BRA $-1
-                                                // Handler at the T1 vector (number 11 -> address 0x1A):
+                                                // Handler at PC 0x100:
                                                 //   MOV #0, W0 ; MOV W0, T1CON ; MOV W0, IFS0 ; RETFIE
                                                 // The timer is stopped first: with PR1 = 0 a tick re-sets the flag in
                                                 // the very same step that clears it — correct silicon behaviour, but
@@ -1859,9 +4324,14 @@ mod tests {
         handler.extend(enc(mov_w0_to_f(SFR_T1CON)));
         handler.extend(enc(mov_w0_to_f(SFR_IFS0)));
         handler.extend(enc(INSN_RETFIE));
-        cpu.load_flash(0x1A, &handler);
+        cpu.load_flash(0x100, &handler);
+        // The T1 vector (number 11) lives at PC 0x1A and holds the 24-bit ISR
+        // address as data (DS70283H §7.1).
+        cpu.load_flash(0x1A, &enc(0x000100));
 
-        cpu.set_sp(0x1000);
+        // The stack grows toward higher addresses (DS70283H Figure 4-4), so
+        // it starts at the bottom of the 2 KB SRAM.
+        cpu.set_sp(0x0800);
         write_sfr(&mut cpu, SFR_PR1, 0); // flag after every tick
         write_sfr(&mut cpu, SFR_T1CON, TCON_TON);
         write_sfr(&mut cpu, SFR_IEC0, 1 << IRQ_T1.0);
@@ -1871,18 +4341,23 @@ mod tests {
         step(&mut cpu, &mut bus); // BRA; the timer ticks -> T1IF
         assert_ne!(cpu.data_read(SFR_IFS0).unwrap() & (1 << IRQ_T1.0), 0);
 
-        step(&mut cpu, &mut bus); // vector + first handler instruction
-        assert_eq!(cpu.get_pc(), 0x1C, "handler began at the T1 vector");
+        step(&mut cpu, &mut bus); // vector fetch + first handler instruction
+        assert_eq!(
+            cpu.get_pc(),
+            0x102,
+            "handler began at the vector's ISR address"
+        );
         assert_eq!(
             (cpu.data_read(SFR_SR).unwrap() >> 5) & 0x7,
             1,
             "IPL raised to the source priority"
         );
 
-        // DS70283H frame: [SP] = SR<7:0>|IPL3|PC<22:16>, [SP+2] = PC<15:0>.
+        // DS70283H frame, stack growing up (Figure 4-4): [SP] = PC<15:0>,
+        // [SP+2] = SR<7:0>|IPL3|PC<22:16>.
         let sp = cpu.w[15];
-        assert_eq!(cpu.data_read(sp).unwrap(), 0x0000, "packed frame word");
-        assert_eq!(cpu.data_read(sp + 2).unwrap(), 0x0000, "saved PC (was 0)");
+        assert_eq!(cpu.data_read(sp - 2).unwrap(), 0x0000, "packed frame word");
+        assert_eq!(cpu.data_read(sp - 4).unwrap(), 0x0000, "saved PC (was 0)");
 
         step(&mut cpu, &mut bus); // MOV W0, T1CON stops the timer
         assert_eq!(
@@ -1898,7 +4373,7 @@ mod tests {
         );
         step(&mut cpu, &mut bus); // RETFIE
         assert_eq!(cpu.get_pc(), 0, "returned to the interrupted loop");
-        assert_eq!(cpu.w[15], 0x1000, "stack fully unwound");
+        assert_eq!(cpu.w[15], 0x0800, "stack fully unwound");
         assert_eq!(
             (cpu.data_read(SFR_SR).unwrap() >> 5) & 0x7,
             0,
@@ -2206,5 +4681,1218 @@ mod tests {
         }
         let con = cpu.data_read(SFR_IC1CON).unwrap();
         assert_eq!(con & (ICCON_ICBNE | ICCON_ICOV), 0, "drained clean");
+    }
+
+    // ── M1c: DSP MAC class (DS70000157G §4.15, §5.4) ───────────────────────
+
+    /// `MAC/MPY/MPY.N/MSC Wm*Wn, Acc {,AWB}` word (fields per §5.4).
+    #[allow(clippy::too_many_arguments)]
+    fn mac_word(
+        mmm: u32,
+        acc_b: bool,
+        negate: bool,
+        store: bool,
+        xx: u32,
+        yy: u32,
+        xop: u32,
+        yop: u32,
+        aa: u32,
+    ) -> u32 {
+        let mut w = 0x00C0_0000
+            | ((mmm & 7) << 16)
+            | ((xx & 3) << 12)
+            | ((yy & 3) << 10)
+            | ((xop & 0xF) << 6)
+            | ((yop & 0xF) << 2)
+            | (aa & 3);
+        if acc_b {
+            w |= 1 << 15;
+        }
+        if negate {
+            w |= 1 << 14;
+        }
+        if store {
+            w |= 0b11;
+        }
+        w
+    }
+
+    /// Square `MAC/MPY Wm*Wm, Acc {,prefetch}` word.
+    fn square_word(mm: u32, acc_b: bool, store: bool, xx: u32, yy: u32, xop: u32, yop: u32) -> u32 {
+        let mut w = 0x00F0_0000
+            | ((mm & 3) << 16)
+            | ((xx & 3) << 12)
+            | ((yy & 3) << 10)
+            | ((xop & 0xF) << 6)
+            | ((yop & 0xF) << 2);
+        if acc_b {
+            w |= 1 << 15;
+        }
+        if store {
+            w |= 1;
+        }
+        w
+    }
+
+    fn clr_word(acc_b: bool, xx: u32, yy: u32, xop: u32, yop: u32, aa: u32) -> u32 {
+        0x00C3_0000
+            | ((acc_b as u32) << 15)
+            | ((xx & 3) << 12)
+            | ((yy & 3) << 10)
+            | ((xop & 0xF) << 6)
+            | ((yop & 0xF) << 2)
+            | (aa & 3)
+    }
+
+    fn movsac_word(acc_b: bool, xx: u32, yy: u32, xop: u32, yop: u32, aa: u32) -> u32 {
+        0x00C7_0000
+            | ((acc_b as u32) << 15)
+            | ((xx & 3) << 12)
+            | ((yy & 3) << 10)
+            | ((xop & 0xF) << 6)
+            | ((yop & 0xF) << 2)
+            | (aa & 3)
+    }
+
+    fn lac_word(acc_b: bool, wb: u32, slit: i32, mode: u32, ws: u32) -> u32 {
+        0x00CA_0000
+            | ((acc_b as u32) << 15)
+            | ((wb & 0xF) << 11)
+            | (((slit & 0xF) as u32) << 7)
+            | ((mode & 7) << 4)
+            | (ws & 0xF)
+    }
+
+    fn sac_word(rounded: bool, acc_b: bool, wb: u32, slit: i32, mode: u32, wd: u32) -> u32 {
+        (if rounded { 0x00CD_0000 } else { 0x00CC_0000 })
+            | ((acc_b as u32) << 15)
+            | ((wb & 0xF) << 11)
+            | (((slit & 0xF) as u32) << 7)
+            | ((mode & 7) << 4)
+            | (wd & 0xF)
+    }
+
+    /// Every builder is checked against xc16-as output for the same
+    /// mnemonic — the encodings are not transcribed by hand.
+    #[test]
+    fn dsp_words_match_xc16_as() {
+        assert_eq!(
+            mac_word(0, false, false, false, 0, 1, 3, 1, 2),
+            0x00C0_04C6,
+            "mac w4*w5,a,[w8]+=6,w4,[w10]+=2,w5"
+        );
+        assert_eq!(
+            square_word(3, false, false, 0, 3, 4, 15),
+            0x00F3_0D3C,
+            "mac w7*w7,a,[w11]-=2,w7"
+        );
+        assert_eq!(
+            mac_word(0, false, false, true, 2, 3, 1, 7, 3),
+            0x00C0_2C5F,
+            "mpy w4*w5,a,[w8]+=2,w6,[w10]-=2,w7"
+        );
+        assert_eq!(
+            mac_word(0, false, true, true, 0, 1, 1, 1, 3),
+            0x00C0_4447,
+            "mpy.n w4*w5,a,[w8]+=2,w4,[w10]+=2,w5"
+        );
+        assert_eq!(
+            mac_word(6, false, true, false, 2, 3, 6, 6, 2),
+            0x00C6_6D9A,
+            "msc w6*w7,a,[w8]-=4,w6,[w10]-=4,w7"
+        );
+        assert_eq!(
+            mac_word(0, true, true, false, 0, 1, 4, 12, 0),
+            0x00C0_C530,
+            "msc w4*w5,b,[w11+w12],w5,w13"
+        );
+        assert_eq!(
+            square_word(0, true, true, 0, 1, 12, 1),
+            0x00F0_8705,
+            "mpy w4*w4,b,[w9+w12],w4,[w10]+=2,w5"
+        );
+        assert_eq!(
+            clr_word(false, 0, 0, 1, 4, 0),
+            0x00C3_0050,
+            "clr a,[w8]+=2,w4,w13"
+        );
+        assert_eq!(
+            movsac_word(true, 2, 3, 8, 10, 0),
+            0x00C7_AE28,
+            "movsac b,[w9],w6,[w11]+=4,w7,w13"
+        );
+        assert_eq!(lac_word(true, 0, -3, 3, 4), 0x00CA_86B4, "lac [w4++],#-3,b");
+        assert_eq!(lac_word(false, 0, 7, 4, 2), 0x00CA_03C2, "lac [--w2],#7,a");
+        assert_eq!(
+            sac_word(false, false, 0, 4, 0, 5),
+            0x00CC_0205,
+            "sac a,#4,w5"
+        );
+        assert_eq!(
+            sac_word(false, true, 0, -4, 3, 5),
+            0x00CC_8635,
+            "sac b,#-4,[w5++]"
+        );
+        assert_eq!(
+            sac_word(true, false, 0, 4, 0, 5),
+            0x00CD_0205,
+            "sac.r a,#4,w5"
+        );
+        assert_eq!(
+            sac_word(true, true, 0, -4, 3, 5),
+            0x00CD_8635,
+            "sac.r b,#-4,[w5++]"
+        );
+        assert_eq!(
+            square_word(0, false, true, 0, 0, 4, 4),
+            0x00F0_0111,
+            "mpy w4*w4,a"
+        );
+        assert_eq!(
+            mac_word(0, false, false, false, 0, 0, 4, 4, 2),
+            0x00C0_0112,
+            "mac w4*w5,a"
+        );
+        assert_eq!(
+            movsac_word(false, 0, 1, 1, 5, 1),
+            0x00C7_0455,
+            "movsac a,[w8]+=2,w4,[w10]-=6,w5,[w13]+=2"
+        );
+        assert_eq!(
+            mac_word(6, true, false, false, 0, 0, 4, 4, 2),
+            0x00C6_8112,
+            "mac w6*w7,b"
+        );
+        assert_eq!(
+            mac_word(0, true, true, false, 0, 0, 4, 4, 0),
+            0x00C0_C110,
+            "msc w4*w5,b,w13"
+        );
+    }
+
+    #[test]
+    fn dsp_mac_fractional_with_prefetches_matches_prm_example_1() {
+        // DS70000157G MAC example 1: CORCON = 0x00C0 (fractional, normal
+        // saturation), ACCA = 0x0012000000, W4=0xA022, W5=0xB900.
+        let mut cpu = cpu_with(&[0x00C0_04C6]);
+        cpu.corcon = 0x00C0;
+        cpu.w[4] = 0xA022;
+        cpu.w[5] = 0xB900;
+        cpu.w[8] = 0x0A00;
+        cpu.w[10] = 0x0C00;
+        cpu.acc_a = 0x1200_0000;
+        cpu.data_write(0x0A00, 0x2567).unwrap();
+        cpu.data_write(0x0C00, 0x909C).unwrap();
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.acc_a, 0x472D_2400, "ACCA = ACCA + W4*W5 in 1.31");
+        assert_eq!(cpu.w[4], 0x2567, "X prefetch destination");
+        assert_eq!(cpu.w[5], 0x909C, "Y prefetch destination");
+        assert_eq!(cpu.w[8], 0x0A06, "X post-increment by 6");
+        assert_eq!(cpu.w[10], 0x0C02, "Y post-increment by 2");
+        assert_eq!(
+            cpu.data_read(SFR_SR).unwrap() & (SR_OA | SR_OB | SR_SA | SR_SB),
+            0,
+            "no DSP flags"
+        );
+    }
+
+    #[test]
+    fn dsp_mac_square_super_saturation_matches_prm_example_2() {
+        // DS70000157G square MAC example 2: CORCON = 0x00D0 (fractional,
+        // super saturation), ACCA = 0xFE98344500, W7 = 0x76AE.
+        let mut cpu = cpu_with(&[0x00F3_0D3C]);
+        cpu.corcon = 0x00D0;
+        cpu.w[7] = 0x76AE;
+        cpu.w[11] = 0x0C00;
+        cpu.acc_a = acc40(0xFE, 0x9834, 0x4500);
+        cpu.data_write(0x0C00, 0x23FF).unwrap();
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        assert_eq!(
+            cpu.acc_a,
+            acc40(0xFF, 0x063E, 0x0188),
+            "9.31 result keeps the guard bits"
+        );
+        assert_eq!(cpu.w[7], 0x23FF, "Y prefetch");
+        assert_eq!(cpu.w[11], 0x0BFE, "Y post-decrement by 2");
+        let sr = cpu.data_read(SFR_SR).unwrap();
+        assert_ne!(sr & SR_OA, 0, "guard-bit overflow sets OA");
+        assert_eq!(sr & SR_OAB, SR_OAB, "OAB follows");
+        assert_eq!(sr & (SR_SA | SR_SB | SR_SAB), 0, "not saturated");
+    }
+
+    #[test]
+    fn dsp_mpy_fractional_matches_prm_example_1() {
+        // DS70000157G MPY example 1: CORCON = 0 (fractional, no saturation);
+        // the product replaces the accumulator.
+        let mut cpu = cpu_with(&[0x00C0_2C5F]);
+        cpu.corcon = 0x0000;
+        cpu.w[4] = 0xC000;
+        cpu.w[5] = 0x9000;
+        cpu.w[8] = 0x0A00;
+        cpu.w[10] = 0x0C00;
+        cpu.acc_a = acc40(0xFF, 0xF780, 0x2087);
+        cpu.data_write(0x0A00, 0x671F).unwrap();
+        cpu.data_write(0x0C00, 0xE3DC).unwrap();
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.acc_a, 0x3800_0000, "MPY stores the product");
+        assert_eq!(cpu.w[6], 0x671F, "X prefetch destination W6");
+        assert_eq!(cpu.w[7], 0xE3DC, "Y prefetch destination W7");
+        assert_eq!(cpu.w[8], 0x0A02);
+        assert_eq!(cpu.w[10], 0x0BFE);
+        assert_eq!(cpu.data_read(SFR_SR).unwrap() & 0xF800, 0);
+    }
+
+    #[test]
+    fn dsp_mpyn_integer_and_fractional_match_prm_examples() {
+        // Integer mode (CORCON = 0x0001): the negated product replaces ACCA.
+        let mut cpu = cpu_with(&[0x00C0_4447]);
+        cpu.corcon = 0x0001;
+        cpu.w[4] = 0x3023;
+        cpu.w[5] = 0x1290;
+        cpu.w[8] = 0x0A00;
+        cpu.w[10] = 0x0C00;
+        cpu.acc_a = 0x0000_2387;
+        cpu.data_write(0x0A00, 0x0054).unwrap();
+        cpu.data_write(0x0C00, 0x660A).unwrap();
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.acc_a, acc40(0xFF, 0xFC82, 0x7650), "integer example 1");
+        assert_eq!(cpu.w[4], 0x0054);
+        assert_eq!(cpu.w[5], 0x660A);
+        assert_eq!(cpu.w[8], 0x0A02);
+        assert_eq!(cpu.w[10], 0x0C02);
+        assert_eq!(cpu.data_read(SFR_SR).unwrap() & 0xF800, 0);
+
+        // Fractional mode (CORCON = 0): the same word, left-shifted product.
+        let mut cpu = cpu_with(&[0x00C0_4447]);
+        cpu.corcon = 0x0000;
+        cpu.w[4] = 0x3023;
+        cpu.w[5] = 0x1290;
+        cpu.acc_a = 0x0000_2387;
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        assert_eq!(
+            cpu.acc_a,
+            acc40(0xFF, 0xF904, 0xECA0),
+            "fractional example 2"
+        );
+    }
+
+    #[test]
+    fn dsp_msc_integer_matches_prm_example_1() {
+        // DS70000157G MSC example 1: CORCON = 0x0001 (integer).
+        let mut cpu = cpu_with(&[0x00C6_6D9A]);
+        cpu.corcon = 0x0001;
+        cpu.w[6] = 0x9051;
+        cpu.w[7] = 0x7230;
+        cpu.w[8] = 0x0A00;
+        cpu.w[10] = 0x0C00;
+        cpu.acc_a = 0x0567_8000;
+        cpu.data_write(0x0A00, 0xD309).unwrap();
+        cpu.data_write(0x0C00, 0x100B).unwrap();
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.acc_a, 0x3738_5ED0, "ACCA = ACCA - W6*W7");
+        assert_eq!(cpu.w[6], 0xD309);
+        assert_eq!(cpu.w[7], 0x100B);
+        assert_eq!(cpu.w[8], 0x09FC, "post-decrement by 4");
+        assert_eq!(cpu.w[10], 0x0BFC);
+        assert_eq!(cpu.data_read(SFR_SR).unwrap() & 0xF800, 0);
+    }
+
+    #[test]
+    fn dsp_msc_fractional_with_awb_matches_prm_example_2() {
+        // DS70000157G MSC example 2: CORCON = 0 (fractional), [W11+W12]
+        // prefetch and ACCA write-back to W13.
+        let mut cpu = cpu_with(&[0x00C0_C530]);
+        cpu.corcon = 0x0000;
+        cpu.w[4] = 0x0500;
+        cpu.w[5] = 0x2000;
+        cpu.w[11] = 0x0B00;
+        cpu.w[12] = 0x0100;
+        cpu.w[13] = 0x6233;
+        cpu.acc_a = 0x3738_5ED0;
+        cpu.acc_b = 0x1000_0000;
+        cpu.data_write(0x0C00, 0x3579).unwrap();
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.acc_b, 0x0EC0_0000, "ACCB = ACCB - W4*W5");
+        assert_eq!(cpu.w[5], 0x3579, "Y prefetch through W12 offset");
+        assert_eq!(
+            cpu.w[11], 0x0B00,
+            "register-offset mode does not update W11"
+        );
+        assert_eq!(cpu.w[12], 0x0100, "nor W12");
+        assert_eq!(cpu.w[13], 0x3738, "rounded ACCA written back to W13");
+        assert_eq!(cpu.acc_a, 0x3738_5ED0, "write-back leaves ACCA alone");
+    }
+
+    #[test]
+    fn dsp_mpy_square_with_register_offset_matches_prm_example_2() {
+        // DS70000157G MPY square example 2: [W9+W12] with W12 = 0xFF00
+        // (signed -256).
+        let mut cpu = cpu_with(&[0x00F0_8705]);
+        cpu.corcon = 0x0000;
+        cpu.w[4] = 0xE228;
+        cpu.w[9] = 0x0C00;
+        cpu.w[12] = 0xFF00;
+        cpu.w[10] = 0x0A00;
+        cpu.acc_b = 0x9834_4500;
+        cpu.data_write(0x0B00, 0x8911).unwrap();
+        cpu.data_write(0x0A00, 0xF678).unwrap();
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.acc_b, 0x06F5_4C80);
+        assert_eq!(cpu.w[4], 0x8911, "X prefetch at W9 + (W12 as i16)");
+        assert_eq!(cpu.w[5], 0xF678, "Y prefetch");
+        assert_eq!(cpu.w[9], 0x0C00);
+        assert_eq!(cpu.w[10], 0x0A02);
+    }
+
+    #[test]
+    fn dsp_clr_matches_prm_example_1_and_clears_its_flags() {
+        let mut cpu = cpu_with(&[0x00C3_0050]);
+        cpu.corcon = 0x0000;
+        cpu.w[4] = 0xF001;
+        cpu.w[8] = 0x0A00;
+        cpu.w[13] = 0xC623;
+        cpu.acc_a = 0x0067_2345;
+        cpu.acc_b = 0x5420_3BDD;
+        cpu.sr |= SR_OA | SR_SA;
+        cpu.refresh_dsp_status();
+        cpu.data_write(0x0A00, 0x1221).unwrap();
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.acc_a, 0, "ACCA cleared");
+        assert_eq!(cpu.acc_b, 0x5420_3BDD, "ACCB untouched");
+        assert_eq!(cpu.w[4], 0x1221, "X prefetch");
+        assert_eq!(cpu.w[8], 0x0A02);
+        assert_eq!(cpu.w[13], 0x5420, "ACCB rounded write-back");
+        let sr = cpu.data_read(SFR_SR).unwrap();
+        assert_eq!(
+            sr & (SR_OA | SR_SA | SR_OAB | SR_SAB),
+            0,
+            "ACCA flags cleared"
+        );
+    }
+
+    #[test]
+    fn dsp_movsac_matches_prm_example_1() {
+        let mut cpu = cpu_with(&[0x00C7_AE28]);
+        cpu.corcon = 0x0000;
+        cpu.w[6] = 0xA022;
+        cpu.w[7] = 0xB200;
+        cpu.w[9] = 0x0A00;
+        cpu.w[11] = 0x0C00;
+        cpu.w[13] = 0x0020;
+        cpu.acc_a = 0x3290_5968;
+        cpu.data_write(0x0A00, 0x7811).unwrap();
+        cpu.data_write(0x0C00, 0xB2AF).unwrap();
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.w[6], 0x7811, "X prefetch");
+        assert_eq!(cpu.w[7], 0xB2AF, "Y prefetch");
+        assert_eq!(cpu.w[9], 0x0A00, "no update");
+        assert_eq!(cpu.w[11], 0x0C04, "post-increment by 4");
+        assert_eq!(cpu.w[13], 0x3290, "rounded ACCA write-back");
+        assert_eq!(cpu.acc_a, 0x3290_5968, "MOVSAC does not change ACCA");
+        assert_eq!(cpu.data_read(SFR_SR).unwrap(), 0, "status not affected");
+    }
+
+    #[test]
+    fn dsp_lac_left_shift_matches_prm_example_1() {
+        // DS70000157G LAC example 1: SATB = 0; the 32-bit shifter loses the
+        // sign bit and the guard byte becomes the sign extension.
+        let mut cpu = cpu_with(&[0x00CA_86B4]);
+        cpu.corcon = 0x0000;
+        cpu.w[4] = 0x0A00;
+        cpu.acc_b = 0x5125_ABCD;
+        cpu.data_write(0x0A00, 0x1221).unwrap();
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.w[4], 0x0A02, "post-increment");
+        assert_eq!(cpu.acc_b, acc40(0xFF, 0x9108, 0x0000));
+        let sr = cpu.data_read(SFR_SR).unwrap();
+        assert_eq!(sr, 0x4800, "OB and OAB set (0x4000 | 0x0800)");
+    }
+
+    #[test]
+    fn dsp_lac_right_shift_matches_prm_example_2() {
+        let mut cpu = cpu_with(&[0x00CA_03C2]);
+        cpu.corcon = 0x0000;
+        cpu.w[2] = 0x0C02;
+        cpu.acc_a = 0x5125_ABCD;
+        cpu.data_write(0x0C00, 0x9108).unwrap();
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.w[2], 0x0C00, "pre-decrement");
+        assert_eq!(cpu.acc_a, acc40(0xFF, 0xFF22, 0x1000));
+        assert_eq!(
+            cpu.data_read(SFR_SR).unwrap(),
+            0,
+            "a right shift never flags"
+        );
+    }
+
+    #[test]
+    fn dsp_sac_and_sacr_match_prm_examples() {
+        // SAC example 1: SATDW = 1, truncated store. (The PRM example
+        // writes CORCON = 0x0010, but DS70283H Register 3-2 puts SATDW at
+        // bit 5 — 0x0010 is ACCSAT; the datasheet wins here.)
+        let mut cpu = cpu_with(&[0x00CC_0205]);
+        cpu.corcon = CORCON_SATDW;
+        cpu.acc_a = 0x120F_FF00;
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.w[5], 0x0120, "SAC stores ACCxH after >> 4");
+
+        // SAC example 2: the shifted 40-bit value needs the guard bits, so
+        // SATDW clamps the store to 0x8000.
+        let mut cpu = cpu_with(&[0x00CC_8635]);
+        cpu.corcon = CORCON_SATDW;
+        cpu.acc_b = acc40(0xFF, 0xC891, 0x8F4C);
+        cpu.w[5] = 0x0A00;
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.data_read(0x0A00).unwrap(), 0x8000, "SATDW saturates");
+        assert_eq!(cpu.w[5], 0x0A02);
+        assert_eq!(
+            cpu.acc_b,
+            acc40(0xFF, 0xC891, 0x8F4C),
+            "SAC never changes the accumulator"
+        );
+
+        // SAC.R example 1: rounding adds one to the high word.
+        let mut cpu = cpu_with(&[0x00CD_0205]);
+        cpu.corcon = CORCON_SATDW;
+        cpu.acc_a = 0x120F_FF00;
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.w[5], 0x0121, "SAC.R rounds");
+
+        // SAC.R example 2: this value fits the signed 32-bit range, so it is
+        // not saturated; the low word rounds 0xF4C0 up.
+        let mut cpu = cpu_with(&[0x00CD_8635]);
+        cpu.corcon = CORCON_SATDW;
+        cpu.acc_b = acc40(0xFF, 0xF891, 0x8F4C);
+        cpu.w[5] = 0x0C00;
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.data_read(0x0C00).unwrap(), 0x8919);
+        assert_eq!(cpu.w[5], 0x0C02);
+    }
+
+    #[test]
+    fn dsp_saturation_modes_follow_corcon() {
+        // MPY W4*W4, A with W4 = 0x8000 (-1.0): the fractional product is
+        // exactly +2^31, outside the 1.31 range.
+        let cases = [
+            (
+                0x0000u16,
+                0x8000_0000i64,
+                true,
+                false,
+                "disabled: guard bits",
+            ),
+            (
+                CORCON_SATA,
+                0x7FFF_FFFF,
+                false,
+                true,
+                "normal: clamp to 1.31",
+            ),
+            (
+                CORCON_SATA | CORCON_ACCSAT,
+                0x8000_0000,
+                true,
+                false,
+                "super: 9.31",
+            ),
+        ];
+        for (corcon, expected, oa, sa, name) in cases {
+            let mut cpu = cpu_with(&[0xF00111]);
+            cpu.corcon = corcon;
+            cpu.w[4] = 0x8000;
+            let mut bus = SystemBus::new();
+            step(&mut cpu, &mut bus);
+            assert_eq!(cpu.acc_a, expected, "{name}");
+            let sr = cpu.data_read(SFR_SR).unwrap();
+            assert_eq!(sr & SR_OA != 0, oa, "{name}: OA");
+            assert_eq!(sr & SR_SA != 0, sa, "{name}: SA");
+            assert_eq!(
+                sr & SR_OAB != 0,
+                sr & (SR_OA | SR_OB) != 0,
+                "{name}: OAB derived"
+            );
+        }
+    }
+
+    #[test]
+    fn dsp_sa_sb_are_sticky_and_clearable_through_sr() {
+        let mut cpu = cpu_with(&[0xF00111, 0xC00112]);
+        cpu.corcon = CORCON_SATA;
+        cpu.w[4] = 0x8000;
+        cpu.w[5] = 0;
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus); // saturates -> SA
+        assert_ne!(cpu.data_read(SFR_SR).unwrap() & SR_SA, 0);
+        step(&mut cpu, &mut bus); // non-saturating MAC
+        assert_ne!(cpu.data_read(SFR_SR).unwrap() & SR_SA, 0, "SA is sticky");
+        // Clearing SAB clears SA and SB.
+        let sr = cpu.data_read(SFR_SR).unwrap();
+        cpu.data_write(SFR_SR, sr & !SR_SAB).unwrap();
+        assert_eq!(
+            cpu.data_read(SFR_SR).unwrap() & (SR_SA | SR_SB | SR_SAB),
+            0,
+            "SAB clear clears the sticky bits"
+        );
+        // Writing SAB = 1 cannot set SA/SB (read-only).
+        cpu.data_write(SFR_SR, SR_SAB).unwrap();
+        assert_eq!(cpu.data_read(SFR_SR).unwrap() & (SR_SA | SR_SB | SR_SAB), 0);
+    }
+
+    #[test]
+    fn dsp_individual_status_bits_clear_independently() {
+        // Saturate both accumulators: MPY W4*W4, A and MPY W4*W4, B with
+        // W4 = 0x8000 produce +2^31 (the 1.31 clamp).
+        let mut cpu = cpu_with(&[0xF00111, 0xF08111]); // MPY sq A, MPY sq B
+        cpu.corcon = CORCON_SATA | CORCON_SATB;
+        cpu.w[4] = 0x8000;
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        step(&mut cpu, &mut bus);
+        let sr = cpu.data_read(SFR_SR).unwrap();
+        assert_ne!(sr & SR_SA, 0, "ACCA saturated");
+        assert_ne!(sr & SR_SB, 0, "ACCB saturated");
+
+        // A read-modify-write that clears SA alone: the SAB bit reads back
+        // as 1, and the write must still clear SA while keeping SB
+        // (DS70000157G §2.16.4 Note 2).
+        let sr = cpu.data_read(SFR_SR).unwrap();
+        cpu.data_write(SFR_SR, (sr & !SR_SA) | SR_SB | SR_SAB)
+            .unwrap();
+        let sr = cpu.data_read(SFR_SR).unwrap();
+        assert_eq!(sr & SR_SA, 0, "SA cleared on its own");
+        assert_ne!(sr & SR_SB, 0, "SB kept");
+        assert_ne!(sr & SR_SAB, 0, "SAB follows SB");
+
+        // Clearing SB alone works the same way; a written 1 to SA cannot
+        // set a flag that is 0.
+        let sr = cpu.data_read(SFR_SR).unwrap();
+        cpu.data_write(SFR_SR, (sr & !SR_SB) | SR_SA | SR_SAB)
+            .unwrap();
+        let sr = cpu.data_read(SFR_SR).unwrap();
+        assert_eq!(sr & (SR_SA | SR_SB), 0);
+        assert_eq!(sr & SR_SAB, 0);
+    }
+
+    #[test]
+    fn dsp_clr_b_clears_only_accb_and_its_flags() {
+        // CLR B, [W8]+=2, W4, W13 (xc16-as 0xC38050).
+        let mut cpu = cpu_with(&[0x00C3_8050]);
+        cpu.corcon = 0x0000;
+        cpu.w[8] = 0x0A00;
+        cpu.w[13] = 0x0020;
+        cpu.acc_a = 0x3290_5968;
+        cpu.acc_b = 0x1234_5678;
+        cpu.sr |= SR_OA | SR_SA | SR_OB | SR_SB;
+        cpu.refresh_dsp_status();
+        cpu.data_write(0x0A00, 0x4321).unwrap();
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.acc_b, 0, "ACCB cleared");
+        assert_eq!(cpu.acc_a, 0x3290_5968, "ACCA untouched");
+        assert_eq!(cpu.w[4], 0x4321, "X prefetch");
+        assert_eq!(cpu.w[8], 0x0A02);
+        assert_eq!(cpu.w[13], 0x3290, "rounded ACCA write-back");
+        let sr = cpu.data_read(SFR_SR).unwrap();
+        assert_eq!(sr & (SR_OB | SR_SB), 0, "ACCB flags cleared");
+        assert_ne!(sr & (SR_OA | SR_SA), 0, "ACCA flags untouched");
+        assert_ne!(sr & SR_OAB, 0, "OAB still follows OA");
+        assert_ne!(sr & SR_SAB, 0, "SAB still follows SA");
+    }
+
+    #[test]
+    fn dsp_lac_and_sac_register_offset_mode() {
+        // lac [W4+W5], A (xc16-as 0xCA2864): EA = 0x0B00.
+        let mut cpu = cpu_with(&[0x00CA_2864]);
+        cpu.corcon = 0x0000;
+        cpu.w[4] = 0x0A00;
+        cpu.w[5] = 0x0100;
+        cpu.data_write(0x0B00, 0x1234).unwrap();
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.acc_a, 0x1234_0000);
+        assert_eq!(cpu.w[4], 0x0A00, "register-offset mode does not update Ws");
+        assert_eq!(cpu.w[5], 0x0100, "nor Wb");
+
+        // sac A, [W5+W6] (xc16-as 0xCC3065): EA = 0x0D00.
+        let mut cpu = cpu_with(&[0x00CC_3065]);
+        cpu.corcon = 0x0000;
+        cpu.acc_a = 0x1234_0000;
+        cpu.w[5] = 0x0C00;
+        cpu.w[6] = 0x0100;
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.data_read(0x0D00).unwrap(), 0x1234);
+        assert_eq!(cpu.w[5], 0x0C00, "register-offset mode does not update Wd");
+        assert_eq!(cpu.w[6], 0x0100);
+    }
+
+    #[test]
+    fn dsp_rounding_modes_differ_only_on_a_tie() {
+        // ACCA = 0x0000_1000_8000: the low word is exactly 0x8000 and the
+        // high word is even.
+        for (rnd, expected, name) in [
+            (0u16, 0x1000u16, "convergent rounds a tie to even"),
+            (CORCON_RND, 0x1001, "biased rounds a tie up"),
+        ] {
+            let mut cpu = cpu_with(&[0x00CD_0005]); // SAC.R A, #0, W5
+            cpu.corcon = rnd;
+            cpu.acc_a = 0x1000_8000;
+            let mut bus = SystemBus::new();
+            step(&mut cpu, &mut bus);
+            assert_eq!(cpu.w[5], expected, "{name}");
+        }
+    }
+
+    #[test]
+    fn dsp_unsigned_and_integer_modes_follow_corcon() {
+        // MPY W4*W4, A: US = 1, integer mode -> 0xFFFF * 0xFFFF.
+        let mut cpu = cpu_with(&[0xF00111]);
+        cpu.corcon = CORCON_US | CORCON_IF;
+        cpu.w[4] = 0xFFFF;
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.acc_a, 0xFFFE_0001, "unsigned 16x16 product");
+        assert_ne!(
+            cpu.data_read(SFR_SR).unwrap() & SR_OA,
+            0,
+            "the product needs the guard bits"
+        );
+    }
+
+    #[test]
+    fn dsp_awb_indirect_post_increment() {
+        // MOVSAC A, [W8]+=2, W4, [W10]-=6, W5, [W13]+=2 stores the other
+        // accumulator (B) through the pointer in W13.
+        let mut cpu = cpu_with(&[0x00C7_0455]);
+        cpu.corcon = 0x0000;
+        cpu.w[8] = 0x0A00;
+        cpu.w[10] = 0x0B00;
+        cpu.w[13] = 0x0900;
+        cpu.acc_b = 0x2000_0000;
+        cpu.data_write(0x0A00, 0x1111).unwrap();
+        cpu.data_write(0x0B00, 0x2222).unwrap();
+        cpu.data_write(0x0900, 0xFFFF).unwrap();
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.data_read(0x0900).unwrap(), 0x2000, "ACCB written back");
+        assert_eq!(cpu.w[13], 0x0902, "pointer post-incremented");
+        assert_eq!(cpu.w[4], 0x1111);
+        assert_eq!(cpu.w[5], 0x2222);
+        assert_eq!(cpu.w[10], 0x0AFA, "post-decrement by 6");
+    }
+
+    #[test]
+    fn dsp_prefetch_covers_every_x_and_y_operation() {
+        // (xop, base register, expected delta)
+        let cases = [
+            (0u32, 8usize, 0i32),
+            (1, 8, 2),
+            (2, 8, 4),
+            (3, 8, 6),
+            (5, 8, -6),
+            (6, 8, -4),
+            (7, 8, -2),
+            (8, 9, 0),
+            (9, 9, 2),
+            (10, 9, 4),
+            (11, 9, 6),
+            (13, 9, -6),
+            (14, 9, -4),
+            (15, 9, -2),
+        ];
+        for (xop, base, delta) in cases {
+            let word = movsac_word(false, 0, 0, xop, 0b0100, 2);
+            let mut cpu = cpu_with(&[word]);
+            let start = 0x0A00u16;
+            cpu.w[base] = start;
+            cpu.data_write(start, 0xBEEF).unwrap();
+            let mut bus = SystemBus::new();
+            step(&mut cpu, &mut bus);
+            assert_eq!(cpu.w[4], 0xBEEF, "xop {xop:#x} reads [W{base}]");
+            assert_eq!(
+                cpu.w[base],
+                (i32::from(start) + delta) as u16,
+                "xop {xop:#x} updates W{base}"
+            );
+        }
+        // Y operations use W10/W11.
+        let y_cases = [
+            (0u32, 10usize, 0i32),
+            (1, 10, 2),
+            (2, 10, 4),
+            (3, 10, 6),
+            (5, 10, -6),
+            (6, 10, -4),
+            (7, 10, -2),
+            (8, 11, 0),
+            (9, 11, 2),
+            (10, 11, 4),
+            (11, 11, 6),
+            (13, 11, -6),
+            (14, 11, -4),
+            (15, 11, -2),
+        ];
+        for (yop, base, delta) in y_cases {
+            let word = movsac_word(false, 0, 0, 0b0100, yop, 2);
+            let mut cpu = cpu_with(&[word]);
+            let start = 0x0C00u16;
+            cpu.w[base] = start;
+            cpu.data_write(start, 0xCAFE).unwrap();
+            let mut bus = SystemBus::new();
+            step(&mut cpu, &mut bus);
+            assert_eq!(cpu.w[4], 0xCAFE, "yop {yop:#x} reads [W{base}]");
+            assert_eq!(
+                cpu.w[base],
+                (i32::from(start) + delta) as u16,
+                "yop {yop:#x} updates W{base}"
+            );
+        }
+        // The W12 register-offset mode uses a signed 16-bit offset and does
+        // not update either register.
+        let mut cpu = cpu_with(&[movsac_word(false, 0, 0, 0b1100, 0b0100, 2)]);
+        cpu.w[9] = 0x0A00;
+        cpu.w[12] = 0xFF00;
+        cpu.data_write(0x0900, 0x1234).unwrap();
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.w[4], 0x1234);
+        assert_eq!(cpu.w[9], 0x0A00);
+        assert_eq!(cpu.w[12], 0xFF00);
+    }
+
+    // ── M2: Motor Control PWM + QEI (DS70187E / DS70208C) ──────────────────
+
+    /// Configure PWM1 for an edge-aligned complementary pair 1 (PEN1H|PEN1L)
+    /// with the given period and duty, then enable the time base at 1:1.
+    fn pwm_edge_setup(cpu: &mut Pic24, tper: u16, dc: u16) {
+        write_sfr(cpu, SFR_P1TPER, tper);
+        write_sfr(cpu, SFR_P1DC1, dc);
+        write_sfr(cpu, SFR_PWM1CON1, 0x0011);
+        write_sfr(cpu, SFR_P1TCON, PTCON_PTEN);
+    }
+
+    #[test]
+    fn pwm_edge_aligned_complementary_duty_and_dead_time() {
+        let mut cpu = cpu_with(&[0x0000_0000; 16]);
+        let mut bus = MirrorBus::new();
+        write_sfr(&mut cpu, SFR_P1DTCON1, 2); // DTA = 2 TCY, prescale 1:1
+        write_sfr(&mut cpu, SFR_P1DTCON2, 0); // both edges use unit A
+        pwm_edge_setup(&mut cpu, 7, 3);
+        // PTEN drives the edge-aligned generator active; the 2-cycle dead
+        // time gates the high-side pin.
+        step(&mut cpu, &mut bus); // count 1, DT 1
+        assert!(!bus.pad(1, 14) && !bus.pad(1, 15), "both off during DT");
+        step(&mut cpu, &mut bus); // count 2, DT 0
+        assert!(bus.pad(1, 14), "PWM1H1 active after the dead time");
+        assert!(!bus.pad(1, 15), "complementary low side stays off");
+        // Duty match at TMR = 3: the high side goes inactive immediately,
+        // the low side waits its dead time.
+        step(&mut cpu, &mut bus); // count 3
+        assert!(!bus.pad(1, 14) && !bus.pad(1, 15), "dead time on the fall");
+        step(&mut cpu, &mut bus); // count 4, DT 1
+        step(&mut cpu, &mut bus); // count 5, DT 0
+        assert!(!bus.pad(1, 14), "high side off after the match");
+        assert!(bus.pad(1, 15), "low side active after the dead time");
+        // 6, 7, then the period match resets TMR and starts a new pulse.
+        step(&mut cpu, &mut bus);
+        step(&mut cpu, &mut bus);
+        step(&mut cpu, &mut bus); // reset to 0, DT re-armed
+        assert_ne!(
+            cpu.data_read(SFR_IFS3).unwrap() & (1 << IRQ_PWM1.0),
+            0,
+            "PWM1IF on the period match"
+        );
+        assert!(!bus.pad(1, 14) && !bus.pad(1, 15));
+        step(&mut cpu, &mut bus);
+        step(&mut cpu, &mut bus);
+        assert!(bus.pad(1, 14), "next period's high side");
+        assert_eq!(cpu.data_read(SFR_P1TMR).unwrap() & 0x7FFF, 2);
+        assert_eq!(
+            cpu.data_read(SFR_P1TMR).unwrap() & 0x8000,
+            0,
+            "PTDIR clear while counting up"
+        );
+    }
+
+    #[test]
+    fn pwm_output_postscaler_divides_the_interrupt_rate() {
+        let mut cpu = cpu_with(&[0x0000_0000; 16]);
+        let mut bus = MirrorBus::new();
+        write_sfr(&mut cpu, SFR_P1TPER, 1);
+        write_sfr(&mut cpu, SFR_PWM1CON1, 0x0011);
+        // PTEN | PTOPS = 1 → 1:2 postscale.
+        write_sfr(&mut cpu, SFR_P1TCON, PTCON_PTEN | 0x0010);
+        step(&mut cpu, &mut bus); // count 1
+        step(&mut cpu, &mut bus); // reset, event 1/2
+        assert_eq!(cpu.data_read(SFR_IFS3).unwrap() & (1 << IRQ_PWM1.0), 0);
+        step(&mut cpu, &mut bus);
+        step(&mut cpu, &mut bus); // reset, event 2/2 → flag
+        assert_ne!(cpu.data_read(SFR_IFS3).unwrap() & (1 << IRQ_PWM1.0), 0);
+    }
+
+    #[test]
+    fn pwm_center_aligned_follows_the_compare_rule() {
+        let mut cpu = cpu_with(&[0x0000_0000; 32]);
+        let mut bus = MirrorBus::new();
+        write_sfr(&mut cpu, SFR_P1TPER, 3);
+        write_sfr(&mut cpu, SFR_P1DC1, 1);
+        write_sfr(&mut cpu, SFR_PWM1CON1, 0x0011);
+        write_sfr(&mut cpu, SFR_P1TCON, PTCON_PTEN | 2); // up/down
+                                                         // 0→1 (up compare at 0), 1→2 (match at 1 → inactive).
+        step(&mut cpu, &mut bus);
+        step(&mut cpu, &mut bus);
+        assert!(!bus.pad(1, 14), "inactive after the up-count match");
+        // 2→3, 3 (direction flip), 3→2, 2→1, then the down-count match at
+        // 1 drives the output active.
+        for _ in 0..5 {
+            step(&mut cpu, &mut bus);
+        }
+        assert!(bus.pad(1, 14), "active on the down-count match");
+        // Ticks 8 (zero, flag), 9 (up at 0) stay active; the next up match
+        // at 1 turns it off.
+        step(&mut cpu, &mut bus); // zero boundary + PWM1IF
+        assert_ne!(cpu.data_read(SFR_IFS3).unwrap() & (1 << IRQ_PWM1.0), 0);
+        step(&mut cpu, &mut bus);
+        assert!(bus.pad(1, 14));
+        step(&mut cpu, &mut bus);
+        assert!(!bus.pad(1, 14), "inactive again at the up match");
+    }
+
+    #[test]
+    fn pwm_override_and_fault_states() {
+        let mut cpu = cpu_with(&[0x0000_0000; 16]);
+        let mut bus = MirrorBus::new();
+        write_sfr(&mut cpu, SFR_RPINR12, 0); // FLTA1 = RP0/RB0
+        pwm_edge_setup(&mut cpu, 7, 3);
+        step(&mut cpu, &mut bus);
+        assert!(bus.pad(1, 14), "normal PWM first");
+        // Override pair 1: high follows POUT1H = 0 (inactive), low follows
+        // POUT1L = 1 (active) because both POVD bits are cleared.
+        write_sfr(&mut cpu, SFR_P1OVDCON, 0x3C01);
+        step(&mut cpu, &mut bus);
+        assert!(!bus.pad(1, 14), "override drives the high pin inactive");
+        assert!(bus.pad(1, 15), "override drives the low pin active");
+        // Fault A (active low), cycle-by-cycle, both pins inactive. Give the
+        // pin a high (inactive) level first so the fault is a real edge.
+        write_sfr(&mut cpu, SFR_P1OVDCON, 0x3F00);
+        bus.set_input(1, 0, true);
+        step(&mut cpu, &mut bus);
+        write_sfr(&mut cpu, SFR_P1FLTACON, 0x0081); // FLTAM = 1, FAEN1
+        bus.set_input(1, 0, false);
+        step(&mut cpu, &mut bus);
+        assert!(!bus.pad(1, 14) && !bus.pad(1, 15), "fault state");
+        assert_ne!(
+            cpu.data_read(SFR_IFS3).unwrap() & (1 << IRQ_FLTA1.0),
+            0,
+            "FLTA1IF"
+        );
+        // Release: the outputs stay in the fault state until the period
+        // boundary, then the generator resumes.
+        bus.set_input(1, 0, true);
+        step(&mut cpu, &mut bus);
+        assert!(
+            !bus.pad(1, 14) && !bus.pad(1, 15),
+            "held until the boundary"
+        );
+        for _ in 0..8 {
+            step(&mut cpu, &mut bus);
+            if bus.pad(1, 14) {
+                break;
+            }
+        }
+        assert!(bus.pad(1, 14), "restored at the next period");
+    }
+
+    #[test]
+    fn pwm_single_event_stops_at_the_period_match() {
+        let mut cpu = cpu_with(&[0x0000_0000; 16]);
+        let mut bus = MirrorBus::new();
+        write_sfr(&mut cpu, SFR_P1TPER, 3);
+        write_sfr(&mut cpu, SFR_P1DC1, 1);
+        write_sfr(&mut cpu, SFR_PWM1CON1, 0x0011);
+        write_sfr(&mut cpu, SFR_P1TCON, PTCON_PTEN | 1); // single event
+        for _ in 0..4 {
+            step(&mut cpu, &mut bus);
+        }
+        assert_eq!(
+            cpu.data_read(SFR_P1TCON).unwrap() & PTCON_PTEN,
+            0,
+            "the period match clears PTEN"
+        );
+        assert!(!bus.pad(1, 14) && !bus.pad(1, 15), "outputs stop inactive");
+        assert_ne!(cpu.data_read(SFR_IFS3).unwrap() & (1 << IRQ_PWM1.0), 0);
+    }
+
+    #[test]
+    fn m2_interrupt_vectors_and_ipc_mapping() {
+        let mut cpu = cpu_with(&[0x0000_0000; 4]);
+        // PWM1: IRQ 57 → IPC14 field 1 (bits 6-4), vector 65.
+        write_sfr(&mut cpu, SFR_IPC14, 6 << 4);
+        write_sfr(&mut cpu, SFR_IEC3, 1 << IRQ_PWM1.0);
+        write_sfr(&mut cpu, SFR_IFS3, 1 << IRQ_PWM1.0);
+        assert_eq!(cpu.pending_interrupt(), Some((65, 6)));
+        // QEI: IRQ 58 → IPC14 field 2 (bits 10-8), vector 66.
+        write_sfr(&mut cpu, SFR_IFS3, 1 << IRQ_QEI.0);
+        write_sfr(&mut cpu, SFR_IEC3, 1 << IRQ_QEI.0);
+        write_sfr(&mut cpu, SFR_IPC14, 7 << 8);
+        assert_eq!(cpu.pending_interrupt(), Some((66, 7)));
+        // FLTA1: IRQ 63 → IPC15 field 3 (bits 14-12), vector 71.
+        write_sfr(&mut cpu, SFR_IFS3, 1 << IRQ_FLTA1.0);
+        write_sfr(&mut cpu, SFR_IEC3, 1 << IRQ_FLTA1.0);
+        write_sfr(&mut cpu, SFR_IPC15, 5 << 12);
+        assert_eq!(cpu.pending_interrupt(), Some((71, 5)));
+        // Equal priority: the lower vector number wins.
+        write_sfr(&mut cpu, SFR_IFS3, (1 << IRQ_QEI.0) | (1 << IRQ_FLTA1.0));
+        write_sfr(&mut cpu, SFR_IEC3, (1 << IRQ_QEI.0) | (1 << IRQ_FLTA1.0));
+        write_sfr(&mut cpu, SFR_IPC14, 5 << 8);
+        assert_eq!(cpu.pending_interrupt(), Some((66, 5)));
+        // IFS0 sources keep their datasheet vectors — the M1a table was off
+        // by one for IC2/OC2/T2/T3 (DS70283H Table 7-1).
+        for (bit, ipc_reg, shift, vector) in [
+            (IRQ_IC2.0, SFR_IPC1, 4u16, 13u32),
+            (IRQ_OC2.0, SFR_IPC1, 8, 14),
+            (IRQ_T2.0, SFR_IPC1, 12, 15),
+            (IRQ_T3.0, SFR_IPC2, 0, 16),
+        ] {
+            let mut c = cpu_with(&[0x0000_0000; 2]);
+            write_sfr(&mut c, ipc_reg, 3 << shift);
+            write_sfr(&mut c, SFR_IEC0, 1 << bit);
+            write_sfr(&mut c, SFR_IFS0, 1 << bit);
+            assert_eq!(c.pending_interrupt(), Some((vector, 3)));
+        }
+    }
+
+    /// QEI: QEA on RP0/RB0, QEB on RP1/RB1, INDX on RP2/RB2.
+    fn qei_setup(cpu: &mut Pic24, mode: u16, max: u16) {
+        write_sfr(cpu, SFR_RPINR14, 0x0100);
+        write_sfr(cpu, SFR_RPINR15, 2);
+        write_sfr(cpu, SFR_MAX1CNT, max);
+        write_sfr(cpu, SFR_QEI1CON, (mode << 8) | QEICON_POSRES);
+    }
+
+    fn qei_edge(cpu: &mut Pic24, bus: &mut MirrorBus, a: bool, b: bool) {
+        bus.set_input(1, 0, a);
+        bus.set_input(1, 1, b);
+        step(cpu, bus);
+    }
+
+    #[test]
+    fn qei_x4_counts_forward_and_reverse() {
+        let mut cpu = cpu_with(&[0x0000_0000; 32]);
+        let mut bus = MirrorBus::new();
+        qei_setup(&mut cpu, 6, 100); // x4, reset on index
+        for (a, b) in [(true, false), (true, true), (false, true), (false, false)] {
+            qei_edge(&mut cpu, &mut bus, a, b);
+        }
+        assert_eq!(cpu.data_read(SFR_POS1CNT).unwrap(), 4);
+        assert_ne!(cpu.data_read(SFR_QEI1CON).unwrap() & QEICON_UPDN, 0);
+        for (a, b) in [(false, true), (true, true)] {
+            qei_edge(&mut cpu, &mut bus, a, b);
+        }
+        assert_eq!(cpu.data_read(SFR_POS1CNT).unwrap(), 2);
+        assert_eq!(cpu.data_read(SFR_QEI1CON).unwrap() & QEICON_UPDN, 0);
+    }
+
+    #[test]
+    fn qei_x2_counts_only_on_phase_a_edges() {
+        let mut cpu = cpu_with(&[0x0000_0000; 32]);
+        let mut bus = MirrorBus::new();
+        qei_setup(&mut cpu, 4, 100); // x2
+        qei_edge(&mut cpu, &mut bus, true, false); // A edge → +1
+        qei_edge(&mut cpu, &mut bus, true, true); // B edge → no count
+        assert_eq!(cpu.data_read(SFR_POS1CNT).unwrap(), 1);
+        qei_edge(&mut cpu, &mut bus, false, true); // A edge → +1
+        qei_edge(&mut cpu, &mut bus, false, false); // B edge → no count
+        assert_eq!(cpu.data_read(SFR_POS1CNT).unwrap(), 2);
+    }
+
+    #[test]
+    fn qei_match_reset_rolls_over_and_under() {
+        let mut cpu = cpu_with(&[0x0000_0000; 32]);
+        let mut bus = MirrorBus::new();
+        qei_setup(&mut cpu, 7, 3); // x4, reset on match, MAXCNT = 3
+        for (a, b) in [(true, false), (true, true), (false, true)] {
+            qei_edge(&mut cpu, &mut bus, a, b);
+        }
+        assert_eq!(cpu.data_read(SFR_POS1CNT).unwrap(), 3);
+        qei_edge(&mut cpu, &mut bus, false, false); // POSCNT == MAX → 0
+        assert_eq!(cpu.data_read(SFR_POS1CNT).unwrap(), 0);
+        assert_ne!(
+            cpu.data_read(SFR_IFS3).unwrap() & (1 << IRQ_QEI.0),
+            0,
+            "rollover interrupt"
+        );
+        write_sfr(&mut cpu, SFR_IFS3, 0);
+        qei_edge(&mut cpu, &mut bus, false, true); // POSCNT == 0 → MAX
+        assert_eq!(cpu.data_read(SFR_POS1CNT).unwrap(), 3);
+        assert_ne!(
+            cpu.data_read(SFR_IFS3).unwrap() & (1 << IRQ_QEI.0),
+            0,
+            "underflow interrupt"
+        );
+    }
+
+    #[test]
+    fn qei_index_reset_uses_the_imv_and_direction() {
+        let mut cpu = cpu_with(&[0x0000_0000; 32]);
+        let mut bus = MirrorBus::new();
+        qei_setup(&mut cpu, 6, 100); // x4, reset on index
+        write_sfr(&mut cpu, SFR_DFLT1CON, 2 << 9); // IMV: A = 0, B = 1
+                                                   // Forward to state 01 (A = 0, B = 1), POSCNT = 3.
+        for (a, b) in [(true, false), (true, true), (false, true)] {
+            qei_edge(&mut cpu, &mut bus, a, b);
+        }
+        assert_eq!(cpu.data_read(SFR_POS1CNT).unwrap(), 3);
+        bus.set_input(1, 2, true); // INDX rising at the matching state
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.data_read(SFR_POS1CNT).unwrap(), 0, "forward → 0");
+        assert_ne!(cpu.data_read(SFR_IFS3).unwrap() & (1 << IRQ_QEI.0), 0);
+        // Reverse: state 01 → 11 (A rises), POSCNT 10 → 9, UPDN clears.
+        write_sfr(&mut cpu, SFR_IFS3, 0);
+        write_sfr(&mut cpu, SFR_POS1CNT, 10);
+        qei_edge(&mut cpu, &mut bus, true, true);
+        assert_eq!(cpu.data_read(SFR_POS1CNT).unwrap(), 9);
+        assert_eq!(cpu.data_read(SFR_QEI1CON).unwrap() & QEICON_UPDN, 0);
+        // An index pulse at state 11 does not match IMV = B1/A0: no reset and
+        // no interrupt.
+        bus.set_input(1, 2, false);
+        step(&mut cpu, &mut bus);
+        bus.set_input(1, 2, true);
+        step(&mut cpu, &mut bus);
+        assert_eq!(
+            cpu.data_read(SFR_POS1CNT).unwrap(),
+            9,
+            "index at a non-matching state is ignored"
+        );
+        assert_eq!(cpu.data_read(SFR_IFS3).unwrap() & (1 << IRQ_QEI.0), 0);
+        // Reverse to state 00: 11 → 10 → 00, POSCNT 8 → 7.
+        qei_edge(&mut cpu, &mut bus, true, false);
+        qei_edge(&mut cpu, &mut bus, false, false);
+        assert_eq!(cpu.data_read(SFR_POS1CNT).unwrap(), 7);
+        // IMV = 00, reverse index: POSCNT loads MAXCNT.
+        write_sfr(&mut cpu, SFR_DFLT1CON, 0);
+        bus.set_input(1, 2, false);
+        step(&mut cpu, &mut bus);
+        bus.set_input(1, 2, true);
+        step(&mut cpu, &mut bus);
+        assert_eq!(
+            cpu.data_read(SFR_POS1CNT).unwrap(),
+            100,
+            "reverse index loads MAXCNT"
+        );
+    }
+
+    #[test]
+    fn qei_count_error_and_ceid() {
+        let mut cpu = cpu_with(&[0x0000_0000; 32]);
+        let mut bus = MirrorBus::new();
+        qei_setup(&mut cpu, 4, 3); // x2, index mode, MAXCNT = 3
+                                   // Four Phase A edges: POSCNT reaches MAXCNT + 1 = 4.
+        for (a, b) in [
+            (true, false),
+            (true, true),
+            (false, true),
+            (false, false),
+            (true, false),
+            (true, true),
+            (false, true),
+            (false, false),
+        ] {
+            qei_edge(&mut cpu, &mut bus, a, b);
+        }
+        let con = cpu.data_read(SFR_QEI1CON).unwrap();
+        assert_ne!(con & QEICON_CNTERR, 0, "CNTERR at MAXCNT + 1");
+        assert_ne!(cpu.data_read(SFR_IFS3).unwrap() & (1 << IRQ_QEI.0), 0);
+        // Further errors do not re-interrupt until CNTERR is cleared.
+        write_sfr(&mut cpu, SFR_IFS3, 0);
+        qei_edge(&mut cpu, &mut bus, true, false);
+        assert_eq!(cpu.data_read(SFR_IFS3).unwrap() & (1 << IRQ_QEI.0), 0);
+        // CEID still sets CNTERR but suppresses the interrupt.
+        let mut cpu = cpu_with(&[0x0000_0000; 32]);
+        let mut bus = MirrorBus::new();
+        qei_setup(&mut cpu, 4, 3);
+        write_sfr(&mut cpu, SFR_DFLT1CON, DFLT_CEID);
+        for (a, b) in [
+            (true, false),
+            (true, true),
+            (false, true),
+            (false, false),
+            (true, false),
+            (true, true),
+            (false, true),
+            (false, false),
+        ] {
+            qei_edge(&mut cpu, &mut bus, a, b);
+        }
+        assert_ne!(cpu.data_read(SFR_QEI1CON).unwrap() & QEICON_CNTERR, 0);
+        assert_eq!(cpu.data_read(SFR_IFS3).unwrap() & (1 << IRQ_QEI.0), 0);
+    }
+
+    #[test]
+    fn qei_timer_mode_up_and_down() {
+        let mut cpu = cpu_with(&[0x0000_0000; 16]);
+        let mut bus = MirrorBus::new();
+        write_sfr(&mut cpu, SFR_MAX1CNT, 2);
+        // QEIM = 001, internal clock, UPDN = 1 (up).
+        write_sfr(&mut cpu, SFR_QEI1CON, 0x0100 | QEICON_UPDN);
+        step(&mut cpu, &mut bus);
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.data_read(SFR_POS1CNT).unwrap(), 2);
+        step(&mut cpu, &mut bus); // 3 > MAXCNT → 0 + QEIIF
+        assert_eq!(cpu.data_read(SFR_POS1CNT).unwrap(), 0);
+        assert_ne!(cpu.data_read(SFR_IFS3).unwrap() & (1 << IRQ_QEI.0), 0);
+        // Down-count: start at 0xFFFF, MAXCNT = 0xFFFE → one tick matches.
+        write_sfr(&mut cpu, SFR_IFS3, 0);
+        write_sfr(&mut cpu, SFR_POS1CNT, 0xFFFF);
+        write_sfr(&mut cpu, SFR_MAX1CNT, 0xFFFE);
+        write_sfr(&mut cpu, SFR_QEI1CON, 0x0100); // UPDN = 0 (down)
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.data_read(SFR_POS1CNT).unwrap(), 0);
+        assert_ne!(cpu.data_read(SFR_IFS3).unwrap() & (1 << IRQ_QEI.0), 0);
+    }
+
+    #[test]
+    fn qei_digital_filter_rejects_short_pulses() {
+        let mut cpu = cpu_with(&[0x0000_0000; 32]);
+        let mut bus = MirrorBus::new();
+        qei_setup(&mut cpu, 6, 100);
+        write_sfr(&mut cpu, SFR_DFLT1CON, DFLT_QEOUT); // 1:1 filter clock
+                                                       // A one-cycle high pulse is rejected (needs three equal samples).
+        bus.set_input(1, 2, true);
+        step(&mut cpu, &mut bus);
+        assert_eq!(
+            cpu.data_read(SFR_QEI1CON).unwrap() & QEICON_INDEX,
+            0,
+            "single-sample pulse rejected"
+        );
+        bus.set_input(1, 2, false);
+        step(&mut cpu, &mut bus);
+        step(&mut cpu, &mut bus);
+        // Three consecutive highs pass the filter.
+        for _ in 0..3 {
+            bus.set_input(1, 2, true);
+            step(&mut cpu, &mut bus);
+        }
+        assert_ne!(
+            cpu.data_read(SFR_QEI1CON).unwrap() & QEICON_INDEX,
+            0,
+            "three equal samples are accepted"
+        );
     }
 }

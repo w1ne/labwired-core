@@ -736,9 +736,10 @@ jobs:
         run: cargo test -p labwired-core --lib
 
       - name: ARM C compiler for the UARTE stack-lifetime guest (FEATURE-OFF)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends gcc-arm-none-eabi
+        timeout-minutes: 10
+        uses: ./.github/actions/apt-install-cached
+        with:
+          packages: gcc-arm-none-eabi
 
       - name: UARTE stack-lifetime guest (FEATURE-OFF)
         env:
@@ -1680,11 +1681,14 @@ jobs:
       # Without it the test was allow-listed known-red (#960) and therefore
       # proved NOTHING on every PR — a gate that cannot build its inputs is not
       # a gate. Same package core-coverage-matrix-smoke.yml already installs.
+      # Workspace integration suites also compile/tamper actual RV1103 DTBs.
+      # C only: libstdc++-arm-none-eabi-newlib (~460 MB, a recommends of
+      # newlib) is deliberately not installed.
       - name: Add the C cross-compiler (OBD2 ECU firmware)
-        run: |
-          sudo apt-get update
-          # Workspace integration suites also compile/tamper actual RV1103 DTBs.
-          sudo apt-get install -y gcc-arm-none-eabi device-tree-compiler
+        timeout-minutes: 10
+        uses: ./.github/actions/apt-install-cached
+        with:
+          packages: gcc-arm-none-eabi libnewlib-arm-none-eabi device-tree-compiler
 
       # READ-ONLY. This lane restores main's `core-ci` target dir; it must not
       # write one back, for a reason that is easy to miss: GitHub scopes caches
@@ -2223,11 +2227,12 @@ jobs:
       # rather than skips (a gate that cannot build its inputs is not a gate),
       # so the absent compiler is a hard failure, and it was invisible for as
       # long as the firmware build above failed first and skipped this step.
+      # Both default workspace and feature integration suites need dtc/fdtput.
       - name: Add the C cross-compiler (OBD2 ECU firmware)
-        run: |
-          sudo apt-get update
-          # Both default workspace and feature integration suites need dtc/fdtput.
-          sudo apt-get install -y gcc-arm-none-eabi device-tree-compiler
+        timeout-minutes: 10
+        uses: ./.github/actions/apt-install-cached
+        with:
+          packages: gcc-arm-none-eabi libnewlib-arm-none-eabi device-tree-compiler
 
       # ubuntu-latest ships ~14 GB free, and this job builds the workspace test
       # binaries twice — once on default features, once on `jit,event-scheduler`

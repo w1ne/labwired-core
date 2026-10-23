@@ -6,14 +6,20 @@ Claims, evidence, and what is explicitly **not** claimed yet.
 
 | Capability | Tier | Evidence |
 | :--- | :--- | :--- |
-| Boot from ELF at entry 0 | smoke-tested | `crates/core/tests/pic24_m0_smoke.rs` |
-| `NOP` / `MOV #lit16` / `MOV Wns,f` / `MOV f,Wnd` / `BRA Expr` / `RETFIE` decode | unit-tested | `crates/core/src/cpu/pic24.rs` (`#[cfg(test)]`) |
-| UART1 TX (`U1TXREG`) → console sink | smoke-tested | unit test `mov_w0_to_u1txreg_reaches_sink`, integration test, io-smoke |
-| Determinism (same inputs → same output) | smoke-tested | integration test runs the fixture twice and compares sink + PC |
+| Boot from ELF: PC 0 → reset `GOTO` → `__reset` | smoke-tested | `crates/core/tests/pic24_m0_smoke.rs`, `pic24_xc16_elf_boot.rs` |
+| Base ISA (`MOV`/`MOV.B`, `ADD`/`AND`/`IOR`, `CLR`/`SETM`, `CP0`, `BSET`/`BCLR`/`BTG`, `SE`, `LSR`, `BRA`/`RCALL`/`CALL`/`GOTO`, `RETURN`/`RETLW`/`LNK`/`ULNK`/`RETFIE`) | unit-tested | `crates/core/src/cpu/pic24.rs` (`#[cfg(test)]`), real-XC16 boot test |
+| Stack semantics: `PUSH [W15++]` / `POP [--W15]` (DS70283H Figure 4-4) | unit-tested | `call_and_return_use_the_upward_stack`, `lnk_and_ulnk_allocate_a_frame` |
+| UART1 TX (`U1TXREG`) → console sink | smoke-tested | unit test `mov_w0_to_u1txreg_reaches_sink`, integration tests, io-smoke |
+| Determinism (same inputs → same output) | smoke-tested | both integration tests run their firmware twice and compare |
+| **Real XC16 v1.70 firmware boots** (`xc16-uart-smoke.c`, stock linker script): UART `HI` + `LATB0` toggle loop | integration | `crates/core/tests/pic24_xc16_elf_boot.rs` |
+| XC16 ELF section layout (4-byte slots, PC-unit addresses, reset GOTO, IVT addresses) | integration | `xc16_elf_sections_land_at_their_pc_unit_addresses` |
 | Timers T1/T2/T3: TON, TCKPS 1:1–1:256, `TMR > PR` match, 32-bit T2/T3 pair (M1a) | unit-tested | `timer1_counts_to_period_and_raises_flag`, `timer1_prescaler_1_to_8`, `timer23_pair_counts_32_bit_and_flags_timer3` |
-| Interrupts: IFS0/IEC0/IPC0-2, DISI/NSTDIS gating, vector `0x4+2*N`, two-word frame, RETFIE (M1a) | unit-tested | `timer1_interrupt_vectors_frames_and_returns`, `disabled_source_does_not_vector` |
+| Interrupts: IFS0/IEC0/IPC0-2, DISI/NSTDIS gating, **IVT/AIVT vector fetch of the 24-bit ISR address**, two-word frame, RETFIE (M1a) | unit-tested | `timer1_interrupt_vectors_frames_and_returns`, `disabled_source_does_not_vector` |
 | `ACCA*` / `ACCB*` 40-bit SFR storage (M1a) | unit-tested | `accumulator_sfr_words_round_trip` |
-| DSP MAC (M1c), PWM/QEI (M2), ADC/SPI/I2C (M3) | **not modelled** | decode error on unsupported opcodes; no claims |
+| **DSP MAC class (M1c)**: `MAC`/`MPY`/`MPY.N`/`MSC` (incl. squares), `CLR`, `MOVSAC`, `LAC`, `SAC`, `SAC.R`, X/Y prefetch + W12 offset, write-back, CORCON modes, OA/OB/SA/SB | unit + integration | `dsp_*` tests (PRM golden vectors); `crates/core/tests/pic24_xc16_dsp.rs` (real XC16 firmware) |
+| **Motor Control PWM + QEI (M2)**: MCPWM1 time base (free/single/up-down/double), 3 duty generators + buffering/IUE, complementary/independent pairs with dead time, P1OVDCON override, FLTA1 faults, PWM1IF postscale; QEI1 x2/x4, POS1CNT/MAX1CNT, match/index resets with IMV, CNTERR/CEID, digital filter, timer mode; IFS3/IEC3/IPC14/15 | unit + integration | `pwm_*`/`qei_*`/`m2_*` tests; `crates/core/tests/pic24_xc16_m2.rs` (real XC16 firmware) |
+| DSP accumulator arithmetic (`ADD`/`SUB`/`MAX`/`MIN`/`SFTAC`/`FBCL` on ACCA/ACCB) | **not modelled** | decode error on unsupported opcodes; no claims |
+| ADC/SPI/I2C (M3) | **not modelled** | decode error on unsupported opcodes; no claims |
 | GPIO ports A/B/C: TRISx/PORTx/LATx/ODCx, 44-pin masks (M1b) | unit-tested | `gpio_output_drives_the_pad_model`, `port_read_sees_external_levels_and_own_latch`; `peripherals::pic24_gpio` tests |
 | PPS slice: RPINR7 inputs, RPOR0-12 outputs, RP0-15 = RB0-15 / RP16-25 = RC0-9 (M1b) | unit-tested | exercised by the OC/IC tests below |
 | Input capture 1/2: edge modes, prescalers, 4-deep FIFO, ICI, ICOV/ICBNE (M1b) | unit-tested | `ic1_captures_tmr2_on_a_rising_edge_of_rp0`, `ic_interrupt_divider_and_overflow_rules` |
@@ -147,6 +153,105 @@ step; the `OCxR = 0` "second timer cycle" case uses the plain equality
 compare; output compare cannot use the 32-bit T2/T3 pair; IC mode 111
 (sleep/idle wake) never captures; CNPU internal pull-ups are not modelled.
 
+## XC16 firmware evidence (real toolchain, verified 2026-10-22)
+
+The committed `dspic33fj32mc204-xc16-uart-smoke.elf` is built by Microchip
+XC16 v1.70 (container recipe in the README) from `xc16-uart-smoke.c` with
+the stock `p33FJ32MC204.gld` linker script. It exercises the compiler's own
+startup code and the base ISA, not a hand-written fixture.
+
+```bash
+# 1. Unit tests — 55 passed (base ISA + stack + M0/M1a/M1b/M1c tests)
+cargo test -p labwired-core --lib pic24
+#   test result: ok. 55 passed; 0 failed
+
+# 2. The real XC16 ELF boots — 3 passed
+cargo test -p labwired-core --test pic24_xc16_elf_boot
+#   xc16_elf_sections_land_at_their_pc_unit_addresses ... ok
+#   xc16_firmware_boots_and_writes_hi_to_uart ... ok
+#   xc16_firmware_is_deterministic ... ok
+
+# 3. Fixture, trace and catalogue gates — green
+cargo test -p labwired-core --test pic24_m0_smoke        # 2 passed
+cargo test -p labwired-core --test cpu_trace_conformance # 3 passed
+cargo test -p labwired-core --test session_catalog       # 1 passed
+cargo test -p labwired-loader                            # 0 tests (parsers covered via core)
+
+# 4. fmt / clippy
+cargo fmt --all -- --check                              # clean
+cargo clippy -p labwired-core -p labwired-loader --tests -- -D warnings   # clean
+```
+
+Scope added by this milestone: the base integer ISA the XC16 startup and
+`main` use, the corrected stack direction (`PUSH [W15++]`), the corrected
+exception entry (PC loaded from the IVT/AIVT entry as a 24-bit address),
+section-based PIC24 ELF loading, and the boot-at-0 reset path.
+
+## M1c evidence (DSP MAC class, verified 2026-10-23, branch `feat/pic24-m1c-dsp-mac`)
+
+The DSP MAC class is implemented from DS70000157G §4.15/§5.4 and verified
+two ways: the PRM's own worked examples as golden unit vectors, and a real
+XC16 v1.70 firmware (`firmware/xc16-dsp-mac.c` → `...-xc16-dsp-mac.elf`)
+whose body is a fixed MAC-class sequence from those examples.
+
+```bash
+# 1. Unit tests — the PRM examples plus mode/prefetch coverage
+cargo test -p labwired-core --lib pic24
+#   test result: ok. 55 passed; 0 failed
+
+# 2. The real XC16 DSP firmware boots and lands its expected state
+cargo test -p labwired-core --test pic24_xc16_dsp
+#   xc16_dsp_firmware_runs_the_mac_class_and_saturates ... ok
+```
+
+The DSP firmware checks: `LAC` load, a prefetched `MAC` (PRM example 1,
+ACCA = 0x472D_2400 with W4/W5 prefetched and W8/W10 advanced), `MPY` then
+`MSC` cancelling exactly, `MSC`'s write-back of the rounded ACCA to W13
+(0x472D), `SAC` (0x0472), `SAC.R` rounding (0x0121), and a normal-saturation
+clamp of +2^31 to 0x7FFF_FFFF with SA/SAB set.
+
+Every instruction encoding used in the tests and firmware is cross-checked
+against `xc16-as` output (`dsp_words_match_xc16_as`).
+
+Approximations are listed in `docs/pic24-m0-reference.md` §3.2 and the
+module docs; nothing else is guessed — the PRM examples pin the semantics.
+
+## M2 evidence (Motor Control PWM + QEI, verified 2026-10-23, branch `feat/pic24-m2-pwm-qei`)
+
+MCPWM1 is implemented from DS70187E §14 and QEI1 from DS70208C §15, with
+the SFR maps and vectors from DS70283H (Tables 4-8, 4-10, 7-1) and the
+pin/PPS data from Tables 1-1 and 10-2.
+
+```bash
+# 1. Unit tests — PWM/QEI plus every earlier milestone
+cargo test -p labwired-core --lib pic24
+#   test result: ok. 71 passed; 0 failed
+
+# 2. The real XC16 M2 firmware configures PWM1+QEI1 and counts edges
+cargo test -p labwired-core --test pic24_xc16_m2
+#   xc16_m2_firmware_configures_pwm_and_qei ... ok
+```
+
+The M2 firmware checks: the post-init register image (`PTEN`, P1TPER = 15,
+P1DC1 = 5, PWM1CON1 = 0x0011, P1DTCON1 = 2, QEI1CON = 0x0604, MAX1CNT =
+199, RPINR14/15), the complementary PWM1H1/L1 pads through the dead time and
+duty match (and PWM1IF at the period match), and injected QEA/QEB/INDX edges
+for x4 forward/reverse counting, UPDN, the IMV-gated index reset in both
+directions (forward → 0, reverse → MAXCNT) and QEIIF.
+
+The unit tests additionally cover the single-event and center-aligned time
+base, the output postscaler, P1OVDCON override, FLTA1 latched/cycle-by-cycle
+fault states, the QEI x2 mode, match-reset rollover/underflow, CNTERR/CEID,
+timer mode and the digital filter, plus the IFS3 vectors and IPC14/15
+mapping. While wiring the interrupt fabric the M1a vector table was corrected
+against DS70283H Table 7-1: IC2/OC2/T2/T3 are vectors 13/14/15/16 (IFS0
+bit 4 is reserved) and T3's priority comes from IPC2 field 0.
+
+Approximations are listed in `docs/pic24-m0-reference.md` §3.3 and the
+module docs (PWM polarity/PWMPIN from the erased-device FPOR, center-aligned
+endpoint order, index recognition by the INDX edge plus IMV, diagonal
+quadrature transitions ignored, per-step input sampling).
+
 ## Unsupported-instruction audit
 
 ```bash
@@ -181,9 +286,12 @@ labwired --firmware <elf> --system examples/dspic33fj32mc204/system.yaml --max-s
 ## Method notes
 
 - Fixture ELF is deterministic (generated by `firmware/make-fixture-elf.py`).
-- The XC16 ELF layout is **verified** against DS50002071F ("Program Counter
-  Unit"): 3 bytes per instruction in executable sections, PC-unit addresses
-  (2 per instruction). The model expands sections into its internal 4-byte
-  slots and runs with a PC-unit PC; see `docs/pic24-m0-reference.md` §3.1.
+- The XC16 ELF layout is **verified against a real XC16 v1.70 build**
+  (committed `dspic33fj32mc204-xc16-uart-smoke.elf`): executable sections are
+  4-byte slots (24-bit word + pad byte) at PC-unit addresses; the reset GOTO
+  sits at PC 0; the IVT stores 24-bit ISR addresses as data. #1447's "3
+  bytes per instruction" reading of DS50002071F described the assembler's
+  conceptual addressing, not ELF storage; see `docs/pic24-m0-reference.md`
+  §3.1 and the follow-up layout PR.
 - No silicon comparison exists for this part yet; nothing here is
   hardware-compared.
