@@ -10,17 +10,19 @@
  * The program:
  *   - samples AN4 (RB2) once with the 10-bit ADC in unsigned-integer mode;
  *   - shifts 0xA5 through SPI1 in master mode (the board ties SDO to SDI:
- *     the loopback device declared in examples/dspic33fj32mc204/system.yaml);
+ *     the loopback device declared in examples/dspic33fj32mc204/system-m3.yaml);
  *   - reads the TMP102 temperature register over I2C1 (0x48, pointer 0,
  *     repeated start, two-byte read, NACK + stop);
  *   - writes the three results and a completion marker to RAM, and prints
- *     "M3 OK" over UART1.
+ *     "M3 OK" over UART1. If the SPI byte does not loop back or the TMP102
+ *     does not answer with 0x1900, it prints "M3 FAIL" instead (the session
+ *     test runs a no-device control to prove the check works).
  *
  * Scratch layout: 0x0E00 = 0xBEEF when done, 0x0E02 = ADC1BUF0,
  * 0x0E04 = SPI byte, 0x0E06/0x0E07 = TMP102 temperature MSB/LSB,
  * 0x0E08 = failure code.
  * The integration test (crates/core/tests/pic24_xc16_m3.rs) boots this ELF and
- * checks those words; the session path is exercised with the example system.
+ * checks those words; the session path is exercised with `system-m3.yaml`.
  */
 
 #include <xc.h>
@@ -57,7 +59,8 @@ int main(void)
     ADC_RESULT = ADC1BUF0;
 
     /* ---------- SPI1: master, 8-bit, mode 0, prescalers 1:1 ---------- */
-    SPI1CON1 = 0x013F;      /* MSTEN = 1, SPRE = 111 (1:1), PPRE = 11 (1:1) */
+    SPI1CON1 = 0x0137;      /* MSTEN = 1, SPRE = 101 (4:1), PPRE = 11 (1:1):
+                               10 MHz at 40 MIPS (DS70206C Table 18-1) */
     SPI1CON2 = 0x0000;
     SPI1STATbits.SPIEN = 1;
     SPI1BUF = 0x00A5;
@@ -67,7 +70,8 @@ int main(void)
 
     /* ---------- I2C1: master, TMP102 at 0x48 ---------- */
     I2C1CON = 0x8000;       /* I2CEN */
-    I2C1BRG = 0x009D;       /* 2*(BRG+1) TCY per SCL */
+    I2C1BRG = 0x016B;       /* DS70000195: BRG = FCY/FSCL - FCY/1.111 MHz - 1
+                               for 100 kHz at 40 MIPS */
     I2C1CONbits.SEN = 1;
     while (I2C1CONbits.SEN) {
     }
@@ -78,8 +82,8 @@ int main(void)
     }
     i2c_wait_master();
     if (I2C1STATbits.ACKSTAT) {
-        FAIL_CODE = 1;
-        goto done;
+        FAIL_CODE = 1;      /* no TMP102 at 0x48 */
+        goto fail;
     }
 
     I2C1TRN = 0x0000;       /* pointer = temperature register */
@@ -122,7 +126,11 @@ int main(void)
     }
     IFS1bits.MI2C1IF = 0;
 
-done:
+    if (I2C_MSB != 0x19 || I2C_LSB != 0x00) {
+        FAIL_CODE = 3;      /* unexpected temperature register value */
+        goto fail;
+    }
+
     /* Direct UART1 writes (no helper loop: the RCALL/INC forms it needs
        are outside the modelled base subset). */
     U1TXREG = 'M';
@@ -130,6 +138,19 @@ done:
     U1TXREG = ' ';
     U1TXREG = 'O';
     U1TXREG = 'K';
+    U1TXREG = '\n';
+    MARKER = 0xBEEF;
+    for (;;) {
+    }
+
+fail:
+    U1TXREG = 'M';
+    U1TXREG = '3';
+    U1TXREG = ' ';
+    U1TXREG = 'F';
+    U1TXREG = 'A';
+    U1TXREG = 'I';
+    U1TXREG = 'L';
     U1TXREG = '\n';
     MARKER = 0xBEEF;
     for (;;) {

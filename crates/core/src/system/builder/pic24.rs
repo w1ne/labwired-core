@@ -41,6 +41,9 @@ pub(super) fn build(req: BuildRequest<'_>) -> anyhow::Result<BuiltMachine> {
     bus_manifest.external_devices.clear();
     let mut bus = SystemBus::from_config(chip, &bus_manifest)
         .map_err(|e| anyhow!("Bus config error: {e:#}"))?;
+    // Keep the manifest's declarations for inspection even though the
+    // devices themselves are attached to the CPU, not to bus peripherals.
+    bus.record_external_devices(manifest);
 
     let console = ConsoleCapture::for_manifest(manifest);
     let uart_sink = console.heard_sink();

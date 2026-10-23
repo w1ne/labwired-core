@@ -55,8 +55,9 @@ Five committed ELFs exercise the chip:
    `dspic33fj32mc204-xc16-m3-adc-spi-i2c.elf`) — samples AN4, shifts 0xA5
    through SPI1 (the manifest's `loopback` device), reads the TMP102
    temperature over I2C1 and prints `M3 OK` on UART1. Booted by
-   `crates/core/tests/pic24_xc16_m3.rs`; the `system.yaml` declares the
-   TMP102 on `i2c1` and the SPI loopback on `spi1`.
+   `crates/core/tests/pic24_xc16_m3.rs`; `system-m3.yaml` declares the
+   TMP102 on `i2c1` and the SPI loopback on `spi1` for the session builder
+   (the base `system.yaml` stays device-free for the CLI `test` path).
 
 Rebuild the XC16 ELFs (Linux x86-64 container; XC16 itself is proprietary
 and not redistributed — only its output is committed):

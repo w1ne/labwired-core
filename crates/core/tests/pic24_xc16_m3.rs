@@ -44,7 +44,7 @@ fn repo_root() -> PathBuf {
 
 fn run_firmware() -> (Pic24, Vec<u8>) {
     let root = repo_root();
-    let system = SystemManifest::from_file(root.join("examples/dspic33fj32mc204/system.yaml"))
+    let system = SystemManifest::from_file(root.join("examples/dspic33fj32mc204/system-m3.yaml"))
         .expect("parse the M3 example system manifest");
 
     let elf = std::fs::read(
@@ -123,7 +123,7 @@ fn xc16_m3_firmware_samples_adc_loops_spi_and_reads_tmp102() {
     assert_eq!(cpu.data_read(SFR_AD1CON1).unwrap() & 0x8000, 0x8000, "ADON");
     assert_eq!(cpu.data_read(SFR_AD1PCFGL).unwrap(), 0x01EF);
     assert_eq!(cpu.data_read(SFR_AD1CHS0).unwrap(), 4, "CH0SA = AN4");
-    assert_eq!(cpu.data_read(SFR_SPI1CON1).unwrap(), 0x013F);
+    assert_eq!(cpu.data_read(SFR_SPI1CON1).unwrap(), 0x0137);
     assert_eq!(
         cpu.data_read(SFR_SPI1STAT).unwrap() & 0x8000,
         0x8000,
@@ -131,11 +131,9 @@ fn xc16_m3_firmware_samples_adc_loops_spi_and_reads_tmp102() {
     );
 }
 
-/// The full session path: `build_machine` reads the example system, attaches
-/// the TMP102 to the CPU-internal I2C1 and the loopback to SPI1, and the
-/// firmware's UART message proves both devices answered.
-#[test]
-fn example_system_builder_attaches_the_m3_devices() {
+/// Build and run the M3 machine through the full session path and return
+/// the UART bytes. `system` must carry an absolute `chip` path.
+fn run_builder(system: &SystemManifest, elf: &[u8]) -> String {
     use labwired_config::ChipDescriptor;
     use labwired_core::system::builder::{
         build_machine, BootMode, BuildOptions, BuildRequest, FirmwareSource,
@@ -145,21 +143,11 @@ fn example_system_builder_attaches_the_m3_devices() {
     let root = repo_root();
     let chip = ChipDescriptor::from_file(root.join("configs/chips/dspic33fj32mc204.yaml"))
         .expect("parse chip descriptor");
-    let mut system = SystemManifest::from_file(root.join("examples/dspic33fj32mc204/system.yaml"))
-        .expect("parse the M3 example system");
-    system.chip = root
-        .join("configs/chips/dspic33fj32mc204.yaml")
-        .display()
-        .to_string();
-    let elf = std::fs::read(
-        root.join("examples/dspic33fj32mc204/firmware/dspic33fj32mc204-xc16-m3-adc-spi-i2c.elf"),
-    )
-    .expect("read XC16 M3 ELF");
     let blobs = std::collections::HashMap::new();
     let built = build_machine(BuildRequest {
         chip: &chip,
-        system: &system,
-        firmware: FirmwareSource::Elf(&elf),
+        system,
+        firmware: FirmwareSource::Elf(elf),
         boot: BootMode::FastBoot,
         blobs: &blobs,
         options: BuildOptions {
@@ -173,9 +161,42 @@ fn example_system_builder_attaches_the_m3_devices() {
         .advance(AdvanceRequest::run(Some(200_000)))
         .expect("run the M3 firmware");
     let out = built.uart.sink.lock().unwrap().clone();
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+/// The full session path: `build_machine` reads the M3 system, attaches the
+/// TMP102 to the CPU-internal I2C1 and the loopback to SPI1, and the firmware
+/// only prints `M3 OK` after it has read the sensor and matched the SPI
+/// loopback byte. A second machine built with the devices removed must print
+/// `M3 FAIL`, so this test cannot pass without the attach path.
+#[test]
+fn example_system_builder_attaches_the_m3_devices() {
+    let root = repo_root();
+    let mut system =
+        SystemManifest::from_file(root.join("examples/dspic33fj32mc204/system-m3.yaml"))
+            .expect("parse the M3 example system");
+    system.chip = root
+        .join("configs/chips/dspic33fj32mc204.yaml")
+        .display()
+        .to_string();
+    let elf = std::fs::read(
+        root.join("examples/dspic33fj32mc204/firmware/dspic33fj32mc204-xc16-m3-adc-spi-i2c.elf"),
+    )
+    .expect("read XC16 M3 ELF");
+
+    let out = run_builder(&system, &elf);
     assert!(
-        out.ends_with(b"M3 OK\n"),
-        "builder-attached TMP102/loopback did not complete: {:?}",
-        String::from_utf8_lossy(&out)
+        out.ends_with("M3 OK\n"),
+        "builder-attached TMP102/loopback did not complete: {out:?}"
+    );
+
+    // Negative control: without the external devices the firmware must take
+    // its failure path, not print the success message.
+    let mut no_devices = system.clone();
+    no_devices.external_devices.clear();
+    let failed = run_builder(&no_devices, &elf);
+    assert!(
+        failed.ends_with("M3 FAIL\n"),
+        "the end-to-end test cannot detect a missing device: {failed:?}"
     );
 }

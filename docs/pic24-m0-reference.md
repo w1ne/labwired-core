@@ -245,8 +245,10 @@ through pads (see approximations).
 
 **ADC model.** `AD1CON1`: ADON, AD12B, FORM (00 unsigned integer,
 01 signed integer, 10 unsigned fraction, 11 signed fraction), SSRC, SIMSAM,
-ASAM, SAMP and DONE. Writing ADON 0→1 starts sampling; with SSRC = 000
-software clears SAMP to start the conversion; SSRC = 111 uses the internal
+ASAM, SAMP and DONE. Writing ADON 0→1 powers the ADC; sampling starts
+automatically only when ASAM = 1, otherwise software sets SAMP (DS70183D
+Register 16-1). With SSRC = 000 software clears SAMP to start the conversion;
+SSRC = 111 uses the internal
 counter (`SAMC × TAD`) and ASAM restarts sampling after each sequence.
 SSRC = 010 is triggered by the TMR3 period match and SSRC = 011 by the
 PWM1 period/half-period match; SSRC = 001 (INT0) is not driven because the
@@ -254,7 +256,8 @@ INT0 pin edge is not modelled. TAD = `(ADCS + 1) × TCY`; a 10-bit
 conversion is 12 TAD and a 12-bit conversion 14 TAD (DS70183D §16.4.4).
 FORM results are left-justified for the fractional modes. CHPS selects
 1-4 channels per sequence (CH0 + CH1-3 from CH123SA); CSCNA walks the
-AD1CSSL scan list for CH0; ALTS alternates MUX A/B per sequence. Results
+AD1CSSL scan list for CH0; ALTS uses MUX A for the first sequence and MUX B
+for the next (switching only after the sequence completes). Results
 land in the 16-word buffer; BUFM splits it into two 8-word halves whose
 fill status is the read-only BUFS bit. SMPI sets the interrupt period
 (every SMPI+1 sequences, as DS70183D §16.4.6 defines for devices without
@@ -262,8 +265,8 @@ DMA). Negative inputs (CH0NA, CH123NA) subtract the selected ANx code,
 clamped to the converter range; PCFG = 1 reads 0.
 
 **SPI model.** Master writes to SPI1BUF start a transfer whose duration is
-`bits × 2 × PPRE × SPRE` TCY (PPRE 1/4/16/64, SPRE 1-8; DS70283H
-Register 17-2). MODE16 exchanges two bytes (high first). SPITBF stays set
+`bits × PPRE × SPRE` TCY (PPRE 1/4/16/64, SPRE 1-8; DS70206C Equation 18-1:
+`FSCK = FCY / (PPRE × SPRE)`). MODE16 exchanges two bytes (high first). SPITBF stays set
 while the word shifts; the received word lands in SPI1BUF, sets SPIRBF and
 SPI1IF; an unread previous word sets SPIROV and SPI1EIF instead. A second
 write while shifting is held in a one-deep TX slot. SPI1CON2 keeps the
@@ -275,8 +278,9 @@ loopback (`type: "loopback"`) that returns every byte.
 
 **I2C model.** `I2C1CON` implements I2CEN, SEN, RSEN, PEN, RCEN and
 ACKEN/ACKDT with the datasheet's hardware-clear behaviour; each operation
-takes its wire time (`2 × (BRG + 1)` TCY per SCL, nine SCL for a byte and
-one for start/stop). A transmit byte is the address after a start/restart
+takes its wire time (`(BRG + 1)` TCY per SCL, nine SCL for a byte and
+one for start/stop; the 1.111 MHz high-time correction term in the
+DS70000195 BRG formula is omitted). A transmit byte is the address after a start/restart
 (7-bit; `11110xx` starts a 10-bit prefix decode, but the `I2cDevice` slave
 contract is a 7-bit `u8` address, so a 10-bit address cannot match a device
 here) and data thereafter. Address matching uses
@@ -296,7 +300,8 @@ SMPI, SPI byte/word transfers with the prescaler timing, SPIROV, the slave
 seam, an I2C TMP102 temperature read, a missing-slave NACK, I2COV and the
 slave seams, plus the IFS1/IPC3/IPC4 vectors. Booting the firmware also
 added four base-ISA encodings the XC16 startup uses: 3-operand `SUB`,
-`INC Ws,Wd`, and the WREG forms of `CLR Wd`/`SETM Wd` (xc16-as words). The real XC16 firmware
+`INC Ws,Wd` (C/DC/N/OV/Z), and the WREG forms of `CLR Wd`/`SETM Wd`
+(no status flags; DS70283H Table 22-2 #15/#39/#69), pinned by xc16-as words. The real XC16 firmware
 `xc16-m3-adc-spi-i2c.c` samples AN4, loops 0xA5 through SPI1 and reads the
 TMP102; `crates/core/tests/pic24_xc16_m3.rs` checks the results,
 `"M3 OK\n"` on UART1 and the register image.

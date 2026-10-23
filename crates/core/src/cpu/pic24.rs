@@ -143,8 +143,8 @@
 //! | `CLR{.B} f`, `SETM{.B} f` | D=0/1 (WREG or file register) |
 //! | `ADD{.B} Wb,#lit5,Wd`, `ADD{.B} Wb,Ws,Wd` | |
 //! | `SUB{.B} Wb,#lit5,Wd`, `SUB{.B} Wb,Ws,Wd` | |
-//! | `CLR Wd`, `SETM Wd` (WREG forms) | |
-//! | `INC{.B} Ws,Wd` | C unaffected |
+//! | `CLR Wd`, `SETM Wd` (WREG forms) | no flags (Table 22-2) |
+//! | `INC{.B} Ws,Wd` | C/DC/N/OV/Z |
 //! | `AND{.B} Wb,#lit5,Wd`, `AND{.B} Wb,Ws,Wd`, `AND #lit10,Wn` | |
 //! | `IOR{.B} Wb,#lit5,Wd`, `IOR{.B} Wb,Ws,Wd`, `IOR #lit10,Wn` | |
 //! | `CP0{.B} Ws`, `CP0{.B} f` | |
@@ -2709,9 +2709,18 @@ impl Pic24 {
                             self.adc_conv_remaining = 0;
                             self.adc_sample_remaining = 0;
                         } else if !was_on {
-                            v |= AD1CON1_SAMP;
-                            self.ad1con1 = v;
-                            self.adc_start_sampling();
+                            // Enabling the module does not start sampling in
+                            // manual mode; ADON just powers the ADC.
+                            self.adc_t3_trigger = false;
+                            self.adc_pwm_trigger = false;
+                            if v & 0x0004 != 0 {
+                                v |= AD1CON1_SAMP;
+                                self.ad1con1 = v;
+                                self.adc_start_sampling();
+                            } else {
+                                self.ad1con1 = v & !AD1CON1_SAMP;
+                                self.adc_state = AdcState::Off;
+                            }
                         } else {
                             let old_samp = old & AD1CON1_SAMP != 0;
                             let want_samp = val & AD1CON1_SAMP != 0;
@@ -2737,7 +2746,7 @@ impl Pic24 {
                                 | AD1CON2_ALTS);
                     }
                     SFR_AD1CON3 => self.ad1con3 = val & 0x9FFF,
-                    SFR_AD1CHS123 => self.ad1chs123 = val & 0x3838,
+                    SFR_AD1CHS123 => self.ad1chs123 = val & 0x0707,
                     SFR_AD1CHS0 => self.ad1chs0 = val & 0x9F9F,
                     SFR_AD1PCFGL => self.ad1pcfgl = val & 0x01FF,
                     SFR_AD1CSSL => self.ad1cssl = val & 0x01FF,
@@ -2800,7 +2809,9 @@ impl Pic24 {
                             self.i2c1con = v & !0x001F;
                             self.i2c_op = None;
                             self.i2c_busy = 0;
-                            self.i2c_target = None;
+                            if let Some(idx) = self.i2c_target.take() {
+                                self.i2c_devices[idx].stop();
+                            }
                             self.i2c_addressed = false;
                             self.i2c_reading = false;
                             self.i2c_10bit_prefix = None;
@@ -3699,12 +3710,12 @@ impl Pic24 {
         }
 
         // CLR/SETM Wd — 1110 1011 0xxx xddd d000 0000. (The WREG forms;
-        // the 1110 111x file forms are decoded below.)
+        // the 1110 111x file forms are decoded below.) Table 22-2 #15/#69
+        // lists Status Affected = None for both, matching the file form.
         if word & 0x00FF_0000 == 0x00EB_0000 && word & 0x0000_787F == 0 {
             let set = word & 0x0000_8000 != 0;
             let d = ((word >> 7) & 0xF) as usize;
             self.w[d] = if set { 0xFFFF } else { 0 };
-            self.set_nz(self.w[d], false);
             self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
             return Ok(1);
         }
@@ -3721,10 +3732,9 @@ impl Pic24 {
             let ppp = (word >> 4) & 0x7;
             let sreg = (word & 0xF) as usize;
             let v = self.read_operand(sreg, ppp, byte)?;
-            // INC affects N/Z/V but leaves C unchanged.
-            let saved_c = self.sr & SR_C;
+            // INC affects C, DC, N, OV and Z (DS70283H Table 22-2 #39);
+            // XC16 relies on C for its 32-bit increment idiom.
             let r = self.alu_add(v, 1, 0, byte);
-            self.sr = (self.sr & !SR_C) | saved_c;
             self.write_operand(d, qqq, r, byte)?;
             self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
             return Ok(1);
@@ -4091,9 +4101,9 @@ impl Pic24 {
             self.ad1chs0 & 0x1F
         };
         let ch123 = if alt {
-            (self.ad1chs123 >> 11) & 0x1
+            (self.ad1chs123 >> 8) & 0x1
         } else {
-            (self.ad1chs123 >> 3) & 0x1
+            self.ad1chs123 & 0x1
         };
         match pos {
             0 if self.ad1con2 & AD1CON2_CSCNA != 0 => self.adc_scan_channel(),
@@ -4132,15 +4142,18 @@ impl Pic24 {
                 (self.ad1chs0 >> 7) & 1
             };
             (na != 0).then_some(1)
+        } else if self.ad1con1 & AD1CON1_AD12B != 0 {
+            // 12-bit mode: the CH1-3 negative selects are reserved.
+            None
         } else {
             let na = if alt {
-                (self.ad1chs123 >> 12) & 0x3
+                (self.ad1chs123 >> 9) & 0x3
             } else {
-                (self.ad1chs123 >> 4) & 0x3
+                (self.ad1chs123 >> 1) & 0x3
             };
+            // 10 = AN6/AN7/AN8; 00/01 = VREF-; 11 = reserved.
             match na {
-                1 => Some(6 + (pos - 1)),
-                2 => Some(9 + (pos - 1)),
+                2 => Some(6 + (pos - 1)),
                 _ => None,
             }
         }
@@ -4196,6 +4209,9 @@ impl Pic24 {
         self.adc_state = AdcState::Sampling;
         self.adc_seq_pos = 0;
         self.adc_sample_remaining = 0;
+        // A period match while the ADC was off or converting is stale.
+        self.adc_t3_trigger = false;
+        self.adc_pwm_trigger = false;
         // SSRC = 111: the internal counter ends sampling after SAMC * TAD.
         if (self.ad1con1 >> 5) & 0x7 == 0b111 {
             let samc = u32::from((self.ad1con3 >> 8) & 0x1F).max(1);
@@ -4210,10 +4226,6 @@ impl Pic24 {
         self.ad1con1 &= !(AD1CON1_SAMP | AD1CON1_DONE);
         self.adc_state = AdcState::Converting;
         self.adc_seq_pos = 0;
-        // Alternate Input Selection switches MUX A/B once per sequence.
-        if self.ad1con2 & AD1CON2_ALTS != 0 {
-            self.adc_alt = !self.adc_alt;
-        }
         let tconv = if self.ad1con1 & AD1CON1_AD12B != 0 {
             14
         } else {
@@ -4273,6 +4285,10 @@ impl Pic24 {
             let used = self.adc_scan_channel();
             self.adc_scan_next = (used + 1) % 9;
         }
+        // ALTS: this sequence used its MUX; the next one uses the other.
+        if self.ad1con2 & AD1CON2_ALTS != 0 {
+            self.adc_alt = !self.adc_alt;
+        }
         if self.ad1con1 & 0x0004 != 0 {
             // ASAM: sampling begins immediately after the last conversion.
             self.adc_start_sampling();
@@ -4319,9 +4335,9 @@ impl Pic24 {
 
     // ── SPI1 ────────────────────────────────────────────────────────────────
 
-    /// SCK divider: PPRE (1/4/16/64) times SPRE (1..8); the wire clock is
-    /// FCY divided by this, so one SCK period is `2 * divider` TCY
-    /// (DS70283H Register 17-2).
+    /// SCK divider: PPRE (1/4/16/64) times SPRE (1..8). DS70206C Eq. 18-1
+    /// gives `FSCK = FCY / (PPRE * SPRE)`, so one SCK period is `divider`
+    /// TCY (not `2 * divider`).
     fn spi_divider(&self) -> u32 {
         let ppre = u32::from(self.spi1con1 & 0x3);
         let spre = u32::from((self.spi1con1 >> 2) & 0x7);
@@ -4353,14 +4369,16 @@ impl Pic24 {
 
     fn spi_start_transfer(&mut self, word: u16) {
         self.spi1_tx = word;
-        self.spi1stat |= SPI1STAT_SPITBF;
+        // TXB -> SPIxSR happens as soon as the module is idle, so the
+        // transmit buffer is no longer full (DS70283H Register 17-1).
+        self.spi1stat &= !SPI1STAT_SPITBF;
         self.spi1_shifting = true;
         let bits = if self.spi1con1 & SPI1CON1_MODE16 != 0 {
             16
         } else {
             8
         };
-        self.spi1_busy = bits * 2 * self.spi_divider();
+        self.spi1_busy = bits * self.spi_divider();
     }
 
     fn advance_spi(&mut self, cycles: u32) {
@@ -4404,11 +4422,11 @@ impl Pic24 {
 
     // ── I2C1 ────────────────────────────────────────────────────────────────
 
-    /// One SCL period is `2 * (BRG + 1)` TCY (DS70000195 §19: the BRG down
-    /// counter reloads every half period). Byte operations charge nine SCL
-    /// periods; start/stop conditions charge one.
+    /// One SCL period is `(BRG + 1)` TCY (DS70000195 §19; the 1.111 MHz
+    /// high-time correction term is omitted — a documented approximation).
+    /// Byte operations charge nine SCL periods; start/stop conditions one.
     fn i2c_op_cycles(&self, bits: u32) -> u32 {
-        bits * 2 * (u32::from(self.i2c1brg) + 1)
+        bits * (u32::from(self.i2c1brg) + 1)
     }
 
     fn i2c_select(&mut self, addr: u8, read: bool) {
@@ -4432,13 +4450,15 @@ impl Pic24 {
     fn i2c_transmit_complete(&mut self) {
         let byte = (self.i2c1trn & 0x00FF) as u8;
         if !self.i2c_addressed {
-            if let Some(prefix) = self.i2c_10bit_prefix.take() {
-                // 10-bit address low byte. The slave contract is 7-bit, so a
-                // 10-bit address cannot match a device here (documented).
-                let addr = ((prefix & 0x3) << 7) | u16::from(byte);
-                let read = prefix & 1 != 0;
-                self.i2c_select((addr & 0x7F) as u8, read);
-                self.i2c1stat |= I2C1STAT_ADD10;
+            if let Some(_prefix) = self.i2c_10bit_prefix.take() {
+                // 10-bit address low byte. The slave contract is 7-bit, so
+                // the address cannot match: NACK it (do not truncate to 7
+                // bits, which could accidentally select a different slave).
+                self.i2c_addressed = true;
+                self.i2c_target = None;
+                self.i2c_reading = false;
+                self.i2c1stat &= !(I2C1STAT_ACKSTAT | I2C1STAT_DA);
+                self.i2c1stat |= I2C1STAT_ACKSTAT | I2C1STAT_ADD10;
             } else if byte & 0xF8 == 0xF0 {
                 // 10-bit address prefix (11110 A9 A8 R/W).
                 self.i2c_10bit_prefix = Some(u16::from(byte));
@@ -4586,7 +4606,8 @@ impl Pic24 {
         self.ad1pcfgl = 0x0000;
         self.ad1cssl = 0;
         self.adc_buf = [0; ADC1_BUF_COUNT];
-        self.adc_analog = [0; 16];
+        // `adc_analog` is the harness's pin voltage, not an SFR: a device
+        // reset does not change what is connected to the pin.
         self.adc_state = AdcState::Off;
         self.adc_conv_remaining = 0;
         self.adc_sample_remaining = 0;
@@ -4960,6 +4981,8 @@ impl Cpu for Pic24 {
             adc_half: self.adc_half,
             adc_alt: self.adc_alt,
             adc_scan_next: self.adc_scan_next,
+            adc_t3_trigger: self.adc_t3_trigger,
+            adc_pwm_trigger: self.adc_pwm_trigger,
             spi1stat: self.spi1stat,
             spi1con1: self.spi1con1,
             spi1con2: self.spi1con2,
@@ -5109,6 +5132,8 @@ impl Cpu for Pic24 {
             self.adc_half = s.adc_half;
             self.adc_alt = s.adc_alt;
             self.adc_scan_next = s.adc_scan_next;
+            self.adc_t3_trigger = s.adc_t3_trigger;
+            self.adc_pwm_trigger = s.adc_pwm_trigger;
             self.spi1stat = s.spi1stat;
             self.spi1con1 = s.spi1con1;
             self.spi1con2 = s.spi1con2;
@@ -5195,19 +5220,32 @@ mod tests {
         assert_eq!(cpu.w[9], 0x8000);
         assert_ne!(cpu.sr & SR_N, 0);
         assert_ne!(cpu.sr & SR_OV, 0);
+        assert_eq!(cpu.sr & SR_C, 0);
 
+        // INC 0xFFFF -> 0x0000 sets C and DC; the 32-bit addc idiom depends
+        // on that carry.
+        let mut cpu = cpu_with(&[0x00E8_0489]);
+        cpu.w[9] = 0xFFFF;
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.w[9], 0);
+        assert_ne!(cpu.sr & SR_C, 0, "INC carry");
+        assert_ne!(cpu.sr & SR_DC, 0, "INC digit carry");
+        assert_ne!(cpu.sr & SR_Z, 0);
+
+        // CLR/SETM affect no status flags (DS70283H Table 22-2 #15/#69).
         let mut cpu = cpu_with(&[0x00EB_0000]);
         cpu.w[0] = 0x1234;
+        cpu.sr = SR_C | SR_N | SR_Z | SR_OV | SR_DC;
         step(&mut cpu, &mut bus);
         assert_eq!(cpu.w[0], 0);
-        assert_ne!(cpu.sr & SR_Z, 0);
+        assert_eq!(cpu.sr, SR_C | SR_N | SR_Z | SR_OV | SR_DC);
 
         let mut cpu = cpu_with(&[0x00EB_8600]);
         cpu.w[12] = 0x1234;
+        cpu.sr = SR_C | SR_Z;
         step(&mut cpu, &mut bus);
         assert_eq!(cpu.w[12], 0xFFFF);
-        assert_ne!(cpu.sr & SR_N, 0);
-        assert_eq!(cpu.sr & SR_Z, 0);
+        assert_eq!(cpu.sr, SR_C | SR_Z);
     }
 
     #[test]
@@ -7179,15 +7217,22 @@ mod tests {
         cpu.ad1con1 &= !AD1CON1_ADON;
         let on = cpu.ad1con1 | AD1CON1_ADON;
         cpu.data_write(SFR_AD1CON1, on).unwrap();
+        // ASAM = 0: software sets SAMP to begin sampling.
+        cpu.data_write(SFR_AD1CON1, cpu.ad1con1 | AD1CON1_SAMP)
+            .unwrap();
         cpu.data_write(SFR_AD1CON1, cpu.ad1con1 & !AD1CON1_SAMP)
             .unwrap();
-        // 10-bit: 12 TAD; 12-bit: 14 TAD; TAD = 2 cycles.
+        // 10-bit: 12 TAD; 12-bit: 14 TAD; TAD = 2 cycles. A CHPS sequence
+        // converts each selected channel back-to-back, one conversion at a
+        // time, so advance once per channel.
         let tconv = if cpu.ad1con1 & AD1CON1_AD12B != 0 {
             14
         } else {
             12
         };
-        cpu.advance_adc(tconv * 2);
+        for _ in 0..cpu.adc_channels_per_sample() {
+            cpu.advance_adc(tconv * 2);
+        }
     }
 
     #[test]
@@ -7292,6 +7337,83 @@ mod tests {
     }
 
     #[test]
+    fn adc_chps_selects_an3_and_subtracts_the_selected_negative_input() {
+        // CHPS = 01 (two channels), CH123SA = 1 -> CH1 = AN3.
+        let mut cpu = adc_cpu(0, false);
+        cpu.ad1con2 = 1 << 8;
+        cpu.ad1chs0 = 0; // CH0 = AN0
+        cpu.ad1chs123 = 0b1; // CH123SA = 1 (bit 0)
+        cpu.ad1pcfgl = 0x01FF & !((1 << 0) | (1 << 3) | (1 << 6));
+        cpu.set_adc_analog(0, 0x100);
+        cpu.set_adc_analog(3, 0x200);
+        cpu.set_adc_analog(6, 0x080);
+        adc_convert(&mut cpu);
+        assert_eq!(cpu.data_read(SFR_ADC1BUF0).unwrap(), 0x0100);
+        assert_eq!(cpu.data_read(SFR_ADC1BUF0 + 2).unwrap(), 0x0200);
+
+        // CH123NA = 10 -> CH1..3 negative input is AN6/7/8 (10-bit mode).
+        let mut cpu = adc_cpu(0, false);
+        cpu.ad1con2 = 1 << 8;
+        cpu.ad1chs0 = 0;
+        cpu.ad1chs123 = 0b1 | (0b10 << 1);
+        cpu.ad1pcfgl = 0x01FF & !((1 << 0) | (1 << 3) | (1 << 6));
+        cpu.set_adc_analog(0, 0x100);
+        cpu.set_adc_analog(3, 0x200);
+        cpu.set_adc_analog(6, 0x080);
+        adc_convert(&mut cpu);
+        assert_eq!(cpu.data_read(SFR_ADC1BUF0).unwrap(), 0x0100);
+        assert_eq!(
+            cpu.data_read(SFR_ADC1BUF0 + 2).unwrap(),
+            0x0180,
+            "AN3 - AN6"
+        );
+    }
+
+    #[test]
+    fn adc_alts_uses_mux_a_first_and_then_mux_b() {
+        let mut cpu = adc_cpu(0, false);
+        cpu.ad1con2 = AD1CON2_ALTS;
+        cpu.ad1chs0 = 0 | (2 << 8); // CH0SA = AN0, CH0SB = AN2
+        cpu.ad1pcfgl = 0x01FF & !((1 << 0) | (1 << 2));
+        cpu.set_adc_analog(0, 0x111);
+        cpu.set_adc_analog(2, 0x222);
+        adc_convert(&mut cpu);
+        assert_eq!(cpu.data_read(SFR_ADC1BUF0).unwrap(), 0x0111);
+        adc_convert(&mut cpu);
+        assert_eq!(cpu.data_read(SFR_ADC1BUF0 + 2).unwrap(), 0x0222);
+    }
+
+    #[test]
+    fn adc_manual_mode_needs_a_software_sample_and_drops_stale_triggers() {
+        let mut cpu = adc_cpu(0, false);
+        cpu.ad1con1 &= !AD1CON1_ADON;
+        cpu.data_write(SFR_AD1CON1, cpu.ad1con1 | AD1CON1_ADON)
+            .unwrap();
+        assert_eq!(cpu.ad1con1 & AD1CON1_SAMP, 0, "ASAM = 0: no auto-sample");
+        assert_eq!(cpu.adc_state, AdcState::Off);
+
+        // A TMR3 match while the ADC was off must not fire on the next start.
+        cpu.adc_t3_trigger = true;
+        cpu.data_write(SFR_AD1CON1, cpu.ad1con1 | AD1CON1_SAMP)
+            .unwrap();
+        assert_eq!(cpu.adc_state, AdcState::Sampling);
+        assert!(!cpu.adc_t3_trigger);
+    }
+
+    #[test]
+    fn adc_pwm_trigger_starts_the_conversion() {
+        let mut cpu = adc_cpu(0, false);
+        cpu.ad1con1 |= 0b011 << 5; // SSRC = 011 (PWM1 special event)
+        cpu.ad1con1 |= AD1CON1_ADON;
+        cpu.adc_start_sampling();
+        cpu.adc_pwm_trigger = true;
+        cpu.advance_adc(1);
+        assert_eq!(cpu.adc_state, AdcState::Converting);
+        cpu.advance_adc(12 * 2);
+        assert_eq!(cpu.data_read(SFR_ADC1BUF0).unwrap(), 0x02AA);
+    }
+
+    #[test]
     fn adc_timer3_trigger_starts_the_conversion() {
         let mut cpu = adc_cpu(0, false);
         cpu.ad1con1 |= 0b010 << 5; // SSRC = 010 (TMR3 compare)
@@ -7346,10 +7468,11 @@ mod tests {
     fn spi_master_byte_transfer_and_loopback() {
         let mut cpu = spi_cpu();
         cpu.data_write(SFR_SPI1BUF, 0x00A5).unwrap();
-        assert_ne!(cpu.data_read(SFR_SPI1STAT).unwrap() & SPI1STAT_SPITBF, 0);
-        cpu.advance_spi(15);
+        // TXB moved into the shift register: it is no longer full.
+        assert_eq!(cpu.data_read(SFR_SPI1STAT).unwrap() & SPI1STAT_SPITBF, 0);
+        cpu.advance_spi(7);
         assert_eq!(cpu.data_read(SFR_SPI1STAT).unwrap() & SPI1STAT_SPIRBF, 0);
-        cpu.advance_spi(1); // 8 bits * 2 TCY at 1:1
+        cpu.advance_spi(1); // 8 bits * 1 TCY at 1:1 (DS70206C Eq. 18-1)
         let stat = cpu.data_read(SFR_SPI1STAT).unwrap();
         assert_ne!(stat & SPI1STAT_SPIRBF, 0);
         assert_eq!(stat & SPI1STAT_SPITBF, 0);
@@ -7359,13 +7482,35 @@ mod tests {
     }
 
     #[test]
+    fn spi_tx_holding_slot_reports_full_and_chains() {
+        let mut cpu = spi_cpu();
+        cpu.data_write(SFR_SPI1BUF, 0x0011).unwrap();
+        assert_eq!(cpu.data_read(SFR_SPI1STAT).unwrap() & SPI1STAT_SPITBF, 0);
+        cpu.data_write(SFR_SPI1BUF, 0x0022).unwrap();
+        assert_ne!(
+            cpu.data_read(SFR_SPI1STAT).unwrap() & SPI1STAT_SPITBF,
+            0,
+            "the second write fills TXB"
+        );
+        cpu.advance_spi(8);
+        assert_eq!(cpu.data_read(SFR_SPI1BUF).unwrap(), 0x0011);
+        assert_eq!(
+            cpu.data_read(SFR_SPI1STAT).unwrap() & SPI1STAT_SPITBF,
+            0,
+            "TXB moved into the shift register for the next word"
+        );
+        cpu.advance_spi(8);
+        assert_eq!(cpu.data_read(SFR_SPI1BUF).unwrap(), 0x0022);
+    }
+
+    #[test]
     fn spi_word_mode_and_prescaler_timing() {
         let mut cpu = spi_cpu();
         // MODE16, SPRE = 000 (8:1), PPRE = 00 (64:1): 16 bits * 2 * 512.
         cpu.data_write(SFR_SPI1CON1, SPI1CON1_MSTEN | SPI1CON1_MODE16)
             .unwrap();
         cpu.data_write(SFR_SPI1BUF, 0x1234).unwrap();
-        cpu.advance_spi(16 * 2 * 512 - 1);
+        cpu.advance_spi(16 * 512 - 1);
         assert_eq!(cpu.data_read(SFR_SPI1STAT).unwrap() & SPI1STAT_SPIRBF, 0);
         cpu.advance_spi(1);
         assert_eq!(cpu.data_read(SFR_SPI1BUF).unwrap(), 0x1234);
@@ -7375,10 +7520,10 @@ mod tests {
     fn spi_receive_overrun_sets_spirov_and_the_error_vector() {
         let mut cpu = spi_cpu();
         cpu.data_write(SFR_SPI1BUF, 0x0011).unwrap();
-        cpu.advance_spi(16);
+        cpu.advance_spi(8);
         // Do not read SPI1BUF; start another transfer.
         cpu.data_write(SFR_SPI1BUF, 0x0022).unwrap();
-        cpu.advance_spi(16);
+        cpu.advance_spi(8);
         let stat = cpu.data_read(SFR_SPI1STAT).unwrap();
         assert_ne!(stat & SPI1STAT_SPIROV, 0, "SPIROV");
         assert_ne!(cpu.ifs0 & (1 << IRQ_SPI1E.0), 0, "SPI1EIF");
@@ -7532,6 +7677,92 @@ mod tests {
         assert_eq!(cpu.i2c_slave_read(), 0xC3);
         cpu.i2c_slave_stop();
         assert_ne!(cpu.data_read(SFR_I2C1STAT).unwrap() & I2C1STAT_P, 0);
+    }
+
+    struct StopSpy {
+        stopped: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    }
+
+    impl I2cDevice for StopSpy {
+        fn address(&self) -> u8 {
+            0x48
+        }
+        fn read(&mut self) -> u8 {
+            0
+        }
+        fn write(&mut self, _data: u8) {}
+        fn stop(&mut self) {
+            self.stopped
+                .store(true, std::sync::atomic::Ordering::SeqCst);
+        }
+    }
+
+    #[test]
+    fn i2c_ten_bit_address_is_nacked_and_not_truncated() {
+        let mut cpu = i2c_cpu_with_tmp102();
+        cpu.data_write(SFR_I2C1CON, I2C1CON_I2CEN | I2C1CON_SEN)
+            .unwrap();
+        i2c_finish(&mut cpu);
+        // 11110 A9 A8 0, then the low address byte.
+        cpu.data_write(SFR_I2C1TRN, 0x00F0).unwrap();
+        i2c_finish(&mut cpu);
+        cpu.data_write(SFR_I2C1TRN, 0x0048).unwrap();
+        i2c_finish(&mut cpu);
+        let stat = cpu.data_read(SFR_I2C1STAT).unwrap();
+        assert_ne!(stat & I2C1STAT_ACKSTAT, 0, "10-bit address must NACK");
+        assert_ne!(stat & I2C1STAT_ADD10, 0);
+    }
+
+    #[test]
+    fn i2c_transmit_collision_sets_iwcol() {
+        let mut cpu = i2c_cpu_with_tmp102();
+        cpu.data_write(SFR_I2C1CON, I2C1CON_I2CEN | I2C1CON_SEN)
+            .unwrap();
+        i2c_finish(&mut cpu);
+        cpu.data_write(SFR_I2C1TRN, 0x0090).unwrap(); // transmit pending
+        cpu.data_write(SFR_I2C1TRN, 0x0091).unwrap(); // must not overwrite
+        assert_ne!(cpu.data_read(SFR_I2C1STAT).unwrap() & I2C1STAT_IWCOL, 0);
+        i2c_finish(&mut cpu);
+        let stat = cpu.data_read(SFR_I2C1STAT).unwrap();
+        assert_eq!(stat & I2C1STAT_ACKSTAT, 0, "the first address was sent");
+    }
+
+    #[test]
+    fn i2c_disable_stops_the_selected_slave() {
+        let stopped = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let mut cpu = cpu_with(&[0x0000_0000; 4]);
+        cpu.attach_i2c_device(Box::new(StopSpy {
+            stopped: stopped.clone(),
+        }));
+        cpu.data_write(SFR_I2C1BRG, 1).unwrap();
+        cpu.data_write(SFR_I2C1CON, I2C1CON_I2CEN).unwrap();
+        cpu.data_write(SFR_I2C1CON, I2C1CON_I2CEN | I2C1CON_SEN)
+            .unwrap();
+        i2c_finish(&mut cpu);
+        cpu.data_write(SFR_I2C1TRN, 0x0090).unwrap();
+        i2c_finish(&mut cpu);
+        cpu.data_write(SFR_I2C1CON, 0).unwrap();
+        assert!(stopped.load(std::sync::atomic::Ordering::SeqCst));
+    }
+
+    #[test]
+    fn m3_state_round_trips_through_a_snapshot() {
+        let mut cpu = adc_cpu(0, false);
+        cpu.set_adc_analog(4, 0x2AA);
+        cpu.adc_t3_trigger = true;
+        cpu.adc_state = AdcState::Sampling;
+        cpu.spi1con1 = 0x0137;
+        cpu.i2c1brg = 0x016B;
+        cpu.ifs1 = 0x0002;
+        let snap = cpu.snapshot();
+        let mut back = Pic24::new();
+        back.apply_snapshot(&snap);
+        assert_eq!(back.adc_analog[4], 0x2AA, "injected analog survives");
+        assert!(back.adc_t3_trigger, "pending trigger survives");
+        assert_eq!(back.adc_state, AdcState::Sampling);
+        assert_eq!(back.spi1con1, 0x0137);
+        assert_eq!(back.i2c1brg, 0x016B);
+        assert_eq!(back.ifs1, 0x0002);
     }
 
     #[test]

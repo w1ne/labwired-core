@@ -261,29 +261,41 @@ DS70000195 §19, with the SFR maps and vectors from DS70283H (Tables 4-11,
 ```bash
 # 1. Unit tests — ADC/SPI/I2C plus every earlier milestone
 cargo test -p labwired-core --lib pic24
-#   test result: ok. 89 passed; 0 failed
+#   test result: ok. 98 passed; 0 failed
 
 # 2. The real XC16 M3 firmware samples AN4, loops SPI and reads the TMP102
 cargo test -p labwired-core --test pic24_xc16_m3
 #   xc16_m3_firmware_samples_adc_loops_spi_and_reads_tmp102 ... ok
+#   example_system_builder_attaches_the_m3_devices ... ok  (plus a no-device
+#   negative control that must print M3 FAIL)
+
+# 3. The CLI path strict onboarding uses (base, device-free system.yaml)
+cargo run -q -p labwired-cli -- test \
+  --script examples/dspic33fj32mc204/io-smoke.yaml --no-uart-stdout
+#   PASS  2/2 checks · io-smoke · 64 steps
 ```
 
 The M3 firmware checks: `ADC1BUF0 = 0x2AA` for injected AN4, the SPI1
 loopback byte `0xA5`, the TMP102 temperature bytes `0x19`/`0x00` (25.0 °C),
 no failure code, `"M3 OK\n"` on UART1 and the programmed register image
 (`ADON`, `AD1PCFGL = 0x01EF`, `CH0SA = 4`, `SPI1CON1 = 0x013F`, `SPIEN`).
-The devices are attached from `examples/dspic33fj32mc204/system.yaml`
+The devices are attached from `examples/dspic33fj32mc204/system-m3.yaml`
 (`tmp102` on `i2c1`, `loopback` on `spi1`) through the same factory calls
-the session builder uses. A second test,
+the session builder uses. The base `system.yaml` deliberately has no
+external devices: it is the CLI `test` path's manifest (the generic bus has
+no PIC24 I2C/SPI controllers). A second test,
 `example_system_builder_attaches_the_m3_devices`, runs the whole session
 path (`build_machine` from the example system) and checks the same UART
 message, so the manifest attach code is covered end to end.
 
 The unit tests additionally cover all four FORM formats in 10/12-bit modes,
-ASAM/SSRC = 111, the TMR3 trigger, the scan list, the split buffer and SMPI,
-SPI byte/word transfers with the prescaler timing, SPIROV, the SPI slave
+ASAM/SSRC = 111, ADON with ASAM = 0 (software SAMP), the TMR3 and PWM1
+triggers, the scan list, the split buffer and SMPI, CHPS sequences with AN3
+and AN3-AN6 subtraction, ALTS (MUX A first), SPI byte/word transfers with the
+`PPRE × SPRE` prescaler timing, the held-TX slot, SPIROV, the SPI slave
 seam, an I2C TMP102 pointer-write/read transaction, a missing-slave NACK,
-I2COV, the I2C slave seams and the IFS1/IPC3/IPC4 vectors (SPI1E = 17,
+I2COV, IWCOL, a 10-bit address NACK, I2C disable-stop, the I2C slave seams,
+the snapshot round-trip and the IFS1/IPC3/IPC4 vectors (SPI1E = 17,
 SPI1 = 18, ADC1 = 21, SI2C1 = 24, MI2C1 = 25).
 
 Booting the firmware also closed four base-ISA gaps the XC16 startup and

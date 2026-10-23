@@ -5,7 +5,7 @@
 | TMP102 temperature sensor | `i2c1` | `tmp102` | sensor model (12-bit left-justified temperature, pointer register, writable CONFIG/TLOW/THIGH); the starter is the model's 25.0 °C | `configs/peripherals/tmp102.yaml` (embedded descriptor) |
 | SPI wire loopback | `spi1` | `loopback` | harness, **not silicon**: `SDO` tied to `SDI`, every byte returns unchanged | — |
 
-Both are declared in `examples/dspic33fj32mc204/system.yaml` and attached by
+Both are declared in `examples/dspic33fj32mc204/system-m3.yaml` and attached by
 the PIC24 session builder to the CPU-internal controllers:
 
 - the TMP102 goes through the generic external-device factory

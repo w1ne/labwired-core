@@ -312,7 +312,11 @@ impl Peripheral for Pic24GpioPort {
 
     /// `TRISx` is the direction register: a set bit makes the pad an input.
     fn read_gpio_is_output(&self, pin: u8) -> Option<bool> {
-        (pin < 16 && self.mask & (1u16 << pin) != 0).then_some(self.tris & (1u16 << pin) == 0)
+        if pin < 16 && self.mask & (1u16 << pin) != 0 {
+            Some(self.tris & (1u16 << pin) == 0)
+        } else {
+            None
+        }
     }
 
     fn gpio_routing(&self, pin: u8) -> Option<GpioRouting> {

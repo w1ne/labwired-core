@@ -275,6 +275,10 @@ pub struct Pic24CpuSnapshot {
     #[serde(default)]
     pub adc_scan_next: u8,
     #[serde(default)]
+    pub adc_t3_trigger: bool,
+    #[serde(default)]
+    pub adc_pwm_trigger: bool,
+    #[serde(default)]
     pub spi1stat: u16,
     #[serde(default)]
     pub spi1con1: u16,
