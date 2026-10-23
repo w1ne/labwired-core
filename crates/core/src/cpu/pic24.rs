@@ -4,7 +4,7 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
-//! PIC24 / dsPIC33F CPU — **M0 + M1a + M1b subset** for the
+//! PIC24 / dsPIC33F CPU — **M0 + M1a + M1b + M1c subset** for the
 //! dsPIC33FJ32MC204 class.
 //!
 //! Scope:
@@ -21,14 +21,30 @@
 //!   prescaler capture modes, 4-deep FIFO, ICI interrupt divider,
 //!   ICOV/ICBNE) and Output Compare 1/2 (one-shot, toggle, delayed
 //!   one-shot, continuous pulse, PWM modes driving their routed RPn pin).
+//! * **M1c** — the DSP MAC class: `MAC`/`MPY`/`MPY.N`/`MSC` (incl. the
+//!   same-register square forms), `CLR`, `MOVSAC`, `LAC`, `SAC`, `SAC.R`,
+//!   the X/Y prefetches (Tables 5-7…5-10), accumulator write-back
+//!   (Table 5-13), CORCON fractional/integer, signed/unsigned, rounding and
+//!   saturation modes, and the OA/OB/SA/SB/OAB/SAB status bits. Verified
+//!   against the DS70000157G worked examples and real XC16 firmware.
 //!
 //! Not yet modelled — unsupported opcodes return
 //! [`SimulationError::DecodeError`] rather than guessing: PWM/QEI (M2), ADC/
-//! SPI/I2C (M3), DSP MAC (field tables pending, M1c), PSV/EDS windows.
-//! Status-flag arithmetic (SR N/Z/C/OV) is not evaluated yet. Change
+//! SPI/I2C (M3), PSV/EDS windows, the DSP *accumulator* arithmetic
+//! (`ADD`/`SUB`/`MAX`/`MIN`/`SFTAC`/`FBCL` on ACCA/ACCB). Change
 //! notification (CNENx/CNPUx) and the remaining PPS functions (UART/SPI/
 //! INT/QEI routing) are not modelled: the PPS registers store values, but
 //! only the IC1/IC2 inputs and OC1/OC2 outputs are consumed.
+//!
+//! Known M1c approximations (documented, not guessed; every other M1c
+//! behaviour is pinned by a DS70000157G example — see the tests):
+//! * `LAC`'s shifter is 32-bit, which the PRM's examples 1-2 pin exactly;
+//!   with super saturation enabled and an overflowing left shift the exact
+//!   40-bit result is kept (no PRM example covers this combination).
+//! * `MPY.N` lists only OA/OB/OAB as affected, so it stores the negated
+//!   product without saturation or SA/SB (the page is followed literally).
+//! * Accumulator write-back applies SATDW like `SAC.R` (the PRM mentions
+//!   saturation only for SAC/SAC.R; no write-back example saturates).
 //!
 //! Known M1b approximations (documented, not guessed):
 //! * IC capture latency (2 instruction cycles, DS70198D Figure 12-2) is not
@@ -99,9 +115,22 @@
 //! | `RETURN`, `RETLW{.B} #lit10,Wn`, `LNK #lit14`, `ULNK` | |
 //! | `RETFIE` | M1a |
 //!
+//! DSP MAC class (M1c, DS70000157G §4.15/§5.4), all with the X/Y prefetch
+//! tables, write-back table and CORCON modes:
+//!
+//! | Instruction | Notes |
+//! | :--- | :--- |
+//! | `MAC/MPY/MPY.N/MSC Wm*Wn, Acc {,AWB}` | `1100 0mmm`, Tables 5-12/5-13 |
+//! | `MAC/MPY Wm*Wm, Acc` | `1111 00mm`, Table 5-11, no write-back |
+//! | `CLR Acc {,AWB}` | clears the accumulator and its OA/SA or OB/SB |
+//! | `MOVSAC Acc {,AWB}` | prefetch + write-back only, no status |
+//! | `LAC Ws/[...], {#Slit4,} Acc` | 32-bit shifter (PRM examples 1-2) |
+//! | `SAC`/`SAC.R Acc, {#Slit4,} Wd/[...]` | 40-bit shift, SATDW, RND |
+//!
 //! Not yet implemented — these return [`SimulationError::DecodeError`]:
 //! `TBLRD*`/`TBLW*` (PSV is not modelled), `ADDC`/`SUBB`/`CPB` and their
-//! sticky Z flag, the `[Ws+Wb]` register-offset mode, DSP/MAC (M1c),
+//! sticky Z flag, the `[Ws+Wb]` register-offset mode for the base ISA, the
+//! DSP accumulator arithmetic (`ADD`/`SUB`/`MAX`/`MIN`/`SFTAC`/`FBCL`),
 //! `REPEAT`/`DO`, `PUSH`/`POP`, `RESET`/`BREAK`.
 //!
 //! UART1 registers (DS70283H): `U1MODE 0x0220`, `U1STA 0x0222`, `U1TXREG 0x0224`.
@@ -292,6 +321,66 @@ pub const SR_DC: u16 = 0x0100;
 
 /// INTCON2.ALTIVT — use the Alternate IVT at `0x104` (DS70283H §7.1).
 pub const INTCON2_ALTIVT: u16 = 0x8000;
+
+// ── CORCON (DS70283H Register 3-2) ──────────────────────────────────────────
+
+/// CORCON.IF — 1 = integer multiplies, 0 = fractional (left-shifted by one,
+/// DS70000157G §4.12.1).
+pub const CORCON_IF: u16 = 0x0001;
+/// CORCON.RND — 1 = biased (conventional) rounding, 0 = unbiased
+/// (convergent) rounding.
+pub const CORCON_RND: u16 = 0x0002;
+/// CORCON.ACCSAT — 1 = 9.31 super saturation, 0 = 1.31 normal saturation.
+pub const CORCON_ACCSAT: u16 = 0x0010;
+/// CORCON.SATDW — data-space write saturation from the DSP engine.
+pub const CORCON_SATDW: u16 = 0x0020;
+/// CORCON.SATB / CORCON.SATA — per-accumulator saturation enables.
+pub const CORCON_SATB: u16 = 0x0040;
+pub const CORCON_SATA: u16 = 0x0080;
+/// CORCON.US — 1 = unsigned multiplies.
+pub const CORCON_US: u16 = 0x1000;
+
+// ── DSP ALU status bits, SR high byte (DS70000157G §2.16.4) ─────────────────
+
+/// SR.OA — accumulator A overflowed into the guard bits.
+pub const SR_OA: u16 = 0x8000;
+/// SR.OB — accumulator B overflowed into the guard bits.
+pub const SR_OB: u16 = 0x4000;
+/// SR.SA — accumulator A saturated (sticky).
+pub const SR_SA: u16 = 0x2000;
+/// SR.SB — accumulator B saturated (sticky).
+pub const SR_SB: u16 = 0x1000;
+/// SR.OAB — OA || OB (derived).
+pub const SR_OAB: u16 = 0x0800;
+/// SR.SAB — SA || SB (derived; clearing it clears SA and SB).
+pub const SR_SAB: u16 = 0x0400;
+
+/// Signed 32-bit range — the 1.31 normal-saturation limits.
+const ACC32_MAX: i64 = (1 << 31) - 1;
+const ACC32_MIN: i64 = -(1 << 31);
+/// Signed 40-bit range — the 9.31 super-saturation limits.
+const ACC40_MAX: i64 = (1 << 39) - 1;
+const ACC40_MIN: i64 = -(1 << 39);
+
+/// `true` when `value` fits the signed 32-bit range.
+fn fits_signed32(value: i64) -> bool {
+    (ACC32_MIN..=ACC32_MAX).contains(&value)
+}
+
+/// `true` when `value` fits the signed 40-bit range.
+fn fits_signed40(value: i64) -> bool {
+    (ACC40_MIN..=ACC40_MAX).contains(&value)
+}
+
+/// Wrap an i64 to the 40-bit accumulator width, sign-extended.
+fn wrap40(value: i64) -> i64 {
+    let masked = value & 0xFF_FFFF_FFFF;
+    if masked >= (1 << 39) {
+        masked - (1 << 40)
+    } else {
+        masked
+    }
+}
 
 // ── DS70283H / DS70190D / DS70198D / DS70209A (M1b additions) ───────────────
 
@@ -1229,7 +1318,25 @@ impl Pic24 {
                         self.acc_b =
                             (self.acc_b & !0x00FF_0000_0000) | (i64::from(val & 0x00FF) << 32)
                     }
-                    SFR_SR => self.sr = val,
+                    SFR_SR => {
+                        // SA/SB/OA/OB are sticky, set by hardware and cleared
+                        // only by software: a written 0 clears a flag, a
+                        // written 1 keeps its old value (a write cannot set
+                        // it). SAB/OAB are derived; writing 0 to SAB also
+                        // clears SA and SB (DS70000157G §2.16.4 Notes 2-3).
+                        let old = self.sr;
+                        let keep = |bit: u16| if val & bit != 0 { old & bit } else { 0 };
+                        let mut v = val & !(SR_OA | SR_OB | SR_SA | SR_SB | SR_OAB | SR_SAB);
+                        v |= keep(SR_OA) | keep(SR_OB) | keep(SR_SA) | keep(SR_SB);
+                        if val & SR_SAB == 0 {
+                            v &= !(SR_SA | SR_SB);
+                        }
+                        if val & SR_OAB == 0 {
+                            v &= !(SR_OA | SR_OB);
+                        }
+                        self.sr = v;
+                        self.refresh_dsp_status();
+                    }
                     SFR_CORCON => self.corcon = val,
                     SFR_INTCON1 => self.intcon1 = val,
                     SFR_INTCON2 => self.intcon2 = val,
@@ -1525,6 +1632,376 @@ impl Pic24 {
             ppp: (word >> 4) & 0x7,
             ws: (word & 0xF) as usize,
         }
+    }
+
+    /// Keep the derived OAB/SAB bits equal to OA|OB and SA|SB
+    /// (DS70000157G §2.16.4).
+    fn refresh_dsp_status(&mut self) {
+        let oab = self.sr & (SR_OA | SR_OB) != 0;
+        let sab = self.sr & (SR_SA | SR_SB) != 0;
+        self.sr = (self.sr & !(SR_OAB | SR_SAB))
+            | if oab { SR_OAB } else { 0 }
+            | if sab { SR_SAB } else { 0 };
+    }
+
+    // ── DSP engine: MAC class (DS70000157G §4.15, §5.4) ─────────────────────
+
+    /// The DSP multiplier result for `Wm*Wn`: signed or unsigned per
+    /// CORCON.US, left-shifted by one in fractional mode (CORCON.IF = 0)
+    /// because the 2.30 product of two 1.15 values is kept in the 1.31
+    /// accumulator format (DS70000157G §4.12.1).
+    fn dsp_multiply(&self, wm: u16, wn: u16) -> i64 {
+        let product = if self.corcon & CORCON_US != 0 {
+            i64::from(wm) * i64::from(wn)
+        } else {
+            i64::from(wm as i16) * i64::from(wn as i16)
+        };
+        if self.corcon & CORCON_IF == 0 {
+            product << 1
+        } else {
+            product
+        }
+    }
+
+    /// Store a result to an accumulator with the CORCON saturation rules and
+    /// the OA/OB/SA/SB status updates (DS70000157G §2.16.4, §4.12.1, §4.13):
+    ///
+    /// * saturation disabled — the 40-bit adder result is kept, a guard-bit
+    ///   overflow (outside the signed 32-bit range) sets OA/OB, an overflow
+    ///   out of the accumulator MSb sets SA/SB;
+    /// * normal (1.31) — a result outside signed 32-bit clamps to
+    ///   0x7FFF_FFFF / 0x8000_0000 and sets SA/SB (no OA/OB: the clamped
+    ///   value never uses the guard bits);
+    /// * super (9.31) — a result outside signed 40-bit clamps to
+    ///   0x7F_FFFF_FFFF / 0x80_0000_0000 and sets SA/SB; guard-bit overflow
+    ///   sets OA/OB.
+    fn dsp_store_acc(&mut self, acc: usize, value: i64) {
+        let sat_enabled = self.corcon & if acc == 0 { CORCON_SATA } else { CORCON_SATB } != 0;
+        let super_sat = self.corcon & CORCON_ACCSAT != 0;
+        let fits32 = fits_signed32(value);
+        let fits40 = fits_signed40(value);
+        // OA/OB report a *guard-bit* overflow (the exact result no longer
+        // fits the signed 32-bit range) while SA/SB report *saturation* (the
+        // result left the active accumulator range). That is why the two
+        // flags use different predicates (DS70000157G §2.16.4).
+        let (stored, saturated, guard_overflow) = if !sat_enabled {
+            (wrap40(value), !fits40, !fits32)
+        } else if super_sat {
+            let stored = value.clamp(ACC40_MIN, ACC40_MAX);
+            (stored, !fits40, !fits32)
+        } else {
+            let stored = value.clamp(ACC32_MIN, ACC32_MAX);
+            (stored, !fits32, false)
+        };
+        if guard_overflow {
+            self.sr |= if acc == 0 { SR_OA } else { SR_OB };
+        }
+        if saturated {
+            self.sr |= if acc == 0 { SR_SA } else { SR_SB };
+        }
+        self.refresh_dsp_status();
+        if acc == 0 {
+            self.acc_a = stored;
+        } else {
+            self.acc_b = stored;
+        }
+    }
+
+    /// One X or Y data prefetch (DS70000157G Tables 5-7/5-9, §4.15.1-4.15.2).
+    /// The X path uses W8/W9, the Y path W10/W11; `op == 0b1100` is the
+    /// W12 register-offset mode (16-bit signed offset, no updates).
+    fn dsp_prefetch(&mut self, x_space: bool, op: u32, dest: usize) -> SimResult<()> {
+        if op == 0b0100 {
+            return Ok(());
+        }
+        let base = match (x_space, op & 0b1000 != 0) {
+            (true, false) => 8,
+            (true, true) => 9,
+            (false, false) => 10,
+            (false, true) => 11,
+        };
+        let (ea, delta) = if op == 0b1100 {
+            let offset = i32::from(self.w[12] as i16);
+            ((i32::from(self.w[base]) + offset) as u16, 0i32)
+        } else {
+            let delta = match op & 0b111 {
+                0 => 0,
+                1 => 2,
+                2 => 4,
+                3 => 6,
+                5 => -6,
+                6 => -4,
+                _ => -2,
+            };
+            (self.w[base], delta)
+        };
+        let value = self.data_read(ea)?;
+        self.w[dest] = value;
+        if delta != 0 {
+            self.w[base] = (i32::from(self.w[base]) + delta) as u16;
+        }
+        Ok(())
+    }
+
+    /// Rounding decision for SAC.R and accumulator write-back
+    /// (DS70000157G CORCON.RND; Microchip "Rounding" note): conventional
+    /// (biased) rounds up when the low word is >= 0x8000; convergent
+    /// (unbiased) rounds a 0x8000 tie to even.
+    fn dsp_round_up(&self, hi: u16, lo: u16) -> bool {
+        if self.corcon & CORCON_RND != 0 {
+            lo >= 0x8000
+        } else {
+            lo > 0x8000 || (lo == 0x8000 && hi & 1 == 1)
+        }
+    }
+
+    /// SATDW (CORCON<5>): a DSP data-space store saturates to 0x7FFF/0x8000
+    /// when the stored value needs the guard bits. The PRM's SAC examples
+    /// pin the test: `FF C891 8F4C << 4` (40-bit `FC 8918 F4C0`) stores
+    /// 0x8000, while a value whose bits 39:32 are sign extension keeps its
+    /// high word (`00 120F FF00 >> 4` stores 0x0120).
+    fn dsp_satdw(&self, value: i64, stored: u16) -> u16 {
+        if self.corcon & CORCON_SATDW != 0 && !fits_signed32(value) {
+            if value < 0 {
+                0x8000
+            } else {
+                0x7FFF
+            }
+        } else {
+            stored
+        }
+    }
+
+    /// Accumulator write-back of the *other* accumulator (DS70000157G
+    /// Table 5-13): `00` stores the rounded ACCxH to W13, `01` to [W13] with
+    /// a post-increment of two, `10`/`11` do nothing (no write-back).
+    fn dsp_write_back(&mut self, acc: usize, awb: u32) -> SimResult<()> {
+        if awb >= 2 {
+            return Ok(());
+        }
+        // The operation uses `acc`; the write-back stores the other one.
+        let value = if acc == 0 { self.acc_b } else { self.acc_a };
+        let hi = ((value >> 16) & 0xFFFF) as u16;
+        let lo = (value & 0xFFFF) as u16;
+        // The accumulator is 40-bit and the rounding carry adds at most
+        // 2^16, so `rounded` still fits 41 bits: SATDW compares the true
+        // value (a value above 2^39 is positive and saturates to 0x7FFF) and
+        // the stored word is its ACCxH extract.
+        let rounded = if self.dsp_round_up(hi, lo) {
+            value.wrapping_add(0x1_0000)
+        } else {
+            value
+        };
+        let stored = self.dsp_satdw(rounded, ((rounded >> 16) & 0xFFFF) as u16);
+        if awb == 0 {
+            self.w[13] = stored;
+        } else {
+            let ea = self.w[13];
+            self.data_write(ea, stored)?;
+            self.w[13] = self.w[13].wrapping_add(2);
+        }
+        Ok(())
+    }
+
+    /// MAC / MPY / MPY.N / MSC (DS70000157G §5.4). `square` selects the
+    /// same-register form (`1111 00mm ...`, no write-back).
+    fn exec_dsp_mac(&mut self, word: u32, square: bool) -> SimResult<()> {
+        let acc = ((word >> 15) & 1) as usize;
+        let (wm, wn) = if square {
+            let w = 4 + ((word >> 16) & 0x3) as usize;
+            (self.w[w], self.w[w])
+        } else {
+            let (a, b) = match (word >> 16) & 0x7 {
+                0 => (4, 5),
+                1 => (4, 6),
+                2 => (4, 7),
+                4 => (5, 6),
+                5 => (5, 7),
+                6 => (6, 7),
+                _ => return Err(SimulationError::DecodeError(u64::from(self.pc))),
+            };
+            (self.w[a], self.w[b])
+        };
+        let negate = word & 0x0000_4000 != 0;
+        let store = if square {
+            word & 0x3 == 0b01
+        } else {
+            word & 0x3 == 0b11
+        };
+        let product = self.dsp_multiply(wm, wn);
+        if store && negate {
+            // MPY.N lists OA/OB/OAB only (DS70000157G MPY.N page): the
+            // negated product is stored without saturation and without SA/SB.
+            let negated = -product;
+            if !fits_signed32(negated) {
+                self.sr |= if acc == 0 { SR_OA } else { SR_OB };
+            }
+            self.refresh_dsp_status();
+            if acc == 0 {
+                self.acc_a = wrap40(negated);
+            } else {
+                self.acc_b = wrap40(negated);
+            }
+        } else if store {
+            self.dsp_store_acc(acc, product);
+        } else {
+            let current = if acc == 0 { self.acc_a } else { self.acc_b };
+            // MAC adds the product, MSC subtracts it.
+            let result = if negate {
+                current - product
+            } else {
+                current + product
+            };
+            self.dsp_store_acc(acc, result);
+        }
+        let x_op = (word >> 6) & 0xF;
+        let y_op = (word >> 2) & 0xF;
+        let x_dest = 4 + ((word >> 12) & 0x3) as usize;
+        let y_dest = 4 + ((word >> 10) & 0x3) as usize;
+        self.dsp_prefetch(true, x_op, x_dest)?;
+        self.dsp_prefetch(false, y_op, y_dest)?;
+        if !square {
+            self.dsp_write_back(acc, word & 0x3)?;
+        }
+        Ok(())
+    }
+
+    /// `CLR Acc {,prefetch} {,AWB}` (DS70000157G): clear the 40-bit
+    /// accumulator and its OA/SA (or OB/SB) status bits, optionally
+    /// prefetching and writing back the other accumulator.
+    fn exec_dsp_clr(&mut self, word: u32) -> SimResult<()> {
+        let acc = ((word >> 15) & 1) as usize;
+        if acc == 0 {
+            self.acc_a = 0;
+            self.sr &= !(SR_OA | SR_SA);
+        } else {
+            self.acc_b = 0;
+            self.sr &= !(SR_OB | SR_SB);
+        }
+        self.refresh_dsp_status();
+        let x_op = (word >> 6) & 0xF;
+        let y_op = (word >> 2) & 0xF;
+        let x_dest = 4 + ((word >> 12) & 0x3) as usize;
+        let y_dest = 4 + ((word >> 10) & 0x3) as usize;
+        self.dsp_prefetch(true, x_op, x_dest)?;
+        self.dsp_prefetch(false, y_op, y_dest)?;
+        self.dsp_write_back(acc, word & 0x3)?;
+        Ok(())
+    }
+
+    /// `MOVSAC Acc {,prefetch} {,AWB}` — prefetches and write-back only; no
+    /// accumulator operation and no status (DS70000157G).
+    fn exec_dsp_movsac(&mut self, word: u32) -> SimResult<()> {
+        let acc = ((word >> 15) & 1) as usize;
+        let x_op = (word >> 6) & 0xF;
+        let y_op = (word >> 2) & 0xF;
+        let x_dest = 4 + ((word >> 12) & 0x3) as usize;
+        let y_dest = 4 + ((word >> 10) & 0x3) as usize;
+        self.dsp_prefetch(true, x_op, x_dest)?;
+        self.dsp_prefetch(false, y_op, y_dest)?;
+        self.dsp_write_back(acc, word & 0x3)?;
+        Ok(())
+    }
+
+    /// `LAC Ws|[...], {#Slit4,} Acc` (DS70000157G): load a 1.15 value into
+    /// the accumulator with an optional shift (negative = left).
+    ///
+    /// The PRM's examples 1-2 pin the shifter as **32-bit**: the value is
+    /// placed in ACCxH:ACCxL, the shift wraps/extends within 32 bits and
+    /// ACCxU is the sign extension of the result — example 1 (`0x1221 << 3`)
+    /// stores `FF 9108 0000` with OB set, not the 40-bit `00 9108 0000`.
+    /// The overflow test uses the exact shifted value, so a right shift never
+    /// flags (example 2 has SR = 0).
+    fn exec_dsp_lac(&mut self, word: u32) -> SimResult<()> {
+        let acc = ((word >> 15) & 1) as usize;
+        let wb = ((word >> 11) & 0xF) as usize;
+        let shift = ((word >> 7) & 0xF) as u8;
+        let mode = (word >> 4) & 0x7;
+        let ws = (word & 0xF) as usize;
+        let src = match mode {
+            0 => self.w[ws],
+            6 => {
+                let ea = self.w[ws].wrapping_add(self.w[wb]);
+                self.data_read(ea)?
+            }
+            _ => self.read_operand(ws, mode, false)?,
+        };
+        let slit = i32::from(shift) - if shift >= 8 { 16 } else { 0 }; // -8..=7
+        let base = i64::from(src as i16) << 16;
+        let true_value = if slit < 0 {
+            base << (-slit)
+        } else {
+            base >> slit
+        };
+        let shifted32 = if slit < 0 {
+            (base as i32).wrapping_shl((-slit) as u32)
+        } else {
+            (base as i32) >> slit
+        };
+        let sat_enabled = self.corcon & if acc == 0 { CORCON_SATA } else { CORCON_SATB } != 0;
+        let super_sat = self.corcon & CORCON_ACCSAT != 0;
+        let fits32 = fits_signed32(true_value);
+        let stored = if !fits32 && sat_enabled && !super_sat {
+            if true_value > 0 {
+                ACC32_MAX
+            } else {
+                ACC32_MIN
+            }
+        } else if !fits32 && sat_enabled && super_sat {
+            // Super saturation keeps the guard bits: store the exact 40-bit
+            // result (a 32-bit source shifted by at most 8 always fits).
+            true_value
+        } else {
+            i64::from(shifted32)
+        };
+        if !fits32 && (!sat_enabled || super_sat) {
+            self.sr |= if acc == 0 { SR_OA } else { SR_OB };
+        }
+        if !fits32 && sat_enabled && !super_sat {
+            self.sr |= if acc == 0 { SR_SA } else { SR_SB };
+        }
+        self.refresh_dsp_status();
+        if acc == 0 {
+            self.acc_a = stored;
+        } else {
+            self.acc_b = stored;
+        }
+        Ok(())
+    }
+
+    /// `SAC`/`SAC.R` (DS70000157G): store ACCxH after an optional 40-bit
+    /// arithmetic shift, with SATDW saturation (status is not affected).
+    fn exec_dsp_sac(&mut self, word: u32, rounded: bool) -> SimResult<()> {
+        let acc = ((word >> 15) & 1) as usize;
+        let wb = ((word >> 11) & 0xF) as usize;
+        let shift = ((word >> 7) & 0xF) as u8;
+        let mode = (word >> 4) & 0x7;
+        let wd = (word & 0xF) as usize;
+        let value = if acc == 0 { self.acc_a } else { self.acc_b };
+        let slit = i32::from(shift) - if shift >= 8 { 16 } else { 0 };
+        let shifted = wrap40(if slit < 0 {
+            value << (-slit)
+        } else {
+            value >> slit
+        });
+        let hi = ((shifted >> 16) & 0xFFFF) as u16;
+        let lo = (shifted & 0xFFFF) as u16;
+        let store_value = if rounded && self.dsp_round_up(hi, lo) {
+            shifted + 0x1_0000
+        } else {
+            shifted
+        };
+        let stored = self.dsp_satdw(store_value, ((store_value >> 16) & 0xFFFF) as u16);
+        match mode {
+            0 => self.w[wd] = stored,
+            1..=5 => self.write_operand(wd, mode, stored, false)?,
+            6 => {
+                let ea = self.w[wd].wrapping_add(self.w[wb]);
+                self.data_write(ea, stored)?;
+            }
+            _ => return Err(SimulationError::DecodeError(u64::from(self.pc))),
+        }
+        Ok(())
     }
 
     /// Execute one decoded word. Returns the instruction cycles consumed.
@@ -1998,6 +2475,36 @@ impl Pic24 {
             return Ok(1);
         }
 
+        // ── DSP MAC class (DS70000157G §4.15, §5.4) ─────────────────────────
+        // Square MAC/MPY — 1111 00mm A0xx yyii iijj jj0b.
+        // 0b1x in bits 19-18 is an unimplemented encoding (DecodeError).
+        if word & 0x00F0_0000 == 0x00F0_0000 {
+            if word & 0x000C_0000 == 0 {
+                self.exec_dsp_mac(word, true)?;
+                self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+                return Ok(1);
+            }
+        } else if word & 0x00F0_0000 == 0x00C0_0000 {
+            if word & 0x0008_0000 == 0 {
+                // MAC/MPY/MPY.N/MSC/CLR/MOVSAC — 1100 0mmm ...
+                match (word >> 16) & 0x7 {
+                    0b011 => self.exec_dsp_clr(word)?,
+                    0b111 => self.exec_dsp_movsac(word)?,
+                    _ => self.exec_dsp_mac(word, false)?,
+                }
+            } else {
+                // LAC/SAC/SAC.R — 1100 1010 / 1100 1100 / 1100 1101.
+                match (word >> 16) & 0xF {
+                    0xA => self.exec_dsp_lac(word)?,
+                    0xC => self.exec_dsp_sac(word, false)?,
+                    0xD => self.exec_dsp_sac(word, true)?,
+                    _ => return Err(SimulationError::DecodeError(u64::from(pc))),
+                }
+            }
+            self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
+            return Ok(1);
+        }
+
         // Everything else is deliberately unimplemented (see module scope).
         Err(SimulationError::DecodeError(self.pc as u64))
     }
@@ -2296,6 +2803,11 @@ mod tests {
     fn mov_w0_to_f(f: u16) -> u32 {
         debug_assert!(f % 2 == 0);
         0b1_0001 << 19 | (u32::from(f >> 1) << 4)
+    }
+
+    /// A signed 40-bit accumulator value from its ACCxU/H/L bytes.
+    fn acc40(u: i64, h: i64, l: i64) -> i64 {
+        wrap40((u << 32) | (h << 16) | l)
     }
 
     fn step<B: Bus>(cpu: &mut Pic24, bus: &mut B) {
@@ -3036,5 +3548,798 @@ mod tests {
         }
         let con = cpu.data_read(SFR_IC1CON).unwrap();
         assert_eq!(con & (ICCON_ICBNE | ICCON_ICOV), 0, "drained clean");
+    }
+
+    // ── M1c: DSP MAC class (DS70000157G §4.15, §5.4) ───────────────────────
+
+    /// `MAC/MPY/MPY.N/MSC Wm*Wn, Acc {,AWB}` word (fields per §5.4).
+    #[allow(clippy::too_many_arguments)]
+    fn mac_word(
+        mmm: u32,
+        acc_b: bool,
+        negate: bool,
+        store: bool,
+        xx: u32,
+        yy: u32,
+        xop: u32,
+        yop: u32,
+        aa: u32,
+    ) -> u32 {
+        let mut w = 0x00C0_0000
+            | ((mmm & 7) << 16)
+            | ((xx & 3) << 12)
+            | ((yy & 3) << 10)
+            | ((xop & 0xF) << 6)
+            | ((yop & 0xF) << 2)
+            | (aa & 3);
+        if acc_b {
+            w |= 1 << 15;
+        }
+        if negate {
+            w |= 1 << 14;
+        }
+        if store {
+            w |= 0b11;
+        }
+        w
+    }
+
+    /// Square `MAC/MPY Wm*Wm, Acc {,prefetch}` word.
+    fn square_word(mm: u32, acc_b: bool, store: bool, xx: u32, yy: u32, xop: u32, yop: u32) -> u32 {
+        let mut w = 0x00F0_0000
+            | ((mm & 3) << 16)
+            | ((xx & 3) << 12)
+            | ((yy & 3) << 10)
+            | ((xop & 0xF) << 6)
+            | ((yop & 0xF) << 2);
+        if acc_b {
+            w |= 1 << 15;
+        }
+        if store {
+            w |= 1;
+        }
+        w
+    }
+
+    fn clr_word(acc_b: bool, xx: u32, yy: u32, xop: u32, yop: u32, aa: u32) -> u32 {
+        0x00C3_0000
+            | ((acc_b as u32) << 15)
+            | ((xx & 3) << 12)
+            | ((yy & 3) << 10)
+            | ((xop & 0xF) << 6)
+            | ((yop & 0xF) << 2)
+            | (aa & 3)
+    }
+
+    fn movsac_word(acc_b: bool, xx: u32, yy: u32, xop: u32, yop: u32, aa: u32) -> u32 {
+        0x00C7_0000
+            | ((acc_b as u32) << 15)
+            | ((xx & 3) << 12)
+            | ((yy & 3) << 10)
+            | ((xop & 0xF) << 6)
+            | ((yop & 0xF) << 2)
+            | (aa & 3)
+    }
+
+    fn lac_word(acc_b: bool, wb: u32, slit: i32, mode: u32, ws: u32) -> u32 {
+        0x00CA_0000
+            | ((acc_b as u32) << 15)
+            | ((wb & 0xF) << 11)
+            | (((slit & 0xF) as u32) << 7)
+            | ((mode & 7) << 4)
+            | (ws & 0xF)
+    }
+
+    fn sac_word(rounded: bool, acc_b: bool, wb: u32, slit: i32, mode: u32, wd: u32) -> u32 {
+        (if rounded { 0x00CD_0000 } else { 0x00CC_0000 })
+            | ((acc_b as u32) << 15)
+            | ((wb & 0xF) << 11)
+            | (((slit & 0xF) as u32) << 7)
+            | ((mode & 7) << 4)
+            | (wd & 0xF)
+    }
+
+    /// Every builder is checked against xc16-as output for the same
+    /// mnemonic — the encodings are not transcribed by hand.
+    #[test]
+    fn dsp_words_match_xc16_as() {
+        assert_eq!(
+            mac_word(0, false, false, false, 0, 1, 3, 1, 2),
+            0x00C0_04C6,
+            "mac w4*w5,a,[w8]+=6,w4,[w10]+=2,w5"
+        );
+        assert_eq!(
+            square_word(3, false, false, 0, 3, 4, 15),
+            0x00F3_0D3C,
+            "mac w7*w7,a,[w11]-=2,w7"
+        );
+        assert_eq!(
+            mac_word(0, false, false, true, 2, 3, 1, 7, 3),
+            0x00C0_2C5F,
+            "mpy w4*w5,a,[w8]+=2,w6,[w10]-=2,w7"
+        );
+        assert_eq!(
+            mac_word(0, false, true, true, 0, 1, 1, 1, 3),
+            0x00C0_4447,
+            "mpy.n w4*w5,a,[w8]+=2,w4,[w10]+=2,w5"
+        );
+        assert_eq!(
+            mac_word(6, false, true, false, 2, 3, 6, 6, 2),
+            0x00C6_6D9A,
+            "msc w6*w7,a,[w8]-=4,w6,[w10]-=4,w7"
+        );
+        assert_eq!(
+            mac_word(0, true, true, false, 0, 1, 4, 12, 0),
+            0x00C0_C530,
+            "msc w4*w5,b,[w11+w12],w5,w13"
+        );
+        assert_eq!(
+            square_word(0, true, true, 0, 1, 12, 1),
+            0x00F0_8705,
+            "mpy w4*w4,b,[w9+w12],w4,[w10]+=2,w5"
+        );
+        assert_eq!(
+            clr_word(false, 0, 0, 1, 4, 0),
+            0x00C3_0050,
+            "clr a,[w8]+=2,w4,w13"
+        );
+        assert_eq!(
+            movsac_word(true, 2, 3, 8, 10, 0),
+            0x00C7_AE28,
+            "movsac b,[w9],w6,[w11]+=4,w7,w13"
+        );
+        assert_eq!(lac_word(true, 0, -3, 3, 4), 0x00CA_86B4, "lac [w4++],#-3,b");
+        assert_eq!(lac_word(false, 0, 7, 4, 2), 0x00CA_03C2, "lac [--w2],#7,a");
+        assert_eq!(
+            sac_word(false, false, 0, 4, 0, 5),
+            0x00CC_0205,
+            "sac a,#4,w5"
+        );
+        assert_eq!(
+            sac_word(false, true, 0, -4, 3, 5),
+            0x00CC_8635,
+            "sac b,#-4,[w5++]"
+        );
+        assert_eq!(
+            sac_word(true, false, 0, 4, 0, 5),
+            0x00CD_0205,
+            "sac.r a,#4,w5"
+        );
+        assert_eq!(
+            sac_word(true, true, 0, -4, 3, 5),
+            0x00CD_8635,
+            "sac.r b,#-4,[w5++]"
+        );
+        assert_eq!(
+            square_word(0, false, true, 0, 0, 4, 4),
+            0x00F0_0111,
+            "mpy w4*w4,a"
+        );
+        assert_eq!(
+            mac_word(0, false, false, false, 0, 0, 4, 4, 2),
+            0x00C0_0112,
+            "mac w4*w5,a"
+        );
+        assert_eq!(
+            movsac_word(false, 0, 1, 1, 5, 1),
+            0x00C7_0455,
+            "movsac a,[w8]+=2,w4,[w10]-=6,w5,[w13]+=2"
+        );
+        assert_eq!(
+            mac_word(6, true, false, false, 0, 0, 4, 4, 2),
+            0x00C6_8112,
+            "mac w6*w7,b"
+        );
+        assert_eq!(
+            mac_word(0, true, true, false, 0, 0, 4, 4, 0),
+            0x00C0_C110,
+            "msc w4*w5,b,w13"
+        );
+    }
+
+    #[test]
+    fn dsp_mac_fractional_with_prefetches_matches_prm_example_1() {
+        // DS70000157G MAC example 1: CORCON = 0x00C0 (fractional, normal
+        // saturation), ACCA = 0x0012000000, W4=0xA022, W5=0xB900.
+        let mut cpu = cpu_with(&[0x00C0_04C6]);
+        cpu.corcon = 0x00C0;
+        cpu.w[4] = 0xA022;
+        cpu.w[5] = 0xB900;
+        cpu.w[8] = 0x0A00;
+        cpu.w[10] = 0x0C00;
+        cpu.acc_a = 0x1200_0000;
+        cpu.data_write(0x0A00, 0x2567).unwrap();
+        cpu.data_write(0x0C00, 0x909C).unwrap();
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.acc_a, 0x472D_2400, "ACCA = ACCA + W4*W5 in 1.31");
+        assert_eq!(cpu.w[4], 0x2567, "X prefetch destination");
+        assert_eq!(cpu.w[5], 0x909C, "Y prefetch destination");
+        assert_eq!(cpu.w[8], 0x0A06, "X post-increment by 6");
+        assert_eq!(cpu.w[10], 0x0C02, "Y post-increment by 2");
+        assert_eq!(
+            cpu.data_read(SFR_SR).unwrap() & (SR_OA | SR_OB | SR_SA | SR_SB),
+            0,
+            "no DSP flags"
+        );
+    }
+
+    #[test]
+    fn dsp_mac_square_super_saturation_matches_prm_example_2() {
+        // DS70000157G square MAC example 2: CORCON = 0x00D0 (fractional,
+        // super saturation), ACCA = 0xFE98344500, W7 = 0x76AE.
+        let mut cpu = cpu_with(&[0x00F3_0D3C]);
+        cpu.corcon = 0x00D0;
+        cpu.w[7] = 0x76AE;
+        cpu.w[11] = 0x0C00;
+        cpu.acc_a = acc40(0xFE, 0x9834, 0x4500);
+        cpu.data_write(0x0C00, 0x23FF).unwrap();
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        assert_eq!(
+            cpu.acc_a,
+            acc40(0xFF, 0x063E, 0x0188),
+            "9.31 result keeps the guard bits"
+        );
+        assert_eq!(cpu.w[7], 0x23FF, "Y prefetch");
+        assert_eq!(cpu.w[11], 0x0BFE, "Y post-decrement by 2");
+        let sr = cpu.data_read(SFR_SR).unwrap();
+        assert_ne!(sr & SR_OA, 0, "guard-bit overflow sets OA");
+        assert_eq!(sr & SR_OAB, SR_OAB, "OAB follows");
+        assert_eq!(sr & (SR_SA | SR_SB | SR_SAB), 0, "not saturated");
+    }
+
+    #[test]
+    fn dsp_mpy_fractional_matches_prm_example_1() {
+        // DS70000157G MPY example 1: CORCON = 0 (fractional, no saturation);
+        // the product replaces the accumulator.
+        let mut cpu = cpu_with(&[0x00C0_2C5F]);
+        cpu.corcon = 0x0000;
+        cpu.w[4] = 0xC000;
+        cpu.w[5] = 0x9000;
+        cpu.w[8] = 0x0A00;
+        cpu.w[10] = 0x0C00;
+        cpu.acc_a = acc40(0xFF, 0xF780, 0x2087);
+        cpu.data_write(0x0A00, 0x671F).unwrap();
+        cpu.data_write(0x0C00, 0xE3DC).unwrap();
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.acc_a, 0x3800_0000, "MPY stores the product");
+        assert_eq!(cpu.w[6], 0x671F, "X prefetch destination W6");
+        assert_eq!(cpu.w[7], 0xE3DC, "Y prefetch destination W7");
+        assert_eq!(cpu.w[8], 0x0A02);
+        assert_eq!(cpu.w[10], 0x0BFE);
+        assert_eq!(cpu.data_read(SFR_SR).unwrap() & 0xF800, 0);
+    }
+
+    #[test]
+    fn dsp_mpyn_integer_and_fractional_match_prm_examples() {
+        // Integer mode (CORCON = 0x0001): the negated product replaces ACCA.
+        let mut cpu = cpu_with(&[0x00C0_4447]);
+        cpu.corcon = 0x0001;
+        cpu.w[4] = 0x3023;
+        cpu.w[5] = 0x1290;
+        cpu.w[8] = 0x0A00;
+        cpu.w[10] = 0x0C00;
+        cpu.acc_a = 0x0000_2387;
+        cpu.data_write(0x0A00, 0x0054).unwrap();
+        cpu.data_write(0x0C00, 0x660A).unwrap();
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.acc_a, acc40(0xFF, 0xFC82, 0x7650), "integer example 1");
+        assert_eq!(cpu.w[4], 0x0054);
+        assert_eq!(cpu.w[5], 0x660A);
+        assert_eq!(cpu.w[8], 0x0A02);
+        assert_eq!(cpu.w[10], 0x0C02);
+        assert_eq!(cpu.data_read(SFR_SR).unwrap() & 0xF800, 0);
+
+        // Fractional mode (CORCON = 0): the same word, left-shifted product.
+        let mut cpu = cpu_with(&[0x00C0_4447]);
+        cpu.corcon = 0x0000;
+        cpu.w[4] = 0x3023;
+        cpu.w[5] = 0x1290;
+        cpu.acc_a = 0x0000_2387;
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        assert_eq!(
+            cpu.acc_a,
+            acc40(0xFF, 0xF904, 0xECA0),
+            "fractional example 2"
+        );
+    }
+
+    #[test]
+    fn dsp_msc_integer_matches_prm_example_1() {
+        // DS70000157G MSC example 1: CORCON = 0x0001 (integer).
+        let mut cpu = cpu_with(&[0x00C6_6D9A]);
+        cpu.corcon = 0x0001;
+        cpu.w[6] = 0x9051;
+        cpu.w[7] = 0x7230;
+        cpu.w[8] = 0x0A00;
+        cpu.w[10] = 0x0C00;
+        cpu.acc_a = 0x0567_8000;
+        cpu.data_write(0x0A00, 0xD309).unwrap();
+        cpu.data_write(0x0C00, 0x100B).unwrap();
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.acc_a, 0x3738_5ED0, "ACCA = ACCA - W6*W7");
+        assert_eq!(cpu.w[6], 0xD309);
+        assert_eq!(cpu.w[7], 0x100B);
+        assert_eq!(cpu.w[8], 0x09FC, "post-decrement by 4");
+        assert_eq!(cpu.w[10], 0x0BFC);
+        assert_eq!(cpu.data_read(SFR_SR).unwrap() & 0xF800, 0);
+    }
+
+    #[test]
+    fn dsp_msc_fractional_with_awb_matches_prm_example_2() {
+        // DS70000157G MSC example 2: CORCON = 0 (fractional), [W11+W12]
+        // prefetch and ACCA write-back to W13.
+        let mut cpu = cpu_with(&[0x00C0_C530]);
+        cpu.corcon = 0x0000;
+        cpu.w[4] = 0x0500;
+        cpu.w[5] = 0x2000;
+        cpu.w[11] = 0x0B00;
+        cpu.w[12] = 0x0100;
+        cpu.w[13] = 0x6233;
+        cpu.acc_a = 0x3738_5ED0;
+        cpu.acc_b = 0x1000_0000;
+        cpu.data_write(0x0C00, 0x3579).unwrap();
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.acc_b, 0x0EC0_0000, "ACCB = ACCB - W4*W5");
+        assert_eq!(cpu.w[5], 0x3579, "Y prefetch through W12 offset");
+        assert_eq!(
+            cpu.w[11], 0x0B00,
+            "register-offset mode does not update W11"
+        );
+        assert_eq!(cpu.w[12], 0x0100, "nor W12");
+        assert_eq!(cpu.w[13], 0x3738, "rounded ACCA written back to W13");
+        assert_eq!(cpu.acc_a, 0x3738_5ED0, "write-back leaves ACCA alone");
+    }
+
+    #[test]
+    fn dsp_mpy_square_with_register_offset_matches_prm_example_2() {
+        // DS70000157G MPY square example 2: [W9+W12] with W12 = 0xFF00
+        // (signed -256).
+        let mut cpu = cpu_with(&[0x00F0_8705]);
+        cpu.corcon = 0x0000;
+        cpu.w[4] = 0xE228;
+        cpu.w[9] = 0x0C00;
+        cpu.w[12] = 0xFF00;
+        cpu.w[10] = 0x0A00;
+        cpu.acc_b = 0x9834_4500;
+        cpu.data_write(0x0B00, 0x8911).unwrap();
+        cpu.data_write(0x0A00, 0xF678).unwrap();
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.acc_b, 0x06F5_4C80);
+        assert_eq!(cpu.w[4], 0x8911, "X prefetch at W9 + (W12 as i16)");
+        assert_eq!(cpu.w[5], 0xF678, "Y prefetch");
+        assert_eq!(cpu.w[9], 0x0C00);
+        assert_eq!(cpu.w[10], 0x0A02);
+    }
+
+    #[test]
+    fn dsp_clr_matches_prm_example_1_and_clears_its_flags() {
+        let mut cpu = cpu_with(&[0x00C3_0050]);
+        cpu.corcon = 0x0000;
+        cpu.w[4] = 0xF001;
+        cpu.w[8] = 0x0A00;
+        cpu.w[13] = 0xC623;
+        cpu.acc_a = 0x0067_2345;
+        cpu.acc_b = 0x5420_3BDD;
+        cpu.sr |= SR_OA | SR_SA;
+        cpu.refresh_dsp_status();
+        cpu.data_write(0x0A00, 0x1221).unwrap();
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.acc_a, 0, "ACCA cleared");
+        assert_eq!(cpu.acc_b, 0x5420_3BDD, "ACCB untouched");
+        assert_eq!(cpu.w[4], 0x1221, "X prefetch");
+        assert_eq!(cpu.w[8], 0x0A02);
+        assert_eq!(cpu.w[13], 0x5420, "ACCB rounded write-back");
+        let sr = cpu.data_read(SFR_SR).unwrap();
+        assert_eq!(
+            sr & (SR_OA | SR_SA | SR_OAB | SR_SAB),
+            0,
+            "ACCA flags cleared"
+        );
+    }
+
+    #[test]
+    fn dsp_movsac_matches_prm_example_1() {
+        let mut cpu = cpu_with(&[0x00C7_AE28]);
+        cpu.corcon = 0x0000;
+        cpu.w[6] = 0xA022;
+        cpu.w[7] = 0xB200;
+        cpu.w[9] = 0x0A00;
+        cpu.w[11] = 0x0C00;
+        cpu.w[13] = 0x0020;
+        cpu.acc_a = 0x3290_5968;
+        cpu.data_write(0x0A00, 0x7811).unwrap();
+        cpu.data_write(0x0C00, 0xB2AF).unwrap();
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.w[6], 0x7811, "X prefetch");
+        assert_eq!(cpu.w[7], 0xB2AF, "Y prefetch");
+        assert_eq!(cpu.w[9], 0x0A00, "no update");
+        assert_eq!(cpu.w[11], 0x0C04, "post-increment by 4");
+        assert_eq!(cpu.w[13], 0x3290, "rounded ACCA write-back");
+        assert_eq!(cpu.acc_a, 0x3290_5968, "MOVSAC does not change ACCA");
+        assert_eq!(cpu.data_read(SFR_SR).unwrap(), 0, "status not affected");
+    }
+
+    #[test]
+    fn dsp_lac_left_shift_matches_prm_example_1() {
+        // DS70000157G LAC example 1: SATB = 0; the 32-bit shifter loses the
+        // sign bit and the guard byte becomes the sign extension.
+        let mut cpu = cpu_with(&[0x00CA_86B4]);
+        cpu.corcon = 0x0000;
+        cpu.w[4] = 0x0A00;
+        cpu.acc_b = 0x5125_ABCD;
+        cpu.data_write(0x0A00, 0x1221).unwrap();
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.w[4], 0x0A02, "post-increment");
+        assert_eq!(cpu.acc_b, acc40(0xFF, 0x9108, 0x0000));
+        let sr = cpu.data_read(SFR_SR).unwrap();
+        assert_eq!(sr, 0x4800, "OB and OAB set (0x4000 | 0x0800)");
+    }
+
+    #[test]
+    fn dsp_lac_right_shift_matches_prm_example_2() {
+        let mut cpu = cpu_with(&[0x00CA_03C2]);
+        cpu.corcon = 0x0000;
+        cpu.w[2] = 0x0C02;
+        cpu.acc_a = 0x5125_ABCD;
+        cpu.data_write(0x0C00, 0x9108).unwrap();
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.w[2], 0x0C00, "pre-decrement");
+        assert_eq!(cpu.acc_a, acc40(0xFF, 0xFF22, 0x1000));
+        assert_eq!(
+            cpu.data_read(SFR_SR).unwrap(),
+            0,
+            "a right shift never flags"
+        );
+    }
+
+    #[test]
+    fn dsp_sac_and_sacr_match_prm_examples() {
+        // SAC example 1: SATDW = 1, truncated store. (The PRM example
+        // writes CORCON = 0x0010, but DS70283H Register 3-2 puts SATDW at
+        // bit 5 — 0x0010 is ACCSAT; the datasheet wins here.)
+        let mut cpu = cpu_with(&[0x00CC_0205]);
+        cpu.corcon = CORCON_SATDW;
+        cpu.acc_a = 0x120F_FF00;
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.w[5], 0x0120, "SAC stores ACCxH after >> 4");
+
+        // SAC example 2: the shifted 40-bit value needs the guard bits, so
+        // SATDW clamps the store to 0x8000.
+        let mut cpu = cpu_with(&[0x00CC_8635]);
+        cpu.corcon = CORCON_SATDW;
+        cpu.acc_b = acc40(0xFF, 0xC891, 0x8F4C);
+        cpu.w[5] = 0x0A00;
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.data_read(0x0A00).unwrap(), 0x8000, "SATDW saturates");
+        assert_eq!(cpu.w[5], 0x0A02);
+        assert_eq!(
+            cpu.acc_b,
+            acc40(0xFF, 0xC891, 0x8F4C),
+            "SAC never changes the accumulator"
+        );
+
+        // SAC.R example 1: rounding adds one to the high word.
+        let mut cpu = cpu_with(&[0x00CD_0205]);
+        cpu.corcon = CORCON_SATDW;
+        cpu.acc_a = 0x120F_FF00;
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.w[5], 0x0121, "SAC.R rounds");
+
+        // SAC.R example 2: this value fits the signed 32-bit range, so it is
+        // not saturated; the low word rounds 0xF4C0 up.
+        let mut cpu = cpu_with(&[0x00CD_8635]);
+        cpu.corcon = CORCON_SATDW;
+        cpu.acc_b = acc40(0xFF, 0xF891, 0x8F4C);
+        cpu.w[5] = 0x0C00;
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.data_read(0x0C00).unwrap(), 0x8919);
+        assert_eq!(cpu.w[5], 0x0C02);
+    }
+
+    #[test]
+    fn dsp_saturation_modes_follow_corcon() {
+        // MPY W4*W4, A with W4 = 0x8000 (-1.0): the fractional product is
+        // exactly +2^31, outside the 1.31 range.
+        let cases = [
+            (
+                0x0000u16,
+                0x8000_0000i64,
+                true,
+                false,
+                "disabled: guard bits",
+            ),
+            (
+                CORCON_SATA,
+                0x7FFF_FFFF,
+                false,
+                true,
+                "normal: clamp to 1.31",
+            ),
+            (
+                CORCON_SATA | CORCON_ACCSAT,
+                0x8000_0000,
+                true,
+                false,
+                "super: 9.31",
+            ),
+        ];
+        for (corcon, expected, oa, sa, name) in cases {
+            let mut cpu = cpu_with(&[0xF00111]);
+            cpu.corcon = corcon;
+            cpu.w[4] = 0x8000;
+            let mut bus = SystemBus::new();
+            step(&mut cpu, &mut bus);
+            assert_eq!(cpu.acc_a, expected, "{name}");
+            let sr = cpu.data_read(SFR_SR).unwrap();
+            assert_eq!(sr & SR_OA != 0, oa, "{name}: OA");
+            assert_eq!(sr & SR_SA != 0, sa, "{name}: SA");
+            assert_eq!(
+                sr & SR_OAB != 0,
+                sr & (SR_OA | SR_OB) != 0,
+                "{name}: OAB derived"
+            );
+        }
+    }
+
+    #[test]
+    fn dsp_sa_sb_are_sticky_and_clearable_through_sr() {
+        let mut cpu = cpu_with(&[0xF00111, 0xC00112]);
+        cpu.corcon = CORCON_SATA;
+        cpu.w[4] = 0x8000;
+        cpu.w[5] = 0;
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus); // saturates -> SA
+        assert_ne!(cpu.data_read(SFR_SR).unwrap() & SR_SA, 0);
+        step(&mut cpu, &mut bus); // non-saturating MAC
+        assert_ne!(cpu.data_read(SFR_SR).unwrap() & SR_SA, 0, "SA is sticky");
+        // Clearing SAB clears SA and SB.
+        let sr = cpu.data_read(SFR_SR).unwrap();
+        cpu.data_write(SFR_SR, sr & !SR_SAB).unwrap();
+        assert_eq!(
+            cpu.data_read(SFR_SR).unwrap() & (SR_SA | SR_SB | SR_SAB),
+            0,
+            "SAB clear clears the sticky bits"
+        );
+        // Writing SAB = 1 cannot set SA/SB (read-only).
+        cpu.data_write(SFR_SR, SR_SAB).unwrap();
+        assert_eq!(cpu.data_read(SFR_SR).unwrap() & (SR_SA | SR_SB | SR_SAB), 0);
+    }
+
+    #[test]
+    fn dsp_individual_status_bits_clear_independently() {
+        // Saturate both accumulators: MPY W4*W4, A and MPY W4*W4, B with
+        // W4 = 0x8000 produce +2^31 (the 1.31 clamp).
+        let mut cpu = cpu_with(&[0xF00111, 0xF08111]); // MPY sq A, MPY sq B
+        cpu.corcon = CORCON_SATA | CORCON_SATB;
+        cpu.w[4] = 0x8000;
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        step(&mut cpu, &mut bus);
+        let sr = cpu.data_read(SFR_SR).unwrap();
+        assert_ne!(sr & SR_SA, 0, "ACCA saturated");
+        assert_ne!(sr & SR_SB, 0, "ACCB saturated");
+
+        // A read-modify-write that clears SA alone: the SAB bit reads back
+        // as 1, and the write must still clear SA while keeping SB
+        // (DS70000157G §2.16.4 Note 2).
+        let sr = cpu.data_read(SFR_SR).unwrap();
+        cpu.data_write(SFR_SR, (sr & !SR_SA) | SR_SB | SR_SAB)
+            .unwrap();
+        let sr = cpu.data_read(SFR_SR).unwrap();
+        assert_eq!(sr & SR_SA, 0, "SA cleared on its own");
+        assert_ne!(sr & SR_SB, 0, "SB kept");
+        assert_ne!(sr & SR_SAB, 0, "SAB follows SB");
+
+        // Clearing SB alone works the same way; a written 1 to SA cannot
+        // set a flag that is 0.
+        let sr = cpu.data_read(SFR_SR).unwrap();
+        cpu.data_write(SFR_SR, (sr & !SR_SB) | SR_SA | SR_SAB)
+            .unwrap();
+        let sr = cpu.data_read(SFR_SR).unwrap();
+        assert_eq!(sr & (SR_SA | SR_SB), 0);
+        assert_eq!(sr & SR_SAB, 0);
+    }
+
+    #[test]
+    fn dsp_clr_b_clears_only_accb_and_its_flags() {
+        // CLR B, [W8]+=2, W4, W13 (xc16-as 0xC38050).
+        let mut cpu = cpu_with(&[0x00C3_8050]);
+        cpu.corcon = 0x0000;
+        cpu.w[8] = 0x0A00;
+        cpu.w[13] = 0x0020;
+        cpu.acc_a = 0x3290_5968;
+        cpu.acc_b = 0x1234_5678;
+        cpu.sr |= SR_OA | SR_SA | SR_OB | SR_SB;
+        cpu.refresh_dsp_status();
+        cpu.data_write(0x0A00, 0x4321).unwrap();
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.acc_b, 0, "ACCB cleared");
+        assert_eq!(cpu.acc_a, 0x3290_5968, "ACCA untouched");
+        assert_eq!(cpu.w[4], 0x4321, "X prefetch");
+        assert_eq!(cpu.w[8], 0x0A02);
+        assert_eq!(cpu.w[13], 0x3290, "rounded ACCA write-back");
+        let sr = cpu.data_read(SFR_SR).unwrap();
+        assert_eq!(sr & (SR_OB | SR_SB), 0, "ACCB flags cleared");
+        assert_ne!(sr & (SR_OA | SR_SA), 0, "ACCA flags untouched");
+        assert_ne!(sr & SR_OAB, 0, "OAB still follows OA");
+        assert_ne!(sr & SR_SAB, 0, "SAB still follows SA");
+    }
+
+    #[test]
+    fn dsp_lac_and_sac_register_offset_mode() {
+        // lac [W4+W5], A (xc16-as 0xCA2864): EA = 0x0B00.
+        let mut cpu = cpu_with(&[0x00CA_2864]);
+        cpu.corcon = 0x0000;
+        cpu.w[4] = 0x0A00;
+        cpu.w[5] = 0x0100;
+        cpu.data_write(0x0B00, 0x1234).unwrap();
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.acc_a, 0x1234_0000);
+        assert_eq!(cpu.w[4], 0x0A00, "register-offset mode does not update Ws");
+        assert_eq!(cpu.w[5], 0x0100, "nor Wb");
+
+        // sac A, [W5+W6] (xc16-as 0xCC3065): EA = 0x0D00.
+        let mut cpu = cpu_with(&[0x00CC_3065]);
+        cpu.corcon = 0x0000;
+        cpu.acc_a = 0x1234_0000;
+        cpu.w[5] = 0x0C00;
+        cpu.w[6] = 0x0100;
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.data_read(0x0D00).unwrap(), 0x1234);
+        assert_eq!(cpu.w[5], 0x0C00, "register-offset mode does not update Wd");
+        assert_eq!(cpu.w[6], 0x0100);
+    }
+
+    #[test]
+    fn dsp_rounding_modes_differ_only_on_a_tie() {
+        // ACCA = 0x0000_1000_8000: the low word is exactly 0x8000 and the
+        // high word is even.
+        for (rnd, expected, name) in [
+            (0u16, 0x1000u16, "convergent rounds a tie to even"),
+            (CORCON_RND, 0x1001, "biased rounds a tie up"),
+        ] {
+            let mut cpu = cpu_with(&[0x00CD_0005]); // SAC.R A, #0, W5
+            cpu.corcon = rnd;
+            cpu.acc_a = 0x1000_8000;
+            let mut bus = SystemBus::new();
+            step(&mut cpu, &mut bus);
+            assert_eq!(cpu.w[5], expected, "{name}");
+        }
+    }
+
+    #[test]
+    fn dsp_unsigned_and_integer_modes_follow_corcon() {
+        // MPY W4*W4, A: US = 1, integer mode -> 0xFFFF * 0xFFFF.
+        let mut cpu = cpu_with(&[0xF00111]);
+        cpu.corcon = CORCON_US | CORCON_IF;
+        cpu.w[4] = 0xFFFF;
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.acc_a, 0xFFFE_0001, "unsigned 16x16 product");
+        assert_ne!(
+            cpu.data_read(SFR_SR).unwrap() & SR_OA,
+            0,
+            "the product needs the guard bits"
+        );
+    }
+
+    #[test]
+    fn dsp_awb_indirect_post_increment() {
+        // MOVSAC A, [W8]+=2, W4, [W10]-=6, W5, [W13]+=2 stores the other
+        // accumulator (B) through the pointer in W13.
+        let mut cpu = cpu_with(&[0x00C7_0455]);
+        cpu.corcon = 0x0000;
+        cpu.w[8] = 0x0A00;
+        cpu.w[10] = 0x0B00;
+        cpu.w[13] = 0x0900;
+        cpu.acc_b = 0x2000_0000;
+        cpu.data_write(0x0A00, 0x1111).unwrap();
+        cpu.data_write(0x0B00, 0x2222).unwrap();
+        cpu.data_write(0x0900, 0xFFFF).unwrap();
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.data_read(0x0900).unwrap(), 0x2000, "ACCB written back");
+        assert_eq!(cpu.w[13], 0x0902, "pointer post-incremented");
+        assert_eq!(cpu.w[4], 0x1111);
+        assert_eq!(cpu.w[5], 0x2222);
+        assert_eq!(cpu.w[10], 0x0AFA, "post-decrement by 6");
+    }
+
+    #[test]
+    fn dsp_prefetch_covers_every_x_and_y_operation() {
+        // (xop, base register, expected delta)
+        let cases = [
+            (0u32, 8usize, 0i32),
+            (1, 8, 2),
+            (2, 8, 4),
+            (3, 8, 6),
+            (5, 8, -6),
+            (6, 8, -4),
+            (7, 8, -2),
+            (8, 9, 0),
+            (9, 9, 2),
+            (10, 9, 4),
+            (11, 9, 6),
+            (13, 9, -6),
+            (14, 9, -4),
+            (15, 9, -2),
+        ];
+        for (xop, base, delta) in cases {
+            let word = movsac_word(false, 0, 0, xop, 0b0100, 2);
+            let mut cpu = cpu_with(&[word]);
+            let start = 0x0A00u16;
+            cpu.w[base] = start;
+            cpu.data_write(start, 0xBEEF).unwrap();
+            let mut bus = SystemBus::new();
+            step(&mut cpu, &mut bus);
+            assert_eq!(cpu.w[4], 0xBEEF, "xop {xop:#x} reads [W{base}]");
+            assert_eq!(
+                cpu.w[base],
+                (i32::from(start) + delta) as u16,
+                "xop {xop:#x} updates W{base}"
+            );
+        }
+        // Y operations use W10/W11.
+        let y_cases = [
+            (0u32, 10usize, 0i32),
+            (1, 10, 2),
+            (2, 10, 4),
+            (3, 10, 6),
+            (5, 10, -6),
+            (6, 10, -4),
+            (7, 10, -2),
+            (8, 11, 0),
+            (9, 11, 2),
+            (10, 11, 4),
+            (11, 11, 6),
+            (13, 11, -6),
+            (14, 11, -4),
+            (15, 11, -2),
+        ];
+        for (yop, base, delta) in y_cases {
+            let word = movsac_word(false, 0, 0, 0b0100, yop, 2);
+            let mut cpu = cpu_with(&[word]);
+            let start = 0x0C00u16;
+            cpu.w[base] = start;
+            cpu.data_write(start, 0xCAFE).unwrap();
+            let mut bus = SystemBus::new();
+            step(&mut cpu, &mut bus);
+            assert_eq!(cpu.w[4], 0xCAFE, "yop {yop:#x} reads [W{base}]");
+            assert_eq!(
+                cpu.w[base],
+                (i32::from(start) + delta) as u16,
+                "yop {yop:#x} updates W{base}"
+            );
+        }
+        // The W12 register-offset mode uses a signed 16-bit offset and does
+        // not update either register.
+        let mut cpu = cpu_with(&[movsac_word(false, 0, 0, 0b1100, 0b0100, 2)]);
+        cpu.w[9] = 0x0A00;
+        cpu.w[12] = 0xFF00;
+        cpu.data_write(0x0900, 0x1234).unwrap();
+        let mut bus = SystemBus::new();
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.w[4], 0x1234);
+        assert_eq!(cpu.w[9], 0x0A00);
+        assert_eq!(cpu.w[12], 0xFF00);
     }
 }
