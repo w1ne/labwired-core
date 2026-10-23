@@ -62,7 +62,7 @@ cargo test -p labwired-core --test strict_onboarding
 #   PASS  2/2 checks · io-smoke · 64 steps · 0.00s
 #   [PASS] dspic33fj32mc204 is strictly onboarded.
 cargo test -p labwired-core --test board_coverage_ratchet      # 4 passed
-cargo test -p labwired-core --test session_catalog             # 1 passed (48-chip catalog incl. PIC24)
+cargo test -p labwired-core --test session_catalog             # 1 passed (51-chip catalog incl. PIC24)
 cargo test -p labwired-core --test chip_conformance            # 8 passed (declared-only board regenerated)
 cargo test -p labwired-core --test cpu_trace_conformance       # 3 passed (Pic24 emits the full trace contract)
 cargo test -p labwired-core --test register_compliance         # 1 passed
