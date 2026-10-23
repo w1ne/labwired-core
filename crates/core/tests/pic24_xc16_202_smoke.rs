@@ -68,7 +68,7 @@ fn boot(steps: usize) -> (Pic24, Vec<u8>) {
 
 #[test]
 fn xc16_202_firmware_boots_and_writes_hi_to_uart() {
-    let (mut cpu, bytes) = boot(300);
+    let (_cpu, bytes) = boot(300);
     assert_eq!(
         bytes, b"HI",
         "the XC16 startup must reach main() and transmit both bytes"
