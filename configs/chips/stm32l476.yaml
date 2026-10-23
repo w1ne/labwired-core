@@ -20,6 +20,16 @@ registers_count: 200
 # says so with its own `cpu_hz:` override, which is what that key is for.
 cpu_hz: 80_000_000
 
+# GPIO supply and digital input thresholds (ratios of io_voltage_v), used when
+# co-simulation turns a circuit node voltage into the level the firmware reads.
+# DS10198 Rev 8 (STM32L476xx), section 6.3.14, Table 70 "I/O static
+# characteristics", 1.62 V < VDDIOx < 3.6 V, all I/Os except BOOT0 (tested in
+# production): VIL max 0.3·VDDIOx, VIH min 0.7·VDDIOx.
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.3
+  vih: 0.7
+
 flash:
   base: 0x08000000
   # 1 MiB, spelled in KB because `parse_size` reads MB as 10^6 — "1MB" would be
