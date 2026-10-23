@@ -1,0 +1,30 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+#
+# dsPIC33FJ32MC202 (DS70283H). M0: boot + UART1 TX. The 202 is the 28-pin
+# sibling of the onboarded dsPIC33FJ32MC204 and shares its PIC24/dsPIC33F
+# core, 32 KB flash, 2 KB SRAM, UART1/SPI1/I2C1/ADC1/Timers/PWM/QEI register
+# map and instruction set. Differences that matter later: the package exposes
+# AN0-AN5 only (no AN6-AN8), and the PWM/QEI/port pin set is smaller; those
+# package-level differences are not modelled in M0.
+# - flash 32 KB, data SRAM 2 KB at 0x0800 (X 0x0800-0x0BFF, Y 0x0C00-0x0FFF)
+# - UART1 SFRs: U1MODE 0x0220, U1STA 0x0222, U1TXREG 0x0224
+# - CPU clock: part rated to 40 MIPS; boards override via the system manifest.
+#
+# Peripherals are CPU-internal (the PIC24 core owns UART/timers/GPIO/PWM/QEI/
+# ADC/SPI/I2C); M0 deliberately declares no bus peripherals, matching the
+# 204's UART-only bring-up before its GPIO pads landed in M1b.
+name: dspic33fj32mc202
+arch: pic24
+core: dspic33f
+cpu_hz: 40000000
+flash:
+  base: 0x000000
+  size: "32KB"
+ram:
+  base: 0x000800
+  size: "2KB"
+peripherals: []
