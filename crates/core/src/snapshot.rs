@@ -51,7 +51,7 @@ pub enum CpuSnapshot {
     RiscV(RiscVCpuSnapshot),
     XtensaLx7(XtensaLx7CpuSnapshot),
     Avr(AvrCpuSnapshot),
-    Pic24(Pic24CpuSnapshot),
+    Pic24(Box<Pic24CpuSnapshot>),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -236,6 +236,96 @@ pub struct Pic24CpuSnapshot {
     pub qei_timer_prev: bool,
     #[serde(default)]
     pub qei_ext_psc: u16,
+    // M3: ADC1 / SPI1 / I2C1.
+    #[serde(default)]
+    pub ad1con1: u16,
+    #[serde(default)]
+    pub ad1con2: u16,
+    #[serde(default)]
+    pub ad1con3: u16,
+    #[serde(default)]
+    pub ad1chs123: u16,
+    #[serde(default)]
+    pub ad1chs0: u16,
+    #[serde(default)]
+    pub ad1pcfgl: u16,
+    #[serde(default)]
+    pub ad1cssl: u16,
+    #[serde(default)]
+    pub adc_buf: [u16; 16],
+    #[serde(default)]
+    pub adc_analog: [u16; 16],
+    /// 0 = off, 1 = sampling, 2 = converting.
+    #[serde(default)]
+    pub adc_state: u8,
+    #[serde(default)]
+    pub adc_conv_remaining: u32,
+    #[serde(default)]
+    pub adc_sample_remaining: u32,
+    #[serde(default)]
+    pub adc_conv_count: u16,
+    #[serde(default)]
+    pub adc_seq_pos: u8,
+    #[serde(default)]
+    pub adc_buf_pos: u8,
+    #[serde(default)]
+    pub adc_half: u8,
+    #[serde(default)]
+    pub adc_alt: bool,
+    #[serde(default)]
+    pub adc_scan_next: u8,
+    #[serde(default)]
+    pub spi1stat: u16,
+    #[serde(default)]
+    pub spi1con1: u16,
+    #[serde(default)]
+    pub spi1con2: u16,
+    #[serde(default)]
+    pub spi1_rx: u16,
+    #[serde(default)]
+    pub spi1_tx: u16,
+    #[serde(default)]
+    pub spi1_tx_pending: Option<u16>,
+    #[serde(default)]
+    pub spi1_busy: u32,
+    #[serde(default)]
+    pub spi1_shifting: bool,
+    #[serde(default)]
+    pub i2c1con: u16,
+    #[serde(default)]
+    pub i2c1stat: u16,
+    #[serde(default)]
+    pub i2c1add: u16,
+    #[serde(default)]
+    pub i2c1msk: u16,
+    #[serde(default)]
+    pub i2c1brg: u16,
+    #[serde(default)]
+    pub i2c1rcv: u16,
+    #[serde(default)]
+    pub i2c1trn: u16,
+    #[serde(default)]
+    pub i2c_target: Option<usize>,
+    #[serde(default)]
+    pub i2c_reading: bool,
+    #[serde(default)]
+    pub i2c_addressed: bool,
+    #[serde(default)]
+    pub i2c_10bit_prefix: Option<u16>,
+    #[serde(default)]
+    pub i2c_busy: u32,
+    /// 0 = start, 1 = repeated start, 2 = transmit, 3 = receive, 4 = ack,
+    /// 5 = stop.
+    #[serde(default)]
+    pub i2c_op: Option<u8>,
+    #[serde(default)]
+    pub ifs1: u16,
+    #[serde(default)]
+    pub iec1: u16,
+    #[serde(default)]
+    pub ipc3: u16,
+    #[serde(default)]
+    pub ipc4: u16,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

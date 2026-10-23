@@ -1,4 +1,4 @@
-# Validation — dsPIC33FJ32MC204 (M0 + M1a + M1b)
+# Validation — dsPIC33FJ32MC204 (M0 … M3)
 
 Claims, evidence, and what is explicitly **not** claimed yet.
 
@@ -19,7 +19,7 @@ Claims, evidence, and what is explicitly **not** claimed yet.
 | **DSP MAC class (M1c)**: `MAC`/`MPY`/`MPY.N`/`MSC` (incl. squares), `CLR`, `MOVSAC`, `LAC`, `SAC`, `SAC.R`, X/Y prefetch + W12 offset, write-back, CORCON modes, OA/OB/SA/SB | unit + integration | `dsp_*` tests (PRM golden vectors); `crates/core/tests/pic24_xc16_dsp.rs` (real XC16 firmware) |
 | **Motor Control PWM + QEI (M2)**: MCPWM1 time base (free/single/up-down/double), 3 duty generators + buffering/IUE, complementary/independent pairs with dead time, P1OVDCON override, FLTA1 faults, PWM1IF postscale; QEI1 x2/x4, POS1CNT/MAX1CNT, match/index resets with IMV, CNTERR/CEID, digital filter, timer mode; IFS3/IEC3/IPC14/15 | unit + integration | `pwm_*`/`qei_*`/`m2_*` tests; `crates/core/tests/pic24_xc16_m2.rs` (real XC16 firmware) |
 | DSP accumulator arithmetic (`ADD`/`SUB`/`MAX`/`MIN`/`SFTAC`/`FBCL` on ACCA/ACCB) | **not modelled** | decode error on unsupported opcodes; no claims |
-| ADC/SPI/I2C (M3) | **not modelled** | decode error on unsupported opcodes; no claims |
+| **ADC1 + SPI1 + I2C1 (M3)**: 10/12-bit ADC (FORM, SAMP/DONE/ASAM, SSRC manual/TMR3/PWM1/internal, CHPS, scan, BUFM, SMPI, TAD/SAMC), SPI master/slave (8/16-bit, prescalers, SPIROV, loopback), I2C master (start/restart/stop, ACKSTAT, BRG, TMP102) and slave seams; IFS1/IEC1/IPC3/4 | unit + integration | `adc_*`/`spi_*`/`i2c_*` tests; `crates/core/tests/pic24_xc16_m3.rs` (real XC16 firmware + TMP102) |
 | GPIO ports A/B/C: TRISx/PORTx/LATx/ODCx, 44-pin masks (M1b) | unit-tested | `gpio_output_drives_the_pad_model`, `port_read_sees_external_levels_and_own_latch`; `peripherals::pic24_gpio` tests |
 | PPS slice: RPINR7 inputs, RPOR0-12 outputs, RP0-15 = RB0-15 / RP16-25 = RC0-9 (M1b) | unit-tested | exercised by the OC/IC tests below |
 | Input capture 1/2: edge modes, prescalers, 4-deep FIFO, ICI, ICOV/ICBNE (M1b) | unit-tested | `ic1_captures_tmr2_on_a_rising_edge_of_rp0`, `ic_interrupt_divider_and_overflow_rules` |
@@ -251,6 +251,51 @@ Approximations are listed in `docs/pic24-m0-reference.md` §3.3 and the
 module docs (PWM polarity/PWMPIN from the erased-device FPOR, center-aligned
 endpoint order, index recognition by the INDX edge plus IMV, diagonal
 quadrature transitions ignored, per-step input sampling).
+
+## M3 evidence (ADC1 + SPI1 + I2C1, verified 2026-10-23, branch `feat/pic24-m3-adc-spi-i2c`)
+
+ADC1 is implemented from DS70183D §16, SPI1 from DS70206 §18 and I2C1 from
+DS70000195 §19, with the SFR maps and vectors from DS70283H (Tables 4-11,
+4-13, 4-15, 7-1) and the pin data from Table 1-1.
+
+```bash
+# 1. Unit tests — ADC/SPI/I2C plus every earlier milestone
+cargo test -p labwired-core --lib pic24
+#   test result: ok. 89 passed; 0 failed
+
+# 2. The real XC16 M3 firmware samples AN4, loops SPI and reads the TMP102
+cargo test -p labwired-core --test pic24_xc16_m3
+#   xc16_m3_firmware_samples_adc_loops_spi_and_reads_tmp102 ... ok
+```
+
+The M3 firmware checks: `ADC1BUF0 = 0x2AA` for injected AN4, the SPI1
+loopback byte `0xA5`, the TMP102 temperature bytes `0x19`/`0x00` (25.0 °C),
+no failure code, `"M3 OK\n"` on UART1 and the programmed register image
+(`ADON`, `AD1PCFGL = 0x01EF`, `CH0SA = 4`, `SPI1CON1 = 0x013F`, `SPIEN`).
+The devices are attached from `examples/dspic33fj32mc204/system.yaml`
+(`tmp102` on `i2c1`, `loopback` on `spi1`) through the same factory calls
+the session builder uses. A second test,
+`example_system_builder_attaches_the_m3_devices`, runs the whole session
+path (`build_machine` from the example system) and checks the same UART
+message, so the manifest attach code is covered end to end.
+
+The unit tests additionally cover all four FORM formats in 10/12-bit modes,
+ASAM/SSRC = 111, the TMR3 trigger, the scan list, the split buffer and SMPI,
+SPI byte/word transfers with the prescaler timing, SPIROV, the SPI slave
+seam, an I2C TMP102 pointer-write/read transaction, a missing-slave NACK,
+I2COV, the I2C slave seams and the IFS1/IPC3/IPC4 vectors (SPI1E = 17,
+SPI1 = 18, ADC1 = 21, SI2C1 = 24, MI2C1 = 25).
+
+Booting the firmware also closed four base-ISA gaps the XC16 startup and
+`__data_init` use: the 3-operand `SUB` (`0101 0www …`), `INC Ws,Wd`
+(`1110 1000 0B…`), and the WREG forms of `CLR Wd` / `SETM Wd`
+(`1110 1011 …`), all pinned by xc16-as words in
+`base_sub_inc_clr_and_setm_wreg_forms`.
+
+Approximations are listed in `docs/pic24-m0-reference.md` §3.4 and the
+module docs (ADRC = 1 TAD, leftover conversion cycles, INT0/SIMSAM triggers,
+SPI CS routing, I²C ACK delivery, 10-bit address matching, ANx/SPI/I²C pin
+electrical mapping).
 
 ## Unsupported-instruction audit
 

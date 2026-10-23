@@ -221,6 +221,97 @@ the INDX rising edge plus the IMV match rather than latching a quadrature
 transition (§15.5.3.1); diagonal quadrature transitions are ignored; PWM/QEI
 inputs are sampled once per retired step.
 
+### 3.4 ADC1 + SPI1 + I2C1 (M3, implemented 2026-10-23)
+
+Sources: DS70183D (Section 16, ADC), DS70206 (Section 18, SPI),
+DS70000195 (Section 19, I2C) and DS70283H Tables 4-11/4-13/4-15 (SFR maps),
+7-1 (vectors) and 1-1 (pins).
+
+**SFRs.** ADC1: `ADC1BUF0-15 0x0300-0x031E`, `AD1CON1 0x0320`,
+`AD1CON2 0x0322`, `AD1CON3 0x0324`, `AD1CHS123 0x0326`,
+`AD1CHS0 0x0328`, `AD1PCFGL 0x032C`, `AD1CSSL 0x0330`. SPI1:
+`SPI1STAT 0x0240`, `SPI1CON1 0x0242`, `SPI1CON2 0x0244`, `SPI1BUF 0x0248`.
+I2C1: `I2C1RCV 0x0200`, `I2C1TRN 0x0202`, `I2C1BRG 0x0204`,
+`I2C1CON 0x0206`, `I2C1STAT 0x0208`, `I2C1ADD 0x020A`,
+`I2C1MSK 0x020C`. Interrupts: `IFS1 0x0086` (MI2C1 bit 1, SI2C1 bit 0),
+`IEC1 0x0096`, `IPC3 0x00AA` (AD1IP 6-4) and `IPC4 0x00AC`
+(MI2C1IP 6-4, SI2C1IP 2-0); `IFS0` carries AD1IF (13), SPI1IF (10) and
+SPI1EIF (9). Vectors: SPI1E 17, SPI1 18, ADC1 21, SI2C1 24, MI2C1 25.
+
+**Pins.** AN0-AN8 = RA0, RA1, RB0-RB3, RC0-RC2 (DS70283H Table 1-1);
+`AD1PCFGL` bit n = 1 makes ANn digital. SPI1 SDI/SDO/SCK/SS and I2C1
+SDA/SCL are PPS-remappable inputs/outputs; this model does not route them
+through pads (see approximations).
+
+**ADC model.** `AD1CON1`: ADON, AD12B, FORM (00 unsigned integer,
+01 signed integer, 10 unsigned fraction, 11 signed fraction), SSRC, SIMSAM,
+ASAM, SAMP and DONE. Writing ADON 0→1 starts sampling; with SSRC = 000
+software clears SAMP to start the conversion; SSRC = 111 uses the internal
+counter (`SAMC × TAD`) and ASAM restarts sampling after each sequence.
+SSRC = 010 is triggered by the TMR3 period match and SSRC = 011 by the
+PWM1 period/half-period match; SSRC = 001 (INT0) is not driven because the
+INT0 pin edge is not modelled. TAD = `(ADCS + 1) × TCY`; a 10-bit
+conversion is 12 TAD and a 12-bit conversion 14 TAD (DS70183D §16.4.4).
+FORM results are left-justified for the fractional modes. CHPS selects
+1-4 channels per sequence (CH0 + CH1-3 from CH123SA); CSCNA walks the
+AD1CSSL scan list for CH0; ALTS alternates MUX A/B per sequence. Results
+land in the 16-word buffer; BUFM splits it into two 8-word halves whose
+fill status is the read-only BUFS bit. SMPI sets the interrupt period
+(every SMPI+1 sequences, as DS70183D §16.4.6 defines for devices without
+DMA). Negative inputs (CH0NA, CH123NA) subtract the selected ANx code,
+clamped to the converter range; PCFG = 1 reads 0.
+
+**SPI model.** Master writes to SPI1BUF start a transfer whose duration is
+`bits × 2 × PPRE × SPRE` TCY (PPRE 1/4/16/64, SPRE 1-8; DS70283H
+Register 17-2). MODE16 exchanges two bytes (high first). SPITBF stays set
+while the word shifts; the received word lands in SPI1BUF, sets SPIRBF and
+SPI1IF; an unread previous word sets SPIROV and SPI1EIF instead. A second
+write while shifting is held in a one-deep TX slot. SPI1CON2 keeps the
+framed-mode bits (the framing protocol itself is not driven). Slave mode
+loads TXB on a SPI1BUF write and is clocked through the
+`spi_slave_clock()` test seam. Attached `SpiDevice`s are called once per
+byte (first device only; no SS routing), so the example declares a wire
+loopback (`type: "loopback"`) that returns every byte.
+
+**I2C model.** `I2C1CON` implements I2CEN, SEN, RSEN, PEN, RCEN and
+ACKEN/ACKDT with the datasheet's hardware-clear behaviour; each operation
+takes its wire time (`2 × (BRG + 1)` TCY per SCL, nine SCL for a byte and
+one for start/stop). A transmit byte is the address after a start/restart
+(7-bit; `11110xx` starts a 10-bit prefix decode, but the `I2cDevice` slave
+contract is a 7-bit `u8` address, so a 10-bit address cannot match a device
+here) and data thereafter. Address matching uses
+`I2cDevice::claims_address`, then `select_address`/`start`; writes go to
+`write()`, RCEN reads from `read()`, and PEN calls `stop()`. ACKSTAT
+reports a missing slave's NACK; RBF/TBF track the buffers; reading
+I2C1RCV clears RBF; I2COV/IWCOL/BCL are clear-on-0. The TMP102 model is
+attached by the session builder from the manifest's `i2c1` entries
+(`type: "tmp102"`, pointer register + 12-bit left-justified temperature).
+Slave mode is register-level plus test seams (`i2c_slave_address`,
+`i2c_slave_write`, `i2c_slave_read`, `i2c_slave_stop`); there is no
+external master model.
+
+**Verification.** Unit tests cover all four FORM formats in 10- and 12-bit
+modes, ASAM/SSRC = 111, the TMR3 trigger, the scan list, the split buffer,
+SMPI, SPI byte/word transfers with the prescaler timing, SPIROV, the slave
+seam, an I2C TMP102 temperature read, a missing-slave NACK, I2COV and the
+slave seams, plus the IFS1/IPC3/IPC4 vectors. Booting the firmware also
+added four base-ISA encodings the XC16 startup uses: 3-operand `SUB`,
+`INC Ws,Wd`, and the WREG forms of `CLR Wd`/`SETM Wd` (xc16-as words). The real XC16 firmware
+`xc16-m3-adc-spi-i2c.c` samples AN4, loops 0xA5 through SPI1 and reads the
+TMP102; `crates/core/tests/pic24_xc16_m3.rs` checks the results,
+`"M3 OK\n"` on UART1 and the register image.
+
+**Approximations** (documented, not guessed): ADRC = 1 (internal RC)
+reuses the `(ADCS + 1) × TCY` TAD formula because the RC frequency is not
+characterized here; a conversion's leftover cycles at a step boundary are
+not carried into the next channel; the ADC's INT0 trigger and the
+simultaneous-sample (SIMSAM) sample instant are not modelled (the channels
+convert sequentially); SPI SS/CS routing is absent (first device answers,
+the example uses a wire loopback); I2C ACK bits are not delivered to the
+slave model (the TMP102 does not need them); 10-bit addressing is decoded
+but cannot match a 7-bit slave address; electrical pin mapping of
+ANx/SPI/I2C is not routed through the pad model.
+
 ## 4. Engine integration map (M0 wiring)
 
 | Concern | File | Change |

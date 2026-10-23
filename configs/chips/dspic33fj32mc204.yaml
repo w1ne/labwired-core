@@ -12,6 +12,10 @@
 # generators, complementary/independent pairs with dead time, override,
 # FLTA1 fault states, PWM1IF postscale) and QEI1 (x2/x4, POSCNT/MAXCNT,
 # match/index reset, CNTERR, filter, 16-bit timer); IFS3/IEC3/IPC14/15.
+# M3: ADC1 (10/12-bit, FORM, SAMP/DONE/ASAM, manual/TMR3/PWM1/internal
+# triggers, CHPS, CSCNA scan, BUFM, SMPI), SPI1 (master/slave, 8/16-bit,
+# prescalers, SPIROV, attached devices) and I2C1 (master start/restart/stop,
+# ACKSTAT, BRG, TMP102 attach, slave seams); IFS1/IEC1/IPC3/4.
 # - flash 32 KB, data SRAM 2 KB at 0x0800 (X 0x0800-0x0BFF, Y 0x0C00-0x0FFF)
 # - UART1 SFRs: U1MODE 0x0220, U1STA 0x0222, U1TXREG 0x0224
 # - CPU clock: part rated to 40 MIPS; boards override via the system manifest.

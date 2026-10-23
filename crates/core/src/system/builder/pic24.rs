@@ -34,8 +34,13 @@ pub(super) fn build(req: BuildRequest<'_>) -> anyhow::Result<BuiltMachine> {
     };
     let (chip, manifest) = (req.chip, req.system);
 
-    let mut bus =
-        SystemBus::from_config(chip, manifest).map_err(|e| anyhow!("Bus config error: {e:#}"))?;
+    // M3: SPI1/I2C1 are CPU-internal, so the generic bus must not try to
+    // attach their `external_devices` to bus peripherals. Build the bus
+    // without those entries and attach them to the CPU below.
+    let mut bus_manifest = manifest.clone();
+    bus_manifest.external_devices.clear();
+    let mut bus = SystemBus::from_config(chip, &bus_manifest)
+        .map_err(|e| anyhow!("Bus config error: {e:#}"))?;
 
     let console = ConsoleCapture::for_manifest(manifest);
     let uart_sink = console.heard_sink();
@@ -60,6 +65,51 @@ pub(super) fn build(req: BuildRequest<'_>) -> anyhow::Result<BuiltMachine> {
     cpu.load_program_image(&program_image);
     // UART1 TX is on the CPU, not a bus UART peripheral.
     cpu.set_serial_sink(uart_sink.clone());
+
+    // M3: the SPI1/I2C1 controllers live on the CPU too, so the manifest's
+    // devices are attached to it rather than to bus peripherals.
+    for device in &manifest.external_devices {
+        match device.connection.as_str() {
+            "i2c1" => {
+                let model = crate::peripherals::components::i2c_factory::build_external_i2c_device(
+                    &device.r#type,
+                    &device.id,
+                    &device.config,
+                )
+                .ok_or_else(|| {
+                    anyhow!(
+                        "unsupported I2C device type '{}' on i2c1 (device '{}')",
+                        device.r#type,
+                        device.id
+                    )
+                })?;
+                cpu.attach_i2c_device(model);
+            }
+            "spi1" => {
+                let kind = device.r#type.to_ascii_lowercase();
+                if kind == "loopback" || kind == "spi_loopback" {
+                    let cs = device.route.get("cs").cloned().unwrap_or_default();
+                    cpu.attach_spi_device(Box::new(
+                        crate::peripherals::spi_loopback::SpiLoopback::new(cs),
+                    ));
+                } else {
+                    return Err(anyhow!(
+                        "unsupported SPI device type '{}' on spi1 (device '{}'); the PIC24 \
+                         M3 model supports a wire loopback only",
+                        device.r#type,
+                        device.id
+                    ));
+                }
+            }
+            other => {
+                return Err(anyhow!(
+                    "external device '{}' uses connection '{other}', which the PIC24 \
+                     model does not provide (only i2c1 and spi1 are CPU-internal)",
+                    device.id
+                ))
+            }
+        }
+    }
 
     let boxed: Box<dyn Cpu> = Box::new(cpu);
     let machine = Machine::new(boxed, bus);
