@@ -3727,14 +3727,17 @@ impl Pic24 {
         // which it actually writes as `INC [Wn],[Wn]`.)
         if word & 0x00FF_0000 == 0x00E8_0000 {
             let byte = word & 0x0000_4000 != 0;
+            // Bit 15 separates INC (clear) from INC2 (set); the two share
+            // the rest of the encoding (DS70157D §5).
+            let increment = if word & 0x0000_8000 != 0 { 2 } else { 1 };
             let qqq = (word >> 11) & 0x7;
             let d = ((word >> 7) & 0xF) as usize;
             let ppp = (word >> 4) & 0x7;
             let sreg = (word & 0xF) as usize;
             let v = self.read_operand(sreg, ppp, byte)?;
-            // INC affects C, DC, N, OV and Z (DS70283H Table 22-2 #39);
+            // INC/INC2 affect C, DC, N, OV and Z (DS70283H Table 22-2 #39);
             // XC16 relies on C for its 32-bit increment idiom.
-            let r = self.alu_add(v, 1, 0, byte);
+            let r = self.alu_add(v, increment, 0, byte);
             self.write_operand(d, qqq, r, byte)?;
             self.pc = pc.wrapping_add(PC_UNITS_PER_INSTRUCTION);
             return Ok(1);
@@ -4071,7 +4074,12 @@ impl Pic24 {
     }
 
     fn adc_channels_per_sample(&self) -> u8 {
-        (((self.ad1con2 >> 8) & 0x3) + 1) as u8
+        // CHPS: 00 = CH0, 01 = CH0/CH1, 1x = CH0-CH3 (DS70183D Table 16-6).
+        match (self.ad1con2 >> 8) & 0x3 {
+            0 => 1,
+            1 => 2,
+            _ => 4,
+        }
     }
 
     /// The next channel in the AD1CSSL scan list (CSCNA), or CH0SA when the
@@ -5231,6 +5239,19 @@ mod tests {
         assert_ne!(cpu.sr & SR_C, 0, "INC carry");
         assert_ne!(cpu.sr & SR_DC, 0, "INC digit carry");
         assert_ne!(cpu.sr & SR_Z, 0);
+
+        // INC2 W9,W9 adds two, not one (DS70157D §5, 0x00E8_8489).
+        let mut cpu = cpu_with(&[0x00E8_8489]);
+        cpu.w[9] = 1;
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.w[9], 3, "INC2 adds 2");
+        assert_eq!(cpu.sr & SR_C, 0);
+
+        let mut cpu = cpu_with(&[0x00E8_8489]);
+        cpu.w[9] = 0xFFFE;
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.w[9], 0, "INC2 wraps");
+        assert_ne!(cpu.sr & SR_C, 0, "INC2 carry");
 
         // CLR/SETM affect no status flags (DS70283H Table 22-2 #15/#69).
         let mut cpu = cpu_with(&[0x00EB_0000]);
@@ -7367,6 +7388,25 @@ mod tests {
             0x0180,
             "AN3 - AN6"
         );
+    }
+
+    #[test]
+    fn adc_chps_four_channels_converts_ch0_through_ch3() {
+        // CHPS = 1x means CH0-CH3 (DS70183D Table 16-6), not three channels.
+        let mut cpu = adc_cpu(0, false);
+        cpu.ad1con2 = 2 << 8;
+        cpu.ad1chs0 = 4; // CH0 = AN4
+        cpu.ad1chs123 = 0; // CH1/2/3 = AN0/1/2
+        cpu.ad1pcfgl = 0x01FF & !((1 << 4) | (1 << 0) | (1 << 1) | (1 << 2));
+        cpu.set_adc_analog(4, 0x2AA);
+        cpu.set_adc_analog(0, 0x100);
+        cpu.set_adc_analog(1, 0x200);
+        cpu.set_adc_analog(2, 0x300);
+        adc_convert(&mut cpu);
+        assert_eq!(cpu.data_read(SFR_ADC1BUF0).unwrap(), 0x02AA);
+        assert_eq!(cpu.data_read(SFR_ADC1BUF0 + 2).unwrap(), 0x0100);
+        assert_eq!(cpu.data_read(SFR_ADC1BUF0 + 4).unwrap(), 0x0200);
+        assert_eq!(cpu.data_read(SFR_ADC1BUF0 + 6).unwrap(), 0x0300);
     }
 
     #[test]
