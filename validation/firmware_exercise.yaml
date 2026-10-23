@@ -566,12 +566,11 @@ chips:
 
   - id: dspic33fj32mc204
     arch: pic24
-    headline: "M0 + M1a + M1b bring-up: boot (PC 0 -> reset GOTO) with UART1 TX, timers T1/T2/T3, the interrupt fabric (IVT/AIVT vector fetch), GPIO ports A/B/C, PPS, input capture 1/2 and output compare 1/2. The committed XC16 v1.70 firmware (xc16-uart-smoke.c, stock linker script) boots on the model and prints `HI` (crates/core/tests/pic24_xc16_elf_boot.rs); the hand fixture runs in the PR shards (crates/core/tests/pic24_m0_smoke.rs) and through examples/dspic33fj32mc204/io-smoke.yaml in strict_onboarding. Motor Control PWM/QEI, ADC/SPI/I2C and the DSP MAC are unmodeled (docs/pic24-m0-reference.md), so no advanced blocks exist to list."
+    headline: "M0 + M1a + M1b + M1c bring-up: boot (PC 0 -> reset GOTO) with UART1 TX, timers T1/T2/T3, the interrupt fabric (IVT/AIVT vector fetch), GPIO ports A/B/C, PPS, input capture 1/2, output compare 1/2, and the DSP MAC class (MAC/MPY/MPY.N/MSC/CLR/MOVSAC/LAC/SAC/SAC.R with X/Y prefetches, write-back, CORCON saturation/rounding and OA/OB/SA/SB). Two committed XC16 v1.70 firmwares boot on the model: xc16-uart-smoke.c prints `HI` (crates/core/tests/pic24_xc16_elf_boot.rs) and xc16-dsp-mac.c runs the DS70000157G example-1 MAC sequence (crates/core/tests/pic24_xc16_dsp.rs); the hand fixture runs in the PR shards (crates/core/tests/pic24_m0_smoke.rs) and through examples/dspic33fj32mc204/io-smoke.yaml in strict_onboarding. Motor Control PWM/QEI, ADC/SPI/I2C and the DSP accumulator arithmetic (ADD/SUB on ACCA/ACCB) are unmodeled (docs/pic24-m0-reference.md), so no advanced blocks exist to list."
     functional: []
     advanced_unit_only: []
     advanced_dead: []
     shim: []
-
   - id: litex-vexriscv
     arch: riscv32im
     headline: "L1 smoke, SIM-DERIVED; no beyond-rubric content. Boot, the LiteX UART console and the countdown-timer one-shot are proven by tests/fixtures/litex-vexriscv-smoke.elf and examples/litex-vexriscv/io-smoke.yaml. SPI flash, Ethernet and MMCM are declared stubs and timer IRQ delivery is not wired (examples/litex-vexriscv/VALIDATION.md), so no advanced blocks exist to list."
