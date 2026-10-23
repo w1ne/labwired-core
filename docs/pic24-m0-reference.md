@@ -101,6 +101,58 @@ This matches the datasheet wording "addresses are incremented or decremented
 by two during code execution" (DS70283H §4.2.3) and the reset/vector figures
 (DS70283H §4 and §7.1).
 
+### 3.2 DSP MAC class (M1c, verified 2026-10-23 against DS70000157G examples and real XC16 output)
+
+Implemented in `crates/core/src/cpu/pic24.rs`; encodings are cross-checked
+against `xc16-as` output in `dsp_words_match_xc16_as`, and the semantics are
+pinned by the PRM's own worked examples in the `dsp_*` unit tests.
+
+| Instruction | Encoding (24-bit) | Notes |
+| :--- | :--- | :--- |
+| `MAC Wm*Wn, Acc {,AWB}` | `1100 0mmm A0xx yyii iijj jjaa` | `mmm` = Table 5-12 |
+| `MPY Wm*Wn, Acc` | `1100 0mmm A0xx yyii iijj jj11` | product replaces Acc |
+| `MPY.N Wm*Wn, Acc` | `1100 0mmm A1xx yyii iijj jj11` | negated product |
+| `MSC Wm*Wn, Acc {,AWB}` | `1100 0mmm A1xx yyii iijj jjaa` | Acc −= product |
+| `MAC/MPY Wm*Wm, Acc` | `1111 00mm A0xx yyii iijj jj0b` | square, no write-back |
+| `CLR Acc {,AWB}` | `1100 0011 A0xx yyii iijj jjaa` | clears Acc and its OA/SA (OB/SB) |
+| `MOVSAC Acc {,AWB}` | `1100 0111 A0xx yyii iijj jjaa` | prefetch/write-back only |
+| `LAC Ws/[...], {#Slit4,} Acc` | `1100 1010 Awww wrrr rggg ssss` | 32-bit shifter |
+| `SAC Acc, {#Slit4,} Wd/[...]` | `1100 1100 Awww wrrr rhhh dddd` | 40-bit shift, SATDW |
+| `SAC.R Acc, {#Slit4,} Wd/[...]` | `1100 1101 Awww wrrr rhhh dddd` | + RND rounding |
+
+**Prefetch fields** (Tables 5-7…5-10): `iiii`/`jjjj` select the X (W8/W9) and
+Y (W10/W11) operation — no prefetch (`0100`), `[Wn]`, `[Wn]±2/4/6`, and the
+`[W9+W12]`/`[W11+W12]` register-offset mode (16-bit signed offset, no
+register update); `xx`/`yy` select the W4–W7 destinations. `aa` is the
+write-back selector (Table 5-13): `W13`, `[W13]+=2`, none.
+
+**CORCON modes**: `IF` (bit 0, fractional multiplies are left-shifted one),
+`RND` (bit 1, biased vs convergent rounding), `SATDW` (bit 5),
+`SATB`/`SATA` (bits 6/7), `ACCSAT` (bit 4, 9.31 vs 1.31), `US` (bit 12,
+unsigned multiplies).
+
+**Status** (SR high byte, §2.16.4): `OA`/`OB` = guard-bit overflow (set when
+saturation is disabled or in super mode), `SA`/`SB` = sticky saturation,
+`OAB`/`SAB` derived; a write to SR can only clear them, and clearing `SAB`
+clears `SA`/`SB`. `CLR` clears the accumulator's own pair.
+
+**Rounding** (`SAC.R`, write-back): conventional rounds up when the low word
+is ≥ 0x8000; convergent rounds a 0x8000 tie to even. **SATDW** saturates a
+store to 0x7FFF/0x8000 when the shifted value needs the guard bits (PRM SAC
+examples 1–2).
+
+Approximations (documented, not guessed — no PRM example covers them):
+`LAC`'s shifter is 32-bit (its examples 1–2 pin this); with super saturation
+and an overflowing left shift the exact 40-bit result is kept; `MPY.N`
+follows its "OA, OB, OAB" status list literally (no saturation/SA/SB);
+write-back applies SATDW like `SAC.R`.
+
+Verification: 16 `dsp_*` unit tests use the PRM's MAC/MPY/MPY.N/MSC/CLR/
+MOVSAC/LAC/SAC/SAC.R examples as golden vectors, plus saturation-mode,
+rounding-tie, unsigned, sticky-flag and full prefetch-table coverage; a real
+XC16 v1.70 firmware (`firmware/xc16-dsp-mac.c`) boots and reproduces the
+example-1 sequence (`crates/core/tests/pic24_xc16_dsp.rs`).
+
 ## 4. Engine integration map (M0 wiring)
 
 | Concern | File | Change |
