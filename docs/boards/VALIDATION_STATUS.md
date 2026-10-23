@@ -50,7 +50,7 @@ The models column is a content digest over everything that board's `models` list
 | `nucleo-g071rb` | 🟡 smoke-manual | — | `354776217a6e438d` | no silicon capture |
 | `esp32c6-devkitc` | 🟡 smoke-manual | — | `6bf4bc0838f602a6` | no silicon capture |
 | `litex-vexriscv` | 🟡 smoke-manual | — | `63a4e7787665a4f7` | no silicon capture |
-| `arty-litex-vexriscv` | 🟡 smoke-manual | — | `f591f50a095f47e4` | no silicon capture |
+| `arty-litex-vexriscv` | 🟡 smoke-manual | — | `f901af05f68f8393` | no silicon capture |
 
 ## `nrf52840` — 🟢 silicon-verified
 
