@@ -1,0 +1,25 @@
+# LabWired - Arduino Nano 33 BLE IO smoke
+#
+# Build: cargo build -p firmware-arduino-nano-33-ble-smoke --release --target thumbv7em-none-eabihf
+#
+# The firmware boots the nRF52840 from flash at 0x0 and prints over UARTE0
+# (the board's D0/D1 `Serial1` pins). Each `out=` field is the GPIO0 OUT
+# register read back from the model: the RGB channels are active low, so
+# `rgb=red out=00012040` means bit 24 (red) is cleared while green/blue (bits
+# 16/6) stay set, and the built-in D13 LED (bit 13) is on.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabihf/release/firmware-arduino-nano-33-ble-smoke"
+  system: "./system.yaml"
+limits:
+  max_steps: 4000000
+assertions:
+  - uart_contains: "ARDUINO NANO 33 BLE SMOKE"
+  - uart_ordered:
+      - "cpu=nrf52840 uart=uarte0"
+      - "rgb=red out=00012040"
+      - "rgb=green out=01002040"
+      - "rgb=blue out=01012000"
+      - "hb=0 out=01012000"
+      - "hb=1 out=01012000"
+  - expected_stop_reason: max_steps

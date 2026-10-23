@@ -366,7 +366,15 @@ impl SystemBus {
             e.irq = irq;
             e.dev = dev;
             e.ticks_remaining = 0;
-            e.clock_gate = None;
+            // A base-matched replacement (the core-tied SCB/NVIC/DWT/ITM
+            // swap in `configure_cortex_m`) swaps the model behind an entry
+            // whose clock gate `resolve_clock_gates` may already have
+            // resolved. Keep that gate: dropping it silently ungates the
+            // window (the pre-#1443 in-place swap never touched it). A
+            // name-only replacement keeps its historical reset.
+            if !match_base {
+                e.clock_gate = None;
+            }
         } else {
             self.peripherals.push(PeripheralEntry {
                 name: name.to_string(),
@@ -1465,5 +1473,47 @@ mod tests {
         // The widened window is only visible if `rebuild_peripheral_ranges`
         // ran after the replacement.
         assert_eq!(bus.find_peripheral_index(0x4000_01F0), Some(idx));
+    }
+
+    #[test]
+    fn replace_or_add_peripheral_at_keeps_a_resolved_clock_gate() {
+        use crate::bus::{RccClockBit, ResolvedClockGate};
+        use crate::peripherals::stub::StubPeripheral;
+
+        let mut bus = SystemBus::new();
+        bus.add_peripheral(
+            "gated",
+            0x4000_0000,
+            0x100,
+            None,
+            Box::new(StubPeripheral::new(0)),
+        );
+        let idx = bus.find_peripheral_index_by_name("gated").unwrap();
+        bus.peripherals[idx].clock_gate = Some(ResolvedClockGate {
+            requires: vec![RccClockBit {
+                controller_idx: 0,
+                reg_offset: 0x18,
+                bit: 3,
+            }],
+            gclk_id: None,
+            gclk_idx: None,
+        });
+
+        // Gates are resolved before `configure_cortex_m` swaps the core-tied
+        // models in by base; the swap must not silently ungate the window.
+        bus.replace_or_add_peripheral_at(
+            "gated",
+            0x4000_0000,
+            0x100,
+            None,
+            Box::new(StubPeripheral::new(0xAA)),
+        );
+        let idx = bus.find_peripheral_index_by_name("gated").unwrap();
+        let gate = bus.peripherals[idx]
+            .clock_gate
+            .as_ref()
+            .expect("base-matched replacement must keep the resolved clock gate");
+        assert_eq!(gate.requires.len(), 1);
+        assert_eq!(gate.requires[0].bit, 3);
     }
 }
