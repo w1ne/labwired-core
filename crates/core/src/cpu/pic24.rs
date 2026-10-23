@@ -4,7 +4,7 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
-//! PIC24 / dsPIC33F CPU — **M0 + M1a + M1b + M1c subset** for the
+//! PIC24 / dsPIC33F CPU — **M0 + M1a + M1b + M1c + M2 subset** for the
 //! dsPIC33FJ32MC204 class.
 //!
 //! Scope:
@@ -27,14 +27,43 @@
 //!   (Table 5-13), CORCON fractional/integer, signed/unsigned, rounding and
 //!   saturation modes, and the OA/OB/SA/SB/OAB/SAB status bits. Verified
 //!   against the DS70000157G worked examples and real XC16 firmware.
+//! * **M2** — Motor Control PWM 1 (free-running/single-event/up-down time
+//!   base, PTOPS/PTCKPS, three duty generators with buffering and IUE, the
+//!   complementary/independent output pairs on PWM1H1/L1 = RB14/RB15,
+//!   PWM1H2/L2 = RB12/RB13, PWM1H3/L3 = RB10/RB11, dead-time units A/B,
+//!   P1OVDCON override, FLTA1 fault states with latched/cycle-by-cycle
+//!   restore, PWM1IF postscaling) and the Quadrature Encoder Interface 1
+//!   (x2/x4 decoding, POS1CNT/MAX1CNT, match and index resets with IMV,
+//!   UPDN/UPDN pin, CNTERR/CEID, the digital filter and the 16-bit
+//!   timer/counter mode). IFS3/IEC3/IPC14/IPC15 are wired into the interrupt
+//!   fabric (PWM1 = vector 65, QEI = 66, FLTA1 = 71).
 //!
 //! Not yet modelled — unsupported opcodes return
-//! [`SimulationError::DecodeError`] rather than guessing: PWM/QEI (M2), ADC/
-//! SPI/I2C (M3), PSV/EDS windows, the DSP *accumulator* arithmetic
+//! [`SimulationError::DecodeError`] rather than guessing: ADC/SPI/I2C (M3),
+//! PSV/EDS windows, the DSP *accumulator* arithmetic
 //! (`ADD`/`SUB`/`MAX`/`MIN`/`SFTAC`/`FBCL` on ACCA/ACCB). Change
 //! notification (CNENx/CNPUx) and the remaining PPS functions (UART/SPI/
 //! INT/QEI routing) are not modelled: the PPS registers store values, but
-//! only the IC1/IC2 inputs and OC1/OC2 outputs are consumed.
+//! only the IC1/IC2 inputs, OC1/OC2 outputs, PWM outputs, QEI inputs and the
+//! UPDN output are consumed.
+//!
+//! Known M2 approximations (documented, not guessed; the PWM/QEI state
+//! machines follow DS70187E §14 and DS70208C §15):
+//! * PWM output polarity is active-high and PWMPIN = 1 is assumed (the
+//!   erased-device FPOR values), so PWM1CON1 resets to 0 and the pins are
+//!   GPIO until PENyH/PENyL are set.
+//! * Center-aligned counting keeps both endpoint ticks (the 2*(PTPER+1)
+//!   period of Equation 14-2); the compare is evaluated with the phase
+//!   direction before the endpoint flip. The FRM's text does not pin the
+//!   exact endpoint tick order.
+//! * QEI index recognition uses the rising edge of the filtered INDX input
+//!   with the IMV match, rather than latching a quadrature-state transition
+//!   (DS70208C §15.5.3.1); diagonal (illegal) quadrature transitions are
+//!   ignored.
+//! * The QEI digital filter advances once per instruction cycle with the
+//!   QECK divider and accepts a level after three equal samples.
+//! * PWM/QEI inputs are sampled once per retired instruction step (the same
+//!   granularity as the M1b capture units).
 //!
 //! Known M1c approximations (documented, not guessed; every other M1c
 //! behaviour is pinned by a DS70000157G example — see the tests):
@@ -134,6 +163,9 @@
 //! `REPEAT`/`DO`, `PUSH`/`POP`, `RESET`/`BREAK`.
 //!
 //! UART1 registers (DS70283H): `U1MODE 0x0220`, `U1STA 0x0222`, `U1TXREG 0x0224`.
+//! M2 peripherals (DS70283H Tables 4-8/4-10): `P1TCON 0x01C0` …
+//! `P1DC3 0x01DA`, `QEI1CON 0x01E0` … `MAX1CNT 0x01E6`; the QEI inputs are
+//! mapped by `RPINR14/15` and the FLTA1 fault input by `RPINR12`.
 
 use crate::snapshot::{CpuSnapshot, Pic24CpuSnapshot};
 use crate::{Bus, Cpu, SimResult, SimulationConfig, SimulationError, SimulationObserver};
@@ -282,15 +314,26 @@ pub const TCON_TCKPS_SHIFT: u16 = 4;
 /// T2CON.T32 — Timer2/3 32-bit pair mode.
 pub const T2CON_T32: u16 = 0x0008;
 
-/// IFS0 flag bit and vector number for each modelled source (DS70283H §7.3.1).
+/// IFS0 flag bit and vector number for each modelled source (DS70283H
+/// Table 7-1). The vector number is the table's *Vector Number* column
+/// (`IRQ + 8`); IFS0 bit 4 is reserved, so IC2/OC2/T2/T3 are one vector
+/// higher than the bit index + 7 (fixed in M2: the previous table was off
+/// by one for those four sources).
 pub const IRQ_INT0: (u16, u32) = (0, 8);
 pub const IRQ_IC1: (u16, u32) = (1, 9);
 pub const IRQ_OC1: (u16, u32) = (2, 10);
 pub const IRQ_T1: (u16, u32) = (3, 11);
-pub const IRQ_IC2: (u16, u32) = (5, 12);
-pub const IRQ_OC2: (u16, u32) = (6, 13);
-pub const IRQ_T2: (u16, u32) = (7, 14);
-pub const IRQ_T3: (u16, u32) = (8, 15);
+pub const IRQ_IC2: (u16, u32) = (5, 13);
+pub const IRQ_OC2: (u16, u32) = (6, 14);
+pub const IRQ_T2: (u16, u32) = (7, 15);
+pub const IRQ_T3: (u16, u32) = (8, 16);
+
+/// IFS3 flag bit and vector number for the M2 sources (DS70283H Table 7-1:
+/// PWM1 = vector 65, QEI = vector 66, FLTA1 = vector 71). Their IRQ numbers
+/// (57/58/63) drive the IPC mapping: IPC14 fields 1/2 and IPC15 field 3.
+pub const IRQ_PWM1: (u16, u32) = (8, 65);
+pub const IRQ_QEI: (u16, u32) = (9, 66);
+pub const IRQ_FLTA1: (u16, u32) = (15, 71);
 
 /// INTCON1.NSTDIS — nesting disable (bit 15).
 pub const INTCON1_NSTDIS: u16 = 0x8000;
@@ -447,6 +490,81 @@ pub const OCCON_OCM_MASK: u16 = 0x0007;
 /// PPS output function codes (DS70283H Table 10-2).
 pub const PPS_OUT_OC1: u16 = 0b1_0010;
 pub const PPS_OUT_OC2: u16 = 0b1_0011;
+/// UPDN (QEI direction) output function (DS70283H Table 10-2: 11010).
+pub const PPS_OUT_UPDN: u16 = 0b1_1010;
+
+// ── M2: Motor Control PWM (DS70283H Table 4-8) ──────────────────────────────
+
+pub const SFR_P1TCON: u16 = 0x01C0;
+pub const SFR_P1TMR: u16 = 0x01C2;
+pub const SFR_P1TPER: u16 = 0x01C4;
+pub const SFR_P1SECMP: u16 = 0x01C6;
+pub const SFR_PWM1CON1: u16 = 0x01C8;
+pub const SFR_PWM1CON2: u16 = 0x01CA;
+pub const SFR_P1DTCON1: u16 = 0x01CC;
+pub const SFR_P1DTCON2: u16 = 0x01CE;
+pub const SFR_P1FLTACON: u16 = 0x01D0;
+pub const SFR_P1OVDCON: u16 = 0x01D4;
+pub const SFR_P1DC1: u16 = 0x01D6;
+pub const SFR_P1DC2: u16 = 0x01D8;
+pub const SFR_P1DC3: u16 = 0x01DA;
+
+/// P1TCON bits (DS70187E Register 14-1).
+pub const PTCON_PTEN: u16 = 0x8000;
+pub const PTCON_PTSIDL: u16 = 0x2000;
+pub const PTCON_PTOPS_MASK: u16 = 0x00F0;
+pub const PTCON_PTCKPS_MASK: u16 = 0x000C;
+pub const PTCON_PTMOD_MASK: u16 = 0x0003;
+
+/// PWM1CON2 bits (DS70187E Register 14-6).
+pub const PWM2CON_IUE: u16 = 0x0004;
+pub const PWM2CON_OSYNC: u16 = 0x0002;
+pub const PWM2CON_UDIS: u16 = 0x0001;
+
+/// The six PWM1 output pins on the 44-pin package (DS70283H Table 1-1):
+/// (port index, bit) for pairs 1-3, high then low.
+pub const PWM1_PINS: [((usize, u8), (usize, u8)); 3] = [
+    ((1, 14), (1, 15)), // PWM1H1/L1 = RB14/RB15
+    ((1, 12), (1, 13)), // PWM1H2/L2 = RB12/RB13
+    ((1, 10), (1, 11)), // PWM1H3/L3 = RB10/RB11
+];
+
+// ── M2: Quadrature Encoder Interface (DS70283H Table 4-10) ─────────────────
+
+pub const SFR_QEI1CON: u16 = 0x01E0;
+pub const SFR_DFLT1CON: u16 = 0x01E2;
+pub const SFR_POS1CNT: u16 = 0x01E4;
+pub const SFR_MAX1CNT: u16 = 0x01E6;
+
+/// QEI1CON bits (DS70208C Register 15-1).
+pub const QEICON_CNTERR: u16 = 0x8000;
+pub const QEICON_INDEX: u16 = 0x1000;
+pub const QEICON_UPDN: u16 = 0x0800;
+pub const QEICON_QEIM_MASK: u16 = 0x0700;
+pub const QEICON_SWPAB: u16 = 0x0080;
+pub const QEICON_PCDOUT: u16 = 0x0040;
+pub const QEICON_TQGATE: u16 = 0x0020;
+pub const QEICON_TQCKPS_MASK: u16 = 0x0018;
+pub const QEICON_POSRES: u16 = 0x0004;
+pub const QEICON_TQCS: u16 = 0x0002;
+pub const QEICON_UDSRC: u16 = 0x0001;
+
+/// DFLT1CON bits (DS70208C Register 15-2).
+pub const DFLT_IMV_MASK: u16 = 0x0600;
+pub const DFLT_CEID: u16 = 0x0100;
+pub const DFLT_QEOUT: u16 = 0x0080;
+pub const DFLT_QECK_MASK: u16 = 0x0070;
+
+/// PPS inputs used by M2 (DS70283H Table 4-2).
+pub const SFR_RPINR12: u16 = 0x0698; // FLTA1R<4:0>
+pub const SFR_RPINR14: u16 = 0x069C; // QEB1R<12:8>, QEA1R<4:0>
+pub const SFR_RPINR15: u16 = 0x069E; // INDX1R<4:0>
+
+/// IFS3/IEC3/IPC14/IPC15 (DS70283H Table 7-2).
+pub const SFR_IFS3: u16 = 0x008A;
+pub const SFR_IEC3: u16 = 0x009A;
+pub const SFR_IPC14: u16 = 0x00C0;
+pub const SFR_IPC15: u16 = 0x00C2;
 
 /// Input capture FIFO depth (DS70198D §12.4: four levels).
 pub const IC_FIFO_DEPTH: usize = 4;
@@ -553,6 +671,68 @@ pub struct Pic24 {
     rpor: [u16; RPOR_COUNT],
     ic: [IcChannel; 2],
     oc: [OcChannel; 2],
+    // M2: Motor Control PWM (MCPWM1) and QEI1.
+    p1tcon: u16,
+    /// P1TMR: bit 15 = PTDIR (read-only), bits 14-0 = the count.
+    p1tmr: u16,
+    /// P1TPER buffer (loaded into `p1tper_active` at the period boundary).
+    p1tper: u16,
+    p1tper_active: u16,
+    p1secmp: u16,
+    pwm1con1: u16,
+    pwm1con2: u16,
+    p1dtcon1: u16,
+    p1dtcon2: u16,
+    p1fltacon: u16,
+    p1ovdcon: u16,
+    /// P1DC1-3 buffers.
+    p1dc: [u16; 3],
+    p1dc_active: [u16; 3],
+    /// PWM input-prescaler phase (TCY counts).
+    p1_frac: u16,
+    /// PWM output postscaler counter.
+    p1_post: u8,
+    /// Generator levels (logical active), one per complementary/independent pair.
+    p1_gen: [bool; 3],
+    /// Remaining dead-time cycles before the high/low pin may go active.
+    p1_dt_hi: [u16; 3],
+    p1_dt_lo: [u16; 3],
+    /// FLTA1 currently forces the programmed fault states.
+    p1_fault_force: bool,
+    /// Latched-mode fault that has not been cleared yet.
+    p1_fault_latched: bool,
+    /// Fault released; the outputs resume at the next period/half boundary.
+    p1_fault_release: bool,
+    /// Last sampled FLTA1 *asserted* state (the pin is active low).
+    flta_prev: bool,
+    /// `RPINR12/14/15`: FLTA1 / QEB1,QEA1 / INDX1 input maps.
+    rpinr12: u16,
+    rpinr14: u16,
+    rpinr15: u16,
+    /// IFS3/IEC3/IPC14/IPC15 — PWM1, QEI and FLTA1 interrupts.
+    ifs3: u16,
+    iec3: u16,
+    ipc14: u16,
+    ipc15: u16,
+    qei1con: u16,
+    dflt1con: u16,
+    pos1cnt: u16,
+    max1cnt: u16,
+    /// Last decoded filtered (A<<1)|B quadrature state.
+    qei_prev_ab: u8,
+    /// Last filtered index level (rising-edge detection).
+    qei_index_prev: bool,
+    /// Digital filter: 3-bit histories, clock-divider counters and outputs
+    /// for QEA, QEB and INDX.
+    qei_filt: [u8; 3],
+    qei_filt_cnt: [u16; 3],
+    qei_filt_out: [bool; 3],
+    /// QEI timer-mode input prescaler phase.
+    qei_frac: u16,
+    /// Last raw QEA level (timer external clock / gate edge detection).
+    qei_timer_prev: bool,
+    /// QEI external-clock prescaler counter.
+    qei_ext_psc: u16,
     /// Port state changed and must be pushed to the pad models.
     pads_dirty: bool,
     serial_sink: Option<Arc<Mutex<Vec<u8>>>>,
@@ -610,6 +790,49 @@ impl Pic24 {
             rpor: [0; RPOR_COUNT],
             ic: [IcChannel::default(), IcChannel::default()],
             oc: [OcChannel::default(), OcChannel::default()],
+            p1tcon: 0,
+            p1tmr: 0,
+            p1tper: 0,
+            p1tper_active: 0,
+            p1secmp: 0,
+            // PWMPIN = 1, HPOL = LPOL = 1 (erased-device configuration):
+            // PWM pins are GPIO until PEN is set, and active is high.
+            pwm1con1: 0,
+            pwm1con2: 0,
+            p1dtcon1: 0,
+            p1dtcon2: 0,
+            p1fltacon: 0,
+            p1ovdcon: 0x3F00,
+            p1dc: [0; 3],
+            p1dc_active: [0; 3],
+            p1_frac: 0,
+            p1_post: 0,
+            p1_gen: [false; 3],
+            p1_dt_hi: [0; 3],
+            p1_dt_lo: [0; 3],
+            p1_fault_force: false,
+            p1_fault_latched: false,
+            p1_fault_release: false,
+            flta_prev: false,
+            rpinr12: 0x001F,
+            rpinr14: 0x1F1F,
+            rpinr15: 0x001F,
+            ifs3: 0,
+            iec3: 0,
+            ipc14: 0,
+            ipc15: 0x4000,
+            qei1con: 0,
+            dflt1con: 0,
+            pos1cnt: 0,
+            max1cnt: 0xFFFF,
+            qei_prev_ab: 0,
+            qei_index_prev: false,
+            qei_filt: [0; 3],
+            qei_filt_cnt: [0; 3],
+            qei_filt_out: [false; 3],
+            qei_frac: 0,
+            qei_timer_prev: false,
+            qei_ext_psc: 0,
             pads_dirty: true,
             serial_sink: None,
             exception_pending: None,
@@ -806,6 +1029,11 @@ impl Pic24 {
     /// (DS70283H Table 10-2: 10010 = OC1, 10011 = OC2).
     fn oc_rp(&self, ch: usize) -> Option<u8> {
         let code = if ch == 0 { PPS_OUT_OC1 } else { PPS_OUT_OC2 };
+        self.pps_out_rp(code)
+    }
+
+    /// Find the RPn whose RPOR field carries `code`.
+    fn pps_out_rp(&self, code: u16) -> Option<u8> {
         for (i, reg) in self.rpor.iter().enumerate() {
             if reg & 0x1F == code {
                 return Some((2 * i) as u8);
@@ -850,6 +1078,23 @@ impl Pic24 {
                 pdrv[port] |= 1 << bit;
             }
         }
+        let (pwm_levels, pwm_mask) = self.pwm_pad_state();
+        for port in 0..3 {
+            pdrv[port] = (pdrv[port] & !pwm_mask[port]) | pwm_levels[port];
+            mask[port] |= pwm_mask[port];
+        }
+        if self.qei1con & QEICON_PCDOUT != 0 {
+            if let Some(rp) = self.pps_out_rp(PPS_OUT_UPDN) {
+                if let Some((port, bit)) = Self::rp_pin(rp) {
+                    mask[port] |= 1 << bit;
+                    if self.qei1con & QEICON_UPDN != 0 {
+                        pdrv[port] |= 1 << bit;
+                    } else {
+                        pdrv[port] &= !(1 << bit);
+                    }
+                }
+            }
+        }
         self.pdrv = pdrv;
         self.pdrv_mask = mask;
         for port in 0..3 {
@@ -864,7 +1109,7 @@ impl Pic24 {
 
     /// Sample the ports once per retired step and run the input capture
     /// channels on the edges (see the module-level latency note).
-    fn sample_capture(&mut self, bus: &dyn Bus) {
+    fn sample_capture(&mut self, bus: &dyn Bus, cycles: u32) {
         let mut sampled = [0u16; 3];
         for (port, slot) in sampled.iter_mut().enumerate() {
             let addr = PIC24_IO_MIRROR_BASE + u64::from(Self::port_base(port)) + 0x02;
@@ -909,6 +1154,664 @@ impl Pic24 {
             if fire {
                 self.ic_capture(ch);
             }
+        }
+        self.sample_qei(cycles);
+    }
+
+    // ── M2: Motor Control PWM (DS70187E §14) ────────────────────────────────
+
+    /// Dead time for unit A (`a = true`) or unit B, in TCY: a 6-bit count
+    /// times the 1/2/4/8 prescaler (DS70187E Register 14-7).
+    fn pwm_dead_time(&self, a: bool) -> u16 {
+        let (ps, val) = if a {
+            ((self.p1dtcon1 >> 6) & 0x3, self.p1dtcon1 & 0x3F)
+        } else {
+            ((self.p1dtcon1 >> 14) & 0x3, (self.p1dtcon1 >> 8) & 0x3F)
+        };
+        val.saturating_mul(1u16 << ps)
+    }
+
+    /// `true` when the pair's active-edge dead time comes from unit A.
+    fn pwm_dt_unit_a(&self, pair: usize, active_edge: bool) -> bool {
+        let bit = if active_edge { 2 * pair + 1 } else { 2 * pair };
+        self.p1dtcon2 & (1 << bit) == 0
+    }
+
+    fn pwm_pair_complementary(&self, pair: usize) -> bool {
+        self.pwm1con1 & (1 << (8 + pair)) == 0
+    }
+
+    fn pwm_pair_enabled(&self, pair: usize) -> (bool, bool) {
+        (
+            self.pwm1con1 & (1 << (4 + pair)) != 0,
+            self.pwm1con1 & (1 << pair) != 0,
+        )
+    }
+
+    /// Drive one generator and arm the dead-time counter for the pin that is
+    /// about to go active (complementary pairs only, DS70187E §14.14).
+    fn pwm_drive(&mut self, pair: usize, active: bool) {
+        if self.p1_gen[pair] == active {
+            return;
+        }
+        self.p1_gen[pair] = active;
+        if !self.pwm_pair_complementary(pair) {
+            return;
+        }
+        if active {
+            let a = self.pwm_dt_unit_a(pair, true);
+            self.p1_dt_hi[pair] = self.pwm_dead_time(a);
+            self.p1_dt_lo[pair] = 0;
+        } else {
+            let a = self.pwm_dt_unit_a(pair, false);
+            self.p1_dt_lo[pair] = self.pwm_dead_time(a);
+            self.p1_dt_hi[pair] = 0;
+        }
+    }
+
+    /// PWM1IF with the PTOPS postscaler (DS70187E §14.9). Single-event and
+    /// double-update modes ignore the postscaler.
+    fn pwm_interrupt(&mut self) {
+        let mode = self.p1tcon & PTCON_PTMOD_MASK;
+        if mode == 1 || mode == 3 {
+            self.ifs3 |= 1 << IRQ_PWM1.0;
+            return;
+        }
+        let post = ((self.p1tcon & PTCON_PTOPS_MASK) >> 4) + 1;
+        self.p1_post = self.p1_post.wrapping_add(1);
+        if u16::from(self.p1_post) >= post {
+            self.p1_post = 0;
+            self.ifs3 |= 1 << IRQ_PWM1.0;
+        }
+    }
+
+    /// A period/zero boundary: latch the buffered period and duty values and
+    /// resume from a fault (DS70187E §14.12, §14.15.3.2).
+    fn pwm_boundary(&mut self) {
+        self.p1tper_active = self.p1tper;
+        if self.pwm1con2 & PWM2CON_UDIS == 0 {
+            self.p1dc_active = self.p1dc;
+        }
+        if self.p1_fault_release {
+            self.p1_fault_release = false;
+            self.p1_fault_force = false;
+        }
+    }
+
+    /// Apply the duty-cycle special cases: 0 is inactive for the whole
+    /// period, values above PxTPER are active for the whole period.
+    fn pwm_apply_duty_extremes(&mut self, tper: u16) {
+        for pair in 0..3 {
+            let dc = self.p1dc_active[pair];
+            if dc == 0 {
+                self.pwm_drive(pair, false);
+            } else if dc > tper {
+                self.pwm_drive(pair, true);
+            }
+        }
+    }
+
+    /// One PWM time-base tick (DS70187E §14.7/§14.8/§14.11).
+    fn pwm_tick(&mut self) {
+        let mode = self.p1tcon & PTCON_PTMOD_MASK;
+        let tper = self.p1tper_active & 0x7FFF;
+        let mut count = self.p1tmr & 0x7FFF;
+        let mut down = self.p1tmr & 0x8000 != 0;
+        self.pwm_apply_duty_extremes(tper);
+        match mode {
+            0 | 1 => {
+                if count == tper {
+                    count = 0;
+                    self.pwm_boundary();
+                    self.pwm_interrupt();
+                    for pair in 0..3 {
+                        let dc = self.p1dc_active[pair];
+                        self.pwm_drive(pair, dc != 0);
+                    }
+                    if mode == 1 {
+                        self.p1tcon &= !PTCON_PTEN;
+                        for pair in 0..3 {
+                            self.pwm_drive(pair, false);
+                        }
+                    }
+                } else {
+                    count += 1;
+                    for pair in 0..3 {
+                        let dc = self.p1dc_active[pair];
+                        if dc != 0 && dc <= tper && count == dc {
+                            self.pwm_drive(pair, false);
+                        }
+                    }
+                }
+            }
+            2 | 3 => {
+                if !down {
+                    for pair in 0..3 {
+                        let dc = self.p1dc_active[pair];
+                        if dc != 0 && dc <= tper && count == dc {
+                            self.pwm_drive(pair, false);
+                        }
+                    }
+                    if count >= tper {
+                        down = true;
+                        if mode == 3 {
+                            self.pwm_boundary();
+                            self.pwm_interrupt();
+                        }
+                    } else {
+                        count += 1;
+                    }
+                } else {
+                    for pair in 0..3 {
+                        let dc = self.p1dc_active[pair];
+                        if dc != 0 && count == dc {
+                            self.pwm_drive(pair, true);
+                        }
+                    }
+                    if count == 0 {
+                        down = false;
+                        self.pwm_boundary();
+                        self.pwm_interrupt();
+                    } else {
+                        count -= 1;
+                    }
+                }
+            }
+            _ => {}
+        }
+        self.p1tmr = (if down { 0x8000 } else { 0 }) | (count & 0x7FFF);
+    }
+
+    /// Sample FLTA1 (active low) and update the fault force/latch state.
+    fn pwm_fault_sample(&mut self, bus: &dyn Bus) {
+        let old_force = self.p1_fault_force;
+        let level = self.rp_input_level(bus, self.rpinr12 & 0x1F);
+        let asserted = !level;
+        let enabled = self.p1fltacon & 0x7 != 0;
+        let latched_mode = self.p1fltacon & 0x0080 == 0;
+        if enabled && asserted && !self.flta_prev {
+            self.ifs3 |= 1 << IRQ_FLTA1.0;
+            if latched_mode {
+                self.p1_fault_latched = true;
+            }
+        }
+        if asserted {
+            // A new fault cancels a pending boundary release.
+            self.p1_fault_release = false;
+        } else if self.p1_fault_latched && self.ifs3 & (1 << IRQ_FLTA1.0) == 0 {
+            // Latched mode: pin high and flag cleared → release at the next
+            // period/half-period boundary.
+            self.p1_fault_latched = false;
+            self.p1_fault_release = true;
+        } else if !self.p1_fault_latched && self.p1_fault_force {
+            // Cycle-by-cycle: released when the pin goes high.
+            self.p1_fault_release = true;
+        }
+        self.p1_fault_force = if !enabled {
+            false
+        } else {
+            asserted || self.p1_fault_latched || self.p1_fault_release
+        };
+        if !enabled {
+            self.p1_fault_latched = false;
+            self.p1_fault_release = false;
+        }
+        if self.p1tcon & PTCON_PTEN == 0 {
+            self.p1_fault_force = false;
+            self.p1_fault_latched = false;
+            self.p1_fault_release = false;
+        }
+        self.flta_prev = asserted;
+        if self.p1_fault_force != old_force {
+            self.pads_dirty = true;
+        }
+    }
+
+    /// Advance the PWM time base by `cycles` TCY (called once per retired
+    /// step, before the pad drive is published).
+    fn advance_mcpwm(&mut self, cycles: u32, bus: &dyn Bus) {
+        self.pwm_fault_sample(bus);
+        if self.p1tcon & PTCON_PTEN == 0 {
+            for pair in 0..3 {
+                self.p1_gen[pair] = false;
+                self.p1_dt_hi[pair] = 0;
+                self.p1_dt_lo[pair] = 0;
+            }
+            return;
+        }
+        let psc = 1u32 << (2 * u32::from((self.p1tcon & PTCON_PTCKPS_MASK) >> 2));
+        for _ in 0..cycles {
+            for pair in 0..3 {
+                self.p1_dt_hi[pair] = self.p1_dt_hi[pair].saturating_sub(1);
+                self.p1_dt_lo[pair] = self.p1_dt_lo[pair].saturating_sub(1);
+            }
+            self.p1_frac += 1;
+            if u32::from(self.p1_frac) >= psc {
+                self.p1_frac = 0;
+                self.pwm_tick();
+            }
+        }
+        // The generator/dead-time state may have changed this step.
+        self.pads_dirty = true;
+    }
+
+    /// The six PWM pin levels and their driver mask, after dead time,
+    /// override and fault logic (DS70187E §14.10/§14.11/§14.15).
+    fn pwm_pad_state(&self) -> ([u16; 3], [u16; 3]) {
+        let mut levels = [0u16; 3];
+        let mut mask = [0u16; 3];
+        for (pair, (high_pin, low_pin)) in PWM1_PINS.iter().enumerate() {
+            let (en_h, en_l) = self.pwm_pair_enabled(pair);
+            if !en_h && !en_l {
+                continue;
+            }
+            let complementary = self.pwm_pair_complementary(pair);
+            let gen = self.p1_gen[pair];
+            let running = self.p1tcon & PTCON_PTEN != 0;
+            // With the time base disabled both pins are inactive; only an
+            // override or fault can still drive them (DS70187E §14.11.1).
+            let mut act_h = running && gen;
+            let mut act_l = running && if complementary { !gen } else { gen };
+            if complementary && running {
+                if gen {
+                    act_h = self.p1_dt_hi[pair] == 0;
+                    act_l = false;
+                } else {
+                    act_l = self.p1_dt_lo[pair] == 0;
+                    act_h = false;
+                }
+            }
+            // Override: POVD = 0 drives the pin from POUT.
+            if self.p1ovdcon & (1 << (9 + 2 * pair)) == 0 {
+                act_h = self.p1ovdcon & (1 << (1 + 2 * pair)) != 0;
+            }
+            if self.p1ovdcon & (1 << (8 + 2 * pair)) == 0 {
+                act_l = self.p1ovdcon & (1 << (2 * pair)) != 0;
+            }
+            // Fault A has priority over override and the generator.
+            if self.p1_fault_force && self.p1fltacon & (1 << pair) != 0 {
+                act_h = self.p1fltacon & (1 << (9 + 2 * pair)) != 0;
+                act_l = self.p1fltacon & (1 << (8 + 2 * pair)) != 0;
+                if complementary && act_h && act_l {
+                    act_l = false;
+                }
+            }
+            let (hp, hb) = *high_pin;
+            let (lp, lb) = *low_pin;
+            if en_h {
+                mask[hp] |= 1 << hb;
+                if act_h {
+                    levels[hp] |= 1 << hb;
+                }
+            }
+            if en_l {
+                mask[lp] |= 1 << lb;
+                if act_l {
+                    levels[lp] |= 1 << lb;
+                }
+            }
+        }
+        (levels, mask)
+    }
+
+    /// `P1TCON` write: enable/disable, mode and prescaler changes restart
+    /// the time-base counters (DS70187E §14.8.2).
+    fn pwm_configure_tcon(&mut self, val: u16) {
+        let old = self.p1tcon;
+        let new = val
+            & (PTCON_PTEN | PTCON_PTSIDL | PTCON_PTOPS_MASK | PTCON_PTCKPS_MASK | PTCON_PTMOD_MASK);
+        self.p1tcon = new;
+        self.p1_frac = 0;
+        self.p1_post = 0;
+        if new & PTCON_PTEN == 0 {
+            for pair in 0..3 {
+                self.p1_gen[pair] = false;
+                self.p1_dt_hi[pair] = 0;
+                self.p1_dt_lo[pair] = 0;
+            }
+            self.p1tper_active = self.p1tper;
+            self.p1dc_active = self.p1dc;
+            self.p1_fault_force = false;
+            self.p1_fault_latched = false;
+            self.p1_fault_release = false;
+        } else if old & PTCON_PTEN == 0 && new & PTCON_PTMOD_MASK <= 1 {
+            // Edge-aligned modes start the period (and the active outputs)
+            // when the time base is enabled at TMR = 0.
+            for pair in 0..3 {
+                let dc = self.p1dc_active[pair];
+                self.pwm_drive(pair, dc != 0);
+            }
+        }
+        self.pads_dirty = true;
+    }
+
+    /// `P1DCy` write: the buffer updates immediately when the time base is
+    /// off or IUE = 1, otherwise at the next duty update point (§14.12).
+    fn pwm_duty_write(&mut self, pair: usize, val: u16) {
+        self.p1dc[pair] = val;
+        if self.p1tcon & PTCON_PTEN == 0 || self.pwm1con2 & PWM2CON_IUE != 0 {
+            self.p1dc_active[pair] = val;
+        }
+    }
+
+    /// `QEI1CON` write: INDEX is read-only, UPDN is read-only in QEI modes,
+    /// and a mode change clears the edge/filter state (DS70208C Register 15-1).
+    fn qei_configure(&mut self, val: u16) {
+        let old_mode = (self.qei1con >> 8) & 7;
+        let mut new = (val & !QEICON_INDEX) | (self.qei1con & QEICON_INDEX);
+        if (new & QEICON_QEIM_MASK) >> 8 >= 4 {
+            // QEI modes: UPDN is the read-only direction status.
+            new = (new & !QEICON_UPDN) | (self.qei1con & QEICON_UPDN);
+        }
+        self.qei1con = new;
+        let new_mode = (new >> 8) & 7;
+        if new_mode != old_mode {
+            self.qei_prev_ab = 0;
+            self.qei_index_prev = false;
+            self.qei_filt = [0; 3];
+            self.qei_filt_cnt = [0; 3];
+            self.qei_frac = 0;
+            self.qei_ext_psc = 0;
+            self.qei_timer_prev = false;
+        }
+        // TQCS = TQGATE = 1: no counting, one interrupt on configuration.
+        if new_mode == 1 && new & (QEICON_TQCS | QEICON_TQGATE) == (QEICON_TQCS | QEICON_TQGATE) {
+            self.qei_interrupt();
+        }
+        self.pads_dirty = true;
+    }
+
+    // ── M2: Quadrature Encoder Interface (DS70208C §15) ─────────────────────
+
+    fn qei_interrupt(&mut self) {
+        self.ifs3 |= 1 << IRQ_QEI.0;
+    }
+
+    fn pad_level(&self, rp: u16) -> bool {
+        Self::rp_field(rp)
+            .and_then(Self::rp_pin)
+            .map(|(p, b)| self.pad_in[p] & (1 << b) != 0)
+            .unwrap_or(false)
+    }
+
+    fn rp_field(field: u16) -> Option<u8> {
+        (field <= 25).then_some(field as u8)
+    }
+
+    /// Read one external pad level from the bus pad mirror (used for FLTA1,
+    /// which is sampled before `sample_capture` runs).
+    fn rp_input_level(&self, bus: &dyn Bus, rp: u16) -> bool {
+        let Some((port, bit)) = Self::rp_field(rp).and_then(Self::rp_pin) else {
+            return false;
+        };
+        let addr = PIC24_IO_MIRROR_BASE + u64::from(Self::port_base(port)) + 0x02;
+        bus.read_u16(addr)
+            .map(|v| v & (1 << bit) != 0)
+            .unwrap_or(self.pad_in[port] & (1 << bit) != 0)
+    }
+
+    fn qei_raw_inputs(&self) -> [bool; 3] {
+        [
+            self.pad_level(self.rpinr14 & 0x1F),
+            self.pad_level((self.rpinr14 >> 8) & 0x1F),
+            self.pad_level(self.rpinr15 & 0x1F),
+        ]
+    }
+
+    /// Digital filter: a level is accepted after three consecutive equal
+    /// filter clocks (`FCY / QECK`, DS70208C §15.3). Returns the filtered
+    /// QEA, QEB and INDX levels.
+    fn qei_filter(&mut self, raw: [bool; 3], cycles: u32) -> [bool; 3] {
+        if self.dflt1con & DFLT_QEOUT == 0 {
+            self.qei_filt = [0; 3];
+            self.qei_filt_cnt = [0; 3];
+            self.qei_filt_out = raw;
+            return raw;
+        }
+        let div = match (self.dflt1con & DFLT_QECK_MASK) >> 4 {
+            0 => 1u16,
+            1 => 2,
+            2 => 4,
+            3 => 16,
+            4 => 32,
+            5 => 64,
+            6 => 128,
+            _ => 256,
+        };
+        let added = cycles.min(u32::from(u16::MAX)) as u16;
+        for (ch, &raw_ch) in raw.iter().enumerate() {
+            self.qei_filt_cnt[ch] = self.qei_filt_cnt[ch].saturating_add(added);
+            while self.qei_filt_cnt[ch] >= div {
+                self.qei_filt_cnt[ch] -= div;
+                self.qei_filt[ch] = ((self.qei_filt[ch] << 1) | u8::from(raw_ch)) & 0x7;
+                if self.qei_filt[ch] == 0b111 {
+                    self.qei_filt_out[ch] = true;
+                } else if self.qei_filt[ch] == 0 {
+                    self.qei_filt_out[ch] = false;
+                }
+            }
+        }
+        self.qei_filt_out
+    }
+
+    /// x2/x4 quadrature decoding (DS70208C §15.4, Table 15-1). State is
+    /// `(A << 1) | B`; forward is 00→10→11→01→00.
+    fn qei_decode(&mut self, old_ab: u8, new_ab: u8) {
+        let qeim = (self.qei1con >> 8) & 7;
+        if qeim < 4 {
+            return;
+        }
+        let swap = self.qei1con & QEICON_SWPAB != 0;
+        let map = |ab: u8| -> u8 {
+            if swap {
+                ((ab & 1) << 1) | ((ab >> 1) & 1)
+            } else {
+                ab
+            }
+        };
+        let old = map(old_ab);
+        let new = map(new_ab);
+        let delta = if qeim & 2 != 0 {
+            // x4: every edge; diagonal transitions are ignored.
+            const QUAD: [i8; 16] = [0, -1, 1, 0, 1, 0, 0, -1, -1, 0, 0, 1, 0, 1, -1, 0];
+            QUAD[usize::from((old << 2) | new)]
+        } else if (old & 2) != (new & 2) {
+            // x2: count on Phase A edges only (Phase B gives the direction).
+            let a = (new >> 1) & 1;
+            let b = new & 1;
+            if a != b {
+                1
+            } else {
+                -1
+            }
+        } else {
+            0
+        };
+        if delta != 0 {
+            self.qei_count(delta);
+        }
+    }
+
+    /// Apply one quadrature count to POS1CNT, including the match-reset and
+    /// index-mode count-error rules (DS70208C §15.5.2/§15.5.3.4).
+    fn qei_count(&mut self, delta: i8) {
+        let qeim = (self.qei1con >> 8) & 7;
+        let up = delta > 0;
+        self.qei1con = if up {
+            self.qei1con | QEICON_UPDN
+        } else {
+            self.qei1con & !QEICON_UPDN
+        };
+        let index_mode = qeim & 1 == 0; // 100 or 110
+        if index_mode {
+            self.pos1cnt = if up {
+                self.pos1cnt.wrapping_add(1)
+            } else {
+                self.pos1cnt.wrapping_sub(1)
+            };
+            if self.qei1con & QEICON_CNTERR == 0 {
+                let error = if up {
+                    self.pos1cnt == self.max1cnt.wrapping_add(1)
+                } else {
+                    self.pos1cnt == 0xFFFF
+                };
+                if error {
+                    // CNTERR is set even when CEID masks the interrupt
+                    // (DS70208C §15.5.3.4); further errors are ignored until
+                    // the flag is cleared by software.
+                    self.qei1con |= QEICON_CNTERR;
+                    if self.dflt1con & DFLT_CEID == 0 {
+                        self.qei_interrupt();
+                    }
+                }
+            }
+        } else if up {
+            if self.pos1cnt == self.max1cnt {
+                self.pos1cnt = 0;
+                self.qei_interrupt();
+            } else {
+                self.pos1cnt = self.pos1cnt.wrapping_add(1);
+            }
+        } else if self.pos1cnt == 0 {
+            self.pos1cnt = self.max1cnt;
+            self.qei_interrupt();
+        } else {
+            self.pos1cnt = self.pos1cnt.wrapping_sub(1);
+        }
+    }
+
+    /// A filtered index rising edge: apply the IMV match and reset POS1CNT
+    /// in the index modes (DS70208C §15.5.3).
+    fn qei_index_event(&mut self, a: bool, b: bool) {
+        let qeim = (self.qei1con >> 8) & 7;
+        if qeim < 4 {
+            return;
+        }
+        let imv = (self.dflt1con & DFLT_IMV_MASK) >> 9;
+        let matched = if qeim & 2 != 0 {
+            // x4: IMV1 = required B, IMV0 = required A.
+            (u16::from(b) == (imv >> 1)) && (u16::from(a) == (imv & 1))
+        } else {
+            // x2: IMV1 selects the phase (0 = A, 1 = B), IMV0 is its state.
+            let value = if imv & 2 != 0 { b } else { a };
+            u16::from(value) == (imv & 1)
+        };
+        if !matched {
+            return;
+        }
+        self.qei_interrupt();
+        if self.qei1con & QEICON_POSRES != 0 {
+            let up = self.qei1con & QEICON_UPDN != 0;
+            self.pos1cnt = if up { 0 } else { self.max1cnt };
+        }
+    }
+
+    /// QEI timer/counter mode (QEIM = 001, DS70208C §15.6).
+    fn qei_timer_step(&mut self, cycles: u32, qea: bool, qeb: bool) {
+        let tqcs = self.qei1con & QEICON_TQCS != 0;
+        let tqgate = self.qei1con & QEICON_TQGATE != 0;
+        if tqcs && tqgate {
+            // The timer does not increment; the interrupt is raised when the
+            // configuration is written (qei_configure).
+            self.qei_timer_prev = qea;
+            return;
+        }
+        let up = if self.qei1con & QEICON_UDSRC != 0 {
+            qeb
+        } else {
+            self.qei1con & QEICON_UPDN != 0
+        };
+        let psc = match (self.qei1con & QEICON_TQCKPS_MASK) >> 3 {
+            0 => 1u16,
+            1 => 8,
+            2 => 64,
+            _ => 256,
+        };
+        if tqcs {
+            if qea && !self.qei_timer_prev {
+                self.qei_ext_psc = self.qei_ext_psc.wrapping_add(1);
+                if self.qei_ext_psc >= psc {
+                    self.qei_ext_psc = 0;
+                    self.qei_timer_count(up);
+                }
+            }
+            self.qei_timer_prev = qea;
+            return;
+        }
+        if tqgate {
+            if self.qei_timer_prev && !qea {
+                self.qei_interrupt();
+            }
+            self.qei_timer_prev = qea;
+            if !qea {
+                return;
+            }
+        }
+        self.qei_frac = self
+            .qei_frac
+            .saturating_add(cycles.min(u32::from(u16::MAX)) as u16);
+        while self.qei_frac >= psc {
+            self.qei_frac -= psc;
+            self.qei_timer_count(up);
+        }
+    }
+
+    fn qei_timer_count(&mut self, up: bool) {
+        self.qei1con = if up {
+            self.qei1con | QEICON_UPDN
+        } else {
+            self.qei1con & !QEICON_UPDN
+        };
+        if up {
+            let next = u32::from(self.pos1cnt) + 1;
+            if next > u32::from(self.max1cnt) {
+                self.pos1cnt = 0;
+                self.qei_interrupt();
+            } else {
+                self.pos1cnt = next as u16;
+            }
+        } else {
+            let next = self.pos1cnt.wrapping_sub(1);
+            if next == self.max1cnt {
+                self.pos1cnt = 0;
+                self.qei_interrupt();
+            } else {
+                self.pos1cnt = next;
+            }
+        }
+    }
+
+    /// Sample the QEI inputs once per retired step and run the decoder or
+    /// timer (DS70208C §15.3-§15.6).
+    fn sample_qei(&mut self, cycles: u32) {
+        let raw = self.qei_raw_inputs();
+        let qeim = (self.qei1con >> 8) & 7;
+        if qeim == 1 {
+            // Timer mode: the digital filter is inactive (§15.6).
+            self.qei1con = (self.qei1con & !QEICON_INDEX) | if raw[2] { QEICON_INDEX } else { 0 };
+            self.qei_timer_step(cycles, raw[0], raw[1]);
+            return;
+        }
+        if qeim < 4 {
+            self.qei_prev_ab = (u8::from(raw[0]) << 1) | u8::from(raw[1]);
+            self.qei_index_prev = raw[2];
+            return;
+        }
+        let filt = self.qei_filter(raw, cycles);
+        self.qei1con = (self.qei1con & !QEICON_INDEX) | if filt[2] { QEICON_INDEX } else { 0 };
+        let ab = (u8::from(filt[0]) << 1) | u8::from(filt[1]);
+        let old_ab = self.qei_prev_ab;
+        self.qei_prev_ab = ab;
+        if ab != old_ab {
+            self.qei_decode(old_ab, ab);
+        }
+        if filt[2] && !self.qei_index_prev {
+            self.qei_index_event(filt[0], filt[1]);
+        }
+        self.qei_index_prev = filt[2];
+        if self.qei1con & QEICON_PCDOUT != 0 {
+            // The UPDN output pin follows the direction status.
+            self.pads_dirty = true;
         }
     }
 
@@ -1142,6 +2045,22 @@ impl Pic24 {
     ///
     /// Natural order = IFS0 bit order (DS70283H §7.3.1). Simplified gating:
     /// DISI blocks everything we model (levels 1-6), NSTDIS blocks nesting.
+    /// The priority field for `irq` from IPC0-2 or IPC14/15
+    /// (DS70283H §7.3: four priority fields per register).
+    fn ipc_priority(&self, irq: u32) -> u16 {
+        let reg = irq / 4;
+        let shift = 4 * (irq % 4);
+        let ipc = match reg {
+            0 => self.ipc0,
+            1 => self.ipc1,
+            2 => self.ipc2,
+            14 => self.ipc14,
+            15 => self.ipc15,
+            _ => 0,
+        };
+        (ipc >> shift) & 0x7
+    }
+
     fn pending_interrupt(&self) -> Option<(u32, u16)> {
         if self.intcon2 & INTCON2_DISI != 0 {
             return None;
@@ -1150,31 +2069,45 @@ impl Pic24 {
         if self.intcon1 & INTCON1_NSTDIS != 0 && ipl > 0 {
             return None;
         }
-        let sources: [(u16, u32, u8); 8] = [
-            (IRQ_INT0.0, IRQ_INT0.1, 0),
-            (IRQ_IC1.0, IRQ_IC1.1, 4),
-            (IRQ_OC1.0, IRQ_OC1.1, 8),
-            (IRQ_T1.0, IRQ_T1.1, 12),
-            (IRQ_IC2.0, IRQ_IC2.1, 4),
-            (IRQ_OC2.0, IRQ_OC2.1, 8),
-            (IRQ_T2.0, IRQ_T2.1, 12),
-            (IRQ_T3.0, IRQ_T3.1, 12),
+        // (IFS register index, flag bit, IRQ number, vector number).
+        let sources: [(u8, u16, u32, u32); 11] = [
+            (0, IRQ_INT0.0, 0, IRQ_INT0.1),
+            (0, IRQ_IC1.0, 1, IRQ_IC1.1),
+            (0, IRQ_OC1.0, 2, IRQ_OC1.1),
+            (0, IRQ_T1.0, 3, IRQ_T1.1),
+            (0, IRQ_IC2.0, 5, IRQ_IC2.1),
+            (0, IRQ_OC2.0, 6, IRQ_OC2.1),
+            (0, IRQ_T2.0, 7, IRQ_T2.1),
+            (0, IRQ_T3.0, 8, IRQ_T3.1),
+            (3, IRQ_PWM1.0, 57, IRQ_PWM1.1),
+            (3, IRQ_QEI.0, 58, IRQ_QEI.1),
+            (3, IRQ_FLTA1.0, 63, IRQ_FLTA1.1),
         ];
-        for (i, (bit, vector, shift)) in sources.iter().enumerate() {
-            if self.ifs0 & (1 << bit) == 0 || self.iec0 & (1 << bit) == 0 {
+        let mut best: Option<(u32, u16)> = None;
+        for (reg, bit, irq, vector) in sources {
+            let (flags, enables) = if reg == 0 {
+                (self.ifs0, self.iec0)
+            } else {
+                (self.ifs3, self.iec3)
+            };
+            if flags & (1 << bit) == 0 || enables & (1 << bit) == 0 {
                 continue;
             }
-            let ipc = match i {
-                0..=3 => self.ipc0,
-                4..=6 => self.ipc1,
-                _ => self.ipc2,
-            };
-            let prio = (ipc >> shift) & 0x7;
-            if prio != 0 && prio > ipl {
-                return Some((*vector, prio));
+            let prio = self.ipc_priority(irq);
+            if prio == 0 || prio <= ipl {
+                continue;
+            }
+            // Highest priority wins; on a tie the lower vector number wins
+            // (the hardware's fixed priority order).
+            match best {
+                None => best = Some((vector, prio)),
+                Some((bv, bp)) if prio > bp || (prio == bp && vector < bv) => {
+                    best = Some((vector, prio));
+                }
+                _ => {}
             }
         }
-        None
+        best
     }
 
     /// Take the pending interrupt, if any: push the DS70283H §7 frame
@@ -1267,6 +2200,30 @@ impl Pic24 {
                 SFR_OC1RS => Ok(self.oc[0].rs),
                 SFR_OC2RS => Ok(self.oc[1].rs),
                 SFR_RPINR7 => Ok(self.rpinr7),
+                SFR_P1TCON => Ok(self.p1tcon),
+                SFR_P1TMR => Ok(self.p1tmr),
+                SFR_P1TPER => Ok(self.p1tper),
+                SFR_P1SECMP => Ok(self.p1secmp),
+                SFR_PWM1CON1 => Ok(self.pwm1con1),
+                SFR_PWM1CON2 => Ok(self.pwm1con2),
+                SFR_P1DTCON1 => Ok(self.p1dtcon1),
+                SFR_P1DTCON2 => Ok(self.p1dtcon2),
+                SFR_P1FLTACON => Ok(self.p1fltacon),
+                SFR_P1OVDCON => Ok(self.p1ovdcon),
+                SFR_P1DC1 => Ok(self.p1dc[0]),
+                SFR_P1DC2 => Ok(self.p1dc[1]),
+                SFR_P1DC3 => Ok(self.p1dc[2]),
+                SFR_QEI1CON => Ok(self.qei1con),
+                SFR_DFLT1CON => Ok(self.dflt1con & 0x07F0),
+                SFR_POS1CNT => Ok(self.pos1cnt),
+                SFR_MAX1CNT => Ok(self.max1cnt),
+                SFR_RPINR12 => Ok(self.rpinr12),
+                SFR_RPINR14 => Ok(self.rpinr14),
+                SFR_RPINR15 => Ok(self.rpinr15),
+                SFR_IFS3 => Ok(self.ifs3),
+                SFR_IEC3 => Ok(self.iec3),
+                SFR_IPC14 => Ok(self.ipc14),
+                SFR_IPC15 => Ok(self.ipc15),
                 a if (SFR_RPOR0..SFR_RPOR0 + 2 * RPOR_COUNT as u16).contains(&a) => {
                     Ok(self.rpor[((a - SFR_RPOR0) / 2) as usize])
                 }
@@ -1375,6 +2332,59 @@ impl Pic24 {
                     SFR_OC1RS => self.oc[0].rs = val,
                     SFR_OC2RS => self.oc[1].rs = val,
                     SFR_RPINR7 => self.rpinr7 = val & 0x1F1F,
+                    SFR_P1TCON => self.pwm_configure_tcon(val),
+                    SFR_P1TMR => {
+                        self.p1tmr = (self.p1tmr & 0x8000) | (val & 0x7FFF);
+                        self.p1_frac = 0;
+                        self.p1_post = 0;
+                    }
+                    SFR_P1TPER => {
+                        self.p1tper = val & 0x7FFF;
+                        if self.p1tcon & PTCON_PTEN == 0 {
+                            self.p1tper_active = self.p1tper;
+                        }
+                    }
+                    SFR_P1SECMP => self.p1secmp = val & 0x7FFF,
+                    SFR_PWM1CON1 => {
+                        self.pwm1con1 = val & 0x0777;
+                        self.pads_dirty = true;
+                    }
+                    SFR_PWM1CON2 => self.pwm1con2 = val & 0x0F07,
+                    SFR_P1DTCON1 => self.p1dtcon1 = val,
+                    SFR_P1DTCON2 => self.p1dtcon2 = val & 0x003F,
+                    SFR_P1FLTACON => {
+                        let old = self.p1fltacon;
+                        self.p1fltacon = val & 0x3F87;
+                        // A fault already asserted when FAEN is first enabled
+                        // is a new fault event (the flagged edge happened
+                        // while the input was disabled).
+                        if self.p1fltacon & 0x7 != 0 && old & 0x7 == 0 && self.flta_prev {
+                            self.ifs3 |= 1 << IRQ_FLTA1.0;
+                            if self.p1fltacon & 0x0080 == 0 {
+                                self.p1_fault_latched = true;
+                            }
+                            self.p1_fault_force = true;
+                            self.pads_dirty = true;
+                        }
+                    }
+                    SFR_P1OVDCON => {
+                        self.p1ovdcon = val & 0x3FFF;
+                        self.pads_dirty = true;
+                    }
+                    SFR_P1DC1 => self.pwm_duty_write(0, val),
+                    SFR_P1DC2 => self.pwm_duty_write(1, val),
+                    SFR_P1DC3 => self.pwm_duty_write(2, val),
+                    SFR_QEI1CON => self.qei_configure(val),
+                    SFR_DFLT1CON => self.dflt1con = val & 0x07F0,
+                    SFR_POS1CNT => self.pos1cnt = val,
+                    SFR_MAX1CNT => self.max1cnt = val,
+                    SFR_RPINR12 => self.rpinr12 = val & 0x001F,
+                    SFR_RPINR14 => self.rpinr14 = val & 0x1F1F,
+                    SFR_RPINR15 => self.rpinr15 = val & 0x001F,
+                    SFR_IFS3 => self.ifs3 = val,
+                    SFR_IEC3 => self.iec3 = val,
+                    SFR_IPC14 => self.ipc14 = val,
+                    SFR_IPC15 => self.ipc15 = val,
                     a if (SFR_RPOR0..SFR_RPOR0 + 2 * RPOR_COUNT as u16).contains(&a) => {
                         self.rpor[((a - SFR_RPOR0) / 2) as usize] = val;
                         self.pads_dirty = true;
@@ -2550,6 +3560,47 @@ impl Cpu for Pic24 {
         self.rpor = [0; RPOR_COUNT];
         self.ic = [IcChannel::default(), IcChannel::default()];
         self.oc = [OcChannel::default(), OcChannel::default()];
+        self.p1tcon = 0;
+        self.p1tmr = 0;
+        self.p1tper = 0;
+        self.p1tper_active = 0;
+        self.p1secmp = 0;
+        self.pwm1con1 = 0;
+        self.pwm1con2 = 0;
+        self.p1dtcon1 = 0;
+        self.p1dtcon2 = 0;
+        self.p1fltacon = 0;
+        self.p1ovdcon = 0x3F00;
+        self.p1dc = [0; 3];
+        self.p1dc_active = [0; 3];
+        self.p1_frac = 0;
+        self.p1_post = 0;
+        self.p1_gen = [false; 3];
+        self.p1_dt_hi = [0; 3];
+        self.p1_dt_lo = [0; 3];
+        self.p1_fault_force = false;
+        self.p1_fault_latched = false;
+        self.p1_fault_release = false;
+        self.flta_prev = false;
+        self.rpinr12 = 0x001F;
+        self.rpinr14 = 0x1F1F;
+        self.rpinr15 = 0x001F;
+        self.ifs3 = 0;
+        self.iec3 = 0;
+        self.ipc14 = 0;
+        self.ipc15 = 0x4000;
+        self.qei1con = 0;
+        self.dflt1con = 0;
+        self.pos1cnt = 0;
+        self.max1cnt = 0xFFFF;
+        self.qei_prev_ab = 0;
+        self.qei_index_prev = false;
+        self.qei_filt = [0; 3];
+        self.qei_filt_cnt = [0; 3];
+        self.qei_filt_out = [false; 3];
+        self.qei_frac = 0;
+        self.qei_timer_prev = false;
+        self.qei_ext_psc = 0;
         self.pads_dirty = true;
         self.exception_pending = None;
         Ok(())
@@ -2585,11 +3636,11 @@ impl Cpu for Pic24 {
         self.cycles += u64::from(used);
         crate::advance_batch_cycle(bus, u64::from(used));
         self.advance_timers(used);
-        // M1b: publish the port/OC drive to the pad models, then sample the
-        // pads for input capture (order: what this step drives is what it
-        // samples).
+        // M2: run the PWM time base (and sample FLTA1) before publishing the
+        // pad drive, then sample the QEI inputs with the input capture units.
+        self.advance_mcpwm(used, bus);
         self.sync_pads(bus);
-        self.sample_capture(bus);
+        self.sample_capture(bus, used);
 
         if observed {
             // W0-W15, then the standard trailer: SP (W15), then PC.
@@ -2725,6 +3776,47 @@ impl Cpu for Pic24 {
             oc_rs: [self.oc[0].rs, self.oc[1].rs],
             oc_level: [self.oc[0].level, self.oc[1].level],
             oc_halted: [self.oc[0].halted, self.oc[1].halted],
+            p1tcon: self.p1tcon,
+            p1tmr: self.p1tmr,
+            p1tper: self.p1tper,
+            p1tper_active: self.p1tper_active,
+            p1secmp: self.p1secmp,
+            pwm1con1: self.pwm1con1,
+            pwm1con2: self.pwm1con2,
+            p1dtcon1: self.p1dtcon1,
+            p1dtcon2: self.p1dtcon2,
+            p1fltacon: self.p1fltacon,
+            p1ovdcon: self.p1ovdcon,
+            p1dc: self.p1dc,
+            p1dc_active: self.p1dc_active,
+            p1_frac: self.p1_frac,
+            p1_post: self.p1_post,
+            p1_gen: self.p1_gen,
+            p1_dt_hi: self.p1_dt_hi,
+            p1_dt_lo: self.p1_dt_lo,
+            p1_fault_force: self.p1_fault_force,
+            p1_fault_latched: self.p1_fault_latched,
+            p1_fault_release: self.p1_fault_release,
+            flta_prev: self.flta_prev,
+            rpinr12: self.rpinr12,
+            rpinr14: self.rpinr14,
+            rpinr15: self.rpinr15,
+            ifs3: self.ifs3,
+            iec3: self.iec3,
+            ipc14: self.ipc14,
+            ipc15: self.ipc15,
+            qei1con: self.qei1con,
+            dflt1con: self.dflt1con,
+            pos1cnt: self.pos1cnt,
+            max1cnt: self.max1cnt,
+            qei_prev_ab: self.qei_prev_ab,
+            qei_index_prev: self.qei_index_prev,
+            qei_filt: self.qei_filt,
+            qei_filt_cnt: self.qei_filt_cnt,
+            qei_filt_out: self.qei_filt_out,
+            qei_frac: self.qei_frac,
+            qei_timer_prev: self.qei_timer_prev,
+            qei_ext_psc: self.qei_ext_psc,
         })
     }
 
@@ -2779,6 +3871,47 @@ impl Cpu for Pic24 {
                 self.oc[ch].level = s.oc_level[ch];
                 self.oc[ch].halted = s.oc_halted[ch];
             }
+            self.p1tcon = s.p1tcon;
+            self.p1tmr = s.p1tmr;
+            self.p1tper = s.p1tper;
+            self.p1tper_active = s.p1tper_active;
+            self.p1secmp = s.p1secmp;
+            self.pwm1con1 = s.pwm1con1;
+            self.pwm1con2 = s.pwm1con2;
+            self.p1dtcon1 = s.p1dtcon1;
+            self.p1dtcon2 = s.p1dtcon2;
+            self.p1fltacon = s.p1fltacon;
+            self.p1ovdcon = s.p1ovdcon;
+            self.p1dc = s.p1dc;
+            self.p1dc_active = s.p1dc_active;
+            self.p1_frac = s.p1_frac;
+            self.p1_post = s.p1_post;
+            self.p1_gen = s.p1_gen;
+            self.p1_dt_hi = s.p1_dt_hi;
+            self.p1_dt_lo = s.p1_dt_lo;
+            self.p1_fault_force = s.p1_fault_force;
+            self.p1_fault_latched = s.p1_fault_latched;
+            self.p1_fault_release = s.p1_fault_release;
+            self.flta_prev = s.flta_prev;
+            self.rpinr12 = s.rpinr12;
+            self.rpinr14 = s.rpinr14;
+            self.rpinr15 = s.rpinr15;
+            self.ifs3 = s.ifs3;
+            self.iec3 = s.iec3;
+            self.ipc14 = s.ipc14;
+            self.ipc15 = s.ipc15;
+            self.qei1con = s.qei1con;
+            self.dflt1con = s.dflt1con;
+            self.pos1cnt = s.pos1cnt;
+            self.max1cnt = s.max1cnt;
+            self.qei_prev_ab = s.qei_prev_ab;
+            self.qei_index_prev = s.qei_index_prev;
+            self.qei_filt = s.qei_filt;
+            self.qei_filt_cnt = s.qei_filt_cnt;
+            self.qei_filt_out = s.qei_filt_out;
+            self.qei_frac = s.qei_frac;
+            self.qei_timer_prev = s.qei_timer_prev;
+            self.qei_ext_psc = s.qei_ext_psc;
             // The pad models take the restored state on the next sync.
             self.pads_dirty = true;
         }
@@ -4341,5 +5474,425 @@ mod tests {
         assert_eq!(cpu.w[4], 0x1234);
         assert_eq!(cpu.w[9], 0x0A00);
         assert_eq!(cpu.w[12], 0xFF00);
+    }
+
+    // ── M2: Motor Control PWM + QEI (DS70187E / DS70208C) ──────────────────
+
+    /// Configure PWM1 for an edge-aligned complementary pair 1 (PEN1H|PEN1L)
+    /// with the given period and duty, then enable the time base at 1:1.
+    fn pwm_edge_setup(cpu: &mut Pic24, tper: u16, dc: u16) {
+        write_sfr(cpu, SFR_P1TPER, tper);
+        write_sfr(cpu, SFR_P1DC1, dc);
+        write_sfr(cpu, SFR_PWM1CON1, 0x0011);
+        write_sfr(cpu, SFR_P1TCON, PTCON_PTEN);
+    }
+
+    #[test]
+    fn pwm_edge_aligned_complementary_duty_and_dead_time() {
+        let mut cpu = cpu_with(&[0x0000_0000; 16]);
+        let mut bus = MirrorBus::new();
+        write_sfr(&mut cpu, SFR_P1DTCON1, 2); // DTA = 2 TCY, prescale 1:1
+        write_sfr(&mut cpu, SFR_P1DTCON2, 0); // both edges use unit A
+        pwm_edge_setup(&mut cpu, 7, 3);
+        // PTEN drives the edge-aligned generator active; the 2-cycle dead
+        // time gates the high-side pin.
+        step(&mut cpu, &mut bus); // count 1, DT 1
+        assert!(!bus.pad(1, 14) && !bus.pad(1, 15), "both off during DT");
+        step(&mut cpu, &mut bus); // count 2, DT 0
+        assert!(bus.pad(1, 14), "PWM1H1 active after the dead time");
+        assert!(!bus.pad(1, 15), "complementary low side stays off");
+        // Duty match at TMR = 3: the high side goes inactive immediately,
+        // the low side waits its dead time.
+        step(&mut cpu, &mut bus); // count 3
+        assert!(!bus.pad(1, 14) && !bus.pad(1, 15), "dead time on the fall");
+        step(&mut cpu, &mut bus); // count 4, DT 1
+        step(&mut cpu, &mut bus); // count 5, DT 0
+        assert!(!bus.pad(1, 14), "high side off after the match");
+        assert!(bus.pad(1, 15), "low side active after the dead time");
+        // 6, 7, then the period match resets TMR and starts a new pulse.
+        step(&mut cpu, &mut bus);
+        step(&mut cpu, &mut bus);
+        step(&mut cpu, &mut bus); // reset to 0, DT re-armed
+        assert_ne!(
+            cpu.data_read(SFR_IFS3).unwrap() & (1 << IRQ_PWM1.0),
+            0,
+            "PWM1IF on the period match"
+        );
+        assert!(!bus.pad(1, 14) && !bus.pad(1, 15));
+        step(&mut cpu, &mut bus);
+        step(&mut cpu, &mut bus);
+        assert!(bus.pad(1, 14), "next period's high side");
+        assert_eq!(cpu.data_read(SFR_P1TMR).unwrap() & 0x7FFF, 2);
+        assert_eq!(
+            cpu.data_read(SFR_P1TMR).unwrap() & 0x8000,
+            0,
+            "PTDIR clear while counting up"
+        );
+    }
+
+    #[test]
+    fn pwm_output_postscaler_divides_the_interrupt_rate() {
+        let mut cpu = cpu_with(&[0x0000_0000; 16]);
+        let mut bus = MirrorBus::new();
+        write_sfr(&mut cpu, SFR_P1TPER, 1);
+        write_sfr(&mut cpu, SFR_PWM1CON1, 0x0011);
+        // PTEN | PTOPS = 1 → 1:2 postscale.
+        write_sfr(&mut cpu, SFR_P1TCON, PTCON_PTEN | 0x0010);
+        step(&mut cpu, &mut bus); // count 1
+        step(&mut cpu, &mut bus); // reset, event 1/2
+        assert_eq!(cpu.data_read(SFR_IFS3).unwrap() & (1 << IRQ_PWM1.0), 0);
+        step(&mut cpu, &mut bus);
+        step(&mut cpu, &mut bus); // reset, event 2/2 → flag
+        assert_ne!(cpu.data_read(SFR_IFS3).unwrap() & (1 << IRQ_PWM1.0), 0);
+    }
+
+    #[test]
+    fn pwm_center_aligned_follows_the_compare_rule() {
+        let mut cpu = cpu_with(&[0x0000_0000; 32]);
+        let mut bus = MirrorBus::new();
+        write_sfr(&mut cpu, SFR_P1TPER, 3);
+        write_sfr(&mut cpu, SFR_P1DC1, 1);
+        write_sfr(&mut cpu, SFR_PWM1CON1, 0x0011);
+        write_sfr(&mut cpu, SFR_P1TCON, PTCON_PTEN | 2); // up/down
+                                                         // 0→1 (up compare at 0), 1→2 (match at 1 → inactive).
+        step(&mut cpu, &mut bus);
+        step(&mut cpu, &mut bus);
+        assert!(!bus.pad(1, 14), "inactive after the up-count match");
+        // 2→3, 3 (direction flip), 3→2, 2→1, then the down-count match at
+        // 1 drives the output active.
+        for _ in 0..5 {
+            step(&mut cpu, &mut bus);
+        }
+        assert!(bus.pad(1, 14), "active on the down-count match");
+        // Ticks 8 (zero, flag), 9 (up at 0) stay active; the next up match
+        // at 1 turns it off.
+        step(&mut cpu, &mut bus); // zero boundary + PWM1IF
+        assert_ne!(cpu.data_read(SFR_IFS3).unwrap() & (1 << IRQ_PWM1.0), 0);
+        step(&mut cpu, &mut bus);
+        assert!(bus.pad(1, 14));
+        step(&mut cpu, &mut bus);
+        assert!(!bus.pad(1, 14), "inactive again at the up match");
+    }
+
+    #[test]
+    fn pwm_override_and_fault_states() {
+        let mut cpu = cpu_with(&[0x0000_0000; 16]);
+        let mut bus = MirrorBus::new();
+        write_sfr(&mut cpu, SFR_RPINR12, 0); // FLTA1 = RP0/RB0
+        pwm_edge_setup(&mut cpu, 7, 3);
+        step(&mut cpu, &mut bus);
+        assert!(bus.pad(1, 14), "normal PWM first");
+        // Override pair 1: high follows POUT1H = 0 (inactive), low follows
+        // POUT1L = 1 (active) because both POVD bits are cleared.
+        write_sfr(&mut cpu, SFR_P1OVDCON, 0x3C01);
+        step(&mut cpu, &mut bus);
+        assert!(!bus.pad(1, 14), "override drives the high pin inactive");
+        assert!(bus.pad(1, 15), "override drives the low pin active");
+        // Fault A (active low), cycle-by-cycle, both pins inactive. Give the
+        // pin a high (inactive) level first so the fault is a real edge.
+        write_sfr(&mut cpu, SFR_P1OVDCON, 0x3F00);
+        bus.set_input(1, 0, true);
+        step(&mut cpu, &mut bus);
+        write_sfr(&mut cpu, SFR_P1FLTACON, 0x0081); // FLTAM = 1, FAEN1
+        bus.set_input(1, 0, false);
+        step(&mut cpu, &mut bus);
+        assert!(!bus.pad(1, 14) && !bus.pad(1, 15), "fault state");
+        assert_ne!(
+            cpu.data_read(SFR_IFS3).unwrap() & (1 << IRQ_FLTA1.0),
+            0,
+            "FLTA1IF"
+        );
+        // Release: the outputs stay in the fault state until the period
+        // boundary, then the generator resumes.
+        bus.set_input(1, 0, true);
+        step(&mut cpu, &mut bus);
+        assert!(
+            !bus.pad(1, 14) && !bus.pad(1, 15),
+            "held until the boundary"
+        );
+        for _ in 0..8 {
+            step(&mut cpu, &mut bus);
+            if bus.pad(1, 14) {
+                break;
+            }
+        }
+        assert!(bus.pad(1, 14), "restored at the next period");
+    }
+
+    #[test]
+    fn pwm_single_event_stops_at_the_period_match() {
+        let mut cpu = cpu_with(&[0x0000_0000; 16]);
+        let mut bus = MirrorBus::new();
+        write_sfr(&mut cpu, SFR_P1TPER, 3);
+        write_sfr(&mut cpu, SFR_P1DC1, 1);
+        write_sfr(&mut cpu, SFR_PWM1CON1, 0x0011);
+        write_sfr(&mut cpu, SFR_P1TCON, PTCON_PTEN | 1); // single event
+        for _ in 0..4 {
+            step(&mut cpu, &mut bus);
+        }
+        assert_eq!(
+            cpu.data_read(SFR_P1TCON).unwrap() & PTCON_PTEN,
+            0,
+            "the period match clears PTEN"
+        );
+        assert!(!bus.pad(1, 14) && !bus.pad(1, 15), "outputs stop inactive");
+        assert_ne!(cpu.data_read(SFR_IFS3).unwrap() & (1 << IRQ_PWM1.0), 0);
+    }
+
+    #[test]
+    fn m2_interrupt_vectors_and_ipc_mapping() {
+        let mut cpu = cpu_with(&[0x0000_0000; 4]);
+        // PWM1: IRQ 57 → IPC14 field 1 (bits 6-4), vector 65.
+        write_sfr(&mut cpu, SFR_IPC14, 6 << 4);
+        write_sfr(&mut cpu, SFR_IEC3, 1 << IRQ_PWM1.0);
+        write_sfr(&mut cpu, SFR_IFS3, 1 << IRQ_PWM1.0);
+        assert_eq!(cpu.pending_interrupt(), Some((65, 6)));
+        // QEI: IRQ 58 → IPC14 field 2 (bits 10-8), vector 66.
+        write_sfr(&mut cpu, SFR_IFS3, 1 << IRQ_QEI.0);
+        write_sfr(&mut cpu, SFR_IEC3, 1 << IRQ_QEI.0);
+        write_sfr(&mut cpu, SFR_IPC14, 7 << 8);
+        assert_eq!(cpu.pending_interrupt(), Some((66, 7)));
+        // FLTA1: IRQ 63 → IPC15 field 3 (bits 14-12), vector 71.
+        write_sfr(&mut cpu, SFR_IFS3, 1 << IRQ_FLTA1.0);
+        write_sfr(&mut cpu, SFR_IEC3, 1 << IRQ_FLTA1.0);
+        write_sfr(&mut cpu, SFR_IPC15, 5 << 12);
+        assert_eq!(cpu.pending_interrupt(), Some((71, 5)));
+        // Equal priority: the lower vector number wins.
+        write_sfr(&mut cpu, SFR_IFS3, (1 << IRQ_QEI.0) | (1 << IRQ_FLTA1.0));
+        write_sfr(&mut cpu, SFR_IEC3, (1 << IRQ_QEI.0) | (1 << IRQ_FLTA1.0));
+        write_sfr(&mut cpu, SFR_IPC14, 5 << 8);
+        assert_eq!(cpu.pending_interrupt(), Some((66, 5)));
+        // IFS0 sources keep their datasheet vectors — the M1a table was off
+        // by one for IC2/OC2/T2/T3 (DS70283H Table 7-1).
+        for (bit, ipc_reg, shift, vector) in [
+            (IRQ_IC2.0, SFR_IPC1, 4u16, 13u32),
+            (IRQ_OC2.0, SFR_IPC1, 8, 14),
+            (IRQ_T2.0, SFR_IPC1, 12, 15),
+            (IRQ_T3.0, SFR_IPC2, 0, 16),
+        ] {
+            let mut c = cpu_with(&[0x0000_0000; 2]);
+            write_sfr(&mut c, ipc_reg, 3 << shift);
+            write_sfr(&mut c, SFR_IEC0, 1 << bit);
+            write_sfr(&mut c, SFR_IFS0, 1 << bit);
+            assert_eq!(c.pending_interrupt(), Some((vector, 3)));
+        }
+    }
+
+    /// QEI: QEA on RP0/RB0, QEB on RP1/RB1, INDX on RP2/RB2.
+    fn qei_setup(cpu: &mut Pic24, mode: u16, max: u16) {
+        write_sfr(cpu, SFR_RPINR14, 0x0100);
+        write_sfr(cpu, SFR_RPINR15, 2);
+        write_sfr(cpu, SFR_MAX1CNT, max);
+        write_sfr(cpu, SFR_QEI1CON, (mode << 8) | QEICON_POSRES);
+    }
+
+    fn qei_edge(cpu: &mut Pic24, bus: &mut MirrorBus, a: bool, b: bool) {
+        bus.set_input(1, 0, a);
+        bus.set_input(1, 1, b);
+        step(cpu, bus);
+    }
+
+    #[test]
+    fn qei_x4_counts_forward_and_reverse() {
+        let mut cpu = cpu_with(&[0x0000_0000; 32]);
+        let mut bus = MirrorBus::new();
+        qei_setup(&mut cpu, 6, 100); // x4, reset on index
+        for (a, b) in [(true, false), (true, true), (false, true), (false, false)] {
+            qei_edge(&mut cpu, &mut bus, a, b);
+        }
+        assert_eq!(cpu.data_read(SFR_POS1CNT).unwrap(), 4);
+        assert_ne!(cpu.data_read(SFR_QEI1CON).unwrap() & QEICON_UPDN, 0);
+        for (a, b) in [(false, true), (true, true)] {
+            qei_edge(&mut cpu, &mut bus, a, b);
+        }
+        assert_eq!(cpu.data_read(SFR_POS1CNT).unwrap(), 2);
+        assert_eq!(cpu.data_read(SFR_QEI1CON).unwrap() & QEICON_UPDN, 0);
+    }
+
+    #[test]
+    fn qei_x2_counts_only_on_phase_a_edges() {
+        let mut cpu = cpu_with(&[0x0000_0000; 32]);
+        let mut bus = MirrorBus::new();
+        qei_setup(&mut cpu, 4, 100); // x2
+        qei_edge(&mut cpu, &mut bus, true, false); // A edge → +1
+        qei_edge(&mut cpu, &mut bus, true, true); // B edge → no count
+        assert_eq!(cpu.data_read(SFR_POS1CNT).unwrap(), 1);
+        qei_edge(&mut cpu, &mut bus, false, true); // A edge → +1
+        qei_edge(&mut cpu, &mut bus, false, false); // B edge → no count
+        assert_eq!(cpu.data_read(SFR_POS1CNT).unwrap(), 2);
+    }
+
+    #[test]
+    fn qei_match_reset_rolls_over_and_under() {
+        let mut cpu = cpu_with(&[0x0000_0000; 32]);
+        let mut bus = MirrorBus::new();
+        qei_setup(&mut cpu, 7, 3); // x4, reset on match, MAXCNT = 3
+        for (a, b) in [(true, false), (true, true), (false, true)] {
+            qei_edge(&mut cpu, &mut bus, a, b);
+        }
+        assert_eq!(cpu.data_read(SFR_POS1CNT).unwrap(), 3);
+        qei_edge(&mut cpu, &mut bus, false, false); // POSCNT == MAX → 0
+        assert_eq!(cpu.data_read(SFR_POS1CNT).unwrap(), 0);
+        assert_ne!(
+            cpu.data_read(SFR_IFS3).unwrap() & (1 << IRQ_QEI.0),
+            0,
+            "rollover interrupt"
+        );
+        write_sfr(&mut cpu, SFR_IFS3, 0);
+        qei_edge(&mut cpu, &mut bus, false, true); // POSCNT == 0 → MAX
+        assert_eq!(cpu.data_read(SFR_POS1CNT).unwrap(), 3);
+        assert_ne!(
+            cpu.data_read(SFR_IFS3).unwrap() & (1 << IRQ_QEI.0),
+            0,
+            "underflow interrupt"
+        );
+    }
+
+    #[test]
+    fn qei_index_reset_uses_the_imv_and_direction() {
+        let mut cpu = cpu_with(&[0x0000_0000; 32]);
+        let mut bus = MirrorBus::new();
+        qei_setup(&mut cpu, 6, 100); // x4, reset on index
+        write_sfr(&mut cpu, SFR_DFLT1CON, 2 << 9); // IMV: A = 0, B = 1
+                                                   // Forward to state 01 (A = 0, B = 1), POSCNT = 3.
+        for (a, b) in [(true, false), (true, true), (false, true)] {
+            qei_edge(&mut cpu, &mut bus, a, b);
+        }
+        assert_eq!(cpu.data_read(SFR_POS1CNT).unwrap(), 3);
+        bus.set_input(1, 2, true); // INDX rising at the matching state
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.data_read(SFR_POS1CNT).unwrap(), 0, "forward → 0");
+        assert_ne!(cpu.data_read(SFR_IFS3).unwrap() & (1 << IRQ_QEI.0), 0);
+        // Reverse: state 01 → 11 (A rises), POSCNT 10 → 9, UPDN clears.
+        write_sfr(&mut cpu, SFR_IFS3, 0);
+        write_sfr(&mut cpu, SFR_POS1CNT, 10);
+        qei_edge(&mut cpu, &mut bus, true, true);
+        assert_eq!(cpu.data_read(SFR_POS1CNT).unwrap(), 9);
+        assert_eq!(cpu.data_read(SFR_QEI1CON).unwrap() & QEICON_UPDN, 0);
+        // An index pulse at state 11 does not match IMV = B1/A0: no reset and
+        // no interrupt.
+        bus.set_input(1, 2, false);
+        step(&mut cpu, &mut bus);
+        bus.set_input(1, 2, true);
+        step(&mut cpu, &mut bus);
+        assert_eq!(
+            cpu.data_read(SFR_POS1CNT).unwrap(),
+            9,
+            "index at a non-matching state is ignored"
+        );
+        assert_eq!(cpu.data_read(SFR_IFS3).unwrap() & (1 << IRQ_QEI.0), 0);
+        // Reverse to state 00: 11 → 10 → 00, POSCNT 8 → 7.
+        qei_edge(&mut cpu, &mut bus, true, false);
+        qei_edge(&mut cpu, &mut bus, false, false);
+        assert_eq!(cpu.data_read(SFR_POS1CNT).unwrap(), 7);
+        // IMV = 00, reverse index: POSCNT loads MAXCNT.
+        write_sfr(&mut cpu, SFR_DFLT1CON, 0);
+        bus.set_input(1, 2, false);
+        step(&mut cpu, &mut bus);
+        bus.set_input(1, 2, true);
+        step(&mut cpu, &mut bus);
+        assert_eq!(
+            cpu.data_read(SFR_POS1CNT).unwrap(),
+            100,
+            "reverse index loads MAXCNT"
+        );
+    }
+
+    #[test]
+    fn qei_count_error_and_ceid() {
+        let mut cpu = cpu_with(&[0x0000_0000; 32]);
+        let mut bus = MirrorBus::new();
+        qei_setup(&mut cpu, 4, 3); // x2, index mode, MAXCNT = 3
+                                   // Four Phase A edges: POSCNT reaches MAXCNT + 1 = 4.
+        for (a, b) in [
+            (true, false),
+            (true, true),
+            (false, true),
+            (false, false),
+            (true, false),
+            (true, true),
+            (false, true),
+            (false, false),
+        ] {
+            qei_edge(&mut cpu, &mut bus, a, b);
+        }
+        let con = cpu.data_read(SFR_QEI1CON).unwrap();
+        assert_ne!(con & QEICON_CNTERR, 0, "CNTERR at MAXCNT + 1");
+        assert_ne!(cpu.data_read(SFR_IFS3).unwrap() & (1 << IRQ_QEI.0), 0);
+        // Further errors do not re-interrupt until CNTERR is cleared.
+        write_sfr(&mut cpu, SFR_IFS3, 0);
+        qei_edge(&mut cpu, &mut bus, true, false);
+        assert_eq!(cpu.data_read(SFR_IFS3).unwrap() & (1 << IRQ_QEI.0), 0);
+        // CEID still sets CNTERR but suppresses the interrupt.
+        let mut cpu = cpu_with(&[0x0000_0000; 32]);
+        let mut bus = MirrorBus::new();
+        qei_setup(&mut cpu, 4, 3);
+        write_sfr(&mut cpu, SFR_DFLT1CON, DFLT_CEID);
+        for (a, b) in [
+            (true, false),
+            (true, true),
+            (false, true),
+            (false, false),
+            (true, false),
+            (true, true),
+            (false, true),
+            (false, false),
+        ] {
+            qei_edge(&mut cpu, &mut bus, a, b);
+        }
+        assert_ne!(cpu.data_read(SFR_QEI1CON).unwrap() & QEICON_CNTERR, 0);
+        assert_eq!(cpu.data_read(SFR_IFS3).unwrap() & (1 << IRQ_QEI.0), 0);
+    }
+
+    #[test]
+    fn qei_timer_mode_up_and_down() {
+        let mut cpu = cpu_with(&[0x0000_0000; 16]);
+        let mut bus = MirrorBus::new();
+        write_sfr(&mut cpu, SFR_MAX1CNT, 2);
+        // QEIM = 001, internal clock, UPDN = 1 (up).
+        write_sfr(&mut cpu, SFR_QEI1CON, 0x0100 | QEICON_UPDN);
+        step(&mut cpu, &mut bus);
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.data_read(SFR_POS1CNT).unwrap(), 2);
+        step(&mut cpu, &mut bus); // 3 > MAXCNT → 0 + QEIIF
+        assert_eq!(cpu.data_read(SFR_POS1CNT).unwrap(), 0);
+        assert_ne!(cpu.data_read(SFR_IFS3).unwrap() & (1 << IRQ_QEI.0), 0);
+        // Down-count: start at 0xFFFF, MAXCNT = 0xFFFE → one tick matches.
+        write_sfr(&mut cpu, SFR_IFS3, 0);
+        write_sfr(&mut cpu, SFR_POS1CNT, 0xFFFF);
+        write_sfr(&mut cpu, SFR_MAX1CNT, 0xFFFE);
+        write_sfr(&mut cpu, SFR_QEI1CON, 0x0100); // UPDN = 0 (down)
+        step(&mut cpu, &mut bus);
+        assert_eq!(cpu.data_read(SFR_POS1CNT).unwrap(), 0);
+        assert_ne!(cpu.data_read(SFR_IFS3).unwrap() & (1 << IRQ_QEI.0), 0);
+    }
+
+    #[test]
+    fn qei_digital_filter_rejects_short_pulses() {
+        let mut cpu = cpu_with(&[0x0000_0000; 32]);
+        let mut bus = MirrorBus::new();
+        qei_setup(&mut cpu, 6, 100);
+        write_sfr(&mut cpu, SFR_DFLT1CON, DFLT_QEOUT); // 1:1 filter clock
+                                                       // A one-cycle high pulse is rejected (needs three equal samples).
+        bus.set_input(1, 2, true);
+        step(&mut cpu, &mut bus);
+        assert_eq!(
+            cpu.data_read(SFR_QEI1CON).unwrap() & QEICON_INDEX,
+            0,
+            "single-sample pulse rejected"
+        );
+        bus.set_input(1, 2, false);
+        step(&mut cpu, &mut bus);
+        step(&mut cpu, &mut bus);
+        // Three consecutive highs pass the filter.
+        for _ in 0..3 {
+            bus.set_input(1, 2, true);
+            step(&mut cpu, &mut bus);
+        }
+        assert_ne!(
+            cpu.data_read(SFR_QEI1CON).unwrap() & QEICON_INDEX,
+            0,
+            "three equal samples are accepted"
+        );
     }
 }
