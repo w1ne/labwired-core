@@ -566,7 +566,7 @@ chips:
 
   - id: dspic33fj32mc204
     arch: pic24
-    headline: "M0 bring-up; no beyond-rubric content. Boot + UART1 TX run in the PR shards (crates/core/tests/pic24_m0_smoke.rs) and through examples/dspic33fj32mc204/io-smoke.yaml in strict_onboarding; UART1 TX is also console-proven by `labwired run --chip ...` printing `UART: H`. Timers, interrupts, PWM, QEI, ADC, SPI, I2C and the DSP MAC are unmodeled at M0 (docs/pic24-m0-reference.md), so no advanced blocks exist to list."
+    headline: "M0 + M1a + M1b bring-up: boot (PC 0 -> reset GOTO) with UART1 TX, timers T1/T2/T3, the interrupt fabric (IVT/AIVT vector fetch), GPIO ports A/B/C, PPS, input capture 1/2 and output compare 1/2. The committed XC16 v1.70 firmware (xc16-uart-smoke.c, stock linker script) boots on the model and prints `HI` (crates/core/tests/pic24_xc16_elf_boot.rs); the hand fixture runs in the PR shards (crates/core/tests/pic24_m0_smoke.rs) and through examples/dspic33fj32mc204/io-smoke.yaml in strict_onboarding. Motor Control PWM/QEI, ADC/SPI/I2C and the DSP MAC are unmodeled (docs/pic24-m0-reference.md), so no advanced blocks exist to list."
     functional: []
     advanced_unit_only: []
     advanced_dead: []
