@@ -4,6 +4,10 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 #
-# dsPIC33FJ32MC204 demo system — M0 bring-up.
+# dsPIC33FJ32MC204 base onboarding system (M0–M3). UART1, the timers, GPIO,
+# PWM/QEI, ADC and SPI/I2C controllers are CPU-internal; the CLI `test`/`run`
+# paths use this file. The M3 TMP102/loopback demo lives in `system-m3.yaml`,
+# which is consumed by the session builder (`build_machine`) because the
+# generic bus has no PIC24 I2C/SPI controllers to attach them to.
 name: "dspic33fj32mc204-demo"
 chip: "../../configs/chips/dspic33fj32mc204.yaml"
