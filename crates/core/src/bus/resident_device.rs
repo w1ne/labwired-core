@@ -115,6 +115,14 @@ impl DevicePins for SystemBus {
         {
             return Some(true);
         }
+        // AVR: a DDR-clear pad is an input whatever PORT holds (Keypad.h ends
+        // each column pulse with `pinMode(INPUT)`, which clears PORT).
+        if self.find_peripheral_index(addr).is_some_and(|idx| {
+            let dev = &self.peripherals[idx].dev;
+            dev.gpio_input_is_released() && dev.read_gpio_is_output(bit) == Some(false)
+        }) {
+            return Some(true);
+        }
         self.output_bit(addr, bit)
     }
 

@@ -497,6 +497,14 @@ pub trait Peripheral: std::fmt::Debug + Send {
         }
     }
 
+    /// GPIO capability: whether an input pad (`read_gpio_is_output == Some(false)`)
+    /// is released whatever its output latch holds. True for the ATmega port,
+    /// where `pinMode(INPUT)` clears `PORTx` yet the pad drives nothing; the
+    /// default `false` keeps the latch as the released level (STM32 `ODR`).
+    fn gpio_input_is_released(&self) -> bool {
+        false
+    }
+
     /// GPIO capability: the offsets of this port's output latch and input
     /// register within its window, for a port whose register bit `n` IS pad
     /// `n` (an STM32/nRF/SAM/EFR32/Kinetis `GpioPort`, an ATmega `PORTx`).
