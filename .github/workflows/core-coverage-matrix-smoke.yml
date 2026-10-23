@@ -371,7 +371,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.95.0
         with:
-          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,thumbv8m.main-none-eabi,riscv32i-unknown-none-elf,riscv32imc-unknown-none-elf,riscv32im-unknown-none-elf
+          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,thumbv7em-none-eabihf,thumbv8m.main-none-eabi,riscv32i-unknown-none-elf,riscv32imc-unknown-none-elf,riscv32im-unknown-none-elf
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
