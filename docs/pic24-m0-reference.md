@@ -56,36 +56,50 @@ Addresses are PC units (2 per instruction), user flash as XC16 lays it out:
 0x000210: BRA  $-1               ; self-loop (PC = PC + 2 + 2*(-1))
 ```
 
-The fixture ELF's entry is `0x200`; the reset trampoline at `0x0` is not part
-of the fixture — the model starts at `e_entry`.
+The fixture ELF carries the real reset vector: a 2-word `GOTO 0x200` at PC 0,
+so the model resets to `PC = 0` and vectors through it (DS70283H Figure 7-1,
+"Reset – GOTO Instruction" / "Reset – GOTO Address"). `e_entry` is `0x200`.
 
 Acceptance: UART sink receives `H`; PC/SP initialization deterministic; repeat runs identical.
 
-### 3.1 XC16 ELF layout (verified 2026-10-19, DS50002071F)
+### 3.1 XC16 ELF layout (verified 2026-10-22 against real XC16 v1.70 output)
 
-The earlier M0 note called the layout "provisional: one instruction per
-4-byte slot with the PC indexing slots". The XC16 compiler guide's "Program
-Counter Unit" definition settles it:
+The M0 note first called the layout "provisional"; #1447 then claimed the ELF
+stores **3 bytes per instruction**, reading DS50002071F's "Program Counter
+Unit" glossary entry ("in an executable section, 2 program counter units are
+equivalent to 3 bytes"). That is the 16-bit assembler's **conceptual address
+arithmetic**, not the ELF file layout — and it was disproved by building the
+committed `dspic33fj32mc204-xc16-uart-smoke.elf` with XC16 v1.70 and
+inspecting it:
 
-- the PC increments by **2** per instruction word (24-bit instructions);
-- **in an executable section, 2 program counter units are equivalent to
-  3 bytes** — the ELF stores 3 bytes per instruction;
-- in a read-only (data) section, 2 PC units are 2 bytes;
-- "phantom bytes" (a 4th pad byte) appear in **HEX** files, not in ELF.
+- every executable section (`.text`, `.reset`, `.ivt.*`, `.aivt.*`) has a
+  size that is a **multiple of 4**;
+- the bytes are 4-byte slots: `0f 80 20 00 | 0e ff 20 00 | …` — the 24-bit
+  little-endian word plus one pad byte (the "phantom byte" of the 4-byte
+  container, DS50002071F glossary);
+- the disassembler decodes with a 4-byte stride while PC addresses advance
+  by 2 per instruction (`0x200`, `0x202`, …), i.e. **addresses are PC
+  units**, 2 per instruction;
+- `.reset` holds the 2-word `GOTO` as two slots; each `.ivt.*`/`.aivt.*`
+  entry is one slot holding a **24-bit ISR address as data**
+  (DS70283H §7.1: "Each interrupt vector contains a 24-bit-wide address").
 
 The model therefore:
 
-- keeps `pc` in PC units (`PC_UNITS_PER_INSTRUCTION = 2`; interrupt vectors
-  stay `0x4 + 2*N`, as on silicon);
-- expands XC16 3-byte executable segments into its internal 4-byte slots at
-  load (`cpu::pic24::xc16_executable_slots`) and places them at `addr / 2`;
-- rejects an executable segment whose size is not a multiple of 3 rather
-  than guessing;
-- skips non-executable PIC24 program-memory segments (PSV/table reads are
+- keeps `pc` in PC units (`PC_UNITS_PER_INSTRUCTION = 2`) and one 24-bit word
+  per 4-byte flash slot (`INSTR_SLOT_BYTES = 4`) — **identical to the ELF
+  layout**, so the parsers copy executable sections verbatim
+  (`xc16_section_is_slot_aligned` validates the size);
+- places each section at its own PC-unit address from the section table
+  (program headers can span sections at non-contiguous addresses);
+- loads the PC from the vector table on exception entry
+  (`INTCON2.ALTIVT` selects the AIVT at `0x104`);
+- skips non-executable PIC24 program-memory sections (PSV/table reads are
   not modelled).
 
 This matches the datasheet wording "addresses are incremented or decremented
-by two during code execution" (DS70283H §4.2.3).
+by two during code execution" (DS70283H §4.2.3) and the reset/vector figures
+(DS70283H §4 and §7.1).
 
 ## 4. Engine integration map (M0 wiring)
 
