@@ -40,6 +40,7 @@ pub(crate) fn write_outputs<C: labwired_core::Cpu>(
     inspect: Option<labwired_core::inspect::MachineInspect>,
     logic_edges: Option<labwired_core::logic_capture::LogicEdgesResult>,
     gpio_pins: Option<Vec<labwired_core::logic_capture::GpioPinState>>,
+    uart_lines: Option<crate::uart_lines::UartLinesResult>,
     motors: Vec<labwired_core::bus::MotorSnapshot>,
     analog_series: Option<labwired_core::analog::AnalogSeries>,
     stimuli: Vec<StimulusOutcome>,
@@ -123,6 +124,7 @@ pub(crate) fn write_outputs<C: labwired_core::Cpu>(
         fault_verdict,
         logic_edges,
         gpio_pins,
+        uart_lines,
         motors,
         analog_series,
         stimuli,
@@ -504,6 +506,7 @@ pub(crate) fn write_config_error_outputs(
         // Nor any logic-analyzer edges — capture never armed.
         logic_edges: None,
         gpio_pins: None,
+        uart_lines: None,
         // Nor any motor evidence: the run was rejected before a machine existed.
         motors: Vec::new(),
         analog_series: None,
