@@ -292,6 +292,21 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output: b"NRF52840_SMOKE_OK\n",
     },
     SurvivalCase {
+        // Arduino Nano 33 BLE (ABX00030): nRF52840, 1 MiB flash at 0x0, 256 KiB
+        // RAM at 0x20000000. UARTE0 (EasyDMA) is the board's D0/D1 `Serial1`;
+        // the RGB LED is active low, so the smoke prints the GPIO0 OUT readback
+        // to pin the red/green/blue channel mapping. SIM-DERIVED.
+        name: "arduino_nano_33_ble_smoke",
+        core: "cortex-m4",
+        family: CpuFamily::CortexM,
+        hal: Hal::Bare,
+        chip: "nrf52840",
+        system: "arduino-nano-33-ble",
+        fixture: "arduino-nano-33-ble-smoke.elf",
+        valid_pc_ranges: &[(0x0000_0000, 0x000F_FFFF), (0x2000_0000, 0x2003_FFFF)],
+        expected_uart_output: b"ARDUINO NANO 33 BLE SMOKE\n",
+    },
+    SurvivalCase {
         // Plain Arduino sketch built with the Adafruit nRF52 core (board
         // `nrf52840_dk`). Serial.println drives the legacy UART personality of
         // UART0/UARTE0 (ENABLE=4): it writes each byte to TXD (0x51C) and spins
@@ -2028,6 +2043,11 @@ survival_gate!(
 );
 
 survival_gate!(test_nrf52840_demo_survival, "nrf52840_demo");
+
+survival_gate!(
+    test_arduino_nano_33_ble_smoke_survival,
+    "arduino_nano_33_ble_smoke"
+);
 
 survival_gate!(
     test_nrf52840_arduino_serial_survival,

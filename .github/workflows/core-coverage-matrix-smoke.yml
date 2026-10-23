@@ -348,6 +348,15 @@ jobs:
           # wire. No build_dir needed: this crate's link args come from its
           # build.rs, which cargo reads from the package regardless of the
           # working directory.
+          # Arduino Nano 33 BLE: nRF52840 UARTE console + the active-low RGB
+          # OUT readback; the LSM9DS1 IMU and USB CDC are not modelled.
+          - id: arduino-nano-33-ble-smoke
+            target: thumbv7em-none-eabihf
+            crate: firmware-arduino-nano-33-ble-smoke
+            profile: release
+            profile_dir: release
+            script: examples/arduino-nano-33-ble/io-smoke.yaml
+            system: examples/arduino-nano-33-ble/system.yaml
           - id: litex-vexriscv-smoke
             target: riscv32im-unknown-none-elf
             crate: firmware-litex-vexriscv-smoke
