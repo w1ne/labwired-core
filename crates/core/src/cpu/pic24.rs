@@ -7373,7 +7373,7 @@ mod tests {
     fn adc_alts_uses_mux_a_first_and_then_mux_b() {
         let mut cpu = adc_cpu(0, false);
         cpu.ad1con2 = AD1CON2_ALTS;
-        cpu.ad1chs0 = 0 | (2 << 8); // CH0SA = AN0, CH0SB = AN2
+        cpu.ad1chs0 = 2 << 8; // CH0SA = AN0, CH0SB = AN2
         cpu.ad1pcfgl = 0x01FF & !((1 << 0) | (1 << 2));
         cpu.set_adc_analog(0, 0x111);
         cpu.set_adc_analog(2, 0x222);
