@@ -574,6 +574,21 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output: b"LITEX VEXRISCV SMOKE\n",
     },
     SurvivalCase {
+        // Vega board (RI5CY, RV32IMC): 1 MiB flash at 0x0, 192 KiB SRAM at
+        // 0x20000000, LPUART0 at 0x40042000. The smoke boots from flash and
+        // prints over the LPUART; SCG/PCC/INTMUX/LPTMR remain declared stubs.
+        // SIM-DERIVED.
+        name: "vegaboard_ri5cy_smoke",
+        core: "rv32imc",
+        family: CpuFamily::RiscV,
+        hal: Hal::Bare,
+        chip: "vegaboard-ri5cy",
+        system: "vegaboard-ri5cy",
+        fixture: "vegaboard-ri5cy-smoke.elf",
+        valid_pc_ranges: &[(0x0000_0000, 0x000F_FFFF), (0x2000_0000, 0x2002_FFFF)],
+        expected_uart_output: b"VEGABOARD RI5CY SMOKE\n",
+    },
+    SurvivalCase {
         // Hardware-validated against real NUCLEO-L476RG silicon: the
         // exact byte stream below was captured from /dev/ttyACM1 with the
         // J-Link OB Virtual COM Port at 115200 baud. The simulator must
@@ -2476,6 +2491,8 @@ survival_gate!(test_esp32c3_demo_survival, "esp32c3_demo");
 survival_gate!(test_esp32c6_demo_survival, "esp32c6_demo");
 
 survival_gate!(test_litex_vexriscv_smoke_survival, "litex_vexriscv_smoke");
+
+survival_gate!(test_vegaboard_ri5cy_smoke_survival, "vegaboard_ri5cy_smoke");
 
 survival_gate!(test_nucleo_l476rg_smoke_survival, "nucleo_l476rg_smoke");
 
