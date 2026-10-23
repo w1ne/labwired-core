@@ -272,6 +272,10 @@
     "litex-vexriscv": {
       "how": "needs-build",
       "why": "The LiteX VexRiscv model (RV32IM profile, LiteX UART and timer) is newer than the released CLI this gate installs. The committed smoke tests/fixtures/litex-vexriscv-smoke.elf prints 'LITEX VEXRISCV SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
+    },
+    "vegaboard-ri5cy": {
+      "how": "needs-build",
+      "why": "The RI5CY/Vega board model is newer than the released CLI this gate installs. The committed smoke tests/fixtures/vegaboard-ri5cy-smoke.elf prints 'VEGABOARD RI5CY SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
     }
   }
 }
