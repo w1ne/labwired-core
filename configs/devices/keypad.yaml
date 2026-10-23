@@ -1,4 +1,6 @@
-# A 4×4 membrane keypad: the selected column follows its pressed key's row.
+# A 4×4 membrane keypad: a pressed key joins its row and column, both ways.
+# A line the MCU drives LOW pulls the other side LOW; a released line (input,
+# pull-up) does not. Row-drive and column-drive (Keypad.h) scans both read it.
 # One rounded `key` stimulus (row*4+column), -1 releases. No ghosting or bounce.
 type: keypad
 behavior:
@@ -7,15 +9,30 @@ behavior:
   pins:
     rows: { config: row_pins, count: 4 }
     cols: { config: col_pins, count: 4 }
-  pin_defaults: { rows: true }
-  outputs: ["cols[0]", "cols[1]", "cols[2]", "cols[3]"]
+    cols_in: { config: col_pins, count: 4 }
+    rows_out: { config: row_pins, count: 4 }
+  pin_defaults: { rows: true, cols_in: true }
+  pin_sampling:
+    "rows[0]": open_drain_release
+    "rows[1]": open_drain_release
+    "rows[2]": open_drain_release
+    "rows[3]": open_drain_release
+    "cols_in[0]": open_drain_release
+    "cols_in[1]": open_drain_release
+    "cols_in[2]": open_drain_release
+    "cols_in[3]": open_drain_release
+  outputs: ["cols[0]", "cols[1]", "cols[2]", "cols[3]", "rows_out[0]", "rows_out[1]", "rows_out[2]", "rows_out[3]"]
   rules:
-    - on: { pins: ["rows[0]", "rows[1]", "rows[2]", "rows[3]"] }
+    - on: { pins: ["rows[0]", "rows[1]", "rows[2]", "rows[3]", "cols_in[0]", "cols_in[1]", "cols_in[2]", "cols_in[3]"] }
       do: &reflect
         - { pin: "cols[0]", level: "!(input(key) >= 0 && input(key) % 4 == 0 && !pin(rows[input(key) / 4]))" }
         - { pin: "cols[1]", level: "!(input(key) >= 0 && input(key) % 4 == 1 && !pin(rows[input(key) / 4]))" }
         - { pin: "cols[2]", level: "!(input(key) >= 0 && input(key) % 4 == 2 && !pin(rows[input(key) / 4]))" }
         - { pin: "cols[3]", level: "!(input(key) >= 0 && input(key) % 4 == 3 && !pin(rows[input(key) / 4]))" }
+        - { pin: "rows_out[0]", level: "!(input(key) >= 0 && input(key) / 4 == 0 && !pin(cols_in[input(key) % 4]))" }
+        - { pin: "rows_out[1]", level: "!(input(key) >= 0 && input(key) / 4 == 1 && !pin(cols_in[input(key) % 4]))" }
+        - { pin: "rows_out[2]", level: "!(input(key) >= 0 && input(key) / 4 == 2 && !pin(cols_in[input(key) % 4]))" }
+        - { pin: "rows_out[3]", level: "!(input(key) >= 0 && input(key) / 4 == 3 && !pin(cols_in[input(key) % 4]))" }
     - on: { input: key }
       do: *reflect
 

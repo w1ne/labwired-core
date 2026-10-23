@@ -256,6 +256,11 @@ impl Peripheral for AvrGpioPort {
         (pin < 8).then(|| self.ddr & (1u8 << pin) != 0)
     }
 
+    /// A DDR-clear pad drives nothing, whatever `PORTx` holds.
+    fn gpio_input_is_released(&self) -> bool {
+        true
+    }
+
     fn gpio_routing(&self, pin: u8) -> Option<GpioRouting> {
         self.read_gpio_is_output(pin).map(|output| GpioRouting {
             mode: if output {
