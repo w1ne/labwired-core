@@ -153,6 +153,89 @@ pub struct Pic24CpuSnapshot {
     pub oc_level: [Option<bool>; 2],
     #[serde(default)]
     pub oc_halted: [bool; 2],
+    // M2: Motor Control PWM (MCPWM1) and QEI1.
+    #[serde(default)]
+    pub p1tcon: u16,
+    #[serde(default)]
+    pub p1tmr: u16,
+    #[serde(default)]
+    pub p1tper: u16,
+    #[serde(default)]
+    pub p1tper_active: u16,
+    #[serde(default)]
+    pub p1secmp: u16,
+    #[serde(default)]
+    pub pwm1con1: u16,
+    #[serde(default)]
+    pub pwm1con2: u16,
+    #[serde(default)]
+    pub p1dtcon1: u16,
+    #[serde(default)]
+    pub p1dtcon2: u16,
+    #[serde(default)]
+    pub p1fltacon: u16,
+    #[serde(default)]
+    pub p1ovdcon: u16,
+    #[serde(default)]
+    pub p1dc: [u16; 3],
+    #[serde(default)]
+    pub p1dc_active: [u16; 3],
+    #[serde(default)]
+    pub p1_frac: u16,
+    #[serde(default)]
+    pub p1_post: u8,
+    #[serde(default)]
+    pub p1_gen: [bool; 3],
+    #[serde(default)]
+    pub p1_dt_hi: [u16; 3],
+    #[serde(default)]
+    pub p1_dt_lo: [u16; 3],
+    #[serde(default)]
+    pub p1_fault_force: bool,
+    #[serde(default)]
+    pub p1_fault_latched: bool,
+    #[serde(default)]
+    pub p1_fault_release: bool,
+    #[serde(default)]
+    pub flta_prev: bool,
+    #[serde(default)]
+    pub rpinr12: u16,
+    #[serde(default)]
+    pub rpinr14: u16,
+    #[serde(default)]
+    pub rpinr15: u16,
+    #[serde(default)]
+    pub ifs3: u16,
+    #[serde(default)]
+    pub iec3: u16,
+    #[serde(default)]
+    pub ipc14: u16,
+    #[serde(default)]
+    pub ipc15: u16,
+    #[serde(default)]
+    pub qei1con: u16,
+    #[serde(default)]
+    pub dflt1con: u16,
+    #[serde(default)]
+    pub pos1cnt: u16,
+    #[serde(default)]
+    pub max1cnt: u16,
+    #[serde(default)]
+    pub qei_prev_ab: u8,
+    #[serde(default)]
+    pub qei_index_prev: bool,
+    #[serde(default)]
+    pub qei_filt: [u8; 3],
+    #[serde(default)]
+    pub qei_filt_cnt: [u16; 3],
+    #[serde(default)]
+    pub qei_filt_out: [bool; 3],
+    #[serde(default)]
+    pub qei_frac: u16,
+    #[serde(default)]
+    pub qei_timer_prev: bool,
+    #[serde(default)]
+    pub qei_ext_psc: u16,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
