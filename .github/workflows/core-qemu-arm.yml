@@ -146,7 +146,13 @@ jobs:
         with:
           shared-key: native-arm-system
       - name: Install native and compiled-DTB build tools
-        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build clang device-tree-compiler busybox gcc-arm-none-eabi=15:13.2.rel1-2
+        timeout-minutes: 10
+        run: sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update && sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y cmake ninja-build clang device-tree-compiler busybox
+      - name: Install pinned ARM C compiler
+        timeout-minutes: 10
+        uses: ./.github/actions/apt-install-cached
+        with:
+          packages: gcc-arm-none-eabi=15:13.2.rel1-2 libnewlib-arm-none-eabi
       - name: Check strict joint preparation, historical modules and CI input contracts
         run: |
           python3 -m unittest discover -s scripts/tests -p test_prepare_rv1103_basket.py
@@ -256,10 +262,16 @@ jobs:
         with:
           node-version: "22.22.0"
       - uses: dtolnay/rust-toolchain@1.95.0
-      - name: Install exact reviewed helper compiler and native tools
+      - name: Install exact reviewed helper compiler
+        timeout-minutes: 10
+        uses: ./.github/actions/apt-install-cached
+        with:
+          packages: gcc-arm-none-eabi=15:13.2.rel1-2 libnewlib-arm-none-eabi
+      - name: Install exact reviewed native tools
+        timeout-minutes: 10
         run: >
-          sudo apt-get update && sudo apt-get install -y
-          gcc-arm-none-eabi=15:13.2.rel1-2 device-tree-compiler=1.7.0-2build1
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update && sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y
+          device-tree-compiler=1.7.0-2build1
           cmake ninja-build clang busybox python3
       - name: Record pinned inputs and tools
         run: |
