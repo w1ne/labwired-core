@@ -44,8 +44,6 @@ const REG_ENABLED: u64 = 0x10;
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct LitexControlStatus {
     leds: u32,
-    switches: u32,
-    buttons: u32,
     pending: u32,
     enabled: u32,
     /// Levels presented on the switch pads (bit n = switch n).
@@ -63,8 +61,6 @@ impl LitexControlStatus {
     pub fn new() -> Self {
         Self {
             leds: 0,
-            switches: 0,
-            buttons: 0,
             pending: 0,
             enabled: 0,
             switch_levels: 0,
@@ -95,8 +91,10 @@ impl LitexControlStatus {
     fn read_reg(&self, offset: u64) -> u32 {
         match offset {
             REG_LEDS => self.leds,
-            REG_SWITCHES => self.switches,
-            REG_BUTTONS => self.buttons,
+            // The status registers combinationally reflect the live pad levels
+            // (there is no separate sampled copy to go stale across a reset).
+            REG_SWITCHES => self.switch_levels,
+            REG_BUTTONS => self.button_levels,
             REG_PENDING => self.pending,
             REG_ENABLED => self.enabled,
             _ => {
@@ -160,6 +158,8 @@ impl crate::Peripheral for LitexControlStatus {
             self.write_reg(offset, value);
             return Ok(());
         }
+        // Defensive only: every CSR is 4-byte aligned, so a misaligned word
+        // store is not expected in normal operation; fall back to byte writes.
         for (i, byte) in value.to_le_bytes().iter().enumerate() {
             self.write(offset + i as u64, *byte)?;
         }
@@ -181,7 +181,8 @@ impl crate::Peripheral for LitexControlStatus {
 
     /// The board_io button attach reads pins individually; the input pins live
     /// above bit 31 (switches 32..63, buttons 64..95), so the 32-bit word
-    /// cannot carry them.
+    /// cannot carry them. The per-pin `read_gpio_input` path is authoritative;
+    /// a renderer that falls back to this word accessor sees no input state.
     fn read_gpio_input_word(&self) -> u32 {
         0
     }
@@ -239,12 +240,14 @@ impl crate::Peripheral for LitexControlStatus {
     }
 
     /// A node reset returns the block to its reset state; the switch/button
-    /// levels are the world's connections and survive.
+    /// levels are the world's connections and survive, and `buttons_active_low`
+    /// is a board-wiring fact (a reset does not rewire the physical buttons).
     fn on_node_reset(&mut self) {
         let switch_levels = self.switch_levels;
         let button_levels = self.button_levels;
+        let buttons_active_low = self.buttons_active_low;
         *self = Self::new();
-        self.buttons_active_low = false;
+        self.buttons_active_low = buttons_active_low;
         self.switch_levels = switch_levels;
         self.button_levels = button_levels;
     }
@@ -267,18 +270,10 @@ impl PinPort for LitexControlStatus {
         let pin = pin as usize;
         if (SWITCHES..LEDS + SWITCHES).contains(&pin) {
             let bit = pin - LEDS;
-            if self.switch_levels & (1 << bit) != 0 {
-                External::Level(true)
-            } else {
-                External::Level(false)
-            }
+            External::Level(self.switch_levels & (1 << bit) != 0)
         } else if (LEDS + SWITCHES..PINS).contains(&pin) {
             let bit = pin - (LEDS + SWITCHES);
-            if self.button_levels & (1 << bit) != 0 {
-                External::Level(true)
-            } else {
-                External::Level(false)
-            }
+            External::Level(self.button_levels & (1 << bit) != 0)
         } else {
             External::Released
         }
@@ -292,7 +287,6 @@ impl PinPort for LitexControlStatus {
             let before = self.switch_levels & (1 << bit) != 0;
             if let Some(level) = level {
                 self.switch_levels = (self.switch_levels & !(1 << bit)) | ((level as u32) << bit);
-                self.switches = self.switch_levels;
             }
             Some(InputChange {
                 before,
@@ -303,7 +297,6 @@ impl PinPort for LitexControlStatus {
             let before = self.button_levels & (1 << bit) != 0;
             if let Some(level) = level {
                 self.button_levels = (self.button_levels & !(1 << bit)) | ((level as u32) << bit);
-                self.buttons = self.button_levels;
                 self.note_button(bit, before);
             }
             Some(InputChange {
@@ -367,6 +360,30 @@ mod tests {
         assert_eq!(cas.read_u32(REG_BUTTONS).unwrap(), 0b10);
         assert_eq!(cas.input(LEDS as u8 + 2), Some(true));
         assert_eq!(cas.input(0), None, "an LED is not an input");
+    }
+
+    #[test]
+    fn node_reset_preserves_the_wiring_and_the_status_readback() {
+        let mut cas = LitexControlStatus::new().with_buttons_active_low(true);
+        cas.write_u32(REG_ENABLED, 0b1).unwrap();
+        // A held switch and a released (high, active-low) button.
+        cas.set_external(LEDS as u8, External::Level(true)); // switch 0
+        cas.set_external((LEDS + SWITCHES) as u8, External::Level(true)); // button 0 released
+        assert_eq!(cas.read_u32(REG_SWITCHES).unwrap(), 0b1);
+
+        cas.on_node_reset();
+
+        // The status CSRs still reflect the held pad levels (not zero), and the
+        // registered interrupts are cleared.
+        assert_eq!(cas.read_u32(REG_SWITCHES).unwrap(), 0b1);
+        assert_eq!(cas.read_u32(REG_BUTTONS).unwrap(), 0b1);
+        assert_eq!(cas.read_u32(REG_PENDING).unwrap(), 0);
+        assert_eq!(cas.read_u32(REG_ENABLED).unwrap(), 0);
+
+        // The active-low wiring survives the reset: a press still latches.
+        cas.write_u32(REG_ENABLED, 0b1).unwrap();
+        cas.set_external((LEDS + SWITCHES) as u8, External::Level(false));
+        assert_eq!(cas.read_u32(REG_PENDING).unwrap(), 0b1);
     }
 
     #[test]
