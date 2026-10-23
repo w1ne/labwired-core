@@ -17,8 +17,9 @@ Claims, evidence, and what is explicitly **not** claimed yet.
 | Interrupts: IFS0/IEC0/IPC0-2, DISI/NSTDIS gating, **IVT/AIVT vector fetch of the 24-bit ISR address**, two-word frame, RETFIE (M1a) | unit-tested | `timer1_interrupt_vectors_frames_and_returns`, `disabled_source_does_not_vector` |
 | `ACCA*` / `ACCB*` 40-bit SFR storage (M1a) | unit-tested | `accumulator_sfr_words_round_trip` |
 | **DSP MAC class (M1c)**: `MAC`/`MPY`/`MPY.N`/`MSC` (incl. squares), `CLR`, `MOVSAC`, `LAC`, `SAC`, `SAC.R`, X/Y prefetch + W12 offset, write-back, CORCON modes, OA/OB/SA/SB | unit + integration | `dsp_*` tests (PRM golden vectors); `crates/core/tests/pic24_xc16_dsp.rs` (real XC16 firmware) |
+| **Motor Control PWM + QEI (M2)**: MCPWM1 time base (free/single/up-down/double), 3 duty generators + buffering/IUE, complementary/independent pairs with dead time, P1OVDCON override, FLTA1 faults, PWM1IF postscale; QEI1 x2/x4, POS1CNT/MAX1CNT, match/index resets with IMV, CNTERR/CEID, digital filter, timer mode; IFS3/IEC3/IPC14/15 | unit + integration | `pwm_*`/`qei_*`/`m2_*` tests; `crates/core/tests/pic24_xc16_m2.rs` (real XC16 firmware) |
 | DSP accumulator arithmetic (`ADD`/`SUB`/`MAX`/`MIN`/`SFTAC`/`FBCL` on ACCA/ACCB) | **not modelled** | decode error on unsupported opcodes; no claims |
-| PWM/QEI (M2), ADC/SPI/I2C (M3) | **not modelled** | decode error on unsupported opcodes; no claims |
+| ADC/SPI/I2C (M3) | **not modelled** | decode error on unsupported opcodes; no claims |
 | GPIO ports A/B/C: TRISx/PORTx/LATx/ODCx, 44-pin masks (M1b) | unit-tested | `gpio_output_drives_the_pad_model`, `port_read_sees_external_levels_and_own_latch`; `peripherals::pic24_gpio` tests |
 | PPS slice: RPINR7 inputs, RPOR0-12 outputs, RP0-15 = RB0-15 / RP16-25 = RC0-9 (M1b) | unit-tested | exercised by the OC/IC tests below |
 | Input capture 1/2: edge modes, prescalers, 4-deep FIFO, ICI, ICOV/ICBNE (M1b) | unit-tested | `ic1_captures_tmr2_on_a_rising_edge_of_rp0`, `ic_interrupt_divider_and_overflow_rules` |
@@ -214,6 +215,42 @@ against `xc16-as` output (`dsp_words_match_xc16_as`).
 
 Approximations are listed in `docs/pic24-m0-reference.md` §3.2 and the
 module docs; nothing else is guessed — the PRM examples pin the semantics.
+
+## M2 evidence (Motor Control PWM + QEI, verified 2026-10-23, branch `feat/pic24-m2-pwm-qei`)
+
+MCPWM1 is implemented from DS70187E §14 and QEI1 from DS70208C §15, with
+the SFR maps and vectors from DS70283H (Tables 4-8, 4-10, 7-1) and the
+pin/PPS data from Tables 1-1 and 10-2.
+
+```bash
+# 1. Unit tests — PWM/QEI plus every earlier milestone
+cargo test -p labwired-core --lib pic24
+#   test result: ok. 71 passed; 0 failed
+
+# 2. The real XC16 M2 firmware configures PWM1+QEI1 and counts edges
+cargo test -p labwired-core --test pic24_xc16_m2
+#   xc16_m2_firmware_configures_pwm_and_qei ... ok
+```
+
+The M2 firmware checks: the post-init register image (`PTEN`, P1TPER = 15,
+P1DC1 = 5, PWM1CON1 = 0x0011, P1DTCON1 = 2, QEI1CON = 0x0604, MAX1CNT =
+199, RPINR14/15), the complementary PWM1H1/L1 pads through the dead time and
+duty match (and PWM1IF at the period match), and injected QEA/QEB/INDX edges
+for x4 forward/reverse counting, UPDN, the IMV-gated index reset in both
+directions (forward → 0, reverse → MAXCNT) and QEIIF.
+
+The unit tests additionally cover the single-event and center-aligned time
+base, the output postscaler, P1OVDCON override, FLTA1 latched/cycle-by-cycle
+fault states, the QEI x2 mode, match-reset rollover/underflow, CNTERR/CEID,
+timer mode and the digital filter, plus the IFS3 vectors and IPC14/15
+mapping. While wiring the interrupt fabric the M1a vector table was corrected
+against DS70283H Table 7-1: IC2/OC2/T2/T3 are vectors 13/14/15/16 (IFS0
+bit 4 is reserved) and T3's priority comes from IPC2 field 0.
+
+Approximations are listed in `docs/pic24-m0-reference.md` §3.3 and the
+module docs (PWM polarity/PWMPIN from the erased-device FPOR, center-aligned
+endpoint order, index recognition by the INDX edge plus IMV, diagonal
+quadrature transitions ignored, per-step input sampling).
 
 ## Unsupported-instruction audit
 

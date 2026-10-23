@@ -23,7 +23,7 @@ cargo build --release -p labwired-cli
 
 ## The firmware
 
-Three committed ELFs exercise the chip:
+Four committed ELFs exercise the chip:
 
 1. **Hand-assembled fixture** (`firmware/make-fixture-elf.py`, DS70000157G
    encodings) — the minimal M0 smoke: `MOV #'H', W0` / `MOV W0, 0x0224`
@@ -44,6 +44,11 @@ Three committed ELFs exercise the chip:
    `SAC.R`, normal-saturation clamp). Booted by
    `crates/core/tests/pic24_xc16_dsp.rs`, which checks the accumulators,
    W13, the prefetch registers and the SR flags.
+4. **Real XC16 M2 build** (`firmware/xc16-m2-pwm-qei.c` →
+   `dspic33fj32mc204-xc16-m2-pwm-qei.elf`) — configures an edge-aligned
+   complementary PWM1 pair with a 2 TCY dead time and a x4 index-reset
+   QEI1. Booted by `crates/core/tests/pic24_xc16_m2.rs`, which checks the
+   register image, the PWM pads and injected quadrature edges.
 
 Rebuild the XC16 ELFs (Linux x86-64 container; XC16 itself is proprietary
 and not redistributed — only its output is committed):
@@ -56,7 +61,10 @@ docker run --rm -v "$PWD/examples/dspic33fj32mc204/firmware:/work" -w /work \
       -o dspic33fj32mc204-xc16-uart-smoke.elf xc16-uart-smoke.c
     xc16-gcc -mcpu=33FJ32MC204 -O0 -Wall \
       -Wl,-T,/opt/microchip/xc16/support/dsPIC33F/gld/p33FJ32MC204.gld \
-      -o dspic33fj32mc204-xc16-dsp-mac.elf xc16-dsp-mac.c'
+      -o dspic33fj32mc204-xc16-dsp-mac.elf xc16-dsp-mac.c
+    xc16-gcc -mcpu=33FJ32MC204 -O0 -Wall \
+      -Wl,-T,/opt/microchip/xc16/support/dsPIC33F/gld/p33FJ32MC204.gld \
+      -o dspic33fj32mc204-xc16-m2-pwm-qei.elf xc16-m2-pwm-qei.c'
 ```
 
 (The explicit `-T` matters: this container's `-p` device selection silently
@@ -78,7 +86,12 @@ real XC16 code (`NOP`; `MOV #lit16`/`MOV f,Wn`/`MOV Wns,f`; `MOV.B #lit8`;
 `MPY.N`/`MSC` including the square forms, `CLR`, `MOVSAC`, `LAC`, `SAC`,
 `SAC.R`, X/Y prefetches with the W12 register-offset mode, accumulator
 write-back, CORCON fractional/integer, signed/unsigned, rounding and
-saturation modes, OA/OB/SA/SB/OAB/SAB), UART1 TX
+saturation modes, OA/OB/SA/SB/OAB/SAB), Motor Control PWM 1 (edge-aligned,
+single-event and center-aligned time base, three duty generators with
+buffering/IUE, complementary/independent pairs with dead time, P1OVDCON
+override, FLTA1 fault states, PWM1IF postscaling) and QEI1 (x2/x4 decoding,
+POS1CNT/MAX1CNT, match/index resets with IMV, UPDN, CNTERR/CEID, digital
+filter, 16-bit timer mode), UART1 TX
 (`U1MODE`/`U1STA`/`U1TXREG`), Timers T1/T2/T3 (`TMR`/`PR`/`TCON`, TCKPS
 prescaler, 32-bit T2/T3 pair), interrupts (`IFS0`/`IEC0`/`IPC0-2`,
 DISI/NSTDIS, IVT/AIVT vector fetch of the 24-bit ISR address, two-word
@@ -92,7 +105,7 @@ Not modelled (each has its own milestone): `TBLRD*`/`TBLW*` (PSV), `ADDC`/
 `SUBB`/`CPB` sticky-Z forms, register-offset `[Ws+Wb]` addressing,
 `REPEAT`/`DO`, `PUSH`/`POP`, `RESET`/`BREAK`, CNPU pull-ups, the DSP
 accumulator arithmetic (`ADD`/`SUB`/`MAX`/`MIN`/`SFTAC`/`FBCL` on
-ACCA/ACCB), Motor Control PWM/QEI (M2), ADC/SPI/I2C (M3), PSV/EDS windows.
+ACCA/ACCB), ADC/SPI/I2C (M3), PSV/EDS windows.
 Unsupported opcodes return a decode error — they are never skipped silently.
 
 Known M1c approximations (everything else is pinned by a DS70000157G
@@ -102,5 +115,14 @@ keeps the exact 40-bit result (no PRM example covers that combination);
 `MPY.N` lists only OA/OB/OAB as affected and is followed literally (no
 saturation, no SA/SB); accumulator write-back applies SATDW like `SAC.R`
 (no write-back example saturates).
+
+Known M2 approximations (documented, not guessed): PWM polarity is
+active-high with PWMPIN = 1 (the erased-device FPOR values; configuration
+bits are not modelled); center-aligned counting keeps both endpoint ticks
+per Equation 14-2 and the compare uses the phase direction before the
+endpoint flip (the FRM does not pin that order); QEI index recognition uses
+the INDX rising edge plus the IMV match instead of latching a quadrature
+transition (DS70208C §15.5.3.1); diagonal quadrature transitions are
+ignored; PWM/QEI inputs are sampled once per retired step.
 
 See `VALIDATION.md` for the evidence and `REQUIRED_DOCS.md` for sources.

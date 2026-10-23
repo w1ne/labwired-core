@@ -71,9 +71,13 @@ jobs:
         uses: dtolnay/rust-toolchain@1.95.0
 
       - name: Install host C toolchain
+        timeout-minutes: 10
+        uses: ./.github/actions/apt-install-cached
+        with:
+          packages: build-essential gcc-arm-none-eabi libnewlib-arm-none-eabi
+
+      - name: Show host C toolchain
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends build-essential gcc-arm-none-eabi libnewlib-arm-none-eabi
           cc --version
           arm-none-eabi-gcc --version
 
