@@ -364,6 +364,15 @@ jobs:
             profile_dir: release
             script: examples/litex-vexriscv/io-smoke.yaml
             system: examples/litex-vexriscv/system.yaml
+          # Vega board (RI5CY): LPUART0 console + a real multiply; SCG/PCC,
+          # INTMUX and the low-power timers stay declared stubs.
+          - id: vegaboard-ri5cy-smoke
+            target: riscv32imc-unknown-none-elf
+            crate: firmware-vegaboard-ri5cy-smoke
+            profile: release
+            profile_dir: release
+            script: examples/vegaboard-ri5cy/io-smoke.yaml
+            system: examples/vegaboard-ri5cy/system.yaml
 
     steps:
       - uses: actions/checkout@v4

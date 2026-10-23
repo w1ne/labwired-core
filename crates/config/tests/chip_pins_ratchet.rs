@@ -57,6 +57,9 @@ const PARSE_FALLBACK_CHIPS: &[&str] = &[
     // The LiteX VexRiscv SoC models a UART and a timer and no GPIO bank, so
     // there are no pads to read, by parse or by map.
     "litex-vexriscv",
+    // The Vega board's SoC models UARTs and timers and no GPIO bank, so there
+    // are no pads to read, by parse or by map.
+    "vegaboard-ri5cy",
     "nrf52832",
     "nrf52833",
     "nrf52840",

@@ -1719,6 +1719,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-vegaboard-ri5cy-smoke"
+version = "0.1.0"
+dependencies = [
+ "panic-halt",
+ "riscv-rt",
+]
+
+[[package]]
 name = "firmware-xiao-nrf52840-sense-demo"
 version = "0.1.0"
 dependencies = [

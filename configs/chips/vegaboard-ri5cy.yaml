@@ -1,0 +1,71 @@
+# LabWired - Vega board (RI5CY) chip configuration
+#
+# Sources (retrieved 2026-10-23):
+# - The pinned upstream RI5CY platform and the Vega board overlay: RI5CY CPU
+#   (RV32IMC, privileged 1.10), 1 MiB flash at 0x0, 192 KiB SRAM at
+#   0x20000000, LPUART0 at 0x40042000 (external IRQ 17) and LPUART1 at
+#   0x40043000 (routed through the INTMUX), LPTMR0/1/2 at 0x40032000 /
+#   0x40033000 / 0x4102B000, INTMUX at 0x4004F000.
+# - The Vega board overlay's clock blocks: the System Clock Generator CSR at
+#   0x4002C010 and the two PCC clock banks at 0x4002B000 / 0x41027000.
+# - NXP LPUART (Kinetis) register map: DATA @ +0x0C, STAT @ +0x04 with TDRE
+#   (bit 23) / TC (bit 22); the engine's `lpuart` UART profile models it.
+#
+# Modelled: CPU + memory + LPUART0/1 (polled console path).
+# Declared, not modelled (`type: stub`): the low-power timers, the INTMUX and
+# the SCG/PCC clock blocks — the smoke prints the SCG/PCC readbacks so the
+# boundary is visible on the wire. The board has no modelled user I/O.
+#
+# Tier: L1 smoke — boot + UART byte path on the Vega SoC map.
+
+name: "vegaboard-ri5cy"
+arch: "riscv"
+core: "rv32imc"
+# The platform does not declare a core clock; 50 MHz is the rate this target
+# models (the smoke is polled and does not depend on it).
+cpu_hz: 50_000_000
+
+flash: { base: 0x0, size: "1MiB" }
+ram: { base: 0x20000000, size: "192KB" }
+# 0x0 is the SoC's real flash, not an alias.
+flash_boot_alias: false
+peripherals:
+  - id: "lpuart0"
+    type: "uart"
+    config: { profile: "lpuart" }
+    base_address: 0x40042000
+    size: "4KB"
+    irq: 17
+  - id: "lpuart1"
+    type: "uart"
+    config: { profile: "lpuart" }
+    base_address: 0x40043000
+    size: "4KB"
+  - id: "lptmr0"
+    type: "stub"
+    base_address: 0x40032000
+    size: "4KB"
+  - id: "lptmr1"
+    type: "stub"
+    base_address: 0x40033000
+    size: "4KB"
+  - id: "lptmr2"
+    type: "stub"
+    base_address: 0x4102B000
+    size: "4KB"
+  - id: "intmux0"
+    type: "stub"
+    base_address: 0x4004F000
+    size: "4KB"
+  - id: "scg_csr"
+    type: "stub"
+    base_address: 0x4002C010
+    size: "1KB"
+  - id: "pcc0"
+    type: "stub"
+    base_address: 0x4002B000
+    size: "1KB"
+  - id: "pcc1"
+    type: "stub"
+    base_address: 0x41027000
+    size: "1KB"
