@@ -51,6 +51,7 @@ The models column is a content digest over everything that board's `models` list
 | `esp32c6-devkitc` | 🟡 smoke-manual | — | `6bf4bc0838f602a6` | no silicon capture |
 | `litex-vexriscv` | 🟡 smoke-manual | — | `63a4e7787665a4f7` | no silicon capture |
 | `arty-litex-vexriscv` | 🟡 smoke-manual | — | `5c8a8b02be0e493c` | no silicon capture |
+| `vegaboard-ri5cy` | 🟡 smoke-manual | — | `1a1c17f6b26895a8` | no silicon capture |
 
 ## `nrf52840` — 🟢 silicon-verified
 
@@ -406,4 +407,11 @@ The models column is a content digest over everything that board's `models` list
 - Doc: [`docs/boards/arty-litex-vexriscv.md`](arty-litex-vexriscv.md)  ·  Chip: `configs/chips/arty-litex-vexriscv.yaml`
 - Silicon: none — not validated against real hardware.
   - offline (CI): firmware_survival::test_arty_litex_smoke_survival
+- Drift status: **no silicon capture**
+
+## `vegaboard-ri5cy` — 🟡 smoke-manual
+
+- Doc: [`docs/boards/vegaboard-ri5cy.md`](vegaboard-ri5cy.md)  ·  Chip: `configs/chips/vegaboard-ri5cy.yaml`
+- Silicon: none — not validated against real hardware.
+  - offline (CI): firmware_survival::test_vegaboard_ri5cy_smoke_survival
 - Drift status: **no silicon capture**

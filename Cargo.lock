@@ -1130,6 +1130,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-arduino-nano-33-ble-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-arduino-zero-demo"
 version = "0.1.0"
 dependencies = [
@@ -1716,6 +1724,14 @@ version = "0.25.0"
 dependencies = [
  "cortex-m",
  "panic-halt",
+]
+
+[[package]]
+name = "firmware-vegaboard-ri5cy-smoke"
+version = "0.1.0"
+dependencies = [
+ "panic-halt",
+ "riscv-rt",
 ]
 
 [[package]]

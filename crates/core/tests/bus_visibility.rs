@@ -127,6 +127,14 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         "no LiteX UART bring-up in this harness; bytes are proven by the \
          arty-litex-vexriscv survival smoke",
     ),
+    // Vega board (RI5CY): no LPUART bring-up in this harness; bytes are proven
+    // by the vegaboard-ri5cy survival smoke.
+    (
+        "vegaboard-ri5cy",
+        BusKind::Uart,
+        "no LPUART bring-up in this harness; bytes are proven by the \
+         vegaboard-ri5cy survival smoke",
+    ),
     // ATmega328P: USART0 is mirrored from the AVR CPU, which owns UCSR0x/UBRR0
     // and forwards each register write and UDR0 byte to the bus-side host. The
     // harness drives bus MMIO directly, so it never programs the baud divisor the

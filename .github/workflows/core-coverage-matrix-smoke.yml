@@ -348,6 +348,15 @@ jobs:
           # wire. No build_dir needed: this crate's link args come from its
           # build.rs, which cargo reads from the package regardless of the
           # working directory.
+          # Arduino Nano 33 BLE: nRF52840 UARTE console + the active-low RGB
+          # OUT readback; the LSM9DS1 IMU and USB CDC are not modelled.
+          - id: arduino-nano-33-ble-smoke
+            target: thumbv7em-none-eabihf
+            crate: firmware-arduino-nano-33-ble-smoke
+            profile: release
+            profile_dir: release
+            script: examples/arduino-nano-33-ble/io-smoke.yaml
+            system: examples/arduino-nano-33-ble/system.yaml
           - id: litex-vexriscv-smoke
             target: riscv32im-unknown-none-elf
             crate: firmware-litex-vexriscv-smoke
@@ -366,6 +375,15 @@ jobs:
             profile_dir: release
             script: examples/arty-litex-vexriscv/io-smoke.yaml
             system: examples/arty-litex-vexriscv/system.yaml
+          # Vega board (RI5CY): LPUART0 console + a real multiply; SCG/PCC,
+          # INTMUX and the low-power timers stay declared stubs.
+          - id: vegaboard-ri5cy-smoke
+            target: riscv32imc-unknown-none-elf
+            crate: firmware-vegaboard-ri5cy-smoke
+            profile: release
+            profile_dir: release
+            script: examples/vegaboard-ri5cy/io-smoke.yaml
+            system: examples/vegaboard-ri5cy/system.yaml
 
     steps:
       - uses: actions/checkout@v4
@@ -373,7 +391,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.95.0
         with:
-          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,thumbv8m.main-none-eabi,riscv32i-unknown-none-elf,riscv32imc-unknown-none-elf,riscv32im-unknown-none-elf
+          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,thumbv7em-none-eabihf,thumbv8m.main-none-eabi,riscv32i-unknown-none-elf,riscv32imc-unknown-none-elf,riscv32im-unknown-none-elf
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2

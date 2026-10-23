@@ -1,0 +1,41 @@
+# LabWired - Arduino Nano 33 BLE system manifest
+#
+# Board facts (Arduino ABX00030 / ABX00069 schematics, ArduinoCore-mbed
+# `variants/ARDUINO_NANO33BLE`):
+#   P0.24 / P0.16 / P0.06 — RGB LED red / green / blue, **active low**
+#                           (the MCU pins connect to the LED cathodes)
+#   P0.13                 — built-in D13 LED (through an nMOS), active high
+#   P1.03 / P1.10         — D0/TX and D1/RX, UARTE0 (`Serial1`)
+#   P0.14 / P0.15         — SDA1 / SCL1 (TWI0, the onboard LSM9DS1 IMU)
+#
+# The onboard LSM9DS1 IMU and the USB CDC (`Serial`) are not modelled; the
+# modelled console is UARTE0 (the board's `Serial1` pins).
+name: "arduino-nano-33-ble"
+chip: "../chips/nrf52840.yaml"
+debug_uart: "uart0"
+external_devices: []
+board_io:
+  - id: "led_red"
+    kind: "led"
+    peripheral: "gpio0"
+    pin: 24
+    signal: "output"
+    active_high: false
+  - id: "led_green"
+    kind: "led"
+    peripheral: "gpio0"
+    pin: 16
+    signal: "output"
+    active_high: false
+  - id: "led_blue"
+    kind: "led"
+    peripheral: "gpio0"
+    pin: 6
+    signal: "output"
+    active_high: false
+  - id: "led_builtin"
+    kind: "led"
+    peripheral: "gpio0"
+    pin: 13
+    signal: "output"
+    active_high: true

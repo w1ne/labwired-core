@@ -656,7 +656,7 @@
         "test": "LW_L4_OK",
         "signal": "real PlatformIO-compiled Arduino firmware clocks the MAX31855 device model over spi1 and accepts ONLY the exact default kit frame 0x01901600 (tc=25.0 C, internal=22.0 C, fault=0; any other word prints LW_L4_FAIL frame=0x...); the LW_L4_OK verdict returns as real bytes on the modelled USART1, matched by a uart_contains oracle. The engine's classic-SPI model is NOT a blanket responder: this is a value-exact oracle.",
         "lane": "core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
-        "note": "the U575 SPI1 pad map is now declared (`pad_map: stm32u5`, DS13737 Table 27: PA5 SCK / PA6 MISO / PA7 MOSI at AF5, NSS PA4 verified but not routable), so the SPI v3 narrator publishes onto the Arduino pads and bus_visibility scores U575 SPI ✓. This lane still proves the shift engine + MAX31855 device model end to end (value-exact frame on the wire, not a logic-analyzer pad capture). Local run 2026-09-18 (validation/arduino-matrix/out/stm32u575/L4_spi_sensor/run/uart.log)."
+        "note": "the U575 SPI1 pad map is now declared (`pad_map: stm32u5`, DS13737 Table 27: PA5 SCK / PA6 MISO / PA7 MOSI at AF5, NSS PA4 verified but not routable), so the SPI v3 narrator publishes onto the Arduino pads and bus_visibility scores U575 SPI \u2713. This lane still proves the shift engine + MAX31855 device model end to end (value-exact frame on the wire, not a logic-analyzer pad capture). Local run 2026-09-18 (validation/arduino-matrix/out/stm32u575/L4_spi_sensor/run/uart.log)."
       },
       "i2c": {
         "state": "proven",
@@ -824,7 +824,7 @@
         "state": "proven",
         "file": "crates/core/tests/strict_onboarding.rs",
         "test": "test_strict_board_onboarding",
-        "signal": "firmware-samd21-demo brings SERCOM0 up the way a driver does — NVMCTRL wait states, the SYSCTRL.PCLKSR ready-flag poll, three GCLK SYNCBUSY spins, PM.APBCMASK, a WRCONFIG pad mux, then CTRLB before CTRLA.ENABLE — and its bytes reach the capture sink through the DRE poll. Two separate lines are asserted, so a model that sets DRE once and forgets fails: it emits one byte and then spins in putc forever.",
+        "signal": "firmware-samd21-demo brings SERCOM0 up the way a driver does \u2014 NVMCTRL wait states, the SYSCTRL.PCLKSR ready-flag poll, three GCLK SYNCBUSY spins, PM.APBCMASK, a WRCONFIG pad mux, then CTRLB before CTRLA.ENABLE \u2014 and its bytes reach the capture sink through the DRE poll. Two separate lines are asserted, so a model that sets DRE once and forgets fails: it emits one byte and then spins in putc forever.",
         "lane": "core-ci: cargo test -p labwired-core --test strict_onboarding (the gate EXECUTES examples/samd21-smoke/io-smoke.yaml through the CLI and fails the board if any assertion fails)"
       },
       "spi": {
@@ -969,7 +969,7 @@
         "state": "shallow",
         "file": "crates/core/tests/bus_visibility.rs",
         "test": "bus_visibility_ratchet",
-        "signal": "bus_visibility drives the controller and decodes edges; stm32g071 is ✓ on the SPI column (docs/coverage/bus-visibility.md, regenerated 2026-09-19).",
+        "signal": "bus_visibility drives the controller and decodes edges; stm32g071 is \u2713 on the SPI column (docs/coverage/bus-visibility.md, regenerated 2026-09-19).",
         "gap": "Proves the SPI controller clocks decodable frames on named lines, not a full device payload round-trip. SPI1/SPI2 reuse the classic stm32 SPI model from L0; no G0-tuned transfer diff.",
         "lane": "core-ci / pr-workspace-tests: cargo test -p labwired-core --test bus_visibility"
       },
@@ -977,7 +977,7 @@
         "state": "shallow",
         "file": "crates/core/tests/bus_visibility.rs",
         "test": "bus_visibility_ratchet",
-        "signal": "bus_visibility drives the controller and decodes edges; stm32g071 is ✓ on the I2C column (docs/coverage/bus-visibility.md, regenerated 2026-09-19).",
+        "signal": "bus_visibility drives the controller and decodes edges; stm32g071 is \u2713 on the I2C column (docs/coverage/bus-visibility.md, regenerated 2026-09-19).",
         "gap": "Proves the I2C controller produces decodable address/data transitions, not a full device round-trip. I2C1/I2C2 reuse the stm32l4 v2 controller model; no G0-tuned transfer diff.",
         "lane": "core-ci / pr-workspace-tests: cargo test -p labwired-core --test bus_visibility"
       }
@@ -1020,6 +1020,26 @@
       "i2c": {
         "state": "none",
         "gap": "No I2C controller is modelled on the LiteX VexRiscv SoC.",
+        "lane": "none"
+      }
+    },
+    "vegaboard-ri5cy": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_vegaboard_ri5cy_smoke_survival",
+        "signal": "committed ELF fixture tests/fixtures/vegaboard-ri5cy-smoke.elf booted in-sim; the survival gate asserts 'VEGABOARD RI5CY SMOKE\\n' on the LPUART0 TX sink. Fixture absence is a hard assert!, not a skip.",
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "No SPI controller is modelled on the Vega board's SoC.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "No I2C controller is modelled on the Vega board's SoC.",
         "lane": "none"
       }
     },

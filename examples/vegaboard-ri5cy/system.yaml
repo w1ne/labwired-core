@@ -1,0 +1,9 @@
+# LabWired - Vega board (RI5CY) example system
+#
+# Same board manifest as configs/systems/vegaboard-ri5cy.yaml, kept beside the
+# example so the package is self-contained.
+name: "vegaboard-ri5cy"
+chip: "../../configs/chips/vegaboard-ri5cy.yaml"
+debug_uart: "lpuart0"
+external_devices: []
+board_io: []

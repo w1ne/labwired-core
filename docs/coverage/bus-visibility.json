@@ -288,5 +288,9 @@
       "UART"
     ],
     "name": "stm32wba52"
+  },
+  {
+    "buses": [],
+    "name": "vegaboard-ri5cy"
   }
 ]

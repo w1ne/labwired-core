@@ -61,6 +61,9 @@ const PARSE_FALLBACK_CHIPS: &[&str] = &[
     // CSR (`board_io` binds `cas` pin N); no `P<bank><bit>` label exists to
     // parse, and the CAS model is the authoritative pad surface.
     "arty-litex-vexriscv",
+    // The Vega board's SoC models UARTs and timers and no GPIO bank, so there
+    // are no pads to read, by parse or by map.
+    "vegaboard-ri5cy",
     "nrf52832",
     "nrf52833",
     "nrf52840",
