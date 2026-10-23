@@ -1,0 +1,58 @@
+name: Install apt packages (cached, no recommends)
+description: >
+  apt-get install a fixed package list with --no-install-recommends, bounded
+  retries/timeouts, and the downloaded .debs kept in actions/cache so later
+  runs do not re-download them from the (sometimes very slow) Ubuntu mirror.
+  Installs exactly the packages named plus their hard Depends; nothing else.
+inputs:
+  packages:
+    description: "space-separated apt packages, optionally pinned (pkg=version)"
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Prepare .deb cache key
+      id: prep
+      shell: bash
+      env:
+        PACKAGES: ${{ inputs.packages }}
+      run: |
+        set -euo pipefail
+        dir="$RUNNER_TEMP/apt-archives"
+        mkdir -p "$dir/partial"
+        sum="$(printf '%s\n' $PACKAGES | sort | sha256sum | cut -c1-16)"
+        prefix="apt-debs-${ImageOS:-unknown}-${RUNNER_ARCH}-${sum}-"
+        {
+          echo "dir=$dir"
+          echo "prefix=$prefix"
+          # Monthly rotation so superseded .debs do not live forever; the
+          # restore-key below still seeds a new month from the previous one.
+          echo "key=${prefix}$(date -u +%Y-%m)"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Restore downloaded .debs
+      uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+      with:
+        path: ${{ steps.prep.outputs.dir }}
+        key: ${{ steps.prep.outputs.key }}
+        restore-keys: ${{ steps.prep.outputs.prefix }}
+
+    - name: apt-get install
+      shell: bash
+      env:
+        PACKAGES: ${{ inputs.packages }}
+        ARCHIVES: ${{ steps.prep.outputs.dir }}
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        set -euo pipefail
+        opts=(-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30
+              -o "Dir::Cache::Archives=$ARCHIVES")
+        sudo apt-get "${opts[@]}" update -qq
+        # shellcheck disable=SC2086  # PACKAGES is a space-separated list; splitting is the point.
+        sudo apt-get "${opts[@]}" install -y --no-install-recommends $PACKAGES
+        # Drop .debs that are no longer current, and hand the dir back to the
+        # runner user so actions/cache can read it when saving.
+        sudo apt-get "${opts[@]}" autoclean -qq
+        sudo rm -rf "$ARCHIVES/lock" "$ARCHIVES/partial"
+        sudo chown -R "$(id -u):$(id -g)" "$ARCHIVES"
+        echo "cached .debs: $(find "$ARCHIVES" -name '*.deb' | wc -l) ($(du -sh "$ARCHIVES" | cut -f1))"
