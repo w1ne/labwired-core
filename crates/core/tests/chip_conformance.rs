@@ -108,6 +108,16 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_vegaboard_ri5cy_smoke_survival"),
     },
     ChipConf {
+        // SAM4S Xplained (ATSAM4S16C, Cortex-M4). SIM-DERIVED: no SAM4S bench
+        // part. Modelled: PMC (sam4s_pmc), the older PIO block (sam4s_pio),
+        // UART0/1 and USART0/1 (sam layout); TC/SPI/TWI/EEFC and the system
+        // controller are declared stubs — see examples/sam4s-xplained/VALIDATION.md.
+        name: "sam4s16c",
+        yaml: "configs/chips/sam4s16c.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("firmware_survival::test_sam4s_xplained_smoke_survival"),
+    },
+    ChipConf {
         name: "nrf54l15",
         yaml: "configs/chips/nrf54l15.yaml",
         // No silicon capture: nothing here has been diffed against a real

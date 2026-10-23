@@ -48,9 +48,10 @@ The models column is a content digest over everything that board's `models` list
 | `teensy-41` | 🟡 smoke-manual | — | `17608f4d8f9162c5` | no silicon capture |
 | `stm32f7-discovery` | 🟡 smoke-manual | — | `6ba3e2270e8012cd` | no silicon capture |
 | `nucleo-g071rb` | 🟡 smoke-manual | — | `354776217a6e438d` | no silicon capture |
-| `esp32c6-devkitc` | 🟡 smoke-manual | — | `10b8c5606329a0c7` | no silicon capture |
-| `litex-vexriscv` | 🟡 smoke-manual | — | `669c6e8a626b9f33` | no silicon capture |
-| `vegaboard-ri5cy` | 🟡 smoke-manual | — | `c2bad1bf3ae94bfa` | no silicon capture |
+| `esp32c6-devkitc` | 🟡 smoke-manual | — | `9f2b5203e4da68e7` | no silicon capture |
+| `litex-vexriscv` | 🟡 smoke-manual | — | `488f6dbedb87c718` | no silicon capture |
+| `sam4s16c` | 🟡 smoke-manual | — | `7dc1c22bdaa058a9` | no silicon capture |
+| `vegaboard-ri5cy` | 🟡 smoke-manual | — | `08a1406d0ab37b3f` | no silicon capture |
 
 ## `nrf52840` — 🟢 silicon-verified
 
@@ -399,6 +400,13 @@ The models column is a content digest over everything that board's `models` list
 - Doc: [`docs/boards/litex-vexriscv.md`](litex-vexriscv.md)  ·  Chip: `configs/chips/litex-vexriscv.yaml`
 - Silicon: none — not validated against real hardware.
   - offline (CI): firmware_survival::test_litex_vexriscv_smoke_survival
+- Drift status: **no silicon capture**
+
+## `sam4s16c` — 🟡 smoke-manual
+
+- Doc: [`docs/boards/sam4s-xplained.md`](sam4s-xplained.md)  ·  Chip: `configs/chips/sam4s16c.yaml`
+- Silicon: none — not validated against real hardware.
+  - offline (CI): firmware_survival::test_sam4s_xplained_smoke_survival
 - Drift status: **no silicon capture**
 
 ## `vegaboard-ri5cy` — 🟡 smoke-manual
