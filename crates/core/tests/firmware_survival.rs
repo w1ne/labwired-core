@@ -281,6 +281,21 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output: b"verdict=GOOD rp2040",
     },
     SurvivalCase {
+        // STM32F072B-DISCO: STM32F072RBT6 (Cortex-M0), 128 KiB flash at
+        // 0x08000000, 16 KiB SRAM at 0x20000000. USART1 (PA9/PA10) is the
+        // ST-LINK VCP; the smoke walks the four user LEDs with GPIOC ODR
+        // readback and reads the pulled-up user button. SIM-DERIVED.
+        name: "stm32f072b_disco_smoke",
+        core: "cortex-m0",
+        family: CpuFamily::CortexM,
+        hal: Hal::Bare,
+        chip: "stm32f072",
+        system: "stm32f072b-disco",
+        fixture: "stm32f072b-disco-smoke.elf",
+        valid_pc_ranges: &[(0x0800_0000, 0x0801_FFFF), (0x2000_0000, 0x2000_3FFF)],
+        expected_uart_output: b"STM32F072B-DISCO SMOKE\n",
+    },
+    SurvivalCase {
         name: "nrf52840_demo",
         core: "cortex-m4",
         family: CpuFamily::CortexM,
@@ -2058,6 +2073,11 @@ survival_gate!(
 );
 
 survival_gate!(test_nrf52840_demo_survival, "nrf52840_demo");
+
+survival_gate!(
+    test_stm32f072b_disco_smoke_survival,
+    "stm32f072b_disco_smoke"
+);
 
 survival_gate!(
     test_arduino_nano_33_ble_smoke_survival,

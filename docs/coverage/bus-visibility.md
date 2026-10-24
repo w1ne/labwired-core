@@ -65,6 +65,8 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * I2C: rp2350 from_config bus not yet edge-gated (no line cells)
   * SPI: rp2350 from_config bus not yet edge-gated (no line cells)
   * UART: rp2350 from_config bus not yet edge-gated (no line cells)
+* **stm32f072**
+  * UART: no USART1 bring-up in this harness; bytes are proven by the stm32f072b-disco survival smoke
 * **vegaboard-ri5cy**
   * UART: no LPUART bring-up in this harness; bytes are proven by the vegaboard-ri5cy survival smoke
 
@@ -97,6 +99,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | rp2040 | ✓ | ✓ | ✓ |
 | rp2350 | — | — | — |
 | rv1103 | — | — | — |
+| stm32f072 | ✓ | ✓ | — |
 | stm32f103 | ✓ | ✓ | ✓ |
 | stm32f401 | ✓ | ✓ | ✓ |
 | stm32f401cdu6 | ✓ | ✓ | ✓ |

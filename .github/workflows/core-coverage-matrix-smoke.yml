@@ -357,6 +357,15 @@ jobs:
             profile_dir: release
             script: examples/arduino-nano-33-ble/io-smoke.yaml
             system: examples/arduino-nano-33-ble/system.yaml
+          # STM32F072B-DISCO: Cortex-M0, USART1 console + the four-LED ODR
+          # walk; USB/TSC/CRS stay declared stubs.
+          - id: stm32f072b-disco-smoke
+            target: thumbv6m-none-eabi
+            crate: firmware-stm32f072b-disco-smoke
+            profile: release
+            profile_dir: release
+            script: examples/stm32f072b-disco/io-smoke.yaml
+            system: examples/stm32f072b-disco/system.yaml
           - id: litex-vexriscv-smoke
             target: riscv32im-unknown-none-elf
             crate: firmware-litex-vexriscv-smoke

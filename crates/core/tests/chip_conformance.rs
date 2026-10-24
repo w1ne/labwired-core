@@ -108,6 +108,17 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_vegaboard_ri5cy_smoke_survival"),
     },
     ChipConf {
+        // STM32F072B-DISCO (STM32F072RBT6, Cortex-M0). SIM-DERIVED: no
+        // STM32F072 bench part. Modelled: RCC (stm32f0 profile), GPIO v2,
+        // USART1-4 v2, SPI/I2C/timers, DMA/EXTI/SYSCFG, bxCAN, DAC, RTC;
+        // USB/TSC/CRS are declared stubs — see
+        // examples/stm32f072b-disco/VALIDATION.md.
+        name: "stm32f072",
+        yaml: "configs/chips/stm32f072.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("firmware_survival::test_stm32f072b_disco_smoke_survival"),
+    },
+    ChipConf {
         name: "nrf54l15",
         yaml: "configs/chips/nrf54l15.yaml",
         // No silicon capture: nothing here has been diffed against a real
