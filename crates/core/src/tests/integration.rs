@@ -23,6 +23,82 @@ pub mod integration_tests {
     }
     type VariableMachine = Machine<CortexM>;
 
+    /// The five profile tests share one scaffold: a 125 KiB flash / 20 KB RAM
+    /// Cortex-M chip whose single peripheral carries a one-key `config` map.
+    fn chip_with_peripheral(
+        chip_name: &str,
+        id: &str,
+        ty: &str,
+        base: u64,
+        config_key: &str,
+        profile: &str,
+    ) -> ChipDescriptor {
+        let mut config = HashMap::new();
+        config.insert(
+            config_key.to_string(),
+            serde_yaml::Value::String(profile.to_string()),
+        );
+        ChipDescriptor {
+            schema_version: "1.0".to_string(),
+            name: chip_name.to_string(),
+            cpu_hz: 0,
+            arch: Arch::Arm,
+            core: None,
+            flash: MemoryRange {
+                base: 0x0,
+                size: 125 * 1024,
+                cpu_writes: labwired_config::CpuWritePolicy::Allow,
+            },
+            ram: MemoryRange {
+                base: 0x2000_0000,
+                size: 20000,
+                cpu_writes: labwired_config::CpuWritePolicy::Allow,
+            },
+            reset_vector_offset: 0,
+            flash_boot_alias: true,
+            atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
+            ns_alias_offset: None,
+            memory_regions: Vec::new(),
+            peripherals: vec![PeripheralConfig {
+                id: id.to_string(),
+                r#type: ty.to_string(),
+                base_address: base,
+                size: None,
+                irq: None,
+                irq_controller: None,
+                clock: None,
+                config,
+            }],
+            pins: Default::default(),
+            analog_pins: Default::default(),
+            io_voltage_v: None,
+            gpio_input_thresholds: None,
+            supply_monitor: None,
+            include: None,
+        }
+    }
+
+    /// Manifest matching `chip_with_peripheral`: the system name is the chip
+    /// name with `chip` → `system`; `chip` points at the descriptor name.
+    fn manifest_for(chip_name: &str) -> SystemManifest {
+        SystemManifest {
+            parts: Vec::new(),
+            walk_deleted: Some(false),
+            schema_version: "1.0".to_string(),
+            name: chip_name.replacen("chip", "system", 1),
+            chip: chip_name.to_string(),
+            cpu_hz: None,
+            memory_overrides: HashMap::new(),
+            external_devices: Vec::new(),
+            cosim_models: Vec::new(),
+            motor_models: Vec::new(),
+            board_io: Vec::new(),
+            debug_uart: None,
+            wifi_ap: None,
+            peripherals: Vec::new(),
+        }
+    }
+
     #[derive(Debug)]
     struct RecordingPeripheral {
         regs: [u8; 16],
@@ -407,10 +483,12 @@ pub mod integration_tests {
             flash: MemoryRange {
                 base: 0x0,
                 size: 125 * 1024,
+                cpu_writes: labwired_config::CpuWritePolicy::Allow,
             },
             ram: MemoryRange {
                 base: 0x2000_0000,
                 size: 20000,
+                cpu_writes: labwired_config::CpuWritePolicy::Allow,
             },
             reset_vector_offset: 0,
             flash_boot_alias: true,
@@ -492,6 +570,18 @@ pub mod integration_tests {
         assert_eq!(
             crate::bus::SystemBus::canonical_peripheral_type("litex_uart"),
             "uart"
+        );
+        // The Mi-V models must resolve verbatim: the fuzzy fallback would
+        // otherwise coerce `miv_coregpio` onto the STM32 GPIO map and
+        // `miv_coretimer` onto the STM32 timer map — silently wrong models
+        // for the staged descriptors.
+        assert_eq!(
+            crate::bus::SystemBus::canonical_peripheral_type("miv_coregpio"),
+            "miv_coregpio"
+        );
+        assert_eq!(
+            crate::bus::SystemBus::canonical_peripheral_type("miv_coretimer"),
+            "miv_coretimer"
         );
         assert_eq!(
             crate::bus::SystemBus::canonical_peripheral_type("stm32f1gpioport"),
@@ -605,10 +695,12 @@ pub mod integration_tests {
             flash: MemoryRange {
                 base: 0x0,
                 size: 125 * 1024,
+                cpu_writes: labwired_config::CpuWritePolicy::Allow,
             },
             ram: MemoryRange {
                 base: 0x2000_0000,
                 size: 20000,
+                cpu_writes: labwired_config::CpuWritePolicy::Allow,
             },
             reset_vector_offset: 0,
             flash_boot_alias: true,
@@ -701,10 +793,12 @@ pub mod integration_tests {
             flash: MemoryRange {
                 base: 0x0,
                 size: 125 * 1024,
+                cpu_writes: labwired_config::CpuWritePolicy::Allow,
             },
             ram: MemoryRange {
                 base: 0x2000_0000,
                 size: 20000,
+                cpu_writes: labwired_config::CpuWritePolicy::Allow,
             },
             reset_vector_offset: 0,
             flash_boot_alias: true,
@@ -758,66 +852,15 @@ pub mod integration_tests {
 
     #[test]
     fn test_from_config_gpio_profile_stm32v2() {
-        let mut gpio_config = HashMap::new();
-        gpio_config.insert(
-            "profile".to_string(),
-            serde_yaml::Value::String("stm32v2".to_string()),
+        let chip = chip_with_peripheral(
+            "test-chip-gpio-v2",
+            "gpioa",
+            "gpio",
+            0x4001_0800,
+            "profile",
+            "stm32v2",
         );
-
-        let chip = ChipDescriptor {
-            schema_version: "1.0".to_string(),
-            name: "test-chip-gpio-v2".to_string(),
-            cpu_hz: 0,
-            arch: Arch::Arm,
-            core: None,
-            flash: MemoryRange {
-                base: 0x0,
-                size: 125 * 1024,
-            },
-            ram: MemoryRange {
-                base: 0x2000_0000,
-                size: 20000,
-            },
-            reset_vector_offset: 0,
-            flash_boot_alias: true,
-            atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
-            ns_alias_offset: None,
-            memory_regions: Vec::new(),
-            peripherals: vec![PeripheralConfig {
-                id: "gpioa".to_string(),
-                r#type: "gpio".to_string(),
-                base_address: 0x4001_0800,
-                size: None,
-                irq: None,
-                irq_controller: None,
-                clock: None,
-                config: gpio_config,
-            }],
-            pins: Default::default(),
-            analog_pins: Default::default(),
-            io_voltage_v: None,
-            gpio_input_thresholds: None,
-            supply_monitor: None,
-            include: None,
-        };
-
-        let manifest = SystemManifest {
-            parts: Vec::new(),
-            walk_deleted: Some(false),
-            schema_version: "1.0".to_string(),
-            name: "test-system-gpio-v2".to_string(),
-            chip: "test-chip-gpio-v2".to_string(),
-            cpu_hz: None,
-            memory_overrides: HashMap::new(),
-            external_devices: Vec::new(),
-            cosim_models: Vec::new(),
-            motor_models: Vec::new(),
-            board_io: Vec::new(),
-            debug_uart: None,
-            wifi_ap: None,
-            peripherals: Vec::new(),
-        };
-
+        let manifest = manifest_for("test-chip-gpio-v2");
         let mut bus = crate::bus::SystemBus::from_config(&chip, &manifest).unwrap();
         let base = 0x4001_0800;
 
@@ -836,66 +879,15 @@ pub mod integration_tests {
 
     #[test]
     fn test_from_config_uart_profile_stm32v2() {
-        let mut uart_config = HashMap::new();
-        uart_config.insert(
-            "profile".to_string(),
-            serde_yaml::Value::String("stm32v2".to_string()),
+        let chip = chip_with_peripheral(
+            "test-chip-uart-v2",
+            "uart3",
+            "uart",
+            0x4000_4800,
+            "profile",
+            "stm32v2",
         );
-
-        let chip = ChipDescriptor {
-            schema_version: "1.0".to_string(),
-            name: "test-chip-uart-v2".to_string(),
-            cpu_hz: 0,
-            arch: Arch::Arm,
-            core: None,
-            flash: MemoryRange {
-                base: 0x0,
-                size: 125 * 1024,
-            },
-            ram: MemoryRange {
-                base: 0x2000_0000,
-                size: 20000,
-            },
-            reset_vector_offset: 0,
-            flash_boot_alias: true,
-            atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
-            ns_alias_offset: None,
-            memory_regions: Vec::new(),
-            peripherals: vec![PeripheralConfig {
-                id: "uart3".to_string(),
-                r#type: "uart".to_string(),
-                base_address: 0x4000_4800,
-                size: None,
-                irq: None,
-                irq_controller: None,
-                clock: None,
-                config: uart_config,
-            }],
-            pins: Default::default(),
-            analog_pins: Default::default(),
-            io_voltage_v: None,
-            gpio_input_thresholds: None,
-            supply_monitor: None,
-            include: None,
-        };
-
-        let manifest = SystemManifest {
-            parts: Vec::new(),
-            walk_deleted: Some(false),
-            schema_version: "1.0".to_string(),
-            name: "test-system-uart-v2".to_string(),
-            chip: "test-chip-uart-v2".to_string(),
-            cpu_hz: None,
-            memory_overrides: HashMap::new(),
-            external_devices: Vec::new(),
-            cosim_models: Vec::new(),
-            motor_models: Vec::new(),
-            board_io: Vec::new(),
-            debug_uart: None,
-            wifi_ap: None,
-            peripherals: Vec::new(),
-        };
-
+        let manifest = manifest_for("test-chip-uart-v2");
         let mut bus = crate::bus::SystemBus::from_config(&chip, &manifest).unwrap();
         let sink = Arc::new(Mutex::new(Vec::new()));
         bus.attach_uart_tx_sink(sink.clone(), false);
@@ -1007,10 +999,12 @@ pub mod integration_tests {
             flash: MemoryRange {
                 base: 0x0,
                 size: 125 * 1024,
+                cpu_writes: labwired_config::CpuWritePolicy::Allow,
             },
             ram: MemoryRange {
                 base: 0x2000_0000,
                 size: 20000,
+                cpu_writes: labwired_config::CpuWritePolicy::Allow,
             },
             memory_regions: Vec::new(),
             peripherals: vec![
@@ -1077,66 +1071,15 @@ pub mod integration_tests {
 
     #[test]
     fn test_from_config_rcc_profile_stm32v2() {
-        let mut rcc_config = HashMap::new();
-        rcc_config.insert(
-            "profile".to_string(),
-            serde_yaml::Value::String("stm32v2".to_string()),
+        let chip = chip_with_peripheral(
+            "test-chip-rcc-v2",
+            "rcc",
+            "rcc",
+            0x4402_0C00,
+            "profile",
+            "stm32v2",
         );
-
-        let chip = ChipDescriptor {
-            schema_version: "1.0".to_string(),
-            name: "test-chip-rcc-v2".to_string(),
-            cpu_hz: 0,
-            arch: Arch::Arm,
-            core: None,
-            flash: MemoryRange {
-                base: 0x0,
-                size: 125 * 1024,
-            },
-            ram: MemoryRange {
-                base: 0x2000_0000,
-                size: 20000,
-            },
-            reset_vector_offset: 0,
-            flash_boot_alias: true,
-            atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
-            ns_alias_offset: None,
-            memory_regions: Vec::new(),
-            peripherals: vec![PeripheralConfig {
-                id: "rcc".to_string(),
-                r#type: "rcc".to_string(),
-                base_address: 0x4402_0C00,
-                size: None,
-                irq: None,
-                irq_controller: None,
-                clock: None,
-                config: rcc_config,
-            }],
-            pins: Default::default(),
-            analog_pins: Default::default(),
-            io_voltage_v: None,
-            gpio_input_thresholds: None,
-            supply_monitor: None,
-            include: None,
-        };
-
-        let manifest = SystemManifest {
-            parts: Vec::new(),
-            walk_deleted: Some(false),
-            schema_version: "1.0".to_string(),
-            name: "test-system-rcc-v2".to_string(),
-            chip: "test-chip-rcc-v2".to_string(),
-            cpu_hz: None,
-            memory_overrides: HashMap::new(),
-            external_devices: Vec::new(),
-            cosim_models: Vec::new(),
-            motor_models: Vec::new(),
-            board_io: Vec::new(),
-            debug_uart: None,
-            wifi_ap: None,
-            peripherals: Vec::new(),
-        };
-
+        let manifest = manifest_for("test-chip-rcc-v2");
         let mut bus = crate::bus::SystemBus::from_config(&chip, &manifest).unwrap();
         let base = 0x4402_0C00;
 
@@ -1152,66 +1095,15 @@ pub mod integration_tests {
 
     #[test]
     fn test_from_config_rcc_profile_stm32f4() {
-        let mut rcc_config = HashMap::new();
-        rcc_config.insert(
-            "profile".to_string(),
-            serde_yaml::Value::String("stm32f4".to_string()),
+        let chip = chip_with_peripheral(
+            "test-chip-rcc-f4",
+            "rcc",
+            "rcc",
+            0x4002_3800,
+            "profile",
+            "stm32f4",
         );
-
-        let chip = ChipDescriptor {
-            schema_version: "1.0".to_string(),
-            name: "test-chip-rcc-f4".to_string(),
-            cpu_hz: 0,
-            arch: Arch::Arm,
-            core: None,
-            flash: MemoryRange {
-                base: 0x0,
-                size: 125 * 1024,
-            },
-            ram: MemoryRange {
-                base: 0x2000_0000,
-                size: 20000,
-            },
-            reset_vector_offset: 0,
-            flash_boot_alias: true,
-            atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
-            ns_alias_offset: None,
-            memory_regions: Vec::new(),
-            peripherals: vec![PeripheralConfig {
-                id: "rcc".to_string(),
-                r#type: "rcc".to_string(),
-                base_address: 0x4002_3800,
-                size: None,
-                irq: None,
-                irq_controller: None,
-                clock: None,
-                config: rcc_config,
-            }],
-            pins: Default::default(),
-            analog_pins: Default::default(),
-            io_voltage_v: None,
-            gpio_input_thresholds: None,
-            supply_monitor: None,
-            include: None,
-        };
-
-        let manifest = SystemManifest {
-            parts: Vec::new(),
-            walk_deleted: Some(false),
-            schema_version: "1.0".to_string(),
-            name: "test-system-rcc-f4".to_string(),
-            chip: "test-chip-rcc-f4".to_string(),
-            cpu_hz: None,
-            memory_overrides: HashMap::new(),
-            external_devices: Vec::new(),
-            cosim_models: Vec::new(),
-            motor_models: Vec::new(),
-            board_io: Vec::new(),
-            debug_uart: None,
-            wifi_ap: None,
-            peripherals: Vec::new(),
-        };
-
+        let manifest = manifest_for("test-chip-rcc-f4");
         let mut bus = crate::bus::SystemBus::from_config(&chip, &manifest).unwrap();
         let base = 0x4002_3800;
 
@@ -1227,66 +1119,15 @@ pub mod integration_tests {
 
     #[test]
     fn test_from_config_profile_register_layout_alias_still_supported() {
-        let mut gpio_config = HashMap::new();
-        gpio_config.insert(
-            "register_layout".to_string(),
-            serde_yaml::Value::String("stm32v2".to_string()),
+        let chip = chip_with_peripheral(
+            "test-chip-gpio-v2-alias",
+            "gpioa",
+            "gpio",
+            0x4001_0800,
+            "register_layout",
+            "stm32v2",
         );
-
-        let chip = ChipDescriptor {
-            schema_version: "1.0".to_string(),
-            name: "test-chip-gpio-v2-alias".to_string(),
-            cpu_hz: 0,
-            arch: Arch::Arm,
-            core: None,
-            flash: MemoryRange {
-                base: 0x0,
-                size: 125 * 1024,
-            },
-            ram: MemoryRange {
-                base: 0x2000_0000,
-                size: 20000,
-            },
-            reset_vector_offset: 0,
-            flash_boot_alias: true,
-            atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
-            ns_alias_offset: None,
-            memory_regions: Vec::new(),
-            peripherals: vec![PeripheralConfig {
-                id: "gpioa".to_string(),
-                r#type: "gpio".to_string(),
-                base_address: 0x4001_0800,
-                size: None,
-                irq: None,
-                irq_controller: None,
-                clock: None,
-                config: gpio_config,
-            }],
-            pins: Default::default(),
-            analog_pins: Default::default(),
-            io_voltage_v: None,
-            gpio_input_thresholds: None,
-            supply_monitor: None,
-            include: None,
-        };
-
-        let manifest = SystemManifest {
-            parts: Vec::new(),
-            walk_deleted: Some(false),
-            schema_version: "1.0".to_string(),
-            name: "test-system-gpio-v2-alias".to_string(),
-            chip: "test-chip-gpio-v2-alias".to_string(),
-            cpu_hz: None,
-            memory_overrides: HashMap::new(),
-            external_devices: Vec::new(),
-            cosim_models: Vec::new(),
-            motor_models: Vec::new(),
-            board_io: Vec::new(),
-            debug_uart: None,
-            wifi_ap: None,
-            peripherals: Vec::new(),
-        };
-
+        let manifest = manifest_for("test-chip-gpio-v2-alias");
         let mut bus = crate::bus::SystemBus::from_config(&chip, &manifest).unwrap();
         let base = 0x4001_0800;
         bus.write_u32(base + 0x14, 0x0000_0002).unwrap();
@@ -2484,10 +2325,12 @@ pub mod integration_tests {
             flash: MemoryRange {
                 base: 0x4200_0000,
                 size: 4000000,
+                cpu_writes: labwired_config::CpuWritePolicy::Allow,
             },
             ram: MemoryRange {
                 base: 0x3FC8_0000,
                 size: 400000,
+                cpu_writes: labwired_config::CpuWritePolicy::Allow,
             },
             reset_vector_offset: 0,
             flash_boot_alias: true,
@@ -2586,10 +2429,12 @@ pub mod integration_tests {
             flash: MemoryRange {
                 base: 0x4200_0000,
                 size: 4000000,
+                cpu_writes: labwired_config::CpuWritePolicy::Allow,
             },
             ram: MemoryRange {
                 base: 0x3FC8_0000,
                 size: 400000,
+                cpu_writes: labwired_config::CpuWritePolicy::Allow,
             },
             reset_vector_offset: 0,
             flash_boot_alias: true,
@@ -2661,10 +2506,12 @@ pub mod integration_tests {
             flash: MemoryRange {
                 base: 0x4200_0000,
                 size: 4000000,
+                cpu_writes: labwired_config::CpuWritePolicy::Allow,
             },
             ram: MemoryRange {
                 base: 0x3FC8_0000,
                 size: 400000,
+                cpu_writes: labwired_config::CpuWritePolicy::Allow,
             },
             reset_vector_offset: 0,
             flash_boot_alias: true,
@@ -2838,6 +2685,205 @@ pub mod integration_tests {
         );
     }
 
+    /// A store watch stops the run immediately after the store retires: the
+    /// store commits (GDB semantics: the new value is reported), then the run
+    /// stops instead of retiring anything else.
+    ///
+    /// CONTRACT (pinned): the stop is reported AFTER the store retires, so
+    /// `get_pc()` is the instruction after the store, not the store itself.
+    /// Watches pin the CPU window to one instruction (`plan_cpu_window`), so
+    /// nothing retires between the store and the stop. GDB's "PC at the store"
+    /// rendering would need a pre-decode/pushback the machine does not have;
+    /// Task 4 asserts this contract.
+    #[test]
+    fn store_watch_stops_after_retiring_the_store() {
+        let mut machine = create_machine();
+        // Force batches larger than one instruction so the watch's one-window
+        // clamp is genuinely exercised (mirrors `test_breakpoint_stops_inside_batch`).
+        machine.config.peripheral_tick_interval = 16;
+        let code = 0x2000_0800u32;
+        let watched = 0x2000_0200u32;
+        machine.cpu.set_pc(code);
+        // str r0, [r1] (Thumb-16 0x6008 = bytes 08 60), then NOPs (MOV R0, R0)
+        // so the same program is valid for a full 16-step budget.
+        machine.bus.write_u16(code as u64, 0x6008).unwrap();
+        for i in 1..16u64 {
+            machine.bus.write_u16(code as u64 + i * 2, 0x4600).unwrap();
+        }
+        machine.cpu.set_register(0, 0xAB);
+        machine.cpu.set_register(1, watched);
+        assert!(machine.add_watchpoint(watched as u64, 4, false, true));
+
+        let stop = machine.run(Some(16)).unwrap();
+        assert_eq!(
+            stop,
+            StopReason::Watchpoint(watched as u64),
+            "a store inside the watched range must stop the run"
+        );
+        assert_eq!(
+            machine.bus.ram.read_u32(watched as u64),
+            Some(0xAB),
+            "the watched store must have committed before the stop"
+        );
+        assert_eq!(
+            machine.cpu.get_pc(),
+            code + 2,
+            "PC is PAST the store (pinned contract: stop after the store retires)"
+        );
+    }
+
+    #[test]
+    fn load_watch_stops_on_the_load() {
+        let mut machine = create_machine();
+        // Force batches larger than one instruction so the watch's one-window
+        // clamp is genuinely exercised (mirrors `test_breakpoint_stops_inside_batch`).
+        machine.config.peripheral_tick_interval = 16;
+        let code = 0x2000_0800u32;
+        let watched = 0x2000_0200u32;
+        machine.bus.write_u32(watched as u64, 0x1234_5678).unwrap();
+        machine.cpu.set_pc(code);
+        // ldr r0, [r1] (Thumb-16 0x6808 = bytes 08 68), then NOPs.
+        machine.bus.write_u16(code as u64, 0x6808).unwrap();
+        for i in 1..16u64 {
+            machine.bus.write_u16(code as u64 + i * 2, 0x4600).unwrap();
+        }
+        machine.cpu.set_register(1, watched);
+        assert!(machine.add_watchpoint(watched as u64, 4, true, false));
+
+        let stop = machine.run(Some(16)).unwrap();
+        assert_eq!(
+            stop,
+            StopReason::Watchpoint(watched as u64),
+            "a load from the watched range must stop the run"
+        );
+        assert_eq!(
+            machine.cpu.get_register(0),
+            0x1234_5678,
+            "the watched load must have committed before the stop"
+        );
+        assert_eq!(
+            machine.cpu.get_pc(),
+            code + 2,
+            "PC is PAST the load (pinned contract: stop after the load retires)"
+        );
+    }
+
+    #[test]
+    fn no_watch_default_run_is_unchanged() {
+        let mut machine = create_machine();
+        // A tick interval that permits multi-instruction batches, so the
+        // watch clamp's effect on batching is observable (see below).
+        machine.config.peripheral_tick_interval = 16;
+        let code = 0x2000_0800u32;
+        machine.cpu.set_pc(code);
+        machine.bus.write_u16(code as u64, 0x6008).unwrap();
+        for i in 1..16u64 {
+            machine.bus.write_u16(code as u64 + i * 2, 0x4600).unwrap();
+        }
+        machine.cpu.set_register(0, 0xAB);
+        machine.cpu.set_register(1, 0x2000_0200);
+
+        let stop = machine.run(Some(16)).unwrap();
+        assert_eq!(
+            stop,
+            StopReason::MaxStepsReached,
+            "with no watch armed the run must spend its budget exactly as before"
+        );
+        assert_eq!(
+            machine.cpu.get_pc(),
+            code + 32,
+            "all 16 budgeted instructions retired"
+        );
+
+        // Batching pin: with no watch armed the 16 instructions retire in one
+        // CPU batch, so the default fast path is untouched …
+        machine.cpu.set_pc(code);
+        let unarmed = machine
+            .advance(crate::AdvanceRequest::run(Some(16)))
+            .unwrap();
+        assert_eq!(
+            unarmed.cpu_batches, 1,
+            "no watch: the whole window is one CPU batch"
+        );
+        assert_eq!(unarmed.primary_steps, 16);
+
+        // … while ANY armed watch clamps every window to one instruction, so
+        // the same budget runs as one batch per instruction. The watch is on
+        // an address the program never touches, so the run completes.
+        assert!(machine.add_watchpoint(0x2000_0300, 4, false, true));
+        machine.cpu.set_pc(code);
+        let armed = machine
+            .advance(crate::AdvanceRequest::run(Some(16)))
+            .unwrap();
+        assert_eq!(
+            armed.cpu_batches, 16,
+            "a watch armed clamps the window to one instruction per batch"
+        );
+    }
+
+    /// A debugger-context memory read must not latch a read watch: GDB's `x`
+    /// is not a CPU load. With a latch left behind, the next `run` would stop
+    /// before retiring anything.
+    #[test]
+    fn debugger_read_memory_does_not_latch_a_read_watch() {
+        let mut machine = create_machine();
+        let code = 0x2000_0800u32;
+        let watched = 0x2000_0200u32;
+        machine.cpu.set_pc(code);
+        for i in 0..4u64 {
+            machine.bus.write_u16(code as u64 + i * 2, 0x4600).unwrap();
+        }
+        assert!(machine.add_watchpoint(watched as u64, 4, true, false));
+
+        assert_eq!(machine.read_memory(watched, 4).unwrap(), vec![0, 0, 0, 0]);
+        let stop = machine.run(Some(4)).unwrap();
+        assert_eq!(
+            stop,
+            StopReason::MaxStepsReached,
+            "the debugger read must not have latched a watch on the CPU's behalf"
+        );
+        assert_eq!(machine.cpu.get_pc(), code + 8);
+    }
+
+    /// A debugger-context write that faults must still restore the host
+    /// bypass: a later CPU store into the watched range latches and stops the
+    /// run. The PC pins that the stop came from the CPU's store, not from a
+    /// stale latch the failed host write left behind.
+    #[test]
+    fn faulting_debugger_write_restores_the_bypass() {
+        let mut machine = create_machine();
+        let code = 0x2000_0800u32;
+        let watched = 0x2000_0200u32;
+        machine.cpu.set_pc(code);
+        // str r0, [r1] (Thumb-16 0x6008), then NOPs.
+        machine.bus.write_u16(code as u64, 0x6008).unwrap();
+        for i in 1..4u64 {
+            machine.bus.write_u16(code as u64 + i * 2, 0x4600).unwrap();
+        }
+        machine.cpu.set_register(0, 0xAB);
+        machine.cpu.set_register(1, watched);
+        assert!(machine.add_watchpoint(watched as u64, 4, false, true));
+
+        // The debugger's own write into the watched range is rejected by the
+        // CPU-write policy; the `Err` must not leak the bypass flag.
+        machine.bus.memory_policy.ram = crate::bus::CpuWritePolicy::Fault;
+        assert!(machine.write_memory(watched, &[0xAB]).is_err());
+        machine.bus.memory_policy.ram = crate::bus::CpuWritePolicy::Allow;
+
+        let stop = machine.run(Some(4)).unwrap();
+        assert_eq!(
+            stop,
+            StopReason::Watchpoint(watched as u64),
+            "after the faulted host write the CPU's own store must still latch"
+        );
+        assert_eq!(
+            machine.cpu.get_pc(),
+            code + 2,
+            "the stop is the CPU store's, not a stale latch from the host write"
+        );
+        assert_eq!(machine.bus.ram.read_u32(watched as u64), Some(0xAB));
+    }
+
     #[test]
     fn pc_coverage_observer_records_executed_addresses() {
         use crate::pc_coverage::PcCoverageObserver;
@@ -2882,10 +2928,12 @@ pub mod integration_tests {
             flash: MemoryRange {
                 base: 0x4200_0000,
                 size: 4000000,
+                cpu_writes: labwired_config::CpuWritePolicy::Allow,
             },
             ram: MemoryRange {
                 base: 0x3FC8_0000,
                 size: 400000,
+                cpu_writes: labwired_config::CpuWritePolicy::Allow,
             },
             reset_vector_offset: 0,
             flash_boot_alias: true,
@@ -3026,10 +3074,12 @@ pub mod integration_tests {
                 flash: MemoryRange {
                     base: 0x4200_0000,
                     size: 4000000,
+                    cpu_writes: labwired_config::CpuWritePolicy::Allow,
                 },
                 ram: MemoryRange {
                     base: 0x3FC8_0000,
                     size: 400000,
+                    cpu_writes: labwired_config::CpuWritePolicy::Allow,
                 },
                 reset_vector_offset: 0,
                 flash_boot_alias: true,
@@ -3105,10 +3155,12 @@ pub mod integration_tests {
                 flash: MemoryRange {
                     base: 0x4200_0000,
                     size: 4000000,
+                    cpu_writes: labwired_config::CpuWritePolicy::Allow,
                 },
                 ram: MemoryRange {
                     base: 0x4080_0000,
                     size: 400000,
+                    cpu_writes: labwired_config::CpuWritePolicy::Allow,
                 },
                 reset_vector_offset: 0,
                 flash_boot_alias: true,
@@ -3227,10 +3279,12 @@ pub mod integration_tests {
                 flash: MemoryRange {
                     base: 0x4200_0000,
                     size: 4000000,
+                    cpu_writes: labwired_config::CpuWritePolicy::Allow,
                 },
                 ram: MemoryRange {
                     base: 0x3FC8_0000,
                     size: 400000,
+                    cpu_writes: labwired_config::CpuWritePolicy::Allow,
                 },
                 reset_vector_offset: 0,
                 flash_boot_alias: true,

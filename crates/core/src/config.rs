@@ -16,6 +16,10 @@ pub struct SimulationConfig {
     pub peripheral_tick_interval: u32,
     /// Enable optimized multi-byte memory access paths in the SystemBus.
     pub optimized_bus_access: bool,
+    /// Report committed fast RAM halfword/word stores as exact old/new byte
+    /// observer callbacks. Off by default; does not instrument flash or MMIO.
+    #[serde(default)]
+    pub observe_wide_ram_stores: bool,
     /// Enable high-throughput batch execution for the CPU.
     pub batch_mode_enabled: bool,
     /// Enable scheduler-safe CPU idle fast-forwarding.
@@ -63,6 +67,7 @@ impl Default for SimulationConfig {
             decode_cache_enabled: true,
             peripheral_tick_interval: 1, // Correctness by default
             optimized_bus_access: true,
+            observe_wide_ram_stores: false,
             batch_mode_enabled: true,
             idle_fast_forward_enabled: false,
             riscv_jit_enabled: false,

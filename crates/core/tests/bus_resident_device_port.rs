@@ -182,6 +182,15 @@ fn a_keypad_scans_with_no_bus_in_sight() {
     );
 }
 
+/// A token that is a parameter NAME rather than a type: lowercase-initial
+/// identifiers, including the `_`-prefixed spellings rustc wants for unused
+/// parameters (`_addr: u64`). Types are uppercase-initial by convention, so
+/// this is what distinguishes `u64`/`_bit` from `SystemBus`/`Peripheral`.
+fn is_parameter_name(tok: &str) -> bool {
+    let t = tok.trim_start_matches('_');
+    !t.is_empty() && t.chars().next().is_some_and(|c| c.is_lowercase())
+}
+
 /// The port must stay primitive.
 ///
 /// Every argument and return of every `DevicePins` method has to be a scalar or
@@ -245,7 +254,7 @@ fn resident_device_port_stays_narrow() {
             .skip(2)
         {
             assert!(
-                ALLOWED.contains(&tok) || tok.chars().next().is_some_and(|c| c.is_lowercase()),
+                ALLOWED.contains(&tok) || is_parameter_name(tok),
                 "`DevicePins::{sig}` names `{tok}`. The port a bus-resident \
                  device is handed must stay primitive — one engine type in it \
                  and every off-chip model is coupled to the machine again, \

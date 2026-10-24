@@ -1,0 +1,6 @@
+# STM32L476 with nothing on the board: every pad these examples use goes to a
+# gpio_net in the environment file.
+name: "stm32l476-bare"
+chip: "../../configs/chips/stm32l476.yaml"
+external_devices: []
+board_io: []

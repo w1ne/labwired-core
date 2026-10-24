@@ -991,6 +991,9 @@ pub(crate) const ESP32S3_PERIPHERALS: &[(&str, &str, u64, u64, Option<u32>)] = &
     ("gpio",            "esp32s3_gpio",            0x6000_4000, 0x0800, None),
     ("io_mux",          "esp32s3_io_mux",          0x6000_9000, 0x0100, None),
     ("sens_s3",         "esp32s3_sens",            0x6000_8800, 0x0400, None),
+    // RTC IO MUX + RTC GPIO (`DR_REG_RTCIO_BASE`, TRM §6.15). Wins its 1 KiB
+    // over the `rtc_cntl` catch-all (greatest start).
+    ("rtc_io",          "esp32s3_rtc_io",          0x6000_8400, 0x0400, None),
     ("rng",             "esp32s3_rng",             0x6003_5000, 0x0100, None),
     ("sha",             "esp32s3_sha",             0x6003_B000, 0x0100, None),
     ("pcnt",            "esp32s3_pcnt",            0x6001_7000, 0x1000, Some(41)),

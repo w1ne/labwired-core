@@ -392,8 +392,12 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
     rom_bank.register(0x4000_d280, rom_thunks::rom_umoddi3); // __umoddi3
     rom_bank.register(0x4000_c7e8, rom_thunks::rom_clzsi2); // __clzsi2
     rom_bank.register(0x4000_c7f0, rom_thunks::rom_ctzsi2); // __ctzsi2
-                                                            // esp_crc8 — used by get_efuse_factory_mac to validate the MAC blob
-                                                            // against the stored CRC byte. Dallas/Maxim 1-Wire CRC-8 algorithm.
+                                                            // libgcc soft-float: every double op on classic ESP32 lives in mask ROM.
+    for &(addr, thunk) in rom_thunks::ESP32_ROM_LIBGCC_FP {
+        rom_bank.register(addr, thunk);
+    }
+    // esp_crc8 — used by get_efuse_factory_mac to validate the MAC blob
+    // against the stored CRC byte. Dallas/Maxim 1-Wire CRC-8 algorithm.
     rom_bank.register(0x4005_d144, rom_thunks::rom_esp_crc8);
     // esp_rom_crc32_le — core dump / image helpers (not in all ld scripts as a
     // named export; address from ESP-IDF rom/esp32.rom.ld + nm of app that calls it).
@@ -442,13 +446,16 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
                                                                  // intr_matrix_set is at 0x4000_681c (above); cpu1 calls intr_matrix_set
                                                                  // for its own intr table — same thunk works since we don't model the
                                                                  // interrupt matrix per-CPU.
-                                                                 // GPIO matrix routing helpers — used by Arduino's spiAttach{SCK,MOSI,MISO}
-                                                                 // and HardwareSerial pin attach. We don't model the GPIO matrix; signals
-                                                                 // routed via SPI3 controller flow directly to attached SPI devices.
-                                                                 // gpio_matrix_in (0x4000_9edc) is the same BROM entry already registered
-                                                                 // above as esp_rom_gpio_connect_in_signal — just two ABI-compatible names
-                                                                 // for the same function. Only register the new alias (gpio_matrix_out).
-    rom_bank.register(0x4000_9f0c, rom_thunks::nop_return_zero); // gpio_matrix_out
+                                                                 // GPIO output matrix — `gpio_matrix_out(gpio, signal, out_inv, oen_inv)`,
+                                                                 // what Arduino's `pinMatrixOutAttach` calls for `ledcAttachPin`,
+                                                                 // spiAttach{SCK,MOSI} and HardwareSerial pin attach. It writes the
+                                                                 // pad's `GPIO_FUNCn_OUT_SEL_CFG`, which the classic GPIO port resolves
+                                                                 // pad routing against (LEDC 71..86, SPI, UART). It was a nop, so a pad
+                                                                 // attached with `ledcAttachPin` stayed a plain GPIO and showed 0 edges
+                                                                 // although the LEDC model drove its signal. gpio_matrix_in
+                                                                 // (0x4000_9edc) is the same BROM entry already registered above as
+                                                                 // esp_rom_gpio_connect_in_signal.
+    rom_bank.register(0x4000_9f0c, gpio_matrix_out); // gpio_matrix_out
 
     // ESP-IDF partition-table verification uses ROM MD5 (classic MD5Context
     // layout). Real implementations — CONFIG_PARTITION_TABLE_MD5 is on for
@@ -604,6 +611,9 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
     // `configs/chips/esp32.yaml` is not what a classic lab is built from.
     bus.wire_esp32_spi_pads();
     bus.wire_esp32_uart_pads();
+    // …and the LEDC channel outputs (matrix signals 71..86), so a servo or LED
+    // pad attached with `ledcAttachPin` shows its PWM edges.
+    bus.wire_esp32_ledc_pads();
     // AHB TX FIFO alias registered after wifi_mac_phy (see below).
 
     // SYSCON (TRM §13.2) — system controller. Owns SYSCLK_CONF, TICK_CONF,
@@ -650,7 +660,8 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
     // LEDC — LED PWM controller (TRM §14) at 0x3FF5_9000. Real model: 8 HS +
     // 8 LS channels over 4 HS / 4 LS timers, CONF1.DUTY_START latch so
     // ledc_get_duty()/ledcRead() read back the committed duty, derived duty
-    // fraction + frequency. (PWM-edge emission to GPIO deferred.) Registered
+    // fraction + frequency, and the PWM waveform on the matrix-routed pads
+    // (`wire_esp32_ledc_pads`). Registered
     // before the catch-all loop below so its window wins (first-registered).
 
     // TWAI / CAN controller (TRM §27) at 0x3FF6_B000. SJA1000-derived:
@@ -666,13 +677,12 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
 
     // Catch-all stubs for the rest of the APB peripheral block
     // (0x3FF4A000–0x3FF6FFFF). ESP32 packs ~30 peripherals here
-    // (RTC_IO, SAR ADC, I2S0/1, BB, UART1/2, I2C0/1, MCPWM, PCNT, RMT,
+    // (SAR ADC, I2S0/1, BB, UART1/2, I2C0/1, MCPWM, PCNT, RMT,
     // LEDC, etc). Most are touched briefly during esp-idf init; round-
     // trip stubs satisfy the access pattern even without modeling
     // any specific peripheral semantics.
     for (name, base) in [
         ("sdio_host", 0x3FF4_A000u64),
-        ("rtcio", 0x3FF4_8400), // sub-range of RTC_CNTL window, leave 4 KiB span
         ("sar_adc", 0x3FF4_C000),
         ("i2s0", 0x3FF4_F000),
         // uart1 (0x3FF5_0000) and uart2 (0x3FF6_E000) are the real Esp32Uart
@@ -730,14 +740,20 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
     //
     // I2C0 TX FIFO AHB window: esp-idf `i2c_ll_write_txfifo` stores at
     // 0x6001_301c (not the APB DATA reg). Same last-wins priority over wifi stub.
-    if let Some(idx) = bus.find_peripheral_index_by_name("i2c0") {
-        if let Some(i2c) = bus.peripherals[idx]
-            .dev
-            .as_any()
-            .and_then(|a| a.downcast_ref::<crate::peripherals::esp32::i2c::Esp32I2c>())
-        {
-            let ahb = i2c.ahb_tx_fifo_alias(idx);
-            bus.add_peripheral("i2c0_ahb_fifo", 0x6001_301c, 4, None, Box::new(ahb));
+    // I2C1's is at 0x6002_701c (`DR_REG_I2C1_EXT_BASE` + the AHB offset).
+    for (name, alias, ahb_base) in [
+        ("i2c0", "i2c0_ahb_fifo", 0x6001_301cu64),
+        ("i2c1", "i2c1_ahb_fifo", 0x6002_701c),
+    ] {
+        if let Some(idx) = bus.find_peripheral_index_by_name(name) {
+            if let Some(i2c) = bus.peripherals[idx]
+                .dev
+                .as_any()
+                .and_then(|a| a.downcast_ref::<crate::peripherals::esp32::i2c::Esp32I2c>())
+            {
+                let ahb = i2c.ahb_tx_fifo_alias(idx);
+                bus.add_peripheral(alias, ahb_base, 4, None, Box::new(ahb));
+            }
         }
     }
     for (name, ahb_base) in [
@@ -901,8 +917,15 @@ pub(crate) const ESP32_PERIPHERALS: &[(&str, &str, u64, u64, Option<u32>)] = &[
     ("uart2",    "esp32_uart",     0x3FF6_E000, 0x0100, Some(36)),
     ("spi0",     "esp32_spi",      0x3FF4_3000, 0x1000, None),
     ("spi1",     "esp32_spi",      0x3FF4_2000, 0x1000, None),
+    // HSPI (SPI2, TRM §7): the second general-purpose SPI, matrix signals
+    // `HSPI*` (8..11). Bound to the pads by `wire_esp32_spi_pads`.
+    ("spi2",     "esp32_spi",      0x3FF6_4000, 0x1000, None),
     ("spi3",     "esp32_spi",      0x3FF6_5000, 0x1000, None),
     ("i2c0",     "esp32_i2c",      0x3FF5_3000, 0x1000, Some(49)),
+    // I2C1 (I2C_EXT1, TRM §11): the second controller, `DR_REG_I2C1_EXT_BASE`
+    // = 0x3FF6_7000, `ETS_I2C_EXT1_INTR_SOURCE` = 50, matrix signals
+    // `I2CEXT1_SCL/SDA` 95/96. Bound to the pads by `wire_esp32_i2c_pads`.
+    ("i2c1",     "esp32_i2c",      0x3FF6_7000, 0x1000, Some(50)),
     // SENS SAR-ADC one-shot engine (RTC controller ADC1/ADC2 path the IDF
     // adc1_get_raw/adc2_get_raw drivers drive). 0x100 window over the SAR
     // control + measurement registers. It wins the overlapping SENS sub-range
@@ -924,7 +947,37 @@ pub(crate) const ESP32_PERIPHERALS: &[(&str, &str, u64, u64, Option<u32>)] = &[
     ("twai",     "esp32_twai",     0x3FF6_B000, 0x1000, None),
     ("mcpwm0",   "esp32_mcpwm",    0x3FF5_E000, 0x1000, None),
     ("host_slc", "esp32_sdio",     0x3FF5_8000, 0x1000, None),
+    // RTC IO MUX + RTC GPIO (TRM §6.11-6.13, `DR_REG_RTCIO_BASE`). The block
+    // is 0xCC bytes; the window stays the 4 KiB the catch-all stub it
+    // replaces always had, so what answers 0x3FF4_8900..0x3FF4_8FFF (SENS
+    // past the `sens_sar_adc` model) is unchanged: `EspRtcIo` keeps that tail
+    // as round-trip storage. `sens_sar_adc` (0x3FF4_8800) and `io_mux`
+    // (0x3FF4_9000) still win their ranges by the greatest-start rule.
+    ("rtcio",    "esp32_rtc_io",   0x3FF4_8400, 0x1000, None),
 ];
+
+/// `GPIO_FUNC0_OUT_SEL_CFG_REG` (`DR_REG_GPIO_BASE` 0x3FF4_4000 + 0x530), stride 4.
+const GPIO_FUNC0_OUT_SEL_CFG: u64 = 0x3FF4_4530;
+
+/// BROM `gpio_matrix_out(gpio, signal_idx, out_inv, oen_inv)`: write the
+/// pad's `FUNCn_OUT_SEL_CFG` = `signal_idx` (bits 8:0) | `out_inv` << 9
+/// (`OUT_INV_SEL`) | `oen_inv` << 11 (`OEN_INV_SEL`), `OEN_SEL` clear (TRM
+/// §4.12, esp-idf `rom/gpio.h`). Output enable stays with `GPIO_ENABLE`, which
+/// `pinMode(OUTPUT)` sets before the attach. A pad number past the 40 pads is
+/// ignored, as the ROM does.
+fn gpio_matrix_out(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> crate::SimResult<()> {
+    let n = cpu.ps.callinc() * 4;
+    let gpio = cpu.regs.read_logical(n + 2);
+    let signal = cpu.regs.read_logical(n + 3) & 0x1FF;
+    let out_inv = cpu.regs.read_logical(n + 4) & 1;
+    let oen_inv = cpu.regs.read_logical(n + 5) & 1;
+    if gpio < 40 {
+        let value = signal | (out_inv << 9) | (oen_inv << 11);
+        bus.write_u32(GPIO_FUNC0_OUT_SEL_CFG + u64::from(gpio) * 4, value)?;
+    }
+    rom_thunks::RomThunkBank::return_with(cpu, 0);
+    Ok(())
+}
 
 #[cfg(test)]
 mod board_io_tests {
@@ -995,6 +1048,45 @@ mod board_io_tests {
     /// it failed with "no attached input device exposes channel 'btn/pressed'".
     /// `attach_esp32_external_devices` is this family's manifest seam and now
     /// runs the same button pass every yaml-built chip runs.
+    /// Call the `gpio_matrix_out` thunk as a CALL0 with these four arguments.
+    fn call_gpio_matrix_out(cpu: &mut XtensaLx7, bus: &mut dyn Bus, args: [u32; 4]) {
+        cpu.ps.set_callinc(0);
+        cpu.regs.write_logical(0, 0x400d_1000);
+        for (i, v) in args.into_iter().enumerate() {
+            cpu.regs.write_logical(2 + i as u8, v);
+        }
+        gpio_matrix_out(cpu, bus).expect("gpio_matrix_out");
+    }
+
+    /// `ledcAttachPin(25, 0)` ends in `gpio_matrix_out(25, 71, false, false)`.
+    /// The thunk was a nop, so FUNC25_OUT_SEL_CFG kept its 0x100 bypass value
+    /// and the pad never carried LEDC_HS_SIG_OUT0. It must hold the signal,
+    /// with the two invert bits in their TRM places, and return to the caller.
+    #[test]
+    fn gpio_matrix_out_routes_the_pad_to_the_signal() {
+        let mut bus = crate::bus::SystemBus::new();
+        let mut cpu = configure_xtensa_esp32(&mut bus);
+        let cfg = |bus: &mut crate::bus::SystemBus, pin: u64| {
+            bus.read_u32(GPIO_FUNC0_OUT_SEL_CFG + pin * 4)
+                .expect("read OUT_SEL")
+        };
+        assert_eq!(
+            cfg(&mut bus, 25),
+            0x100,
+            "reset value is the bypass sentinel"
+        );
+
+        call_gpio_matrix_out(&mut cpu, &mut bus, [25, 71, 0, 0]);
+        assert_eq!(cfg(&mut bus, 25), 71);
+        assert_eq!(cpu.pc, 0x400d_1000, "the thunk returns to a0");
+
+        call_gpio_matrix_out(&mut cpu, &mut bus, [26, 72, 1, 1]);
+        assert_eq!(cfg(&mut bus, 26), 72 | (1 << 9) | (1 << 11));
+
+        call_gpio_matrix_out(&mut cpu, &mut bus, [40, 71, 0, 0]);
+        assert_eq!(cfg(&mut bus, 39), 0x100, "a pad past GPIO39 writes nothing");
+    }
+
     #[test]
     fn board_io_button_attaches_on_classic_esp32() {
         let mut bus = crate::bus::SystemBus::new();

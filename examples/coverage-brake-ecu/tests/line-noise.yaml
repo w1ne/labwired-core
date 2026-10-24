@@ -1,0 +1,21 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+# Line noise before a frame: the receiver skips bytes until it sees the sync
+# byte, then decodes the frame normally.
+schema_version: "1.2"
+inputs:
+  firmware: "../../../tests/fixtures/coverage-brake-ecu-cm3.elf"
+  system: "../system.yaml"
+limits:
+  max_steps: 200000
+uart_injections:
+  - uart: "uart1"
+    bytes: [0x00, 0xFF, 0x13, 0xA5, 0x01, 0x28, 0x00, 0x55]
+assertions:
+  - uart_contains: "BRAKE ECU READY"
+  - uart_contains: "BRAKE ON"
+  - expected_stop_reason: max_steps

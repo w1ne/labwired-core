@@ -1,0 +1,164 @@
+{
+  "schema_version": "1.0",
+  "path": "local-engine",
+  "engine": {
+    "binary": "/home/andrii/src/labwired/.worktrees/stage3-climate-node-testing/core/target/release/labwired",
+    "version": "0.25.0"
+  },
+  "command": "/home/andrii/src/labwired/.worktrees/stage3-climate-node-testing/core/target/release/labwired test --script io-smoke.yaml --firmware firmware/.pio/build/blackpill_f411ce/firmware.elf --system system.yaml --output-dir receipt/run --run-manifest --watch-gpio gpioa:5",
+  "inputs": {
+    "firmware": {
+      "path": "firmware/.pio/build/blackpill_f411ce/firmware.elf",
+      "sha256": "8210df4c47ef9086ea9c4f6c1b5c4783689f697290f2366ac1757b9e6d505806"
+    },
+    "system": {
+      "path": "system.yaml",
+      "sha256": "274f86281359153ea356312d52a9b448b3f5bbf7ee8a727c2a30cbe724e232fe"
+    },
+    "script": {
+      "path": "io-smoke.yaml",
+      "sha256": "8f6cc60baeadf2918ba3b129c985b6149241a4cc2d82d58a96198419700f2146"
+    }
+  },
+  "run": {
+    "status": "pass",
+    "stop_reason": "max_steps",
+    "steps_executed": 24000000,
+    "cycles": 24000000,
+    "instructions": 24000000
+  },
+  "assertions": {
+    "passed": 11,
+    "total": 11
+  },
+  "stimuli": [
+    {
+      "component": "th1",
+      "channel": "temperature",
+      "value": 80,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 15000000
+        }
+      },
+      "outcome": "applied",
+      "at_cycle": 15000000
+    },
+    {
+      "component": "ldr1",
+      "channel": "lux",
+      "value": 800,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 15000000
+        }
+      },
+      "outcome": "applied",
+      "at_cycle": 15000000
+    },
+    {
+      "component": "u2",
+      "channel": "temperature",
+      "value": 31,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 15000000
+        }
+      },
+      "outcome": "applied",
+      "at_cycle": 15000000
+    },
+    {
+      "component": "u2",
+      "channel": "pressure",
+      "value": 1002,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 15000000
+        }
+      },
+      "outcome": "applied",
+      "at_cycle": 15000000
+    },
+    {
+      "component": "u2",
+      "channel": "humidity",
+      "value": 60,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 15000000
+        }
+      },
+      "outcome": "applied",
+      "at_cycle": 15000000
+    }
+  ],
+  "serial": {
+    "path": "receipt/run/uart.log",
+    "sha256": "8cc750cdb9f8239246d6396ab05706ff8ec7db37284dc7a9665eec89929ed02f",
+    "bytes": 1200,
+    "lines": 47
+  },
+  "logic_edges": {
+    "watch": "gpioa:5",
+    "now_cycle": 24000000,
+    "dropped": 0,
+    "channels": [
+      {
+        "channel": "CH0",
+        "peripheral": "gpioa",
+        "pin": 5,
+        "initial": 0,
+        "initial_state": "z",
+        "gaps": [],
+        "transitions": [
+          {
+            "cycle": 965643,
+            "value": 1
+          }
+        ]
+      }
+    ],
+    "gpio_pins": [
+      {
+        "pin": "CH0",
+        "peripheral": "gpioa",
+        "number": 5,
+        "mode": "af",
+        "func": "TIM2_CH1",
+        "output": false,
+        "input": true,
+        "pad": true,
+        "drive": "z"
+      }
+    ]
+  },
+  "manifest": {
+    "path": "receipt/run/run-manifest.json",
+    "digest": "851ab72018d0da9086599e8a249fbda8dbf90287d6e8bb65d4a5e619214aedaa",
+    "nondeterminism": "none"
+  },
+  "determinism": {
+    "runs": 2,
+    "uart_sha256": [
+      "8cc750cdb9f8239246d6396ab05706ff8ec7db37284dc7a9665eec89929ed02f",
+      "8cc750cdb9f8239246d6396ab05706ff8ec7db37284dc7a9665eec89929ed02f"
+    ],
+    "uart_byte_identical": true,
+    "run_manifest_digest": [
+      "851ab72018d0da9086599e8a249fbda8dbf90287d6e8bb65d4a5e619214aedaa",
+      "851ab72018d0da9086599e8a249fbda8dbf90287d6e8bb65d4a5e619214aedaa"
+    ],
+    "run_manifest_digest_identical": true
+  },
+  "artifacts": {
+    "result_json": "receipt/run/result.json",
+    "uart_log": "receipt/run/uart.log",
+    "run_manifest": "receipt/run/run-manifest.json",
+    "junit": "receipt/run/junit.xml"
+  },
+  "mcp_stdio_run_attempt": {
+    "error": "INVALID_BOARD",
+    "message": "Unknown target \"stm32f411ceu6-climate-node\". Call labwired_list to see available ids."
+  }
+}

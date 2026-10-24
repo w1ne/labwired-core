@@ -57,10 +57,12 @@ struct ChipConf {
 /// Explicit declarations that have no modeled platform to measure. This is a
 /// closed shortlist, validated against the descriptor before rendering; it
 /// never contributes an estate checkmark, conformance level or ratchet record.
-const DECLARED_ONLY_CHIPS: &[(&str, &str)] = &[(
-    "rv1103",
-    "CPU/memory declaration only. No RV1103 firmware/platform CI gate; peripherals, boot chain and Linux/BSP execution are unimplemented. The optional generic Cortex-A7 CPU subset does not establish board L0/L1.",
-)];
+const DECLARED_ONLY_CHIPS: &[(&str, &str)] = &[
+    (
+        "rv1103",
+        "Normal descriptor is CPU/memory only. Optional native reduced Linux direct boot and joint I2C3/UART4 basket acceptance pass separately with functional timing and a persistent reduced plant; this does not establish full board L0/L1, vendor BSP/SD/ROM boot or physical qualification. The older generic Cortex-A7 CPU subset is separate.",
+    ),
+];
 
 /// The modeled fleet. Every descriptor MUST appear here or in the explicitly
 /// validated declaration table (enforced below), so new chips cannot disappear.
@@ -81,6 +83,29 @@ const CHIPS: &[ChipConf] = &[
         yaml: "configs/chips/esp32c6.yaml",
         reset_oracle: None,
         behavior_gate: Some("firmware_survival::test_esp32c6_demo_survival"),
+    },
+    ChipConf {
+        // LiteX VexRiscv SoC (RV32IM — the descriptor declares `core: rv32im`,
+        // so runs select the standard RV32 profile). SIM-DERIVED: nothing here
+        // has been diffed against a silicon capture, so no reset_oracle. The
+        // modelled surface is CPU + memory + the LiteX UART and countdown
+        // timer; the SPI-flash / Ethernet / MMCM CSR windows are declared
+        // stubs — see
+        // examples/litex-vexriscv/VALIDATION.md.
+        name: "litex-vexriscv",
+        yaml: "configs/chips/litex-vexriscv.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("firmware_survival::test_litex_vexriscv_smoke_survival"),
+    },
+    ChipConf {
+        // Vega board (RI5CY, RV32IMC). SIM-DERIVED: no silicon capture.
+        // Modelled: CPU + memory + LPUART0/1; the SCG/PCC clock blocks, INTMUX
+        // and low-power timers are declared stubs — see
+        // examples/vegaboard-ri5cy/VALIDATION.md.
+        name: "vegaboard-ri5cy",
+        yaml: "configs/chips/vegaboard-ri5cy.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("firmware_survival::test_vegaboard_ri5cy_smoke_survival"),
     },
     ChipConf {
         name: "nrf54l15",
@@ -398,6 +423,14 @@ const CHIPS: &[ChipConf] = &[
         reset_oracle: None,
         behavior_gate: Some("avr_nano_golden_survival::arduino_nano_golden_prints_and_blinks"),
     },
+    // Behavior: Arduino-core Mega 2560 sketch (LED pins on ports E/G/F/B/H,
+    // A8/A9 via MUX5, millis, Serial). No silicon capture → below L2.
+    ChipConf {
+        name: "atmega2560",
+        yaml: "configs/chips/atmega2560.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("avr_mega2560_io::each_led_lands_on_its_mega_port_pin"),
+    },
     ChipConf {
         name: "atsamd21",
         yaml: "configs/chips/atsamd21.yaml",
@@ -448,6 +481,24 @@ const CHIPS: &[ChipConf] = &[
         yaml: "configs/chips/stm32g071.yaml",
         reset_oracle: None,
         behavior_gate: Some("firmware_survival::test_nucleo_g071rb_smoke_survival"),
+    },
+    ChipConf {
+        // First PIC24/dsPIC33F target. SIM-DERIVED: no silicon capture yet,
+        // so no reset_oracle; the behavior gate is the committed
+        // hand-assembled UART smoke. M1a added timers + interrupts, M1b the
+        // GPIO ports, PPS, input capture and output compare.
+        name: "dspic33fj32mc204",
+        yaml: "configs/chips/dspic33fj32mc204.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("pic24_m0_smoke::pic24_fixture_boots_and_writes_h_to_uart"),
+    },
+    ChipConf {
+        // 28-pin sibling of the 204, same datasheet/core/memory. The gate is
+        // a real XC16-built UART firmware, not the hand fixture.
+        name: "dspic33fj32mc202",
+        yaml: "configs/chips/dspic33fj32mc202.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("pic24_xc16_202_smoke::xc16_202_firmware_boots_and_writes_hi_to_uart"),
     },
 ];
 
@@ -930,6 +981,29 @@ fn declares_test_fn(src: &str, name: &str) -> bool {
     attr_blocks(&masked, name)
         .iter()
         .any(|block| block.iter().any(|l| is_test_attr(l)))
+        || declares_macro_generated_test_fn(&masked, name)
+}
+
+/// True when the masked source invokes `survival_gate!(<name>, …)` — the macro
+/// expands to a `#[test] fn <name>`, so the generated test is a real,
+/// cargo-filterable gate even though the literal `fn <name>(` never appears as
+/// text. The first macro argument is the generated function name by
+/// construction, so matching it here cannot admit a name that names no test.
+fn declares_macro_generated_test_fn(masked: &str, name: &str) -> bool {
+    const MACRO: &str = "survival_gate!(";
+    let mut rest = masked;
+    while let Some(pos) = rest.find(MACRO) {
+        let after = rest[pos + MACRO.len()..].trim_start();
+        let ident: String = after
+            .chars()
+            .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+            .collect();
+        if ident == name {
+            return true;
+        }
+        rest = after;
+    }
+    false
 }
 
 /// True when `src` declares `fn name(` whose attribute block marks it ignored —
@@ -1370,34 +1444,39 @@ fn level(r: &Record) -> u8 {
     }
 }
 
-fn is_declared_only_prototype(chip: &ChipDescriptor) -> bool {
-    chip.name == "rv1103"
-        && matches!(chip.arch, labwired_config::Arch::Arm)
-        && chip.core.as_deref() == Some("cortex-a7")
-        && chip.peripherals.is_empty()
-        && chip.flash.size == 0
+fn is_declared_only_prototype(name: &str, chip: &ChipDescriptor) -> bool {
+    match name {
+        "rv1103" => {
+            chip.name == "rv1103"
+                && matches!(chip.arch, labwired_config::Arch::Arm)
+                && chip.core.as_deref() == Some("cortex-a7")
+                && chip.peripherals.is_empty()
+                && chip.flash.size == 0
+        }
+        _ => false,
+    }
 }
 
 #[test]
 fn declared_only_classification_rejects_other_chips_or_modeled_platforms() {
     assert_eq!(DECLARED_ONLY_CHIPS.len(), 1);
-    assert_eq!(DECLARED_ONLY_CHIPS[0].0, "rv1103");
+    assert!(DECLARED_ONLY_CHIPS.iter().any(|(n, _)| *n == "rv1103"));
     let chip = ChipDescriptor::from_file(root("configs/chips/rv1103.yaml")).unwrap();
-    assert!(is_declared_only_prototype(&chip));
+    assert!(is_declared_only_prototype("rv1103", &chip));
     let mut changed = chip.clone();
     changed.name = "another-prototype".into();
-    assert!(!is_declared_only_prototype(&changed));
+    assert!(!is_declared_only_prototype("rv1103", &changed));
     changed = chip.clone();
     changed.core = Some("cortex-m7".into());
-    assert!(!is_declared_only_prototype(&changed));
+    assert!(!is_declared_only_prototype("rv1103", &changed));
     changed = chip.clone();
     changed.flash.size = 1;
-    assert!(!is_declared_only_prototype(&changed));
+    assert!(!is_declared_only_prototype("rv1103", &changed));
     changed = chip;
     changed.peripherals = ChipDescriptor::from_file(root("configs/chips/stm32f103.yaml"))
         .unwrap()
         .peripherals;
-    assert!(!is_declared_only_prototype(&changed));
+    assert!(!is_declared_only_prototype("rv1103", &changed));
 }
 
 #[test]
@@ -1445,8 +1524,8 @@ fn chip_conformance_ratchet() {
         let chip = ChipDescriptor::from_file(root(&format!("configs/chips/{name}.yaml")))
             .unwrap_or_else(|error| panic!("{name}: load declared prototype: {error}"));
         assert!(
-            is_declared_only_prototype(&chip),
-            "{name}: declaration no longer matches the CPU-only unmodeled prototype; classify its platform explicitly"
+            is_declared_only_prototype(name, &chip),
+            "{name}: declaration no longer matches the declared-only prototype; classify its platform explicitly"
         );
     }
 

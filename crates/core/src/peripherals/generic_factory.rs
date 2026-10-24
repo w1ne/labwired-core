@@ -41,6 +41,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "gpio",
     "avr_gpio",
     "avr_adc",
+    "pic24_gpio",
     "rcc",
     "systick",
     "timer",
@@ -49,6 +50,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "exti",
     "afio",
     "dma",
+    "dmamux",
     "stm32f4_dma",
     "gpdma",
     "adc",
@@ -102,6 +104,9 @@ pub const MODEL_TYPES: &[&str] = &[
     "esp32c3_bt",
     "esp32c3_i2c",
     "esp32c3_spi",
+    // MUST be listed: the fuzzy `contains("dma")` fallback would coerce the
+    // C3 GDMA onto the STM32 DMA register map.
+    "esp32c3_gdma",
     "esp32c3_gpio",
     "esp32c3_io_mux",
     "esp32c3_apb_saradc",
@@ -141,6 +146,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "nrf52840_spis",
     "nrf52840_twis",
     "nrf52840_uart",
+    "nrf5340_dppic",
     "nrf52_gpiote",
     // nRF54L behavioral models (nrf54l factory). Listed here so the fuzzy
     // `contains("uart")` heuristic cannot coerce `nrf54l_uarte` onto the
@@ -153,6 +159,11 @@ pub const MODEL_TYPES: &[&str] = &[
     // offsets mean nothing to a SERCOM. That is the silent shape — a console
     // that enables cleanly and never emits a byte.
     "sam_sercom_usart",
+    "sam_sercom_spi",
+    "sam_dmac_byte",
+    "sam_dmac_sercom4_tx_byte",
+    // Reserve the full name: never fuzzy-coerce an unqualified SAM DMAC to STM32.
+    "sam_dmac",
     // ⚠️ Load-bearing. Without this entry the fuzzy `contains("spi")` heuristic
     // coerces `nrf54l_spim` onto the shared `spi` arm, which then sees
     // `contains("nrf")` and picks the nRF52 SPIM offset map. That failure is
@@ -171,6 +182,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "esp32_ledc",
     "esp32_mcpwm",
     "esp32_rtc_cntl",
+    "esp32_rtc_io",
     "esp32_sar_adc",
     "esp32_sdio",
     "esp32_sha",
@@ -201,6 +213,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "esp32s3_rmt",
     "esp32s3_rng",
     "esp32s3_rsa",
+    "esp32s3_rtc_io",
     "esp32s3_sar_adc",
     "esp32s3_sdmmc",
     "esp32s3_sens",
@@ -311,11 +324,37 @@ pub const MODEL_TYPES: &[&str] = &[
     "imxrt_gpt",
     "imxrt_flexio",
     "imxrt_sai",
+    // LiteX countdown timer (first modelled LiteX peripheral besides the UART
+    // profile). Its type carries the `litex` prefix, so it must be a canonical
+    // type or the fuzzy `contains("timer")` fallback would coerce it onto the
+    // STM32 timer map.
+    "litex_timer",
+    // Microchip Mi-V reference-design peripherals. MUST be listed: without
+    // membership the fuzzy fallbacks would coerce `miv_coregpio` onto the
+    // STM32 GPIO map (it was doing exactly that for the staged descriptors)
+    // and `miv_coretimer` onto the STM32 timer map — silently wrong models.
+    "miv_coregpio",
+    "miv_coretimer",
 ];
 
 /// True if `t` is already a canonical model-type name (see [`MODEL_TYPES`]).
 pub fn is_canonical_model_type(t: &str) -> bool {
     MODEL_TYPES.contains(&t)
+}
+
+/// The chip yaml's DMA `config: { requests: { <request>: <route>, ... } }`
+/// table, sorted by request name so the routing order is deterministic.
+fn dma_request_table(p_cfg: &PeripheralConfig) -> Vec<(String, serde_yaml::Value)> {
+    let mut out: Vec<(String, serde_yaml::Value)> = p_cfg
+        .config
+        .get("requests")
+        .and_then(|v| v.as_mapping())
+        .into_iter()
+        .flatten()
+        .filter_map(|(k, v)| Some((k.as_str()?.to_string(), v.clone())))
+        .collect();
+    out.sort_by(|a, b| a.0.cmp(&b.0));
+    out
 }
 
 /// Build a generic peripheral model for `canonical_type`, or `None` if it is not
@@ -525,9 +564,92 @@ pub fn try_build(
             }
         }
         "avr_gpio" => Box::new(crate::peripherals::avr_gpio::AvrGpioPort::new()),
-        "avr_adc" => Box::new(crate::peripherals::avr_adc::AvrAdcInputs::new()),
+        "pic24_gpio" => {
+            // The dsPIC33FJ32MC204 has no uniform port width: PORTA presents
+            // RA0-4/RA7-10, PORTB RB0-15, PORTC RC0-9 (DS70283H pin diagrams,
+            // Table 4-20/21/22). The package mask comes from the instance.
+            let mask = match p_cfg.config.get("port").and_then(|v| v.as_str()) {
+                Some("a") => 0x079F,
+                Some("b") => 0xFFFF,
+                Some("c") => 0x03FF,
+                other => {
+                    return Err(anyhow::anyhow!(
+                        "pic24_gpio '{}': config.port must be \"a\", \"b\" or \"c\", got {other:?}",
+                        p_cfg.id
+                    ))
+                }
+            };
+            Box::new(crate::peripherals::pic24_gpio::Pic24GpioPort::new(mask))
+        }
+        "avr_adc" => {
+            // `config.channels`: 8 on the ATmega328P (default), 16 on the ATmega2560.
+            let channels = p_cfg
+                .config
+                .get("channels")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(crate::peripherals::avr_adc::AVR_ADC_CHANNELS as u64);
+            Box::new(crate::peripherals::avr_adc::AvrAdcInputs::with_channels(
+                channels as usize,
+            ))
+        }
         "sam_sercom_usart" => {
             Box::new(crate::peripherals::sam::sercom_usart::SamSercomUsart::new())
+        }
+        "sam_dmac" => {
+            anyhow::bail!("full SAM DMAC is not admitted; sam_dmac_byte is an opt-in software-byte foundation only");
+        }
+        "sam_dmac_byte" => {
+            if p_cfg.irq != Some(31) || p_cfg.base_address != 0x4100a000 {
+                anyhow::bail!("sam_dmac_byte requires SAMD51 base 0x4100a000 and IRQ31");
+            }
+            Box::new(crate::peripherals::sam::dmac_byte::SamDmacByte::new(
+                p_cfg.base_address,
+            ))
+        }
+        "sam_dmac_sercom4_tx_byte" => {
+            if p_cfg.irq != Some(31) || p_cfg.base_address != 0x4100a000 {
+                anyhow::bail!("SERCOM4 TX byte profile requires SAMD51 base 0x4100a000 and IRQ31");
+            }
+            if !p_cfg.clock.as_ref().is_some_and(|clocks| {
+                clocks
+                    .as_slice()
+                    .iter()
+                    .any(|gate| gate.controller == "mclk" && gate.reg == "AHBMASK" && gate.bit == 9)
+            }) {
+                anyhow::bail!(
+                    "SERCOM4 TX byte profile requires explicit mclk AHBMASK bit9 binding"
+                );
+            }
+            Box::new(
+                crate::peripherals::sam::dmac_byte::SamDmacByte::new_sercom4_tx(p_cfg.base_address),
+            )
+        }
+        "sam_sercom_spi" => {
+            let number = |key: &str| -> anyhow::Result<u64> {
+                p_cfg
+                    .config
+                    .get(key)
+                    .and_then(|v| v.as_u64())
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("SAM SPI '{}' requires integer config.{key}", p_cfg.id)
+                    })
+            };
+            let sck = number("sck_bit")?;
+            let mosi = number("mosi_bit")?;
+            let mux = number("pad_mux")?;
+            let dopo = number("dopo")?;
+            if sck >= 32 || mosi >= 32 || mux >= 16 || dopo >= 4 {
+                anyhow::bail!("SAM SPI '{}' has invalid pad configuration", p_cfg.id);
+            }
+            Box::new(crate::peripherals::sam::sercom_spi::SamSercomSpi::new(
+                crate::peripherals::sam::sercom_spi::SamSpiPads {
+                    port_base: number("port_base")?,
+                    sck: sck as u8,
+                    mosi: mosi as u8,
+                    mux: mux as u8,
+                    dopo: dopo as u8,
+                },
+            ))
         }
         "spi" | "stm32spi" => {
             let layout: crate::peripherals::spi::SpiRegisterLayout = if p_cfg.r#type.contains("nrf")
@@ -693,7 +815,69 @@ pub fn try_build(
             ))
         }
         "afio" => Box::new(crate::peripherals::afio::Afio::new()),
-        "dma" | "stm32dma" => Box::new(crate::peripherals::dma::Dma1::new()),
+        // Channel-based DMA (F1/L0/L4/G0). `config: { requests: { spi1_tx: 3,
+        // spi1_rx: [2, 1] } }` hard-wires a peripheral request to a channel
+        // (F1), or — `[channel, selector]` — to a channel while its L4
+        // `CSELR` nibble holds the selector.
+        "dma" | "stm32dma" => {
+            let mut dma = crate::peripherals::dma::Dma1::new();
+            for (request, v) in dma_request_table(p_cfg) {
+                let pair = v.as_sequence().map(|s| {
+                    s.iter()
+                        .filter_map(|n| n.as_u64())
+                        .map(|n| n as u32)
+                        .collect::<Vec<_>>()
+                });
+                match (v.as_u64(), pair.as_deref()) {
+                    (Some(ch), _) => dma = dma.with_request_route(&request, ch as u32, None),
+                    (None, Some([ch, sel])) => {
+                        dma = dma.with_request_route(&request, *ch, Some(*sel))
+                    }
+                    _ => anyhow::bail!(
+                        "dma `{}`: request `{request}` must be a channel or [channel, cselr]",
+                        p_cfg.id
+                    ),
+                }
+            }
+            Box::new(dma)
+        }
+        // STM32 DMA request multiplexer (G0/G4/WB). `config: { dma: dma1,
+        // channels: 7, requests: { spi1_tx: 17, ... }, id_registers: {
+        // 0x3FC: 0xA3C5DD01, ... } }`.
+        "dmamux" => {
+            let channels = p_cfg
+                .config
+                .get("channels")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(7) as usize;
+            let dma = p_cfg
+                .config
+                .get("dma")
+                .and_then(|v| v.as_str())
+                .unwrap_or("dma1");
+            let mut mux = crate::peripherals::dmamux::Dmamux::new(channels, dma);
+            for (request, v) in dma_request_table(p_cfg) {
+                let Some(id) = v.as_u64() else {
+                    anyhow::bail!(
+                        "dmamux `{}`: request `{request}` needs a DMAREQ_ID",
+                        p_cfg.id
+                    );
+                };
+                mux = mux.with_request(&request, id as u32);
+            }
+            if let Some(map) = p_cfg
+                .config
+                .get("id_registers")
+                .and_then(|v| v.as_mapping())
+            {
+                for (k, v) in map {
+                    if let (Some(off), Some(val)) = (k.as_u64(), v.as_u64()) {
+                        mux = mux.with_id_register(off, val as u32);
+                    }
+                }
+            }
+            Box::new(mux)
+        }
         // STM32F4 stream-based DMA (RM0090 §10). `config: { dma2: true }` marks
         // the DMA2 instance (memory-to-memory capable); `config: { stream_irqs:
         // [..8..] }` routes each stream to its own NVIC vector (F4 stream IRQs
@@ -718,6 +902,25 @@ pub fn try_build(
                     .filter_map(|v| v.as_u64().map(|n| n as u32))
                     .collect();
                 dma = dma.with_stream_irqs(irqs);
+            }
+            // `config: { requests: { spi1_tx: [[3, 3], [5, 3]] } }`: the
+            // (stream, channel) pairs a peripheral request reaches.
+            for (request, v) in dma_request_table(p_cfg) {
+                for pair in v.as_sequence().into_iter().flatten() {
+                    let ns: Vec<u32> = pair
+                        .as_sequence()
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|n| n.as_u64().map(|n| n as u32))
+                        .collect();
+                    let [stream, chsel] = ns[..] else {
+                        anyhow::bail!(
+                            "stm32f4_dma `{}`: request `{request}` needs [stream, channel] pairs",
+                            p_cfg.id
+                        );
+                    };
+                    dma = dma.with_request_route(&request, stream, chsel);
+                }
             }
             Box::new(dma)
         }
@@ -893,6 +1096,12 @@ pub fn try_build(
                 .unwrap_or(crate::peripherals::imxrt::lpuart::DEFAULT_UART_CLK_HZ);
             Box::new(crate::peripherals::imxrt::lpuart::ImxrtLpuart::new(clk))
         }
+        // LiteX countdown timer (`litex/soc/cores/timer.py`): 32-bit CSRs
+        // load/reload/en/update_value/value plus the zero-event manager.
+        "litex_timer" => Box::new(crate::peripherals::litex_timer::LitexTimer::new()),
+        // Microchip Mi-V reference-design peripherals.
+        "miv_coregpio" => Box::new(crate::peripherals::miv::MivCoreGpio::new()),
+        "miv_coretimer" => Box::new(crate::peripherals::miv::MivCoreTimer::new()),
         _ => return Ok(None),
     };
     Ok(Some(dev))

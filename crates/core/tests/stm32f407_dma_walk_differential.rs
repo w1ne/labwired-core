@@ -141,8 +141,9 @@ fn stm32f407_dma2_m2m_transfer_copies_buffer_and_latches_tcif() {
     seed_buffers(&mut bus);
     program_m2m(&mut bus, DMA2_BASE, CR_TCIE);
 
-    // Drive the transfer to completion (one item per tick; a few extra ticks
-    // are harmless once the stream goes idle).
+    // Drive the transfer to completion (one item into the FIFO per tick, a
+    // drain at each FIFO threshold; extra ticks are harmless once the stream
+    // goes idle).
     for _ in 0..LEN + 4 {
         bus.tick_peripherals_fully();
     }
@@ -183,18 +184,22 @@ fn stm32f407_dma2_stream_irq_routes_through_nvic() {
     let mut bus = f407_bus();
     bus.write_u32(RCC_AHB1ENR, DMA2EN).unwrap();
     seed_buffers(&mut bus);
-    // Two items so the completion (and its TCIE pend) lands on the last tick.
+    // Two items. Memory-to-memory runs through the FIFO (RM0090 §10.3.12):
+    // two slots read the items in, the third flushes them to memory and
+    // completes — the TCIE pend lands there.
     bus.write_u32(s_par(DMA2_BASE, 0), SRC as u32).unwrap();
     bus.write_u32(s_m0ar(DMA2_BASE, 0), DST as u32).unwrap();
     bus.write_u32(s_ndtr(DMA2_BASE, 0), 2).unwrap();
     bus.write_u32(s_cr(DMA2_BASE, 0), CR_EN | DIR_M2M | CR_MINC | CR_TCIE)
         .unwrap();
 
-    let (irqs, _) = bus.tick_peripherals_fully();
-    assert!(
-        !irqs.contains(&DMA2_STREAM0_IRQ),
-        "no IRQ before transfer-complete"
-    );
+    for _ in 0..2 {
+        let (irqs, _) = bus.tick_peripherals_fully();
+        assert!(
+            !irqs.contains(&DMA2_STREAM0_IRQ),
+            "no IRQ before transfer-complete"
+        );
+    }
     let (irqs, _) = bus.tick_peripherals_fully();
     assert!(
         irqs.contains(&DMA2_STREAM0_IRQ),

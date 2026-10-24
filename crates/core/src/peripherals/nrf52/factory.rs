@@ -28,7 +28,14 @@ pub fn try_build(
     chip_map: crate::peripherals::chip_map::ChipMap<'_>,
 ) -> Option<Box<dyn Peripheral>> {
     let dev: Box<dyn Peripheral> = match canonical_type {
-        "nrf52840_uart" => Box::new(crate::peripherals::nrf52::uarte::Nrf52Uarte::new()),
+        "nrf52840_uart" => Box::new(
+            crate::peripherals::nrf52::uarte::Nrf52Uarte::with_interconnects(
+                p_cfg.base_address,
+                chip_map.base_of("ppi"),
+                chip_map.base_of("dppic"),
+            ),
+        ),
+        "nrf5340_dppic" => Box::new(crate::peripherals::nrf52::dppic::NrfDppic::new()),
         "nrf52840_rtc" | "nrf52_rtc" => {
             // RTC1/RTC2 have 4 CC; RTC0 has 3 (default).
             let num_cc: usize = p_cfg

@@ -590,6 +590,10 @@ pub mod artifact_format {
     pub const SSD1306_PAGE: &str = "ssd1306_page";
     pub const SH1107_PAGE: &str = "sh1107_page";
     pub const RGB565_BE: &str = "rgb565_be";
+    /// Three bytes per pixel, row-major R/G/B channels. A controller-memory
+    /// artifact may bit-expand six-bit values; this does not assert physical
+    /// glass colour, gamma or backlight fidelity.
+    pub const RGB888: &str = "rgb888";
     pub const PCD8544_BANK: &str = "pcd8544_bank";
     pub const MAX7219_ROWS: &str = "max7219_rows";
     pub const HD44780_DDRAM: &str = "hd44780_ddram";
@@ -650,7 +654,7 @@ pub fn artifact_region_ink(
     let dim = |k: &str| -> Result<usize, String> {
         meta.get(k)
             .and_then(|v| v.as_u64())
-            .map(|v| v as usize)
+            .and_then(|v| usize::try_from(v).ok())
             .ok_or_else(|| format!("framebuffer artifact has no numeric `meta.{k}`"))
     };
     let (pw, ph) = (dim("w")?, dim("h")?);
@@ -660,18 +664,38 @@ pub fn artifact_region_ink(
             region.w, region.h, region.x, region.y
         ));
     }
-    if region.x + region.w > pw || region.y + region.h > ph {
+    if region.x.checked_add(region.w).is_none_or(|end| end > pw)
+        || region.y.checked_add(region.h).is_none_or(|end| end > ph)
+    {
         return Err(format!(
             "region ({},{}) {}x{} falls outside the {pw}x{ph} panel",
             region.x, region.y, region.w, region.h
         ));
     }
 
+    // Unknown frame memory is not black. Even if a caller supplies placeholder
+    // bytes, it must not be able to pass a max-ink assertion on an undefined
+    // frame. This also rejects malformed validity metadata explicitly.
+    if let Some(unknown) = meta.get("unknown_pixels") {
+        match unknown.as_u64() {
+            Some(0) => {}
+            Some(n) => {
+                return Err(format!(
+                    "framebuffer has {n} unknown pixels; cannot measure an undefined frame"
+                ));
+            }
+            None => return Err("framebuffer meta.unknown_pixels is not an unsigned count".into()),
+        }
+    }
+
     // Per-format "is pixel (x, y) lit?".
     let lit: Box<dyn Fn(usize, usize) -> bool> = match format {
         // 2 bytes per pixel, row-major, big-endian. Ground is black (0x0000).
         artifact_format::RGB565_BE => {
-            let need = pw * ph * 2;
+            let need = pw
+                .checked_mul(ph)
+                .and_then(|n| n.checked_mul(2))
+                .ok_or_else(|| "rgb565_be geometry overflows payload length".to_string())?;
             if bytes.len() < need {
                 return Err(format!(
                     "rgb565_be payload is {} bytes, expected {need} for {pw}x{ph}",
@@ -681,6 +705,22 @@ pub fn artifact_region_ink(
             Box::new(move |x, y| {
                 let i = (y * pw + x) * 2;
                 bytes[i] != 0 || bytes[i + 1] != 0
+            })
+        }
+        artifact_format::RGB888 => {
+            let need = pw
+                .checked_mul(ph)
+                .and_then(|n| n.checked_mul(3))
+                .ok_or_else(|| "rgb888 geometry overflows payload length".to_string())?;
+            if bytes.len() < need {
+                return Err(format!(
+                    "rgb888 payload is {} bytes, expected {need} for {pw}x{ph}",
+                    bytes.len()
+                ));
+            }
+            Box::new(move |x, y| {
+                let i = (y * pw + x) * 3;
+                bytes[i] != 0 || bytes[i + 1] != 0 || bytes[i + 2] != 0
             })
         }
         // Page-addressed 1bpp: byte (page * width + column), bit = row within
@@ -724,8 +764,9 @@ pub fn artifact_region_ink(
             return Err(format!(
                 "display format `{other}` has no pixel decoder here, so this region cannot be \
                  measured. Reporting it as unpainted would make the assertion pass or fail on a \
-                 measurement that was never taken. Supported: {}, {}, {}, {}",
+                 measurement that was never taken. Supported: {}, {}, {}, {}, {}",
                 artifact_format::RGB565_BE,
+                artifact_format::RGB888,
                 artifact_format::SSD1306_PAGE,
                 artifact_format::SH1107_PAGE,
                 artifact_format::EPAPER_TRICOLOR_PLANES,
@@ -845,6 +886,17 @@ pub fn artifact_generation(bytes: &[u8]) -> u64 {
         hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
     }
     hash
+}
+
+/// UART peer adapter for the common attached-device inspection visitor.
+pub(crate) struct UartEvidence<'a>(pub &'a dyn crate::peripherals::device::UartStreamDevice);
+impl DeviceEvidence for UartEvidence<'_> {
+    fn artifacts(&self, id: &str, opts: &InspectOpts) -> Vec<Artifact> {
+        self.0.artifacts(id, opts)
+    }
+    fn evidence_logs(&self) -> Vec<crate::peripheral_log::PeripheralLog> {
+        self.0.logs()
+    }
 }
 
 #[cfg(test)]
@@ -1084,6 +1136,123 @@ mod tests {
             (8, 16),
             "noise inks the band only partially"
         );
+    }
+
+    #[test]
+    fn rgb888_region_counts_each_channel_once_and_ignores_outside_pixels() {
+        let bytes = [255, 0, 0, 0, 130, 0, 0, 0, 4, 0, 0, 0];
+        let region = PixelRegion {
+            x: 0,
+            y: 0,
+            w: 2,
+            h: 2,
+        };
+        assert_eq!(
+            artifact_region_ink(artifact_format::RGB888, &meta(2, 2), &bytes, region).unwrap(),
+            (3, 4)
+        );
+        assert_eq!(
+            artifact_region_ink(
+                artifact_format::RGB888,
+                &meta(2, 2),
+                &bytes,
+                PixelRegion {
+                    x: 1,
+                    y: 1,
+                    w: 1,
+                    h: 1
+                }
+            )
+            .unwrap(),
+            (0, 1)
+        );
+        assert_eq!(
+            artifact_region_ink(artifact_format::RGB888, &meta(2, 2), &[255; 12], region).unwrap(),
+            (4, 4)
+        );
+    }
+
+    #[test]
+    fn rgb888_short_payload_is_an_error_not_an_unpainted_frame() {
+        let result = artifact_region_ink(
+            artifact_format::RGB888,
+            &meta(2, 1),
+            &[0; 5],
+            PixelRegion {
+                x: 0,
+                y: 0,
+                w: 2,
+                h: 1,
+            },
+        );
+        assert!(result.unwrap_err().contains("expected 6"));
+    }
+
+    #[test]
+    fn unknown_pixel_metadata_rejects_even_supplied_black_placeholders() {
+        let region = PixelRegion {
+            x: 0,
+            y: 0,
+            w: 1,
+            h: 1,
+        };
+        for format in [artifact_format::RGB888, artifact_format::RGB565_BE] {
+            for value in [
+                serde_json::json!(1),
+                serde_json::json!(-1),
+                serde_json::json!("0"),
+                serde_json::Value::Null,
+            ] {
+                let mut m = meta(1, 1);
+                m["unknown_pixels"] = value;
+                assert!(artifact_region_ink(format, &m, &[0; 3], region).is_err());
+            }
+            let mut m = meta(1, 1);
+            m["unknown_pixels"] = serde_json::json!(0);
+            assert_eq!(
+                artifact_region_ink(format, &m, &[0; 3], region).unwrap(),
+                (0, 1)
+            );
+        }
+    }
+
+    #[test]
+    fn rgb888_overflowing_region_or_geometry_is_refused_without_panicking() {
+        let full = PixelRegion {
+            x: 0,
+            y: 0,
+            w: 1,
+            h: 1,
+        };
+        assert!(
+            artifact_region_ink(artifact_format::RGB888, &meta(usize::MAX, 2), &[], full)
+                .unwrap_err()
+                .contains("overflows")
+        );
+        assert!(artifact_region_ink(
+            artifact_format::RGB888,
+            &meta(2, 2),
+            &[0; 12],
+            PixelRegion {
+                x: usize::MAX,
+                y: 0,
+                w: 2,
+                h: 1
+            }
+        )
+        .is_err());
+        assert!(artifact_region_ink(
+            artifact_format::RGB888,
+            &meta(2, 2),
+            &[0; 12],
+            PixelRegion {
+                x: 0,
+                y: usize::MAX,
+                w: 1,
+                h: 2
+            }
+        )
+        .is_err());
     }
 
     #[test]

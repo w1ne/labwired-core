@@ -22,6 +22,106 @@ impl SystemBus {
         self.observers.push(observer);
     }
 
+    fn dma_tx_endpoint_index(&self, addr: u64) -> Option<usize> {
+        // DMA endpoint admission must not bypass normal storage precedence.
+        if self.resolve_ns_alias(addr) != addr
+            || self.ram.read_u8(addr).is_some()
+            || self.flash.read_u8(addr).is_some()
+            || (self.flash_boot_alias
+                && self.flash.base_addr != 0
+                && addr < self.flash.data.len() as u64)
+            || self.extra_mem.iter().any(|m| m.read_u8(addr).is_some())
+        {
+            return None;
+        }
+        let idx = self.find_peripheral_index(addr)?;
+        let p = &self.peripherals[idx];
+        if p.dev.scheduler_wake_owner().is_some() {
+            return None; // Owner-alias windows are not separate TX endpoints.
+        }
+        p.dev.dma_tx_request(addr - p.base)?;
+        Some(idx)
+    }
+
+    /// Shared byte-MMIO choke; the const intent leaves CPU store semantics
+    /// unchanged, including ordinary stores that return Ok while dropping data.
+    fn store_mmio_byte<const DMA_TX: bool>(
+        &mut self,
+        idx: usize,
+        off: u64,
+        value: u8,
+    ) -> SimResult<bool> {
+        self.note_mmio_activity(idx, off);
+        #[cfg(feature = "event-scheduler")]
+        self.sync_scheduler_peripheral(idx);
+        if DMA_TX {
+            // Synchronization can advance state: recheck the actual live gate
+            // and readiness before latching or invoking the accepted-byte hook.
+            if !self.is_peripheral_clocked(idx) {
+                return Ok(false);
+            }
+            match self.peripherals[idx].dev.dma_tx_request(off) {
+                Some(true) => {}
+                Some(false) => return Ok(false),
+                None => {
+                    return Err(SimulationError::NotImplemented(
+                        "TX DMA endpoint lost admission".into(),
+                    ));
+                }
+            }
+            // Refresh external control inputs before acceptance. An idle SPI
+            // has no bus tick yet, so waiting until its first DATA-triggered
+            // tick would notify CS selection after the first accepted byte.
+            let placeholder: Box<dyn Peripheral> =
+                Box::new(crate::peripherals::stub::StubPeripheral::new(0));
+            let mut dev = std::mem::replace(&mut self.peripherals[idx].dev, placeholder);
+            dev.prepare_dma_tx(self);
+            self.peripherals[idx].dev = dev;
+        }
+        self.maybe_latch_dc(idx);
+        let brackets = self.pad_brackets_present();
+        let (c3_io_mux_capture, rp_io_bank0_capture, pad_control_capture) = if brackets {
+            (
+                self.begin_esp32c3_io_mux_write(idx),
+                self.begin_rp2040_io_bank0_write(idx),
+                self.begin_pad_control_write(idx),
+            )
+        } else {
+            (None, None, false)
+        };
+        let pad_claim_capture = brackets && self.begin_pad_claim_write(idx);
+        let rtc_io_capture = self.begin_rtc_io_write(idx);
+        let r = if DMA_TX {
+            self.peripherals[idx].dev.try_dma_write_tx_u8(off, value)
+        } else {
+            self.peripherals[idx].dev.write(off, value).map(|()| true)
+        };
+        if matches!(r, Ok(true)) && brackets {
+            self.finish_esp32c3_io_mux_write(c3_io_mux_capture);
+            self.finish_rp2040_io_bank0_write(rp_io_bank0_capture);
+            self.finish_pad_control_write(idx, pad_control_capture);
+            self.finish_pad_claim_write(pad_claim_capture);
+        }
+        if matches!(r, Ok(true)) {
+            self.finish_rtc_io_write(rtc_io_capture);
+        }
+        self.maybe_service_edge_driven_gpio_devices(idx);
+        #[cfg(feature = "event-scheduler")]
+        self.collect_scheduled_events(idx);
+        r
+    }
+
+    fn finish_byte_mmio_write(&mut self, idx: usize, mmio_addr: u64) {
+        let base = self.peripherals[idx].base;
+        self.sync_esp32c3_irq_cache_write(idx, mmio_addr - base);
+        self.sync_esp32s3_irq_write(idx);
+        self.sync_esp32c3_pms_write(idx, mmio_addr - base);
+        self.peripherals[idx].ticks_remaining = 0;
+        self.refresh_legacy_tick_index(idx);
+        self.refresh_bus_tick_index(idx);
+        self.reconcile_irq_levels_after_write(idx);
+    }
+
     /// Side-effect-free byte read used by the universal inspect `peek`.
     ///
     /// Mirrors `read_u8`'s routing (RAM, flash, extra windows, flash boot
@@ -191,6 +291,70 @@ impl SystemBus {
         }
     }
 
+    /// Exact committed RAM bytes, unlike peripheral callbacks' unknown old value.
+    #[inline(never)]
+    fn notify_ram_store_cold(&self, addr: u64, old: &[u8], new: &[u8]) {
+        for (i, (&old, &new)) in old.iter().zip(new).enumerate() {
+            for observer in &self.observers {
+                observer.on_memory_write(addr + i as u64, old, new);
+            }
+        }
+    }
+
+    /// Offer a CPU store into the flash region to the peripheral that owns
+    /// flash stores (a flash controller that latches addresses or programs
+    /// pages through stores). Returns `Some(result)` when the store was consumed
+    /// or programmed here, `None` when the caller commits it as usual (no owner,
+    /// not a flash address, a device-originated write, or the owner said
+    /// `Commit`). Inlined presence test, outlined body, like the U5 gate.
+    #[inline]
+    fn try_flash_owner_store(&mut self, addr: u64, width: u8, value: u32) -> Option<SimResult<()>> {
+        self.flash_store_owner_idx?;
+        self.flash_owner_store_cold(addr, width, value)
+    }
+
+    #[inline(never)]
+    fn flash_owner_store_cold(
+        &mut self,
+        addr: u64,
+        width: u8,
+        value: u32,
+    ) -> Option<SimResult<()>> {
+        let idx = self.flash_store_owner_idx?;
+        if self.device_write_bypass() {
+            return None;
+        }
+        let off = if self.flash.read_u8(addr).is_some() {
+            addr - self.flash.base_addr
+        } else if self.flash_boot_alias
+            && self.flash.base_addr != 0
+            && addr < self.flash.data.len() as u64
+        {
+            addr
+        } else {
+            return None;
+        };
+        let outcome = self
+            .peripherals
+            .get_mut(idx)?
+            .dev
+            .flash_cpu_store(off, width, value);
+        match outcome {
+            crate::FlashStoreOutcome::Commit => None,
+            crate::FlashStoreOutcome::Consumed => Some(Ok(())),
+            crate::FlashStoreOutcome::Program => {
+                for i in 0..width as u64 {
+                    let a = self.flash.base_addr + off + i;
+                    let existing = self.flash.read_u8(a).unwrap_or(0xFF);
+                    self.flash.write_u8(a, existing & (value >> (8 * i)) as u8);
+                }
+                self.note_memory_write();
+                self.notify_peripheral_store(addr, &value.to_le_bytes()[..width as usize]);
+                Some(Ok(()))
+            }
+        }
+    }
+
     /// Route a flash-region store through the U5 quad-word program machine when
     /// the opt-in U5 gate is on (`config: { error_flags: true }` on the U5
     /// FLASH). Mirrors the H5 gate in `write_u8`, but word-granular: U5 programs
@@ -265,6 +429,13 @@ impl SystemBus {
 
 impl crate::Bus for SystemBus {
     fn read_u64(&self, addr: u64) -> SimResult<u64> {
+        // Watched like every other width: a 64-bit load is a CPU access on
+        // cores that have one (Cortex-A7 `w=8`), so the latch is uniform.
+        // Taken before routing, like the narrower reads; the machine discards
+        // the latch if the access faults (see `Machine::advance`).
+        if !self.debug_watches.is_empty() && !self.debug_watch_host_bypass.get() {
+            self.note_debug_watch_read(addr);
+        }
         let offset =
             addr.checked_sub(self.ram.base_addr)
                 .and_then(|v| usize::try_from(v).ok())
@@ -282,6 +453,21 @@ impl crate::Bus for SystemBus {
     }
 
     fn write_u64(&mut self, addr: u64, value: u64) -> SimResult<()> {
+        self.batch_stop.note_store(addr, 8);
+        // Latch the watch BEFORE the memory-policy gate below: an attempted
+        // store is what the debugger watches for, so a store a gate rejects
+        // still latches — uniformly across all four widths. Unlike the
+        // byte/half/word stores there is no C3 PMS gate on the 64-bit path.
+        // An attempt-latch is delivered as the watch stop: on an erroring
+        // step path `Machine::advance` discards the pending hit, but a CPU
+        // that escalates the fault to a handler keeps it and the stop fires
+        // on the window boundary (PC on the faulting store).
+        if !self.debug_watches.is_empty() && !self.debug_watch_host_bypass.get() {
+            self.note_debug_watch_store(addr);
+        }
+        if let Some(r) = self.memory_policy_gate_store(addr) {
+            return r;
+        }
         let offset =
             addr.checked_sub(self.ram.base_addr)
                 .and_then(|v| usize::try_from(v).ok())
@@ -334,6 +520,14 @@ impl crate::Bus for SystemBus {
         SystemBus::commit_plain_memory_store_spin(self, addr, value, elided)
     }
 
+    fn batch_stop_armed(&self) -> bool {
+        self.batch_stop.armed()
+    }
+
+    fn batch_stop_hit(&self) -> bool {
+        self.batch_stop.hit()
+    }
+
     fn systick_ticks_until_fire(&self) -> Option<u64> {
         self.peripherals
             .iter()
@@ -354,12 +548,16 @@ impl crate::Bus for SystemBus {
             // The existing RX queue capability may be filled by host input
             // between instructions. Reconcile its live level before sampling
             // GIC pins; UART entries have no legacy NVIC IRQ number.
-            if let Some(level) = f
-                .uart2_index
-                .and_then(|i| self.peripherals.get(i))
-                .and_then(|p| p.dev.irq_line_level())
-            {
-                f.gic.lock().unwrap().set_level(59, level);
+            // Only the two registered ARM UART sources, never a peripheral scan.
+            for (index, intid) in [(f.uart2_index, Some(59)), (f.uart4_index, f.uart4_irq)] {
+                if let (Some(intid), Some(level)) = (
+                    intid,
+                    index
+                        .and_then(|i| self.peripherals.get(i))
+                        .and_then(|p| p.dev.irq_line_level()),
+                ) {
+                    f.gic.lock().unwrap().set_level(intid as usize, level);
+                }
             }
             f.gic.lock().unwrap().levels()
         })
@@ -387,6 +585,9 @@ impl crate::Bus for SystemBus {
         self.irq_fabric.armv7.as_ref()?.timer.next_deadline()
     }
     fn read_u8(&self, addr: u64) -> SimResult<u8> {
+        if !self.debug_watches.is_empty() && !self.debug_watch_host_bypass.get() {
+            self.note_debug_watch_read(addr);
+        }
         // RAM is always first (hot path, never overlaps a peripheral window).
         if let Some(val) = self.ram.read_u8(addr) {
             self.note_memory_read();
@@ -493,6 +694,17 @@ impl crate::Bus for SystemBus {
     }
 
     fn write_u8(&mut self, addr: u64, value: u8) -> SimResult<()> {
+        self.batch_stop.note_store(addr, 1);
+        // Latch BEFORE the memory-policy and PMS gates below: uniform attempt
+        // semantics across all four write widths — a store a gate rejects is
+        // still an attempted access and latches; the machine discards the
+        // latch if the step faults (see `Machine::advance`).
+        if !self.debug_watches.is_empty() && !self.debug_watch_host_bypass.get() {
+            self.note_debug_watch_store(addr);
+        }
+        if let Some(r) = self.memory_policy_gate_store(addr) {
+            return r;
+        }
         // ESP32-C3 permission control (PMS): a store into a region the
         // SENSITIVE PMS marks non-writable is blocked on silicon and raises
         // ETS_CORE0_{I,D}RAM0_PMS_INTR_SOURCE. Inert (one bool test) unless
@@ -503,6 +715,9 @@ impl crate::Bus for SystemBus {
         // U5 quad-word programming gate (opt-in, U5 FLASH only): consumed here
         // so a byte access while PG is set raises SIZERR instead of committing.
         if let Some(r) = self.try_u5_program_store(addr, 1, value as u32) {
+            return r;
+        }
+        if let Some(r) = self.try_flash_owner_store(addr, 1, value as u32) {
             return r;
         }
         let flash_alias_old = if self.flash_boot_alias
@@ -663,35 +878,7 @@ impl crate::Bus for SystemBus {
                     return Ok(());
                 }
                 let off = mmio_addr - self.peripherals[idx].base;
-                self.note_mmio_activity(idx, off);
-                #[cfg(feature = "event-scheduler")]
-                self.sync_scheduler_peripheral(idx);
-                self.maybe_latch_dc(idx);
-                // One test instead of four calls. See `pad_brackets_present`.
-                let brackets = self.pad_brackets_present();
-                let (c3_io_mux_capture, rp_io_bank0_capture, pad_control_capture) = if brackets {
-                    (
-                        self.begin_esp32c3_io_mux_write(idx),
-                        self.begin_rp2040_io_bank0_write(idx),
-                        self.begin_pad_control_write(idx),
-                    )
-                } else {
-                    (None, None, false)
-                };
-                let r = {
-                    let p = &mut self.peripherals[idx];
-                    p.dev.write(off, value)
-                };
-                if r.is_ok() && brackets {
-                    self.finish_esp32c3_io_mux_write(c3_io_mux_capture);
-                    self.finish_rp2040_io_bank0_write(rp_io_bank0_capture);
-                    self.finish_pad_control_write(idx, pad_control_capture);
-                }
-
-                self.maybe_service_edge_driven_gpio_devices(idx);
-                #[cfg(feature = "event-scheduler")]
-                self.collect_scheduled_events(idx);
-                r
+                self.store_mmio_byte::<false>(idx, off, value).map(|_| ())
             } else {
                 if std::env::var("LABWIRED_TRACE_VIOLATIONS").is_ok() {
                     eprintln!(
@@ -707,23 +894,7 @@ impl crate::Bus for SystemBus {
         if res.is_ok() {
             // Wake up the peripheral
             if let Some(idx) = self.find_peripheral_index(mmio_addr) {
-                let base = self.peripherals[idx].base;
-                self.sync_esp32c3_irq_cache_write(idx, mmio_addr - base);
-                // Same write choke, ESP32-S3 interrupt matrix: a level moved by
-                // this write (above all the FROM_CPU self-IPI that implements
-                // `portYIELD_WITHIN_API`) must reach the core on the NEXT
-                // instruction, not at the next peripheral tick.
-                self.sync_esp32s3_irq_write(idx);
-                // Same write choke, for the C3 permission-control unit: a
-                // write into the SENSITIVE PMS span re-derives the permission
-                // map (and honours a VIOLATE_CLR pulse).
-                self.sync_esp32c3_pms_write(idx, mmio_addr - base);
-                self.peripherals[idx].ticks_remaining = 0;
-                self.refresh_legacy_tick_index(idx);
-                self.refresh_bus_tick_index(idx);
-                // Same level reconcile as the 16/32-bit chokes: a byte store
-                // (STRB of EXTI_PR, a timer SR) deasserts a line just as well.
-                self.reconcile_irq_levels_after_write(idx);
+                self.finish_byte_mmio_write(idx, mmio_addr);
             }
 
             // Trigger observers, with the address the firmware actually issued
@@ -738,6 +909,9 @@ impl crate::Bus for SystemBus {
     }
 
     fn read_u16(&self, addr: u64) -> SimResult<u16> {
+        if !self.debug_watches.is_empty() && !self.debug_watch_host_bypass.get() {
+            self.note_debug_watch_read(addr);
+        }
         if let Some(val) = self.ram.read_u16(addr) {
             self.note_memory_read();
             return Ok(val);
@@ -822,6 +996,9 @@ impl crate::Bus for SystemBus {
     }
 
     fn read_u32(&self, addr: u64) -> SimResult<u32> {
+        if !self.debug_watches.is_empty() && !self.debug_watch_host_bypass.get() {
+            self.note_debug_watch_read(addr);
+        }
         // Debug (env-gated): trace the driver's reads of a freshly-injected RX
         // buffer, to RE the rx-control header format the RX callback parses.
         if crate::peripherals::esp32c3::wifi_mac::rxbuf_trace_enabled() {
@@ -976,6 +1153,17 @@ impl crate::Bus for SystemBus {
     }
 
     fn write_u16(&mut self, addr: u64, value: u16) -> SimResult<()> {
+        self.batch_stop.note_store(addr, 2);
+        // Latch BEFORE the memory-policy and PMS gates below: uniform attempt
+        // semantics across all four write widths — a store a gate rejects is
+        // still an attempted access and latches; the machine discards the
+        // latch if the step faults (see `Machine::advance`).
+        if !self.debug_watches.is_empty() && !self.debug_watch_host_bypass.get() {
+            self.note_debug_watch_store(addr);
+        }
+        if let Some(r) = self.memory_policy_gate_store(addr) {
+            return r;
+        }
         // ESP32-C3 permission control (PMS): a store into a region the
         // SENSITIVE PMS marks non-writable is blocked on silicon and raises
         // ETS_CORE0_{I,D}RAM0_PMS_INTR_SOURCE. Inert (one bool test) unless
@@ -987,6 +1175,14 @@ impl crate::Bus for SystemBus {
         if let Some(r) = self.try_u5_program_store(addr, 2, value as u32) {
             return r;
         }
+        if let Some(r) = self.try_flash_owner_store(addr, 2, value as u32) {
+            return r;
+        }
+        let observed_old = if self.config.observe_wide_ram_stores && !self.observers.is_empty() {
+            self.ram.read_u16(addr)
+        } else {
+            None
+        };
         let mut wrote = self.ram.write_u16(addr, value) || self.flash.write_u16(addr, value);
         if !wrote
             && self.flash_boot_alias
@@ -997,6 +1193,9 @@ impl crate::Bus for SystemBus {
         }
         if wrote {
             self.note_memory_write();
+            if let Some(old) = observed_old {
+                self.notify_ram_store_cold(addr, &old.to_le_bytes(), &value.to_le_bytes());
+            }
             return Ok(());
         }
         let mmio_addr = self.resolve_ns_alias(addr);
@@ -1041,6 +1240,8 @@ impl crate::Bus for SystemBus {
             } else {
                 (None, None, false)
             };
+            let pad_claim_capture = brackets && self.begin_pad_claim_write(idx);
+            let rtc_io_capture = self.begin_rtc_io_write(idx);
             let r = {
                 let p = &mut self.peripherals[idx];
                 p.ticks_remaining = 0;
@@ -1050,6 +1251,10 @@ impl crate::Bus for SystemBus {
                 self.finish_esp32c3_io_mux_write(c3_io_mux_capture);
                 self.finish_rp2040_io_bank0_write(rp_io_bank0_capture);
                 self.finish_pad_control_write(idx, pad_control_capture);
+                self.finish_pad_claim_write(pad_claim_capture);
+            }
+            if r.is_ok() {
+                self.finish_rtc_io_write(rtc_io_capture);
             }
 
             self.maybe_service_edge_driven_gpio_devices(idx);
@@ -1082,6 +1287,17 @@ impl crate::Bus for SystemBus {
     }
 
     fn write_u32(&mut self, addr: u64, value: u32) -> SimResult<()> {
+        self.batch_stop.note_store(addr, 4);
+        // Latch BEFORE the memory-policy and PMS gates below: uniform attempt
+        // semantics across all four write widths — a store a gate rejects is
+        // still an attempted access and latches; the machine discards the
+        // latch if the step faults (see `Machine::advance`).
+        if !self.debug_watches.is_empty() && !self.debug_watch_host_bypass.get() {
+            self.note_debug_watch_store(addr);
+        }
+        if let Some(r) = self.memory_policy_gate_store(addr) {
+            return r;
+        }
         // ESP32-C3 permission control (PMS): a store into a region the
         // SENSITIVE PMS marks non-writable is blocked on silicon and raises
         // ETS_CORE0_{I,D}RAM0_PMS_INTR_SOURCE. Inert (one bool test) unless
@@ -1094,6 +1310,9 @@ impl crate::Bus for SystemBus {
         // AND(existing, new) and sets EOP. Consumed before the direct flash
         // commit below (which would otherwise bypass the machine entirely).
         if let Some(r) = self.try_u5_program_store(addr, 4, value) {
+            return r;
+        }
+        if let Some(r) = self.try_flash_owner_store(addr, 4, value) {
             return r;
         }
         // Atomic register aliases: a write to a +0x1000/0x2000/0x3000 alias of
@@ -1151,6 +1370,11 @@ impl crate::Bus for SystemBus {
             }
         }
 
+        let observed_old = if self.config.observe_wide_ram_stores && !self.observers.is_empty() {
+            self.ram.read_u32(addr)
+        } else {
+            None
+        };
         let mut wrote = self.ram.write_u32(addr, value) || self.flash.write_u32(addr, value);
         if !wrote
             && self.flash_boot_alias
@@ -1161,6 +1385,9 @@ impl crate::Bus for SystemBus {
         }
         if wrote {
             self.note_memory_write();
+            if let Some(old) = observed_old {
+                self.notify_ram_store_cold(addr, &old.to_le_bytes(), &value.to_le_bytes());
+            }
             return Ok(());
         }
         let mmio_addr = self.resolve_ns_alias(addr);
@@ -1205,6 +1432,8 @@ impl crate::Bus for SystemBus {
             } else {
                 (None, None, false)
             };
+            let pad_claim_capture = brackets && self.begin_pad_claim_write(idx);
+            let rtc_io_capture = self.begin_rtc_io_write(idx);
             let r = {
                 let p = &mut self.peripherals[idx];
                 p.ticks_remaining = 0;
@@ -1214,6 +1443,10 @@ impl crate::Bus for SystemBus {
                 self.finish_esp32c3_io_mux_write(c3_io_mux_capture);
                 self.finish_rp2040_io_bank0_write(rp_io_bank0_capture);
                 self.finish_pad_control_write(idx, pad_control_capture);
+                self.finish_pad_claim_write(pad_claim_capture);
+            }
+            if r.is_ok() {
+                self.finish_rtc_io_write(rtc_io_capture);
             }
 
             self.maybe_service_edge_driven_gpio_devices(idx);
@@ -1261,6 +1494,19 @@ impl crate::Bus for SystemBus {
     /// and on snapshot restore. Reads from non-RAM peripherals (e.g.
     /// `RomThunkBank`, GPIO, declarative peripherals) keep going
     /// through the slow path so side effects fire as before.
+    fn plain_memory_slice(&self, addr: u64) -> Option<(u64, u64, &[u8])> {
+        for mem in std::iter::once(&self.ram)
+            .chain(std::iter::once(&self.flash))
+            .chain(self.extra_mem.iter())
+        {
+            let end = mem.base_addr + mem.data.len() as u64;
+            if addr >= mem.base_addr && addr < end {
+                return Some((mem.base_addr, end, &mem.data));
+            }
+        }
+        self.fetch_slice(addr)
+    }
+
     fn fetch_slice(&self, pc: u64) -> Option<(u64, u64, &[u8])> {
         let idx = self.find_peripheral_index(pc)?;
         let entry = self.peripherals.get(idx)?;
@@ -1295,24 +1541,23 @@ impl crate::Bus for SystemBus {
 
     fn execute_dma(&mut self, requests: &[crate::DmaRequest]) -> SimResult<()> {
         for req in requests {
-            match req.direction {
-                crate::DmaDirection::Read => {
-                    let _ = self.read_u8(req.addr)?;
-                }
-                crate::DmaDirection::Write => {
-                    self.write_u8(req.addr, req.val)?;
-                }
-                crate::DmaDirection::Copy => {
-                    if let Some(t) = req.transform {
-                        self.dma_copy_unit(req.src_addr, req.addr, t)?;
-                    } else {
-                        let val = self.read_u8(req.src_addr)?;
-                        self.write_u8(req.addr, val)?;
-                    }
-                }
-            }
+            self.execute_dma_request(req)?;
         }
         Ok(())
+    }
+
+    fn with_peripheral_mut(
+        &mut self,
+        name: &str,
+        f: &mut dyn FnMut(&mut dyn crate::Peripheral),
+    ) -> bool {
+        let Some(idx) = self.find_peripheral_index_by_name(name) else {
+            return false;
+        };
+        f(&mut *self.peripherals[idx].dev);
+        self.refresh_legacy_tick_index(idx);
+        self.collect_scheduled_events(idx);
+        true
     }
 
     fn config(&self) -> &crate::SimulationConfig {
@@ -1375,6 +1620,14 @@ impl crate::Bus for SystemBus {
         Some(self)
     }
 
+    fn device_write_bypass(&self) -> bool {
+        Self::device_write_bypass(self)
+    }
+
+    fn set_device_write_bypass(&mut self, on: bool) {
+        Self::set_device_write_bypass(self, on)
+    }
+
     fn read_gpio_output_by_label(&self, pin: &str) -> Option<bool> {
         let (addr, bit) = Self::resolve_pin_odr(self, pin)?;
         let peripheral = self.peripherals.iter().find(|peripheral| {
@@ -1388,6 +1641,62 @@ impl crate::Bus for SystemBus {
 
     fn has_mmio_window(&self, addr: u64) -> bool {
         self.find_peripheral_index(addr).is_some()
+    }
+
+    fn dma_tx_request(&self, addr: u64) -> Option<bool> {
+        let idx = self.dma_tx_endpoint_index(addr)?;
+        let p = &self.peripherals[idx];
+        p.dev
+            .dma_tx_request(addr - p.base)
+            .map(|ready| self.is_peripheral_clocked(idx) && ready)
+    }
+
+    fn try_dma_write_tx_u8(&mut self, addr: u64, value: u8) -> SimResult<bool> {
+        let idx = self.dma_tx_endpoint_index(addr).ok_or_else(|| {
+            SimulationError::NotImplemented(
+                "TX DMA requires a canonical unshadowed endpoint".into(),
+            )
+        })?;
+        if self.dma_tx_request(addr) != Some(true) {
+            return Ok(false);
+        }
+        let off = addr - self.peripherals[idx].base;
+        let old_value = self.peripherals[idx].dev.peek(off).unwrap_or(0);
+        let accepted = self.store_mmio_byte::<true>(idx, off, value)?;
+        if accepted {
+            self.finish_byte_mmio_write(idx, addr);
+            for observer in &self.observers {
+                observer.on_memory_write(addr, old_value, value);
+            }
+        }
+        Ok(accepted)
+    }
+
+    fn admits_ram_only_dma_extent(&self, start: u64, length: u64) -> bool {
+        let contains = |base: u64, size: usize, address: u64| {
+            address
+                .checked_sub(base)
+                .is_some_and(|offset| offset < size as u64)
+        };
+        (0..length).all(|offset| {
+            let Some(address) = start.checked_add(offset) else {
+                return false;
+            };
+            // Routing windows remain present while a bus-assisted model is
+            // swapped out. Reject aliases and overlapping MMIO before RAM.
+            if self.has_mmio_window(self.resolve_ns_alias(address)) {
+                return false;
+            }
+            if contains(self.ram.base_addr, self.ram.data.len(), address) {
+                return true;
+            }
+            !(contains(self.flash.base_addr, self.flash.data.len(), address)
+                || (self.flash_boot_alias && address < self.flash.data.len() as u64)
+                || self
+                    .extra_mem
+                    .iter()
+                    .any(|memory| contains(memory.base_addr, memory.data.len(), address)))
+        })
     }
 
     /// Hand the CPU-owned pull-up-disable switch to every pin port, each
@@ -1441,7 +1750,13 @@ impl crate::Bus for SystemBus {
         &self,
         pc: u32,
     ) -> Option<crate::peripherals::esp_xtensa_common::rom_thunks::RomThunkFn> {
-        SystemBus::get_rom_thunk(self, pc)
+        let thunk = SystemBus::get_rom_thunk(self, pc);
+        // A thunk is host code with effects of its own (an APP_CPU release,
+        // a cross-core hand-off): an armed batch ends on it, as on a device.
+        if thunk.is_some() {
+            self.batch_stop.note_device_access();
+        }
+        thunk
     }
 
     fn route_irq_source_to_cpu_irq(&self, source_id: u32) -> Option<u8> {

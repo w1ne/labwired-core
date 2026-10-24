@@ -37,12 +37,16 @@ mod dispatch;
 /// `execute_test_loop` and the `TestExecutionContext` it takes.
 mod execute;
 mod gpio_observer;
+mod inspect_export;
+/// `--log-timestamps` prefix state ([`log_ts::prefix`] / the `eventln!` macro).
+pub(crate) mod log_ts;
 /// The three run-outcome writers (`write_outputs`, `write_config_error_outputs`,
 /// `write_junit_xml`), all deriving from `artifacts::TestOutcome`.
 mod outputs;
 mod resource_report;
 mod size_limited_writer;
 mod stimuli;
+mod uart_lines;
 mod vcd_trace;
 mod wifi_frames;
 
@@ -184,7 +188,13 @@ pub struct Tier1MatrixArgs {
 }
 
 #[derive(Parser, Debug)]
+#[command(args_conflicts_with_subcommands = true)]
 pub struct CoverageArgs {
+    /// Firmware-coverage tools. With no subcommand, `labwired coverage`
+    /// prints the ESP32-S3 chip-model register-coverage matrix.
+    #[command(subcommand)]
+    pub action: Option<CoverageAction>,
+
     /// Path to the ESP32-S3 SVD (else auto-discovered from PlatformIO or
     /// LABWIRED_ESP32S3_SVD env var).
     #[arg(long)]
@@ -193,6 +203,48 @@ pub struct CoverageArgs {
     /// Write the coverage matrix as JSON to this path.
     #[arg(long = "json-out", id = "coverage_json_out")]
     pub json_out: Option<PathBuf>,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum CoverageAction {
+    /// Merge firmware-coverage LCOV files (from `labwired test --coverage`,
+    /// gcov/gcovr, llvm-cov, …) into one report: counts add up, and a branch
+    /// stays "never evaluated" only if no run evaluated it. Prints a summary,
+    /// writes LCOV / Cobertura / JSON, and can fail the build under a
+    /// threshold.
+    Merge(CoverageMergeArgs),
+}
+
+#[derive(Parser, Debug)]
+pub struct CoverageMergeArgs {
+    /// LCOV files, or directories searched recursively for `*.info`.
+    #[arg(required = true, value_name = "INPUT")]
+    pub inputs: Vec<PathBuf>,
+
+    /// Write the merged LCOV tracefile here.
+    #[arg(short, long, value_name = "PATH")]
+    pub output: Option<PathBuf>,
+
+    /// Write Cobertura XML here (GitLab `coverage_report`, Jenkins, Azure).
+    #[arg(long, value_name = "PATH")]
+    pub cobertura: Option<PathBuf>,
+
+    /// Base directory relative source paths resolve against, for the
+    /// Cobertura `<source>` element. Repeatable. Default: current directory.
+    #[arg(long = "source-root", value_name = "DIR")]
+    pub source_roots: Vec<String>,
+
+    /// Write the summary, per-file numbers and every uncovered branch as JSON.
+    #[arg(long = "json-out", value_name = "PATH", id = "coverage_merge_json")]
+    pub json_out: Option<PathBuf>,
+
+    /// Exit with an error if merged line coverage is below this percentage.
+    #[arg(long, value_name = "PERCENT")]
+    pub fail_under_lines: Option<f64>,
+
+    /// Exit with an error if merged branch coverage is below this percentage.
+    #[arg(long, value_name = "PERCENT")]
+    pub fail_under_branches: Option<f64>,
 }
 
 #[derive(Parser, Debug)]
@@ -376,12 +428,11 @@ pub struct RunArgs {
     /// uses, instead of the one-instruction-per-call `Machine::step()` loop.
     ///
     /// This is an assertion, not a hint: the flag fails the run rather than
-    /// falling back, on any chip family or option combination that cannot take
-    /// the batched path. ARM and RISC-V use batching by default for ordinary
-    /// runs. On RISC-V the flag refuses the
-    /// per-instruction instrumentation (`--break-at`, the WiFi bridge, the DHCP
-    /// trace) that would silently turn it back into single-stepping; on Xtensa
-    /// this flag is not supported, so it is rejected outright.
+    /// falling back when per-instruction instrumentation (`--break-at`,
+    /// `--watch-mem`, `--stop-on`; on RISC-V also the WiFi bridge and the DHCP
+    /// trace) would pin the CPU quantum to one instruction. ARM and RISC-V use
+    /// batching by default for ordinary runs; Xtensa (ESP32 / ESP32-S3) takes
+    /// its batched path only with this flag.
     ///
     /// Keeps throughput measurements explicit even when instrumentation would
     /// otherwise select single-stepping. It also prints a `[batched] ...`
@@ -394,6 +445,13 @@ pub struct RunArgs {
     /// sleeps when virtual time (`cycles/cpu_hz`) is at least 1 ms ahead of wall.
     #[arg(long = "time-mode", value_name = "MODE", default_value_t = labwired_core::HostTimeMode::MaxSpeed)]
     pub time_mode: labwired_core::HostTimeMode,
+
+    /// Prefix human-readable stderr event/log lines with virtual and/or real
+    /// timestamps: `[t=virt=<sim time>|real=<wall since start>]`. Virtual time
+    /// is deterministic (cycles / cpu_hz); real time is not. Default `none`
+    /// leaves all outputs byte-identical.
+    #[arg(long, value_enum, default_value_t = crate::log_ts::LogTimestamps::None)]
+    pub log_timestamps: crate::log_ts::LogTimestamps,
 }
 
 impl RunArgs {
@@ -594,6 +652,12 @@ struct TestArgs {
     #[arg(long)]
     output_dir: Option<PathBuf>,
 
+    /// Include complete inspect artifact byte payloads up to this cumulative
+    /// raw-byte limit (maximum 1 MiB). Default 0 keeps summary-only output.
+    /// Over-budget payloads are omitted with a reason in their metadata.
+    #[arg(long, default_value_t = 0, value_parser = clap::value_parser!(u64).range(0..=1_048_576))]
+    inspect_bytes_max: u64,
+
     /// Optional path to write a JUnit XML report for CI systems
     #[arg(long)]
     junit: Option<PathBuf>,
@@ -632,9 +696,10 @@ struct TestArgs {
     #[arg(long)]
     trace_max: Option<usize>,
 
-    /// Collect firmware statement coverage. Writes coverage.info (LCOV) and
-    /// coverage.json into --output-dir. Distinct from `labwired coverage`,
-    /// which measures chip-model register faithfulness.
+    /// Collect firmware coverage (lines, branches, functions, with hit
+    /// counts) from the unmodified ELF. Writes coverage.info (LCOV),
+    /// coverage.cobertura.xml and coverage.json into --output-dir. Combine
+    /// runs with `labwired coverage merge`.
     #[arg(long)]
     coverage: bool,
 
@@ -695,6 +760,13 @@ struct TestArgs {
     /// advancing from one that is hung. No flag → no writes, no clock reads.
     #[arg(long = "heartbeat-file", value_name = "PATH")]
     heartbeat_file: Option<PathBuf>,
+
+    /// Prefix human-readable stderr event/log lines with virtual and/or real
+    /// timestamps: `[t=virt=<sim time>|real=<wall since start>]`. Virtual time
+    /// is deterministic (cycles / cpu_hz); real time is not. Default `none`
+    /// leaves all outputs byte-identical.
+    #[arg(long, value_enum, default_value_t = crate::log_ts::LogTimestamps::None)]
+    pub log_timestamps: crate::log_ts::LogTimestamps,
 }
 
 /// Unified error response for agent consumption
@@ -1404,11 +1476,19 @@ fn handle_load_error<C: labwired_core::Cpu>(
         None,
         // Nor any per-pin GPIO state.
         None,
+        // Nor any UART line stamps.
+        None,
         // Load/reset failed before a machine existed: no motor evidence either.
         Vec::new(),
+        None,
         // Load/reset failed before the run loop, so no stimulus was attempted.
         Vec::new(),
         // Load failed: no successful machine run for footprint/paint/metrics.
+        None,
+        None,
+        // No machine: no policy report either.
+        None,
+        // No machine: no run-level times either.
         None,
         None,
         None,
@@ -2921,10 +3001,15 @@ mod test_outcome_golden_tests {
             fault_verdict: None,
             logic_edges: None,
             gpio_pins: None,
+            uart_lines: None,
             motors: Vec::new(),
+            analog_series: None,
             stimuli: Vec::new(),
             footprint: None,
             memory: None,
+            memory_policy: None,
+            virtual_time_ns: None,
+            host_time_ns: None,
             metrics: None,
             rtt: None,
             semihosting: None,
@@ -2975,6 +3060,62 @@ mod test_outcome_golden_tests {
             }
         });
         assert_eq!(json, expected);
+    }
+
+    /// The `memory_policy` block's on-disk shape: lowercase modes, a numeric
+    /// `addr`/`cycle`/`pc`, and no `first` key for a region with no violation.
+    /// The e2e asserts this same shape through a real `labwired test` run.
+    #[test]
+    fn golden_memory_policy_block() {
+        let mut outcome = synthetic_outcome();
+        outcome.memory_policy = Some(labwired_core::bus::MemoryPolicyReport {
+            flash: labwired_core::bus::RegionPolicyStats {
+                mode: labwired_core::bus::CpuWritePolicy::Fault,
+                violations: 2,
+                first: Some(labwired_core::bus::RegionViolation {
+                    addr: 0x0800_1234,
+                    cycle: 77,
+                    pc: Some(0x0800_0001),
+                }),
+            },
+            ram: labwired_core::bus::RegionPolicyStats {
+                mode: labwired_core::bus::CpuWritePolicy::Allow,
+                violations: 0,
+                first: None,
+            },
+        });
+
+        let json = serde_json::to_value(&outcome).expect("outcome should serialize");
+        assert_eq!(
+            json["memory_policy"],
+            serde_json::json!({
+                "flash": {
+                    "mode": "fault",
+                    "violations": 2,
+                    "first": {"addr": 0x0800_1234u64, "cycle": 77, "pc": 0x0800_0001u64}
+                },
+                "ram": {"mode": "allow", "violations": 0}
+            })
+        );
+        assert!(json["memory_policy"]["flash"]["first"]["addr"].is_number());
+    }
+
+    /// The run-level `--log-timestamps` pair on disk: both keys present and
+    /// numeric when set, both absent (not null) when `None`, so a default run
+    /// stays byte-identical to the pre-`--log-timestamps` artifact.
+    #[test]
+    fn golden_log_timestamp_block() {
+        let mut outcome = synthetic_outcome();
+        outcome.virtual_time_ns = Some(1_500_000_000);
+        outcome.host_time_ns = Some(123_456_789);
+        let json = serde_json::to_value(&outcome).unwrap();
+        assert_eq!(json["virtual_time_ns"], 1_500_000_000u64);
+        assert_eq!(json["host_time_ns"], 123_456_789u64);
+        outcome.virtual_time_ns = None;
+        outcome.host_time_ns = None;
+        let json = serde_json::to_value(&outcome).unwrap();
+        assert!(json.get("virtual_time_ns").is_none());
+        assert!(json.get("host_time_ns").is_none());
     }
 
     #[test]

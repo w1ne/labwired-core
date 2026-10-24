@@ -1,0 +1,108 @@
+name: SAMD actual CODAL services guest
+on:
+  pull_request:
+    paths: ['crates/core/tests/samd_real_services_guest.rs', '.github/workflows/samd-real-services-guest.yml']
+permissions:
+  contents: read
+concurrency:
+  group: real-services-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  LABWIRED_SERVICES_SOURCE: 1f95fec39e379205e1b4fc854faa26597b747452
+jobs:
+  services-guest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: CrispStrobe/codal-samd
+          ref: 1f95fec39e379205e1b4fc854faa26597b747452
+          path: owned-services-source
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: lancaster-university/codal-core
+          ref: 2ed19d64ec3359143409a4b0a9758b4aeef3ee7d
+          path: owned-positive-core
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: lancaster-university/codal-core
+          ref: 2ed19d64ec3359143409a4b0a9758b4aeef3ee7d
+          path: owned-refusal-core
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: lancaster-university/codal-core
+          ref: 2ed19d64ec3359143409a4b0a9758b4aeef3ee7d
+          path: owned-clock-irq-core
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: lancaster-university/codal-core
+          ref: 2ed19d64ec3359143409a4b0a9758b4aeef3ee7d
+          path: owned-clock-stop-core
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: lancaster-university/codal-core
+          ref: 2ed19d64ec3359143409a4b0a9758b4aeef3ee7d
+          path: owned-long-gap-core
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: lancaster-university/codal-core
+          ref: 2ed19d64ec3359143409a4b0a9758b4aeef3ee7d
+          path: owned-heap-alignment-core
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: lancaster-university/codal-core
+          ref: 2ed19d64ec3359143409a4b0a9758b4aeef3ee7d
+          path: owned-public-heap-core
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: lancaster-university/codal-core
+          ref: 2ed19d64ec3359143409a4b0a9758b4aeef3ee7d
+          path: owned-public-heap-oom-core
+          persist-credentials: false
+      - uses: Swatinem/rust-cache@v2
+      - name: Build actual services and explicit source-bound refusal
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-arm-none-eabi
+          arm-none-eabi-g++ --version
+          dpkg-query -W gcc-arm-none-eabi
+          cd owned-services-source
+          bash runtime-services/build.sh ../owned-positive-core "$RUNNER_TEMP/runtime-services/positive" 0
+          bash runtime-services/build.sh ../owned-refusal-core "$RUNNER_TEMP/runtime-services/closed-switch" 1
+          bash runtime-services/build.sh ../owned-clock-irq-core "$RUNNER_TEMP/runtime-services/clock-irq-disable" 2
+          bash runtime-services/build.sh ../owned-clock-stop-core "$RUNNER_TEMP/runtime-services/clock-disable" 3
+          bash runtime-services/build.sh ../owned-long-gap-core "$RUNNER_TEMP/runtime-services/long-gap" 4
+          bash runtime-services/build.sh ../owned-heap-alignment-core "$RUNNER_TEMP/runtime-services/heap-alignment" 5
+          bash runtime-services/build.sh ../owned-public-heap-core "$RUNNER_TEMP/runtime-services/public-heap" 6
+          bash runtime-services/build.sh ../owned-public-heap-oom-core "$RUNNER_TEMP/runtime-services/public-heap-oom" 7
+      - name: Execute actual services in both scheduler profiles
+        env:
+          LABWIRED_SERVICES_FIXTURE_DIR: ${{ runner.temp }}/runtime-services
+        run: |
+          set -o pipefail
+          cargo test --release --locked -p labwired-core --test samd_real_services_guest -- --nocapture
+          cargo test --release --locked -p labwired-core --test samd_real_services_guest -- --ignored --nocapture | tee services-guest-default.log
+          cargo test --release --locked -p labwired-core --features event-scheduler --test samd_real_services_guest -- --ignored --nocapture | tee services-guest-scheduler.log
+      - name: Preserve source-bound build and actual execution evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: actual-codal-services-guest-results
+          path: |
+            services-guest-default.log
+            services-guest-scheduler.log
+            ${{ runner.temp }}/runtime-services/

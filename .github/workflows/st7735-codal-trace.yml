@@ -1,0 +1,40 @@
+name: ST7735 pinned CODAL driver trace
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - scripts/st7735-codal-trace/**
+      - .github/workflows/st7735-codal-trace.yml
+      - crates/core/tests/st7735_sam_guest.rs
+      - crates/core/tests/fixtures/st7735-codal-host-trace.json
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: st7735-codal-trace-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  pinned-driver-trace:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install 32-bit host compiler support
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends g++-multilib
+      - name: Execute original pinned driver against explicit host trace boundary
+        run: >
+          python3 scripts/st7735-codal-trace/run.py
+          --work-dir "$RUNNER_TEMP"
+          --output "$RUNNER_TEMP/st7735-codal-trace.json"
+          --fixture crates/core/tests/fixtures/st7735-codal-host-trace.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: st7735-codal-host-trace
+          path: ${{ runner.temp }}/st7735-codal-trace.json
+          if-no-files-found: error

@@ -261,9 +261,73 @@ static void test_tick_at_paces_operate_cycles_by_min_cycle_time(void** state)
     assert_int_equal(g_send_calls, 1);
     assert_int_equal(iolink_master_port_state(&port)->cycle_count, 1U);
 
+    /* One M-sequence at a time: while the reply is outstanding the due cycle
+       is deferred, not pipelined. */
+    assert_int_equal(iolink_master_tick_at(&port, IOLINK_MASTER_TICK_CYCLE_DUE, 120U), 0);
+    assert_int_equal(g_send_calls, 1);
+    assert_int_equal(iolink_master_port_state(&port)->cycle_count, 1U);
+
+    /* Consume the write reply ([PD-in] CKS, no OD octet), then the next due
+       cycle proceeds. */
+    {
+        const uint8_t pd_in[1] = {0x00U};
+        uint8_t reply[2];
+
+        reply[0] = pd_in[0];
+        reply[1] = test_ck6_reply(pd_in, 1U, 0U);
+        queue_bytes(reply, sizeof(reply));
+    }
+    assert_int_equal(iolink_master_tick_at(&port, IOLINK_MASTER_TICK_NONE, 120U), 1);
     assert_int_equal(iolink_master_tick_at(&port, IOLINK_MASTER_TICK_CYCLE_DUE, 120U), 0);
     assert_int_equal(g_send_calls, 2);
     assert_int_equal(iolink_master_port_state(&port)->cycle_count, 2U);
+}
+
+static void test_response_timeout_flushes_partial_reply_bytes(void** state)
+{
+    iolink_master_port_t port;
+    iolink_master_config_t config = g_config;
+    iolink_master_diagnostics_t diagnostics;
+
+    (void)state;
+
+    config.response_timeout_100us = 20U;
+
+    assert_int_equal(iolink_master_init(&port, &g_phy, &config), 0);
+    iolink_master_port_state(&port)->state = IOLINK_MASTER_STATE_OPERATE;
+
+    assert_int_equal(iolink_master_tick_at(&port, IOLINK_MASTER_TICK_CYCLE_DUE, 100U), 0);
+    assert_int_equal(g_send_calls, 1);
+
+    /* One stale reply byte from the timed-out request is already inside the
+       port's RX buffer (a poll consumed it before the deadline). */
+    {
+        const uint8_t partial[1] = {0x11U};
+
+        queue_bytes(partial, sizeof(partial));
+    }
+    assert_int_equal(iolink_master_tick_at(&port, IOLINK_MASTER_TICK_NONE, 110U), 0);
+
+    /* The timeout drops the partial byte, then the retry reply frames cleanly:
+       without the flush the stale byte would mis-frame it and raise a checksum
+       error. */
+    {
+        int tr = iolink_master_tick_at(&port, IOLINK_MASTER_TICK_RESPONSE_TIMEOUT, 120U);
+
+        assert_true(tr >= 0);
+    }
+    {
+        const uint8_t pd_in[1] = {0x00U};
+        uint8_t reply[2];
+
+        reply[0] = pd_in[0];
+        reply[1] = test_ck6_reply(pd_in, 1U, 0U);
+        queue_bytes(reply, sizeof(reply));
+    }
+    assert_int_equal(iolink_master_tick_at(&port, IOLINK_MASTER_TICK_NONE, 121U), 1);
+    assert_int_equal(iolink_master_get_diagnostics(&port, &diagnostics), 0);
+    assert_int_equal(diagnostics.checksum_errors, 0U);
+    assert_int_equal(diagnostics.rx_retry_count, 0U);
 }
 
 static void test_next_tick_time_prefers_response_deadline_before_cycle_due(void** state)
@@ -376,21 +440,23 @@ static void test_tick_at_holds_first_message_for_t_dmt_after_wake(void** state)
 
     assert_int_equal(iolink_master_init(&port, &g_phy, &g_config), 0);
 
-    /* Wake-up at t=0; COM3 T_DMT = 32 * 4.34us = 139us -> 2 ticks of 100us. */
+    /* 7.3.2.2: the first test message follows the wake-up after T_REN (max
+       500us, Table 10) and T_DMT (Table 42). Wake-up at t=0; COM3 T_DMT =
+       32 * 4.34us = 139us -> 2 ticks; 5 + 2 = 7 ticks of 100us. */
     assert_int_equal(iolink_master_tick_at(&port, event, 0U), 0);
     assert_int_equal(g_send_calls, 1);
     assert_int_equal(iolink_master_port_state(&port)->startup.step,
                      IOLINK_MASTER_STARTUP_STEP_SEND_TYPE0);
-    assert_int_equal(iolink_master_port_state(&port)->send_ready_at_100us, 2U);
+    assert_int_equal(iolink_master_port_state(&port)->send_ready_at_100us, 7U);
 
-    /* T_DMT not yet elapsed: the test message is held off (Table 42). */
-    assert_int_equal(iolink_master_tick_at(&port, event, 1U), 0);
+    /* T_REN + T_DMT not yet elapsed: the test message is held off. */
+    assert_int_equal(iolink_master_tick_at(&port, event, 6U), 0);
     assert_int_equal(g_send_calls, 1);
     assert_int_equal(iolink_master_port_state(&port)->startup.step,
                      IOLINK_MASTER_STARTUP_STEP_SEND_TYPE0);
 
-    /* At t=200us (2 ticks) the first test message is sent. */
-    assert_int_equal(iolink_master_tick_at(&port, event, 2U), 0);
+    /* At t=700us the first test message is sent. */
+    assert_int_equal(iolink_master_tick_at(&port, event, 7U), 0);
     assert_int_equal(g_send_calls, 2);
     assert_int_equal(iolink_master_port_state(&port)->startup.step,
                      IOLINK_MASTER_STARTUP_STEP_AWAIT_RESPONSE);
@@ -473,6 +539,8 @@ int main(void)
         cmocka_unit_test_setup(test_tick_event_response_timeout_reports_pending_retry,
                                reset_fixture),
         cmocka_unit_test_setup(test_tick_at_paces_operate_cycles_by_min_cycle_time,
+                               reset_fixture),
+        cmocka_unit_test_setup(test_response_timeout_flushes_partial_reply_bytes,
                                reset_fixture),
         cmocka_unit_test_setup(test_next_tick_time_prefers_response_deadline_before_cycle_due,
                                reset_fixture),

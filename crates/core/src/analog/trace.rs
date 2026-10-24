@@ -31,6 +31,47 @@ use std::sync::{Arc, Mutex};
 /// Default ring depth: 20 000 samples, two seconds at a 100 µs co-sim step.
 pub const DEFAULT_TRACE_SAMPLES: usize = 20_000;
 
+/// Most change points one channel of [`AnalogSeries`] keeps for a run.
+/// Past this the channel stops recording and counts what it dropped, so a
+/// reader can tell a truncated series from a quiet one.
+pub const DEFAULT_SERIES_POINTS: usize = 65_536;
+
+/// Absolute deadband of the run-long series: 10 uA for a current channel.
+pub const SERIES_DEADBAND_AMPS: f64 = 1e-5;
+/// Absolute deadband of the run-long series: 1 mV for a voltage channel.
+pub const SERIES_DEADBAND_VOLTS: f64 = 1e-3;
+/// Relative deadband: a change smaller than 0.5 % of the held value is not a
+/// new point.
+pub const SERIES_DEADBAND_REL: f64 = 5e-3;
+
+/// One channel of the run-long, change-point series.
+///
+/// Sample-and-hold: each `[time_ns, value]` point holds until the next one.
+/// A point is written when the value moves by more than the channel's
+/// deadband from the last written point, so the series covers the WHOLE run
+/// (unlike the 2 s scope ring) at a size set by how often the circuit changes,
+/// not by how long it runs.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct AnalogSeriesChannel {
+    /// Same name as the scope channel (`<model>.<probe or trace expression>`).
+    pub name: String,
+    /// `"V"` or `"A"`.
+    pub unit: String,
+    /// `[time_ns, value]` change points, oldest first.
+    pub points: Vec<(u64, f64)>,
+    /// Change points not kept because the channel reached its cap.
+    pub dropped: u64,
+}
+
+/// `result.json`'s `analog_series` block: every analog channel over the run.
+#[derive(Debug, Clone, PartialEq, Default, serde::Serialize, serde::Deserialize)]
+pub struct AnalogSeries {
+    /// Simulated time of the last sample any model wrote.
+    pub end_time_ns: u64,
+    /// One entry per channel, in channel-table order.
+    pub channels: Vec<AnalogSeriesChannel>,
+}
+
 /// One column of the trace.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct AnalogChannel {
@@ -125,6 +166,9 @@ pub struct AnalogTrace {
     next_seq: u64,
     dropped: u64,
     last_values: Vec<f32>,
+    series: Vec<AnalogSeriesChannel>,
+    series_cap: usize,
+    end_time_ns: u64,
 }
 
 impl Default for AnalogTrace {
@@ -143,6 +187,22 @@ impl AnalogTrace {
             next_seq: 0,
             dropped: 0,
             last_values: Vec::new(),
+            series: Vec::new(),
+            series_cap: DEFAULT_SERIES_POINTS,
+            end_time_ns: 0,
+        }
+    }
+
+    /// Cap the run-long series at `points` per channel (at least two).
+    pub fn set_series_cap(&mut self, points: usize) {
+        self.series_cap = points.max(2);
+    }
+
+    /// The run-long change-point series of every channel.
+    pub fn series(&self) -> AnalogSeries {
+        AnalogSeries {
+            end_time_ns: self.end_time_ns,
+            channels: self.series.clone(),
         }
     }
 
@@ -162,6 +222,13 @@ impl AnalogTrace {
         let base = self.channels.len();
         self.channels.extend_from_slice(channels);
         self.last_values.resize(self.channels.len(), 0.0);
+        self.series
+            .extend(channels.iter().map(|channel| AnalogSeriesChannel {
+                name: channel.name.clone(),
+                unit: channel.unit.clone(),
+                points: Vec::new(),
+                dropped: 0,
+            }));
         for sample in &mut self.samples {
             sample.1.values.resize(self.channels.len(), 0.0);
         }
@@ -190,7 +257,11 @@ impl AnalogTrace {
             if let Some(slot) = self.last_values.get_mut(base + offset) {
                 *slot = *value as f32;
             }
+            if let Some(channel) = self.series.get_mut(base + offset) {
+                record_change(channel, self.series_cap, time_ns, *value);
+            }
         }
+        self.end_time_ns = self.end_time_ns.max(time_ns);
         let sample = AnalogSample {
             cycle,
             time_ns,
@@ -220,6 +291,29 @@ impl AnalogTrace {
             dropped: self.dropped,
         }
     }
+}
+
+/// Append `value` to `channel` when it left the deadband of the last point.
+fn record_change(channel: &mut AnalogSeriesChannel, cap: usize, time_ns: u64, value: f64) {
+    if !value.is_finite() {
+        return;
+    }
+    if let Some(&(_, held)) = channel.points.last() {
+        let floor = if channel.unit == "A" {
+            SERIES_DEADBAND_AMPS
+        } else {
+            SERIES_DEADBAND_VOLTS
+        };
+        let band = floor.max(SERIES_DEADBAND_REL * held.abs());
+        if (value - held).abs() <= band {
+            return;
+        }
+    }
+    if channel.points.len() >= cap {
+        channel.dropped += 1;
+        return;
+    }
+    channel.points.push((time_ns, value));
 }
 
 /// Shared handle to the ring. The adapter lives inside the co-sim runner, so
@@ -270,5 +364,62 @@ impl AnalogTraceRegistry {
             Ok(trace) => trace.snapshot(cursor),
             Err(poisoned) => poisoned.into_inner().snapshot(cursor),
         }
+    }
+
+    /// The run-long change-point series of every channel.
+    pub fn series(&self) -> AnalogSeries {
+        match self.trace.lock() {
+            Ok(trace) => trace.series(),
+            Err(poisoned) => poisoned.into_inner().series(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_series_outlives_the_ring() {
+        let mut trace = AnalogTrace::new(4);
+        trace.register_channels(&[AnalogChannel::amps("m.i(L1)")]);
+        for step in 0..100u64 {
+            let amps = if (20..60).contains(&step) { 0.2 } else { 0.0 };
+            trace.push(0, step, step * 100_000, &[amps]);
+        }
+        assert_eq!(trace.len(), 4, "the scope ring keeps only its depth");
+        let series = trace.series();
+        assert_eq!(series.end_time_ns, 99 * 100_000);
+        let points = &series.channels[0].points;
+        assert_eq!(
+            points.first(),
+            Some(&(0, 0.0)),
+            "the first sample is always a point"
+        );
+        assert!(
+            points.contains(&(20 * 100_000, 0.2)),
+            "turn-on kept after the ring wrapped"
+        );
+        assert!(points.contains(&(60 * 100_000, 0.0)), "turn-off kept");
+    }
+
+    #[test]
+    fn changes_inside_the_deadband_are_not_points() {
+        let mut trace = AnalogTrace::new(8);
+        trace.register_channels(&[AnalogChannel::amps("i"), AnalogChannel::volts("v")]);
+        trace.push(0, 0, 0, &[0.100, 1.000]);
+        trace.push(
+            0,
+            1,
+            1,
+            &[
+                0.100 + SERIES_DEADBAND_REL * 0.05,
+                1.0 + SERIES_DEADBAND_VOLTS * 0.5,
+            ],
+        );
+        trace.push(0, 2, 2, &[0.150, 2.0]);
+        let series = trace.series();
+        assert_eq!(series.channels[0].points, vec![(0, 0.100), (2, 0.150)]);
+        assert_eq!(series.channels[1].points, vec![(0, 1.0), (2, 2.0)]);
     }
 }

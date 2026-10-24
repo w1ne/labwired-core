@@ -1,6 +1,6 @@
 # Mini A validation record
 
-Record date: **2026-10-12**. Status: **documentation grounded; separate reduced native Linux boot passed; generic board descriptors remain below L0**.
+Original record: **2026-10-12**; updated with later joint evidence on **2026-10-13**. Status: **documentation grounded; reduced native Linux joint basket accepted; generic board descriptors remain below L0**. The later joint evidence is recorded separately in [BASKET.md](../luckfox-pico-mini-a-linux/BASKET.md); physical acceptance remains unavailable.
 
 ## Evidence ledger
 
@@ -14,9 +14,9 @@ Record date: **2026-10-12**. Status: **documentation grounded; separate reduced 
 | RV1103 configs and reset contract | Generic CPU/memory-only declarations; reset/ROM/SD/BSP absent; separate Linux platform does not populate this YAML | Declared; below L0 |
 | Deterministic Mini A UART smoke | No board firmware, result JSON or UART capture | Pending; no L1 |
 | Reduced RV1103 direct Linux boot | [Native zImage receipt](../luckfox-pico-mini-a-linux/VALIDATION.md): real MMU/GIC/timer/UART2, kernel/PID1/mounts/proc/uname and sleep/uptime | Passed locally; SD/vendor BSP/physical boot pending |
-| I2C3 + ADXL345 | Existing ADXL345 I2C kit and core DEVID/XYZ test; RV1103 controller and board wiring absent | Sensor model available; basket scenario pending |
-| UART4 + ESP-AT | Vendor pin references and proposed serial architecture only | Pending |
-| Native-to-browser integration | No `qemu-arm` browser execution evidence | Pending |
+| I2C3 + ADXL345 | Actual native I2C3 controller and shared ADXL345 kit; decoded transactions, registers and synthetic XYZ inputs in the eight-phase Linux receipt | Accepted in the reduced native basket; physical/pinmux/electrical qualification unavailable |
+| UART4 + ESP-AT | Actual native UART4 controller and shared behavioral ESP-AT peer; byte pacing, commands and cut/restore in the joint receipt | Accepted behavioral protocol; ESP firmware/RF/physical qualification unavailable |
+| Native-to-browser integration | Default/browser builds refuse Linux; local viewer plays recorded native evidence | Recorded playback only; Linux does not execute in the browser |
 | Physical basket / power / RF | No board, battery, charger or antenna measurements | Pending |
 
 ## Core tests are a separate claim

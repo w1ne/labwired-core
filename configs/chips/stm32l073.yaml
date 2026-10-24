@@ -193,6 +193,8 @@ peripherals:
     config:
       debug_schema: "../peripherals/stm32l073/spi1.yaml"
       profile: "stm32"
+      # L0 AF pinout (SPI1 on AF0), not the F4 AF5 one.
+      pad_map: "stm32l0"
     # SPI1 is clocked from RCC_APB2ENR.SPI1EN (bit 12). Unclocked out of reset
     # (RM0367 §7.3.13) — SR.TXE never asserts until the clock is enabled.
     clock: { reg: "apb2enr", bit: 12 }
@@ -205,6 +207,8 @@ peripherals:
     config:
       debug_schema: "../peripherals/stm32l073/spi2.yaml"
       profile: "stm32"
+      # L0 AF pinout (SPI1 on AF0), not the F4 AF5 one.
+      pad_map: "stm32l0"
 
   # --- I2C (v2 TIMINGR-based controller, shared with L4/F7/G0) ---------------
   - id: "i2c1"

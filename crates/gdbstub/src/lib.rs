@@ -99,6 +99,61 @@ impl SingleThreadBase for LabwiredTarget<CortexM> {
     ) -> Option<gdbstub::target::ext::base::singlethread::SingleThreadResumeOps<'_, Self>> {
         Some(self)
     }
+
+    fn support_single_register_access(
+        &mut self,
+    ) -> Option<
+        gdbstub::target::ext::base::single_register_access::SingleRegisterAccessOps<'_, (), Self>,
+    > {
+        Some(self)
+    }
+}
+
+/// GDB's `p`/`P` packets against an ARM core: one 32-bit little-endian word
+/// per core register. This is what `set $pc = ...` / `reset $pc` travels on.
+impl gdbstub::target::ext::base::single_register_access::SingleRegisterAccess<()>
+    for LabwiredTarget<CortexM>
+{
+    fn read_register(
+        &mut self,
+        _tid: (),
+        reg_id: gdbstub_arch::arm::reg::id::ArmCoreRegId,
+        buf: &mut [u8],
+    ) -> TargetResult<usize, Self> {
+        use gdbstub_arch::arm::reg::id::ArmCoreRegId;
+        let index = match reg_id {
+            ArmCoreRegId::Gpr(r) => r,
+            ArmCoreRegId::Sp => 13,
+            ArmCoreRegId::Lr => 14,
+            ArmCoreRegId::Pc => 15,
+            ArmCoreRegId::Cpsr => 16,
+            _ => return Err(TargetError::NonFatal),
+        };
+        let slot = buf.get_mut(..4).ok_or(TargetError::NonFatal)?;
+        slot.copy_from_slice(&self.machine.read_core_reg(index).to_le_bytes());
+        Ok(4)
+    }
+
+    fn write_register(
+        &mut self,
+        _tid: (),
+        reg_id: gdbstub_arch::arm::reg::id::ArmCoreRegId,
+        val: &[u8],
+    ) -> TargetResult<(), Self> {
+        use gdbstub_arch::arm::reg::id::ArmCoreRegId;
+        let index = match reg_id {
+            ArmCoreRegId::Gpr(r) => r,
+            ArmCoreRegId::Sp => 13,
+            ArmCoreRegId::Lr => 14,
+            ArmCoreRegId::Pc => 15,
+            ArmCoreRegId::Cpsr => 16,
+            _ => return Err(TargetError::NonFatal),
+        };
+        let bytes: [u8; 4] = val.try_into().map_err(|_| TargetError::NonFatal)?;
+        self.machine
+            .write_core_reg(index, u32::from_le_bytes(bytes));
+        Ok(())
+    }
 }
 
 impl Target for LabwiredTarget<RiscV> {
@@ -169,6 +224,55 @@ impl SingleThreadBase for LabwiredTarget<RiscV> {
     ) -> Option<gdbstub::target::ext::base::singlethread::SingleThreadResumeOps<'_, Self>> {
         Some(self)
     }
+
+    fn support_single_register_access(
+        &mut self,
+    ) -> Option<
+        gdbstub::target::ext::base::single_register_access::SingleRegisterAccessOps<'_, (), Self>,
+    > {
+        Some(self)
+    }
+}
+
+/// GDB's `p`/`P` packets against a RISC-V core: one 32-bit little-endian word
+/// per core register (`x0`-`x31`, then `pc`).
+impl gdbstub::target::ext::base::single_register_access::SingleRegisterAccess<()>
+    for LabwiredTarget<RiscV>
+{
+    fn read_register(
+        &mut self,
+        _tid: (),
+        reg_id: gdbstub_arch::riscv::reg::id::RiscvRegId<u32>,
+        buf: &mut [u8],
+    ) -> TargetResult<usize, Self> {
+        use gdbstub_arch::riscv::reg::id::RiscvRegId;
+        let index = match reg_id {
+            RiscvRegId::Gpr(x) => x,
+            RiscvRegId::Pc => 32,
+            _ => return Err(TargetError::NonFatal),
+        };
+        let slot = buf.get_mut(..4).ok_or(TargetError::NonFatal)?;
+        slot.copy_from_slice(&self.machine.read_core_reg(index).to_le_bytes());
+        Ok(4)
+    }
+
+    fn write_register(
+        &mut self,
+        _tid: (),
+        reg_id: gdbstub_arch::riscv::reg::id::RiscvRegId<u32>,
+        val: &[u8],
+    ) -> TargetResult<(), Self> {
+        use gdbstub_arch::riscv::reg::id::RiscvRegId;
+        let index = match reg_id {
+            RiscvRegId::Gpr(x) => x,
+            RiscvRegId::Pc => 32,
+            _ => return Err(TargetError::NonFatal),
+        };
+        let bytes: [u8; 4] = val.try_into().map_err(|_| TargetError::NonFatal)?;
+        self.machine
+            .write_core_reg(index, u32::from_le_bytes(bytes));
+        Ok(())
+    }
 }
 
 impl<C: Cpu> SingleThreadResume for LabwiredTarget<C>
@@ -208,6 +312,12 @@ where
     ) -> Option<gdbstub::target::ext::breakpoints::SwBreakpointOps<'_, Self>> {
         Some(self)
     }
+
+    fn support_hw_watchpoint(
+        &mut self,
+    ) -> Option<gdbstub::target::ext::breakpoints::HwWatchpointOps<'_, Self>> {
+        Some(self)
+    }
 }
 
 impl<C: Cpu> gdbstub::target::ext::breakpoints::SwBreakpoint for LabwiredTarget<C>
@@ -230,6 +340,50 @@ where
     ) -> TargetResult<bool, Self> {
         self.machine.remove_breakpoint(addr);
         Ok(true)
+    }
+}
+
+impl<C: Cpu> gdbstub::target::ext::breakpoints::HwWatchpoint for LabwiredTarget<C>
+where
+    LabwiredTarget<C>: Target<Arch: gdbstub::arch::Arch<Usize = u32>>,
+{
+    fn add_hw_watchpoint(
+        &mut self,
+        addr: u32,
+        len: u32,
+        kind: gdbstub::target::ext::breakpoints::WatchKind,
+    ) -> TargetResult<bool, Self> {
+        use gdbstub::target::ext::breakpoints::WatchKind;
+        // GDB's WatchKind has three variants (`Write` / `Read` / `ReadWrite`);
+        // map each onto the bus's (on_read, on_store) pair.
+        let (on_read, on_store) = match kind {
+            WatchKind::Write => (false, true),
+            WatchKind::Read => (true, false),
+            WatchKind::ReadWrite => (true, true),
+        };
+        // `Machine::add_watchpoint` refuses empty ranges, ranges wider than
+        // 4 KiB and a full watch table; the same verdict goes back to GDB so
+        // it can report the failure to the user.
+        Ok(self
+            .machine
+            .add_watchpoint(u64::from(addr), u64::from(len), on_read, on_store))
+    }
+
+    fn remove_hw_watchpoint(
+        &mut self,
+        addr: u32,
+        len: u32,
+        kind: gdbstub::target::ext::breakpoints::WatchKind,
+    ) -> TargetResult<bool, Self> {
+        use gdbstub::target::ext::breakpoints::WatchKind;
+        let (on_read, on_store) = match kind {
+            WatchKind::Write => (false, true),
+            WatchKind::Read => (true, false),
+            WatchKind::ReadWrite => (true, true),
+        };
+        Ok(self
+            .machine
+            .remove_watchpoint(u64::from(addr), u64::from(len), on_read, on_store))
     }
 }
 
@@ -389,6 +543,15 @@ where
                         gdbstub::common::Signal::SIGTRAP,
                     )));
                 }
+                Ok(StopReason::Watchpoint(_)) => {
+                    // Without this arm the latch is consumed by the `Ok(_)`
+                    // arm's MaxStepsReached fall-through and swallowed — the
+                    // target would keep running past the watchpoint.
+                    target.running = false;
+                    return Ok(Event::TargetStopped(BaseStopReason::Signal(
+                        gdbstub::common::Signal::SIGTRAP,
+                    )));
+                }
                 Ok(_) => {
                     // MaxStepsReached
                     if target.single_step {
@@ -454,6 +617,205 @@ mod tests {
     }
 
     #[test]
+    fn single_register_access_round_trips_arm() {
+        use gdbstub::target::ext::base::single_register_access::SingleRegisterAccess;
+        use gdbstub_arch::arm::reg::id::ArmCoreRegId;
+
+        let mut bus = SystemBus::new();
+        let (cpu, _nvic) = labwired_core::system::cortex_m::configure_cortex_m(&mut bus);
+        let machine = Machine::new(cpu, bus);
+        let mut target = LabwiredTarget::<CortexM>::new(machine);
+
+        assert!(target.support_single_register_access().is_some());
+
+        // `P f=<le>` then `p f` must round-trip the PC, and the machine's core
+        // register 15 must be the same value — this is what `reset $pc` uses.
+        let pc = 0x0800_0240u32;
+        target
+            .write_register((), ArmCoreRegId::Pc, &pc.to_le_bytes())
+            .unwrap_or_else(|_| panic!("P write of PC refused"));
+        let mut buf = [0u8; 4];
+        let n = target
+            .read_register((), ArmCoreRegId::Pc, &mut buf)
+            .unwrap_or_else(|_| panic!("p read of PC refused"));
+        assert_eq!(n, 4);
+        assert_eq!(u32::from_le_bytes(buf), pc);
+        assert_eq!(target.machine.read_core_reg(15), pc);
+
+        // `P 1,<le>` lands in core register 1, as `G` would.
+        let r1 = 0xdead_beefu32;
+        target
+            .write_register((), ArmCoreRegId::Gpr(1), &r1.to_le_bytes())
+            .unwrap_or_else(|_| panic!("P write of r1 refused"));
+        assert_eq!(target.machine.read_core_reg(1), r1);
+
+        // Register classes this target does not model must be a NonFatal
+        // error, so GDB sees a real refusal rather than a silent no-op.
+        let mut buf = [0u8; 4];
+        assert!(matches!(
+            target.read_register((), ArmCoreRegId::Fpr(0), &mut buf),
+            Err(TargetError::NonFatal)
+        ));
+        assert!(matches!(
+            target.write_register((), ArmCoreRegId::Fps, &[0u8; 4]),
+            Err(TargetError::NonFatal)
+        ));
+    }
+
+    #[test]
+    fn single_register_access_round_trips_riscv() {
+        use gdbstub::target::ext::base::single_register_access::SingleRegisterAccess;
+        use gdbstub_arch::riscv::reg::id::RiscvRegId;
+
+        let machine = Machine::new(labwired_core::cpu::RiscV::new(), SystemBus::new());
+        let mut target = LabwiredTarget::<RiscV>::new(machine);
+
+        assert!(target.support_single_register_access().is_some());
+
+        let pc = 0x8000_0300u32;
+        target
+            .write_register((), RiscvRegId::Pc, &pc.to_le_bytes())
+            .unwrap_or_else(|_| panic!("P write of PC refused"));
+        let mut buf = [0u8; 4];
+        let n = target
+            .read_register((), RiscvRegId::Pc, &mut buf)
+            .unwrap_or_else(|_| panic!("p read of PC refused"));
+        assert_eq!(n, 4);
+        assert_eq!(u32::from_le_bytes(buf), pc);
+        assert_eq!(target.machine.read_core_reg(32), pc);
+
+        let x2 = 0x2000_0800u32;
+        target
+            .write_register((), RiscvRegId::Gpr(2), &x2.to_le_bytes())
+            .unwrap_or_else(|_| panic!("P write of x2 refused"));
+        assert_eq!(target.machine.read_core_reg(2), x2);
+
+        let mut buf = [0u8; 4];
+        assert!(matches!(
+            target.read_register((), RiscvRegId::Csr(0), &mut buf),
+            Err(TargetError::NonFatal)
+        ));
+        assert!(matches!(
+            target.write_register((), RiscvRegId::Priv, &[0u8; 4]),
+            Err(TargetError::NonFatal)
+        ));
+    }
+
+    #[test]
+    fn hw_watchpoint_round_trip_through_the_target() {
+        use gdbstub::target::ext::breakpoints::{Breakpoints, HwWatchpoint, WatchKind};
+
+        let mut bus = SystemBus::new();
+        let (cpu, _nvic) = labwired_core::system::cortex_m::configure_cortex_m(&mut bus);
+        let machine = Machine::new(cpu, bus);
+        let mut target = LabwiredTarget::<CortexM>::new(machine);
+
+        assert!(target.support_hw_watchpoint().is_some());
+        assert!(target
+            .add_hw_watchpoint(0x2000_0100, 4, WatchKind::ReadWrite)
+            .unwrap_or(false));
+        assert!(
+            !target
+                .remove_hw_watchpoint(0x2000_0100, 8, WatchKind::ReadWrite)
+                .unwrap_or(false),
+            "a length mismatch is not the armed watch"
+        );
+        assert!(target
+            .remove_hw_watchpoint(0x2000_0100, 4, WatchKind::ReadWrite)
+            .unwrap_or(false));
+        assert!(
+            !target
+                .remove_hw_watchpoint(0x2000_0100, 4, WatchKind::ReadWrite)
+                .unwrap_or(false),
+            "a removed watch cannot be removed twice"
+        );
+
+        // The extension is implemented generically, so the RISC-V arch target
+        // exposes it too.
+        let mut riscv = LabwiredTarget::<RiscV>::new(Machine::new(
+            labwired_core::cpu::RiscV::new(),
+            SystemBus::new(),
+        ));
+        assert!(riscv.support_hw_watchpoint().is_some());
+        assert!(riscv
+            .add_hw_watchpoint(0x8000_0100, 4, WatchKind::Write)
+            .unwrap_or(false));
+        assert!(riscv
+            .remove_hw_watchpoint(0x8000_0100, 4, WatchKind::Write)
+            .unwrap_or(false));
+    }
+
+    #[test]
+    fn hw_watchpoint_refusals_reach_gdb_as_false() {
+        use gdbstub::target::ext::breakpoints::{HwWatchpoint, WatchKind};
+
+        let mut bus = SystemBus::new();
+        let (cpu, _nvic) = labwired_core::system::cortex_m::configure_cortex_m(&mut bus);
+        let machine = Machine::new(cpu, bus);
+        let mut target = LabwiredTarget::<CortexM>::new(machine);
+
+        assert!(
+            !target
+                .add_hw_watchpoint(0x2000_0100, 4097, WatchKind::Write)
+                .unwrap_or(false),
+            "a range wider than 4 KiB is refused"
+        );
+        assert!(!target
+            .add_hw_watchpoint(0x2000_0100, 0, WatchKind::Write)
+            .unwrap_or(false));
+        for i in 0..16u32 {
+            assert!(target
+                .add_hw_watchpoint(0x2000_1000 + i * 16, 4, WatchKind::Write)
+                .unwrap_or(false));
+        }
+        assert!(
+            !target
+                .add_hw_watchpoint(0x2000_2000, 4, WatchKind::Write)
+                .unwrap_or(false),
+            "17th watch is refused at the cap"
+        );
+    }
+
+    #[test]
+    fn hw_watchpoint_stops_the_machine_run() {
+        use gdbstub::target::ext::breakpoints::{HwWatchpoint, WatchKind};
+        use labwired_core::Bus;
+
+        let mut bus = SystemBus::new();
+        let (cpu, _nvic) = labwired_core::system::cortex_m::configure_cortex_m(&mut bus);
+        let machine = Machine::new(cpu, bus);
+        let mut target = LabwiredTarget::<CortexM>::new(machine);
+
+        let code = 0x2000_0800u32;
+        let watched = 0x2000_0200u64;
+        target.machine.cpu.set_pc(code);
+        // str r0, [r1] (Thumb-16 0x6008), then NOPs so the budget is valid.
+        target.machine.bus.write_u16(code as u64, 0x6008).unwrap();
+        for i in 1..4u64 {
+            target
+                .machine
+                .bus
+                .write_u16(code as u64 + i * 2, 0x4600)
+                .unwrap();
+        }
+        target.machine.cpu.set_register(0, 0xAB);
+        target.machine.cpu.set_register(1, watched as u32);
+
+        assert!(target
+            .add_hw_watchpoint(watched as u32, 4, WatchKind::Write)
+            .unwrap_or(false));
+        let stop = target.machine.run(Some(4)).unwrap();
+        assert_eq!(
+            stop,
+            StopReason::Watchpoint(watched),
+            "a CPU store into the armed range must stop the machine"
+        );
+        let _ = target
+            .remove_hw_watchpoint(watched as u32, 4, WatchKind::Write)
+            .unwrap_or(false);
+    }
+
+    #[test]
     fn test_riscv_target_register_access() {
         let bus = SystemBus::new();
         let cpu = labwired_core::cpu::RiscV::new();
@@ -478,16 +840,5 @@ mod tests {
             .write_registers(&regs)
             .unwrap_or_else(|_| panic!("Failed to write registers"));
         assert_eq!(target.machine.read_core_reg(2), 0xdeadbeef);
-    }
-
-    #[test]
-    fn test_target_memory_access() {
-        let mut bus = SystemBus::new();
-        let (cpu, _nvic) = labwired_core::system::cortex_m::configure_cortex_m(&mut bus);
-        let machine = Machine::new(cpu, bus);
-        let mut target = LabwiredTarget::<CortexM>::new(machine);
-
-        let data = [0xAA, 0xBB, 0xCC, 0xDD];
-        let _ = target.write_addrs(0x20000000, &data);
     }
 }

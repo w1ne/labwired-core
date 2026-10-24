@@ -1,0 +1,54 @@
+name: SAMD authored software IRQ mask ARM guest
+on:
+  pull_request:
+    paths: ['crates/core/tests/samd_irq_mask_guest.rs', 'scripts/samd-irq-mask/**', '.github/workflows/samd-irq-mask-guest.yml']
+permissions:
+  contents: read
+jobs:
+  irq-guest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Require source and handler-witness receipt controls
+        run: python3 scripts/samd-irq-mask/test_record.py
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: CrispStrobe/codal-samd
+          ref: 2a991760339fe89f5272f923baf89dc18fd434d0
+          path: owned-irq-source
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: Swatinem/rust-cache@v2
+      - name: Build source-bound owned IRQ guests
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-arm-none-eabi libnewlib-dev libstdc++-arm-none-eabi-dev
+          test "$(git -C owned-irq-source rev-parse HEAD)" = 2a991760339fe89f5272f923baf89dc18fd434d0
+          arm-none-eabi-g++ --version
+          sha256sum owned-irq-source/simulation/arm/irq-mask-probe.cpp \
+            owned-irq-source/simulation/arm/irq-startup.S owned-irq-source/simulation/arm/control.ld \
+            owned-irq-source/simulation/include/InterruptMask.h
+          bash scripts/samd-irq-mask/build.sh owned-irq-source "$RUNNER_TEMP/irq-guests"
+      - name: Execute positive and premature-delivery negative fixtures
+        env:
+          LABWIRED_IRQ_FIXTURE_DIR: ${{ runner.temp }}/irq-guests
+        run: |
+          set -o pipefail
+          cargo test --release -p labwired-core --test samd_irq_mask_guest -- --ignored --nocapture | tee irq-guest-default.log
+          cargo test --release -p labwired-core --features event-scheduler --test samd_irq_mask_guest -- --ignored --nocapture | tee irq-guest-scheduler.log
+      - name: Bind execution to actual source snapshot
+        env:
+          QUALIFICATION_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: python3 scripts/samd-irq-mask/record.py
+      - name: Preserve bounded evidence (no ELF)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: authored-irq-mask-guest-results
+          path: |
+            irq-guest-default.log
+            irq-guest-scheduler.log
+            irq-qualification.json
+            ${{ runner.temp }}/irq-guests/*/control.map
+            ${{ runner.temp }}/irq-guests/*/symbols.txt

@@ -343,6 +343,9 @@ impl TracingI2cDevice {
 }
 
 impl I2cDevice for TracingI2cDevice {
+    fn transaction_generation(&self) -> Option<u64> {
+        self.inner.transaction_generation()
+    }
     fn address(&self) -> u8 {
         self.inner.address()
     }
@@ -462,11 +465,11 @@ impl I2cDevice for TracingI2cDevice {
         );
         b
     }
-    fn as_any(&self) -> Option<&dyn std::any::Any> {
-        self.inner.as_any()
+    fn wrapped_device(&self) -> Option<&dyn crate::peripherals::device::I2cDevice> {
+        Some(self.inner.as_ref())
     }
-    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
-        self.inner.as_any_mut()
+    fn wrapped_device_mut(&mut self) -> Option<&mut dyn crate::peripherals::device::I2cDevice> {
+        Some(self.inner.as_mut())
     }
     fn as_sim_input_mut(&mut self) -> Option<&mut dyn crate::sim_input::SimInput> {
         self.inner.as_sim_input_mut()
@@ -594,6 +597,9 @@ mod tests {
         fn as_any(&self) -> Option<&dyn std::any::Any> {
             Some(self)
         }
+        fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+            Some(self)
+        }
     }
 
     #[test]
@@ -615,23 +621,50 @@ mod tests {
 
     #[test]
     fn tracing_i2c_wrapper_records_writes_and_is_transparent_to_downcast() {
-        let log = new_log();
-        let mut w = TracingI2cDevice::new("i2c1".into(), log.clone(), Box::new(Dev { addr: 0x1E }));
-        // simulate a master write of one data byte
-        I2cDevice::write(&mut w, 0xAF);
-        let snap = log.snapshot();
-        assert_eq!(snap.len(), 1);
-        assert_eq!(snap[0].bus, "i2c1");
-        match &snap[0].payload {
-            BusPayload::I2c { byte, .. } => assert_eq!(*byte, 0xAF),
-            _ => panic!("wrong payload"),
+        use crate::peripherals::components::supply_domain::{GatedI2cDevice, SupplyGate};
+        for gated in [false, true] {
+            let log = new_log();
+            let mut bus = crate::bus::SystemBus::empty();
+            let domain = bus.register_supply_domain("external", 2.7).unwrap();
+            let inner: Box<dyn I2cDevice> = if gated {
+                // Nested decorators preserve the same concrete readback even
+                // while the supply gate refuses wire traffic.
+                Box::new(GatedI2cDevice::new(
+                    Box::new(TracingI2cDevice::new(
+                        "inner".into(),
+                        new_log(),
+                        Box::new(Dev { addr: 0x1E }),
+                    )),
+                    SupplyGate::routed(domain, true),
+                ))
+            } else {
+                Box::new(Dev { addr: 0x1E })
+            };
+            let mut w = TracingI2cDevice::new("i2c1".into(), log.clone(), inner);
+            assert_eq!(I2cDevice::claims_address(&w, 0x1E), !gated);
+            // Transparency remains available before powering the device.
+            for mutable in [false, true] {
+                let any: &dyn std::any::Any = if mutable {
+                    I2cDevice::as_any_mut(&mut w).expect("wrapper forwards mutable readback")
+                } else {
+                    I2cDevice::as_any(&w).expect("wrapper forwards immutable readback")
+                };
+                assert!(
+                    any.downcast_ref::<Dev>().is_some(),
+                    "readback must forward to inner"
+                );
+            }
+            bus.update_supply_domain("external", 3.3).unwrap();
+            assert!(I2cDevice::claims_address(&w, 0x1E));
+            I2cDevice::write(&mut w, 0xAF);
+            let snap = log.snapshot();
+            assert_eq!(snap.len(), 1);
+            assert_eq!(snap[0].bus, "i2c1");
+            match &snap[0].payload {
+                BusPayload::I2c { byte, .. } => assert_eq!(*byte, 0xAF),
+                _ => panic!("wrong payload"),
+            }
         }
-        // transparency: downcast through the wrapper still finds the inner Dev
-        let any = I2cDevice::as_any(&w).expect("wrapper forwards as_any");
-        assert!(
-            any.downcast_ref::<Dev>().is_some(),
-            "as_any must forward to inner"
-        );
     }
 
     /// Regression guard: the trace wrapper MUST forward `advance_time_us` to the

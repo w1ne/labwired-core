@@ -515,6 +515,10 @@ impl WasmSimulator {
             MachineFamily::Xtensa => Self::new_from_config_xtensa_esp32(&manifest, firmware),
             // Classic Arduino Nano / ATmega328P — same shape as `build_avr_node`.
             MachineFamily::Avr => Self::new_from_config_avr(&chip, &manifest, firmware),
+            // PIC24 M0 has no browser constructor yet.
+            MachineFamily::Pic24 => Err(JsValue::from_str(
+                "PIC24 (M0) is not available in the browser build yet",
+            )),
         }?;
         // Every architecture's machine is built by now, so co-simulation binds
         // here once rather than in each constructor above.
@@ -603,7 +607,7 @@ impl WasmSimulator {
 
         let program_image = load_elf_bytes(firmware)
             .map_err(|e| JsValue::from_str(&format!("Loader Error: {}", e)))?;
-        let mut cpu = labwired_core::cpu::Avr::new();
+        let mut cpu = labwired_core::cpu::Avr::for_chip_name(&chip.name);
         cpu.load_program_image(&program_image);
         // USART0 is modelled on the CPU, not as a bus UART, so the host
         // console above reaches nothing on this part: the Serial pane only
@@ -3195,6 +3199,136 @@ mod disasm_arch_tests {
     }
 }
 
+/// Browser-path speed and timing harness for a CCOUNT-timed ESP32 sketch
+/// (the four-servo drawing-robot trajectory, share d26Wk2eXNiFS). Runs the
+/// same `WasmSimulator` calls the playground makes, natively, and prints wall
+/// time per simulated second plus the servo pulse widths. Needs the ELF:
+/// `LABWIRED_SERVO_TRAJECTORY_ELF=... cargo test --release -p labwired-wasm
+/// servo_trajectory_browser_path -- --ignored --nocapture`.
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod esp32_servo_trajectory_harness {
+    use super::*;
+    use labwired_core::logic_capture::LogicSource;
+    use std::time::Instant;
+
+    pub(crate) struct Run {
+        pub wall_s: f64,
+        pub sim_s: f64,
+        pub skipped: u64,
+        pub poll_skipped: u64,
+        pub poll_skips: u64,
+        pub deferred: u64,
+        /// Per channel: (rise cycle, fall cycle) pairs.
+        pub pulses: Vec<Vec<(u64, u64)>>,
+        pub done_cycle: Option<u64>,
+    }
+
+    pub(crate) fn run(fw: &[u8], ff: bool, sim_cycles: u64) -> Run {
+        let sys = std::fs::read_to_string("../../configs/systems/esp32-wroom-32.yaml").unwrap();
+        let chip = std::fs::read_to_string("../../configs/chips/esp32.yaml").unwrap();
+        let mut sim = WasmSimulator::new_from_config(&sys, &chip, fw, JsValue::NULL)
+            .expect("new_from_config");
+        sim.install_arduino_esp32_quirks(fw).expect("quirks");
+        sim.set_idle_fast_forward_enabled(ff);
+        let rec = sim.recommended_tick_interval();
+        sim.set_peripheral_tick_interval(rec);
+        let pins = [25u8, 26, 27, 33, 23];
+        {
+            let m = sim.machine.as_mut().unwrap();
+            let gpio = m.bus.find_peripheral_index_by_name("gpio").expect("gpio");
+            let refs: Vec<_> = pins
+                .iter()
+                .map(|p| Some(LogicSource::pad(gpio, *p)))
+                .collect();
+            m.logic_watch(&refs);
+        }
+        let start = Instant::now();
+        let mut edges = Vec::new();
+        let mut cursor = 0;
+        loop {
+            sim.step_with_esp32_aids(2_000_000).expect("step");
+            let m = sim.machine.as_mut().unwrap();
+            let batch = m.logic_read_edges(cursor);
+            cursor = batch.cursor;
+            edges.extend(batch.edges);
+            if m.total_cycles >= sim_cycles {
+                break;
+            }
+        }
+        let wall_s = start.elapsed().as_secs_f64();
+        let m = sim.machine.as_ref().unwrap();
+        let mut pulses = vec![Vec::new(); 4];
+        let mut rise = [None; 4];
+        let mut done_cycle = None;
+        for e in &edges {
+            let ch = e.ch as usize;
+            if ch == 4 {
+                if e.value && done_cycle.is_none() {
+                    done_cycle = Some(e.cycle);
+                }
+                continue;
+            }
+            if e.value {
+                rise[ch] = Some(e.cycle);
+            } else if let Some(r) = rise[ch].take() {
+                pulses[ch].push((r, e.cycle));
+            }
+        }
+        Run {
+            wall_s,
+            sim_s: m.total_cycles as f64 / 240e6,
+            skipped: m.idle_fast_forward_cycles_skipped,
+            poll_skipped: m.poll_loop_cycles_skipped,
+            poll_skips: m.poll_loop_skips,
+            deferred: m.poll_loop_cycles_deferred,
+            pulses,
+            done_cycle,
+        }
+    }
+
+    #[test]
+    #[ignore = "needs LABWIRED_SERVO_TRAJECTORY_ELF; a measurement harness, not a gate"]
+    fn servo_trajectory_browser_path() {
+        let path = std::env::var("LABWIRED_SERVO_TRAJECTORY_ELF")
+            .expect("set LABWIRED_SERVO_TRAJECTORY_ELF");
+        let fw = std::fs::read(path).unwrap();
+        let cycles: u64 = std::env::var("LABWIRED_SERVO_SIM_CYCLES")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(240_000_000);
+        let ff = std::env::var("LABWIRED_SERVO_FF").as_deref() != Ok("0");
+        let r = run(&fw, ff, cycles);
+        eprintln!(
+            "SERVO ff={ff} wall={:.2}s sim={:.3}s ratio={:.3}x skipped={} poll_skipped={} poll_skips={} deferred={} done_cycle={:?}",
+            r.wall_s,
+            r.sim_s,
+            r.sim_s / r.wall_s,
+            r.skipped,
+            r.poll_skipped,
+            r.poll_skips,
+            r.deferred,
+            r.done_cycle
+        );
+        for (ch, p) in r.pulses.iter().enumerate() {
+            let widths: Vec<f64> = p.iter().map(|(a, b)| (b - a) as f64 / 240.0).collect();
+            let periods: Vec<f64> = p
+                .windows(2)
+                .map(|w| (w[1].0 - w[0].0) as f64 / 240.0)
+                .collect();
+            eprintln!(
+                "SERVO ch{ch} n={} widths_us={:?} periods_us(first 5)={:?}",
+                p.len(),
+                widths,
+                &periods[..periods.len().min(5)]
+            );
+        }
+        if let Ok(out) = std::env::var("LABWIRED_SERVO_OUT") {
+            let json: Vec<Vec<(u64, u64)>> = r.pulses.clone();
+            std::fs::write(out, format!("{:?}\n{:?}", json, r.done_cycle)).unwrap();
+        }
+    }
+}
+
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod esp32_classic_aids_stability_tests {
     use super::*;
@@ -3380,6 +3514,41 @@ external_devices:
             "idle FF should engage on waiti while primary parks"
         );
         drop(sim);
+    }
+
+    /// The browser boot path must read the partition table and bring up NVS,
+    /// as the CLI path does (`crates/core/tests/e2e_labwired_ereader.rs`).
+    /// Before the browser ran the real esp_flash driver and seeded
+    /// `g_rom_flashchip`, every classic-ESP32 lab printed these two lines.
+    #[test]
+    fn wasm_simulator_ereader_boot_finds_nvs_and_coredump_partitions() {
+        let Some(fw) = ereader_elf_bytes() else {
+            eprintln!("[skip] no ereader elf");
+            return;
+        };
+        let mut sim =
+            WasmSimulator::new_from_config(&system_yaml(), &chip_yaml(), &fw, JsValue::NULL)
+                .expect("new_from_config");
+        sim.install_arduino_esp32_quirks(&fw).expect("quirks");
+        sim.set_idle_fast_forward_enabled(true);
+        let rec = sim.recommended_tick_interval();
+        sim.set_peripheral_tick_interval(rec);
+        let mut uart = Vec::new();
+        for _ in 0..20 {
+            sim.step_with_esp32_aids(1_000_000).expect("step");
+            uart.extend(sim.drain_uart_output());
+        }
+        let text = String::from_utf8_lossy(&uart);
+        assert!(
+            !text.is_empty(),
+            "the ereader prints its own markers; empty serial means the boot did not run"
+        );
+        for bad in ["Failed to initialize NVS", "No core dump partition found"] {
+            assert!(
+                !text.contains(bad),
+                "browser boot printed {bad:?}. Serial:\n{text}"
+            );
+        }
     }
 
     /// PR-I: sequential WasmSimulator sessions in one process must not inherit

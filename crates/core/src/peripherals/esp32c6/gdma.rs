@@ -66,12 +66,15 @@
 //!
 //! ## What is NOT modelled (documented stubs, never silent byte movement)
 //!
-//! * **Peripheral-coupled transfers** (SPI2, UHCI0, I2S, AES, SHA, ADC,
-//!   PARLIO): a START with `MEM_TRANS_EN` clear and a real peripheral bound in
-//!   `PERI_SEL` (0, 2, 3, 6, 7, 8, 9) is marked *pending* and **stalls
-//!   visibly** — no EOF latches and `needs_bus_tick()` stays true. There is no
-//!   peripheral-side pump on the C6 yet, and auto-completing would claim a
-//!   transfer that never moved a byte. A Dummy `PERI_SEL` value or the unbound
+//! * **Peripheral-coupled transfers** other than the GP-SPI2 (UHCI0, I2S,
+//!   AES, SHA, ADC, PARLIO): a START with `MEM_TRANS_EN` clear and such a
+//!   peripheral bound in `PERI_SEL` (2, 3, 6, 7, 8, 9) is marked *pending* and
+//!   **stalls visibly** — no EOF latches and `needs_bus_tick()` stays true.
+//!   There is no peripheral-side pump for them, and auto-completing would
+//!   claim a transfer that never moved a byte. The **GP-SPI2** (`PERI_SEL` =
+//!   0) IS coupled: the OUT list feeds the controller's transmit FIFO and the
+//!   IN list receives what a DMA transaction read, through the C3's shared
+//!   coupling ([`crate::peripherals::esp_gdma`]). A Dummy `PERI_SEL` value or the unbound
 //!   reset value (`0x3F`) takes the fallback auto-complete path (EOF/DONE
 //!   latch, zero bytes moved), matching the S3 twin's fallback so a firmware
 //!   that never binds a peripheral cannot hang.
@@ -85,8 +88,11 @@
 //!   sources (IN_CHn = 66+n, OUT_CHn = 69+n on the C6) are exported via
 //!   `tick()` / `matrix_irq_sources_into`, but no C6 fixture drives one
 //!   through the interrupt fabric yet (the tier-1 `dma` check is polled).
-//! * **`IN_DSCR_EMPTY` on an under-provisioned IN chain**: excess bytes are
-//!   dropped (same documented simplification as the S3 model).
+//! * **Descriptor errors on the memory-to-memory path**: an under-provisioned
+//!   IN chain drops the excess bytes and a malformed chain just ends the walk
+//!   (same documented simplification as the S3 model). The GP-SPI2 path walks
+//!   with the shared walkers and reports `IN_DSCR_ERR` / `OUT_DSCR_ERR` /
+//!   `IN_DSCR_EMPTY` ([`crate::peripherals::esp_gdma`]).
 
 use crate::{Bus, Peripheral, PeripheralTickResult, SimResult};
 
@@ -152,15 +158,12 @@ const IN_DONE_BIT: u32 = 1 << 0;
 const IN_SUC_EOF_BIT: u32 = 1 << 1;
 #[allow(dead_code)]
 const IN_ERR_EOF_BIT: u32 = 1 << 2;
-#[allow(dead_code)]
 const IN_DSCR_ERR_BIT: u32 = 1 << 3;
-#[allow(dead_code)]
 const IN_DSCR_EMPTY_BIT: u32 = 1 << 4;
 
 // ── OUT_INT_* bits ────────────────────────────────────────────────────────
 const OUT_DONE_BIT: u32 = 1 << 0;
 const OUT_EOF_BIT: u32 = 1 << 1;
-#[allow(dead_code)]
 const OUT_DSCR_ERR_BIT: u32 = 1 << 2;
 const OUT_TOTAL_EOF_BIT: u32 = 1 << 3;
 
@@ -177,6 +180,11 @@ const PERI_SEL_RESET: u32 = 0x3F;
 /// field; C6 GDMA descriptors must live in HP SRAM, which the chip descriptor
 /// places at `0x4080_0000`. See the module docs for the provenance.
 const DESC_ADDR_PREFIX: u32 = 0x4080_0000;
+
+/// The HP SRAM the DMA reaches (the chip yaml's `ram`, 0x4080_0000..
+/// 0x4088_0000): a descriptor, buffer or next link of a GP-SPI2 list outside
+/// it is a descriptor error ([`crate::peripherals::esp_gdma`]).
+const DMA_RAM: std::ops::Range<u32> = 0x4080_0000..0x4088_0000;
 
 /// Maximum descriptor hops per chain (runaway-chain guard).
 const MAX_DESC_CHAIN: usize = 4096;
@@ -275,13 +283,19 @@ struct Desc {
 
 impl Desc {
     fn read(bus: &mut dyn Bus, addr: u64) -> Self {
-        let dw0 = bus.read_u32(addr).unwrap_or(0);
+        let (dw0, buf, next) = crate::with_device_write_bypass(bus, |bus| {
+            (
+                bus.read_u32(addr).unwrap_or(0),
+                bus.read_u32(addr + 4).unwrap_or(0) as u64,
+                bus.read_u32(addr + 8).unwrap_or(0) as u64,
+            )
+        });
         Self {
             dw0,
             len: (dw0 >> 12) & 0xFFF,
             size: dw0 & 0xFFF,
-            buf: bus.read_u32(addr + 4).unwrap_or(0) as u64,
-            next: bus.read_u32(addr + 8).unwrap_or(0) as u64,
+            buf,
+            next,
         }
     }
 
@@ -300,7 +314,7 @@ impl Desc {
             Some(n) => (self.dw0 & !(DESC_OWNER_BIT | DESC_LEN_MASK)) | (n << 12),
             None => self.dw0 & !DESC_OWNER_BIT,
         };
-        let _ = bus.write_u32(addr, dw0);
+        let _ = crate::with_device_write_bypass(bus, |bus| bus.write_u32(addr, dw0));
     }
 }
 
@@ -667,9 +681,11 @@ impl Esp32c6Gdma {
             if check_owner && !d.dma_owned() {
                 break;
             }
-            for i in 0..d.len {
-                bytes.push(bus.read_u8(d.buf + u64::from(i)).unwrap_or(0));
-            }
+            crate::with_device_write_bypass(bus, |bus| {
+                for i in 0..d.len {
+                    bytes.push(bus.read_u8(d.buf + u64::from(i)).unwrap_or(0));
+                }
+            });
             last = addr as u32;
             if auto_wrback {
                 d.write_back_owner(bus, addr, None);
@@ -698,9 +714,11 @@ impl Esp32c6Gdma {
                 break;
             }
             let to_write = remaining.len().min(d.size as usize);
-            for (i, &b) in remaining[..to_write].iter().enumerate() {
-                let _ = bus.write_u8(d.buf + i as u64, b);
-            }
+            crate::with_device_write_bypass(bus, |bus| {
+                for (i, &b) in remaining[..to_write].iter().enumerate() {
+                    let _ = bus.write_u8(d.buf + i as u64, b);
+                }
+            });
             remaining = &remaining[to_write..];
             d.write_back_owner(bus, addr, Some(to_write as u32));
             last = addr as u32;
@@ -712,8 +730,68 @@ impl Esp32c6Gdma {
         last
     }
 
+    /// Serve the directions bound to the GP-SPI2 (`PERI_SEL` = 0): the C6
+    /// GP-SPI2 is the C3's controller model, and the coupling is the one the
+    /// C3 GDMA uses ([`crate::peripherals::esp_gdma`]).
+    fn pump_spi2(&mut self, bus: &mut dyn Bus) {
+        use crate::peripherals::esp_gdma::{
+            fill_in, spi2_in_delivered, spi2_in_take, spi2_out_load, walk_out,
+        };
+        for ch in 0..NUM_CHANNELS {
+            let c = self.channels[ch];
+            if c.out_coupled_pending && c.tx.peri_sel & PERI_SEL_MASK == 0 {
+                let w = walk_out(
+                    bus,
+                    Self::full_desc_addr(c.tx.link_addr) as u32,
+                    c.tx.conf1 & CHECK_OWNER_BIT != 0,
+                    c.tx.conf0 & OUT_AUTO_WRBACK_BIT != 0,
+                    &DMA_RAM,
+                );
+                spi2_out_load(bus, &w.bytes);
+                let c = &mut self.channels[ch];
+                c.out_coupled_pending = false;
+                c.out_eof_des_addr = w.last_desc;
+                if w.descs > 0 {
+                    c.tx.int_raw |= OUT_DONE_BIT;
+                }
+                if w.eof {
+                    c.tx.int_raw |= OUT_EOF_BIT | OUT_TOTAL_EOF_BIT;
+                }
+                if w.dscr_err {
+                    c.tx.int_raw |= OUT_DSCR_ERR_BIT;
+                }
+            }
+            if c.in_coupled_pending && c.rx.peri_sel & PERI_SEL_MASK == 0 {
+                if let Some(rx) = spi2_in_take(bus) {
+                    let f = fill_in(
+                        bus,
+                        Self::full_desc_addr(c.rx.link_addr) as u32,
+                        &rx,
+                        c.rx.conf1 & CHECK_OWNER_BIT != 0,
+                        &DMA_RAM,
+                    );
+                    spi2_in_delivered(bus);
+                    let c = &mut self.channels[ch];
+                    c.in_coupled_pending = false;
+                    c.in_suc_eof_des_addr = f.last_desc;
+                    for (hit, bit) in [
+                        (f.descs > 0, IN_DONE_BIT),
+                        (f.suc_eof, IN_SUC_EOF_BIT),
+                        (f.dscr_err, IN_DSCR_ERR_BIT),
+                        (f.dscr_empty, IN_DSCR_EMPTY_BIT),
+                    ] {
+                        if hit {
+                            c.rx.int_raw |= bit;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     /// Execute pending descriptor walks. Called from `tick_with_bus`.
     fn do_tick_with_bus(&mut self, bus: &mut dyn Bus) {
+        self.pump_spi2(bus);
         for ch in 0..NUM_CHANNELS {
             if !self.channels[ch].pending_m2m {
                 continue;

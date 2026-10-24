@@ -134,3 +134,72 @@ Pass criteria:
    rtc=pass spi=pass timer=pass uart=pass wdt=pass`, and no other chip's row
    changed (diff against `docs/coverage/tier1-matrix.json`: exactly
    `nrf52833/dma: na -> pass` and `nrf52833/irq: na -> pass`)
+
+## A10 transmit stack-lifetime regression
+
+`uarte-stack-buffer.S` is original MIT-licensed Cortex-M4 assembly, with no
+Nordic/CODAL/MakeCode implementation copied. Its `stack_putc` arms a one-byte
+UARTE transfer from its stack, returns, and a separate function overwrites that
+same slot before the caller waits for ENDTX. It emits `A10 stack reuse OK\n`.
+RAM counters prove that every transmitted slot was reused and the guest reached
+its terminal success state rather than timing out.
+
+The Rust integration test compiles that source with ARM GCC and `board-io.ld`,
+prints the ELF SHA-256, executes it on the micro:bit V2 system at tick interval 1 in both feature
+configurations, additionally at interval 64 with the scheduler, and checks
+exact ordered UART bytes and all guest counters:
+
+```sh
+cargo test -p labwired-core --features event-scheduler --test microbit_v2_uarte_stack_guest -- --nocapture
+LABWIRED_UARTE_STACK_INTERVALS=1 cargo test -p labwired-core --no-default-features --test microbit_v2_uarte_stack_guest -- --nocapture
+```
+
+The model controls separately require that early capture publishes no bytes,
+AMOUNT, completion event or interrupt, while the original frame-count completion
+deadline is retained. This is a bounded simulated UART/stack-lifetime proof;
+MakeCode firmware on the released WASM engine and Lite adoption remain separate.
+
+## A10 interrupt-chained completion regression
+
+`uarte-irq-chain.S` is separately authored MIT assembly; no Nordic or CODAL
+implementation is copied. UARTE0's real interrupt vector chains each next
+stack-backed byte from ENDTX, then inspects TXSTOPPED in that same handler.
+An unsolicited stop records failure before the new transfer can be mistaken
+for idle. After the last byte, the guest explicitly requests STOPTX and requires
+its TXSTOPPED event to finish. The exact expected stream is `A10 IRQ chain OK\n`.
+
+The same `microbit_v2_uarte_stack_guest` target runs both guests. The new guest
+requires done=1, every byte completed in order, zero unsolicited stops, idle
+state only after the final explicit stop, and an exact serial-byte comparison.
+Scheduler runs cover intervals 1, 64 and 1024; feature-off runs select interval 1.
+The earlier stack-reuse guest remains unchanged. These tests do not substitute
+for Lite's actual MakeCode CLI and browser complete-line qualification.
+
+The event distinction follows the [nRF52833 UARTE transmission specification](https://docs.nordicsemi.com/r/bundle/ps_nrf52833/page/uarte.html):
+ENDTX marks a completed buffer; TXSTOPPED acknowledges STOPTX. Existing framing,
+completion-cycle bounds, descriptor capture and explicit-stop IRQ checks stay
+required. No physical timing or silicon re-capture result is implied.
+
+The shared UARTE model also serves nRF5340. Its Zephyr enhanced polling driver
+uses a configured local DPPI ENDTX-to-STOPTX route; a completed buffer alone
+must not imply that route exists. The nRF5340 channel-enable subset models
+CHEN, CHENSET and CHENCLR. UARTE's local route requires enabled publish and
+subscribe endpoints on the same valid channel plus the controller's live
+channel-enable bit. The controller base comes from ChipMap, so remapped buses
+remain valid. The unchanged full nRF5340 Zephyr greeting is mandatory.
+
+This is a UART-local subset grounded in the [nRF5340 DPPI specification](https://docs.nordicsemi.com/r/bundle/ps_nrf5340/page/dppi.html).
+General DPPI delivery, cross-instance routes, channel groups and SPU security
+attributes remain outside this model's qualified boundary. nRF52 boards without
+a DPPIC keep ENDTX and explicit STOPTX separate. No silicon result is claimed.
+
+Classic nRF52 PPI uses the same bounded local-stop rule. The factory resolves
+both the controller and UART bases; only an enabled configurable channel whose
+EEP names this UART's ENDTX and whose primary or fork task names this UART's
+STOPTX may stop it. Configurable channels 0–19 follow the [nRF52840 PPI specification](https://docs.nordicsemi.com/r/bundle/ps_nrf52840/page/ppi.html).
+Fixed channels have other event sources and are not treated as arbitrary UART
+routes. General event publication and cross-instance delivery are not added.
+The nRF52840 Zephyr JIT/interpreter comparisons retain their full markers,
+instruction budget, architectural/cycle/memory assertions and event ceiling.
+Failure-only observations report UART/PPI state and rethrow the original panic;
+successful execution performs no extra diagnostic reads.

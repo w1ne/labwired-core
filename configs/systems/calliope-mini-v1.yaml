@@ -1,0 +1,47 @@
+# LabWired - Calliope mini 1.x (nRF51822) running an S110 v8 APPLICATION with
+# the SoftDevice emulated at API level (crates/nrf-softdevice-hle).
+# Pin facts are from the board's own open runtime (calliope-mini/microbit-dal,
+# MIT, and its mbed target TARGET_NRF51_CALLIOPE PinNames.h, Apache-2.0); none
+# was checked on hardware.
+# UART: TX = P0.24, RX = P0.25 (TGT_TX / TGT_RX).
+# Buttons: A = P0.17, B = P0.16, read active low by MicroBitButton.
+# Motor driver inputs (not modelled as a device; observable as GPIO levels):
+# nSLEEP = P0.28, IN1 = P0.29, IN2 = P0.30.
+# LED matrix: the same 3 row lines (P0.13-P0.15) x 9 column lines
+# (P0.4-P0.12) and the same MICROBIT_SB2 map as the micro:bit V1, which is the
+# default MICROBIT_DISPLAY_TYPE of that runtime's MicroBitConfig.h; see
+# microbit-v1.yaml for how the map is transposed.
+name: "calliope-mini-v1"
+chip: "../chips/nrf51822.yaml"
+external_devices:
+  - id: "led_matrix"
+    type: "led-matrix-mux"
+    connection: "gpio0"
+    config:
+      row_pins: ["P0.13", "P0.14", "P0.15"]
+      col_pins: ["P0.04", "P0.05", "P0.06", "P0.07", "P0.08", "P0.09", "P0.10", "P0.11", "P0.12"]
+      row_active_high: true
+      col_active_high: false
+      cpu_hz: 16000000
+      # layout[row line][column line] = picture pixel "x,y" ("-": no LED).
+      layout:
+        - ["0,0", "2,0", "4,0", "4,3", "3,3", "2,3", "1,3", "0,3", "1,2"]
+        - ["4,2", "0,2", "2,2", "1,0", "3,0", "3,4", "1,4", "-", "-"]
+        - ["2,4", "4,4", "0,4", "0,1", "1,1", "2,1", "3,1", "4,1", "3,2"]
+board_io:
+  - id: "button_a"
+    kind: "button"
+    peripheral: "gpio0"
+    pin: 17
+    signal: "input"
+    active_high: false
+  - id: "button_b"
+    kind: "button"
+    peripheral: "gpio0"
+    pin: 16
+    signal: "input"
+    active_high: false
+connectors:
+  - type: "uart"
+    peripheral: "uart0"
+    endpoint: "host_console"

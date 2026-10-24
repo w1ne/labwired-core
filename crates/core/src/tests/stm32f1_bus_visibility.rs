@@ -58,6 +58,9 @@ mod stm32f1_bus_visibility_tests {
     const APB2ENR: u64 = 0x18;
     const APB1ENR: u64 = 0x1C;
     const IOPAEN: u32 = 1 << 2;
+    /// GPIOB is gated on RCC_APB2ENR.IOPBEN (bit 3, RM0008 §7.3.7): the I²C
+    /// pads PB6/PB7 take no CRL write until it is set.
+    const IOPBEN: u32 = 1 << 3;
     const USART1EN: u32 = 1 << 14;
     const I2C1EN: u32 = 1 << 21;
 
@@ -250,6 +253,7 @@ mod stm32f1_bus_visibility_tests {
     /// Enable I2C1 + its port, route PB6/PB7 to alternate-function open drain,
     /// and program CCR + PE, exactly as the HAL's MSP init does.
     fn configure_i2c(machine: &mut Machine<CortexM>) {
+        machine.bus.write_u32(RCC_BASE + APB2ENR, IOPBEN).unwrap();
         machine.bus.write_u32(RCC_BASE + APB1ENR, I2C1EN).unwrap();
         set_pin_config(machine, GPIOB_BASE, SCL_PIN, AF_OPEN_DRAIN);
         set_pin_config(machine, GPIOB_BASE, SDA_PIN, AF_OPEN_DRAIN);
@@ -631,7 +635,7 @@ mod stm32f1_bus_visibility_tests {
         let mut machine = uart_machine();
         machine
             .bus
-            .write_u32(RCC_BASE + APB2ENR, IOPAEN | USART1EN)
+            .write_u32(RCC_BASE + APB2ENR, IOPAEN | IOPBEN | USART1EN)
             .unwrap();
         machine.bus.write_u32(RCC_BASE + APB1ENR, I2C1EN).unwrap();
         set_pin_config(&mut machine, GPIOA_BASE, TX_PIN, AF_PUSH_PULL);

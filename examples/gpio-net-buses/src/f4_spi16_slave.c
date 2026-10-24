@@ -1,9 +1,9 @@
-/* STM32F401 SPI1 slave on gpio nets, 16-bit frames (CR1.DFF), mode 0. Its
- * PA4 is a plain input here: the F401's hardware NSS pad is not routed by
- * the model, so the slave selects itself in software (SSM=1, SSI=0) and
- * the master frames by the words it sends.
+/* STM32F401 SPI1 slave on gpio nets, 16-bit frames (CR1.DFF), mode 0. By
+ * default it selects itself in software (SSM=1, SSI=0) and the master
+ * frames by the words it sends; -DHW_NSS=1 takes the select from its
+ * hardware NSS pad instead (SSM=0, PA4 = SPI1_NSS, AF5).
  *
- *   PA5 SCK (AF5)   PA6 MISO (AF5)   PA7 MOSI (AF5)
+ *   PA5 SCK (AF5)   PA6 MISO (AF5)   PA7 MOSI (AF5)   [PA4 NSS (AF5)]
  *
  * Answers 0x1234, 0xBEEF, 0x00FF from the RXNE interrupt. RESULT[0..2]
  * words received, RESULT[4] interrupts taken, RESULT[5] OVR seen.
@@ -40,15 +40,23 @@ void spi1_handler(void) {
     }
 }
 
+#ifndef HW_NSS
+#define HW_NSS 0
+#endif
+
 int main(void) {
     RCC_AHB1ENR |= 1u;
     RCC_APB2ENR |= 1u << 12;
-    for (unsigned pin = 5; pin <= 7; ++pin) {
+    for (unsigned pin = HW_NSS ? 4 : 5; pin <= 7; ++pin) {
         set_af_low(&GPIOA_AFRL, pin, 5);
         set_mode(&GPIOA_MODER, pin, 2);
     }
     SPI1_CR2 = 1u << 6;                          /* RXNEIE */
+#if HW_NSS
+    SPI1_CR1 = 1u << 11;                         /* DFF, hardware NSS */
+#else
     SPI1_CR1 = (1u << 11) | (1u << 9);           /* DFF, SSM, SSI = 0 */
+#endif
     SPI1_DR = answers[0];                        /* first answer, SPE=0 */
     SPI1_CR1 |= 1u << 6;                         /* SPE */
     NVIC_ISER1 = 1u << (35 - 32);

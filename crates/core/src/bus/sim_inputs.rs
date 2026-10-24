@@ -30,6 +30,22 @@ pub struct AnalogInputSource {
 }
 
 impl SystemBus {
+    /// Set the ambient temperature every on-chip temperature sensor on this
+    /// bus reports, in °C (today: the STM32F1 ADC's IN16 sensor). Returns how
+    /// many peripherals took it — `0` on a chip without a modelled sensor,
+    /// and for a non-finite value. One world temperature, fanned out; a
+    /// caller does not need to know which peripheral owns the sensor.
+    pub fn set_ambient_temperature_c(&mut self, celsius: f64) -> usize {
+        if !celsius.is_finite() {
+            return 0;
+        }
+        self.peripherals
+            .iter_mut()
+            .map(|p| p.dev.set_ambient_temperature_c(celsius))
+            .filter(|&took| took)
+            .count()
+    }
+
     /// Write `millivolts` into `channel` of the ADC named `connection`.
     ///
     /// Several unrelated ADC controller models exist

@@ -1,0 +1,45 @@
+# An STM32G071 SPI1 master (CS on a GPIO) and an nRF52840 SPIS0 slave, mode
+# 0. The slave answers from its EasyDMA TX buffer once the CPU has released
+# the semaphore.
+schema_version: "1.0"
+name: gpio-net-spi-nrf52-slave
+nodes:
+  - id: a
+    system: "system.yaml"
+    firmware: "firmware/spi-master.elf"
+  - id: nrf
+    system: "system-nrf52840.yaml"
+    firmware: "firmware/nrf-spis-slave.elf"
+interconnects:
+  - type: gpio_net
+    nodes: [a, nrf]
+    config:
+      name: cs
+      pull: up
+      members:
+        - { node: a, peripheral: gpioa, pin: 4 }     # GPIO out
+        - { node: nrf, peripheral: gpio0, pin: 2 }   # PSEL.CSN
+  - type: gpio_net
+    nodes: [a, nrf]
+    config:
+      name: sck
+      pull: down
+      members:
+        - { node: a, peripheral: gpioa, pin: 5 }
+        - { node: nrf, peripheral: gpio0, pin: 3 }   # PSEL.SCK
+  - type: gpio_net
+    nodes: [a, nrf]
+    config:
+      name: miso
+      pull: down
+      members:
+        - { node: a, peripheral: gpioa, pin: 6 }
+        - { node: nrf, peripheral: gpio0, pin: 5 }   # PSEL.MISO
+  - type: gpio_net
+    nodes: [a, nrf]
+    config:
+      name: mosi
+      pull: down
+      members:
+        - { node: a, peripheral: gpioa, pin: 7 }
+        - { node: nrf, peripheral: gpio0, pin: 4 }   # PSEL.MOSI

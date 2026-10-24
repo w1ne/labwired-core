@@ -41,6 +41,9 @@
 #[path = "stm32_walk_free/mod.rs"]
 mod harness;
 
+mod common;
+
+use common::walk_differential::{assert_walk_differential, probe_at, run_probed, WalkMode};
 use labwired_core::bus::{SystemBus, RECOMMENDED_TICK_INTERVAL};
 use labwired_core::cpu::CortexM;
 use labwired_core::peripherals::gpdma::Gpdma;
@@ -235,52 +238,51 @@ fn load_gpdma_memcpy(bus: &mut SystemBus) {
     program_gpdma_channel(bus);
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct GpdmaProbe {
-    step: u64,
-    total_cycles: u64,
-    pc: u32,
-    regs: [u32; 16],
-    isr_count: u32,
-    main_count: u32,
-    csr: u32,
-    dst: Vec<u8>,
+/// The GPDMA destination buffer as two little-endian u64 words — byte-equality
+/// preserved exactly, with the failure text naming the differing half.
+fn gpdma_dst_words(machine: &Machine<CortexM>) -> (u64, u64) {
+    let word = |off: u64| {
+        let mut w = [0u8; 8];
+        for (i, b) in w.iter_mut().enumerate() {
+            *b = machine
+                .bus
+                .read_u8(GPDMA_DST as u64 + off + i as u64)
+                .unwrap();
+        }
+        u64::from_le_bytes(w)
+    };
+    (word(0), word(8))
 }
 
-fn probe_gpdma(machine: &Machine<CortexM>, step: u64) -> GpdmaProbe {
-    let mut regs = [0u32; 16];
-    for (i, r) in regs.iter_mut().enumerate() {
-        *r = machine.read_core_reg(i as u8);
-    }
-    let dst = (0..GPDMA_N)
-        .map(|i| machine.bus.read_u8(GPDMA_DST as u64 + i as u64).unwrap())
-        .collect();
-    GpdmaProbe {
-        step,
-        total_cycles: machine.total_cycles,
-        pc: machine.get_pc(),
-        regs,
-        isr_count: machine.bus.read_u32(ISR_COUNT_ADDR).unwrap(),
-        main_count: machine.bus.read_u32(MAIN_COUNT_ADDR).unwrap(),
-        csr: machine.bus.read_u32(CH0_CSR as u64).unwrap(),
-        dst,
-    }
+/// The caller-supplied observables the harness probe carries for the GPDMA
+/// fixture: the two RAM counters, the channel CSR and the destination words.
+fn extra_gpdma(machine: &Machine<CortexM>) -> Vec<(&'static str, u64)> {
+    let (lo, hi) = gpdma_dst_words(machine);
+    vec![
+        (
+            "isr_count",
+            u64::from(machine.bus.read_u32(ISR_COUNT_ADDR).unwrap()),
+        ),
+        (
+            "main_count",
+            u64::from(machine.bus.read_u32(MAIN_COUNT_ADDR).unwrap()),
+        ),
+        (
+            "csr",
+            u64::from(machine.bus.read_u32(CH0_CSR as u64).unwrap()),
+        ),
+        ("dst_lo", lo),
+        ("dst_hi", hi),
+    ]
 }
 
-fn run_gpdma_probed(machine: &mut Machine<CortexM>, steps: u64) -> Vec<GpdmaProbe> {
-    machine.cpu.pc = GPDMA_FW_BASE as u32;
-    let mut probes = Vec::with_capacity(steps as usize);
-    for s in 0..steps {
-        machine.run(Some(1)).unwrap();
-        probes.push(probe_gpdma(machine, s + 1));
-    }
-    probes
-}
-
-fn expected_gpdma_dst() -> Vec<u8> {
-    (0..GPDMA_N)
+fn expected_gpdma_dst() -> (u64, u64) {
+    let bytes: Vec<u8> = (0..GPDMA_N)
         .map(|i| 0xA0u8 ^ (i as u8).wrapping_mul(7))
-        .collect()
+        .collect();
+    let lo = u64::from_le_bytes(bytes[0..8].try_into().unwrap());
+    let hi = u64::from_le_bytes(bytes[8..16].try_into().unwrap());
+    (lo, hi)
 }
 
 /// Gate: GPDMA mem2mem + TCIE — walk-on vs scheduler at tick interval 1,
@@ -289,34 +291,30 @@ fn expected_gpdma_dst() -> Vec<u8> {
 fn gpdma_mem2mem_tcie_is_byte_identical_at_interval_1() {
     const STEPS: u64 = 800;
 
-    let mut walk = build_gpdma_machine(false, 1);
-    load_gpdma_memcpy(&mut walk.bus);
-    let walk_probes = run_gpdma_probed(&mut walk, STEPS);
+    let build = |mode: WalkMode| {
+        let mut m = build_gpdma_machine(!mode.is_legacy_walk(), 1);
+        load_gpdma_memcpy(&mut m.bus);
+        m
+    };
+    let reference = assert_walk_differential(
+        "GPDMA mem2mem",
+        GPDMA_FW_BASE as u32,
+        STEPS,
+        build,
+        extra_gpdma,
+    );
 
-    let mut sched = build_gpdma_machine(true, 1);
-    load_gpdma_memcpy(&mut sched.bus);
-    let sched_probes = run_gpdma_probed(&mut sched, STEPS);
-
-    assert_eq!(walk_probes.len(), sched_probes.len());
-    for (r, c) in walk_probes.iter().zip(sched_probes.iter()) {
-        assert_eq!(
-            r, c,
-            "GPDMA mem2mem: first divergence at step {} (walk vs scheduler)",
-            r.step
-        );
-    }
-
-    let last = walk_probes.last().unwrap();
-    assert_eq!(last.isr_count, 1, "TC ISR must fire exactly once");
-    assert!(last.main_count > 50, "main loop must run");
+    let last = reference.last().unwrap();
+    assert_eq!(last.extra("isr_count"), 1, "TC ISR must fire exactly once");
+    assert!(last.extra("main_count") > 50, "main loop must run");
     assert_eq!(
-        last.dst,
+        (last.extra("dst_lo"), last.extra("dst_hi")),
         expected_gpdma_dst(),
         "mem2mem must copy source bytes"
     );
     // Completion CSR: IDLEF | TCF | HTF = 0x301 (or 0x001 after ISR CFCR clear).
     assert!(
-        walk_probes.iter().any(|p| p.csr & 0x100 != 0),
+        reference.iter().any(|p| p.extra("csr") & 0x100 != 0),
         "CSR.TCF must latch at least once before the ISR clears it"
     );
 }
@@ -335,24 +333,25 @@ fn gpdma_mem2mem_is_byte_identical_at_certified_intervals() {
         load_gpdma_memcpy(&mut walk.bus);
         walk.cpu.pc = GPDMA_FW_BASE as u32;
         walk.run(Some(steps as u32)).unwrap();
-        let walk_probe = probe_gpdma(&walk, steps);
+        let walk_probe = probe_at(&walk, steps, &extra_gpdma);
 
         let mut sched = build_gpdma_machine(true, interval);
         load_gpdma_memcpy(&mut sched.bus);
         sched.cpu.pc = GPDMA_FW_BASE as u32;
         sched.run(Some(steps as u32)).unwrap();
-        let sched_probe = probe_gpdma(&sched, steps);
+        let sched_probe = probe_at(&sched, steps, &extra_gpdma);
 
         assert_eq!(
             walk_probe, sched_probe,
             "interval-{interval} batched run: final state diverged (walk vs scheduler)"
         );
         assert_eq!(
-            walk_probe.isr_count, 1,
+            walk_probe.extra("isr_count"),
+            1,
             "the TC ISR must fire once at interval {interval}"
         );
         assert_eq!(
-            walk_probe.dst,
+            (walk_probe.extra("dst_lo"), walk_probe.extra("dst_hi")),
             expected_gpdma_dst(),
             "mem2mem copies the source bytes at interval {interval}"
         );
@@ -471,43 +470,21 @@ fn load_rtc_poll_firmware(bus: &mut SystemBus) {
     load_rtc_isr(bus);
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct RtcProbe {
-    step: u64,
-    total_cycles: u64,
-    pc: u32,
-    regs: [u32; 16],
-    isr_count: u32,
-    main_count: u32,
-    tr: u32,
-    sr: u32,
-}
-
-fn probe_rtc(machine: &Machine<CortexM>, step: u64) -> RtcProbe {
-    let mut regs = [0u32; 16];
-    for (i, r) in regs.iter_mut().enumerate() {
-        *r = machine.read_core_reg(i as u8);
-    }
-    RtcProbe {
-        step,
-        total_cycles: machine.total_cycles,
-        pc: machine.get_pc(),
-        regs,
-        isr_count: machine.bus.read_u32(ISR_COUNT_ADDR).unwrap(),
-        main_count: machine.bus.read_u32(MAIN_COUNT_ADDR).unwrap(),
-        tr: machine.bus.read_u32(RTC_TR).unwrap(),
-        sr: machine.bus.read_u32(RTC_SR).unwrap(),
-    }
-}
-
-fn run_rtc_probed(machine: &mut Machine<CortexM>, steps: u64) -> Vec<RtcProbe> {
-    machine.cpu.pc = RTC_FW_BASE as u32;
-    let mut probes = Vec::with_capacity(steps as usize);
-    for s in 0..steps {
-        machine.run(Some(1)).unwrap();
-        probes.push(probe_rtc(machine, s + 1));
-    }
-    probes
+/// The caller-supplied observables the harness probe carries for the RTC
+/// fixture: the two RAM counters, the calendar register and the status word.
+fn extra_rtc(machine: &Machine<CortexM>) -> Vec<(&'static str, u64)> {
+    vec![
+        (
+            "isr_count",
+            u64::from(machine.bus.read_u32(ISR_COUNT_ADDR).unwrap()),
+        ),
+        (
+            "main_count",
+            u64::from(machine.bus.read_u32(MAIN_COUNT_ADDR).unwrap()),
+        ),
+        ("tr", u64::from(machine.bus.read_u32(RTC_TR).unwrap())),
+        ("sr", u64::from(machine.bus.read_u32(RTC_SR).unwrap())),
+    ]
 }
 
 /// Gate: RTC second advance + Alarm A latch/IRQ — walk-on vs scheduler at
@@ -520,40 +497,37 @@ fn rtc_second_and_alarm_is_byte_identical_at_interval_1() {
     // Setup instructions + one full second + ISR + trailing poll margin.
     const STEPS: u64 = TICKS_PER_SECOND as u64 + 8_000;
 
-    let mut walk = build_rtc_machine(false, 1);
-    program_rtc_alarm(&mut walk.bus);
-    load_rtc_poll_firmware(&mut walk.bus);
-    let walk_probes = run_rtc_probed(&mut walk, STEPS);
+    let build = |mode: WalkMode| {
+        let mut m = build_rtc_machine(!mode.is_legacy_walk(), 1);
+        program_rtc_alarm(&mut m.bus);
+        load_rtc_poll_firmware(&mut m.bus);
+        m
+    };
+    let reference = assert_walk_differential(
+        "RTC second/alarm",
+        RTC_FW_BASE as u32,
+        STEPS,
+        build,
+        extra_rtc,
+    );
 
-    let mut sched = build_rtc_machine(true, 1);
-    program_rtc_alarm(&mut sched.bus);
-    load_rtc_poll_firmware(&mut sched.bus);
-    let sched_probes = run_rtc_probed(&mut sched, STEPS);
-
-    assert_eq!(walk_probes.len(), sched_probes.len());
-    for (r, c) in walk_probes.iter().zip(sched_probes.iter()) {
-        assert_eq!(
-            r, c,
-            "RTC second/alarm: first divergence at step {} (walk vs scheduler)",
-            r.step
-        );
-    }
-
-    let last = walk_probes.last().unwrap();
+    let last = reference.last().unwrap();
     assert_eq!(
-        last.tr, 0x0012_3457,
+        last.extra("tr"),
+        0x0012_3457,
         "calendar must advance one BCD second (got TR={:#010x})",
-        last.tr
+        last.extra("tr")
     );
     assert_eq!(
-        last.isr_count, 1,
+        last.extra("isr_count"),
+        1,
         "Alarm A ISR must fire exactly once on the second match"
     );
     assert!(
-        walk_probes.iter().any(|p| p.sr & 1 != 0) || last.isr_count == 1,
+        reference.iter().any(|p| p.extra("sr") & 1 != 0) || last.extra("isr_count") == 1,
         "SR.ALRAF must latch (or already been cleared by the ISR)"
     );
-    assert!(last.main_count > 100, "main loop must run");
+    assert!(last.extra("main_count") > 100, "main loop must run");
 }
 
 /// Gate: scheduler at the historical 512 interval and the current
@@ -567,14 +541,14 @@ fn rtc_second_count_is_exact_at_certified_intervals() {
     let mut walk = build_rtc_machine(false, 1);
     program_rtc_alarm(&mut walk.bus);
     load_rtc_poll_firmware(&mut walk.bus);
-    let walk_probes = run_rtc_probed(&mut walk, STEPS);
+    let walk_probes = run_probed(&mut walk, RTC_FW_BASE as u32, STEPS, &extra_rtc);
 
     let reference = walk_probes.last().unwrap();
 
     // Count TR second-field transitions in the reference (each BCD second).
     let mut walk_seconds = 0u32;
     for w in walk_probes.windows(2) {
-        if w[1].tr != w[0].tr {
+        if w[1].extra("tr") != w[0].extra("tr") {
             walk_seconds += 1;
         }
     }
@@ -583,7 +557,7 @@ fn rtc_second_count_is_exact_at_certified_intervals() {
     // ≤-one-interval quantisation cannot drop a count at interval 512.
     let last_second_step = walk_probes
         .windows(2)
-        .filter(|w| w[1].tr != w[0].tr)
+        .filter(|w| w[1].extra("tr") != w[0].extra("tr"))
         .map(|w| w[1].step)
         .next_back()
         .expect("reference must observe at least one second advance");
@@ -607,14 +581,17 @@ fn rtc_second_count_is_exact_at_certified_intervals() {
         let sched_tr = sched.bus.read_u32(RTC_TR).unwrap();
         let sched_isr = sched.bus.read_u32(ISR_COUNT_ADDR).unwrap();
         assert_eq!(
-            reference.tr, sched_tr,
+            reference.extra("tr") as u32,
+            sched_tr,
             "final TR must match at sched@{interval}: walk={:#010x} sched={:#010x}",
-            reference.tr, sched_tr
+            reference.extra("tr"),
+            sched_tr
         );
         // Alarm matches only second==57 (one fire); later seconds do not
         // re-match until TR returns to :57.
         assert_eq!(
-            reference.isr_count, sched_isr,
+            reference.extra("isr_count") as u32,
+            sched_isr,
             "Alarm A ISR count must be exact at interval {interval}"
         );
         assert_eq!(

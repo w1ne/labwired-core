@@ -10,7 +10,7 @@ use crate::cpu::xtensa_lx7::XtensaLx7;
 use crate::{Bus, SimResult};
 
 use crate::cpu::xtensa_regs::Ps;
-use crate::cpu::xtensa_sr::INTERRUPT;
+use crate::cpu::xtensa_sr::{CCOUNT, INTERRUPT};
 use crate::decoder::xtensa;
 use crate::SimulationError;
 impl XtensaLx7 {
@@ -166,6 +166,9 @@ impl XtensaLx7 {
             // sees PRO_CPU's peripheral interrupts (which would unbalance
             // its critical nesting → vPortExitCritical "nesting > 0").
             v |= bus.pending_cpu_irqs(self.core_id());
+        }
+        if sr == CCOUNT {
+            self.note_ccount_read(self.pc, v);
         }
         self.regs.write_logical(at, v);
         self.pc = self.pc.wrapping_add(len);

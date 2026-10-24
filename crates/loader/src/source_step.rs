@@ -18,7 +18,10 @@
 //! stopped (an Arduino-ESP32 sketch's `loop()` runs on core 1).
 
 use crate::source_map::{LineAddress, SourceMap};
-use crate::{DwarfLocation, SymbolProvider};
+use crate::{
+    Abi, DwarfLocation, FrameContext, InlineFrame, PhysicalFrame, RegisterSet, SymbolProvider,
+    TargetMemory, VariableValue,
+};
 use labwired_core::debug::SourceStepTarget;
 use labwired_core::decoder::xtensa_length;
 use labwired_core::snapshot::CpuSnapshot;
@@ -35,6 +38,9 @@ const RUN_THROUGH_CYCLES_PER_STEP: u64 = 256;
 /// Step-out is step-over repeated until the line lands in another function;
 /// this bounds how many lines it may cross on the way.
 const STEP_OUT_MAX_LINES: u32 = 10_000;
+
+/// The most frames a call stack shows.
+pub const MAX_STACK_FRAMES: usize = 32;
 
 /// The parsed DWARF of one firmware ELF.
 pub struct SourceDebug {
@@ -97,6 +103,9 @@ pub struct StepOutcome {
     pub pc: u32,
     /// Single steps plus cycles run through calls.
     pub instructions: u32,
+    /// How many frames of the inline chain at `pc` the stop shows (see
+    /// [`SourceDebug::location_at`]); 0 when `pc` has no debug information.
+    pub depth: usize,
 }
 
 /// A call or exception being run through: where it returns to, and the
@@ -112,6 +121,32 @@ enum Through {
     Breakpoint(u32),
     Cap,
     Halted,
+}
+
+/// Where a source step starts in the inline chain at its pc.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StepFrame {
+    /// Frames shown (1 = the physical function); 0 without debug info.
+    pub depth: usize,
+    /// Frames in the chain.
+    pub len: usize,
+    /// The shown frame's file and line.
+    pub pos: Option<(String, u32)>,
+    /// The physical function.
+    pub function: Option<Range<u64>>,
+}
+
+/// See [`SourceDebug::over_inline`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InlineVerdict {
+    /// Not inline-related: the plain line comparison decides.
+    Defer,
+    /// Still the line being stepped.
+    Continue,
+    /// Another line's code, but not where it starts: keep stepping.
+    Pass,
+    /// A new line.
+    Stop,
 }
 
 impl SourceDebug {
@@ -166,6 +201,132 @@ impl SourceDebug {
         })
     }
 
+    /// The inline chain at `pc`, innermost first; the last frame is the
+    /// physical function (see [`SymbolProvider::frames`]).
+    pub fn frames(&self, pc: u32) -> Vec<InlineFrame> {
+        self.symbols.frames(self.map.code_address(u64::from(pc)))
+    }
+
+    /// How many frames of the chain at `pc` a stop that no step chose (a
+    /// breakpoint, a pause) shows: all of them, less the inlined calls whose
+    /// body starts exactly at `pc`. There the program is about to run the
+    /// call, so the line that makes it is shown, as a breakpoint set on that
+    /// line expects.
+    pub fn default_depth(&self, pc: u32) -> usize {
+        let frames = self.frames(pc);
+        let calls: Vec<(&str, u32)> = self.map.inline_calls_at(u64::from(pc)).collect();
+        let mut depth = frames.len();
+        for caller in frames.iter().skip(1) {
+            let site = caller.file.as_deref().zip(caller.line);
+            if depth > 1 && site.is_some_and(|site| calls.contains(&site)) {
+                depth -= 1;
+            } else {
+                break;
+            }
+        }
+        depth
+    }
+
+    /// Where `pc` is, shown `depth` frames deep into its inline chain: 1 is
+    /// the physical function at the line of the outermost inlined call, the
+    /// chain's length (or more) is [`Self::location`].
+    pub fn location_at(&self, pc: u32, depth: usize) -> Option<SourceLocation> {
+        let frames = self.frames(pc);
+        if depth == 0 || depth >= frames.len() {
+            return self.location(pc);
+        }
+        let frame = &frames[frames.len() - depth];
+        match (frame.file.clone(), frame.line.filter(|l| *l != 0)) {
+            (Some(file), Some(line)) => Some(SourceLocation {
+                file,
+                line,
+                column: None,
+                function: frame.function.clone(),
+            }),
+            // A call site the compiler gave no line: show the code itself.
+            _ => self.location(pc),
+        }
+    }
+
+    /// Where a source step starts: the frame shown at `pc` (`view`, else
+    /// [`Self::default_depth`]).
+    pub fn step_frame(&self, pc: u32, view: Option<usize>) -> StepFrame {
+        let frames = self.frames(pc);
+        let len = frames.len();
+        let depth = view.unwrap_or_else(|| self.default_depth(pc)).min(len);
+        let pos = depth
+            .checked_sub(1)
+            .and_then(|d| frames.get(len - 1 - d))
+            .and_then(|f| f.file.clone().zip(f.line));
+        StepFrame {
+            depth,
+            len,
+            pos,
+            function: self.function_range(pc),
+        }
+    }
+
+    /// Step-over's verdict on the instruction at `pc`, in the physical
+    /// function the step started in.
+    ///
+    /// Deeper than the frame being stepped is code inlined into it. Code
+    /// inlined from another file (core's `write_volatile`, a range iterator,
+    /// a `nop()` delay loop) is part of the line being stepped, as it always
+    /// was. A function of the stepped frame's own file inlined into it
+    /// (`lcd_frame(&FB);`) is a line of its own: the step stops where the
+    /// next line's inlined call starts. Shallower than the stepped frame is
+    /// its return to the line that inlined it.
+    pub fn over_inline(&self, start: &StepFrame, pc: u32) -> InlineVerdict {
+        if start.depth == 0 || self.function_range(pc) != start.function {
+            return InlineVerdict::Defer;
+        }
+        let frames = self.frames(pc);
+        let n = frames.len();
+        let statement = self.map.is_statement(u64::from(pc));
+        if n < start.depth {
+            return if statement {
+                InlineVerdict::Stop
+            } else {
+                InlineVerdict::Pass
+            };
+        }
+        if n == start.depth {
+            return InlineVerdict::Defer;
+        }
+        let at = &frames[n - start.depth];
+        let callee = &frames[n - start.depth - 1];
+        let own_file = start.pos.as_ref().map(|p| p.0.as_str());
+        if callee.file.as_deref() != own_file {
+            return InlineVerdict::Continue;
+        }
+        let line = at.line.filter(|l| *l != 0);
+        if line.is_none() || at.file.clone().zip(line) == start.pos {
+            // Still the line being stepped (or code the compiler gave no line).
+            InlineVerdict::Continue
+        } else if statement || self.map.inline_calls_at(u64::from(pc)).next().is_some() {
+            // The next line's inlined call starts here; its first
+            // instruction need not start a line-table statement.
+            InlineVerdict::Stop
+        } else {
+            InlineVerdict::Pass
+        }
+    }
+
+    /// The depth a step that stopped at `pc` shows: the stepped frame (or
+    /// the shallower one it returned to) for a step over that stayed in its
+    /// physical function, the whole chain for a step into, else as a
+    /// breakpoint would.
+    pub fn stop_depth(&self, start: &StepFrame, pc: u32, over: bool) -> usize {
+        let n = self.frames(pc).len();
+        if !over {
+            n
+        } else if start.depth > 0 && self.function_range(pc) == start.function {
+            n.min(start.depth)
+        } else {
+            self.default_depth(pc)
+        }
+    }
+
     /// The code addresses of `file:line` (`file` matches by path suffix).
     pub fn line_to_pc(&self, file: &str, line: u32) -> Option<LineAddress> {
         self.map.line_to_pc(file, line)
@@ -184,6 +345,9 @@ impl SourceDebug {
         let reg_count: u16 = match family {
             MachineFamily::CortexM | MachineFamily::CortexA | MachineFamily::Xtensa => 16,
             MachineFamily::RiscV | MachineFamily::Avr => 32,
+            // W0-W15, PC (16), SR (17) — provisional until XC16 DWARF numbers
+            // are verified.
+            MachineFamily::Pic24 => 18,
         };
         let cpu = target.debug_cpu();
         self.symbols
@@ -221,6 +385,269 @@ impl SourceDebug {
     }
 }
 
+/// One frame of the call stack, innermost first. A physical frame (one
+/// activation of a real function) shows as its inline chain: the inlined
+/// calls first, then the function they were inlined into.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct StackFrame {
+    pub index: usize,
+    /// The frame's pc: where frame 0 stopped, or for a caller the return
+    /// address (the instruction after the call).
+    pub pc: u32,
+    pub function: Option<String>,
+    pub file: Option<String>,
+    pub line: Option<u32>,
+    pub column: Option<u32>,
+    /// True for a call the compiler inlined into the frame below it.
+    pub inlined: bool,
+}
+
+/// A logical frame and where its variables come from.
+struct FrameSlot {
+    frame: StackFrame,
+    /// Index into the physical frames.
+    physical: usize,
+    /// The inline level whose variables the frame shows (0 is the physical
+    /// function); `None` without debug information.
+    level: Option<usize>,
+}
+
+/// The debugged core's memory, read through the bus.
+struct BusMemory<'a>(&'a dyn SourceStepTarget);
+
+impl TargetMemory for BusMemory<'_> {
+    fn read_memory(&self, addr: u64, buf: &mut [u8]) -> bool {
+        let Ok(base) = u32::try_from(addr) else {
+            return false;
+        };
+        for (i, b) in buf.iter_mut().enumerate() {
+            match self.0.read_code_u8(base.wrapping_add(i as u32)) {
+                Some(v) => *b = v,
+                None => return false,
+            }
+        }
+        true
+    }
+}
+
+/// How to unwind and read registers on `family`. Cortex-M/A and RISC-V
+/// unwind with CFI; Xtensa (register windows) and AVR show frame 0 only.
+fn abi(family: MachineFamily) -> Abi {
+    match family {
+        MachineFamily::CortexM | MachineFamily::CortexA => Abi {
+            sp: 13,
+            callee_saved: (4..=11).collect(),
+            code_mask: !1,
+            register_size: 4,
+            unwind: true,
+            exc_return: family == MachineFamily::CortexM,
+        },
+        MachineFamily::RiscV => Abi {
+            sp: 2,
+            callee_saved: [3, 4, 8, 9].into_iter().chain(18..=27).collect(),
+            code_mask: !0,
+            register_size: 4,
+            unwind: true,
+            exc_return: false,
+        },
+        MachineFamily::Xtensa => Abi {
+            sp: 1,
+            callee_saved: Vec::new(),
+            code_mask: !0,
+            register_size: 4,
+            unwind: false,
+            exc_return: false,
+        },
+        MachineFamily::Avr => Abi {
+            sp: 32,
+            callee_saved: Vec::new(),
+            code_mask: !0,
+            register_size: 1,
+            unwind: false,
+            exc_return: false,
+        },
+        MachineFamily::Pic24 => Abi {
+            // W15 is the stack pointer.
+            sp: 15,
+            callee_saved: Vec::new(),
+            code_mask: !0,
+            register_size: 2,
+            unwind: false,
+            exc_return: false,
+        },
+    }
+}
+
+/// The debugged core's registers by DWARF number: r0-r15, x0-x31, the
+/// current window's a0-a15, or AVR r0-r31 and SP (32).
+fn live_registers(target: &dyn SourceStepTarget, family: MachineFamily) -> RegisterSet {
+    let cpu = target.debug_cpu();
+    let mut regs = RegisterSet::default();
+    let count: u8 = match family {
+        MachineFamily::CortexM | MachineFamily::CortexA | MachineFamily::Xtensa => 16,
+        MachineFamily::RiscV => 32,
+        MachineFamily::Avr => 33,
+        // W0-W15, PC (16), SR (17).
+        MachineFamily::Pic24 => 18,
+    };
+    for r in 0..count {
+        regs.set(u16::from(r), Some(u64::from(cpu.get_register(r))));
+    }
+    match family {
+        MachineFamily::CortexM | MachineFamily::CortexA => {
+            regs.set(15, Some(u64::from(cpu.get_pc())));
+        }
+        MachineFamily::RiscV => regs.set(0, Some(0)),
+        _ => {}
+    }
+    regs
+}
+
+impl SourceDebug {
+    /// The call stack of the debugged core, innermost frame first, at most
+    /// `max_frames` frames. Frame 0 is the frame the stop shows (`view`, the
+    /// inline depth the last source step left, else
+    /// [`Self::default_depth`]), as [`Self::location_at`] reports it.
+    pub fn call_stack(
+        &self,
+        target: &dyn SourceStepTarget,
+        family: MachineFamily,
+        view: Option<usize>,
+        max_frames: usize,
+    ) -> Vec<StackFrame> {
+        let (_, slots) = self.stack(target, family, view, max_frames);
+        slots.into_iter().map(|s| s.frame).collect()
+    }
+
+    /// The variables and parameters of call-stack frame `index` (see
+    /// [`Self::call_stack`]) with their values in that frame. `None` when
+    /// there is no such frame.
+    pub fn frame_variables(
+        &self,
+        target: &dyn SourceStepTarget,
+        family: MachineFamily,
+        view: Option<usize>,
+        index: usize,
+    ) -> Option<Vec<VariableValue>> {
+        let (physical, slots) = self.stack(target, family, view, index + 1);
+        let slot = slots.get(index)?;
+        let frame = &physical[slot.physical];
+        let mem = BusMemory(target);
+        let ctx = FrameContext {
+            pc: frame.lookup_pc,
+            regs: &frame.regs,
+            cfa: frame.cfa,
+            mem: &mem,
+            register_size: abi(family).register_size,
+        };
+        Some(self.symbols.variables(&ctx, slot.level))
+    }
+
+    /// The physical frames and, for at least `max_frames` logical frames,
+    /// what each shows.
+    fn stack(
+        &self,
+        target: &dyn SourceStepTarget,
+        family: MachineFamily,
+        view: Option<usize>,
+        max_frames: usize,
+    ) -> (Vec<PhysicalFrame>, Vec<FrameSlot>) {
+        let abi = abi(family);
+        let pc = target.debug_cpu().get_pc();
+        let regs = live_registers(target, family);
+        let mem = BusMemory(target);
+        let max_frames = max_frames.clamp(1, MAX_STACK_FRAMES);
+        let physical = self.symbols.unwind(
+            self.map.code_address(u64::from(pc)),
+            regs,
+            &mem,
+            &abi,
+            max_frames,
+        );
+        let mut slots: Vec<FrameSlot> = Vec::new();
+        for (i, frame) in physical.iter().enumerate() {
+            if slots.len() >= max_frames {
+                break;
+            }
+            let lookup = frame.lookup_pc as u32;
+            let chain = self.frames(lookup);
+            let n = chain.len();
+            let push = |slots: &mut Vec<FrameSlot>, mut f: StackFrame, level| {
+                f.index = slots.len();
+                slots.push(FrameSlot {
+                    frame: f,
+                    physical: i,
+                    level,
+                });
+            };
+            if n == 0 {
+                // No debug information: the symbol table names the function.
+                let function = self
+                    .symbols
+                    .functions()
+                    .iter()
+                    .rev()
+                    .find(|(start, size, _)| {
+                        *start <= frame.lookup_pc && frame.lookup_pc < start + size
+                    })
+                    .map(|(_, _, name)| name.clone());
+                push(
+                    &mut slots,
+                    StackFrame {
+                        index: 0,
+                        pc: frame.pc as u32,
+                        function,
+                        file: None,
+                        line: None,
+                        column: None,
+                        inlined: false,
+                    },
+                    None,
+                );
+                continue;
+            }
+            // Frame 0 shows `depth` frames of its chain; callers show all.
+            let depth = if i == 0 {
+                view.unwrap_or_else(|| self.default_depth(pc)).clamp(1, n)
+            } else {
+                n
+            };
+            for (k, inline) in chain.iter().enumerate().skip(n - depth) {
+                let level = n - 1 - k;
+                let shown = if i == 0 && k == n - depth {
+                    self.location_at(pc, depth)
+                        .map(|l| (Some(l.file), Some(l.line), l.column, l.function))
+                } else {
+                    None
+                };
+                let (file, line, column, function) = shown.unwrap_or_else(|| {
+                    (
+                        inline.file.clone(),
+                        inline.line.filter(|l| *l != 0),
+                        None,
+                        inline.function.clone(),
+                    )
+                });
+                push(
+                    &mut slots,
+                    StackFrame {
+                        index: 0,
+                        pc: frame.pc as u32,
+                        function,
+                        file,
+                        line,
+                        column,
+                        inlined: k + 1 < n,
+                    },
+                    Some(level),
+                );
+            }
+        }
+        slots.truncate(max_frames);
+        (physical, slots)
+    }
+}
+
 /// The stack pointer's id for `get_register`.
 fn stack_register(family: MachineFamily) -> u8 {
     match family {
@@ -230,6 +657,8 @@ fn stack_register(family: MachineFamily) -> u8 {
         MachineFamily::Xtensa => 1,
         // SP, after r0..r31.
         MachineFamily::Avr => 32,
+        // W15 is the stack pointer.
+        MachineFamily::Pic24 => 15,
     }
 }
 
@@ -375,6 +804,7 @@ pub fn step_source_line(
     over: bool,
     max_instructions: u32,
     breakpoints: &[u32],
+    view: Option<usize>,
 ) -> Result<StepOutcome, String> {
     let sp_id = stack_register(family);
     // Cortex-M and RISC-V find a call by its return-address register.
@@ -387,7 +817,27 @@ pub fn step_source_line(
     let xtensa = family == MachineFamily::Xtensa;
 
     let (start_pc, start_sp) = pc_sp(target, sp_id);
-    let start_line = debug.map.line_key(u64::from(start_pc));
+    let frame = debug.step_frame(start_pc, view);
+    if !over && frame.depth < frame.len {
+        // Into a call inlined here: its body starts at this pc, so show it
+        // one frame deeper without running anything.
+        return Ok(StepOutcome {
+            stop: StepStop::LineChanged,
+            pc: start_pc,
+            instructions: 0,
+            depth: frame.depth + 1,
+        });
+    }
+    // Started in a shallower inline frame than the innermost, the line
+    // being stepped is that frame's: the call site of what is inlined there.
+    let start_line = if frame.depth < frame.len {
+        frame
+            .pos
+            .as_ref()
+            .and_then(|(file, line)| debug.map.key_of(file, *line))
+    } else {
+        debug.map.line_key(u64::from(start_pc))
+    };
     // Set once step-over has run into code inlined from another file.
     let mut left_file = false;
     let mut frame_sp = start_sp;
@@ -399,6 +849,11 @@ pub fn step_source_line(
         stop,
         pc,
         instructions: (u64::from(stepped) + ran).min(u64::from(u32::MAX)) as u32,
+        depth: if stop == StepStop::Breakpoint {
+            debug.default_depth(pc)
+        } else {
+            debug.stop_depth(&frame, pc, over)
+        },
     };
     while stepped < max_instructions {
         let (before_pc, before_sp) = pc_sp(target, sp_id);
@@ -491,6 +946,21 @@ pub fn step_source_line(
         }
 
         let (pc, sp) = pc_sp(target, sp_id);
+        match if over {
+            debug.over_inline(&frame, pc)
+        } else {
+            InlineVerdict::Defer
+        } {
+            InlineVerdict::Continue => {
+                left_file = true;
+                continue;
+            }
+            InlineVerdict::Pass => continue,
+            InlineVerdict::Stop => {
+                return Ok(outcome(StepStop::LineChanged, pc, stepped, ran_through));
+            }
+            InlineVerdict::Defer => {}
+        }
         if debug.map.is_statement(u64::from(pc)) {
             let key = debug.map.line_key(u64::from(pc));
             if key != start_line || left_file {
@@ -519,32 +989,61 @@ pub fn step(
     kind: StepKind,
     max_instructions: u32,
     breakpoints: &[u32],
+    view: Option<usize>,
 ) -> Result<StepOutcome, String> {
     match kind {
-        StepKind::Into => {
-            step_source_line(target, debug, family, false, max_instructions, breakpoints)
-        }
-        StepKind::Over => {
-            step_source_line(target, debug, family, true, max_instructions, breakpoints)
-        }
+        StepKind::Into => step_source_line(
+            target,
+            debug,
+            family,
+            false,
+            max_instructions,
+            breakpoints,
+            view,
+        ),
+        StepKind::Over => step_source_line(
+            target,
+            debug,
+            family,
+            true,
+            max_instructions,
+            breakpoints,
+            view,
+        ),
         StepKind::Out => {
             let start = target.debug_cpu().get_pc();
             let function = debug.function_range(start);
+            let depth = debug.step_frame(start, view).depth;
+            let mut view = view;
             let mut total = 0u32;
             for _ in 0..STEP_OUT_MAX_LINES {
-                let mut out =
-                    step_source_line(target, debug, family, true, max_instructions, breakpoints)?;
+                let mut out = step_source_line(
+                    target,
+                    debug,
+                    family,
+                    true,
+                    max_instructions,
+                    breakpoints,
+                    view,
+                )?;
                 total = total.saturating_add(out.instructions);
                 out.instructions = total;
-                if out.stop != StepStop::LineChanged || debug.function_range(out.pc) != function {
+                // Out of an inlined function is back in the frame that
+                // inlined it; out of a physical one is in another function.
+                if out.stop != StepStop::LineChanged
+                    || debug.function_range(out.pc) != function
+                    || out.depth < depth
+                {
                     return Ok(out);
                 }
+                view = Some(out.depth);
             }
             let pc = target.debug_cpu().get_pc();
             Ok(StepOutcome {
                 stop: StepStop::Cap,
                 pc,
                 instructions: total,
+                depth: debug.default_depth(pc),
             })
         }
     }

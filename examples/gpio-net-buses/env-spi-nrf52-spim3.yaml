@@ -1,0 +1,55 @@
+# An nRF52840 SPIM3 master and an STM32G071 SPI1 slave, mode 0. SPIM3 drives
+# its own chip select (PSEL.CSN = P0.02, CSNPOL, IFTIMING.CSNDUR), which the
+# G071 takes as its hardware NSS, and its D/CX line (PSELDCX = P0.06,
+# DCXCNT), which the G071 reads on PA8 as a plain input. EasyDMA moves the
+# four bytes each way.
+schema_version: "1.0"
+name: gpio-net-spi-nrf52-spim3
+nodes:
+  - id: nrf
+    system: "system-nrf52840.yaml"
+    firmware: "firmware/nrf-spim3-master.elf"
+  - id: b
+    system: "system.yaml"
+    firmware: "firmware/spi-slave.elf"
+interconnects:
+  - type: gpio_net
+    nodes: [nrf, b]
+    config:
+      name: cs
+      pull: up
+      members:
+        - { node: nrf, peripheral: gpio0, pin: 2 }   # PSEL.CSN
+        - { node: b, peripheral: gpioa, pin: 4 }     # SPI1_NSS
+  - type: gpio_net
+    nodes: [nrf, b]
+    config:
+      name: sck
+      pull: down
+      members:
+        - { node: nrf, peripheral: gpio0, pin: 3 }   # PSEL.SCK
+        - { node: b, peripheral: gpioa, pin: 5 }
+  - type: gpio_net
+    nodes: [nrf, b]
+    config:
+      name: miso
+      pull: down
+      members:
+        - { node: nrf, peripheral: gpio0, pin: 5 }   # PSEL.MISO
+        - { node: b, peripheral: gpioa, pin: 6 }
+  - type: gpio_net
+    nodes: [nrf, b]
+    config:
+      name: mosi
+      pull: down
+      members:
+        - { node: nrf, peripheral: gpio0, pin: 4 }   # PSEL.MOSI
+        - { node: b, peripheral: gpioa, pin: 7 }
+  - type: gpio_net
+    nodes: [nrf, b]
+    config:
+      name: dcx
+      pull: up
+      members:
+        - { node: nrf, peripheral: gpio0, pin: 6 }   # PSELDCX
+        - { node: b, peripheral: gpioa, pin: 8 }     # input

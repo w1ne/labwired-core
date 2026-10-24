@@ -83,6 +83,7 @@ nav:
     - Timed UART networks: howto/timed-uart-network.md
     - GPIO nets between machines: howto/gpio-nets.md
     - SEGGER RTT logging: howto/segger-rtt.md
+    - Firmware coverage (lines, branches, CI): howto/firmware-coverage.md
     - CI integration: ci_integration.md
     - Peripheral modeling: peripherals.md
     - Hardware Interaction Guide: hardware_interaction_guide.md
@@ -93,6 +94,11 @@ nav:
     - PlatformIO Integration: platformio_integration.md
     - Co-simulation Plugins: cosimulation_plugins.md
     - CI Integration Templates: integration-templates/README.md
+    - Extend LabWired:
+      - Add a peripheral block (YAML): howto/extend/add-a-peripheral.md
+      - Add an I2C sensor (data + Python): howto/extend/python-device.md
+      - Add a board (chip + manifest): howto/extend/add-a-board.md
+      - Hook surfaces (device, host, Rust): howto/extend/hooks.md
 
   - Reference:
     - Configuration (YAML): configuration_reference.md

@@ -1,8 +1,8 @@
 # Two STM32F401s, SPI1 to SPI1, 16-bit frames (CR1.DFF). Node `a` is the
-# master, node `b` the slave in software select (SSM=1, SSI=0): the model
-# does not route the F401's hardware NSS pad, so there is no chip-select
-# wire and the slave frames by bit count from enable. Every SPI wire is a
-# gpio_net.
+# master, node `b` the slave in software select (SSM=1, SSI=0): there is no
+# chip-select wire and the slave frames by bit count from enable (see
+# env-spi16-nss.yaml for the same pair on the hardware NSS pads). Every SPI
+# wire is a gpio_net.
 schema_version: "1.0"
 name: gpio-net-spi16
 nodes:

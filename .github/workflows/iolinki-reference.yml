@@ -39,7 +39,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.95.0
       - uses: Swatinem/rust-cache@v2
       - name: Install ARM GCC
-        run: sudo apt-get update && sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi
+        timeout-minutes: 10
+        uses: ./.github/actions/apt-install-cached
+        with:
+          packages: gcc-arm-none-eabi libnewlib-arm-none-eabi
       - name: Build actual customer firmware
         env:
           STM32_CMSIS_ROOT: ${{ github.workspace }}/.vendor/g0
@@ -77,10 +80,15 @@ jobs:
           python-version: '3.12'
       - uses: dtolnay/rust-toolchain@1.95.0
       - uses: Swatinem/rust-cache@v2
+      - name: Install ARM GCC
+        timeout-minutes: 10
+        uses: ./.github/actions/apt-install-cached
+        with:
+          packages: gcc-arm-none-eabi libnewlib-arm-none-eabi
       - name: Install Zephyr board build dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi cmake ninja-build device-tree-compiler
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update
+          timeout 600 sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y cmake ninja-build device-tree-compiler
           pip install west
           # west init --mr only accepts a branch or tag. This pin is a commit.
           mkdir -p .zephyr-workspace/zephyr

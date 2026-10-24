@@ -73,6 +73,7 @@ pub(crate) enum Op {
     SetAdcMillivolts(String, u8, u16),
     ClearAdc(String, u8),
     SetNtc(String, f32),
+    SetAmbientTemperature(f64),
     SetPot(String, f32),
     SetMotorInput(String, String, f64),
     SetMotorFault(String, String, bool),
@@ -148,6 +149,10 @@ pub(crate) struct SimTools {
     /// The firmware's DWARF, parsed once for source-level debugging. Dropped
     /// when `install_arduino_esp32_quirks` hands over a different ELF.
     pub(crate) source_debug: Option<Rc<crate::source_debug::SourceDebug>>,
+    /// The inline frame the last source step stopped in, as `(pc, depth)`
+    /// (see `SourceDebug::location_at`). Any later call that changes the
+    /// machine drops it.
+    pub(crate) source_view: Option<(u32, usize)>,
 }
 
 fn js(e: impl std::fmt::Display) -> JsValue {
@@ -157,6 +162,7 @@ fn js(e: impl std::fmt::Display) -> JsValue {
 impl WasmSimulator {
     pub(crate) fn record(&self, op: Op) {
         let mut tools = self.tools.borrow_mut();
+        tools.source_view = None;
         if let Op::InstallEsp32Quirks(elf) = &op {
             tools.elf = Some(elf.clone());
             tools.source_debug = None;
@@ -239,6 +245,7 @@ impl WasmSimulator {
             Op::SetAdcMillivolts(p, c, mv) => self.set_adc_channel_millivolts(p, *c, *mv),
             Op::ClearAdc(p, c) => self.clear_adc_channel(p, *c),
             Op::SetNtc(d, t) => self.set_ntc_temperature(d, *t),
+            Op::SetAmbientTemperature(c) => self.set_ambient_temperature(*c).map(|_| ()),
             Op::SetPot(d, p) => self.set_potentiometer(d, *p),
             Op::SetMotorInput(i, n, v) => self.set_motor_input(i, n, *v),
             Op::SetMotorFault(i, f, a) => self.set_motor_fault(i, f, *a),
@@ -413,6 +420,10 @@ impl WasmSimulator {
         }
         let coverage = fresh.tools.borrow().coverage.clone();
         if let Some(obs) = coverage {
+            // Counts keep accumulating across the rewind, but the step from
+            // the last instruction before it to the saved point never
+            // happened; don't let it count as a branch outcome.
+            obs.break_chain();
             fresh.jit_browser_enabled = false;
             fresh.jit_browser_cache = None;
             if let Some(m) = fresh.machine.as_mut() {
@@ -530,6 +541,7 @@ impl WasmSimulator {
             symbols
                 .as_ref()
                 .map(|s| s as &dyn labwired_core::fault_verdict::FaultSymbolizer),
+            None,
         );
         let json = verdict
             .map(|v| serde_json::to_string(&v))

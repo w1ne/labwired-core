@@ -18,11 +18,13 @@ peripherals:
   bus: sysbus
   base_address: 3758100480
 - id: lpspi0
-  type: imxrt_lpspi
+  type: stub
+  renode_type: imxrt_lpspi
   bus: sysbus
   base_address: 1073922048
 - id: lpspi1
-  type: imxrt_lpspi
+  type: stub
+  renode_type: imxrt_lpspi
   bus: sysbus
   base_address: 1073926144
 - id: lpuart0
@@ -38,14 +40,17 @@ peripherals:
   bus: sysbus
   base_address: 1073889280
 - id: lpit
-  type: s32k_lpit
+  type: stub
+  renode_type: s32k_lpit
   bus: sysbus
   base_address: 1073967104
 - id: lptmr
-  type: s32k_lptmr
+  type: stub
+  renode_type: s32k_lptmr
   bus: sysbus
   base_address: 1074003968
 - id: scg
-  type: s32k_scg
+  type: stub
+  renode_type: s32k_scg
   bus: sysbus
   base_address: 1074151424

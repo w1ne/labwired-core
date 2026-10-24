@@ -1,0 +1,101 @@
+name: SAMD actual CODAL clock-gated SPI timeout guest
+on:
+  pull_request:
+    paths: ['crates/core/tests/samd_real_spi_timeout_guest.rs', '.github/workflows/samd-real-spi-timeout-guest.yml']
+permissions:
+  contents: read
+concurrency:
+  group: real-spi-timeout-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  LABWIRED_SPI_SOURCE: d7a5f5a4e2607d1b5c19a3a6168bb0d286efc92a
+jobs:
+  spi-timeout-guest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: CrispStrobe/codal-samd
+          ref: d7a5f5a4e2607d1b5c19a3a6168bb0d286efc92a
+          path: owned-timeout-source
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: lancaster-university/codal-core
+          ref: 2ed19d64ec3359143409a4b0a9758b4aeef3ee7d
+          path: owned-mclk-core
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: lancaster-university/codal-core
+          ref: 2ed19d64ec3359143409a4b0a9758b4aeef3ee7d
+          path: owned-gclk-core
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: lancaster-university/codal-core
+          ref: 2ed19d64ec3359143409a4b0a9758b4aeef3ee7d
+          path: owned-success-core
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: lancaster-university/codal-core
+          ref: 2ed19d64ec3359143409a4b0a9758b4aeef3ee7d
+          path: owned-cancel-core
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: Swatinem/rust-cache@v2
+      - name: Build separately selected success cancellation and clock-gated timeout callers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-arm-none-eabi
+          arm-none-eabi-g++ --version
+          dpkg-query -W gcc-arm-none-eabi
+          cd owned-timeout-source
+          bash runtime-services/build.sh ../owned-success-core "$RUNNER_TEMP/spi-timeout-8" 8
+          bash runtime-services/build.sh ../owned-cancel-core "$RUNNER_TEMP/spi-timeout-9" 9
+          bash runtime-services/build.sh ../owned-mclk-core "$RUNNER_TEMP/spi-timeout-10" 10
+          bash runtime-services/build.sh ../owned-gclk-core "$RUNNER_TEMP/spi-timeout-11" 11
+      - name: Nonvacuous success cancellation timeout and recovery ordering controls
+        run: |
+          for fixture in samd_real_spi_guest samd_real_spi_cancel_guest samd_real_spi_timeout_guest; do
+            cargo test --release --locked -p labwired-core --test "$fixture" -- --nocapture
+          done
+      - name: Execute all eight actual success cancellation and timeout cases
+        run: |
+          set -o pipefail
+          timeout_failures=0
+          for mode in 8 9 10 11; do
+            case "$mode" in
+              8) fixture=samd_real_spi_guest ;;
+              9) fixture=samd_real_spi_cancel_guest ;;
+              10|11) fixture=samd_real_spi_timeout_guest ;;
+            esac
+            for profile in default scheduler; do
+              feature_args=()
+              if test "$profile" = scheduler; then feature_args=(--features event-scheduler); fi
+              export LABWIRED_SPI_MODE="$mode"
+              export LABWIRED_SPI_FIXTURE_DIR="$RUNNER_TEMP/spi-timeout-$mode"
+              if ! cargo test --release --locked -p labwired-core "${feature_args[@]}" --test "$fixture" -- --ignored --nocapture 2>&1 | tee "spi-timeout-$mode-$profile.log"; then
+                timeout_failures=$((timeout_failures + 1))
+              fi
+            done
+          done
+          # Preserve all eight originals on failure; never convert failure to pass.
+          test "$timeout_failures" -eq 0
+      - name: Preserve actual timeout source and observations
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: actual-codal-spi-timeout-guest-results
+          path: |
+            spi-timeout-*.log
+            ${{ runner.temp }}/spi-timeout-8/
+            ${{ runner.temp }}/spi-timeout-9/
+            ${{ runner.temp }}/spi-timeout-10/
+            ${{ runner.temp }}/spi-timeout-11/

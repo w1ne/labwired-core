@@ -292,3 +292,27 @@ Deliverables:
 
 The result-code enum remains important, but it is API cleanup. Timing is the
 architectural blocker between a protocol test harness and a real master runtime.
+
+## Release Retrospective
+
+### v1.1.0 — 2026-10-17
+
+Completed in this release (since v1.0.0; see CHANGELOG for the authoritative
+list):
+
+- OPERATE M-sequence reply layout decode corrected to Figures A.9/A.10/A.13/A.14
+  (READ `[OD][PD-in] CKS`, WRITE `[PD-in] CKS`) with direction-aware framing,
+  device and master in lockstep.
+- Stale-reply flush guard: a direction-changing send drops RX bytes left over
+  from the previous request instead of mis-framing the late reply.
+- Establish communication per V1.1.5 7.3.2.2 (rate scan without per-rate
+  wake-up) and COMLOST restarting from the wake-up.
+- Gateway record line (`iolinki-gw/1`) after device identity is known.
+
+Open follow-ups:
+
+- Hardware validation (Phase 5) remains open: first real sensor and actuator,
+  hardware PHY adapter, official conformance validation.
+- Residual software-only race: a reply that arrives on the wire after a
+  direction-changing frame cannot be distinguished from the new reply by a
+  software-only master; the flush covers bytes already received at send time.

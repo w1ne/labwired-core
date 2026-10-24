@@ -2,6 +2,42 @@
   "schema_version": 2,
   "peripherals": [
     {
+      "device_type": "esp32c3_esp_at",
+      "label": "ESP32-C3 behavioral ESP-AT",
+      "summary": "Bounded AT peer with explicit mock connection state",
+      "detail": "Behavioral mock only; no ESP firmware or RF. Strict CRLF. AT, AT+GMR, AT+LABMOCKSTATUS?, AT+LABMOCKCONNECT, AT+LABMOCKDISCONNECT; unknown/malformed frames return ERROR. Commands 256 bytes, replies 1024 bytes; saturation drops complete frames before mock-state changes. One reply byte per >=1000us poll; no baud accuracy.",
+      "transport": "uart",
+      "category": "uart",
+      "config_keys": [
+        {
+          "name": "powered",
+          "ty": "bool",
+          "doc": "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered part -- ABSENT MEANS POWERED, because curated labs state signals and leave the rails implicit. Only an explicit `false`, which the diagram compiler emits when it can see the supply pins are on no net, changes anything: the part then ignores its bus entirely and reports the dark/idle state it has on a bench."
+        },
+        {
+          "name": "supply_domain",
+          "ty": "str",
+          "doc": "Explicit pre-registered external supply domain; starts off until a finite voltage update."
+        },
+        {
+          "name": "supply_min_v",
+          "ty": "float",
+          "doc": "Functional gate threshold, must match domain registration; no silicon threshold claim."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "mock_connected",
+          "label": "Mock connection",
+          "unit": "boolean",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.0
+        }
+      ]
+    },
+    {
       "device_type": "bg770a-cellular",
       "label": "Quectel BG770A Cellular",
       "summary": "LTE-M / NB-IoT cellular modem with the full Quectel AT command surface.",
@@ -1265,6 +1301,53 @@
       "inputs": []
     },
     {
+      "device_type": "ov3660",
+      "label": "OV3660 Camera",
+      "summary": "OmniVision 3 MP camera: SCCB control at 0x3C plus 8-bit DVP frames into the ESP32-S3 LCD_CAM.",
+      "detail": "SCCB register file with 16-bit addressing (chip ID 0x3660, software reset). Frames follow the output window (0x3808-0x380B) and format (0x4300: RGB565, YUV422, Y8) the driver programs, and stream through LCD_CAM's camera slave and GDMA exactly as esp32-camera expects. The scene is synthetic: drive `pattern`, `brightness` and `motion`; the colour-bar test-pattern bit (0x503D[7]) overrides it. JPEG mode (0x3821[5]) emits real baseline JPEG frames at the quality in 0x4407. connection: the I2C controller carrying SIOD/SIOC (esp32-camera uses i2c1 by default).",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit SCCB address. Defaults to 0x3C (fixed on the part)."
+        },
+        {
+          "name": "powered",
+          "ty": "bool",
+          "doc": "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered part -- ABSENT MEANS POWERED, because curated labs state signals and leave the rails implicit. Only an explicit `false`, which the diagram compiler emits when it can see the supply pins are on no net, changes anything: the part then ignores its bus entirely and reports the dark/idle state it has on a bench."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "pattern",
+          "label": "Scene (0 bars, 1 checker, 2 gradient, 3 flat)",
+          "unit": "",
+          "min": 0.0,
+          "max": 3.0,
+          "default": 0.0
+        },
+        {
+          "key": "brightness",
+          "label": "Brightness",
+          "unit": "%",
+          "min": 0.0,
+          "max": 100.0,
+          "default": 100.0
+        },
+        {
+          "key": "motion",
+          "label": "Scene motion",
+          "unit": "px/frame",
+          "min": 0.0,
+          "max": 64.0,
+          "default": 0.0
+        }
+      ]
+    },
+    {
       "device_type": "ssd1680_tricolor_290",
       "label": "SSD1680 Tri-Color E-Paper",
       "summary": "2.9\" tri-color (black/white/red) e-paper over SPI. Driver class GxEPD2_290_C90c -- the WeAct / Waveshare 2.9\" B/W/R module. Not interchangeable with the UC8151D part.",
@@ -1564,6 +1647,32 @@
       ]
     },
     {
+      "device_type": "tmp36",
+      "label": "TMP36 Temperature Sensor",
+      "summary": "Analog temperature sensor, 10 mV/°C with 500 mV at 0 °C.",
+      "detail": "Analog Devices TMP36 linear temperature sensor. Drive the `temperature` channel (°C) at runtime and the ADC channel follows V_out = 500 mV + 10 mV/°C, independent of the supply. Starts at 25 °C (750 mV).",
+      "transport": "analog",
+      "category": "analog",
+      "config_keys": [
+        {
+          "name": "channel",
+          "ty": "int",
+          "doc": "ADC channel index (0..N). Defaults to 0."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "temperature",
+          "label": "Temperature",
+          "unit": "°C",
+          "min": -40.0,
+          "max": 125.0,
+          "default": 25.0
+        }
+      ]
+    },
+    {
       "device_type": "potentiometer",
       "label": "Potentiometer",
       "summary": "3-pin linear potentiometer on an ADC channel (rotary or slide).",
@@ -1575,6 +1684,11 @@
           "name": "channel",
           "ty": "int",
           "doc": "ADC channel index (0..N). Defaults to 0."
+        },
+        {
+          "name": "supply_mv",
+          "ty": "float",
+          "doc": "Rail across the pot ends, in mV (default 3300). The wiper spans 0..supply_mv."
         }
       ],
       "labs": [],
@@ -2960,7 +3074,7 @@
         {
           "name": "ledc_channel",
           "ty": "int",
-          "doc": "Optional ESP32 LEDC channel (0..15). When omitted, all 16 channels observe."
+          "doc": "Optional ESP32 LEDC channel (0..15). When omitted, the servo follows the channel the GPIO matrix routes to its pad."
         }
       ],
       "labs": [],
@@ -3536,10 +3650,21 @@
           "label": "Distance",
           "unit": "cm",
           "min": 2.0,
-          "max": 400.0,
+          "max": 1000.0,
           "default": 50.0
         }
       ]
+    },
+    {
+      "device_type": "dfplayer_mini",
+      "label": "DFPlayer Mini",
+      "summary": "MP3 player module: serial commands in, BUSY low while playing",
+      "detail": "Decodes the DFPlayer Mini 10-byte serial frames (9600 8N1, checksum checked) from the RX pad, so hardware UART and SoftwareSerial both work. Play (0x03) drives BUSY LOW for a constant 1 s clip, volume (0x06) is stored, pause/stop release BUSY. NOT modelled: SD card, MP3 decoding and audio output, replies on TX (it stays idle HIGH), power-on delay and the other commands.",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [],
+      "labs": [],
+      "inputs": []
     },
     {
       "device_type": "pybadge_buttons",

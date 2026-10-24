@@ -1,0 +1,45 @@
+# An ESP32-C3 GP-SPI2 master (register level, src/esp32c_spi_master.c) and an
+# STM32G071 SPI1 slave, mode 0. The C3's pads reach SPI2 through its GPIO
+# matrix (FUNCn_OUT_SEL_CFG / FUNCn_IN_SEL_CFG); CS0 frames the four bytes.
+schema_version: "1.0"
+name: gpio-net-spi-esp32c3
+nodes:
+  - id: esp
+    system: "../../configs/systems/esp32c3-devkit.yaml"
+    firmware: "firmware/esp32c3-spi-master.elf"
+  - id: b
+    system: "system.yaml"
+    firmware: "firmware/spi-slave.elf"
+interconnects:
+  - type: gpio_net
+    nodes: [esp, b]
+    config:
+      name: cs
+      pull: up
+      members:
+        - { node: esp, peripheral: gpio, pin: 1 }   # FSPICS0
+        - { node: b, peripheral: gpioa, pin: 4 }    # SPI1_NSS
+  - type: gpio_net
+    nodes: [esp, b]
+    config:
+      name: sck
+      pull: down
+      members:
+        - { node: esp, peripheral: gpio, pin: 4 }   # FSPICLK
+        - { node: b, peripheral: gpioa, pin: 5 }
+  - type: gpio_net
+    nodes: [esp, b]
+    config:
+      name: miso
+      pull: down
+      members:
+        - { node: esp, peripheral: gpio, pin: 3 }   # FSPIQ (input)
+        - { node: b, peripheral: gpioa, pin: 6 }
+  - type: gpio_net
+    nodes: [esp, b]
+    config:
+      name: mosi
+      pull: down
+      members:
+        - { node: esp, peripheral: gpio, pin: 5 }   # FSPID
+        - { node: b, peripheral: gpioa, pin: 7 }

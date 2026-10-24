@@ -18,8 +18,8 @@ validation:
     system_manifest: true
     chip_descriptor: true
     simulation: true
-  timestamp_utc: '2026-06-09T13:16:42.868020+00:00'
-  run_url: https://github.com/w1ne/labwired-core/actions/runs/27208642377/attempts/1
+  timestamp_utc: '2026-10-18T14:40:06.594447+00:00'
+  run_url: ''
   artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/nrf52840.validation.md
 silicon_conformance:
   verified_against: nRF52840 (Seeed XIAO nRF52840 Sense)
@@ -37,3 +37,5 @@ silicon_conformance:
   - GPIOTE task->GPIO over-permissive vs silicon
   corpus: validation/silicon/nrf52840/ (private repo)
   audit: examples/seeed-xiao-nrf52840-sense/VALIDATION.md
+provenance:
+  generated_by: scripts/onboard_hw_targets.py

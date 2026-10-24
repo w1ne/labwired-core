@@ -11,6 +11,33 @@ mod scb_reset_tests {
     /// AIRCR address: SCB base (0xE000_ED00) + 0x0C.
     const SCB_AIRCR: u64 = 0xE000_ED0C;
 
+    #[test]
+    fn cpu_reset_drops_masks_it_and_previous_exception_context() {
+        let mut bus = crate::bus::SystemBus::new();
+        let (mut cpu, _) = crate::system::cortex_m::configure_cortex_m(&mut bus);
+        bus.write_u32(0, 0x2000_1000).unwrap();
+        bus.write_u32(4, 0x0800_0101).unwrap();
+        cpu.primask = true;
+        cpu.basepri = 0x80;
+        cpu.faultmask = true;
+        cpu.it_state = 0xbf;
+        cpu.xpsr = 0xf700_0030;
+        cpu.lr = 0xffff_fff9;
+        cpu.control = 3;
+        cpu.pending_exceptions = [u64::MAX; 4];
+        cpu.reset(&mut bus).unwrap();
+        assert!(!cpu.primask);
+        assert_eq!(cpu.basepri, 0);
+        assert!(!cpu.faultmask);
+        assert_eq!(cpu.it_state, 0);
+        assert_eq!(cpu.xpsr, 0x0100_0000);
+        assert_eq!(cpu.lr, u32::MAX);
+        assert_eq!(cpu.control, 0);
+        assert_eq!(cpu.pending_exceptions, [0; 4]);
+        assert_eq!(cpu.get_pc(), 0x0800_0100);
+        assert_eq!(cpu.get_register(13), 0x2000_1000);
+    }
+
     /// A real Cortex-M write to AIRCR with the correct VECTKEY (0x05FA in
     /// bits 31:16) and SYSRESETREQ (bit 2) must reboot the CPU through the
     /// vector table on the next instruction boundary: MSP reloads from

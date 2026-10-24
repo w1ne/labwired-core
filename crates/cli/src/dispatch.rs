@@ -95,6 +95,8 @@ pub(crate) enum Commands {
 
     /// Reduced RV1103 Linux direct boot with strict artifacts and a guest acceptance receipt.
     Rv1103Linux(commands::rv1103_linux::Rv1103LinuxArgs),
+    /// Strict canonical smart-basket Linux and persistent power-plant local acceptance.
+    Rv1103Basket(commands::rv1103_basket::Rv1103BasketArgs),
 
     /// Capture a binary runtime snapshot of a firmware mid-flight, for
     /// fast-replay in the playground. Produces an `.lwrs` blob that
@@ -199,9 +201,21 @@ pub fn run_with_plugins(plugins: &[&dyn labwired_core::plugin::ChipPlugin]) -> E
     let default_level = if cli.trace { "debug" } else { "info" };
     let log_filter = tracing_subscriber::EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(default_level));
+
+    // The timestamp mode must be known before the subscriber is built: parse
+    // it out of the command, then let the formatter consult the global
+    // context (empty prefix unless a mode was requested).
+    let log_mode = match &cli.command {
+        Some(Commands::Run(a)) => a.log_timestamps,
+        Some(Commands::Test(a)) => a.log_timestamps,
+        _ => crate::log_ts::LogTimestamps::None,
+    };
+    crate::log_ts::init(log_mode);
+
     tracing_subscriber::fmt()
         .with_writer(std::io::stderr)
         .with_env_filter(log_filter)
+        .event_format(crate::log_ts::LogTsFormat)
         .init();
 
     match cli.command {
@@ -223,6 +237,7 @@ pub fn run_with_plugins(plugins: &[&dyn labwired_core::plugin::ChipPlugin]) -> E
         Some(Commands::Asset(args)) => run_asset(args, plugins),
         Some(Commands::Run(args)) => commands::run::run_firmware(args, plugins, cli.json),
         Some(Commands::Rv1103Linux(args)) => commands::rv1103_linux::run(args),
+        Some(Commands::Rv1103Basket(args)) => commands::rv1103_basket::run(args),
         Some(Commands::Snapshot(args)) => commands::snapshot::run_snapshot(args, plugins),
         Some(Commands::Coverage(args)) => commands::coverage::run_coverage(args),
         Some(Commands::Tier1Matrix(args)) => commands::tier1::run_tier1_matrix(args),

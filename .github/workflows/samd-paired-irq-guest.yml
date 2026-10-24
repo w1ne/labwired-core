@@ -1,0 +1,61 @@
+name: SAMD authored strict paired IRQ ARM guest
+on:
+  pull_request:
+    paths: ['crates/core/tests/samd_paired_irq_guest.rs', 'scripts/samd-paired-irq/**', '.github/workflows/samd-paired-irq-guest.yml']
+permissions:
+  contents: read
+env:
+  LABWIRED_PAIRED_QUALIFIED_SOURCE: 3c66f0d27c865192a2b22217e71c1f88f2b3fe91
+  LABWIRED_PAIRED_SOURCE_DIR: owned-paired-source
+jobs:
+  paired-guest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Require manufactured source and receipt controls
+        run: python3 -B scripts/samd-paired-irq/test_record.py
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: CrispStrobe/codal-samd
+          ref: 3c66f0d27c865192a2b22217e71c1f88f2b3fe91
+          path: owned-paired-source
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: Swatinem/rust-cache@v2
+      - name: Build five source-bound authored controls
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-arm-none-eabi
+          arm-none-eabi-g++ --version
+          dpkg-query -W gcc-arm-none-eabi
+          bash scripts/samd-paired-irq/build.sh owned-paired-source "$RUNNER_TEMP/paired-guests"
+      - name: Execute positive and four refusal controls in both scheduler profiles
+        env:
+          LABWIRED_PAIRED_FIXTURE_DIR: ${{ runner.temp }}/paired-guests
+        run: |
+          set -o pipefail
+          cargo test --release -p labwired-core --test samd_paired_irq_guest -- --nocapture
+          cargo test --release -p labwired-core --test samd_paired_irq_guest -- --ignored --nocapture | tee paired-guest-default.log
+          cargo test --release -p labwired-core --features event-scheduler --test samd_paired_irq_guest -- --ignored --nocapture | tee paired-guest-scheduler.log
+      - name: Bind actual source, merge, ELF and execution logs
+        env:
+          LABWIRED_PAIRED_FIXTURE_DIR: ${{ runner.temp }}/paired-guests
+          QUALIFICATION_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: python3 -B scripts/samd-paired-irq/record.py
+      - name: Preserve bounded original evidence without ELF
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: authored-paired-irq-guest-results
+          path: |
+            paired-guest-default.log
+            paired-guest-scheduler.log
+            paired-qualification.json
+            ${{ runner.temp }}/paired-guests/source-before.json
+            ${{ runner.temp }}/paired-guests/source-after.json
+            ${{ runner.temp }}/paired-guests/*/control.map
+            ${{ runner.temp }}/paired-guests/*/symbols.txt

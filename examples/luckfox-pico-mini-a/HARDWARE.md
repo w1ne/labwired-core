@@ -1,6 +1,6 @@
 # Smart basket hardware notes
 
-This is the proposed carrier integration for the exact Mini A. No schematic for the complete carrier, PCB, fitted battery, firmware image or physical measurements have been produced. Component selection and interfaces are fixed here; supporting values and assembly qualification remain open.
+This describes the carrier integration for the exact Mini A. The canonical private app source [schematic](https://github.com/w1ne/labwired/blob/main/examples/smart-basket/artifacts/schematic/smart-basket.svg) and [PCB](https://github.com/w1ne/labwired/blob/main/examples/smart-basket/artifacts/rv1103.svg) exist, with 50 parts and 119 connections. The separate [reduced native Linux basket](../luckfox-pico-mini-a-linux/BASKET.md) has accepted joint virtual evidence. Fabrication, fitted battery, physical ESP firmware/RF, electrical measurements and assembly qualification remain unavailable; the selected physical devices are not qualified by the shared kits or reduced power plant.
 
 ## Wi-Fi: ESP32-C3-MINI-1U over UART4
 
@@ -21,7 +21,7 @@ Flow control requires UART4 pinmux, host driver configuration and ESP firmware c
 
 Provide EN pull-up/reset circuitry, the documented boot straps, a separate download/log header and local decoupling according to Espressif's hardware guidance. The carrier's UART pins must remain high impedance while either endpoint is unpowered, or use suitable isolation to prevent phantom power. Keep the external antenna away from basket metal, battery, switching inductors and human handling; test the assembled position and orientation.
 
-The proposed host software opens UART4 (normally `/dev/ttyS4` once enabled in the vendor image), requests station association and sends application socket traffic with ESP-AT. This is serial network offload. It does not provide a Linux WLAN interface. Firmware feature selection, secure transport limits, reconnect behavior and bandwidth must be verified for the actual ESP-AT build. An eventual simulator AT peer would test protocol handling, not RF or real network availability.
+The proposed host software opens UART4 (normally `/dev/ttyS4` once enabled in the vendor image), requests station association and sends application socket traffic with ESP-AT. This is serial network offload. It does not provide a Linux WLAN interface. Firmware feature selection, secure transport limits, reconnect behavior and bandwidth must be verified for the actual ESP-AT build. The separate native UART4 basket profile already uses the shared bounded behavioral ESP-AT peer and has accepted serial protocol evidence. It executes no ESP firmware or RF and proves no real network availability.
 
 ## Motion: ADXL345 on I2C3
 
@@ -29,7 +29,7 @@ The [ADXL345 datasheet](https://www.analog.com/media/en/technical-documentation/
 
 Read DEVID register 0x00 and expect **0xE5** before enabling measurement. A proposed first capture uses 100 Hz, full-resolution ±2 g and timestamped XYZ samples; choose final range/rate from measured basket vibration and impact. Mount the sensor rigidly, document axis orientation, measure offsets and compare stationary/tilted/moving cases. An accelerometer alone detects motion or tilt; it does not prove item identity, weight or basket inventory.
 
-Start with polling; any INT1/INT2-to-GPIO assignment and interrupt policy require a separate reviewed pinmux decision. Motion-triggered wake of a powered-down Linux host is not provided by this wiring. LabWired already contains the [ADXL345 I2C register kit](../../configs/devices/adxl345.yaml), with DEVID/XYZ read tests and acceleration inputs in g. RV1103 I2C3 controller/pinmux integration, a complete basket scenario and physical data replay remain unimplemented.
+Start with polling; any INT1/INT2-to-GPIO assignment and interrupt policy require a separate reviewed pinmux decision. Motion-triggered wake of a powered-down Linux host is not provided by this wiring. LabWired already contains the [ADXL345 I2C register kit](../../configs/devices/adxl345.yaml), with DEVID/XYZ read tests and acceleration inputs in g. The separate native basket profile has an actual I2C3 register controller, shared ADXL345 instance and accepted joint Linux scenario with synthetic acceleration inputs. Pinmux/electrical behavior and physical data replay remain unqualified.
 
 ## Battery and power tree
 

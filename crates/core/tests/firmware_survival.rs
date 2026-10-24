@@ -15,7 +15,6 @@
 
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
-use labwired_core::cpu::riscv::RiscV;
 use labwired_core::system::cortex_m::configure_cortex_m;
 use labwired_core::trace::TraceObserver;
 use labwired_core::{Cpu, Machine};
@@ -293,6 +292,21 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output: b"NRF52840_SMOKE_OK\n",
     },
     SurvivalCase {
+        // Arduino Nano 33 BLE (ABX00030): nRF52840, 1 MiB flash at 0x0, 256 KiB
+        // RAM at 0x20000000. UARTE0 (EasyDMA) is the board's D0/D1 `Serial1`;
+        // the RGB LED is active low, so the smoke prints the GPIO0 OUT readback
+        // to pin the red/green/blue channel mapping. SIM-DERIVED.
+        name: "arduino_nano_33_ble_smoke",
+        core: "cortex-m4",
+        family: CpuFamily::CortexM,
+        hal: Hal::Bare,
+        chip: "nrf52840",
+        system: "arduino-nano-33-ble",
+        fixture: "arduino-nano-33-ble-smoke.elf",
+        valid_pc_ranges: &[(0x0000_0000, 0x000F_FFFF), (0x2000_0000, 0x2003_FFFF)],
+        expected_uart_output: b"ARDUINO NANO 33 BLE SMOKE\n",
+    },
+    SurvivalCase {
         // Plain Arduino sketch built with the Adafruit nRF52 core (board
         // `nrf52840_dk`). Serial.println drives the legacy UART personality of
         // UART0/UARTE0 (ENABLE=4): it writes each byte to TXD (0x51C) and spins
@@ -557,6 +571,37 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         fixture: "esp32c6-demo.elf",
         valid_pc_ranges: &[(0x4200_0000, 0x42FF_FFFF), (0x4080_0000, 0x4087_FFFF)],
         expected_uart_output: b"OK\n",
+    },
+    SurvivalCase {
+        // LiteX VexRiscv SoC (RV32IM — no compressed, no atomics): the smoke
+        // links into the SoC's integrated SRAM (0x10000000) and prints over
+        // the LiteX UART at 0x60001800. The chip descriptor declares a generic
+        // `rv32` core, so the run selects the standard RV32 profile rather
+        // than the ESP32-C3's vendor CSR set. SIM-DERIVED — no silicon diff.
+        name: "litex_vexriscv_smoke",
+        core: "rv32im",
+        family: CpuFamily::RiscV,
+        hal: Hal::Bare,
+        chip: "litex-vexriscv",
+        system: "litex-vexriscv",
+        fixture: "litex-vexriscv-smoke.elf",
+        valid_pc_ranges: &[(0x1000_0000, 0x1003_FFFF)],
+        expected_uart_output: b"LITEX VEXRISCV SMOKE\n",
+    },
+    SurvivalCase {
+        // Vega board (RI5CY, RV32IMC): 1 MiB flash at 0x0, 192 KiB SRAM at
+        // 0x20000000, LPUART0 at 0x40042000. The smoke boots from flash and
+        // prints over the LPUART; SCG/PCC/INTMUX/LPTMR remain declared stubs.
+        // SIM-DERIVED.
+        name: "vegaboard_ri5cy_smoke",
+        core: "rv32imc",
+        family: CpuFamily::RiscV,
+        hal: Hal::Bare,
+        chip: "vegaboard-ri5cy",
+        system: "vegaboard-ri5cy",
+        fixture: "vegaboard-ri5cy-smoke.elf",
+        valid_pc_ranges: &[(0x0000_0000, 0x000F_FFFF), (0x2000_0000, 0x2002_FFFF)],
+        expected_uart_output: b"VEGABOARD RI5CY SMOKE\n",
     },
     SurvivalCase {
         // Hardware-validated against real NUCLEO-L476RG silicon: the
@@ -1669,13 +1714,14 @@ fn run_survival_case(case: &SurvivalCase) {
 }
 
 /// Per-case cycle budget. Most firmwares emit their banner within the default
-/// window; the RP2040 Arduino Mbed-OS sketch prints over **USB CDC**, and its
-/// `loop()` only sends once per `delay(200)` — so it needs a wider window for a
-/// loop iteration to land after the simulated host finishes USB enumeration and
-/// asserts CDC DTR.
+/// window. The RP2040 Arduino ELF first calls `busy_wait_us(100_000)` from
+/// `_GLOBAL__sub_I.00101_dt`, before `main`: at its declared 125 MHz clock that
+/// constructor alone needs 12.5M cycles. Allow 500 ms for that boot delay,
+/// peripheral/USB setup and the sketch's 200 ms loop delay. The old 2M-cycle
+/// window covered only 16 ms once TIMER runs at its correct 1 MHz rate.
 fn case_cycles(case: &SurvivalCase) -> u32 {
     if case.name == "rp2040_arduino_serial" {
-        2_000_000
+        125_000_000 / 2
     } else {
         SURVIVAL_CYCLES
     }
@@ -1891,7 +1937,12 @@ fn run_riscv_firmware(
         SystemBus::from_config(&chip, &manifest).expect("Failed to build SystemBus from config");
     let uart_sink = Arc::new(Mutex::new(Vec::new()));
     bus.attach_uart_tx_sink(uart_sink.clone(), false);
-    let mut machine = Machine::new(RiscV::new(), bus);
+    // The chip descriptor selects the RISC-V core profile (name + `core:`),
+    // through the same one resolution the CLI, browser and debugger paths
+    // use — a generic `rv32*` chip must not silently run the ESP32-C3's
+    // vendor CSR set.
+    let cpu = labwired_core::system::riscv::configure_riscv(&mut bus);
+    let mut machine = Machine::new(cpu, bus);
     let trace = Arc::new(TraceObserver::new(5000));
     machine.add_observer(trace.clone());
 
@@ -1946,124 +1997,93 @@ fn case_by_name(name: &str) -> &'static SurvivalCase {
         .unwrap_or_else(|| panic!("no SurvivalCase named {name:?}"))
 }
 
-#[test]
-fn test_stm32f103_blinky_survival() {
-    run_survival_case(case_by_name("stm32f103_blinky"));
-}
-
-#[test]
-fn test_stm32f401_blinky_survival() {
-    run_survival_case(case_by_name("stm32f401_blinky"));
-}
-
-#[test]
-fn test_stm32f401_zephyr_survival() {
-    run_survival_case(case_by_name("stm32f401_zephyr"));
-}
-
-#[test]
-fn test_stm32f103_zephyr_survival() {
-    run_survival_case(case_by_name("stm32f103_zephyr"));
-}
-
-#[test]
-fn test_stm32l073_zephyr_survival() {
-    run_survival_case(case_by_name("stm32l073_zephyr"));
-}
-
-#[test]
-fn test_stm32l476_zephyr_survival() {
-    run_survival_case(case_by_name("stm32l476_zephyr"));
-}
-
-#[test]
-fn test_stm32g474_zephyr_survival() {
-    run_survival_case(case_by_name("stm32g474_zephyr"));
-}
-
-#[test]
-fn test_stm32h563_zephyr_survival() {
-    run_survival_case(case_by_name("stm32h563_zephyr"));
-}
-
-#[test]
-fn test_stm32wb55_zephyr_survival() {
-    run_survival_case(case_by_name("stm32wb55_zephyr"));
-}
-
-#[test]
-fn test_stm32wba52_zephyr_survival() {
-    run_survival_case(case_by_name("stm32wba52_zephyr"));
-}
-
-#[test]
-fn test_stm32u575_zephyr_survival() {
-    run_survival_case(case_by_name("stm32u575_zephyr"));
-}
-
-#[test]
-fn test_rp2040_demo_survival() {
-    run_survival_case(case_by_name("rp2040_demo"));
-}
-
-#[test]
-fn test_rp2040_zephyr_hello_survival() {
-    run_survival_case(case_by_name("rp2040_zephyr_hello"));
-}
-
-/// Arduino Mbed-OS RP2040 serial sketch — full end-to-end over **USB CDC**.
+/// One survival gate per `SURVIVAL_CASES` row.
 ///
-/// This is the deepest RP2040 path modelled: it exercises the boot2/XIP bring-up
-/// (`XIP_SSI` + SIO spinlocks + TBMAN), the RTX kernel tick (real `systick` +
-/// TIMER alarms), and the whole USB device stack. The sketch's default `Serial`
-/// is USB CDC, so `verdict=GOOD rp2040` is only emitted once the device has been
-/// enumerated by a host and the CDC terminal (DTR) is up. The `rp2040_usb`
-/// peripheral supplies both the device controller and a simulated host that
-/// enumerates the device and asserts DTR, then captures the sketch's bulk-IN
-/// bytes into the UART sink.
-///
-/// Uses a wider cycle budget (see `case_cycles`) because the sketch's `loop()`
-/// only transmits once per `delay(200)`, so a loop iteration must land after the
-/// simulated host finishes enumeration.
-#[test]
-fn test_rp2040_arduino_serial_survival() {
-    run_survival_case(case_by_name("rp2040_arduino_serial"));
+/// Each invocation keeps the CI-visible test name (filters, failure
+/// attribution) while the four-line
+/// `#[test] fn …() { run_survival_case(case_by_name(…)); }` boilerplate lives
+/// once. `case_by_name` still panics naming the row if the case was renamed.
+macro_rules! survival_gate {
+    ($(#[$doc:meta])* $name:ident, $case:literal) => {
+        $(#[$doc])*
+        #[test]
+        fn $name() {
+            run_survival_case(case_by_name($case));
+        }
+    };
 }
 
-#[test]
-fn test_nrf52840_demo_survival() {
-    run_survival_case(case_by_name("nrf52840_demo"));
-}
+survival_gate!(test_stm32f103_blinky_survival, "stm32f103_blinky");
 
-#[test]
-fn test_nrf52840_arduino_serial_survival() {
-    run_survival_case(case_by_name("nrf52840_arduino_serial"));
-}
+survival_gate!(test_stm32f401_blinky_survival, "stm32f401_blinky");
 
-#[test]
-fn test_nrf52832_demo_survival() {
-    run_survival_case(case_by_name("nrf52832_demo"));
-}
+survival_gate!(test_stm32f401_zephyr_survival, "stm32f401_zephyr");
 
-#[test]
-fn test_nrf52833_microbit_v2_smoke_survival() {
-    run_survival_case(case_by_name("nrf52833_microbit_v2_smoke"));
-}
+survival_gate!(test_stm32f103_zephyr_survival, "stm32f103_zephyr");
 
-#[test]
-fn test_nrf51822_microbit_v1_smoke_survival() {
-    run_survival_case(case_by_name("nrf51822_microbit_v1_smoke"));
-}
+survival_gate!(test_stm32l073_zephyr_survival, "stm32l073_zephyr");
 
-#[test]
-fn test_nrf5340_zephyr_survival() {
-    run_survival_case(case_by_name("nrf5340_zephyr"));
-}
+survival_gate!(test_stm32l476_zephyr_survival, "stm32l476_zephyr");
 
-#[test]
-fn test_nrf54l15_smoke_survival() {
-    run_survival_case(case_by_name("nrf54l15_smoke"));
-}
+survival_gate!(test_stm32g474_zephyr_survival, "stm32g474_zephyr");
+
+survival_gate!(test_stm32h563_zephyr_survival, "stm32h563_zephyr");
+
+survival_gate!(test_stm32wb55_zephyr_survival, "stm32wb55_zephyr");
+
+survival_gate!(test_stm32wba52_zephyr_survival, "stm32wba52_zephyr");
+
+survival_gate!(test_stm32u575_zephyr_survival, "stm32u575_zephyr");
+
+survival_gate!(test_rp2040_demo_survival, "rp2040_demo");
+
+survival_gate!(test_rp2040_zephyr_hello_survival, "rp2040_zephyr_hello");
+
+survival_gate!(
+    /// Arduino Mbed-OS RP2040 serial sketch — full end-to-end over **USB CDC**.
+    ///
+    /// This is the deepest RP2040 path modelled: it exercises the boot2/XIP bring-up
+    /// (`XIP_SSI` + SIO spinlocks + TBMAN), the RTX kernel tick (real `systick` +
+    /// TIMER alarms), and the whole USB device stack. The sketch's default `Serial`
+    /// is USB CDC, so `verdict=GOOD rp2040` is only emitted once the device has been
+    /// enumerated by a host and the CDC terminal (DTR) is up. The `rp2040_usb`
+    /// peripheral supplies both the device controller and a simulated host that
+    /// enumerates the device and asserts DTR, then captures the sketch's bulk-IN
+    /// bytes into the UART sink.
+    ///
+    /// Uses a wider cycle budget (see `case_cycles`) for the ELF's 100 ms global
+    /// constructor delay before `main`, peripheral/USB setup and 200 ms loop delay.
+    test_rp2040_arduino_serial_survival,
+    "rp2040_arduino_serial"
+);
+
+survival_gate!(test_nrf52840_demo_survival, "nrf52840_demo");
+
+survival_gate!(
+    test_arduino_nano_33_ble_smoke_survival,
+    "arduino_nano_33_ble_smoke"
+);
+
+survival_gate!(
+    test_nrf52840_arduino_serial_survival,
+    "nrf52840_arduino_serial"
+);
+
+survival_gate!(test_nrf52832_demo_survival, "nrf52832_demo");
+
+survival_gate!(
+    test_nrf52833_microbit_v2_smoke_survival,
+    "nrf52833_microbit_v2_smoke"
+);
+
+survival_gate!(
+    test_nrf51822_microbit_v1_smoke_survival,
+    "nrf51822_microbit_v1_smoke"
+);
+
+survival_gate!(test_nrf5340_zephyr_survival, "nrf5340_zephyr");
+
+survival_gate!(test_nrf54l15_smoke_survival, "nrf54l15_smoke");
 
 /// End-to-end proof that GPIO reaches the pin, not just that the CPU survived.
 ///
@@ -2114,30 +2134,15 @@ fn test_nrf54l15_lights_dk_led0() {
     );
 }
 
-#[test]
-fn test_nrf54l15_zephyr_survival() {
-    run_survival_case(case_by_name("nrf54l15_zephyr"));
-}
+survival_gate!(test_nrf54l15_zephyr_survival, "nrf54l15_zephyr");
 
-#[test]
-fn test_kw41z_smoke_survival() {
-    run_survival_case(case_by_name("kw41z_smoke"));
-}
+survival_gate!(test_kw41z_smoke_survival, "kw41z_smoke");
 
-#[test]
-fn test_kw41z_nxp_survival() {
-    run_survival_case(case_by_name("kw41z_nxp"));
-}
+survival_gate!(test_kw41z_nxp_survival, "kw41z_nxp");
 
-#[test]
-fn test_kw41z_zephyr_survival() {
-    run_survival_case(case_by_name("kw41z_zephyr"));
-}
+survival_gate!(test_kw41z_zephyr_survival, "kw41z_zephyr");
 
-#[test]
-fn test_kw41z_lcd_activity_survival() {
-    run_survival_case(case_by_name("kw41z_lcd_activity"));
-}
+survival_gate!(test_kw41z_lcd_activity_survival, "kw41z_lcd_activity");
 
 /// End-to-end proof that the activity bar-graph reaches the screen: boot the
 /// firmware, then read back the PCD8544 model's framebuffer and confirm the
@@ -2497,95 +2502,54 @@ fn test_kw41z_zephyr_fxos8700_survival() {
     assert_uart_contains(&uart_bytes, case.expected_uart_output, case.name);
 }
 
-#[test]
-fn test_stm32h563_demo_survival() {
-    run_survival_case(case_by_name("stm32h563_demo"));
-}
+survival_gate!(test_stm32h563_demo_survival, "stm32h563_demo");
 
-#[test]
-fn test_riscv_ci_fixture_survival() {
-    run_survival_case(case_by_name("riscv_ci_fixture"));
-}
+survival_gate!(test_riscv_ci_fixture_survival, "riscv_ci_fixture");
 
-#[test]
-fn test_esp32c3_demo_survival() {
-    run_survival_case(case_by_name("esp32c3_demo"));
-}
+survival_gate!(test_esp32c3_demo_survival, "esp32c3_demo");
 
-#[test]
-fn test_esp32c6_demo_survival() {
-    run_survival_case(case_by_name("esp32c6_demo"));
-}
+survival_gate!(test_esp32c6_demo_survival, "esp32c6_demo");
 
-#[test]
-fn test_nucleo_l476rg_smoke_survival() {
-    run_survival_case(case_by_name("nucleo_l476rg_smoke"));
-}
+survival_gate!(test_litex_vexriscv_smoke_survival, "litex_vexriscv_smoke");
 
-#[test]
-fn test_nucleo_l476rg_spi_survival() {
-    run_survival_case(case_by_name("nucleo_l476rg_spi"));
-}
+survival_gate!(test_vegaboard_ri5cy_smoke_survival, "vegaboard_ri5cy_smoke");
 
-#[test]
-fn test_nucleo_l476rg_pll_survival() {
-    run_survival_case(case_by_name("nucleo_l476rg_pll"));
-}
+survival_gate!(test_nucleo_l476rg_smoke_survival, "nucleo_l476rg_smoke");
 
-#[test]
-fn test_nucleo_l476rg_misc_survival() {
-    run_survival_case(case_by_name("nucleo_l476rg_misc"));
-}
+survival_gate!(test_nucleo_l476rg_spi_survival, "nucleo_l476rg_spi");
 
-#[test]
-fn test_nucleo_l476rg_l4periphs_survival() {
-    run_survival_case(case_by_name("nucleo_l476rg_l4periphs"));
-}
+survival_gate!(test_nucleo_l476rg_pll_survival, "nucleo_l476rg_pll");
 
-#[test]
-fn test_nucleo_l476rg_demo_survival() {
-    run_survival_case(case_by_name("nucleo_l476rg_demo"));
-}
+survival_gate!(test_nucleo_l476rg_misc_survival, "nucleo_l476rg_misc");
 
-#[test]
-fn test_nucleo_l476rg_dma_survival() {
-    run_survival_case(case_by_name("nucleo_l476rg_dma"));
-}
+survival_gate!(
+    test_nucleo_l476rg_l4periphs_survival,
+    "nucleo_l476rg_l4periphs"
+);
 
-#[test]
-fn test_nucleo_l476rg_adc_survival() {
-    run_survival_case(case_by_name("nucleo_l476rg_adc"));
-}
+survival_gate!(test_nucleo_l476rg_demo_survival, "nucleo_l476rg_demo");
 
-#[test]
-fn test_nucleo_l476rg_i2c_survival() {
-    run_survival_case(case_by_name("nucleo_l476rg_i2c"));
-}
+survival_gate!(test_nucleo_l476rg_dma_survival, "nucleo_l476rg_dma");
 
-#[test]
-fn test_nucleo_l476rg_l4periphs2_survival() {
-    run_survival_case(case_by_name("nucleo_l476rg_l4periphs2"));
-}
+survival_gate!(test_nucleo_l476rg_adc_survival, "nucleo_l476rg_adc");
 
-#[test]
-fn test_nucleo_l476rg_tim1_advanced_survival() {
-    run_survival_case(case_by_name("nucleo_l476rg_tim1_advanced"));
-}
+survival_gate!(test_nucleo_l476rg_i2c_survival, "nucleo_l476rg_i2c");
 
-#[test]
-fn test_nucleo_l476rg_r11_survival() {
-    run_survival_case(case_by_name("nucleo_l476rg_r11"));
-}
+survival_gate!(
+    test_nucleo_l476rg_l4periphs2_survival,
+    "nucleo_l476rg_l4periphs2"
+);
 
-#[test]
-fn test_nucleo_l476rg_r12_survival() {
-    run_survival_case(case_by_name("nucleo_l476rg_r12"));
-}
+survival_gate!(
+    test_nucleo_l476rg_tim1_advanced_survival,
+    "nucleo_l476rg_tim1_advanced"
+);
 
-#[test]
-fn test_nucleo_f407_smoke_survival() {
-    run_survival_case(case_by_name("nucleo_f407_smoke"));
-}
+survival_gate!(test_nucleo_l476rg_r11_survival, "nucleo_l476rg_r11");
+
+survival_gate!(test_nucleo_l476rg_r12_survival, "nucleo_l476rg_r12");
+
+survival_gate!(test_nucleo_f407_smoke_survival, "nucleo_f407_smoke");
 
 #[test]
 fn test_nucleo_f407_i2c_survival() {
@@ -2603,112 +2567,97 @@ fn test_nucleo_f407_i2c_survival() {
     assert_uart_contains(&uart, case.expected_uart_output, case.name);
 }
 
-#[test]
-fn test_nucleo_l073rz_smoke_survival() {
-    run_survival_case(case_by_name("nucleo_l073rz_smoke"));
-}
+survival_gate!(test_nucleo_l073rz_smoke_survival, "nucleo_l073rz_smoke");
 
 // --- Arduino-startup corpus (Core Arduino Matrix `L0_serial_boot`) ---------
 // Each asserts the sketch reaches `LW_L0_OK`, which is the matrix's own L0
 // oracle: the full vendor startup must complete. See the block comment on
 // these cases in SURVIVAL_CASES for why they are on the PR gate.
 
-#[test]
-fn test_nrf52832_arduino_serial_survival() {
-    run_survival_case(case_by_name("nrf52832_arduino_serial"));
-}
+survival_gate!(
+    test_nrf52832_arduino_serial_survival,
+    "nrf52832_arduino_serial"
+);
 
-#[test]
-fn test_stm32f103_arduino_serial_survival() {
-    run_survival_case(case_by_name("stm32f103_arduino_serial"));
-}
+survival_gate!(
+    test_stm32f103_arduino_serial_survival,
+    "stm32f103_arduino_serial"
+);
 
-#[test]
-fn test_stm32f401_arduino_serial_survival() {
-    run_survival_case(case_by_name("stm32f401_arduino_serial"));
-}
+survival_gate!(
+    test_stm32f401_arduino_serial_survival,
+    "stm32f401_arduino_serial"
+);
 
-#[test]
-fn test_stm32f407_arduino_serial_survival() {
-    run_survival_case(case_by_name("stm32f407_arduino_serial"));
-}
+survival_gate!(
+    test_stm32f407_arduino_serial_survival,
+    "stm32f407_arduino_serial"
+);
 
-/// Regression for the unmapped `CRC->POL` write (0x4002_3014) that reverted the
-/// Cortex-M memory-violation propagation work twice. Zephyr never calls
-/// `HAL_CRC_Init`; this Arduino/STM32Cube startup does.
-#[test]
-fn test_stm32g474re_arduino_serial_survival() {
-    run_survival_case(case_by_name("stm32g474re_arduino_serial"));
-}
+survival_gate!(
+    /// Regression for the unmapped `CRC->POL` write (0x4002_3014) that reverted the
+    /// Cortex-M memory-violation propagation work twice. Zephyr never calls
+    /// `HAL_CRC_Init`; this Arduino/STM32Cube startup does.
+    test_stm32g474re_arduino_serial_survival,
+    "stm32g474re_arduino_serial"
+);
 
-#[test]
-fn test_stm32h563_arduino_serial_survival() {
-    run_survival_case(case_by_name("stm32h563_arduino_serial"));
-}
+survival_gate!(
+    test_stm32h563_arduino_serial_survival,
+    "stm32h563_arduino_serial"
+);
 
-#[test]
-fn test_stm32l073_arduino_serial_survival() {
-    run_survival_case(case_by_name("stm32l073_arduino_serial"));
-}
+survival_gate!(
+    test_stm32l073_arduino_serial_survival,
+    "stm32l073_arduino_serial"
+);
 
-#[test]
-fn test_stm32l476_arduino_serial_survival() {
-    run_survival_case(case_by_name("stm32l476_arduino_serial"));
-}
+survival_gate!(
+    test_stm32l476_arduino_serial_survival,
+    "stm32l476_arduino_serial"
+);
 
-/// Regression for the unmapped `CRC->POL` write (0x4002_3014) on WB55 — see
-/// `test_stm32g474re_arduino_serial_survival`.
-#[test]
-fn test_stm32wb55_arduino_serial_survival() {
-    run_survival_case(case_by_name("stm32wb55_arduino_serial"));
-}
+survival_gate!(
+    /// Regression for the unmapped `CRC->POL` write (0x4002_3014) on WB55 — see
+    /// `test_stm32g474re_arduino_serial_survival`.
+    test_stm32wb55_arduino_serial_survival,
+    "stm32wb55_arduino_serial"
+);
 
-/// Regression for the unmapped `CRC->POL` write (0x4002_3014) on WBA52 — see
-/// `test_stm32g474re_arduino_serial_survival`.
-#[test]
-fn test_stm32wba52_arduino_serial_survival() {
-    run_survival_case(case_by_name("stm32wba52_arduino_serial"));
-}
+survival_gate!(
+    /// Regression for the unmapped `CRC->POL` write (0x4002_3014) on WBA52 — see
+    /// `test_stm32g474re_arduino_serial_survival`.
+    test_stm32wba52_arduino_serial_survival,
+    "stm32wba52_arduino_serial"
+);
 
-#[test]
-fn test_stm32u545_blinky_survival() {
-    run_survival_case(case_by_name("stm32u545_blinky"));
-}
+survival_gate!(test_stm32u545_blinky_survival, "stm32u545_blinky");
 
-#[test]
-fn test_stm32u575_arduino_serial_survival() {
-    run_survival_case(case_by_name("stm32u575_arduino_serial"));
-}
+survival_gate!(
+    test_stm32u575_arduino_serial_survival,
+    "stm32u575_arduino_serial"
+);
 
-#[test]
-fn test_atsamd21_nano33_smoke_survival() {
-    run_survival_case(case_by_name("atsamd21_nano33_smoke"));
-}
+survival_gate!(test_atsamd21_nano33_smoke_survival, "atsamd21_nano33_smoke");
 
-#[test]
-fn test_atsamd51_metro_m4_smoke_survival() {
-    run_survival_case(case_by_name("atsamd51_metro_m4_smoke"));
-}
+survival_gate!(
+    test_atsamd51_metro_m4_smoke_survival,
+    "atsamd51_metro_m4_smoke"
+);
 
-#[test]
-fn test_ra4m1_uno_r4_smoke_survival() {
-    run_survival_case(case_by_name("ra4m1_uno_r4_smoke"));
-}
+survival_gate!(test_ra4m1_uno_r4_smoke_survival, "ra4m1_uno_r4_smoke");
 
-#[test]
-fn test_imxrt1064_teensy41_smoke_survival() {
-    run_survival_case(case_by_name("imxrt1064_teensy41_smoke"));
-}
+survival_gate!(
+    test_imxrt1064_teensy41_smoke_survival,
+    "imxrt1064_teensy41_smoke"
+);
 
-#[test]
-fn test_stm32f746_discovery_smoke_survival() {
-    run_survival_case(case_by_name("stm32f746_discovery_smoke"));
-}
+survival_gate!(
+    test_stm32f746_discovery_smoke_survival,
+    "stm32f746_discovery_smoke"
+);
 
-#[test]
-fn test_nucleo_g071rb_smoke_survival() {
-    run_survival_case(case_by_name("nucleo_g071rb_smoke"));
-}
+survival_gate!(test_nucleo_g071rb_smoke_survival, "nucleo_g071rb_smoke");
 
 #[test]
 fn test_nucleo_l476rg_cubemx_hal_survival() {
@@ -2734,129 +2683,23 @@ fn test_nucleo_l476rg_arduino_serial_survival() {
     assert_uart_contains(&uart_bytes, case.expected_uart_output, case.name);
 }
 
-/// One-shot capture helper: runs the new round-8 ELF through the simulator
-/// and prints the UART trace to stdout so a human can audit it before locking
-/// the bytes into a survival case. Marked `#[ignore]` so it doesn't run in
-/// CI — invoke with `cargo test ... -- --ignored capture_l4periphs2`.
-#[test]
-#[ignore = "one-shot UART capture helper, not a gate: prints the trace for a human to audit and \
-            asserts nothing. Run with `cargo test -p labwired-core --test firmware_survival -- \
-            --ignored capture_l4periphs2`"]
-fn capture_l4periphs2_sim_output() {
-    let firmware = fixtures().join("nucleo-l476rg-l4periphs2.elf");
-    let (_pc, uart) =
-        run_cortex_m_firmware("stm32l476", "nucleo-l476rg", firmware, SURVIVAL_CYCLES);
-    let s = String::from_utf8_lossy(&uart);
-    eprintln!("--- BEGIN UART ---");
-    eprintln!("{}", s);
-    eprintln!("--- END UART ---");
-    eprintln!("escaped: {:?}", s);
-}
+survival_gate!(test_stm32f401cdu6_demo_survival, "stm32f401cdu6_demo");
 
-#[test]
-#[ignore = "one-shot UART capture helper for nucleo-l476rg-r12.elf, not a gate: prints the trace \
-            and asserts nothing. Run with `cargo test -p labwired-core --test firmware_survival \
-            -- --ignored capture_r12`"]
-fn capture_r12_sim_output() {
-    let firmware = fixtures().join("nucleo-l476rg-r12.elf");
-    let (_pc, uart) =
-        run_cortex_m_firmware("stm32l476", "nucleo-l476rg", firmware, SURVIVAL_CYCLES);
-    let s = String::from_utf8_lossy(&uart);
-    eprintln!("--- BEGIN UART ---");
-    eprintln!("{}", s);
-    eprintln!("--- END UART ---");
-    eprintln!("escaped: {:?}", s);
-}
+survival_gate!(test_rp2350_demo_survival, "rp2350_demo");
 
-#[test]
-#[ignore = "one-shot UART capture helper for nucleo-l476rg-r11.elf, not a gate: prints the trace \
-            and asserts nothing. Run with `cargo test -p labwired-core --test firmware_survival \
-            -- --ignored capture_r11`"]
-fn capture_r11_sim_output() {
-    let firmware = fixtures().join("nucleo-l476rg-r11.elf");
-    let (_pc, uart) =
-        run_cortex_m_firmware("stm32l476", "nucleo-l476rg", firmware, SURVIVAL_CYCLES);
-    let s = String::from_utf8_lossy(&uart);
-    eprintln!("--- BEGIN UART ---");
-    eprintln!("{}", s);
-    eprintln!("--- END UART ---");
-    eprintln!("escaped: {:?}", s);
-}
+survival_gate!(test_esp32_tier1_survival, "esp32_tier1");
 
-#[test]
-#[ignore = "one-shot UART capture helper for nucleo-l476rg-tim1-advanced.elf, not a gate: prints \
-            the trace and asserts nothing. Run with `cargo test -p labwired-core --test \
-            firmware_survival -- --ignored capture_tim1_advanced`"]
-fn capture_tim1_advanced_sim_output() {
-    let firmware = fixtures().join("nucleo-l476rg-tim1-advanced.elf");
-    let (_pc, uart) =
-        run_cortex_m_firmware("stm32l476", "nucleo-l476rg", firmware, SURVIVAL_CYCLES);
-    let s = String::from_utf8_lossy(&uart);
-    eprintln!("--- BEGIN UART ---");
-    eprintln!("{}", s);
-    eprintln!("--- END UART ---");
-    eprintln!("escaped: {:?}", s);
-}
+survival_gate!(test_esp32s3_tier1_survival, "esp32s3_tier1");
 
-#[test]
-#[ignore = "one-shot UART capture helper for nucleo-l476rg-cubemx-hal.elf, not a gate: prints the \
-            trace and final PC, and asserts nothing. Run with `cargo test -p labwired-core --test \
-            firmware_survival -- --ignored capture_cubemx_hal`"]
-fn capture_cubemx_hal_sim_output() {
-    let firmware = fixtures().join("nucleo-l476rg-cubemx-hal.elf");
-    let (pc, uart) =
-        run_cortex_m_firmware("stm32l476", "nucleo-l476rg", firmware, SURVIVAL_CYCLES * 4);
-    let s = String::from_utf8_lossy(&uart);
-    eprintln!("--- BEGIN UART (final PC={:#010x}) ---", pc);
-    eprintln!("{}", s);
-    eprintln!("--- END UART ---");
-    eprintln!("escaped: {:?}", s);
-}
+survival_gate!(test_esp32s3_zero_tier1_survival, "esp32s3_zero_tier1");
 
-#[test]
-fn test_stm32f401cdu6_demo_survival() {
-    run_survival_case(case_by_name("stm32f401cdu6_demo"));
-}
+survival_gate!(test_stm32f411_tier1_survival, "stm32f411_tier1");
 
-#[test]
-fn test_rp2350_demo_survival() {
-    run_survival_case(case_by_name("rp2350_demo"));
-}
+survival_gate!(test_stm32f405_tier1_survival, "stm32f405_tier1");
 
-#[test]
-fn test_esp32_tier1_survival() {
-    run_survival_case(case_by_name("esp32_tier1"));
-}
+survival_gate!(test_stm32f767_tier1_survival, "stm32f767_tier1");
 
-#[test]
-fn test_esp32s3_tier1_survival() {
-    run_survival_case(case_by_name("esp32s3_tier1"));
-}
-
-#[test]
-fn test_esp32s3_zero_tier1_survival() {
-    run_survival_case(case_by_name("esp32s3_zero_tier1"));
-}
-
-#[test]
-fn test_stm32f411_tier1_survival() {
-    run_survival_case(case_by_name("stm32f411_tier1"));
-}
-
-#[test]
-fn test_stm32f405_tier1_survival() {
-    run_survival_case(case_by_name("stm32f405_tier1"));
-}
-
-#[test]
-fn test_stm32f767_tier1_survival() {
-    run_survival_case(case_by_name("stm32f767_tier1"));
-}
-
-#[test]
-fn test_stm32h735_tier1_survival() {
-    run_survival_case(case_by_name("stm32h735_tier1"));
-}
+survival_gate!(test_stm32h735_tier1_survival, "stm32h735_tier1");
 
 #[test]
 fn session_cases_carry_no_pc_ranges() {

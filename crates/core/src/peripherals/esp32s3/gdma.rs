@@ -84,7 +84,7 @@
 //! path consults `IN_PERI_SEL` / `OUT_PERI_SEL` to decide how to proceed:
 //!
 //! **Coupled set — real byte movement** (`Uhci0` = UART DMA, `Spi2`,
-//! `Spi3`, `I2s0`, `I2s1`, plus `LcdCam` on the **OUT** direction only):
+//! `Spi3`, `I2s0`, `I2s1`, plus `LcdCam` in both directions):
 //! the direction is marked `pending_coupled`;
 //! `needs_bus_tick` returns `true`; byte movement runs inside
 //! `tick_with_bus` via the per-peripheral pumps. For a coupled direction
@@ -93,18 +93,17 @@
 //! visibly stalls rather than silently auto-completing.
 //!
 //! **Fallback set — auto-complete, no byte movement** (explicitly: `Aes`,
-//! `Sha`, `AdcDac`, `Rmt`, `LcdCam`, `Unknown`, and the reset / unbound
-//! value `0x3F`): the legacy behaviour is preserved — writing
-//! `OUTLINK_START` latches `OUT_EOF + OUT_TOTAL_EOF + OUT_DONE`; writing
-//! `INLINK_START` latches `IN_SUC_EOF + IN_DONE` — so firmware polling EOF
-//! makes forward progress. Firmware that never writes `PERI_SEL` gets
-//! `0x3F` (unbound → `Unknown`) and falls through here, preserving full
-//! backwards compatibility. `LcdCam` is in this set for the **IN**
-//! direction only (camera RX is still unmodelled); its **OUT** direction
-//! is coupled and streams pixel words into the LCD_CAM i80 master — see
-//! `pump_lcd`. With no `lcd_cam` peripheral on the bus that pump falls
-//! back to auto-complete, so a chip config without the block behaves
-//! exactly as before.
+//! `Sha`, `AdcDac`, `Rmt`, `Unknown`, and the reset / unbound value
+//! `0x3F`): the legacy behaviour is preserved — writing `OUTLINK_START`
+//! latches `OUT_EOF + OUT_TOTAL_EOF + OUT_DONE`; writing `INLINK_START`
+//! latches `IN_SUC_EOF + IN_DONE` — so firmware polling EOF makes forward
+//! progress. Firmware that never writes `PERI_SEL` gets `0x3F` (unbound →
+//! `Unknown`) and falls through here, preserving full backwards
+//! compatibility. `LcdCam`'s **OUT** direction streams pixel words into the
+//! LCD_CAM i80 master (`pump_lcd_cam`); its **IN** direction receives the
+//! attached camera sensor's frames from the CAM slave (`pump_lcd_cam`). With no
+//! `lcd_cam` peripheral on the bus both pumps fall back to auto-complete, so
+//! a chip config without the block behaves exactly as before.
 //!
 //! ## Coupled-mode data movement — shared mechanics
 //!
@@ -240,6 +239,13 @@ const OUT_LINK_PARK_BIT: u32 = 1 << 23;
 /// MEM_TRANS_EN (bit 4): selects memory-to-memory mode on this channel.
 const MEM_TRANS_EN_BIT: u32 = 1 << 4;
 
+// ── IN_CONF1 bit positions ──
+/// IN_CHECK_OWNER (bit 12, per the ESP32-S3 SVD `IN_CONF1_CHn`): when clear
+/// the engine fills RX descriptors without looking at their owner bit. The
+/// camera driver clears it and runs a circular ring, so the second lap
+/// meets descriptors whose owner the first lap already returned to the CPU.
+const IN_CHECK_OWNER_BIT: u32 = 1 << 12;
+
 // ── OUT_CONF0 bit positions ──
 /// OUT_AUTO_WRBACK (bit 2): when set, the engine clears the owner bit on
 /// each fully consumed OUT (TX) descriptor; when clear (the reset value)
@@ -278,7 +284,8 @@ enum DmaPeripheral {
     I2s0,
     /// I2S1 TX/RX (sel = 4)
     I2s1,
-    /// LCD/camera controller (sel = 5) — deferred, fallback behaviour
+    /// LCD/camera controller (sel = 5) — OUT: i80 pixels (`pump_lcd_cam`);
+    /// IN: camera frames (`pump_lcd_cam`)
     LcdCam,
     /// AES accelerator (sel = 6) — fallback auto-complete
     Aes,
@@ -397,6 +404,14 @@ const LCD_CAM_S3_NAME: &str = "lcd_cam";
 /// exists only to keep one tick's work finite.
 const LCD_BYTES_PER_TICK: usize = 4096;
 
+/// How long the camera pump waits before asking LCD_CAM again when capture is
+/// stopped (≈10 µs at 240 MHz). Restarting capture is an LCD_CAM register
+/// write the pump cannot observe, so it re-polls instead of sleeping forever.
+const CAM_IDLE_POLL_CYCLES: u64 = 2_400;
+
+/// Event token for the camera pump's scheduler wake-ups.
+const CAM_WAKE_TOKEN: u32 = 1;
+
 /// Maximum bytes transferred per `tick_with_bus` call for a coupled channel.
 ///
 /// Bounds latency per tick to a realistic burst size. 64 bytes matches the
@@ -425,13 +440,19 @@ struct Desc {
 impl Desc {
     /// Read and decode the three descriptor words at `addr`.
     fn read(bus: &mut dyn Bus, addr: u64) -> Self {
-        let dw0 = bus.read_u32(addr).unwrap_or(0);
+        let (dw0, buf, next) = crate::with_device_write_bypass(bus, |bus| {
+            (
+                bus.read_u32(addr).unwrap_or(0),
+                bus.read_u32(addr + 4).unwrap_or(0) as u64,
+                bus.read_u32(addr + 8).unwrap_or(0) as u64,
+            )
+        });
         Self {
             dw0,
             len: (dw0 >> 12) & 0xFFF,
             size: dw0 & 0xFFF,
-            buf: bus.read_u32(addr + 4).unwrap_or(0) as u64,
-            next: bus.read_u32(addr + 8).unwrap_or(0) as u64,
+            buf,
+            next,
         }
     }
 
@@ -459,7 +480,7 @@ impl Desc {
             Some(n) => (self.dw0 & !(DESC_OWNER_BIT | DESC_LEN_MASK)) | (n << 12),
             None => self.dw0 & !DESC_OWNER_BIT,
         };
-        let _ = bus.write_u32(addr, dw0);
+        let _ = crate::with_device_write_bypass(bus, |bus| bus.write_u32(addr, dw0));
     }
 }
 
@@ -540,6 +561,15 @@ pub struct Esp32s3Gdma {
     /// IN_CHn = base + n; OUT_CHn = base + 5 + n.
     dma_in_ch0_source: u32,
 
+    /// Whether LCD_CAM was last told an IN chain is armed for it (see
+    /// `pump_lcd_cam`). Kept so the pump runs once more to disarm after a stop.
+    cam_rx_armed: bool,
+    /// Earliest cycle at which the camera pump has bytes to move; lets the
+    /// pump skip the peripheral swap on ticks where nothing has arrived.
+    cam_next_poll: u64,
+    /// A camera-pump wake-up is armed with the scheduler.
+    cam_scheduled: bool,
+
     /// Bus-published cycle clock (walk-free level export).
     clock: Option<CycleClock>,
 }
@@ -553,6 +583,9 @@ impl Esp32s3Gdma {
             channels: [Channel::default(); NUM_CHANNELS],
             misc_conf: 0,
             dma_in_ch0_source,
+            cam_rx_armed: false,
+            cam_next_poll: 0,
+            cam_scheduled: false,
 
             clock: None,
         }
@@ -643,6 +676,17 @@ impl Esp32s3Gdma {
                     } else {
                         // Peripheral-coupled mode: route by PERI_SEL.
                         match DmaPeripheral::from_sel(c.rx.peri_sel) {
+                            // LCD_CAM IN = the camera slave's receive path;
+                            // bytes arrive from the attached sensor via
+                            // `pump_lcd_cam`. With no LCD_CAM on the bus the pump
+                            // auto-completes, as before.
+                            DmaPeripheral::LcdCam => {
+                                c.rx.pending_coupled = true;
+                                c.rx.coupled_desc_ptr = Self::full_desc_addr(c.rx.link_addr);
+                                c.rx.coupled_buf_offset = 0;
+                                c.rx.coupled_bytes_moved = 0;
+                                self.cam_next_poll = 0;
+                            }
                             p if p.is_coupled() => {
                                 // Coupled set (SPI2/3, UHCI0, I2S0/1): mark
                                 // pending — byte movement runs in tick_with_bus.
@@ -665,11 +709,18 @@ impl Esp32s3Gdma {
                         }
                     }
                 }
-                // STOP: not modelled — in-flight coupled transfers run to
-                // completion (or stall visibly). SPI-side aborts are handled
-                // by SPI_SOFT_RESET clearing the pending transaction (the
-                // stalled GDMA direction then stays visibly pending).
-                let _ = IN_LINK_STOP_BIT;
+                // STOP ends a camera receive (the stream never drains on its
+                // own; `ll_cam_stop` stops the link at every frame end).
+                // Other coupled transfers run to completion (or stall
+                // visibly); SPI-side aborts are handled by SPI_SOFT_RESET
+                // clearing the pending transaction.
+                if value & IN_LINK_STOP_BIT != 0
+                    && DmaPeripheral::from_sel(c.rx.peri_sel) == DmaPeripheral::LcdCam
+                {
+                    c.rx.pending_coupled = false;
+                    c.rx.coupled_desc_ptr = 0;
+                    c.rx.coupled_buf_offset = 0;
+                }
             }
             IN_PERI_SEL => c.rx.peri_sel = value & PERI_SEL_MASK,
             OUT_CONF0 => c.tx.conf0 = value,
@@ -694,11 +745,8 @@ impl Esp32s3Gdma {
                     } else {
                         // Peripheral-coupled mode: route by PERI_SEL.
                         match DmaPeripheral::from_sel(c.tx.peri_sel) {
-                            // LCD_CAM couples on the OUT direction only: the
-                            // i80 / RGB master pulls pixel words out of this
-                            // chain. The IN direction (sel 5 = camera RX) is
-                            // still unmodelled and keeps the auto-complete
-                            // fallback below.
+                            // LCD_CAM OUT: the i80 / RGB master pulls pixel
+                            // words out of this chain (`pump_lcd_cam`).
                             DmaPeripheral::LcdCam => {
                                 c.tx.pending_coupled = true;
                                 c.tx.coupled_desc_ptr = Self::full_desc_addr(c.tx.link_addr);
@@ -759,9 +807,11 @@ impl Esp32s3Gdma {
                 break;
             }
 
-            for i in 0..d.len {
-                bytes.push(bus.read_u8(d.buf + i as u64).unwrap_or(0));
-            }
+            crate::with_device_write_bypass(bus, |bus| {
+                for i in 0..d.len {
+                    bytes.push(bus.read_u8(d.buf + i as u64).unwrap_or(0));
+                }
+            });
 
             // Descriptor returned to CPU (owner cleared) — only when the
             // channel opted in via OUT_AUTO_WRBACK.
@@ -798,9 +848,11 @@ impl Esp32s3Gdma {
             }
 
             let to_write = remaining.len().min(d.size as usize);
-            for (i, &b) in remaining[..to_write].iter().enumerate() {
-                let _ = bus.write_u8(d.buf + i as u64, b);
-            }
+            crate::with_device_write_bypass(bus, |bus| {
+                for (i, &b) in remaining[..to_write].iter().enumerate() {
+                    let _ = bus.write_u8(d.buf + i as u64, b);
+                }
+            });
             remaining = &remaining[to_write..];
 
             // Owner bit cleared, length field set to bytes written.
@@ -871,9 +923,8 @@ impl Esp32s3Gdma {
             let to_send = remaining.min(budget);
 
             for i in 0..to_send {
-                let byte = bus
-                    .read_u8(d.buf + (dir.coupled_buf_offset as u64) + i as u64)
-                    .unwrap_or(0);
+                let at = d.buf + (dir.coupled_buf_offset as u64) + i as u64;
+                let byte = crate::with_device_write_bypass(bus, |bus| bus.read_u8(at)).unwrap_or(0);
                 let _ = bus.write_u8(UART0_FIFO_ADDR, byte);
             }
             budget -= to_send;
@@ -952,7 +1003,8 @@ impl Esp32s3Gdma {
 
             for i in 0..to_recv {
                 let byte = bus.read_u8(UART0_FIFO_ADDR).unwrap_or(0);
-                let _ = bus.write_u8(d.buf + (dir.coupled_buf_offset as u64) + i as u64, byte);
+                let at = d.buf + (dir.coupled_buf_offset as u64) + i as u64;
+                let _ = crate::with_device_write_bypass(bus, |bus| bus.write_u8(at, byte));
             }
             budget -= to_recv;
             rx_avail -= to_recv;
@@ -1037,12 +1089,14 @@ impl Esp32s3Gdma {
 
             let remaining = d.len.saturating_sub(dir.coupled_buf_offset) as usize;
             let to_read = remaining.min(budget - out.len());
-            for i in 0..to_read {
-                out.push(
-                    bus.read_u8(d.buf + dir.coupled_buf_offset as u64 + i as u64)
-                        .unwrap_or(0),
-                );
-            }
+            crate::with_device_write_bypass(bus, |bus| {
+                for i in 0..to_read {
+                    out.push(
+                        bus.read_u8(d.buf + dir.coupled_buf_offset as u64 + i as u64)
+                            .unwrap_or(0),
+                    );
+                }
+            });
             dir.coupled_buf_offset += to_read as u32;
 
             if dir.coupled_buf_offset >= d.len {
@@ -1069,7 +1123,12 @@ impl Esp32s3Gdma {
     /// Bytes beyond the end of the chain are dropped (the chain was
     /// under-provisioned; real silicon raises `IN_DSCR_EMPTY` here — a
     /// documented simplification, see the module doc).
-    fn coupled_in_write(dir: &mut DmaDir, bus: &mut dyn Bus, bytes: &[u8]) {
+    ///
+    /// `check_owner` is the channel's `IN_CHECK_OWNER`: with it clear a
+    /// CPU-owned descriptor is filled anyway, as silicon does. The UART, SPI
+    /// and I2S pumps pass `true` (their drivers hand over every descriptor
+    /// owned, so the distinction never arises there).
+    fn coupled_in_write(dir: &mut DmaDir, bus: &mut dyn Bus, bytes: &[u8], check_owner: bool) {
         let mut written = 0usize;
         // Hop bound guards against corrupted (e.g. circular) chains.
         for _ in 0..MAX_DESC_CHAIN {
@@ -1081,19 +1140,21 @@ impl Esp32s3Gdma {
                 break;
             }
             let d = Desc::read(bus, addr);
-            if !d.dma_owned() {
+            if check_owner && !d.dma_owned() {
                 dir.coupled_desc_ptr = 0;
                 break;
             }
 
             let cap = d.size.saturating_sub(dir.coupled_buf_offset) as usize;
             let n = cap.min(bytes.len() - written);
-            for i in 0..n {
-                let _ = bus.write_u8(
-                    d.buf + dir.coupled_buf_offset as u64 + i as u64,
-                    bytes[written + i],
-                );
-            }
+            crate::with_device_write_bypass(bus, |bus| {
+                for i in 0..n {
+                    let _ = bus.write_u8(
+                        d.buf + dir.coupled_buf_offset as u64 + i as u64,
+                        bytes[written + i],
+                    );
+                }
+            });
             written += n;
             dir.coupled_buf_offset += n as u32;
 
@@ -1213,7 +1274,7 @@ impl Esp32s3Gdma {
             let miso = spi.dma_transfer(&mosi);
             if let Some(i) = rx_idx {
                 if pending.rx_ena {
-                    Self::coupled_in_write(&mut self.channels[i].rx, &mut *sys_bus, &miso);
+                    Self::coupled_in_write(&mut self.channels[i].rx, &mut *sys_bus, &miso, true);
                 }
             }
 
@@ -1350,7 +1411,7 @@ impl Esp32s3Gdma {
                     };
                     let bytes = i2s.dma_pop_rx(COUPLED_BYTES_PER_TICK.min(to_eof));
                     if !bytes.is_empty() {
-                        Self::coupled_in_write(rx, &mut *sys_bus, &bytes);
+                        Self::coupled_in_write(rx, &mut *sys_bus, &bytes, true);
                         rx.coupled_bytes_moved += bytes.len() as u32;
                     }
                     let eof_reached = eof_num != 0 && rx.coupled_bytes_moved >= eof_num;
@@ -1369,7 +1430,104 @@ impl Esp32s3Gdma {
         sys_bus.peripherals[i2s_idx].dev = i2s_dev;
     }
 
-    /// Service GDMA→LCD_CAM pixel streaming (`PERI_SEL == 5`, OUT direction).
+    /// Service both LCD_CAM directions (`PERI_SEL == 5`) in one lend of the
+    /// controller: the i80 pixel stream out ([`Self::lcd_tx_step`]) and the
+    /// camera stream in ([`Self::cam_rx_step`]). One lend, one downcast, for
+    /// both: the two directions are halves of the same peripheral.
+    ///
+    /// **No LCD_CAM on the bus** (a chip config without it, or a harness):
+    /// both directions auto-complete as they did before LCD_CAM coupling
+    /// existed, so firmware cannot hang waiting for a peripheral that was never
+    /// wired.
+    ///
+    /// `with_tx` / `with_cam` select the directions this call services: the
+    /// bus-tick pass drives TX (and, in a non-scheduler build, the camera);
+    /// under the event scheduler the camera is driven from this model's own
+    /// wake-ups instead (see [`Self::cam_rx_pending`]).
+    fn pump_lcd_cam(&mut self, bus: &mut dyn Bus, with_tx: bool, with_cam: bool) {
+        use crate::bus::SystemBus;
+        use crate::peripherals::esp32s3::lcd_cam::Esp32s3LcdCam;
+        use crate::peripherals::stub::StubPeripheral;
+
+        let tx_idx = if with_tx {
+            self.channels.iter().position(|c| {
+                c.tx.pending_coupled
+                    && DmaPeripheral::from_sel(c.tx.peri_sel) == DmaPeripheral::LcdCam
+            })
+        } else {
+            None
+        };
+        let rx_idx = self.cam_rx_index();
+        // The camera side is visited to arm, to disarm after a stop, and
+        // whenever bytes can have arrived — not on every tick in between, which
+        // would cost a lend per CPU cycle for a stream that delivers a byte
+        // every dozen.
+        let cam_due = with_cam
+            && match rx_idx {
+                None => self.cam_rx_armed,
+                Some(i) => {
+                    let now = self.clock.as_ref().map_or(0, CycleClock::now);
+                    !self.cam_rx_armed
+                        || (!Self::eof_unacked(&self.channels[i].rx) && now >= self.cam_next_poll)
+                }
+            };
+        if tx_idx.is_none() && !cam_due {
+            return;
+        }
+
+        let Some(sys_bus) = bus.as_any_mut().and_then(|a| a.downcast_mut::<SystemBus>()) else {
+            return;
+        };
+        let Some(lcd_idx) = sys_bus.find_peripheral_index_by_name(LCD_CAM_S3_NAME) else {
+            self.lcd_cam_auto_complete(tx_idx, rx_idx);
+            return;
+        };
+
+        // Lend the LCD_CAM out from behind a stub (the `pump_spi` dance) so we
+        // can hold `&mut` to it while descriptor reads still route through the
+        // bus.
+        let placeholder: Box<dyn Peripheral> = Box::new(StubPeripheral::new(0));
+        let mut lcd_dev = std::mem::replace(&mut sys_bus.peripherals[lcd_idx].dev, placeholder);
+
+        match lcd_dev
+            .as_any_mut()
+            .and_then(|a| a.downcast_mut::<Esp32s3LcdCam>())
+        {
+            Some(lcd) => {
+                if let Some(t) = tx_idx {
+                    self.lcd_tx_step(lcd, t, &mut *sys_bus);
+                }
+                if cam_due {
+                    self.cam_rx_step(lcd, rx_idx, &mut *sys_bus);
+                }
+            }
+            None => self.lcd_cam_auto_complete(tx_idx, rx_idx),
+        }
+
+        sys_bus.peripherals[lcd_idx].dev = lcd_dev;
+    }
+
+    /// No LCD_CAM model to talk to: complete whatever was started, as the
+    /// fallback set does.
+    fn lcd_cam_auto_complete(&mut self, tx_idx: Option<usize>, rx_idx: Option<usize>) {
+        if let Some(t) = tx_idx {
+            let tx = &mut self.channels[t].tx;
+            tx.int_raw |= OUT_EOF_BIT | OUT_TOTAL_EOF_BIT | OUT_DONE_BIT;
+            tx.pending_coupled = false;
+            tx.coupled_desc_ptr = 0;
+            tx.coupled_buf_offset = 0;
+        }
+        if let Some(r) = rx_idx {
+            let rx = &mut self.channels[r].rx;
+            rx.int_raw |= IN_SUC_EOF_BIT | IN_DONE_BIT;
+            rx.pending_coupled = false;
+            rx.coupled_desc_ptr = 0;
+            rx.coupled_buf_offset = 0;
+        }
+        self.cam_rx_armed = false;
+    }
+
+    /// GDMA→LCD_CAM pixel streaming (OUT direction).
     ///
     /// This is the path an `esp_lcd` i80 transaction takes: the driver mounts
     /// the payload on the outlink chain and writes `OUT_LINK.START`
@@ -1388,78 +1546,160 @@ impl Esp32s3Gdma {
     /// The walk stops at `suc_eof` as well as at `next == 0` / a CPU-owned
     /// descriptor: the i80 driver keeps a fixed descriptor pool and rewrites
     /// only the leading nodes per transfer (see [`DESC_SUC_EOF_BIT`]).
-    ///
-    /// **No LCD_CAM on the bus** (a chip config without it, or a harness):
-    /// the transfer auto-completes as it did before LCD coupling existed, so
-    /// firmware cannot hang waiting for a peripheral that was never wired.
-    fn pump_lcd(&mut self, bus: &mut dyn Bus) {
-        use crate::bus::SystemBus;
-        use crate::peripherals::esp32s3::lcd_cam::Esp32s3LcdCam;
-        use crate::peripherals::stub::StubPeripheral;
+    fn lcd_tx_step(
+        &mut self,
+        lcd: &mut crate::peripherals::esp32s3::lcd_cam::Esp32s3LcdCam,
+        tx_idx: usize,
+        bus: &mut dyn Bus,
+    ) {
+        // Tell the LCD a payload chain is standing by. Must happen even while
+        // it stalls below: it is what makes the LCD hold TRANS_DONE back once
+        // LCD_START lands.
+        lcd.dma_arm();
 
-        let Some(tx_idx) = self.channels.iter().position(|c| {
-            c.tx.pending_coupled && DmaPeripheral::from_sel(c.tx.peri_sel) == DmaPeripheral::LcdCam
-        }) else {
+        if !lcd.dma_wants_data() {
+            // Transaction not started yet (or has no DOUT phase): hold the
+            // chain, revisit next tick.
             return;
-        };
-
-        let Some(sys_bus) = bus.as_any_mut().and_then(|a| a.downcast_mut::<SystemBus>()) else {
-            return;
-        };
-        let complete = |tx: &mut DmaDir| {
-            tx.int_raw |= OUT_EOF_BIT | OUT_TOTAL_EOF_BIT | OUT_DONE_BIT;
-            tx.pending_coupled = false;
-            tx.coupled_desc_ptr = 0;
-            tx.coupled_buf_offset = 0;
-        };
-        let Some(lcd_idx) = sys_bus.find_peripheral_index_by_name(LCD_CAM_S3_NAME) else {
-            complete(&mut self.channels[tx_idx].tx);
-            return;
-        };
-
-        // Lend the LCD_CAM out from behind a stub (the `pump_spi` dance) so we
-        // can hold `&mut` to it while descriptor reads still route through the
-        // bus.
-        let placeholder: Box<dyn Peripheral> = Box::new(StubPeripheral::new(0));
-        let mut lcd_dev = std::mem::replace(&mut sys_bus.peripherals[lcd_idx].dev, placeholder);
-
-        'work: {
-            let Some(lcd) = lcd_dev
-                .as_any_mut()
-                .and_then(|a| a.downcast_mut::<Esp32s3LcdCam>())
-            else {
-                complete(&mut self.channels[tx_idx].tx);
-                break 'work;
-            };
-
-            // Tell the LCD a payload chain is standing by. Must happen even
-            // while it stalls below: it is what makes the LCD hold TRANS_DONE
-            // back once LCD_START lands.
-            lcd.dma_arm();
-
-            if !lcd.dma_wants_data() {
-                // Transaction not started yet (or has no DOUT phase): hold the
-                // chain, revisit next tick.
-                break 'work;
-            }
-
-            let bytes = Self::coupled_out_collect(
-                &mut self.channels[tx_idx].tx,
-                &mut *sys_bus,
-                LCD_BYTES_PER_TICK,
-                true,
-            );
-            lcd.dma_push_tx(&bytes);
-
-            if self.channels[tx_idx].tx.coupled_desc_ptr == 0 {
-                // Chain drained (end-of-list, suc_eof, or a CPU-owned
-                // descriptor): the DOUT phase is over.
-                lcd.dma_finish();
-                complete(&mut self.channels[tx_idx].tx);
-            }
         }
 
-        sys_bus.peripherals[lcd_idx].dev = lcd_dev;
+        let bytes =
+            Self::coupled_out_collect(&mut self.channels[tx_idx].tx, bus, LCD_BYTES_PER_TICK, true);
+        lcd.dma_push_tx(&bytes);
+
+        let tx = &mut self.channels[tx_idx].tx;
+        if tx.coupled_desc_ptr == 0 {
+            // Chain drained (end-of-list, suc_eof, or a CPU-owned descriptor):
+            // the DOUT phase is over.
+            lcd.dma_finish();
+            tx.int_raw |= OUT_EOF_BIT | OUT_TOTAL_EOF_BIT | OUT_DONE_BIT;
+            tx.pending_coupled = false;
+            tx.coupled_buf_offset = 0;
+        }
+    }
+
+    /// The channel whose IN direction is receiving from LCD_CAM, if any.
+    fn cam_rx_index(&self) -> Option<usize> {
+        self.channels.iter().position(|c| {
+            c.rx.pending_coupled && DmaPeripheral::from_sel(c.rx.peri_sel) == DmaPeripheral::LcdCam
+        })
+    }
+
+    /// The camera receive needs servicing: a link is started, or the pump
+    /// still has to tell LCD_CAM that capture stopped.
+    ///
+    /// Under the event scheduler this is deliberately NOT part of
+    /// `needs_bus_tick`. A camera link stays started for as long as the driver
+    /// captures, and a bus-tick member is visited at every machine boundary,
+    /// which keeps the CPU from batching at all: the ESP32-S3 ran about five
+    /// times slower per instruction the moment frames started flowing. The
+    /// stream's next byte burst has a known cycle, so the pump runs from this
+    /// model's own wake-up at that cycle instead (`take_scheduled_events` /
+    /// `on_event`).
+    fn cam_rx_pending(&self) -> bool {
+        self.cam_rx_armed || self.cam_rx_index().is_some()
+    }
+
+    /// Cycles until the camera pump should run again, or `None` when it has
+    /// nothing to do until a register write wakes it (an unacknowledged EOF
+    /// waits for the ISR's `INT_CLR`; a stopped link for the next start).
+    fn cam_next_wake(&self) -> Option<u64> {
+        if !self.cam_rx_pending() {
+            return None;
+        }
+        if let Some(i) = self.cam_rx_index() {
+            if self.cam_rx_armed && Self::eof_unacked(&self.channels[i].rx) {
+                return None;
+            }
+        }
+        let now = self.clock.as_ref().map_or(0, CycleClock::now);
+        Some(self.cam_next_poll.saturating_sub(now).max(1))
+    }
+
+    /// `IN_SUC_EOF` latched and enabled: the CPU has an EOF to acknowledge.
+    fn eof_unacked(rx: &DmaDir) -> bool {
+        rx.int_ena & IN_SUC_EOF_BIT != 0 && rx.int_raw & IN_SUC_EOF_BIT != 0
+    }
+
+    /// LCD_CAM's CAM half → the IN descriptor chain (camera receive).
+    ///
+    /// This is the path `esp32-camera`'s `ll_cam` drives on the S3: a ring of
+    /// RX descriptors over an internal DMA buffer, `IN_CHECK_OWNER` clear, the
+    /// link started by `ll_cam_start` and stopped by `ll_cam_stop` at every
+    /// frame end. Each visit asks LCD_CAM for the bytes the sensor has put on
+    /// the pins since the last pull ([`Esp32s3LcdCam::cam_rx_pull`]), writes
+    /// them into the chain, and latches `IN_SUC_EOF` when LCD_CAM says an EOF
+    /// block is complete, closing the current descriptor with its received
+    /// length and `suc_eof` set.
+    ///
+    /// The stream never drains by itself, so unlike the other pumps there is
+    /// no completion: the direction stays pending until the driver stops the
+    /// link.
+    ///
+    /// **Back-pressure on an unacknowledged EOF.** While `IN_SUC_EOF` is both
+    /// enabled and still raw-pending, no bytes move. On silicon the CPU always
+    /// acknowledges an EOF long before the next one (a half-buffer takes
+    /// thousands of PCLKs), and the driver counts EOF *events*; in the twin an
+    /// idle fast-forward can make two EOFs due in one tick, and the sticky RAW
+    /// bit would merge them into one interrupt, the driver would count one
+    /// half-buffer too few, and drop the frame as `FB-SIZE` mismatched.
+    /// A consumer that polls with the interrupt disabled is not held back.
+    ///
+    /// [`Esp32s3LcdCam::cam_rx_pull`]: crate::peripherals::esp32s3::lcd_cam::Esp32s3LcdCam::cam_rx_pull
+    fn cam_rx_step(
+        &mut self,
+        lcd: &mut crate::peripherals::esp32s3::lcd_cam::Esp32s3LcdCam,
+        rx_idx: Option<usize>,
+        bus: &mut dyn Bus,
+    ) {
+        lcd.set_cam_dma_armed(rx_idx.is_some());
+        self.cam_rx_armed = rx_idx.is_some();
+        let Some(i) = rx_idx else {
+            return;
+        };
+        let rx = &mut self.channels[i].rx;
+        if Self::eof_unacked(rx) {
+            return;
+        }
+        let check_owner = rx.conf1 & IN_CHECK_OWNER_BIT != 0;
+        let pulled = lcd.cam_rx_pull(LCD_BYTES_PER_TICK);
+        if !pulled.bytes.is_empty() {
+            Self::coupled_in_write(rx, bus, &pulled.bytes, check_owner);
+            rx.coupled_bytes_moved = rx
+                .coupled_bytes_moved
+                .wrapping_add(pulled.bytes.len() as u32);
+        }
+        if pulled.eof {
+            Self::close_in_descriptor(rx, bus);
+            rx.int_raw |= IN_SUC_EOF_BIT;
+        }
+        let now = self.clock.as_ref().map_or(0, CycleClock::now);
+        self.cam_next_poll = if pulled.eof {
+            0
+        } else {
+            // Capture stopped or no sensor: nothing will arrive until the
+            // driver restarts it, but that restart is an LCD_CAM write the
+            // pump cannot see, so look again shortly.
+            pulled.next_ready.unwrap_or(now + CAM_IDLE_POLL_CYCLES)
+        };
+    }
+
+    /// End the current IN descriptor at an `in_suc_eof`: write back owner=0,
+    /// the bytes it received and `suc_eof`, and move on to the next one. At a
+    /// descriptor boundary there is nothing to close (the filled descriptor
+    /// was already written back by [`Self::coupled_in_write`]).
+    fn close_in_descriptor(dir: &mut DmaDir, bus: &mut dyn Bus) {
+        if dir.coupled_desc_ptr == 0 || dir.coupled_buf_offset == 0 {
+            return;
+        }
+        let addr = dir.coupled_desc_ptr;
+        let d = Desc::read(bus, addr);
+        let dw0 = (d.dw0 & !(DESC_OWNER_BIT | DESC_LEN_MASK))
+            | (dir.coupled_buf_offset << 12)
+            | DESC_SUC_EOF_BIT;
+        let _ = crate::with_device_write_bypass(bus, |bus| bus.write_u32(addr, dw0));
+        dir.coupled_buf_offset = 0;
+        dir.coupled_desc_ptr = d.next;
     }
 
     /// Execute all pending descriptor walks and coupled-mode ticks.
@@ -1495,7 +1735,8 @@ impl Esp32s3Gdma {
         self.pump_spi(bus, DmaPeripheral::Spi3, SPI3_S3_NAME);
         self.pump_i2s(bus, DmaPeripheral::I2s0, I2S0_S3_NAME);
         self.pump_i2s(bus, DmaPeripheral::I2s1, I2S1_S3_NAME);
-        self.pump_lcd(bus);
+        let cam_from_bus_tick = !self.uses_scheduler();
+        self.pump_lcd_cam(bus, true, cam_from_bus_tick);
 
         for (ch_idx, c) in self.channels.iter_mut().enumerate() {
             // ── UHCI0 (UART) coupled OUT (TX) ────────────────────────────
@@ -1608,13 +1849,61 @@ impl Peripheral for Esp32s3Gdma {
     /// `tick_with_bus` so the peripheral pumps (UART, SPI2/3, I2S0/1) can
     /// make progress. Cleared per-direction when the transfer completes.
     fn needs_bus_tick(&self) -> bool {
-        self.channels
-            .iter()
-            .any(|c| c.pending_m2m || c.rx.pending_coupled || c.tx.pending_coupled)
+        // The camera receive is event-driven under the scheduler (see
+        // `cam_rx_pending`); without one it rides this pass, and
+        // `cam_rx_armed` keeps one more pass alive after a link stop so the
+        // pump can tell LCD_CAM nobody is capturing any more.
+        let cam_on_bus_tick = !self.uses_scheduler();
+        (cam_on_bus_tick && self.cam_rx_armed)
+            || self.channels.iter().any(|c| {
+                let cam_rx = c.rx.pending_coupled
+                    && DmaPeripheral::from_sel(c.rx.peri_sel) == DmaPeripheral::LcdCam;
+                c.pending_m2m
+                    || c.tx.pending_coupled
+                    || (c.rx.pending_coupled && (cam_on_bus_tick || !cam_rx))
+            })
     }
 
     fn tick_with_bus(&mut self, bus: &mut dyn Bus) {
         Esp32s3Gdma::do_tick_with_bus(self, bus);
+    }
+
+    /// Arms the camera pump's wake-up. Harvested after every MMIO write to
+    /// this block, which covers each moment the camera can become due: the
+    /// link start and stop, and the ISR's `INT_CLR` that releases an EOF.
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        if !self.uses_scheduler() || self.cam_scheduled {
+            return Vec::new();
+        }
+        match self.cam_next_wake() {
+            Some(delay) => {
+                self.cam_scheduled = true;
+                vec![(delay, CAM_WAKE_TOKEN)]
+            }
+            None => Vec::new(),
+        }
+    }
+
+    fn on_event(
+        &mut self,
+        event_token: u32,
+        _sched: &mut crate::sched::EventScheduler,
+        bus: &mut dyn Bus,
+    ) -> crate::sched::EventResult {
+        if event_token != CAM_WAKE_TOKEN {
+            return crate::sched::EventResult::default();
+        }
+        self.cam_scheduled = false;
+        self.pump_lcd_cam(bus, false, true);
+        let reschedule = self.cam_next_wake();
+        self.cam_scheduled = reschedule.is_some();
+        let mut explicit_irqs = Vec::new();
+        self.matrix_irq_sources_into(&mut explicit_irqs);
+        crate::sched::EventResult {
+            explicit_irqs,
+            reschedule_delay: reschedule,
+            ..Default::default()
+        }
     }
 
     /// Walk-free: once the bus attaches a cycle clock under `event-scheduler`,

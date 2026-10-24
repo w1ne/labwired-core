@@ -47,7 +47,11 @@ board_io:
         chip_path.display()
     );
     let manifest: SystemManifest = serde_yaml::from_str(&manifest_yaml).expect("parse manifest");
-    SystemBus::from_config(&chip, &manifest).expect("build bus")
+    let mut bus = SystemBus::from_config(&chip, &manifest).expect("build bus");
+    // GPIOC is clock-gated on RCC_APB2ENR.IOPCEN (bit 4, RM0008 §7.3.7): its IDR
+    // reads 0 until firmware enables the clock, exactly as on silicon.
+    bus.write_u32(0x4002_1018, 1 << 4).expect("enable IOPCEN");
+    bus
 }
 
 /// The level the firmware would read on PC13, sampled the same way it does —
@@ -447,7 +451,11 @@ board_io:
         chip_path.display()
     );
     let manifest: SystemManifest = serde_yaml::from_str(&manifest_yaml).expect("parse manifest");
-    SystemBus::from_config(&chip, &manifest).expect("build bus")
+    let mut bus = SystemBus::from_config(&chip, &manifest).expect("build bus");
+    // GPIOC is clock-gated on RCC_APB2ENR.IOPCEN (bit 4, RM0008 §7.3.7): its IDR
+    // reads 0 until firmware enables the clock, exactly as on silicon.
+    bus.write_u32(0x4002_1018, 1 << 4).expect("enable IOPCEN");
+    bus
 }
 
 #[test]

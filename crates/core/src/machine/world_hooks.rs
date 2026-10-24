@@ -77,6 +77,7 @@ impl<C: Cpu> Machine<C> {
                 AdvanceStop::NoProgress
                     | AdvanceStop::FirmwareExit { .. }
                     | AdvanceStop::NetDriveChange
+                    | AdvanceStop::Watchpoint(_)
             ) {
                 break;
             }
@@ -287,6 +288,7 @@ impl<C: Cpu> Machine<C> {
         // A net pad routed to a peripheral line (SPI, I²C) hands the levels
         // the net delivers to that peripheral.
         self.bus.wire_inputs_live = true;
+        self.bus.rebuild_pad_claim_links();
         for (name, pin) in pins {
             let idx = self
                 .bus
@@ -343,6 +345,14 @@ impl<C: Cpu> Machine<C> {
     /// would, through the same seam a board button uses (EXTI edges and timer
     /// captures fire). `false` if the pad does not resolve or cannot be driven.
     pub fn drive_gpio_input(&mut self, name: &str, pin: u8, level: bool) -> bool {
+        // A timed core publishes its cycle to the bus only when it crosses a
+        // peripheral tick, so between ticks the bus can lag the core. A
+        // peripheral answering the edge (an nRF SPIS/TWIS putting its next
+        // bit out) stamps its answer with the bus cycle: bring it up to the
+        // cycle the edge is applied at, which is where the world logs it.
+        if self.bus.current_cycle < self.total_cycles {
+            self.bus.set_current_cycle(self.total_cycles);
+        }
         match self.bus.find_peripheral_index_by_name(name) {
             Some(idx) => self.bus.set_peripheral_gpio_input(idx, pin, level),
             None => false,

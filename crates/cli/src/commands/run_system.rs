@@ -121,20 +121,24 @@ pub(crate) fn run_firmware_with_system(
             return ExitCode::from(EXIT_CONFIG_ERROR);
         }
     };
-    let chip_path = system_path
-        .parent()
-        .unwrap_or_else(|| Path::new("."))
-        .join(&manifest.chip);
-    let chip = match ChipDescriptor::from_file(&chip_path) {
+    // Resolve the chip the way every other manifest consumer does: a bare id
+    // through the built-in registry (then plugins), a path-shaped spec against
+    // the manifest's directory. Joining the spec as a file path first refused
+    // every GENERATED manifest — `prepareRunTarget` emits `chip: stm32f103`
+    // for the hosted builder — with "cannot parse chip descriptor
+    // <dir>/stm32f103", which also hid the fail-fast channel inventory from
+    // `--stimulus` callers.
+    let chip = match ChipDescriptor::resolve_with(
+        &manifest.chip,
+        system_path.parent().unwrap_or_else(|| Path::new(".")),
+        &crate::plugin_chip_yaml(plugins),
+    ) {
         Ok(c) => c,
         Err(e) => {
             emit_error(
                 json,
                 "ConfigError",
-                format!(
-                    "cannot parse chip descriptor {}: {e:#}",
-                    chip_path.display()
-                ),
+                format!("cannot load chip descriptor '{}': {e:#}", manifest.chip),
                 None,
                 EXIT_CONFIG_ERROR,
             );
@@ -146,10 +150,9 @@ pub(crate) fn run_firmware_with_system(
             json,
             "ConfigError",
             format!(
-                "run --system currently supports ARM manifests only; got arch {:?} from {} \
+                "run --system currently supports ARM manifests only; got arch {:?} from chip '{}' \
                  (RISC-V and Xtensa boot paths are a follow-up)",
-                chip.arch,
-                chip_path.display()
+                chip.arch, manifest.chip
             ),
             None,
             EXIT_CONFIG_ERROR,
@@ -247,6 +250,7 @@ pub(crate) fn run_firmware_with_system(
         Box::new(cpu)
     };
     let mut machine = Machine::new(cpu, bus);
+    crate::log_ts::set_hz(machine.bus.cpu_hz);
     machine.config.host_time_mode = args.time_mode;
     machine.config.idle_fast_forward_enabled =
         std::env::var("LABWIRED_IDLE_FAST_FORWARD").as_deref() != Ok("0");
@@ -283,6 +287,7 @@ pub(crate) fn run_firmware_with_system(
 
     let mut steps: u64 = 0;
     while steps < max_steps {
+        crate::log_ts::refresh_cycles(machine.total_cycles);
         let current_cycle = machine.total_cycles;
         track.poll(&mut machine, current_cycle);
         let mut limit = (max_steps - steps).min(RUN_BATCH_CAP);
@@ -295,7 +300,9 @@ pub(crate) fn run_firmware_with_system(
                 NonZeroU32::new(batch.min(u64::from(u32::MAX)) as u32).expect("batch is non-zero"),
             )
             .with_breakpoints(labwired_core::BreakpointPolicy::Ignore);
-        match machine.advance(request) {
+        let result = machine.advance(request);
+        crate::log_ts::refresh_cycles(machine.total_cycles);
+        match result {
             Ok(report) => {
                 steps += report.fuel_consumed;
                 if report.primary_steps == 0 && report.idle_cycles == 0 {
@@ -308,7 +315,11 @@ pub(crate) fn run_firmware_with_system(
                     &machine.bus,
                 );
                 let elf = std::fs::read(&args.firmware).ok();
-                let verdict = crate::fault_report::fault_verdict(&machine.cpu, elf.as_deref());
+                let verdict = crate::fault_report::fault_verdict(
+                    &machine.cpu,
+                    elf.as_deref(),
+                    machine.bus.memory_policy_report().as_ref(),
+                );
                 if let (Some(v), false) = (&verdict, json) {
                     crate::fault_report::eprint(v);
                 }
@@ -334,17 +345,25 @@ pub(crate) fn run_firmware_with_system(
             })
             .collect::<Vec<_>>()
             .join("; ");
-        eprintln!("labwired-cli run (system): warning: {list} never fired before the run ended");
+        crate::log_ts::eventln!(
+            "labwired-cli run (system): warning: {list} never fired before the run ended"
+        );
     }
     let elf = std::fs::read(&args.firmware).ok();
-    if let Some(v) = crate::fault_report::fault_verdict(&machine.cpu, elf.as_deref()) {
+    if let Some(v) = crate::fault_report::fault_verdict(
+        &machine.cpu,
+        elf.as_deref(),
+        machine.bus.memory_policy_report().as_ref(),
+    ) {
         crate::fault_report::eprint(&v);
     }
     let pc = machine.cpu.get_pc();
     if steps >= max_steps {
-        eprintln!("labwired-cli run (system): reached --max-steps {max_steps}; pc=0x{pc:08x}");
+        crate::log_ts::eventln!(
+            "labwired-cli run (system): reached --max-steps {max_steps}; pc=0x{pc:08x}"
+        );
     } else {
-        eprintln!("labwired-cli run (system): halted at step {steps}; pc=0x{pc:08x}");
+        crate::log_ts::eventln!("labwired-cli run (system): halted at step {steps}; pc=0x{pc:08x}");
     }
     ExitCode::from(EXIT_PASS)
 }

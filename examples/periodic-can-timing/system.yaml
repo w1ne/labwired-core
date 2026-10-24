@@ -1,0 +1,9 @@
+name: "periodic-can-timing"
+chip: "../../configs/chips/stm32f103.yaml"
+external_devices:
+  - type: "can-bridge"
+    id: "bus"
+    connection: "bxcan1"
+    config:
+      pause_mode: drop
+board_io: []

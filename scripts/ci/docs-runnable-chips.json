@@ -15,9 +15,14 @@
   ],
   "firmware_release": "firmware-demos-v3",
   "chips": {
+    "dspic33fj32mc204": {
+      "how": "committed",
+      "firmware": "examples/dspic33fj32mc204/firmware/dspic33fj32mc204-uart-smoke.elf",
+      "expect": "UART: H"
+    },
     "rv1103": {
       "how": "needs-build",
-      "why": "Declared Luckfox Pico Mini A platform only. The optional native qemu-arm build executes a generic Cortex-A7 CPU fixture; RV1103 peripherals, boot chain and Linux/BSP execution are not implemented, and the released CLI cannot run this board"
+      "why": "Optional source-built qemu-arm-system reduced Linux direct boot and joint I2C3/UART4 basket acceptance exist at functional 24MHz; default/released CLI cannot run this board. Vendor BSP/SD/ROM boot, complete RV1103 and physical qualification remain unavailable; this is not an installed CLI command"
     },
     "esp32": {
       "how": "committed",
@@ -200,6 +205,12 @@
       "firmware": "tests/fixtures/nucleo-u545re-blinky.elf",
       "expect": "OK"
     },
+    "atmega2560": {
+      "how": "example",
+      "script": "examples/arduino-mega-2560-io/io-smoke.yaml",
+      "expect": "2/2 checks",
+      "note": "AVR runs through a system manifest, not `labwired run`, and `labwired test` does not echo the AVR console, so the expectation is the script verdict line: it asserts the USART0 banner and a report line with A8/A9 read through ADCSRB.MUX5."
+    },
     "atmega328p": {
       "how": "example",
       "script": "examples/arduino-nano-blinky/io-smoke.yaml",
@@ -257,6 +268,19 @@
       "script": "examples/stm32g0b1re/io-smoke.yaml",
       "expect": "exti0 port=B falling imr=1",
       "note": "In-repo USART1 PA9 AF1, TIM2 PSC, and G0 EXTI examples. The customer IO-Link ELF is still built by iolinki-reference.yml; see docs/iolinki-g0-prerequisites.md."
+    },
+    "litex-vexriscv": {
+      "how": "needs-build",
+      "why": "The LiteX VexRiscv model (RV32IM profile, LiteX UART and timer) is newer than the released CLI this gate installs. The committed smoke tests/fixtures/litex-vexriscv-smoke.elf prints 'LITEX VEXRISCV SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
+    },
+    "vegaboard-ri5cy": {
+      "how": "needs-build",
+      "why": "The RI5CY/Vega board model is newer than the released CLI this gate installs. The committed smoke tests/fixtures/vegaboard-ri5cy-smoke.elf prints 'VEGABOARD RI5CY SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
+    },
+    "dspic33fj32mc202": {
+      "how": "committed",
+      "firmware": "examples/dspic33fj32mc202/firmware/dspic33fj32mc202-xc16-uart-smoke.elf",
+      "expect": "UART: HI"
     }
   }
 }

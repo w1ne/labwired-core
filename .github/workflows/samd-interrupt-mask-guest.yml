@@ -1,0 +1,56 @@
+name: SAMD authored interrupt mask ARM guest
+on:
+  pull_request:
+    paths: ['crates/core/tests/samd_interrupt_mask_guest.rs', 'scripts/samd-interrupt-mask/**', '.github/workflows/samd-interrupt-mask-guest.yml']
+permissions:
+  contents: read
+jobs:
+  mask-guest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Require receipt source-binding controls
+        run: python3 scripts/samd-interrupt-mask/test_record.py
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: CrispStrobe/codal-samd
+          ref: e15482fd6b537ffd208919c31d568c0bea14d47a
+          path: owned-mask-source
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: Swatinem/rust-cache@v2
+      - name: Build source-bound owned PRIMASK guests
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-arm-none-eabi libnewlib-dev libstdc++-arm-none-eabi-dev
+          test "$(git -C owned-mask-source rev-parse HEAD)" = e15482fd6b537ffd208919c31d568c0bea14d47a
+          git log -1 --format='%H %T %P'
+          arm-none-eabi-g++ --version
+          dpkg-query -W gcc-arm-none-eabi libnewlib-dev libstdc++-arm-none-eabi-dev
+          sha256sum owned-mask-source/simulation/arm/interrupt-mask-probe.cpp \
+            owned-mask-source/simulation/arm/startup.S owned-mask-source/simulation/arm/control.ld \
+            owned-mask-source/simulation/include/InterruptMask.h
+          bash scripts/samd-interrupt-mask/build.sh owned-mask-source "$RUNNER_TEMP/mask-guests"
+      - name: Execute positive and exact-assertion-negative ARM fixtures
+        env:
+          LABWIRED_MASK_FIXTURE_DIR: ${{ runner.temp }}/mask-guests
+        run: |
+          set -o pipefail
+          cargo test --release -p labwired-core --test samd_interrupt_mask_guest -- --ignored --nocapture | tee mask-guest-default.log
+          cargo test --release -p labwired-core --features event-scheduler --test samd_interrupt_mask_guest -- --ignored --nocapture | tee mask-guest-scheduler.log
+      - name: Bind execution to actual source snapshot
+        env:
+          QUALIFICATION_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: python3 scripts/samd-interrupt-mask/record.py
+      - name: Preserve bounded result evidence (no ELF)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: authored-interrupt-mask-guest-results
+          path: |
+            mask-guest-default.log
+            mask-guest-scheduler.log
+            mask-qualification.json
+            ${{ runner.temp }}/mask-guests/*/control.map
+            ${{ runner.temp }}/mask-guests/*/symbols.txt

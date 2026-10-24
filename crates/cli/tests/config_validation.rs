@@ -24,6 +24,10 @@ fn test_chip_config_validation() {
     // We can check this by trying to write/read from those addresses
     // or by inspecting the bus peripheral map if exposed.
 
+    // GPIOC is clock-gated on RCC_APB2ENR.IOPCEN (bit 4, RM0008 §7.3.7):
+    // enable it first, as firmware must.
+    bus.write_u32(0x40021018, 1 << 4)
+        .expect("Failed to enable IOPCEN");
     // Let's try writing to GPIOC_ODR
     bus.write_u32(0x4001100C, 0x1234)
         .expect("Failed to write to GPIOC");

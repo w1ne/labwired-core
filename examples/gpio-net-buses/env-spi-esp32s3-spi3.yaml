@@ -1,0 +1,46 @@
+# An ESP32-S3 GP-SPI3 master (register level, src/esp32x_spi_master.S built
+# with INST1 and PADS_HI) and an STM32G071 SPI1 slave, mode 0, on bank-1 pads:
+# GPIO34..37 reach the controller through the S3 GPIO matrix (SPI3_CLK 66,
+# SPI3_Q 67, SPI3_D 68, SPI3_CS0 71); CS0 frames the four bytes.
+schema_version: "1.0"
+name: gpio-net-spi-esp32s3-spi3
+nodes:
+  - id: esp
+    system: "../../configs/systems/esp32s3.yaml"
+    firmware: "firmware/esp32s3-spi3-master.elf"
+  - id: b
+    system: "system.yaml"
+    firmware: "firmware/spi-slave.elf"
+interconnects:
+  - type: gpio_net
+    nodes: [esp, b]
+    config:
+      name: cs
+      pull: up
+      members:
+        - { node: esp, peripheral: gpio, pin: 34 }   # SPI3_CS0
+        - { node: b, peripheral: gpioa, pin: 4 }    # SPI1_NSS
+  - type: gpio_net
+    nodes: [esp, b]
+    config:
+      name: sck
+      pull: down
+      members:
+        - { node: esp, peripheral: gpio, pin: 36 }   # SPI3_CLK
+        - { node: b, peripheral: gpioa, pin: 5 }
+  - type: gpio_net
+    nodes: [esp, b]
+    config:
+      name: miso
+      pull: down
+      members:
+        - { node: esp, peripheral: gpio, pin: 37 }   # SPI3_Q
+        - { node: b, peripheral: gpioa, pin: 6 }
+  - type: gpio_net
+    nodes: [esp, b]
+    config:
+      name: mosi
+      pull: down
+      members:
+        - { node: esp, peripheral: gpio, pin: 35 }   # SPI3_D
+        - { node: b, peripheral: gpioa, pin: 7 }

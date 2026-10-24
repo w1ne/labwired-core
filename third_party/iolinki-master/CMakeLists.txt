@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.10)
 
-project(iolinki_master VERSION 0.2.0 LANGUAGES C)
+project(iolinki_master VERSION 1.1.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -37,6 +37,7 @@ target_include_directories(iolinki_frame_helpers PUBLIC "${IOLINKI_DEVICE_DIR}/i
 
 add_library(iolinki_master STATIC
     src/master_controller.c
+    src/master_gateway.c
     src/master_isdu.c
     src/master_parameters.c
     src/master_port.c

@@ -42,7 +42,7 @@ Pass criteria:
 ## 5) Run config-build gate
 
 ```bash
-cargo test -p labwired-core --test stm32f746_config -- --nocapture
+cargo test -p labwired-core --test board_config_gates stm32f746_from_config_builds -- --nocapture
 ```
 
 ## 6) Run direct simulation for PC/SP evidence

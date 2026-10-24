@@ -116,6 +116,32 @@ fn hc_sr04_echo_width_is_measured_by_tim2_input_capture() {
 }
 
 #[test]
+fn hc_sr04_beyond_rated_range_answers_with_the_38_ms_timeout_pulse() {
+    // Datasheet: no target within 400 cm -> ECHO high ~38 ms, never a range.
+    for distance in [400.5, 401.0, 650.0, 1000.0] {
+        let mut m = machine(&hc_sr04("PA0"), "echo-capture.elf");
+        m.bus
+            .set_input(Some("range"), "distance", distance)
+            .unwrap();
+        m.advance(AdvanceRequest::run(Some(3_600_000))).unwrap();
+        let r = results(&m, 6);
+        assert_eq!(r[0], 2, "{distance} cm: the CC2 interrupt must have run");
+        assert!(
+            (i64::from(r[3]) - 38_000).abs() <= 1,
+            "{distance} cm: echo {} us, want 38000",
+            r[3]
+        );
+    }
+    // 400 cm itself is still a proportional echo.
+    let r = echo(400.0, "PA0");
+    assert!(
+        (f64::from(r[3]) - 23_200.0).abs() <= 1.0,
+        "400 cm: {} us",
+        r[3]
+    );
+}
+
+#[test]
 fn echo_on_a_pad_that_is_not_a_timer_input_is_never_captured() {
     // Negative control: identical firmware and sensor, ECHO wired to PA4,
     // which has no TIM2 function. The firmware triggers (phase 1) and never

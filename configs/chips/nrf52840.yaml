@@ -23,6 +23,15 @@ memory_regions:
     base: 0xF0000000
     size: "4KB"
 peripherals:
+  # SysTick: an ARMv6-M/ARMv7-M/ARMv8-M core peripheral every Cortex-M on
+  # this family has. The Nordic SVD starts above the PPB, so it is declared
+  # by hand; without it, any firmware using SysTick (the Arduino and Zephyr
+  # cores both do) faults on its first SYST_CSR write.
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+    size: "16B"
+
   - id: "uart0"
     type: "nrf52840_uart"
     base_address: 0x40002000
@@ -366,13 +375,28 @@ peripherals:
     size: "4KB"
     config:
       debug_schema: "../peripherals/nrf52840/power.yaml"
+  # ACL's registers live in the NVMC page (0x4001E000), which `nvmc` maps, so
+  # the inert stub gets a private window at 0x4002E000, a reserved slot (no
+  # peripheral ID 46 on this part). It used to sit at 0x4002F000, which is
+  # SPIM3's (below).
   - id: "acl"
     type: "nrf52840_acl"
-    base_address: 0x4002f000
+    base_address: 0x4002e000
     size: "4KB"
     irq: 30
     config:
       debug_schema: "../peripherals/nrf52840/acl.yaml"
+  # SPIM3 — the 32 MHz SPI master with hardware chip select (PSEL.CSN,
+  # CSNPOL, IFTIMING.CSNDUR) and D/CX (PSELDCX, DCXCNT), PS v1.x §6.25. No
+  # SPIS3/TWIM3 share this window.
+  - id: "spi3"
+    type: "nrf52840_spi"
+    base_address: 0x4002f000
+    size: "4KB"
+    irq: 47
+    config:
+      profile: "nrf52_spim"
+      debug_schema: "../peripherals/nrf52840/spim3.yaml"
   - id: "cryptocell"
     type: "nrf52840_cryptocell"
     base_address: 0x5002a000

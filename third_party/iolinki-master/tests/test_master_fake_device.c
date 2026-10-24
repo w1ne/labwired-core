@@ -47,6 +47,7 @@ static int reset_fixture(void** state)
     return 0;
 }
 
+
 /** @brief Drain the CKS-only DeviceOperate reply queued by the fake device.
  *
  * Figure A.5: the DeviceOperate Type-0 WRITE is answered with the CKS octet alone
@@ -170,6 +171,7 @@ static void test_fake_device_can_inject_bad_operate_checksum(void** state)
     assert_int_equal(diagnostics.checksum_errors, 1U);
     assert_int_equal(diagnostics.rx_retry_count, 1U);
 }
+
 
 static void test_fake_device_can_drop_response_for_timeout_path(void** state)
 {

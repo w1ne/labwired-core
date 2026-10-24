@@ -1,0 +1,123 @@
+{
+  "base": {
+    "init": {
+      "bytes": 1003,
+      "sha256": "5d1d1e1cd5d6b0e37ee352feeef4d998548d1ecd98ffee0d67a0b797c044663c"
+    },
+    "initramfs.cpio": {
+      "bytes": 889544,
+      "sha256": "b13962b76edb327b89cec464014cd2565694d88a7f0f86ccc361317cf879ccce"
+    },
+    "kernel.config": {
+      "bytes": 269493,
+      "sha256": "4e64812402b287e13fd7513aa830432782a1ae94a5461bfe579999d1e18432fb"
+    },
+    "rv1103-direct.dtb": {
+      "bytes": 1537,
+      "sha256": "5069562faf959fad32ce34db1dcc0f76f7721382abe6d0d713c033a6d0f83a75"
+    },
+    "zImage": {
+      "bytes": 8524288,
+      "sha256": "eac9582162e912bdb577bba6ea224d98a29c997e52ee891383ea836aa704680a"
+    }
+  },
+  "compiler_version": "arm-none-eabi-gcc (15:13.2.rel1-2) 13.2.1 20231009",
+  "helper": {
+    "bytes": 9600,
+    "sha256": "3aac2073b75cae9a951868146b31298c4953505f3ca6da3c0c611f9973bb74b6"
+  },
+  "module_receipt": {
+    "bytes": 64632,
+    "sha256": "f5fab55c5d3cecb9713d277b9c19f3b215d781467ad91971219e35cf8e503ab6"
+  },
+  "modules": {
+    "i2c-dev.ko": {
+      "bytes": 21719,
+      "sha256": "6381d4a9b257a836ce7f14a80ad1386ae5471e82a0b23715c848ba5362c159aa"
+    },
+    "i2c-rk3x.ko": {
+      "bytes": 300952,
+      "sha256": "1b3404627ffae4a66d0d126bc14c0fee76127609455c52d44137d7db82257efa"
+    }
+  },
+  "outputs": {
+    "initramfs.cpio": {
+      "bytes": 1225024,
+      "sha256": "b718eb872e4a87aece01468d3c0364d6cac5080cce6d42e2439bfa6e3ddb4cf5"
+    },
+    "rv1103-basket.dtb": {
+      "bytes": 2062,
+      "sha256": "d83aacde44192069b04f33c7b2980464d475ba8e362b5d925f6c85e7bbc1efab"
+    }
+  },
+  "profile": "rv1103-linux-basket-v1",
+  "schema": 1,
+  "sources": {
+    "helper.c": {
+      "bytes": 8292,
+      "sha256": "b4310e8527bf97032d215af174a34c1a322c8c43b12649308dbd52a8a4bf95d3"
+    },
+    "init": {
+      "bytes": 3146,
+      "sha256": "4245c9d4a5aaab7f30b8f54b6ffd7c9be9e120e0daba7cad0c2fbe92b27d24d9"
+    },
+    "phases.json": {
+      "bytes": 2000,
+      "sha256": "17ff08ae818a8477eb0bd26bb51f15c83d2946f06bc6589449ddebf75c5eeac6"
+    },
+    "rv1103-basket.dts": {
+      "bytes": 2350,
+      "sha256": "91805fcba051a69004658d27f8aee43df850d1469a4e8d82fb13176e3bb0fedc"
+    }
+  },
+  "uapi": {
+    "arch/arm/include/generated/uapi/asm/termbits.h": {
+      "bytes": 34,
+      "sha256": "cba6faa5749f84248b3e73894fb6731dc558af01f8f5a626d8f44ba6fad46977"
+    },
+    "arch/arm/include/generated/uapi/asm/unistd-eabi.h": {
+      "bytes": 20935,
+      "sha256": "b3568fb2ee2f71be55325285ce226b7c8e8a17b0cd302e13008db2c1b97a6979"
+    },
+    "arch/arm/include/uapi/asm/ioctls.h": {
+      "bytes": 183,
+      "sha256": "19970612f5a7f7f71226d50527d8267411958e4dcc9f2e9c3b29a5de060524e1"
+    },
+    "include/uapi/asm-generic/fcntl.h": {
+      "bytes": 5563,
+      "sha256": "08449ed601f650b5f6afbf8a4cfd7129242107e3d1c46c1f0c0abfedb44a21a4"
+    },
+    "include/uapi/asm-generic/ioctls.h": {
+      "bytes": 3983,
+      "sha256": "867644cd4a20815b7d8be14902b594bb6e30a81ea159aa5c67f24212c92cbab6"
+    },
+    "include/uapi/asm-generic/poll.h": {
+      "bytes": 863,
+      "sha256": "800ec73ce21e427587fda77b35a804f522d9e4a18eef87d516e10d1b28fc8b90"
+    },
+    "include/uapi/asm-generic/termbits-common.h": {
+      "bytes": 2214,
+      "sha256": "b022fb7a77f70ad67237b4f2091d17e0189ea7cc6c7d6632c1030326f887949c"
+    },
+    "include/uapi/asm-generic/termbits.h": {
+      "bytes": 3654,
+      "sha256": "6769d652b4178463ed74ac4848a851abe5e457ee0623eb56f331d77c1e1863b9"
+    },
+    "include/uapi/asm-generic/termios.h": {
+      "bytes": 1392,
+      "sha256": "ced65a437336762b4e795389f5bcb26461e5c940624567f0f880eaa53082ff63"
+    },
+    "include/uapi/linux/i2c-dev.h": {
+      "bytes": 1931,
+      "sha256": "5779095287ae32d17f3524a7a7a2d3a1ddfe6ad1345929ec6f2f4a442ff41312"
+    },
+    "include/uapi/linux/i2c.h": {
+      "bytes": 6963,
+      "sha256": "8b4f0e08de273edb14e2ae289c8988fac2f025564cdda7d9323ef6a90ca0cbaa"
+    },
+    "include/uapi/linux/time_types.h": {
+      "bytes": 1292,
+      "sha256": "45f5bd4a2412fe6c1f1415a1e00e8521ad45f37117ab7dd1e9fafd7f922b224a"
+    }
+  }
+}

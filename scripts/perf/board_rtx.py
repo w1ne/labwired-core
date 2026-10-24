@@ -76,6 +76,27 @@ def run_once(cli: Path, board: str, firmware: Path, steps: int) -> tuple[float, 
     return elapsed, float(proof.group(3))
 
 
+def declared_only(chip: dict) -> bool:
+    """A descriptor with no platform behind it: no peripherals, no flash, and
+    no perf fixture for its memory map.
+
+    This is the one kind of chip RTx may leave unmeasured. A waiver in
+    ``board_perf.WAIVED`` wins over a matching fixture, so a waiver on its own
+    could drop a chip this gate is able to run; that stays a refusal. A
+    declaration with nothing to execute has no throughput to prove.
+    """
+    flash = chip.get("flash") or {}
+    try:
+        flash_size = int(flash.get("size", 0))
+    except (TypeError, ValueError):
+        return False
+    return (
+        not chip.get("peripherals")
+        and flash_size == 0
+        and bp.fixture_for(chip) is None
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--boards", help="comma-separated subset (default: all covered)")
@@ -101,9 +122,16 @@ def main() -> int:
     except bp.CoverageError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
-    if waived:
-        print("error: RTx cannot prove all chips while waivers remain", file=sys.stderr)
+    unprovable = sorted(b for b in waived if not declared_only(chips[b]))
+    if unprovable:
+        print(
+            "error: RTx cannot prove all chips while waivers remain on runnable "
+            "chips: " + ", ".join(unprovable),
+            file=sys.stderr,
+        )
         return 1
+    for board, reason in sorted(waived.items()):
+        print(f"not measured (declared only, no platform to run): {board}: {reason}")
 
     selected = set(args.boards.split(",")) if args.boards else set(covered)
     unknown = selected - set(covered)
@@ -163,6 +191,7 @@ def main() -> int:
         "minimum_required_rtx": args.min_rtx,
         "failures": failures,
         "measured": rows,
+        "not_measured": dict(sorted(waived.items())),
     }
     if args.status_json:
         Path(args.status_json).write_text(json.dumps(status, indent=2, sort_keys=True) + "\n")
@@ -173,7 +202,8 @@ def main() -> int:
             file=sys.stderr,
         )
         return 1
-    print(f"\nall {len(rows)} chips meet or exceed {args.min_rtx:.2f}x real time")
+    unmeasured = f"; {len(waived)} declared-only chip(s) not measured" if waived else ""
+    print(f"\nall {len(rows)} chips meet or exceed {args.min_rtx:.2f}x real time{unmeasured}")
     return 0
 
 

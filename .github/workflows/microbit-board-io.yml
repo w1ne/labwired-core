@@ -40,7 +40,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.95.0
       - uses: Swatinem/rust-cache@v2
       - name: Install source guest compiler
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends gcc-arm-none-eabi
+        timeout-minutes: 10
+        uses: ./.github/actions/apt-install-cached
+        with:
+          packages: gcc-arm-none-eabi
       - name: Record qualification runner and toolchains
         shell: bash
         run: |

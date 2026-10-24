@@ -94,14 +94,15 @@ static int demo_phy_send(void* user, const uint8_t* data, size_t len)
         return (int)len;
     }
 
-    /* TYPE_2_1 cyclic request: MC, CKT, PD-out(1), OD(1) -> 4 octets (Table A.10). */
+    /* TYPE_2_1 cyclic WRITE request: MC, CKT, PD-out(1), OD(1) -> 4 octets
+       (Table A.10). */
     if(len == 4U)
     {
-        /* A.2.4/A.1.5 reply: [PD-in][OD] CKS, no status octet; flags in CKS bits 7/6. */
+        /* Figures A.9/A.10: the WRITE reply is [PD-in] CKS, no OD and no
+           status octet; flags live in CKS bits 7/6 (A.1.5). */
         response[0] = 0x5AU;
-        response[1] = 0x00U;
-        response[2] = iolink_checksum6(response, 3U);
-        queue_bytes(response, 3U);
+        response[1] = iolink_checksum6(response, 2U);
+        queue_bytes(response, 2U);
         return (int)len;
     }
 

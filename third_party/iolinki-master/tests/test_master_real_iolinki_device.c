@@ -770,6 +770,17 @@ test_master_restores_data_storage_with_real_parameter_block(void **state) {
                    IOLINK_MASTER_STATUS_OK);
   assert_true(len >= sizeof(ds_image));
   assert_memory_equal(readback, ds_image, sizeof(ds_image));
+
+  /* Reinitialize both stacks so readback must reload the file-backed NVM. */
+  init_master_and_real_device_in_operate(&master, IOLINK_MASTER_M_SEQ_TYPE_1_2,
+                                         2U, sizeof(pd_out), pd_out);
+  memset(readback, 0, sizeof(readback));
+  len = sizeof(readback);
+  assert_int_equal(drive_real_stack_read_isdu(&master, IOLINK_IDX_DATA_STORAGE,
+                                              0U, 2U, readback, &len),
+                   IOLINK_MASTER_STATUS_OK);
+  assert_true(len >= sizeof(ds_image));
+  assert_memory_equal(readback, ds_image, sizeof(ds_image));
 }
 
 static void test_master_observes_real_device_access_locks(void **state) {

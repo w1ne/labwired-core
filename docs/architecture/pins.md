@@ -94,6 +94,19 @@ Two more, for pulls a GPIO port does not keep itself:
   the block decodes each pad's pull and hands it over, bracketed for push
   capture like a write to the port itself. The port reports it in
   `driver().pull` and folds it into its input register.
+- ESP32 / ESP32-S3 RTC IO MUX: not a `PinPort` hook but two `Peripheral`
+  capabilities. The RTC_IO block shares its register state
+  (`esp_rtc_io::RtcIoPads`) through `rtc_io_pads()`; the bus hands it to the
+  part's GPIO model (`attach_rtc_io_pads`) when the peripherals are
+  attached, and brackets every RTC_IO write with the GPIO port's push
+  capture, calling `rtc_io_written()` inside the bracket. The GPIO model
+  stays the pads' only pin port: for a pad whose `MUX_SEL` is set it
+  reports the RTC GPIO's drive and pull, routes no matrix signal, and reads
+  `GPIO_IN` through the RTC `FUN_IE`; on the classic part an RTC-capable
+  pad's pull is the RTC_IO `RUE` / `RDE` in the digital domain too (errata
+  3.6). In return it publishes the outside's levels and `GPIO_IN`
+  (`RtcIoPads::set_inputs`), from which `RTC_GPIO_IN` and its status latch
+  follow.
 - `set_pull_ups_disabled(bool)`: a chip-wide switch outside the port. The
   ATmega CPU owns `MCUCR`; when firmware changes `PUD` it calls
   `Bus::set_pull_ups_disabled`, and the bus hands it to every port
@@ -196,8 +209,14 @@ model):
   its latch (STM32, ESP32 family), standing in for the board pull-up these
   models have no other source for. As soon as the outside presents a level
   (a net always does) it reads that level.
-- ESP32-S3: the interface covers bank 0 (GPIO0..31), the pads with input
-  storage and a probe level in the model.
+- ESP32-S3: the interface covers the package's pads, GPIO0..48, both banks;
+  GPIO49..53 have registers but no pad. Classic ESP32: GPIO0..39, with
+  GPIO34..39 input-only (their `ENABLE1` bits never drive, nor do their RTC
+  GPIO enables).
+- A floating RTC-domain pad (ESP32 / S3 RTC IO MUX, released, no pull,
+  nothing outside) reads the last level the outside presented, as a floating
+  digital pad does. A probe reads the wire level, `GPIO_IN` / `RTC_GPIO_IN`
+  the same level through `FUN_IE`.
 
 What the pull models leave out:
 

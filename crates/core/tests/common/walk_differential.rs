@@ -61,9 +61,8 @@
 
 #![allow(dead_code)]
 
-use labwired_core::cpu::CortexM;
 // `run`, `get_pc` and `read_core_reg` reach the machine through DebugControl.
-use labwired_core::{DebugControl, Machine};
+use labwired_core::{Cpu, DebugControl, Machine};
 
 /// Which side of the differential a machine is being built for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -97,34 +96,55 @@ pub struct Probe {
     pub extra: Vec<(&'static str, u64)>,
 }
 
+impl Probe {
+    /// Look up one caller-supplied observable by name.
+    pub fn extra(&self, name: &str) -> u64 {
+        self.extra
+            .iter()
+            .find(|(n, _)| *n == name)
+            .unwrap_or_else(|| panic!("probe has no extra observable named {name:?}"))
+            .1
+    }
+}
+
+/// Snapshot one instruction boundary without stepping: for gates that run a
+/// batched `Machine::run` (final-state comparisons at interval > 1, WFI
+/// fast-forward end-states), where per-instruction probing is not possible.
+pub fn probe_at<C: Cpu, E>(machine: &Machine<C>, step: u64, extra: &E) -> Probe
+where
+    E: Fn(&Machine<C>) -> Vec<(&'static str, u64)>,
+{
+    let mut regs = [0u32; 16];
+    for (i, r) in regs.iter_mut().enumerate() {
+        *r = machine.read_core_reg(i as u8);
+    }
+    Probe {
+        step,
+        total_cycles: machine.total_cycles,
+        pc: machine.get_pc(),
+        regs,
+        extra: extra(machine),
+    }
+}
+
 /// Single-step `steps` instructions from `entry`, snapshotting after each.
 ///
 /// Stepping ONE instruction at a time is the point: a batched run would hide
 /// exactly the mid-batch divergence this exists to catch.
-pub fn run_probed<E>(
-    machine: &mut Machine<CortexM>,
+pub fn run_probed<C: Cpu, E>(
+    machine: &mut Machine<C>,
     entry: u32,
     steps: u64,
     extra: &E,
 ) -> Vec<Probe>
 where
-    E: Fn(&Machine<CortexM>) -> Vec<(&'static str, u64)>,
+    E: Fn(&Machine<C>) -> Vec<(&'static str, u64)>,
 {
-    machine.cpu.pc = entry;
+    machine.cpu.set_pc(entry);
     let mut probes = Vec::with_capacity(steps as usize);
     for s in 0..steps {
         machine.run(Some(1)).expect("machine step");
-        let mut regs = [0u32; 16];
-        for (i, r) in regs.iter_mut().enumerate() {
-            *r = machine.read_core_reg(i as u8);
-        }
-        probes.push(Probe {
-            step: s + 1,
-            total_cycles: machine.total_cycles,
-            pc: machine.get_pc(),
-            regs,
-            extra: extra(machine),
-        });
+        probes.push(probe_at(machine, s + 1, extra));
     }
     probes
 }
@@ -175,10 +195,16 @@ pub fn assert_probes_identical(reference: &[Probe], candidate: &[Probe], what: &
 /// `build` is called twice and must produce an otherwise-identical machine,
 /// differing only in whether the peripheral under test is pinned to the walk.
 /// Load firmware inside it.
-pub fn assert_walk_differential<B, E>(what: &str, entry: u32, steps: u64, build: B, extra: E)
+pub fn assert_walk_differential<C: Cpu, B, E>(
+    what: &str,
+    entry: u32,
+    steps: u64,
+    build: B,
+    extra: E,
+) -> Vec<Probe>
 where
-    B: Fn(WalkMode) -> Machine<CortexM>,
-    E: Fn(&Machine<CortexM>) -> Vec<(&'static str, u64)>,
+    B: Fn(WalkMode) -> Machine<C>,
+    E: Fn(&Machine<C>) -> Vec<(&'static str, u64)>,
 {
     let mut walk = build(WalkMode::LegacyWalk);
     let reference = run_probed(&mut walk, entry, steps, &extra);
@@ -187,6 +213,7 @@ where
     let candidate = run_probed(&mut sched, entry, steps, &extra);
 
     assert_probes_identical(&reference, &candidate, what);
+    reference
 }
 
 /// Guard against the vacuous pass: prove the two sides really are different

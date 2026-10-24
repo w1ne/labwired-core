@@ -53,6 +53,9 @@
 
 #![cfg(feature = "event-scheduler")]
 
+mod common;
+
+use common::walk_differential::{assert_modes_differ, assert_walk_differential, WalkMode};
 use labwired_core::bus::SystemBus;
 use labwired_core::cpu::CortexM;
 use labwired_core::peripherals::dwt::Dwt;
@@ -182,41 +185,25 @@ fn build_batchable_dwt_machine(scheduler: bool, tick_interval: u32) -> Machine<C
     machine
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct Probe {
-    step: u64,
-    total_cycles: u64,
-    pc: u32,
-    regs: [u32; 16],
-    main_count: u32,
-    cyccnt_sample: u32,
+/// The caller-supplied observables the harness probe carries for this fixture:
+/// the main-loop counter and the last stored CYCCNT sample.
+fn extra(machine: &Machine<CortexM>) -> Vec<(&'static str, u64)> {
+    vec![
+        (
+            "main_count",
+            u64::from(machine.bus.read_u32(MAIN_COUNT_ADDR).unwrap()),
+        ),
+        (
+            "cyccnt_sample",
+            u64::from(machine.bus.read_u32(CYCCNT_STORE_ADDR).unwrap()),
+        ),
+    ]
 }
 
-fn probe(machine: &Machine<CortexM>, step: u64) -> Probe {
-    let mut regs = [0u32; 16];
-    for (i, r) in regs.iter_mut().enumerate() {
-        *r = machine.read_core_reg(i as u8);
-    }
-    Probe {
-        step,
-        total_cycles: machine.total_cycles,
-        pc: machine.get_pc(),
-        regs,
-        main_count: machine.bus.read_u32(MAIN_COUNT_ADDR).unwrap(),
-        cyccnt_sample: machine.bus.read_u32(CYCCNT_STORE_ADDR).unwrap(),
-    }
-}
-
-/// Run `steps` instructions one at a time through the batched `Machine::run`
-/// path, probing the full architectural state after every instruction.
-fn run_probed(machine: &mut Machine<CortexM>, entry: u32, steps: u64) -> Vec<Probe> {
-    machine.cpu.pc = entry;
-    let mut probes = Vec::with_capacity(steps as usize);
-    for s in 0..steps {
-        machine.run(Some(1)).unwrap();
-        probes.push(probe(machine, s + 1));
-    }
-    probes
+/// Vacuity guard for the DWT pinned by `build_machine`.
+fn uses_scheduler(machine: &Machine<CortexM>) -> bool {
+    let idx = machine.bus.find_peripheral_index_by_name("dwt").unwrap();
+    machine.bus.peripherals[idx].dev.uses_scheduler()
 }
 
 /// Gate 1: lazy CYCCNT reads at unaligned cycles, walk-on vs walk-deleted
@@ -226,33 +213,28 @@ fn run_probed(machine: &mut Machine<CortexM>, entry: u32, steps: u64) -> Vec<Pro
 fn dwt_cyccnt_is_byte_identical_at_interval_1() {
     const STEPS: u64 = 3_000;
 
-    let mut walk = build_machine(false, 1);
-    load_firmware_cyccnt_poll(&mut walk.bus);
-    let walk_probes = run_probed(&mut walk, 0x40, STEPS);
+    let build = |mode: WalkMode| {
+        let mut m = build_machine(!mode.is_legacy_walk(), 1);
+        load_firmware_cyccnt_poll(&mut m.bus);
+        m
+    };
+    assert_modes_differ(
+        uses_scheduler(&build(WalkMode::LegacyWalk)),
+        uses_scheduler(&build(WalkMode::Scheduler)),
+        "DWT CYCCNT firmware",
+    );
+    let reference = assert_walk_differential("DWT CYCCNT firmware", 0x40, STEPS, build, extra);
 
-    let mut sched = build_machine(true, 1);
-    load_firmware_cyccnt_poll(&mut sched.bus);
-    let sched_probes = run_probed(&mut sched, 0x40, STEPS);
-
-    assert_eq!(walk_probes.len(), sched_probes.len());
-    for (r, c) in walk_probes.iter().zip(sched_probes.iter()) {
-        assert_eq!(
-            r, c,
-            "DWT CYCCNT firmware: first divergence at step {} (walk-reference vs scheduler)",
-            r.step
-        );
-    }
-
-    let last = walk_probes.last().unwrap();
+    let last = reference.last().unwrap();
     assert!(
-        last.cyccnt_sample > 1_000,
+        last.extra("cyccnt_sample") > 1_000,
         "reference must observe a live, advancing CYCCNT (got {})",
-        last.cyccnt_sample
+        last.extra("cyccnt_sample")
     );
     // The reads land at many distinct cycle values (unaligned), so this is the
     // "exact at arbitrary cycles" proof, not just at a single point.
-    let distinct: std::collections::BTreeSet<u32> =
-        walk_probes.iter().map(|p| p.cyccnt_sample).collect();
+    let distinct: std::collections::BTreeSet<u64> =
+        reference.iter().map(|p| p.extra("cyccnt_sample")).collect();
     assert!(
         distinct.len() > 100,
         "CYCCNT must be sampled at many distinct cycle values (got {})",

@@ -55,23 +55,51 @@ use std::sync::Arc;
 struct CycleCpu {
     pc: u32,
     steps: u32,
+    /// When set, every retired instruction reads this bus address and records
+    /// the value — the "firmware polls a lazily-advanced counter from inside a
+    /// CPU batch" surface (formerly the separate `PollingCpu`).
+    poll_addr: Option<u64>,
+    observed: Vec<u32>,
+}
+
+impl CycleCpu {
+    /// Longest run of consecutive polls that read the SAME counter value.
+    /// This is the number the bug moves: a counter that only refreshes at
+    /// batch boundaries reads frozen for a whole quantum of polls.
+    fn longest_frozen_run(&self) -> usize {
+        let mut longest = 1usize;
+        let mut run = 1usize;
+        for w in self.observed.windows(2) {
+            if w[0] == w[1] {
+                run += 1;
+                longest = longest.max(run);
+            } else {
+                run = 1;
+            }
+        }
+        longest
+    }
 }
 
 impl Cpu for CycleCpu {
     fn reset(&mut self, _bus: &mut dyn Bus) -> SimResult<()> {
         self.pc = 0;
         self.steps = 0;
+        self.observed.clear();
         Ok(())
     }
 
     fn step(
         &mut self,
-        _bus: &mut dyn Bus,
+        bus: &mut dyn Bus,
         _observers: &[Arc<dyn SimulationObserver>],
         _config: &SimulationConfig,
     ) -> SimResult<()> {
         self.steps = self.steps.wrapping_add(1);
         self.pc = self.pc.wrapping_add(2);
+        if let Some(addr) = self.poll_addr {
+            self.observed.push(bus.read_u32(addr)?);
+        }
         Ok(())
     }
 
@@ -915,92 +943,9 @@ const DWT_CTRL: u64 = 0xE000_1000;
 const DWT_CYCCNT: u64 = 0xE000_1004;
 const DWT_CTRL_CYCCNTENA: u32 = 1 << 0;
 
-/// A CPU whose every retired instruction is one iteration of a firmware
-/// counter-poll loop: read CYCCNT, remember what it saw. Stands in for the
-/// busy-wait loop in `tests/fixtures/tier1/*.elf` without needing the ELF, and
-/// — unlike a harness-side read — samples where real firmware does: mid-batch.
-#[derive(Debug, Default)]
-struct PollingCpu {
-    pc: u32,
-    observed: Vec<u32>,
-}
-
-impl PollingCpu {
-    /// Longest run of consecutive polls that read the SAME counter value.
-    /// This is the number the bug moves: a counter that only refreshes at
-    /// batch boundaries reads frozen for a whole quantum of polls.
-    fn longest_frozen_run(&self) -> usize {
-        let mut longest = 1usize;
-        let mut run = 1usize;
-        for w in self.observed.windows(2) {
-            if w[0] == w[1] {
-                run += 1;
-                longest = longest.max(run);
-            } else {
-                run = 1;
-            }
-        }
-        longest
-    }
-}
-
-impl Cpu for PollingCpu {
-    fn reset(&mut self, _bus: &mut dyn Bus) -> SimResult<()> {
-        self.pc = 0;
-        self.observed.clear();
-        Ok(())
-    }
-
-    fn step(
-        &mut self,
-        bus: &mut dyn Bus,
-        _observers: &[Arc<dyn SimulationObserver>],
-        _config: &SimulationConfig,
-    ) -> SimResult<()> {
-        self.observed.push(bus.read_u32(DWT_CYCCNT)?);
-        self.pc = self.pc.wrapping_add(2);
-        Ok(())
-    }
-
-    fn set_pc(&mut self, val: u32) {
-        self.pc = val;
-    }
-    fn get_pc(&self) -> u32 {
-        self.pc
-    }
-    fn set_sp(&mut self, _val: u32) {}
-    fn set_exception_pending(&mut self, _exception_num: u32) {}
-    fn get_register(&self, _id: u8) -> u32 {
-        0
-    }
-    fn set_register(&mut self, _id: u8, _val: u32) {}
-    fn snapshot(&self) -> CpuSnapshot {
-        CpuSnapshot::Arm(ArmCpuSnapshot {
-            registers: vec![0; 16],
-            pc: self.pc,
-            xpsr: 0,
-            primask: false,
-            pending_exceptions: 0,
-            pending_exceptions_hi: Vec::new(),
-            vtor: 0,
-            waiting_for_event: false,
-            event_register: false,
-        })
-    }
-    fn apply_snapshot(&mut self, _snapshot: &CpuSnapshot) {}
-    fn get_register_names(&self) -> Vec<String> {
-        Vec::new()
-    }
-    fn index_of_register(&self, _name: &str) -> Option<u8> {
-        None
-    }
-}
-
-fn polling_machine_at_interval(interval: u32) -> Machine<PollingCpu> {
-    let bus = bus_nrf52840_walk_free();
-    let mut machine = Machine::new(PollingCpu::default(), bus);
-    machine.config.peripheral_tick_interval = interval;
-    machine.bus.config.peripheral_tick_interval = interval;
+fn polling_machine_at_interval(interval: u32) -> Machine<CycleCpu> {
+    let mut machine = machine_at_interval(interval);
+    machine.cpu.poll_addr = Some(DWT_CYCCNT);
     // The one write, before the run: arm CYCCNT. The poll loop itself is
     // read-only (see the note above).
     machine
@@ -1010,7 +955,7 @@ fn polling_machine_at_interval(interval: u32) -> Machine<PollingCpu> {
     machine
 }
 
-fn run_poll(interval: u32, budget: u64) -> Machine<PollingCpu> {
+fn run_poll(interval: u32, budget: u64) -> Machine<CycleCpu> {
     let mut m = polling_machine_at_interval(interval);
     m.advance(AdvanceRequest::run(Some(budget)).with_breakpoints(BreakpointPolicy::Ignore))
         .expect("Machine::advance");

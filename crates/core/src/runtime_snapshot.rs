@@ -254,6 +254,23 @@ pub struct RiscVRuntimeSnapshot {
     pub reservation: Option<u32>,
 }
 
+/// [`RiscVRuntimeSnapshot`] plus the debug trigger module (`tselect`,
+/// `tdata1`/`tdata2` per trigger, `tcontrol`), so a resumed machine keeps its
+/// breakpoints and watchpoints.
+///
+/// Versioned by layout, like the SYSTIMER's `SystimerSnapshotV3`: bincode is
+/// positional, so the new field cannot be appended to the old struct. The
+/// writer emits this layout; the reader tries it first and falls back to the
+/// bare [`RiscVRuntimeSnapshot`], which an older blob decodes as exactly (a
+/// shorter blob can never decode as the longer layout). The machine-level
+/// [`RUNTIME_SNAPSHOT_VERSION`] is deliberately NOT bumped: that would reject
+/// every older snapshot outright.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RiscVRuntimeSnapshotV2 {
+    pub base: RiscVRuntimeSnapshot,
+    pub triggers: crate::cpu::riscv::trigger::TriggerSnapshot,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

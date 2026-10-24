@@ -1,0 +1,73 @@
+name: SAMD actual Timer adapter refusal guests
+on:
+  pull_request:
+    paths: ['crates/core/tests/samd_real_timer_adversary_guest.rs', 'scripts/samd-real-timer-adversaries/**', '.github/workflows/samd-real-timer-adversary-guest.yml']
+permissions:
+  contents: read
+env:
+  LABWIRED_TIMER_SOURCE_DIR: owned-timer-source
+  LABWIRED_TIMER_CORE_DIR: owned-timer-core
+jobs:
+  timer-refusals:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Require manufactured mutation and complete receipt controls
+        run: |
+          python3 -B scripts/samd-real-timer-adversaries/test_build.py
+          python3 -B scripts/samd-real-timer-adversaries/test_record.py
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: CrispStrobe/codal-samd
+          ref: d55214588780d737640536b0a58707cd6d69cfce
+          path: owned-timer-source
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: lancaster-university/codal-core
+          ref: 2ed19d64ec3359143409a4b0a9758b4aeef3ee7d
+          path: owned-timer-core
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: Swatinem/rust-cache@v2
+      - name: Build bound positive objects and three owned adapter derivatives
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-arm-none-eabi
+          arm-none-eabi-g++ --version
+          dpkg-query -W gcc-arm-none-eabi
+          (cd owned-timer-source && bash timer-caller/build.sh ../owned-timer-core "$RUNNER_TEMP/timer-positive")
+          python3 -B scripts/samd-real-timer-adversaries/build.py owned-timer-source owned-timer-core "$RUNNER_TEMP/timer-positive" "$RUNNER_TEMP/timer-mutants"
+      - name: Execute three exact refusals in both scheduler profiles
+        env:
+          LABWIRED_TIMER_MUTANT_DIR: ${{ runner.temp }}/timer-mutants
+        run: |
+          set -o pipefail
+          cargo test --release -p labwired-core --test samd_real_timer_adversary_guest -- --nocapture
+          cargo test --release -p labwired-core --test samd_real_timer_adversary_guest -- --ignored --nocapture | tee timer-refusal-default.log
+          cargo test --release -p labwired-core --features event-scheduler --test samd_real_timer_adversary_guest -- --ignored --nocapture | tee timer-refusal-scheduler.log
+      - name: Bind original source derivatives, objects, images, logs and qualification identity
+        env:
+          LABWIRED_TIMER_POSITIVE_DIR: ${{ runner.temp }}/timer-positive
+          LABWIRED_TIMER_MUTANT_DIR: ${{ runner.temp }}/timer-mutants
+          QUALIFICATION_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: python3 -B scripts/samd-real-timer-adversaries/record.py
+      - name: Preserve bounded original negative evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: actual-timer-owned-adapter-refusals
+          path: |
+            timer-refusal-default.log
+            timer-refusal-scheduler.log
+            timer-refusal-qualification.json
+            ${{ runner.temp }}/timer-positive/source-before.json
+            ${{ runner.temp }}/timer-positive/build-provenance.json
+            ${{ runner.temp }}/timer-positive/control.elf
+            ${{ runner.temp }}/timer-positive/control.map
+            ${{ runner.temp }}/timer-positive/*.o
+            ${{ runner.temp }}/timer-mutants/

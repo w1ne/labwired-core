@@ -1,10 +1,10 @@
 {
   "esp32": {
-    "modeled": 2376,
+    "modeled": 2735,
     "total": 2997
   },
   "esp32c3": {
-    "modeled": 2531,
+    "modeled": 2522,
     "total": 2606
   },
   "esp32c6": {
@@ -12,7 +12,7 @@
     "total": 3944
   },
   "esp32s3": {
-    "modeled": 3340,
+    "modeled": 3333,
     "total": 4283
   },
   "nrf52832": {

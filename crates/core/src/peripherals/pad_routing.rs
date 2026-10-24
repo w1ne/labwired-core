@@ -61,6 +61,10 @@ struct Route {
     func: &'static str,
     /// Index into [`PadRoutes::cells`].
     cell: usize,
+    /// A CONDITIONAL route ([`PadRoutes::bind_when_driving`]): live only
+    /// while its line's output stage drives the pad, and then ahead of every
+    /// ordinary route on the same pin.
+    when_driving: bool,
 }
 
 /// Every pad-to-peripheral-wire binding on one GPIO port.
@@ -134,6 +138,46 @@ impl PadRoutes {
             line,
             func,
             cell: cell_idx,
+            when_driving: false,
+        });
+    }
+
+    /// Bind `pin` to `line` of `cell` CONDITIONALLY: the route is live only
+    /// while the line's output stage drives the pad ([`PadLines::drives`]),
+    /// and while it is, it wins the pad over every ordinary route bound there.
+    ///
+    /// This is the STM32F1 shared-pad rule. DS5319 Rev 20 Table 5 puts several
+    /// DEFAULT functions on one pad (PA7 = `SPI1_MOSI/TIM3_CH2`, PA9 =
+    /// `USART1_TX/TIM1_CH2`, PB6 = `I2C1_SCL/TIM4_CH1`), and note 4 of that
+    /// table resolves the clash by "only one peripheral should be enabled at a
+    /// time" — the F1 pad has no mux to ask. A timer channel whose output is
+    /// not enabled (`CCxE = 0`, or MOE clear on TIM1) does not drive its pad,
+    /// so the pad keeps whatever an ordinary route (or nothing) gives it; a
+    /// channel firmware has enabled does drive it, and that is the level the
+    /// pad carries.
+    pub fn bind_when_driving(
+        &mut self,
+        cell: &Arc<PadLines>,
+        pin: u8,
+        selector: Option<u32>,
+        line: usize,
+        func: &'static str,
+    ) {
+        let cell_idx = match self.cells.iter().position(|c| Arc::ptr_eq(c, cell)) {
+            Some(i) => i,
+            None => {
+                self.cells.push(cell.clone());
+                self.registered.push(vec![Vec::new(); cell.names().len()]);
+                self.cells.len() - 1
+            }
+        };
+        self.routes.push(Route {
+            pin,
+            selector,
+            line,
+            func,
+            cell: cell_idx,
+            when_driving: true,
         });
     }
 
@@ -151,9 +195,18 @@ impl PadRoutes {
             return None;
         }
         let current = selector_of(pin)?;
-        self.routes
-            .iter()
-            .find(|r| r.pin == pin && r.selector.is_none_or(|want| want == current))
+        let conditional = self.routes.iter().find(|r| {
+            r.pin == pin
+                && r.when_driving
+                && r.selector.is_none_or(|want| want == current)
+                && self.cells[r.cell].drives(r.line)
+        });
+        if conditional.is_some() {
+            return conditional;
+        }
+        self.routes.iter().find(|r| {
+            r.pin == pin && !r.when_driving && r.selector.is_none_or(|want| want == current)
+        })
     }
 
     /// The live wire level for `pin`, or `None` when no peripheral drives it
@@ -215,6 +268,24 @@ impl PadRoutes {
             if let Some(route) = self.active(pin, &selector_of) {
                 if let Some(slot) = per_cell[route.cell].get_mut(route.line) {
                     slot.push(channel);
+                }
+            }
+            // A conditional route can take the pad over WITHOUT a write to
+            // this port (a timer enabling its channel output), and only a
+            // port write re-syncs taps. So its line reports to the watch
+            // channel whenever the pad is handed to a peripheral at all; it
+            // publishes nothing while it does not drive.
+            if selector_of(pin).is_some() {
+                for r in self
+                    .routes
+                    .iter()
+                    .filter(|r| r.when_driving && r.pin == pin)
+                {
+                    if let Some(slot) = per_cell[r.cell].get_mut(r.line) {
+                        if !slot.contains(&channel) {
+                            slot.push(channel);
+                        }
+                    }
                 }
             }
         }

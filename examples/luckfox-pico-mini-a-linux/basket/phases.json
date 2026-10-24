@@ -1,0 +1,107 @@
+{
+  "address": 83,
+  "axis_register": 50,
+  "configuration": [
+    {
+      "register": 45,
+      "value": 8
+    },
+    {
+      "register": 49,
+      "value": 8
+    }
+  ],
+  "console_limit_bytes": 65536,
+  "devid": 229,
+  "encoding_source": "configs/devices/adxl345.yaml DATA_FORMAT=0x08 scale256 signed16 LE bypass",
+  "phases": [
+    {
+      "expected_raw": [
+        256,
+        -128,
+        64
+      ],
+      "external_power": true,
+      "id": "stimulus_a",
+      "input_g": [
+        1,
+        -0.5,
+        0.25
+      ],
+      "sequence": 1
+    },
+    {
+      "expected_raw": [
+        -64,
+        128,
+        -256
+      ],
+      "external_power": true,
+      "id": "stimulus_b",
+      "input_g": [
+        -0.25,
+        0.5,
+        -1
+      ],
+      "sequence": 2
+    },
+    {
+      "expected_i2c_errno": 6,
+      "expected_uart_bytes": 0,
+      "external_power": false,
+      "id": "external_off",
+      "sequence": 3
+    },
+    {
+      "expected_raw": [
+        -64,
+        128,
+        -256
+      ],
+      "external_power": true,
+      "id": "external_restored",
+      "input_g": [
+        -0.25,
+        0.5,
+        -1
+      ],
+      "sequence": 4
+    }
+  ],
+  "profile": "rv1103-linux-basket-v1",
+  "ready_wait_ms": 100,
+  "schema": 1,
+  "sensor_id": "accelerometer",
+  "uart_deadline_ms": 500,
+  "uart_exchanges": [
+    {
+      "command": "AT",
+      "reply": "OK\r\n"
+    },
+    {
+      "command": "AT+GMR",
+      "reply": "LabWired behavioral ESP32-C3 ESP-AT mock\r\nOK\r\n"
+    },
+    {
+      "command": "AT+LABMOCKSTATUS?",
+      "reply": "+LABMOCKSTATUS:DISCONNECTED\r\nOK\r\n"
+    },
+    {
+      "command": "AT+LABMOCKCONNECT",
+      "reply": "OK\r\n"
+    },
+    {
+      "command": "AT+LABMOCKSTATUS?",
+      "reply": "+LABMOCKSTATUS:CONNECTED\r\nOK\r\n"
+    },
+    {
+      "command": "AT+LABMOCKDISCONNECT",
+      "reply": "OK\r\n"
+    },
+    {
+      "command": "AT+LABMOCKSTATUS?",
+      "reply": "+LABMOCKSTATUS:DISCONNECTED\r\nOK\r\n"
+    }
+  ],
+  "uart_id": "wifi"
+}

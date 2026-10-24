@@ -1,0 +1,18 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+#
+# M0 IO smoke: boot the real XC16 UART firmware and receive "HI" from U1TXREG
+# (0x0224). The program then toggles LATB0 forever, so the run ends at
+# max_steps with both bytes captured.
+schema_version: "1.0"
+inputs:
+  firmware: "./firmware/dspic33fj32mc202-xc16-uart-smoke.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 400
+assertions:
+  - uart_contains: "HI"
+  - expected_stop_reason: max_steps

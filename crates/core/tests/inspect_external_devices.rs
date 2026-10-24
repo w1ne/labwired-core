@@ -316,11 +316,12 @@ fn unpainted_panel_reports_zero_rather_than_nothing() {
 }
 
 /// `SystemBus::record_external_devices` is the one home for the manifest
-/// declarations inspect names devices from, and it has exactly two callers:
+/// declarations inspect names devices from, and it has exactly three callers:
 /// `from_config` (every chip that loads peripherals from a descriptor) and the
-/// classic-ESP32 glue (which builds its peripheral bank in Rust instead).
+/// classic-ESP32 glue (which builds its peripheral bank in Rust instead), and
+/// the manifest funnel for programmatic platforms.
 ///
-/// A third attach path that forgets to call it would not fail loudly — its
+/// A new attach path that forgets to call it would not fail loudly — its
 /// devices would still attach and still simulate, and would simply inspect as
 /// anonymous `i2c0@0x70` entries. That is precisely the kind of silent,
 /// partial regression this file exists to prevent, so the fork is caught here
@@ -357,7 +358,12 @@ fn record_external_devices_has_one_home() {
     assert_eq!(
         callers,
         vec![
+            "src/bus/external_devices.rs".to_string(),
             "src/bus/from_config.rs".to_string(),
+            // PIC24 SPI1/I2C1 are CPU-internal: the builder strips the
+            // manifest for the bus and attaches the devices to the CPU, but
+            // still records the declarations for inspection.
+            "src/system/builder/pic24.rs".to_string(),
             "src/system/xtensa/esp32.rs".to_string(),
         ],
         "a new external-device attach path must record its declarations too, \

@@ -1,0 +1,31 @@
+# An ESP32-S3 I2C1 controller (register level, src/esp32x_i2c_controller.S
+# built with INST1 and PADS_HI) and an STM32G071 I2C1 target at 0x42 (the
+# env-i2c.yaml target), on bank-1 pads GPIO41 (SDA) / GPIO42 (SCL) through
+# the S3 GPIO matrix (I2CEXT1_SCL 91, I2CEXT1_SDA 92). Open-drain nets with
+# the bus pull-up on the net.
+schema_version: "1.0"
+name: gpio-net-i2c-esp32s3-i2c1
+nodes:
+  - id: esp
+    system: "../../configs/systems/esp32s3.yaml"
+    firmware: "firmware/esp32s3-i2c1-controller.elf"
+  - id: b
+    system: "system.yaml"
+    firmware: "firmware/i2c-target.elf"
+interconnects:
+  - type: gpio_net
+    nodes: [esp, b]
+    config:
+      name: scl
+      pull: up
+      members:
+        - { node: esp, peripheral: gpio, pin: 42 }   # I2CEXT1_SCL
+        - { node: b, peripheral: gpiob, pin: 6 }
+  - type: gpio_net
+    nodes: [esp, b]
+    config:
+      name: sda
+      pull: up
+      members:
+        - { node: esp, peripheral: gpio, pin: 41 }   # I2CEXT1_SDA
+        - { node: b, peripheral: gpiob, pin: 7 }

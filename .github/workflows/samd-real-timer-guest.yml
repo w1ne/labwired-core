@@ -1,0 +1,71 @@
+name: SAMD actual Timer caller ARM guest
+on:
+  pull_request:
+    paths: ['crates/core/tests/samd_real_timer_guest.rs', 'scripts/samd-real-timer/**', '.github/workflows/samd-real-timer-guest.yml']
+permissions:
+  contents: read
+env:
+  LABWIRED_TIMER_QUALIFIED_SOURCE: d55214588780d737640536b0a58707cd6d69cfce
+  LABWIRED_TIMER_SOURCE_DIR: owned-timer-source
+  LABWIRED_TIMER_CORE_DIR: owned-timer-core
+jobs:
+  timer-guest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Require manufactured receipt and entry-point controls
+        run: python3 -B scripts/samd-real-timer/test_record.py
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: CrispStrobe/codal-samd
+          ref: d55214588780d737640536b0a58707cd6d69cfce
+          path: owned-timer-source
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: lancaster-university/codal-core
+          ref: 2ed19d64ec3359143409a4b0a9758b4aeef3ee7d
+          path: owned-timer-core
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: Swatinem/rust-cache@v2
+      - name: Build source-bound actual Timer and explicit diagnostic adapters
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-arm-none-eabi
+          arm-none-eabi-g++ --version
+          dpkg-query -W gcc-arm-none-eabi
+          cd owned-timer-source
+          bash timer-caller/build.sh ../owned-timer-core "$RUNNER_TEMP/timer-caller"
+      - name: Execute actual caller in both scheduler profiles
+        env:
+          LABWIRED_TIMER_FIXTURE_DIR: ${{ runner.temp }}/timer-caller
+        run: |
+          set -o pipefail
+          cargo test --release -p labwired-core --test samd_real_timer_guest -- --nocapture
+          cargo test --release -p labwired-core --test samd_real_timer_guest -- --ignored --nocapture | tee timer-guest-default.log
+          cargo test --release -p labwired-core --features event-scheduler --test samd_real_timer_guest -- --ignored --nocapture | tee timer-guest-scheduler.log
+      - name: Bind actual source, merge, ELF and execution logs
+        env:
+          LABWIRED_TIMER_FIXTURE_DIR: ${{ runner.temp }}/timer-caller
+          QUALIFICATION_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: python3 -B scripts/samd-real-timer/record.py
+      - name: Preserve original bounded execution and build evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: actual-timer-caller-guest-results
+          path: |
+            timer-guest-default.log
+            timer-guest-scheduler.log
+            timer-qualification.json
+            ${{ runner.temp }}/timer-caller/source-before.json
+            ${{ runner.temp }}/timer-caller/build-provenance.json
+            ${{ runner.temp }}/timer-caller/control.elf
+            ${{ runner.temp }}/timer-caller/control.map
+            ${{ runner.temp }}/timer-caller/symbols.txt
+            ${{ runner.temp }}/timer-caller/*.d

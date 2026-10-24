@@ -426,6 +426,51 @@ impl Rig for Avr {
     }
 }
 
+// ── dsPIC33F/PIC24 ───────────────────────────────────────────────────────────
+
+struct Pic24;
+impl Rig for Pic24 {
+    fn name(&self) -> &'static str {
+        "Pic24GpioPort"
+    }
+    fn build(&mut self) -> Box<dyn Peripheral> {
+        // PORTB of the 44-pin dsPIC33FJ32MC204: RB0-RB15.
+        Box::new(crate::peripherals::pic24_gpio::Pic24GpioPort::new(0xFFFF))
+    }
+    fn set_mode(&mut self, port: &mut dyn Peripheral, pin: u8, mode: Mode) -> bool {
+        use crate::peripherals::pic24_gpio::{OFF_LAT, OFF_ODC, OFF_TRIS};
+        let set = |port: &mut dyn Peripheral, off: u64, on: bool| {
+            let cur = port.read(off).unwrap();
+            let next = if on {
+                cur | (1 << pin)
+            } else {
+                cur & !(1 << pin)
+            };
+            port.write(off, next).unwrap();
+        };
+        match mode {
+            // CNPU internal pull-ups are not modelled (M1b scope): the pull
+            // input modes are refused rather than faked.
+            Mode::Input(Pull::Up) | Mode::Input(Pull::Down) => return false,
+            Mode::Input(Pull::None) => {
+                set(port, OFF_TRIS, true);
+                set(port, OFF_LAT, false);
+            }
+            Mode::PushPull(level) => {
+                set(port, OFF_LAT, level);
+                set(port, OFF_ODC, false);
+                set(port, OFF_TRIS, false);
+            }
+            Mode::OpenDrain(level) => {
+                set(port, OFF_LAT, level);
+                set(port, OFF_ODC, true);
+                set(port, OFF_TRIS, false);
+            }
+        }
+        true
+    }
+}
+
 // ── RP2040 SIO ───────────────────────────────────────────────────────────────
 
 struct Rp2040;
@@ -452,18 +497,37 @@ impl Rig for Rp2040 {
 
 // ── ESP32 family ─────────────────────────────────────────────────────────────
 
-/// GPIO_OUT_W1TS 0x08, OUT_W1TC 0x0C, ENABLE_W1TS 0x24, ENABLE_W1TC 0x28 on
-/// all three; `pin_reg` is `GPIO_PINn_REG` (PAD_DRIVER = bit 2).
-fn esp_output(port: &mut dyn Peripheral, pin: u8, level: bool, open_drain: bool, pin_reg: u64) {
-    w32(port, pin_reg, if open_drain { 1 << 2 } else { 0 });
-    w32(port, if level { 0x08 } else { 0x0C }, 1 << pin);
-    w32(port, 0x24, 1 << pin);
+/// `(OUT_W1TS, OUT_W1TC, ENABLE_W1TS, ENABLE_W1TC, bit)` for `pin` on all
+/// three: GPIO_OUT_W1TS 0x08, OUT_W1TC 0x0C, ENABLE_W1TS 0x24, ENABLE_W1TC
+/// 0x28 for GPIO0..31; the `1` twins at 0x14 / 0x18 / 0x30 / 0x34 and bit
+/// `pin - 32` above (classic ESP32 and S3).
+fn esp_bank(pin: u8) -> (u64, u64, u64, u64, u32) {
+    if pin < 32 {
+        (0x08, 0x0C, 0x24, 0x28, 1 << pin)
+    } else {
+        (0x14, 0x18, 0x30, 0x34, 1 << (pin - 32))
+    }
 }
 
-struct Esp32;
+/// An output through the bank's W1TS / W1TC registers; `pin_reg` is
+/// `GPIO_PINn_REG` (PAD_DRIVER = bit 2).
+fn esp_output(port: &mut dyn Peripheral, pin: u8, level: bool, open_drain: bool, pin_reg: u64) {
+    let (set, clear, oe, _, bit) = esp_bank(pin);
+    w32(port, pin_reg, if open_drain { 1 << 2 } else { 0 });
+    w32(port, if level { set } else { clear }, bit);
+    w32(port, oe, bit);
+}
+
+/// The classic ESP32 GPIO, on a bank-0 pad (GPIO3) and, as `Esp32(33)`, on
+/// GPIO33: bank 1, the highest pad with an output stage.
+struct Esp32(u8);
 impl Rig for Esp32 {
     fn name(&self) -> &'static str {
-        "Esp32Gpio"
+        if self.0 < 32 {
+            "Esp32Gpio"
+        } else {
+            "Esp32Gpio bank 1"
+        }
     }
     fn build(&mut self) -> Box<dyn Peripheral> {
         Box::new(crate::peripherals::esp32::gpio::Esp32Gpio::new())
@@ -471,12 +535,18 @@ impl Rig for Esp32 {
     fn set_mode(&mut self, port: &mut dyn Peripheral, pin: u8, mode: Mode) -> bool {
         let pin_reg = 0x88 + u64::from(pin) * 4;
         match mode {
-            Mode::Input(Pull::None) => w32(port, 0x28, 1 << pin),
+            Mode::Input(Pull::None) => {
+                let (_, _, _, oe_clear, bit) = esp_bank(pin);
+                w32(port, oe_clear, bit)
+            }
             Mode::Input(_) => return false,
             Mode::PushPull(level) => esp_output(port, pin, level, false, pin_reg),
             Mode::OpenDrain(level) => esp_output(port, pin, level, true, pin_reg),
         }
         true
+    }
+    fn pin(&self) -> u8 {
+        self.0
     }
 }
 
@@ -509,7 +579,8 @@ fn esp_matrix_mode(
                 IO_MUX_INPUT
             };
             io_mux_write(io_mux, port, pin, word);
-            w32(port, 0x28, 1 << pin);
+            let (_, _, _, oe_clear, bit) = esp_bank(pin);
+            w32(port, oe_clear, bit);
         }
         Mode::PushPull(level) | Mode::OpenDrain(level) => {
             io_mux_write(io_mux, port, pin, IO_MUX_INPUT);
@@ -546,13 +617,26 @@ impl Rig for Esp32c3 {
     }
 }
 
+/// The ESP32-S3 GPIO on a bank-0 pad (GPIO3), or with `bank1` on GPIO40.
 #[derive(Default)]
 struct Esp32s3 {
     io_mux: Option<crate::peripherals::esp32s3::io_mux::Esp32s3IoMux>,
+    bank1: bool,
 }
 impl Rig for Esp32s3 {
     fn name(&self) -> &'static str {
-        "Esp32s3Gpio"
+        if self.bank1 {
+            "Esp32s3Gpio bank 1"
+        } else {
+            "Esp32s3Gpio"
+        }
+    }
+    fn pin(&self) -> u8 {
+        if self.bank1 {
+            40
+        } else {
+            3
+        }
     }
     fn build(&mut self) -> Box<dyn Peripheral> {
         let io_mux = crate::peripherals::esp32s3::io_mux::Esp32s3IoMux::new();
@@ -564,6 +648,92 @@ impl Rig for Esp32s3 {
     fn set_mode(&mut self, port: &mut dyn Peripheral, pin: u8, mode: Mode) -> bool {
         let io_mux = self.io_mux.as_mut().expect("built");
         esp_matrix_mode(io_mux, port, pin, mode)
+    }
+}
+
+/// A pad the RTC IO MUX owns (`MUX_SEL` and `FUN_IE` set), driven through
+/// the RTC_IO block: the classic part's GPIO25 (RTC_GPIO6, `PAD_DAC1`, bit
+/// 20), or with `s3` the S3's GPIO5 (RTC_GPIO5, `TOUCH_PAD5`, bit 15). The
+/// RTC_IO write moves the GPIO port's pad without touching the GPIO block,
+/// so it is bracketed for push capture, as the bus does.
+#[derive(Default)]
+struct EspRtc {
+    s3: bool,
+    rtc: Option<crate::peripherals::esp_rtc_io::EspRtcIo>,
+}
+impl EspRtc {
+    /// `(pad register, MUX_SEL | FUN_IE, RTC GPIO bit, RTC_GPIO_PINn)`.
+    fn regs(&self) -> (u64, u32, u32, u64) {
+        if self.s3 {
+            (0x84 + 4 * 5, (1 << 19) | (1 << 13), 1 << 15, 0x28 + 4 * 5)
+        } else {
+            (0x84, (1 << 17) | (1 << 11), 1 << 20, 0x28 + 4 * 6)
+        }
+    }
+    fn rtc_write(&mut self, port: &mut dyn Peripheral, off: u64, value: u32) {
+        let rtc = self.rtc.as_mut().expect("built");
+        watch_begin(port.pins_mut().expect("pin port"));
+        w32(rtc, off, value);
+        watch_end(port.pins_mut().expect("pin port"));
+    }
+}
+impl Rig for EspRtc {
+    fn name(&self) -> &'static str {
+        if self.s3 {
+            "Esp32s3Gpio RTC GPIO"
+        } else {
+            "Esp32Gpio RTC GPIO"
+        }
+    }
+    fn pin(&self) -> u8 {
+        if self.s3 {
+            5
+        } else {
+            25
+        }
+    }
+    fn build(&mut self) -> Box<dyn Peripheral> {
+        use crate::peripherals::esp_rtc_io::EspRtcIo;
+        let mut rtc = if self.s3 {
+            EspRtcIo::new_esp32s3()
+        } else {
+            EspRtcIo::new_esp32()
+        };
+        let mut gpio: Box<dyn Peripheral> = if self.s3 {
+            Box::new(crate::peripherals::esp32s3::gpio::Esp32s3Gpio::new())
+        } else {
+            Box::new(crate::peripherals::esp32::gpio::Esp32Gpio::new())
+        };
+        assert!(gpio.attach_rtc_io_pads(rtc.rtc_io_pads().expect("RTC_IO")));
+        let (pad, on, _, _) = self.regs();
+        w32(&mut rtc, pad, on);
+        self.rtc = Some(rtc);
+        gpio
+    }
+    fn set_mode(&mut self, port: &mut dyn Peripheral, _pin: u8, mode: Mode) -> bool {
+        const RUE: u32 = 1 << 27;
+        const RDE: u32 = 1 << 28;
+        let (pad, on, bit, pin_reg) = self.regs();
+        match mode {
+            Mode::Input(pull) => {
+                self.rtc_write(port, 0x14, bit); // RTC_GPIO_ENABLE_W1TC
+                let pull = match pull {
+                    Pull::None => 0,
+                    Pull::Up => RUE,
+                    Pull::Down => RDE,
+                };
+                self.rtc_write(port, pad, on | pull);
+            }
+            Mode::PushPull(level) | Mode::OpenDrain(level) => {
+                self.rtc_write(port, pad, on);
+                let od = matches!(mode, Mode::OpenDrain(_));
+                self.rtc_write(port, pin_reg, if od { 1 << 2 } else { 0 });
+                // RTC_GPIO_OUT_W1TS / _W1TC, then RTC_GPIO_ENABLE_W1TS.
+                self.rtc_write(port, if level { 0x04 } else { 0x08 }, bit);
+                self.rtc_write(port, 0x10, bit);
+            }
+        }
+        true
     }
 }
 
@@ -628,10 +798,21 @@ fn rigs() -> Vec<Box<dyn Rig>> {
         Box::new(RaPort::default()),
         Box::new(Imxrt::default()),
         Box::new(Avr),
+        Box::new(Pic24),
         Box::new(Rp2040),
-        Box::new(Esp32),
+        Box::new(Esp32(3)),
+        Box::new(Esp32(33)),
         Box::new(Esp32c3::default()),
         Box::new(Esp32s3::default()),
+        Box::new(Esp32s3 {
+            bank1: true,
+            ..Default::default()
+        }),
+        Box::new(EspRtc::default()),
+        Box::new(EspRtc {
+            s3: true,
+            ..Default::default()
+        }),
         Box::new(Declarative),
     ]
 }
@@ -829,9 +1010,10 @@ fn every_model_input_register_reads_its_pull() {
         }
         pulled_models += usize::from(pulled);
     }
-    // STM32 v2/f1, nRF52, Kinetis, EFR32, SAM, RA, i.MX RT, ATmega, ESP32-C3/S3.
+    // STM32 v2/f1, nRF52, Kinetis, EFR32, SAM, RA, i.MX RT, ATmega, ESP32-C3/S3,
+    // and the RTC GPIO of the classic ESP32 and the S3.
     assert!(
-        pulled_models >= 11,
+        pulled_models >= 13,
         "pulls exercised on {pulled_models} models"
     );
 }

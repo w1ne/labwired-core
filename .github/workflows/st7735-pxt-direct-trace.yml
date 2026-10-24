@@ -1,0 +1,50 @@
+name: ST7735 pinned PXT direct fragments
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - scripts/st7735-pxt-direct-trace/**
+      - .github/workflows/st7735-pxt-direct-trace.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: st7735-pxt-direct-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  pinned-direct-fragments:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Runner admission controls without network or compilation
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python3 -m unittest discover -s scripts/st7735-pxt-direct-trace -p 'test_*.py' -v
+      - name: Install 32-bit host compiler support
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends g++-multilib
+      - name: Execute pinned original fragments and corrupt-data negative
+        run: >
+          python3 scripts/st7735-pxt-direct-trace/run.py
+          --work-dir "$RUNNER_TEMP"
+          --output "$RUNNER_TEMP/st7735-pxt-direct-trace.json"
+          --notice-output "$RUNNER_TEMP/LICENSE-pxt-common-packages.txt"
+      - name: Execute exact caller and Image accessor fragments (macro on and off)
+        run: >
+          python3 scripts/st7735-pxt-direct-trace/caller_run.py
+          --work-dir "$RUNNER_TEMP"
+          --output "$RUNNER_TEMP/st7735-pxt-caller-trace.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: st7735-pxt-direct-fragment-trace
+          path: |
+            ${{ runner.temp }}/st7735-pxt-direct-trace.json
+            ${{ runner.temp }}/LICENSE-pxt-common-packages.txt
+            ${{ runner.temp }}/st7735-pxt-caller-trace.json
+          if-no-files-found: error

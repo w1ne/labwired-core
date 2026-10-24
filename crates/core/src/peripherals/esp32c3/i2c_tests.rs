@@ -1,4 +1,5 @@
 use super::*;
+use crate::peripherals::esp_i2c_core::esp_i2c_family_suite;
 
 #[test]
 fn manifest_route_rejects_incomplete_or_invalid_c3_pads() {
@@ -36,8 +37,6 @@ fn manifest_route_rejects_incomplete_or_invalid_c3_pads() {
         .to_string()
         .contains("route.mosi"));
 }
-
-const REG_CMD1_OFFSET: u64 = REG_CMD0 + 4;
 
 // ── Wake-cadence safety: re-anchor while a wake is in flight ─────────────
 //
@@ -208,11 +207,11 @@ fn every_attached_i2c_device_matches_the_per_cycle_walk() {
             write(REG_SCL_STOP_SETUP, 200);
             write(REG_SCL_STOP_HOLD, 200);
             write(REG_CMD0, cmd(CMD_RSTART, 0));
-            write(REG_CMD1_OFFSET, cmd(CMD_WRITE, 2));
-            write(REG_CMD1_OFFSET + 4, cmd(CMD_RSTART, 0));
-            write(REG_CMD1_OFFSET + 8, cmd(CMD_WRITE, 1));
-            write(REG_CMD1_OFFSET + 12, cmd(CMD_READ, 4));
-            write(REG_CMD1_OFFSET + 16, cmd(CMD_STOP, 0));
+            write(REG_CMD0 + 4, cmd(CMD_WRITE, 2));
+            write(REG_CMD0 + 8, cmd(CMD_RSTART, 0));
+            write(REG_CMD0 + 12, cmd(CMD_WRITE, 1));
+            write(REG_CMD0 + 16, cmd(CMD_READ, 4));
+            write(REG_CMD0 + 20, cmd(CMD_STOP, 0));
             for b in tx_bytes {
                 write(REG_DATA, b);
             }
@@ -340,8 +339,8 @@ fn program_write_txn(write: &mut dyn FnMut(u64, u32)) {
     write(REG_SCL_STOP_SETUP, 200);
     write(REG_SCL_STOP_HOLD, 200);
     write(REG_CMD0, cmd(CMD_RSTART, 0));
-    write(REG_CMD1_OFFSET, cmd(CMD_WRITE, 2));
-    write(REG_CMD1_OFFSET + 4, cmd(CMD_STOP, 0));
+    write(REG_CMD0 + 4, cmd(CMD_WRITE, 2));
+    write(REG_CMD0 + 8, cmd(CMD_STOP, 0));
     write(REG_DATA, 0x3C << 1);
     write(REG_DATA, 0xA5);
 }
@@ -560,124 +559,6 @@ fn i2c0_interrupt_source_is_29_not_42() {
 }
 
 #[test]
-fn ctr_round_trip() {
-    let mut p = Esp32c3I2c::new();
-    p.write_u32(REG_CTR, 0x0000_0010).unwrap(); // arbitrary, no TRANS_START
-    assert_eq!(p.read_u32(REG_CTR).unwrap(), 0x0000_0010);
-}
-
-#[test]
-fn slave_addr_round_trip() {
-    let mut p = Esp32c3I2c::new();
-    p.write_u32(REG_SLAVE_ADDR, 0x48).unwrap();
-    assert_eq!(p.read_u32(REG_SLAVE_ADDR).unwrap(), 0x48);
-}
-
-#[test]
-fn cmd_registers_round_trip() {
-    let mut p = Esp32c3I2c::new();
-    p.write_u32(REG_CMD0, 0x0000_0800).unwrap();
-    p.write_u32(REG_CMD7, 0x0000_2000).unwrap();
-    assert_eq!(p.read_u32(REG_CMD0).unwrap(), 0x0000_0800);
-    assert_eq!(p.read_u32(REG_CMD7).unwrap(), 0x0000_2000);
-}
-
-#[test]
-fn sr_txfifo_cnt_reflects_pushes() {
-    let mut p = Esp32c3I2c::new();
-    p.write_u32(REG_DATA, 0xAA).unwrap();
-    p.write_u32(REG_DATA, 0xBB).unwrap();
-    p.write_u32(REG_DATA, 0xCC).unwrap();
-    let sr = p.read_u32(REG_SR).unwrap();
-    assert_eq!(
-        (sr >> 18) & 0x3F,
-        3,
-        "SR.txfifo_cnt should reflect 3 pushes"
-    );
-}
-
-#[test]
-fn fifo_reset_bits_clear_fifos() {
-    let mut p = Esp32c3I2c::new();
-    p.write_u32(REG_DATA, 0x11).unwrap();
-    p.write_u32(REG_DATA, 0x22).unwrap();
-    p.write_u32(REG_FIFO_CONF, 1 << 13).unwrap(); // TX_FIFO_RST
-    let sr = p.read_u32(REG_SR).unwrap();
-    assert_eq!((sr >> 18) & 0x3F, 0);
-}
-
-#[test]
-fn int_clr_clears_specified_bits() {
-    let mut p = Esp32c3I2c::new();
-    p.int_raw = INT_TRANS_COMPLETE | INT_NACK;
-    p.write_u32(REG_INT_CLR, INT_NACK).unwrap();
-    assert_eq!(p.read_u32(REG_INT_RAW).unwrap(), INT_TRANS_COMPLETE);
-}
-
-#[test]
-fn int_st_masks_with_int_ena() {
-    let mut p = Esp32c3I2c::new();
-    p.int_raw = INT_TRANS_COMPLETE | INT_NACK;
-    assert!(
-        !p.legacy_tick_active(),
-        "disabled C3 I2C level IRQs must stay out of the legacy tick walk"
-    );
-    assert!(
-        p.legacy_tick_dynamic(),
-        "C3 I2C updates tick membership when INT_ST changes"
-    );
-    p.write_u32(REG_INT_ENA, INT_TRANS_COMPLETE).unwrap();
-    assert_eq!(p.read_u32(REG_INT_ST).unwrap(), INT_TRANS_COMPLETE);
-    assert!(
-        p.legacy_tick_active(),
-        "enabled C3 I2C level IRQ must re-enter the legacy tick walk"
-    );
-    p.write_u32(REG_INT_CLR, INT_TRANS_COMPLETE).unwrap();
-    assert!(
-        !p.legacy_tick_active(),
-        "cleared C3 I2C level IRQ must leave the legacy tick walk"
-    );
-}
-
-#[test]
-fn end_opcode_raises_end_detect_not_trans_complete() {
-    let mut p = Esp32c3I2c::new();
-    p.write_u32(REG_CMD0, cmd(CMD_END, 0)).unwrap();
-    start_and_run(&mut p);
-    let int_raw = p.read_u32(REG_INT_RAW).unwrap();
-    assert_eq!(
-        int_raw & INT_END_DETECT,
-        INT_END_DETECT,
-        "END must raise END_DETECT"
-    );
-    assert_eq!(
-        int_raw & INT_TRANS_COMPLETE,
-        0,
-        "END must NOT raise TRANS_COMPLETE"
-    );
-}
-
-#[test]
-fn rstart_then_stop_completes() {
-    let mut p = Esp32c3I2c::new();
-    p.write_u32(REG_CMD0, cmd(CMD_RSTART, 0)).unwrap();
-    p.write_u32(REG_CMD1_OFFSET, cmd(CMD_STOP, 0)).unwrap();
-    start_and_run(&mut p);
-    assert_eq!(
-        p.read_u32(REG_INT_RAW).unwrap() & INT_TRANS_COMPLETE,
-        INT_TRANS_COMPLETE
-    );
-}
-
-#[test]
-fn trans_start_auto_clears() {
-    let mut p = Esp32c3I2c::new();
-    p.write_u32(REG_CMD0, cmd(CMD_END, 0)).unwrap();
-    start_and_run(&mut p);
-    assert_eq!(p.read_u32(REG_CTR).unwrap() & CTR_TRANS_START_BIT, 0);
-}
-
-#[test]
 fn one_shot_control_bits_auto_clear() {
     let mut p = Esp32c3I2c::new();
     p.write_u32(REG_CTR, CTR_FSM_RST | CTR_CONF_UPGATE).unwrap();
@@ -718,22 +599,6 @@ fn txfifo_start_addr_window_peeks_tx_fifo_non_destructively() {
     );
     let sr = p.read_u32(REG_SR).unwrap();
     assert_eq!((sr >> 18) & 0x3F, 2, "peek must not consume TX FIFO bytes");
-}
-
-#[test]
-fn write_with_unmatched_address_sets_nack_int() {
-    let mut p = Esp32c3I2c::new();
-    // No slaves attached.
-    p.write_u32(REG_CMD0, cmd(CMD_RSTART, 0)).unwrap();
-    p.write_u32(REG_CMD0 + 4, cmd(CMD_WRITE, 1)).unwrap();
-    p.write_u32(REG_CMD0 + 8, cmd(CMD_STOP, 0)).unwrap();
-    p.write_u32(REG_DATA, 0xA0).unwrap(); // some addr+W, no slave
-    start_and_run(&mut p);
-    assert_eq!(
-        p.read_u32(REG_INT_RAW).unwrap() & INT_NACK,
-        INT_NACK,
-        "INT_NACK should fire when no slave matches"
-    );
 }
 
 #[test]
@@ -788,55 +653,6 @@ fn config_registers_reset_values_match_c3_yaml() {
 //    register-pointer device (an existing I2cDevice).
 
 use crate::peripherals::components::Bmp280;
-
-#[test]
-fn write_read_drives_attached_bmp280() {
-    let mut p = Esp32c3I2c::new();
-    // Default address 0x76.
-    p.push_slave(Box::new(Bmp280::new(0x76)));
-
-    // Canonical register-pointer read: set pointer to 0xD0 (chip-id), then
-    // repeated-start and read one byte. CHIP_ID for BMP280 is 0x58.
-    //   RSTART; WRITE 2 (addr+W, pointer=0xD0); RSTART;
-    //   WRITE 1 (addr+R); READ 1; STOP.
-    p.write_u32(REG_CMD0, cmd(CMD_RSTART, 0)).unwrap();
-    p.write_u32(REG_CMD0 + 4, cmd(CMD_WRITE, 2)).unwrap();
-    p.write_u32(REG_CMD0 + 8, cmd(CMD_RSTART, 0)).unwrap();
-    p.write_u32(REG_CMD0 + 12, cmd(CMD_WRITE, 1)).unwrap();
-    p.write_u32(REG_CMD0 + 16, cmd(CMD_READ, 1)).unwrap();
-    p.write_u32(REG_CMD0 + 20, cmd(CMD_STOP, 0)).unwrap();
-
-    // Push TX bytes: addr+W (0x76<<1=0xEC), pointer 0xD0, addr+R (0xED).
-    p.write_u32(REG_DATA, 0xEC).unwrap();
-    p.write_u32(REG_DATA, 0xD0).unwrap();
-    p.write_u32(REG_DATA, 0xED).unwrap();
-
-    start_and_run(&mut p);
-
-    // Address must have matched (no NACK).
-    assert_eq!(
-        p.read_u32(REG_INT_RAW).unwrap() & INT_NACK,
-        0,
-        "BMP280 at 0x76 must ACK its address"
-    );
-    // Slave acked → RESP_REC set in SR.
-    assert_eq!(
-        p.read_u32(REG_SR).unwrap() & SR_RESP_REC,
-        SR_RESP_REC,
-        "SR.RESP_REC must be set after a successful transaction"
-    );
-    // The chip-id byte 0x58 should be in the RX FIFO.
-    assert_eq!(
-        p.read_u32(REG_DATA).unwrap(),
-        0x58,
-        "BMP280 CHIP_ID round-trip"
-    );
-    // STOP completed the transaction.
-    assert_eq!(
-        p.read_u32(REG_INT_RAW).unwrap() & INT_TRANS_COMPLETE,
-        INT_TRANS_COMPLETE
-    );
-}
 
 #[test]
 fn inspect_ssd1306_framebuffer_reports_ink_metrics() {
@@ -1222,203 +1038,83 @@ fn multi_chunk_pixel_burst_delivers_every_byte_to_ssd1306() {
         "all {DATA_LEN} written pixel bytes are nonzero and must be lit"
     );
 }
-// ── TCA9548A driven through the ESP32-C3 bit-level engine ───────────────
-//
-// The C3 does not execute its command list synchronously: the transaction
-// is clocked out bit by bit over simulated cycles, and the address frame is
-// resolved at the ACK bit (`ack_bit_level`). That is a third, independent
-// resolution site — plus the `SLAVE_ADDR` fallback beside it — and neither
-// had ever been driven with a bus switch attached.
-mod mux {
-    use super::*;
-    use crate::peripherals::components::mux_fixture::{
-        bytes_written_to, mux_with_tags, tag_for, MUX_ADDR, SENSOR_ADDR,
-    };
-    use crate::peripherals::components::tca9548a::Tca9548a;
+esp_i2c_family_suite! {
+    ctrl: Esp32c3I2c,
+    p_name: p,
+    launch: start_and_run,
+    ack_bit: SR_RESP_REC,
+    cmd_last: REG_CMD7,
+    cmd_slots_test: cmd_registers_round_trip,
+    fifo_reset_test: fifo_reset_bits_clear_fifos,
+    bmp280_test: write_read_drives_attached_bmp280,
+    mux_extra: {
+        /// The C3 bit engine skips a zero-payload WRITE entirely (there is
+        /// no address byte to clock), so its SLAVE_ADDR fallback is reached
+        /// from the address frame itself when the wire address matches
+        /// nothing. That is a different drive from the classic/S3 engines,
+        /// and it stays its own body.
+        #[test]
+        fn the_slave_addr_register_path_also_routes_through_the_switch() {
+            let mut p = controller();
 
-    fn controller() -> Esp32c3I2c {
-        let mut p = Esp32c3I2c::new();
-        p.push_slave(Box::new(mux_with_tags(4)));
-        p
-    }
-
-    fn with_mux<R>(p: &Esp32c3I2c, f: impl FnOnce(&Tca9548a) -> R) -> R {
-        let mux = p.attached_slaves()[0]
-            .as_any()
-            .and_then(|a| a.downcast_ref::<Tca9548a>())
-            .expect("slave 0 is the switch");
-        f(mux)
-    }
-
-    /// Program a command list + TX FIFO and clock the bit engine to a park.
-    fn program(p: &mut Esp32c3I2c, list: &[(u8, u8)], tx: &[u8]) {
-        p.write_u32(REG_INT_CLR, 0xFFFF_FFFF).unwrap();
-        // Flush both FIFOs without disturbing the watermark fields.
-        let conf = p.read_u32(REG_FIFO_CONF).unwrap();
-        p.write_u32(REG_FIFO_CONF, conf | (1 << 12) | (1 << 13))
-            .unwrap();
-        for (i, (op, n)) in list.iter().enumerate() {
-            p.write_u32(REG_CMD0 + 4 * i as u64, cmd(*op, *n)).unwrap();
-        }
-        for b in tx {
-            p.write_u32(REG_DATA, *b as u32).unwrap();
-        }
-        start_and_run(p);
-    }
-
-    fn write_bytes(p: &mut Esp32c3I2c, addr: u8, payload: &[u8]) {
-        let mut tx = vec![addr << 1];
-        tx.extend_from_slice(payload);
-        p.write_u32(REG_SLAVE_ADDR, addr as u32).unwrap();
-        program(
-            p,
-            &[(CMD_RSTART, 0), (CMD_WRITE, tx.len() as u8), (CMD_STOP, 0)],
-            &tx,
-        );
-    }
-
-    fn read_byte(p: &mut Esp32c3I2c, addr: u8) -> u8 {
-        p.write_u32(REG_SLAVE_ADDR, addr as u32).unwrap();
-        program(
-            p,
-            &[
-                (CMD_RSTART, 0),
-                (CMD_WRITE, 1),
-                (CMD_READ, 1),
-                (CMD_STOP, 0),
-            ],
-            &[(addr << 1) | 1],
-        );
-        p.read_u32(REG_DATA).unwrap() as u8
-    }
-
-    fn nacked(p: &Esp32c3I2c) -> bool {
-        p.read_u32(REG_INT_RAW).unwrap() & INT_NACK != 0
-    }
-
-    fn probe_acked(p: &mut Esp32c3I2c, addr: u8) -> bool {
-        p.write_u32(REG_SLAVE_ADDR, addr as u32).unwrap();
-        program(
-            p,
-            &[(CMD_RSTART, 0), (CMD_WRITE, 1), (CMD_STOP, 0)],
-            &[addr << 1],
-        );
-        !nacked(p)
-    }
-
-    #[test]
-    fn four_sensors_at_one_address_answer_independently() {
-        let mut p = controller();
-        for ch in 0..4u8 {
-            write_bytes(&mut p, MUX_ADDR, &[1 << ch]);
+            // Park a DIFFERENT wire address and let SLAVE_ADDR carry the
+            // real target.
+            write_bytes(&mut p, MUX_ADDR, &[1 << 3]);
+            p.write_u32(REG_SLAVE_ADDR, SENSOR_ADDR as u32).unwrap();
+            program(
+                &mut p,
+                &[
+                    (CMD_RSTART, 0),
+                    (CMD_WRITE, 1),
+                    (CMD_READ, 1),
+                    (CMD_STOP, 0),
+                ],
+                &[0x00],
+            );
+            assert!(
+                !nacked(&p),
+                "SLAVE_ADDR holds 0x13 and channel 3 is enabled — the fallback \
+                 must resolve through the switch"
+            );
             assert_eq!(
-                read_byte(&mut p, SENSOR_ADDR),
-                tag_for(ch),
-                "channel {ch} must be answered by the sensor wired to it"
+                p.read_u32(REG_DATA).unwrap() as u8,
+                tag_for(3),
+                "the SLAVE_ADDR fallback must reach the sensor on the SELECTED channel"
+            );
+
+            // Isolate every channel: the same fallback must now find nothing.
+            write_bytes(&mut p, MUX_ADDR, &[0x00]);
+            p.write_u32(REG_SLAVE_ADDR, SENSOR_ADDR as u32).unwrap();
+            program(
+                &mut p,
+                &[(CMD_RSTART, 0), (CMD_WRITE, 1), (CMD_STOP, 0)],
+                &[0x00],
+            );
+            assert!(
+                nacked(&p),
+                "with every channel isolated the SLAVE_ADDR fallback must NACK"
             );
         }
-    }
-
-    #[test]
-    fn switching_channels_changes_which_sensor_answers() {
-        let mut p = controller();
-        for ch in [2u8, 0, 3, 1, 3, 0] {
-            write_bytes(&mut p, MUX_ADDR, &[1 << ch]);
-            assert_eq!(read_byte(&mut p, SENSOR_ADDR), tag_for(ch), "channel {ch}");
-        }
-    }
-
-    #[test]
-    fn control_register_reads_back_over_the_bus() {
-        let mut p = controller();
-        write_bytes(&mut p, MUX_ADDR, &[0b0000_1010]);
+    },
+    int_st_pre: {
         assert!(
-            probe_acked(&mut p, MUX_ADDR),
-            "the switch ACKs its own address"
-        );
-        assert_eq!(read_byte(&mut p, MUX_ADDR), 0b0000_1010);
-    }
-
-    #[test]
-    fn a_sensor_on_a_disabled_channel_does_not_answer() {
-        let mut p = controller();
-        assert!(
-            !probe_acked(&mut p, SENSOR_ADDR),
-            "with all channels disabled the sensor address must raise INT_NACK, \
-                 exactly as an unpopulated bus does"
-        );
-
-        write_bytes(&mut p, MUX_ADDR, &[1 << 1]);
-        assert!(probe_acked(&mut p, SENSOR_ADDR));
-        assert_eq!(read_byte(&mut p, SENSOR_ADDR), tag_for(1));
-
-        write_bytes(&mut p, MUX_ADDR, &[0x00]);
-        assert!(
-            !probe_acked(&mut p, SENSOR_ADDR),
-            "re-isolating the switch takes the sensor off the bus again"
-        );
-    }
-
-    #[test]
-    fn the_slave_addr_register_path_also_routes_through_the_switch() {
-        let mut p = controller();
-
-        // A zero-payload WRITE has no address byte to clock, so the C3
-        // engine skips it entirely; the SLAVE_ADDR fallback on this
-        // controller is reached from the address frame itself, when the
-        // wire address matches nothing. Park a DIFFERENT wire address and
-        // let SLAVE_ADDR carry the real target.
-        write_bytes(&mut p, MUX_ADDR, &[1 << 3]);
-        p.write_u32(REG_SLAVE_ADDR, SENSOR_ADDR as u32).unwrap();
-        program(
-            &mut p,
-            &[
-                (CMD_RSTART, 0),
-                (CMD_WRITE, 1),
-                (CMD_READ, 1),
-                (CMD_STOP, 0),
-            ],
-            &[0x00],
+            !p.legacy_tick_active(),
+            "disabled C3 I2C level IRQs must stay out of the legacy tick walk"
         );
         assert!(
-            !nacked(&p),
-            "SLAVE_ADDR holds 0x13 and channel 3 is enabled — the fallback \
-                 must resolve through the switch"
+            p.legacy_tick_dynamic(),
+            "C3 I2C updates tick membership when INT_ST changes"
         );
-        assert_eq!(
-            p.read_u32(REG_DATA).unwrap() as u8,
-            tag_for(3),
-            "the SLAVE_ADDR fallback must reach the sensor on the SELECTED channel"
-        );
-
-        // Isolate every channel: the same fallback must now find nothing.
-        write_bytes(&mut p, MUX_ADDR, &[0x00]);
-        p.write_u32(REG_SLAVE_ADDR, SENSOR_ADDR as u32).unwrap();
-        program(
-            &mut p,
-            &[(CMD_RSTART, 0), (CMD_WRITE, 1), (CMD_STOP, 0)],
-            &[0x00],
-        );
+    },
+    int_st_post: {
         assert!(
-            nacked(&p),
-            "with every channel isolated the SLAVE_ADDR fallback must NACK"
+            p.legacy_tick_active(),
+            "enabled C3 I2C level IRQ must re-enter the legacy tick walk"
         );
-    }
-
-    #[test]
-    fn a_write_reaches_only_the_selected_channel() {
-        let mut p = controller();
-        write_bytes(&mut p, MUX_ADDR, &[1 << 2]);
-        write_bytes(&mut p, SENSOR_ADDR, &[0x5A]);
-
-        with_mux(&p, |mux| {
-            assert_eq!(bytes_written_to(mux, 2), vec![0x5A]);
-            for ch in [0u8, 1, 3] {
-                assert!(
-                    bytes_written_to(mux, ch).is_empty(),
-                    "channel {ch} is isolated and must receive nothing"
-                );
-            }
-        });
-    }
+        p.write_u32(REG_INT_CLR, INT_TRANS_COMPLETE).unwrap();
+        assert!(
+            !p.legacy_tick_active(),
+            "cleared C3 I2C level IRQ must leave the legacy tick walk"
+        );
+    },
 }

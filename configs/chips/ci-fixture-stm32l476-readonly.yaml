@@ -1,0 +1,566 @@
+# CI fixture: stm32l476 + flash.cpu_writes: fault (renode#787 round)
+# LabWired - STM32L476RG chip configuration
+#
+# Source references:
+# - RM0351 (STM32L4 Reference Manual): memory map, RCC layout, peripheral
+#   register offsets.
+# - DEV_ID 0x415, REV_ID 0x1007 verified against real silicon via SWD probe
+#   (DBGMCU_IDCODE @ 0xE0042000 = 0x10076415).
+#
+# Tier: experimental — basic UART smoke verified against NUCLEO-L476RG hardware,
+# other peripherals not yet hardware-validated.
+
+name: "stm32l476rg"
+arch: "arm"
+core: "cortex-m4"
+registers_count: 200
+# Simulated core clock, Hz — see ChipDescriptor::cpu_hz. Self-timed devices
+# scale their datasheet microseconds by it; a slower board overrides it.
+# STM32L476RG maximum core clock, 80 MHz. The NUCLEO-L476RG lab never
+# configures the PLL and so runs at the 4 MHz MSI reset rate — that board
+# says so with its own `cpu_hz:` override, which is what that key is for.
+cpu_hz: 80_000_000
+
+flash:
+  base: 0x08000000
+  # 1 MiB, spelled in KB because `parse_size` reads MB as 10^6 — "1MB" would be
+  # 1_000_000, 48_576 bytes short of the part. Gated by
+  # crates/core/src/tests/chip_memory_sizes.rs.
+  size: "1024KB"
+  cpu_writes: fault
+ram:
+  base: 0x20000000
+  size: "96KB"
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40021000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l476/rcc.yaml"
+      profile: "stm32l4"
+
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x48000000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l476/gpioa.yaml"
+      profile: "stm32v2"
+    # GPIOA is clocked from RCC_AHB2ENR.GPIOAEN (bit 0). Unclocked out of reset,
+    # so register writes are dropped until firmware enables it (RM0351 §6.4.17).
+    clock: { reg: "ahb2enr", bit: 0 }
+
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x48000400
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l476/gpiob.yaml"
+      profile: "stm32v2"
+    # GPIOB is clocked from RCC_AHB2ENR.GPIOBEN (bit 1).
+    clock: { reg: "ahb2enr", bit: 1 }
+
+  - id: "gpioc"
+    type: "gpio"
+    base_address: 0x48000800
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l476/gpioc.yaml"
+      profile: "stm32v2"
+    # GPIOC is clocked from RCC_AHB2ENR.GPIOCEN (bit 2).
+    clock: { reg: "ahb2enr", bit: 2 }
+
+  - id: "gpiod"
+    type: "gpio"
+    base_address: 0x48000C00
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l476/gpiod.yaml"
+      profile: "stm32v2"
+
+  - id: "gpioe"
+    type: "gpio"
+    base_address: 0x48001000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l476/gpioe.yaml"
+      profile: "stm32v2"
+
+  - id: "gpioh"
+    type: "gpio"
+    base_address: 0x48001C00
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l476/gpioh.yaml"
+      profile: "stm32v2"
+
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+    config:
+      debug_schema: "../peripherals/stm32l476/stk.yaml"
+
+  - id: "uart2"
+    type: "uart"
+    base_address: 0x40004400
+    size: "1KB"
+    irq: 38
+    config:
+      debug_schema: "../peripherals/stm32l476/usart2.yaml"
+      profile: "stm32v2"
+    # USART2 is on APB1: RCC_APB1ENR1.USART2EN (bit 17). Unclocked out of reset,
+    # so ISR.TXE/RXNE never assert until firmware enables the clock (RM0351 §6.4.19).
+    clock: { reg: "apb1enr1", bit: 17 }
+
+  - id: "uart1"
+    type: "uart"
+    base_address: 0x40013800
+    size: "1KB"
+    irq: 37
+    config:
+      debug_schema: "../peripherals/stm32l476/usart1.yaml"
+      profile: "stm32v2"
+    # USART1 is on APB2: RCC_APB2ENR.USART1EN (bit 14). Unclocked out of reset
+    # (RM0351 §6.4.21).
+    clock: { reg: "apb2enr", bit: 14 }
+
+  - id: "uart3"
+    type: "uart"
+    base_address: 0x40004800
+    size: "1KB"
+    irq: 39
+    config:
+      debug_schema: "../peripherals/stm32l476/usart3.yaml"
+      profile: "stm32v2"
+
+  - id: "uart4"
+    type: "uart"
+    base_address: 0x40004C00
+    size: "1KB"
+    irq: 52
+    config:
+      debug_schema: "../peripherals/stm32l476/uart4.yaml"
+      profile: "stm32v2"
+
+  - id: "uart5"
+    type: "uart"
+    base_address: 0x40005000
+    size: "1KB"
+    irq: 53
+    config:
+      debug_schema: "../peripherals/stm32l476/uart5.yaml"
+      profile: "stm32v2"
+
+  # LPUART1 — same register layout as USART (modern stm32v2).
+  - id: "lpuart1"
+    type: "uart"
+    base_address: 0x40008000
+    size: "1KB"
+    irq: 70
+    config:
+      debug_schema: "../peripherals/stm32l476/lpuart1.yaml"
+      profile: "stm32v2"
+
+  - id: "spi1"
+    type: "spi"
+    base_address: 0x40013000
+    size: "1KB"
+    irq: 35
+    config:
+      debug_schema: "../peripherals/stm32l476/spi1.yaml"
+      profile: "stm32_fifo"
+    # SPI1 is on APB2: RCC_APB2ENR.SPI1EN (bit 12). Unclocked out of reset, so
+    # SR.RXNE/TXE never assert until firmware enables the clock (RM0351 §6.4.21).
+    clock: { reg: "apb2enr", bit: 12 }
+
+  - id: "spi2"
+    type: "spi"
+    base_address: 0x40003800
+    size: "1KB"
+    irq: 36
+    config:
+      debug_schema: "../peripherals/stm32l476/spi2.yaml"
+      profile: "stm32_fifo"
+
+  - id: "spi3"
+    type: "spi"
+    base_address: 0x40003C00
+    size: "1KB"
+    irq: 51
+    config:
+      debug_schema: "../peripherals/stm32l476/spi3.yaml"
+      profile: "stm32_fifo"
+
+  - id: "i2c1"
+    type: "i2c"
+    base_address: 0x40005400
+    size: "1KB"
+    irq: 31
+    config:
+      debug_schema: "../peripherals/stm32l476/i2c1.yaml"
+      profile: "stm32l4"
+
+  - id: "i2c2"
+    type: "i2c"
+    base_address: 0x40005800
+    size: "1KB"
+    irq: 33
+    config:
+      debug_schema: "../peripherals/stm32l476/i2c2.yaml"
+      profile: "stm32l4"
+
+  - id: "i2c3"
+    type: "i2c"
+    base_address: 0x40005C00
+    size: "1KB"
+    irq: 72
+    config:
+      debug_schema: "../peripherals/stm32l476/i2c3.yaml"
+      profile: "stm32l4"
+
+  - id: "adc1"
+    type: "adc"
+    base_address: 0x50040000
+    # 1KB window covers ADC1 (0x000), ADC2 (0x100), ADC3 (0x200), and the
+    # common block at 0x300 — all three instances share the bus mapping.
+    size: "1KB"
+    irq: 18
+    config:
+      debug_schema: "../peripherals/stm32l476/adc1.yaml"
+      profile: "stm32l4"
+
+  - id: "dma1"
+    type: "dma"
+    base_address: 0x40020000
+    size: "1KB"
+    irq: 11
+    config:
+      debug_schema: "../peripherals/stm32l476/dma1.yaml"
+      # Peripheral requests as [channel, CSELR selector] (RM0351 Table 41,
+      # DMA1 requests): SPI1_RX ch2 / SPI1_TX ch3 (CxS = 1), SPI2_RX ch4 /
+      # SPI2_TX ch5 (CxS = 1).
+      requests:
+        spi1_rx: [2, 1]
+        spi1_tx: [3, 1]
+        spi2_rx: [4, 1]
+        spi2_tx: [5, 1]
+
+  - id: "dma2"
+    type: "dma"
+    base_address: 0x40020400
+    size: "1KB"
+    irq: 56
+    config:
+      debug_schema: "../peripherals/stm32l476/dma2.yaml"
+      # RM0351 Table 42, DMA2 requests: SPI3_RX ch1 / SPI3_TX ch2 (CxS = 3),
+      # SPI1_RX ch3 / SPI1_TX ch4 (CxS = 4).
+      requests:
+        spi3_rx: [1, 3]
+        spi3_tx: [2, 3]
+        spi1_rx: [3, 4]
+        spi1_tx: [4, 4]
+
+  - id: "pwr"
+    type: "pwr"
+    base_address: 0x40007000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l476/pwr.yaml"
+
+  - id: "flash"
+    type: "flash"
+    base_address: 0x40022000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l476/flash.yaml"
+
+  - id: "rng"
+    type: "rng"
+    base_address: 0x50060800
+    size: "1KB"
+    irq: 80
+    config:
+      debug_schema: "../peripherals/stm32l476/rng.yaml"
+
+  - id: "crc"
+    type: "crc"
+    base_address: 0x40023000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l476/crc.yaml"
+
+  # General-purpose 32-bit timer (TIM2 — STM32L4 RM0351 §29).
+  - id: "tim2"
+    type: "timer"
+    base_address: 0x40000000
+    size: "1KB"
+    irq: 28
+    config:
+      debug_schema: "../peripherals/stm32l476/tim2.yaml"
+      width: 32
+
+  # 32-bit general-purpose TIM5.
+  - id: "tim5"
+    type: "timer"
+    base_address: 0x40000C00
+    size: "1KB"
+    irq: 50
+    config:
+      debug_schema: "../peripherals/stm32l476/tim5.yaml"
+      width: 32
+
+  # 16-bit general-purpose TIM3, TIM4.
+  - id: "tim3"
+    type: "timer"
+    base_address: 0x40000400
+    size: "1KB"
+    irq: 29
+    config:
+      debug_schema: "../peripherals/stm32l476/tim3.yaml"
+
+  - id: "tim4"
+    type: "timer"
+    base_address: 0x40000800
+    size: "1KB"
+    irq: 30
+    config:
+      debug_schema: "../peripherals/stm32l476/tim4.yaml"
+
+  # 16-bit basic timers TIM6, TIM7 — used by HAL as time base.
+  # `basic: true` → counter + UIF only, no capture/compare channels (so an
+  # update event latches UIF, not the CCxIF compare-match flags a GP timer
+  # would set).
+  - id: "tim6"
+    type: "timer"
+    base_address: 0x40001000
+    size: "1KB"
+    irq: 54
+    config:
+      debug_schema: "../peripherals/stm32l476/tim6.yaml"
+      basic: true
+
+  - id: "tim7"
+    type: "timer"
+    base_address: 0x40001400
+    size: "1KB"
+    irq: 55
+    config:
+      debug_schema: "../peripherals/stm32l476/tim7.yaml"
+      basic: true
+
+  # Advanced-control timers TIM1 / TIM8 — full register file with BDTR
+  # (break + dead-time + MOE), RCR (repetition counter), CCMR3, CCR5/6.
+  # Used for motor-control / centre-aligned PWM where dead-time matters.
+  - id: "tim1"
+    type: "timer"
+    base_address: 0x40012C00
+    size: "1KB"
+    irq: 27
+    config:
+      debug_schema: "../peripherals/stm32l476/tim1.yaml"
+      advanced: true
+
+  - id: "tim8"
+    type: "timer"
+    base_address: 0x40013400
+    size: "1KB"
+    irq: 46
+    config:
+      debug_schema: "../peripherals/stm32l476/tim8.yaml"
+      advanced: true
+
+  # General-purpose 16-bit timers TIM15 / TIM16 / TIM17.
+  - id: "tim15"
+    type: "timer"
+    base_address: 0x40014000
+    size: "1KB"
+    irq: 24
+    config:
+      debug_schema: "../peripherals/stm32l476/tim15.yaml"
+
+  - id: "tim16"
+    type: "timer"
+    base_address: 0x40014400
+    size: "1KB"
+    irq: 25
+    config:
+      debug_schema: "../peripherals/stm32l476/tim16.yaml"
+
+  - id: "tim17"
+    type: "timer"
+    base_address: 0x40014800
+    size: "1KB"
+    irq: 26
+    config:
+      debug_schema: "../peripherals/stm32l476/tim17.yaml"
+
+  - id: "rtc"
+    type: "rtc"
+    base_address: 0x40002800
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l476/rtc.yaml"
+
+  - id: "iwdg"
+    type: "iwdg"
+    base_address: 0x40003000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l476/iwdg.yaml"
+
+  - id: "wwdg"
+    type: "wwdg"
+    base_address: 0x40002C00
+    size: "1KB"
+    irq: 0
+    config:
+      debug_schema: "../peripherals/stm32l476/wwdg.yaml"
+
+  - id: "dac"
+    type: "dac"
+    base_address: 0x40007400
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l476/dac.yaml"
+
+  # EXTI — 40 lines, two-bank layout (RM0351 §13).
+  - id: "exti"
+    type: "exti"
+    base_address: 0x40010400
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l476/exti.yaml"
+      profile: "stm32l4"
+
+  # SYSCFG — system config (mostly EXTI line source selection); modeled as stub.
+  - id: "syscfg"
+    type: "stub"
+    base_address: 0x40010000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l476/syscfg.yaml"
+
+  # Low-power timers.
+  - id: "lptim1"
+    type: "lptim"
+    base_address: 0x40007C00
+    size: "1KB"
+    irq: 65
+    config:
+      debug_schema: "../peripherals/stm32l476/lptim1.yaml"
+
+  - id: "lptim2"
+    type: "lptim"
+    base_address: 0x40009400
+    size: "1KB"
+    # STM32L476 LPTIM2_IRQn = 66 (SVD); 78 is LCD.
+    irq: 66
+    config:
+      debug_schema: "../peripherals/stm32l476/lptim2.yaml"
+
+  # QUADSPI — quad-SPI memory interface (RM0351 §14).
+  - id: "quadspi"
+    type: "quadspi"
+    base_address: 0xA0001000
+    size: "1KB"
+    irq: 71
+    config:
+      debug_schema: "../peripherals/stm32l476/quadspi.yaml"
+
+  # SAI1 / SAI2 — serial audio interface.
+  - id: "sai1"
+    type: "sai"
+    base_address: 0x40015400
+    size: "1KB"
+    irq: 74
+    config:
+      debug_schema: "../peripherals/stm32l476/sai1.yaml"
+
+  - id: "sai2"
+    type: "sai"
+    base_address: 0x40015800
+    size: "1KB"
+    irq: 75
+    config:
+      debug_schema: "../peripherals/stm32l476/sai2.yaml"
+
+  # USB OTG FS — Synopsys DWC2 controller (RM0351 §44).
+  - id: "usb_otg_fs"
+    type: "usb_otg"
+    base_address: 0x50000000
+    # Full DWC2 register window is 256KB; we model only the first 4KB.
+    size: "4KB"
+    irq: 67
+    config:
+      debug_schema: "../peripherals/stm32l476/otg_fs_global.yaml"
+
+  # bxCAN1 — basic-extended CAN.
+  - id: "can1"
+    type: "bxcan"
+    base_address: 0x40006400
+    size: "1KB"
+    irq: 19
+    config:
+      debug_schema: "../peripherals/stm32l476/can1.yaml"
+
+  # SDMMC1 — SD/MMC card host (RM0351 §38).
+  - id: "sdmmc1"
+    type: "sdmmc"
+    base_address: 0x40012800
+    size: "1KB"
+    irq: 49
+    config:
+      debug_schema: "../peripherals/stm32l476/sdmmc1.yaml"
+
+  # COMP — analog comparators (COMP1 + COMP2 sharing one window).
+  - id: "comp"
+    type: "comp"
+    base_address: 0x40010200
+    size: "1KB"
+    irq: 64
+    config:
+      debug_schema: "../peripherals/stm32l476/comp.yaml"
+
+  # TSC — touch sensing controller (RM0351 §21).
+  - id: "tsc"
+    type: "tsc"
+    base_address: 0x40024000
+    size: "1KB"
+    irq: 77
+    config:
+      debug_schema: "../peripherals/stm32l476/tsc.yaml"
+
+  # FMC — flexible memory controller (RM0351 §13).
+  - id: "fmc"
+    type: "fmc"
+    base_address: 0xA0000000
+    size: "1KB"
+    irq: 48
+    config:
+      debug_schema: "../peripherals/stm32l476/fmc.yaml"
+
+  - id: "scb"
+    type: "scb"
+    base_address: 0xE000ED00
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l476/scb.yaml"
+
+  - id: "nvic"
+    type: "nvic"
+    base_address: 0xE000E100
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l476/nvic.yaml"
+
+  - id: "dbgmcu"
+    type: "dbgmcu"
+    base_address: 0xE0042000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l476/dbgmcu.yaml"
+      # DBGMCU_IDCODE for STM32L476RG: REV_ID=0x1007 (Rev Z), DEV_ID=0x415.
+      # Verified against real hardware via SWD probe.
+      idcode: "0x10076415"

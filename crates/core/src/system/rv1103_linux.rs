@@ -315,7 +315,7 @@ fn terminated(bytes: &[u8]) -> SimResult<(&str, usize)> {
         end + 1,
     ))
 }
-fn tree(bytes: &[u8]) -> SimResult<Tree> {
+pub(crate) fn tree(bytes: &[u8]) -> SimResult<Tree> {
     if bytes.len() < 40
         || word(bytes, 0)? != 0xd00dfeed
         || word(bytes, 4)? as usize != bytes.len()

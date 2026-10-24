@@ -36,6 +36,11 @@
 
 #![cfg(feature = "event-scheduler")]
 
+mod common;
+
+use common::walk_differential::{
+    assert_modes_differ, assert_walk_differential, probe_at, run_probed, WalkMode,
+};
 use labwired_core::bus::SystemBus;
 use labwired_core::cpu::CortexM;
 use labwired_core::peripherals::scb::Scb;
@@ -224,55 +229,28 @@ fn load_firmware_wfi(bus: &mut SystemBus) {
     load_isr(bus);
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct Probe {
-    step: u64,
-    total_cycles: u64,
-    pc: u32,
-    regs: [u32; 16],
-    isr_count: u32,
-    main_count: u32,
+/// The caller-supplied observables the harness probe carries for this fixture:
+/// the two RAM counters the ISR and the main loop maintain.
+fn extra(machine: &Machine<CortexM>) -> Vec<(&'static str, u64)> {
+    vec![
+        (
+            "isr_count",
+            u64::from(machine.bus.read_u32(ISR_COUNT_ADDR).unwrap()),
+        ),
+        (
+            "main_count",
+            u64::from(machine.bus.read_u32(MAIN_COUNT_ADDR).unwrap()),
+        ),
+    ]
 }
 
-fn probe(machine: &Machine<CortexM>, step: u64) -> Probe {
-    let mut regs = [0u32; 16];
-    for (i, r) in regs.iter_mut().enumerate() {
-        *r = machine.read_core_reg(i as u8);
-    }
-    Probe {
-        step,
-        total_cycles: machine.total_cycles,
-        pc: machine.get_pc(),
-        regs,
-        isr_count: machine.bus.read_u32(ISR_COUNT_ADDR).unwrap(),
-        main_count: machine.bus.read_u32(MAIN_COUNT_ADDR).unwrap(),
-    }
-}
-
-/// Run `steps` instructions one at a time through the batched `Machine::run`
-/// path (the production path the scheduler timing convention is calibrated
-/// to), probing the full architectural state after every instruction.
-fn run_probed(machine: &mut Machine<CortexM>, entry: u32, steps: u64) -> Vec<Probe> {
-    machine.cpu.pc = entry;
-    let mut probes = Vec::with_capacity(steps as usize);
-    for s in 0..steps {
-        machine.run(Some(1)).unwrap();
-        probes.push(probe(machine, s + 1));
-    }
-    probes
-}
-
-/// First divergence pretty-printer: comparing two 3000-element probe vectors
-/// with assert_eq! produces an unreadable dump; find the first mismatch.
-fn assert_probes_identical(reference: &[Probe], candidate: &[Probe], what: &str) {
-    assert_eq!(reference.len(), candidate.len());
-    for (r, c) in reference.iter().zip(candidate.iter()) {
-        assert_eq!(
-            r, c,
-            "{what}: first divergence at step {} (walk-reference vs scheduler)",
-            r.step
-        );
-    }
+/// Vacuity guard for the SysTick half of the pair pinned by `build_machine`.
+fn uses_scheduler(machine: &Machine<CortexM>) -> bool {
+    let idx = machine
+        .bus
+        .find_peripheral_index_by_name("systick")
+        .unwrap();
+    machine.bus.peripherals[idx].dev.uses_scheduler()
 }
 
 /// Gate 1: the delay-loop + SysTick-IRQ-counter firmware, walk-on vs
@@ -283,25 +261,27 @@ fn assert_probes_identical(reference: &[Probe], candidate: &[Probe], what: &str)
 fn systick_irq_firmware_is_byte_identical_at_interval_1() {
     const STEPS: u64 = 3_000;
 
-    let mut walk = build_machine(false, 1);
-    load_firmware_systick_counter(&mut walk.bus);
-    let walk_probes = run_probed(&mut walk, 0x40, STEPS);
-
-    let mut sched = build_machine(true, 1);
-    load_firmware_systick_counter(&mut sched.bus);
-    let sched_probes = run_probed(&mut sched, 0x40, STEPS);
+    let build = |mode: WalkMode| {
+        let mut m = build_machine(!mode.is_legacy_walk(), 1);
+        load_firmware_systick_counter(&mut m.bus);
+        m
+    };
+    assert_modes_differ(
+        uses_scheduler(&build(WalkMode::LegacyWalk)),
+        uses_scheduler(&build(WalkMode::Scheduler)),
+        "systick counter firmware",
+    );
+    let reference = assert_walk_differential("systick counter firmware", 0x40, STEPS, build, extra);
 
     // The firmware must actually exercise the surface: multiple ISR entries
     // and a live main loop.
-    let last = walk_probes.last().unwrap();
+    let last = reference.last().unwrap();
     assert!(
-        last.isr_count >= 25,
+        last.extra("isr_count") >= 25,
         "reference must take repeated SysTick ISRs (got {})",
-        last.isr_count
+        last.extra("isr_count")
     );
-    assert!(last.main_count > 500, "main loop must run");
-
-    assert_probes_identical(&walk_probes, &sched_probes, "systick counter firmware");
+    assert!(last.extra("main_count") > 500, "main loop must run");
 }
 
 /// Gate 2: scheduler @ interval 64 vs the walk-on interval-1 golden
@@ -316,7 +296,7 @@ fn systick_isr_count_is_exact_at_interval_64() {
 
     let mut walk = build_machine(false, 1);
     load_firmware_systick_counter(&mut walk.bus);
-    let walk_probes = run_probed(&mut walk, 0x40, STEPS);
+    let walk_probes = run_probed(&mut walk, 0x40, STEPS, &extra);
 
     let mut sched = build_machine(true, 64);
     load_firmware_systick_counter(&mut sched.bus);
@@ -337,7 +317,7 @@ fn systick_isr_count_is_exact_at_interval_64() {
     let last_delivery_step = walk_probes
         .iter()
         .zip(walk_probes.iter().skip(1))
-        .filter(|(a, b)| b.isr_count > a.isr_count)
+        .filter(|(a, b)| b.extra("isr_count") > a.extra("isr_count"))
         .map(|(_, b)| b.step)
         .next_back()
         .expect("reference delivers at least one ISR");
@@ -348,11 +328,12 @@ fn systick_isr_count_is_exact_at_interval_64() {
     );
 
     assert!(
-        reference.isr_count >= 25,
+        reference.extra("isr_count") >= 25,
         "reference must take repeated ISRs"
     );
     assert_eq!(
-        sched_isr, reference.isr_count,
+        sched_isr,
+        reference.extra("isr_count") as u32,
         "ISR execution count over the fixed window must be exact at interval 64"
     );
     // total_cycles advances one per instruction in both lanes (B1 removed the
@@ -366,20 +347,18 @@ fn systick_isr_count_is_exact_at_interval_64() {
 fn pendsv_firmware_is_byte_identical_at_interval_1() {
     const STEPS: u64 = 40;
 
-    let mut walk = build_machine(false, 1);
-    load_firmware_pendsv(&mut walk.bus);
-    let walk_probes = run_probed(&mut walk, 0x40, STEPS);
-
-    let mut sched = build_machine(true, 1);
-    load_firmware_pendsv(&mut sched.bus);
-    let sched_probes = run_probed(&mut sched, 0x40, STEPS);
+    let build = |mode: WalkMode| {
+        let mut m = build_machine(!mode.is_legacy_walk(), 1);
+        load_firmware_pendsv(&mut m.bus);
+        m
+    };
+    let reference = assert_walk_differential("pendsv firmware", 0x40, STEPS, build, extra);
 
     assert_eq!(
-        walk_probes.last().unwrap().isr_count,
+        reference.last().unwrap().extra("isr_count"),
         1,
         "PendSV ISR must run exactly once in the reference"
     );
-    assert_probes_identical(&walk_probes, &sched_probes, "pendsv firmware");
 }
 
 /// Gate 4: WFI idle fast-forward + SysTick. The sleeping firmware must
@@ -404,19 +383,19 @@ fn wfi_sleep_wakes_from_scheduled_systick_event() {
 
     let mut ff_off = build(false);
     ff_off.run(Some(STEPS)).unwrap();
-    let off_probe = probe(&ff_off, STEPS as u64);
+    let off_probe = probe_at(&ff_off, STEPS as u64, &extra);
 
     let mut ff_on = build(true);
     ff_on.reset_step_profile();
     ff_on.run(Some(STEPS)).unwrap();
-    let on_probe = probe(&ff_on, STEPS as u64);
+    let on_probe = probe_at(&ff_on, STEPS as u64, &extra);
 
     // The pattern must actually sleep-and-wake repeatedly, driven by the
     // scheduled SysTick expiries (period 200 → ~20 wakes in 4000 cycles).
     assert!(
-        off_probe.isr_count >= 10,
+        off_probe.extra("isr_count") >= 10,
         "WFI loop must take repeated SysTick ISRs (got {})",
-        off_probe.isr_count
+        off_probe.extra("isr_count")
     );
 
     // Fast-forward must not change WHEN things happen or HOW OFTEN the ISR
@@ -426,14 +405,15 @@ fn wfi_sleep_wakes_from_scheduled_systick_event() {
     // event-driven observables must not.)
     assert_eq!(on_probe.total_cycles, off_probe.total_cycles);
     assert_eq!(
-        on_probe.isr_count, off_probe.isr_count,
+        on_probe.extra("isr_count"),
+        off_probe.extra("isr_count"),
         "every scheduled SysTick expiry must wake the sleeping core and run the ISR"
     );
 
     // Each wake resumes the interrupted thread: exactly one loop pass (one
     // main_count increment) per wake before the next sleep.
-    let wakes = on_probe.isr_count as i64;
-    let passes = on_probe.main_count as i64;
+    let wakes = on_probe.extra("isr_count") as i64;
+    let passes = on_probe.extra("main_count") as i64;
     assert!(
         (wakes - passes).abs() <= 1,
         "FF lane must run one thread pass per wake (isr {wakes}, main {passes})"

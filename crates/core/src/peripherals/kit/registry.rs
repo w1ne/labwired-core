@@ -20,6 +20,7 @@ use crate::peripherals::components;
 /// Peripherals not listed here still use the legacy hand-written arms in
 /// `bus/mod.rs` — both paths coexist during migration.
 pub static KITS: &[&'static dyn PeripheralKit] = &[
+    &components::esp32c3_esp_at::ESP_AT_KIT,
     &components::bg770a::BG770A_KIT,
     &components::declarative_uart::NEO6M_KIT,
     &components::ydlidar::YDLIDAR_KIT,
@@ -55,6 +56,8 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     &components::declarative_display::ST7789_KIT,
     &components::inmp441::INMP441_KIT,
     &components::ili9341_parallel::ILI9341_PARALLEL_KIT,
+    // OV3660 camera: SCCB on I²C plus DVP frames into the ESP32-S3 LCD_CAM.
+    &components::ov3660::OV3660_KIT,
     &components::declarative_display::SSD1680_TRICOLOR_290_KIT,
     &components::declarative_display::UC8151D_TRICOLOR_290_KIT,
     &components::declarative_spi::SN74HC165_KIT,
@@ -69,6 +72,7 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     // `analog_plant_migration_parity` sweeps each one's full input range
     // against the arithmetic the deleted model performed.
     &components::declarative_analog::NTC_THERMISTOR_KIT,
+    &components::declarative_analog::TMP36_KIT,
     &components::declarative_analog::POTENTIOMETER_KIT,
     &components::declarative_analog::LIPO_CHARGER_KIT,
     &components::declarative_analog::LDR_KIT,

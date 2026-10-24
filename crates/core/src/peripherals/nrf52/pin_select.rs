@@ -160,6 +160,17 @@ impl NrfPinClaim {
         self.claims.is_some()
     }
 
+    /// `true` while this signal holds a pad (its peripheral is enabled and
+    /// the pin select is connected) and that pad sits on a world `gpio_net`:
+    /// the wire is shared with other chips, and the peripheral drives it bit
+    /// by bit.
+    pub fn on_net(&self) -> bool {
+        match (&self.claims, self.held) {
+            (Some(claims), Some(pad)) => claims.pad_on_net(pad),
+            _ => false,
+        }
+    }
+
     /// Re-point this signal at whatever `psel` now names, releasing whatever it
     /// held before. `live` is the peripheral's enable state: a disabled
     /// peripheral holds no pad at all (nRF52840 PS v1.11 §6.31.6, p790).

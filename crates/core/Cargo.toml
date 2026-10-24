@@ -65,6 +65,9 @@ wasmtime = { version = "45", optional = true, default-features = false, features
 
 labwired-arm-system = { path = "../arm-system", optional = true }
 
+[target.'cfg(unix)'.dependencies]
+libc.workspace = true
+
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # QEMU-derived native CPU library; GPL-2.0, never part of default/browser builds.
 unicorn-engine = { version = "=2.1.5", optional = true, default-features = false, features = ["arch_arm"] }
@@ -151,6 +154,7 @@ required-features = ["mlx90640-decode-test"]
 labwired-loader = { path = "../loader" }
 svd-ingestor = { path = "../svd-ingestor" }
 svd-parser = "0.14"
+jpeg-decoder = { version = "0.3", default-features = false }
 
 [[test]]
 name = "qemu_arm_core"
@@ -173,6 +177,11 @@ required-features = ["event-scheduler"]
 
 [[test]]
 name = "esp32_classic_ahb_fifo_wakes_uart"
+required-features = ["event-scheduler"]
+
+# #![cfg(feature = "event-scheduler")]
+[[test]]
+name = "xtensa_poll_loop_skip"
 required-features = ["event-scheduler"]
 
 # #![cfg(feature = "event-scheduler")]

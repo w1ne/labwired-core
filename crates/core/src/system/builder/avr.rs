@@ -56,7 +56,7 @@ pub(super) fn build(req: BuildRequest<'_>) -> anyhow::Result<BuiltMachine> {
 
     let program_image =
         parse_avr_elf_image(firmware).map_err(|e| anyhow!("Loader Error: {e:#}"))?;
-    let mut cpu = crate::cpu::Avr::new();
+    let mut cpu = crate::cpu::Avr::for_chip_name(&chip.name);
     cpu.load_program_image(&program_image);
     // USART TX is on the CPU, not a bus UART peripheral.
     cpu.set_serial_sink(uart_sink.clone());

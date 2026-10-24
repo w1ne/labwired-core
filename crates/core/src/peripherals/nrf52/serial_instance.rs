@@ -7,23 +7,30 @@
 //! SPIM0, SPIS0, SPI0, TWIM0, TWI0 and TWIS0; the active sub-peripheral
 //! is selected by ENABLE (offset 0x500):
 //!
+//!   ENABLE = 2 → SPIS (SPI slave with EasyDMA)
 //!   ENABLE = 6 → TWIM (I²C master with EasyDMA)
 //!   ENABLE = 7 → SPIM (SPI master with EasyDMA)
+//!   ENABLE = 9 → TWIS (I²C slave with EasyDMA)
 //!
-//! This struct wraps [`Spi`] (Nrf52Spim layout) and [`Nrf52Twim`] behind
-//! the same [`Peripheral`] surface. Reads/writes to offset 0x500 update a
-//! shared enable field and are forwarded to both sub-peripherals so their
-//! internal enable state stays coherent. All other offsets are dispatched
-//! to the sub-peripheral selected by the current enable value.
+//! This struct wraps [`Spi`] (Nrf52Spim layout), [`Nrf52Twim`],
+//! [`Nrf52Spis`] and [`Nrf52Twis`] behind the same [`Peripheral`] surface.
+//! Reads/writes to offset 0x500 update a shared enable field and are
+//! forwarded to every sub-peripheral so their internal enable state stays
+//! coherent. All other offsets are dispatched to the sub-peripheral
+//! selected by the current enable value.
 
 use crate::peripherals::i2c::I2cDevice;
+use crate::peripherals::nrf52::spis::Nrf52Spis;
 use crate::peripherals::nrf52::twim::Nrf52Twim;
+use crate::peripherals::nrf52::twis::Nrf52Twis;
 use crate::peripherals::spi::{Spi, SpiDevice, SpiRegisterLayout};
 use crate::{Bus, Peripheral, PeripheralTickResult, SimResult};
 
 const OFF_ENABLE: u64 = 0x500;
 const ENABLE_TWIM: u32 = 6;
 const ENABLE_SPIM: u32 = 7;
+const ENABLE_SPIS: u32 = crate::peripherals::nrf52::spis::ENABLE_SPIS;
+const ENABLE_TWIS: u32 = crate::peripherals::nrf52::twis::ENABLE_TWIS;
 const ENABLE_MASK: u32 = 0xF;
 /// The PSEL block: 0x508 and 0x50C are TWIM's SCL/SDA and SPIM's SCK/MOSI —
 /// the SAME two words on silicon — and 0x510/0x514 continue it (SPIM MISO,
@@ -31,6 +38,8 @@ const ENABLE_MASK: u32 = 0xF;
 /// §6.31.7 (TWIM, p791) against §6.25.6 (SPIM, p727).
 const OFF_PSEL_FIRST: u64 = 0x508;
 const OFF_PSEL_LAST: u64 = 0x514;
+/// `SHORTS`, the first register past the task and event blocks.
+const OFF_CONFIG_FIRST: u64 = 0x200;
 
 /// Unified SPIM0/TWIM0 serial instance at a single MMIO base.
 ///
@@ -41,6 +50,8 @@ const OFF_PSEL_LAST: u64 = 0x514;
 pub struct Nrf52SerialInstance {
     spim: Spi,
     twim: Nrf52Twim,
+    spis: Nrf52Spis,
+    twis: Nrf52Twis,
     enable: u32,
 }
 
@@ -49,6 +60,8 @@ impl Nrf52SerialInstance {
         Self {
             spim: Spi::new_with_layout(SpiRegisterLayout::Nrf52Spim),
             twim: Nrf52Twim::new(),
+            spis: Nrf52Spis::new(),
+            twis: Nrf52Twis::new(),
             enable: 0,
         }
     }
@@ -108,13 +121,74 @@ impl Nrf52SerialInstance {
         claims: &std::sync::Arc<crate::peripherals::nrf52::pin_select::NrfPinClaims>,
         sck_token: u32,
         mosi_token: u32,
+        miso_token: u32,
     ) {
         self.spim
-            .install_nrf_pin_claims(claims, sck_token, mosi_token);
+            .install_nrf_pin_claims(claims, sck_token, mosi_token, miso_token);
+    }
+
+    /// The SPIS half's SCK/MOSI/MISO/CSN pad-line cell (bus wiring time).
+    pub(crate) fn spis_pad_lines_arc(
+        &mut self,
+    ) -> std::sync::Arc<crate::peripherals::pad_lines::PadLines> {
+        self.spis.pad_lines_arc()
+    }
+
+    /// Give the SPIS half its pin claims (tokens in SCK, MOSI, MISO, CSN
+    /// order); gated on `ENABLE == 2`.
+    pub(crate) fn install_spis_pin_claims(
+        &mut self,
+        claims: &std::sync::Arc<crate::peripherals::nrf52::pin_select::NrfPinClaims>,
+        tokens: [u32; 4],
+    ) {
+        self.spis.install_pin_claims(claims, tokens);
+    }
+
+    /// The TWIS half's SCL/SDA pad-line cell (bus wiring time).
+    pub(crate) fn twis_pad_lines_arc(
+        &mut self,
+    ) -> std::sync::Arc<crate::peripherals::pad_lines::PadLines> {
+        self.twis.pad_lines_arc()
+    }
+
+    /// Give the TWIS half its pin claims; gated on `ENABLE == 9`.
+    pub(crate) fn install_twis_pin_claims(
+        &mut self,
+        claims: &std::sync::Arc<crate::peripherals::nrf52::pin_select::NrfPinClaims>,
+        scl_token: u32,
+        sda_token: u32,
+    ) {
+        self.twis.install_pin_claims(claims, scl_token, sda_token);
     }
 
     fn active(&self) -> u32 {
         self.enable & ENABLE_MASK
+    }
+
+    /// The slave personalities, which have no attached-device side.
+    fn slave(&self) -> Option<&dyn Peripheral> {
+        match self.active() {
+            ENABLE_SPIS => Some(&self.spis),
+            ENABLE_TWIS => Some(&self.twis),
+            _ => None,
+        }
+    }
+
+    fn slave_mut(&mut self) -> Option<&mut dyn Peripheral> {
+        match self.active() {
+            ENABLE_SPIS => Some(&mut self.spis),
+            ENABLE_TWIS => Some(&mut self.twis),
+            _ => None,
+        }
+    }
+
+    /// Write the shared `ENABLE` (or a PSEL word, one register file on
+    /// silicon) to every personality.
+    fn broadcast_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        self.twim.write_u32(offset, value)?;
+        self.spim.write_u32(offset, value)?;
+        self.spis.write_u32(offset, value)?;
+        self.twis.write_u32(offset, value)
     }
 }
 
@@ -168,6 +242,7 @@ impl Peripheral for Nrf52SerialInstance {
         match self.active() {
             ENABLE_TWIM => crate::peripherals::nrf52::twim::TWIM_LINES,
             ENABLE_SPIM => self.spim.line_names(),
+            ENABLE_SPIS | ENABLE_TWIS => self.slave().map_or(&[], |s| s.line_names()),
             _ => &[],
         }
     }
@@ -176,8 +251,30 @@ impl Peripheral for Nrf52SerialInstance {
         match self.active() {
             ENABLE_TWIM => self.twim.wire_lines(),
             ENABLE_SPIM => self.spim.wire_lines(),
-            _ => None,
+            _ => self.slave().and_then(|s| s.wire_lines()),
         }
+    }
+
+    fn wire_input_edge(&mut self, line: usize, level: bool, cycle: u64) -> bool {
+        match self.active() {
+            ENABLE_TWIM => self.twim.wire_input_edge(line, level, cycle),
+            ENABLE_SPIM => self.spim.wire_input_edge(line, level, cycle),
+            _ => self
+                .slave_mut()
+                .is_some_and(|s| s.wire_input_edge(line, level, cycle)),
+        }
+    }
+
+    /// Every personality keeps its own wire engine on the one clock.
+    fn attach_cycle_clock(&mut self, clock: crate::CycleClock) {
+        self.twim.attach_cycle_clock(clock.clone());
+        self.spim.attach_cycle_clock(clock.clone());
+        self.spis.attach_cycle_clock(clock.clone());
+        self.twis.attach_cycle_clock(clock);
+    }
+
+    fn claims_pads(&self) -> bool {
+        true
     }
 
     fn read(&self, offset: u64) -> SimResult<u8> {
@@ -188,6 +285,8 @@ impl Peripheral for Nrf52SerialInstance {
         match self.active() {
             ENABLE_TWIM => self.twim.read(offset),
             ENABLE_SPIM => self.spim.read(offset),
+            ENABLE_SPIS => self.spis.read(offset),
+            ENABLE_TWIS => self.twis.read(offset),
             // ENABLE=0: pinctrl writes PSEL before ENABLE is set; shadow to TWIM.
             _ => self.twim.read(offset),
         }
@@ -200,13 +299,13 @@ impl Peripheral for Nrf52SerialInstance {
             let mask: u32 = 0xFF << byte_shift;
             let new32 = (self.enable & !mask) | ((value as u32) << byte_shift);
             self.enable = new32 & ENABLE_MASK;
-            self.twim.write(offset, value)?;
-            self.spim.write(offset, value)?;
-            return Ok(());
+            return self.broadcast_u32(OFF_ENABLE, self.enable);
         }
         match self.active() {
             ENABLE_TWIM => self.twim.write(offset, value),
             ENABLE_SPIM => self.spim.write(offset, value),
+            ENABLE_SPIS => self.spis.write(offset, value),
+            ENABLE_TWIS => self.twis.write(offset, value),
             // ENABLE=0: pinctrl writes PSEL before ENABLE is set; shadow to TWIM.
             _ => self.twim.write(offset, value),
         }
@@ -219,6 +318,8 @@ impl Peripheral for Nrf52SerialInstance {
         match self.active() {
             ENABLE_TWIM => self.twim.read_u32(offset),
             ENABLE_SPIM => self.spim.read_u32(offset),
+            ENABLE_SPIS => self.spis.read_u32(offset),
+            ENABLE_TWIS => self.twis.read_u32(offset),
             // ENABLE=0: pinctrl writes PSEL before ENABLE is set; shadow to TWIM
             // — EXCEPT across the PSEL block, which must mirror the write path
             // below. Writes there go to BOTH halves, so both hold the same
@@ -239,14 +340,14 @@ impl Peripheral for Nrf52SerialInstance {
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
         if offset == OFF_ENABLE {
             self.enable = value & ENABLE_MASK;
-            // Keep both sub-peripherals' internal enable coherent.
-            self.twim.write_u32(offset, value)?;
-            self.spim.write_u32(offset, value)?;
-            return Ok(());
+            // Keep every sub-peripheral's internal enable coherent.
+            return self.broadcast_u32(offset, value);
         }
         match self.active() {
             ENABLE_TWIM => self.twim.write_u32(offset, value),
             ENABLE_SPIM => self.spim.write_u32(offset, value),
+            ENABLE_SPIS => self.spis.write_u32(offset, value),
+            ENABLE_TWIS => self.twis.write_u32(offset, value),
             // ENABLE=0: pinctrl writes PSEL before ENABLE is set; shadow to
             // TWIM — and, for the PSEL block ONLY, to SPIM as well.
             //
@@ -259,10 +360,14 @@ impl Peripheral for Nrf52SerialInstance {
             // a SPIM0 whose PSEL never reached the SPIM half would enable onto
             // two Disconnected pins and its waveform would reach no pad at all —
             // silently, with every register read still correct.
-            _ if (OFF_PSEL_FIRST..=OFF_PSEL_LAST).contains(&offset) => {
-                self.twim.write_u32(offset, value)?;
-                self.spim.write_u32(offset, value)
-            }
+            //
+            // The same holds past the PSEL block: SHORTS, INTEN, the EasyDMA
+            // descriptors, FREQUENCY/CONFIG/ORC are words of the one register
+            // file, and firmware may well program them before ENABLE (a SPIM
+            // whose TXD.MAXCNT stayed 0 because it was written while the
+            // window was disabled clocked nothing). Tasks and events stay
+            // with TWIM: a task written to a disabled window starts nothing.
+            _ if offset >= OFF_CONFIG_FIRST => self.broadcast_u32(offset, value),
             _ => self.twim.write_u32(offset, value),
         }
     }
@@ -274,6 +379,8 @@ impl Peripheral for Nrf52SerialInstance {
         match self.active() {
             ENABLE_TWIM => self.twim.read_u16(offset),
             ENABLE_SPIM => self.spim.read_u16(offset),
+            ENABLE_SPIS => self.spis.read_u16(offset),
+            ENABLE_TWIS => self.twis.read_u16(offset),
             _ => self.twim.read_u16(offset),
         }
     }
@@ -281,13 +388,13 @@ impl Peripheral for Nrf52SerialInstance {
     fn write_u16(&mut self, offset: u64, value: u16) -> SimResult<()> {
         if offset & !3 == OFF_ENABLE {
             self.enable = (value as u32) & ENABLE_MASK;
-            self.twim.write_u16(offset, value)?;
-            self.spim.write_u16(offset, value)?;
-            return Ok(());
+            return self.broadcast_u32(OFF_ENABLE, self.enable);
         }
         match self.active() {
             ENABLE_TWIM => self.twim.write_u16(offset, value),
             ENABLE_SPIM => self.spim.write_u16(offset, value),
+            ENABLE_SPIS => self.spis.write_u16(offset, value),
+            ENABLE_TWIS => self.twis.write_u16(offset, value),
             _ => self.twim.write_u16(offset, value),
         }
     }
@@ -299,6 +406,14 @@ impl Peripheral for Nrf52SerialInstance {
                 self.twim.tick()
             }
             ENABLE_SPIM => self.spim.tick(),
+            ENABLE_SPIS => {
+                self.spim.poll_external_bus_devices();
+                self.spis.tick()
+            }
+            ENABLE_TWIS => {
+                self.spim.poll_external_bus_devices();
+                self.twis.tick()
+            }
             _ => {
                 self.spim.poll_external_bus_devices();
                 PeripheralTickResult::default()
@@ -310,6 +425,10 @@ impl Peripheral for Nrf52SerialInstance {
         match self.active() {
             ENABLE_TWIM => self.twim.needs_bus_tick() || self.spim.has_external_bus_device(),
             ENABLE_SPIM => self.spim.needs_bus_tick(),
+            ENABLE_SPIS | ENABLE_TWIS => {
+                self.slave().is_some_and(|s| s.needs_bus_tick())
+                    || self.spim.has_external_bus_device()
+            }
             _ => self.spim.has_external_bus_device(),
         }
     }
@@ -321,6 +440,14 @@ impl Peripheral for Nrf52SerialInstance {
                 self.twim.tick_with_bus(bus);
             }
             ENABLE_SPIM => self.spim.tick_with_bus(bus),
+            ENABLE_SPIS => {
+                self.spim.poll_external_bus_devices();
+                self.spis.tick_with_bus(bus);
+            }
+            ENABLE_TWIS => {
+                self.spim.poll_external_bus_devices();
+                self.twis.tick_with_bus(bus);
+            }
             _ => self.spim.poll_external_bus_devices(),
         }
     }
@@ -334,6 +461,8 @@ impl Peripheral for Nrf52SerialInstance {
         match self.active() {
             ENABLE_TWIM => self.twim.on_event(event_token, sched, bus),
             ENABLE_SPIM => self.spim.on_event(event_token, sched, bus),
+            ENABLE_SPIS => self.spis.on_event(event_token, sched, bus),
+            ENABLE_TWIS => self.twis.on_event(event_token, sched, bus),
             _ => crate::sched::EventResult::default(),
         }
     }
@@ -362,6 +491,8 @@ impl Peripheral for Nrf52SerialInstance {
         match self.active() {
             ENABLE_TWIM => self.twim.take_scheduled_events(),
             ENABLE_SPIM => self.spim.take_scheduled_events(),
+            ENABLE_SPIS => self.spis.take_scheduled_events(),
+            ENABLE_TWIS => self.twis.take_scheduled_events(),
             _ => Vec::new(),
         }
     }

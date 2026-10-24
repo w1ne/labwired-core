@@ -138,19 +138,6 @@ mod playground_secure_boot_repro {
         }
     }
 
-    #[test]
-    fn matrix() {
-        for (idle, tick) in [(false, false), (false, true), (true, false), (true, true)] {
-            let (uart, key) = run_playground_path(idle, tick);
-            let last = uart.lines().last().unwrap_or("(no uart)").to_string();
-            let reached = uart.contains("ATTESTATION OK");
-            let hex: String = key.iter().map(|b| format!("{b:02X} ")).collect();
-            println!(
-                "idle_ff={idle:<5} auto_tick={tick:<5} boot3={reached:<5} key={hex}last={last:?}"
-            );
-        }
-    }
-
     /// At interval 1 the lab walks all three boots, which is what the CLI does.
     #[test]
     fn playground_path_reaches_boot_three() {

@@ -1,0 +1,388 @@
+{
+  "schema_version": "1.0",
+  "path": {
+    "evaluation": "local engine run + @labwired/board-config evaluateOracle/classifyModelVerification (the shared evaluator)",
+    "run": "labwired test --script io-smoke.yaml ... --watch-gpio gpioa:5 (receipt/run)",
+    "evidence_feed": "uart.log -> serial; result.json inspect.devices -> peripherals (device_type folded per the builder seam); result.json logic_edges -> gpio (parseLogicEdges mirror)"
+  },
+  "oracle": {
+    "serial": [
+      {
+        "contains": "NODE boot"
+      },
+      {
+        "contains": "BME280 ok"
+      },
+      {
+        "contains": "OLED painted"
+      },
+      {
+        "matches": "NTC iter=0 adc=2047 mV=1649\\.6 temp_c=24\\.99"
+      },
+      {
+        "matches": "LDR adc=3413 lux=99\\.8"
+      },
+      {
+        "matches": "NTC iter=[1-9][0-9]* adc=3633 mV=2927\\.7 temp_c=79\\.97"
+      },
+      {
+        "matches": "LDR adc=3912 lux=794\\.2"
+      },
+      {
+        "matches": "BME t=31\\.00 p=1002\\.0 h=60\\.0"
+      },
+      {
+        "contains": "ALARM 1"
+      }
+    ],
+    "display": {
+      "panel": "oled-ssd1306",
+      "painted": true,
+      "min_ink_bytes": 1
+    },
+    "gpio": [
+      {
+        "pin": "PA5",
+        "state": "toggled"
+      }
+    ]
+  },
+  "verdict": {
+    "status": "model_verified",
+    "proven": true,
+    "clauses": [
+      {
+        "kind": "serial",
+        "passed": true,
+        "detail": "serial contains \"NODE boot\""
+      },
+      {
+        "kind": "serial",
+        "passed": true,
+        "detail": "serial contains \"BME280 ok\""
+      },
+      {
+        "kind": "serial",
+        "passed": true,
+        "detail": "serial contains \"OLED painted\""
+      },
+      {
+        "kind": "serial",
+        "passed": true,
+        "detail": "serial matches /NTC iter=0 adc=2047 mV=1649\\.6 temp_c=24\\.99/"
+      },
+      {
+        "kind": "serial",
+        "passed": true,
+        "detail": "serial matches /LDR adc=3413 lux=99\\.8/"
+      },
+      {
+        "kind": "serial",
+        "passed": true,
+        "detail": "serial matches /NTC iter=[1-9][0-9]* adc=3633 mV=2927\\.7 temp_c=79\\.97/"
+      },
+      {
+        "kind": "serial",
+        "passed": true,
+        "detail": "serial matches /LDR adc=3912 lux=794\\.2/"
+      },
+      {
+        "kind": "serial",
+        "passed": true,
+        "detail": "serial matches /BME t=31\\.00 p=1002\\.0 h=60\\.0/"
+      },
+      {
+        "kind": "serial",
+        "passed": true,
+        "detail": "serial contains \"ALARM 1\""
+      },
+      {
+        "kind": "display",
+        "passed": true,
+        "detail": "display PAINTED on framebuffer (refresh_gen=n/a, ink=170>=1)"
+      },
+      {
+        "kind": "gpio",
+        "passed": true,
+        "detail": "PA5 toggled (gpio evidence)"
+      }
+    ],
+    "gaps": [
+      {
+        "code": "approximation",
+        "scope": "model",
+        "detail": "derived_device_time: device time derived from cpu_hz (100000000 Hz); PLL reconfiguration is not tracked"
+      },
+      {
+        "code": "approximation",
+        "scope": "model",
+        "detail": "unpowered_rail_assumed: no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal 3.3 V rail, so power-on and brown-out reset are not simulated"
+      }
+    ],
+    "engine_approximations": [
+      {
+        "code": "approximation",
+        "scope": "model",
+        "detail": "derived_device_time: device time derived from cpu_hz (100000000 Hz); PLL reconfiguration is not tracked"
+      },
+      {
+        "code": "approximation",
+        "scope": "model",
+        "detail": "unpowered_rail_assumed: no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal 3.3 V rail, so power-on and brown-out reset are not simulated"
+      }
+    ]
+  },
+  "evidence": {
+    "serial": {
+      "source": "receipt/run/uart.log",
+      "sha256": "8cc750cdb9f8239246d6396ab05706ff8ec7db37284dc7a9665eec89929ed02f"
+    },
+    "display": {
+      "kind": "framebuffer",
+      "id": "oled1",
+      "meta": {
+        "device_id": "oled1",
+        "format": "ssd1306_page",
+        "generation": 4584229257914157000,
+        "h": 64,
+        "ink_bytes": 170,
+        "lit_pixels": 1096,
+        "powered": true,
+        "supply_generation": null,
+        "w": 128
+      }
+    },
+    "gpio": [
+      {
+        "pin": "gpioa:5",
+        "transitions": [
+          {
+            "cycle": 965643,
+            "value": 1
+          }
+        ],
+        "gpio_pins": [
+          {
+            "pin": "CH0",
+            "peripheral": "gpioa",
+            "number": 5,
+            "mode": "af",
+            "func": "TIM2_CH1",
+            "output": false,
+            "input": true,
+            "pad": true,
+            "drive": "z"
+          }
+        ]
+      }
+    ]
+  },
+  "stimuli": [
+    {
+      "component": "th1",
+      "channel": "temperature",
+      "value": 80,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 15000000
+        }
+      },
+      "outcome": "applied",
+      "at_cycle": 15000000
+    },
+    {
+      "component": "ldr1",
+      "channel": "lux",
+      "value": 800,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 15000000
+        }
+      },
+      "outcome": "applied",
+      "at_cycle": 15000000
+    },
+    {
+      "component": "u2",
+      "channel": "temperature",
+      "value": 31,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 15000000
+        }
+      },
+      "outcome": "applied",
+      "at_cycle": 15000000
+    },
+    {
+      "component": "u2",
+      "channel": "pressure",
+      "value": 1002,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 15000000
+        }
+      },
+      "outcome": "applied",
+      "at_cycle": 15000000
+    },
+    {
+      "component": "u2",
+      "channel": "humidity",
+      "value": 60,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 15000000
+        }
+      },
+      "outcome": "applied",
+      "at_cycle": 15000000
+    }
+  ],
+  "negative_control": {
+    "command": "labwired test --script io-smoke.yaml --firmware firmware/.pio/build/blackpill_f411ce/firmware.elf --system system.yaml --max-steps 12500000 --watch-gpio gpioa:5 --output-dir /tmp/opencode/stage3-receipt-neg",
+    "note": "--max-steps 12,500,000 cuts the run before the 15,000,000-cycle stimuli: full boot state, no stimulus",
+    "verdict": {
+      "passed": false,
+      "status": "failed",
+      "clauses": [
+        {
+          "kind": "serial",
+          "passed": true,
+          "detail": "serial contains \"NODE boot\""
+        },
+        {
+          "kind": "serial",
+          "passed": true,
+          "detail": "serial contains \"BME280 ok\""
+        },
+        {
+          "kind": "serial",
+          "passed": true,
+          "detail": "serial contains \"OLED painted\""
+        },
+        {
+          "kind": "serial",
+          "passed": true,
+          "detail": "serial matches /NTC iter=0 adc=2047 mV=1649\\.6 temp_c=24\\.99/"
+        },
+        {
+          "kind": "serial",
+          "passed": true,
+          "detail": "serial matches /LDR adc=3413 lux=99\\.8/"
+        },
+        {
+          "kind": "serial",
+          "passed": false,
+          "detail": "serial does NOT match /NTC iter=[1-9][0-9]* adc=3633 mV=2927\\.7 temp_c=79\\.97/"
+        },
+        {
+          "kind": "serial",
+          "passed": false,
+          "detail": "serial does NOT match /LDR adc=3912 lux=794\\.2/"
+        },
+        {
+          "kind": "serial",
+          "passed": false,
+          "detail": "serial does NOT match /BME t=31\\.00 p=1002\\.0 h=60\\.0/"
+        },
+        {
+          "kind": "serial",
+          "passed": false,
+          "detail": "serial does NOT contain \"ALARM 1\""
+        },
+        {
+          "kind": "display",
+          "passed": true,
+          "detail": "display PAINTED on framebuffer (refresh_gen=n/a, ink=170>=1)"
+        },
+        {
+          "kind": "gpio",
+          "passed": true,
+          "detail": "PA5 toggled (gpio evidence)"
+        }
+      ]
+    },
+    "uart_sha256": "125882f740c6e5fbb7c61db216c74c56f58c48d39c8f1de8f88c84d86401eb15"
+  },
+  "stdio_attempt": {
+    "ok": false,
+    "proven": false,
+    "status": "inconclusive",
+    "run_status": "",
+    "gaps": [
+      {
+        "code": "observation_missing",
+        "scope": "oracle",
+        "detail": "stdio verification did not collect register/GPIO evidence required by the oracle"
+      }
+    ],
+    "verification": "",
+    "stop_reason": "",
+    "assertions": [],
+    "oracle_results": [
+      {
+        "kind": "serial",
+        "passed": false,
+        "detail": "serial does NOT contain \"NODE boot\""
+      },
+      {
+        "kind": "serial",
+        "passed": false,
+        "detail": "serial does NOT contain \"OLED painted\""
+      },
+      {
+        "kind": "serial",
+        "passed": false,
+        "detail": "serial does NOT match /temp_c=8[0-9]\\.[0-9]{2}/"
+      },
+      {
+        "kind": "display",
+        "passed": false,
+        "detail": "no panel \"oled-ssd1306\" in run peripherals"
+      },
+      {
+        "kind": "gpio",
+        "passed": false,
+        "detail": "no state evidence for PA5: nothing in this run reports that pad's level"
+      }
+    ],
+    "unevaluable_clauses": "register/gpio clauses require the hosted /run peripheral-inspect block; the stdio verify path only observes serial (UART) + display. Those clauses were evaluated against an empty peripheral set and cannot pass here - use the hosted verify for them.",
+    "verdict_lines": [],
+    "uart_excerpt": "",
+    "display": {
+      "painted": false,
+      "panel": null,
+      "refresh_generation": 0,
+      "ink_bytes": 0,
+      "readout": "(no panel readout — firmware may not drive a display)"
+    },
+    "error": "No builder URL configured. Set LABWIRED_COMPILE_URL (or LABWIRED_BUILDER_URL) to the labwired-builder base URL so the build can run server-side."
+  },
+  "hosted": {
+    "attempted": false,
+    "reason": "hosted not attempted: no token in this environment"
+  },
+  "unclaimed": [
+    {
+      "clause": "gpio_duty (PWM duty on PA5)",
+      "observable_on_this_path": false,
+      "why": "the logic capture on gpioa:5 recorded a single drive-enable edge (z->1 @ cycle 965,643) and a flat high tail; TIM2 compare toggles of the AF pad do not appear in the tap, so a duty computed from one edge + tail (1.0) would be an artifact, not PWM evidence"
+    },
+    {
+      "clause": "serial/register/gpio via MCP stdio labwired_verify",
+      "observable_on_this_path": false,
+      "why": "stdio verify routes serial/register/gpio clauses through the hosted builder and fails without LABWIRED_COMPILE_URL (packages/mcp/src/handlers/verify.ts needBuilder; packages/mcp/src/cli.ts runBuildViaBuilder: \"No builder URL configured\")"
+    },
+    {
+      "clause": "display via MCP stdio labwired_verify",
+      "observable_on_this_path": false,
+      "why": "the stdio device path runs `labwired snapshot capture --profile arduino-esp32` and decodes only ssd1680/uc8151d e-paper panels (packages/mcp/src/cli.ts panel-state regex); the SSD1306 OLED is not observable there (archived result: painted=false, panel=null)"
+    },
+    {
+      "clause": "hosted labwired_run / labwired_verify",
+      "observable_on_this_path": false,
+      "why": "hosted not attempted: no token in this environment"
+    }
+  ]
+}

@@ -15,6 +15,11 @@
 //!
 //! TASKS registers read as zero (write-only strobes on silicon).
 //! SEMSTAT is read-only (RO). STATUS is W1C (write-1 clears a status bit).
+//!
+//! The semaphore (PS v1.11 §6.26.2): `TASKS_ACQUIRE` gives the CPU the
+//! buffers with `EVENTS_ACQUIRED` (or after the transaction in progress),
+//! `TASKS_RELEASE` hands them to the SPI slave. On a world `gpio_net` the
+//! slave takes part in transactions bit by bit (`spis_net`).
 
 use crate::{Peripheral, SimResult};
 
@@ -50,6 +55,32 @@ const ENABLE_MASK: u32 = 0xF;
 
 // SHORTS valid bits: END_ACQUIRE (bit 2) per PS table.
 const SHORTS_MASK: u32 = 0x0000_0004;
+const SHORT_END_ACQUIRE: u32 = 1 << 2;
+
+// INTEN bits.
+const INTEN_END: u32 = 1 << 1;
+const INTEN_ENDRX: u32 = 1 << 4;
+const INTEN_ACQUIRED: u32 = 1 << 10;
+
+// SEMSTAT encoding: 0 free, 1 CPU, 2 SPIS, 3 CPU pending.
+const SEM_FREE: u32 = 0;
+const SEM_CPU: u32 = 1;
+const SEM_SPIS: u32 = 2;
+const SEM_CPU_PENDING: u32 = 3;
+
+/// `ENABLE` value that selects the SPIS personality (PS v1.11 §6.26.7.11).
+pub(crate) const ENABLE_SPIS: u32 = 2;
+
+// STATUS bits.
+const STATUS_OVERREAD: u32 = 1 << 0;
+const STATUS_OVERFLOW: u32 = 1 << 1;
+
+/// Line order for this slave's [`PadLines`](crate::peripherals::pad_lines::PadLines).
+pub(crate) const SPIS_LINES: &[&str] = &["SCK", "MOSI", "MISO", "CSN"];
+pub(crate) const LINE_SCK: usize = 0;
+pub(crate) const LINE_MOSI: usize = 1;
+pub(crate) const LINE_MISO: usize = 2;
+pub(crate) const LINE_CSN: usize = 3;
 
 // INTEN valid bits: END(1) ENDRX(4) ACQUIRED(10) — PS §6.26.
 const INTEN_MASK: u32 = (1 << 1) | (1 << 4) | (1 << 10);
@@ -93,6 +124,16 @@ pub struct Nrf52Spis {
     config: u32,
     def: u32,
     orc: u32,
+    /// Wire levels for the pads the `PSEL`s name (bus wiring time).
+    lines: Option<std::sync::Arc<crate::peripherals::pad_lines::PadLines>>,
+    claim_sck: crate::peripherals::nrf52::pin_select::NrfPinClaim,
+    claim_mosi: crate::peripherals::nrf52::pin_select::NrfPinClaim,
+    claim_miso: crate::peripherals::nrf52::pin_select::NrfPinClaim,
+    claim_csn: crate::peripherals::nrf52::pin_select::NrfPinClaim,
+    /// Bus cycle clock (the net engine's time base).
+    clock: Option<crate::CycleClock>,
+    /// The bit-level slave used on a world `gpio_net` (see `spis_net`).
+    net: net::SpisNet,
 }
 
 impl Nrf52Spis {
@@ -112,17 +153,90 @@ impl Nrf52Spis {
     }
 }
 
-impl Peripheral for Nrf52Spis {
-    /// Walk-independent for every firmware state: this model overrides neither
-    /// `tick()` nor `tick_elapsed()` with time-driven work that the walk must
-    /// deliver. Observable effects land on MMIO writes and/or the separate
-    /// `tick_with_bus` path (`bus_tick_indices`), which still runs when the
-    /// legacy walk is deleted. Marking `needs_legacy_walk = false` therefore
-    /// drops only empty dispatch from the per-cycle walk — byte-identical.
-    fn needs_legacy_walk(&self) -> bool {
-        false
+impl Nrf52Spis {
+    /// The shared pad-line cell for this slave, created on first use (bus
+    /// wiring time). Every line is an input until the slave is selected on a
+    /// net and drives MISO.
+    pub(crate) fn pad_lines_arc(
+        &mut self,
+    ) -> std::sync::Arc<crate::peripherals::pad_lines::PadLines> {
+        use crate::peripherals::pad_lines::{LineDrive, PadLines};
+        self.lines
+            .get_or_insert_with(|| {
+                let lines = PadLines::new(SPIS_LINES, &[false, false, false, true]);
+                for line in 0..SPIS_LINES.len() {
+                    lines.set_mode(line, LineDrive::Input);
+                    lines.set_net_idle(line, LineDrive::Input);
+                }
+                std::sync::Arc::new(lines)
+            })
+            .clone()
     }
 
+    /// Join the chip's pin-claim table (config-build time). Tokens in
+    /// [`SPIS_LINES`] order.
+    pub(crate) fn install_pin_claims(
+        &mut self,
+        claims: &std::sync::Arc<crate::peripherals::nrf52::pin_select::NrfPinClaims>,
+        tokens: [u32; 4],
+    ) {
+        self.claim_sck.install(claims.clone(), tokens[LINE_SCK]);
+        self.claim_mosi.install(claims.clone(), tokens[LINE_MOSI]);
+        self.claim_miso.install(claims.clone(), tokens[LINE_MISO]);
+        self.claim_csn.install(claims.clone(), tokens[LINE_CSN]);
+        self.sync_pin_claims();
+    }
+
+    /// Republish the claims from `ENABLE` and the `PSEL`s: the pads are the
+    /// slave's only while `ENABLE = 2`.
+    fn sync_pin_claims(&mut self) {
+        let live = self.enable & ENABLE_MASK == ENABLE_SPIS;
+        self.claim_sck.update(self.psel_sck, live);
+        self.claim_mosi.update(self.psel_mosi, live);
+        self.claim_miso.update(self.psel_miso, live);
+        self.claim_csn.update(self.psel_csn, live);
+    }
+
+    /// The interrupt level: an event whose `INTEN` bit is set.
+    fn irq_level(&self) -> bool {
+        (self.events_end != 0 && self.inten & INTEN_END != 0)
+            || (self.events_endrx != 0 && self.inten & INTEN_ENDRX != 0)
+            || (self.events_acquired != 0 && self.inten & INTEN_ACQUIRED != 0)
+    }
+
+    /// `TASKS_ACQUIRE`: the CPU gets the semaphore now when it is free (or
+    /// already its own), else when the slave's transaction ends.
+    fn task_acquire(&mut self) {
+        match self.semstat & 0x3 {
+            SEM_FREE | SEM_CPU => {
+                self.semstat = SEM_CPU;
+                self.events_acquired = 1;
+            }
+            _ => self.semstat = SEM_CPU_PENDING,
+        }
+    }
+
+    /// `TASKS_RELEASE`: the CPU hands the buffers to the slave.
+    fn task_release(&mut self) {
+        if self.semstat & 0x3 == SEM_CPU {
+            self.semstat = SEM_FREE;
+            self.net_released();
+        }
+    }
+
+    /// A granted transaction ended: the semaphore goes back to the CPU when
+    /// it asked for it (or `END_ACQUIRE`), else it is free again.
+    fn transaction_ended(&mut self) {
+        if self.semstat & 0x3 == SEM_CPU_PENDING || self.shorts & SHORT_END_ACQUIRE != 0 {
+            self.semstat = SEM_CPU;
+            self.events_acquired = 1;
+        } else {
+            self.semstat = SEM_FREE;
+        }
+    }
+}
+
+impl Peripheral for Nrf52Spis {
     fn read(&self, _offset: u64) -> SimResult<u8> {
         Ok(0)
     }
@@ -171,12 +285,8 @@ impl Peripheral for Nrf52Spis {
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
         match offset {
             // TASKS: write-only (read-as-zero); model the side-effect on semaphore.
-            OFF_TASKS_ACQUIRE if value & 1 != 0 => {
-                // TASKS_ACQUIRE: firmware requests semaphore (sim: no-op, SEMSTAT stays 0).
-            }
-            OFF_TASKS_RELEASE if value & 1 != 0 => {
-                // TASKS_RELEASE: firmware releases semaphore.
-            }
+            OFF_TASKS_ACQUIRE if value & 1 != 0 => self.task_acquire(),
+            OFF_TASKS_RELEASE if value & 1 != 0 => self.task_release(),
             // EVENTS: hardware-generated; SW write-1 ignored, write-0 clears.
             OFF_EVENTS_END if value == 0 => self.events_end = 0,
             OFF_EVENTS_ENDRX if value == 0 => self.events_endrx = 0,
@@ -190,9 +300,8 @@ impl Peripheral for Nrf52Spis {
             OFF_SEMSTAT => {}
             // STATUS is W1C: writing 1 to a bit CLEARS that bit.
             OFF_STATUS => self.status &= !(value & STATUS_MASK),
-            // ENABLE.
+            // ENABLE and PSEL move which pads the slave owns.
             OFF_ENABLE => self.enable = value & ENABLE_MASK,
-            // PSEL.
             OFF_PSEL_SCK => self.psel_sck = value,
             OFF_PSEL_MISO => self.psel_miso = value,
             OFF_PSEL_MOSI => self.psel_mosi = value,
@@ -210,9 +319,79 @@ impl Peripheral for Nrf52Spis {
                 crate::census_reg!("nrf52.spis:Nrf52Spis", offset, "write");
             }
         }
+        if matches!(
+            offset,
+            OFF_ENABLE | OFF_PSEL_SCK | OFF_PSEL_MISO | OFF_PSEL_MOSI | OFF_PSEL_CSN | OFF_CONFIG
+        ) {
+            self.sync_pin_claims();
+            self.net_after_pins();
+        }
         Ok(())
     }
+
+    fn line_names(&self) -> &'static [&'static str] {
+        SPIS_LINES
+    }
+
+    fn wire_lines(&self) -> Option<&crate::peripherals::pad_lines::PadLines> {
+        self.lines.as_deref()
+    }
+
+    fn wire_input_edge(&mut self, line: usize, level: bool, cycle: u64) -> bool {
+        self.net_edge(line, level, cycle)
+    }
+
+    fn attach_cycle_clock(&mut self, clock: crate::CycleClock) {
+        self.clock = Some(clock);
+    }
+
+    fn claims_pads(&self) -> bool {
+        true
+    }
+
+    fn uses_scheduler(&self) -> bool {
+        true
+    }
+
+    fn tick(&mut self) -> crate::PeripheralTickResult {
+        crate::PeripheralTickResult {
+            irq: self.irq_level(),
+            ..Default::default()
+        }
+    }
+
+    fn needs_bus_tick(&self) -> bool {
+        self.net_needs_bus()
+    }
+
+    fn tick_with_bus(&mut self, bus: &mut dyn crate::Bus) {
+        self.net_dma(bus);
+    }
+
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        self.net_take_events()
+    }
+
+    fn on_event(
+        &mut self,
+        _event_token: u32,
+        _sched: &mut crate::sched::EventScheduler,
+        bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        self.net_on_sched(bus)
+    }
+
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
+    }
+
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        Some(self)
+    }
 }
+
+#[path = "spis_net.rs"]
+mod net;
 
 #[cfg(test)]
 mod tests {

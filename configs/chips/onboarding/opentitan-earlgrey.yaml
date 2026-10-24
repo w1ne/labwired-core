@@ -42,19 +42,23 @@ peripherals:
   bus: sysbus
   base_address: 1073938432
 - id: i2c0
-  type: opentitan_i2c
+  type: stub
+  renode_type: opentitan_i2c
   bus: sysbus
   base_address: 1074266112
 - id: i2c1
-  type: opentitan_i2c
+  type: stub
+  renode_type: opentitan_i2c
   bus: sysbus
   base_address: 1074331648
 - id: i2c2
-  type: opentitan_i2c
+  type: stub
+  renode_type: opentitan_i2c
   bus: sysbus
   base_address: 1074397184
 - id: spi_device
-  type: opentitan_spidevice
+  type: stub
+  renode_type: opentitan_spidevice
   bus: sysbus
   base_address: 1074069504
 - id: gpio
@@ -62,23 +66,28 @@ peripherals:
   bus: sysbus
   base_address: 1074003968
 - id: aes
-  type: opentitan_aes
+  type: stub
+  renode_type: opentitan_aes
   bus: sysbus
   base_address: 1091567616
 - id: keymgr
-  type: opentitan_keymanager
+  type: stub
+  renode_type: opentitan_keymanager
   bus: sysbus
   base_address: 1091829760
 - id: csrng
-  type: opentitan_csrng
+  type: stub
+  renode_type: opentitan_csrng
   bus: sysbus
   base_address: 1091895296
 - id: hmac
-  type: opentitan_hmac
+  type: stub
+  renode_type: opentitan_hmac
   bus: sysbus
   base_address: 1091633152
 - id: kmac
-  type: opentitan_kmac
+  type: stub
+  renode_type: opentitan_kmac
   bus: sysbus
   base_address: 1091698688
 - id: rv_timer
@@ -90,51 +99,63 @@ peripherals:
   bus: sysbus
   base_address: 1078394880
 - id: pwrmgr_aon
-  type: opentitan_powermanager
+  type: stub
+  renode_type: opentitan_powermanager
   bus: sysbus
   base_address: 1077936128
 - id: rstmgr_aon
-  type: opentitan_resetmanager
+  type: stub
+  renode_type: opentitan_resetmanager
   bus: sysbus
   base_address: 1078001664
 - id: otp_ctrl
-  type: opentitan_onetimeprogrammablememorycontroller
+  type: stub
+  renode_type: opentitan_onetimeprogrammablememorycontroller
   bus: sysbus
   base_address: 1074987008
 - id: lc_ctrl
-  type: opentitan_lifecyclecontroller
+  type: stub
+  renode_type: opentitan_lifecyclecontroller
   bus: sysbus
   base_address: 1075052544
 - id: swteststatus
-  type: opentitan_verilatorswteststatus
+  type: stub
+  renode_type: opentitan_verilatorswteststatus
   bus: sysbus
   base_address: 1092550784
 - id: entropy_src
-  type: opentitan_entropysource
+  type: stub
+  renode_type: opentitan_entropysource
   bus: sysbus
   base_address: 1091960832
 - id: edn0
-  type: opentitan_entropydistributionnetwork
+  type: stub
+  renode_type: opentitan_entropydistributionnetwork
   bus: sysbus
   base_address: 1092026368
 - id: edn1
-  type: opentitan_entropydistributionnetwork
+  type: stub
+  renode_type: opentitan_entropydistributionnetwork
   bus: sysbus
   base_address: 1092091904
 - id: alert_handler
-  type: opentitan_alerthandler
+  type: stub
+  renode_type: opentitan_alerthandler
   bus: sysbus
   base_address: 1075118080
 - id: otbn
-  type: opentitan_bignumberaccelerator
+  type: stub
+  renode_type: opentitan_bignumberaccelerator
   bus: sysbus
   base_address: 1091764224
 - id: sysrst_ctrl
-  type: opentitan_systemresetcontrol
+  type: stub
+  renode_type: opentitan_systemresetcontrol
   bus: sysbus
   base_address: 1078132736
 - id: clock_manager
-  type: opentitan_clockmanager
+  type: stub
+  renode_type: opentitan_clockmanager
   bus: sysbus
   base_address: 1078067200
 - id: RV_CORE_IBEX_RND_DATA

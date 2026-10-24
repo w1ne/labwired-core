@@ -23,6 +23,9 @@ fn open(selected: Option<&str>) -> anyhow::Result<Session> {
     // USART1's bus window reads zero until its APB2 clock is enabled. Enable
     // it so checking an unselected port can actually detect stray input.
     session.write_u32(AddrOrSymbol::Addr(0x4002_1018), 1 << 14)?;
+    // USART2/USART3 are gated on RCC_APB1ENR bits 17/18 (RM0008 §7.3.8): enable
+    // them too, so the selected port reads its byte and USART3's zero is real.
+    session.write_u32(AddrOrSymbol::Addr(0x4002_101C), (1 << 17) | (1 << 18))?;
     Ok(session)
 }
 

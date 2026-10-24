@@ -29,6 +29,16 @@ use std::collections::HashSet;
 /// no source position until the next sequence starts.
 const END_OF_SEQUENCE: u32 = u32::MAX;
 
+/// One inlined call: the line that makes it and the address its inlined
+/// body starts at.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct InlineSite {
+    /// Index into [`SourceMap::files`].
+    file: u32,
+    line: u32,
+    addr: u64,
+}
+
 #[derive(Debug, Clone, Copy)]
 struct Row {
     addr: u64,
@@ -74,6 +84,10 @@ pub struct SourceMap {
     rows: Vec<Row>,
     /// Addresses that start an `is_stmt` row: where a source-level step stops.
     stmt_addrs: HashSet<u64>,
+    /// Where each inlined call starts, by its call site: a line whose whole
+    /// statement is an inlined call (`lcd_frame(&FB);` in an optimised build)
+    /// has no line-table row of its own, only these.
+    inline_sites: Vec<InlineSite>,
     /// Clears what a pc carries that is not part of its address: the Thumb
     /// bit on Arm. Every other architecture's pc is the address, and on
     /// Xtensa an odd one is an ordinary instruction start.
@@ -155,6 +169,8 @@ impl SourceMap {
             }
         }
 
+        let inline_sites = collect_inline_sites(dwarf, &text, &mut files, &mut file_ids);
+
         // Stable: rows at one address keep line-program order.
         rows.sort_by_key(|r| (r.addr, r.file != END_OF_SEQUENCE));
         let stmt_addrs = rows
@@ -168,6 +184,7 @@ impl SourceMap {
             files,
             rows,
             stmt_addrs,
+            inline_sites,
             pc_mask: if arm { !1 } else { !0 },
         }
     }
@@ -229,6 +246,13 @@ impl SourceMap {
         })
     }
 
+    /// The [`Self::line_key`] of `line` in `file`, a full DWARF path as
+    /// [`SymbolProvider::frames`] reports it.
+    pub fn key_of(&self, file: &str, line: u32) -> Option<(u32, u32)> {
+        let index = self.files.iter().position(|f| f == file)?;
+        Some((index as u32, line))
+    }
+
     /// `(file index, line)` of `pc`, for cheap comparisons while stepping.
     pub fn line_key(&self, pc: u64) -> Option<(u32, u32)> {
         self.row_at(pc & self.pc_mask).map(|r| (r.file, r.line))
@@ -259,42 +283,64 @@ impl SourceMap {
         if matched.is_empty() {
             return None;
         }
-        let stmts = || {
-            self.rows
-                .iter()
-                .filter(|r| r.is_stmt && r.file != END_OF_SEQUENCE && matched.contains(&r.file))
-        };
-        let chosen = stmts()
-            .map(|r| r.line)
+        let spots = self.line_spots(&matched);
+        let chosen = spots
+            .iter()
+            .map(|s| s.1)
             .filter(|l| *l >= line)
             .min()
-            .or_else(|| stmts().map(|r| r.line).filter(|l| *l < line).max())?;
-        let mut on_line: Vec<&Row> = stmts().filter(|r| r.line == chosen).collect();
-        on_line.sort_by_key(|r| r.addr);
-        let first = on_line.first()?;
-        let mut pcs: Vec<u64> = on_line.iter().map(|r| r.addr).collect();
+            .or_else(|| spots.iter().map(|s| s.1).filter(|l| *l < line).max())?;
+        let mut on_line: Vec<(u32, u64)> = spots
+            .iter()
+            .filter(|s| s.1 == chosen)
+            .map(|s| (s.0, s.2))
+            .collect();
+        on_line.sort_by_key(|s| s.1);
+        let first = *on_line.first()?;
+        let mut pcs: Vec<u64> = on_line.iter().map(|s| s.1).collect();
         pcs.dedup();
         Some(LineAddress {
-            pc: first.addr,
+            pc: first.1,
             pcs,
-            file: self.files[first.file as usize].clone(),
+            file: self.files[first.0 as usize].clone(),
             line: chosen,
         })
     }
 
-    /// The lines of the file best matching `file` that carry a statement,
-    /// ascending (matching as in [`Self::line_to_pc`]).
-    pub fn lines(&self, file: &str) -> Vec<u32> {
-        let matched = self.matching_files(file);
-        let mut lines: Vec<u32> = self
+    /// `(file, line, address)` of every place a breakpoint on a line of
+    /// `files` can stop: statement rows, and the starts of calls inlined there.
+    fn line_spots(&self, files: &[u32]) -> Vec<(u32, u32, u64)> {
+        let rows = self
             .rows
             .iter()
-            .filter(|r| r.is_stmt && r.file != END_OF_SEQUENCE && matched.contains(&r.file))
-            .map(|r| r.line)
-            .collect();
+            .filter(|r| r.is_stmt && r.file != END_OF_SEQUENCE && files.contains(&r.file))
+            .map(|r| (r.file, r.line, r.addr));
+        let sites = self
+            .inline_sites
+            .iter()
+            .filter(|s| files.contains(&s.file))
+            .map(|s| (s.file, s.line, s.addr));
+        rows.chain(sites).collect()
+    }
+
+    /// The lines of the file best matching `file` that carry a statement or
+    /// an inlined call, ascending (matching as in [`Self::line_to_pc`]).
+    pub fn lines(&self, file: &str) -> Vec<u32> {
+        let matched = self.matching_files(file);
+        let mut lines: Vec<u32> = self.line_spots(&matched).iter().map(|s| s.1).collect();
         lines.sort_unstable();
         lines.dedup();
         lines
+    }
+
+    /// The call sites (`file`, `line`) of the inlined calls whose body starts
+    /// at `pc`.
+    pub fn inline_calls_at(&self, pc: u64) -> impl Iterator<Item = (&str, u32)> + '_ {
+        let pc = pc & self.pc_mask;
+        self.inline_sites
+            .iter()
+            .filter(move |s| s.addr == pc)
+            .map(|s| (self.files[s.file as usize].as_str(), s.line))
     }
 
     /// Every file the line program names, full paths.
@@ -376,6 +422,102 @@ fn attr_text(
 ) -> Option<String> {
     let s = dwarf.attr_string(unit, attr).ok()?;
     s.to_string_lossy().ok().map(|c| c.into_owned())
+}
+
+/// Every `DW_TAG_inlined_subroutine` with a call site, as the call's line
+/// and the lowest address of the inlined body (`DW_AT_entry_pc` when given).
+/// Call files are added to `files` as the line rows add theirs.
+fn collect_inline_sites(
+    dwarf: &gimli::Dwarf<DwarfReader>,
+    text: &[std::ops::Range<u64>],
+    files: &mut Vec<String>,
+    file_ids: &mut std::collections::HashMap<String, u32>,
+) -> Vec<InlineSite> {
+    let mut sites = Vec::new();
+    let mut units = dwarf.units();
+    while let Ok(Some(header)) = units.next() {
+        let Ok(unit) = dwarf.unit(header) else {
+            continue;
+        };
+        let Some(program) = unit.line_program.as_ref() else {
+            continue;
+        };
+        let line_header = program.header();
+        let comp_dir = unit
+            .comp_dir
+            .as_ref()
+            .and_then(|d| d.to_string_lossy().ok().map(|s| s.into_owned()));
+        let mut entries = unit.entries();
+        while let Ok(Some((_, entry))) = entries.next_dfs() {
+            if entry.tag() != gimli::DW_TAG_inlined_subroutine {
+                continue;
+            }
+            let value = |name| entry.attr_value(name).ok().flatten();
+            // gimli reads DW_AT_call_file as a file index, not plain data.
+            let call_file = match value(gimli::DW_AT_call_file) {
+                Some(gimli::AttributeValue::FileIndex(index)) => Some(index),
+                other => other.and_then(|v| v.udata_value()),
+            };
+            let line = value(gimli::DW_AT_call_line).and_then(|v| v.udata_value());
+            // Line 0: code the compiler merged from several call sites.
+            let (Some(call_file), Some(line)) = (call_file, line.filter(|l| *l != 0)) else {
+                continue;
+            };
+            let Some(addr) = inline_entry(dwarf, &unit, entry) else {
+                continue;
+            };
+            if !text.iter().any(|r| r.contains(&addr)) {
+                continue;
+            }
+            let Some(file_entry) = line_header.file(call_file) else {
+                continue;
+            };
+            let Some(name) = attr_text(dwarf, &unit, file_entry.path_name()) else {
+                continue;
+            };
+            let dir = file_entry
+                .directory(line_header)
+                .and_then(|d| attr_text(dwarf, &unit, d));
+            let path = join_path(comp_dir.as_deref(), dir.as_deref(), &name);
+            let next = files.len() as u32;
+            let file = *file_ids.entry(path.clone()).or_insert_with(|| {
+                files.push(path);
+                next
+            });
+            sites.push(InlineSite {
+                file,
+                line: u32::try_from(line).unwrap_or(u32::MAX - 1),
+                addr,
+            });
+        }
+    }
+    sites.sort_by_key(|s| (s.addr, s.file, s.line));
+    sites.dedup();
+    sites
+}
+
+/// Where an inlined body starts: `DW_AT_entry_pc`, else `DW_AT_low_pc`, else
+/// the lowest address of its ranges.
+fn inline_entry(
+    dwarf: &gimli::Dwarf<DwarfReader>,
+    unit: &gimli::Unit<DwarfReader>,
+    entry: &gimli::DebuggingInformationEntry<DwarfReader>,
+) -> Option<u64> {
+    for name in [gimli::DW_AT_entry_pc, gimli::DW_AT_low_pc] {
+        if let Ok(Some(value)) = entry.attr_value(name) {
+            if let Ok(Some(addr)) = dwarf.attr_address(unit, value) {
+                return Some(addr);
+            }
+        }
+    }
+    let mut ranges = dwarf.die_ranges(unit, entry).ok()?;
+    let mut lowest: Option<u64> = None;
+    while let Ok(Some(r)) = ranges.next() {
+        if r.begin < r.end {
+            lowest = Some(lowest.map_or(r.begin, |l| l.min(r.begin)));
+        }
+    }
+    lowest
 }
 
 /// Address ranges of the ELF's executable sections.

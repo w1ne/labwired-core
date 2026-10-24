@@ -218,7 +218,15 @@ impl XtensaSrFile {
                 if idx == CCOMPARE0 as usize {
                     self.ccompare0_armed = v != 0;
                     self.storage[IDX_INTERRUPT] &= !(1 << 6);
-                    if v != 0 && self.storage[IDX_CCOUNT] >= v {
+                    // "Already overrun" is wrap-aware: CCOUNT is a 32-bit
+                    // counter, and the FreeRTOS tick handler routinely sets
+                    // CCOMPARE0 = old + divisor, which wraps past 0 while
+                    // CCOUNT is still near u32::MAX. A plain `>=` read that as
+                    // overrun, re-raised timer-0 at once, and the handler's
+                    // catch-up loop pushed CCOMPARE0 ~130M cycles ahead: every
+                    // 2^32 cycles (17.9 s at 240 MHz) the tick went dead for
+                    // ~0.5 s and an Arduino loop() missed a button press.
+                    if v != 0 && (self.storage[IDX_CCOUNT].wrapping_sub(v) as i32) >= 0 {
                         self.storage[IDX_INTERRUPT] |= 1 << 6;
                     }
                 }
@@ -286,6 +294,26 @@ impl XtensaSrFile {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ccompare0_written_just_past_a_ccount_wrap_is_not_treated_as_overrun() {
+        let mut sr = XtensaSrFile::new();
+        sr.write(CCOUNT, 0xFFFF_FF00);
+        // Tick handler: CCOMPARE0 = old + 240_000, wrapping past 0.
+        sr.write(CCOMPARE0, 0xFFFF_FF00u32.wrapping_add(240_000));
+        assert_eq!(
+            sr.read(INTERRUPT) & (1 << 6),
+            0,
+            "wrapped compare is in the future"
+        );
+        // A genuinely overrun compare still raises at once.
+        sr.write(CCOMPARE0, 0xFFFF_FE00);
+        assert_ne!(
+            sr.read(INTERRUPT) & (1 << 6),
+            0,
+            "overrun compare must raise"
+        );
+    }
 
     #[test]
     fn ccompare0_armed_follows_every_store() {

@@ -1,0 +1,44 @@
+name: ST7735 colour controls
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - crates/core/src/peripherals/components/st7735_color.rs
+      - crates/core/src/peripherals/components/declarative_display.rs
+      - crates/core/src/peripherals/components/declarative_display_gpio.rs
+      - crates/core/src/bus/resident_device.rs
+      - crates/core/src/peripherals/components/mod.rs
+      - crates/config/src/peripherals.rs
+      - crates/core/tests/fixtures/st7735r-memory.yaml
+      - crates/core/src/inspect.rs
+      - crates/core/tests/st7735_sam_guest.rs
+      - .github/workflows/st7735-color-controls.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: st7735-color-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  standalone-codec:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.95.0
+      - name: Compile and run pure codec controls, not a panel qualification
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_file=crates/core/src/peripherals/components/st7735_color.rs
+          binary="$RUNNER_TEMP/st7735-color-controls"
+          rustc --version
+          sha256sum "$source_file"
+          rustc --edition=2021 --test -D warnings "$source_file" -o "$binary"
+          "$binary" --list | tee "$RUNNER_TEMP/st7735-color-tests.txt"
+          test "$(grep -c ': test$' "$RUNNER_TEMP/st7735-color-tests.txt")" -eq 11
+          "$binary" --nocapture

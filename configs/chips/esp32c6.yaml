@@ -143,7 +143,9 @@ peripherals:
   # 0x6008_0000) and esp-idf reg_base.h (DR_REG_GDMA_BASE). The C6 register
   # layout differs from the S3's flat 0xC0-stride block (see
   # peripherals/esp32c6/gdma.rs); the model implements real memory-to-memory
-  # descriptor walks. IRQ = 66 (DMA_IN_CH0); IN_CHn = 66+n, OUT_CHn = 69+n.
+  # descriptor walks, and channels bound to the GP-SPI2 (PERI_SEL = 0) move its
+  # DMA data (peripherals/esp_gdma.rs). IRQ = 66 (DMA_IN_CH0); IN_CHn = 66+n,
+  # OUT_CHn = 69+n.
   - id: "gdma"
     type: "esp32c6_gdma"
     irq: 66 # DMA_IN_CH0 (esp32c6.svd)

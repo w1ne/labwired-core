@@ -72,7 +72,7 @@ For the documented scenarios in `VALIDATION.md` (Tier-1 fixture
 - Each gated class is poked **while its RCC gate is off** and must read dead
   before the enable, so a wrong G0 gate offset fails the class.
 - The L1 smoke (`firmware_survival::test_nucleo_g071rb_smoke_survival`) and
-  config-build gate (`stm32g071_config::stm32g071_from_config_builds`) still
+  config-build gate (`board_config_gates::stm32g071_from_config_builds`) still
   pass; register-vs-SVD conformance is green.
 
 Beyond those scenarios, assume nothing. Anything not listed above is either

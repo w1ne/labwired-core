@@ -1,0 +1,78 @@
+name: SAMD actual CODAL software-pended stale SPI IRQ guest
+on:
+  pull_request:
+    paths: ['crates/core/tests/samd_real_spi_stale_guest.rs', '.github/workflows/samd-real-spi-stale-guest.yml']
+permissions:
+  contents: read
+concurrency:
+  group: real-spi-stale-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  LABWIRED_SPI_SOURCE: 35386bee113d4dc1531aa3c8ab90e6f9078191fe
+jobs:
+  spi-stale-guest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: CrispStrobe/codal-samd
+          ref: 35386bee113d4dc1531aa3c8ab90e6f9078191fe
+          path: owned-stale-source
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: lancaster-university/codal-core
+          ref: 2ed19d64ec3359143409a4b0a9758b4aeef3ee7d
+          path: owned-stale-core
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: lancaster-university/codal-core
+          ref: 2ed19d64ec3359143409a4b0a9758b4aeef3ee7d
+          path: owned-positive-core
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: Swatinem/rust-cache@v2
+      - name: Build separate stale-dispatch and positive callers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-arm-none-eabi
+          arm-none-eabi-g++ --version
+          dpkg-query -W gcc-arm-none-eabi
+          cd owned-stale-source
+          bash runtime-services/build.sh ../owned-stale-core "$RUNNER_TEMP/spi-stale-13" 13
+          bash runtime-services/build.sh ../owned-positive-core "$RUNNER_TEMP/spi-stale-8" 8
+      - name: Nonvacuous stale-dispatch and positive ordering controls
+        run: |
+          cargo test --release --locked -p labwired-core --test samd_real_spi_stale_guest -- --nocapture
+          cargo test --release --locked -p labwired-core --test samd_real_spi_guest -- --nocapture
+      - name: Execute all four actual stale-dispatch and positive cases
+        run: |
+          set -o pipefail
+          stale_failures=0
+          for mode in 13 8; do
+            if test "$mode" = 13; then fixture=samd_real_spi_stale_guest; else fixture=samd_real_spi_guest; fi
+            export LABWIRED_SPI_FIXTURE_DIR="$RUNNER_TEMP/spi-stale-$mode"
+            for profile in default scheduler; do
+              feature_args=()
+              if test "$profile" = scheduler; then feature_args=(--features event-scheduler); fi
+              if ! cargo test --release --locked -p labwired-core "${feature_args[@]}" --test "$fixture" -- --ignored --nocapture 2>&1 | tee "spi-stale-$mode-$profile.log"; then
+                stale_failures=$((stale_failures + 1))
+              fi
+            done
+          done
+          test "$stale_failures" -eq 0
+      - name: Preserve actual source and stale-dispatch observations
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: actual-codal-spi-software-stale-guest-results
+          path: |
+            spi-stale-*.log
+            ${{ runner.temp }}/spi-stale-13/
+            ${{ runner.temp }}/spi-stale-8/

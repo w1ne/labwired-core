@@ -645,7 +645,7 @@ static void test_master_command_encode_decode_round_trips(void** state)
     assert_int_equal(iolink_master_mc_channel(mc), IOLINK_MASTER_MC_CHANNEL_ISDU);
     assert_int_equal(iolink_master_mc_address(mc), 0x12U);
 
-    /* The operate-transition command composes from parts to the legacy 0x0F octet. */
+    /* Process-channel write of address 0x0F is the legacy octet, not DeviceOperate. */
     assert_int_equal(iolink_master_encode_master_command(false,
                                                          IOLINK_MASTER_MC_CHANNEL_PROCESS,
                                                          IOLINK_MASTER_MC_TRANSITION_ADDR),
@@ -656,6 +656,20 @@ static void test_master_command_encode_decode_round_trips(void** state)
     assert_false(iolink_master_mc_is_read(mc));
     assert_int_equal(iolink_master_mc_channel(mc), IOLINK_MASTER_MC_CHANNEL_PAGE);
     assert_int_equal(iolink_master_mc_address(mc), 0x1FU);
+}
+
+
+static void test_device_operate_is_page_write_of_0x99(void** state)
+{
+    uint8_t mc;
+
+    (void)state;
+
+    mc = iolink_master_encode_master_command(false, IOLINK_MASTER_MC_CHANNEL_PAGE, 0x00U);
+    assert_int_equal(mc, 0x20U);
+    assert_int_equal(IOLINK_CMD_DEVICE_OPERATE, 0x99U);
+    assert_int_not_equal(mc, IOLINK_MC_TRANSITION_COMMAND);
+    assert_int_not_equal(IOLINK_CMD_DEVICE_OPERATE, IOLINK_MC_TRANSITION_COMMAND);
 }
 
 int main(void)
@@ -685,6 +699,7 @@ int main(void)
         cmocka_unit_test(test_mseq_capability_code_matches_table_a10),
         cmocka_unit_test(test_validate_accepts_every_table_a10_code_for_its_type),
         cmocka_unit_test(test_master_command_encode_decode_round_trips),
+        cmocka_unit_test(test_device_operate_is_page_write_of_0x99),
     };
 
     return cmocka_run_group_tests(tests, NULL, NULL);

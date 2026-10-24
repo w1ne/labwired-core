@@ -1,5 +1,7 @@
 # iolinki-master Architecture
 
+The companion device stack is [iolinki](https://github.com/w1ne/iolinki).
+
 `iolinki-master` is a standalone, hardware-independent IO-Link **master** protocol
 library. The design goal is a portable embedded master core with clean boundaries:
 no heap, caller-owned storage, a public API that hides private state, and no
@@ -25,7 +27,7 @@ under `src/`.**
 
 - Public users allocate `iolink_master_port_t` (per port) or
   `iolink_master_controller_t` (per multi-port controller). These are unions sized
-  by audited budgets — `IOLINK_MASTER_PORT_STORAGE_SIZE` (1280 B) and
+  by audited budgets — `IOLINK_MASTER_PORT_STORAGE_SIZE` (1312 B) and
   `IOLINK_MASTER_CONTROLLER_STORAGE_SIZE` (32 B) — giving embedded integrators a
   fixed, auditable RAM ceiling and keeping the ABI heap-free and caller-owned.
 - The real layout lives in `src/master_internal.h` and is reached only through
@@ -46,9 +48,10 @@ external users compile against the storage sizes and result codes.
 - **Port lifecycle**: `INACTIVE → STARTUP → PREOPERATE → OPERATE`, plus `ERROR`
   (`iolink_master_state_t`), driven by `iolink_master_process` /
   `iolink_master_poll_rx`.
-- **Startup**: wake-up request, Type-0 idle exchange, operate transition command,
-  and OPERATE entry; fixed baudrate or auto-baud scan across COM3→COM2→COM1 with a
-  configurable per-baud `wake_retry_limit`.
+- **Startup**: the EstablishCom submachine of V1.1.5 Figure 36 (one wake-up,
+  then a TYPE_0 test message at COM3, COM2, COM1; up to n_WU + 1 wake-ups per
+  sequence; T_SD between sequences), operate transition command, and OPERATE
+  entry. A fixed-rate port (`auto_baudrate = false`) tries only `baudrate`.
 - **Cyclic process data**: configured PD in/out for M-sequence Types 0, 1_1/1_2/1_V,
   2_1/2_2/2_V (`iolink_master_m_seq_type_t`), exposed via `iolink_master_set_pd_out`
   / `iolink_master_get_pd_in` / `iolink_master_get_od_status`.

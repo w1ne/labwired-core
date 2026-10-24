@@ -1,0 +1,22 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+#
+# dsPIC33FJ32MC204 M3 demo system: TMP102 on the CPU-internal I2C1 and a
+# wire loopback on SPI1. Use this file with the session builder / the M3
+# integration test (`crates/core/tests/pic24_xc16_m3.rs`), not with the
+# generic CLI bus builder, which has no PIC24 I2C/SPI peripherals.
+name: "dspic33fj32mc204-m3-demo"
+chip: "../../configs/chips/dspic33fj32mc204.yaml"
+external_devices:
+  - id: "temp"
+    type: "tmp102"
+    connection: "i2c1"
+    config:
+      descriptor: "../../configs/peripherals/tmp102.yaml"
+      i2c_address: 0x48
+  - id: "spi_loopback"
+    type: "loopback"
+    connection: "spi1"

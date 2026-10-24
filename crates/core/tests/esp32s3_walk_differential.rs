@@ -39,6 +39,9 @@
 
 #![cfg(feature = "event-scheduler")]
 
+mod common;
+
+use common::walk_differential::{assert_probes_identical, run_probed};
 use labwired_core::bus::SystemBus;
 use labwired_core::cpu::XtensaLx7;
 use labwired_core::peripherals::esp32s3::gpio::GpioObserver;
@@ -183,36 +186,19 @@ fn run_steps(machine: &mut Machine<XtensaLx7>, steps: u64) {
 /// matrix source asserted.
 const INTR_STATUS_REG1: u32 = INTMATRIX_BASE + 0x190;
 
-/// The exact interrupt-delivery state the coordinator's fidelity checklist
-/// names: CPU PC (→ ISR-entry cycle), the routed `pending_cpu_irqs` level for
-/// core 0 (set/clear timing), and the intmatrix `INTR_STATUS` word the ISR
-/// reads (source-discovery content). Captured after EVERY instruction.
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct IrqProbe {
-    step: u64,
-    total_cycles: u64,
-    pc: u32,
-    pending_cpu_irqs0: u32,
-    intr_status_reg1: u32,
-}
-
-fn irq_probe(machine: &Machine<XtensaLx7>, step: u64) -> IrqProbe {
-    IrqProbe {
-        step,
-        total_cycles: machine.total_cycles,
-        pc: machine.cpu.get_pc(),
-        pending_cpu_irqs0: machine.bus.pending_cpu_irqs[0],
-        intr_status_reg1: machine.bus.read_u32(INTR_STATUS_REG1 as u64).unwrap(),
-    }
-}
-
-fn run_irq_probed(machine: &mut Machine<XtensaLx7>, steps: u64) -> Vec<IrqProbe> {
-    let mut probes = Vec::with_capacity(steps as usize);
-    for s in 0..steps {
-        machine.run(Some(1)).expect("run S3 alarm machine");
-        probes.push(irq_probe(machine, s + 1));
-    }
-    probes
+/// The caller-supplied observables the harness probe carries for this fixture:
+/// the routed CPU level and the intmatrix status word the ISR reads.
+fn extra(machine: &Machine<XtensaLx7>) -> Vec<(&'static str, u64)> {
+    vec![
+        (
+            "pending_cpu_irqs0",
+            u64::from(machine.bus.pending_cpu_irqs[0]),
+        ),
+        (
+            "intr_status_reg1",
+            u64::from(machine.bus.read_u32(INTR_STATUS_REG1 as u64).unwrap()),
+        ),
+    ]
 }
 
 /// Gate 1: walk-on vs scheduler at tick interval 1. The alarm is delivered on
@@ -228,11 +214,11 @@ fn alarm_isr_is_byte_identical_at_interval_1() {
     const STEPS: u64 = 20_000;
 
     let (mut walk, walk_obs) = build_alarm_machine(false, 1);
-    let walk_probes = run_irq_probed(&mut walk, STEPS);
+    let walk_probes = run_probed(&mut walk, IRAM_BASE, STEPS, &extra);
     let walk_events = walk_obs.events.lock().unwrap().clone();
 
     let (mut sched, sched_obs) = build_alarm_machine(true, 1);
-    let sched_probes = run_irq_probed(&mut sched, STEPS);
+    let sched_probes = run_probed(&mut sched, IRAM_BASE, STEPS, &extra);
     let sched_events = sched_obs.events.lock().unwrap().clone();
 
     let rising = pin2_rising_cycles(&walk_obs);
@@ -247,27 +233,22 @@ fn alarm_isr_is_byte_identical_at_interval_1() {
     assert!(
         walk_probes
             .iter()
-            .any(|p| p.pending_cpu_irqs0 == (1 << CPU_IRQ_SLOT)),
+            .any(|p| p.extra("pending_cpu_irqs0") == (1 << CPU_IRQ_SLOT)),
         "reference must route the alarm to CPU slot {CPU_IRQ_SLOT} in pending_cpu_irqs"
     );
     assert!(
         walk_probes
             .iter()
-            .any(|p| p.intr_status_reg1 & (1 << 25) != 0),
+            .any(|p| p.extra("intr_status_reg1") & (1 << 25) != 0),
         "reference must mirror SYSTIMER source 57 into INTR_STATUS_REG_1"
     );
     // The whole point: every interrupt observable identical at every
     // instruction — find the first divergence if any.
-    for (w, s) in walk_probes.iter().zip(sched_probes.iter()) {
-        assert_eq!(
-            w, s,
-            "IRQ delivery diverged at step {} (SYSTIMER walk-reference vs scheduler): \
-             pending_cpu_irqs / INTR_STATUS / PC / total_cycles must be byte-identical \
-             every cycle at interval 1",
-            w.step
-        );
-    }
-    assert_eq!(walk_probes.len(), sched_probes.len());
+    assert_probes_identical(
+        &walk_probes,
+        &sched_probes,
+        "IRQ delivery (SYSTIMER walk-reference vs scheduler)",
+    );
     assert_eq!(
         walk_events, sched_events,
         "GPIO2 transition trace (pin, edge, sim-cycle) must be byte-identical \

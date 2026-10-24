@@ -1,0 +1,31 @@
+# Plain GPIO on bank-1 pads between a classic ESP32 and an ESP32-S3
+# (register level, src/esp32x_gpio_hi.S): the classic part drives GPIO32
+# (OUT1 bit 0) onto the S3's GPIO40 (IN1 bit 8); the S3 drives GPIO41 (OUT1
+# bit 9) onto the classic part's input-only GPIO39 (IN1 bit 7). Four
+# handshake rounds, each input edge counted from GPIO_STATUS1.
+schema_version: "1.0"
+name: gpio-net-gpio-esp32-esp32s3
+nodes:
+  - id: esp
+    system: "../../configs/systems/esp32-wroom-32.yaml"
+    firmware: "firmware/esp32-gpio-hi.elf"
+  - id: esps3
+    system: "../../configs/systems/esp32s3.yaml"
+    firmware: "firmware/esp32s3-gpio-hi.elf"
+interconnects:
+  - type: gpio_net
+    nodes: [esp, esps3]
+    config:
+      name: a2b
+      pull: down
+      members:
+        - { node: esp, peripheral: gpio, pin: 32 }     # OUT1 bit 0
+        - { node: esps3, peripheral: gpio, pin: 40 }   # IN1 bit 8
+  - type: gpio_net
+    nodes: [esp, esps3]
+    config:
+      name: b2a
+      pull: down
+      members:
+        - { node: esps3, peripheral: gpio, pin: 41 }   # OUT1 bit 9
+        - { node: esp, peripheral: gpio, pin: 39 }     # IN1 bit 7, input-only

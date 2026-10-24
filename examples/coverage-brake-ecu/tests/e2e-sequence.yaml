@@ -1,0 +1,23 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+# Alive-counter faults: repeated frame, skipped frames, then three bad
+# frames in a row latch the safe state.
+schema_version: "1.2"
+inputs:
+  firmware: "../../../tests/fixtures/coverage-brake-ecu-cm3.elf"
+  system: "../system.yaml"
+limits:
+  max_steps: 200000
+uart_injections:
+  - uart: "uart1"
+    bytes: [0xA5, 0x01, 0x00, 0x00, 0x7A, 0xA5, 0x01, 0x00, 0x00, 0x7A, 0xA5, 0x06, 0x00, 0x00, 0xF0, 0xA5, 0x06, 0x00, 0x00, 0xF0, 0xA5, 0x06, 0x00, 0x00, 0xF1, 0xA5, 0x07, 0x1E, 0x00, 0x24]
+assertions:
+  - uart_contains: "BRAKE ECU READY"
+  - uart_contains: "E2E REPEATED"
+  - uart_contains: "E2E WRONG SEQUENCE"
+  - uart_contains: "SAFE STATE"
+  - expected_stop_reason: max_steps

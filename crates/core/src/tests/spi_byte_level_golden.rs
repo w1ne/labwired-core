@@ -175,9 +175,15 @@ mod spi_byte_level_golden_tests {
     /// Wire captured on pristine HEAD 0877f536 (2026-08-08), BEFORE any
     /// edge-sampling code existed. DR/SR recaptured 2026-09-15 after merging
     /// main: RXNE is now clear-on-read (SR 3 → 2). The wire hex is unchanged.
+    /// FIFO case DR recaptured 2026-10-11 when the FIFO profile gained its
+    /// RX FIFO: each 16-bit DR write at DS=8 sends two frames, and the 16-bit
+    /// DR read now pops BOTH answers packed (low byte = first frame) — 22731
+    /// = 0x58CB, 24312 = 0x5EF8 — where it used to return only the last one
+    /// (88 = 0x58, 94 = 0x5E). RM0444/RM0351 data packing; wire and SR
+    /// unchanged.
     const WIRE: &str = "02266115533771155004433771155226621155004433773377337722660044115510044115500441155115500440044115510737362735151404004040514062626262246666222255551111444400005555111144440000555511115555111177773333740415371537371537737372604263737155026042626262626042626370426372626201155115500442266115500443377115500441155004411551155004400440044011551155337733771155226600440044004411550044115511551155115500440";
     const DR: &[u16] = &[
-        118, 2, 185, 2, 89, 2, 220, 2, 32, 2, 87, 2, 254, 2, 227, 2, 36, 2, 88, 2, 94, 2,
+        118, 2, 185, 2, 89, 2, 220, 2, 32, 2, 87, 2, 254, 2, 227, 2, 36, 2, 22731, 2, 24312, 2,
     ];
 
     #[test]

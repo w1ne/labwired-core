@@ -1,0 +1,69 @@
+name: SAMD actual CODAL core reset
+on:
+  pull_request:
+    paths:
+      - 'crates/core/src/cpu/cortex_m.rs'
+      - 'crates/core/src/tests/scb_reset.rs'
+      - 'crates/core/src/config.rs'
+      - 'crates/core/src/bus/**'
+      - 'crates/core/tests/samd_real_core_reset_guest.rs'
+      - '.github/workflows/samd-real-core-reset-guest.yml'
+permissions:
+  contents: read
+concurrency:
+  group: real-core-reset-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  LABWIRED_RESET_SOURCE: 12d4759af0bf2b29726cfd79c487474a282cc5b0
+jobs:
+  core-reset-guest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: CrispStrobe/codal-samd
+          ref: 12d4759af0bf2b29726cfd79c487474a282cc5b0
+          path: owned-reset-source
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: Swatinem/rust-cache@v2
+      - name: Build the reset caller image
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-arm-none-eabi
+          arm-none-eabi-g++ --version
+          dpkg-query -W gcc-arm-none-eabi
+          git clone --no-checkout https://github.com/lancaster-university/codal-core.git owned-reset-core-19
+          git -C owned-reset-core-19 checkout --detach 2ed19d64ec3359143409a4b0a9758b4aeef3ee7d
+          (cd owned-reset-source; bash runtime-services/build.sh "../owned-reset-core-19" "$RUNNER_TEMP/core-reset" 19)
+      - name: Nonvacuous reset controls and source-reviewed CPU reset controls
+        run: |
+          cargo test --release --locked -p labwired-core --test samd_real_core_reset_guest -- --nocapture
+          cargo test --release --locked -p labwired-core --lib scb_reset_tests -- --nocapture
+          cargo test --release --locked -p labwired-core --lib test_wide_ram_store_observation_is_explicit_and_exact -- --nocapture
+      - name: Execute the reset caller in both profiles
+        run: |
+          set -o pipefail
+          reset_failures=0
+          for profile in default event-scheduler; do
+            feature_args=()
+            if test "$profile" = event-scheduler; then feature_args=(--features event-scheduler); fi
+            echo "SAMD_CORE_RESET_BEGIN profile=$profile"
+            export LABWIRED_RESET_FIXTURE_DIR="$RUNNER_TEMP/core-reset"
+            if ! cargo test --release --locked -p labwired-core "${feature_args[@]}" --test samd_real_core_reset_guest -- --ignored --nocapture 2>&1 | tee "core-reset-new-$profile.log"; then reset_failures=$((reset_failures+1)); fi
+            echo "SAMD_CORE_RESET_END profile=$profile"
+          done
+          test "$reset_failures" -eq 0
+      - name: Preserve reset source-bound observations
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: actual-codal-core-reset-results
+          path: |
+            core-reset-*.log
+            ${{ runner.temp }}/core-reset/

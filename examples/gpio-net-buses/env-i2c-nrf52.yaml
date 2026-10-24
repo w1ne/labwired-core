@@ -1,0 +1,29 @@
+# An nRF52840 TWIM0 controller and an STM32G071 I2C1 target at 0x42 (the
+# `env-i2c.yaml` target firmware): SCL and SDA are open-drain gpio_nets with
+# the bus pull-up on the net.
+schema_version: "1.0"
+name: gpio-net-i2c-nrf52
+nodes:
+  - id: nrf
+    system: "system-nrf52840.yaml"
+    firmware: "firmware/nrf-twim-controller.elf"
+  - id: b
+    system: "system.yaml"
+    firmware: "firmware/i2c-target.elf"
+interconnects:
+  - type: gpio_net
+    nodes: [nrf, b]
+    config:
+      name: scl
+      pull: up
+      members:
+        - { node: nrf, peripheral: gpio0, pin: 27 }  # PSEL.SCL
+        - { node: b, peripheral: gpiob, pin: 6 }
+  - type: gpio_net
+    nodes: [nrf, b]
+    config:
+      name: sda
+      pull: up
+      members:
+        - { node: nrf, peripheral: gpio0, pin: 26 }  # PSEL.SDA
+        - { node: b, peripheral: gpiob, pin: 7 }

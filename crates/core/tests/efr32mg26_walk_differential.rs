@@ -54,6 +54,7 @@
 
 mod common;
 use common::root;
+use common::walk_differential::{probe_at, Probe};
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::cpu::CortexM;
@@ -223,36 +224,6 @@ fn machine(lane: Lane) -> (Machine<CortexM>, Arc<Mutex<Vec<u8>>>) {
     (m, sink)
 }
 
-/// Everything the two lanes must agree on after a single retired instruction.
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct Probe {
-    step: u64,
-    total_cycles: u64,
-    pc: u32,
-    regs: [u32; 16],
-    uart_len: usize,
-    /// TIMER0/TIMER1 `CNT`, `IF`, `STATUS`; IADC `STATUS`/`IF`; EXTI `IF`;
-    /// I2C0 `IF`; BLE `STATUS`.
-    periph: [u32; 11],
-    /// NVIC `ISPR0..2` — the interrupt-pending latch.
-    ///
-    /// ⚠️ This is the field that makes the whole differential able to fail, and
-    /// it was NOT in the first version. Every migrated model advances its state
-    /// LAZILY: a register read syncs to "now" before answering, so `TIMER0.IF`
-    /// reads correctly whatever cycle the event was armed for. The only thing a
-    /// mis-armed event actually moves is the cycle the NVIC line is PENDED on —
-    /// so a differential that does not sample ISPR passes with the arming
-    /// deliberately broken. Verified by doing exactly that.
-    ispr: [u32; 3],
-    /// Live pad level of LED0/LED1 — the wire, not the register, so a PWM
-    /// output that stops moving is visible here.
-    pads: [Option<bool>; 2],
-    /// Folded in every `SRAM_HASH_EVERY` steps (`None` otherwise), so a
-    /// divergence that reaches memory without reaching a register is caught
-    /// too, without hashing 16 KiB per instruction.
-    sram: Option<u64>,
-}
-
 /// How often the SRAM window is hashed into the probe.
 const SRAM_HASH_EVERY: u64 = 2048;
 
@@ -283,52 +254,42 @@ fn lane_run(lane: Lane) -> LaneRun {
 }
 
 fn probe(run: &mut LaneRun, step: u64) -> Probe {
-    let m = &mut run.machine;
-    let mut regs = [0u32; 16];
-    for (i, r) in regs.iter_mut().enumerate() {
-        *r = m.read_core_reg(i as u8);
+    let gpioc = run.gpioc;
+    let uart_len = run.sink.lock().unwrap().len() as u64;
+    let extra = move |m: &Machine<CortexM>| -> Vec<(&'static str, u64)> {
+        let rd = |a: u64| u64::from(m.bus.read_u32(a).unwrap_or(0xDEAD_BEEF));
+        let dev = &m.bus.peripherals[gpioc].dev;
+        // `None` (no pad) maps to 2 so it never equals a driven low/high level.
+        let pad = |pin: u8| match dev.read_gpio_pad(pin) {
+            None => 2u64,
+            Some(false) => 0,
+            Some(true) => 1,
+        };
+        vec![
+            ("timer0_cnt", rd(TIMER0 + TIMER_CNT)),
+            ("timer0_if", rd(TIMER0 + TIMER_IF)),
+            ("timer0_status", rd(TIMER0 + TIMER_STATUS)),
+            ("timer1_cnt", rd(TIMER1 + TIMER_CNT)),
+            ("timer1_if", rd(TIMER1 + TIMER_IF)),
+            ("timer1_status", rd(TIMER1 + TIMER_STATUS)),
+            ("iadc_status", rd(IADC0 + IADC_STATUS)),
+            ("iadc_if", rd(IADC0 + IADC_IF)),
+            ("exti_if", rd(GPIO_EXTI + EXTI_IF)),
+            ("i2c0_if", rd(I2C0 + I2C_IF)),
+            ("ble_status", rd(BLE + BLE_STATUS)),
+            ("ispr0", rd(NVIC_ISPR)),
+            ("ispr1", rd(NVIC_ISPR + 4)),
+            ("ispr2", rd(NVIC_ISPR + 8)),
+            ("pad0", pad(LED_PINS[0])),
+            ("pad1", pad(LED_PINS[1])),
+            ("uart_len", uart_len),
+        ]
+    };
+    let mut p = probe_at(&run.machine, step, &extra);
+    if step.is_multiple_of(SRAM_HASH_EVERY) {
+        p.extra.push(("sram", sram_hash(&run.machine.bus)));
     }
-    let rd = |b: &SystemBus, a: u64| b.read_u32(a).unwrap_or(0xDEAD_BEEF);
-    let periph = [
-        rd(&m.bus, TIMER0 + TIMER_CNT),
-        rd(&m.bus, TIMER0 + TIMER_IF),
-        rd(&m.bus, TIMER0 + TIMER_STATUS),
-        rd(&m.bus, TIMER1 + TIMER_CNT),
-        rd(&m.bus, TIMER1 + TIMER_IF),
-        rd(&m.bus, TIMER1 + TIMER_STATUS),
-        rd(&m.bus, IADC0 + IADC_STATUS),
-        rd(&m.bus, IADC0 + IADC_IF),
-        rd(&m.bus, GPIO_EXTI + EXTI_IF),
-        rd(&m.bus, I2C0 + I2C_IF),
-        rd(&m.bus, BLE + BLE_STATUS),
-    ];
-    let ispr = [
-        rd(&m.bus, NVIC_ISPR),
-        rd(&m.bus, NVIC_ISPR + 4),
-        rd(&m.bus, NVIC_ISPR + 8),
-    ];
-    // The WIRE level a probe clipped to the pin would read, through the same
-    // routing seam the logic analyzer uses — not the port's output register. A
-    // PWM output whose pad stops moving is invisible in the register and
-    // obvious here.
-    let dev = &m.bus.peripherals[run.gpioc].dev;
-    let pads = [
-        dev.read_gpio_pad(LED_PINS[0]),
-        dev.read_gpio_pad(LED_PINS[1]),
-    ];
-    Probe {
-        step,
-        total_cycles: m.total_cycles,
-        pc: m.get_pc(),
-        regs,
-        uart_len: run.sink.lock().unwrap().len(),
-        periph,
-        ispr,
-        pads,
-        sram: step
-            .is_multiple_of(SRAM_HASH_EVERY)
-            .then(|| sram_hash(&m.bus)),
-    }
+    p
 }
 
 /// Run both lanes `steps` instructions, ONE at a time, comparing the full probe

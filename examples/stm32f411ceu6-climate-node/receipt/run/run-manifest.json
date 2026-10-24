@@ -1,0 +1,77 @@
+{
+  "manifest_schema_version": "1.0",
+  "engine_version": "0.25.0",
+  "seed": 0,
+  "nondeterminism": "none",
+  "firmware": {
+    "path": "firmware.elf",
+    "sha256": "8210df4c47ef9086ea9c4f6c1b5c4783689f697290f2366ac1757b9e6d505806"
+  },
+  "configs": [
+    {
+      "path": "io-smoke.yaml",
+      "sha256": "8f6cc60baeadf2918ba3b129c985b6149241a4cc2d82d58a96198419700f2146"
+    },
+    {
+      "path": "system.yaml",
+      "sha256": "274f86281359153ea356312d52a9b448b3f5bbf7ee8a727c2a30cbe724e232fe"
+    }
+  ],
+  "results": {
+    "status": "pass",
+    "stop_reason": "MaxSteps",
+    "steps_executed": 24000000,
+    "cycles": 24000000,
+    "instructions": 24000000,
+    "assertions": [
+      {
+        "assertion": "UartContains(UartContainsAssertion { uart_contains: \"NODE boot\" })",
+        "passed": true
+      },
+      {
+        "assertion": "UartContains(UartContainsAssertion { uart_contains: \"BME280 ok\" })",
+        "passed": true
+      },
+      {
+        "assertion": "UartContains(UartContainsAssertion { uart_contains: \"OLED painted\" })",
+        "passed": true
+      },
+      {
+        "assertion": "UartRegex(UartRegexAssertion { uart_regex: \"NTC iter=0 adc=2047 mV=1649\\\\.6 temp_c=24\\\\.99\" })",
+        "passed": true
+      },
+      {
+        "assertion": "UartRegex(UartRegexAssertion { uart_regex: \"LDR adc=3413 lux=99\\\\.8\" })",
+        "passed": true
+      },
+      {
+        "assertion": "UartRegex(UartRegexAssertion { uart_regex: \"NTC iter=[1-9][0-9]* adc=3633 mV=2927\\\\.7 temp_c=79\\\\.97\" })",
+        "passed": true
+      },
+      {
+        "assertion": "UartRegex(UartRegexAssertion { uart_regex: \"LDR adc=3912 lux=794\\\\.2\" })",
+        "passed": true
+      },
+      {
+        "assertion": "UartRegex(UartRegexAssertion { uart_regex: \"BME t=31\\\\.00 p=1002\\\\.0 h=60\\\\.0\" })",
+        "passed": true
+      },
+      {
+        "assertion": "UartContains(UartContainsAssertion { uart_contains: \"ALARM 1\" })",
+        "passed": true
+      },
+      {
+        "assertion": "DisplayRegion(DisplayRegionAssertion { display_region: DisplayRegionDetails { id: \"oled1\", x: 0, y: 0, w: Some(128), h: Some(8), min_ink: 1.0, max_ink: None, lit: None } })",
+        "passed": true
+      },
+      {
+        "assertion": "ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps })",
+        "passed": true
+      }
+    ],
+    "cpu_state_digest": "9afb6b38f81d1b360704f55553c41aeb2048ac4eaa7f17503162f2d02b2ce44c"
+  },
+  "coverage": null,
+  "fault_injections": [],
+  "digest": "851ab72018d0da9086599e8a249fbda8dbf90287d6e8bb65d4a5e619214aedaa"
+}

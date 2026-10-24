@@ -256,3 +256,20 @@ fn zero_internal_flash_is_only_allowed_for_the_declared_rv1103_soc() {
     mcu.flash.size = 4096 * 1024;
     assert!(flash_geometry_is_valid(&mcu));
 }
+
+/// The `stm32f103.yaml` descriptor is named `stm32f103c8`, and a C8 has 64 KiB
+/// of main flash and 20 KiB of SRAM: DS5319 Rev 20, Table 2 ("STM32F103xx
+/// medium-density device features and peripheral counts") gives Flash 64
+/// Kbytes for the `x8` parts and 128 Kbytes for `xB`, SRAM 20 Kbytes for both.
+/// RM0008 Rev 21 §3.3.3 Table 5 lays the medium-density main block out as
+/// 1 KiB pages from 0x0800_0000. The descriptor once declared 1 MiB, so an
+/// image too large for the part it names loaded and ran in the simulator.
+#[test]
+fn stm32f103c8_declares_the_datasheet_flash_and_sram() {
+    let chip = ChipDescriptor::from_file(chips_dir().join("stm32f103.yaml")).unwrap();
+    assert_eq!(chip.name, "stm32f103c8");
+    assert_eq!(chip.flash.base, 0x0800_0000);
+    assert_eq!(chip.flash.size, 64 * 1024, "DS5319 Table 2: C8 = 64 KiB");
+    assert_eq!(chip.ram.base, 0x2000_0000);
+    assert_eq!(chip.ram.size, 20 * 1024, "DS5319 Table 2: 20 KiB SRAM");
+}

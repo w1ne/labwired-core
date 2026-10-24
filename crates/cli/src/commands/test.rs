@@ -94,7 +94,7 @@ fn apply_run_speed_opts<C: labwired_core::Cpu>(machine: &mut labwired_core::Mach
     // Only say so when the setting can actually do something, so the line is
     // never a claim the build cannot honour.
     if cfg!(feature = "event-scheduler") {
-        eprintln!(
+        crate::log_ts::eventln!(
             "labwired-cli test: idle_ff={} (event_scheduler=on{})",
             if opted_out { "off" } else { "on" },
             if opted_out {
@@ -339,6 +339,7 @@ fn run_s3_rom_boot_no_elf(
     let mut app_cpu = labwired_core::cpu::xtensa_lx7::XtensaLx7::new_app_cpu();
     app_cpu.faithful_windows = true;
     let mut machine = labwired_core::Machine::new(cpu, bus).with_secondary_cpu(app_cpu);
+    crate::log_ts::set_hz(machine.bus.cpu_hz);
     // BOTH consoles, because the boot and the sketch do not share one. The mask
     // ROM and the 2nd-stage bootloader talk on UART0 (attached above); an
     // Arduino sketch built with ARDUINO_USB_CDC_ON_BOOT=1 — which is every
@@ -378,6 +379,8 @@ fn run_s3_rom_boot_no_elf(
         uart_injections,
         // Xtensa is never JIT-eligible (the JIT is RISC-V only).
         jit_eligible: false,
+        counter_metrics: false,
+        machine_metrics: false,
         arch: labwired_core::Arch::XtensaLx7,
         stack_paint,
         chip_mem,
@@ -612,6 +615,7 @@ fn run_c3_rom_boot_no_elf(
             Err(code) => return code,
         }
     };
+    crate::log_ts::set_hz(machine.bus.cpu_hz);
 
     // Universal WiFi adapter: if the diagram carries a `wifi_ap`, attach every
     // real WiFi MAC to a per-lab virtual-WiFi medium so the device associates →
@@ -690,6 +694,8 @@ fn run_c3_rom_boot_no_elf(
         uart_injections,
         // rom-boot is never JIT-eligible (it forces cycle-accurate stepping).
         jit_eligible: false,
+        counter_metrics: false,
+        machine_metrics: false,
         arch: labwired_core::Arch::RiscV,
         stack_paint,
         chip_mem,
@@ -1318,6 +1324,7 @@ pub(crate) fn run_test(
                     cpu.faithful_windows = true;
                     bus.attach_uart_tx_sink(uart_tx.clone(), !args.no_uart_stdout);
                     let mut machine = labwired_core::Machine::new(cpu, bus);
+                    crate::log_ts::set_hz(machine.bus.cpu_hz);
                     machine.add_observer(metrics.clone());
                     machine
                 } else {
@@ -1561,6 +1568,7 @@ pub(crate) fn run_test(
                     app_cpu.set_sp(0x3FCD_8000);
                     let mut machine =
                         labwired_core::Machine::new(pro_cpu, bus).with_secondary_cpu(app_cpu);
+                    crate::log_ts::set_hz(machine.bus.cpu_hz);
                     // Fast boot: the mask ROM is a thunk harness, so core 1's
                     // reset vector holds no startup code. Wait for
                     // `ets_set_appcpu_boot_addr`.
@@ -1633,7 +1641,11 @@ pub(crate) fn run_test(
                 // flash-thunks, no forged s_cpu_up — APP_CPU runs call_start_cpu1.
                 let mut machine =
                     labwired_core::Machine::new(pro_cpu, esp_bus).with_secondary_cpu(app_cpu);
-                machine.add_observer(metrics.clone());
+                crate::log_ts::set_hz(machine.bus.cpu_hz);
+                // Idle and CCOUNT poll-loop skips, as every other `test` path
+                // (opt out with LABWIRED_IDLE_FAST_FORWARD=0). No per-step
+                // observer: `counter_metrics` below.
+                apply_run_speed_opts(&mut machine);
                 if let Err(e) = machine.load_firmware(&program) {
                     return handle_load_error(
                         &args,
@@ -1746,8 +1758,12 @@ pub(crate) fn run_test(
                 stimuli: &stimuli,
                 uart_injections: &uart_injections,
                 // Xtensa (ESP32) path: never JIT-eligible (the RV32IMC JIT is
-                // RISC-V only), so keep the exact current observer-based metrics.
+                // RISC-V only). Metrics come from the machine's counters: a
+                // per-step observer would count the skipped iterations it
+                // never sees, and its presence costs every instruction.
                 jit_eligible: false,
+                counter_metrics: true,
+                machine_metrics: false,
                 arch: labwired_core::Arch::XtensaLx7,
                 stack_paint,
                 chip_mem,
@@ -1977,8 +1993,34 @@ pub(crate) fn run_test(
                     &machine,
                     program.arch,
                 );
-            if !jit_eligible {
+            // Cortex-M bare-ELF runs (the hosted labwired_run path for every
+            // STM32/nRF/RP/EFR board): metrics from the machine's counters
+            // instead of a per-step observer (which costs every instruction
+            // and disables the core's fast batch paths), and CPU windows
+            // planned at the bus's max-safe interval with exact boundaries
+            // (`Machine::exact_batch_boundaries`). The bus keeps interval 1,
+            // so peripherals pace their events exactly as before. Outputs are
+            // the same as the per-instruction run; only `cycles` in
+            // result.json changes, to the machine clock. Opt out with
+            // LABWIRED_HOSTED_FAST=0.
+            let hosted_fast = !jit_eligible
+                && program.arch == labwired_core::Arch::Arm
+                && std::env::var("LABWIRED_HOSTED_FAST").as_deref() != Ok("0");
+            if !jit_eligible && !hosted_fast {
                 machine.add_observer(metrics.clone());
+            }
+            if hosted_fast {
+                // Only where the per-cycle tick has no work of its own (no CAN
+                // tester or bridge, no GPIO device needing service): those are
+                // serviced per tick and would see the wide window.
+                let wide = machine.max_safe_tick_interval();
+                if wide > 1 && machine.bus.per_cycle_tick_is_trivial() {
+                    machine.config.peripheral_tick_interval = wide;
+                    machine.exact_batch_boundaries = true;
+                    crate::log_ts::eventln!(
+                        "labwired-cli test: hosted fast path (exact windows up to {wide} cycles)"
+                    );
+                }
             }
             if itm_enabled {
                 machine.bus.attach_itm_output(Some(itm_tx.clone()), false);
@@ -2003,6 +2045,8 @@ pub(crate) fn run_test(
                 stimuli: &stimuli,
                 uart_injections: &uart_injections,
                 jit_eligible,
+                counter_metrics: false,
+                machine_metrics: hosted_fast,
                 arch: program.arch,
                 stack_paint,
                 chip_mem,
@@ -2015,6 +2059,7 @@ pub(crate) fn run_test(
     macro_rules! setup_and_run {
         ($cpu:expr) => {{
             let mut machine = labwired_core::Machine::new($cpu, bus);
+            crate::log_ts::set_hz(machine.bus.cpu_hz);
             // FreeRTOS on ESP32-C3 is interrupt-driven (yield + SYSTIMER tick).
             // Instruction batching freezes peripheral tick / IRQ delivery
             // across large step batches and strands the scheduler — same
@@ -2396,6 +2441,7 @@ pub(crate) fn run_test(
                     Ok(m) => m,
                     Err(code) => return code,
                 };
+                crate::log_ts::set_hz(machine.bus.cpu_hz);
                 if let Err(e) = machine.apply_runtime_snapshot(&snap) {
                     // The snapshot self-keyed clean (same chip + firmware) but is
                     // structurally incompatible with the freshly-built machine —
@@ -2428,6 +2474,7 @@ pub(crate) fn run_test(
                     Ok(m) => m,
                     Err(code) => return code,
                 };
+                crate::log_ts::set_hz(machine.bus.cpu_hz);
                 run_machine!(machine)
             } else {
                 let mut cpu = labwired_core::system::riscv::configure_riscv(&mut bus);
@@ -2449,7 +2496,16 @@ pub(crate) fn run_test(
             // AVR is Harvard: code lives in the CPU flash image, not bus.flash.
             // Machine::load_firmware only walks bus memory maps, so seed the
             // interpreter with load_program_image (same as build_avr_node).
-            let mut cpu = labwired_core::cpu::Avr::new();
+            // The chip names the part (ATmega328P by default, ATmega2560).
+            let avr_chip_name = resolved_system
+                .as_ref()
+                .and_then(|s| {
+                    s.chip_with_plugins(&|name| plugins.iter().find_map(|p| p.chip_yaml(name)))
+                        .ok()
+                })
+                .map(|c| c.name)
+                .unwrap_or_default();
+            let mut cpu = labwired_core::cpu::Avr::for_chip_name(&avr_chip_name);
             cpu.load_program_image(&program);
             // USART TX is on the CPU, not a bus UART peripheral.
             cpu.set_serial_sink(uart_tx.clone());
@@ -2465,6 +2521,16 @@ pub(crate) fn run_test(
                     cpu.push_i2c_slave(dev);
                 }
             }
+            let machine = labwired_core::Machine::new(cpu, bus);
+            crate::log_ts::set_hz(machine.bus.cpu_hz);
+            run_machine!(machine)
+        }
+        labwired_core::Arch::Pic24 => {
+            // PIC24 is Harvard: code lives in the CPU flash image.
+            // UART1 TX is on the CPU, not a bus UART peripheral.
+            let mut cpu = labwired_core::cpu::Pic24::new();
+            cpu.load_program_image(&program);
+            cpu.set_serial_sink(uart_tx.clone());
             let machine = labwired_core::Machine::new(cpu, bus);
             run_machine!(machine)
         }

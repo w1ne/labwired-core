@@ -28,6 +28,12 @@ impl From<StopReason> for PyStopReason {
                 kind: "breakpoint".to_string(),
                 pc: Some(pc),
             },
+            // A debug watch matched. The two-field surface has no place for
+            // the watched address, so only the kind is reported.
+            StopReason::Watchpoint(_) => PyStopReason {
+                kind: "watchpoint".to_string(),
+                pc: None,
+            },
             StopReason::StepDone => PyStopReason {
                 kind: "step_done".to_string(),
                 pc: None,

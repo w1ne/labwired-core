@@ -345,6 +345,20 @@ impl WasmSimulator {
             .map_err(|err| JsValue::from_str(&format!("analog_trace_snapshot: {err}")))
     }
 
+    /// The run-long, change-point series of every analog channel (a coil's
+    /// `i(L1)`, a probed node): the same block `labwired test` writes as
+    /// `result.json`'s `analog_series`, so a hosted oracle reads the identical
+    /// evidence. `null` when no co-simulation session is attached.
+    #[wasm_bindgen]
+    pub fn analog_series(&self) -> Result<JsValue, JsValue> {
+        let series = self
+            .machine
+            .as_ref()
+            .and_then(|machine| machine.analog_series());
+        serde_wasm_bindgen::to_value(&series)
+            .map_err(|err| JsValue::from_str(&format!("analog_series: {err}")))
+    }
+
     /// UDS evidence for this run: each `uds-tester`'s executed steps (request,
     /// expected, response, cycles, pass/fail), the CAN frames on the tester
     /// ids decoded as ISO-TP and UDS, and the firmware console lines. `null`

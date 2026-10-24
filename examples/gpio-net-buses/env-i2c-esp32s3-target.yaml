@@ -1,0 +1,29 @@
+# An STM32G071 I2C1 controller (the env-i2c.yaml controller) and an ESP32-S3
+# I2C0 target at 0x42 (register level, src/esp32x_i2c_target.S). Open-drain
+# nets with the pull-up on the net.
+schema_version: "1.0"
+name: gpio-net-i2c-esp32s3-target
+nodes:
+  - id: esp
+    system: "../../configs/systems/esp32s3.yaml"
+    firmware: "firmware/esp32s3-i2c-target.elf"
+  - id: b
+    system: "system.yaml"
+    firmware: "firmware/i2c-controller.elf"
+interconnects:
+  - type: gpio_net
+    nodes: [esp, b]
+    config:
+      name: scl
+      pull: up
+      members:
+        - { node: esp, peripheral: gpio, pin: 9 }   # I2CEXT0_SCL
+        - { node: b, peripheral: gpiob, pin: 6 }
+  - type: gpio_net
+    nodes: [esp, b]
+    config:
+      name: sda
+      pull: up
+      members:
+        - { node: esp, peripheral: gpio, pin: 8 }   # I2CEXT0_SDA
+        - { node: b, peripheral: gpiob, pin: 7 }

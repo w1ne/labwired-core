@@ -1,0 +1,57 @@
+name: SAMD selected IRQ preprocessing
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - scripts/samd-irq-preprocess/**
+      - .github/workflows/samd-irq-preprocess.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: samd-irq-preprocess-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  selected-preprocessor:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Pure frozen-input and refusal controls
+        run: |
+          python3 -B scripts/samd-irq-preprocess/test_probe.py
+          python3 -B -O scripts/samd-irq-preprocess/test_probe.py
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: CrispStrobe/brickwright-lite
+          ref: 6a7027e117a6698866516f52feca259127c80c7d
+          path: public-consumer
+          persist-credentials: false
+      - name: Acquire frozen public request-generation inputs only
+        run: python3 scripts/pybadge-build-evidence/acquire.py --lite public-consumer --out "$RUNNER_TEMP/request-input"
+      - name: Regenerate and byte-bind original request without invoking buildBase
+        run: node scripts/pybadge-build-evidence/evidence.mjs request public-consumer "$RUNNER_TEMP/unused-build-root" "$RUNNER_TEMP/request-input"
+      - name: Stage six immutable public source inputs and captured configuration only
+        run: python3 -B scripts/samd-irq-preprocess/probe.py stage --root "$RUNNER_TEMP/irq-probe-source" --request "$RUNNER_TEMP/request-input/request.json"
+      - name: Install and bind historical preprocessing toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-arm-none-eabi libnewlib-arm-none-eabi libstdc++-arm-none-eabi-newlib
+          test "$(dpkg-query -W -f='${Version}' gcc-arm-none-eabi)" = '15:13.2.rel1-2'
+      - name: Separate preprocessing of 21 selected units; no configure, compile, link or guest
+        run: python3 -B scripts/samd-irq-preprocess/probe.py probe --root "$RUNNER_TEMP/irq-probe-source" --out "$RUNNER_TEMP/irq-probe-result"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: ${{ !cancelled() }}
+        with:
+          name: samd-selected-irq-preprocessing
+          path: ${{ runner.temp }}/irq-probe-result/result.json
+          if-no-files-found: warn

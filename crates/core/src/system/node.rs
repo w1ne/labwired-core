@@ -194,6 +194,7 @@ pub fn build_node_with_options(
         }
         MachineFamily::Xtensa => build_xtensa_node(id, chip, system, firmware, blobs, opts.profile),
         MachineFamily::Avr => build_avr_node(id, chip, system, firmware, opts.plugins),
+        MachineFamily::Pic24 => build_pic24_node(id, chip, system, firmware, opts.plugins),
     }
 }
 
@@ -259,7 +260,7 @@ fn build_avr_node(
         parse_elf_image(&bytes).with_context(|| format!("node '{id}': parse firmware ELF"))?;
     let mut bus = crate::bus::SystemBus::from_config_with_plugins(chip, system, plugins)
         .with_context(|| format!("node '{id}': build bus"))?;
-    let mut cpu = crate::cpu::Avr::new();
+    let mut cpu = crate::cpu::Avr::for_chip_name(&chip.name);
     cpu.load_program_image(&image);
     // SPI/I2C kits park on bus controllers; the AVR interpreter owns
     // transfers via SPDR / TWCR, so move slaves onto the CPU.
@@ -273,6 +274,37 @@ fn build_avr_node(
             cpu.push_i2c_slave(dev);
         }
     }
+    let machine = Machine::new(cpu, bus);
+    Ok(Box::new(machine))
+}
+
+/// PIC24/dsPIC33 node (M0): ELF in, CPU-internal UART1 out.
+fn build_pic24_node(
+    id: &str,
+    chip: &ChipDescriptor,
+    system: &SystemManifest,
+    firmware: NodeFirmware,
+    plugins: &[&dyn crate::plugin::ChipPlugin],
+) -> anyhow::Result<Box<dyn MachineTrait>> {
+    let NodeFirmware::Elf(bytes) = firmware else {
+        anyhow::bail!(
+            "node '{id}': chip '{}' boots from an ELF, but the firmware is not an ELF file",
+            chip.name
+        );
+    };
+    let image =
+        parse_elf_image(&bytes).with_context(|| format!("node '{id}': parse firmware ELF"))?;
+    if image.arch != crate::Arch::Pic24 {
+        anyhow::bail!(
+            "node '{id}': firmware architecture {:?} is incompatible with PIC24 chip '{}'",
+            image.arch,
+            chip.name
+        );
+    }
+    let bus = crate::bus::SystemBus::from_config_with_plugins(chip, system, plugins)
+        .with_context(|| format!("node '{id}': build bus"))?;
+    let mut cpu = crate::cpu::Pic24::new();
+    cpu.load_program_image(&image);
     let machine = Machine::new(cpu, bus);
     Ok(Box::new(machine))
 }
@@ -465,6 +497,17 @@ fn build_xtensa_node(
     machine
         .reset()
         .map_err(|e| anyhow::anyhow!("node '{id}': reset: {e:?}"))?;
+    // The reset leaves the core at the BROM reset vector, which this bank
+    // does not emulate: enter the ELF where a 2nd-stage bootloader would land,
+    // with the stacks the BROM seeds — what `builder::xtensa::build_esp32`
+    // does for the single-chip engine. Without it a bare ELF node faulted on
+    // its first fetch.
+    use crate::Cpu as _;
+    machine.cpu.set_pc(image.entry_point as u32);
+    machine.cpu.set_sp(0x3FFE_0000);
+    if let Some(cpu1) = machine.cpu_secondary.as_mut() {
+        cpu1.set_sp(0x3FFD_8000);
+    }
     Ok(Box::new(machine))
 }
 
@@ -649,9 +692,7 @@ pub fn parse_avr_elf_image(bytes: &[u8]) -> anyhow::Result<crate::memory::Progra
             continue;
         }
         let (off, n) = (ph.p_offset as usize, ph.p_filesz as usize);
-        if off + n > bytes.len() {
-            anyhow::bail!("Segment out of bounds in ELF file");
-        }
+        check_load_segment(ph, bytes.len())?;
         let data = bytes[off..off + n].to_vec();
         let vma = if ph.p_vaddr != 0 {
             ph.p_vaddr
@@ -670,7 +711,8 @@ pub fn parse_avr_elf_image(bytes: &[u8]) -> anyhow::Result<crate::memory::Progra
             }
             AvrLoadSpace::Data | AvrLoadSpace::Eeprom => {
                 // Flash LMA holds the initializer image.
-                if ph.p_paddr < 0x8000 {
+                // Below 256 KB: the largest modelled AVR flash (ATmega2560).
+                if ph.p_paddr < 0x4_0000 {
                     image.add_segment(ph.p_paddr, data.clone());
                 }
                 // Keep the biased VMA so `load_program_image` can tell data
@@ -680,6 +722,28 @@ pub fn parse_avr_elf_image(bytes: &[u8]) -> anyhow::Result<crate::memory::Progra
         }
     }
     Ok(image)
+}
+
+/// A nonempty PT_LOAD segment's header is checked before it is loaded or
+/// skipped: its bytes must lie inside the file, and it cannot carry more file
+/// bytes than it occupies in memory.
+fn check_load_segment(ph: &goblin::elf::ProgramHeader, file_len: usize) -> anyhow::Result<()> {
+    if ph.p_filesz > ph.p_memsz {
+        anyhow::bail!(
+            "ELF segment at {:#x} has p_filesz {:#x} > p_memsz {:#x}",
+            ph.p_paddr,
+            ph.p_filesz,
+            ph.p_memsz
+        );
+    }
+    let end = (ph.p_offset as usize).checked_add(ph.p_filesz as usize);
+    if end.is_none_or(|end| end > file_len) {
+        anyhow::bail!(
+            "ELF segment at {:#x} runs past the end of the file",
+            ph.p_paddr
+        );
+    }
+    Ok(())
 }
 
 /// Parse ELF bytes into a [`crate::memory::ProgramImage`].
@@ -696,18 +760,69 @@ pub fn parse_elf_image(bytes: &[u8]) -> anyhow::Result<crate::memory::ProgramIma
     let machine = elf.header.e_machine;
     let arch = elf_arch(machine)
         .ok_or_else(|| anyhow::anyhow!("unsupported ELF machine type {machine}"))?;
+    if arch == crate::Arch::Pic24 {
+        crate::cpu::pic24::check_xc16_entry(elf.entry).map_err(anyhow::Error::msg)?;
+    }
     let mut image = crate::memory::ProgramImage::new(elf.entry, arch);
+    if arch == crate::Arch::Pic24 {
+        // XC16 executable sections are already in the CPU's 4-byte slot form
+        // (24-bit word + pad) and addresses are PC units. Program headers can
+        // cover several sections at once, so walk the sections to keep every
+        // section at its own address (the real toolchain puts `.reset`,
+        // `.ivt.*`/`.aivt.*` and `.text` at non-contiguous PC addresses).
+        parse_pic24_sections(&elf, bytes, &mut image)?;
+        return Ok(image);
+    }
     for ph in &elf.program_headers {
         if ph.p_type != PT_LOAD || ph.p_filesz == 0 {
             continue;
         }
         let off = ph.p_offset as usize;
         let n = ph.p_filesz as usize;
-        if off + n <= bytes.len() {
-            image.add_segment(ph.p_paddr, bytes[off..off + n].to_vec());
-        }
+        check_load_segment(ph, bytes.len())?;
+        image.add_segment(ph.p_paddr, bytes[off..off + n].to_vec());
     }
     Ok(image)
+}
+
+/// Load a PIC24 XC16 ELF from its **section** table (see [`parse_elf_image`]).
+///
+/// Only executable sections are loaded; non-executable program-space data
+/// (PSV/table reads) is not modelled and is skipped. Every loaded section
+/// must be a whole number of 4-byte slots — the parsers reject anything else
+/// instead of guessing (verified against XC16 v1.70 output).
+pub fn parse_pic24_sections(
+    elf: &goblin::elf::Elf<'_>,
+    bytes: &[u8],
+    image: &mut crate::memory::ProgramImage,
+) -> anyhow::Result<()> {
+    use goblin::elf::section_header::{SHF_EXECINSTR, SHT_PROGBITS};
+    let mut loaded = 0usize;
+    for sh in &elf.section_headers {
+        if sh.sh_type != SHT_PROGBITS || sh.sh_size == 0 {
+            continue;
+        }
+        let (off, n) = (sh.sh_offset as usize, sh.sh_size as usize);
+        if off + n > bytes.len() {
+            anyhow::bail!(
+                "PIC24 section at {:#x} runs past the end of the ELF file",
+                sh.sh_addr
+            );
+        }
+        if sh.sh_flags & u64::from(SHF_EXECINSTR) == 0 {
+            // Read-only program-space data (PSV/table reads) is not modelled:
+            // skip it rather than misread it as instructions.
+            continue;
+        }
+        let data = &bytes[off..off + n];
+        crate::cpu::pic24::check_xc16_section(sh.sh_addr, data).map_err(anyhow::Error::msg)?;
+        image.add_segment(sh.sh_addr, data.to_vec());
+        loaded += 1;
+    }
+    if loaded == 0 {
+        anyhow::bail!("PIC24 ELF has no executable sections to load");
+    }
+    Ok(())
 }
 
 /// A Cortex-M image must carry a usable reset vector, or the machine boots to

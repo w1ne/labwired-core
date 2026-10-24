@@ -1,0 +1,18 @@
+name: Prospective Timer adversary harness controls
+on:
+  pull_request:
+    paths: ['crates/core/tests/samd_real_timer_adversary_guest.rs', '.github/workflows/samd-real-timer-adversary-controls.yml']
+permissions:
+  contents: read
+jobs:
+  refusal-controls:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: Swatinem/rust-cache@v2
+      - name: Compile prospective harness and run manufactured refusal controls only
+        run: cargo test --release -p labwired-core --test samd_real_timer_adversary_guest -- --nocapture

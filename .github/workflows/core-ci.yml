@@ -497,6 +497,11 @@ jobs:
       - name: Every `#[ignore]` says why
         run: python3 scripts/ci/ignore_reasons.py --check
 
+      # Renders the 116-row catalog from the generated manifest, so the doc copy
+      # cannot drift from the kit registry. Pure Python, no toolchain, sub-second.
+      - name: Device catalog in the configuration reference is generated
+        run: python3 scripts/ci/device_catalog_doc.py --check
+
       # A doubled `-Tlink.x` duplicates memory.x's MEMORY block and the link
       # dies with "region 'FLASH' already defined". It is invisible on a warm
       # `target/` — cargo does not relink a cached artifact — so the build step
@@ -587,6 +592,7 @@ jobs:
             scripts/test_generate_validation_status.py \
             scripts/test_labwired_audit.py \
             validation/matrix_lib/test_invoke.py
+          python3 -m unittest discover -s scripts/tests -p test_cli_release_tag.py
 
       # Mixed-signal co-sim: the ngspice wrapper (tools/cosim) is pure Python
       # over libngspice and steps a real RC circuit; seconds, no cargo. It is a
@@ -728,6 +734,36 @@ jobs:
       # plain `cargo test -p labwired-core` gives a contributor.
       - name: Unit tests (labwired-core, FEATURE-OFF)
         run: cargo test -p labwired-core --lib
+
+      - name: ARM C compiler for the UARTE stack-lifetime guest (FEATURE-OFF)
+        timeout-minutes: 10
+        uses: ./.github/actions/apt-install-cached
+        with:
+          packages: gcc-arm-none-eabi
+
+      - name: UARTE stack-lifetime guest (FEATURE-OFF)
+        env:
+          LABWIRED_UARTE_STACK_INTERVALS: "1"
+        run: >
+          scripts/ci/cargo-test-nonvacuous.sh
+          -p labwired-core --no-default-features --test microbit_v2_uarte_stack_guest
+          -- --nocapture
+
+      # The workspace shards exercise SPI with event-scheduler. Keep its
+      # reference/MMIO/guest cancellation tests nonvacuous without the feature,
+      # too; lib-only feature-off tests do not reach integration targets.
+      # Keep diagnostics visible: nonvacuous enumeration redirects Cargo JSON,
+      # including compiler errors, into its temporary artifact inventory.
+      - name: Compile TX completion guest with rendered diagnostics (FEATURE-OFF)
+        run: cargo test -p labwired-core --test sam_dmac_tx_completion --no-run
+
+      - name: SAM SPI controller and guest (FEATURE-OFF)
+        run: >
+          scripts/ci/cargo-test-nonvacuous.sh
+          -p labwired-core --test sam_sercom_spi --test st7735_sam_guest --test sam_dmac_byte
+          --test sam_dmac_sercom4_tx
+          --test sam_dmac_tx_completion
+          -- --nocapture
 
       # AVR sim-smoke golden — cheap (~ms), no PlatformIO. Pins Arduino Nano
       # UART+D13 behavior on every PR so the twin cannot regress silently.
@@ -1307,6 +1343,20 @@ jobs:
       # refuse rather than fake it — the wrapper is the second lock, and it also
       # catches the emptying this step could still suffer silently: a per-item
       # `#[cfg]` or a deleted test leaving a binary with nothing in it.
+      # A real authored blocking-SPI guest, not a host transfer substitute.
+      # Reuse this job's compiled feature set, and run the feature-off reference
+      # in pr-feature-off. Bounded prototype pixels/controls, not native Arcade
+      # or actual module/timing qualification.
+      - name: Compile TX completion guest with rendered diagnostics (FEATURE-ON)
+        run: cargo test -p labwired-core --features event-scheduler --test sam_dmac_tx_completion --no-run
+
+      - name: SAM split IRQ and ST7735 controller-memory guests (FEATURE-ON)
+        run: >
+          scripts/ci/cargo-test-nonvacuous.sh
+          -p labwired-core --features event-scheduler
+          --test sam_sercom_spi --test st7735_sam_guest --test sam_dmac_byte
+          --test sam_dmac_sercom4_tx --test sam_dmac_tx_completion -- --nocapture
+
       - name: Scheduler-only fidelity lanes (walk≡scheduler timing gates)
         run: >
           scripts/ci/cargo-test-nonvacuous.sh
@@ -1332,6 +1382,7 @@ jobs:
           --test stm32l073_walk_differential
           --test stm32l476_walk_differential
           --test esp32_classic_ahb_fifo_wakes_uart
+          --test xtensa_poll_loop_skip
 
       # JIT-on vs interpreter on nRF TIMER0 / UART / WFI at tick 512. Needs
       # `jit` as well as `event-scheduler` (`required-features` on the target).
@@ -1630,11 +1681,14 @@ jobs:
       # Without it the test was allow-listed known-red (#960) and therefore
       # proved NOTHING on every PR — a gate that cannot build its inputs is not
       # a gate. Same package core-coverage-matrix-smoke.yml already installs.
+      # Workspace integration suites also compile/tamper actual RV1103 DTBs.
+      # C only: libstdc++-arm-none-eabi-newlib (~460 MB, a recommends of
+      # newlib) is deliberately not installed.
       - name: Add the C cross-compiler (OBD2 ECU firmware)
-        run: |
-          sudo apt-get update
-          # Workspace integration suites also compile/tamper actual RV1103 DTBs.
-          sudo apt-get install -y gcc-arm-none-eabi device-tree-compiler
+        timeout-minutes: 10
+        uses: ./.github/actions/apt-install-cached
+        with:
+          packages: gcc-arm-none-eabi libnewlib-arm-none-eabi device-tree-compiler
 
       # READ-ONLY. This lane restores main's `core-ci` target dir; it must not
       # write one back, for a reason that is easy to miss: GitHub scopes caches
@@ -2153,6 +2207,11 @@ jobs:
         # Without the target, that build dies in a dependency with E0463
         # "can't find crate for `core`" and the job reports esp32c6 firmware
         # build failed. The ARM targets above do not provide it.
+        # riscv32im-unknown-none-elf is required by firmware-litex-vexriscv-smoke:
+        # strict_onboarding builds examples/litex-vexriscv/io-smoke.yaml, whose
+        # firmware path is target/riscv32im-unknown-none-elf/release/firmware-litex-vexriscv-smoke
+        # (the VexRiscv variant has no compressed/atomic extensions, so the C6's
+        # riscv32imc target is not a substitute).
         run: |
           rustup target add thumbv6m-none-eabi
           rustup target add thumbv7m-none-eabi
@@ -2160,6 +2219,7 @@ jobs:
           rustup target add thumbv7em-none-eabihf
           rustup target add thumbv8m.main-none-eabi
           rustup target add riscv32imc-unknown-none-elf
+          rustup target add riscv32im-unknown-none-elf
 
       # `pr-workspace-tests` installs this and this job did not, so the same
       # OBD2 end-to-end passed on every PR and failed here — the ECU half is C,
@@ -2167,11 +2227,12 @@ jobs:
       # rather than skips (a gate that cannot build its inputs is not a gate),
       # so the absent compiler is a hard failure, and it was invisible for as
       # long as the firmware build above failed first and skipped this step.
+      # Both default workspace and feature integration suites need dtc/fdtput.
       - name: Add the C cross-compiler (OBD2 ECU firmware)
-        run: |
-          sudo apt-get update
-          # Both default workspace and feature integration suites need dtc/fdtput.
-          sudo apt-get install -y gcc-arm-none-eabi device-tree-compiler
+        timeout-minutes: 10
+        uses: ./.github/actions/apt-install-cached
+        with:
+          packages: gcc-arm-none-eabi libnewlib-arm-none-eabi device-tree-compiler
 
       # ubuntu-latest ships ~14 GB free, and this job builds the workspace test
       # binaries twice — once on default features, once on `jit,event-scheduler`

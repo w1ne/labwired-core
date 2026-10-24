@@ -16,11 +16,18 @@ use std::path::Path;
 use std::sync::Arc;
 use tracing::{debug, info, warn};
 
+pub mod branch_sites;
 pub mod coverage;
 pub mod footprint;
+pub mod lcov;
 pub mod multi_image;
 pub mod source_map;
 pub mod source_step;
+pub mod unwind;
+pub mod variables;
+
+pub use unwind::{Abi, PhysicalFrame};
+pub use variables::{FrameContext, RegisterSet, TargetMemory, VariableValue};
 
 pub use footprint::{elf_section_totals_v1, ElfSectionTotals, FOOTPRINT_METHOD};
 
@@ -87,9 +94,21 @@ pub fn load_elf_bytes(buffer: &[u8]) -> Result<ProgramImage> {
             labwired_core::Arch::Unknown
         });
 
+    if arch == labwired_core::Arch::Pic24 {
+        labwired_core::cpu::pic24::check_xc16_entry(elf.entry).map_err(|e| anyhow!(e))?;
+    }
     let mut program_image = ProgramImage::new(elf.entry, arch);
 
-    for ph in elf.program_headers {
+    if arch == labwired_core::Arch::Pic24 {
+        // XC16 executable sections are already in the CPU's 4-byte slot form
+        // and their addresses are PC units; load them from the section table
+        // (program headers can span several non-contiguous sections). Shared
+        // with the core parser.
+        labwired_core::system::node::parse_pic24_sections(&elf, buffer, &mut program_image)?;
+        return Ok(program_image);
+    }
+
+    for ph in &elf.program_headers {
         if ph.p_type == PT_LOAD {
             // We only care about loadable segments
             let size = ph.p_filesz as usize;
@@ -99,7 +118,18 @@ pub fn load_elf_bytes(buffer: &[u8]) -> Result<ProgramImage> {
                 continue;
             }
 
-            if offset + size > buffer.len() {
+            if ph.p_filesz > ph.p_memsz {
+                return Err(anyhow!(
+                    "ELF segment at {:#x} has p_filesz {:#x} > p_memsz {:#x}",
+                    ph.p_paddr,
+                    ph.p_filesz,
+                    ph.p_memsz
+                ));
+            }
+            if offset
+                .checked_add(size)
+                .is_none_or(|end| end > buffer.len())
+            {
                 return Err(anyhow!("Segment out of bounds in ELF file"));
             }
 
@@ -127,7 +157,8 @@ pub fn load_elf_bytes(buffer: &[u8]) -> Result<ProgramImage> {
                     labwired_core::cpu::avr::AvrLoadSpace::Data
                     | labwired_core::cpu::avr::AvrLoadSpace::Eeprom => {
                         // Flash LMA holds the initializer image (for LPM / __do_copy_data).
-                        if ph.p_paddr < 0x8000 {
+                        // Below 256 KB: the largest modelled AVR flash (ATmega2560).
+                        if ph.p_paddr < 0x4_0000 {
                             debug!("AVR data LMA flash {:#x} size {}", ph.p_paddr, size);
                             program_image.add_segment(ph.p_paddr, segment_data.clone());
                         }
@@ -161,6 +192,14 @@ pub struct SourceLocation {
     pub function: Option<String>,
 }
 
+/// One frame of the inline chain at an address (see [`SymbolProvider::frames`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InlineFrame {
+    pub file: Option<String>,
+    pub line: Option<u32>,
+    pub function: Option<String>,
+}
+
 /// One row of the DWARF line-number program: the instruction address and the
 /// source position it maps to. Unlike the reverse `line_map`, these are NOT
 /// deduplicated — every row is retained, so the set of `is_stmt` rows is the
@@ -168,7 +207,14 @@ pub struct SourceLocation {
 #[derive(Debug, Clone)]
 pub struct StmtRow {
     pub addr: u64,
+    /// File name exactly as the line program records it (often a bare name
+    /// such as `main.c`).
     pub file: String,
+    /// The same file with its line-program directory joined on: relative to
+    /// the compilation directory (`src/main.c`) or absolute
+    /// (`/usr/include/stdint.h`). Unique where `file` is not — two different
+    /// `main.c` files have different paths.
+    pub path: String,
     pub line: u32,
     pub is_stmt: bool,
 }
@@ -200,13 +246,34 @@ pub struct SymbolProvider {
     line_map: HashMap<(String, u32), u64>,
     // Full line-program rows (not deduped) — the statement universe for coverage
     stmt_rows: Vec<StmtRow>,
+    // Address-sorted line table for address -> source: (addr, index into
+    // stmt_rows), with `None` marking the end of a sequence so an address in
+    // a gap between sequences maps to nothing.
+    line_index: Vec<(u64, Option<usize>)>,
+    // The root relative paths resolve against (Cobertura <source>).
+    comp_dirs: Vec<String>,
+    // Line-table sequences as [start, end) address ranges.
+    line_sequences: Vec<(u64, u64)>,
     // Map of symbol_name -> address
     symbol_map: HashMap<String, u64>,
     // Function symbols with a size: (start, size, name), start Thumb bit cleared
     functions: Vec<(u64, u64, String)>,
     // Test-only locals: PC -> list of locals
     test_locals: HashMap<u64, Vec<LocalVariable>>,
+    // Call frame information for unwinding (empty when absent).
+    cfi: unwind::CfiSections,
 }
+
+/// Where a variable that [`SymbolProvider::walk_scope`] reports sits.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct VarScope {
+    /// How many inlined calls hold it: 0 is the physical function.
+    pub level: usize,
+    /// The physical function (`DW_TAG_subprogram`) that holds `pc`.
+    pub subprogram: gimli::UnitOffset<usize>,
+}
+
+pub(crate) type DwarfReader = gimli::EndianReader<gimli::RunTimeEndian, Arc<[u8]>>;
 
 impl SymbolProvider {
     pub fn new(path: &Path) -> Result<Self> {
@@ -226,9 +293,6 @@ impl SymbolProvider {
 
         let object = object::File::parse(slice).context("Failed to parse ELF for symbols")?;
 
-        let mut line_map = std::collections::HashMap::new();
-        let mut stmt_rows: Vec<StmtRow> = Vec::new();
-
         // Build line map using gimli for reverse lookup
         let load_section = |id: gimli::SectionId| -> std::result::Result<
             addr2line::gimli::EndianReader<gimli::RunTimeEndian, Arc<[u8]>>,
@@ -245,44 +309,8 @@ impl SymbolProvider {
 
         let dwarf = gimli::Dwarf::load(&load_section).context("Failed to load DWARF")?;
 
-        let mut iter = dwarf.units();
-        while let Ok(Some(header)) = iter.next() {
-            let unit = dwarf.unit(header).ok();
-            if let Some(unit) = unit {
-                if let Some(ref line_program) = unit.line_program {
-                    let mut rows = line_program.clone().rows();
-                    while let Ok(Some((_, row))) = rows.next_row() {
-                        if row.end_sequence() {
-                            continue;
-                        }
-                        let file_idx = row.file_index();
-                        if let Some(file) = line_program.header().file(file_idx) {
-                            let file_name = dwarf
-                                .attr_string(&unit, file.path_name())
-                                .ok()
-                                .and_then(|s| {
-                                    let s2 = s.to_string_lossy().ok()?;
-                                    Some(s2.into_owned())
-                                });
-
-                            if let (Some(f), Some(line)) = (file_name, row.line()) {
-                                let line_u32 = line.get() as u32;
-                                // Retain every row for the statement universe...
-                                stmt_rows.push(StmtRow {
-                                    addr: row.address(),
-                                    file: f.clone(),
-                                    line: line_u32,
-                                    is_stmt: row.is_stmt(),
-                                });
-                                // ...and the first address per file:line for reverse lookup.
-                                line_map.entry((f, line_u32)).or_insert(row.address());
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
+        // Function symbols first: the line table needs them to tell a
+        // discarded function from real code at address 0.
         let mut symbol_map = std::collections::HashMap::new();
         let mut functions = Vec::new();
         for sym in object.symbols() {
@@ -297,11 +325,134 @@ impl SymbolProvider {
         }
         functions.sort();
         functions.dedup_by(|a, b| a.0 == b.0 && a.2 == b.2);
+        // A linker that garbage-collects a function leaves its line-table
+        // sequence behind, relocated to address 0. Those rows describe code
+        // that is not in the image; unless a real function starts at 0, a
+        // sequence starting there is one of them and is dropped whole.
+        let code_at_zero = functions.iter().any(|(a, _, _)| *a == 0);
+
+        // One row as parsed, before its path is finalised.
+        struct RawRow {
+            addr: u64,
+            file: String,
+            rel: String,
+            comp: Option<usize>,
+            line: u32,
+            is_stmt: bool,
+        }
+        let mut raw: Vec<RawRow> = Vec::new();
+        // (address, index into `raw`), `None` = end of a sequence.
+        let mut raw_index: Vec<(u64, Option<usize>)> = Vec::new();
+        let mut all_comp_dirs: Vec<String> = Vec::new();
+        let mut line_sequences: Vec<(u64, u64)> = Vec::new();
+        let mut iter = dwarf.units();
+        while let Ok(Some(header)) = iter.next() {
+            let unit = dwarf.unit(header).ok();
+            if let Some(unit) = unit {
+                let comp = unit
+                    .comp_dir
+                    .as_ref()
+                    .and_then(|d| d.to_string_lossy().ok())
+                    .map(|dir| {
+                        match all_comp_dirs
+                            .iter()
+                            .position(|c| c.as_str() == dir.as_ref())
+                        {
+                            Some(i) => i,
+                            None => {
+                                all_comp_dirs.push(dir.into_owned());
+                                all_comp_dirs.len() - 1
+                            }
+                        }
+                    });
+                if let Some(ref line_program) = unit.line_program {
+                    let header = line_program.header();
+                    let mut rows = line_program.clone().rows();
+                    let mut seq: Vec<RawRow> = Vec::new();
+                    while let Ok(Some((_, row))) = rows.next_row() {
+                        if row.end_sequence() {
+                            let start = seq.first().map(|r| r.addr);
+                            let keep = matches!(start, Some(a) if a != 0 || code_at_zero);
+                            if keep {
+                                let start = start.unwrap_or(0);
+                                if row.address() > start {
+                                    line_sequences.push((start, row.address()));
+                                }
+                                for r in seq.drain(..) {
+                                    raw_index.push((r.addr, Some(raw.len())));
+                                    raw.push(r);
+                                }
+                                raw_index.push((row.address(), None));
+                            }
+                            seq.clear();
+                            continue;
+                        }
+                        let Some(file) = header.file(row.file_index()) else {
+                            continue;
+                        };
+                        let file_name = dwarf
+                            .attr_string(&unit, file.path_name())
+                            .ok()
+                            .and_then(|s| Some(s.to_string_lossy().ok()?.into_owned()));
+                        if let (Some(f), Some(line)) = (file_name, row.line()) {
+                            seq.push(RawRow {
+                                addr: row.address(),
+                                rel: joined_file_path(&dwarf, &unit, header, file, &f),
+                                file: f,
+                                comp,
+                                line: line.get() as u32,
+                                is_stmt: row.is_stmt(),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        // Relative paths are relative to their unit's compilation directory.
+        // The directory most rows come from is the report's root and its
+        // files stay relative (`src/main.c`); files of any other unit get
+        // their absolute path, so two crates' `src/lib.rs` stay apart.
+        let root = {
+            let mut count = vec![0usize; all_comp_dirs.len()];
+            for r in &raw {
+                if let Some(c) = r.comp {
+                    count[c] += 1;
+                }
+            }
+            (0..count.len()).max_by_key(|&i| (count[i], std::cmp::Reverse(i)))
+        };
+        let mut line_map = std::collections::HashMap::new();
+        let mut stmt_rows: Vec<StmtRow> = Vec::with_capacity(raw.len());
+        for r in raw {
+            let path = match r.comp {
+                Some(c) if Some(c) != root && !r.rel.starts_with('/') => {
+                    format!("{}/{}", all_comp_dirs[c].trim_end_matches('/'), r.rel)
+                }
+                _ => r.rel,
+            };
+            // The first address per file:line, for breakpoints.
+            line_map.entry((r.file.clone(), r.line)).or_insert(r.addr);
+            stmt_rows.push(StmtRow {
+                addr: r.addr,
+                file: r.file,
+                path,
+                line: r.line,
+                is_stmt: r.is_stmt,
+            });
+        }
+        // Sorted by address; at one address an end-of-sequence marker sorts
+        // before rows, so a sequence that starts where another ends is found.
+        // Otherwise stable: the last row at an address wins in `line_at`.
+        let mut line_index = raw_index;
+        line_index.sort_by_key(|(a, row)| (*a, row.is_some()));
+        let comp_dirs: Vec<String> = root.map(|i| all_comp_dirs[i].clone()).into_iter().collect();
 
         let dwarf_for_context =
             gimli::Dwarf::load(&load_section).context("Failed to load DWARF for context")?;
         let context = addr2line::Context::from_dwarf(dwarf_for_context)
             .context("Failed to create context from dwarf")?;
+        let cfi = unwind::CfiSections::from_object(&object);
 
         Ok(Self {
             data,
@@ -309,9 +460,13 @@ impl SymbolProvider {
             context,
             line_map,
             stmt_rows,
+            line_index,
+            comp_dirs,
+            line_sequences,
             symbol_map,
             functions,
             test_locals: HashMap::new(),
+            cfi,
         })
     }
 
@@ -322,10 +477,65 @@ impl SymbolProvider {
         &self.stmt_rows
     }
 
+    /// The source row covering `addr`: the last line-table row at or before it
+    /// in the same sequence. `None` when `addr` is outside every sequence.
+    pub fn line_at(&self, addr: u64) -> Option<&StmtRow> {
+        let idx = self.line_index.partition_point(|(a, _)| *a <= addr);
+        let (_, row) = self.line_index.get(idx.checked_sub(1)?)?;
+        row.map(|i| &self.stmt_rows[i])
+    }
+
+    /// The directory relative [`StmtRow::path`]s are relative to: the
+    /// compilation directory most of the line table comes from (empty when
+    /// the DWARF names none). Files of other units carry absolute paths.
+    pub fn comp_dirs(&self) -> &[String] {
+        &self.comp_dirs
+    }
+
+    /// The line table's sequences as `[start, end)` address ranges: the code
+    /// that has line info.
+    pub fn line_sequences(&self) -> &[(u64, u64)] {
+        &self.line_sequences
+    }
+
+    /// The raw ELF this provider was built from.
+    pub fn elf_bytes(&self) -> &[u8] {
+        &self.data
+    }
+
     /// Sized function symbols as `(start, size, name)`, ascending by start,
     /// with the Thumb bit cleared from `start`.
     pub fn functions(&self) -> &[(u64, u64, String)] {
         &self.functions
+    }
+
+    /// The inline chain at `addr`, innermost first. The first frame's
+    /// position is the line-table row of `addr`; each outer frame's position
+    /// is the call site (`DW_AT_call_file`/`DW_AT_call_line`) of the frame
+    /// inside it, so the last frame is the physical function and its line.
+    /// Empty when `addr` has no debug information.
+    pub fn frames(&self, addr: u64) -> Vec<InlineFrame> {
+        let mut frames = match self.context.find_frames(addr) {
+            addr2line::LookupResult::Output(Ok(frames)) => frames,
+            _ => return Vec::new(),
+        };
+        let mut out = Vec::new();
+        while let Ok(Some(frame)) = frames.next() {
+            out.push(InlineFrame {
+                file: frame
+                    .location
+                    .as_ref()
+                    .and_then(|l| l.file)
+                    .map(str::to_string),
+                line: frame.location.as_ref().and_then(|l| l.line),
+                function: frame
+                    .function
+                    .as_ref()
+                    .and_then(|f| f.demangle().ok())
+                    .map(|s| s.into_owned()),
+            });
+        }
+        out
     }
 
     pub fn lookup(&self, addr: u64) -> Option<SourceLocation> {
@@ -437,6 +647,82 @@ impl SymbolProvider {
             }
         }
 
+        self.walk_scope(pc, |unit, entry, _| {
+            let name = entry
+                .attr_value(addr2line::gimli::DW_AT_name)
+                .ok()
+                .flatten()
+                .and_then(|attr| {
+                    let s = self.dwarf.attr_string(unit, attr).ok()?;
+                    s.to_string_lossy().ok().map(|c| c.into_owned())
+                });
+
+            let Some(n) = name else { return };
+            // A single expression, or (what optimised builds emit for nearly
+            // every local) a location list whose entry covering `pc` holds
+            // it. A list with no entry here means the value is gone at this
+            // point.
+            let expr = match entry
+                .attr_value(addr2line::gimli::DW_AT_location)
+                .ok()
+                .flatten()
+            {
+                Some(addr2line::gimli::AttributeValue::Exprloc(expr)) => Some(expr),
+                Some(addr2line::gimli::AttributeValue::LocationListsRef(offset)) => {
+                    let Ok(mut list) = self.dwarf.locations(unit, offset) else {
+                        return;
+                    };
+                    let mut found = None;
+                    while let Ok(Some(e)) = list.next() {
+                        if e.range.begin <= pc && pc < e.range.end {
+                            found = Some(e.data);
+                            break;
+                        }
+                    }
+                    if found.is_none() {
+                        locals.push(LocalVariable {
+                            name: n,
+                            location: DwarfLocation::Other("optimized out".into()),
+                        });
+                        return;
+                    }
+                    found
+                }
+                _ => None,
+            };
+            let Some(expr) = expr else { return };
+            let mut ops = expr.operations(unit.encoding());
+            if let Ok(Some(op)) = ops.next() {
+                let location = match op {
+                    addr2line::gimli::Operation::Register { register } => {
+                        DwarfLocation::Register(register.0)
+                    }
+                    addr2line::gimli::Operation::FrameOffset { offset } => {
+                        DwarfLocation::FrameRelative(offset)
+                    }
+                    addr2line::gimli::Operation::Address { address } => {
+                        DwarfLocation::Address(address)
+                    }
+                    _ => DwarfLocation::Other(format!("{:?}", op)),
+                };
+                locals.push(LocalVariable { name: n, location });
+            }
+        });
+        locals
+    }
+
+    /// Calls `f` for each variable and parameter in scope at `pc`: those of
+    /// the function holding `pc` and of the lexical blocks and inlined calls
+    /// inside it that hold `pc` too. The `let`s of an earlier `unsafe {}`
+    /// block are not live later on.
+    pub(crate) fn walk_scope<F>(&self, pc: u64, mut f: F)
+    where
+        F: FnMut(
+            &gimli::Unit<DwarfReader>,
+            &gimli::DebuggingInformationEntry<'_, '_, DwarfReader>,
+            VarScope,
+        ),
+    {
         let mut units = self.dwarf.units();
 
         while let Ok(Some(header)) = units.next() {
@@ -446,124 +732,73 @@ impl SymbolProvider {
             };
 
             // Whether `entry`'s address ranges (low/high_pc or DW_AT_ranges) hold `pc`.
-            let covers =
-                |entry: &addr2line::gimli::DebuggingInformationEntry<'_, '_, _, _>| -> bool {
-                    let Ok(mut ranges) = self.dwarf.die_ranges(&unit, entry) else {
-                        return false;
-                    };
-                    while let Ok(Some(r)) = ranges.next() {
-                        if r.begin <= pc && pc < r.end {
-                            return true;
-                        }
-                    }
-                    false
+            let covers = |entry: &gimli::DebuggingInformationEntry<'_, '_, DwarfReader>| -> bool {
+                let Ok(mut ranges) = self.dwarf.die_ranges(&unit, entry) else {
+                    return false;
                 };
+                while let Ok(Some(r)) = ranges.next() {
+                    if r.begin <= pc && pc < r.end {
+                        return true;
+                    }
+                }
+                false
+            };
 
             // `next_dfs` reports a depth change, not a depth: keep the sum.
             let mut depth: isize = 0;
-            // Depth of the subprogram that contains `pc`, while inside it.
-            let mut subprogram: Option<isize> = None;
-            // Lexical blocks and inlined calls inside it, with whether each
-            // holds `pc`. A variable is in scope only if all of them do: the
-            // `let`s of an earlier `unsafe {}` block are not live later on.
-            let mut scopes: Vec<(isize, bool)> = Vec::new();
+            // Depth and offset of the subprogram that contains `pc`, while inside it.
+            let mut subprogram: Option<(isize, gimli::UnitOffset<usize>)> = None;
+            // Lexical blocks and inlined calls inside it: depth, whether
+            // each holds `pc`, and whether it is an inlined call. A variable
+            // is in scope only if all of them hold `pc`.
+            let mut scopes: Vec<(isize, bool, bool)> = Vec::new();
             let mut entries = unit.entries();
 
             while let Ok(Some((delta, entry))) = entries.next_dfs() {
                 depth += delta;
-                while scopes.last().is_some_and(|(d, _)| *d >= depth) {
+                while scopes.last().is_some_and(|(d, _, _)| *d >= depth) {
                     scopes.pop();
                 }
-                if subprogram.is_some_and(|d| depth <= d) {
+                if subprogram.is_some_and(|(d, _)| depth <= d) {
                     subprogram = None;
                 }
-                let Some(_) = subprogram else {
-                    if entry.tag() == addr2line::gimli::DW_TAG_subprogram && covers(entry) {
-                        subprogram = Some(depth);
+                let Some((_, function)) = subprogram else {
+                    if entry.tag() == gimli::DW_TAG_subprogram && covers(entry) {
+                        subprogram = Some((depth, entry.offset()));
                     }
                     continue;
                 };
+                if matches!(
+                    entry.tag(),
+                    gimli::DW_TAG_lexical_block
+                        | gimli::DW_TAG_inlined_subroutine
+                        | gimli::DW_TAG_subprogram
+                ) {
+                    scopes.push((
+                        depth,
+                        covers(entry),
+                        entry.tag() == gimli::DW_TAG_inlined_subroutine,
+                    ));
+                    continue;
+                }
+                if !scopes.iter().all(|(_, live, _)| *live) {
+                    continue;
+                }
+                if entry.tag() == gimli::DW_TAG_variable
+                    || entry.tag() == gimli::DW_TAG_formal_parameter
                 {
-                    if matches!(
-                        entry.tag(),
-                        addr2line::gimli::DW_TAG_lexical_block
-                            | addr2line::gimli::DW_TAG_inlined_subroutine
-                            | addr2line::gimli::DW_TAG_subprogram
-                    ) {
-                        scopes.push((depth, covers(entry)));
-                        continue;
-                    }
-                    if !scopes.iter().all(|(_, live)| *live) {
-                        continue;
-                    }
-
-                    if entry.tag() == addr2line::gimli::DW_TAG_variable
-                        || entry.tag() == addr2line::gimli::DW_TAG_formal_parameter
-                    {
-                        let name = entry
-                            .attr_value(addr2line::gimli::DW_AT_name)
-                            .ok()
-                            .flatten()
-                            .and_then(|attr| {
-                                let s = self.dwarf.attr_string(&unit, attr).ok()?;
-                                s.to_string_lossy().ok().map(|c| c.into_owned())
-                            });
-
-                        let Some(n) = name else { continue };
-                        // A single expression, or (what optimised builds emit
-                        // for nearly every local) a location list whose entry
-                        // covering `pc` holds it. A list with no entry here
-                        // means the value is gone at this point.
-                        let expr = match entry
-                            .attr_value(addr2line::gimli::DW_AT_location)
-                            .ok()
-                            .flatten()
-                        {
-                            Some(addr2line::gimli::AttributeValue::Exprloc(expr)) => Some(expr),
-                            Some(addr2line::gimli::AttributeValue::LocationListsRef(offset)) => {
-                                let Ok(mut list) = self.dwarf.locations(&unit, offset) else {
-                                    continue;
-                                };
-                                let mut found = None;
-                                while let Ok(Some(e)) = list.next() {
-                                    if e.range.begin <= pc && pc < e.range.end {
-                                        found = Some(e.data);
-                                        break;
-                                    }
-                                }
-                                if found.is_none() {
-                                    locals.push(LocalVariable {
-                                        name: n,
-                                        location: DwarfLocation::Other("optimized out".into()),
-                                    });
-                                    continue;
-                                }
-                                found
-                            }
-                            _ => None,
-                        };
-                        let Some(expr) = expr else { continue };
-                        let mut ops = expr.operations(unit.encoding());
-                        if let Ok(Some(op)) = ops.next() {
-                            let location = match op {
-                                addr2line::gimli::Operation::Register { register } => {
-                                    DwarfLocation::Register(register.0)
-                                }
-                                addr2line::gimli::Operation::FrameOffset { offset } => {
-                                    DwarfLocation::FrameRelative(offset)
-                                }
-                                addr2line::gimli::Operation::Address { address } => {
-                                    DwarfLocation::Address(address)
-                                }
-                                _ => DwarfLocation::Other(format!("{:?}", op)),
-                            };
-                            locals.push(LocalVariable { name: n, location });
-                        }
-                    }
+                    let level = scopes.iter().filter(|(_, _, inlined)| *inlined).count();
+                    f(
+                        &unit,
+                        entry,
+                        VarScope {
+                            level,
+                            subprogram: function,
+                        },
+                    );
                 }
             }
         }
-        locals
     }
 
     /// Create an empty SymbolProvider for testing
@@ -588,9 +823,13 @@ impl SymbolProvider {
             context,
             line_map: HashMap::new(),
             stmt_rows: Vec::new(),
+            line_index: Vec::new(),
+            comp_dirs: Vec::new(),
+            line_sequences: Vec::new(),
             symbol_map: HashMap::new(),
             functions: Vec::new(),
             test_locals: HashMap::new(),
+            cfi: unwind::CfiSections::default(),
         }
     }
 
@@ -653,8 +892,119 @@ impl labwired_core::fault_verdict::FaultSymbolizer for SymbolProvider {
     }
 }
 
+/// `name` with its line-program directory joined on. Directory 0 is the
+/// compilation directory itself, so its files stay bare (`main.c`); other
+/// directories are prefixed (`src/main.c`, `/usr/include/stdint.h`). An
+/// absolute `name` is returned unchanged.
+fn joined_file_path<R: gimli::Reader>(
+    dwarf: &gimli::Dwarf<R>,
+    unit: &gimli::Unit<R>,
+    header: &gimli::LineProgramHeader<R>,
+    file: &gimli::FileEntry<R>,
+    name: &str,
+) -> String {
+    if name.starts_with('/') || file.directory_index() == 0 {
+        return name.to_string();
+    }
+    let dir = file
+        .directory(header)
+        .and_then(|d| dwarf.attr_string(unit, d).ok())
+        .and_then(|d| d.to_string_lossy().ok().map(|c| c.into_owned()));
+    match dir {
+        Some(d) if !d.is_empty() && d != "." => {
+            // DWARF 5 repeats the compilation directory as directory 0 *and*
+            // sometimes as an absolute entry; strip it so paths stay relative.
+            let comp = unit
+                .comp_dir
+                .as_ref()
+                .and_then(|c| c.to_string_lossy().ok().map(|c| c.into_owned()));
+            let rel = match comp {
+                Some(c) if d == c => return name.to_string(),
+                Some(c) => d
+                    .strip_prefix(&format!("{}/", c.trim_end_matches('/')))
+                    .map(str::to_string)
+                    .unwrap_or(d),
+                None => d,
+            };
+            format!("{}/{}", rel.trim_end_matches('/'), name)
+        }
+        _ => name.to_string(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    /// A minimal little-endian ELF32 for EM_DSPIC30F (118) with one
+    /// executable section per entry, in the XC16 4-byte slot form.
+    fn pic24_elf(entry: u32, sections: &[(u32, Vec<u8>)]) -> Vec<u8> {
+        let shstr = b"\x00.text\x00.shstrtab\x00";
+        let n = sections.len() as u16;
+        let mut data_off = 52u32;
+        let mut sec_off = Vec::new();
+        for (_, bytes) in sections {
+            sec_off.push(data_off);
+            data_off += bytes.len() as u32;
+        }
+        let shstr_off = data_off;
+        data_off += shstr.len() as u32;
+        let shoff = data_off;
+
+        let mut out = vec![0x7f, b'E', b'L', b'F', 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        out.extend_from_slice(&2u16.to_le_bytes()); // ET_EXEC
+        out.extend_from_slice(&118u16.to_le_bytes()); // EM_DSPIC30F
+        out.extend_from_slice(&1u32.to_le_bytes());
+        out.extend_from_slice(&entry.to_le_bytes());
+        out.extend_from_slice(&0u32.to_le_bytes()); // e_phoff
+        out.extend_from_slice(&shoff.to_le_bytes());
+        out.extend_from_slice(&0u32.to_le_bytes()); // e_flags
+        for half in [52u16, 0, 0, 40, n + 2, n + 1] {
+            out.extend_from_slice(&half.to_le_bytes());
+        }
+        for (_, bytes) in sections {
+            out.extend_from_slice(bytes);
+        }
+        out.extend_from_slice(shstr);
+        let sh =
+            |out: &mut Vec<u8>, name: u32, typ: u32, flags: u32, addr: u32, off: u32, size: u32| {
+                for w in [name, typ, flags, addr, off, size, 0u32, 0, 2, 0] {
+                    out.extend_from_slice(&w.to_le_bytes());
+                }
+            };
+        sh(&mut out, 0, 0, 0, 0, 0, 0);
+        for (i, (addr, bytes)) in sections.iter().enumerate() {
+            sh(&mut out, 1, 1, 0x6, *addr, sec_off[i], bytes.len() as u32);
+        }
+        sh(&mut out, 8, 3, 0, 0, shstr_off, shstr.len() as u32);
+        out
+    }
+
+    #[test]
+    fn load_elf_bytes_rejects_malformed_xc16_elves() {
+        let end = labwired_core::cpu::pic24::PROGRAM_PC_END;
+        let code = vec![0u8; 8]; // two 4-byte slots
+        assert!(load_elf_bytes(&pic24_elf(0x200, &[(0x200, code.clone())])).is_ok());
+        let odd_entry = load_elf_bytes(&pic24_elf(0x201, &[(0x200, code.clone())])).unwrap_err();
+        assert!(odd_entry.to_string().contains("entry point"), "{odd_entry}");
+        let odd_section = load_elf_bytes(&pic24_elf(0x200, &[(0x201, code.clone())])).unwrap_err();
+        assert!(odd_section.to_string().contains("is odd"), "{odd_section}");
+        for entry in [end, end + 0x100] {
+            let far = load_elf_bytes(&pic24_elf(entry, &[(0x200, code.clone())])).unwrap_err();
+            assert!(far.to_string().contains("entry point"), "{far}");
+        }
+        let beyond = load_elf_bytes(&pic24_elf(0x200, &[(end + 0x100, code.clone())])).unwrap_err();
+        assert!(
+            beyond.to_string().contains("does not fit program flash"),
+            "{beyond}"
+        );
+        let bad = load_elf_bytes(&pic24_elf(0x200, &[(0x200, vec![0u8; 6])])).unwrap_err();
+        assert!(bad.to_string().contains("not a whole number"), "{bad}");
+        let past = load_elf_bytes(&pic24_elf(0x200, &[(end - 2, code)])).unwrap_err();
+        assert!(
+            past.to_string().contains("does not fit program flash"),
+            "{past}"
+        );
+    }
+
     use super::*;
 
     #[test]

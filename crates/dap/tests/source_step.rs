@@ -156,10 +156,14 @@ fn cortex_m_step_over_into_and_out() {
     let locals = adapter.source_locals().unwrap();
     let p = locals.iter().find(|l| l.name == "p").expect("local p");
     assert_eq!(p.kind, "frame_offset");
-    // Out: back in main, past the call on 224. The next statement main
-    // reaches is probe_tmp117's first line, which -Os inlined into main (it
-    // has no symbol of its own), so DWARF names the inlined function.
+    // Out: back in main. Its next statement is the call to probe_tmp117,
+    // which -Os inlined (it has no symbol of its own): the stop shows the
+    // line in main that makes the call, not the inlined body.
     let (stop, _) = step(&adapter, StepKind::Out);
+    assert_eq!(stop, StepStop::LineChanged);
+    assert_eq!(here(&adapter), ("main.c".into(), 225, "main".into()));
+    // Into enters the inlined probe_tmp117 without running anything.
+    let (stop, _) = step(&adapter, StepKind::Into);
     assert_eq!(stop, StepStop::LineChanged);
     let (file, line, function) = here(&adapter);
     assert_eq!(
@@ -254,4 +258,242 @@ fn riscv_step_over_runs_through_code_inlined_from_another_file() {
     run_to_breakpoint(&adapter, 5_000_000);
     assert_eq!(step(&adapter, StepKind::Into).0, StepStop::LineChanged);
     assert_eq!(here(&adapter).0, "mod.rs");
+}
+
+/// Nokia 5110 starter (STM32L476, Rust release build): most of `main`'s loop
+/// is inlined and has no line-table row of its own. Step over walks the
+/// loop's lines (each inlined call is shown on the line that makes it),
+/// into enters an inlined function, out returns to its caller, and a
+/// breakpoint on an inlined call's line stops on that line.
+#[test]
+fn cortex_m_rust_steps_through_inlined_calls() {
+    let adapter = load(
+        "examples/nokia5110-invaders-lab/system.yaml",
+        "tests/fixtures/nokia5110-invaders-lab.elf",
+    );
+    set_line_breakpoint(&adapter, "src/main.rs", 508);
+    run_to_breakpoint(&adapter, 50_000_000);
+    let main = here(&adapter).2;
+    assert!(main.ends_with("__cortex_m_rt_main"), "{main}");
+    assert_eq!(here(&adapter).1, 508);
+
+    // 508 calls render; 509 (lcd_frame) and 511 (delay) are inlined.
+    for line in [509, 511, 491] {
+        assert_eq!(step(&adapter, StepKind::Over).0, StepStop::LineChanged);
+        assert_eq!(here(&adapter), ("main.rs".into(), line, main.clone()));
+    }
+    // 491 is `let count = measure();`: into enters the inlined measure.
+    assert_eq!(
+        step(&adapter, StepKind::Into),
+        (StepStop::LineChanged, 0x0800_0f6a)
+    );
+    let (file, line, function) = here(&adapter);
+    assert_eq!(file, "main.rs");
+    assert!(function.ends_with("::measure"), "{function}");
+    assert!((223..=248).contains(&line), "measure body, got {line}");
+    // Out finishes measure and is back in main, past the call.
+    assert_eq!(step(&adapter, StepKind::Out).0, StepStop::LineChanged);
+    assert_eq!(here(&adapter), ("main.rs".into(), 493, main.clone()));
+
+    // A breakpoint on an inlined call's line stops there, shown on that line.
+    set_line_breakpoint(&adapter, "src/main.rs", 509);
+    run_to_breakpoint(&adapter, 50_000_000);
+    assert_eq!(here(&adapter), ("main.rs".into(), 509, main));
+}
+
+/// The field names of `struct Game` in the Nokia example's source.
+fn game_fields() -> Vec<String> {
+    let src = std::fs::read_to_string(root().join("examples/nokia5110-invaders-lab/src/main.rs"))
+        .unwrap();
+    let body = src.split("struct Game {").nth(1).unwrap();
+    let body = &body[..body.find('}').unwrap()];
+    body.lines()
+        .filter_map(|l| l.trim().split_once(':').map(|(n, _)| n.trim().to_string()))
+        .filter(|n| !n.is_empty() && !n.starts_with("//"))
+        .collect()
+}
+
+fn var<'a>(
+    vars: &'a [labwired_loader::VariableValue],
+    name: &str,
+) -> &'a labwired_loader::VariableValue {
+    vars.iter()
+        .find(|v| v.name == name)
+        .unwrap_or_else(|| panic!("no variable {name} in {vars:#?}"))
+}
+
+/// (function, file name, line, inlined) per call-stack frame.
+fn stack(adapter: &LabwiredAdapter) -> Vec<(String, String, Option<u32>, bool)> {
+    adapter
+        .call_stack(32)
+        .unwrap()
+        .into_iter()
+        .map(|f| {
+            (
+                f.function.unwrap_or_default(),
+                f.file
+                    .map(|p| p.rsplit('/').next().unwrap().to_string())
+                    .unwrap_or_default(),
+                f.line,
+                f.inlined,
+            )
+        })
+        .collect()
+}
+
+/// Checks `game` (a `Game` in main's stack frame) against the source.
+fn assert_game(game: &labwired_loader::VariableValue) {
+    assert!(game.available, "{game:#?}");
+    assert_eq!(game.type_name.as_deref(), Some("Game"));
+    assert!(
+        game.value.starts_with("Game { paddle_x: "),
+        "{}",
+        game.value
+    );
+    let names: Vec<&str> = game.children.iter().map(|c| c.name.as_str()).collect();
+    assert_eq!(names, game_fields());
+    let paddle: i32 = var(&game.children, "paddle_x").value.parse().unwrap();
+    assert!((0..84).contains(&paddle), "paddle_x {paddle}");
+    let vx: i32 = var(&game.children, "vx").value.parse().unwrap();
+    assert!(vx == 1 || vx == -1, "vx {vx}");
+    // bricks: [[bool; BCOLS]; BROWS], each brick true or false.
+    let bricks = var(&game.children, "bricks");
+    assert_eq!(bricks.value, "[[bool; 6]; 3]");
+    assert_eq!(bricks.children.len(), 3);
+    for row in &bricks.children {
+        assert_eq!(row.children.len(), 6);
+        for b in &row.children {
+            assert!(b.value == "true" || b.value == "false", "{b:?}");
+        }
+    }
+    let addr = game.address.expect("game lives on the stack");
+    assert!((0x2000_0000..0x2002_0000).contains(&addr), "{addr:#x}");
+}
+
+/// Nokia 5110 starter (Rust release build): typed variables and the call
+/// stack at `game.render(&mut FB)` (main.rs:508), in `render` after a step
+/// into that real call, and in the inlined `measure`.
+#[test]
+fn cortex_m_rust_variables_and_call_stack() {
+    let adapter = load(
+        "examples/nokia5110-invaders-lab/system.yaml",
+        "tests/fixtures/nokia5110-invaders-lab.elf",
+    );
+    set_line_breakpoint(&adapter, "src/main.rs", 508);
+    run_to_breakpoint(&adapter, 50_000_000);
+
+    // `game` is DW_OP_breg13 (sp) + offset: a stack slot, not optimized out.
+    let vars = adapter.frame_variables(0).unwrap();
+    assert_game(var(&vars, "game"));
+    for name in ["c1", "c2"] {
+        let v = var(&vars, name);
+        assert!(v.available, "{v:?}");
+        assert_eq!(v.type_name.as_deref(), Some("u32"));
+    }
+    // `paddle` is in a register here.
+    let paddle = var(&vars, "paddle");
+    assert!(paddle.available && paddle.address.is_none(), "{paddle:?}");
+
+    let frames = stack(&adapter);
+    assert!(frames[0].0.ends_with("::__cortex_m_rt_main"), "{frames:?}");
+    assert_eq!((frames[0].2, frames[0].3), (Some(508), false));
+    // The cortex-m-rt trampoline `main` calls it.
+    assert_eq!(frames[1].0, "main", "{frames:?}");
+
+    // Into the real call `render`: the stack is render <- main, the caller
+    // shown on the line of the call, its variables still readable.
+    assert_eq!(step(&adapter, StepKind::Into).0, StepStop::LineChanged);
+    let frames = stack(&adapter);
+    assert!(frames[0].0.ends_with("Game::render"), "{frames:?}");
+    assert!(!frames[0].3);
+    assert!(frames[1].0.ends_with("::__cortex_m_rt_main"), "{frames:?}");
+    assert_eq!(
+        (frames[1].1.as_str(), frames[1].2, frames[1].3),
+        ("main.rs", Some(508), false)
+    );
+    assert_eq!(frames[2].0, "main");
+    let caller = adapter.frame_variables(1).unwrap();
+    assert_game(var(&caller, "game"));
+    // `self` is `&Game`: the pointer, with the Game it points at below.
+    let this = var(&adapter.frame_variables(0).unwrap(), "self").clone();
+    assert_eq!(
+        this.type_name.as_deref(),
+        Some("&nokia5110_invaders_lab::Game")
+    );
+    assert!(this.value.starts_with("0x2"), "{}", this.value);
+    let names: Vec<&str> = this.children.iter().map(|c| c.name.as_str()).collect();
+    assert_eq!(names, game_fields());
+
+    // The inlined `measure` (main.rs:491): measure (inlined) above main.
+    let adapter = load(
+        "examples/nokia5110-invaders-lab/system.yaml",
+        "tests/fixtures/nokia5110-invaders-lab.elf",
+    );
+    set_line_breakpoint(&adapter, "src/main.rs", 508);
+    run_to_breakpoint(&adapter, 50_000_000);
+    for _ in [509, 511, 491] {
+        assert_eq!(step(&adapter, StepKind::Over).0, StepStop::LineChanged);
+    }
+    assert_eq!(step(&adapter, StepKind::Into).0, StepStop::LineChanged);
+    let frames = stack(&adapter);
+    assert!(frames[0].0.ends_with("::measure"), "{frames:?}");
+    assert!(frames[0].3, "measure is inlined");
+    assert!(frames[1].0.ends_with("::__cortex_m_rt_main"), "{frames:?}");
+    assert_eq!((frames[1].2, frames[1].3), (Some(491), false));
+    // Frame 0's variables are measure's own; main's are one frame down.
+    let vars = adapter.frame_variables(1).unwrap();
+    assert_game(var(&vars, "game"));
+    let filt = var(&vars, "filt");
+    assert!(filt.available, "{filt:?}");
+    assert!(!adapter
+        .frame_variables(0)
+        .unwrap()
+        .iter()
+        .any(|v| v.name == "game"));
+}
+
+/// nRF54L15 smart-ring (C, gcc -Os): step into `probe8` from main.c:223 and
+/// read its parameters, which -Os keeps in registers and location lists.
+#[test]
+fn cortex_m_c_parameters_and_call_stack() {
+    let adapter = load(
+        "examples/nrf54l15-smart-ring/system.yaml",
+        "tests/fixtures/nrf54l15-smart-ring.elf",
+    );
+    set_line_breakpoint(&adapter, "src/main.c", 223);
+    run_to_breakpoint(&adapter, 5_000_000);
+    assert_eq!(step(&adapter, StepKind::Into).0, StepStop::LineChanged);
+    assert_eq!(here(&adapter), ("main.c".into(), 177, "probe8".into()));
+
+    // main.c:223 is `probe8("imu    BMI270   ", 0x68, 0x00, 0x24);`.
+    let vars = adapter.frame_variables(0).unwrap();
+    let label = var(&vars, "label");
+    assert_eq!(label.type_name.as_deref(), Some("const char *"));
+    assert!(
+        label.value.ends_with(r#""imu    BMI270   ""#),
+        "{}",
+        label.value
+    );
+    for (name, value) in [("addr", "104"), ("reg", "0"), ("expect", "36")] {
+        let v = var(&vars, name);
+        assert_eq!((v.value.as_str(), v.available), (value, true), "{name}");
+        assert_eq!(v.type_name.as_deref(), Some("uint8_t"));
+    }
+
+    let frames = stack(&adapter);
+    assert_eq!(
+        frames[0],
+        ("probe8".into(), "main.c".into(), Some(177), false)
+    );
+    assert_eq!(
+        frames[1],
+        ("main".into(), "main.c".into(), Some(223), false)
+    );
+
+    // Over twim_read_reg: `acked` holds its result.
+    assert_eq!(step(&adapter, StepKind::Over).0, StepStop::LineChanged);
+    let vars = adapter.frame_variables(0).unwrap();
+    let acked = var(&vars, "acked");
+    assert_eq!((acked.value.as_str(), acked.available), ("1", true));
+    assert_eq!(var(&vars, "addr").value, "104");
 }

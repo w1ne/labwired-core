@@ -24,10 +24,14 @@ gpio_input_thresholds:
 
 flash:
   base: 0x08000000
-  # 1 MiB, spelled in KB because `parse_size` reads MB as 10^6 — "1MB" would be
-  # 1_000_000, 48_576 bytes short of the part. Gated by
-  # crates/core/src/tests/chip_memory_sizes.rs.
-  size: "1024KB"
+  # STM32F103C8: 64 KiB of main flash (0x0800_0000..0x0801_0000). DS5319
+  # Rev 20, Table 2 "STM32F103xx medium-density device features and
+  # peripheral counts": the "8" suffix is 64 Kbytes ("B" is 128 Kbytes);
+  # RM0008 §3.3.3 Table 5 lays a medium-density part out as 64/128 pages of
+  # 1 KiB. Spelled in KB because `parse_size` reads MB as 10^6. Gated by
+  # crates/core/src/tests/chip_memory_sizes.rs. An image that does not fit
+  # 64 KiB does not fit the C8 either; a 128 KiB "B" part needs its own chip.
+  size: "64KB"
 ram:
   base: 0x20000000
   # STM32F103C8 has 20KB of SRAM (0x2000_0000..0x2000_5000). Modelling the
@@ -56,6 +60,8 @@ peripherals:
     type: "gpio"
     base_address: 0x40010C00
     size: "1KB"
+    # RCC_APB2ENR.IOPBEN (bit 3), RM0008 §7.3.7. Unclocked out of reset.
+    clock: { reg: "apb2enr", bit: 3 }
     config:
       debug_schema: "../peripherals/stm32f103/gpiob.yaml"
       profile: "stm32f1"
@@ -63,6 +69,8 @@ peripherals:
     type: "gpio"
     base_address: 0x40011000
     size: "1KB"
+    # RCC_APB2ENR.IOPCEN (bit 4), RM0008 §7.3.7. Unclocked out of reset.
+    clock: { reg: "apb2enr", bit: 4 }
     config:
       debug_schema: "../peripherals/stm32f103/gpioc.yaml"
       profile: "stm32f1"
@@ -85,6 +93,8 @@ peripherals:
     base_address: 0x40004400
     size: "1KB"
     irq: 38
+    # RCC_APB1ENR.USART2EN (bit 17), RM0008 §7.3.8. Unclocked out of reset.
+    clock: { reg: "apb1enr", bit: 17 }
     config:
       debug_schema: "../peripherals/stm32f103/usart2.yaml"
   - id: "i2c1"
@@ -107,6 +117,8 @@ peripherals:
     base_address: 0x40005800
     size: "1KB"
     irq: 33
+    # RCC_APB1ENR.I2C2EN (bit 22), RM0008 §7.3.8. Unclocked out of reset.
+    clock: { reg: "apb1enr", bit: 22 }
     config:
       debug_schema: "../peripherals/stm32f103/i2c2.yaml"
   - id: "spi1"
@@ -124,6 +136,8 @@ peripherals:
     base_address: 0x40003800
     size: "1KB"
     irq: 36
+    # RCC_APB1ENR.SPI2EN (bit 14), RM0008 §7.3.8. Unclocked out of reset.
+    clock: { reg: "apb1enr", bit: 14 }
     config:
       debug_schema: "../peripherals/stm32f103/spi2.yaml"
   - id: "afio"
@@ -152,6 +166,13 @@ peripherals:
     clock: { reg: "ahbenr", bit: 0 }
     config:
       debug_schema: "../peripherals/stm32f103/dma1.yaml"
+      # Hard-wired peripheral requests (RM0008 Table 78, DMA1 request
+      # mapping): SPI1_RX ch2, SPI1_TX ch3, SPI2_RX ch4, SPI2_TX ch5.
+      requests:
+        spi1_rx: 2
+        spi1_tx: 3
+        spi2_rx: 4
+        spi2_tx: 5
   # ─── STM32F1-family peripherals, reset values verified against ─────────
   # ─── STM32F103C8 silicon (Blue Pill, ST-LINK V2, 2026-06-04). ──────────
   # Each `profile` selects the chip-family layout in the peripheral model
@@ -232,6 +253,8 @@ peripherals:
     base_address: 0x40012C00
     size: "1KB"
     irq: 25
+    # RCC_APB2ENR.TIM1EN (bit 11), RM0008 §7.3.7. Unclocked out of reset.
+    clock: { reg: "apb2enr", bit: 11 }
     config:
       debug_schema: "../peripherals/stm32f103/tim1.yaml"
       advanced: true
@@ -250,6 +273,8 @@ peripherals:
     base_address: 0x40000400
     size: "1KB"
     irq: 29
+    # RCC_APB1ENR.TIM3EN (bit 1), RM0008 §7.3.8. Unclocked out of reset.
+    clock: { reg: "apb1enr", bit: 1 }
     config:
       debug_schema: "../peripherals/stm32f103/tim3.yaml"
   - id: "tim4"
@@ -257,6 +282,8 @@ peripherals:
     base_address: 0x40000800
     size: "1KB"
     irq: 30
+    # RCC_APB1ENR.TIM4EN (bit 2), RM0008 §7.3.8. Unclocked out of reset.
+    clock: { reg: "apb1enr", bit: 2 }
     config:
       debug_schema: "../peripherals/stm32f103/tim4.yaml"
   - id: "adc1"
@@ -274,6 +301,8 @@ peripherals:
     type: "adc"
     base_address: 0x40012800
     size: "1KB"
+    # RCC_APB2ENR.ADC2EN (bit 10), RM0008 §7.3.7. Unclocked out of reset.
+    clock: { reg: "apb2enr", bit: 10 }
     config:
       debug_schema: "../peripherals/stm32f103/adc2.yaml"
       profile: "stm32f1"
@@ -282,6 +311,8 @@ peripherals:
     base_address: 0x40004800
     size: "1KB"
     irq: 39
+    # RCC_APB1ENR.USART3EN (bit 18), RM0008 §7.3.8. Unclocked out of reset.
+    clock: { reg: "apb1enr", bit: 18 }
     config:
       debug_schema: "../peripherals/stm32f103/usart3.yaml"
 

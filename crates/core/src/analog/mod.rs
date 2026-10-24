@@ -42,6 +42,7 @@ pub use netlist::{
     MACRO_GAIN_RESISTANCE, POWER_SINK_VMIN, REGULATOR_LIMIT_DIODE, REGULATOR_LIMIT_GAIN,
 };
 pub use trace::{
-    AnalogChannel, AnalogSample, AnalogTrace, AnalogTraceBatch, AnalogTraceHandle,
-    AnalogTraceRegistry, DEFAULT_TRACE_SAMPLES,
+    AnalogChannel, AnalogSample, AnalogSeries, AnalogSeriesChannel, AnalogTrace, AnalogTraceBatch,
+    AnalogTraceHandle, AnalogTraceRegistry, DEFAULT_SERIES_POINTS, DEFAULT_TRACE_SAMPLES,
+    SERIES_DEADBAND_AMPS, SERIES_DEADBAND_REL, SERIES_DEADBAND_VOLTS,
 };

@@ -7,6 +7,381 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- GDB watchpoints (`Z2`/`Z3`/`Z4`, write/read/access) on the RSP server,
+  software-tracked by the bus accessors: ranges up to 4 KiB (a single 2 KiB
+  object fits one request) and 16 concurrent ranges, debugger `M`/`m` never
+  tripping them, and stops that are post-retirement (Thumb-16 `PC = store + 2`)
+  with a bare SIGTRAP and no `watch:` annotation. `P` single-register writes
+  really work now (the `reset $pc` path; before, the stub answered the empty
+  envelope and changed nothing). Six pinned RSP conformance scenarios for
+  renode #51/#52/#57/#70/#74/#978 run under
+  `cargo test -p labwired-gdbstub` (`crates/gdbstub/tests/rsp_conformance.rs`),
+  and `docs/gdb_integration.md` carries the honest client matrix backed by
+  those runs: CI covers the RSP side, `scripts/gdb-conformance.sh` is an
+  optional `gdb-multiarch` batch smoke that skips without the tool, and every
+  other client (arm-none-eabi-gdb, CLion, cortex-debug, LLDB) stays `untested`
+  until someone runs it.
+- `--log-timestamps {none,virtual,real,both}` on `labwired run` and
+  `labwired test` (default `none`): human-readable stderr event/log lines are
+  prefixed `[t=virt=1.500000000s|real=+0.123456789s]` — only the components
+  the selected mode asks for. Virtual time derives from committed
+  cycles and the declared `cpu_hz` and is byte-stable across runs; real time
+  is wall-clock and explicitly not comparable. `result.json` carries
+  `virtual_time_ns` / `host_time_ns` only when the flag requests them, so
+  default artifacts stay byte-identical (locked by the determinism guard,
+  which now hashes stdout too).
+- Read-only memory regions: `cpu_writes: allow|warn|fault` on a chip YAML
+  `flash:` / `ram:` region (default `allow`). A CPU store into a `fault`
+  region raises the existing precise BusFault and the fault verdict names the
+  reason (`data access at 0x0800_1000 (BFAR valid; store to read-only
+  flash)`); `warn` commits the store, counts it and logs once per region.
+  Violation records land in `result.json` under `memory_policy` (absent on
+  default configs, so existing runs stay byte-identical; the record names the
+  store address plus the boundary PC and cycle). The Cortex-M RAM store fast
+  paths, the RISC-V coalesced-store fold and the JIT lanes defer while a
+  non-default RAM policy is in force, so the interpreter's gate owns every
+  store; loader writes bypass by construction and the generic DMA request
+  path bypasses (it is hardware, not the CPU). Proven end-to-end by
+  `crates/cli/tests/readonly_flash_e2e.rs` on a CI fixture chip whose flash
+  is `fault`, and runnable via `examples/readonly-flash/` (renode#787).
+- Firmware branch coverage that counts every conditional branch, measured on
+  the unmodified ELF (`docs/howto/firmware-coverage.md`,
+  `examples/coverage-brake-ecu`). The branch list comes from decoding the ELF
+  (Thumb `B<cond>`/`CBZ`/`CBNZ`, RISC-V `B*`/`C.BEQZ`/`C.BNEZ`; function
+  symbols, `$t`/`$x`/`$d` mapping symbols and DWARF line sequences, so
+  assembly with line info is included), so branches no test reached count
+  against coverage (`BRDA:…,-`) instead of disappearing. The decoder was
+  checked against llvm-objdump on all 81 committed ELFs with line info:
+  18,195 of 18,195 two-outcome branches, no extras, no wrong targets
+  (`crates/loader/tests/branch_sites_fixtures.rs`). Lines and functions now
+  carry hit and call counts.
+- `labwired coverage merge`: merge LCOV files from many runs (and from
+  gcov/llvm-cov host tests), list every branch the tests never took with the
+  tests that ran its line, write LCOV / Cobertura / JSON, and fail CI with
+  `--fail-under-lines` / `--fail-under-branches`. Same counts as `lcov -a`
+  once its per-test records are summed. `labwired test --coverage` also writes
+  `coverage.cobertura.xml` (valid against `coverage-04.dtd`) and names each
+  run's `TN:` after its script.
+- STM32 DMA arbitration, F4 stream FIFOs, transfer errors, DMAMUX
+  generators and synchronisation, GDMA descriptor errors. Each STM32 DMA
+  controller (F1/L4/G0 `dma`, F4/F7 `stm32f4_dma`, H5/U5 `gpdma`) moves one
+  item per arbitration slot, to the channel or stream with the highest
+  software priority (`CCR.PL`, `SxCR.PL`, `CCR.PRIO`) and then the lowest
+  number; a request that loses the slot stays latched. An item that faults
+  on the bus sets `TEIF` (GPDMA `DTEF`) and disables the channel or stream
+  (bus plumbing: the bus tells the issuing controller,
+  `Peripheral::dma_transfer_error`). F4 streams model the 16-byte FIFO
+  (`DMDIS`, `FTH`, live `FS`, `PBURST` / `MBURST` INCR4/8/16, packing when
+  `PSIZE` ≠ `MSIZE`, `FEIF` for a forbidden `FTH` / `MBURST` / `MSIZE`
+  combination, an overrun or an underrun, `FEIE`), force `MSIZE` = `PSIZE`
+  and no bursts in direct mode, flush a P2M FIFO when `EN` is cleared (`EN`
+  reads 1 until the stream stops, `TCIF` set), and run memory-to-memory
+  through the FIFO (new `DmaDirection::Load` / `Store` items,
+  `Peripheral::dma_load_data`). The G0 DMAMUX request generators
+  (`RGxCR`) and synchronisation (`CxCR.SE`, `SYNC_ID`, `SPOL`, `NBREQ`,
+  `EGE`, `CSR` / `RGSR` overruns) take EXTI lines 0..15 (the G0 EXTI now
+  answers `exti_line_source`) and the channel events `dmamux_evt0..3`. The
+  ESP32-C3 / C6 GP-SPI2 GDMA path raises `IN_DSCR_ERR` / `OUT_DSCR_ERR`
+  (owner check, a descriptor, buffer or next link outside internal SRAM),
+  `IN_DSCR_EMPTY`, and `OUT_EOF` only for a `suc_eof` descriptor. New
+  end-to-end net test `env-spi-f4-dma.yaml` (F401 master: two streams
+  complete by priority, then SPI1 through the FIFOs in INCR4 bursts, against
+  the G071 DMA slave). Behaviour change: an F4 memory-to-memory transfer now
+  takes its FIFO drains as extra slots, and an F4 stream disabled by
+  software sets `TCIF` as on silicon.
+- OV3660 JPEG output. With `PIXFORMAT_JPEG` the `ov3660` part streams real
+  baseline JPEG frames (YCbCr 4:2:2, quantised by `COMPRESSION_CTRL07`)
+  instead of no frames, sized so `esp32-camera` finds SOI and EOI the way it
+  does on silicon (zero padding to the DMA block, a COM segment for the one
+  length its PSRAM path cannot size). Espressif's `take_picture` runs in JPEG
+  mode: 320x240 frames that decode with Pillow and `jpeg-decoder`. The encoder
+  is `peripherals/jpeg_baseline.rs`; `jpeg-decoder` is a new dev-dependency
+  for its tests.
+- RTC IO MUX and RTC GPIO on the classic ESP32 and the ESP32-S3
+  (`peripherals/esp_rtc_io.rs`, `esp32_rtc_io` at 0x3FF4_8400 replacing the
+  round-trip stub, `esp32s3_rtc_io` at 0x6000_8400 in place of the RTC_CNTL
+  catch-all). The SVD register map and reset values (unit-tested against the
+  vendored SVDs); a pad whose `MUX_SEL` is set is driven by
+  `RTC_GPIO_OUT` / `ENABLE` (+ `_W1TS` / `_W1TC`), `PAD_DRIVER` open drain
+  and `RUE` / `RDE` pulls instead of `GPIO_OUT` / `GPIO_ENABLE` and the GPIO
+  matrix, on a probe and on a world `gpio_net`; `RTC_GPIO_IN` and `GPIO_IN`
+  read it through `FUN_IE`; `RTC_GPIO_PINn.INT_TYPE` latches
+  `RTC_GPIO_STATUS` (no CPU interrupt: neither part routes it to one); the
+  classic `HOLD` bits freeze the RTC output stage. Classic RTC GPIO numbers
+  follow `rtc_io_desc` (GPIO0 is RTC_GPIO11, bit 25). The GPIO model of each
+  part takes the shared state through `Peripheral::rtc_io_pads` /
+  `attach_rtc_io_pads`, no downcast. `env-rtc-gpio-esp32-esp32s3.yaml` runs
+  RTC GPIO between the two parts and hands a pad from the RTC domain back to
+  the digital one.
+
+### Changed
+- Classic ESP32 RTC-capable pads (GPIO0, 2, 4, 12..15, 25..27, 32, 33) take
+  their pull from RTC_IO `RUE` / `RDE` in the digital domain too (ESP32
+  errata 3.6; ESP-IDF `gpio_pullup_en` writes them there), from the silicon
+  reset values on: GPIO0, GPIO14 and GPIO15 pulled up, GPIO2, GPIO4, GPIO12
+  and GPIO13 pulled down. A released input there now reads its pull and shows
+  it on a net, where it read the last outside level (0) before.
+- The `gpio-net-buses` Xtensa firmware clears RTC_IO `MUX_SEL` before using
+  an RTC-capable pad digitally, as `gpio_config()` does (`RTC_DIGITAL` in
+  `src/esp32x.inc`). The ELFs whose pads have an RTC function were rebuilt:
+  the S3 GP-SPI2 / I2C0 ones (GPIO8..13) and the classic bank-1 ones
+  (GPIO32..36, GPIO39); the rest are byte-identical.
+
+### Performance
+- Cortex-M skips fixed-point poll loops: a loop that waits for a RAM word only
+  an interrupt changes (`HAL_Delay`, Arduino `delay()`, a `b .` park). At a
+  loop head the core runs one iteration on a read-only view of plain memory;
+  it is refused on any store, device access, pending or changed exception, or
+  if it does not come back to the head in the state it left. The machine
+  then skips whole iterations up to the next interrupt or event deadline, and
+  the CLI counts them as steps, so `max_steps` stops where it did. Outputs are
+  identical to a run with no skip (`LABWIRED_IDLE_FAST_FORWARD=0`). STM32
+  Arduino blink labs: H563 24x, U545 10x, G474 7x, F401 4x less CPU.
+- `labwired test` on a Cortex-M bare ELF (the hosted `labwired_run` path for
+  STM32, RP2040, nRF and EFR32 boards) takes `cycles`/`instructions` from the
+  machine's counters instead of a per-step observer. Where the bus's per-cycle
+  tick has no work of its own (no CAN tester or bridge, no GPIO device needing
+  service) it also plans CPU windows at the bus's max-safe interval with exact
+  boundaries (`Machine::exact_batch_boundaries`): each batch ends after an
+  instruction that touches a device, windows already end at scheduler and
+  interrupt deadlines, every boundary ticks, and the bus keeps interval 1 so
+  peripherals pace events as before. UART, GPIO edges, final CPU state and
+  stop reason are identical with `LABWIRED_HOSTED_FAST=0`; result.json
+  `cycles` becomes the machine clock (the observer over-counted Cortex-M
+  cycles up to 10x) and `instructions` now counts exception-entry steps.
+  STM32 and RP2040 labs run 1.5-5x faster.
+- `labwired snapshot capture --profile arduino-esp32` (the hosted
+  `labwired_run` path for a classic ESP32 without watches, stimuli or
+  acceptance) advances in chunks with the idle and CCOUNT poll-loop skips
+  instead of one instruction per call. A step is still a machine cycle, so
+  `--steps`, `--progress-every` and the captured state land on the same
+  cycle. `LABWIRED_IDLE_FAST_FORWARD=0` and `--trace-out` keep single steps.
+  The four-servo lab: 10 s simulated in 1.3 s (was ~110 s).
+- `labwired test` on a classic ESP32 (the hosted `labwired_run` /
+  `labwired_verify` path, including the `arduino-esp32` profile with loopTask
+  on PRO_CPU) runs the idle and CCOUNT poll-loop skips, as every other test
+  path already did (`LABWIRED_IDLE_FAST_FORWARD=0` opts out). Metrics come
+  from the machine's counters instead of a per-step observer, and a step is a
+  machine cycle, retired or skipped, so every advance call, assertion check,
+  settle window and `max_steps` lands on the same cycle as a run with no
+  skip. result.json is unchanged except `metrics.pc_samples` and
+  `metrics.peripheral_accesses`, which count retired work. The four-servo lab
+  (d26Wk2eXNiFS): 10 s simulated in 1.4 s, was ~450 s.
+- A dual-core machine no longer runs in lockstep while the secondary core
+  busy-waits on CCOUNT and the primary is busy. The secondary's proven poll
+  loop is deferred: the primary runs alone, and the secondary catches up
+  when the deferral ends (before its CCOMPARE0 edge, when a byte its loop
+  reads changes, when an interrupt it takes becomes pending, or at the end of
+  the advance). Servo edge stamps are identical to a run without any skip.
+  The four-servo lab's native browser-path harness goes from 3.75x to 5.4x
+  real time.
+- Beside a deferred secondary, the primary runs as one CPU batch instead of
+  one instruction per tick, on a bus whose per-cycle tick does nothing. The
+  batch ends right after the instruction that touches a device or stores
+  into a byte the deferred loop reads (`bus::BatchStop`). Servo edge stamps
+  are unchanged; the four-servo lab's native harness goes from 5.3x to 8.7x.
+- Idle fast-forward also skips a proven CCOUNT busy-wait, on any core. A
+  core in a loop that only reads CCOUNT, computes with it and compares it
+  (`while (ESP.getCycleCount() - t0 < n) {}`, a servo pulse loop) counts as
+  idle: the Xtensa core proves one iteration is a pure function of the
+  CCOUNT value (read-only probe, taint per register, exact first change of
+  every compare) and the machine skips the steady iterations. The skip is a
+  whole number of iterations, ends on every core's CCOMPARE0 edge, and
+  leaves the same state as running them: servo edge stamps are identical to
+  a run without any skip. The four-servo trajectory lab (two cores, loopTask
+  on APP_CPU) goes from 0.03x to 2.0x real time in WASM (Node, 12 s).
+### Fixed
+- A WAITI-parked secondary core that an interrupt wakes in the middle of a
+  quantum-1 window runs from the next cycle. The window stepped a secondary
+  only while it was parked, so after a mid-window wake it sat unstepped
+  until the window ended, and a dual-core run depended on where `advance`
+  calls ended (with idle fast-forward on or off). On the four-servo ESP32
+  lab the APP_CPU lost 776 cycles at its boot wake; every servo edge now
+  lands 776 cycles earlier, the same for every call size.
+- Idle fast-forward on a dual-core machine waits until BOTH cores are idle.
+  It skipped on the primary's WAITI alone, so an ESP32 sketch whose
+  `loopTask` runs on APP_CPU got about 1 % of the machine's cycles: a
+  CCOUNT-timed 20 ms servo frame took about 2 s of machine time in the
+  browser. A parked secondary's CCOUNT now moves with the skip.
+- Browser (WASM) classic-ESP32 boot runs the real esp_flash chip driver and
+  seeds `g_rom_flashchip`, as the shared Arduino profile does. Every
+  classic-ESP32 lab printed `No core dump partition found` and
+  `initArduino(): Failed to initialize NVS! Error: 261`; `Preferences` failed
+  in the browser and worked on silicon.
+- A servo without `ledc_channel` follows the LEDC channel the GPIO matrix
+  routes to its pad. Before, it observed all 16 channels, so every
+  `ledcWrite` moved every servo: four servos on GPIO25/26/27/33 (channels
+  0..3) all showed the angle of the last write. The classic ESP32 GPIO
+  reports each pad's source (`GpioObserver::on_pad_source`: latch, LEDC
+  channel, other peripheral). A port that does not report sources keeps the
+  old behaviour.
+- Classic ESP32 Arduino fast boot: the BROM `gpio_matrix_out` thunk now
+  writes `GPIO_FUNCn_OUT_SEL_CFG` (signal, `OUT_INV_SEL`, `OEN_INV_SEL`)
+  instead of returning without effect. `ledcAttachPin`, `spiAttach*` and
+  HardwareSerial pin attach call it through `pinMatrixOutAttach`, so on that
+  path a pad attached to LEDC stayed a plain GPIO and showed 0 edges. A
+  sketch with `ledcSetup(ch, 50, 14)` + `ledcAttachPin` + `ledcWrite` now
+  shows its 20.032 ms frames on the attached pads in `labwired test
+  --watch-gpio`.
+
+### Added
+- Every ESP32 / ESP32-S3 pad and bus controller instance on `gpio_net`s.
+  Bank-1 pads join nets like bank 0: classic GPIO32..39 and S3 GPIO32..48
+  take outside levels in `GPIO_IN1`, drive `GPIO_OUT1` / `GPIO_ENABLE1` (bit
+  `pad - 32`), latch `GPIO_STATUS1` per `INT_TYPE` (`GPIO_ACPU_INT1` /
+  `GPIO_PCPU_INT1`, the same GPIO interrupt source), and carry peripheral
+  lines through the GPIO matrix, which indexes `FUNCn_OUT_SEL_CFG` and
+  `FUNCn_IN_SEL_CFG`'s pad field by the pad number itself. Classic
+  GPIO34..39 stay input-only: `ENABLE1` stores but never drives them, and
+  they feed matrix inputs. The S3 GP-SPI3 (`SPI3_*` 66/67/68/71) and I2C1
+  (`I2CEXT1_*` 91/92) and the classic I2C1 (`I2CEXT1_*` 95/96) now run the
+  bit-level net engines S3 SPI2 / I2C0 and classic I2C0 host. The classic
+  I2C1 is on the bus at 0x3FF6_7000 (interrupt source 50, AHB TX FIFO alias
+  0x6002_701C); before, nothing answered there. Tested against an STM32G071
+  both ways round on bank-1 pads (S3 SPI3 on GPIO34..37, I2C1 on GPIO41/42;
+  classic I2C1 on GPIO32/33, VSPI / HSPI with GPIO34..36 taking lines in),
+  and plain GPIO between a classic ESP32 and an ESP32-S3 on GPIO32/39 and
+  GPIO40/41 (`examples/gpio-net-buses`, `docs/howto/gpio-nets.md`).
+- OV3660 camera on the ESP32-S3 (`type: ov3660`, `docs/boards/esp32s3.md`
+  "Camera (DVP)"). The part answers SCCB at 0x3C (16-bit register addresses,
+  chip ID 0x3660, software reset) and streams frames over DVP into LCD_CAM's
+  camera slave, which now feeds GDMA's IN channel (`PERI_SEL = 5`) with the
+  VSYNC / `IN_SUC_EOF` sequence `esp32-camera`'s `cam_hal` counts. Frames
+  follow the window and format the driver programs (RGB565, YUV422, Y8);
+  the scene is synthetic and stimulus-driven (`pattern`, `brightness`,
+  `motion`). Espressif's `take_picture` example runs unmodified apart from
+  board pins. JPEG is not modelled (no frames). Under the event scheduler
+  the camera's GDMA pump runs from its own wake-ups rather than the
+  per-boundary bus-tick pass, so the CPU keeps batching while frames flow
+  (camera-to-ST7789 preview: ~3x faster per frame). Tested in
+  `tests/esp32s3_camera_dvp.rs`.
+- ESP32-S3 I²C slaves reach the GPIO matrix: a part attached with a pad
+  `route:` can ask for twins on the chip's other I²C controllers, which claim
+  its address only while the firmware routes that controller's SCL/SDA to the
+  part's pads. The `ov3660` uses it, so a camera the canvas names on `i2c0`
+  answers `esp32-camera`'s I2C1 as on silicon.
+
+- Hardware chip select on `gpio_net`s for more parts. The STM32L476 SPI pad
+  table routes NSS (SPI1 PA4/PA15/PE12 and SPI2 PB9/PB12/PD0 on AF5, SPI3
+  PA4/PA15 on AF6), and the STM32G474, STM32WB55 and STM32L073 get their own
+  SPI tables with NSS (`pad_map: stm32g4` / `stm32wb` / `stm32l0`, read off
+  ST's open pin data): until now the G4 and WB used the L4 table (whose
+  PE12-PE15/AF5 rows are SPI4 on a G4) and the L073 the F4 AF5 one (its SPI1
+  is on AF0). A FIFO master with `CR2.SSOE=1` drives NSS (with `NSSP`
+  pulses) and a slave with `SSM=0` takes it from its pad. The nRF52840 gains
+  SPIM3 at 0x4002F000 (`spi3`; the inert ACL stub that sat there moves to the
+  reserved 0x4002E000), and SPIM3 on a net drives its own chip select and
+  D/CX: `PSEL.CSN`, `CSNPOL`, `IFTIMING.CSNDUR` (CSN-to-SCK, SCK-to-CSN and
+  CSN-high times) and `PSELDCX`/`DCXCNT`. The nRF52 SPIM register map now
+  decodes `IFTIMING.RXDELAY`/`CSNDUR`, `CSNPOL`, `PSELDCX` and `DCXCNT`
+  (0x560-0x570), and `PSEL.CSN`/`PSELDCX` reset disconnected, as the SVD
+  says. Tested in `examples/gpio-net-buses` (`env-spi-l4-nss.yaml` on an L476
+  and a G474 pair, `env-spi-nrf52-spim3.yaml` against a G071 on hardware
+  NSS), each re-run with the nodes swapped and with 37 ns rounds.
+- ESP32-S3 and classic ESP32 SPI and I²C on `gpio_net`s, bit by bit at the
+  pads (`docs/howto/gpio-nets.md`, "Buses over nets";
+  `examples/gpio-net-buses`, `tests/world_gpio_net_buses.rs`):
+  - The S3 and classic GPIO matrices hand net levels to peripheral inputs
+    through `FUNCn_IN_SEL_CFG` (S3 at 0x154, classic `GPIO_FUNCn_IN_SEL_CFG`
+    at 0x130, now stored and masked to its 8 writable bits; pad [5:0], `SEL`
+    bit 7 on both), and a pad routed out drives what the peripheral's line
+    drives (released, input, open drain or push-pull), as the C3/C6 do.
+  - The S3 GP-SPI2 and I2C0 run the chip-neutral `esp_gpspi_net` and
+    `esp_i2c_net` engines (S3 signals `FSPICLK/D/Q/CS0` 101/103/102/110,
+    `I2CEXT0_SCL/SDA` 89/90; I²C timing from `CLK_CONF` at a 240 MHz core).
+  - The classic VSPI and HSPI answer `esp_gpspi_net` through a translated
+    view of the classic SPI register file (`SPI_CMD.USR` 18, `SPI_USER`,
+    `SPI_CTRL2`, `SPI_MOSI/MISO_DLEN`, `SPI_PIN`, `SPI_SLAVE.SLAVE_MODE` /
+    `TRANS_DONE`, `SPI_SLV_RD_BIT`, `W0` at 0x80). HSPI (`spi2`,
+    0x3FF6_4000) is now on the classic bus, bound to its own matrix signals
+    (8..11) beside VSPI's (63..68); both SPI cells carry MISO.
+  - The classic I2C0 runs `esp_i2c_net` with the classic opcodes and APB
+    timing; with no `SCL_STRETCH_CONF` its target sends 0xFF from an empty
+    TX FIFO rather than stretching.
+  - Test firmware is hand-written Xtensa assembly (`src/esp32x_*.S`): LLVM 18
+    assembles Xtensa but neither compiles C for it nor links it, so
+    `build.sh` assembles with `llvm-mc` and `src/xtensa_elf.py` places the
+    relocation-free object at IRAM. Tested against an STM32G071 both ways
+    round on each part, including an address NACK, a slow G071 target
+    holding either controller and a slow S3 target stretching the G071's
+    clock, each re-run with the nodes swapped and with 37 ns rounds.
+- SPI DMA, STM32 and ESP32-C3/C6, including over `gpio_net`s
+  (`docs/howto/gpio-nets.md`, "SPI DMA"). The STM32 classic and FIFO SPI raise
+  DMA requests from `CR2.TXDMAEN` (TXE; the FIFO port while its TX FIFO is at
+  or below half full) and `RXDMAEN` (RXNE, following `FRXTH`), each held until
+  the `DR` access that answers it; `LDMA_TX` sends one frame from the last
+  packed half-word item and `LDMA_RX` requests the odd last byte below the
+  16-bit threshold, both from the DMA's end-of-transfer notice
+  (`DmaRequest::remaining`, `Peripheral::dma_access_notice`). Requests reach
+  the chip's DMA through its own routing registers
+  (`Peripheral::dma_route_request`): F1 fixed channels and L4 `CSELR`
+  (`dma`, `config.requests`), F4 `SxCR.CHSEL` (`stm32f4_dma`), and the new
+  G0 DMAMUX model (`dmamux`, `DMAMUX_CxCR.DMAREQ_ID`, 0x4002_0800 on the
+  G071). Routes are declared for the G071, F103, F401, F407 and L476. The
+  ESP32-C3 GDMA is a behavioral model now (`esp32c3_gdma`, was a declarative
+  register file): descriptor lists in RAM, channels bound to the GP-SPI2
+  (`PERI_SEL` = 0) feed `SPI_DMA_CONF.DMA_TX_ENA` / `DMA_RX_ENA`
+  transactions, `MEM_TRANS_EN` copies memory to memory, `INT_RAW` / `ST` /
+  `ENA` / `CLR` per channel on matrix sources 44..46. The ESP32-C6 GDMA
+  couples its SPI2 channels the same way. A DMA transaction completes
+  (`USR` clears, `SPI_TRANS_DONE`) once the IN link holds the data. Tested
+  end to end over nets (`examples/gpio-net-buses`, `env-spi-dma.yaml`,
+  `env-spi-esp32c3-dma*.yaml`, clang-built firmware): a G071 DMA master and
+  a G071 DMA slave, and an ESP32-C3 / C6 GDMA master and slave against a
+  G071 DMA slave and master, each with nodes swapped and 37 ns rounds.
+- Classic ESP32 LEDC drives its pads. Each of the 16 channels generates its
+  PWM waveform (TRM §14.2: REF_TICK / APB / RTC8M source, Q8 `DIV_NUM`,
+  `2^DUTY_RES` period, `HPOINT`/`DUTY`, duty latched at the next overflow,
+  `IDLE_LV` when `SIG_OUT_EN` is clear) on a 16-line pad wire, and the classic
+  GPIO matrix routes it on signals 71..86 (`LEDC_HS_SIG_OUT0..7`,
+  `LEDC_LS_SIG_OUT0..7`). A pad attached with `ledcAttachPin` now shows real
+  edges to `read_gpio_pad`, the logic analyzer and `--watch-gpio`; before, it
+  read 0 edges. `HSTIMERx_CONF.DIV_NUM` is decoded as the 18-bit field it is
+  (was 13 bits), and `channel_freq_hz` honours `TICK_SEL` (REF_TICK when 0).
+- nRF52 SPI and I²C over `gpio_net`s (`docs/howto/gpio-nets.md`, "Buses
+  over nets"): the nRF52840 SPIM, SPIS, TWIM and TWIS talk to other chips
+  bit by bit at the pads their `PSEL` registers name, with EasyDMA buffers
+  (`TXD`/`RXD` `PTR`/`MAXCNT`/`AMOUNT`) and their events and interrupts
+  (`STARTED`/`END`/`ENDRX`/`ENDTX`/`STOPPED`; SPIS semaphore `ACQUIRED`,
+  `SEMSTAT`, `DEF`/`ORC`, `OVERREAD`/`OVERFLOW`; TWIM `LASTTX`/`LASTRX`
+  shortcuts, `SUSPEND`/`RESUME`, `ERROR` with `ANACK`/`DNACK`; TWIS
+  `WRITE`/`READ`, `PREPARERX`/`PREPARETX` with clock stretching until
+  firmware prepares, `MATCH`). The serial instance at 0x40003000 gains its
+  SPIS (`ENABLE = 2`) and TWIS (`ENABLE = 9`) personalities, and the window
+  is one register file: what firmware programs before `ENABLE` reaches every
+  personality (a SPIM whose `TXD.MAXCNT` was written while disabled used to
+  clock nothing). A new chip-neutral SPI wire engine
+  (`peripherals::spi_bitbus`) serves the SPIM and SPIS; the TWIM and TWIS use
+  `peripherals::i2c_bitbus`. Tested against an STM32G071 both ways round on
+  each bus (`examples/gpio-net-buses`, `env-spi-nrf52*.yaml`,
+  `env-i2c-nrf52*.yaml`, clang-built firmware), including an address NACK,
+  a slow G071 target stretching the TWIM's clock and a slow TWIS stretching
+  the G071's, each re-run with the nodes swapped and with 37 ns rounds.
+- ESP32-C3 and ESP32-C6 GP-SPI2 and I2C0 on `gpio_net`s, bit by bit at the
+  pads (`docs/howto/gpio-nets.md`, "Buses over nets";
+  `examples/gpio-net-buses`, `tests/world_gpio_net_buses.rs`):
+  - The C3/C6 GPIO matrix hands net levels to peripheral inputs through
+    `FUNCn_IN_SEL_CFG` (new shared `esp_gpio_net::MatrixInputs`) and a pad
+    routed out through `FUNCn_OUT_SEL_CFG` drives what the peripheral's line
+    drives (released, input, open drain or push-pull). A line becomes a net
+    line when firmware routes it to a net pad. The C6 GPIO now uses its own
+    matrix numbers (`I2CEXT0_SCL/SDA` 45/46, `IN_SEL.SEL` at bit 7) instead
+    of the C3's.
+  - GP-SPI2 as a bit-level master (`SPI_CMD.USR` at the `SPI_CLOCK` rate,
+    CS0 with setup/hold, command/address/dummy phases, full and half duplex,
+    MISO sampled into `W0..`, `TRANS_DONE`) and CPU-controlled slave (answers
+    from `W0..W15` while CS0 is low, stores what it sampled and
+    `SLAVE1.DATA_BITLEN` when CS0 rises), in the new chip-neutral
+    `peripherals::esp_gpspi_net`.
+  - I2C0 as a bit-level command-list master (`RSTART`/`WRITE`/`READ`/`STOP`/
+    `END`, ACK checking with `NACK`, `command_done`, `SR.RESP_REC`) and slave
+    (7-bit `SLAVE_ADDR`, RX/TX FIFOs, SCL stretching with `SLAVE_STRETCH`
+    until `SLAVE_SCL_STRETCH_CLR`), on the shared `i2c_bitbus` wire engine,
+    in the new chip-neutral `peripherals::esp_i2c_net`.
+  - Tested against an STM32G071 both ways round on the C3 and the C6
+    (register-level firmware), including a NACK and slow targets that
+    stretch SCL on either side, and with esp-hal 1.1's blocking SPI and I2C
+    master drivers on the C3 (`examples/gpio-net-buses/esp32c3-esp-hal`).
 - ESP32-C3 debug trigger module: `tselect` / `tdata1` / `tdata2` / `tdata3` /
   `tinfo` / `tcontrol` (CSRs 0x7A0-0x7A5) with 8 `mcontrol` triggers, exact
   and NAPOT address match on load / store / execute, and action 0 (breakpoint
@@ -49,7 +424,103 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Every new exchange is checked for the same results and wire history
     with the nodes swapped and with 37 ns rounds.
 
+### Changed
+- Firmware coverage paths: LCOV `SF:`, Cobertura `filename` and the JSON's
+  new `path` field carry the source's directory (`src/main.c`, not
+  `main.c`), relative to the build directory most of the line table comes
+  from; files of other compilation units (a registry crate, a vendor SDK)
+  keep their absolute path. Update `genhtml --prefix` / editor path
+  mappings that relied on bare names. The JSON's `file` keeps the bare name.
+- The coverage JSON's `branches` lists every conditional branch in the ELF
+  (unreached ones with `reached: false`), so UIs see more entries and a
+  lower, honest branch percentage.
+- `Session::restore` gives a coverage report equal to a straight run to the
+  snapshot; the browser playground keeps accumulating across a rewind, as
+  before.
+
 ### Fixed
+- Firmware coverage branch numbers were wrong on every ISA but Thumb: the
+  fall-through address came from a Thumb-only instruction-length rule, so a
+  RISC-V run reported ~200 "branch sites" for firmware with 19. The observer
+  now records `(from, to)` step counts with no ISA assumption.
+- Branch coverage counted unconditional jumps, calls and returns as
+  half-covered branches, and dropped branches the run never reached.
+- Coverage source files are keyed by their path with directory
+  (`src/main.c`), not the bare name: two `main.c` files no longer merge, and
+  branch data is no longer lost when the compiler records the source with a
+  directory (a clang build of `src/brake_ecu.c` produced LCOV with no `BRDA`
+  at all).
+- `Session::restore` replayed the run into the coverage observer on top of
+  the counts it already had. The playground's restore no longer records the
+  rewind as a jump, and on dual-core chips the two cores' instructions no
+  longer chain into made-up jumps (new `SimulationObserver::on_core_switch`).
+- Line-table sequences of functions the linker discarded (relocated to
+  address 0) no longer count as statements or claim the live code that sits
+  at low addresses; a sequence starting where another ends is found.
+- Plain C function names were passed through the C++ demangler (`f` became
+  `float`, `d` became `double`).
+- ESP32-S3 LCD_CAM `CAM_CTRL1`: `CAM_START` is bit 29 and `CAM_RESET` bit 30
+  (with `CAM_AFIFO_RESET` at 31), per the SVD. They were modelled swapped, so
+  the camera driver's start was read as a reset pulse and capture never ran.
+- GDMA IN descriptors are filled regardless of their owner bit when
+  `IN_CHECK_OWNER` is clear, as on silicon, so a circular RX ring keeps
+  filling after its first lap (used by the camera path).
+- ESP32-S3 / C3 GP-SPI logic-analyzer narration no longer re-narrates a held
+  burst on every cycle while it cannot fit (`LevelsOnly`); it waits for the
+  cycles it was short. A large `SPI.writeBytes` (a camera frame to a
+  display at 40 MHz) made the run quadratic in the burst length. A wire
+  nobody records (no logic-capture tap, no `gpio_net`) now narrates only a
+  burst's last byte, which leaves the lines exactly where the whole burst
+  would; a tap or a net still gets every edge.
+- STM32 DMA peripheral transfers move data. The channel (`dma`) and stream
+  (`stm32f4_dma`) models emitted a memory-to-peripheral item as a write of 0
+  and a peripheral-to-memory item as a read whose value was dropped; every
+  item is now a copy at its `PSIZE` / `MSIZE` widths (one 16-bit access for a
+  half-word item, so a FIFO SPI `DR` read pops two bytes). A peripheral
+  channel no longer moves an item when it is enabled, only on its
+  peripheral's request; the channel model's `PINC` / `MINC` strides decode
+  `PSIZE` / `MSIZE` from the right bits; an F4 stream clears `SxCR.EN` at the
+  end of a non-circular transfer; and a word (or half-word) store to a DMA
+  register is one write, so a `CCR` with `EN` and `MEM2MEM` written together
+  starts as memory-to-memory.
+- A peripheral answering a `gpio_net` edge on a timed core (the nRF52's
+  Cortex-M4) stamped its answer with the bus cycle, which lags the core
+  between peripheral ticks: the answer's time then depended on the world's
+  round size. The world brings the bus up to the core's cycle before it
+  applies an edge.
+- STM32G071 and STM32F767 SPI are the FIFO-type IP (RM0444 §35, RM0410
+  §35: `CR2.DS` 4-16 bits, `FRXTH`, 32-bit RX/TX FIFOs, `FRLVL`/`FTLVL`,
+  `NSSP`, `LDMA_TX`/`LDMA_RX`), not the classic F1/F4 one: both now load the
+  `stm32_fifo` profile (`CR2` resets to 0x0700). The FIFO profile itself
+  (G0/L4/G4/WB/F7) now models the FIFOs instead of one data register: frames
+  queue in a 4-byte RX FIFO (one byte up to 8 bits, two above) and pop by
+  `DR` access size (an 8-bit read one byte, a 16-bit read two — two packed
+  frames at `DS` ≤ 8); RXNE follows the `FRXTH` byte threshold; TXE means the
+  TX FIFO is at most half full and a write to a full one is lost (byte
+  accounting: four 8-bit or two 16-bit frames); `SR.FRLVL`/`FTLVL` read the
+  levels; a frame into a full RX FIFO sets OVR, cleared by a `DR` read then
+  an `SR` read; a master with `NSSP=1`, `SSOE=1`, `CPHA=0` pulses NSS high
+  for one SCK period between back-to-back frames (and the next frame waits
+  for it). The classic F1/F4/L0 profile is unchanged. The F767 keeps its F4
+  AF5 pinout through the new `pad_map: stm32f4`. On a `gpio_net` the FIFO
+  slave queues its answers in the TX FIFO and its received frames in the RX
+  FIFO. `examples/gpio-net-buses` G071 firmware now sets `FRXTH` (it relied
+  on the classic RXNE-per-frame behaviour a real G0 does not have) and has
+  4-, 12- and 16-bit `CR2.DS` variants and a no-`FRXTH` master that stalls,
+  as on silicon; `spi_byte_level_golden`'s FIFO case was re-recorded for its
+  `DR` reads only (a 16-bit read at `DS` = 8 now returns both packed frames;
+  the wire is byte-identical).
+- STM32F4 SPI hardware NSS on a `gpio_net`: the F4 AF5 table routes
+  SPI1_NSS (PA4, PA15) and SPI2_NSS (PB9, PB12), so a slave with `SSM=0` is
+  selected by its NSS pad and a master with `SSOE=1` drives it, as on the
+  G071 (`examples/gpio-net-buses/env-spi16-nss.yaml`, tested on an F401
+  pair).
+- ESP32-C3 CPU snapshots carry the debug trigger module (`tselect`, each
+  trigger's `tdata1`/`tdata2` including its `hit` bit, `tcontrol`), so a
+  resumed machine keeps its breakpoints and watchpoints — both the JSON
+  `RiscVCpuSnapshot` (optional `triggers` field) and the bincode runtime
+  snapshot (`RiscVRuntimeSnapshotV2`, read newest-layout first). Snapshots
+  written before still load, with the trigger module at reset.
 - STM32 SPI slave on a net: a frame that starts with nothing written to
   `DR` shifts out the shift register (the previous frame received) instead
   of zeros, and is counted (`Spi::net_slave_underruns`) and logged once;

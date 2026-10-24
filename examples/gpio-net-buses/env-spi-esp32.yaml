@@ -1,0 +1,46 @@
+# An classic ESP32 VSPI (SPI3) master (register level, src/esp32x_spi_master.S) and
+# an STM32G071 SPI1 slave, mode 0. The classic ESP32's pads reach the controller
+# through its GPIO matrix (FUNCn_OUT_SEL_CFG / FUNCn_IN_SEL_CFG); CS0 frames
+# the four bytes.
+schema_version: "1.0"
+name: gpio-net-spi-esp32
+nodes:
+  - id: esp
+    system: "../../configs/systems/esp32-wroom-32.yaml"
+    firmware: "firmware/esp32-spi-master.elf"
+  - id: b
+    system: "system.yaml"
+    firmware: "firmware/spi-slave.elf"
+interconnects:
+  - type: gpio_net
+    nodes: [esp, b]
+    config:
+      name: cs
+      pull: up
+      members:
+        - { node: esp, peripheral: gpio, pin: 5 }   # VSPICS0
+        - { node: b, peripheral: gpioa, pin: 4 }    # SPI1_NSS
+  - type: gpio_net
+    nodes: [esp, b]
+    config:
+      name: sck
+      pull: down
+      members:
+        - { node: esp, peripheral: gpio, pin: 18 }   # VSPICLK
+        - { node: b, peripheral: gpioa, pin: 5 }
+  - type: gpio_net
+    nodes: [esp, b]
+    config:
+      name: miso
+      pull: down
+      members:
+        - { node: esp, peripheral: gpio, pin: 19 }   # VSPIQ
+        - { node: b, peripheral: gpioa, pin: 6 }
+  - type: gpio_net
+    nodes: [esp, b]
+    config:
+      name: mosi
+      pull: down
+      members:
+        - { node: esp, peripheral: gpio, pin: 23 }   # VSPID
+        - { node: b, peripheral: gpioa, pin: 7 }

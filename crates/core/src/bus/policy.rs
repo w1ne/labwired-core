@@ -176,10 +176,11 @@ impl SystemBus {
     /// this — a contact level changes only when something drives it, so it is
     /// applied at the stimulus point (`sync_button_inputs`) and a button alone
     /// never costs a bus its fast path.
-    #[cfg(feature = "event-scheduler")]
     #[inline]
-    pub(crate) fn per_cycle_tick_is_trivial(&self) -> bool {
-        self.legacy_walk_disabled
+    pub fn per_cycle_tick_is_trivial(&self) -> bool {
+        // Without the scheduler every model is on the per-cycle walk.
+        cfg!(feature = "event-scheduler")
+            && self.legacy_walk_disabled
             && self.bus_tick_indices.is_empty()
             && !self.nordic_gpio_service
             && self
@@ -209,7 +210,6 @@ impl SystemBus {
     ///
     /// Vacuously true on an empty list, which is what preserves the fast path
     /// for the overwhelmingly common bus that hosts no such device at all.
-    #[cfg(feature = "event-scheduler")]
     #[inline]
     fn no_gpio_device_needs_service(&self) -> bool {
         self.gpio_devices

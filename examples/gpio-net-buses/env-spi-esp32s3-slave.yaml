@@ -1,0 +1,45 @@
+# An STM32G071 SPI1 master (mode 0, CS on a GPIO) and an ESP32-S3 GP-SPI2
+# slave (register level, src/esp32x_spi_slave.S) answering from its W
+# buffer. SCK, MOSI and CS0 reach it through its GPIO matrix inputs.
+schema_version: "1.0"
+name: gpio-net-spi-esp32s3-slave
+nodes:
+  - id: esp
+    system: "../../configs/systems/esp32s3.yaml"
+    firmware: "firmware/esp32s3-spi-slave.elf"
+  - id: b
+    system: "system.yaml"
+    firmware: "firmware/spi-master.elf"
+interconnects:
+  - type: gpio_net
+    nodes: [esp, b]
+    config:
+      name: cs
+      pull: up
+      members:
+        - { node: esp, peripheral: gpio, pin: 10 }   # FSPICS0
+        - { node: b, peripheral: gpioa, pin: 4 }    # GPIO chip select
+  - type: gpio_net
+    nodes: [esp, b]
+    config:
+      name: sck
+      pull: down
+      members:
+        - { node: esp, peripheral: gpio, pin: 12 }   # FSPICLK
+        - { node: b, peripheral: gpioa, pin: 5 }
+  - type: gpio_net
+    nodes: [esp, b]
+    config:
+      name: miso
+      pull: down
+      members:
+        - { node: esp, peripheral: gpio, pin: 13 }   # FSPIQ (slave output)
+        - { node: b, peripheral: gpioa, pin: 6 }
+  - type: gpio_net
+    nodes: [esp, b]
+    config:
+      name: mosi
+      pull: down
+      members:
+        - { node: esp, peripheral: gpio, pin: 11 }   # FSPID
+        - { node: b, peripheral: gpioa, pin: 7 }

@@ -1,0 +1,23 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: mspsim-msp430f2617
+arch: unknown
+flash:
+  base: 12544
+  size: 92KB
+ram:
+  base: 4352
+  size: 8KB
+peripherals: []
+provenance:
+  source: mspsim
+  repo: https://github.com/contiki-ng/mspsim
+  commit: c8169c98ad6696b0e2ad2e0f926a371499dacd8f
+  path: se/sics/mspsim/config/MSP430f2617Config.java
+  kind: chip-config
+  license: BSD-3-Clause
+  retrieved: '2026-10-18'

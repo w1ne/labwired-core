@@ -35,13 +35,11 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         // @0x554, FUNC0_IN_SEL_CFG @0x154 — cross-checked against esp-idf v5.3
         // `soc/esp32c6/include/soc/gpio_reg.h`). It is sized for the C3's
         // 26-pin block, so C6 GPIO26..GPIO30 are not modelled. The C6's
-        // I2C-matrix signal indices differ from the C3's (I2CEXT0_SCL is 45 vs
-        // 53), so the C3 I2C pad wiring does not apply — UART0/UART1 TX indices
-        // (6/9) happen to match and do.
+        // matrix numbering is its own (I2CEXT0_SCL/SDA 45/46 against the C3's
+        // 53/54, `FUNCn_IN_SEL_CFG.SEL` at bit 7 against bit 6), so the model
+        // is built with the C6 layout; the FSPI and UART TX numbers match.
         // Its GPIO interrupt is matrix source 30 (esp32c6.svd), not the C3's 16.
-        "esp32c6_gpio" => {
-            Box::new(crate::peripherals::esp32c3::gpio::Esp32c3Gpio::with_intr_source(30))
-        }
+        "esp32c6_gpio" => Box::new(crate::peripherals::esp32c3::gpio::Esp32c3Gpio::for_esp32c6()),
         // PCR — the C6's clock/reset block. Register-backed (full SVD map) and
         // the clock controller the chip yaml's `clock:` gates resolve through
         // (`Peripheral::clock_gate_reg_offset`); see super::pcr for exactly

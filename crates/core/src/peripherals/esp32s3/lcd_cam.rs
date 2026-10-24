@@ -22,10 +22,29 @@
 //!   command/dummy/dout phases finish). Firmware that polls `LCD_USER.LCD_START`
 //!   for 0, polls `LC_DMA_INT_RAW`, or waits on the IRQ all make progress
 //!   instead of hanging.
-//! * **CAM transaction**: setting `CAM_CTRL1.CAM_START` (bit 30) starts a
-//!   frame capture. On a later tick we latch `CAM_VSYNC` (frame boundary) into
-//!   the raw-interrupt block. `CAM_START` is a level/run bit on silicon and is
-//!   left asserted (the driver clears it explicitly to stop), matching HW.
+//! * **CAM transaction, no sensor attached**: setting `CAM_CTRL1.CAM_START`
+//!   (bit 29) latches `CAM_VSYNC` on a later tick, so firmware waiting on the
+//!   first frame boundary makes progress. `CAM_START` is a level/run bit on
+//!   silicon and is left asserted (the driver clears it explicitly to stop).
+//! * **DVP capture, sensor attached** (an `ov3660` part binds itself through
+//!   [`Esp32s3LcdCam::attach_camera`]): the sensor free-runs a frame stream
+//!   once someone listens (the CAM_VSYNC interrupt is enabled or GDMA arms a
+//!   receive chain). Each frame is VSYNC → back porch → the frame's bytes at
+//!   one byte per PCLK → blanking → next VSYNC. VSYNC latches `CAM_VSYNC`
+//!   whether or not capture is running, as the pin does. While `CAM_START` is
+//!   set the bytes go to GDMA's IN channel (`PERI_SEL == 5`) via
+//!   [`Self::cam_rx_pull`], and `in_suc_eof` is generated every
+//!   `CAM_REC_DATA_BYTELEN + 1` bytes — or at VSYNC with `CAM_VS_EOF_EN` —
+//!   which is exactly the event sequence `esp32-camera`'s `cam_hal` state
+//!   machine counts (VSYNC, N × EOF, VSYNC). Bytes that arrive while
+//!   `CAM_START` is clear are dropped, as the real FIFO drops them.
+//!
+//!   Two deliberate guards keep the sequence intact when the simulator
+//!   compresses time (idle fast-forward can jump many frames' worth of
+//!   cycles): the next VSYNC is held until a frame being captured has been
+//!   fully handed to GDMA, and GDMA moves no bytes past an `in_suc_eof` the
+//!   CPU has not acknowledged yet (see the GDMA camera pump). On silicon the
+//!   PCLK is slow enough that neither ever binds.
 //! * **Interrupt block** (`LC_DMA_INT_*`): `INT_ST = INT_RAW & INT_ENA`;
 //!   `INT_CLR` is write-1-to-clear over the latched raw bits; the matrix source
 //!   (24) is emitted from `tick` while `INT_ST != 0` (level-triggered, matching
@@ -53,7 +72,7 @@
 //! |-------:|------------------|----------------------------------------------------|
 //! | 0x00   | LCD_CLOCK        | LCD clock-source select + dividers                 |
 //! | 0x04   | CAM_CTRL         | CAM clock / sampling-edge / mode config            |
-//! | 0x08   | CAM_CTRL1        | CAM_START=b30, CAM_RESET=b29, frame/line config    |
+//! | 0x08   | CAM_CTRL1        | CAM_START=b29, CAM_RESET=b30, AFIFO_RESET=b31, bytelen |
 //! | 0x0C   | CAM_RGB_YUV      | CAM RGB↔YUV color-conversion config                |
 //! | 0x10   | LCD_RGB_YUV      | LCD RGB↔YUV color-conversion config                |
 //! | 0x14   | LCD_USER         | LCD_START=b27, LCD_CMD=b26, LCD_DUMMY=b25, LCD_DOUT=b24, resets |
@@ -166,13 +185,47 @@ const LCD_UPDATE_BIT: u32 = 1 << 20;
 /// it stays asserted until the transaction completes on a later tick.
 const LCD_USER_PULSE_BITS: u32 = LCD_RESET_BIT | LCD_UPDATE_BIT;
 
+// ── CAM_CTRL bits ──
+/// CAM_VS_EOF_EN — 1: CAM_VSYNC generates the GDMA `in_suc_eof`; 0: it is
+/// generated every `CAM_REC_DATA_BYTELEN + 1` bytes (bit 8).
+const CAM_VS_EOF_EN_BIT: u32 = 1 << 8;
+
 // ── CAM_CTRL1 bits ──
-/// CAM_RESET — write-pulse reset of the CAM module. Self-clears.
-const CAM_RESET_BIT: u32 = 1 << 29;
+//
+// Per the ESP32-S3 SVD (`CAM_CTRL1`): REC_DATA_BYTELEN[15:0],
+// LINE_INT_NUM[21:16], …, VH_DE_MODE_EN[28], **START[29], RESET[30],
+// AFIFO_RESET[31]**. START and RESET used to be modelled swapped (START=30,
+// RESET=29): the driver's `cam_start = 1` then landed on the "reset pulse",
+// was stripped, and capture never ran, while its `cam_reset` pulse started a
+// frame nobody asked for.
+/// CAM_REC_DATA_BYTELEN — bytes per `in_suc_eof`, minus one (bits 15:0).
+const CAM_REC_DATA_BYTELEN_MASK: u32 = 0xFFFF;
 /// CAM_START — start camera capture (run/level bit; driver clears to stop).
-const CAM_START_BIT: u32 = 1 << 30;
+const CAM_START_BIT: u32 = 1 << 29;
+/// CAM_RESET — write-pulse reset of the CAM module. Self-clears.
+const CAM_RESET_BIT: u32 = 1 << 30;
+/// CAM_AFIFO_RESET — write-pulse reset of the CAM async FIFO. Self-clears.
+const CAM_AFIFO_RESET_BIT: u32 = 1 << 31;
 /// CAM_CTRL1 write-pulse bits that self-clear immediately.
-const CAM_CTRL1_PULSE_BITS: u32 = CAM_RESET_BIT;
+const CAM_CTRL1_PULSE_BITS: u32 = CAM_RESET_BIT | CAM_AFIFO_RESET_BIT;
+
+// ── Camera stream timing ──
+//
+// The sensor's PCLK is not derivable from anything this model sees (it is the
+// sensor's PLL output, set over SCCB), so the stream uses a fixed, plausible
+// DVP rate: one byte per PCLK at 20 MHz, the XCLK `esp32-camera` configures.
+// What matters for firmware is the ORDER of events and that each gap is long
+// enough for the driver's ISR + task to run, as on silicon.
+/// DVP byte rate (one byte per PCLK).
+const CAM_PCLK_HZ: u64 = 20_000_000;
+/// VSYNC → first data byte (vertical back porch), in microseconds.
+const CAM_PORCH_US: u64 = 200;
+/// Last data byte → next VSYNC (vertical blanking), in microseconds.
+const CAM_VBLANK_US: u64 = 1_000;
+/// Retry interval while the sensor produces no frames (powered down, JPEG).
+const CAM_IDLE_RETRY_US: u64 = 1_000;
+/// Event token for the camera stream's own wake-ups.
+const CAM_WAKE_TOKEN: u32 = 2;
 
 // ── LC_DMA_INT_* bit positions (RAW/ST/ENA/CLR share the layout) ──
 //
@@ -264,10 +317,64 @@ pub struct Esp32s3LcdCam {
     /// nothing else about what is on the far end.
     panels: Vec<std::sync::Arc<dyn crate::peripherals::components::I80Panel>>,
 
+    /// DVP sensor on the CAM half. Bound by a camera kit (`ov3660`); `None`
+    /// keeps the no-sensor behaviour (one VSYNC per CAM_START).
+    ///
+    /// `dyn DvpSensor` for the reason `panels` is `dyn I80Panel`: the
+    /// controller needs one frame of D[7:0] and must not name a part.
+    camera: Option<std::sync::Arc<dyn crate::peripherals::components::DvpSensor>>,
+    /// The sensor's frame stream. Meaningful only with `camera` set.
+    cam: CamStream,
+    /// GDMA has an IN (receive) chain started for LCD_CAM. Set and cleared by
+    /// the GDMA camera pump.
+    cam_dma_armed: bool,
+    /// CPU clock, for converting the stream's microsecond timings to cycles.
+    cpu_hz: u64,
+
     /// Bus-published cycle clock (walk-free deferred work).
     clock: Option<CycleClock>,
     /// Event armed for one-tick deferred work.
     scheduled: bool,
+    /// Camera-stream wake-up armed with the scheduler.
+    cam_scheduled: bool,
+}
+
+/// The attached sensor's free-running frame stream, as the CAM pins see it.
+#[derive(Debug, Default)]
+struct CamStream {
+    /// The stream has started (a listener appeared). Until then no frame is
+    /// rendered: a sensor still at its power-on window would otherwise be
+    /// asked for multi-megabyte frames nobody will read.
+    live: bool,
+    /// The bytes of the frame currently on the pins (empty when none).
+    frame: Vec<u8>,
+    /// Cycle at which byte 0 of `frame` is on the pins.
+    data_start: u64,
+    /// Cycle of the next VSYNC.
+    next_vsync: u64,
+    /// First byte of `frame` not yet handed to GDMA or dropped.
+    cursor: usize,
+    /// Bytes handed to GDMA since the last `in_suc_eof` (or capture start).
+    since_eof: u32,
+    /// Bytes of the current frame handed to GDMA.
+    captured: usize,
+    /// A VSYNC-generated `in_suc_eof` (`CAM_VS_EOF_EN`) waiting for the pump.
+    vs_eof_pending: bool,
+    /// Frames whose VSYNC has been signalled.
+    frames: u64,
+}
+
+/// One burst handed from the CAM half to GDMA by [`Esp32s3LcdCam::cam_rx_pull`].
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct CamRx {
+    /// Captured bytes, in wire order.
+    pub bytes: Vec<u8>,
+    /// The last byte of `bytes` (or, with none, the frame end) completes an
+    /// `in_suc_eof` block: GDMA latches IN_SUC_EOF after writing them.
+    pub eof: bool,
+    /// Cycle at which pulling again is worth it. `None` when nothing is
+    /// coming (no sensor, capture stopped).
+    pub next_ready: Option<u64>,
 }
 
 impl Esp32s3LcdCam {
@@ -301,8 +408,13 @@ impl Esp32s3LcdCam {
             dma_inflight: false,
             dma_half_word: None,
             panels: Vec::new(),
+            camera: None,
+            cam: CamStream::default(),
+            cam_dma_armed: false,
+            cpu_hz: 240_000_000,
             clock: None,
             scheduled: false,
+            cam_scheduled: false,
         }
     }
 
@@ -322,6 +434,26 @@ impl Esp32s3LcdCam {
     /// Number of panels bound to the i80 pixel path (attach evidence).
     pub fn panel_count(&self) -> usize {
         self.panels.len()
+    }
+
+    /// Bind a DVP camera sensor to the CAM half. Called by a camera kit at
+    /// manifest-attach time. One sensor per controller: the S3 has one CAM
+    /// port, so a second call replaces the first.
+    pub fn attach_camera(
+        &mut self,
+        sensor: std::sync::Arc<dyn crate::peripherals::components::DvpSensor>,
+    ) {
+        self.camera = Some(sensor);
+    }
+
+    /// True when a sensor is bound to the CAM half (attach evidence).
+    pub fn has_camera(&self) -> bool {
+        self.camera.is_some()
+    }
+
+    /// Frames whose VSYNC the attached sensor has signalled.
+    pub fn cam_frames(&self) -> u64 {
+        self.cam.frames
     }
 }
 
@@ -502,19 +634,194 @@ impl Esp32s3LcdCam {
         self.dma_half_word = None;
     }
 
-    /// Apply a write to CAM_CTRL1: latch config, self-clear CAM_RESET, act on
-    /// CAM_START.
+    /// Apply a write to CAM_CTRL1: latch config, self-clear the reset pulses,
+    /// act on CAM_START.
     fn write_cam_ctrl1(&mut self, value: u32) {
         if value & CAM_START_BIT != 0 {
             if !self.cam_running {
-                // Rising edge: arm a one-tick vsync completion.
-                self.cam_pending_vsync = true;
+                if self.camera.is_none() {
+                    // No sensor: arm a one-tick vsync completion.
+                    self.cam_pending_vsync = true;
+                } else {
+                    // Capture joins a running stream: whatever already went
+                    // past the pins is gone, and EOF counting starts afresh.
+                    let now = self.now();
+                    self.cam_advance(now);
+                    self.cam.since_eof = 0;
+                    self.cam.captured = 0;
+                }
             }
             self.cam_running = true;
         } else {
             self.cam_running = false;
         }
+        if value & CAM_CTRL1_PULSE_BITS != 0 {
+            self.cam.since_eof = 0;
+        }
         self.cam_ctrl1 = value & !(CAM_START_BIT | CAM_CTRL1_PULSE_BITS);
+    }
+
+    // ── DVP camera stream ──────────────────────────────────────────────────
+
+    fn now(&self) -> u64 {
+        self.clock.as_ref().map_or(0, CycleClock::now)
+    }
+
+    fn us_to_cycles(&self, us: u64) -> u64 {
+        self.cpu_hz.saturating_mul(us) / 1_000_000
+    }
+
+    fn cam_cycles_per_byte(&self) -> u64 {
+        (self.cpu_hz / CAM_PCLK_HZ).max(1)
+    }
+
+    /// Bytes per `in_suc_eof` (`CAM_REC_DATA_BYTELEN + 1`).
+    fn cam_eof_block(&self) -> u32 {
+        (self.cam_ctrl1 & CAM_REC_DATA_BYTELEN_MASK) + 1
+    }
+
+    fn cam_vs_eof(&self) -> bool {
+        self.cam_ctrl & CAM_VS_EOF_EN_BIT != 0
+    }
+
+    /// Someone consumes the stream: the VSYNC interrupt is enabled or GDMA
+    /// has a receive chain armed.
+    fn cam_listening(&self) -> bool {
+        self.int_ena & INT_CAM_VSYNC != 0 || self.cam_dma_armed
+    }
+
+    /// The bytes are actually being captured into memory.
+    fn cam_capturing(&self) -> bool {
+        self.cam_running && self.cam_dma_armed
+    }
+
+    /// Number of bytes of the current frame that have appeared on the pins by
+    /// `now`. Byte `i` appears at `data_start + i * cycles_per_byte`.
+    fn cam_released(&self, now: u64) -> usize {
+        if self.cam.frame.is_empty() || now < self.cam.data_start {
+            return 0;
+        }
+        let n = (now - self.cam.data_start) / self.cam_cycles_per_byte() + 1;
+        (n as usize).min(self.cam.frame.len())
+    }
+
+    /// Advance the sensor's frame stream to `now`: drop bytes nobody is
+    /// capturing, and signal the next VSYNC when it is due.
+    fn cam_advance(&mut self, now: u64) {
+        let Some(sensor) = self.camera.clone() else {
+            return;
+        };
+        if !self.cam.live {
+            if !self.cam_listening() {
+                return;
+            }
+            self.cam.live = true;
+            self.cam.next_vsync = now;
+        }
+        if !self.cam_capturing() {
+            self.cam.cursor = self.cam.cursor.max(self.cam_released(now));
+        }
+        if now < self.cam.next_vsync {
+            return;
+        }
+        // Hold the frame boundary until a frame being captured has been fully
+        // handed to GDMA (see the module doc: time-compression guard).
+        if self.cam_capturing() && self.cam.cursor < self.cam.frame.len() {
+            return;
+        }
+        if self.cam_vs_eof() && self.cam_running && self.cam.captured > 0 {
+            self.cam.vs_eof_pending = true;
+        }
+        self.cam.cursor = 0;
+        self.cam.captured = 0;
+        match sensor.next_frame() {
+            Some(frame) => {
+                self.int_raw |= INT_CAM_VSYNC;
+                self.cam.frames += 1;
+                let data_cycles = frame.len() as u64 * self.cam_cycles_per_byte();
+                self.cam.frame = frame;
+                self.cam.data_start = now + self.us_to_cycles(CAM_PORCH_US);
+                self.cam.next_vsync =
+                    self.cam.data_start + data_cycles + self.us_to_cycles(CAM_VBLANK_US);
+            }
+            None => {
+                // A silent sensor: no VSYNC, no data. Look again later.
+                self.cam.frame.clear();
+                self.cam.next_vsync = now + self.us_to_cycles(CAM_IDLE_RETRY_US);
+            }
+        }
+    }
+
+    /// Cycles from `now` until the stream next needs attention.
+    fn cam_next_wake(&self, now: u64) -> u64 {
+        if !self.cam.live {
+            return 1;
+        }
+        if now >= self.cam.next_vsync {
+            // Held: re-check soon, the pump is draining the frame.
+            return self.us_to_cycles(10).max(1);
+        }
+        self.cam.next_vsync - now
+    }
+
+    /// GDMA started (or stopped) an IN chain for LCD_CAM. Called by the GDMA
+    /// camera pump.
+    pub fn set_cam_dma_armed(&mut self, armed: bool) {
+        self.cam_dma_armed = armed;
+    }
+
+    /// Hand GDMA the captured bytes that have arrived by now, at most `max`,
+    /// never crossing an `in_suc_eof` boundary. See [`CamRx`].
+    pub fn cam_rx_pull(&mut self, max: usize) -> CamRx {
+        let now = self.now();
+        self.cam_advance(now);
+        let mut rx = CamRx::default();
+        if self.cam.vs_eof_pending {
+            self.cam.vs_eof_pending = false;
+            rx.eof = true;
+            rx.next_ready = Some(now);
+            return rx;
+        }
+        if self.camera.is_none() || !self.cam_running {
+            return rx;
+        }
+        let vs_eof = self.cam_vs_eof();
+        let block = self.cam_eof_block();
+        let to_eof = if vs_eof {
+            usize::MAX
+        } else {
+            block.saturating_sub(self.cam.since_eof) as usize
+        };
+        let avail = self.cam_released(now).saturating_sub(self.cam.cursor);
+        let n = avail.min(max).min(to_eof);
+        if n > 0 {
+            let start = self.cam.cursor;
+            rx.bytes = self.cam.frame[start..start + n].to_vec();
+            self.cam.cursor += n;
+            self.cam.captured += n;
+            self.cam.since_eof += n as u32;
+            if !vs_eof && self.cam.since_eof >= block {
+                self.cam.since_eof = 0;
+                rx.eof = true;
+            }
+        }
+        let remaining = self.cam.frame.len().saturating_sub(self.cam.cursor);
+        rx.next_ready = if remaining == 0 {
+            Some(self.cam.next_vsync)
+        } else {
+            // Wake when a worthwhile burst has arrived, not on every byte.
+            let to_eof = if vs_eof {
+                usize::MAX
+            } else {
+                block.saturating_sub(self.cam.since_eof) as usize
+            };
+            let burst = remaining.min(to_eof).clamp(1, 256);
+            Some(
+                self.cam.data_start
+                    + (self.cam.cursor + burst - 1) as u64 * self.cam_cycles_per_byte(),
+            )
+        };
+        rx
     }
 }
 
@@ -607,6 +914,12 @@ impl Peripheral for Esp32s3LcdCam {
             self.int_raw |= INT_CAM_VSYNC;
         }
 
+        // Attached sensor: the frame stream runs on the cycle clock.
+        if self.camera.is_some() {
+            let now = self.now();
+            self.cam_advance(now);
+        }
+
         // Level-triggered IRQ delivery: emit our matrix source while any
         // enabled raw bit is set (same model as the timer-group / I2S twins).
         let explicit = if self.int_raw & self.int_ena != 0 {
@@ -633,6 +946,20 @@ impl Peripheral for Esp32s3LcdCam {
         self.clock = Some(clock);
     }
 
+    fn attach_cpu_hz(&mut self, hz: u64) {
+        if hz > 0 {
+            self.cpu_hz = hz;
+        }
+    }
+
+    fn attach_dvp_sensor(
+        &mut self,
+        sensor: std::sync::Arc<dyn crate::peripherals::components::DvpSensor>,
+    ) -> bool {
+        self.attach_camera(sensor);
+        true
+    }
+
     fn matrix_irq_sources_into(&self, out: &mut Vec<u32>) {
         if self.int_raw & self.int_ena != 0 {
             out.push(self.source_id);
@@ -643,21 +970,40 @@ impl Peripheral for Esp32s3LcdCam {
         if !self.uses_scheduler() {
             return Vec::new();
         }
+        let mut events = Vec::new();
         // Parenthesised: without the grouping `lcd_pending_done` alone armed a
         // fresh event on every call, even when one was already scheduled.
         if (self.lcd_pending_done || self.cam_pending_vsync) && !self.scheduled {
             self.scheduled = true;
-            return vec![(1, DEFERRED_WAKE_TOKEN)];
+            events.push((1, DEFERRED_WAKE_TOKEN));
         }
-        Vec::new()
+        // The camera stream keeps its own wake-up chain alive (`on_event`
+        // reschedules it); this only starts it, on the register write that
+        // first makes someone listen.
+        if self.camera.is_some() && !self.cam_scheduled && (self.cam.live || self.cam_listening()) {
+            self.cam_scheduled = true;
+            events.push((self.cam_next_wake(self.now()), CAM_WAKE_TOKEN));
+        }
+        events
     }
 
     fn on_event(
         &mut self,
-        _event_token: u32,
+        event_token: u32,
         _sched: &mut crate::sched::EventScheduler,
         _bus: &mut dyn crate::Bus,
     ) -> crate::sched::EventResult {
+        if event_token == CAM_WAKE_TOKEN {
+            let now = self.now();
+            self.cam_advance(now);
+            let mut explicit_irqs = Vec::new();
+            self.matrix_irq_sources_into(&mut explicit_irqs);
+            return crate::sched::EventResult {
+                explicit_irqs,
+                reschedule_delay: Some(self.cam_next_wake(now)),
+                ..Default::default()
+            };
+        }
         // Same one-tick transition the legacy walk performed.
         let _ = self.tick();
         self.scheduled = false;
@@ -993,5 +1339,224 @@ mod tests {
         p.write(REG_LCD_CLOCK, 0xAB).unwrap();
         assert_eq!(p.read(REG_LCD_CLOCK).unwrap(), 0);
         assert_eq!(p.read_u32(REG_LCD_CLOCK).unwrap(), 0);
+    }
+
+    // ── DVP camera stream ──────────────────────────────────────────────────
+
+    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+    use std::sync::Arc;
+
+    /// A sensor that always returns the same frame (bytes 0, 1, 2, …).
+    #[derive(Debug)]
+    struct FakeSensor {
+        len: usize,
+        streaming: AtomicBool,
+        frames: AtomicU64,
+    }
+
+    impl crate::peripherals::components::DvpSensor for FakeSensor {
+        fn next_frame(&self) -> Option<Vec<u8>> {
+            if !self.streaming.load(Ordering::Relaxed) {
+                return None;
+            }
+            self.frames.fetch_add(1, Ordering::Relaxed);
+            Some((0..self.len).map(|i| i as u8).collect())
+        }
+    }
+
+    /// 240 MHz: 12 cycles per byte, 48 000-cycle porch, 240 000-cycle blank.
+    const CPB: u64 = 12;
+    const PORCH: u64 = 48_000;
+    const BLANK: u64 = 240_000;
+
+    fn camera_rig(len: usize) -> (Esp32s3LcdCam, CycleClock, Arc<FakeSensor>) {
+        let mut p = new_lcd_cam();
+        let clock = CycleClock::default();
+        p.attach_cycle_clock(clock.clone());
+        p.attach_cpu_hz(240_000_000);
+        let sensor = Arc::new(FakeSensor {
+            len,
+            streaming: AtomicBool::new(true),
+            frames: AtomicU64::new(0),
+        });
+        p.attach_camera(sensor.clone());
+        (p, clock, sensor)
+    }
+
+    fn vsync_raw(p: &Esp32s3LcdCam) -> bool {
+        p.read_u32(REG_LC_DMA_INT_RAW).unwrap() & INT_CAM_VSYNC != 0
+    }
+
+    fn clear_vsync(p: &mut Esp32s3LcdCam) {
+        p.write_u32(REG_LC_DMA_INT_CLR, INT_CAM_VSYNC).unwrap();
+    }
+
+    /// `ll_cam_start` as far as LCD_CAM is concerned: EOF block, then START.
+    fn start_capture(p: &mut Esp32s3LcdCam, block: u32) {
+        p.write_u32(REG_CAM_CTRL1, block - 1).unwrap();
+        p.write_u32(REG_CAM_CTRL1, (block - 1) | CAM_START_BIT)
+            .unwrap();
+        p.set_cam_dma_armed(true);
+    }
+
+    #[test]
+    fn cam_ctrl1_start_reset_and_afifo_reset_sit_where_the_svd_puts_them() {
+        let mut p = new_lcd_cam();
+        p.write_u32(REG_CAM_CTRL1, 1 << 29).unwrap();
+        assert_eq!(
+            p.read_u32(REG_CAM_CTRL1).unwrap() & (1 << 29),
+            1 << 29,
+            "CAM_START is bit 29"
+        );
+        p.write_u32(REG_CAM_CTRL1, (1 << 29) | (1 << 30) | (1 << 31) | 0x7F)
+            .unwrap();
+        let v = p.read_u32(REG_CAM_CTRL1).unwrap();
+        assert_eq!(v & ((1 << 30) | (1 << 31)), 0, "reset pulses self-clear");
+        assert_eq!(v & 0xFFFF, 0x7F, "REC_DATA_BYTELEN round-trips");
+        assert_ne!(v & (1 << 29), 0, "a reset pulse does not stop capture");
+    }
+
+    #[test]
+    fn stream_is_silent_until_someone_listens() {
+        let (mut p, clock, sensor) = camera_rig(64);
+        clock.publish(10_000_000);
+        p.tick();
+        assert!(!vsync_raw(&p));
+        assert_eq!(
+            sensor.frames.load(Ordering::Relaxed),
+            0,
+            "no frame rendered"
+        );
+        p.write_u32(REG_LC_DMA_INT_ENA, INT_CAM_VSYNC).unwrap();
+        p.tick();
+        assert!(vsync_raw(&p), "first VSYNC once the interrupt is enabled");
+        assert_eq!(sensor.frames.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn capture_hands_the_frame_to_dma_in_eof_blocks_between_two_vsyncs() {
+        let (mut p, clock, _) = camera_rig(256);
+        p.write_u32(REG_LC_DMA_INT_ENA, INT_CAM_VSYNC).unwrap();
+        start_capture(&mut p, 128);
+        p.tick();
+        assert!(vsync_raw(&p), "frame start");
+        clear_vsync(&mut p);
+
+        // Back porch: nothing yet.
+        let r = p.cam_rx_pull(4096);
+        assert!(r.bytes.is_empty() && !r.eof);
+        assert_eq!(
+            r.next_ready,
+            Some(PORCH + 127 * CPB),
+            "wake when a block is in"
+        );
+
+        // First block arrives byte by byte at the PCLK rate.
+        clock.publish(PORCH + 99 * CPB);
+        let r = p.cam_rx_pull(4096);
+        assert_eq!(r.bytes, (0..100).collect::<Vec<u8>>());
+        assert!(!r.eof);
+        clock.publish(PORCH + 127 * CPB);
+        let r = p.cam_rx_pull(4096);
+        assert_eq!(r.bytes, (100..128).collect::<Vec<u8>>());
+        assert!(r.eof, "EOF after exactly REC_DATA_BYTELEN + 1 bytes");
+
+        // The pull never crosses an EOF boundary, however much has arrived.
+        clock.publish(PORCH + 1_000 * CPB);
+        let r = p.cam_rx_pull(64);
+        assert_eq!(r.bytes, (128..192).collect::<Vec<u8>>());
+        assert!(!r.eof);
+        let r = p.cam_rx_pull(4096);
+        assert_eq!(r.bytes.len(), 64);
+        assert!(r.eof);
+        assert!(!vsync_raw(&p), "no VSYNC before blanking ends");
+
+        // Frame end.
+        let next_vsync = PORCH + 256 * CPB + BLANK;
+        clock.publish(next_vsync - 1);
+        p.tick();
+        assert!(!vsync_raw(&p));
+        clock.publish(next_vsync);
+        p.tick();
+        assert!(vsync_raw(&p), "VSYNC closes the frame");
+        assert_eq!(p.cam_frames(), 2);
+    }
+
+    #[test]
+    fn vsync_waits_for_a_frame_being_captured_to_drain() {
+        let (mut p, clock, _) = camera_rig(256);
+        p.write_u32(REG_LC_DMA_INT_ENA, INT_CAM_VSYNC).unwrap();
+        start_capture(&mut p, 128);
+        p.tick();
+        clear_vsync(&mut p);
+        // Far past the frame end with nothing pulled (an idle fast-forward).
+        clock.publish(10_000_000);
+        p.tick();
+        assert!(!vsync_raw(&p), "VSYNC held while bytes are owed to GDMA");
+        assert!(p.cam_rx_pull(4096).eof);
+        assert!(p.cam_rx_pull(4096).eof);
+        p.tick();
+        assert!(vsync_raw(&p), "and released once the frame is handed over");
+    }
+
+    #[test]
+    fn bytes_that_pass_before_capture_starts_are_dropped() {
+        let (mut p, clock, _) = camera_rig(256);
+        p.write_u32(REG_LC_DMA_INT_ENA, INT_CAM_VSYNC).unwrap();
+        p.tick();
+        // Mid-frame: bytes 0..=9 have gone by with nobody capturing.
+        clock.publish(PORCH + 9 * CPB);
+        start_capture(&mut p, 128);
+        assert!(p.cam_rx_pull(4096).bytes.is_empty());
+        clock.publish(PORCH + 11 * CPB);
+        assert_eq!(p.cam_rx_pull(4096).bytes, vec![10, 11]);
+    }
+
+    #[test]
+    fn stopped_capture_is_not_held_back_and_drops_the_frame() {
+        let (mut p, clock, _) = camera_rig(256);
+        p.write_u32(REG_LC_DMA_INT_ENA, INT_CAM_VSYNC).unwrap();
+        p.tick();
+        clear_vsync(&mut p);
+        clock.publish(PORCH + 256 * CPB + BLANK);
+        p.tick();
+        assert!(vsync_raw(&p), "an uncaptured frame does not delay VSYNC");
+        assert!(
+            p.cam_rx_pull(4096).bytes.is_empty(),
+            "CAM_START clear: no data"
+        );
+    }
+
+    #[test]
+    fn vs_eof_mode_ends_the_dma_block_at_vsync() {
+        let (mut p, clock, _) = camera_rig(64);
+        p.write_u32(REG_CAM_CTRL, CAM_VS_EOF_EN_BIT).unwrap();
+        p.write_u32(REG_LC_DMA_INT_ENA, INT_CAM_VSYNC).unwrap();
+        start_capture(&mut p, 16);
+        p.tick();
+        clock.publish(PORCH + 63 * CPB);
+        let r = p.cam_rx_pull(4096);
+        assert_eq!(r.bytes.len(), 64, "no byte-count EOF in VS_EOF mode");
+        assert!(!r.eof);
+        clock.publish(PORCH + 64 * CPB + BLANK);
+        let r = p.cam_rx_pull(4096);
+        assert!(r.bytes.is_empty());
+        assert!(r.eof, "the frame's EOF comes with VSYNC");
+    }
+
+    #[test]
+    fn a_silent_sensor_produces_no_vsync() {
+        let (mut p, clock, sensor) = camera_rig(64);
+        sensor.streaming.store(false, Ordering::Relaxed);
+        p.write_u32(REG_LC_DMA_INT_ENA, INT_CAM_VSYNC).unwrap();
+        for t in [0, 1_000_000, 5_000_000] {
+            clock.publish(t);
+            p.tick();
+        }
+        assert!(!vsync_raw(&p));
+        sensor.streaming.store(true, Ordering::Relaxed);
+        clock.publish(6_000_000);
+        p.tick();
+        assert!(vsync_raw(&p), "VSYNC resumes once the sensor streams");
     }
 }

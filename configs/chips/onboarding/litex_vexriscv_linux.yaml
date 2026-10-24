@@ -20,6 +20,7 @@ peripherals:
   bus: sysbus
   base_address: 4026533888
 - id: spi
-  type: litex_spi
+  type: stub
+  renode_type: litex_spi
   bus: sysbus
   base_address: 4026564608

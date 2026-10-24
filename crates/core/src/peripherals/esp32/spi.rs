@@ -135,6 +135,38 @@ fn framing(pin_reg: u32, user_reg: u32) -> SpiFraming {
 }
 
 const CMD_USR_BIT: u32 = 1 << 18;
+
+// ── The registers the bit-level net engine reads, classic layout ─────────
+//
+// `esp_gpspi_net` speaks the C3/C6/S3 GP-SPI register file. The classic SPI is
+// the older IP: the same fields at other offsets and bits (classic
+// `soc/esp32/include/soc/spi_reg.h`, TRM v4.6 §7.7), so this model answers the
+// engine through a translated view ([`NetView`]) rather than the engine
+// learning a second layout.
+
+/// `SPI_CTRL_REG` — `WR_BIT_ORDER` (26) / `RD_BIT_ORDER` (25), the C3's bits.
+const REG_CTRL: u64 = 0x08;
+/// `SPI_CTRL2_REG` — `SETUP_TIME` [3:0], `HOLD_TIME` [7:4] (SPI clock cycles
+/// of CS setup / hold, the C3's `USER1.CS_SETUP_TIME` / `CS_HOLD_TIME`).
+const REG_CTRL2: u64 = 0x14;
+/// `SPI_USER1_REG` — `ADDR_BITLEN` [31:26], `DUMMY_CYCLELEN` [7:0].
+const REG_USER1: u64 = 0x20;
+/// `SPI_SLAVE_REG` — `TRANS_DONE` (4), `SLAVE_MODE` (30).
+const REG_SLAVE: u64 = 0x38;
+/// `SPI_SLV_RD_BIT_REG` — `SLV_RDATA_BIT` [23:0]: bits a slave received
+/// (esp-idf `spi_ll_slave_get_rcv_bitlen`).
+const REG_SLV_RD_BIT: u64 = 0x64;
+/// `SPI_USER` bits whose C3 positions differ: `CS_HOLD` 4 (C3 6), `CS_SETUP`
+/// 5 (C3 7), `CK_I_EDGE` 6 (no C3 twin), `CK_OUT_EDGE` 7 (C3 9).
+const USER_CS_HOLD: u32 = 1 << 4;
+const USER_CS_SETUP: u32 = 1 << 5;
+const USER_CK_I_EDGE: u32 = 1 << 6;
+/// `SPI_SLAVE.TRANS_DONE`: the classic part's transaction-done flag, for
+/// master and slave alike (it has no `SPI_DMA_INT_RAW.TRANS_DONE`).
+const SLAVE_TRANS_DONE: u32 = 1 << 4;
+const SLAVE_MODE: u32 = 1 << 30;
+/// Scheduler token whose firing re-derives levels after a net transaction.
+const NET_IRQ_TOKEN: u32 = u32::MAX - 1;
 /// All CMD bits that launch an operation and auto-clear (bits [31:16]:
 /// FLASH_READ..FLASH_PER plus USR). Firmware busy-polls until CMD == 0.
 const CMD_TRIGGER_MASK: u32 = 0xFFFF_0000;
@@ -239,6 +271,11 @@ pub struct Esp32Spi {
     /// hand-built bus, where there is no axis to place a waveform on.
     clock: Option<CycleClock>,
     external_can_poll_scheduled: bool,
+    /// The bit-level engine that runs instead of the transaction path while a
+    /// line is on a world `gpio_net` ([`crate::peripherals::esp_gpspi_net`]).
+    net: crate::peripherals::esp_gpspi_net::GpSpiNet,
+    /// `SPI_SLAVE.TRANS_DONE` level last reported through a scheduler event.
+    net_irq: crate::peripherals::esp_gpio_net::IrqLevelWatch,
 }
 
 impl std::fmt::Debug for Esp32Spi {
@@ -275,7 +312,62 @@ impl Esp32Spi {
     /// wire nothing reads.
     pub(crate) fn pad_lines_arc(&mut self) -> Arc<PadLines> {
         let cpol = framing(self.read_word(REG_PIN), self.user).cpol;
-        self.wire.pad_lines_arc(cpol)
+        // With a MISO line: this controller can be a master or a slave on a
+        // world `gpio_net` (`esp_gpspi_net`).
+        self.wire.pad_lines_arc_with_miso(cpol)
+    }
+
+    /// `true` while the GPIO matrix routes one of this controller's lines to
+    /// a pad on a world `gpio_net`: the bit engine owns the wire.
+    fn net_mode(&self) -> bool {
+        self.wire.wire_lines().is_some_and(PadLines::any_on_net)
+    }
+
+    fn net_now(&self) -> u64 {
+        self.clock.as_ref().map_or(0, CycleClock::now)
+    }
+
+    /// Run `f` with the net engine, this model's translated register view as
+    /// its host, and the wire, stamping the wire's reports with `now`.
+    fn with_net<R>(
+        &mut self,
+        now: u64,
+        f: impl FnOnce(
+            &mut crate::peripherals::esp_gpspi_net::GpSpiNet,
+            &mut NetView<'_>,
+            &PadLines,
+        ) -> R,
+    ) -> Option<R> {
+        let pads = self.wire.lines_arc()?;
+        let mut net = std::mem::take(&mut self.net);
+        pads.set_stamp(Some(now));
+        let r = f(&mut net, &mut NetView(self), &pads);
+        pads.set_stamp(None);
+        self.net = net;
+        Some(r)
+    }
+
+    /// Master transactions this controller has completed on a net.
+    pub fn net_master_transactions(&self) -> u64 {
+        self.net.master_transactions()
+    }
+
+    /// Slave transactions this controller has completed on a net.
+    pub fn net_slave_transactions(&self) -> u64 {
+        self.net.slave_transactions()
+    }
+
+    /// On a net, re-state every line's drive after a register write.
+    fn net_apply_drive(&mut self) {
+        if self.net_mode() {
+            let now = self.net_now();
+            self.with_net(now, |net, host, pads| net.apply_drive(host, pads));
+        }
+    }
+
+    /// `SPI_SLAVE.TRANS_DONE` is up.
+    fn trans_done(&self) -> bool {
+        self.read_word(REG_SLAVE) & SLAVE_TRANS_DONE != 0
     }
 
     /// Publish a held burst once the wire has carried it. Without a cycle clock
@@ -329,6 +421,15 @@ impl Esp32Spi {
 
     fn write_word(&mut self, off: u64, value: u32) {
         match off {
+            // On a net the bit engine runs a user transaction on the wire (a
+            // master), or the slave waits for the master's clock with USR
+            // set; USR clears when the transaction is done.
+            REG_CMD if value & CMD_USR_BIT != 0 && self.net_mode() => {
+                self.cmd = CMD_USR_BIT;
+                self.transactions += 1;
+                let now = self.net_now();
+                self.with_net(now, |net, host, pads| net.launch(host, now, pads));
+            }
             REG_CMD => {
                 self.cmd = value;
                 if value & CMD_TRIGGER_MASK != 0 {
@@ -611,7 +712,130 @@ impl Esp32Spi {
     }
 }
 
+/// The classic SPI register file as the C3-layout GP-SPI net engine reads it
+/// (`esp_gpspi_net`'s offsets and bits). Every field the engine uses exists
+/// on the classic part, at its own place:
+///
+/// | engine (C3) | classic |
+/// |---|---|
+/// | `CMD.USR` (24) | `SPI_CMD.USR` (18) |
+/// | `ADDR`, `CTRL` bit order, `USER2` | same offsets and bits |
+/// | `USER` `DOUTDIN` 0, `CS_HOLD` 6, `CS_SETUP` 7, `CK_OUT_EDGE` 9, phases 27..31 | `SPI_USER` 0, 4, 5, 7, 27..31 |
+/// | `USER1` `ADDR_BITLEN` [31:27], `CS_SETUP_TIME` [21:17], `CS_HOLD_TIME` [26:22], dummy [7:0] | `SPI_USER1` [31:26] and [7:0], `SPI_CTRL2` `SETUP_TIME` [3:0] / `HOLD_TIME` [7:4] |
+/// | `MS_DLEN` | `SPI_MOSI_DLEN` (`SPI_MISO_DLEN` for a read-only transaction) |
+/// | `MISC` `CS0_DIS` 0, `CK_IDLE_EDGE` 29, `CS_KEEP_ACTIVE` 30 | `SPI_PIN` 0, 29, 30 |
+/// | `W0..W15` at 0x98 | `SPI_W0..W15` at 0x80 |
+/// | `SLAVE.MODE` (26) | `SPI_SLAVE.SLAVE_MODE` (30) |
+/// | `SLAVE.CLK_MODE_13` (slave CPHA) | `!SPI_USER.CK_I_EDGE ^ CPOL` (esp-idf `spi_ll_slave_set_mode`: mode 0 sets `CK_I_EDGE`) |
+/// | `SLAVE1.DATA_BITLEN` (bits received) | `SPI_SLV_RD_BIT.SLV_RDATA_BIT` |
+/// | `SPI_DMA_INT_RAW.TRANS_DONE` | `SPI_SLAVE.TRANS_DONE` (4) |
+struct NetView<'a>(&'a mut Esp32Spi);
+
+impl NetView<'_> {
+    fn classic_w(off: u64) -> Option<u64> {
+        use crate::peripherals::esp_gpspi_net::REG_W0;
+        (REG_W0..REG_W0 + 64)
+            .contains(&off)
+            .then(|| FIFO_START + (off - REG_W0))
+    }
+}
+
+impl crate::peripherals::esp_gpspi_net::GpSpiHost for NetView<'_> {
+    fn reg(&self, off: u64) -> u32 {
+        use crate::peripherals::esp_gpspi_net as n;
+        let s = &*self.0;
+        let bit = |v: u32, from: u32, to: u32| ((v >> from) & 1) << to;
+        match off {
+            n::REG_CMD => bit(s.cmd, 18, 24),
+            n::REG_ADDR => s.addr,
+            n::REG_CTRL => s.read_word(REG_CTRL),
+            n::REG_USER => {
+                let u = s.user;
+                let flag = |mask: u32, to: u32| if u & mask != 0 { 1 << to } else { 0 };
+                (u & (1 | (0x1F << 27)))
+                    | flag(USER_CS_HOLD, 6)
+                    | flag(USER_CS_SETUP, 7)
+                    | flag(CK_OUT_EDGE, 9)
+            }
+            n::REG_USER1 => {
+                let u1 = s.read_word(REG_USER1);
+                let c2 = s.read_word(REG_CTRL2);
+                (((u1 >> 26) & 0x1F) << 27)
+                    | (((c2 >> 4) & 0xF) << 22)
+                    | ((c2 & 0xF) << 17)
+                    | (u1 & 0xFF)
+            }
+            n::REG_USER2 => s.user2,
+            n::REG_MS_DLEN => {
+                if s.user & USER_USR_MOSI_BIT == 0 && s.user & USER_USR_MISO_BIT != 0 {
+                    s.miso_dlen & 0xFF_FFFF
+                } else {
+                    s.mosi_dlen & 0xFF_FFFF
+                }
+            }
+            n::REG_MISC => s.read_word(REG_PIN) & (1 | (1 << 29) | (1 << 30)),
+            n::REG_SLAVE => {
+                let slave = s.read_word(REG_SLAVE);
+                let cpol = s.read_word(REG_PIN) & CK_IDLE_EDGE != 0;
+                let cpha = (s.user & USER_CK_I_EDGE == 0) != cpol;
+                (if slave & SLAVE_MODE != 0 { 1 << 26 } else { 0 }) | if cpha { 1 << 2 } else { 0 }
+            }
+            n::REG_SLAVE1 => s.read_word(REG_SLV_RD_BIT),
+            off => Self::classic_w(off).map_or(0, |w| s.read_word(w)),
+        }
+    }
+
+    fn set_reg(&mut self, off: u64, value: u32) {
+        use crate::peripherals::esp_gpspi_net as n;
+        match off {
+            // The engine only ever clears USR when a transaction is done.
+            n::REG_CMD => {
+                if value & (1 << 24) == 0 {
+                    self.0.cmd &= !CMD_USR_BIT;
+                }
+            }
+            n::REG_SLAVE1 => self.0.write_word(REG_SLV_RD_BIT, value & 0xFF_FFFF),
+            off => {
+                if let Some(w) = Self::classic_w(off) {
+                    self.0.write_word(w, value);
+                }
+            }
+        }
+    }
+
+    fn raise(&mut self, bits: u32) {
+        if bits & crate::peripherals::esp_gpspi_net::INT_TRANS_DONE != 0 {
+            let slave = self.0.read_word(REG_SLAVE);
+            self.0.write_word(REG_SLAVE, slave | SLAVE_TRANS_DONE);
+        }
+    }
+
+    fn bit_time(&self) -> Option<u64> {
+        bit_time_cycles(self.0.read_word(REG_CLOCK))
+    }
+}
+
 impl Peripheral for Esp32Spi {
+    fn line_names(&self) -> &'static [&'static str] {
+        crate::peripherals::esp_gpspi_wire::SPI_NET_LINES
+    }
+
+    fn wire_lines(&self) -> Option<&PadLines> {
+        self.wire.wire_lines()
+    }
+
+    fn wire_input_edge(&mut self, line: usize, level: bool, cycle: u64) -> bool {
+        if !self.net_mode() {
+            return false;
+        }
+        let changed = self
+            .with_net(cycle, |net, host, pads| {
+                net.on_edge(host, line, level, pads)
+            })
+            .unwrap_or(false);
+        changed || self.net.deadline().is_some()
+    }
+
     fn spi_attached_devices(&self) -> Option<&Vec<Box<dyn crate::peripherals::device::SpiDevice>>> {
         Some(&self.attached_devices)
     }
@@ -698,6 +922,7 @@ impl Peripheral for Esp32Spi {
         word &= !(0xFFu32 << byte_off);
         word |= (value as u32) << byte_off;
         self.write_word(word_off, word);
+        self.net_apply_drive();
         Ok(())
     }
 
@@ -707,6 +932,7 @@ impl Peripheral for Esp32Spi {
         // CMD_USR isn't fired four times per word write.
         if offset & 3 == 0 {
             self.write_word(offset, value);
+            self.net_apply_drive();
             Ok(())
         } else {
             // Misaligned — fall back to byte path.
@@ -793,6 +1019,10 @@ impl Peripheral for Esp32Spi {
     /// this method did in full before the wire existed.
     fn tick(&mut self) -> PeripheralTickResult {
         self.wire_flush(false);
+        if self.net.deadline().is_some_and(|d| d <= self.net_now()) {
+            let now = self.net_now();
+            self.with_net(now, |net, host, pads| net.step(host, now, pads));
+        }
         for device in &mut self.attached_devices {
             device.poll_external_bus();
         }
@@ -819,6 +1049,15 @@ impl Peripheral for Esp32Spi {
             return Vec::new();
         }
         let mut events = Vec::new();
+        if self.net_mode() {
+            let now = self.net_now();
+            if let Some(ev) = self.net.take_event(now) {
+                events.push(ev);
+            }
+            if self.net_irq.take(self.trans_done()).is_some() {
+                events.push((0, NET_IRQ_TOKEN));
+            }
+        }
         if self.wire.is_pending() && !self.wire.scheduled {
             let now = self.clock.as_ref().map_or(0, |clock| clock.now());
             self.wire.arm_seq = self.wire.arm_seq.wrapping_add(1);
@@ -845,6 +1084,19 @@ impl Peripheral for Esp32Spi {
         _sched: &mut crate::sched::EventScheduler,
         _bus: &mut dyn crate::Bus,
     ) -> crate::sched::EventResult {
+        if event_token == crate::peripherals::esp_gpspi_net::NET_TOKEN {
+            let now = _sched.now();
+            let next = self
+                .with_net(now, |net, host, pads| net.on_event(host, now, pads))
+                .flatten();
+            return crate::sched::EventResult {
+                reschedule_delay: next,
+                ..Default::default()
+            };
+        }
+        if event_token == NET_IRQ_TOKEN {
+            return crate::sched::EventResult::default();
+        }
         if event_token == EXTERNAL_CAN_POLL_EVENT {
             for device in &mut self.attached_devices {
                 device.poll_external_bus();

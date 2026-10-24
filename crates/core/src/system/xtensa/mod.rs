@@ -703,6 +703,128 @@ board_io: []
         }
     }
 
+    /// The drawing-robot lab: a classic ESP32 with four sg90 servos on
+    /// GPIO25/26/27/33 and no `ledc_channel` in the manifest.
+    fn classic_bus_with_four_servos() -> SystemBus {
+        let manifest: labwired_config::SystemManifest = serde_yaml::from_str(
+            r#"
+name: "classic-four-servo"
+chip: "esp32.yaml"
+external_devices:
+  - { id: "shoulder", type: "servo", connection: "gpio", config: { signal_pin: "GPIO25", model: "sg90" } }
+  - { id: "elbow", type: "servo", connection: "gpio", config: { signal_pin: "GPIO26", model: "sg90" } }
+  - { id: "wrist", type: "servo", connection: "gpio", config: { signal_pin: "GPIO27", model: "sg90" } }
+  - { id: "lift", type: "servo", connection: "gpio", config: { signal_pin: "GPIO33", model: "sg90" } }
+board_io: []
+"#,
+        )
+        .expect("parse classic four-servo manifest");
+        let mut bus = SystemBus::new();
+        let _ = configure_xtensa_esp32(&mut bus);
+        attach_esp32_external_devices(&mut bus, &manifest).expect("attach servos");
+        bus
+    }
+
+    fn classic_servo_angles(bus: &SystemBus) -> Vec<(String, f32)> {
+        bus.observed_of::<crate::peripherals::components::servo::Servo>()
+            .map(|s| (s.id().to_string(), s.angle_degrees()))
+            .collect()
+    }
+
+    const CLASSIC_GPIO: u64 = 0x3FF4_4000;
+    const CLASSIC_LEDC: u64 = 0x3FF5_9000;
+
+    /// `pinMode(pin, OUTPUT)` + `gpio_matrix_out(pin, LEDC_HS_SIG_OUT0 + ch)`.
+    fn classic_route_hs(bus: &mut SystemBus, pin: u8, ch: u32) {
+        if pin < 32 {
+            bus.write_u32(CLASSIC_GPIO + 0x24, 1 << pin).unwrap();
+        } else {
+            bus.write_u32(CLASSIC_GPIO + 0x30, 1 << (pin - 32)).unwrap();
+        }
+        bus.write_u32(CLASSIC_GPIO + 0x530 + u64::from(pin) * 4, 71 + ch)
+            .unwrap();
+    }
+
+    /// `ledcWrite(ch, us)` at 50 Hz / 14 bit on HS channel `ch`.
+    fn classic_ledc_write_us(bus: &mut SystemBus, ch: u64, us: u32) {
+        let base = CLASSIC_LEDC + ch * 0x14;
+        bus.write_u32(base, (1 << 2) | (ch / 2) as u32).unwrap();
+        bus.write_u32(base + 0x08, (us * 16384 / 20000) << 4)
+            .unwrap();
+        bus.write_u32(base + 0x0C, 1 << 31).unwrap();
+    }
+
+    fn sg90_angle(us: u32) -> f32 {
+        (us as f32 - 500.0) * 180.0 / 1900.0
+    }
+
+    /// Four servos on four LEDC channels each follow THEIR channel. Before
+    /// this, every servo without `ledc_channel` observed all 16 channels, so
+    /// each `ledcWrite` moved all four and they ended on the last write.
+    #[test]
+    fn classic_servos_follow_the_ledc_channel_routed_to_their_pad() {
+        let mut bus = classic_bus_with_four_servos();
+        let pins = [25u8, 26, 27, 33];
+        let us = [1000u32, 1500, 2000, 1250];
+        for t in 0..2u64 {
+            bus.write_u32(CLASSIC_LEDC + 0x140 + 8 * t, 14).unwrap();
+        }
+        for (ch, (&pin, &u)) in pins.iter().zip(us.iter()).enumerate() {
+            classic_route_hs(&mut bus, pin, ch as u32);
+            classic_ledc_write_us(&mut bus, ch as u64, u);
+        }
+        let want: std::collections::HashMap<&str, f32> = [
+            ("shoulder", sg90_angle(us[0])),
+            ("elbow", sg90_angle(us[1])),
+            ("wrist", sg90_angle(us[2])),
+            ("lift", sg90_angle(us[3])),
+        ]
+        .into_iter()
+        .collect();
+        let got = classic_servo_angles(&bus);
+        assert_eq!(got.len(), 4);
+        for (id, angle) in &got {
+            assert!(
+                (angle - want[id.as_str()]).abs() < 1.0,
+                "{id}: shaft {angle}, want {} (all: {got:?})",
+                want[id.as_str()]
+            );
+        }
+
+        // A later write on one channel moves only the servo on that channel.
+        classic_ledc_write_us(&mut bus, 1, 2400);
+        for (id, angle) in classic_servo_angles(&bus) {
+            let w = if id == "elbow" {
+                180.0
+            } else {
+                want[id.as_str()]
+            };
+            assert!((angle - w).abs() < 1.0, "{id}: shaft {angle}, want {w}");
+        }
+    }
+
+    /// `ledcWrite` before `ledcAttachPin`: the servo takes the channel's duty
+    /// when the matrix routes the channel to its pad, and a servo whose pad
+    /// stays on the GPIO latch ignores LEDC.
+    #[test]
+    fn classic_servo_takes_a_duty_written_before_the_route() {
+        let mut bus = classic_bus_with_four_servos();
+        bus.write_u32(CLASSIC_LEDC + 0x140, 14).unwrap();
+        classic_ledc_write_us(&mut bus, 0, 2000);
+        for (id, angle) in classic_servo_angles(&bus) {
+            assert_eq!(angle, 0.0, "{id} is on the latch and must not move");
+        }
+        classic_route_hs(&mut bus, 25, 0);
+        for (id, angle) in classic_servo_angles(&bus) {
+            let w = if id == "shoulder" {
+                sg90_angle(2000)
+            } else {
+                0.0
+            };
+            assert!((angle - w).abs() < 1.0, "{id}: shaft {angle}, want {w}");
+        }
+    }
+
     /// ESP32Servo 3.x on the S3 prefers MCPWM: `mcpwm_init` (1 MHz, 50 Hz
     /// up-count => PERIOD 19999, operator n on timer n) then `mcpwm_set_duty`
     /// (compare A = peak * duty). The servo follows on either MCPWM unit.

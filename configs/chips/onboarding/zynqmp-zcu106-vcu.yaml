@@ -1,0 +1,130 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: zynqmp-zcu106-vcu
+arch: arm
+flash:
+  base: 3221225472
+  size: 536870912B
+ram:
+  base: 196608
+  size: 2147287040B
+peripherals:
+- id: allegro
+  type: allegro_e310
+  bus: sysbus
+  base_address: 2685403136
+- id: phy3
+  type: ethernetphysicallayer
+  bus: gem3
+  base_address: 12
+- id: i2c_mux
+  type: pca9548
+  bus: i2c1
+  base_address: 116
+- id: tca6416_u97
+  type: tca6416
+  bus: i2c1
+  base_address: 32
+- id: gdma
+  type: zynqmp_dma
+  bus: sysbus
+  base_address: 4249878528
+- id: adma
+  type: zynqmp_dma
+  bus: sysbus
+  base_address: 4289200128
+- id: uart0
+  type: cadence_uart
+  bus: sysbus
+  base_address: 4278190080
+- id: uart1
+  type: cadence_uart
+  bus: sysbus
+  base_address: 4278255616
+- id: i2c0
+  type: stub
+  renode_type: cadence_i2c
+  bus: sysbus
+  base_address: 4278321152
+- id: i2c1
+  type: stub
+  renode_type: cadence_i2c
+  bus: sysbus
+  base_address: 4278386688
+- id: ttc0
+  type: cadence_ttc
+  bus: sysbus
+  base_address: 4279304192
+- id: ttc1
+  type: cadence_ttc
+  bus: sysbus
+  base_address: 4279369728
+- id: ttc2
+  type: cadence_ttc
+  bus: sysbus
+  base_address: 4279435264
+- id: ttc3
+  type: cadence_ttc
+  bus: sysbus
+  base_address: 4279500800
+- id: gem0
+  type: cadencegem
+  bus: sysbus
+  base_address: 4278910976
+- id: gem1
+  type: cadencegem
+  bus: sysbus
+  base_address: 4278976512
+- id: gem2
+  type: cadencegem
+  bus: sysbus
+  base_address: 4279042048
+- id: gem3
+  type: cadencegem
+  bus: sysbus
+  base_address: 4279107584
+- id: phy
+  type: ethernetphysicallayer
+  bus: gem0
+  base_address: 0
+- id: gpio
+  type: xilinxgpiops
+  bus: sysbus
+  base_address: 4278845440
+- id: ipi
+  type: stub
+  renode_type: zynqmp_ipi
+  bus: sysbus
+  base_address: 4281335808
+- id: rtc
+  type: stub
+  renode_type: zynqmp_rtc
+  bus: sysbus
+  base_address: 4289069056
+- id: L1_PLL_STATUS_READ_1_SERDES_REGISTER
+  type: arraymemory
+  bus: sysbus
+  base_address: 4248855524
+- id: L2_PLL_STATUS_READ_1_SERDES_REGISTER
+  type: arraymemory
+  bus: sysbus
+  base_address: 4248871908
+- id: L3_PLL_STATUS_READ_1_SERDES_REGISTER
+  type: arraymemory
+  bus: sysbus
+  base_address: 4248888292
+- id: PS_CTRL_STATUS_AMS_REGISTER
+  type: pythonperipheral
+  bus: sysbus
+  base_address: 4289003584
+- id: qspi
+  type: stub
+  renode_type: zynqmp_gqspi
+  bus: sysbus
+  base_address: 4279173120
+provenance:
+  generated_by: scripts/onboard_hw_targets.py

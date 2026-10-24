@@ -1,0 +1,78 @@
+name: SAMD actual CODAL blocking SPI terminal-result lease guest
+on:
+  pull_request:
+    paths: ['crates/core/tests/samd_real_spi_lease_guest.rs', '.github/workflows/samd-real-spi-lease-guest.yml']
+permissions:
+  contents: read
+concurrency:
+  group: real-spi-lease-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  LABWIRED_SPI_SOURCE: 0f952e5399c0723f8312b9f9a7d767272856d099
+jobs:
+  spi-lease-guest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: CrispStrobe/codal-samd
+          ref: 0f952e5399c0723f8312b9f9a7d767272856d099
+          path: owned-lease-source
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: lancaster-university/codal-core
+          ref: 2ed19d64ec3359143409a4b0a9758b4aeef3ee7d
+          path: owned-lease-core
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: lancaster-university/codal-core
+          ref: 2ed19d64ec3359143409a4b0a9758b4aeef3ee7d
+          path: owned-positive-core
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: Swatinem/rust-cache@v2
+      - name: Build separate blocking-lease and positive callers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-arm-none-eabi
+          arm-none-eabi-g++ --version
+          dpkg-query -W gcc-arm-none-eabi
+          cd owned-lease-source
+          bash runtime-services/build.sh ../owned-lease-core "$RUNNER_TEMP/spi-lease-14" 14
+          bash runtime-services/build.sh ../owned-positive-core "$RUNNER_TEMP/spi-lease-8" 8
+      - name: Nonvacuous blocking-lease and positive ordering controls
+        run: |
+          cargo test --release --locked -p labwired-core --test samd_real_spi_lease_guest -- --nocapture
+          cargo test --release --locked -p labwired-core --test samd_real_spi_guest -- --nocapture
+      - name: Execute all four actual blocking-lease and positive cases
+        run: |
+          set -o pipefail
+          lease_failures=0
+          for mode in 14 8; do
+            if test "$mode" = 14; then fixture=samd_real_spi_lease_guest; else fixture=samd_real_spi_guest; fi
+            export LABWIRED_SPI_FIXTURE_DIR="$RUNNER_TEMP/spi-lease-$mode"
+            for profile in default scheduler; do
+              feature_args=()
+              if test "$profile" = scheduler; then feature_args=(--features event-scheduler); fi
+              if ! cargo test --release --locked -p labwired-core "${feature_args[@]}" --test "$fixture" -- --ignored --nocapture 2>&1 | tee "spi-lease-$mode-$profile.log"; then
+                lease_failures=$((lease_failures + 1))
+              fi
+            done
+          done
+          test "$lease_failures" -eq 0
+      - name: Preserve actual source and blocking-lease observations
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: actual-codal-spi-blocking-lease-guest-results
+          path: |
+            spi-lease-*.log
+            ${{ runner.temp }}/spi-lease-14/
+            ${{ runner.temp }}/spi-lease-8/

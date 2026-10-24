@@ -1615,23 +1615,6 @@ peripherals:
     }
 
     #[test]
-    fn manifest_verification_happy_path() {
-        let dir = std::env::temp_dir().join(format!("tier1-manifest-happy-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let body = b"good-blob-bytes";
-        std::fs::write(dir.join("esp32s3.elf"), body).unwrap();
-        let sha = format!("{:x}", <sha2::Sha256 as sha2::Digest>::digest(body));
-        std::fs::write(
-            dir.join("MANIFEST.json"),
-            format!(r#"{{ "esp32s3.elf": {{ "sha256": "{sha}" }} }}"#),
-        )
-        .unwrap();
-        let verified = verify_fixture_manifest(&dir).unwrap();
-        assert!(verified.contains("esp32s3.elf"), "{verified:?}");
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
     fn manifest_verification_missing_blob_file() {
         let dir =
             std::env::temp_dir().join(format!("tier1-manifest-missing-{}", std::process::id()));

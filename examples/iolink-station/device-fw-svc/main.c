@@ -79,6 +79,30 @@ static const iolink_ds_storage_api_t DS_STORAGE = {
     .erase = ds_nvm_erase,
 };
 
+/* RAM-backed platform NVM for the parameter subsystem. The pinned device stack
+ * rejects a persistent parameter write when the NVM hook fails
+ * (iolink_params_ctx_set: "A rejected persistent write must not appear accepted
+ * in RAM/readback"), so the example must provide working NVM hooks — otherwise
+ * a Data-Storage restore is acknowledged but the applied value never appears in
+ * the readback. The DS hooks above cover the DS engine's own storage. */
+static uint8_t g_params_nvm[256];
+
+int iolink_nvm_read(uint32_t offset, uint8_t* data, size_t len) {
+    if ((size_t)offset + len > sizeof(g_params_nvm)) {
+        return -1;
+    }
+    memcpy(data, &g_params_nvm[offset], len);
+    return 0;
+}
+
+int iolink_nvm_write(uint32_t offset, const uint8_t* data, size_t len) {
+    if ((size_t)offset + len > sizeof(g_params_nvm)) {
+        return -1;
+    }
+    memcpy(&g_params_nvm[offset], data, len);
+    return 0;
+}
+
 /* RCC (STM32L4, RM0351 §6.4) — enable peripheral clocks before touching their
  * registers. The simulator models clock-gating: USART1 (debug, APB2) and USART2
  * (IO-Link C/Q PHY, APB1) are unclocked out of reset and their register writes

@@ -47,9 +47,10 @@ jobs:
             . -> target
 
       - name: Install ARM Toolchain
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-arm-none-eabi
+        timeout-minutes: 10
+        uses: ./.github/actions/apt-install-cached
+        with:
+          packages: gcc-arm-none-eabi libnewlib-arm-none-eabi
 
       - name: Install ARM and RISC-V targets
         run: |
@@ -108,9 +109,15 @@ jobs:
       # clang + rust-lld build the bare-metal C examples (e.g. the H563 UDS
       # responder); arm-none-eabi-objcopy strips them for the sim.
       - name: Install C cross toolchain
+        timeout-minutes: 10
+        uses: ./.github/actions/apt-install-cached
+        with:
+          packages: gcc-arm-none-eabi libnewlib-arm-none-eabi
+      - name: Install clang
+        timeout-minutes: 10
         run: |
-          sudo apt-get update
-          sudo apt-get install -y clang gcc-arm-none-eabi
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y clang
 
       # Rebuild the H563 UDS responder from source against the pinned UDSLib so a
       # firmware/library regression is caught here, not on the live blog demo.

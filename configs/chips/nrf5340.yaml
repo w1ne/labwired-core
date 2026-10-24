@@ -43,6 +43,15 @@ ram:
   base: 0x20000000
   size: "512KB"
 peripherals:
+  # SysTick: an ARMv6-M/ARMv7-M/ARMv8-M core peripheral every Cortex-M on
+  # this family has. The Nordic SVD starts above the PPB, so it is declared
+  # by hand; without it, any firmware using SysTick (the Arduino and Zephyr
+  # cores both do) faults on its first SYST_CSR write.
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+    size: "16B"
+
   # ── Behavioural models (shared nRF52 implementations, reused at nRF5340 bases) ──
 
   # CLOCK / POWER / RESET share peripheral id 5 (0x50005000). The model settles
@@ -207,10 +216,10 @@ peripherals:
     size: "4KB"
     config:
       debug_schema: "../peripherals/nrf5340/gpiote0_s.yaml"
-  # DPPIC — the RTC/timer SUBSCRIBE/PUBLISH channel wiring is poked here at boot
-  # but is not read back; benign for a UART smoke boot.
+  # DPPIC channel-enable subset. UARTE implements its own configured
+  # ENDTX -> STOPTX route; cross-instance and other DPPI routes are unmodelled.
   - id: "dppic"
-    type: "nrf5340_dppic_stub"
+    type: "nrf5340_dppic"
     base_address: 0x50017000
     size: "4KB"
     config:

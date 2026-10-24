@@ -34,6 +34,17 @@
 //!   trigger never fires inside the handler it would re-enter.
 //! * `hit` (bit 20) is set by hardware when the trigger fires and cleared only
 //!   by software.
+//! * CPU snapshots carry `tselect`, every `tdata1`/`tdata2` and `tcontrol`
+//!   ([`TriggerSnapshot`]), so a resumed machine keeps its watchpoints.
+//!
+//! Provenance of the count and of `tdata3`: re-checked 2026-10-11 against
+//! what is available offline. esp-hal 1.1.1 `src/debugger.rs` confirms the
+//! `tdata1` field layout (load/store/execute/u/m, match 10:7 clipping to 1,
+//! action 15:12, hit 20, dmode 27) and `tcontrol` `mte`/`mpte`, and uses
+//! triggers 0 and 1 only; it states neither the trigger count nor anything
+//! about `tdata3`. ESP-IDF's `soc_caps.h` and the C3 TRM are not available
+//! offline, so the count (8) and `tdata3` reading 0 rest on them as cited
+//! above and were not re-verified.
 
 /// Number of triggers the ESP32-C3 implements.
 pub const TRIGGER_COUNT: usize = 8;
@@ -100,7 +111,57 @@ impl Default for TriggerModule {
     }
 }
 
+/// The trigger module's software-visible state, for CPU snapshots: `tselect`,
+/// every trigger's `tdata1` (configuration and its `hit` bit) and `tdata2`
+/// (match address), and `tcontrol`. `tdata3` is not implemented (reads 0) and
+/// `tinfo` is constant, so neither is carried; the `armed` cache is derived.
+///
+/// The per-trigger banks are `Vec`s rather than `[u32; TRIGGER_COUNT]` so a
+/// snapshot taken with a different trigger count still decodes; [`restore`]
+/// takes what fits and legalises it.
+///
+/// [`restore`]: TriggerModule::restore
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct TriggerSnapshot {
+    pub tselect: u32,
+    pub tdata1: Vec<u32>,
+    pub tdata2: Vec<u32>,
+    pub tcontrol: u32,
+}
+
 impl TriggerModule {
+    /// Capture the state a resumed machine needs to keep its breakpoints and
+    /// watchpoints (and their `hit` bits).
+    pub fn snapshot(&self) -> TriggerSnapshot {
+        TriggerSnapshot {
+            tselect: self.tselect,
+            tdata1: self.tdata1.to_vec(),
+            tdata2: self.tdata2.to_vec(),
+            tcontrol: self.tcontrol,
+        }
+    }
+
+    /// Restore from [`Self::snapshot`]. Values go through the same WARL rules
+    /// a CSR write does, so a hand-edited or foreign snapshot cannot put the
+    /// module in a state firmware could not have reached; triggers the
+    /// snapshot does not cover come back at reset.
+    pub fn restore(&mut self, snap: &TriggerSnapshot) {
+        *self = Self::default();
+        for i in 0..TRIGGER_COUNT {
+            if let Some(&t1) = snap.tdata1.get(i) {
+                self.tdata1[i] = legalize_tdata1(t1);
+            }
+            if let Some(&t2) = snap.tdata2.get(i) {
+                self.tdata2[i] = t2;
+            }
+        }
+        if (snap.tselect as usize) < TRIGGER_COUNT {
+            self.tselect = snap.tselect;
+        }
+        self.tcontrol = snap.tcontrol & (MTE | MPTE);
+        self.recompute_armed();
+    }
+
     /// True if some trigger can fire. When false, no access can trap.
     #[inline]
     pub fn armed(&self) -> bool {
@@ -376,6 +437,43 @@ mod tests {
         assert!(tm.check_data(0x100, 4, AccessKind::Store).is_some());
         tm.on_trap_entry();
         assert!(tm.check_data(0x100, 4, AccessKind::Store).is_none());
+    }
+
+    #[test]
+    fn snapshot_round_trips_every_bank_and_rearms() {
+        let mut tm = TriggerModule::default();
+        arm(&mut tm, 0, BIT_M | BIT_STORE | (1 << 7), 0x3FC8_1000 | 0b01);
+        arm(&mut tm, 5, BIT_M | BIT_EXECUTE, 0x4200_0100);
+        assert!(tm.check_execute(0x4200_0100, 4).is_some(), "sets hit on 5");
+        tm.write_csr(0x7A0, 3);
+        let snap = tm.snapshot();
+        assert_eq!(snap.tdata1.len(), TRIGGER_COUNT);
+
+        let mut back = TriggerModule::default();
+        back.restore(&snap);
+        assert_eq!(back, tm, "every field, including the armed cache");
+        assert_eq!(back.read_csr(0x7A0), Some(3));
+        back.write_csr(0x7A0, 5);
+        assert_eq!(back.read_csr(0x7A1).unwrap() & HIT, HIT, "hit survives");
+        assert!(back.check_data(0x3FC8_1002, 2, AccessKind::Store).is_some());
+    }
+
+    #[test]
+    fn restore_legalises_and_tolerates_other_bank_sizes() {
+        let snap = TriggerSnapshot {
+            tselect: 99,
+            tdata1: vec![0xFFFF_FFFF],
+            tdata2: vec![0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70, 0x80, 0x90],
+            tcontrol: 0xFFFF_FFFF,
+        };
+        let mut tm = TriggerModule::default();
+        tm.restore(&snap);
+        assert_eq!(tm.read_csr(0x7A0), Some(0), "out-of-range tselect");
+        assert_eq!(tm.read_csr(0x7A1), Some(legalize_tdata1(0xFFFF_FFFF)));
+        assert_eq!(tm.read_csr(0x7A5), Some(MTE | MPTE));
+        tm.write_csr(0x7A0, 7);
+        assert_eq!(tm.read_csr(0x7A1), Some(TDATA1_RESET), "not in snapshot");
+        assert_eq!(tm.read_csr(0x7A2), Some(0x80), "extra entries ignored");
     }
 
     #[test]

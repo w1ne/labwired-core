@@ -1,0 +1,20 @@
+name: cortex-a53-gicv2
+description: 'cortex-a53-gicv2 (root platform, Generic). Architecture: ARMv8-A (AArch64).'
+family: Generic
+code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
+  \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
+pass_rate: 100
+verified: true
+system: systems/onboarding/cortex-a53-gicv2.yaml
+provenance:
+  generated_by: scripts/onboard_hw_targets.py
+validation:
+  method: ci-arm-fixture-simulation
+  reason: simulation-ok
+  checks:
+    system_manifest: true
+    chip_descriptor: true
+    simulation: true
+  timestamp_utc: '2026-10-18T14:39:52.246968+00:00'
+  run_url: ''
+  artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/cortex-a53-gicv2.md

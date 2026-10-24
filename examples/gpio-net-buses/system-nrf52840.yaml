@@ -1,0 +1,6 @@
+# nRF52840 with nothing on the board: every pad these examples use goes to a
+# gpio_net in the environment file.
+name: "nrf52840-bare"
+chip: "../../configs/chips/nrf52840.yaml"
+external_devices: []
+board_io: []

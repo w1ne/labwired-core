@@ -1,0 +1,40 @@
+# RTC GPIO between a classic ESP32 and an ESP32-S3 (register level,
+# src/esp32x_rtc_gpio.S): pads the RTC IO MUX owns (RTC_IO MUX_SEL = 1),
+# driven through RTC_GPIO_OUT / ENABLE and read in RTC_GPIO_IN. The classic
+# part's GPIO25 (RTC_GPIO6) is open drain and the S3's GPIO4 (RTC_GPIO4)
+# pulls a2b up with its RTC_IO RUE; the S3's GPIO5 (RTC_GPIO5) answers on b2a
+# into the classic part's GPIO26 (RTC_GPIO7). Then the classic part hands
+# GPIO27 from the RTC domain to the digital output it set up from the start:
+# the S3's GPIO6 (RTC_GPIO6, RDE) sees it only after MUX_SEL clears. No board
+# pull on any net: every weak level is a member's own.
+schema_version: "1.0"
+name: gpio-net-rtc-gpio-esp32-esp32s3
+nodes:
+  - id: esp
+    system: "../../configs/systems/esp32-wroom-32.yaml"
+    firmware: "firmware/esp32-rtc-gpio.elf"
+  - id: esps3
+    system: "../../configs/systems/esp32s3.yaml"
+    firmware: "firmware/esp32s3-rtc-gpio.elf"
+interconnects:
+  - type: gpio_net
+    nodes: [esp, esps3]
+    config:
+      name: a2b
+      members:
+        - { node: esp, peripheral: gpio, pin: 25 }     # RTC_GPIO6, open drain
+        - { node: esps3, peripheral: gpio, pin: 4 }    # RTC_GPIO4, RUE
+  - type: gpio_net
+    nodes: [esp, esps3]
+    config:
+      name: b2a
+      members:
+        - { node: esps3, peripheral: gpio, pin: 5 }    # RTC_GPIO5
+        - { node: esp, peripheral: gpio, pin: 26 }     # RTC_GPIO7
+  - type: gpio_net
+    nodes: [esp, esps3]
+    config:
+      name: handoff
+      members:
+        - { node: esp, peripheral: gpio, pin: 27 }     # RTC_GPIO17 -> digital
+        - { node: esps3, peripheral: gpio, pin: 6 }    # RTC_GPIO6, RDE

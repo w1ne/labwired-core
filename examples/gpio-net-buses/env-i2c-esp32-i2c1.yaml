@@ -1,0 +1,31 @@
+# A classic ESP32 I2C1 controller (I2C_EXT1 at 0x3FF6_7000, register level,
+# src/esp32x_i2c_controller.S built with INST1 and PADS_HI) and an STM32G071
+# I2C1 target at 0x42 (the env-i2c.yaml target), on the bank-1 pads GPIO32
+# (SDA) / GPIO33 (SCL) — the only two of GPIO32..39 with an output stage —
+# through the classic GPIO matrix (I2CEXT1_SCL 95, I2CEXT1_SDA 96).
+schema_version: "1.0"
+name: gpio-net-i2c-esp32-i2c1
+nodes:
+  - id: esp
+    system: "../../configs/systems/esp32-wroom-32.yaml"
+    firmware: "firmware/esp32-i2c1-controller.elf"
+  - id: b
+    system: "system.yaml"
+    firmware: "firmware/i2c-target.elf"
+interconnects:
+  - type: gpio_net
+    nodes: [esp, b]
+    config:
+      name: scl
+      pull: up
+      members:
+        - { node: esp, peripheral: gpio, pin: 33 }   # I2CEXT1_SCL
+        - { node: b, peripheral: gpiob, pin: 6 }
+  - type: gpio_net
+    nodes: [esp, b]
+    config:
+      name: sda
+      pull: up
+      members:
+        - { node: esp, peripheral: gpio, pin: 32 }   # I2CEXT1_SDA
+        - { node: b, peripheral: gpiob, pin: 7 }

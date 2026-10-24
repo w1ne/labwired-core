@@ -57,6 +57,7 @@ struct InjectionRun {
     stderr: String,
     uart: String,
     status: String,
+    result: serde_json::Value,
 }
 
 fn run_script(root: &std::path::Path, script_yaml: &str) -> InjectionRun {
@@ -86,10 +87,13 @@ fn run_script(root: &std::path::Path, script_yaml: &str) -> InjectionRun {
         .expect("execute labwired");
 
     let uart = std::fs::read_to_string(out_dir.join("uart.log")).unwrap_or_default();
-    let status = std::fs::read_to_string(out_dir.join("result.json"))
+    let result = std::fs::read_to_string(out_dir.join("result.json"))
         .ok()
         .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
-        .and_then(|v| v["status"].as_str().map(str::to_string))
+        .unwrap_or(serde_json::Value::Null);
+    let status = result["status"]
+        .as_str()
+        .map(str::to_string)
         .unwrap_or_default();
 
     let _ = std::fs::remove_dir_all(&out_dir);
@@ -98,6 +102,7 @@ fn run_script(root: &std::path::Path, script_yaml: &str) -> InjectionRun {
         stderr: String::from_utf8_lossy(&output.stderr).to_string(),
         uart,
         status,
+        result,
     }
 }
 
@@ -282,6 +287,64 @@ assertions:
         "expected the runner to log the applied injection\n--- stderr ---\n{}",
         run.stderr
     );
+}
+
+/// `result.json` `uart_lines` stamps each printed line with the simulated time
+/// it appeared: the reply to a byte injected mid-run is stamped at or after
+/// the injection, the boot banner before it, and the stamped text is exactly
+/// the capture's lines.
+#[test]
+fn uart_lines_are_stamped_in_simulated_time() {
+    let root = repo_root();
+    let fw = ensure_fixture_built(&root);
+    let inject_at = 3000u64;
+    let yaml = script(
+        &root,
+        &fw,
+        &format!(
+            r#"uart_injections:
+  - uart: "uart1"
+    bytes: "Q"
+    trigger: !after_cycles {{ cycles: {inject_at} }}
+"#
+        ),
+    );
+    let run = run_script(&root, &yaml);
+    let lines = run.result["uart_lines"]["lines"]
+        .as_array()
+        .unwrap_or_else(|| panic!("no uart_lines block: {}", run.result));
+    let texts: Vec<&str> = lines.iter().map(|l| l["text"].as_str().unwrap()).collect();
+    let captured: Vec<&str> = run.uart.lines().collect();
+    assert_eq!(texts, captured, "stamped text must be the capture's lines");
+    let at = |text: &str, key: &str| {
+        lines
+            .iter()
+            .find(|l| l["text"] == text)
+            .and_then(|l| l[key].as_u64())
+            .unwrap()
+    };
+    assert!(
+        at("READY", "cycle") <= inject_at,
+        "boot banner precedes the injection"
+    );
+    assert!(
+        at("BYE", "cycle_lo") >= at("READY", "cycle"),
+        "lines stamped in print order"
+    );
+    assert!(
+        at("BYE", "cycle") >= inject_at,
+        "the reply cannot precede its trigger"
+    );
+    for l in lines {
+        let (lo, hi) = (
+            l["cycle_lo"].as_u64().unwrap(),
+            l["cycle"].as_u64().unwrap(),
+        );
+        assert!(lo <= hi, "window bounds ordered: {l}");
+        if let Some(end) = l["end_cycle"].as_u64() {
+            assert!(end >= hi, "newline cannot precede the first byte: {l}");
+        }
+    }
 }
 
 /// Naming a UART peripheral that doesn't exist on the built machine is a

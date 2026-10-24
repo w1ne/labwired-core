@@ -1,0 +1,21 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+# A frame with a broken CRC is rejected, then traffic recovers.
+schema_version: "1.2"
+inputs:
+  firmware: "../../../tests/fixtures/coverage-brake-ecu-cm3.elf"
+  system: "../system.yaml"
+limits:
+  max_steps: 200000
+uart_injections:
+  - uart: "uart1"
+    bytes: [0xA5, 0x01, 0x00, 0x00, 0x7A, 0xA5, 0x02, 0x32, 0x00, 0xAE, 0xA5, 0x03, 0x32, 0x00, 0x20]
+assertions:
+  - uart_contains: "BRAKE ECU READY"
+  - uart_contains: "E2E CRC ERROR"
+  - uart_contains: "BRAKE ON"
+  - expected_stop_reason: max_steps

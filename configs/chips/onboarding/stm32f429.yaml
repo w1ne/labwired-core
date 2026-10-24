@@ -134,7 +134,7 @@ peripherals:
   bus: sysbus
   base_address: 1073898496
 - id: rng
-  type: stm32f4_rng
+  type: stm32_rng
   bus: sysbus
   base_address: 1342572544
 - id: iwdg

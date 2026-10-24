@@ -1,4 +1,5 @@
 use super::*;
+use crate::bus::CpuWritePolicy;
 use crate::{DmaRequest, Machine, SimulationConfig};
 use std::collections::HashMap;
 
@@ -3203,6 +3204,98 @@ fn t16_ram_fast_path_does_not_cache_an_unsupported_thumb32_prefix() {
     assert_eq!(bus.access_counts(), (0, 0, 0));
 }
 
+#[test]
+fn str_fast_path_obeys_ram_policy() {
+    let mut cpu = CortexM::new();
+    let mut bus = crate::bus::SystemBus::new();
+    assert!(
+        !bus.ram.data.is_empty(),
+        "SystemBus::new() must provide RAM for this test"
+    );
+    let ram_addr = bus.ram.base_addr as u32;
+    bus.memory_policy.ram = CpuWritePolicy::Fault;
+    // str r0, [r1]  (Thumb-16 0x6008)
+    assert!(bus.flash.write_u16(0x100, 0x6008));
+    cpu.r0 = 0xAB;
+    cpu.r1 = ram_addr;
+    cpu.pc = 0x100;
+
+    // The single-instruction fast decoder is only reached from the batch
+    // runner, so drive it directly: it must refuse rather than commit.
+    assert!(
+        !cpu.try_step_t16_ram_fast(&mut bus, true),
+        "the fast decoder must defer a policy-blocked store"
+    );
+    assert_eq!(
+        bus.ram.read_u32(u64::from(ram_addr)),
+        Some(0),
+        "the deferred fast path must not commit"
+    );
+
+    // The refusal defers to the slow interpreted path, which is gated: it
+    // records the violation and raises a precise data fault without committing.
+    let config = bus.config.clone();
+    let err = cpu
+        .step_internal(&mut bus, &[], &config)
+        .expect_err("the gated slow path must raise a memory violation");
+    assert!(matches!(
+        err,
+        SimulationError::MemoryViolation(a) if a == u64::from(ram_addr)
+    ));
+    assert_eq!(
+        bus.memory_policy.violations_ram, 1,
+        "the RAM policy gate must see the store (fast path must defer to the slow path)"
+    );
+    assert_eq!(
+        bus.ram.read_u32(u64::from(ram_addr)),
+        Some(0),
+        "the store must not commit"
+    );
+}
+
+/// Every T16 store shape in the per-op fast decoder must defer to the gated
+/// slow path when the RAM policy blocks CPU stores. A committed store here
+/// would bypass `memory_policy.violations_ram` entirely.
+#[test]
+fn t16_fast_decoder_defers_every_store_shape_under_ram_policy() {
+    let mut bus = crate::bus::SystemBus::new();
+    assert!(!bus.ram.data.is_empty());
+    let ram_addr = bus.ram.base_addr as u32;
+    // str r0,[r1]; strb r0,[r1]; strh r0,[r1]; str r0,[sp];
+    // str r0,[r1,r0]; strb r0,[r1,r0]; strh r0,[r1,r0]
+    // The register forms encode Rm = 0, and r0 = 0xAB, so their target is
+    // ram_addr + 0xAB; the immediate forms target ram_addr.
+    let cases: [(u16, u32); 7] = [
+        (0x6008, 0),
+        (0x7008, 0),
+        (0x8008, 0),
+        (0x9000, 0),
+        (0x5008, 0xAB),
+        (0x5408, 0xAB),
+        (0x5208, 0xAB),
+    ];
+    for (op, target) in cases {
+        let mut cpu = CortexM::new();
+        bus.memory_policy.ram = CpuWritePolicy::Fault;
+        cpu.r0 = 0xAB;
+        cpu.r1 = ram_addr;
+        cpu.sp = ram_addr;
+        let pc = cpu.pc;
+        let fast = cpu.execute_t16_fast_op(&mut bus, decode_thumb_16(op));
+        assert!(!fast, "op {op:#06x} must defer, not commit");
+        assert_eq!(cpu.pc, pc, "op {op:#06x} must not retire");
+        assert_eq!(
+            bus.ram.read_u32(u64::from(ram_addr.wrapping_add(target))),
+            Some(0),
+            "op {op:#06x} committed to RAM"
+        );
+        assert_eq!(
+            bus.memory_policy.violations_ram, 0,
+            "op {op:#06x}: the refusal itself must not record (the slow path does)"
+        );
+    }
+}
+
 /// `vldr s0, [pc, #0]` reads Align(PC+4, 4). The address of the instruction
 /// itself is 4 bytes too low and lands on the opcode, not the literal.
 #[test]
@@ -3395,6 +3488,111 @@ fn coalesced_t16_store_spin_matches_compiler_loop_from_every_phase_and_budget() 
         .opcode = 0x4668;
     assert_eq!(alias.run_t16_store_spin(&mut alias_bus, 40), 0);
     assert_eq!(alias_bus.access_counts(), (0, 0, 0));
+}
+
+/// The coalesced store-spin fold writes RAM through its closed-form
+/// recurrence, not through the bus, so it must refuse entirely when the CPU
+/// write policy makes the store illegal. The caller then falls back to
+/// per-instruction stepping, where the gated slow path records the fault.
+#[test]
+fn store_spin_refuses_under_ram_policy() {
+    const BASE: u64 = 0x100;
+    // str r0,[sp]; mov r1,sp; adds r0,r0,#1; b BASE
+    const PROGRAM: [u16; 4] = [0x9000, 0x4669, 0x1c40, 0xe7fb];
+
+    fn fixture() -> (CortexM, crate::bus::SystemBus) {
+        let mut cpu = CortexM::new();
+        cpu.pc = BASE as u32;
+        cpu.sp = 0x2000_0100;
+        cpu.r0 = 1;
+        let mut bus = crate::bus::SystemBus::new();
+        for (i, op) in PROGRAM.iter().enumerate() {
+            let pc = BASE as u32 + (i as u32 * 2);
+            assert!(bus.flash.write_u16(u64::from(pc), *op));
+            cpu.decode_cache[((pc >> 1) & 0x0fff) as usize] = Some(DecodeCacheEntry {
+                tag: pc,
+                instruction: decode_thumb_16(*op),
+                opcode: u32::from(*op),
+                pc_increment: 2,
+                cycles: 1,
+            });
+        }
+        (cpu, bus)
+    }
+
+    let (mut cpu, mut bus) = fixture();
+    bus.memory_policy.ram = CpuWritePolicy::Fault;
+    assert_eq!(
+        cpu.run_t16_store_spin(&mut bus, 40),
+        0,
+        "the fold must refuse rather than commit a policy-blocked store"
+    );
+    assert_eq!(
+        bus.ram.read_u32(0x2000_0100),
+        Some(0),
+        "the refused fold must not write RAM"
+    );
+    assert_eq!(bus.access_counts(), (0, 0, 0));
+
+    // The fallback per-instruction step goes through the gated slow path and
+    // must record the violation without committing the store.
+    let config = bus.config.clone();
+    let err = cpu
+        .step_internal(&mut bus, &[], &config)
+        .expect_err("the gated slow path must raise a memory violation");
+    assert!(matches!(err, SimulationError::MemoryViolation(0x2000_0100)));
+    assert_eq!(bus.memory_policy.violations_ram, 1);
+    assert_eq!(bus.ram.read_u32(0x2000_0100), Some(0));
+}
+
+/// The coalesced ADDS/STR/LDR/B fold commits its word store through a
+/// closed-form recurrence, not through the bus, so it must refuse entirely
+/// under a non-Allow RAM policy, exactly like the store-spin fold.
+#[test]
+fn ram_fast_coalescer_refuses_under_ram_policy() {
+    const BASE: u64 = 0x100;
+    const RAM: u64 = 0x2000_0000;
+    // adds r0,#1; str r0,[r1]; ldr r2,[r1]; b BASE
+    const PROGRAM: [u16; 4] = [0x3001, 0x6008, 0x680a, 0xe7fb];
+
+    fn fixture() -> (CortexM, crate::bus::SystemBus) {
+        let mut cpu = CortexM::new();
+        cpu.pc = BASE as u32;
+        cpu.r0 = 0;
+        cpu.r1 = RAM as u32;
+        let mut bus = crate::bus::SystemBus::new();
+        for (i, op) in PROGRAM.iter().enumerate() {
+            let pc = BASE as u32 + (i as u32 * 2);
+            assert!(bus.flash.write_u16(u64::from(pc), *op));
+            cpu.decode_cache[((pc >> 1) & 0x0fff) as usize] = Some(DecodeCacheEntry {
+                tag: pc,
+                instruction: decode_thumb_16(*op),
+                opcode: u32::from(*op),
+                pc_increment: 2,
+                cycles: 1,
+            });
+        }
+        (cpu, bus)
+    }
+
+    // Default policy: the fold coalesces the whole budget into one store.
+    let (mut cpu, mut bus) = fixture();
+    assert_eq!(cpu.run_t16_ram_fast(&mut bus, 40, true), 40);
+    assert_eq!(bus.ram.read_u32(RAM), Some(10));
+
+    let (mut cpu, mut bus) = fixture();
+    bus.memory_policy.ram = CpuWritePolicy::Fault;
+    assert_eq!(
+        cpu.run_t16_ram_fast(&mut bus, 40, true),
+        0,
+        "the fold must refuse rather than commit a policy-blocked store"
+    );
+    assert_eq!(
+        bus.ram.read_u32(RAM),
+        Some(0),
+        "the refused fold must not write RAM"
+    );
+    assert_eq!(bus.access_counts(), (0, 0, 0));
 }
 
 #[test]
@@ -3594,4 +3792,29 @@ fn vmov_two_core_registers_moves_and_stores_nothing() {
     assert_eq!((cpu.fpu_s[4], cpu.fpu_s[5]), (0x1111_2222, 0x3333_4444));
     run_test_instr(&mut cpu, &mut bus, 0xEC532A12, true);
     assert_eq!((cpu.r2, cpu.r3), (0x1111_2222, 0x3333_4444));
+}
+
+#[cfg(feature = "jit")]
+#[test]
+fn jit_gate_refuses_non_default_ram_policy() {
+    let cpu = CortexM::new();
+    let mut bus = crate::bus::SystemBus::new();
+    assert!(cpu.jit_gate_allows(&bus, &[]));
+    bus.memory_policy.ram = CpuWritePolicy::Warn;
+    assert!(!cpu.jit_gate_allows(&bus, &[]));
+    bus.memory_policy.ram = CpuWritePolicy::Fault;
+    assert!(!cpu.jit_gate_allows(&bus, &[]));
+}
+
+#[cfg(feature = "jit")]
+#[test]
+fn jit_gate_refuses_an_armed_debug_watch() {
+    let cpu = CortexM::new();
+    let mut bus = crate::bus::SystemBus::new();
+    assert!(cpu.jit_gate_allows(&bus, &[]));
+    assert!(bus.add_debug_watch(0x2000_0100, 4, false, true));
+    assert!(
+        !cpu.jit_gate_allows(&bus, &[]),
+        "a compiled block writes raw RAM and must not bypass a watch"
+    );
 }

@@ -7,6 +7,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-17
+
+### Added
+- A port emits a one-line gateway record (`iolinki-gw/1`) once the device
+  identity is known, so bench and bring-up captures name the device without
+  extra probing.
+
+### Changed
+- **Establish communication per V1.1.5 7.3.2.2 (Figure 36, Table 44).** One
+  wake-up request is followed by a TYPE_0 test message at COM3, COM2 and COM1
+  until the device answers; there is no wake-up between rates any more. The
+  first test message waits T_REN (Table 10) plus T_DMT, and each further rate
+  waits T_DMT in its own bit time (Table 42). With no answer at the last rate the
+  next wake-up waits T_DWU; after n_WU + 1 wake-ups the failed sequence is
+  reported (`IOLINK_MASTER_ERR_RETRY_LIMIT`, `diagnostics.establish_failures`),
+  the PHY goes inactive and a new sequence starts after T_SD (Figure 33). The
+  port stays in STARTUP instead of latching ERROR. `wake_retry_limit` now counts
+  wake-ups per sequence, not per rate.
+- **COMLOST restarts from the wake-up.** Message retry exhaustion (MaxRetry = 2)
+  in PREOPERATE and OPERATE re-enters STARTUP (Table 46, Table 44 T9/T14,
+  Table 85 T3) instead of latching ERROR.
+- `IOLINK_MASTER_PORT_STORAGE_SIZE` grew from 1296 to 1312 bytes for
+  `config.t_sd_100us` and `diagnostics.establish_failures`.
+
+### Fixed
+- **OPERATE M-sequence reply layout (wire change).** The reply to a READ
+  M-sequence is now decoded as `[OD][PD-in] CKS` and the reply to a WRITE
+  M-sequence as `[PD-in] CKS` with no OD, matching the device stack and Figures
+  A.9/A.10/A.13/A.14. Reply framing and OD routing follow the direction of
+  the M-sequence on the wire. Device and master must be upgraded together for
+  the multi-octet OPERATE types: mixed old/new pairings frame replies with the
+  wrong layout and produce checksum errors. Use with iolinki device stack 3.0.0.
+- The master now serializes M-sequence exchanges: a new request is deferred
+  while a reply is outstanding, and a response timeout flushes late or partial
+  reply bytes. Replies carry direction-dependent lengths (A.9/A.10/A.13/A.14),
+  so a pipelined send could otherwise mis-frame or desynchronize the stream;
+  the ISDU transport and the diagnosis readout advance on reply receipt and
+  rely on this ordering.
+- `iolink_master_tick_at` / `iolink_master_controller_tick_at` now time out a
+  startup test message after T_M-sequence (A.3.6, 58 T_BIT for TYPE_0, widened
+  by `response_timeout_100us`). Before, the timed API never left
+  "await response" in STARTUP, so a silent port never retried or scanned.
+- An undecodable answer to a test message counts as no answer (Table 46
+  AwaitReply_1); it no longer latches ERROR after two checksum errors.
+- The OPERATE response deadline uses the established rate, not `baudrate`,
+  when `auto_baudrate` is set.
+- `iolink_master_get_next_tick_time` reports the end of a startup wait.
+- Link the real-device test's file-backed NVM hooks directly into its executable
+  so weak platform stubs cannot mask parameter writes. Check Data Storage
+  readback after reinitializing the stacks.
+
+### Documented
+- Align new master commercial quotes with the Indie/Company product-family
+  packages: named independent individual or legal company, two/eight total
+  scoped assistance hours, and perpetual royalty-free family rights. Retain
+  accepted older grants and archive the previous published offer; the device
+  stack remains separately licensed.
+
+## [1.0.0] - 2026-09-25
+
 ### Changed
 - **BREAKING: spec-conformant wire (IO-Link V1.1.5).** The master now speaks the
   spec message checksum (A.1.6), reply layout (A.1.5: `[PD-in][OD] CKS`, no
@@ -28,6 +88,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `check_quality.sh` now also finds the Debian x86_64 cppcheck MISRA addon path.
 
 ### Added
+- **Zephyr module**: `zephyr/`, a west manifest, and a `native_sim` sample.
 - **Startup timing config**: `t_dmt_tbit` (T_DMT, default 32 bit times) and
   `t_dwu_100us` (T_DWU, default 400 = 40 ms); `wake_retry_limit` now defaults to
   the spec n_WU = 2 when 0, and the response deadline is floored at (11 + 10)
@@ -43,12 +104,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Startup probe** (`master_port.c`): the MinCycleTime probe octet is stored in
   `device_info.min_cycle_time` under every inspection level, including
   `NO_CHECK`.
+- **Table A.10 OD width**: TYPE_2_1 and TYPE_2_2 carry one On-request Data octet.
+- **Event readout**: a cyclic OPERATE reply can no longer complete a diagnosis
+  readout that has not been sent.
 
 ### Documented
 - **Spec conformance audit** against Interface & System Spec V1.1.5 in
   `docs/IMPLEMENTATION_STATUS.md`: the wire, ISDU transport, events, codes and
   timing are now conformant for the master slice (C1..C6); the former
   startup/OPERATE-transition and ISDU I-Service deviations are gone.
+
+### Verified
+- `cmake-ctest` and `labwired-real-firmware-model` are green against the
+  `iolinki` device stack on `develop`.
+- This tag is not an official IO-Link master conformance test. It has not been
+  run against a third-party sensor or actuator. The physical wake-up pulse
+  stays in the PHY adapter.
 
 ## [0.2.0] - 2026-07-04
 
@@ -113,6 +184,7 @@ for the honest gap list).
 - **Project baseline**: dual-license model (GPLv3 + commercial), coordinated-disclosure
   `SECURITY.md`, and `.clang-format` / `.editorconfig`.
 
-[Unreleased]: https://github.com/w1ne/iolinki-master/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/w1ne/iolinki-master/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/w1ne/iolinki-master/compare/v0.2.0...v1.0.0
 [0.2.0]: https://github.com/w1ne/iolinki-master/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/w1ne/iolinki-master/releases/tag/v0.1.0

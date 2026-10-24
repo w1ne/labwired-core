@@ -26,6 +26,9 @@ pub(crate) fn run_snapshot(
 /// same thunk setup, same IPI bridge cadence — so the captured state will
 /// resume bit-identically inside the browser. Thunk PCs are resolved from the
 /// ELF symbol table (no hand-curated per-firmware address list).
+/// Most cycles one skip-enabled `snapshot capture` advance call covers.
+const SNAPSHOT_RUN_CHUNK: u64 = 1_000_000;
+
 pub(crate) fn run_snapshot_capture(
     args: SnapshotCaptureArgs,
     plugins: &[&dyn labwired_core::plugin::ChipPlugin],
@@ -238,16 +241,44 @@ pub(crate) fn run_snapshot_capture(
 
     let mut i: u64 = 0;
     let progress = args.progress_every;
+    // Idle and CCOUNT poll-loop skips, as `labwired test` runs them
+    // (`LABWIRED_IDLE_FAST_FORWARD=0` opts out, and so does a trace, which
+    // must see every retired instruction). A step here is a machine cycle,
+    // so each call advances at most the cycles left to the next progress line
+    // or the end, retired or skipped, and lands where single steps would.
+    let skip = std::env::var("LABWIRED_IDLE_FAST_FORWARD").as_deref() != Ok("0") && ring.is_none();
+    machine.config.idle_fast_forward_enabled = skip;
     while i < args.steps {
         // `advance` rather than `step`: `step` discards the AdvanceReport, so a
         // firmware `simctl` verdict would be silently swallowed and this loop
         // would keep stepping a run the firmware had already ended.
-        match machine.advance(labwired_core::AdvanceRequest::single()) {
+        let request = if skip {
+            let mut chunk = (args.steps - i).min(SNAPSHOT_RUN_CHUNK);
+            if progress > 0 {
+                chunk = chunk.min(progress - i % progress);
+            }
+            labwired_core::AdvanceRequest::run(Some(chunk))
+                .with_cycle_limit(chunk)
+                .with_breakpoints(labwired_core::BreakpointPolicy::Ignore)
+        } else {
+            labwired_core::AdvanceRequest::single()
+        };
+        let before = machine.total_cycles;
+        let advanced = machine.advance(request);
+        // One step is one cycle; a call that faulted before retiring
+        // anything still counts the one step a single-step call counted.
+        let steps = if skip {
+            (machine.total_cycles - before).max(1)
+        } else {
+            1
+        };
+        match advanced {
             Ok(report) => {
                 if let labwired_core::AdvanceStop::FirmwareExit { code } = report.stop {
                     eprintln!(
-                        "[firmware] {} (step {i})",
-                        crate::firmware_exit_message(code)
+                        "[firmware] {} (step {})",
+                        crate::firmware_exit_message(code),
+                        i + steps - 1
                     );
                     break;
                 }
@@ -265,7 +296,7 @@ pub(crate) fn run_snapshot_capture(
         // Secondary-CPU release, secondary stepping and peripheral ticking
         // all happen inside Machine::step. Doing them here as well is how
         // this loop drifted from every other runner in the first place.
-        i += 1;
+        i += steps;
         if progress > 0 && i.is_multiple_of(progress) {
             let cpu1_state = match machine.cpu_secondary.as_ref() {
                 Some(cpu1) => format!("  cpu1=0x{:08x}", cpu1.get_pc()),

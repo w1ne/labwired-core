@@ -1,5 +1,7 @@
 # iolinki-master
 
+The companion device stack is [iolinki](https://github.com/w1ne/iolinki).
+
 `iolinki-master` is a standalone IO-Link master stack. It is intentionally split
 from the device-oriented [`iolinki`](https://github.com/w1ne/iolinki) repository
 and reuses only the narrow shared pieces needed for CRC, frame handling, PHY
@@ -86,3 +88,29 @@ SPDX 2.3) attached to each tagged release.
 closed-source / proprietary products that cannot accept the GPLv3 copyleft).
 Shipping a proprietary product? Email **andrii@shylenko.com**. See
 [`LICENSE`](LICENSE) and [`LICENSE.COMMERCIAL`](LICENSE.COMMERCIAL).
+
+For new quotes using **2026-10-02-indie-company-v4**:
+
+| Package | Holder and product rights | Included assistance |
+| --- | --- | --- |
+| **Indie — €1,399** | Named individual developing their own independent product family, including as a sole trader. Employer or separate-company rights require Company licensing. | Two onboarding hours; 48-hour email response target. |
+| **Company — €4,699** | Named legal company; unlimited authorized employees and contractors working on one agreed product family. | Eight total scoped engineering hours, including quarterly technical reviews during the first year; 24-hour priority email response target. |
+
+Both packages include the same master source, documentation and reference
+release, perpetual royalty-free rights for unlimited units and customers within
+the agreed family, and one year of updates and bug fixes. Optional annual
+updates/support renewal is 20% of the original fee, with coverage agreed in the
+quote. The named family includes variants, successors and hardware revisions
+within that commercial range; an unrelated line needs separate scope.
+
+Agree the target, compiler, PHY and tasks before booking. Assistance covers
+setup/build configuration, MCU/PHY callbacks and wiring review, an integration
+checklist and written findings within the allowance. Larger ports and validation
+work are quoted separately; reproducible stack bug corrections do not consume
+custom engineering hours. Broader families, subsidiaries and SDK redistribution
+use an Enterprise quote.
+
+These packages license **iolinki-master only**; the companion device stack is
+separately licensed. Previously accepted agreements retain their existing rights,
+including older unlimited-deployment and developer-seat grants. See the
+[commercial terms](LICENSE.COMMERCIAL) and [prior published offer](docs/licenses/commercial-pre-v4.md).

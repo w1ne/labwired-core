@@ -219,7 +219,7 @@ fn arm_uarte_tx(machine: &mut Machine<CycleCpu>, buf: u64, bytes: &[u8]) {
 
 fn uarte_complete(m: &Machine<CycleCpu>) -> bool {
     m.bus.read_u32(UARTE_EVENTS_ENDTX).unwrap_or(0) != 0
-        && m.bus.read_u32(UARTE_EVENTS_TXSTOPPED).unwrap_or(0) != 0
+        && m.bus.read_u32(UARTE_EVENTS_TXSTOPPED).unwrap_or(1) == 0
 }
 
 /// Machine + walk-free: two bytes at the reset baud finish after one frame
@@ -237,7 +237,7 @@ fn uarte_easydma_completes_one_frame_per_byte_at_tick_512() {
     let at = advance_until(&mut machine, CYCLE_BUDGET, 1, uarte_complete);
     assert!(
         at.is_some(),
-        "UARTE ENDTX/TXSTOPPED never set within {CYCLE_BUDGET} cycles under \
+        "UARTE ENDTX without a spurious stop never set within {CYCLE_BUDGET} cycles under \
          Machine + peripheral_tick_interval={RECOMMENDED_TICK_INTERVAL} \
          (total_cycles={}, legacy_walk_disabled={}). The frame wait must \
          complete without waiting out an extra bus_tick quantum.",
@@ -254,6 +254,8 @@ fn uarte_easydma_completes_one_frame_per_byte_at_tick_512() {
         machine.bus.read_u32(UARTE_TXD_AMOUNT).unwrap(),
         payload.len() as u32
     );
+    machine.bus.write_u32(UARTE0 + 0x00C, 1).unwrap();
+    assert_eq!(machine.bus.read_u32(UARTE_EVENTS_TXSTOPPED).unwrap(), 1);
 }
 
 // ── SAADC EasyDMA SAMPLE @ tick 512 ─────────────────────────────────────────
@@ -377,7 +379,7 @@ fn uarte_tx_walk1_vs_sched512_completion_cycle_identity() {
 
     assert!(
         uarte_complete(&lane_a) && uarte_complete(&lane_b),
-        "both lanes must raise ENDTX+TXSTOPPED"
+        "both lanes must raise ENDTX without TXSTOPPED"
     );
     assert_eq!(
         lane_a.bus.read_u32(UARTE_TXD_AMOUNT).unwrap(),
@@ -399,4 +401,8 @@ fn uarte_tx_walk1_vs_sched512_completion_cycle_identity() {
         "UARTE TX completion cycle must agree within 1: \
          walk@1 at={at_a}, sched at={at_b}, delta={delta}"
     );
+    for lane in [&mut lane_a, &mut lane_b] {
+        lane.bus.write_u32(UARTE0 + 0x00C, 1).unwrap();
+        assert_eq!(lane.bus.read_u32(UARTE_EVENTS_TXSTOPPED).unwrap(), 1);
+    }
 }

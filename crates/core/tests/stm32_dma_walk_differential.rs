@@ -34,6 +34,9 @@
 
 #![cfg(feature = "event-scheduler")]
 
+mod common;
+
+use common::walk_differential::{assert_walk_differential, probe_at, WalkMode};
 use labwired_core::bus::SystemBus;
 use labwired_core::cpu::CortexM;
 use labwired_core::peripherals::dma::Dma1;
@@ -202,64 +205,44 @@ fn load_firmware_memcpy(bus: &mut SystemBus) {
     fill_source(bus);
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct Probe {
-    step: u64,
-    total_cycles: u64,
-    pc: u32,
-    regs: [u32; 16],
-    isr_count: u32,
-    main_count: u32,
-    dst: Vec<u8>,
+/// The destination buffer as two little-endian u64 words — byte-equality
+/// preserved exactly, with the failure text naming the differing half.
+fn dst_words(machine: &Machine<CortexM>) -> (u64, u64) {
+    let word = |off: u64| {
+        let mut w = [0u8; 8];
+        for (i, b) in w.iter_mut().enumerate() {
+            *b = machine
+                .bus
+                .read_u8(DST_ADDR as u64 + off + i as u64)
+                .unwrap();
+        }
+        u64::from_le_bytes(w)
+    };
+    (word(0), word(8))
 }
 
-fn probe(machine: &Machine<CortexM>, step: u64) -> Probe {
-    let mut regs = [0u32; 16];
-    for (i, r) in regs.iter_mut().enumerate() {
-        *r = machine.read_core_reg(i as u8);
-    }
-    let dst = (0..N)
-        .map(|i| machine.bus.read_u8(DST_ADDR as u64 + i as u64).unwrap())
-        .collect();
-    Probe {
-        step,
-        total_cycles: machine.total_cycles,
-        pc: machine.get_pc(),
-        regs,
-        isr_count: machine.bus.read_u32(ISR_COUNT_ADDR).unwrap(),
-        main_count: machine.bus.read_u32(MAIN_COUNT_ADDR).unwrap(),
-        dst,
-    }
+/// The caller-supplied observables the harness probe carries for this fixture.
+fn extra(machine: &Machine<CortexM>) -> Vec<(&'static str, u64)> {
+    let (lo, hi) = dst_words(machine);
+    vec![
+        (
+            "isr_count",
+            u64::from(machine.bus.read_u32(ISR_COUNT_ADDR).unwrap()),
+        ),
+        (
+            "main_count",
+            u64::from(machine.bus.read_u32(MAIN_COUNT_ADDR).unwrap()),
+        ),
+        ("dst_lo", lo),
+        ("dst_hi", hi),
+    ]
 }
 
-fn run_probed(machine: &mut Machine<CortexM>, entry: u32, steps: u64) -> Vec<Probe> {
-    machine.cpu.pc = entry;
-    let mut probes = Vec::with_capacity(steps as usize);
-    for s in 0..steps {
-        machine.run(Some(1)).unwrap();
-        probes.push(probe(machine, s + 1));
-    }
-    probes
-}
-
-fn run_differential(load: fn(&mut SystemBus), steps: u64, interval: u32, what: &str) -> Vec<Probe> {
-    let mut walk = build_machine(false, interval);
-    load(&mut walk.bus);
-    let walk_probes = run_probed(&mut walk, 0x40, steps);
-
-    let mut sched = build_machine(true, interval);
-    load(&mut sched.bus);
-    let sched_probes = run_probed(&mut sched, 0x40, steps);
-
-    assert_eq!(walk_probes.len(), sched_probes.len());
-    for (r, c) in walk_probes.iter().zip(sched_probes.iter()) {
-        assert_eq!(
-            r, c,
-            "{what}: first divergence at step {} (walk-reference vs scheduler)",
-            r.step
-        );
-    }
-    walk_probes
+fn expected_dst() -> (u64, u64) {
+    let bytes: Vec<u8> = (0..N).map(|i| 0xA0u8 ^ (i as u8).wrapping_mul(7)).collect();
+    let lo = u64::from_le_bytes(bytes[0..8].try_into().unwrap());
+    let hi = u64::from_le_bytes(bytes[8..16].try_into().unwrap());
+    (lo, hi)
 }
 
 /// Gate 1: mem2mem memcpy + TCIE NVIC IRQ — walk-on vs scheduler at tick
@@ -270,18 +253,31 @@ fn run_differential(load: fn(&mut SystemBus), steps: u64, interval: u32, what: &
 #[test]
 fn mem2mem_memcpy_tcie_firmware_is_byte_identical_at_interval_1() {
     const STEPS: u64 = 800;
-    let walk_probes = run_differential(
-        load_firmware_memcpy,
-        STEPS,
-        1,
+    let build = |mode: WalkMode| {
+        let mut m = build_machine(!mode.is_legacy_walk(), 1);
+        load_firmware_memcpy(&mut m.bus);
+        m
+    };
+    let reference = assert_walk_differential(
         "DMA mem2mem memcpy firmware (interval 1)",
+        0x40,
+        STEPS,
+        build,
+        extra,
     );
-    let last = walk_probes.last().unwrap();
-    assert_eq!(last.isr_count, 1, "reference must take exactly one TC ISR");
-    assert!(last.main_count > 100, "main loop must run");
+    let last = reference.last().unwrap();
+    assert_eq!(
+        last.extra("isr_count"),
+        1,
+        "reference must take exactly one TC ISR"
+    );
+    assert!(last.extra("main_count") > 100, "main loop must run");
     // The destination must hold the source pattern after the transfer.
-    let expected: Vec<u8> = (0..N).map(|i| 0xA0u8 ^ (i as u8).wrapping_mul(7)).collect();
-    assert_eq!(last.dst, expected, "mem2mem must copy the source bytes");
+    assert_eq!(
+        (last.extra("dst_lo"), last.extra("dst_hi")),
+        expected_dst(),
+        "mem2mem must copy the source bytes"
+    );
 }
 
 /// Gate 2: the SAME memcpy firmware, walk-on vs scheduler, BOTH lanes at tick
@@ -303,25 +299,26 @@ fn mem2mem_memcpy_is_byte_identical_at_interval_64() {
     load_firmware_memcpy(&mut walk.bus);
     walk.cpu.pc = 0x40;
     walk.run(Some(STEPS as u32)).unwrap();
-    let walk_probe = probe(&walk, STEPS);
+    let walk_probe = probe_at(&walk, STEPS, &extra);
 
     let mut sched = build_machine(true, 64);
     load_firmware_memcpy(&mut sched.bus);
     sched.cpu.pc = 0x40;
     sched.run(Some(STEPS as u32)).unwrap();
-    let sched_probe = probe(&sched, STEPS);
+    let sched_probe = probe_at(&sched, STEPS, &extra);
 
     assert_eq!(
         walk_probe, sched_probe,
         "interval-64 batched run: final state diverged (walk vs scheduler)"
     );
     assert_eq!(
-        walk_probe.isr_count, 1,
+        walk_probe.extra("isr_count"),
+        1,
         "the TC ISR must fire once at interval 64"
     );
-    let expected: Vec<u8> = (0..N).map(|i| 0xA0u8 ^ (i as u8).wrapping_mul(7)).collect();
     assert_eq!(
-        walk_probe.dst, expected,
+        (walk_probe.extra("dst_lo"), walk_probe.extra("dst_hi")),
+        expected_dst(),
         "mem2mem copies the source bytes at interval 64"
     );
 }

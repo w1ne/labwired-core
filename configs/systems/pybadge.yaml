@@ -41,7 +41,7 @@ connectors:
     endpoint: "host_console"
 
 # Honest boundary:
-# * the ST7735 160x128 display needs SERCOM4 SPI (PB15 MOSI, PB13 SCK), which
-#   the SAM SERCOM model does not yet implement;
+# * SERCOM4 has a blocking byte-level SPI slice (PB15 MOSI, PB13 SCK), but
+#   the ST7735 panel and DMA-backed native firmware path are not attached yet;
 # * buttons support GPIO scanning, but do not imply working native display/UI;
 # * QSPI flash and native USB remain stub register windows in the chip model.

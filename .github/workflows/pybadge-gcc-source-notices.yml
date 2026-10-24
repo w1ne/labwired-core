@@ -1,0 +1,49 @@
+name: PyBadge pinned GCC source notice evidence
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - scripts/pybadge-gcc-source-notices/**
+      - .github/workflows/pybadge-gcc-source-notices.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: pybadge-gcc-source-notices-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gcc-source-notice-evidence:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Pure streaming admission controls (no source download or compiler)
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python3 -m unittest discover -s scripts/pybadge-gcc-source-notices -p 'test_*.py' -v
+      - name: Acquire exact qualified source metadata and official context
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/CrispStrobe/labwired-core/actions/runs/37821668715 > "$RUNNER_TEMP/source-run.json"
+          gh api repos/CrispStrobe/labwired-core/actions/runs/37821668715/artifacts > "$RUNNER_TEMP/source-artifacts.json"
+          gh api repos/CrispStrobe/labwired-core/actions/artifacts/11569199112/zip > "$RUNNER_TEMP/source-metadata.zip"
+      - name: Verify original GCC archive then stream bounded notice extraction
+        run: |
+          python3 scripts/pybadge-gcc-source-notices/collect.py \
+            --prior "$RUNNER_TEMP/source-metadata.zip" \
+            --run-record "$RUNNER_TEMP/source-run.json" \
+            --artifact-record "$RUNNER_TEMP/source-artifacts.json" \
+            --work "$RUNNER_TEMP/gcc-source-cache" \
+            --out "$RUNNER_TEMP/gcc-source-notice-evidence"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: ${{ !cancelled() }}
+        with:
+          name: pybadge-gcc-source-notices
+          path: ${{ runner.temp }}/gcc-source-notice-evidence/
+          if-no-files-found: error

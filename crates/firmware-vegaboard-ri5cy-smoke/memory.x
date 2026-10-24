@@ -1,0 +1,17 @@
+/* memory.x for firmware-vegaboard-ri5cy-smoke
+ *
+ * The RI5CY platform maps 1 MiB of flash at 0x0 and 192 KiB of SRAM at
+ * 0x20000000 (the Vega board's SoC map).
+ */
+MEMORY
+{
+  FLASH : ORIGIN = 0x00000000, LENGTH = 1M
+  RAM   : ORIGIN = 0x20000000, LENGTH = 192K
+}
+
+REGION_ALIAS("REGION_TEXT", FLASH);
+REGION_ALIAS("REGION_RODATA", FLASH);
+REGION_ALIAS("REGION_DATA", RAM);
+REGION_ALIAS("REGION_BSS", RAM);
+REGION_ALIAS("REGION_HEAP", RAM);
+REGION_ALIAS("REGION_STACK", RAM);

@@ -1,0 +1,79 @@
+name: SAMD actual CODAL SPI cancellation guest
+on:
+  pull_request:
+    paths: ['crates/core/tests/samd_real_spi_cancel_guest.rs', 'crates/core/tests/samd_real_spi_guest.rs', 'crates/core/tests/sam_sercom_spi.rs', 'crates/core/src/lib.rs', 'crates/core/src/bus/accessors.rs', 'crates/core/src/peripherals/sam/sercom_spi.rs', '.github/workflows/samd-real-spi-cancel-guest.yml']
+permissions:
+  contents: read
+concurrency:
+  group: real-spi-cancel-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  LABWIRED_SPI_SOURCE: 846601f69005d2cbd1c82f33e350301882ac4f80
+jobs:
+  spi-services-guest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: CrispStrobe/codal-samd
+          ref: 846601f69005d2cbd1c82f33e350301882ac4f80
+          path: owned-spi-source
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: lancaster-university/codal-core
+          ref: 2ed19d64ec3359143409a4b0a9758b4aeef3ee7d
+          path: owned-spi-core
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: lancaster-university/codal-core
+          ref: 2ed19d64ec3359143409a4b0a9758b4aeef3ee7d
+          path: owned-spi-positive-core
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: Swatinem/rust-cache@v2
+      - name: Build actual cancellation caller and preserve selected source provenance
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-arm-none-eabi
+          arm-none-eabi-g++ --version
+          dpkg-query -W gcc-arm-none-eabi
+          cd owned-spi-source
+          bash runtime-services/build.sh ../owned-spi-core "$RUNNER_TEMP/spi-services" 9
+          bash runtime-services/build.sh ../owned-spi-positive-core "$RUNNER_TEMP/spi-positive-services" 8
+      - name: Execute affected positive SPI in both scheduler profiles
+        env:
+          LABWIRED_SPI_FIXTURE_DIR: ${{ runner.temp }}/spi-positive-services
+        run: |
+          set -o pipefail
+          cargo test --release --locked -p labwired-core --test samd_real_spi_guest -- --nocapture
+          cargo test --release --locked -p labwired-core --test samd_real_spi_guest -- --ignored --nocapture | tee spi-positive-default.log
+          cargo test --release --locked -p labwired-core --features event-scheduler --test samd_real_spi_guest -- --ignored --nocapture | tee spi-positive-scheduler.log
+      - name: Execute actual cancellation and recovery in both scheduler profiles
+        env:
+          LABWIRED_SPI_FIXTURE_DIR: ${{ runner.temp }}/spi-services
+        run: |
+          set -o pipefail
+          cargo test --release --locked -p labwired-core --test sam_sercom_spi dma_tx_bus_acceptance_preserves_gates_observers_irqs_and_pump -- --nocapture
+          cargo test --release --locked -p labwired-core --features event-scheduler --test sam_sercom_spi dma_tx_bus_acceptance_preserves_gates_observers_irqs_and_pump -- --nocapture
+          cargo test --release --locked -p labwired-core --test samd_real_spi_cancel_guest -- --nocapture
+          cargo test --release --locked -p labwired-core --test samd_real_spi_cancel_guest -- --ignored --nocapture | tee spi-guest-default.log
+          cargo test --release --locked -p labwired-core --features event-scheduler --test samd_real_spi_cancel_guest -- --ignored --nocapture | tee spi-guest-scheduler.log
+      - name: Preserve actual source-bound build and SPI observations
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: actual-codal-spi-cancel-guest-results
+          path: |
+            spi-guest-default.log
+            spi-guest-scheduler.log
+            spi-positive-default.log
+            spi-positive-scheduler.log
+            ${{ runner.temp }}/spi-services/
+            ${{ runner.temp }}/spi-positive-services/

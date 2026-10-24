@@ -322,11 +322,46 @@ FIXTURES = {
 # their own chip config and get their own baseline. A generic CPU-only smoke
 # fixture must not stand in for an unimplemented board platform.
 WAIVED: dict[str, str] = {
+    "atmega2560": (
+        "Runs on the same AVR interpreter as atmega328p (AvrModel::Atmega2560: "
+        "3-byte PC, RAM at 0x200), but the AVR spin fixture is linked with "
+        "-mmcu=atmega328p for RAM at 0x100 and no avr6 build of it exists yet. "
+        "No separate throughput claim is made for the Mega 2560."
+    ),
+    "dspic33fj32mc204": (
+        "PIC24 M0 bring-up: boot + UART1 TX only, with the UART modelled on the "
+        "CPU (not a bus peripheral), so this gate's MMIO spin fixture cannot "
+        "represent it. A perf fixture needs M1+ peripherals and proven timing; "
+        "no throughput claim is made for this part yet "
+        "(docs/pic24-m0-reference.md)."
+    ),
+    "dspic33fj32mc202": (
+        "PIC24 M0 bring-up: boot + UART1 TX only, with the UART modelled on the "
+        "CPU (not a bus peripheral), so this gate's MMIO spin fixture cannot "
+        "represent it. No perf-spin fixture or throughput claim for this part yet "
+        "(docs/pic24-m0-reference.md)."
+    ),
+    "litex-vexriscv": (
+        "L1 smoke, SIM-DERIVED: CPU + integrated SRAM + the LiteX UART console and "
+        "countdown timer only, with no silicon capture and no executing-fidelity "
+        "differential. No perf fixture is built for its memory map (flash "
+        "0x20000000, RAM 0x10000000), and no throughput claim is made for this SoC "
+        "(docs/boards/litex-vexriscv.md)."
+    ),
+    "vegaboard-ri5cy": (
+        "L1 smoke, SIM-DERIVED: CPU + flash/SRAM + the LPUART0 console only, with "
+        "no silicon capture and no executing-fidelity differential. No perf fixture "
+        "is built for the Vega SoC map (flash 0x0, RAM 0x20000000), and no "
+        "throughput claim is made for this board (docs/boards/vegaboard-ri5cy.md)."
+    ),
     "rv1103": (
-        "Optional native Cortex-A7 CPU subset only; RV1103 platform peripherals, "
-        "boot chain and Linux/BSP execution are unimplemented. No representative "
-        "perf fixture can run this board; the generic Cortex-A7 CPU smoke ELF "
-        "does not establish RV1103 throughput."
+        "The old Cortex-A7 CPU subset fixture is not representative perf evidence. "
+        "Optional native reduced Linux direct boot and joint I2C3/UART4 basket "
+        "acceptance now pass through Machine/SystemBus/CosimSession at fixed "
+        "functional 24MHz with a persistent reduced plant. The actual run took "
+        "644 wall seconds for 89 functional-clock seconds; no 1x or physical "
+        "RV1103 platform throughput claim. Vendor BSP/SD/ROM boot remains "
+        "unimplemented and no representative perf fixture qualifies this board."
     ),
 }
 

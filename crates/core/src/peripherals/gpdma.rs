@@ -36,21 +36,30 @@
 //!   transfer and CSR stays IDLEF.
 //! - Linked-list mode is not modeled: CLBAR / CLLR are plain storage
 //!   the engine ignores.
-//! - Transfers are paced one source data unit per tick/event per channel and
-//!   modeled byte-wise internally; `CBR1.BNDT` counts bytes (RM0481 §16.4.6),
-//!   so SDW/DDW widths wider than a byte still produce byte-exact
-//!   destination data and correct final addresses.
+//! - Transfers move one source data unit per arbitration slot (one slot per
+//!   tick/event for the whole controller) and are modeled byte-wise
+//!   internally; `CBR1.BNDT` counts bytes (RM0481 §16.4.6), so SDW/DDW
+//!   widths wider than a byte still produce byte-exact destination data and
+//!   correct final addresses.
+//! - **Arbitration**: when several channels have work, the slot goes to a
+//!   high-priority channel (`CCR.PRIO` = 11) first, then to the highest
+//!   low-priority `PRIO` (10, 01, 00), then to the lowest channel number.
+//!   Silicon shares the bus among low-priority channels by weighted round
+//!   robin (the `PRIO` weight); the model serves them in strict weight order
+//!   instead (documented approximation).
+//! - **Data transfer error**: an item that faults on the bus (an unmapped
+//!   address) sets `CSR.DTEF`, clears `CCR.EN` (the channel is back to
+//!   IDLEF) and, with `CCR.DTEIE`, pends the channel's line at the next slot.
 //!
 //! ## Drive modes (walk-free H5 campaign)
 //!
-//! * **Scheduler mode** (`event-scheduler` + bus [`CycleClock`]): channel
-//!   transfers ride delay-0/1 events (Dma1 pattern). Enabling a channel
-//!   (CCR.EN 0→1 with SWREQ / linked-list) arms a delay-0 element event;
-//!   `on_event` moves one unit and self-perpetuates at delay 1 while the
-//!   channel stays active with work remaining (including linked-list node
-//!   fetch ticks).
-//! * **Legacy mode** (feature off / no clock): per-cycle `tick()` is
-//!   byte-identical to the historical model.
+//! * **Scheduler mode** (`event-scheduler` + bus [`CycleClock`]): the
+//!   arbitration slots ride ONE arbiter event (Dma1 pattern). Enabling a
+//!   channel (CCR.EN 0→1 with SWREQ / linked-list) arms a delay-0 event;
+//!   `on_event` runs one slot and self-perpetuates at delay 1 while any
+//!   channel has work remaining (including linked-list node fetch slots).
+//! * **Legacy mode** (feature off / no clock): per-cycle `tick()` runs the
+//!   same slot.
 
 use crate::{CycleClock, DmaDirection, DmaRequest, Peripheral, PeripheralTickResult, SimResult};
 use std::any::Any;
@@ -80,10 +89,17 @@ const CCR_EN: u32 = 1 << 0;
 const CCR_RESET: u32 = 1 << 1;
 const CCR_TCIE: u32 = 1 << 8;
 const CCR_HTIE: u32 = 1 << 9;
+const CCR_DTEIE: u32 = 1 << 10;
+/// CCR.PRIO[1:0] (H563 SVD, bits 23:22): 11 high priority, 00..10 low priority.
+const CCR_PRIO_SHIFT: u32 = 22;
 
 const CSR_IDLEF: u32 = 1 << 0;
 const CSR_TCF: u32 = 1 << 8;
 const CSR_HTF: u32 = 1 << 9;
+const CSR_DTEF: u32 = 1 << 10;
+
+/// The scheduler token of the controller's arbiter event.
+const ARBITER_TOKEN: u32 = 0;
 
 const CTR1_SINC: u32 = 1 << 3;
 const CTR1_DINC: u32 = 1 << 19;
@@ -119,9 +135,9 @@ struct GpdmaChannel {
     active: bool,
     /// BNDT value latched at EN, used for the half-transfer (HTF) mark.
     bndt_initial: u32,
-    /// Scheduler mode: one live element/chain event per channel.
-    #[serde(skip)]
-    chain_live: bool,
+    /// A data transfer error latched after its item ran (DTEIE), pended at
+    /// the next slot.
+    irq_deferred: bool,
 }
 
 impl GpdmaChannel {
@@ -150,6 +166,13 @@ pub struct Gpdma {
     /// Own bus base address (for linked-list node-fetch self-copies).
     #[serde(default)]
     base: u32,
+    /// The channel served by the most recent slot: the issuer of the item a
+    /// bus error reports ([`Peripheral::dma_transfer_error`]).
+    #[serde(skip)]
+    last_served: Option<usize>,
+    /// Scheduler mode only: the arbiter event is live in the heap.
+    #[serde(skip)]
+    arbiter_live: bool,
     /// Bus-published cycle clock. `Some` once registration attaches it;
     /// `None` keeps the model on the legacy walk path.
     #[serde(skip)]
@@ -375,6 +398,7 @@ impl Gpdma {
                                 val: 0,
                                 direction: DmaDirection::Copy,
                                 transform: None,
+                                remaining: None,
                             });
                         }
                         word += 1;
@@ -403,6 +427,7 @@ impl Gpdma {
                 dbx: ch.ctr1 & CTR1_DBX != 0,
                 dhx: ch.ctr1 & CTR1_DHX != 0,
             }),
+            remaining: None,
         });
 
         // H5 GPDMA advances user-visible CSAR/CDAR as the transfer runs.
@@ -437,11 +462,45 @@ impl Gpdma {
         (dma_requests, irq, explicit_irqs)
     }
 
+    /// The channel the arbiter serves this slot: high-priority channels
+    /// (`CCR.PRIO` = 11) before low-priority ones, a higher `PRIO` first
+    /// among those, then the lowest channel number.
+    fn arbiter_winner(&self) -> Option<usize> {
+        let prio = |ch: &GpdmaChannel| (ch.ccr >> CCR_PRIO_SHIFT) & 3;
+        let mut best: Option<usize> = None;
+        for (i, ch) in self.channels.iter().enumerate() {
+            if !Self::channel_needs_service(ch) {
+                continue;
+            }
+            if best.is_none_or(|b| prio(ch) > prio(&self.channels[b])) {
+                best = Some(i);
+            }
+        }
+        best
+    }
+
+    fn has_work(&self) -> bool {
+        self.channels.iter().any(|c| c.irq_deferred) || self.arbiter_winner().is_some()
+    }
+
+    /// One arbitration slot — the ONE body both drive modes run: deferred
+    /// error interrupts, then the winning channel's element (or node fetch).
     fn tick_channels_once(&mut self) -> PeripheralTickResult {
         let mut dma_requests: Option<Vec<DmaRequest>> = None;
         let mut irq = false;
         let mut explicit_irqs: Option<Vec<u32>> = None;
         for ch_idx in 0..NUM_CHANNELS {
+            if std::mem::take(&mut self.channels[ch_idx].irq_deferred) {
+                match self.irq_base {
+                    Some(base) => explicit_irqs
+                        .get_or_insert_with(Vec::new)
+                        .push(base + ch_idx as u32),
+                    None => irq = true,
+                }
+            }
+        }
+        self.last_served = self.arbiter_winner();
+        if let Some(ch_idx) = self.last_served {
             let (reqs, chan_irq, chan_explicit) = self.service_channel_once(ch_idx);
             if let Some(r) = reqs {
                 dma_requests.get_or_insert_with(Vec::new).extend(r);
@@ -512,15 +571,11 @@ impl Peripheral for Gpdma {
         if !self.scheduler_mode() {
             return Vec::new();
         }
-        let mut events = Vec::new();
-        for i in 0..NUM_CHANNELS {
-            let ch = &mut self.channels[i];
-            if Self::channel_needs_service(ch) && !ch.chain_live {
-                ch.chain_live = true;
-                events.push((0u64, i as u32));
-            }
+        if self.has_work() && !self.arbiter_live {
+            self.arbiter_live = true;
+            return vec![(0, ARBITER_TOKEN)];
         }
-        events
+        Vec::new()
     }
 
     fn on_event(
@@ -529,20 +584,35 @@ impl Peripheral for Gpdma {
         _sched: &mut crate::sched::EventScheduler,
         _bus: &mut dyn crate::Bus,
     ) -> crate::sched::EventResult {
-        let i = event_token as usize;
-        if !self.scheduler_mode() || i >= NUM_CHANNELS {
+        if !self.scheduler_mode() || event_token != ARBITER_TOKEN {
             return crate::sched::EventResult::default();
         }
-        let (reqs, irq, explicit) = self.service_channel_once(i);
-        let reschedule = Self::channel_needs_service(&self.channels[i]);
-        self.channels[i].chain_live = reschedule;
+        let res = self.tick_channels_once();
+        let reschedule = self.has_work();
+        self.arbiter_live = reschedule;
         crate::sched::EventResult {
-            raise_own_irq: irq && self.irq_base.is_none(),
-            explicit_irqs: explicit.unwrap_or_default(),
+            raise_own_irq: res.irq,
+            explicit_irqs: res.explicit_irqs.unwrap_or_default(),
             reschedule_delay: reschedule.then_some(1),
-            dma_requests: reqs.unwrap_or_default(),
+            dma_requests: res.dma_requests.unwrap_or_default(),
             ..Default::default()
         }
+    }
+
+    fn dma_transfer_error(&mut self, _item: &DmaRequest) {
+        // RM0481 (GPDMA error management): a data transfer error sets DTEF, and the channel
+        // is disabled (EN cleared, CSR back to IDLEF).
+        let Some(i) = self.last_served else {
+            return;
+        };
+        let ch = &mut self.channels[i];
+        if ch.flags & CSR_DTEF != 0 && !ch.active {
+            return; // a later item of the same faulting slot
+        }
+        ch.flags |= CSR_DTEF;
+        ch.ccr &= !CCR_EN;
+        ch.active = false;
+        ch.irq_deferred |= ch.ccr & CCR_DTEIE != 0;
     }
 
     fn attach_cycle_clock(&mut self, clock: CycleClock) {
@@ -1058,5 +1128,65 @@ mod tests {
         assert_eq!(bus.read_u32(c15 + OFF_CSR).unwrap(), 0x0000_0301);
         assert_eq!(bus.read_u32(c15 + OFF_CBR1).unwrap() & BNDT_MASK, 0);
         assert_eq!(bus.read_u32(c15 + OFF_CCR).unwrap(), 0);
+    }
+
+    /// Program channel `n` for an 8-byte SWREQ mem-to-mem copy at `prio`.
+    fn program_m2m(bus: &mut SystemBus, n: u64, src: u64, dst: u64, prio: u32, extra: u32) {
+        let c = GPDMA_BASE + CHAN_BASE + n * CHAN_STRIDE;
+        bus.write_u32(c + OFF_CTR1, CTR1_SINC | CTR1_DINC).unwrap();
+        bus.write_u32(c + OFF_CTR2, CTR2_SWREQ).unwrap();
+        bus.write_u32(c + OFF_CBR1, 8).unwrap();
+        bus.write_u32(c + OFF_CSAR, src as u32).unwrap();
+        bus.write_u32(c + OFF_CDAR, dst as u32).unwrap();
+        bus.write_u32(c + OFF_CCR, CCR_EN | (prio << CCR_PRIO_SHIFT) | extra)
+            .unwrap();
+    }
+
+    /// One unit per slot for the whole controller: CCR.PRIO = 11 (high)
+    /// runs before a low-priority channel, a lower channel number wins
+    /// between equals.
+    #[test]
+    fn test_arbiter_serves_by_prio_then_channel_number() {
+        fn order(p0: u32, p3: u32) -> Vec<u64> {
+            let mut bus = bus_with_gpdma();
+            fill_src(&mut bus, 8);
+            program_m2m(&mut bus, 0, SRC, DST, p0, 0);
+            program_m2m(&mut bus, 3, SRC, DST + 0x40, p3, 0);
+            let mut done = Vec::new();
+            for _ in 0..20 {
+                bus.tick_peripherals_fully_forced();
+                for n in [0u64, 3] {
+                    let csr = GPDMA_BASE + CHAN_BASE + n * CHAN_STRIDE + OFF_CSR;
+                    if bus.read_u32(csr).unwrap() & CSR_TCF != 0 && !done.contains(&n) {
+                        done.push(n);
+                    }
+                }
+            }
+            done
+        }
+        assert_eq!(order(0, 3), vec![3, 0], "high priority first");
+        assert_eq!(order(2, 1), vec![0, 3], "higher low-priority weight first");
+        assert_eq!(order(1, 1), vec![0, 3], "equal: lower channel number");
+    }
+
+    /// A unit that faults on the bus: DTEF, EN cleared (IDLEF), DTEIE pends
+    /// the channel's line.
+    #[test]
+    fn test_bus_error_sets_dtef_and_disables_the_channel() {
+        let mut bus = bus_with_gpdma();
+        program_m2m(&mut bus, 0, 0x5FFF_0000, DST, 0, CCR_DTEIE);
+        bus.tick_peripherals_fully_forced();
+        let csr = bus.read_u32(CH0_CSR).unwrap();
+        assert_eq!(csr & (CSR_DTEF | CSR_IDLEF), CSR_DTEF | CSR_IDLEF);
+        assert_eq!(bus.read_u32(CH0_CCR).unwrap() & CCR_EN, 0);
+        // MISR mirrors DTEF & DTEIE; the per-channel line pends next slot.
+        assert_eq!(bus.read_u32(GPDMA_BASE + 0x0C).unwrap() & 1, 1);
+        let mut g = Gpdma::new().with_irq_base(GPDMA_IRQ);
+        g.write_reg(0x50 + OFF_CTR2, CTR2_SWREQ);
+        g.write_reg(0x50 + OFF_CBR1, 4);
+        g.write_reg(0x50 + OFF_CCR, CCR_EN | CCR_DTEIE);
+        let item = g.tick().dma_requests.unwrap()[0];
+        g.dma_transfer_error(&item);
+        assert_eq!(g.tick().explicit_irqs, Some(vec![GPDMA_IRQ]));
     }
 }

@@ -80,8 +80,8 @@ Shared vendor mechanical reference, not a manufactured carrier-board footprint. 
 | MMU, exceptions and interrupt delivery | ⚠️ | Native system fixtures and real Linux boot through GIC400; separate from old ELF adapter |
 | UART2 and architectural timer | ⚠️ | Real guest console and advancing uptime through reduced SystemBus platform; functional timing |
 | RV1103 CRU, reset, GPIO, pinmux and DMA | ❌ | Not modeled |
-| RV1103 I2C3 connected to ADXL345 | ❌ | ADXL345 register kit exists; RV1103 controller and board transaction path absent |
-| ESP-AT Wi-Fi bridge | ❌ | Selected UART architecture; no simulated or physical integration proof |
+| RV1103 I2C3 connected to ADXL345 | ⚠️ | Joint real Linux transfers through modeled RK3x controller and shared ADXL345 register kit; native reduced profile only |
+| ESP-AT Wi-Fi bridge | ⚠️ | Joint real guest UART4 bytes and behavioral ESP-AT mock; no ESP firmware/RF/physical proof |
 | Reduced direct Linux zImage boot | ✅ | Pinned Alpine kernel/PID1/proc/mount/uname/sleep receipt; native host only |
 | MicroSD controller / vendor BSP / NPU / camera | ❌ | No execution evidence |
 | Battery, charging, RF and enclosure | ❌ | Engineering proposal; no bench results |
@@ -105,3 +105,7 @@ For the separate reduced Linux platform, follow the [native zImage preparation/b
 - [External components and model gaps](../../examples/luckfox-pico-mini-a/EXTERNAL_COMPONENTS.md)
 - [Validation record](../../examples/luckfox-pico-mini-a/VALIDATION.md)
 - [Board onboarding playbook](../board_onboarding_playbook.md)
+
+## Joint native basket evidence
+
+The [joint Linux basket receipt and reproduction](../../examples/luckfox-pico-mini-a-linux/BASKET.md) add native-only ADXL345 I2C3 and behavioral UART4 integration through actual Machine/SystemBus/CosimSession plus one persistent reduced power plant. Actual 644.13082329 wall seconds / 89 functional-clock seconds at fixed 24MHz is not 1x performance. Recovery uses a fresh CPU/bus/controllers/components with the SAME plant, battery and time. Register retention applies only within one external cut/restore fixture. Raw5V maps to synthetic execution VDD; raw3V/effective external domain uses functional2.7V. Carrier disconnect and latch reset are explicit interventions. Browser/default still refuse Linux; full RV1103/vendorBSP/SD/ROM/RF/all50silicon/physical acceptance remain unavailable.

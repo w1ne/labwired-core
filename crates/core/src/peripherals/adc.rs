@@ -103,6 +103,29 @@ const F1_CR2_RSTCAL: u32 = 1 << 3;
 const F1_CR2_EXTSEL: u32 = 0b111 << 17;
 const F1_CR2_EXTTRIG: u32 = 1 << 20;
 const F1_CR2_SWSTART: u32 = 1 << 22;
+/// ADC_CR2.TSVREFE (bit 23, RM0008 §11.12.3): connects the temperature sensor
+/// to ADC1_IN16 and V_REFINT to ADC1_IN17. Clear (the reset state), both
+/// internal channels are disconnected.
+const F1_CR2_TSVREFE: u32 = 1 << 23;
+
+// ── STM32F1 internal channels (DS5319 Rev 20) ───────────────────────────────
+/// Temperature sensor V_SENSE at 25 °C, typical: 1.43 V (DS5319 Table 50
+/// "TS characteristics", V25 min 1.34 / typ 1.43 / max 1.52 V).
+const F1_TS_V25_MV: f64 = 1430.0;
+/// Temperature sensor average slope, typical: 4.3 mV/°C (DS5319 Table 50,
+/// Avg_Slope min 4.0 / typ 4.3 / max 4.6 mV/°C). V_SENSE FALLS as temperature
+/// rises: RM0008 §11.10 gives T = (V25 − V_SENSE) / Avg_Slope + 25.
+const F1_TS_AVG_SLOPE_MV_PER_C: f64 = 4.3;
+/// Internal reference voltage, typical: 1.20 V (DS5319 Table 13 "Embedded
+/// internal reference voltage", V_REFINT min 1.16 / typ 1.20 / max 1.24 V).
+const F1_VREFINT_MV: f64 = 1200.0;
+/// V_REF+ the converter's 12-bit code is taken against. A Blue Pill ties
+/// V_DDA/V_REF+ to the 3.3 V rail; the same reference `set_channel_input`
+/// assumes.
+const F1_VREF_MV: f64 = 3300.0;
+/// Ambient temperature an F1 temperature sensor reads before anything sets
+/// one, in °C.
+pub const DEFAULT_AMBIENT_TEMPERATURE_C: f64 = 25.0;
 
 /// STM32F2/F4 ADC_CR2.SWSTART (RM0090) — same legacy register *block* as F1,
 /// different bit. Kept so F4 board bindings are not silently retargeted to F1.
@@ -381,6 +404,11 @@ pub struct Adc {
     /// expose to the ADC. When it does, this flag should die and both layouts
     /// should ask the clock instead.
     calibration_completes: bool,
+    /// Die/ambient temperature the F1 temperature sensor (ADC1_IN16) reports,
+    /// in °C. Set by [`Self::set_ambient_temperature_c`]; not a register, so
+    /// not serialized (keeps snapshot shapes identical).
+    #[serde(skip)]
+    ambient_temp_c: f64,
 }
 
 impl Adc {
@@ -446,7 +474,53 @@ impl Adc {
             f1_cal_remaining: None,
             f1_rstcal_live: false,
             f1_cal_live: false,
+            ambient_temp_c: DEFAULT_AMBIENT_TEMPERATURE_C,
         }
+    }
+
+    /// Set the temperature the F1 internal temperature sensor reports, in °C.
+    /// Non-finite values are refused (returns `false`) and leave it unchanged.
+    pub fn set_ambient_temperature_c(&mut self, celsius: f64) -> bool {
+        if !celsius.is_finite() {
+            return false;
+        }
+        self.ambient_temp_c = celsius;
+        true
+    }
+
+    /// The temperature the F1 internal sensor currently reports, in °C.
+    pub fn ambient_temperature_c(&self) -> f64 {
+        self.ambient_temp_c
+    }
+
+    /// Millivolts on an F1 INTERNAL channel, or `None` for a pad channel.
+    ///
+    /// * IN16 — temperature sensor: V_SENSE = V25 − (T − 25) · Avg_Slope
+    ///   (RM0008 §11.10; DS5319 Table 50 typicals 1.43 V and 4.3 mV/°C).
+    ///   V_SENSE decreases with temperature: 1.43 V at 25 °C, 1.215 V at 75 °C.
+    /// * IN17 — V_REFINT, 1.20 V typical (DS5319 Table 13).
+    ///
+    /// Both read 0 V while `CR2.TSVREFE` is clear: the sensor and the
+    /// reference are disconnected from the converter (RM0008 §11.10, "The
+    /// TSVREFE bit must be set to enable both internal channels").
+    fn f1_internal_channel_mv(&self, ch: usize, cr2: u32) -> Option<f64> {
+        if !matches!(self.regs, AdcRegs::Stm32F1(_)) || !(16..=17).contains(&ch) {
+            return None;
+        }
+        if cr2 & F1_CR2_TSVREFE == 0 {
+            return Some(0.0);
+        }
+        Some(if ch == 16 {
+            F1_TS_V25_MV - (self.ambient_temp_c - 25.0) * F1_TS_AVG_SLOPE_MV_PER_C
+        } else {
+            F1_VREFINT_MV
+        })
+    }
+
+    /// 12-bit code for `mv` against the F1's 3.3 V reference, truncated as
+    /// [`Self::set_channel_input`] truncates.
+    fn f1_code_for_mv(mv: f64) -> u32 {
+        ((mv * 4095.0 / F1_VREF_MV).floor()).clamp(0.0, 4095.0) as u32
     }
 
     crate::cycle_clock::scheduler_mode!();
@@ -480,6 +554,8 @@ impl Adc {
                 let ch = self.f1_regular_channel();
                 if ch < self.channel_inputs.len() && self.channel_inputs[ch] != 0xFFFF {
                     self.dr = self.channel_inputs[ch] as u32;
+                } else if let Some(mv) = self.f1_internal_channel_mv(ch, cr2) {
+                    self.dr = Self::f1_code_for_mv(mv);
                 } else {
                     self.dr = (self.dr + 1) & 0xFFF;
                 }
@@ -1135,6 +1211,13 @@ impl Default for Adc {
 impl Peripheral for Adc {
     fn adc_channel_count(&self) -> Option<u8> {
         Some(self.channel_count())
+    }
+
+    fn set_ambient_temperature_c(&mut self, celsius: f64) -> bool {
+        // Only the F1 layout models its temperature sensor; the other
+        // families' internal channels are not this sensor and keep their own
+        // documented behaviour.
+        matches!(self.regs, AdcRegs::Stm32F1(_)) && Adc::set_ambient_temperature_c(self, celsius)
     }
 
     fn read(&self, offset: u64) -> SimResult<u8> {

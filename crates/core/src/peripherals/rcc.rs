@@ -91,6 +91,18 @@ pub enum RccRegisterLayout {
     /// HSI48ON/CRRCR for this part). NOT the L0 map — L0 has CRRCR at 0x08,
     /// a 2-bit CFGR switch, and IOPENR@0x2C.
     Stm32G0,
+    /// STM32F0 family (RM0360 §6.4, STM32F030x4/x6/x8/xC and F070). The F1
+    /// register map for CR/CFGR/CIR/APB2RSTR/APB1RSTR/AHBENR/APB2ENR/APB1ENR/
+    /// BDCR/CSR at 0x00–0x24 — with the same CR enable→ready pairs and the
+    /// same 2-bit SW[1:0]/SWS[3:2] switch in CFGR — plus AHBRSTR@0x28,
+    /// CFGR2@0x2C (PREDIV), CFGR3@0x30 and CR2@0x34 (HSI14ON bit0 →
+    /// HSI14RDY bit1, the ADC's dedicated 14 MHz oscillator; HSI48ON bit16 →
+    /// HSI48RDY bit17 on the F04x/F07x/F09x). Unlike [`Self::Stm32F1`] the
+    /// enable registers carry the F0 bit positions — the GPIO port clocks are
+    /// AHBENR IOPAEN..IOPFEN bits 17–22 (RM0360 §6.4.6), which the F103's
+    /// silicon-pinned AHBENR mask would discard — so the enable registers are
+    /// stored unmasked, like an un-pinned F4 part.
+    Stm32F0,
 }
 
 impl FromStr for RccRegisterLayout {
@@ -110,8 +122,9 @@ impl FromStr for RccRegisterLayout {
             "stm32wb" | "wb" => Ok(Self::Stm32Wb),
             "stm32wba" | "wba" => Ok(Self::Stm32Wba),
             "stm32g0" | "g0" => Ok(Self::Stm32G0),
+            "stm32f0" | "f0" => Ok(Self::Stm32F0),
             _ => Err(format!(
-                "unsupported RCC register layout '{}'; supported: stm32f1, stm32f4, stm32v2, stm32h5, stm32h7, stm32l4, stm32l0, stm32g4, stm32wb, stm32wba, stm32g0",
+                "unsupported RCC register layout '{}'; supported: stm32f1, stm32f4, stm32v2, stm32h5, stm32h7, stm32l4, stm32l0, stm32g4, stm32wb, stm32wba, stm32g0, stm32f0",
                 value
             )),
         }
@@ -262,6 +275,129 @@ impl RccModel for F1Rcc {
             0x28 => self.ahbrstr = value,
             _ => {
                 crate::census_reg!("rcc:F1Rcc", offset, "write");
+            }
+        }
+    }
+    fn snapshot(&self) -> serde_json::Value {
+        serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+    }
+}
+
+// ── STM32F0 ─────────────────────────────────────────────────────────────────
+// RM0360 Rev 5 §6.4 (STM32F030x4/x6/x8/xC, STM32F070x6/xB). Reference-manual
+// derived; not silicon-verified (no F0 bench part).
+#[derive(Debug, Default, serde::Serialize)]
+pub struct F0Rcc {
+    cr: u32,       // 0x00
+    cfgr: u32,     // 0x04
+    cir: u32,      // 0x08
+    apb2rstr: u32, // 0x0C
+    apb1rstr: u32, // 0x10
+    ahbenr: u32,   // 0x14
+    apb2enr: u32,  // 0x18
+    apb1enr: u32,  // 0x1C
+    bdcr: u32,     // 0x20 — LSEON bit0 → LSERDY bit1
+    csr: u32,      // 0x24 — LSION bit0 → LSIRDY bit1
+    ahbrstr: u32,  // 0x28
+    cfgr2: u32,    // 0x2C — PREDIV[3:0]
+    cfgr3: u32,    // 0x30 — USART1SW / I2C1SW / …
+    cr2: u32,      // 0x34 — HSI14ON bit0 → HSI14RDY bit1, HSI48ON 16 → 17
+}
+
+/// RM0360 §6.4.14 RCC_CR2: each ON bit sets its RDY bit.
+///   HSI14ON bit0 → HSI14RDY bit1, HSI48ON bit16 → HSI48RDY bit17.
+fn f0_cr2_ready(mut cr2: u32) -> u32 {
+    for &(on, rdy) in &[(0u32, 1u32), (16, 17)] {
+        if cr2 & (1 << on) != 0 {
+            cr2 |= 1 << rdy;
+        } else {
+            cr2 &= !(1 << rdy);
+        }
+    }
+    cr2
+}
+
+/// Bit `on` of `value` decides bit `rdy` (the LSE/LSI ready pairs).
+fn on_sets_ready(value: u32, on: u32, rdy: u32) -> u32 {
+    if value & (1 << on) != 0 {
+        value | (1 << rdy)
+    } else {
+        value & !(1 << rdy)
+    }
+}
+
+impl F0Rcc {
+    fn new() -> Self {
+        Self {
+            // RM0360 §6.4.1: reset 0x0000_XX83 — HSION|HSIRDY, HSITRIM = 0x10;
+            // HSICAL (bits 15:8) is per-die factory trim, modelled as 0.
+            cr: classic_cr_ready(0x0000_0083),
+            // RM0360 §6.4.6: AHBENR reset 0x0000_0014 (SRAMEN | FLITFEN).
+            ahbenr: 0x0000_0014,
+            // RM0360 §6.4.10: CSR reset 0x0C00_0000 (NRSTF | PORRSTF).
+            csr: 0x0C00_0000,
+            // RM0360 §6.4.14: CR2 reset 0x0000_XX80 — HSI14TRIM = 0x10, off.
+            cr2: 0x0000_0080,
+            ..Default::default()
+        }
+    }
+}
+
+impl RccModel for F0Rcc {
+    fn read_reg(&self, offset: u64) -> u32 {
+        match offset {
+            0x00 => self.cr,
+            0x04 => self.cfgr,
+            0x08 => self.cir,
+            0x0C => self.apb2rstr,
+            0x10 => self.apb1rstr,
+            0x14 => self.ahbenr,
+            0x18 => self.apb2enr,
+            0x1C => self.apb1enr,
+            0x20 => self.bdcr,
+            0x24 => self.csr,
+            0x28 => self.ahbrstr,
+            0x2C => self.cfgr2,
+            0x30 => self.cfgr3,
+            0x34 => self.cr2,
+            _ => {
+                crate::census_reg!("rcc:F0Rcc", offset, "read");
+                0
+            }
+        }
+    }
+    fn write_reg(&mut self, offset: u64, value: u32) {
+        match offset {
+            0x00 => self.cr = classic_cr_ready(value),
+            // SW→SWS only follows once the requested source is ready in CR:
+            // 00 HSI (bit1), 01 HSE (bit17), 10 PLL (bit25). 11 is HSI48 on
+            // the F04x/F07x/F09x (ready in CR2, not CR) and reserved on the
+            // F030/F070, so it never completes here.
+            0x04 => {
+                self.cfgr = cfgr_with_gated_sws(
+                    value,
+                    self.cr,
+                    self.cfgr,
+                    [Some(1), Some(17), Some(25), None],
+                )
+            }
+            // CIR: only the interrupt-enable bits 13:8 hold state; the flags
+            // (7:0) are read-only and the clear bits (23:16) write-only.
+            0x08 => self.cir = value & 0x0000_3F00,
+            0x0C => self.apb2rstr = value,
+            0x10 => self.apb1rstr = value,
+            0x14 => self.ahbenr = value,
+            0x18 => self.apb2enr = value,
+            0x1C => self.apb1enr = value,
+            0x20 => self.bdcr = on_sets_ready(value, 0, 1),
+            // CSR: LSION → LSIRDY; the reset flags (31:24) are plain storage.
+            0x24 => self.csr = on_sets_ready(value, 0, 1),
+            0x28 => self.ahbrstr = value,
+            0x2C => self.cfgr2 = value & 0xF,
+            0x30 => self.cfgr3 = value,
+            0x34 => self.cr2 = f0_cr2_ready(value),
+            _ => {
+                crate::census_reg!("rcc:F0Rcc", offset, "write");
             }
         }
     }
@@ -2213,6 +2349,7 @@ pub enum Rcc {
     Stm32L0(L0Rcc),
     Stm32G4(G4Rcc),
     Stm32G0(G0Rcc),
+    Stm32F0(F0Rcc),
 }
 
 impl Default for Rcc {
@@ -2237,6 +2374,7 @@ impl Rcc {
             RccRegisterLayout::Stm32L0 => Self::Stm32L0(L0Rcc::new()),
             RccRegisterLayout::Stm32G4 => Self::Stm32G4(G4Rcc::new()),
             RccRegisterLayout::Stm32G0 => Self::Stm32G0(G0Rcc::new()),
+            RccRegisterLayout::Stm32F0 => Self::Stm32F0(F0Rcc::new()),
             // Same V2 model, RM0434 enable/reset placement.
             RccRegisterLayout::Stm32Wb => Self::Stm32V2(V2Rcc::new_wb()),
             // Same V2 model, RM0493 PLL1RCLKPRE→PLL1RCLKPRERDY status.
@@ -2286,6 +2424,16 @@ impl Rcc {
         match self {
             // F1: AHBENR@0x14, APB2ENR@0x18, APB1ENR@0x1C (RM0008 §7.3).
             Self::Stm32F1(_) => match r.as_str() {
+                "ahbenr" | "ahb1enr" => Some(0x14),
+                "apb2enr" => Some(0x18),
+                "apb1enr" | "apb1enr1" => Some(0x1C),
+                _ => None,
+            },
+            // F0: AHBENR@0x14, APB2ENR@0x18, APB1ENR@0x1C (RM0360 §6.4.6-8);
+            // `cr2` resolves the HSI14 ADC clock source (HSI14RDY bit 1).
+            Self::Stm32F0(_) => match r.as_str() {
+                "cr" => Some(0x00),
+                "cr2" => Some(0x34),
                 "ahbenr" | "ahb1enr" => Some(0x14),
                 "apb2enr" => Some(0x18),
                 "apb1enr" | "apb1enr1" => Some(0x1C),
@@ -2431,6 +2579,7 @@ impl Rcc {
             Self::Stm32L0(r) => r,
             Self::Stm32G4(r) => r,
             Self::Stm32G0(r) => r,
+            Self::Stm32F0(r) => r,
         }
     }
 
@@ -2445,6 +2594,7 @@ impl Rcc {
             Self::Stm32L0(r) => r,
             Self::Stm32G4(r) => r,
             Self::Stm32G0(r) => r,
+            Self::Stm32F0(r) => r,
         }
     }
 }
@@ -3532,6 +3682,66 @@ mod tests {
         rcc.write_u32(0x60, 1).unwrap();
         assert_eq!(rcc.read_u32(0x60).unwrap() & 0x3, 0x3, "G0 LSIRDY");
         assert_eq!(rcc.read_u32(0x5C).unwrap() & 0x3, 0x3, "G0 LSERDY");
+    }
+
+    /// The F030 clock bring-up STM32Cube and generated programs run (RM0360
+    /// §6.2.3 / §6.4): PLLSRC = HSI/2, PLLMUL ×12, PLLON, wait PLLRDY, SW =
+    /// PLL, wait SWS = PLL. PLLRDY follows PLLON only, and SWS follows SW only
+    /// once the PLL is ready — never before.
+    #[test]
+    fn f0_pll_bring_up_ready_bits_follow_their_enables() {
+        let mut rcc = Rcc::new_with_layout(RccRegisterLayout::Stm32F0);
+        assert_eq!(
+            rcc.read_u32(0x00).unwrap() & 0x3,
+            0x3,
+            "HSION|HSIRDY at reset"
+        );
+        assert_eq!(
+            rcc.read_u32(0x14).unwrap(),
+            0x14,
+            "AHBENR reset SRAMEN|FLITFEN"
+        );
+
+        // SW = PLL before the PLL runs: SWS must stay HSI.
+        rcc.write_u32(0x04, (10 << 18) | 0b10).unwrap();
+        assert_eq!((rcc.read_u32(0x04).unwrap() >> 2) & 3, 0b00, "no PLL yet");
+        assert_eq!(rcc.read_u32(0x00).unwrap() & (1 << 25), 0, "PLLRDY off");
+
+        rcc.write_u32(0x00, rcc.read_u32(0x00).unwrap() | (1 << 24))
+            .unwrap();
+        assert_ne!(
+            rcc.read_u32(0x00).unwrap() & (1 << 25),
+            0,
+            "PLLRDY follows PLLON"
+        );
+        rcc.write_u32(0x04, (10 << 18) | 0b10).unwrap();
+        assert_eq!((rcc.read_u32(0x04).unwrap() >> 2) & 3, 0b10, "SWS = PLL");
+        assert_eq!((rcc.read_u32(0x04).unwrap() >> 18) & 0xF, 10, "PLLMUL kept");
+
+        // PLL off again: PLLRDY drops.
+        rcc.write_u32(0x00, rcc.read_u32(0x00).unwrap() & !(1 << 24))
+            .unwrap();
+        assert_eq!(rcc.read_u32(0x00).unwrap() & (1 << 25), 0, "PLLRDY drops");
+
+        // F0 GPIO clocks live in AHBENR bits 17..22 and read back.
+        rcc.write_u32(0x14, 0x14 | (1 << 17) | (1 << 19)).unwrap();
+        assert_eq!(rcc.read_u32(0x14).unwrap(), 0x14 | (1 << 17) | (1 << 19));
+
+        // CR2: HSI14ON → HSI14RDY (the ADC oscillator), off at reset.
+        assert_eq!(rcc.read_u32(0x34).unwrap() & 0x3, 0, "HSI14 off at reset");
+        rcc.write_u32(0x34, 0x80 | 1).unwrap();
+        assert_eq!(
+            rcc.read_u32(0x34).unwrap() & 0x3,
+            0x3,
+            "HSI14RDY follows HSI14ON"
+        );
+
+        assert_eq!(
+            "stm32f0".parse::<RccRegisterLayout>().unwrap(),
+            RccRegisterLayout::Stm32F0
+        );
+        assert_eq!(rcc.rcc_reg_offset("ahbenr"), Some(0x14));
+        assert_eq!(rcc.rcc_reg_offset("cr2"), Some(0x34));
     }
 
     /// G0's CR ready pair is at bit 8→10 (HSI16 style), which is why the L0

@@ -1,0 +1,20 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+# A pedal value over 100 % is implausible and ignored.
+schema_version: "1.2"
+inputs:
+  firmware: "../../../tests/fixtures/coverage-brake-ecu-cm3.elf"
+  system: "../system.yaml"
+limits:
+  max_steps: 200000
+uart_injections:
+  - uart: "uart1"
+    bytes: [0xA5, 0x01, 0x65, 0x00, 0x84]
+assertions:
+  - uart_contains: "BRAKE ECU READY"
+  - uart_contains: "PEDAL IMPLAUSIBLE"
+  - expected_stop_reason: max_steps

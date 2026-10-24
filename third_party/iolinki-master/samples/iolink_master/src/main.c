@@ -121,12 +121,23 @@ static int demo_phy_send(void* user, const uint8_t* data, size_t len)
     /* TYPE_2_1 cyclic request: MC, CKT, PD-out(1), OD(1) -> 4 octets (Table A.10). */
     if(len == 4U)
     {
-        /* A.2.4/A.1.5 OPERATE reply: [PD-in][OD] CKS, no status octet; flags
-           live in CKS bits 7/6. */
-        response[0] = 0x5AU;
-        response[1] = 0x00U;
-        response[2] = iolink_checksum6(response, 3U);
-        queue_bytes(response, 3U);
+        if((data[0] & IOLINK_MC_RW_MASK) != 0U)
+        {
+            /* Figures A.9/A.10 READ reply: [OD][PD-in] CKS, no status octet;
+               flags live in CKS bits 7/6 (A.1.5). */
+            response[0] = 0x00U;
+            response[1] = 0x5AU;
+            response[2] = iolink_checksum6(response, 3U);
+            queue_bytes(response, 3U);
+        }
+        else
+        {
+            /* Figures A.9/A.10 WRITE reply: [PD-in] CKS, no OD and no status
+               octet; flags live in CKS bits 7/6 (A.1.5). */
+            response[0] = 0x5AU;
+            response[1] = iolink_checksum6(response, 2U);
+            queue_bytes(response, 2U);
+        }
         return (int)len;
     }
 

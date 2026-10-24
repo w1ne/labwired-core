@@ -93,8 +93,37 @@ fn full_run_maps_lines_and_functions() {
     assert!(r.covered_functions < r.total_functions);
     assert!(r.total_branches > 0 && r.covered_branches > 0);
 
+    // Branches come from decoding the ELF, so the denominator includes the
+    // ones this run never reached, and every outcome count is consistent with
+    // how often the branch instruction itself ran.
+    assert_eq!(r.branch_isa.as_deref(), Some("thumb"));
+    assert_eq!(r.total_branches, r.branches.len() * 2);
+    for b in &r.branches {
+        if b.reached {
+            assert!(
+                b.taken + b.not_taken > 0,
+                "a reached branch went somewhere: {b:?}"
+            );
+        } else {
+            assert_eq!((b.taken, b.not_taken), (0, 0), "{b:?}");
+        }
+    }
+    // A function that never ran contributes branches nobody evaluated.
+    assert!(
+        r.branches.iter().any(|b| !b.reached),
+        "unreached branches are counted, not dropped"
+    );
+    // The boot loop that waits for each I2C transfer runs many times.
+    assert!(
+        main_c.lines.iter().any(|l| l.hits > 100),
+        "hit counts, not 0/1"
+    );
+
     let lcov = r.to_lcov();
-    assert!(lcov.contains("SF:main.c\n"));
+    // SF carries the directory from the line table, so CI tools can find
+    // the file relative to the build directory.
+    assert!(lcov.contains("SF:src/main.c\n"), "{lcov}");
+    assert_eq!(main_c.path, "src/main.c");
     assert!(lcov.contains(&format!("FN:{},main\n", main.line.unwrap())));
     assert!(lcov.contains("FNDA:1,main\n"));
     assert!(lcov.contains("FNDA:0,HardFault_Handler\n"));
@@ -137,7 +166,8 @@ fn deterministic_and_restore_equivalent() {
     restored.run_cycles(19_000).unwrap();
     assert_eq!(restored.cycles(), straight.cycles());
     let (a, b) = (report(&straight), report(&restored));
-    assert_eq!(a.files, b.files, "same lines covered");
+    assert_eq!(a.files, b.files, "same lines covered, same hit counts");
+    assert_eq!(a.branches, b.branches, "same branch outcomes");
     assert_eq!(a.functions, b.functions, "same functions entered");
     assert_eq!(a.executed_addresses, b.executed_addresses);
 }

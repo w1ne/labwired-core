@@ -51,6 +51,11 @@
 
 #![cfg(feature = "event-scheduler")]
 
+mod common;
+
+use common::walk_differential::{
+    assert_modes_differ, assert_walk_differential, run_probed, WalkMode,
+};
 use labwired_core::bus::SystemBus;
 use labwired_core::cpu::CortexM;
 use labwired_core::peripherals::timer::Timer;
@@ -339,71 +344,33 @@ fn load_firmware_wrap_poll(bus: &mut SystemBus) {
     write_word(bus, 0x6C, MAIN_COUNT_ADDR as u32);
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct Probe {
-    step: u64,
-    total_cycles: u64,
-    pc: u32,
-    regs: [u32; 16],
-    isr_count: u32,
-    main_count: u32,
-    poll_out: [u32; 2],
+/// The caller-supplied observables the harness probe carries for this fixture:
+/// the two RAM counters, plus the two poll-loop cells (`CNT`/`SR` snapshots).
+fn extra(machine: &Machine<CortexM>) -> Vec<(&'static str, u64)> {
+    vec![
+        (
+            "isr_count",
+            u64::from(machine.bus.read_u32(ISR_COUNT_ADDR).unwrap()),
+        ),
+        (
+            "main_count",
+            u64::from(machine.bus.read_u32(MAIN_COUNT_ADDR).unwrap()),
+        ),
+        (
+            "poll_lo",
+            u64::from(machine.bus.read_u32(0x2000_0008).unwrap()),
+        ),
+        (
+            "poll_hi",
+            u64::from(machine.bus.read_u32(0x2000_000C).unwrap()),
+        ),
+    ]
 }
 
-fn probe(machine: &Machine<CortexM>, step: u64) -> Probe {
-    let mut regs = [0u32; 16];
-    for (i, r) in regs.iter_mut().enumerate() {
-        *r = machine.read_core_reg(i as u8);
-    }
-    Probe {
-        step,
-        total_cycles: machine.total_cycles,
-        pc: machine.get_pc(),
-        regs,
-        isr_count: machine.bus.read_u32(ISR_COUNT_ADDR).unwrap(),
-        main_count: machine.bus.read_u32(MAIN_COUNT_ADDR).unwrap(),
-        poll_out: [
-            machine.bus.read_u32(0x2000_0008).unwrap(),
-            machine.bus.read_u32(0x2000_000C).unwrap(),
-        ],
-    }
-}
-
-/// Run `steps` instructions one at a time through the batched `Machine::run`
-/// path (the production path the scheduler timing convention is calibrated
-/// to), probing the full architectural state after every instruction.
-fn run_probed(machine: &mut Machine<CortexM>, entry: u32, steps: u64) -> Vec<Probe> {
-    machine.cpu.pc = entry;
-    let mut probes = Vec::with_capacity(steps as usize);
-    for s in 0..steps {
-        machine.run(Some(1)).unwrap();
-        probes.push(probe(machine, s + 1));
-    }
-    probes
-}
-
-fn assert_probes_identical(reference: &[Probe], candidate: &[Probe], what: &str) {
-    assert_eq!(reference.len(), candidate.len());
-    for (r, c) in reference.iter().zip(candidate.iter()) {
-        assert_eq!(
-            r, c,
-            "{what}: first divergence at step {} (walk-reference vs scheduler)",
-            r.step
-        );
-    }
-}
-
-fn run_differential(load: fn(&mut SystemBus), steps: u64, what: &str) -> (Vec<Probe>, Vec<Probe>) {
-    let mut walk = build_machine(false, 1);
-    load(&mut walk.bus);
-    let walk_probes = run_probed(&mut walk, 0x40, steps);
-
-    let mut sched = build_machine(true, 1);
-    load(&mut sched.bus);
-    let sched_probes = run_probed(&mut sched, 0x40, steps);
-
-    assert_probes_identical(&walk_probes, &sched_probes, what);
-    (walk_probes, sched_probes)
+/// Vacuity guard for the timer pinned by `build_machine`.
+fn uses_scheduler(machine: &Machine<CortexM>) -> bool {
+    let idx = machine.bus.find_peripheral_index_by_name("tim2").unwrap();
+    machine.bus.peripherals[idx].dev.uses_scheduler()
 }
 
 /// Gate 1: update-event (UIF/UIE) NVIC IRQ + lazy CNT polling — walk-on vs
@@ -414,15 +381,25 @@ fn run_differential(load: fn(&mut SystemBus), steps: u64, what: &str) -> (Vec<Pr
 #[test]
 fn update_irq_firmware_is_byte_identical_at_interval_1() {
     const STEPS: u64 = 4_000;
-    let (walk_probes, _) =
-        run_differential(load_firmware_update_irq, STEPS, "timer update-IRQ firmware");
-    let last = walk_probes.last().unwrap();
-    assert!(
-        last.isr_count >= 15,
-        "reference must take repeated update ISRs (got {})",
-        last.isr_count
+    let build = |mode: WalkMode| {
+        let mut m = build_machine(!mode.is_legacy_walk(), 1);
+        load_firmware_update_irq(&mut m.bus);
+        m
+    };
+    assert_modes_differ(
+        uses_scheduler(&build(WalkMode::LegacyWalk)),
+        uses_scheduler(&build(WalkMode::Scheduler)),
+        "timer update-IRQ firmware",
     );
-    assert!(last.main_count > 300, "main loop must run");
+    let reference =
+        assert_walk_differential("timer update-IRQ firmware", 0x40, STEPS, build, extra);
+    let last = reference.last().unwrap();
+    assert!(
+        last.extra("isr_count") >= 15,
+        "reference must take repeated update ISRs (got {})",
+        last.extra("isr_count")
+    );
+    assert!(last.extra("main_count") > 300, "main loop must run");
 }
 
 /// Gate 2: compare-match (CC1IF/CC1IE) — the latch lands on the match tick,
@@ -430,16 +407,18 @@ fn update_irq_firmware_is_byte_identical_at_interval_1() {
 #[test]
 fn compare_match_irq_firmware_is_byte_identical_at_interval_1() {
     const STEPS: u64 = 4_000;
-    let (walk_probes, _) = run_differential(
-        load_firmware_compare_irq,
-        STEPS,
-        "timer compare-IRQ firmware",
-    );
-    let last = walk_probes.last().unwrap();
+    let build = |mode: WalkMode| {
+        let mut m = build_machine(!mode.is_legacy_walk(), 1);
+        load_firmware_compare_irq(&mut m.bus);
+        m
+    };
+    let reference =
+        assert_walk_differential("timer compare-IRQ firmware", 0x40, STEPS, build, extra);
+    let last = reference.last().unwrap();
     assert!(
-        last.isr_count >= 15,
+        last.extra("isr_count") >= 15,
         "reference must take repeated compare ISRs (got {})",
-        last.isr_count
+        last.extra("isr_count")
     );
 }
 
@@ -449,16 +428,18 @@ fn compare_match_irq_firmware_is_byte_identical_at_interval_1() {
 #[test]
 fn mid_run_reconfig_firmware_is_byte_identical_at_interval_1() {
     const STEPS: u64 = 4_000;
-    let (walk_probes, _) = run_differential(
-        load_firmware_reconfig,
-        STEPS,
-        "timer mid-run-reconfig firmware",
-    );
-    let last = walk_probes.last().unwrap();
+    let build = |mode: WalkMode| {
+        let mut m = build_machine(!mode.is_legacy_walk(), 1);
+        load_firmware_reconfig(&mut m.bus);
+        m
+    };
+    let reference =
+        assert_walk_differential("timer mid-run-reconfig firmware", 0x40, STEPS, build, extra);
+    let last = reference.last().unwrap();
     assert!(
-        last.isr_count >= 5,
+        last.extra("isr_count") >= 5,
         "reference must take ISRs across the reconfiguration (got {})",
-        last.isr_count
+        last.extra("isr_count")
     );
 }
 
@@ -467,11 +448,15 @@ fn mid_run_reconfig_firmware_is_byte_identical_at_interval_1() {
 #[test]
 fn cnt_sr_poll_firmware_is_byte_identical_at_interval_1() {
     const STEPS: u64 = 2_000;
-    let (walk_probes, _) =
-        run_differential(load_firmware_poll, STEPS, "timer CNT/SR poll firmware");
-    let last = walk_probes.last().unwrap();
+    let build = |mode: WalkMode| {
+        let mut m = build_machine(!mode.is_legacy_walk(), 1);
+        load_firmware_poll(&mut m.bus);
+        m
+    };
+    let reference =
+        assert_walk_differential("timer CNT/SR poll firmware", 0x40, STEPS, build, extra);
     assert!(
-        last.poll_out[1] & 1 == 1 || walk_probes.iter().any(|p| p.poll_out[1] & 1 == 1),
+        reference.iter().any(|p| p.extra("poll_hi") & 1 == 1),
         "the poll loop must observe a lazily-latched UIF"
     );
 }
@@ -490,7 +475,7 @@ fn wrap_count_is_exact_at_interval_64() {
 
     let mut walk = build_machine(false, 1);
     load_firmware_wrap_poll(&mut walk.bus);
-    let walk_probes = run_probed(&mut walk, 0x40, STEPS);
+    let walk_probes = run_probed(&mut walk, 0x40, STEPS, &extra);
 
     let mut sched = build_machine(true, 64);
     load_firmware_wrap_poll(&mut sched.bus);
@@ -507,7 +492,7 @@ fn wrap_count_is_exact_at_interval_64() {
     let last_observation_step = walk_probes
         .iter()
         .zip(walk_probes.iter().skip(1))
-        .filter(|(a, b)| b.main_count > a.main_count)
+        .filter(|(a, b)| b.extra("main_count") > a.extra("main_count"))
         .map(|(_, b)| b.step)
         .next_back()
         .expect("reference observes at least one wrap");
@@ -518,12 +503,13 @@ fn wrap_count_is_exact_at_interval_64() {
     );
 
     assert!(
-        reference.main_count >= 10,
+        reference.extra("main_count") >= 10,
         "reference must observe repeated update events (got {})",
-        reference.main_count
+        reference.extra("main_count")
     );
     assert_eq!(
-        sched_count, reference.main_count,
+        sched_count,
+        reference.extra("main_count") as u32,
         "update-event count over the fixed window must be exact at interval 64"
     );
     // total_cycles advances one per instruction in both lanes (B2/B3 removed

@@ -203,6 +203,9 @@ def test_buffered_expect_does_not_advance_time():
 def test_python_send_routes_and_preserves_byte_order():
     with labwired.Sim(ROOT / 'tests/fixtures/tier1/stm32f103.elf', chip='stm32f103', uart='uart2') as s:
         s.write_u32(0x40021018, 1 << 14)  # Enable USART1 so the untouched RX check is meaningful.
+        # USART2/USART3 are clock-gated on RCC_APB1ENR bits 17/18 (RM0008 7.3.8);
+        # enable both so the routed read and the untouched USART3 check are meaningful.
+        s.write_u32(0x4002101C, (1 << 17) | (1 << 18))
         s.send('A')
         s.send_bytes(b'\x00\xffB')
         assert [s.read_u32(0x40004404) for _ in range(4)] == [65, 0, 255, 66]

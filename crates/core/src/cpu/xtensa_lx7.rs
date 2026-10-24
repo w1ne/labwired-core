@@ -113,6 +113,7 @@ fn bus_free(ins: &xtensa::Instruction) -> bool {
             | Moveqz { .. }
             | MoveqzS { .. }
             | MovfS { .. }
+            | Movf { .. }
             | Movgez { .. }
             | MovgezS { .. }
             | Movi { .. }
@@ -121,6 +122,7 @@ fn bus_free(ins: &xtensa::Instruction) -> bool {
             | Movnez { .. }
             | MovnezS { .. }
             | Movsp { .. }
+            | Movt { .. }
             | MovtS { .. }
             | MsubS { .. }
             | Mul16s { .. }
@@ -194,6 +196,10 @@ mod exec;
 /// Divide / square-root assist semantics (`div0.s`, `maddn.s`, `divn.s`, …).
 #[path = "xtensa_lx7/fp_assist.rs"]
 pub(crate) mod fp_assist;
+
+/// CCOUNT time-poll loop fast-forward (see the module doc).
+#[path = "xtensa_lx7/poll_loop.rs"]
+mod poll_loop;
 
 /// Offset of _KernelExceptionVector relative to VECBASE on ESP32-S3 LX7.
 ///
@@ -424,6 +430,10 @@ pub struct XtensaLx7 {
     /// `boundary.rs` calls between peripheral ticks) never uses it.
     bus_irq_memo: Option<u32>,
     in_step_batch: bool,
+    /// Last `RSR CCOUNT` seen, for the time-poll loop skip.
+    poll: poll_loop::PollTracker,
+    /// The skip the last `poll_loop_skip_budget` proved, until applied.
+    poll_plan: Option<poll_loop::PollPlan>,
     /// JIT cache (Phase 3.2 pilot — issue #124).
     #[cfg(feature = "jit")]
     pub jit: Option<Box<crate::cpu::xtensa_jit::JitCache>>,
@@ -485,6 +495,8 @@ impl XtensaLx7 {
             cur_decode_gen: 1,
             bus_irq_memo: None,
             in_step_batch: false,
+            poll: poll_loop::PollTracker::default(),
+            poll_plan: None,
             #[cfg(feature = "jit")]
             jit: None,
             #[cfg(feature = "jit")]
@@ -1193,7 +1205,23 @@ impl XtensaLx7 {
             // restored a bogus frame and RETW'd to pc=0. There is no safe
             // fallback: with no known callee we cannot place the record, and
             // guessing is what corrupted the stack, so skip the pane instead.
-            let Some(&callee_sp) = all_sps.iter().rev().find(|&&s| s < a1) else {
+            //
+            // When the pane IS a preserve-chain frame, its callee is the next
+            // chain SP below it. Only fall back to every known SP (which also
+            // holds the a1 of stale panes left by frames that have since
+            // returned) when the chain cannot answer: a stale a1 between a
+            // frame and its real callee points the record into the callee's
+            // live locals. grow.ino: readSensors (sp 0x..2200) -> printf (sp
+            // 0x..2160) with a dead pane at 0x..21e0 put a3 on printf's
+            // stack canary at 0x..21dc, and the next RETW panicked with
+            // "Stack smashing protect failure!".
+            let chain_callee = if frame_sps.contains(&a1) {
+                frame_sps.iter().rev().find(|&&s| s < a1)
+            } else {
+                None
+            };
+            let Some(&callee_sp) = chain_callee.or_else(|| all_sps.iter().rev().find(|&&s| s < a1))
+            else {
                 continue;
             };
             write4(bus, callee_sp, 16, a0, a1, a2, a3)?;
@@ -1479,6 +1507,8 @@ impl XtensaLx7 {
             Movnez { ar, as_, at } => self.exec_movnez(bus, len, ar, as_, at),
             Movltz { ar, as_, at } => self.exec_movltz(bus, len, ar, as_, at),
             Movgez { ar, as_, at } => self.exec_movgez(bus, len, ar, as_, at),
+            Movf { ar, as_, bt } => self.exec_movbool(bus, len, ar, as_, bt, false),
+            Movt { ar, as_, bt } => self.exec_movbool(bus, len, ar, as_, bt, true),
             Waiti { level } => self.exec_waiti(bus, len, level),
             // Xtensa Zero Overhead Loops (LOOP / LOOPNEZ / LOOPGTZ).
             // ISA RM §4.3.2: LCOUNT = as_ - 1, LBEG = PC + 3 (after LOOP),
@@ -2919,6 +2949,30 @@ impl Cpu for XtensaLx7 {
         self.ps.intlevel()
     }
 
+    fn poll_loop_anchor_ready(&self) -> bool {
+        self.poll_anchor_ready()
+    }
+
+    fn poll_loop_skip_budget(&mut self, bus: &dyn Bus, limit: u64) -> Option<(u64, u64)> {
+        self.poll_loop_budget(bus, limit)
+    }
+
+    fn fast_forward_poll_loop(&mut self, cycles: u64) -> bool {
+        self.apply_poll_loop_skip(cycles)
+    }
+
+    fn poll_loop_defer_changed(&self, bus: &dyn Bus) -> bool {
+        self.poll_defer_changed(bus)
+    }
+
+    fn poll_loop_watch(&self, out: &mut Vec<(u64, u64)>) {
+        self.poll_watch(out)
+    }
+
+    fn poll_loop_catch_up(&mut self, bus: &dyn Bus, cycles: u64) -> bool {
+        self.poll_catch_up(bus, cycles)
+    }
+
     fn is_parked_idle(&self) -> bool {
         // Not halted: reset-hold still needs lockstep so PRO can release APP.
         self.waiti_parked && !self.halted
@@ -3269,6 +3323,46 @@ mod fp_tests {
     fn run(cpu: &mut XtensaLx7, bus: &mut RamBus, word: u32) {
         let ins = decode(word);
         cpu.execute(ins, bus, 3).expect("exec");
+    }
+
+    /// Integer MOVF/MOVT (Boolean option). 0xc34800 is `movf a4, a8, b0`,
+    /// taken verbatim from an arduino-esp32 2.0.17 image (gcc's lowering of a
+    /// float-compare select), which raised IllegalInstruction before.
+    #[test]
+    fn integer_movf_movt_select_on_boolean_register() {
+        assert_eq!(
+            decode(0xc34800),
+            crate::decoder::xtensa::Instruction::Movf {
+                ar: 4,
+                as_: 8,
+                bt: 0
+            }
+        );
+        assert_eq!(
+            decode(0xd34800),
+            crate::decoder::xtensa::Instruction::Movt {
+                ar: 4,
+                as_: 8,
+                bt: 0
+            }
+        );
+        let mut bus = RamBus::new();
+        for (word, b0, moves) in [
+            (0xc34800u32, 0u32, true), // movf, b0 clear -> move
+            (0xc34800, 1, false),      // movf, b0 set   -> keep
+            (0xd34800, 1, true),       // movt, b0 set   -> move
+            (0xd34800, 0, false),      // movt, b0 clear -> keep
+        ] {
+            let mut cpu = XtensaLx7::new();
+            cpu.br = b0 as u16;
+            cpu.regs.write_logical(4, 1);
+            cpu.regs.write_logical(8, 0xdead_beef);
+            let pc = cpu.pc;
+            run(&mut cpu, &mut bus, word);
+            let want = if moves { 0xdead_beef } else { 1 };
+            assert_eq!(cpu.regs.read_logical(4), want, "word {word:#x} b0={b0}");
+            assert_eq!(cpu.pc, pc.wrapping_add(3));
+        }
     }
 
     #[test]

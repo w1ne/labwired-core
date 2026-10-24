@@ -15,6 +15,9 @@
 //!
 //! TASKS registers read as zero (write-only strobes on silicon).
 //! ERRORSRC is W1C (write-1 clears an error flag). MATCH is read-only.
+//!
+//! On a world `gpio_net` the target takes part in transfers bit by bit
+//! (`twis_net`).
 
 use crate::{Peripheral, SimResult};
 
@@ -31,6 +34,7 @@ const OFF_EVENTS_RXSTARTED: u64 = 0x14C;
 const OFF_EVENTS_TXSTARTED: u64 = 0x150;
 const OFF_EVENTS_WRITE: u64 = 0x164;
 const OFF_EVENTS_READ: u64 = 0x168;
+const OFF_SHORTS: u64 = 0x200;
 const OFF_INTEN: u64 = 0x300;
 const OFF_INTENSET: u64 = 0x304;
 const OFF_INTENCLR: u64 = 0x308;
@@ -52,6 +56,23 @@ const OFF_ORC: u64 = 0x5C0;
 
 // ENABLE register: value 9 selects TWIS mode (PS §6.29).
 const ENABLE_MASK: u32 = 0xF;
+/// `ENABLE` value that selects the TWIS personality.
+pub(crate) const ENABLE_TWIS: u32 = 9;
+
+// SHORTS: WRITE_SUSPEND (bit 13), READ_SUSPEND (bit 14).
+const SHORT_WRITE_SUSPEND: u32 = 1 << 13;
+const SHORT_READ_SUSPEND: u32 = 1 << 14;
+const SHORTS_MASK: u32 = SHORT_WRITE_SUSPEND | SHORT_READ_SUSPEND;
+
+// ERRORSRC bits.
+const ERRORSRC_OVERFLOW: u32 = 1 << 0;
+const ERRORSRC_DNACK: u32 = 1 << 2;
+const ERRORSRC_OVERREAD: u32 = 1 << 3;
+
+/// Line order for this target's pad-line cell.
+pub(crate) const TWIS_LINES: &[&str] = &["SCL", "SDA"];
+pub(crate) const LINE_SCL: usize = 0;
+pub(crate) const LINE_SDA: usize = 1;
 
 // INTEN valid bits per PS §6.29 — STOPPED(1) ERROR(9) RXSTARTED(19)
 // TXSTARTED(20) WRITE(25) READ(26).
@@ -97,6 +118,15 @@ pub struct Nrf52Twis {
     address: [u32; 2],
     config: u32,
     orc: u32,
+    shorts: u32,
+    /// Wire levels for the pads `PSEL.SCL`/`PSEL.SDA` name (bus wiring time).
+    lines: Option<std::sync::Arc<crate::peripherals::pad_lines::PadLines>>,
+    claim_scl: crate::peripherals::nrf52::pin_select::NrfPinClaim,
+    claim_sda: crate::peripherals::nrf52::pin_select::NrfPinClaim,
+    /// Bus cycle clock (the net engine's time base).
+    clock: Option<crate::CycleClock>,
+    /// The bit-level target used on a world `gpio_net` (see `twis_net`).
+    net: net::TwisNet,
 }
 
 impl Nrf52Twis {
@@ -110,17 +140,62 @@ impl Nrf52Twis {
     }
 }
 
-impl Peripheral for Nrf52Twis {
-    /// Walk-independent for every firmware state: this model overrides neither
-    /// `tick()` nor `tick_elapsed()` with time-driven work that the walk must
-    /// deliver. Observable effects land on MMIO writes and/or the separate
-    /// `tick_with_bus` path (`bus_tick_indices`), which still runs when the
-    /// legacy walk is deleted. Marking `needs_legacy_walk = false` therefore
-    /// drops only empty dispatch from the per-cycle walk — byte-identical.
-    fn needs_legacy_walk(&self) -> bool {
-        false
+impl Nrf52Twis {
+    /// The shared pad-line cell, created on first use (bus wiring time).
+    /// Both lines are open drain on a net, released until the target pulls
+    /// one low.
+    pub(crate) fn pad_lines_arc(
+        &mut self,
+    ) -> std::sync::Arc<crate::peripherals::pad_lines::PadLines> {
+        use crate::peripherals::pad_lines::{LineDrive, PadLines};
+        self.lines
+            .get_or_insert_with(|| {
+                let lines = PadLines::new(TWIS_LINES, &[true, true]);
+                for line in [LINE_SCL, LINE_SDA] {
+                    lines.set_mode(line, LineDrive::OpenDrain);
+                    lines.set_net_idle(line, LineDrive::OpenDrain);
+                }
+                std::sync::Arc::new(lines)
+            })
+            .clone()
     }
 
+    /// Join the chip's pin-claim table (config-build time).
+    pub(crate) fn install_pin_claims(
+        &mut self,
+        claims: &std::sync::Arc<crate::peripherals::nrf52::pin_select::NrfPinClaims>,
+        scl_token: u32,
+        sda_token: u32,
+    ) {
+        self.claim_scl.install(claims.clone(), scl_token);
+        self.claim_sda.install(claims.clone(), sda_token);
+        self.sync_pin_claims();
+    }
+
+    /// The pads are the target's only while `ENABLE = 9`.
+    fn sync_pin_claims(&mut self) {
+        let live = self.enable & ENABLE_MASK == ENABLE_TWIS;
+        self.claim_scl.update(self.psel_scl, live);
+        self.claim_sda.update(self.psel_sda, live);
+    }
+
+    /// The interrupt level: an event whose `INTEN` bit is set.
+    fn irq_level(&self) -> bool {
+        let events = [
+            (self.events_stopped, 1u32 << 1),
+            (self.events_error, 1 << 9),
+            (self.events_rxstarted, 1 << 19),
+            (self.events_txstarted, 1 << 20),
+            (self.events_write, 1 << 25),
+            (self.events_read, 1 << 26),
+        ];
+        events
+            .iter()
+            .any(|&(ev, bit)| ev != 0 && self.inten & bit != 0)
+    }
+}
+
+impl Peripheral for Nrf52Twis {
     fn read(&self, _offset: u64) -> SimResult<u8> {
         Ok(0)
     }
@@ -141,6 +216,7 @@ impl Peripheral for Nrf52Twis {
             OFF_EVENTS_TXSTARTED => self.events_txstarted,
             OFF_EVENTS_WRITE => self.events_write,
             OFF_EVENTS_READ => self.events_read,
+            OFF_SHORTS => self.shorts & SHORTS_MASK,
             // INTEN (all three aliases return the same mask).
             OFF_INTEN | OFF_INTENSET | OFF_INTENCLR => self.inten & INTEN_MASK,
             // ERRORSRC: W1C — read returns latched bits.
@@ -170,9 +246,14 @@ impl Peripheral for Nrf52Twis {
 
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
         match offset {
-            // TASKS: write-only strobes.
+            // TASKS: write-only strobes; on a net they drive the target.
             OFF_TASKS_STOP | OFF_TASKS_SUSPEND | OFF_TASKS_RESUME | OFF_TASKS_PREPARERX
-            | OFF_TASKS_PREPARETX => {}
+            | OFF_TASKS_PREPARETX => {
+                if value != 0 {
+                    self.net_task(offset);
+                }
+            }
+            OFF_SHORTS => self.shorts = value & SHORTS_MASK,
             // EVENTS: hardware-generated; SW write-1 ignored, write-0 clears.
             OFF_EVENTS_STOPPED if value == 0 => self.events_stopped = 0,
             OFF_EVENTS_ERROR if value == 0 => self.events_error = 0,
@@ -204,9 +285,77 @@ impl Peripheral for Nrf52Twis {
                 crate::census_reg!("nrf52.twis:Nrf52Twis", offset, "write");
             }
         }
+        if matches!(offset, OFF_ENABLE | OFF_PSEL_SCL | OFF_PSEL_SDA) {
+            self.sync_pin_claims();
+            self.net_after_pins();
+        }
         Ok(())
     }
+
+    fn line_names(&self) -> &'static [&'static str] {
+        TWIS_LINES
+    }
+
+    fn wire_lines(&self) -> Option<&crate::peripherals::pad_lines::PadLines> {
+        self.lines.as_deref()
+    }
+
+    fn wire_input_edge(&mut self, line: usize, level: bool, cycle: u64) -> bool {
+        self.net_edge(line, level, cycle)
+    }
+
+    fn attach_cycle_clock(&mut self, clock: crate::CycleClock) {
+        self.clock = Some(clock);
+    }
+
+    fn claims_pads(&self) -> bool {
+        true
+    }
+
+    fn uses_scheduler(&self) -> bool {
+        true
+    }
+
+    fn tick(&mut self) -> crate::PeripheralTickResult {
+        self.net_tick();
+        crate::PeripheralTickResult {
+            irq: self.irq_level(),
+            ..Default::default()
+        }
+    }
+
+    fn needs_bus_tick(&self) -> bool {
+        self.net_needs_bus()
+    }
+
+    fn tick_with_bus(&mut self, bus: &mut dyn crate::Bus) {
+        self.net_dma(bus);
+    }
+
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        self.net_take_events()
+    }
+
+    fn on_event(
+        &mut self,
+        _event_token: u32,
+        sched: &mut crate::sched::EventScheduler,
+        bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        self.net_on_sched(sched.now(), bus)
+    }
+
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
+    }
+
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        Some(self)
+    }
 }
+
+#[path = "twis_net.rs"]
+mod net;
 
 #[cfg(test)]
 mod tests {

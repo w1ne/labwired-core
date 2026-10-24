@@ -196,10 +196,10 @@ impl<'a> AttachCtx<'a> {
         //
         // ⚠️ ABSENT MEANS POWERED. See `components::supply` for why that
         // asymmetry is load-bearing: the curated labs declare no rails at all.
-        if !crate::peripherals::components::supply::powered_from_config(self) {
-            device =
-                Box::new(crate::peripherals::components::supply::UnpoweredI2cDevice::new(device));
-        }
+        let gate = crate::peripherals::components::supply_domain::SupplyGate::from_config(self)?;
+        device = Box::new(
+            crate::peripherals::components::supply_domain::GatedI2cDevice::new(device, gate),
+        );
         // Funnel through the single bus choke point, which wraps the device in
         // the shared bus trace before handing it to whichever I²C controller the
         // `connection:` resolves to. There is no untraced attach path.

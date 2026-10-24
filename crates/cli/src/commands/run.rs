@@ -255,6 +255,7 @@ pub(crate) fn run_firmware_riscv(
         machine.cpu.set_sp(sp_top & !0xF);
         machine
     };
+    crate::log_ts::set_hz(machine.bus.cpu_hz);
     machine.config.host_time_mode = args.time_mode;
 
     // Keep the RISC-V fast-boot path observable through the same UART capture
@@ -366,7 +367,7 @@ pub(crate) fn run_firmware_riscv(
         }};
     }
     if bridge {
-        eprintln!("[bridge] on; wifi_mac_idx={wifi_mac_idx:?}");
+        crate::log_ts::eventln!("[bridge] on; wifi_mac_idx={wifi_mac_idx:?}");
     }
 
     // Set when the run ends because the simulation raised an error rather than
@@ -375,6 +376,7 @@ pub(crate) fn run_firmware_riscv(
     let mut faulted = false;
 
     for i in 0..limit {
+        crate::log_ts::refresh_cycles(machine.total_cycles);
         // Periodic beacon so the STA's scan finds the AP (real APs beacon ~always).
         if bridge && i >= next_beacon_at {
             next_beacon_at = i + 2_000_000;
@@ -411,11 +413,11 @@ pub(crate) fn run_firmware_riscv(
                         let txs = mac.take_tx_frames();
                         for tx in txs {
                             if std::env::var("LABWIRED_BRIDGE_TRACE").is_ok() {
-                                eprintln!("[bridge] STA TX {} at step {i}", tx_kind(&tx));
+                                crate::log_ts::eventln!("[bridge] STA TX {} at step {i}", tx_kind(&tx));
                             }
                             for (reply, label) in ap_respond(&tx) {
                                 inject_priority!(mac, reply);
-                                eprintln!("[bridge] {label} at step {i}");
+                                crate::log_ts::eventln!("[bridge] {label} at step {i}");
                             }
                         }
                     }
@@ -437,7 +439,7 @@ pub(crate) fn run_firmware_riscv(
                 _ => None,
             };
             if let Some(n) = name {
-                eprintln!("[dhcp] {n} at step {i}");
+                crate::log_ts::eventln!("[dhcp] {n} at step {i}");
             }
         }
         if debug {
@@ -447,13 +449,15 @@ pub(crate) fn run_firmware_riscv(
             recent.push_back(pc);
             if i > 0 && !is_exec(pc) {
                 let c = &machine.cpu;
-                eprintln!(
+                crate::log_ts::eventln!(
                     "[badjump] step {i}: PC entered non-exec region {pc:#010x} \
                      ra={:#010x} sp={:#010x} a0={:#010x}",
-                    c.x[1], c.x[2], c.x[10]
+                    c.x[1],
+                    c.x[2],
+                    c.x[10]
                 );
                 let trail: Vec<String> = recent.iter().map(|p| format!("{p:#010x}")).collect();
-                eprintln!("[trail] {}", trail.join(" -> "));
+                crate::log_ts::eventln!("[trail] {}", trail.join(" -> "));
                 break;
             }
         }
@@ -461,14 +465,16 @@ pub(crate) fn run_firmware_riscv(
             if !break_hit[bi] {
                 break_hit[bi] = true;
                 let c = &machine.cpu;
-                eprintln!(
+                crate::log_ts::eventln!(
                     "[break] step {i} pc={pc:#010x} ra={:#010x} sp={:#010x} a0={:#010x}",
-                    c.x[1], c.x[2], c.x[10]
+                    c.x[1],
+                    c.x[2],
+                    c.x[10]
                 );
             }
         }
         if debug && i > 0 && i % 20_000_000 == 0 {
-            eprintln!("[progress] step {i} pc={pc:#010x}");
+            crate::log_ts::eventln!("[progress] step {i} pc={pc:#010x}");
         }
         // `advance` rather than `step`: `step` throws away the AdvanceReport,
         // and a firmware-authored verdict lives only in that report. The
@@ -476,7 +482,7 @@ pub(crate) fn run_firmware_riscv(
         match machine.advance(labwired_core::AdvanceRequest::single()) {
             Ok(report) => {
                 if let labwired_core::AdvanceStop::FirmwareExit { code } = report.stop {
-                    eprintln!(
+                    crate::log_ts::eventln!(
                         "[firmware] {} (step {i})",
                         crate::firmware_exit_message(code)
                     );
@@ -489,12 +495,12 @@ pub(crate) fn run_firmware_riscv(
                 // off — and the run then returned EXIT_PASS regardless, so a
                 // `MemoryViolation` or a `DecodeError` at instruction 12 of a
                 // hundred million produced no stderr and exit 0.
-                eprintln!(
+                crate::log_ts::eventln!(
                     "labwired run (riscv): simulation error at pc={pc:#010x} (step {i}): {e}"
                 );
                 if !break_at.is_empty() {
                     let trail: Vec<String> = recent.iter().map(|p| format!("{p:#010x}")).collect();
-                    eprintln!("[trail] {}", trail.join(" -> "));
+                    crate::log_ts::eventln!("[trail] {}", trail.join(" -> "));
                 }
                 faulted = true;
                 break;
@@ -599,7 +605,9 @@ fn run_firmware_riscv_batched(
             CHUNK.min((limit - ran) as u32)
         };
         let before = machine.step_profile().cpu_instructions;
-        match machine.run(Some(n)) {
+        let result = machine.run(Some(n));
+        crate::log_ts::refresh_cycles(machine.total_cycles);
+        match result {
             // The firmware stated its own result. `DebugControl::run` is the
             // only reader of that stop, and this loop used to drop it on the
             // floor and keep issuing chunks — the single-step loop above breaks
@@ -608,7 +616,7 @@ fn run_firmware_riscv_batched(
             // its own manifest), which is why it is wired up rather than left
             // to be discovered by the first board that does declare one.
             Ok(labwired_core::StopReason::FirmwareExit(code)) => {
-                eprintln!("[firmware] {}", crate::firmware_exit_message(code));
+                crate::log_ts::eventln!("[firmware] {}", crate::firmware_exit_message(code));
                 break;
             }
             Ok(_) => {}
@@ -616,7 +624,7 @@ fn run_firmware_riscv_batched(
                 // Was `tracing::debug!("… halt: {e}")` under a comment claiming
                 // a halt is the normal end of a fixture run. It is not: a
                 // normal end arrives as `Ok`. See `riscv_run_exit_code`.
-                eprintln!(
+                crate::log_ts::eventln!(
                     "labwired run (riscv, batched): simulation error at pc={:#010x}: {e}",
                     machine.cpu.get_pc(),
                 );
@@ -639,11 +647,16 @@ fn run_firmware_riscv_batched(
     #[cfg(feature = "jit-core")]
     if std::env::var("LABWIRED_JIT_STATS").is_ok() {
         match machine.cpu.jit_stats() {
-            Some(s) => eprintln!(
+            Some(s) => crate::log_ts::eventln!(
                 "[jit-stats] compiled={} block_runs={} block_instrs={} interpreted={}",
-                s.compiled, s.block_runs, s.block_instrs, s.interpreted
+                s.compiled,
+                s.block_runs,
+                s.block_instrs,
+                s.interpreted
             ),
-            None => eprintln!("[jit-stats] JIT engine never created (interpreter-only run)"),
+            None => crate::log_ts::eventln!(
+                "[jit-stats] JIT engine never created (interpreter-only run)"
+            ),
         }
     }
 
@@ -727,6 +740,7 @@ pub(crate) fn run_firmware_esp32(args: &RunArgs) -> ExitCode {
     // cycle clock, which freezes every `uses_scheduler()` peripheral under
     // `--features event-scheduler`.
     let mut machine = labwired_core::Machine::new(cpu, bus);
+    crate::log_ts::set_hz(machine.bus.cpu_hz);
     machine.config.host_time_mode = args.time_mode;
 
     if args.batched {
@@ -734,15 +748,18 @@ pub(crate) fn run_firmware_esp32(args: &RunArgs) -> ExitCode {
     }
 
     while steps < limit {
+        crate::log_ts::refresh_cycles(machine.total_cycles);
         match machine.step() {
             Ok(()) => {}
             Err(SimulationError::BreakpointHit(_)) => break,
             Err(SimulationError::ExceptionRaised { cause, pc }) => {
-                eprintln!("labwired-cli run (esp32): ExceptionRaised cause={cause} at 0x{pc:08x}");
+                crate::log_ts::eventln!(
+                    "labwired-cli run (esp32): ExceptionRaised cause={cause} at 0x{pc:08x}"
+                );
                 return ExitCode::from(EXIT_RUNTIME_ERROR);
             }
             Err(e) => {
-                eprintln!(
+                crate::log_ts::eventln!(
                     "labwired-cli run (esp32): simulator error at pc=0x{:08x}: {e}",
                     machine.cpu.get_pc(),
                 );
@@ -751,7 +768,8 @@ pub(crate) fn run_firmware_esp32(args: &RunArgs) -> ExitCode {
         }
         steps += 1;
     }
-    eprintln!(
+    crate::log_ts::refresh_cycles(machine.total_cycles);
+    crate::log_ts::eventln!(
         "labwired-cli run (esp32): reached --max-steps {limit}; pc=0x{:08x}",
         machine.cpu.get_pc(),
     );
@@ -783,10 +801,12 @@ fn run_firmware_xtensa_batched(
     while ran < limit {
         let fuel = CHUNK.min(limit - ran);
         let before = machine.step_profile().cpu_instructions;
-        let report = match machine.advance(AdvanceRequest::run(Some(fuel))) {
+        let result = machine.advance(AdvanceRequest::run(Some(fuel)));
+        crate::log_ts::refresh_cycles(machine.total_cycles);
+        let report = match result {
             Ok(report) => report,
             Err(e) => {
-                eprintln!(
+                crate::log_ts::eventln!(
                     "labwired run ({chip}, batched): simulator error at pc=0x{:08x}: {e}",
                     machine.cpu.get_pc(),
                 );
@@ -800,7 +820,7 @@ fn run_firmware_xtensa_batched(
         match report.stop {
             AdvanceStop::NoProgress => break,
             AdvanceStop::FirmwareExit { code } => {
-                eprintln!("[firmware] {}", crate::firmware_exit_message(code));
+                crate::log_ts::eventln!("[firmware] {}", crate::firmware_exit_message(code));
                 break;
             }
             _ if delta == 0 => break,
@@ -809,7 +829,7 @@ fn run_firmware_xtensa_batched(
     }
 
     print_batched_summary(machine.step_profile(), interval, "");
-    eprintln!(
+    crate::log_ts::eventln!(
         "labwired-cli run ({chip}, batched): reached --max-steps {limit}; pc=0x{:08x}",
         machine.cpu.get_pc(),
     );
@@ -867,6 +887,10 @@ pub(crate) fn run_firmware(
 
     if chip_yaml.contains("arch: \"avr\"") || chip_yaml.contains("arch: avr") {
         return run_firmware_avr(&args, &chip_yaml, plugins);
+    }
+
+    if chip_yaml.contains("arch: \"pic24\"") || chip_yaml.contains("arch: pic24") {
+        return run_firmware_pic24(&args, &chip_yaml, plugins);
     }
 
     // RISC-V fast-boot path: load peripherals from the chip YAML and run the
@@ -1030,6 +1054,9 @@ pub(crate) fn run_firmware(
             None
         });
     let mut stop_scanned: usize = 0;
+    // A run ended by `--stop-on` did not exhaust its budget; the epilogue
+    // below must not tell the user it did.
+    let mut stopped_by_pattern = false;
 
     let mut cpu = wiring.cpu;
 
@@ -1152,6 +1179,7 @@ pub(crate) fn run_firmware(
         Some(c1) => labwired_core::Machine::new(cpu, bus).with_secondary_cpu(c1),
         None => labwired_core::Machine::new(cpu, bus),
     };
+    crate::log_ts::set_hz(machine.bus.cpu_hz);
     machine.config.host_time_mode = args.time_mode;
     let mut steps = 0u64;
     // Ring buffer of recent PCs for post-mortem on exceptions.
@@ -1199,7 +1227,7 @@ pub(crate) fn run_firmware(
             if let Some(bi) = break_at.iter().position(|&b| b == $pc) {
                 if !$hits[bi] {
                     $hits[bi] = true;
-                    eprintln!(
+                    crate::log_ts::eventln!(
                         "labwired-cli run: BREAK-AT 0x{:08x} (step {steps}, core {})",
                         $pc,
                         if $c.app_cpu { 1 } else { 0 }
@@ -1248,6 +1276,7 @@ pub(crate) fn run_firmware(
         faulted = run_xtensa_batched_loop(&mut machine, limit);
     } else {
         while steps < limit {
+            crate::log_ts::refresh_cycles(machine.total_cycles);
             let pc_before = machine.cpu.get_pc();
             pc_ring[ring_head] = pc_before;
             ring_head = (ring_head + 1) % RING_LEN;
@@ -1278,7 +1307,7 @@ pub(crate) fn run_firmware(
                 if let Some(c1) = machine.cpu_secondary.as_mut() {
                     c1.halted = false;
                 }
-                eprintln!(
+                crate::log_ts::eventln!(
                 "labwired-cli run: APP_CPU released from reset → booting real ROM (step {steps})"
             );
             }
@@ -1286,14 +1315,16 @@ pub(crate) fn run_firmware(
             match machine.step() {
                 Ok(()) => {}
                 Err(SimulationError::BreakpointHit(pc)) => {
-                    eprintln!("labwired-cli run: BREAK at 0x{pc:08x}");
+                    crate::log_ts::eventln!("labwired-cli run: BREAK at 0x{pc:08x}");
                     export_bus_trace_if_requested(&args.bus_trace_out, &machine.bus);
                     crate::export_analog_trace_if_requested(&args.analog_trace, &machine);
                     export_display_if_requested(&args.display_out, &machine.bus);
                     return ExitCode::from(EXIT_PASS);
                 }
                 Err(SimulationError::ExceptionRaised { cause, pc }) => {
-                    eprintln!("labwired-cli run: ExceptionRaised cause={cause} at 0x{pc:08x}");
+                    crate::log_ts::eventln!(
+                        "labwired-cli run: ExceptionRaised cause={cause} at 0x{pc:08x}"
+                    );
                     eprintln!(
                         "labwired-cli run: PS=0x{:08x} (excm={} intlevel={}) WB={} WS=0x{:04x}",
                         machine.cpu.ps.as_raw(),
@@ -1302,7 +1333,7 @@ pub(crate) fn run_firmware(
                         machine.cpu.regs.windowbase(),
                         machine.cpu.regs.windowstart(),
                     );
-                    eprintln!("labwired-cli run: recent PCs (oldest first):");
+                    crate::log_ts::eventln!("labwired-cli run: recent PCs (oldest first):");
                     for i in 0..RING_LEN {
                         let idx = (ring_head + i) % RING_LEN;
                         if pc_ring[idx] != 0 {
@@ -1312,11 +1343,11 @@ pub(crate) fn run_firmware(
                     return ExitCode::from(EXIT_RUNTIME_ERROR);
                 }
                 Err(e) => {
-                    eprintln!(
+                    crate::log_ts::eventln!(
                         "labwired-cli run: simulator error at pc=0x{:08x}: {e}",
                         machine.cpu.get_pc(),
                     );
-                    eprintln!("labwired-cli run: a0..a15 at fault:");
+                    crate::log_ts::eventln!("labwired-cli run: a0..a15 at fault:");
                     for r in 0..16u8 {
                         eprintln!("  a{:<2} = 0x{:08x}", r, machine.cpu.regs.read_logical(r));
                     }
@@ -1325,7 +1356,7 @@ pub(crate) fn run_firmware(
                         machine.cpu.regs.windowbase(),
                         machine.cpu.regs.windowstart(),
                     );
-                    eprintln!("labwired-cli run: recent PCs (oldest first):");
+                    crate::log_ts::eventln!("labwired-cli run: recent PCs (oldest first):");
                     for i in 0..RING_LEN {
                         let idx = (ring_head + i) % RING_LEN;
                         if pc_ring[idx] != 0 {
@@ -1355,7 +1386,7 @@ pub(crate) fn run_firmware(
                             Ok(b) => s.push(b as char),
                         }
                     }
-                    eprintln!("CCDBG: panic \"{s}\" step={steps}");
+                    crate::log_ts::eventln!("CCDBG: panic \"{s}\" step={steps}");
                 }
             }
             steps += 1;
@@ -1372,9 +1403,10 @@ pub(crate) fn run_firmware(
                         let from = stop_scanned.saturating_sub(pat.len());
                         if String::from_utf8_lossy(&buf[from..]).contains(pat.as_str()) {
                             drop(buf);
-                            eprintln!(
+                            crate::log_ts::eventln!(
                                 "labwired-cli run: --stop-on {pat:?} matched at step {steps}"
                             );
+                            stopped_by_pattern = true;
                             break;
                         }
                         stop_scanned = buf.len();
@@ -1396,12 +1428,15 @@ pub(crate) fn run_firmware(
                     for w in watch.iter_mut() {
                         if w.0 == pc && !w.2[core] {
                             w.2[core] = true;
-                            eprintln!("SMP: core {core} reached {} (0x{pc:08x}) step {steps}", w.1);
+                            crate::log_ts::eventln!(
+                                "SMP: core {core} reached {} (0x{pc:08x}) step {steps}",
+                                w.1
+                            );
                         }
                     }
                 }
                 if steps.is_multiple_of(10_000_000) {
-                    eprintln!(
+                    crate::log_ts::eventln!(
                         "SMP: step {steps:>11}  pro=0x{:08x}  app=0x{app_pc:08x}",
                         machine.cpu.get_pc(),
                     );
@@ -1409,7 +1444,7 @@ pub(crate) fn run_firmware(
                 // Dense single-step trace window (env LABWIRED_DENSE_FROM / _LEN)
                 // for following a context switch instruction-by-instruction.
                 if steps >= dense_from && steps < dense_from + dense_len {
-                    eprintln!(
+                    crate::log_ts::eventln!(
                     "D {steps} pro=0x{:08x} ps={:x} wb={} ws=0x{:04x} exc={} epc1=0x{:08x} | app=0x{app_pc:08x}",
                     machine.cpu.get_pc(),
                     machine.cpu.ps.as_raw(),
@@ -1422,11 +1457,12 @@ pub(crate) fn run_firmware(
             }
         }
     } // else (non-batched step loop)
-      // Optional end-of-run dump of the Unity result struct (env
-      // LABWIRED_UNITY_ADDR=<hex base of the `Unity` UNITY_STORAGE_T global>).
-      // Mirrors the hardware oracle (`mdw <addr> 10`): NumberOfTests at +20,
-      // TestFailures at +24, TestIgnores at +28 — the authoritative pass/fail
-      // since Unity's text output goes out USB_SERIAL_JTAG, not stdout.
+    crate::log_ts::refresh_cycles(machine.total_cycles);
+    // Optional end-of-run dump of the Unity result struct (env
+    // LABWIRED_UNITY_ADDR=<hex base of the `Unity` UNITY_STORAGE_T global>).
+    // Mirrors the hardware oracle (`mdw <addr> 10`): NumberOfTests at +20,
+    // TestFailures at +24, TestIgnores at +28 — the authoritative pass/fail
+    // since Unity's text output goes out USB_SERIAL_JTAG, not stdout.
     if let Ok(s) = std::env::var("LABWIRED_UNITY_ADDR") {
         if let Ok(base) = u32::from_str_radix(s.trim_start_matches("0x"), 16) {
             let mut words = [0u32; 10];
@@ -1441,21 +1477,25 @@ pub(crate) fn run_firmware(
                 eprint!(" {w:08x}");
             }
             eprintln!();
-            eprintln!(
+            crate::log_ts::eventln!(
                 "labwired-cli run: Unity NumberOfTests={} TestFailures={} TestIgnores={}",
-                words[5], words[6], words[7],
+                words[5],
+                words[6],
+                words[7],
             );
         }
     }
-    let cpu1_pc = machine
-        .cpu_secondary
-        .as_ref()
-        .map(|c| format!(" appcpu_pc=0x{:08x}", c.get_pc()))
-        .unwrap_or_default();
-    eprintln!(
-        "labwired-cli run: reached --max-steps {limit}; pc=0x{:08x}{cpu1_pc}",
-        machine.cpu.get_pc(),
-    );
+    if !stopped_by_pattern {
+        let cpu1_pc = machine
+            .cpu_secondary
+            .as_ref()
+            .map(|c| format!(" appcpu_pc=0x{:08x}", c.get_pc()))
+            .unwrap_or_default();
+        crate::log_ts::eventln!(
+            "labwired-cli run: reached --max-steps {limit}; pc=0x{:08x}{cpu1_pc}",
+            machine.cpu.get_pc(),
+        );
+    }
     export_bus_trace_if_requested(&args.bus_trace_out, &machine.bus);
     crate::export_analog_trace_if_requested(&args.analog_trace, &machine);
     export_display_if_requested(&args.display_out, &machine.bus);
@@ -1492,10 +1532,12 @@ fn run_xtensa_batched_loop(
     while ran < limit {
         let fuel = CHUNK.min(limit - ran);
         let before = machine.step_profile().cpu_instructions;
-        let stop = match machine.advance(AdvanceRequest::run(Some(fuel))) {
+        let result = machine.advance(AdvanceRequest::run(Some(fuel)));
+        crate::log_ts::refresh_cycles(machine.total_cycles);
+        let stop = match result {
             Ok(report) => Some(report.stop),
             Err(e) => {
-                eprintln!("labwired run (xtensa, batched): simulation error: {e}");
+                crate::log_ts::eventln!("labwired run (xtensa, batched): simulation error: {e}");
                 faulted = true;
                 None
             }
@@ -1569,6 +1611,98 @@ fn run_firmware_avr(
 
     let limit = args.max_steps.unwrap_or(u64::MAX);
     let mut machine = Machine::new(cpu, bus);
+    crate::log_ts::set_hz(machine.bus.cpu_hz);
+    if args.batched {
+        let interval = machine.bus.max_safe_tick_interval();
+        machine.config.peripheral_tick_interval = interval;
+        machine.bus.config.peripheral_tick_interval = interval;
+        let result = machine.advance(AdvanceRequest::run(Some(limit)));
+        crate::log_ts::refresh_cycles(machine.total_cycles);
+        let report = match result {
+            Ok(report) => report,
+            Err(e) => {
+                crate::log_ts::eventln!("labwired run (avr, batched): simulator error: {e}");
+                return ExitCode::from(EXIT_RUNTIME_ERROR);
+            }
+        };
+        if let AdvanceStop::FirmwareExit { code } = report.stop {
+            crate::log_ts::eventln!("[firmware] {}", crate::firmware_exit_message(code));
+        }
+        print_batched_summary(machine.step_profile(), interval, "");
+    } else {
+        for _ in 0..limit {
+            crate::log_ts::refresh_cycles(machine.total_cycles);
+            if let Err(e) = machine.step() {
+                crate::log_ts::eventln!("labwired run (avr): simulator error: {e}");
+                return ExitCode::from(EXIT_RUNTIME_ERROR);
+            }
+        }
+    }
+    crate::log_ts::refresh_cycles(machine.total_cycles);
+    crate::log_ts::eventln!(
+        "labwired-cli run (avr{}): reached --max-steps {limit}; pc=0x{:08x}",
+        if args.batched { ", batched" } else { "" },
+        machine.cpu.get_pc(),
+    );
+    export_bus_trace_if_requested(&args.bus_trace_out, &machine.bus);
+    export_display_if_requested(&args.display_out, &machine.bus);
+    ExitCode::from(EXIT_PASS)
+}
+
+/// The PIC24 (dsPIC33) fast path for `labwired run` and the audit harness:
+/// bus from the chip YAML, UART1 on the CPU, run to `--max-steps`, then the
+/// standard trace/display exports. Same shape as [`run_firmware_avr`] minus
+/// the SPI/I2C kit take-over (PIC24 M0 has no bus kits yet).
+fn run_firmware_pic24(
+    args: &RunArgs,
+    chip_yaml: &str,
+    plugins: &[&dyn labwired_core::plugin::ChipPlugin],
+) -> ExitCode {
+    use labwired_config::{ChipDescriptor, SystemManifest};
+    use labwired_core::{AdvanceRequest, AdvanceStop, Cpu, Machine};
+
+    let chip = match serde_yaml::from_str::<ChipDescriptor>(chip_yaml) {
+        Ok(chip) => chip,
+        Err(e) => {
+            eprintln!("error: cannot parse chip YAML: {e}");
+            return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
+    };
+    let manifest_yaml = format!(
+        "name: \"perf-pic24-run\"\nchip: \"{}\"\nexternal_devices: []\n",
+        args.chip_path().display()
+    );
+    let manifest = match serde_yaml::from_str::<SystemManifest>(&manifest_yaml) {
+        Ok(manifest) => manifest,
+        Err(e) => {
+            eprintln!("error: cannot build PIC24 manifest: {e}");
+            return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
+    };
+    let bus =
+        match labwired_core::bus::SystemBus::from_config_with_plugins(&chip, &manifest, plugins) {
+            Ok(bus) => bus,
+            Err(e) => {
+                eprintln!("error: cannot build PIC24 bus: {e}");
+                return ExitCode::from(EXIT_CONFIG_ERROR);
+            }
+        };
+    let image = match labwired_loader::load_elf(&args.firmware) {
+        Ok(image) => image,
+        Err(e) => {
+            eprintln!("error: cannot load PIC24 firmware {:?}: {e}", args.firmware);
+            return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
+    };
+    let mut cpu = labwired_core::cpu::Pic24::new();
+    cpu.load_program_image(&image);
+    // UART1 TX is on the CPU: buffer it and print the console at the end.
+    let uart_sink: std::sync::Arc<std::sync::Mutex<Vec<u8>>> =
+        std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    cpu.set_serial_sink(uart_sink.clone());
+
+    let limit = args.max_steps.unwrap_or(u64::MAX);
+    let mut machine = Machine::new(cpu, bus);
     if args.batched {
         let interval = machine.bus.max_safe_tick_interval();
         machine.config.peripheral_tick_interval = interval;
@@ -1576,7 +1710,7 @@ fn run_firmware_avr(
         let report = match machine.advance(AdvanceRequest::run(Some(limit))) {
             Ok(report) => report,
             Err(e) => {
-                eprintln!("labwired run (avr, batched): simulator error: {e}");
+                eprintln!("labwired run (pic24, batched): simulator error: {e}");
                 return ExitCode::from(EXIT_RUNTIME_ERROR);
             }
         };
@@ -1587,13 +1721,19 @@ fn run_firmware_avr(
     } else {
         for _ in 0..limit {
             if let Err(e) = machine.step() {
-                eprintln!("labwired run (avr): simulator error: {e}");
+                eprintln!("labwired run (pic24): simulator error: {e}");
                 return ExitCode::from(EXIT_RUNTIME_ERROR);
             }
         }
     }
+    if let Ok(bytes) = uart_sink.lock() {
+        if !bytes.is_empty() {
+            println!("UART: {}", String::from_utf8_lossy(&bytes));
+        }
+    }
+
     eprintln!(
-        "labwired-cli run (avr{}): reached --max-steps {limit}; pc=0x{:08x}",
+        "labwired-cli run (pic24{}): reached --max-steps {limit}; pc=0x{:08x}",
         if args.batched { ", batched" } else { "" },
         machine.cpu.get_pc(),
     );
@@ -1743,6 +1883,7 @@ pub(crate) fn run_interactive(
             labwired_core::Arch::RiscV => labwired_config::Arch::RiscV,
             labwired_core::Arch::XtensaLx7 => labwired_config::Arch::Xtensa,
             labwired_core::Arch::Avr => labwired_config::Arch::Avr,
+            labwired_core::Arch::Pic24 => labwired_config::Arch::Pic24,
             _ => labwired_config::Arch::Unknown,
         };
 
@@ -1759,6 +1900,7 @@ pub(crate) fn run_interactive(
         labwired_config::Arch::Arm => run_interactive_arm(cli, bus, program, metrics),
         labwired_config::Arch::RiscV => run_interactive_riscv(cli, bus, program, metrics),
         labwired_config::Arch::Xtensa => run_interactive_xtensa(cli, bus, program, metrics),
+        labwired_config::Arch::Pic24 => run_interactive_pic24(cli, bus, program, metrics),
         _ => {
             emit_error(
                 cli.json,
@@ -1849,6 +1991,7 @@ pub(crate) fn run_firmware_arm(
     // Configure Cortex-M CPU.
     let (cpu, _nvic) = configure_cortex_m(&mut bus);
     let mut machine = Machine::new(cpu, bus);
+    crate::log_ts::set_hz(machine.bus.cpu_hz);
     machine.config.host_time_mode = args.time_mode;
 
     // Load ELF.
@@ -1962,7 +2105,11 @@ pub(crate) fn run_firmware_arm(
     // Flush stdout.
     let _ = std::io::stdout().flush();
     let elf = std::fs::read(&args.firmware).ok();
-    if let Some(v) = crate::fault_report::fault_verdict(&machine.cpu, elf.as_deref()) {
+    if let Some(v) = crate::fault_report::fault_verdict(
+        &machine.cpu,
+        elf.as_deref(),
+        machine.bus.memory_policy_report().as_ref(),
+    ) {
         crate::fault_report::eprint(&v);
     }
     export_bus_trace_if_requested(&args.bus_trace_out, &machine.bus);
@@ -1993,15 +2140,16 @@ fn run_arm_step_loop(
         .and_then(|s| s.parse().ok())
         .unwrap_or(0);
     for i in 0..limit {
+        crate::log_ts::refresh_cycles(machine.total_cycles);
         if dbg_trace != 0 && i % dbg_trace == 0 {
-            eprintln!("[arm-trace] step {i} pc={:#010x}", machine.cpu.get_pc());
+            crate::log_ts::eventln!("[arm-trace] step {i} pc={:#010x}", machine.cpu.get_pc());
         }
         // `advance` rather than `step`: `step` discards the AdvanceReport, and
         // a firmware-authored verdict appears nowhere else.
         match machine.advance(labwired_core::AdvanceRequest::single()) {
             Ok(report) => {
                 if let labwired_core::AdvanceStop::FirmwareExit { code } = report.stop {
-                    eprintln!(
+                    crate::log_ts::eventln!(
                         "[firmware] {} (step {i})",
                         crate::firmware_exit_message(code)
                     );
@@ -2009,7 +2157,7 @@ fn run_arm_step_loop(
                 }
             }
             Err(e) => {
-                eprintln!("labwired run (arm): simulation error: {e}");
+                crate::log_ts::eventln!("labwired run (arm): simulation error: {e}");
                 // The caller decides what this means. It ends the run either
                 // way; whether it ends the PROCESS with a failure is up to
                 // `--allow-sim-error`, because a TIER1 protocol may already
@@ -2039,7 +2187,7 @@ fn print_batched_summary(profile: labwired_core::StepProfile, tick_interval: u32
     } else {
         profile.cpu_instructions as f64 / profile.cpu_batches as f64
     };
-    eprintln!(
+    crate::log_ts::eventln!(
         "[batched] instructions={} batches={} steps_per_batch={:.2} \
          tick_interval={} peripheral_ticks={}{}",
         profile.cpu_instructions,
@@ -2176,12 +2324,14 @@ fn run_arm_batched_loop(
     let mut ran: u64 = 0;
     while ran < limit {
         let fuel = CHUNK.min(limit - ran);
-        match machine.advance(AdvanceRequest::run(Some(fuel))) {
+        let result = machine.advance(AdvanceRequest::run(Some(fuel)));
+        crate::log_ts::refresh_cycles(machine.total_cycles);
+        match result {
             Ok(report) => {
                 ran += report.fuel_consumed;
                 match report.stop {
                     AdvanceStop::FirmwareExit { code } => {
-                        eprintln!(
+                        crate::log_ts::eventln!(
                             "[firmware] {} (step {ran})",
                             crate::firmware_exit_message(code)
                         );
@@ -2193,7 +2343,7 @@ fn run_arm_batched_loop(
                 }
             }
             Err(e) => {
-                eprintln!("labwired run (arm, batched): simulation error: {e}");
+                crate::log_ts::eventln!("labwired run (arm, batched): simulation error: {e}");
                 faulted = true;
                 break;
             }
@@ -2207,11 +2357,16 @@ fn run_arm_batched_loop(
     #[cfg(feature = "jit-core")]
     if std::env::var("LABWIRED_JIT_STATS").is_ok() {
         match machine.cpu.jit_stats() {
-            Some(s) => eprintln!(
+            Some(s) => crate::log_ts::eventln!(
                 "[jit-stats] compiled={} block_runs={} block_instrs={} interpreted={}",
-                s.compiled, s.block_runs, s.block_instrs, s.interpreted
+                s.compiled,
+                s.block_runs,
+                s.block_instrs,
+                s.interpreted
             ),
-            None => eprintln!("[jit-stats] JIT engine never created (interpreter-only run)"),
+            None => crate::log_ts::eventln!(
+                "[jit-stats] JIT engine never created (interpreter-only run)"
+            ),
         }
     }
 
@@ -2357,6 +2512,59 @@ fn note_itm_echo_suppressed(cli: &Cli) {
     if cli.itm && cli.json {
         eprintln!("note: --itm echo is suppressed under --json (no structured ITM channel yet)");
     }
+}
+
+/// PIC24/dsPIC33 interactive run (M0).
+///
+/// UART1 lives on the CPU, so there is no RTT/GDB/bus-UART wiring yet; the
+/// shared simulation loop and metrics reporting run as for every other core.
+pub(crate) fn run_interactive_pic24(
+    cli: Cli,
+    bus: labwired_core::bus::SystemBus,
+    program: labwired_core::memory::ProgramImage,
+    metrics: Arc<labwired_core::metrics::PerformanceMetrics>,
+) -> ExitCode {
+    let mut cpu = labwired_core::cpu::Pic24::new();
+    cpu.load_program_image(&program);
+    // UART1 TX is on the CPU; keep the bytes so the console can be shown.
+    let uart_sink: Arc<Mutex<Vec<u8>>> = Arc::new(Mutex::new(Vec::new()));
+    cpu.set_serial_sink(uart_sink.clone());
+    let mut machine = labwired_core::Machine::new(cpu, bus);
+    machine.add_observer(metrics.clone());
+
+    info!("Starting Simulation (PIC24/dsPIC33 M0)...");
+
+    let result = run_simulation_loop(&cli, &mut machine, &metrics);
+
+    if !cli.json {
+        if let Ok(bytes) = uart_sink.lock() {
+            if !bytes.is_empty() {
+                println!("UART: {}", String::from_utf8_lossy(&bytes));
+            }
+        }
+    }
+
+    if let Some(path) = &cli.snapshot {
+        let firmware_path = cli.firmware.as_ref().expect("Firmware path required");
+        let system_path = cli.system.as_ref();
+
+        write_interactive_snapshot(
+            path,
+            &metrics,
+            &machine,
+            InteractiveSnapshotInputs {
+                firmware_path,
+                system_path,
+                max_steps: cli.max_steps,
+                steps_executed: result.steps_executed,
+                stop_reason: result.stop_reason,
+                message: result.stop_message,
+            },
+        );
+    }
+
+    crate::report::report_metrics(cli.json, &machine.cpu, &metrics);
+    ExitCode::from(EXIT_PASS)
 }
 
 pub(crate) fn run_interactive_riscv(

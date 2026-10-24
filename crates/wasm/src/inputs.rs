@@ -465,6 +465,29 @@ impl WasmSimulator {
             .map_err(|e| JsValue::from_str(&e.to_string()))
     }
 
+    /// Set the ambient temperature the chip's own temperature sensor reports,
+    /// in °C (STM32F1: ADC1_IN16, read once firmware sets `ADC_CR2.TSVREFE`).
+    ///
+    /// The chip-level counterpart of [`Self::set_ntc_temperature`]: no
+    /// `external_devices` entry — every peripheral with an on-chip sensor
+    /// takes the one value. Returns how many took it (`0` on a chip with no
+    /// modelled sensor). The default before any call is 25 °C. A non-finite
+    /// value is an error.
+    #[wasm_bindgen]
+    pub fn set_ambient_temperature(&mut self, celsius: f64) -> Result<u32, JsValue> {
+        self.record(lab_tools::Op::SetAmbientTemperature(celsius));
+        if !celsius.is_finite() {
+            return Err(JsValue::from_str(&format!(
+                "ambient temperature {celsius} is not a finite number of degrees C"
+            )));
+        }
+        let machine = self
+            .machine
+            .as_mut()
+            .ok_or_else(|| JsValue::from_str("simulator not initialized"))?;
+        Ok(machine.bus.set_ambient_temperature_c(celsius) as u32)
+    }
+
     /// Set the simulated wiper position on a potentiometer kit.
     ///
     /// Thin wrapper over [`Machine::set_input_on`] — identity is the

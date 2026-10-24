@@ -1,0 +1,55 @@
+# SPDX-License-Identifier: MIT
+# Test-only controller-memory descriptor, NOT registered/attached to PyBadge.
+# ST7735R v0.2 sections 9.6, 9.15, 9.18, 10.1.20–22, 10.1.27, 10.1.30:
+# https://cdn-shop.adafruit.com/datasheets/ST7735R_V0.2.pdf
+# Geometry is GM00 controller RAM, not an asserted module glass/crop. BGR,
+# scanning, inversion, gamma and analogue output are not rendered here.
+type: st7735r-memory-prototype
+behavior:
+  primitive: display
+  display:
+    width: 132
+    height: 162
+    pixel_format: rgb888
+    artifact_format: rgb888
+    serial_color: { encoding: st7735r, colmod_var: colmod }
+    gpio_control:
+      reset: { config_key: reset_pin, active_level: false }
+      backlight: { config_key: backlight_pin, active_level: true }
+    # Three bit-expanded RGB666 memory channels per pixel, NOT wire bytes.
+    ram: { bytes: 64152, layout: row_major, stream: command }
+    dc: { source: pin, pin_role: dc, command_level: 0 }
+    cs_select: keeps_stream
+    addressing: { modes: [horizontal], default: horizontal }
+    vars: { madctl: 0, colmod: 6 }
+    orientation: { var: madctl, swap_bit: 0x20, mirror_x_bit: 0x40, mirror_y_bit: 0x80 }
+    artifact_meta: [display_on, awake, lit, inverted, painted_bytes, total_bytes,
+                    { var: madctl }, { var: colmod }]
+    commands:
+      - { opcode: 0x01, name: SWRESET, do: [{ reset_control: true }] }
+      - { opcode: 0x10, name: SLPIN, do: [{ awake: false }] }
+      - { opcode: 0x11, name: SLPOUT, do: [{ awake: true }] }
+      - { opcode: 0x20, name: INVOFF, do: [{ invert: false }] }
+      - { opcode: 0x21, name: INVON, do: [{ invert: true }] }
+      - { opcode: 0x28, name: DISPOFF, do: [{ display_on: false }] }
+      - { opcode: 0x29, name: DISPON, do: [{ display_on: true }] }
+      - opcode: 0x2A
+        name: CASET
+        args: 4
+        do:
+          - set_window:
+              axis: col
+              start: { args: [0, 1] }
+              end: { args: [2, 3] }
+      - opcode: 0x2B
+        name: RASET
+        args: 4
+        do:
+          - set_window:
+              axis: row
+              start: { args: [0, 1] }
+              end: { args: [2, 3] }
+      - { opcode: 0x2C, name: RAMWR, do: [{ ram_write: { reset_cursor: true } }] }
+      - { opcode: 0x2D, name: RGBSET, args: 128, do: [{ load_rgb_lut: true }] }
+      - { opcode: 0x36, name: MADCTL, args: 1, do: [{ set_var: { name: madctl, value: { args: [0] } } }] }
+      - { opcode: 0x3A, name: COLMOD, args: 1, do: [{ set_var: { name: colmod, value: { args: [0] } } }] }

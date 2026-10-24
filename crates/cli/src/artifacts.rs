@@ -182,6 +182,12 @@ pub(crate) struct TestResult {
     /// where the pad's model cannot say. Omitted when no pad was watched.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) gpio_pins: Option<Vec<labwired_core::logic_capture::GpioPinState>>,
+    /// Every UART capture line with the simulated-time window its first byte
+    /// (and its newline) appeared in, so an oracle can anchor pin evidence on
+    /// "when the firmware printed X". Additive: absent when nothing was
+    /// printed. See `crate::uart_lines` for the resolution contract.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) uart_lines: Option<crate::uart_lines::UartLinesResult>,
     /// Final + peak motor evidence (omitted when the manifest declared no
     /// motors, keeping result.json byte-identical for every other run). The
     /// oracle evaluates the peak `|speed_rpm|` post-hoc: a continuous
@@ -196,6 +202,14 @@ pub(crate) struct TestResult {
     /// `TestResult` — `result.json` is a write-only artifact.
     #[serde(default, skip_deserializing, skip_serializing_if = "Vec::is_empty")]
     pub(crate) motors: Vec<labwired_core::bus::MotorSnapshot>,
+    /// Run-long change-point series of every in-core analog channel (probes
+    /// and `trace:` expressions such as a coil's `i(L1)`): `[time_ns, value]`
+    /// points, sample-and-hold, written when the value leaves a small
+    /// deadband. Unlike the 2 s scope ring it covers the whole run. Omitted
+    /// when no analog model is attached or none has a channel, so every other
+    /// run keeps a byte-identical `result.json`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) analog_series: Option<labwired_core::analog::AnalogSeries>,
     /// What became of every declarative input stimulus the script declared —
     /// applied, rejected by the engine, or never reached. Absent (and omitted)
     /// when the script declared none, so runs that never used the feature keep
@@ -218,6 +232,19 @@ pub(crate) struct TestResult {
     /// Main-stack paint / high-water report. Absent when not collected.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) memory: Option<labwired_core::stack_paint::MainStackReport>,
+    /// CPU-write policy violations (`cpu_writes: warn|fault` regions). Present
+    /// only when a policy is non-default, so default runs stay byte-identical.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) memory_policy: Option<labwired_core::bus::MemoryPolicyReport>,
+    /// Simulated run time in nanoseconds: `total_cycles * 1e9 / cpu_hz`.
+    /// Present only when `--log-timestamps` requests virtual time, so default
+    /// runs are byte-identical. Deterministic for a given firmware+config.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) virtual_time_ns: Option<u64>,
+    /// Wall time of the run in nanoseconds. Explicitly NON-deterministic;
+    /// never compare this across runs. Present only for `real`/`both`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) host_time_ns: Option<u64>,
     /// Always-on cheap execution metrics (cycles, bus accesses, PC samples).
     /// Present on successful machine runs; omitted on config-error paths that
     /// never built a machine. Top-level `cycles` / `instructions` /

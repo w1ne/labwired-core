@@ -155,23 +155,10 @@ const KNOWN_FORK: &[(&str, &str)] = &[
         "do_secondary_init",
         "IDF secondary init; CLI runs the real one",
     ),
-    // Flash bring-up. The profile models flash via its own chip-driver stubs
-    // (spi_flash_chip_generic_*, spi_flash_hal_*), which the browser lacks, so
-    // these are not a like-for-like swap and must be moved as a set.
-    (
-        "esp_flash_app_disable_protect",
-        "flash bring-up; profile models flash differently",
-    ),
-    ("esp_flash_app_init", "flash bring-up"),
-    ("esp_flash_chip_driver_initialized", "flash bring-up"),
-    ("esp_flash_init", "flash bring-up"),
-    ("esp_flash_init_default_chip", "flash bring-up"),
-    ("esp_flash_init_main", "flash bring-up"),
-    ("esp_flash_read_chip_id", "flash bring-up"),
-    ("esp_partition_main_flash_region_safe", "flash bring-up"),
-    ("spi_flash_init_lock", "flash locking"),
-    ("spi_flash_op_lock", "flash locking"),
-    ("spi_flash_op_unlock", "flash locking"),
+    // Flash bring-up and flash locking: CLOSED. The browser now runs the real
+    // esp_flash chip driver and seeds `g_rom_flashchip`, as the profile does;
+    // verified on the four-servo drawing-robot lab (serial without the
+    // coredump and NVS errors, servos follow the trajectory).
     // ESP logging. This is the divergence with a user-visible shape: the browser
     // nops `esp_log_writev`, the CLI does not, so an ESP_LOGI() can reach serial
     // in `labwired test` and not in the lab. NOT yet confirmed by running it —
@@ -241,8 +228,9 @@ fn the_known_fork_only_shrinks() {
         stale.join("\n  ")
     );
     assert!(
-        KNOWN_FORK.len() <= 29,
-        "KNOWN_FORK has grown to {}. It was 29 when this guard landed and may only fall.",
+        KNOWN_FORK.len() <= 18,
+        "KNOWN_FORK has grown to {}. It was 29 when this guard landed, 18 after the flash \
+         bring-up set closed, and may only fall.",
         KNOWN_FORK.len()
     );
 }

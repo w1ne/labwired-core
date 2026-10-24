@@ -140,15 +140,19 @@ impl SystemBus {
     #[inline]
     pub(crate) fn reconcile_level_after_read(&self, idx: usize) {
         let p = &self.peripherals[idx];
-        let Some(irq) = p.irq else {
-            return;
-        };
         if !p.dev.reads_can_deassert_irq() {
             return;
         }
-        if p.dev.irq_line_level() == Some(false) {
-            super::reconcile_nvic_level(&self.nvic, irq, false);
+        if let Some(irq) = p.irq {
+            if p.dev.irq_line_level() == Some(false) {
+                super::reconcile_nvic_level(&self.nvic, irq, false);
+            }
         }
+        p.dev.irq_line_levels(&mut |irq, level| {
+            if !level {
+                super::reconcile_nvic_level(&self.nvic, irq, false);
+            }
+        });
     }
 
     /// Drive an external input level on `pin` of the GPIO peripheral at bus
@@ -289,6 +293,9 @@ impl SystemBus {
             {
                 self.collect_scheduled_events(owner);
             }
+            // The edge may have given the owner EasyDMA work (an nRF slave
+            // ending a transaction): keep the bus-tick set in step.
+            self.refresh_bus_tick_index(owner);
         }
         if let Some(port) = self.peripherals[gpio_idx].dev.pins_mut() {
             crate::pins::watch_end(port);

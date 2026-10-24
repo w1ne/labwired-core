@@ -192,9 +192,17 @@ peripherals:
     base_address: 0x40013000
     size: "1KB"
     irq: 35
+    # F7 SPI is the FIFO-type IP (RM0410 §35: CR2.DS 4-16 bit, FRXTH, 32-bit
+    # RX/TX FIFOs, FRLVL/FTLVL, NSSP), not the F4 classic one, so CR2 resets
+    # to 0x0700 and the F4 `cr2_mask` no longer applies. `cr1_mask` (CRCNEXT
+    # not latched) is the F407 silicon capture this descriptor was built
+    # from; it is kept, not re-measured on F7 silicon. The AF pinout is the
+    # F4 one (AF5 SPI1/SPI2), declared because a FIFO part would otherwise
+    # get the L4 table.
     config:
       debug_schema: "../peripherals/stm32f767/spi1.yaml"
-      cr2_mask: 0xF7
+      profile: "stm32_fifo"
+      pad_map: "stm32f4"
       cr1_mask: 0xEFFF
     clock: { reg: "apb2enr", bit: 12 }
   - id: "spi2"
@@ -202,12 +210,18 @@ peripherals:
     base_address: 0x40003800
     size: "1KB"
     irq: 36
+    config:
+      profile: "stm32_fifo"
+      pad_map: "stm32f4"
     clock: { reg: "apb1enr", bit: 14 }
   - id: "spi3"
     type: "spi"
     base_address: 0x40003C00
     size: "1KB"
     irq: 51
+    config:
+      profile: "stm32_fifo"
+      pad_map: "stm32f4"
     clock: { reg: "apb1enr", bit: 15 }
   - id: "flash"
     type: "flash"

@@ -1,0 +1,18 @@
+name: Prospective SAMD paired IRQ receipt controls
+on:
+  pull_request:
+    paths: ['scripts/samd-paired-irq/**', 'crates/core/tests/samd_paired_irq_guest.rs', '.github/workflows/samd-paired-irq-controls.yml']
+permissions:
+  contents: read
+jobs:
+  reader-controls:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Manufactured source and receipt refusal controls only
+        run: |
+          python3 -B scripts/samd-paired-irq/test_record.py
+          bash -n scripts/samd-paired-irq/build.sh

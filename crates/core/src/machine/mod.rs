@@ -174,6 +174,10 @@ pub enum AdvanceStop {
     CycleLimit,
     /// Execution reached a breakpoint at the given primary CPU program counter.
     Breakpoint(u32),
+    /// A debug watch range matched a CPU load/store at this address; the
+    /// access committed, and nothing after it retires before the stop. See
+    /// `crates/core/src/bus/debug_watch.rs` for the latching contract.
+    Watchpoint(u64),
     /// The CPU reported zero forward progress.
     NoProgress,
     /// The **firmware** ended its own run by writing an exit code to the

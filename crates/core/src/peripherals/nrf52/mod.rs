@@ -5,9 +5,10 @@
 //!
 //! These live in a dedicated module because the Nordic peripherals are
 //! task/event-driven and their register layouts are unrelated to the
-//! STM32 / ARM-PrimeCell layouts the generic models target.  Cross-
-//! validated against real silicon by the `hw-oracle` crate's
-//! `nrf52_onboarding_diff` test.
+//! STM32 / ARM-PrimeCell layouts the generic models target. Existing nRF52
+//! captures cover the boundaries named by `nrf52_onboarding_diff`; they do
+//! not qualify every model here. The nRF5340 DPPIC/UARTE local route is a
+//! bounded simulation subset, without a silicon or general-DPPI claim.
 
 pub mod aar;
 pub mod acl;
@@ -16,6 +17,7 @@ pub mod ccm;
 pub mod clock;
 pub mod comp;
 pub mod cryptocell;
+pub mod dppic;
 pub mod ecb;
 pub mod egu;
 pub mod factory;

@@ -79,3 +79,41 @@ pub fn unsupported_external_device_error(
         ext.id
     )
 }
+
+impl SystemBus {
+    /// Attach a programmatic platform's manifest parts after its controllers
+    /// are installed, using the same resolution order as config-built buses.
+    /// Declarations are recorded first because kits resolve other placements.
+    /// An attachment error may follow earlier successful attachments; discard
+    /// that incomplete bus instead of retrying and duplicating those devices.
+    /// This single-use funnel rejects duplicate IDs and recorded placements.
+    pub fn attach_manifest_external_devices(
+        &mut self,
+        manifest: &labwired_config::SystemManifest,
+    ) -> anyhow::Result<()> {
+        if !self.external_device_decls.is_empty() {
+            anyhow::bail!(
+                "manifest external devices already recorded; refusing repeated attachment"
+            );
+        }
+        let mut ids = std::collections::HashSet::new();
+        for ext in &manifest.external_devices {
+            if !ids.insert(ext.id.as_str()) {
+                anyhow::bail!("duplicate external device id '{}'", ext.id);
+            }
+        }
+        self.record_external_devices(manifest);
+        for ext in &manifest.external_devices {
+            if attach_external_device_universal(self, manifest, ext)?
+                == UniversalResolution::Unrecognized
+            {
+                return Err(unsupported_external_device_error(
+                    "programmatic platform",
+                    ext,
+                ));
+            }
+        }
+        self.recompute_walk_deletable();
+        Ok(())
+    }
+}

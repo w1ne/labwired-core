@@ -72,7 +72,7 @@ so this is a real gate on the G0 register map, not just a boot check.
 ## 4. Config-build gate
 
 ```bash
-cargo test -p labwired-core --test stm32g071_config -j 4 -- --nocapture
+cargo test -p labwired-core --test board_config_gates stm32g071_from_config_builds -j 4 -- --nocapture
 ```
 
 ```

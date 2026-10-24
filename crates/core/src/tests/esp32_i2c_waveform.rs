@@ -18,11 +18,11 @@
 
 #[cfg(test)]
 mod esp32_i2c_waveform_tests {
-    use crate::logic_capture::LogicEdge;
     use crate::logic_capture::LogicSource;
     use crate::peripherals::esp32::gpio::Esp32Gpio;
     use crate::peripherals::esp32::i2c::Esp32I2c;
     use crate::peripherals::i2c::I2cDevice;
+    use crate::tests::i2c_waveform_common::{assert_scl_rate, decode};
     use crate::{Bus, Machine};
 
     const GPIO_BASE: u64 = 0x3FF4_4000;
@@ -147,44 +147,6 @@ mod esp32_i2c_waveform_tests {
         machine.step().unwrap();
     }
 
-    /// An INDEPENDENT I²C decoder — protocol rules only, knowing nothing about
-    /// how the waveform was produced. Identical rules to the STM32/S3/C3 gates.
-    fn decode(edges: &[LogicEdge]) -> Vec<(u8, bool)> {
-        let (mut scl, mut sda) = (true, true);
-        let mut started = false;
-        let mut bits: Vec<bool> = Vec::new();
-        let mut frames = Vec::new();
-        for edge in edges {
-            let (prev_scl, prev_sda) = (scl, sda);
-            match edge.ch {
-                CH_SCL => scl = edge.value,
-                CH_SDA => sda = edge.value,
-                _ => continue,
-            }
-            if edge.ch == CH_SDA && prev_sda && !sda && scl {
-                started = true;
-                bits.clear();
-                continue;
-            }
-            if edge.ch == CH_SDA && !prev_sda && sda && scl {
-                started = false;
-                bits.clear();
-                continue;
-            }
-            if started && edge.ch == CH_SCL && !prev_scl && scl {
-                bits.push(sda);
-                if bits.len() == 9 {
-                    let byte = bits[..8]
-                        .iter()
-                        .fold(0u8, |acc, &bit| (acc << 1) | u8::from(bit));
-                    frames.push((byte, !bits[8]));
-                    bits.clear();
-                }
-            }
-        }
-        frames
-    }
-
     #[test]
     fn logic_capture_sees_a_decodable_classic_esp32_i2c_waveform() {
         let mut machine = machine();
@@ -212,7 +174,7 @@ mod esp32_i2c_waveform_tests {
             "a classic-ESP32 I²C transaction must put edges on its pads, not a flat trace",
         );
         assert_eq!(
-            decode(&edges),
+            decode(&edges, CH_SCL, CH_SDA),
             vec![(SLAVE_ADDR << 1, true), (0x00, true), (0xAF, true)],
             "the wire must carry the addressed write the model performed",
         );
@@ -308,19 +270,10 @@ mod esp32_i2c_waveform_tests {
 
         // (SCL_LOW_PERIOD + SCL_HIGH_PERIOD) APB cycles x 3 CPU cycles per APB.
         const EXPECTED_BIT_TIME: u64 = (400 + 400) * 3;
-        let rises: Vec<u64> = machine
-            .logic_read_edges(0)
-            .edges
-            .iter()
-            .filter(|e| e.ch == CH_SCL && e.value)
-            .map(|e| e.cycle)
-            .collect();
-        assert!(rises.len() >= 9, "at least one full frame of clocks");
-        let gaps: Vec<u64> = rises.windows(2).map(|pair| pair[1] - pair[0]).collect();
-        let at_rate = gaps.iter().filter(|&&g| g == EXPECTED_BIT_TIME).count();
-        assert!(
-            at_rate >= gaps.len() - 1,
-            "SCL period should be {EXPECTED_BIT_TIME} cycles, got {gaps:?}",
+        assert_scl_rate(
+            &machine.logic_read_edges(0).edges,
+            CH_SCL,
+            EXPECTED_BIT_TIME,
         );
     }
 }

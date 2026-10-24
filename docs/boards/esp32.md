@@ -22,6 +22,11 @@ models the memory map probed against a real ESP32-WROOM-32 module (chip type
 - Timer group `timg0` (`0x3FF5_F000`)
 - RTC_CNTL and the DPORT interrupt matrix (declared as stubs)
 - SPI3 (`esp32_spi`), I2C0 (`esp32_i2c`), SAR ADC, LEDC
+- RTC IO MUX / RTC GPIO (`esp32_rtc_io`, `0x3FF4_8400`): RTC_GPIO0..17 on
+  GPIO36..39, 34, 35, 25, 26, 33, 32, 4, 0, 2, 15, 13, 12, 14, 27 at bit
+  `14 + n`; `MUX_SEL` hands a pad to `RTC_GPIO_OUT` / `ENABLE`, the RTC_IO
+  pulls apply in either domain (errata 3.6). See
+  [GPIO nets](../howto/gpio-nets.md#rtc-io-esp32-and-esp32-s3).
 
 ## What is NOT proven
 

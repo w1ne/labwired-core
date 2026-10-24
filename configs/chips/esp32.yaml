@@ -239,8 +239,11 @@ peripherals:
     size: "256B"
     config:
       debug_schema: "../peripherals/esp32/apb_ctrl.yaml"
+  # RTC IO MUX + RTC GPIO: the EspRtcIo model (`esp32_rtc_io`). Declared 4 KB
+  # as the bus registers it: the block is 0xCC bytes, the rest of the window
+  # is the round-trip tail the old stub answered with (see ESP32_PERIPHERALS).
   - id: "rtcio"
-    type: "system_stub"
+    type: "esp32_rtc_io"
     base_address: 0x3FF48400
     size: "4KB"
     config:

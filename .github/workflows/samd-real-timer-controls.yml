@@ -1,0 +1,20 @@
+name: Prospective real Timer guest witness controls
+on:
+  pull_request:
+    paths: ['crates/core/tests/samd_real_timer_guest.rs', 'scripts/samd-real-timer/**', '.github/workflows/samd-real-timer-controls.yml']
+permissions:
+  contents: read
+jobs:
+  witness-controls:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: Swatinem/rust-cache@v2
+      - name: Require manufactured source-bound receipt controls
+        run: python3 -B scripts/samd-real-timer/test_record.py
+      - name: Compile prospective harness and run manufactured witnesses only
+        run: cargo test --release -p labwired-core --test samd_real_timer_guest -- --nocapture

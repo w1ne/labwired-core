@@ -24,6 +24,10 @@ behavior:
       - [100, 3300]
     below_first: clamp
     encode: trunc
+    # Ratiometric: the wiper is a fraction of the rail the ends sit on. The
+    # curve above is written at 3.3 V; `config.supply_mv` (5000 on a 5 V Uno)
+    # rescales it to the placed supply.
+    ratiometric_ref_mv: 3300
 
 metadata:
   label: Potentiometer
@@ -35,5 +39,6 @@ metadata:
     slide pot are electrically identical and share this model.
   config_keys:
     - { name: channel, ty: int, doc: "ADC channel index (0..N). Defaults to 0." }
+    - { name: supply_mv, ty: float, doc: "Rail across the pot ends, in mV (default 3300). The wiper spans 0..supply_mv." }
   inputs:
     - { key: position, label: Position, unit: "%", min: 0, max: 100, default: 50 }

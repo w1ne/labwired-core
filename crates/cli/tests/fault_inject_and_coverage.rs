@@ -78,7 +78,7 @@ fn test_coverage_writes_function_level_lcov() {
         String::from_utf8_lossy(&out.stderr)
     );
     let lcov = std::fs::read_to_string(out_dir.join("coverage.info")).unwrap();
-    assert!(lcov.contains("SF:main.c\n"), "{lcov}");
+    assert!(lcov.contains("SF:src/main.c\n"), "{lcov}");
     assert!(lcov.contains("FNDA:1,main\n"), "{lcov}");
     assert!(lcov.contains("FNDA:0,HardFault_Handler\n"), "{lcov}");
     let json: serde_json::Value =

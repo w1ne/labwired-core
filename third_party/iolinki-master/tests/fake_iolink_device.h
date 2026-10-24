@@ -21,6 +21,14 @@ void fake_iolink_device_set_event_memory(const uint8_t* memory, uint8_t len);
 void fake_iolink_device_corrupt_next_response_checksum(void);
 void fake_iolink_device_drop_next_response(void);
 void fake_iolink_device_truncate_next_response(void);
+/** @brief Keep already queued but unread reply bytes when the next reply is queued.
+ *
+ * Models a reply that is already on the wire when the master sends its next
+ * request: the unread bytes stay in front of the new reply.
+ */
+void fake_iolink_device_keep_unread_responses(void);
+/** @brief Drop all queued (read and unread) reply bytes, like a PHY RX flush. */
+void fake_iolink_device_flush_rx(void);
 const iolink_phy_api_t* fake_iolink_device_phy(void);
 uint32_t fake_iolink_device_wakeup_count(void);
 uint32_t fake_iolink_device_transition_count(void);

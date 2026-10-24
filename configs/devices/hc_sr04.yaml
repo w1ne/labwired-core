@@ -21,16 +21,30 @@ behavior:
         - hold:
             level: true
             us: {input: distance, scale: 58, arithmetic: f32, min_cycles: 1}
+    # Datasheet: with no target inside the rated 400 cm the module times out
+    # and holds ECHO high for ~38 ms, which no valid range produces.
+    out_of_range:
+      output: ECHO
+      idle: false
+      final: false
+      timing: peripheral_tick_grid
+      segments:
+        - hold: {level: false, us: 200}
+        - hold: {level: true, us: 38000}
   rules:
     - on: {pin: TRIG, edge: rising}
+      when: "input(distance) <= 400"
       do: [{emit_schedule: echo}]
+    - on: {pin: TRIG, edge: rising}
+      when: "input(distance) > 400"
+      do: [{emit_schedule: out_of_range}]
 
 metadata:
   label: "HC-SR04"
   summary: "Ultrasonic distance sensor (trigger / echo)"
   category: gpio
   inputs:
-    - { key: distance, label: "Distance", unit: cm, min: 2, max: 400, default: 50, config_key: distance_cm, expr_precision: f32 }
+    - { key: distance, label: "Distance", unit: cm, min: 2, max: 1000, default: 50, config_key: distance_cm, expr_precision: f32 }
 
 # --- Canvas-compiler emit mapping (phase 2: unifies the TS/Rust emitters) ---
 # NOTE: unlike the self-timed one-wire/quadrature devices, HC-SR04's cpu_hz uses

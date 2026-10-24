@@ -32,6 +32,11 @@ pub struct PadClaims {
     /// the signal driving that pad or [`UNCLAIMED`].
     slots: Vec<AtomicU32>,
     pins_per_port: usize,
+    /// Per pad: the pad sits on a world `gpio_net` (set once, at world
+    /// build, by the GPIO port's `join_wire`). A peripheral asks it of the
+    /// pad its pin select names, to know whether its wire is shared with
+    /// other chips.
+    on_net: Vec<std::sync::atomic::AtomicBool>,
 }
 
 impl PadClaims {
@@ -47,6 +52,9 @@ impl PadClaims {
                 .map(|_| AtomicU32::new(UNCLAIMED))
                 .collect(),
             pins_per_port,
+            on_net: (0..ports * pins_per_port)
+                .map(|_| std::sync::atomic::AtomicBool::new(false))
+                .collect(),
         }
     }
 
@@ -92,6 +100,20 @@ impl PadClaims {
         if let Some(slot) = self.slots.get(pad) {
             let _ = slot.compare_exchange(token, UNCLAIMED, Ordering::Relaxed, Ordering::Relaxed);
         }
+    }
+
+    /// Mark pad `pin` of `port` as being on a world `gpio_net`.
+    pub(crate) fn mark_on_net(&self, port: u8, pin: u8) {
+        if let Some(flag) = self.on_net.get(self.pad_index(port, pin)) {
+            flag.store(true, Ordering::Relaxed);
+        }
+    }
+
+    /// `true` when the pad at flat index `pad` is on a world `gpio_net`.
+    pub(crate) fn pad_on_net(&self, pad: usize) -> bool {
+        self.on_net
+            .get(pad)
+            .is_some_and(|flag| flag.load(Ordering::Relaxed))
     }
 }
 

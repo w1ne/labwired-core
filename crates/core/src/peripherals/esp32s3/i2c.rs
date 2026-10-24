@@ -119,6 +119,16 @@ const NUM_CMDS: usize = 8;
 /// axis is CPU cycles at 240 MHz — the reset-default 3:1 ratio.
 const CORE_PER_APB: u64 = 3;
 
+/// The S3's CPU clock, XTAL and RC_FAST: the I²C source clock
+/// (`CLK_CONF.SCLK_SEL`, 0 XTAL, 1 RC_FAST) against the engine's cycle axis,
+/// for the bit-level net engine's timing.
+const CPU_CLK_HZ: u64 = 240_000_000;
+const XTAL_CLK_HZ: u64 = 40_000_000;
+const RC_FAST_CLK_HZ: u64 = 17_500_000;
+/// Scheduler token whose firing makes the interrupt matrix re-derive this
+/// controller's level after a net edge latched an interrupt bit.
+const NET_IRQ_TOKEN: u32 = u32::MAX - 1;
+
 pub struct Esp32s3I2c {
     ctr: u32,
     sr: u32,
@@ -165,6 +175,22 @@ pub struct Esp32s3I2c {
 
     /// Bus-published cycle clock (walk-free level export).
     clock: Option<CycleClock>,
+
+    /// The bit-level engine that owns SCL/SDA while the GPIO matrix routes
+    /// one of them to a pad on a world `gpio_net`
+    /// ([`crate::peripherals::esp_i2c_net`]). Off a net the command list
+    /// runs instantly, as below.
+    net: crate::peripherals::esp_i2c_net::EspI2cNet,
+    /// `SR` bits the net engine owns (RESP_REC, SLAVE_RW, ARB_LOST,
+    /// BUS_BUSY, SLAVE_ADDRESSED, STRETCH_CAUSE).
+    net_sr: u32,
+    /// Interrupt level last reported through a scheduler event in net mode.
+    net_irq: crate::peripherals::esp_gpio_net::IrqLevelWatch,
+    /// The chip's live GPIO output matrix, installed at bus wiring time
+    /// (`SystemBus::wire_esp32s3_i2c_pads`). Lets a slave be reached through
+    /// this controller when the firmware routes it to that slave's pads; see
+    /// `peripherals::i2c_matrix`.
+    pad_matrix: Option<std::sync::Arc<dyn crate::peripherals::i2c_matrix::PadOutMatrix>>,
 }
 
 impl Esp32s3I2c {
@@ -209,6 +235,10 @@ impl Esp32s3I2c {
             reg_date: 0x2007_0201,
 
             clock: None,
+            net: Default::default(),
+            net_sr: 0,
+            net_irq: Default::default(),
+            pad_matrix: None,
         }
     }
 
@@ -304,6 +334,9 @@ impl Esp32s3I2c {
         const SR_STRETCH_CAUSE_RESET: u32 = 0x0000_C000;
         let rx = (self.core.rx_len() as u32) & 0x3F;
         let tx = (self.tx_fifo.len() as u32) & 0x3F;
+        if self.net_mode() {
+            return self.net_sr | (rx << 8) | (tx << 18);
+        }
         (self.sr & SR_RESP_REC) | SR_STRETCH_CAUSE_RESET | (rx << 8) | (tx << 18)
     }
 
@@ -321,6 +354,158 @@ impl Esp32s3I2c {
     /// the master selected.
     fn find_slave_by_address(&mut self, address: u8) -> Option<usize> {
         self.core.find_by_address(address, &RouteGate::All)
+    }
+}
+
+impl Esp32s3I2c {
+    /// `true` while the GPIO matrix routes SCL or SDA to a pad on a world
+    /// `gpio_net`: the net engine owns the wire.
+    fn net_mode(&self) -> bool {
+        self.wire.on_net()
+    }
+
+    fn net_now(&self) -> u64 {
+        self.clock.as_ref().map_or(0, CycleClock::now)
+    }
+
+    /// Run `f` with the net engine, this model as its register host, and the
+    /// wire, stamping the wire's reports with `now`.
+    fn with_net<R>(
+        &mut self,
+        now: u64,
+        f: impl FnOnce(&mut crate::peripherals::esp_i2c_net::EspI2cNet, &mut Self, &PadLines) -> R,
+    ) -> Option<R> {
+        let pads = self.wire.lines_arc()?;
+        let mut net = std::mem::take(&mut self.net);
+        pads.set_stamp(Some(now));
+        let r = f(&mut net, self, &pads);
+        pads.set_stamp(None);
+        self.net = net;
+        Some(r)
+    }
+
+    /// Transfers this controller ended with STOP as a master on a net.
+    pub fn net_master_transfers(&self) -> u64 {
+        self.net.master_transfers()
+    }
+
+    /// Transfers that addressed this controller as a slave on a net.
+    pub fn net_slave_transfers(&self) -> u64 {
+        self.net.slave_transfers()
+    }
+
+    /// The register writes the net engine acts on.
+    fn net_write(&mut self, offset: u64, value: u32) {
+        let now = self.net_now();
+        self.with_net(now, |net, host, pads| {
+            match offset {
+                REG_CTR => {
+                    if value & CTR_FSM_RST != 0 {
+                        net.reset(pads);
+                    }
+                    if value & CTR_TRANS_START_BIT != 0 {
+                        net.start(host, now, pads);
+                    }
+                }
+                REG_DATA => net.tx_written(host, now, pads),
+                REG_SCL_STRETCH_CONF
+                    if value & crate::peripherals::esp_i2c_net::STRETCH_CLR != 0 =>
+                {
+                    net.stretch_clear(host, now, pads)
+                }
+                _ => {}
+            }
+            net.after_write(host, now, pads);
+        });
+    }
+
+    fn net_step(&mut self, now: u64) {
+        if self.net.deadline().is_some_and(|d| d <= now) {
+            self.with_net(now, |net, host, pads| net.step(host, now, pads));
+        }
+    }
+}
+
+impl crate::peripherals::esp_i2c_net::EspI2cHost for Esp32s3I2c {
+    fn ctr(&self) -> u32 {
+        self.ctr
+    }
+
+    fn slave_addr(&self) -> u32 {
+        self.slave_addr
+    }
+
+    fn fifo_conf(&self) -> u32 {
+        self.fifo_conf
+    }
+
+    fn stretch_conf(&self) -> u32 {
+        self.reg_scl_stretch_conf
+    }
+
+    fn cmd(&self, i: usize) -> u32 {
+        self.cmds.get(i).copied().unwrap_or(0)
+    }
+
+    fn set_cmd(&mut self, i: usize, value: u32) {
+        if let Some(slot) = self.cmds.get_mut(i) {
+            *slot = value;
+        }
+    }
+
+    fn cmd_count(&self) -> usize {
+        NUM_CMDS
+    }
+
+    fn tx_pop(&mut self) -> Option<u8> {
+        self.tx_fifo.pop_front()
+    }
+
+    fn rx_push(&mut self, byte: u8) -> bool {
+        if self.core.rx_len() >= FIFO_CAPACITY {
+            return false;
+        }
+        self.core.rx_push(byte);
+        true
+    }
+
+    fn rx_len(&self) -> usize {
+        self.core.rx_len()
+    }
+
+    fn raise(&mut self, bits: u32) {
+        self.int_raw |= bits;
+    }
+
+    fn sr_update(&mut self, set: u32, clear: u32) {
+        self.net_sr = (self.net_sr & !clear) | set;
+    }
+
+    /// The S3 timing registers count I²C source-clock ticks (`CLK_CONF`:
+    /// XTAL or RC_FAST over `SCLK_DIV_NUM + 1` plus the fractional
+    /// `DIV_B / DIV_A`), each field plus one, and the high period adds
+    /// `SCL_WAIT_HIGH_PERIOD` (TRM §29.4.6, the C3's layout).
+    fn timing(&self) -> crate::peripherals::i2c_bitbus::Timing {
+        let clk = self.reg_clk_conf;
+        let div_num = u64::from(clk & 0xFF) + 1;
+        let div_a = u64::from((clk >> 8) & 0x3F);
+        let div_b = u64::from((clk >> 14) & 0x3F);
+        let src_hz = if clk & (1 << 20) != 0 {
+            RC_FAST_CLK_HZ
+        } else {
+            XTAL_CLK_HZ
+        };
+        let (a, b) = if div_a == 0 { (1, 0) } else { (div_a, div_b) };
+        let num = CPU_CLK_HZ * (div_num * a + b);
+        let den = src_hz * a;
+        let cycles = |ticks: u32| (u64::from(ticks) * num).div_ceil(den.max(1));
+        let high =
+            (self.reg_scl_high_period & 0x1FF) + ((self.reg_scl_high_period >> 9) & 0x7F) + 1;
+        crate::peripherals::i2c_bitbus::Timing::new(
+            cycles((self.reg_scl_low_period & 0x1FF) + 1),
+            cycles(high),
+            cycles((self.reg_sda_hold & 0x1FF) + 1),
+        )
     }
 }
 
@@ -343,7 +528,42 @@ impl std::fmt::Debug for Esp32s3I2c {
     }
 }
 
+/// `I2CEXT0_SCL/SDA` and `I2CEXT1_SCL/SDA` output signals
+/// (`soc/esp32s3/include/soc/gpio_sig_map.h`: 89/90 and 91/92).
+const I2CEXT0_SIGNALS: (u32, u32) = (89, 90);
+const I2CEXT1_SIGNALS: (u32, u32) = (91, 92);
+
+impl crate::peripherals::device::I2cSlaveHost for Esp32s3I2c {
+    fn attach_slave(&mut self, device: Box<dyn I2cDevice>) {
+        self.push_slave(device);
+    }
+
+    fn matrix_reach(&self) -> Option<crate::peripherals::i2c_matrix::I2cMatrixReach> {
+        let (scl_signal, sda_signal) = match self.intr_source_id {
+            I2C0_INTR_SOURCE_ID => I2CEXT0_SIGNALS,
+            I2C1_INTR_SOURCE_ID => I2CEXT1_SIGNALS,
+            _ => return None,
+        };
+        Some(crate::peripherals::i2c_matrix::I2cMatrixReach {
+            matrix: self.pad_matrix.clone()?,
+            scl_signal,
+            sda_signal,
+        })
+    }
+
+    fn set_pad_matrix(
+        &mut self,
+        matrix: std::sync::Arc<dyn crate::peripherals::i2c_matrix::PadOutMatrix>,
+    ) {
+        self.pad_matrix = Some(matrix);
+    }
+}
+
 impl Peripheral for Esp32s3I2c {
+    fn i2c_slave_host(&mut self) -> Option<&mut dyn crate::peripherals::device::I2cSlaveHost> {
+        Some(self)
+    }
+
     fn line_names(&self) -> &'static [&'static str] {
         I2C_LINES
     }
@@ -421,6 +641,12 @@ impl Peripheral for Esp32s3I2c {
 
         match offset {
             REG_SCL_LOW_PERIOD => masked_write(&mut self.reg_scl_low_period, value, 0x0000_01FF),
+            // On a net the engine runs the command list on the wire
+            // (`net_write` below); TRANS_START, FSM_RST and CONF_UPGATE are
+            // strobes that never read back.
+            REG_CTR if self.net_mode() => {
+                self.ctr = value & !(CTR_TRANS_START_BIT | CTR_FSM_RST | CTR_CONF_UPGATE);
+            }
             REG_CTR => {
                 self.ctr = value;
                 if value & CTR_TRANS_START_BIT != 0 {
@@ -493,10 +719,74 @@ impl Peripheral for Esp32s3I2c {
                 crate::census_reg!("esp32s3.i2c:Esp32s3I2c", offset, "write");
             } // Accept-and-ignore (unmapped offsets)
         }
+        if self.net_mode() {
+            // SLAVE_SCL_STRETCH_CLR is write-1, it never reads back.
+            self.reg_scl_stretch_conf &= !crate::peripherals::esp_i2c_net::STRETCH_CLR;
+            self.net_write(offset, value);
+        }
         Ok(())
     }
 
+    fn wire_input_edge(&mut self, line: usize, level: bool, cycle: u64) -> bool {
+        if !self.net_mode() {
+            return false;
+        }
+        self.with_net(cycle, |net, host, pads| {
+            net.on_edge(host, line, level, cycle, pads)
+        });
+        true
+    }
+
+    fn sync_to(&mut self, now: u64) {
+        self.net_step(now);
+    }
+
+    /// On a net: the engine's next timed step, and one event per change of
+    /// the interrupt level a net edge latched, so the interrupt matrix
+    /// re-derives its sources. Off a net nothing is scheduled.
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        if !self.net_mode() {
+            return Vec::new();
+        }
+        let now = self.net_now();
+        let mut events = Vec::new();
+        if let Some(ev) = self.net.take_event(now) {
+            events.push(ev);
+        }
+        if self
+            .net_irq
+            .take(self.int_raw & self.int_ena != 0)
+            .is_some()
+        {
+            events.push((0, NET_IRQ_TOKEN));
+        }
+        events
+    }
+
+    fn on_event(
+        &mut self,
+        event_token: u32,
+        sched: &mut crate::sched::EventScheduler,
+        _bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        if event_token == crate::peripherals::esp_i2c_net::NET_TOKEN {
+            let now = sched.now();
+            let next = self
+                .with_net(now, |net, host, pads| net.on_event(host, now, pads))
+                .flatten();
+            return crate::sched::EventResult {
+                reschedule_delay: next,
+                ..Default::default()
+            };
+        }
+        crate::sched::EventResult::default()
+    }
+
     fn tick(&mut self) -> PeripheralTickResult {
+        if self.net.deadline().is_some() {
+            let now = self.net_now();
+            self.net_step(now);
+        }
         let mut explicit = Vec::new();
         // LEVEL interrupt: assert the I2C0 source every tick while any enabled
         // INT bit is set, mirroring real silicon (INT_RAW stays asserted until the
@@ -748,8 +1038,7 @@ impl Esp32s3I2c {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    const REG_CMD1_OFFSET: u64 = REG_CMD0 + 4;
+    use crate::peripherals::esp_i2c_core::esp_i2c_family_suite;
 
     /// Encode a 14-bit command word: opcode | byte_num.
     fn cmd(opcode: u8, byte_num: u8) -> u32 {
@@ -777,116 +1066,10 @@ mod tests {
     }
 
     #[test]
-    fn ctr_round_trip() {
-        let mut p = Esp32s3I2c::new();
-        p.write_u32(REG_CTR, 0x0000_0010).unwrap(); // arbitrary, no TRANS_START
-        assert_eq!(p.read_u32(REG_CTR).unwrap(), 0x0000_0010);
-    }
-
-    #[test]
-    fn slave_addr_round_trip() {
-        let mut p = Esp32s3I2c::new();
-        p.write_u32(REG_SLAVE_ADDR, 0x48).unwrap();
-        assert_eq!(p.read_u32(REG_SLAVE_ADDR).unwrap(), 0x48);
-    }
-
-    #[test]
-    fn cmd_registers_round_trip() {
-        let mut p = Esp32s3I2c::new();
-        p.write_u32(REG_CMD0, 0x0000_0800).unwrap();
-        p.write_u32(REG_CMD7, 0x0000_2000).unwrap();
-        assert_eq!(p.read_u32(REG_CMD0).unwrap(), 0x0000_0800);
-        assert_eq!(p.read_u32(REG_CMD7).unwrap(), 0x0000_2000);
-    }
-
-    #[test]
     fn unmapped_offsets_read_zero_and_accept_writes() {
         let mut p = Esp32s3I2c::new();
         p.write_u32(0xFFC, 0xDEAD_BEEF).unwrap(); // last 4-byte slot in 4 KiB
         assert_eq!(p.read_u32(0xFFC).unwrap(), 0);
-    }
-
-    #[test]
-    fn sr_txfifo_cnt_reflects_pushes() {
-        // esp-hal reads TX/RX FIFO counts from SR.txfifo_cnt (bits 18..23)
-        // and SR.rxfifo_cnt (bits 8..13), not from FIFO_ST.
-        let mut p = Esp32s3I2c::new();
-        p.write_u32(REG_DATA, 0xAA).unwrap();
-        p.write_u32(REG_DATA, 0xBB).unwrap();
-        p.write_u32(REG_DATA, 0xCC).unwrap();
-        let sr = p.read_u32(REG_SR).unwrap();
-        assert_eq!(
-            (sr >> 18) & 0x3F,
-            3,
-            "SR.txfifo_cnt should reflect 3 pushes"
-        );
-    }
-
-    #[test]
-    fn fifo_reset_bits_clear_fifos() {
-        let mut p = Esp32s3I2c::new();
-        p.write_u32(REG_DATA, 0x11).unwrap();
-        p.write_u32(REG_DATA, 0x22).unwrap();
-        p.write_u32(REG_FIFO_CONF, 1 << 13).unwrap(); // TX_FIFO_RST
-        let sr = p.read_u32(REG_SR).unwrap();
-        assert_eq!((sr >> 18) & 0x3F, 0);
-    }
-
-    #[test]
-    fn int_clr_clears_specified_bits() {
-        let mut p = Esp32s3I2c::new();
-        p.int_raw = INT_TRANS_COMPLETE | INT_NACK;
-        p.write_u32(REG_INT_CLR, INT_NACK).unwrap();
-        assert_eq!(p.read_u32(REG_INT_RAW).unwrap(), INT_TRANS_COMPLETE);
-    }
-
-    #[test]
-    fn int_st_masks_with_int_ena() {
-        let mut p = Esp32s3I2c::new();
-        p.int_raw = INT_TRANS_COMPLETE | INT_NACK;
-        p.write_u32(REG_INT_ENA, INT_TRANS_COMPLETE).unwrap();
-        assert_eq!(p.read_u32(REG_INT_ST).unwrap(), INT_TRANS_COMPLETE);
-    }
-
-    #[test]
-    fn end_opcode_raises_end_detect_not_trans_complete() {
-        // Per ESP32-S3 TRM § 29.5: the END opcode pauses the controller and
-        // raises END_DETECT (bit 3). esp-hal uses END_DETECT to chain phase 2
-        // of a write_read transaction. STOP is what raises TRANS_COMPLETE.
-        let mut p = Esp32s3I2c::new();
-        p.write_u32(REG_CMD0, cmd(CMD_END, 0)).unwrap();
-        p.write_u32(REG_CTR, CTR_TRANS_START_BIT).unwrap();
-        let int_raw = p.read_u32(REG_INT_RAW).unwrap();
-        assert_eq!(
-            int_raw & INT_END_DETECT,
-            INT_END_DETECT,
-            "END must raise END_DETECT"
-        );
-        assert_eq!(
-            int_raw & INT_TRANS_COMPLETE,
-            0,
-            "END must NOT raise TRANS_COMPLETE"
-        );
-    }
-
-    #[test]
-    fn rstart_then_stop_completes() {
-        let mut p = Esp32s3I2c::new();
-        p.write_u32(REG_CMD0, cmd(CMD_RSTART, 0)).unwrap();
-        p.write_u32(REG_CMD1_OFFSET, cmd(CMD_STOP, 0)).unwrap();
-        p.write_u32(REG_CTR, CTR_TRANS_START_BIT).unwrap();
-        assert_eq!(
-            p.read_u32(REG_INT_RAW).unwrap() & INT_TRANS_COMPLETE,
-            INT_TRANS_COMPLETE
-        );
-    }
-
-    #[test]
-    fn trans_start_auto_clears() {
-        let mut p = Esp32s3I2c::new();
-        p.write_u32(REG_CMD0, cmd(CMD_END, 0)).unwrap();
-        p.write_u32(REG_CTR, CTR_TRANS_START_BIT).unwrap();
-        assert_eq!(p.read_u32(REG_CTR).unwrap() & CTR_TRANS_START_BIT, 0);
     }
 
     #[test]
@@ -1061,22 +1244,6 @@ mod tests {
             oled.ink_bytes(),
             4,
             "exactly the four written bytes are lit"
-        );
-    }
-
-    #[test]
-    fn write_with_unmatched_address_sets_nack_int() {
-        let mut p = Esp32s3I2c::new();
-        // No slaves attached.
-        p.write_u32(REG_CMD0, cmd(CMD_RSTART, 0)).unwrap();
-        p.write_u32(REG_CMD0 + 4, cmd(CMD_WRITE, 1)).unwrap();
-        p.write_u32(REG_CMD0 + 8, cmd(CMD_STOP, 0)).unwrap();
-        p.write_u32(REG_DATA, 0xA0).unwrap(); // some addr+W, no slave
-        p.write_u32(REG_CTR, CTR_TRANS_START_BIT).unwrap();
-        assert_eq!(
-            p.read_u32(REG_INT_RAW).unwrap() & INT_NACK,
-            INT_NACK,
-            "INT_NACK should fire when no slave matches"
         );
     }
 
@@ -1263,191 +1430,22 @@ mod tests {
         assert_eq!(p.read_u32(0xC0).unwrap(), 0, "unmapped 0xC0 must read 0");
     }
 
-    // ── TCA9548A driven through the ESP32-S3 command-list engine ────────────
-    //
-    // Same shape as the classic-ESP32 coverage, against the S3's own opcode
-    // numbering and its own copy of the resolution code — including the
-    // `SLAVE_ADDR` fallback, which is a second, independent path into
-    // `claims_address` that no existing test drove with a switch attached.
-    mod mux {
-        use super::*;
-        use crate::peripherals::components::mux_fixture::{
-            bytes_written_to, mux_with_tags, tag_for, MUX_ADDR, SENSOR_ADDR,
-        };
-        use crate::peripherals::components::tca9548a::Tca9548a;
+    /// Classic-ESP32 (and S3) command-list engines execute the whole list
+    /// inside the TRANS_START write; the C3 clocks a bit engine, so its
+    /// `start_and_run` is a different function in its own file. The shared
+    /// suite calls whichever this module passes as `launch`.
+    fn start_and_run(p: &mut Esp32s3I2c) {
+        p.write_u32(REG_CTR, CTR_TRANS_START_BIT).unwrap();
+    }
 
-        fn controller() -> Esp32s3I2c {
-            let mut p = Esp32s3I2c::new();
-            p.push_slave(Box::new(mux_with_tags(4)));
-            p
-        }
-
-        fn with_mux<R>(p: &Esp32s3I2c, f: impl FnOnce(&Tca9548a) -> R) -> R {
-            let mux = p.attached_slaves()[0]
-                .as_any()
-                .and_then(|a| a.downcast_ref::<Tca9548a>())
-                .expect("slave 0 is the switch");
-            f(mux)
-        }
-
-        fn program(p: &mut Esp32s3I2c, list: &[(u8, u8)], tx: &[u8]) {
-            p.write_u32(REG_INT_CLR, 0xFFFF_FFFF).unwrap();
-            // Flush both FIFOs without disturbing the watermark fields.
-            let conf = p.read_u32(REG_FIFO_CONF).unwrap();
-            p.write_u32(REG_FIFO_CONF, conf | (1 << 12) | (1 << 13))
-                .unwrap();
-            for (i, (op, n)) in list.iter().enumerate() {
-                p.write_u32(REG_CMD0 + 4 * i as u64, cmd(*op, *n)).unwrap();
-            }
-            for b in tx {
-                p.write_u32(REG_DATA, *b as u32).unwrap();
-            }
-            p.write_u32(REG_CTR, CTR_TRANS_START_BIT).unwrap();
-        }
-
-        fn write_bytes(p: &mut Esp32s3I2c, addr: u8, payload: &[u8]) {
-            let mut tx = vec![addr << 1];
-            tx.extend_from_slice(payload);
-            p.write_u32(REG_SLAVE_ADDR, addr as u32).unwrap();
-            program(
-                p,
-                &[(CMD_RSTART, 0), (CMD_WRITE, tx.len() as u8), (CMD_STOP, 0)],
-                &tx,
-            );
-        }
-
-        fn read_byte(p: &mut Esp32s3I2c, addr: u8) -> u8 {
-            p.write_u32(REG_SLAVE_ADDR, addr as u32).unwrap();
-            program(
-                p,
-                &[
-                    (CMD_RSTART, 0),
-                    (CMD_WRITE, 1),
-                    (CMD_READ, 1),
-                    (CMD_STOP, 0),
-                ],
-                &[(addr << 1) | 1],
-            );
-            p.read_u32(REG_DATA).unwrap() as u8
-        }
-
-        fn nacked(p: &Esp32s3I2c) -> bool {
-            p.read_u32(REG_INT_RAW).unwrap() & INT_NACK != 0
-        }
-
-        fn probe_acked(p: &mut Esp32s3I2c, addr: u8) -> bool {
-            p.write_u32(REG_SLAVE_ADDR, addr as u32).unwrap();
-            program(
-                p,
-                &[(CMD_RSTART, 0), (CMD_WRITE, 1), (CMD_STOP, 0)],
-                &[addr << 1],
-            );
-            !nacked(p)
-        }
-
-        #[test]
-        fn four_sensors_at_one_address_answer_independently() {
-            let mut p = controller();
-            for ch in 0..4u8 {
-                write_bytes(&mut p, MUX_ADDR, &[1 << ch]);
-                assert_eq!(
-                    read_byte(&mut p, SENSOR_ADDR),
-                    tag_for(ch),
-                    "channel {ch} must be answered by the sensor wired to it"
-                );
-            }
-        }
-
-        #[test]
-        fn switching_channels_changes_which_sensor_answers() {
-            let mut p = controller();
-            for ch in [2u8, 0, 3, 1, 3, 0] {
-                write_bytes(&mut p, MUX_ADDR, &[1 << ch]);
-                assert_eq!(read_byte(&mut p, SENSOR_ADDR), tag_for(ch), "channel {ch}");
-            }
-        }
-
-        #[test]
-        fn control_register_reads_back_over_the_bus() {
-            let mut p = controller();
-            write_bytes(&mut p, MUX_ADDR, &[0b0000_1010]);
-            assert!(
-                probe_acked(&mut p, MUX_ADDR),
-                "the switch ACKs its own address"
-            );
-            assert_eq!(read_byte(&mut p, MUX_ADDR), 0b0000_1010);
-        }
-
-        #[test]
-        fn a_sensor_on_a_disabled_channel_does_not_answer() {
-            let mut p = controller();
-            assert!(
-                !probe_acked(&mut p, SENSOR_ADDR),
-                "with all channels disabled the sensor address must raise INT_NACK, \
-                 exactly as an unpopulated bus does"
-            );
-
-            write_bytes(&mut p, MUX_ADDR, &[1 << 1]);
-            assert!(probe_acked(&mut p, SENSOR_ADDR));
-            assert_eq!(read_byte(&mut p, SENSOR_ADDR), tag_for(1));
-
-            write_bytes(&mut p, MUX_ADDR, &[0x00]);
-            assert!(
-                !probe_acked(&mut p, SENSOR_ADDR),
-                "re-isolating the switch takes the sensor off the bus again"
-            );
-        }
-
-        #[test]
-        fn the_slave_addr_register_path_also_routes_through_the_switch() {
-            let mut p = controller();
-
-            p.write_u32(REG_SLAVE_ADDR, SENSOR_ADDR as u32).unwrap();
-            program(
-                &mut p,
-                &[(CMD_RSTART, 0), (CMD_WRITE, 0), (CMD_STOP, 0)],
-                &[],
-            );
-            assert!(
-                nacked(&p),
-                "a SLAVE_ADDR-parked probe must NACK while every channel is isolated"
-            );
-
-            write_bytes(&mut p, MUX_ADDR, &[1 << 3]);
-            p.write_u32(REG_SLAVE_ADDR, SENSOR_ADDR as u32).unwrap();
-            program(
-                &mut p,
-                &[
-                    (CMD_RSTART, 0),
-                    (CMD_WRITE, 0),
-                    (CMD_READ, 1),
-                    (CMD_STOP, 0),
-                ],
-                &[],
-            );
-            assert!(!nacked(&p), "channel 3 is enabled; 0x13 must ACK");
-            assert_eq!(
-                p.read_u32(REG_DATA).unwrap() as u8,
-                tag_for(3),
-                "the SLAVE_ADDR path must reach the sensor on the SELECTED channel"
-            );
-        }
-
-        #[test]
-        fn a_write_reaches_only_the_selected_channel() {
-            let mut p = controller();
-            write_bytes(&mut p, MUX_ADDR, &[1 << 2]);
-            write_bytes(&mut p, SENSOR_ADDR, &[0x5A]);
-
-            with_mux(&p, |mux| {
-                assert_eq!(bytes_written_to(mux, 2), vec![0x5A]);
-                for ch in [0u8, 1, 3] {
-                    assert!(
-                        bytes_written_to(mux, ch).is_empty(),
-                        "channel {ch} is isolated and must receive nothing"
-                    );
-                }
-            });
-        }
+    esp_i2c_family_suite! {
+        ctrl: Esp32s3I2c,
+        p_name: p,
+        launch: start_and_run,
+        ack_bit: SR_RESP_REC,
+        cmd_last: REG_CMD7,
+        cmd_slots_test: cmd_registers_round_trip,
+        fifo_reset_test: fifo_reset_bits_clear_fifos,
+        mux_slave_addr_test: the_slave_addr_register_path_also_routes_through_the_switch,
     }
 }

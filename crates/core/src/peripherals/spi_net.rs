@@ -41,6 +41,10 @@
 //! shorten `latency_ns` when it does not.
 
 use super::{Spi, SpiRegs, SpiSignal};
+
+fn cr1_spe(spi: &Spi) -> bool {
+    matches!(&spi.regs, SpiRegs::Stm32(r) if r.cr1 & CR1_SPE != 0)
+}
 use crate::peripherals::pad_lines::{LineDrive, PadLines};
 
 const CR1_CPOL: u16 = 1 << 1;
@@ -131,11 +135,15 @@ impl Spi {
             pads.set_mode(MOSI, LineDrive::PushPull);
             pads.set_mode(MISO, LineDrive::Input);
             if cr2 & CR2_SSOE != 0 && cr1 & CR1_SSM == 0 {
-                pads.drive_line(NSS, LineDrive::PushPull, false);
+                // Low from enable to disable; in NSS pulse mode (FIFO parts,
+                // CR2.NSSP) high between frames and after the last one.
+                let high = self.nssp_active() && self.net_nss_high;
+                pads.drive_line(NSS, LineDrive::PushPull, high);
             } else {
                 pads.set_mode(NSS, LineDrive::Input);
             }
         } else {
+            self.net_nss_high = false;
             pads.set_mode(SCK, LineDrive::Input);
             pads.set_mode(MOSI, LineDrive::Input);
             pads.set_mode(NSS, LineDrive::Input);
@@ -150,8 +158,7 @@ impl Spi {
             // TXEIE is a level: enabling it while the transmit buffer is
             // empty interrupts at once (the usual way a slave primes its
             // first answer).
-            let txe = matches!(&self.regs, SpiRegs::Stm32(r) if r.sr & SR_TXE != 0);
-            if cr2 & CR2_TXEIE != 0 && txe {
+            if cr2 & CR2_TXEIE != 0 && self.stm32_txe() {
                 self.net_irq_pending = true;
             }
         }
@@ -209,12 +216,14 @@ impl Spi {
         }
         if let Some(word) = self.tx_queue.pop_front() {
             self.net_slave.tx = Some(word);
-            let mut irq = false;
+            let mut txeie = false;
             if let SpiRegs::Stm32(r) = &mut self.regs {
                 r.sr |= SR_TXE;
-                irq = r.cr2 & CR2_TXEIE != 0;
+                txeie = r.cr2 & CR2_TXEIE != 0;
             }
-            if irq {
+            // A FIFO port's TXE is "at or below half full", which a pop need
+            // not reach; a classic port's buffer is empty now.
+            if txeie && self.stm32_txe() {
                 self.net_irq_pending = true;
             }
         }
@@ -302,6 +311,20 @@ impl Spi {
         self.net_slave.bits = 0;
         self.net_slave.tx = None;
         self.net_frames += 1;
+        if self.rx_fifo {
+            // FIFO port: the frame joins the RX FIFO (lost to OVR when it is
+            // full); RXNE follows the CR2.FRXTH threshold.
+            self.fifo_rx_push(rx);
+            let rxneie = matches!(&self.regs, SpiRegs::Stm32(r) if r.cr2 & CR2_RXNEIE != 0);
+            if let SpiRegs::Stm32(r) = &mut self.regs {
+                r.sr &= !SR_BSY;
+            }
+            if rxneie && self.stm32_rxne.get() {
+                self.net_irq_pending = true;
+            }
+            self.net_slave_load_tx();
+            return;
+        }
         let rxne_set = self.stm32_rxne.get();
         let mut irq = false;
         if let SpiRegs::Stm32(r) = &mut self.regs {
@@ -377,10 +400,24 @@ impl Spi {
     /// slave between frames takes it at once, so a CPHA=0 first bit is on
     /// MISO before the master's first edge.
     pub(super) fn net_slave_write_dr(&mut self, value: u16) {
-        self.tx_queue.clear();
-        self.tx_queue.push_back(value);
-        if let SpiRegs::Stm32(r) = &mut self.regs {
-            r.sr &= !SR_TXE;
+        if self.rx_fifo {
+            // FIFO port: the word joins the TX FIFO (lost when it is full).
+            // TXE is a level: while the FIFO is still at or below half full
+            // the TXE interrupt stays asserted, so a TXEIE handler that
+            // writes one word per entry is re-entered until it fills.
+            if self.fifo_tx_has_room() {
+                self.tx_queue.push_back(value);
+            }
+            let txeie = matches!(&self.regs, SpiRegs::Stm32(r) if r.cr2 & CR2_TXEIE != 0);
+            if txeie && self.stm32_txe() && cr1_spe(self) {
+                self.net_irq_pending = true;
+            }
+        } else {
+            self.tx_queue.clear();
+            self.tx_queue.push_back(value);
+            if let SpiRegs::Stm32(r) = &mut self.regs {
+                r.sr &= !SR_TXE;
+            }
         }
         if self.net_slave.selected && self.net_slave.bits == 0 && self.net_slave.tx.is_none() {
             self.net_slave_load_tx();
@@ -390,6 +427,21 @@ impl Spi {
             let (_, cpol, cpha, _) = self.net_frame_shape();
             if !cpha && self.net_slave.sck == cpol {
                 self.net_slave_present(0);
+            }
+        }
+    }
+
+    /// Master, NSS pulse mode: drive the NSS pad `high` or low. Off a net, or
+    /// without SSOE, NSS is no wire and this does nothing.
+    pub(super) fn net_master_nss(&mut self, high: bool) {
+        self.net_nss_high = high;
+        if !self.net_mode() {
+            return;
+        }
+        let (cr1, cr2) = self.net_cr();
+        if cr1 & CR1_SPE != 0 && cr1 & CR1_MSTR != 0 && cr2 & CR2_SSOE != 0 && cr1 & CR1_SSM == 0 {
+            if let Some(pads) = self.net_lines() {
+                pads.drive_line(NSS, LineDrive::PushPull, high);
             }
         }
     }

@@ -1,0 +1,72 @@
+name: PyBadge original build evidence
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - scripts/pybadge-build-evidence/**
+      - .github/workflows/pybadge-build-evidence.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pybadge-build-evidence-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  original-build-evidence:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+      - name: Evidence admission controls (no worker or compiler)
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          node --test scripts/pybadge-build-evidence/test.mjs
+          python3 -m unittest discover -s scripts/pybadge-build-evidence -p 'test_*.py' -v
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: CrispStrobe/brickwright-lite
+          ref: 6a7027e117a6698866516f52feca259127c80c7d
+          path: public-consumer
+          persist-credentials: false
+      - name: Fetch immutable consumer runtime inputs
+        run: python3 scripts/pybadge-build-evidence/acquire.py --lite public-consumer --out "$RUNNER_TEMP/pybadge-evidence"
+      - name: Retain and verify original generated request
+        run: node scripts/pybadge-build-evidence/evidence.mjs request public-consumer "$RUNNER_TEMP/codal" "$RUNNER_TEMP/pybadge-evidence"
+      - name: Install historical ARM toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-arm-none-eabi libnewlib-arm-none-eabi libstdc++-arm-none-eabi-newlib cmake
+          test "$(dpkg-query -W -f='${Version}' gcc-arm-none-eabi)" = '15:13.2.rel1-2'
+      - name: Clean original from-source build (only samd51adafruit)
+        working-directory: public-consumer
+        run: node scripts/build-makecode-arcade-bases.mjs --variant samd51adafruit --work "$RUNNER_TEMP/codal" --out "$RUNNER_TEMP/codal/bases"
+      - name: Verify build identity and retain generated configuration
+        run: node scripts/pybadge-build-evidence/evidence.mjs collect public-consumer "$RUNNER_TEMP/codal" "$RUNNER_TEMP/pybadge-evidence"
+      - name: Preprocess original screen with generated ARM target flags
+        run: python3 scripts/pybadge-build-evidence/preprocess.py --root "$RUNNER_TEMP/codal/samd51adafruit" --out "$RUNNER_TEMP/pybadge-evidence"
+      - name: Retain original clean-build link map without relinking
+        run: python3 scripts/pybadge-build-evidence/link_map.py --root "$RUNNER_TEMP/codal/samd51adafruit" --out "$RUNNER_TEMP/pybadge-evidence"
+      - name: Inventory compiled source and header dependencies
+        run: python3 scripts/pybadge-build-evidence/dependencies.py --root "$RUNNER_TEMP/codal/samd51adafruit" --out "$RUNNER_TEMP/pybadge-evidence"
+      - name: Separate dependency-only probes of generated C and C++ commands
+        run: python3 scripts/pybadge-build-evidence/diagnostic_dependencies.py --root "$RUNNER_TEMP/codal/samd51adafruit" --out "$RUNNER_TEMP/pybadge-evidence"
+      - name: Bind dependency identities to pinned Git blobs and original request
+        run: python3 scripts/pybadge-build-evidence/origins.py --root "$RUNNER_TEMP/codal/samd51adafruit" --out "$RUNNER_TEMP/pybadge-evidence"
+      - name: Capture unclassified notice candidates and toolchain package records
+        run: python3 scripts/pybadge-build-evidence/notices.py --root "$RUNNER_TEMP/codal/samd51adafruit" --out "$RUNNER_TEMP/pybadge-evidence"
+      - name: Discover same-package GCC notice references without substituting host GCC
+        run: python3 scripts/pybadge-build-evidence/notice_references.py --out "$RUNNER_TEMP/pybadge-evidence"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: ${{ !cancelled() }}
+        with:
+          name: pybadge-original-build-evidence
+          path: ${{ runner.temp }}/pybadge-evidence/
+          if-no-files-found: error

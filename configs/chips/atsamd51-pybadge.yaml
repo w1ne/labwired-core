@@ -10,14 +10,14 @@
 #
 # SELF-CONTAINED COPY of atsamd51.yaml (builtin chips may not `include:` a
 # sibling file — the built-in registry embeds each descriptor on its own).
-# Only `name` and `reset_vector_offset` differ from atsamd51.yaml; keep the
-# rest in step with it.
+# PyBadge adds its dedicated SERCOM4 display SPI bus and application vector
+# offset; unrelated MCU blocks should remain in step with atsamd51.yaml.
 #
 # SIM-DERIVED SAMD51J19A descriptor for Adafruit Metro M4 bring-up.
 # Not silicon-verified. Bench silicon may be ItsyBitsy M4 (SAMD51G19A);
 # Playground pinout is Metro M4. QSPI, USB, NeoPixel, and unused SERCOMs
 # are intentionally stubbed / omitted — only the MCU core, PORT, MCLK/GCLK,
-# SERCOM1/3 UARTs and SysTick are modelled here.
+# SERCOM1/3 UARTs, blocking SERCOM4 SPI and SysTick are modelled here.
 # Pin labels follow Adafruit ArduinoCore-samd variants/metro_m4/variant.cpp.
 
 name: "atsamd51j19a-pybadge"
@@ -105,6 +105,22 @@ pins:
   PB30: { gpio: portb, bit: 30 }
   PB31: { gpio: portb, bit: 31 }
 peripherals:
+  # Display bus only: ST7735 and DMAC integration/qualification remain owed.
+  # CMSIS SERCOM4: APBDMASK bit 0, GCLK core channel 34.
+  - id: "sercom4"
+    type: "sam_sercom_spi"
+    base_address: 0x43000000
+    size: "256B"
+    # DS60001507F 10.2.2: DRE/TXC/RXC/ERROR use SERCOM4_0..3 (62..65).
+    irq: 62
+    clock: { controller: "mclk", reg: "APBDMASK", bit: 0 }
+    config:
+      gclk_id: 34
+      port_base: 0x41008080
+      sck_bit: 13
+      mosi_bit: 15
+      pad_mux: 2
+      dopo: 2
   - id: "mclk"
     type: "sam_mclk"
     base_address: 0x40000800

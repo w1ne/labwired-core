@@ -1,0 +1,73 @@
+name: SAMD actual CODAL SPI lifetime refusal and reconstruction guest
+on:
+  pull_request:
+    paths: ['crates/core/tests/samd_real_spi_lifetime_guest.rs', '.github/workflows/samd-real-spi-lifetime-guest.yml']
+permissions:
+  contents: read
+concurrency:
+  group: real-spi-lifetime-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  LABWIRED_SPI_SOURCE: 932d476344107386d56dfd2d595d74d713780563
+jobs:
+  spi-lifetime-guest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: CrispStrobe/codal-samd
+          ref: 932d476344107386d56dfd2d595d74d713780563
+          path: owned-lifetime-source
+          persist-credentials: false
+      - name: Obtain separate clean immutable dependency trees
+        run: |
+          for mode in 15 16 17 18 8; do
+            git clone --no-checkout https://github.com/lancaster-university/codal-core.git "owned-lifetime-core-$mode"
+            git -C "owned-lifetime-core-$mode" checkout --detach 2ed19d64ec3359143409a4b0a9758b4aeef3ee7d
+          done
+      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: Swatinem/rust-cache@v2
+      - name: Build separate lifetime and positive callers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-arm-none-eabi
+          arm-none-eabi-g++ --version
+          dpkg-query -W gcc-arm-none-eabi
+          cd owned-lifetime-source
+          for mode in 15 16 17 18 8; do
+            bash runtime-services/build.sh "../owned-lifetime-core-$mode" "$RUNNER_TEMP/spi-lifetime-$mode" "$mode"
+          done
+      - name: Nonvacuous lifetime and positive ordering controls
+        run: |
+          cargo test --release --locked -p labwired-core --test samd_real_spi_lifetime_guest -- --nocapture
+          cargo test --release --locked -p labwired-core --test samd_real_spi_guest -- --nocapture
+      - name: Execute all ten actual lifetime and positive cases
+        run: |
+          set -o pipefail
+          lifetime_failures=0
+          for mode in 15 16 17 18 8; do
+            if test "$mode" = 8; then fixture=samd_real_spi_guest; else fixture=samd_real_spi_lifetime_guest; fi
+            export LABWIRED_SPI_MODE="$mode"
+            export LABWIRED_SPI_FIXTURE_DIR="$RUNNER_TEMP/spi-lifetime-$mode"
+            for profile in default scheduler; do
+              feature_args=()
+              if test "$profile" = scheduler; then feature_args=(--features event-scheduler); fi
+              if ! cargo test --release --locked -p labwired-core "${feature_args[@]}" --test "$fixture" -- --ignored --nocapture 2>&1 | tee "spi-lifetime-$mode-$profile.log"; then
+                lifetime_failures=$((lifetime_failures + 1))
+              fi
+            done
+          done
+          test "$lifetime_failures" -eq 0
+      - name: Preserve actual lifetime source and observations
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: actual-codal-spi-lifetime-guest-results
+          path: |
+            spi-lifetime-*.log
+            ${{ runner.temp }}/spi-lifetime-*/

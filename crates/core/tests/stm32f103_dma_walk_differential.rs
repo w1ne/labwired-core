@@ -23,12 +23,15 @@
 
 #![cfg(feature = "event-scheduler")]
 
+mod common;
+
+use common::walk_differential::{assert_walk_differential, WalkMode};
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
+use labwired_core::cpu::CortexM;
 use labwired_core::peripherals::dma::Dma1;
 use labwired_core::system::cortex_m::configure_cortex_m;
-use labwired_core::{Bus, Cpu, DebugControl, Machine};
-use std::path::PathBuf;
+use labwired_core::{Bus, Machine};
 
 const DMA_BASE: u32 = 0x4002_0000;
 // RCC_AHBENR (RM0008 §7.3.6); DMA1EN is bit 0. Writes to DMA1 are dropped until
@@ -44,18 +47,9 @@ const FW_BASE: u64 = 0x2000_1000;
 const INITIAL_SP: u32 = 0x2000_5000;
 const N: u32 = 16;
 
-fn workspace_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .to_path_buf()
-}
-
-fn build_machine(reference: bool) -> Machine<labwired_core::cpu::CortexM> {
-    let chip_path = workspace_root().join("configs/chips/stm32f103.yaml");
-    let sys_path = workspace_root().join("configs/systems/stm32f103-bare.yaml");
+fn build_machine(reference: bool) -> Machine<CortexM> {
+    let chip_path = common::root("configs/chips/stm32f103.yaml");
+    let sys_path = common::root("configs/systems/stm32f103-bare.yaml");
     let chip = ChipDescriptor::from_file(&chip_path).expect("load stm32f103 chip");
     let mut manifest = SystemManifest::from_file(&sys_path).expect("load stm32f103-bare system");
     manifest.chip = sys_path
@@ -128,43 +122,35 @@ fn build_machine(reference: bool) -> Machine<labwired_core::cpu::CortexM> {
     machine
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct Probe {
-    step: u64,
-    total_cycles: u64,
-    pc: u32,
-    regs: [u32; 16],
-    isr: u32,
-    dst: Vec<u8>,
+/// The destination buffer as two little-endian u64 words — byte-equality
+/// preserved exactly, with the failure text naming the differing half.
+fn dst_words(m: &Machine<CortexM>) -> (u64, u64) {
+    let word = |off: u64| {
+        let mut w = [0u8; 8];
+        for (i, b) in w.iter_mut().enumerate() {
+            *b = m.bus.read_u8(DST_ADDR as u64 + off + i as u64).unwrap();
+        }
+        u64::from_le_bytes(w)
+    };
+    (word(0), word(8))
 }
 
-fn probe(m: &Machine<labwired_core::cpu::CortexM>, step: u64) -> Probe {
-    let mut regs = [0u32; 16];
-    for (i, r) in regs.iter_mut().enumerate() {
-        *r = m.read_core_reg(i as u8);
-    }
-    let dst = (0..N)
-        .map(|i| m.bus.read_u8(DST_ADDR as u64 + i as u64).unwrap())
-        .collect();
-    Probe {
-        step,
-        total_cycles: m.total_cycles,
-        pc: m.cpu.get_pc(),
-        regs,
-        isr: m.bus.read_u32(DMA_BASE as u64).unwrap(),
-        dst,
-    }
+/// The caller-supplied observables the harness probe carries for this fixture:
+/// the DMA ISR register and the two destination words.
+fn extra(m: &Machine<CortexM>) -> Vec<(&'static str, u64)> {
+    let (lo, hi) = dst_words(m);
+    vec![
+        ("isr", u64::from(m.bus.read_u32(DMA_BASE as u64).unwrap())),
+        ("dst_lo", lo),
+        ("dst_hi", hi),
+    ]
 }
 
-fn run_probed(reference: bool, steps: u64) -> Vec<Probe> {
-    let mut m = build_machine(reference);
-    m.cpu.pc = FW_BASE as u32;
-    let mut probes = Vec::with_capacity(steps as usize);
-    for s in 0..steps {
-        m.run(Some(1)).unwrap();
-        probes.push(probe(&m, s + 1));
-    }
-    probes
+fn expected_dst() -> (u64, u64) {
+    let bytes: Vec<u8> = (0..N).map(|i| 0xA0u8 ^ (i as u8).wrapping_mul(7)).collect();
+    let lo = u64::from_le_bytes(bytes[0..8].try_into().unwrap());
+    let hi = u64::from_le_bytes(bytes[8..16].try_into().unwrap());
+    (lo, hi)
 }
 
 /// mem2mem transfer on the real F103 DMA1: walk reference vs scheduler,
@@ -173,28 +159,20 @@ fn run_probed(reference: bool, steps: u64) -> Vec<Probe> {
 #[test]
 fn stm32f103_dma_mem2mem_walk_vs_scheduler_is_byte_identical() {
     const STEPS: u64 = 800;
-    let walk = run_probed(true, STEPS);
-    let sched = run_probed(false, STEPS);
-
-    assert_eq!(walk.len(), sched.len());
-    for (w, s) in walk.iter().zip(sched.iter()) {
-        assert_eq!(
-            w, s,
-            "F103 DMA mem2mem: first divergence at step {} (walk vs scheduler)",
-            w.step
-        );
-    }
+    let build = |mode: WalkMode| build_machine(mode.is_legacy_walk());
+    let reference =
+        assert_walk_differential("F103 DMA mem2mem", FW_BASE as u32, STEPS, build, extra);
 
     // The transfer must have actually completed on the real chip bus.
-    let last = walk.last().unwrap();
-    let expected: Vec<u8> = (0..N).map(|i| 0xA0u8 ^ (i as u8).wrapping_mul(7)).collect();
+    let last = reference.last().unwrap();
     assert_eq!(
-        last.dst, expected,
+        (last.extra("dst_lo"), last.extra("dst_hi")),
+        expected_dst(),
         "F103 DMA1 mem2mem must copy the source bytes to the destination"
     );
     // TCIF1 (bit 1) latched in the DMA ISR register at completion.
     assert!(
-        walk.iter().any(|p| p.isr & (1 << 1) != 0),
+        reference.iter().any(|p| p.extra("isr") & (1 << 1) != 0),
         "F103 DMA1 must latch TCIF1 on transfer completion"
     );
 }

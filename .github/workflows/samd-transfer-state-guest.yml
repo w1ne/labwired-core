@@ -1,0 +1,66 @@
+name: SAMD authored transfer state ARM guest
+on:
+  pull_request:
+    paths: ['crates/core/tests/samd_transfer_state_guest.rs', 'scripts/samd-transfer-state/**', '.github/workflows/samd-transfer-state-guest.yml']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  guest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Check source-bound qualification reuse
+        id: prior
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 scripts/samd-transfer-state/test_reuse.py
+          python3 scripts/samd-transfer-state/reuse.py
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        if: steps.prior.outputs.reuse != 'true'
+        with:
+          repository: CrispStrobe/codal-samd
+          ref: 592748e51e6b82238d9c1d6a69ffa4e74ccc4ce1
+          path: owned-state-source
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.95.0
+        if: steps.prior.outputs.reuse != 'true'
+      - uses: Swatinem/rust-cache@v2
+        if: steps.prior.outputs.reuse != 'true'
+      - name: Build source-bound owned guests
+        if: steps.prior.outputs.reuse != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-arm-none-eabi libnewlib-dev libstdc++-arm-none-eabi-dev
+          test "$(git -C owned-state-source rev-parse HEAD)" = 592748e51e6b82238d9c1d6a69ffa4e74ccc4ce1
+          arm-none-eabi-g++ --version
+          dpkg-query -W gcc-arm-none-eabi libnewlib-dev libstdc++-arm-none-eabi-dev
+          sha256sum owned-state-source/simulation/arm/* owned-state-source/simulation/include/SpiTransferState.h
+          bash scripts/samd-transfer-state/build.sh owned-state-source "$RUNNER_TEMP/state-guests"
+      - name: Execute positive and assertion-negative ARM fixtures
+        if: steps.prior.outputs.reuse != 'true'
+        env:
+          LABWIRED_TRANSFER_FIXTURE_DIR: ${{ runner.temp }}/state-guests
+        run: |
+          set -o pipefail
+          cargo test --release -p labwired-core --test samd_transfer_state_guest -- --ignored --nocapture | tee state-guest-default.log
+          cargo test --release -p labwired-core --features event-scheduler --test samd_transfer_state_guest -- --ignored --nocapture | tee state-guest-scheduler.log
+      - name: Bind fresh execution to actual source snapshot
+        if: steps.prior.outputs.reuse != 'true'
+        env:
+          QUALIFICATION_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: python3 scripts/samd-transfer-state/reuse.py --record
+      - name: Preserve bounded result evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: authored-state-guest-results
+          path: |
+            state-guest-default.log
+            state-guest-scheduler.log
+            qualification.json
+            qualification-reuse.json
+            ${{ runner.temp }}/state-guests/*/control.map
+            ${{ runner.temp }}/state-guests/*/symbols.txt

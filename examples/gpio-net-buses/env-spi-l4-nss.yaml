@@ -1,0 +1,48 @@
+# Two STM32L476s, SPI1 to SPI1, with the hardware slave select wired: node
+# `a` is the master with CR2.SSOE=1 (its SPI drives PA4 = SPI1_NSS, AF5),
+# node `b` the slave with SSM=0 (selected by the level on its own PA4 =
+# SPI1_NSS). The tests swap in the STM32G474 (`system-g474.yaml`) and the
+# NSS pulse-mode master (`l4-spi-nss-master-nssp.elf`). Every SPI wire is a
+# gpio_net.
+schema_version: "1.0"
+name: gpio-net-spi-l4-nss
+nodes:
+  - id: a
+    system: "system-l476.yaml"
+    firmware: "firmware/l4-spi-nss-master.elf"
+  - id: b
+    system: "system-l476.yaml"
+    firmware: "firmware/l4-spi-nss-slave.elf"
+interconnects:
+  - type: gpio_net
+    nodes: [a, b]
+    config:
+      name: nss
+      pull: up
+      members:
+        - { node: a, peripheral: gpioa, pin: 4 }   # SPI1_NSS out (SSOE)
+        - { node: b, peripheral: gpioa, pin: 4 }   # SPI1_NSS in
+  - type: gpio_net
+    nodes: [a, b]
+    config:
+      name: sck
+      pull: down
+      members:
+        - { node: a, peripheral: gpioa, pin: 5 }
+        - { node: b, peripheral: gpioa, pin: 5 }
+  - type: gpio_net
+    nodes: [a, b]
+    config:
+      name: miso
+      pull: down
+      members:
+        - { node: a, peripheral: gpioa, pin: 6 }
+        - { node: b, peripheral: gpioa, pin: 6 }
+  - type: gpio_net
+    nodes: [a, b]
+    config:
+      name: mosi
+      pull: down
+      members:
+        - { node: a, peripheral: gpioa, pin: 7 }
+        - { node: b, peripheral: gpioa, pin: 7 }

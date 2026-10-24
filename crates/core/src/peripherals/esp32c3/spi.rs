@@ -37,8 +37,15 @@
 //! controller shifts in from an idle bus. Then `USR` auto-clears (so the
 //! firmware's poll exits) and `SPI_TRANS_DONE` latches in `SPI_DMA_INT_RAW`.
 //!
-//! This is the CPU data path only; GDMA-coupled (descriptor-driven) transfers
-//! are not modeled here.
+//! ## GDMA data path (`SPI_DMA_CONF.DMA_TX_ENA` / `DMA_RX_ENA`)
+//!
+//! With DMA enabled the MOSI bytes come from what the GDMA OUT link bound to
+//! SPI2 pushed into the controller ([`Peripheral::gdma_out_load`]) and the
+//! MISO bytes go to its IN link instead of `W0..W15`, with no 64-byte limit.
+//! The transaction completes — `USR` clears and `SPI_TRANS_DONE` latches —
+//! when the GDMA has written the received bytes to memory
+//! ([`Peripheral::gdma_in_delivered`]), so firmware that sees it done finds
+//! its buffer filled. See [`crate::peripherals::esp_gdma`].
 //!
 //! `tick()` emits the controller's intr-matrix source while `INT_ST != 0`,
 //! mirroring the I²C / UART pattern; the bus routes it through the per-core
@@ -67,6 +74,9 @@ pub const SPI2_SIZE: u64 = 0x1000;
 /// 21 (which is the Xtensa `ets_isr_source_t` ordinal).
 pub const SPI2_INTR_SOURCE_ID: u32 = 19;
 const EXTERNAL_CAN_POLL_EVENT: u32 = u32::MAX;
+/// Scheduler token whose firing makes the interrupt matrix re-derive this
+/// controller's level after a net edge latched an interrupt bit.
+const NET_IRQ_TOKEN: u32 = u32::MAX - 1;
 
 const CMD: u64 = 0x00;
 const CTRL: u64 = 0x08;
@@ -113,6 +123,14 @@ const MS_DATA_BITLEN: u32 = 0x0003_FFFF;
 const AFIFO_RST_BITS: u32 = 0xE000_0000;
 /// `SPI_SOFT_RESET` in `SLAVE` (bitpos 27, WT) — self-clearing.
 const SOFT_RESET_BIT: u32 = 1 << 27;
+/// `SPI_DMA_CONF.DMA_RX_ENA` / `DMA_TX_ENA` (bits 27 / 28): the data phase
+/// moves through the GDMA instead of `W0..W15`.
+const DMA_RX_ENA: u32 = 1 << 27;
+const DMA_TX_ENA: u32 = 1 << 28;
+/// `SPI_DMA_CONF.RX_AFIFO_RST` (bit 29) and `BUF_AFIFO_RST` / `DMA_AFIFO_RST`
+/// (bits 30 / 31, the transmit side).
+const RX_AFIFO_RST: u32 = 1 << 29;
+const TX_AFIFO_RST: u32 = (1 << 30) | (1 << 31);
 
 /// One word past the last architected register (`DATE` @ 0xF0).
 const NWORDS: usize = 0xF4 / 4;
@@ -188,6 +206,18 @@ pub struct Esp32c3Spi {
     /// this same IP.
     wire: EspSpiWire,
     external_can_poll_scheduled: bool,
+    /// The bit-level engine that runs instead of the transaction path while a
+    /// line is on a world `gpio_net` ([`crate::peripherals::esp_gpspi_net`]).
+    net: crate::peripherals::esp_gpspi_net::GpSpiNet,
+    /// Interrupt level last reported through a scheduler event in net mode.
+    net_irq: crate::peripherals::esp_gpio_net::IrqLevelWatch,
+    /// GDMA coupling (`crate::peripherals::esp_gdma`): bytes the OUT link has
+    /// pushed into the transmit FIFO, not yet shifted out.
+    dma_tx: std::collections::VecDeque<u8>,
+    /// Bytes a DMA_RX_ENA transaction received, waiting for the IN link. The
+    /// transaction completes (`USR` clears, `TRANS_DONE`) when the GDMA has
+    /// written them to memory ([`Self::gdma_in_delivered`]).
+    dma_rx: Option<Vec<u8>>,
 }
 
 impl std::fmt::Debug for Esp32c3Spi {
@@ -225,7 +255,19 @@ impl Esp32c3Spi {
             clock: None,
             wire: EspSpiWire::default(),
             external_can_poll_scheduled: false,
+            net: Default::default(),
+            net_irq: Default::default(),
+            dma_tx: Default::default(),
+            dma_rx: None,
         }
+    }
+
+    fn dma_tx_enabled(&self) -> bool {
+        self.reg(DMA_CONF) & DMA_TX_ENA != 0
+    }
+
+    fn dma_rx_enabled(&self) -> bool {
+        self.reg(DMA_CONF) & DMA_RX_ENA != 0
     }
 
     /// The shared pad-line cell for this controller's SCK/MOSI/CS, created on
@@ -239,7 +281,51 @@ impl Esp32c3Spi {
         &mut self,
     ) -> std::sync::Arc<crate::peripherals::pad_lines::PadLines> {
         let cpol = crate::peripherals::esp_gpspi_wire::framing(self.reg(MISC), self.reg(USER)).cpol;
-        self.wire.pad_lines_arc(cpol)
+        // With a MISO line: this controller can be a master or a slave on a
+        // world `gpio_net` (`esp_gpspi_net`).
+        self.wire.pad_lines_arc_with_miso(cpol)
+    }
+
+    /// `true` while the GPIO matrix routes one of this controller's lines to
+    /// a pad on a world `gpio_net`: the bit engine owns the wire.
+    fn net_mode(&self) -> bool {
+        self.wire
+            .wire_lines()
+            .is_some_and(crate::peripherals::pad_lines::PadLines::any_on_net)
+    }
+
+    fn net_now(&self) -> u64 {
+        self.clock.as_ref().map_or(0, CycleClock::now)
+    }
+
+    /// Run `f` with the net engine, this model as its register host, and the
+    /// wire, stamping the wire's reports with `now`.
+    fn with_net<R>(
+        &mut self,
+        now: u64,
+        f: impl FnOnce(
+            &mut crate::peripherals::esp_gpspi_net::GpSpiNet,
+            &mut Self,
+            &crate::peripherals::pad_lines::PadLines,
+        ) -> R,
+    ) -> Option<R> {
+        let pads = self.wire.lines_arc()?;
+        let mut net = std::mem::take(&mut self.net);
+        pads.set_stamp(Some(now));
+        let r = f(&mut net, self, &pads);
+        pads.set_stamp(None);
+        self.net = net;
+        Some(r)
+    }
+
+    /// Master transactions this controller has completed on a net.
+    pub fn net_master_transactions(&self) -> u64 {
+        self.net.master_transactions()
+    }
+
+    /// Slave transactions this controller has completed on a net.
+    pub fn net_slave_transactions(&self) -> u64 {
+        self.net.slave_transactions()
     }
 
     /// Engine cycles per SCK period, from this controller's own `SPI_CLOCK`.
@@ -355,6 +441,10 @@ impl Esp32c3Spi {
     /// (`SPI_MS_DATA_BITLEN` is bits-1). Capped at the 64-byte W buffer.
     fn transfer_bytes(&self) -> usize {
         let bits = (self.reg(MS_DLEN) & MS_DATA_BITLEN) as usize + 1;
+        if self.dma_tx_enabled() || self.dma_rx_enabled() {
+            // The GDMA data path is not limited to the W buffer.
+            return bits.div_ceil(8);
+        }
         (bits.div_ceil(8)).min(64)
     }
 
@@ -410,16 +500,32 @@ impl Esp32c3Spi {
         let framing = crate::peripherals::esp_gpspi_wire::framing(self.reg(MISC), self.reg(USER));
         let bit_time = self.bit_time_cycles();
         let now = self.clock.as_ref().map_or(0, |c| c.now());
+        let (dma_tx, dma_rx) = (self.dma_tx_enabled(), self.dma_rx_enabled());
+        let mut received = Vec::new();
         for i in 0..bytes {
             let off = W0 + (i as u64 / 4) * 4;
             let shift = (i % 4) * 8;
-            let mosi = ((self.reg(off) >> shift) & 0xFF) as u8;
+            // GDMA: the OUT link's bytes (zeros once it runs dry); else W.
+            let mosi = if dma_tx {
+                self.dma_tx.pop_front().unwrap_or(0)
+            } else {
+                ((self.reg(off) >> shift) & 0xFF) as u8
+            };
             // Narrate the byte the CPU put on the bus, at the point it goes out
             // — before the MISO response overwrites the W slot it came from.
             self.wire.push(mosi, framing, bit_time, now);
             let miso = self.exchange_byte(mosi);
-            let word = (self.reg(off) & !(0xFFu32 << shift)) | ((miso as u32) << shift);
-            self.set_reg_raw(off, word);
+            if dma_rx {
+                received.push(miso);
+            } else if i < 64 {
+                let word = (self.reg(off) & !(0xFFu32 << shift)) | ((miso as u32) << shift);
+                self.set_reg_raw(off, word);
+            }
+        }
+        if dma_rx {
+            // Complete once the GDMA IN link has the bytes in memory.
+            self.dma_rx = Some(received);
+            return;
         }
         // Clear the USR start bit (auto-clear on done) so `!(CMD & USR)` exits.
         let cmd = self.reg(CMD) & !USR_BIT;
@@ -429,7 +535,63 @@ impl Esp32c3Spi {
     }
 }
 
+impl crate::peripherals::esp_gpspi_net::GpSpiHost for Esp32c3Spi {
+    fn reg(&self, off: u64) -> u32 {
+        Esp32c3Spi::reg(self, off)
+    }
+
+    fn set_reg(&mut self, off: u64, value: u32) {
+        self.set_reg_raw(off, value);
+    }
+
+    fn raise(&mut self, bits: u32) {
+        self.int_raw |= bits & INT_MASK;
+    }
+
+    fn bit_time(&self) -> Option<u64> {
+        self.bit_time_cycles()
+    }
+
+    fn dma_tx(&self) -> bool {
+        self.dma_tx_enabled()
+    }
+
+    fn dma_rx(&self) -> bool {
+        self.dma_rx_enabled()
+    }
+
+    fn take_dma_tx(&mut self, max: usize) -> Vec<u8> {
+        let n = max.min(self.dma_tx.len());
+        self.dma_tx.drain(..n).collect()
+    }
+
+    fn give_dma_rx(&mut self, bytes: Vec<u8>) {
+        self.dma_rx = Some(bytes);
+    }
+}
+
 impl Peripheral for Esp32c3Spi {
+    // ── GDMA coupling (`crate::peripherals::esp_gdma`) ──────────────────────
+
+    /// The GDMA OUT link bound to this controller (`PERI_SEL` = SPI2) pushed
+    /// `bytes` into its transmit FIFO.
+    fn gdma_out_load(&mut self, bytes: &[u8]) {
+        self.dma_tx.extend(bytes);
+    }
+
+    /// The bytes a finished DMA_RX_ENA transaction holds for the IN link.
+    fn gdma_in_take(&mut self) -> Option<Vec<u8>> {
+        self.dma_rx.take()
+    }
+
+    /// The IN link has the received bytes in memory: the transaction is
+    /// complete.
+    fn gdma_in_delivered(&mut self) {
+        let cmd = self.reg(CMD) & !USR_BIT;
+        self.set_reg_raw(CMD, cmd);
+        self.int_raw |= TRANS_DONE;
+    }
+
     fn spi_attached_devices(&self) -> Option<&Vec<Box<dyn crate::peripherals::device::SpiDevice>>> {
         Some(&self.attached_devices)
     }
@@ -466,7 +628,19 @@ impl Peripheral for Esp32c3Spi {
     }
 
     fn line_names(&self) -> &'static [&'static str] {
-        crate::peripherals::esp_gpspi_wire::SPI_LINES
+        crate::peripherals::esp_gpspi_wire::SPI_NET_LINES
+    }
+
+    fn wire_input_edge(&mut self, line: usize, level: bool, cycle: u64) -> bool {
+        if !self.net_mode() {
+            return false;
+        }
+        let changed = self
+            .with_net(cycle, |net, host, pads| {
+                net.on_edge(host, line, level, pads)
+            })
+            .unwrap_or(false);
+        changed || self.net.deadline().is_some()
     }
 
     fn wire_lines(&self) -> Option<&crate::peripherals::pad_lines::PadLines> {
@@ -519,14 +693,30 @@ impl Peripheral for Esp32c3Spi {
                 let cmd = self.reg(CMD) & !UPDATE_BIT;
                 self.set_reg_raw(CMD, cmd);
                 if value & USR_BIT != 0 {
-                    self.launch_transaction();
+                    if self.net_mode() {
+                        // On a net the bit engine runs the transaction on the
+                        // wire (a master), or the slave waits for the
+                        // master's clock with USR set.
+                        let now = self.net_now();
+                        self.with_net(now, |net, host, pads| net.launch(host, now, pads));
+                    } else {
+                        self.launch_transaction();
+                    }
                 }
             }
             DMA_CONF => {
                 self.set_reg_masked(DMA_CONF, value);
-                // AFIFO reset strobes (bits 29/30/31) self-clear.
+                // AFIFO reset strobes (bits 29/30/31) self-clear, and empty
+                // the FIFO they name: drivers reset them before every
+                // transaction, ahead of starting the GDMA links.
                 let v = self.reg(DMA_CONF) & !AFIFO_RST_BITS;
                 self.set_reg_raw(DMA_CONF, v);
+                if value & TX_AFIFO_RST != 0 {
+                    self.dma_tx.clear();
+                }
+                if value & RX_AFIFO_RST != 0 {
+                    self.dma_rx = None;
+                }
             }
             SLAVE => {
                 self.set_reg_masked(SLAVE, value);
@@ -543,6 +733,10 @@ impl Peripheral for Esp32c3Spi {
             // holes ignore writes entirely.
             o => self.set_reg_masked(o, value),
         }
+        if self.net_mode() {
+            let now = self.net_now();
+            self.with_net(now, |net, host, pads| net.apply_drive(host, pads));
+        }
         Ok(())
     }
 
@@ -557,6 +751,10 @@ impl Peripheral for Esp32c3Spi {
         // the feature this is where a held burst reaches the pads. Inert — one
         // `is_empty` — on every bus that never routed an SPI pad.
         self.wire_flush(false);
+        if self.net.deadline().is_some_and(|d| d <= self.net_now()) {
+            let now = self.net_now();
+            self.with_net(now, |net, host, pads| net.step(host, now, pads));
+        }
         for device in &mut self.attached_devices {
             device.poll_external_bus();
         }
@@ -578,6 +776,7 @@ impl Peripheral for Esp32c3Spi {
     fn legacy_tick_active(&self) -> bool {
         self.int_st() != 0
             || self.wire.is_pending()
+            || self.net.deadline().is_some()
             || self
                 .attached_devices
                 .iter()
@@ -617,6 +816,17 @@ impl Peripheral for Esp32c3Spi {
             return Vec::new();
         }
         let mut events = Vec::new();
+        if self.net_mode() {
+            let now = self.net_now();
+            if let Some(ev) = self.net.take_event(now) {
+                events.push(ev);
+            }
+            // An interrupt bit latched by a net edge: one event per change of
+            // the level, so the interrupt matrix re-derives its sources.
+            if self.net_irq.take(self.int_st() != 0).is_some() {
+                events.push((0, NET_IRQ_TOKEN));
+            }
+        }
         if self.wire.is_pending() && !self.wire.scheduled {
             let now = self.clock.as_ref().map_or(0, |c| c.now());
             self.wire.arm_seq = self.wire.arm_seq.wrapping_add(1);
@@ -643,6 +853,19 @@ impl Peripheral for Esp32c3Spi {
         _sched: &mut crate::sched::EventScheduler,
         _bus: &mut dyn crate::Bus,
     ) -> crate::sched::EventResult {
+        if event_token == crate::peripherals::esp_gpspi_net::NET_TOKEN {
+            let now = _sched.now();
+            let next = self
+                .with_net(now, |net, host, pads| net.on_event(host, now, pads))
+                .flatten();
+            return crate::sched::EventResult {
+                reschedule_delay: next,
+                ..Default::default()
+            };
+        }
+        if event_token == NET_IRQ_TOKEN {
+            return crate::sched::EventResult::default();
+        }
         if event_token == EXTERNAL_CAN_POLL_EVENT {
             for device in &mut self.attached_devices {
                 device.poll_external_bus();
@@ -716,53 +939,36 @@ impl Peripheral for Esp32c3Spi {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::sync::Arc;
+    use crate::peripherals::esp_gpspi_wire::esp_gpspi_suite;
 
-    struct ExternalCanPoller(Arc<AtomicUsize>);
-    impl SpiDevice for ExternalCanPoller {
-        fn needs_external_bus_poll(&self) -> bool {
-            true
-        }
-        fn component_id(&self) -> Option<&str> {
-            Some("external-can")
-        }
-        fn poll_external_bus(&mut self) {
-            self.0.fetch_add(1, Ordering::SeqCst);
-        }
-        fn transfer(&mut self, _mosi: u8) -> u8 {
-            0
-        }
-        fn cs_pin(&self) -> &str {
-            "GPIO10"
-        }
-    }
-
-    #[test]
-    fn scheduler_arms_recurring_external_can_poll() {
-        let polls = Arc::new(AtomicUsize::new(0));
-        let mut spi = Esp32c3Spi::new(SPI2_INTR_SOURCE_ID);
-        spi.push_device(Box::new(ExternalCanPoller(polls.clone())));
-        spi.attach_cycle_clock(crate::CycleClock::default());
-
-        let events = spi.take_scheduled_events();
-        assert_eq!(
-            events.len(),
-            1,
-            "scheduler mode must arm external CAN polling"
-        );
-        let mut scheduler = crate::sched::EventScheduler::new();
-        let mut bus = crate::bus::SystemBus::new();
-        let result = spi.on_event(events[0].1, &mut scheduler, &mut bus);
-        assert_eq!(polls.load(Ordering::SeqCst), 1);
-        assert_eq!(result.reschedule_delay, Some(1));
-
-        let legacy_polls = Arc::new(AtomicUsize::new(0));
-        let mut legacy = Esp32c3Spi::new(SPI2_INTR_SOURCE_ID);
-        legacy.push_device(Box::new(ExternalCanPoller(legacy_polls.clone())));
-        assert!(legacy.take_scheduled_events().is_empty());
-        legacy.tick();
-        assert_eq!(legacy_polls.load(Ordering::SeqCst), 1);
+    esp_gpspi_suite! {
+        ctrl: Esp32c3Spi,
+        s_name: s,
+        source: SPI2_INTR_SOURCE_ID,
+        reset_test: reset_defaults_match_c3_yaml,
+        dma_conf_reset: 0x0000_0000,
+        date_reset: 0x0200_7220,
+        w0_preload: 0x1234_5678,
+        w1_preload: 0x0000_0000,
+        int_st_pre: {
+            assert!(
+                !s.legacy_tick_active(),
+                "idle level-IRQ SPI must stay out of the legacy tick walk"
+            );
+            assert!(
+                s.legacy_tick_dynamic(),
+                "writes that assert/clear INT_ST must refresh tick membership"
+            );
+        },
+        int_st_mid: {
+            assert!(s.legacy_tick_active(), "asserted INT_ST needs level ticks");
+        },
+        int_st_post: {
+            assert!(
+                !s.legacy_tick_active(),
+                "cleared INT_ST can leave tick walk"
+            );
+        },
     }
 
     #[test]
@@ -770,21 +976,6 @@ mod tests {
         // C3-vs-S3 difference: the C3 routes GP-SPI2 through interrupt-matrix
         // source 19 (SPI_INTR_2_MAP at offset 76 = 4*19), NOT the S3's 21.
         assert_eq!(SPI2_INTR_SOURCE_ID, 19);
-    }
-
-    #[test]
-    fn reset_defaults_match_c3_yaml() {
-        let s = Esp32c3Spi::new(SPI2_INTR_SOURCE_ID);
-        assert_eq!(s.read_u32(CLOCK).unwrap(), 0x8000_3043, "CLOCK");
-        assert_eq!(s.read_u32(CTRL).unwrap(), 0x003C_0000, "CTRL");
-        assert_eq!(s.read_u32(USER).unwrap(), 0x8000_00C0, "USER");
-        assert_eq!(s.read_u32(USER1).unwrap(), 0xB841_0007, "USER1");
-        assert_eq!(s.read_u32(USER2).unwrap(), 0x7800_0000, "USER2");
-        assert_eq!(s.read_u32(MISC).unwrap(), 0x0000_003E, "MISC");
-        // C3-specific resets (differ from the S3).
-        assert_eq!(s.read_u32(DMA_CONF).unwrap(), 0x0000_0000, "DMA_CONF (C3)");
-        assert_eq!(s.read_u32(SLAVE).unwrap(), 0x0280_0000, "SLAVE");
-        assert_eq!(s.read_u32(DATE).unwrap(), 0x0200_7220, "DATE (C3)");
     }
 
     #[test]
@@ -804,93 +995,6 @@ mod tests {
         let mut s = Esp32c3Spi::new(SPI2_INTR_SOURCE_ID);
         s.write_u32(0x44, 0xDEAD_BEEF).unwrap();
         assert_eq!(s.read_u32(0x44).unwrap(), 0, "0x44 is a hole on the C3");
-    }
-
-    #[test]
-    fn unmapped_offsets_read_zero_and_ignore_writes() {
-        let mut s = Esp32c3Spi::new(SPI2_INTR_SOURCE_ID);
-        for off in [0x48u64, 0x90, 0xD8, 0xEC, 0xF4, 0xFFC] {
-            s.write_u32(off, 0xDEAD_BEEF).unwrap();
-            assert_eq!(s.read_u32(off).unwrap(), 0, "hole at {off:#x}");
-        }
-    }
-
-    #[test]
-    fn cmd_update_bit_self_clears() {
-        let mut s = Esp32c3Spi::new(SPI2_INTR_SOURCE_ID);
-        s.write_u32(CMD, UPDATE_BIT).unwrap();
-        assert_eq!(
-            s.read_u32(CMD).unwrap() & UPDATE_BIT,
-            0,
-            "UPDATE self-clears"
-        );
-    }
-
-    #[test]
-    fn dma_conf_afifo_rst_strobes_self_clear() {
-        let mut s = Esp32c3Spi::new(SPI2_INTR_SOURCE_ID);
-        s.write_u32(DMA_CONF, AFIFO_RST_BITS).unwrap();
-        assert_eq!(
-            s.read_u32(DMA_CONF).unwrap() & AFIFO_RST_BITS,
-            0,
-            "AFIFO reset strobes self-clear"
-        );
-    }
-
-    #[test]
-    fn slave_soft_reset_self_clears() {
-        let mut s = Esp32c3Spi::new(SPI2_INTR_SOURCE_ID);
-        s.write_u32(SLAVE, SOFT_RESET_BIT).unwrap();
-        assert_eq!(
-            s.read_u32(SLAVE).unwrap() & SOFT_RESET_BIT,
-            0,
-            "SOFT_RESET (WT) self-clears"
-        );
-    }
-
-    #[test]
-    fn w_buffer_round_trips() {
-        let mut s = Esp32c3Spi::new(SPI2_INTR_SOURCE_ID);
-        for w in 0..16u64 {
-            s.write_u32(W0 + w * 4, 0xA000_0000 | (w as u32)).unwrap();
-        }
-        for w in 0..16u64 {
-            assert_eq!(s.read_u32(W0 + w * 4).unwrap(), 0xA000_0000 | (w as u32));
-        }
-        assert_eq!(W15, W0 + 15 * 4, "W15 offset");
-    }
-
-    #[test]
-    fn usr_start_auto_clears_and_latches_trans_done() {
-        let mut s = Esp32c3Spi::new(SPI2_INTR_SOURCE_ID);
-        s.write_u32(MS_DLEN, 32 - 1).unwrap(); // 32-bit transfer
-        s.write_u32(CMD, USR_BIT).unwrap();
-        assert_eq!(s.read_u32(CMD).unwrap() & USR_BIT, 0, "USR auto-clears");
-        assert_eq!(
-            s.read_u32(DMA_INT_RAW).unwrap() & TRANS_DONE,
-            TRANS_DONE,
-            "TRANS_DONE latched"
-        );
-    }
-
-    #[test]
-    fn miso_fills_0xff_for_no_device() {
-        let mut s = Esp32c3Spi::new(SPI2_INTR_SOURCE_ID);
-        s.write_u32(W0, 0x1234_5678).unwrap();
-        s.write_u32(W0 + 4, 0x0000_0000).unwrap();
-        // 5-byte (40-bit) transfer → W0 fully 0xFF, W1 low byte 0xFF only.
-        s.write_u32(MS_DLEN, 40 - 1).unwrap();
-        s.write_u32(CMD, USR_BIT).unwrap();
-        assert_eq!(
-            s.read_u32(W0).unwrap(),
-            0xFFFF_FFFF,
-            "first 4 MISO bytes 0xFF"
-        );
-        assert_eq!(
-            s.read_u32(W0 + 4).unwrap(),
-            0x0000_00FF,
-            "5th byte 0xFF, rest untouched"
-        );
     }
 
     #[test]
@@ -917,50 +1021,6 @@ mod tests {
         // MISO = each byte ^ 0xA5 → 7B 08 1B 4A, packed little-endian.
         let expect = u32::from_le_bytes([0xDE ^ 0xA5, 0xAD ^ 0xA5, 0xBE ^ 0xA5, 0xEF ^ 0xA5]);
         assert_eq!(s.read_u32(W0).unwrap(), expect, "full-duplex MISO in W0");
-    }
-
-    #[test]
-    fn int_clr_is_w1c() {
-        let mut s = Esp32c3Spi::new(SPI2_INTR_SOURCE_ID);
-        s.write_u32(MS_DLEN, 8 - 1).unwrap();
-        s.write_u32(CMD, USR_BIT).unwrap();
-        assert_eq!(s.read_u32(DMA_INT_RAW).unwrap() & TRANS_DONE, TRANS_DONE);
-        s.write_u32(DMA_INT_CLR, TRANS_DONE).unwrap();
-        assert_eq!(
-            s.read_u32(DMA_INT_RAW).unwrap() & TRANS_DONE,
-            0,
-            "W1C cleared"
-        );
-    }
-
-    #[test]
-    fn int_st_masks_with_ena_and_emits_source() {
-        let mut s = Esp32c3Spi::new(SPI2_INTR_SOURCE_ID);
-        assert!(
-            !s.legacy_tick_active(),
-            "idle level-IRQ SPI must stay out of the legacy tick walk"
-        );
-        assert!(
-            s.legacy_tick_dynamic(),
-            "writes that assert/clear INT_ST must refresh tick membership"
-        );
-        s.write_u32(MS_DLEN, 8 - 1).unwrap();
-        s.write_u32(CMD, USR_BIT).unwrap();
-        // No enable yet → ST gated, no source emitted.
-        assert_eq!(s.read_u32(DMA_INT_ST).unwrap(), 0, "ST gated by ENA");
-        assert_eq!(s.tick().explicit_irqs, None, "no source while ST==0");
-        // Enable TRANS_DONE → ST asserts and the source is emitted.
-        s.write_u32(DMA_INT_ENA, TRANS_DONE).unwrap();
-        assert_eq!(s.read_u32(DMA_INT_ST).unwrap() & TRANS_DONE, TRANS_DONE);
-        assert!(s.legacy_tick_active(), "asserted INT_ST needs level ticks");
-        assert_eq!(s.tick().explicit_irqs, Some(vec![SPI2_INTR_SOURCE_ID]));
-        // Clear the raw bit → ST drops, source stops.
-        s.write_u32(DMA_INT_CLR, TRANS_DONE).unwrap();
-        assert!(
-            !s.legacy_tick_active(),
-            "cleared INT_ST can leave tick walk"
-        );
-        assert_eq!(s.tick().explicit_irqs, None);
     }
 
     #[test]

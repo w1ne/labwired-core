@@ -4,6 +4,7 @@
 //! Production callers enter through `Machine::advance` or its public adapters.
 
 use crate::bus::SystemBus;
+use crate::memory::LinearMemory;
 use crate::runtime_snapshot::CpuKind;
 use crate::snapshot::{ArmCpuSnapshot, CpuSnapshot};
 use crate::{
@@ -570,6 +571,65 @@ fn run_advances_in_capped_batches_and_reports_progress() {
     assert_eq!(machine.cpu.steps, 7);
     assert_eq!(machine.step_profile().cpu_instructions, 7);
     assert_eq!(machine.step_profile().cpu_batches, 3);
+}
+
+/// A faulting CPU store on a single-core machine records the boundary PC and
+/// cycle through the live `Machine::step`/`Machine::advance` paths. Regression
+/// for the single-core guards: without them the gate keeps its zeroed defaults.
+#[test]
+fn single_core_violation_records_boundary_pc_and_cycle() {
+    let bus_with_flash_policy = || {
+        let mut bus = SystemBus::new();
+        bus.flash = LinearMemory::new_erased(64 * 1024, 0x0800_0000);
+        bus.ram = LinearMemory::new(16 * 1024, 0x2000_0000);
+        bus.memory_policy.flash = crate::bus::CpuWritePolicy::Fault;
+        bus
+    };
+
+    // SingleDirect (`Machine::step`): the guard stamps the step-entry PC, so
+    // the violation carries the PC of the faulting instruction.
+    let mut machine = Machine::new(
+        CountingCpu {
+            pc: 0x0800_0000,
+            gpio_write_at_step: Some((1, 0x0800_1000, 0xAB)),
+            ..Default::default()
+        },
+        bus_with_flash_policy(),
+    );
+    machine.total_cycles = 100;
+    let err = machine.step().unwrap_err();
+    assert!(matches!(err, SimulationError::MemoryViolation(0x0800_1000)));
+    let first = machine
+        .bus
+        .memory_policy
+        .first_flash
+        .as_ref()
+        .expect("first flash violation recorded");
+    assert_eq!(first.pc, Some(0x0800_0000), "single-step entry PC");
+    assert_eq!(first.cycle, 100, "cycle published for the single step");
+
+    // RunBatch (`Machine::advance`): the guard stamps at batch entry, so the
+    // violation carries the batch-start PC, not the store instruction's.
+    let mut machine = Machine::new(
+        CountingCpu {
+            pc: 0x0800_0000,
+            gpio_write_at_step: Some((2, 0x0800_1000, 0xAB)),
+            ..Default::default()
+        },
+        bus_with_flash_policy(),
+    );
+    machine.total_cycles = 100;
+    machine.config.peripheral_tick_interval = 64;
+    let err = machine.advance(AdvanceRequest::run(Some(4))).unwrap_err();
+    assert!(matches!(err, SimulationError::MemoryViolation(0x0800_1000)));
+    let first = machine
+        .bus
+        .memory_policy
+        .first_flash
+        .as_ref()
+        .expect("first flash violation recorded");
+    assert_eq!(first.pc, Some(0x0800_0000), "batch-start PC");
+    assert_eq!(first.cycle, 100, "cycle published at batch start");
 }
 
 #[test]
@@ -1207,6 +1267,63 @@ fn idle_fast_forward_is_reconciled_in_report_and_cpu() {
     assert_eq!(report.elapsed_cycles, 5);
     assert_eq!(machine.cpu.idle_skipped, 5);
     assert_eq!(machine.idle_fast_forward_cycles_skipped, 5);
+}
+
+/// The skip moves machine time without stepping either core. With the
+/// secondary running (an ESP32 loopTask on APP_CPU while PRO_CPU sits in
+/// WAITI), a skip takes that time away from it: the primary's idle budget
+/// alone must not skip. Holds with and without `event-scheduler` (without it
+/// nothing skips), so it carries no cfg.
+#[test]
+fn idle_fast_forward_waits_for_an_active_secondary() {
+    let mut bus = SystemBus::new();
+    bus.peripherals.clear();
+    let mut machine = Machine::new(
+        CountingCpu {
+            idle_budget: Some(5),
+            ..Default::default()
+        },
+        bus,
+    )
+    .with_secondary_cpu(CountingCpu::default());
+    machine.config.idle_fast_forward_enabled = true;
+
+    let report = machine.advance(AdvanceRequest::run(Some(5))).unwrap();
+
+    assert_eq!(
+        report.idle_cycles, 0,
+        "an active secondary must run, not be skipped"
+    );
+    assert_eq!(machine.idle_fast_forward_cycles_skipped, 0);
+    assert_eq!(machine.cpu_secondary.as_ref().unwrap().steps, 5);
+}
+
+/// Both cores parked: the skip runs, and the parked secondary's clock moves
+/// with it (its CCOUNT is the FreeRTOS tick source on APP_CPU).
+#[cfg(feature = "event-scheduler")]
+#[test]
+fn idle_fast_forward_moves_a_parked_secondary_with_the_primary() {
+    let mut bus = SystemBus::new();
+    bus.peripherals.clear();
+    let mut machine = Machine::new(
+        CountingCpu {
+            idle_budget: Some(5),
+            ..Default::default()
+        },
+        bus,
+    )
+    .with_secondary_cpu(CountingCpu {
+        parked: true,
+        idle_budget: Some(u64::MAX),
+        ..Default::default()
+    });
+    machine.config.idle_fast_forward_enabled = true;
+
+    let report = machine.advance(AdvanceRequest::run(Some(5))).unwrap();
+
+    assert_eq!(report.idle_cycles, 5);
+    assert_eq!(machine.cpu.idle_skipped, 5);
+    assert_eq!(machine.cpu_secondary.as_ref().unwrap().idle_skipped, 5);
 }
 
 #[cfg(feature = "event-scheduler")]

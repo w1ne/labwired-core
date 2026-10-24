@@ -447,3 +447,34 @@ def test_write_ack_digests_leaves_undrifted_boards_alone(tmp_path, monkeypatch):
     gvs.write_ack_digests({"boards": boards}, stamp_all=True)
     lines = [ln for ln in manifest_file.read_text().splitlines() if "drift_ack_digest" in ln]
     assert all("newdigest" in ln for ln in lines), "--all must stamp both"
+
+
+def test_esp32c3_manifest_has_one_drift_ack():
+    # Inspect the syntax tree: safe_load silently discards duplicate keys.
+    root = yaml.compose(gvs.MANIFEST.read_text())
+    boards = next(value for key, value in root.value if key.value == "boards")
+    board = next(
+        node for node in boards.value
+        if any(key.value == "id" and value.value == "esp32c3"
+               for key, value in node.value)
+    )
+    assert sum(key.value == "drift_ack" for key, _ in board.value) == 1
+
+
+# ── Duplicate keys: PyYAML would silently keep the last one ──────────────────
+
+def test_duplicate_drift_ack_is_rejected():
+    text = "boards:\n  - id: x\n    drift_ack: 2026-01-01\n    drift_ack: 2026-02-01\n"
+    with pytest.raises(SystemExit) as e:
+        gvs.load_manifest(text)
+    assert "duplicate key 'drift_ack'" in str(e.value)
+    assert "line 4" in str(e.value) and "first at line 3" in str(e.value)
+
+
+def test_same_key_on_different_boards_is_fine():
+    text = "boards:\n  - id: x\n    drift_ack: 2026-01-01\n  - id: y\n    drift_ack: 2026-01-01\n"
+    assert [b["id"] for b in gvs.load_manifest(text)["boards"]] == ["x", "y"]
+
+
+def test_committed_manifest_has_no_duplicate_keys():
+    gvs.load_manifest(gvs.MANIFEST.read_text())

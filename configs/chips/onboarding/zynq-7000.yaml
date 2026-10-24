@@ -42,27 +42,33 @@ peripherals:
   bus: sysbus
   base_address: 3758100480
 - id: i2c1
-  type: cadence_i2c
+  type: stub
+  renode_type: cadence_i2c
   bus: sysbus
   base_address: 3758116864
 - id: i2c0
-  type: cadence_i2c
+  type: stub
+  renode_type: cadence_i2c
   bus: sysbus
   base_address: 3758112768
 - id: spi0
-  type: cadence_spi
+  type: stub
+  renode_type: cadence_spi
   bus: sysbus
   base_address: 3758120960
 - id: spi1
-  type: cadence_spi
+  type: stub
+  renode_type: cadence_spi
   bus: sysbus
   base_address: 3758125056
 - id: sdhci0
-  type: sdhci
+  type: stub
+  renode_type: sdhci
   bus: sysbus
   base_address: 3759144960
 - id: sdhci1
-  type: sdhci
+  type: stub
+  renode_type: sdhci
   bus: sysbus
   base_address: 3759149056
 - id: ttc0
@@ -74,7 +80,8 @@ peripherals:
   bus: sysbus
   base_address: 4160757760
 - id: watchdog0
-  type: cadence_wdt
+  type: stub
+  renode_type: cadence_wdt
   bus: sysbus
   base_address: 4160770048
 - id: globalTimer
@@ -94,11 +101,13 @@ peripherals:
   bus: sysbus
   base_address: 3758137344
 - id: xadc
-  type: xilinx_xadc
+  type: stub
+  renode_type: xilinx_xadc
   bus: sysbus
   base_address: 4160778496
 - id: slcr
-  type: zynq7000_systemlevelcontrolregisters
+  type: stub
+  renode_type: zynq7000_systemlevelcontrolregisters
   bus: sysbus
   base_address: 4160749568
 - id: nand

@@ -24,6 +24,10 @@
 //! outside (a board button, a `gpio_net`) or after firmware acknowledges the
 //! interrupt in `STATUS_W1TC`.
 
+use std::sync::Arc;
+
+use crate::peripherals::pad_lines::{PadLines, WireInputEdge};
+
 /// `GPIO_PINn_REG.PAD_DRIVER`: open drain.
 pub(crate) const PIN_PAD_DRIVER: u32 = 1 << 2;
 
@@ -80,6 +84,143 @@ impl IrqLevelWatch {
         self.reported = level;
         self.seq = self.seq.wrapping_add(1);
         Some(self.seq)
+    }
+}
+
+/// How a chip encodes `GPIO_FUNCn_IN_SEL_CFG_REG`: the pad number field and
+/// the `SEL` bit that routes the signal through the matrix (clear: the
+/// signal takes its IO_MUX pad, which these models do not follow).
+///
+/// | part | pad field | `SEL` | source |
+/// |---|---|---|---|
+/// | ESP32-C3 | [4:0] | bit 6 | esp32c3 PAC `gpio::func_in_sel_cfg` |
+/// | ESP32-C6 | [5:0] | bit 7 | esp32c6 PAC `gpio::func_in_sel_cfg` |
+/// | ESP32-S3 | [5:0] | bit 7 | esp32s3 PAC `gpio::func_in_sel_cfg` |
+/// | ESP32 (classic) | [5:0] | bit 7 (`SIG_IN_SEL`) | esp-idf `soc/esp32/include/soc/gpio_reg.h` |
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct InSelLayout {
+    pub(crate) pad_mask: u32,
+    pub(crate) sel_bit: u32,
+}
+
+impl InSelLayout {
+    /// The pad a `FUNCn_IN_SEL_CFG` word routes its signal from, if the
+    /// matrix routes it at all.
+    #[inline]
+    pub(crate) fn pad(self, word: u32) -> Option<u8> {
+        (word & self.sel_bit != 0).then_some((word & self.pad_mask) as u8)
+    }
+}
+
+/// One peripheral INPUT signal of the GPIO matrix, bound to the line of the
+/// peripheral wire it feeds (an SPI slave's SCK, a master's MISO, an I²C
+/// controller's SCL/SDA, which read the wire they also drive).
+#[derive(Debug, Clone)]
+struct InputRoute {
+    signal: u32,
+    cell: Arc<PadLines>,
+    line: usize,
+}
+
+/// The input half of the ESP32-family GPIO matrix for peripheral wires.
+///
+/// The output half is [`crate::peripherals::pad_routing::PadRoutes`]: a pad
+/// selects the signal that drives it (`FUNCn_OUT_SEL_CFG`, pad-indexed). The
+/// input matrix is the other way round: each peripheral input signal selects
+/// the pad it reads (`FUNCn_IN_SEL_CFG`, signal-indexed), so one pad can feed
+/// several inputs and an input follows firmware's re-routing at once.
+///
+/// What a level presented to a pad from outside (a world `gpio_net`) does:
+/// every signal whose `IN_SEL` names that pad gets it on its line
+/// ([`PadLines::set_input`]), and a [`WireInputEdge`] is queued for the bus to
+/// hand to the peripheral owning the line
+/// ([`crate::Peripheral::wire_input_edge`]). Shared by every ESP GPIO model
+/// with a matrix; the signal numbers and the `IN_SEL` encoding are the chip's.
+#[derive(Debug, Default)]
+pub(crate) struct MatrixInputs {
+    routes: Vec<InputRoute>,
+}
+
+impl MatrixInputs {
+    /// Bind input `signal` to `line` of `cell`.
+    pub(crate) fn bind(&mut self, signal: u32, cell: &Arc<PadLines>, line: usize) {
+        if self
+            .routes
+            .iter()
+            .any(|r| r.signal == signal && Arc::ptr_eq(&r.cell, cell) && r.line == line)
+        {
+            return;
+        }
+        self.routes.push(InputRoute {
+            signal,
+            cell: cell.clone(),
+            line,
+        });
+    }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        self.routes.is_empty()
+    }
+
+    /// The level `level` reached pad `pin` from outside: hand it to every
+    /// bound input whose `IN_SEL` names the pad.
+    pub(crate) fn deliver(
+        &self,
+        pin: u8,
+        level: bool,
+        in_sel: impl Fn(u32) -> u32,
+        layout: InSelLayout,
+        out: &mut Vec<WireInputEdge>,
+    ) {
+        for r in &self.routes {
+            if layout.pad(in_sel(r.signal)) == Some(pin) && r.cell.set_input(r.line, level) {
+                out.push(WireInputEdge {
+                    cell: r.cell.clone(),
+                    line: r.line,
+                    level,
+                });
+            }
+        }
+    }
+
+    /// After a routing write: every bound input takes the level the outside
+    /// holds on the pad it now selects (`external(pin)`), if any.
+    pub(crate) fn sync(
+        &self,
+        in_sel: impl Fn(u32) -> u32,
+        layout: InSelLayout,
+        external: impl Fn(u8) -> Option<bool>,
+        out: &mut Vec<WireInputEdge>,
+    ) {
+        for r in &self.routes {
+            let Some(pin) = layout.pad(in_sel(r.signal)) else {
+                continue;
+            };
+            if let Some(level) = external(pin) {
+                if r.cell.set_input(r.line, level) {
+                    out.push(WireInputEdge {
+                        cell: r.cell.clone(),
+                        line: r.line,
+                        level,
+                    });
+                }
+            }
+        }
+    }
+
+    /// Mark every bound input that reads a pad on a world `gpio_net` as a
+    /// net line ([`PadLines::mark_on_net`]).
+    pub(crate) fn mark_on_net(
+        &self,
+        in_sel: impl Fn(u32) -> u32,
+        layout: InSelLayout,
+        on_net: impl Fn(u8) -> bool,
+    ) {
+        for r in &self.routes {
+            if layout.pad(in_sel(r.signal)).is_some_and(&on_net) && !r.cell.on_net(r.line) {
+                r.cell.mark_on_net(r.line);
+            }
+        }
     }
 }
 

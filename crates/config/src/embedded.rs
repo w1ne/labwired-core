@@ -100,6 +100,10 @@ pub static EMBEDDED_DEVICES: &[(&[&str], &str)] = &[
         include_str!("../../../configs/devices/hc_sr04.yaml"),
     ),
     (
+        &["dfplayer-mini", "dfplayer_mini"],
+        include_str!("../../../configs/devices/dfplayer_mini.yaml"),
+    ),
+    (
         &["sht31"],
         include_str!("../../../configs/devices/sht31.yaml"),
     ),
@@ -290,6 +294,10 @@ pub static EMBEDDED_DEVICES: &[(&[&str], &str)] = &[
     (
         &["ntc-thermistor"],
         include_str!("../../../configs/devices/ntc_thermistor.yaml"),
+    ),
+    (
+        &["tmp36"],
+        include_str!("../../../configs/devices/tmp36.yaml"),
     ),
     (&["mq-6"], include_str!("../../../configs/devices/mq6.yaml")),
     (

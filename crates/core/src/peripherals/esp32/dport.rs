@@ -327,10 +327,19 @@ impl Dport {
         }
         let map = self.read_word(map_base + source * 4);
         if map == 0 {
-            None
-        } else {
-            Some((map & 0x1F) as u8)
+            return None;
         }
+        let slot = (map & 0x1F) as u8;
+        // TRM §2.3.2 (Table 8): CPU interrupts 6, 15 and 16 are the internal
+        // CCOMPARE0..2 timers and are not wired to the matrix. ESP-IDF's `intr_matrix_clear()` parks every unused
+        // source on 6 (`ETS_INVALID_INUM`) precisely because routing there
+        // is a no-op on silicon. Delivering it raised timer-0 on both cores
+        // whenever any parked source (e.g. GPIO) was asserted, so the
+        // FreeRTOS tick ran ~20x fast and `delay(1)` loops starved.
+        if matches!(slot, 6 | 15 | 16) {
+            return None;
+        }
+        Some(slot)
     }
 
     /// Route a set of asserting peripheral source IDs into per-core CPU IRQ
@@ -446,6 +455,40 @@ impl Peripheral for Dport {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sources_parked_on_an_internal_cpu_interrupt_are_not_delivered() {
+        let mut p = Dport::new();
+        let gpio_source = 22u32;
+        // intr_matrix_clear(): park the source on ETS_INVALID_INUM (6).
+        write_u32_at(
+            &mut p,
+            (DPORT_PRO_MAC_INTR_MAP_REG_OFFSET + gpio_source * 4) as u64,
+            6,
+        );
+        write_u32_at(
+            &mut p,
+            (DPORT_APP_MAC_INTR_MAP_REG_OFFSET + gpio_source * 4) as u64,
+            6,
+        );
+        assert_eq!(p.map_source_slot(0, gpio_source), None);
+        assert_eq!(p.route_sources(&[gpio_source]), [0, 0]);
+        for internal in [15u32, 16] {
+            write_u32_at(
+                &mut p,
+                (DPORT_PRO_MAC_INTR_MAP_REG_OFFSET + gpio_source * 4) as u64,
+                internal,
+            );
+            assert_eq!(p.map_source_slot(0, gpio_source), None, "slot {internal}");
+        }
+        // A real peripheral slot still routes.
+        write_u32_at(
+            &mut p,
+            (DPORT_PRO_MAC_INTR_MAP_REG_OFFSET + gpio_source * 4) as u64,
+            13,
+        );
+        assert_eq!(p.route_sources(&[gpio_source]), [1 << 13, 0]);
+    }
 
     fn read_u32_at(p: &Dport, offset: u64) -> u32 {
         let mut v = 0u32;

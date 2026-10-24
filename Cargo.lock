@@ -1130,6 +1130,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-arduino-nano-33-ble-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-arduino-zero-demo"
 version = "0.1.0"
 dependencies = [
@@ -1211,6 +1219,14 @@ version = "0.1.0"
 name = "firmware-f103-i2c-demo"
 version = "0.25.0"
 dependencies = [
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-f4-discovery-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
  "panic-halt",
 ]
 
@@ -1318,6 +1334,14 @@ name = "firmware-l476-demo"
 version = "0.25.0"
 dependencies = [
  "panic-halt",
+]
+
+[[package]]
+name = "firmware-litex-vexriscv-smoke"
+version = "0.1.0"
+dependencies = [
+ "panic-halt",
+ "riscv-rt",
 ]
 
 [[package]]
@@ -1692,6 +1716,14 @@ version = "0.25.0"
 dependencies = [
  "cortex-m",
  "panic-halt",
+]
+
+[[package]]
+name = "firmware-vegaboard-ri5cy-smoke"
+version = "0.1.0"
+dependencies = [
+ "panic-halt",
+ "riscv-rt",
 ]
 
 [[package]]
@@ -2216,6 +2248,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
+name = "jpeg-decoder"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "00810f1d8b74be64b13dbf3db89ac67740615d6c891f0e7b6179326533011a07"
+
+[[package]]
 name = "js-sys"
 version = "0.3.98"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2314,11 +2352,13 @@ dependencies = [
  "bitflags 2.11.1",
  "cc",
  "goblin",
+ "jpeg-decoder",
  "labwired-arm-system",
  "labwired-config",
  "labwired-hw-trace",
  "labwired-ir",
  "labwired-loader",
+ "libc",
  "libm",
  "memmap2 0.9.10",
  "nrf-softdevice-hle",

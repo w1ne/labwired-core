@@ -29,6 +29,21 @@ impl SystemBus {
         self.attach_i2c_slave_with_route(controller, dev, None)
     }
 
+    /// Bind a DVP camera sensor to the chip's camera interface — the first
+    /// peripheral whose [`Peripheral::attach_dvp_sensor`] takes it. Returns
+    /// `false` on a chip with no camera interface; the caller decides whether
+    /// that is an error (a camera kit keeps its SCCB side working either way).
+    ///
+    /// [`Peripheral::attach_dvp_sensor`]: crate::Peripheral::attach_dvp_sensor
+    pub fn attach_dvp_sensor(
+        &mut self,
+        sensor: std::sync::Arc<dyn crate::peripherals::components::DvpSensor>,
+    ) -> bool {
+        self.peripherals
+            .iter_mut()
+            .any(|p| p.dev.attach_dvp_sensor(sensor.clone()))
+    }
+
     /// The single funnel through which every manifest-backed I²C slave reaches
     /// a controller. `route` is a target-neutral signal map (`sda`/`scl` for
     /// I²C); ESP32-C3 lowers it to real GPIO-matrix pads and rejects missing,
@@ -46,6 +61,10 @@ impl SystemBus {
         let idx = self
             .find_peripheral_index_by_name(controller)
             .ok_or_else(|| anyhow::anyhow!("attach_i2c_slave: no peripheral '{controller}'"))?;
+        if let Some(host) = self.peripherals[idx].dev.i2c_slave_host() {
+            host.attach_slave(wrapped);
+            return Ok(());
+        }
         let any = self.peripherals[idx].dev.as_any_mut().ok_or_else(|| {
             anyhow::anyhow!("attach_i2c_slave: '{controller}' is not downcastable")
         })?;
@@ -62,8 +81,6 @@ impl SystemBus {
             let route =
                 crate::peripherals::esp32c3::i2c::C3I2cPadRoute::from_manifest_route(route)?;
             c.push_slave_with_route(wrapped, route);
-        } else if let Some(c) = any.downcast_mut::<crate::peripherals::esp32s3::i2c::Esp32s3I2c>() {
-            c.push_slave(wrapped);
         } else if let Some(c) = any.downcast_mut::<crate::peripherals::esp32::i2c::Esp32I2c>() {
             c.push_slave(wrapped);
         } else if let Some(c) = any.downcast_mut::<crate::peripherals::nrf52::twim::Nrf52Twim>() {
@@ -148,14 +165,33 @@ impl SystemBus {
     /// only caller: `configure_xtensa_esp32` registers the classic peripheral
     /// bank in Rust and bypasses the chip YAML's peripheral list, so the classic
     /// call site lives there too. Both are no-ops unless both models are present.
+    ///
+    /// I2C0 (`i2c0`, signals 29/30) and I2C1 (`i2c1` at 0x3FF6_7000, signals
+    /// 95/96) are resolved by NAME: both are the same model, and
+    /// `configure_xtensa_esp32` registers `i2c1` from the table BEFORE it
+    /// builds `i2c0`, so "the first one found" would bind I2C1's wire to
+    /// I2C0's signals. A hand-built bus with one unnamed controller still
+    /// wires it as I2C0.
     pub(crate) fn wire_esp32_i2c_pads(&mut self) {
-        use crate::peripherals::esp32::gpio::Esp32Gpio;
+        use crate::peripherals::esp32::gpio::{Esp32Gpio, I2C0_SIGNALS, I2C1_SIGNALS};
         use crate::peripherals::esp32::i2c::Esp32I2c;
 
-        let i2c_idx = self
-            .peripherals
-            .iter()
-            .position(|p| p.dev.as_any().map(|a| a.is::<Esp32I2c>()).unwrap_or(false));
+        let is_i2c = |p: &crate::bus::PeripheralEntry| {
+            p.dev.as_any().map(|a| a.is::<Esp32I2c>()).unwrap_or(false)
+        };
+        let mut controllers: Vec<_> = [("i2c0", I2C0_SIGNALS), ("i2c1", I2C1_SIGNALS)]
+            .into_iter()
+            .filter_map(|(name, signals)| {
+                self.find_peripheral_index_by_name(name)
+                    .filter(|&i| is_i2c(&self.peripherals[i]))
+                    .map(|i| (i, signals))
+            })
+            .collect();
+        if controllers.is_empty() {
+            if let Some(i) = self.peripherals.iter().position(is_i2c) {
+                controllers.push((i, I2C0_SIGNALS));
+            }
+        }
         let gpio_idx = self
             .peripherals
             .iter()
@@ -163,92 +199,95 @@ impl SystemBus {
         // Resolve BOTH before touching either: `pad_lines_arc` CREATES the wire
         // cell, and a controller owning a cell no GPIO port reaches would
         // narrate every transaction into something nothing reads.
-        let (Some(i2c_idx), Some(gpio_idx)) = (i2c_idx, gpio_idx) else {
+        let Some(gpio_idx) = gpio_idx else {
             return;
         };
-        let Some(lines) = self.peripherals[i2c_idx]
-            .dev
-            .as_any_mut()
-            .and_then(|a| a.downcast_mut::<Esp32I2c>())
-            .map(Esp32I2c::pad_lines_arc)
-        else {
-            return;
-        };
-        if let Some(gpio) = self.peripherals[gpio_idx]
-            .dev
-            .as_any_mut()
-            .and_then(|a| a.downcast_mut::<Esp32Gpio>())
-        {
-            gpio.set_i2c_lines(lines);
+        for (i2c_idx, signals) in controllers {
+            let Some(lines) = self.peripherals[i2c_idx]
+                .dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<Esp32I2c>())
+                .map(Esp32I2c::pad_lines_arc)
+            else {
+                continue;
+            };
+            if let Some(gpio) = self.peripherals[gpio_idx]
+                .dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<Esp32Gpio>())
+            {
+                gpio.bind_i2c_lines(&lines, signals);
+            }
         }
     }
 
-    /// Bind the classic-ESP32 **VSPI** master's SCK/MOSI/CS wire to the pads its
-    /// output matrix can route them to, so a probe on GPIO18 shows the shifted
-    /// bytes rather than the GPIO output latch.
+    /// Bind the classic-ESP32 **VSPI** (`spi3`) and **HSPI** (`spi2`) wires to
+    /// the pads their output matrix can route them to, so a probe on GPIO18
+    /// shows the shifted bytes rather than the GPIO output latch, and a pad on
+    /// a world `gpio_net` carries the controller's lines both ways.
     ///
-    /// # Why VSPI, and only VSPI
+    /// # Why VSPI and HSPI, and not SPI0/SPI1
     ///
     /// Classic ESP32 has FOUR SPI controllers and three matrix signal groups
     /// (ESP32 datasheet v5.3 §4.8.2 p36 and Appendix A p61): SPI0/SPI1 drive the
     /// `SPI*` group and are the flash path, SPI2 drives `HSPI*`, SPI3 drives
     /// `VSPI*`. Arduino's `SPI` object is VSPI on this part
-    /// (`libraries/SPI/src/SPI.cpp` :348 `SPIClass SPI(VSPI);`), which is what
-    /// every classic lab in this repo actually drives, and `spi3`
-    /// (`0x3FF6_5000`) is the instance this engine registers for it.
+    /// (`libraries/SPI/src/SPI.cpp` :348 `SPIClass SPI(VSPI);`), and `spi3`
+    /// (`0x3FF6_5000`) is the instance this engine registers for it; `spi2`
+    /// (`0x3FF6_4000`) is HSPI. SPI0/1 carry flash traffic on the bonded flash
+    /// pins, which no board routes to a probe, and stay on the latch fallback.
     ///
-    /// The other instances are left on the latch fallback deliberately. SPI0/1
-    /// carry flash traffic on the bonded flash pins, which no board routes to a
-    /// probe, and binding them here would need the `SPI*` group's indices
-    /// (`SPICLK_OUT_IDX` = 0, …), not VSPI's — the same wire on three different
-    /// index sets. SPI2/HSPI is not registered on this bus at all. Both join
-    /// when something drives them, not before.
+    /// Resolution is by NAME, and only by name. Several `Esp32Spi` instances
+    /// sit on a classic bus and they are indistinguishable by type, so "the
+    /// first one found" would bind VSPI's signals onto whichever flash
+    /// controller happened to be registered first. Both production builders
+    /// spell the instances `spi2`/`spi3` (`ESP32_PERIPHERALS`); anything else is
+    /// a no-op, deliberately.
     ///
-    /// Resolution is by NAME, and only by name. Three `Esp32Spi` instances sit
-    /// on a classic bus and they are indistinguishable by type, so "the first
-    /// one found" would bind VSPI's signals onto whichever flash controller
-    /// happened to be registered first — a wire published under a signal that
-    /// controller never drives. Both production builders spell the VSPI
-    /// instance `spi3` (`ESP32_PERIPHERALS` and `configs/chips/esp32.yaml`);
-    /// anything else is a no-op, deliberately.
-    ///
-    /// MISO (`VSPIQ`) is unbound; see [`crate::peripherals::esp_gpspi_wire`].
+    /// Each cell carries MISO as well (`VSPIQ` / `HSPIQ`, an input line until a
+    /// slave on a net drives it); see [`crate::peripherals::esp_gpspi_net`].
     pub(crate) fn wire_esp32_spi_pads(&mut self) {
-        use crate::peripherals::esp32::gpio::Esp32Gpio;
+        use crate::peripherals::esp32::gpio::{Esp32Gpio, HSPI_SIGNALS, VSPI_SIGNALS};
         use crate::peripherals::esp32::spi::Esp32Spi;
 
         let gpio_idx = self
             .peripherals
             .iter()
             .position(|p| p.dev.as_any().map(|a| a.is::<Esp32Gpio>()).unwrap_or(false));
-        let spi_idx = self.find_peripheral_index_by_name("spi3").filter(|&i| {
-            self.peripherals[i]
+        let Some(gpio_idx) = gpio_idx else {
+            return;
+        };
+        // VSPI is `spi3`; HSPI is `spi2` where the bus carries it.
+        for (name, signals) in [("spi3", VSPI_SIGNALS), ("spi2", HSPI_SIGNALS)] {
+            let spi_idx = self.find_peripheral_index_by_name(name).filter(|&i| {
+                self.peripherals[i]
+                    .dev
+                    .as_any()
+                    .map(|a| a.is::<Esp32Spi>())
+                    .unwrap_or(false)
+            });
+            // ⚠️ Resolve BOTH before touching either: `pad_lines_arc` CREATES
+            // the wire cell, and a controller that owns a cell no route
+            // reaches still buffers every launched transaction, arms a wakeup
+            // per burst, and narrates into a wire nothing reads.
+            let Some(spi_idx) = spi_idx else {
+                continue;
+            };
+            let Some(lines) = self.peripherals[spi_idx]
                 .dev
-                .as_any()
-                .map(|a| a.is::<Esp32Spi>())
-                .unwrap_or(false)
-        });
-        // ⚠️ Resolve BOTH before touching either: `pad_lines_arc` CREATES the
-        // wire cell, and a controller that owns a cell no route reaches still
-        // buffers every launched transaction, arms a wakeup per burst, and
-        // narrates into a wire nothing reads.
-        let (Some(spi_idx), Some(gpio_idx)) = (spi_idx, gpio_idx) else {
-            return;
-        };
-        let Some(lines) = self.peripherals[spi_idx]
-            .dev
-            .as_any_mut()
-            .and_then(|a| a.downcast_mut::<Esp32Spi>())
-            .map(Esp32Spi::pad_lines_arc)
-        else {
-            return;
-        };
-        if let Some(gpio) = self.peripherals[gpio_idx]
-            .dev
-            .as_any_mut()
-            .and_then(|a| a.downcast_mut::<Esp32Gpio>())
-        {
-            gpio.bind_spi_lines(&lines);
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<Esp32Spi>())
+                .map(Esp32Spi::pad_lines_arc)
+            else {
+                continue;
+            };
+            if let Some(gpio) = self.peripherals[gpio_idx]
+                .dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<Esp32Gpio>())
+            {
+                gpio.bind_spi_lines(&lines, signals);
+            }
         }
     }
 
@@ -303,6 +342,52 @@ impl SystemBus {
             {
                 gpio.bind_uart_tx_lines(instance, &lines);
             }
+        }
+    }
+
+    /// Bind the classic-ESP32 LEDC controller's 16 channel outputs to the pads
+    /// the GPIO output matrix can route them to (signals 71..86,
+    /// `LEDC_HS_SIG_OUT0_IDX`..`LEDC_LS_SIG_OUT7_IDX`), so a pad attached with
+    /// `ledcAttachPin` carries the PWM waveform for `read_gpio_pad`, the logic
+    /// analyzer and `--watch-gpio` instead of the idle GPIO latch. No-op
+    /// unless both models are on the bus.
+    pub(crate) fn wire_esp32_ledc_pads(&mut self) {
+        use crate::peripherals::esp32::gpio::Esp32Gpio;
+        use crate::peripherals::esp32::ledc::Ledc;
+
+        // By NAME, as `wire_esp32_spi_pads` resolves `spi3`: both classic
+        // builders register these two as `gpio` and `ledc`
+        // (`ESP32_PERIPHERALS`, `configs/chips/esp32.yaml`).
+        let (Some(ledc_idx), Some(gpio_idx)) = (
+            self.find_peripheral_index_by_name("ledc"),
+            self.find_peripheral_index_by_name("gpio"),
+        ) else {
+            return;
+        };
+        // Resolve BOTH types before touching either: `pad_lines_arc` CREATES
+        // the wire cell, and a controller owning a cell no route reaches
+        // publishes edges nothing reads.
+        let gpio_is_classic = self.peripherals[gpio_idx]
+            .dev
+            .as_any_mut()
+            .is_some_and(|a| a.is::<Esp32Gpio>());
+        if !gpio_is_classic {
+            return;
+        }
+        let Some(lines) = self.peripherals[ledc_idx]
+            .dev
+            .as_any_mut()
+            .and_then(|a| a.downcast_mut::<Ledc>())
+            .map(Ledc::pad_lines_arc)
+        else {
+            return;
+        };
+        if let Some(gpio) = self.peripherals[gpio_idx]
+            .dev
+            .as_any_mut()
+            .and_then(|a| a.downcast_mut::<Esp32Gpio>())
+        {
+            gpio.bind_ledc_lines(&lines);
         }
     }
 
@@ -616,38 +701,120 @@ impl SystemBus {
     /// this direction is one-way, because the S3 I²C model resolves its slaves
     /// by address rather than by physical pad route.
     pub(crate) fn wire_esp32s3_i2c_pads(&mut self) {
-        use crate::peripherals::esp32s3::gpio::Esp32s3Gpio;
+        use crate::peripherals::esp32s3::gpio::{Esp32s3Gpio, I2C0_SIGNALS, I2C1_SIGNALS};
         use crate::peripherals::esp32s3::i2c::Esp32s3I2c;
 
-        let i2c_idx = self.peripherals.iter().position(|p| {
+        let is_i2c = |p: &crate::bus::PeripheralEntry| {
             p.dev
                 .as_any()
                 .map(|a| a.is::<Esp32s3I2c>())
                 .unwrap_or(false)
-        });
+        };
+        // By name: I2C0 (signals 89/90) and I2C1 (91/92) are the same model,
+        // and the programmatic builder registers i2c1 BEFORE i2c0, so "the
+        // first one found" bound I2C1's wire to I2C0's signals. A hand-built
+        // bus with one unnamed controller still wires it as I2C0.
+        let mut controllers: Vec<_> = [("i2c0", I2C0_SIGNALS), ("i2c1", I2C1_SIGNALS)]
+            .into_iter()
+            .filter_map(|(name, signals)| {
+                self.find_peripheral_index_by_name(name)
+                    .filter(|&i| is_i2c(&self.peripherals[i]))
+                    .map(|i| (i, signals))
+            })
+            .collect();
+        if controllers.is_empty() {
+            if let Some(i) = self.peripherals.iter().position(is_i2c) {
+                controllers.push((i, I2C0_SIGNALS));
+            }
+        }
         let gpio_idx = self.peripherals.iter().position(|p| {
             p.dev
                 .as_any()
                 .map(|a| a.is::<Esp32s3Gpio>())
                 .unwrap_or(false)
         });
-        let (Some(i2c_idx), Some(gpio_idx)) = (i2c_idx, gpio_idx) else {
+        let (false, Some(gpio_idx)) = (controllers.is_empty(), gpio_idx) else {
             return;
         };
-        let lines = self.peripherals[i2c_idx]
+        let lines: Vec<_> = controllers
+            .into_iter()
+            .filter_map(|(i2c_idx, signals)| {
+                self.peripherals[i2c_idx]
+                    .dev
+                    .as_any_mut()
+                    .and_then(|a| a.downcast_mut::<Esp32s3I2c>())
+                    .map(|c| (c.pad_lines_arc(), signals))
+            })
+            .collect();
+        let matrix = self.peripherals[gpio_idx]
             .dev
             .as_any_mut()
-            .and_then(|a| a.downcast_mut::<Esp32s3I2c>())
-            .map(|c| c.pad_lines_arc());
-        if let (Some(lines), Some(gpio)) = (
-            lines,
-            self.peripherals[gpio_idx]
-                .dev
-                .as_any_mut()
-                .and_then(|a| a.downcast_mut::<Esp32s3Gpio>()),
-        ) {
-            gpio.set_i2c_lines(lines);
+            .and_then(|a| a.downcast_mut::<Esp32s3Gpio>())
+            .map(|gpio| {
+                for (lines, signals) in &lines {
+                    gpio.bind_i2c_lines(lines, *signals);
+                }
+                gpio.out_sel_view()
+            });
+        // Every I²C controller on the bus learns the live output matrix, so a
+        // slave can be reached through whichever one the firmware routes to
+        // its pads (`attach_i2c_matrix_twins`). Controllers with fixed pins
+        // ignore it.
+        if let Some(matrix) = matrix {
+            let matrix: std::sync::Arc<dyn crate::peripherals::i2c_matrix::PadOutMatrix> = matrix;
+            for p in self.peripherals.iter_mut() {
+                if let Some(host) = p.dev.i2c_slave_host() {
+                    host.set_pad_matrix(matrix.clone());
+                }
+            }
         }
+    }
+
+    /// Give a slave attached on `controller` twins on every OTHER controller
+    /// that reaches pads through the chip's GPIO output matrix. Each twin
+    /// claims its address only while that controller's SCL/SDA are routed to
+    /// the route's pads, so the slave answers whichever controller the
+    /// firmware wires to it — as it does on the board. `make` builds each twin
+    /// (a second handle on the same device state); `wrap` is the same bus-trace
+    /// choke the primary went through. Returns how many twins were attached:
+    /// 0 on a chip without a matrix, or for a route that names no `GPIOn` pads.
+    ///
+    /// See [`crate::peripherals::i2c_matrix`] for why this is per part.
+    pub fn attach_i2c_matrix_twins(
+        &mut self,
+        controller: &str,
+        route: &std::collections::BTreeMap<String, String>,
+        mut make: impl FnMut() -> Box<dyn crate::peripherals::i2c::I2cDevice>,
+    ) -> usize {
+        let Some((scl_pad, sda_pad)) = crate::peripherals::i2c_matrix::route_pads(route) else {
+            return 0;
+        };
+        let mut attached = 0;
+        for i in 0..self.peripherals.len() {
+            if self.peripherals[i].name == controller {
+                continue;
+            }
+            let name = self.peripherals[i].name.clone();
+            let Some(reach) = self.peripherals[i]
+                .dev
+                .i2c_slave_host()
+                .and_then(|h| h.matrix_reach())
+            else {
+                continue;
+            };
+            let twin = Box::new(crate::peripherals::i2c_matrix::MatrixRoutedI2c::new(
+                make(),
+                reach,
+                scl_pad,
+                sda_pad,
+            ));
+            let wrapped = bus_trace::wrap_i2c(&name, &self.bus_trace, twin);
+            if let Some(host) = self.peripherals[i].dev.i2c_slave_host() {
+                host.attach_slave(wrapped);
+                attached += 1;
+            }
+        }
+        attached
     }
 
     /// Bind the ESP32-C3 GP-SPI2 (FSPI) controller's SCK/MOSI/CS wire to the
@@ -758,12 +925,11 @@ impl SystemBus {
     /// signal at all — a borrowed constant would decode routed pads as plain and
     /// plain pads as routed, silently, in both directions.
     ///
-    /// Only SPI2 is bound. Both S3 GP-SPI instances are the same model type, so
-    /// the first one found is taken and SPI3 keeps the latch fallback; binding
-    /// both would need a per-instance signal set (`SPI3_CLK_OUT_IDX` and
-    /// friends) that no lab drives today.
+    /// SPI2 (`FSPI*`, 101..110) and SPI3 (`SPI3_*`, 66..71) are both bound,
+    /// each by NAME with its own signal set: the two GP-SPI instances are the
+    /// same model type, so the type cannot say which is which.
     pub(crate) fn wire_esp32s3_spi_pads(&mut self) {
-        use crate::peripherals::esp32s3::gpio::Esp32s3Gpio;
+        use crate::peripherals::esp32s3::gpio::{Esp32s3Gpio, SPI2_SIGNALS, SPI3_SIGNALS};
         use crate::peripherals::esp32s3::gpspi::Esp32s3Spi;
 
         let gpio_idx = self.peripherals.iter().position(|p| {
@@ -772,45 +938,47 @@ impl SystemBus {
                 .map(|a| a.is::<Esp32s3Gpio>())
                 .unwrap_or(false)
         });
-        // Prefer the instance the chip calls SPI2 (`spi2_s3` on the programmatic
-        // builder, `spi2` from a yaml); fall back to the first GP-SPI on the bus
-        // so a hand-built test bus with one controller still wires.
-        let spi_idx = ["spi2_s3", "spi2"]
-            .iter()
-            .find_map(|n| self.find_peripheral_index_by_name(n))
-            .filter(|&i| {
+        let is_spi = |i: usize| {
+            self.peripherals[i]
+                .dev
+                .as_any()
+                .map(|a| a.is::<Esp32s3Spi>())
+                .unwrap_or(false)
+        };
+        // The instance names: `spi2_s3` / `spi3_s3` on the programmatic
+        // builder, `spi2` / `spi3` from a yaml. With neither SPI2 name, the
+        // first GP-SPI on the bus is SPI2, so a hand-built test bus with one
+        // controller still wires.
+        let by_name = |names: [&str; 2]| {
+            names
+                .iter()
+                .find_map(|n| self.find_peripheral_index_by_name(n))
+                .filter(|&i| is_spi(i))
+        };
+        let spi2 = by_name(["spi2_s3", "spi2"])
+            .or_else(|| (0..self.peripherals.len()).find(|&i| is_spi(i)));
+        let spi3 = by_name(["spi3_s3", "spi3"]).filter(|&i| Some(i) != spi2);
+        // ⚠️ Resolve BOTH first — `pad_lines_arc` CREATES the wire cell.
+        let Some(gpio_idx) = gpio_idx else {
+            return;
+        };
+        for (spi_idx, signals) in [(spi2, SPI2_SIGNALS), (spi3, SPI3_SIGNALS)] {
+            let Some(lines) = spi_idx.and_then(|i| {
                 self.peripherals[i]
                     .dev
-                    .as_any()
-                    .map(|a| a.is::<Esp32s3Spi>())
-                    .unwrap_or(false)
-            })
-            .or_else(|| {
-                self.peripherals.iter().position(|p| {
-                    p.dev
-                        .as_any()
-                        .map(|a| a.is::<Esp32s3Spi>())
-                        .unwrap_or(false)
-                })
-            });
-        // ⚠️ Resolve BOTH first — `pad_lines_arc` CREATES the wire cell.
-        let (Some(spi_idx), Some(gpio_idx)) = (spi_idx, gpio_idx) else {
-            return;
-        };
-        let Some(lines) = self.peripherals[spi_idx]
-            .dev
-            .as_any_mut()
-            .and_then(|a| a.downcast_mut::<Esp32s3Spi>())
-            .map(Esp32s3Spi::pad_lines_arc)
-        else {
-            return;
-        };
-        if let Some(gpio) = self.peripherals[gpio_idx]
-            .dev
-            .as_any_mut()
-            .and_then(|a| a.downcast_mut::<Esp32s3Gpio>())
-        {
-            gpio.bind_spi_lines(&lines);
+                    .as_any_mut()
+                    .and_then(|a| a.downcast_mut::<Esp32s3Spi>())
+                    .map(Esp32s3Spi::pad_lines_arc)
+            }) else {
+                continue;
+            };
+            if let Some(gpio) = self.peripherals[gpio_idx]
+                .dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<Esp32s3Gpio>())
+            {
+                gpio.bind_spi_lines(&lines, signals);
+            }
         }
     }
 
@@ -953,6 +1121,7 @@ impl SystemBus {
         self.esp32c3_io_mux_idx.is_some()
             || self.rp2040_io_bank0_idx.is_some()
             || !self.pad_control_links.is_empty()
+            || !self.pad_claim_links.owners.is_empty()
     }
 
     /// Resolve every pin port's [`pad_control`](crate::pins::PinPort::pad_control)
@@ -1060,6 +1229,68 @@ impl SystemBus {
             if link.block == idx {
                 self.apply_pad_control(link);
             }
+        }
+    }
+
+    /// Hand the RTC_IO block's pad state to the GPIO port of the same part
+    /// and remember both indices for [`Self::begin_rtc_io_write`]. Called
+    /// from `rebuild_peripheral_ranges`, so the link follows the peripheral
+    /// list; with no RTC_IO block (every bus but the ESP32 / ESP32-S3 ones)
+    /// it stays `None`. Capability calls, no downcast: the block names its
+    /// pads ([`Peripheral::rtc_io_pads`](crate::Peripheral::rtc_io_pads)) and
+    /// the port takes them only if they are its part's.
+    pub(crate) fn rebuild_rtc_io_link(&mut self) {
+        self.rtc_io_link = None;
+        let Some((rtc, pads)) = self
+            .peripherals
+            .iter()
+            .enumerate()
+            .find_map(|(i, p)| p.dev.rtc_io_pads().map(|pads| (i, pads)))
+        else {
+            return;
+        };
+        let gpio = self
+            .peripherals
+            .iter_mut()
+            .position(|p| p.dev.attach_rtc_io_pads(pads.clone()));
+        if let Some(gpio) = gpio {
+            self.rtc_io_link = Some(super::RtcIoLink { rtc, gpio });
+        }
+    }
+
+    /// Bracket a write to the RTC_IO block: a `MUX_SEL`, `RTC_GPIO_OUT` /
+    /// `ENABLE`, `PAD_DRIVER`, pull or `HOLD` write moves the GPIO port's pads
+    /// without touching the GPIO block, so the port's push capture is
+    /// snapshotted first. One compare on every other write. Returns the GPIO
+    /// port's index for [`Self::finish_rtc_io_write`].
+    #[inline]
+    pub(crate) fn begin_rtc_io_write(&mut self, idx: usize) -> Option<usize> {
+        let link = self.rtc_io_link?;
+        if link.rtc != idx {
+            return None;
+        }
+        crate::pins::watch_begin(self.peripherals.get_mut(link.gpio)?.dev.pins_mut()?);
+        Some(link.gpio)
+    }
+
+    /// Complete a successful RTC_IO write started by
+    /// [`Self::begin_rtc_io_write`]: the port re-derives its routing
+    /// ([`Peripheral::rtc_io_written`](crate::Peripheral::rtc_io_written)),
+    /// reports what moved, and on a world net hands the net's levels to
+    /// lines a pad handed back to the matrix now carries.
+    pub(crate) fn finish_rtc_io_write(&mut self, gpio: Option<usize>) {
+        let Some(gpio) = gpio else {
+            return;
+        };
+        let Some(p) = self.peripherals.get_mut(gpio) else {
+            return;
+        };
+        p.dev.rtc_io_written();
+        if let Some(port) = p.dev.pins_mut() {
+            crate::pins::watch_end(port);
+        }
+        if self.wire_inputs_live {
+            self.deliver_wire_input_edges(gpio);
         }
     }
 
@@ -1172,6 +1403,71 @@ impl SystemBus {
         }
     }
 
+    /// Resolve the [`PadClaimLinks`](super::PadClaimLinks): every peripheral
+    /// that names its own pads and every pin port that follows those names.
+    /// Called when a world `gpio_net` joins a pad; empty without one.
+    pub(crate) fn rebuild_pad_claim_links(&mut self) {
+        let mut links = super::PadClaimLinks::default();
+        if self.wire_inputs_live {
+            for (i, p) in self.peripherals.iter().enumerate() {
+                if p.dev.claims_pads() {
+                    links.owners.push(i);
+                }
+                if p.dev.reads_pad_claims() {
+                    links.ports.push(i);
+                }
+            }
+            if links.ports.is_empty() {
+                links.owners.clear();
+            }
+        }
+        self.pad_claim_links = links;
+    }
+
+    /// Bracket a write to a peripheral that names its own pads (nRF
+    /// `PSEL`, `ENABLE`): snapshot every claim-reading port. `true` when
+    /// `idx` is such a peripheral, for [`Self::finish_pad_claim_write`].
+    pub(crate) fn begin_pad_claim_write(&mut self, idx: usize) -> bool {
+        if !self.pad_claim_links.owners.contains(&idx) {
+            return false;
+        }
+        for k in 0..self.pad_claim_links.ports.len() {
+            let port = self.pad_claim_links.ports[k];
+            if let Some(pins) = self
+                .peripherals
+                .get_mut(port)
+                .and_then(|p| p.dev.pins_mut())
+            {
+                crate::pins::watch_begin(pins);
+            }
+        }
+        true
+    }
+
+    /// Complete a write started by [`Self::begin_pad_claim_write`]: report
+    /// the pads whose drive moved, re-register line taps for the new routing
+    /// and hand the net's levels to lines that just gained a pad.
+    pub(crate) fn finish_pad_claim_write(&mut self, begun: bool) {
+        if !begun {
+            return;
+        }
+        for k in 0..self.pad_claim_links.ports.len() {
+            let port = self.pad_claim_links.ports[k];
+            if let Some(pins) = self
+                .peripherals
+                .get_mut(port)
+                .and_then(|p| p.dev.pins_mut())
+            {
+                crate::pins::watch_end(pins);
+                pins.routes_changed();
+            }
+        }
+        for k in 0..self.pad_claim_links.ports.len() {
+            let port = self.pad_claim_links.ports[k];
+            self.deliver_wire_input_edges(port);
+        }
+    }
+
     /// Wire the STM32 SPI bit engines' live SCK/MOSI/MISO levels into the
     /// STM32 GPIO ports, so pads whose MODER/AFR (V2) or CRL/CRH CNF (F1)
     /// route an SPI alternate function read the real waveform through
@@ -1182,7 +1478,10 @@ impl SystemBus {
     /// Signal mapping comes from static per-family AF tables sourced from the
     /// datasheet alternate-function maps:
     /// * L4 (FIFO SPI + V2 GPIO): STM32L476 datasheet DS10198 Table 17 —
-    ///   SPI1/SPI2 on AF5, SPI3 on AF6.
+    ///   SPI1/SPI2 on AF5, SPI3 on AF6, NSS included.
+    /// * G4, WB and L0: their own tables (`pad_map: stm32g4` / `stm32wb` /
+    ///   `stm32l0`), read off ST's open pin data, NSS included — each
+    ///   disagrees with the L4 or F4 table on some pad.
     /// * F4 (classic SPI + V2 GPIO): STM32F407 datasheet DS8626 Table 9 —
     ///   SPI1/SPI2 on AF5.
     /// * F1 (classic SPI + F1 GPIO): RM0008 §9.3 default pinout, no AFIO
@@ -1223,9 +1522,142 @@ impl SystemBus {
             ("spi3", 'c', 10, 6, Sck, "SPI3_SCK"),
             ("spi3", 'c', 11, 6, Miso, "SPI3_MISO"),
             ("spi3", 'c', 12, 6, Mosi, "SPI3_MOSI"),
+            // NSS (hardware slave select), read off ST's open pin data for the
+            // L47x (`GPIO-STM32L47x_gpio_v1_0_Modes.xml`, which agrees with
+            // every SCK/MISO/MOSI row above). PA4 and PA15 carry SPI1_NSS at
+            // AF5 and SPI3_NSS at AF6: the AF nibble picks the controller.
+            ("spi1", 'a', 4, 5, Nss, "SPI1_NSS"),
+            ("spi1", 'a', 15, 5, Nss, "SPI1_NSS"),
+            ("spi1", 'e', 12, 5, Nss, "SPI1_NSS"),
+            ("spi2", 'b', 9, 5, Nss, "SPI2_NSS"),
+            ("spi2", 'b', 12, 5, Nss, "SPI2_NSS"),
+            ("spi2", 'd', 0, 5, Nss, "SPI2_NSS"),
+            ("spi3", 'a', 4, 6, Nss, "SPI3_NSS"),
+            ("spi3", 'a', 15, 6, Nss, "SPI3_NSS"),
         ];
-        // V2 ports, F4 parts (DS8626 Table 9: SPI1-2).
+        // ── STM32G4 parts ───────────────────────────────────────────────────
+        //
+        // STM32G47x (ST open pin data `GPIO-STM32G47x_gpio_v1_0_Modes.xml`,
+        // the CubeMX source of DS12288's alternate-function table). Its own
+        // table, not the L4 one, because the two disagree: PE12-PE15 at AF5
+        // are SPI4 on a G4 but SPI1 NSS/SCK/MISO/MOSI on an L4, PB10/AF5 is
+        // SPI2_SCK on an L4 and not SPI on a G4, and the G4 puts SPI2 on
+        // PA10/PA11 and PF0/PF1/PF9/PF10. SPI4 is not modelled. Selected by
+        // the chip yaml's `pad_map: stm32g4`.
+        const G4: &[(&str, char, u8, u8, SpiSignal, &str)] = &[
+            ("spi1", 'a', 4, 5, Nss, "SPI1_NSS"),
+            ("spi1", 'a', 5, 5, Sck, "SPI1_SCK"),
+            ("spi1", 'a', 6, 5, Miso, "SPI1_MISO"),
+            ("spi1", 'a', 7, 5, Mosi, "SPI1_MOSI"),
+            ("spi1", 'a', 15, 5, Nss, "SPI1_NSS"),
+            ("spi1", 'b', 3, 5, Sck, "SPI1_SCK"),
+            ("spi1", 'b', 4, 5, Miso, "SPI1_MISO"),
+            ("spi1", 'b', 5, 5, Mosi, "SPI1_MOSI"),
+            ("spi1", 'g', 2, 5, Sck, "SPI1_SCK"),
+            ("spi1", 'g', 3, 5, Miso, "SPI1_MISO"),
+            ("spi1", 'g', 4, 5, Mosi, "SPI1_MOSI"),
+            ("spi1", 'g', 5, 5, Nss, "SPI1_NSS"),
+            ("spi2", 'a', 10, 5, Miso, "SPI2_MISO"),
+            ("spi2", 'a', 11, 5, Mosi, "SPI2_MOSI"),
+            ("spi2", 'b', 12, 5, Nss, "SPI2_NSS"),
+            ("spi2", 'b', 13, 5, Sck, "SPI2_SCK"),
+            ("spi2", 'b', 14, 5, Miso, "SPI2_MISO"),
+            ("spi2", 'b', 15, 5, Mosi, "SPI2_MOSI"),
+            ("spi2", 'd', 15, 6, Nss, "SPI2_NSS"),
+            ("spi2", 'f', 0, 5, Nss, "SPI2_NSS"),
+            ("spi2", 'f', 1, 5, Sck, "SPI2_SCK"),
+            ("spi2", 'f', 9, 5, Sck, "SPI2_SCK"),
+            ("spi2", 'f', 10, 5, Sck, "SPI2_SCK"),
+            ("spi3", 'a', 4, 6, Nss, "SPI3_NSS"),
+            ("spi3", 'a', 15, 6, Nss, "SPI3_NSS"),
+            ("spi3", 'b', 3, 6, Sck, "SPI3_SCK"),
+            ("spi3", 'b', 4, 6, Miso, "SPI3_MISO"),
+            ("spi3", 'b', 5, 6, Mosi, "SPI3_MOSI"),
+            ("spi3", 'c', 10, 6, Sck, "SPI3_SCK"),
+            ("spi3", 'c', 11, 6, Miso, "SPI3_MISO"),
+            ("spi3", 'c', 12, 6, Mosi, "SPI3_MOSI"),
+            ("spi3", 'g', 9, 6, Sck, "SPI3_SCK"),
+        ];
+        // ── STM32WB parts ───────────────────────────────────────────────────
+        //
+        // STM32WB55 (ST open pin data `GPIO-STM32WB55x_gpio_v1_0_Modes.xml`,
+        // DS11929's alternate-function table). SPI1 and SPI2 on AF5 except
+        // PC1/AF3 (SPI2_MOSI) and PD3/AF3 (SPI2_SCK, where AF5 is
+        // SPI2_MISO). The WB has no SPI3 and no PE12-PE15, which is why it
+        // does not share the L4 table. Selected by `pad_map: stm32wb`.
+        const WB: &[(&str, char, u8, u8, SpiSignal, &str)] = &[
+            ("spi1", 'a', 1, 5, Sck, "SPI1_SCK"),
+            ("spi1", 'a', 4, 5, Nss, "SPI1_NSS"),
+            ("spi1", 'a', 5, 5, Sck, "SPI1_SCK"),
+            ("spi1", 'a', 6, 5, Miso, "SPI1_MISO"),
+            ("spi1", 'a', 7, 5, Mosi, "SPI1_MOSI"),
+            ("spi1", 'a', 11, 5, Miso, "SPI1_MISO"),
+            ("spi1", 'a', 12, 5, Mosi, "SPI1_MOSI"),
+            ("spi1", 'a', 15, 5, Nss, "SPI1_NSS"),
+            ("spi1", 'b', 2, 5, Nss, "SPI1_NSS"),
+            ("spi1", 'b', 3, 5, Sck, "SPI1_SCK"),
+            ("spi1", 'b', 4, 5, Miso, "SPI1_MISO"),
+            ("spi1", 'b', 5, 5, Mosi, "SPI1_MOSI"),
+            ("spi2", 'a', 9, 5, Sck, "SPI2_SCK"),
+            ("spi2", 'b', 9, 5, Nss, "SPI2_NSS"),
+            ("spi2", 'b', 10, 5, Sck, "SPI2_SCK"),
+            ("spi2", 'b', 12, 5, Nss, "SPI2_NSS"),
+            ("spi2", 'b', 13, 5, Sck, "SPI2_SCK"),
+            ("spi2", 'b', 14, 5, Miso, "SPI2_MISO"),
+            ("spi2", 'b', 15, 5, Mosi, "SPI2_MOSI"),
+            ("spi2", 'c', 1, 3, Mosi, "SPI2_MOSI"),
+            ("spi2", 'c', 2, 5, Miso, "SPI2_MISO"),
+            ("spi2", 'c', 3, 5, Mosi, "SPI2_MOSI"),
+            ("spi2", 'd', 0, 5, Nss, "SPI2_NSS"),
+            ("spi2", 'd', 1, 5, Sck, "SPI2_SCK"),
+            ("spi2", 'd', 3, 3, Sck, "SPI2_SCK"),
+            ("spi2", 'd', 3, 5, Miso, "SPI2_MISO"),
+            ("spi2", 'd', 4, 5, Mosi, "SPI2_MOSI"),
+        ];
+        // ── STM32L0 parts ───────────────────────────────────────────────────
+        //
+        // STM32L07x (ST open pin data `GPIO-STM32L071_gpio_v1_0_Modes.xml`,
+        // DS10685's alternate-function table). A classic-layout SPI on V2
+        // ports, so before this table the L073 fell through to the F4 one —
+        // AF5 rows on a part whose SPI1 sits on AF0. Selected by
+        // `pad_map: stm32l0`.
+        const L0: &[(&str, char, u8, u8, SpiSignal, &str)] = &[
+            ("spi1", 'a', 4, 0, Nss, "SPI1_NSS"),
+            ("spi1", 'a', 5, 0, Sck, "SPI1_SCK"),
+            ("spi1", 'a', 6, 0, Miso, "SPI1_MISO"),
+            ("spi1", 'a', 7, 0, Mosi, "SPI1_MOSI"),
+            ("spi1", 'a', 11, 0, Miso, "SPI1_MISO"),
+            ("spi1", 'a', 12, 0, Mosi, "SPI1_MOSI"),
+            ("spi1", 'a', 15, 0, Nss, "SPI1_NSS"),
+            ("spi1", 'b', 3, 0, Sck, "SPI1_SCK"),
+            ("spi1", 'b', 4, 0, Miso, "SPI1_MISO"),
+            ("spi1", 'b', 5, 0, Mosi, "SPI1_MOSI"),
+            ("spi1", 'e', 12, 2, Nss, "SPI1_NSS"),
+            ("spi1", 'e', 13, 2, Sck, "SPI1_SCK"),
+            ("spi1", 'e', 14, 2, Miso, "SPI1_MISO"),
+            ("spi1", 'e', 15, 2, Mosi, "SPI1_MOSI"),
+            ("spi2", 'b', 9, 5, Nss, "SPI2_NSS"),
+            ("spi2", 'b', 10, 5, Sck, "SPI2_SCK"),
+            ("spi2", 'b', 12, 0, Nss, "SPI2_NSS"),
+            ("spi2", 'b', 13, 0, Sck, "SPI2_SCK"),
+            ("spi2", 'b', 14, 0, Miso, "SPI2_MISO"),
+            ("spi2", 'b', 15, 0, Mosi, "SPI2_MOSI"),
+            ("spi2", 'c', 2, 2, Miso, "SPI2_MISO"),
+            ("spi2", 'c', 3, 2, Mosi, "SPI2_MOSI"),
+            ("spi2", 'd', 0, 1, Nss, "SPI2_NSS"),
+            ("spi2", 'd', 1, 1, Sck, "SPI2_SCK"),
+            ("spi2", 'd', 3, 2, Miso, "SPI2_MISO"),
+            ("spi2", 'd', 4, 1, Mosi, "SPI2_MOSI"),
+        ];
+        // V2 ports, F4 parts (DS8626 Table 9: SPI1-2; the F401's DS9716
+        // Table 9 agrees on every row). NSS is routed as on the G0, so an F4
+        // pair on a world `gpio_net` can use the hardware slave select:
+        // SPI1_NSS on PA4/PA15, SPI2_NSS on PB9/PB12, all AF5.
         const F4: &[(&str, char, u8, u8, SpiSignal, &str)] = &[
+            ("spi1", 'a', 4, 5, Nss, "SPI1_NSS"),
+            ("spi1", 'a', 15, 5, Nss, "SPI1_NSS"),
+            ("spi2", 'b', 9, 5, Nss, "SPI2_NSS"),
+            ("spi2", 'b', 12, 5, Nss, "SPI2_NSS"),
             ("spi1", 'a', 5, 5, Sck, "SPI1_SCK"),
             ("spi1", 'a', 6, 5, Miso, "SPI1_MISO"),
             ("spi1", 'a', 7, 5, Mosi, "SPI1_MOSI"),
@@ -1313,11 +1745,13 @@ impl SystemBus {
         // SPI3_MOSI/AF6 row comes from the datasheet table).
         //
         // The NUCLEO-U575ZI-Q Arduino SPI header is SPI1 on PA4 (NSS) / PA5
-        // (SCK) / PA6 (MISO) / PA7 (MOSI), all AF5. PA4 is NOT routed: this
-        // mechanism carries SCK/MOSI/MISO only (`SpiSignal` has no Nss), the
-        // same honest gap every L4/F4/H5/WBA table has. The U575's AF map is a
-        // third pinout on the shared SPI-v3 register file, which is why it is
-        // a `SpiPadMap` variant and not a wider H5 table.
+        // (SCK) / PA6 (MISO) / PA7 (MOSI), all AF5. PA4 is NOT routed: the
+        // H5-class "SPI v3" model has no net slave to read an NSS pad (only
+        // the classic/FIFO engine does, which is why only the G0/F4/L4/G4/WB/
+        // L0 tables carry NSS rows) — the same gap the H5/WBA tables have.
+        // The U575's AF map is a third pinout on the shared SPI-v3 register
+        // file, which is why it is a `SpiPadMap` variant and not a wider H5
+        // table.
         //
         // ⚠️ SPI3 on this part is NOT uniformly AF6: PD6/AF5 is SPI3_MOSI
         // (AF6 on PD6 is MDF1_SDI1), and PB3/PB4 carry SPI1 SCK/MISO at AF5
@@ -1374,11 +1808,11 @@ impl SystemBus {
         // ── STM32G0 parts ───────────────────────────────────────────────────
         //
         // STM32G071 (DS12232, "Port A/Port B alternate function mapping"
-        // tables, AF0 column). The classic register file behind a V2 port
-        // would otherwise pick the F4 table, whose AF5 is not SPI on a G0.
-        // Selected by the chip yaml's `pad_map: stm32g0`. NSS is routed here
-        // (and only here) because a G0 pair on a world `gpio_net` uses it as
-        // the hardware slave select.
+        // tables, AF0 column). The FIFO register file behind a V2 port would
+        // otherwise pick the L4 table, whose AF5 is not SPI on a G0.
+        // Selected by the chip yaml's `pad_map: stm32g0`. NSS is routed (as
+        // in the F4 table) because a pair on a world `gpio_net` uses it as the
+        // hardware slave select.
         const G0: &[(&str, char, u8, u8, SpiSignal, &str)] = &[
             ("spi1", 'a', 4, 0, Nss, "SPI1_NSS"),
             ("spi1", 'a', 5, 0, Sck, "SPI1_SCK"),
@@ -1445,6 +1879,10 @@ impl SystemBus {
                             (true, SpiPadMap::Stm32U5) => U5,
                             (true, _) => H5,
                             (false, SpiPadMap::Stm32G0) => G0,
+                            (false, SpiPadMap::Stm32F4) => F4,
+                            (false, SpiPadMap::Stm32G4) => G4,
+                            (false, SpiPadMap::Stm32Wb) => WB,
+                            (false, SpiPadMap::Stm32L0) => L0,
                             (false, _) if fifo => L4,
                             (false, _) => F4,
                         };
@@ -2068,6 +2506,75 @@ impl SystemBus {
         self.timer_capture_wired = wired;
     }
 
+    /// Route each STM32F1 timer's channel OUTPUTS (OC1..OC4) onto the GPIO
+    /// pads that carry them, so a pad configured as an alternate-function
+    /// output reads — and the logic analyzer records — the PWM / output-compare
+    /// waveform the timer generates, instead of the idle output latch.
+    ///
+    /// F1 only: the pads are the fixed DEFAULT map (RM0008 Rev 21 §9.3.7
+    /// Tables 43-46, `AFIO_MAPR` remaps not decoded — the same honest gap the
+    /// SPI/I²C/USART/capture tables carry): TIM1 CH1-4 = PA8-PA11, TIM2 CH1-4
+    /// = PA0-PA3, TIM3 CH1-4 = PA6/PA7/PB0/PB1, TIM4 CH1-4 = PB6-PB9. A pad
+    /// carries a timer output only while it is an AF output (CRL/CRH `MODE !=
+    /// 0`, `CNF >= 0b10`, RM0008 §9.1.11 Table 20 "TIMx_CHx output compare:
+    /// alternate function push-pull").
+    ///
+    /// Several of these pads carry another peripheral's DEFAULT function too
+    /// (PA7 SPI1_MOSI, PA9 USART1_TX, PA2 USART2_TX, PB6/PB7 I2C1). DS5319 Rev
+    /// 20 Table 5 note 4 leaves that to firmware ("only one peripheral should
+    /// be enabled at a time"), so the timer routes are CONDITIONAL
+    /// ([`crate::Peripheral::bind_timer_output_pad`]): a channel whose output is
+    /// enabled owns the pad, and one that is not leaves it to the other
+    /// peripheral (or to nothing).
+    pub(crate) fn wire_stm32_timer_output_pads(&mut self) {
+        // (timer, port, pin, channel 0-based, func)
+        const F1: &[(&str, char, u8, usize, &str)] = &[
+            ("tim1", 'a', 8, 0, "TIM1_CH1"),
+            ("tim1", 'a', 9, 1, "TIM1_CH2"),
+            ("tim1", 'a', 10, 2, "TIM1_CH3"),
+            ("tim1", 'a', 11, 3, "TIM1_CH4"),
+            ("tim2", 'a', 0, 0, "TIM2_CH1"),
+            ("tim2", 'a', 1, 1, "TIM2_CH2"),
+            ("tim2", 'a', 2, 2, "TIM2_CH3"),
+            ("tim2", 'a', 3, 3, "TIM2_CH4"),
+            ("tim3", 'a', 6, 0, "TIM3_CH1"),
+            ("tim3", 'a', 7, 1, "TIM3_CH2"),
+            ("tim3", 'b', 0, 2, "TIM3_CH3"),
+            ("tim3", 'b', 1, 3, "TIM3_CH4"),
+            ("tim4", 'b', 6, 0, "TIM4_CH1"),
+            ("tim4", 'b', 7, 1, "TIM4_CH2"),
+            ("tim4", 'b', 8, 2, "TIM4_CH3"),
+            ("tim4", 'b', 9, 3, "TIM4_CH4"),
+        ];
+        use crate::peripherals::timer::TimerInputStage;
+        for &(tim, port, pin, ch, func) in F1 {
+            let Some(t_idx) = self
+                .find_peripheral_index_by_name(tim)
+                .or_else(|| self.find_peripheral_index_by_name(&format!("{tim}_pwm")))
+            else {
+                continue;
+            };
+            // Only an F1-generation timer (no CCxNP); the port refuses a row
+            // unless it is an F1 port itself.
+            if self.peripherals[t_idx].dev.timer_input_stage() != Some(TimerInputStage::F1) {
+                continue;
+            }
+            let Some(gpio_idx) = self.find_peripheral_index_by_name(&format!("gpio{port}")) else {
+                continue;
+            };
+            let Some(lines) = self.peripherals[t_idx].dev.timer_output_lines(false) else {
+                continue;
+            };
+            if self.peripherals[gpio_idx]
+                .dev
+                .bind_timer_output_pad(&lines, pin, ch, func)
+            {
+                // A pad can carry it: the timer starts generating its outputs.
+                self.peripherals[t_idx].dev.timer_output_lines(true);
+            }
+        }
+    }
+
     /// Bind every nRF52 bus controller's wire to every pad its `PSEL` can name,
     /// so a probe shows the bus instead of the GPIO output latch.
     ///
@@ -2124,11 +2631,18 @@ impl SystemBus {
     ///   waveform. It is also what keeps a part with an nRF52 peripheral MODEL
     ///   at a different address — the nRF5340's UARTE0 — out of the table.
     ///
-    /// TX / SCL / SDA / SCK / MOSI ONLY. `PSEL.RXD`, `PSEL.MISO`, `PSEL.CTS`,
-    /// `PSEL.RTS` and `PSEL.CSN` are tracked registers that nothing in this
-    /// engine DRIVES, so a pad routed to one would report a confident constant
-    /// idle level straight through real traffic — worse than the GPIO-latch
-    /// fallback it replaced, because it looks authoritative. Same call as
+    /// TX / SCL / SDA / SCK / MOSI, plus the SPIM's `PSEL.MISO` and the
+    /// SPIS/TWIS slave personalities of the shared serial-instance window.
+    /// `PSEL.MISO` is routed as an INPUT line (it drives nothing; a pad on it
+    /// reads the outside level, and on a world `gpio_net` the bit engine
+    /// samples it), and the slave lines are driven only by their bit engines
+    /// on a net. SPIM3's `PSEL.CSN` and `PSELDCX` are routed too: its net
+    /// engine drives them (`spi_nrf_net`). `PSEL.RXD`, `PSEL.CTS`, `PSEL.RTS`
+    /// and SPIM0-2's `PSEL.CSN` are tracked registers that nothing in this
+    /// engine DRIVES, so a pad
+    /// routed to one would report a confident constant idle level straight
+    /// through real traffic — worse than the GPIO-latch fallback it replaced,
+    /// because it looks authoritative. Same call as
     /// [`Self::wire_rp2040_uart_pads`].
     pub(crate) fn wire_nrf52_pads(&mut self) {
         use crate::peripherals::gpio::{GpioPort, GpioRegisterLayout};
@@ -2146,13 +2660,40 @@ impl SystemBus {
             (0x4000_4000, "TWIM1_SCL", "TWIM1_SDA"),
         ];
         /// SPIM instances by base address (PS v1.11 §6.25.6, p727). SPIM3
-        /// (0x4002_F000) is listed for completeness of the address decode; no
-        /// chip yaml in this checkout maps it.
-        const SPIM: &[(u64, &str, &str)] = &[
-            (0x4000_3000, "SPIM0_SCK", "SPIM0_MOSI"),
-            (0x4000_4000, "SPIM1_SCK", "SPIM1_MOSI"),
-            (0x4002_3000, "SPIM2_SCK", "SPIM2_MOSI"),
-            (0x4002_F000, "SPIM3_SCK", "SPIM3_MOSI"),
+        /// (0x4002_F000, the nRF52833/nRF52840 `spi3`) also drives its own
+        /// chip select and D/CX: [`SPIM_HW_SELECT`].
+        const SPIM: &[(u64, &str, &str, &str)] = &[
+            (0x4000_3000, "SPIM0_SCK", "SPIM0_MOSI", "SPIM0_MISO"),
+            (0x4000_4000, "SPIM1_SCK", "SPIM1_MOSI", "SPIM1_MISO"),
+            (0x4002_3000, "SPIM2_SCK", "SPIM2_MOSI", "SPIM2_MISO"),
+            (0x4002_F000, "SPIM3_SCK", "SPIM3_MOSI", "SPIM3_MISO"),
+        ];
+        /// SPIM instances with a hardware chip select (`PSEL.CSN`, `CSNPOL`,
+        /// `IFTIMING.CSNDUR`) and D/CX (`PSELDCX`, `DCXCNT`): SPIM3 only
+        /// (nRF52840 PS v1.x §6.25). Both lines are driven by the net engine
+        /// (`spi_nrf_net`), so on a world `gpio_net` they are real wires.
+        const SPIM_HW_SELECT: &[(u64, &str, &str)] = &[(0x4002_F000, "SPIM3_CSN", "SPIM3_DCX")];
+        /// SPIS instances by base address (PS v1.11 §6.26.7), signals in
+        /// SCK, MOSI, MISO, CSN order. Only the shared serial-instance window
+        /// carries this personality in the chip yamls.
+        const SPIS: &[(u64, [&str; 4])] = &[
+            (
+                0x4000_3000,
+                ["SPIS0_SCK", "SPIS0_MOSI", "SPIS0_MISO", "SPIS0_CSN"],
+            ),
+            (
+                0x4000_4000,
+                ["SPIS1_SCK", "SPIS1_MOSI", "SPIS1_MISO", "SPIS1_CSN"],
+            ),
+            (
+                0x4002_3000,
+                ["SPIS2_SCK", "SPIS2_MOSI", "SPIS2_MISO", "SPIS2_CSN"],
+            ),
+        ];
+        /// TWIS instances by base address (PS v1.11 §6.32.7).
+        const TWIS: &[(u64, &str, &str)] = &[
+            (0x4000_3000, "TWIS0_SCL", "TWIS0_SDA"),
+            (0x4000_4000, "TWIS1_SCL", "TWIS1_SDA"),
         ];
 
         /// PWM instances by base address, as the nRF52833/nRF52840 chip yamls map them.
@@ -2264,16 +2805,46 @@ impl SystemBus {
                         vec![(scl_token, LINE_SCL, scl), (sda_token, LINE_SDA, sda)],
                     ));
                 }
-                if let Some(&(_, sck, mosi)) = SPIM.iter().find(|&&(addr, ..)| addr == base) {
-                    let (sck_token, mosi_token) = (next_token, next_token + 1);
-                    next_token += 2;
+                if let Some(&(_, sck, mosi, miso)) = SPIM.iter().find(|&&(addr, ..)| addr == base) {
+                    let (sck_token, mosi_token, miso_token) =
+                        (next_token, next_token + 1, next_token + 2);
+                    next_token += 3;
                     let lines = mux.spim_pad_lines_arc();
-                    mux.install_spim_pin_claims(&claims, sck_token, mosi_token);
+                    mux.install_spim_pin_claims(&claims, sck_token, mosi_token, miso_token);
                     wired.push((
                         lines,
                         vec![
                             (sck_token, SpiSignal::Sck as usize, sck),
                             (mosi_token, SpiSignal::Mosi as usize, mosi),
+                            (miso_token, SpiSignal::Miso as usize, miso),
+                        ],
+                    ));
+                }
+                if let Some(&(_, funcs)) = SPIS.iter().find(|&&(addr, _)| addr == base) {
+                    let first = next_token;
+                    next_token += 4;
+                    let tokens = [first, first + 1, first + 2, first + 3];
+                    let lines = mux.spis_pad_lines_arc();
+                    mux.install_spis_pin_claims(&claims, tokens);
+                    wired.push((
+                        lines,
+                        funcs
+                            .iter()
+                            .enumerate()
+                            .map(|(line, &func)| (first + line as u32, line, func))
+                            .collect(),
+                    ));
+                }
+                if let Some(&(_, scl, sda)) = TWIS.iter().find(|&&(addr, ..)| addr == base) {
+                    let (scl_token, sda_token) = (next_token, next_token + 1);
+                    next_token += 2;
+                    let lines = mux.twis_pad_lines_arc();
+                    mux.install_twis_pin_claims(&claims, scl_token, sda_token);
+                    wired.push((
+                        lines,
+                        vec![
+                            (scl_token, crate::peripherals::nrf52::twis::LINE_SCL, scl),
+                            (sda_token, crate::peripherals::nrf52::twis::LINE_SDA, sda),
                         ],
                     ));
                 }
@@ -2350,20 +2921,30 @@ impl SystemBus {
                 if !spi.is_nrf_wire_layout() {
                     continue;
                 }
-                let Some(&(_, sck, mosi)) = SPIM.iter().find(|&&(addr, ..)| addr == base) else {
+                let Some(&(_, sck, mosi, miso)) = SPIM.iter().find(|&&(addr, ..)| addr == base)
+                else {
                     continue;
                 };
-                let (sck_token, mosi_token) = (next_token, next_token + 1);
-                next_token += 2;
+                let (sck_token, mosi_token, miso_token) =
+                    (next_token, next_token + 1, next_token + 2);
+                next_token += 3;
                 let lines = spi.line_levels_arc().pad_lines().clone();
-                spi.install_nrf_pin_claims(&claims, sck_token, mosi_token);
-                wired.push((
-                    lines,
-                    vec![
-                        (sck_token, SpiSignal::Sck as usize, sck),
-                        (mosi_token, SpiSignal::Mosi as usize, mosi),
-                    ],
-                ));
+                spi.install_nrf_pin_claims(&claims, sck_token, mosi_token, miso_token);
+                let mut bindings = vec![
+                    (sck_token, SpiSignal::Sck as usize, sck),
+                    (mosi_token, SpiSignal::Mosi as usize, mosi),
+                    (miso_token, SpiSignal::Miso as usize, miso),
+                ];
+                if let Some(&(_, csn, dcx)) =
+                    SPIM_HW_SELECT.iter().find(|&&(addr, ..)| addr == base)
+                {
+                    let (csn_token, dcx_token) = (next_token, next_token + 1);
+                    next_token += 2;
+                    spi.install_nrf_hw_select_claims(&claims, csn_token, dcx_token);
+                    bindings.push((csn_token, SpiSignal::Nss as usize, csn));
+                    bindings.push((dcx_token, crate::peripherals::spi::NRF_SPIM_LINE_DCX, dcx));
+                }
+                wired.push((lines, bindings));
             }
         }
 
@@ -2839,7 +3420,18 @@ impl SystemBus {
         } else if let Some(c) = any.downcast_mut::<crate::peripherals::rp2040::spi::Rp2040Spi>() {
             c.push_device(wrapped);
         } else {
-            anyhow::bail!("attach_spi_device: '{name}' is not a SPI controller");
+            // New byte-level controllers join through the existing capability,
+            // without growing this concrete-type dispatch or its downcast debt.
+            let Some(devices) = self.peripherals[idx].dev.spi_attached_devices_mut() else {
+                anyhow::bail!("attach_spi_device: '{name}' is not a SPI controller");
+            };
+            if edge_sampled {
+                return Err(edge_sampling_unsupported(
+                    controller,
+                    "byte-level SPI capability",
+                ));
+            }
+            devices.push(wrapped);
         }
         Ok(())
     }

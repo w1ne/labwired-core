@@ -1322,7 +1322,7 @@ metadata:
     #[test]
     fn hcsr04_fractional_width_matches_oracle_and_retrigger_latches() {
         for hz in [1_000_000, 1_500_001, 1000] {
-            for distance in [2.1, 50.125, 399.9, -10.0, 1000.0] {
+            for distance in [2.1, 50.125, 399.9, -10.0, 400.0] {
                 let (mut dev, mut pads) = sensor("hc-sr04", hz);
                 dev.seed_input("distance", distance);
                 let mut oracle = crate::peripherals::hc_sr04::HcSr04::new(

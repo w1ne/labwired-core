@@ -34,6 +34,30 @@ pub enum RiscVCoreProfile {
     StandardRv32,
 }
 
+impl RiscVCoreProfile {
+    /// Select the profile a chip descriptor runs.
+    ///
+    /// The engine models two profiles: the standard RV32 machine and the
+    /// ESP32-C3's vendor CSR set. An `esp32*` chip keeps the vendor profile —
+    /// the C3 is the part whose ROM and performance-counter block the engine
+    /// models, and the C6 shares that register surface today. Any other chip
+    /// that declares a generic `rv32*` core (e.g. `core: "rv32im"` on a
+    /// VexRiscv SoC) runs the standard profile. A chip with no `core:` keeps
+    /// the historical ESP32-C3 default, so descriptors written before this
+    /// selection existed behave exactly as they did.
+    pub fn for_chip(chip: &labwired_config::ChipDescriptor) -> Self {
+        if chip.name.to_ascii_lowercase().contains("esp32") {
+            return Self::Esp32C3;
+        }
+        match chip.core.as_deref() {
+            Some(core) if core.trim().to_ascii_lowercase().starts_with("rv32") => {
+                Self::StandardRv32
+            }
+            _ => Self::Esp32C3,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct RiscV {
     pub core_profile: RiscVCoreProfile,
@@ -882,6 +906,24 @@ impl RiscV {
             .and_then(|a| a.downcast_ref::<crate::bus::SystemBus>())
         {
             if sb.requires_cycle_accurate() {
+                return false;
+            }
+            // A non-default RAM `cpu_writes` policy is enforced by the
+            // interpreter's store gate; compiled blocks write `bus.ram.data`
+            // directly, so they must not run while it is in force.
+            if sb.ram_cpu_writes_gated() {
+                return false;
+            }
+            // Same reasoning, one level up: compiled blocks also bypass the
+            // accessors that latch a debug watch, and they run whole blocks
+            // without the machine getting a window boundary to stop at. Refuse
+            // while ANY watch is armed — store-only watches included, because
+            // the gate's job is to keep raw-RAM writes off the path, and the
+            // per-batch test is cheaper than reasoning about which block might
+            // touch which range. `plan_cpu_window` already clamps to one
+            // instruction while a watch is armed; this refusal is
+            // defence-in-depth for direct `step_batch` callers.
+            if !sb.debug_watches.is_empty() {
                 return false;
             }
         }
@@ -1980,6 +2022,7 @@ impl Cpu for RiscV {
             mtval: self.mtval,
             mtime: self.mtime,
             mtimecmp: self.mtimecmp,
+            triggers: Some(self.triggers.snapshot()),
         })
     }
 
@@ -2000,12 +2043,19 @@ impl Cpu for RiscV {
             self.mtval = s.mtval;
             self.mtime = s.mtime;
             self.mtimecmp = s.mtimecmp;
+            // A snapshot from before triggers were captured carries none:
+            // the module comes back at reset, so the result does not depend
+            // on what the machine it is applied to had programmed.
+            match &s.triggers {
+                Some(t) => self.triggers.restore(t),
+                None => self.triggers = trigger::TriggerModule::default(),
+            }
         }
     }
 
     fn runtime_snapshot(&self) -> Option<(crate::runtime_snapshot::CpuKind, Vec<u8>)> {
-        use crate::runtime_snapshot::RiscVRuntimeSnapshot;
-        let snap = RiscVRuntimeSnapshot {
+        use crate::runtime_snapshot::{RiscVRuntimeSnapshot, RiscVRuntimeSnapshotV2};
+        let base = RiscVRuntimeSnapshot {
             x: self.x,
             pc: self.pc,
             mstatus: self.mstatus,
@@ -2020,6 +2070,10 @@ impl Cpu for RiscV {
             mtimecmp: self.mtimecmp,
             reservation: self.reservation,
         };
+        let snap = RiscVRuntimeSnapshotV2 {
+            base,
+            triggers: self.triggers.snapshot(),
+        };
         let bytes = bincode::serialize(&snap).expect("bincode serialize RiscVRuntimeSnapshot");
         Some((crate::runtime_snapshot::CpuKind::RiscV, bytes))
     }
@@ -2029,15 +2083,29 @@ impl Cpu for RiscV {
         kind: crate::runtime_snapshot::CpuKind,
         bytes: &[u8],
     ) -> SimResult<()> {
-        use crate::runtime_snapshot::{CpuKind, RiscVRuntimeSnapshot};
+        use crate::runtime_snapshot::{CpuKind, RiscVRuntimeSnapshot, RiscVRuntimeSnapshotV2};
         if kind != CpuKind::RiscV {
             return Err(crate::SimulationError::NotImplemented(format!(
                 "apply_runtime_snapshot: kind {kind:?} given to RiscV"
             )));
         }
-        let snap: RiscVRuntimeSnapshot = bincode::deserialize(bytes).map_err(|e| {
-            crate::SimulationError::NotImplemented(format!("RiscV snapshot decode: {e}"))
-        })?;
+        // Newest layout first: an older, shorter blob cannot decode as it, but
+        // it decodes exactly as the bare V1 layout. A V1 blob carries no
+        // trigger state, so the module comes back at reset — what a machine
+        // that never programmed a trigger has.
+        let (snap, triggers) = match bincode::deserialize::<RiscVRuntimeSnapshotV2>(bytes) {
+            Ok(v2) => (v2.base, Some(v2.triggers)),
+            Err(_) => {
+                let v1: RiscVRuntimeSnapshot = bincode::deserialize(bytes).map_err(|e| {
+                    crate::SimulationError::NotImplemented(format!("RiscV snapshot decode: {e}"))
+                })?;
+                (v1, None)
+            }
+        };
+        match &triggers {
+            Some(t) => self.triggers.restore(t),
+            None => self.triggers = trigger::TriggerModule::default(),
+        }
         self.x = snap.x;
         self.x[0] = 0; // x0 is hardwired to zero regardless of the blob.
         self.pc = snap.pc;

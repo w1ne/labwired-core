@@ -1,0 +1,33 @@
+# ESP32-S3 N16R8 camera board: OV3660 on the DVP connector, 1.9" ST7789
+# 170x320 TFT on the right-hand header.
+#
+#   OV3660 (on-board ribbon)            ST7789 breakout (8-pin header)
+#   XCLK  = GPIO15  (LEDC)              SCL (SCK)  = GPIO39
+#   SIOD  = GPIO4   SIOC = GPIO5        SDA (MOSI) = GPIO40
+#   D0..D7 = 11 9 8 10 12 18 17 16      CS  = GPIO41   DC  = GPIO42
+#   VSYNC = GPIO6   HREF = GPIO7        RES = GPIO47   BLK = GPIO21
+#   PCLK  = GPIO13                      VCC = 3V3      GND = GND
+#
+# The camera's SCCB rides I2C1 because that is the port esp32-camera opens by
+# default; the DVP pins are bound to LCD_CAM's camera slave by the `ov3660`
+# kit, not by this file. The panel's 170 visible columns sit at offset 35 in
+# the controller's 240-column RAM.
+name: "esp32s3-ov3660-camera"
+chip: "../../configs/chips/esp32s3.yaml"
+
+external_devices:
+  - id: "cam"
+    type: "ov3660"
+    connection: "i2c1"
+  - id: "lcd"
+    type: "st7789-170x320"
+    connection: "spi2_s3"
+    config:
+      cs_pin: "GPIO41"
+      dc_pin: "GPIO42"
+      col_offset: 35
+      row_offset: 0
+      cols: 170
+      rows: 320
+
+board_io: []

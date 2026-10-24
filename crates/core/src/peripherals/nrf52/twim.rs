@@ -248,6 +248,10 @@ pub struct Nrf52Twim {
     /// Set when a transaction blew past [`WIRE_EVENT_CAP`], so its narration is
     /// dropped whole rather than published truncated.
     wire_overflow: bool,
+    /// Bus cycle clock (the net engine's time base).
+    clock: Option<crate::CycleClock>,
+    /// The bit-level engine used on a world `gpio_net` (see `twim_net`).
+    net: net::TwimNet,
 }
 
 impl std::fmt::Debug for Nrf52Twim {
@@ -294,6 +298,8 @@ impl Default for Nrf52Twim {
             claim_sda: NrfPinClaim::default(),
             wire_events: Vec::new(),
             wire_overflow: false,
+            clock: None,
+            net: net::TwimNet::default(),
         }
     }
 }
@@ -323,7 +329,15 @@ impl Nrf52Twim {
     /// pull-ups idles high on both lines.
     pub(crate) fn pad_lines_arc(&mut self) -> Arc<PadLines> {
         self.lines
-            .get_or_insert_with(|| Arc::new(PadLines::new(TWIM_LINES, &[true, true])))
+            .get_or_insert_with(|| {
+                let lines = PadLines::new(TWIM_LINES, &[true, true]);
+                // On a world net both lines are open drain, released until the
+                // bit engine (`twim_net`) pulls one low.
+                for line in [LINE_SCL, LINE_SDA] {
+                    lines.set_net_idle(line, crate::peripherals::pad_lines::LineDrive::OpenDrain);
+                }
+                Arc::new(lines)
+            })
             .clone()
     }
 
@@ -525,7 +539,8 @@ impl Nrf52Twim {
 
         let mut amount: u32 = 0;
         for i in 0..txd_maxcnt {
-            let byte = bus.read_u8(txd_ptr + i as u64).unwrap_or(0);
+            let addr = txd_ptr + i as u64;
+            let byte = crate::with_device_write_bypass(bus, |bus| bus.read_u8(addr)).unwrap_or(0);
             self.attached_devices[idx].borrow_mut().write(byte);
             // A slave that accepted the address ACKs its data; this model has
             // no per-byte NACK to report, and says so by never inventing one.
@@ -561,7 +576,8 @@ impl Nrf52Twim {
             self.events_error = 1;
             // Fill RX buffer with 0xFF (bus release / NACK default).
             for i in 0..rxd_maxcnt {
-                let _ = bus.write_u8(rxd_ptr + i as u64, 0xFF);
+                let addr = rxd_ptr + i as u64;
+                let _ = crate::with_device_write_bypass(bus, |bus| bus.write_u8(addr, 0xFF));
             }
             self.rxd_amount = rxd_maxcnt as u32;
             self.events_lastrx = 1;
@@ -575,7 +591,8 @@ impl Nrf52Twim {
         let mut amount: u32 = 0;
         for i in 0..rxd_maxcnt {
             let byte = self.attached_devices[idx].borrow_mut().read();
-            let _ = bus.write_u8(rxd_ptr + i as u64, byte);
+            let addr = rxd_ptr + i as u64;
+            let _ = crate::with_device_write_bypass(bus, |bus| bus.write_u8(addr, byte));
             // On a read the MASTER acknowledges, and it NACKs the last byte to
             // tell the slave to release SDA. A decoder that never sees that
             // NACK reads the transfer as still running.
@@ -782,6 +799,21 @@ impl Peripheral for Nrf52Twim {
     }
 
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        // On a world `gpio_net` the tasks drive the bit engine (`twim_net`).
+        if value != 0
+            && matches!(
+                offset,
+                OFF_TASKS_STARTRX
+                    | OFF_TASKS_STARTTX
+                    | OFF_TASKS_STOP
+                    | OFF_TASKS_SUSPEND
+                    | OFF_TASKS_RESUME
+            )
+            && self.net_mode()
+            && self.net_task(offset)
+        {
+            return Ok(());
+        }
         match offset {
             // ── TASKS ─────────────────────────────────────────────────────────
             OFF_TASKS_STARTRX if value != 0 => {
@@ -850,14 +882,17 @@ impl Peripheral for Nrf52Twim {
             OFF_ENABLE => {
                 self.enable = value & ENABLE_MASK;
                 self.sync_pin_claims();
+                self.net_after_pins();
             }
             OFF_PSEL_SCL => {
                 self.psel_scl = value;
                 self.sync_pin_claims();
+                self.net_after_pins();
             }
             OFF_PSEL_SDA => {
                 self.psel_sda = value;
                 self.sync_pin_claims();
+                self.net_after_pins();
             }
             OFF_FREQUENCY => self.frequency = value,
 
@@ -883,16 +918,34 @@ impl Peripheral for Nrf52Twim {
         // EasyDMA still rides the bus-tick pump (works for bare-bus unit tests
         // and for walk-deleted buses where bus_tick_indices keep running). The
         // scheduler path also completes transfers in on_event as a dual path.
-        self.pending != PENDING_NONE
+        // On a net the pump stays armed for the whole transfer, so EasyDMA
+        // work a wire event creates is picked up on the walk too.
+        self.pending != PENDING_NONE || self.net_busy() || self.net_has_work()
     }
 
     /// EasyDMA engine (legacy walk / feature-off).
     fn tick_with_bus(&mut self, bus: &mut dyn Bus) {
         self.run_pending_transfer(bus);
+        if self.net_has_work() {
+            self.net_dma(bus);
+        }
     }
 
     fn tick(&mut self) -> PeripheralTickResult {
+        self.net_tick();
         self.irq_from_events()
+    }
+
+    fn wire_input_edge(&mut self, line: usize, level: bool, cycle: u64) -> bool {
+        self.net_edge(line, level, cycle)
+    }
+
+    fn attach_cycle_clock(&mut self, clock: crate::CycleClock) {
+        self.clock = Some(clock);
+    }
+
+    fn claims_pads(&self) -> bool {
+        true
     }
 
     fn uses_scheduler(&self) -> bool {
@@ -904,6 +957,9 @@ impl Peripheral for Nrf52Twim {
     }
 
     fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        if self.net_mode() || self.net_busy() || self.net_has_work() {
+            return self.net_take_events();
+        }
         if self.pending != PENDING_NONE {
             // Wire latency budget set at task write; 0 means run next cycle.
             let d = self.busy_cycles.max(1) as u64;
@@ -921,6 +977,9 @@ impl Peripheral for Nrf52Twim {
         _sched: &mut crate::sched::EventScheduler,
         bus: &mut dyn Bus,
     ) -> crate::sched::EventResult {
+        if event_token == net::NET_TOKEN {
+            return self.net_on_sched(_sched.now(), bus);
+        }
         if event_token == 1 && self.pending != PENDING_NONE {
             // Consume the latency in one shot (event fires at the deadline).
             self.busy_cycles = 0;
@@ -977,6 +1036,19 @@ impl Peripheral for Nrf52Twim {
         }
     }
 }
+
+impl Nrf52Twim {
+    /// After a write that can move a pad (`ENABLE`, `PSEL`): a TWIM that left
+    /// its net forgets the transfer and lets go of the lines.
+    fn net_after_pins(&mut self) {
+        if !self.net_mode() && self.net_busy() {
+            self.net_disable();
+        }
+    }
+}
+
+#[path = "twim_net.rs"]
+mod net;
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 

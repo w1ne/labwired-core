@@ -28,3 +28,8 @@ ram: { base: 0, size: "64MiB" }
 memory_regions:
   - { name: sram, base: 0xff6c0000, size: "256KiB" }
 peripherals: []
+# Explicit native basket opt-in only; generic peripherals above remain empty.
+# Register windows / SPI IDs match the reviewed reduced basket DT.
+native_basket_peripherals:
+  - { id: i2c3, type: rk3x_i2c, base_address: 0xff460000, size: 4KiB, irq: 53 }
+  - { id: uart4, type: dw_uart, base_address: 0xff4e0000, size: 256B, irq: 61 }

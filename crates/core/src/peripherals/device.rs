@@ -51,7 +51,33 @@ use std::any::Any;
 use std::sync::mpsc::{Receiver, Sender};
 
 // ── I²C ─────────────────────────────────────────────────────────────────────
+/// Controller capability for attaching a slave to a fixed-pin I2C host.
+/// Routing-aware controller families retain their existing attachment path.
+pub trait I2cSlaveHost {
+    fn attach_slave(&mut self, device: Box<dyn I2cDevice>);
+
+    /// How this controller reaches pads through a GPIO output matrix, for a
+    /// controller on a part where any I²C can drive any pad (the ESP32
+    /// family). `None` — the default — for a controller with fixed pins.
+    /// See [`crate::peripherals::i2c_matrix`].
+    fn matrix_reach(&self) -> Option<crate::peripherals::i2c_matrix::I2cMatrixReach> {
+        None
+    }
+
+    /// Hand this controller the chip's live output matrix. Called once at bus
+    /// wiring time; ignored by a controller with fixed pins.
+    fn set_pad_matrix(
+        &mut self,
+        _matrix: std::sync::Arc<dyn crate::peripherals::i2c_matrix::PadOutMatrix>,
+    ) {
+    }
+}
+
 pub trait I2cDevice: Send {
+    /// Optional transaction epoch. A change invalidates a controller selection.
+    fn transaction_generation(&self) -> Option<u64> {
+        None
+    }
     fn address(&self) -> u8;
     fn read(&mut self) -> u8;
     fn write(&mut self, data: u8);
@@ -136,11 +162,19 @@ pub trait I2cDevice: Send {
             None => false,
         }
     }
-    fn as_any(&self) -> Option<&dyn std::any::Any> {
+    /// Readback through a transparent decorator. Wire operations, mutable
+    /// inputs and power gating still belong to the decorator itself.
+    fn wrapped_device(&self) -> Option<&dyn I2cDevice> {
         None
     }
-    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+    fn wrapped_device_mut(&mut self) -> Option<&mut dyn I2cDevice> {
         None
+    }
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        self.wrapped_device()?.as_any()
+    }
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        self.wrapped_device_mut()?.as_any_mut()
     }
     /// Runtime-drivable view of this device, if it accepts simulated input.
     /// Overridden by input devices (accelerometers, …) so the generic
@@ -367,7 +401,36 @@ pub trait UartStreamHost {
         false
     }
 
-    /// Bind a peer to this UART's RX/TX paths.
+    /// Whether an ordinary peer can be attached without violating exclusivity.
+    fn accepts_stream_attachment(&self) -> bool {
+        true
+    }
+
+    /// Attach one epoch-aware protocol peer to an otherwise empty host.
+    /// Default rejects: clearing a shared RX FIFO is unsafe without exclusivity.
+    fn attach_exclusive_stream_device(
+        &mut self,
+        _dev: Box<dyn UartStreamDevice>,
+    ) -> Result<(), String> {
+        Err("UART does not support an exclusive generation-aware peer".into())
+    }
+
+    /// Fallible ordinary attachment, validating before any host side effects.
+    /// Generation-aware peers must use the explicit exclusive capability so
+    /// hosts cannot silently invalidate a shared legacy RX FIFO.
+    fn try_attach_stream_device(&mut self, dev: Box<dyn UartStreamDevice>) -> Result<(), String> {
+        if !self.accepts_stream_attachment() {
+            return Err("UART already hosts an exclusive generation-aware peer".into());
+        }
+        if dev.stream_generation().is_some() {
+            return Err("generation-aware peer requires explicit exclusive attachment".into());
+        }
+        self.attach_stream_device(dev);
+        Ok(())
+    }
+
+    /// Low-level binding for a validated ordinary peer. Fallible attachment
+    /// seams should use `try_attach_stream_device` instead.
     fn attach_stream_device(&mut self, dev: Box<dyn UartStreamDevice>);
 
     /// Stop mirroring TX to the console/capture sink. A cross-linked UART
@@ -421,6 +484,17 @@ pub fn inject_remote_into(
 
 /// A device that emits bytes through the UART's RX path (e.g. a GPS module).
 pub trait UartStreamDevice: Send {
+    /// Epoch for a dedicated stream; a change invalidates delivered host RX.
+    fn stream_generation(&self) -> Option<u64> {
+        None
+    }
+    fn artifacts(
+        &self,
+        _id: &str,
+        _opts: &crate::inspect::InspectOpts,
+    ) -> Vec<crate::inspect::Artifact> {
+        Vec::new()
+    }
     /// Called periodically by the bus tick. Returns the next byte to push into UART RX,
     /// or None if no byte is pending. Implementations should respect `elapsed_us` to
     /// pace output (e.g. 9600 baud → ~1 ms/byte → emit one byte per ~1000 us tick).
@@ -596,6 +670,27 @@ pub trait GpioObserver: Send + Sync + std::fmt::Debug {
         _sim_cycle: u64,
     ) {
     }
+
+    /// Fired when the source that drives pad `pin` changes: the port's own
+    /// output latch, an LEDC channel, or another peripheral signal through a
+    /// pin matrix. A GPIO model that reports sources also calls this once per
+    /// pad when the observer is added, so an observer can tell "this pad is on
+    /// the latch" from "this port never says". `on_pin_change` sees only the
+    /// latch; a pad a peripheral drives moves without it. Default: ignored.
+    fn on_pad_source(&self, _pin: u8, _source: PadSource) {}
+}
+
+/// What drives a pad right now, as a GPIO model with a pin matrix reports it
+/// through [`GpioObserver::on_pad_source`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PadSource {
+    /// The port's output latch, or nothing (output driver off).
+    Latch,
+    /// LEDC channel `channel`, numbered as the chip's LEDC model numbers the
+    /// channels it reports to [`crate::peripherals::LedcDutyObserver`].
+    Ledc(u8),
+    /// Any other peripheral signal.
+    Peripheral,
 }
 
 // ── Tier 2 pin-drive collection ─────────────────────────────────────────────

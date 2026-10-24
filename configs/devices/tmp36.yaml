@@ -1,0 +1,30 @@
+# Analog Devices TMP36 low-voltage temperature sensor on an ADC channel —
+# declarative `analog_source`.
+#
+# The datasheet transfer function is a straight line with an offset:
+#
+#   V_out = 500 mV + 10 mV/°C * T        (T in °C)
+#
+# so 0 °C = 500 mV, 25 °C = 750 mV, 125 °C = 1750 mV. The specified range is
+# -40..+125 °C (100..1750 mV). V_out does not depend on the supply (2.7..5.5 V),
+# so there is no supply_mv key: a 3.3 V and a 5 V board read the same millivolts
+# and only their ADC reference turns them into different counts.
+type: tmp36
+
+behavior:
+  primitive: analog_source
+  analog:
+    formula: "min(max(500 + 10 * temperature, 0), 1750)"
+    encode: trunc
+
+metadata:
+  label: TMP36 Temperature Sensor
+  summary: Analog temperature sensor, 10 mV/°C with 500 mV at 0 °C.
+  detail: >-
+    Analog Devices TMP36 linear temperature sensor. Drive the `temperature`
+    channel (°C) at runtime and the ADC channel follows V_out = 500 mV + 10 mV/°C,
+    independent of the supply. Starts at 25 °C (750 mV).
+  config_keys:
+    - { name: channel, ty: int, doc: "ADC channel index (0..N). Defaults to 0." }
+  inputs:
+    - { key: temperature, label: Temperature, unit: "°C", min: -40, max: 125, default: 25 }

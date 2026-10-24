@@ -84,6 +84,194 @@ fn fifo_u8_dr_write_is_one_frame() {
     assert_eq!(captured(&spi), vec![0xAB], "8-bit DR ⇒ 1 frame");
 }
 
+/// Device answering a fixed sequence, one byte per frame.
+struct Answers(std::collections::VecDeque<u8>);
+impl SpiDevice for Answers {
+    fn transfer(&mut self, _mosi: u8) -> u8 {
+        self.0.pop_front().unwrap_or(0)
+    }
+    fn cs_pin(&self) -> &str {
+        ""
+    }
+}
+
+fn fifo_master(answers: &[u8]) -> Spi {
+    let mut spi = Spi::new_with_layout(SpiRegisterLayout::Stm32Fifo);
+    spi.push_device(Box::new(Answers(answers.iter().copied().collect())));
+    spi
+}
+
+const SR_RXNE: u16 = 1 << 0;
+const SR_TXE: u16 = 1 << 1;
+const SR_OVR: u16 = 1 << 6;
+const SR_FRLVL: u16 = 0b11 << 9;
+const SR_FTLVL: u16 = 0b11 << 11;
+
+fn sr(spi: &Spi) -> u16 {
+    spi.read_u16(0x08).unwrap()
+}
+
+/// G0/L4 RX FIFO (RM0444 §35.5.9): frames pile up in the 32-bit RX FIFO,
+/// FRLVL counts bytes, an 8-bit DR read pops one frame, and RXNE follows
+/// FRXTH — one byte with FRXTH=1, two with FRXTH=0.
+#[test]
+fn fifo_rx_fifo_levels_and_frxth_threshold() {
+    let mut spi = fifo_master(&[0x11, 0x22, 0x33]);
+    spi.write(0x00, 0x44).unwrap(); // SPE | MSTR
+    assert_eq!(spi.read_u16(0x04).unwrap(), 0x0700, "CR2 reset: DS = 8 bit");
+    spi.write(0x0C, 0xA0).unwrap();
+    run_engine(&mut spi);
+    assert_eq!(sr(&spi) & SR_FRLVL, 1 << 9, "FRLVL = 1/4 (one byte)");
+    assert_eq!(sr(&spi) & SR_RXNE, 0, "FRXTH=0: one byte is below 16 bits");
+    spi.write(0x0C, 0xA1).unwrap();
+    run_engine(&mut spi);
+    assert_eq!(sr(&spi) & SR_FRLVL, 2 << 9, "FRLVL = 1/2");
+    assert_ne!(
+        sr(&spi) & SR_RXNE,
+        0,
+        "two bytes reach the 16-bit threshold"
+    );
+    // 8-bit reads pop one frame each.
+    assert_eq!(spi.read(0x0C).unwrap(), 0x11);
+    assert_eq!(sr(&spi) & SR_RXNE, 0, "back below the threshold");
+    // FRXTH=1: one byte is enough.
+    spi.write_u16(0x04, 0x1700).unwrap();
+    assert_ne!(sr(&spi) & SR_RXNE, 0, "FRXTH applies at once");
+    assert_eq!(spi.read(0x0C).unwrap(), 0x22);
+    assert_eq!(sr(&spi) & (SR_RXNE | SR_FRLVL), 0, "empty");
+    assert_eq!(spi.read(0x0C).unwrap(), 0, "an empty RX FIFO reads 0");
+}
+
+/// Data packing on the read side: a 16-bit DR read at DS≤8 pops two frames,
+/// low byte first.
+#[test]
+fn fifo_u16_dr_read_pops_two_packed_frames() {
+    let mut spi = fifo_master(&[0x5A, 0xC3]);
+    spi.write(0x00, 0x44).unwrap();
+    spi.write_u16(0x0C, 0x0201).unwrap(); // two frames out
+    run_engine(&mut spi);
+    assert_eq!(spi.read_u16(0x0C).unwrap(), 0xC35A);
+    assert_eq!(sr(&spi) & (SR_RXNE | SR_FRLVL), 0);
+}
+
+/// Wider frames (CR2.DS > 8) take two bytes of each FIFO: a 12-bit frame
+/// fills half the RX FIFO and a 16-bit read pops it whole.
+#[test]
+fn fifo_wide_frames_take_two_bytes() {
+    let mut spi = Spi::new_with_layout(SpiRegisterLayout::Stm32Fifo);
+    spi.set_loopback(true);
+    spi.write_u16(0x04, 0x0B00).unwrap(); // DS = 12 bit
+    spi.write(0x00, 0x44).unwrap();
+    spi.write_u16(0x0C, 0xFABC).unwrap();
+    run_engine(&mut spi);
+    assert_eq!(sr(&spi) & SR_FRLVL, 2 << 9, "one 12-bit frame = 1/2");
+    assert_ne!(sr(&spi) & SR_RXNE, 0, "a 16-bit threshold is one frame");
+    assert_eq!(spi.read_u16(0x0C).unwrap(), 0x0ABC, "12 bits on the wire");
+}
+
+/// The TX FIFO: TXE while it is at most half full, FTLVL counts its bytes,
+/// and a write into a full FIFO is lost.
+#[test]
+fn fifo_tx_fifo_level_txe_and_overflow() {
+    let mut spi = fifo_master(&[]);
+    spi.write(0x00, 0x7C).unwrap(); // SPE | MSTR | BR=7 (slow)
+    spi.write(0x0C, 1).unwrap(); // straight into the shift register
+    assert_ne!(sr(&spi) & SR_TXE, 0);
+    assert_eq!(sr(&spi) & SR_FTLVL, 0);
+    spi.write(0x0C, 2).unwrap();
+    spi.write(0x0C, 3).unwrap();
+    assert_eq!(sr(&spi) & SR_FTLVL, 2 << 11, "two bytes queued");
+    assert_ne!(sr(&spi) & SR_TXE, 0, "half full still has TXE");
+    spi.write(0x0C, 4).unwrap();
+    assert_eq!(sr(&spi) & SR_FTLVL, 3 << 11, "three bytes read as full");
+    assert_eq!(sr(&spi) & SR_TXE, 0, "above half full: no TXE");
+    spi.write(0x0C, 5).unwrap(); // fourth byte: full
+    spi.write(0x0C, 6).unwrap(); // lost
+    let mut sent = 0;
+    for _ in 0..1_000_000 {
+        if !spi.transfer_active() {
+            break;
+        }
+        spi.tick_elapsed(1);
+        sent += 1;
+    }
+    // Five frames of 8 bits at 2^(7+1) cycles per bit.
+    assert_eq!(sent, 5 * 8 * 256, "the sixth write was dropped");
+    assert_ne!(sr(&spi) & SR_TXE, 0);
+}
+
+/// Overrun: a frame arriving into a full RX FIFO is lost and sets OVR, which
+/// clears on a DR read followed by an SR read.
+#[test]
+fn fifo_rx_overrun_and_its_clear_sequence() {
+    let mut spi = fifo_master(&[1, 2, 3, 4, 5]);
+    spi.write_u16(0x04, 0x1700).unwrap(); // FRXTH
+    spi.write(0x00, 0x44).unwrap();
+    for b in 0..5 {
+        spi.write(0x0C, b).unwrap();
+        run_engine(&mut spi);
+    }
+    assert_ne!(sr(&spi) & SR_OVR, 0, "fifth frame overran");
+    assert_eq!(sr(&spi) & SR_FRLVL, 3 << 9, "full");
+    assert_eq!(spi.read(0x0C).unwrap(), 1, "the first four survive");
+    assert_ne!(sr(&spi) & SR_OVR, 0, "this SR read still shows OVR");
+    assert_eq!(sr(&spi) & SR_OVR, 0, "DR then SR cleared it");
+    for want in [2, 3, 4] {
+        assert_eq!(spi.read(0x0C).unwrap(), want);
+    }
+}
+
+/// NSS pulse mode (CR2.NSSP, master, SSOE=1, CPHA=0): NSS rises for one SCK
+/// period between back-to-back frames and after the last one, and the next
+/// frame waits for the pulse.
+#[test]
+fn fifo_nssp_pulses_nss_between_frames() {
+    use super::SpiSignal;
+    let mut spi = fifo_master(&[]);
+    let lines = spi.line_levels_arc();
+    for line in 0..4 {
+        lines.pad_lines().mark_on_net(line);
+    }
+    spi.write_u16(0x04, 0x1700 | (1 << 3) | (1 << 2)).unwrap(); // FRXTH NSSP SSOE
+    spi.write(0x00, 0x44).unwrap(); // SPE | MSTR, BR=0: 2 cycles per bit
+    let nss = |s: &Spi| s.lines.as_ref().unwrap().level(SpiSignal::Nss);
+    assert!(!nss(&spi), "SSOE: NSS low from SPE");
+    spi.write(0x0C, 0xAA).unwrap();
+    spi.write(0x0C, 0x55).unwrap();
+    let mut trace = Vec::new();
+    for _ in 0..1000 {
+        if !spi.transfer_active() {
+            break;
+        }
+        trace.push(nss(&spi));
+        spi.tick_elapsed(1);
+    }
+    trace.push(nss(&spi));
+    // Frame (16 cycles low), pulse (one SCK period, 2 cycles, high), frame,
+    // then high after the last.
+    let mut want = vec![false; 16];
+    want.extend([true; 2]);
+    want.extend([false; 16]);
+    want.push(true);
+    assert_eq!(trace, want);
+}
+
+/// Without NSSP the same two frames run back to back with NSS held low.
+#[test]
+fn fifo_without_nssp_frames_run_back_to_back() {
+    let mut spi = fifo_master(&[]);
+    spi.write_u16(0x04, 0x1700 | (1 << 2)).unwrap();
+    spi.write(0x00, 0x44).unwrap();
+    spi.write(0x0C, 0xAA).unwrap();
+    spi.write(0x0C, 0x55).unwrap();
+    let mut cycles = 0;
+    while spi.transfer_active() {
+        spi.tick_elapsed(1);
+        cycles += 1;
+    }
+    assert_eq!(cycles, 32);
+}
+
 /// Non-FIFO STM32 (F1/F4) does NOT pack: a 16-bit DR write is one frame,
 /// so the F103 ILI9341 lab (which writes DR as u16) is unaffected.
 #[test]

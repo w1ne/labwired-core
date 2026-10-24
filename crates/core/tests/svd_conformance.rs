@@ -90,7 +90,8 @@ const ALLOWED: &[(&str, &str, Deviation, &str)] = &[
         "acl",
         Deviation::Base,
         "ACL's registers live in the NVMC page (0x4001E000), which `nvmc` \
-         already maps; the stub gets a private window instead.",
+         already maps; the stub gets a private window at reserved 0x4002E000 \
+         instead (0x4002F000 is SPIM3's).",
     ),
     (
         "nrf5340",

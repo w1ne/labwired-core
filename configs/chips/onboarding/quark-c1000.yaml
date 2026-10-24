@@ -14,11 +14,13 @@ ram:
   size: 81920B
 peripherals:
 - id: spi0
-  type: quark_spi
+  type: stub
+  renode_type: quark_spi
   bus: sysbus
   base_address: 2952794112
 - id: spi1
-  type: quark_spi
+  type: stub
+  renode_type: quark_spi
   bus: sysbus
   base_address: 2952795136
 - id: uartA
@@ -34,10 +36,12 @@ peripherals:
   bus: sysbus
   base_address: 2952793088
 - id: pwm
-  type: quark_pwm
+  type: stub
+  renode_type: quark_pwm
   bus: sysbus
   base_address: 2952792064
 - id: scss
-  type: quark_systemcontrolsubsystem
+  type: stub
+  renode_type: quark_systemcontrolsubsystem
   bus: sysbus
   base_address: 2961178624

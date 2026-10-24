@@ -382,6 +382,82 @@ fn has_marker(sink: &Arc<Mutex<Vec<u8>>>, marker: &[u8]) -> bool {
         .any(|w| w == marker)
 }
 
+// Failure-only observations: successful execution performs no extra MMIO reads.
+fn run_hello_chunk(
+    machine: &mut Machine<CortexM>,
+    count: u32,
+    sink: &Arc<Mutex<Vec<u8>>>,
+    label: &str,
+) {
+    let result =
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| machine.run(Some(count))));
+    match result {
+        Ok(result) => {
+            result.expect(label);
+        }
+        Err(original) => {
+            let uart = sink.lock().map(|bytes| {
+                (
+                    bytes.len(),
+                    String::from_utf8_lossy(&bytes[bytes.len().saturating_sub(256)..]).into_owned(),
+                )
+            });
+            eprintln!(
+                "UART/PPI failure pc={:#x} cycles={} uart={uart:?}",
+                machine.cpu.pc, machine.total_cycles
+            );
+            if let Some(base) = machine
+                .bus
+                .peripherals
+                .iter()
+                .find(|p| p.name == "uart0")
+                .map(|p| p.base)
+            {
+                for offset in [
+                    0x008u64, 0x00c, 0x120, 0x158, 0x300, 0x500, 0x544, 0x548, 0x54c,
+                ] {
+                    eprintln!(
+                        "UART reg {offset:#x} = {:?}",
+                        machine.bus.read_u32(base + offset)
+                    );
+                }
+            }
+            if let Some(base) = machine
+                .bus
+                .peripherals
+                .iter()
+                .find(|p| p.name == "ppi")
+                .map(|p| p.base)
+            {
+                let enabled = machine.bus.read_u32(base + 0x500);
+                eprintln!("PPI CHEN={enabled:?}");
+                for channel in 0u32..20 {
+                    if enabled
+                        .as_ref()
+                        .is_ok_and(|bits| bits & (1 << channel) != 0)
+                    {
+                        let index = u64::from(channel);
+                        eprintln!(
+                            "PPI channel{channel} EEP={:?} TEP={:?} FORK={:?}",
+                            machine.bus.read_u32(base + 0x510 + index * 8),
+                            machine.bus.read_u32(base + 0x514 + index * 8),
+                            machine.bus.read_u32(base + 0x910 + index * 4)
+                        );
+                    }
+                }
+            }
+            std::panic::resume_unwind(original);
+        }
+    }
+}
+
+fn catch_up_hello(machine: &mut Machine<CortexM>, target_insns: u64, sink: &Arc<Mutex<Vec<u8>>>) {
+    while machine.step_profile().cpu_instructions < target_insns {
+        let remain = (target_insns - machine.step_profile().cpu_instructions).min(512);
+        run_hello_chunk(machine, remain as u32, sink, "catch-up");
+    }
+}
+
 fn catch_up(machine: &mut Machine<CortexM>, target_insns: u64) {
     while machine.step_profile().cpu_instructions < target_insns {
         let remain = (target_insns - machine.step_profile().cpu_instructions).min(512);
@@ -440,14 +516,14 @@ fn nrf52840_zephyr_hello_uart_and_cycles_match_at_tick_512() {
         && on.step_profile().cpu_instructions < ZEPHYR_HELLO_INSN_BUDGET
         && (!has_marker(&sink_off, MARKER) || !has_marker(&sink_on, MARKER))
     {
-        off.run(Some(64)).expect("interp chunk");
-        on.run(Some(64)).expect("jit chunk");
+        run_hello_chunk(&mut off, 64, &sink_off, "interp chunk");
+        run_hello_chunk(&mut on, 64, &sink_on, "jit chunk");
         let target = off
             .step_profile()
             .cpu_instructions
             .max(on.step_profile().cpu_instructions);
-        catch_up(&mut off, target);
-        catch_up(&mut on, target);
+        catch_up_hello(&mut off, target, &sink_off);
+        catch_up_hello(&mut on, target, &sink_on);
         chunks += 1;
         let snap_off = snapshot_state(&off.cpu);
         let snap_on = snapshot_state(&on.cpu);
@@ -485,8 +561,8 @@ fn nrf52840_zephyr_hello_uart_and_cycles_match_at_tick_512() {
         .step_profile()
         .cpu_instructions
         .max(on.step_profile().cpu_instructions);
-    catch_up(&mut off, target);
-    catch_up(&mut on, target);
+    catch_up_hello(&mut off, target, &sink_off);
+    catch_up_hello(&mut on, target, &sink_on);
     let uart_off = sink_off.lock().unwrap().clone();
     let uart_on = sink_on.lock().unwrap().clone();
     eprintln!(
@@ -546,14 +622,14 @@ fn nrf52840_zephyr_hello_matches_at_min_block_4() {
         && on.step_profile().cpu_instructions < ZEPHYR_HELLO_INSN_BUDGET
         && (!has_marker(&sink_off, MARKER) || !has_marker(&sink_on, MARKER))
     {
-        off.run(Some(64)).expect("interp chunk");
-        on.run(Some(64)).expect("jit chunk");
+        run_hello_chunk(&mut off, 64, &sink_off, "interp chunk");
+        run_hello_chunk(&mut on, 64, &sink_on, "jit chunk");
         let target = off
             .step_profile()
             .cpu_instructions
             .max(on.step_profile().cpu_instructions);
-        catch_up(&mut off, target);
-        catch_up(&mut on, target);
+        catch_up_hello(&mut off, target, &sink_off);
+        catch_up_hello(&mut on, target, &sink_on);
         chunks += 1;
         let snap_off = snapshot_state(&off.cpu);
         let snap_on = snapshot_state(&on.cpu);

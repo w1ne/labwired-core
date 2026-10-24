@@ -94,19 +94,23 @@ peripherals:
   bus: sysbus
   base_address: 1073812736
 - id: spip
-  type: npcx_spip
+  type: stub
+  renode_type: npcx_spip
   bus: sysbus
   base_address: 1074601984
 - id: lfcg
-  type: npcx_lfcg
+  type: stub
+  renode_type: npcx_lfcg
   bus: sysbus
   base_address: 1074483456
 - id: hfcg
-  type: npcx_hfcg
+  type: stub
+  renode_type: npcx_hfcg
   bus: sysbus
   base_address: 1074483200
 - id: fiu
-  type: npcx_fiu
+  type: stub
+  renode_type: npcx_fiu
   bus: sysbus
   base_address: 1073872896
 - id: gpio0
@@ -174,35 +178,43 @@ peripherals:
   bus: sysbus
   base_address: 1074393088
 - id: smbus0
-  type: npcx_smbus
+  type: stub
+  renode_type: npcx_smbus
   bus: sysbus
   base_address: 1073778688
 - id: smbus1
-  type: npcx_smbus
+  type: stub
+  renode_type: npcx_smbus
   bus: sysbus
   base_address: 1073786880
 - id: smbus2
-  type: npcx_smbus
+  type: stub
+  renode_type: npcx_smbus
   bus: sysbus
   base_address: 1074528256
 - id: smbus3
-  type: npcx_smbus
+  type: stub
+  renode_type: npcx_smbus
   bus: sysbus
   base_address: 1074536448
 - id: smbus4
-  type: npcx_smbus
+  type: stub
+  renode_type: npcx_smbus
   bus: sysbus
   base_address: 1073774592
 - id: smbus5
-  type: npcx_smbus
+  type: stub
+  renode_type: npcx_smbus
   bus: sysbus
   base_address: 1073836032
 - id: smbus6
-  type: npcx_smbus
+  type: stub
+  renode_type: npcx_smbus
   bus: sysbus
   base_address: 1073840128
 - id: smbus7
-  type: npcx_smbus
+  type: stub
+  renode_type: npcx_smbus
   bus: sysbus
   base_address: 1073844224
 - id: DEV_CTL4

@@ -57,7 +57,7 @@ These live in `iolink_master_config_t` and are what
 | `flush_rx()` | before startup and before each retry / baud change | Clear the UART/adapter RX FIFO so stale bytes cannot bleed across attempts |
 | `prepare_tx()` | before each core-driven `send` | Switch the half-duplex driver to transmit |
 | `prepare_rx()` | after each `send` | Switch back to receive; return non-zero if you cannot, so the core stops instead of listening in the wrong direction |
-| `wake_up()` | startup, per `wake_retry_limit` | Generate the master wake-up request (WURQ) — see timing below |
+| `wake_up()` | startup, up to `wake_retry_limit` + 1 times per wake-up retry sequence | Generate the master wake-up request (WURQ) and return when the pulse is done — see timing below |
 | `read_cq_line_checked()` | DI mode | Read the C/Q line, report adapter failure |
 | `read_cq_line()` | DI mode (permissive fallback) | Legacy reader for tests/partial fakes |
 
@@ -71,15 +71,20 @@ The core supplies monotonic 100µs pacing (`iolink_master_tick_at`), but the phy
 line timing is **entirely the adapter's responsibility** and is currently
 unverified on hardware:
 
-- **The 80µs WURQ wake pulse.** `wake_up()` must generate the master wake-up
-  request (a defined wake pulse on C/Q). The core only decides *when* to call it and
-  how many times (`wake_retry_limit`); it does not shape the pulse.
-- **`t_WU`** — the wake-up recovery / device-ready window after the pulse before the
-  first master message.
-- **`t_REN`** — the driver-enable / receiver-enable settling around half-duplex
-  direction changes, which is why `prepare_tx` / `prepare_rx` exist as explicit
-  hooks.
-- **`TDMT`** — the master's inter-frame idle time before it starts a new message.
+- **The WURQ wake pulse, T_WU = 75..85 µs (Table 10).** `wake_up()` must generate
+  the master wake-up request on C/Q and return when it is done. The core decides
+  *when* to call it and how many times; it does not shape the pulse.
+- **Driver direction changes** around each frame, which is why `prepare_tx` /
+  `prepare_rx` exist as explicit hooks.
+
+The establish-communication waits are the core's job when you drive it with
+`iolink_master_tick_at` (V1.1.5 7.3.2.2, Figure 36, Table 42): T_REN (500 µs,
+Table 10) plus T_DMT (`t_dmt_tbit`) after the wake-up, T_DMT before each further
+COM rate, T_M-sequence for each test message (widened by
+`response_timeout_100us`), T_DWU (`t_dwu_100us`) before a repeated wake-up, and
+T_SD (`t_sd_100us`) with the PHY set inactive between wake-up retry sequences.
+Their resolution is your tick: call `tick_at` at least every 100 µs, or use
+`iolink_master_get_next_tick_time`, or the waits stretch to your tick period.
 
 If your transceiver or MCU UART cannot meet these windows, that is a hardware/timing
 limitation the core cannot paper over. Validate them with a logic analyzer per
@@ -100,7 +105,7 @@ static iolink_master_config_t cfg = {
     .m_seq_type = IOLINK_MASTER_M_SEQ_TYPE_2_1,
     .baudrate = IOLINK_BAUDRATE_COM3,
     .min_cycle_time = 20U, .pd_in_len = 1U, .pd_out_len = 1U,
-    .response_timeout_100us = 30U, .wake_retry_limit = 3U,
+    .auto_baudrate = true, .response_timeout_100us = 30U,
     .set_mode_checked = my_set_mode_checked,
     .set_baudrate_checked = my_set_baud_checked,
     .flush_rx = my_flush_rx,

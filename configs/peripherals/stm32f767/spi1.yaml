@@ -27,11 +27,11 @@ registers:
     - 12
     - 12
     description: CRC transfer next
-  - name: DFF
+  - name: CRCL
     bit_range:
     - 11
     - 11
-    description: Data frame format
+    description: CRC length
   - name: RXONLY
     bit_range:
     - 10
@@ -82,8 +82,28 @@ registers:
   address_offset: 4
   size: 32
   access: READ_WRITE
-  reset_value: 0
+  reset_value: 1792
   fields:
+  - name: LDMA_TX
+    bit_range:
+    - 14
+    - 14
+    description: Last DMA transfer for transmission
+  - name: LDMA_RX
+    bit_range:
+    - 13
+    - 13
+    description: Last DMA transfer for reception
+  - name: FRXTH
+    bit_range:
+    - 12
+    - 12
+    description: FIFO reception threshold
+  - name: DS
+    bit_range:
+    - 11
+    - 8
+    description: Data size
   - name: TXEIE
     bit_range:
     - 7
@@ -104,6 +124,11 @@ registers:
     - 4
     - 4
     description: Frame format
+  - name: NSSP
+    bit_range:
+    - 3
+    - 3
+    description: NSS pulse management
   - name: SSOE
     bit_range:
     - 2
@@ -126,6 +151,16 @@ registers:
   access: READ_WRITE
   reset_value: 2
   fields:
+  - name: FTLVL
+    bit_range:
+    - 12
+    - 11
+    description: FIFO transmission level
+  - name: FRLVL
+    bit_range:
+    - 10
+    - 9
+    description: FIFO reception level
   - name: TIFRFE
     bit_range:
     - 8

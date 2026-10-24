@@ -1555,6 +1555,98 @@ mod trigger_module {
         assert_eq!(cpu.read_csr(0x7A0), None);
     }
 
+    /// Arm the store watch, then hand the CPU state to a fresh machine
+    /// through `transfer` and run the watched store there.
+    fn resumed_store_traps(transfer: impl Fn(&RiscV, &mut RiscV)) -> Machine<RiscV> {
+        let (prog, body) = program(TCONTROL_MTE, STORE_WATCH, &[sw(6, 0x10, 5)]);
+        let mut armed = machine(&prog, &[jal(0, 0)]);
+        step_n(&mut armed, body as usize / 4);
+        assert!(armed.cpu.triggers.armed());
+        let mut resumed = machine(&prog, &[jal(0, 0)]);
+        transfer(&armed.cpu, &mut resumed.cpu);
+        assert_eq!(resumed.cpu.pc, body);
+        step_n(&mut resumed, 1);
+        resumed
+    }
+
+    fn assert_watch_fired(m: &Machine<RiscV>) {
+        assert_eq!(m.cpu.pc, HANDLER, "the restored watchpoint fired");
+        assert_eq!(m.cpu.mcause, 3);
+        assert_eq!(m.cpu.mtval, WATCHED);
+        assert_eq!(m.bus.read_u32(u64::from(WATCHED)).unwrap(), 0);
+    }
+
+    #[test]
+    fn runtime_snapshot_carries_the_trigger_module() {
+        let m = resumed_store_traps(|from, to| {
+            let (kind, bytes) = from.runtime_snapshot().unwrap();
+            to.apply_runtime_snapshot(kind, &bytes).unwrap();
+            assert_eq!(to.triggers, from.triggers, "round trip");
+        });
+        assert_watch_fired(&m);
+    }
+
+    #[test]
+    fn json_snapshot_carries_the_trigger_module() {
+        let m = resumed_store_traps(|from, to| {
+            let json = serde_json::to_string(&from.snapshot()).unwrap();
+            let back: crate::snapshot::CpuSnapshot = serde_json::from_str(&json).unwrap();
+            to.apply_snapshot(&back);
+            assert_eq!(to.triggers, from.triggers, "round trip");
+        });
+        assert_watch_fired(&m);
+    }
+
+    #[test]
+    fn pre_trigger_runtime_snapshot_still_loads_with_triggers_at_reset() {
+        // The layout written before the trigger module was captured: the bare
+        // `RiscVRuntimeSnapshot`, nothing after `reservation`.
+        let m = resumed_store_traps(|from, to| {
+            let old = crate::runtime_snapshot::RiscVRuntimeSnapshot {
+                x: from.x,
+                pc: from.pc,
+                mstatus: from.mstatus,
+                mie: from.mie,
+                mip: from.mip,
+                mtvec: from.mtvec,
+                mscratch: from.mscratch,
+                mepc: from.mepc,
+                mcause: from.mcause,
+                mtval: from.mtval,
+                mtime: from.mtime,
+                mtimecmp: from.mtimecmp,
+                reservation: from.reservation,
+            };
+            let bytes = bincode::serialize(&old).unwrap();
+            // A stale programmed trigger on the target must not survive.
+            to.triggers.write_csr(0x7A5, TCONTROL_MTE);
+            to.triggers.write_csr(0x7A1, STORE_WATCH);
+            to.apply_runtime_snapshot(crate::runtime_snapshot::CpuKind::RiscV, &bytes)
+                .unwrap();
+            assert_eq!(to.pc, from.pc, "the old layout decodes");
+            assert_eq!(to.x, from.x);
+            assert_eq!(to.triggers, trigger::TriggerModule::default());
+        });
+        assert_eq!(m.cpu.mcause, 0, "no trigger state, no trap");
+        assert_eq!(m.bus.read_u32(u64::from(WATCHED)).unwrap(), 0x55);
+    }
+
+    #[test]
+    fn pre_trigger_json_snapshot_still_loads_with_triggers_at_reset() {
+        let m = resumed_store_traps(|from, to| {
+            let mut json = serde_json::to_value(from.snapshot()).unwrap();
+            // What a snapshot written before the field existed looks like.
+            assert!(json.as_object_mut().unwrap().remove("triggers").is_some());
+            let back: crate::snapshot::CpuSnapshot = serde_json::from_value(json).unwrap();
+            to.triggers.write_csr(0x7A5, TCONTROL_MTE);
+            to.apply_snapshot(&back);
+            assert_eq!(to.pc, from.pc);
+            assert_eq!(to.triggers, trigger::TriggerModule::default());
+        });
+        assert_eq!(m.cpu.mcause, 0);
+        assert_eq!(m.bus.read_u32(u64::from(WATCHED)).unwrap(), 0x55);
+    }
+
     #[test]
     fn watched_store_raises_a_breakpoint_before_the_store() {
         let (prog, body) = program(TCONTROL_MTE, STORE_WATCH, &[sw(6, 0x10, 5)]);
@@ -1666,4 +1758,91 @@ mod trigger_module {
         assert_eq!(m.cpu.mtval, target);
         assert_eq!(m.cpu.read_reg(10), 0);
     }
+}
+
+#[test]
+fn store_spin_window_refuses_an_armed_debug_watch() {
+    let config = crate::SimulationConfig::default();
+    let (mut cpu, mut bus) = store_spin_fixture();
+    for _ in 0..3 {
+        cpu.step(&mut bus, &[], &config).unwrap();
+    }
+    let watched = u64::from(STORE_SPIN_RAM + 0x88);
+    assert!(bus.add_debug_watch(watched, 4, false, true));
+    assert_eq!(
+        cpu.try_store_spin_window(&mut bus, 64),
+        0,
+        "an armed debug watch must refuse the collapsed store"
+    );
+    // The refused loop falls back to the interpreter, where the store reaches
+    // the accessors and latches like any other watched store.
+    cpu.step(&mut bus, &[], &config).unwrap();
+    assert_eq!(bus.take_debug_watch_hit(), Some(watched));
+}
+
+#[cfg(feature = "jit")]
+#[test]
+fn jit_gate_refuses_non_default_ram_policy() {
+    let cpu = RiscV::new();
+    let mut bus = SystemBus::new();
+    assert!(cpu.jit_gate_allows(&bus, &[]));
+    bus.memory_policy.ram = crate::bus::CpuWritePolicy::Warn;
+    assert!(!cpu.jit_gate_allows(&bus, &[]));
+    bus.memory_policy.ram = crate::bus::CpuWritePolicy::Fault;
+    assert!(!cpu.jit_gate_allows(&bus, &[]));
+}
+
+#[cfg(feature = "jit")]
+#[test]
+fn jit_gate_refuses_an_armed_debug_watch() {
+    let cpu = RiscV::new();
+    let mut bus = SystemBus::new();
+    assert!(cpu.jit_gate_allows(&bus, &[]));
+    assert!(bus.add_debug_watch(0x2000_0100, 4, false, true));
+    assert!(
+        !cpu.jit_gate_allows(&bus, &[]),
+        "a compiled block writes raw RAM and must not bypass a watch"
+    );
+}
+
+/// The profile a chip runs is selected from its descriptor, not hardcoded:
+/// an ESP32 part keeps the C3's vendor CSR set, a chip that declares a
+/// generic `rv32*` core runs the standard profile, and an undeclared core
+/// keeps the historical C3 default.
+#[test]
+fn riscv_profile_is_selected_from_the_chip_descriptor() {
+    fn chip(name: &str, core: Option<&str>) -> labwired_config::ChipDescriptor {
+        let core_line = core.map(|c| format!("core: \"{c}\"\n")).unwrap_or_default();
+        let yaml = format!(
+            "name: \"{name}\"\n\
+             arch: \"riscv\"\n\
+             cpu_hz: 100_000_000\n\
+             {core_line}\
+             flash:\n  base: 0x20000000\n  size: \"32MB\"\n\
+             ram:\n  base: 0x10000000\n  size: \"256KB\"\n\
+             peripherals: []\n"
+        );
+        serde_yaml::from_str(&yaml).expect("fixture chip must parse")
+    }
+
+    assert_eq!(
+        RiscVCoreProfile::for_chip(&chip("esp32c3", None)),
+        RiscVCoreProfile::Esp32C3,
+        "the C3 has no `core:` and must keep its vendor profile"
+    );
+    assert_eq!(
+        RiscVCoreProfile::for_chip(&chip("esp32c6", Some("rv32imac"))),
+        RiscVCoreProfile::Esp32C3,
+        "ESP32 parts keep the vendor profile regardless of the ISA string"
+    );
+    assert_eq!(
+        RiscVCoreProfile::for_chip(&chip("arty-litex-vexriscv", Some("rv32im"))),
+        RiscVCoreProfile::StandardRv32,
+        "a generic rv32 core runs the standard profile"
+    );
+    assert_eq!(
+        RiscVCoreProfile::for_chip(&chip("mystery-riscv", None)),
+        RiscVCoreProfile::Esp32C3,
+        "an undeclared core keeps the historical default"
+    );
 }

@@ -299,12 +299,17 @@ peripherals:
     base_address: 0x6003E000
     config:
       path: "../peripherals/esp32c3/hmac.yaml"
-  # GDMA (general DMA)
+  # GDMA (general DMA): three IN/OUT channel pairs walking descriptor lists
+  # (crates/core/src/peripherals/esp32c3/gdma.rs). A channel bound to the
+  # GP-SPI2 (PERI_SEL = 0) moves the SPI's DMA data (SPI_DMA_CONF.DMA_TX_ENA /
+  # DMA_RX_ENA), MEM_TRANS_EN copies memory to memory; channel n raises
+  # interrupt-matrix source 44 + n. Register map: ../peripherals/esp32c3/dma.yaml.
   - id: "dma"
-    type: "declarative"
+    type: "esp32c3_gdma"
     base_address: 0x6003F000
+    size: "4KB"
     config:
-      path: "../peripherals/esp32c3/dma.yaml"
+      debug_schema: "../peripherals/esp32c3/dma.yaml"
   # SAR ADC behavioral one-shot engine
   # (crates/core/src/peripherals/esp32c3/apb_saradc.rs): a ONETIME_SAMPLE
   # conversion produces a channel-dependent result + DONE handshake. The

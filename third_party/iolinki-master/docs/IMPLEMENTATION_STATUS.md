@@ -19,7 +19,7 @@ Status definitions:
 | Public API shape | Partial | [`include/iolinki_master/master.h`](../include/iolinki_master/master.h), [`tests/test_master_public_header.c`](../tests/test_master_public_header.c), [`tests/test_master_isdu_public.c`](../tests/test_master_isdu_public.c), [`tests/test_master_sio_public.c`](../tests/test_master_sio_public.c) | Add more black-box tests for future service APIs. |
 | Opaque storage/private state | Implemented | [`include/iolinki_master/master.h`](../include/iolinki_master/master.h), [`src/master_internal.h`](../src/master_internal.h) | Tune the public storage sizes once the private state stops moving quickly. |
 | Port lifecycle | Implemented | [`src/master_port.c`](../src/master_port.c), [`tests/test_master_startup.c`](../tests/test_master_startup.c) | Add a public lifecycle example for downstream users. |
-| Startup and baudrate scan | Implemented | [`src/master_port.c`](../src/master_port.c), [`tests/test_master_startup.c`](../tests/test_master_startup.c), [`tests/test_master_tick.c`](../tests/test_master_tick.c) | Per-baud wake-up retry (`wake_retry_limit`, default n_WU = 2), T_DMT (`t_dmt_tbit`) and T_DWU (`t_dwu_100us`) gating implemented and covered by ctest. The physical WURQ pulse and T_REN still live in the PHY adapter and remain unverified on silicon. |
+| Startup and baudrate scan | Implemented | [`src/master_port.c`](../src/master_port.c), [`tests/test_master_startup.c`](../tests/test_master_startup.c), [`tests/test_master_tick.c`](../tests/test_master_tick.c) | EstablishCom submachine of 7.3.2.2 / Figure 36: one wake-up, then test messages at COM3, COM2, COM1; T_REN + T_DMT, T_DMT per rate, T_DWU, n_WU = 2 and T_SD with the PHY inactive between sequences, covered by [`tests/test_master_establish.c`](../tests/test_master_establish.c). The physical WURQ pulse stays in the PHY adapter; none of this timing has been measured on silicon. |
 | M-sequence handling | Implemented | [`src/master_port.c`](../src/master_port.c), [`src/master_parameters.c`](../src/master_parameters.c), [`tests/test_master_pd.c`](../tests/test_master_pd.c), [`tests/test_master_startup.c`](../tests/test_master_startup.c), [`tests/test_master_parameters.c`](../tests/test_master_parameters.c) | Real-device validation remains open. |
 | Cyclic process data | Implemented | [`src/master_port.c`](../src/master_port.c), [`tests/test_master_pd.c`](../tests/test_master_pd.c), [`tests/test_master_public_flow.c`](../tests/test_master_public_flow.c); on-wire PD output echo against real device firmware in `labwired-core` test `world_station_services.rs :: master_services_isdu_pdout_event_ds_all_pass_on_wire` (this repo's `labwired-real-firmware-model` CI job) | Add more black-box coverage for configured PD sizes and invalid user buffers. |
 | RX path and retries | Implemented | [`src/master_port.c`](../src/master_port.c), [`tests/test_master_startup.c`](../tests/test_master_startup.c), [`tests/test_master_tick.c`](../tests/test_master_tick.c); real on-wire RX of device responses over a simulated UART wire in `labwired-core` test `world_station_services.rs :: master_services_isdu_pdout_event_ds_all_pass_on_wire` (this repo's `labwired-real-firmware-model` CI job) | Add line-noise and long-running soak tests with a real PHY. |
@@ -30,7 +30,7 @@ Status definitions:
 | Diagnostics | Partial | [`include/iolinki_master/master.h`](../include/iolinki_master/master.h), [`src/master_port.c`](../src/master_port.c), [`src/master_isdu.c`](../src/master_isdu.c), [`tests/test_master_pd.c`](../tests/test_master_pd.c), [`tests/test_master_isdu.c`](../tests/test_master_isdu.c) | Add event detail and link-quality metrics. |
 | Multi-port controller | Partial | [`src/master_controller.c`](../src/master_controller.c), [`tests/test_master_controller.c`](../tests/test_master_controller.c), [`examples/master_4port_controller_demo.c`](../examples/master_4port_controller_demo.c) | Define scheduler ownership and port-level runtime policy. |
 | SIO DI/DQ | Partial | [`src/master_sio.c`](../src/master_sio.c), [`tests/test_master_startup.c`](../tests/test_master_startup.c), [`tests/test_master_sio_public.c`](../tests/test_master_sio_public.c) | Validate SIO and mode transitions against real adapters. |
-| Scheduler/timing | Implemented | [`src/master_port.c`](../src/master_port.c), [`src/master_parameters.c`](../src/master_parameters.c), [`src/master_controller.c`](../src/master_controller.c), [`tests/test_master_tick.c`](../tests/test_master_tick.c), [`tests/test_master_controller.c`](../tests/test_master_controller.c), [`tests/test_master_parameters.c`](../tests/test_master_parameters.c) | MasterCycleTime octet decoded to 100us for validation and pacing; response deadline floored at (11 + 10) T_BIT per A.3.5/A.3.6; T_DMT/T_DWU startup timers implemented. Validate timing against hardware captures. |
+| Scheduler/timing | Implemented | [`src/master_port.c`](../src/master_port.c), [`src/master_parameters.c`](../src/master_parameters.c), [`src/master_controller.c`](../src/master_controller.c), [`tests/test_master_tick.c`](../tests/test_master_tick.c), [`tests/test_master_controller.c`](../tests/test_master_controller.c), [`tests/test_master_parameters.c`](../tests/test_master_parameters.c) | MasterCycleTime octet decoded to 100us for validation and pacing; response deadline floored at (11 + 10) T_BIT per A.3.5/A.3.6; T_REN/T_DMT/T_DWU/T_SD startup timers and the T_M-sequence test-message window implemented. Validate timing against hardware captures. |
 | Master Command channel/addressing | Implemented | [`src/master_parameters.c`](../src/master_parameters.c), [`src/master_port.c`](../src/master_port.c), [`tests/test_master_parameters.c`](../tests/test_master_parameters.c) | R/W + communication-channel + address encode/decode helpers; the operate transition is composed through them. Page/diagnosis channel services build on this next. |
 | Events | Partial | [`include/iolinki_master/master.h`](../include/iolinki_master/master.h), [`src/master_isdu.c`](../src/master_isdu.c), [`src/master_port.c`](../src/master_port.c), [`tests/test_master_isdu_public.c`](../tests/test_master_isdu_public.c), [`tests/test_master_fake_device.c`](../tests/test_master_fake_device.c); on-wire event trigger and `iolink_master_read_event_details` returning code 0x8CA0 against real device firmware in `labwired-core` test `world_station_services.rs :: master_services_isdu_pdout_event_ds_all_pass_on_wire` (this repo's `labwired-real-firmware-model` CI job) | Optional dispatch callbacks (rising-edge event-pending notify + per-event handler) added; fully autonomous async event servicing remains. |
 | Data Storage | Implemented | [`src/master_isdu.c`](../src/master_isdu.c), [`tests/test_master_isdu_public.c`](../tests/test_master_isdu_public.c), [`tests/test_master_fake_device.c`](../tests/test_master_fake_device.c); on-wire Data Storage write + readback round-trip against real device firmware in `labwired-core` test `world_station_services.rs :: master_services_isdu_pdout_event_ds_all_pass_on_wire` (this repo's `labwired-real-firmware-model` CI job) | Validate Data Storage restore flows against real devices. |
@@ -194,9 +194,11 @@ spec-conformant for the master slice (design contract C1..C6 in
 - **C1 message checksum (A.1.6).** Requests and replies use the spec XOR
   checksum, seeded `0x52` and compressed 8-to-6 bits by equations (A.1). The
   shared helper is `iolink_checksum6` from the `iolinki` device stack; the
-  obsolete `iolink_crc6` is gone. Reply layout is `[PD-in][OD] CKS` with the
-  Event flag in CKS bit 7 and the PD-invalid flag in bit 6 (A.1.5); there is no
-  leading status octet and no PD toggle bit.
+  obsolete `iolink_crc6` is gone. The reply to a READ M-sequence is
+  `[OD][PD-in] CKS` and the reply to a WRITE M-sequence is `[PD-in] CKS`
+  (Figures A.9/A.10/A.13/A.14), with the Event flag in CKS bit 7 and the
+  PD-invalid flag in bit 6 (A.1.5); there is no leading status octet and no PD
+  toggle bit.
 - **C2 M-sequence control octet (A.1.2, Table A.1/A.2).** `MC = RW<<7 |
   channel<<5 | address`; the master addresses Process, Page, Diagnosis and ISDU
   channels, and reads of unimplemented addresses return 0.
@@ -230,4 +232,12 @@ needs hardware/conformance validation (see the Open rows).
 The scheduler/timing model is now explicit (cycle/deadline pacing plus the
 C6 startup/recovery timers). The remaining architecture work is real-PHY
 adapters and hardware validation, not the protocol wire.
+
+The next proof is a bench: one commercial sensor on this master through an
+out-of-tree PHY adapter, with VendorID, DeviceID, and process data emitted by
+`iolink_master_write_gateway_line`. Still open:
+
+- No hardware PHY adapter in this repository. `docs/PHY_BOUNDARY.md` is the contract.
+- No real-device sensor or actuator matrix.
+- No official IO-Link master conformance test.
 

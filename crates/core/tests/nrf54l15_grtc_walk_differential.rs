@@ -34,6 +34,11 @@
 
 #![cfg(feature = "event-scheduler")]
 
+mod common;
+
+use common::walk_differential::{
+    assert_modes_differ, assert_walk_differential, probe_at, run_probed, WalkMode,
+};
 use labwired_core::bus::SystemBus;
 use labwired_core::cpu::CortexM;
 use labwired_core::peripherals::nrf54l::grtc::Nrf54lGrtc;
@@ -326,50 +331,25 @@ fn load_firmware(bus: &mut SystemBus, with_wfi: bool) {
     );
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct Probe {
-    step: u64,
-    total_cycles: u64,
-    pc: u32,
-    regs: [u32; 16],
-    isr_count: u32,
-    main_count: u32,
+/// The caller-supplied observables the harness probe carries for this fixture:
+/// the two RAM counters the ISR and the main loop maintain.
+fn extra(machine: &Machine<CortexM>) -> Vec<(&'static str, u64)> {
+    vec![
+        (
+            "isr_count",
+            u64::from(machine.bus.read_u32(ISR_COUNT_ADDR).unwrap()),
+        ),
+        (
+            "main_count",
+            u64::from(machine.bus.read_u32(MAIN_COUNT_ADDR).unwrap()),
+        ),
+    ]
 }
 
-fn probe(machine: &Machine<CortexM>, step: u64) -> Probe {
-    let mut regs = [0u32; 16];
-    for (i, r) in regs.iter_mut().enumerate() {
-        *r = machine.read_core_reg(i as u8);
-    }
-    Probe {
-        step,
-        total_cycles: machine.total_cycles,
-        pc: machine.get_pc(),
-        regs,
-        isr_count: machine.bus.read_u32(ISR_COUNT_ADDR).unwrap(),
-        main_count: machine.bus.read_u32(MAIN_COUNT_ADDR).unwrap(),
-    }
-}
-
-fn run_probed(machine: &mut Machine<CortexM>, entry: u32, steps: u64) -> Vec<Probe> {
-    machine.cpu.pc = entry;
-    let mut probes = Vec::with_capacity(steps as usize);
-    for s in 0..steps {
-        machine.run(Some(1)).unwrap();
-        probes.push(probe(machine, s + 1));
-    }
-    probes
-}
-
-fn assert_probes_identical(reference: &[Probe], candidate: &[Probe], what: &str) {
-    assert_eq!(reference.len(), candidate.len());
-    for (r, c) in reference.iter().zip(candidate.iter()) {
-        assert_eq!(
-            r, c,
-            "{what}: first divergence at step {} (walk-reference vs scheduler)",
-            r.step
-        );
-    }
+/// Vacuity guard for the GRTC pinned by `build_machine`.
+fn uses_scheduler(machine: &Machine<CortexM>) -> bool {
+    let idx = machine.bus.find_peripheral_index_by_name("grtc").unwrap();
+    machine.bus.peripherals[idx].dev.uses_scheduler()
 }
 
 /// Gate 1: the compare-IRQ + SYSCOUNTER-poll firmware, walk-on vs scheduler at
@@ -380,29 +360,32 @@ fn assert_probes_identical(reference: &[Probe], candidate: &[Probe], what: &str)
 fn grtc_compare_irq_firmware_is_byte_identical_at_interval_1() {
     const STEPS: u64 = 3_000;
 
-    let mut walk = build_machine(false, 1);
-    load_firmware(&mut walk.bus, false);
-    let walk_probes = run_probed(&mut walk, MAIN_ENTRY, STEPS);
-
-    let mut sched = build_machine(true, 1);
-    load_firmware(&mut sched.bus, false);
-    let sched_probes = run_probed(&mut sched, MAIN_ENTRY, STEPS);
+    let build = |mode: WalkMode| {
+        let mut m = build_machine(!mode.is_legacy_walk(), 1);
+        load_firmware(&mut m.bus, false);
+        m
+    };
+    assert_modes_differ(
+        uses_scheduler(&build(WalkMode::LegacyWalk)),
+        uses_scheduler(&build(WalkMode::Scheduler)),
+        "grtc compare-irq firmware",
+    );
+    let reference =
+        assert_walk_differential("grtc compare-irq firmware", MAIN_ENTRY, STEPS, build, extra);
 
     // The firmware must actually exercise the surface: repeated compare IRQs
     // and a live main loop that observed the SYSCOUNTER advancing.
-    let last = walk_probes.last().unwrap();
+    let last = reference.last().unwrap();
     assert!(
-        last.isr_count >= 3,
+        last.extra("isr_count") >= 3,
         "reference must take repeated GRTC compare IRQs (got {})",
-        last.isr_count
+        last.extra("isr_count")
     );
-    assert!(last.main_count > 100, "main loop must run");
+    assert!(last.extra("main_count") > 100, "main loop must run");
     assert!(
         last.regs[4] > 0,
         "the main loop must observe the SYSCOUNTER advance"
     );
-
-    assert_probes_identical(&walk_probes, &sched_probes, "grtc compare-irq firmware");
 }
 
 /// Gate 2: scheduler @ interval 64 vs the walk-on interval-1 golden reference.
@@ -417,7 +400,7 @@ fn grtc_isr_count_is_exact_at_interval_64() {
 
     let mut walk = build_machine(false, 1);
     load_firmware(&mut walk.bus, false);
-    let walk_probes = run_probed(&mut walk, MAIN_ENTRY, STEPS);
+    let walk_probes = run_probed(&mut walk, MAIN_ENTRY, STEPS, &extra);
 
     let mut sched = build_machine(true, 64);
     load_firmware(&mut sched.bus, false);
@@ -430,7 +413,7 @@ fn grtc_isr_count_is_exact_at_interval_64() {
     let last_delivery_step = walk_probes
         .iter()
         .zip(walk_probes.iter().skip(1))
-        .filter(|(a, b)| b.isr_count > a.isr_count)
+        .filter(|(a, b)| b.extra("isr_count") > a.extra("isr_count"))
         .map(|(_, b)| b.step)
         .next_back()
         .expect("reference delivers at least one ISR");
@@ -441,11 +424,12 @@ fn grtc_isr_count_is_exact_at_interval_64() {
     );
 
     assert!(
-        reference.isr_count >= 3,
+        reference.extra("isr_count") >= 3,
         "reference must take repeated IRQs"
     );
     assert_eq!(
-        sched_isr, reference.isr_count,
+        sched_isr,
+        reference.extra("isr_count") as u32,
         "ISR execution count over the fixed window must be exact at interval 64"
     );
     assert_eq!(
@@ -477,26 +461,27 @@ fn wfi_sleep_wakes_from_scheduled_grtc_compare() {
 
     let mut ff_off = build(false);
     ff_off.run(Some(STEPS)).unwrap();
-    let off_probe = probe(&ff_off, STEPS as u64);
+    let off_probe = probe_at(&ff_off, STEPS as u64, &extra);
 
     let mut ff_on = build(true);
     ff_on.reset_step_profile();
     ff_on.run(Some(STEPS)).unwrap();
-    let on_probe = probe(&ff_on, STEPS as u64);
+    let on_probe = probe_at(&ff_on, STEPS as u64, &extra);
 
     // The pattern must actually sleep-and-wake repeatedly on the scheduled GRTC
     // compares.
     assert!(
-        off_probe.isr_count >= 5,
+        off_probe.extra("isr_count") >= 5,
         "WFI loop must take repeated GRTC compare IRQs (got {})",
-        off_probe.isr_count
+        off_probe.extra("isr_count")
     );
 
     // Fast-forward must not change WHEN things happen or HOW OFTEN the ISR
     // runs — only how many instructions the CPU retires getting there.
     assert_eq!(on_probe.total_cycles, off_probe.total_cycles);
     assert_eq!(
-        on_probe.isr_count, off_probe.isr_count,
+        on_probe.extra("isr_count"),
+        off_probe.extra("isr_count"),
         "every scheduled GRTC compare must wake the sleeping core and run the ISR"
     );
 

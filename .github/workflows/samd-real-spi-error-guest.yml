@@ -1,0 +1,78 @@
+name: SAMD actual CODAL SPI writeback AHB error guest
+on:
+  pull_request:
+    paths: ['crates/core/tests/samd_real_spi_error_guest.rs', '.github/workflows/samd-real-spi-error-guest.yml']
+permissions:
+  contents: read
+concurrency:
+  group: real-spi-error-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  LABWIRED_SPI_SOURCE: e81fa3b95a3f3e0a32975273f7da0d176ffd61b8
+jobs:
+  spi-error-guest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: CrispStrobe/codal-samd
+          ref: e81fa3b95a3f3e0a32975273f7da0d176ffd61b8
+          path: owned-error-source
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: lancaster-university/codal-core
+          ref: 2ed19d64ec3359143409a4b0a9758b4aeef3ee7d
+          path: owned-error-core
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: lancaster-university/codal-core
+          ref: 2ed19d64ec3359143409a4b0a9758b4aeef3ee7d
+          path: owned-positive-core
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: Swatinem/rust-cache@v2
+      - name: Build separate DMA-error and positive callers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-arm-none-eabi
+          arm-none-eabi-g++ --version
+          dpkg-query -W gcc-arm-none-eabi
+          cd owned-error-source
+          bash runtime-services/build.sh ../owned-error-core "$RUNNER_TEMP/spi-error-12" 12
+          bash runtime-services/build.sh ../owned-positive-core "$RUNNER_TEMP/spi-error-8" 8
+      - name: Nonvacuous AHB-fault and positive ordering controls
+        run: |
+          cargo test --release --locked -p labwired-core --test samd_real_spi_error_guest -- --nocapture
+          cargo test --release --locked -p labwired-core --test samd_real_spi_guest -- --nocapture
+      - name: Execute all four actual error and positive cases
+        run: |
+          set -o pipefail
+          fault_failures=0
+          for mode in 12 8; do
+            if test "$mode" = 12; then fixture=samd_real_spi_error_guest; else fixture=samd_real_spi_guest; fi
+            export LABWIRED_SPI_FIXTURE_DIR="$RUNNER_TEMP/spi-error-$mode"
+            for profile in default scheduler; do
+              feature_args=()
+              if test "$profile" = scheduler; then feature_args=(--features event-scheduler); fi
+              if ! cargo test --release --locked -p labwired-core "${feature_args[@]}" --test "$fixture" -- --ignored --nocapture 2>&1 | tee "spi-error-$mode-$profile.log"; then
+                fault_failures=$((fault_failures + 1))
+              fi
+            done
+          done
+          test "$fault_failures" -eq 0
+      - name: Preserve actual fault source and observations
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: actual-codal-spi-ahb-error-guest-results
+          path: |
+            spi-error-*.log
+            ${{ runner.temp }}/spi-error-12/
+            ${{ runner.temp }}/spi-error-8/

@@ -1,0 +1,19 @@
+[package]
+name = "esp32c3-net-buses"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
+
+[workspace]
+
+[dependencies]
+esp-hal       = { version = "1.1", features = ["esp32c3", "unstable"] }
+esp-println   = { version = "0.17", default-features = false, features = ["esp32c3", "jtag-serial", "colors", "critical-section"] }
+esp-backtrace = { version = "0.19", features = ["esp32c3", "panic-handler", "println"] }
+
+[profile.release]
+opt-level     = "s"
+lto           = "thin"
+codegen-units = 1
+debug         = false

@@ -925,9 +925,13 @@ fn call4_entry_retw_no_overflow() -> OracleCase {
 /// sim (the canonical `l32e a0, a1, -12` handler double-faults on
 /// freshly-created task frames). We use transparent shadow-spilling on
 /// CALL{n} instead — see `spill_shadow_on_call` in cpu/xtensa_lx7.rs and
-/// the `#[cfg(any())]`-gated F5 check at the top of execute(). The case
-/// body below is still kept as the canonical hardware spec; the sim
-/// variant is wrapped manually as `#[ignore]` below.
+/// the runtime gate on `faithful_windows` in execute(). The case body
+/// below is still kept as the canonical hardware spec for the `_hw`
+/// variant; the sim variant (`entry_window_overflow_of4_sim`) was removed
+/// by the test-suite trim — entry-overflow vectoring does not exist on the
+/// sim path, so it could never pass. The spec still backs the `_hw` variant,
+/// so it is gated with it rather than left dangling in default builds.
+#[cfg(feature = "hw-oracle")]
 fn entry_window_overflow_of4_inner_spec() -> OracleCase {
     // Oracle program lays out BREAKs at all three OF vectors (0x000, 0x080,
     // 0x100) so the CPU halts cleanly regardless of which OFx the rotation
@@ -957,13 +961,6 @@ fn entry_window_overflow_of4_inner_spec() -> OracleCase {
             st.assert_excm(true);
             st.assert_windowbase(2);
         })
-}
-
-/// Sim variant: ignored. See note on `entry_window_overflow_of4_inner_spec`.
-#[test]
-#[ignore = "F5 overflow vector disabled in sim — shadow-spill used instead"]
-fn entry_window_overflow_of4_sim() {
-    labwired_hw_oracle::run_sim(entry_window_overflow_of4_inner_spec());
 }
 
 /// HW variant: feature-gated, exercises real-silicon vectoring.

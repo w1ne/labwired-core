@@ -21,7 +21,7 @@ A bare-metal firmware performs the real SAM D21 bring-up in datasheet order —
 NVMCTRL wait states, SYSCTRL.PCLKSR ready poll, GCLK SYNCBUSY spins,
 PM.APBCMASK, WRCONFIG, then `CTRLB` before `CTRLA.ENABLE` on SERCOM5 — and its
 `OK\n` console reaches the capture sink. The chip descriptor builds through
-`Session`/`SystemBus::from_config` (`atsamd21_config`), and the board LED is
+`Session`/`SystemBus::from_config` (`board_config_gates`), and the board LED is
 declared on PA17 per ArduinoCore-samd `variants/nano_33_iot/variant.cpp`.
 
 ## What is not proven

@@ -192,16 +192,18 @@ peripherals:
       pad_map: "stm32g0"
     clock: { reg: "apbenr1", bit: 22 }
 
-  # --- SPI (G0/Kinetis-style FIFO-less SPI; G4 uses the FIFO profile) ------
-  # `pad_map: stm32g0` routes SCK/MISO/MOSI/NSS by the G0 AF0 pinout
-  # (DS12232), not the F4 AF5 one.
+  # --- SPI (FIFO-type SPI: CR2.DS 4-16 bit, FRXTH, 32-bit RX/TX FIFOs, ----
+  # FRLVL/FTLVL, LDMA_TX/RX, NSSP — RM0444 §35, and the CR2/SR field lists of
+  # the STM32G071 SVD). CR2 resets to 0x0700 (DS = 8 bit), not the classic
+  # F1/F4/L0 0x0000. `pad_map: stm32g0` routes SCK/MISO/MOSI/NSS by the G0 AF0
+  # pinout (DS12232), not the L4 AF5 one.
   - id: "spi1"
     type: "spi"
     base_address: 0x40013000
     size: "1KB"
     irq: 25
     config:
-      profile: "stm32"
+      profile: "stm32_fifo"
       pad_map: "stm32g0"
     clock: { reg: "apbenr2", bit: 12 }
 
@@ -211,7 +213,7 @@ peripherals:
     size: "1KB"
     irq: 26
     config:
-      profile: "stm32"
+      profile: "stm32_fifo"
       pad_map: "stm32g0"
     clock: { reg: "apbenr1", bit: 14 }
 
@@ -340,6 +342,32 @@ peripherals:
     base_address: 0x40020000
     size: "1KB"
     clock: { reg: "ahbenr", bit: 0 }
+
+  # --- DMAMUX (RM0444 §11): channel x feeds DMA1 channel x+1; CxCR.DMAREQ_ID
+  # selects the peripheral request (RM0444 Table 59 "DMAMUX: assignment of
+  # multiplexer inputs to resources": 16 SPI1_RX, 17 SPI1_TX, 18 SPI2_RX,
+  # 19 SPI2_TX). Shares DMA1's clock enable (RCC_AHBENR.DMA1EN). The
+  # identification registers are the G071 SVD reset values (HWCFGR1: 7
+  # channels, 4 request generators).
+  - id: "dmamux"
+    type: "dmamux"
+    base_address: 0x40020800
+    size: "1KB"
+    clock: { reg: "ahbenr", bit: 0 }
+    config:
+      dma: "dma1"
+      channels: 7
+      requests:
+        spi1_rx: 16
+        spi1_tx: 17
+        spi2_rx: 18
+        spi2_tx: 19
+      id_registers:
+        0x3EC: 0x00000017
+        0x3F0: 0x04173907
+        0x3F4: 0x00000011
+        0x3F8: 0x00100011
+        0x3FC: 0xA3C5DD01
 
   # --- Watchdogs / RTC ------------------------------------------------------
   - id: "rtc"

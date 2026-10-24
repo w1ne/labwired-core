@@ -174,7 +174,17 @@ impl SystemBus {
         // parse with `from_yaml`. Validating at load time only would mean two
         // of our three runtimes silently accept documents the third rejects.
         super::part_pack::validate_manifest(manifest)?;
-        let flash_size = chip.flash.size;
+        // AVR is Harvard: the CPU keeps the program in its own flash (sized by
+        // `AvrModel`), and the bus-side flash window is only nominal. Data-space
+        // I/O is mirrored on the bus at 0x1_0000 (`AVR_IO_MIRROR_BASE`), so a
+        // part with more than 64 KB of flash (ATmega2560: 256 KB) must not map
+        // its whole flash there, or the window would shadow the port, USART and
+        // ADC mirrors (reads of 0x1_00C7 came back as erased 0xFF).
+        let flash_size = if chip.arch == labwired_config::Arch::Avr {
+            chip.flash.size.min(crate::cpu::avr::AVR_IO_MIRROR_BASE)
+        } else {
+            chip.flash.size
+        };
         let ram_size = chip.ram.size;
 
         let mut extra_mem = Vec::with_capacity(chip.memory_regions.len());
@@ -276,6 +286,11 @@ impl SystemBus {
         let mut bus = Self {
             flash_thunks: std::collections::HashMap::new(),
             flash: LinearMemory::new_erased(flash_size as usize, chip.flash.base),
+            memory_policy: crate::bus::memory_policy::MemoryPolicyState::for_chip(chip),
+            memory_policy_bypass: false,
+            debug_watches: Vec::new(),
+            debug_watch_hit: Cell::new(None),
+            debug_watch_host_bypass: std::cell::Cell::new(false),
             ram: LinearMemory::new(ram_size as usize, chip.ram.base),
             extra_mem,
             peripherals: Vec::new(),
@@ -290,6 +305,7 @@ impl SystemBus {
             // never configures the PLL, so it really does run its 80 MHz part
             // at the 4 MHz MSI reset rate and says so in its manifest.
             cpu_hz: manifest.cpu_hz.unwrap_or(chip.cpu_hz),
+            riscv_profile: crate::cpu::RiscVCoreProfile::for_chip(chip),
             bit_band_enabled: Self::chip_has_bit_band(chip),
             reset_vector_offset: chip.reset_vector_offset,
             flash_boot_alias: chip.flash_boot_alias,
@@ -302,6 +318,8 @@ impl SystemBus {
             rp2040_io_bank0_idx: None,
             rp2040_sio_idx: None,
             pad_control_links: Vec::new(),
+            rtc_io_link: None,
+            pad_claim_links: Default::default(),
             pin_port_ids: Vec::new(),
             rcc_idx: None,
             clock_gating_bypass: false,
@@ -323,6 +341,7 @@ impl SystemBus {
             pending_schedule: Vec::new(),
             freerunning_timer_poll_mmio: Cell::new(0),
             side_effecting_mmio: Cell::new(0),
+            batch_stop: Default::default(),
             memory_reads: Cell::new(0),
             memory_writes: Cell::new(0),
             peripheral_accesses: Cell::new(0),
@@ -354,6 +373,7 @@ impl SystemBus {
             flash_error_flags_idx: None,
             u5_program_gate_idx: None,
             nrf52_nvmc_idx: None,
+            flash_store_owner_idx: None,
             bus_trace: bus_trace::new_log(),
             logic_tap: crate::logic_capture::LogicTap::new(),
             pin_map: std::collections::HashMap::new(),
@@ -361,6 +381,7 @@ impl SystemBus {
             io_voltage_v: None,
             gpio_input_thresholds: None,
             supply: crate::power::SupplySupervisor::default(),
+            supply_domains: Default::default(),
         };
         bus.record_external_devices(manifest);
 
@@ -1058,6 +1079,8 @@ impl SystemBus {
         // the UART indices 14/17/198 are the classic part's alone.
         bus.wire_esp32_spi_pads();
         bus.wire_esp32_uart_pads();
+        // …and its LEDC outputs (signals 71..86).
+        bus.wire_esp32_ledc_pads();
         // RP2040: bind I²C wires to the pads IO_BANK0's FUNCSEL can route them to.
         bus.wire_rp2040_i2c_pads();
         // Same for the RP2040 UARTs' TX/RX, so serial output is a waveform on
@@ -1081,6 +1104,9 @@ impl SystemBus {
         // And the other direction: pads that feed a timer's input-capture
         // stage (TIMx_CHn), so an external edge latches CCRx at its cycle.
         bus.wire_stm32_timer_capture_pads();
+        // And the timers' channel OUTPUTS (F1): a PWM / output-compare channel
+        // drives its AF pad, so `analogWrite` is a waveform on the pin.
+        bus.wire_stm32_timer_output_pads();
         // nRF52: bind every TWIM/SPIM/UARTE wire to every pad its PSEL can
         // name. Unlike the four above this is not a datasheet AF table — the
         // pad has no function register on this family, so the peripherals

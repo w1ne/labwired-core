@@ -51,6 +51,7 @@ pub enum CpuSnapshot {
     RiscV(RiscVCpuSnapshot),
     XtensaLx7(XtensaLx7CpuSnapshot),
     Avr(AvrCpuSnapshot),
+    Pic24(Box<Pic24CpuSnapshot>),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -66,6 +67,269 @@ pub struct AvrCpuSnapshot {
     pub pc: u32,
     pub sp: u16,
     pub sreg: u8,
+}
+
+/// PIC24/dsPIC33 visible state (word-addressed PC; W0–W15; UART1 latches;
+/// M1a timers, interrupt latches and accumulators).
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Pic24CpuSnapshot {
+    pub registers: Vec<u16>,
+    pub pc: u32,
+    pub sr: u16,
+    pub cycles: u64,
+    pub u1mode: u16,
+    pub u1sta: u16,
+    #[serde(default)]
+    pub t1con: u16,
+    #[serde(default)]
+    pub tmr1: u16,
+    #[serde(default)]
+    pub pr1: u16,
+    #[serde(default)]
+    pub t1_frac: u16,
+    #[serde(default)]
+    pub t2con: u16,
+    #[serde(default)]
+    pub tmr2: u16,
+    #[serde(default)]
+    pub pr2: u16,
+    #[serde(default)]
+    pub t2_frac: u16,
+    #[serde(default)]
+    pub t3con: u16,
+    #[serde(default)]
+    pub tmr3: u16,
+    #[serde(default)]
+    pub pr3: u16,
+    #[serde(default)]
+    pub t3_frac: u16,
+    #[serde(default)]
+    pub ifs0: u16,
+    #[serde(default)]
+    pub iec0: u16,
+    #[serde(default)]
+    pub ipc0: u16,
+    #[serde(default)]
+    pub ipc1: u16,
+    #[serde(default)]
+    pub ipc2: u16,
+    #[serde(default)]
+    pub intcon1: u16,
+    #[serde(default)]
+    pub intcon2: u16,
+    #[serde(default)]
+    pub corcon: u16,
+    #[serde(default)]
+    pub acc_a: i64,
+    #[serde(default)]
+    pub acc_b: i64,
+    #[serde(default)]
+    pub tris: [u16; 3],
+    #[serde(default)]
+    pub lat: [u16; 3],
+    #[serde(default)]
+    pub odc: [u16; 3],
+    #[serde(default)]
+    pub pad_in: [u16; 3],
+    #[serde(default)]
+    pub rpinr7: u16,
+    #[serde(default)]
+    pub rpor: Vec<u16>,
+    #[serde(default)]
+    pub ic_con: [u16; 2],
+    #[serde(default)]
+    pub ic_fifo: [Vec<u16>; 2],
+    #[serde(default)]
+    pub ic_prescale: [u8; 2],
+    #[serde(default)]
+    pub ic_ici_count: [u8; 2],
+    #[serde(default)]
+    pub oc_con: [u16; 2],
+    #[serde(default)]
+    pub oc_r: [u16; 2],
+    #[serde(default)]
+    pub oc_rs: [u16; 2],
+    #[serde(default)]
+    pub oc_level: [Option<bool>; 2],
+    #[serde(default)]
+    pub oc_halted: [bool; 2],
+    // M2: Motor Control PWM (MCPWM1) and QEI1.
+    #[serde(default)]
+    pub p1tcon: u16,
+    #[serde(default)]
+    pub p1tmr: u16,
+    #[serde(default)]
+    pub p1tper: u16,
+    #[serde(default)]
+    pub p1tper_active: u16,
+    #[serde(default)]
+    pub p1secmp: u16,
+    #[serde(default)]
+    pub pwm1con1: u16,
+    #[serde(default)]
+    pub pwm1con2: u16,
+    #[serde(default)]
+    pub p1dtcon1: u16,
+    #[serde(default)]
+    pub p1dtcon2: u16,
+    #[serde(default)]
+    pub p1fltacon: u16,
+    #[serde(default)]
+    pub p1ovdcon: u16,
+    #[serde(default)]
+    pub p1dc: [u16; 3],
+    #[serde(default)]
+    pub p1dc_active: [u16; 3],
+    #[serde(default)]
+    pub p1_frac: u16,
+    #[serde(default)]
+    pub p1_post: u8,
+    #[serde(default)]
+    pub p1_gen: [bool; 3],
+    #[serde(default)]
+    pub p1_dt_hi: [u16; 3],
+    #[serde(default)]
+    pub p1_dt_lo: [u16; 3],
+    #[serde(default)]
+    pub p1_fault_force: bool,
+    #[serde(default)]
+    pub p1_fault_latched: bool,
+    #[serde(default)]
+    pub p1_fault_release: bool,
+    #[serde(default)]
+    pub flta_prev: bool,
+    #[serde(default)]
+    pub rpinr12: u16,
+    #[serde(default)]
+    pub rpinr14: u16,
+    #[serde(default)]
+    pub rpinr15: u16,
+    #[serde(default)]
+    pub ifs3: u16,
+    #[serde(default)]
+    pub iec3: u16,
+    #[serde(default)]
+    pub ipc14: u16,
+    #[serde(default)]
+    pub ipc15: u16,
+    #[serde(default)]
+    pub qei1con: u16,
+    #[serde(default)]
+    pub dflt1con: u16,
+    #[serde(default)]
+    pub pos1cnt: u16,
+    #[serde(default)]
+    pub max1cnt: u16,
+    #[serde(default)]
+    pub qei_prev_ab: u8,
+    #[serde(default)]
+    pub qei_index_prev: bool,
+    #[serde(default)]
+    pub qei_filt: [u8; 3],
+    #[serde(default)]
+    pub qei_filt_cnt: [u16; 3],
+    #[serde(default)]
+    pub qei_filt_out: [bool; 3],
+    #[serde(default)]
+    pub qei_frac: u16,
+    #[serde(default)]
+    pub qei_timer_prev: bool,
+    #[serde(default)]
+    pub qei_ext_psc: u16,
+    // M3: ADC1 / SPI1 / I2C1.
+    #[serde(default)]
+    pub ad1con1: u16,
+    #[serde(default)]
+    pub ad1con2: u16,
+    #[serde(default)]
+    pub ad1con3: u16,
+    #[serde(default)]
+    pub ad1chs123: u16,
+    #[serde(default)]
+    pub ad1chs0: u16,
+    #[serde(default)]
+    pub ad1pcfgl: u16,
+    #[serde(default)]
+    pub ad1cssl: u16,
+    #[serde(default)]
+    pub adc_buf: [u16; 16],
+    #[serde(default)]
+    pub adc_analog: [u16; 16],
+    /// 0 = off, 1 = sampling, 2 = converting.
+    #[serde(default)]
+    pub adc_state: u8,
+    #[serde(default)]
+    pub adc_conv_remaining: u32,
+    #[serde(default)]
+    pub adc_sample_remaining: u32,
+    #[serde(default)]
+    pub adc_conv_count: u16,
+    #[serde(default)]
+    pub adc_seq_pos: u8,
+    #[serde(default)]
+    pub adc_buf_pos: u8,
+    #[serde(default)]
+    pub adc_half: u8,
+    #[serde(default)]
+    pub adc_alt: bool,
+    #[serde(default)]
+    pub adc_scan_next: u8,
+    #[serde(default)]
+    pub adc_t3_trigger: bool,
+    #[serde(default)]
+    pub adc_pwm_trigger: bool,
+    #[serde(default)]
+    pub spi1stat: u16,
+    #[serde(default)]
+    pub spi1con1: u16,
+    #[serde(default)]
+    pub spi1con2: u16,
+    #[serde(default)]
+    pub spi1_rx: u16,
+    #[serde(default)]
+    pub spi1_tx: u16,
+    #[serde(default)]
+    pub spi1_tx_pending: Option<u16>,
+    #[serde(default)]
+    pub spi1_busy: u32,
+    #[serde(default)]
+    pub spi1_shifting: bool,
+    #[serde(default)]
+    pub i2c1con: u16,
+    #[serde(default)]
+    pub i2c1stat: u16,
+    #[serde(default)]
+    pub i2c1add: u16,
+    #[serde(default)]
+    pub i2c1msk: u16,
+    #[serde(default)]
+    pub i2c1brg: u16,
+    #[serde(default)]
+    pub i2c1rcv: u16,
+    #[serde(default)]
+    pub i2c1trn: u16,
+    #[serde(default)]
+    pub i2c_target: Option<usize>,
+    #[serde(default)]
+    pub i2c_reading: bool,
+    #[serde(default)]
+    pub i2c_addressed: bool,
+    #[serde(default)]
+    pub i2c_10bit_prefix: Option<u16>,
+    #[serde(default)]
+    pub i2c_busy: u32,
+    /// 0 = start, 1 = repeated start, 2 = transmit, 3 = receive, 4 = ack,
+    /// 5 = stop.
+    #[serde(default)]
+    pub i2c_op: Option<u8>,
+    #[serde(default)]
+    pub ifs1: u16,
+    #[serde(default)]
+    pub iec1: u16,
+    #[serde(default)]
+    pub ipc3: u16,
+    #[serde(default)]
+    pub ipc4: u16,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -102,6 +366,12 @@ pub struct RiscVCpuSnapshot {
 
     pub mtime: u64,
     pub mtimecmp: u64,
+
+    /// Debug trigger module (hardware breakpoints / watchpoints). Absent in
+    /// snapshots written before it was captured; those still load, with the
+    /// trigger module at reset.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub triggers: Option<crate::cpu::riscv::trigger::TriggerSnapshot>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

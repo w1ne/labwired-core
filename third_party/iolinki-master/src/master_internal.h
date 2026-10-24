@@ -40,6 +40,17 @@
 #define IOLINK_MASTER_DEFAULT_T_DMT_TBIT 32U /**< Default T_DMT in bit times (Table 42). */
 #define IOLINK_MASTER_DEFAULT_T_DWU_100US 400U /**< Default T_DWU, 40 ms (Table 42). */
 #define IOLINK_MASTER_DEFAULT_WAKE_RETRY_LIMIT 2U /**< Default n_WU (Table 42). */
+/** @brief Default T_SD, 500 ms: spacing of wake-up retry sequences (Table 42, 0.5..1 s). */
+#define IOLINK_MASTER_DEFAULT_T_SD_100US 5000U
+/** @brief T_REN maximum, 500 us, in 100us ticks (Table 10). */
+#define IOLINK_MASTER_T_REN_MAX_100US 5U
+/**
+ * @brief Worst-case TYPE_0 read M-sequence time in bit times (A.3.6, equation A.6).
+ *
+ * m = 2 master frames (MC, CKT), n = 2 device frames (OD, CKS):
+ * (2 + 2) * 11 + t_A (10, A.5) + (2 - 1) * t1 (1, A.3) + (2 - 1) * t2 (3, A.4) = 58.
+ */
+#define IOLINK_MASTER_TYPE0_M_SEQ_MAX_TBIT 58U
 /** @brief UART frame length in bit times (1 start + 8 data + 1 parity + 1 stop). */
 #define IOLINK_MASTER_UART_FRAME_TBIT 11U
 /** @brief Maximum device response delay in bit times (t_A, A.3.5). */
@@ -151,14 +162,16 @@
 #define IOLINK_MASTER_STARTUP_STEP_SEND_TYPE0 1U     /**< Send the TYPE_0 request. */
 #define IOLINK_MASTER_STARTUP_STEP_AWAIT_RESPONSE 2U /**< Await the device response. */
 #define IOLINK_MASTER_STARTUP_STEP_AWAIT_OPERATE_ACK 3U /**< Await the CKS reply to DeviceOperate. */
+/** Wake-up retry sequence failed: PHY inactive, waiting T_SD before the next one (7.3.2.2). */
+#define IOLINK_MASTER_STARTUP_STEP_INACTIVE 4U
 /** @} */
 
 /** @brief Startup micro-sequence progress for a port. */
 typedef struct
 {
     uint8_t step;           /**< Current startup step (IOLINK_MASTER_STARTUP_STEP_*). */
-    uint8_t baudrate_index; /**< Index into the COM baudrate sweep (auto-baud). */
-    uint8_t wake_attempts;  /**< Wake-up requests issued at the current baudrate. */
+    uint8_t baudrate_index; /**< Index into the COM3, COM2, COM1 sweep (auto-baud). */
+    uint8_t wake_attempts;  /**< Retry counter of Figure 36: failed WURQ + rate scans so far. */
 } iolink_master_startup_state_t;
 
 /** @brief Transport phase of the master ISDU handler (7.3.6.3, Figure 51). */
@@ -291,6 +304,10 @@ typedef struct
     bool send_ready_valid;            /**< True when @c send_ready_at_100us gates transmits. */
     bool cycle_timer_valid;           /**< True once the cycle timer has a valid start. */
     bool awaiting_response;           /**< True while waiting on a device response. */
+    /** True when the reply to the outstanding frame carries OD octets: a READ
+     *  M-sequence is answered with [OD][PD-in] CKS, a WRITE with [PD-in] CKS
+     *  (Figures A.9/A.10/A.13/A.14). */
+    bool rx_od_expected;
 } iolink_master_port_state_t;
 
 /** @brief Private controller state backed by ::iolink_master_controller_t storage. */

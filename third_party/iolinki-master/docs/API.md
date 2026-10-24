@@ -22,7 +22,8 @@ int iolink_master_init(iolink_master_port_t* port,
 Key config fields (`iolink_master_config_t`): `port_mode`
 (`IOLINK_MASTER_PORT_MODE_IOLINK` / `_DI` / `_DQ` / `_DEACTIVATED`), `m_seq_type`,
 `baudrate`, `min_cycle_time`, `pd_in_len` / `pd_out_len`, `auto_baudrate`,
-`response_timeout_100us`, `wake_retry_limit`, the identity fields
+`response_timeout_100us`, `t_dmt_tbit`, `t_dwu_100us`, `wake_retry_limit`,
+`t_sd_100us`, the identity fields
 (`validate_device_info`, `inspection_level`, `expected_vendor_id`,
 `expected_device_id`), the event callbacks (§6), and the PHY adapter hooks
 (`set_mode_checked`, `set_baudrate_checked`, `flush_rx`, `prepare_tx`,
@@ -52,7 +53,10 @@ The core owns no clock. You drive it and supply time.
 - `iolink_master_get_next_tick_time(port, now_100us, &out_next_100us)` — when the
   port is next due, for your hardware timer.
 - `iolink_master_on_timeout(port)` — advance the retry policy on a response timeout;
-  returns `OK`, `PENDING` while retrying, or `ERR_RETRY_LIMIT`.
+  returns `OK`, `PENDING` while retrying, or `ERR_RETRY_LIMIT` when a wake-up
+  retry sequence failed (the port stays in STARTUP and starts the next sequence).
+  It has no clock, so startup waits are skipped; use `iolink_master_tick_at` for
+  spec timing.
 - `iolink_master_get_timing(port, &timing)` — read-only scheduler snapshot.
 
 `response_timeout_100us` controls the response deadline; `min_cycle_time` controls

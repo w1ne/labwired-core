@@ -1,0 +1,85 @@
+name: AVR layout attribution (C9 diagnostic)
+
+# No push/schedule trigger, status issue, baseline update or engine publication.
+# After source qualification/landing, dispatch this fixed four-source campaign
+# once. Original readers are frozen independently before that event.
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - scripts/perf/avr_layout_profile.py
+      - scripts/perf/test_avr_layout_profile.py
+      - .github/workflows/avr-layout-profile.yml
+      - docs/engineering/avr-layout-cost.md
+
+permissions:
+  contents: read
+
+jobs:
+  producer-controls:
+    name: C9 pure producer controls
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - run: python3 -m unittest discover -s scripts/perf -p test_avr_layout_profile.py -v
+  profile:
+    name: avr-layout (${{ matrix.variant }})
+    if: github.event_name == 'workflow_dispatch'
+    needs: producer-controls
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - variant: before-sync
+            source: f1ca219d08080f4d93a73a3a4c5630e0824db799
+          - variant: sync-merge
+            source: 6e03dd12e22ceb534ec1bc494c360b72209ca94f
+          - variant: current
+            source: 715e1272d639aff3d12c0c73ff5f00e9a94d3371
+          - variant: upstream-source
+            source: 49f656f5233d109a8d357e6c5e0cec9e788decd5
+    steps:
+      - name: Checkout diagnostic controller
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: control
+          persist-credentials: false
+      - name: Checkout frozen source from this fork
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ matrix.source }}
+          path: source
+          persist-credentials: false
+      - name: Install the declared Rust toolchain
+        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
+        with:
+          toolchain: 1.95.0
+      - name: Install profiler and authored AVR fixture tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends valgrind gcc-avr binutils binutils-avr avr-libc
+      - name: Build and retain the original low/high profiles
+        env:
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          python3 control/scripts/perf/avr_layout_profile.py \
+            --source source --variant "$VARIANT" --output evidence
+      - name: Upload this snapshot's originals once
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: avr-layout-${{ matrix.variant }}
+          path: evidence/
+          # The producer copies the selected public .cargo/config.toml into
+          # this fresh, closed evidence directory; its inventory must retain it.
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14

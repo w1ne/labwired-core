@@ -1,0 +1,22 @@
+name: vexpress
+description: 'vexpress (root platform, ARM Versatile Express). Architecture: ARMv7-A.'
+family: ARM Versatile Express
+code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
+  \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
+pass_rate: 100
+verified: true
+system: systems/onboarding/vexpress.yaml
+provenance:
+  generated_by: scripts/onboard_hw_targets.py
+  parse_fallbacks:
+  - flash=memory
+validation:
+  method: ci-arm-fixture-simulation
+  reason: simulation-ok
+  checks:
+    system_manifest: true
+    chip_descriptor: true
+    simulation: true
+  timestamp_utc: '2026-10-18T14:40:38.225971+00:00'
+  run_url: ''
+  artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/vexpress.md

@@ -1,0 +1,65 @@
+#!/bin/busybox sh
+export PATH=/bin
+fail() { echo "LW_BASKET_FAILURE: $1"; while :; do /bin/busybox sleep 3600; done; }
+# UART identity validator begin
+uart_identity() {
+    [ "$#" = 2 ] || return 1
+    [ "${#1}" -le 512 ] && [ "${#2}" -le 512 ] || return 1
+    [ "$2" = /sys/firmware/devicetree/base/serial@ff4e0000 ] || return 1
+    case "$1" in ''|*[!A-Za-z0-9/.:@_-]*) return 1;; esac
+    # Linux6.18 serial_base creates physical/controller/port ancestry. Its
+    # decimal IDs are not the tty line number; both names must share ctrl_id.
+    awk -v path="$1" 'function id(v) {
+        return v ~ /^(0|[1-9][0-9]*)$/ && length(v) <= 10 && v + 0 <= 2147483647
+    } BEGIN {
+        if (split(path, p, "/") != 7 || p[1] != "" || p[2] != "sys" ||
+            p[3] != "devices" || p[4] != "platform" || p[5] != "ff4e0000.serial") exit 1
+        if (split(p[6], c, ":") != 2 || c[1] != "ff4e0000.serial" || !id(c[2])) exit 1
+        if (split(p[7], port, ":") != 2 || port[1] != "ff4e0000.serial" ||
+            split(port[2], n, "\\.") != 2 || !id(n[1]) || !id(n[2]) || n[1] != c[2]) exit 1
+        exit 0
+    }'
+}
+# UART identity validator end
+mount -t proc proc /proc || fail proc
+mount -t sysfs sysfs /sys || fail sysfs
+mount -t devtmpfs devtmpfs /dev || fail devtmpfs
+echo "LW_LINUX_MOUNTS proc=ok sysfs=ok devtmpfs=ok"
+[ "$$" = 1 ] || fail pid1
+release=$(uname -r) || fail uname_release
+[ "$release" = 6.18.56-0-lts ] || fail kernel_identity
+machine=$(uname -m) || fail uname_machine
+[ "$machine" = armv7l ] || fail architecture
+echo "LW_LINUX_PID1 pid=$$ kernel=$release machine=$machine"
+cat /proc/cpuinfo || fail cpuinfo
+head -n 4 /proc/meminfo || fail meminfo
+read before ignored < /proc/uptime || fail uptime_before
+echo "LW_LINUX_UPTIME_BEFORE=$before"
+sleep 1 || fail sleep_syscall
+read after ignored < /proc/uptime || fail uptime_after
+echo "LW_LINUX_UPTIME_AFTER=$after"
+awk -v a="$after" -v b="$before" 'BEGIN { exit !(a > b && a - b >= 0.8) }' || fail timer_advance
+echo LW_LINUX_BOOT_ACCEPTED
+for module in i2c-rk3x i2c-dev; do
+    insmod /lib/modules/6.18.56-0-lts/$module.ko
+    status=$?
+    echo "LW_BASKET_INSMOD module=$module exit=$status"
+    [ "$status" = 0 ] || fail module_load
+ done
+taint=$(cat /proc/sys/kernel/tainted) || fail taint
+case "$taint" in ''|*[!0-9]*) fail taint_format;; esac
+echo "LW_BASKET_TAINT=$taint"
+i2cpath=$(readlink -f /sys/class/i2c-dev/i2c-3/device) || fail i2c_sysfs
+uartpath=$(readlink -f /sys/class/tty/ttyS4/device) || fail uart_sysfs
+uartdt=$(readlink -f /sys/devices/platform/ff4e0000.serial/of_node) || fail uart_dt_sysfs
+[ "${#i2cpath}" -le 512 ] && [ "${#uartpath}" -le 512 ] && [ "${#uartdt}" -le 512 ] || fail sysfs_path_bound
+case "$i2cpath" in /sys/devices/platform/ff460000.i2c/i2c-3) ;; *) fail i2c_identity;; esac
+uart_identity "$uartpath" "$uartdt" || fail uart_identity
+echo "LW_BASKET_SYSFS i2c=$i2cpath uart=$uartpath uart_dt=$uartdt"
+[ -c /dev/i2c-3 ] && [ -c /dev/ttyS4 ] || fail device_nodes
+/bin/basket-helper
+status=$?
+echo "LW_BASKET_HELPER_EXIT=$status"
+[ "$status" = 0 ] || fail helper
+echo LW_BASKET_GUEST_ACCEPTED
+while :; do sleep 3600 || fail parked_sleep; done

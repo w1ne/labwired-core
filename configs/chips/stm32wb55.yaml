@@ -159,6 +159,8 @@ peripherals:
     config:
       debug_schema: "../peripherals/stm32wb55/spi1.yaml"
       profile: "stm32_fifo"
+      # WB AF pinout (SPI1 AF5, NSS on PA4/PA15/PB2), not the L4 one.
+      pad_map: "stm32wb"
     clock: { reg: "apb2enr", bit: 12 }
   # ADC1 (AHB2). RCC_AHB2ENR.ADCEN (bit 13). Model has no conversion engine
   # (L4 layout) — the genuinely-modelled DEEPPWD→ADVREGEN→ADEN→ADRDY power-up

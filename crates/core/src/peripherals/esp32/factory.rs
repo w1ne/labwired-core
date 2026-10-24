@@ -37,7 +37,10 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         }
         "esp32_spi" => Box::new(spi::Esp32Spi::new()),
         "esp32_sar_adc" => Box::new(sar_adc::Esp32SarAdc::new()),
-        "esp32_i2c" => Box::new(i2c::Esp32I2c::new()),
+        // I2C0 asserts source 49, I2C1 50 (`ETS_I2C_EXT{0,1}_INTR_SOURCE`).
+        "esp32_i2c" => Box::new(i2c::Esp32I2c::with_intr_source(
+            p_cfg.irq.unwrap_or(i2c::I2C0_INTR_SOURCE_ID),
+        )),
         "esp32_gpio" | "gpio_esp32" => Box::new(gpio::Esp32Gpio::new()),
         "esp32_dport" => Box::new(dport::Dport::new()),
         "esp32_sha" => Box::new(sha::Sha::new()),
@@ -52,6 +55,9 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         "esp32_twai" => Box::new(twai::Esp32Twai::new()),
         "esp32_mcpwm" => Box::new(mcpwm::Mcpwm::new(base)),
         "esp32_sdio" => Box::new(sdio_stub::HostSlc::new()),
+        // RTC IO MUX + RTC GPIO (`DR_REG_RTCIO_BASE` 0x3FF4_8400), shared with
+        // the GPIO model through the bus (`rebuild_rtc_io_link`).
+        "esp32_rtc_io" => Box::new(crate::peripherals::esp_rtc_io::EspRtcIo::new_esp32()),
         _ => return None,
     };
     Some(dev)
@@ -74,4 +80,5 @@ pub const SUPPORTED_TYPES: &[&str] = &[
     "esp32_twai",
     "esp32_mcpwm",
     "esp32_sdio",
+    "esp32_rtc_io",
 ];

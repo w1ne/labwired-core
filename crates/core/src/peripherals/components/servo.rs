@@ -124,6 +124,13 @@ struct ServoState {
     angle: f32,
     /// True once at least one valid duty measurement has been applied.
     commanded: bool,
+    /// What drives the control pad, as the GPIO port last reported it.
+    /// `None` when the port never reports sources (see
+    /// [`Servo::on_ledc_duty`]).
+    source: Option<crate::peripherals::device::PadSource>,
+    /// Last committed duty fraction per LEDC channel, seen through a routed
+    /// driver ([`LedcServoDriver::routed`]).
+    ledc_duty: [Option<f64>; 16],
 }
 
 /// A hobby PWM servo digital twin. See module docs.
@@ -199,6 +206,51 @@ impl Servo {
         self.state.lock().unwrap().commanded
     }
 
+    /// LEDC channel `channel` committed `fraction` (a routed driver,
+    /// [`LedcServoDriver::routed`]). The servo follows it only when the GPIO
+    /// matrix routes that channel to its pad: four servos on four channels
+    /// each follow their own channel. When the GPIO port never reports pad
+    /// sources (no pin matrix model), every channel drives the servo, as
+    /// before routing was known.
+    pub fn on_ledc_duty(&self, channel: u64, fraction: f64) {
+        use crate::peripherals::device::PadSource;
+        let follow = {
+            let mut s = self.state.lock().unwrap();
+            if let Some(slot) = s.ledc_duty.get_mut(channel as usize) {
+                *slot = Some(fraction);
+            }
+            match s.source {
+                None => true,
+                Some(PadSource::Ledc(ch)) => u64::from(ch) == channel,
+                Some(_) => false,
+            }
+        };
+        if follow {
+            self.apply_duty_fraction(fraction);
+        }
+    }
+
+    /// The GPIO port reports what drives pad `pin`. When the matrix hands
+    /// this servo's pad to an LEDC channel that already has a duty, the servo
+    /// takes it at once (`ledcWrite` before `ledcAttachPin`).
+    pub fn on_pad_source(&self, pin: u8, source: crate::peripherals::device::PadSource) {
+        use crate::peripherals::device::PadSource;
+        if pin != self.pin {
+            return;
+        }
+        let duty = {
+            let mut s = self.state.lock().unwrap();
+            s.source = Some(source);
+            match source {
+                PadSource::Ledc(ch) => s.ledc_duty.get(ch as usize).copied().flatten(),
+                _ => None,
+            }
+        };
+        if let Some(fraction) = duty {
+            self.apply_duty_fraction(fraction);
+        }
+    }
+
     /// Drive the servo from a PWM **duty fraction** (`high / period`, in
     /// `0.0..=1.0`) — the direct path for PWM sources that expose their
     /// duty without toggling a GPIO pin (e.g. `Ledc::channel_duty_fraction`).
@@ -258,6 +310,10 @@ impl crate::peripherals::device::GpioObserver for Servo {
     fn on_pin_change(&self, pin: u8, _from: bool, to: bool, sim_cycle: u64) {
         self.on_gpio_edge(pin, to, sim_cycle);
     }
+
+    fn on_pad_source(&self, pin: u8, source: crate::peripherals::device::PadSource) {
+        Servo::on_pad_source(self, pin, source);
+    }
 }
 
 /// Binds an [`Ledc`](crate::peripherals::esp32::ledc::Ledc) PWM channel to a
@@ -266,21 +322,36 @@ impl crate::peripherals::device::GpioObserver for Servo {
 /// servo)))` and keep an `Arc<Servo>` clone to read the angle back.
 #[derive(Debug)]
 pub struct LedcServoDriver {
-    channel: u64,
+    /// `Some(ch)`: bound to one channel. `None`: follow whichever channel the
+    /// GPIO matrix routes to the servo's pad ([`Servo::on_ledc_duty`]).
+    channel: Option<u64>,
     servo: Arc<Servo>,
 }
 
 impl LedcServoDriver {
     /// Drive `servo` from LEDC `channel`'s duty.
     pub fn new(channel: u64, servo: Arc<Servo>) -> Self {
-        Self { channel, servo }
+        Self {
+            channel: Some(channel),
+            servo,
+        }
+    }
+
+    /// Drive `servo` from the LEDC channel routed to its pad.
+    pub fn routed(servo: Arc<Servo>) -> Self {
+        Self {
+            channel: None,
+            servo,
+        }
     }
 }
 
 impl crate::peripherals::esp32::ledc::LedcDutyObserver for LedcServoDriver {
     fn on_duty_change(&self, channel: u64, duty_fraction: f64) {
-        if channel == self.channel {
-            self.servo.apply_duty_fraction(duty_fraction);
+        match self.channel {
+            Some(ch) if ch == channel => self.servo.apply_duty_fraction(duty_fraction),
+            Some(_) => {}
+            None => self.servo.on_ledc_duty(channel, duty_fraction),
         }
     }
 }
@@ -344,7 +415,7 @@ static SERVO_METADATA: KitMetadata = KitMetadata {
         ConfigKey {
             name: std::borrow::Cow::Borrowed("ledc_channel"),
             ty: ConfigType::Int,
-            doc: std::borrow::Cow::Borrowed("Optional ESP32 LEDC channel (0..15). When omitted, all 16 channels observe."),
+            doc: std::borrow::Cow::Borrowed("Optional ESP32 LEDC channel (0..15). When omitted, the servo follows the channel the GPIO matrix routes to its pad."),
         },
     ]),
     labs: std::borrow::Cow::Borrowed(&[]),
@@ -392,16 +463,19 @@ impl PeripheralKit for ServoKit {
             }
         }
         // Any LEDC model (classic ESP32: 16 channels, ESP32-S3: 8, ESP32-C3:
-        // 6) reports its committed duties through the same observer.
-        let channels = ctx
-            .config_i64("ledc_channel")
-            .map_or(0..16, |ch| ch as u64..ch as u64 + 1);
+        // 6) reports its committed duties through the same observer. Without
+        // an explicit `ledc_channel` the servo follows the channel the GPIO
+        // matrix routes to its pad, so servos on different channels do not
+        // all take the last `ledcWrite`.
+        let ledc_channel = ctx.config_i64("ledc_channel");
         for name in ["ledc", "LEDC"] {
             if let Some(idx) = ctx.bus.find_peripheral_index_by_name(name) {
                 let ledc = &mut ctx.bus.peripherals[idx].dev;
-                for ch in channels.clone() {
-                    ledc.add_ledc_duty_observer(Arc::new(LedcServoDriver::new(ch, servo.clone())));
-                }
+                let driver = match ledc_channel {
+                    Some(ch) => LedcServoDriver::new(ch as u64, servo.clone()),
+                    None => LedcServoDriver::routed(servo.clone()),
+                };
+                ledc.add_ledc_duty_observer(Arc::new(driver));
             }
         }
         // Likewise any MCPWM unit's operators (`mcpwm_set_duty`; ESP32Servo

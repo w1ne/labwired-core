@@ -35,6 +35,7 @@ pub enum MachineFamily {
     RiscV,
     Xtensa,
     Avr,
+    Pic24,
 }
 
 /// What machine family this chip is built as, or an error naming why not.
@@ -55,8 +56,9 @@ pub fn machine_family(chip: &ChipDescriptor) -> anyhow::Result<MachineFamily> {
         Arch::RiscV => Ok(MachineFamily::RiscV),
         Arch::Xtensa => Ok(MachineFamily::Xtensa),
         Arch::Avr => Ok(MachineFamily::Avr),
+        Arch::Pic24 => Ok(MachineFamily::Pic24),
         Arch::Unknown => anyhow::bail!(
-            "chip '{}' does not declare a known architecture (`arch:` must be arm, riscv, xtensa, or avr)",
+            "chip '{}' does not declare a known architecture (`arch:` must be arm, riscv, xtensa, avr, or pic24)",
             chip.name
         ),
     }
@@ -75,6 +77,9 @@ pub fn elf_arch(e_machine: u16) -> Option<crate::Arch> {
         goblin::elf::header::EM_RISCV => Some(crate::Arch::RiscV),
         goblin::elf::header::EM_XTENSA => Some(crate::Arch::XtensaLx7),
         83 => Some(crate::Arch::Avr), // EM_AVR
+        // EM_DSPIC30F (binutils elf.h) — the machine Microchip's dsPIC30/33
+        // toolchains stamp on 16-bit MCU/DSC ELFs.
+        118 => Some(crate::Arch::Pic24),
         _ => None,
     }
 }

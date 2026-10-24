@@ -25,6 +25,9 @@ mod exec;
 #[path = "cortex_m/semihost.rs"]
 pub mod semihost;
 
+#[path = "cortex_m/poll_loop.rs"]
+mod poll_loop;
+
 /// How an executed arm advances PC relative to the decoded default. Returned
 /// by every `exec_*` method instead of mutating a `&mut` out-parameter: the
 /// hot `Keep` case costs nothing once the method is inlined.
@@ -212,6 +215,9 @@ pub struct CortexM {
     it_state_restored: bool,
     decode_cache: Box<[Option<DecodeCacheEntry>; 4096]>,
     decode_generation: u64,
+    /// Loop-head detection and the last proven fixed-point poll loop
+    /// (`poll_loop.rs`).
+    poll: poll_loop::PollDetector,
     // Bounded 1 KiB, direct-mapped (PC, generation) discovery-only memo.
     // Register-dependent execution failures MUST NOT be recorded here.
     t16_discovery_misses: [(u32, u64); T16_DISCOVERY_MISS_SLOTS],
@@ -321,6 +327,7 @@ impl Default for CortexM {
             it_state_restored: false,
             decode_cache: Box::new([None; 4096]),
             decode_generation: 1,
+            poll: poll_loop::PollDetector::default(),
             t16_discovery_misses: [(0, 0); T16_DISCOVERY_MISS_SLOTS],
             t16_fast_block: None,
             fpu_s: [0u32; 32],
@@ -806,7 +813,9 @@ impl CortexM {
                 let addr = self
                     .read_reg(rn)
                     .wrapping_add(u32::from((op >> 6) & 0x1f) << 2);
-                if !bus.ram.write_u32(u64::from(addr), self.read_reg(rt)) {
+                if bus.ram_cpu_writes_blocked(u64::from(addr))
+                    || !bus.ram.write_u32(u64::from(addr), self.read_reg(rt))
+                {
                     return false;
                 }
                 bus.note_memory_write();
@@ -916,6 +925,11 @@ impl CortexM {
             let addr = self
                 .read_reg(store_rn)
                 .wrapping_add(u32::from(store_imm) << 2);
+            // A non-Allow RAM policy must not commit through the closed-form
+            // recurrence: refuse the fold and defer to the gated slow path.
+            if bus.ram_cpu_writes_blocked(u64::from(addr)) {
+                return executed;
+            }
             if bus.ram.read_u32(u64::from(addr)).is_none() {
                 return executed;
             }
@@ -1021,6 +1035,11 @@ impl CortexM {
         }
 
         let addr = self.sp.wrapping_add(store_imm);
+        // A non-Allow RAM policy must not commit through the closed-form
+        // recurrence: refuse the fold and defer to the gated slow path.
+        if bus.ram_cpu_writes_blocked(u64::from(addr)) {
+            return 0;
+        }
         if bus.ram.read_u32(u64::from(addr)).is_none() {
             return 0;
         }
@@ -1438,7 +1457,9 @@ impl CortexM {
             }
             Instruction::StrImm { rt, rn, imm } => {
                 let addr = self.read_reg(rn).wrapping_add(u32::from(imm));
-                if !bus.ram.write_u32(u64::from(addr), self.read_reg(rt)) {
+                if bus.ram_cpu_writes_blocked(u64::from(addr))
+                    || !bus.ram.write_u32(u64::from(addr), self.read_reg(rt))
+                {
                     return false;
                 }
                 bus.note_memory_write();
@@ -1453,7 +1474,9 @@ impl CortexM {
             }
             Instruction::StrReg { rt, rn, rm } => {
                 let addr = self.read_reg(rn).wrapping_add(self.read_reg(rm));
-                if !bus.ram.write_u32(u64::from(addr), self.read_reg(rt)) {
+                if bus.ram_cpu_writes_blocked(u64::from(addr))
+                    || !bus.ram.write_u32(u64::from(addr), self.read_reg(rt))
+                {
                     return false;
                 }
                 bus.note_memory_write();
@@ -1470,7 +1493,9 @@ impl CortexM {
             }
             Instruction::StrSp { rt, imm } => {
                 let addr = self.sp.wrapping_add(u32::from(imm));
-                if !bus.ram.write_u32(u64::from(addr), self.read_reg(rt)) {
+                if bus.ram_cpu_writes_blocked(u64::from(addr))
+                    || !bus.ram.write_u32(u64::from(addr), self.read_reg(rt))
+                {
                     return false;
                 }
                 bus.note_memory_write();
@@ -1493,14 +1518,18 @@ impl CortexM {
             }
             Instruction::StrbImm { rt, rn, imm } => {
                 let addr = self.read_reg(rn).wrapping_add(u32::from(imm));
-                if !bus.ram.write_u8(u64::from(addr), self.read_reg(rt) as u8) {
+                if bus.ram_cpu_writes_blocked(u64::from(addr))
+                    || !bus.ram.write_u8(u64::from(addr), self.read_reg(rt) as u8)
+                {
                     return false;
                 }
                 bus.note_memory_write();
             }
             Instruction::StrbReg { rt, rn, rm } => {
                 let addr = self.read_reg(rn).wrapping_add(self.read_reg(rm));
-                if !bus.ram.write_u8(u64::from(addr), self.read_reg(rt) as u8) {
+                if bus.ram_cpu_writes_blocked(u64::from(addr))
+                    || !bus.ram.write_u8(u64::from(addr), self.read_reg(rt) as u8)
+                {
                     return false;
                 }
                 bus.note_memory_write();
@@ -1523,14 +1552,18 @@ impl CortexM {
             }
             Instruction::StrhImm { rt, rn, imm } => {
                 let addr = self.read_reg(rn).wrapping_add(u32::from(imm));
-                if !bus.ram.write_u16(u64::from(addr), self.read_reg(rt) as u16) {
+                if bus.ram_cpu_writes_blocked(u64::from(addr))
+                    || !bus.ram.write_u16(u64::from(addr), self.read_reg(rt) as u16)
+                {
                     return false;
                 }
                 bus.note_memory_write();
             }
             Instruction::StrhReg { rt, rn, rm } => {
                 let addr = self.read_reg(rn).wrapping_add(self.read_reg(rm));
-                if !bus.ram.write_u16(u64::from(addr), self.read_reg(rt) as u16) {
+                if bus.ram_cpu_writes_blocked(u64::from(addr))
+                    || !bus.ram.write_u16(u64::from(addr), self.read_reg(rt) as u16)
+                {
                     return false;
                 }
                 bus.note_memory_write();
@@ -2405,6 +2438,29 @@ impl CortexM {
         if bus.requires_cycle_accurate() {
             return false;
         }
+        if let Some(sb) = bus
+            .as_any()
+            .and_then(|a| a.downcast_ref::<crate::bus::SystemBus>())
+        {
+            // A non-default RAM `cpu_writes` policy is enforced by the
+            // interpreter's store gate; compiled blocks write `bus.ram.data`
+            // directly, so they must not run while it is in force.
+            if sb.ram_cpu_writes_gated() {
+                return false;
+            }
+            // Same reasoning, one level up: compiled blocks also bypass the
+            // accessors that latch a debug watch, and they run whole blocks
+            // without the machine getting a window boundary to stop at. Refuse
+            // while ANY watch is armed — store-only watches included, because
+            // the gate's job is to keep raw-RAM writes off the path, and the
+            // per-batch test is cheaper than reasoning about which block might
+            // touch which range. `plan_cpu_window` already clamps to one
+            // instruction while a watch is armed; this refusal is
+            // defence-in-depth for direct `step_batch` callers.
+            if !sb.debug_watches.is_empty() {
+                return false;
+            }
+        }
         true
     }
 
@@ -2680,6 +2736,16 @@ impl Cpu for CortexM {
         self.pc = 0x0000_0000;
         self.sp = 0x2000_0000;
         self.pending_exceptions = [0; 4];
+        // Reset is not exception return: no interrupt mask, IT block or
+        // exception-return LR from the previous boot may survive. Cortex-M4
+        // DUI0553A table 2-1 defines these reset values. General registers
+        // remain architecturally UNKNOWN; do not invent a zeroing promise.
+        self.primask = false;
+        self.basepri = 0;
+        self.faultmask = false;
+        self.it_state = 0;
+        self.xpsr = 0x0100_0000;
+        self.lr = u32::MAX;
         self.exclusive_subword = None;
         self.firmware_exit = None;
         self.set_core_sleeping(false);
@@ -2896,6 +2962,7 @@ impl Cpu for CortexM {
             self.retire_pending_debug_step(bus, observers, config)?;
             return Ok(1);
         }
+        self.poll_batch_start();
         #[cfg(feature = "jit")]
         {
             self.jit_enabled = config.cortex_m_jit_enabled;
@@ -3071,7 +3138,9 @@ impl Cpu for CortexM {
                 if let Some(tap) = &tap {
                     tap.bump_clock();
                 }
+                let pc_before = self.pc;
                 self.step_internal(sysbus, observers, config)?;
+                self.note_poll_step(pc_before);
                 // The hot arm. Concrete `SystemBus`, so this is one in-place
                 // add on a field, not a virtual call — and deliberately NOT
                 // `set_current_cycle`, whose extra job is republishing the
@@ -3093,6 +3162,10 @@ impl Cpu for CortexM {
                 if sysbus.pending_wake_left() == Some(0) {
                     break;
                 }
+                // A device access under `Machine::exact_batch_boundaries`.
+                if sysbus.batch_stop.hit() {
+                    break;
+                }
                 // See the `!batch_mode_enabled` arm: a latched SYSRESETREQ ends
                 // the batch here so the reset lands on this exact boundary.
                 if self.sysreset_latched()
@@ -3108,7 +3181,7 @@ impl Cpu for CortexM {
                 // sleep leaves the batch, so the machine can fast-forward the
                 // idle window.
                 if config.idle_fast_forward_enabled
-                    && self.idle_fast_forward_budget(sysbus).is_some()
+                    && (self.idle_fast_forward_budget(sysbus).is_some() || self.poll_anchor_ready())
                 {
                     break;
                 }
@@ -3135,11 +3208,16 @@ impl Cpu for CortexM {
                 if let Some(tap) = &tap {
                     tap.bump_clock();
                 }
+                let pc_before = self.pc;
                 self.step_internal(bus, observers, config)?;
+                self.note_poll_step(pc_before);
                 // See the `live_step` block above.
                 #[cfg(feature = "event-scheduler")]
                 bus.advance_cycle(live_step);
                 executed += 1;
+                if bus.batch_stop_hit() {
+                    break;
+                }
                 if self.sysreset_latched()
                     || self.debug_batch_break()
                     || self.firmware_exit_latched()
@@ -3147,7 +3225,8 @@ impl Cpu for CortexM {
                 {
                     break;
                 }
-                if config.idle_fast_forward_enabled && self.idle_fast_forward_budget(bus).is_some()
+                if config.idle_fast_forward_enabled
+                    && (self.idle_fast_forward_budget(bus).is_some() || self.poll_anchor_ready())
                 {
                     break;
                 }
@@ -3155,6 +3234,18 @@ impl Cpu for CortexM {
         }
 
         Ok(executed)
+    }
+
+    fn poll_loop_anchor_ready(&self) -> bool {
+        self.poll_anchor_ready()
+    }
+
+    fn poll_loop_skip_budget(&mut self, bus: &dyn Bus, limit: u64) -> Option<(u64, u64)> {
+        self.poll_skip_budget(bus, limit)
+    }
+
+    fn fast_forward_poll_loop(&mut self, cycles: u64) -> bool {
+        self.poll_fast_forward(cycles)
     }
 
     fn idle_fast_forward_budget(&self, _bus: &dyn Bus) -> Option<u64> {

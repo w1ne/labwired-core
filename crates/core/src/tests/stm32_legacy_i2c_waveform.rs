@@ -284,7 +284,9 @@ mod stm32_legacy_i2c_waveform_tests {
                     .write_u32(GPIOB_BASE + 0x24, AF_I2C) // AFRH, pin 8
                     .unwrap();
             } else {
-                // F103 GPIOB is at a different address; CRH pin 8 = AF open drain.
+                // F103 GPIOB is at a different address and is clock-gated on
+                // RCC_APB2ENR.IOPBEN (bit 3); CRH pin 8 = AF open drain.
+                machine.bus.write_u32(0x4002_1000 + 0x18, 1 << 3).unwrap();
                 machine.bus.write_u32(0x4001_0C00 + 0x04, 0b1111).unwrap();
             }
             let gpiob = machine

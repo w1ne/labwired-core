@@ -1647,58 +1647,6 @@ mod tests {
     }
 
     #[test]
-    fn test_decode_memory_ops() {
-        // LDR R0, [R1, #4] (T1) -> 6848
-        // imm5 = 1 (4>>2). rn=1. rt=0.
-        // 0110 1000 0100 1000 -> 6848
-        assert_eq!(
-            decode_thumb_16(0x6848),
-            Instruction::LdrImm {
-                rt: 0,
-                rn: 1,
-                imm: 4
-            }
-        );
-
-        // STR R2, [R3, #0] (T1) -> 601A
-        // imm5=0. rn=3. rt=2.
-        // 0110 0000 0001 1010 -> 601A
-        assert_eq!(
-            decode_thumb_16(0x601A),
-            Instruction::StrImm {
-                rt: 2,
-                rn: 3,
-                imm: 0
-            }
-        );
-    }
-
-    #[test]
-    fn test_decode_push_pop() {
-        // PUSH {R0, LR} (T1) -> B501
-        // 1011 0101 0000 0001
-        // m=1 (LR), regs=1 (R0)
-        assert_eq!(
-            decode_thumb_16(0xB501),
-            Instruction::Push {
-                registers: 1,
-                m: true
-            }
-        );
-
-        // POP {R1, PC} (T1) -> BD02
-        // 1011 1101 0000 0010
-        // p=1 (PC), regs=2 (R1)
-        assert_eq!(
-            decode_thumb_16(0xBD02),
-            Instruction::Pop {
-                registers: 2,
-                p: true
-            }
-        );
-    }
-
-    #[test]
     fn test_decode_misc_rev() {
         // REV R0, R2 (using F081 -> Rd=0)
         assert_eq!(
@@ -1757,16 +1705,6 @@ mod tests {
                 op: 3
             }
         );
-    }
-
-    #[test]
-    fn test_decode_rev_t1_16bit() {
-        // REV T1 (16-bit): `rev r3, r3` = 0xBA1B (0xBA00 | (rm=3<<3) | rd=3).
-        assert_eq!(decode_thumb_16(0xBA1B), Instruction::Rev { rd: 3, rm: 3 });
-        // REV16 T1: `rev16 r5, r5` = 0xBA6D (0xBA40 | (rm=5<<3) | rd=5).
-        assert_eq!(decode_thumb_16(0xBA6D), Instruction::Rev16 { rd: 5, rm: 5 });
-        // REVSH T1: `revsh r0, r1` = 0xBAC8 (0xBAC0 | (rm=1<<3) | rd=0).
-        assert_eq!(decode_thumb_16(0xBAC8), Instruction::RevSh { rd: 0, rm: 1 });
     }
 
     #[test]

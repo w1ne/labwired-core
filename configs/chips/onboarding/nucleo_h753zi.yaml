@@ -122,7 +122,7 @@ peripherals:
   bus: sysbus
   base_address: 1073881088
 - id: rng
-  type: stm32f4_rng
+  type: stm32_rng
   bus: sysbus
   base_address: 1208096768
 - id: dma2

@@ -28,7 +28,16 @@ pub struct DapServer {
     stop_on_entry: Arc<Mutex<bool>>,
     source_map: Arc<Mutex<Vec<(String, String)>>>,
     rust_source_root: Arc<Mutex<Option<String>>>,
+    /// The children of expandable variables, by `variablesReference`
+    /// (from [`FIRST_CHILD_REF`]). Valid until the next stack trace.
+    var_refs: Arc<Mutex<Vec<Vec<labwired_loader::VariableValue>>>>,
 }
+
+/// `variablesReference` of the Locals scope of call-stack frame 0; frame `i`
+/// is this plus `i`.
+const LOCALS_REF: i64 = 100;
+/// The first `variablesReference` handed to an expandable variable.
+const FIRST_CHILD_REF: i64 = 1000;
 
 #[derive(Serialize)]
 struct DapResponse {
@@ -391,6 +400,7 @@ impl DapServer {
             stop_on_entry: Arc::new(Mutex::new(true)),
             source_map: Arc::new(Mutex::new(Vec::new())),
             rust_source_root: Arc::new(Mutex::new(Self::detect_rust_source_root())),
+            var_refs: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -600,46 +610,81 @@ impl DapServer {
         }
     }
 
-    /// The Locals scope. With a line table, the locals the browser shows:
-    /// register-held values read from the debugged core, a static read from
-    /// memory, a frame slot or an expression described rather than guessed at.
+    /// The Locals scope of call-stack frame `frame`. With a line table, the
+    /// typed values of the frame's variables (structs and arrays expand).
     /// Without one, the symbol table's locals with frame offsets read off SP.
-    fn locals_variables(&self) -> Vec<Value> {
+    fn locals_variables(&self, frame: usize) -> Vec<Value> {
         if !self.adapter.has_source() {
-            return self.legacy_locals_variables();
+            return if frame == 0 {
+                self.legacy_locals_variables()
+            } else {
+                Vec::new()
+            };
         }
-        let read_word = |addr: u32| {
-            self.adapter
-                .read_memory(addr as u64, 4)
-                .ok()
-                .filter(|d| d.len() == 4)
-                .map(|d| u32::from_le_bytes([d[0], d[1], d[2], d[3]]))
-        };
-        self.adapter
-            .source_locals()
-            .unwrap_or_default()
-            .into_iter()
-            .map(|local| {
-                let value = match (local.kind, local.value) {
-                    (_, Some(v)) => format!("{:#x}", v),
-                    ("address", None) => local
-                        .address
-                        .and_then(read_word)
-                        .map(|v| format!("{:#x}", v))
-                        .unwrap_or_else(|| "not available".to_string()),
-                    ("frame_offset", None) => {
-                        format!("not available (frame offset {})", local.offset.unwrap_or(0))
-                    }
-                    _ => "not available".to_string(),
+        let vars = self.adapter.frame_variables(frame).unwrap_or_default();
+        self.variables_json(vars)
+    }
+
+    /// DAP variables for `vars`; each one with children gets a reference.
+    fn variables_json(&self, vars: Vec<labwired_loader::VariableValue>) -> Vec<Value> {
+        let mut refs = self.var_refs.lock().unwrap();
+        vars.into_iter()
+            .map(|v| {
+                let reference = if v.children.is_empty() {
+                    0
+                } else {
+                    refs.push(v.children);
+                    FIRST_CHILD_REF + refs.len() as i64 - 1
                 };
-                json!({
-                    "name": local.name,
-                    "value": value,
-                    "type": local.kind,
-                    "variablesReference": 0,
-                })
+                let mut out = json!({
+                    "name": v.name,
+                    "value": v.value,
+                    "type": v.type_name,
+                    "variablesReference": reference,
+                });
+                if let Some(addr) = v.address {
+                    out["memoryReference"] = json!(format!("{addr:#x}"));
+                }
+                out
             })
             .collect()
+    }
+
+    /// The real call stack, when the firmware has a line table.
+    fn stack_frames_json(&self) -> Option<Vec<Value>> {
+        if !self.adapter.has_source() {
+            return None;
+        }
+        let frames = self
+            .adapter
+            .call_stack(labwired_loader::source_step::MAX_STACK_FRAMES)
+            .ok()?;
+        if frames.is_empty() {
+            return None;
+        }
+        Some(
+            frames
+                .into_iter()
+                .map(|f| {
+                    let source = f.file.as_ref().map(|file| {
+                        let mapped = self.apply_source_map_outgoing(file);
+                        json!({
+                            "name": std::path::Path::new(&mapped).file_name().and_then(|n| n.to_str()).unwrap_or(&mapped),
+                            "path": mapped,
+                        })
+                    });
+                    json!({
+                        "id": f.index + 1,
+                        "name": f.function.unwrap_or_else(|| format!("{:#x}", f.pc)),
+                        "line": f.line.unwrap_or(0),
+                        "column": f.column.unwrap_or(0),
+                        "source": source,
+                        "instructionPointerReference": format!("{:#x}", f.pc),
+                        "presentationHint": if f.inlined { "subtle" } else { "normal" },
+                    })
+                })
+                .collect(),
+        )
     }
 
     fn legacy_locals_variables(&self) -> Vec<Value> {
@@ -985,6 +1030,16 @@ impl DapServer {
                 )?;
             }
             "stackTrace" => {
+                self.var_refs.lock().unwrap().clear();
+                if let Some(frames) = self.stack_frames_json() {
+                    let total = frames.len();
+                    sender.send_response(
+                        req_seq,
+                        "stackTrace",
+                        Some(json!({ "stackFrames": frames, "totalFrames": total })),
+                    )?;
+                    return Ok(HandleResult::Continue);
+                }
                 let pc = self.adapter.get_pc().unwrap_or(0);
                 // The line table (function-entry rule, as the browser shows
                 // it) first; the symbol lookup for firmware without one.
@@ -1031,6 +1086,11 @@ impl DapServer {
                 )?;
             }
             "scopes" => {
+                let frame = arguments
+                    .and_then(|a| a.get("frameId"))
+                    .and_then(|v| v.as_i64())
+                    .map(|id| (id - 1).clamp(0, FIRST_CHILD_REF - LOCALS_REF - 1))
+                    .unwrap_or(0);
                 let reg_count = self
                     .adapter
                     .get_register_names()
@@ -1049,7 +1109,7 @@ impl DapServer {
                             },
                             {
                                 "name": "Locals",
-                                "variablesReference": 100,
+                                "variablesReference": LOCALS_REF + frame,
                                 "namedVariables": 0,
                                 "expensive": false,
                             }
@@ -1081,8 +1141,22 @@ impl DapServer {
                         "variables",
                         Some(json!({ "variables": variables })),
                     )?;
-                } else if var_ref == 100 {
-                    let variables = self.locals_variables();
+                } else if (LOCALS_REF..FIRST_CHILD_REF).contains(&var_ref) {
+                    let variables = self.locals_variables((var_ref - LOCALS_REF) as usize);
+                    sender.send_response(
+                        req_seq,
+                        "variables",
+                        Some(json!({ "variables": variables })),
+                    )?;
+                } else if var_ref >= FIRST_CHILD_REF {
+                    let children = self
+                        .var_refs
+                        .lock()
+                        .unwrap()
+                        .get((var_ref - FIRST_CHILD_REF) as usize)
+                        .cloned()
+                        .unwrap_or_default();
+                    let variables = self.variables_json(children);
                     sender.send_response(
                         req_seq,
                         "variables",
@@ -1732,6 +1806,96 @@ mod tests {
         // Check for both response and initialized event
         assert!(out_str.contains("\"command\":\"initialize\""));
         assert!(out_str.contains("\"event\":\"initialized\""));
+        Ok(())
+    }
+
+    /// The JSON bodies of every response written so far, in order.
+    fn responses(output: &Arc<Mutex<Vec<u8>>>) -> Vec<Value> {
+        let out = String::from_utf8(output.lock().unwrap().clone()).unwrap();
+        out.split("Content-Length: ")
+            .filter_map(|chunk| chunk.split_once("\r\n\r\n").map(|(_, b)| b))
+            .filter_map(|b| serde_json::from_str::<Value>(b).ok())
+            .filter(|m| m["type"] == "response")
+            .collect()
+    }
+
+    /// stackTrace, scopes and variables on a real firmware: the unwound
+    /// frames, each frame's Locals, and a struct expanded by reference.
+    #[test]
+    fn test_stack_trace_and_typed_variables() -> Result<()> {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let server = DapServer::new();
+        server.adapter.load_firmware(
+            root.join("tests/fixtures/nokia5110-invaders-lab.elf"),
+            Some(root.join("examples/nokia5110-invaders-lab/system.yaml")),
+        )?;
+        let res = server
+            .adapter
+            .set_breakpoints("src/main.rs".into(), vec![508])?;
+        assert!(res[0].verified);
+        let mut ran = 0;
+        while !matches!(
+            server.adapter.continue_execution_chunk(1_000_000)?,
+            labwired_core::StopReason::Breakpoint(_)
+        ) {
+            ran += 1;
+            assert!(ran < 50, "no breakpoint");
+        }
+        let output = Arc::new(Mutex::new(Vec::new()));
+        let sender = MessageSender {
+            output: output.clone(),
+            seq: Arc::new(AtomicI64::new(1)),
+        };
+
+        server.handle_request(1, "stackTrace", Some(&json!({"threadId": 1})), &sender)?;
+        let frames = responses(&output)[0]["body"]["stackFrames"].clone();
+        let names: Vec<&str> = frames
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|f| f["name"].as_str().unwrap())
+            .collect();
+        assert!(names[0].ends_with("::__cortex_m_rt_main"), "{names:?}");
+        assert_eq!(names[1], "main");
+        assert_eq!(frames[0]["line"], 508);
+
+        server.handle_request(2, "scopes", Some(&json!({"frameId": 2})), &sender)?;
+        assert_eq!(
+            responses(&output)[1]["body"]["scopes"][1]["variablesReference"],
+            LOCALS_REF + 1
+        );
+        server.handle_request(
+            3,
+            "variables",
+            Some(&json!({"variablesReference": LOCALS_REF})),
+            &sender,
+        )?;
+        let vars = responses(&output)[2]["body"]["variables"].clone();
+        let game = vars
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|v| v["name"] == "game")
+            .expect("game")
+            .clone();
+        assert_eq!(game["type"], "Game");
+        assert!(game["value"]
+            .as_str()
+            .unwrap()
+            .starts_with("Game { paddle_x: "));
+        let reference = game["variablesReference"].as_i64().unwrap();
+        assert!(reference >= FIRST_CHILD_REF);
+
+        server.handle_request(
+            4,
+            "variables",
+            Some(&json!({"variablesReference": reference})),
+            &sender,
+        )?;
+        let fields = responses(&output)[3]["body"]["variables"].clone();
+        assert_eq!(fields[1]["name"], "paddle_x");
+        assert_eq!(fields[1]["type"], "i32");
+        assert!(fields[0]["variablesReference"].as_i64().unwrap() > reference);
         Ok(())
     }
 

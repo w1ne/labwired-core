@@ -672,6 +672,44 @@ def write_ack_digests(manifest: dict, stamp_all: bool = False) -> int:
     return 0
 
 
+class DuplicateKeyError(ValueError):
+    pass
+
+
+class _UniqueKeyLoader(yaml.SafeLoader):
+    """SafeLoader that refuses a mapping with the same key twice.
+
+    PyYAML keeps the LAST value of a repeated key and says nothing. In this
+    manifest that hid real trouble: boards piled up dozens of `drift_ack:` keys
+    (one per change), the parser read the last one, and `--write-ack-digests`
+    stamped its digest beside the FIRST, so a fresh ack could not take effect.
+    One key per board: renew an ack by changing its date and adding to its
+    comment block, never by adding another `drift_ack:` line.
+    """
+
+    def construct_mapping(self, node, deep=False):
+        seen = {}
+        for key_node, _ in node.value:
+            key = self.construct_object(key_node, deep=deep)
+            if key in seen:
+                raise DuplicateKeyError(
+                    f"duplicate key {key!r} at line {key_node.start_mark.line + 1} "
+                    f"(first at line {seen[key] + 1})"
+                )
+            seen[key] = key_node.start_mark.line
+        return super().construct_mapping(node, deep=deep)
+
+
+def load_manifest(text: str):
+    try:
+        return yaml.load(text, Loader=_UniqueKeyLoader)
+    except DuplicateKeyError as e:
+        sys.exit(
+            f"error: validation/manifest.yaml: {e}. Each board takes one "
+            "`drift_ack:`; renew it in place instead of adding another."
+        )
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--check", action="store_true", help="fail if committed doc is stale")
@@ -702,7 +740,7 @@ def main() -> int:
     # gate verdict (1) — if the checkout cannot supply trustworthy dates.
     require_full_history()
 
-    manifest = yaml.safe_load(MANIFEST.read_text())
+    manifest = load_manifest(MANIFEST.read_text())
 
     if args.digests:
         return print_digests(manifest)

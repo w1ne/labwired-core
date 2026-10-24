@@ -4019,157 +4019,6 @@ fn test_exec_s32ri_imm_offset() {
 // Trigger condition: WindowStart[(wb_new + 1) mod 16] == 1
 //   where wb_new = (wb_old + callinc) & 0xF.
 
-// QEMU-aligned dispatch picks the OF{4,8,12} vector based on `ctz(ws_ahead >> n)`,
-// which lands all three setup_entry_overflow scenarios on OF12. Keeping the
-// constants in case a future test exercises a multi-conflict WS that picks
-// OF4 or OF8.
-#[allow(dead_code)]
-const OF4_VECOFS: u32 = 0x000;
-#[allow(dead_code)]
-const OF8_VECOFS: u32 = 0x080;
-const OF12_VECOFS: u32 = 0x100;
-
-/// Helper: set up CPU state so that ENTRY with the given CALLINC will trigger
-/// window overflow. WindowBase=0, CALLINC=callinc, wb_new = callinc & 0xF.
-/// We mark WindowStart[(wb_new + 1) mod 16] = 1 to trigger overflow.
-fn setup_entry_overflow(cpu: &mut XtensaLx7, callinc: u8) {
-    cpu.regs.set_windowbase(0);
-    cpu.ps.set_callinc(callinc);
-    // wb_new = callinc (since wb_old=0)
-    let wb_new = callinc & 0x0F;
-    let check_idx = (wb_new + 1) & 0x0F;
-    // Mark the check frame as in-use to trigger overflow
-    cpu.regs.set_windowstart_bit(check_idx, true);
-    // Also keep bit 0 set (reset state: caller frame live)
-    cpu.regs.set_windowstart_bit(0, true);
-}
-
-/// F3: ENTRY with CALLINC=1 triggers WindowOverflow4.
-/// Expect: PC = VECBASE + OF4 offset (0x000), EPC1 = original PC, PS.EXCM=1,
-/// WindowBase NOT rotated (still 0), WindowStart check bit still set.
-///
-/// IGNORED: real silicon vectors to OF4/OF8/OF12 handlers on overflow; the
-/// sim instead transparently shadows the displaced frame on CALL{n} (see
-/// `spill_shadow_on_call` in cpu/xtensa_lx7.rs). Vectoring to the
-/// firmware's canonical OF handler would double-fault — its
-/// `l32e a0, a1, -12` reads uninitialised stack on freshly-created task
-/// frames. The F5 per-instruction overflow check at the top of execute()
-/// is gated off with `#[cfg(any())]` for the same reason. Re-enable both
-/// the check and this test if/when the firmware OF-handler path is fully
-/// modelled.
-#[test]
-#[ignore = "F5 overflow vector intentionally disabled; sim uses shadow-spill instead"]
-fn test_exec_entry_window_overflow_of4() {
-    let mut cpu = XtensaLx7::new();
-    let mut bus = SystemBus::new();
-    cpu.reset(&mut bus).unwrap();
-    cpu.set_pc(TEST_PC);
-    setup_entry_overflow(&mut cpu, 1);
-    let original_pc = TEST_PC;
-    let vecbase = cpu.sr.read(VECBASE_ID);
-
-    write_insns(&mut bus, TEST_PC as u64, &[enc_entry(1, 4)]);
-    cpu.step(&mut bus, &[], &labwired_core::SimulationConfig::default())
-        .unwrap();
-
-    // Per QEMU `target/xtensa/win_helper.c::HELPER(window_check)`:
-    //   ws_replicated = 0x0005_0005, ws_ahead = ws_replicated >> 1 = 0x0002_8002
-    //   n = ctz(ws_ahead) + 1 = 1+1 = 2 → WB rotates 0+2=2
-    //   secondary = ctz(ws_ahead >> n) = ctz(0x0000_a000) = 13 → vec OF12 (0x100)
-    // Setup chose minimal-conflict WS (only bits 0 and 2 set) — after rotation
-    // by n=2 the next conflict is far away, so dispatch is OF12 (max-spill).
-    assert_eq!(
-        cpu.pc,
-        vecbase.wrapping_add(OF12_VECOFS),
-        "Setup with WS=0x0005, CALLINC=1 → secondary ctz=13 → OF12 vector"
-    );
-    assert_eq!(
-        cpu.sr.read(EPC1_ID),
-        original_pc,
-        "EPC1 should hold the faulting ENTRY PC"
-    );
-    assert!(cpu.ps.excm(), "PS.EXCM should be set");
-    assert_eq!(cpu.regs.windowbase(), 2, "WindowBase rotates by n=2");
-    assert_eq!(cpu.ps.owb(), 0, "PS.OWB saves the original WB=0");
-    // check_idx = (1 + 1) & 0xF = 2
-    assert!(
-        cpu.regs.windowstart_bit(2),
-        "OF4: WindowStart[check_idx] must remain set (overflow did not consume it)"
-    );
-}
-
-/// F3: ENTRY with CALLINC=2 triggers WindowOverflow8.
-/// IGNORED — same reason as `test_exec_entry_window_overflow_of4`.
-#[test]
-#[ignore = "F5 overflow vector intentionally disabled; sim uses shadow-spill instead"]
-fn test_exec_entry_window_overflow_of8() {
-    let mut cpu = XtensaLx7::new();
-    let mut bus = SystemBus::new();
-    cpu.reset(&mut bus).unwrap();
-    cpu.set_pc(TEST_PC);
-    setup_entry_overflow(&mut cpu, 2);
-    let original_pc = TEST_PC;
-    let vecbase = cpu.sr.read(VECBASE_ID);
-
-    write_insns(&mut bus, TEST_PC as u64, &[enc_entry(1, 4)]);
-    cpu.step(&mut bus, &[], &labwired_core::SimulationConfig::default())
-        .unwrap();
-
-    // Per QEMU dispatch:
-    //   ws_replicated = 0x0009_0009, ws_ahead = >> 1 = 0x0004_8004
-    //   n = ctz(0x0004_8004) + 1 = 2+1 = 3 → WB rotates 0+3=3
-    //   secondary = ctz(0x0004_8004 >> 3) = ctz(0x0000_9000) = 12 → OF12
-    // Same as OF4 test: minimal-conflict WS picks OF12 max-spill vector.
-    assert_eq!(
-        cpu.pc,
-        vecbase.wrapping_add(OF12_VECOFS),
-        "Setup with WS=0x0009, CALLINC=2 → secondary ctz=12 → OF12 vector"
-    );
-    assert_eq!(
-        cpu.sr.read(EPC1_ID),
-        original_pc,
-        "EPC1 should hold the faulting ENTRY PC"
-    );
-    assert!(cpu.ps.excm(), "PS.EXCM should be set");
-    assert_eq!(cpu.regs.windowbase(), 3, "WindowBase rotates by n=3");
-    assert_eq!(cpu.ps.owb(), 0, "PS.OWB saves the original WB=0");
-}
-
-/// F3: ENTRY with CALLINC=3 triggers WindowOverflow12.
-/// IGNORED — same reason as `test_exec_entry_window_overflow_of4`.
-#[test]
-#[ignore = "F5 overflow vector intentionally disabled; sim uses shadow-spill instead"]
-fn test_exec_entry_window_overflow_of12() {
-    let mut cpu = XtensaLx7::new();
-    let mut bus = SystemBus::new();
-    cpu.reset(&mut bus).unwrap();
-    cpu.set_pc(TEST_PC);
-    setup_entry_overflow(&mut cpu, 3);
-    let original_pc = TEST_PC;
-    let vecbase = cpu.sr.read(VECBASE_ID);
-
-    write_insns(&mut bus, TEST_PC as u64, &[enc_entry(1, 4)]);
-    cpu.step(&mut bus, &[], &labwired_core::SimulationConfig::default())
-        .unwrap();
-
-    assert_eq!(
-        cpu.pc,
-        vecbase.wrapping_add(OF12_VECOFS),
-        "OF12: PC should jump to VECBASE + 0x100"
-    );
-    assert_eq!(
-        cpu.sr.read(EPC1_ID),
-        original_pc,
-        "OF12: EPC1 should hold the faulting ENTRY PC"
-    );
-    assert!(cpu.ps.excm(), "OF12: PS.EXCM should be set");
-    // setup_entry_overflow(callinc=3) sets WS=0b10001 (bits 0,4). With WB=0,
-    // WS_ahead = (0x11 replicated) >> 1 has its first set bit at pos 3, so
-    // n=4; wb_handler = 0+4 = 4.
-    assert_eq!(cpu.regs.windowbase(), 4, "OF12: WindowBase rotates to 4");
-    assert_eq!(cpu.ps.owb(), 0, "OF12: PS.OWB saves the original WB=0");
-}
-
 /// F3 happy path: ENTRY proceeds normally when the target frame is clear.
 /// With CALLINC=1, WB=0, wb_new=1, check_idx=2: if WindowStart[2]=0, no overflow.
 /// Verify normal ENTRY semantics: WB rotates, WindowStart set, CALLINC cleared.
@@ -4244,134 +4093,53 @@ fn setup_retw_underflow(cpu: &mut XtensaLx7, callinc: u8) {
     cpu.regs.set_physical((wb_cur as usize) * 4, a0_val);
 }
 
-/// F4: RETW with N=1 triggers WindowUnderflow4 when destination frame is absent.
-/// Expect: PC = VECBASE + 0x040, EPC1 = RETW's PC, PS.EXCM=1,
-/// WindowBase NOT rotated (still 1), WindowStart NOT modified.
+/// F4: RETW with N=1/2/3 triggers WindowUnderflow4/8/12 when the destination
+/// frame is absent. Expect: PC = VECBASE + {0x040,0x0C0,0x140}, EPC1 = RETW's
+/// PC, PS.EXCM=1, WindowBase rotates to wb_dest=0, PS.OWB saves N,
+/// WindowStart NOT modified.
 #[test]
-fn test_exec_retw_window_underflow_uf4() {
-    let mut cpu = XtensaLx7::new();
-    let mut bus = SystemBus::new();
-    cpu.reset(&mut bus).unwrap();
-    cpu.set_pc(TEST_PC);
-    setup_retw_underflow(&mut cpu, 1);
-    let original_pc = TEST_PC;
-    let vecbase = cpu.sr.read(VECBASE_ID);
-    let ws_before = cpu.regs.windowstart();
+fn test_exec_retw_window_underflow_vectors() {
+    for (callinc, vecofs) in [(1u8, UF4_VECOFS), (2, UF8_VECOFS), (3, UF12_VECOFS)] {
+        let mut cpu = XtensaLx7::new();
+        let mut bus = SystemBus::new();
+        cpu.reset(&mut bus).unwrap();
+        cpu.set_pc(TEST_PC);
+        setup_retw_underflow(&mut cpu, callinc);
+        let original_pc = TEST_PC;
+        let vecbase = cpu.sr.read(VECBASE_ID);
+        let ws_before = cpu.regs.windowstart();
 
-    write_insns(&mut bus, TEST_PC as u64, &[enc_retw()]);
-    cpu.step(&mut bus, &[], &labwired_core::SimulationConfig::default())
-        .unwrap();
+        write_insns(&mut bus, TEST_PC as u64, &[enc_retw()]);
+        cpu.step(&mut bus, &[], &labwired_core::SimulationConfig::default())
+            .unwrap();
 
-    assert_eq!(
-        cpu.pc,
-        vecbase.wrapping_add(UF4_VECOFS),
-        "UF4: PC should jump to VECBASE + 0x040"
-    );
-    assert_eq!(
-        cpu.sr.read(EPC1_ID),
-        original_pc,
-        "UF4: EPC1 should hold the faulting RETW PC"
-    );
-    assert!(cpu.ps.excm(), "UF4: PS.EXCM should be set");
-    // Canonical Xtensa UF entry: WB rotates to wb_dest = wb_cur - N.
-    // Test setup uses callinc=1, so wb_cur=1, N=1, wb_dest=0.
-    assert_eq!(
-        cpu.regs.windowbase(),
-        0,
-        "UF4: WindowBase rotates to wb_dest=0"
-    );
-    assert_eq!(cpu.ps.owb(), 1, "UF4: PS.OWB saves the original WB=1");
-    assert_eq!(
-        cpu.regs.windowstart(),
-        ws_before,
-        "UF4: WindowStart must NOT be modified"
-    );
-}
-
-/// F4: RETW with N=2 triggers WindowUnderflow8 when destination frame is absent.
-/// Expect: PC = VECBASE + 0x0C0, EPC1 = RETW's PC, PS.EXCM=1,
-/// WindowBase NOT rotated (still 2), WindowStart NOT modified.
-#[test]
-fn test_exec_retw_window_underflow_uf8() {
-    let mut cpu = XtensaLx7::new();
-    let mut bus = SystemBus::new();
-    cpu.reset(&mut bus).unwrap();
-    cpu.set_pc(TEST_PC);
-    setup_retw_underflow(&mut cpu, 2);
-    let original_pc = TEST_PC;
-    let vecbase = cpu.sr.read(VECBASE_ID);
-    let ws_before = cpu.regs.windowstart();
-
-    write_insns(&mut bus, TEST_PC as u64, &[enc_retw()]);
-    cpu.step(&mut bus, &[], &labwired_core::SimulationConfig::default())
-        .unwrap();
-
-    assert_eq!(
-        cpu.pc,
-        vecbase.wrapping_add(UF8_VECOFS),
-        "UF8: PC should jump to VECBASE + 0x0C0"
-    );
-    assert_eq!(
-        cpu.sr.read(EPC1_ID),
-        original_pc,
-        "UF8: EPC1 should hold the faulting RETW PC"
-    );
-    assert!(cpu.ps.excm(), "UF8: PS.EXCM should be set");
-    // wb_cur=2, N=2, wb_dest=0.
-    assert_eq!(
-        cpu.regs.windowbase(),
-        0,
-        "UF8: WindowBase rotates to wb_dest=0"
-    );
-    assert_eq!(cpu.ps.owb(), 2, "UF8: PS.OWB saves the original WB=2");
-    assert_eq!(
-        cpu.regs.windowstart(),
-        ws_before,
-        "UF8: WindowStart must NOT be modified"
-    );
-}
-
-/// F4: RETW with N=3 triggers WindowUnderflow12 when destination frame is absent.
-/// Expect: PC = VECBASE + 0x140, EPC1 = RETW's PC, PS.EXCM=1,
-/// WindowBase NOT rotated (still 3), WindowStart NOT modified.
-#[test]
-fn test_exec_retw_window_underflow_uf12() {
-    let mut cpu = XtensaLx7::new();
-    let mut bus = SystemBus::new();
-    cpu.reset(&mut bus).unwrap();
-    cpu.set_pc(TEST_PC);
-    setup_retw_underflow(&mut cpu, 3);
-    let original_pc = TEST_PC;
-    let vecbase = cpu.sr.read(VECBASE_ID);
-    let ws_before = cpu.regs.windowstart();
-
-    write_insns(&mut bus, TEST_PC as u64, &[enc_retw()]);
-    cpu.step(&mut bus, &[], &labwired_core::SimulationConfig::default())
-        .unwrap();
-
-    assert_eq!(
-        cpu.pc,
-        vecbase.wrapping_add(UF12_VECOFS),
-        "UF12: PC should jump to VECBASE + 0x140"
-    );
-    assert_eq!(
-        cpu.sr.read(EPC1_ID),
-        original_pc,
-        "UF12: EPC1 should hold the faulting RETW PC"
-    );
-    assert!(cpu.ps.excm(), "UF12: PS.EXCM should be set");
-    // wb_cur=3, N=3, wb_dest=0.
-    assert_eq!(
-        cpu.regs.windowbase(),
-        0,
-        "UF12: WindowBase rotates to wb_dest=0"
-    );
-    assert_eq!(cpu.ps.owb(), 3, "UF12: PS.OWB saves the original WB=3");
-    assert_eq!(
-        cpu.regs.windowstart(),
-        ws_before,
-        "UF12: WindowStart must NOT be modified"
-    );
+        assert_eq!(
+            cpu.pc,
+            vecbase.wrapping_add(vecofs),
+            "RETW N={callinc}: PC should jump to VECBASE + {vecofs:#x}"
+        );
+        assert_eq!(
+            cpu.sr.read(EPC1_ID),
+            original_pc,
+            "RETW N={callinc}: EPC1 should hold the faulting RETW PC"
+        );
+        assert!(cpu.ps.excm(), "RETW N={callinc}: PS.EXCM should be set");
+        assert_eq!(
+            cpu.regs.windowbase(),
+            0,
+            "RETW N={callinc}: WindowBase rotates to wb_dest=0"
+        );
+        assert_eq!(
+            cpu.ps.owb(),
+            callinc,
+            "RETW N={callinc}: PS.OWB saves the original WB={callinc}"
+        );
+        assert_eq!(
+            cpu.regs.windowstart(),
+            ws_before,
+            "RETW N={callinc}: WindowStart must NOT be modified"
+        );
+    }
 }
 
 /// F4 happy path: RETW proceeds normally when destination frame IS live.
@@ -4831,130 +4599,41 @@ fn test_exec_movsp_overflow_raises_exception() {
     );
 }
 
-/// ROTW +1: WindowBase = (old_WB + 1) & 0xF.
+/// ROTW rotates WindowBase by (old_WB + n) & 0xF and leaves WindowStart alone.
+///
+/// HW-oracle byte encodings: `rotw 1` → 0x408010 (WB 3 → 4); `rotw -1` →
+/// 0x4080f0 (WB 5 → 4, and the WB=0 case wraps to 15); `rotw 7` → 0x408070
+/// (WB 2 → 9); `rotw -8` → 0x408080 (WB 5 → 13).
 #[test]
-fn test_exec_rotw_pos() {
-    let (mut cpu, mut bus) = make_cpu_bus();
+fn test_exec_rotw_rotations() {
+    for (wb_old, n, wb_new, note) in [
+        (3u8, 1i32, 4u8, "ROTW +1"),
+        (5, -1, 4, "ROTW -1"),
+        (0, -1, 15, "ROTW -1 wraparound"),
+        (2, 7, 9, "ROTW +7"),
+        (5, -8, 13, "ROTW -8"),
+    ] {
+        let (mut cpu, mut bus) = make_cpu_bus();
 
-    cpu.regs.set_windowbase(3);
-    let ws_before = cpu.regs.windowstart();
+        cpu.regs.set_windowbase(wb_old);
+        let ws_before = cpu.regs.windowstart();
 
-    // HW-oracle: `rotw 1` → 0x408010.
-    write_insns(&mut bus, TEST_PC as u64, &[enc_rotw(1)]);
-    cpu.step(&mut bus, &[], &labwired_core::SimulationConfig::default())
-        .expect("ROTW +1 must not error");
+        write_insns(&mut bus, TEST_PC as u64, &[enc_rotw(n)]);
+        cpu.step(&mut bus, &[], &labwired_core::SimulationConfig::default())
+            .expect("ROTW must not error");
 
-    assert_eq!(
-        cpu.regs.windowbase(),
-        4,
-        "ROTW +1: WB must be (3+1)&0xF = 4"
-    );
-    assert_eq!(
-        cpu.regs.windowstart(),
-        ws_before,
-        "ROTW +1: WindowStart must not change"
-    );
-    assert_eq!(cpu.get_pc(), TEST_PC + 3, "ROTW +1: PC must advance by 3");
-}
-
-/// ROTW -1: WindowBase = (old_WB - 1) & 0xF (wrapping).
-#[test]
-fn test_exec_rotw_neg() {
-    let (mut cpu, mut bus) = make_cpu_bus();
-
-    cpu.regs.set_windowbase(5);
-    let ws_before = cpu.regs.windowstart();
-
-    // HW-oracle: `rotw -1` → 0x4080f0.
-    write_insns(&mut bus, TEST_PC as u64, &[enc_rotw(-1)]);
-    cpu.step(&mut bus, &[], &labwired_core::SimulationConfig::default())
-        .expect("ROTW -1 must not error");
-
-    assert_eq!(
-        cpu.regs.windowbase(),
-        4,
-        "ROTW -1: WB must be (5-1)&0xF = 4"
-    );
-    assert_eq!(
-        cpu.regs.windowstart(),
-        ws_before,
-        "ROTW -1: WindowStart must not change"
-    );
-    assert_eq!(cpu.get_pc(), TEST_PC + 3, "ROTW -1: PC must advance by 3");
-}
-
-/// ROTW -1 wraparound: WindowBase = (0 - 1) & 0xF = 15.
-#[test]
-fn test_exec_rotw_neg_wraparound() {
-    let (mut cpu, mut bus) = make_cpu_bus();
-
-    cpu.regs.set_windowbase(0);
-    let ws_before = cpu.regs.windowstart();
-
-    write_insns(&mut bus, TEST_PC as u64, &[enc_rotw(-1)]);
-    cpu.step(&mut bus, &[], &labwired_core::SimulationConfig::default())
-        .expect("ROTW -1 wraparound must not error");
-
-    assert_eq!(
-        cpu.regs.windowbase(),
-        15,
-        "ROTW -1 from WB=0 must wrap to 15"
-    );
-    assert_eq!(
-        cpu.regs.windowstart(),
-        ws_before,
-        "ROTW wraparound: WindowStart must not change"
-    );
-}
-
-/// ROTW +7 (max positive): WindowBase = (old_WB + 7) & 0xF.
-#[test]
-fn test_exec_rotw_max_pos() {
-    let (mut cpu, mut bus) = make_cpu_bus();
-
-    cpu.regs.set_windowbase(2);
-    let ws_before = cpu.regs.windowstart();
-
-    // HW-oracle: `rotw 7` → 0x408070.
-    write_insns(&mut bus, TEST_PC as u64, &[enc_rotw(7)]);
-    cpu.step(&mut bus, &[], &labwired_core::SimulationConfig::default())
-        .expect("ROTW +7 must not error");
-
-    assert_eq!(
-        cpu.regs.windowbase(),
-        9,
-        "ROTW +7: WB must be (2+7)&0xF = 9"
-    );
-    assert_eq!(
-        cpu.regs.windowstart(),
-        ws_before,
-        "ROTW max-pos: WindowStart must not change"
-    );
-}
-
-/// ROTW -8 (max negative): WindowBase = (old_WB - 8) & 0xF (wrapping).
-#[test]
-fn test_exec_rotw_max_neg() {
-    let (mut cpu, mut bus) = make_cpu_bus();
-
-    cpu.regs.set_windowbase(5);
-    let ws_before = cpu.regs.windowstart();
-
-    // HW-oracle: `rotw -8` → 0x408080.
-    write_insns(&mut bus, TEST_PC as u64, &[enc_rotw(-8)]);
-    cpu.step(&mut bus, &[], &labwired_core::SimulationConfig::default())
-        .expect("ROTW -8 must not error");
-
-    assert_eq!(
-        cpu.regs.windowbase(),
-        13,
-        "ROTW -8: WB must be (5-8+16)&0xF = 13"
-    );
-    assert_eq!(
-        cpu.regs.windowstart(),
-        ws_before,
-        "ROTW max-neg: WindowStart must not change"
-    );
+        assert_eq!(
+            cpu.regs.windowbase(),
+            wb_new,
+            "{note}: WB must be ({wb_old} + {n}) & 0xF = {wb_new}"
+        );
+        assert_eq!(
+            cpu.regs.windowstart(),
+            ws_before,
+            "{note}: WindowStart must not change"
+        );
+        assert_eq!(cpu.get_pc(), TEST_PC + 3, "{note}: PC must advance by 3");
+    }
 }
 
 /// ROTW does not modify WindowStart regardless of the rotation amount.
@@ -5083,53 +4762,6 @@ fn test_general_exception_remu_redirects_pc() {
         cpu.get_pc(),
         vecbase.wrapping_add(KERNEL_VECTOR_OFFSET_TEST),
         "PC must redirect to VECBASE + 0x300"
-    );
-}
-
-/// G1: MOVSP with live adjacent frame redirects PC to kernel vector (AllocaCause=5).
-///
-/// Faithful (rom-boot) mode: `vector_exception(5)` drives the real Xtensa flow
-/// (EPC1←PC, EXCCAUSE←5, PS.EXCM←1, PC←_KernelExceptionVector) and returns Ok,
-/// mirroring silicon continuing into the handler. See
-/// `test_exec_movsp_overflow_raises_exception` for why the default fast-boot
-/// path (a plain register move) is not where AllocaCause is asserted (#618).
-#[test]
-fn test_general_exception_movsp_alloca_redirects_pc() {
-    let (mut cpu, mut bus) = make_cpu_bus();
-    // Exercise the ISA-faithful windowed-register path.
-    cpu.faithful_windows = true;
-
-    // Clear PS.EXCM so we can observe it being set by the vectoring.
-    cpu.ps.set_excm(false);
-
-    // Set WB=0 and mark WS bit 1 live → triggers AllocaCause.
-    cpu.regs.set_windowbase(0);
-    cpu.regs.set_windowstart_bit(1, true);
-
-    cpu.set_register(4, 0x1234_5678);
-    write_insns(&mut bus, TEST_PC as u64, &[enc_movsp(3, 4)]);
-
-    cpu.step(&mut bus, &[], &labwired_core::SimulationConfig::default())
-        .expect("MOVSP AllocaCause must vector to the handler, not abort the run");
-    assert_eq!(
-        cpu.sr.read(EPC1_ID),
-        TEST_PC,
-        "EPC1 must be set to faulting MOVSP PC"
-    );
-    assert_eq!(
-        cpu.sr.read(EXCCAUSE_ID),
-        5,
-        "EXCCAUSE must be 5 (AllocaCause)"
-    );
-    assert!(
-        cpu.ps.excm(),
-        "PS.EXCM must be 1 after MOVSP alloca exception"
-    );
-    let vecbase = cpu.sr.read(VECBASE_ID);
-    assert_eq!(
-        cpu.get_pc(),
-        vecbase.wrapping_add(KERNEL_VECTOR_OFFSET_TEST),
-        "PC must redirect to VECBASE + 0x300 (_KernelExceptionVector)"
     );
 }
 
@@ -5352,7 +4984,7 @@ fn test_exec_rfwo_callinc2_advances_wb_by_2() {
     let (mut cpu, mut bus) = make_cpu_bus();
 
     let target_pc: u32 = 0x2000_0020;
-    // After OF8 entry rotation (n=3 for setup_entry_overflow(2)):
+    // After OF8 entry rotation (entry overflow of 8, n=3):
     // wb_handler = 3 + 3 = 6, OWB = 3.
     cpu.regs.set_windowbase(6);
     cpu.regs.set_windowstart_bit(3, true); // caller (OWB) bit

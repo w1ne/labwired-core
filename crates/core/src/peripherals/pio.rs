@@ -39,6 +39,12 @@ pub struct StateMachine {
     pub stalled: bool,
 }
 
+/// `LABWIRED_PIO_PARK=0` disables the parked-chain stop (reference runs).
+fn park_enabled() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var("LABWIRED_PIO_PARK").as_deref() != Ok("0"))
+}
+
 #[derive(Debug)]
 pub struct Pio {
     pub instruction_mem: [u16; 32],
@@ -121,6 +127,26 @@ impl Pio {
     /// True while any state machine is enabled (needs per-cycle SM steps).
     fn any_sm_enabled(&self) -> bool {
         self.sm.iter().any(|s| s.enabled)
+    }
+
+    /// True when every enabled state machine is parked on an unconditional
+    /// `jmp` to its own address, with no delay pending and a 1.0 clock
+    /// divider. A tick then changes nothing: the pc, the divider counter, the
+    /// scratch registers and the FIFOs stay the same, so `fstat` recomputes to
+    /// the same value. The scheduler step chain may stop; any PIO write
+    /// re-arms it through `take_scheduled_events` at the same cycle the live
+    /// delay-1 chain would have ticked.
+    fn all_enabled_sms_parked(&self) -> bool {
+        self.sm.iter().filter(|s| s.enabled).all(|s| {
+            let instr = self.instruction_mem[(s.pc & 0x1F) as usize];
+            // JMP (opcode 0), condition "always" (0), delay/side-set 0.
+            instr & 0xFFE0 == 0
+                && (instr & 0x1F) as u8 == s.pc
+                && s.delay_cycles == 0
+                && !s.stalled
+                && s.clkdiv_int == 1
+                && s.clkdiv_frac == 0
+        })
     }
 
     pub fn load_program_asm(&mut self, asm: &str) -> Result<()> {
@@ -598,7 +624,9 @@ impl Peripheral for Pio {
             return crate::sched::EventResult::default();
         }
         let _ = self.tick();
-        let active = self.any_sm_enabled();
+        // A parked chain stops; the next PIO write re-arms it (see
+        // `all_enabled_sms_parked`). `LABWIRED_PIO_PARK=0` keeps it ticking.
+        let active = self.any_sm_enabled() && !(park_enabled() && self.all_enabled_sms_parked());
         self.chain_live = active;
         crate::sched::EventResult {
             reschedule_delay: active.then_some(1),
@@ -610,6 +638,54 @@ impl Peripheral for Pio {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A state machine parked on `jmp <own pc>` stops the scheduler step
+    /// chain; a write re-arms it, and a jump elsewhere or a slower clock
+    /// divider keeps it stepping. tests/pio_parked_chain.rs (labwired-cli)
+    /// checks that a parked chain reports the same run as a ticking one.
+    #[test]
+    fn a_parked_state_machine_stops_the_step_chain() {
+        if !crate::cycle_clock::event_scheduler_enabled() {
+            return;
+        }
+        let mut pio = Pio::new();
+        pio.attach_cycle_clock(CycleClock::default());
+        let mut sched = crate::sched::EventScheduler::new();
+        let mut bus = crate::bus::SystemBus::new();
+        let mut step = |pio: &mut Pio| {
+            pio.on_event(EVT_SM_STEP, &mut sched, &mut bus)
+                .reschedule_delay
+        };
+
+        pio.write_reg(0x000, 1); // CTRL: SM0 on, INSTR_MEM0 = 0 = `jmp 0`
+        assert_eq!(pio.take_scheduled_events(), vec![(0, EVT_SM_STEP)]);
+        assert_eq!(step(&mut pio), None, "`jmp 0` at pc 0 parks");
+
+        pio.write_reg(0x048, 0x0001); // INSTR_MEM0 = `jmp 1`
+        assert_eq!(
+            pio.take_scheduled_events(),
+            vec![(0, EVT_SM_STEP)],
+            "a write re-arms a parked chain"
+        );
+        assert_eq!(step(&mut pio), Some(1), "`jmp 1` at pc 0 runs");
+        assert_eq!(pio.sm[0].pc, 1);
+        assert_eq!(
+            step(&mut pio),
+            Some(1),
+            "INSTR_MEM1 = `jmp 0` is not a self-jump"
+        );
+        assert_eq!(pio.sm[0].pc, 0);
+
+        pio.write_reg(0x048, 0x0000);
+        pio.write_reg(0x0c8, 0x0002_0000); // SM0_CLKDIV = 2.0
+        let _ = pio.take_scheduled_events();
+        assert_eq!(step(&mut pio), Some(1), "a divided clock keeps stepping");
+
+        pio.write_reg(0x0c8, 0x0001_0000);
+        pio.write_reg(0x048, 0x0100); // `jmp 0 [1]`: a delay is pending each loop
+        let _ = pio.take_scheduled_events();
+        assert_eq!(step(&mut pio), Some(1), "a delayed jmp keeps stepping");
+    }
 
     #[test]
     fn test_pio_set_jmp() {

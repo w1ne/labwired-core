@@ -208,8 +208,12 @@ fn svc_and_irq_emit_real_handler_instruction() {
     b.levels = Some((true, false));
     let t = Arc::new(Trace::default());
     assert_eq!(
-        c.step_retired(&mut b, &[t.clone()], &SimulationConfig::default())
-            .unwrap(),
+        c.step_retired(
+            &mut b,
+            std::slice::from_ref(&(t.clone() as Arc<dyn SimulationObserver>)),
+            &SimulationConfig::default()
+        )
+        .unwrap(),
         1
     );
     assert_eq!(*t.0.lock().unwrap(), vec![(0x18, 0xe3a0600d)]);
@@ -227,8 +231,12 @@ fn wfi_wait_has_zero_retirement_and_real_deadline() {
     assert!(c.is_parked_idle());
     let t = Arc::new(Trace::default());
     assert_eq!(
-        c.step_retired(&mut b, &[t.clone()], &SimulationConfig::default())
-            .unwrap(),
+        c.step_retired(
+            &mut b,
+            std::slice::from_ref(&(t.clone() as Arc<dyn SimulationObserver>)),
+            &SimulationConfig::default()
+        )
+        .unwrap(),
         0
     );
     assert!(t.0.lock().unwrap().is_empty());
@@ -335,8 +343,12 @@ fn observer_opcode_is_translated_at_virtual_pc() {
     c.set_pc(0x80000300);
     let t = Arc::new(Trace::default());
     assert_eq!(
-        c.step_retired(&mut b, &[t.clone()], &SimulationConfig::default())
-            .unwrap(),
+        c.step_retired(
+            &mut b,
+            std::slice::from_ref(&(t.clone() as Arc<dyn SimulationObserver>)),
+            &SimulationConfig::default()
+        )
+        .unwrap(),
         1
     );
     assert_eq!(*t.0.lock().unwrap(), vec![(0x80000300, 0xe3a0402a)]);
@@ -387,8 +399,12 @@ fn fiq_entry_retires_only_vector_instruction() {
     b.levels = Some((false, true));
     let t = Arc::new(Trace::default());
     assert_eq!(
-        c.step_retired(&mut b, &[t.clone()], &SimulationConfig::default())
-            .unwrap(),
+        c.step_retired(
+            &mut b,
+            std::slice::from_ref(&(t.clone() as Arc<dyn SimulationObserver>)),
+            &SimulationConfig::default()
+        )
+        .unwrap(),
         1
     );
     assert_eq!(c.get_register(16) & 31, 0x11);
@@ -458,8 +474,12 @@ fn self_branch_batch_retires_real_instructions_in_arm_and_thumb() {
         assert!(!c.is_parked_idle());
         let t = Arc::new(Trace::default());
         assert_eq!(
-            c.step_retired(&mut b, &[t.clone()], &SimulationConfig::default())
-                .unwrap(),
+            c.step_retired(
+                &mut b,
+                std::slice::from_ref(&(t.clone() as Arc<dyn SimulationObserver>)),
+                &SimulationConfig::default()
+            )
+            .unwrap(),
             1
         );
         assert_eq!(

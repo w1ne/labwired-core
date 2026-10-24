@@ -40,10 +40,15 @@ pub(crate) fn write_outputs<C: labwired_core::Cpu>(
     inspect: Option<labwired_core::inspect::MachineInspect>,
     logic_edges: Option<labwired_core::logic_capture::LogicEdgesResult>,
     gpio_pins: Option<Vec<labwired_core::logic_capture::GpioPinState>>,
+    uart_lines: Option<crate::uart_lines::UartLinesResult>,
     motors: Vec<labwired_core::bus::MotorSnapshot>,
+    analog_series: Option<labwired_core::analog::AnalogSeries>,
     stimuli: Vec<StimulusOutcome>,
     footprint: Option<artifacts::FootprintReport>,
     memory: Option<labwired_core::stack_paint::MainStackReport>,
+    memory_policy: Option<labwired_core::bus::MemoryPolicyReport>,
+    virtual_time_ns: Option<u64>,
+    host_time_ns: Option<u64>,
     metrics_block: Option<artifacts::ExecutionMetrics>,
     can_bridges: Vec<(
         labwired_core::network::can_bridge::CanBridgeReport,
@@ -66,7 +71,8 @@ pub(crate) fn write_outputs<C: labwired_core::Cpu>(
 
     // The Cortex-M fault verdict, symbolized against the firmware ELF. `None`
     // on a clean run (and on non-ARM cores), so the block stays absent.
-    let fault_verdict = crate::fault_report::fault_verdict(cpu, Some(firmware_bytes));
+    let fault_verdict =
+        crate::fault_report::fault_verdict(cpu, Some(firmware_bytes), memory_policy.as_ref());
 
     // Silent-path census (measurement only). Compiled to an empty function
     // unless `--features silent-census`, and even then writes nothing unless
@@ -118,10 +124,15 @@ pub(crate) fn write_outputs<C: labwired_core::Cpu>(
         fault_verdict,
         logic_edges,
         gpio_pins,
+        uart_lines,
         motors,
+        analog_series,
         stimuli,
         footprint,
         memory,
+        memory_policy,
+        virtual_time_ns,
+        host_time_ns,
         metrics: metrics_block,
         rtt: rtt_status,
         semihosting: semihost_status.clone(),
@@ -214,9 +225,22 @@ pub(crate) fn write_outputs<C: labwired_core::Cpu>(
                         let report = labwired_cli::pc_coverage_report::CoverageReport::from_run(
                             &symbols, cov,
                         );
+                        // TN: carries the test's name (the script's file
+                        // stem) so `labwired coverage merge` can say which
+                        // test ran each line.
+                        let test_name = args
+                            .script
+                            .file_stem()
+                            .map(|s| s.to_string_lossy().into_owned())
+                            .unwrap_or_default();
                         let info_path = output_dir.join("coverage.info");
-                        if let Err(e) = std::fs::write(&info_path, report.to_lcov()) {
+                        if let Err(e) = std::fs::write(&info_path, report.to_lcov_named(&test_name))
+                        {
                             error!("Failed to write coverage.info: {}", e);
+                        }
+                        let cobertura_path = output_dir.join("coverage.cobertura.xml");
+                        if let Err(e) = std::fs::write(&cobertura_path, report.to_cobertura()) {
+                            error!("Failed to write coverage.cobertura.xml: {}", e);
                         }
                         let cov_json_path = output_dir.join("coverage.json");
                         match std::fs::File::create(&cov_json_path) {
@@ -228,14 +252,23 @@ pub(crate) fn write_outputs<C: labwired_core::Cpu>(
                             Err(e) => error!("Failed to create coverage.json: {}", e),
                         }
                         info!(
-                            "Coverage: {}/{} statements ({:.1}%), {}/{} branches ({:.1}%)",
+                            "Coverage: {}/{} lines ({:.1}%), {}/{} branches ({:.1}%), {}/{} functions ({:.1}%)",
                             report.covered_statements,
                             report.total_statements,
                             report.statement_percent(),
                             report.covered_branches,
                             report.total_branches,
-                            report.branch_percent()
+                            report.branch_percent(),
+                            report.covered_functions,
+                            report.total_functions,
+                            report.function_percent()
                         );
+                        if report.branch_isa.is_none() {
+                            info!(
+                                "Coverage: branch coverage is not available for this \
+                                 instruction set (Thumb and RISC-V are supported)"
+                            );
+                        }
                         coverage_summary = Some(labwired_cli::manifest::CoverageSummary {
                             statements_total: report.total_statements,
                             statements_covered: report.covered_statements,
@@ -473,14 +506,21 @@ pub(crate) fn write_config_error_outputs(
         // Nor any logic-analyzer edges — capture never armed.
         logic_edges: None,
         gpio_pins: None,
+        uart_lines: None,
         // Nor any motor evidence: the run was rejected before a machine existed.
         motors: Vec::new(),
+        analog_series: None,
         // Nor any stimulus outcomes: the run was rejected before a machine
         // existed, so no stimulus was ever attempted.
         stimuli: Vec::new(),
         // Config error: no firmware footprint or stack paint collected.
         footprint: None,
         memory: None,
+        // Config error: no machine ran, so no CPU-write policy was exercised.
+        memory_policy: None,
+        // Config error: no machine ran, so there are no run-level times either.
+        virtual_time_ns: None,
+        host_time_ns: None,
         metrics: None,
         // Config error: no machine, so no RTT model and no diagnostics.
         rtt: None,

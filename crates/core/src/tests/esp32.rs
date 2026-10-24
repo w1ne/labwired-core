@@ -346,7 +346,7 @@ fn esp32_uart0_ahb_fifo_emits_to_sink() {
 
 #[test]
 fn esp32_sar_adc_oneshot_is_channel_dependent() {
-    // The SENS SAR-ADC model must win the overlapping rtcio-stub window at
+    // The SENS SAR-ADC model must win the overlapping 4 KiB rtcio window at
     // 0x3FF4_8800 and produce a genuine channel-dependent one-shot result.
     let mut bus = SystemBus::empty();
     let _cpu = configure_xtensa_esp32(&mut bus);

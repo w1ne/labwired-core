@@ -41,6 +41,13 @@ const DEFAULT_SCAN_EVERY_POLLS: u64 = 64;
 /// Candidates probed per `scan` call. A 1 MiB RAM holds 262,144 candidates, so
 /// one poll cannot sweep it; the cursor resumes where the last poll stopped.
 const SCAN_CANDIDATES_PER_POLL: u32 = 4096;
+/// Ranges this size or smaller are real SRAM and are scanned on every poll.
+/// A 1 MiB RAM still uses the resumable cursor (see the sweep test).
+const BOUNDED_SCAN_RANGE: u64 = 256 * 1024;
+/// Above this, the window is memory-mapped flash (K32W QSPI is 4 MiB), not a
+/// place a control block is published. Walking it after a miss during `_DoInit`
+/// does not return to SRAM inside a normal test budget.
+const SKIP_SCAN_RANGE_ABOVE: u64 = 1024 * 1024;
 
 /// Final-state RTT diagnostics, surfaced in `result.json`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
@@ -161,17 +168,25 @@ impl SeggerRtt {
         (self.polls - 1) % self.scan_every_polls == 0
     }
 
+    fn has_bounded_scan_range(&self) -> bool {
+        self.scan_ranges
+            .iter()
+            .any(|&(_, size)| (16u64..=BOUNDED_SCAN_RANGE).contains(&size))
+    }
+
     /// True when the 16-byte RTT ID sits at `addr`. Bails on the first
     /// mismatching byte, so a full no-hit sweep costs one read per candidate
     /// rather than sixteen.
-    fn magic_at(bus: &dyn Bus, addr: u64) -> bool {
-        for (i, expected) in RTT_ID.iter().enumerate() {
-            match bus.read_u8(addr + i as u64) {
-                Ok(b) if b == *expected => {}
-                _ => return false,
+    fn magic_at(bus: &mut dyn Bus, addr: u64) -> bool {
+        crate::with_device_write_bypass(bus, |bus| {
+            for (i, expected) in RTT_ID.iter().enumerate() {
+                match bus.read_u8(addr + i as u64) {
+                    Ok(b) if b == *expected => {}
+                    _ => return false,
+                }
             }
-        }
-        true
+            true
+        })
     }
 
     fn in_ranges(&self, addr: u64, len: u64) -> bool {
@@ -180,18 +195,17 @@ impl SeggerRtt {
             .any(|&(base, size)| addr >= base && addr.saturating_add(len) <= base + size)
     }
 
-    /// Bounded magic sweep over the configured ranges. It resumes from
-    /// `scan_cursor` and probes at most `SCAN_CANDIDATES_PER_POLL` candidates
-    /// per call, so a 1 MiB RAM is swept across polls instead of restarting —
-    /// and re-reading — from the first range base every time.
-    fn scan(&mut self, bus: &dyn Bus) -> Option<u32> {
-        let n = self.scan_ranges.len();
-        if n == 0 {
+    /// Resumable magic sweep. Ranges above [`SKIP_SCAN_RANGE_ABOVE`] are not
+    /// candidates. The cursor resumes inside the ranges that remain, so a
+    /// 1 MiB SRAM is still spread across polls.
+    fn scan(&mut self, bus: &mut dyn Bus) -> Option<u32> {
+        if self.scan_ranges.is_empty() {
             self.scan_cursor = (0, 0);
             return None;
         }
         let mut budget = SCAN_CANDIDATES_PER_POLL;
         let (mut range_idx, mut offset) = self.scan_cursor;
+        let n = self.scan_ranges.len();
         if range_idx >= n {
             range_idx = 0;
             offset = 0;
@@ -199,6 +213,12 @@ impl SeggerRtt {
         let mut skipped = 0usize;
         while skipped < n {
             let (base, size) = self.scan_ranges[range_idx];
+            if !(16u64..=SKIP_SCAN_RANGE_ABOVE).contains(&size) {
+                range_idx = (range_idx + 1) % n;
+                offset = 0;
+                skipped += 1;
+                continue;
+            }
             if offset + 16 > size {
                 range_idx = (range_idx + 1) % n;
                 offset = 0;
@@ -211,18 +231,17 @@ impl SeggerRtt {
                 return None;
             }
             if Self::magic_at(bus, base + offset) {
-                self.scan_cursor = (range_idx, offset + 4);
+                self.scan_cursor = (0, 0);
                 return Some((base + offset) as u32);
             }
             offset += 4;
             budget -= 1;
         }
-        // Every range is smaller than the ID: nothing can ever match.
         self.scan_cursor = (0, 0);
         None
     }
 
-    fn discover(&mut self, bus: &dyn Bus) {
+    fn discover(&mut self, bus: &mut dyn Bus) {
         if let Some(addr) = self.control_block {
             // Range-guard the ELF-supplied address: a control block can only
             // live in RAM, and probing a stale symbol that resolved into MMIO
@@ -243,19 +262,22 @@ impl SeggerRtt {
         // the stock `_DoInit` writes it before the ID, but a re-init or a
         // partially-written control block must recover, not stall silently
         // behind a stale zero.
-        let max_up = bus
-            .read_u32(cb + CB_OFF_MAX_UP)
+        let max_up = crate::with_device_write_bypass(bus, |bus| bus.read_u32(cb + CB_OFF_MAX_UP))
             .unwrap_or(0)
             .min(MAX_CHANNELS as u32) as usize;
         for i in 0..max_up {
             let desc = cb + CB_OFF_AUP0 + CHAN_SIZE * i as u64;
-            let (Ok(p_buffer), Ok(size), Ok(wr), Ok(rd), Ok(flags)) = (
-                bus.read_u32(desc + CHAN_OFF_PBUFFER),
-                bus.read_u32(desc + CHAN_OFF_SIZE),
-                bus.read_u32(desc + CHAN_OFF_WR),
-                bus.read_u32(desc + CHAN_OFF_RD),
-                bus.read_u32(desc + CHAN_OFF_FLAGS),
-            ) else {
+            let (Ok(p_buffer), Ok(size), Ok(wr), Ok(rd), Ok(flags)) =
+                crate::with_device_write_bypass(bus, |bus| {
+                    (
+                        bus.read_u32(desc + CHAN_OFF_PBUFFER),
+                        bus.read_u32(desc + CHAN_OFF_SIZE),
+                        bus.read_u32(desc + CHAN_OFF_WR),
+                        bus.read_u32(desc + CHAN_OFF_RD),
+                        bus.read_u32(desc + CHAN_OFF_FLAGS),
+                    )
+                })
+            else {
                 continue;
             };
             if size < 2 || p_buffer == 0 {
@@ -275,16 +297,18 @@ impl SeggerRtt {
             }
             let len = if wr > rd { wr - rd } else { size - rd + wr };
             let mut buf = Vec::with_capacity(len as usize);
-            for k in 0..len {
-                let idx = (rd as u64 + k as u64) % size as u64;
-                match bus.read_u8(p_buffer as u64 + idx) {
-                    Ok(b) => buf.push(b),
-                    Err(_) => {
-                        buf.clear();
-                        break;
+            crate::with_device_write_bypass(bus, |bus| {
+                for k in 0..len {
+                    let idx = (rd as u64 + k as u64) % size as u64;
+                    match bus.read_u8(p_buffer as u64 + idx) {
+                        Ok(b) => buf.push(b),
+                        Err(_) => {
+                            buf.clear();
+                            break;
+                        }
                     }
                 }
-            }
+            });
             if buf.is_empty() {
                 continue;
             }
@@ -303,7 +327,8 @@ impl SeggerRtt {
             // the firmware's ring (all current callers attach one; a standalone
             // `attach_segger_rtt` discards them).
             self.bytes_drained += buf.len() as u64;
-            let _ = bus.write_u32(desc + CHAN_OFF_RD, wr);
+            let _ =
+                crate::with_device_write_bypass(bus, |bus| bus.write_u32(desc + CHAN_OFF_RD, wr));
         }
     }
 
@@ -311,15 +336,19 @@ impl SeggerRtt {
     /// block whose ID is not present yet, must not produce that address: it
     /// would alias `aDown` onto `aUp`. Re-read every call; `_DoInit` publishes
     /// the count before the ID, and a later re-init can change it.
-    fn down_channel_desc(bus: &dyn Bus, cb: u64, index: u32) -> Option<u64> {
+    fn down_channel_desc(bus: &mut dyn Bus, cb: u64, index: u32) -> Option<u64> {
         if !Self::magic_at(bus, cb) {
             return None;
         }
-        let max_up = bus.read_u32(cb + CB_OFF_MAX_UP).unwrap_or(0);
+        let (max_up, max_down) = crate::with_device_write_bypass(bus, |bus| {
+            (
+                bus.read_u32(cb + CB_OFF_MAX_UP).unwrap_or(0),
+                bus.read_u32(cb + CB_OFF_MAX_DOWN).unwrap_or(0),
+            )
+        });
         if max_up == 0 {
             return None;
         }
-        let max_down = bus.read_u32(cb + CB_OFF_MAX_DOWN).unwrap_or(0);
         if index >= max_down {
             return None;
         }
@@ -329,14 +358,18 @@ impl SeggerRtt {
     /// `None` when this descriptor must not be written: bad geometry, a
     /// non-zero `Flags[31:24]`, or a buffer outside the RAM `attach_segger_rtt`
     /// already collected.
-    fn usable_down(&self, bus: &dyn Bus, desc: u64) -> Option<(u32, u32, u32, u32)> {
-        let (Ok(p_buffer), Ok(size), Ok(wr), Ok(rd), Ok(flags)) = (
-            bus.read_u32(desc + CHAN_OFF_PBUFFER),
-            bus.read_u32(desc + CHAN_OFF_SIZE),
-            bus.read_u32(desc + CHAN_OFF_WR),
-            bus.read_u32(desc + CHAN_OFF_RD),
-            bus.read_u32(desc + CHAN_OFF_FLAGS),
-        ) else {
+    fn usable_down(&self, bus: &mut dyn Bus, desc: u64) -> Option<(u32, u32, u32, u32)> {
+        let (Ok(p_buffer), Ok(size), Ok(wr), Ok(rd), Ok(flags)) =
+            crate::with_device_write_bypass(bus, |bus| {
+                (
+                    bus.read_u32(desc + CHAN_OFF_PBUFFER),
+                    bus.read_u32(desc + CHAN_OFF_SIZE),
+                    bus.read_u32(desc + CHAN_OFF_WR),
+                    bus.read_u32(desc + CHAN_OFF_RD),
+                    bus.read_u32(desc + CHAN_OFF_FLAGS),
+                )
+            })
+        else {
             return None;
         };
         if size < 2 || p_buffer == 0 || flags >> 24 != 0 || rd >= size || wr >= size {
@@ -378,13 +411,17 @@ impl SeggerRtt {
         let n = (Self::free_down(size, wr, rd) as usize).min(data.len());
         let mut accepted = 0usize;
         for &byte in &data[..n] {
-            if bus.write_u8(p_buffer as u64 + u64::from(wr), byte).is_err() {
+            let at = p_buffer as u64 + u64::from(wr);
+            if crate::with_device_write_bypass(bus, |bus| bus.write_u8(at, byte)).is_err() {
                 break;
             }
             wr = if wr + 1 == size { 0 } else { wr + 1 };
             accepted += 1;
         }
-        if accepted > 0 && bus.write_u32(desc + CHAN_OFF_WR, wr).is_err() {
+        if accepted > 0
+            && crate::with_device_write_bypass(bus, |bus| bus.write_u32(desc + CHAN_OFF_WR, wr))
+                .is_err()
+        {
             return 0;
         }
         accepted
@@ -411,7 +448,8 @@ impl SeggerRtt {
                 break;
             }
             let Some(byte) = q.pop_front() else { break };
-            if bus.write_u8(p_buffer as u64 + u64::from(wr), byte).is_err() {
+            let at = p_buffer as u64 + u64::from(wr);
+            if crate::with_device_write_bypass(bus, |bus| bus.write_u8(at, byte)).is_err() {
                 q.push_front(byte);
                 break;
             }
@@ -419,7 +457,8 @@ impl SeggerRtt {
             wrote = true;
         }
         if wrote {
-            let _ = bus.write_u32(desc + CHAN_OFF_WR, wr);
+            let _ =
+                crate::with_device_write_bypass(bus, |bus| bus.write_u32(desc + CHAN_OFF_WR, wr));
         }
     }
 }
@@ -451,7 +490,10 @@ impl Peripheral for SeggerRtt {
             // `_DoInit` within `poll_every_cycles`; only the RAM sweep is
             // throttled, because a full sweep already spans polls via the
             // cursor and probing more often only burns reads.
-            if self.control_block.is_none() && !self.scan_due() {
+            // A bounded SRAM range is swept every poll. The 64-poll throttle
+            // is only for a scan that has nothing but huge windows: those are
+            // skipped, so the throttle would otherwise never look again.
+            if self.control_block.is_none() && !self.scan_due() && !self.has_bounded_scan_range() {
                 return;
             }
             self.discover(bus);
@@ -904,6 +946,42 @@ mod tests {
     fn host_write_waits_until_a_down_channel_exists() {
         let bus = SystemBus::new();
         assert!(!bus.write_rtt_input(b"x"));
+    }
+
+    #[test]
+    fn host_down_write_bypasses_cpu_store_policy_and_store_watch() {
+        let mut bus = SystemBus::new();
+        let cb = 0x2000_0000u64;
+        let up = 0x2000_1000u64;
+        let down = 0x2000_2000u64;
+        setup_cb(&mut bus, cb, up, 16, 0, 0);
+        setup_down(&mut bus, cb, 3, down, 16, 0, 0);
+        attach(&mut bus, cb);
+
+        bus.memory_policy.ram = crate::bus::CpuWritePolicy::Fault;
+        assert!(bus.add_debug_watch(down, 16, false, true));
+
+        // The host's down-channel write is not a CPU store.
+        assert_eq!(bus.write_rtt_down(0, b"ab"), 2);
+        assert_eq!(bus.ram.read_u8(down), Some(b'a'));
+        assert_eq!(bus.ram.read_u8(down + 1), Some(b'b'));
+        let desc = down_desc(cb, 3);
+        assert_eq!(bus.ram.read_u32(desc + CHAN_OFF_WR), Some(2));
+        assert_eq!(
+            bus.memory_policy.violations_ram, 0,
+            "host RTT writes must bypass the cpu_writes policy"
+        );
+        assert_eq!(
+            bus.take_debug_watch_hit(),
+            None,
+            "host RTT writes must not latch a store watch"
+        );
+
+        // A direct CPU store is still gated and still latches.
+        let err = bus.write_u8(down, 0xAA).unwrap_err();
+        assert!(matches!(err, crate::SimulationError::MemoryViolation(_)));
+        assert_eq!(bus.memory_policy.violations_ram, 1);
+        assert_eq!(bus.take_debug_watch_hit(), Some(down));
     }
 
     /// Wrap, the one-byte gap that means full, and `Flags[31:24] != 0`.

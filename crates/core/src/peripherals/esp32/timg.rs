@@ -13,9 +13,10 @@
 //!   * Register reads/writes are acknowledged at the correct offsets so
 //!     state probes don't fault.
 //!   * The 64-bit T0/T1 counters tick monotonically at a deterministic
-//!     1 µs cadence (1 increment per `tick()`, assuming 240 MHz CPU and
-//!     240 cycles per µs upstream — the bus drives `tick()` once per
-//!     simulated µs, see `Bus::tick_peripherals_with_costs`).
+//!     one increment per CPU-cycle `tick()` (or elapsed cycle in `sync_to`).
+//!     Their functional counters do not model the hardware prescaler.
+//!     Classic LACT separately models the fixed 240 MHz CPU / 80 MHz APB
+//!     ratio and its programmed divider.
 //!   * `T0_UPDATE` / `T1_UPDATE` latches the live counter into LO/HI so
 //!     subsequent register reads return a consistent 64-bit snapshot —
 //!     real silicon also requires this strobe before reading LO/HI.
@@ -135,9 +136,14 @@ const LACT_EN_BIT: u32 = 1 << 31;
 /// `extui a8, a8, 13, 16`.
 const LACT_DIVIDER_SHIFT: u32 = 13;
 const LACT_DIVIDER_BITS: u32 = 16;
-/// APB clock in MHz. `tick()` runs once per simulated microsecond, so this
-/// is exactly how many APB cycles elapse per tick.
+/// Fixed APB clock in MHz; LACT converts CPU-cycle advances to this clock.
 const APB_MHZ: u32 = 80;
+/// ESP32-classic CPU clock in MHz (`configs/chips/esp32.yaml` `cpu_hz`).
+/// Both the legacy walk (`tick()`) and the scheduler (`sync_to`) advance this
+/// model in CPU cycles, so LACT converts CPU cycles to APB cycles at
+/// `APB_MHZ / LACT_CPU_MHZ` — otherwise `esp_timer_get_time()` (and with it
+/// Arduino `millis()`/`micros()`/`delayMicroseconds()`) runs 240x fast.
+const LACT_CPU_MHZ: u32 = 240;
 
 // Watchdog. The module's default layout is the ESP32-classic one: five config
 // registers WDTCONFIG0..4 @0x48..0x58, WDTFEED @0x5C, WDTWPROTECT @0x60.
@@ -274,11 +280,10 @@ pub struct Timg {
     /// Live 64-bit value for timer 1. Same semantics as `counter_t0`.
     counter_t1: u64,
     /// Live 64-bit LACT counter — the `esp_timer` time base. Advances by
-    /// `APB_MHZ / divider` per tick while `LACT_CONFIG.EN` is set, with the
-    /// remainder carried in `lact_rem` so a divider that does not divide 80
-    /// still averages out to the right rate instead of truncating to zero.
+    /// `APB_MHZ / (LACT_CPU_MHZ * divider)` per CPU cycle while enabled,
+    /// carrying fractional progress in `lact_rem` across advances.
     counter_lact: u64,
-    /// Undivided APB cycles not yet converted into LACT ticks.
+    /// Fractional LACT progress in APB cycles multiplied by LACT_CPU_MHZ.
     lact_rem: u32,
     /// Is this a TIMG that HAS a LACT timer? Only ESP32-classic does.
     ///
@@ -482,17 +487,20 @@ impl Timg {
         }
     }
 
-    /// Advance LACT by one simulated microsecond's worth of APB cycles.
-    fn advance_lact(&mut self, ticks: u64) {
+    /// Advance LACT by `cpu_cycles` CPU cycles (the unit both `tick()` and
+    /// `sync_to` deliver). One CPU cycle is `APB_MHZ / LACT_CPU_MHZ` APB
+    /// cycles; the fractional APB remainder is carried in `lact_rem`, scaled
+    /// by `LACT_CPU_MHZ`, so no time is lost across calls.
+    fn advance_lact(&mut self, cpu_cycles: u64) {
         let Some(div) = self.lact_divider() else {
             return;
         };
-        // Accumulate undivided APB cycles, then convert whole quotients.
-        // Saturating rather than wrapping: a run long enough to overflow
-        // this has bigger problems than a timer glitch.
-        let cycles = (ticks.saturating_mul(APB_MHZ as u64)).saturating_add(self.lact_rem as u64);
-        self.counter_lact = self.counter_lact.wrapping_add(cycles / div as u64);
-        self.lact_rem = (cycles % div as u64) as u32;
+        // Widen before multiplying so even a full u64 span is exact and
+        // partition-independent. Only the hardware counter wraps.
+        let scaled = u128::from(cpu_cycles) * u128::from(APB_MHZ) + u128::from(self.lact_rem);
+        let per_tick = u128::from(div) * u128::from(LACT_CPU_MHZ);
+        self.counter_lact = self.counter_lact.wrapping_add((scaled / per_tick) as u64);
+        self.lact_rem = (scaled % per_tick) as u32;
     }
 
     /// Latch the live LACT counter into LACT_LO/LACT_HI. Real silicon
@@ -874,10 +882,9 @@ impl Peripheral for Timg {
     }
 
     fn tick(&mut self) -> PeripheralTickResult {
-        // Each `tick()` advances the deterministic 1-µs clock. The bus
-        // calls us once per simulated µs (240 CPU cycles at 240 MHz),
-        // so a saturating +1 here gives a 1 MHz timer — exactly the
-        // ESP-IDF default for the 80 MHz APB / 80 divider.
+        // Each legacy tick represents one CPU cycle. T0/T1 retain their
+        // functional one-increment-per-call behavior; LACT applies its
+        // CPU-to-APB conversion and programmed divider below.
         if self.is_t0_enabled() {
             self.counter_t0 = self.counter_t0.wrapping_add(1);
         }
@@ -889,6 +896,14 @@ impl Peripheral for Timg {
         // No interrupt firing this round — see module docs. Routing is
         // a separate task.
         PeripheralTickResult::default()
+    }
+
+    fn tick_elapsed(&mut self, cycles: u64) -> PeripheralTickResult {
+        // Preserve the legacy T0/T1 and MWDT callback cadence. LACT alone
+        // consumes the full CPU-cycle interval supplied by the bus.
+        let result = self.tick();
+        self.advance_lact(cycles.saturating_sub(1));
+        result
     }
 
     /// Phase 2B.2 (issue #192): TIMG is the first peripheral to migrate to the
@@ -1196,7 +1211,8 @@ mod tests {
         // LACT_EN | divider 40 at bits [28:13] — what esp_timer programs for
         // the 2 MHz tick esp_timer_get_time() halves into microseconds.
         write_u32(&mut t, 0x70, (1 << 31) | (40 << 13));
-        for _ in 0..1000 {
+        // tick() is one CPU cycle: 1000 us at 240 MHz is 240_000 cycles.
+        for _ in 0..240_000 {
             t.tick();
         }
         // 1000 us at APB 80 MHz / 40 = 2 ticks per us.
@@ -1204,6 +1220,109 @@ mod tests {
         write_u32(&mut t, 0x80, 1); // LACT_UPDATE latches LO/HI
         assert_eq!(read_u32(&t, 0x78), 2000);
         assert_eq!(read_u32(&t, 0x7C), 0);
+    }
+
+    /// esp_timer must run at wall rate against the CPU clock: one simulated
+    /// second (240 M CPU cycles, scheduler `sync_to`) is exactly 1 s of LACT
+    /// time (2 M ticks at the 2 MHz esp_timer programs), including when the
+    /// span arrives in odd-sized pieces that do not divide the APB ratio.
+    #[test]
+    fn lact_sync_to_tracks_cpu_clock_not_cycles_as_microseconds() {
+        let mut t = Timg::new(0x3FF5_F000).with_lact();
+        write_u32(&mut t, 0x70, (1 << 31) | (40 << 13));
+        let mut now = 0u64;
+        for step in [1u64, 7, 239, 1_000, 123_457].iter().cycle() {
+            if now >= 240_000_000 {
+                break;
+            }
+            now = (now + step).min(240_000_000);
+            t.sync_to(now);
+        }
+        assert_eq!(
+            t.counter_lact(),
+            2_000_000,
+            "1 s of CPU cycles = 1 s of esp_timer"
+        );
+    }
+
+    #[test]
+    fn lact_elapsed_walk_matches_sync_for_batched_cycles() {
+        let mut walk = Timg::new(0).with_lact();
+        let mut sync = Timg::new(0).with_lact();
+        for t in [&mut walk, &mut sync] {
+            t.write_u32(LACT_CONFIG, LACT_EN_BIT | (40 << 13)).unwrap();
+        }
+        let mut now = 0;
+        for cycles in [1, 7, 239, 1000, 123457] {
+            walk.tick_elapsed(cycles);
+            now += cycles;
+            sync.sync_to(now);
+            assert_eq!(
+                (walk.counter_lact, walk.lact_rem),
+                (sync.counter_lact, sync.lact_rem)
+            );
+        }
+    }
+
+    #[test]
+    fn lact_large_sync_is_partition_independent() {
+        for divider in [1, 40, 65535] {
+            let mut whole = Timg::new(0).with_lact();
+            let mut pieces = Timg::new(0).with_lact();
+            for t in [&mut whole, &mut pieces] {
+                t.write_u32(LACT_CONFIG, LACT_EN_BIT | (divider << 13))
+                    .unwrap();
+            }
+            whole.sync_to(u64::MAX);
+            for now in [u64::MAX / 3, u64::MAX / 2, u64::MAX] {
+                pieces.sync_to(now);
+            }
+            let numerator = u128::from(u64::MAX) * 80;
+            let denominator = u128::from(divider) * 240;
+            assert_eq!(whole.counter_lact, (numerator / denominator) as u64);
+            assert_eq!(whole.counter_lact, pieces.counter_lact);
+            assert_eq!(whole.lact_rem, pieces.lact_rem);
+        }
+    }
+
+    #[test]
+    fn lact_walk_sync_phase_and_load_contract() {
+        for divider in [1, 7, 40, 65535] {
+            let mut walk = Timg::new(0).with_lact();
+            let mut sync = Timg::new(0).with_lact();
+            let cfg = LACT_EN_BIT | (divider << 13);
+            for t in [&mut walk, &mut sync] {
+                t.write_u32(LACT_CONFIG, cfg).unwrap();
+            }
+            for now in 1..=3 * u64::from(divider) + 1 {
+                walk.tick();
+                sync.sync_to(now);
+                assert_eq!(walk.counter_lact, now / (3 * u64::from(divider)));
+                assert_eq!(
+                    (walk.counter_lact, walk.lact_rem),
+                    (sync.counter_lact, sync.lact_rem)
+                );
+            }
+            let anchor = sync.anchor_tick;
+            let phase = sync.lact_rem;
+            sync.sync_to(anchor - 1);
+            sync.sync_to(anchor);
+            sync.write_u32(LACT_CONFIG, cfg & !LACT_EN_BIT).unwrap();
+            sync.sync_to(anchor + 100);
+            assert_eq!(sync.lact_rem, phase);
+            sync.write_u32(LACT_CONFIG, cfg).unwrap();
+            sync.sync_to(anchor + 101);
+            assert_eq!(sync.lact_rem, phase + 80);
+            sync.write_u32(LACT_LOADLO, u32::MAX).unwrap();
+            sync.write_u32(LACT_LOADHI, u32::MAX).unwrap();
+            sync.write_u32(LACT_LOAD, 1).unwrap();
+            assert_eq!(sync.lact_rem, 0);
+            sync.sync_to(anchor + 101 + 3 * u64::from(divider));
+            assert_eq!(sync.counter_lact, 0);
+            sync.write_u32(LACT_UPDATE, 1).unwrap();
+            assert_eq!(sync.read_u32(LACT_LO).unwrap(), 0);
+            assert_eq!(sync.read_u32(LACT_HI).unwrap(), 0);
+        }
     }
 
     // ── C3/C6 MWDT (with_mwdt) ──────────────────────────────────────────────

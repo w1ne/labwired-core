@@ -97,6 +97,9 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         "esp32s3_crosscore_ipi" => Box::new(crosscore_ipi::Esp32s3CrossCoreIpi::new()),
         "esp32s3_gpio" => Box::new(gpio::Esp32s3Gpio::new()),
         "esp32s3_io_mux" => Box::new(io_mux::Esp32s3IoMux::new()),
+        // RTC IO MUX + RTC GPIO (`DR_REG_RTCIO_BASE` 0x6000_8400), shared with
+        // the GPIO model through the bus (`rebuild_rtc_io_link`).
+        "esp32s3_rtc_io" => Box::new(crate::peripherals::esp_rtc_io::EspRtcIo::new_esp32s3()),
         "esp32s3_usb_serial_jtag" => Box::new(usb_serial_jtag::UsbSerialJtag::new_esp32s3()),
         // Same WDEV MAC IP as the C3 (`0x6003_3000`, ETS source 0).
         "esp32s3_wifi_mac" => Box::new(wifi_mac::Esp32s3WifiMac::new()),
@@ -158,6 +161,7 @@ pub const SUPPORTED_TYPES: &[&str] = &[
     "esp32s3_crosscore_ipi",
     "esp32s3_gpio",
     "esp32s3_io_mux",
+    "esp32s3_rtc_io",
     "esp32s3_usb_serial_jtag",
     "esp32s3_wifi_mac",
     "esp32s3_systimer",

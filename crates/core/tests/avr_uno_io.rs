@@ -29,8 +29,14 @@ struct Rig {
 }
 
 fn boot() -> Rig {
+    boot_with(|yaml| yaml)
+}
+
+/// Boot the example with its system.yaml rewritten by `edit` first.
+fn boot_with(edit: impl FnOnce(String) -> String) -> Rig {
     let yaml = root().join("examples/arduino-uno-io/system.yaml");
-    let manifest = SystemManifest::from_file(&yaml).expect("load system.yaml");
+    let text = edit(std::fs::read_to_string(&yaml).expect("read system.yaml"));
+    let manifest = SystemManifest::from_yaml(&text).expect("load system.yaml");
     let chip_path = yaml.parent().unwrap().join(&manifest.chip);
     let chip = ChipDescriptor::from_file(&chip_path).expect("load chip");
     let bus = SystemBus::from_config(&chip, &manifest).expect("build bus");
@@ -146,4 +152,34 @@ fn the_potentiometer_on_a0_moves_analog_read() {
         "knob at 100 % is the 3.3 V rail on a 5 V reference"
     );
     assert_eq!(centred, 337, "the knob starts centred at 50 %");
+}
+
+/// End to end: `config.supply_mv` on the pot survives `attach` and drives what
+/// the firmware's analogRead returns. With the pot across the Uno's 5 V rail,
+/// full travel is the converter's full scale (1023), not the 3.3 V curve's 675.
+#[test]
+fn a_pot_on_the_5v_rail_reads_full_scale_through_attach() {
+    let mut rig = boot_with(|yaml| {
+        let edited = yaml.replace(
+            "      channel: 0\n",
+            "      channel: 0\n      supply_mv: 5000\n",
+        );
+        assert_ne!(
+            edited, yaml,
+            "example yaml still has the knob's channel line"
+        );
+        edited
+    });
+    let centred = field(&rig.next_lines(2), "A0=");
+    rig.machine
+        .set_input_on("knob", "position", 100.0)
+        .expect("knob to 100 %");
+    let top = field(&rig.next_lines(2), "A0=");
+    rig.machine
+        .set_input_on("knob", "position", 0.0)
+        .expect("knob to 0 %");
+    let bottom = field(&rig.next_lines(2), "A0=");
+    assert_eq!(top, 1023, "5 V on a 5 V reference is full scale");
+    assert_eq!(centred, 512, "2.5 V centred: 2500 * 1024 / 5000");
+    assert_eq!(bottom, 0);
 }

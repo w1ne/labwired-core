@@ -1,0 +1,53 @@
+name: PyBadge toolchain source metadata
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - scripts/pybadge-toolchain-source-evidence/**
+      - .github/workflows/pybadge-toolchain-source-evidence.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: pybadge-toolchain-source-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  toolchain-source-metadata:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Pure metadata admission controls (no compiler or guest)
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python3 -m unittest discover -s scripts/pybadge-toolchain-source-evidence -p 'test_*.py' -v
+      - name: Acquire the exact qualified notice artifact and official metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/CrispStrobe/labwired-core/actions/runs/37817595613 > "$RUNNER_TEMP/prior-run.json"
+          gh api repos/CrispStrobe/labwired-core/actions/runs/37817595613/artifacts > "$RUNNER_TEMP/prior-artifacts.json"
+          gh api repos/CrispStrobe/labwired-core/actions/artifacts/11568138312/zip > "$RUNNER_TEMP/prior-notices.zip"
+      - name: Enable source indexes without installing a toolchain
+        run: |
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo sed -i 's/^Types: deb$/Types: deb deb-src/' /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get update
+      - name: Bind exact binary versions to source records and descriptors
+        run: |
+          python3 scripts/pybadge-toolchain-source-evidence/collect.py \
+            --prior "$RUNNER_TEMP/prior-notices.zip" \
+            --run-record "$RUNNER_TEMP/prior-run.json" \
+            --artifact-record "$RUNNER_TEMP/prior-artifacts.json" \
+            --out "$RUNNER_TEMP/toolchain-source-evidence"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: ${{ !cancelled() }}
+        with:
+          name: pybadge-toolchain-source-metadata
+          path: ${{ runner.temp }}/toolchain-source-evidence/
+          if-no-files-found: error

@@ -328,6 +328,14 @@ peripherals:
       debug_schema: "../peripherals/stm32f407/dma1.yaml"
       # DMA1_Stream0..7 NVIC positions (stm32f407xx.h): 11..17, then 47.
       stream_irqs: [11, 12, 13, 14, 15, 16, 17, 47]
+      # Peripheral requests as [stream, SxCR.CHSEL] (RM0090 Table 42, DMA1
+      # request mapping, channel 0): SPI3_RX streams 0/2, SPI2_RX stream 3,
+      # SPI2_TX stream 4, SPI3_TX streams 5/7.
+      requests:
+        spi2_rx: [[3, 0]]
+        spi2_tx: [[4, 0]]
+        spi3_rx: [[0, 0], [2, 0]]
+        spi3_tx: [[5, 0], [7, 0]]
   - id: "dma2"
     type: "stm32f4_dma"
     base_address: 0x40026400
@@ -338,6 +346,11 @@ peripherals:
       dma2: true
       # DMA2_Stream0..7 NVIC positions (stm32f407xx.h): 56..60, then 68..70.
       stream_irqs: [56, 57, 58, 59, 60, 68, 69, 70]
+      # RM0090 Table 43, DMA2 request mapping (channel 3): SPI1_RX streams
+      # 0/2, SPI1_TX streams 3/5.
+      requests:
+        spi1_rx: [[0, 3], [2, 3]]
+        spi1_tx: [[3, 3], [5, 3]]
   # FLASH interface + PWR — required by Arduino/STM32 core bring-up
   # (HAL_RCC_ClockConfig waits on FLASH_ACR latency; SystemInit touches PWR).
   # Same bindings as stm32f401.yaml; without them Arduino sketches bus-fault

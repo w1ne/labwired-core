@@ -19,7 +19,32 @@ pub enum Arch {
     /// AVR8 (ATmega328P / classic Arduino Nano).
     #[serde(alias = "avr8", alias = "atmega328p")]
     Avr,
+    /// PIC24 / dsPIC33 16-bit MCU & DSC family (24-bit instruction words).
+    #[serde(alias = "dspic33", alias = "pic24f", alias = "dspic33f")]
+    Pic24,
     Unknown,
+}
+
+/// What the bus does with a CPU-initiated store into this memory region.
+///
+/// `Allow` (the default, and what every config got before this existed) does
+/// exactly what the bus always did. `Warn` commits the store and records one
+/// deduplicated warning per region. `Fault` refuses the store and raises a
+/// precise data fault the CPU turns into a BusFault — the way to model a ROM
+/// the processor must not write (renode/renode#787).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum CpuWritePolicy {
+    #[default]
+    Allow,
+    Warn,
+    Fault,
+}
+
+impl CpuWritePolicy {
+    pub fn is_allow(&self) -> bool {
+        matches!(self, CpuWritePolicy::Allow)
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -32,6 +57,10 @@ pub struct MemoryRange {
         serialize_with = "serialize_size"
     )]
     pub size: u64,
+    /// CPU-initiated store policy. Host/loader writes (ELF load, fixtures,
+    /// snapshots) never pass through this.
+    #[serde(default, skip_serializing_if = "CpuWritePolicy::is_allow")]
+    pub cpu_writes: CpuWritePolicy,
 }
 
 /// An additional named RAM/ROM-backed memory window beyond the primary
@@ -1340,8 +1369,13 @@ impl From<labwired_ir::IrDevice> for ChipDescriptor {
                 // "<n>B" purely so this field could hold a String, then parsed
                 // straight back at every read. That round-trip is gone.
                 size: r.size,
+                cpu_writes: CpuWritePolicy::Allow,
             })
-            .unwrap_or(MemoryRange { base: 0, size: 0 });
+            .unwrap_or(MemoryRange {
+                base: 0,
+                size: 0,
+                cpu_writes: CpuWritePolicy::Allow,
+            });
 
         let ram = ir
             .memory_regions
@@ -1352,8 +1386,13 @@ impl From<labwired_ir::IrDevice> for ChipDescriptor {
                 // "<n>B" purely so this field could hold a String, then parsed
                 // straight back at every read. That round-trip is gone.
                 size: r.size,
+                cpu_writes: CpuWritePolicy::Allow,
             })
-            .unwrap_or(MemoryRange { base: 0, size: 0 });
+            .unwrap_or(MemoryRange {
+                base: 0,
+                size: 0,
+                cpu_writes: CpuWritePolicy::Allow,
+            });
 
         Self {
             schema_version: default_schema_version(),
@@ -1413,4 +1452,43 @@ mod builtin_chip_tests;
 
 fn default_true() -> bool {
     true
+}
+
+#[cfg(test)]
+mod cpu_writes_tests {
+    use super::*;
+
+    #[test]
+    fn memory_range_defaults_to_allow() {
+        let r: MemoryRange = serde_yaml::from_str("base: 0x08000000\nsize: \"1MB\"\n").unwrap();
+        assert_eq!(r.cpu_writes, CpuWritePolicy::Allow);
+    }
+
+    #[test]
+    fn memory_range_parses_fault_and_warn() {
+        let r: MemoryRange =
+            serde_yaml::from_str("base: 0x08000000\nsize: \"1MB\"\ncpu_writes: fault\n").unwrap();
+        assert_eq!(r.cpu_writes, CpuWritePolicy::Fault);
+        let w: MemoryRange =
+            serde_yaml::from_str("base: 0x20000000\nsize: \"96KB\"\ncpu_writes: warn\n").unwrap();
+        assert_eq!(w.cpu_writes, CpuWritePolicy::Warn);
+    }
+
+    #[test]
+    fn allow_is_not_serialized() {
+        let r = MemoryRange {
+            base: 0x0800_0000,
+            size: 1024,
+            cpu_writes: CpuWritePolicy::Allow,
+        };
+        let s = serde_yaml::to_string(&r).unwrap();
+        assert!(!s.contains("cpu_writes"), "{s}");
+        let f = MemoryRange {
+            base: 0x0800_0000,
+            size: 1024,
+            cpu_writes: CpuWritePolicy::Fault,
+        };
+        let s = serde_yaml::to_string(&f).unwrap();
+        assert!(s.contains("cpu_writes: fault"), "{s}");
+    }
 }

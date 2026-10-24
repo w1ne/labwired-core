@@ -57,12 +57,14 @@ pub(crate) struct OperateResponse {
     pub(crate) event_present: bool,
 }
 
-/// Decode a device reply `[PD_in..., OD..., CKS]` (Spec A.1.5; length
-/// `pd_in_len + od_len + 1`). There is no leading status octet: the checksum
-/// is over every data octet and CKS with its checksum bits (0-5) zeroed, the
-/// PD status is CKS bit 6 (1 = invalid) and the Event flag is CKS bit 7.
-pub(crate) fn decode_operate(data: &[u8], pd_in_len: usize, od_len: usize) -> OperateResponse {
-    if data.len() < pd_in_len + od_len + 1 {
+/// Decode a cyclic OPERATE reply `[PD_in..., CKS]` (Figures A.9/A.10/A.13/A.14:
+/// a WRITE M-sequence is answered without an OD octet, and the kit's cyclic
+/// frames are writes, so the reply carries process data only). There is no
+/// leading status octet: the checksum is over every data octet and CKS with
+/// its checksum bits (0-5) zeroed, the PD status is CKS bit 6 (1 = invalid)
+/// and the Event flag is CKS bit 7.
+pub(crate) fn decode_operate(data: &[u8], pd_in_len: usize) -> OperateResponse {
+    if data.len() < pd_in_len + 1 {
         return OperateResponse {
             pd: Vec::new(),
             pd_valid: false,
@@ -70,8 +72,7 @@ pub(crate) fn decode_operate(data: &[u8], pd_in_len: usize, od_len: usize) -> Op
             event_present: false,
         };
     }
-    let pd_end = data.len() - od_len - 1;
-    let pd = data[..pd_end].to_vec();
+    let pd = data[..pd_in_len].to_vec();
     let cks = data[data.len() - 1];
     let mut masked = data.to_vec();
     if let Some(last) = masked.last_mut() {
@@ -491,7 +492,7 @@ impl IolinkMaster {
     }
 
     fn operate_response_len(&self) -> usize {
-        self.pd_in_len + self.od_len + 1
+        self.pd_in_len + 1
     }
 
     /// Turn a completed in-flight frame into a trace record, decoding the
@@ -500,7 +501,7 @@ impl IolinkMaster {
         let (pd_in, ck_ok, pd_valid) = if matches!(p.kind, IolinkFrameKind::Cyclic) {
             let n = self.operate_response_len();
             if p.raw_device.len() >= n {
-                let r = decode_operate(&p.raw_device[..n], self.pd_in_len, self.od_len);
+                let r = decode_operate(&p.raw_device[..n], self.pd_in_len);
                 (r.pd, Some(r.checksum_ok), Some(r.pd_valid))
             } else {
                 (Vec::new(), None, Some(false))
@@ -634,7 +635,7 @@ impl UartStreamDevice for IolinkMaster {
             && self.rx_accum.len() >= self.operate_response_len()
         {
             let n = self.operate_response_len();
-            let resp = decode_operate(&self.rx_accum[..n], self.pd_in_len, self.od_len);
+            let resp = decode_operate(&self.rx_accum[..n], self.pd_in_len);
             if resp.checksum_ok && resp.pd_valid {
                 // Log only when the verdict changed, so the capture stays
                 // readable (one line per distinct verdict the master received).
@@ -812,8 +813,8 @@ mod tests {
 
     #[test]
     fn decodes_operate_response_and_extracts_pd() {
-        // Reply is `[PD_in..., OD..., CKS]` with no leading status octet.
-        let resp = decode_operate(&[0xA5, 0x00, 0x22], 1, 1);
+        // Cyclic WRITE reply is `[PD_in..., CKS]` (no OD octet).
+        let resp = decode_operate(&[0xA5, 0x22], 1);
         assert!(resp.checksum_ok);
         assert!(resp.pd_valid);
         assert!(!resp.event_present);
@@ -823,14 +824,14 @@ mod tests {
     #[test]
     fn decode_operate_flags_event_and_pd_invalid_in_cks() {
         // PD valid, Event flag set: CKS = 0x80 | ck6([0xA5, 0x80]) = 0x8A.
-        let ev = decode_operate(&[0xA5, 0x00, 0x8A], 1, 1);
+        let ev = decode_operate(&[0xA5, 0x8A], 1);
         assert!(ev.checksum_ok);
         assert!(ev.pd_valid);
         assert!(ev.event_present);
 
         // PD invalid (CKS bit 6), no event: the PD-status bit participates in
         // the checksum, so CKS = 0x40 | ck6([0xA5, 0x40]) = 0x7A.
-        let inv = decode_operate(&[0xA5, 0x00, 0x7A], 1, 1);
+        let inv = decode_operate(&[0xA5, 0x7A], 1);
         assert!(inv.checksum_ok);
         assert!(!inv.pd_valid);
         assert!(!inv.event_present);
@@ -846,22 +847,22 @@ mod tests {
         // The invalid vector follows C1: Event and PD-status bits of CKS are
         // part of the checked message (only bits 0-5 are zeroed), so
         // CKS = 0x40 | ck6([0xA5, 0x40]) = 0x7A.
-        let od = decode_operate(&[0x10, 0x39], 0, 1);
+        let od = decode_operate(&[0x10, 0x39], 0);
         assert!(od.checksum_ok);
         assert!(od.pd_valid);
         assert!(od.pd.is_empty());
 
-        let valid = decode_operate(&[0xA5, 0x22], 1, 0);
+        let valid = decode_operate(&[0xA5, 0x22], 1);
         assert!(valid.checksum_ok);
         assert!(valid.pd_valid);
         assert_eq!(valid.pd, vec![0xA5]);
 
-        let event = decode_operate(&[0xA5, 0x8A], 1, 0);
+        let event = decode_operate(&[0xA5, 0x8A], 1);
         assert!(event.checksum_ok);
         assert!(event.pd_valid);
         assert!(event.event_present);
 
-        let invalid = decode_operate(&[0xA5, 0x7A], 1, 0);
+        let invalid = decode_operate(&[0xA5, 0x7A], 1);
         assert!(invalid.checksum_ok);
         assert!(!invalid.pd_valid);
         assert!(!invalid.event_present);
@@ -937,7 +938,7 @@ mod tests {
     #[test]
     fn finalize_cyclic_decodes_response_and_marks_ck() {
         let m = IolinkMaster::new(1, 1, IolinkComSpeed::Com2);
-        let resp = [0xA5u8, 0x00, 0x22];
+        let resp = [0xA5u8, 0x22];
         let p = PendingXfer {
             seq: 7,
             kind: IolinkFrameKind::Cyclic,
@@ -992,8 +993,9 @@ mod tests {
     fn decode_operate_handles_two_byte_pd() {
         let mut frame = vec![0xAAu8, 0xBB, 0x00];
         let ck = checksum6(&frame);
+        frame.pop();
         frame.push(ck);
-        let resp = decode_operate(&frame, 2, 1);
+        let resp = decode_operate(&frame, 2);
         assert!(resp.checksum_ok);
         assert!(resp.pd_valid);
         assert_eq!(resp.pd, vec![0xAA, 0xBB]);
@@ -1060,18 +1062,18 @@ mod tests {
     #[test]
     fn decode_operate_surfaces_event_bit() {
         // CKS with the Event flag (0x80): PD valid, event present.
-        let mut frame = vec![0xAAu8, 0x00];
-        let mut cks = 0x80 | checksum6(&[0xAA, 0x80]);
+        let mut frame = vec![0xAAu8];
+        let cks = 0x80 | checksum6(&[0xAA, 0x80]);
         frame.push(cks);
-        let resp = decode_operate(&frame, 1, 1);
+        let resp = decode_operate(&frame, 1);
         assert!(resp.checksum_ok);
         assert!(resp.pd_valid);
         assert!(resp.event_present, "EVENT flag (0x80) must be decoded");
 
         // PD valid, no event.
-        cks = checksum6(&[0xAA, 0x00]);
-        let f2 = vec![0xAAu8, 0x00, cks];
-        let r2 = decode_operate(&f2, 1, 1);
+        let cks = checksum6(&[0xAA, 0x00]);
+        let f2 = vec![0xAAu8, cks];
+        let r2 = decode_operate(&f2, 1);
         assert!(!r2.event_present);
     }
 
@@ -1083,9 +1085,8 @@ mod tests {
         let pd = [0x1Cu8, 0xC5, 0x00, 0xBB, 0x03, 0x00, 0xFF, 0xFF, 0x17];
         let mut frame = Vec::new();
         frame.extend_from_slice(&pd);
-        frame.push(0x00); // OD
-                          // CKS with the Event flag set (PD valid): bit 7 plus the checksum.
-        frame.push(0x80 | checksum6(&[pd.as_slice(), &[0x00, 0x80]].concat()));
+        // CKS with the Event flag set (PD valid): bit 7 plus the checksum.
+        frame.push(0x80 | checksum6(&[pd.as_slice(), &[0x80]].concat()));
 
         let sink = Arc::new(Mutex::new(Vec::new()));
         let mut m = IolinkMaster::new(9, 1, IolinkComSpeed::Com2);
@@ -1116,7 +1117,7 @@ mod tests {
         }
         // The device raises the CKS Event flag on a cyclic reply.
         let mut mcs = Vec::new();
-        for b in [0xA5u8, 0x00, 0x80 | checksum6(&[0xA5, 0x80])] {
+        for b in [0xA5u8, 0x80 | checksum6(&[0xA5, 0x80])] {
             m.on_tx_byte(b);
         }
         // The next frames are the Table 59 readout: StatusCode 0xC0, the event
@@ -1167,7 +1168,7 @@ mod tests {
             drain(&mut m);
         }
         // Device replies to the cyclic request with PD = 0xA5, valid.
-        for b in [0xA5u8, 0x00, 0x22] {
+        for b in [0xA5u8, 0x22] {
             m.on_tx_byte(b);
         }
         assert_eq!(m.input_byte(), 0xA5);

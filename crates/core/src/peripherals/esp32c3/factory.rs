@@ -13,6 +13,12 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         // window + the Bluetooth native clock the BT ROM's event scheduler
         // reads; reverse-engineered from live silicon, see `super::bt`.
         "esp32c3_bt" => Box::new(super::bt::Esp32c3Bt::new()),
+        // GDMA (0x6003_F000): descriptor-list DMA, coupled to the GP-SPI2 and
+        // memory to memory (`super::gdma`). Channel n raises matrix source
+        // `irq + n` (44.. by default).
+        "esp32c3_gdma" => Box::new(super::gdma::Esp32c3Gdma::new(
+            p_cfg.irq.unwrap_or(super::gdma::DMA_CH0_INTR_SOURCE_ID),
+        )),
         "esp32c3_gpio" => Box::new(super::gpio::Esp32c3Gpio::new()),
         "esp32c3_io_mux" => Box::new(super::io_mux::Esp32c3IoMux::new()),
         // RMT TX model (Arduino RGB_BUILTIN / rgbLedWrite). Instant TX_END +
@@ -60,6 +66,7 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
 
 pub const SUPPORTED_TYPES: &[&str] = &[
     "esp32c3_bt",
+    "esp32c3_gdma",
     "esp32c3_gpio",
     "esp32c3_io_mux",
     "esp32c3_rmt",

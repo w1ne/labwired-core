@@ -10,6 +10,7 @@ pub mod bt;
 pub mod cache;
 pub mod factory;
 pub mod forced_status;
+pub mod gdma;
 pub mod gpio;
 pub mod i2c;
 pub mod io_mux;

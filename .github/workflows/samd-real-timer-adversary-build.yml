@@ -1,0 +1,45 @@
+name: Prospective Timer owned-adapter adversary builds
+on:
+  pull_request:
+    paths: ['scripts/samd-real-timer-adversaries/**', '.github/workflows/samd-real-timer-adversary-build.yml']
+permissions:
+  contents: read
+jobs:
+  adversary-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Require manufactured unique mutation selectors
+        run: python3 -B scripts/samd-real-timer-adversaries/test_build.py
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: CrispStrobe/codal-samd
+          ref: d55214588780d737640536b0a58707cd6d69cfce
+          path: owned-timer-source
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: lancaster-university/codal-core
+          ref: 2ed19d64ec3359143409a4b0a9758b4aeef3ee7d
+          path: owned-timer-core
+          persist-credentials: false
+      - name: Build unchanged positive inputs and three owned-adapter mutants
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-arm-none-eabi
+          arm-none-eabi-g++ --version
+          dpkg-query -W gcc-arm-none-eabi
+          (cd owned-timer-source && bash timer-caller/build.sh ../owned-timer-core "$RUNNER_TEMP/timer-positive")
+          python3 -B scripts/samd-real-timer-adversaries/build.py owned-timer-source owned-timer-core "$RUNNER_TEMP/timer-positive" "$RUNNER_TEMP/timer-mutants"
+      - name: Preserve original prospective mutant build evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: prospective-timer-owned-adapter-mutants
+          path: |
+            ${{ runner.temp }}/timer-positive/source-before.json
+            ${{ runner.temp }}/timer-positive/build-provenance.json
+            ${{ runner.temp }}/timer-mutants/

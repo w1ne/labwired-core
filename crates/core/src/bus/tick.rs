@@ -244,16 +244,191 @@ impl SystemBus {
         };
         if let Some((dma_name, channel)) = target_dma {
             if let Some(p_idx) = self.find_peripheral_index_by_name(dma_name) {
-                self.peripherals[p_idx].dev.dma_request(channel);
-                // Walk-free B4: a routed request makes the channel active. On a
-                // scheduler-driven DMA (walk-skipped) the transfer has to ride
-                // an event, so harvest the freshly-armed element event into
-                // `pending_schedule` at deadline `current_cycle + 1` — the exact
-                // cycle the legacy walk's next tick would have serviced it. No-op
-                // for a legacy-walk DMA (`collect_scheduled_events` guards on
-                // `uses_scheduler()`), so the walk path is unchanged.
-                #[cfg(feature = "event-scheduler")]
-                self.collect_scheduled_events(p_idx);
+                self.request_dma_channel(p_idx, channel);
+            }
+            return;
+        }
+        // A request multiplexer forwarding a request it held or generated
+        // (STM32 DMAMUX synchronisation / request generators).
+        if let Some(src) = self.find_peripheral_index_by_name(source_name) {
+            if let Some(route) = self.peripherals[src].dev.dma_mux_output(request_id) {
+                let target = match &route.controller {
+                    None => Some(src),
+                    Some(name) => self.find_peripheral_index_by_name(name),
+                };
+                if let Some(t) = target {
+                    self.request_dma_channel(t, route.channel);
+                }
+                return;
+            }
+        }
+        // Every other request line is routed by the chip's own DMA
+        // controllers and multiplexers, from their live routing registers
+        // (`Peripheral::dma_route_request`): F1 fixed channels, L4 CSELR, F4
+        // SxCR.CHSEL, G0/G4/WB DMAMUX_CxCR.DMAREQ_ID.
+        let line = match request_id {
+            crate::DMA_SIGNAL_TX => "tx",
+            crate::DMA_SIGNAL_RX => "rx",
+            _ => return,
+        };
+        let request = format!("{source_name}_{line}");
+        // `(answering peripheral, target controller, channel)`.
+        let mut targets: Vec<(usize, Option<usize>, u32)> = Vec::new();
+        let mut routes = Vec::new();
+        for (idx, p) in self.peripherals.iter().enumerate() {
+            routes.clear();
+            p.dev.dma_route_request(&request, &mut routes);
+            for r in &routes {
+                let target = match &r.controller {
+                    None => Some(idx),
+                    Some(name) => self.find_peripheral_index_by_name(name),
+                };
+                targets.push((idx, target, r.channel));
+            }
+        }
+        for (mux, target, channel) in targets {
+            // A multiplexer may hold the request back (synchronisation); it
+            // forwards it later on its own.
+            if target != Some(mux) {
+                let forward = self.peripherals[mux].dev.dma_mux_forward(channel);
+                self.collect_scheduled_events(mux);
+                if !forward {
+                    continue;
+                }
+            }
+            if let Some(t) = target {
+                self.request_dma_channel(t, channel);
+            }
+        }
+    }
+
+    /// One routed request on channel `channel` of the DMA controller at
+    /// `p_idx`.
+    fn request_dma_channel(&mut self, p_idx: usize, channel: u32) {
+        self.peripherals[p_idx].dev.dma_request(channel);
+        // Walk-free B4: a routed request makes the channel active. On a
+        // scheduler-driven DMA (walk-skipped) the transfer has to ride
+        // an event, so harvest the freshly-armed element event into
+        // `pending_schedule` at deadline `current_cycle + 1` — the exact
+        // cycle the legacy walk's next tick would have serviced it. No-op
+        // for a legacy-walk DMA (`collect_scheduled_events` guards on
+        // `uses_scheduler()`, and is a no-op without the scheduler), so the
+        // walk path is unchanged.
+        self.collect_scheduled_events(p_idx);
+    }
+
+    /// Execute one DMA request against the bus — the single body the walk's
+    /// phase 2 and [`crate::Bus::execute_dma`] (the event path) share.
+    ///
+    /// A peripheral-paced item ([`crate::DmaRequest::remaining`]) first tells
+    /// the peripheral on its peripheral side that it is coming and how many
+    /// follow ([`crate::Peripheral::dma_access_notice`]).
+    pub(crate) fn execute_dma_request(
+        &mut self,
+        req: &crate::DmaRequest,
+    ) -> SimResult<Option<u32>> {
+        if let Some(remaining) = req.remaining {
+            // A FIFO load touches only its source, a FIFO store only its
+            // destination; a copy touches both.
+            let sides: &[(u64, bool)] = match req.direction {
+                crate::DmaDirection::Load => &[(req.src_addr, true)],
+                crate::DmaDirection::Store(_) => &[(req.addr, false)],
+                _ => &[(req.src_addr, true), (req.addr, false)],
+            };
+            for &(addr, read) in sides {
+                if let Some(idx) = self.find_peripheral_index(addr) {
+                    let base = self.peripherals[idx].base;
+                    self.peripherals[idx]
+                        .dev
+                        .dma_access_notice(addr - base, read, remaining);
+                }
+            }
+        }
+        // The DMA controller is its own bus master, not the CPU: DWT-style
+        // debug watches compare CPU accesses, so nothing here may latch. The
+        // wrapper covers every arm, including the multi-unit load/store
+        // helpers below; the memory-policy bypass nests inside it cleanly.
+        self.with_debug_watch_bypass(|bus| match req.direction {
+            crate::DmaDirection::Read => {
+                let _ = bus.read_u8(req.addr)?;
+                Ok(None)
+            }
+            crate::DmaDirection::Write => {
+                bus.with_memory_policy_bypass(|bus| bus.write_u8(req.addr, req.val))?;
+                Ok(None)
+            }
+            crate::DmaDirection::Copy => {
+                bus.with_memory_policy_bypass(|bus| {
+                    if let Some(t) = req.transform {
+                        bus.dma_copy_unit(req.src_addr, req.addr, t)
+                    } else {
+                        let val = bus.read_u8(req.src_addr)?;
+                        bus.write_u8(req.addr, val)
+                    }
+                })?;
+                Ok(None)
+            }
+            crate::DmaDirection::Load => {
+                let w = req.transform.map_or(1, |t| t.src_width);
+                bus.dma_load_unit(req.src_addr, w).map(Some)
+            }
+            crate::DmaDirection::Store(value) => {
+                let w = req.transform.map_or(1, |t| t.dst_width);
+                bus.dma_store_unit(req.addr, w, value)?;
+                Ok(None)
+            }
+        })
+    }
+
+    /// Execute one DMA item on behalf of the controller at `issuer`: a FIFO
+    /// load hands its data back ([`crate::Peripheral::dma_load_data`]), a
+    /// bus error is reported as a transfer error
+    /// ([`crate::Peripheral::dma_transfer_error`]). Either may give the
+    /// controller new work, which a scheduler-driven model then arms.
+    pub(crate) fn execute_dma_for(&mut self, issuer: usize, req: &crate::DmaRequest) {
+        let outcome = self.execute_dma_request(req);
+        let Some(p) = self.peripherals.get_mut(issuer) else {
+            return;
+        };
+        match outcome {
+            Ok(None) => return,
+            Ok(Some(value)) => p.dev.dma_load_data(req, value),
+            Err(e) => {
+                tracing::trace!("DMA request {req:?} failed: {e:?}");
+                p.dev.dma_transfer_error(req);
+            }
+        }
+        self.collect_scheduled_events(issuer);
+    }
+
+    /// One DMA source read of `width` bytes (1, 2 or 4) at `addr`: ONE access
+    /// when aligned, as the DMA's AHB master issues it (a half-word read of
+    /// a FIFO SPI's DR pops two frames), byte reads otherwise.
+    pub(crate) fn dma_load_unit(&mut self, addr: u64, width: u8) -> SimResult<u32> {
+        Ok(match width {
+            2 if addr % 2 == 0 => u32::from(self.read_u16(addr)?),
+            4 if addr % 4 == 0 => self.read_u32(addr)?,
+            w => {
+                let mut v = 0u32;
+                for k in 0..u64::from(w.clamp(1, 4)) {
+                    v |= u32::from(self.read_u8(addr + k)?) << (8 * k);
+                }
+                v
+            }
+        })
+    }
+
+    /// One DMA destination write of the low `width` bytes of `value`, the
+    /// twin of [`Self::dma_load_unit`].
+    pub(crate) fn dma_store_unit(&mut self, addr: u64, width: u8, value: u32) -> SimResult<()> {
+        match width {
+            2 if addr % 2 == 0 => self.write_u16(addr, value as u16),
+            4 if addr % 4 == 0 => self.write_u32(addr, value),
+            w => {
+                for k in 0..u64::from(w.clamp(1, 4)) {
+                    self.write_u8(addr + k, (value >> (8 * k)) as u8)?;
+                }
+                Ok(())
             }
         }
     }
@@ -327,6 +502,13 @@ impl SystemBus {
         let mut bus_tick_pos = 0;
         while bus_tick_pos < self.bus_tick_indices.len() {
             let i = self.bus_tick_indices[bus_tick_pos];
+            // Bus-assisted transfer work must obey the same live clock gate
+            // as register accesses and the legacy walk. In particular, a
+            // completed frame must not reach its slave while its clock is off.
+            if !self.is_peripheral_clocked(i) {
+                bus_tick_pos += 1;
+                continue;
+            }
             let placeholder: Box<dyn Peripheral> =
                 Box::new(crate::peripherals::stub::StubPeripheral::new(0));
             let mut dev = std::mem::replace(&mut self.peripherals[i].dev, placeholder);
@@ -370,6 +552,10 @@ impl SystemBus {
         let mut pos = 0;
         while pos < forced.len() {
             let i = forced[pos];
+            if self.peripherals[i].dev.requires_clocked_tick() && !self.is_peripheral_clocked(i) {
+                pos += 1;
+                continue;
+            }
             let placeholder: Box<dyn Peripheral> =
                 Box::new(crate::peripherals::stub::StubPeripheral::new(0));
             let mut dev = std::mem::replace(&mut self.peripherals[i].dev, placeholder);
@@ -419,7 +605,7 @@ impl SystemBus {
     ) -> (
         Vec<u32>,
         Vec<PeripheralTickCost>,
-        Vec<DmaRequest>,
+        Vec<(usize, DmaRequest)>,
         Vec<(String, u32)>,
         Vec<u32>,
     ) {
@@ -501,6 +687,18 @@ impl SystemBus {
         } else {
             self.legacy_tick_indices.get(tick_pos).copied()
         } {
+            // A bus pass alone cannot freeze a clocked countdown: otherwise
+            // tick_elapsed consumes gated time and completes immediately on
+            // resume. Opt-in tick models use the same central gate as events;
+            // other legacy models retain their historical behavior.
+            if self.peripherals[peripheral_index]
+                .dev
+                .requires_clocked_tick()
+                && !self.is_peripheral_clocked(peripheral_index)
+            {
+                tick_pos += 1;
+                continue;
+            }
             let Some((res, irq, base, refresh_after_tick)) =
                 self.peripherals.get_mut(peripheral_index).map(|p| {
                     // Phase 2B.2 (issue #192): scheduler-driven peripherals are advanced
@@ -554,7 +752,7 @@ impl SystemBus {
             }
 
             if let Some(reqs) = res.dma_requests {
-                dma_requests.extend(reqs);
+                dma_requests.extend(reqs.into_iter().map(|r| (peripheral_index, r)));
             }
 
             if let Some(signals) = res.dma_signals {
@@ -1418,9 +1616,19 @@ impl SystemBus {
         let sw = (t.src_width.max(1) as usize).min(4);
         let dw = (t.dst_width.max(1) as usize).min(4);
 
+        // One access per side at the item's width (when aligned): a
+        // half-word item read from an STM32 FIFO SPI DR is ONE 16-bit read
+        // popping two bytes, not two byte reads, exactly as the DMA's AHB
+        // master issues it. Memory sees the same bytes either way.
         let mut unit = [0u8; 4];
-        for (k, b) in unit.iter_mut().enumerate().take(sw) {
-            *b = self.read_u8(src + k as u64)?;
+        match sw {
+            2 if src % 2 == 0 => unit[..2].copy_from_slice(&self.read_u16(src)?.to_le_bytes()),
+            4 if src % 4 == 0 => unit.copy_from_slice(&self.read_u32(src)?.to_le_bytes()),
+            _ => {
+                for (k, b) in unit.iter_mut().enumerate().take(sw) {
+                    *b = self.read_u8(src + k as u64)?;
+                }
+            }
         }
         // SBX: exchange the two middle bytes of a word-width source.
         if t.sbx && sw == 4 {
@@ -1460,8 +1668,14 @@ impl SystemBus {
             out.swap(1, 3);
         }
 
-        for (k, b) in out.iter().enumerate().take(dw) {
-            self.write_u8(dst + k as u64, *b)?;
+        match dw {
+            2 if dst % 2 == 0 => self.write_u16(dst, u16::from_le_bytes([out[0], out[1]]))?,
+            4 if dst % 4 == 0 => self.write_u32(dst, u32::from_le_bytes(out))?,
+            _ => {
+                for (k, b) in out.iter().enumerate().take(dw) {
+                    self.write_u8(dst + k as u64, *b)?;
+                }
+            }
         }
         Ok(())
     }
@@ -1495,7 +1709,11 @@ impl SystemBus {
         self.aggregate_esp32_classic_irqs(&explicit_source_ids);
         self.collect_enabled_nvic_interrupts(&mut interrupts);
 
-        (interrupts, costs, dma_requests)
+        (
+            interrupts,
+            costs,
+            dma_requests.into_iter().map(|(_, r)| r).collect(),
+        )
     }
 
     pub fn tick_peripherals_fully(&mut self) -> (Vec<u32>, Vec<PeripheralTickCost>) {
@@ -1595,31 +1813,8 @@ impl SystemBus {
         }
 
         // Phase 2: Execute DMA requests (this now has access to self.flash/ram via write_u8)
-        for req in pending_dma {
-            match req.direction {
-                crate::DmaDirection::Read => {
-                    if let Ok(val) = self.read_u8(req.addr) {
-                        tracing::trace!("DMA Read: {:#x} -> {:#x}", req.addr, val);
-                    }
-                }
-                crate::DmaDirection::Write => {
-                    let _ = self.write_u8(req.addr, req.val);
-                    tracing::trace!("DMA Write: {:#x} <- {:#x}", req.addr, req.val);
-                }
-                crate::DmaDirection::Copy => {
-                    if let Some(t) = req.transform {
-                        let _ = self.dma_copy_unit(req.src_addr, req.addr, t);
-                    } else if let Ok(val) = self.read_u8(req.src_addr) {
-                        let _ = self.write_u8(req.addr, val);
-                        tracing::trace!(
-                            "DMA Copy: {:#x} -> {:#x} ({:#x})",
-                            req.src_addr,
-                            req.addr,
-                            val
-                        );
-                    }
-                }
-            }
+        for (issuer, req) in pending_dma {
+            self.execute_dma_for(issuer, &req);
         }
 
         // Phase 3: Scan NVIC

@@ -37,6 +37,16 @@ pub(crate) struct TestExecutionContext<'a, C: labwired_core::Cpu> {
     // forces the JIT's correctness gate shut), so the loop mirrors the machine's
     // own counters into `metrics` before each cycle-sensitive check.
     pub jit_eligible: bool,
+    /// `cycles` / `instructions` come from the machine's counters (as on the
+    /// JIT-eligible path), not a per-step observer, and a step is a machine
+    /// cycle, retired or skipped by idle fast-forward, so the loop observes on
+    /// the same cycles as a run without any skip. Set on the classic-ESP32
+    /// path, where one instruction is one cycle.
+    pub counter_metrics: bool,
+    /// `cycles` / `instructions` come from the machine's counters, not a
+    /// per-step observer, while a step stays one retired instruction (so
+    /// `max_steps` means what it did). Set on the Cortex-M bare-ELF path.
+    pub machine_metrics: bool,
     // Architecture of the loaded image (paint is ARM-only in P0).
     pub arch: labwired_core::Arch,
     // Script + env kill switch for main-stack paint.
@@ -55,6 +65,10 @@ pub(crate) struct TestExecutionContext<'a, C: labwired_core::Cpu> {
 pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
     ctx: &mut TestExecutionContext<C>,
 ) -> ExitCode {
+    // The test loop runs the machine its caller already built; publish the
+    // declared core clock here so every `test` machine reports a virtual time
+    // (mirrors the per-run-path `set_hz` calls on `run`).
+    crate::log_ts::set_hz(ctx.machine.bus.cpu_hz);
     // ── Resource metrics: footprint + main-stack paint (load/reset-time) ────
     // Paint is not a SimulationObserver: fill unused stack RAM now, scan after
     // the run. Footprint is pure ELF section math and does not touch the bus.
@@ -727,9 +741,13 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
     let mut cached_uart_len = usize::MAX;
     let mut cached_all_pass = false;
 
+    // Simulated-time stamps for every UART line (`result.json` `uart_lines`).
+    let mut uart_lines = crate::uart_lines::UartLineRecorder::new();
+
     let mut step = 0;
     let mut heartbeat = Heartbeat::new(ctx.args.heartbeat_file.clone());
     while step < max_steps {
+        crate::log_ts::refresh_cycles(ctx.machine.total_cycles);
         heartbeat.tick(step, ctx.machine.total_cycles);
         // JIT-eligible path: mirror the machine's authoritative counters into
         // `metrics` BEFORE the cycle-sensitive checks below (stimulus
@@ -738,7 +756,7 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
         // count (accumulated from `step_batch` return values); `total_cycles`
         // is the machine's canonical cycle counter. No-op for the non-eligible
         // path, where `metrics` IS the live step observer.
-        if ctx.jit_eligible {
+        if ctx.jit_eligible || ctx.counter_metrics || ctx.machine_metrics {
             ctx.metrics.set_cycles(ctx.machine.total_cycles);
             ctx.metrics.set_instructions(step);
         }
@@ -865,6 +883,7 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
             let chunk = remaining.min(JIT_RUN_CHUNK);
             (u64::from(chunk), chunk)
         } else if idle_ff_wide_observation
+            && !ctx.counter_metrics
             && assertions_first_passed_at.is_none()
             && ctx
                 .machine
@@ -927,6 +946,7 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
         // back, so the firmware's next instruction sees the model's answer to
         // the levels it had just driven. Without models this is the plain
         // `Machine::advance` the loop always issued.
+        let poll_skipped_before = ctx.machine.poll_loop_cycles_skipped;
         let advanced = match cosim.as_mut() {
             Some(session) => session.advance(ctx.machine, request),
             None => ctx
@@ -935,6 +955,7 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
                 .map(labwired_core::cosim::CosimAdvance::from)
                 .map_err(labwired_core::cosim::CosimAdvanceError::Machine),
         };
+        crate::log_ts::refresh_cycles(ctx.machine.total_cycles);
         let (report, boundary) = match advanced {
             Ok(advance) => (
                 advance.report,
@@ -959,7 +980,26 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
             }
         };
 
-        step += report.primary_steps;
+        // On the counter-metrics path a step is a machine cycle, retired or
+        // skipped (one instruction is one cycle on that core). Fuel counts
+        // both, so every call ends on the same cycle as a run without any
+        // skip, and so do the checks between calls: assertions, settling,
+        // `max_steps`. The wide-fuel arm above is off there for that reason.
+        // A skipped poll-loop iteration is instructions the core would have
+        // retired, so it counts as steps and `max_steps` stops where it does
+        // without the skip. (Cortex-M retires one per cycle; on the
+        // counter-metrics path idle cycles, poll skips included, already
+        // count.)
+        let poll_skipped = ctx
+            .machine
+            .poll_loop_cycles_skipped
+            .saturating_sub(poll_skipped_before);
+        step += report.primary_steps
+            + if ctx.counter_metrics {
+                report.idle_cycles
+            } else {
+                poll_skipped
+            };
         steps_executed = step;
         // Statistical PC sampling: one histogram hit every
         // PC_SAMPLE_EVERY retired primary steps, using the post-batch
@@ -1053,6 +1093,12 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
                 stuck_counter = 0;
                 prev_pc = current_pc;
             }
+        }
+
+        // One uncontended lock per advance; only bytes past the last
+        // observation are read, and the window edge always moves forward.
+        if let Ok(g) = ctx.uart_tx.lock() {
+            uart_lines.observe(&g, ctx.machine.total_cycles);
         }
 
         if !uart_milestone_cycles.occurrences.is_empty() {
@@ -1187,7 +1233,7 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
     // before the LAST batch, so capture that batch's retired cycles/instructions
     // here — `result.json` (`cycles`/`instructions`) and `stop_reason_details`
     // read `metrics` below and must report the true totals.
-    if ctx.jit_eligible {
+    if ctx.jit_eligible || ctx.counter_metrics || ctx.machine_metrics {
         ctx.metrics.set_cycles(ctx.machine.total_cycles);
         ctx.metrics.set_instructions(steps_executed);
     }
@@ -1198,11 +1244,16 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
     // whose JIT engine was created, `None` otherwise (interpreter-only).
     if ctx.jit_eligible && std::env::var("LABWIRED_JIT_STATS").is_ok() {
         match ctx.machine.cpu.jit_engine_stats() {
-            Some(s) => eprintln!(
+            Some(s) => crate::log_ts::eventln!(
                 "[jit-stats] compiled={} block_runs={} block_instrs={} interpreted={}",
-                s.compiled, s.block_runs, s.block_instrs, s.interpreted
+                s.compiled,
+                s.block_runs,
+                s.block_instrs,
+                s.interpreted
             ),
-            None => eprintln!("[jit-stats] JIT engine never created (interpreter-only run)"),
+            None => crate::log_ts::eventln!(
+                "[jit-stats] JIT engine never created (interpreter-only run)"
+            ),
         }
     }
 
@@ -1213,9 +1264,13 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
     // clamped to nothing, which is indistinguishable from working unless the
     // number is visible. `steps_executed + skipped == machine.total_cycles`.
     if ctx.machine.idle_fast_forward_cycles_skipped > 0 {
-        eprintln!(
+        crate::log_ts::eventln!(
             "labwired-cli test: idle_ff skipped {} of {} device cycles ({} interpreted)",
-            ctx.machine.idle_fast_forward_cycles_skipped, ctx.machine.total_cycles, steps_executed
+            ctx.machine.idle_fast_forward_cycles_skipped,
+            ctx.machine.total_cycles,
+            ctx.machine
+                .total_cycles
+                .saturating_sub(ctx.machine.idle_fast_forward_cycles_skipped)
         );
     }
 
@@ -1591,16 +1646,20 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
         duration,
         0, // vcd_bytes - will be updated below
     );
-    // Final-state universal inspect block (summary mode: decoded registers +
-    // artifact metadata, framebuffer bytes omitted/hashed). This is the
-    // agent-facing oracle payload — after a run the caller sees the decoded
+    // Final-state universal inspect block (summary mode by default: decoded
+    // registers + artifact metadata, with optional bounded byte payloads).
+    // This is the agent-facing oracle payload — after a run the caller sees the decoded
     // final register state and which artifacts exist.
-    let inspect_block = ctx.machine.inspect(
+    let mut inspect_block = ctx.machine.inspect(
         None,
         &labwired_core::inspect::InspectOpts {
-            include_bytes: false,
+            include_bytes: ctx.args.inspect_bytes_max > 0,
             peripheral: None,
         },
+    );
+    crate::inspect_export::bound_inspect_bytes(
+        &mut inspect_block,
+        ctx.args.inspect_bytes_max as usize,
     );
 
     // Drain the deterministic logic-analyzer edge capture for THIS run and shape
@@ -1623,6 +1682,11 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
         let states = ctx.machine.logic_read_states(0);
         let initial_states = ctx.machine.logic_initial_states().to_vec();
         labwired_core::logic_capture::attach_logic_states(&mut result, &initial_states, &states);
+        // Exact per-pad totals: the retained `transitions` are a 64k window.
+        labwired_core::logic_capture::attach_logic_edge_counts(
+            &mut result,
+            ctx.machine.logic_channel_edge_counts(),
+        );
         // End-of-run per-pad state through the chip-agnostic GPIO accessors,
         // so an agent reads `gpio_pins` instead of raw per-family registers.
         let pins =
@@ -1634,6 +1698,12 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
     };
 
     export_analog_trace_if_requested(&ctx.args.analog_trace, ctx.machine);
+
+    // A loop exit between an advance and its observation must not lose the
+    // last bytes' stamps.
+    if let Ok(g) = ctx.uart_tx.lock() {
+        uart_lines.observe(&g, ctx.machine.total_cycles);
+    }
 
     // ── THE VERDICT ──────────────────────────────────────────────────────────
     //
@@ -1664,7 +1734,7 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
             .or_else(|| ctx.firmware_path.file_stem())
             .map(|s| s.to_string_lossy().to_string())
             .unwrap_or_else(|| "run".to_string());
-        eprintln!(
+        crate::log_ts::eventln!(
             "{label}  {passed}/{checked} checks · {subject} · {steps_executed} steps · {:.2}s",
             duration.as_secs_f64()
         );
@@ -1672,8 +1742,11 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
 
     // Why and where the firmware faulted, if it did. Same stderr rule as the
     // banner above. `write_outputs` puts the same verdict in `result.json`.
-    if let Some(v) = crate::fault_report::fault_verdict(&ctx.machine.cpu, Some(ctx.firmware_bytes))
-    {
+    if let Some(v) = crate::fault_report::fault_verdict(
+        &ctx.machine.cpu,
+        Some(ctx.firmware_bytes),
+        ctx.machine.bus.memory_policy_report().as_ref(),
+    ) {
         crate::fault_report::eprint(&v);
     }
 
@@ -1688,6 +1761,8 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
             observable: ctx.machine.cpu.supports_semihosting(),
             bytes_drained: ctx.machine.bus.semihost_bytes_appended(),
         });
+    let (virtual_time_ns, host_time_ns) =
+        crate::log_ts::result_times(ctx.machine.total_cycles, ctx.machine.bus.cpu_hz, duration);
     write_outputs(
         ctx.args,
         verdict,
@@ -1723,10 +1798,17 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
         Some(inspect_block),
         logic_edges,
         gpio_pins,
+        uart_lines.finish(),
         ctx.machine.bus.motor_snapshots(),
+        ctx.machine
+            .analog_series()
+            .filter(|series| !series.channels.is_empty()),
         stimulus_outcomes,
         footprint,
         Some(memory),
+        ctx.machine.bus.memory_policy_report(),
+        virtual_time_ns,
+        host_time_ns,
         Some(execution_metrics),
         ctx.machine
             .bus

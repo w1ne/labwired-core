@@ -76,13 +76,20 @@ impl SystemBus {
             let (gpio_name, bit) = bus.pin_map.get(&pin.to_ascii_uppercase())?;
             let idx = bus.find_peripheral_index_by_name(gpio_name)?;
             let base = bus.peripherals[idx].base;
-            let gpio = bus.peripherals[idx]
-                .dev
+            let dev = bus.peripherals[idx].dev.as_ref();
+            if let Some(gpio) = dev
                 .as_any()
-                .and_then(|a| a.downcast_ref::<crate::peripherals::gpio::GpioPort>())?;
-            let odr_off = gpio.odr_offset();
-            let bit = Self::ra_port_odr_bit(gpio, *bit)?;
-            return Some((base + odr_off, bit));
+                .and_then(|a| a.downcast_ref::<crate::peripherals::gpio::GpioPort>())
+            {
+                let odr_off = gpio.odr_offset();
+                let bit = Self::ra_port_odr_bit(gpio, *bit)?;
+                return Some((base + odr_off, bit));
+            }
+            // Generic GPIO blocks publish their latch offsets through the
+            // trait (Mi-V CoreGPIO, ATmega ports, …): pin bit N is register
+            // bit N.
+            let offsets = dev.gpio_port_offsets()?;
+            return Some((base + offsets.output, *bit));
         }
         // 2. No chip pin map → standard STM32/Nordic label parse.
         // STM32/Nordic: "PA5" / "P0.13" → per-port GpioPort with an ODR offset.
@@ -252,12 +259,16 @@ impl SystemBus {
             if let Some((gpio_name, bit)) = bus.pin_map.get(&pin.to_ascii_uppercase()) {
                 let idx = bus.find_peripheral_index_by_name(gpio_name)?;
                 let base = bus.peripherals[idx].base;
-                let idr_off = bus.peripherals[idx]
-                    .dev
+                let dev = bus.peripherals[idx].dev.as_ref();
+                if let Some(idr_off) = dev
                     .as_any()
                     .and_then(|a| a.downcast_ref::<crate::peripherals::gpio::GpioPort>())
-                    .map(|g| g.idr_offset())?;
-                return Some((base + idr_off, *bit));
+                    .map(|g| g.idr_offset())
+                {
+                    return Some((base + idr_off, *bit));
+                }
+                let offsets = dev.gpio_port_offsets()?;
+                return Some((base + offsets.input, *bit));
             }
             // Label not in map — fall through (ESP bare/GPIO labels, etc.).
         }
@@ -391,6 +402,9 @@ impl SystemBus {
         // Pin ports whose pulls another block keeps: link them, and hand each
         // the pulls its block holds now.
         self.rebuild_pad_control_links();
+        // The ESP32 / ESP32-S3 RTC IO MUX and the GPIO port it shares pads
+        // with.
+        self.rebuild_rtc_io_link();
         // Cache the clock-controller peripheral index so the clock-gate check
         // on the hot read/write path is O(1).
         //
@@ -449,6 +463,11 @@ impl SystemBus {
                 .and_then(|a| a.downcast_ref::<crate::peripherals::nrf52::nvmc::Nrf52Nvmc>())
                 .is_some()
         });
+        // The peripheral that owns CPU stores into the flash region, if any.
+        self.flash_store_owner_idx = self
+            .peripherals
+            .iter()
+            .position(|p| p.dev.owns_flash_stores());
         // The GPIO edge-detection pass caches its four port indices on first
         // use. Every other index on this bus is rebuilt here when the
         // peripheral list changes; that one must be dropped for the same
@@ -1200,7 +1219,8 @@ impl SystemBus {
     /// UART peripheral registered under `uart_id`. This is the post-build
     /// counterpart to `AttachCtx::uart().attach_stream(..)`, used by
     /// `World::from_manifest` to wire cross-link endpoints between nodes.
-    /// Errors if no such peripheral exists or it is not a UART.
+    /// Errors if no such peripheral exists, it is not a UART, its host is
+    /// exclusive, or the peer requires explicit exclusive attachment.
     pub fn attach_uart_stream_by_id(
         &mut self,
         uart_id: &str,
@@ -1217,8 +1237,9 @@ impl SystemBus {
             .dev
             .as_uart_stream_host()
             .ok_or_else(|| anyhow::anyhow!("peripheral '{uart_id}' is not a UART"))?;
+        uart.try_attach_stream_device(dev)
+            .map_err(|e| anyhow::anyhow!("peripheral '{uart_id}': {e}"))?;
         uart.detach_console_sink();
-        uart.attach_stream_device(dev);
         // Stream attach can flip models that force walk when a peer is wired
         // (CanBus-style). Rebuild tick indices and recompute walk-deletion —
         // same seam as `attach_can_bus_by_id`. EspUart under event-scheduler

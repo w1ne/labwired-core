@@ -10,6 +10,7 @@ pub mod bus_trace_one_home;
 /// A chip may not declare a memory size no silicon has (decimal-MB trap).
 #[cfg(test)]
 pub mod chip_memory_sizes;
+
 #[cfg(test)]
 pub mod cortex_m_fault_escalation;
 #[cfg(all(test, any(feature = "jit", feature = "jit-framework")))]
@@ -20,6 +21,9 @@ pub mod cortex_m_memory_contract;
 pub mod device_identity_one_home;
 #[cfg(test)]
 pub mod device_time_derived;
+/// STM32F103 timer outputs on pads, RCC gates, internal temperature sensor.
+#[cfg(test)]
+pub mod stm32f1_timer_outputs;
 
 /// Row 6.5: the runtime-downcast count may not grow.
 #[cfg(test)]
@@ -54,9 +58,14 @@ pub mod riscv_cycle_counter_pulse_in;
 #[cfg(test)]
 pub mod bench_spi_engine;
 pub mod esp32_i2c_waveform;
+pub mod esp32_ledc_waveform;
 #[cfg(test)]
 pub mod esp32s3_i2c_waveform;
 pub mod esp_spi_uart_waveform;
+#[cfg(test)]
+pub mod i2c_waveform_common;
+#[cfg(test)]
+pub mod loader_host_bypass;
 #[cfg(test)]
 pub mod machine_advance;
 #[cfg(test)]
@@ -72,6 +81,8 @@ pub mod one_arduino_boot_path;
 pub mod out_of_line_test_modules;
 #[cfg(test)]
 pub mod peripheral_reachability;
+#[cfg(test)]
+pub mod peripheral_reset_request;
 #[cfg(test)]
 pub mod pre_merge_lane_covers_browser;
 #[cfg(test)]

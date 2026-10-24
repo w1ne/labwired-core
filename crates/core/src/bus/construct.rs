@@ -12,6 +12,11 @@ impl SystemBus {
         let mut bus = Self {
             flash_thunks: std::collections::HashMap::new(),
             flash: LinearMemory::new_erased(1024 * 1024, 0x0),
+            memory_policy: crate::bus::memory_policy::MemoryPolicyState::default(),
+            memory_policy_bypass: false,
+            debug_watches: Vec::new(),
+            debug_watch_hit: Cell::new(None),
+            debug_watch_host_bypass: std::cell::Cell::new(false),
             ram: LinearMemory::new(1024 * 1024, 0x2000_0000),
             extra_mem: Vec::new(),
             peripherals: vec![
@@ -57,6 +62,9 @@ impl SystemBus {
             observers: Vec::new(),
             config: crate::SimulationConfig::default(),
             cpu_hz: 0,
+            // A bare test bus has no chip descriptor; the historical default
+            // profile is the ESP32-C3's (the engine's `RiscV::new` default).
+            riscv_profile: crate::cpu::RiscVCoreProfile::Esp32C3,
             bit_band_enabled: true,
             pending_cpu_irqs: [0; 2],
             dport_idx: None,
@@ -65,6 +73,8 @@ impl SystemBus {
             rp2040_io_bank0_idx: None,
             rp2040_sio_idx: None,
             pad_control_links: Vec::new(),
+            rtc_io_link: None,
+            pad_claim_links: Default::default(),
             pin_port_ids: Vec::new(),
             rcc_idx: None,
             clock_gating_bypass: false,
@@ -86,6 +96,7 @@ impl SystemBus {
             pending_schedule: Vec::new(),
             freerunning_timer_poll_mmio: std::cell::Cell::new(0),
             side_effecting_mmio: std::cell::Cell::new(0),
+            batch_stop: Default::default(),
             memory_reads: std::cell::Cell::new(0),
             memory_writes: std::cell::Cell::new(0),
             peripheral_accesses: std::cell::Cell::new(0),
@@ -121,6 +132,7 @@ impl SystemBus {
             flash_error_flags_idx: None,
             u5_program_gate_idx: None,
             nrf52_nvmc_idx: None,
+            flash_store_owner_idx: None,
             bus_trace: bus_trace::new_log(),
             logic_tap: crate::logic_capture::LogicTap::new(),
             pin_map: std::collections::HashMap::new(),
@@ -128,6 +140,7 @@ impl SystemBus {
             io_voltage_v: None,
             gpio_input_thresholds: None,
             supply: crate::power::SupplySupervisor::default(),
+            supply_domains: Default::default(),
             external_device_decls: Vec::new(),
             semihost: SemihostState::new(),
         };
@@ -144,6 +157,11 @@ impl SystemBus {
         let mut bus = Self {
             flash_thunks: std::collections::HashMap::new(),
             flash: LinearMemory::new_erased(0, 0),
+            memory_policy: crate::bus::memory_policy::MemoryPolicyState::default(),
+            memory_policy_bypass: false,
+            debug_watches: Vec::new(),
+            debug_watch_hit: Cell::new(None),
+            debug_watch_host_bypass: std::cell::Cell::new(false),
             ram: LinearMemory::new(0, 0),
             extra_mem: Vec::new(),
             peripherals: Vec::new(),
@@ -152,6 +170,7 @@ impl SystemBus {
             observers: Vec::new(),
             config: crate::SimulationConfig::default(),
             cpu_hz: 0,
+            riscv_profile: crate::cpu::RiscVCoreProfile::Esp32C3,
             bit_band_enabled: false,
             pending_cpu_irqs: [0; 2],
             dport_idx: None,
@@ -160,6 +179,8 @@ impl SystemBus {
             rp2040_io_bank0_idx: None,
             rp2040_sio_idx: None,
             pad_control_links: Vec::new(),
+            rtc_io_link: None,
+            pad_claim_links: Default::default(),
             pin_port_ids: Vec::new(),
             rcc_idx: None,
             clock_gating_bypass: false,
@@ -181,6 +202,7 @@ impl SystemBus {
             pending_schedule: Vec::new(),
             freerunning_timer_poll_mmio: std::cell::Cell::new(0),
             side_effecting_mmio: std::cell::Cell::new(0),
+            batch_stop: Default::default(),
             memory_reads: std::cell::Cell::new(0),
             memory_writes: std::cell::Cell::new(0),
             peripheral_accesses: std::cell::Cell::new(0),
@@ -216,6 +238,7 @@ impl SystemBus {
             flash_error_flags_idx: None,
             u5_program_gate_idx: None,
             nrf52_nvmc_idx: None,
+            flash_store_owner_idx: None,
             bus_trace: bus_trace::new_log(),
             logic_tap: crate::logic_capture::LogicTap::new(),
             pin_map: std::collections::HashMap::new(),
@@ -223,6 +246,7 @@ impl SystemBus {
             io_voltage_v: None,
             gpio_input_thresholds: None,
             supply: crate::power::SupplySupervisor::default(),
+            supply_domains: Default::default(),
             external_device_decls: Vec::new(),
             semihost: SemihostState::new(),
         };
@@ -238,6 +262,7 @@ impl SystemBus {
     #[inline]
     pub fn set_current_cycle(&mut self, cycle: u64) {
         self.current_cycle = cycle;
+        self.memory_policy.cycle = cycle;
         self.cycle_clock.publish(cycle);
         if let Some(fabric) = self.irq_fabric.armv7.as_mut() {
             fabric.synchronize(cycle, self.cpu_hz);
@@ -293,23 +318,66 @@ impl SystemBus {
         base: u64,
         size: u64,
         irq: Option<u32>,
+        dev: Box<dyn Peripheral>,
+    ) {
+        self.upsert_peripheral(name, base, size, irq, dev, false);
+    }
+
+    /// Replace the first peripheral with `name` **or** `base`, or append when
+    /// neither exists.
+    ///
+    /// The core-tied ARM blocks (SCB, NVIC, DWT, ITM) are discovered either by
+    /// the name a previous builder gave them or by their architectural
+    /// address. Matching both here keeps that decision in one place instead of
+    /// repeating `iter_mut().find(...)` + `p.dev = ...` at every call site,
+    /// where forgetting `rebuild_peripheral_ranges` leaves the routing and
+    /// tick indices pointing at the old device.
+    pub fn replace_or_add_peripheral_at(
+        &mut self,
+        name: &str,
+        base: u64,
+        size: u64,
+        irq: Option<u32>,
+        dev: Box<dyn Peripheral>,
+    ) {
+        self.upsert_peripheral(name, base, size, irq, dev, true);
+    }
+
+    fn upsert_peripheral(
+        &mut self,
+        name: &str,
+        base: u64,
+        size: u64,
+        irq: Option<u32>,
         mut dev: Box<dyn Peripheral>,
+        match_base: bool,
     ) {
         dev.attach_cycle_clock(self.cycle_clock.clone());
         dev.attach_irq_line(irq);
         dev.attach_cpu_hz(self.cpu_hz);
         dev.attach_bus_trace(name, &self.bus_trace);
-        if let Some(idx) = self.peripherals.iter().position(|p| p.name == name) {
+        if let Some(idx) = self
+            .peripherals
+            .iter()
+            .position(|p| p.name == name || (match_base && p.base == base))
+        {
             let e = &mut self.peripherals[idx];
+            e.name = name.to_string();
             e.base = base;
             e.size = size;
             e.irq = irq;
             e.dev = dev;
             e.ticks_remaining = 0;
-            e.clock_gate = None;
-            self.rebuild_peripheral_ranges();
+            // A base-matched replacement (the core-tied SCB/NVIC/DWT/ITM
+            // swap in `configure_cortex_m`) swaps the model behind an entry
+            // whose clock gate `resolve_clock_gates` may already have
+            // resolved. Keep that gate: dropping it silently ungates the
+            // window (the pre-#1443 in-place swap never touched it). A
+            // name-only replacement keeps its historical reset.
+            if !match_base {
+                e.clock_gate = None;
+            }
         } else {
-            // attach already done; push without double-attach
             self.peripherals.push(PeripheralEntry {
                 name: name.to_string(),
                 base,
@@ -319,8 +387,11 @@ impl SystemBus {
                 ticks_remaining: 0,
                 clock_gate: None,
             });
-            self.rebuild_peripheral_ranges();
         }
+        // One rebuild for both branches: an upsert always changes the device
+        // set the MMIO router, tick walk and scheduler indices were derived
+        // from.
+        self.rebuild_peripheral_ranges();
     }
 
     /// Look up a registered ROM thunk by absolute PC.
@@ -418,14 +489,13 @@ impl SystemBus {
     /// [`crate::Machine::inspect`] can name the live models it finds.
     ///
     /// The ONE home for this. Every path that attaches manifest-declared
-    /// external devices must call it, and there are exactly two:
-    /// [`Self::from_config`] (every MCU family that loads peripherals from a
-    /// chip descriptor) and
-    /// [`crate::system::xtensa::attach_esp32_external_devices`] (classic ESP32,
-    /// whose peripheral bank is built in Rust and bypasses `from_config`'s
-    /// peripheral loop). `record_external_devices_has_one_home` in
-    /// `crates/core/tests/inspect_external_devices.rs` fails if a third path
-    /// appears.
+    /// external devices must call it, and there are exactly three:
+    /// [`Self::from_config`] (descriptor-built MCU platforms),
+    /// [`crate::system::xtensa::attach_esp32_external_devices`] (the classic
+    /// ESP32 programmatic peripheral bank), and
+    /// [`Self::attach_manifest_external_devices`] (other programmatic platforms).
+    /// `record_external_devices_has_one_home` in
+    /// `crates/core/tests/inspect_external_devices.rs` guards these callers.
     ///
     /// Idempotent: recording replaces, so a bus built through both paths does
     /// not list a device twice.
@@ -1361,5 +1431,91 @@ mod tests {
         sink.lock().unwrap().extend_from_slice(b"rtt");
         assert_eq!(bus.drain_rtt_output(), b"rtt");
         assert!(bus.drain_rtt_output().is_empty());
+    }
+
+    #[test]
+    fn replace_or_add_peripheral_at_replaces_by_base_and_rebuilds_routing() {
+        use crate::peripherals::stub::StubPeripheral;
+
+        let mut bus = SystemBus::new();
+        // `SystemBus::new()` seeds four test peripherals; only the delta
+        // matters here.
+        let before = bus.peripherals.len();
+        bus.add_peripheral(
+            "placeholder",
+            0x4000_0000,
+            0x100,
+            None,
+            Box::new(StubPeripheral::new(0)),
+        );
+        assert_eq!(bus.peripherals.len(), before + 1);
+
+        // The core-tied ARM blocks are matched by architectural address even
+        // when an earlier builder gave them another name. A block that merely
+        // appends would leave two devices on one window and the routing cache
+        // pointing at the first.
+        bus.replace_or_add_peripheral_at(
+            "renamed",
+            0x4000_0000,
+            0x200,
+            Some(7),
+            Box::new(StubPeripheral::new(0xAA)),
+        );
+
+        assert_eq!(
+            bus.peripherals.len(),
+            before + 1,
+            "base match must replace, not append"
+        );
+        let idx = bus
+            .find_peripheral_index_by_name("renamed")
+            .expect("the replacement kept its name");
+        assert_eq!(bus.peripherals[idx].size, 0x200);
+        assert_eq!(bus.peripherals[idx].irq, Some(7));
+        // The widened window is only visible if `rebuild_peripheral_ranges`
+        // ran after the replacement.
+        assert_eq!(bus.find_peripheral_index(0x4000_01F0), Some(idx));
+    }
+
+    #[test]
+    fn replace_or_add_peripheral_at_keeps_a_resolved_clock_gate() {
+        use crate::bus::{RccClockBit, ResolvedClockGate};
+        use crate::peripherals::stub::StubPeripheral;
+
+        let mut bus = SystemBus::new();
+        bus.add_peripheral(
+            "gated",
+            0x4000_0000,
+            0x100,
+            None,
+            Box::new(StubPeripheral::new(0)),
+        );
+        let idx = bus.find_peripheral_index_by_name("gated").unwrap();
+        bus.peripherals[idx].clock_gate = Some(ResolvedClockGate {
+            requires: vec![RccClockBit {
+                controller_idx: 0,
+                reg_offset: 0x18,
+                bit: 3,
+            }],
+            gclk_id: None,
+            gclk_idx: None,
+        });
+
+        // Gates are resolved before `configure_cortex_m` swaps the core-tied
+        // models in by base; the swap must not silently ungate the window.
+        bus.replace_or_add_peripheral_at(
+            "gated",
+            0x4000_0000,
+            0x100,
+            None,
+            Box::new(StubPeripheral::new(0xAA)),
+        );
+        let idx = bus.find_peripheral_index_by_name("gated").unwrap();
+        let gate = bus.peripherals[idx]
+            .clock_gate
+            .as_ref()
+            .expect("base-matched replacement must keep the resolved clock gate");
+        assert_eq!(gate.requires.len(), 1);
+        assert_eq!(gate.requires[0].bit, 3);
     }
 }

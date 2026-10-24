@@ -44,6 +44,15 @@ memory_regions:
     base: 0xF0000000
     size: "4KB"
 peripherals:
+  # SysTick: an ARMv6-M/ARMv7-M/ARMv8-M core peripheral every Cortex-M on
+  # this family has. The Nordic SVD starts above the PPB, so it is declared
+  # by hand; without it, any firmware using SysTick (the Arduino and Zephyr
+  # cores both do) faults on its first SYST_CSR write.
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+    size: "16B"
+
   - id: "clock"
     type: "nrf_clock"
     base_address: 0x40000000

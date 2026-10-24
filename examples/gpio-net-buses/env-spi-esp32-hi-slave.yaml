@@ -1,0 +1,46 @@
+# An STM32G071 SPI1 master (mode 0, CS on a GPIO) and a classic ESP32 HSPI
+# slave (register level, src/esp32x_spi_slave.S built with PADS_HI) on
+# bank-1 pads: SCK, MOSI and CS0 in on the input-only GPIO34 / GPIO35 /
+# GPIO36, MISO out on GPIO33, all through the classic GPIO matrix.
+schema_version: "1.0"
+name: gpio-net-spi-esp32-hi-slave
+nodes:
+  - id: esp
+    system: "../../configs/systems/esp32-wroom-32.yaml"
+    firmware: "firmware/esp32-spi-hi-slave.elf"
+  - id: b
+    system: "system.yaml"
+    firmware: "firmware/spi-master.elf"
+interconnects:
+  - type: gpio_net
+    nodes: [esp, b]
+    config:
+      name: cs
+      pull: up
+      members:
+        - { node: esp, peripheral: gpio, pin: 36 }   # HSPICS0 (input-only pad)
+        - { node: b, peripheral: gpioa, pin: 4 }    # GPIO chip select
+  - type: gpio_net
+    nodes: [esp, b]
+    config:
+      name: sck
+      pull: down
+      members:
+        - { node: esp, peripheral: gpio, pin: 34 }   # HSPICLK (input-only pad)
+        - { node: b, peripheral: gpioa, pin: 5 }
+  - type: gpio_net
+    nodes: [esp, b]
+    config:
+      name: miso
+      pull: down
+      members:
+        - { node: esp, peripheral: gpio, pin: 33 }   # HSPIQ (slave output)
+        - { node: b, peripheral: gpioa, pin: 6 }
+  - type: gpio_net
+    nodes: [esp, b]
+    config:
+      name: mosi
+      pull: down
+      members:
+        - { node: esp, peripheral: gpio, pin: 35 }   # HSPID (input-only pad)
+        - { node: b, peripheral: gpioa, pin: 7 }

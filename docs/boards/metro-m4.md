@@ -19,7 +19,7 @@ the modelled slice: core, PORT A/B, MCLK+GCLK, SERCOM3 as Serial1, SysTick.
 A bare-metal firmware enables `MCLK.APBBMASK` bit 10 and `GCLK PCHCTRL[24]`
 (SERCOM3_CORE), then writes `OK\n` on SERCOM3 DATA and toggles PA16 (D13 per
 Adafruit `variants/metro_m4/variant.cpp`). The chip descriptor builds through
-`SystemBus::from_config` (`atsamd51_config`). MCLK APB\*MASK and GCLK PCHCTRL
+`SystemBus::from_config` (`board_config_gates`). MCLK APB\*MASK and GCLK PCHCTRL
 are behavioural models, not stubs.
 
 ## What is not proven

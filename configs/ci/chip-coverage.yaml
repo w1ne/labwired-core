@@ -1,6 +1,6 @@
 # Explicit debt for the newly declared RV1103 platform, not firmware coverage.
 # scripts/ci/chip_coverage.py derives coverage from actual workflow execution;
-# this ledger only records the one prototype that cannot run board firmware.
+# this ledger only records the reduced prototype without qualified full board firmware coverage.
 # Another uncovered chip still fails. Remove this entry and the file when an
 # RV1103 firmware CLI gate exists; the stale-waiver check enforces that change.
 max_uncovered: 1
@@ -9,8 +9,9 @@ uncovered:
   rv1103:
     kind: waived
     reason: >-
-      No CI gate executes firmware on the RV1103 platform. The descriptor
-      declares CPU and memory geometry only; RV1103 peripherals, boot chain,
-      DDR initialization and Linux/BSP execution remain unimplemented. The
-      optional native qemu-arm tests run a generic Cortex-A7 CPU subset fixture,
-      not RV1103 board firmware, so they cannot establish platform coverage.
+      No CI gate qualifies full RV1103 platform coverage. The normal descriptor
+      still declares CPU and memory geometry only. Optional native reduced Linux
+      direct boot and joint I2C3/UART4 basket acceptance pass separately at fixed
+      functional 24MHz, with a persistent reduced power plant. The older generic
+      Cortex-A7 CPU subset is not board coverage. Vendor BSP/SD/ROM boot, DDR
+      initialization, full silicon and physical qualification remain unavailable.
