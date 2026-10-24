@@ -242,7 +242,13 @@ impl PinPort for Pic24GpioPort {
 
     /// The firmware-visible input level of `pin` (`PORTx`).
     fn input(&self, pin: u8) -> Option<bool> {
-        (pin < 16 && self.mask & (1u16 << pin) != 0).then_some(self.pad_bits() & (1u16 << pin) != 0)
+        // `then_some` evaluates its argument eagerly, so the shift must only
+        // happen inside the guarded branch (pin >= 16 would overflow).
+        if pin < 16 && self.mask & (1u16 << pin) != 0 {
+            Some(self.pad_bits() & (1u16 << pin) != 0)
+        } else {
+            None
+        }
     }
 
     fn install_watch(&mut self, watch: Option<crate::pins::PadWatch>) -> bool {
@@ -306,7 +312,11 @@ impl Peripheral for Pic24GpioPort {
 
     /// `TRISx` is the direction register: a set bit makes the pad an input.
     fn read_gpio_is_output(&self, pin: u8) -> Option<bool> {
-        (pin < 16 && self.mask & (1u16 << pin) != 0).then_some(self.tris & (1u16 << pin) == 0)
+        if pin < 16 && self.mask & (1u16 << pin) != 0 {
+            Some(self.tris & (1u16 << pin) == 0)
+        } else {
+            None
+        }
     }
 
     fn gpio_routing(&self, pin: u8) -> Option<GpioRouting> {

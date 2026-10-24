@@ -421,6 +421,13 @@ pub struct SystemBus {
     /// YAML predating [`labwired_config::ChipDescriptor::cpu_hz`] behaves
     /// exactly as it did.
     pub cpu_hz: u64,
+    /// RISC-V core profile this bus's chip runs, resolved once at config-build
+    /// from the chip descriptor (name + `core:`, see
+    /// [`crate::cpu::RiscVCoreProfile::for_chip`]) and read by
+    /// [`crate::system::riscv::configure_riscv`]. Every RISC-V caller — CLI,
+    /// browser, debugger, tests — therefore gets the chip's own profile
+    /// instead of a hardcoded one.
+    pub riscv_profile: crate::cpu::RiscVCoreProfile,
     /// Enable Cortex-M peripheral/SRAM bit-band alias translation.
     /// False for architectures (e.g. RISC-V) whose memory maps collide with
     /// the bit-band alias ranges 0x42000000–0x44000000 / 0x22000000–0x24000000.
@@ -819,6 +826,11 @@ pub struct SystemBus {
     /// (bits only flip 1→0) when it is. `None` on every non-nRF52 bus, so
     /// that path is unchanged everywhere else.
     nrf52_nvmc_idx: Option<usize>,
+    /// Index of the peripheral that owns CPU stores into the flash region
+    /// ([`crate::Peripheral::owns_flash_stores`]), if any. Cached in
+    /// `rebuild_peripheral_ranges`. `None` on every bus without such a
+    /// controller, so the flash-region store path costs one test.
+    flash_store_owner_idx: Option<usize>,
     /// Universal bus-transaction trace (logic analyzer): a shared, ring-
     /// buffered log that `I2c`/`Spi` peripherals record into once wrapped via
     /// `set_bus_trace` + `attach` (see `crate::bus::bus_trace`). Always

@@ -12,8 +12,8 @@ The models column is a content digest over everything that board's `models` list
 | `nrf52840` | 🟢 silicon-verified | 2026-08-09 | `429f2db00968034f` | ⚠ drift acked 2026-10-20, expires 2026-11-19 (re-capture pending) |
 | `seeed-xiao-nrf52840-sense` | 🟢 silicon-verified | 2026-08-09 | `429f2db00968034f` | ⚠ drift acked 2026-10-20, expires 2026-11-19 (re-capture pending) |
 | `stm32h563` | 🟢 silicon-verified | 2026-08-10 | `46b99e08f382a208` | ⚠ drift acked 2026-10-20, expires 2026-11-19 (re-capture pending) |
-| `esp32c3` | 🟢 silicon-verified | 2026-08-09 | `dc653b8932aae47b` | ⚠ drift acked 2026-10-19, expires 2026-11-18 (re-capture pending) |
-| `nucleo-l476rg` | 🟢 silicon-verified | 2026-08-09 | `d18f669d1e72f977` | ⚠ drift acked 2026-10-20, expires 2026-11-19 (re-capture pending) |
+| `esp32c3` | 🟢 silicon-verified | 2026-08-09 | `705efa0bce5458a3` | ⚠ drift acked 2026-10-19, expires 2026-11-18 (re-capture pending) |
+| `nucleo-l476rg` | 🟢 silicon-verified | 2026-08-09 | `87b5c99e9870470b` | ⚠ drift acked 2026-10-24, expires 2026-11-23 (re-capture pending) |
 | `nucleo-l073rz` | 🟢 silicon-verified | 2026-08-09 | `c83f4bf93d7f022a` | ⚠ drift acked 2026-10-20, expires 2026-11-19 (re-capture pending) |
 | `stm32f103` | 🟢 silicon-verified | 2026-08-09 | `613cb705ce8180ed` | ⚠ drift acked 2026-10-20, expires 2026-11-19 (re-capture pending) |
 | `stm32f407` | 🟢 silicon-smoke | 2026-06-20 | `d0c997aee7cad870` | ⚠ drift acked 2026-10-20, expires 2026-11-19 (re-capture pending) |
@@ -24,8 +24,8 @@ The models column is a content digest over everything that board's `models` list
 | `nrf52832` | ⚪ structural | — | `d616c323d009d8a5` | no silicon capture |
 | `microbit-v1` | 🟡 smoke-manual | — | `6c5babba450c6d3e` | no silicon capture |
 | `microbit-v2` | 🟡 smoke-manual | — | `d4d4ed6717e731c8` | no silicon capture |
-| `rp2040` | ⚪ structural | — | `14aabd53434b4fb9` | no silicon capture |
-| `rp2350` | 🟡 smoke-manual | — | `ded8fd89a957436e` | no silicon capture |
+| `rp2040` | ⚪ structural | — | `e675aa5c2e30ced3` | no silicon capture |
+| `rp2350` | 🟡 smoke-manual | — | `d0719edf492263e4` | no silicon capture |
 | `nrf5340` | 🔵 sim-validated (deep model, no HW diff) | — | `4484ae4cf614b92a` | no silicon capture |
 | `stm32h735` | 🔵 sim-validated (deep model, no HW diff) | — | `1727c899608a88a5` | no silicon capture |
 | `stm32u575` | 🔵 sim-validated (deep model, no HW diff) | — | `30111b9772afd282` | no silicon capture |
@@ -41,14 +41,16 @@ The models column is a content digest over everything that board's `models` list
 | `nrf54l15` | 🔵 sim-validated (deep model, no HW diff) | — | `0019eb4a38d55b62` | no silicon capture |
 | `stm32g474re` | 🔵 sim-validated (deep model, no HW diff) | — | `5e0a71df9474bfb7` | no silicon capture |
 | `stm32wb55` | 🔵 sim-validated (deep model, no HW diff) | — | `b43b2fbde191648e` | no silicon capture |
-| `ci-fixture-riscv` | ⚪ structural | — | `1493d9bc642c09c8` | no silicon capture |
+| `ci-fixture-riscv` | ⚪ structural | — | `0282a3b1fb6b2117` | no silicon capture |
 | `nano-33-iot` | 🟡 smoke-manual | — | `7844ae27228f5972` | no silicon capture |
 | `metro-m4` | 🟡 smoke-manual | — | `1c3a0d7bdb87fc77` | no silicon capture |
 | `arduino-uno-r4-minima` | 🟡 smoke-manual | — | `33e27f2342293797` | no silicon capture |
 | `teensy-41` | 🟡 smoke-manual | — | `b5a0f48d93623014` | no silicon capture |
 | `stm32f7-discovery` | 🟡 smoke-manual | — | `cdd5972b351635c2` | no silicon capture |
 | `nucleo-g071rb` | 🟡 smoke-manual | — | `0b8f5fc01a297433` | no silicon capture |
-| `esp32c6-devkitc` | 🟡 smoke-manual | — | `37ed3a24c9e601b8` | no silicon capture |
+| `esp32c6-devkitc` | 🟡 smoke-manual | — | `bfe2b814ca9f9226` | no silicon capture |
+| `litex-vexriscv` | 🟡 smoke-manual | — | `08a354e7a55908d8` | no silicon capture |
+| `vegaboard-ri5cy` | 🟡 smoke-manual | — | `e22e85efcc4699ce` | no silicon capture |
 
 ## `nrf52840` — 🟢 silicon-verified
 
@@ -90,7 +92,7 @@ The models column is a content digest over everything that board's `models` list
 - Silicon: **2026-08-09** on STLINK-V2.1 (USB 0483:374b serial 0670FF…1747, NUCLEO-L476RG onboard) — re-captured live 2026-08-09 with L476_STRICT=1: l476_mmio_diff 15/15 and l476_parity_diff 104/104, 0 divergence — identical to the 2026-06-20 figures. Clean on arrival; nothing to fix. SAME physical board as that baseline, established by probe serial 0670FF535155878281121747 being recorded in both (the L073 entry could not make that claim, having no serial on file before today). Scope unchanged and still partial: the mmio+parity set, not a full-chip sweep.
   - offline (CI): l476_mmio_diff::{l476_mmio_sim_only,l476_parity_sim_only}
   - offline (CI): firmware_survival L476 cases (UART byte stream)
-- Drift status: **⚠ drift acked 2026-10-20, expires 2026-11-19 (re-capture pending)**
+- Drift status: **⚠ drift acked 2026-10-24, expires 2026-11-23 (re-capture pending)**
 
 ## `nucleo-l073rz` — 🟢 silicon-verified
 
@@ -390,4 +392,18 @@ The models column is a content digest over everything that board's `models` list
 - Silicon: none — not validated against real hardware.
   - offline (CI): firmware_survival::test_esp32c6_demo_survival
   - offline (CI): svd_conformance::chip_configs_match_their_svd (configs/chips/esp32c6.yaml vs tests/fixtures/real_world/esp32c6.svd)
+- Drift status: **no silicon capture**
+
+## `litex-vexriscv` — 🟡 smoke-manual
+
+- Doc: [`docs/boards/litex-vexriscv.md`](litex-vexriscv.md)  ·  Chip: `configs/chips/litex-vexriscv.yaml`
+- Silicon: none — not validated against real hardware.
+  - offline (CI): firmware_survival::test_litex_vexriscv_smoke_survival
+- Drift status: **no silicon capture**
+
+## `vegaboard-ri5cy` — 🟡 smoke-manual
+
+- Doc: [`docs/boards/vegaboard-ri5cy.md`](vegaboard-ri5cy.md)  ·  Chip: `configs/chips/vegaboard-ri5cy.yaml`
+- Silicon: none — not validated against real hardware.
+  - offline (CI): firmware_survival::test_vegaboard_ri5cy_smoke_survival
 - Drift status: **no silicon capture**

@@ -36,9 +36,10 @@ jobs:
           targets: thumbv7em-none-eabihf,thumbv7em-none-eabi,thumbv8m.main-none-eabi
 
       - name: Install the ARM C cross-compiler (SEGGER RTT demo)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-arm-none-eabi
+        timeout-minutes: 10
+        uses: ./.github/actions/apt-install-cached
+        with:
+          packages: gcc-arm-none-eabi libnewlib-arm-none-eabi
 
       # Build each firmware FROM ITS OWN DIRECTORY. Cargo reads
       # `.cargo/config.toml` from the working directory and its ancestors, not

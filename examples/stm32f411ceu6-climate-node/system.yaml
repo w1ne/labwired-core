@@ -59,10 +59,10 @@ cosim_models:
     adapter: "analog"
     step_ns: 100000
     inputs:
-      drv_ph0: "board.gpio.ph0"
-      ctl_ph0: "board.gpio_output.ph0"
-      drv_ph1: "board.gpio.ph1"
-      ctl_ph1: "board.gpio_output.ph1"
+      drv_ph0: "board.gpio_pad.ph0"
+      ctl_ph0: "board.gpio_driven.ph0"
+      drv_ph1: "board.gpio_pad.ph1"
+      ctl_ph1: "board.gpio_driven.ph1"
     outputs:
       in_ph0: "board.gpio_in.ph0"
       in_ph1: "board.gpio_in.ph1"

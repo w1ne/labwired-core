@@ -34,3 +34,8 @@ boards:
     kind: sim-validate
     path: examples/esp32c3-blinky
     gate: true
+  # atmega2560's only CLI proof. Committed ELF, no toolchain, seconds to run.
+  - id: arduino-mega-2560-io
+    kind: sim-validate
+    path: examples/arduino-mega-2560-io
+    gate: true

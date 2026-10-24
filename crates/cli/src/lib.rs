@@ -37,6 +37,7 @@ mod dispatch;
 /// `execute_test_loop` and the `TestExecutionContext` it takes.
 mod execute;
 mod gpio_observer;
+mod inspect_export;
 /// `--log-timestamps` prefix state ([`log_ts::prefix`] / the `eventln!` macro).
 pub(crate) mod log_ts;
 /// The three run-outcome writers (`write_outputs`, `write_config_error_outputs`,
@@ -45,6 +46,7 @@ mod outputs;
 mod resource_report;
 mod size_limited_writer;
 mod stimuli;
+mod uart_lines;
 mod vcd_trace;
 mod wifi_frames;
 
@@ -649,6 +651,12 @@ struct TestArgs {
     /// Directory to write test artifacts (result.json, uart.log)
     #[arg(long)]
     output_dir: Option<PathBuf>,
+
+    /// Include complete inspect artifact byte payloads up to this cumulative
+    /// raw-byte limit (maximum 1 MiB). Default 0 keeps summary-only output.
+    /// Over-budget payloads are omitted with a reason in their metadata.
+    #[arg(long, default_value_t = 0, value_parser = clap::value_parser!(u64).range(0..=1_048_576))]
+    inspect_bytes_max: u64,
 
     /// Optional path to write a JUnit XML report for CI systems
     #[arg(long)]
@@ -1467,6 +1475,8 @@ fn handle_load_error<C: labwired_core::Cpu>(
         None,
         None,
         // Nor any per-pin GPIO state.
+        None,
+        // Nor any UART line stamps.
         None,
         // Load/reset failed before a machine existed: no motor evidence either.
         Vec::new(),
@@ -2991,6 +3001,7 @@ mod test_outcome_golden_tests {
             fault_verdict: None,
             logic_edges: None,
             gpio_pins: None,
+            uart_lines: None,
             motors: Vec::new(),
             analog_series: None,
             stimuli: Vec::new(),

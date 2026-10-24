@@ -47,9 +47,11 @@ fn run_fixture() -> (Vec<u8>, u32) {
     cpu.load_program_image(&image);
     cpu.set_serial_sink(sink.clone());
     cpu.reset(&mut bus).expect("reset");
-    cpu.set_pc(image.entry_point as u32);
+    // dsPIC33F resets to PC = 0 and vectors through the GOTO at address 0
+    // (DS70283H Figure 7-1); the fixture carries that reset vector.
+    cpu.set_pc(0);
 
-    for _ in 0..32 {
+    for _ in 0..33 {
         cpu.step(&mut bus, &[], &SimulationConfig::default())
             .expect("fixture instruction must decode and execute");
     }

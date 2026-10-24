@@ -2502,7 +2502,16 @@ pub(crate) fn run_test(
             // AVR is Harvard: code lives in the CPU flash image, not bus.flash.
             // Machine::load_firmware only walks bus memory maps, so seed the
             // interpreter with load_program_image (same as build_avr_node).
-            let mut cpu = labwired_core::cpu::Avr::new();
+            // The chip names the part (ATmega328P by default, ATmega2560).
+            let avr_chip_name = resolved_system
+                .as_ref()
+                .and_then(|s| {
+                    s.chip_with_plugins(&|name| plugins.iter().find_map(|p| p.chip_yaml(name)))
+                        .ok()
+                })
+                .map(|c| c.name)
+                .unwrap_or_default();
+            let mut cpu = labwired_core::cpu::Avr::for_chip_name(&avr_chip_name);
             cpu.load_program_image(&program);
             // USART TX is on the CPU, not a bus UART peripheral.
             cpu.set_serial_sink(uart_tx.clone());

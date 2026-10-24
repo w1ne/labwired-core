@@ -3567,6 +3567,7 @@ fn test_flash_boot_alias_read_and_write() {
         observers: Vec::new(),
         config: crate::SimulationConfig::default(),
         cpu_hz: 0,
+        riscv_profile: crate::cpu::RiscVCoreProfile::Esp32C3,
         bit_band_enabled: true,
         pending_cpu_irqs: [0; 2],
         esp32s3_irq_audit: None,
@@ -3635,6 +3636,7 @@ fn test_flash_boot_alias_read_and_write() {
         flash_error_flags_idx: None,
         u5_program_gate_idx: None,
         nrf52_nvmc_idx: None,
+        flash_store_owner_idx: None,
         bus_trace: bus_trace::new_log(),
         logic_tap: crate::logic_capture::LogicTap::new(),
         pin_map: std::collections::HashMap::new(),
@@ -3694,6 +3696,7 @@ fn h5_flash_bus(gate: bool) -> SystemBus {
         observers: Vec::new(),
         config: crate::SimulationConfig::default(),
         cpu_hz: 0,
+        riscv_profile: crate::cpu::RiscVCoreProfile::Esp32C3,
         bit_band_enabled: false,
         pending_cpu_irqs: [0; 2],
         esp32s3_irq_audit: None,
@@ -3762,6 +3765,7 @@ fn h5_flash_bus(gate: bool) -> SystemBus {
         flash_error_flags_idx: None,
         u5_program_gate_idx: None,
         nrf52_nvmc_idx: None,
+        flash_store_owner_idx: None,
         bus_trace: bus_trace::new_log(),
         logic_tap: crate::logic_capture::LogicTap::new(),
         pin_map: std::collections::HashMap::new(),
@@ -3974,6 +3978,7 @@ fn h5_rww_bus(gate: bool) -> SystemBus {
         observers: Vec::new(),
         config: crate::SimulationConfig::default(),
         cpu_hz: 0,
+        riscv_profile: crate::cpu::RiscVCoreProfile::Esp32C3,
         bit_band_enabled: false,
         pending_cpu_irqs: [0; 2],
         esp32s3_irq_audit: None,
@@ -4042,6 +4047,7 @@ fn h5_rww_bus(gate: bool) -> SystemBus {
         flash_error_flags_idx: None,
         u5_program_gate_idx: None,
         nrf52_nvmc_idx: None,
+        flash_store_owner_idx: None,
         bus_trace: bus_trace::new_log(),
         logic_tap: crate::logic_capture::LogicTap::new(),
         pin_map: std::collections::HashMap::new(),
@@ -4250,6 +4256,7 @@ fn test_peripheral_range_index_lookup() {
         observers: Vec::new(),
         config: crate::SimulationConfig::default(),
         cpu_hz: 0,
+        riscv_profile: crate::cpu::RiscVCoreProfile::Esp32C3,
         bit_band_enabled: true,
         pending_cpu_irqs: [0; 2],
         esp32s3_irq_audit: None,
@@ -4318,6 +4325,7 @@ fn test_peripheral_range_index_lookup() {
         flash_error_flags_idx: None,
         u5_program_gate_idx: None,
         nrf52_nvmc_idx: None,
+        flash_store_owner_idx: None,
         bus_trace: bus_trace::new_log(),
         logic_tap: crate::logic_capture::LogicTap::new(),
         pin_map: std::collections::HashMap::new(),
@@ -4382,6 +4390,7 @@ fn test_dma_tick_executes_copy_and_raises_irq() {
         observers: Vec::new(),
         config: crate::SimulationConfig::default(),
         cpu_hz: 0,
+        riscv_profile: crate::cpu::RiscVCoreProfile::Esp32C3,
         bit_band_enabled: true,
         pending_cpu_irqs: [0; 2],
         esp32s3_irq_audit: None,
@@ -4450,6 +4459,7 @@ fn test_dma_tick_executes_copy_and_raises_irq() {
         flash_error_flags_idx: None,
         u5_program_gate_idx: None,
         nrf52_nvmc_idx: None,
+        flash_store_owner_idx: None,
         bus_trace: bus_trace::new_log(),
         logic_tap: crate::logic_capture::LogicTap::new(),
         pin_map: std::collections::HashMap::new(),
@@ -6387,4 +6397,118 @@ fn debug_watch_default_bus_has_no_hit() {
     bus.write_u8(0x2000_0100, 0xAB).unwrap();
     let _ = bus.read_u32(0x2000_0100).unwrap();
     assert_eq!(bus.take_debug_watch_hit(), None);
+}
+
+// ── Flash-store owner ─────────────────────────────────────────────────────
+
+type StoreLog = std::sync::Arc<std::sync::Mutex<Vec<(u64, u8, u32)>>>;
+
+/// A peripheral that owns CPU stores into the flash region and answers each
+/// with a scripted outcome, recording what it was offered.
+#[derive(Debug)]
+struct FlashStoreProbe {
+    outcome: crate::FlashStoreOutcome,
+    seen: StoreLog,
+}
+
+impl crate::Peripheral for FlashStoreProbe {
+    fn read(&self, _offset: u64) -> crate::SimResult<u8> {
+        Ok(0)
+    }
+    fn write(&mut self, _offset: u64, _value: u8) -> crate::SimResult<()> {
+        Ok(())
+    }
+    fn owns_flash_stores(&self) -> bool {
+        true
+    }
+    fn flash_cpu_store(&mut self, offset: u64, width: u8, value: u32) -> crate::FlashStoreOutcome {
+        self.seen.lock().unwrap().push((offset, width, value));
+        self.outcome
+    }
+}
+
+fn flash_owner_bus(outcome: Option<crate::FlashStoreOutcome>) -> (SystemBus, StoreLog) {
+    let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let mut bus = SystemBus::empty();
+    bus.flash = crate::memory::LinearMemory::new_erased(0x1000, 0x0);
+    bus.ram = crate::memory::LinearMemory::new(0x1000, 0x2000_0000);
+    if let Some(outcome) = outcome {
+        bus.peripherals.push(PeripheralEntry {
+            name: "flashctl".to_string(),
+            base: 0x4000_0000,
+            size: 0x1000,
+            irq: None,
+            dev: Box::new(FlashStoreProbe {
+                outcome,
+                seen: seen.clone(),
+            }),
+            ticks_remaining: 0,
+            clock_gate: None,
+        });
+    }
+    bus.rebuild_peripheral_ranges();
+    (bus, seen)
+}
+
+#[test]
+fn flash_store_owner_commit_keeps_the_direct_write() {
+    let (mut bus, seen) = flash_owner_bus(Some(crate::FlashStoreOutcome::Commit));
+    bus.write_u32(0x100, 0x1234_5678).unwrap();
+    assert_eq!(bus.read_u32(0x100).unwrap(), 0x1234_5678);
+    assert_eq!(seen.lock().unwrap().as_slice(), &[(0x100, 4, 0x1234_5678)]);
+}
+
+#[test]
+fn flash_store_owner_consumed_drops_the_store() {
+    let (mut bus, seen) = flash_owner_bus(Some(crate::FlashStoreOutcome::Consumed));
+    bus.write_u8(0x20, 0xBB).unwrap();
+    bus.write_u16(0x30, 0xBEEF).unwrap();
+    bus.write_u32(0x40, 0xDEAD_BEEF).unwrap();
+    assert_eq!(bus.read_u32(0x20).unwrap(), 0xFFFF_FFFF);
+    assert_eq!(bus.read_u32(0x30).unwrap(), 0xFFFF_FFFF);
+    assert_eq!(bus.read_u32(0x40).unwrap(), 0xFFFF_FFFF);
+    assert_eq!(
+        seen.lock().unwrap().as_slice(),
+        &[(0x20, 1, 0xBB), (0x30, 2, 0xBEEF), (0x40, 4, 0xDEAD_BEEF)]
+    );
+}
+
+#[test]
+fn flash_store_owner_program_only_clears_bits() {
+    let (mut bus, _) = flash_owner_bus(Some(crate::FlashStoreOutcome::Program));
+    bus.write_u32(0x100, 0xF0F0_F0F0).unwrap();
+    assert_eq!(bus.read_u32(0x100).unwrap(), 0xF0F0_F0F0);
+    bus.write_u32(0x100, 0x0FF0_0FF0).unwrap();
+    assert_eq!(bus.read_u32(0x100).unwrap(), 0x00F0_00F0, "existing & new");
+    bus.write_u16(0x104, 0x1234).unwrap();
+    assert_eq!(bus.read_u16(0x104).unwrap(), 0x1234);
+    bus.write_u8(0x106, 0x0F).unwrap();
+    assert_eq!(bus.read_u8(0x106).unwrap(), 0x0F);
+}
+
+#[test]
+fn flash_store_owner_is_not_offered_ram_or_device_writes() {
+    let (mut bus, seen) = flash_owner_bus(Some(crate::FlashStoreOutcome::Consumed));
+    bus.write_u32(0x2000_0010, 7).unwrap();
+    assert_eq!(bus.read_u32(0x2000_0010).unwrap(), 7);
+    crate::with_device_write_bypass(&mut bus, |b| b.write_u32(0x80, 0).unwrap());
+    assert_eq!(
+        bus.read_u32(0x80).unwrap(),
+        0,
+        "the controller's own programming reaches the array"
+    );
+    assert!(seen.lock().unwrap().is_empty());
+}
+
+#[test]
+fn bus_without_a_flash_store_owner_commits_as_before() {
+    let (mut bus, _) = flash_owner_bus(None);
+    assert!(bus.flash_store_owner_idx.is_none());
+    bus.write_u32(0x100, 0x1234_5678).unwrap();
+    bus.write_u32(0x100, 0xFFFF_0000).unwrap();
+    assert_eq!(
+        bus.read_u32(0x100).unwrap(),
+        0xFFFF_0000,
+        "plain overwrite, no AND"
+    );
 }

@@ -85,6 +85,29 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_esp32c6_demo_survival"),
     },
     ChipConf {
+        // LiteX VexRiscv SoC (RV32IM — the descriptor declares `core: rv32im`,
+        // so runs select the standard RV32 profile). SIM-DERIVED: nothing here
+        // has been diffed against a silicon capture, so no reset_oracle. The
+        // modelled surface is CPU + memory + the LiteX UART and countdown
+        // timer; the SPI-flash / Ethernet / MMCM CSR windows are declared
+        // stubs — see
+        // examples/litex-vexriscv/VALIDATION.md.
+        name: "litex-vexriscv",
+        yaml: "configs/chips/litex-vexriscv.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("firmware_survival::test_litex_vexriscv_smoke_survival"),
+    },
+    ChipConf {
+        // Vega board (RI5CY, RV32IMC). SIM-DERIVED: no silicon capture.
+        // Modelled: CPU + memory + LPUART0/1; the SCG/PCC clock blocks, INTMUX
+        // and low-power timers are declared stubs — see
+        // examples/vegaboard-ri5cy/VALIDATION.md.
+        name: "vegaboard-ri5cy",
+        yaml: "configs/chips/vegaboard-ri5cy.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("firmware_survival::test_vegaboard_ri5cy_smoke_survival"),
+    },
+    ChipConf {
         name: "nrf54l15",
         yaml: "configs/chips/nrf54l15.yaml",
         // No silicon capture: nothing here has been diffed against a real
@@ -400,6 +423,14 @@ const CHIPS: &[ChipConf] = &[
         reset_oracle: None,
         behavior_gate: Some("avr_nano_golden_survival::arduino_nano_golden_prints_and_blinks"),
     },
+    // Behavior: Arduino-core Mega 2560 sketch (LED pins on ports E/G/F/B/H,
+    // A8/A9 via MUX5, millis, Serial). No silicon capture → below L2.
+    ChipConf {
+        name: "atmega2560",
+        yaml: "configs/chips/atmega2560.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("avr_mega2560_io::each_led_lands_on_its_mega_port_pin"),
+    },
     ChipConf {
         name: "atsamd21",
         yaml: "configs/chips/atsamd21.yaml",
@@ -460,6 +491,14 @@ const CHIPS: &[ChipConf] = &[
         yaml: "configs/chips/dspic33fj32mc204.yaml",
         reset_oracle: None,
         behavior_gate: Some("pic24_m0_smoke::pic24_fixture_boots_and_writes_h_to_uart"),
+    },
+    ChipConf {
+        // 28-pin sibling of the 204, same datasheet/core/memory. The gate is
+        // a real XC16-built UART firmware, not the hand fixture.
+        name: "dspic33fj32mc202",
+        yaml: "configs/chips/dspic33fj32mc202.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("pic24_xc16_202_smoke::xc16_202_firmware_boots_and_writes_hi_to_uart"),
     },
 ];
 

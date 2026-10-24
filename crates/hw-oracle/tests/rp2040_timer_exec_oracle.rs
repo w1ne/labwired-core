@@ -13,10 +13,9 @@
 //!
 //! The RP2040 has no attached bench target, so only the always-compiled `_sim`
 //! variant runs (the macro's `_hw` / `_diff` variants are feature-gated and
-//! `#[ignore]`). Sim advances the counter one tick per executed instruction —
-//! the absolute rate is arbitrary (the sim has no wall clock) but strictly
-//! deterministic, so the pinned deltas below are exact regression locks, not
-//! timing-fidelity claims.
+//! `#[ignore]`). Each simulated CPU instruction advances one CPU cycle. The
+//! fixed 125 MHz declared clock gives one timer microsecond per 125 cycles;
+//! these tests check that modeled ratio, not physical instruction timing.
 //!
 //! ```text
 //! cargo test -p labwired-hw-oracle --test rp2040_timer_exec_oracle
@@ -82,9 +81,9 @@ fn sample_reg_to(src: u32, dst: u32) -> Vec<Thumb> {
 }
 
 /// A run of distinct-PC filler instructions so the peripheral walk advances the
-/// timer this many ticks while the CPU is still executing (the harness breaks
+/// timer across this many CPU cycles while the CPU is still executing (the harness breaks
 /// two steps after the PC settles on the `B .` terminator, so ticks must elapse
-/// *before* then). Each `MOVS` is one instruction → one tick.
+/// *before* then). Each `MOVS` is one instruction → one CPU cycle.
 fn filler(n: usize) -> Vec<Thumb> {
     (0..n)
         .map(|i| Thumb::H(movs_imm8(4, (i & 0xFF) as u8)))
@@ -120,15 +119,15 @@ fn rp2040_bus() -> SystemBus {
 // ── 1. Free-running counter monotonic advance ───────────────────────────────────
 //
 // Sample TIMERAWL, run a fixed filler window, sample again. With the peripheral
-// walk live (one tick per executed instruction) the second sample must be
+// walk live the second sample must be
 // strictly greater — the counter genuinely advanced through CPU→bus→timer, not
-// via a poke. The exact delta is the deterministic instruction count between the
-// two reads and is pinned as a regression lock.
+// via a poke. The 250-cycle interval is exactly two timer microseconds at
+// the declared 125 MHz CPU clock, independent of fractional starting phase.
 #[thumb_oracle_test]
 fn rp2040_timer_free_running() -> ThumbOracleCase {
     let mut prog: Vec<Thumb> = Vec::new();
     prog.extend(sample_reg_to(TIMER_TIMERAWL, SAMPLE_A));
-    prog.extend(filler(16));
+    prog.extend(filler(244));
     prog.extend(sample_reg_to(TIMER_TIMERAWL, SAMPLE_B));
 
     ThumbOracleCase::mixed(&prog)
@@ -142,11 +141,8 @@ fn rp2040_timer_free_running() -> ThumbOracleCase {
                 b > a,
                 "TIMERAWL must advance monotonically: A=0x{a:08X} B=0x{b:08X}"
             );
-            // Deterministic tick count between the two samples (filler + the
-            // second sample's address-materialise/load run). Pinned from the
-            // model; a change here means the timer's advance cadence or the
-            // executor's per-instruction tick moved.
-            assert_eq!(b - a, 22, "pinned free-running delta");
+            // 244 filler instructions plus six sample instructions =250 cycles.
+            assert_eq!(b - a, 2, "250 CPU cycles at125MHz must be2us");
         })
 }
 
@@ -163,12 +159,12 @@ fn rp2040_timer_pause_freezes() -> ThumbOracleCase {
     prog.extend(load_addr(0, TIMER_PAUSE));
     prog.extend(store_imm32(0x1));
     prog.extend(sample_reg_to(TIMER_TIMERAWL, SAMPLE_A));
-    prog.extend(filler(16));
+    prog.extend(filler(244));
     prog.extend(sample_reg_to(TIMER_TIMERAWL, SAMPLE_B));
     // PAUSE = 0 (resume), then let it advance and sample again.
     prog.extend(load_addr(0, TIMER_PAUSE));
     prog.extend(store_imm32(0x0));
-    prog.extend(filler(16));
+    prog.extend(filler(244));
     prog.extend(sample_reg_to(TIMER_TIMERAWL, SAMPLE_C));
 
     ThumbOracleCase::mixed(&prog)
@@ -199,7 +195,7 @@ fn rp2040_timer_pause_freezes() -> ThumbOracleCase {
 #[thumb_oracle_test]
 fn rp2040_timer_alarm_delivers_irq() -> ThumbOracleCase {
     const TIMER_IRQ0_EXC: usize = 16; // IRQ 0 → exception number 16
-    const ALARM_MARGIN: u8 = 0x40; // ticks ahead of "now" to arm the alarm
+    const ALARM_MARGIN: u8 = 4; // microseconds ahead (500 CPU cycles)
 
     // ISR: write the marker, acknowledge INTR (write-1-clear bit0), return.
     let mut isr: Vec<Thumb> = Vec::new();
@@ -228,7 +224,7 @@ fn rp2040_timer_alarm_delivers_irq() -> ThumbOracleCase {
     main.push(Thumb::H(adds_imm8(3, ALARM_MARGIN))); // r3 += margin
     main.extend(load_addr(0, TIMER_ALARM0));
     main.push(Thumb::H(str_imm5(3, 0, 0))); // arm alarm 0
-    main.extend(filler(128)); // > margin ticks so the match lands mid-execution
+    main.extend(filler(1024)); // >500 CPU cycles: alarm lands before the terminator
 
     let (prog, entry) = interrupt_program(&isr, &main, TIMER_IRQ0_EXC);
 

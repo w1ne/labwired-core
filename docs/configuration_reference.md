@@ -482,6 +482,7 @@ canonical `type:`; the table below is rendered from that file by
 | `bldc-motor` | GPIO | Configurable deterministic three-phase BLDC motor plant |
 | `bldc_hall_driver` | GPIO | PWM/DIR/ENABLE in; 6-step Hall pattern out. Duty→RPM not modelled |
 | `dc-motor` | GPIO | Configurable deterministic brushed DC motor plant |
+| `dfplayer_mini` | GPIO | MP3 player module: serial commands in, BUSY low while playing |
 | `dht11` | GPIO | One-wire temperature + humidity sensor |
 | `dht22` | GPIO | One-wire temperature + humidity sensor |
 | `hc-sr04` | GPIO | Ultrasonic distance sensor (trigger / echo) |

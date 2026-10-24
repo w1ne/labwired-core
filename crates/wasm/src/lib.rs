@@ -607,7 +607,7 @@ impl WasmSimulator {
 
         let program_image = load_elf_bytes(firmware)
             .map_err(|e| JsValue::from_str(&format!("Loader Error: {}", e)))?;
-        let mut cpu = labwired_core::cpu::Avr::new();
+        let mut cpu = labwired_core::cpu::Avr::for_chip_name(&chip.name);
         cpu.load_program_image(&program_image);
         // USART0 is modelled on the CPU, not as a bus UART, so the host
         // console above reaches nothing on this part: the Serial pane only

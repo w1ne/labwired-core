@@ -127,6 +127,11 @@ impl Avr {
     /// Push the waveform levels onto the pads after the timers moved. One
     /// bus write per pad change; nothing while no `COMnx` bit is set.
     pub(super) fn sync_oc_pins(&mut self, bus: &mut dyn Bus) {
+        // The ATmega2560's OC pads are on other pins (PB4..PB7, PE3..5, PG5,
+        // PH3..6, PL3..5); its pads follow `PORTx` (see `AvrModel`).
+        if self.model == super::AvrModel::Atmega2560 {
+            return;
+        }
         if (self.tccr0a | self.t1.tccra | self.tccr2a) & 0xF0 == 0 && self.oc_mask == [0, 0] {
             return;
         }

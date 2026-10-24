@@ -34,6 +34,30 @@ pub enum RiscVCoreProfile {
     StandardRv32,
 }
 
+impl RiscVCoreProfile {
+    /// Select the profile a chip descriptor runs.
+    ///
+    /// The engine models two profiles: the standard RV32 machine and the
+    /// ESP32-C3's vendor CSR set. An `esp32*` chip keeps the vendor profile —
+    /// the C3 is the part whose ROM and performance-counter block the engine
+    /// models, and the C6 shares that register surface today. Any other chip
+    /// that declares a generic `rv32*` core (e.g. `core: "rv32im"` on a
+    /// VexRiscv SoC) runs the standard profile. A chip with no `core:` keeps
+    /// the historical ESP32-C3 default, so descriptors written before this
+    /// selection existed behave exactly as they did.
+    pub fn for_chip(chip: &labwired_config::ChipDescriptor) -> Self {
+        if chip.name.to_ascii_lowercase().contains("esp32") {
+            return Self::Esp32C3;
+        }
+        match chip.core.as_deref() {
+            Some(core) if core.trim().to_ascii_lowercase().starts_with("rv32") => {
+                Self::StandardRv32
+            }
+            _ => Self::Esp32C3,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct RiscV {
     pub core_profile: RiscVCoreProfile,

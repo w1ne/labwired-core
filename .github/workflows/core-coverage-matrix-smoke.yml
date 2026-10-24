@@ -341,6 +341,43 @@ jobs:
           - id: dspic33fj32mc204-uart
             script: examples/dspic33fj32mc204/io-smoke.yaml
             system: examples/dspic33fj32mc204/system.yaml
+          # dsPIC33FJ32MC202 — 28-pin sibling of the 204 with the same M0
+          # scope: boot + UART1 TX, asserted by the committed XC16 ELF.
+          - id: dspic33fj32mc202-uart
+            script: examples/dspic33fj32mc202/io-smoke.yaml
+            system: examples/dspic33fj32mc202/system.yaml
+          # LiteX VexRiscv SoC — first RISC-V soft-core cell. The smoke links
+          # into the SoC's integrated SRAM (0x10000000) and prints over the
+          # LiteX UART; one assertion reads back a declared-stub CSR window
+          # (zeros), so the "declared, not modelled" boundary is pinned on the
+          # wire. No build_dir needed: this crate's link args come from its
+          # build.rs, which cargo reads from the package regardless of the
+          # working directory.
+          # Arduino Nano 33 BLE: nRF52840 UARTE console + the active-low RGB
+          # OUT readback; the LSM9DS1 IMU and USB CDC are not modelled.
+          - id: arduino-nano-33-ble-smoke
+            target: thumbv7em-none-eabihf
+            crate: firmware-arduino-nano-33-ble-smoke
+            profile: release
+            profile_dir: release
+            script: examples/arduino-nano-33-ble/io-smoke.yaml
+            system: examples/arduino-nano-33-ble/system.yaml
+          - id: litex-vexriscv-smoke
+            target: riscv32im-unknown-none-elf
+            crate: firmware-litex-vexriscv-smoke
+            profile: release
+            profile_dir: release
+            script: examples/litex-vexriscv/io-smoke.yaml
+            system: examples/litex-vexriscv/system.yaml
+          # Vega board (RI5CY): LPUART0 console + a real multiply; SCG/PCC,
+          # INTMUX and the low-power timers stay declared stubs.
+          - id: vegaboard-ri5cy-smoke
+            target: riscv32imc-unknown-none-elf
+            crate: firmware-vegaboard-ri5cy-smoke
+            profile: release
+            profile_dir: release
+            script: examples/vegaboard-ri5cy/io-smoke.yaml
+            system: examples/vegaboard-ri5cy/system.yaml
 
     steps:
       - uses: actions/checkout@v4
@@ -348,7 +385,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.95.0
         with:
-          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,thumbv8m.main-none-eabi,riscv32i-unknown-none-elf,riscv32imc-unknown-none-elf
+          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,thumbv7em-none-eabihf,thumbv8m.main-none-eabi,riscv32i-unknown-none-elf,riscv32imc-unknown-none-elf,riscv32im-unknown-none-elf
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
@@ -362,9 +399,10 @@ jobs:
 
       - name: Install C cross toolchain
         if: matrix.make != ''
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y gcc-arm-none-eabi
+        timeout-minutes: 10
+        uses: ./.github/actions/apt-install-cached
+        with:
+          packages: gcc-arm-none-eabi libnewlib-arm-none-eabi
 
       - name: Build C firmware
         if: matrix.make != ''

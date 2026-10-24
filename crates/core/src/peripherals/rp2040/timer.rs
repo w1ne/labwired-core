@@ -7,10 +7,10 @@
 //! RP2040 64-bit microsecond timer (datasheet §4.6, base `0x40054000`).
 //!
 //! A single free-running 64-bit counter that, on real silicon, increments once
-//! per microsecond off the watchdog tick. This model advances the counter by
-//! one on every peripheral tick — the absolute rate is arbitrary (the sim has
-//! no wall clock), but the counter is genuinely monotonic, so firmware that
-//! samples it twice always sees forward progress.
+//! per microsecond off the watchdog tick. This model derives that fixed 1 MHz
+//! timebase from the attached CPU frequency, retaining fractional microseconds
+//! across batches. Watchdog tick reprogramming and dynamic PLL changes are not
+//! modeled. Standalone timers without an attached clock use a 1 MHz fallback.
 //!
 //! `TIMERAWL` / `TIMERAWH` read the live low / high words. `TIMELR` / `TIMEHR`
 //! read the same live counter: the datasheet's read-latch protocol (TIMELR
@@ -64,6 +64,10 @@ pub struct Rp2040Timer {
     /// Live 64-bit microsecond counter. `Cell` so `&self` reads can lazy-sync
     /// under the event-scheduler path (batch-boundary freshness).
     counter: Cell<u64>,
+    /// Declared CPU clock, or 1 MHz for standalone direct-tick users.
+    cpu_hz: u64,
+    /// Fractional microsecond numerator, always less than `cpu_hz`.
+    residue: Cell<u64>,
     /// `PAUSE.bit0` — when set, advance does not move the counter.
     paused: bool,
     /// Low word staged by a `TIMELW` write (committed by `TIMEHW`).
@@ -71,9 +75,9 @@ pub struct Rp2040Timer {
     /// 32-bit compare target per alarm (`ALARM0..3`).
     alarm: [u32; 4],
     /// `ARMED` — bit `x` set while alarm `x` is armed and awaiting its match.
-    armed: u8,
+    armed: Cell<u8>,
     /// `INTR` — latched raw interrupt, bit `x` per fired alarm (write-1-clear).
-    intr: u8,
+    intr: Cell<u8>,
     /// `INTE` — per-alarm interrupt enable.
     inte: u8,
     /// `INTF` — per-alarm interrupt force (pico-sdk sets this to fire an alarm
@@ -101,11 +105,13 @@ impl Rp2040Timer {
     pub fn new() -> Self {
         Self {
             counter: Cell::new(0),
+            cpu_hz: 1_000_000,
+            residue: Cell::new(0),
             paused: false,
             pending_low: 0,
             alarm: [0; 4],
-            armed: 0,
-            intr: 0,
+            armed: Cell::new(0),
+            intr: Cell::new(0),
             inte: 0,
             intf: 0,
             clock: None,
@@ -118,23 +124,21 @@ impl Rp2040Timer {
     /// Masked interrupt status: an alarm's IRQ line is asserted while its raw
     /// or forced bit is set and enabled.
     fn ints(&self) -> u8 {
-        (self.intr | self.intf) & self.inte
+        (self.intr.get() | self.intf) & self.inte
     }
 
     crate::cycle_clock::scheduler_mode!();
 
-    /// Lazy advance of the free-running counter only (no alarm latch — that
-    /// needs `&mut` and rides write/`on_event`). Idempotent on `now`.
-    fn advance_counter_to(&self, now: u64) {
+    /// One shared clock boundary for reads, writes and event delivery. Reads
+    /// must latch crossed alarms too, so a later same-cycle event cannot lose
+    /// a match after the read has consumed its elapsed time.
+    fn advance_to(&self, now: u64) -> PeripheralTickResult {
         let anchor = self.anchor.get();
         if now <= anchor {
-            return;
-        }
-        if !self.paused {
-            self.counter
-                .set(self.counter.get().wrapping_add(now - anchor));
+            return self.level_irqs();
         }
         self.anchor.set(now);
+        self.advance_cycles(now - anchor)
     }
 
     /// Pull "now" from the bus-published clock so polled `TIMERAWL` observes
@@ -142,23 +146,26 @@ impl Rp2040Timer {
     fn sync_from_clock(&self) {
         if let Some(clock) = self.clock.as_ref() {
             if self.scheduler_mode() {
-                self.advance_counter_to(clock.now());
+                let _ = self.advance_to(clock.now());
             }
         }
     }
 
-    /// Advance the free-running counter by `cycles` base ticks (one base tick
-    /// ≡ one legacy `tick()` call) and fire any alarm that lands on the way.
-    fn advance_cycles(&mut self, cycles: u64) -> PeripheralTickResult {
-        if cycles == 0 {
+    /// Convert elapsed CPU cycles to microseconds, then latch every alarm
+    /// crossed in that interval. All drive modes consume the same residue.
+    fn advance_cycles(&self, cycles: u64) -> PeripheralTickResult {
+        if cycles == 0 || self.paused {
             return self.level_irqs();
         }
+        let scaled = u128::from(self.residue.get()) + u128::from(cycles) * 1_000_000;
+        let ticks = scaled / u128::from(self.cpu_hz);
+        self.residue.set((scaled % u128::from(self.cpu_hz)) as u64);
         let start = self.counter.get();
-        if !self.paused {
-            // Fire armed alarms whose low-32 target is hit at some step
-            // k ∈ 1..=cycles: after k advances, low == (start + k) as u32.
+        if ticks != 0 {
+            // An alarm matches if its low-32 target is crossed by a whole
+            // microsecond tick, including the 32-bit counter wrap.
             for idx in 0..4u8 {
-                if self.armed & (1 << idx) == 0 {
+                if self.armed.get() & (1 << idx) == 0 {
                     continue;
                 }
                 let target = self.alarm[idx as usize];
@@ -170,12 +177,12 @@ impl Rp2040Timer {
                 } else {
                     target.wrapping_sub(start_low) as u64
                 };
-                if steps <= cycles {
-                    self.intr |= 1 << idx;
-                    self.armed &= !(1 << idx);
+                if u128::from(steps) <= ticks {
+                    self.intr.set(self.intr.get() | (1 << idx));
+                    self.armed.set(self.armed.get() & !(1 << idx));
                 }
             }
-            self.counter.set(start.wrapping_add(cycles));
+            self.counter.set(start.wrapping_add(ticks as u64));
         }
         self.level_irqs()
     }
@@ -196,13 +203,13 @@ impl Rp2040Timer {
 
     /// CPU cycles until the next armed alarm match (or `None` if paused / none).
     fn cycles_until_next_alarm(&self) -> Option<u64> {
-        if self.paused || self.armed == 0 {
+        if self.paused || self.armed.get() == 0 {
             return None;
         }
         let start_low = self.counter.get() as u32;
         let mut best: Option<u64> = None;
         for idx in 0..4u8 {
-            if self.armed & (1 << idx) == 0 {
+            if self.armed.get() & (1 << idx) == 0 {
                 continue;
             }
             let target = self.alarm[idx as usize];
@@ -211,7 +218,11 @@ impl Rp2040Timer {
             } else {
                 target.wrapping_sub(start_low) as u64
             };
-            best = Some(best.map_or(steps, |b| b.min(steps)));
+            let needed =
+                u128::from(steps) * u128::from(self.cpu_hz) - u128::from(self.residue.get());
+            if let Ok(cycles) = u64::try_from(needed.div_ceil(1_000_000)) {
+                best = Some(best.map_or(cycles, |b| b.min(cycles)));
+            }
         }
         best
     }
@@ -225,9 +236,9 @@ impl Peripheral for Rp2040Timer {
             TIMERAWL | TIMELR => counter as u32,
             TIMERAWH | TIMEHR => (counter >> 32) as u32,
             ALARM0..=ALARM3 => self.alarm[((offset - ALARM0) / 4) as usize],
-            ARMED => self.armed as u32,
+            ARMED => self.armed.get() as u32,
             PAUSE => self.paused as u32,
-            INTR => self.intr as u32,
+            INTR => self.intr.get() as u32,
             INTE => self.inte as u32,
             INTF => self.intf as u32,
             INTS => self.ints() as u32,
@@ -244,13 +255,7 @@ impl Peripheral for Rp2040Timer {
         // any alarm that lands in the deferred window).
         if self.scheduler_mode() {
             if let Some(clock) = self.clock.as_ref() {
-                let now = clock.now();
-                let anchor = self.anchor.get();
-                if now > anchor {
-                    let delta = now - anchor;
-                    self.anchor.set(now);
-                    let _ = self.advance_cycles(delta);
-                }
+                let _ = self.advance_to(clock.now());
             }
         }
         match offset {
@@ -265,12 +270,12 @@ impl Peripheral for Rp2040Timer {
             ALARM0..=ALARM3 => {
                 let idx = ((offset - ALARM0) / 4) as usize;
                 self.alarm[idx] = value;
-                self.armed |= 1 << idx;
+                self.armed.set(self.armed.get() | (1 << idx));
             }
             // Write-1-to-clear: disarm the selected alarms.
-            ARMED => self.armed &= !(value as u8),
+            ARMED => self.armed.set(self.armed.get() & !(value as u8)),
             // Write-1-to-clear: acknowledge the raw interrupt.
-            INTR => self.intr &= !(value as u8),
+            INTR => self.intr.set(self.intr.get() & !(value as u8)),
             INTE => self.inte = (value & 0xf) as u8,
             INTF => self.intf = (value & 0xf) as u8,
             _ => {
@@ -301,18 +306,16 @@ impl Peripheral for Rp2040Timer {
         self.advance_cycles(1)
     }
 
-    /// Oracle settle path: latch alarm matches and re-assert the held level
-    /// even under scheduler mode.
-    ///
-    /// The bare-CPU oracle has no `Machine` to drain `on_event` and, while it
-    /// spins through filler instructions, issues no MMIO write to trigger
-    /// [`Peripheral::sync_to`] — so the only `&mut` entry point left is this
-    /// forced tick. Reads alone cannot do it: `advance_counter_to` is `&self`
-    /// and moves the free-running counter WITHOUT latching `INTR`. Pull the
-    /// elapsed base ticks straight off the bus-published clock (the oracle
-    /// advances it once per executed instruction) and run the same
-    /// `advance_cycles` the `on_event` path runs. Anchor-based, so it cannot
-    /// double-count against the read-side lazy sync.
+    fn tick_elapsed(&mut self, cycles: u64) -> PeripheralTickResult {
+        if self.scheduler_mode() {
+            return PeripheralTickResult::default();
+        }
+        self.advance_cycles(cycles)
+    }
+
+    /// The bare-CPU oracle owns its clock and does not drain Machine events.
+    /// Consume only time not already observed by a read, then deliver the
+    /// latched level even when that read crossed the alarm in this same cycle.
     fn tick_elapsed_forced(&mut self, cycles: u64) -> PeripheralTickResult {
         if !self.scheduler_mode() {
             return self.tick_elapsed(cycles);
@@ -320,13 +323,7 @@ impl Peripheral for Rp2040Timer {
         let Some(now) = self.clock.as_ref().map(|c| c.now()) else {
             return self.level_irqs();
         };
-        let anchor = self.anchor.get();
-        if now > anchor {
-            self.anchor.set(now);
-            return self.advance_cycles(now - anchor);
-        }
-        // Level re-pend without counter motion — mirrors `on_event`.
-        self.level_irqs()
+        self.advance_to(now)
     }
 
     fn uses_scheduler(&self) -> bool {
@@ -337,6 +334,13 @@ impl Peripheral for Rp2040Timer {
         !self.scheduler_mode()
     }
 
+    fn attach_cpu_hz(&mut self, hz: u64) {
+        if hz != 0 {
+            self.cpu_hz = hz;
+            self.residue.set(0);
+        }
+    }
+
     fn attach_cycle_clock(&mut self, clock: CycleClock) {
         self.clock = Some(clock);
     }
@@ -345,13 +349,7 @@ impl Peripheral for Rp2040Timer {
         if !self.scheduler_mode() {
             return;
         }
-        let anchor = self.anchor.get();
-        if now_cycle <= anchor {
-            return;
-        }
-        let delta = now_cycle - anchor;
-        self.anchor.set(now_cycle);
-        let _ = self.advance_cycles(delta);
+        let _ = self.advance_to(now_cycle);
     }
 
     fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
@@ -387,16 +385,7 @@ impl Peripheral for Rp2040Timer {
         if !self.scheduler_mode() || event_token != self.arm_seq {
             return crate::sched::EventResult::default();
         }
-        let now = sched.now();
-        let anchor = self.anchor.get();
-        let res = if now > anchor {
-            let delta = now - anchor;
-            self.anchor.set(now);
-            self.advance_cycles(delta)
-        } else {
-            // Level re-pend without counter motion (e.g. INTF-only).
-            self.level_irqs()
-        };
+        let res = self.advance_to(sched.now());
         let next_alarm = self.cycles_until_next_alarm().map(|d| d.saturating_sub(1));
         let next_level = (self.ints() != 0).then_some(1u64);
         let reschedule = match (next_alarm, next_level) {
@@ -417,6 +406,139 @@ impl Peripheral for Rp2040Timer {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn configured_clock_counts_microseconds_and_elapsed_batches() {
+        let mut t = Rp2040Timer::new();
+        t.attach_cpu_hz(125_000_000);
+        t.tick_elapsed(124);
+        assert_eq!(t.read_u32(TIMERAWL).unwrap(), 0);
+        t.tick_elapsed(1);
+        assert_eq!(t.read_u32(TIMERAWL).unwrap(), 1);
+        t.tick_elapsed(125_000_000);
+        assert_eq!(t.read_u32(TIMERAWL).unwrap(), 1_000_001);
+    }
+
+    #[test]
+    fn fractional_microseconds_survive_split_batches() {
+        let mut split = Rp2040Timer::new();
+        split.attach_cpu_hz(125_500_000);
+        for (cycles, expected_us) in [(125, 0), (1, 1), (124, 1), (1, 2), (749, 7)] {
+            split.tick_elapsed(cycles);
+            assert_eq!(split.read_u32(TIMERAWL).unwrap(), expected_us);
+        }
+        let mut whole = Rp2040Timer::new();
+        whole.attach_cpu_hz(125_500_000);
+        whole.tick_elapsed(1_000);
+        assert_eq!(whole.read_u32(TIMERAWL).unwrap(), 7);
+    }
+
+    #[test]
+    fn configured_alarm_waits_for_microseconds_and_holds_until_ack() {
+        let mut t = Rp2040Timer::new();
+        t.attach_cpu_hz(125_000_000);
+        t.write_u32(INTE, 1).unwrap();
+        t.write_u32(ALARM0, 8).unwrap();
+        assert!(t.tick_elapsed(999).explicit_irqs.is_none());
+        assert_eq!(t.read_u32(TIMERAWL).unwrap(), 7);
+        assert_eq!(t.tick_elapsed(1).explicit_irqs, Some(vec![0]));
+        assert_eq!(t.tick_elapsed(125).explicit_irqs, Some(vec![0]));
+        t.write_u32(INTR, 1).unwrap();
+        assert!(t.tick_elapsed(125).explicit_irqs.is_none());
+    }
+
+    #[test]
+    fn configured_pause_preserves_phase_without_counting_paused_cycles() {
+        let mut t = Rp2040Timer::new();
+        t.attach_cpu_hz(125_000_000);
+        t.tick_elapsed(124);
+        t.write_u32(PAUSE, 1).unwrap();
+        t.tick_elapsed(10_000);
+        assert_eq!(t.read_u32(TIMERAWL).unwrap(), 0);
+        t.write_u32(PAUSE, 0).unwrap();
+        t.tick_elapsed(1);
+        assert_eq!(t.read_u32(TIMERAWL).unwrap(), 1);
+    }
+
+    #[test]
+    fn counter_write_keeps_fractional_phase_and_alarm_fires_across_wrap() {
+        let mut t = Rp2040Timer::new();
+        t.attach_cpu_hz(125_000_000);
+        t.tick_elapsed(124);
+        t.write_u32(TIMELW, 0xffff_fffe).unwrap();
+        t.write_u32(TIMEHW, 0).unwrap();
+        t.write_u32(ALARM0, 0).unwrap();
+        t.write_u32(INTE, 1).unwrap();
+        assert_eq!(t.cycles_until_next_alarm(), Some(126));
+        assert!(t.tick_elapsed(1).explicit_irqs.is_none());
+        assert_eq!(t.read_u32(TIMERAWL).unwrap(), 0xffff_ffff);
+        assert_eq!(t.tick_elapsed(125).explicit_irqs, Some(vec![0]));
+        assert_eq!(t.read_u32(TIMERAWL).unwrap(), 0);
+        assert_eq!(t.read_u32(TIMERAWH).unwrap(), 1);
+    }
+
+    #[test]
+    fn configured_lazy_reads_and_alarm_deadlines_share_fractional_phase() {
+        let mut t = Rp2040Timer::new();
+        let clock = CycleClock::default();
+        t.attach_cpu_hz(125_000_000);
+        t.attach_cycle_clock(clock.clone());
+        clock.publish(124);
+        t.tick_elapsed(124); // Walk advances here; scheduler mode advances on read.
+        assert_eq!(t.read_u32(TIMERAWL).unwrap(), 0);
+        assert_eq!(t.read_u32(TIMERAWL).unwrap(), 0, "read must be idempotent");
+        t.write_u32(ALARM0, 1).unwrap();
+        assert_eq!(t.cycles_until_next_alarm(), Some(1));
+        clock.publish(125);
+        t.sync_to(125);
+        t.tick_elapsed(1);
+        assert_eq!(t.read_u32(TIMERAWL).unwrap(), 1);
+        assert_eq!(t.read_u32(INTR).unwrap(), 1);
+        assert_eq!(t.read_u32(ARMED).unwrap(), 0);
+        t.sync_to(125);
+        assert_eq!(t.read_u32(TIMERAWL).unwrap(), 1);
+    }
+
+    #[test]
+    fn a_lazy_read_cannot_consume_an_alarm_before_the_event_handler() {
+        let mut t = Rp2040Timer::new();
+        let clock = CycleClock::default();
+        t.attach_cycle_clock(clock.clone());
+        t.write_u32(INTE, 1).unwrap();
+        t.write_u32(ALARM0, 2).unwrap();
+        let events = t.take_scheduled_events();
+        clock.publish(2);
+        t.tick_elapsed(2); // A scheduler-driven timer leaves this to the lazy read.
+        assert_eq!(t.read_u32(TIMERAWL).unwrap(), 2);
+        if t.uses_scheduler() {
+            let mut scheduler = crate::sched::EventScheduler::new();
+            scheduler.advance_to(2);
+            let mut bus = crate::bus::SystemBus::new();
+            assert_eq!(
+                t.on_event(events[0].1, &mut scheduler, &mut bus)
+                    .explicit_irqs,
+                vec![0]
+            );
+        } else {
+            assert!(
+                events.is_empty(),
+                "walk mode must not schedule alarm events"
+            );
+        }
+        let settle_cycles = u64::from(t.uses_scheduler());
+        assert_eq!(
+            t.tick_elapsed_forced(settle_cycles).explicit_irqs,
+            Some(vec![0])
+        );
+        assert_eq!(t.read_u32(INTR).unwrap(), 1);
+        assert_eq!(
+            t.read_u32(TIMERAWL).unwrap(),
+            2,
+            "same-cycle event must not add time"
+        );
+        t.write_u32(INTR, 1).unwrap();
+        assert!(t.tick_elapsed_forced(settle_cycles).explicit_irqs.is_none());
+    }
 
     #[test]
     fn counter_advances_on_tick() {

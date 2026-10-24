@@ -8,6 +8,8 @@ Reg match = verifiable cold-reset registers reproduced. "Excluded" = registers a
 |------|-------|--------|-------------|------------------------|----------|---------------|
 | esp32c3 | **L2** | ✓ | 40 | 380/402 (94%) | 190 | firmware_survival::test_esp32c3_demo_survival |
 | esp32c6 | **L1** | ✓ | 16 | — | — | firmware_survival::test_esp32c6_demo_survival |
+| litex-vexriscv | **L1** | ✓ | 5 | — | — | firmware_survival::test_litex_vexriscv_smoke_survival |
+| vegaboard-ri5cy | **L1** | ✓ | 9 | — | — | firmware_survival::test_vegaboard_ri5cy_smoke_survival |
 | nrf54l15 | **L1** | ✓ | 29 | — | — | firmware_survival::test_nrf54l15_zephyr_survival |
 | atsamd21g18a | **L1** | ✓ | 15 | — | — | atsamd21_peripheral_estate::the_estate_answers_at_its_own_addresses |
 | nrf54lm20a | **L1** | ✓ | 31 | — | — | nrf54lm20a_peripheral_estate::the_estate_answers_at_its_own_addresses |
@@ -41,6 +43,7 @@ Reg match = verifiable cold-reset registers reproduced. "Excluded" = registers a
 | mkw41z4 | **L1** | ✓ | 20 | — | — | firmware_survival::test_kw41z_smoke_survival |
 | efr32mg26 | **L2** | ✓ | 34 | 243/243 (100%) | 1 | efr32_deck_behavior::the_deck_firmware_drives_every_part |
 | atmega328p | **L1** | ✓ | 7 | — | — | avr_nano_golden_survival::arduino_nano_golden_prints_and_blinks |
+| atmega2560 | **L1** | ✓ | 15 | — | — | avr_mega2560_io::each_led_lands_on_its_mega_port_pin |
 | atsamd21 | **L1** | ✓ | 7 | — | — | firmware_survival::test_atsamd21_nano33_smoke_survival |
 | atsamd51 | **L1** | ✓ | 9 | — | — | firmware_survival::test_atsamd51_metro_m4_smoke_survival |
 | atsamd51-pybadge | **L0** | ✓ | 10 | — | — | — |
@@ -49,6 +52,7 @@ Reg match = verifiable cold-reset registers reproduced. "Excluded" = registers a
 | stm32f746 | **L1** | ✓ | 17 | — | — | firmware_survival::test_stm32f746_discovery_smoke_survival |
 | stm32g071 | **L1** | ✓ | 41 | — | — | firmware_survival::test_nucleo_g071rb_smoke_survival |
 | dspic33fj32mc204 | **L1** | ✓ | 3 | — | — | pic24_m0_smoke::pic24_fixture_boots_and_writes_h_to_uart |
+| dspic33fj32mc202 | **L1** | ✓ | 0 | — | — | pic24_xc16_202_smoke::xc16_202_firmware_boots_and_writes_hi_to_uart |
 
 ## Declared platforms without a model
 

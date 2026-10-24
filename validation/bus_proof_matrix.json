@@ -23,6 +23,46 @@
         "lane": "none"
       }
     },
+    "dspic33fj32mc202": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/pic24_xc16_202_smoke.rs",
+        "test": "xc16_202_firmware_boots_and_writes_hi_to_uart",
+        "signal": "the committed XC16 ELF boots on the 28-pin descriptor and writes 'HI' through U1TXREG (0x0224); examples/dspic33fj32mc202/io-smoke.yaml asserts the UART output under `labwired test`",
+        "lane": "pr-workspace-tests shards - cargo test -p labwired-core --test pic24_xc16_202_smoke; core-coverage-matrix-smoke dspic33fj32mc202-uart"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "PIC24 M0 does not model SPI; it lands in M3 per docs/pic24-m0-reference.md.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "PIC24 M0 does not model I2C; it lands in M3 per docs/pic24-m0-reference.md.",
+        "lane": "none"
+      }
+    },
+    "atmega2560": {
+      "in_boards": true,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/avr_mega2560_io.rs",
+        "test": "serial_banner_comes_out_of_usart0",
+        "signal": "the committed arduino-cli Mega ELF (tests/fixtures/avr/arduino-mega-2560-io.elf) prints `MEGA READY` through USART0 UDR0 and the test asserts the console sink receives it; examples/arduino-mega-2560-io/io-smoke.yaml asserts the `k=1 a8=512 a9=512 a0=512 ms=200 f=6` line under `labwired test`",
+        "lane": "pr-workspace-tests shards - cargo test -p labwired-core --test avr_mega2560_io; configs/ci/boards.yml arduino-mega-2560-io (sim-validate, gate)"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "No SPI controller model on the ATmega2560 (same AVR P0 model as the 328P).",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "No TWI model on the ATmega2560 (same AVR P0 model as the 328P).",
+        "lane": "none"
+      }
+    },
     "atmega328p": {
       "in_boards": true,
       "uart": {
@@ -804,7 +844,7 @@
         "state": "proven",
         "file": "crates/core/tests/strict_onboarding.rs",
         "test": "test_strict_board_onboarding",
-        "signal": "firmware-samd21-demo brings SERCOM0 up the way a driver does \u2014 NVMCTRL wait states, the SYSCTRL.PCLKSR ready-flag poll, three GCLK SYNCBUSY spins, PM.APBCMASK, a WRCONFIG pad mux, then CTRLB before CTRLA.ENABLE \u2014 and its bytes reach the capture sink through the DRE poll. Two separate lines are asserted, so a model that sets DRE once and forgets fails: it emits one byte and then spins in putc forever.",
+        "signal": "firmware-samd21-demo brings SERCOM0 up the way a driver does — NVMCTRL wait states, the SYSCTRL.PCLKSR ready-flag poll, three GCLK SYNCBUSY spins, PM.APBCMASK, a WRCONFIG pad mux, then CTRLB before CTRLA.ENABLE — and its bytes reach the capture sink through the DRE poll. Two separate lines are asserted, so a model that sets DRE once and forgets fails: it emits one byte and then spins in putc forever.",
         "lane": "core-ci: cargo test -p labwired-core --test strict_onboarding (the gate EXECUTES examples/samd21-smoke/io-smoke.yaml through the CLI and fails the board if any assertion fails)"
       },
       "spi": {
@@ -980,6 +1020,46 @@
       "i2c": {
         "state": "none",
         "gap": "The descriptor declares i2c0 (SPI0/TWI0 mux) and twi1 (shared nRF52 TWIM model), but no firmware or harness on this chip drives I2C.",
+        "lane": "none"
+      }
+    },
+    "litex-vexriscv": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_litex_vexriscv_smoke_survival",
+        "signal": "committed ELF fixture tests/fixtures/litex-vexriscv-smoke.elf booted in-sim; the survival gate asserts 'LITEX VEXRISCV SMOKE\\n' on the LiteX UART TX sink. Fixture absence is a hard assert!, not a skip.",
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "The LiteX SPI-flash controller is a declared `type: stub` (docs/boards/litex-vexriscv.md).",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "No I2C controller is modelled on the LiteX VexRiscv SoC.",
+        "lane": "none"
+      }
+    },
+    "vegaboard-ri5cy": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_vegaboard_ri5cy_smoke_survival",
+        "signal": "committed ELF fixture tests/fixtures/vegaboard-ri5cy-smoke.elf booted in-sim; the survival gate asserts 'VEGABOARD RI5CY SMOKE\\n' on the LPUART0 TX sink. Fixture absence is a hard assert!, not a skip.",
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "No SPI controller is modelled on the Vega board's SoC.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "No I2C controller is modelled on the Vega board's SoC.",
         "lane": "none"
       }
     }

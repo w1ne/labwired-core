@@ -1,6 +1,10 @@
 [
   {
     "buses": [],
+    "name": "atmega2560"
+  },
+  {
+    "buses": [],
     "name": "atmega328p"
   },
   {
@@ -18,6 +22,10 @@
   {
     "buses": [],
     "name": "atsamd51-pybadge"
+  },
+  {
+    "buses": [],
+    "name": "dspic33fj32mc202"
   },
   {
     "buses": [],
@@ -64,6 +72,10 @@
   {
     "buses": [],
     "name": "imxrt1064"
+  },
+  {
+    "buses": [],
+    "name": "litex-vexriscv"
   },
   {
     "buses": [],
@@ -276,5 +288,9 @@
       "UART"
     ],
     "name": "stm32wba52"
+  },
+  {
+    "buses": [],
+    "name": "vegaboard-ri5cy"
   }
 ]

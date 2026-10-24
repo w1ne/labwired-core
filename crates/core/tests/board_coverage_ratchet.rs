@@ -481,6 +481,13 @@ fn every_shipped_descriptor_is_ratcheted() {
     // Chip descriptors that exist in configs/chips but are NOT in the canonical
     // shipped catalog (bundled-configs.ts). They are intentionally not ratcheted.
     const NOT_SHIPPED: &[&str] = &[
+        // ATmega2560 (Arduino Mega 2560) on the 328P AVR model. Has a chip
+        // descriptor, a system manifest, a gated sim-validate example with an
+        // io-smoke and the avr_mega2560_io integration tests. It is not a
+        // bundled-configs.ts catalog board yet (the superproject board is a
+        // separate PR) and it has no executing-fidelity differential of its own.
+        // Promote when the catalog board lands AND a differential exists.
+        "atmega2560",
         // First Microchip part in the engine. Has a chip descriptor, an
         // io-smoke executed by the coverage matrix and the strict-onboarding
         // gate, and a peripheral-estate test — but it is NOT a
@@ -498,6 +505,22 @@ fn every_shipped_descriptor_is_ratcheted() {
         // tests — but not a bundled-configs.ts catalog board and no silicon
         // oracle. Promote when peripheral milestones land.
         "dspic33fj32mc204",
+        // 28-pin sibling of dspic33fj32mc204, M0 bring-up on the shared
+        // PIC24 core. Same rationale: no bundled-configs.ts board and no
+        // silicon oracle yet.
+        "dspic33fj32mc202",
+        // First RISC-V soft-core SoC in the engine (LiteX VexRiscv, RV32IM).
+        // Has a chip descriptor, a system manifest, an example with an
+        // io-smoke, a committed smoke fixture and a firmware-survival gate —
+        // but not a bundled-configs.ts catalog board, no silicon capture (no
+        // bench bitstream diff), and no executing-fidelity differential of
+        // its own. Promote when the browser board lands AND a differential
+        // exists.
+        "litex-vexriscv",
+        // Vega board (RI5CY): chip + system + example with an io-smoke, a
+        // committed fixture and a survival gate; no catalog board, no silicon
+        // capture and no executing-fidelity differential.
+        "vegaboard-ri5cy",
         // Descriptor-level derivative of the F401 lane (shared F4 profiles,
         // DEV_ID 0x413), smoke-validated via the feather-f405 example only:
         // no catalog board, no silicon oracle, no executing-fidelity

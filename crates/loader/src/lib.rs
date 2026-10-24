@@ -94,9 +94,21 @@ pub fn load_elf_bytes(buffer: &[u8]) -> Result<ProgramImage> {
             labwired_core::Arch::Unknown
         });
 
+    if arch == labwired_core::Arch::Pic24 {
+        labwired_core::cpu::pic24::check_xc16_entry(elf.entry).map_err(|e| anyhow!(e))?;
+    }
     let mut program_image = ProgramImage::new(elf.entry, arch);
 
-    for ph in elf.program_headers {
+    if arch == labwired_core::Arch::Pic24 {
+        // XC16 executable sections are already in the CPU's 4-byte slot form
+        // and their addresses are PC units; load them from the section table
+        // (program headers can span several non-contiguous sections). Shared
+        // with the core parser.
+        labwired_core::system::node::parse_pic24_sections(&elf, buffer, &mut program_image)?;
+        return Ok(program_image);
+    }
+
+    for ph in &elf.program_headers {
         if ph.p_type == PT_LOAD {
             // We only care about loadable segments
             let size = ph.p_filesz as usize;
@@ -106,7 +118,18 @@ pub fn load_elf_bytes(buffer: &[u8]) -> Result<ProgramImage> {
                 continue;
             }
 
-            if offset + size > buffer.len() {
+            if ph.p_filesz > ph.p_memsz {
+                return Err(anyhow!(
+                    "ELF segment at {:#x} has p_filesz {:#x} > p_memsz {:#x}",
+                    ph.p_paddr,
+                    ph.p_filesz,
+                    ph.p_memsz
+                ));
+            }
+            if offset
+                .checked_add(size)
+                .is_none_or(|end| end > buffer.len())
+            {
                 return Err(anyhow!("Segment out of bounds in ELF file"));
             }
 
@@ -134,7 +157,8 @@ pub fn load_elf_bytes(buffer: &[u8]) -> Result<ProgramImage> {
                     labwired_core::cpu::avr::AvrLoadSpace::Data
                     | labwired_core::cpu::avr::AvrLoadSpace::Eeprom => {
                         // Flash LMA holds the initializer image (for LPM / __do_copy_data).
-                        if ph.p_paddr < 0x8000 {
+                        // Below 256 KB: the largest modelled AVR flash (ATmega2560).
+                        if ph.p_paddr < 0x4_0000 {
                             debug!("AVR data LMA flash {:#x} size {}", ph.p_paddr, size);
                             program_image.add_segment(ph.p_paddr, segment_data.clone());
                         }
@@ -150,30 +174,7 @@ pub fn load_elf_bytes(buffer: &[u8]) -> Result<ProgramImage> {
                     "Found Loadable Segment: Addr={:#x}, Size={} bytes, Offset={:#x}",
                     start_addr, size, offset
                 );
-                if arch == labwired_core::Arch::Pic24 {
-                    use goblin::elf::program_header::PF_X;
-                    if ph.p_flags & PF_X == 0 {
-                        // Read-only program-space data (PSV/table reads) is
-                        // not modelled; skipping beats misreading it as code.
-                        debug!(
-                            "PIC24: skipping non-executable segment {:#x} ({} bytes)",
-                            ph.p_paddr, size
-                        );
-                        continue;
-                    }
-                    let slots = labwired_core::cpu::pic24::xc16_executable_slots(&segment_data)
-                        .ok_or_else(|| {
-                            anyhow!(
-                                "PIC24 executable segment at {:#x} is not XC16 3-byte \
-                                 packed ({} bytes)",
-                                ph.p_paddr,
-                                size
-                            )
-                        })?;
-                    program_image.add_segment(start_addr, slots);
-                } else {
-                    program_image.add_segment(start_addr, segment_data);
-                }
+                program_image.add_segment(start_addr, segment_data);
             }
         }
     }
@@ -933,6 +934,77 @@ fn joined_file_path<R: gimli::Reader>(
 
 #[cfg(test)]
 mod tests {
+    /// A minimal little-endian ELF32 for EM_DSPIC30F (118) with one
+    /// executable section per entry, in the XC16 4-byte slot form.
+    fn pic24_elf(entry: u32, sections: &[(u32, Vec<u8>)]) -> Vec<u8> {
+        let shstr = b"\x00.text\x00.shstrtab\x00";
+        let n = sections.len() as u16;
+        let mut data_off = 52u32;
+        let mut sec_off = Vec::new();
+        for (_, bytes) in sections {
+            sec_off.push(data_off);
+            data_off += bytes.len() as u32;
+        }
+        let shstr_off = data_off;
+        data_off += shstr.len() as u32;
+        let shoff = data_off;
+
+        let mut out = vec![0x7f, b'E', b'L', b'F', 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        out.extend_from_slice(&2u16.to_le_bytes()); // ET_EXEC
+        out.extend_from_slice(&118u16.to_le_bytes()); // EM_DSPIC30F
+        out.extend_from_slice(&1u32.to_le_bytes());
+        out.extend_from_slice(&entry.to_le_bytes());
+        out.extend_from_slice(&0u32.to_le_bytes()); // e_phoff
+        out.extend_from_slice(&shoff.to_le_bytes());
+        out.extend_from_slice(&0u32.to_le_bytes()); // e_flags
+        for half in [52u16, 0, 0, 40, n + 2, n + 1] {
+            out.extend_from_slice(&half.to_le_bytes());
+        }
+        for (_, bytes) in sections {
+            out.extend_from_slice(bytes);
+        }
+        out.extend_from_slice(shstr);
+        let sh =
+            |out: &mut Vec<u8>, name: u32, typ: u32, flags: u32, addr: u32, off: u32, size: u32| {
+                for w in [name, typ, flags, addr, off, size, 0u32, 0, 2, 0] {
+                    out.extend_from_slice(&w.to_le_bytes());
+                }
+            };
+        sh(&mut out, 0, 0, 0, 0, 0, 0);
+        for (i, (addr, bytes)) in sections.iter().enumerate() {
+            sh(&mut out, 1, 1, 0x6, *addr, sec_off[i], bytes.len() as u32);
+        }
+        sh(&mut out, 8, 3, 0, 0, shstr_off, shstr.len() as u32);
+        out
+    }
+
+    #[test]
+    fn load_elf_bytes_rejects_malformed_xc16_elves() {
+        let end = labwired_core::cpu::pic24::PROGRAM_PC_END;
+        let code = vec![0u8; 8]; // two 4-byte slots
+        assert!(load_elf_bytes(&pic24_elf(0x200, &[(0x200, code.clone())])).is_ok());
+        let odd_entry = load_elf_bytes(&pic24_elf(0x201, &[(0x200, code.clone())])).unwrap_err();
+        assert!(odd_entry.to_string().contains("entry point"), "{odd_entry}");
+        let odd_section = load_elf_bytes(&pic24_elf(0x200, &[(0x201, code.clone())])).unwrap_err();
+        assert!(odd_section.to_string().contains("is odd"), "{odd_section}");
+        for entry in [end, end + 0x100] {
+            let far = load_elf_bytes(&pic24_elf(entry, &[(0x200, code.clone())])).unwrap_err();
+            assert!(far.to_string().contains("entry point"), "{far}");
+        }
+        let beyond = load_elf_bytes(&pic24_elf(0x200, &[(end + 0x100, code.clone())])).unwrap_err();
+        assert!(
+            beyond.to_string().contains("does not fit program flash"),
+            "{beyond}"
+        );
+        let bad = load_elf_bytes(&pic24_elf(0x200, &[(0x200, vec![0u8; 6])])).unwrap_err();
+        assert!(bad.to_string().contains("not a whole number"), "{bad}");
+        let past = load_elf_bytes(&pic24_elf(0x200, &[(end - 2, code)])).unwrap_err();
+        assert!(
+            past.to_string().contains("does not fit program flash"),
+            "{past}"
+        );
+    }
+
     use super::*;
 
     #[test]

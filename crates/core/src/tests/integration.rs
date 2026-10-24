@@ -571,6 +571,18 @@ pub mod integration_tests {
             crate::bus::SystemBus::canonical_peripheral_type("litex_uart"),
             "uart"
         );
+        // The Mi-V models must resolve verbatim: the fuzzy fallback would
+        // otherwise coerce `miv_coregpio` onto the STM32 GPIO map and
+        // `miv_coretimer` onto the STM32 timer map — silently wrong models
+        // for the staged descriptors.
+        assert_eq!(
+            crate::bus::SystemBus::canonical_peripheral_type("miv_coregpio"),
+            "miv_coregpio"
+        );
+        assert_eq!(
+            crate::bus::SystemBus::canonical_peripheral_type("miv_coretimer"),
+            "miv_coretimer"
+        );
         assert_eq!(
             crate::bus::SystemBus::canonical_peripheral_type("stm32f1gpioport"),
             "gpio"

@@ -15,7 +15,6 @@
 
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
-use labwired_core::cpu::riscv::RiscV;
 use labwired_core::system::cortex_m::configure_cortex_m;
 use labwired_core::trace::TraceObserver;
 use labwired_core::{Cpu, Machine};
@@ -293,6 +292,21 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output: b"NRF52840_SMOKE_OK\n",
     },
     SurvivalCase {
+        // Arduino Nano 33 BLE (ABX00030): nRF52840, 1 MiB flash at 0x0, 256 KiB
+        // RAM at 0x20000000. UARTE0 (EasyDMA) is the board's D0/D1 `Serial1`;
+        // the RGB LED is active low, so the smoke prints the GPIO0 OUT readback
+        // to pin the red/green/blue channel mapping. SIM-DERIVED.
+        name: "arduino_nano_33_ble_smoke",
+        core: "cortex-m4",
+        family: CpuFamily::CortexM,
+        hal: Hal::Bare,
+        chip: "nrf52840",
+        system: "arduino-nano-33-ble",
+        fixture: "arduino-nano-33-ble-smoke.elf",
+        valid_pc_ranges: &[(0x0000_0000, 0x000F_FFFF), (0x2000_0000, 0x2003_FFFF)],
+        expected_uart_output: b"ARDUINO NANO 33 BLE SMOKE\n",
+    },
+    SurvivalCase {
         // Plain Arduino sketch built with the Adafruit nRF52 core (board
         // `nrf52840_dk`). Serial.println drives the legacy UART personality of
         // UART0/UARTE0 (ENABLE=4): it writes each byte to TXD (0x51C) and spins
@@ -557,6 +571,37 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         fixture: "esp32c6-demo.elf",
         valid_pc_ranges: &[(0x4200_0000, 0x42FF_FFFF), (0x4080_0000, 0x4087_FFFF)],
         expected_uart_output: b"OK\n",
+    },
+    SurvivalCase {
+        // LiteX VexRiscv SoC (RV32IM — no compressed, no atomics): the smoke
+        // links into the SoC's integrated SRAM (0x10000000) and prints over
+        // the LiteX UART at 0x60001800. The chip descriptor declares a generic
+        // `rv32` core, so the run selects the standard RV32 profile rather
+        // than the ESP32-C3's vendor CSR set. SIM-DERIVED — no silicon diff.
+        name: "litex_vexriscv_smoke",
+        core: "rv32im",
+        family: CpuFamily::RiscV,
+        hal: Hal::Bare,
+        chip: "litex-vexriscv",
+        system: "litex-vexriscv",
+        fixture: "litex-vexriscv-smoke.elf",
+        valid_pc_ranges: &[(0x1000_0000, 0x1003_FFFF)],
+        expected_uart_output: b"LITEX VEXRISCV SMOKE\n",
+    },
+    SurvivalCase {
+        // Vega board (RI5CY, RV32IMC): 1 MiB flash at 0x0, 192 KiB SRAM at
+        // 0x20000000, LPUART0 at 0x40042000. The smoke boots from flash and
+        // prints over the LPUART; SCG/PCC/INTMUX/LPTMR remain declared stubs.
+        // SIM-DERIVED.
+        name: "vegaboard_ri5cy_smoke",
+        core: "rv32imc",
+        family: CpuFamily::RiscV,
+        hal: Hal::Bare,
+        chip: "vegaboard-ri5cy",
+        system: "vegaboard-ri5cy",
+        fixture: "vegaboard-ri5cy-smoke.elf",
+        valid_pc_ranges: &[(0x0000_0000, 0x000F_FFFF), (0x2000_0000, 0x2002_FFFF)],
+        expected_uart_output: b"VEGABOARD RI5CY SMOKE\n",
     },
     SurvivalCase {
         // Hardware-validated against real NUCLEO-L476RG silicon: the
@@ -1669,13 +1714,14 @@ fn run_survival_case(case: &SurvivalCase) {
 }
 
 /// Per-case cycle budget. Most firmwares emit their banner within the default
-/// window; the RP2040 Arduino Mbed-OS sketch prints over **USB CDC**, and its
-/// `loop()` only sends once per `delay(200)` — so it needs a wider window for a
-/// loop iteration to land after the simulated host finishes USB enumeration and
-/// asserts CDC DTR.
+/// window. The RP2040 Arduino ELF first calls `busy_wait_us(100_000)` from
+/// `_GLOBAL__sub_I.00101_dt`, before `main`: at its declared 125 MHz clock that
+/// constructor alone needs 12.5M cycles. Allow 500 ms for that boot delay,
+/// peripheral/USB setup and the sketch's 200 ms loop delay. The old 2M-cycle
+/// window covered only 16 ms once TIMER runs at its correct 1 MHz rate.
 fn case_cycles(case: &SurvivalCase) -> u32 {
     if case.name == "rp2040_arduino_serial" {
-        2_000_000
+        125_000_000 / 2
     } else {
         SURVIVAL_CYCLES
     }
@@ -1891,7 +1937,12 @@ fn run_riscv_firmware(
         SystemBus::from_config(&chip, &manifest).expect("Failed to build SystemBus from config");
     let uart_sink = Arc::new(Mutex::new(Vec::new()));
     bus.attach_uart_tx_sink(uart_sink.clone(), false);
-    let mut machine = Machine::new(RiscV::new(), bus);
+    // The chip descriptor selects the RISC-V core profile (name + `core:`),
+    // through the same one resolution the CLI, browser and debugger paths
+    // use — a generic `rv32*` chip must not silently run the ESP32-C3's
+    // vendor CSR set.
+    let cpu = labwired_core::system::riscv::configure_riscv(&mut bus);
+    let mut machine = Machine::new(cpu, bus);
     let trace = Arc::new(TraceObserver::new(5000));
     machine.add_observer(trace.clone());
 
@@ -2000,14 +2051,18 @@ survival_gate!(
     /// enumerates the device and asserts DTR, then captures the sketch's bulk-IN
     /// bytes into the UART sink.
     ///
-    /// Uses a wider cycle budget (see `case_cycles`) because the sketch's `loop()`
-    /// only transmits once per `delay(200)`, so a loop iteration must land after the
-    /// simulated host finishes enumeration.
+    /// Uses a wider cycle budget (see `case_cycles`) for the ELF's 100 ms global
+    /// constructor delay before `main`, peripheral/USB setup and 200 ms loop delay.
     test_rp2040_arduino_serial_survival,
     "rp2040_arduino_serial"
 );
 
 survival_gate!(test_nrf52840_demo_survival, "nrf52840_demo");
+
+survival_gate!(
+    test_arduino_nano_33_ble_smoke_survival,
+    "arduino_nano_33_ble_smoke"
+);
 
 survival_gate!(
     test_nrf52840_arduino_serial_survival,
@@ -2454,6 +2509,10 @@ survival_gate!(test_riscv_ci_fixture_survival, "riscv_ci_fixture");
 survival_gate!(test_esp32c3_demo_survival, "esp32c3_demo");
 
 survival_gate!(test_esp32c6_demo_survival, "esp32c6_demo");
+
+survival_gate!(test_litex_vexriscv_smoke_survival, "litex_vexriscv_smoke");
+
+survival_gate!(test_vegaboard_ri5cy_smoke_survival, "vegaboard_ri5cy_smoke");
 
 survival_gate!(test_nucleo_l476rg_smoke_survival, "nucleo_l476rg_smoke");
 
