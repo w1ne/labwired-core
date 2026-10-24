@@ -1,0 +1,9 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+#
+# dsPIC33FJ32MC202 demo system — M0: boot + UART1 TX (CPU-internal).
+name: "dspic33fj32mc202-demo"
+chip: "../../configs/chips/dspic33fj32mc202.yaml"
