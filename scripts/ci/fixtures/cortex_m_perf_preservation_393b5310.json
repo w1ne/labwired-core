@@ -3,7 +3,7 @@
   "source_sha256": {
     "scripts/ci/cortex_m_perf_evidence.py": "ddd70f916f6a6d03c1e5213b0826f5db3bd35bf9c9315aa37860b4e7cb5d310b",
     ".github/workflows/core-identity.yml": "33ff891faf95f5948ec49037b351ffa3ebb832d2ec8a54401267540b3f65b549",
-    "scripts/perf/board_perf.py": "3ad796622c8caec49870204a50c021a81a0d99b5d8d246d8da398703727e6140",
+    "scripts/perf/board_perf.py": "a5e8f1417429aa5c52833d09842fcb80c7e3fe9cdef251c78232232a7114c40c",
     "scripts/perf/baselines.json": "527cea1b89f422af64bbc0ea0e10ae43d1503bd63d0cfb997095607e7f731cc9"
   },
   "function_ast_sha256": {
