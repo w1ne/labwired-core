@@ -2822,11 +2822,11 @@ impl Pic24 {
                             }
                             if self.i2c_op.is_none() {
                                 let request = if val & I2C1CON_SEN != 0 {
-                                    Some((I2cOp::Start, I2C1CON_SEN, 2))
+                                    Some((I2cOp::Start, I2C1CON_SEN, 1))
                                 } else if val & I2C1CON_RSEN != 0 {
-                                    Some((I2cOp::RepeatedStart, I2C1CON_RSEN, 2))
+                                    Some((I2cOp::RepeatedStart, I2C1CON_RSEN, 1))
                                 } else if val & I2C1CON_PEN != 0 {
-                                    Some((I2cOp::Stop, I2C1CON_PEN, 2))
+                                    Some((I2cOp::Stop, I2C1CON_PEN, 1))
                                 } else if val & I2C1CON_RCEN != 0 {
                                     Some((I2cOp::Receive, I2C1CON_RCEN, 9))
                                 } else if val & I2C1CON_ACKEN != 0 {
@@ -4441,7 +4441,7 @@ impl Pic24 {
         self.i2c_target = self.i2c_devices.iter().position(|d| d.claims_address(addr));
         self.i2c_addressed = true;
         self.i2c_reading = read;
-        self.i2c1stat &= !(I2C1STAT_ACKSTAT | I2C1STAT_DA);
+        self.i2c1stat &= !(I2C1STAT_ACKSTAT | I2C1STAT_DA | I2C1STAT_ADD10);
         if read {
             self.i2c1stat |= I2C1STAT_RW;
         } else {
@@ -4465,8 +4465,8 @@ impl Pic24 {
                 self.i2c_addressed = true;
                 self.i2c_target = None;
                 self.i2c_reading = false;
-                self.i2c1stat &= !(I2C1STAT_ACKSTAT | I2C1STAT_DA);
-                self.i2c1stat |= I2C1STAT_ACKSTAT | I2C1STAT_ADD10;
+                self.i2c1stat &= !(I2C1STAT_ACKSTAT | I2C1STAT_DA | I2C1STAT_ADD10);
+                self.i2c1stat |= I2C1STAT_ACKSTAT;
             } else if byte & 0xF8 == 0xF0 {
                 // 10-bit address prefix (11110 A9 A8 R/W).
                 self.i2c_10bit_prefix = Some(u16::from(byte));
@@ -4599,7 +4599,7 @@ impl Pic24 {
 
     /// Test seam: an external master issues a stop.
     pub fn i2c_slave_stop(&mut self) {
-        self.i2c1stat = (self.i2c1stat & !I2C1STAT_S) | I2C1STAT_P;
+        self.i2c1stat = (self.i2c1stat & !(I2C1STAT_S | I2C1STAT_ADD10)) | I2C1STAT_P;
         self.ifs1 |= 1 << IRQ_SI2C1.0;
     }
 
@@ -7750,7 +7750,29 @@ mod tests {
         i2c_finish(&mut cpu);
         let stat = cpu.data_read(SFR_I2C1STAT).unwrap();
         assert_ne!(stat & I2C1STAT_ACKSTAT, 0, "10-bit address must NACK");
-        assert_ne!(stat & I2C1STAT_ADD10, 0);
+        // ADD10 reports a matched 10-bit address (Register 18-2); the
+        // 7-bit I2cDevice contract has no 10-bit match, so it stays clear.
+        assert_eq!(stat & I2C1STAT_ADD10, 0);
+    }
+
+    #[test]
+    fn i2c_slave_ten_bit_match_sets_add10_and_stop_clears_it() {
+        let mut cpu = cpu_with(&[0x0000_0000; 4]);
+        cpu.data_write(SFR_I2C1ADD, 0x0123).unwrap();
+        cpu.data_write(SFR_I2C1CON, I2C1CON_I2CEN | I2C1CON_A10M)
+            .unwrap();
+        assert!(cpu.i2c_slave_address(0x0123, false));
+        assert_ne!(
+            cpu.data_read(SFR_I2C1STAT).unwrap() & I2C1STAT_ADD10,
+            0,
+            "a matched 10-bit address sets ADD10"
+        );
+        cpu.i2c_slave_stop();
+        assert_eq!(
+            cpu.data_read(SFR_I2C1STAT).unwrap() & I2C1STAT_ADD10,
+            0,
+            "Stop clears ADD10 (Register 18-2)"
+        );
     }
 
     #[test]

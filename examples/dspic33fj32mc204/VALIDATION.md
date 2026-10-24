@@ -275,10 +275,12 @@ cargo run -q -p labwired-cli -- test \
 #   PASS  2/2 checks · io-smoke · 64 steps
 ```
 
-The M3 firmware checks: `ADC1BUF0 = 0x2AA` for injected AN4, the SPI1
-loopback byte `0xA5`, the TMP102 temperature bytes `0x19`/`0x00` (25.0 °C),
-no failure code, `"M3 OK\n"` on UART1 and the programmed register image
-(`ADON`, `AD1PCFGL = 0x01EF`, `CH0SA = 4`, `SPI1CON1 = 0x013F`, `SPIEN`).
+The M3 firmware checks the SPI1 loopback byte (`0xA5`) and the TMP102
+temperature bytes (`0x19`/`0x00`, 25.0 °C) at runtime and prints `M3 FAIL`
+otherwise. The integration test separately checks `ADC1BUF0 = 0x2AA` for
+injected AN4, no failure code, `"M3 OK\n"` on UART1 and the programmed
+register image (`ADON`, `AD1PCFGL = 0x01EF`, `CH0SA = 4`,
+`SPI1CON1 = 0x0137`, `SPIEN`).
 The devices are attached from `examples/dspic33fj32mc204/system-m3.yaml`
 (`tmp102` on `i2c1`, `loopback` on `spi1`) through the same factory calls
 the session builder uses. The base `system.yaml` deliberately has no
@@ -286,7 +288,9 @@ external devices: it is the CLI `test` path's manifest (the generic bus has
 no PIC24 I2C/SPI controllers). A second test,
 `example_system_builder_attaches_the_m3_devices`, runs the whole session
 path (`build_machine` from the example system) and checks the same UART
-message, so the manifest attach code is covered end to end.
+message. It also removes both devices, then the SPI loopback alone and the
+TMP102 alone, and requires `M3 FAIL` in each case, so neither attach can
+regress silently.
 
 The unit tests additionally cover all four FORM formats in 10/12-bit modes,
 ASAM/SSRC = 111, ADON with ASAM = 0 (software SAMP), the TMR3 and PWM1
