@@ -98,6 +98,8 @@ steps the model against the pins the firmware is actually driving:
 |------|-----------|------|------------|
 | `board.gpio.<pad>` | machine → model | bool | The level the firmware is driving on an output pad. |
 | `board.gpio_output.<pad>` | machine → model | bool | Whether the firmware has configured `<pad>` as a general-purpose output. |
+| `board.gpio_pad.<pad>` | machine → model | bool | The live level a logic probe clipped to `<pad>` sees: the GPIO latch for a plain output, the peripheral's wire for an alternate-function pad, the input register for an input. |
+| `board.gpio_driven.<pad>` | machine → model | bool | Whether the MCU's own output stage drives `<pad>`, through a GPIO output OR an alternate-function peripheral. False for an input, an analog pad, or a released open-drain line. |
 | `board.gpio_in.<pad>` | model → machine | bool or volts | An externally held level on an input pad (also readable). A number is volts, turned into a level with the chip's input thresholds. |
 | `board.analog.<pad>_volts` | model → machine | number | The analog level on the ADC channel belonging to `<pad>`. |
 | `adc.<peripheral>.<channel>_volts` | model → machine | number | The analog level on an explicitly named ADC channel. |
@@ -133,6 +135,15 @@ config:
     Sdrv_pa0 drv_pa0 v_rc ctl_pa0 ron=25 roff=1e12
   sources: { drv_pa0: Vdrv_pa0 }
 ```
+
+`board.gpio_output` and `board.gpio` describe a plain GPIO output. An
+alternate-function pad (SPI SCK, a timer PWM) is driven by the peripheral, not
+by the output latch, so a circuit that needs the pin's real waveform (an
+oscilloscope on an SPI clock) uses `board.gpio_pad.<pad>` as the source and
+`board.gpio_driven.<pad>` as the switch control. The latter is true for a GPIO
+output and for an AF output, and false for an input or a released open-drain
+line. `board.gpio_pad` reads the same live-pad truth the logic analyzer uses, so
+an AF pin follows the peripheral's wire instead of a flat latch.
 
 A pad whose GPIO model cannot report direction fails when the session is built
 with "the GPIO model that owns pad … does not report pin direction". It never
