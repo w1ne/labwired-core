@@ -492,6 +492,14 @@ const CHIPS: &[ChipConf] = &[
         reset_oracle: None,
         behavior_gate: Some("pic24_m0_smoke::pic24_fixture_boots_and_writes_h_to_uart"),
     },
+    ChipConf {
+        // 28-pin sibling of the 204, same datasheet/core/memory. The gate is
+        // a real XC16-built UART firmware, not the hand fixture.
+        name: "dspic33fj32mc202",
+        yaml: "configs/chips/dspic33fj32mc202.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("pic24_xc16_202_smoke::xc16_202_firmware_boots_and_writes_hi_to_uart"),
+    },
 ];
 
 /// Registers a cold-reset sim model can *never* reproduce from a `reset_halt`
