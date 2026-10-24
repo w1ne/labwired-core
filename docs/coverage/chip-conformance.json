@@ -320,5 +320,12 @@
     "level": 1,
     "name": "dspic33fj32mc204",
     "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "dspic33fj32mc202",
+    "reg_match": 0
   }
 ]

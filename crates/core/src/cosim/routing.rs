@@ -153,6 +153,8 @@ impl InputThresholds {
 /// |------|-----------|------|
 /// | `board.gpio.<pad>` | machine → model | `Bool` |
 /// | `board.gpio_output.<pad>` | machine → model | `Bool` |
+/// | `board.gpio_pad.<pad>` | machine → model | `Bool` |
+/// | `board.gpio_driven.<pad>` | machine → model | `Bool` |
 /// | `board.gpio_in.<pad>` | model → machine (also readable) | `Bool`, or `F64` volts |
 /// | `board.analog.<pad>_volts` | model → machine | `F64` |
 /// | `adc.<peripheral>.<channel>_volts` | model → machine | `F64` |
@@ -186,6 +188,19 @@ pub enum SignalPath {
     /// pad. A boolean is the level; a number is volts, turned into a level with
     /// the chip's [`InputThresholds`].
     GpioInput { pad: String },
+    /// `board.gpio_pad.<pad>` — the live level a logic probe clipped to the pad
+    /// sees: the GPIO latch for a plain output, the peripheral's wire for an
+    /// alternate-function pad, the input register for an input.
+    ///
+    /// Distinct from [`Self::GpioOutput`], which is the GPIO output latch and is
+    /// not what drives an AF pad. A circuit that needs the pin's real waveform
+    /// (an SPI clock on a scope) pairs this with [`Self::GpioDriven`].
+    GpioPad { pad: String },
+    /// `board.gpio_driven.<pad>` — whether the MCU's own output stage is driving
+    /// the pad, through a GPIO output OR an alternate-function peripheral. False
+    /// for an input, an analog pad, a released open-drain line, or a pad nothing
+    /// drives.
+    GpioDriven { pad: String },
     /// `board.analog.<pad>_volts` — the analog level on the ADC input the chip
     /// descriptor's `analog_pins:` assigns to `<pad>`.
     AnalogPad { pad: String },
@@ -208,6 +223,16 @@ impl SignalPath {
         }
         if let Some(pad) = path.strip_prefix("board.gpio_in.") {
             return (!pad.is_empty()).then(|| Self::GpioInput {
+                pad: pad.to_string(),
+            });
+        }
+        if let Some(pad) = path.strip_prefix("board.gpio_pad.") {
+            return (!pad.is_empty()).then(|| Self::GpioPad {
+                pad: pad.to_string(),
+            });
+        }
+        if let Some(pad) = path.strip_prefix("board.gpio_driven.") {
+            return (!pad.is_empty()).then(|| Self::GpioDriven {
                 pad: pad.to_string(),
             });
         }
@@ -247,7 +272,11 @@ impl SignalPath {
     pub fn is_readable(&self) -> bool {
         matches!(
             self,
-            Self::GpioOutput { .. } | Self::GpioDirection { .. } | Self::GpioInput { .. }
+            Self::GpioOutput { .. }
+                | Self::GpioDirection { .. }
+                | Self::GpioInput { .. }
+                | Self::GpioPad { .. }
+                | Self::GpioDriven { .. }
         )
     }
 
@@ -448,6 +477,13 @@ enum ReadBinding {
     Direction { peripheral: usize, pad: u8 },
     /// Owning peripheral index + bit, read through `Peripheral::read_gpio_input`.
     Input { peripheral: usize, bit: u8 },
+    /// Owning peripheral index + pad number, read through
+    /// `Peripheral::read_gpio_pad` (the live pin a probe sees).
+    PadLevel { peripheral: usize, pad: u8 },
+    /// Owning peripheral index + pad number; true when
+    /// `pins::own_drive` says the MCU's own output stage drives the pad (a GPIO
+    /// output or an alternate-function peripheral line).
+    Driven { peripheral: usize, pad: u8 },
 }
 
 /// A resolved store → machine sink.
@@ -589,6 +625,26 @@ impl SignalRouter {
                 let (peripheral, bit) = resolve_pad_owner_idr(bus, pad, path)?;
                 Ok(ReadBinding::Input { peripheral, bit })
             }
+            SignalPath::GpioPad { pad } => {
+                let (peripheral, pad_number) = resolve_pad_number(bus, pad, path)?;
+                Ok(ReadBinding::PadLevel {
+                    peripheral,
+                    pad: pad_number,
+                })
+            }
+            SignalPath::GpioDriven { pad } => {
+                let (peripheral, pad_number) = resolve_pad_number(bus, pad, path)?;
+                if bus.peripherals[peripheral].dev.pins().is_none() {
+                    return Err(RoutingError::NoDirection {
+                        path: path.to_string(),
+                        pad: pad.clone(),
+                    });
+                }
+                Ok(ReadBinding::Driven {
+                    peripheral,
+                    pad: pad_number,
+                })
+            }
             // `is_readable` already rejected the analog and supply forms.
             SignalPath::AnalogPad { .. }
             | SignalPath::AdcChannel { .. }
@@ -660,11 +716,12 @@ impl SignalRouter {
                 }
                 Ok(WriteBinding::SupplyVdd)
             }
-            SignalPath::GpioOutput { .. } | SignalPath::GpioDirection { .. } => {
-                Err(RoutingError::NotWritable {
-                    path: path.to_string(),
-                })
-            }
+            SignalPath::GpioOutput { .. }
+            | SignalPath::GpioDirection { .. }
+            | SignalPath::GpioPad { .. }
+            | SignalPath::GpioDriven { .. } => Err(RoutingError::NotWritable {
+                path: path.to_string(),
+            }),
         }
     }
 
@@ -707,6 +764,16 @@ impl SignalRouter {
                     .peripherals
                     .get(peripheral)
                     .and_then(|p| p.dev.read_gpio_is_output(pad)),
+                ReadBinding::PadLevel { peripheral, pad } => bus
+                    .peripherals
+                    .get(peripheral)
+                    .and_then(|p| p.dev.read_gpio_pad(pad)),
+                ReadBinding::Driven { peripheral, pad } => bus
+                    .peripherals
+                    .get(peripheral)
+                    .and_then(|p| p.dev.pins())
+                    .and_then(|port| crate::pins::own_drive(port, pad))
+                    .map(|drive| matches!(drive, crate::logic_capture::PadDrive::Driven)),
             };
             if let Some(level) = level {
                 signals.insert(path.clone(), CosimSignalValue::Bool(level));
@@ -889,6 +956,24 @@ fn signal_as_f64(value: &CosimSignalValue) -> Option<f64> {
         // it means.
         CosimSignalValue::Bool(_) | CosimSignalValue::Text(_) => None,
     }
+}
+
+/// Resolve a pad label to `(owning peripheral index, pad number)`, the shape
+/// the live-pad probe and own-drive queries take.
+fn resolve_pad_number(bus: &SystemBus, pad: &str, path: &str) -> Result<(usize, u8), RoutingError> {
+    let (addr, bit) =
+        SystemBus::resolve_pin_idr(bus, pad).ok_or_else(|| RoutingError::UnknownPad {
+            path: path.to_string(),
+            pad: pad.to_string(),
+        })?;
+    let idx = bus
+        .find_peripheral_index(addr)
+        .ok_or_else(|| RoutingError::UnknownGpio {
+            path: path.to_string(),
+            pad: pad.to_string(),
+        })?;
+    let owner = &bus.peripherals[idx];
+    Ok((idx, pad_number(owner.dev.as_ref(), addr - owner.base, bit)))
 }
 
 /// Resolve a pad label to `(owning peripheral index, bit)` through its OUTPUT
@@ -1507,6 +1592,18 @@ mod tests {
             SignalPath::parse("board.gpio_in.pc13"),
             Some(SignalPath::GpioInput {
                 pad: "pc13".to_string()
+            })
+        );
+        assert_eq!(
+            SignalPath::parse("board.gpio_pad.pa5"),
+            Some(SignalPath::GpioPad {
+                pad: "pa5".to_string()
+            })
+        );
+        assert_eq!(
+            SignalPath::parse("board.gpio_driven.pa5"),
+            Some(SignalPath::GpioDriven {
+                pad: "pa5".to_string()
             })
         );
         assert_eq!(

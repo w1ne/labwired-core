@@ -505,6 +505,10 @@ fn every_shipped_descriptor_is_ratcheted() {
         // tests — but not a bundled-configs.ts catalog board and no silicon
         // oracle. Promote when peripheral milestones land.
         "dspic33fj32mc204",
+        // 28-pin sibling of dspic33fj32mc204, M0 bring-up on the shared
+        // PIC24 core. Same rationale: no bundled-configs.ts board and no
+        // silicon oracle yet.
+        "dspic33fj32mc202",
         // First RISC-V soft-core SoC in the engine (LiteX VexRiscv, RV32IM).
         // Has a chip descriptor, a system manifest, an example with an
         // io-smoke, a committed smoke fixture and a firmware-survival gate —
