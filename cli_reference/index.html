@@ -1,0 +1,5799 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="The labwired command-line interface is the primary entry point for running simulations, testing, debugging, and managing assets.">
+      
+      
+      
+        <link rel="canonical" href="https://docs.labwired.com/cli_reference/">
+      
+      
+        <link rel="prev" href="../declarative_registers/">
+      
+      
+        <link rel="next" href="../python-sdk/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>CLI Commands - LabWired docs</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    <meta property="og:type" content="website">
+  <meta property="og:site_name" content="LabWired docs">
+  <meta property="og:title" content="CLI Commands - LabWired docs">
+  <meta property="og:description" content="The labwired command-line interface is the primary entry point for running simulations, testing, debugging, and managing assets.">
+  <meta property="og:url" content="https://docs.labwired.com/cli_reference/">
+  <meta property="og:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="CLI Commands - LabWired docs">
+  <meta name="twitter:description" content="The labwired command-line interface is the primary entry point for running simulations, testing, debugging, and managing assets.">
+  <meta name="twitter:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
+
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#cli-reference" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="LabWired docs" class="md-header__button md-logo" aria-label="LabWired docs" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            LabWired docs
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              CLI Commands
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/w1ne/labwired-core" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    w1ne/labwired-core
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="LabWired docs" class="md-nav__button md-logo" aria-label="LabWired docs" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    LabWired docs
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/w1ne/labwired-core" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    w1ne/labwired-core
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../fidelity/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fidelity
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture Internals
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../golden_reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware-Sim Parity
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Agent
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agent/mcp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Connect MCP
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agent/tools/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tool reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agent/first-run/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    First agent run
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing (engine agents)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tutorials
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/playground/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Playground first run
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting_started_firmware/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Run firmware (CLI)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../examples/i2c_sensor_example/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    I2C sensor example (TMP102)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../examples/dma_exti_example/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DMA & Interrupts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../examples/integrated_test_walkthrough/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Integrated Test Walkthrough
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How-To Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How-To Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/onboard-hardware/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Onboard hardware
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/onboard-part/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Onboard a part (I2C/SPI/actuators)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../board_onboarding_playbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Board onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../target_support_rubric/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Target support levels
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/multi-node/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-node worlds
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/timed-uart-network/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Timed UART networks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/gpio-nets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GPIO nets between machines
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/segger-rtt/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SEGGER RTT logging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/firmware-coverage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Firmware coverage (lines, branches, CI)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ci_integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CI integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../peripherals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Peripheral modeling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hardware_interaction_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware Interaction Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../vscode_debugging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Debugging with VS Code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../gdb_integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GDB Integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../debugging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Debugging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../platformio_integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PlatformIO Integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cosimulation_plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Co-simulation Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../integration-templates/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CI Integration Templates
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7_20" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_20" id="__nav_7_20_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Extend LabWired
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_20_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_20">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Extend LabWired
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/extend/add-a-peripheral/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Add a peripheral block (YAML)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/extend/python-device/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Add an I2C sensor (data + Python)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/extend/add-a-board/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Add a board (chip + manifest)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/extend/hooks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hook surfaces (device, host, Rust)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration_reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration (YAML)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../declarative_registers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Declarative Registers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Commands
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#global-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Global Options
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#modes-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Modes &amp; Commands
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Modes &amp; Commands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#interactive-run-mode-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Interactive / Run Mode (Default)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Interactive / Run Mode (Default)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#-gdb-gdb-rsp-server" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --gdb — GDB RSP server
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        run
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="run">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#-log-timestamps-run-and-test" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --log-timestamps (run and test)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-bus-trace-out-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --bus-trace-out (run)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-stop-on-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --stop-on (run)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        test
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#coverage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        coverage
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="coverage">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#coverage-merge" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        coverage merge
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chips" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        chips
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#asset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        asset
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="asset">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#asset-import-svd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        asset import-svd
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#asset-codegen" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        asset codegen
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#asset-init" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        asset init
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#asset-add-peripheral" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        asset add-peripheral
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#asset-validate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        asset validate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#asset-list-chips" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        asset list-chips
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#asset-validate-component" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        asset validate-component
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#asset-ingest-svd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        asset ingest-svd
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#machine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        machine
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="machine">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#machine-load" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        machine load
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#snapshot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        snapshot
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="snapshot">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#snapshot-capture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        snapshot capture
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#debug-probe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        debug-probe
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fault-inject" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fault-inject
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fuzz" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fuzz
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier1-matrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tier1-matrix
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cosim-step" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        cosim-step
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rv1103-linux" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        rv1103-linux
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rv1103-basket" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        rv1103-basket
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#environment-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Environment Variables
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../python-sdk/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python SDK
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ci_test_runner/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test Script Schema
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference_client_flows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Client Flows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../isa_coverage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ISA Coverage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../schema_compatibility/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Schema Compatibility
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../catalog_validation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Catalog Validation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../target_support_rubric/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Target support levels
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Boards
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Boards
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/arduino-uno/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Arduino Uno R3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/esp32c3/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ESP32-C3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/esp32c6-devkitc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ESP32-C6
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/esp32s3/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ESP32-S3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/nrf52840/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    nRF52840
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/microbit-v1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    micro:bit V1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/microbit-v2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    micro:bit v2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/seeed-xiao-nrf52840-sense/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    XIAO nRF52840 Sense
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/rp2040/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RP2040
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/rp2350/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RP2350
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/rp2350-zero/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RP2350-Zero
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32f103/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F103
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32f401/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F401
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32f405/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F405
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32f407/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F407
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32f411/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F411
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32f767/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F767
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/nucleo-l476rg/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NUCLEO-L476RG
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/nucleo-l073rz/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NUCLEO-L073RZ
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/nucleo-g071rb/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NUCLEO-G071RB
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32g0b1re/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32G0B1RE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32h563/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32H563
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32h735/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32H735
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32u575/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32U575
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/nucleo-u545re/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NUCLEO-U545RE-Q
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32wba52/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32WBA52
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/nrf52832/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    nRF52832
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/nrf5340/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    nRF5340
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/nrf54l15/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    nRF54L15
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/atsamd21g18a/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ATSAMD21G18A
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Parts
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Parts
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/mcp9808/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP9808
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/mma8451q/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MMA8451Q
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/mpu6050/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MPU-6050
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/bmp280/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    BMP280
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/ssd1306/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SSD1306 OLED
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/lcd1602/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LCD1602
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/apa102/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    APA102
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/servo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Servo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/button/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Button
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/buzzer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Buzzer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/seven-segment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Seven-segment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/segment-display-mux/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multiplexed segment display
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/led-matrix-mux/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multiplexed LED matrix
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/74hc4051/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    74HC4051
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/max485/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MAX485
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/xy-md02/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    XY-MD02
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release_strategy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Strategy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../RELEASE_DETERMINISM/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Determinism
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../labwired_audit_protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Verification Audit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../coverage_scoreboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coverage Scoreboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../coverage/chip-conformance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Chip Conformance (live)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../coverage/tier1-scoreboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tier-1 Matrix (live)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../coverage/arduino-scoreboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Arduino Scoreboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../coverage/zephyr-scoreboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Zephyr Scoreboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../engineering/test_harness/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test Harness
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../limits/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Run Limits
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Demos
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../case_study_stm32/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Case Study (STM32)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_12" >
+        
+          
+          <label class="md-nav__link" for="__nav_12" id="__nav_12_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Explanation
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Explanation
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture_overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../simulation_protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Simulation Protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#global-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Global Options
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#modes-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Modes &amp; Commands
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Modes &amp; Commands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#interactive-run-mode-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Interactive / Run Mode (Default)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Interactive / Run Mode (Default)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#-gdb-gdb-rsp-server" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --gdb — GDB RSP server
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        run
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="run">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#-log-timestamps-run-and-test" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --log-timestamps (run and test)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-bus-trace-out-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --bus-trace-out (run)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-stop-on-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --stop-on (run)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        test
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#coverage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        coverage
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="coverage">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#coverage-merge" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        coverage merge
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chips" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        chips
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#asset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        asset
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="asset">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#asset-import-svd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        asset import-svd
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#asset-codegen" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        asset codegen
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#asset-init" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        asset init
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#asset-add-peripheral" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        asset add-peripheral
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#asset-validate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        asset validate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#asset-list-chips" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        asset list-chips
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#asset-validate-component" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        asset validate-component
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#asset-ingest-svd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        asset ingest-svd
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#machine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        machine
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="machine">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#machine-load" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        machine load
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#snapshot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        snapshot
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="snapshot">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#snapshot-capture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        snapshot capture
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#debug-probe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        debug-probe
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fault-inject" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fault-inject
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fuzz" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fuzz
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier1-matrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tier1-matrix
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cosim-step" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        cosim-step
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rv1103-linux" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        rv1103-linux
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rv1103-basket" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        rv1103-basket
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#environment-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Environment Variables
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="cli-reference">CLI Reference</h1>
+<p>The <code>labwired</code> command-line interface is the primary entry point for running simulations, testing, debugging, and managing assets. This page documents every command listed by <code>labwired --help</code>. The built-in help is authoritative when the two disagree; run <code>labwired &lt;command&gt; --help</code> for the version you have.</p>
+<h2 id="global-options">Global Options</h2>
+<p>These flags are declared as global options, so every subcommand accepts them. The per-command tables below list only that command's own flags.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Option</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>-t, --trace</code></td>
+<td style="text-align: left;">Enable instruction-level execution tracing. <code>test</code> writes <code>trace.json</code> into <code>--output-dir</code>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--json</code></td>
+<td style="text-align: left;">Output errors and diagnostics as structured JSON for agent consumption.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--vcd &lt;PATH&gt;</code></td>
+<td style="text-align: left;">Output a Value Change Dump (VCD) trace file to the specified path.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--rtt</code></td>
+<td style="text-align: left;">Emit SEGGER RTT output: interactive runs echo drained up-channel bytes and write stdin into down-channel 0; <code>test</code> writes <code>rtt.log</code> and enables <code>rtt_contains</code>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--semihosting</code></td>
+<td style="text-align: left;">Emit ARM semihosting output: interactive runs echo drained bytes to stdout; <code>test</code> writes <code>semihosting.log</code> and enables <code>semihosting_contains</code>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--itm</code></td>
+<td style="text-align: left;">Emit ITM stimulus port 0: interactive runs echo the byte stream to stdout; <code>test</code> writes <code>itm.log</code> and enables <code>itm_contains</code>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>-V, --version</code></td>
+<td style="text-align: left;">Print version information.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>-h, --help</code></td>
+<td style="text-align: left;">Print help. <code>labwired help [COMMAND]</code> prints the same help for a subcommand.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="modes-commands">Modes &amp; Commands</h2>
+<h3 id="interactive-run-mode-default">Interactive / Run Mode (Default)</h3>
+<p>Running <code>labwired</code> with no subcommand starts the interactive runner:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>labwired<span class="w"> </span>--firmware<span class="w"> </span>&lt;ELF&gt;<span class="w"> </span>--system<span class="w"> </span>&lt;YAML&gt;<span class="w"> </span><span class="o">[</span>OPTIONS<span class="o">]</span>
+</span></code></pre></div>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Option</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>-f, --firmware &lt;PATH&gt;</code></td>
+<td style="text-align: left;">Path to the firmware ELF file.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>-s, --system &lt;PATH&gt;</code></td>
+<td style="text-align: left;">Path to the system manifest (YAML).</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--snapshot &lt;PATH&gt;</code></td>
+<td style="text-align: left;">Write a JSON state snapshot on exit; resume it with <code>labwired machine load --snapshot &lt;PATH&gt;</code>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--breakpoint &lt;ADDR&gt;</code></td>
+<td style="text-align: left;">Breakpoint PC address (decimal or <code>0x</code> hex). Repeatable.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--max-steps &lt;N&gt;</code></td>
+<td style="text-align: left;">Maximum number of steps to execute (default: 20000).</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--gdb &lt;PORT&gt;</code></td>
+<td style="text-align: left;">Start a GDB RSP server on the specified port (e.g. <code>3333</code>).</td>
+</tr>
+</tbody>
+</table>
+<p>Plus the <a href="#global-options">global flags</a>. The top-level <code>--max-steps</code> default (20000) is separate from <code>run --max-steps</code>, which defaults to unlimited.</p>
+<h4 id="-gdb-gdb-rsp-server"><code>--gdb</code> — GDB RSP server</h4>
+<p>Start the server with <code>labwired --firmware app.elf --system board.yaml --gdb 3333</code>. The RSP surface is documented in <a href="../gdb_integration/#3-supported-commands">GDB Integration</a>; two debugger behaviours worth knowing:</p>
+<ul>
+<li><strong>Watchpoints</strong> — <code>Z2</code>/<code>Z3</code>/<code>Z4</code> arm a write/read/access watch on a byte range of <code>1..=4096</code> bytes, up to 16 concurrent ranges. They are software-tracked on CPU accesses only: DMA and debugger transfers (<code>m</code>/<code>M</code>/<code>x</code>) do not trip them, so inspecting a watched object cannot fire its own watchpoint. A hit stops the target with a bare <code>T05</code>/<code>S05</code> (no <code>watch:</code> annotation; read <code>PC</code> back with <code>g</code>). Details: <a href="../gdb_integration/#5-watchpoints-z2-z3-z4">Watchpoints</a>.</li>
+<li><strong><code>P</code></strong> — writes a single register for real (<code>reg=value</code> form), so <code>set $pc = ...</code> and <code>reset $pc</code> take effect; see the CPSR raw-id quirk in the same section.</li>
+</ul>
+<p>Which clients have actually run against the stub is tracked in the <a href="../gdb_integration/#6-conformance-matrix">conformance matrix</a>; every cell is either CI-backed or marked <code>untested</code>.</p>
+<h3 id="run"><code>run</code></h3>
+<p>Run a firmware ELF in the simulator using a chip descriptor. The chip's peripheral wiring is loaded, the firmware is fast-booted, and console output appears on stdout in real time.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>labwired<span class="w"> </span>run<span class="w"> </span>--chip<span class="w"> </span>&lt;CHIP&gt;<span class="w"> </span>--firmware<span class="w"> </span>&lt;ELF&gt;<span class="w"> </span><span class="o">[</span>OPTIONS<span class="o">]</span>
+</span></code></pre></div>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Option</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>--chip &lt;PATH&gt;</code></td>
+<td style="text-align: left;">Chip descriptor YAML. Required unless <code>--system</code> is given (the manifest then names the chip).</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--firmware &lt;PATH&gt;</code></td>
+<td style="text-align: left;">Path to the firmware ELF. Required.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--system &lt;PATH&gt;</code></td>
+<td style="text-align: left;">Board manifest. With <code>--chip</code>, attaches its <code>external_devices:</code> before the run (ESP32-S3 only). Without <code>--chip</code>, selects the system-aware driver, which resolves the chip from the manifest, attaches external devices, and applies <code>--stimulus</code> (ARM only); an explicit <code>--max-steps</code> is then required.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--stimulus &lt;JSON&gt;</code></td>
+<td style="text-align: left;">Declarative input stimulus, e.g. <code>{"channel":"x","value":2.0,"after_cycles":3000000,"component":"fxos8700"}</code>. Repeatable. Requires <code>--system</code> without <code>--chip</code>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--display-out &lt;PATH&gt;</code></td>
+<td style="text-align: left;">End-of-run dump of every attached parallel panel: binary PPM here plus a luma ASCII map on stderr.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--stop-on &lt;TEXT&gt;</code></td>
+<td style="text-align: left;">End the run when the text appears on the console. ESP32-S3 only. See <a href="#-stop-on-run"><code>--stop-on</code></a> below.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--max-steps &lt;N&gt;</code></td>
+<td style="text-align: left;">Step budget (default: unlimited; required with <code>--system</code> without <code>--chip</code>). Coalesced idle cycles count against it on accelerated ARM runs.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--allow-sim-error</code></td>
+<td style="text-align: left;">Exit 0 even when the run ends on a simulation fault (normally exit 3).</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--gpio-trace &lt;PATH&gt;</code></td>
+<td style="text-align: left;">JSON-line GPIO transition trace: <code>{"sim_cycle":N,"pin":P,"from":B,"to":B}</code>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--gpio-trace-format &lt;MODE&gt;</code></td>
+<td style="text-align: left;"><code>bool</code> (default) or <code>4state</code>; the latter adds <code>from_state</code>/<code>to_state</code> (<code>0</code>, <code>1</code>, <code>z</code>, <code>x</code>) and logs drive changes too.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--bus-trace-out &lt;PATH&gt;</code></td>
+<td style="text-align: left;">Export the I²C/SPI/UART bus trace. <code>.json</code> writes raw events; any other extension writes VCD. See <a href="#-bus-trace-out-run"><code>--bus-trace-out</code></a> below.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--analog-trace &lt;PATH&gt;</code></td>
+<td style="text-align: left;">In-core analog waveform trace from an <code>adapter: analog</code> co-simulation model. <code>.csv</code> writes <code>time_ns,&lt;channel&gt;...</code>; other extensions write VCD <code>real</code> variables. Empty unless a co-sim runner is attached.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--rom-boot</code></td>
+<td style="text-align: left;">Boot from the real ROM reset vector (<code>0x40000400</code>) instead of fast-booting. ESP32-S3; requires <code>LABWIRED_ESP32S3_FLASH</code> (ROM auto-provisioned from the ESP toolchain or pinned with <code>LABWIRED_ESP32S3_ROM</code>/<code>_DROM</code>/<code>_ROM_ELF</code>).</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--break-at &lt;HEX&gt;</code></td>
+<td style="text-align: left;">Debug: PC address(es) to dump registers and <code>--watch-mem</code> words at first hit, then continue. Repeatable.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--watch-mem &lt;HEX&gt;</code></td>
+<td style="text-align: left;">Debug: memory address(es) printed as <code>u32</code> whenever a <code>--break-at</code> fires. Repeatable.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--flash-image &lt;PATH@HEX&gt;</code></td>
+<td style="text-align: left;">ARM-only additional flash piece at an absolute address. Repeatable; ELF, Intel HEX, or raw binary. Overlaps are a hard error.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--batched</code></td>
+<td style="text-align: left;">Drive the run through the batched orchestration instead of per-instruction <code>step()</code>. Fails rather than falls back when per-instruction instrumentation (<code>--break-at</code>, <code>--watch-mem</code>, <code>--stop-on</code>; on RISC-V also the WiFi bridge and DHCP trace) is active. ARM, RISC-V and Xtensa (ESP32 / ESP32-S3) all have batched paths. Prints a <code>[batched] ...</code> summary.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--time-mode &lt;MODE&gt;</code></td>
+<td style="text-align: left;"><code>max-speed</code> (default, never sleeps) or <code>realtime</code> (sleeps when virtual time is ≥ 1 ms ahead of wall).</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--log-timestamps &lt;MODE&gt;</code></td>
+<td style="text-align: left;"><code>none</code> (default), <code>virtual</code>, <code>real</code>, or <code>both</code>. See <a href="#-log-timestamps-run-and-test"><code>--log-timestamps</code></a> below.</td>
+</tr>
+</tbody>
+</table>
+<p>Plus the <a href="#global-options">global flags</a>.</p>
+<h4 id="-log-timestamps-run-and-test"><code>--log-timestamps</code> (run and test)</h4>
+<p><code>--log-timestamps {none,virtual,real,both}</code> prefixes the human-readable stderr event/log lines of a run — the <code>labwired-cli ...</code> progress and verdict lines and the tracing subscriber's event lines. The prefix is a fixed-format bracket:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Value</th>
+<th style="text-align: left;">Prefix</th>
+<th style="text-align: left;">Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>none</code></td>
+<td style="text-align: left;">nothing</td>
+<td style="text-align: left;">Default. Every output stays byte-identical to a run without the flag.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>virtual</code></td>
+<td style="text-align: left;"><code>[t=virt=1.500000000s]</code></td>
+<td style="text-align: left;">Simulation time from <code>cycles / cpu_hz</code>. Deterministic: two runs of the same firmware compare equal.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>real</code></td>
+<td style="text-align: left;"><code>[t=real=+0.123456789s]</code></td>
+<td style="text-align: left;">Wall-clock since process start. Explicitly <strong>not</strong> comparable between runs.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>both</code></td>
+<td style="text-align: left;"><code>virtual</code> and <code>real</code> in one bracket</td>
+<td style="text-align: left;">Both numbers.</td>
+</tr>
+</tbody>
+</table>
+<p>With <code>both</code>, the bracket joins the two numbers:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>[t=virt=1.500000000s|real=+0.123456789s] ...
+</span></code></pre></div>
+<p>With a prefixed mode active, the tracing formatter drops its own RFC 3339 wall-clock stamp so the <code>virtual</code> stream is byte-stable. <code>result.json</code> gains <code>virtual_time_ns</code> for <code>virtual</code>/<code>both</code> and <code>host_time_ns</code> for <code>real</code>/<code>both</code>; default <code>none</code> adds neither key and leaves the file unchanged.</p>
+<p>Receipt — <code>test</code> over the committed UART fixture, with a two-input script whose paths are absolute (<code>inputs</code> resolve relative to the script file):</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">schema_version</span><span class="p">:</span><span class="w"> </span><span class="s">"1.0"</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nt">inputs</span><span class="p">:</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span><span class="nt">firmware</span><span class="p">:</span><span class="w"> </span><span class="s">"/path/to/tests/fixtures/uart-ok-thumbv7m.elf"</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span><span class="nt">system</span><span class="p">:</span><span class="w"> </span><span class="s">"/path/to/configs/systems/ci-fixture-uart1.yaml"</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="nt">limits</span><span class="p">:</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">  </span><span class="nt">max_steps</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1000</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="nt">assertions</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[]</span>
+</span></code></pre></div>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>labwired<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--script<span class="w"> </span>/tmp/cli-ref/logts/script.yaml<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span>--no-uart-stdout<span class="w"> </span>--output-dir<span class="w"> </span>/tmp/cli-ref/logts/out<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span>--log-timestamps<span class="w"> </span>virtual
+</span></code></pre></div>
+<p>Real output (trimmed — the full run also prints the ELF entry-point and <code>idle_ff</code> lines; wall-seconds vary between runs):</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>[t=virt=0.000000000s]  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/ci-fixture-cortex-m3-uart1.yaml
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>[t=virt=0.000000000s] labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>[t=virt=0.000012500s] PASS  0/0 checks · script · 1000 steps · 0.00s
+</span></code></pre></div>
+<p>The same run's <code>result.json</code> carries <code>"virtual_time_ns": 12500</code> and no <code>host_time_ns</code> key.</p>
+<h4 id="-bus-trace-out-run"><code>--bus-trace-out</code> (run)</h4>
+<p><code>--bus-trace-out &lt;PATH&gt;</code> exports the universal I²C/SPI bus trace captured during the run. A <code>.json</code> extension writes the raw event list (each event has <code>seq</code>, <code>cycle</code>, <code>bus</code>, and the native payload); any other extension writes a VCD that opens directly in GTKWave / PulseView / sigrok. UART octets are recorded too, even though the flag's help names I²C/SPI.</p>
+<p>Receipt — the committed C3 blinky, 57 UART octets:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>labwired<span class="w"> </span>run<span class="w"> </span>--chip<span class="w"> </span>configs/chips/esp32c3.yaml<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span>--firmware<span class="w"> </span>examples/esp32c3-blinky/firmware/esp32c3_blinky.elf<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span>--max-steps<span class="w"> </span><span class="m">800000</span><span class="w"> </span>--bus-trace-out<span class="w"> </span>/tmp/cli-ref/blinky.vcd
+</span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>LED Olabwired-cli run: bus trace (57 events) -&gt; "/tmp/cli-ref/blinky.vcd"
+</span></code></pre></div>
+<p>The VCD declares one 8-bit wire (UART octets) and stamps each event at its sequence number with a 1 µs timescale:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>$timescale 1 us $end
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>$scope module bus_trace $end
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>$var wire 8 ! uart0 $end
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>$upscope $end
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>$enddefinitions $end
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>#1
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>b01000011 !
+</span></code></pre></div>
+<p><code>b01000011</code> is <code>0x43</code> (<code>C</code>), the first byte of the firmware banner. Point the same flag at <code>blinky.json</code> for the lossless event list (<code>seq</code> 1, <code>cycle</code> 13312, <code>bus</code> <code>uart0</code>, payload <code>{"protocol":"uart","direction":"tx","byte":67}</code>). More on the ring and formats: <a href="../howto/extend/hooks/#2-host-observation-bus-trace-console-stop-logic-capture-python-frames">Hook surfaces</a>.</p>
+<h4 id="-stop-on-run"><code>--stop-on</code> (run)</h4>
+<p><code>--stop-on &lt;TEXT&gt;</code> (ESP32-S3 only; it needs the USB-Serial-JTAG console) ends the run as soon as the text appears on the firmware's console. The console is mirrored into a buffer and scanned every 100,000 steps; the first match logs the step and breaks the loop. It cannot be combined with <code>--batched</code>.</p>
+<p>Receipt — the committed S3 Arduino source-debug fixture; <code>81</code> is the fifth <code>loop()</code> print (one interleaved GPIO <code>INFO</code> line is elided between the console byte and the match line):</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nv">LABWIRED_ESP32S3_FLASH</span><span class="o">=</span>tests/fixtures/source-debug/esp32s3-arduino-flash.bin<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span>labwired<span class="w"> </span>run<span class="w"> </span>--chip<span class="w"> </span>configs/chips/esp32s3.yaml<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">  </span>--firmware<span class="w"> </span>tests/fixtures/source-debug/esp32s3-arduino.elf<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">  </span>--rom-boot<span class="w"> </span>--max-steps<span class="w"> </span><span class="m">200000000</span><span class="w"> </span>--stop-on<span class="w"> </span><span class="m">81</span>
+</span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>81labwired-cli run: --stop-on "81" matched at step 101700000
+</span></code></pre></div>
+<p>Two caveats:</p>
+<ul>
+<li>The <code>reached --max-steps</code> epilogue is printed only when the stepping loop actually exhausts the budget; a run stopped by <code>--stop-on</code> prints only the match line.</li>
+<li>A marker that occurs in boot output matches during boot. <code>--stop-on 27</code> matches the ROM banner <code>ESP-ROM:esp32s3-20210327</code> at step 100000, not application output:</li>
+</ul>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>ESP-ROM:esp32s3-20210327
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>ESP-ROM:1
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>labwired-cli run: --stop-on "27" matched at step 100000
+</span></code></pre></div>
+<p>Pick a marker unique to the point you care about. The hook surface and the shared observation story are in <a href="../howto/extend/hooks/">Hook surfaces</a>.</p>
+<h3 id="test"><code>test</code></h3>
+<p>Runs a CI-friendly test script with assertions. Script schema, exit codes, stop reasons, and the <code>result.json</code> contract live in <a href="../ci_test_runner/">CI Test Runner</a>.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>labwired<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--script<span class="w"> </span>&lt;YAML&gt;<span class="w"> </span><span class="o">[</span>OVERRIDES<span class="o">]</span>
+</span></code></pre></div>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Option</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>-f, --firmware &lt;PATH&gt;</code></td>
+<td style="text-align: left;">Override the firmware in a single-machine script only; environment topology comes from <code>inputs.env</code>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>-s, --system &lt;PATH&gt;</code></td>
+<td style="text-align: left;">Override the system manifest in a single-machine script only; environment topology comes from <code>inputs.env</code>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>-c, --script &lt;PATH&gt;</code></td>
+<td style="text-align: left;">Path to the test script (YAML). Required.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--max-steps &lt;N&gt;</code></td>
+<td style="text-align: left;">Override the script's step limit.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--breakpoint &lt;ADDR&gt;</code></td>
+<td style="text-align: left;">Breakpoint PC address. Repeatable.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--no-uart-stdout</code></td>
+<td style="text-align: left;">Disable UART stdout echo (still captured for assertions/artifacts).</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--output-dir &lt;PATH&gt;</code></td>
+<td style="text-align: left;">Artifact directory: <code>result.json</code>, <code>snapshot.json</code>, <code>uart.log</code>, <code>rtt.log</code>, <code>semihosting.log</code>, <code>itm.log</code>, <code>junit.xml</code>; requested <code>trace.json</code>, coverage, run-manifest, and fault artifacts land here too.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--junit &lt;PATH&gt;</code></td>
+<td style="text-align: left;">Also write the JUnit XML report to this path.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--max-cycles &lt;N&gt;</code></td>
+<td style="text-align: left;">Override the cycle limit.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--max-uart-bytes &lt;N&gt;</code></td>
+<td style="text-align: left;">Override the UART output limit.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--detect-stuck &lt;N&gt;</code></td>
+<td style="text-align: left;">Fail if the PC does not change for N steps (hang detection). Hidden alias: <code>--no-progress</code>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--max-vcd-bytes &lt;N&gt;</code></td>
+<td style="text-align: left;">Override the VCD size limit (bytes).</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--analog-trace &lt;PATH&gt;</code></td>
+<td style="text-align: left;">Analog waveform trace (<code>.csv</code> or VCD <code>real</code> variables).</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--trace-max &lt;N&gt;</code></td>
+<td style="text-align: left;">Maximum number of instructions to trace.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--coverage</code></td>
+<td style="text-align: left;">Collect line/branch/function coverage from the unmodified ELF into <code>coverage.info</code> (LCOV), <code>coverage.cobertura.xml</code>, and <code>coverage.json</code>. See <a href="../howto/firmware-coverage/">Firmware coverage</a>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--rom-boot</code></td>
+<td style="text-align: left;">Faithful ESP32-C3 boot (<code>mask ROM → 2nd-stage bootloader → app</code>); requires <code>LABWIRED_ESP32C3_FLASH</code> with bootloader@<code>0x0</code>, partition table@<code>0x8000</code>, app@<code>0x10000</code>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--run-manifest</code></td>
+<td style="text-align: left;">Write <code>run-manifest.json</code> (input hashes, engine version, result subset, coverage summary, wall-clock-free digest).</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--capture-app-entry &lt;PATH&gt;</code></td>
+<td style="text-align: left;">Faithful rom-boot: snapshot the machine at application entry into a <code>.lwrs</code> blob while the run continues to <code>--max-steps</code>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--resume-snapshot &lt;PATH&gt;</code></td>
+<td style="text-align: left;">Resume from a <code>.lwrs</code> snapshot instead of cold-booting, after validating its chip + firmware self-key against the current inputs.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--no-key</code></td>
+<td style="text-align: left;">Explicitly do not send <code>LABWIRED_API_KEY</code>, even when it is set.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--watch-gpio &lt;PERIPHERAL:PIN&gt;</code></td>
+<td style="text-align: left;">Logic-analyzer edge capture for a pad, e.g. <code>gpio8:8</code>. Repeatable; channels land in <code>result.json</code>'s <code>logic_edges</code> block.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--inspect-bytes-max &lt;BYTES&gt;</code></td>
+<td style="text-align: left;">Include complete inspect artifact payloads within a cumulative raw-byte limit (0 by default; maximum 1 MiB). Over-budget payloads are omitted, with <code>meta.bytes_omitted_reason: "inspect_bytes_limit"</code> and <code>meta.byte_length</code>; image bytes are never truncated.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--heartbeat-file &lt;PATH&gt;</code></td>
+<td style="text-align: left;">Supervisor liveness file, rewritten atomically at most once a second with <code>{"steps":N,"cycles":C}</code>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--log-timestamps &lt;MODE&gt;</code></td>
+<td style="text-align: left;"><code>none</code>, <code>virtual</code>, <code>real</code>, or <code>both</code>. See <a href="#-log-timestamps-run-and-test"><code>--log-timestamps</code></a> above.</td>
+</tr>
+</tbody>
+</table>
+<p>Plus the <a href="#global-options">global flags</a>, including <code>-t/--trace</code> (saved to <code>trace.json</code>) and <code>--vcd</code>.</p>
+<h3 id="coverage"><code>coverage</code></h3>
+<p>Report ESP32-S3 register-level peripheral coverage against the SVD: every register is probed behaviourally (read/write sentinel) and classified Modelled / Indeterminate / Unmodelled. Prints a human-readable table.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Option</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>--svd &lt;PATH&gt;</code></td>
+<td style="text-align: left;">ESP32-S3 SVD; otherwise auto-discovered from PlatformIO or <code>LABWIRED_ESP32S3_SVD</code>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--json-out &lt;PATH&gt;</code></td>
+<td style="text-align: left;">Write the full coverage matrix as JSON.</td>
+</tr>
+</tbody>
+</table>
+<p>Plus the <a href="#global-options">global flags</a>.</p>
+<h4 id="coverage-merge"><code>coverage merge</code></h4>
+<p>Merge firmware-coverage LCOV files (from <code>test --coverage</code>, gcov/gcovr, llvm-cov, …) into one report: counts add up, and a branch stays "never evaluated" only if no run evaluated it. Prints a summary, writes LCOV / Cobertura / JSON, and can fail the build under a threshold. Worked example and CI setup: <a href="../howto/firmware-coverage/#merging">Firmware coverage</a>.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Option</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>&lt;INPUT&gt;...</code></td>
+<td style="text-align: left;">LCOV files, or directories searched recursively for <code>*.info</code>. Earlier merge results and the <code>-o</code> target are skipped.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>-o, --output &lt;PATH&gt;</code></td>
+<td style="text-align: left;">Merged LCOV tracefile.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--cobertura &lt;PATH&gt;</code></td>
+<td style="text-align: left;">Cobertura XML for GitLab / Jenkins / Azure DevOps.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--source-root &lt;DIR&gt;</code></td>
+<td style="text-align: left;">Cobertura <code>&lt;source&gt;</code> base; repeatable, default <code>.</code>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--json-out &lt;PATH&gt;</code></td>
+<td style="text-align: left;">Summary, per-file numbers, and every uncovered branch as JSON.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--fail-under-lines &lt;PCT&gt;</code></td>
+<td style="text-align: left;">Exit 1 below this line-coverage percentage.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--fail-under-branches &lt;PCT&gt;</code></td>
+<td style="text-align: left;">Exit 1 below this branch-coverage percentage.</td>
+</tr>
+</tbody>
+</table>
+<p>Plus the <a href="#global-options">global flags</a>.</p>
+<h3 id="chips"><code>chips</code></h3>
+<p>List the chips bundled with the CLI, usable as <code>inputs.chip</code> in a test script or as a manifest's <code>chip:</code> field without copying any YAML. No command-specific flags; accepts the <a href="#global-options">global flags</a>.</p>
+<h3 id="asset"><code>asset</code></h3>
+<p>Utilities for Asset Foundry.</p>
+<h4 id="asset-import-svd"><code>asset import-svd</code></h4>
+<p>Import an SVD file and convert it to Strict IR (JSON).</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Option</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>-i, --input &lt;SVD&gt;</code></td>
+<td style="text-align: left;">Input SVD file.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>-o, --output &lt;JSON&gt;</code></td>
+<td style="text-align: left;">Output JSON file.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--flash-base &lt;ADDR&gt;</code></td>
+<td style="text-align: left;">Optional flash base address.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--flash-size &lt;SIZE&gt;</code></td>
+<td style="text-align: left;">Optional flash size, e.g. <code>512KB</code>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--ram-base &lt;ADDR&gt;</code></td>
+<td style="text-align: left;">Optional RAM base address.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--ram-size &lt;SIZE&gt;</code></td>
+<td style="text-align: left;">Optional RAM size, e.g. <code>128KB</code>.</td>
+</tr>
+</tbody>
+</table>
+<h4 id="asset-codegen"><code>asset codegen</code></h4>
+<p>Generate Rust code from Strict IR.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Option</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>-i, --input &lt;JSON&gt;</code></td>
+<td style="text-align: left;">Input Strict IR file.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>-o, --output &lt;RS&gt;</code></td>
+<td style="text-align: left;">Output Rust source file.</td>
+</tr>
+</tbody>
+</table>
+<h4 id="asset-init"><code>asset init</code></h4>
+<p>Initialize a new project skeleton.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Option</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>-o, --output &lt;DIR&gt;</code></td>
+<td style="text-align: left;">Output directory. Required.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>-c, --chip &lt;CHIP&gt;</code></td>
+<td style="text-align: left;">Chip name or path to a chip descriptor.</td>
+</tr>
+</tbody>
+</table>
+<h4 id="asset-add-peripheral"><code>asset add-peripheral</code></h4>
+<p>Add a peripheral to an existing chip descriptor.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Option</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>-c, --chip &lt;YAML&gt;</code></td>
+<td style="text-align: left;">Target chip descriptor.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>-i, --id &lt;NAME&gt;</code></td>
+<td style="text-align: left;">New peripheral ID.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--type &lt;TYPE&gt;</code></td>
+<td style="text-align: left;">Peripheral type (default <code>strict_ir</code>).</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>-b, --base &lt;ADDR&gt;</code></td>
+<td style="text-align: left;">Base memory address.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--ir-path &lt;PATH&gt;</code></td>
+<td style="text-align: left;">Path to the IR descriptor (JSON).</td>
+</tr>
+</tbody>
+</table>
+<h4 id="asset-validate"><code>asset validate</code></h4>
+<p>Validate a System Manifest and its referenced Chip.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Option</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>--system &lt;YAML&gt;</code></td>
+<td style="text-align: left;">System manifest to validate.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--chip &lt;YAML&gt;</code></td>
+<td style="text-align: left;">Chip descriptor to validate.</td>
+</tr>
+</tbody>
+</table>
+<h4 id="asset-list-chips"><code>asset list-chips</code></h4>
+<p>List available chip descriptors.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Option</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>-f, --filter &lt;TEXT&gt;</code></td>
+<td style="text-align: left;">Filter string for chip names.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--format &lt;FORMAT&gt;</code></td>
+<td style="text-align: left;">Output format: <code>text</code> (default) or <code>json</code>.</td>
+</tr>
+</tbody>
+</table>
+<h4 id="asset-validate-component"><code>asset validate-component</code></h4>
+<p>Validate an off-chip component IR spec (YAML).</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Option</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>&lt;SPEC&gt;</code></td>
+<td style="text-align: left;">Path to the device descriptor YAML.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--json</code></td>
+<td style="text-align: left;">Emit machine-readable JSON on stdout.</td>
+</tr>
+</tbody>
+</table>
+<h4 id="asset-ingest-svd"><code>asset ingest-svd</code></h4>
+<p>Ingest an SVD into runnable declarative PeripheralDescriptor YAML — <code>type: declarative</code> peripherals, no codegen or recompile (unlike <code>import-svd</code>).</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Option</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>-i, --input &lt;SVD&gt;</code></td>
+<td style="text-align: left;">Input SVD file.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>-o, --output-dir &lt;DIR&gt;</code></td>
+<td style="text-align: left;">Directory to write <code>&lt;peripheral&gt;.yaml</code> descriptors into.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--filter &lt;NAMES&gt;</code></td>
+<td style="text-align: left;">Only ingest these peripherals (comma-separated). Default: all.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--json</code></td>
+<td style="text-align: left;">Emit a machine-readable JSON summary on stdout.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="machine"><code>machine</code></h3>
+<p>Machine state control operations.</p>
+<h4 id="machine-load"><code>machine load</code></h4>
+<p>Load a machine state from a JSON snapshot and resume simulation.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Option</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>-s, --snapshot &lt;JSON&gt;</code></td>
+<td style="text-align: left;">Path to the snapshot file. Required.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--max-steps &lt;N&gt;</code></td>
+<td style="text-align: left;">Override the maximum number of steps to execute.</td>
+</tr>
+</tbody>
+</table>
+<p>Plus the <a href="#global-options">global flags</a>.</p>
+<h3 id="snapshot"><code>snapshot</code></h3>
+<p>Capture a binary runtime snapshot (<code>.lwrs</code>) mid-flight for fast replay in the playground, restorable by <code>WasmSimulator::apply_runtime_snapshot</code>.</p>
+<h4 id="snapshot-capture"><code>snapshot capture</code></h4>
+<p>Boot a firmware, step N times, write a runtime snapshot blob.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Option</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>--firmware &lt;ELF&gt;</code></td>
+<td style="text-align: left;">Path to the firmware ELF. Required.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--steps &lt;N&gt;</code></td>
+<td style="text-align: left;">Number of cycles to run before taking the snapshot. Required.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--output &lt;PATH&gt;</code></td>
+<td style="text-align: left;">Output <code>.lwrs</code> path. Required.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--system &lt;YAML&gt;</code></td>
+<td style="text-align: left;">Board manifest declaring external peripherals to attach.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--profile &lt;NAME&gt;</code></td>
+<td style="text-align: left;">Firmware profile (default and only supported value: <code>arduino-esp32</code>).</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--progress-every &lt;N&gt;</code></td>
+<td style="text-align: left;">Progress line every N steps; <code>0</code> = silent (default <code>5000000</code>).</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--trace-out &lt;PATH&gt;</code></td>
+<td style="text-align: left;">JSON instruction trace of the last <code>--trace-last</code> retired instructions; forces the interpreter.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--trace-last &lt;N&gt;</code></td>
+<td style="text-align: left;">Trace ring size (default <code>4096</code>).</td>
+</tr>
+</tbody>
+</table>
+<p>Plus the <a href="#global-options">global flags</a>.</p>
+<h3 id="debug-probe"><code>debug-probe</code></h3>
+<p>One-shot agent debug probe: loads machine + firmware, resolves optional breakpoints (address / symbol / line), runs until stop or <code>--max-steps</code>, and returns stop reason, PC, location, registers, and serial as JSON. Observational only — <code>proven</code> is always false.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Option</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>-f, --firmware &lt;ELF&gt;</code></td>
+<td style="text-align: left;">Firmware ELF (required in v1; there is no flash-only rom-boot path).</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>-s, --system &lt;YAML&gt;</code></td>
+<td style="text-align: left;">System manifest. Required.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--breakpoints-json &lt;JSON&gt;</code></td>
+<td style="text-align: left;">JSON array of breakpoint specs.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--breakpoints-file &lt;PATH&gt;</code></td>
+<td style="text-align: left;">Breakpoints JSON file (alternative to <code>--breakpoints-json</code>).</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--max-steps &lt;N&gt;</code></td>
+<td style="text-align: left;">Step budget (default <code>2000000</code>).</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--read &lt;LIST&gt;</code></td>
+<td style="text-align: left;">Comma list: <code>serial,regs,pc,location,fault</code> (default all). <code>fault</code> is present only when the firmware faulted.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--step-after-stop</code></td>
+<td style="text-align: left;">After the primary stop, take one single-instruction step.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--output-dir &lt;DIR&gt;</code></td>
+<td style="text-align: left;">Write <code>result.json</code> here (also prints JSON to stdout).</td>
+</tr>
+</tbody>
+</table>
+<p>Plus the <a href="#global-options">global flags</a>.</p>
+<h3 id="fault-inject"><code>fault-inject</code></h3>
+<p>Inject scheduled faults (register/memory bit flips, instruction skips) and report the lockstep verdict against a golden run as JSON. Verdicts: <code>masked</code>, <code>latent</code>, <code>diverged</code>, <code>output_changed</code>, <code>crashed</code>, <code>not_injected</code>.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Option</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>-f, --firmware &lt;ELF&gt;</code></td>
+<td style="text-align: left;">Firmware ELF. Required.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>-s, --system &lt;YAML&gt;</code></td>
+<td style="text-align: left;">System manifest; its <code>chip:</code> is a built-in name or a path. Required.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--plan &lt;JSON&gt;</code></td>
+<td style="text-align: left;">Plan file <code>{"until_cycle": N, "faults": [...]}</code>. Conflicts with <code>--faults-json</code>/<code>--until-cycle</code>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--faults-json &lt;JSON&gt;</code></td>
+<td style="text-align: left;">Faults as a JSON array, e.g. <code>[{"at_cycle":500,"kind":"register_bit_flip","register":"R0","bit":3}]</code>. Requires <code>--until-cycle</code>. Kinds: <code>register_bit_flip</code>, <code>memory_bit_flip</code>, <code>instruction_skip</code>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--until-cycle &lt;N&gt;</code></td>
+<td style="text-align: left;">Stop when the golden machine reaches this cycle.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--output-dir &lt;DIR&gt;</code></td>
+<td style="text-align: left;">Also write the report to <code>&lt;dir&gt;/fault-report.json</code>.</td>
+</tr>
+</tbody>
+</table>
+<p>Plus the <a href="#global-options">global flags</a>.</p>
+<h3 id="fuzz"><code>fuzz</code></h3>
+<p>Coverage-guided fuzzing in the simulator: mutates an input byte stream injected into the firmware's RAM buffer, drives execution with AFL-style edge coverage, and reports crashes. Exits non-zero when a crash is found.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Option</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>--chip &lt;YAML&gt;</code></td>
+<td style="text-align: left;">Chip descriptor. Required.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--system &lt;YAML&gt;</code></td>
+<td style="text-align: left;">System manifest. Required.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--firmware &lt;ELF&gt;</code></td>
+<td style="text-align: left;">Firmware ELF following the fuzz contract. Required.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--max-iters &lt;N&gt;</code></td>
+<td style="text-align: left;">Max fuzzing iterations (default <code>200000</code>).</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--max-steps &lt;N&gt;</code></td>
+<td style="text-align: left;">Max steps per run; past it is a hang (default <code>1000000</code>).</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--seed &lt;N&gt;</code></td>
+<td style="text-align: left;">RNG seed (default <code>3735928559</code>); deterministic for a fixed seed.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--seed-input &lt;HEX&gt;</code></td>
+<td style="text-align: left;">Seed input as hex bytes, e.g. <code>5000</code>. Repeatable.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--collect &lt;N&gt;</code></td>
+<td style="text-align: left;">Collect up to N distinct crashes instead of stopping at the first.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--crashes-out &lt;PATH&gt;</code></td>
+<td style="text-align: left;">Write crashing inputs as a JSON array of byte arrays.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--input-len-addr &lt;ADDR&gt;</code></td>
+<td style="text-align: left;">Contract: <code>u32</code> input-length word (default <code>0x20002800</code>).</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--input-data-addr &lt;ADDR&gt;</code></td>
+<td style="text-align: left;">Contract: input data buffer (default <code>0x20002804</code>).</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--verdict-addr &lt;ADDR&gt;</code></td>
+<td style="text-align: left;">Contract: <code>u32</code> verdict word (default <code>0x20003000</code>).</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--done-magic &lt;HEX&gt;</code></td>
+<td style="text-align: left;">Clean-completion verdict (default <code>0xC0DEF022</code>).</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--fault-magic &lt;HEX&gt;</code></td>
+<td style="text-align: left;">Fault/panic verdict (default <code>0xDEADFA17</code>).</td>
+</tr>
+</tbody>
+</table>
+<p>Plus the <a href="#global-options">global flags</a>.</p>
+<h3 id="tier1-matrix"><code>tier1-matrix</code></h3>
+<p>Run the Tier-1 chip × peripheral validation matrix and export it.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Option</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>--json-out &lt;PATH&gt;</code></td>
+<td style="text-align: left;">Write the matrix as JSON (the committed snapshot is <code>docs/coverage/tier1-matrix.json</code>).</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--run-url &lt;URL&gt;</code></td>
+<td style="text-align: left;">Evidence link stamped into every cell that carries evidence (skips <code>na</code> and unrecorded).</td>
+</tr>
+</tbody>
+</table>
+<p>Plus the <a href="#global-options">global flags</a>.</p>
+<h3 id="cosim-step"><code>cosim-step</code></h3>
+<p>Step a manifest-declared co-simulation model through the real runner/adapter chain and print the routed outputs.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Option</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>&lt;SYSTEM&gt;</code></td>
+<td style="text-align: left;">System manifest declaring <code>cosim_models</code>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--set &lt;PATH=VALUE&gt;</code></td>
+<td style="text-align: left;">Seed a signal-store path before stepping, e.g. <code>--set plant.channels.11.enabled=false</code>. Repeatable.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--steps &lt;N&gt;</code></td>
+<td style="text-align: left;">Model steps to advance (default <code>1</code>).</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--json</code></td>
+<td style="text-align: left;">Print routed outputs as JSON instead of a table.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--analog-trace &lt;PATH&gt;</code></td>
+<td style="text-align: left;">Analog waveform trace (<code>.csv</code> or VCD <code>real</code> variables); only <code>adapter: analog</code> models produce samples.</td>
+</tr>
+</tbody>
+</table>
+<p>Plus the <a href="#global-options">global flags</a>.</p>
+<h3 id="rv1103-linux"><code>rv1103-linux</code></h3>
+<p>Reduced RV1103 Linux direct boot with strict artifacts and a guest acceptance receipt.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Option</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>--artifacts &lt;DIR&gt;</code></td>
+<td style="text-align: left;">Directory produced by <code>scripts/prepare-rv1103-linux.py</code>. Required.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--receipt &lt;PATH&gt;</code></td>
+<td style="text-align: left;">Full bounded console, artifact/backend hashes, and acceptance evidence. Required.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--cpu-hz &lt;N&gt;</code></td>
+<td style="text-align: left;">Functional instruction tick calibration (default <code>1200000000</code>; not physical timing).</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--max-cycles &lt;N&gt;</code></td>
+<td style="text-align: left;">Default <code>24000000000</code>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--max-retirements &lt;N&gt;</code></td>
+<td style="text-align: left;">Default <code>2000000000</code>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--max-fuel &lt;N&gt;</code></td>
+<td style="text-align: left;">Machine fuel, also counting idle fast-forward skips (default <code>24000000000</code>).</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--wall-seconds &lt;N&gt;</code></td>
+<td style="text-align: left;">Default <code>1800</code>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--console-bytes &lt;N&gt;</code></td>
+<td style="text-align: left;">UART2 byte cap, at most 64 KiB (default <code>65536</code>).</td>
+</tr>
+</tbody>
+</table>
+<p>Plus the <a href="#global-options">global flags</a>.</p>
+<h3 id="rv1103-basket"><code>rv1103-basket</code></h3>
+<p>Strict canonical smart-basket Linux and persistent power-plant local acceptance.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Option</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>--artifacts &lt;DIR&gt;</code></td>
+<td style="text-align: left;">Required.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--receipt &lt;PATH&gt;</code></td>
+<td style="text-align: left;">Required.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--max-cycles &lt;N&gt;</code></td>
+<td style="text-align: left;">Default <code>4000000000</code>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--max-retirements &lt;N&gt;</code></td>
+<td style="text-align: left;">Default <code>2000000000</code>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--max-fuel &lt;N&gt;</code></td>
+<td style="text-align: left;">Default <code>4000000000</code>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--wall-seconds &lt;N&gt;</code></td>
+<td style="text-align: left;">Default <code>3600</code>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--console-bytes &lt;N&gt;</code></td>
+<td style="text-align: left;">Default <code>65536</code>.</td>
+</tr>
+</tbody>
+</table>
+<p>Plus the <a href="#global-options">global flags</a>.</p>
+<h2 id="environment-variables">Environment Variables</h2>
+<ul>
+<li><code>RUST_LOG</code>: Controls logging level (e.g., <code>info</code>, <code>debug</code>).</li>
+<li>Native logging uses <code>tracing</code>.</li>
+<li>Example: <code>RUST_LOG=labwired_core=debug</code></li>
+<li><code>LABWIRED_API_KEY</code>: Sent by <code>test</code> unless <code>--no-key</code> is given.</li>
+<li><code>LABWIRED_ESP32S3_FLASH</code>, <code>LABWIRED_ESP32S3_ROM</code>, <code>LABWIRED_ESP32S3_ROM_DROM</code>, <code>LABWIRED_ESP32S3_ROM_ELF</code>: ROM-boot inputs for <code>run --rom-boot</code> and <code>test</code>.</li>
+<li><code>LABWIRED_ESP32C3_FLASH</code>: Merged flash image for <code>test --rom-boot</code> / <code>--capture-app-entry</code> / <code>--resume-snapshot</code>.</li>
+</ul>
+
+
+
+
+
+
+
+  
+  
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.expand", "navigation.top", "toc.follow", "search.suggest", "search.highlight", "content.code.copy"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

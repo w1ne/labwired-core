@@ -1,0 +1,183 @@
+{
+  "attempt": 1,
+  "boundary": "Actual Timer caller with explicit diagnostic adapters; not full runtime admission",
+  "build": {
+    "elf": {
+      "bytes": 20368,
+      "sha256": "61bbd44ef36a34293326c97a68768b4350ed393ad087f2cea08f65171c1c9f0a"
+    },
+    "guest_executed": false,
+    "map": {
+      "bytes": 30047,
+      "sha256": "202076738bd17162c066f8d0ab759dcb613a6c77fffc06a6815b9574b9670eb5"
+    },
+    "runtime_admitted": false,
+    "schema": 1,
+    "source": {
+      "boundary": "Diagnostic build only; no guest, full toolchain or runtime admission",
+      "core_commit": "2ed19d64ec3359143409a4b0a9758b4aeef3ee7d",
+      "files": {
+        "compiler/driver": {
+          "bytes": 1284952,
+          "sha256": "8b954aa209c87cc599255fc91618e2e7cc41f913d37a1bd233fdd1c13e3274a3"
+        },
+        "compiler/include/stdbool.h": {
+          "bytes": 1490,
+          "sha256": "68b898fc39d5d2a450df9b7263d984e7d2ad4c02675f4043a62e762f169e4b85"
+        },
+        "compiler/libgcc.a": {
+          "bytes": 9550530,
+          "sha256": "af0272f07ffcd4f4dddd548d2607d514d501b78d232922ac1fd3d915cd415137"
+        },
+        "core/LICENSE": {
+          "bytes": 1077,
+          "sha256": "8a97e7f8b7c220437cd49da7ff13b2b6ac12fdf626fc1361b0e737923ecb04c7"
+        },
+        "core/inc/core/CodalCompat.h": {
+          "bytes": 4481,
+          "sha256": "0047a10015ecfeadab51d9fede5b269c888b53e783b9ee8b994c50bed2f13e16"
+        },
+        "core/inc/core/CodalComponent.h": {
+          "bytes": 7235,
+          "sha256": "345c469f7a48b496506128aa4add54a8d8b6665c594b0bde97b0e3e4f31d4914"
+        },
+        "core/inc/core/CodalConfig.h": {
+          "bytes": 6539,
+          "sha256": "2505fbd1e62e57860a52bfd33efc5a68f9471ace4f0f766bb4c6a98dd5023b20"
+        },
+        "core/inc/core/CodalDmesg.h": {
+          "bytes": 2557,
+          "sha256": "ef91f16ecbb8516927209828afa8ff78ddacfa13fc32aa159346e21c2a5a1026"
+        },
+        "core/inc/core/ErrorNo.h": {
+          "bytes": 3400,
+          "sha256": "3926b4b39a65e4120c7faccb56e14a8019f5de5f169447b49b02b91aa3a59c83"
+        },
+        "core/inc/core/codal_target_hal.h": {
+          "bytes": 2580,
+          "sha256": "dad862ea056054f10a240579a845608cb832ec5222133ef5b7d98ea4615d424d"
+        },
+        "core/inc/driver-models/LowLevelTimer.h": {
+          "bytes": 4543,
+          "sha256": "392d505295e1e3180a9369106357b3719f7594ba1e978996858599354e72c834"
+        },
+        "core/inc/driver-models/Timer.h": {
+          "bytes": 10647,
+          "sha256": "f2e94bebbf8593086f246c3a77c0a7de37ac6d280a4839eb0f51ef8e547c760f"
+        },
+        "core/inc/types/Event.h": {
+          "bytes": 4996,
+          "sha256": "14be4ab70b3c69a5ddbfc54a6aaf214b9964f0634b3bfbf44ed74f17145c3437"
+        },
+        "core/source/driver-models/Timer.cpp": {
+          "bytes": 15857,
+          "sha256": "af0804b6019aea3e0cae664847b348c7323fa6fc9d400da969309959a6601e8f"
+        },
+        "samd/paired-irq/include/PairedIrqState.h": {
+          "bytes": 3356,
+          "sha256": "05e66ca9472fb138272d3b9d7e2c72338141f48cac95255103df77166ff69484"
+        },
+        "samd/paired-irq/profile.cpp": {
+          "bytes": 1990,
+          "sha256": "6338c2501169cd9269a5fae89f56c2fcf1430155d1bf8767249275088e0d159f"
+        },
+        "samd/simulation/arm/control.ld": {
+          "bytes": 823,
+          "sha256": "7b20ad2dc6040d852c6fbc9b6f280c906bab291e9e3769da22d5917b1819361c"
+        },
+        "samd/simulation/arm/irq-startup.S": {
+          "bytes": 1323,
+          "sha256": "5eb1d1ce523380d2297dec54022ea29ae0f950746a09fd66b7d689dd2e7b0bc8"
+        },
+        "samd/simulation/include/InterruptMask.h": {
+          "bytes": 1192,
+          "sha256": "8d4fa4d8742eea9f72ec131dbb70e5a245535c902ab91adb2fc6cbebb744cd5a"
+        },
+        "samd/timer-caller/build.sh": {
+          "bytes": 2614,
+          "sha256": "b14e9a7d09fe4a4389fb247f6eb64d484602f8e03a539b8e783d8dc9aa286289"
+        },
+        "samd/timer-caller/platform_includes.h": {
+          "bytes": 763,
+          "sha256": "dea200bc2cf55ba09e42e742dd852db914796ddeae984b432ad2f8950a041e62"
+        },
+        "samd/timer-caller/probe.cpp": {
+          "bytes": 7340,
+          "sha256": "534e6e57c871213e03f428d0d776fbfda00360365baca96baa24f6b40c4e6422"
+        },
+        "samd/timer-caller/provenance.py": {
+          "bytes": 5709,
+          "sha256": "e94712c219cb2b90f1e93a7861ddc2a85176dbe44713db61c17665188cb6e1af"
+        },
+        "samd/timer-caller/test_provenance.py": {
+          "bytes": 3831,
+          "sha256": "74fd9b41478479f0123c26427acf7f2f464477e86dd666678f0e7ce19cbb55cc"
+        }
+      },
+      "samd_commit": "d55214588780d737640536b0a58707cd6d69cfce",
+      "schema": 1
+    },
+    "units": {
+      "probe": [
+        "core/inc/core/CodalComponent.h",
+        "core/inc/core/CodalConfig.h",
+        "core/inc/core/ErrorNo.h",
+        "core/inc/core/codal_target_hal.h",
+        "core/inc/driver-models/LowLevelTimer.h",
+        "core/inc/driver-models/Timer.h",
+        "core/inc/types/Event.h",
+        "samd/simulation/include/InterruptMask.h",
+        "samd/timer-caller/platform_includes.h",
+        "samd/timer-caller/probe.cpp"
+      ],
+      "profile": [
+        "samd/paired-irq/include/PairedIrqState.h",
+        "samd/paired-irq/profile.cpp",
+        "samd/simulation/include/InterruptMask.h"
+      ],
+      "timer": [
+        "compiler/include/stdbool.h",
+        "core/inc/core/CodalCompat.h",
+        "core/inc/core/CodalComponent.h",
+        "core/inc/core/CodalConfig.h",
+        "core/inc/core/CodalDmesg.h",
+        "core/inc/core/ErrorNo.h",
+        "core/inc/core/codal_target_hal.h",
+        "core/inc/driver-models/LowLevelTimer.h",
+        "core/inc/driver-models/Timer.h",
+        "core/inc/types/Event.h",
+        "core/source/driver-models/Timer.cpp",
+        "samd/timer-caller/platform_includes.h"
+      ]
+    }
+  },
+  "commit": "44bc038b75fa58374b0a5a907f7085380dc433b2",
+  "head": "126ce5394e8be26d078fa333f7d6965a78e8a2bb",
+  "parents": [
+    "ce5091d8d9bf5c64f625cafad928af2f418c51d2",
+    "126ce5394e8be26d078fa333f7d6965a78e8a2bb"
+  ],
+  "profiles": {
+    "default": {
+      "fault": 0,
+      "irq_entries": 2,
+      "irq_returns": 2,
+      "log_sha256": "a5fa2fa7c2110130e2cc1d49ef902a4b91d577de9ae047f306ff3d33de368522",
+      "milestones": 6,
+      "status": "0x600d",
+      "steps": 45344
+    },
+    "scheduler": {
+      "fault": 0,
+      "irq_entries": 2,
+      "irq_returns": 2,
+      "log_sha256": "a5fa2fa7c2110130e2cc1d49ef902a4b91d577de9ae047f306ff3d33de368522",
+      "milestones": 6,
+      "status": "0x600d",
+      "steps": 45344
+    }
+  },
+  "run": 38216803677,
+  "schema": 1,
+  "tree": "1d76d37ef8c2c536c9be94b23fb6cb564803dd7b"
+}

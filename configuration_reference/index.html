@@ -1,0 +1,5987 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="LabWired uses YAML configuration to define the simulated hardware, so the same firmware binary runs against different hardware configurations.">
+      
+      
+      
+        <link rel="canonical" href="https://docs.labwired.com/configuration_reference/">
+      
+      
+        <link rel="prev" href="../howto/extend/hooks/">
+      
+      
+        <link rel="next" href="../declarative_registers/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Configuration (YAML) - LabWired docs</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    <meta property="og:type" content="website">
+  <meta property="og:site_name" content="LabWired docs">
+  <meta property="og:title" content="Configuration (YAML) - LabWired docs">
+  <meta property="og:description" content="LabWired uses YAML configuration to define the simulated hardware, so the same firmware binary runs against different hardware configurations.">
+  <meta property="og:url" content="https://docs.labwired.com/configuration_reference/">
+  <meta property="og:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Configuration (YAML) - LabWired docs">
+  <meta name="twitter:description" content="LabWired uses YAML configuration to define the simulated hardware, so the same firmware binary runs against different hardware configurations.">
+  <meta name="twitter:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
+
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#configuration-reference" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="LabWired docs" class="md-header__button md-logo" aria-label="LabWired docs" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            LabWired docs
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Configuration (YAML)
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/w1ne/labwired-core" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    w1ne/labwired-core
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="LabWired docs" class="md-nav__button md-logo" aria-label="LabWired docs" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    LabWired docs
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/w1ne/labwired-core" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    w1ne/labwired-core
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../fidelity/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fidelity
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture Internals
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../golden_reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware-Sim Parity
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Agent
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agent/mcp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Connect MCP
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agent/tools/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tool reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agent/first-run/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    First agent run
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing (engine agents)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tutorials
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/playground/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Playground first run
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting_started_firmware/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Run firmware (CLI)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../examples/i2c_sensor_example/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    I2C sensor example (TMP102)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../examples/dma_exti_example/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DMA & Interrupts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../examples/integrated_test_walkthrough/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Integrated Test Walkthrough
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How-To Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How-To Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/onboard-hardware/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Onboard hardware
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/onboard-part/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Onboard a part (I2C/SPI/actuators)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../board_onboarding_playbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Board onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../target_support_rubric/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Target support levels
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/multi-node/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-node worlds
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/timed-uart-network/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Timed UART networks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/gpio-nets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GPIO nets between machines
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/segger-rtt/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SEGGER RTT logging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/firmware-coverage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Firmware coverage (lines, branches, CI)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ci_integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CI integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../peripherals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Peripheral modeling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hardware_interaction_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware Interaction Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../vscode_debugging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Debugging with VS Code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../gdb_integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GDB Integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../debugging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Debugging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../platformio_integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PlatformIO Integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cosimulation_plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Co-simulation Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../integration-templates/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CI Integration Templates
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7_20" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_20" id="__nav_7_20_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Extend LabWired
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_20_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_20">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Extend LabWired
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/extend/add-a-peripheral/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Add a peripheral block (YAML)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/extend/python-device/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Add an I2C sensor (data + Python)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/extend/add-a-board/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Add a board (chip + manifest)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/extend/hooks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hook surfaces (device, host, Rust)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration (YAML)
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration (YAML)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-file-hierarchy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. File Hierarchy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-chip-descriptor-schema" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Chip Descriptor Schema
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Chip Descriptor Schema">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#every-chip-key" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Every chip key
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cpu_writes-the-memory-region-store-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        cpu_writes — the memory-region store policy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#memory-map-keys-beyond-flashram" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Memory-map keys beyond flash/ram
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#peripheral-entries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Peripheral entries
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#supported-peripheral-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Supported Peripheral Types
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pin-maps-and-pad-voltage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pin maps and pad voltage
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#supply-supervisor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Supply supervisor
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#clock-schema-and-includes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Clock, schema and includes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-system-manifest-schema" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. System Manifest Schema
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. System Manifest Schema">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#every-manifest-key" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Every manifest key
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#external-devices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        External devices
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#device-descriptors-external-parts-as-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Device descriptors (external parts as data)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#co-simulation-and-motor-models" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Co-simulation and motor models
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#board-io" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Board I/O
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#wifi-ap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WiFi AP
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#st7789-physical-glass-window" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ST7789 physical glass window
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#debug_uart-which-console-the-boards-usb-socket-is-wired-to" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        debug_uart — which console the board's USB socket is wired to
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-cli-usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. CLI Usage
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../declarative_registers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Declarative Registers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli_reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../python-sdk/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python SDK
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ci_test_runner/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test Script Schema
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference_client_flows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Client Flows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../isa_coverage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ISA Coverage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../schema_compatibility/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Schema Compatibility
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../catalog_validation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Catalog Validation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../target_support_rubric/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Target support levels
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Boards
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Boards
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/arduino-uno/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Arduino Uno R3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/esp32c3/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ESP32-C3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/esp32c6-devkitc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ESP32-C6
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/esp32s3/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ESP32-S3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/nrf52840/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    nRF52840
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/microbit-v1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    micro:bit V1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/microbit-v2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    micro:bit v2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/seeed-xiao-nrf52840-sense/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    XIAO nRF52840 Sense
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/rp2040/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RP2040
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/rp2350/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RP2350
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/rp2350-zero/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RP2350-Zero
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32f103/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F103
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32f401/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F401
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32f405/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F405
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32f407/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F407
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32f411/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F411
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32f767/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F767
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/nucleo-l476rg/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NUCLEO-L476RG
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/nucleo-l073rz/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NUCLEO-L073RZ
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/nucleo-g071rb/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NUCLEO-G071RB
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32g0b1re/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32G0B1RE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32h563/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32H563
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32h735/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32H735
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32u575/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32U575
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/nucleo-u545re/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NUCLEO-U545RE-Q
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32wba52/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32WBA52
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/nrf52832/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    nRF52832
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/nrf5340/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    nRF5340
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/nrf54l15/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    nRF54L15
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/atsamd21g18a/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ATSAMD21G18A
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Parts
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Parts
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/mcp9808/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP9808
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/mma8451q/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MMA8451Q
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/mpu6050/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MPU-6050
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/bmp280/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    BMP280
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/ssd1306/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SSD1306 OLED
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/lcd1602/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LCD1602
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/apa102/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    APA102
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/servo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Servo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/button/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Button
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/buzzer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Buzzer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/seven-segment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Seven-segment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/segment-display-mux/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multiplexed segment display
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/led-matrix-mux/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multiplexed LED matrix
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/74hc4051/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    74HC4051
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/max485/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MAX485
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/xy-md02/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    XY-MD02
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release_strategy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Strategy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../RELEASE_DETERMINISM/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Determinism
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../labwired_audit_protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Verification Audit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../coverage_scoreboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coverage Scoreboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../coverage/chip-conformance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Chip Conformance (live)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../coverage/tier1-scoreboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tier-1 Matrix (live)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../coverage/arduino-scoreboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Arduino Scoreboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../coverage/zephyr-scoreboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Zephyr Scoreboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../engineering/test_harness/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test Harness
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../limits/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Run Limits
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Demos
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../case_study_stm32/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Case Study (STM32)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_12" >
+        
+          
+          <label class="md-nav__link" for="__nav_12" id="__nav_12_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Explanation
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Explanation
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture_overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../simulation_protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Simulation Protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-file-hierarchy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. File Hierarchy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-chip-descriptor-schema" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Chip Descriptor Schema
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Chip Descriptor Schema">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#every-chip-key" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Every chip key
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cpu_writes-the-memory-region-store-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        cpu_writes — the memory-region store policy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#memory-map-keys-beyond-flashram" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Memory-map keys beyond flash/ram
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#peripheral-entries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Peripheral entries
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#supported-peripheral-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Supported Peripheral Types
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pin-maps-and-pad-voltage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pin maps and pad voltage
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#supply-supervisor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Supply supervisor
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#clock-schema-and-includes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Clock, schema and includes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-system-manifest-schema" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. System Manifest Schema
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. System Manifest Schema">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#every-manifest-key" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Every manifest key
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#external-devices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        External devices
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#device-descriptors-external-parts-as-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Device descriptors (external parts as data)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#co-simulation-and-motor-models" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Co-simulation and motor models
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#board-io" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Board I/O
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#wifi-ap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WiFi AP
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#st7789-physical-glass-window" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ST7789 physical glass window
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#debug_uart-which-console-the-boards-usb-socket-is-wired-to" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        debug_uart — which console the board's USB socket is wired to
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-cli-usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. CLI Usage
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="configuration-reference">Configuration Reference</h1>
+<p>LabWired uses a YAML-based configuration system to define the simulated hardware environment. This separation allows the same firmware binary to be tested against different hardware configurations (e.g., changing memory sizes or remapping peripherals) without recompilation.</p>
+<h2 id="1-file-hierarchy">1. File Hierarchy</h2>
+<p>A complete simulation requires two descriptor files:</p>
+<ol>
+<li><strong>Chip Descriptor</strong> (<code>chips/&lt;name&gt;.yaml</code>): Defines the internal architecture of the SoC (Flash/RAM size, internal peripheral addresses).</li>
+<li><strong>System Manifest</strong> (<code>systems/&lt;name&gt;.yaml</code>): Instantiates a chip and defines board-level wiring (external sensors, UART loopbacks).</li>
+</ol>
+<p>A chip descriptor loaded from a path may <code>include:</code> other chip YAMLs (§2), and
+a manifest's <code>external_devices:</code> entries resolve either to a model built into
+the engine or to a declarative device descriptor — <code>configs/devices/*.yaml</code> —
+whose <code>behavior:</code> primitives are the third, data-only configuration surface
+(§3, External devices).</p>
+<h2 id="2-chip-descriptor-schema">2. Chip Descriptor Schema</h2>
+<p>Defines the invariant properties of the silicon.</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">"STM32F103"</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nt">arch</span><span class="p">:</span><span class="w"> </span><span class="s">"arm"</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="nt">core</span><span class="p">:</span><span class="w"> </span><span class="s">"cortex-m3"</span><span class="w">   </span><span class="c1"># Exact CPU core; gates core-specific behavior</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">                    </span><span class="c1"># (e.g. bit-band aliasing exists only on M3/M4)</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="nt">flash</span><span class="p">:</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">  </span><span class="nt">base</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0x08000000</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">  </span><span class="nt">size</span><span class="p">:</span><span class="w"> </span><span class="s">"64KB"</span><span class="w">  </span><span class="c1"># Supports KB/MB suffixes</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="nt">ram</span><span class="p">:</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">  </span><span class="nt">base</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0x20000000</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">  </span><span class="nt">size</span><span class="p">:</span><span class="w"> </span><span class="s">"20KB"</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="nt">peripherals</span><span class="p">:</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">  </span><span class="c1"># Internal Peripheral Definition</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="s">"usart1"</span>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="s">"uart"</span>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="w">    </span><span class="nt">base_address</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0x40013800</span>
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="w">    </span><span class="nt">irq</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">37</span>
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="w">    </span><span class="nt">config</span><span class="p">:</span>
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="w">      </span><span class="nt">profile</span><span class="p">:</span><span class="w"> </span><span class="s">"stm32f1"</span><span class="w">  </span><span class="c1"># Loads architecture-specific register map</span>
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>
+</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="s">"gpioa"</span>
+</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="s">"gpio"</span>
+</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="w">    </span><span class="nt">base_address</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0x40010800</span>
+</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="w">    </span><span class="nt">config</span><span class="p">:</span>
+</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="w">      </span><span class="nt">profile</span><span class="p">:</span><span class="w"> </span><span class="s">"stm32f1"</span>
+</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a>
+</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a><span class="w">  </span><span class="c1"># Declarative Peripheral (Custom)</span>
+</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="s">"my_custom_timer"</span>
+</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="s">"declarative"</span>
+</span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a><span class="w">    </span><span class="nt">base_address</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0x40004000</span>
+</span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a><span class="w">    </span><span class="nt">config</span><span class="p">:</span>
+</span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a><span class="w">      </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="s">"../peripherals/custom_timer.yaml"</span>
+</span></code></pre></div>
+<h3 id="every-chip-key">Every chip key</h3>
+<p>This is the complete <code>ChipDescriptor</code> surface (<code>crates/config/src/chip.rs</code>); the
+sample above is its common shape. <code>name</code>, <code>arch</code>, <code>flash</code>, <code>ram</code>, and
+<code>peripherals</code> are required (<code>peripherals: []</code> is a valid chip with no MMIO);
+everything else is optional and has a default.</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Meaning</th>
+<th>Minimal example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>schema_version</code></td>
+<td>Free-form descriptor version; defaults to <code>"1.0"</code>.</td>
+<td><code>schema_version: "1.0"</code></td>
+</tr>
+<tr>
+<td><code>name</code></td>
+<td>Part label; also how a manifest's bare-word <code>chip:</code> finds a built-in.</td>
+<td><code>name: "STM32F103"</code></td>
+</tr>
+<tr>
+<td><code>arch</code></td>
+<td>Instruction-set family: <code>arm</code>, <code>riscv</code>, <code>xtensa</code>, <code>avr</code>, <code>unknown</code> (family aliases like <code>cortex-m3</code> are accepted).</td>
+<td><code>arch: "arm"</code></td>
+</tr>
+<tr>
+<td><code>core</code></td>
+<td>Exact core (<code>cortex-m3</code>, <code>cortex-m33</code>, <code>cortex-m0+</code>); gates per-core bus behavior — bit-band aliasing exists only on M3/M4.</td>
+<td><code>core: "cortex-m3"</code></td>
+</tr>
+<tr>
+<td><code>cpu_hz</code></td>
+<td>The clock the simulator runs the core at, in Hz. Declared, not derived — see <a href="#clock-schema-and-includes">Clock, schema and includes</a>. <code>0</code> = undeclared.</td>
+<td><code>cpu_hz: 72_000_000</code></td>
+</tr>
+<tr>
+<td><code>flash</code></td>
+<td>Primary flash window: <code>base</code>, <code>size</code>, optional <code>cpu_writes</code> policy (see below).</td>
+<td><code>flash: {base: 0x08000000, size: "64KB"}</code></td>
+</tr>
+<tr>
+<td><code>ram</code></td>
+<td>Primary RAM window: <code>base</code>, <code>size</code>, optional <code>cpu_writes</code>.</td>
+<td><code>ram: {base: 0x20000000, size: "20KB"}</code></td>
+</tr>
+<tr>
+<td><code>reset_vector_offset</code></td>
+<td>Bytes from the flash base to the application vector table when a stage-2 bootloader precedes it (<code>0</code> = vectors at the flash base).</td>
+<td><code>reset_vector_offset: 0x100</code></td>
+</tr>
+<tr>
+<td><code>flash_boot_alias</code></td>
+<td><code>true</code> (default): address <code>0x0</code> mirrors flash (the STM32 boot alias). <code>false</code> for a part whose low addresses are real memory (i.MX RT ITCM at <code>0x0</code>).</td>
+<td><code>flash_boot_alias: false</code></td>
+</tr>
+<tr>
+<td><code>atomic_register_aliases</code></td>
+<td>Register-alias flavour: <code>false</code> (default), <code>true</code> (= <code>rp2040</code>), <code>rp2040</code>, <code>efr32s2</code>.</td>
+<td><code>atomic_register_aliases: "efr32s2"</code></td>
+</tr>
+<tr>
+<td><code>ns_alias_offset</code></td>
+<td>TrustZone non-secure alias offset; applied only to otherwise-unmapped addresses, so it cannot shadow a declared peripheral.</td>
+<td><code>ns_alias_offset: 0x10000000</code></td>
+</tr>
+<tr>
+<td><code>memory_regions</code></td>
+<td>Extra CPU-visible windows beyond <code>flash</code>/<code>ram</code> — see <a href="#memory-map-keys-beyond-flashram">Memory-map keys</a>.</td>
+<td>see below</td>
+</tr>
+<tr>
+<td><code>peripherals</code></td>
+<td>MMIO peripheral list; see <a href="#peripheral-entries">Peripheral entries</a>.</td>
+<td><code>peripherals: []</code></td>
+</tr>
+<tr>
+<td><code>pins</code></td>
+<td>Authoritative pad→GPIO map; once declared, an unlisted pad no longer resolves (no silent label-letter fallback).</td>
+<td><code>pins: {PA5: {gpio: gpio_a, bit: 5}}</code></td>
+</tr>
+<tr>
+<td><code>analog_pins</code></td>
+<td>Pad→ADC map (<code>peripheral</code>, <code>channel</code>); kept apart from <code>pins</code> so naming only the ADC inputs does not force a full GPIO transcription.</td>
+<td><code>analog_pins: {PA0: {peripheral: "adc1", channel: 0}}</code></td>
+</tr>
+<tr>
+<td><code>io_voltage_v</code></td>
+<td>The supply the chip's GPIO pads run from, in volts; reference for <code>gpio_input_thresholds</code>. Absent = "not transcribed" (nothing defaults it).</td>
+<td><code>io_voltage_v: 3.3</code></td>
+</tr>
+<tr>
+<td><code>gpio_input_thresholds</code></td>
+<td>Digital input thresholds as ratios of <code>io_voltage_v</code>; must satisfy <code>0 &lt; vil &lt; vih &lt; 1</code>.</td>
+<td><code>gpio_input_thresholds: {vil: 0.35, vih: 0.65}</code></td>
+</tr>
+<tr>
+<td><code>supply_monitor</code></td>
+<td>POR/PDR/BOR supply thresholds — see <a href="#supply-supervisor">Supply supervisor</a>.</td>
+<td>see below</td>
+</tr>
+<tr>
+<td><code>include</code></td>
+<td>Chip YAML include(s), expanded only when the descriptor is loaded from a path.</td>
+<td><code>include: nrf52-common.yaml</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="cpu_writes-the-memory-region-store-policy"><code>cpu_writes</code> — the memory-region store policy</h3>
+<p><code>flash:</code> and <code>ram:</code> are memory regions: <code>base</code>, <code>size</code>, and the optional
+<code>cpu_writes</code> policy. The policy says what the bus does with a <strong>CPU-initiated
+store</strong> into that region; it is independent per region and defaults to <code>allow</code>
+(the only behaviour that existed before the key):</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># configs/chips/ci-fixture-stm32l476-readonly.yaml</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nt">flash</span><span class="p">:</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="nt">base</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0x08000000</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="nt">size</span><span class="p">:</span><span class="w"> </span><span class="s">"1024KB"</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">  </span><span class="nt">cpu_writes</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">fault</span><span class="w">   </span><span class="c1"># allow (default) | warn | fault</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="nt">ram</span><span class="p">:</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">  </span><span class="nt">base</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0x20000000</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">  </span><span class="nt">size</span><span class="p">:</span><span class="w"> </span><span class="s">"96KB"</span><span class="w">        </span><span class="c1"># omitted cpu_writes ⇒ allow</span>
+</span></code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Mode</th>
+<th>A CPU store into the region…</th>
+<th>Recorded when the store is flagged or refused</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>allow</code> (default)</td>
+<td>commits silently, exactly as before</td>
+<td>this region records nothing</td>
+</tr>
+<tr>
+<td><code>warn</code></td>
+<td>commits; one deduplicated <code>WARN</code> per region</td>
+<td>violation count + first <code>{addr, cycle, pc}</code></td>
+</tr>
+<tr>
+<td><code>fault</code></td>
+<td>does not commit; raises <code>SimulationError::MemoryViolation(addr)</code></td>
+<td>violation count + first <code>{addr, cycle, pc}</code></td>
+</tr>
+</tbody>
+</table>
+<p>The semantics, precisely (<code>crates/config/src/chip.rs</code> <code>CpuWritePolicy</code>,
+<code>crates/core/src/bus/memory_policy.rs</code>, <code>crates/core/src/bus/accessors.rs</code>):</p>
+<ul>
+<li><strong>CPU stores only.</strong> The gate sits at the top of the CPU store path for every
+  access width (<code>write_u8</code>/<code>16</code>/<code>32</code>/<code>64</code>) before anything commits. Host/loader
+  writes never pass through it: loading an image whose segments land inside
+  <code>flash:</code>/<code>ram:</code> writes the backing memory directly (<code>Machine::load_firmware</code> →
+  <code>LinearMemory::load_from_segment</code>), and a snapshot restore is the same. The
+  generic DMA request path runs with the gate explicitly bypassed;
+  peripheral-internal DMA models that write through <code>&amp;mut dyn Bus</code> are a
+  recorded deferral, not part of this rule yet.</li>
+<li><strong>The boot alias counts as flash.</strong> A store through the boot alias (address
+  <code>0x0</code> on a flash-at-<code>0x08000000</code> part) is gated as a flash store.</li>
+<li><strong><code>fault</code> → precise BusFault.</strong> The store raises
+  <code>SimulationError::MemoryViolation(addr)</code>. On an ARMv7-M core with BusFault
+  enabled that is a precise data BusFault with <code>BFAR</code> valid, and the CLI's
+  verdict names the region when the fault address matches the first recorded
+  violation in a <code>fault</code>-mode region (<code>crates/cli/src/fault_report.rs</code>):
+  <code>data access at 0x0800_1000 (BFAR valid; store to read-only flash)</code>.</li>
+<li><strong><code>warn</code> commits and records.</strong> The store lands exactly as with <code>allow</code>; one
+  WARN is logged for the first violation in the region and no more — the count
+  and the first violation are still recorded in full.</li>
+<li><strong><code>result.json.memory_policy</code> is skip-on-default.</strong> <code>labwired test</code> writes the
+  block only when at least one of the two regions is non-<code>allow</code>; an all-default
+  config produces byte-identical artifacts to before the key existed. Each
+  region carries <code>mode</code>, <code>violations</code>, and <code>first</code> (<code>addr</code>, <code>cycle</code>, <code>pc</code>;
+  omitted when there were none).</li>
+</ul>
+<p>Runnable receipt: <a href="../examples/readonly-flash/README.md">examples/readonly-flash/</a>
+runs a firmware store into <code>cpu_writes: fault</code> flash end to end, and
+<a href="../howto/extend/add-a-board/">Add a board</a> shows the flip to <code>warn</code>.</p>
+<p><strong>Known caveat — images linked at the boot alias.</strong> A segment whose address is
+not inside the flash/RAM backing (an ELF linked at <code>0x0</code> on a part whose flash
+sits at <code>0x0800_0000</code>) is loaded byte-by-byte through the bus
+(<code>Machine::load_firmware</code> falls back to one bus store per byte), and those load
+stores are subject to <code>cpu_writes</code> like any other. With <code>cpu_writes: fault</code> on
+flash, such an image cannot load: the first store is refused and the segment
+fails — the Cortex-M loader logs
+<code>Failed to load segment at 0x0 - outside of memory map</code> and continues with a
+blank flash. Link firmware at the flash base, as real parts' images are; the
+<a href="../examples/readonly-flash/README.md">read-only-flash example</a> is linked at
+<code>0x0800_0000</code>, so its own load is direct and recorded as zero violations.</p>
+<h3 id="memory-map-keys-beyond-flashram">Memory-map keys beyond <code>flash</code>/<code>ram</code></h3>
+<ul>
+<li><code>reset_vector_offset</code> — where the real reset vector hides when a stage-2
+  bootloader precedes the application. The simulator does not execute the
+  stage-2 blob (flash is directly mapped); it uses this offset to find the
+  vector table when the flash-base vectors are not valid. RP2040 sets <code>0x100</code>
+  (the boot2 blob).
+  <div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">reset_vector_offset</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0x100</span><span class="w">            </span><span class="c1"># configs/chips/rp2040.yaml</span>
+</span></code></pre></div></li>
+<li><code>flash_boot_alias</code> (default <code>true</code>) — whether address <code>0x0</code> mirrors the flash
+  image. Set <code>false</code> for a part whose low addresses are memory of their own;
+  on the i.MX RT the ITCM sits at <code>0x0</code>, and with the alias on a store there
+  would be written into flash.
+  <div class="language-yaml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">flash_boot_alias</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w">               </span><span class="c1"># no in-tree chip needs it today</span>
+</span></code></pre></div></li>
+<li><code>atomic_register_aliases</code> — the 0x1000-strided aliases of every peripheral
+  register that a family's HAL uses for read-modify-write. Two families use the
+  SAME stride with DIFFERENT ops, so the value names the flavour:</li>
+<li><code>rp2040</code>: <code>+0x1000</code> XOR, <code>+0x2000</code> SET, <code>+0x3000</code> CLR (also RP2350);</li>
+<li><code>efr32s2</code>: <code>+0x1000</code> SET, <code>+0x2000</code> CLR, <code>+0x3000</code> TGL (EFR32/EFM32 Series 2).</li>
+</ul>
+<p>The historical boolean spelling still loads: <code>true</code> == <code>rp2040</code>; <code>false</code> (or
+  omitting the key) means an alias address is ordinary unmapped MMIO.
+  <div class="language-yaml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">atomic_register_aliases</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">         </span><span class="c1"># configs/chips/rp2040.yaml</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="nt">atomic_register_aliases</span><span class="p">:</span><span class="w"> </span><span class="s">"efr32s2"</span><span class="w">    </span><span class="c1"># configs/chips/efr32mg26.yaml</span>
+</span></code></pre></div>
+- <code>ns_alias_offset</code> — the TrustZone non-secure alias window. An MMIO access
+  that maps to no peripheral but whose address plus this offset DOES map to one
+  is served by that peripheral; the offset applies only as a fallback, so it
+  can never shadow a declared peripheral. The nRF54L family exposes every
+  peripheral at <code>0x5000_0000+</code> (secure) and exactly <code>0x1000_0000</code> below it.
+  <div class="language-yaml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">ns_alias_offset</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0x10000000</span><span class="w">           </span><span class="c1"># configs/chips/nrf54l15.yaml</span>
+</span></code></pre></div>
+- <code>memory_regions</code> — additional CPU-visible windows beyond <code>flash</code>/<code>ram</code>
+  (ESP32-C3 IRAM <code>0x4037C000</code> and flash-DROM view <code>0x3C000000</code>, the RP2040
+  bootrom). Each entry has <code>name</code>, <code>base</code>, <code>size</code>, and optionally:
+  - <code>image_env</code> — an environment variable naming a raw binary loaded into the
+    region at <code>base</code> (a mask-ROM dump, say). The region stays zero-filled when
+    the variable is unset or the file is missing.
+  - <code>erased</code> — fill the region with <code>0xFF</code> instead of <code>0x00</code>. An erased flash
+    byte reads ones, so a blank settings page must read <code>ffffffff …</code> in the
+    twin too.</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># configs/chips/efr32mg26.yaml (excerpt)</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="nt">memory_regions</span><span class="p">:</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">"userdata"</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">    </span><span class="nt">base</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0x0FE00000</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">    </span><span class="nt">size</span><span class="p">:</span><span class="w"> </span><span class="s">"1KB"</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">    </span><span class="nt">erased</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span></code></pre></div>
+<h3 id="peripheral-entries">Peripheral entries</h3>
+<p>Each <code>peripherals:</code> entry is a <code>PeripheralConfig</code> (<code>crates/config/src/chip.rs</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Meaning</th>
+<th>Minimal example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>id</code></td>
+<td>Instance name; <code>clock:</code>, <code>board_io:</code> and <code>external_devices[].connection</code> cite it.</td>
+<td><code>id: "usart1"</code></td>
+</tr>
+<tr>
+<td><code>type</code></td>
+<td>Model selector; an unrecognised type fails the load (see below).</td>
+<td><code>type: "uart"</code></td>
+</tr>
+<tr>
+<td><code>base_address</code></td>
+<td>MMIO window base; accepts <code>0x…</code> or an underscored integer.</td>
+<td><code>base_address: 0x40013800</code></td>
+</tr>
+<tr>
+<td><code>size</code></td>
+<td>Optional window length.</td>
+<td><code>size: "1KB"</code></td>
+</tr>
+<tr>
+<td><code>irq</code></td>
+<td>Vector line: <code>irq: 37</code>, or <code>irq: nvic@37</code> to name the controller in one token.</td>
+<td><code>irq: 37</code></td>
+</tr>
+<tr>
+<td><code>irq_controller</code></td>
+<td>Controller id when not given by the <code>controller@line</code> sugar.</td>
+<td><code>irq_controller: "nvic"</code></td>
+</tr>
+<tr>
+<td><code>clock</code></td>
+<td>RCC gate(s) that must ALL be set for the block to answer: one <code>{reg, bit}</code> or a list. <code>reg</code> is a symbolic enable-register name resolved at build time; a name the family does not expose is a hard build error. Absent ⇒ never gated.</td>
+<td><code>clock: {reg: "apb2enr", bit: 14}</code></td>
+</tr>
+<tr>
+<td><code>config</code></td>
+<td>Instance knobs. Unknown top-level keys flatten in here (<code>easyDMA: true</code> ≡ <code>config: {easyDMA: true}</code>); nested <code>config:</code> wins on a colliding key.</td>
+<td><code>config: {profile: "stm32f1"}</code></td>
+</tr>
+</tbody>
+</table>
+<p>The <code>clock:</code> mechanism (one gate or several ANDed) is documented in the
+<a href="../peripherals/">Peripheral modeling guide</a>; declarative register blocks in
+<a href="../declarative_registers/">Declarative Register Definitions</a>.</p>
+<h3 id="supported-peripheral-types">Supported Peripheral Types</h3>
+<ul>
+<li><code>uart</code>, <code>usart</code>: Universal Asynchronous Receiver Transmitter</li>
+<li><code>gpio</code>: General Purpose I/O</li>
+<li><code>rcc</code>: Reset and Clock Control</li>
+<li><code>timer</code>: Basic Timer</li>
+<li><code>i2c</code>: Inter-Integrated Circuit</li>
+<li><code>spi</code>: Serial Peripheral Interface</li>
+<li><code>exti</code>: External Interrupt Controller</li>
+<li><code>afio</code>: Alternate Function I/O</li>
+<li><code>dma</code>: Direct Memory Access Controller</li>
+<li><code>systick</code>: System Tick Timer</li>
+<li><code>declarative</code>: Loads a generic peripheral from a YAML register description.</li>
+<li><code>strict_ir</code>: Loads a register map from Strict IR JSON.</li>
+<li><code>stub</code>: A zero-filled window — only for types on the explicit known-stub
+  allowlist (<code>crates/core/src/bus/known_stubs.rs</code>, shrink-only, each entry with
+  a written reason).</li>
+</ul>
+<p>Family factories add family-specific types (<code>nrf52_uart</code>, <code>esp32c3_i2c</code>,
+<code>imxrt_lpi2c</code>, …). An unrecognised type is a <strong>load error</strong>, never a silent
+zero-filled stub: the message tells you to model it, describe it with
+<code>type: declarative</code> plus a descriptor <code>path</code>, or — if answering zeros really is
+right — declare <code>type: stub</code> (or add the type to the allowlist with a reason).</p>
+<h3 id="pin-maps-and-pad-voltage">Pin maps and pad voltage</h3>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Meaning</th>
+<th>Minimal example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>pins</code></td>
+<td>Authoritative pad label → <code>{gpio, bit}</code> map. When a chip declares any pins, resolution goes through the map, so a pad whose label implies the wrong port still resolves correctly — and an undeclared pin fails to resolve instead of silently letter-parsing onto a port. Extra fields (e.g. <code>functions:</code>) are ignored by the simulator.</td>
+<td><code>pins: {PA5: {gpio: gpio_a, bit: 5}}</code> (<code>configs/chips/atsamd21g18a.yaml</code>)</td>
+</tr>
+<tr>
+<td><code>analog_pins</code></td>
+<td>Pad label → the ADC that samples it (<code>peripheral</code>, <code>channel</code>), transcribed from the datasheet pinout. A pad absent here means "no analog pad is modelled", not "channel 0": the co-simulation <code>board.analog.&lt;pad&gt;_volts</code> path refuses such a pad rather than guessing.</td>
+<td><code>analog_pins: {PA0: {peripheral: "adc1", channel: 0}}</code> (<code>configs/chips/stm32f103.yaml</code>)</td>
+</tr>
+<tr>
+<td><code>io_voltage_v</code></td>
+<td>The supply the GPIO pads run from, in volts. Absent means "not transcribed", and nothing defaults it — a board at another supply would get thresholds for the wrong rail.</td>
+<td><code>io_voltage_v: 3.3</code></td>
+</tr>
+<tr>
+<td><code>gpio_input_thresholds</code></td>
+<td>Datasheet digital input thresholds as ratios of <code>io_voltage_v</code>: a pad reads low at or below <code>vil</code> and high at or above <code>vih</code>.</td>
+<td><code>gpio_input_thresholds: {vil: 0.35, vih: 0.65}</code> (<code>configs/chips/stm32f103.yaml</code>)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="supply-supervisor">Supply supervisor</h3>
+<p><code>supply_monitor:</code> transcribes the part's reset and power-control thresholds: the
+MCU is held in reset until VDD rises to <code>por_rising_v</code> (and, with a brown-out
+level active, to that level's <code>rising_v</code>); it resets again when VDD falls below
+<code>pdr_falling_v</code> or the active level's <code>falling_v</code>. It is only consulted when a
+board routes its VDD net into the engine (<code>board.power.vdd_volts</code>); absent means
+the chip cannot be held in reset by its supply, and such a route is refused
+rather than guessed.</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># configs/chips/stm32f401.yaml (excerpt)</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="nt">supply_monitor</span><span class="p">:</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span><span class="nt">por_rising_v</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.72</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">  </span><span class="nt">pdr_falling_v</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.68</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">  </span><span class="nt">bor_levels</span><span class="p">:</span>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">    </span><span class="nt">bor1</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> falling_v</span><span class="p">:</span><span class="w"> </span><span class="nv">2.19</span><span class="p p-Indicator">,</span><span class="nt"> rising_v</span><span class="p">:</span><span class="w"> </span><span class="nv">2.29</span><span class="w"> </span><span class="p p-Indicator">}</span>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">    </span><span class="nt">bor2</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> falling_v</span><span class="p">:</span><span class="w"> </span><span class="nv">2.50</span><span class="p p-Indicator">,</span><span class="nt"> rising_v</span><span class="p">:</span><span class="w"> </span><span class="nv">2.59</span><span class="w"> </span><span class="p p-Indicator">}</span>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="w">    </span><span class="nt">bor3</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> falling_v</span><span class="p">:</span><span class="w"> </span><span class="nv">2.83</span><span class="p p-Indicator">,</span><span class="nt"> rising_v</span><span class="p">:</span><span class="w"> </span><span class="nv">2.92</span><span class="w"> </span><span class="p p-Indicator">}</span>
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="w">  </span><span class="c1"># bor_level: bor1    # optional: the level in effect (absent = BOR disabled)</span>
+</span></code></pre></div>
+<h3 id="clock-schema-and-includes">Clock, schema and includes</h3>
+<ul>
+<li><strong><code>cpu_hz</code> — declared, not derived.</strong> Nothing walks RCC/PLL registers to
+  compute a clock. This number is the single source of truth for every "how
+  many cycles is a microsecond" question, and self-timed device models (DHT22,
+  WS2812, the rotary encoder) scale their datasheet windows by it, so it must
+  agree with the clock the firmware was built against or the firmware decodes
+  noise. <code>0</code> means undeclared; every in-tree chip declares it
+  (<code>every_chip_descriptor_declares_a_cpu_hz</code> fails the build if a new one does
+  not). A board that runs the part slower overrides it with the manifest's
+  <code>cpu_hz:</code> — the NUCLEO-L476RG never leaves the 4 MHz MSI reset clock and
+  says so in its manifest.
+  <div class="language-yaml highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nt">cpu_hz</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">80_000_000</span>
+</span></code></pre></div></li>
+<li><code>schema_version</code> — descriptor version string, defaults to <code>"1.0"</code>. No engine
+  behaviour keys off it; it is provenance.
+  <div class="language-yaml highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nt">schema_version</span><span class="p">:</span><span class="w"> </span><span class="s">"1.0"</span>
+</span></code></pre></div></li>
+<li><code>include</code> — chip YAML include(s), expanded <strong>only</strong> when the descriptor is
+  loaded from a path (<code>ChipDescriptor::from_file</code>); built-in chips cannot
+  include because there is no filesystem. Paths are relative to the including
+  file, includes load first, and local keys win. <code>peripherals</code> merge by <code>id</code>,
+  <code>memory_regions</code> by <code>name</code>, <code>pins</code>/<code>analog_pins</code> as maps.
+  <div class="language-yaml highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nt">include</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">nrf52-common.yaml</span><span class="w">       </span><span class="c1"># or: include: [a.yaml, b.yaml]</span>
+</span></code></pre></div></li>
+</ul>
+<h2 id="3-system-manifest-schema">3. System Manifest Schema</h2>
+<p>Defines the board-level environment.</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">"BluePill</span><span class="nv"> </span><span class="s">Board"</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="nt">chip</span><span class="p">:</span><span class="w"> </span><span class="s">"../chips/stm32f103.yaml"</span><span class="w">  </span><span class="c1"># Path relative to this file</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="c1"># Accepted but ignored today: the engine has no `connectors:` field (see the</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="c1"># note under "Every manifest key"). Console routing is `debug_uart:`; external</span>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="c1"># buses are `external_devices:`. Nine in-tree system manifests still carry this</span>
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="c1"># block, so it is documented rather than deleted.</span>
+</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="nt">connectors</span><span class="p">:</span>
+</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="s">"uart"</span>
+</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="w">    </span><span class="nt">peripheral</span><span class="p">:</span><span class="w"> </span><span class="s">"usart1"</span>
+</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a><span class="w">    </span><span class="nt">endpoint</span><span class="p">:</span><span class="w"> </span><span class="s">"host_console"</span><span class="w">  </span><span class="c1"># Pipes UART output to simulator stdout</span>
+</span></code></pre></div>
+<h3 id="every-manifest-key">Every manifest key</h3>
+<p>This is the complete <code>SystemManifest</code> surface (<code>crates/config/src/manifest.rs</code>).
+<code>name</code> and <code>chip</code> are required; everything else is optional.</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Meaning</th>
+<th>Minimal example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>schema_version</code></td>
+<td>Defaults to <code>"1.0"</code>; environment manifests must declare <code>"1.0"</code> exactly.</td>
+<td><code>schema_version: "1.0"</code></td>
+</tr>
+<tr>
+<td><code>name</code></td>
+<td>Board label; used in logs and to name a private lab air.</td>
+<td><code>name: "BluePill Board"</code></td>
+</tr>
+<tr>
+<td><code>chip</code></td>
+<td>A <strong>bare word</strong> (<code>stm32f103</code>) is a built-in/plugin chip name; anything containing <code>/</code>, <code>\</code>, or ending <code>.yaml</code>/<code>.yml</code>/<code>.json</code> is a path resolved relative to THIS manifest, so a manifest is relocatable with the files it names.</td>
+<td><code>chip: "stm32f103"</code></td>
+</tr>
+<tr>
+<td><code>cpu_hz</code></td>
+<td>Board-level override of the chip's declared clock, in Hz. Absent ⇒ the chip's default.</td>
+<td><code>cpu_hz: 4_000_000</code> (<code>configs/systems/nucleo-l476rg.yaml</code>)</td>
+</tr>
+<tr>
+<td><code>memory_overrides</code></td>
+<td>Parsed but <strong>not consulted by the engine today</strong> — region sizes come from the chip descriptor. The field exists so manifests may carry it; do not rely on it.</td>
+<td><code>memory_overrides: {flash: "512KB"}</code></td>
+</tr>
+<tr>
+<td><code>peripherals</code></td>
+<td>Chip-peripheral patches/additions. An entry whose <code>id</code> matches a chip peripheral merges its <code>config</code> keys and overrides <code>base_address</code> (when nonzero; <code>0</code> keeps the chip's), <code>irq</code> and <code>size</code>; an unmatched <code>id</code> adds a new peripheral. <code>id</code>, <code>type</code> and <code>base_address</code> are required on every entry.</td>
+<td><code>peripherals: [{id: "usart1", type: "uart", base_address: 0, config: {profile: "stm32f1"}}]</code></td>
+</tr>
+<tr>
+<td><code>external_devices</code></td>
+<td>The parts on the board's buses — see <a href="#external-devices">External devices</a>.</td>
+<td>see below</td>
+</tr>
+<tr>
+<td><code>parts</code></td>
+<td>Manifest-carried part packs (private/vendor catalogs). The <code>labwired.part/v1</code> contract lives in <a href="../part-packs/">Part packs</a>; <code>- path:</code> is a CLI convenience that <code>SystemManifest::from_file</code> inlines, so a manifest handed straight to the browser/engine must carry the pack inline.</td>
+<td><code>parts: [{path: "./acme.yaml"}]</code></td>
+</tr>
+<tr>
+<td><code>cosim_models</code></td>
+<td>Scalar signal-level co-simulation plants — see <a href="#co-simulation-and-motor-models">Co-simulation and motor models</a>.</td>
+<td>see below</td>
+</tr>
+<tr>
+<td><code>motor_models</code></td>
+<td>Typed motor plants (<code>kind: dc</code> or <code>kind: bldc</code>) with SI-unit fields.</td>
+<td>see below</td>
+</tr>
+<tr>
+<td><code>board_io</code></td>
+<td>Board-level pin bindings — see <a href="#board-io">Board I/O</a>.</td>
+<td>see below</td>
+</tr>
+<tr>
+<td><code>debug_uart</code></td>
+<td>Which console the board's USB socket is wired to; see its section below.</td>
+<td><code>debug_uart: "uart0"</code></td>
+</tr>
+<tr>
+<td><code>wifi_ap</code></td>
+<td>Opt-in per-lab virtual WiFi AP — see <a href="#wifi-ap">WiFi AP</a>. Absent ⇒ no AP.</td>
+<td>see below</td>
+</tr>
+<tr>
+<td><code>walk_deleted</code></td>
+<td>Per-cycle peripheral-walk deletion: absent = auto-derive, <code>true</code> = force deleted, <code>false</code> = pin on. Only consulted in <code>event-scheduler</code> builds; a legacy build always walks.</td>
+<td><code>walk_deleted: true</code> (<code>examples/nokia5110-invaders-lab/system.yaml</code>)</td>
+</tr>
+</tbody>
+</table>
+<p><code>connectors:</code> — nine in-tree system manifests (arduino-uno-r4-minima,
+calliope-mini-v1, metro-m4, microbit-v1, microbit-v2, nano-33-iot, pybadge,
+stm32f7-discovery, teensy-41) still carry a <code>connectors:</code> block that the engine
+ignores; their consoles work through the defaults meanwhile. One day core may
+parse it; today it is not a configuration surface.</p>
+<p><code>walk_deleted</code> in full (<code>crates/config/src/manifest.rs</code>): absent means the core
+auto-derives walk-deletability at build time — the walk is deleted iff EVERY
+peripheral on the bus is provably walk-independent for all firmware states
+(conservative). <code>true</code> is a hand opt-in for a config verified byte-identical
+walk-free; <code>false</code> pins the walk on.</p>
+<h3 id="external-devices">External devices</h3>
+<p>Each <code>external_devices:</code> entry:</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>id</code></td>
+<td>Instance name. <code>board_io</code> and stimulus channels address the device by it, and mux children name it as their <code>connection</code>.</td>
+</tr>
+<tr>
+<td><code>type</code></td>
+<td>The device model — see the catalog below. An unknown type is a hard load error; nothing is silently skipped.</td>
+</tr>
+<tr>
+<td><code>connection</code></td>
+<td>What the device hangs off: normally a controller peripheral id (<code>"i2c1"</code>, <code>"spi1"</code>, <code>"uart2"</code>), or a GPIO peripheral id for pin-timing parts. It may also name ANOTHER external device's <code>id</code> — that is how a slave is placed behind a TCA9548A bus switch.</td>
+</tr>
+<tr>
+<td><code>channel</code></td>
+<td>Downstream channel on a bus switch (<code>0..=7</code>; absent behind a switch means 0). Meaningless and ignored when <code>connection</code> names a controller.</td>
+</tr>
+<tr>
+<td><code>route</code></td>
+<td>Optional signal→pad route: <code>sda</code>/<code>scl</code>, <code>mosi</code>/<code>miso</code>/<code>sck</code>, <code>tx</code>/<code>rx</code>. Required by controllers whose pads are runtime-routed — an ESP32-C3 I²C rejects a missing route because its GPIO matrix makes the wiring runtime-configurable.</td>
+</tr>
+<tr>
+<td><code>config</code></td>
+<td>Per-device knobs (<code>i2c_address</code>, pin labels, seeds, …); the model's metadata lists the keys it reads.</td>
+</tr>
+</tbody>
+</table>
+<p>Resolution order — one implementation in <code>crates/core/src/bus/external_devices.rs</code>:</p>
+<ol>
+<li>the manifest's own <code>parts:</code> packs (most specific wins);</li>
+<li>the built-in kit registry (the catalog below);</li>
+<li>the declarative <code>configs/devices/*.yaml</code> descriptors.</li>
+</ol>
+<p>Anything still unclaimed fails the build with the manifest id and type named.</p>
+<p>The catalog is generated from the kit registry into
+<code>crates/core/tests/fixtures/peripherals/manifest.json</code> (regenerate with
+<code>cargo run -p labwired-cli --bin gen-peripherals-manifest</code>). One line per
+canonical <code>type:</code>; the table below is rendered from that file by
+<code>python3 scripts/ci/device_catalog_doc.py --write</code> and checked in CI:</p>
+<!-- device-catalog:start -->
+<table>
+<thead>
+<tr>
+<th><code>type</code></th>
+<th>Bus</th>
+<th>Model</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>bg770a-cellular</code></td>
+<td>UART</td>
+<td>LTE-M / NB-IoT cellular modem with the full Quectel AT command surface</td>
+</tr>
+<tr>
+<td><code>bt201</code></td>
+<td>UART</td>
+<td>Dual-mode Bluetooth 5.0 audio + BLE module with a UART AT interface and BLE transparent data</td>
+</tr>
+<tr>
+<td><code>esp32c3_esp_at</code></td>
+<td>UART</td>
+<td>Bounded AT peer with explicit mock connection state</td>
+</tr>
+<tr>
+<td><code>hc-05</code></td>
+<td>UART</td>
+<td>Bluetooth SPP module with AT command shell over UART</td>
+</tr>
+<tr>
+<td><code>iolink-master</code></td>
+<td>UART</td>
+<td>IO-Link master state machine over UART</td>
+</tr>
+<tr>
+<td><code>max485</code></td>
+<td>UART</td>
+<td>Half-duplex RS-485 transceiver between a UART and a shared A/B pair</td>
+</tr>
+<tr>
+<td><code>neo6m-gps</code></td>
+<td>UART</td>
+<td>GPS module streaming NMEA sentences over UART RX</td>
+</tr>
+<tr>
+<td><code>sim800l</code></td>
+<td>UART</td>
+<td>SIM800L UART AT command shell (no cellular RF)</td>
+</tr>
+<tr>
+<td><code>xy-md02</code></td>
+<td>UART</td>
+<td>SHT20 RS-485 temperature and humidity transmitter speaking Modbus RTU</td>
+</tr>
+<tr>
+<td><code>ydlidar-scanner</code></td>
+<td>UART</td>
+<td>Spinning lidar streaming YDLIDAR scan frames over UART RX at 230400 baud</td>
+</tr>
+<tr>
+<td><code>ads1115</code></td>
+<td>I²C</td>
+<td>4-channel 16-bit I²C ADC (TI ADS1115)</td>
+</tr>
+<tr>
+<td><code>adxl345</code></td>
+<td>I²C</td>
+<td>3-axis ±2/4/8/16 g digital accelerometer over I2C</td>
+</tr>
+<tr>
+<td><code>aht20</code></td>
+<td>I²C</td>
+<td>Aosong AHT20 I²C temperature and humidity sensor</td>
+</tr>
+<tr>
+<td><code>as5600</code></td>
+<td>I²C</td>
+<td>12-bit contactless magnetic rotary position sensor over I²C</td>
+</tr>
+<tr>
+<td><code>at24c256</code></td>
+<td>I²C</td>
+<td>I²C serial EEPROM with a 16-bit address pointer and 64-byte pages</td>
+</tr>
+<tr>
+<td><code>atecc608a</code></td>
+<td>I²C</td>
+<td>I²C secure element: P-256 sign/verify, RNG, key slots (HSM/TPM role)</td>
+</tr>
+<tr>
+<td><code>bh1750</code></td>
+<td>I²C</td>
+<td>Ambient-light sensor over I²C (single-byte opcodes)</td>
+</tr>
+<tr>
+<td><code>bme280</code></td>
+<td>I²C</td>
+<td>Bosch BME280 temp + humidity + pressure sensor over I2C</td>
+</tr>
+<tr>
+<td><code>bmi270</code></td>
+<td>I²C</td>
+<td>Bosch BMI270 low-power IMU with hardware step counter over I2C</td>
+</tr>
+<tr>
+<td><code>bmp280</code></td>
+<td>I²C</td>
+<td>Bosch BMP280 I²C pressure + temperature sensor (no humidity)</td>
+</tr>
+<tr>
+<td><code>bno055</code></td>
+<td>I²C</td>
+<td>9-DoF absolute orientation sensor (Bosch BNO055) over I²C</td>
+</tr>
+<tr>
+<td><code>cap1188</code></td>
+<td>I²C</td>
+<td>Microchip CAP1188 8-channel capacitive touch controller over I2C</td>
+</tr>
+<tr>
+<td><code>drv2605</code></td>
+<td>I²C</td>
+<td>TI DRV2605 haptic motor driver over I2C</td>
+</tr>
+<tr>
+<td><code>ds3231</code></td>
+<td>I²C</td>
+<td>I²C real-time clock with temperature-compensated crystal</td>
+</tr>
+<tr>
+<td><code>fxos8700</code></td>
+<td>I²C</td>
+<td>NXP FXOS8700 6-axis accelerometer + magnetometer over I2C</td>
+</tr>
+<tr>
+<td><code>ina219</code></td>
+<td>I²C</td>
+<td>High-side current and bus voltage sensor over I²C</td>
+</tr>
+<tr>
+<td><code>lcd1602</code></td>
+<td>I²C</td>
+<td>16×2 HD44780 character LCD behind a PCF8574 I2C backpack</td>
+</tr>
+<tr>
+<td><code>lsm303agr_accel</code></td>
+<td>I²C</td>
+<td>ST LSM303AGR accelerometer half over I2C (address 0x19)</td>
+</tr>
+<tr>
+<td><code>lsm303agr_mag</code></td>
+<td>I²C</td>
+<td>ST LSM303AGR magnetometer half over I2C (address 0x1E)</td>
+</tr>
+<tr>
+<td><code>max30102</code></td>
+<td>I²C</td>
+<td>Maxim MAX30102 pulse-oximetry / heart-rate front-end over I2C</td>
+</tr>
+<tr>
+<td><code>mcp9808</code></td>
+<td>I²C</td>
+<td>±0.25 °C I²C temperature sensor with seeded noise + thermal lag</td>
+</tr>
+<tr>
+<td><code>mlx90614</code></td>
+<td>I²C</td>
+<td>Single-point IR (non-contact) thermometer over SMBus/I2C</td>
+</tr>
+<tr>
+<td><code>mlx90640</code></td>
+<td>I²C</td>
+<td>Melexis MLX90640 32×24 far-IR thermal array over I2C</td>
+</tr>
+<tr>
+<td><code>mma8451q</code></td>
+<td>I²C</td>
+<td>3-axis 14-bit accelerometer over I2C with standby/active gating</td>
+</tr>
+<tr>
+<td><code>mpu6050</code></td>
+<td>I²C</td>
+<td>6-axis gyro + accelerometer over I2C</td>
+</tr>
+<tr>
+<td><code>nau88l21</code></td>
+<td>I²C</td>
+<td>Nuvoton NAU88L21 stereo audio codec: I2C control port and register file</td>
+</tr>
+<tr>
+<td><code>oled-sh1107</code></td>
+<td>I²C</td>
+<td>128×128 monochrome OLED display over I2C with a paged framebuffer</td>
+</tr>
+<tr>
+<td><code>oled-ssd1306</code></td>
+<td>I²C</td>
+<td>128×64 monochrome OLED display over I2C with a paged framebuffer</td>
+</tr>
+<tr>
+<td><code>oled-ssd1306-128x32</code></td>
+<td>I²C</td>
+<td>0.91″ 128×32 monochrome OLED display over I2C with a paged framebuffer</td>
+</tr>
+<tr>
+<td><code>ov3660</code></td>
+<td>I²C</td>
+<td>OmniVision 3 MP camera: SCCB control at 0x3C plus 8-bit DVP frames into the ESP32-S3 LCD_CAM</td>
+</tr>
+<tr>
+<td><code>pca9685</code></td>
+<td>I²C</td>
+<td>16-channel 12-bit I²C PWM / servo controller</td>
+</tr>
+<tr>
+<td><code>pcf8574</code></td>
+<td>I²C</td>
+<td>NXP PCF8574 8-bit I²C quasi-bidirectional port expander</td>
+</tr>
+<tr>
+<td><code>pn532</code></td>
+<td>I²C</td>
+<td>NXP PN532 I²C NFC controller probe shell (no RF)</td>
+</tr>
+<tr>
+<td><code>scd41</code></td>
+<td>I²C</td>
+<td>Photoacoustic CO₂ + temperature + humidity sensor over I2C</td>
+</tr>
+<tr>
+<td><code>sgp41</code></td>
+<td>I²C</td>
+<td>MOx gas sensor returning raw VOC/NOx signals over I2C</td>
+</tr>
+<tr>
+<td><code>sht30</code></td>
+<td>I²C</td>
+<td>Sensirion SHT30 I²C temperature and humidity sensor</td>
+</tr>
+<tr>
+<td><code>sht31</code></td>
+<td>I²C</td>
+<td>Temperature + humidity sensor over I²C (Sensirion CRC-8)</td>
+</tr>
+<tr>
+<td><code>sps30</code></td>
+<td>I²C</td>
+<td>Laser particulate-matter sensor (PM1/2.5/4/10) over I2C</td>
+</tr>
+<tr>
+<td><code>tmp102</code></td>
+<td>I²C</td>
+<td>12-bit I²C temperature sensor (self-drifting demo)</td>
+</tr>
+<tr>
+<td><code>tmp117</code></td>
+<td>I²C</td>
+<td>TI TMP117 high-accuracy digital temperature sensor over I2C</td>
+</tr>
+<tr>
+<td><code>vcnl4010</code></td>
+<td>I²C</td>
+<td>Proximity + ambient-light sensor over I2C (fixed address 0x13)</td>
+</tr>
+<tr>
+<td><code>veml7700</code></td>
+<td>I²C</td>
+<td>Ambient-light sensor (lux) over I2C</td>
+</tr>
+<tr>
+<td><code>vl53l0x</code></td>
+<td>I²C</td>
+<td>Laser time-of-flight distance sensor over I²C (ST VL53L0X)</td>
+</tr>
+<tr>
+<td><code>vl53l1x</code></td>
+<td>I²C</td>
+<td>Laser time-of-flight distance sensor over I2C</td>
+</tr>
+<tr>
+<td><code>74hc595</code></td>
+<td>SPI</td>
+<td>8-bit serial-in / parallel-out shift register over SPI</td>
+</tr>
+<tr>
+<td><code>adxl345_spi</code></td>
+<td>SPI</td>
+<td>3-axis ±16 g accelerometer over SPI (full-resolution, 256 LSB/g)</td>
+</tr>
+<tr>
+<td><code>amoled-rm67162</code></td>
+<td>SPI</td>
+<td>240x536 RGB565 AMOLED, 4-wire SPI (DBI Type-C)</td>
+</tr>
+<tr>
+<td><code>apa102</code></td>
+<td>SPI</td>
+<td>SPI-clocked addressable RGB LED strip (write-only sink)</td>
+</tr>
+<tr>
+<td><code>hc595-7seg</code></td>
+<td>SPI</td>
+<td>4-digit 7-segment LED display driven by two chained 74HC595 shift registers over SPI</td>
+</tr>
+<tr>
+<td><code>ili9341</code></td>
+<td>SPI</td>
+<td>240×320 RGB565 SPI TFT display</td>
+</tr>
+<tr>
+<td><code>inmp441</code></td>
+<td>SPI</td>
+<td>Omnidirectional MEMS microphone, 24-bit I2S digital output</td>
+</tr>
+<tr>
+<td><code>led-matrix</code></td>
+<td>SPI</td>
+<td>8×8 LED matrix driven by a MAX7219 serial display driver over SPI</td>
+</tr>
+<tr>
+<td><code>lora-sx1278</code></td>
+<td>SPI</td>
+<td>Semtech SX1278 SPI LoRa register shell (no RF)</td>
+</tr>
+<tr>
+<td><code>max31855</code></td>
+<td>SPI</td>
+<td>K-type thermocouple-to-digital converter over SPI (read-only 32-bit frame)</td>
+</tr>
+<tr>
+<td><code>mcp2515</code></td>
+<td>SPI</td>
+<td>Functional SPI classical CAN controller for standard 11-bit data frames</td>
+</tr>
+<tr>
+<td><code>microsd</code></td>
+<td>SPI</td>
+<td>SPI SD card command shell (init + single-block read zeros)</td>
+</tr>
+<tr>
+<td><code>nrf24l01</code></td>
+<td>SPI</td>
+<td>2.4 GHz SPI transceiver register shell (no air link)</td>
+</tr>
+<tr>
+<td><code>pcd8544</code></td>
+<td>SPI</td>
+<td>Nokia 5110 (PCD8544) monochrome 84×48 LCD over SPI</td>
+</tr>
+<tr>
+<td><code>rc522</code></td>
+<td>SPI</td>
+<td>MFRC522 SPI RFID reader register shell (no RF)</td>
+</tr>
+<tr>
+<td><code>sn74hc165</code></td>
+<td>SPI</td>
+<td>8-bit parallel-in / serial-out shift register over SPI</td>
+</tr>
+<tr>
+<td><code>ssd1680_tricolor_290</code></td>
+<td>SPI</td>
+<td>2.9" tri-color (black/white/red) e-paper over SPI. Driver class GxEPD2_290_C90c -- the WeAct / Waveshare 2.9" B/W/R module. Not interchangeable with the UC8151D part</td>
+</tr>
+<tr>
+<td><code>st7789-170x320</code></td>
+<td>SPI</td>
+<td>1.9in 170x320 IPS TFT on a Sitronix ST7789V, 4-wire SPI</td>
+</tr>
+<tr>
+<td><code>uc8151d_tricolor_290</code></td>
+<td>SPI</td>
+<td>2.9" tri-color (black/white/red) e-paper over SPI. Driver class GxEPD2_290_Z13c. Different command set from the SSD1680 part -- pick by the driver class your firmware instantiates, not by how the panel looks</td>
+</tr>
+<tr>
+<td><code>74cbtlv3257</code></td>
+<td>GPIO</td>
+<td>Four 1-of-2 bus switches; S picks the A or B side, OE opens all four</td>
+</tr>
+<tr>
+<td><code>74hc00</code></td>
+<td>GPIO</td>
+<td>Four independent 2-input NAND gates, 9 ns propagation delay</td>
+</tr>
+<tr>
+<td><code>74hc04</code></td>
+<td>GPIO</td>
+<td>Six independent inverting buffers, 7 ns propagation delay</td>
+</tr>
+<tr>
+<td><code>74hc08</code></td>
+<td>GPIO</td>
+<td>Four independent 2-input AND gates, 8 ns propagation delay</td>
+</tr>
+<tr>
+<td><code>74hc32</code></td>
+<td>GPIO</td>
+<td>Four independent 2-input OR gates, 9 ns propagation delay</td>
+</tr>
+<tr>
+<td><code>74hc125</code></td>
+<td>GPIO</td>
+<td>Four non-inverting buffers, each with its own active-low output enable</td>
+</tr>
+<tr>
+<td><code>74hc245</code></td>
+<td>GPIO</td>
+<td>Eight bidirectional bits; DIR picks the direction, OE isolates both buses</td>
+</tr>
+<tr>
+<td><code>74hc4051</code></td>
+<td>GPIO</td>
+<td>Routes one of eight analog inputs (Y0..Y7) to an ADC channel, selected by three GPIO pins</td>
+</tr>
+<tr>
+<td><code>74lvc1t45</code></td>
+<td>GPIO</td>
+<td>Single-bit bidirectional translator; DIR picks the direction, OE isolates</td>
+</tr>
+<tr>
+<td><code>a4988</code></td>
+<td>GPIO</td>
+<td>A4988/DRV8825/TMC2209-class STEP/DIR twin (step count + angle)</td>
+</tr>
+<tr>
+<td><code>bldc-motor</code></td>
+<td>GPIO</td>
+<td>Configurable deterministic three-phase BLDC motor plant</td>
+</tr>
+<tr>
+<td><code>bldc_hall_driver</code></td>
+<td>GPIO</td>
+<td>PWM/DIR/ENABLE in; 6-step Hall pattern out. Duty→RPM not modelled</td>
+</tr>
+<tr>
+<td><code>dc-motor</code></td>
+<td>GPIO</td>
+<td>Configurable deterministic brushed DC motor plant</td>
+</tr>
+<tr>
+<td><code>dfplayer_mini</code></td>
+<td>GPIO</td>
+<td>MP3 player module: serial commands in, BUSY low while playing</td>
+</tr>
+<tr>
+<td><code>dht11</code></td>
+<td>GPIO</td>
+<td>One-wire temperature + humidity sensor</td>
+</tr>
+<tr>
+<td><code>dht22</code></td>
+<td>GPIO</td>
+<td>One-wire temperature + humidity sensor</td>
+</tr>
+<tr>
+<td><code>hc-sr04</code></td>
+<td>GPIO</td>
+<td>Ultrasonic distance sensor (trigger / echo)</td>
+</tr>
+<tr>
+<td><code>hx711</code></td>
+<td>GPIO</td>
+<td>24-bit load-cell amplifier (DT/SCK bit-bang)</td>
+</tr>
+<tr>
+<td><code>ili9341-16bit</code></td>
+<td>GPIO</td>
+<td>240×320 RGB565 TFT over Intel 8080 16-bit GPIO bit-bang</td>
+</tr>
+<tr>
+<td><code>keypad</code></td>
+<td>GPIO</td>
+<td>4×4 membrane keypad (row-drive / column-read)</td>
+</tr>
+<tr>
+<td><code>l298n</code></td>
+<td>GPIO</td>
+<td>L298N/TB6612/L293D-class dual H-bridge twin (direction + enable effort)</td>
+</tr>
+<tr>
+<td><code>led-matrix-mux</code></td>
+<td>GPIO</td>
+<td>Row/column LED matrix (micro:bit 5x5, bare 8x8) multiplexed by GPIO row and column lines, with per-pixel brightness</td>
+</tr>
+<tr>
+<td><code>logic_level_shifter_4ch</code></td>
+<td>GPIO</td>
+<td>BSS138-class 4-channel bidirectional shifter; DIR is a sim strap (not on the PCB)</td>
+</tr>
+<tr>
+<td><code>neopixel</code></td>
+<td>GPIO</td>
+<td>Addressable RGB LED strip on one data pin (edge-timed bit stream)</td>
+</tr>
+<tr>
+<td><code>pybadge_buttons</code></td>
+<td>GPIO</td>
+<td>Eight active-low buttons through the board's SN74HC165</td>
+</tr>
+<tr>
+<td><code>rotary_encoder</code></td>
+<td>GPIO</td>
+<td>Incremental quadrature knob (EC11)</td>
+</tr>
+<tr>
+<td><code>segment-display-mux</code></td>
+<td>GPIO</td>
+<td>N-digit 7/14/16-segment LED display, multiplexed by GPIO segment and digit-select lines</td>
+</tr>
+<tr>
+<td><code>servo</code></td>
+<td>GPIO</td>
+<td>RC hobby servo driven by a single PWM control pin (GPIO edges and/or LEDC duty)</td>
+</tr>
+<tr>
+<td><code>seven-segment</code></td>
+<td>GPIO</td>
+<td>Bare single-digit 7-segment LED display driven straight from nine GPIO pins</td>
+</tr>
+<tr>
+<td><code>tm1637-7seg</code></td>
+<td>GPIO</td>
+<td>4-digit 7-segment LED display with the TM1637 2-wire (CLK/DIO) driver</td>
+</tr>
+<tr>
+<td><code>uln2003</code></td>
+<td>GPIO</td>
+<td>Four-phase unipolar stepper twin (IN1..IN4)</td>
+</tr>
+<tr>
+<td><code>gp2y0a21</code></td>
+<td>Analog</td>
+<td>Sharp GP2Y0A21YK0F analogue infrared distance sensor, 10–80 cm (Vo on ADC)</td>
+</tr>
+<tr>
+<td><code>ldr</code></td>
+<td>Analog</td>
+<td>CdS photoresistor + voltage divider on an ADC channel</td>
+</tr>
+<tr>
+<td><code>lipo_charger</code></td>
+<td>Analog</td>
+<td>Single-cell LiPo pack + TP4056-class analog charger on an ADC channel</td>
+</tr>
+<tr>
+<td><code>mq-6</code></td>
+<td>Analog</td>
+<td>Hanwei MQ-6 LPG/propane semiconductor gas sensor module (AOUT on ADC)</td>
+</tr>
+<tr>
+<td><code>ntc-thermistor</code></td>
+<td>Analog</td>
+<td>10 kΩ NTC + voltage divider on an ADC channel</td>
+</tr>
+<tr>
+<td><code>potentiometer</code></td>
+<td>Analog</td>
+<td>3-pin linear potentiometer on an ADC channel (rotary or slide)</td>
+</tr>
+<tr>
+<td><code>soil-moisture</code></td>
+<td>Analog</td>
+<td>Capacitive soil moisture probe module (AOUT on ADC; wetter → lower voltage)</td>
+</tr>
+<tr>
+<td><code>tmp36</code></td>
+<td>Analog</td>
+<td>Analog temperature sensor, 10 mV/°C with 500 mV at 0 °C</td>
+</tr>
+<tr>
+<td><code>xl4015</code></td>
+<td>Analog</td>
+<td>Adjustable XL4015 buck; Vout setpoint observed through a ÷11 ADC divider</td>
+</tr>
+<tr>
+<td><code>can-bridge</code></td>
+<td>CAN</td>
+<td>Boundary between a CAN controller and traffic from outside the simulation</td>
+</tr>
+<tr>
+<td><code>can-diagnostic-tester</code></td>
+<td>CAN</td>
+<td>One-shot single-frame UDS-style request injector on bxCAN/FDCAN</td>
+</tr>
+<tr>
+<td><code>can-player</code></td>
+<td>CAN</td>
+<td>Replays candump-format traffic into a bxCAN/FDCAN controller</td>
+</tr>
+<tr>
+<td><code>uds-tester</code></td>
+<td>CAN</td>
+<td>Stateful multi-frame UDS tester (SecurityAccess-class handshakes)</td>
+</tr>
+</tbody>
+</table>
+<!-- device-catalog:end -->
+
+<p>Legacy and alternate spellings resolve to the same canonical models:
+<code>sn74cbtlv3257</code> = <code>74cbtlv3257</code>; <code>74ls00</code>/<code>74hct00</code> = <code>74hc00</code>;
+<code>74ls04</code>/<code>74hct04</code> = <code>74hc04</code>; <code>74ls08</code>/<code>74hct08</code> = <code>74hc08</code>;
+<code>74ls125</code>/<code>74lvth125</code>/<code>sn74lvth125</code> = <code>74hc125</code>;
+<code>74ls245</code>/<code>74lvc245</code>/<code>sn74lvc245a</code> = <code>74hc245</code>; <code>74ls32</code>/<code>74hct32</code> = <code>74hc32</code>;
+<code>cd4051</code>/<code>cd74hc4051</code> = <code>74hc4051</code>; <code>hc595</code> = <code>74hc595</code>;
+<code>sn74lvc1t45</code> = <code>74lvc1t45</code>; <code>drv8825</code>/<code>tmc2209</code> = <code>a4988</code>; <code>dc_motor</code> =
+<code>dc-motor</code>; <code>bldc_motor</code> = <code>bldc-motor</code>; <code>bldc-hall-driver</code> =
+<code>bldc_hall_driver</code>; <code>uds-diagnostic-tester</code> = <code>can-diagnostic-tester</code>; <code>am2302</code>
+= <code>dht22</code>; <code>drv2605l</code> = <code>drv2605</code>; <code>hc05</code> = <code>hc-05</code>; <code>hcsr04</code> = <code>hc-sr04</code>;
+<code>hc595_7seg</code> = <code>hc595-7seg</code>; <code>ili9341_16bit</code> = <code>ili9341-16bit</code>;
+<code>bts7960</code>/<code>ibt-2</code>/<code>ibt2</code>/<code>l293d</code>/<code>tb6612</code> = <code>l298n</code>; <code>max7219</code> = <code>led-matrix</code>;
+<code>led_matrix_mux</code> = <code>led-matrix-mux</code>; <code>logic-level-shifter-4ch</code> =
+<code>logic_level_shifter_4ch</code>; <code>ws2812</code> = <code>neopixel</code>; <code>slide-potentiometer</code> =
+<code>potentiometer</code>; <code>rotary-encoder</code> = <code>rotary_encoder</code>; <code>segment_display_mux</code> =
+<code>segment-display-mux</code>; <code>sg90</code>/<code>mg996r</code> = <code>servo</code>; <code>seven_segment</code> =
+<code>seven-segment</code>; <code>epd-2in9-tricolor</code>/<code>gxepd2_290_c90c</code> =
+<code>ssd1680_tricolor_290</code>; <code>tm1637_7seg</code> = <code>tm1637-7seg</code>; <code>epd-2in9-uc8151d</code> =
+<code>uc8151d_tricolor_290</code>; <code>stepper-28byj48</code> = <code>uln2003</code>.</p>
+<p>Two I²C types are attached by the I²C factory rather than the kit registry and
+so are absent from the generated catalog: <code>tca9548a</code> (aliases <code>pca9548a</code>,
+<code>tca9548</code>) — the 8-channel bus switch whose <code>channel:</code> places children behind
+it; and <code>shm_i2c</code> — a shared-memory I²C bridge for host-injected traffic.</p>
+<p>Beyond the catalog and those two, any <code>type:</code> is valid if the manifest's own
+<code>parts:</code> defines it — see <a href="../part-packs/">Part packs</a> for the
+<code>labwired.part/v1</code> contract and the <code>behavior:</code> primitive reference.</p>
+<h3 id="device-descriptors-external-parts-as-data">Device descriptors (external parts as data)</h3>
+<p>Every model in the catalog is a device descriptor: the in-tree ones live in
+<code>configs/devices/*.yaml</code>, and a manifest can carry its own in <code>parts:</code>. The
+top-level keys (<code>crates/config/src/peripherals.rs</code> <code>DeviceDescriptor</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>type</code></td>
+<td>The <code>type:</code> string the manifest uses — a descriptor's identity.</td>
+</tr>
+<tr>
+<td><code>behavior</code></td>
+<td>Which runtime primitive backs the part and how its pins/registers are declared.</td>
+</tr>
+<tr>
+<td><code>emit</code></td>
+<td>How the canvas compiler emits this device into a manifest (used by the browser compiler; optional).</td>
+</tr>
+<tr>
+<td><code>metadata</code></td>
+<td>Display labels, accepted <code>config:</code> keys, and the stimulus channels the part serves — load-bearing: the same channel definitions back the device's <code>SimInput</code> impl.</td>
+</tr>
+<tr>
+<td><code>schema</code></td>
+<td>Contract version — required of a manifest-carried pack (<code>labwired.part/v1</code>).</td>
+</tr>
+<tr>
+<td><code>source</code></td>
+<td>Provenance (which catalog/vendor shipped the pack), so errors can name where a model came from.</td>
+</tr>
+<tr>
+<td><code>overrides</code></td>
+<td>The built-in <code>type</code> this pack deliberately replaces; shadowing a built-in is otherwise a hard error.</td>
+</tr>
+<tr>
+<td><code>catalog</code></td>
+<td>App-layer catalog record (opaque to the simulator).</td>
+</tr>
+</tbody>
+</table>
+<p><code>behavior.primitive</code> selects the interpreter (one line each):</p>
+<table>
+<thead>
+<tr>
+<th>Primitive</th>
+<th>What the engine interprets</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>i2c_device</code></td>
+<td>Register-pointer I²C part (the <code>i2c:</code> block).</td>
+</tr>
+<tr>
+<td><code>spi_device</code></td>
+<td>SPI register/frame part (the <code>spi:</code> block).</td>
+</tr>
+<tr>
+<td><code>display</code></td>
+<td>Framebuffer panel: geometry, pixel format, RAM layout, command/data framing.</td>
+</tr>
+<tr>
+<td><code>led_strip</code></td>
+<td>Addressable LED strip: wire protocol plus the artifact it publishes.</td>
+</tr>
+<tr>
+<td><code>analog_source</code></td>
+<td>ADC-channel plant: the datasheet's output curve.</td>
+</tr>
+<tr>
+<td><code>uart_device</code></td>
+<td>Byte-stream part: frame shape, command table, unsolicited output.</td>
+</tr>
+<tr>
+<td><code>uart_transceiver</code></td>
+<td>A part that gates a UART (driver/receiver enable pads).</td>
+</tr>
+<tr>
+<td><code>gpio_device</code></td>
+<td>Pin-timing part driven by rules and finite edge schedules.</td>
+</tr>
+<tr>
+<td><code>logic_gate</code></td>
+<td>74-series truth table, enables, direction/select, propagation delay.</td>
+</tr>
+<tr>
+<td><code>segment_display</code></td>
+<td>Multiplexed 7/14/16-segment display.</td>
+</tr>
+<tr>
+<td><code>led_matrix</code></td>
+<td>Row/column multiplexed LED matrix.</td>
+</tr>
+<tr>
+<td><code>analog_mux</code></td>
+<td>Analog multiplexer: select pins, channel count, enable.</td>
+</tr>
+<tr>
+<td><code>dc_motor</code> / <code>bldc_motor</code></td>
+<td>Motor plants — converted to the typed plants at the loader boundary.</td>
+</tr>
+</tbody>
+</table>
+<p>The wire-level detail (register encoding keys, schedules, artifacts, rules)
+lives in <a href="../part-packs/">Part packs</a>; declarative register blocks for <em>chip</em>
+peripherals live in <a href="../declarative_registers/">Declarative Register Definitions</a>.
+Worked examples: <code>configs/devices/adxl345.yaml</code> (I²C), <code>configs/devices/dht22.yaml</code>
+(one-wire GPIO), and the howtos under Extend LabWired.</p>
+<h3 id="co-simulation-and-motor-models">Co-simulation and motor models</h3>
+<p><code>cosim_models:</code> declares scalar signal-level plants stepped in lockstep with the
+machine: <code>id</code>, <code>adapter</code> (<code>external_process</code>, <code>fmi</code>, <code>mock</code>, <code>analog</code>),
+<code>model</code> (required for <code>external_process</code> and <code>fmi</code>), <code>step_ns</code> (default
+<code>1000</code>), <code>inputs</code>/<code>outputs</code> (signal name → <code>board.*</code> route) and free-form
+<code>config</code>. The <code>analog</code> adapter needs <code>config.netlist</code> (a path) or
+<code>config.netlist_text</code> (inline) plus <code>config.probes</code>. Deep reference:
+<a href="../cosim-external-process/">External-process co-simulation</a>.</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># examples/cosim-spice-rc/system.yaml (excerpt)</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="nt">cosim_models</span><span class="p">:</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="s">"rc_lowpass"</span>
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="w">    </span><span class="nt">adapter</span><span class="p">:</span><span class="w"> </span><span class="s">"external_process"</span>
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="w">    </span><span class="nt">model</span><span class="p">:</span><span class="w"> </span><span class="s">"./models/rc_lowpass.py"</span>
+</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="w">    </span><span class="nt">step_ns</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">100000</span><span class="w">            </span><span class="c1"># 100 us; RC tau is 1 ms</span>
+</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="w">    </span><span class="nt">inputs</span><span class="p">:</span>
+</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="w">      </span><span class="nt">gpio</span><span class="p">:</span><span class="w"> </span><span class="s">"board.gpio.pa5"</span>
+</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a><span class="w">    </span><span class="nt">outputs</span><span class="p">:</span>
+</span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a><span class="w">      </span><span class="nt">v_out</span><span class="p">:</span><span class="w"> </span><span class="s">"board.analog.pa0_volts"</span>
+</span><span id="__span-12-11"><a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a><span class="w">    </span><span class="nt">config</span><span class="p">:</span>
+</span><span id="__span-12-12"><a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a><span class="w">      </span><span class="nt">protocol</span><span class="p">:</span><span class="w"> </span><span class="s">"jsonl"</span>
+</span><span id="__span-12-13"><a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a><span class="w">      </span><span class="nt">engine</span><span class="p">:</span><span class="w"> </span><span class="s">"ngspice"</span>
+</span><span id="__span-12-14"><a id="__codelineno-12-14" name="__codelineno-12-14" href="#__codelineno-12-14"></a><span class="w">      </span><span class="nt">netlist</span><span class="p">:</span><span class="w"> </span><span class="s">"./rc.cir"</span>
+</span></code></pre></div>
+<p><code>motor_models:</code> declares typed deterministic motor plants —
+<code>kind: dc</code> (brushed) or <code>kind: bldc</code> — with SI-unit fields (resistance,
+inductance, torque/back-EMF constants, inertia, friction, supply, encoder CPR)
+and pad bindings; see
+<a href="../examples/nucleo-l476rg-bldc/system.yaml">examples/nucleo-l476rg-bldc/system.yaml</a>
+for the full BLDC form. A motor can equivalently be declared as an
+<code>external_devices</code> entry with <code>type: dc-motor</code> or <code>bldc-motor</code>: the loader
+converts it to the same typed plant (<code>MotorModelConfig::from_external_device</code>),
+so the two spellings cannot drift.</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># examples/f401-hbridge-dc-motor/system.yaml (excerpt)</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="nt">external_devices</span><span class="p">:</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">motor</span>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">dc-motor</span>
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="w">    </span><span class="nt">connection</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gpio</span>
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="w">    </span><span class="nt">config</span><span class="p">:</span>
+</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="w">      </span><span class="nt">resistance_ohm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.2</span>
+</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="w">      </span><span class="nt">inductance_h</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.002</span>
+</span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="w">      </span><span class="nt">torque_constant_nm_per_a</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.08</span>
+</span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a><span class="w">      </span><span class="nt">back_emf_constant_v_per_rad_s</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.08</span>
+</span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a><span class="w">      </span><span class="nt">rotor_inertia_kg_m2</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.00004</span>
+</span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a><span class="w">      </span><span class="nt">viscous_friction_nm_per_rad_s</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.00001</span>
+</span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a><span class="w">      </span><span class="nt">supply_voltage_v</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">12.0</span>
+</span><span id="__span-13-14"><a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a><span class="w">      </span><span class="nt">load_torque_nm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.0</span>
+</span><span id="__span-13-15"><a id="__codelineno-13-15" name="__codelineno-13-15" href="#__codelineno-13-15"></a><span class="w">      </span><span class="nt">encoder_cpr</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1024</span>
+</span><span id="__span-13-16"><a id="__codelineno-13-16" name="__codelineno-13-16" href="#__codelineno-13-16"></a><span class="w">      </span><span class="nt">simulation_clock_hz</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">84000000</span>
+</span><span id="__span-13-17"><a id="__codelineno-13-17" name="__codelineno-13-17" href="#__codelineno-13-17"></a><span class="w">      </span><span class="nt">in1_pin</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">PA0</span>
+</span><span id="__span-13-18"><a id="__codelineno-13-18" name="__codelineno-13-18" href="#__codelineno-13-18"></a><span class="w">      </span><span class="nt">in2_pin</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">PA1</span>
+</span><span id="__span-13-19"><a id="__codelineno-13-19" name="__codelineno-13-19" href="#__codelineno-13-19"></a><span class="w">      </span><span class="nt">both_inputs_low</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">brake</span>
+</span><span id="__span-13-20"><a id="__codelineno-13-20" name="__codelineno-13-20" href="#__codelineno-13-20"></a><span class="w">      </span><span class="nt">pwm_pin</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">PA6</span>
+</span><span id="__span-13-21"><a id="__codelineno-13-21" name="__codelineno-13-21" href="#__codelineno-13-21"></a><span class="w">      </span><span class="nt">timer_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">tim3</span>
+</span><span id="__span-13-22"><a id="__codelineno-13-22" name="__codelineno-13-22" href="#__codelineno-13-22"></a><span class="w">      </span><span class="nt">timer_channel</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
+</span></code></pre></div>
+<h3 id="board-io">Board I/O</h3>
+<p><code>board_io:</code> is the board-level pin vocabulary: an LED soldered to a pad, a
+button a user can press, an ADC input. Entries are <code>BoardIoBinding</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>id</code></td>
+<td>Binding name; also the stimulus channel for a drivable contact.</td>
+</tr>
+<tr>
+<td><code>kind</code></td>
+<td><code>led</code>, <code>button</code>, <code>adc_input</code>, <code>pwm_output</code>, <code>i2c_device</code>, <code>spi_device</code>, <code>uart_device</code>.</td>
+</tr>
+<tr>
+<td><code>peripheral</code></td>
+<td>The peripheral <code>id</code> (from the chip or a manifest patch) that owns the pin.</td>
+</tr>
+<tr>
+<td><code>pin</code></td>
+<td>Bit within that peripheral's port / ADC channel number.</td>
+</tr>
+<tr>
+<td><code>signal</code></td>
+<td><code>output</code> (default) or <code>input</code>. A <code>kind: button</code> binding with <code>signal: input</code> is additionally materialised as a drivable button stimulus; an output-kind button is not a contact the firmware samples.</td>
+</tr>
+<tr>
+<td><code>active_high</code></td>
+<td>Polarity, default <code>true</code>.</td>
+</tr>
+<tr>
+<td><code>i2c_address</code></td>
+<td>For <code>kind: i2c_device</code> bindings.</td>
+</tr>
+<tr>
+<td><code>device_type</code></td>
+<td>The external-device <code>type</code> this binding surfaces, for the browser.</td>
+</tr>
+<tr>
+<td><code>channel</code></td>
+<td>Stimulus channel this contact exposes when it is not a plain <code>pressed</code> button (<code>obstacle</code>, <code>field</code>, <code>vibration</code>, …); absent means <code>pressed</code>.</td>
+</tr>
+</tbody>
+</table>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># configs/systems/nucleo-l476rg.yaml (excerpt)</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="nt">board_io</span><span class="p">:</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="s">"led_ld2"</span>
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">    </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="s">"led"</span>
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">    </span><span class="nt">peripheral</span><span class="p">:</span><span class="w"> </span><span class="s">"gpioa"</span>
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="w">    </span><span class="nt">pin</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5</span>
+</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="w">    </span><span class="nt">signal</span><span class="p">:</span><span class="w"> </span><span class="s">"output"</span>
+</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="w">    </span><span class="nt">active_high</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="s">"button_b1"</span>
+</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="w">    </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="s">"button"</span>
+</span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a><span class="w">    </span><span class="nt">peripheral</span><span class="p">:</span><span class="w"> </span><span class="s">"gpioc"</span>
+</span><span id="__span-14-12"><a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a><span class="w">    </span><span class="nt">pin</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">13</span>
+</span><span id="__span-14-13"><a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a><span class="w">    </span><span class="nt">signal</span><span class="p">:</span><span class="w"> </span><span class="s">"input"</span>
+</span><span id="__span-14-14"><a id="__codelineno-14-14" name="__codelineno-14-14" href="#__codelineno-14-14"></a><span class="w">    </span><span class="nt">active_high</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+</span></code></pre></div>
+<h3 id="wifi-ap">WiFi AP</h3>
+<p><code>wifi_ap:</code> is the opt-in virtual access point, emitted when a lab diagram
+contains a <code>wifi-ap</code> component. Absent ⇒ no AP, and WiFi MACs stay
+unassociated (the honest "no AP present"). No in-tree system manifest uses the
+key yet.</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="nt">wifi_ap</span><span class="p">:</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="w">  </span><span class="nt">ssid</span><span class="p">:</span><span class="w"> </span><span class="s">"labwired-ap"</span><span class="w">           </span><span class="c1"># defaults shown</span>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="w">  </span><span class="nt">ip</span><span class="p">:</span><span class="w"> </span><span class="s">"192.168.4.1"</span><span class="w">             </span><span class="c1"># its /24 is the DHCP pool</span>
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="w">  </span><span class="nt">serves</span><span class="p">:</span><span class="w"> </span><span class="s">"labwired-stats"</span><span class="w">      </span><span class="c1"># or "none"</span>
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="w">  </span><span class="nt">password</span><span class="p">:</span><span class="w"> </span><span class="s">""</span><span class="w">                  </span><span class="c1"># empty/absent = open AP; a WPA handshake is not modelled yet</span>
+</span></code></pre></div>
+<h3 id="st7789-physical-glass-window">ST7789 physical glass window</h3>
+<p>For <code>st7789-170x320</code> external devices, the optional config keys <code>col_offset</code>,
+<code>row_offset</code>, <code>cols</code>, and <code>rows</code> describe the glass in physical 240×320
+frame-memory coordinates. Supply all four together. For a module exposing
+columns 35–204 and all 320 rows, use <code>col_offset: 35</code>, <code>row_offset: 0</code>,
+<code>cols: 170</code>, and <code>rows: 320</code>; the offsets are module integration values.</p>
+<p>The configured framebuffer and artifact dimensions remain 170×320 regardless
+of MADCTL rotation or mirroring. MADCTL controls how firmware writes map into
+physical memory, while the glass stays fixed. Without a configured window,
+the framebuffer uses firmware coordinates and reports 240×320 or 320×240
+according to MADCTL's row/column exchange bit.</p>
+<h3 id="debug_uart-which-console-the-boards-usb-socket-is-wired-to"><code>debug_uart</code> — which console the board's USB socket is wired to</h3>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="nt">debug_uart</span><span class="p">:</span><span class="w"> </span><span class="s">"usb_serial_jtag"</span><span class="w">   </span><span class="c1"># ESP32-C3 SuperMini, ESP32-S3 Zero</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="nt">debug_uart</span><span class="p">:</span><span class="w"> </span><span class="s">"uart0"</span><span class="w">             </span><span class="c1"># CP210x/CH34x bridge boards</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="nt">debug_uart</span><span class="p">:</span><span class="w"> </span><span class="s">"uart1"</span><span class="w">             </span><span class="c1"># a board that routes its console elsewhere</span>
+</span></code></pre></div>
+<p>An ESP32-C3 or -S3 has two consoles in silicon: UART0 and the chip's own
+USB-Serial-JTAG block. Which one carries <code>Serial</code> to the developer's cable is
+neither a chip fact nor a firmware fact — it is a BOARD fact, decided by what
+the USB socket is soldered to:</p>
+<table>
+<thead>
+<tr>
+<th>board's USB socket</th>
+<th>console</th>
+<th><code>Serial</code> build flag</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>native USB</td>
+<td>USB-Serial-JTAG</td>
+<td><code>ARDUINO_USB_CDC_ON_BOOT=1</code></td>
+</tr>
+<tr>
+<td>USB-UART bridge IC</td>
+<td>UART0</td>
+<td><code>ARDUINO_USB_CDC_ON_BOOT=0</code></td>
+</tr>
+</tbody>
+</table>
+<p>The build flags and this key must come from the SAME board fact. If they
+disagree, firmware built for one console runs against a twin listening on the
+other and the Serial pane stays empty — which is exactly what a real board does
+when the flags are wrong, and exactly what shipped: a hosted build flashed to a
+real ESP32-C3 SuperMini printed the ROM and bootloader banners and then nothing,
+because <code>Serial</code> was on UART0 and a SuperMini's USB-C is not.</p>
+<p>The engine taps ONE console, the declared one, because a real board gives you
+one cable. It records the other and reports what the firmware said there
+(<code>WasmSimulator::console_mismatch</code>) so a silent pane has a reason. A declared
+console the bus does not have is refused at construction rather than silently
+substituted — see <code>crates/core/src/console.rs</code>.</p>
+<p>Omit the key to keep each path's historical default (UART0 on the ESP32-C3
+merged-flash paths; every console-capable UART elsewhere).</p>
+<p>For an <code>inputs.env</code> CI world, each <code>nodes[].system</code> value points to this
+same System Manifest format used by the Playground. The environment manifest
+adds node IDs, firmware paths, and explicit interconnects; it does not create a
+second board-configuration dialect. v0.19 world manifests reject
+<code>nodes[].config_overrides</code>: the field must be omitted, including <code>{}</code> and <code>null</code>.
+Each resolved node chip must resolve to <code>arch: arm</code> and declare
+<code>core: cortex-m*</code>; its firmware must be an <code>EM_ARM</code> ELF with a valid Cortex-M
+Thumb reset vector at <code>flash.base + reset_vector_offset</code> (SP in RAM and
+Thumb-bit reset handler in flash). See the <a href="../ci_test_runner/">CI Test Runner</a>
+for the closed world-interconnect schema.</p>
+<p>A node may set <code>profile: arduino-esp32</code>, the same boot profile a test script
+names in <code>inputs.profile</code>: a classic-ESP32 (Xtensa LX6) node running an
+Arduino-ESP32 sketch ELF then takes the Arduino fast boot
+(<code>install_arduino_esp32_profile</code>). Any other value, or the profile on any other
+chip, is refused, and a world admits one such node (the profile's boot thunks
+keep per-thread state). ESP32-S3 and ESP32-C3 nodes need no profile; their mask
+ROMs are provisioned like the single-chip engine's (in the browser, passed as
+the node's <code>blobs</code>).</p>
+<p>World completion stays in the <code>inputs.env</code> test script, not the manifest. Set
+<code>limits.stop_when_assertions_pass: true</code> to opt into a durable early completion:
+all node-qualified assertions must pass at or after the optional
+<code>stop_when_assertions_pass_min_steps</code> floor and remain true for the optional
+<code>stop_when_assertions_pass_settle_steps</code> window (default <code>100000</code>). The default
+is <code>false</code>; a same-round runtime failure or <code>wall_time_ms</code>, <code>max_cycles</code>, or
+<code>max_uart_bytes</code> limit takes precedence over <code>assertions_passed</code>. <code>max_steps</code>
+remains the outer execution bound, so an all-pass final world round reports
+<code>assertions_passed</code>.</p>
+<h2 id="4-cli-usage">4. CLI Usage</h2>
+<p>To run a simulation, provide both the firmware and the system manifest:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>labwired<span class="w"> </span>--firmware<span class="w"> </span>firmware.elf<span class="w"> </span>--system<span class="w"> </span>configs/systems/bluepill.yaml
+</span></code></pre></div>
+<p>The simulator loads the system manifest, resolves the chip descriptor, initializes the memory map, and begins execution at the Reset Vector.</p>
+
+
+
+
+
+
+
+  
+  
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.expand", "navigation.top", "toc.follow", "search.suggest", "search.highlight", "content.code.copy"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

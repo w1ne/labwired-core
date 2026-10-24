@@ -1,0 +1,83 @@
+{
+  "board": "Luckfox Pico Mini A",
+  "retrieved_date": "2026-10-11",
+  "status": "source-grounded documentation; target below L0; no physical validation",
+  "official_docs_repository": {
+    "url": "https://github.com/LuckfoxTECH/Luckfox-Pico-docs",
+    "revision": "b28b3929a5b5f78308b2c26d0cad8629f20fcead",
+    "discovery_url": "https://wiki.luckfox.com/Luckfox-Pico-RV1103/Downloads/"
+  },
+  "assets": [
+    {
+      "file": "product.webp",
+      "url": "https://wiki.luckfox.com/img/RV1106/overview/RV1103/Luckfox-Pico-Mini-A.webp",
+      "source_page": "https://wiki.luckfox.com/Luckfox-Pico/Luckfox-Pico-RV1103/",
+      "bytes": 70948,
+      "sha256": "0c1e8ef73ee0b8a862a1f3d52aca6dc17c6133f02c1f2d0d4add21c08e6ce43b",
+      "scope": "exact Mini A product photo",
+      "inspection": "visual; unpopulated NAND footprint"
+    },
+    {
+      "file": "pinout.jpg",
+      "url": "https://files.luckfox.com/wiki/img/devkit/Luckfox-Pico-Mini/Luckfox-Pico-Mini-details-inter.jpg",
+      "bytes": 156180,
+      "sha256": "b8c73f6451aee4a5f12da6966cff99d405434c4137d885177298acacdef65acf",
+      "scope": "shared Mini A/B interface diagram, photographed NAND-populated variant",
+      "inspection": "visual; complete 22-side-pad transcription and I2C3/UART4 alternatives checked"
+    },
+    {
+      "file": "dimensions.jpg",
+      "url": "https://files.luckfox.com/wiki/img/devkit/Luckfox-Pico-Mini/Luckfox-Pico-Mini-details-size.jpg",
+      "bytes": 78734,
+      "sha256": "d0756c7b2c71193901cdbc55f5185c4dc4dfaed61c1fba68c1b74cfbe248bb2b",
+      "scope": "shared Mini A/B dimensions, photographed NAND-populated variant",
+      "inspection": "visual; width/height/row spacing/pitch checked; no physical measurement"
+    },
+    {
+      "file": "schematic.pdf",
+      "url": "https://raw.githubusercontent.com/LuckfoxTECH/Luckfox-Pico-docs/b28b3929a5b5f78308b2c26d0cad8629f20fcead/Hardware/Schematic/Luckfox-Pico-Mini.pdf",
+      "bytes": 777428,
+      "sha256": "1568b63fed745d8862a664c5f17ef00050481985488f6e1451845af0147f6c45",
+      "scope": "shared Mini schematic including optional flash population",
+      "document_revision": "no printed revision/date found on inspected sheet; source revision and hash identify this copy",
+      "inspection": "PDF text and rendered sheet; RV1103G1, header and USB VBUS power nets checked"
+    },
+    {
+      "file": "rv1103-datasheet.pdf",
+      "url": "https://raw.githubusercontent.com/LuckfoxTECH/Luckfox-Pico-docs/b28b3929a5b5f78308b2c26d0cad8629f20fcead/Docs/datasheets/Rockchip_RV1103_Datasheet_V1.1.pdf",
+      "bytes": 1113149,
+      "sha256": "d8ebd8b56650f2e9a4a618a8b5351653f17e4f05901487d26c069f059b0e2ede",
+      "document_revision": "1.1; revision history 2022-04-27",
+      "inspection": "title, revision history and contents text; register-level TRM still missing"
+    },
+    {
+      "file": "vendor-cad.zip",
+      "url": "https://raw.githubusercontent.com/LuckfoxTECH/Luckfox-Pico-docs/b28b3929a5b5f78308b2c26d0cad8629f20fcead/Hardware/CAD/Luckfox-Pico-CAD.zip",
+      "bytes": 1166770,
+      "sha256": "1ec6b29e57f3ff3015c4e1acec2f3474a32ab80cf488bc38ee6ca62b336f2205",
+      "scope": "official multi-board mechanical CAD archive",
+      "mini_member": "Luckfox-Pico-CAD/Luckfox Pico Mini.DWG",
+      "inspection": "archive member listing only; geometry and scale unverified"
+    }
+  ],
+  "references": [
+    {"id": "selected-product", "url": "https://www.luckfox.com/Luckfox-Pico-Mini-A?ci=536", "access": "scripted request returned HTTP 403; verified facts use vendor wiki and schematic"},
+    {"id": "board-overview", "url": "https://wiki.luckfox.com/Luckfox-Pico/Luckfox-Pico-RV1103/"},
+    {"id": "microSD-flash", "url": "https://wiki.luckfox.com/Luckfox-Pico-Plus-Mini/Flash-image/"},
+    {"id": "uart", "url": "https://wiki.luckfox.com/Luckfox-Pico-Plus-Mini/UART/"},
+    {"id": "i2c", "url": "https://wiki.luckfox.com/Luckfox-Pico-Plus-Mini/I2C/"},
+    {"id": "device-tree", "url": "https://wiki.luckfox.com/Luckfox-Pico-Pro-Max/Device-Tree/"},
+    {"id": "official-sdk", "url": "https://github.com/LuckfoxTECH/luckfox-pico", "revision": "not pinned or built in this documentation pass"},
+    {"id": "esp-module", "url": "https://www.espressif.com/sites/default/files/documentation/esp32-c3-mini-1_datasheet_en.pdf", "revision": "2.2 at inspection"},
+    {"id": "esp-at-wiring", "url": "https://docs.espressif.com/projects/esp-at/en/latest/esp32c3/Get_Started/Hardware_connection.html"},
+    {"id": "esp-at-release", "url": "https://docs.espressif.com/projects/esp-at/en/latest/esp32c3/AT_Binary_Lists/esp_at_binaries.html"},
+    {"id": "adxl345", "url": "https://www.analog.com/media/en/technical-documentation/data-sheets/adxl345.pdf", "revision": "G"},
+    {"id": "bq24074", "url": "https://www.ti.com/product/BQ24074"},
+    {"id": "tps61023", "url": "https://www.ti.com/product/TPS61023"},
+    {"id": "tps62160", "url": "https://www.ti.com/product/TPS62160"},
+    {"id": "official-STEP-uninspected", "url": "https://github.com/LuckfoxTECH/Luckfox-Pico-docs/blob/b28b3929a5b5f78308b2c26d0cad8629f20fcead/Hardware/3D%20Models/Luckfox-Pico-Step.zip", "access": "not downloaded; exact Mini A contents unverified"},
+    {"id": "community-CAD-excluded", "url": "https://github.com/lightningspore/seedsigner-luckfox-pico/tree/main/hardware-kicad", "license": "explicit redistribution license not established", "imported": false}
+  ],
+  "rights": "Original assets remain attributed to their vendor/rightsholders. No explicit permissive redistribution license was established; no relicensing claim is made.",
+  "gaps": ["RV1103 register-level TRM", "exact battery pack datasheet", "carrier schematic and PCB", "physical measurements", "Mini A runtime descriptors and smoke firmware"]
+}
