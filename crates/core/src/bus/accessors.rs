@@ -301,6 +301,60 @@ impl SystemBus {
         }
     }
 
+    /// Offer a CPU store into the flash region to the peripheral that owns
+    /// flash stores (a flash controller that latches addresses or programs
+    /// pages through stores). Returns `Some(result)` when the store was consumed
+    /// or programmed here, `None` when the caller commits it as usual (no owner,
+    /// not a flash address, a device-originated write, or the owner said
+    /// `Commit`). Inlined presence test, outlined body, like the U5 gate.
+    #[inline]
+    fn try_flash_owner_store(&mut self, addr: u64, width: u8, value: u32) -> Option<SimResult<()>> {
+        self.flash_store_owner_idx?;
+        self.flash_owner_store_cold(addr, width, value)
+    }
+
+    #[inline(never)]
+    fn flash_owner_store_cold(
+        &mut self,
+        addr: u64,
+        width: u8,
+        value: u32,
+    ) -> Option<SimResult<()>> {
+        let idx = self.flash_store_owner_idx?;
+        if self.device_write_bypass() {
+            return None;
+        }
+        let off = if self.flash.read_u8(addr).is_some() {
+            addr - self.flash.base_addr
+        } else if self.flash_boot_alias
+            && self.flash.base_addr != 0
+            && addr < self.flash.data.len() as u64
+        {
+            addr
+        } else {
+            return None;
+        };
+        let outcome = self
+            .peripherals
+            .get_mut(idx)?
+            .dev
+            .flash_cpu_store(off, width, value);
+        match outcome {
+            crate::FlashStoreOutcome::Commit => None,
+            crate::FlashStoreOutcome::Consumed => Some(Ok(())),
+            crate::FlashStoreOutcome::Program => {
+                for i in 0..width as u64 {
+                    let a = self.flash.base_addr + off + i;
+                    let existing = self.flash.read_u8(a).unwrap_or(0xFF);
+                    self.flash.write_u8(a, existing & (value >> (8 * i)) as u8);
+                }
+                self.note_memory_write();
+                self.notify_peripheral_store(addr, &value.to_le_bytes()[..width as usize]);
+                Some(Ok(()))
+            }
+        }
+    }
+
     /// Route a flash-region store through the U5 quad-word program machine when
     /// the opt-in U5 gate is on (`config: { error_flags: true }` on the U5
     /// FLASH). Mirrors the H5 gate in `write_u8`, but word-granular: U5 programs
@@ -661,6 +715,9 @@ impl crate::Bus for SystemBus {
         // U5 quad-word programming gate (opt-in, U5 FLASH only): consumed here
         // so a byte access while PG is set raises SIZERR instead of committing.
         if let Some(r) = self.try_u5_program_store(addr, 1, value as u32) {
+            return r;
+        }
+        if let Some(r) = self.try_flash_owner_store(addr, 1, value as u32) {
             return r;
         }
         let flash_alias_old = if self.flash_boot_alias
@@ -1118,6 +1175,9 @@ impl crate::Bus for SystemBus {
         if let Some(r) = self.try_u5_program_store(addr, 2, value as u32) {
             return r;
         }
+        if let Some(r) = self.try_flash_owner_store(addr, 2, value as u32) {
+            return r;
+        }
         let observed_old = if self.config.observe_wide_ram_stores && !self.observers.is_empty() {
             self.ram.read_u16(addr)
         } else {
@@ -1250,6 +1310,9 @@ impl crate::Bus for SystemBus {
         // AND(existing, new) and sets EOP. Consumed before the direct flash
         // commit below (which would otherwise bypass the machine entirely).
         if let Some(r) = self.try_u5_program_store(addr, 4, value) {
+            return r;
+        }
+        if let Some(r) = self.try_flash_owner_store(addr, 4, value) {
             return r;
         }
         // Atomic register aliases: a write to a +0x1000/0x2000/0x3000 alias of

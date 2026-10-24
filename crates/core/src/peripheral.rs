@@ -97,6 +97,23 @@ pub struct DmaUnitTransform {
     pub dhx: bool,
 }
 
+// ── Flash-store ownership ─────────────────────────────────────────────────
+
+/// What the bus does with a CPU store into the flash region once a
+/// flash-controller peripheral has seen it ([`Peripheral::flash_cpu_store`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FlashStoreOutcome {
+    /// Commit the stored bytes to the flash array as written (the behaviour of
+    /// a bus without a flash-store owner).
+    Commit,
+    /// The controller consumed the store (an address latch, or a write while
+    /// not in a programming mode); the array is left alone.
+    Consumed,
+    /// Program the stored bytes: each array byte becomes `existing & new`, the
+    /// 1-to-0 rule of NOR flash.
+    Program,
+}
+
 // ── Tick result ───────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Default)]
@@ -1084,6 +1101,23 @@ pub trait Peripheral: std::fmt::Debug + Send {
     fn drain_attached_pin_drives(&mut self, _out: &mut Vec<(String, String, bool)>) {}
 
     fn dma_request(&mut self, _request_id: u32) {}
+    /// Flash-controller capability: `true` for the peripheral that decides what
+    /// a CPU store into the flash region does (NXP JN51xx / K32W flash
+    /// controllers latch addresses and program pages through stores to the
+    /// flash address space). The bus resolves at most one such peripheral when
+    /// its peripheral list changes and offers it every flash-region CPU store
+    /// ([`Self::flash_cpu_store`]). Default `false`: flash stores commit as before.
+    fn owns_flash_stores(&self) -> bool {
+        false
+    }
+    /// A CPU store of `width` bytes (1, 2 or 4) with `value` landed at byte
+    /// `offset` of the flash array. Only called on the peripheral that
+    /// [`Self::owns_flash_stores`], and never for device-originated writes
+    /// (`device_write_bypass`): the controller programs and erases the array
+    /// through those.
+    fn flash_cpu_store(&mut self, _offset: u64, _width: u8, _value: u32) -> FlashStoreOutcome {
+        FlashStoreOutcome::Commit
+    }
     /// DMA request routing: append the channels the peripheral request
     /// `request` (`<peripheral id>_tx` / `_rx`, see [`DMA_SIGNAL_TX`]) drives
     /// on this DMA controller — or, for a request multiplexer, on the
