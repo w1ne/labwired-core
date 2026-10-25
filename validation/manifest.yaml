@@ -454,7 +454,7 @@ boards:
     # files. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: b0c56af1ead933ae492d2ee0f58cb2669c3c917d1e841707f50280527a44d28b
+    drift_ack_digest: 759c126a423d898569ea382d61e01d0505db73136d80c3705724cff511bd7df4
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -663,6 +663,11 @@ boards:
     # regressions cover instruction decode/execute only. This
     # digest-matched acknowledgement is NOT A SILICON CAPTURE; live
     # nRF re-capture remains pending.
+    # 2026-10-25 follow-up: the -D warnings cleanup removes redundant integer
+    # casts in the Thumb-2 decoder, makes the zero-length FDCAN standard-filter
+    # word count explicit, and expresses equivalent SPI frame-byte ceiling
+    # arithmetic. Behavior is unchanged; this is an ACK, NOT A CAPTURE. The
+    # previously owed live re-capture remains pending.
     drift_ack: 2026-10-25
     # 2026-10-25 (perf/cortex-m-decode-reference): the Cortex-M decode cache
     # now checks the PC tag through a borrow and copies only on a hit. The
@@ -973,7 +978,7 @@ boards:
     # files. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: b0c56af1ead933ae492d2ee0f58cb2669c3c917d1e841707f50280527a44d28b
+    drift_ack_digest: 759c126a423d898569ea382d61e01d0505db73136d80c3705724cff511bd7df4
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -1182,6 +1187,11 @@ boards:
     # regressions cover instruction decode/execute only. This
     # digest-matched acknowledgement is NOT A SILICON CAPTURE; live
     # nRF re-capture remains pending.
+    # 2026-10-25 follow-up: the -D warnings cleanup removes redundant integer
+    # casts in the Thumb-2 decoder, makes the zero-length FDCAN standard-filter
+    # word count explicit, and expresses equivalent SPI frame-byte ceiling
+    # arithmetic. Behavior is unchanged; this is an ACK, NOT A CAPTURE. The
+    # previously owed live re-capture remains pending.
     drift_ack: 2026-10-25
     # 2026-10-25 (perf/cortex-m-decode-reference): the Cortex-M decode cache
     # now checks the PC tag through a borrow and copies only on a hit. The
@@ -1638,7 +1648,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: 114056683fdeef5eaf9ca7b7e1ca892604a23ff743d9c9a3f0ba8dcf63fadb9c
+    drift_ack_digest: 9ee198511198438e4cc269d57ef65ed0c7419978580a32b94590883db612a297
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -2190,6 +2200,11 @@ boards:
     # GPIO analog-input and LCKR semantics are covered by simulation
     # regressions. This digest-matched acknowledgement is NOT A
     # SILICON CAPTURE; a live re-capture for this board remains owed.
+    # 2026-10-25 follow-up: the -D warnings cleanup removes redundant integer
+    # casts in the Thumb-2 decoder, makes the zero-length FDCAN standard-filter
+    # word count explicit, and expresses equivalent SPI frame-byte ceiling
+    # arithmetic. Behavior is unchanged; this is an ACK, NOT A CAPTURE. The
+    # previously owed live re-capture remains pending.
     drift_ack: 2026-10-25
     # 2026-10-25 (perf/cortex-m-decode-reference): the Cortex-M decode cache
     # now checks the PC tag through a borrow and copies only on a hit. The
@@ -3590,7 +3605,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: 43696b84f8bcb9b09b7da552dbe056750172214fc8e05450c5e68facee8bff73
+    drift_ack_digest: 2c7f34bfe4554b029efe7b72383748bc86ef90ab30b7ced8d66c05e83ec48be4
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4130,6 +4145,11 @@ boards:
     # GPIO analog-input and LCKR semantics are covered by simulation
     # regressions. This digest-matched acknowledgement is NOT A
     # SILICON CAPTURE; a live re-capture for this board remains owed.
+    # 2026-10-25 follow-up: the -D warnings cleanup removes redundant integer
+    # casts in the Thumb-2 decoder, makes the zero-length FDCAN standard-filter
+    # word count explicit, and expresses equivalent SPI frame-byte ceiling
+    # arithmetic. Behavior is unchanged; this is an ACK, NOT A CAPTURE. The
+    # previously owed live re-capture remains pending.
     drift_ack: 2026-10-25
   - id: nucleo-l073rz
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
@@ -4523,7 +4543,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: f996c45b26e00feb1c28d8d1fb29806d242174d74981a670a48e9fab0150eb21
+    drift_ack_digest: b5adafbaf3f7f1e5e085acae4d585b0be1f35f763028e824c14cd0eff98d3630
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4996,6 +5016,11 @@ boards:
     # GPIO analog-input and LCKR semantics are covered by simulation
     # regressions. This digest-matched acknowledgement is NOT A
     # SILICON CAPTURE; a live re-capture for this board remains owed.
+    # 2026-10-25 follow-up: the -D warnings cleanup removes redundant integer
+    # casts in the Thumb-2 decoder, makes the zero-length FDCAN standard-filter
+    # word count explicit, and expresses equivalent SPI frame-byte ceiling
+    # arithmetic. Behavior is unchanged; this is an ACK, NOT A CAPTURE. The
+    # previously owed live re-capture remains pending.
     drift_ack: 2026-10-25
     # 2026-10-25 (perf/cortex-m-decode-reference): the Cortex-M decode cache
     # now checks the PC tag through a borrow and copies only on a hit. The
@@ -5447,7 +5472,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: a257ddfb4b6470989351d0374f46ea43583e00ff01af066b2b3caf4cff8ffa57
+    drift_ack_digest: cd76b0463b9a774d9dfbe174c0ee915a4a365afce2e0f368265eabe72465dab6
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5990,6 +6015,11 @@ boards:
     # GPIO analog-input and LCKR semantics are covered by simulation
     # regressions. This digest-matched acknowledgement is NOT A
     # SILICON CAPTURE; a live re-capture for this board remains owed.
+    # 2026-10-25 follow-up: the -D warnings cleanup removes redundant integer
+    # casts in the Thumb-2 decoder, makes the zero-length FDCAN standard-filter
+    # word count explicit, and expresses equivalent SPI frame-byte ceiling
+    # arithmetic. Behavior is unchanged; this is an ACK, NOT A CAPTURE. The
+    # previously owed live re-capture remains pending.
     drift_ack: 2026-10-25
     # 2026-10-25 (perf/cortex-m-decode-reference): the Cortex-M decode cache
     # now checks the PC tag through a borrow and copies only on a hit. The
@@ -6404,7 +6434,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: a0c66cbc0cdf14aed94d3edb765e08c90e3e706c87b4304f624fdc178a821c77
+    drift_ack_digest: c2707beb3a0be0e830237660f3929b7c1f081c5045fb91a6ad1c02d77b38e3ee
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6886,6 +6916,11 @@ boards:
     # GPIO analog-input and LCKR semantics are covered by simulation
     # regressions. This digest-matched acknowledgement is NOT A
     # SILICON CAPTURE; a live re-capture for this board remains owed.
+    # 2026-10-25 follow-up: the -D warnings cleanup removes redundant integer
+    # casts in the Thumb-2 decoder, makes the zero-length FDCAN standard-filter
+    # word count explicit, and expresses equivalent SPI frame-byte ceiling
+    # arithmetic. Behavior is unchanged; this is an ACK, NOT A CAPTURE. The
+    # previously owed live re-capture remains pending.
     drift_ack: 2026-10-25
     # 2026-10-25 (perf/cortex-m-decode-reference): the Cortex-M decode cache
     # now checks the PC tag through a borrow and copies only on a hit. The

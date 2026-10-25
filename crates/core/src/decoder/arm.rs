@@ -1116,7 +1116,7 @@ pub fn decode_thumb_16(opcode: u16) -> Instruction {
     // 4.3 Load/Store Byte (Imm5) (T1): 0111 Liii iinn nttt
     if (opcode & 0xF000) == 0x7000 {
         let is_load = (opcode & 0x0800) != 0;
-        let imm = ((opcode >> 6) & 0x1F) as u16;
+        let imm = (opcode >> 6) & 0x1F;
         let rn = ((opcode >> 3) & 0x7) as u8;
         let rt = (opcode & 0x7) as u8;
 
@@ -1130,7 +1130,7 @@ pub fn decode_thumb_16(opcode: u16) -> Instruction {
     // 4.5 Load/Store Halfword (Imm5) (T1): 1000 Liii iinn nttt
     if (opcode & 0xF000) == 0x8000 {
         let is_load = (opcode & 0x0800) != 0;
-        let imm5 = ((opcode >> 6) & 0x1F) as u16;
+        let imm5 = (opcode >> 6) & 0x1F;
         // The immediate is scaled by 2 for halfword access
         let imm = imm5 << 1;
         let rn = ((opcode >> 3) & 0x7) as u8;

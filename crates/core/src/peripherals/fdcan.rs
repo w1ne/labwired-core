@@ -157,7 +157,7 @@ const RAM_RF0_WORDS: usize = 0xB0 / 4;
 /// RX FIFO1 elements: 3 x 18 words at SRAMCAN + 0x188.
 const RAM_RF1_WORDS: usize = 0x188 / 4;
 /// Standard filter list: one 32-bit element each at SRAMCAN + 0x000.
-const RAM_STD_FILTER_WORDS: usize = 0x000 / 4;
+const RAM_STD_FILTER_WORDS: usize = 0;
 /// Extended filter list: two 32-bit elements each at SRAMCAN + 0x070.
 const RAM_EXT_FILTER_WORDS: usize = 0x070 / 4;
 /// TX buffers: 3 x 18 words at SRAMCAN + 0x278.

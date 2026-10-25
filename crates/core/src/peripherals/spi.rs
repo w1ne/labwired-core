@@ -2905,7 +2905,9 @@ impl Spi {
                 r.cfg2 & H5_CFG2_MASTER != 0,
                 // CFG1.DSIZE is the frame width in BITS minus one (7=8-bit,
                 // 15=16-bit, 31=32-bit), not bytes.
-                ((((r.cfg1 & H5_CFG1_DSIZE) as usize) + 1 + 7) / 8).clamp(1, 4),
+                (((r.cfg1 & H5_CFG1_DSIZE) as usize) + 1)
+                    .div_ceil(8)
+                    .clamp(1, 4),
             ),
             _ => return,
         };
@@ -3952,7 +3954,7 @@ impl crate::Peripheral for Spi {
             SpiRegs::Nrf52(r) => r.read_reg(reg_offset),
             SpiRegs::KinetisDspi(r) => r.read_reg(reg_offset),
             SpiRegs::Stm32H5(r) => {
-                let mut v = r.read_reg(reg_offset) as u32;
+                let mut v = r.read_reg(reg_offset);
                 // RXDR read consumes the frame: RXP clears and an outstanding
                 // RX DMA request is answered (RM0456 §68.8.6).
                 if reg_offset == 0x30 {
