@@ -1,0 +1,316 @@
+"""Dependency-free controls; synthetic ELF/logs never qualify simulator behavior."""
+
+import importlib.util
+import pathlib
+import os
+import subprocess
+import sys
+import struct
+import tempfile
+import unittest
+from unittest import mock
+
+from test_core_identity_harness import literal_run
+
+
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+VERIFIER = ROOT / "scripts/ci/cortex_m_oracle_evidence.py"
+
+
+def fixture_bytes():
+    data = bytearray(56)
+    data[:7] = b"\x7fELF\x01\x01\x01"
+    struct.pack_into("<HHI", data, 16, 2, 40, 1)
+    struct.pack_into("<H", data, 40, 52)
+    data[52:] = b"\x00\xbf\x00\xbf"
+    return bytes(data)
+
+
+def positive_log(oracle):
+    test = "cpu_conformance_sim" if oracle == "nrf52_cpu_conformance" else "conformance_sim"
+    if oracle == "f103_conformance":
+        digest = "sim conformance digest: [C0DEF103, 0000001C, 0000001F, 00000000, 7D24A31B, 00000000, 00000000, DEADBEEF, 00000000, 00000000, 00000000]"
+    else:
+        cpu = oracle == "nrf52_cpu_conformance"
+        title = "nRF52840 sim CPU-conformance digest:" if cpu else "nRF52840 sim conformance digest (16 words):"
+        count = 9 if cpu else 16
+        digest = title + "\n" + "\n".join(
+            f"  [{i:02}] {'DONE' if i == 0 else 'field':<14} = 0x{0x52840D0E if i == 0 else i:08X}"
+            for i in range(count)
+        )
+    return f"running 1 test\n{digest}\ntest {test} ... ok\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s\n"
+
+
+class EvidenceControls(unittest.TestCase):
+    def setUp(self):
+        self.assertTrue(VERIFIER.is_file(), "qualification verifier missing")
+        spec = importlib.util.spec_from_file_location("oracle_evidence", VERIFIER)
+        self.verifier = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.verifier)
+        self.temp = tempfile.TemporaryDirectory(prefix="cortex-oracle-control-")
+        self.addCleanup(self.temp.cleanup)
+        self.root = pathlib.Path(self.temp.name)
+
+    def fixture(self, data=None):
+        path = self.root / "fixture.elf"
+        path.write_bytes(fixture_bytes() if data is None else data)
+        return path
+
+    def log(self, text):
+        path = self.root / "oracle.log"
+        path.write_text(text)
+        return path
+
+    def test_real_shaped_elf_records_size_and_hash(self):
+        evidence = self.verifier.verify_fixture(self.fixture())
+        self.assertEqual(evidence["bytes"], 56)
+        self.assertEqual(len(evidence["sha256"]), 64)
+
+    def test_missing_elf_fails(self):
+        with self.assertRaises(ValueError):
+            self.verifier.verify_fixture(self.root / "missing")
+
+    def test_empty_truncated_and_non_elf_fail(self):
+        for data in (b"", b"\x7fELF", b"x" * 56):
+            with self.subTest(data=data), self.assertRaises(ValueError):
+                self.verifier.verify_fixture(self.fixture(data))
+
+    def test_wrong_class_endian_architecture_or_header_fail(self):
+        for offset, value in ((4, 2), (5, 2), (6, 0), (16, 1), (18, 62), (40, 0)):
+            data = bytearray(fixture_bytes())
+            data[offset] = value
+            with self.subTest(offset=offset), self.assertRaises(ValueError):
+                self.verifier.verify_fixture(self.fixture(data))
+
+    def test_header_without_payload_fails(self):
+        with self.assertRaises(ValueError):
+            self.verifier.verify_fixture(self.fixture(fixture_bytes()[:52]))
+
+    def test_each_positive_oracle_records_asserted_done(self):
+        for oracle in ("nrf52_conformance", "nrf52_cpu_conformance", "f103_conformance"):
+            with self.subTest(oracle=oracle):
+                evidence = self.verifier.verify_log(self.log(positive_log(oracle)), oracle, 0)
+                self.assertEqual(evidence["oracle"], oracle)
+                self.assertGreater(len(evidence["digest_words"]), 1)
+
+    def test_fake_pass_without_digest_fails(self):
+        text = "test conformance_sim ... ok\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n"
+        with self.assertRaises(ValueError):
+            self.verifier.verify_log(self.log(text), "nrf52_conformance", 0)
+
+    def test_empty_missing_and_wrong_named_logs_fail(self):
+        for text in ("", positive_log("nrf52_conformance").replace("test conformance_sim", "test other")):
+            with self.subTest(text=text), self.assertRaises(ValueError):
+                self.verifier.verify_log(self.log(text), "nrf52_conformance", 0)
+        with self.assertRaises(ValueError):
+            self.verifier.verify_log(self.root / "missing", "nrf52_conformance", 0)
+
+    def test_missing_or_wrong_done_fails_each_oracle(self):
+        for oracle in ("nrf52_conformance", "nrf52_cpu_conformance", "f103_conformance"):
+            sentinel = "C0DEF103" if oracle == "f103_conformance" else "52840D0E"
+            for replacement in ("00000000", ""):
+                with self.subTest(oracle=oracle, replacement=replacement), self.assertRaises(ValueError):
+                    self.verifier.verify_log(self.log(positive_log(oracle).replace(sentinel, replacement)), oracle, 0)
+
+    def test_partial_digest_fails(self):
+        text = positive_log("nrf52_cpu_conformance").replace("  [08] field          = 0x00000008\n", "")
+        with self.assertRaises(ValueError):
+            self.verifier.verify_log(self.log(text), "nrf52_cpu_conformance", 0)
+
+    def test_skip_notice_fails_even_with_positive_output(self):
+        with self.assertRaises(ValueError):
+            self.verifier.verify_log(self.log("skip: firmware ELF not built\n" + positive_log("nrf52_conformance")), "nrf52_conformance", 0)
+
+    def test_nonzero_exit_zero_filtered_or_failed_test_fails(self):
+        good = positive_log("f103_conformance")
+        for text, code in ((good, 1), (good.replace("1 passed", "0 passed"), 0), (good.replace("0 filtered", "1 filtered"), 0), (good.replace("0 failed", "1 failed"), 0)):
+            with self.subTest(text=text, code=code), self.assertRaises(ValueError):
+                self.verifier.verify_log(self.log(text), "f103_conformance", code)
+
+    def test_streaming_collector_retains_cap_and_stops_owned_overflow_producer(self):
+        self.assertTrue(hasattr(self.verifier, "collect_log"), "streaming collector missing")
+        log = self.root / "overflow.log"
+        result = self.verifier.collect_log([sys.executable, "-c", "import sys,time;sys.stdout.buffer.write(b'x'*1000002);sys.stdout.flush();time.sleep(10)"], log)
+        self.assertEqual(result["exit_code"], 125)
+        self.assertTrue(result["overflow"])
+        self.assertEqual(log.stat().st_size, 1000000)
+        self.assertIsNotNone(result["producer_exit_code"])
+
+    def test_streaming_collector_propagates_nonzero_and_timeout(self):
+        self.assertTrue(hasattr(self.verifier, "collect_log"), "streaming collector missing")
+        log = self.root / "producer.log"
+        result = self.verifier.collect_log([sys.executable, "-c", "import sys;print('diagnostic');sys.exit(7)"], log)
+        self.assertEqual(result["exit_code"], 7)
+        self.assertFalse(result["overflow"])
+        result = self.verifier.collect_log([sys.executable, "-c", "import time;print('running',flush=True);time.sleep(10)"], log, timeout_seconds=0.1)
+        self.assertEqual(result["exit_code"], 124)
+        self.assertTrue(result["timed_out"])
+        self.assertLessEqual(log.stat().st_size, 1000000)
+
+    def test_literal_job_shell_has_complete_two_mode_route_and_fails_closed(self):
+        workflow = pathlib.Path(os.environ.get("CORE_ORACLE_WORKFLOW", ROOT / ".github/workflows/core-identity.yml")).read_text()
+        self.assertIn("qualify_cortex_m_oracles:", workflow, "optional qualification route missing")
+        source = literal_run(workflow, "Record exact Cortex-M oracle source")
+        build = literal_run(workflow, "Build Cortex-M oracle firmware")
+        run = literal_run(workflow, "Run Cortex-M digest oracles")
+        mock_bin = self.root / "bin"
+        mock_bin.mkdir()
+        cargo = mock_bin / "cargo"
+        cargo.write_text('''#!/usr/bin/env python3
+import os,pathlib,sys,time
+sys.path.insert(0,os.environ['CONTROL_DIR'])
+from test_cortex_m_oracle_evidence import fixture_bytes,positive_log
+args=sys.argv[1:]
+if args[0]=='build':
+ target=args[args.index('--target')+1]
+ for i,arg in enumerate(args):
+  if arg=='-p':
+   p=pathlib.Path('target')/target/'release'/args[i+1]
+   p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes(fixture_bytes())
+else:
+ oracle=args[args.index('--test')+1]
+ test='cpu_conformance_sim' if oracle=='nrf52_cpu_conformance' else 'conformance_sim'
+ assert args[args.index('--test')+2]==test
+ assert args[-3:]==['--','--exact','--nocapture']
+ mode='scheduler' if '--features' in args else 'feature-off'
+ if mode=='scheduler': assert args[args.index('--features')+1]=='labwired-core/event-scheduler'
+ with open('calls','a') as f:f.write(mode+' '+oracle+'\\n')
+ if os.environ.get('OVERFLOW'):
+  sys.stdout.buffer.write(b'x'*1000002);sys.stdout.flush();time.sleep(1)
+ elif os.environ.get('FAKE_PASS'):
+  print('test '+test+' ... ok\\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s')
+ else: print(positive_log(oracle))
+''')
+        cargo.chmod(0o755)
+        git = mock_bin / "git"
+        git.write_text('#!/bin/sh\n[ "$1" = rev-parse ] && [ "$2" = HEAD ] || exit 1\nprintf "%s\\n" "$MOCK_SOURCE_SHA"\n')
+        git.chmod(0o755)
+        sha = "6" * 40
+        env = dict(os.environ, PATH=str(mock_bin) + os.pathsep + os.environ["PATH"],
+                   CONTROL_DIR=str(VERIFIER.parent), EVIDENCE_VERIFIER=str(VERIFIER),
+                   EXPECTED_SOURCE_SHA=sha, MOCK_SOURCE_SHA=sha)
+        for script in (source, build, run):
+            syntax = subprocess.run(["bash", "-n"], input=script, text=True, capture_output=True)
+            self.assertEqual(syntax.returncode, 0, syntax.stderr)
+            result = subprocess.run(["bash", "-c", script], cwd=self.root, env=env, text=True, capture_output=True, timeout=15)
+            self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn(sha, (self.root / "oracle-evidence/source.json").read_text())
+        for expected, actual in (("main", sha), (sha, "7" * 40)):
+            bad = subprocess.run(["bash", "-c", source], cwd=self.root,
+                                 env=dict(env, EXPECTED_SOURCE_SHA=expected, MOCK_SOURCE_SHA=actual),
+                                 text=True, capture_output=True, timeout=15)
+            self.assertNotEqual(bad.returncode, 0)
+        self.assertEqual((self.root / "calls").read_text().splitlines(), [
+            mode + " " + oracle for mode in ("feature-off", "scheduler")
+            for oracle in ("nrf52_conformance", "nrf52_cpu_conformance", "f103_conformance")])
+        for mode in ("feature-off", "scheduler"):
+            for oracle in ("nrf52_conformance", "nrf52_cpu_conformance", "f103_conformance"):
+                self.assertTrue((self.root / "oracle-evidence" / f"{mode}-{oracle}.exit").is_file())
+        bad = subprocess.run(["bash", "-c", run], cwd=self.root, env=dict(env, FAKE_PASS="1"), text=True, capture_output=True, timeout=15)
+        self.assertNotEqual(bad.returncode, 0)
+        self.assertIn("FAIL-ORACLE-EVIDENCE", bad.stderr)
+        bad = subprocess.run(["bash", "-c", run], cwd=self.root, env=dict(env, OVERFLOW="1"), text=True, capture_output=True, timeout=15)
+        self.assertNotEqual(bad.returncode, 0)
+        oversized = self.root / "oracle-evidence/feature-off-nrf52_conformance.log"
+        self.assertLessEqual(oversized.stat().st_size, 1000000, "oversized evidence must not survive for always-upload")
+        self.assertEqual((self.root / "oracle-evidence/feature-off-nrf52_conformance.exit").read_text().strip(), "125")
+        fixture = self.root / "target/thumbv7em-none-eabi/release/firmware-nrf52840-conformance"
+        fixture.unlink()
+        bad = subprocess.run(["bash", "-c", run], cwd=self.root, env=env, text=True, capture_output=True, timeout=15)
+        self.assertNotEqual(bad.returncode, 0)
+        self.assertIn("missing evidence", bad.stderr)
+
+
+
+class OracleCollectorOwnershipControls(unittest.TestCase):
+    def setUp(self):
+        spec=importlib.util.spec_from_file_location("oracle_owned_lifetime",VERIFIER)
+        self.module=importlib.util.module_from_spec(spec);spec.loader.exec_module(self.module)
+        self.temp=tempfile.TemporaryDirectory(prefix="cortex-oracle-owned-")
+        self.addCleanup(self.temp.cleanup);self.path=pathlib.Path(self.temp.name)
+
+    def probe(self, **kwargs):
+        from test_cortex_m_perf_evidence import collector_ownership_probe
+        return collector_ownership_probe(self.module,lambda:self.module.collect_log(["synthetic-never-started"],self.path/"owned.log"),**kwargs)
+
+    def test_setup_read_and_cleanup_failures_preserve_original_and_attempt_remaining_closes(self):
+        for phase, cleanup in (("constructor",None),("spawn",None),("register",None),("read",None),
+                               ("read","selector"),("read","pipe"),("read","signal"),("read","wait")):
+            with self.subTest(phase=phase,cleanup=cleanup):
+                events,error,_,original,_,_=self.probe(phase=phase,cleanup=cleanup)
+                self.assertIs(error,original)
+                if "spawn" in events and phase!="spawn":
+                    self.assertIn("selector.close",events);self.assertEqual(events.count("pipe.close"),1)
+                    self.assertTrue(any(isinstance(e,tuple) and e[0]=="wait" and e[1] is not None for e in events))
+                    self.assertNotIn("poll-reaps",events)
+                elif phase=="spawn":self.assertIn("selector.close",events)
+                else:self.assertNotIn("spawn",events)
+
+    def test_cleanup_failure_rejects_success_but_preserves_original_producer_failure(self):
+        for cleanup in ("selector","pipe","signal","wait"):
+            _,error,result,_,fault,_=self.probe(phase="success",cleanup=cleanup)
+            self.assertIs(error,fault);self.assertIsNone(result)
+        for cleanup in ("selector","pipe","signal","wait"):
+            _,error,result,_,_,_=self.probe(phase="success",cleanup=cleanup,status=7)
+            self.assertIsNone(error);self.assertEqual(result["exit_code"],7);self.assertEqual(result["producer_exit_code"],7)
+
+    def test_ownership_loss_never_signals_and_keeps_original_failure(self):
+        for ownership in ("lost","pid","group","session"):
+            for phase in ("read","success"):
+                events,error,_,original,_,_=self.probe(phase=phase,ownership=ownership)
+                self.assertFalse(any(isinstance(e,tuple) and e[0]=="signal" for e in events))
+                self.assertEqual(events.count("pipe.close"),1);self.assertIn("selector.close",events)
+                if phase=="read":self.assertIs(error,original)
+                else:self.assertIsNotNone(error)
+
+    def test_failed_ownership_proof_is_sticky_even_if_later_reads_recover(self):
+        for ownership in ("group-once", "session-once", "group-error-once", "session-error-once", "terminal-once", "wait-error-once"):
+            for phase in ("read", "success"):
+                with self.subTest(ownership=ownership, phase=phase):
+                    events,error,result,original,_,producer=self.probe(phase=phase,ownership=ownership)
+                    self.assertFalse(any(isinstance(e,tuple) and e[0]=="signal" for e in events), events)
+                    self.assertEqual(events.count("pipe.close"),1);self.assertIn("selector.close",events)
+                    self.assertIsNone(result)
+                    if phase=="read":self.assertIs(error,original)
+                    else:self.assertIsNotNone(error)
+                    waits=[e for e in events if isinstance(e,tuple) and e[0]=="wait"]
+                    if ownership.startswith(("group", "session")):
+                        self.assertEqual(waits,[("wait",0.2)]);self.assertTrue(producer.reaped)
+                    else:
+                        self.assertEqual(waits,[]);self.assertFalse(producer.reaped)
+
+    def test_unsupported_platform_and_sigchld_autoreap_reject_before_birth(self):
+        for obj,name,value in ((self.module.sys,"platform","darwin"),(self.module.os,"waitid",None),(self.module.os,"getpgid",None),(self.module.os,"getsid",None)):
+            with mock.patch.object(obj,name,value),mock.patch.object(self.module.subprocess,"Popen") as birth:
+                with self.assertRaises(ValueError):self.module.collect_log(["never-started"],self.path/"owned.log")
+                birth.assert_not_called()
+        with mock.patch.object(self.module.signal,"getsignal",return_value=self.module.signal.SIG_IGN),mock.patch.object(self.module.subprocess,"Popen") as birth:
+            with self.assertRaises(ValueError):self.module.collect_log(["never-started"],self.path/"owned.log")
+            birth.assert_not_called()
+
+    def test_log_open_failure_closes_selector_before_child_birth(self):
+        original = OSError("owned log open failed")
+        with mock.patch.object(self.module.Path,"open",side_effect=original),mock.patch.object(self.module.selectors,"DefaultSelector") as selectors,mock.patch.object(self.module.subprocess,"Popen") as birth:
+            with self.assertRaises(OSError) as caught:self.module.collect_log(["never-started"],self.path/"owned.log")
+            self.assertIs(caught.exception,original);birth.assert_not_called();selectors.return_value.close.assert_called_once()
+
+    def test_log_close_failure_preserves_read_error_and_rejects_success(self):
+        class Log:
+            closed = False
+            def close(self):
+                self.closed = True
+                raise OSError("owned log close failed")
+        for phase in ("read","success"):
+            log=Log()
+            with mock.patch.object(self.module.Path,"open",return_value=log):
+                _,error,result,original,_,_=self.probe(phase=phase)
+            self.assertTrue(log.closed);self.assertIsNone(result)
+            if phase=="read":self.assertIs(error,original)
+            else:self.assertIsInstance(error,OSError)
+
+    def test_real_early_exit_leader_stays_unreaped_until_owned_descendants_stop(self):
+        from test_cortex_m_perf_evidence import assert_collector_early_parent_exit
+        assert_collector_early_parent_exit(self,self.module,lambda command:self.module.collect_log(command,self.path/"early.log"),self.path)
+
+if __name__ == "__main__":
+    unittest.main()

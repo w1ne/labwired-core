@@ -1063,6 +1063,46 @@
         "lane": "none"
       }
     },
+    "arty-litex-vexriscv": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_arty_litex_smoke_survival",
+        "signal": "committed ELF fixture tests/fixtures/arty-litex-smoke.elf booted in-sim; the survival gate asserts 'ARTY LITEX SMOKE\n' on the LiteX UART TX sink. Fixture absence is a hard assert!, not a skip.",
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "The LiteX SPI-flash controller is a declared `type: stub` (docs/boards/arty-litex-vexriscv.md).",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "No I2C controller is modelled on the Arty's LiteX VexRiscv SoC.",
+        "lane": "none"
+      }
+    },
+    "stm32f072": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_stm32f072b_disco_smoke_survival",
+        "signal": "committed ELF fixture tests/fixtures/stm32f072b-disco-smoke.elf booted in-sim; the survival gate asserts 'STM32F072B-DISCO SMOKE\\n' on the USART1 TX sink. Fixture absence is a hard assert!, not a skip.",
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "No SPI device is attached on the DISCO board package; the SPI1/SPI2 controllers are modelled but unexercised.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "No I2C device is attached on the DISCO board package; the legacy I2C1/I2C2 controllers are modelled but unexercised.",
+        "lane": "none"
+      }
+    },
     "sam4s16c": {
       "in_boards": false,
       "uart": {

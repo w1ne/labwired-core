@@ -98,6 +98,16 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_litex_vexriscv_smoke_survival"),
     },
     ChipConf {
+        // Digilent Arty A7-35T (LiteX VexRiscv SoC, RV32IM). SIM-DERIVED: no
+        // bitstream capture exists. Modelled: CPU + memory + LiteX UART, timer
+        // and the control-and-status LED/switch/button CSR; SPI/Ethernet/MMCM
+        // are declared stubs — see examples/arty-litex-vexriscv/VALIDATION.md.
+        name: "arty-litex-vexriscv",
+        yaml: "configs/chips/arty-litex-vexriscv.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("firmware_survival::test_arty_litex_smoke_survival"),
+    },
+    ChipConf {
         // Vega board (RI5CY, RV32IMC). SIM-DERIVED: no silicon capture.
         // Modelled: CPU + memory + LPUART0/1; the SCG/PCC clock blocks, INTMUX
         // and low-power timers are declared stubs — see
@@ -116,6 +126,17 @@ const CHIPS: &[ChipConf] = &[
         yaml: "configs/chips/sam4s16c.yaml",
         reset_oracle: None,
         behavior_gate: Some("firmware_survival::test_sam4s_xplained_smoke_survival"),
+    },
+    ChipConf {
+        // STM32F072B-DISCO (STM32F072RBT6, Cortex-M0). SIM-DERIVED: no
+        // STM32F072 bench part. Modelled: RCC (stm32f0 profile), GPIO v2,
+        // USART1-4 v2, SPI/I2C/timers, DMA/EXTI/SYSCFG, bxCAN, DAC, RTC;
+        // USB/TSC/CRS are declared stubs — see
+        // examples/stm32f072b-disco/VALIDATION.md.
+        name: "stm32f072",
+        yaml: "configs/chips/stm32f072.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("firmware_survival::test_stm32f072b_disco_smoke_survival"),
     },
     ChipConf {
         name: "nrf54l15",

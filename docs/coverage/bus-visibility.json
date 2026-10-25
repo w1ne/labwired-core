@@ -1,6 +1,10 @@
 [
   {
     "buses": [],
+    "name": "arty-litex-vexriscv"
+  },
+  {
+    "buses": [],
     "name": "atmega2560"
   },
   {
@@ -144,6 +148,13 @@
   {
     "buses": [],
     "name": "sam4s16c"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI"
+    ],
+    "name": "stm32f072"
   },
   {
     "buses": [

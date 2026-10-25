@@ -348,6 +348,13 @@ WAIVED: dict[str, str] = {
         "0x20000000, RAM 0x10000000), and no throughput claim is made for this SoC "
         "(docs/boards/litex-vexriscv.md)."
     ),
+    "arty-litex-vexriscv": (
+        "L1 smoke, SIM-DERIVED: CPU + integrated SRAM + the LiteX UART/timer and the "
+        "board's Control-and-Status LED/switch/button CSR, with no silicon capture "
+        "and no executing-fidelity differential. No perf fixture is built for its "
+        "memory map (flash 0x20000000, RAM 0x10000000), and no throughput claim is "
+        "made for this board (docs/boards/arty-litex-vexriscv.md)."
+    ),
     "vegaboard-ri5cy": (
         "L1 smoke, SIM-DERIVED: CPU + flash/SRAM + the LPUART0 console only, with "
         "no silicon capture and no executing-fidelity differential. No perf fixture "
@@ -360,6 +367,13 @@ WAIVED: dict[str, str] = {
         "executing-fidelity differential. No perf fixture is built for the "
         "SAM4S map (flash 0x00400000, RAM 0x20000000), and no throughput claim "
         "is made for this board (docs/boards/sam4s-xplained.md)."
+    ),
+    "stm32f072": (
+        "L1 smoke, SIM-DERIVED: Cortex-M0 + flash/SRAM + USART1 and the GPIO "
+        "LED/button path only, with no silicon capture and no "
+        "executing-fidelity differential. No perf fixture is built for the "
+        "DISCO memory map (flash 0x08000000, RAM 0x20000000), and no "
+        "throughput claim is made for this board (docs/boards/stm32f072b-disco.md)."
     ),
     "rv1103": (
         "The old Cortex-A7 CPU subset fixture is not representative perf evidence. "

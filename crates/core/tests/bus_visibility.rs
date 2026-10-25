@@ -119,6 +119,14 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         "no LiteX UART bring-up in this harness; bytes are proven by the \
          litex-vexriscv survival smoke",
     ),
+    // The same SoC family on the Digilent Arty board: no LiteX UART bring-up
+    // here either; bytes are proven by the arty-litex-vexriscv survival smoke.
+    (
+        "arty-litex-vexriscv",
+        BusKind::Uart,
+        "no LiteX UART bring-up in this harness; bytes are proven by the \
+         arty-litex-vexriscv survival smoke",
+    ),
     // Vega board (RI5CY): no LPUART bring-up in this harness; bytes are proven
     // by the vegaboard-ri5cy survival smoke.
     (
@@ -134,6 +142,14 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         BusKind::Uart,
         "no UART0 bring-up in this harness; bytes are proven by the \
          sam4s-xplained survival smoke",
+    ),
+    // STM32F072B-DISCO: no USART1 bring-up in this harness; bytes are proven
+    // by the stm32f072b-disco survival smoke.
+    (
+        "stm32f072",
+        BusKind::Uart,
+        "no USART1 bring-up in this harness; bytes are proven by the \
+         stm32f072b-disco survival smoke",
     ),
     // ATmega328P: USART0 is mirrored from the AVR CPU, which owns UCSR0x/UBRR0
     // and forwards each register write and UDR0 byte to the bus-side host. The

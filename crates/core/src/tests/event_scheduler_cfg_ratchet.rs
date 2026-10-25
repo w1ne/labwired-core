@@ -291,7 +291,13 @@ const MAX_MODEL_SITES: usize = 179;
 /// every record, CCOUNT and machine cycle stays the same" has nothing to
 /// measure without it. `required-features` and the `pr-scheduler-observable`
 /// lane keep it from reading green empty. Ends with the feature.
-const MAX_HARNESS_SITES: usize = 88;
+///
+/// 88 → 89: `tests/cortex_m_loop_trace_differential.rs` is one gated file.
+/// It compares the native JIT with counted loop traces on against traces off,
+/// and both run only on the event-scheduler build (cycle/budget accounting is
+/// what the trace changes). `required-features` and the Cortex-M JIT
+/// differential lane keep it from reading green empty. Ends with the feature.
+const MAX_HARNESS_SITES: usize = 89;
 
 // ---------------------------------------------------------------------------
 // The counter. A pure function over source text, so its definition is testable
