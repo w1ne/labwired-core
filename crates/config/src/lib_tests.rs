@@ -1331,3 +1331,30 @@ assertions:
     let err = load_test_script(&script_path).unwrap_err().to_string();
     assert!(err.contains("cannot observe"), "unexpected error: {err}");
 }
+
+#[test]
+fn pic18_arch_parses_with_its_serde_aliases() {
+    for name in ["pic18", "pic18f"] {
+        let yaml = format!("\"{name}\"");
+        let arch: Arch = serde_yaml::from_str(&yaml).expect("PIC18 alias must parse");
+        assert_eq!(arch, Arch::Pic18, "alias {name:?} did not select PIC18");
+    }
+    assert_eq!(serde_yaml::to_string(&Arch::Pic18).unwrap().trim(), "pic18");
+}
+
+#[test]
+fn adding_pic18_leaves_existing_arch_aliases_unchanged() {
+    for (name, want) in [
+        ("arm", Arch::Arm),
+        ("cortex-m4", Arch::Arm),
+        ("riscv", Arch::RiscV),
+        ("xtensa", Arch::Xtensa),
+        ("avr", Arch::Avr),
+        ("pic24", Arch::Pic24),
+        ("dspic33", Arch::Pic24),
+    ] {
+        let yaml = format!("\"{name}\"");
+        let arch: Arch = serde_yaml::from_str(&yaml).expect("existing alias must still parse");
+        assert_eq!(arch, want, "alias {name:?} changed meaning");
+    }
+}

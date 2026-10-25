@@ -195,6 +195,7 @@ pub fn build_node_with_options(
         MachineFamily::Xtensa => build_xtensa_node(id, chip, system, firmware, blobs, opts.profile),
         MachineFamily::Avr => build_avr_node(id, chip, system, firmware, opts.plugins),
         MachineFamily::Pic24 => build_pic24_node(id, chip, system, firmware, opts.plugins),
+        MachineFamily::Pic18 => build_pic18_node(id, chip, system, firmware, opts.plugins),
     }
 }
 
@@ -304,6 +305,40 @@ fn build_pic24_node(
     let bus = crate::bus::SystemBus::from_config_with_plugins(chip, system, plugins)
         .with_context(|| format!("node '{id}': build bus"))?;
     let mut cpu = crate::cpu::Pic24::new();
+    cpu.load_program_image(&image);
+    let machine = Machine::new(cpu, bus);
+    Ok(Box::new(machine))
+}
+
+/// PIC18 node (M0): ELF in, CPU-local flash. No console or peripheral model
+/// is attached at this milestone.
+fn build_pic18_node(
+    id: &str,
+    chip: &ChipDescriptor,
+    system: &SystemManifest,
+    firmware: NodeFirmware,
+    plugins: &[&dyn crate::plugin::ChipPlugin],
+) -> anyhow::Result<Box<dyn MachineTrait>> {
+    let NodeFirmware::Elf(bytes) = firmware else {
+        anyhow::bail!(
+            "node '{id}': chip '{}' boots from an ELF, but the firmware is not an ELF file",
+            chip.name
+        );
+    };
+    let image =
+        parse_elf_image(&bytes).with_context(|| format!("node '{id}': parse firmware ELF"))?;
+    if image.arch != crate::Arch::Pic18 {
+        anyhow::bail!(
+            "node '{id}': firmware architecture {:?} is incompatible with PIC18 chip '{}'",
+            image.arch,
+            chip.name
+        );
+    }
+    crate::cpu::pic18::check_pic18_entry(image.entry_point)
+        .map_err(|e| anyhow::anyhow!("node '{id}': {e}"))?;
+    let bus = crate::bus::SystemBus::from_config_with_plugins(chip, system, plugins)
+        .with_context(|| format!("node '{id}': build bus"))?;
+    let mut cpu = crate::cpu::Pic18::new();
     cpu.load_program_image(&image);
     let machine = Machine::new(cpu, bus);
     Ok(Box::new(machine))
@@ -762,6 +797,9 @@ pub fn parse_elf_image(bytes: &[u8]) -> anyhow::Result<crate::memory::ProgramIma
         .ok_or_else(|| anyhow::anyhow!("unsupported ELF machine type {machine}"))?;
     if arch == crate::Arch::Pic24 {
         crate::cpu::pic24::check_xc16_entry(elf.entry).map_err(anyhow::Error::msg)?;
+    }
+    if arch == crate::Arch::Pic18 {
+        crate::cpu::pic18::check_pic18_entry(elf.entry).map_err(anyhow::Error::msg)?;
     }
     let mut image = crate::memory::ProgramImage::new(elf.entry, arch);
     if arch == crate::Arch::Pic24 {

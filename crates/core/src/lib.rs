@@ -81,6 +81,8 @@ pub enum Arch {
     Avr,
     /// PIC24 / dsPIC33 (dsPIC33FJ32MC204-class, M0 subset).
     Pic24,
+    /// PIC18 8-bit MCU (16-bit instruction words, byte-addressed PC).
+    Pic18,
     Unknown,
 }
 

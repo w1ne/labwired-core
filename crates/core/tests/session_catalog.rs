@@ -77,6 +77,9 @@ fn every_catalog_chip_builds_or_is_listed_in_needs() {
             labwired_config::Arch::RiscV => &riscv_fw,
             labwired_config::Arch::Avr => &avr_fw,
             labwired_config::Arch::Pic24 => &pic24_fw,
+            // No public PIC18 chip descriptor exists yet; the architecture is
+            // accepted by the policy but has no catalogue fixture.
+            labwired_config::Arch::Pic18 => &arm_fw,
             labwired_config::Arch::Xtensa => {
                 if name == "esp32" {
                     &esp32_fw
