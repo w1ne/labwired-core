@@ -13,7 +13,7 @@ The models column is a content digest over everything that board's `models` list
 | `seeed-xiao-nrf52840-sense` | 🟢 silicon-verified | 2026-08-09 | `a089c16151ad03e4` | ⚠ drift acked 2026-10-19, expires 2026-11-18 (re-capture pending) |
 | `stm32h563` | 🟢 silicon-verified | 2026-08-10 | `accfb123b9b3e4d4` | ⚠ drift acked 2026-10-19, expires 2026-11-18 (re-capture pending) |
 | `esp32c3` | 🟢 silicon-verified | 2026-08-09 | `705efa0bce5458a3` | ⚠ drift acked 2026-10-19, expires 2026-11-18 (re-capture pending) |
-| `nucleo-l476rg` | 🟢 silicon-verified | 2026-08-09 | `f1f97225721537df` | ⚠ drift acked 2026-10-19, expires 2026-11-18 (re-capture pending) |
+| `nucleo-l476rg` | 🟢 silicon-verified | 2026-08-09 | `e7e9efeae0133725` | ⚠ drift acked 2026-10-24, expires 2026-11-23 (re-capture pending) |
 | `nucleo-l073rz` | 🟢 silicon-verified | 2026-08-09 | `926ba8b0248152a6` | ⚠ drift acked 2026-10-19, expires 2026-11-18 (re-capture pending) |
 | `stm32f103` | 🟢 silicon-verified | 2026-08-09 | `8e6af0ca123118db` | ⚠ drift acked 2026-10-19, expires 2026-11-18 (re-capture pending) |
 | `stm32f407` | 🟢 silicon-smoke | 2026-06-20 | `b47f0b77db285652` | ⚠ drift acked 2026-10-19, expires 2026-11-18 (re-capture pending) |
@@ -48,10 +48,10 @@ The models column is a content digest over everything that board's `models` list
 | `teensy-41` | 🟡 smoke-manual | — | `17608f4d8f9162c5` | no silicon capture |
 | `stm32f7-discovery` | 🟡 smoke-manual | — | `6ba3e2270e8012cd` | no silicon capture |
 | `nucleo-g071rb` | 🟡 smoke-manual | — | `354776217a6e438d` | no silicon capture |
-| `esp32c6-devkitc` | 🟡 smoke-manual | — | `6bf4bc0838f602a6` | no silicon capture |
-| `litex-vexriscv` | 🟡 smoke-manual | — | `63a4e7787665a4f7` | no silicon capture |
-| `arty-litex-vexriscv` | 🟡 smoke-manual | — | `5c8a8b02be0e493c` | no silicon capture |
-| `vegaboard-ri5cy` | 🟡 smoke-manual | — | `1a1c17f6b26895a8` | no silicon capture |
+| `esp32c6-devkitc` | 🟡 smoke-manual | — | `45386add70a1a5e4` | no silicon capture |
+| `litex-vexriscv` | 🟡 smoke-manual | — | `4a458086f90ebd1a` | no silicon capture |
+| `arty-litex-vexriscv` | 🟡 smoke-manual | — | `fb70a736365986c3` | no silicon capture |
+| `vegaboard-ri5cy` | 🟡 smoke-manual | — | `f5e5798f997e3ae5` | no silicon capture |
 
 ## `nrf52840` — 🟢 silicon-verified
 
@@ -93,7 +93,7 @@ The models column is a content digest over everything that board's `models` list
 - Silicon: **2026-08-09** on STLINK-V2.1 (USB 0483:374b serial 0670FF…1747, NUCLEO-L476RG onboard) — re-captured live 2026-08-09 with L476_STRICT=1: l476_mmio_diff 15/15 and l476_parity_diff 104/104, 0 divergence — identical to the 2026-06-20 figures. Clean on arrival; nothing to fix. SAME physical board as that baseline, established by probe serial 0670FF535155878281121747 being recorded in both (the L073 entry could not make that claim, having no serial on file before today). Scope unchanged and still partial: the mmio+parity set, not a full-chip sweep.
   - offline (CI): l476_mmio_diff::{l476_mmio_sim_only,l476_parity_sim_only}
   - offline (CI): firmware_survival L476 cases (UART byte stream)
-- Drift status: **⚠ drift acked 2026-10-19, expires 2026-11-18 (re-capture pending)**
+- Drift status: **⚠ drift acked 2026-10-24, expires 2026-11-23 (re-capture pending)**
 
 ## `nucleo-l073rz` — 🟢 silicon-verified
 

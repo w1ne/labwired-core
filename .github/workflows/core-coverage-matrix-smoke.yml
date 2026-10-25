@@ -341,6 +341,11 @@ jobs:
           - id: dspic33fj32mc204-uart
             script: examples/dspic33fj32mc204/io-smoke.yaml
             system: examples/dspic33fj32mc204/system.yaml
+          # dsPIC33FJ32MC202 — 28-pin sibling of the 204 with the same M0
+          # scope: boot + UART1 TX, asserted by the committed XC16 ELF.
+          - id: dspic33fj32mc202-uart
+            script: examples/dspic33fj32mc202/io-smoke.yaml
+            system: examples/dspic33fj32mc202/system.yaml
           # LiteX VexRiscv SoC — first RISC-V soft-core cell. The smoke links
           # into the SoC's integrated SRAM (0x10000000) and prints over the
           # LiteX UART; one assertion reads back a declared-stub CSR window

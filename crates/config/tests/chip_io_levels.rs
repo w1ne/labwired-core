@@ -60,6 +60,8 @@ fn datasheet_transcriptions() {
         ("stm32f407", 3.3, 0.3, 0.7),
         // DS10314 Table 53.
         ("stm32f411ceu6", 3.3, 0.3, 0.7),
+        // DS10198 Table 70, 1.62 V < VDDIOx < 3.6 V, all I/Os except BOOT0.
+        ("stm32l476", 3.3, 0.3, 0.7),
     ] {
         let desc = load(chip);
         assert_eq!(desc.io_voltage_v, Some(volts), "{chip}");

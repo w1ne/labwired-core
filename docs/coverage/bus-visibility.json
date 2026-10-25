@@ -29,6 +29,10 @@
   },
   {
     "buses": [],
+    "name": "dspic33fj32mc202"
+  },
+  {
+    "buses": [],
     "name": "dspic33fj32mc204"
   },
   {

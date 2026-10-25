@@ -280,6 +280,11 @@
     "arty-litex-vexriscv": {
       "how": "needs-build",
       "why": "The LiteX VexRiscv SoC and Control-and-Status model are newer than the released CLI this gate installs. The committed smoke tests/fixtures/arty-litex-smoke.elf prints 'ARTY LITEX SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
+    },
+    "dspic33fj32mc202": {
+      "how": "committed",
+      "firmware": "examples/dspic33fj32mc202/firmware/dspic33fj32mc202-xc16-uart-smoke.elf",
+      "expect": "UART: HI"
     }
   }
 }

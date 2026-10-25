@@ -463,6 +463,11 @@ impl SystemBus {
                 .and_then(|a| a.downcast_ref::<crate::peripherals::nrf52::nvmc::Nrf52Nvmc>())
                 .is_some()
         });
+        // The peripheral that owns CPU stores into the flash region, if any.
+        self.flash_store_owner_idx = self
+            .peripherals
+            .iter()
+            .position(|p| p.dev.owns_flash_stores());
         // The GPIO edge-detection pass caches its four port indices on first
         // use. Every other index on this bus is rebuilt here when the
         // peripheral list changes; that one must be dropped for the same

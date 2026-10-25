@@ -44,6 +44,8 @@ const PARSE_FALLBACK_CHIPS: &[&str] = &[
     // M1 item (docs/pic24-m0-reference.md). The M0 fixture drives no GPIO, so
     // no pad is read as a fact and there is nothing to mis-parse.
     "dspic33fj32mc204",
+    // Same PIC24 M0 scope for the 28-pin sibling; no `pins:` map yet.
+    "dspic33fj32mc202",
     // EFR32 pin labels ARE the parse: Silicon Labs names GPIO pins P<bank><bit>
     // (PB2 = port B, bit 2) straight through the datasheet and UG594, so the
     // label-letter parse is the datasheet truth here, not a guess. There is no
