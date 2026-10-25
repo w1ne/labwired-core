@@ -1,0 +1,37 @@
+{
+  "schema": 1,
+  "note": "Public rating rows for closed-source models. Only the rating and public board doc are in this tree; the model, chip YAML and source stay private.",
+  "models": [
+    {
+      "name": "k32w041z",
+      "display_name": "K32W041AM DK6",
+      "visibility": "closed",
+      "public_doc": "docs/boards/k32w041amdk6.md",
+      "conformance": {
+        "level": 2,
+        "estate": true,
+        "peripherals": 9,
+        "reg_match": null,
+        "excluded": null,
+        "behavior_gate": "private-ci:k32w041-m1",
+        "evidence": "Hosted labwired-pro; private CI runs boot, hello_world, watchdog reset, RTT and the M1 demo"
+      },
+      "perf": {
+        "step_ir": 2880.8,
+        "batch_ir": 3083.5,
+        "batch_tick_interval": 1,
+        "rtx": 0.0204,
+        "rtx_ok": false,
+        "batch_ok": false,
+        "measured_by": "labwired-pro",
+        "measured_at": "2026-10-25",
+        "provenance": {
+          "core": "cc59a5c46",
+          "model": "0cd67d2da71233a04144e383e038fe7687fc8267",
+          "private_branch": "m1-k32w041z"
+        },
+        "note": "Batch is per-instruction (tick interval 1); RTx is below the open-model 1.0x floor."
+      }
+    }
+  ]
+}
