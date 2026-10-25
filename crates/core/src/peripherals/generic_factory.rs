@@ -160,6 +160,8 @@ pub const MODEL_TYPES: &[&str] = &[
     // that enables cleanly and never emits a byte.
     "sam_sercom_usart",
     "sam_sercom_spi",
+    "samd51_nvmctrl_manual_storage",
+    "samd51_cmcc_control",
     "sam_dmac_byte",
     "sam_dmac_sercom4_tx_byte",
     // Reserve the full name: never fuzzy-coerce an unqualified SAM DMAC to STM32.
@@ -329,12 +331,17 @@ pub const MODEL_TYPES: &[&str] = &[
     // type or the fuzzy `contains("timer")` fallback would coerce it onto the
     // STM32 timer map.
     "litex_timer",
+    // LiteX Control-and-Status (LED/switch/button CSR block).
+    "litex_controlandstatus",
     // Microchip Mi-V reference-design peripherals. MUST be listed: without
     // membership the fuzzy fallbacks would coerce `miv_coregpio` onto the
     // STM32 GPIO map (it was doing exactly that for the staged descriptors)
     // and `miv_coretimer` onto the STM32 timer map — silently wrong models.
     "miv_coregpio",
     "miv_coretimer",
+    // SAM4S (the older PIO/PMC blocks; not the SAM D21 PORT/PM pair).
+    "sam4s_pio",
+    "sam4s_pmc",
 ];
 
 /// True if `t` is already a canonical model-type name (see [`MODEL_TYPES`]).
@@ -568,7 +575,7 @@ pub fn try_build(
             // The dsPIC33FJ32MC204 has no uniform port width: PORTA presents
             // RA0-4/RA7-10, PORTB RB0-15, PORTC RC0-9 (DS70283H pin diagrams,
             // Table 4-20/21/22). The package mask comes from the instance.
-            let mask = match p_cfg.config.get("port").and_then(|v| v.as_str()) {
+            let default_mask = match p_cfg.config.get("port").and_then(|v| v.as_str()) {
                 Some("a") => 0x079F,
                 Some("b") => 0xFFFF,
                 Some("c") => 0x03FF,
@@ -579,6 +586,15 @@ pub fn try_build(
                     ))
                 }
             };
+            // The package mask is per part (the 28-pin sibling has RA0-RA4,
+            // RB0-RB15 and no PORTC); `config.mask` overrides the 44-pin
+            // default.
+            let mask = p_cfg
+                .config
+                .get("mask")
+                .and_then(|v| v.as_u64())
+                .map(|v| v as u16)
+                .unwrap_or(default_mask);
             Box::new(crate::peripherals::pic24_gpio::Pic24GpioPort::new(mask))
         }
         "avr_adc" => {
@@ -594,6 +610,23 @@ pub fn try_build(
         }
         "sam_sercom_usart" => {
             Box::new(crate::peripherals::sam::sercom_usart::SamSercomUsart::new())
+        }
+        "samd51_nvmctrl_manual_storage" | "samd51_cmcc_control" => {
+            let expected = if canonical_type == "samd51_nvmctrl_manual_storage" {
+                0x4100_4000
+            } else {
+                0x4100_6000
+            };
+            if p_cfg.base_address != expected || p_cfg.irq.is_some() || !p_cfg.config.is_empty() {
+                anyhow::bail!(
+                    "SAMD51 storage slice requires its exact base, no IRQ and no config overrides"
+                );
+            }
+            if canonical_type == "samd51_nvmctrl_manual_storage" {
+                Box::new(crate::peripherals::sam::nvmctrl::Samd51Nvmctrl::new())
+            } else {
+                Box::new(crate::peripherals::sam::cmcc::Samd51Cmcc::new())
+            }
         }
         "sam_dmac" => {
             anyhow::bail!("full SAM DMAC is not admitted; sam_dmac_byte is an opt-in software-byte foundation only");
@@ -1099,9 +1132,22 @@ pub fn try_build(
         // LiteX countdown timer (`litex/soc/cores/timer.py`): 32-bit CSRs
         // load/reload/en/update_value/value plus the zero-event manager.
         "litex_timer" => Box::new(crate::peripherals::litex_timer::LitexTimer::new()),
+        "litex_controlandstatus" => {
+            let active_low = p_cfg
+                .config
+                .get("buttons_active_low")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            Box::new(
+                crate::peripherals::litex_control_status::LitexControlStatus::new()
+                    .with_buttons_active_low(active_low),
+            )
+        }
         // Microchip Mi-V reference-design peripherals.
         "miv_coregpio" => Box::new(crate::peripherals::miv::MivCoreGpio::new()),
         "miv_coretimer" => Box::new(crate::peripherals::miv::MivCoreTimer::new()),
+        "sam4s_pio" => Box::new(crate::peripherals::sam4s::Sam4sPio::new()),
+        "sam4s_pmc" => Box::new(crate::peripherals::sam4s::Sam4sPmc::new()),
         _ => return Ok(None),
     };
     Ok(Some(dev))

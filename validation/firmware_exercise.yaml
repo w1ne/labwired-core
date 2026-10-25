@@ -570,7 +570,7 @@ chips:
     functional: []
   - id: dspic33fj32mc202
     arch: pic24
-    headline: "M0 bring-up: boot (PC 0 -> reset GOTO) and UART1 TX on the 28-pin sibling of the dsPIC33FJ32MC204; a real XC16 v1.70 firmware (xc16-uart-smoke.c) prints `HI` and toggles LATB0, booted by crates/core/tests/pic24_xc16_202_smoke.rs. The 202 shares the 204's PIC24/dsPIC33F core, 32 KB flash / 2 KB SRAM, UART1 and instruction set; the 204's M1-M3 peripheral models apply to the shared silicon, while the 202's package-level differences (28 pins, AN0-AN5 only, smaller PWM/QEI pin set) are not modelled in M0."
+    headline: "M0 + M1 + M2 bring-up on the 28-pin sibling of the dsPIC33FJ32MC204: boot (PC 0 -> reset GOTO) and UART1 TX, the 28-pin GPIO package (RA0-RA4, RB0-RB15, no PORTC; TRIS/LAT/ODC masks derived from the descriptor's pic24_gpio pads), and the shared T1 timer, Motor Control PWM 1 (complementary pair with dead time on RB14/RB15) and QEI1 (x4 index reset, QEA/QEB/INDX on RB0/RB1/RB2) on 202 package pins. Three real XC16 v1.70 firmwares: xc16-uart-smoke.c prints `HI` and toggles LATB0 (crates/core/tests/pic24_xc16_202_smoke.rs); xc16-m1-gpio.c prints `G1`, makes PORTA/PORTB outputs and toggles RA0/RB0 (crates/core/tests/pic24_xc16_202_m1.rs), including the reset masks and pad levels; xc16-m2-pwm-qei.c waits on T1IF and configures PWM1+QEI1 (crates/core/tests/pic24_xc16_202_m2.rs), with injected quadrature edges, PWM pad checks and the direction-aware index reset. The 202 shares the 204's PIC24/dsPIC33F core, 32 KB flash / 2 KB SRAM, UART1 and instruction set; the AN0-AN5 analog set and ADC/SPI/I2C validation are the next milestone."
     functional: []
     advanced_unit_only: []
     advanced_dead: []
@@ -578,6 +578,19 @@ chips:
   - id: litex-vexriscv
     arch: riscv32im
     headline: "L1 smoke, SIM-DERIVED; no beyond-rubric content. Boot, the LiteX UART console and the countdown-timer one-shot are proven by tests/fixtures/litex-vexriscv-smoke.elf and examples/litex-vexriscv/io-smoke.yaml. SPI flash, Ethernet and MMCM are declared stubs and timer IRQ delivery is not wired (examples/litex-vexriscv/VALIDATION.md), so no advanced blocks exist to list."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+  - id: sam4s16c
+    arch: cortex-m4
+    headline: "L1 smoke, SIM-DERIVED; no beyond-rubric content. Boot, the PMC clock enables (PCER0) and master-clock-ready status, the UART0 console and the SAM4S PIO LED/button path with ODSR readback are proven by tests/fixtures/sam4s-xplained-smoke.elf and examples/sam4s-xplained/io-smoke.yaml. TC/SPI/TWI/EEFC and the RSTC/SUPC/RTT/WDT/RTC system controller are declared stubs (examples/sam4s-xplained/VALIDATION.md), so no advanced blocks exist to list."
+  - id: stm32f072
+    arch: cortex-m0
+    headline: "L1 smoke, SIM-DERIVED; no beyond-rubric content. Boot, the F0 clock gates (AHBENR/APB2ENR), the USART1 console and the four-LED GPIO walk with GPIOC ODR readback are proven by tests/fixtures/stm32f072b-disco-smoke.elf and examples/stm32f072b-disco/io-smoke.yaml. USB, TSC and CRS are declared stubs (examples/stm32f072b-disco/VALIDATION.md), so no advanced blocks exist to list."
+  - id: arty-litex-vexriscv
+    arch: riscv32im
+    headline: "L1 smoke, SIM-DERIVED; no beyond-rubric content. Boot, the LiteX UART console, the countdown-timer one-shot and the Control-and-Status LED/switch/button CSR are proven by tests/fixtures/arty-litex-smoke.elf and examples/arty-litex-vexriscv/io-smoke.yaml. SPI flash, Ethernet and MMCM are declared stubs (examples/arty-litex-vexriscv/VALIDATION.md), so no advanced blocks exist to list."
     functional: []
     advanced_unit_only: []
     advanced_dead: []

@@ -468,6 +468,13 @@ impl SystemBus {
             .peripherals
             .iter()
             .position(|p| p.dev.owns_flash_stores());
+        // Opt-in manual storage (SAMD51 NVMCTRL) needs the same per-instruction
+        // pending-op watch as the H5/U5 FLASH models, plus a boundary commit.
+        self.samd51_nvmctrl_idx = self
+            .peripherals
+            .iter()
+            .position(|p| p.dev.manual_flash_storage().is_some());
+        self.flash_models_ops = self.samd51_nvmctrl_idx.is_some() || self.flash_models_ops;
         // The GPIO edge-detection pass caches its four port indices on first
         // use. Every other index on this bus is rebuilt here when the
         // peripheral list changes; that one must be dropped for the same

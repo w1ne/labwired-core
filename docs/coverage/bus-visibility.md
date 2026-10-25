@@ -10,6 +10,8 @@ This is NOT a pad-binding board. Binding answers the static question "what could
 
 Chips that cannot yet produce edges for a bus are listed here with a reason — never silently skipped.
 
+* **arty-litex-vexriscv**
+  * UART: no LiteX UART bring-up in this harness; bytes are proven by the arty-litex-vexriscv survival smoke
 * **atmega2560**
   * UART: USART0 registers live on the AVR CPU and are forwarded to the bus-side host; this harness drives bus MMIO, not the CPU, so no bring-up exists here
   * I2C: AVR from_config I2C is generic type:i2c without PadLines cell
@@ -65,11 +67,16 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * I2C: rp2350 from_config bus not yet edge-gated (no line cells)
   * SPI: rp2350 from_config bus not yet edge-gated (no line cells)
   * UART: rp2350 from_config bus not yet edge-gated (no line cells)
+* **sam4s16c**
+  * UART: no UART0 bring-up in this harness; bytes are proven by the sam4s-xplained survival smoke
+* **stm32f072**
+  * UART: no USART1 bring-up in this harness; bytes are proven by the stm32f072b-disco survival smoke
 * **vegaboard-ri5cy**
   * UART: no LPUART bring-up in this harness; bytes are proven by the vegaboard-ri5cy survival smoke
 
 | Chip | I2C | SPI | UART |
 |------|-----|-----|------|
+| arty-litex-vexriscv | — | — | — |
 | atmega2560 | — | — | — |
 | atmega328p | — | — | — |
 | atsamd21 | — | — | — |
@@ -98,6 +105,8 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | rp2040 | ✓ | ✓ | ✓ |
 | rp2350 | — | — | — |
 | rv1103 | — | — | — |
+| sam4s16c | — | — | — |
+| stm32f072 | ✓ | ✓ | — |
 | stm32f103 | ✓ | ✓ | ✓ |
 | stm32f401 | ✓ | ✓ | ✓ |
 | stm32f401cdu6 | ✓ | ✓ | ✓ |

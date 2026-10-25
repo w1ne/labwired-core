@@ -24,7 +24,28 @@
     "behavior": true,
     "excluded": 0,
     "level": 1,
+    "name": "arty-litex-vexriscv",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
     "name": "vegaboard-ri5cy",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "sam4s16c",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "stm32f072",
     "reg_match": 0
   },
   {

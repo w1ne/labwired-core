@@ -47,6 +47,7 @@ mod policy;
 mod profiles;
 mod resident_device;
 mod routing;
+mod samd51_storage;
 pub mod sim_inputs;
 mod tick;
 mod timed_can;
@@ -831,6 +832,10 @@ pub struct SystemBus {
     /// `rebuild_peripheral_ranges`. `None` on every bus without such a
     /// controller, so the flash-region store path costs one test.
     flash_store_owner_idx: Option<usize>,
+    /// Index of the opt-in SAMD51 manual-storage controller, if any. Cached in
+    /// `rebuild_peripheral_ranges` and used by the instruction-boundary commit
+    /// and the pending-op watch. `None` on every default board.
+    samd51_nvmctrl_idx: Option<usize>,
     /// Universal bus-transaction trace (logic analyzer): a shared, ring-
     /// buffered log that `I2c`/`Spi` peripherals record into once wrapped via
     /// `set_bus_trace` + `attach` (see `crate::bus::bus_trace`). Always
