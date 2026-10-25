@@ -74,7 +74,7 @@ fn pad_level(bus: &SystemBus, pin: u16) -> bool {
 
 #[test]
 fn package_masks_are_the_28_pin_202() {
-    let (mut cpu, bus, _) = boot(0);
+    let (mut cpu, _bus, _) = boot(0);
 
     // Reset: every package pad is an input over its mask.
     assert_eq!(cpu.data_read(SFR_TRISA).unwrap(), 0x001F, "RA0-RA4");
