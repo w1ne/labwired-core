@@ -35,6 +35,27 @@ on:
         description: "Space-separated --max-steps values"
         required: false
         default: "5000000 40000000"
+      suite:
+        description: "Firmware family to compare"
+        type: choice
+        options: [esp32s3, cortex-m, all]
+        default: esp32s3
+      qualify_cortex_m_oracles:
+        description: "Also build and execute Cortex-M frozen digest oracles at exact head SHA"
+        type: boolean
+        default: false
+      qualify_cortex_m_perf:
+        description: "Also measure exact base/head three-board Cortex-M Ir/step (not full CorePerf)"
+        type: boolean
+        default: false
+      diagnose_cortex_m_common_fixtures:
+        description: "Optional perf only: preserve original ELF and common-input Callgrind diagnostics"
+        type: boolean
+        default: false
+      diagnose_cortex_m_raw_profiles:
+        description: "Optional common-fixture perf only: retain three original base L476 raw profiles"
+        type: boolean
+        default: false
 
 concurrency:
   group: core-identity-${{ inputs.head }}
@@ -44,6 +65,221 @@ permissions:
   contents: read
 
 jobs:
+  cortex-m-perf:
+    needs: [run, compare]
+    if: ${{ always() && inputs.qualify_cortex_m_perf && needs.run.result == 'success' && needs.compare.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      RUSTUP_TOOLCHAIN: 1.95.0
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check Cortex-M performance evidence controls
+        run: python3 scripts/ci/test_cortex_m_perf_evidence.py
+      - name: Fence exact Cortex-M performance sources
+        env:
+          BASE_SHA: ${{ inputs.base }}
+          HEAD_SHA: ${{ inputs.head }}
+          IDENTITY_SUITE: ${{ inputs.suite }}
+          STEP_COUNTS: ${{ inputs.steps }}
+        run: |
+          set -euo pipefail
+          [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$IDENTITY_SUITE" = cortex-m || "$IDENTITY_SUITE" = all ]]
+          [ "$STEP_COUNTS" = '5000000 40000000' ]
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.base }}
+          path: perf-base
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.head }}
+          path: perf-head
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          targets: thumbv6m-none-eabi
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: core-perf
+          save-if: false
+          workspaces: |
+            perf-base -> target
+            perf-head -> target
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install and record one Cortex-M performance toolchain
+        run: |
+          set -euo pipefail
+          mkdir perf-build-evidence
+          sudo apt-get update -qq
+          version=$(apt-cache policy valgrind | sed -n 's/^  Candidate: //p')
+          [[ -n "$version" && "$version" != '(none)' ]]
+          sudo apt-get install -y "valgrind=$version"
+          python -m pip install --quiet pyyaml
+          dpkg-query -W -f '${Version}\n' valgrind > perf-build-evidence/valgrind-package.txt
+          valgrind --version > perf-build-evidence/valgrind-version.txt
+          rustc --version > perf-build-evidence/rustc-version.txt
+          cargo --version > perf-build-evidence/cargo-version.txt
+          python --version > perf-build-evidence/python-version.txt
+          uname -sr > perf-build-evidence/host.txt
+          cp /etc/os-release perf-build-evidence/os-release.txt
+          grep -q '^rustc 1\.95\.0 ' perf-build-evidence/rustc-version.txt
+      - uses: actions/download-artifact@v4
+        with:
+          name: identity-base
+          path: perf-identity/identity-base
+      - uses: actions/download-artifact@v4
+        with:
+          name: identity-head
+          path: perf-identity/identity-head
+      - name: Build exact Cortex-M performance CLIs
+        env:
+          BASE_SHA: ${{ inputs.base }}
+          HEAD_SHA: ${{ inputs.head }}
+        run: |
+          set -euo pipefail
+          [ -z "${RUSTFLAGS:-}" ]
+          [ -z "${CARGO_ENCODED_RUSTFLAGS:-}" ]
+          [ -z "${CARGO_TARGET_DIR:-}" ]
+          unset LABWIRED_ARM_SINGLE_STEP
+          helper="$GITHUB_WORKSPACE/scripts/ci/cortex_m_perf_evidence.py"
+          for side in base head; do
+            expected="$BASE_SHA"
+            if [ "$side" = head ]; then expected="$HEAD_SHA"; fi
+            [ "$(git -C "perf-$side" rev-parse HEAD)" = "$expected" ]
+            (
+              cd "perf-$side"
+              python "$helper" collect --timeout 900 \
+                --output "$GITHUB_WORKSPACE/perf-build-evidence/$side-build" \
+                -- cargo build --locked --release -p labwired-cli --features event-scheduler
+            )
+          done
+      - name: Qualify three-board Cortex-M performance evidence
+        env:
+          BASE_SHA: ${{ inputs.base }}
+          HEAD_SHA: ${{ inputs.head }}
+          IDENTITY_SUITE: ${{ inputs.suite }}
+          STEP_COUNTS: ${{ inputs.steps }}
+          DIAGNOSE_COMMON_FIXTURES: ${{ inputs.diagnose_cortex_m_common_fixtures }}
+          DIAGNOSE_RAW_PROFILES: ${{ inputs.diagnose_cortex_m_raw_profiles }}
+        run: |
+          set -euo pipefail
+          unset LABWIRED_ARM_SINGLE_STEP
+          valgrind --version > perf-build-evidence/valgrind-version-after.txt
+          cmp perf-build-evidence/valgrind-version.txt perf-build-evidence/valgrind-version-after.txt
+          diagnostic_args=()
+          case "${DIAGNOSE_COMMON_FIXTURES:-false}" in
+            false) ;;
+            true) diagnostic_args+=(--diagnose-common-fixtures) ;;
+            *) echo 'Invalid diagnostic toggle' >&2; exit 1 ;;
+          esac
+          case "${DIAGNOSE_RAW_PROFILES:-false}" in
+            false) ;;
+            true)
+              if [ "${DIAGNOSE_COMMON_FIXTURES:-false}" != true ] || [ "$IDENTITY_SUITE" != cortex-m ]; then
+                echo 'Raw diagnosis requires common fixtures and Cortex-M' >&2; exit 1
+              fi
+              diagnostic_args+=(--diagnose-raw-l476-repeats) ;;
+            *) echo 'Invalid raw diagnostic toggle' >&2; exit 1 ;;
+          esac
+          python scripts/ci/cortex_m_perf_evidence.py qualify "${diagnostic_args[@]}" \
+            --base-dir perf-base --head-dir perf-head \
+            --base-sha "$BASE_SHA" --head-sha "$HEAD_SHA" \
+            --identity-dir perf-identity --steps "$STEP_COUNTS" --suite "$IDENTITY_SUITE" \
+            --output perf-evidence
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cortex-m-perf-evidence
+          retention-days: 7
+          path: |
+            perf-evidence/
+            perf-build-evidence/
+
+  cortex-m-oracles:
+    if: ${{ inputs.qualify_cortex_m_oracles }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      # Keep the verifier at the reviewed workflow ref even when inputs.head
+      # predates it. The second checkout contains only the source under test.
+      - uses: actions/checkout@v4
+      - name: Check Cortex-M oracle evidence controls
+        run: python3 scripts/ci/test_cortex_m_oracle_evidence.py
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.head }}
+          path: oracle-source
+          persist-credentials: false
+      - name: Record exact Cortex-M oracle source
+        working-directory: oracle-source
+        env:
+          EXPECTED_SOURCE_SHA: ${{ inputs.head }}
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          actual=$(git rev-parse HEAD)
+          [ "$actual" = "$EXPECTED_SOURCE_SHA" ]
+          mkdir -p oracle-evidence
+          printf '{"source_sha":"%s"}\n' "$actual" > oracle-evidence/source.json
+      - uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          targets: thumbv7em-none-eabi,thumbv7m-none-eabi
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: core-perf
+          save-if: false
+          workspaces: |
+            oracle-source -> target
+      - name: Build Cortex-M oracle firmware
+        working-directory: oracle-source
+        run: |
+          set -euo pipefail
+          cargo build -p firmware-nrf52840-conformance -p firmware-nrf52840-cpu-conformance \
+            --target thumbv7em-none-eabi --release
+          cargo build -p firmware-f103-conformance --target thumbv7m-none-eabi --release
+      - name: Run Cortex-M digest oracles
+        working-directory: oracle-source
+        env:
+          EVIDENCE_VERIFIER: ${{ github.workspace }}/scripts/ci/cortex_m_oracle_evidence.py
+        run: |
+          set -euo pipefail
+          mkdir -p oracle-evidence
+          : > oracle-evidence/fixtures.jsonl
+          for fixture in \
+            target/thumbv7em-none-eabi/release/firmware-nrf52840-conformance \
+            target/thumbv7em-none-eabi/release/firmware-nrf52840-cpu-conformance \
+            target/thumbv7m-none-eabi/release/firmware-f103-conformance; do
+            python3 "$EVIDENCE_VERIFIER" fixture "$fixture" >> oracle-evidence/fixtures.jsonl
+          done
+          : > oracle-evidence/oracles.jsonl
+          for mode in feature-off scheduler; do
+            flags=()
+            [ "$mode" != scheduler ] || flags+=(--features labwired-core/event-scheduler)
+            for oracle in nrf52_conformance nrf52_cpu_conformance f103_conformance; do
+              test=conformance_sim
+              [ "$oracle" != nrf52_cpu_conformance ] || test=cpu_conformance_sim
+              log="oracle-evidence/$mode-$oracle.log"
+              status=0
+              python3 "$EVIDENCE_VERIFIER" collect "$log" -- \
+                cargo test -p labwired-hw-oracle "${flags[@]}" \
+                --test "$oracle" "$test" -- --exact --nocapture > "$log.collector.json" || status=$?
+              printf '%s\n' "$status" > "oracle-evidence/$mode-$oracle.exit"
+              python3 "$EVIDENCE_VERIFIER" log "$oracle" "$log" "$status" >> oracle-evidence/oracles.jsonl
+            done
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cortex-m-oracle-evidence
+          path: oracle-source/oracle-evidence/
+
   run:
     name: run (${{ matrix.side }})
     runs-on: ubuntu-latest
@@ -56,6 +292,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      # Exercise the workflow's literal shell with mock artifacts before
+      # switching to either ref; the old base need not contain this test.
+      - name: Check identity harness controls
+        run: python3 scripts/ci/test_core_identity_harness.py
 
       - name: Check out the ref under test
         env:
@@ -88,6 +329,7 @@ jobs:
         env:
           STEP_COUNTS: ${{ inputs.steps }}
           SIDE: ${{ matrix.side }}
+          IDENTITY_SUITE: ${{ inputs.suite }}
         run: |
           set -uo pipefail
           mkdir -p out
@@ -103,9 +345,28 @@ jobs:
           for steps in "${step_counts[@]}"; do
             for mode in step batched; do
               for pass in $(seq 1 $passes); do
-                cell="esp32s3-romboot-${steps}-${mode}-p${pass}"
                 flags=()
                 [ "$mode" = batched ] && flags+=(--batched)
+                single_step=0
+                [ "$mode" = step ] && single_step=1
+                if [ "$IDENTITY_SUITE" = cortex-m ] || [ "$IDENTITY_SUITE" = all ]; then
+                  for chip in nrf52840 stm32f405 stm32l476; do
+                    cell="cortex-m-${chip}-${steps}-${mode}-p${pass}"
+                    LABWIRED_ARM_SINGLE_STEP="$single_step" \
+                      timeout 1200 target/release/labwired run \
+                      --chip "configs/chips/$chip.yaml" \
+                      --firmware "tests/fixtures/tier1/$chip.elf" \
+                      --allow-sim-error --max-steps "$steps" "${flags[@]}" \
+                      --bus-trace-out "out/$cell.bus.json" \
+                      > "out/$cell.stdout" 2> "out/$cell.stderr"
+                    echo "$?" > "out/$cell.exit"
+                    printf '%-44s exit=%s stdout=%s bus=%s\n' "$cell" "$(cat "out/$cell.exit")" \
+                      "$(sha256sum < "out/$cell.stdout" | cut -c1-16)" \
+                      "$(sha256sum < "out/$cell.bus.json" | cut -c1-16)"
+                  done
+                fi
+                [ "$IDENTITY_SUITE" = cortex-m ] && continue
+                cell="esp32s3-romboot-${steps}-${mode}-p${pass}"
                 LABWIRED_ESP32S3_FLASH=tests/fixtures/tier1/esp32s3-flash.bin \
                   timeout 1200 target/release/labwired run \
                     --chip configs/chips/esp32s3.yaml \
@@ -136,6 +397,9 @@ jobs:
           pattern: identity-*
 
       - name: Compare
+        env:
+          STEP_COUNTS: ${{ inputs.steps }}
+          IDENTITY_SUITE: ${{ inputs.suite }}
         run: |
           set -uo pipefail
           echo "base $(cat identity-base/sha)"
@@ -160,14 +424,96 @@ jobs:
             else sha256sum < "$1" | cut -c1-16; fi
           }
           bad=0; judged=0
+          # Derive the complete inventory from dispatch inputs, never from
+          # files that happened to upload. A missing first-base exit otherwise
+          # removes its entire cell from the comparison below.
+          if ! python3 - <<'PY_INVENTORY'
+          import os
+          import re
+          import sys
+          from pathlib import Path
+
+          suite = os.environ["IDENTITY_SUITE"]
+          steps = os.environ["STEP_COUNTS"].split()
+          if suite not in ("esp32s3", "cortex-m", "all") or not steps or any(
+              re.fullmatch(r"[1-9][0-9]*", count) is None for count in steps
+          ) or len(steps) != len(set(steps)):
+              print("FAIL-INVENTORY invalid suite/step inputs")
+              sys.exit(1)
+          cells = []
+          for count in steps:
+              for mode in ("step", "batched"):
+                  if suite in ("cortex-m", "all"):
+                      cells.extend(f"cortex-m-{chip}-{count}-{mode}" for chip in
+                                   ("nrf52840", "stm32f405", "stm32l476"))
+                  if suite in ("esp32s3", "all"):
+                      cells.append(f"esp32s3-romboot-{count}-{mode}")
+          for root, passes in (("identity-base", (1, 2)), ("identity-head", (1,))):
+              expected = {"sha"}
+              for cell in cells:
+                  streams = ("exit", "stdout", "stderr", "bus.json") if cell.startswith("cortex-m-") else ("exit", "stdout", "stderr")
+                  expected.update(f"{cell}-p{run}.{stream}" for run in passes for stream in streams)
+              path = Path(root)
+              actual = {entry.name for entry in path.iterdir() if entry.is_file()} if path.is_dir() else set()
+              if actual != expected:
+                  print(f"FAIL-INVENTORY {root}: missing={sorted(expected - actual)} unexpected={sorted(actual - expected)}")
+                  sys.exit(1)
+          print(f"inventory complete: {len(cells)} cells, base twice, head once")
+          PY_INVENTORY
+          then
+            bad=1
+          fi
           printf '%-38s %-7s %-17s %-17s %s\n' cell stream base head verdict | tee report.txt
           for f in identity-base/*-p1.exit; do
             cell=$(basename "$f" -p1.exit)
-            for stream in exit stdout stderr; do
+            streams=(exit stdout stderr)
+            if [[ "$cell" = cortex-m-* ]]; then
+              streams+=(bus.json)
+              # These fixtures speak TIER1 over UART. Require real, cycle-stamped
+              # firmware traffic on BOTH base controls and head before hashing.
+              # .json is essential: other export extensions select VCD.
+              if ! python3 - "$cell" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          cell = sys.argv[1]
+          for root, run in [("identity-base", "p1"), ("identity-base", "p2"), ("identity-head", "p1")]:
+              prefix = Path(root) / f"{cell}-{run}"
+              try:
+                  assert Path(f"{prefix}.exit").read_text().strip() == "0", "invalid exit"
+                  assert b"TIER1 " in Path(f"{prefix}.stdout").read_bytes(), "no firmware UART stdout"
+                  events = json.loads(Path(f"{prefix}.bus.json").read_text())
+                  assert isinstance(events, list) and events, "empty/non-list bus trace"
+                  uart = bytearray()
+                  for event in events:
+                      assert isinstance(event, dict), "invalid event"
+                      assert type(event.get("seq")) is int and event["seq"] >= 0, "invalid sequence"
+                      assert type(event.get("cycle")) is int and event["cycle"] >= 0, "invalid cycle"
+                      assert isinstance(event.get("bus"), str) and event["bus"], "invalid bus"
+                      payload = event.get("payload")
+                      assert isinstance(payload, dict), "invalid payload"
+                      assert payload.get("protocol") in ("i2c", "spi", "uart", "can"), "invalid protocol"
+                      if payload["protocol"] == "uart":
+                          assert payload.get("direction") in ("tx", "rx"), "invalid UART direction"
+                          assert type(payload.get("byte")) is int and 0 <= payload["byte"] <= 255, "invalid UART byte"
+                          if payload["direction"] == "tx" and event["cycle"] > 0:
+                              uart.append(payload["byte"])
+                  assert b"TIER1 " in uart, "no cycle-stamped firmware UART events"
+              except (AssertionError, OSError, ValueError) as error:
+                  print(f"FAIL-EXECUTION {prefix}: {error}")
+                  sys.exit(1)
+          PY
+              then
+                bad=1
+                continue
+              fi
+            fi
+            for stream in "${streams[@]}"; do
               b1=$(h "identity-base/$cell-p1.$stream")
               b2=$(h "identity-base/$cell-p2.$stream")
               hd=$(h "identity-head/$cell-p1.$stream")
-              if [ "$b1" = MISSING ] || [ "$hd" = MISSING ]; then
+              if [ "$b1" = MISSING ] || [ "$b2" = MISSING ] || [ "$hd" = MISSING ]; then
                 v=FAIL-MISSING; bad=1
               elif [ "$(cat "identity-base/$cell-p1.exit")" = 2 ] \
                 || [ ! -s "identity-base/$cell-p1.stdout" ]; then
@@ -177,6 +523,10 @@ jobs:
                 v=FAIL-DIDNOTRUN; bad=1
               elif [ "$b1" != "$b2" ]; then
                 v=UNSTABLE      # the control: base disagrees with itself
+                # Exit-only agreement cannot certify Cortex-M behavior.
+                if [[ "$cell" = cortex-m-* ]] && [[ "$stream" = stdout || "$stream" = bus.json ]]; then
+                  bad=1
+                fi
               elif [ "$b1" = "$hd" ]; then
                 v=identical; judged=$((judged + 1))
               else

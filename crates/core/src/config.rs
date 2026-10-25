@@ -54,6 +54,14 @@ pub struct SimulationConfig {
     /// else the JIT does not model. Has no effect without the `jit` feature.
     #[serde(default)]
     pub cortex_m_jit_enabled: bool,
+    /// Cortex-M loop TRACES: a counted ALU loop whose conditional backedge
+    /// targets its own entry compiles to a wasm `loop` that runs many
+    /// iterations per dispatch. Only consulted when
+    /// [`Self::cortex_m_jit_enabled`] is true. Default off; the native
+    /// differential (`tests/cortex_m_loop_trace_differential.rs`) and the
+    /// browser adapter opt in.
+    #[serde(default)]
+    pub cortex_m_jit_loop_traces: bool,
     /// Minimum compiled-block length. `0` = framework default (16). Lower
     /// values compile more Zephyr-sized Thumb BBs; only safe once RAM
     /// access is zero-copy (host load/store, no SRAM memcpy).
@@ -73,6 +81,7 @@ impl Default for SimulationConfig {
             riscv_jit_enabled: false,
             host_time_mode: HostTimeMode::MaxSpeed,
             cortex_m_jit_enabled: false,
+            cortex_m_jit_loop_traces: false,
             cortex_m_jit_min_block_instrs: 0,
         }
     }
