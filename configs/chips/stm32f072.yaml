@@ -1,0 +1,335 @@
+# LabWired - STM32F072 chip configuration
+#
+# The STM32F072RBT6: Cortex-M0, 128 KiB flash, 16 KiB SRAM — the MCU on the
+# STM32F072B-DISCO board. This is the first STM32F0 part in the engine.
+#
+# Sources:
+# - RM0360 (STM32F0x1/2/8 reference manual): RCC §6, GPIO §9, USART §27,
+#   SPI §25, I2C §22, timers, FLASH §3, EXTI/SYSCFG, DMA §10.
+# - DS9826 (STM32F072xB datasheet): memory boundaries, pin map, clock limits.
+# - Zephyr `stm32f072b_disco` board dts: the board's console/USART1 and LED map
+#   (the board package lives in the system manifest, not here).
+#
+# Profiles (shared silicon IP, chosen per family):
+# - rcc     `stm32f0`  — RM0360 register map (CR/CFGR/APBxENR/CFGR2/CFGR3/CR2).
+# - gpio    `stm32v2`  — MODER/OTYPER/OSPEEDR/PUPDR/IDR/ODR/BSRR/AFRx.
+# - uart    `stm32v2`  — ISR/RDR/TDR (the "USART v2" block, same as F7/G0).
+# - spi     `stm32`    — the legacy DR/SR SPI; the F0 has no FIFO.
+# - i2c     `stm32f1`  — the legacy CR1/CR2/SR1/SR2/CCR/TRISE I2C.
+# - flash   `stm32f1`  — FLASH_R: ACR/KEYR/OPTKEYR/SR/CR/AR/OBR/WRPR.
+# - adc     `stm32l4`  — the CFGR1/CFGR2 "v2" ADC (same family profile as G0);
+#                        the smoke does not exercise it.
+# - timer   generic    — TIMx CR1/PSC/ARR/CNT.
+# - can     generic    — bxCAN (the licensed Bosch core ST wraps).
+# - dac     generic    — the F1-shaped DAC.
+# - rtc     `rtc`      — the v2 RTC calendar block.
+# - USB FS, TSC, CRS, COMP are declared stubs.
+#
+# Tier: L1 smoke — boot + USART1 console + GPIO LED/button path on the DISCO
+# board map. SIM-DERIVED (no STM32F072 bench part).
+
+name: "stm32f072"
+arch: "arm"
+core: "cortex-m0"
+registers_count: 120
+# STM32F072 maximum core clock, 48 MHz (DS9826).
+cpu_hz: 48_000_000
+# DS9826 §5.3.14, "I/O static characteristics": VIL max 0.35·VDD,
+# VIH min 0.65·VDD.
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.35
+  vih: 0.65
+
+flash:
+  base: 0x08000000
+  # 128 KiB of main flash (the "B" suffix; DS9826 Table 2).
+  size: "128KB"
+ram:
+  base: 0x20000000
+  # 16 KiB of SRAM (DS9826 Table 2).
+  size: "16KB"
+
+pins:
+  # Board-relevant pads (STM32F072RBT6 LQFP64, DS9826 Table 14 / Zephyr dts).
+  PA0: { gpio: "gpioa", bit: 0 }
+  PA9: { gpio: "gpioa", bit: 9 }
+  PA10: { gpio: "gpioa", bit: 10 }
+  PC6: { gpio: "gpioc", bit: 6 }
+  PC7: { gpio: "gpioc", bit: 7 }
+  PC8: { gpio: "gpioc", bit: 8 }
+  PC9: { gpio: "gpioc", bit: 9 }
+
+peripherals:
+  # --- Clock / power -------------------------------------------------------
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40021000
+    size: "1KB"
+    config:
+      profile: "stm32f0"
+
+  - id: "pwr"
+    type: "pwr"
+    base_address: 0x40007000
+    size: "1KB"
+    clock: { reg: "apb1enr", bit: 28 }
+
+  # FLASH_R @ 0x40022000 — ACR/KEYR/OPTKEYR/SR/CR/AR/OBR/WRPR (RM0360 §3.5);
+  # the F1-shaped register file is reused (the F0's OBL_LAUNCH lives in CR
+  # bit 19 and is not modelled; the smoke never programs flash).
+  - id: "flash_ctrl"
+    type: "flash"
+    base_address: 0x40022000
+    size: "1KB"
+    config:
+      profile: "stm32f1"
+
+  - id: "crc"
+    type: "crc"
+    base_address: 0x40023000
+    size: "1KB"
+    clock: { reg: "ahbenr", bit: 6 }
+
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+    size: "16B"
+
+  - id: "dbgmcu"
+    type: "dbgmcu"
+    base_address: 0x40015800
+    size: "1KB"
+
+  # --- GPIO (AHB @ 0x48000000; clocks in AHBENR bits 17..22) --------------
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x48000000
+    size: "1KB"
+    clock: { reg: "ahbenr", bit: 17 }
+    config:
+      profile: "stm32v2"
+      # SWD on PA13/PA14 (AF) plus their pull-ups, per DS9826.
+      reset_moder: 0xA8000000
+      reset_pupdr: 0x24000000
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x48000400
+    size: "1KB"
+    clock: { reg: "ahbenr", bit: 18 }
+    config:
+      profile: "stm32v2"
+  - id: "gpioc"
+    type: "gpio"
+    base_address: 0x48000800
+    size: "1KB"
+    clock: { reg: "ahbenr", bit: 19 }
+    config:
+      profile: "stm32v2"
+  - id: "gpiod"
+    type: "gpio"
+    base_address: 0x48000C00
+    size: "1KB"
+    clock: { reg: "ahbenr", bit: 20 }
+    config:
+      profile: "stm32v2"
+  - id: "gpioe"
+    type: "gpio"
+    base_address: 0x48001000
+    size: "1KB"
+    clock: { reg: "ahbenr", bit: 21 }
+    config:
+      profile: "stm32v2"
+  - id: "gpiof"
+    type: "gpio"
+    base_address: 0x48001400
+    size: "1KB"
+    clock: { reg: "ahbenr", bit: 22 }
+    config:
+      profile: "stm32v2"
+
+  # --- USARTs (v2 layout; USART1 on APB2, 2-4 on APB1) --------------------
+  - id: "usart1"
+    type: "uart"
+    base_address: 0x40013800
+    size: "1KB"
+    irq: 27
+    clock: { reg: "apb2enr", bit: 14 }
+    config:
+      profile: "stm32v2"
+  - id: "usart2"
+    type: "uart"
+    base_address: 0x40004400
+    size: "1KB"
+    irq: 28
+    clock: { reg: "apb1enr", bit: 17 }
+    config:
+      profile: "stm32v2"
+  - id: "usart3"
+    type: "uart"
+    base_address: 0x40004800
+    size: "1KB"
+    # USART3/USART4 share vector 29 on the F072 (RM0360 vector table).
+    irq: 29
+    clock: { reg: "apb1enr", bit: 18 }
+    config:
+      profile: "stm32v2"
+  - id: "usart4"
+    type: "uart"
+    base_address: 0x40004C00
+    size: "1KB"
+    irq: 29
+    clock: { reg: "apb1enr", bit: 19 }
+    config:
+      profile: "stm32v2"
+
+  # --- SPI (legacy, no FIFO) ----------------------------------------------
+  - id: "spi1"
+    type: "spi"
+    base_address: 0x40013000
+    size: "1KB"
+    irq: 25
+    clock: { reg: "apb2enr", bit: 12 }
+    config:
+      profile: "stm32"
+  - id: "spi2"
+    type: "spi"
+    base_address: 0x40003800
+    size: "1KB"
+    irq: 26
+    clock: { reg: "apb1enr", bit: 14 }
+    config:
+      profile: "stm32"
+
+  # --- I2C (legacy) --------------------------------------------------------
+  - id: "i2c1"
+    type: "i2c"
+    base_address: 0x40005400
+    size: "1KB"
+    irq: 23
+    clock: { reg: "apb1enr", bit: 21 }
+    config:
+      profile: "stm32f1"
+  - id: "i2c2"
+    type: "i2c"
+    base_address: 0x40005800
+    size: "1KB"
+    irq: 24
+    clock: { reg: "apb1enr", bit: 22 }
+    config:
+      profile: "stm32f1"
+
+  # --- Timers --------------------------------------------------------------
+  - id: "tim1"
+    type: "timer"
+    base_address: 0x40012C00
+    size: "1KB"
+    irq: 13
+    clock: { reg: "apb2enr", bit: 11 }
+  - id: "tim2"
+    type: "timer"
+    base_address: 0x40000000
+    size: "1KB"
+    irq: 15
+    clock: { reg: "apb1enr", bit: 0 }
+  - id: "tim3"
+    type: "timer"
+    base_address: 0x40000400
+    size: "1KB"
+    irq: 16
+    clock: { reg: "apb1enr", bit: 1 }
+  - id: "tim14"
+    type: "timer"
+    base_address: 0x40002000
+    size: "1KB"
+    irq: 19
+    clock: { reg: "apb1enr", bit: 8 }
+  - id: "tim15"
+    type: "timer"
+    base_address: 0x40014000
+    size: "1KB"
+    irq: 20
+    clock: { reg: "apb2enr", bit: 16 }
+  - id: "tim16"
+    type: "timer"
+    base_address: 0x40014400
+    size: "1KB"
+    irq: 21
+    clock: { reg: "apb2enr", bit: 17 }
+  - id: "tim17"
+    type: "timer"
+    base_address: 0x40014800
+    size: "1KB"
+    irq: 22
+    clock: { reg: "apb2enr", bit: 18 }
+
+  # --- Interrupt / system --------------------------------------------------
+  - id: "exti"
+    type: "exti"
+    base_address: 0x40010400
+    size: "1KB"
+    config:
+      lines: 32
+  - id: "syscfg"
+    type: "syscfg"
+    base_address: 0x40010000
+    size: "1KB"
+
+  # --- DMA -----------------------------------------------------------------
+  - id: "dma1"
+    type: "dma"
+    base_address: 0x40020000
+    size: "1KB"
+    clock: { reg: "ahbenr", bit: 0 }
+
+  # --- Analog --------------------------------------------------------------
+  - id: "adc1"
+    type: "adc"
+    base_address: 0x40012400
+    size: "1KB"
+    irq: 12
+    clock: { reg: "apb2enr", bit: 9 }
+    config:
+      profile: "stm32l4"
+  - id: "dac1"
+    type: "dac"
+    base_address: 0x40007400
+    size: "1KB"
+    clock: { reg: "apb1enr", bit: 29 }
+
+  # --- Connectivity --------------------------------------------------------
+  - id: "can1"
+    type: "bxcan"
+    base_address: 0x40006400
+    size: "1KB"
+    irq: 30
+  - id: "rtc"
+    type: "rtc"
+    base_address: 0x40002800
+    size: "1KB"
+    irq: 2
+    clock: { reg: "apb1enr", bit: 10 }
+  - id: "iwdg"
+    type: "iwdg"
+    base_address: 0x40003000
+    size: "1KB"
+  - id: "wwdg"
+    type: "wwdg"
+    base_address: 0x40002C00
+    size: "1KB"
+    irq: 0
+    clock: { reg: "apb1enr", bit: 11 }
+
+  # --- Declared, not modelled ---------------------------------------------
+  - id: "usb"
+    type: "stub"
+    base_address: 0x40005C00
+    size: "1KB"
+  - id: "tsc"
+    type: "stub"
+    base_address: 0x40024000
+    size: "1KB"
+  - id: "crs"
+    type: "stub"
+    base_address: 0x40006C00
+    size: "1KB"

@@ -66,6 +66,11 @@ pub struct BlockPlan {
     /// Number of guest instructions the block retires when it runs to the
     /// terminator (used to advance the cycle counter in one shot).
     pub instr_count: u32,
+    /// `Some(n)` for a LOOP TRACE: the block runs `k` iterations of an
+    /// `n`-instruction loop per dispatch and reports `k` through the
+    /// runtime's iterations-done read-back (`ITERS_DONE_SLOT`). `None` for
+    /// basic blocks, whose `instr_count` is their only cost.
+    pub iter_instr_count: Option<u32>,
     /// Emitted WebAssembly module bytes. Empty for the passthrough stub,
     /// which carries no body and side-exits at entry.
     pub code: Vec<u8>,
@@ -84,6 +89,7 @@ impl BlockPlan {
             entry_pc,
             end_pc: entry_pc,
             instr_count: 0,
+            iter_instr_count: None,
             code: Vec::new(),
             exits: vec![ExitEdge {
                 wire_code: 0,

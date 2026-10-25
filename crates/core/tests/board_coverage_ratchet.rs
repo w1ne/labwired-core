@@ -517,10 +517,19 @@ fn every_shipped_descriptor_is_ratcheted() {
         // its own. Promote when the browser board lands AND a differential
         // exists.
         "litex-vexriscv",
+        // Digilent Arty A7-35T on the LiteX VexRiscv SoC: chip + system + example
+        // with an io-smoke, a committed fixture and a survival gate, but no
+        // bundled-configs.ts catalog board, no bitstream capture and no
+        // executing-fidelity differential of its own. Same bar as litex-vexriscv.
+        "arty-litex-vexriscv",
         // Vega board (RI5CY): chip + system + example with an io-smoke, a
         // committed fixture and a survival gate; no catalog board, no silicon
         // capture and no executing-fidelity differential.
         "vegaboard-ri5cy",
+        // First STM32F0 part (STM32F072B-DISCO): chip + system + example with
+        // an io-smoke, a committed fixture and a survival gate; no catalog
+        // board, no silicon capture and no executing-fidelity differential.
+        "stm32f072",
         // Descriptor-level derivative of the F401 lane (shared F4 profiles,
         // DEV_ID 0x413), smoke-validated via the feather-f405 example only:
         // no catalog board, no silicon oracle, no executing-fidelity

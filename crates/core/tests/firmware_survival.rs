@@ -281,6 +281,21 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output: b"verdict=GOOD rp2040",
     },
     SurvivalCase {
+        // STM32F072B-DISCO: STM32F072RBT6 (Cortex-M0), 128 KiB flash at
+        // 0x08000000, 16 KiB SRAM at 0x20000000. USART1 (PA9/PA10) is the
+        // ST-LINK VCP; the smoke walks the four user LEDs with GPIOC ODR
+        // readback and reads the pulled-up user button. SIM-DERIVED.
+        name: "stm32f072b_disco_smoke",
+        core: "cortex-m0",
+        family: CpuFamily::CortexM,
+        hal: Hal::Bare,
+        chip: "stm32f072",
+        system: "stm32f072b-disco",
+        fixture: "stm32f072b-disco-smoke.elf",
+        valid_pc_ranges: &[(0x0800_0000, 0x0801_FFFF), (0x2000_0000, 0x2000_3FFF)],
+        expected_uart_output: b"STM32F072B-DISCO SMOKE\n",
+    },
+    SurvivalCase {
         name: "nrf52840_demo",
         core: "cortex-m4",
         family: CpuFamily::CortexM,
@@ -587,6 +602,22 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         fixture: "litex-vexriscv-smoke.elf",
         valid_pc_ranges: &[(0x1000_0000, 0x1003_FFFF)],
         expected_uart_output: b"LITEX VEXRISCV SMOKE\n",
+    },
+    SurvivalCase {
+        // Digilent Arty A7-35T (LiteX VexRiscv SoC, RV32IM): the smoke links
+        // into the SoC's integrated SRAM, walks the control-and-status LEDs,
+        // and prints over the LiteX UART. The chip declares `core: rv32im`, so
+        // runs select the standard RV32 profile. SIM-DERIVED — no bitstream
+        // diff exists.
+        name: "arty_litex_smoke",
+        core: "rv32im",
+        family: CpuFamily::RiscV,
+        hal: Hal::Bare,
+        chip: "arty-litex-vexriscv",
+        system: "arty-litex-vexriscv",
+        fixture: "arty-litex-smoke.elf",
+        valid_pc_ranges: &[(0x1000_0000, 0x1003_FFFF)],
+        expected_uart_output: b"ARTY LITEX SMOKE\n",
     },
     SurvivalCase {
         // Vega board (RI5CY, RV32IMC): 1 MiB flash at 0x0, 192 KiB SRAM at
@@ -2060,6 +2091,11 @@ survival_gate!(
 survival_gate!(test_nrf52840_demo_survival, "nrf52840_demo");
 
 survival_gate!(
+    test_stm32f072b_disco_smoke_survival,
+    "stm32f072b_disco_smoke"
+);
+
+survival_gate!(
     test_arduino_nano_33_ble_smoke_survival,
     "arduino_nano_33_ble_smoke"
 );
@@ -2512,6 +2548,7 @@ survival_gate!(test_esp32c6_demo_survival, "esp32c6_demo");
 
 survival_gate!(test_litex_vexriscv_smoke_survival, "litex_vexriscv_smoke");
 
+survival_gate!(test_arty_litex_smoke_survival, "arty_litex_smoke");
 survival_gate!(test_vegaboard_ri5cy_smoke_survival, "vegaboard_ri5cy_smoke");
 
 survival_gate!(test_nucleo_l476rg_smoke_survival, "nucleo_l476rg_smoke");
