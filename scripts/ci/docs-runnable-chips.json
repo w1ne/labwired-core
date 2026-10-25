@@ -285,6 +285,10 @@
       "how": "committed",
       "firmware": "examples/dspic33fj32mc202/firmware/dspic33fj32mc202-xc16-uart-smoke.elf",
       "expect": "UART: HI"
+    },
+    "stm32f072": {
+      "how": "needs-build",
+      "why": "The STM32F0 part is newer than the released CLI this gate installs. The committed smoke tests/fixtures/stm32f072b-disco-smoke.elf prints 'STM32F072B-DISCO SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
     }
   }
 }

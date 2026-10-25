@@ -1677,6 +1677,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-stm32f072b-disco-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-stm32f746-demo"
 version = "0.1.0"
 dependencies = [

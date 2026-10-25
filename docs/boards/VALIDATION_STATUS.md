@@ -50,6 +50,7 @@ The models column is a content digest over everything that board's `models` list
 | `nucleo-g071rb` | 🟡 smoke-manual | — | `74bd288aadeff1f6` | no silicon capture |
 | `esp32c6-devkitc` | 🟡 smoke-manual | — | `45386add70a1a5e4` | no silicon capture |
 | `litex-vexriscv` | 🟡 smoke-manual | — | `4a458086f90ebd1a` | no silicon capture |
+| `stm32f072` | 🟡 smoke-manual | — | `9c02e4a15620fce5` | no silicon capture |
 | `arty-litex-vexriscv` | 🟡 smoke-manual | — | `fb70a736365986c3` | no silicon capture |
 | `vegaboard-ri5cy` | 🟡 smoke-manual | — | `f5e5798f997e3ae5` | no silicon capture |
 
@@ -400,6 +401,13 @@ The models column is a content digest over everything that board's `models` list
 - Doc: [`docs/boards/litex-vexriscv.md`](litex-vexriscv.md)  ·  Chip: `configs/chips/litex-vexriscv.yaml`
 - Silicon: none — not validated against real hardware.
   - offline (CI): firmware_survival::test_litex_vexriscv_smoke_survival
+- Drift status: **no silicon capture**
+
+## `stm32f072` — 🟡 smoke-manual
+
+- Doc: [`docs/boards/stm32f072b-disco.md`](stm32f072b-disco.md)  ·  Chip: `configs/chips/stm32f072.yaml`
+- Silicon: none — not validated against real hardware.
+  - offline (CI): firmware_survival::test_stm32f072b_disco_smoke_survival
 - Drift status: **no silicon capture**
 
 ## `arty-litex-vexriscv` — 🟡 smoke-manual

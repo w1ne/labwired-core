@@ -148,6 +148,13 @@
   {
     "buses": [
       "I2C",
+      "SPI"
+    ],
+    "name": "stm32f072"
+  },
+  {
+    "buses": [
+      "I2C",
       "SPI",
       "UART"
     ],
