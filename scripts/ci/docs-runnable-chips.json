@@ -197,8 +197,10 @@
       "expect": "TIER1 clock PASS"
     },
     "stm32u575": {
-      "how": "needs-build",
-      "why": "First U5 part. The io-smoke firmware is built from source (examples/nucleo-u575zi/io-smoke.yaml expects target/thumbv8m.main-none-eabi/release/firmware-stm32u575-demo); no firmware-demos release asset exists yet"
+      "how": "committed",
+      "firmware": "tests/fixtures/stm32u575i-ev-smoke.elf",
+      "expect": "STM32U575I-EV SMOKE",
+      "note": "Shared STM32U575 descriptor. The U575 Rust demo is still built from source by strict_onboarding; this committed STM32U575I-EV bare-metal smoke lets a clean install run the same chip with no cross toolchain."
     },
     "stm32u545": {
       "how": "committed",
