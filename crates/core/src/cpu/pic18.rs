@@ -438,8 +438,8 @@ impl Pic18 {
             let src = word & 0x0FFF;
             let dst = second & 0x0FFF;
             let value = self.read_data(src);
-            self.write_data(dst, value);
             self.pc = Self::align_pc(pc.wrapping_add(4));
+            self.write_data(dst, value);
             return Ok(2);
         }
 
