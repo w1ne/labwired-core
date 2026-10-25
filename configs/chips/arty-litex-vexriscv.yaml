@@ -1,0 +1,71 @@
+# LabWired - LiteX VexRiscv SoC on the Digilent Arty A7-35T chip configuration
+#
+# Sources (retrieved 2026-10-19 / 2026-10-22):
+# - The LiteX VexRiscv SoC map documented in `litex-vexriscv.yaml`: integrated
+#   ROM at 0x0, SRAM at 0x10000000, main RAM at 0x40000000, the SPI-flash
+#   window at 0x20000000, and the 0x60000000-based CSR map (uart @ +0x1800,
+#   timer @ +0x2800). LiteX makes the CSR base a gateware parameter; this
+#   chip pins the 0x60000000 map and documents the 0xE0000000 shadow.
+# - The public `litex-hub/zephyr-on-litex-vexriscv` gateware for the Arty:
+#   VexRiscv CPU (rv32im_zicsr_zifencei), 100 MHz system clock, UART external
+#   IRQ 2, timer IRQ 1.
+# - The Arty board's control-and-status block (`LiteX_ControlAndStatus` in the
+#   board's SoC): Leds @ 0x00 (R/W, bit n = LED n), Switches @ 0x04,
+#   ButtonsStatus @ 0x08, ButtonsPending @ 0x0C (W1C), ButtonsEnabled @ 0x10;
+#   the pads are LEDs 0..31, switches 32..63, buttons 64..95. The Arty's four
+#   user LEDs are LD4..LD7 on bits 0..3, the four switches on 32..35 and the
+#   four buttons on 64..67; the physical buttons pull the line low, hence
+#   `buttons_active_low: true`.
+# - Digilent Arty A7-35T reference manual: 100 MHz oscillator, four user LEDs,
+#   four switches, four push-buttons, FTDI USB-UART (the console path).
+#
+# Modelled: CPU + memory + LiteX UART + LiteX timer + the Control-and-Status
+# block (LED drive/readback, switch/button levels, pending/enable interrupts).
+# Declared stubs: SPI-flash / Ethernet / MMCM CSRs. Fast boot: the ELF is
+# loaded directly; the LiteX BIOS and the SPI-flash load are not modelled.
+#
+# Tier: L1 smoke — boot + UART + timer one-shot + LED/switch/button CSR path.
+
+name: "arty-litex-vexriscv"
+arch: "riscv"
+core: "rv32im"
+cpu_hz: 100_000_000
+
+flash: { base: 0x20000000, size: "32MiB" }
+ram: { base: 0x10000000, size: "256KB" }
+flash_boot_alias: false
+memory_regions:
+  - { name: "rom", base: 0x0, size: "256KB" }
+peripherals:
+  - id: "uart"
+    type: "litex_uart"
+    base_address: 0x60001800
+    size: "2KB"
+    irq: 2
+  - id: "timer"
+    type: "litex_timer"
+    base_address: 0x60002800
+    size: "2KB"
+    irq: 1
+  # The board's control-and-status CSR (LEDs 0..3, switches 32..35, buttons
+  # 64..67). 0xE0006800 is the shadow window, not modelled.
+  - id: "cas"
+    type: "litex_controlandstatus"
+    base_address: 0x60006800
+    size: "2KB"
+    config:
+      buttons_active_low: true
+  - id: "spi_flash_ctrl"
+    type: "stub"
+    base_address: 0x60005000
+    size: "2KB"
+    irq: 9
+  - id: "eth"
+    type: "stub"
+    base_address: 0x60007800
+    size: "2KB"
+    irq: 3
+  - id: "clock0"
+    type: "stub"
+    base_address: 0xE0004800
+    size: "2KB"

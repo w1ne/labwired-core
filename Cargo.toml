@@ -75,6 +75,7 @@ members = [
     "crates/firmware-nrf5340-dk-demo",
     "crates/firmware-nucleo-f407-demo",
     "crates/firmware-f4-discovery-smoke",
+    "crates/firmware-arty-litex-smoke",
     "crates/firmware-vegaboard-ri5cy-smoke",
     "crates/firmware-arduino-nano-33-ble-smoke",
     "crates/firmware-litex-vexriscv-smoke",

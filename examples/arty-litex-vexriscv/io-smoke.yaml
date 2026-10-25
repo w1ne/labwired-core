@@ -1,0 +1,32 @@
+# LabWired - Digilent Arty A7-35T IO smoke (LiteX VexRiscv SoC)
+#
+# Build: cargo build -p firmware-arty-litex-smoke --release --target riscv32im-unknown-none-elf
+#
+# The firmware walks the four user LEDs through the Control-and-Status Leds
+# register, reading each pattern back from the CSR; prints the idle
+# switch/button levels and the pending/enable registers; and runs the LiteX
+# timer as a one-shot (`timer=running` -> `timer=zero`). The heartbeat's
+# `txfull=` field is read back from the UART CSR.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv32im-unknown-none-elf/release/firmware-arty-litex-smoke"
+  system: "./system.yaml"
+limits:
+  max_steps: 4000000
+assertions:
+  - uart_contains: "ARTY LITEX SMOKE"
+  - uart_ordered:
+      - "cpu=rv32im cas=litex"
+      - "leds=00000001"
+      - "leds=00000002"
+      - "leds=00000004"
+      - "leds=00000008"
+      - "leds=0000000f"
+      - "leds=00000000"
+      - "sw=0000000f btn=0000000f"
+      - "pend=00000000 en=0000000f"
+      - "timer=running"
+      - "timer=zero"
+      - "hb=0 txfull=00000000"
+      - "hb=1 txfull=00000000"
+  - expected_stop_reason: max_steps

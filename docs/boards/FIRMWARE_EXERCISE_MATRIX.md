@@ -471,6 +471,10 @@ _M0 bring-up: boot (PC 0 -> reset GOTO) and UART1 TX on the 28-pin sibling of th
 
 _L1 smoke, SIM-DERIVED; no beyond-rubric content. Boot, the LiteX UART console and the countdown-timer one-shot are proven by tests/fixtures/litex-vexriscv-smoke.elf and examples/litex-vexriscv/io-smoke.yaml. SPI flash, Ethernet and MMCM are declared stubs and timer IRQ delivery is not wired (examples/litex-vexriscv/VALIDATION.md), so no advanced blocks exist to list._
 
+### `arty-litex-vexriscv`
+
+_L1 smoke, SIM-DERIVED; no beyond-rubric content. Boot, the LiteX UART console, the countdown-timer one-shot and the Control-and-Status LED/switch/button CSR are proven by tests/fixtures/arty-litex-smoke.elf and examples/arty-litex-vexriscv/io-smoke.yaml. SPI flash, Ethernet and MMCM are declared stubs (examples/arty-litex-vexriscv/VALIDATION.md), so no advanced blocks exist to list._
+
 ### `vegaboard-ri5cy`
 
 _L1 smoke, SIM-DERIVED; no beyond-rubric content. Boot, the RV32IMC core (a real multiply is asserted) and the LPUART0 console are proven by tests/fixtures/vegaboard-ri5cy-smoke.elf and examples/vegaboard-ri5cy/io-smoke.yaml. The SCG/PCC clock blocks, INTMUX and low-power timers are declared stubs (examples/vegaboard-ri5cy/VALIDATION.md), so no advanced blocks exist to list._
