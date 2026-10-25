@@ -17,20 +17,20 @@
         "evidence": "Hosted labwired-pro; private CI runs boot, hello_world, watchdog reset, RTT and the M1 demo"
       },
       "perf": {
-        "step_ir": 2880.8,
-        "batch_ir": 3083.5,
-        "batch_tick_interval": 1,
-        "rtx": 0.0204,
-        "rtx_ok": false,
-        "batch_ok": false,
+        "step_ir": 987.8,
+        "batch_ir": 1.6,
+        "batch_tick_interval": 1024,
+        "rtx": 6.50,
+        "rtx_ok": true,
+        "batch_ok": true,
         "measured_by": "labwired-pro",
         "measured_at": "2026-10-25",
         "provenance": {
-          "core": "cc59a5c46",
-          "model": "0cd67d2da71233a04144e383e038fe7687fc8267",
+          "core": "0decf72ff",
+          "model": "157db4d74fb05b3f6f48bc88836127f1a9a4421f",
           "private_branch": "m1-k32w041z"
         },
-        "note": "Batch is per-instruction (tick interval 1); RTx is below the open-model 1.0x floor."
+        "note": "WWDT events are scheduler-driven; the closed model now meets the open batch interval and 1.0x real-time floor."
       }
     }
   ]
