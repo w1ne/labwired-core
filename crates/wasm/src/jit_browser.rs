@@ -83,8 +83,9 @@ use js_sys::{Array, Function, Object, Reflect, Uint8Array, WebAssembly};
 use labwired_core::bus::SystemBus;
 use labwired_core::cpu::cortex_m::{vfp_binop, VfpBinOp};
 use labwired_core::cpu::jit_framework::cortex_m::emit::{
-    FAULT_PC_SLOT, FAULT_RETIRED_SLOT, IT_STATE_SLOT, NEXT_PC_SLOT, RES_FLAG_SLOT,
-    WIRE_CHAIN_DYNAMIC, WIRE_FALL_THROUGH, WIRE_MEM_FAULT, WIRE_UNSUPPORTED,
+    FAULT_PC_SLOT, FAULT_RETIRED_SLOT, ITERS_CAP_SLOT, ITERS_DONE_SLOT, IT_STATE_SLOT,
+    NEXT_PC_SLOT, RES_FLAG_SLOT, WIRE_CHAIN_DYNAMIC, WIRE_FALL_THROUGH, WIRE_MEM_FAULT,
+    WIRE_UNSUPPORTED,
 };
 use labwired_core::cpu::jit_framework::cortex_m::host::{pack_regs, unpack_regs};
 use labwired_core::cpu::jit_framework::cortex_m::CortexMFrontend;
@@ -449,6 +450,10 @@ pub struct BrowserJitCache {
     compiled_thumb: HashMap<u32, CortexMBrowserBlock>,
     /// Thumb PCs emit refused (too short, unmodeled, instantiate error).
     refused_thumb: HashSet<u32>,
+    /// Loop-trace dispatches: one per entry of a counted-loop trace.
+    trace_runs: u64,
+    /// Loop-trace iterations retired inside those dispatches.
+    trace_iters: u64,
 }
 
 impl BrowserJitCache {
@@ -470,6 +475,24 @@ impl BrowserJitCache {
     /// compiled has no hits either.
     pub fn compiled_blocks(&self) -> u64 {
         (self.compiled.len() + self.compiled_thumb.len()) as u64
+    }
+
+    /// Loop-trace dispatches (one entry of a counted-loop trace each).
+    pub(crate) fn trace_runs(&self) -> u64 {
+        self.trace_runs
+    }
+
+    /// Loop-trace iterations retired inside those dispatches. Non-zero is
+    /// the browser-layer gate's proof that an emitted loop actually ran its
+    /// body, not merely that it was compiled.
+    pub(crate) fn trace_iters(&self) -> u64 {
+        self.trace_iters
+    }
+
+    /// Charge one loop-trace dispatch that retired `iterations` iterations.
+    fn bump_trace(&mut self, iterations: u32) {
+        self.trace_runs = self.trace_runs.saturating_add(1);
+        self.trace_iters = self.trace_iters.saturating_add(u64::from(iterations));
     }
 
     /// Compile an [`EmittedBlock`] and install it under `(pc, ps_bits)`.
@@ -880,9 +903,23 @@ extern "C" {
 
 const THUMB_MIN_PROFITABLE: u32 = 4;
 const THUMB_CODE_WINDOW: usize = 4096;
+/// Upper bound on loop-trace iterations per dispatch. Mirrors
+/// `labwired_core`'s `MAX_TRACE_ITERS` (the native `run_jit_loop`): a trace
+/// must end well inside any window, so the cap is a safety bound, not a
+/// target — the batch budget and the SysTick edge bind first in practice.
+const MAX_TRACE_ITERS: u32 = 4096;
 /// Register file + the control slots the emitted body writes (through
 /// [`IT_STATE_SLOT`]), rounded up so the IT slot is inside the read-back.
+/// Also covers [`ITERS_CAP_SLOT`] (84) and [`ITERS_DONE_SLOT`] (88) for a
+/// loop trace: the runtime stages the iteration cap and reads the count
+/// back through the same window the registers use.
 const THUMB_REG_BYTES: usize = 96;
+
+/// What one dispatch of an emitted Thumb block reports to the dispatcher:
+/// `(wire, next_pc, clear_exclusive, fault_pc, fault_retired, fault_it_state,
+/// iters_done)`. Named so `clippy::type_complexity` stays quiet and the field
+/// order is documented once.
+type ThumbRun = (i32, u32, bool, u32, u32, u8, u32);
 
 type ThumbLoadClosure = Closure<dyn FnMut(i32, i32, i32) -> i32>;
 type ThumbStoreClosure = Closure<dyn FnMut(i32, i32, i32)>;
@@ -914,6 +951,11 @@ struct CortexMBrowserBlock {
     host: Rc<RefCell<ThumbHost>>,
     end_pc: u32,
     instr_count: u32,
+    /// `Some(n)` for a LOOP TRACE: the block runs `k` iterations of an
+    /// `n`-instruction loop per dispatch and reports `k` through
+    /// [`ITERS_DONE_SLOT`]. `None` for an ordinary block, whose
+    /// `instr_count` is its only cost.
+    iter_instr_count: Option<u32>,
     has_store: bool,
     _closures: Vec<ThumbLoadClosure>,
     _void3: Vec<ThumbStoreClosure>,
@@ -930,6 +972,7 @@ impl CortexMBrowserBlock {
         end_pc: u32,
         instr_count: u32,
         has_store: bool,
+        iter_instr_count: Option<u32>,
     ) -> Result<Self, JsValue> {
         let buf = Uint8Array::new_with_length(wasm_bytes.len() as u32);
         buf.copy_from(wasm_bytes);
@@ -1036,6 +1079,7 @@ impl CortexMBrowserBlock {
             host,
             end_pc,
             instr_count,
+            iter_instr_count,
             has_store,
             _closures: closures,
             _void3: void3,
@@ -1046,19 +1090,29 @@ impl CortexMBrowserBlock {
         })
     }
 
-    /// Returns `(wire, next_pc, clear_exclusive, fault_pc, fault_retired,
-    /// fault_it_state)`; the last is the pre-fault IT state the caller must
-    /// reinstall before the interpreter resumes mid-IT.
+    /// `(wire, next_pc, clear_exclusive, fault_pc, fault_retired,
+    /// fault_it_state, iters_done)`; `fault_it_state` is the pre-fault IT state
+    /// the caller must reinstall before the interpreter resumes mid-IT, and
+    /// `iters_done` is the loop-trace iteration count the emitted body wrote
+    /// back (0 for an ordinary block).
     fn run(
         &mut self,
         cpu: &mut CortexM,
         ram: &mut [u8],
-    ) -> Result<(i32, u32, bool, u32, u32, u8), JsValue> {
+        iters_cap: Option<u32>,
+    ) -> Result<ThumbRun, JsValue> {
         let mut x = [0u32; 16];
         pack_regs(cpu, &mut x);
         let mut bytes = [0u8; THUMB_REG_BYTES];
         for (i, w) in x.iter().enumerate() {
             bytes[i * 4..i * 4 + 4].copy_from_slice(&w.to_le_bytes());
+        }
+        if let Some(cap) = iters_cap {
+            // The emitted loop cannot terminate once started with 0, so a
+            // traced block never enters with an empty cap.
+            let cap = cap.max(1);
+            bytes[ITERS_CAP_SLOT as usize..ITERS_CAP_SLOT as usize + 4]
+                .copy_from_slice(&cap.to_le_bytes());
         }
         self.regs_view.copy_from(&bytes);
         {
@@ -1113,6 +1167,12 @@ impl CortexMBrowserBlock {
                 bytes[RES_FLAG_SLOT as usize + 3],
             ]) != 0;
         let fault_it_state = bytes[IT_STATE_SLOT as usize];
+        let iters_done = u32::from_le_bytes([
+            bytes[ITERS_DONE_SLOT as usize],
+            bytes[ITERS_DONE_SLOT as usize + 1],
+            bytes[ITERS_DONE_SLOT as usize + 2],
+            bytes[ITERS_DONE_SLOT as usize + 3],
+        ]);
         Ok((
             wire,
             next_pc,
@@ -1120,6 +1180,7 @@ impl CortexMBrowserBlock {
             fault_pc,
             fault_retired,
             fault_it_state,
+            iters_done,
         ))
     }
 }
@@ -1214,11 +1275,16 @@ fn thumb_vfp_binop(host: &ThumbHost, fop: i32, a: i32, b: i32) -> i32 {
 /// `actual_n` before it interprets, and dropping the pre-fault instructions
 /// makes every fault in a compiled block free of charge, a cycle-accounting
 /// divergence from the interpreter.
+/// `max_n` is the call's remaining instruction budget; `traces_enabled` is
+/// `SimulationConfig::cortex_m_jit_loop_traces`, consulted only at compile
+/// time (a cached block keeps the mode it was built with — the simulator
+/// drops the cache when the flag changes).
 pub(crate) fn try_browser_cortex_m_jit_step(
     cpu: &mut CortexM,
     bus: &mut SystemBus,
     cache: &mut BrowserJitCache,
     max_n: u32,
+    traces_enabled: bool,
 ) -> u32 {
     if cpu.it_state != 0 {
         return 0;
@@ -1240,7 +1306,12 @@ pub(crate) fn try_browser_cortex_m_jit_step(
         let mut frontend = CortexMFrontend::new();
         frontend.set_ram_window(bus.ram.base_addr as u32, bus.ram.data.len() as u32);
         let view = CodeView::new(pc as u64, &code);
-        let Ok((plan, binding)) = frontend.translate_block_thumb(pc as u64, &view) else {
+        let translated = if traces_enabled {
+            frontend.translate_block_thumb_traced(pc as u64, &view)
+        } else {
+            frontend.translate_block_thumb(pc as u64, &view)
+        };
+        let Ok((plan, binding)) = translated else {
             cache.refused_thumb.insert(pc);
             cache.refusals = cache.refusals.saturating_add(1);
             return 0;
@@ -1257,6 +1328,7 @@ pub(crate) fn try_browser_cortex_m_jit_step(
             plan.end_pc as u32,
             plan.instr_count,
             has_store,
+            plan.iter_instr_count,
         ) {
             Ok(block) => {
                 cache.compiled_thumb.insert(pc, block);
@@ -1276,16 +1348,46 @@ pub(crate) fn try_browser_cortex_m_jit_step(
             Some(b) => b,
             None => return 0,
         };
-        if block.instr_count == 0 || block.instr_count > max_n {
+        let per_iter = block.iter_instr_count;
+        // Loop-trace cap: never start an iteration the call's own budget or
+        // the SysTick edge cannot cover, and never enter with 0 (the emitted
+        // loop cannot terminate once started). Same formula as the native
+        // `run_jit_loop`: a block of `n` instructions crosses a tick when
+        // `n >= ticks_until_fire`, so `(h - 1) / n` iterations stay inside.
+        let cap = match per_iter {
+            Some(per) => {
+                let by_budget = u64::from(max_n / per);
+                let by_irq = match bus.systick_ticks_until_fire() {
+                    Some(h) => h.saturating_sub(1) / u64::from(per),
+                    None => u64::from(u32::MAX),
+                };
+                Some(by_budget.min(by_irq).min(u64::from(MAX_TRACE_ITERS)) as u32)
+            }
+            None => None,
+        };
+        if cap == Some(0) {
             return 0;
         }
-        if cpu.block_would_cross_irq(bus, block.instr_count) {
-            return 0;
+        if per_iter.is_none() {
+            if block.instr_count == 0 || block.instr_count > max_n {
+                return 0;
+            }
+            if cpu.block_would_cross_irq(bus, block.instr_count) {
+                return 0;
+            }
         }
         let instr_count = block.instr_count;
         let end_pc = block.end_pc;
-        block.run(cpu, &mut bus.ram.data).map(
-            |(wire, next_pc, clear_exclusive, fault_pc, fault_retired, fault_it_state)| {
+        block.run(cpu, &mut bus.ram.data, cap).map(
+            |(
+                wire,
+                next_pc,
+                clear_exclusive,
+                fault_pc,
+                fault_retired,
+                fault_it_state,
+                iters_done,
+            )| {
                 (
                     wire,
                     next_pc,
@@ -1295,6 +1397,8 @@ pub(crate) fn try_browser_cortex_m_jit_step(
                     fault_it_state,
                     instr_count,
                     end_pc,
+                    per_iter,
+                    iters_done,
                 )
             },
         )
@@ -1309,13 +1413,27 @@ pub(crate) fn try_browser_cortex_m_jit_step(
             fault_it_state,
             instr_count,
             end_pc,
+            per_iter,
+            iters_done,
         )) => {
             if clear_exclusive {
                 cpu.clear_exclusive_monitor();
             }
             let (n, cont, needs_interp) = match wire {
                 WIRE_FALL_THROUGH => (instr_count, end_pc, false),
-                WIRE_CHAIN_DYNAMIC => (instr_count, next_pc, false),
+                WIRE_CHAIN_DYNAMIC => match per_iter {
+                    Some(per) => {
+                        if iters_done == 0 {
+                            // A trace that retired nothing advanced nothing:
+                            // interpret the head instruction instead of
+                            // trusting the next_pc it wrote.
+                            (0, pc, false)
+                        } else {
+                            (per.saturating_mul(iters_done), next_pc, false)
+                        }
+                    }
+                    None => (instr_count, next_pc, false),
+                },
                 WIRE_MEM_FAULT | WIRE_UNSUPPORTED => {
                     // Mid-IT resume: the interpreter must see the IT state as
                     // of before the faulting instruction, not a cleared one.
@@ -1334,6 +1452,9 @@ pub(crate) fn try_browser_cortex_m_jit_step(
             }
             if n == 0 {
                 return 0;
+            }
+            if per_iter.is_some() {
+                cache.bump_trace(iters_done);
             }
             cache.bump_hit();
             n
@@ -1415,7 +1536,13 @@ pub(crate) fn run_browser_cortex_m_jit_window(
             cpu.step(bus, observers, config)?;
             n = 1;
         } else {
-            let block_n = try_browser_cortex_m_jit_step(cpu, bus, cache, max_n - retired);
+            let block_n = try_browser_cortex_m_jit_step(
+                cpu,
+                bus,
+                cache,
+                max_n - retired,
+                config.cortex_m_jit_loop_traces,
+            );
             n = if block_n > 0 {
                 // Compiled instructions skip the interpreter's per-step
                 // SysTick consume, so hand the block's cycles to it directly

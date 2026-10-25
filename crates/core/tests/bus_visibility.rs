@@ -119,6 +119,14 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         "no LiteX UART bring-up in this harness; bytes are proven by the \
          litex-vexriscv survival smoke",
     ),
+    // The same SoC family on the Digilent Arty board: no LiteX UART bring-up
+    // here either; bytes are proven by the arty-litex-vexriscv survival smoke.
+    (
+        "arty-litex-vexriscv",
+        BusKind::Uart,
+        "no LiteX UART bring-up in this harness; bytes are proven by the \
+         arty-litex-vexriscv survival smoke",
+    ),
     // Vega board (RI5CY): no LPUART bring-up in this harness; bytes are proven
     // by the vegaboard-ri5cy survival smoke.
     (

@@ -1146,6 +1146,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-arty-litex-smoke"
+version = "0.1.0"
+dependencies = [
+ "panic-halt",
+ "riscv-rt",
+]
+
+[[package]]
 name = "firmware-atsamd21-demo"
 version = "0.1.0"
 dependencies = [
