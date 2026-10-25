@@ -149,6 +149,12 @@ impl<C: Cpu> Machine<C> {
             return Ok(report);
         }
         let report = self.advance_inner(request, None);
+        // Flush the derived device clock at the run boundary; the per-step
+        // throttle otherwise stops one µs short when the last call lands just
+        // before `total_cycles` reaches the boundary.
+        if !request.is_single() {
+            self.advance_central_i2c_time();
+        }
         if report.is_err() {
             // A faulted access must not leave its attempt-latch behind to
             // stop some later run at a stale address. See `bus/debug_watch.rs`

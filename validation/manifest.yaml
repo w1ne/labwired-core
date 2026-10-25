@@ -1626,7 +1626,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: 2fe0ebf3d6f3ec3cf3c78a67cbe3358829a4aa939ce2ecfb72e44c44fa81923b
+    drift_ack_digest: bf63cb6622590a8c55fe9fdbe7b00e1dae9bbc66b5fd3822ccc775ac44c9b5ac
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -3127,6 +3127,14 @@ boards:
     # reset-conformance gates. No register map, reset value or default-config
     # readback changes.
     # ACK, NOT A CAPTURE — physical re-capture remains owed.
+    # 2026-10-25 (perf/recover-step-overhead): per-step service fast paths
+    # (device-time throttle, NVIC any-enabled cache, logic-capture guard,
+    # plain-RAM store fast path, AVR timer/OC shortcuts). No register map,
+    # reset value, IRQ route or byte path changed. ACK, NOT A CAPTURE.
+    # 2026-10-25 (perf/recover-step-overhead): per-step service fast paths
+    # (device-time throttle, NVIC any-enabled cache, logic-capture guard,
+    # plain-RAM store fast path, AVR timer/OC shortcuts). No register map,
+    # reset value, IRQ route or byte path changed. ACK, NOT A CAPTURE.
     drift_ack: 2026-10-19
 
   - id: nucleo-l476rg
@@ -3562,7 +3570,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: 26db20d8a7639b1e0d51946b9c3577f9d55735cee45456cc4871d08d28cbef5e
+    drift_ack_digest: 99d98dde77933b390687b855b5fb45ffa45c2204c48a1e4677f4c163abc32b94
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4090,6 +4098,10 @@ boards:
     # now checks the PC tag through a borrow and copies only on a hit. The
     # interpreter's decoded instruction stream and state are unchanged;
     # Core Identity and the perf evidence pin it. ACK, NOT A CAPTURE.
+    # 2026-10-25 (perf/recover-step-overhead): per-step service fast paths
+    # (device-time throttle, NVIC any-enabled cache, logic-capture guard,
+    # plain-RAM store fast path, AVR timer/OC shortcuts). No register map,
+    # reset value, IRQ route or byte path changed. ACK, NOT A CAPTURE.
     drift_ack: 2026-10-25
   - id: nucleo-l073rz
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
@@ -4483,7 +4495,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: be4b678ce8f50cde1b8b1ef8d985d88c62430ebd5553e6f758a6fa2cda187825
+    drift_ack_digest: 5ac0629b030600e7a6c3569083e5e5bed7a1d866632119514a55c42d9480f40f
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4944,6 +4956,10 @@ boards:
     # register map, reset value, timing or IRQ route changes; JIT code is not
     # covered by any silicon capture. The digest moves only because it hashes
     # whole files. ACK, NOT A CAPTURE.
+    # 2026-10-25 (perf/recover-step-overhead): per-step service fast paths
+    # (device-time throttle, NVIC any-enabled cache, logic-capture guard,
+    # plain-RAM store fast path, AVR timer/OC shortcuts). No register map,
+    # reset value, IRQ route or byte path changed. ACK, NOT A CAPTURE.
     drift_ack: 2026-10-25
     # 2026-10-25 (perf/cortex-m-decode-reference): the Cortex-M decode cache
     # now checks the PC tag through a borrow and copies only on a hit. The
@@ -5395,7 +5411,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: 944d85f27203b80857dfcb67dfbc17cf141d8fe745521ff945398e63c981fd27
+    drift_ack_digest: d54e653fd5d793c54591fc9053961aaa0af582ac1e975a86507404d641c57420
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6344,7 +6360,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: 71609d1d5fde4fb3e33eaff984bd8a68d2fa463ee3761379a4b43b7c8120f96e
+    drift_ack_digest: 724f4fe3cfbedac7b04c48ac0721e3f22069db42d1c1382367ecd3c4ef534993
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -8377,6 +8393,10 @@ boards:
     # no silicon capture covers any of those. The digest is re-stamped here so
     # this ack names content a human actually read; no live re-capture owed for
     # this change, and any already owed above still is.
+    # 2026-10-25 (perf/recover-step-overhead): per-step service fast paths
+    # (device-time throttle, NVIC any-enabled cache, logic-capture guard,
+    # plain-RAM store fast path, AVR timer/OC shortcuts). No register map,
+    # reset value, IRQ route or byte path changed. ACK, NOT A CAPTURE.
     drift_ack: 2026-09-14
     # 2026-08-22: the Thumb-2 decoder gained SMLABB/BT/TB/TT and SMULBB/BT/TB/TT
     # (ARMv7-M A7.7.166/171). They were UNDECODED, which in this core means a
