@@ -1,0 +1,155 @@
+# LabWired - SAM4S16C chip configuration
+#
+# The ATSAM4S16C: Cortex-M4, 1 MiB flash at 0x00400000, 128 KiB SRAM at
+# 0x20000000 — the MCU on the SAM4S Xplained board. The first SAM4S part in
+# the engine.
+#
+# Sources:
+# - SAM4S datasheet (Atmel 11100): §31 PIO, §28 PMC, §34 UART, §35 USART,
+#   §36 USART, §33 SPI, §32 TWI, §16 TC, memory map.
+# - Renode `platforms/cpus/sam4s.repl` + `sam4s16c.repl` for the peripheral
+#   addresses and the 1 MiB/128 KiB part sizes.
+#
+# Profiles: `sam4s_pio` is the new SAM4S PIO model (PER/OER/SODR/CODR/ODSR/
+# PSR/PDSR — not the SAM D21 PORT block); `sam4s_pmc` is the PMC with the
+# master-clock-ready status; UART0/1 and USART0/1 use the `sam` USART layout
+# (status SR/CSR @0x14, THR @0x1C).
+#
+# Not modelled (declared stubs): TC0/TC1, SPI0, TWI0/TWI1, EEFC, RSTC/SUPC/
+# RTT/WDT/RTC (the SAM4S system controller), CHIPID.
+#
+# Tier: L1 smoke — boot + UART0 console + PIO LED/button path on the SAM4S
+# Xplained map. SIM-DERIVED (no SAM4S bench part).
+
+name: "sam4s16c"
+arch: "arm"
+core: "cortex-m4"
+registers_count: 120
+# ATSAM4S16C maximum core clock, 120 MHz (SAM4S datasheet).
+cpu_hz: 120_000_000
+
+flash:
+  base: 0x00400000
+  # 1 MiB of embedded flash (SAM4S16C).
+  size: "1024KB"
+ram:
+  base: 0x20000000
+  # 128 KiB of SRAM.
+  size: "128KB"
+# The SAM4S boots from flash at 0x00400000, not from an alias at 0.
+flash_boot_alias: false
+
+pins:
+  # Board-relevant pads (SAM4S Xplained: LED on PC10, button on PA5, USART0
+  # console on PA9/PA10 — the UART0 pins used by the Renode board).
+  PA5: { gpio: "pioA", bit: 5 }
+  PA9: { gpio: "pioA", bit: 9 }
+  PA10: { gpio: "pioA", bit: 10 }
+  PC10: { gpio: "pioC", bit: 10 }
+
+peripherals:
+  # --- System controller (0x400E0000, 0x200-byte blocks) ------------------
+  - id: "pmc"
+    type: "sam4s_pmc"
+    base_address: 0x400E0400
+    size: 512
+
+  - id: "uart0"
+    type: "uart"
+    base_address: 0x400E0600
+    size: 64
+    irq: 8
+    config:
+      profile: "sam"
+  - id: "uart1"
+    type: "uart"
+    base_address: 0x400E0800
+    size: 64
+    irq: 9
+    config:
+      profile: "sam"
+
+  - id: "eefc"
+    type: "stub"
+    base_address: 0x400E0A00
+    size: 64
+
+  - id: "pioA"
+    type: "sam4s_pio"
+    base_address: 0x400E0E00
+    size: 512
+    irq: 11
+  - id: "pioB"
+    type: "sam4s_pio"
+    base_address: 0x400E1000
+    size: 512
+    irq: 12
+  - id: "pioC"
+    type: "sam4s_pio"
+    base_address: 0x400E1200
+    size: 512
+    irq: 13
+
+  - id: "rstc"
+    type: "stub"
+    base_address: 0x400E1400
+    size: 16
+  - id: "supc"
+    type: "stub"
+    base_address: 0x400E1410
+    size: 32
+  - id: "rtt"
+    type: "stub"
+    base_address: 0x400E1430
+    size: 16
+  - id: "wdt"
+    type: "stub"
+    base_address: 0x400E1450
+    size: 16
+  - id: "rtc"
+    type: "stub"
+    base_address: 0x400E1460
+    size: 48
+
+  # --- USARTs and timers --------------------------------------------------
+  - id: "usart0"
+    type: "uart"
+    base_address: 0x40024000
+    size: "1KB"
+    irq: 14
+    config:
+      profile: "sam"
+  - id: "usart1"
+    type: "uart"
+    base_address: 0x40028000
+    size: "1KB"
+    irq: 15
+    config:
+      profile: "sam"
+  - id: "tc0"
+    type: "stub"
+    base_address: 0x40010000
+    size: "1KB"
+  - id: "tc1"
+    type: "stub"
+    base_address: 0x40014000
+    size: "1KB"
+
+  # --- Serial buses -------------------------------------------------------
+  - id: "spi0"
+    type: "stub"
+    base_address: 0x40008000
+    size: "1KB"
+  - id: "twi0"
+    type: "stub"
+    base_address: 0x40018000
+    size: "1KB"
+  - id: "twi1"
+    type: "stub"
+    base_address: 0x4001C000
+    size: "1KB"
+
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+    size: 16

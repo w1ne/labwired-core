@@ -471,6 +471,10 @@ _M0 + M1 bring-up on the 28-pin sibling of the dsPIC33FJ32MC204: boot (PC 0 -> r
 
 _L1 smoke, SIM-DERIVED; no beyond-rubric content. Boot, the LiteX UART console and the countdown-timer one-shot are proven by tests/fixtures/litex-vexriscv-smoke.elf and examples/litex-vexriscv/io-smoke.yaml. SPI flash, Ethernet and MMCM are declared stubs and timer IRQ delivery is not wired (examples/litex-vexriscv/VALIDATION.md), so no advanced blocks exist to list._
 
+### `sam4s16c`
+
+_L1 smoke, SIM-DERIVED; no beyond-rubric content. Boot, the PMC clock enables (PCER0) and master-clock-ready status, the UART0 console and the SAM4S PIO LED/button path with ODSR readback are proven by tests/fixtures/sam4s-xplained-smoke.elf and examples/sam4s-xplained/io-smoke.yaml. TC/SPI/TWI/EEFC and the RSTC/SUPC/RTT/WDT/RTC system controller are declared stubs (examples/sam4s-xplained/VALIDATION.md), so no advanced blocks exist to list._
+
 ### `stm32f072`
 
 _L1 smoke, SIM-DERIVED; no beyond-rubric content. Boot, the F0 clock gates (AHBENR/APB2ENR), the USART1 console and the four-LED GPIO walk with GPIOC ODR readback are proven by tests/fixtures/stm32f072b-disco-smoke.elf and examples/stm32f072b-disco/io-smoke.yaml. USB, TSC and CRS are declared stubs (examples/stm32f072b-disco/VALIDATION.md), so no advanced blocks exist to list._

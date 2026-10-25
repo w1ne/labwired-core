@@ -48,11 +48,12 @@ The models column is a content digest over everything that board's `models` list
 | `teensy-41` | 🟡 smoke-manual | — | `dff2f322c7245e11` | no silicon capture |
 | `stm32f7-discovery` | 🟡 smoke-manual | — | `7310851a0f778931` | no silicon capture |
 | `nucleo-g071rb` | 🟡 smoke-manual | — | `74bd288aadeff1f6` | no silicon capture |
-| `esp32c6-devkitc` | 🟡 smoke-manual | — | `389d4dfc27ca5692` | no silicon capture |
-| `litex-vexriscv` | 🟡 smoke-manual | — | `d6f6a7f837d01b9d` | no silicon capture |
-| `stm32f072` | 🟡 smoke-manual | — | `4fd43a729064ece7` | no silicon capture |
-| `arty-litex-vexriscv` | 🟡 smoke-manual | — | `792eb78a792a5f14` | no silicon capture |
-| `vegaboard-ri5cy` | 🟡 smoke-manual | — | `89ba03c847f8fc8f` | no silicon capture |
+| `esp32c6-devkitc` | 🟡 smoke-manual | — | `dad7790f93ff963b` | no silicon capture |
+| `litex-vexriscv` | 🟡 smoke-manual | — | `e7421374ca5c990d` | no silicon capture |
+| `sam4s16c` | 🟡 smoke-manual | — | `9764222fc950e6ab` | no silicon capture |
+| `stm32f072` | 🟡 smoke-manual | — | `77d9ecc2de841a19` | no silicon capture |
+| `arty-litex-vexriscv` | 🟡 smoke-manual | — | `b28bf9ce5c2d7bf7` | no silicon capture |
+| `vegaboard-ri5cy` | 🟡 smoke-manual | — | `f7a265d3be1ef406` | no silicon capture |
 
 ## `nrf52840` — 🟢 silicon-verified
 
@@ -401,6 +402,13 @@ The models column is a content digest over everything that board's `models` list
 - Doc: [`docs/boards/litex-vexriscv.md`](litex-vexriscv.md)  ·  Chip: `configs/chips/litex-vexriscv.yaml`
 - Silicon: none — not validated against real hardware.
   - offline (CI): firmware_survival::test_litex_vexriscv_smoke_survival
+- Drift status: **no silicon capture**
+
+## `sam4s16c` — 🟡 smoke-manual
+
+- Doc: [`docs/boards/sam4s-xplained.md`](sam4s-xplained.md)  ·  Chip: `configs/chips/sam4s16c.yaml`
+- Silicon: none — not validated against real hardware.
+  - offline (CI): firmware_survival::test_sam4s_xplained_smoke_survival
 - Drift status: **no silicon capture**
 
 ## `stm32f072` — 🟡 smoke-manual

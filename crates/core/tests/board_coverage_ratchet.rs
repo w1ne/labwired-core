@@ -526,6 +526,10 @@ fn every_shipped_descriptor_is_ratcheted() {
         // committed fixture and a survival gate; no catalog board, no silicon
         // capture and no executing-fidelity differential.
         "vegaboard-ri5cy",
+        // First SAM4S part (SAM4S Xplained): chip + system + example with an
+        // io-smoke, a committed fixture and a survival gate; no catalog board,
+        // no silicon capture and no executing-fidelity differential.
+        "sam4s16c",
         // First STM32F0 part (STM32F072B-DISCO): chip + system + example with
         // an io-smoke, a committed fixture and a survival gate; no catalog
         // board, no silicon capture and no executing-fidelity differential.

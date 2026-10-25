@@ -582,6 +582,9 @@ chips:
     advanced_unit_only: []
     advanced_dead: []
     shim: []
+  - id: sam4s16c
+    arch: cortex-m4
+    headline: "L1 smoke, SIM-DERIVED; no beyond-rubric content. Boot, the PMC clock enables (PCER0) and master-clock-ready status, the UART0 console and the SAM4S PIO LED/button path with ODSR readback are proven by tests/fixtures/sam4s-xplained-smoke.elf and examples/sam4s-xplained/io-smoke.yaml. TC/SPI/TWI/EEFC and the RSTC/SUPC/RTT/WDT/RTC system controller are declared stubs (examples/sam4s-xplained/VALIDATION.md), so no advanced blocks exist to list."
   - id: stm32f072
     arch: cortex-m0
     headline: "L1 smoke, SIM-DERIVED; no beyond-rubric content. Boot, the F0 clock gates (AHBENR/APB2ENR), the USART1 console and the four-LED GPIO walk with GPIOC ODR readback are proven by tests/fixtures/stm32f072b-disco-smoke.elf and examples/stm32f072b-disco/io-smoke.yaml. USB, TSC and CRS are declared stubs (examples/stm32f072b-disco/VALIDATION.md), so no advanced blocks exist to list."
