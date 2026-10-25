@@ -335,6 +335,12 @@ WAIVED: dict[str, str] = {
         "no throughput claim is made for this part yet "
         "(docs/pic24-m0-reference.md)."
     ),
+    "dspic33fj32mc202": (
+        "PIC24 M0 bring-up: boot + UART1 TX only, with the UART modelled on the "
+        "CPU (not a bus peripheral), so this gate's MMIO spin fixture cannot "
+        "represent it. No perf-spin fixture or throughput claim for this part yet "
+        "(docs/pic24-m0-reference.md)."
+    ),
     "litex-vexriscv": (
         "L1 smoke, SIM-DERIVED: CPU + integrated SRAM + the LiteX UART console and "
         "countdown timer only, with no silicon capture and no executing-fidelity "

@@ -3520,7 +3520,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: f1f97225721537df4db3408b673fd34c10cac6706ecd37fdd73f88e4cfa19305
+    drift_ack_digest: e7e9efeae0133725ba01212880a419f7e0f5b44321050b42042aa21eff7d88bb
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4027,7 +4027,14 @@ boards:
     # transfer windows are wrapped in `with_device_write_bypass` (hardware-
     # originated guest-memory transfers only). STM32 register/reset paths are
     # unchanged. ACK, NOT A CAPTURE.
-    drift_ack: 2026-10-19
+    # 2026-10-24: io_voltage_v/gpio_input_thresholds for the STM32L476, from
+    # DS10198 Rev 8 Table 70 (VIL max 0.3*VDDIOx, VIH min 0.7*VDDIOx,
+    # 1.62 V < VDDIOx < 3.6 V, all I/Os except BOOT0). Declarative electrical
+    # data for co-simulation: no peripheral register model reads it, so no
+    # register map, reset value or timing this capture anchors can move. An
+    # oscilloscope clipped to PA5 was failing at co-sim bind for lack of it.
+    # ACK, NOT A CAPTURE — physical re-capture remains owed.
+    drift_ack: 2026-10-24
   - id: nucleo-l073rz
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
     # 2026-09-16 (#1125): Cortex-M JIT follow-ups (block chaining, floor 4, IT-predicated ALU, VFP S-ALU, VLDR/VSTR, LDR.W PC), plus two model fixes that ride along: the bit-band alias decode no longer swallows peripherals vendors place inside 0x4200_0000 (SAMD51 QSPI/SERCOM), and the STM32 timer's scheduled compare pend lands on the latch tick like the walk. JIT is opt-in (`cortex_m_jit_enabled` default off); interpreter path unchanged, JIT-on vs off lockstep in cortex_m_jit_nrf_differential; both fixes pinned by bus-level gates. No silicon capture pins JIT.

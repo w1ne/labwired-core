@@ -63,8 +63,8 @@ pub use machine::{
     IdlePolicy,
 };
 pub use peripheral::{
-    DmaDirection, DmaRequest, DmaRoute, DmaUnitTransform, MmioAccessClass, Peripheral,
-    PeripheralResetCause, PeripheralTickResult, DMA_SIGNAL_RX, DMA_SIGNAL_TX,
+    DmaDirection, DmaRequest, DmaRoute, DmaUnitTransform, FlashStoreOutcome, MmioAccessClass,
+    Peripheral, PeripheralResetCause, PeripheralTickResult, DMA_SIGNAL_RX, DMA_SIGNAL_TX,
 };
 
 use std::collections::HashSet;

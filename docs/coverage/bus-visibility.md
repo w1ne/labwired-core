@@ -78,6 +78,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | atsamd21g18a | — | — | — |
 | atsamd51 | — | — | — |
 | atsamd51-pybadge | — | — | — |
+| dspic33fj32mc202 | — | — | — |
 | dspic33fj32mc204 | — | — | — |
 | efr32mg26 | ✓ | ✓ | — |
 | esp32 | ✓ | — | ✓ |
