@@ -105,6 +105,8 @@ image loading, and a hand-assembled add/store/GOTO program.
 
 Commit: `d6402f376` (`feat(core): add PIC18 vertical slice`).
 
+Follow-up fix: `75f859ce9` (`fix(pic18): let MOVFF to PCL update the PC`).
+
 ## Next missing pieces
 
 1. **Loader / firmware toolchain.** XC8 output format and address semantics
