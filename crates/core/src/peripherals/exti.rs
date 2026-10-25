@@ -213,6 +213,8 @@ impl SplitPendingGpioExti {
         match offset {
             0x00 => self.rtsr,
             0x04 => self.ftsr,
+            // SWIER is write-only; reads return 0.
+            0x08 => 0,
             0x0c => self.rpr,
             0x10 => self.fpr,
             0x60..=0x6c => self.exticr[((offset - 0x60) / 4) as usize],
@@ -228,6 +230,9 @@ impl SplitPendingGpioExti {
         match offset {
             0x00 => self.rtsr = value & 0xffff,
             0x04 => self.ftsr = value & 0xffff,
+            // A 1 written to SWIER pends the matching line regardless of the
+            // edge selection (RM0456 §23.6.3).
+            0x08 => self.rpr |= value & 0xFFFF,
             0x0c => self.rpr &= !value,
             0x10 => self.fpr &= !value,
             0x60..=0x6c => self.exticr[((offset - 0x60) / 4) as usize] = value & mux_mask,

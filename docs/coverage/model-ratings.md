@@ -39,8 +39,8 @@ same fields but never their source, chip YAML, binary or build paths.
 | stm32g0b1re | open | L0 | 10 | 895.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/stm32g0b1re.md) |
 | stm32g474re | open | L1 | 22 | 936.3 | 1.5 | ≥1× (CI) | [doc](docs/boards/stm32g474re.md) |
 | stm32h563 | open | L1 | 37 | 986.5 | 1.8 | ≥1× (CI) | [doc](docs/boards/stm32h563.md) |
-| stm32u575 | open | L1 | 41 | 986.8 | 1.8 | ≥1× (CI) | [doc](docs/boards/stm32u575.md) |
-| stm32u545 | open | L1 | 38 | 986.8 | 1.8 | ≥1× (CI) | — |
+| stm32u575 | open | L1 | 42 | 986.8 | 1.8 | ≥1× (CI) | [doc](docs/boards/stm32u575.md) |
+| stm32u545 | open | L1 | 39 | 986.8 | 1.8 | ≥1× (CI) | — |
 | stm32h735 | open | L1 | 40 | 936.2 | 1.6 | ≥1× (CI) | [doc](docs/boards/stm32h735.md) |
 | stm32l073 | open | L2 | 42 | 939.5 | 1.6 | ≥1× (CI) | — |
 | stm32l476 | open | L1 | 58 | 937.6 | 1.6 | ≥1× (CI) | — |

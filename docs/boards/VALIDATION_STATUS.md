@@ -9,51 +9,51 @@ The models column is a content digest over everything that board's `models` list
 
 | Board | Tier | Last silicon capture | Models | Status |
 |-------|------|----------------------|--------|--------|
-| `nrf52840` | 🟢 silicon-verified | 2026-08-09 | `d819af0f80818e82` | ⚠ drift acked 2026-10-25, expires 2026-11-24 (re-capture pending) |
-| `seeed-xiao-nrf52840-sense` | 🟢 silicon-verified | 2026-08-09 | `d819af0f80818e82` | ⚠ drift acked 2026-10-25, expires 2026-11-24 (re-capture pending) |
-| `stm32h563` | 🟢 silicon-verified | 2026-08-10 | `bf63cb6622590a8c` | ⚠ drift acked 2026-10-25, expires 2026-11-24 (re-capture pending) |
+| `nrf52840` | 🟢 silicon-verified | 2026-08-09 | `d598c88e444bae9f` | ⚠ drift acked 2026-10-25, expires 2026-11-24 (re-capture pending) |
+| `seeed-xiao-nrf52840-sense` | 🟢 silicon-verified | 2026-08-09 | `d598c88e444bae9f` | ⚠ drift acked 2026-10-25, expires 2026-11-24 (re-capture pending) |
+| `stm32h563` | 🟢 silicon-verified | 2026-08-10 | `e3f8909a7a8f9db8` | ⚠ drift acked 2026-10-25, expires 2026-11-24 (re-capture pending) |
 | `esp32c3` | 🟢 silicon-verified | 2026-08-09 | `705efa0bce5458a3` | ⚠ drift acked 2026-10-19, expires 2026-11-18 (re-capture pending) |
-| `nucleo-l476rg` | 🟢 silicon-verified | 2026-08-09 | `99d98dde77933b39` | ⚠ drift acked 2026-10-25, expires 2026-11-24 (re-capture pending) |
-| `nucleo-l073rz` | 🟢 silicon-verified | 2026-08-09 | `5ac0629b030600e7` | ⚠ drift acked 2026-10-25, expires 2026-11-24 (re-capture pending) |
-| `stm32f103` | 🟢 silicon-verified | 2026-08-09 | `d54e653fd5d793c5` | ⚠ drift acked 2026-10-25, expires 2026-11-24 (re-capture pending) |
-| `stm32f407` | 🟢 silicon-smoke | 2026-06-20 | `724f4fe3cfbedac7` | ⚠ drift acked 2026-10-25, expires 2026-11-24 (re-capture pending) |
+| `nucleo-l476rg` | 🟢 silicon-verified | 2026-08-09 | `68b750d97fbdc454` | ⚠ drift acked 2026-10-25, expires 2026-11-24 (re-capture pending) |
+| `nucleo-l073rz` | 🟢 silicon-verified | 2026-08-09 | `0d1e836193371821` | ⚠ drift acked 2026-10-25, expires 2026-11-24 (re-capture pending) |
+| `stm32f103` | 🟢 silicon-verified | 2026-08-09 | `6e1b8f3e4778ee26` | ⚠ drift acked 2026-10-25, expires 2026-11-24 (re-capture pending) |
+| `stm32f407` | 🟢 silicon-smoke | 2026-06-20 | `52ad838114060d5e` | ⚠ drift acked 2026-10-25, expires 2026-11-24 (re-capture pending) |
 | `esp32s3` | 🟢 silicon-verified | 2026-08-09 | `ded2b7b36eff6988` | ⚠ drift acked 2026-10-19, expires 2026-11-18 (re-capture pending) |
 | `esp32s3-zero` | 🔵 sim-validated (deep model, no HW diff) | — | `ee0986c39a7b72ee` | no silicon capture |
-| `stm32f401` | 🟡 smoke-manual | — | `911c0e60d40ec19f` | no silicon capture |
-| `stm32wba52` | 🟡 smoke-manual | — | `f2b52229c61a5397` | no silicon capture |
-| `nrf52832` | ⚪ structural | — | `86a24a5ec7d59f03` | no silicon capture |
-| `microbit-v1` | 🟡 smoke-manual | — | `3760ee3bbb0d4dcf` | no silicon capture |
-| `microbit-v2` | 🟡 smoke-manual | — | `5d65285fa1c4abe2` | no silicon capture |
-| `rp2040` | ⚪ structural | — | `9e1ee9c679c03f84` | no silicon capture |
-| `rp2350` | 🟡 smoke-manual | — | `49dd0ab6b47481d6` | no silicon capture |
-| `nrf5340` | 🔵 sim-validated (deep model, no HW diff) | — | `12655767f32dc9f2` | no silicon capture |
-| `stm32h735` | 🔵 sim-validated (deep model, no HW diff) | — | `366db079de1a641a` | no silicon capture |
-| `stm32u575` | 🔵 sim-validated (deep model, no HW diff) | — | `140e4dbc008e65cf` | no silicon capture |
-| `nucleo-u545re` | 🔵 sim-validated (deep model, no HW diff) | — | `1985221a4d3f3f49` | no silicon capture |
-| `stm32f411ceu6` | 🔵 sim-validated (deep model, no HW diff) | — | `0c4d12bf6fb9fa6e` | no silicon capture |
-| `brd2709a` | 🟡 smoke-manual | — | `a32e6a6a4d54929b` | no silicon capture |
-| `esp32` | ⚪ structural | — | `a04a52566cc64d8e` | no silicon capture |
-| `mkw41z4` | 🔵 sim-validated (deep model, no HW diff) | — | `f3ddbcd28d6e496b` | no silicon capture |
-| `stm32f405` | 🔵 sim-validated (deep model, no HW diff) | — | `610c65c3f0a87481` | no silicon capture |
-| `stm32f767` | 🔵 sim-validated (deep model, no HW diff) | — | `c24a289bf9b78544` | no silicon capture |
-| `stm32f401cdu6` | 🔵 sim-validated (deep model, no HW diff) | — | `13f02118dc3a38ae` | no silicon capture |
-| `atsamd21g18a` | 🔵 sim-validated (deep model, no HW diff) | — | `61ecaf8308493e75` | no silicon capture |
-| `nrf54l15` | 🔵 sim-validated (deep model, no HW diff) | — | `65acf830be44c192` | no silicon capture |
-| `stm32g474re` | 🔵 sim-validated (deep model, no HW diff) | — | `e3cf115be2bd7d90` | no silicon capture |
-| `stm32wb55` | 🔵 sim-validated (deep model, no HW diff) | — | `d974f49f75f9eae0` | no silicon capture |
-| `ci-fixture-riscv` | ⚪ structural | — | `0282a3b1fb6b2117` | no silicon capture |
-| `nano-33-iot` | 🟡 smoke-manual | — | `fe3d60b1d33888c8` | no silicon capture |
-| `metro-m4` | 🟡 smoke-manual | — | `64ab31b88eef3d9d` | no silicon capture |
-| `arduino-uno-r4-minima` | 🟡 smoke-manual | — | `3acc13708f55d0c5` | no silicon capture |
-| `teensy-41` | 🟡 smoke-manual | — | `dff2f322c7245e11` | no silicon capture |
-| `stm32f7-discovery` | 🟡 smoke-manual | — | `7310851a0f778931` | no silicon capture |
-| `nucleo-g071rb` | 🟡 smoke-manual | — | `4ba3b51a4a9a27bc` | no silicon capture |
-| `esp32c6-devkitc` | 🟡 smoke-manual | — | `dad7790f93ff963b` | no silicon capture |
-| `litex-vexriscv` | 🟡 smoke-manual | — | `e7421374ca5c990d` | no silicon capture |
-| `sam4s16c` | 🟡 smoke-manual | — | `9764222fc950e6ab` | no silicon capture |
-| `stm32f072` | 🟡 smoke-manual | — | `3573bd3233a0a2c6` | no silicon capture |
-| `arty-litex-vexriscv` | 🟡 smoke-manual | — | `b28bf9ce5c2d7bf7` | no silicon capture |
-| `vegaboard-ri5cy` | 🟡 smoke-manual | — | `f7a265d3be1ef406` | no silicon capture |
+| `stm32f401` | 🟡 smoke-manual | — | `2ff023dddf69cb47` | no silicon capture |
+| `stm32wba52` | 🟡 smoke-manual | — | `0af329ec0d9c35bd` | no silicon capture |
+| `nrf52832` | ⚪ structural | — | `d32c2c12673e934a` | no silicon capture |
+| `microbit-v1` | 🟡 smoke-manual | — | `a972c933ae519ef4` | no silicon capture |
+| `microbit-v2` | 🟡 smoke-manual | — | `4bdee8b78570a12d` | no silicon capture |
+| `rp2040` | ⚪ structural | — | `f5f00abd1fa27df4` | no silicon capture |
+| `rp2350` | 🟡 smoke-manual | — | `cac577d9e9423025` | no silicon capture |
+| `nrf5340` | 🔵 sim-validated (deep model, no HW diff) | — | `73a4f6d1da20d9ca` | no silicon capture |
+| `stm32h735` | 🔵 sim-validated (deep model, no HW diff) | — | `24a57a066f584a16` | no silicon capture |
+| `stm32u575` | 🔵 sim-validated (deep model, no HW diff) | — | `34f5dd70aa425775` | no silicon capture |
+| `nucleo-u545re` | 🔵 sim-validated (deep model, no HW diff) | — | `34f5dd70aa425775` | no silicon capture |
+| `stm32f411ceu6` | 🔵 sim-validated (deep model, no HW diff) | — | `63769b62946581ab` | no silicon capture |
+| `brd2709a` | 🟡 smoke-manual | — | `d913ae31bfe88d82` | no silicon capture |
+| `esp32` | ⚪ structural | — | `9e4d71de3a84fe4c` | no silicon capture |
+| `mkw41z4` | 🔵 sim-validated (deep model, no HW diff) | — | `8caa681196d73d1c` | no silicon capture |
+| `stm32f405` | 🔵 sim-validated (deep model, no HW diff) | — | `d1671e2417f146e6` | no silicon capture |
+| `stm32f767` | 🔵 sim-validated (deep model, no HW diff) | — | `2b58a8524b34cf72` | no silicon capture |
+| `stm32f401cdu6` | 🔵 sim-validated (deep model, no HW diff) | — | `a70177fe5fbb0372` | no silicon capture |
+| `atsamd21g18a` | 🔵 sim-validated (deep model, no HW diff) | — | `c7c2b7c0e9367a5f` | no silicon capture |
+| `nrf54l15` | 🔵 sim-validated (deep model, no HW diff) | — | `8b7a2f01a32d2d01` | no silicon capture |
+| `stm32g474re` | 🔵 sim-validated (deep model, no HW diff) | — | `0024b546fc1652d6` | no silicon capture |
+| `stm32wb55` | 🔵 sim-validated (deep model, no HW diff) | — | `ae25f01a6692dcc7` | no silicon capture |
+| `ci-fixture-riscv` | ⚪ structural | — | `d58e51cdda296e67` | no silicon capture |
+| `nano-33-iot` | 🟡 smoke-manual | — | `f2ea474ab6cba207` | no silicon capture |
+| `metro-m4` | 🟡 smoke-manual | — | `3266bb0f6df9f555` | no silicon capture |
+| `arduino-uno-r4-minima` | 🟡 smoke-manual | — | `7cd6142c3308fab0` | no silicon capture |
+| `teensy-41` | 🟡 smoke-manual | — | `aa4d46a0e2587392` | no silicon capture |
+| `stm32f7-discovery` | 🟡 smoke-manual | — | `14a3d1c34b5bb996` | no silicon capture |
+| `nucleo-g071rb` | 🟡 smoke-manual | — | `c97615aa755dbfb1` | no silicon capture |
+| `esp32c6-devkitc` | 🟡 smoke-manual | — | `b82128c77b795299` | no silicon capture |
+| `litex-vexriscv` | 🟡 smoke-manual | — | `11d95b59bc087e6f` | no silicon capture |
+| `sam4s16c` | 🟡 smoke-manual | — | `fd03bafaa4c35af4` | no silicon capture |
+| `stm32f072` | 🟡 smoke-manual | — | `c5c7f08d06d2f9ae` | no silicon capture |
+| `arty-litex-vexriscv` | 🟡 smoke-manual | — | `a44ebd0dbd2732b3` | no silicon capture |
+| `vegaboard-ri5cy` | 🟡 smoke-manual | — | `cba5e981cbe8276b` | no silicon capture |
 
 ## `nrf52840` — 🟢 silicon-verified
 
@@ -215,22 +215,24 @@ The models column is a content digest over everything that board's `models` list
 ## `stm32u575` — 🔵 sim-validated (deep model, no HW diff)
 
 - Doc: [`docs/boards/stm32u575.md`](stm32u575.md)  ·  Chip: `configs/chips/stm32u575.yaml`
-- Note: STM32U575ZI (NUCLEO-U575ZI-Q), first U5 part. Cortex-M33, 2 MiB flash, 768 KiB SRAM + 16 KiB SRAM4. Reuses the shared V2 RCC/GPIO/UART models plus the U5 PLL1 register block (PLL1CFGR 0x28 / DIVR 0x34 / FRACR 0x38), the U5 CR ready pairs, and a CRS register-surface model. ADC1 runs the SVD-verified U5 layout (CFGR1.RES[3:2] 14/12/10/8, PCSEL@0x1C, LTR1-3/HTR1-3@0xA8..0xBC, CALFACT2@0xC8) and passes Arduino L5 analogRead; GPDMA1 models all 16 channels. FDCAN1 (0x4000A400, 4 KiB window over SRAMCAN @ +0x800, RCC_APB1ENR2.FDCAN1EN bit 9 gate) reuses the Bosch M_CAN model and passes Arduino L8 enter_loopback; the U575 has a single FDCAN instance (SVD + stm32u575xx.h declare only FDCAN1 — no fdcan2). Validated by: real STM32CubeU5 HAL firmware (160 MHz PLL1 bring-up, USART1 VCP banner + LED loop), Rust io-smoke, Arduino matrix L0-L8, Zephyr matrix L0-L3, unsupported-instruction audit. NO bench part: every value is SVD/RM0456-derived; Renode has no STM32U5 platform, so no Renode differential is claimed. TrustZone/GTZC, OCTOSPI and USB are not modeled; flash program/erase IS modeled (unlock, page erase, quad-word program, EOP/WRPERR, option-byte read) with documented residuals: mass erase accepted-but-not-applied, secure path/SECKEYR unmodeled, no option reload/SWAP_BANK. ADC4 is not declared: its SVD map is a different 12-bit class (SMPR/AWDxTR/CHSELRMOD0/1, no PCSEL/LTR/HTR/CALFACT2), not a sibling of the ADC1 map.
+- Note: STM32U575ZI (NUCLEO-U575ZI-Q), first U575 target. Cortex-M33, 2 MiB flash, 768 KiB SRAM + 16 KiB SRAM4. Reuses the shared V2 RCC/GPIO/UART models plus U5 PLL1/2/3 and ready pairs, and a CRS register-surface model. GPIO models analog-reset IDR, one-shot LCKR, and per-chip SECCFGR reset; U5 USART TXFE/AUTOCR are enabled only on U5 configs. ADC1 uses the SVD-verified U5 layout and passes Arduino L5 analogRead; GPDMA1 models all 16 channels and split NVIC lines 29-36/80-87; the core-onboarding-smoke lane exercises SPI-DMA, UART-DMA and flash-to-RAM reference firmware in the LabWired simulator on main pushes, nightly and manual dispatch (not PR, silicon or Renode comparison). The U5 ICACHE profile has a limited register contract; cache contents and line effects are not simulated. The 2 KiB U5 system-memory window seeds a read-only per-part FLASHSIZE word; OTP/package/UID bytes are simplified read/write storage. FDCAN1 (0x4000A400, 4 KiB window over SRAMCAN @ +0x800, RCC_APB1ENR2.FDCAN1EN bit 9 gate) reuses Bosch M_CAN and passes Arduino L8 internal loopback; the U575 has a single FDCAN instance. Rust io-smoke and a local Star Catcher smoke cover startup; the latter checks PC13 input/B1, simulated SSD1306 output and USART1 TX. Also validated by real STM32CubeU5 HAL firmware, Arduino matrix L0-L8, Zephyr matrix L0-L3, and unsupported-instruction audit. NO bench part: values are SVD/RM0456-derived; upstream Renode master has no built-in STM32U5 platform, and this work does not compare against the separate 60North reference platform. TrustZone/GTZC, OCTOSPI and USB are not modeled. Flash supports non-secure unlock, page and one-/two-bank erase, quad-word program, EOP/WRPERR and option-byte storage; residuals include secure path/SECKEYR, read-while-write stalling and option reload/SWAP_BANK. ADC4 is not declared because its SVD map is a different 12-bit class from ADC1.
 - Silicon: none — not validated against real hardware.
   - offline (CI): strict_onboarding (io-smoke builds + runs firmware-stm32u575-demo)
   - offline (CI): chip_conformance (estate OK)
   - offline (CI): svd_conformance / register_coverage (SVD pinning)
   - offline (CI): firmware_survival test_stm32u575_zephyr_survival (stock Zephyr hello)
+  - offline (CI): firmware_survival test_stm32u575_arduino_serial_survival (stock Arduino serial)
+  - offline (CI): core-onboarding-smoke (main push/nightly/manual: 60North hal-spi-dma, hal-uart-dma, st-dma-flash-to-ram in LabWired simulator; not PR/silicon/Renode)
   - offline (CI): arduino matrix L0-L8 (validation/arduino-matrix)
 - Drift status: **no silicon capture**
 
 ## `nucleo-u545re` — 🔵 sim-validated (deep model, no HW diff)
 
 - Doc: [`docs/boards/nucleo-u545re.md`](nucleo-u545re.md)  ·  Chip: `configs/chips/stm32u545.yaml`
-- Note: STM32U545RET6Q (NUCLEO-U545RE-Q, MB1841). Cortex-M33, 512 KiB flash in two 256 KiB banks, SRAM1+SRAM2 256 KiB + SRAM4 16 KiB. A self-contained derivative of stm32u575.yaml: every peripheral kept is byte-identical to the U575 entry, enforced by crates/core/tests/u545_u575_drift_guard.rs; differences are the memory map, no USART2/GPIOF/GPIOI, DBGMCU IDCODE 0x10026455 (the U5 flash erase path derives the 256 KiB bank size from the mapped flash). Board facts (LD2 PA5, B1 PC13, VCP USART1 PA9/PA10) from ST's stm32u5xx-nucleo-bsp, ST open pin data .ioc and Zephyr nucleo_u545re_q; st.com datasheet/RM0456/UM3062 were not reachable when this was written. Validated by: nucleo_u545re machine-run pin tests, the committed bare-metal blinky (survival gate), a Cube HAL 160 MHz run (ignored-by-default, evidence in VALIDATION.md), Arduino matrix L0-L8 on the generic U545RETxQ variant. Zephyr is NOT validated (workspace predates the U545 SoC). NO bench part: SVD-derived, no silicon diff.
+- Note: STM32U545RET6Q (NUCLEO-U545RE-Q, MB1841). Cortex-M33, 512 KiB flash in two 256 KiB banks, SRAM1+SRAM2 256 KiB + SRAM4 16 KiB. A self-contained derivative of stm32u575.yaml, checked by crates/core/tests/u545_u575_drift_guard.rs with two explicit shared peripheral-field exceptions: DBGMCU IDCODE 0x10026455 and sysmem.config.flash_size_kb (512 vs 2048 KiB). Top-level flash/RAM sizes and package pin maps also differ; USART2/GPIOF/GPIOI are absent. The U5 flash erase path derives the 256 KiB bank size from mapped flash. Its system-memory window seeds FLASHSIZE read-only and simplifies OTP/package/UID bytes as ordinary storage. Board facts (LD2 PA5, B1 PC13, VCP USART1 PA9/PA10) from ST's stm32u5xx-nucleo-bsp, ST open pin data .ioc and Zephyr nucleo_u545re_q; st.com datasheet/RM0456/UM3062 were not reachable when this was written. Validated by: nucleo_u545re machine-run pin tests, the committed bare-metal blinky (survival gate), a Cube HAL 160 MHz run (ignored-by-default, evidence in VALIDATION.md), Arduino matrix L0-L8 on the generic U545RETxQ variant. Zephyr is NOT validated (workspace predates the U545 SoC). NO bench part: SVD-derived, no silicon diff.
 - Silicon: none — not validated against real hardware.
-  - offline (CI): nucleo_u545re (LD2 PA5 edges, B1 PC13 -> VCP, USART1 RX echo, memory map, flash banks)
-  - offline (CI): u545_u575_drift_guard (peripherals identical to U575 except an allow-list)
+  - offline (CI): nucleo_u545re (LD2 PA5 edges, B1 PC13 -> VCP, USART1 RX queue-injected echo (PA10 pad input is not routed), memory map, flash banks)
+  - offline (CI): u545_u575_drift_guard (shared peripherals compared with the explicit DBGMCU IDCODE and sysmem flash-size allow-list)
   - offline (CI): chip_conformance (estate OK)
   - offline (CI): svd_conformance / register_coverage (STM32U545.svd)
   - offline (CI): firmware_survival test_stm32u545_blinky_survival

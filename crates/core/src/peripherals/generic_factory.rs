@@ -60,6 +60,8 @@ pub const MODEL_TYPES: &[&str] = &[
     "strict_ir_internal",
     "pwr",
     "flash",
+    // STM32U5 system memory (OTP / package / UID / factory flash size).
+    "stm32u5_sysmem",
     "rng",
     "simctl",
     "crc",
@@ -480,6 +482,11 @@ pub fn try_build(
                 m("rcc_apb1enr_mask"),
                 m("rcc_apb2enr_mask"),
             );
+            // HSE is a board component. U5 reference platforms have none
+            // fitted unless the chip yaml says `hse: true`.
+            if let Some(present) = p_cfg.config.get("hse").and_then(|v| v.as_bool()) {
+                rcc.set_hse_present(present);
+            }
             Box::new(rcc)
         }
         "dbgmcu" => {
@@ -699,7 +706,15 @@ pub fn try_build(
                 .and_then(|v| v.as_u64())
                 .map(|n| n as u32)
                 .unwrap_or(0x0000_00E7);
+            let limited = p_cfg
+                .config
+                .get("limited_features")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
             let mut spi = crate::peripherals::spi::Spi::new_with_layout_cr2(layout, cr2_mask);
+            if limited {
+                spi = spi.as_limited();
+            }
             // Classic-SPI CR1 writable mask, also a per-part delta: F407 silicon
             // does not latch CR1 bit 12 (CRCNEXT) → 0xEFFF; F1/L0/L4 leave it
             // fully writable (the default). YAML: `config: { cr1_mask: 0xEFFF }`.
@@ -959,13 +974,32 @@ pub fn try_build(
         }
         "gpdma" => {
             // `config: { irq_base: N }` routes channel n to NVIC
-            // line N + n (H563 GPDMA1: 27..34). Without it the
+            // line N + n (H563 GPDMA1: 27..34); `irq_high_base: M` routes the
+            // U5's channels 8..15 to M + (n - 8) (80..87). Without either the
             // block's single `irq:` line serves every channel.
-            let g = crate::peripherals::gpdma::Gpdma::new().with_base(p_cfg.base_address as u32);
-            match p_cfg.config.get("irq_base").and_then(|v| v.as_u64()) {
-                Some(base) => Box::new(g.with_irq_base(base as u32)),
-                None => Box::new(g),
+            // `config: { requests: { usart1_rx: 24, ... } }` maps the
+            // `<peripheral id>_tx` / `_rx` request names the bus routes to the
+            // numeric CxTR2.REQSEL values.
+            let mut g =
+                crate::peripherals::gpdma::Gpdma::new().with_base(p_cfg.base_address as u32);
+            if let Some(base) = p_cfg.config.get("irq_base").and_then(|v| v.as_u64()) {
+                g = g.with_irq_base(base as u32);
             }
+            if let Some(base) = p_cfg.config.get("irq_high_base").and_then(|v| v.as_u64()) {
+                g = g.with_irq_high_base(base as u32);
+            }
+            let mut requests = std::collections::BTreeMap::new();
+            if let Some(table) = p_cfg.config.get("requests").and_then(|v| v.as_mapping()) {
+                for (k, v) in table {
+                    if let (Some(name), Some(id)) = (k.as_str(), v.as_u64()) {
+                        requests.insert(name.to_string(), id as u32);
+                    }
+                }
+            }
+            if !requests.is_empty() {
+                g = g.with_request_table(requests);
+            }
+            Box::new(g)
         }
         "adc" => {
             let layout: crate::peripherals::adc::AdcRegisterLayout =
@@ -998,11 +1032,21 @@ pub fn try_build(
                 ),
             )
         }
-        // Instruction/data cache controllers (H5, WBA, U5…). Zephyr's SoC init
-        // enables the cache via ICACHE_CR.EN and never polls a completion flag,
-        // so a read-as-zero stub keeps the enable sequence from bus-faulting.
-        // No cache behaviour is modelled — the simulator has flat memory.
+        // U5 gets its limited register-contract model below; other chip
+        // profiles use the read-as-zero stub. Cache contents and line effects
+        // are not simulated because the simulator has flat memory.
+        "icache" if p_cfg.config.get("profile").and_then(|v| v.as_str()) == Some("stm32u5") => {
+            Box::new(crate::peripherals::icache::Icache::new())
+        }
         "icache" | "dcache" => Box::new(crate::peripherals::stub::StubPeripheral::new(0x00)),
+        "stm32u5_sysmem" => {
+            let kb = p_cfg
+                .config
+                .get("flash_size_kb")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(2048) as u16;
+            Box::new(crate::peripherals::stm32u5_sysmem::Stm32u5Sysmem::new(kb))
+        }
         // SYSCFG on STM32F4 (`profile: stm32f4`): a real register file,
         // because its EXTICR is the EXTI line-source mux external GPIO edges
         // go through.

@@ -167,6 +167,17 @@ fn systick_and_usart_reset_state_match_silicon() {
 }
 
 #[test]
+fn reserved_uart_register_window_remains_unimplemented_on_h563() {
+    let mut bus = h563_bus();
+    // H563 USART schemas end at PRESC (0x2C); AUTOCR at 0x30 is a U5-only
+    // register. The shared STM32 V2 layout must not expose the U5 reset value.
+    const USART1: u64 = 0x4001_3800;
+    assert_eq!(bus.read_u32(USART1 + 0x30).unwrap(), 0);
+    bus.write_u32(USART1 + 0x30, 0x1234_5678).unwrap();
+    assert_eq!(bus.read_u32(USART1 + 0x30).unwrap(), 0);
+}
+
+#[test]
 fn class_model_reset_state_matches_silicon() {
     // SPI1/SPI2 (stm32h5 profile), ADC1 (stm32l4 layout), RTC (rtc_v3) and
     // GPDMA1 reset values, all pinned to the 2026-06-11 NUCLEO-H563ZI

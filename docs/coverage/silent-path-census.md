@@ -11,6 +11,11 @@ run-to-run drift.
 
 This document is a **measurement**. Nothing is fixed, escalated, or gated here. It
 exists to scope three follow-up repairs that could not be sized without data.
+It is a frozen snapshot of the measured branch, not a current-tree count. Since
+that measurement, the U575 and U545 `stm32u5` ICACHE profiles gained a limited
+register-contract model; those two profiles no longer use the read-zero ICACHE
+stub. The report's ICACHE counts below remain historical until the census is
+rerun against a current tree.
 
 > ## Correction (counter b)
 >
@@ -212,7 +217,7 @@ is a stub the manifest or the factory deliberately asked for**:
 |---|---|---|
 | 120 | manifest `type: "stub"` | **Declared.** The manifest literally says `type: stub`; the factory is doing what it was asked. |
 | 18 | manifest `type: "nrf54l_*_stub"` (7 strings) | **Declared by naming convention.** `dppic` x4, `wdt` x4, `ficr`/`regulators`/`rramc`/`tampc`/`uicr` x2 each. Intentional, but they still reach the factory's `_other =>` arm by *failing to match*, so the factory cannot tell them from a typo. |
-| 7 | manifest `type: "icache"` | **Declared, and explicitly handled.** `peripherals/generic_factory.rs` maps `"icache" \| "dcache"` to a read-as-zero stub on purpose: Zephyr's SoC init writes `ICACHE_CR.EN` and never polls a completion flag, and the simulator has flat memory, so there is no cache behaviour to model. |
+| 7 | manifest `type: "icache"` | **At the measured revision, declared and explicitly handled.** `peripherals/generic_factory.rs` mapped `"icache" \| "dcache"` to a read-as-zero stub. The current U575/U545 `stm32u5` profile dispatches to a limited ICACHE register-contract model instead; other profiles retain the stub. Cache contents are still not simulated. |
 | 2 | manifest `type: "syscfg"` | **Declared, and explicitly handled.** Same file: a read-0 stub with `CCCSR` @ 0x20 seeded to `0x0000_0100` so the H7 HAL's I/O-compensation-cell READY poll exits. |
 | **0** | anything else | **Nothing unaccounted for.** |
 
@@ -272,7 +277,7 @@ Neither number is a proxy for the other.
 | entries called "not intentional" | `nvic` x22, `scb` x3 | **none** | both are real models at run time |
 | labs with a live stub | 47 | 41 | 6 labs were hot only because of `nvic` |
 | clean labs | 19 | 25 | same 6 labs |
-| stub sources not previously visible | - | `icache` x7, `syscfg` x2 | explicit factory arms, missed by a fallthrough-only counter |
+| stub sources not previously visible | - | historical snapshot: `icache` x7, `syscfg` x2 | explicit factory arms, missed by a fallthrough-only counter; U575/U545 ICACHE profiles have since moved to the register-contract model |
 | (a) dropped memory errors | 2 | 2 | unchanged |
 | (c) undecoded register access | 11 raw / 5 distinct | 11 raw / 5 distinct | unchanged |
 

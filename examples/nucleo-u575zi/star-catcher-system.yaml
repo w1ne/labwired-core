@@ -1,0 +1,35 @@
+# NUCLEO-U575ZI-Q Star Catcher simulation system.
+name: "nucleo-u575zi-star-catcher"
+chip: "../../configs/chips/stm32u575.yaml"
+debug_uart: "usart1"
+external_devices:
+  - id: "oled"
+    type: "oled-ssd1306"
+    connection: "i2c1"
+    config:
+      i2c_address: 0x3C
+board_io:
+  - id: "led_green_ld1"
+    kind: "led"
+    peripheral: "gpioc"
+    pin: 7
+    signal: "output"
+    active_high: true
+  - id: "led_blue_ld2"
+    kind: "led"
+    peripheral: "gpiob"
+    pin: 7
+    signal: "output"
+    active_high: true
+  - id: "led_red_ld3"
+    kind: "led"
+    peripheral: "gpiog"
+    pin: 2
+    signal: "output"
+    active_high: true
+  - id: "button_user_pc13"
+    kind: "button"
+    peripheral: "gpioc"
+    pin: 13
+    signal: "input"
+    active_high: true
