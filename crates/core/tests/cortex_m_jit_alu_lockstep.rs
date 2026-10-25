@@ -1181,7 +1181,7 @@ fn every_alu_op_matches_interpreter() {
         let start_r0 = interp.cpu.r0;
         interp.step().unwrap();
         let mut fpu = [0u32; 32];
-        let (exit, n, _, _) = block.run(&mut x, &mut [], &mut fpu);
+        let (exit, n, _, _, _) = block.run(&mut x, &mut [], &mut fpu, None);
         assert_eq!(n, 2, "adds + branch");
         assert_eq!(x[0], interp.cpu.r0, "r0 imm={imm} start={start_r0:#x}");
         assert_eq!(x[15] & 0xF000_0000, interp.cpu.xpsr & 0xF000_0000, "NZCV");
