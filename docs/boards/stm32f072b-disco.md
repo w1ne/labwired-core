@@ -60,6 +60,12 @@ cargo build -p firmware-stm32f072b-disco-smoke --release --target thumbv6m-none-
 
 See [`examples/stm32f072b-disco/VALIDATION.md`](../../examples/stm32f072b-disco/VALIDATION.md) for the claims, runtime evidence and explicit non-claims.
 
+The board shares the generic `stm32` perf spin fixture (flash `0x0800_0000`,
+RAM `0x2000_0000`) and now carries step/batch baselines in
+[`scripts/perf/baselines.json`](../../scripts/perf/baselines.json). That gate
+measures host instructions per simulated step; it is not a silicon throughput
+or physical-timing claim.
+
 ## Sources
 
 RM0360 (STM32F0x1/2/8 reference manual) and DS9826 (STM32F072xB datasheet)
