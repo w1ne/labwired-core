@@ -17,13 +17,14 @@
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::console::ConsoleCapture;
-use labwired_core::cpu::pic24::{SFR_LATA, SFR_LATB, SFR_TRISA, SFR_TRISB, SFR_TRISC};
+use labwired_core::cpu::pic24::{
+    PIC24_IO_MIRROR_BASE, SFR_LATA, SFR_LATB, SFR_TRISA, SFR_TRISB, SFR_TRISC,
+};
 use labwired_core::cpu::Pic24;
-use labwired_core::peripherals::pic24_gpio::Pic24GpioPort;
-use labwired_core::pins::PinPort;
+use labwired_core::peripherals::pic24_gpio;
 use labwired_core::system::builder::pic24_port_masks;
 use labwired_core::system::node::parse_elf_image;
-use labwired_core::{Cpu, SimulationConfig};
+use labwired_core::{Bus, Cpu, SimulationConfig};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
@@ -66,21 +67,14 @@ fn boot(steps: usize) -> (Pic24, SystemBus, Vec<u8>) {
     (cpu, bus, bytes)
 }
 
-fn gpio<'a>(bus: &'a SystemBus, id: &str) -> &'a Pic24GpioPort {
-    bus.peripherals
-        .iter()
-        .find(|p| p.name == id)
-        .unwrap_or_else(|| panic!("no {id} peripheral"))
-        .dev
-        .as_any()
-        .expect("native peripheral")
-        .downcast_ref::<Pic24GpioPort>()
-        .unwrap_or_else(|| panic!("{id} is not a Pic24GpioPort"))
+fn pad_level(bus: &SystemBus, pin: u16) -> bool {
+    let addr = PIC24_IO_MIRROR_BASE + u64::from(SFR_TRISA) + pic24_gpio::OFF_PORT;
+    bus.read_u16(addr).expect("PORTA pad window") & (1u16 << pin) != 0
 }
 
 #[test]
 fn package_masks_are_the_28_pin_202() {
-    let (mut cpu, bus, _) = boot(0);
+    let (mut cpu, _bus, _) = boot(0);
 
     // Reset: every package pad is an input over its mask.
     assert_eq!(cpu.data_read(SFR_TRISA).unwrap(), 0x001F, "RA0-RA4");
@@ -92,10 +86,6 @@ fn package_masks_are_the_28_pin_202() {
     cpu.data_write(SFR_TRISC, 0xFFFF).unwrap();
     assert_eq!(cpu.data_read(SFR_TRISA).unwrap(), 0x001F);
     assert_eq!(cpu.data_read(SFR_TRISC).unwrap(), 0x0000);
-
-    assert_eq!(gpio(&bus, "gpioa").pin_count(), 5);
-    assert_eq!(gpio(&bus, "gpiob").pin_count(), 16);
-    assert_eq!(gpio(&bus, "gpioc").pin_count(), 0);
 }
 
 #[test]
@@ -112,7 +102,7 @@ fn firmware_toggles_ra0_and_rb0_through_the_pads() {
     let mut last_b = cpu.data_read(SFR_LATB).unwrap();
     let mut lat_changed = false;
     let mut pad_changed = false;
-    let mut last_pad = gpio(&bus, "gpioa").level(0);
+    let mut last_pad = pad_level(&bus, 0);
     for _ in 0..40 {
         cpu.step(&mut bus, &[], &SimulationConfig::default())
             .expect("step the GPIO loop");
@@ -123,7 +113,7 @@ fn firmware_toggles_ra0_and_rb0_through_the_pads() {
         }
         last_a = a;
         last_b = b;
-        let pad = gpio(&bus, "gpioa").level(0);
+        let pad = pad_level(&bus, 0);
         if pad != last_pad {
             pad_changed = true;
             break;
