@@ -280,6 +280,11 @@
     "sam4s16c": {
       "how": "needs-build",
       "why": "The SAM4S part (and the sam4s_pio/sam4s_pmc models) are newer than the released CLI this gate installs. The committed smoke tests/fixtures/sam4s-xplained-smoke.elf prints 'SAM4S XPLAINED SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
+    },
+    "dspic33fj32mc202": {
+      "how": "committed",
+      "firmware": "examples/dspic33fj32mc202/firmware/dspic33fj32mc202-xc16-uart-smoke.elf",
+      "expect": "UART: HI"
     }
   }
 }

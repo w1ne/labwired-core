@@ -23,10 +23,10 @@ cosim_models:
     step_ns: 1000
     inputs:
       ctl_touch: "ui.touch.pressed"
-      drv_pd2: "board.gpio.pd2"
-      ctl_pd2: "board.gpio_output.pd2"
-      drv_pd4: "board.gpio.pd4"
-      ctl_pd4: "board.gpio_output.pd4"
+      drv_pd2: "board.gpio_pad.pd2"
+      ctl_pd2: "board.gpio_driven.pd2"
+      drv_pd4: "board.gpio_pad.pd4"
+      ctl_pd4: "board.gpio_driven.pd4"
     outputs:
       in_pd2: "board.gpio_in.pd2"
       in_pd4: "board.gpio_in.pd4"
