@@ -35,7 +35,7 @@ ELF: `tests/fixtures/nucleo-u545re-blinky.elf` (arm-none-eabi-gcc 13.2.1,
 | `blinky_prints_ok_on_usart1_vcp` | USART1 TX (VCP, PA9) delivers `OK` |
 | `blinky_configures_the_board_pins_and_toggles_ld2_on_pa5` | GPIOA ODR bit 5 toggles (>= 3 edges); PA5 MODER=output, PA9/PA10 MODER=AF with AFRH=AF7, PC13 input with pull-down |
 | `button_pc13_press_and_release_reach_the_vcp` | driving PC13 high/low is read by firmware and reported `B1=1` / `B1=0` |
-| `vcp_rx_pa10_is_echoed_back_on_tx_pa9` | a byte injected on USART1 RX is received and echoed on TX |
+| `vcp_rx_pa10_is_echoed_back_on_tx_pa9` | a byte injected into the USART1 RX queue is echoed on TX. The test does not route RX through the PA10 pad; U5 RX pad traffic is not modeled. |
 | `memory_map_is_the_u545_one` | 256 KiB SRAM at `0x20000000` (no SRAM3), SRAM4 16 KiB, flash ends at 512 KiB |
 | `peripherals_the_u545_lacks_are_unmapped` | USART2, GPIOF, GPIOI are bus errors |
 | `dbgmcu_idcode_is_the_u545_one` | IDCODE `0x10026455` |
