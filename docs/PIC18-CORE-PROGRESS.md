@@ -74,6 +74,9 @@ returns `SimulationError::DecodeError(pc)`; no opcode is guessed.
 * Single-word instructions advance by 2; `CALL`, `GOTO`, `MOVFF`, `LFSR`
   advance by 4.
 * A write to `PCL` combines PCLATU/PCLATH/PCL and aligns the target.
+* `ADDWF PCL,f` is a computed GOTO from the instruction's own address: the
+  low-byte addition does not propagate into the upper PC bytes, and reading
+  `PCL` latches the current PCLATH/PCLATU. `MOVFF ... ,PCL` uses the latches.
 * Return stack defaults to 31 levels (classic parts). Push past full sets
   `STKFUL` and overwrites the top entry; pop from empty sets `STKUNF` and
   returns 0. The pointer never wraps circularly. `STVREN` reset behavior is not
@@ -85,27 +88,32 @@ Commands run from this worktree:
 
 | Command | Result |
 | :--- | :--- |
-| `cargo test -p labwired-core pic18` | PASS: 17 PIC18 unit tests; other test binaries filtered to 0 |
-| `cargo test -p labwired-core --lib cpu::pic18` | PASS: 17 passed; 0 failed |
+| `cargo test -p labwired-core pic18` | PASS: 21 PIC18 unit tests; other test binaries filtered to 0 |
+| `cargo test -p labwired-core --lib cpu::pic18` | PASS: 21 passed; 0 failed |
 | `cargo test -p labwired-core one_arch_policy` | PASS: 8 passed; 0 failed |
 | `cargo test -p labwired-core --test session_catalog` | PASS: 1 passed; 0 failed |
 | `cargo test -p labwired-core --test register_compliance` | PASS: 1 passed; 0 failed |
 | `cargo test -p labwired-core --test register_coverage` | PASS: 1 passed; 0 failed |
 | `cargo test -p labwired-config --lib --tests` | PASS: 265 passed across 9 binaries; 0 failed |
-| `cargo test -p labwired-config` | Unit/integration pass; the doctest phase cannot start because this environment has no `rustdoc` binary (`failed to execute rustdoc ... No such file or directory`) |
+| `cargo test -p labwired-config` | PASS: 265 passed (including 0 doctests); 0 failed |
+| `cargo test -p labwired-loader` | PASS: 57 passed across 4 binaries; 0 failed |
 | `cargo check -p labwired-cli -p labwired-wasm -p labwired-loader` | PASS |
 | `cargo check --workspace --all-targets` | Blocked by a pre-existing unrelated failure: `firmware-semihost-smoke` uses host-invalid inline assembly registers `r0`/`r1` |
 
 The PIC18 tests cover reset and PC alignment, Access Bank vs BSR addressing,
 exact `C`/`DC`/`Z`/`OV`/`N` cases, logic/`CLRF`/`MOVF` flag rules, `MOVFF`
 absolute addressing, two-word `GOTO`/`CALL`/`RETURN`, `LFSR`, conditional
-branches, skip over a two-word instruction, return-stack overflow/underflow,
-PCL latch writes, unknown-opcode `DecodeError`, snapshot round-trip, program
-image loading, and a hand-assembled add/store/GOTO program.
+branches, `BTG`/`BTFSS`, `RCALL`/`RETLW`, skip over a two-word instruction,
+return-stack overflow/underflow, PCL latch writes, `MOVFF` to `PCL`, `ADDWF PCL`
+computed jumps with and without low-byte carry, unknown-opcode `DecodeError`,
+snapshot round-trip, program image loading, and a hand-assembled
+add/store/GOTO program.
 
 Commit: `d6402f376` (`feat(core): add PIC18 vertical slice`).
 
-Follow-up fix: `75f859ce9` (`fix(pic18): let MOVFF to PCL update the PC`).
+Follow-ups: `75f859ce9` (`fix(pic18): let MOVFF to PCL update the PC`),
+`7f81f318b` (progress note), and `c718f35a8`
+(`test(pic18): cover PCL jumps and remaining bit/return ops`).
 
 ## Next missing pieces
 
