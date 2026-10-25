@@ -2604,6 +2604,10 @@ impl crate::Peripheral for I2c {
         true
     }
 
+    fn has_attached_time_devices(&self) -> bool {
+        !self.attached_devices().is_empty()
+    }
+
     /// Advance every attached slave's data-ready clock. Slaves live behind
     /// `RefCell` here (the transaction engine hands out interior-mutable borrows
     /// mid-transfer), so borrow each cell in turn. On STM32/Kinetis the machine

@@ -778,11 +778,13 @@ impl<C: Cpu> Machine<C> {
         // boundary. Absent controllers pay one predictable None check.
         self.bus.service_samd51_storage_boundary()?;
 
-        // Logic-analyzer edge capture. No-op (one `is_active` check) unless a
-        // watch set is installed. Observed after the instruction + peripheral
-        // effects of this cycle have landed, so pad levels are the committed
-        // state at `total_cycles`.
-        self.logic_observe(logic_boundary);
+        // Logic-analyzer edge capture. The caller checks `is_active` inline so
+        // an unflagged run pays one bool rather than a cross-module call.
+        // Observed after the instruction + peripheral effects of this cycle
+        // have landed, so pad levels are the committed state at `total_cycles`.
+        if self.logic_capture.is_active() {
+            self.logic_observe(logic_boundary);
+        }
 
         Ok(())
     }

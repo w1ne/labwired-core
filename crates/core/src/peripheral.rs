@@ -1071,6 +1071,13 @@ pub trait Peripheral: std::fmt::Debug + Send {
         self.drives_central_i2c_time()
     }
 
+    /// True when this controller currently has at least one attached device
+    /// whose free-running clock the central drive would advance. Controllers
+    /// without an attached-device list keep the historical `true`.
+    fn has_attached_time_devices(&self) -> bool {
+        true
+    }
+
     /// Advance every attached off-chip device's free-running clock by `us`
     /// microseconds — the generalization of
     /// [`advance_attached_i2c_us`](Self::advance_attached_i2c_us) over both bus

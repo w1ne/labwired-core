@@ -559,6 +559,10 @@ pub struct Machine<C: Cpu> {
     /// advancing (mirrors the nRF54L TWIM `last_us` seeding). A backward jump
     /// (SYSTIMER LOAD) re-anchors rather than advancing by a negative delta.
     last_i2c_time_us: u64,
+    /// First cycle at which the derived µs clock can next change. Avoids the
+    /// expensive u128 divide (and fan-out) on every instruction when the
+    /// attached devices only need one update per simulated microsecond.
+    next_i2c_time_cycle: u64,
     /// Has this machine already told the fidelity census that its device time
     /// is DERIVED from `cpu_hz` rather than read off a modelled µs counter?
     ///
@@ -1226,6 +1230,7 @@ impl<C: Cpu> Machine<C> {
             i2c_time_source_index,
             i2c_time_controller_indices,
             last_i2c_time_us: u64::MAX,
+            next_i2c_time_cycle: 0,
             derived_device_time_noted: false,
             unpowered_rail_noted: false,
             net_drive_stop_from: u64::MAX,
@@ -1273,6 +1278,30 @@ impl<C: Cpu> Machine<C> {
                 let hz = self.bus.cpu_hz;
                 if hz == 0 {
                     // No declared core clock ⇒ nothing honest to derive from.
+                    return;
+                }
+                // The derived µs clock only changes at a µs boundary. Skip the
+                // u128 divide and the device fan-out on the cycles in between.
+                if self.total_cycles < self.next_i2c_time_cycle {
+                    return;
+                }
+                let cycles_per_us = (hz / 1_000_000).max(1);
+                // Round up to the next absolute µs boundary, not "one µs from
+                // whenever this call happened": a run can end exactly on a
+                // boundary and must still flush that last µs to the device.
+                self.next_i2c_time_cycle = self
+                    .total_cycles
+                    .saturating_div(cycles_per_us)
+                    .saturating_add(1)
+                    .saturating_mul(cycles_per_us);
+                // No attached device needs a clock: skip the divide and the
+                // controller fan-out. Re-scanned at the next µs boundary, so a
+                // device attached later is picked up without re-construction.
+                if !self
+                    .i2c_time_controller_indices
+                    .iter()
+                    .any(|&idx| self.bus.peripherals[idx].dev.has_attached_time_devices())
+                {
                     return;
                 }
                 // u128 so a long run cannot wrap: `total_cycles * 1_000_000`
