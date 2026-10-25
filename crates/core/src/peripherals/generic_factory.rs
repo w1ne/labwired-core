@@ -160,6 +160,8 @@ pub const MODEL_TYPES: &[&str] = &[
     // that enables cleanly and never emits a byte.
     "sam_sercom_usart",
     "sam_sercom_spi",
+    "samd51_nvmctrl_manual_storage",
+    "samd51_cmcc_control",
     "sam_dmac_byte",
     "sam_dmac_sercom4_tx_byte",
     // Reserve the full name: never fuzzy-coerce an unqualified SAM DMAC to STM32.
@@ -596,6 +598,23 @@ pub fn try_build(
         }
         "sam_sercom_usart" => {
             Box::new(crate::peripherals::sam::sercom_usart::SamSercomUsart::new())
+        }
+        "samd51_nvmctrl_manual_storage" | "samd51_cmcc_control" => {
+            let expected = if canonical_type == "samd51_nvmctrl_manual_storage" {
+                0x4100_4000
+            } else {
+                0x4100_6000
+            };
+            if p_cfg.base_address != expected || p_cfg.irq.is_some() || !p_cfg.config.is_empty() {
+                anyhow::bail!(
+                    "SAMD51 storage slice requires its exact base, no IRQ and no config overrides"
+                );
+            }
+            if canonical_type == "samd51_nvmctrl_manual_storage" {
+                Box::new(crate::peripherals::sam::nvmctrl::Samd51Nvmctrl::new())
+            } else {
+                Box::new(crate::peripherals::sam::cmcc::Samd51Cmcc::new())
+            }
         }
         "sam_dmac" => {
             anyhow::bail!("full SAM DMAC is not admitted; sam_dmac_byte is an opt-in software-byte foundation only");

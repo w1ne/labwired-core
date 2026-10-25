@@ -774,6 +774,9 @@ impl<C: Cpu> Machine<C> {
         // batch/CLI run path (`Machine::run`), which executes cycle-accurately
         // when an H5 op-modeling FLASH is present so this fires per instruction.
         self.apply_pending_flash_op()?;
+        // Opt-in SAMD51 manual storage commits on the same retired-window
+        // boundary. Absent controllers pay one predictable None check.
+        self.bus.service_samd51_storage_boundary()?;
 
         // Logic-analyzer edge capture. No-op (one `is_active` check) unless a
         // watch set is installed. Observed after the instruction + peripheral

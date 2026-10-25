@@ -374,6 +374,7 @@ impl SystemBus {
             u5_program_gate_idx: None,
             nrf52_nvmc_idx: None,
             flash_store_owner_idx: None,
+            samd51_nvmctrl_idx: None,
             bus_trace: bus_trace::new_log(),
             logic_tap: crate::logic_capture::LogicTap::new(),
             pin_map: std::collections::HashMap::new(),

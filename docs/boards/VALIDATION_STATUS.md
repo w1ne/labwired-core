@@ -48,11 +48,11 @@ The models column is a content digest over everything that board's `models` list
 | `teensy-41` | 🟡 smoke-manual | — | `dff2f322c7245e11` | no silicon capture |
 | `stm32f7-discovery` | 🟡 smoke-manual | — | `7310851a0f778931` | no silicon capture |
 | `nucleo-g071rb` | 🟡 smoke-manual | — | `74bd288aadeff1f6` | no silicon capture |
-| `esp32c6-devkitc` | 🟡 smoke-manual | — | `45386add70a1a5e4` | no silicon capture |
-| `litex-vexriscv` | 🟡 smoke-manual | — | `4a458086f90ebd1a` | no silicon capture |
-| `stm32f072` | 🟡 smoke-manual | — | `9c02e4a15620fce5` | no silicon capture |
-| `arty-litex-vexriscv` | 🟡 smoke-manual | — | `fb70a736365986c3` | no silicon capture |
-| `vegaboard-ri5cy` | 🟡 smoke-manual | — | `f5e5798f997e3ae5` | no silicon capture |
+| `esp32c6-devkitc` | 🟡 smoke-manual | — | `954a1ce43048a2d3` | no silicon capture |
+| `litex-vexriscv` | 🟡 smoke-manual | — | `c943aa1fd17c2410` | no silicon capture |
+| `stm32f072` | 🟡 smoke-manual | — | `6c1ccde4517ad97e` | no silicon capture |
+| `arty-litex-vexriscv` | 🟡 smoke-manual | — | `1a88682944dd1c93` | no silicon capture |
+| `vegaboard-ri5cy` | 🟡 smoke-manual | — | `006636e9d1f1159c` | no silicon capture |
 
 ## `nrf52840` — 🟢 silicon-verified
 
