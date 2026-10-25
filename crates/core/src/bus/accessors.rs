@@ -720,6 +720,9 @@ impl crate::Bus for SystemBus {
         if let Some(r) = self.try_flash_owner_store(addr, 1, value as u32) {
             return r;
         }
+        if let Some(r) = self.try_samd51_storage_store(addr, 1, value as u32) {
+            return r;
+        }
         let flash_alias_old = if self.flash_boot_alias
             && self.flash.base_addr != 0
             && addr < self.flash.data.len() as u64
@@ -1178,6 +1181,9 @@ impl crate::Bus for SystemBus {
         if let Some(r) = self.try_flash_owner_store(addr, 2, value as u32) {
             return r;
         }
+        if let Some(r) = self.try_samd51_storage_store(addr, 2, value as u32) {
+            return r;
+        }
         let observed_old = if self.config.observe_wide_ram_stores && !self.observers.is_empty() {
             self.ram.read_u16(addr)
         } else {
@@ -1313,6 +1319,9 @@ impl crate::Bus for SystemBus {
             return r;
         }
         if let Some(r) = self.try_flash_owner_store(addr, 4, value) {
+            return r;
+        }
+        if let Some(r) = self.try_samd51_storage_store(addr, 4, value) {
             return r;
         }
         // Atomic register aliases: a write to a +0x1000/0x2000/0x3000 alias of

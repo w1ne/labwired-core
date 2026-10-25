@@ -1118,6 +1118,21 @@ pub trait Peripheral: std::fmt::Debug + Send {
     fn flash_cpu_store(&mut self, _offset: u64, _width: u8, _value: u32) -> FlashStoreOutcome {
         FlashStoreOutcome::Commit
     }
+    /// Opt-in manual flash page buffer and instruction-boundary commit
+    /// capability (SAMD51 NVMCTRL manual mode). Discovery and access use the
+    /// same interface, without a concrete peripheral downcast. Controllers that
+    /// commit on the store itself use [`Self::flash_cpu_store`] instead.
+    fn manual_flash_storage(
+        &self,
+    ) -> Option<&dyn crate::peripherals::sam::nvmctrl::ManualFlashStorage> {
+        None
+    }
+    /// Mutable counterpart of [`Self::manual_flash_storage`].
+    fn manual_flash_storage_mut(
+        &mut self,
+    ) -> Option<&mut dyn crate::peripherals::sam::nvmctrl::ManualFlashStorage> {
+        None
+    }
     /// DMA request routing: append the channels the peripheral request
     /// `request` (`<peripheral id>_tx` / `_rx`, see [`DMA_SIGNAL_TX`]) drives
     /// on this DMA controller — or, for a request multiplexer, on the
