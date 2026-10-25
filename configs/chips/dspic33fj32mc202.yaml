@@ -5,6 +5,8 @@
 # See the LICENSE file in the project root for full license information.
 #
 # dsPIC33FJ32MC202 (DS70283H). M0: boot + UART1 TX. M1: 28-pin GPIO package.
+# M2: shared T1/PWM1/QEI1 validated on the 202 package pins (RB14/RB15 PWM,
+# RB0-RB2 QEI); AN0-AN5 and ADC/SPI/I2C remain for the next milestone.
 # The 202 is the 28-pin
 # sibling of the onboarded dsPIC33FJ32MC204 and shares its PIC24/dsPIC33F
 # core, 32 KB flash, 2 KB SRAM, UART1/SPI1/I2C1/ADC1/Timers/PWM/QEI register
