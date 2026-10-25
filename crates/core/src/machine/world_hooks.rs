@@ -204,6 +204,7 @@ impl<C: Cpu> Machine<C> {
     pub fn reset_node(&mut self) -> SimResult<()> {
         if let Some(nvic) = &self.bus.nvic {
             use std::sync::atomic::Ordering;
+            nvic.any_enabled.store(false, Ordering::SeqCst);
             for w in 0..8 {
                 nvic.iser[w].store(0, Ordering::SeqCst);
                 nvic.ispr[w].store(0, Ordering::SeqCst);

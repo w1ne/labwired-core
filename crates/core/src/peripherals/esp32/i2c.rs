@@ -777,6 +777,10 @@ impl Peripheral for Esp32I2c {
         true
     }
 
+    fn has_attached_time_devices(&self) -> bool {
+        !self.attached_slaves().is_empty()
+    }
+
     fn advance_attached_i2c_us(&mut self, us: u64) {
         self.core.advance_time_us(us);
     }

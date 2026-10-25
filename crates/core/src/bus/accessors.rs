@@ -291,6 +291,31 @@ impl SystemBus {
         }
     }
 
+    /// Fast path for a CPU store into plain RAM while every optional store
+    /// gate is inactive. The per-step perf fixture spends most of its stores
+    /// here; the gate chain is only paid on buses that actually enable one.
+    #[inline(always)]
+    fn try_plain_ram_store(&mut self, addr: u64, width: u8, value: u32) -> bool {
+        if self.ram.read_u8(addr).is_none()
+            || !self.debug_watches.is_empty()
+            || self.memory_policy.active()
+            || self.esp32c3_pms_armed
+            || !self.observers.is_empty()
+        {
+            return false;
+        }
+        let wrote = match width {
+            1 => self.ram.write_u8(addr, value as u8),
+            2 => self.ram.write_u16(addr, value as u16),
+            4 => self.ram.write_u32(addr, value),
+            _ => false,
+        };
+        if wrote {
+            self.note_memory_write();
+        }
+        wrote
+    }
+
     /// Exact committed RAM bytes, unlike peripheral callbacks' unknown old value.
     #[inline(never)]
     fn notify_ram_store_cold(&self, addr: u64, old: &[u8], new: &[u8]) {
@@ -701,6 +726,9 @@ impl crate::Bus for SystemBus {
         // latch if the step faults (see `Machine::advance`).
         if !self.debug_watches.is_empty() && !self.debug_watch_host_bypass.get() {
             self.note_debug_watch_store(addr);
+        }
+        if self.try_plain_ram_store(addr, 1, value as u32) {
+            return Ok(());
         }
         if let Some(r) = self.memory_policy_gate_store(addr) {
             return r;
@@ -1164,6 +1192,9 @@ impl crate::Bus for SystemBus {
         if !self.debug_watches.is_empty() && !self.debug_watch_host_bypass.get() {
             self.note_debug_watch_store(addr);
         }
+        if self.try_plain_ram_store(addr, 2, value as u32) {
+            return Ok(());
+        }
         if let Some(r) = self.memory_policy_gate_store(addr) {
             return r;
         }
@@ -1300,6 +1331,9 @@ impl crate::Bus for SystemBus {
         // latch if the step faults (see `Machine::advance`).
         if !self.debug_watches.is_empty() && !self.debug_watch_host_bypass.get() {
             self.note_debug_watch_store(addr);
+        }
+        if self.try_plain_ram_store(addr, 4, value) {
+            return Ok(());
         }
         if let Some(r) = self.memory_policy_gate_store(addr) {
             return r;

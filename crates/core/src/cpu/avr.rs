@@ -1186,9 +1186,17 @@ impl Avr {
     }
 
     fn tick_io_timers(&mut self, cpu_cycles: u32) {
-        self.tick_timer0(cpu_cycles);
-        self.tick_timer1(cpu_cycles);
-        self.tick_timer2(cpu_cycles);
+        // The spin fixture (and most sketches between timer uses) has every
+        // prescaler stopped. Skip the three outlined tick bodies then.
+        if self.t0_prescaler() != 0 {
+            self.tick_timer0(cpu_cycles);
+        }
+        if self.t1.prescaler() != 0 {
+            self.tick_timer1(cpu_cycles);
+        }
+        if self.t2_prescaler() != 0 {
+            self.tick_timer2(cpu_cycles);
+        }
     }
 
     /// CPU cycles until the next Timer2 interrupt that can wake a sleeper.
