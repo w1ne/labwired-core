@@ -1440,12 +1440,16 @@ fn stm32h5_tx_engine_transmits_and_completes() {
     h5_write(&mut spi, 0x20, 0x11);
     assert_eq!(
         h5_read(&spi, 0x14),
-        0x0001_0013,
-        "CTSIZE 2->1, TXP|TXTF|RXP (each frame clocks one in)"
+        0x0001_0017,
+        "CTSIZE 2->1, TXP|TXTF|RXP|DXP (each frame clocks one in)"
     );
     h5_write(&mut spi, 0x20, 0x22);
     assert_eq!(captured(&spi), vec![0x11, 0x22], "both frames on the bus");
-    assert_eq!(h5_read(&spi, 0x14), 0x0000_101B, "EOT|TXC|RXP at CTSIZE=0");
+    assert_eq!(
+        h5_read(&spi, 0x14),
+        0x0000_101F,
+        "EOT|TXC|RXP|DXP at CTSIZE=0"
+    );
     assert_eq!(h5_read(&spi, 0x00), 0x0000_1001, "CSTART HW-cleared");
     // Full duplex: each transmitted frame clocks one in. With no slave
     // attached the captured value is the idle line level (0), but RXP is

@@ -3801,13 +3801,20 @@ impl Spi {
     }
 
     /// SR with the receive-queue-dependent flags applied: RXP/DXP are live
-    /// over the queue, everything else is the stored event register.
+    /// over the queue, everything else is the stored event register. CTSIZE
+    /// occupies SR[31:16] on the full H5/U5 personality; the limited U575
+    /// SPI3 personality omits that field.
     fn h5_rx_available(&self) -> bool {
         !self.h5_rx_fifo.borrow().is_empty() || self.h5_rx_cur.get().is_some()
     }
 
     fn h5_live_sr(&self, r: &Stm32H5SpiRegs) -> u32 {
-        let mut v = r.sr;
+        let ctsize = if self.limited_features {
+            0
+        } else {
+            r.ctsize << 16
+        };
+        let mut v = ctsize | r.sr;
         if self.h5_rx_available() {
             v |= H5_SR_RXP;
             if v & H5_SR_TXP != 0 {

@@ -146,7 +146,7 @@ fn rcc_reset_pll_gating_prescalers_and_backup_domain() {
     // PLL1 locks from MSIS with M=1, N=80, R=2.
     r.w(RCC + 0x28, 0x0004_0001);
     r.w(RCC + 0x34, 0x0101_024F);
-    r.w(RCC + 0x00, r.r(RCC) | (1 << 24)); // PLL1ON
+    r.w(RCC, r.r(RCC) | (1 << 24)); // PLL1ON
     assert_ne!(r.r(RCC) & (1 << 25), 0, "PLL1RDY");
     // A source that is not ready cannot be selected.
     r.w(RCC + 0x1C, 0x2);
@@ -473,7 +473,7 @@ fn gpio_inputs_and_exti_edges() {
     let nvic_ispr = 0xE000_E200u64;
     r.w(nvic_iser, 1 << 24); // EXTI13_IRQn
     r.w(EXTI + 0x6C, 0x200); // EXTICR4: PC13
-    r.w(EXTI + 0x00, 0x2000); // RTSR1 line 13
+    r.w(EXTI, 0x2000); // RTSR1 line 13
     r.w(EXTI + 0x80, 0x2000); // IMR1 line 13
 
     let c = r
@@ -602,18 +602,18 @@ fn spi3_limits_loopback_threshold_and_irq() {
         .bus
         .attach_spi_device("spi1", Box::new(SpiLoopback::default()))
         .unwrap();
-    r.w(SPI1 + 0x00, 1 << 12); // SSI first: MASTER|SSM with SSI=0 mode-faults
+    r.w(SPI1, 1 << 12); // SSI first: MASTER|SSM with SSI=0 mode-faults
     r.w(SPI1 + 0x08, 0x0007_0007);
     r.w(SPI1 + 0x0C, (1 << 22) | (1 << 26)); // MASTER | SSM
     r.w(SPI1 + 0x04, 2);
-    r.w(SPI1 + 0x00, (1 << 12) | 1); // SSI | SPE
-    r.w(SPI1 + 0x00, (1 << 12) | 1 | (1 << 9)); // CSTART
+    r.w(SPI1, (1 << 12) | 1); // SSI | SPE
+    r.w(SPI1, (1 << 12) | 1 | (1 << 9)); // CSTART
     r.w(SPI1 + 0x20, 0xA5);
     assert_ne!(r.r(SPI1 + 0x14) & 1, 0, "RXP");
     assert_eq!(r.r(SPI1 + 0x14) & (1 << 3), 0, "EOT not yet");
     r.w(SPI1 + 0x20, 0x5A);
     assert_ne!(r.r(SPI1 + 0x14) & (1 << 3), 0, "EOT");
-    assert_eq!(r.r(SPI1 + 0x00) & (1 << 9), 0, "CSTART cleared");
+    assert_eq!(r.r(SPI1) & (1 << 9), 0, "CSTART cleared");
     assert_eq!(r.r(SPI1 + 0x30), 0xA5, "first RX frame");
     assert_eq!(r.r(SPI1 + 0x30), 0x5A, "second RX frame");
     r.w(SPI1 + 0x18, 1 << 3); // EOTC
@@ -626,13 +626,13 @@ fn spi3_limits_loopback_threshold_and_irq() {
         .bus
         .attach_spi_device("spi1", Box::new(Echo))
         .unwrap();
-    r.w(SPI1 + 0x00, 1 << 12); // SSI first
+    r.w(SPI1, 1 << 12); // SSI first
     r.w(SPI1 + 0x08, 0x0007_0007);
     r.w(SPI1 + 0x0C, (1 << 22) | (1 << 26));
     r.w(SPI1 + 0x04, 1);
     r.w(SPI1 + 0x10, 1); // RXPIE
-    r.w(SPI1 + 0x00, (1 << 12) | 1);
-    r.w(SPI1 + 0x00, (1 << 12) | 1 | (1 << 9));
+    r.w(SPI1, (1 << 12) | 1);
+    r.w(SPI1, (1 << 12) | 1 | (1 << 9));
     r.w(SPI1 + 0x20, 0x42);
     assert!(r.r(SPI1 + 0x14) & 1 != 0);
     // The SPI1 IRQ is NVIC line 59.
@@ -738,7 +738,7 @@ fn gpdma_bndt_bytes_irq_split_and_peripheral_routing() {
     r.w(src, 0x1111_1111);
     r.w(src + 4, 0x2222_2222);
     r.w(dst + 8, 0xAAAA_AAAA);
-    r.w(chan(0) + 0x40, (2 << 0) | (1 << 3) | (2 << 16) | (1 << 19));
+    r.w(chan(0) + 0x40, 2 | (1 << 3) | (2 << 16) | (1 << 19));
     r.w(chan(0) + 0x44, 1 << 9); // SWREQ
     r.w(chan(0) + 0x48, 8); // BNDT bytes
     r.w(chan(0) + 0x4C, src as u32);
@@ -761,7 +761,7 @@ fn gpdma_bndt_bytes_irq_split_and_peripheral_routing() {
     for (ch, irq) in [(8u64, 80u32), (15, 87)] {
         let mut r = Rig::new();
         r.enable(RCC + 0x88, 1);
-        r.w(chan(ch) + 0x40, (2 << 0) | (1 << 3) | (2 << 16) | (1 << 19));
+        r.w(chan(ch) + 0x40, 2 | (1 << 3) | (2 << 16) | (1 << 19));
         r.w(chan(ch) + 0x44, 1 << 9);
         r.w(chan(ch) + 0x48, 8);
         r.w(chan(ch) + 0x4C, src as u32);
@@ -781,12 +781,12 @@ fn gpdma_bndt_bytes_irq_split_and_peripheral_routing() {
     let mut r = Rig::new();
     r.enable(RCC + 0x88, 1); // GPDMA1
     r.enable(RCC + 0xA4, 1 << 12); // SPI1EN
-    r.w(SPI1 + 0x00, 1 << 12); // SSI first
+    r.w(SPI1, 1 << 12); // SSI first
     r.w(SPI1 + 0x08, 0x0007_0007 | (1 << 15)); // TXDMAEN before SPE locks CFG1
     r.w(SPI1 + 0x0C, (1 << 22) | (1 << 26));
     r.w(SPI1 + 0x04, 1);
-    r.w(SPI1 + 0x00, (1 << 12) | 1);
-    r.w(SPI1 + 0x00, (1 << 12) | 1 | (1 << 9));
+    r.w(SPI1, (1 << 12) | 1);
+    r.w(SPI1, (1 << 12) | 1 | (1 << 9));
     r.w(chan(0) + 0x40, (1 << 3) | (2 << 16)); // SINC, DDW 32? byte source
     r.w(chan(0) + 0x44, 7); // REQSEL = SPI1_TX, SWREQ=0
     r.w(chan(0) + 0x48, 1);

@@ -904,6 +904,11 @@ pub(super) fn decode_ldst_single(h1: u16, h2: u16) -> Option<Instruction> {
         let rn = (h1 & 0xF) as u8;
         let rt = ((h2 >> 12) & 0xF) as u8;
         let imm = h2 & 0xFFF;
+        // Rt==PC is the architecturally allocated PLD hint encoding. It must
+        // not execute as an LDRB into PC (newlib uses this in optimized libc).
+        if rt == 15 {
+            return Some(Instruction::Nop);
+        }
         return Some(Instruction::LdrbImm { rt, rn, imm });
     }
     if (h1 & 0xFFF0) == 0xF880 {
@@ -916,6 +921,10 @@ pub(super) fn decode_ldst_single(h1: u16, h2: u16) -> Option<Instruction> {
         let rn = (h1 & 0xF) as u8;
         let rt = ((h2 >> 12) & 0xF) as u8;
         let imm = h2 & 0xFFF;
+        // Rt==PC is PLDW in this halfword-load encoding, also a hint/NOP.
+        if rt == 15 {
+            return Some(Instruction::Nop);
+        }
         return Some(Instruction::LdrhImm { rt, rn, imm });
     }
     if (h1 & 0xFFF0) == 0xF8A0 {

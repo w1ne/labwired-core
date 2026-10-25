@@ -741,9 +741,9 @@ pub struct V2Rcc {
     cier: u32,
     cifr: u32,
     cfgr1: u32, // 0x1C — U5/WBA RCC_CFGR1 (SW→SWS); G4/WB use CFGR at 0x08
-    /// WBA/U5 RCC_PLL1CFGR @ 0x28 (RM0493/RM0456). Plain storage; the
-    /// `stm32wba` layout additionally synthesizes the read-only
-    /// `PLL1RCLKPRERDY` status (see `synthesize_wba_rclk_pre_rdy`).
+    /// WBA/U5 RCC_PLL1CFGR @ 0x28 (RM0493/RM0456). The WBA layout keeps the
+    /// R-clock divider writable while PLL1 is enabled and synthesizes its
+    /// read-only `PLL1RCLKPRERDY` status; U5 is plain storage.
     pll1cfgr: u32, // 0x28
     /// WBA/U5 RCC_PLL1DIVR @ 0x34. Seeded to the vendored-SVD reset value
     /// 0x01010280 in `new()`.
@@ -1169,7 +1169,17 @@ impl RccModel for V2Rcc {
                     value & !(1 << 1)
                 };
             }
-            // PLL1 configuration is frozen while PLL1ON is set (RM0456 §11.8.9).
+            // On WBA, RCLKPRE and RCLKPRESTEP remain writable while PLL1 runs
+            // (RM0493 §7.7.13); all other PLL1CFGR configuration is frozen.
+            0x28 if self.synthesize_wba_rclk_pre_rdy => {
+                const RCLK_PRE_FIELDS: u32 = 0b11 << 20;
+                if self.cr & (1 << 24) == 0 {
+                    self.pll1cfgr = value & !(1 << 22);
+                } else {
+                    self.pll1cfgr = (self.pll1cfgr & !RCLK_PRE_FIELDS) | (value & RCLK_PRE_FIELDS);
+                }
+            }
+            // U5 PLL1 configuration is frozen while PLL1ON is set (RM0456 §11.8.9).
             0x28 if self.cr & (1 << 24) == 0 => self.pll1cfgr = value,
             0x34 if self.cr & (1 << 24) == 0 => self.pll1divr = value,
             0x38 if self.cr & (1 << 24) == 0 => self.pll1fracr = value,
@@ -2959,6 +2969,49 @@ mod tests {
             wba.read_u32(0x28).unwrap(),
             0x0010_1400,
             "stm32wba PRERDY reads 0 while PRE is set"
+        );
+    }
+
+    #[test]
+    fn wba_pll1_rclkpre_can_change_while_pll_is_enabled() {
+        let mut wba = Rcc::new_with_layout(RccRegisterLayout::Stm32Wba);
+        wba.write_u32(0x28, 0x0010_1400).unwrap(); // RCLKPRE=1
+        wba.write_u32(0x00, 1 << 24).unwrap(); // PLL1ON
+        assert_eq!(wba.read_u32(0x28).unwrap() & (1 << 22), 0);
+
+        // RM0493 keeps PLL1RCLKPRE and PLL1RCLKPRESTEP writable while PLL1
+        // runs. The ready flag is read-only and is synthesized from PRE.
+        wba.write_u32(0x28, 0x0030_1400).unwrap(); // RCLKPRE=1, PRESTEP=1
+        assert_eq!(
+            wba.read_u32(0x28).unwrap(),
+            0x0030_1400,
+            "PRESTEP is writable while PLL1 runs"
+        );
+        wba.write_u32(0x28, 0x0070_1400).unwrap(); // software also sets RO PRERDY
+        assert_eq!(
+            wba.read_u32(0x28).unwrap(),
+            0x0030_1400,
+            "software cannot set PRERDY while PRE remains set"
+        );
+        wba.write_u32(0x28, 0x0020_1400).unwrap(); // RCLKPRE=0, PRESTEP=1
+        assert_eq!(
+            wba.read_u32(0x28).unwrap(),
+            0x0060_1400,
+            "RCLKPRE clears live, PRESTEP remains set, and PRERDY follows"
+        );
+        wba.write_u32(0x28, 0x0040_1400).unwrap(); // clear PRESTEP
+        assert_eq!(
+            wba.read_u32(0x28).unwrap(),
+            0x0040_1400,
+            "PRESTEP can be cleared while PLL1 runs"
+        );
+
+        // Other PLL configuration remains frozen while PLL1ON is set.
+        wba.write_u32(0x28, 0x0040_1402).unwrap();
+        assert_eq!(
+            wba.read_u32(0x28).unwrap(),
+            0x0040_1400,
+            "live RCLK update must not alter the PLL source"
         );
     }
 

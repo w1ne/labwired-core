@@ -31,9 +31,8 @@
 //! - `MISR` / `SMISR` would read the OR of per-channel flag&enable; this
 //!   model returns 0 — firmware that polls per-channel CSR (the common
 //!   HAL path) is unaffected.
-//! - `SWREQ = 0` (peripheral-request mode, RM0481 §16.4.2) is not yet
-//!   modeled: enabling a channel without SWREQ does not start a
-//!   transfer and CSR stays IDLEF.
+//! - Peripheral-request mode (`SWREQ = 0`, RM0481 §16.4.2) starts an enabled
+//!   channel but waits for a routed peripheral request before moving data.
 //! - Linked-list mode is not modeled: CLBAR / CLLR are plain storage
 //!   the engine ignores.
 //! - Transfers move one source data unit per arbitration slot (one slot per
@@ -134,7 +133,9 @@ struct GpdmaChannel {
     ctr3: u32,
     cbr2: u32,
     cllr: u32,
-    /// Transfer in flight. Set on EN rising edge when CTR2.SWREQ = 1.
+    /// Channel active after EN rises. Software-request mode transfers
+    /// immediately; peripheral-request mode stays active while waiting for
+    /// its routed request.
     active: bool,
     /// BNDT value latched at EN, used for the half-transfer (HTF) mark.
     bndt_initial: u32,
@@ -353,13 +354,9 @@ impl Gpdma {
                         let old_en = ch.ccr & CCR_EN != 0;
                         ch.ccr = value;
                         let new_en = value & CCR_EN != 0;
-                        // EN rising edge with software request (mem-to-mem)
-                        // starts the transfer immediately. SWREQ = 0
-                        // (peripheral-request mode) is not yet modeled —
-                        // the channel stays idle (CSR = IDLEF).
-                        // Start on EN rise for software-request transfers
-                        // and for linked-list starts (CLLR set, the first
-                        // node delivers CTR2/CBR1 from memory).
+                        // EN rising edge starts the block. Software-request
+                        // transfers run immediately; peripheral-request
+                        // transfers remain active while waiting for a request.
                         if !old_en && new_en {
                             // A software-request channel starts its block at
                             // once; a peripheral-request channel becomes
@@ -974,9 +971,7 @@ mod tests {
     }
 
     #[test]
-    fn test_swreq_zero_peripheral_mode_does_not_start() {
-        // SWREQ = 0 (peripheral-request mode) is not yet modeled: the
-        // transfer must not start and CSR stays IDLEF.
+    fn test_swreq_zero_peripheral_mode_waits_for_request() {
         let mut bus = bus_with_gpdma();
         fill_src(&mut bus, 16);
         bus.write_u32(CH0_CTR1, CTR1_SINC | CTR1_DINC).unwrap();
@@ -989,7 +984,7 @@ mod tests {
         for _ in 0..4 {
             bus.tick_peripherals_fully_forced();
         }
-        assert_eq!(bus.read_u32(CH0_CSR).unwrap(), CSR_IDLEF);
+        assert_eq!(bus.read_u32(CH0_CSR).unwrap() & CSR_IDLEF, 0);
         assert_eq!(bus.read_u32(CH0_CBR1).unwrap() & BNDT_MASK, 16);
         assert_eq!(bus.read_u8(DST).unwrap(), 0);
     }

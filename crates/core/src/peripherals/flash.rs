@@ -147,8 +147,9 @@ pub struct Flash {
     // Internal: tracks unlock sequence on KEYR (write 0x45670123 then 0xCDEF89AB).
     key_state: KeyUnlockState,
     optkey_state: KeyUnlockState,
-    /// U5: a wrong NSKEYR value locks the interface until the next reset
-    /// (RM0456 §7.3.5); later key writes are ignored.
+    /// U5: a wrong NSKEYR value blocks later key writes for this peripheral
+    /// instance (RM0456 §7.3.5). Machine::reset preserves peripheral state, so
+    /// system-reset recovery from this lockout is not modeled yet.
     #[serde(default)]
     key_locked_out: bool,
 
@@ -970,7 +971,8 @@ impl Flash {
                             KeyUnlockState::Unlocked
                         }
                         _ => {
-                            // A wrong key locks the interface until reset.
+                            // A wrong key blocks later writes for this
+                            // peripheral instance; reset recovery is not modeled.
                             self.key_locked_out = true;
                             KeyUnlockState::Locked
                         }
@@ -1449,14 +1451,10 @@ mod u5_controller_tests {
     }
 
     #[test]
-    fn reset_locks_and_key_sequences_clear_them() {
+    fn clean_key_sequences_clear_their_locks() {
         let mut f = Flash::new_with_layout(FlashRegisterLayout::Stm32U5);
         assert_eq!(nscr(&f), u5::NSCR_RESET);
-        // Wrong first key does not unlock; second write restarts.
-        f.write_u32(u5::NSKEYR_OFF, 0xDEAD_BEEF).unwrap();
-        f.write_u32(u5::NSKEYR_OFF, 0xCDEF_89AB).unwrap();
-        assert_eq!(nscr(&f) & u5::NSCR_LOCK, u5::NSCR_LOCK);
-        // KEY1+KEY2 clears LOCK only.
+        // A clean KEY1+KEY2 sequence clears LOCK only.
         f.write_u32(u5::NSKEYR_OFF, 0x4567_0123).unwrap();
         f.write_u32(u5::NSKEYR_OFF, 0xCDEF_89AB).unwrap();
         assert_eq!(nscr(&f) & u5::NSCR_LOCK, 0);
@@ -1636,11 +1634,15 @@ mod u5_wrong_key_tests {
     use super::{Flash, FlashRegisterLayout};
     use crate::Peripheral;
     #[test]
-    fn wrong_key_locks_until_reset() {
+    fn wrong_key_blocks_later_key_writes() {
         let mut f = Flash::new_with_layout(FlashRegisterLayout::Stm32U5);
         f.write_u32(0x08, 0x1234_5678).unwrap();
         f.write_u32(0x08, 0x4567_0123).unwrap();
         f.write_u32(0x08, 0xCDEF_89AB).unwrap();
-        assert_ne!(f.read_u32(0x28).unwrap() & 0x8000_0000, 0);
+        assert_ne!(
+            f.read_u32(0x28).unwrap() & 0x8000_0000,
+            0,
+            "later key writes are ignored on this peripheral instance"
+        );
     }
 }

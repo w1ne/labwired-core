@@ -454,7 +454,7 @@ boards:
     # files. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: 759c126a423d898569ea382d61e01d0505db73136d80c3705724cff511bd7df4
+    drift_ack_digest: d598c88e444bae9f16d7ead310c002271e7d70b3c363b30829bd49c7d52ae297
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -668,6 +668,10 @@ boards:
     # word count explicit, and expresses equivalent SPI frame-byte ceiling
     # arithmetic. Behavior is unchanged; this is an ACK, NOT A CAPTURE. The
     # previously owed live re-capture remains pending.
+    # 2026-10-25 CI repair: Thumb-2 PLD/PLDW encodings with Rt=PC are
+    # decoded as no-op hints instead of loads into PC. Decoder and firmware
+    # regressions cover this shared Cortex-M behavior; ACK, NOT A SILICON
+    # CAPTURE, and live re-capture remains pending.
     drift_ack: 2026-10-25
     # 2026-10-25 (perf/cortex-m-decode-reference): the Cortex-M decode cache
     # now checks the PC tag through a borrow and copies only on a hit. The
@@ -978,7 +982,7 @@ boards:
     # files. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: 759c126a423d898569ea382d61e01d0505db73136d80c3705724cff511bd7df4
+    drift_ack_digest: d598c88e444bae9f16d7ead310c002271e7d70b3c363b30829bd49c7d52ae297
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -1192,6 +1196,10 @@ boards:
     # word count explicit, and expresses equivalent SPI frame-byte ceiling
     # arithmetic. Behavior is unchanged; this is an ACK, NOT A CAPTURE. The
     # previously owed live re-capture remains pending.
+    # 2026-10-25 CI repair: Thumb-2 PLD/PLDW encodings with Rt=PC are
+    # decoded as no-op hints instead of loads into PC. Decoder and firmware
+    # regressions cover this shared Cortex-M behavior; ACK, NOT A SILICON
+    # CAPTURE, and live re-capture remains pending.
     drift_ack: 2026-10-25
     # 2026-10-25 (perf/cortex-m-decode-reference): the Cortex-M decode cache
     # now checks the PC tag through a borrow and copies only on a hit. The
@@ -1648,7 +1656,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: 9ee198511198438e4cc269d57ef65ed0c7419978580a32b94590883db612a297
+    drift_ack_digest: e3f8909a7a8f9db8d45e913135879bc1f2c8dc4a3d2c0178ba85feb46be7e595
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -2205,6 +2213,14 @@ boards:
     # word count explicit, and expresses equivalent SPI frame-byte ceiling
     # arithmetic. Behavior is unchanged; this is an ACK, NOT A CAPTURE. The
     # previously owed live re-capture remains pending.
+    # 2026-10-25 CI repair: Thumb-2 PLD/PLDW encodings with Rt=PC are
+    # decoded as no-op hints instead of loads into PC. Decoder and firmware
+    # regressions cover this shared Cortex-M behavior; ACK, NOT A SILICON
+    # CAPTURE, and live re-capture remains pending.
+    # 2026-10-25 CI repair: H5/U5 SPI SR readback includes the modeled
+    # CTSIZE field; the fix is H5-profile-only, while L4/F1 paths are
+    # unchanged. Unit/firmware tests cover simulation behavior; ACK, NOT A
+    # SILICON CAPTURE, and live re-capture remains pending.
     drift_ack: 2026-10-25
     # 2026-10-25 (perf/cortex-m-decode-reference): the Cortex-M decode cache
     # now checks the PC tag through a borrow and copies only on a hit. The
@@ -3605,7 +3621,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: 2c7f34bfe4554b029efe7b72383748bc86ef90ab30b7ced8d66c05e83ec48be4
+    drift_ack_digest: 68b750d97fbdc454fe25be70b1388d8e92e6bb59ae47849e87418c93861e5b45
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4150,6 +4166,14 @@ boards:
     # word count explicit, and expresses equivalent SPI frame-byte ceiling
     # arithmetic. Behavior is unchanged; this is an ACK, NOT A CAPTURE. The
     # previously owed live re-capture remains pending.
+    # 2026-10-25 CI repair: Thumb-2 PLD/PLDW encodings with Rt=PC are
+    # decoded as no-op hints instead of loads into PC. Decoder and firmware
+    # regressions cover this shared Cortex-M behavior; ACK, NOT A SILICON
+    # CAPTURE, and live re-capture remains pending.
+    # 2026-10-25 CI repair: H5/U5 SPI SR readback includes the modeled
+    # CTSIZE field; the fix is H5-profile-only, while L4/F1 paths are
+    # unchanged. Unit/firmware tests cover simulation behavior; ACK, NOT A
+    # SILICON CAPTURE, and live re-capture remains pending.
     drift_ack: 2026-10-25
   - id: nucleo-l073rz
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
@@ -4543,7 +4567,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: b5adafbaf3f7f1e5e085acae4d585b0be1f35f763028e824c14cd0eff98d3630
+    drift_ack_digest: 0d1e83619337182162ec027cfa747f06325eaf48e5aef68c209945b9c526514a
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5021,6 +5045,14 @@ boards:
     # word count explicit, and expresses equivalent SPI frame-byte ceiling
     # arithmetic. Behavior is unchanged; this is an ACK, NOT A CAPTURE. The
     # previously owed live re-capture remains pending.
+    # 2026-10-25 CI repair: Thumb-2 PLD/PLDW encodings with Rt=PC are
+    # decoded as no-op hints instead of loads into PC. Decoder and firmware
+    # regressions cover this shared Cortex-M behavior; ACK, NOT A SILICON
+    # CAPTURE, and live re-capture remains pending.
+    # 2026-10-25 CI repair: H5/U5 SPI SR readback includes the modeled
+    # CTSIZE field; the fix is H5-profile-only, while L4/F1 paths are
+    # unchanged. Unit/firmware tests cover simulation behavior; ACK, NOT A
+    # SILICON CAPTURE, and live re-capture remains pending.
     drift_ack: 2026-10-25
     # 2026-10-25 (perf/cortex-m-decode-reference): the Cortex-M decode cache
     # now checks the PC tag through a borrow and copies only on a hit. The
@@ -5472,7 +5504,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: cd76b0463b9a774d9dfbe174c0ee915a4a365afce2e0f368265eabe72465dab6
+    drift_ack_digest: 6e1b8f3e4778ee26f480d3f0b813da3b443337cabb95048291dd1450b95b2224
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6020,6 +6052,14 @@ boards:
     # word count explicit, and expresses equivalent SPI frame-byte ceiling
     # arithmetic. Behavior is unchanged; this is an ACK, NOT A CAPTURE. The
     # previously owed live re-capture remains pending.
+    # 2026-10-25 CI repair: Thumb-2 PLD/PLDW encodings with Rt=PC are
+    # decoded as no-op hints instead of loads into PC. Decoder and firmware
+    # regressions cover this shared Cortex-M behavior; ACK, NOT A SILICON
+    # CAPTURE, and live re-capture remains pending.
+    # 2026-10-25 CI repair: H5/U5 SPI SR readback includes the modeled
+    # CTSIZE field; the fix is H5-profile-only, while L4/F1 paths are
+    # unchanged. Unit/firmware tests cover simulation behavior; ACK, NOT A
+    # SILICON CAPTURE, and live re-capture remains pending.
     drift_ack: 2026-10-25
     # 2026-10-25 (perf/cortex-m-decode-reference): the Cortex-M decode cache
     # now checks the PC tag through a borrow and copies only on a hit. The
@@ -6434,7 +6474,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: c2707beb3a0be0e830237660f3929b7c1f081c5045fb91a6ad1c02d77b38e3ee
+    drift_ack_digest: 52ad838114060d5e9bb070bc75b4a29044dd81df9e6e8564ec87ab51a207ac00
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6921,6 +6961,14 @@ boards:
     # word count explicit, and expresses equivalent SPI frame-byte ceiling
     # arithmetic. Behavior is unchanged; this is an ACK, NOT A CAPTURE. The
     # previously owed live re-capture remains pending.
+    # 2026-10-25 CI repair: Thumb-2 PLD/PLDW encodings with Rt=PC are
+    # decoded as no-op hints instead of loads into PC. Decoder and firmware
+    # regressions cover this shared Cortex-M behavior; ACK, NOT A SILICON
+    # CAPTURE, and live re-capture remains pending.
+    # 2026-10-25 CI repair: H5/U5 SPI SR readback includes the modeled
+    # CTSIZE field; the fix is H5-profile-only, while L4/F1 paths are
+    # unchanged. Unit/firmware tests cover simulation behavior; ACK, NOT A
+    # SILICON CAPTURE, and live re-capture remains pending.
     drift_ack: 2026-10-25
     # 2026-10-25 (perf/cortex-m-decode-reference): the Cortex-M decode cache
     # now checks the PC tag through a borrow and copies only on a hit. The
