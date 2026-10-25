@@ -188,6 +188,12 @@ jobs:
           - id: nucleo-u545re
             script: examples/nucleo-u545re/io-smoke.yaml
             system: examples/nucleo-u545re/system.yaml
+          # STM32U575I-EV: committed bare-metal ELF, LED5 PB7 / LED6 PH7
+          # ODR read-back plus the USART1 COM1 banner. Shares the U575 chip
+          # descriptor with the NUCLEO-U575ZI-Q. No cross-toolchain needed.
+          - id: stm32u575i-ev
+            script: examples/stm32u575i-ev/io-smoke.yaml
+            system: examples/stm32u575i-ev/system.yaml
           - id: h735-telematics-lab
             target: thumbv7em-none-eabi
             crate: h735-telematics-lab

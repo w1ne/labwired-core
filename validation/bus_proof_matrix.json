@@ -668,7 +668,7 @@
         "test": "test_stm32u575_zephyr_survival",
         "signal": "the committed stock Zephyr 3.7.2 hello_world ELF (tests/fixtures/stm32u575-zephyr-hello.elf, Zephyr commit c66235fb7346, built for nucleo_u575zi_q) is booted in-sim and assert_uart_contains matches 'Hello World! nucleo_u575zi_q' on a real bus.attach_uart_tx_sink capture. Fixture absence is a hard assert!, not a skip.",
         "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival",
-        "note": "two further independent UART proofs land in the same file: test_stm32u575_arduino_serial_survival (PlatformIO L0 sketch, 'LW_L0_OK') and the Arduino/Zephyr matrix L0 cells. Evidence captured 2026-09-18."
+        "note": "two further independent UART proofs land in the same file: test_stm32u575_arduino_serial_survival (PlatformIO L0 sketch, 'LW_L0_OK') and the Arduino/Zephyr matrix L0 cells. Evidence captured 2026-09-18. The STM32U575I-EV board package adds a third: test_stm32u575i_ev_smoke_survival boots tests/fixtures/stm32u575i-ev-smoke.elf on the shared stm32u575 chip and asserts 'STM32U575I-EV SMOKE\\n' on USART1 (2026-10-25)."
       },
       "spi": {
         "state": "proven",

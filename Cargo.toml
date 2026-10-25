@@ -39,6 +39,7 @@ members = [
     "crates/firmware-h563-fullchip-demo",
     "crates/firmware-h563-io-demo",
     "crates/firmware-stm32u575-demo",
+    "crates/firmware-stm32u575i-ev-smoke",
     "crates/firmware-hil-showcase",
     "crates/firmware-l073-demo",
     "crates/firmware-stm32g0-demo",
@@ -281,6 +282,10 @@ codegen-units = 1
 opt-level = "s"
 
 [profile.release.package.firmware-stm32u575-demo]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-stm32u575i-ev-smoke]
 codegen-units = 1
 opt-level = "s"
 

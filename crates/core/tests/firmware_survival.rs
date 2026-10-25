@@ -1441,6 +1441,22 @@ DONE\r\n",
         expected_uart_output: b"OK\n",
     },
     SurvivalCase {
+        // STM32U575I-EV (MB1550, STM32U575AII6Q) bare-metal smoke: RCC
+        // AHB2ENR1 GPIOB/GPIOH gates, APB2ENR USART1 gate, LED5 PB7 and LED6
+        // PH7 driven independently with ODR read-back, USART1 COM1 banner.
+        // The chip descriptor is shared with the NUCLEO-U575ZI-Q; this case is
+        // the EV board package's PR-run behavior gate. SIM-DERIVED.
+        name: "stm32u575i_ev_smoke",
+        core: "cortex-m33",
+        family: CpuFamily::CortexM,
+        hal: Hal::Bare,
+        chip: "stm32u575",
+        system: "stm32u575i-ev",
+        fixture: "stm32u575i-ev-smoke.elf",
+        valid_pc_ranges: &[(0x0800_0000, 0x081F_FFFF), (0x2000_0000, 0x200B_FFFF)],
+        expected_uart_output: b"STM32U575I-EV SMOKE\n",
+    },
+    SurvivalCase {
         // SAMD21G18A Nano 33 IoT bare-metal UART smoke: PM APBCMASK + GCLK
         // SERCOM5_CORE, then three DATA writes of "OK\n" on Serial1.
         name: "atsamd21_nano33_smoke",
@@ -2686,6 +2702,8 @@ survival_gate!(
 );
 
 survival_gate!(test_stm32u545_blinky_survival, "stm32u545_blinky");
+
+survival_gate!(test_stm32u575i_ev_smoke_survival, "stm32u575i_ev_smoke");
 
 survival_gate!(
     test_stm32u575_arduino_serial_survival,

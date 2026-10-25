@@ -52,6 +52,11 @@ jobs:
             target: thumbv8m.main-none-eabi
             script: examples/nucleo-u575zi/io-smoke.yaml
             system: configs/systems/nucleo-u575zi.yaml
+          - id: stm32u575i-ev
+            crate: firmware-stm32u575i-ev-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/stm32u575i-ev/source-smoke.yaml
+            system: configs/systems/stm32u575i-ev.yaml
           - id: rp2040-pio
             crate: firmware-rp2040-pio-onboarding
             target: thumbv6m-none-eabi

@@ -8134,6 +8134,51 @@ boards:
       # capture claim.
       - crates/core/src/peripherals/exti.rs
 
+  - id: stm32u575i-ev
+    # 2026-10-25: STM32U575I-EV evaluation board (MB1550, STM32U575AII6Q). It
+    # shares configs/chips/stm32u575.yaml with the NUCLEO-U575ZI-Q (same U5
+    # register map). Board facts from UM2854 Rev 2 + ST stm32u575i-ev-bsp
+    # v1.4.1 (83d8fb77...): LED5 PB7 and LED6 PH7 active high, USER button
+    # PC13, COM1 = USART1 PA9/PA10 AF7. LED7/LED8 are on the MFX expander and
+    # are not modelled. SIM-DERIVED, no bench part. See
+    # docs/boards/stm32u575i-ev.md and examples/stm32u575i-ev/VALIDATION.md.
+    doc: docs/boards/stm32u575i-ev.md
+    chip: configs/chips/stm32u575.yaml
+    tier: sim-validated
+    note: "STM32U575I-EV (MB1550, STM32U575AII6Q), second first-class U5 board. Cortex-M33, 2 MiB flash, 768 KiB SRAM + 16 KiB SRAM4 (the U575AII6Q die shares the stm32u575 chip descriptor with the NUCLEO-U575ZI-Q). Board facts from UM2854 Rev 2 and ST STM32CubeU5 v1.9.0 stm32u575i-ev-bsp v1.4.1: LED5 PB7 and LED6 PH7 active high (BSP_LED_On drives high), USER button PC13 active high, COM1 = USART1 PA9/PA10 AF7 115200 8N1. LED7/LED8 sit behind the MFX I/O expander and are not modelled. Validated by: the committed bare-metal crates/firmware-stm32u575i-ev-smoke (PR-gated firmware_survival + io-smoke, LED ODR read-back), chip_conformance on the shared descriptor, and the 60North renode-stm32u5 reference (FDCAN loopback on LED5/LED6) via the stm32u575_60north target. NO bench part and no silicon capture: every value is UM2854/BSP/RM0456/DS13736-derived. Renode-derived reference only, not silicon."
+    offline_tests:
+      - "firmware_survival test_stm32u575i_ev_smoke_survival"
+      - "io-smoke examples/stm32u575i-ev/io-smoke.yaml (LED5 PB7 / LED6 PH7 ODR read-back)"
+      - "chip_conformance (shared stm32u575 descriptor, estate OK)"
+      - "60North stm32u575_60north (Renode-derived reference; model branch)"
+    models:
+      - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/decoder/arm.rs
+      - crates/core/src/peripherals/rcc.rs
+      - crates/core/src/peripherals/pwr.rs
+      - crates/core/src/peripherals/flash.rs
+      - crates/core/src/peripherals/uart.rs
+      - crates/core/src/peripherals/gpio.rs
+      - crates/core/src/peripherals/i2c.rs
+      - crates/core/src/peripherals/spi.rs
+      - crates/core/src/peripherals/fdcan.rs
+      - crates/core/src/peripherals/timer.rs
+      - crates/core/src/peripherals/adc.rs
+      - crates/core/src/peripherals/rtc_v3.rs
+      - crates/core/src/peripherals/iwdg.rs
+      - crates/core/src/peripherals/gpdma.rs
+      - crates/core/src/peripherals/crc.rs
+      - crates/core/src/peripherals/rng.rs
+      - crates/core/src/peripherals/dbgmcu.rs
+      - crates/core/src/peripherals/crs.rs
+      - crates/core/src/peripherals/stub.rs
+      - crates/core/src/peripherals/systick.rs
+      - crates/core/src/peripherals/exti.rs
+      - configs/chips/stm32u575.yaml
+      - configs/peripherals/stm32u575
+      - configs/systems/stm32u575i-ev.yaml
+      - crates/firmware-stm32u575i-ev-smoke
+
   - id: nucleo-u545re
     doc: docs/boards/nucleo-u545re.md
     chip: configs/chips/stm32u545.yaml

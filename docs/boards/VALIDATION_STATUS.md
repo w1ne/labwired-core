@@ -29,6 +29,7 @@ The models column is a content digest over everything that board's `models` list
 | `nrf5340` | 🔵 sim-validated (deep model, no HW diff) | — | `12655767f32dc9f2` | no silicon capture |
 | `stm32h735` | 🔵 sim-validated (deep model, no HW diff) | — | `d9092703680991be` | no silicon capture |
 | `stm32u575` | 🔵 sim-validated (deep model, no HW diff) | — | `79a078c07e3b0b0c` | no silicon capture |
+| `stm32u575i-ev` | 🔵 sim-validated (deep model, no HW diff) | — | `b576e69aa886a0b0` | no silicon capture |
 | `nucleo-u545re` | 🔵 sim-validated (deep model, no HW diff) | — | `3d23ef61b6b3d62b` | no silicon capture |
 | `stm32f411ceu6` | 🔵 sim-validated (deep model, no HW diff) | — | `ab48cd336788c38b` | no silicon capture |
 | `brd2709a` | 🟡 smoke-manual | — | `a50254359c07aa6d` | no silicon capture |
@@ -222,6 +223,17 @@ The models column is a content digest over everything that board's `models` list
   - offline (CI): svd_conformance / register_coverage (SVD pinning)
   - offline (CI): firmware_survival test_stm32u575_zephyr_survival (stock Zephyr hello)
   - offline (CI): arduino matrix L0-L8 (validation/arduino-matrix)
+- Drift status: **no silicon capture**
+
+## `stm32u575i-ev` — 🔵 sim-validated (deep model, no HW diff)
+
+- Doc: [`docs/boards/stm32u575i-ev.md`](stm32u575i-ev.md)  ·  Chip: `configs/chips/stm32u575.yaml`
+- Note: STM32U575I-EV (MB1550, STM32U575AII6Q), second first-class U5 board. Cortex-M33, 2 MiB flash, 768 KiB SRAM + 16 KiB SRAM4 (the U575AII6Q die shares the stm32u575 chip descriptor with the NUCLEO-U575ZI-Q). Board facts from UM2854 Rev 2 and ST STM32CubeU5 v1.9.0 stm32u575i-ev-bsp v1.4.1: LED5 PB7 and LED6 PH7 active high (BSP_LED_On drives high), USER button PC13 active high, COM1 = USART1 PA9/PA10 AF7 115200 8N1. LED7/LED8 sit behind the MFX I/O expander and are not modelled. Validated by: the committed bare-metal crates/firmware-stm32u575i-ev-smoke (PR-gated firmware_survival + io-smoke, LED ODR read-back), chip_conformance on the shared descriptor, and the 60North renode-stm32u5 reference (FDCAN loopback on LED5/LED6) via the stm32u575_60north target. NO bench part and no silicon capture: every value is UM2854/BSP/RM0456/DS13736-derived. Renode-derived reference only, not silicon.
+- Silicon: none — not validated against real hardware.
+  - offline (CI): firmware_survival test_stm32u575i_ev_smoke_survival
+  - offline (CI): io-smoke examples/stm32u575i-ev/io-smoke.yaml (LED5 PB7 / LED6 PH7 ODR read-back)
+  - offline (CI): chip_conformance (shared stm32u575 descriptor, estate OK)
+  - offline (CI): 60North stm32u575_60north (Renode-derived reference; model branch)
 - Drift status: **no silicon capture**
 
 ## `nucleo-u545re` — 🔵 sim-validated (deep model, no HW diff)

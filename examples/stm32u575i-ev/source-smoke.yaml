@@ -1,0 +1,22 @@
+# LabWired - STM32U575I-EV source-built IO smoke test
+#
+# Same assertions as io-smoke.yaml, but run against the ELF built from
+# crates/firmware-stm32u575i-ev-smoke by the onboarding workflow:
+#   cargo build -p firmware-stm32u575i-ev-smoke --release \
+#     --target thumbv8m.main-none-eabi
+# The committed-fixture variant is io-smoke.yaml (used by the coverage matrix).
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-stm32u575i-ev-smoke"
+  system: "./system.yaml"
+limits:
+  max_steps: 4000000
+assertions:
+  - uart_contains: "STM32U575I-EV SMOKE"
+  - uart_ordered:
+      - "leds=off odr_b=00000000 odr_h=00000000"
+      - "led5=on odr_b=00000080 odr_h=00000000"
+      - "led6=on odr_b=00000080 odr_h=00000080"
+      - "led5=off odr_b=00000000 odr_h=00000080"
+      - "led6=off odr_b=00000000 odr_h=00000000"
+  - expected_stop_reason: max_steps

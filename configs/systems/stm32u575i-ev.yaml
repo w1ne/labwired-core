@@ -1,0 +1,36 @@
+# LabWired - STM32U575I-EV board system (STM32U575AII6Q, MB1550).
+#
+# Pin and polarity sources:
+# - UM2854 Rev 2 (STM32U575I-EV evaluation board with STM32U575AI MCU)
+#   https://www.st.com/resource/en/user_manual/dm00779680.pdf
+# - ST STM32CubeU5 v1.9.0 evaluation BSP `stm32u575i-ev-bsp` v1.4.1,
+#   `stm32u575i_eval.h`: LED5 PB7 / LED6 PH7, driven high by BSP_LED_On;
+#   USER button PC13; COM1 = USART1 PA9/PA10 (AF7), 115200 8N1.
+#   LED7 and LED8 are driven through the MFX I/O expander, not directly by a
+#   GPIO, so they are not board_io here.
+#
+# The MCU is the 2 MiB-flash STM32U575AII6Q. It shares the STM32U575 chip
+# descriptor with the NUCLEO-U575ZI-Q (same die family, same U5 register map).
+name: "stm32u575i-ev"
+chip: "../chips/stm32u575.yaml"
+debug_uart: "usart1"
+external_devices: []
+board_io:
+  - id: "led_green_led5"
+    kind: "led"
+    peripheral: "gpiob"
+    pin: 7
+    signal: "output"
+    active_high: true
+  - id: "led_red_led6"
+    kind: "led"
+    peripheral: "gpioh"
+    pin: 7
+    signal: "output"
+    active_high: true
+  - id: "button_user_pc13"
+    kind: "button"
+    peripheral: "gpioc"
+    pin: 13
+    signal: "input"
+    active_high: true

@@ -1,0 +1,22 @@
+# LabWired - STM32U575I-EV IO smoke test
+#
+# Committed bare-metal ELF (source: crates/firmware-stm32u575i-ev-smoke,
+# `cargo build -p firmware-stm32u575i-ev-smoke --release
+#  --target thumbv8m.main-none-eabi`). Prints a banner on USART1 (COM1,
+# PA9/PA10) and drives LED5 (PB7) / LED6 (PH7) independently, reporting the
+# GPIODB/GPIOH ODR values READ BACK after each write.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/stm32u575i-ev-smoke.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 4000000
+assertions:
+  - uart_contains: "STM32U575I-EV SMOKE"
+  - uart_ordered:
+      - "leds=off odr_b=00000000 odr_h=00000000"
+      - "led5=on odr_b=00000080 odr_h=00000000"
+      - "led6=on odr_b=00000080 odr_h=00000080"
+      - "led5=off odr_b=00000000 odr_h=00000080"
+      - "led6=off odr_b=00000000 odr_h=00000000"
+  - expected_stop_reason: max_steps
