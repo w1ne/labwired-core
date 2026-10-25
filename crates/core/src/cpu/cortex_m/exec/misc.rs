@@ -144,7 +144,11 @@ impl CortexM {
             let shift = ((((h2 >> 12) & 0x7) << 2) | ((h2 >> 6) & 0x3)) as u32;
             let asr = (h1 & 0x20) != 0;
             let raw = self.get_register(rn) as i32;
-            let shifted = if asr { raw >> shift } else { raw.wrapping_shl(shift) };
+            let shifted = if asr {
+                raw >> shift
+            } else {
+                raw.wrapping_shl(shift)
+            };
             let bits = sat_imm + 1;
             let (min, max) = if bits >= 32 {
                 (i32::MIN, i32::MAX)
