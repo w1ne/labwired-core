@@ -160,6 +160,8 @@ pub const MODEL_TYPES: &[&str] = &[
     // that enables cleanly and never emits a byte.
     "sam_sercom_usart",
     "sam_sercom_spi",
+    "samd51_nvmctrl_manual_storage",
+    "samd51_cmcc_control",
     "sam_dmac_byte",
     "sam_dmac_sercom4_tx_byte",
     // Reserve the full name: never fuzzy-coerce an unqualified SAM DMAC to STM32.
@@ -329,6 +331,8 @@ pub const MODEL_TYPES: &[&str] = &[
     // type or the fuzzy `contains("timer")` fallback would coerce it onto the
     // STM32 timer map.
     "litex_timer",
+    // LiteX Control-and-Status (LED/switch/button CSR block).
+    "litex_controlandstatus",
     // Microchip Mi-V reference-design peripherals. MUST be listed: without
     // membership the fuzzy fallbacks would coerce `miv_coregpio` onto the
     // STM32 GPIO map (it was doing exactly that for the staged descriptors)
@@ -603,6 +607,23 @@ pub fn try_build(
         }
         "sam_sercom_usart" => {
             Box::new(crate::peripherals::sam::sercom_usart::SamSercomUsart::new())
+        }
+        "samd51_nvmctrl_manual_storage" | "samd51_cmcc_control" => {
+            let expected = if canonical_type == "samd51_nvmctrl_manual_storage" {
+                0x4100_4000
+            } else {
+                0x4100_6000
+            };
+            if p_cfg.base_address != expected || p_cfg.irq.is_some() || !p_cfg.config.is_empty() {
+                anyhow::bail!(
+                    "SAMD51 storage slice requires its exact base, no IRQ and no config overrides"
+                );
+            }
+            if canonical_type == "samd51_nvmctrl_manual_storage" {
+                Box::new(crate::peripherals::sam::nvmctrl::Samd51Nvmctrl::new())
+            } else {
+                Box::new(crate::peripherals::sam::cmcc::Samd51Cmcc::new())
+            }
         }
         "sam_dmac" => {
             anyhow::bail!("full SAM DMAC is not admitted; sam_dmac_byte is an opt-in software-byte foundation only");
@@ -1108,6 +1129,17 @@ pub fn try_build(
         // LiteX countdown timer (`litex/soc/cores/timer.py`): 32-bit CSRs
         // load/reload/en/update_value/value plus the zero-event manager.
         "litex_timer" => Box::new(crate::peripherals::litex_timer::LitexTimer::new()),
+        "litex_controlandstatus" => {
+            let active_low = p_cfg
+                .config
+                .get("buttons_active_low")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            Box::new(
+                crate::peripherals::litex_control_status::LitexControlStatus::new()
+                    .with_buttons_active_low(active_low),
+            )
+        }
         // Microchip Mi-V reference-design peripherals.
         "miv_coregpio" => Box::new(crate::peripherals::miv::MivCoreGpio::new()),
         "miv_coretimer" => Box::new(crate::peripherals::miv::MivCoreTimer::new()),

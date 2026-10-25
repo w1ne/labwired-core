@@ -76,25 +76,15 @@ def run_once(cli: Path, board: str, firmware: Path, steps: int) -> tuple[float, 
     return elapsed, float(proof.group(3))
 
 
-def declared_only(chip: dict) -> bool:
-    """A descriptor with no platform behind it: no peripherals, no flash, and
-    no perf fixture for its memory map.
+def fixture_could_run(chip: dict) -> bool:
+    """Whether a matching perf fixture exists for this chip's memory map.
 
-    This is the one kind of chip RTx may leave unmeasured. A waiver in
-    ``board_perf.WAIVED`` wins over a matching fixture, so a waiver on its own
-    could drop a chip this gate is able to run; that stays a refusal. A
-    declaration with nothing to execute has no throughput to prove.
+    A waiver is refused when the gate *could* measure the chip: otherwise the
+    waiver would hide runnable coverage. A chip with a platform but no fixture
+    (the explicit WAIVED entries for part-complete boards) is reported, not
+    refused — otherwise one such waiver blocks every measured board in the run.
     """
-    flash = chip.get("flash") or {}
-    try:
-        flash_size = int(flash.get("size", 0))
-    except (TypeError, ValueError):
-        return False
-    return (
-        not chip.get("peripherals")
-        and flash_size == 0
-        and bp.fixture_for(chip) is None
-    )
+    return bp.fixture_for(chip) is not None
 
 
 def main() -> int:
@@ -122,7 +112,7 @@ def main() -> int:
     except bp.CoverageError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
-    unprovable = sorted(b for b in waived if not declared_only(chips[b]))
+    unprovable = sorted(b for b in waived if fixture_could_run(chips[b]))
     if unprovable:
         print(
             "error: RTx cannot prove all chips while waivers remain on runnable "
@@ -131,7 +121,7 @@ def main() -> int:
         )
         return 1
     for board, reason in sorted(waived.items()):
-        print(f"not measured (declared only, no platform to run): {board}: {reason}")
+        print(f"not measured (no perf fixture): {board}: {reason}")
 
     selected = set(args.boards.split(",")) if args.boards else set(covered)
     unknown = selected - set(covered)
@@ -202,7 +192,7 @@ def main() -> int:
             file=sys.stderr,
         )
         return 1
-    unmeasured = f"; {len(waived)} declared-only chip(s) not measured" if waived else ""
+    unmeasured = f"; {len(waived)} waived chip(s) not measured" if waived else ""
     print(f"\nall {len(rows)} chips meet or exceed {args.min_rtx:.2f}x real time{unmeasured}")
     return 0
 

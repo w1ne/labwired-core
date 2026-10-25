@@ -1,0 +1,46 @@
+# LabWired - STM32F072B-DISCO system manifest
+#
+# The STM32F072B-DISCO board (ST UM1694 / Zephyr `stm32f072b_disco`):
+#   PC6 — LD3 (red),    PC8 — LD4 (yellow),  PC9 — LD5 (green),  PC7 — LD6 (blue)
+#   PA0 — user button B1, active low (external pull-up on the board)
+#   USART1 (PA9/PA10, AF1) — the ST-LINK/V2-1 virtual COM port
+#
+# The board's console is USART1; the four user LEDs and the button are the
+# modelled board I/O. The 4-direction joystick and the touch sensor are not
+# modelled (the TSC block is a declared stub in the chip).
+
+name: "stm32f072b-disco"
+chip: "../../configs/chips/stm32f072.yaml"
+debug_uart: "usart1"
+external_devices: []
+board_io:
+  - id: "led_ld3"
+    kind: "led"
+    peripheral: "gpioc"
+    pin: 6
+    signal: "output"
+    active_high: true
+  - id: "led_ld4"
+    kind: "led"
+    peripheral: "gpioc"
+    pin: 8
+    signal: "output"
+    active_high: true
+  - id: "led_ld5"
+    kind: "led"
+    peripheral: "gpioc"
+    pin: 9
+    signal: "output"
+    active_high: true
+  - id: "led_ld6"
+    kind: "led"
+    peripheral: "gpioc"
+    pin: 7
+    signal: "output"
+    active_high: true
+  - id: "button_b1"
+    kind: "button"
+    peripheral: "gpioa"
+    pin: 0
+    signal: "input"
+    active_high: false

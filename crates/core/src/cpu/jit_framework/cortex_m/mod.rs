@@ -41,6 +41,8 @@ pub fn differential_cycle_ignore_indices() -> Vec<usize> {
 }
 
 pub(crate) const MAX_BLOCK_INSTRS: u32 = 1024;
+/// Per-iteration cap for a counted loop trace (body + backedge).
+pub(crate) const MAX_TRACE_INSTRS: u32 = 512;
 
 /// How a decoded Thumb instruction affects the block walk.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -325,6 +327,7 @@ impl CortexMFrontend {
                 entry_pc: pc,
                 end_pc: blk.end_pc,
                 instr_count: blk.instr_count,
+                iter_instr_count: None,
                 code: blk.code,
                 exits: blk.exits,
             };
@@ -338,6 +341,7 @@ impl CortexMFrontend {
             entry_pc: walk.entry_pc,
             end_pc: walk.end_pc,
             instr_count: walk.instr_count,
+            iter_instr_count: None,
             code: Vec::new(),
             exits: vec![ExitEdge {
                 wire_code: 0,
@@ -345,6 +349,34 @@ impl CortexMFrontend {
             }],
         };
         Ok((plan, None))
+    }
+
+    /// [`Self::translate_block_thumb`], but a qualifying counted ALU loop
+    /// compiles to a loop TRACE first; everything else falls through to the
+    /// basic-block path unchanged. Only called when
+    /// `SimulationConfig::cortex_m_jit_loop_traces` is set.
+    pub fn translate_block_thumb_traced(
+        &self,
+        pc: Pc,
+        code: &CodeView<'_>,
+    ) -> Result<(BlockPlan, Option<MemBinding>), FrontendRefusal> {
+        // Try the trace first. `emit_loop_trace` returns `None` for anything
+        // it cannot decode at `pc`, so an out-of-range pc falls through to the
+        // block path and keeps its exact `PcOutOfRange` refusal.
+        if let Some(blk) = emit::emit_loop_trace(pc, code) {
+            return Ok((
+                BlockPlan {
+                    entry_pc: pc,
+                    end_pc: blk.end_pc,
+                    instr_count: blk.instr_count,
+                    iter_instr_count: blk.iter_instr_count,
+                    code: blk.code,
+                    exits: blk.exits,
+                },
+                blk.binding,
+            ));
+        }
+        self.translate_block_thumb(pc, code)
     }
 }
 
@@ -478,6 +510,191 @@ mod tests {
     #[test]
     fn isa_name_is_thumb2() {
         assert_eq!(CortexMFrontend::new().isa_name(), "thumb2");
+    }
+
+    #[test]
+    fn translate_block_thumb_traced_prefers_loops_and_matches_plain_path() {
+        // Counted ALU loop -> trace plan.
+        let mut prog = Vec::new();
+        h(&mut prog, 0x24FA); // movs r4, #250
+        h(&mut prog, 0x2000); // movs r0, #0
+        let head = BASE + 4;
+        h(&mut prog, 0xBF00); // nop @ head
+        h(&mut prog, 0x3001); // adds r0, #1
+        h(&mut prog, 0x3C01); // subs r4, #1
+        h(&mut prog, 0xD1FB); // bne head
+        let view = CodeView::new(BASE, &prog);
+        let frontend = CortexMFrontend::new();
+        let (plan, binding) = frontend.translate_block_thumb_traced(head, &view).unwrap();
+        assert_eq!(plan.iter_instr_count, Some(4));
+        assert!(binding.is_none());
+
+        // Non-loop block -> identical to the untraced basic-block path.
+        let mut prog = Vec::new();
+        h(&mut prog, 0x2001); // movs r0, #1
+        h(&mut prog, 0xE7FE); // b .
+        let view = CodeView::new(BASE, &prog);
+        let (traced, traced_binding) = frontend.translate_block_thumb_traced(BASE, &view).unwrap();
+        let (plain, plain_binding) = frontend.translate_block_thumb(BASE, &view).unwrap();
+        assert_eq!(traced.iter_instr_count, None);
+        assert_eq!(traced.entry_pc, plain.entry_pc);
+        assert_eq!(traced.end_pc, plain.end_pc);
+        assert_eq!(traced.instr_count, plain.instr_count);
+        assert_eq!(traced.code, plain.code);
+        assert_eq!(traced.exits, plain.exits);
+        assert_eq!(traced_binding.is_none(), plain_binding.is_none());
+    }
+
+    #[test]
+    fn emit_loop_trace_counts_alu_body_and_backedge() {
+        let mut prog = Vec::new();
+        h(&mut prog, 0x24FA); // movs r4, #250
+        h(&mut prog, 0x2000); // movs r0, #0
+        let head = BASE + 4;
+        h(&mut prog, 0xBF00); // nop @ head
+        h(&mut prog, 0x3001); // adds r0, #1
+        h(&mut prog, 0x3C01); // subs r4, #1
+        h(&mut prog, 0xD1FB); // bne head: (BASE+0xA)+4-10 == head
+        let view = CodeView::new(BASE, &prog);
+        assert!(matches!(
+            decode_at(BASE + 0xA, &view).unwrap().0,
+            Instruction::BranchCond {
+                cond: 1,
+                offset: -10
+            }
+        ));
+        let trace = emit::emit_loop_trace(head, &view).expect("counted ALU loop");
+        assert_eq!(trace.iter_instr_count, Some(4));
+        assert_eq!(trace.instr_count, 4);
+        assert_eq!(trace.end_pc, BASE + 0xC);
+        assert!(!trace.code.is_empty());
+        assert!(trace.binding.is_none());
+        #[cfg(feature = "jit")]
+        {
+            let engine = wasmtime::Engine::default();
+            wasmtime::Module::new(&engine, &trace.code).expect("loop trace must validate");
+        }
+        eprintln!(
+            "loop trace: {} bytes, end_pc={:#x}",
+            trace.code.len(),
+            trace.end_pc
+        );
+    }
+
+    #[test]
+    fn emit_loop_trace_inlines_leaf_call() {
+        let mut prog = Vec::new();
+        h(&mut prog, 0x2000); // movs r0, #0 @ head
+        h(&mut prog, 0xF000); // bl callee (BL T1, +0xA)
+        h(&mut prog, 0xF805);
+        h(&mut prog, 0x3801); // subs r0, #1
+        h(&mut prog, 0xD1FA); // bne head: (BASE+8)+4-12 == BASE
+        h(&mut prog, 0xBF00); // pad
+        h(&mut prog, 0xBF00); // pad
+        h(&mut prog, 0xBF00); // pad
+        h(&mut prog, 0x3101); // BASE+0x10: adds r1, #1
+        h(&mut prog, 0x4770); // BASE+0x12: bx lr
+        let view = CodeView::new(BASE, &prog);
+        let (bl, bl_len) = decode_at(BASE + 2, &view).unwrap();
+        assert_eq!(bl_len, 4);
+        assert!(matches!(bl, Instruction::Bl { offset: 10 }));
+        assert!(matches!(
+            decode_at(BASE + 8, &view).unwrap().0,
+            Instruction::BranchCond {
+                cond: 1,
+                offset: -12
+            }
+        ));
+        let trace = emit::emit_loop_trace(BASE, &view).expect("leaf call inline");
+        assert_eq!(trace.iter_instr_count, Some(6));
+        #[cfg(feature = "jit")]
+        {
+            let engine = wasmtime::Engine::default();
+            wasmtime::Module::new(&engine, &trace.code).expect("leaf-call trace must validate");
+        }
+        eprintln!(
+            "leaf-call trace: {} bytes, end_pc={:#x}",
+            trace.code.len(),
+            trace.end_pc
+        );
+    }
+
+    #[test]
+    fn emit_loop_trace_refuses_memory_in_body() {
+        let mut prog = Vec::new();
+        h(&mut prog, 0x3001); // adds r0, #1 @ head
+        h(&mut prog, 0x6800); // ldr r0, [r0, #0]
+        h(&mut prog, 0xD1FC); // bne head: (BASE+4)+4-8 == BASE
+        let view = CodeView::new(BASE, &prog);
+        assert!(matches!(
+            decode_at(BASE + 4, &view).unwrap().0,
+            Instruction::BranchCond {
+                cond: 1,
+                offset: -8
+            }
+        ));
+        assert!(emit::emit_loop_trace(BASE, &view).is_none());
+    }
+
+    #[test]
+    fn emit_loop_trace_refuses_backedge_to_other_pc() {
+        let mut prog = Vec::new();
+        h(&mut prog, 0x3001); // adds r0, #1 @ BASE
+        h(&mut prog, 0xD1FE); // bne BASE+2 (self, not the head)
+        let view = CodeView::new(BASE, &prog);
+        assert!(matches!(
+            decode_at(BASE + 2, &view).unwrap().0,
+            Instruction::BranchCond {
+                cond: 1,
+                offset: -4
+            }
+        ));
+        assert!(emit::emit_loop_trace(BASE, &view).is_none());
+    }
+
+    #[cfg(feature = "jit")]
+    #[test]
+    fn emit_loop_trace_reports_retired_iterations() {
+        use wasmtime::{Engine, Instance, Memory, MemoryType, Module, Store};
+
+        let mut prog = Vec::new();
+        h(&mut prog, 0x24FA); // not traced: pre-head movs r4, #250
+        h(&mut prog, 0x2000); // not traced: pre-head movs r0, #0
+        let head = BASE + 4;
+        h(&mut prog, 0xBF00); // nop @ head
+        h(&mut prog, 0x3001); // adds r0, #1
+        h(&mut prog, 0x3C01); // subs r4, #1
+        h(&mut prog, 0xD1FB); // bne head
+        let view = CodeView::new(BASE, &prog);
+        let trace = emit::emit_loop_trace(head, &view).unwrap();
+
+        let engine = Engine::default();
+        let module = Module::new(&engine, &trace.code).unwrap();
+        // (cap, retired iterations, next pc): natural exit, then cap exit.
+        for (cap, done, next_pc) in [(250u32, 250u32, BASE + 0xC), (2, 2, head)] {
+            let mut store = Store::new(&engine, ());
+            let regs = Memory::new(&mut store, MemoryType::new(1, None)).unwrap();
+            let instance = Instance::new(&mut store, &module, &[regs.into()]).unwrap();
+            let run = instance
+                .get_typed_func::<(), i32>(&mut store, "run")
+                .unwrap();
+            regs.write(&mut store, 0, &0u32.to_le_bytes()).unwrap();
+            regs.write(&mut store, 16, &250u32.to_le_bytes()).unwrap();
+            regs.write(
+                &mut store,
+                emit::ITERS_CAP_SLOT as usize,
+                &cap.to_le_bytes(),
+            )
+            .unwrap();
+            assert_eq!(run.call(&mut store, ()).unwrap(), emit::WIRE_CHAIN_DYNAMIC);
+            let mut word = [0u8; 4];
+            regs.read(&store, emit::ITERS_DONE_SLOT as usize, &mut word)
+                .unwrap();
+            assert_eq!(u32::from_le_bytes(word), done, "cap {cap}");
+            regs.read(&store, emit::NEXT_PC_SLOT as usize, &mut word)
+                .unwrap();
+            assert_eq!(u64::from(u32::from_le_bytes(word)), next_pc, "cap {cap}");
+        }
     }
 
     #[test]

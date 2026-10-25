@@ -4,10 +4,12 @@ name: Core Perf (simulator throughput)
 #
 # The gate measures host instructions retired per simulated CPU step, per
 # board, under callgrind — see scripts/perf/board_perf.py for why that metric
-# and not wall clock. It is NOT a merge-blocking gate on PRs by default: it
-# runs on push to main and nightly, and tracks a regression in a single issue,
-# so a slowdown is noticed the day it lands rather than months later when
-# someone reports "the blinky looks frozen".
+# and not wall clock. Main pushes and nightly runs keep the full unchanged
+# gate. Owned-repository PRs affecting the engine's hot paths, build settings
+# or perf inputs run the same gate before merge; docs-only PRs pay only the
+# cheap selection check. A main regression is tracked in a single issue, so a
+# slowdown is noticed the day it lands rather than months later when someone
+# reports "the blinky looks frozen".
 #
 # The issue is a live status page, not a log: each run rewrites its body with
 # the current state and only comments when the set of failing boards actually
@@ -15,15 +17,18 @@ name: Core Perf (simulator throughput)
 # body — not one comment per push to main. When the gate goes green the issue
 # is closed automatically, which is also the only thing that ever closed it.
 #
-# Run it on a PR by hand with workflow_dispatch when touching the CPU step
-# path, the machine-advance loop, or the peripheral tick walk.
-
-# Scheduled runs are gated to this repository: every job below carries
-# `if: github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core'`.
-# GitHub attributes a cron run to whoever last edited the schedule, so a fork
-# with Actions enabled mails this workflow's failures to a maintainer here,
-# about a run they can neither see nor stop. Pushes and manual dispatch are
-# untouched — a fork still gets this workflow on its own changes.
+# Scheduled runs are gated to this repository. GitHub attributes a cron run to
+# whoever last edited the schedule, so a fork with Actions enabled mails this
+# workflow's failures to a maintainer here, about a run they can neither see
+# nor stop. Pushes and manual dispatch are untouched — a fork still gets this
+# workflow on its own changes.
+#
+# PR selection uses the actual tested merge's first-parent diff, including
+# runtime deletions and renames. Source-admission or Git failures fail the
+# scope job instead of turning into a silent skip. `perf-verdict` is the
+# fail-closed aggregate: it fails when the scope job fails, or when a required
+# full run is skipped/fails. Make `perf-verdict` (not `board-throughput`) the
+# required check if this lane should block merges.
 on:
   push:
     branches:
@@ -33,6 +38,7 @@ on:
       - "crates/cli/**"
       - "crates/config/**"
       - "configs/chips/**"
+      - "configs/systems/**"
       # All THREE fixture crates, not just the unsuffixed one. This lane builds
       # firmware-perf-spin-xtensa and -riscv as well, and `firmware-perf-spin/**`
       # matches neither — so a change to a fixture never re-ran the lane that
@@ -40,10 +46,18 @@ on:
       # required esp-backtrace feature, the lane died compiling it on every main
       # commit for a day, and the one-line fix could not trigger its own gate.
       - "crates/firmware-perf-spin/**"
+      - "crates/firmware-perf-spin-avr/**"
       - "crates/firmware-perf-spin-riscv/**"
       - "crates/firmware-perf-spin-xtensa/**"
       - "scripts/perf/**"
       - ".github/workflows/core-perf.yml"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain*"
+      - ".cargo/**"
+  pull_request:
+    branches:
+      - main
   schedule:
     # Nightly, after core-ci's 02:30 slot.
     - cron: "45 3 * * *"
@@ -58,9 +72,41 @@ permissions:
   issues: write
 
 jobs:
+  perf-scope:
+    name: perf-scope
+    if: ${{ github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core' }}
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      required: ${{ steps.select.outputs.required }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Test path and source-history admission
+        run: python3 scripts/perf/test_pr_hotpath_gate.py
+      - name: Select the unchanged full gate
+        id: select
+        env:
+          EVENT: ${{ github.event_name }}
+          REPOSITORY: ${{ github.repository }}
+          HEAD_REF: ${{ github.head_ref }}
+          TESTED: ${{ github.sha }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          python3 scripts/perf/pr_hotpath_gate.py \
+            --event "$EVENT" --repository "$REPOSITORY" --head-ref "$HEAD_REF" \
+            --tested "$TESTED" --base "$BASE" --head "$HEAD" --output "$GITHUB_OUTPUT"
+
   board-throughput:
     name: board-throughput
-    if: ${{ github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core' }}
+    needs: perf-scope
+    if: ${{ needs.perf-scope.outputs.required == 'true' }}
     # Keep absolute RTx and relative Ir/step receipts on one stable image.
     # `ubuntu-latest` moves to Ubuntu 26 on 2026-10-19, which would silently
     # change both the compiler output and host throughput under our baselines.
@@ -297,3 +343,28 @@ jobs:
                 state: 'closed', state_reason: 'completed',
               });
             }
+
+  perf-verdict:
+    name: perf-verdict
+    needs: [perf-scope, board-throughput]
+    if: ${{ always() && (github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core') }}
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Fail closed on incomplete perf admission
+        env:
+          SCOPE_RESULT: ${{ needs.perf-scope.result }}
+          BOARD_RESULT: ${{ needs.board-throughput.result }}
+          REQUIRED: ${{ needs.perf-scope.outputs.required }}
+        run: |
+          if [[ "$SCOPE_RESULT" != success ]]; then
+            echo "perf-scope did not succeed ($SCOPE_RESULT)" >&2
+            exit 1
+          fi
+          if [[ "$REQUIRED" == true && "$BOARD_RESULT" != success ]]; then
+            echo "required board-throughput did not succeed ($BOARD_RESULT)" >&2
+            exit 1
+          fi
+          echo "perf admission complete: required=$REQUIRED board=$BOARD_RESULT"
