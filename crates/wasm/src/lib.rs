@@ -1908,6 +1908,30 @@ impl WasmSimulator {
         }
     }
 
+    /// Enable/disable Cortex-M loop TRACES on top of the browser JIT.
+    ///
+    /// When on, a counted pure-ALU loop whose conditional backedge targets
+    /// its own entry compiles to a single wasm `loop` that runs many
+    /// iterations per dispatch, instead of one dispatch per iteration (see
+    /// `labwired_core`'s `emit_loop_trace`). Only meaningful with
+    /// `set_jit_enabled(true)`. Off by default; the RP2040 demo opts in.
+    ///
+    /// Toggling drops the compiled-block cache: a block keeps the mode it
+    /// was compiled under, so a cached untraced block would otherwise
+    /// survive the switch.
+    #[wasm_bindgen]
+    pub fn set_jit_loop_traces_enabled(&mut self, on: bool) -> Result<(), JsValue> {
+        self.record(lab_tools::Op::SetJitLoopTraces(on));
+        let machine = self.machine();
+        machine.config.cortex_m_jit_loop_traces = on;
+        // The window runner reads the bus copy for IRQ decisions and the
+        // machine copy for the span; keep them in step like the tick
+        // interval setter does.
+        machine.bus.config.cortex_m_jit_loop_traces = on;
+        self.jit_browser_cache = None;
+        Ok(())
+    }
+
     /// Enable/disable scheduler-safe CPU idle fast-forwarding. Off by default;
     /// browser callers opt in explicitly after comparing accelerated and
     /// non-accelerated traces for the target firmware.
@@ -2006,6 +2030,31 @@ impl WasmSimulator {
             .as_ref()
             .map(|c| c.refusals)
             .unwrap_or(0)
+    }
+
+    /// Loop-trace iterations the browser JIT retired inside traced runs.
+    ///
+    /// Zero after a batch through the loop-trace path means either no trace
+    /// was compiled or every trace dispatch retired nothing; non-zero is the
+    /// non-vacuity proof for the browser-layer gate and the bench.
+    #[wasm_bindgen]
+    pub fn jit_trace_iters(&self) -> Result<u64, JsValue> {
+        Ok(self
+            .jit_browser_cache
+            .as_ref()
+            .map(|c| c.trace_iters())
+            .unwrap_or(0))
+    }
+
+    /// Number of loop-trace dispatches (one per entry of a counted-loop
+    /// trace), the companion of [`Self::jit_trace_iters`].
+    #[wasm_bindgen]
+    pub fn jit_trace_runs(&self) -> Result<u64, JsValue> {
+        Ok(self
+            .jit_browser_cache
+            .as_ref()
+            .map(|c| c.trace_runs())
+            .unwrap_or(0))
     }
 
     /// Bench runner: execute `cycles` `step_with_esp32_aids` iterations

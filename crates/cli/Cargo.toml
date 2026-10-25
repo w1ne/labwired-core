@@ -111,6 +111,10 @@ fuzz-libafl = ["labwired-fuzz/libafl"]
 
 # #![cfg(feature = "event-scheduler")]
 [[test]]
+name = "cortex_m_loop_trace_lab"
+required-features = ["jit-core"]
+
+[[test]]
 name = "e2e_esp32c3_ble_adv_republish"
 required-features = ["event-scheduler"]
 
