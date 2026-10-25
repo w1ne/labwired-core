@@ -4,7 +4,8 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 #
-# dsPIC33FJ32MC202 (DS70283H). M0: boot + UART1 TX. The 202 is the 28-pin
+# dsPIC33FJ32MC202 (DS70283H). M0: boot + UART1 TX. M1: 28-pin GPIO package.
+# The 202 is the 28-pin
 # sibling of the onboarded dsPIC33FJ32MC204 and shares its PIC24/dsPIC33F
 # core, 32 KB flash, 2 KB SRAM, UART1/SPI1/I2C1/ADC1/Timers/PWM/QEI register
 # map and instruction set. Differences that matter later: the package exposes
@@ -14,9 +15,9 @@
 # - UART1 SFRs: U1MODE 0x0220, U1STA 0x0222, U1TXREG 0x0224
 # - CPU clock: part rated to 40 MIPS; boards override via the system manifest.
 #
-# Peripherals are CPU-internal (the PIC24 core owns UART/timers/GPIO/PWM/QEI/
-# ADC/SPI/I2C); M0 deliberately declares no bus peripherals, matching the
-# 204's UART-only bring-up before its GPIO pads landed in M1b.
+# UART/timers/GPIO/PWM/QEI/ADC/SPI/I2C are CPU-internal; M1 declares the
+# three bus-side GPIO pad models with the 28-pin masks (RA0-RA4, RB0-RB15,
+# no PORTC).
 name: dspic33fj32mc202
 arch: pic24
 core: dspic33f
@@ -27,4 +28,22 @@ flash:
 ram:
   base: 0x000800
   size: "2KB"
-peripherals: []
+# M1: 28-pin package pads (DS70283H 28-pin pin diagrams): RA0-RA4,
+# RB0-RB15, no PORTC. The masks are the package truth; the CPU derives its
+# TRIS/LAT/ODC masks from these entries (44-pin defaults when absent).
+peripherals:
+  - id: "gpioa"
+    type: "pic24_gpio"
+    base_address: 0x000102C0
+    size: "12"
+    config: { port: "a", mask: 0x001F }
+  - id: "gpiob"
+    type: "pic24_gpio"
+    base_address: 0x000102D0
+    size: "12"
+    config: { port: "b", mask: 0xFFFF }
+  - id: "gpioc"
+    type: "pic24_gpio"
+    base_address: 0x000102E0
+    size: "12"
+    config: { port: "c", mask: 0x0000 }

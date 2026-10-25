@@ -575,7 +575,7 @@ pub fn try_build(
             // The dsPIC33FJ32MC204 has no uniform port width: PORTA presents
             // RA0-4/RA7-10, PORTB RB0-15, PORTC RC0-9 (DS70283H pin diagrams,
             // Table 4-20/21/22). The package mask comes from the instance.
-            let mask = match p_cfg.config.get("port").and_then(|v| v.as_str()) {
+            let default_mask = match p_cfg.config.get("port").and_then(|v| v.as_str()) {
                 Some("a") => 0x079F,
                 Some("b") => 0xFFFF,
                 Some("c") => 0x03FF,
@@ -586,6 +586,15 @@ pub fn try_build(
                     ))
                 }
             };
+            // The package mask is per part (the 28-pin sibling has RA0-RA4,
+            // RB0-RB15 and no PORTC); `config.mask` overrides the 44-pin
+            // default.
+            let mask = p_cfg
+                .config
+                .get("mask")
+                .and_then(|v| v.as_u64())
+                .map(|v| v as u16)
+                .unwrap_or(default_mask);
             Box::new(crate::peripherals::pic24_gpio::Pic24GpioPort::new(mask))
         }
         "avr_adc" => {

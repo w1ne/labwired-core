@@ -194,6 +194,36 @@ pub use xtensa::esp32s3_flash_backing_size;
 /// Named binary blobs a board references (mask ROM images, merged flash, ...).
 pub type BlobMap = HashMap<String, Vec<u8>>;
 
+/// Derive the PIC24 package port masks (RA, RB, RC) from a chip's
+/// `pic24_gpio` peripherals. A port without a declared `mask` keeps the
+/// 44-pin dsPIC33FJ32MC204 default. The 28-pin sibling declares RA0-RA4
+/// (`0x001F`), RB0-RB15 (`0xFFFF`) and no PORTC (`0x0000`).
+pub fn pic24_port_masks(chip: &labwired_config::ChipDescriptor) -> [u16; 3] {
+    let mut masks = [
+        crate::cpu::pic24::PORT_A_MASK,
+        crate::cpu::pic24::PORT_B_MASK,
+        crate::cpu::pic24::PORT_C_MASK,
+    ];
+    for p in &chip.peripherals {
+        if p.r#type != "pic24_gpio" {
+            continue;
+        }
+        let Some(port) = p.config.get("port").and_then(|v| v.as_str()) else {
+            continue;
+        };
+        let idx = match port {
+            "a" => 0,
+            "b" => 1,
+            "c" => 2,
+            _ => continue,
+        };
+        if let Some(mask) = p.config.get("mask").and_then(|v| v.as_u64()) {
+            masks[idx] = mask as u16;
+        }
+    }
+    masks
+}
+
 /// The image a machine runs.
 pub enum FirmwareSource<'a> {
     /// ELF bytes.

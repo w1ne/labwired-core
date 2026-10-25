@@ -71,6 +71,12 @@ pub struct AvrCpuSnapshot {
 
 /// PIC24/dsPIC33 visible state (word-addressed PC; W0–W15; UART1 latches;
 /// M1a timers, interrupt latches and accumulators).
+/// Default PIC24 package masks: the 44-pin dsPIC33FJ32MC204. Used when a
+/// snapshot predates the per-chip `port_masks` field.
+pub fn default_pic24_port_masks() -> [u16; 3] {
+    [0x079F, 0xFFFF, 0x03FF]
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Pic24CpuSnapshot {
     pub registers: Vec<u16>,
@@ -123,6 +129,8 @@ pub struct Pic24CpuSnapshot {
     pub acc_a: i64,
     #[serde(default)]
     pub acc_b: i64,
+    #[serde(default = "default_pic24_port_masks")]
+    pub port_masks: [u16; 3],
     #[serde(default)]
     pub tris: [u16; 3],
     #[serde(default)]
