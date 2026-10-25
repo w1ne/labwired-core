@@ -361,6 +361,13 @@ WAIVED: dict[str, str] = {
         "is built for the Vega SoC map (flash 0x0, RAM 0x20000000), and no "
         "throughput claim is made for this board (docs/boards/vegaboard-ri5cy.md)."
     ),
+    "stm32f072": (
+        "L1 smoke, SIM-DERIVED: Cortex-M0 + flash/SRAM + USART1 and the GPIO "
+        "LED/button path only, with no silicon capture and no "
+        "executing-fidelity differential. No perf fixture is built for the "
+        "DISCO memory map (flash 0x08000000, RAM 0x20000000), and no "
+        "throughput claim is made for this board (docs/boards/stm32f072b-disco.md)."
+    ),
     "rv1103": (
         "The old Cortex-A7 CPU subset fixture is not representative perf evidence. "
         "Optional native reduced Linux direct boot and joint I2C3/UART4 basket "

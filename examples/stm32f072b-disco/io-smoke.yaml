@@ -1,0 +1,26 @@
+# LabWired - STM32F072B-DISCO IO smoke
+#
+# Build: cargo build -p firmware-stm32f072b-disco-smoke --release --target thumbv6m-none-eabi
+#
+# The firmware enables the F0's clock gates (AHBENR GPIOA/GPIOC, APB2ENR
+# USART1), configures PA9/PA10 as AF1, walks the four user LEDs and prints the
+# GPIOC ODR readback (`led=ld3 odr=00000040` … `led=ld6 odr=000003c0`), then
+# reads the pulled-up user button (PA0 = 1 released) and heartbeats.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv6m-none-eabi/release/firmware-stm32f072b-disco-smoke"
+  system: "./system.yaml"
+limits:
+  max_steps: 4000000
+assertions:
+  - uart_contains: "STM32F072B-DISCO SMOKE"
+  - uart_ordered:
+      - "cpu=cortex-m0 uart=usart1"
+      - "led=ld3 odr=00000040"
+      - "led=ld4 odr=00000140"
+      - "led=ld5 odr=00000340"
+      - "led=ld6 odr=000003c0"
+      - "btn=1"
+      - "hb=0 odr=000003c0 btn=1"
+      - "hb=1 odr=000003c0 btn=1"
+  - expected_stop_reason: max_steps
