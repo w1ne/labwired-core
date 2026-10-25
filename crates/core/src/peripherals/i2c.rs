@@ -2627,6 +2627,22 @@ impl crate::Peripheral for I2c {
         }
     }
 
+    /// RXDR is one byte wide. A word read must pop exactly one byte, not
+    /// byte-slice the register four times (which would consume/duplicate the
+    /// framing).
+    fn read_u32(&self, offset: u64) -> SimResult<u32> {
+        if let Self::Stm32L4(i) = self {
+            if offset & !3 == 0x24 {
+                return Ok(i.read_reg(0x24));
+            }
+        }
+        let b0 = self.read(offset)? as u32;
+        let b1 = self.read(offset + 1)? as u32;
+        let b2 = self.read(offset + 2)? as u32;
+        let b3 = self.read(offset + 3)? as u32;
+        Ok(b0 | (b1 << 8) | (b2 << 16) | (b3 << 24))
+    }
+
     /// Atomic word writes: STM32 HAL stores CR2 as a single STR (START, NBYTES,
     /// and AUTOEND together). Default Peripheral::write_u32 byte-slices and would
     /// assert START before AUTOEND lands, breaking the NBYTES=0 probe path.

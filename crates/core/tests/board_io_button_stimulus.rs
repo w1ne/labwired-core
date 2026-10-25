@@ -54,6 +54,29 @@ board_io:
     bus
 }
 
+/// An STM32U575 with a test button on PC13, whose GPIOC pins reset to analog.
+fn u575_with_button(active_high: bool) -> SystemBus {
+    let chip_path = workspace_root().join("configs/chips/stm32u575.yaml");
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load stm32u575 chip");
+    let manifest_yaml = format!(
+        r#"
+name: "u575-button"
+chip: "{}"
+external_devices: []
+board_io:
+  - id: "btn_pc13"
+    kind: "button"
+    peripheral: "gpioc"
+    pin: 13
+    signal: "input"
+    active_high: {active_high}
+"#,
+        chip_path.display()
+    );
+    let manifest: SystemManifest = serde_yaml::from_str(&manifest_yaml).expect("parse manifest");
+    SystemBus::from_config(&chip, &manifest).expect("build bus")
+}
+
 /// The level the firmware would read on PC13, sampled the same way it does —
 /// through the GPIO input register.
 fn pc13_high(bus: &mut SystemBus) -> bool {
@@ -112,6 +135,40 @@ fn an_active_high_button_is_the_mirror_image() {
         .expect("press");
     settle(&mut bus);
     assert!(pc13_high(&mut bus), "pressing must pull PC13 HIGH");
+}
+
+#[test]
+fn analog_reset_button_stays_attached_until_firmware_selects_input_mode() {
+    const RCC: u64 = 0x4602_0C00;
+    const GPIOC: u64 = 0x4202_0800;
+    let mut bus = u575_with_button(false);
+    assert!(bus
+        .list_inputs()
+        .iter()
+        .any(|(owner, channel)| owner == "btn_pc13" && channel.key == "pressed"));
+
+    // GPIOC's reset mode for PC13 is analog. IDR stays low despite the
+    // active-low button's released pull-up level being high at the pad.
+    bus.write_u32(RCC + 0x8C, 1 << 2)
+        .expect("enable GPIOC clock");
+    settle(&mut bus);
+    assert!(
+        !pc13_high(&mut bus),
+        "analog mode forces the digital IDR low"
+    );
+
+    let moder = bus.read_u32(GPIOC).expect("read GPIOC MODER");
+    bus.write_u32(GPIOC, moder & !(0b11 << (13 * 2)))
+        .expect("select PC13 input mode");
+    assert!(
+        pc13_high(&mut bus),
+        "input mode exposes the released button"
+    );
+
+    bus.set_input(Some("btn_pc13"), "pressed", 1.0)
+        .expect("press the button after GPIO setup");
+    settle(&mut bus);
+    assert!(!pc13_high(&mut bus), "the input register sees the press");
 }
 
 #[test]

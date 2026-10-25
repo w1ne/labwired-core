@@ -41,10 +41,10 @@
 //!   not blank the status register.
 //!
 //! Modeling notes (KISS, documented deviations from full silicon):
-//! - acceptance filtering is not modeled: every frame is treated as
-//!   non-matching and follows RXGFC.ANFS/ANFE (default: into FIFO0,
-//!   ANMF set). Dedicated RX buffers and FIFO1 routing by filter are
-//!   not modeled; RX FIFO1 only overflows-counts.
+//! - standard/extended range, dual-ID and classic-mask filters route to
+//!   FIFO0/FIFO1 or reject; global non-matching actions and remote-frame
+//!   rejection are honored. Priority-only actions, dedicated RX buffers and
+//!   the HPMS register are not modeled.
 //! - bit timing is not simulated; transmission completes on the tick
 //!   after TXBAR (or on the delay-0 scheduler event that stands in for
 //!   that next tick under walk-free). DBTP/NBTP/CKDIV are storage with
@@ -731,7 +731,6 @@ impl Fdcan {
             REG_XIDAM if self.config_unlocked() => self.xidam = value,
             REG_RXF1A => self.ack_rx_fifo1(value),
             REG_RXF0A => self.ack_rx_fifo0(value),
-            REG_RXF1A => {}
             REG_TXBAR if self.running() => self.request_tx(value),
             REG_TXBCR => {
                 // Nothing is ever pending long enough to cancel, but
@@ -780,20 +779,27 @@ impl Fdcan {
         if self.rxf1_fill == 0 {
             return;
         }
-        let acked = value & 0x3F;
-        let consumed = (acked + FIFO_DEPTH + 1 - self.rxf1_get) % FIFO_DEPTH.max(1);
-        let consumed = consumed.max(1).min(self.rxf1_fill);
+        let acked = (value & 0x3F) % FIFO_DEPTH;
+        let consumed = ((acked + FIFO_DEPTH - self.rxf1_get) % FIFO_DEPTH + 1).min(self.rxf1_fill);
         self.rxf1_get = (acked + 1) % FIFO_DEPTH;
         self.rxf1_fill -= consumed;
     }
 
     /// Acceptance filtering (RM0456 §70.4.3 / M_CAN filter lists written by
-    /// HAL_FDCAN_ConfigFilter): returns the RX FIFO index, or `None` when the
-    /// frame is rejected. The filter elements live in the fixed message-RAM
-    /// sections (standard 0x000, extended 0x070), and RXGFC carries the list
-    /// lengths plus the non-matching actions.
-    fn filter_route(&self, frame: &CanFrame) -> Option<u8> {
+    /// HAL_FDCAN_ConfigFilter): returns the RX FIFO and matching list index,
+    /// or `None` when the frame is rejected. The filter elements live in the
+    /// fixed message-RAM sections (standard 0x000, extended 0x070), and RXGFC
+    /// carries the list lengths, non-matching actions and remote rejection.
+    fn filter_route(&self, frame: &CanFrame) -> Option<RxFilterRoute> {
         let rxgfc = self.rxgfc;
+        let reject_remote = if frame.extended {
+            rxgfc & 1 != 0 // RRFE
+        } else {
+            rxgfc & 2 != 0 // RRFS
+        };
+        if frame.remote && reject_remote {
+            return None;
+        }
         if frame.extended {
             let count = ((rxgfc >> 24) & 0xF) as usize;
             for idx in 0..count {
@@ -811,20 +817,24 @@ impl Fdcan {
                 let id1 = w0 & 0x1FFF_FFFF;
                 let filter_type = (w1 >> 30) & 0x3;
                 let id2 = w1 & 0x1FFF_FFFF;
-                let mask = if self.xidam == 0 { 0x1FFF_FFFF } else { self.xidam };
-                let id = frame.id & mask;
+                let mask = if self.xidam == 0 {
+                    0x1FFF_FFFF
+                } else {
+                    self.xidam
+                };
+                // EFT=3 is the extended range form that bypasses XIDAM.
+                let id = if filter_type == 3 {
+                    frame.id & 0x1FFF_FFFF
+                } else {
+                    frame.id & mask
+                };
                 let matches = match filter_type {
                     0 | 3 => id1 <= id && id <= id2,
                     1 => id == id1 || id == id2,
                     _ => (id & id2) == (id1 & id2),
                 };
                 if matches {
-                    return match config {
-                        1 | 5 => Some(0),
-                        2 | 6 => Some(1),
-                        3 => None,
-                        _ => None,
-                    };
+                    return accepted_filter_route(config, idx);
                 }
             }
         } else {
@@ -847,12 +857,7 @@ impl Fdcan {
                     _ => (id & id2) == (id1 & id2),
                 };
                 if matches {
-                    return match config {
-                        1 | 5 => Some(0),
-                        2 | 6 => Some(1),
-                        3 => None,
-                        _ => None,
-                    };
+                    return accepted_filter_route(config, idx);
                 }
             }
         }
@@ -863,8 +868,14 @@ impl Fdcan {
             (rxgfc >> 4) & 0x3
         };
         match nonmatching {
-            0 => Some(0),
-            1 => Some(1),
+            0 => Some(RxFilterRoute {
+                fifo: 0,
+                filter_index: None,
+            }),
+            1 => Some(RxFilterRoute {
+                fifo: 1,
+                filter_index: None,
+            }),
             _ => None,
         }
     }
@@ -873,9 +884,8 @@ impl Fdcan {
         if self.rxf0_fill == 0 {
             return;
         }
-        let acked = value & 0x3F;
-        let consumed = (acked + FIFO_DEPTH + 1 - self.rxf0_get) % FIFO_DEPTH.max(1);
-        let consumed = consumed.max(1).min(self.rxf0_fill);
+        let acked = (value & 0x3F) % FIFO_DEPTH;
+        let consumed = ((acked + FIFO_DEPTH - self.rxf0_get) % FIFO_DEPTH + 1).min(self.rxf0_fill);
         self.rxf0_get = (acked + 1) % FIFO_DEPTH;
         self.rxf0_fill -= consumed;
     }
@@ -987,15 +997,15 @@ impl Fdcan {
         if !self.running() {
             return Err(CanRxRejection::NotRunning);
         }
-        let fifo = self.filter_route(&frame);
-        let fifo = match fifo {
-            Some(f) => f,
+        let route = self.filter_route(&frame);
+        let route = match route {
+            Some(route) => route,
             None => {
                 self.push_trace("rx", &frame);
                 return Err(CanRxRejection::NoFilterMatch);
             }
         };
-        if fifo == 1 {
+        if route.fifo == 1 {
             if self.rxf1_fill >= FIFO_DEPTH {
                 self.rxf1_lost = true;
                 self.ir |= IR_RF1L;
@@ -1003,7 +1013,7 @@ impl Fdcan {
             }
             self.push_trace("rx", &frame);
             let base = RAM_RF1_WORDS + self.rxf1_put as usize * ELEMENT_WORDS;
-            self.encode_rx_element(base, &frame);
+            self.encode_rx_element(base, &frame, route.filter_index);
             self.rxf1_put = (self.rxf1_put + 1) % FIFO_DEPTH;
             self.rxf1_fill += 1;
             self.ir |= IR_RF1N;
@@ -1016,14 +1026,14 @@ impl Fdcan {
         }
         self.push_trace("rx", &frame);
         let base = RAM_RF0_WORDS + self.rxf0_put as usize * ELEMENT_WORDS;
-        self.encode_rx_element(base, &frame);
+        self.encode_rx_element(base, &frame, route.filter_index);
         self.rxf0_put = (self.rxf0_put + 1) % FIFO_DEPTH;
         self.rxf0_fill += 1;
         self.ir |= IR_RF0N;
         Ok(())
     }
 
-    fn encode_rx_element(&mut self, base: usize, frame: &CanFrame) {
+    fn encode_rx_element(&mut self, base: usize, frame: &CanFrame, filter_index: Option<u8>) {
         if base + ELEMENT_WORDS > self.message_ram.len() {
             return;
         }
@@ -1032,11 +1042,11 @@ impl Fdcan {
         } else {
             (frame.id & 0x7FF) << 18
         } | if frame.remote { 1 << 29 } else { 0 };
-        // ANMF set + FIDX all-ones: filtering isn't modeled, every
-        // frame arrives as accepted-non-matching (capture13: R1 high
-        // byte 0xBF).
-        self.message_ram[base + 1] = (1 << 31)
-            | (0x3F << 24)
+        // Preserve capture13's FIDX value for accepted non-matching frames;
+        // a matched frame carries its real filter index with ANMF clear.
+        let filter_metadata =
+            filter_index.map_or((1 << 31) | (0x3F << 24), |index| u32::from(index) << 24);
+        self.message_ram[base + 1] = filter_metadata
             | if frame.fd { 1 << 21 } else { 0 }
             | if frame.bitrate_switch { 1 << 20 } else { 0 }
             | ((len_to_dlc(frame.data.len()) as u32) << 16);
@@ -1047,6 +1057,24 @@ impl Fdcan {
             self.message_ram[base + 2 + idx / 4] |= (*byte as u32) << ((idx % 4) * 8);
         }
     }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct RxFilterRoute {
+    fifo: u8,
+    filter_index: Option<u8>,
+}
+
+fn accepted_filter_route(config: u32, index: usize) -> Option<RxFilterRoute> {
+    let fifo = match config {
+        1 | 5 => 0,
+        2 | 6 => 1,
+        _ => return None,
+    };
+    Some(RxFilterRoute {
+        fifo,
+        filter_index: Some(index as u8),
+    })
 }
 
 fn dlc_to_len(dlc: u8) -> usize {

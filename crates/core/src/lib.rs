@@ -2155,6 +2155,11 @@ impl<C: Cpu> Machine<C> {
                         "FLASH EraseBank bank={bank} offset={offset:#010x} size={bank_size:#x}"
                     );
                 }
+                FlashOp::EraseBothBanks => {
+                    let flash_size = self.bus.flash.data.len() as u64;
+                    self.bus.flash.fill(0, flash_size, 0xFF);
+                    tracing::debug!("FLASH EraseBothBanks size={flash_size:#x}");
+                }
                 FlashOp::SwapAndReset => {
                     // Swap the two architectural 1 MiB (0x100000) banks. The
                     // H563 flash buffer is sized to exactly 2 * BANK_SIZE by the

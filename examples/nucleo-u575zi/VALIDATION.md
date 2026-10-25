@@ -4,7 +4,7 @@ Run all commands from the repository root. Captured evidence below is from
 **2026-09-18** on branch `feat/onboard-stm32u575` unless a command output says
 otherwise.
 
-Tier: **sim-validated** — all values are SVD / RM0456 / DS13736-derived. There
+Tier: **sim-validated** — all values are SVD / RM0456 / DS13737-derived. There
 is no bench part; no silicon capture and no Renode differential is claimed.
 
 ## Prerequisites
@@ -123,6 +123,10 @@ Captured result (Task D final, 2026-09-18, `feat/stm32u575-fidelity`): **9 pass 
 | L6_pwm | ✅ pass | `LW_L6_OK` |
 | L7_timer | ✅ pass | `LW_L7_OK` |
 | L8_can | ✅ pass | `LW_L8_OK` — FDCAN1 M_CAN model, internal loopback (`TEST.LBCK`) |
+
+L6's marker confirms that the sketch reaches its `analogWrite()` path. The
+current U575 timer model does not route timer channels to GPIO pads, and this
+matrix has no PWM edge oracle; treat PWM pad output as unverified.
 
 Per-level `uart.log`/`result.json` under
 `validation/arduino-matrix/out/stm32u575/<level>/run/`.
@@ -374,6 +378,26 @@ U575-HAL OK
 BLINK 0 LD1=1
 ```
 
+## U575 Star Catcher OLED smoke (2026-10-25)
+
+The new simulation example uses a second binary in `firmware-stm32u575-demo`.
+It drives a virtual SSD1306 over I2C1, prints a serial ready banner and has a
+button/LED game loop. It is simulator evidence only; no physical board, button,
+LED or display was tested.
+
+```bash
+cargo fmt --all -- --check
+cargo build --locked -p firmware-stm32u575-demo \
+  --bin nucleo-u575-star-catcher --release --target thumbv8m.main-none-eabi
+cargo run -q -p labwired-cli -- test --script \
+  examples/nucleo-u575zi/star-catcher-smoke.yaml
+```
+
+Captured result: `PASS 3/3 checks · star-catcher-smoke · 5000000 steps`.
+Assertions require `STAR CATCHER READY`, 1–25% OLED ink and a normal max-step
+stop. The first smoke revision was intentionally run against the baseline ELF:
+it failed the banner and reported 0% OLED ink before the new firmware was added.
+
 ### K.4 Docs / gates freshness
 
 ```bash
@@ -474,3 +498,77 @@ with the HEAD library sources.
 
 The 7 board drifts this branch caused are re-acked with rationale (§K.4), not
 outstanding; no H563/WBA52/L476 regressions.
+
+## L. Fresh local continuation (2026-10-25)
+
+On branch `agent/u5-60north`, after adding the ST LQFP144 pin table and
+updating the U545/U575 package-difference allow-list:
+
+```bash
+cargo build --locked -p firmware-stm32u575-demo --release --target thumbv8m.main-none-eabi
+cargo run --locked -q -p labwired-cli -- test --script examples/nucleo-u575zi/io-smoke.yaml
+cargo run --locked -q -p labwired-cli -- test --script examples/nucleo-u575zi/uart-smoke.yaml
+cargo test --locked -p labwired-core --test stm32u575_60north_registers --test u545_u575_drift_guard
+./scripts/unsupported_instruction_audit.sh \
+  --firmware target/thumbv8m.main-none-eabi/release/firmware-stm32u575-demo \
+  --system configs/systems/nucleo-u575zi.yaml --max-steps 200000 \
+  --out-dir out/unsupported-audit/nucleo-u575zi-rust-20261025 \
+  --fail-on-unsupported
+```
+
+Results: firmware build succeeded; both smoke scripts reported `OK` and
+`PASS 2/2`; the register contract suite passed **11/11** and the U545/U575
+drift guard passed **3/3**. The 200,000-step Rust-demo audit reported
+`unknown_thumb16=0`, `unhandled_thumb32=0`, `unknown_riscv=0`.
+
+This is current simulator and source-build evidence. It does not represent a
+Renode differential, flash/upload, or physical-board acceptance.
+
+## M. Star Catcher and docs continuation (2026-10-25)
+
+The new register-level game was built from source and checked with its
+deterministic simulator script:
+
+```bash
+cargo fmt --all -- --check
+cargo build --locked -p firmware-stm32u575-demo \
+  --bin nucleo-u575-star-catcher --release \
+  --target thumbv8m.main-none-eabi
+cargo run --locked -q -p labwired-cli -- test \
+  --script examples/nucleo-u575zi/star-catcher-smoke.yaml
+cargo run --locked -q -p labwired-cli -- test \
+  --script examples/nucleo-u575zi/io-smoke.yaml
+cargo run --locked -q -p labwired-cli -- test \
+  --script examples/nucleo-u575zi/uart-smoke.yaml
+cargo test --locked -p labwired-core \
+  --test board_io_button_stimulus \
+  --test stm32u575_60north_registers \
+  --test u545_u575_drift_guard \
+  --test h563_conformance
+./scripts/unsupported_instruction_audit.sh \
+  --firmware target/thumbv8m.main-none-eabi/release/nucleo-u575-star-catcher \
+  --system examples/nucleo-u575zi/star-catcher-system.yaml \
+  --max-steps 200000 \
+  --out-dir out/unsupported-audit/nucleo-u575zi-star-catcher-20261025 \
+  --fail-on-unsupported
+```
+
+Results: `cargo fmt --all -- --check` exited 0 and the release ELF built from
+source. The six-check Star Catcher smoke printed `STAR CATCHER READY` and
+passed **6/6 checks** in 5,000,000 steps (5.24 s): it confirms the firmware
+selected input mode on PC13, the injected B1 press produced `B1 MOVE`, USART1
+TX reached PA9, the OLED framebuffer was nonblank, and execution stopped at
+the requested step limit. The baseline IO and UART scripts each passed **2/2**.
+
+The selected regression set passed: board button stimulus **18/18**, H563
+silicon-pinned conformance **7/7**, U575 register contract **17/17**, and
+U545/U575 drift guard **3/3**. This includes the one-shot GPIO LCKR lock
+regression, H563's reserved UART AUTOCR window and reset ISR, and the U5 USART
+TXFE/AUTOCR behavior. The 200,000-step instruction audit reported
+`unknown_thumb16=0`, `unhandled_thumb32=0`, `unknown_riscv=0`, and
+`unsupported_total=0`.
+
+The new browser link, OLED, simulated B1/LEDs, and serial event stream are
+documented in the Playground guide. All evidence above is local simulation and
+source-build evidence; CI, deployment, and physical-board/display acceptance
+remain separate gates.

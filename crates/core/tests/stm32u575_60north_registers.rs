@@ -12,10 +12,12 @@
 
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
+use labwired_core::network::CanFrame;
 use labwired_core::peripherals::device::I2cDevice;
+use labwired_core::peripherals::fdcan::Fdcan;
 use labwired_core::peripherals::spi_loopback::SpiLoopback;
 use labwired_core::system::cortex_m::configure_cortex_m;
-use labwired_core::{Bus, Cpu, Machine};
+use labwired_core::{Bus, Cpu, Machine, Peripheral};
 use std::path::PathBuf;
 
 const SYSTEM: &str = "configs/systems/nucleo-u575zi.yaml";
@@ -35,6 +37,30 @@ const SPI1: u64 = 0x4001_3000;
 const SPI3: u64 = 0x4600_2000;
 const I2C1: u64 = 0x4000_5400;
 const GPDMA1: u64 = 0x4002_0000;
+const FDCAN_CCCR: u64 = 0x018;
+const FDCAN_RXGFC: u64 = 0x080;
+const FDCAN_XIDAM: u64 = 0x084;
+const FDCAN_RXF0S: u64 = 0x090;
+const FDCAN_RXF0A: u64 = 0x094;
+const FDCAN_RXF1S: u64 = 0x098;
+const FDCAN_RXF1A: u64 = 0x09C;
+const FDCAN_RAM: u64 = 0x800;
+
+fn fdcan_read(dev: &Fdcan, offset: u64) -> u32 {
+    Peripheral::read_u32(dev, offset).unwrap()
+}
+
+fn fdcan_write(dev: &mut Fdcan, offset: u64, value: u32) {
+    Peripheral::write_u32(dev, offset, value).unwrap();
+}
+
+fn fdcan_running(rxgfc: u32) -> Fdcan {
+    let mut dev = Fdcan::new();
+    fdcan_write(&mut dev, FDCAN_CCCR, 0x3); // INIT | CCE
+    fdcan_write(&mut dev, FDCAN_RXGFC, rxgfc);
+    fdcan_write(&mut dev, FDCAN_CCCR, 0); // enter normal mode
+    dev
+}
 
 struct Rig {
     machine: Machine<labwired_core::cpu::CortexM>,
@@ -54,9 +80,13 @@ impl Rig {
         // while it drains flash erase/program ops recorded by MMIO writes.
         bus.write_u16(0x2000_0000, 0xE7FE).unwrap();
         cpu.set_pc(0x2000_0000);
-        Self {
-            machine: Machine::new(cpu, bus),
-        }
+        let mut machine = Machine::new(cpu, bus);
+        // These tests drive the bus with no firmware; a one-cycle tick
+        // interval makes each `step()` advance the peripheral models (GPDMA
+        // elements, UART RX pacing) instead of waiting for the default batch.
+        machine.config.peripheral_tick_interval = 1;
+        machine.bus.config.peripheral_tick_interval = 1;
+        Self { machine }
     }
 
     /// Enable every peripheral clock these register tests touch.
@@ -82,6 +112,12 @@ impl Rig {
 
     fn step(&mut self) {
         let _ = self.machine.step();
+    }
+
+    /// Advance the peripheral walk without running the CPU, so a pending
+    /// interrupt stays in NVIC.ISPR for the assertion.
+    fn tick(&mut self) {
+        let _ = self.machine.bus.tick_peripherals_fully_forced();
     }
 
     fn enable_gpio(&mut self, bits: u32) {
@@ -171,11 +207,7 @@ fn pwr_voltage_range_booster_regulator_and_dbpr() {
     }
     assert_eq!(r.r(PWR + 0x0C) & 0x4000, 0, "BOOSTRDY off");
     r.w(PWR + 0x0C, (3 << 16) | (1 << 18));
-    assert_eq!(
-        r.r(PWR + 0x0C) & 0xC000,
-        0xC000,
-        "BOOSTEN|BOOSTRDY|VOSRDY"
-    );
+    assert_eq!(r.r(PWR + 0x0C) & 0xC000, 0xC000, "BOOSTEN|BOOSTRDY|VOSRDY");
     // Regulator selection mirrors CR3.REGSEL into SVMSR.REGS.
     assert_eq!(r.r(PWR + 0x3C) & 2, 0, "LDO selected");
     r.w(PWR + 0x08, 2);
@@ -271,7 +303,7 @@ fn flash_page_and_mass_erase_touch_only_the_selected_region() {
         }
     }
     r.w(FLASH + 0x28, 0); // end programming
-    // Page 2 of bank 1 (PER, PNB=2, STRT).
+                          // Page 2 of bank 1 (PER, PNB=2, STRT).
     r.w(FLASH + 0x28, 0x2 | (2 << 3) | (1 << 16));
     r.step();
     assert_eq!(r.r(bank1 + 2 * page), 0xFFFF_FFFF, "page erased");
@@ -287,6 +319,27 @@ fn flash_page_and_mass_erase_touch_only_the_selected_region() {
     r.w(FLASH + 0x28, 0x4 | (1 << 16)); // MER1|STRT
     r.step();
     assert_eq!(r.r(bank1 + 3 * page), 0xFFFF_FFFF, "bank 1 erased");
+
+    // Selecting MER1 and MER2 together mass-erases both banks. Seed one
+    // quad-word in each bank after the individual erase cases above.
+    r.w(FLASH + 0x28, 1); // PG
+    for (base, word) in [
+        (bank1 + 5 * page, 0x1234_5678u32),
+        (bank2 + 6 * page, 0x8765_4321u32),
+    ] {
+        for k in 0..4u64 {
+            r.machine.bus.write_u32(base + k * 4, word).unwrap();
+        }
+    }
+    r.w(FLASH + 0x28, 0); // end programming
+    assert_eq!(r.r(bank1 + 5 * page), 0x1234_5678, "bank 1 reprogrammed");
+    assert_eq!(r.r(bank2 + 6 * page), 0x8765_4321, "bank 2 reprogrammed");
+    r.w(FLASH + 0x28, 0x4 | (1 << 15) | (1 << 16)); // MER1|MER2|STRT
+    r.step();
+    assert_eq!(r.r(bank1 + 5 * page), 0xFFFF_FFFF, "bank 1 mass-erased");
+    assert_eq!(r.r(bank2 + 6 * page), 0xFFFF_FFFF, "bank 2 mass-erased");
+    assert_eq!(r.r(bank1 + 0x0F_FFFC), 0xFFFF_FFFF, "bank 1 last word");
+    assert_eq!(r.r(bank2 + 0x0F_FFFC), 0xFFFF_FFFF, "bank 2 last word");
 }
 
 // ── GPIO / EXTI ─────────────────────────────────────────────────────────────
@@ -298,7 +351,13 @@ fn gpio_reset_values_are(port: u64, moder: u32, ospeedr: u32, pupdr: u32) {
     assert_eq!(r.r(port + 0x04), 0, "OTYPER");
     assert_eq!(r.r(port + 0x08), ospeedr, "OSPEEDR");
     assert_eq!(r.r(port + 0x0C), pupdr, "PUPDR");
-    assert_eq!(r.r(port + 0x10), 0, "IDR");
+    // LabWired retains physical weak pulls on undriven inputs. 60North's
+    // reset IDR=0 oracle omits these pulls; do not remove shared GPIO physics
+    // to match that reference simplification.
+    let pulled_high = (0..16).fold(0, |bits, pin| {
+        bits | (u32::from((pupdr >> (2 * pin)) & 3 == 1) << pin)
+    });
+    assert_eq!(r.r(port + 0x10), pulled_high, "IDR reflects pulls");
     assert_eq!(r.r(port + 0x14), 0, "ODR");
     assert_eq!(r.r(port + 0x20), 0, "AFRL");
     assert_eq!(r.r(port + 0x24), 0, "AFRH");
@@ -341,10 +400,73 @@ fn gpio_reset_values_and_set_reset_priority() {
 }
 
 #[test]
+fn gpio_lock_sequence_with_changed_masks_aborts() {
+    let lckk = 1 << 16;
+    let first_mask = 1 << 5;
+    let second_mask = 1 << 6;
+    let final_mask = 1 << 7;
+
+    for sequence in [
+        [first_mask, second_mask, final_mask],
+        [first_mask, first_mask, final_mask],
+    ] {
+        let mut r = Rig::powered();
+        r.w(GPIOA + 0x1C, lckk | sequence[0]);
+        r.w(GPIOA + 0x1C, sequence[1]);
+        r.w(GPIOA + 0x1C, lckk | sequence[2]);
+
+        assert_eq!(r.r(GPIOA + 0x1C) & lckk, 0, "mismatched masks abort LCKR");
+        r.w(GPIOA, 0);
+        assert_eq!(r.r(GPIOA), 0, "mismatched masks lock no GPIO pins");
+    }
+}
+
+#[test]
+fn gpio_lckk_is_irreversible_until_reset() {
+    let mut r = Rig::powered();
+    let pa5 = 1 << 5;
+    let pa6 = 1 << 6;
+    let lckk = 1 << 16;
+    r.w(GPIOA, (1 << (5 * 2)) | (1 << (6 * 2))); // PA5/PA6 outputs
+
+    r.w(GPIOA + 0x1C, lckk | pa5);
+    r.w(GPIOA + 0x1C, pa5);
+    r.w(GPIOA + 0x1C, lckk | pa5);
+    assert_eq!(r.r(GPIOA + 0x1C), lckk | pa5, "PA5 lock latched");
+
+    // A later 1-0-1 attempt cannot alter LCKR or add PA6 to the locked mask.
+    r.w(GPIOA + 0x1C, lckk | pa6);
+    r.w(GPIOA + 0x1C, pa6);
+    r.w(GPIOA + 0x1C, lckk | pa6);
+    assert_eq!(r.r(GPIOA + 0x1C), lckk | pa5, "LCKR remains latched");
+
+    // PA5 remains locked while PA6 can still be reconfigured as an input.
+    r.w(GPIOA, 0);
+    let moder = r.r(GPIOA);
+    assert_eq!((moder >> (5 * 2)) & 0b11, 0b01, "PA5 remains output");
+    assert_eq!((moder >> (6 * 2)) & 0b11, 0, "PA6 changes to input");
+}
+
+#[test]
+fn gpio_locked_alternate_functions_preserve_only_selected_nibbles() {
+    let mut r = Rig::powered();
+    r.w(GPIOA + 0x20, 0x7654_3210);
+    r.w(GPIOA + 0x24, 0xFEDC_BA98);
+    let pins = (1 << 1) | (1 << 5) | (1 << 9) | (1 << 15);
+    for key in [1 << 16, 0, 1 << 16] {
+        r.w(GPIOA + 0x1C, pins | key);
+    }
+    r.w(GPIOA + 0x20, 0xFFFF_FFFF);
+    r.w(GPIOA + 0x24, 0x0000_0000);
+    assert_eq!(r.r(GPIOA + 0x20), 0xFF5F_FF1F);
+    assert_eq!(r.r(GPIOA + 0x24), 0xF000_0090);
+}
+
+#[test]
 fn gpio_inputs_and_exti_edges() {
     let mut r = Rig::new();
     r.enable_gpio(0x7); // GPIOA/B/C
-    // PC13 input, PB13 input.
+                        // PC13 input, PB13 input.
     r.w(GPIOC, 0xF3FF_FFFF);
     r.w(GPIOB, 0xF3FF_FEBF);
     let nvic_iser = 0xE000_E100u64;
@@ -354,8 +476,16 @@ fn gpio_inputs_and_exti_edges() {
     r.w(EXTI + 0x00, 0x2000); // RTSR1 line 13
     r.w(EXTI + 0x80, 0x2000); // IMR1 line 13
 
-    let c = r.machine.bus.find_peripheral_index_by_name("gpioc").unwrap();
-    let b = r.machine.bus.find_peripheral_index_by_name("gpiob").unwrap();
+    let c = r
+        .machine
+        .bus
+        .find_peripheral_index_by_name("gpioc")
+        .unwrap();
+    let b = r
+        .machine
+        .bus
+        .find_peripheral_index_by_name("gpiob")
+        .unwrap();
     r.machine.bus.set_peripheral_gpio_input(c, 13, true);
     r.step();
     assert_ne!(r.r(GPIOC + 0x10) & 0x2000, 0, "IDR sees the input");
@@ -394,6 +524,8 @@ fn usart_reset_values_prescaler_and_fifo_flags() {
         assert_eq!(r.r(base + 0x2C), 0, "PRESC");
         assert_eq!(r.r(base + 0x30), 0x8000_0000, "AUTOCR");
     }
+    r.w(USART1 + 0x30, 0x1234_5678);
+    assert_eq!(r.r(USART1 + 0x30), 0x1234_5678, "AUTOCR storage");
     // PRESC is writable while UE=0, frozen while UE=1.
     r.w(USART1 + 0x2C, 5);
     assert_eq!(r.r(USART1 + 0x2C), 5, "PRESC stored");
@@ -405,33 +537,29 @@ fn usart_reset_values_prescaler_and_fifo_flags() {
     assert_eq!(r.r(USART1 + 0x2C), 3);
 
     // FIFO mode: RXFTCFG=010 (half, 4 chars); RXFT after 4, RXFF after 8.
-    let mut r = Rig::new();
+    let mut r = Rig::powered();
     r.w(USART1 + 0x08, (2 << 25) | (1 << 28)); // CR3 RXFTCFG | RXFTIE
-    r.w(USART1, 1 | (1 << 29)); // UE | FIFOEN
-    let rx = r
-        .machine
-        .bus
-        .attach_uart_rx_source_named("usart1")
-        .unwrap();
+    r.w(USART1, 1 | (1 << 2) | (1 << 29)); // UE | RE | FIFOEN
+    let rx = r.machine.bus.attach_uart_rx_source_named("usart1").unwrap();
     rx.lock().unwrap().extend(b"abc");
     for _ in 0..4_000 {
-        r.step();
+        r.tick();
     }
     assert_eq!(r.r(USART1 + 0x1C) & (1 << 26), 0, "RXFT below threshold");
     rx.lock().unwrap().extend(b"d");
     for _ in 0..4_000 {
-        r.step();
+        r.tick();
     }
     assert_ne!(r.r(USART1 + 0x1C) & (1 << 26), 0, "RXFT at half");
     assert_eq!(r.r(USART1 + 0x1C) & (1 << 24), 0, "RXFF not yet");
     rx.lock().unwrap().extend(b"efghij");
     for _ in 0..4_000 {
-        r.step();
+        r.tick();
     }
     assert_ne!(r.r(USART1 + 0x1C) & (1 << 24), 0, "RXFF at depth 8");
 
     // TXFE is set from reset on USARTs, only in FIFO mode on LPUART.
-    let mut r = Rig::new();
+    let mut r = Rig::powered();
     assert_ne!(r.r(USART1 + 0x1C) & (1 << 23), 0, "USART1 TXFE");
     assert_eq!(r.r(LPUART1 + 0x1C) & (1 << 23), 0, "LPUART TXFE off");
     r.w(LPUART1, 1 << 29); // FIFOEN
@@ -469,10 +597,12 @@ fn spi3_limits_loopback_threshold_and_irq() {
 
     // Full-duplex loopback: RXP after each frame, EOT + CSTART clear at end.
     let mut r = Rig::new();
+    r.enable(RCC + 0xA4, 1 << 12); // SPI1EN
     r.machine
         .bus
         .attach_spi_device("spi1", Box::new(SpiLoopback::default()))
         .unwrap();
+    r.w(SPI1 + 0x00, 1 << 12); // SSI first: MASTER|SSM with SSI=0 mode-faults
     r.w(SPI1 + 0x08, 0x0007_0007);
     r.w(SPI1 + 0x0C, (1 << 22) | (1 << 26)); // MASTER | SSM
     r.w(SPI1 + 0x04, 2);
@@ -491,10 +621,12 @@ fn spi3_limits_loopback_threshold_and_irq() {
 
     // RXPIE gates the interrupt line.
     let mut r = Rig::new();
+    r.enable(RCC + 0xA4, 1 << 12); // SPI1EN
     r.machine
         .bus
         .attach_spi_device("spi1", Box::new(Echo))
         .unwrap();
+    r.w(SPI1 + 0x00, 1 << 12); // SSI first
     r.w(SPI1 + 0x08, 0x0007_0007);
     r.w(SPI1 + 0x0C, (1 << 22) | (1 << 26));
     r.w(SPI1 + 0x04, 1);
@@ -504,8 +636,12 @@ fn spi3_limits_loopback_threshold_and_irq() {
     r.w(SPI1 + 0x20, 0x42);
     assert!(r.r(SPI1 + 0x14) & 1 != 0);
     // The SPI1 IRQ is NVIC line 59.
-    assert!(r.machine.bus.is_nvic_irq_pending(59), "SPI1 IRQ pending");
-    r.w(SPI1 + 0x30, 0);
+    r.tick();
+    assert!(
+        r.machine.bus.is_nvic_irq_pending(16 + 59),
+        "SPI1 IRQ pending"
+    );
+    let _ = r.r(SPI1 + 0x30);
     assert_eq!(r.r(SPI1 + 0x14) & 1, 0, "RXDR read clears RXP");
 }
 
@@ -533,35 +669,56 @@ fn i2c_write_read_and_nack() {
     let mut r = Rig::powered();
     r.machine
         .bus
-        .attach_i2c_slave("i2c1", Box::new(EchoI2c { address: 0x42, bytes: Default::default() }))
+        .attach_i2c_slave(
+            "i2c1",
+            Box::new(EchoI2c {
+                address: 0x42,
+                bytes: Default::default(),
+            }),
+        )
         .unwrap();
     r.w(I2C1, 1); // PE
-    // Write two bytes, AUTOEND.
-    r.w(
-        I2C1 + 0x04,
-        (0x42 << 1) | (2 << 16) | (1 << 25) | (1 << 13),
-    );
+                  // Write two bytes, AUTOEND.
+    r.w(I2C1 + 0x04, (0x42 << 1) | (2 << 16) | (1 << 25) | (1 << 13));
+    for _ in 0..1000 {
+        r.tick();
+    }
     assert_ne!(r.r(I2C1 + 0x18) & 2, 0, "TXIS");
     r.w(I2C1 + 0x28, 0x11);
+    for _ in 0..200 {
+        r.tick();
+    }
     r.w(I2C1 + 0x28, 0x22);
+    for _ in 0..1000 {
+        r.tick();
+    }
     assert_ne!(r.r(I2C1 + 0x18) & (1 << 5), 0, "STOPF");
     r.w(I2C1 + 0x1C, 1 << 5);
     assert_eq!(r.r(I2C1 + 0x18) & (1 << 5), 0, "STOPF W1C");
 
     // Read back the two bytes echoed by the target.
-    r.w(I2C1 + 0x04, (0x42 << 1) | (1 << 10) | (2 << 16) | (1 << 25) | (1 << 13));
+    r.w(
+        I2C1 + 0x04,
+        (0x42 << 1) | (1 << 10) | (2 << 16) | (1 << 25) | (1 << 13),
+    );
+    for _ in 0..1000 {
+        r.tick();
+    }
     assert_ne!(r.r(I2C1 + 0x18) & 4, 0, "RXNE");
     assert_eq!(r.r(I2C1 + 0x24), 0x11);
+    for _ in 0..200 {
+        r.tick();
+    }
     assert_eq!(r.r(I2C1 + 0x24), 0x22);
     assert_ne!(r.r(I2C1 + 0x18) & (1 << 5), 0, "STOPF");
 
     // No target: NACK + STOP.
-    let mut r = Rig::new();
+    let mut r = Rig::powered();
     r.w(I2C1, 1);
-    r.w(
-        I2C1 + 0x04,
-        (0x50 << 1) | (1 << 16) | (1 << 25) | (1 << 13),
-    );
+    r.w(I2C1 + 0x04, (0x50 << 1) | (1 << 16) | (1 << 25) | (1 << 13));
+    for _ in 0..1000 {
+        r.tick();
+    }
     assert_ne!(r.r(I2C1 + 0x18) & (1 << 4), 0, "NACKF");
     assert_ne!(r.r(I2C1 + 0x18) & (1 << 5), 0, "STOPF");
     r.w(I2C1 + 0x1C, 1 << 4);
@@ -588,14 +745,17 @@ fn gpdma_bndt_bytes_irq_split_and_peripheral_routing() {
     r.w(chan(0) + 0x50, dst as u32);
     r.w(chan(0) + 0x14, (1 << 8) | 1); // TCIE | EN
     for _ in 0..20 {
-        r.step();
+        r.tick();
     }
     assert_eq!(r.r(dst), 0x1111_1111);
     assert_eq!(r.r(dst + 4), 0x2222_2222);
     assert_eq!(r.r(dst + 8), 0xAAAA_AAAA, "BNDT is bytes, not beats");
     assert_eq!(r.r(chan(0) + 0x48) & 0xFFFF, 0, "BNDT drained");
     assert_ne!(r.r(chan(0) + 0x10) & (1 << 8), 0, "TCF");
-    assert!(r.machine.bus.is_nvic_irq_pending(29), "channel 0 IRQ 29");
+    assert!(
+        r.machine.bus.is_nvic_irq_pending(16 + 29),
+        "channel 0 IRQ 29"
+    );
 
     // Channel 8 and 15 use NVIC 80..87, not 37..44.
     for (ch, irq) in [(8u64, 80u32), (15, 87)] {
@@ -608,10 +768,10 @@ fn gpdma_bndt_bytes_irq_split_and_peripheral_routing() {
         r.w(chan(ch) + 0x50, dst as u32);
         r.w(chan(ch) + 0x14, (1 << 8) | 1); // TCIE | EN
         for _ in 0..20 {
-            r.step();
+            r.tick();
         }
         assert!(
-            r.machine.bus.is_nvic_irq_pending(irq),
+            r.machine.bus.is_nvic_irq_pending(16 + irq),
             "channel {ch} pends IRQ {irq}"
         );
     }
@@ -621,7 +781,8 @@ fn gpdma_bndt_bytes_irq_split_and_peripheral_routing() {
     let mut r = Rig::new();
     r.enable(RCC + 0x88, 1); // GPDMA1
     r.enable(RCC + 0xA4, 1 << 12); // SPI1EN
-    r.w(SPI1 + 0x08, 0x0007_0007);
+    r.w(SPI1 + 0x00, 1 << 12); // SSI first
+    r.w(SPI1 + 0x08, 0x0007_0007 | (1 << 15)); // TXDMAEN before SPE locks CFG1
     r.w(SPI1 + 0x0C, (1 << 22) | (1 << 26));
     r.w(SPI1 + 0x04, 1);
     r.w(SPI1 + 0x00, (1 << 12) | 1);
@@ -632,10 +793,89 @@ fn gpdma_bndt_bytes_irq_split_and_peripheral_routing() {
     r.w(chan(0) + 0x4C, src as u32);
     r.w(chan(0) + 0x50, SPI1 as u32 + 0x20);
     r.w(chan(0) + 0x14, 1); // EN
-    r.w(SPI1 + 0x08, r.r(SPI1 + 0x08) | (1 << 15)); // TXDMAEN
     r.w(src, 0x0000_00A5);
     for _ in 0..5_000 {
-        r.step();
+        r.tick();
     }
     assert_ne!(r.r(SPI1 + 0x14) & (1 << 4), 0, "SPI TXTF after DMA frame");
+}
+
+// ── FDCAN acceptance and RX metadata ────────────────────────────────────────
+
+#[test]
+fn fdcan_fifo_ack_drains_all_entries_across_index_wrap() {
+    let mut dev = Fdcan::new();
+    fdcan_write(&mut dev, FDCAN_CCCR, 0x3);
+    fdcan_write(&mut dev, FDCAN_RXGFC, 1 << 16); // one standard filter
+    fdcan_write(&mut dev, FDCAN_RAM, 1 << 30 | 2 << 27 | 0x123 << 16 | 0x123); // dual ID, FIFO1, exact match
+    fdcan_write(&mut dev, FDCAN_CCCR, 0);
+    for index in 0..3 {
+        assert!(dev.receive_frame(CanFrame::classic(0x123, vec![0x5A])));
+        assert!(dev.receive_frame(CanFrame::classic(0x200 + index, vec![0xA5])));
+    }
+    assert_eq!(fdcan_read(&dev, FDCAN_RXF0S) & 0x7F, 3);
+    assert_eq!(fdcan_read(&dev, FDCAN_RXF1S) & 0x7F, 3);
+
+    fdcan_write(&mut dev, FDCAN_RXF0A, 2);
+    fdcan_write(&mut dev, FDCAN_RXF1A, 2);
+
+    assert_eq!(fdcan_read(&dev, FDCAN_RXF0S) & 0x7F, 0);
+    assert_eq!(fdcan_read(&dev, FDCAN_RXF1S) & 0x7F, 0);
+    assert_eq!((fdcan_read(&dev, FDCAN_RXF0S) >> 8) & 0x3F, 0);
+    assert_eq!((fdcan_read(&dev, FDCAN_RXF1S) >> 8) & 0x3F, 0);
+}
+
+#[test]
+fn fdcan_matched_filter_sets_real_index_and_clears_anmf() {
+    let mut dev = Fdcan::new();
+    // Filter 0 is disabled; filter 1 is dual-ID, FIFO1, and matches 0x123.
+    fdcan_write(&mut dev, FDCAN_RAM, 1 << 30 | 0x123 << 16 | 0x123);
+    fdcan_write(
+        &mut dev,
+        FDCAN_RAM + 4,
+        1 << 30 | 2 << 27 | 0x123 << 16 | 0x123,
+    );
+    fdcan_write(&mut dev, FDCAN_CCCR, 0x3);
+    fdcan_write(&mut dev, FDCAN_RXGFC, 2 << 16);
+    fdcan_write(&mut dev, FDCAN_CCCR, 0);
+
+    assert!(dev.receive_frame(CanFrame::classic(0x123, vec![0x5A])));
+    let r1 = fdcan_read(&dev, FDCAN_RAM + 0x188 + 4);
+    assert_eq!(r1 >> 31, 0, "ANMF is clear for a matched filter");
+    assert_eq!((r1 >> 24) & 0x7F, 1, "FIDX is the matching list index");
+}
+
+#[test]
+fn fdcan_global_filter_rejects_standard_and_extended_remote_frames() {
+    let mut dev = fdcan_running(0b11); // RRFE | RRFS
+    let mut standard = CanFrame::classic(0x123, vec![]);
+    standard.remote = true;
+    let mut extended = CanFrame::classic(0x123, vec![]);
+    extended.extended = true;
+    extended.remote = true;
+
+    assert!(!dev.receive_frame(standard));
+    assert!(!dev.receive_frame(extended));
+    assert_eq!(fdcan_read(&dev, FDCAN_RXF0S) & 0x7F, 0);
+    assert_eq!(fdcan_read(&dev, FDCAN_RXF1S) & 0x7F, 0);
+}
+
+#[test]
+fn fdcan_extended_range_filter_type_three_ignores_xidam() {
+    let mut dev = Fdcan::new();
+    // EFT=3 bypasses XIDAM. The raw 0x1234 ID falls in [0x1000, 0x2000],
+    // while its XIDAM-masked form (0x34) does not.
+    fdcan_write(&mut dev, FDCAN_RAM + 0x70, 1 << 29 | 0x1000);
+    fdcan_write(&mut dev, FDCAN_RAM + 0x74, 3 << 30 | 0x2000);
+    fdcan_write(&mut dev, FDCAN_CCCR, 0x3);
+    fdcan_write(&mut dev, FDCAN_RXGFC, 1 << 24 | 2 << 2); // one ext filter; reject nonmatches
+    fdcan_write(&mut dev, FDCAN_XIDAM, 0xFF);
+    fdcan_write(&mut dev, FDCAN_CCCR, 0);
+
+    let mut frame = CanFrame::classic(0x1234, vec![0xA5]);
+    frame.extended = true;
+    assert!(dev.receive_frame(frame));
+    let r1 = fdcan_read(&dev, FDCAN_RAM + 0xB0 + 4);
+    assert_eq!(r1 >> 31, 0, "ANMF is clear for a matched filter");
+    assert_eq!((r1 >> 24) & 0x7F, 0);
 }

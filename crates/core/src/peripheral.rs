@@ -415,6 +415,14 @@ pub trait Peripheral: std::fmt::Debug + Send {
         None
     }
 
+    /// Bind a power controller's backup-domain write-enable signal to its
+    /// clock controller. Models without that protection ignore the signal.
+    fn bind_backup_domain_write_enable(
+        &mut self,
+        _enabled: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    ) {
+    }
+
     /// Camera-slave capability: bind a DVP sensor's pixel output to this
     /// peripheral's camera input. Returns `true` when this peripheral has one
     /// and took the sensor.

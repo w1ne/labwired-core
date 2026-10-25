@@ -22,6 +22,8 @@
 
 use crate::SimResult;
 use std::str::FromStr;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 /// Selects which chip family's RCC model to instantiate. Kept as the public
 /// config-facing selector (chip yaml `profile`); each value maps 1:1 to a
@@ -764,6 +766,15 @@ pub struct V2Rcc {
     /// same reason as `map`.
     #[serde(skip)]
     u5_cr_ready: bool,
+    /// An external HSE oscillator is present on this board. HSE is a board
+    /// component (RM0456 §11): HSEON only reaches HSERDY when one is fitted.
+    /// Fixed configuration, skipped in the snapshot.
+    #[serde(skip)]
+    hse_present: bool,
+    /// PWR_DBPR.DBP on U5: the backup domain (BDCR) is write-protected until
+    /// software sets DBP. Shared with the PWR model by the bus builder.
+    #[serde(skip)]
+    dbp_flag: Option<Arc<AtomicBool>>,
     /// STM32WB RCC_EXTCFGR @ 0x108 — shared/CPU2 AHB prescalers + ready flags
     /// (RM0434: SHDHPREF bit16, C2HPREF bit17). G4 has no EXTCFGR.
     extcfgr: u32,
@@ -778,6 +789,7 @@ impl V2Rcc {
         Self {
             cr: Self::ready_classic(1 << 0),
             pll1divr: pll1divr_reset(),
+            hse_present: true,
             ..Default::default()
         }
     }
@@ -797,7 +809,10 @@ impl V2Rcc {
     /// 0x0C004400 (MSI ranges + PINRSTF|BORRSTF).
     fn new_u5() -> Self {
         Self {
-            cr: Self::ready_u5(0x35),
+            // HSE is a board component; the reference U5 platform has none
+            // fitted unless the board description says so.
+            cr: Self::ready_u5(0x35, false),
+            hse_present: false,
             icscr: 0x4400_0000,
             icscr2: 0x0008_4210,
             icscr3: 0x0010_0000,
@@ -848,13 +863,12 @@ impl V2Rcc {
     /// modelled — no shipped firmware starts it. RDY is a pure status: it
     /// follows ON on every write, exactly as the per-family parent/sibling
     /// models latch their CR ready bits.
-    fn ready_u5(mut cr: u32) -> u32 {
+    fn ready_u5(mut cr: u32, hse_present: bool) -> u32 {
         for &(on, rdy) in &[
             (0u32, 2u32),
             (4, 5),
             (8, 10),
             (12, 13),
-            (16, 17),
             (24, 25),
             (26, 27),
             (28, 29),
@@ -865,7 +879,32 @@ impl V2Rcc {
                 cr &= !(1 << rdy);
             }
         }
+        // HSEON reaches HSERDY only when an external oscillator is fitted.
+        if hse_present && cr & (1 << 16) != 0 {
+            cr |= 1 << 17;
+        } else {
+            cr &= !(1 << 17);
+        }
         cr
+    }
+
+    /// Board option: is an external HSE oscillator fitted? Re-derives the
+    /// HSEON→HSERDY status for the current control word.
+    fn set_hse_present(&mut self, present: bool) {
+        self.hse_present = present;
+        if self.u5_cr_ready {
+            self.cr = Self::ready_u5(self.cr, present);
+        }
+    }
+
+    fn set_dbp_flag(&mut self, flag: Arc<AtomicBool>) {
+        self.dbp_flag = Some(flag);
+    }
+
+    fn dbp_set(&self) -> bool {
+        self.dbp_flag
+            .as_ref()
+            .is_none_or(|flag| flag.load(Ordering::Relaxed))
     }
 }
 
@@ -1071,7 +1110,7 @@ impl RccModel for V2Rcc {
         match offset {
             0x00 => {
                 self.cr = if self.u5_cr_ready {
-                    Self::ready_u5(value)
+                    Self::ready_u5(value, self.hse_present)
                 } else {
                     Self::ready_classic(value)
                 }
@@ -1188,6 +1227,11 @@ impl RccModel for V2Rcc {
             // `HAL_RCC_OscConfig` polls all three (stm32u5xx_hal_rcc.c), so a
             // partial LSE-only ack hangs the boot on bit11/bit27.
             0xF0 if self.u5_cr_ready => {
+                // BDCR is write-protected until PWR_DBPR.DBP is set
+                // (RM0456 §11.8.40).
+                if !self.dbp_set() {
+                    return;
+                }
                 let mut v = value;
                 for &(on, rdy) in &[(0u32, 1u32), (7, 11), (26, 27)] {
                     if v & (1 << on) != 0 {
@@ -2384,6 +2428,22 @@ impl Rcc {
         }
     }
 
+    /// Board option: an external HSE oscillator is fitted. Only the U5/V2
+    /// clock tree gates HSERDY on this today; other families keep their
+    /// existing fixed-oscillator behaviour.
+    pub fn set_hse_present(&mut self, present: bool) {
+        if let Self::Stm32V2(v2) = self {
+            v2.set_hse_present(present);
+        }
+    }
+
+    /// Link the U5 RCC backup-domain write protection to PWR_DBPR.DBP.
+    pub fn set_dbp_flag(&mut self, flag: Arc<AtomicBool>) {
+        if let Self::Stm32V2(v2) = self {
+            v2.set_dbp_flag(flag);
+        }
+    }
+
     /// Resolve a symbolic RCC register name to its byte offset within THIS chip
     /// family's RCC register map. Returns `None` for a name the active family
     /// does not have. The offsets deliberately differ between families
@@ -2602,6 +2662,10 @@ impl Rcc {
 }
 
 impl crate::Peripheral for Rcc {
+    fn bind_backup_domain_write_enable(&mut self, enabled: Arc<AtomicBool>) {
+        self.set_dbp_flag(enabled);
+    }
+
     /// Record a supply reset in RCC_CSR. Modelled on the F4 layout; the other
     /// families' CSR reset flags stay as they were (plain storage).
     fn on_supply_reset(&mut self, cause: crate::power::SupplyResetCause) {

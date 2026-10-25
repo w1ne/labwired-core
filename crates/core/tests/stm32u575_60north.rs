@@ -11,8 +11,7 @@
 //! check — not on "exit 0" or a UART banner.
 //!
 //! Firmware is an external, non-committed artifact: point
-//! `RENODE_U5_FIRMWARE` at the directory holding the ELFs (default is the
-//! 60North worktree build directory).
+//! `RENODE_U5_FIRMWARE` at the directory holding the ELFs and pass `--ignored`.
 //!
 //! 60North is a Renode-derived reference, not silicon. Passing here means
 //! "matches the reference model's documented behaviour", not "matches a bench
@@ -27,7 +26,6 @@ use labwired_core::{AdvanceRequest, Bus, Cpu, Machine};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-const DEFAULT_FW_DIR: &str = "/home/andrii/projects/renode-stm32u5-60north/build/firmware";
 const SYSTEM_NUCLEO: &str = "configs/systems/nucleo-u575zi.yaml";
 
 const GPIOA: u64 = 0x4202_0000;
@@ -49,7 +47,7 @@ fn root(rel: &str) -> PathBuf {
 fn fw_dir() -> PathBuf {
     std::env::var("RENODE_U5_FIRMWARE")
         .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from(DEFAULT_FW_DIR))
+        .expect("set RENODE_U5_FIRMWARE to the built 60North firmware directory")
 }
 
 struct Rig {
@@ -87,11 +85,7 @@ impl Rig {
         });
         let image = labwired_loader::load_elf(&elf_path).unwrap();
         machine.load_firmware(&image).unwrap();
-        Self {
-            machine,
-            uart,
-            elf,
-        }
+        Self { machine, uart, elf }
     }
 
     fn symbol(&self, name: &str) -> u64 {
@@ -179,7 +173,11 @@ impl Rig {
             }
         }
         let groups: [(&str, u64, &[u64]); 4] = [
-            ("SPI1", 0x4001_3000, &[0x00, 0x04, 0x08, 0x0C, 0x10, 0x14, 0x18, 0x20, 0x30]),
+            (
+                "SPI1",
+                0x4001_3000,
+                &[0x00, 0x04, 0x08, 0x0C, 0x10, 0x14, 0x18, 0x20, 0x30],
+            ),
             ("GPDMA", 0x4002_0000, &[0x64, 0x94, 0x98, 0x9C, 0xA0]),
             ("DMA1", 0x4002_0080, &[0x14, 0x44, 0x48, 0x4C, 0x50]),
             ("RCC", 0x4602_0C00, &[0x00, 0x04, 0x1C]),
@@ -211,9 +209,7 @@ impl Rig {
 
     fn set_input(&mut self, port: &str, pin: u8, level: bool) {
         let idx = self.gpio_idx(port);
-        self.machine
-            .bus
-            .set_peripheral_gpio_input(idx, pin, level);
+        self.machine.bus.set_peripheral_gpio_input(idx, pin, level);
     }
 
     fn uart_rx(&self, name: &str) -> Arc<Mutex<std::collections::VecDeque<u8>>> {
@@ -224,13 +220,10 @@ impl Rig {
     }
 }
 
-fn assert_symbol(rig: &Rig, name: &str, expected: u32) {
-    assert_eq!(rig.symbol_u32(name), expected, "symbol {name}");
-}
-
 // ── Bare-metal core ─────────────────────────────────────────────────────────
 
 #[test]
+#[ignore = "requires external 60North firmware; set RENODE_U5_FIRMWARE and run with --ignored"]
 fn core_smoke_maps_memories_and_services_interrupts() {
     let mut r = Rig::boot("core-smoke.elf", SYSTEM_NUCLEO);
     r.step(60_000);
@@ -256,10 +249,11 @@ fn core_smoke_maps_memories_and_services_interrupts() {
 }
 
 #[test]
+#[ignore = "requires external 60North firmware; set RENODE_U5_FIRMWARE and run with --ignored"]
 fn core_smoke_restarts_after_machine_reset() {
     let mut r = Rig::boot("core-smoke.elf", SYSTEM_NUCLEO);
     r.step(2_000_000);
-    r.machine.reset();
+    r.machine.reset().unwrap();
     r.step(2_000_000);
     let done = 1u32 << 31;
     assert_eq!(r.symbol_u32("passedChecks") & done, done);
@@ -268,6 +262,7 @@ fn core_smoke_restarts_after_machine_reset() {
 // ── Bare-metal clock ────────────────────────────────────────────────────────
 
 #[test]
+#[ignore = "requires external 60North firmware; set RENODE_U5_FIRMWARE and run with --ignored"]
 fn clock_init_reaches_160mhz_and_done_stage() {
     let mut r = Rig::boot("clock-init.elf", SYSTEM_NUCLEO);
     r.run_until(2_000_000, "clock stage 6", |r| {
@@ -285,6 +280,7 @@ fn clock_init_reaches_160mhz_and_done_stage() {
 // ── HAL clock ───────────────────────────────────────────────────────────────
 
 #[test]
+#[ignore = "requires external 60North firmware; set RENODE_U5_FIRMWARE and run with --ignored"]
 fn hal_clock_completes_and_reports_160mhz() {
     let mut r = Rig::boot("hal-clock.elf", SYSTEM_NUCLEO);
     r.run_until(2_000_000, "HAL clock step 7", |r| {
@@ -311,6 +307,7 @@ fn hal_clock_completes_and_reports_160mhz() {
 // ── HAL GPIO/EXTI ───────────────────────────────────────────────────────────
 
 #[test]
+#[ignore = "requires external 60North firmware; set RENODE_U5_FIRMWARE and run with --ignored"]
 fn hal_gpio_toggles_mirrors_and_counts_rising_edges() {
     let mut r = Rig::boot("hal-gpio.elf", SYSTEM_NUCLEO);
     r.run_until(1_000_000, "GPIO ready", |r| r.symbol_u32("ready") == 1);
@@ -342,11 +339,11 @@ fn hal_gpio_toggles_mirrors_and_counts_rising_edges() {
 // ── HAL UART ────────────────────────────────────────────────────────────────
 
 #[test]
+#[ignore = "requires external 60North firmware; set RENODE_U5_FIRMWARE and run with --ignored"]
 fn hal_uart_prints_configures_baud_and_echoes() {
     let mut r = Rig::boot("hal-uart.elf", SYSTEM_NUCLEO);
     r.run_until(3_000_000, "UART receiving", |r| {
-        r.text().contains("Interrupt transmit done")
-            && r.symbol_u32("step") >= 12
+        r.text().contains("Interrupt transmit done") && r.symbol_u32("step") >= 12
     });
     assert_eq!(r.symbol_u32("failedStep"), 0);
     assert_eq!(r.symbol_u32("usartBrr"), 1389);
@@ -361,6 +358,7 @@ fn hal_uart_prints_configures_baud_and_echoes() {
 // ── HAL SPI (polling / interrupt) ───────────────────────────────────────────
 
 #[test]
+#[ignore = "requires external 60North firmware; set RENODE_U5_FIRMWARE and run with --ignored"]
 fn hal_spi_loops_back_8_and_16_bit_frames() {
     let mut r = Rig::boot("hal-spi.elf", SYSTEM_NUCLEO);
     r.machine
@@ -385,6 +383,7 @@ fn hal_spi_loops_back_8_and_16_bit_frames() {
 // ── HAL SPI DMA + loopback ──────────────────────────────────────────────────
 
 #[test]
+#[ignore = "requires external 60North firmware; set RENODE_U5_FIRMWARE and run with --ignored"]
 fn hal_spi_dma_transmits_all_bytes() {
     let mut r = Rig::boot("hal-spi-dma.elf", SYSTEM_NUCLEO);
     r.run_until(4_000_000, "SPI DMA step 6", |r| {
@@ -397,6 +396,7 @@ fn hal_spi_dma_transmits_all_bytes() {
 }
 
 #[test]
+#[ignore = "requires external 60North firmware; set RENODE_U5_FIRMWARE and run with --ignored"]
 fn hal_spi_dma_loopback_receives_what_it_sent() {
     let mut r = Rig::boot("hal-spi-dma-loopback.elf", SYSTEM_NUCLEO);
     r.machine
@@ -416,6 +416,7 @@ fn hal_spi_dma_loopback_receives_what_it_sent() {
 // ── HAL UART DMA ────────────────────────────────────────────────────────────
 
 #[test]
+#[ignore = "requires external 60North firmware; set RENODE_U5_FIRMWARE and run with --ignored"]
 fn hal_uart_dma_receives_text() {
     let mut r = Rig::boot("hal-uart-dma.elf", SYSTEM_NUCLEO);
     r.run_until(3_000_000, "UART DMA ready banner", |r| {
@@ -436,6 +437,7 @@ fn hal_uart_dma_receives_text() {
 // ── ST examples ─────────────────────────────────────────────────────────────
 
 #[test]
+#[ignore = "requires external 60North firmware; set RENODE_U5_FIRMWARE and run with --ignored"]
 fn st_spi_fullduplex_polling_master_sends_and_receives() {
     let mut r = Rig::boot("st-spi-fullduplex-polling-master.elf", SYSTEM_NUCLEO);
     r.machine
@@ -455,7 +457,10 @@ fn st_spi_fullduplex_polling_master_sends_and_receives() {
     // BUFFERSIZE = sizeof(aTxBuffer) - 1 = 0x73.
     let tx = r.symbol_bytes("aTxBuffer", 0x73);
     let rx = r.symbol_bytes("aRxBuffer", 0x73);
-    assert_eq!(rx, tx, "SPI loopback received buffer equals the sent buffer");
+    assert_eq!(
+        rx, tx,
+        "SPI loopback received buffer equals the sent buffer"
+    );
 }
 
 struct EchoI2c {
@@ -485,6 +490,7 @@ impl I2cDevice for EchoI2c {
 }
 
 #[test]
+#[ignore = "requires external 60North firmware; set RENODE_U5_FIRMWARE and run with --ignored"]
 fn st_i2c_twoboards_master_writes_and_reads_back() {
     let mut r = Rig::boot("st-i2c-twoboards-polling-master.elf", SYSTEM_NUCLEO);
     // I2C_ADDRESS is 0x30F (10-bit); the L4-profile controller matches on
@@ -518,6 +524,7 @@ fn st_i2c_twoboards_master_writes_and_reads_back() {
 }
 
 #[test]
+#[ignore = "requires external 60North firmware; set RENODE_U5_FIRMWARE and run with --ignored"]
 fn st_dma_flash_to_ram_copies_and_blinks() {
     let mut r = Rig::boot("st-dma-flash-to-ram.elf", SYSTEM_NUCLEO);
     r.run_until(8_000_000, "GPDMA completion", |r| {
@@ -532,6 +539,7 @@ fn st_dma_flash_to_ram_copies_and_blinks() {
 }
 
 #[test]
+#[ignore = "requires external 60North firmware; set RENODE_U5_FIRMWARE and run with --ignored"]
 fn st_fdcan_loopback_receives_its_own_frames() {
     let mut r = Rig::boot("st-fdcan-loopback.elf", SYSTEM_NUCLEO);
     r.run_until(8_000_000, "FDCAN frame processing", |r| {

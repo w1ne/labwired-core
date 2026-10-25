@@ -64,8 +64,8 @@
 use crate::{
     CycleClock, DmaDirection, DmaRequest, DmaRoute, Peripheral, PeripheralTickResult, SimResult,
 };
-use std::collections::BTreeMap;
 use std::any::Any;
+use std::collections::BTreeMap;
 
 // ---- Channel-relative register offsets (CMSIS stm32h563xx.h) ----
 const CHAN_BASE: u64 = 0x50;
@@ -404,11 +404,10 @@ impl Gpdma {
         let mut dma_requests: Option<Vec<DmaRequest>> = None;
         let mut irq = false;
         let mut explicit_irqs: Option<Vec<u32>> = None;
-        let channel_irq: Vec<Option<u32>> = (0..NUM_CHANNELS).map(|i| self.channel_irq(i)).collect();
+        let channel_irq: Vec<Option<u32>> =
+            (0..NUM_CHANNELS).map(|i| self.channel_irq(i)).collect();
         let mut pend = |ch_idx: usize, irq_flag: &mut bool| match channel_irq[ch_idx] {
-            Some(line) => explicit_irqs
-                .get_or_insert_with(Vec::new)
-                .push(line),
+            Some(line) => explicit_irqs.get_or_insert_with(Vec::new).push(line),
             None => *irq_flag = true,
         };
 
@@ -547,9 +546,7 @@ impl Gpdma {
         for ch_idx in 0..NUM_CHANNELS {
             if std::mem::take(&mut self.channels[ch_idx].irq_deferred) {
                 match self.channel_irq(ch_idx) {
-                    Some(line) => explicit_irqs
-                        .get_or_insert_with(Vec::new)
-                        .push(line),
+                    Some(line) => explicit_irqs.get_or_insert_with(Vec::new).push(line),
                     None => irq = true,
                 }
             }

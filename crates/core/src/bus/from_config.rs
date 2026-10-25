@@ -716,10 +716,16 @@ impl SystemBus {
                         .get("stm32_lpuart")
                         .and_then(|v| v.as_bool())
                         .unwrap_or(false);
+                    let u5_features = p_cfg
+                        .config
+                        .get("u5_features")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
                     Box::new(
                         crate::peripherals::uart::Uart::new_with_layout_cr3(layout, cr3_mask)
                             .set_full_featured(full)
-                            .set_stm32_lpuart(stm32_lpuart),
+                            .set_stm32_lpuart(stm32_lpuart)
+                            .set_u5_features(u5_features),
                     )
                 }
                 "gpio" | "stm32_gpioport" | "stm32f4_gpio" | "efmgpioport" | "npcx_gpio"
@@ -771,10 +777,11 @@ impl SystemBus {
                                 .map(|n| n as u32)
                                 .unwrap_or(0)
                         };
-                        crate::peripherals::gpio::GpioPort::new_stm32v2_with_resets(
+                        crate::peripherals::gpio::GpioPort::new_stm32v2_with_resets_and_seccfgr(
                             cfg_u32("reset_moder"),
                             cfg_u32("reset_ospeedr"),
                             cfg_u32("reset_pupdr"),
+                            cfg_u32("reset_seccfgr"),
                         )
                         .with_window_offset(window_offset)
                     } else {
@@ -1169,6 +1176,22 @@ impl SystemBus {
             bus.attach_private_lab_air(node);
         }
 
+        // U5: the RCC backup domain (BDCR) is write-protected until
+        // PWR_DBPR.DBP is set. The bus is the only place that knows both
+        // models, so one shared flag links them.
+        if let (Some(rcc_i), Some(pwr_i)) = (
+            bus.find_peripheral_index_by_name("rcc"),
+            bus.find_peripheral_index_by_name("pwr"),
+        ) {
+            let flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+            bus.peripherals[rcc_i]
+                .dev
+                .bind_backup_domain_write_enable(flag.clone());
+            bus.peripherals[pwr_i]
+                .dev
+                .bind_backup_domain_write_enable(flag);
+        }
+
         Ok(bus)
     }
 
@@ -1198,6 +1221,7 @@ impl SystemBus {
     /// is their manifest seam and calls this pass itself, so a canvas button is
     /// attached by ONE implementation on every chip family.
     pub(crate) fn attach_board_io_buttons(&mut self, manifest: &SystemManifest) {
+        use crate::peripherals::gpio::GpioMode;
         use labwired_config::{BoardIoKind, BoardIoSignal};
 
         for binding in &manifest.board_io {
@@ -1226,15 +1250,19 @@ impl SystemBus {
             // reset value of 0 reads as a press that is never released, so a
             // sketch waiting on the button fires immediately at boot.
             //
-            // Then PROVE the level landed. A GPIO model that does not honour an
-            // externally driven level would leave a button that discovery
-            // advertises, `set_input` accepts, and the firmware never sees move
-            // — a stimulus that reports success and proves nothing. Where we
-            // cannot demonstrate the drive, we do not claim the capability: the
-            // button is dropped and the pin is left exactly as that chip had it.
+            // Then PROVE the GPIO model accepted the outside level. An analog
+            // reset pin correctly reads zero from IDR, so keep the button
+            // attached when the model accepts its drive even though firmware
+            // must first select digital input mode to observe it. A model that
+            // cannot accept an external level still drops the button.
             let (level, _) = button.service();
-            let landed = self.drive_input_bit(anchor, binding.pin, level)
-                && self.peripherals[idx].dev.read_gpio_input(binding.pin) == Some(level);
+            let accepted = self.drive_input_bit(anchor, binding.pin, level);
+            let reads_back = self.peripherals[idx].dev.read_gpio_input(binding.pin) == Some(level);
+            let waits_for_digital_mode = self.peripherals[idx]
+                .dev
+                .gpio_routing(binding.pin)
+                .is_some_and(|route| route.mode == GpioMode::Analog);
+            let landed = accepted && (reads_back || waits_for_digital_mode);
             if !landed {
                 tracing::warn!(
                     "board_io button '{}' on '{}' pin {}: this GPIO model does not reflect an \

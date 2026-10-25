@@ -120,6 +120,7 @@ peripherals:
       debug_schema: "../peripherals/stm32u575/gpioa.yaml"
       profile: "stm32v2"
       reset_moder: 0xABFFFFFF
+      reset_seccfgr: 0x0000FFFF
       reset_ospeedr: 0x0C000000
       reset_pupdr: 0x64000000
     # GPIOA-I are clocked from RCC_AHB2ENR1 bits 0-8 (RM0456 §11.8.13).
@@ -133,6 +134,7 @@ peripherals:
       debug_schema: "../peripherals/stm32u575/gpiob.yaml"
       profile: "stm32v2"
       reset_moder: 0xFFFFFEBF
+      reset_seccfgr: 0x0000FFFF
       reset_ospeedr: 0x000000C0
       reset_pupdr: 0x00000100
     clock: { reg: "ahb2enr", bit: 1 }
@@ -144,6 +146,7 @@ peripherals:
       debug_schema: "../peripherals/stm32u575/gpioc.yaml"
       profile: "stm32v2"
       reset_moder: 0xFFFFFFFF
+      reset_seccfgr: 0x0000FFFF
       reset_ospeedr: 0
       reset_pupdr: 0
     clock: { reg: "ahb2enr", bit: 2 }
@@ -155,6 +158,7 @@ peripherals:
       debug_schema: "../peripherals/stm32u575/gpiod.yaml"
       profile: "stm32v2"
       reset_moder: 0xFFFFFFFF
+      reset_seccfgr: 0x0000FFFF
       reset_ospeedr: 0
       reset_pupdr: 0
     clock: { reg: "ahb2enr", bit: 3 }
@@ -166,6 +170,7 @@ peripherals:
       debug_schema: "../peripherals/stm32u575/gpioe.yaml"
       profile: "stm32v2"
       reset_moder: 0xFFFFFFFF
+      reset_seccfgr: 0x0000FFFF
       reset_ospeedr: 0
       reset_pupdr: 0
     clock: { reg: "ahb2enr", bit: 4 }
@@ -177,6 +182,7 @@ peripherals:
       debug_schema: "../peripherals/stm32u575/gpiog.yaml"
       profile: "stm32v2"
       reset_moder: 0xFFFFFFFF
+      reset_seccfgr: 0x0000FFFF
       reset_ospeedr: 0
       reset_pupdr: 0
     clock: { reg: "ahb2enr", bit: 6 }
@@ -188,6 +194,7 @@ peripherals:
       debug_schema: "../peripherals/stm32u575/gpioh.yaml"
       profile: "stm32v2"
       reset_moder: 0xFFFFFFFF
+      reset_seccfgr: 0x0000FFFF
       reset_ospeedr: 0
       reset_pupdr: 0
     clock: { reg: "ahb2enr", bit: 7 }
@@ -201,6 +208,7 @@ peripherals:
       debug_schema: "../peripherals/stm32u575/usart1.yaml"
       profile: "stm32v2"
       full_featured: true
+      u5_features: true
     # USART1 is clocked from RCC_APB2ENR.USART1EN (bit 14). Unclocked out of
     # reset (RM0456 §11.8.17) — TDR writes are dropped until on.
     clock: { reg: "apb2enr", bit: 14 }
@@ -213,6 +221,7 @@ peripherals:
       debug_schema: "../peripherals/stm32u575/usart3.yaml"
       profile: "stm32v2"
       full_featured: true
+      u5_features: true
     clock: { reg: "apb1enr1", bit: 18 }
   - id: "uart4"
     type: "uart"
@@ -222,6 +231,7 @@ peripherals:
     config:
       debug_schema: "../peripherals/stm32u575/uart4.yaml"
       profile: "stm32v2"
+      u5_features: true
     clock: { reg: "apb1enr1", bit: 19 }
   - id: "lpuart1"
     type: "uart"
@@ -232,6 +242,7 @@ peripherals:
       debug_schema: "../peripherals/stm32u575/lpuart1.yaml"
       profile: "stm32v2"
       stm32_lpuart: true
+      u5_features: true
     # LPUART1 sits on APB3: RCC_APB3ENR.LPUART1EN (bit 6).
     clock: { reg: "apb3enr", bit: 6 }
   # I2C1 is the default Arduino Wire bus. Modern L4-class I2C IP (same profile
@@ -265,7 +276,7 @@ peripherals:
       debug_schema: "../peripherals/stm32u575/i2c3.yaml"
       profile: "stm32l4"
     clock: { reg: "apb3enr", bit: 7 }
-  # SPI1 is the default Arduino SPI bus (PA5 SCK / PA6 MISO / PA7 MOSI / PA4 NSS).
+  # SPI1 is Arduino SPI (PA5 SCK / PA6 MISO / PA7 MOSI); Nucleo-64 D10 is PC9 CS.
   # `pad_map: "stm32u5"` selects the U575 AF table in `bus/attach.rs`
   # (DS13737 Table 27) so the SPI v3 narrator's waveform reaches these pads.
   # PA4/NSS is on the same AF5 but is not routable: `SpiSignal` carries only

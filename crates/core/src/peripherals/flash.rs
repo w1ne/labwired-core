@@ -112,6 +112,8 @@ pub enum FlashOp {
     EraseBank { bank: u8 },
     /// Bank-swap + option-byte reload (`OPTSR_PRG.SWAP_BANK + OPTCR.OPTSTRT`).
     SwapAndReset,
+    /// U5 mass erase with both MER1 and MER2 selected.
+    EraseBothBanks,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -502,9 +504,10 @@ impl Flash {
 
     /// U5 non-secure control register (NSCR) write semantics (RM0456 §7.9):
     /// LOCK/OPTLOCK are set-only, a locked register ignores configuration
-    /// writes, PER+STRT records a pending 8 KiB page erase (STRT self-clears,
-    /// EOP is set — BSY is never left set), and STRT with no operation bit
-    /// raises PGSERR. Mass erase (MER1/MER2) is deliberately not modeled.
+    /// writes, PER+STRT records a pending 8 KiB page erase, and MER1/MER2+STRT
+    /// records a pending erase for the selected bank (STRT self-clears, EOP is
+    /// set when EOPIE is enabled, and BSY is never left set). STRT with no
+    /// operation bit raises PGSERR.
     fn u5_write_nscr(&mut self, value: u32) {
         if value & u5::NSCR_LOCK != 0 {
             self.cr |= u5::NSCR_LOCK;
@@ -540,19 +543,29 @@ impl Flash {
                 let page = (self.cr & u5::NSCR_PNB_MASK) >> u5::NSCR_PNB_SHIFT;
                 self.pending_op
                     .set(Some(FlashOp::EraseSector { bank, sector: page }));
-                self.sr |= u5::NSSR_EOP;
+                if self.cr & u5::NSCR_EOPIE != 0 {
+                    self.sr |= u5::NSSR_EOP;
+                }
             } else {
-                // MER1/MER2 select the bank (MER2 wins if both are set).
-                let bank = if self.cr & u5::NSCR_MER2 != 0 { 1 } else { 0 };
-                self.pending_op.set(Some(FlashOp::EraseBank { bank }));
-                self.sr |= u5::NSSR_EOP;
+                let banks = self.cr & (u5::NSCR_MER1 | u5::NSCR_MER2);
+                let op = match banks {
+                    bits if bits == (u5::NSCR_MER1 | u5::NSCR_MER2) => FlashOp::EraseBothBanks,
+                    bits if bits == u5::NSCR_MER1 => FlashOp::EraseBank { bank: 0 },
+                    _ => FlashOp::EraseBank { bank: 1 },
+                };
+                self.pending_op.set(Some(op));
+                if self.cr & u5::NSCR_EOPIE != 0 {
+                    self.sr |= u5::NSSR_EOP;
+                }
             }
         }
 
         if self.cr & u5::NSCR_OPTSTRT != 0 {
             self.cr &= !u5::NSCR_OPTSTRT;
             if self.cr & u5::NSCR_OPTLOCK == 0 {
-                self.sr |= u5::NSSR_EOP;
+                if self.cr & u5::NSCR_EOPIE != 0 {
+                    self.sr |= u5::NSSR_EOP;
+                }
             } else {
                 self.sr |= u5::NSSR_OPTWERR;
             }
@@ -624,7 +637,10 @@ impl Flash {
             let bytes = buf.bytes;
             let commit_base = buf.base;
             self.u5_wbuf = None;
-            self.sr = (self.sr & !u5::NSSR_WDW) | u5::NSSR_EOP;
+            self.sr &= !u5::NSSR_WDW;
+            if self.cr & u5::NSCR_EOPIE != 0 {
+                self.sr |= u5::NSSR_EOP;
+            }
             U5ProgAction::Commit {
                 base: commit_base,
                 bytes,
@@ -1461,7 +1477,7 @@ mod u5_controller_tests {
         let mut f = unlocked_u5();
         f.write_u32(
             u5::NSCR_OFF,
-            u5::NSCR_PER | (7 << u5::NSCR_PNB_SHIFT) | u5::NSCR_STRT,
+            u5::NSCR_PER | (7 << u5::NSCR_PNB_SHIFT) | u5::NSCR_STRT | u5::NSCR_EOPIE,
         )
         .unwrap();
         assert_eq!(
@@ -1506,7 +1522,7 @@ mod u5_controller_tests {
         let mut f = unlocked_u5();
         f.write_u32(
             u5::NSCR_OFF,
-            u5::NSCR_PER | (1 << u5::NSCR_PNB_SHIFT) | u5::NSCR_STRT,
+            u5::NSCR_PER | (1 << u5::NSCR_PNB_SHIFT) | u5::NSCR_STRT | u5::NSCR_EOPIE,
         )
         .unwrap();
         assert_ne!(nssr(&f) & u5::NSSR_EOP, 0);
@@ -1540,7 +1556,8 @@ mod u5_controller_tests {
     #[test]
     fn program_store_buffers_four_words_and_commits() {
         let mut f = unlocked_u5();
-        f.write_u32(u5::NSCR_OFF, u5::NSCR_PG).unwrap();
+        f.write_u32(u5::NSCR_OFF, u5::NSCR_PG | u5::NSCR_EOPIE)
+            .unwrap();
         assert_eq!(
             f.u5_program_store(0x1000, 4, 0x1111_1111),
             U5ProgAction::Buffered
@@ -1608,7 +1625,8 @@ mod u5_controller_tests {
         f.write_u32(u5::OPTKEYR_OFF, 0x4C5D_6E7F).unwrap();
         f.write_u32(u5::OPTR_OFF, 0x1234).unwrap();
         assert_eq!(f.read_u32(u5::OPTR_OFF).unwrap(), 0x1234, "OPTR readback");
-        f.write_u32(u5::NSCR_OFF, u5::NSCR_OPTSTRT).unwrap();
+        f.write_u32(u5::NSCR_OFF, u5::NSCR_OPTSTRT | u5::NSCR_EOPIE)
+            .unwrap();
         assert_ne!(nssr(&f) & u5::NSSR_EOP, 0);
     }
 }

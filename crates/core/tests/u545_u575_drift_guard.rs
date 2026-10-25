@@ -24,6 +24,8 @@ const REMOVED_ON_U545: &[&str] = &["usart2", "gpiof", "gpioi"];
 const ALLOWED_PERIPHERAL_DIFFS: &[(&str, &str)] = &[
     // DBGMCU IDCODE reset 0x10026455 in the U545 SVD (U575: 0x30016482).
     ("dbgmcu", "config.idcode"),
+    // Factory flash-size word follows each part's mapped flash: 512 vs 2048 KiB.
+    ("sysmem", "config.flash_size_kb"),
 ];
 
 /// Top-level descriptor fields that legitimately differ.
@@ -35,6 +37,12 @@ const ALLOWED_TOP_LEVEL_DIFFS: &[&str] = &[
     // no SRAM3.
     "ram.size",
 ];
+
+/// U575ZITxQ is LQFP144; U545RETxQ is LQFP64 (ST STM32_open_pin_data at
+/// 7d1f1514ed5583ec5007ad91236b4e1d377295b1). Package pin maps flatten to a
+/// field per pad, so accept the sourced delta by prefix instead of maintaining
+/// 111 individual leaf paths.
+const ALLOWED_TOP_LEVEL_DIFF_PREFIXES: &[&str] = &["pins."];
 
 fn load(name: &str) -> Value {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -141,9 +149,21 @@ fn u545_top_level_matches_u575_except_allow_list() {
     for v in [&mut u575, &mut u545] {
         v.as_object_mut().unwrap().remove("peripherals");
     }
-    let bad: Vec<String> = diff(&u575, &u545)
+    let differences = diff(&u575, &u545);
+    for prefix in ALLOWED_TOP_LEVEL_DIFF_PREFIXES {
+        assert!(
+            differences.iter().any(|field| field.starts_with(prefix)),
+            "stale allow-list prefix: `{prefix}` no longer differs"
+        );
+    }
+    let bad: Vec<String> = differences
         .into_iter()
-        .filter(|f| !ALLOWED_TOP_LEVEL_DIFFS.contains(&f.as_str()))
+        .filter(|f| {
+            !ALLOWED_TOP_LEVEL_DIFFS.contains(&f.as_str())
+                && !ALLOWED_TOP_LEVEL_DIFF_PREFIXES
+                    .iter()
+                    .any(|prefix| f.starts_with(prefix))
+        })
         .map(|f| format!("top-level field `{f}` differs between stm32u575.yaml and stm32u545.yaml"))
         .collect();
     assert!(bad.is_empty(), "U545/U575 drift:\n  {}", bad.join("\n  "));

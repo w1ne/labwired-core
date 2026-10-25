@@ -18,6 +18,11 @@ Arduino `LED_BUILTIN`).
 > evidence, and [`../../docs/boards/stm32u575.md`](../../docs/boards/stm32u575.md)
 > for the model/honesty table.
 
+The browser demo is available at
+[app.labwired.com/?lab=nucleo-u575-star-catcher&run=1](https://app.labwired.com/?lab=nucleo-u575-star-catcher&run=1).
+It opens the curated OLED game and starts its stock ELF in the Playground
+simulator. The link does not connect to a physical NUCLEO-U575ZI-Q.
+
 ## Quick start
 
 Run from the repo root.
@@ -35,6 +40,27 @@ Expected:
 OK
 PASS  2/2 checks · io-smoke · 64 steps · 0.00s
 ```
+
+### 1a. U575 Star Catcher OLED game
+
+This simulator-only example uses I2C1 (PB8/PB9) for an attached SSD1306. The
+firmware configures B1's PC13 pin as an input before reading it. Press B1 to
+move the catcher; the LEDs show the score and USART1 reports moves, catches and
+misses. Its smoke injects a B1 press and asserts the `B1 MOVE` UART event as
+well as the OLED output.
+
+```bash
+cargo build -p firmware-stm32u575-demo --bin nucleo-u575-star-catcher \
+  --release --target thumbv8m.main-none-eabi
+cargo run -q -p labwired-cli -- test --script \
+  examples/nucleo-u575zi/star-catcher-smoke.yaml
+```
+
+The smoke checks that firmware selected input mode on PC13 (`B1 INPUT READY`),
+that an injected press produces `B1 MOVE` on USART1, that the OLED is nonblank,
+and that execution reaches the 5,000,000-step limit. See
+[`EXTERNAL_COMPONENTS.md`](EXTERNAL_COMPONENTS.md) for the virtual display and
+physical acceptance boundary.
 
 ### 2. Vendor CubeU5 HAL firmware
 
@@ -79,12 +105,14 @@ ELF; both are hard-asserted on fixture presence.
 
 ## Files
 
-- `system.yaml` — example system manifest (chip + board IO)
-- `io-smoke.yaml`, `uart-smoke.yaml` — CLI test scripts
+- `system.yaml` — bare-board system manifest (chip + board IO)
+- `star-catcher-system.yaml` — system manifest with the simulated SSD1306
+- `io-smoke.yaml`, `uart-smoke.yaml`, `star-catcher-smoke.yaml` — CLI scripts
+- `../../crates/firmware-stm32u575-demo/src/star_catcher.rs` — register-level OLED game
 - `board_firmware/` — CubeU5 HAL app (`main.c`, `Makefile`, README, HAL conf)
-- `VALIDATION.md` — full runbook + captured evidence (Tasks 3–8)
-- `REQUIRED_DOCS.md` — SVD hash, DS13736/RM0456/UM2861, BSP, Zephyr docs
-- `EXTERNAL_COMPONENTS.md` — no required components; CubeU5 checkout
+- `VALIDATION.md` — runbook + captured evidence (Tasks 3–8 and current addenda)
+- `REQUIRED_DOCS.md` — SVD hash, DS13737/RM0456/UM2861, SSD1306 reference, BSP, Zephyr docs
+- `EXTERNAL_COMPONENTS.md` — simulated OLED, model boundary, CubeU5 checkout
 
 ## References
 

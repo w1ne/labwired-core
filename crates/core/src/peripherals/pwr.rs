@@ -11,6 +11,8 @@
 //! and a missing PWR peripheral bus-faults at the very first store.
 
 use crate::SimResult;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct Pwr {
@@ -472,11 +474,19 @@ impl crate::Peripheral for PwrL0 {
 #[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct PwrWba {
     regs: std::collections::HashMap<u64, u32>,
+    /// PWR_DBPR.DBP shared with the U5 RCC backup-domain write protection.
+    #[serde(skip)]
+    dbp_flag: Option<Arc<AtomicBool>>,
 }
 
 impl PwrWba {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Link PWR_DBPR.DBP to the U5 RCC backup-domain write protection.
+    pub fn set_dbp_flag(&mut self, flag: Arc<AtomicBool>) {
+        self.dbp_flag = Some(flag);
     }
 
     fn read_reg(&self, offset: u64) -> u32 {
@@ -514,11 +524,20 @@ impl PwrWba {
             // SVMSR is mostly status; ignore FW writes to ACTVOS/ACTVOSRDY.
             return;
         }
+        if offset == 0x28 {
+            if let Some(flag) = &self.dbp_flag {
+                flag.store(v & 1 != 0, Ordering::Relaxed);
+            }
+        }
         self.regs.insert(offset, v);
     }
 }
 
 impl crate::Peripheral for PwrWba {
+    fn bind_backup_domain_write_enable(&mut self, enabled: Arc<AtomicBool>) {
+        self.set_dbp_flag(enabled);
+    }
+
     // Inert walk: register storage with instant VOSRDY; tick() is no-op.
     fn needs_legacy_walk(&self) -> bool {
         false

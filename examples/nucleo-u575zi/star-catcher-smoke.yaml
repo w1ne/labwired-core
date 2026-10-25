@@ -1,0 +1,27 @@
+# Verifies the NUCLEO-U575ZI-Q display game reaches the simulated SSD1306.
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/thumbv8m.main-none-eabi/release/nucleo-u575-star-catcher"
+  system: "./star-catcher-system.yaml"
+limits:
+  max_steps: 5000000
+stimuli:
+  - target: { component: "button_user_pc13", channel: "pressed" }
+    trigger: !after_cycles { cycles: 250000 }
+    value: 1.0
+assertions:
+  - uart_contains: "STAR CATCHER READY"
+  - uart_contains: "B1 INPUT READY"
+  - uart_contains: "B1 MOVE"
+  - gpio_edges:
+      pin: "gpioa:9"
+      min_edges: 4
+  - display_region:
+      id: "oled"
+      x: 0
+      y: 0
+      w: 128
+      h: 64
+      min_ink: 0.01
+      max_ink: 0.25
+  - expected_stop_reason: max_steps

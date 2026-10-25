@@ -482,6 +482,11 @@ pub fn try_build(
                 m("rcc_apb1enr_mask"),
                 m("rcc_apb2enr_mask"),
             );
+            // HSE is a board component. U5 reference platforms have none
+            // fitted unless the chip yaml says `hse: true`.
+            if let Some(present) = p_cfg.config.get("hse").and_then(|v| v.as_bool()) {
+                rcc.set_hse_present(present);
+            }
             Box::new(rcc)
         }
         "dbgmcu" => {
@@ -966,8 +971,8 @@ pub fn try_build(
             // `config: { requests: { usart1_rx: 24, ... } }` maps the
             // `<peripheral id>_tx` / `_rx` request names the bus routes to the
             // numeric CxTR2.REQSEL values.
-            let mut g = crate::peripherals::gpdma::Gpdma::new()
-                .with_base(p_cfg.base_address as u32);
+            let mut g =
+                crate::peripherals::gpdma::Gpdma::new().with_base(p_cfg.base_address as u32);
             if let Some(base) = p_cfg.config.get("irq_base").and_then(|v| v.as_u64()) {
                 g = g.with_irq_base(base as u32);
             }

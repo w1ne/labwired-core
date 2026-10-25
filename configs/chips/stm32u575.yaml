@@ -8,7 +8,7 @@
 # - ST SVD (bases/IRQs): tests/fixtures/real_world/stm32u575.svd
 #   (cmsis-svd-data STMicro/STM32U575.svd, sha256
 #   2e45c70a3387a46a07092b145301e7bee3e95480377e67e252db6bf4ecfd701a)
-# - Memory sizes: DS13736 + Zephyr dts/arm/st/u5/stm32u575Xi.dtsi
+# - Memory sizes: DS13737 + Zephyr dts/arm/st/u5/stm32u575Xi.dtsi
 #   (flash 2 MiB @0x08000000; SRAM1+2+3 768 KiB @0x20000000; SRAM4 16 KiB @0x28000000).
 # - Board VCP (USART1 PA9/PA10, 115200 8N1): stm32u5xx-nucleo BSP COM1 +
 #   Zephyr nucleo_u575zi_q board docs.
@@ -23,8 +23,9 @@
 # - TrustZone/GTZC/SAU enforcement: not modeled (factory TZEN=0 per UM2883,
 #   so non-secure alias 0x08000000 is the boot path).
 # - OCTOSPI/HSPI, USB OTG, ethernet, ADC4: not declared.
-# - FLASH mass erase (MER1/MER2) and read-while-write stalling are not modeled;
-#   page erase + quad-word programming and option-byte storage are (RM0456 §7).
+# - FLASH mass erase (MER1/MER2) is modeled for either bank or both banks;
+#   read-while-write stalling and option-byte reload effects are not modeled
+#   (RM0456 §7).
 # - Clock gating IS declared (RM0456 enable bits, verified against the
 #   vendored SVD). IWDG/ICACHE/DBGMCU are deliberately ungated: U5 has no
 #   RCC enable bit for them (IWDG is always-on LSI-clocked; ICACHE has only
@@ -33,7 +34,7 @@
 name: "stm32u575zi"
 arch: "arm"
 core: "cortex-m33"
-# STM32U575ZI maximum CPU frequency, 160 MHz (DS13736).
+# STM32U575ZI maximum CPU frequency, 160 MHz (DS13737).
 cpu_hz: 160_000_000
 
 flash:
@@ -46,7 +47,7 @@ ram:
   # SRAM1+SRAM2+SRAM3 = 768 KiB contiguous (Zephyr stm32u575Xi.dtsi).
   size: "768KiB"
 memory_regions:
-  # SRAM4, 16 KiB (DS13736 + RM0456; SVD SRAM4 base 0x28000000).
+  # SRAM4, 16 KiB (DS13737 + RM0456; SVD SRAM4 base 0x28000000).
   - name: "sram4"
     base: 0x28000000
     size: "16KiB"
@@ -119,6 +120,7 @@ peripherals:
       debug_schema: "../peripherals/stm32u575/gpioa.yaml"
       profile: "stm32v2"
       reset_moder: 0xABFFFFFF
+      reset_seccfgr: 0x0000FFFF
       reset_ospeedr: 0x0C000000
       reset_pupdr: 0x64000000
     # GPIOA-I are clocked from RCC_AHB2ENR1 bits 0-8 (RM0456 §11.8.13).
@@ -132,6 +134,7 @@ peripherals:
       debug_schema: "../peripherals/stm32u575/gpiob.yaml"
       profile: "stm32v2"
       reset_moder: 0xFFFFFEBF
+      reset_seccfgr: 0x0000FFFF
       reset_ospeedr: 0x000000C0
       reset_pupdr: 0x00000100
     clock: { reg: "ahb2enr", bit: 1 }
@@ -143,6 +146,7 @@ peripherals:
       debug_schema: "../peripherals/stm32u575/gpioc.yaml"
       profile: "stm32v2"
       reset_moder: 0xFFFFFFFF
+      reset_seccfgr: 0x0000FFFF
       reset_ospeedr: 0
       reset_pupdr: 0
     clock: { reg: "ahb2enr", bit: 2 }
@@ -154,6 +158,7 @@ peripherals:
       debug_schema: "../peripherals/stm32u575/gpiod.yaml"
       profile: "stm32v2"
       reset_moder: 0xFFFFFFFF
+      reset_seccfgr: 0x0000FFFF
       reset_ospeedr: 0
       reset_pupdr: 0
     clock: { reg: "ahb2enr", bit: 3 }
@@ -165,6 +170,7 @@ peripherals:
       debug_schema: "../peripherals/stm32u575/gpioe.yaml"
       profile: "stm32v2"
       reset_moder: 0xFFFFFFFF
+      reset_seccfgr: 0x0000FFFF
       reset_ospeedr: 0
       reset_pupdr: 0
     clock: { reg: "ahb2enr", bit: 4 }
@@ -176,6 +182,7 @@ peripherals:
       debug_schema: "../peripherals/stm32u575/gpiof.yaml"
       profile: "stm32v2"
       reset_moder: 0xFFFFFFFF
+      reset_seccfgr: 0x0000FFFF
       reset_ospeedr: 0
       reset_pupdr: 0
     clock: { reg: "ahb2enr", bit: 5 }
@@ -187,6 +194,7 @@ peripherals:
       debug_schema: "../peripherals/stm32u575/gpiog.yaml"
       profile: "stm32v2"
       reset_moder: 0xFFFFFFFF
+      reset_seccfgr: 0x0000FFFF
       reset_ospeedr: 0
       reset_pupdr: 0
     clock: { reg: "ahb2enr", bit: 6 }
@@ -198,6 +206,7 @@ peripherals:
       debug_schema: "../peripherals/stm32u575/gpioh.yaml"
       profile: "stm32v2"
       reset_moder: 0xFFFFFFFF
+      reset_seccfgr: 0x0000FFFF
       reset_ospeedr: 0
       reset_pupdr: 0
     clock: { reg: "ahb2enr", bit: 7 }
@@ -209,6 +218,7 @@ peripherals:
       debug_schema: "../peripherals/stm32u575/gpioi.yaml"
       profile: "stm32v2"
       reset_moder: 0x0000FFFF
+      reset_seccfgr: 0x0000FFFF
       reset_ospeedr: 0
       reset_pupdr: 0
     clock: { reg: "ahb2enr", bit: 8 }
@@ -222,6 +232,7 @@ peripherals:
       debug_schema: "../peripherals/stm32u575/usart1.yaml"
       profile: "stm32v2"
       full_featured: true
+      u5_features: true
     # USART1 is clocked from RCC_APB2ENR.USART1EN (bit 14). Unclocked out of
     # reset (RM0456 §11.8.17) — TDR writes are dropped until on.
     clock: { reg: "apb2enr", bit: 14 }
@@ -234,6 +245,7 @@ peripherals:
       debug_schema: "../peripherals/stm32u575/usart2.yaml"
       profile: "stm32v2"
       full_featured: true
+      u5_features: true
     # USART2/3 and UART4 are clocked from RCC_APB1ENR1 bits 17/18/19.
     clock: { reg: "apb1enr1", bit: 17 }
   - id: "usart3"
@@ -245,6 +257,7 @@ peripherals:
       debug_schema: "../peripherals/stm32u575/usart3.yaml"
       profile: "stm32v2"
       full_featured: true
+      u5_features: true
     clock: { reg: "apb1enr1", bit: 18 }
   - id: "uart4"
     type: "uart"
@@ -254,6 +267,7 @@ peripherals:
     config:
       debug_schema: "../peripherals/stm32u575/uart4.yaml"
       profile: "stm32v2"
+      u5_features: true
     clock: { reg: "apb1enr1", bit: 19 }
   - id: "lpuart1"
     type: "uart"
@@ -264,6 +278,7 @@ peripherals:
       debug_schema: "../peripherals/stm32u575/lpuart1.yaml"
       profile: "stm32v2"
       stm32_lpuart: true
+      u5_features: true
     # LPUART1 sits on APB3: RCC_APB3ENR.LPUART1EN (bit 6).
     clock: { reg: "apb3enr", bit: 6 }
   # I2C1 is the default Arduino Wire bus. Modern L4-class I2C IP (same profile
@@ -297,11 +312,11 @@ peripherals:
       debug_schema: "../peripherals/stm32u575/i2c3.yaml"
       profile: "stm32l4"
     clock: { reg: "apb3enr", bit: 7 }
-  # SPI1 is the default Arduino SPI bus (PA5 SCK / PA6 MISO / PA7 MOSI / PA4 NSS).
+  # SPI1 is Arduino SPI (PA5 SCK / PA6 MISO / PA7 MOSI); board D10 is PD14 CS.
   # `pad_map: "stm32u5"` selects the U575 AF table in `bus/attach.rs`
   # (DS13737 Table 27) so the SPI v3 narrator's waveform reaches these pads.
-  # PA4/NSS is on the same AF5 but is not routable: `SpiSignal` carries only
-  # SCK/MOSI/MISO. SPI2/SPI3 rows are transcribed from the same table; SPI3
+  # PA4/NSS is an MCU AF5 alternative, not the Arduino header CS; it is not
+  # routable because `SpiSignal` carries only SCK/MOSI/MISO. SPI2/SPI3 rows are transcribed from the same table; SPI3
   # MOSI also rides PD6/AF5, the one non-AF6 SPI3 data row.
   - id: "spi1"
     type: "spi"
@@ -561,3 +576,120 @@ peripherals:
     type: "nvic"
     base_address: 0xE000E100
     size: "1KB"
+
+# LQFP144 package GPIO pads and the modeled alternate functions below.
+# Pad names/functions are transcribed from STMicroelectronics/STM32_open_pin_data
+# mcu/STM32U575ZITxQ.xml at commit 7d1f1514ed5583ec5007ad91236b4e1d377295b1.
+# Unmodeled silicon functions are intentionally omitted from this app-facing map.
+pins:
+  PA0: { gpio: gpioa, bit: 0, functions: [{ type: adc, peripheral: adc1, channel: 5 }, { type: timer, peripheral: tim2, channel: 1 }, { type: uart, peripheral: uart4, role: tx }] }
+  PA1: { gpio: gpioa, bit: 1, functions: [{ type: adc, peripheral: adc1, channel: 6 }, { type: spi, peripheral: spi1, role: sck }, { type: timer, peripheral: tim2, channel: 2 }, { type: uart, peripheral: uart4, role: rx }] }
+  PA2: { gpio: gpioa, bit: 2, functions: [{ type: adc, peripheral: adc1, channel: 7 }, { type: timer, peripheral: tim2, channel: 3 }, { type: uart, peripheral: lpuart1, role: tx }, { type: uart, peripheral: usart2, role: tx }] }
+  PA3: { gpio: gpioa, bit: 3, functions: [{ type: adc, peripheral: adc1, channel: 8 }, { type: timer, peripheral: tim2, channel: 4 }, { type: uart, peripheral: lpuart1, role: rx }, { type: uart, peripheral: usart2, role: rx }] }
+  PA4: { gpio: gpioa, bit: 4, functions: [{ type: adc, peripheral: adc1, channel: 9 }, { type: spi, peripheral: spi1, role: nss }, { type: spi, peripheral: spi3, role: nss }] }
+  PA5: { gpio: gpioa, bit: 5, functions: [{ type: adc, peripheral: adc1, channel: 10 }, { type: spi, peripheral: spi1, role: sck }, { type: timer, peripheral: tim2, channel: 1 }, { type: uart, peripheral: usart3, role: rx }] }
+  PA6: { gpio: gpioa, bit: 6, functions: [{ type: adc, peripheral: adc1, channel: 11 }, { type: spi, peripheral: spi1, role: miso }, { type: timer, peripheral: tim3, channel: 1 }] }
+  PA7: { gpio: gpioa, bit: 7, functions: [{ type: adc, peripheral: adc1, channel: 12 }, { type: i2c, peripheral: i2c3, role: scl }, { type: spi, peripheral: spi1, role: mosi }, { type: timer, peripheral: tim3, channel: 2 }, { type: uart, peripheral: usart3, role: tx }] }
+  PA8: { gpio: gpioa, bit: 8, functions: [{ type: timer, peripheral: tim1_pwm, channel: 1 }] }
+  PA9: { gpio: gpioa, bit: 9, functions: [{ type: spi, peripheral: spi2, role: sck }, { type: timer, peripheral: tim1_pwm, channel: 2 }, { type: uart, peripheral: usart1, role: tx }] }
+  PA10: { gpio: gpioa, bit: 10, functions: [{ type: timer, peripheral: tim1_pwm, channel: 3 }, { type: uart, peripheral: usart1, role: rx }] }
+  PA11: { gpio: gpioa, bit: 11, functions: [{ type: can, peripheral: fdcan1, role: rx }, { type: spi, peripheral: spi1, role: miso }, { type: timer, peripheral: tim1_pwm, channel: 4 }] }
+  PA12: { gpio: gpioa, bit: 12, functions: [{ type: can, peripheral: fdcan1, role: tx }, { type: spi, peripheral: spi1, role: mosi }] }
+  PA13: { gpio: gpioa, bit: 13 }
+  PA14: { gpio: gpioa, bit: 14 }
+  PA15: { gpio: gpioa, bit: 15, functions: [{ type: spi, peripheral: spi1, role: nss }, { type: spi, peripheral: spi3, role: nss }, { type: timer, peripheral: tim2, channel: 1 }, { type: uart, peripheral: usart2, role: rx }] }
+  PB0: { gpio: gpiob, bit: 0, functions: [{ type: adc, peripheral: adc1, channel: 15 }, { type: spi, peripheral: spi1, role: nss }, { type: timer, peripheral: tim3, channel: 3 }] }
+  PB1: { gpio: gpiob, bit: 1, functions: [{ type: adc, peripheral: adc1, channel: 16 }, { type: timer, peripheral: tim3, channel: 4 }] }
+  PB2: { gpio: gpiob, bit: 2, functions: [{ type: adc, peripheral: adc1, channel: 17 }] }
+  PB3: { gpio: gpiob, bit: 3, functions: [{ type: i2c, peripheral: i2c1, role: sda }, { type: spi, peripheral: spi1, role: sck }, { type: spi, peripheral: spi3, role: sck }, { type: timer, peripheral: tim2, channel: 2 }] }
+  PB4: { gpio: gpiob, bit: 4, functions: [{ type: i2c, peripheral: i2c3, role: sda }, { type: spi, peripheral: spi1, role: miso }, { type: spi, peripheral: spi3, role: miso }, { type: timer, peripheral: tim3, channel: 1 }] }
+  PB5: { gpio: gpiob, bit: 5, functions: [{ type: spi, peripheral: spi1, role: mosi }, { type: spi, peripheral: spi3, role: mosi }, { type: timer, peripheral: tim3, channel: 2 }] }
+  PB6: { gpio: gpiob, bit: 6, functions: [{ type: i2c, peripheral: i2c1, role: scl }, { type: uart, peripheral: usart1, role: tx }] }
+  PB7: { gpio: gpiob, bit: 7, functions: [{ type: i2c, peripheral: i2c1, role: sda }, { type: uart, peripheral: usart1, role: rx }] }
+  PB8: { gpio: gpiob, bit: 8, functions: [{ type: can, peripheral: fdcan1, role: rx }, { type: i2c, peripheral: i2c1, role: scl }] }
+  PB9: { gpio: gpiob, bit: 9, functions: [{ type: can, peripheral: fdcan1, role: tx }, { type: i2c, peripheral: i2c1, role: sda }, { type: spi, peripheral: spi2, role: nss }] }
+  PB10: { gpio: gpiob, bit: 10, functions: [{ type: i2c, peripheral: i2c2, role: scl }, { type: spi, peripheral: spi2, role: sck }, { type: timer, peripheral: tim2, channel: 3 }, { type: uart, peripheral: lpuart1, role: rx }, { type: uart, peripheral: usart3, role: tx }] }
+  PB11: { gpio: gpiob, bit: 11, functions: [{ type: i2c, peripheral: i2c2, role: sda }, { type: timer, peripheral: tim2, channel: 4 }, { type: uart, peripheral: lpuart1, role: tx }, { type: uart, peripheral: usart3, role: rx }] }
+  PB13: { gpio: gpiob, bit: 13, functions: [{ type: i2c, peripheral: i2c2, role: scl }, { type: spi, peripheral: spi2, role: sck }] }
+  PB14: { gpio: gpiob, bit: 14, functions: [{ type: i2c, peripheral: i2c2, role: sda }, { type: spi, peripheral: spi2, role: miso }] }
+  PB15: { gpio: gpiob, bit: 15, functions: [{ type: spi, peripheral: spi2, role: mosi }] }
+  PC0: { gpio: gpioc, bit: 0, functions: [{ type: adc, peripheral: adc1, channel: 1 }, { type: i2c, peripheral: i2c3, role: scl }, { type: uart, peripheral: lpuart1, role: rx }] }
+  PC1: { gpio: gpioc, bit: 1, functions: [{ type: adc, peripheral: adc1, channel: 2 }, { type: i2c, peripheral: i2c3, role: sda }, { type: spi, peripheral: spi2, role: mosi }, { type: uart, peripheral: lpuart1, role: tx }] }
+  PC2: { gpio: gpioc, bit: 2, functions: [{ type: adc, peripheral: adc1, channel: 3 }, { type: spi, peripheral: spi2, role: miso }] }
+  PC3: { gpio: gpioc, bit: 3, functions: [{ type: adc, peripheral: adc1, channel: 4 }, { type: spi, peripheral: spi2, role: mosi }] }
+  PC6: { gpio: gpioc, bit: 6, functions: [{ type: timer, peripheral: tim3, channel: 1 }] }
+  PC7: { gpio: gpioc, bit: 7, functions: [{ type: timer, peripheral: tim3, channel: 2 }] }
+  PC8: { gpio: gpioc, bit: 8, functions: [{ type: timer, peripheral: tim3, channel: 3 }] }
+  PC9: { gpio: gpioc, bit: 9, functions: [{ type: timer, peripheral: tim3, channel: 4 }] }
+  PC10: { gpio: gpioc, bit: 10, functions: [{ type: spi, peripheral: spi3, role: sck }, { type: uart, peripheral: uart4, role: tx }, { type: uart, peripheral: usart3, role: tx }] }
+  PC11: { gpio: gpioc, bit: 11, functions: [{ type: spi, peripheral: spi3, role: miso }, { type: uart, peripheral: uart4, role: rx }, { type: uart, peripheral: usart3, role: rx }] }
+  PC12: { gpio: gpioc, bit: 12, functions: [{ type: spi, peripheral: spi3, role: mosi }] }
+  PC13: { gpio: gpioc, bit: 13 }
+  PC14: { gpio: gpioc, bit: 14 }
+  PC15: { gpio: gpioc, bit: 15 }
+  PD0: { gpio: gpiod, bit: 0, functions: [{ type: can, peripheral: fdcan1, role: rx }, { type: spi, peripheral: spi2, role: nss }] }
+  PD1: { gpio: gpiod, bit: 1, functions: [{ type: can, peripheral: fdcan1, role: tx }, { type: spi, peripheral: spi2, role: sck }] }
+  PD2: { gpio: gpiod, bit: 2 }
+  PD3: { gpio: gpiod, bit: 3, functions: [{ type: spi, peripheral: spi2, role: miso }, { type: spi, peripheral: spi2, role: sck }] }
+  PD4: { gpio: gpiod, bit: 4, functions: [{ type: spi, peripheral: spi2, role: mosi }] }
+  PD5: { gpio: gpiod, bit: 5, functions: [{ type: uart, peripheral: usart2, role: tx }] }
+  PD6: { gpio: gpiod, bit: 6, functions: [{ type: spi, peripheral: spi3, role: mosi }, { type: uart, peripheral: usart2, role: rx }] }
+  PD7: { gpio: gpiod, bit: 7 }
+  PD8: { gpio: gpiod, bit: 8, functions: [{ type: uart, peripheral: usart3, role: tx }] }
+  PD9: { gpio: gpiod, bit: 9, functions: [{ type: uart, peripheral: usart3, role: rx }] }
+  PD10: { gpio: gpiod, bit: 10 }
+  PD11: { gpio: gpiod, bit: 11 }
+  PD12: { gpio: gpiod, bit: 12 }
+  PD13: { gpio: gpiod, bit: 13 }
+  PD14: { gpio: gpiod, bit: 14 }
+  PD15: { gpio: gpiod, bit: 15 }
+  PE0: { gpio: gpioe, bit: 0 }
+  PE1: { gpio: gpioe, bit: 1 }
+  PE2: { gpio: gpioe, bit: 2 }
+  PE3: { gpio: gpioe, bit: 3, functions: [{ type: timer, peripheral: tim3, channel: 1 }] }
+  PE4: { gpio: gpioe, bit: 4, functions: [{ type: timer, peripheral: tim3, channel: 2 }] }
+  PE5: { gpio: gpioe, bit: 5, functions: [{ type: timer, peripheral: tim3, channel: 3 }] }
+  PE6: { gpio: gpioe, bit: 6, functions: [{ type: timer, peripheral: tim3, channel: 4 }] }
+  PE7: { gpio: gpioe, bit: 7 }
+  PE8: { gpio: gpioe, bit: 8 }
+  PE9: { gpio: gpioe, bit: 9, functions: [{ type: timer, peripheral: tim1_pwm, channel: 1 }] }
+  PE10: { gpio: gpioe, bit: 10 }
+  PE11: { gpio: gpioe, bit: 11, functions: [{ type: timer, peripheral: tim1_pwm, channel: 2 }] }
+  PE12: { gpio: gpioe, bit: 12, functions: [{ type: spi, peripheral: spi1, role: nss }] }
+  PE13: { gpio: gpioe, bit: 13, functions: [{ type: spi, peripheral: spi1, role: sck }, { type: timer, peripheral: tim1_pwm, channel: 3 }] }
+  PE14: { gpio: gpioe, bit: 14, functions: [{ type: spi, peripheral: spi1, role: miso }, { type: timer, peripheral: tim1_pwm, channel: 4 }] }
+  PE15: { gpio: gpioe, bit: 15, functions: [{ type: spi, peripheral: spi1, role: mosi }] }
+  PF0: { gpio: gpiof, bit: 0, functions: [{ type: i2c, peripheral: i2c2, role: sda }] }
+  PF1: { gpio: gpiof, bit: 1, functions: [{ type: i2c, peripheral: i2c2, role: scl }] }
+  PF2: { gpio: gpiof, bit: 2 }
+  PF3: { gpio: gpiof, bit: 3 }
+  PF4: { gpio: gpiof, bit: 4 }
+  PF5: { gpio: gpiof, bit: 5 }
+  PF6: { gpio: gpiof, bit: 6 }
+  PF7: { gpio: gpiof, bit: 7, functions: [{ type: can, peripheral: fdcan1, role: rx }] }
+  PF8: { gpio: gpiof, bit: 8, functions: [{ type: can, peripheral: fdcan1, role: tx }] }
+  PF9: { gpio: gpiof, bit: 9 }
+  PF10: { gpio: gpiof, bit: 10 }
+  PF11: { gpio: gpiof, bit: 11 }
+  PF12: { gpio: gpiof, bit: 12 }
+  PF13: { gpio: gpiof, bit: 13 }
+  PF14: { gpio: gpiof, bit: 14 }
+  PF15: { gpio: gpiof, bit: 15 }
+  PG0: { gpio: gpiog, bit: 0 }
+  PG1: { gpio: gpiog, bit: 1 }
+  PG2: { gpio: gpiog, bit: 2, functions: [{ type: spi, peripheral: spi1, role: sck }] }
+  PG3: { gpio: gpiog, bit: 3, functions: [{ type: spi, peripheral: spi1, role: miso }] }
+  PG4: { gpio: gpiog, bit: 4, functions: [{ type: spi, peripheral: spi1, role: mosi }] }
+  PG5: { gpio: gpiog, bit: 5, functions: [{ type: spi, peripheral: spi1, role: nss }] }
+  PG6: { gpio: gpiog, bit: 6 }
+  PG7: { gpio: gpiog, bit: 7, functions: [{ type: i2c, peripheral: i2c3, role: scl }, { type: uart, peripheral: lpuart1, role: tx }] }
+  PG8: { gpio: gpiog, bit: 8, functions: [{ type: i2c, peripheral: i2c3, role: sda }, { type: uart, peripheral: lpuart1, role: rx }] }
+  PG9: { gpio: gpiog, bit: 9, functions: [{ type: spi, peripheral: spi3, role: sck }, { type: uart, peripheral: usart1, role: tx }] }
+  PG10: { gpio: gpiog, bit: 10, functions: [{ type: spi, peripheral: spi3, role: miso }, { type: uart, peripheral: usart1, role: rx }] }
+  PG12: { gpio: gpiog, bit: 12, functions: [{ type: spi, peripheral: spi3, role: nss }] }
+  PG13: { gpio: gpiog, bit: 13, functions: [{ type: i2c, peripheral: i2c1, role: sda }] }
+  PG14: { gpio: gpiog, bit: 14, functions: [{ type: i2c, peripheral: i2c1, role: scl }] }
+  PG15: { gpio: gpiog, bit: 15 }
+  PH0: { gpio: gpioh, bit: 0 }
+  PH1: { gpio: gpioh, bit: 1 }
+  PH3: { gpio: gpioh, bit: 3 }

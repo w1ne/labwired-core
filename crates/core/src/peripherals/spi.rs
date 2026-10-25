@@ -1897,6 +1897,14 @@ impl Spi {
         self.cr1_mask = Some(mask);
     }
 
+    /// Select the limited SPI personality (STM32U5 SPI3, RM0456 Table 696):
+    /// data size 8/16 bits, RX-FIFO threshold 1..4, transfer size 1..1023,
+    /// and no CTSIZE in SR. The masking lives in the register write paths.
+    pub fn as_limited(mut self) -> Self {
+        self.limited_features = true;
+        self
+    }
+
     /// Raw device push — does NOT wrap for tracing. The only caller is the bus
     /// choke point [`crate::bus::SystemBus::attach_spi_device`], which wraps the
     /// device first; nothing else should attach directly (that would bypass the
@@ -3005,8 +3013,7 @@ impl Spi {
                         self.h5_rx_cur.set(None);
                         self.stm32_rxne.set(false);
                     }
-                    let started =
-                        prev & H5_CR1_CSTART == 0 && v & H5_CR1_CSTART != 0;
+                    let started = prev & H5_CR1_CSTART == 0 && v & H5_CR1_CSTART != 0;
                     if started {
                         self.h5_drain_tx_fifo();
                     }
@@ -3101,10 +3108,7 @@ impl Spi {
                 // held in the TX FIFO (HAL_SPI_TransmitReceive_IT pre-fills it
                 // before CSTART); once started each write shifts one frame.
                 let (spe, started) = match &self.regs {
-                    SpiRegs::Stm32H5(r) => (
-                        r.cr1 & H5_CR1_SPE != 0,
-                        r.cr1 & H5_CR1_CSTART != 0,
-                    ),
+                    SpiRegs::Stm32H5(r) => (r.cr1 & H5_CR1_SPE != 0, r.cr1 & H5_CR1_CSTART != 0),
                     _ => return,
                 };
                 if !spe {
@@ -4206,6 +4210,15 @@ impl crate::Peripheral for Spi {
     /// As [`Self::read_u16`]: DR is a 16-bit register, a word read of it is
     /// one halfword-sized pop (bits 31:16 read 0).
     fn read_u32(&self, offset: u64) -> SimResult<u32> {
+        // H5/U5 RXDR: one word access consumes ONE frame, not four byte
+        // lanes (the trait default would pop four frames).
+        if matches!(self.regs, SpiRegs::Stm32H5(_)) && offset == 0x30 {
+            let frame = self.h5_rx_fifo.borrow_mut().pop_front().unwrap_or((0, 1));
+            self.h5_rx_cur.set(None);
+            self.dma_rx_req.set(false);
+            self.stm32_rxne.set(self.h5_rx_available());
+            return Ok(frame.0);
+        }
         if offset == 0x0C && self.is_fifo_layout() {
             self.dma_rx_req.set(false);
             return Ok(u32::from(self.fifo_rx_pop(2)));
