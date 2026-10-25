@@ -1286,7 +1286,14 @@ impl<C: Cpu> Machine<C> {
                     return;
                 }
                 let cycles_per_us = (hz / 1_000_000).max(1);
-                self.next_i2c_time_cycle = self.total_cycles.saturating_add(cycles_per_us);
+                // Round up to the next absolute µs boundary, not "one µs from
+                // whenever this call happened": a run can end exactly on a
+                // boundary and must still flush that last µs to the device.
+                self.next_i2c_time_cycle = self
+                    .total_cycles
+                    .saturating_div(cycles_per_us)
+                    .saturating_add(1)
+                    .saturating_mul(cycles_per_us);
                 // No attached device needs a clock: skip the divide and the
                 // controller fan-out. Re-scanned at the next µs boundary, so a
                 // device attached later is picked up without re-construction.
