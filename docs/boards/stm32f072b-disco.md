@@ -1,6 +1,6 @@
 # STM32F072B-DISCO
 
-The **STM32F072B-DISCO** (ST order code STM32F072B-DISCO): an **STM32F072RBT6** (Cortex-M0, 48 MHz), 128 KiB of flash at `0x08000000`, 16 KiB of SRAM at `0x20000000`, four user LEDs on `PC6` (LD3, red), `PC8` (LD4, yellow), `PC9` (LD5, green) and `PC7` (LD6, blue), a user button on `PA0` (active low), and the ST-LINK/V2-1 virtual COM port on **USART1** (`PA9`/`PA10`, AF1).
+The **STM32F072B-DISCO** (ST order code STM32F072B-DISCO): an **STM32F072RBT6** (Cortex-M0, 48 MHz), 128 KiB of flash at `0x08000000`, 16 KiB of SRAM at `0x20000000`, four user LEDs on `PC6` (LD3, red), `PC8` (LD4, orange), `PC9` (LD5, green) and `PC7` (LD6, blue), a user button on `PA0` (active low), and USART1 on `PA9`/`PA10` (AF1). Its ST-LINK/V2 provides SWD debugging/programming; it does not provide a VCP.
 
 This is the **first STM32F0 part in the engine**. It is an **L1 (smoke)** target: boot, the F0 clock gates (`AHBENR`/`APB2ENR`), the USART1 console and the four-LED GPIO walk (with `GPIOC_ODR` readback) are proven by a committed smoke fixture and an `io-smoke.yaml`. No silicon capture exists: **SIM-DERIVED**, no executing-fidelity differential.
 
@@ -42,7 +42,7 @@ This is the **first STM32F0 part in the engine**. It is an **L1 (smoke)** target
 | USB FS, TSC, CRS | `0x4000_5C00` / `0x4002_4000` / `0x4000_6C00` | `type: stub` — zeros |
 | LD3/LD4/LD5/LD6 | PC6 / PC8 / PC9 / PC7 | modelled GPIO — active high |
 | User button B1 | PA0 | modelled GPIO — active low (internal pull-up) |
-| USART1 VCP | PA9 / PA10 (AF1) | modelled |
+| USART1 console | PA9 / PA10 (AF1) | simulator output capture; physical serial needs an external USB-UART adapter |
 
 ## Boot path
 
