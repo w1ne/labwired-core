@@ -797,6 +797,8 @@ pub struct Pic24 {
     tris: [u16; 3],
     lat: [u16; 3],
     odc: [u16; 3],
+    /// Package pad mask per port (RA/RB/RC): which bits exist on this part.
+    port_masks: [u16; 3],
     /// Last sampled live pad levels (`PORTx`), one word per port.
     pad_in: [u16; 3],
     /// The drive the Output Compare units present on their routed pads.
@@ -989,6 +991,7 @@ impl Pic24 {
             corcon: 0,
             acc_a: 0,
             acc_b: 0,
+            port_masks: [PORT_A_MASK, PORT_B_MASK, PORT_C_MASK],
             tris: [PORT_A_MASK, PORT_B_MASK, PORT_C_MASK],
             lat: [0; 3],
             odc: [0; 3],
@@ -1252,12 +1255,22 @@ impl Pic24 {
         SFR_TRISA + 0x10 * port as u16
     }
 
-    fn port_mask(port: usize) -> u16 {
-        match port {
-            0 => PORT_A_MASK,
-            1 => PORT_B_MASK,
-            _ => PORT_C_MASK,
+    fn port_mask(&self, port: usize) -> u16 {
+        self.port_masks[port]
+    }
+
+    /// Set the package pad masks (RA, RB, RC) for this part and reset the
+    /// direction registers over the new package. The CPU defaults to the
+    /// 44-pin dsPIC33FJ32MC204 masks; the builder derives the chip's masks
+    /// from its `pic24_gpio` peripheral configs.
+    pub fn set_port_masks(&mut self, masks: [u16; 3]) {
+        self.port_masks = masks;
+        self.tris = masks;
+        for (port, mask) in masks.iter().enumerate() {
+            self.lat[port] &= *mask;
+            self.odc[port] &= *mask;
         }
+        self.pads_dirty = true;
     }
 
     /// The `(port, bit)` an RPn pin is on the 44-pin package (DS70283H pin
@@ -1309,7 +1322,7 @@ impl Pic24 {
         let pm = self.pdrv_mask[port];
         let driven = own | pm;
         let levels = (self.lat[port] & own & !pm) | (self.pdrv[port] & pm);
-        ((levels & driven) | (self.pad_in[port] & !driven)) & Self::port_mask(port)
+        ((levels & driven) | (self.pad_in[port] & !driven)) & self.port_mask(port)
     }
 
     /// Push the port registers and the Output Compare drive to the bus-side
@@ -2862,7 +2875,7 @@ impl Pic24 {
                     }
                     a if Self::port_sfr(a).is_some() => {
                         let (port, role) = Self::port_sfr(a).expect("guarded by port_sfr");
-                        let mask = Self::port_mask(port);
+                        let mask = self.port_mask(port);
                         match role {
                             0 => self.tris[port] = val & mask,
                             // Writing PORTx writes the port data latch
@@ -4696,7 +4709,7 @@ impl Cpu for Pic24 {
         self.corcon = 0;
         self.acc_a = 0;
         self.acc_b = 0;
-        self.tris = [PORT_A_MASK, PORT_B_MASK, PORT_C_MASK];
+        self.tris = self.port_masks;
         self.lat = [0; 3];
         self.odc = [0; 3];
         self.pad_in = [0; 3];
@@ -4908,6 +4921,7 @@ impl Cpu for Pic24 {
             corcon: self.corcon,
             acc_a: self.acc_a,
             acc_b: self.acc_b,
+            port_masks: self.port_masks,
             tris: self.tris,
             lat: self.lat,
             odc: self.odc,
@@ -5058,6 +5072,7 @@ impl Cpu for Pic24 {
             self.corcon = s.corcon;
             self.acc_a = s.acc_a;
             self.acc_b = s.acc_b;
+            self.port_masks = s.port_masks;
             self.tris = s.tris;
             self.lat = s.lat;
             self.odc = s.odc;

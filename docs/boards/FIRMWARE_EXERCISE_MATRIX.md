@@ -465,7 +465,7 @@ _M0 + M1a + M1b + M1c + M2 + M3 bring-up: boot (PC 0 -> reset GOTO) with UART1 T
 
 ### `dspic33fj32mc202`
 
-_M0 bring-up: boot (PC 0 -> reset GOTO) and UART1 TX on the 28-pin sibling of the dsPIC33FJ32MC204; a real XC16 v1.70 firmware (xc16-uart-smoke.c) prints `HI` and toggles LATB0, booted by crates/core/tests/pic24_xc16_202_smoke.rs. The 202 shares the 204's PIC24/dsPIC33F core, 32 KB flash / 2 KB SRAM, UART1 and instruction set; the 204's M1-M3 peripheral models apply to the shared silicon, while the 202's package-level differences (28 pins, AN0-AN5 only, smaller PWM/QEI pin set) are not modelled in M0._
+_M0 + M1 bring-up on the 28-pin sibling of the dsPIC33FJ32MC204: boot (PC 0 -> reset GOTO) and UART1 TX, plus the 28-pin GPIO package (RA0-RA4, RB0-RB15, no PORTC; TRIS/LAT/ODC masks derived from the descriptor's pic24_gpio pads). Two real XC16 v1.70 firmwares: xc16-uart-smoke.c prints `HI` and toggles LATB0 (crates/core/tests/pic24_xc16_202_smoke.rs); xc16-m1-gpio.c prints `G1`, makes PORTA/PORTB outputs and toggles RA0/RB0 (crates/core/tests/pic24_xc16_202_m1.rs), including the reset masks and pad levels. The 202 shares the 204's PIC24/dsPIC33F core, 32 KB flash / 2 KB SRAM, UART1 and instruction set; the AN0-AN5 analog set and smaller PWM/QEI pin set are the next milestone._
 
 ### `litex-vexriscv`
 
