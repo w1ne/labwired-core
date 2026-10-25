@@ -855,6 +855,10 @@ impl Peripheral for Esp32Spi {
         true
     }
 
+    fn has_attached_time_devices(&self) -> bool {
+        !self.attached_devices.is_empty()
+    }
+
     fn advance_attached_device_time_us(&mut self, us: u64) {
         if us == 0 {
             return;

@@ -1682,6 +1682,9 @@ impl SystemBus {
 
     fn collect_enabled_nvic_interrupts(&self, interrupts: &mut Vec<u32>) {
         if let Some(nvic) = &self.nvic {
+            if !nvic.any_enabled.load(Ordering::Relaxed) {
+                return;
+            }
             for idx in 0..8 {
                 let mask =
                     nvic.iser[idx].load(Ordering::SeqCst) & nvic.ispr[idx].load(Ordering::SeqCst);
