@@ -28,8 +28,8 @@ The models column is a content digest over everything that board's `models` list
 | `rp2350` | 🟡 smoke-manual | — | `cac577d9e9423025` | no silicon capture |
 | `nrf5340` | 🔵 sim-validated (deep model, no HW diff) | — | `73a4f6d1da20d9ca` | no silicon capture |
 | `stm32h735` | 🔵 sim-validated (deep model, no HW diff) | — | `b7c407b4329893b3` | no silicon capture |
-| `stm32u575` | 🔵 sim-validated (deep model, no HW diff) | — | `d938f5c04f1f37a4` | no silicon capture |
-| `nucleo-u545re` | 🔵 sim-validated (deep model, no HW diff) | — | `3aa424ce3f7d94dd` | no silicon capture |
+| `stm32u575` | 🔵 sim-validated (deep model, no HW diff) | — | `f3eb893d6a2d47d1` | no silicon capture |
+| `nucleo-u545re` | 🔵 sim-validated (deep model, no HW diff) | — | `4dd8a0521327a7e7` | no silicon capture |
 | `stm32f411ceu6` | 🔵 sim-validated (deep model, no HW diff) | — | `95780685916e55aa` | no silicon capture |
 | `brd2709a` | 🟡 smoke-manual | — | `917d2df1551b0f90` | no silicon capture |
 | `esp32` | ⚪ structural | — | `9e4d71de3a84fe4c` | no silicon capture |
@@ -48,12 +48,12 @@ The models column is a content digest over everything that board's `models` list
 | `teensy-41` | 🟡 smoke-manual | — | `aa4d46a0e2587392` | no silicon capture |
 | `stm32f7-discovery` | 🟡 smoke-manual | — | `028ea7d340db1867` | no silicon capture |
 | `nucleo-g071rb` | 🟡 smoke-manual | — | `8496d16989851ada` | no silicon capture |
-| `esp32c6-devkitc` | 🟡 smoke-manual | — | `5da89b777beb8224` | no silicon capture |
-| `litex-vexriscv` | 🟡 smoke-manual | — | `34b08c89757de74f` | no silicon capture |
-| `sam4s16c` | 🟡 smoke-manual | — | `2faba977c694109e` | no silicon capture |
-| `stm32f072` | 🟡 smoke-manual | — | `b14e78569d08b285` | no silicon capture |
-| `arty-litex-vexriscv` | 🟡 smoke-manual | — | `6a75d82b16e410cd` | no silicon capture |
-| `vegaboard-ri5cy` | 🟡 smoke-manual | — | `ef45ae917e7f0e0f` | no silicon capture |
+| `esp32c6-devkitc` | 🟡 smoke-manual | — | `b82128c77b795299` | no silicon capture |
+| `litex-vexriscv` | 🟡 smoke-manual | — | `11d95b59bc087e6f` | no silicon capture |
+| `sam4s16c` | 🟡 smoke-manual | — | `fd03bafaa4c35af4` | no silicon capture |
+| `stm32f072` | 🟡 smoke-manual | — | `1e9389eba0716b97` | no silicon capture |
+| `arty-litex-vexriscv` | 🟡 smoke-manual | — | `a44ebd0dbd2732b3` | no silicon capture |
+| `vegaboard-ri5cy` | 🟡 smoke-manual | — | `cba5e981cbe8276b` | no silicon capture |
 
 ## `nrf52840` — 🟢 silicon-verified
 
@@ -215,22 +215,24 @@ The models column is a content digest over everything that board's `models` list
 ## `stm32u575` — 🔵 sim-validated (deep model, no HW diff)
 
 - Doc: [`docs/boards/stm32u575.md`](stm32u575.md)  ·  Chip: `configs/chips/stm32u575.yaml`
-- Note: STM32U575ZI (NUCLEO-U575ZI-Q), first U575 target. Cortex-M33, 2 MiB flash, 768 KiB SRAM + 16 KiB SRAM4. Reuses the shared V2 RCC/GPIO/UART models plus U5 PLL1/2/3 and ready pairs, and a CRS register-surface model. GPIO models analog-reset IDR, one-shot LCKR, and per-chip SECCFGR reset; U5 USART TXFE/AUTOCR are enabled only on U5 configs. ADC1 uses the SVD-verified U5 layout and passes Arduino L5 analogRead; GPDMA1 models all 16 channels and split NVIC lines 29-36/80-87. FDCAN1 (0x4000A400, 4 KiB window over SRAMCAN @ +0x800, RCC_APB1ENR2.FDCAN1EN bit 9 gate) reuses Bosch M_CAN and passes Arduino L8 internal loopback; the U575 has a single FDCAN instance. Rust io-smoke and a local Star Catcher smoke cover startup; the latter checks PC13 input/B1, simulated SSD1306 output and USART1 TX. Also validated by real STM32CubeU5 HAL firmware, Arduino matrix L0-L8, Zephyr matrix L0-L3, and unsupported-instruction audit. NO bench part: values are SVD/RM0456-derived; Renode has no STM32U5 platform, so no Renode differential is claimed. TrustZone/GTZC, OCTOSPI and USB are not modeled. Flash supports non-secure unlock, page and one-/two-bank erase, quad-word program, EOP/WRPERR and option-byte storage; residuals include secure path/SECKEYR, read-while-write stalling and option reload/SWAP_BANK. ADC4 is not declared because its SVD map is a different 12-bit class from ADC1.
+- Note: STM32U575ZI (NUCLEO-U575ZI-Q), first U575 target. Cortex-M33, 2 MiB flash, 768 KiB SRAM + 16 KiB SRAM4. Reuses the shared V2 RCC/GPIO/UART models plus U5 PLL1/2/3 and ready pairs, and a CRS register-surface model. GPIO models analog-reset IDR, one-shot LCKR, and per-chip SECCFGR reset; U5 USART TXFE/AUTOCR are enabled only on U5 configs. ADC1 uses the SVD-verified U5 layout and passes Arduino L5 analogRead; GPDMA1 models all 16 channels and split NVIC lines 29-36/80-87; the core-onboarding-smoke lane exercises SPI-DMA, UART-DMA and flash-to-RAM reference firmware in the LabWired simulator on main pushes, nightly and manual dispatch (not PR, silicon or Renode comparison). The U5 ICACHE profile has a limited register contract; cache contents and line effects are not simulated. The 2 KiB U5 system-memory window seeds a read-only per-part FLASHSIZE word; OTP/package/UID bytes are simplified read/write storage. FDCAN1 (0x4000A400, 4 KiB window over SRAMCAN @ +0x800, RCC_APB1ENR2.FDCAN1EN bit 9 gate) reuses Bosch M_CAN and passes Arduino L8 internal loopback; the U575 has a single FDCAN instance. Rust io-smoke and a local Star Catcher smoke cover startup; the latter checks PC13 input/B1, simulated SSD1306 output and USART1 TX. Also validated by real STM32CubeU5 HAL firmware, Arduino matrix L0-L8, Zephyr matrix L0-L3, and unsupported-instruction audit. NO bench part: values are SVD/RM0456-derived; upstream Renode master has no built-in STM32U5 platform, and this work does not compare against the separate 60North reference platform. TrustZone/GTZC, OCTOSPI and USB are not modeled. Flash supports non-secure unlock, page and one-/two-bank erase, quad-word program, EOP/WRPERR and option-byte storage; residuals include secure path/SECKEYR, read-while-write stalling and option reload/SWAP_BANK. ADC4 is not declared because its SVD map is a different 12-bit class from ADC1.
 - Silicon: none — not validated against real hardware.
   - offline (CI): strict_onboarding (io-smoke builds + runs firmware-stm32u575-demo)
   - offline (CI): chip_conformance (estate OK)
   - offline (CI): svd_conformance / register_coverage (SVD pinning)
   - offline (CI): firmware_survival test_stm32u575_zephyr_survival (stock Zephyr hello)
+  - offline (CI): firmware_survival test_stm32u575_arduino_serial_survival (stock Arduino serial)
+  - offline (CI): core-onboarding-smoke (main push/nightly/manual: 60North hal-spi-dma, hal-uart-dma, st-dma-flash-to-ram in LabWired simulator; not PR/silicon/Renode)
   - offline (CI): arduino matrix L0-L8 (validation/arduino-matrix)
 - Drift status: **no silicon capture**
 
 ## `nucleo-u545re` — 🔵 sim-validated (deep model, no HW diff)
 
 - Doc: [`docs/boards/nucleo-u545re.md`](nucleo-u545re.md)  ·  Chip: `configs/chips/stm32u545.yaml`
-- Note: STM32U545RET6Q (NUCLEO-U545RE-Q, MB1841). Cortex-M33, 512 KiB flash in two 256 KiB banks, SRAM1+SRAM2 256 KiB + SRAM4 16 KiB. A self-contained derivative of stm32u575.yaml: every peripheral kept is byte-identical to the U575 entry, enforced by crates/core/tests/u545_u575_drift_guard.rs; differences are the memory map, no USART2/GPIOF/GPIOI, DBGMCU IDCODE 0x10026455 (the U5 flash erase path derives the 256 KiB bank size from the mapped flash). Board facts (LD2 PA5, B1 PC13, VCP USART1 PA9/PA10) from ST's stm32u5xx-nucleo-bsp, ST open pin data .ioc and Zephyr nucleo_u545re_q; st.com datasheet/RM0456/UM3062 were not reachable when this was written. Validated by: nucleo_u545re machine-run pin tests, the committed bare-metal blinky (survival gate), a Cube HAL 160 MHz run (ignored-by-default, evidence in VALIDATION.md), Arduino matrix L0-L8 on the generic U545RETxQ variant. Zephyr is NOT validated (workspace predates the U545 SoC). NO bench part: SVD-derived, no silicon diff.
+- Note: STM32U545RET6Q (NUCLEO-U545RE-Q, MB1841). Cortex-M33, 512 KiB flash in two 256 KiB banks, SRAM1+SRAM2 256 KiB + SRAM4 16 KiB. A self-contained derivative of stm32u575.yaml, checked by crates/core/tests/u545_u575_drift_guard.rs with two explicit shared peripheral-field exceptions: DBGMCU IDCODE 0x10026455 and sysmem.config.flash_size_kb (512 vs 2048 KiB). Top-level flash/RAM sizes and package pin maps also differ; USART2/GPIOF/GPIOI are absent. The U5 flash erase path derives the 256 KiB bank size from mapped flash. Its system-memory window seeds FLASHSIZE read-only and simplifies OTP/package/UID bytes as ordinary storage. Board facts (LD2 PA5, B1 PC13, VCP USART1 PA9/PA10) from ST's stm32u5xx-nucleo-bsp, ST open pin data .ioc and Zephyr nucleo_u545re_q; st.com datasheet/RM0456/UM3062 were not reachable when this was written. Validated by: nucleo_u545re machine-run pin tests, the committed bare-metal blinky (survival gate), a Cube HAL 160 MHz run (ignored-by-default, evidence in VALIDATION.md), Arduino matrix L0-L8 on the generic U545RETxQ variant. Zephyr is NOT validated (workspace predates the U545 SoC). NO bench part: SVD-derived, no silicon diff.
 - Silicon: none — not validated against real hardware.
   - offline (CI): nucleo_u545re (LD2 PA5 edges, B1 PC13 -> VCP, USART1 RX echo, memory map, flash banks)
-  - offline (CI): u545_u575_drift_guard (peripherals identical to U575 except an allow-list)
+  - offline (CI): u545_u575_drift_guard (shared peripherals compared with the explicit DBGMCU IDCODE and sysmem flash-size allow-list)
   - offline (CI): chip_conformance (estate OK)
   - offline (CI): svd_conformance / register_coverage (STM32U545.svd)
   - offline (CI): firmware_survival test_stm32u545_blinky_survival

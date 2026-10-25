@@ -4,7 +4,8 @@ Run from the repository root. Evidence captured 2026-10-03, branch
 `feat/stm32u545-nucleo`.
 
 Tier: **sim-validated**. SVD-derived; no bench part, no silicon capture, no
-Renode differential (Renode has no STM32U5 platform).
+Renode differential. Upstream Renode has no built-in STM32U5 platform; the
+separate 60North reference platform is not used for a differential here.
 
 ## Toolchain coverage
 
@@ -66,11 +67,13 @@ audit at 200k steps: `unknown_thumb16: 0`, `unhandled_thumb32: 0`,
 ## D. Chip drift guard
 
 `stm32u545.yaml` is a standalone derivative of `stm32u575.yaml`.
-`crates/core/tests/u545_u575_drift_guard.rs` asserts every shared peripheral is
-identical (type, base, size, irq, clock gate, config) except an allow-list (DBGMCU
-`idcode`, memory sizes, name) and that only USART2, GPIOF and
-GPIOI are removed. Changing a U575 peripheral without mirroring it fails with the
-peripheral and field named (verified by mutating the U575 USART1 `irq`).
+`crates/core/tests/u545_u575_drift_guard.rs` checks every shared peripheral
+(type, base, size, irq, clock gate, config) against an explicit allow-list:
+DBGMCU `idcode` and `sysmem.config.flash_size_kb` (512 vs 2048 KiB). The
+top-level allow-list covers name, flash/RAM sizes, and package pin maps; only
+USART2, GPIOF and GPIOI are removed. Changing any other U575 field without
+mirroring it fails with the peripheral and field named (verified by mutating
+the U575 USART1 `irq`).
 
 ## E. Arduino matrix (fidelity engine)
 

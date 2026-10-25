@@ -13,7 +13,8 @@ Console: **USART1** PA9/PA10 @ 115200 8N1 (board VCP). LED: **PC7** (LD1,
 Arduino `LED_BUILTIN`).
 
 > Tier: **sim-validated** — SVD/RM0456-derived, no bench part, no silicon diff
-> (Renode has no STM32U5 platform either). See
+> (upstream Renode has no built-in STM32U5 platform; no comparison with the
+> separate 60North reference platform is claimed). See
 > [`VALIDATION.md`](VALIDATION.md) for the exact commands and captured
 > evidence, and [`../../docs/boards/stm32u575.md`](../../docs/boards/stm32u575.md)
 > for the model/honesty table.
@@ -86,7 +87,7 @@ BLINK 0 LD1=1
 ```bash
 cargo build -p labwired-cli --release
 
-# Arduino matrix (L0-L4/L6/L7 pass; L5/L8 documented skips)
+# Arduino matrix (L0-L8 pass; 9 pass / 0 skip)
 python3 validation/arduino-matrix/run_matrix.py --boards stm32u575
 
 # Zephyr matrix (L0-L3)

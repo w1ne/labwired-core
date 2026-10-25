@@ -6,6 +6,8 @@ otherwise.
 
 Tier: **sim-validated** — all values are SVD / RM0456 / DS13737-derived. There
 is no bench part; no silicon capture and no Renode differential is claimed.
+Upstream Renode has no built-in STM32U5 platform; the separate 60North
+reference platform is not used for a differential in this runbook.
 
 ## Prerequisites
 

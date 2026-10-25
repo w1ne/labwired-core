@@ -1032,10 +1032,9 @@ pub fn try_build(
                 ),
             )
         }
-        // Instruction/data cache controllers (H5, WBA, U5…). Zephyr's SoC init
-        // enables the cache via ICACHE_CR.EN and never polls a completion flag,
-        // so a read-as-zero stub keeps the enable sequence from bus-faulting.
-        // No cache behaviour is modelled — the simulator has flat memory.
+        // U5 gets its limited register-contract model below; other chip
+        // profiles use the read-as-zero stub. Cache contents and line effects
+        // are not simulated because the simulator has flat memory.
         "icache" if p_cfg.config.get("profile").and_then(|v| v.as_str()) == Some("stm32u5") => {
             Box::new(crate::peripherals::icache::Icache::new())
         }
