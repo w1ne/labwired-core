@@ -546,10 +546,25 @@ impl Pic18 {
             let d = word & 0x0200 != 0;
             let a = word & 0x0100 != 0;
             let f = word as u8;
-            let b = self.read_file(f, a);
+            let addr = self.file_address(f, a);
+            // Reading PCL exposes this instruction's own address and latches
+            // the upper PC bytes; it does not expose the already-advanced PC.
+            let b = if addr == SFR_PCL {
+                self.pclath = (pc >> 8) as u8;
+                self.pclatu = ((pc >> 16) & 0x1F) as u8;
+                pc as u8
+            } else {
+                self.read_data(addr)
+            };
             let result = self.wreg.wrapping_add(b);
             self.set_add_flags(self.wreg, b, result);
-            self.write_result(f, a, d, result);
+            if d && addr == SFR_PCL {
+                // Computed GOTO: the addition does not propagate into the
+                // upper PC bytes (the table must not cross a 256-byte page).
+                self.pc = Self::align_pc((pc & 0xFFFF00) | u32::from(result));
+            } else {
+                self.write_result(f, a, d, result);
+            }
             return Ok(1);
         }
 
@@ -1085,6 +1100,56 @@ mod tests {
     }
 
     #[test]
+    fn btg_and_btfss_share_the_bit_file_resolver() {
+        let mut cpu = Pic18::new();
+        cpu.load_words(&[
+            0x0E00, // MOVLW 0
+            0x6E20, // MOVWF 0x20
+            0x7220, // BTG 0x20, bit 1 -> 0x02
+            0xA220, // BTFSS 0x20, bit 1 -> skip because the bit is set
+            0x0EAA, // skipped
+            0x0E55, // MOVLW 0x55
+        ]);
+        run(&mut cpu, 5);
+        assert_eq!(cpu.read_data(0x020), 0x02);
+        assert_eq!(cpu.wreg(), 0x55);
+    }
+
+    #[test]
+    fn rcall_pushes_the_following_address_and_retlw_pops_it() {
+        let mut cpu = Pic18::new();
+        cpu.load_words(&[
+            0xD801, // RCALL +1 word: next=2, target=4
+            0x0E11, // return target: MOVLW 0x11
+            0x0C42, // RETLW 0x42
+        ]);
+        run(&mut cpu, 1);
+        assert_eq!(cpu.get_pc(), 4);
+        assert_eq!(cpu.stack_pointer(), 1);
+        assert_eq!(cpu.top_of_stack(), 2);
+        run(&mut cpu, 1);
+        assert_eq!(cpu.get_pc(), 2);
+        assert_eq!(cpu.wreg(), 0x42);
+        assert_eq!(cpu.stack_pointer(), 0);
+        run(&mut cpu, 1);
+        assert_eq!(cpu.wreg(), 0x11);
+        assert_eq!(cpu.get_pc(), 4);
+    }
+
+    #[test]
+    fn movff_to_pcl_combines_the_latches_and_overrides_the_advance() {
+        let mut cpu = Pic18::new();
+        cpu.write_data(0x010, 0x40);
+        cpu.write_data(SFR_PCLATH, 0x01);
+        cpu.load_words(&[
+            0xC010, // MOVFF 0x010 -> PCL
+            0xFFF9, // destination 0xFF9 (second word 1111:1111:1111:1001)
+        ]);
+        run(&mut cpu, 1);
+        assert_eq!(cpu.get_pc(), 0x0140);
+    }
+
+    #[test]
     fn stack_overflow_overwrites_top_and_underflow_is_sticky() {
         let mut cpu = Pic18::with_geometry(64, 2);
         cpu.push(0x10);
@@ -1108,6 +1173,28 @@ mod tests {
         cpu.load_words(&[0x6EF9]); // MOVWF PCL, a=0 (resolves to 0xFF9)
         run(&mut cpu, 1);
         assert_eq!(cpu.get_pc(), 0x01FE);
+    }
+
+    #[test]
+    fn addwf_pcl_is_a_computed_goto_from_the_instruction_address() {
+        let mut cpu = Pic18::new();
+        cpu.wreg = 4;
+        cpu.load_words(&[
+            0x26F9, // ADDWF PCL, f, access: (PCL = 0) + 4 -> byte 4
+            0x0000, // must be skipped
+            0x0E11, // MOVLW 0x11 at byte 4
+        ]);
+        run(&mut cpu, 2);
+        assert_eq!(cpu.get_pc(), 6);
+        assert_eq!(cpu.wreg(), 0x11);
+        // PCL low-byte addition must not carry into PCLATH.
+        let mut cpu = Pic18::new();
+        cpu.wreg = 4;
+        cpu.set_pc(0x10FE);
+        cpu.load_flash(0x10FE, &[0xF9, 0x26, 0x00, 0x00]);
+        run(&mut cpu, 1);
+        assert_eq!(cpu.get_pc(), 0x1002);
+        assert_eq!(cpu.pclath, 0x10);
     }
 
     #[test]
