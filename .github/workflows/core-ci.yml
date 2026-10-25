@@ -544,6 +544,7 @@ jobs:
           python -m pip install --quiet pyyaml
           python3 scripts/generate_validation_status.py --check --drift
           python3 scripts/generate_firmware_exercise_matrix.py --check
+          python3 scripts/generate_model_ratings.py --check
 
       # The CHEAT(...) surface FIDELITY.md defines had no gate at all: the doc
       # said "grep for it", and a convention nothing counts is a comment. This
@@ -589,6 +590,7 @@ jobs:
             scripts/ci/test_workspace_test_shard.py \
             scripts/test_gen_debug_schemas.py \
             scripts/test_generate_firmware_exercise_matrix.py \
+            scripts/test_generate_model_ratings.py \
             scripts/test_generate_validation_status.py \
             scripts/test_labwired_audit.py \
             validation/matrix_lib/test_invoke.py
@@ -1839,6 +1841,7 @@ jobs:
           python -m pip install --quiet pyyaml
           python3 scripts/generate_validation_status.py --check --drift
           python3 scripts/generate_firmware_exercise_matrix.py --check
+          python3 scripts/generate_model_ratings.py --check
 
       # THE FORMATTING BACKSTOP. This is now the ONLY `--check` in the file —
       # `pr-gate` no longer has one, because `fmt-autofix` applies formatting to

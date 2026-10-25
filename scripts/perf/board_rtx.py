@@ -40,6 +40,7 @@ def cpu_hz(chip: dict) -> int:
 def run_once(cli: Path, board: str, firmware: Path, steps: int) -> tuple[float, float]:
     """Return (wall seconds, average instructions per dispatcher batch)."""
     chip = bp.CHIP_DIR / f"{board}.yaml"
+    chip_arg = board if bp.USE_CHIP_NAME else str(chip)
     env = dict(os.environ)
     start = time.perf_counter()
     proc = subprocess.run(
@@ -47,7 +48,7 @@ def run_once(cli: Path, board: str, firmware: Path, steps: int) -> tuple[float, 
             str(cli),
             "run",
             "--chip",
-            str(chip),
+            chip_arg,
             "--firmware",
             str(firmware),
             "--max-steps",
@@ -96,11 +97,28 @@ def main() -> int:
     parser.add_argument(
         "--cli", default=str(bp.REPO_ROOT / "target/release/labwired")
     )
+    parser.add_argument(
+        "--chip-dir",
+        default=str(bp.CHIP_DIR),
+        help="directory of chip YAMLs (default: configs/chips; use a private dir for closed models)",
+    )
+    parser.add_argument(
+        "--chip-name",
+        action="store_true",
+        help="pass the board name to --chip instead of the YAML path (private plugin builds)",
+    )
     parser.add_argument("--status-json")
+    parser.add_argument(
+        "--rating-out",
+        type=Path,
+        help="write the RTx rating per board as JSON",
+    )
     args = parser.parse_args()
     if args.repeats < 1 or args.seconds <= 0 or args.min_rtx <= 0:
         parser.error("--repeats, --seconds and --min-rtx must be positive")
 
+    bp.CHIP_DIR = Path(args.chip_dir).resolve()
+    bp.USE_CHIP_NAME = args.chip_name
     cli = Path(args.cli)
     if not cli.exists():
         print(f"error: CLI not found at {cli}", file=sys.stderr)
@@ -185,6 +203,22 @@ def main() -> int:
     }
     if args.status_json:
         Path(args.status_json).write_text(json.dumps(status, indent=2, sort_keys=True) + "\n")
+    if args.rating_out:
+        args.rating_out.write_text(
+            json.dumps(
+                {
+                    "schema": 1,
+                    "chip_dir": str(bp.CHIP_DIR),
+                    "cli": str(cli),
+                    "models": {
+                        board: {"rtx": row["median_rtx"], "min_rtx": row["min_rtx"]}
+                        for board, row in sorted(rows.items())
+                    },
+                },
+                indent=2,
+            )
+            + "\n"
+        )
     if failures:
         print(
             f"\n{len(failures)} chip(s) below {args.min_rtx:.2f}x: "
