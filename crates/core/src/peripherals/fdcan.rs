@@ -154,6 +154,12 @@ const RAM_BASE: u64 = 0x800;
 const RAM_WORDS: usize = 0x6A0 / 4;
 /// RX FIFO0 elements: 3 x 18 words at SRAMCAN + 0xB0.
 const RAM_RF0_WORDS: usize = 0xB0 / 4;
+/// RX FIFO1 elements: 3 x 18 words at SRAMCAN + 0x188.
+const RAM_RF1_WORDS: usize = 0x188 / 4;
+/// Standard filter list: one 32-bit element each at SRAMCAN + 0x000.
+const RAM_STD_FILTER_WORDS: usize = 0x000 / 4;
+/// Extended filter list: two 32-bit elements each at SRAMCAN + 0x070.
+const RAM_EXT_FILTER_WORDS: usize = 0x070 / 4;
 /// TX buffers: 3 x 18 words at SRAMCAN + 0x278.
 const RAM_TFQ_WORDS: usize = 0x278 / 4;
 const ELEMENT_WORDS: usize = 18;
@@ -180,6 +186,8 @@ const TEST_LBCK: u32 = 1 << 4;
 // HPM(6) TC(7) TCF(8) TFE(9) ...
 const IR_RF0N: u32 = 1 << 0;
 const IR_RF0L: u32 = 1 << 2;
+const IR_RF1N: u32 = 1 << 3;
+const IR_RF1L: u32 = 1 << 5;
 const IR_TC: u32 = 1 << 7;
 const IR_TFE: u32 = 1 << 9;
 const IR_EP: u32 = 1 << 17;
@@ -242,6 +250,9 @@ pub struct Fdcan {
     rxf0_put: u32,
     rxf0_get: u32,
     rxf0_lost: bool,
+    rxf1_fill: u32,
+    rxf1_put: u32,
+    rxf1_get: u32,
     rxf1_lost: bool,
     txbrp: u32,
     txbto: u32,
@@ -339,6 +350,9 @@ impl Fdcan {
             rxf0_put: 0,
             rxf0_get: 0,
             rxf0_lost: false,
+            rxf1_fill: 0,
+            rxf1_put: 0,
+            rxf1_get: 0,
             rxf1_lost: false,
             txbrp: 0,
             txbto: 0,
@@ -586,6 +600,18 @@ impl Fdcan {
             | self.rxf0_fill
     }
 
+    fn rxf1s(&self) -> u32 {
+        (if self.rxf1_lost { 1 << 25 } else { 0 })
+            | (if self.rxf1_fill == FIFO_DEPTH {
+                1 << 24
+            } else {
+                0
+            })
+            | (self.rxf1_put << 16)
+            | (self.rxf1_get << 8)
+            | self.rxf1_fill
+    }
+
     fn txfqs(&self) -> u32 {
         // TFFL reflects free slots: depth minus in-flight pending frames.
         let pending = self.pending_tx.len() as u32;
@@ -658,9 +684,9 @@ impl Fdcan {
             REG_XIDAM => self.xidam,
             REG_HPMS => 0,
             REG_RXF0S => self.rxf0s(),
-            REG_RXF0A => 0,
-            REG_RXF1S => u32::from(self.rxf1_lost) << 25,
-            REG_RXF1A => 0,
+            REG_RXF0A => self.rxf0_get,
+            REG_RXF1S => self.rxf1s(),
+            REG_RXF1A => self.rxf1_get,
             REG_TXBC => 0,
             REG_TXFQS => self.txfqs(),
             REG_TXBRP => self.txbrp,
@@ -703,6 +729,7 @@ impl Fdcan {
             REG_ILE => self.ile = value & 0x3,
             REG_RXGFC if self.config_unlocked() => self.rxgfc = value,
             REG_XIDAM if self.config_unlocked() => self.xidam = value,
+            REG_RXF1A => self.ack_rx_fifo1(value),
             REG_RXF0A => self.ack_rx_fifo0(value),
             REG_RXF1A => {}
             REG_TXBAR if self.running() => self.request_tx(value),
@@ -747,6 +774,99 @@ impl Fdcan {
             self.recovery_armed = None;
         }
         self.cccr = next;
+    }
+
+    fn ack_rx_fifo1(&mut self, value: u32) {
+        if self.rxf1_fill == 0 {
+            return;
+        }
+        let acked = value & 0x3F;
+        let consumed = (acked + FIFO_DEPTH + 1 - self.rxf1_get) % FIFO_DEPTH.max(1);
+        let consumed = consumed.max(1).min(self.rxf1_fill);
+        self.rxf1_get = (acked + 1) % FIFO_DEPTH;
+        self.rxf1_fill -= consumed;
+    }
+
+    /// Acceptance filtering (RM0456 §70.4.3 / M_CAN filter lists written by
+    /// HAL_FDCAN_ConfigFilter): returns the RX FIFO index, or `None` when the
+    /// frame is rejected. The filter elements live in the fixed message-RAM
+    /// sections (standard 0x000, extended 0x070), and RXGFC carries the list
+    /// lengths plus the non-matching actions.
+    fn filter_route(&self, frame: &CanFrame) -> Option<u8> {
+        let rxgfc = self.rxgfc;
+        if frame.extended {
+            let count = ((rxgfc >> 24) & 0xF) as usize;
+            for idx in 0..count {
+                let base = RAM_EXT_FILTER_WORDS + idx * 2;
+                let Some(&w0) = self.message_ram.get(base) else {
+                    continue;
+                };
+                let Some(&w1) = self.message_ram.get(base + 1) else {
+                    continue;
+                };
+                let config = (w0 >> 29) & 0x7;
+                if config == 0 || config == 7 {
+                    continue;
+                }
+                let id1 = w0 & 0x1FFF_FFFF;
+                let filter_type = (w1 >> 30) & 0x3;
+                let id2 = w1 & 0x1FFF_FFFF;
+                let mask = if self.xidam == 0 { 0x1FFF_FFFF } else { self.xidam };
+                let id = frame.id & mask;
+                let matches = match filter_type {
+                    0 | 3 => id1 <= id && id <= id2,
+                    1 => id == id1 || id == id2,
+                    _ => (id & id2) == (id1 & id2),
+                };
+                if matches {
+                    return match config {
+                        1 | 5 => Some(0),
+                        2 | 6 => Some(1),
+                        3 => None,
+                        _ => None,
+                    };
+                }
+            }
+        } else {
+            let count = ((rxgfc >> 16) & 0x1F) as usize;
+            for idx in 0..count {
+                let Some(&w) = self.message_ram.get(RAM_STD_FILTER_WORDS + idx) else {
+                    continue;
+                };
+                let filter_type = (w >> 30) & 0x3;
+                let config = (w >> 27) & 0x7;
+                if config == 0 || config == 7 || filter_type == 3 {
+                    continue;
+                }
+                let id1 = (w >> 16) & 0x7FF;
+                let id2 = w & 0x7FF;
+                let id = frame.id & 0x7FF;
+                let matches = match filter_type {
+                    0 => id1 <= id && id <= id2,
+                    1 => id == id1 || id == id2,
+                    _ => (id & id2) == (id1 & id2),
+                };
+                if matches {
+                    return match config {
+                        1 | 5 => Some(0),
+                        2 | 6 => Some(1),
+                        3 => None,
+                        _ => None,
+                    };
+                }
+            }
+        }
+        // No filter matched: RXGFC.ANFS/ANFE.
+        let nonmatching = if frame.extended {
+            (rxgfc >> 2) & 0x3
+        } else {
+            (rxgfc >> 4) & 0x3
+        };
+        match nonmatching {
+            0 => Some(0),
+            1 => Some(1),
+            _ => None,
+        }
     }
 
     fn ack_rx_fifo0(&mut self, value: u32) {
@@ -866,6 +986,28 @@ impl Fdcan {
         use crate::network::CanRxRejection;
         if !self.running() {
             return Err(CanRxRejection::NotRunning);
+        }
+        let fifo = self.filter_route(&frame);
+        let fifo = match fifo {
+            Some(f) => f,
+            None => {
+                self.push_trace("rx", &frame);
+                return Err(CanRxRejection::NoFilterMatch);
+            }
+        };
+        if fifo == 1 {
+            if self.rxf1_fill >= FIFO_DEPTH {
+                self.rxf1_lost = true;
+                self.ir |= IR_RF1L;
+                return Err(CanRxRejection::FifoFull);
+            }
+            self.push_trace("rx", &frame);
+            let base = RAM_RF1_WORDS + self.rxf1_put as usize * ELEMENT_WORDS;
+            self.encode_rx_element(base, &frame);
+            self.rxf1_put = (self.rxf1_put + 1) % FIFO_DEPTH;
+            self.rxf1_fill += 1;
+            self.ir |= IR_RF1N;
+            return Ok(());
         }
         if self.rxf0_fill >= FIFO_DEPTH {
             self.rxf0_lost = true;

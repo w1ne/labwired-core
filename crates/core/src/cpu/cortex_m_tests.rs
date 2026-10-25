@@ -3818,3 +3818,32 @@ fn jit_gate_refuses_an_armed_debug_watch() {
         "a compiled block writes raw RAM and must not bypass a watch"
     );
 }
+
+#[test]
+fn test_exec_wide_strh_strb_imm() {
+    let mut cpu = CortexM::new();
+    let mut bus = MockBus::new();
+    cpu.pc = 0x2000;
+    cpu.r12 = 0x3000;
+    cpu.r3 = 0x0000_1234;
+    run_test_instr(&mut cpu, &mut bus, 0xF8AC_306A, true); // strh.w r3,[r12,#106]
+    assert_eq!(bus.read_u16(0x3000 + 106).unwrap(), 0x1234);
+    cpu.r2 = 0x3000;
+    cpu.r3 = 0x0000_00AB;
+    run_test_instr(&mut cpu, &mut bus, 0xF882_3020, true); // strb.w r3,[r2,#32]
+    assert_eq!(bus.read_u8(0x3000 + 32).unwrap(), 0xAB);
+}
+
+#[test]
+fn test_exec_wide_ldrh_ldrb_imm() {
+    let mut cpu = CortexM::new();
+    let mut bus = MockBus::new();
+    cpu.pc = 0x2000;
+    bus.write_u16(0x3050, 0xBEEF).unwrap();
+    cpu.r2 = 0x3000;
+    run_test_instr(&mut cpu, &mut bus, 0xF8B2_3050, true); // ldrh.w r3,[r2,#80]
+    assert_eq!(cpu.r3, 0xBEEF);
+    bus.write_u8(0x3070, 0x5A).unwrap();
+    run_test_instr(&mut cpu, &mut bus, 0xF892_3070, true); // ldrb.w r3,[r2,#112]
+    assert_eq!(cpu.r3, 0x5A);
+}

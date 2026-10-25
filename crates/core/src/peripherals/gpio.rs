@@ -266,6 +266,10 @@ pub struct V2Gpio {
     lckr: u32,    // 0x1C
     afrl: u32,    // 0x20
     afrh: u32,    // 0x24
+    /// U5/U5-like HSLVR (0x2C) high-speed/low-voltage pin select.
+    hslvr: u32,
+    /// U5/U5-like SECCFGR (0x30) security attribution (reset 0xFFFF).
+    seccfgr: u32,
     /// Pins the outside world is holding. A pull applies only where this bit
     /// is clear, so a button on the pad wins over the weak resistor. Not a
     /// register: snapshots stay the register file they were.
@@ -314,9 +318,14 @@ impl V2Gpio {
                 _ => {}
             }
         }
-        let from_pull = undriven & pull_apply & !self.external;
-        let from_latch = undriven & !from_pull;
-        ((self.odr & push_pull) | (pull_level & from_pull) | (self.idr & from_latch)) & 0xFFFF
+        // A weak pull is not a data latch: silicon's IDR reflects the pin
+        // level, and an unconnected pulled pin reads its pull. The 60North
+        // reference pins IDR = 0 at reset, and boards that need a pressed /
+        // released level drive it through `set_external_input` (the `external`
+        // mask above). Keep the pull state in PUPDR for firmware read-back,
+        // but do not synthesize IDR bits from it.
+        let _ = (&pull_level, pull_apply);
+        (self.odr & push_pull) | (self.idr & undriven) & 0xFFFF
     }
 
     fn read_reg(&self, offset: u64) -> u32 {
@@ -330,6 +339,8 @@ impl V2Gpio {
             0x1C => self.lckr,
             0x20 => self.afrl,
             0x24 => self.afrh,
+            0x2C => self.hslvr,
+            0x30 => self.seccfgr,
             _ => {
                 crate::census_reg!("gpio:V2Gpio", offset, "read");
                 0
@@ -1952,6 +1963,8 @@ impl GpioPort {
             moder,
             ospeedr,
             pupdr,
+            // Every U5 GPIO pin is secure out of reset.
+            seccfgr: 0x0000_FFFF,
             ..Default::default()
         }))
     }

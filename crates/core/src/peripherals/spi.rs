@@ -93,6 +93,9 @@ const SPI_NET_IRQ_TOKEN: u32 = 2;
 /// Scheduler token: raise the STM32 SPI's due DMA requests (CR2.TXDMAEN /
 /// RXDMAEN). See [`Spi::stm32_take_dma_signals`]. (3 is `spi_nrf_net`'s.)
 const SPI_DMA_TOKEN: u32 = 4;
+/// H5 "SPI v3" level IRQ re-check (SR & IER). Separate from the bit-engine
+/// done token because this IP has no frame timeline of its own.
+const SPI_H5_IRQ_TOKEN: u32 = 8;
 /// Cycles between re-checks of the DMA request lines while requests are
 /// being answered — long enough for the routed DMA channel to move the item
 /// (its event fires the cycle after the request), short against a frame.
@@ -614,6 +617,9 @@ const H5_CR1_WRITABLE: u32 = 0x0001_FB01;
 /// SR: TX-packet space available — always set (sim TX path is bottomless).
 const H5_SR_RXP: u32 = 1 << 0;
 const H5_SR_TXP: u32 = 1 << 1;
+/// SR: duplex packet available (both directions can move a packet). With a
+/// bottomless TX path this is live-RXP.
+const H5_SR_DXP: u32 = 1 << 2;
 /// SR: end of transfer (CTSIZE reached 0).
 const H5_SR_EOT: u32 = 1 << 3;
 /// SR: transmission of TxFIFO filled.
@@ -637,6 +643,10 @@ const H5_CFG1_RESET: u32 = 0x0007_0007;
 const H5_CFG2_MASTER: u32 = 1 << 22;
 /// CFG2: software SS management.
 const H5_CFG2_SSM: u32 = 1 << 26;
+/// CFG1: Rx DMA stream enable (RM0456 §68.8.3).
+const H5_CFG1_RXDMAEN: u32 = 1 << 14;
+/// CFG1: Tx DMA stream enable.
+const H5_CFG1_TXDMAEN: u32 = 1 << 15;
 
 /// IER writable bits [10:0] (RXPIE..TSERFIE).
 const H5_IER_WRITABLE: u32 = 0x0000_07FF;
@@ -1777,6 +1787,26 @@ pub struct Spi {
     /// The [`SPI_DMA_TOKEN`] chain is armed.
     #[serde(skip)]
     dma_scheduled: bool,
+    /// The limited SPI3 personality (RM0456 Table 696): DSIZE <= 15,
+    /// FTHLV 0..3, TSIZE <= 0x3FF and no CTSIZE.
+    #[serde(default)]
+    limited_features: bool,
+    /// H5 "SPI v3" receive queue. The IP completes a frame on the TXDR
+    /// access rather than on a wire timeline, so a full-duplex DMA master
+    /// can outrun a one-deep RXDR; silicon has a FIFO there for exactly this
+    /// reason. RXDR reads pop it (RM0456 §68.5.10).
+    #[serde(skip)]
+    h5_rx_fifo: std::cell::RefCell<std::collections::VecDeque<(u32, u8)>>,
+    /// H5 "SPI v3" transmit queue. HAL_SPI_TransmitReceive_IT pre-fills TXDR
+    /// BEFORE setting CSTART, so a one-shot "write = transmit" model would
+    /// drop every pre-filled frame. Frames written while stopped wait here and
+    /// are shifted on CSTART.
+    #[serde(skip)]
+    h5_tx_fifo: std::cell::RefCell<std::collections::VecDeque<u32>>,
+    /// The RX frame currently being read out of RXDR, one byte lane at a time
+    /// (the bus is byte-granular; a 16-bit frame is two reads).
+    #[serde(skip)]
+    h5_rx_cur: std::cell::Cell<Option<(u32, u8)>>,
 }
 
 impl core::fmt::Debug for Spi {
@@ -2857,6 +2887,79 @@ impl Spi {
         }
     }
 
+    /// Shift one frame through the H5 SPI. Full-duplex: every transmitted
+    /// frame simultaneously clocks one IN. Silicon fills RXDR and raises
+    /// SR.RXP whether or not a slave drives MISO — with nothing driving, the
+    /// captured value is just the idle line level.
+    fn h5_transmit_frame(&mut self, word: u32) {
+        let (master, frame_bytes) = match &self.regs {
+            SpiRegs::Stm32H5(r) => (
+                r.cfg2 & H5_CFG2_MASTER != 0,
+                // CFG1.DSIZE is the frame width in BITS minus one (7=8-bit,
+                // 15=16-bit, 31=32-bit), not bytes.
+                ((((r.cfg1 & H5_CFG1_DSIZE) as usize) + 1 + 7) / 8).clamp(1, 4),
+            ),
+            _ => return,
+        };
+        if !master {
+            return;
+        }
+        let mut miso_word: u32 = 0;
+        for lane in (0..frame_bytes).rev() {
+            let mosi = ((word >> (8 * lane)) & 0xFF) as u8;
+            let mut miso: u8 = 0;
+            for dev in &mut self.attached_devices {
+                let r = dev.transfer(mosi);
+                if r != 0 {
+                    miso = r;
+                }
+            }
+            if self.loopback && self.attached_devices.is_empty() {
+                miso = mosi;
+            }
+            miso_word |= u32::from(miso) << (8 * lane);
+            // The byte just crossed the bus. Narrate it onto the routed AF
+            // pads: this IP has no bit engine to drive them per cycle.
+            self.h5_wire_push(u16::from(mosi));
+        }
+        if let SpiRegs::Stm32H5(r) = &mut self.regs {
+            r.rxdr = miso_word;
+            r.sr |= H5_SR_RXP;
+        }
+        self.h5_rx_fifo
+            .borrow_mut()
+            .push_back((miso_word, frame_bytes as u8));
+        // Authoritative RXNE for the DMA handshake and the
+        // clear-on-RXDR-read path.
+        self.stm32_rxne.set(true);
+        if let SpiRegs::Stm32H5(r) = &mut self.regs {
+            if r.ctsize > 0 {
+                r.ctsize -= 1;
+                if r.ctsize == 0 {
+                    // Frame count exhausted: EOT|TXC, start request HW-cleared.
+                    // TSIZE=0 (endless mode) never reaches this — no EOT.
+                    r.sr |= H5_SR_EOT | H5_SR_TXC;
+                    r.cr1 &= !H5_CR1_CSTART;
+                }
+            }
+        }
+    }
+
+    /// Drain every queued frame after CSTART rises.
+    fn h5_drain_tx_fifo(&mut self) {
+        loop {
+            let started = matches!(&self.regs, SpiRegs::Stm32H5(r) if r.cr1 & H5_CR1_CSTART != 0);
+            if !started {
+                return;
+            }
+            let next = self.h5_tx_fifo.borrow_mut().pop_front();
+            let Some(mosi) = next else {
+                return;
+            };
+            self.h5_transmit_frame(mosi);
+        }
+    }
+
     /// STM32H5 ("SPI v3") register write with transfer-engine side effects.
     /// Only called on the `Stm32H5` variant. Behavioural rules pinned by
     /// silicon capture 2026-06-11 (NUCLEO-H563ZI) unless noted otherwise.
@@ -2895,6 +2998,18 @@ impl Spi {
                         v &= !H5_CR1_CSTART;
                     }
                     r.cr1 = v;
+                    if prev & H5_CR1_SPE == 0 && v & H5_CR1_SPE != 0 {
+                        // A fresh enable starts from empty FIFOs.
+                        self.h5_tx_fifo.borrow_mut().clear();
+                        self.h5_rx_fifo.borrow_mut().clear();
+                        self.h5_rx_cur.set(None);
+                        self.stm32_rxne.set(false);
+                    }
+                    let started =
+                        prev & H5_CR1_CSTART == 0 && v & H5_CR1_CSTART != 0;
+                    if started {
+                        self.h5_drain_tx_fifo();
+                    }
                 }
                 // Enabling the peripheral hands the pads to the SPI, and real
                 // silicon immediately drives SCK to the programmed idle
@@ -2918,7 +3033,11 @@ impl Spi {
             0x04 => {
                 // CR2: TSIZE[15:0] (write 0x10 → reads 0x10 on the bench).
                 if let SpiRegs::Stm32H5(r) = &mut self.regs {
-                    r.cr2 = value & 0xFFFF;
+                    r.cr2 = if self.limited_features {
+                        value & 0x03FF
+                    } else {
+                        value & 0xFFFF
+                    };
                 }
             }
             0x08 => {
@@ -2926,8 +3045,24 @@ impl Spi {
                 // read as 0.
                 if let SpiRegs::Stm32H5(r) = &mut self.regs {
                     if r.cr1 & H5_CR1_SPE == 0 {
-                        r.cfg1 = value & !H5_CFG1_RESERVED;
+                        let mut v = value & !H5_CFG1_RESERVED;
+                        if self.limited_features {
+                            v = (v & !H5_CFG1_DSIZE) | (v & 0x0F);
+                            v = (v & !(0xF << 5)) | ((v >> 5 & 0x3) << 5);
+                        }
+                        r.cfg1 = v;
                     }
+                }
+                // A request line switched off drops its outstanding request.
+                let cfg1 = match &self.regs {
+                    SpiRegs::Stm32H5(r) => r.cfg1,
+                    _ => 0,
+                };
+                if cfg1 & H5_CFG1_TXDMAEN == 0 {
+                    self.dma_tx_req = false;
+                }
+                if cfg1 & H5_CFG1_RXDMAEN == 0 {
+                    self.dma_rx_req.set(false);
                 }
             }
             0x0C => {
@@ -2962,68 +3097,30 @@ impl Spi {
                 }
             }
             0x20 => {
-                // TXDR — the TX-only data engine (spec-derived; the bench
-                // part had no SPI kernel clock, see Stm32H5SpiRegs docs).
-                let (spe, started, master) = match &self.regs {
+                // TXDR. Frames written while the transfer has not started are
+                // held in the TX FIFO (HAL_SPI_TransmitReceive_IT pre-fills it
+                // before CSTART); once started each write shifts one frame.
+                let (spe, started) = match &self.regs {
                     SpiRegs::Stm32H5(r) => (
                         r.cr1 & H5_CR1_SPE != 0,
                         r.cr1 & H5_CR1_CSTART != 0,
-                        r.cfg2 & H5_CFG2_MASTER != 0,
                     ),
                     _ => return,
                 };
                 if !spe {
                     return;
                 }
+                // This TXDR access answers an outstanding TX DMA request.
+                self.dma_tx_req = false;
                 if let SpiRegs::Stm32H5(r) = &mut self.regs {
                     // Any enabled TXDR write fills the TxFIFO → TXTF; TXP
                     // stays set (sim TX path is bottomless).
                     r.sr |= H5_SR_TXTF;
                 }
-                if started && master {
-                    // One frame per TXDR access. DSIZE (CFG1[4:0]) is stored
-                    // but not consumed by the TX-only engine: the low byte is
-                    // broadcast, matching the v1 byte-wide device routing.
-                    let mosi = (value & 0xFF) as u8;
-                    // Full-duplex: every transmitted frame simultaneously
-                    // clocks one IN. Silicon fills RXDR and raises SR.RXP
-                    // whether or not a slave drives MISO — with nothing
-                    // driving, the captured value is just the idle line level.
-                    // Without this the peripheral was TX-only, and any driver
-                    // that writes TXDR then waits for RXP (which is what
-                    // HAL_SPI_TransmitReceive, and therefore Arduino's
-                    // SPI.transfer(), does) hung forever.
-                    let mut miso: u8 = 0;
-                    for dev in &mut self.attached_devices {
-                        let r = dev.transfer(mosi);
-                        if r != 0 {
-                            miso = r;
-                        }
-                    }
-                    if self.loopback && self.attached_devices.is_empty() {
-                        miso = mosi;
-                    }
-                    if let SpiRegs::Stm32H5(r) = &mut self.regs {
-                        r.rxdr = miso as u32;
-                        r.sr |= H5_SR_RXP;
-                    }
-                    // The frame just crossed the bus. Narrate it onto the
-                    // routed AF pads: this IP has no bit engine to drive them
-                    // per cycle, so the wire is reconstructed from the completed
-                    // transfer. Buffered here, published by `h5_wire_flush`.
-                    self.h5_wire_push(value as u16);
-                    if let SpiRegs::Stm32H5(r) = &mut self.regs {
-                        if r.ctsize > 0 {
-                            r.ctsize -= 1;
-                            if r.ctsize == 0 {
-                                // Frame count exhausted: EOT|TXC, start
-                                // request HW-cleared. TSIZE=0 (endless mode)
-                                // never reaches this — no EOT.
-                                r.sr |= H5_SR_EOT | H5_SR_TXC;
-                                r.cr1 &= !H5_CR1_CSTART;
-                            }
-                        }
-                    }
+                if started {
+                    self.h5_transmit_frame(value);
+                } else {
+                    self.h5_tx_fifo.borrow_mut().push_back(value);
                 }
             }
             0x40 => {
@@ -3651,24 +3748,69 @@ impl Spi {
     ///   request is raised for a single byte: the odd frame of a packed
     ///   transfer.
     fn stm32_dma_due(&self) -> (bool, bool) {
-        let SpiRegs::Stm32(r) = &self.regs else {
-            return (false, false);
-        };
-        if r.cr2 & (CR2_TXDMAEN | CR2_RXDMAEN) == 0 {
-            return (false, false);
+        match &self.regs {
+            SpiRegs::Stm32(r) => {
+                if r.cr2 & (CR2_TXDMAEN | CR2_RXDMAEN) == 0 {
+                    return (false, false);
+                }
+                let tx = r.cr2 & CR2_TXDMAEN != 0
+                    && !self.dma_tx_req
+                    && r.cr1 & (1 << 6) != 0
+                    && self.stm32_txe();
+                let rx_level = self.stm32_rxne.get()
+                    || (r.fifo
+                        && r.cr2 & FIFO_CR2_LDMA_RX != 0
+                        && r.cr2 & FIFO_CR2_FRXTH == 0
+                        && self.dma_rx_last
+                        && self.fifo_rx.get().len >= 1);
+                let rx = r.cr2 & CR2_RXDMAEN != 0 && !self.dma_rx_req.get() && rx_level;
+                (tx, rx)
+            }
+            // SPI v3 (H5/U5): DMA enables are CFG1.RXDMAEN/TXDMAEN, not CR2
+            // (RM0456 §68.8.3). TX is due while the master is started and the
+            // TX FIFO has space; RX is due while a frame is waiting in RXDR.
+            SpiRegs::Stm32H5(r) => {
+                let tx = r.cfg1 & H5_CFG1_TXDMAEN != 0
+                    && !self.dma_tx_req
+                    && r.cr1 & H5_CR1_SPE != 0
+                    && r.cr1 & H5_CR1_CSTART != 0
+                    && r.sr & H5_SR_TXP != 0;
+                let rx = r.cfg1 & H5_CFG1_RXDMAEN != 0
+                    && !self.dma_rx_req.get()
+                    && !self.h5_rx_fifo.borrow().is_empty();
+                (tx, rx)
+            }
+            _ => (false, false),
         }
-        let tx = r.cr2 & CR2_TXDMAEN != 0
-            && !self.dma_tx_req
-            && r.cr1 & (1 << 6) != 0
-            && self.stm32_txe();
-        let rx_level = self.stm32_rxne.get()
-            || (r.fifo
-                && r.cr2 & FIFO_CR2_LDMA_RX != 0
-                && r.cr2 & FIFO_CR2_FRXTH == 0
-                && self.dma_rx_last
-                && self.fifo_rx.get().len >= 1);
-        let rx = r.cr2 & CR2_RXDMAEN != 0 && !self.dma_rx_req.get() && rx_level;
-        (tx, rx)
+    }
+
+    /// The H5 "SPI v3" interrupt line is the level `SR & IER` over the
+    /// error/event flags (RM0456 §68.8.5/68.8.6). It has no frame engine to
+    /// raise it, so the bus asks this before arming a wakeup.
+    fn h5_irq_pending(&self) -> bool {
+        match &self.regs {
+            SpiRegs::Stm32H5(r) => (self.h5_live_sr(r) & r.ier & 0x7FF) != 0,
+            _ => false,
+        }
+    }
+
+    /// SR with the receive-queue-dependent flags applied: RXP/DXP are live
+    /// over the queue, everything else is the stored event register.
+    fn h5_rx_available(&self) -> bool {
+        !self.h5_rx_fifo.borrow().is_empty() || self.h5_rx_cur.get().is_some()
+    }
+
+    fn h5_live_sr(&self, r: &Stm32H5SpiRegs) -> u32 {
+        let mut v = r.sr;
+        if self.h5_rx_available() {
+            v |= H5_SR_RXP;
+            if v & H5_SR_TXP != 0 {
+                v |= H5_SR_DXP;
+            }
+        } else {
+            v &= !(H5_SR_RXP | H5_SR_DXP);
+        }
+        v
     }
 
     /// Raise every due DMA request: the `dma_signals` the bus routes to the
@@ -3801,7 +3943,44 @@ impl crate::Peripheral for Spi {
         let reg_val = match &self.regs {
             SpiRegs::Nrf52(r) => r.read_reg(reg_offset),
             SpiRegs::KinetisDspi(r) => r.read_reg(reg_offset),
-            SpiRegs::Stm32H5(r) => r.read_reg(reg_offset),
+            SpiRegs::Stm32H5(r) => {
+                let mut v = r.read_reg(reg_offset) as u32;
+                // RXDR read consumes the frame: RXP clears and an outstanding
+                // RX DMA request is answered (RM0456 §68.8.6).
+                if reg_offset == 0x30 {
+                    // Serve one byte lane of the current frame; a fresh frame
+                    // is popped on the first lane read (the bus is byte-wide).
+                    let cur = match self.h5_rx_cur.get() {
+                        Some(cur) => cur,
+                        None => {
+                            let next = self.h5_rx_fifo.borrow_mut().pop_front();
+                            match next {
+                                Some(frame) => {
+                                    self.h5_rx_cur.set(Some(frame));
+                                    frame
+                                }
+                                None => (0, 1),
+                            }
+                        }
+                    };
+                    let (word, bytes) = cur;
+                    if (byte_offset as u8) < bytes {
+                        // Keep the whole frame: the tail of `read` extracts
+                        // this access's byte lane from `reg_val` again.
+                        v = word;
+                    }
+                    if (byte_offset as u8) + 1 >= bytes {
+                        self.h5_rx_cur.set(None);
+                        self.dma_rx_req.set(false);
+                    }
+                    self.stm32_rxne.set(self.h5_rx_available());
+                }
+                // SR.RXP/DXP are live over the queue, not the stored bits.
+                if reg_offset == 0x14 {
+                    v = self.h5_live_sr(r);
+                }
+                v
+            }
             SpiRegs::Efr32s2Usart(r) => r.read_reg(reg_offset),
             // Widen u16→u32 before the shift: byte accesses at offsets 2/3 read
             // the upper byte of the next halfword; `(u16 as u32) >> 16` is 0
@@ -3948,6 +4127,12 @@ impl crate::Peripheral for Spi {
     /// than intended. Firmware on Cortex-M always uses STR (32-bit) for
     /// nRF register accesses — this override matches that behaviour.
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        // H5 "SPI v3": a 32-bit register write is one transaction (TXDR's word
+        // is one 32-bit frame, CFG/IER are stored atomically).
+        if let SpiRegs::Stm32H5(_) = &self.regs {
+            self.write_stm32h5_reg(offset & !3, value);
+            return Ok(());
+        }
         if let SpiRegs::Nrf52(_) = &self.regs {
             let reg_offset = offset & !3;
             // Legacy SPI TXD: same immediate-byte path as the u8 write arm.
@@ -4042,12 +4227,18 @@ impl crate::Peripheral for Spi {
         // §41.4.13) — byte-splitting would transmit two frames. The classic
         // 0x0C special-case below must not run either: 0x0C is CFG2 on H5.
         if let SpiRegs::Stm32H5(_) = &self.regs {
-            if (offset & !3) == 0x20 {
-                self.write_stm32h5_reg(0x20, value as u32);
-            } else {
-                self.write(offset, (value & 0xFF) as u8)?;
-                self.write(offset + 1, ((value >> 8) & 0xFF) as u8)?;
-            }
+            // H5 registers are 32-bit. A halfword access is ONE transaction:
+            // TXDR's halfword is one 16-bit frame (RM0456 §68.8.13), and a
+            // config register's upper half must merge into the stored word.
+            let reg_offset = offset & !3;
+            let byte_offset = (offset % 4) as u32;
+            let cur = match &self.regs {
+                SpiRegs::Stm32H5(r) => r.read_reg(reg_offset),
+                _ => 0,
+            };
+            let mask: u32 = 0xFFFF << (byte_offset * 8);
+            let new = (cur & !mask) | (u32::from(value) << (byte_offset * 8));
+            self.write_stm32h5_reg(reg_offset, new);
             return Ok(());
         }
         // SPI DR (offset 0x0C) MUST be atomic — a Thumb `strh` is one bus
@@ -4139,6 +4330,9 @@ impl crate::Peripheral for Spi {
         if !events.is_empty() {
             return events;
         }
+        if self.h5_irq_pending() {
+            return vec![(0, SPI_H5_IRQ_TOKEN)];
+        }
         // H5 "SPI v3": no bit engine, so no frame to chase — but a buffered
         // narration burst still needs a wakeup to publish on. Arm only while a
         // burst is genuinely held, which requires routed pads, and only once
@@ -4208,6 +4402,14 @@ impl crate::Peripheral for Spi {
                 // Ask for the wire time the burst still needs, floored at one
                 // cycle so a held burst always converges instead of spinning.
                 reschedule_delay: pending.then(|| self.efr32_wire_pending_cycles().max(1)),
+                ..Default::default()
+            };
+        }
+        if event_token == SPI_H5_IRQ_TOKEN {
+            let pending = self.h5_irq_pending();
+            return crate::sched::EventResult {
+                raise_own_irq: pending,
+                reschedule_delay: pending.then_some(1),
                 ..Default::default()
             };
         }
@@ -4385,6 +4587,12 @@ impl crate::Peripheral for Spi {
         }
         // ── STM32 DMA requests (TXDMAEN / RXDMAEN) ───────────────────────────
         let dma_signals = self.stm32_take_dma_signals();
+        // H5 "SPI v3" has no frame engine: its interrupt line is the level
+        // SR & IER, including EOT (which HAL_SPI_IRQHandler needs to finish
+        // a DMA transfer) and RXP (polling/interrupt transfers).
+        if self.h5_irq_pending() {
+            irq = true;
+        }
 
         // ── H5 "SPI v3": publish any buffered narration burst ────────────────
         // Under `event-scheduler` the walk skips this model and the event chain

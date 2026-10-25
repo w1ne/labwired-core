@@ -50,6 +50,10 @@ memory_regions:
   - name: "sram4"
     base: 0x28000000
     size: "16KiB"
+  # Backup SRAM (RM0456 memory map 0x4003_6400-0x4003_6BFF).
+  - name: "bkpsram"
+    base: 0x40036400
+    size: "2KiB"
 
 peripherals:
   # RM0456 / pinned stm32u575xx.h: GPIO EXTI owns EXTICR at 0x60,
@@ -98,6 +102,15 @@ peripherals:
     # FLASHEN (AHB1ENR bit 8) is set in the SVD reset value 0xD020_0100, so
     # the HAL latency writes in HAL_RCC_ClockConfig land without a preamble.
     clock: { reg: "ahb1enr", bit: 8 }
+  # STM32U5 system memory: OTP 0x0BFA_0000, package/UID 0x0BFA_0500 and the
+  # factory flash-size word at 0x0BFA_07A0 (RM0456 §76). Firmware reads the
+  # flash size as a const array; the bare-metal core-smoke writes/reads OTP.
+  - id: "sysmem"
+    type: "stm32u5_sysmem"
+    base_address: 0x0BFA0000
+    size: "2KB"
+    config:
+      flash_size_kb: 2048
   - id: "gpioa"
     type: "gpio"
     base_address: 0x42020000
@@ -105,6 +118,9 @@ peripherals:
     config:
       debug_schema: "../peripherals/stm32u575/gpioa.yaml"
       profile: "stm32v2"
+      reset_moder: 0xABFFFFFF
+      reset_ospeedr: 0x0C000000
+      reset_pupdr: 0x64000000
     # GPIOA-I are clocked from RCC_AHB2ENR1 bits 0-8 (RM0456 §11.8.13).
     # Unclocked out of reset — MODER/AFR read 0 / drop writes until on.
     clock: { reg: "ahb2enr", bit: 0 }
@@ -115,6 +131,9 @@ peripherals:
     config:
       debug_schema: "../peripherals/stm32u575/gpiob.yaml"
       profile: "stm32v2"
+      reset_moder: 0xFFFFFEBF
+      reset_ospeedr: 0x000000C0
+      reset_pupdr: 0x00000100
     clock: { reg: "ahb2enr", bit: 1 }
   - id: "gpioc"
     type: "gpio"
@@ -123,6 +142,9 @@ peripherals:
     config:
       debug_schema: "../peripherals/stm32u575/gpioc.yaml"
       profile: "stm32v2"
+      reset_moder: 0xFFFFFFFF
+      reset_ospeedr: 0
+      reset_pupdr: 0
     clock: { reg: "ahb2enr", bit: 2 }
   - id: "gpiod"
     type: "gpio"
@@ -131,6 +153,9 @@ peripherals:
     config:
       debug_schema: "../peripherals/stm32u575/gpiod.yaml"
       profile: "stm32v2"
+      reset_moder: 0xFFFFFFFF
+      reset_ospeedr: 0
+      reset_pupdr: 0
     clock: { reg: "ahb2enr", bit: 3 }
   - id: "gpioe"
     type: "gpio"
@@ -139,6 +164,9 @@ peripherals:
     config:
       debug_schema: "../peripherals/stm32u575/gpioe.yaml"
       profile: "stm32v2"
+      reset_moder: 0xFFFFFFFF
+      reset_ospeedr: 0
+      reset_pupdr: 0
     clock: { reg: "ahb2enr", bit: 4 }
   - id: "gpiof"
     type: "gpio"
@@ -147,6 +175,9 @@ peripherals:
     config:
       debug_schema: "../peripherals/stm32u575/gpiof.yaml"
       profile: "stm32v2"
+      reset_moder: 0xFFFFFFFF
+      reset_ospeedr: 0
+      reset_pupdr: 0
     clock: { reg: "ahb2enr", bit: 5 }
   - id: "gpiog"
     type: "gpio"
@@ -155,6 +186,9 @@ peripherals:
     config:
       debug_schema: "../peripherals/stm32u575/gpiog.yaml"
       profile: "stm32v2"
+      reset_moder: 0xFFFFFFFF
+      reset_ospeedr: 0
+      reset_pupdr: 0
     clock: { reg: "ahb2enr", bit: 6 }
   - id: "gpioh"
     type: "gpio"
@@ -163,6 +197,9 @@ peripherals:
     config:
       debug_schema: "../peripherals/stm32u575/gpioh.yaml"
       profile: "stm32v2"
+      reset_moder: 0xFFFFFFFF
+      reset_ospeedr: 0
+      reset_pupdr: 0
     clock: { reg: "ahb2enr", bit: 7 }
   - id: "gpioi"
     type: "gpio"
@@ -171,6 +208,9 @@ peripherals:
     config:
       debug_schema: "../peripherals/stm32u575/gpioi.yaml"
       profile: "stm32v2"
+      reset_moder: 0x0000FFFF
+      reset_ospeedr: 0
+      reset_pupdr: 0
     clock: { reg: "ahb2enr", bit: 8 }
   # USART1 is the NUCLEO-U575ZI-Q VCP console (PA9/PA10). IRQ 61 per SVD.
   - id: "usart1"
@@ -181,6 +221,7 @@ peripherals:
     config:
       debug_schema: "../peripherals/stm32u575/usart1.yaml"
       profile: "stm32v2"
+      full_featured: true
     # USART1 is clocked from RCC_APB2ENR.USART1EN (bit 14). Unclocked out of
     # reset (RM0456 §11.8.17) — TDR writes are dropped until on.
     clock: { reg: "apb2enr", bit: 14 }
@@ -192,6 +233,7 @@ peripherals:
     config:
       debug_schema: "../peripherals/stm32u575/usart2.yaml"
       profile: "stm32v2"
+      full_featured: true
     # USART2/3 and UART4 are clocked from RCC_APB1ENR1 bits 17/18/19.
     clock: { reg: "apb1enr1", bit: 17 }
   - id: "usart3"
@@ -202,6 +244,7 @@ peripherals:
     config:
       debug_schema: "../peripherals/stm32u575/usart3.yaml"
       profile: "stm32v2"
+      full_featured: true
     clock: { reg: "apb1enr1", bit: 18 }
   - id: "uart4"
     type: "uart"
@@ -220,6 +263,7 @@ peripherals:
     config:
       debug_schema: "../peripherals/stm32u575/lpuart1.yaml"
       profile: "stm32v2"
+      stm32_lpuart: true
     # LPUART1 sits on APB3: RCC_APB3ENR.LPUART1EN (bit 6).
     clock: { reg: "apb3enr", bit: 6 }
   # I2C1 is the default Arduino Wire bus. Modern L4-class I2C IP (same profile
@@ -290,6 +334,7 @@ peripherals:
       debug_schema: "../peripherals/stm32u575/spi3.yaml"
       profile: "stm32h5"
       pad_map: "stm32u5"
+      limited_features: true
     clock: { reg: "apb3enr", bit: 5 }
   # TIM2/TIM5 are the 32-bit general-purpose timers on U5.
   - id: "tim2"
@@ -372,9 +417,39 @@ peripherals:
     irq: 29
     config:
       debug_schema: "../peripherals/stm32u575/gpdma1.yaml"
-      # CH0..CH7 are NVIC 29..36; the SVD splits CH8..CH15 onto 80..87, which
-      # the single `irq_base + n` routing cannot express (see docs).
+      # CH0..CH7 are NVIC 29..36; the SVD splits CH8..CH15 onto 80..87.
       irq_base: 29
+      irq_high_base: 80
+      # GPDMA1 request-select numbers (RM0456 Table 136 / stm32u5xx_hal_dma.h
+      # GPDMA1_REQUEST_*). The bus names a request `<peripheral id>_tx|_rx`.
+      requests:
+        spi1_rx: 6
+        spi1_tx: 7
+        spi2_rx: 8
+        spi2_tx: 9
+        spi3_rx: 10
+        spi3_tx: 11
+        i2c1_rx: 12
+        i2c1_tx: 13
+        i2c1_evc: 14
+        i2c2_rx: 15
+        i2c2_tx: 16
+        i2c2_evc: 17
+        i2c3_rx: 18
+        i2c3_tx: 19
+        i2c3_evc: 20
+        usart1_rx: 24
+        usart1_tx: 25
+        usart2_rx: 26
+        usart2_tx: 27
+        usart3_rx: 28
+        usart3_tx: 29
+        uart4_rx: 30
+        uart4_tx: 31
+        lpuart1_rx: 34
+        lpuart1_tx: 35
+        tim6_up: 4
+        tim7_up: 5
     # GPDMA1 is clocked from RCC_AHB1ENR.GPDMA1EN (bit 0). Unclocked out of
     # reset (RM0456 §11.8.12) — channel registers drop writes until on.
     clock: { reg: "ahb1enr", bit: 0 }
@@ -460,6 +535,9 @@ peripherals:
     size: "1KB"
     config:
       debug_schema: "../peripherals/stm32u575/icache.yaml"
+      # U5 register contract (RM0456 §8): CACHEINV self-clear, BSYEND IRQ,
+      # WAYSEL locked while enabled. Other icache users keep the read-zero stub.
+      profile: "stm32u5"
     # ICACHE has no bus-enable bit in any U5 ENR — only the sleep-mode
     # RCC_AHB1SMENR.ICACHESMEN (bit 29). Left ungated deliberately.
   # U5 DBGMCU base is 0xE0044000 (not the M4 0xE0042000). IDCODE reset

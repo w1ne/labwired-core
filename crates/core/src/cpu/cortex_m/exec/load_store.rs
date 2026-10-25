@@ -321,7 +321,7 @@ impl CortexM {
         bus: &mut B,
         rt: u8,
         rn: u8,
-        imm: u8,
+        imm: u16,
     ) -> SimResult<PcAdvance> {
         let base = self.read_reg(rn);
         let addr = base.wrapping_add(imm as u32);
@@ -422,7 +422,7 @@ impl CortexM {
         bus: &mut B,
         rt: u8,
         rn: u8,
-        imm: u8,
+        imm: u16,
     ) -> SimResult<PcAdvance> {
         let base = self.read_reg(rn);
         let addr = base.wrapping_add(imm as u32);
@@ -437,7 +437,7 @@ impl CortexM {
         bus: &mut B,
         rt: u8,
         rn: u8,
-        imm: u8,
+        imm: u16,
     ) -> SimResult<PcAdvance> {
         let base = self.read_reg(rn);
         let addr = base.wrapping_add(imm as u32);
@@ -452,7 +452,7 @@ impl CortexM {
         bus: &mut B,
         rt: u8,
         rn: u8,
-        imm: u8,
+        imm: u16,
     ) -> SimResult<PcAdvance> {
         let base = self.read_reg(rn);
         let addr = base.wrapping_add(imm as u32);

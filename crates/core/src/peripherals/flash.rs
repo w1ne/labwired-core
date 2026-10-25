@@ -107,6 +107,9 @@ impl FromStr for FlashRegisterLayout {
 pub enum FlashOp {
     /// Non-secure sector erase (`NSCR.SER + STRT`).
     EraseSector { bank: u8, sector: u32 },
+    /// U5 mass erase of one bank (`NSCR.MER1`/`MER2 + STRT`): the whole
+    /// selected bank returns to 0xFF.
+    EraseBank { bank: u8 },
     /// Bank-swap + option-byte reload (`OPTSR_PRG.SWAP_BANK + OPTCR.OPTSTRT`).
     SwapAndReset,
 }
@@ -142,6 +145,10 @@ pub struct Flash {
     // Internal: tracks unlock sequence on KEYR (write 0x45670123 then 0xCDEF89AB).
     key_state: KeyUnlockState,
     optkey_state: KeyUnlockState,
+    /// U5: a wrong NSKEYR value locks the interface until the next reset
+    /// (RM0456 §7.3.5); later key writes are ignored.
+    #[serde(default)]
+    key_locked_out: bool,
 
     // OPT-IN fidelity gate (H5 only). When true, a flash-region write is fed
     // through the silicon-true write-buffer state machine (see
@@ -309,6 +316,7 @@ impl Flash {
             pending_op: std::cell::Cell::new(None),
             key_state: KeyUnlockState::Locked,
             optkey_state: KeyUnlockState::Locked,
+            key_locked_out: false,
             error_flags: false,
             h5_wbuf: None,
             u5_wbuf: None,
@@ -533,8 +541,12 @@ impl Flash {
                 self.pending_op
                     .set(Some(FlashOp::EraseSector { bank, sector: page }));
                 self.sr |= u5::NSSR_EOP;
+            } else {
+                // MER1/MER2 select the bank (MER2 wins if both are set).
+                let bank = if self.cr & u5::NSCR_MER2 != 0 { 1 } else { 0 };
+                self.pending_op.set(Some(FlashOp::EraseBank { bank }));
+                self.sr |= u5::NSSR_EOP;
             }
-            // MER1/MER2 mass erase: recorded as no-op (documented gap).
         }
 
         if self.cr & u5::NSCR_OPTSTRT != 0 {
@@ -650,6 +662,7 @@ impl Flash {
             pending_op: std::cell::Cell::new(None),
             key_state: KeyUnlockState::Locked,
             optkey_state: KeyUnlockState::Locked,
+            key_locked_out: false,
             error_flags: false,
             h5_wbuf: None,
             u5_wbuf: None,
@@ -930,6 +943,9 @@ impl Flash {
                 0x00 => self.acr = value & u5::ACR_WRITABLE_MASK,
                 // NSKEYR — walks the KEY1/KEY2 sequence and clears NSCR.LOCK.
                 u5::NSKEYR_OFF => {
+                    if self.key_locked_out {
+                        return;
+                    }
                     self.keyr = value;
                     self.key_state = match (self.key_state, value) {
                         (KeyUnlockState::Locked, FLASH_KEY1) => KeyUnlockState::HalfUnlocked,
@@ -937,11 +953,20 @@ impl Flash {
                             self.cr &= !u5::NSCR_LOCK;
                             KeyUnlockState::Unlocked
                         }
-                        _ => KeyUnlockState::Locked,
+                        _ => {
+                            // A wrong key locks the interface until reset.
+                            self.key_locked_out = true;
+                            KeyUnlockState::Locked
+                        }
                     };
                 }
                 // OPTKEYR — separate OPTKEY1/OPTKEY2 domain; clears OPTLOCK.
                 u5::OPTKEYR_OFF => {
+                    // Option bytes can only be unlocked after the control
+                    // register itself is unlocked (RM0456 §7.3.6).
+                    if self.cr & u5::NSCR_LOCK != 0 {
+                        return;
+                    }
                     self.optkeyr = value;
                     self.optkey_state = match (self.optkey_state, value) {
                         (KeyUnlockState::Locked, OPTKEY1) => KeyUnlockState::HalfUnlocked,
@@ -1585,5 +1610,19 @@ mod u5_controller_tests {
         assert_eq!(f.read_u32(u5::OPTR_OFF).unwrap(), 0x1234, "OPTR readback");
         f.write_u32(u5::NSCR_OFF, u5::NSCR_OPTSTRT).unwrap();
         assert_ne!(nssr(&f) & u5::NSSR_EOP, 0);
+    }
+}
+
+#[cfg(test)]
+mod u5_wrong_key_tests {
+    use super::{Flash, FlashRegisterLayout};
+    use crate::Peripheral;
+    #[test]
+    fn wrong_key_locks_until_reset() {
+        let mut f = Flash::new_with_layout(FlashRegisterLayout::Stm32U5);
+        f.write_u32(0x08, 0x1234_5678).unwrap();
+        f.write_u32(0x08, 0x4567_0123).unwrap();
+        f.write_u32(0x08, 0xCDEF_89AB).unwrap();
+        assert_ne!(f.read_u32(0x28).unwrap() & 0x8000_0000, 0);
     }
 }

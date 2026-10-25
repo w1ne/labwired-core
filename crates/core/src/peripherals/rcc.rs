@@ -1130,9 +1130,11 @@ impl RccModel for V2Rcc {
                     value & !(1 << 1)
                 };
             }
-            0x28 => self.pll1cfgr = value,
-            0x34 => self.pll1divr = value,
-            0x38 => self.pll1fracr = value,
+            // PLL1 configuration is frozen while PLL1ON is set (RM0456 §11.8.9).
+            0x28 if self.cr & (1 << 24) == 0 => self.pll1cfgr = value,
+            0x34 if self.cr & (1 << 24) == 0 => self.pll1divr = value,
+            0x38 if self.cr & (1 << 24) == 0 => self.pll1fracr = value,
+            0x28 | 0x34 | 0x38 => {}
             // U5 RCC_CFGR2/3 and the PLL2/PLL3 CFGR/DIVR/FRACR blocks — plain
             // storage (RM0456 §11.8.7-11).
             0x20 if self.u5_cr_ready => self.cfgr2 = value,

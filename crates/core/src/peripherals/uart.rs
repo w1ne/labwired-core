@@ -223,6 +223,27 @@ struct UartRegMap {
 }
 
 impl UartRegisterLayout {
+    /// RXNEIE bit in CR1. Only the STM32/LPUART layouts have the RXNE
+    /// interrupt; everything else keeps the previous "no RX level IRQ" shape.
+    fn rxneie_mask(self) -> u32 {
+        match self {
+            UartRegisterLayout::Stm32F1 | UartRegisterLayout::Stm32V2 => 1 << 5,
+            UartRegisterLayout::Lpuart => 1 << 5,
+            _ => 0,
+        }
+    }
+
+    /// CR3.DMAR: the receiver's DMA request enable (STM32/LPUART bit 6).
+    fn dmar_mask(self) -> u32 {
+        match self {
+            UartRegisterLayout::Stm32F1 | UartRegisterLayout::Stm32V2 => 1 << 6,
+            UartRegisterLayout::Lpuart => 1 << 6,
+            _ => 0,
+        }
+    }
+}
+
+impl UartRegisterLayout {
     fn regmap(self) -> UartRegMap {
         match self {
             UartRegisterLayout::Stm32F1 => UartRegMap {
@@ -746,6 +767,15 @@ pub struct Uart {
     /// (ONEBIT, one-sample-bit mode) → `0x0FFF`, silicon-confirmed on the bench
     /// F103 (0x07FF) and F407 (0x0FFF). Set from the chip config's `cr3_mask`.
     cr3_mask: u32,
+    /// U5 full-featured USART (TCBGT present); false for the basic UART4.
+    #[serde(default)]
+    full_featured: bool,
+    /// U5 PRESC register (offset 0x2C), locked while UE=1.
+    #[serde(default)]
+    presc: u32,
+    /// STM32 LPUART on the V2 register map (TXFE only in FIFO mode).
+    #[serde(default)]
+    stm32_lpuart: bool,
     dma_tx_pending: bool,
     /// Stream devices attached to the RX path (e.g. GPS modules).
     #[serde(skip)]
@@ -936,6 +966,9 @@ impl Uart {
             ibrd: 0,
             fbrd: 0,
             cr3_mask,
+            full_featured: false,
+            presc: 0,
+            stm32_lpuart: false,
             dma_tx_pending: false,
             attached_streams: Vec::new(),
             trace: crate::bus::bus_trace::BusTrace::new(),
@@ -978,6 +1011,18 @@ impl Uart {
     /// the walk ticks this model every cycle unconditionally, so if skipping
     /// unobservable scheduler wakeups changed ANY guest-visible byte, the
     /// walk-on-vs-scheduler differential would diverge.
+    /// Mark this instance as a U5 full-featured USART (TCBGT in ISR reset).
+    pub fn set_full_featured(mut self, yes: bool) -> Self {
+        self.full_featured = yes;
+        self
+    }
+
+    /// Mark this instance as an STM32 LPUART on the V2 register map.
+    pub fn set_stm32_lpuart(mut self, yes: bool) -> Self {
+        self.stm32_lpuart = yes;
+        self
+    }
+
     pub fn force_legacy_walk(&mut self) {
         self.legacy_walk_forced = true;
     }
@@ -1082,7 +1127,22 @@ impl Uart {
         // This narrows WAKEUPS only. Event DELIVERY is untouched: the moment an
         // MMIO write gives the UART real work (a stream byte to pace, a DMA TX),
         // `take_scheduled_events` re-arms at the same cycle it always did.
-        let level_irq_observable = self.irq_wired && (txeie_set || tcie_set);
+        let rxneie_armed = self.layout.rxneie_mask() != 0
+            && (self.cr1 & self.layout.rxneie_mask()) != 0;
+        let dmar_armed = self.layout.dmar_mask() != 0
+            && (self.cr3 & self.layout.dmar_mask()) != 0;
+        let rxftie_armed = matches!(
+            self.layout,
+            UartRegisterLayout::Stm32V2 | UartRegisterLayout::Lpuart
+        ) && self.cr1 & (1 << 29) != 0
+            && self.cr3 & (1 << 28) != 0;
+        // RXNEIE is a level enable with no local producer: the byte arrives
+        // asynchronously (an injected peer, a cross-chip link). Keep a wakeup
+        // armed while it is set so a byte landing in `rx_buf` is observed and
+        // the NVIC line is pended — the RX counterpart of the TXEIE/TCIE arm
+        // below. Without it firmware waiting in HAL_UART_Receive_IT never sees
+        // the character (60North hal-uart/hal-uart-dma).
+        let level_irq_observable = self.irq_wired && (txeie_set || tcie_set || rxneie_armed || rxftie_armed || dmar_armed);
         // A buffered narration is real work: the wire is mid-burst, and the
         // flush that ends it needs a wakeup to happen on. Without this a
         // scheduler-driven bus would leave the last print unpublished.
@@ -1242,7 +1302,39 @@ impl Uart {
         // - TCIE delivers the final completion interrupt after the last byte
         let txeie_set = (self.cr1 & self.txeie_mask()) != 0 && self.txeie_mask() != 0;
         let tcie_set = (self.cr1 & self.tcie_mask()) != 0 && self.tcie_mask() != 0;
-        (txeie_set || tcie_set, dma_signals)
+        let rx_len = self.rx_buf.lock().map(|g| g.len()).unwrap_or(0) as u32;
+        let rxneie_set = self.layout.rxneie_mask() != 0
+            && (self.cr1 & self.layout.rxneie_mask()) != 0
+            && rx_len > 0;
+        // FIFO threshold interrupt (CR3.RXFTIE, RM0456 §66.8.4): the same
+        // threshold that sets ISR.RXFT.
+        let rxftie_set = matches!(
+            self.layout,
+            UartRegisterLayout::Stm32V2 | UartRegisterLayout::Lpuart
+        ) && self.cr1 & (1 << 29) != 0
+            && self.cr3 & (1 << 28) != 0
+            && {
+                let cfg = (self.cr3 >> 25) & 0x7;
+                let threshold = match cfg {
+                    0 => 1,
+                    1 => 2,
+                    2 => 4,
+                    3 => 6,
+                    4 => 7,
+                    5 => 8,
+                    _ => 8,
+                };
+                rx_len >= threshold
+            };
+        // USART_RX DMA request: asserted while a character is available in the
+        // receiver and CR3.DMAR is set. The DMA reads RDR, which pops it.
+        if self.layout.dmar_mask() != 0
+            && (self.cr3 & self.layout.dmar_mask()) != 0
+            && self.rx_buf.lock().map(|g| !g.is_empty()).unwrap_or(false)
+        {
+            dma_signals.push(crate::DMA_SIGNAL_RX);
+        }
+        (txeie_set || tcie_set || rxneie_set || rxftie_set, dma_signals)
     }
 
     // The 7 accessors below all read from the single per-family `regmap()`
@@ -1276,6 +1368,44 @@ impl Uart {
                 }
                 if self.cr1 & RE != 0 {
                     v |= 1 << 22; // REACK
+                }
+            }
+            // RM0456 §66.8.11 reset ISR: TXFE (23) on every USART, TCBGT (25)
+            // on the full-featured parts only. LPUART reports TXFE only in
+            // FIFO mode (handled below).
+            if !self.stm32_lpuart {
+                v |= 1 << 23;
+                if self.full_featured {
+                    v |= 1 << 25;
+                }
+            }
+        }
+        if matches!(
+            self.layout,
+            UartRegisterLayout::Stm32V2 | UartRegisterLayout::Lpuart
+        ) {
+            let fifo = self.cr1 & (1 << 29) != 0;
+            let rx_len = self.rx_buf.lock().map(|g| g.len()).unwrap_or(0) as u32;
+            // STM32 LPUART only reports TXFE in FIFO mode (RM0456 §67.7.9).
+            if self.stm32_lpuart && fifo {
+                v |= 1 << 23;
+            }
+            if fifo && rx_present {
+                let cfg = (self.cr3 >> 25) & 0x7;
+                let threshold = match cfg {
+                    0 => 1,
+                    1 => 2,
+                    2 => 4,
+                    3 => 6,
+                    4 => 7,
+                    5 => 8,
+                    _ => 8,
+                };
+                if rx_len >= threshold {
+                    v |= 1 << 26; // RXFT
+                }
+                if rx_len >= 8 {
+                    v |= 1 << 24; // RXFF
                 }
             }
         }
@@ -1824,6 +1954,13 @@ impl crate::Peripheral for Uart {
         if let Some(byte) = self.baud_register_byte(offset) {
             return Ok(byte);
         }
+        if matches!(
+            self.layout,
+            UartRegisterLayout::Stm32V2 | UartRegisterLayout::Lpuart
+        ) && offset == 0x2C
+        {
+            return Ok(self.presc as u8);
+        }
         if offset == self.cr3_offset() {
             return Ok(self.cr3 as u8);
         }
@@ -1905,6 +2042,15 @@ impl crate::Peripheral for Uart {
             self.cr3 = value as u32;
             if (self.cr3 & (1 << 7)) != 0 {
                 self.dma_tx_pending = true;
+            }
+        } else if matches!(
+            self.layout,
+            UartRegisterLayout::Stm32V2 | UartRegisterLayout::Lpuart
+        ) && offset == 0x2C
+        {
+            // PRESC is locked while the USART is enabled (UE).
+            if self.cr1 & 1 == 0 {
+                self.presc = u32::from(value) & 0xF;
             }
         } else if let Some(cr1_base) = self.cr1_offset() {
             // Track CR1 byte-by-byte so TXEIE state is visible to tick().
@@ -2094,7 +2240,17 @@ impl crate::Peripheral for Uart {
         // wakeup, not something `advance_ticks` accumulates.
         let txeie_set = (self.cr1 & self.txeie_mask()) != 0 && self.txeie_mask() != 0;
         let tcie_set = (self.cr1 & self.tcie_mask()) != 0 && self.tcie_mask() != 0;
-        let irq_paced = self.irq_wired && (txeie_set || tcie_set);
+        let rxneie_armed = self.layout.rxneie_mask() != 0
+            && (self.cr1 & self.layout.rxneie_mask()) != 0;
+        let dmar_armed = self.layout.dmar_mask() != 0
+            && (self.cr3 & self.layout.dmar_mask()) != 0;
+        let rxftie_armed = matches!(
+            self.layout,
+            UartRegisterLayout::Stm32V2 | UartRegisterLayout::Lpuart
+        ) && self.cr1 & (1 << 29) != 0
+            && self.cr3 & (1 << 28) != 0;
+        let irq_paced = self.irq_wired
+            && (txeie_set || tcie_set || rxneie_armed || rxftie_armed || dmar_armed);
         let delay = if irq_paced || self.dma_tx_pending {
             1
         } else {

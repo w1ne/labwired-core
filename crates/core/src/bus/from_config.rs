@@ -706,9 +706,21 @@ impl SystemBus {
                         .and_then(|v| v.as_u64())
                         .map(|n| n as u32)
                         .unwrap_or(0x0000_07FF);
-                    Box::new(crate::peripherals::uart::Uart::new_with_layout_cr3(
-                        layout, cr3_mask,
-                    ))
+                    let full = p_cfg
+                        .config
+                        .get("full_featured")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
+                    let stm32_lpuart = p_cfg
+                        .config
+                        .get("stm32_lpuart")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
+                    Box::new(
+                        crate::peripherals::uart::Uart::new_with_layout_cr3(layout, cr3_mask)
+                            .set_full_featured(full)
+                            .set_stm32_lpuart(stm32_lpuart),
+                    )
                 }
                 "gpio" | "stm32_gpioport" | "stm32f4_gpio" | "efmgpioport" | "npcx_gpio"
                 | "imxrt_gpio" => {

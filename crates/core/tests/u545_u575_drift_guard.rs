@@ -157,10 +157,13 @@ fn u545_merged_memory_map_is_the_u545_one() {
     assert_eq!(chip["ram"]["base"], 0x2000_0000u64);
     assert_eq!(chip["ram"]["size"], 256u64 * 1024);
     let regions = chip["memory_regions"].as_array().unwrap();
-    assert_eq!(regions.len(), 1);
+    assert_eq!(regions.len(), 2);
     assert_eq!(regions[0]["name"], "sram4");
     assert_eq!(regions[0]["base"], 0x2800_0000u64);
     assert_eq!(regions[0]["size"], 16u64 * 1024);
+    assert_eq!(regions[1]["name"], "bkpsram");
+    assert_eq!(regions[1]["base"], 0x4003_6400u64);
+    assert_eq!(regions[1]["size"], 2u64 * 1024);
     let ids: Vec<String> = by_id(&chip).into_keys().collect();
     for gone in REMOVED_ON_U545 {
         assert!(
