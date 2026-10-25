@@ -544,6 +544,36 @@ peripherals:
       debug_schema: "../peripherals/stm32u575/rng.yaml"
     # RNG is on AHB2: RCC_AHB2ENR1.RNGEN (bit 18) (RM0456 §11.8.13).
     clock: { reg: "ahb2enr", bit: 18 }
+  # HASH, SAES, and PKA currently expose their SVD-derived register files.
+  # GenericPeripheral does not perform the cryptographic calculations or
+  # advance BUSY/completion/error status; see docs/boards/stm32u575.md.
+  - id: "hash"
+    type: "declarative"
+    base_address: 0x420C0400
+    size: "1KB"
+    irq: 96
+    config:
+      path: "../peripherals/stm32u575/hash.yaml"
+    # HASHEN is RCC_AHB2ENR1 bit 17 (RM0456 §11.8.13).
+    clock: { reg: "ahb2enr", bit: 17 }
+  - id: "saes"
+    type: "declarative"
+    base_address: 0x420C0C00
+    size: "1KB"
+    irq: 28
+    config:
+      path: "../peripherals/stm32u575/saes.yaml"
+    # SAESEN is RCC_AHB2ENR1 bit 20 (RM0456 §11.8.13).
+    clock: { reg: "ahb2enr", bit: 20 }
+  - id: "pka"
+    type: "declarative"
+    base_address: 0x420C2000
+    size: "8KB"
+    irq: 97
+    config:
+      path: "../peripherals/stm32u575/pka.yaml"
+    # PKAEN is RCC_AHB2ENR1 bit 19 (RM0456 §11.8.13).
+    clock: { reg: "ahb2enr", bit: 19 }
   - id: "icache"
     type: "icache"
     base_address: 0x40030400

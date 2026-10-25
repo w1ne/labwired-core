@@ -25,6 +25,9 @@ const SYSTEM: &str = "configs/systems/nucleo-u575zi.yaml";
 const RCC: u64 = 0x4602_0C00;
 const PWR: u64 = 0x4602_0800;
 const FLASH: u64 = 0x4002_2000;
+const PKA: u64 = 0x420C_2000;
+const HASH: u64 = 0x420C_0400;
+const SAES: u64 = 0x420C_0C00;
 const GPIOA: u64 = 0x4202_0000;
 const GPIOB: u64 = 0x4202_0400;
 const GPIOC: u64 = 0x4202_0800;
@@ -878,4 +881,57 @@ fn fdcan_extended_range_filter_type_three_ignores_xidam() {
     let r1 = fdcan_read(&dev, FDCAN_RAM + 0xB0 + 4);
     assert_eq!(r1 >> 31, 0, "ANMF is clear for a matched filter");
     assert_eq!((r1 >> 24) & 0x7F, 0);
+}
+
+#[test]
+fn u575_crypto_accelerator_register_surfaces_are_mapped() {
+    let sys_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join(SYSTEM);
+    let mut manifest: SystemManifest = SystemManifest::from_file(&sys_path).unwrap();
+    let chip_path = sys_path.parent().unwrap().join(&manifest.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).unwrap();
+    // `declarative` peripheral paths are resolved relative to manifest.chip.
+    manifest.chip = chip_path.to_string_lossy().into_owned();
+    let mut bus = SystemBus::from_config(&chip, &manifest).unwrap();
+
+    for id in ["hash", "pka", "saes"] {
+        assert!(
+            bus.find_peripheral_index_by_name(id).is_some(),
+            "U575 chip map should expose {id}"
+        );
+    }
+
+    let crypto_blocks = [
+        (HASH, 1 << 2, 1 << 17, "HASH.CR"),
+        (PKA, 1, 1 << 19, "PKA.CR"),
+        (SAES, 1, 1 << 20, "SAES.CR"),
+    ];
+    for &(base, value, _, name) in &crypto_blocks {
+        bus.write_u32(base, value).unwrap();
+        assert_eq!(bus.read_u32(base).unwrap(), 0, "{name} is gated off");
+    }
+
+    // These assertions cover the declared MMIO register surfaces. The current
+    // generic model does not calculate cryptographic results or operation flags.
+    // Enable one clock bit at a time so a swapped gate cannot pass by accident.
+    for &(base, value, gate_bit, name) in &crypto_blocks {
+        bus.write_u32(RCC + 0x8C, gate_bit).unwrap();
+        bus.write_u32(base, value).unwrap();
+        assert_eq!(
+            bus.read_u32(base).unwrap(),
+            value,
+            "{name} register readback"
+        );
+        for &(other_base, _, _, other_name) in &crypto_blocks {
+            if other_base != base {
+                bus.write_u32(other_base, 0xFFFF_FFFF).unwrap();
+                assert_eq!(
+                    bus.read_u32(other_base).unwrap(),
+                    0,
+                    "{other_name} remains gated while {name} is enabled"
+                );
+            }
+        }
+    }
 }
