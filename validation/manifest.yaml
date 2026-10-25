@@ -8207,10 +8207,14 @@ boards:
       - "arduino matrix L0-L8 (validation/arduino-matrix)"
     models:
       - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/bus/from_config.rs
+      - crates/core/src/cpu/cortex_m/exec/load_store.rs
       - crates/core/src/decoder/arm.rs
+      - crates/core/src/decoder/arm_thumb32.rs
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/pwr.rs
       - crates/core/src/peripherals/flash.rs
+      - crates/core/src/peripherals/flash_u5_regs.rs
       - crates/core/src/peripherals/uart.rs
       - crates/core/src/peripherals/gpio.rs
       - crates/core/src/peripherals/i2c.rs
@@ -8226,6 +8230,8 @@ boards:
       - crates/core/src/peripherals/dbgmcu.rs
       - crates/core/src/peripherals/crs.rs
       - configs/chips/stm32u575.yaml
+      # The paired descriptor is hashed because u545_u575_drift_guard compares both.
+      - configs/chips/stm32u545.yaml
       - configs/peripherals/stm32u575
       # 2026-09-21, model_paths_drift_gate: models this board REGISTERS that
       # its list omitted, so they were invisible to the drift digest. This
@@ -8238,6 +8244,9 @@ boards:
       # capture and has no drift ack, so adding the path invalidates no
       # capture claim.
       - crates/core/src/peripherals/exti.rs
+      - crates/core/src/peripherals/mod.rs
+      - crates/core/src/peripheral.rs
+      - crates/core/src/lib.rs
       - crates/core/src/peripherals/generic_factory.rs
       - crates/core/src/peripherals/icache.rs
       - crates/core/src/peripherals/stm32u5_sysmem.rs
@@ -8256,10 +8265,14 @@ boards:
       - "arduino matrix L0-L8 (validation/arduino-matrix)"
     models:
       - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/bus/from_config.rs
+      - crates/core/src/cpu/cortex_m/exec/load_store.rs
       - crates/core/src/decoder/arm.rs
+      - crates/core/src/decoder/arm_thumb32.rs
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/pwr.rs
       - crates/core/src/peripherals/flash.rs
+      - crates/core/src/peripherals/flash_u5_regs.rs
       - crates/core/src/peripherals/uart.rs
       - crates/core/src/peripherals/gpio.rs
       - crates/core/src/peripherals/i2c.rs
@@ -8277,10 +8290,15 @@ boards:
       - crates/core/src/peripherals/stub.rs
       - crates/core/src/peripherals/systick.rs
       - crates/core/src/peripherals/exti.rs
+      - crates/core/src/peripherals/mod.rs
+      - crates/core/src/peripheral.rs
+      - crates/core/src/lib.rs
       - crates/core/src/peripherals/generic_factory.rs
       - crates/core/src/peripherals/icache.rs
       - crates/core/src/peripherals/stm32u5_sysmem.rs
       - configs/chips/stm32u545.yaml
+      # The paired descriptor is hashed because u545_u575_drift_guard compares both.
+      - configs/chips/stm32u575.yaml
       - configs/peripherals/stm32u575
 
   - id: stm32f411ceu6
