@@ -24,9 +24,25 @@
    `led0` = blue LD2, clock tree):
    https://docs.zephyrproject.org/3.7.0/boards/st/nucleo_u575zi_q/doc/index.html
 
-## Cross-simulator reference (honest gap)
+## Cross-simulator reference (Renode-derived, not silicon)
 
-Renode master has no STM32U5 platform (checked 2026-09-17, `platforms/cpus/`
-listing); closest references `stm32wba52.repl`, `stm32l552.repl`. No
-Renode-vs-LabWired differential is claimed for this part — every value in the
-chip YAML is SVD/RM0456/DS13736-derived.
+Upstream Renode master has no STM32U5 platform (checked 2026-09-17,
+`platforms/cpus/` listing); closest upstream references are `stm32wba52.repl`
+and `stm32l552.repl`. The community **60North `renode-stm32u5`** package fills
+that gap and is the behavioural acceptance reference used here:
+
+- 60North `renode-stm32u5` at commit `9cef86b9a` (2026-10-22), Renode 1.17.0
+  (reference worktree: `/home/andrii/projects/renode-stm32u5-60north`)
+- STM32CubeU5 **v1.9.0**, pinned by 60North at
+  `d88042df24f16799957c24f00c2b234c9e306188`:
+  https://github.com/STMicroelectronics/STM32CubeU5/tree/v1.9.0
+- ST Nucleo BSP `stm32u5xx-nucleo-bsp` v1.2.3 (`ed50f1d2…`) and the
+  STM32U575I-EV BSP `stm32u575i-ev-bsp` v1.4.1 (`83d8fb77…`).
+
+**This is a Renode-derived reference, not silicon.** The 60North suite is a
+second implementation of the same reference manuals; agreement with it is
+evidence that LabWired matches the reference model's documented behaviour, not
+evidence against a bench part. Every value in the chip YAML remains
+SVD/RM0456/DS13736-derived, and no silicon differential is claimed. See
+[`../../validation/stm32u5-60north/README.md`](../../validation/stm32u5-60north/README.md)
+for the reproduction commands and expected result symbols.

@@ -3,8 +3,10 @@
 Run from the repository root. Evidence captured 2026-10-03, branch
 `feat/stm32u545-nucleo`.
 
-Tier: **sim-validated**. SVD-derived; no bench part, no silicon capture, no
-Renode differential (Renode has no STM32U5 platform).
+Tier: **sim-validated**. SVD-derived; no bench part and no silicon capture.
+Upstream Renode has no STM32U5 platform, but the community **60North
+`renode-stm32u5`** package does; it is a Renode-derived reference, not silicon.
+No differential is claimed for the U545 (the 60North suite targets the U575).
 
 ## Toolchain coverage
 

@@ -5,7 +5,10 @@ Run all commands from the repository root. Captured evidence below is from
 otherwise.
 
 Tier: **sim-validated** — all values are SVD / RM0456 / DS13736-derived. There
-is no bench part; no silicon capture and no Renode differential is claimed.
+is no bench part and no silicon capture. Upstream Renode ships no STM32U5
+platform, but the community **60North `renode-stm32u5`** package does; it is a
+**Renode-derived reference, not silicon**, and section L reproduces its
+14-case acceptance matrix. No silicon differential is claimed.
 
 ## Prerequisites
 
@@ -474,3 +477,32 @@ with the HEAD library sources.
 
 The 7 board drifts this branch caused are re-acked with rationale (§K.4), not
 outstanding; no H563/WBA52/L476 regressions.
+
+## L. 60North Renode-derived acceptance matrix
+
+The community **60North `renode-stm32u5`** package (commit `9cef86b9a`,
+2026-10-22; Renode 1.17.0) is the behavioural acceptance reference for this
+target. Its STM32CubeU5 **v1.9.0** firmware is pinned at
+`d88042df24f16799957c24f00c2b234c9e306188`. It is a **Renode-derived
+reference, not silicon**: the suite asserts the reference model's documented
+result symbols and registers, not a bench capture.
+
+The 60North ELFs are external, non-committed artifacts. Build them in the
+60North worktree, then run the LabWired target owned by the model branch:
+
+```bash
+# 1. 60North firmware (needs Arm GNU toolchain, CMake, Ninja)
+cmake -S /home/andrii/projects/renode-stm32u5-60north/firmware-tests \
+      -B /home/andrii/projects/renode-stm32u5-60north/build/firmware -G Ninja
+cmake --build /home/andrii/projects/renode-stm32u5-60north/build/firmware
+
+# 2. LabWired 14-case acceptance target
+RENODE_U5_FIRMWARE=/home/andrii/projects/renode-stm32u5-60north/build/firmware \
+  cargo test -p labwired-core --test stm32u575_60north -- --nocapture
+```
+
+The full per-ELF/per-case expected-symbol table and the Robot-suite command
+live in
+[`../../validation/stm32u5-60north/README.md`](../../validation/stm32u5-60north/README.md).
+The target is `stm32u575_60north`; it is on the model branch and is not part of
+this package commit until that branch merges.

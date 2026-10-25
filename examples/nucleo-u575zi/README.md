@@ -12,8 +12,11 @@ firmware stacks** on the modelled NUCLEO-U575ZI-Q:
 Console: **USART1** PA9/PA10 @ 115200 8N1 (board VCP). LED: **PC7** (LD1,
 Arduino `LED_BUILTIN`).
 
-> Tier: **sim-validated** — SVD/RM0456-derived, no bench part, no silicon diff
-> (Renode has no STM32U5 platform either). See
+> Tier: **sim-validated** — SVD/RM0456-derived, no bench part and no silicon
+> diff. Upstream Renode ships no STM32U5 platform, but the community **60North
+> `renode-stm32u5`** package does; it is a Renode-derived reference, not
+> silicon, and LabWired reproduces its 14-case acceptance suite (see the
+> [`60North runbook`](../../validation/stm32u5-60north/README.md)). See
 > [`VALIDATION.md`](VALIDATION.md) for the exact commands and captured
 > evidence, and [`../../docs/boards/stm32u575.md`](../../docs/boards/stm32u575.md)
 > for the model/honesty table.
@@ -85,6 +88,8 @@ ELF; both are hard-asserted on fixture presence.
 - `VALIDATION.md` — full runbook + captured evidence (Tasks 3–8)
 - `REQUIRED_DOCS.md` — SVD hash, DS13736/RM0456/UM2861, BSP, Zephyr docs
 - `EXTERNAL_COMPONENTS.md` — no required components; CubeU5 checkout
+- [`../../validation/stm32u5-60north/README.md`](../../validation/stm32u5-60north/README.md)
+  — reproduce the Renode-derived 60North acceptance matrix
 
 ## References
 
