@@ -454,7 +454,7 @@ boards:
     # files. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: d819af0f80818e827d948c0fdb83ffe7e1d7aef5f8c6e1394c252ca05d7d7262
+    drift_ack_digest: b0c56af1ead933ae492d2ee0f58cb2669c3c917d1e841707f50280527a44d28b
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -657,6 +657,12 @@ boards:
     # register map, reset value, timing or IRQ route changes; JIT code is not
     # covered by any silicon capture. The digest moves only because it hashes
     # whole files. ACK, NOT A CAPTURE.
+    # 2026-10-25 (STM32U575 onboarding review): the watched Cortex-M
+    # source now decodes Thumb-2 wide immediate LDRB/STRB/LDRH/STRH
+    # forms with 12-bit offsets, used by the U5 HAL. Added unit
+    # regressions cover instruction decode/execute only. This
+    # digest-matched acknowledgement is NOT A SILICON CAPTURE; live
+    # nRF re-capture remains pending.
     drift_ack: 2026-10-25
     # 2026-10-25 (perf/cortex-m-decode-reference): the Cortex-M decode cache
     # now checks the PC tag through a borrow and copies only on a hit. The
@@ -967,7 +973,7 @@ boards:
     # files. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: d819af0f80818e827d948c0fdb83ffe7e1d7aef5f8c6e1394c252ca05d7d7262
+    drift_ack_digest: b0c56af1ead933ae492d2ee0f58cb2669c3c917d1e841707f50280527a44d28b
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -1170,6 +1176,12 @@ boards:
     # register map, reset value, timing or IRQ route changes; JIT code is not
     # covered by any silicon capture. The digest moves only because it hashes
     # whole files. ACK, NOT A CAPTURE.
+    # 2026-10-25 (STM32U575 onboarding review): the watched Cortex-M
+    # source now decodes Thumb-2 wide immediate LDRB/STRB/LDRH/STRH
+    # forms with 12-bit offsets, used by the U5 HAL. Added unit
+    # regressions cover instruction decode/execute only. This
+    # digest-matched acknowledgement is NOT A SILICON CAPTURE; live
+    # nRF re-capture remains pending.
     drift_ack: 2026-10-25
     # 2026-10-25 (perf/cortex-m-decode-reference): the Cortex-M decode cache
     # now checks the PC tag through a borrow and copies only on a hit. The
@@ -1626,7 +1638,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: bf63cb6622590a8c55fe9fdbe7b00e1dae9bbc66b5fd3822ccc775ac44c9b5ac
+    drift_ack_digest: 114056683fdeef5eaf9ca7b7e1ca892604a23ff743d9c9a3f0ba8dcf63fadb9c
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -2170,6 +2182,14 @@ boards:
     # register map, reset value, timing or IRQ route changes; JIT code is not
     # covered by any silicon capture. The digest moves only because it hashes
     # whole files. ACK, NOT A CAPTURE.
+    # 2026-10-25 (STM32U575 onboarding review): the watched shared
+    # sources include the Cortex-M wide immediate byte/halfword
+    # load/store correction and, as applicable to this board, U5
+    # RCC/PWR/FLASH/SPI/I2C/FDCAN/GPDMA plus GPIO/UART model edits.
+    # U5-only register behavior is profile/config gated; shared V2
+    # GPIO analog-input and LCKR semantics are covered by simulation
+    # regressions. This digest-matched acknowledgement is NOT A
+    # SILICON CAPTURE; a live re-capture for this board remains owed.
     drift_ack: 2026-10-25
     # 2026-10-25 (perf/cortex-m-decode-reference): the Cortex-M decode cache
     # now checks the PC tag through a borrow and copies only on a hit. The
@@ -3570,7 +3590,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: 99d98dde77933b390687b855b5fb45ffa45c2204c48a1e4677f4c163abc32b94
+    drift_ack_digest: 43696b84f8bcb9b09b7da552dbe056750172214fc8e05450c5e68facee8bff73
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4102,6 +4122,14 @@ boards:
     # (device-time throttle, NVIC any-enabled cache, logic-capture guard,
     # plain-RAM store fast path, AVR timer/OC shortcuts). No register map,
     # reset value, IRQ route or byte path changed. ACK, NOT A CAPTURE.
+    # 2026-10-25 (STM32U575 onboarding review): the watched shared
+    # sources include the Cortex-M wide immediate byte/halfword
+    # load/store correction and, as applicable to this board, U5
+    # RCC/PWR/FLASH/SPI/I2C/FDCAN/GPDMA plus GPIO/UART model edits.
+    # U5-only register behavior is profile/config gated; shared V2
+    # GPIO analog-input and LCKR semantics are covered by simulation
+    # regressions. This digest-matched acknowledgement is NOT A
+    # SILICON CAPTURE; a live re-capture for this board remains owed.
     drift_ack: 2026-10-25
   - id: nucleo-l073rz
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
@@ -4495,7 +4523,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: 5ac0629b030600e7a6c3569083e5e5bed7a1d866632119514a55c42d9480f40f
+    drift_ack_digest: f996c45b26e00feb1c28d8d1fb29806d242174d74981a670a48e9fab0150eb21
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4960,6 +4988,14 @@ boards:
     # (device-time throttle, NVIC any-enabled cache, logic-capture guard,
     # plain-RAM store fast path, AVR timer/OC shortcuts). No register map,
     # reset value, IRQ route or byte path changed. ACK, NOT A CAPTURE.
+    # 2026-10-25 (STM32U575 onboarding review): the watched shared
+    # sources include the Cortex-M wide immediate byte/halfword
+    # load/store correction and, as applicable to this board, U5
+    # RCC/PWR/FLASH/SPI/I2C/FDCAN/GPDMA plus GPIO/UART model edits.
+    # U5-only register behavior is profile/config gated; shared V2
+    # GPIO analog-input and LCKR semantics are covered by simulation
+    # regressions. This digest-matched acknowledgement is NOT A
+    # SILICON CAPTURE; a live re-capture for this board remains owed.
     drift_ack: 2026-10-25
     # 2026-10-25 (perf/cortex-m-decode-reference): the Cortex-M decode cache
     # now checks the PC tag through a borrow and copies only on a hit. The
@@ -5411,7 +5447,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: d54e653fd5d793c54591fc9053961aaa0af582ac1e975a86507404d641c57420
+    drift_ack_digest: a257ddfb4b6470989351d0374f46ea43583e00ff01af066b2b3caf4cff8ffa57
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5946,6 +5982,14 @@ boards:
     # register map, reset value, timing or IRQ route changes; JIT code is not
     # covered by any silicon capture. The digest moves only because it hashes
     # whole files. ACK, NOT A CAPTURE.
+    # 2026-10-25 (STM32U575 onboarding review): the watched shared
+    # sources include the Cortex-M wide immediate byte/halfword
+    # load/store correction and, as applicable to this board, U5
+    # RCC/PWR/FLASH/SPI/I2C/FDCAN/GPDMA plus GPIO/UART model edits.
+    # U5-only register behavior is profile/config gated; shared V2
+    # GPIO analog-input and LCKR semantics are covered by simulation
+    # regressions. This digest-matched acknowledgement is NOT A
+    # SILICON CAPTURE; a live re-capture for this board remains owed.
     drift_ack: 2026-10-25
     # 2026-10-25 (perf/cortex-m-decode-reference): the Cortex-M decode cache
     # now checks the PC tag through a borrow and copies only on a hit. The
@@ -6360,7 +6404,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: 724f4fe3cfbedac7b04c48ac0721e3f22069db42d1c1382367ecd3c4ef534993
+    drift_ack_digest: a0c66cbc0cdf14aed94d3edb765e08c90e3e706c87b4304f624fdc178a821c77
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6834,6 +6878,14 @@ boards:
     # register map, reset value, timing or IRQ route changes; JIT code is not
     # covered by any silicon capture. The digest moves only because it hashes
     # whole files. ACK, NOT A CAPTURE.
+    # 2026-10-25 (STM32U575 onboarding review): the watched shared
+    # sources include the Cortex-M wide immediate byte/halfword
+    # load/store correction and, as applicable to this board, U5
+    # RCC/PWR/FLASH/SPI/I2C/FDCAN/GPDMA plus GPIO/UART model edits.
+    # U5-only register behavior is profile/config gated; shared V2
+    # GPIO analog-input and LCKR semantics are covered by simulation
+    # regressions. This digest-matched acknowledgement is NOT A
+    # SILICON CAPTURE; a live re-capture for this board remains owed.
     drift_ack: 2026-10-25
     # 2026-10-25 (perf/cortex-m-decode-reference): the Cortex-M decode cache
     # now checks the PC tag through a borrow and copies only on a hit. The
@@ -8109,7 +8161,7 @@ boards:
     doc: docs/boards/stm32u575.md
     chip: configs/chips/stm32u575.yaml
     tier: sim-validated
-    note: "STM32U575ZI (NUCLEO-U575ZI-Q), first U5 part. Cortex-M33, 2 MiB flash, 768 KiB SRAM + 16 KiB SRAM4. Reuses the shared V2 RCC/GPIO/UART models plus U5 PLL1/2/3 and ready pairs, and a CRS register-surface model. GPIO models analog-reset IDR, one-shot LCKR, and per-chip SECCFGR reset; U5 USART TXFE/AUTOCR are enabled only on U5 configs. ADC1 uses the SVD-verified U5 layout and passes Arduino L5 analogRead; GPDMA1 models all 16 channels and split NVIC lines 29-36/80-87. FDCAN1 (0x4000A400, 4 KiB window over SRAMCAN @ +0x800, RCC_APB1ENR2.FDCAN1EN bit 9 gate) reuses Bosch M_CAN and passes Arduino L8 internal loopback; the U575 has a single FDCAN instance. Rust io-smoke and a local Star Catcher smoke cover startup; the latter checks PC13 input/B1, simulated SSD1306 output and USART1 TX. Also validated by real STM32CubeU5 HAL firmware, Arduino matrix L0-L8, Zephyr matrix L0-L3, and unsupported-instruction audit. NO bench part: values are SVD/RM0456-derived; Renode has no STM32U5 platform, so no Renode differential is claimed. TrustZone/GTZC, OCTOSPI and USB are not modeled. Flash supports non-secure unlock, page and one-/two-bank erase, quad-word program, EOP/WRPERR and option-byte storage; residuals include secure path/SECKEYR, read-while-write stalling and option reload/SWAP_BANK. ADC4 is not declared because its SVD map is a different 12-bit class from ADC1."
+    note: "STM32U575ZI (NUCLEO-U575ZI-Q), first U575 target. Cortex-M33, 2 MiB flash, 768 KiB SRAM + 16 KiB SRAM4. Reuses the shared V2 RCC/GPIO/UART models plus U5 PLL1/2/3 and ready pairs, and a CRS register-surface model. GPIO models analog-reset IDR, one-shot LCKR, and per-chip SECCFGR reset; U5 USART TXFE/AUTOCR are enabled only on U5 configs. ADC1 uses the SVD-verified U5 layout and passes Arduino L5 analogRead; GPDMA1 models all 16 channels and split NVIC lines 29-36/80-87. FDCAN1 (0x4000A400, 4 KiB window over SRAMCAN @ +0x800, RCC_APB1ENR2.FDCAN1EN bit 9 gate) reuses Bosch M_CAN and passes Arduino L8 internal loopback; the U575 has a single FDCAN instance. Rust io-smoke and a local Star Catcher smoke cover startup; the latter checks PC13 input/B1, simulated SSD1306 output and USART1 TX. Also validated by real STM32CubeU5 HAL firmware, Arduino matrix L0-L8, Zephyr matrix L0-L3, and unsupported-instruction audit. NO bench part: values are SVD/RM0456-derived; Renode has no STM32U5 platform, so no Renode differential is claimed. TrustZone/GTZC, OCTOSPI and USB are not modeled. Flash supports non-secure unlock, page and one-/two-bank erase, quad-word program, EOP/WRPERR and option-byte storage; residuals include secure path/SECKEYR, read-while-write stalling and option reload/SWAP_BANK. ADC4 is not declared because its SVD map is a different 12-bit class from ADC1."
     offline_tests:
       - "strict_onboarding (io-smoke builds + runs firmware-stm32u575-demo)"
       - "chip_conformance (estate OK)"

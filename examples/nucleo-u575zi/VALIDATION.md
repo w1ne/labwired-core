@@ -401,16 +401,25 @@ it failed the banner and reported 0% OLED ink before the new firmware was added.
 ### K.4 Docs / gates freshness
 
 ```bash
-python3 scripts/generate_validation_status.py --check
+python3 scripts/generate_validation_status.py --check --drift
 ```
 
-Exit 0, no output. `--check --drift` also exits 0: the 7 silicon-board reds
-this branch produced (`nrf52840`, `seeed-xiao-nrf52840-sense`, `stm32h563`,
-`nucleo-l476rg`, `nucleo-l073rz`, `stm32f103`, `stm32f407`) were NOT
-pre-existing — the branch's CPU shift-flag and V2 RCC PLL1/U5 CR-ready edits
-moved their watched content digests past the old `drift_ack_digest`. Each was
-re-acked on 2026-09-18 with a note naming the changed files and re-stamped via
-`--write-ack-digests`; a live re-capture remains owed. U575 is not among them.
+On the current onboarding tree, the exact gate exited 0. The watched-source
+changes renewed the existing drift acknowledgements for seven silicon-backed
+boards: `nrf52840`, `seeed-xiao-nrf52840-sense`, `stm32h563`, `nucleo-l476rg`,
+`nucleo-l073rz`, `stm32f103`, and `stm32f407`. The digest-matched entries cover
+the Cortex-M wide immediate byte/halfword load/store correction, plus U5 model
+additions in the shared peripheral sources where those files are watched. U5
+register features are explicitly profile/config gated; GPIO analog-input and
+LCKR behavior changes are shared V2 semantics.
+
+The existing acknowledgements were renewed on 2026-10-25 and the generated
+status shows each physical re-capture as pending through 2026-11-24. This is a
+review of changed model source, **not a silicon capture** and not evidence that
+the seven boards were re-read. The selected host suites passed after the main
+merge: board IO **18/18**, H563 conformance **7/7**, U575 register contract
+**17/17**, and U545/U575 drift guard **3/3**. These results validate simulator
+behavior only. The U575 remains sim-validated with no silicon capture.
 
 Arduino matrix — the runner has no `--no-build`; its documented equivalent from
 `--help` is `--sim-only`, which reuses the cached ELFs:

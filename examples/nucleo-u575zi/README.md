@@ -1,6 +1,6 @@
 # NUCLEO-U575ZI-Q Example (STM32U575ZI)
 
-First STM32U5 target in LabWired. This example runs **three independent real
+First STM32U575 target in LabWired. This example runs **three independent real
 firmware stacks** on the modelled NUCLEO-U575ZI-Q:
 
 1. `crates/firmware-stm32u575-demo` — bare-metal Rust smoke (`OK` over USART1)
