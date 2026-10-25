@@ -59,7 +59,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | stm32g071 | open | L1 | 41 | 937.4 | 1.6 | ≥1× (CI) | — |
 | dspic33fj32mc204 | open | L1 | 3 | — | — | ≥1× (CI) | — |
 | dspic33fj32mc202 | open | L1 | 3 | — | — | ≥1× (CI) | — |
-| k32w041z (closed) | closed | L2 | 9 | 2880.8 | 3083.5 (tick 1) | 0.02× FAIL | [doc](docs/boards/k32w041amdk6.md) |
+| k32w041z (closed) | closed | L2 | 9 | 987.8 | 1.6 | 6.50× | [doc](docs/boards/k32w041amdk6.md) |
 
 Open-model RTx is a CI receipt; the committed open perf rating is step/batch.
 Closed-model RTx is measured by the private build and published here as a
