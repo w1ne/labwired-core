@@ -146,6 +146,10 @@
     "name": "rv1103"
   },
   {
+    "buses": [],
+    "name": "sam4s16c"
+  },
+  {
     "buses": [
       "I2C",
       "SPI"

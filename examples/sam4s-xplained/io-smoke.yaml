@@ -1,0 +1,23 @@
+# LabWired - SAM4S Xplained IO smoke
+#
+# Build: cargo build -p firmware-sam4s-xplained-smoke --release --target thumbv7em-none-eabi
+#
+# The firmware enables UART0/PIOA/PIOC in the PMC, configures UART0 (8N1,
+# 115200 at 120 MHz), claims PC10 as a PIO output and PA5 as a pulled-up input,
+# then walks the LED (ODSR read-back) and prints the button level.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-sam4s-xplained-smoke"
+  system: "./system.yaml"
+limits:
+  max_steps: 4000000
+assertions:
+  - uart_contains: "SAM4S XPLAINED SMOKE"
+  - uart_ordered:
+      - "cpu=cortex-m4 uart=uart0"
+      - "led=on odsr=00000400"
+      - "led=off odsr=00000000"
+      - "btn=1"
+      - "hb=0 odsr=00000000 btn=1"
+      - "hb=1 odsr=00000000 btn=1"
+  - expected_stop_reason: max_steps

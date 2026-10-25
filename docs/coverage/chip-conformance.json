@@ -38,6 +38,13 @@
     "behavior": true,
     "excluded": 0,
     "level": 1,
+    "name": "sam4s16c",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
     "name": "stm32f072",
     "reg_match": 0
   },

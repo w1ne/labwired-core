@@ -135,6 +135,14 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         "no LPUART bring-up in this harness; bytes are proven by the \
          vegaboard-ri5cy survival smoke",
     ),
+    // SAM4S Xplained: no UART0 bring-up in this harness; bytes are proven by
+    // the sam4s-xplained survival smoke.
+    (
+        "sam4s16c",
+        BusKind::Uart,
+        "no UART0 bring-up in this harness; bytes are proven by the \
+         sam4s-xplained survival smoke",
+    ),
     // STM32F072B-DISCO: no USART1 bring-up in this harness; bytes are proven
     // by the stm32f072b-disco survival smoke.
     (
