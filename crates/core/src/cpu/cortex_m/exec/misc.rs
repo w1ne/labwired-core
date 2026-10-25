@@ -135,6 +135,29 @@ impl CortexM {
             }
             self.set_register(rd, value);
             __pc = PcAdvance::Add4;
+        } else if (h1 & 0xFF80) == 0xF300 && (h2 & 0x8000) == 0 {
+            // ARMv7-M SSAT: signed saturate with an optional LSL/ASR shift.
+            // The radio library's RSSI calibration uses it (`ssat r0, #7, r3`).
+            let rn = (h1 & 0xF) as u8;
+            let rd = ((h2 >> 8) & 0xF) as u8;
+            let sat_imm = (h2 & 0x1F) as u32;
+            let shift = ((((h2 >> 12) & 0x7) << 2) | ((h2 >> 6) & 0x3)) as u32;
+            let asr = (h1 & 0x20) != 0;
+            let raw = self.get_register(rn) as i32;
+            let shifted = if asr { raw >> shift } else { raw.wrapping_shl(shift) };
+            let bits = sat_imm + 1;
+            let (min, max) = if bits >= 32 {
+                (i32::MIN, i32::MAX)
+            } else {
+                let half = 1i32 << (bits - 1);
+                (-half, half - 1)
+            };
+            let clamped = shifted.clamp(min, max);
+            self.set_register(rd, clamped as u32);
+            if clamped != shifted {
+                self.xpsr |= 1 << 27;
+            }
+            __pc = PcAdvance::Add4;
         } else if matches!(h1 & 0xFFBF, 0xEEB4 | 0xEEB5)
             && (h2 & 0x0F50) == 0x0A40
             && ((h1 & 1) == 0 || (h2 & 0x002F) == 0)

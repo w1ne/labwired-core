@@ -467,6 +467,38 @@ fn cortex_m4_qadd16_and_usat_encode_clamped_coolant_byte() {
 }
 
 #[test]
+fn cortex_m4_ssat_saturates_signed_values_and_sets_q() {
+    let mut cpu = CortexM::new();
+    let mut bus = MockBus::new();
+
+    // ssat r0, #7, r3 saturates to 7 signed bits, range -64..63.
+    cpu.pc = 0x2200;
+    cpu.r3 = 40;
+    run_test_instr(&mut cpu, &mut bus, 0xF3030006, true);
+    assert_eq!(cpu.r0, 40);
+    assert_eq!(cpu.xpsr & (1 << 27), 0, "no saturation means Q stays clear");
+
+    // 100 clamps to 63 and sets Q.
+    cpu.pc = 0x2204;
+    cpu.r3 = 100;
+    run_test_instr(&mut cpu, &mut bus, 0xF3030006, true);
+    assert_eq!(cpu.r0, 63);
+    assert_ne!(cpu.xpsr & (1 << 27), 0, "clamping sets Q");
+
+    // -200 clamps to -64.
+    cpu.pc = 0x2208;
+    cpu.r3 = (-200i32) as u32;
+    run_test_instr(&mut cpu, &mut bus, 0xF3030006, true);
+    assert_eq!(cpu.r0 as i32, -64);
+
+    // LSL #4 then saturate: 100 << 4 = 1600 -> 63 in r1 (h2 bits 14-12 = 1).
+    cpu.pc = 0x220C;
+    cpu.r3 = 100;
+    run_test_instr(&mut cpu, &mut bus, 0xF3031106, true);
+    assert_eq!(cpu.r1, 63);
+}
+
+#[test]
 fn cps_faultmask_set_clear_and_mask() {
     // CPSID f (0xB671) sets FAULTMASK; CPSIE f (0xB661) clears it. Zephyr's
     // fault handler toggles FAULTMASK; an unmodelled CPS-f decoded as Unknown
