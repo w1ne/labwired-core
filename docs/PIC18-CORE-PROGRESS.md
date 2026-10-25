@@ -103,7 +103,7 @@ branches, skip over a two-word instruction, return-stack overflow/underflow,
 PCL latch writes, unknown-opcode `DecodeError`, snapshot round-trip, program
 image loading, and a hand-assembled add/store/GOTO program.
 
-Commit: this milestone commit (`feat(core): add PIC18 vertical slice`).
+Commit: `d6402f376` (`feat(core): add PIC18 vertical slice`).
 
 ## Next missing pieces
 
