@@ -799,6 +799,9 @@ pub struct Pic24 {
     odc: [u16; 3],
     /// Package pad mask per port (RA/RB/RC): which bits exist on this part.
     port_masks: [u16; 3],
+    /// Analog channels (AN0-AN8) bonded out on this package, derived from
+    /// `port_masks` (DS70283H Table 1-1).
+    adc_channels: u16,
     /// Last sampled live pad levels (`PORTx`), one word per port.
     pad_in: [u16; 3],
     /// The drive the Output Compare units present on their routed pads.
@@ -992,6 +995,7 @@ impl Pic24 {
             acc_a: 0,
             acc_b: 0,
             port_masks: [PORT_A_MASK, PORT_B_MASK, PORT_C_MASK],
+            adc_channels: 0x01FF,
             tris: [PORT_A_MASK, PORT_B_MASK, PORT_C_MASK],
             lat: [0; 3],
             odc: [0; 3],
@@ -1259,12 +1263,19 @@ impl Pic24 {
         self.port_masks[port]
     }
 
+    /// The analog channels (AN0-AN8) implied by a set of package pad masks:
+    /// AN0/AN1 are RA0/RA1, AN2-AN5 are RB0-RB3, AN6-AN8 are RC0-RC2.
+    fn adc_channels_from_port_masks(masks: [u16; 3]) -> u16 {
+        (masks[0] & 0x0003) | ((masks[1] & 0x000F) << 2) | ((masks[2] & 0x0007) << 6)
+    }
+
     /// Set the package pad masks (RA, RB, RC) for this part and reset the
     /// direction registers over the new package. The CPU defaults to the
     /// 44-pin dsPIC33FJ32MC204 masks; the builder derives the chip's masks
     /// from its `pic24_gpio` peripheral configs.
     pub fn set_port_masks(&mut self, masks: [u16; 3]) {
         self.port_masks = masks;
+        self.adc_channels = Self::adc_channels_from_port_masks(masks);
         self.tris = masks;
         for (port, mask) in masks.iter().enumerate() {
             self.lat[port] &= *mask;
@@ -4054,14 +4065,21 @@ impl Pic24 {
 // ── M3: ADC1, SPI1, I2C1 ────────────────────────────────────────────────────
 
 impl Pic24 {
+    /// Whether AN`channel` is bonded out on this package (DS70283H Table 1-1).
+    pub fn adc_channel_present(&self, channel: u8) -> bool {
+        channel <= 8 && self.adc_channels & (1 << channel) != 0
+    }
+
     /// Inject a raw 10/12-bit code for analog channel `channel` (AN0-AN8).
     /// This is the harness seam for an analog source; the session builder
     /// leaves unconnected inputs at 0. AN0-AN8 map to RA0, RA1, RB0-RB3,
-    /// RC0-RC2 (DS70283H Table 1-1).
+    /// RC0-RC2 (DS70283H Table 1-1). Channels not bonded out on this part
+    /// and channels above AN8 are ignored.
     pub fn set_adc_analog(&mut self, channel: u8, code: u16) {
-        if let Some(slot) = self.adc_analog.get_mut(usize::from(channel)) {
-            *slot = code & 0x0FFF;
+        if !self.adc_channel_present(channel) {
+            return;
         }
+        self.adc_analog[usize::from(channel)] = code & 0x0FFF;
     }
 
     /// Attach a device to the SPI1 wires. The first attached device answers
@@ -4181,9 +4199,9 @@ impl Pic24 {
     }
 
     fn adc_read_channel(&self, ch: u8) -> u16 {
-        // PCFG = 1 (or an absent channel) is a digital pin, not an analog
-        // source; it reads 0 here (documented approximation).
-        if ch > 8 || self.ad1pcfgl & (1 << ch) != 0 {
+        // PCFG = 1 (or a channel not bonded out) is a digital pin, not an
+        // analog source; it reads 0 here (documented approximation).
+        if !self.adc_channel_present(ch) || self.ad1pcfgl & (1 << ch) != 0 {
             return 0;
         }
         let pos = self.adc_analog[usize::from(ch)];
@@ -5073,6 +5091,7 @@ impl Cpu for Pic24 {
             self.acc_a = s.acc_a;
             self.acc_b = s.acc_b;
             self.port_masks = s.port_masks;
+            self.adc_channels = Self::adc_channels_from_port_masks(s.port_masks);
             self.tris = s.tris;
             self.lat = s.lat;
             self.odc = s.odc;
@@ -7818,6 +7837,41 @@ mod tests {
         assert_eq!(back.spi1con1, 0x0137);
         assert_eq!(back.i2c1brg, 0x016B);
         assert_eq!(back.ifs1, 0x0002);
+    }
+
+    #[test]
+    fn adc_channels_202_masks_expose_an0_to_an5() {
+        let mut cpu = Pic24::new();
+        cpu.set_port_masks([0x001F, 0xFFFF, 0x0000]);
+        for ch in 0..=5 {
+            assert!(cpu.adc_channel_present(ch), "AN{ch} is bonded out");
+        }
+        for ch in 6..=8 {
+            assert!(!cpu.adc_channel_present(ch), "AN{ch} is not bonded out");
+        }
+        assert!(!cpu.adc_channel_present(9));
+        assert!(!cpu.adc_channel_present(15));
+    }
+
+    #[test]
+    fn adc_absent_channel_is_ignored_on_the_202() {
+        let mut cpu = adc_cpu(0, false);
+        cpu.set_port_masks([0x001F, 0xFFFF, 0x0000]);
+        cpu.ad1pcfgl = 0;
+        cpu.set_adc_analog(4, 0x2AA);
+        cpu.set_adc_analog(6, 0xABC);
+        assert_eq!(cpu.adc_read_channel(6), 0, "AN6 is not bonded out");
+        assert_eq!(cpu.adc_read_channel(4), 0x2AA, "AN4 keeps its code");
+    }
+
+    #[test]
+    fn adc_channels_204_masks_expose_all_channels() {
+        let mut cpu = Pic24::new();
+        cpu.set_port_masks([0x079F, 0xFFFF, 0x03FF]);
+        for ch in 0..=8 {
+            assert!(cpu.adc_channel_present(ch), "AN{ch} is bonded out");
+        }
+        assert!(!cpu.adc_channel_present(9));
     }
 
     #[test]
