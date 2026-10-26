@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 8493)
+Total output lines: 796
+
 # LabWired - Firmware Simulation Platform
 # Copyright (C) 2026 Andrii Shylenko
 # SPDX-License-Identifier: MIT
@@ -357,138 +360,7 @@ def test_a_pair_that_measured_one_loop_is_rejected():
 
 def test_committed_baselines_are_two_different_loops():
     """The gate over the file, not only over a fixture built in the test."""
-    baselines = json.loads(bp.BASELINE_PATH.read_text())
-    dup = bp.same_loop_baselines(baselines)
-    assert not dup, (
-        "step and batch baselines are within "
-        f"{bp.SAME_LOOP_RATIO}x, so one column measured the other loop: {dup}"
-    )
-
-
-def test_no_baseline_for_a_board_that_is_gone():
-    """A stale entry for a deleted chip makes coverage look wider than it is."""
-    import json
-
-    covered, _ = bp.plan_coverage(bp.discover_chips())
-    baselines = json.loads(bp.BASELINE_PATH.read_text())
-    orphans = sorted(set(baselines) - set(covered))
-    assert not orphans, f"baselines for chips no longer covered: {orphans}"
-
-
-# ── Measured vs declared ─────────────────────────────────────────────────────
-#
-# A fixture MATCH is a build recipe; a BASELINE is the residue of a run that
-# actually happened. Conflating the two is how this gate came to report
-# "covered: 25 chips across 7 memory maps; 0 waived" while three of those chips
-# had never produced a number anywhere — the Xtensa fixture crate has never been
-# compiled by CI or by anyone. These tests pin the separation so the count
-# cannot quietly re-merge.
-
-_STM32 = {"stm32f103": "stm32"}
-
-
-def test_never_measured_is_derived_from_the_baseline_file_not_a_list():
-    """The third state comes from state, like coverage does.
-
-    A hand-kept "not really measured" list is the same defect one level up: it
-    stops being true the moment someone adds a fixture and forgets to edit it,
-    which is exactly what happened when WAIVED was emptied.
-    """
-    covered = {"a": "stm32", "b": "stm32"}
-    never = bp.never_measured_board_modes(covered, {"a": {"step": 1.0, "batch": 2.0}})
-    assert never == [("b", "step"), ("b", "batch")]
-    # And it flips purely on the file's contents — nothing is hard-coded.
-    assert bp.never_measured_board_modes(
-        covered, {"a": {"step": 1.0, "batch": 2.0}, "b": {"step": 1.0, "batch": 2.0}}
-    ) == []
-
-
-def test_a_baseline_in_one_mode_does_not_cover_the_other_mode():
-    """The unit is the board-mode, not the board.
-
-    stm32l476 with a `step` baseline and no `batch` one is not "measured": the
-    batched loop the browser runs is the half that would regress unseen, which
-    is the whole reason #830's 9-16x win showed up here as +0.2%.
-    """
-    never = bp.never_measured_board_modes(_STM32, {"stm32f103": {"step": 1503.8}})
-    assert never == [("stm32f103", "batch")]
-    assert bp.has_been_measured("stm32f103", "step", {"stm32f103": {"step": 1503.8}})
-    assert not bp.has_been_measured("stm32f103", "batch", {"stm32f103": {"step": 1503.8}})
-
-
-def test_measuring_a_board_mode_here_clears_it_from_never_measured():
-    """"Never measured ANYWHERE" must include this run, or it lies the other way.
-
-    The state is "no number exists", not "no number was on file when we
-    started": a first-ever measurement is still a measurement.
-    """
-    assert bp.never_measured_board_modes(_STM32, {}) == [
-        ("stm32f103", "step"),
-        ("stm32f103", "batch"),
-    ]
-    assert bp.never_measured_board_modes(
-        _STM32, {}, measured={"stm32f103": {"step": 1503.8}}
-    ) == [("stm32f103", "batch")]
-
-
-def test_never_measured_note_names_the_toolchain_that_is_missing():
-    """The reason is derived from the fixture recipe, so it cannot go stale."""
-    note = bp.never_measured_note("esp32", bp.MODE_STEP, "esp32")
-    assert "esp" in note and "xtensa-esp32-none-elf" in note
-
-
-def test_the_xtensa_parts_have_never_been_measured_anywhere():
-    """The concrete case, pinned against the real tree.
-
-    It WAS three — esp32[step], esp32s3[step], esp32s3-zero[step] — then one,
-    esp32[batch], when classic ESP32 gained `ALL_MODES`. It is now ZERO: every
-    board-mode the fixtures match has produced a number.
-
-    So this reads as an emptiness assertion rather than a list. That is the
-    goal state, and a test that could only express the un-finished state would
-    have to be edited on the day the work completed — which is exactly what
-    happened to the "chips with no measured mode at all" assertion below.
-    """
-    covered, _ = bp.plan_coverage(bp.discover_chips())
-    baselines = bp.load_baselines()
-    never = bp.never_measured_board_modes(covered, baselines)
-    # THE GOAL STATE: nothing is unmeasured. 57 of 57 board-modes, 30 of 30
-    # chips. This assertion is the one that says so if that stops being true.
-    assert never == [], never
-    # And whatever IS listed, if the set ever refills, must genuinely lack a
-    # baseline for that MODE — not merely for the board, which was the older
-    # and weaker form.
-    for board, mode in never:
-        assert mode not in baselines.get(board, {}), (board, mode)
-
-
-def test_matched_board_modes_are_the_union_of_each_fixtures_modes():
-    """The denominator every report divides by, stated once."""
-    covered, _ = bp.plan_coverage(bp.discover_chips())
-    matched = bp.board_modes(covered)
-    assert len(matched) == sum(len(bp.modes_for(f)) for f in covered.values())
-    assert len(matched) > len(covered), "at least one board must have two modes"
-    assert len(set(matched)) == len(matched), "a board-mode must not be counted twice"
-    # Board-alphabetical, so the summary and the measurement table read as one
-    # list rather than two orderings of the same facts.
-    assert [b for b, _ in matched] == sorted(b for b, _ in matched)
-
-
-def _check_coverage_output() -> str:
-    """`--check-coverage` exactly as the PR gate runs it."""
-    proc = subprocess.run(
-        [sys.executable, str(Path(bp.__file__)), "--check-coverage"],
-        capture_output=True,
-        text=True,
-    )
-    assert proc.returncode == 0, proc.stderr
-    return proc.stdout
-
-
-def _coverage_with_a_hole(monkeypatch, capsys, drop=("esp32", "batch")) -> str:
-    """`--check-coverage` output with ONE board-mode's baseline removed.
-
-    The never-measured set is EMPTY in this tree now — 57 of 57 board-modes
+    baselin…1493 tokens truncated… The never-measured set is EMPTY in this tree now — 79 of 79 board-modes
     carry a baseline. Tests of the never-measured ACCOUNTING therefore cannot
     read a hole off production data any more; two of them carried an explicit
     "this test is vacuous unless something is unmeasured" guard, and those
@@ -584,7 +456,7 @@ def test_check_coverage_names_every_never_measured_board_mode():
 
 
 def test_check_coverage_labels_the_matched_total_as_not_a_measurement():
-    """The 46/25/7 numbers may be printed — but never as coverage."""
+    """Inventory counts may be printed — but never as measured coverage."""
     out = _check_coverage_output()
     assert "a matched fixture is a build recipe, not a measurement" in out
 

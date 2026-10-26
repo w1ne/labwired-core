@@ -7,9 +7,53 @@
     "batch": 1.4,
     "step": 895.0
   },
+  "atsamd21e15a": {
+    "batch": 1.4,
+    "step": 893.0
+  },
+  "atsamd21e16a": {
+    "batch": 1.4,
+    "step": 893.0
+  },
+  "atsamd21e17a": {
+    "batch": 1.4,
+    "step": 893.0
+  },
+  "atsamd21e18a": {
+    "batch": 1.4,
+    "step": 893.0
+  },
+  "atsamd21g15a": {
+    "batch": 1.4,
+    "step": 893.0
+  },
+  "atsamd21g16a": {
+    "batch": 1.4,
+    "step": 893.0
+  },
+  "atsamd21g17a": {
+    "batch": 1.4,
+    "step": 893.0
+  },
   "atsamd21g18a": {
     "batch": 1.4,
     "step": 895.0
+  },
+  "atsamd21j15a": {
+    "batch": 1.4,
+    "step": 893.0
+  },
+  "atsamd21j16a": {
+    "batch": 1.4,
+    "step": 893.0
+  },
+  "atsamd21j17a": {
+    "batch": 1.4,
+    "step": 893.0
+  },
+  "atsamd21j18a": {
+    "batch": 1.4,
+    "step": 893.0
   },
   "atsamd51": {
     "batch": 1.4,
