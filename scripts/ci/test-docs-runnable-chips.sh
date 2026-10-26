@@ -46,10 +46,12 @@ def trimmed(keep):
     return m
 
 
-# 1. Firmware built for another part: it loads, prints nothing, and the CPU
-#    faults. Exit status alone reads as success here, which is the point.
-m = trimmed({"stm32l073"})
-m["chips"]["stm32l073"] = {
+# 1. Firmware built for another part: it loads and hits an invalid memory
+#    access. Exit status alone reads as success here, which is the point. Keep
+#    the fixture on STM32L476 because it is supported by the public v0.25 CLI
+#    installed in CI; newer chip models cannot test this released-CLI gate.
+m = trimmed({"stm32l476"})
+m["chips"]["stm32l476"] = {
     "how": "committed",
     "firmware": "tests/fixtures/tier1/stm32f407.elf",
     "expect": "TIER1 clock PASS",
@@ -62,15 +64,15 @@ del m["chips"]["stm32h563"]
 json.dump(m, open(work / "missing-chip.json", "w"), indent=2)
 
 # 3. A marker the firmware never prints — an entry copied from a sibling chip
-#    and never actually run. Use the known-good U545 smoke so this reaches the
-#    marker assertion instead of relying on the F103 fixture's UART transcript.
-m = trimmed({"stm32u545"})
-m["chips"]["stm32u545"]["expect"] = "THIS LINE IS NEVER PRINTED"
+#    and never actually run. Use the same known-good STM32L476 smoke as the
+#    positive control so this reaches the marker assertion on the public CLI.
+m = trimmed({"stm32l476"})
+m["chips"]["stm32l476"]["expect"] = "THIS LINE IS NEVER PRINTED"
 json.dump(m, open(work / "wrong-marker.json", "w"), indent=2)
 
-# 4. The positive control. This committed smoke prints `OK` from a bare-metal
-#    image through the direct CLI path; it does not depend on a toolchain.
-json.dump(trimmed({"stm32u545"}), open(work / "good.json", "w"), indent=2)
+# 4. The positive control. This committed smoke prints its TIER1 clock marker
+#    through the direct CLI path; it does not depend on a toolchain.
+json.dump(trimmed({"stm32l476"}), open(work / "good.json", "w"), indent=2)
 
 PY
 
