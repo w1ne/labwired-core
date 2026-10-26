@@ -488,6 +488,10 @@ fn structurally_walk_free_models_do_not_enter_the_legacy_tick_index() {
     assert!(bus.derive_walk_deletable());
 }
 
+fn event_scheduler_feature_enabled() -> bool {
+    cfg!(feature = "event-scheduler")
+}
+
 #[test]
 fn scheduler_peripherals_follow_build_mode_legacy_tick_index() {
     #[derive(Debug)]
@@ -517,7 +521,7 @@ fn scheduler_peripherals_follow_build_mode_legacy_tick_index() {
     let mut bus = SystemBus::empty();
     bus.add_peripheral("sched", 0x1000, 0x100, None, Box::new(SchedulerPeripheral));
 
-    let scheduler_enabled = cfg!(feature = "event-scheduler");
+    let scheduler_enabled = event_scheduler_feature_enabled();
     let expected_indices = if scheduler_enabled {
         Vec::new()
     } else {
@@ -539,12 +543,12 @@ fn scheduler_peripherals_follow_build_mode_legacy_tick_index() {
 }
 
 #[test]
-fn dynamic_scheduler_mode_transition_restores_legacy_walk() {
+fn dynamic_scheduler_mode_transition_respects_build_mode() {
     use std::cell::Cell;
     use std::rc::Rc;
 
     #[derive(Debug)]
-    struct DynamicScheduler(Rc<Cell<bool>>);
+    struct DynamicScheduler(Rc<Cell<bool>>, Rc<Cell<bool>>);
     impl crate::Peripheral for DynamicScheduler {
         fn read(&self, _offset: u64) -> SimResult<u8> {
             Ok(0)
@@ -555,11 +559,11 @@ fn dynamic_scheduler_mode_transition_restores_legacy_walk() {
         }
 
         fn needs_legacy_walk(&self) -> bool {
-            !self.0.get()
+            true
         }
 
         fn legacy_tick_active(&self) -> bool {
-            !self.0.get()
+            self.1.get()
         }
 
         fn legacy_tick_dynamic(&self) -> bool {
@@ -571,25 +575,39 @@ fn dynamic_scheduler_mode_transition_restores_legacy_walk() {
         }
     }
 
-    let scheduler_mode = Rc::new(Cell::new(true));
+    let scheduler_enabled = event_scheduler_feature_enabled();
+    let scheduler_mode = Rc::new(Cell::new(false));
+    let tick_active = Rc::new(Cell::new(false));
     let mut bus = SystemBus::empty();
     bus.add_peripheral(
         "dynamic-scheduler",
         0x1000,
         0x100,
         None,
-        Box::new(DynamicScheduler(Rc::clone(&scheduler_mode))),
+        Box::new(DynamicScheduler(
+            Rc::clone(&scheduler_mode),
+            Rc::clone(&tick_active),
+        )),
     );
     bus.legacy_walk_disabled = bus.derive_walk_deletable();
     assert!(bus.legacy_walk_disabled);
     assert!(bus.legacy_tick_indices.is_empty());
     assert_eq!(bus.legacy_tick_candidate_mask, vec![true]);
 
-    // Mirrors SysTick becoming legacy-driven before a cycle clock attaches.
-    scheduler_mode.set(false);
-    assert!(bus.refresh_legacy_tick_index(0));
-    assert!(!bus.legacy_walk_disabled);
-    assert_eq!(bus.legacy_tick_indices, vec![0]);
+    // Mirrors SysTick switching to scheduler mode when its cycle clock
+    // attaches, while a stale legacy activity predicate still reports work.
+    scheduler_mode.set(true);
+    tick_active.set(true);
+    assert_eq!(bus.refresh_legacy_tick_index(0), !scheduler_enabled);
+    assert_eq!(bus.legacy_walk_disabled, scheduler_enabled);
+    assert_eq!(
+        bus.legacy_tick_indices,
+        if scheduler_enabled {
+            Vec::new()
+        } else {
+            vec![0]
+        }
+    );
 }
 
 #[test]
