@@ -452,8 +452,8 @@ def test_the_xtensa_parts_have_never_been_measured_anywhere():
     covered, _ = bp.plan_coverage(bp.discover_chips())
     baselines = bp.load_baselines()
     never = bp.never_measured_board_modes(covered, baselines)
-    # THE GOAL STATE: nothing is unmeasured. 57 of 57 board-modes, 30 of 30
-    # chips. This assertion is the one that says so if that stops being true.
+    # THE GOAL STATE: nothing is unmeasured. 79 of 79 board-modes, 41 of 41
+    # fixture-covered chips. This assertion is the one that says so if that stops being true.
     assert never == [], never
     # And whatever IS listed, if the set ever refills, must genuinely lack a
     # baseline for that MODE — not merely for the board, which was the older
@@ -488,7 +488,7 @@ def _check_coverage_output() -> str:
 def _coverage_with_a_hole(monkeypatch, capsys, drop=("esp32", "batch")) -> str:
     """`--check-coverage` output with ONE board-mode's baseline removed.
 
-    The never-measured set is EMPTY in this tree now — 57 of 57 board-modes
+    The never-measured set is EMPTY in this tree now — 79 of 79 board-modes
     carry a baseline. Tests of the never-measured ACCOUNTING therefore cannot
     read a hole off production data any more; two of them carried an explicit
     "this test is vacuous unless something is unmeasured" guard, and those
@@ -584,7 +584,7 @@ def test_check_coverage_names_every_never_measured_board_mode():
 
 
 def test_check_coverage_labels_the_matched_total_as_not_a_measurement():
-    """The 46/25/7 numbers may be printed — but never as coverage."""
+    """Inventory counts may be printed — but never as measured coverage."""
     out = _check_coverage_output()
     assert "a matched fixture is a build recipe, not a measurement" in out
 
@@ -645,6 +645,22 @@ def test_run_summary_separates_measured_skipped_and_never_measured(monkeypatch, 
     assert "NEVER measured anywhere" not in out
     # And "covered: N chips" — the line that overstated — is gone for good.
     assert not re.search(r"^covered:", out, re.M), out
+
+
+def test_boards_argument_limits_the_run_to_the_requested_chip(monkeypatch, capsys, tmp_path):
+    _stub_a_full_run(monkeypatch, tmp_path, ["--boards", "stm32f103"])
+
+    assert bp.main() == 0
+    out = capsys.readouterr().out
+    assert re.search(r"^stm32f103\s", out, re.M), out
+    assert not re.search(r"^stm32f401\s", out, re.M), out
+
+
+def test_boards_argument_rejects_unknown_chips(monkeypatch, capsys, tmp_path):
+    _stub_a_full_run(monkeypatch, tmp_path, ["--boards", "not-a-chip"])
+
+    assert bp.main() == 2
+    assert "unknown/uncovered boards: not-a-chip" in capsys.readouterr().err
 
 
 def test_a_baseline_moves_a_board_from_never_measured_to_merely_skipped(

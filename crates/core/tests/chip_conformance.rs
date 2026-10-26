@@ -157,6 +157,77 @@ const CHIPS: &[ChipConf] = &[
         reset_oracle: None,
         behavior_gate: Some("atsamd21_peripheral_estate::the_estate_answers_at_its_own_addresses"),
     },
+    // Exact A-variant SAM D21 orderable geometries on the public G18A engine.
+    // They deliberately carry NO behavior gate: the engine's behavior is
+    // already measured on atsamd21g18a, and these descriptors add no new
+    // peripheral/clock fidelity. Their geometry is checked by
+    // `atsamd21_variant_geometry`. L0 is the honest level here.
+    ChipConf {
+        name: "atsamd21e15a",
+        yaml: "configs/chips/atsamd21e15a.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "atsamd21e16a",
+        yaml: "configs/chips/atsamd21e16a.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "atsamd21e17a",
+        yaml: "configs/chips/atsamd21e17a.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "atsamd21e18a",
+        yaml: "configs/chips/atsamd21e18a.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "atsamd21g15a",
+        yaml: "configs/chips/atsamd21g15a.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "atsamd21g16a",
+        yaml: "configs/chips/atsamd21g16a.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "atsamd21g17a",
+        yaml: "configs/chips/atsamd21g17a.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "atsamd21j15a",
+        yaml: "configs/chips/atsamd21j15a.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "atsamd21j16a",
+        yaml: "configs/chips/atsamd21j16a.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "atsamd21j17a",
+        yaml: "configs/chips/atsamd21j17a.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "atsamd21j18a",
+        yaml: "configs/chips/atsamd21j18a.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
     ChipConf {
         name: "nrf54lm20a",
         yaml: "configs/chips/nrf54lm20a.yaml",
@@ -541,6 +612,46 @@ const CHIPS: &[ChipConf] = &[
         yaml: "configs/chips/dspic33fj32mc202.yaml",
         reset_oracle: None,
         behavior_gate: Some("pic24_xc16_202_smoke::xc16_202_firmware_boots_and_writes_hi_to_uart"),
+    },
+    // PIC24F KA family (DS30009937C / DS39927C). The modelled slice is the
+    // package GPIO masks and UART1; each gate boots that part's own real
+    // XC16 v1.70 image and checks `HI`. Data EEPROM, UART2, timers, ADC, SPI
+    // and I2C are not exercised, so this is L1, not full-device parity.
+    ChipConf {
+        name: "pic24f04ka200",
+        yaml: "configs/chips/pic24f04ka200.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("pic24_ka_smoke::pic24f04ka200_uart_smoke"),
+    },
+    ChipConf {
+        name: "pic24f04ka201",
+        yaml: "configs/chips/pic24f04ka201.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("pic24_ka_smoke::pic24f04ka201_uart_smoke"),
+    },
+    ChipConf {
+        name: "pic24f08ka101",
+        yaml: "configs/chips/pic24f08ka101.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("pic24_ka_smoke::pic24f08ka101_uart_smoke"),
+    },
+    ChipConf {
+        name: "pic24f08ka102",
+        yaml: "configs/chips/pic24f08ka102.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("pic24_ka_smoke::pic24f08ka102_uart_smoke"),
+    },
+    ChipConf {
+        name: "pic24f16ka101",
+        yaml: "configs/chips/pic24f16ka101.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("pic24_ka_smoke::pic24f16ka101_uart_smoke"),
+    },
+    ChipConf {
+        name: "pic24f16ka102",
+        yaml: "configs/chips/pic24f16ka102.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("pic24_ka_smoke::pic24f16ka102_uart_smoke"),
     },
 ];
 

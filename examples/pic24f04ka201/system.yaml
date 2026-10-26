@@ -1,0 +1,9 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+#
+# PIC24F04KA201 UART1 smoke system (CPU-internal UART1, no bus UART).
+name: "pic24f04ka201-demo"
+chip: "../../configs/chips/pic24f04ka201.yaml"

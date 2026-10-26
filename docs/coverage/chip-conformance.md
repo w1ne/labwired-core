@@ -15,6 +15,17 @@ Reg match = verifiable cold-reset registers reproduced. "Excluded" = registers a
 | stm32f072 | **L1** | ✓ | 39 | — | — | firmware_survival::test_stm32f072b_disco_smoke_survival |
 | nrf54l15 | **L1** | ✓ | 29 | — | — | firmware_survival::test_nrf54l15_zephyr_survival |
 | atsamd21g18a | **L1** | ✓ | 15 | — | — | atsamd21_peripheral_estate::the_estate_answers_at_its_own_addresses |
+| atsamd21e15a | **L0** | ✓ | 13 | — | — | — |
+| atsamd21e16a | **L0** | ✓ | 13 | — | — | — |
+| atsamd21e17a | **L0** | ✓ | 13 | — | — | — |
+| atsamd21e18a | **L0** | ✓ | 13 | — | — | — |
+| atsamd21g15a | **L0** | ✓ | 15 | — | — | — |
+| atsamd21g16a | **L0** | ✓ | 15 | — | — | — |
+| atsamd21g17a | **L0** | ✓ | 15 | — | — | — |
+| atsamd21j15a | **L0** | ✓ | 15 | — | — | — |
+| atsamd21j16a | **L0** | ✓ | 15 | — | — | — |
+| atsamd21j17a | **L0** | ✓ | 15 | — | — | — |
+| atsamd21j18a | **L0** | ✓ | 15 | — | — | — |
 | nrf54lm20a | **L1** | ✓ | 31 | — | — | nrf54lm20a_peripheral_estate::the_estate_answers_at_its_own_addresses |
 | esp32 | **L1** | ✓ | 32 | — | — | firmware_survival::test_esp32_tier1_survival |
 | esp32s3 | **L1** | ✓ | 14 | — | — | firmware_survival::test_esp32s3_tier1_survival |
@@ -57,6 +68,12 @@ Reg match = verifiable cold-reset registers reproduced. "Excluded" = registers a
 | stm32g071 | **L1** | ✓ | 41 | — | — | firmware_survival::test_nucleo_g071rb_smoke_survival |
 | dspic33fj32mc204 | **L1** | ✓ | 3 | — | — | pic24_m0_smoke::pic24_fixture_boots_and_writes_h_to_uart |
 | dspic33fj32mc202 | **L1** | ✓ | 3 | — | — | pic24_xc16_202_smoke::xc16_202_firmware_boots_and_writes_hi_to_uart |
+| pic24f04ka200 | **L1** | ✓ | 3 | — | — | pic24_ka_smoke::pic24f04ka200_uart_smoke |
+| pic24f04ka201 | **L1** | ✓ | 3 | — | — | pic24_ka_smoke::pic24f04ka201_uart_smoke |
+| pic24f08ka101 | **L1** | ✓ | 3 | — | — | pic24_ka_smoke::pic24f08ka101_uart_smoke |
+| pic24f08ka102 | **L1** | ✓ | 3 | — | — | pic24_ka_smoke::pic24f08ka102_uart_smoke |
+| pic24f16ka101 | **L1** | ✓ | 3 | — | — | pic24_ka_smoke::pic24f16ka101_uart_smoke |
+| pic24f16ka102 | **L1** | ✓ | 3 | — | — | pic24_ka_smoke::pic24f16ka102_uart_smoke |
 
 ## Declared platforms without a model
 

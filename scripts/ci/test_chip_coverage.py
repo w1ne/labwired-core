@@ -351,12 +351,20 @@ def test_ci_fixture_descriptors_are_not_graded(tmp_path):
     assert code == 0, out
 
 
-def test_committed_debt_only_waives_the_declared_rv1103_prototype():
-    """CPU-only smoke coverage must not claim an RV1103 firmware CI gate."""
+def test_committed_debt_records_samd21_geometry_and_rv1103_gaps():
+    """Exact SAMD21 alternates stay pending until each gets a firmware smoke."""
     cc.set_root(REPO_ROOT)
     entries, ceiling = cc.load_ledger()
-    assert ceiling == 1
-    assert set(entries) == {"rv1103"}
+    samd21_alternates = {
+        "atsamd21e15a", "atsamd21e16a", "atsamd21e17a", "atsamd21e18a",
+        "atsamd21g15a", "atsamd21g16a", "atsamd21g17a",
+        "atsamd21j15a", "atsamd21j16a", "atsamd21j17a", "atsamd21j18a",
+    }
+    assert ceiling == len(samd21_alternates) + 1
+    assert set(entries) == samd21_alternates | {"rv1103"}
+    for chip in samd21_alternates:
+        assert entries[chip]["kind"] == "pending"
+        assert "no CLI firmware smoke boots this exact chip" in entries[chip]["reason"]
     assert entries["rv1103"]["kind"] == "waived"
     reason = entries["rv1103"]["reason"]
     assert "No CI gate qualifies full RV1103 platform coverage" in reason

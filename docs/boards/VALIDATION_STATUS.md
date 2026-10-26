@@ -28,9 +28,9 @@ The models column is a content digest over everything that board's `models` list
 | `rp2350` | 🟡 smoke-manual | — | `cac577d9e9423025` | no silicon capture |
 | `nrf5340` | 🔵 sim-validated (deep model, no HW diff) | — | `73a4f6d1da20d9ca` | no silicon capture |
 | `stm32h735` | 🔵 sim-validated (deep model, no HW diff) | — | `a8c7b07837bbd716` | no silicon capture |
-| `stm32u575` | 🔵 sim-validated (deep model, no HW diff) | — | `c76a3e1f5736fb18` | no silicon capture |
-| `stm32u5a5zj` | 🔵 sim-validated (deep model, no HW diff) | — | `cf8ea87aa324de66` | no silicon capture |
-| `nucleo-u545re` | 🔵 sim-validated (deep model, no HW diff) | — | `19b39732fe565fda` | no silicon capture |
+| `stm32u575` | 🔵 sim-validated (deep model, no HW diff) | — | `2d90b1d3e7dc8872` | no silicon capture |
+| `stm32u5a5zj` | 🔵 sim-validated (deep model, no HW diff) | — | `3b6b0cc3d9b09939` | no silicon capture |
+| `nucleo-u545re` | 🔵 sim-validated (deep model, no HW diff) | — | `47b91dcb5bb8bee5` | no silicon capture |
 | `stm32f411ceu6` | 🔵 sim-validated (deep model, no HW diff) | — | `be1db6b435c76239` | no silicon capture |
 | `brd2709a` | 🟡 smoke-manual | — | `2f1ceb7268c7d40d` | no silicon capture |
 | `esp32` | ⚪ structural | — | `9e4d71de3a84fe4c` | no silicon capture |
@@ -49,12 +49,12 @@ The models column is a content digest over everything that board's `models` list
 | `teensy-41` | 🟡 smoke-manual | — | `aa4d46a0e2587392` | no silicon capture |
 | `stm32f7-discovery` | 🟡 smoke-manual | — | `14a3d1c34b5bb996` | no silicon capture |
 | `nucleo-g071rb` | 🟡 smoke-manual | — | `4ef8449991eacae5` | no silicon capture |
-| `esp32c6-devkitc` | 🟡 smoke-manual | — | `8588d0273f4560d3` | no silicon capture |
-| `litex-vexriscv` | 🟡 smoke-manual | — | `710400497d66a34a` | no silicon capture |
-| `sam4s16c` | 🟡 smoke-manual | — | `30c55f59693ddcf4` | no silicon capture |
-| `stm32f072` | 🟡 smoke-manual | — | `f10f21b59fc9518f` | no silicon capture |
-| `arty-litex-vexriscv` | 🟡 smoke-manual | — | `c51e8708e14e7c54` | no silicon capture |
-| `vegaboard-ri5cy` | 🟡 smoke-manual | — | `f6eb545f7f813f16` | no silicon capture |
+| `esp32c6-devkitc` | 🟡 smoke-manual | — | `746e81eba41c3b5f` | no silicon capture |
+| `litex-vexriscv` | 🟡 smoke-manual | — | `182df5a773c1532a` | no silicon capture |
+| `sam4s16c` | 🟡 smoke-manual | — | `5ad5a987a80c9c3f` | no silicon capture |
+| `stm32f072` | 🟡 smoke-manual | — | `9225e64854496346` | no silicon capture |
+| `arty-litex-vexriscv` | 🟡 smoke-manual | — | `a2c413b2ba2ac8ce` | no silicon capture |
+| `vegaboard-ri5cy` | 🟡 smoke-manual | — | `918d89030a226ef6` | no silicon capture |
 
 ## `nrf52840` — 🟢 silicon-verified
 
