@@ -544,11 +544,13 @@ fn scheduler_peripherals_follow_build_mode_legacy_tick_index() {
 
 #[test]
 fn dynamic_scheduler_mode_transition_respects_build_mode() {
-    use std::cell::Cell;
-    use std::rc::Rc;
+    use std::sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    };
 
     #[derive(Debug)]
-    struct DynamicScheduler(Rc<Cell<bool>>, Rc<Cell<bool>>);
+    struct DynamicScheduler(Arc<AtomicBool>, Arc<AtomicBool>);
     impl crate::Peripheral for DynamicScheduler {
         fn read(&self, _offset: u64) -> SimResult<u8> {
             Ok(0)
@@ -563,7 +565,7 @@ fn dynamic_scheduler_mode_transition_respects_build_mode() {
         }
 
         fn legacy_tick_active(&self) -> bool {
-            self.1.get()
+            self.1.load(Ordering::Relaxed)
         }
 
         fn legacy_tick_dynamic(&self) -> bool {
@@ -571,13 +573,13 @@ fn dynamic_scheduler_mode_transition_respects_build_mode() {
         }
 
         fn uses_scheduler(&self) -> bool {
-            self.0.get()
+            self.0.load(Ordering::Relaxed)
         }
     }
 
     let scheduler_enabled = event_scheduler_feature_enabled();
-    let scheduler_mode = Rc::new(Cell::new(false));
-    let tick_active = Rc::new(Cell::new(false));
+    let scheduler_mode = Arc::new(AtomicBool::new(false));
+    let tick_active = Arc::new(AtomicBool::new(false));
     let mut bus = SystemBus::empty();
     bus.add_peripheral(
         "dynamic-scheduler",
@@ -585,8 +587,8 @@ fn dynamic_scheduler_mode_transition_respects_build_mode() {
         0x100,
         None,
         Box::new(DynamicScheduler(
-            Rc::clone(&scheduler_mode),
-            Rc::clone(&tick_active),
+            Arc::clone(&scheduler_mode),
+            Arc::clone(&tick_active),
         )),
     );
     bus.legacy_walk_disabled = bus.derive_walk_deletable();
@@ -596,8 +598,8 @@ fn dynamic_scheduler_mode_transition_respects_build_mode() {
 
     // Mirrors SysTick switching to scheduler mode when its cycle clock
     // attaches, while a stale legacy activity predicate still reports work.
-    scheduler_mode.set(true);
-    tick_active.set(true);
+    scheduler_mode.store(true, Ordering::Relaxed);
+    tick_active.store(true, Ordering::Relaxed);
     assert_eq!(bus.refresh_legacy_tick_index(0), !scheduler_enabled);
     assert_eq!(bus.legacy_walk_disabled, scheduler_enabled);
     assert_eq!(
