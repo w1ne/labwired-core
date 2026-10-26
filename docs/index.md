@@ -38,7 +38,7 @@ Parts catalog: [Parts](parts/index.md) · Support levels: [Target rubric](target
 
 ## Boards (popular)
 
-[Arduino Uno R3](boards/arduino-uno.md) · [ESP32-C3](boards/esp32c3.md) · [ESP32-S3](boards/esp32s3.md) · [nRF52840](boards/nrf52840.md) · [RP2040](boards/rp2040.md) · [RP2350-Zero](boards/rp2350-zero.md) · [STM32F401](boards/stm32f401.md) · [NUCLEO-U545RE-Q](boards/nucleo-u545re.md) · [NUCLEO-U575ZI-Q](boards/stm32u575.md)
+[Arduino Uno R3](boards/arduino-uno.md) · [ESP32-C3](boards/esp32c3.md) · [ESP32-S3](boards/esp32s3.md) · [nRF52840](boards/nrf52840.md) · [RP2040](boards/rp2040.md) · [RP2350-Zero](boards/rp2350-zero.md) · [STM32F401](boards/stm32f401.md) · [NUCLEO-U545RE-Q](boards/nucleo-u545re.md) · [NUCLEO-U575ZI-Q](boards/stm32u575.md) · [NUCLEO-U5A5ZJ-Q](boards/stm32u5a5zj.md)
 
 ---
 

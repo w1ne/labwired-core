@@ -25,6 +25,7 @@ const SYSTEM: &str = "configs/systems/nucleo-u575zi.yaml";
 const RCC: u64 = 0x4602_0C00;
 const PWR: u64 = 0x4602_0800;
 const FLASH: u64 = 0x4002_2000;
+const HASH: u64 = 0x420C_0400;
 const GPIOA: u64 = 0x4202_0000;
 const GPIOB: u64 = 0x4202_0400;
 const GPIOC: u64 = 0x4202_0800;
@@ -878,4 +879,134 @@ fn fdcan_extended_range_filter_type_three_ignores_xidam() {
     let r1 = fdcan_read(&dev, FDCAN_RAM + 0xB0 + 4);
     assert_eq!(r1 >> 31, 0, "ANMF is clear for a matched filter");
     assert_eq!((r1 >> 24) & 0x7F, 0);
+}
+
+#[test]
+fn u575_crypto_accelerator_register_surfaces_are_mapped() {
+    let sys_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join(SYSTEM);
+    let mut manifest: SystemManifest = SystemManifest::from_file(&sys_path).unwrap();
+    let chip_path = sys_path.parent().unwrap().join(&manifest.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).unwrap();
+    // `declarative` peripheral paths are resolved relative to manifest.chip.
+    manifest.chip = chip_path.to_string_lossy().into_owned();
+    let mut bus = SystemBus::from_config(&chip, &manifest).unwrap();
+
+    assert!(
+        bus.find_peripheral_index_by_name("hash").is_some(),
+        "U575 chip map should expose hash"
+    );
+
+    assert!(bus.find_peripheral_index_by_name("pka").is_none());
+    assert!(bus.find_peripheral_index_by_name("saes").is_none());
+    let crypto_blocks = [(HASH, 3 << 17, 1 << 17, "HASH.CR")];
+    for &(base, value, _, name) in &crypto_blocks {
+        bus.write_u32(base, value).unwrap();
+        assert_eq!(bus.read_u32(base).unwrap(), 0, "{name} is gated off");
+    }
+
+    // HASH executes digest operations and remains clock-gated at RCC.
+    // Enable one clock bit so a wrong gate cannot pass by accident.
+    for &(base, value, gate_bit, name) in &crypto_blocks {
+        bus.write_u32(RCC + 0x8C, gate_bit).unwrap();
+        bus.write_u32(base, value).unwrap();
+        assert_eq!(
+            bus.read_u32(base).unwrap(),
+            value,
+            "{name} register readback"
+        );
+        for &(other_base, _, _, other_name) in &crypto_blocks {
+            if other_base != base {
+                bus.write_u32(other_base, 0xFFFF_FFFF).unwrap();
+                assert_eq!(
+                    bus.read_u32(other_base).unwrap(),
+                    0,
+                    "{other_name} remains gated while {name} is enabled"
+                );
+            }
+        }
+    }
+}
+
+fn u575_hash_digest(algorithm: u32, message: &[u8]) -> Vec<u8> {
+    let sys_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join(SYSTEM);
+    let mut manifest: SystemManifest = SystemManifest::from_file(&sys_path).unwrap();
+    let chip_path = sys_path.parent().unwrap().join(&manifest.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).unwrap();
+    manifest.chip = chip_path.to_string_lossy().into_owned();
+    let mut bus = SystemBus::from_config(&chip, &manifest).unwrap();
+
+    // HASH is on AHB2. 8-bit datatype mode byte-swaps each little-endian
+    // firmware word into the message's byte order.
+    bus.write_u32(RCC + 0x8C, 1 << 17).unwrap();
+    bus.write_u32(HASH, (algorithm << 17) | (2 << 4) | (1 << 2))
+        .unwrap();
+    for word in message.chunks(4) {
+        let mut bytes = [0u8; 4];
+        bytes[..word.len()].copy_from_slice(word);
+        bus.write_u32(HASH + 0x04, u32::from_le_bytes(bytes))
+            .unwrap();
+    }
+    let final_word_bits = ((message.len() % 4) * 8) as u32;
+    bus.write_u32(HASH + 0x08, (1 << 8) | final_word_bits)
+        .unwrap();
+
+    assert_eq!(bus.read_u32(HASH + 0x24).unwrap() & (1 << 1), 1 << 1);
+    let digest_bytes = match algorithm {
+        0 => 20,
+        1 => 16,
+        2 => 28,
+        3 => 32,
+        _ => unreachable!("supported HASH algorithm"),
+    };
+    let mut digest = Vec::with_capacity(digest_bytes);
+    for index in 0..digest_bytes.div_ceil(4) {
+        digest.extend_from_slice(
+            &bus.read_u32(HASH + 0x310 + index as u64 * 4)
+                .unwrap()
+                .to_be_bytes(),
+        );
+    }
+    digest.truncate(digest_bytes);
+    digest
+}
+
+#[test]
+fn u575_hash_sha256_digest_registers_match_the_abc_vector() {
+    assert_eq!(
+        u575_hash_digest(3, b"abc"),
+        [
+            0xba, 0x78, 0x16, 0xbf, 0x8f, 0x01, 0xcf, 0xea, 0x41, 0x41, 0x40, 0xde, 0x5d, 0xae,
+            0x22, 0x23, 0xb0, 0x03, 0x61, 0xa3, 0x96, 0x17, 0x7a, 0x9c, 0xb4, 0x10, 0xff, 0x61,
+            0xf2, 0x00, 0x15, 0xad,
+        ]
+    );
+}
+
+#[test]
+fn u575_hash_sha1_sha224_and_md5_match_the_abc_vectors() {
+    assert_eq!(
+        u575_hash_digest(0, b"abc"),
+        [
+            0xa9, 0x99, 0x3e, 0x36, 0x47, 0x06, 0x81, 0x6a, 0xba, 0x3e, 0x25, 0x71, 0x78, 0x50,
+            0xc2, 0x6c, 0x9c, 0xd0, 0xd8, 0x9d,
+        ]
+    );
+    assert_eq!(
+        u575_hash_digest(1, b"abc"),
+        [
+            0x90, 0x01, 0x50, 0x98, 0x3c, 0xd2, 0x4f, 0xb0, 0xd6, 0x96, 0x3f, 0x7d, 0x28, 0xe1,
+            0x7f, 0x72,
+        ]
+    );
+    assert_eq!(
+        u575_hash_digest(2, b"abc"),
+        [
+            0x23, 0x09, 0x7d, 0x22, 0x34, 0x05, 0xd8, 0x22, 0x86, 0x42, 0xa4, 0x77, 0xbd, 0xa2,
+            0x55, 0xb3, 0x2a, 0xad, 0xbc, 0xe4, 0xbd, 0xa0, 0xb3, 0xf7, 0xe3, 0x6c, 0x9d, 0xa7,
+        ]
+    );
 }

@@ -354,6 +354,17 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_stm32u545_blinky_survival"),
     },
     ChipConf {
+        // NUCLEO-U5A5ZJ-Q, sharing MB1549 with U575 but carrying the U5A5
+        // 4 MiB flash / 2.5 MB-class SRAM map and crypto accelerators. The
+        // register-level SHA/AES/PKA vector is the current behavior gate.
+        name: "stm32u5a5zj",
+        yaml: "configs/chips/stm32u5a5zj.yaml",
+        reset_oracle: None,
+        behavior_gate: Some(
+            "stm32u5_exec_oracle::u5a5_hash_saes_and_pka_execute_register_level_operations",
+        ),
+    },
+    ChipConf {
         // First Cortex-M7 chip. Sim-derived (RM0468); no silicon capture, so no
         // reset_oracle.
         //

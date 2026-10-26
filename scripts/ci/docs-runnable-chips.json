@@ -200,6 +200,10 @@
       "how": "needs-build",
       "why": "First U5 part. The io-smoke firmware is built from source (examples/nucleo-u575zi/io-smoke.yaml expects target/thumbv8m.main-none-eabi/release/firmware-stm32u575-demo); no firmware-demos release asset exists yet"
     },
+    "stm32u5a5zj": {
+      "how": "needs-build",
+      "why": "The U5A5 Nucleo model and source UART smoke are in this repository, but the smoke firmware is built from source (examples/nucleo-u5a5zj/io-smoke.yaml); there is no committed ELF or firmware-demos release asset for an installed CLI"
+    },
     "stm32u545": {
       "how": "committed",
       "firmware": "tests/fixtures/nucleo-u545re-blinky.elf",

@@ -583,3 +583,39 @@ The new browser link, OLED, simulated B1/LEDs, and serial event stream are
 documented in the Playground guide. All evidence above is local simulation and
 source-build evidence; CI, deployment, and physical-board/display acceptance
 remain separate gates.
+
+## N. Core PR #1499 follow-up (2026-10-26)
+
+The scheduler-enabled hardware-oracle walk now calls the same historical I2C
+tick used by the legacy path. The production scheduler still advances active
+I2C transactions through its event chain. This fixes the frozen-CPU test helper
+without changing normal event-scheduler execution. The U575 register suite
+passes **20/20**, including `i2c_write_read_and_nack`.
+
+The U5 HASH, PKA and SAES register models now expose write-reconciled level IRQ
+lines and no longer keep inert per-cycle walks alive. Regression evidence:
+
+```bash
+cargo fmt --all -- --check
+git diff --check
+cargo test -p labwired-core --test stm32u575_60north_registers --features event-scheduler
+cargo test -p labwired-core --test stm32u5_crypto_walk_free --features event-scheduler
+cargo test -p labwired-core --test stm32u5_exec_oracle --features event-scheduler
+python3 scripts/generate_validation_status.py --check --drift
+```
+
+Results: register contract **20/20**, U575/U5A5 batching and IRQ suite **4/4**,
+U5A5 operation oracle **3/3**, formatting/whitespace checks clean, and
+validation status generation plus drift gate passed. The new release ELF is
+149,432 bytes with SHA-256
+`f8d6e1ae7b9cc71db9202947bbe4e3e7492d1fbd163987c70dab939fa1464c4f`, matching
+the manifest. Its six-check Star Catcher simulator smoke passed in 5,000,000
+steps. The measured Callgrind baseline for U5A5 is 984.9 steps/s and 1.8
+batch/s; U575 measured 984.9 steps/s against its 986.8 baseline. A separate
+local real-time run measured 13.52x for U5A5 and 14.63x for U575.
+
+The shared I2C source digest change required dated acknowledgments for H563,
+L476, L073, F103 and F407. Those entries explicitly describe the forced-oracle
+scope and keep live silicon re-capture pending. These results are local
+simulator/source-build evidence; Core CI, Playground CI, deployment, video
+recording, and physical acceptance remain separate gates.

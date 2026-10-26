@@ -1656,7 +1656,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: e3f8909a7a8f9db8d45e913135879bc1f2c8dc4a3d2c0178ba85feb46be7e595
+    drift_ack_digest: 650b7d7ea24b01204febca53e066ac81f3a01ce7e19fa79790906ba05eb2593a
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -2220,8 +2220,12 @@ boards:
     # 2026-10-25 CI repair: H5/U5 SPI SR readback includes the modeled
     # CTSIZE field; the fix is H5-profile-only, while L4/F1 paths are
     # unchanged. Unit/firmware tests cover simulation behavior; ACK, NOT A
-    # SILICON CAPTURE, and live re-capture remains pending.
-    drift_ack: 2026-10-25
+    # 2026-10-26 (shared STM32 I2C forced-oracle hook): the scheduler-owned
+    # transaction now advances through tick_elapsed_forced only when a
+    # frozen-CPU hardware oracle requests the historical walk. Production
+    # event scheduling is unchanged. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
+    drift_ack: 2026-10-26
     # 2026-10-25 (perf/cortex-m-decode-reference): the Cortex-M decode cache
     # now checks the PC tag through a borrow and copies only on a hit. The
     # interpreter's decoded instruction stream and state are unchanged;
@@ -3621,7 +3625,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: 68b750d97fbdc454fe25be70b1388d8e92e6bb59ae47849e87418c93861e5b45
+    drift_ack_digest: fca6be1ecd437ba0d40b9e3abf357000d7aa5f7bc39297fb2065d476092714e7
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4173,8 +4177,12 @@ boards:
     # 2026-10-25 CI repair: H5/U5 SPI SR readback includes the modeled
     # CTSIZE field; the fix is H5-profile-only, while L4/F1 paths are
     # unchanged. Unit/firmware tests cover simulation behavior; ACK, NOT A
-    # SILICON CAPTURE, and live re-capture remains pending.
-    drift_ack: 2026-10-25
+    # 2026-10-26 (shared STM32 I2C forced-oracle hook): the scheduler-owned
+    # transaction now advances through tick_elapsed_forced only when a
+    # frozen-CPU hardware oracle requests the historical walk. Production
+    # event scheduling is unchanged. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
+    drift_ack: 2026-10-26
   - id: nucleo-l073rz
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
     # 2026-09-16 (#1125): Cortex-M JIT follow-ups (block chaining, floor 4, IT-predicated ALU, VFP S-ALU, VLDR/VSTR, LDR.W PC), plus two model fixes that ride along: the bit-band alias decode no longer swallows peripherals vendors place inside 0x4200_0000 (SAMD51 QSPI/SERCOM), and the STM32 timer's scheduled compare pend lands on the latch tick like the walk. JIT is opt-in (`cortex_m_jit_enabled` default off); interpreter path unchanged, JIT-on vs off lockstep in cortex_m_jit_nrf_differential; both fixes pinned by bus-level gates. No silicon capture pins JIT.
@@ -4567,7 +4575,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: 0d1e83619337182162ec027cfa747f06325eaf48e5aef68c209945b9c526514a
+    drift_ack_digest: aa94b7d42910ec979235a6e3b094b71782b4246cdecad03c7d0299d1ef7ea43f
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5052,8 +5060,12 @@ boards:
     # 2026-10-25 CI repair: H5/U5 SPI SR readback includes the modeled
     # CTSIZE field; the fix is H5-profile-only, while L4/F1 paths are
     # unchanged. Unit/firmware tests cover simulation behavior; ACK, NOT A
-    # SILICON CAPTURE, and live re-capture remains pending.
-    drift_ack: 2026-10-25
+    # 2026-10-26 (shared STM32 I2C forced-oracle hook): the scheduler-owned
+    # transaction now advances through tick_elapsed_forced only when a
+    # frozen-CPU hardware oracle requests the historical walk. Production
+    # event scheduling is unchanged. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
+    drift_ack: 2026-10-26
     # 2026-10-25 (perf/cortex-m-decode-reference): the Cortex-M decode cache
     # now checks the PC tag through a borrow and copies only on a hit. The
     # interpreter's decoded instruction stream and state are unchanged;
@@ -5504,7 +5516,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: 6e1b8f3e4778ee26f480d3f0b813da3b443337cabb95048291dd1450b95b2224
+    drift_ack_digest: b5733544d138e104a456e13fad8fad436dd13718f15b81d9404e2de3723a083a
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6059,8 +6071,12 @@ boards:
     # 2026-10-25 CI repair: H5/U5 SPI SR readback includes the modeled
     # CTSIZE field; the fix is H5-profile-only, while L4/F1 paths are
     # unchanged. Unit/firmware tests cover simulation behavior; ACK, NOT A
-    # SILICON CAPTURE, and live re-capture remains pending.
-    drift_ack: 2026-10-25
+    # 2026-10-26 (shared STM32 I2C forced-oracle hook): the scheduler-owned
+    # transaction now advances through tick_elapsed_forced only when a
+    # frozen-CPU hardware oracle requests the historical walk. Production
+    # event scheduling is unchanged. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
+    drift_ack: 2026-10-26
     # 2026-10-25 (perf/cortex-m-decode-reference): the Cortex-M decode cache
     # now checks the PC tag through a borrow and copies only on a hit. The
     # interpreter's decoded instruction stream and state are unchanged;
@@ -6474,7 +6490,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: 52ad838114060d5e9bb070bc75b4a29044dd81df9e6e8564ec87ab51a207ac00
+    drift_ack_digest: 1ef4fd220ab3fb6f8aaf802b165baaf1113122f02b7dfb60afb27856404f5cfb
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6968,8 +6984,12 @@ boards:
     # 2026-10-25 CI repair: H5/U5 SPI SR readback includes the modeled
     # CTSIZE field; the fix is H5-profile-only, while L4/F1 paths are
     # unchanged. Unit/firmware tests cover simulation behavior; ACK, NOT A
-    # SILICON CAPTURE, and live re-capture remains pending.
-    drift_ack: 2026-10-25
+    # 2026-10-26 (shared STM32 I2C forced-oracle hook): the scheduler-owned
+    # transaction now advances through tick_elapsed_forced only when a
+    # frozen-CPU hardware oracle requests the historical walk. Production
+    # event scheduling is unchanged. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
+    drift_ack: 2026-10-26
     # 2026-10-25 (perf/cortex-m-decode-reference): the Cortex-M decode cache
     # now checks the PC tag through a borrow and copies only on a hit. The
     # interpreter's decoded instruction stream and state are unchanged;
@@ -8244,7 +8264,7 @@ boards:
     doc: docs/boards/stm32u575.md
     chip: configs/chips/stm32u575.yaml
     tier: sim-validated
-    note: "STM32U575ZI (NUCLEO-U575ZI-Q), first U575 target. Cortex-M33, 2 MiB flash, 768 KiB SRAM + 16 KiB SRAM4. Reuses the shared V2 RCC/GPIO/UART models plus U5 PLL1/2/3 and ready pairs, and a CRS register-surface model. GPIO models analog-reset IDR, one-shot LCKR, and per-chip SECCFGR reset; U5 USART TXFE/AUTOCR are enabled only on U5 configs. ADC1 uses the SVD-verified U5 layout and passes Arduino L5 analogRead; GPDMA1 models all 16 channels and split NVIC lines 29-36/80-87; the core-onboarding-smoke lane exercises SPI-DMA, UART-DMA and flash-to-RAM reference firmware in the LabWired simulator on main pushes, nightly and manual dispatch (not PR, silicon or Renode comparison). The U5 ICACHE profile has a limited register contract; cache contents and line effects are not simulated. The 2 KiB U5 system-memory window seeds a read-only per-part FLASHSIZE word; OTP/package/UID bytes are simplified read/write storage. FDCAN1 (0x4000A400, 4 KiB window over SRAMCAN @ +0x800, RCC_APB1ENR2.FDCAN1EN bit 9 gate) reuses Bosch M_CAN and passes Arduino L8 internal loopback; the U575 has a single FDCAN instance. Rust io-smoke and a local Star Catcher smoke cover startup; the latter checks PC13 input/B1, simulated SSD1306 output and USART1 TX. Also validated by real STM32CubeU5 HAL firmware, Arduino matrix L0-L8, Zephyr matrix L0-L3, and unsupported-instruction audit. NO bench part: values are SVD/RM0456-derived; upstream Renode master has no built-in STM32U5 platform, and this work does not compare against the separate 60North reference platform. TrustZone/GTZC, OCTOSPI and USB are not modeled. Flash supports non-secure unlock, page and one-/two-bank erase, quad-word program, EOP/WRPERR and option-byte storage; residuals include secure path/SECKEYR, read-while-write stalling and option reload/SWAP_BANK. ADC4 is not declared because its SVD map is a different 12-bit class from ADC1."
+    note: "STM32U575ZI (NUCLEO-U575ZI-Q), first U575 target. Cortex-M33, 2 MiB flash, 768 KiB SRAM + 16 KiB SRAM4. Reuses the shared V2 RCC/GPIO/UART models plus U5 PLL1/2/3 and ready pairs, and a CRS register-surface model. GPIO models analog-reset IDR, one-shot LCKR, and per-chip SECCFGR reset; U5 USART TXFE/AUTOCR are enabled only on U5 configs. ADC1 uses the SVD-verified U5 layout and passes Arduino L5 analogRead; GPDMA1 models all 16 channels and split NVIC lines 29-36/80-87; the core-onboarding-smoke lane exercises SPI-DMA, UART-DMA and flash-to-RAM reference firmware in the LabWired simulator on main pushes, nightly and manual dispatch (not PR, silicon or Renode comparison). The U5 ICACHE profile has a limited register contract; cache contents and line effects are not simulated. The 2 KiB U5 system-memory window seeds a read-only per-part FLASHSIZE word; OTP/package/UID bytes are simplified read/write storage. FDCAN1 (0x4000A400, 4 KiB window over SRAMCAN @ +0x800, RCC_APB1ENR2.FDCAN1EN bit 9 gate) reuses Bosch M_CAN and passes Arduino L8 internal loopback; the U575 has a single FDCAN instance. HASH supports CPU-fed SHA-1, MD5, SHA-224, SHA-256 and HMAC; completion is synchronous and DMA pacing/timing are not modeled. U575 has no PKA or SAES. Rust io-smoke and a local Star Catcher smoke cover startup; the latter checks PC13 input/B1, simulated SSD1306 output and USART1 TX. Also validated by real STM32CubeU5 HAL firmware, Arduino matrix L0-L8, Zephyr matrix L0-L3, and unsupported-instruction audit. NO bench part: values are SVD/RM0456-derived; upstream Renode master has no built-in STM32U5 platform, and this work does not compare against the separate 60North reference platform. TrustZone/GTZC, OCTOSPI and USB are not modeled. Flash supports non-secure unlock, page and one-/two-bank erase, quad-word program, EOP/WRPERR and option-byte storage; residuals include secure path/SECKEYR, read-while-write stalling and option reload/SWAP_BANK. ADC4 is not declared because its SVD map is a different 12-bit class from ADC1."
     offline_tests:
       - "strict_onboarding (io-smoke builds + runs firmware-stm32u575-demo)"
       - "chip_conformance (estate OK)"
@@ -8252,6 +8272,7 @@ boards:
       - "firmware_survival test_stm32u575_zephyr_survival (stock Zephyr hello)"
       - "firmware_survival test_stm32u575_arduino_serial_survival (stock Arduino serial)"
       - "core-onboarding-smoke (main push/nightly/manual: 60North hal-spi-dma, hal-uart-dma, st-dma-flash-to-ram in LabWired simulator; not PR/silicon/Renode)"
+      - "stm32u575_60north_registers::u575_hash_* (SHA-1/MD5/SHA-224/SHA-256 register digest vectors)"
       - "arduino matrix L0-L8 (validation/arduino-matrix)"
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -8298,6 +8319,58 @@ boards:
       - crates/core/src/peripherals/generic_factory.rs
       - crates/core/src/peripherals/icache.rs
       - crates/core/src/peripherals/stm32u5_sysmem.rs
+      - crates/core/src/peripherals/stm32u5_hash.rs
+
+  - id: stm32u5a5zj
+    doc: docs/boards/stm32u5a5zj.md
+    chip: configs/chips/stm32u5a5zj.yaml
+    tier: sim-validated
+    note: "STM32U5A5ZJT6Q on NUCLEO-U5A5ZJ-Q (MB1549), LQFP144, 4 MiB flash and 2.5-MiB-class SRAM. It shares the STM32U5 register surfaces with U575 and adds HASH, SAES and PKA behavioral models. The U5A5 SystemBus oracle checks SHA-256 of abc, AES-128 ECB, 4^13 mod 497, and negative PKA subtraction sign extension through 4160 bits; it rejects 4161-bit operands. Shared-model tests on U575 cover SHA-1/SHA-224/MD5 and RFC 4231 HMAC, while SAES unit vectors cover AES-128 ECB/CBC/CTR. The model implements AES-256 ECB/CBC/CTR, but no AES-256 vector currently tests it. PKA operations are limited to the documented 4160-bit operand maximum. These models are synchronous and omit DMA pacing/timing; SAES GCM/CCM, TrustZone key selection, DPA, and PKA ECC/RSA-CRT/Montgomery helper modes remain unsupported. ICACHE is register-contract only, FDCAN loopback is not a physical bus, and the U5A5 pin/AF map in Playground is a common subset rather than a complete pin inventory. Simulator evidence only; no physical U5A5 board acceptance is claimed."
+    offline_tests:
+      - "chip_conformance (estate OK; register-level HASH/SAES/PKA behavior gate)"
+      - "stm32u5_exec_oracle::u5a5_hash_saes_and_pka_execute_register_level_operations"
+      - "stm32u5_exec_oracle::u5a5_pka_arithmetic_subtraction_returns_sign_extended_negative_result"
+      - "stm32u5_exec_oracle::u5a5_pka_rejects_operand_widths_above_the_hardware_limit"
+      - "stm32u5_reset_conformance"
+    models:
+      - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/bus/from_config.rs
+      - crates/core/src/cpu/cortex_m/exec/load_store.rs
+      - crates/core/src/decoder/arm.rs
+      - crates/core/src/decoder/arm_thumb32.rs
+      - crates/core/src/peripherals/rcc.rs
+      - crates/core/src/peripherals/pwr.rs
+      - crates/core/src/peripherals/flash.rs
+      - crates/core/src/peripherals/flash_u5_regs.rs
+      - crates/core/src/peripherals/uart.rs
+      - crates/core/src/peripherals/gpio.rs
+      - crates/core/src/peripherals/i2c.rs
+      - crates/core/src/peripherals/spi.rs
+      - crates/core/src/peripherals/fdcan.rs
+      - crates/core/src/peripherals/timer.rs
+      - crates/core/src/peripherals/adc.rs
+      - crates/core/src/peripherals/rtc_v3.rs
+      - crates/core/src/peripherals/iwdg.rs
+      - crates/core/src/peripherals/gpdma.rs
+      - crates/core/src/peripherals/crc.rs
+      - crates/core/src/peripherals/rng.rs
+      - crates/core/src/peripherals/dbgmcu.rs
+      - crates/core/src/peripherals/crs.rs
+      - crates/core/src/peripherals/stub.rs
+      - crates/core/src/peripherals/systick.rs
+      - crates/core/src/peripherals/exti.rs
+      - crates/core/src/peripherals/stm32u5_sysmem.rs
+      - crates/core/src/peripherals/stm32u5_hash.rs
+      - crates/core/src/peripherals/stm32u5_saes.rs
+      - crates/core/src/peripherals/stm32u5_pka.rs
+      - crates/core/src/peripherals/mod.rs
+      - crates/core/src/peripheral.rs
+      - crates/core/src/lib.rs
+      - crates/core/src/peripherals/generic_factory.rs
+      - crates/core/src/peripherals/icache.rs
+      - configs/chips/stm32u5a5zj.yaml
+      - configs/peripherals/stm32u575
+      - configs/systems/nucleo-u5a5zj.yaml
 
   - id: nucleo-u545re
     doc: docs/boards/nucleo-u545re.md
