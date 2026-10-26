@@ -62,6 +62,9 @@ pub const MODEL_TYPES: &[&str] = &[
     "flash",
     // STM32U5 system memory (OTP / package / UID / factory flash size).
     "stm32u5_sysmem",
+    "stm32u5_hash",
+    "stm32u5_saes",
+    "stm32u5_pka",
     "rng",
     "simctl",
     "crc",
@@ -1047,6 +1050,9 @@ pub fn try_build(
                 .unwrap_or(2048) as u16;
             Box::new(crate::peripherals::stm32u5_sysmem::Stm32u5Sysmem::new(kb))
         }
+        "stm32u5_hash" => Box::new(crate::peripherals::stm32u5_hash::Stm32u5Hash::new()),
+        "stm32u5_saes" => Box::new(crate::peripherals::stm32u5_saes::Stm32u5Saes::new()),
+        "stm32u5_pka" => Box::new(crate::peripherals::stm32u5_pka::Stm32u5Pka::new()),
         // SYSCFG on STM32F4 (`profile: stm32f4`): a real register file,
         // because its EXTICR is the EXTI line-source mux external GPIO edges
         // go through.

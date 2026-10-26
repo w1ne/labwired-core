@@ -294,6 +294,14 @@
       "SPI",
       "UART"
     ],
+    "name": "stm32u5a5zj"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
     "name": "stm32wb55"
   },
   {

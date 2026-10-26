@@ -124,6 +124,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | stm32l476 | ✓ | ✓ | ✓ |
 | stm32u545 | ✓ | ✓ | ✓ |
 | stm32u575 | ✓ | ✓ | ✓ |
+| stm32u5a5zj | ✓ | ✓ | ✓ |
 | stm32wb55 | ✓ | ✓ | ✓ |
 | stm32wba52 | ✓ | ✓ | ✓ |
 | vegaboard-ri5cy | — | — | — |

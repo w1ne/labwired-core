@@ -544,6 +544,16 @@ peripherals:
       debug_schema: "../peripherals/stm32u575/rng.yaml"
     # RNG is on AHB2: RCC_AHB2ENR1.RNGEN (bit 18) (RM0456 §11.8.13).
     clock: { reg: "ahb2enr", bit: 18 }
+  # HASH supports the U575's SHA-1, MD5, SHA-224, SHA-256, and HMAC modes.
+  - id: "hash"
+    type: "stm32u5_hash"
+    base_address: 0x420C0400
+    size: "1KB"
+    irq: 96
+    config:
+      path: "../peripherals/stm32u575/hash.yaml"
+    # HASHEN is RCC_AHB2ENR1 bit 17 (RM0456 §11.8.13).
+    clock: { reg: "ahb2enr", bit: 17 }
   - id: "icache"
     type: "icache"
     base_address: 0x40030400

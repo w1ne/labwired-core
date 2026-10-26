@@ -3,9 +3,11 @@
 # The SAM4S Xplained board (Atmel SAM4S16C, Renode `sam4s_xplained`):
 #   PC10 — user LED (active high)
 #   PA5  — user button (active low, external pull-up)
-#   PA9/PA10 — UART0 (the board's virtual COM port; Renode `sysbus.uart0`)
+#   PA9/PA10 — UART0 (J-Link OB VCP; simulator capture; Renode `sysbus.uart0`)
 #
-# The board's console is UART0; the LED and button are the modelled board I/O.
+# Zephyr board documentation connects UART0 to the onboard SEGGER J-Link OB
+# VCP. The simulator captures the UART stream directly; it does not model the
+# USB bridge or establish physical acceptance. The LED and button are modeled.
 # The touch/joystick, the EEFC, the TCs and the serial buses are not modelled
 # (declared stubs in the chip).
 

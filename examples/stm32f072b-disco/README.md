@@ -57,7 +57,7 @@ cd core
 | Flash (0x08000000, 128 KiB) / SRAM (0x20000000, 16 KiB) | modelled |
 | RCC (F0 layout: CR/CFGR/APBxENR/CFGR2/CFGR3/CR2) | modelled |
 | GPIOA–F (v2) + AHBENR gates | modelled |
-| USART1–4 (v2) + clock gates | modelled — USART1 is the VCP console |
+| USART1–4 (v2) + clock gates | modelled — USART1 output is captured by the simulator; ST-LINK/V2 is SWD-only |
 | SPI1/2 (legacy), I2C1/2 (legacy), TIM1/2/3/14/15/16/17 | modelled |
 | DMA1, EXTI, SYSCFG, PWR, CRC, bxCAN1, DAC1, RTC, IWDG/WWDG | modelled |
 | ADC1 | modelled — `stm32l4`-family profile (not exercised) |

@@ -5,9 +5,9 @@
 //! STM32F072B-DISCO smoke firmware.
 //!
 //! The board's STM32F072RBT6 is a Cortex-M0 with 128 KiB of flash at
-//! 0x08000000 and 16 KiB of SRAM at 0x20000000. The console is USART1
-//! (PA9/PA10, AF1) — the ST-LINK/V2-1 virtual COM port. The four user LEDs
-//! are PC6 (LD3 red), PC8 (LD4 yellow), PC9 (LD5 green) and PC7 (LD6 blue),
+//! 0x08000000 and 16 KiB of SRAM at 0x20000000. The simulator console is
+//! USART1 (PA9/PA10, AF1); the on-board ST-LINK/V2 is SWD-only. The four user
+//! LEDs are PC6 (LD3 red), PC8 (LD4 orange), PC9 (LD5 green) and PC7 (LD6 blue),
 //! all active high; the user button B1 pulls PA0 low.
 //!
 //! The firmware enables the F0 clock gates (AHBENR for the GPIOs, APB2ENR for
@@ -51,7 +51,7 @@ const USART_CR1_RE: u32 = 1 << 2;
 const USART_CR1_TE: u32 = 1 << 3;
 
 const LED_LD3: u32 = 1 << 6; // PC6, red
-const LED_LD4: u32 = 1 << 8; // PC8, yellow
+const LED_LD4: u32 = 1 << 8; // PC8, orange
 const LED_LD5: u32 = 1 << 9; // PC9, green
 const LED_LD6: u32 = 1 << 7; // PC7, blue
 
