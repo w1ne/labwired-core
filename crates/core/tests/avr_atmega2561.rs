@@ -96,7 +96,8 @@ fn descriptor_is_the_64_pin_2561_and_not_the_100_pin_2560() {
         );
     }
     // DS40002211A gives the 2561 Timer3, but this slice does not model it.
-    // Timer4/5 belong to the 100-pin parts (six vs twelve PWM channels).
+    // Timer4/5 belong to the 100-pin parts; Table 2-1 lists six vs twelve
+    // 16-bit-resolution PWM channels for the 2561 and 2560 respectively.
     for absent in ["timer3", "timer4", "timer5"] {
         assert!(
             !ids.contains(&absent),
