@@ -157,6 +157,77 @@ const CHIPS: &[ChipConf] = &[
         reset_oracle: None,
         behavior_gate: Some("atsamd21_peripheral_estate::the_estate_answers_at_its_own_addresses"),
     },
+    // Exact A-variant SAM D21 orderable geometries on the public G18A engine.
+    // They deliberately carry NO behavior gate: the engine's behavior is
+    // already measured on atsamd21g18a, and these descriptors add no new
+    // peripheral/clock fidelity. Their geometry is checked by
+    // `atsamd21_variant_geometry`. L0 is the honest level here.
+    ChipConf {
+        name: "atsamd21e15a",
+        yaml: "configs/chips/atsamd21e15a.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "atsamd21e16a",
+        yaml: "configs/chips/atsamd21e16a.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "atsamd21e17a",
+        yaml: "configs/chips/atsamd21e17a.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "atsamd21e18a",
+        yaml: "configs/chips/atsamd21e18a.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "atsamd21g15a",
+        yaml: "configs/chips/atsamd21g15a.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "atsamd21g16a",
+        yaml: "configs/chips/atsamd21g16a.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "atsamd21g17a",
+        yaml: "configs/chips/atsamd21g17a.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "atsamd21j15a",
+        yaml: "configs/chips/atsamd21j15a.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "atsamd21j16a",
+        yaml: "configs/chips/atsamd21j16a.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "atsamd21j17a",
+        yaml: "configs/chips/atsamd21j17a.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "atsamd21j18a",
+        yaml: "configs/chips/atsamd21j18a.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
     ChipConf {
         name: "nrf54lm20a",
         yaml: "configs/chips/nrf54lm20a.yaml",
