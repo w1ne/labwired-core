@@ -893,12 +893,10 @@ fn u575_crypto_accelerator_register_surfaces_are_mapped() {
     manifest.chip = chip_path.to_string_lossy().into_owned();
     let mut bus = SystemBus::from_config(&chip, &manifest).unwrap();
 
-    for id in ["hash"] {
-        assert!(
-            bus.find_peripheral_index_by_name(id).is_some(),
-            "U575 chip map should expose {id}"
-        );
-    }
+    assert!(
+        bus.find_peripheral_index_by_name("hash").is_some(),
+        "U575 chip map should expose hash"
+    );
 
     assert!(bus.find_peripheral_index_by_name("pka").is_none());
     assert!(bus.find_peripheral_index_by_name("saes").is_none());
