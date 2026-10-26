@@ -128,13 +128,10 @@ mod u575_flash_tests {
             .unwrap();
         assert_eq!(nscr(&m) & u5::NSCR_PG, 0, "PG write ignored while locked");
 
-        // A wrong first key leaves the controller locked.
-        m.bus
-            .write_u32(FLASH_IF + u5::NSKEYR_OFF, 0xDEAD_BEEF)
-            .unwrap();
-        assert_ne!(nscr(&m) & u5::NSCR_LOCK, 0, "wrong key must not unlock");
-
-        // NSKEYR KEY1+KEY2 clears LOCK only; OPTLOCK stays.
+        // NSKEYR KEY1+KEY2 clears LOCK only; OPTLOCK stays. Wrong-key
+        // lockout is covered by the peripheral-level controller test. A
+        // Machine reset preserves peripherals, so reset recovery is not
+        // covered by the current simulator contract.
         unlock_ns(&mut m);
         assert_eq!(nscr(&m) & u5::NSCR_LOCK, 0, "NS key sequence clears LOCK");
         assert_ne!(nscr(&m) & u5::NSCR_OPTLOCK, 0, "OPTKEYR domain is separate");
@@ -174,7 +171,10 @@ mod u575_flash_tests {
         m.bus
             .write_u32(
                 FLASH_IF + u5::NSCR_OFF,
-                u5::NSCR_PER | ((page as u32) << u5::NSCR_PNB_SHIFT) | u5::NSCR_STRT,
+                u5::NSCR_PER
+                    | u5::NSCR_EOPIE
+                    | ((page as u32) << u5::NSCR_PNB_SHIFT)
+                    | u5::NSCR_STRT,
             )
             .unwrap();
         assert_ne!(
@@ -212,6 +212,7 @@ mod u575_flash_tests {
             .write_u32(
                 FLASH_IF + u5::NSCR_OFF,
                 u5::NSCR_PER
+                    | u5::NSCR_EOPIE
                     | u5::NSCR_BKER
                     | ((page as u32) << u5::NSCR_PNB_SHIFT)
                     | u5::NSCR_STRT,
@@ -239,14 +240,14 @@ mod u575_flash_tests {
         m.bus
             .write_u32(
                 FLASH_IF + u5::NSCR_OFF,
-                u5::NSCR_PER | (4 << u5::NSCR_PNB_SHIFT) | u5::NSCR_STRT,
+                u5::NSCR_PER | u5::NSCR_EOPIE | (4 << u5::NSCR_PNB_SHIFT) | u5::NSCR_STRT,
             )
             .unwrap();
         m.step().expect("step must not fail");
 
         // Enable programming and write four successive 32-bit words.
         m.bus
-            .write_u32(FLASH_IF + u5::NSCR_OFF, u5::NSCR_PG)
+            .write_u32(FLASH_IF + u5::NSCR_OFF, u5::NSCR_PG | u5::NSCR_EOPIE)
             .unwrap();
         for (i, word) in words.iter().enumerate() {
             m.bus.write_u32(qw + (i as u64) * 4, *word).unwrap();
@@ -317,7 +318,7 @@ mod u575_flash_tests {
         m.bus
             .write_u32(
                 FLASH_IF + u5::NSCR_OFF,
-                u5::NSCR_PER | (1 << u5::NSCR_PNB_SHIFT) | u5::NSCR_STRT,
+                u5::NSCR_PER | u5::NSCR_EOPIE | (1 << u5::NSCR_PNB_SHIFT) | u5::NSCR_STRT,
             )
             .unwrap();
         m.step().expect("step must not fail");
@@ -379,7 +380,7 @@ mod u575_flash_tests {
         );
 
         m.bus
-            .write_u32(FLASH_IF + u5::NSCR_OFF, u5::NSCR_OPTSTRT)
+            .write_u32(FLASH_IF + u5::NSCR_OFF, u5::NSCR_OPTSTRT | u5::NSCR_EOPIE)
             .unwrap();
         assert_ne!(nssr(&m) & u5::NSSR_EOP, 0, "OPTSTRT completes with EOP");
     }

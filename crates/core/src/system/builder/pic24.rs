@@ -65,6 +65,7 @@ pub(super) fn build(req: BuildRequest<'_>) -> anyhow::Result<BuiltMachine> {
     }
 
     let mut cpu = crate::cpu::Pic24::new();
+    cpu.set_port_masks(super::pic24_port_masks(chip));
     cpu.load_program_image(&program_image);
     // UART1 TX is on the CPU, not a bus UART peripheral.
     cpu.set_serial_sink(uart_sink.clone());

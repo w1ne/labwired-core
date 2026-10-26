@@ -36,8 +36,10 @@ U5 IP family, smaller memory map, fewer peripherals, one user LED.
 ## Differences from the U575 chip descriptor
 
 `stm32u545.yaml` is a self-contained derivative of `stm32u575.yaml`. A drift guard
-(`crates/core/tests/u545_u575_drift_guard.rs`) fails when any shared peripheral
-diverges, so a U575 fix cannot be left behind silently. The only differences:
+(`crates/core/tests/u545_u575_drift_guard.rs`) checks every shared peripheral;
+its explicit peripheral-field allow-list is `dbgmcu.config.idcode` and
+`sysmem.config.flash_size_kb`. Top-level flash/RAM sizes and package pin maps
+also differ, and USART2/GPIOF/GPIOI are absent on U545.
 
 | Field | U545 | Source |
 |-------|------|--------|
@@ -45,6 +47,7 @@ diverges, so a U575 fix cannot be left behind silently. The only differences:
 | SRAM | SRAM1 192 KiB + SRAM2 64 KiB (256 KiB contiguous at `0x20000000`), SRAM4 16 KiB at `0x28000000`, no SRAM3 | `stm32u545xx.h`, ST `STM32U545xx_FLASH.ld` |
 | Removed peripherals | USART2, GPIOF, GPIOI | absent from the ST U545 SVD |
 | DBGMCU IDCODE | `0x10026455` | ST U545 SVD |
+| System-memory flash-size word | 512 KiB (U575: 2048 KiB) | U545/U575 chip descriptors; checked by the drift guard |
 
 ## Pins (NUCLEO-U545RE-Q)
 
@@ -68,9 +71,16 @@ reachable); see [`images/gen_images.py`](../../examples/nucleo-u545re/images/gen
 ## Peripherals
 
 The model set is the U575's (see [stm32u575.md](stm32u575.md) for the per-block
-table), minus USART2/GPIOF/GPIOI. Declared: RCC, PWR, FLASH (two 256 KiB banks),
+table), minus USART2/GPIOF/GPIOI. The shared peripheral descriptors are checked
+against an explicit drift allow-list: DBGMCU IDCODE and the system-memory flash
+size word differ by part (512 vs 2048 KiB). Top-level flash/RAM/pin maps also
+reflect the smaller package and memory capacity. Declared: RCC, PWR, FLASH (two 256 KiB banks),
 GPIOA-E/G/H, EXTI, USART1/3, UART4, LPUART1, I2C1-3, SPI1-3, TIM1/2/3/6/7, FDCAN1,
-GPDMA1, ADC1, RTC, IWDG, CRC, CRS, RNG, ICACHE (stub), DBGMCU, SysTick, NVIC.
+GPDMA1, ADC1, RTC, IWDG, CRC, CRS, RNG, ICACHE (limited register contract;
+cache contents are not simulated), DBGMCU, SysTick, NVIC, and a 2 KiB STM32U5
+system-memory window at `0x0BFA0000`. Its FLASHSIZE word is seeded read-only to
+512 KiB for U545; OTP/package/UID bytes are simplified backing storage, not
+factory identity behavior.
 Not modeled: TrustZone/GTZC, USB FS, ADC4, DAC, OCTOSPI, SDMMC, AES/PKA/HASH.
 
 ## What this catches (and what it cannot)

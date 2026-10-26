@@ -1,7 +1,15 @@
 [
   {
     "buses": [],
+    "name": "arty-litex-vexriscv"
+  },
+  {
+    "buses": [],
     "name": "atmega2560"
+  },
+  {
+    "buses": [],
+    "name": "atmega2561"
   },
   {
     "buses": [],
@@ -13,7 +21,51 @@
   },
   {
     "buses": [],
+    "name": "atsamd21e15a"
+  },
+  {
+    "buses": [],
+    "name": "atsamd21e16a"
+  },
+  {
+    "buses": [],
+    "name": "atsamd21e17a"
+  },
+  {
+    "buses": [],
+    "name": "atsamd21e18a"
+  },
+  {
+    "buses": [],
+    "name": "atsamd21g15a"
+  },
+  {
+    "buses": [],
+    "name": "atsamd21g16a"
+  },
+  {
+    "buses": [],
+    "name": "atsamd21g17a"
+  },
+  {
+    "buses": [],
     "name": "atsamd21g18a"
+  },
+  {
+    "buses": [],
+    "name": "atsamd21j15a"
+  },
+  {
+    "buses": [],
+    "name": "atsamd21j16a"
+  },
+  {
+    "buses": [],
+    "name": "atsamd21j17a"
+  },
+  {
+    "buses": [],
+    "name": "atsamd21j18a"
   },
   {
     "buses": [],
@@ -123,6 +175,30 @@
   },
   {
     "buses": [],
+    "name": "pic24f04ka200"
+  },
+  {
+    "buses": [],
+    "name": "pic24f04ka201"
+  },
+  {
+    "buses": [],
+    "name": "pic24f08ka101"
+  },
+  {
+    "buses": [],
+    "name": "pic24f08ka102"
+  },
+  {
+    "buses": [],
+    "name": "pic24f16ka101"
+  },
+  {
+    "buses": [],
+    "name": "pic24f16ka102"
+  },
+  {
+    "buses": [],
     "name": "ra4m1"
   },
   {
@@ -140,6 +216,17 @@
   {
     "buses": [],
     "name": "rv1103"
+  },
+  {
+    "buses": [],
+    "name": "sam4s16c"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI"
+    ],
+    "name": "stm32f072"
   },
   {
     "buses": [
@@ -272,6 +359,14 @@
       "UART"
     ],
     "name": "stm32u575"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32u5a5zj"
   },
   {
     "buses": [

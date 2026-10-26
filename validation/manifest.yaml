@@ -454,7 +454,7 @@ boards:
     # files. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: a089c16151ad03e452532b2048042ec59ab86fd880d1e2e69ecec3d89602be63
+    drift_ack_digest: d598c88e444bae9f16d7ead310c002271e7d70b3c363b30829bd49c7d52ae297
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -647,7 +647,36 @@ boards:
     # originated guest-memory transfers from the CPU-store policy and debug
     # watches; CPU-visible register/reset reads and writes are unchanged.
     # ACK, NOT A CAPTURE.
-    drift_ack: 2026-10-19
+    # 2026-10-20 (perf/cortex-m-loop-traces): Cortex-M JIT compiles counted
+    # pure-ALU loops (bl leaf; adds; subs; bne head) into one wasm block/loop run
+    # N times per dispatch, behind `cortex_m_jit_loop_traces` (default off, and
+    # inert unless the JIT itself is on). The interpreter is untouched: the same
+    # firmware run traced vs untraced is byte-identical in state, RAM, cycle
+    # count and UART (cortex_m_loop_trace_differential, cortex_m_loop_trace_lab),
+    # pinning the emitter's cap/iteration arithmetic against the walk. No
+    # register map, reset value, timing or IRQ route changes; JIT code is not
+    # covered by any silicon capture. The digest moves only because it hashes
+    # whole files. ACK, NOT A CAPTURE.
+    # 2026-10-25 (STM32U575 onboarding review): the watched Cortex-M
+    # source now decodes Thumb-2 wide immediate LDRB/STRB/LDRH/STRH
+    # forms with 12-bit offsets, used by the U5 HAL. Added unit
+    # regressions cover instruction decode/execute only. This
+    # digest-matched acknowledgement is NOT A SILICON CAPTURE; live
+    # nRF re-capture remains pending.
+    # 2026-10-25 follow-up: the -D warnings cleanup removes redundant integer
+    # casts in the Thumb-2 decoder, makes the zero-length FDCAN standard-filter
+    # word count explicit, and expresses equivalent SPI frame-byte ceiling
+    # arithmetic. Behavior is unchanged; this is an ACK, NOT A CAPTURE. The
+    # previously owed live re-capture remains pending.
+    # 2026-10-25 CI repair: Thumb-2 PLD/PLDW encodings with Rt=PC are
+    # decoded as no-op hints instead of loads into PC. Decoder and firmware
+    # regressions cover this shared Cortex-M behavior; ACK, NOT A SILICON
+    # CAPTURE, and live re-capture remains pending.
+    drift_ack: 2026-10-25
+    # 2026-10-25 (perf/cortex-m-decode-reference): the Cortex-M decode cache
+    # now checks the PC tag through a borrow and copies only on a hit. The
+    # interpreter's decoded instruction stream and state are unchanged;
+    # Core Identity and the perf evidence pin it. ACK, NOT A CAPTURE.
   - id: seeed-xiao-nrf52840-sense
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
     # 2026-09-16 (#1125): Cortex-M JIT follow-ups (block chaining, floor 4, IT-predicated ALU, VFP S-ALU, VLDR/VSTR, LDR.W PC), plus two model fixes that ride along: the bit-band alias decode no longer swallows peripherals vendors place inside 0x4200_0000 (SAMD51 QSPI/SERCOM), and the STM32 timer's scheduled compare pend lands on the latch tick like the walk. JIT is opt-in (`cortex_m_jit_enabled` default off); interpreter path unchanged, JIT-on vs off lockstep in cortex_m_jit_nrf_differential; both fixes pinned by bus-level gates. No silicon capture pins JIT.
@@ -953,7 +982,7 @@ boards:
     # files. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
     # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
-    drift_ack_digest: a089c16151ad03e452532b2048042ec59ab86fd880d1e2e69ecec3d89602be63
+    drift_ack_digest: d598c88e444bae9f16d7ead310c002271e7d70b3c363b30829bd49c7d52ae297
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -1146,7 +1175,36 @@ boards:
     # originated guest-memory transfers from the CPU-store policy and debug
     # watches; CPU-visible register/reset reads and writes are unchanged.
     # ACK, NOT A CAPTURE.
-    drift_ack: 2026-10-19
+    # 2026-10-20 (perf/cortex-m-loop-traces): Cortex-M JIT compiles counted
+    # pure-ALU loops (bl leaf; adds; subs; bne head) into one wasm block/loop run
+    # N times per dispatch, behind `cortex_m_jit_loop_traces` (default off, and
+    # inert unless the JIT itself is on). The interpreter is untouched: the same
+    # firmware run traced vs untraced is byte-identical in state, RAM, cycle
+    # count and UART (cortex_m_loop_trace_differential, cortex_m_loop_trace_lab),
+    # pinning the emitter's cap/iteration arithmetic against the walk. No
+    # register map, reset value, timing or IRQ route changes; JIT code is not
+    # covered by any silicon capture. The digest moves only because it hashes
+    # whole files. ACK, NOT A CAPTURE.
+    # 2026-10-25 (STM32U575 onboarding review): the watched Cortex-M
+    # source now decodes Thumb-2 wide immediate LDRB/STRB/LDRH/STRH
+    # forms with 12-bit offsets, used by the U5 HAL. Added unit
+    # regressions cover instruction decode/execute only. This
+    # digest-matched acknowledgement is NOT A SILICON CAPTURE; live
+    # nRF re-capture remains pending.
+    # 2026-10-25 follow-up: the -D warnings cleanup removes redundant integer
+    # casts in the Thumb-2 decoder, makes the zero-length FDCAN standard-filter
+    # word count explicit, and expresses equivalent SPI frame-byte ceiling
+    # arithmetic. Behavior is unchanged; this is an ACK, NOT A CAPTURE. The
+    # previously owed live re-capture remains pending.
+    # 2026-10-25 CI repair: Thumb-2 PLD/PLDW encodings with Rt=PC are
+    # decoded as no-op hints instead of loads into PC. Decoder and firmware
+    # regressions cover this shared Cortex-M behavior; ACK, NOT A SILICON
+    # CAPTURE, and live re-capture remains pending.
+    drift_ack: 2026-10-25
+    # 2026-10-25 (perf/cortex-m-decode-reference): the Cortex-M decode cache
+    # now checks the PC tag through a borrow and copies only on a hit. The
+    # interpreter's decoded instruction stream and state are unchanged;
+    # Core Identity and the perf evidence pin it. ACK, NOT A CAPTURE.
   - id: stm32h563
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
     # 2026-09-16 (#1125): Cortex-M JIT follow-ups (block chaining, floor 4, IT-predicated ALU, VFP S-ALU, VLDR/VSTR, LDR.W PC), plus two model fixes that ride along: the bit-band alias decode no longer swallows peripherals vendors place inside 0x4200_0000 (SAMD51 QSPI/SERCOM), and the STM32 timer's scheduled compare pend lands on the latch tick like the walk. JIT is opt-in (`cortex_m_jit_enabled` default off); interpreter path unchanged, JIT-on vs off lockstep in cortex_m_jit_nrf_differential; both fixes pinned by bus-level gates. No silicon capture pins JIT.
@@ -1598,7 +1656,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: accfb123b9b3e4d4301d7a1f7a3abe57c885da35683c287e77285b6152930b6b
+    drift_ack_digest: 650b7d7ea24b01204febca53e066ac81f3a01ce7e19fa79790906ba05eb2593a
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -2132,7 +2190,46 @@ boards:
     # transfer windows are wrapped in `with_device_write_bypass` (hardware-
     # originated guest-memory transfers only). STM32 register/reset paths are
     # unchanged. ACK, NOT A CAPTURE.
-    drift_ack: 2026-10-19
+    # 2026-10-20 (perf/cortex-m-loop-traces): Cortex-M JIT compiles counted
+    # pure-ALU loops (bl leaf; adds; subs; bne head) into one wasm block/loop run
+    # N times per dispatch, behind `cortex_m_jit_loop_traces` (default off, and
+    # inert unless the JIT itself is on). The interpreter is untouched: the same
+    # firmware run traced vs untraced is byte-identical in state, RAM, cycle
+    # count and UART (cortex_m_loop_trace_differential, cortex_m_loop_trace_lab),
+    # pinning the emitter's cap/iteration arithmetic against the walk. No
+    # register map, reset value, timing or IRQ route changes; JIT code is not
+    # covered by any silicon capture. The digest moves only because it hashes
+    # whole files. ACK, NOT A CAPTURE.
+    # 2026-10-25 (STM32U575 onboarding review): the watched shared
+    # sources include the Cortex-M wide immediate byte/halfword
+    # load/store correction and, as applicable to this board, U5
+    # RCC/PWR/FLASH/SPI/I2C/FDCAN/GPDMA plus GPIO/UART model edits.
+    # U5-only register behavior is profile/config gated; shared V2
+    # GPIO analog-input and LCKR semantics are covered by simulation
+    # regressions. This digest-matched acknowledgement is NOT A
+    # SILICON CAPTURE; a live re-capture for this board remains owed.
+    # 2026-10-25 follow-up: the -D warnings cleanup removes redundant integer
+    # casts in the Thumb-2 decoder, makes the zero-length FDCAN standard-filter
+    # word count explicit, and expresses equivalent SPI frame-byte ceiling
+    # arithmetic. Behavior is unchanged; this is an ACK, NOT A CAPTURE. The
+    # previously owed live re-capture remains pending.
+    # 2026-10-25 CI repair: Thumb-2 PLD/PLDW encodings with Rt=PC are
+    # decoded as no-op hints instead of loads into PC. Decoder and firmware
+    # regressions cover this shared Cortex-M behavior; ACK, NOT A SILICON
+    # CAPTURE, and live re-capture remains pending.
+    # 2026-10-25 CI repair: H5/U5 SPI SR readback includes the modeled
+    # CTSIZE field; the fix is H5-profile-only, while L4/F1 paths are
+    # unchanged. Unit/firmware tests cover simulation behavior; ACK, NOT A
+    # 2026-10-26 (shared STM32 I2C forced-oracle hook): the scheduler-owned
+    # transaction now advances through tick_elapsed_forced only when a
+    # frozen-CPU hardware oracle requests the historical walk. Production
+    # event scheduling is unchanged. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
+    drift_ack: 2026-10-26
+    # 2026-10-25 (perf/cortex-m-decode-reference): the Cortex-M decode cache
+    # now checks the PC tag through a borrow and copies only on a hit. The
+    # interpreter's decoded instruction stream and state are unchanged;
+    # Core Identity and the perf evidence pin it. ACK, NOT A CAPTURE.
   - id: esp32c3
     # 2026-09-15 (#932): SPI edge sampling is opt-in (`SpiSampling::Byte` default). Byte-level golden pins the pre-feature path. Controllers without a bit engine reject opt-in at config time.
     doc: docs/boards/esp32c3.md
@@ -3085,6 +3182,14 @@ boards:
     # reset-conformance gates. No register map, reset value or default-config
     # readback changes.
     # ACK, NOT A CAPTURE — physical re-capture remains owed.
+    # 2026-10-25 (perf/recover-step-overhead): per-step service fast paths
+    # (device-time throttle, NVIC any-enabled cache, logic-capture guard,
+    # plain-RAM store fast path, AVR timer/OC shortcuts). No register map,
+    # reset value, IRQ route or byte path changed. ACK, NOT A CAPTURE.
+    # 2026-10-25 (perf/recover-step-overhead): per-step service fast paths
+    # (device-time throttle, NVIC any-enabled cache, logic-capture guard,
+    # plain-RAM store fast path, AVR timer/OC shortcuts). No register map,
+    # reset value, IRQ route or byte path changed. ACK, NOT A CAPTURE.
     drift_ack: 2026-10-19
 
   - id: nucleo-l476rg
@@ -3520,7 +3625,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: e7e9efeae0133725ba01212880a419f7e0f5b44321050b42042aa21eff7d88bb
+    drift_ack_digest: fca6be1ecd437ba0d40b9e3abf357000d7aa5f7bc39297fb2065d476092714e7
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4027,6 +4132,16 @@ boards:
     # transfer windows are wrapped in `with_device_write_bypass` (hardware-
     # originated guest-memory transfers only). STM32 register/reset paths are
     # unchanged. ACK, NOT A CAPTURE.
+    # 2026-10-20 (perf/cortex-m-loop-traces): Cortex-M JIT compiles counted
+    # pure-ALU loops (bl leaf; adds; subs; bne head) into one wasm block/loop run
+    # N times per dispatch, behind `cortex_m_jit_loop_traces` (default off, and
+    # inert unless the JIT itself is on). The interpreter is untouched: the same
+    # firmware run traced vs untraced is byte-identical in state, RAM, cycle
+    # count and UART (cortex_m_loop_trace_differential, cortex_m_loop_trace_lab),
+    # pinning the emitter's cap/iteration arithmetic against the walk. No
+    # register map, reset value, timing or IRQ route changes; JIT code is not
+    # covered by any silicon capture. The digest moves only because it hashes
+    # whole files. ACK, NOT A CAPTURE.
     # 2026-10-24: io_voltage_v/gpio_input_thresholds for the STM32L476, from
     # DS10198 Rev 8 Table 70 (VIL max 0.3*VDDIOx, VIH min 0.7*VDDIOx,
     # 1.62 V < VDDIOx < 3.6 V, all I/Os except BOOT0). Declarative electrical
@@ -4034,7 +4149,40 @@ boards:
     # register map, reset value or timing this capture anchors can move. An
     # oscilloscope clipped to PA5 was failing at co-sim bind for lack of it.
     # ACK, NOT A CAPTURE — physical re-capture remains owed.
-    drift_ack: 2026-10-24
+    # 2026-10-25 (perf/cortex-m-decode-reference): the Cortex-M decode cache
+    # now checks the PC tag through a borrow and copies only on a hit. The
+    # interpreter's decoded instruction stream and state are unchanged;
+    # Core Identity and the perf evidence pin it. ACK, NOT A CAPTURE.
+    # 2026-10-25 (perf/recover-step-overhead): per-step service fast paths
+    # (device-time throttle, NVIC any-enabled cache, logic-capture guard,
+    # plain-RAM store fast path, AVR timer/OC shortcuts). No register map,
+    # reset value, IRQ route or byte path changed. ACK, NOT A CAPTURE.
+    # 2026-10-25 (STM32U575 onboarding review): the watched shared
+    # sources include the Cortex-M wide immediate byte/halfword
+    # load/store correction and, as applicable to this board, U5
+    # RCC/PWR/FLASH/SPI/I2C/FDCAN/GPDMA plus GPIO/UART model edits.
+    # U5-only register behavior is profile/config gated; shared V2
+    # GPIO analog-input and LCKR semantics are covered by simulation
+    # regressions. This digest-matched acknowledgement is NOT A
+    # SILICON CAPTURE; a live re-capture for this board remains owed.
+    # 2026-10-25 follow-up: the -D warnings cleanup removes redundant integer
+    # casts in the Thumb-2 decoder, makes the zero-length FDCAN standard-filter
+    # word count explicit, and expresses equivalent SPI frame-byte ceiling
+    # arithmetic. Behavior is unchanged; this is an ACK, NOT A CAPTURE. The
+    # previously owed live re-capture remains pending.
+    # 2026-10-25 CI repair: Thumb-2 PLD/PLDW encodings with Rt=PC are
+    # decoded as no-op hints instead of loads into PC. Decoder and firmware
+    # regressions cover this shared Cortex-M behavior; ACK, NOT A SILICON
+    # CAPTURE, and live re-capture remains pending.
+    # 2026-10-25 CI repair: H5/U5 SPI SR readback includes the modeled
+    # CTSIZE field; the fix is H5-profile-only, while L4/F1 paths are
+    # unchanged. Unit/firmware tests cover simulation behavior; ACK, NOT A
+    # 2026-10-26 (shared STM32 I2C forced-oracle hook): the scheduler-owned
+    # transaction now advances through tick_elapsed_forced only when a
+    # frozen-CPU hardware oracle requests the historical walk. Production
+    # event scheduling is unchanged. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
+    drift_ack: 2026-10-26
   - id: nucleo-l073rz
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
     # 2026-09-16 (#1125): Cortex-M JIT follow-ups (block chaining, floor 4, IT-predicated ALU, VFP S-ALU, VLDR/VSTR, LDR.W PC), plus two model fixes that ride along: the bit-band alias decode no longer swallows peripherals vendors place inside 0x4200_0000 (SAMD51 QSPI/SERCOM), and the STM32 timer's scheduled compare pend lands on the latch tick like the walk. JIT is opt-in (`cortex_m_jit_enabled` default off); interpreter path unchanged, JIT-on vs off lockstep in cortex_m_jit_nrf_differential; both fixes pinned by bus-level gates. No silicon capture pins JIT.
@@ -4427,7 +4575,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: 926ba8b0248152a651782d20c981aabb32726383c27666e6595d6dcf0158ad5e
+    drift_ack_digest: aa94b7d42910ec979235a6e3b094b71782b4246cdecad03c7d0299d1ef7ea43f
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4878,7 +5026,50 @@ boards:
     # transfer windows are wrapped in `with_device_write_bypass` (hardware-
     # originated guest-memory transfers only). STM32 register/reset paths are
     # unchanged. ACK, NOT A CAPTURE.
-    drift_ack: 2026-10-19
+    # 2026-10-20 (perf/cortex-m-loop-traces): Cortex-M JIT compiles counted
+    # pure-ALU loops (bl leaf; adds; subs; bne head) into one wasm block/loop run
+    # N times per dispatch, behind `cortex_m_jit_loop_traces` (default off, and
+    # inert unless the JIT itself is on). The interpreter is untouched: the same
+    # firmware run traced vs untraced is byte-identical in state, RAM, cycle
+    # count and UART (cortex_m_loop_trace_differential, cortex_m_loop_trace_lab),
+    # pinning the emitter's cap/iteration arithmetic against the walk. No
+    # register map, reset value, timing or IRQ route changes; JIT code is not
+    # covered by any silicon capture. The digest moves only because it hashes
+    # whole files. ACK, NOT A CAPTURE.
+    # 2026-10-25 (perf/recover-step-overhead): per-step service fast paths
+    # (device-time throttle, NVIC any-enabled cache, logic-capture guard,
+    # plain-RAM store fast path, AVR timer/OC shortcuts). No register map,
+    # reset value, IRQ route or byte path changed. ACK, NOT A CAPTURE.
+    # 2026-10-25 (STM32U575 onboarding review): the watched shared
+    # sources include the Cortex-M wide immediate byte/halfword
+    # load/store correction and, as applicable to this board, U5
+    # RCC/PWR/FLASH/SPI/I2C/FDCAN/GPDMA plus GPIO/UART model edits.
+    # U5-only register behavior is profile/config gated; shared V2
+    # GPIO analog-input and LCKR semantics are covered by simulation
+    # regressions. This digest-matched acknowledgement is NOT A
+    # SILICON CAPTURE; a live re-capture for this board remains owed.
+    # 2026-10-25 follow-up: the -D warnings cleanup removes redundant integer
+    # casts in the Thumb-2 decoder, makes the zero-length FDCAN standard-filter
+    # word count explicit, and expresses equivalent SPI frame-byte ceiling
+    # arithmetic. Behavior is unchanged; this is an ACK, NOT A CAPTURE. The
+    # previously owed live re-capture remains pending.
+    # 2026-10-25 CI repair: Thumb-2 PLD/PLDW encodings with Rt=PC are
+    # decoded as no-op hints instead of loads into PC. Decoder and firmware
+    # regressions cover this shared Cortex-M behavior; ACK, NOT A SILICON
+    # CAPTURE, and live re-capture remains pending.
+    # 2026-10-25 CI repair: H5/U5 SPI SR readback includes the modeled
+    # CTSIZE field; the fix is H5-profile-only, while L4/F1 paths are
+    # unchanged. Unit/firmware tests cover simulation behavior; ACK, NOT A
+    # 2026-10-26 (shared STM32 I2C forced-oracle hook): the scheduler-owned
+    # transaction now advances through tick_elapsed_forced only when a
+    # frozen-CPU hardware oracle requests the historical walk. Production
+    # event scheduling is unchanged. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
+    drift_ack: 2026-10-26
+    # 2026-10-25 (perf/cortex-m-decode-reference): the Cortex-M decode cache
+    # now checks the PC tag through a borrow and copies only on a hit. The
+    # interpreter's decoded instruction stream and state are unchanged;
+    # Core Identity and the perf evidence pin it. ACK, NOT A CAPTURE.
   - id: stm32f103
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
     # 2026-09-16 (#1125): Cortex-M JIT follow-ups (block chaining, floor 4, IT-predicated ALU, VFP S-ALU, VLDR/VSTR, LDR.W PC), plus two model fixes that ride along: the bit-band alias decode no longer swallows peripherals vendors place inside 0x4200_0000 (SAMD51 QSPI/SERCOM), and the STM32 timer's scheduled compare pend lands on the latch tick like the walk. JIT is opt-in (`cortex_m_jit_enabled` default off); interpreter path unchanged, JIT-on vs off lockstep in cortex_m_jit_nrf_differential; both fixes pinned by bus-level gates. No silicon capture pins JIT.
@@ -5325,7 +5516,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: 8e6af0ca123118dbd61915bedbd6dedac784d909953d20028c322e5d28a4280b
+    drift_ack_digest: b5733544d138e104a456e13fad8fad436dd13718f15b81d9404e2de3723a083a
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5850,7 +6041,46 @@ boards:
     # transfer windows are wrapped in `with_device_write_bypass` (hardware-
     # originated guest-memory transfers only). STM32 register/reset paths are
     # unchanged. ACK, NOT A CAPTURE.
-    drift_ack: 2026-10-19
+    # 2026-10-20 (perf/cortex-m-loop-traces): Cortex-M JIT compiles counted
+    # pure-ALU loops (bl leaf; adds; subs; bne head) into one wasm block/loop run
+    # N times per dispatch, behind `cortex_m_jit_loop_traces` (default off, and
+    # inert unless the JIT itself is on). The interpreter is untouched: the same
+    # firmware run traced vs untraced is byte-identical in state, RAM, cycle
+    # count and UART (cortex_m_loop_trace_differential, cortex_m_loop_trace_lab),
+    # pinning the emitter's cap/iteration arithmetic against the walk. No
+    # register map, reset value, timing or IRQ route changes; JIT code is not
+    # covered by any silicon capture. The digest moves only because it hashes
+    # whole files. ACK, NOT A CAPTURE.
+    # 2026-10-25 (STM32U575 onboarding review): the watched shared
+    # sources include the Cortex-M wide immediate byte/halfword
+    # load/store correction and, as applicable to this board, U5
+    # RCC/PWR/FLASH/SPI/I2C/FDCAN/GPDMA plus GPIO/UART model edits.
+    # U5-only register behavior is profile/config gated; shared V2
+    # GPIO analog-input and LCKR semantics are covered by simulation
+    # regressions. This digest-matched acknowledgement is NOT A
+    # SILICON CAPTURE; a live re-capture for this board remains owed.
+    # 2026-10-25 follow-up: the -D warnings cleanup removes redundant integer
+    # casts in the Thumb-2 decoder, makes the zero-length FDCAN standard-filter
+    # word count explicit, and expresses equivalent SPI frame-byte ceiling
+    # arithmetic. Behavior is unchanged; this is an ACK, NOT A CAPTURE. The
+    # previously owed live re-capture remains pending.
+    # 2026-10-25 CI repair: Thumb-2 PLD/PLDW encodings with Rt=PC are
+    # decoded as no-op hints instead of loads into PC. Decoder and firmware
+    # regressions cover this shared Cortex-M behavior; ACK, NOT A SILICON
+    # CAPTURE, and live re-capture remains pending.
+    # 2026-10-25 CI repair: H5/U5 SPI SR readback includes the modeled
+    # CTSIZE field; the fix is H5-profile-only, while L4/F1 paths are
+    # unchanged. Unit/firmware tests cover simulation behavior; ACK, NOT A
+    # 2026-10-26 (shared STM32 I2C forced-oracle hook): the scheduler-owned
+    # transaction now advances through tick_elapsed_forced only when a
+    # frozen-CPU hardware oracle requests the historical walk. Production
+    # event scheduling is unchanged. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
+    drift_ack: 2026-10-26
+    # 2026-10-25 (perf/cortex-m-decode-reference): the Cortex-M decode cache
+    # now checks the PC tag through a borrow and copies only on a hit. The
+    # interpreter's decoded instruction stream and state are unchanged;
+    # Core Identity and the perf evidence pin it. ACK, NOT A CAPTURE.
   - id: stm32f407
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
     # 2026-09-16 (#1125): Cortex-M JIT follow-ups (block chaining, floor 4, IT-predicated ALU, VFP S-ALU, VLDR/VSTR, LDR.W PC), plus two model fixes that ride along: the bit-band alias decode no longer swallows peripherals vendors place inside 0x4200_0000 (SAMD51 QSPI/SERCOM), and the STM32 timer's scheduled compare pend lands on the latch tick like the walk. JIT is opt-in (`cortex_m_jit_enabled` default off); interpreter path unchanged, JIT-on vs off lockstep in cortex_m_jit_nrf_differential; both fixes pinned by bus-level gates. No silicon capture pins JIT.
@@ -6260,7 +6490,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: b47f0b77db2856522cfc1bf3709d17f463a9db85b91d8b21e88f590f849cb24b
+    drift_ack_digest: 1ef4fd220ab3fb6f8aaf802b165baaf1113122f02b7dfb60afb27856404f5cfb
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6724,7 +6954,46 @@ boards:
     # transfer windows are wrapped in `with_device_write_bypass` (hardware-
     # originated guest-memory transfers only). STM32 register/reset paths are
     # unchanged. ACK, NOT A CAPTURE.
-    drift_ack: 2026-10-19
+    # 2026-10-20 (perf/cortex-m-loop-traces): Cortex-M JIT compiles counted
+    # pure-ALU loops (bl leaf; adds; subs; bne head) into one wasm block/loop run
+    # N times per dispatch, behind `cortex_m_jit_loop_traces` (default off, and
+    # inert unless the JIT itself is on). The interpreter is untouched: the same
+    # firmware run traced vs untraced is byte-identical in state, RAM, cycle
+    # count and UART (cortex_m_loop_trace_differential, cortex_m_loop_trace_lab),
+    # pinning the emitter's cap/iteration arithmetic against the walk. No
+    # register map, reset value, timing or IRQ route changes; JIT code is not
+    # covered by any silicon capture. The digest moves only because it hashes
+    # whole files. ACK, NOT A CAPTURE.
+    # 2026-10-25 (STM32U575 onboarding review): the watched shared
+    # sources include the Cortex-M wide immediate byte/halfword
+    # load/store correction and, as applicable to this board, U5
+    # RCC/PWR/FLASH/SPI/I2C/FDCAN/GPDMA plus GPIO/UART model edits.
+    # U5-only register behavior is profile/config gated; shared V2
+    # GPIO analog-input and LCKR semantics are covered by simulation
+    # regressions. This digest-matched acknowledgement is NOT A
+    # SILICON CAPTURE; a live re-capture for this board remains owed.
+    # 2026-10-25 follow-up: the -D warnings cleanup removes redundant integer
+    # casts in the Thumb-2 decoder, makes the zero-length FDCAN standard-filter
+    # word count explicit, and expresses equivalent SPI frame-byte ceiling
+    # arithmetic. Behavior is unchanged; this is an ACK, NOT A CAPTURE. The
+    # previously owed live re-capture remains pending.
+    # 2026-10-25 CI repair: Thumb-2 PLD/PLDW encodings with Rt=PC are
+    # decoded as no-op hints instead of loads into PC. Decoder and firmware
+    # regressions cover this shared Cortex-M behavior; ACK, NOT A SILICON
+    # CAPTURE, and live re-capture remains pending.
+    # 2026-10-25 CI repair: H5/U5 SPI SR readback includes the modeled
+    # CTSIZE field; the fix is H5-profile-only, while L4/F1 paths are
+    # unchanged. Unit/firmware tests cover simulation behavior; ACK, NOT A
+    # 2026-10-26 (shared STM32 I2C forced-oracle hook): the scheduler-owned
+    # transaction now advances through tick_elapsed_forced only when a
+    # frozen-CPU hardware oracle requests the historical walk. Production
+    # event scheduling is unchanged. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
+    drift_ack: 2026-10-26
+    # 2026-10-25 (perf/cortex-m-decode-reference): the Cortex-M decode cache
+    # now checks the PC tag through a borrow and copies only on a hit. The
+    # interpreter's decoded instruction stream and state are unchanged;
+    # Core Identity and the perf evidence pin it. ACK, NOT A CAPTURE.
   - id: esp32s3
     # 2026-09-16 (#jit-xtensa-browser): generic Xtensa BB emit core + browser adapter. `xtensa_lx7.rs` gains only `invalidate_for_data_write` — a public forwarder to the existing `maybe_invalidate_for_write` so JIT-committed stores run the same SMC invalidation the S8i/S32i interpreter arms run (no interpreter behavior change; the existing sub-word rules are reused). Hot-block dispatch and every interpreter arm are untouched; the new shapes are browser-only and refused when unsafe. Native interpreter-identity tests in `xtensa_jit/variable.rs`. No silicon capture pins the browser JIT.
     # 2026-09-15 (#1119): PeripheralConfig gained irq_controller (None). No silicon-visible behaviour change.
@@ -7995,19 +8264,26 @@ boards:
     doc: docs/boards/stm32u575.md
     chip: configs/chips/stm32u575.yaml
     tier: sim-validated
-    note: "STM32U575ZI (NUCLEO-U575ZI-Q), first U5 part. Cortex-M33, 2 MiB flash, 768 KiB SRAM + 16 KiB SRAM4. Reuses the shared V2 RCC/GPIO/UART models plus the U5 PLL1 register block (PLL1CFGR 0x28 / DIVR 0x34 / FRACR 0x38), the U5 CR ready pairs, and a CRS register-surface model. ADC1 runs the SVD-verified U5 layout (CFGR1.RES[3:2] 14/12/10/8, PCSEL@0x1C, LTR1-3/HTR1-3@0xA8..0xBC, CALFACT2@0xC8) and passes Arduino L5 analogRead; GPDMA1 models all 16 channels. FDCAN1 (0x4000A400, 4 KiB window over SRAMCAN @ +0x800, RCC_APB1ENR2.FDCAN1EN bit 9 gate) reuses the Bosch M_CAN model and passes Arduino L8 enter_loopback; the U575 has a single FDCAN instance (SVD + stm32u575xx.h declare only FDCAN1 — no fdcan2). Validated by: real STM32CubeU5 HAL firmware (160 MHz PLL1 bring-up, USART1 VCP banner + LED loop), Rust io-smoke, Arduino matrix L0-L8, Zephyr matrix L0-L3, unsupported-instruction audit. NO bench part: every value is SVD/RM0456-derived; Renode has no STM32U5 platform, so no Renode differential is claimed. TrustZone/GTZC, OCTOSPI and USB are not modeled; flash program/erase IS modeled (unlock, page erase, quad-word program, EOP/WRPERR, option-byte read) with documented residuals: mass erase accepted-but-not-applied, secure path/SECKEYR unmodeled, no option reload/SWAP_BANK. ADC4 is not declared: its SVD map is a different 12-bit class (SMPR/AWDxTR/CHSELRMOD0/1, no PCSEL/LTR/HTR/CALFACT2), not a sibling of the ADC1 map."
+    note: "STM32U575ZI (NUCLEO-U575ZI-Q), first U575 target. Cortex-M33, 2 MiB flash, 768 KiB SRAM + 16 KiB SRAM4. Reuses the shared V2 RCC/GPIO/UART models plus U5 PLL1/2/3 and ready pairs, and a CRS register-surface model. GPIO models analog-reset IDR, one-shot LCKR, and per-chip SECCFGR reset; U5 USART TXFE/AUTOCR are enabled only on U5 configs. ADC1 uses the SVD-verified U5 layout and passes Arduino L5 analogRead; GPDMA1 models all 16 channels and split NVIC lines 29-36/80-87; the core-onboarding-smoke lane exercises SPI-DMA, UART-DMA and flash-to-RAM reference firmware in the LabWired simulator on main pushes, nightly and manual dispatch (not PR, silicon or Renode comparison). The U5 ICACHE profile has a limited register contract; cache contents and line effects are not simulated. The 2 KiB U5 system-memory window seeds a read-only per-part FLASHSIZE word; OTP/package/UID bytes are simplified read/write storage. FDCAN1 (0x4000A400, 4 KiB window over SRAMCAN @ +0x800, RCC_APB1ENR2.FDCAN1EN bit 9 gate) reuses Bosch M_CAN and passes Arduino L8 internal loopback; the U575 has a single FDCAN instance. HASH supports CPU-fed SHA-1, MD5, SHA-224, SHA-256 and HMAC; completion is synchronous and DMA pacing/timing are not modeled. U575 has no PKA or SAES. Rust io-smoke and a local Star Catcher smoke cover startup; the latter checks PC13 input/B1, simulated SSD1306 output and USART1 TX. Also validated by real STM32CubeU5 HAL firmware, Arduino matrix L0-L8, Zephyr matrix L0-L3, and unsupported-instruction audit. NO bench part: values are SVD/RM0456-derived; upstream Renode master has no built-in STM32U5 platform, and this work does not compare against the separate 60North reference platform. TrustZone/GTZC, OCTOSPI and USB are not modeled. Flash supports non-secure unlock, page and one-/two-bank erase, quad-word program, EOP/WRPERR and option-byte storage; residuals include secure path/SECKEYR, read-while-write stalling and option reload/SWAP_BANK. ADC4 is not declared because its SVD map is a different 12-bit class from ADC1."
     offline_tests:
       - "strict_onboarding (io-smoke builds + runs firmware-stm32u575-demo)"
       - "chip_conformance (estate OK)"
       - "svd_conformance / register_coverage (SVD pinning)"
       - "firmware_survival test_stm32u575_zephyr_survival (stock Zephyr hello)"
+      - "firmware_survival test_stm32u575_arduino_serial_survival (stock Arduino serial)"
+      - "core-onboarding-smoke (main push/nightly/manual: 60North hal-spi-dma, hal-uart-dma, st-dma-flash-to-ram in LabWired simulator; not PR/silicon/Renode)"
+      - "stm32u575_60north_registers::u575_hash_* (SHA-1/MD5/SHA-224/SHA-256 register digest vectors)"
       - "arduino matrix L0-L8 (validation/arduino-matrix)"
     models:
       - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/bus/from_config.rs
+      - crates/core/src/cpu/cortex_m/exec/load_store.rs
       - crates/core/src/decoder/arm.rs
+      - crates/core/src/decoder/arm_thumb32.rs
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/pwr.rs
       - crates/core/src/peripherals/flash.rs
+      - crates/core/src/peripherals/flash_u5_regs.rs
       - crates/core/src/peripherals/uart.rs
       - crates/core/src/peripherals/gpio.rs
       - crates/core/src/peripherals/i2c.rs
@@ -8023,6 +8299,8 @@ boards:
       - crates/core/src/peripherals/dbgmcu.rs
       - crates/core/src/peripherals/crs.rs
       - configs/chips/stm32u575.yaml
+      # The paired descriptor is hashed because u545_u575_drift_guard compares both.
+      - configs/chips/stm32u545.yaml
       - configs/peripherals/stm32u575
       # 2026-09-21, model_paths_drift_gate: models this board REGISTERS that
       # its list omitted, so they were invisible to the drift digest. This
@@ -8035,25 +8313,35 @@ boards:
       # capture and has no drift ack, so adding the path invalidates no
       # capture claim.
       - crates/core/src/peripherals/exti.rs
+      - crates/core/src/peripherals/mod.rs
+      - crates/core/src/peripheral.rs
+      - crates/core/src/lib.rs
+      - crates/core/src/peripherals/generic_factory.rs
+      - crates/core/src/peripherals/icache.rs
+      - crates/core/src/peripherals/stm32u5_sysmem.rs
+      - crates/core/src/peripherals/stm32u5_hash.rs
 
-  - id: nucleo-u545re
-    doc: docs/boards/nucleo-u545re.md
-    chip: configs/chips/stm32u545.yaml
+  - id: stm32u5a5zj
+    doc: docs/boards/stm32u5a5zj.md
+    chip: configs/chips/stm32u5a5zj.yaml
     tier: sim-validated
-    note: "STM32U545RET6Q (NUCLEO-U545RE-Q, MB1841). Cortex-M33, 512 KiB flash in two 256 KiB banks, SRAM1+SRAM2 256 KiB + SRAM4 16 KiB. A self-contained derivative of stm32u575.yaml: every peripheral kept is byte-identical to the U575 entry, enforced by crates/core/tests/u545_u575_drift_guard.rs; differences are the memory map, no USART2/GPIOF/GPIOI, DBGMCU IDCODE 0x10026455 (the U5 flash erase path derives the 256 KiB bank size from the mapped flash). Board facts (LD2 PA5, B1 PC13, VCP USART1 PA9/PA10) from ST's stm32u5xx-nucleo-bsp, ST open pin data .ioc and Zephyr nucleo_u545re_q; st.com datasheet/RM0456/UM3062 were not reachable when this was written. Validated by: nucleo_u545re machine-run pin tests, the committed bare-metal blinky (survival gate), a Cube HAL 160 MHz run (ignored-by-default, evidence in VALIDATION.md), Arduino matrix L0-L8 on the generic U545RETxQ variant. Zephyr is NOT validated (workspace predates the U545 SoC). NO bench part: SVD-derived, no silicon diff."
+    note: "STM32U5A5ZJT6Q on NUCLEO-U5A5ZJ-Q (MB1549), LQFP144, 4 MiB flash and 2.5-MiB-class SRAM. It shares the STM32U5 register surfaces with U575 and adds HASH, SAES and PKA behavioral models. The U5A5 SystemBus oracle checks SHA-256 of abc, AES-128 ECB, 4^13 mod 497, and negative PKA subtraction sign extension through 4160 bits; it rejects 4161-bit operands. Shared-model tests on U575 cover SHA-1/SHA-224/MD5 and RFC 4231 HMAC, while SAES unit vectors cover AES-128 ECB/CBC/CTR. The model implements AES-256 ECB/CBC/CTR, but no AES-256 vector currently tests it. PKA operations are limited to the documented 4160-bit operand maximum. These models are synchronous and omit DMA pacing/timing; SAES GCM/CCM, TrustZone key selection, DPA, and PKA ECC/RSA-CRT/Montgomery helper modes remain unsupported. ICACHE is register-contract only, FDCAN loopback is not a physical bus, and the U5A5 pin/AF map in Playground is a common subset rather than a complete pin inventory. Simulator evidence only; no physical U5A5 board acceptance is claimed."
     offline_tests:
-      - "nucleo_u545re (LD2 PA5 edges, B1 PC13 -> VCP, USART1 RX echo, memory map, flash banks)"
-      - "u545_u575_drift_guard (peripherals identical to U575 except an allow-list)"
-      - "chip_conformance (estate OK)"
-      - "svd_conformance / register_coverage (STM32U545.svd)"
-      - "firmware_survival test_stm32u545_blinky_survival"
-      - "arduino matrix L0-L8 (validation/arduino-matrix)"
+      - "chip_conformance (estate OK; register-level HASH/SAES/PKA behavior gate)"
+      - "stm32u5_exec_oracle::u5a5_hash_saes_and_pka_execute_register_level_operations"
+      - "stm32u5_exec_oracle::u5a5_pka_arithmetic_subtraction_returns_sign_extended_negative_result"
+      - "stm32u5_exec_oracle::u5a5_pka_rejects_operand_widths_above_the_hardware_limit"
+      - "stm32u5_reset_conformance"
     models:
       - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/bus/from_config.rs
+      - crates/core/src/cpu/cortex_m/exec/load_store.rs
       - crates/core/src/decoder/arm.rs
+      - crates/core/src/decoder/arm_thumb32.rs
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/pwr.rs
       - crates/core/src/peripherals/flash.rs
+      - crates/core/src/peripherals/flash_u5_regs.rs
       - crates/core/src/peripherals/uart.rs
       - crates/core/src/peripherals/gpio.rs
       - crates/core/src/peripherals/i2c.rs
@@ -8071,7 +8359,67 @@ boards:
       - crates/core/src/peripherals/stub.rs
       - crates/core/src/peripherals/systick.rs
       - crates/core/src/peripherals/exti.rs
+      - crates/core/src/peripherals/stm32u5_sysmem.rs
+      - crates/core/src/peripherals/stm32u5_hash.rs
+      - crates/core/src/peripherals/stm32u5_saes.rs
+      - crates/core/src/peripherals/stm32u5_pka.rs
+      - crates/core/src/peripherals/mod.rs
+      - crates/core/src/peripheral.rs
+      - crates/core/src/lib.rs
+      - crates/core/src/peripherals/generic_factory.rs
+      - crates/core/src/peripherals/icache.rs
+      - configs/chips/stm32u5a5zj.yaml
+      - configs/peripherals/stm32u575
+      - configs/systems/nucleo-u5a5zj.yaml
+
+  - id: nucleo-u545re
+    doc: docs/boards/nucleo-u545re.md
+    chip: configs/chips/stm32u545.yaml
+    tier: sim-validated
+    note: "STM32U545RET6Q (NUCLEO-U545RE-Q, MB1841). Cortex-M33, 512 KiB flash in two 256 KiB banks, SRAM1+SRAM2 256 KiB + SRAM4 16 KiB. A self-contained derivative of stm32u575.yaml, checked by crates/core/tests/u545_u575_drift_guard.rs with two explicit shared peripheral-field exceptions: DBGMCU IDCODE 0x10026455 and sysmem.config.flash_size_kb (512 vs 2048 KiB). Top-level flash/RAM sizes and package pin maps also differ; USART2/GPIOF/GPIOI are absent. The U5 flash erase path derives the 256 KiB bank size from mapped flash. Its system-memory window seeds FLASHSIZE read-only and simplifies OTP/package/UID bytes as ordinary storage. Board facts (LD2 PA5, B1 PC13, VCP USART1 PA9/PA10) from ST's stm32u5xx-nucleo-bsp, ST open pin data .ioc and Zephyr nucleo_u545re_q; st.com datasheet/RM0456/UM3062 were not reachable when this was written. Validated by: nucleo_u545re machine-run pin tests, the committed bare-metal blinky (survival gate), a Cube HAL 160 MHz run (ignored-by-default, evidence in VALIDATION.md), Arduino matrix L0-L8 on the generic U545RETxQ variant. Zephyr is NOT validated (workspace predates the U545 SoC). NO bench part: SVD-derived, no silicon diff."
+    offline_tests:
+      - "nucleo_u545re (LD2 PA5 edges, B1 PC13 -> VCP, USART1 RX queue-injected echo (PA10 pad input is not routed), memory map, flash banks)"
+      - "u545_u575_drift_guard (shared peripherals compared with the explicit DBGMCU IDCODE and sysmem flash-size allow-list)"
+      - "chip_conformance (estate OK)"
+      - "svd_conformance / register_coverage (STM32U545.svd)"
+      - "firmware_survival test_stm32u545_blinky_survival"
+      - "arduino matrix L0-L8 (validation/arduino-matrix)"
+    models:
+      - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/bus/from_config.rs
+      - crates/core/src/cpu/cortex_m/exec/load_store.rs
+      - crates/core/src/decoder/arm.rs
+      - crates/core/src/decoder/arm_thumb32.rs
+      - crates/core/src/peripherals/rcc.rs
+      - crates/core/src/peripherals/pwr.rs
+      - crates/core/src/peripherals/flash.rs
+      - crates/core/src/peripherals/flash_u5_regs.rs
+      - crates/core/src/peripherals/uart.rs
+      - crates/core/src/peripherals/gpio.rs
+      - crates/core/src/peripherals/i2c.rs
+      - crates/core/src/peripherals/spi.rs
+      - crates/core/src/peripherals/fdcan.rs
+      - crates/core/src/peripherals/timer.rs
+      - crates/core/src/peripherals/adc.rs
+      - crates/core/src/peripherals/rtc_v3.rs
+      - crates/core/src/peripherals/iwdg.rs
+      - crates/core/src/peripherals/gpdma.rs
+      - crates/core/src/peripherals/crc.rs
+      - crates/core/src/peripherals/rng.rs
+      - crates/core/src/peripherals/dbgmcu.rs
+      - crates/core/src/peripherals/crs.rs
+      - crates/core/src/peripherals/stub.rs
+      - crates/core/src/peripherals/systick.rs
+      - crates/core/src/peripherals/exti.rs
+      - crates/core/src/peripherals/mod.rs
+      - crates/core/src/peripheral.rs
+      - crates/core/src/lib.rs
+      - crates/core/src/peripherals/generic_factory.rs
+      - crates/core/src/peripherals/icache.rs
+      - crates/core/src/peripherals/stm32u5_sysmem.rs
       - configs/chips/stm32u545.yaml
+      # The paired descriptor is hashed because u545_u575_drift_guard compares both.
+      - configs/chips/stm32u575.yaml
       - configs/peripherals/stm32u575
 
   - id: stm32f411ceu6
@@ -8279,6 +8627,10 @@ boards:
     # no silicon capture covers any of those. The digest is re-stamped here so
     # this ack names content a human actually read; no live re-capture owed for
     # this change, and any already owed above still is.
+    # 2026-10-25 (perf/recover-step-overhead): per-step service fast paths
+    # (device-time throttle, NVIC any-enabled cache, logic-capture guard,
+    # plain-RAM store fast path, AVR timer/OC shortcuts). No register map,
+    # reset value, IRQ route or byte path changed. ACK, NOT A CAPTURE.
     drift_ack: 2026-09-14
     # 2026-08-22: the Thumb-2 decoder gained SMLABB/BT/TB/TT and SMULBB/BT/TB/TT
     # (ARMv7-M A7.7.166/171). They were UNDECODED, which in this core means a
@@ -8790,6 +9142,105 @@ boards:
       - crates/firmware-litex-vexriscv-smoke
       - configs/chips/litex-vexriscv.yaml
       - configs/systems/litex-vexriscv.yaml
+  - id: sam4s16c
+    # 2026-10-23: SAM4S Xplained (ATSAM4S16C, Cortex-M4; 1 MiB flash at
+    # 0x00400000, 128 KiB SRAM at 0x20000000). First SAM4S part: the PMC
+    # (sam4s_pmc) and the older SAM4S PIO block (sam4s_pio, not the SAM D21
+    # PORT), UART0/1/USART0/1 on the `sam` layout; TC/SPI/TWI/EEFC and the
+    # system controller are declared stubs. SIM-DERIVED — no SAM4S bench part.
+    # See docs/boards/sam4s-xplained.md and examples/sam4s-xplained/VALIDATION.md.
+    doc: docs/boards/sam4s-xplained.md
+    chip: configs/chips/sam4s16c.yaml
+    tier: smoke-manual
+    offline_tests:
+      - "firmware_survival::test_sam4s_xplained_smoke_survival"
+    models:
+      - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/decoder/arm.rs
+      - crates/core/src/peripherals/sam4s.rs
+      - crates/core/src/peripherals/uart.rs
+      - crates/core/src/peripherals/systick.rs
+      - crates/core/src/peripherals/stub.rs
+      - crates/core/src/bus/from_config.rs
+      - crates/core/src/bus/profiles.rs
+      - crates/core/src/peripherals/generic_factory.rs
+      - crates/core/src/system/builder/arm.rs
+      - crates/firmware-sam4s-xplained-smoke
+      - configs/chips/sam4s16c.yaml
+      - configs/systems/sam4s-xplained.yaml
+
+  - id: stm32f072
+    # 2026-10-23: STM32F072B-DISCO (STM32F072RBT6, Cortex-M0; 128 KiB flash
+    # at 0x08000000, 16 KiB SRAM at 0x20000000). First STM32F0 part: the F0
+    # RCC profile (RM0360), the v2 GPIO/USART blocks, the legacy SPI/I2C and
+    # the F1-shaped FLASH_R; USB/TSC/CRS are declared stubs. SIM-DERIVED — no
+    # STM32F072 bench part. See docs/boards/stm32f072b-disco.md and
+    # examples/stm32f072b-disco/VALIDATION.md.
+    doc: docs/boards/stm32f072b-disco.md
+    chip: configs/chips/stm32f072.yaml
+    tier: smoke-manual
+    offline_tests:
+      - "firmware_survival::test_stm32f072b_disco_smoke_survival"
+    models:
+      - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/decoder/arm.rs
+      - crates/core/src/peripherals/rcc.rs
+      - crates/core/src/peripherals/gpio.rs
+      - crates/core/src/peripherals/uart.rs
+      - crates/core/src/peripherals/spi.rs
+      - crates/core/src/peripherals/i2c.rs
+      - crates/core/src/peripherals/timer.rs
+      - crates/core/src/peripherals/adc.rs
+      - crates/core/src/peripherals/dac.rs
+      - crates/core/src/peripherals/bxcan.rs
+      - crates/core/src/peripherals/crc.rs
+      - crates/core/src/peripherals/dbgmcu.rs
+      - crates/core/src/peripherals/dma.rs
+      - crates/core/src/peripherals/exti.rs
+      - crates/core/src/peripherals/flash.rs
+      - crates/core/src/peripherals/iwdg.rs
+      - crates/core/src/peripherals/pwr.rs
+      - crates/core/src/peripherals/rtc.rs
+      - crates/core/src/peripherals/systick.rs
+      - crates/core/src/peripherals/wwdg.rs
+      - crates/core/src/peripherals/stub.rs
+      - crates/core/src/bus/from_config.rs
+      - crates/core/src/bus/profiles.rs
+      - crates/core/src/peripherals/generic_factory.rs
+      - crates/core/src/system/builder/arm.rs
+      - crates/firmware-stm32f072b-disco-smoke
+      - configs/chips/stm32f072.yaml
+      - configs/systems/stm32f072b-disco.yaml
+
+  - id: arty-litex-vexriscv
+    # 2026-10-22: Digilent Arty A7-35T running the LiteX VexRiscv SoC. The SoC
+    # surface is the litex-vexriscv set plus the board's Control-and-Status
+    # block (Leds/Switches/ButtonsStatus/ButtonsPending/ButtonsEnabled), so the
+    # smoke proves the LED walk with CSR readback, the switch/button levels and
+    # the pending/enable registers. SIM-DERIVED — no bitstream capture and no
+    # executing-fidelity differential. See docs/boards/arty-litex-vexriscv.md
+    # and examples/arty-litex-vexriscv/VALIDATION.md.
+    doc: docs/boards/arty-litex-vexriscv.md
+    chip: configs/chips/arty-litex-vexriscv.yaml
+    tier: smoke-manual
+    offline_tests:
+      - "firmware_survival::test_arty_litex_smoke_survival"
+    models:
+      - crates/core/src/cpu/riscv.rs
+      - crates/core/src/decoder/riscv.rs
+      - crates/core/src/peripherals/uart.rs
+      - crates/core/src/peripherals/litex_timer.rs
+      - crates/core/src/peripherals/litex_control_status.rs
+      - crates/core/src/peripherals/stub.rs
+      - crates/core/src/bus/from_config.rs
+      - crates/core/src/bus/profiles.rs
+      - crates/core/src/peripherals/generic_factory.rs
+      - crates/core/src/system/riscv.rs
+      - crates/core/src/system/builder/riscv.rs
+      - crates/firmware-arty-litex-smoke
+      - configs/chips/arty-litex-vexriscv.yaml
+      - configs/systems/arty-litex-vexriscv.yaml
+
   - id: vegaboard-ri5cy
     # 2026-10-23: the Vega board's RI5CY SoC (RV32IMC; 1 MiB flash at 0x0,
     # 192 KiB SRAM at 0x20000000). Modelled: CPU + memory + LPUART0/1; the

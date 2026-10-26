@@ -1,0 +1,18 @@
+{
+  "source_commit": "393b53104f64b5e4abc31bc5a7148d56d9717093",
+  "source_sha256": {
+    "scripts/ci/cortex_m_perf_evidence.py": "ddd70f916f6a6d03c1e5213b0826f5db3bd35bf9c9315aa37860b4e7cb5d310b",
+    ".github/workflows/core-identity.yml": "33ff891faf95f5948ec49037b351ffa3ebb832d2ec8a54401267540b3f65b549",
+    "scripts/perf/board_perf.py": "a5e8f1417429aa5c52833d09842fcb80c7e3fe9cdef251c78232232a7114c40c",
+    "scripts/perf/baselines.json": "527cea1b89f422af64bbc0ea0e10ae43d1503bd63d0cfb997095607e7f731cc9"
+  },
+  "function_ast_sha256": {
+    "collect": "6649690b5fee77f69af0174dd3a8d1ba6472e09463f354b0cfd4ac6f9b395529",
+    "validate_identity": "71e2b19523594f8cb684328ede310efc41450f8e3a3856f5e2d2465316c39ccd",
+    "validate_records": "2d4b5d8a3f2c4faa36af2415c8fd0296cbf2469d0035aeeb85fbd3480409bb48",
+    "validate_status": "6a26bb7e477bbc85d98635f1b31a1912744cd1834f6704f091c47d1f82f4f51e",
+    "source_contract": "0a9feb33a1c0d03d1f6d1f6627221601926e7074b4de8266dc0e7ebe8d534ac0"
+  },
+  "ast_encoding": "Python 3.12 ast.dump(include_attributes=False), UTF-8; SHA-256",
+  "scope": "Original full source bytes retained as provenance; current reviewed optional helper additions are permitted outside the five preserved functions. Workflow hash applies after reversing exactly four reviewed optional additions."
+}

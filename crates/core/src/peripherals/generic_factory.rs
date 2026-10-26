@@ -60,6 +60,11 @@ pub const MODEL_TYPES: &[&str] = &[
     "strict_ir_internal",
     "pwr",
     "flash",
+    // STM32U5 system memory (OTP / package / UID / factory flash size).
+    "stm32u5_sysmem",
+    "stm32u5_hash",
+    "stm32u5_saes",
+    "stm32u5_pka",
     "rng",
     "simctl",
     "crc",
@@ -160,6 +165,8 @@ pub const MODEL_TYPES: &[&str] = &[
     // that enables cleanly and never emits a byte.
     "sam_sercom_usart",
     "sam_sercom_spi",
+    "samd51_nvmctrl_manual_storage",
+    "samd51_cmcc_control",
     "sam_dmac_byte",
     "sam_dmac_sercom4_tx_byte",
     // Reserve the full name: never fuzzy-coerce an unqualified SAM DMAC to STM32.
@@ -329,12 +336,17 @@ pub const MODEL_TYPES: &[&str] = &[
     // type or the fuzzy `contains("timer")` fallback would coerce it onto the
     // STM32 timer map.
     "litex_timer",
+    // LiteX Control-and-Status (LED/switch/button CSR block).
+    "litex_controlandstatus",
     // Microchip Mi-V reference-design peripherals. MUST be listed: without
     // membership the fuzzy fallbacks would coerce `miv_coregpio` onto the
     // STM32 GPIO map (it was doing exactly that for the staged descriptors)
     // and `miv_coretimer` onto the STM32 timer map — silently wrong models.
     "miv_coregpio",
     "miv_coretimer",
+    // SAM4S (the older PIO/PMC blocks; not the SAM D21 PORT/PM pair).
+    "sam4s_pio",
+    "sam4s_pmc",
 ];
 
 /// True if `t` is already a canonical model-type name (see [`MODEL_TYPES`]).
@@ -473,6 +485,11 @@ pub fn try_build(
                 m("rcc_apb1enr_mask"),
                 m("rcc_apb2enr_mask"),
             );
+            // HSE is a board component. U5 reference platforms have none
+            // fitted unless the chip yaml says `hse: true`.
+            if let Some(present) = p_cfg.config.get("hse").and_then(|v| v.as_bool()) {
+                rcc.set_hse_present(present);
+            }
             Box::new(rcc)
         }
         "dbgmcu" => {
@@ -568,7 +585,7 @@ pub fn try_build(
             // The dsPIC33FJ32MC204 has no uniform port width: PORTA presents
             // RA0-4/RA7-10, PORTB RB0-15, PORTC RC0-9 (DS70283H pin diagrams,
             // Table 4-20/21/22). The package mask comes from the instance.
-            let mask = match p_cfg.config.get("port").and_then(|v| v.as_str()) {
+            let default_mask = match p_cfg.config.get("port").and_then(|v| v.as_str()) {
                 Some("a") => 0x079F,
                 Some("b") => 0xFFFF,
                 Some("c") => 0x03FF,
@@ -579,6 +596,15 @@ pub fn try_build(
                     ))
                 }
             };
+            // The package mask is per part (the 28-pin sibling has RA0-RA4,
+            // RB0-RB15 and no PORTC); `config.mask` overrides the 44-pin
+            // default.
+            let mask = p_cfg
+                .config
+                .get("mask")
+                .and_then(|v| v.as_u64())
+                .map(|v| v as u16)
+                .unwrap_or(default_mask);
             Box::new(crate::peripherals::pic24_gpio::Pic24GpioPort::new(mask))
         }
         "avr_adc" => {
@@ -594,6 +620,23 @@ pub fn try_build(
         }
         "sam_sercom_usart" => {
             Box::new(crate::peripherals::sam::sercom_usart::SamSercomUsart::new())
+        }
+        "samd51_nvmctrl_manual_storage" | "samd51_cmcc_control" => {
+            let expected = if canonical_type == "samd51_nvmctrl_manual_storage" {
+                0x4100_4000
+            } else {
+                0x4100_6000
+            };
+            if p_cfg.base_address != expected || p_cfg.irq.is_some() || !p_cfg.config.is_empty() {
+                anyhow::bail!(
+                    "SAMD51 storage slice requires its exact base, no IRQ and no config overrides"
+                );
+            }
+            if canonical_type == "samd51_nvmctrl_manual_storage" {
+                Box::new(crate::peripherals::sam::nvmctrl::Samd51Nvmctrl::new())
+            } else {
+                Box::new(crate::peripherals::sam::cmcc::Samd51Cmcc::new())
+            }
         }
         "sam_dmac" => {
             anyhow::bail!("full SAM DMAC is not admitted; sam_dmac_byte is an opt-in software-byte foundation only");
@@ -666,7 +709,15 @@ pub fn try_build(
                 .and_then(|v| v.as_u64())
                 .map(|n| n as u32)
                 .unwrap_or(0x0000_00E7);
+            let limited = p_cfg
+                .config
+                .get("limited_features")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
             let mut spi = crate::peripherals::spi::Spi::new_with_layout_cr2(layout, cr2_mask);
+            if limited {
+                spi = spi.as_limited();
+            }
             // Classic-SPI CR1 writable mask, also a per-part delta: F407 silicon
             // does not latch CR1 bit 12 (CRCNEXT) → 0xEFFF; F1/L0/L4 leave it
             // fully writable (the default). YAML: `config: { cr1_mask: 0xEFFF }`.
@@ -926,13 +977,32 @@ pub fn try_build(
         }
         "gpdma" => {
             // `config: { irq_base: N }` routes channel n to NVIC
-            // line N + n (H563 GPDMA1: 27..34). Without it the
+            // line N + n (H563 GPDMA1: 27..34); `irq_high_base: M` routes the
+            // U5's channels 8..15 to M + (n - 8) (80..87). Without either the
             // block's single `irq:` line serves every channel.
-            let g = crate::peripherals::gpdma::Gpdma::new().with_base(p_cfg.base_address as u32);
-            match p_cfg.config.get("irq_base").and_then(|v| v.as_u64()) {
-                Some(base) => Box::new(g.with_irq_base(base as u32)),
-                None => Box::new(g),
+            // `config: { requests: { usart1_rx: 24, ... } }` maps the
+            // `<peripheral id>_tx` / `_rx` request names the bus routes to the
+            // numeric CxTR2.REQSEL values.
+            let mut g =
+                crate::peripherals::gpdma::Gpdma::new().with_base(p_cfg.base_address as u32);
+            if let Some(base) = p_cfg.config.get("irq_base").and_then(|v| v.as_u64()) {
+                g = g.with_irq_base(base as u32);
             }
+            if let Some(base) = p_cfg.config.get("irq_high_base").and_then(|v| v.as_u64()) {
+                g = g.with_irq_high_base(base as u32);
+            }
+            let mut requests = std::collections::BTreeMap::new();
+            if let Some(table) = p_cfg.config.get("requests").and_then(|v| v.as_mapping()) {
+                for (k, v) in table {
+                    if let (Some(name), Some(id)) = (k.as_str(), v.as_u64()) {
+                        requests.insert(name.to_string(), id as u32);
+                    }
+                }
+            }
+            if !requests.is_empty() {
+                g = g.with_request_table(requests);
+            }
+            Box::new(g)
         }
         "adc" => {
             let layout: crate::peripherals::adc::AdcRegisterLayout =
@@ -965,11 +1035,24 @@ pub fn try_build(
                 ),
             )
         }
-        // Instruction/data cache controllers (H5, WBA, U5…). Zephyr's SoC init
-        // enables the cache via ICACHE_CR.EN and never polls a completion flag,
-        // so a read-as-zero stub keeps the enable sequence from bus-faulting.
-        // No cache behaviour is modelled — the simulator has flat memory.
+        // U5 gets its limited register-contract model below; other chip
+        // profiles use the read-as-zero stub. Cache contents and line effects
+        // are not simulated because the simulator has flat memory.
+        "icache" if p_cfg.config.get("profile").and_then(|v| v.as_str()) == Some("stm32u5") => {
+            Box::new(crate::peripherals::icache::Icache::new())
+        }
         "icache" | "dcache" => Box::new(crate::peripherals::stub::StubPeripheral::new(0x00)),
+        "stm32u5_sysmem" => {
+            let kb = p_cfg
+                .config
+                .get("flash_size_kb")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(2048) as u16;
+            Box::new(crate::peripherals::stm32u5_sysmem::Stm32u5Sysmem::new(kb))
+        }
+        "stm32u5_hash" => Box::new(crate::peripherals::stm32u5_hash::Stm32u5Hash::new()),
+        "stm32u5_saes" => Box::new(crate::peripherals::stm32u5_saes::Stm32u5Saes::new()),
+        "stm32u5_pka" => Box::new(crate::peripherals::stm32u5_pka::Stm32u5Pka::new()),
         // SYSCFG on STM32F4 (`profile: stm32f4`): a real register file,
         // because its EXTICR is the EXTI line-source mux external GPIO edges
         // go through.
@@ -1099,9 +1182,22 @@ pub fn try_build(
         // LiteX countdown timer (`litex/soc/cores/timer.py`): 32-bit CSRs
         // load/reload/en/update_value/value plus the zero-event manager.
         "litex_timer" => Box::new(crate::peripherals::litex_timer::LitexTimer::new()),
+        "litex_controlandstatus" => {
+            let active_low = p_cfg
+                .config
+                .get("buttons_active_low")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            Box::new(
+                crate::peripherals::litex_control_status::LitexControlStatus::new()
+                    .with_buttons_active_low(active_low),
+            )
+        }
         // Microchip Mi-V reference-design peripherals.
         "miv_coregpio" => Box::new(crate::peripherals::miv::MivCoreGpio::new()),
         "miv_coretimer" => Box::new(crate::peripherals::miv::MivCoreTimer::new()),
+        "sam4s_pio" => Box::new(crate::peripherals::sam4s::Sam4sPio::new()),
+        "sam4s_pmc" => Box::new(crate::peripherals::sam4s::Sam4sPmc::new()),
         _ => return Ok(None),
     };
     Ok(Some(dev))

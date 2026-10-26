@@ -102,6 +102,9 @@ impl SystemBus {
             peripheral_accesses: std::cell::Cell::new(0),
             poll_streak: std::cell::Cell::new((u32::MAX, 0, 0, 0)),
             legacy_walk_disabled: false,
+            legacy_walk_pinned_on: false,
+            legacy_tick_candidate_mask: Vec::new(),
+            legacy_tick_peer_write_indices: Vec::new(),
             reset_vector_offset: 0,
             flash_boot_alias: true,
             atomic_register_aliases: AtomicAliasFlavour::None,
@@ -133,6 +136,7 @@ impl SystemBus {
             u5_program_gate_idx: None,
             nrf52_nvmc_idx: None,
             flash_store_owner_idx: None,
+            samd51_nvmctrl_idx: None,
             bus_trace: bus_trace::new_log(),
             logic_tap: crate::logic_capture::LogicTap::new(),
             pin_map: std::collections::HashMap::new(),
@@ -208,6 +212,9 @@ impl SystemBus {
             peripheral_accesses: std::cell::Cell::new(0),
             poll_streak: std::cell::Cell::new((u32::MAX, 0, 0, 0)),
             legacy_walk_disabled: false,
+            legacy_walk_pinned_on: false,
+            legacy_tick_candidate_mask: Vec::new(),
+            legacy_tick_peer_write_indices: Vec::new(),
             reset_vector_offset: 0,
             flash_boot_alias: true,
             atomic_register_aliases: AtomicAliasFlavour::None,
@@ -239,6 +246,7 @@ impl SystemBus {
             u5_program_gate_idx: None,
             nrf52_nvmc_idx: None,
             flash_store_owner_idx: None,
+            samd51_nvmctrl_idx: None,
             bus_trace: bus_trace::new_log(),
             logic_tap: crate::logic_capture::LogicTap::new(),
             pin_map: std::collections::HashMap::new(),
@@ -303,6 +311,7 @@ impl SystemBus {
             clock_gate: None,
         });
         self.rebuild_peripheral_ranges();
+        self.restore_legacy_walk_if_active();
     }
 
     /// Replace the first peripheral with `name`, or append if missing.
@@ -392,6 +401,7 @@ impl SystemBus {
         // set the MMIO router, tick walk and scheduler indices were derived
         // from.
         self.rebuild_peripheral_ranges();
+        self.restore_legacy_walk_if_active();
     }
 
     /// Look up a registered ROM thunk by absolute PC.

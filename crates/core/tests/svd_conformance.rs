@@ -31,6 +31,20 @@ use std::collections::{HashMap, HashSet};
 /// newly-vendored SVD cannot sit unused.
 const PAIRS: &[(&str, &str)] = &[
     ("atsamd21g18a", "tests/fixtures/real_world/atsamd21g18a.svd"),
+    // A-variant SAM D21 siblings share the G18A's family-wide linear address
+    // map. The E parts simply expose four SERCOM instances, so only those four
+    // are declared and checked against this SVD.
+    ("atsamd21e15a", "tests/fixtures/real_world/atsamd21g18a.svd"),
+    ("atsamd21e16a", "tests/fixtures/real_world/atsamd21g18a.svd"),
+    ("atsamd21e17a", "tests/fixtures/real_world/atsamd21g18a.svd"),
+    ("atsamd21e18a", "tests/fixtures/real_world/atsamd21g18a.svd"),
+    ("atsamd21g15a", "tests/fixtures/real_world/atsamd21g18a.svd"),
+    ("atsamd21g16a", "tests/fixtures/real_world/atsamd21g18a.svd"),
+    ("atsamd21g17a", "tests/fixtures/real_world/atsamd21g18a.svd"),
+    ("atsamd21j15a", "tests/fixtures/real_world/atsamd21g18a.svd"),
+    ("atsamd21j16a", "tests/fixtures/real_world/atsamd21g18a.svd"),
+    ("atsamd21j17a", "tests/fixtures/real_world/atsamd21g18a.svd"),
+    ("atsamd21j18a", "tests/fixtures/real_world/atsamd21g18a.svd"),
     ("esp32", "tests/fixtures/real_world/esp32.svd"),
     ("esp32c3", "tests/fixtures/real_world/esp32c3.svd"),
     ("esp32c6", "tests/fixtures/real_world/esp32c6.svd"),

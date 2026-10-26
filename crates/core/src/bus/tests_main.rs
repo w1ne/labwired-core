@@ -60,6 +60,81 @@ fn esp32s3_spi_latches_display_dc_from_gpio_output() {
 }
 
 #[test]
+fn gpio_edge_snapshot_skips_generic_gpio_without_edge_observers() {
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
+
+    #[derive(Debug)]
+    struct EdgeObserver;
+
+    impl crate::Peripheral for EdgeObserver {
+        fn read(&self, _offset: u64) -> crate::SimResult<u8> {
+            Ok(0)
+        }
+
+        fn write(&mut self, _offset: u64, _value: u8) -> crate::SimResult<()> {
+            Ok(())
+        }
+
+        fn observes_gpio_edges(&self) -> bool {
+            true
+        }
+    }
+
+    #[derive(Debug)]
+    struct CountedGpio(Arc<AtomicUsize>);
+
+    impl crate::Peripheral for CountedGpio {
+        fn read(&self, _offset: u64) -> crate::SimResult<u8> {
+            Ok(0)
+        }
+
+        fn write(&mut self, _offset: u64, _value: u8) -> crate::SimResult<()> {
+            Ok(())
+        }
+
+        fn read_gpio_input_word(&self) -> u32 {
+            self.0.fetch_add(1, Ordering::SeqCst);
+            0
+        }
+    }
+
+    fn bus_with_observer(include_observer: bool) -> (SystemBus, Arc<AtomicUsize>) {
+        let mut bus = SystemBus::empty();
+        let gpio_reads = Arc::new(AtomicUsize::new(0));
+        bus.add_peripheral(
+            "gpio",
+            0x6000_4000,
+            0x1000,
+            None,
+            Box::new(CountedGpio(gpio_reads.clone())),
+        );
+        if include_observer {
+            bus.add_peripheral("edge-observer", 0x1000, 0x100, None, Box::new(EdgeObserver));
+        }
+        (bus, gpio_reads)
+    }
+
+    let (mut without_observer, gpio_reads_without_observer) = bus_with_observer(false);
+    without_observer.tick_peripherals_fully();
+    assert_eq!(
+        gpio_reads_without_observer.load(Ordering::SeqCst),
+        0,
+        "a generic GPIO name alone must not trigger per-tick input polling"
+    );
+
+    let (mut with_observer, gpio_reads_with_observer) = bus_with_observer(true);
+    with_observer.tick_peripherals_fully();
+    assert_eq!(
+        gpio_reads_with_observer.load(Ordering::SeqCst),
+        1,
+        "GPIO edge observers still need the input snapshot"
+    );
+}
+
+#[test]
 fn timer_poll_coalesce_uses_peripheral_access_class_not_chip_names() {
     let mut bus = SystemBus::new();
     // Systimer model owns ESP register map; bus only sees MmioAccessClass.
@@ -395,9 +470,105 @@ fn declarative_peripherals_enter_legacy_tick_set_only_while_events_are_pending()
     );
 }
 
-#[cfg(feature = "event-scheduler")]
 #[test]
-fn scheduler_peripherals_do_not_enter_legacy_tick_index() {
+fn an_inactive_walk_model_is_deleted_and_restored_when_enabled() {
+    #[derive(Debug)]
+    struct ToggleWalk {
+        active: bool,
+    }
+    impl crate::Peripheral for ToggleWalk {
+        fn read(&self, _offset: u64) -> SimResult<u8> {
+            Ok(0)
+        }
+        fn write(&mut self, _offset: u64, value: u8) -> SimResult<()> {
+            self.active = value != 0;
+            Ok(())
+        }
+        fn legacy_tick_active(&self) -> bool {
+            self.active
+        }
+        fn legacy_tick_dynamic(&self) -> bool {
+            true
+        }
+    }
+
+    let mut bus = SystemBus::empty();
+    bus.add_peripheral(
+        "toggle-walk",
+        0x1000,
+        0x100,
+        None,
+        Box::new(ToggleWalk { active: false }),
+    );
+    bus.legacy_walk_disabled = bus.derive_walk_deletable();
+    assert!(
+        bus.legacy_walk_disabled,
+        "an inactive walk-capable model must not keep the walk alive"
+    );
+    assert!(bus.legacy_tick_indices.is_empty());
+
+    bus.write_u8(0x1000, 1).unwrap();
+    assert!(
+        !bus.legacy_walk_disabled,
+        "enabling the model must bring the walk back"
+    );
+    assert_eq!(bus.legacy_tick_indices, vec![0]);
+
+    bus.write_u8(0x1000, 0).unwrap();
+    assert!(
+        bus.legacy_walk_disabled,
+        "disabling the last walk-capable model must delete the walk again"
+    );
+    assert!(bus.legacy_tick_indices.is_empty());
+
+    bus.add_peripheral(
+        "new-toggle-walk",
+        0x2000,
+        0x100,
+        None,
+        Box::new(ToggleWalk { active: true }),
+    );
+    assert!(
+        !bus.legacy_walk_disabled,
+        "adding an active walk-capable model must restore the walk"
+    );
+    assert_eq!(bus.legacy_tick_indices, vec![1]);
+}
+
+#[test]
+fn structurally_walk_free_models_do_not_enter_the_legacy_tick_index() {
+    #[derive(Debug)]
+    struct WalkFree;
+    impl crate::Peripheral for WalkFree {
+        fn read(&self, _offset: u64) -> SimResult<u8> {
+            Ok(0)
+        }
+        fn write(&mut self, _offset: u64, _value: u8) -> SimResult<()> {
+            Ok(())
+        }
+        fn needs_legacy_walk(&self) -> bool {
+            false
+        }
+    }
+
+    let mut bus = SystemBus::empty();
+    bus.add_peripheral("walk-free", 0x1000, 0x100, None, Box::new(WalkFree));
+
+    assert!(bus.legacy_tick_indices.is_empty());
+    assert_eq!(bus.legacy_tick_candidate_mask, vec![false]);
+    bus.legacy_walk_disabled = true;
+    assert!(!bus.refresh_legacy_tick_index(0));
+    assert!(bus.legacy_tick_indices.is_empty());
+    assert!(bus.legacy_walk_disabled);
+    assert!(bus.derive_walk_deletable());
+}
+
+fn event_scheduler_feature_enabled() -> bool {
+    cfg!(feature = "event-scheduler")
+}
+
+#[test]
+fn scheduler_peripherals_follow_build_mode_legacy_tick_index() {
     #[derive(Debug)]
     struct SchedulerPeripheral;
     impl crate::Peripheral for SchedulerPeripheral {
@@ -407,6 +578,10 @@ fn scheduler_peripherals_do_not_enter_legacy_tick_index() {
 
         fn write(&mut self, _offset: u64, _value: u8) -> SimResult<()> {
             Ok(())
+        }
+
+        fn needs_legacy_walk(&self) -> bool {
+            false
         }
 
         fn legacy_tick_active(&self) -> bool {
@@ -421,14 +596,94 @@ fn scheduler_peripherals_do_not_enter_legacy_tick_index() {
     let mut bus = SystemBus::empty();
     bus.add_peripheral("sched", 0x1000, 0x100, None, Box::new(SchedulerPeripheral));
 
+    let scheduler_enabled = event_scheduler_feature_enabled();
+    let expected_indices = if scheduler_enabled {
+        Vec::new()
+    } else {
+        vec![0]
+    };
+    assert_eq!(bus.legacy_tick_candidate_mask, vec![!scheduler_enabled]);
     assert!(
-        bus.legacy_tick_indices.is_empty(),
-        "scheduler-owned peripherals are advanced by the event scheduler, not the legacy tick walk"
+        bus.legacy_tick_indices == expected_indices,
+        "scheduler-owned peripherals use the event scheduler when enabled and their active legacy fallback otherwise"
     );
-    assert!(!bus.refresh_legacy_tick_index(0));
+    bus.legacy_walk_disabled = true;
+    bus.legacy_tick_indices.clear();
+    assert_eq!(bus.refresh_legacy_tick_index(0), !scheduler_enabled);
+    assert_eq!(bus.legacy_walk_disabled, scheduler_enabled);
     assert!(
-        bus.legacy_tick_indices.is_empty(),
-        "refresh must not reinsert scheduler-owned peripherals into the legacy tick walk"
+        bus.legacy_tick_indices == expected_indices,
+        "refresh must preserve the build-specific scheduler or legacy fallback path"
+    );
+}
+
+#[test]
+fn dynamic_scheduler_mode_transition_respects_build_mode() {
+    use std::sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    };
+
+    #[derive(Debug)]
+    struct DynamicScheduler(Arc<AtomicBool>, Arc<AtomicBool>);
+    impl crate::Peripheral for DynamicScheduler {
+        fn read(&self, _offset: u64) -> SimResult<u8> {
+            Ok(0)
+        }
+
+        fn write(&mut self, _offset: u64, _value: u8) -> SimResult<()> {
+            Ok(())
+        }
+
+        fn needs_legacy_walk(&self) -> bool {
+            true
+        }
+
+        fn legacy_tick_active(&self) -> bool {
+            self.1.load(Ordering::Relaxed)
+        }
+
+        fn legacy_tick_dynamic(&self) -> bool {
+            true
+        }
+
+        fn uses_scheduler(&self) -> bool {
+            self.0.load(Ordering::Relaxed)
+        }
+    }
+
+    let scheduler_enabled = event_scheduler_feature_enabled();
+    let scheduler_mode = Arc::new(AtomicBool::new(false));
+    let tick_active = Arc::new(AtomicBool::new(false));
+    let mut bus = SystemBus::empty();
+    bus.add_peripheral(
+        "dynamic-scheduler",
+        0x1000,
+        0x100,
+        None,
+        Box::new(DynamicScheduler(
+            Arc::clone(&scheduler_mode),
+            Arc::clone(&tick_active),
+        )),
+    );
+    bus.legacy_walk_disabled = bus.derive_walk_deletable();
+    assert!(bus.legacy_walk_disabled);
+    assert!(bus.legacy_tick_indices.is_empty());
+    assert_eq!(bus.legacy_tick_candidate_mask, vec![true]);
+
+    // Mirrors SysTick switching to scheduler mode when its cycle clock
+    // attaches, while a stale legacy activity predicate still reports work.
+    scheduler_mode.store(true, Ordering::Relaxed);
+    tick_active.store(true, Ordering::Relaxed);
+    assert_eq!(bus.refresh_legacy_tick_index(0), !scheduler_enabled);
+    assert_eq!(bus.legacy_walk_disabled, scheduler_enabled);
+    assert_eq!(
+        bus.legacy_tick_indices,
+        if scheduler_enabled {
+            Vec::new()
+        } else {
+            vec![0]
+        }
     );
 }
 
@@ -836,6 +1091,38 @@ fn test_from_config_attaches_adxl345_external_device_to_i2c() {
     let any = bus.peripherals[i2c_idx].dev.as_any_mut().unwrap();
     let i2c = any.downcast_mut::<crate::peripherals::i2c::I2c>().unwrap();
     assert_eq!(i2c.attached_devices().len(), 1);
+
+    #[derive(Debug)]
+    struct ToggleWalk(bool);
+    impl crate::Peripheral for ToggleWalk {
+        fn read(&self, _offset: u64) -> SimResult<u8> {
+            Ok(0)
+        }
+        fn write(&mut self, _offset: u64, value: u8) -> SimResult<()> {
+            self.0 = value != 0;
+            Ok(())
+        }
+        fn legacy_tick_active(&self) -> bool {
+            self.0
+        }
+        fn legacy_tick_dynamic(&self) -> bool {
+            true
+        }
+    }
+
+    bus.add_peripheral(
+        "toggle-walk",
+        0x5000,
+        0x100,
+        None,
+        Box::new(ToggleWalk(false)),
+    );
+    bus.write_u8(0x5000, 1).unwrap();
+    bus.write_u8(0x5000, 0).unwrap();
+    assert!(
+        !bus.legacy_walk_disabled,
+        "manifest walk_deleted: false must pin the legacy walk on after dynamic activity drains"
+    );
 }
 
 #[test]
@@ -3607,6 +3894,9 @@ fn test_flash_boot_alias_read_and_write() {
         peripheral_accesses: std::cell::Cell::new(0),
         poll_streak: std::cell::Cell::new((u32::MAX, 0, 0, 0)),
         legacy_walk_disabled: false,
+        legacy_walk_pinned_on: false,
+        legacy_tick_candidate_mask: Vec::new(),
+        legacy_tick_peer_write_indices: Vec::new(),
         reset_vector_offset: 0,
         flash_boot_alias: true,
         atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
@@ -3637,6 +3927,7 @@ fn test_flash_boot_alias_read_and_write() {
         u5_program_gate_idx: None,
         nrf52_nvmc_idx: None,
         flash_store_owner_idx: None,
+        samd51_nvmctrl_idx: None,
         bus_trace: bus_trace::new_log(),
         logic_tap: crate::logic_capture::LogicTap::new(),
         pin_map: std::collections::HashMap::new(),
@@ -3736,6 +4027,9 @@ fn h5_flash_bus(gate: bool) -> SystemBus {
         peripheral_accesses: std::cell::Cell::new(0),
         poll_streak: std::cell::Cell::new((u32::MAX, 0, 0, 0)),
         legacy_walk_disabled: false,
+        legacy_walk_pinned_on: false,
+        legacy_tick_candidate_mask: Vec::new(),
+        legacy_tick_peer_write_indices: Vec::new(),
         reset_vector_offset: 0,
         flash_boot_alias: true,
         atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
@@ -3766,6 +4060,7 @@ fn h5_flash_bus(gate: bool) -> SystemBus {
         u5_program_gate_idx: None,
         nrf52_nvmc_idx: None,
         flash_store_owner_idx: None,
+        samd51_nvmctrl_idx: None,
         bus_trace: bus_trace::new_log(),
         logic_tap: crate::logic_capture::LogicTap::new(),
         pin_map: std::collections::HashMap::new(),
@@ -4018,6 +4313,9 @@ fn h5_rww_bus(gate: bool) -> SystemBus {
         peripheral_accesses: std::cell::Cell::new(0),
         poll_streak: std::cell::Cell::new((u32::MAX, 0, 0, 0)),
         legacy_walk_disabled: false,
+        legacy_walk_pinned_on: false,
+        legacy_tick_candidate_mask: Vec::new(),
+        legacy_tick_peer_write_indices: Vec::new(),
         reset_vector_offset: 0,
         flash_boot_alias: true,
         atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
@@ -4048,6 +4346,7 @@ fn h5_rww_bus(gate: bool) -> SystemBus {
         u5_program_gate_idx: None,
         nrf52_nvmc_idx: None,
         flash_store_owner_idx: None,
+        samd51_nvmctrl_idx: None,
         bus_trace: bus_trace::new_log(),
         logic_tap: crate::logic_capture::LogicTap::new(),
         pin_map: std::collections::HashMap::new(),
@@ -4296,6 +4595,9 @@ fn test_peripheral_range_index_lookup() {
         peripheral_accesses: std::cell::Cell::new(0),
         poll_streak: std::cell::Cell::new((u32::MAX, 0, 0, 0)),
         legacy_walk_disabled: false,
+        legacy_walk_pinned_on: false,
+        legacy_tick_candidate_mask: Vec::new(),
+        legacy_tick_peer_write_indices: Vec::new(),
         reset_vector_offset: 0,
         flash_boot_alias: true,
         atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
@@ -4326,6 +4628,7 @@ fn test_peripheral_range_index_lookup() {
         u5_program_gate_idx: None,
         nrf52_nvmc_idx: None,
         flash_store_owner_idx: None,
+        samd51_nvmctrl_idx: None,
         bus_trace: bus_trace::new_log(),
         logic_tap: crate::logic_capture::LogicTap::new(),
         pin_map: std::collections::HashMap::new(),
@@ -4430,6 +4733,9 @@ fn test_dma_tick_executes_copy_and_raises_irq() {
         peripheral_accesses: std::cell::Cell::new(0),
         poll_streak: std::cell::Cell::new((u32::MAX, 0, 0, 0)),
         legacy_walk_disabled: false,
+        legacy_walk_pinned_on: false,
+        legacy_tick_candidate_mask: Vec::new(),
+        legacy_tick_peer_write_indices: Vec::new(),
         reset_vector_offset: 0,
         flash_boot_alias: true,
         atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
@@ -4460,6 +4766,7 @@ fn test_dma_tick_executes_copy_and_raises_irq() {
         u5_program_gate_idx: None,
         nrf52_nvmc_idx: None,
         flash_store_owner_idx: None,
+        samd51_nvmctrl_idx: None,
         bus_trace: bus_trace::new_log(),
         logic_tap: crate::logic_capture::LogicTap::new(),
         pin_map: std::collections::HashMap::new(),

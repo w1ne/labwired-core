@@ -168,6 +168,7 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BASELINE_PATH = Path(__file__).resolve().parent / "baselines.json"
 CHIP_DIR = REPO_ROOT / "configs/chips"
+USE_CHIP_NAME = False
 
 FIXTURE_DIR = REPO_ROOT / "target/perf-fixtures"
 
@@ -293,6 +294,9 @@ SPIN_AVR = Spin(
 FIXTURES = {
     ("arm", 0x08000000, 0x20000000): ("stm32", SPIN_CORTEX_M),
     ("arm", 0x00000000, 0x20000000): ("nrf", SPIN_CORTEX_M),
+    # NXP K32W041: flash at 0, SRAM_CTRL0 at 0x04000000. Closed model, private
+    # CLI/chip dir; the public rating pipeline can still link and measure it.
+    ("arm", 0x00000000, 0x04000000): ("k32w041z", SPIN_CORTEX_M),
     # nRF51822 as configs/chips/nrf51822.yaml maps it: the S110 application
     # window only (flash from 0x18000; the MBR/SoftDevice range is not loaded).
     ("arm", 0x00018000, 0x20000000): ("nrf51-app", SPIN_CORTEX_M),
@@ -322,6 +326,12 @@ FIXTURES = {
 # their own chip config and get their own baseline. A generic CPU-only smoke
 # fixture must not stand in for an unimplemented board platform.
 WAIVED: dict[str, str] = {
+    "atmega2561": (
+        "Runs on the same AVR interpreter as atmega328p (AvrModel::Atmega2560: "
+        "3-byte PC, RAM at 0x200), but the AVR spin fixture is linked with "
+        "-mmcu=atmega328p for RAM at 0x100 and no avr6 build of it exists yet. "
+        "No separate throughput claim is made for the 64-pin ATmega2561."
+    ),
     "atmega2560": (
         "Runs on the same AVR interpreter as atmega328p (AvrModel::Atmega2560: "
         "3-byte PC, RAM at 0x200), but the AVR spin fixture is linked with "
@@ -341,6 +351,36 @@ WAIVED: dict[str, str] = {
         "represent it. No perf-spin fixture or throughput claim for this part yet "
         "(docs/pic24-m0-reference.md)."
     ),
+    "pic24f04ka200": (
+        "PIC24 M0 bring-up: boot, UART1 TX and GPIO smoke only. The checked-in "
+        "XC16 image is not a representative perf-spin workload, and this gate "
+        "has no XC16 fixture builder; no throughput claim is made for this part."
+    ),
+    "pic24f04ka201": (
+        "PIC24 M0 bring-up: boot, UART1 TX and GPIO smoke only. The checked-in "
+        "XC16 image is not a representative perf-spin workload, and this gate "
+        "has no XC16 fixture builder; no throughput claim is made for this part."
+    ),
+    "pic24f08ka101": (
+        "PIC24 M0 bring-up: boot, UART1 TX and GPIO smoke only. The checked-in "
+        "XC16 image is not a representative perf-spin workload, and this gate "
+        "has no XC16 fixture builder; no throughput claim is made for this part."
+    ),
+    "pic24f08ka102": (
+        "PIC24 M0 bring-up: boot, UART1 TX and GPIO smoke only. The checked-in "
+        "XC16 image is not a representative perf-spin workload, and this gate "
+        "has no XC16 fixture builder; no throughput claim is made for this part."
+    ),
+    "pic24f16ka101": (
+        "PIC24 M0 bring-up: boot, UART1 TX and GPIO smoke only. The checked-in "
+        "XC16 image is not a representative perf-spin workload, and this gate "
+        "has no XC16 fixture builder; no throughput claim is made for this part."
+    ),
+    "pic24f16ka102": (
+        "PIC24 M0 bring-up: boot, UART1 TX and GPIO smoke only. The checked-in "
+        "XC16 image is not a representative perf-spin workload, and this gate "
+        "has no XC16 fixture builder; no throughput claim is made for this part."
+    ),
     "litex-vexriscv": (
         "L1 smoke, SIM-DERIVED: CPU + integrated SRAM + the LiteX UART console and "
         "countdown timer only, with no silicon capture and no executing-fidelity "
@@ -348,11 +388,25 @@ WAIVED: dict[str, str] = {
         "0x20000000, RAM 0x10000000), and no throughput claim is made for this SoC "
         "(docs/boards/litex-vexriscv.md)."
     ),
+    "arty-litex-vexriscv": (
+        "L1 smoke, SIM-DERIVED: CPU + integrated SRAM + the LiteX UART/timer and the "
+        "board's Control-and-Status LED/switch/button CSR, with no silicon capture "
+        "and no executing-fidelity differential. No perf fixture is built for its "
+        "memory map (flash 0x20000000, RAM 0x10000000), and no throughput claim is "
+        "made for this board (docs/boards/arty-litex-vexriscv.md)."
+    ),
     "vegaboard-ri5cy": (
         "L1 smoke, SIM-DERIVED: CPU + flash/SRAM + the LPUART0 console only, with "
         "no silicon capture and no executing-fidelity differential. No perf fixture "
         "is built for the Vega SoC map (flash 0x0, RAM 0x20000000), and no "
         "throughput claim is made for this board (docs/boards/vegaboard-ri5cy.md)."
+    ),
+    "sam4s16c": (
+        "L1 smoke, SIM-DERIVED: Cortex-M4 + flash/SRAM + UART0 and the SAM4S "
+        "PIO LED/button path only, with no silicon capture and no "
+        "executing-fidelity differential. No perf fixture is built for the "
+        "SAM4S map (flash 0x00400000, RAM 0x20000000), and no throughput claim "
+        "is made for this board (docs/boards/sam4s-xplained.md)."
     ),
     "rv1103": (
         "The old Cortex-A7 CPU subset fixture is not representative perf evidence. "
@@ -430,6 +484,8 @@ def discover_chips() -> dict[str, dict]:
     """Every modelled chip descriptor, by board id (the file stem)."""
     chips: dict[str, dict] = {}
     for path in sorted(CHIP_DIR.glob("*.yaml")):
+        if path.name.endswith("-system.yaml"):
+            continue
         if path.stem.startswith(CHIP_EXCLUDE_PREFIX):
             continue
         chips[path.stem] = yaml.safe_load(path.read_text()) or {}
@@ -785,8 +841,9 @@ def same_loop_baselines(baselines: dict, ratio: float = SAME_LOOP_RATIO) -> list
     return found
 
 
-def measure_once(cli: Path, chip: Path, firmware: Path, steps: int, mode: str) -> Run:
+def measure_once(cli: Path, chip_arg: str, firmware: Path, steps: int, mode: str) -> Run:
     """Retired host instructions for a full run of `steps` simulated steps."""
+    chip_label = Path(chip_arg).name
     # `--batched` does not select the ARM loop. `run_firmware_arm` takes
     # `run_arm_batched_loop` whenever `LABWIRED_ARM_SINGLE_STEP` is unset,
     # and prints the `[batched]` summary only when `--batched` was passed.
@@ -808,7 +865,7 @@ def measure_once(cli: Path, chip: Path, firmware: Path, steps: int, mode: str) -
                 str(cli),
                 "run",
                 "--chip",
-                str(chip),
+                chip_arg,
                 "--firmware",
                 str(firmware),
                 "--max-steps",
@@ -822,7 +879,7 @@ def measure_once(cli: Path, chip: Path, firmware: Path, steps: int, mode: str) -
     match = IREFS_RE.search(proc.stderr)
     if not match:
         raise RuntimeError(
-            f"callgrind produced no instruction count for {chip.name} "
+            f"callgrind produced no instruction count for {chip_label} "
             f"[{mode}]:\n{proc.stderr[-2000:]}"
         )
     irefs = int(match.group(1).replace(",", ""))
@@ -833,7 +890,7 @@ def measure_once(cli: Path, chip: Path, firmware: Path, steps: int, mode: str) -
         strayed = BATCHED_RE.search(proc.stderr)
         if strayed:
             raise ModeNotTakenError(
-                f"{chip.stem}: asked for the STEP loop but the CLI printed a "
+                f"{chip_label}: asked for the STEP loop but the CLI printed a "
                 f"'[batched] ...' line, so it took the batched one. The number "
                 f"would be for the loop this mode exists to avoid.\n"
                 f"{proc.stderr[-2000:]}"
@@ -847,7 +904,7 @@ def measure_once(cli: Path, chip: Path, firmware: Path, steps: int, mode: str) -
     proof = BATCHED_RE.search(proc.stderr)
     if not proof:
         raise ModeNotTakenError(
-            f"{chip.stem}: asked for the batched loop but the CLI printed no "
+            f"{chip_label}: asked for the batched loop but the CLI printed no "
             f"'[batched] ...' line, so the run did not take it. Is the CLI "
             f"older than `--batched`?\n{proc.stderr[-2000:]}"
         )
@@ -876,11 +933,12 @@ def measure_board(cli: Path, board: str, firmware: Path, mode: str) -> Measureme
     chip = CHIP_DIR / f"{board}.yaml"
     if not chip.exists():
         raise FileNotFoundError(f"no chip descriptor for board '{board}': {chip}")
+    chip_arg = board if USE_CHIP_NAME else str(chip)
     samples: list[Measurement] = []
     repeats = BATCH_REPEATS if mode == MODE_BATCH else 1
     for _ in range(repeats):
-        low = measure_once(cli, chip, firmware, STEPS_LOW, mode)
-        high = measure_once(cli, chip, firmware, STEPS_HIGH, mode)
+        low = measure_once(cli, chip_arg, firmware, STEPS_LOW, mode)
+        high = measure_once(cli, chip_arg, firmware, STEPS_HIGH, mode)
         samples.append(
             Measurement(
                 (high.irefs - low.irefs) / (STEPS_HIGH - STEPS_LOW),
@@ -902,6 +960,7 @@ def measure_board(cli: Path, board: str, firmware: Path, mode: str) -> Measureme
 
 
 def main() -> int:
+    global CHIP_DIR, BASELINE_PATH, USE_CHIP_NAME
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--update",
@@ -916,6 +975,26 @@ def main() -> int:
         "--cli",
         default=str(REPO_ROOT / "target/release/labwired"),
         help="path to the labwired CLI built with --features event-scheduler",
+    )
+    parser.add_argument(
+        "--chip-dir",
+        default=str(CHIP_DIR),
+        help="directory of chip YAMLs (default: configs/chips; use a private dir for closed models)",
+    )
+    parser.add_argument(
+        "--baselines",
+        default=str(BASELINE_PATH),
+        help="baseline JSON (default: scripts/perf/baselines.json)",
+    )
+    parser.add_argument(
+        "--chip-name",
+        action="store_true",
+        help="pass the board name to --chip instead of the YAML path (private plugin builds)",
+    )
+    parser.add_argument(
+        "--rating-out",
+        type=Path,
+        help="write measured Ir/step per board/mode as JSON (no baselines)",
     )
     parser.add_argument(
         "--status-json",
@@ -940,6 +1019,10 @@ def main() -> int:
         "Halves the run while iterating; not for CI, which needs both",
     )
     args = parser.parse_args()
+
+    CHIP_DIR = Path(args.chip_dir).resolve()
+    BASELINE_PATH = Path(args.baselines).resolve()
+    USE_CHIP_NAME = args.chip_name
 
     modes_filter = set(args.modes.split(",")) if args.modes else None
     if modes_filter and not modes_filter <= set(ALL_MODES):
@@ -1015,8 +1098,16 @@ def main() -> int:
         )
         return 2
 
+    chips = discover_chips()
+    if args.boards:
+        requested = set(args.boards.split(","))
+        missing = requested - set(chips)
+        if missing:
+            print(f"error: unknown/uncovered boards: {', '.join(sorted(missing))}", file=sys.stderr)
+            return 2
+        chips = {board: chip for board, chip in chips.items() if board in requested}
     try:
-        covered, waived = plan_coverage(discover_chips())
+        covered, waived = plan_coverage(chips)
     except CoverageError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
@@ -1147,6 +1238,20 @@ def main() -> int:
         f"measured this run: {measured_bms} board-modes across {len(measured)} chips / "
         f"{len({covered[b] for b in measured})} memory maps"
     )
+    if args.rating_out:
+        args.rating_out.write_text(
+            json.dumps(
+                {
+                    "schema": 1,
+                    "chip_dir": str(CHIP_DIR),
+                    "cli": str(cli),
+                    "models": measured,
+                },
+                indent=2,
+            )
+            + "\n"
+        )
+
     if unmeasurable:
         print("MODES THAT DID NOT EXECUTE (measured nothing):")
         for note in unmeasurable:

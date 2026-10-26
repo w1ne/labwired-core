@@ -200,10 +200,20 @@
       "how": "needs-build",
       "why": "First U5 part. The io-smoke firmware is built from source (examples/nucleo-u575zi/io-smoke.yaml expects target/thumbv8m.main-none-eabi/release/firmware-stm32u575-demo); no firmware-demos release asset exists yet"
     },
+    "stm32u5a5zj": {
+      "how": "needs-build",
+      "why": "The U5A5 Nucleo model and source UART smoke are in this repository, but the smoke firmware is built from source (examples/nucleo-u5a5zj/io-smoke.yaml); there is no committed ELF or firmware-demos release asset for an installed CLI"
+    },
     "stm32u545": {
       "how": "committed",
       "firmware": "tests/fixtures/nucleo-u545re-blinky.elf",
       "expect": "OK"
+    },
+    "atmega2561": {
+      "how": "example",
+      "script": "examples/atmega2561-io/io-smoke.yaml",
+      "expect": "1/1 checks",
+      "note": "64-pin ATmega2561 on the shared public AVR core. The committed tiny ELF prints `2561 OK` through USART0 and drives PB5; the script verdict is asserted because `labwired test` does not echo the AVR console."
     },
     "atmega2560": {
       "how": "example",
@@ -223,6 +233,17 @@
       "expect": "samd21 sercom0 up",
       "note": "Bare-metal SERCOM0 bring-up for the Arduino Zero / Feather M0 class. Same ELF `cargo build -p firmware-samd21-demo --release` produces from crates/firmware-samd21-demo (build from that directory, not the workspace root: its -Tlink.x comes from its own .cargo/config.toml, and a root build links entry 0x0 and boots nowhere while succeeding). Committed so a clone plus the CLI is the whole prerequisite. The expected line is the SECOND the firmware prints, so a model that sets INTFLAG.DRE once and forgets emits only the first and fails here."
     },
+    "atsamd21e15a": { "how": "needs-build", "why": "Geometry-only A-orderable on the atsamd21g18a engine; no per-orderable firmware run is claimed. Family-wide GPIO labels are not package bond-outs." },
+    "atsamd21e16a": { "how": "needs-build", "why": "Geometry-only A-orderable on the atsamd21g18a engine; no per-orderable firmware run is claimed. Family-wide GPIO labels are not package bond-outs." },
+    "atsamd21e17a": { "how": "needs-build", "why": "Geometry-only A-orderable on the atsamd21g18a engine; no per-orderable firmware run is claimed. Family-wide GPIO labels are not package bond-outs." },
+    "atsamd21e18a": { "how": "needs-build", "why": "Geometry-only A-orderable on the atsamd21g18a engine; no per-orderable firmware run is claimed. Family-wide GPIO labels are not package bond-outs." },
+    "atsamd21g15a": { "how": "needs-build", "why": "Geometry-only A-orderable on the atsamd21g18a engine; no per-orderable firmware run is claimed. Family-wide GPIO labels are not package bond-outs." },
+    "atsamd21g16a": { "how": "needs-build", "why": "Geometry-only A-orderable on the atsamd21g18a engine; no per-orderable firmware run is claimed. Family-wide GPIO labels are not package bond-outs." },
+    "atsamd21g17a": { "how": "needs-build", "why": "Geometry-only A-orderable on the atsamd21g18a engine; no per-orderable firmware run is claimed. Family-wide GPIO labels are not package bond-outs." },
+    "atsamd21j15a": { "how": "needs-build", "why": "Geometry-only A-orderable on the atsamd21g18a engine; no per-orderable firmware run is claimed. Family-wide GPIO labels are not package bond-outs." },
+    "atsamd21j16a": { "how": "needs-build", "why": "Geometry-only A-orderable on the atsamd21g18a engine; no per-orderable firmware run is claimed. Family-wide GPIO labels are not package bond-outs." },
+    "atsamd21j17a": { "how": "needs-build", "why": "Geometry-only A-orderable on the atsamd21g18a engine; no per-orderable firmware run is claimed. Family-wide GPIO labels are not package bond-outs." },
+    "atsamd21j18a": { "how": "needs-build", "why": "Geometry-only A-orderable on the atsamd21g18a engine; no per-orderable firmware run is claimed. Family-wide GPIO labels are not package bond-outs." },
     "atsamd21": {
       "how": "committed",
       "firmware": "tests/fixtures/atsamd21-nano33-smoke.elf",
@@ -277,10 +298,52 @@
       "how": "needs-build",
       "why": "The RI5CY/Vega board model is newer than the released CLI this gate installs. The committed smoke tests/fixtures/vegaboard-ri5cy-smoke.elf prints 'VEGABOARD RI5CY SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
     },
+    "arty-litex-vexriscv": {
+      "how": "needs-build",
+      "why": "The LiteX VexRiscv SoC and Control-and-Status model are newer than the released CLI this gate installs. The committed smoke tests/fixtures/arty-litex-smoke.elf prints 'ARTY LITEX SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
+    },
     "dspic33fj32mc202": {
       "how": "committed",
       "firmware": "examples/dspic33fj32mc202/firmware/dspic33fj32mc202-xc16-uart-smoke.elf",
       "expect": "UART: HI"
+    },
+    "pic24f04ka200": {
+      "how": "committed",
+      "firmware": "examples/pic24f04ka200/firmware/pic24f04ka200-xc16-uart-smoke.elf",
+      "expect": "UART: HI"
+    },
+    "pic24f04ka201": {
+      "how": "committed",
+      "firmware": "examples/pic24f04ka201/firmware/pic24f04ka201-xc16-uart-smoke.elf",
+      "expect": "UART: HI"
+    },
+    "pic24f08ka101": {
+      "how": "committed",
+      "firmware": "examples/pic24f08ka101/firmware/pic24f08ka101-xc16-uart-smoke.elf",
+      "expect": "UART: HI"
+    },
+    "pic24f08ka102": {
+      "how": "committed",
+      "firmware": "examples/pic24f08ka102/firmware/pic24f08ka102-xc16-uart-smoke.elf",
+      "expect": "UART: HI"
+    },
+    "pic24f16ka101": {
+      "how": "committed",
+      "firmware": "examples/pic24f16ka101/firmware/pic24f16ka101-xc16-uart-smoke.elf",
+      "expect": "UART: HI"
+    },
+    "pic24f16ka102": {
+      "how": "committed",
+      "firmware": "examples/pic24f16ka102/firmware/pic24f16ka102-xc16-uart-smoke.elf",
+      "expect": "UART: HI"
+    },
+    "stm32f072": {
+      "how": "needs-build",
+      "why": "The STM32F0 part is newer than the released CLI this gate installs. The committed smoke tests/fixtures/stm32f072b-disco-smoke.elf prints 'STM32F072B-DISCO SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
+    },
+    "sam4s16c": {
+      "how": "needs-build",
+      "why": "The SAM4S part (and the sam4s_pio/sam4s_pmc models) are newer than the released CLI this gate installs. The committed smoke tests/fixtures/sam4s-xplained-smoke.elf prints 'SAM4S XPLAINED SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
     }
   }
 }

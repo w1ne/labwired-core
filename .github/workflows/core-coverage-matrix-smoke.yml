@@ -346,6 +346,27 @@ jobs:
           - id: dspic33fj32mc202-uart
             script: examples/dspic33fj32mc202/io-smoke.yaml
             system: examples/dspic33fj32mc202/system.yaml
+          # PIC24F KA parts use checked-in XC16 ELFs, so these exact-chip CLI
+          # smokes need no cross compiler. They keep the per-part UART contract
+          # in the coverage matrix as well as in the core integration tests.
+          - id: pic24f04ka200-uart
+            script: examples/pic24f04ka200/io-smoke.yaml
+            system: examples/pic24f04ka200/system.yaml
+          - id: pic24f04ka201-uart
+            script: examples/pic24f04ka201/io-smoke.yaml
+            system: examples/pic24f04ka201/system.yaml
+          - id: pic24f08ka101-uart
+            script: examples/pic24f08ka101/io-smoke.yaml
+            system: examples/pic24f08ka101/system.yaml
+          - id: pic24f08ka102-uart
+            script: examples/pic24f08ka102/io-smoke.yaml
+            system: examples/pic24f08ka102/system.yaml
+          - id: pic24f16ka101-uart
+            script: examples/pic24f16ka101/io-smoke.yaml
+            system: examples/pic24f16ka101/system.yaml
+          - id: pic24f16ka102-uart
+            script: examples/pic24f16ka102/io-smoke.yaml
+            system: examples/pic24f16ka102/system.yaml
           # LiteX VexRiscv SoC — first RISC-V soft-core cell. The smoke links
           # into the SoC's integrated SRAM (0x10000000) and prints over the
           # LiteX UART; one assertion reads back a declared-stub CSR window
@@ -362,6 +383,24 @@ jobs:
             profile_dir: release
             script: examples/arduino-nano-33-ble/io-smoke.yaml
             system: examples/arduino-nano-33-ble/system.yaml
+          # SAM4S Xplained: Cortex-M4, UART0 console + the SAM4S PIO LED/button
+          # path; TC/SPI/TWI/EEFC and the system controller stay stubs.
+          - id: sam4s-xplained-smoke
+            target: thumbv7em-none-eabi
+            crate: firmware-sam4s-xplained-smoke
+            profile: release
+            profile_dir: release
+            script: examples/sam4s-xplained/io-smoke.yaml
+            system: examples/sam4s-xplained/system.yaml
+          # STM32F072B-DISCO: Cortex-M0, USART1 console + the four-LED ODR
+          # walk; USB/TSC/CRS stay declared stubs.
+          - id: stm32f072b-disco-smoke
+            target: thumbv6m-none-eabi
+            crate: firmware-stm32f072b-disco-smoke
+            profile: release
+            profile_dir: release
+            script: examples/stm32f072b-disco/io-smoke.yaml
+            system: examples/stm32f072b-disco/system.yaml
           - id: litex-vexriscv-smoke
             target: riscv32im-unknown-none-elf
             crate: firmware-litex-vexriscv-smoke
@@ -369,6 +408,17 @@ jobs:
             profile_dir: release
             script: examples/litex-vexriscv/io-smoke.yaml
             system: examples/litex-vexriscv/system.yaml
+          # Digilent Arty A7-35T on the same LiteX VexRiscv SoC, plus the
+          # board's Control-and-Status block: the smoke walks the LEDs with CSR
+          # readback, reports the switch/button levels and the pending/enable
+          # registers, and runs the timer one-shot.
+          - id: arty-litex-smoke
+            target: riscv32im-unknown-none-elf
+            crate: firmware-arty-litex-smoke
+            profile: release
+            profile_dir: release
+            script: examples/arty-litex-vexriscv/io-smoke.yaml
+            system: examples/arty-litex-vexriscv/system.yaml
           # Vega board (RI5CY): LPUART0 console + a real multiply; SCG/PCC,
           # INTMUX and the low-power timers stay declared stubs.
           - id: vegaboard-ri5cy-smoke

@@ -1,0 +1,32 @@
+# LabWired - NUCLEO-U5A5ZJ-Q example system configuration.
+# Same MB1549 board IO as configs/systems/nucleo-u5a5zj.yaml; kept as its own file so
+# the example is self-contained the way examples/nucleo-h563zi is.
+name: "nucleo-u5a5zj-example"
+chip: "../../configs/chips/stm32u5a5zj.yaml"
+debug_uart: "usart1"
+external_devices: []
+board_io:
+  - id: "led_ld1"
+    kind: "led"
+    peripheral: "gpioc"
+    pin: 7
+    signal: "output"
+    active_high: true
+  - id: "led_ld2"
+    kind: "led"
+    peripheral: "gpiob"
+    pin: 7
+    signal: "output"
+    active_high: true
+  - id: "led_ld3"
+    kind: "led"
+    peripheral: "gpiog"
+    pin: 2
+    signal: "output"
+    active_high: true
+  - id: "button_b1"
+    kind: "button"
+    peripheral: "gpioc"
+    pin: 13
+    signal: "input"
+    active_high: true

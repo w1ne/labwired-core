@@ -70,6 +70,10 @@ pub const NSCR_MER2: u32 = 1 << 15;
 pub const NSCR_STRT: u32 = 1 << 16;
 /// Bit 17 — OPTSTRT: options modification start (needs OPTKEYR unlock).
 pub const NSCR_OPTSTRT: u32 = 1 << 17;
+/// Bit 24 — EOPIE: end-of-operation interrupt and status enable.
+pub const NSCR_EOPIE: u32 = 1 << 24;
+/// Bit 25 — ERRIE: error interrupt enable.
+pub const NSCR_ERRIE: u32 = 1 << 25;
 /// Bit 27 — OBL_LAUNCH: force option-byte loading.
 pub const NSCR_OBL_LAUNCH: u32 = 1 << 27;
 /// Bit 30 — OPTLOCK: option lock. Set-only; cleared by the OPTKEYR sequence.

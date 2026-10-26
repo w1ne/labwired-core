@@ -118,6 +118,7 @@ impl SystemBus {
         self.sync_esp32c3_pms_write(idx, mmio_addr - base);
         self.peripherals[idx].ticks_remaining = 0;
         self.refresh_legacy_tick_index(idx);
+        self.refresh_legacy_tick_peer_write_observers(idx);
         self.refresh_bus_tick_index(idx);
         self.reconcile_irq_levels_after_write(idx);
     }
@@ -289,6 +290,31 @@ impl SystemBus {
                 observer.on_memory_write(addr + i as u64, 0, byte);
             }
         }
+    }
+
+    /// Fast path for a CPU store into plain RAM while every optional store
+    /// gate is inactive. The per-step perf fixture spends most of its stores
+    /// here; the gate chain is only paid on buses that actually enable one.
+    #[inline(always)]
+    fn try_plain_ram_store(&mut self, addr: u64, width: u8, value: u32) -> bool {
+        if self.ram.read_u8(addr).is_none()
+            || !self.debug_watches.is_empty()
+            || self.memory_policy.active()
+            || self.esp32c3_pms_armed
+            || !self.observers.is_empty()
+        {
+            return false;
+        }
+        let wrote = match width {
+            1 => self.ram.write_u8(addr, value as u8),
+            2 => self.ram.write_u16(addr, value as u16),
+            4 => self.ram.write_u32(addr, value),
+            _ => false,
+        };
+        if wrote {
+            self.note_memory_write();
+        }
+        wrote
     }
 
     /// Exact committed RAM bytes, unlike peripheral callbacks' unknown old value.
@@ -702,6 +728,9 @@ impl crate::Bus for SystemBus {
         if !self.debug_watches.is_empty() && !self.debug_watch_host_bypass.get() {
             self.note_debug_watch_store(addr);
         }
+        if self.try_plain_ram_store(addr, 1, value as u32) {
+            return Ok(());
+        }
         if let Some(r) = self.memory_policy_gate_store(addr) {
             return r;
         }
@@ -718,6 +747,9 @@ impl crate::Bus for SystemBus {
             return r;
         }
         if let Some(r) = self.try_flash_owner_store(addr, 1, value as u32) {
+            return r;
+        }
+        if let Some(r) = self.try_samd51_storage_store(addr, 1, value as u32) {
             return r;
         }
         let flash_alias_old = if self.flash_boot_alias
@@ -1161,6 +1193,9 @@ impl crate::Bus for SystemBus {
         if !self.debug_watches.is_empty() && !self.debug_watch_host_bypass.get() {
             self.note_debug_watch_store(addr);
         }
+        if self.try_plain_ram_store(addr, 2, value as u32) {
+            return Ok(());
+        }
         if let Some(r) = self.memory_policy_gate_store(addr) {
             return r;
         }
@@ -1176,6 +1211,9 @@ impl crate::Bus for SystemBus {
             return r;
         }
         if let Some(r) = self.try_flash_owner_store(addr, 2, value as u32) {
+            return r;
+        }
+        if let Some(r) = self.try_samd51_storage_store(addr, 2, value as u32) {
             return r;
         }
         let observed_old = if self.config.observe_wide_ram_stores && !self.observers.is_empty() {
@@ -1273,6 +1311,7 @@ impl crate::Bus for SystemBus {
                 // map (and honours a VIOLATE_CLR pulse).
                 self.sync_esp32c3_pms_write(idx, mmio_addr - base);
                 self.refresh_legacy_tick_index(idx);
+                self.refresh_legacy_tick_peer_write_observers(idx);
                 self.refresh_bus_tick_index(idx);
                 // Level reconcile at the write choke (single- and multi-line
                 // level sources): see `reconcile_irq_levels_after_write`.
@@ -1295,6 +1334,9 @@ impl crate::Bus for SystemBus {
         if !self.debug_watches.is_empty() && !self.debug_watch_host_bypass.get() {
             self.note_debug_watch_store(addr);
         }
+        if self.try_plain_ram_store(addr, 4, value) {
+            return Ok(());
+        }
         if let Some(r) = self.memory_policy_gate_store(addr) {
             return r;
         }
@@ -1313,6 +1355,9 @@ impl crate::Bus for SystemBus {
             return r;
         }
         if let Some(r) = self.try_flash_owner_store(addr, 4, value) {
+            return r;
+        }
+        if let Some(r) = self.try_samd51_storage_store(addr, 4, value) {
             return r;
         }
         // Atomic register aliases: a write to a +0x1000/0x2000/0x3000 alias of
@@ -1465,6 +1510,7 @@ impl crate::Bus for SystemBus {
                 // map (and honours a VIOLATE_CLR pulse).
                 self.sync_esp32c3_pms_write(idx, mmio_addr - base);
                 self.refresh_legacy_tick_index(idx);
+                self.refresh_legacy_tick_peer_write_observers(idx);
                 self.refresh_bus_tick_index(idx);
                 // Level reconcile at the write choke (single- and multi-line
                 // level sources): see `reconcile_irq_levels_after_write`.
@@ -1556,6 +1602,7 @@ impl crate::Bus for SystemBus {
         };
         f(&mut *self.peripherals[idx].dev);
         self.refresh_legacy_tick_index(idx);
+        self.refresh_legacy_tick_peer_write_observers(idx);
         self.collect_scheduled_events(idx);
         true
     }

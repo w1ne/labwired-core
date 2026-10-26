@@ -19,7 +19,7 @@
 //! It is linked once per *memory map*, not once: `build.rs` takes the flash and
 //! RAM origins from the environment, so the same spin loop also covers the
 //! chips that put flash at 0x00000000 (nRF, Kinetis) or 0x10000000 (RP2xxx).
-//! The linked image claims only 32K flash / 8K RAM so it fits the smallest
+//! The linked image claims only 32K flash / 4K RAM so it fits the smallest
 //! board in the matrix; a larger claim would put the reset stack pointer past
 //! the end of modelled RAM and fault before `main`.
 

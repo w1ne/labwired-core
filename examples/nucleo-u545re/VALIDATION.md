@@ -4,7 +4,8 @@ Run from the repository root. Evidence captured 2026-10-03, branch
 `feat/stm32u545-nucleo`.
 
 Tier: **sim-validated**. SVD-derived; no bench part, no silicon capture, no
-Renode differential (Renode has no STM32U5 platform).
+Renode differential. Upstream Renode has no built-in STM32U5 platform; the
+separate 60North reference platform is not used for a differential here.
 
 ## Toolchain coverage
 
@@ -34,7 +35,7 @@ ELF: `tests/fixtures/nucleo-u545re-blinky.elf` (arm-none-eabi-gcc 13.2.1,
 | `blinky_prints_ok_on_usart1_vcp` | USART1 TX (VCP, PA9) delivers `OK` |
 | `blinky_configures_the_board_pins_and_toggles_ld2_on_pa5` | GPIOA ODR bit 5 toggles (>= 3 edges); PA5 MODER=output, PA9/PA10 MODER=AF with AFRH=AF7, PC13 input with pull-down |
 | `button_pc13_press_and_release_reach_the_vcp` | driving PC13 high/low is read by firmware and reported `B1=1` / `B1=0` |
-| `vcp_rx_pa10_is_echoed_back_on_tx_pa9` | a byte injected on USART1 RX is received and echoed on TX |
+| `vcp_rx_pa10_is_echoed_back_on_tx_pa9` | a byte injected into the USART1 RX queue is echoed on TX. The test does not route RX through the PA10 pad; U5 RX pad traffic is not modeled. |
 | `memory_map_is_the_u545_one` | 256 KiB SRAM at `0x20000000` (no SRAM3), SRAM4 16 KiB, flash ends at 512 KiB |
 | `peripherals_the_u545_lacks_are_unmapped` | USART2, GPIOF, GPIOI are bus errors |
 | `dbgmcu_idcode_is_the_u545_one` | IDCODE `0x10026455` |
@@ -66,11 +67,13 @@ audit at 200k steps: `unknown_thumb16: 0`, `unhandled_thumb32: 0`,
 ## D. Chip drift guard
 
 `stm32u545.yaml` is a standalone derivative of `stm32u575.yaml`.
-`crates/core/tests/u545_u575_drift_guard.rs` asserts every shared peripheral is
-identical (type, base, size, irq, clock gate, config) except an allow-list (DBGMCU
-`idcode`, memory sizes, name) and that only USART2, GPIOF and
-GPIOI are removed. Changing a U575 peripheral without mirroring it fails with the
-peripheral and field named (verified by mutating the U575 USART1 `irq`).
+`crates/core/tests/u545_u575_drift_guard.rs` checks every shared peripheral
+(type, base, size, irq, clock gate, config) against an explicit allow-list:
+DBGMCU `idcode` and `sysmem.config.flash_size_kb` (512 vs 2048 KiB). The
+top-level allow-list covers name, flash/RAM sizes, and package pin maps; only
+USART2, GPIOF and GPIOI are removed. Changing any other U575 field without
+mirroring it fails with the peripheral and field named (verified by mutating
+the U575 USART1 `irq`).
 
 ## E. Arduino matrix (fidelity engine)
 

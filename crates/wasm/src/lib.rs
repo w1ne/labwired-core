@@ -21,6 +21,8 @@ mod install;
 mod jit_browser;
 mod lab_tools;
 #[cfg(test)]
+mod pic24_wasm_tests;
+#[cfg(test)]
 mod playground_repro;
 #[cfg(test)]
 mod rtt_arch_tests;
@@ -433,6 +435,23 @@ impl WasmSimulator {
     }
 }
 
+/// PIC24 UART1 is implemented inside the CPU, so it cannot be attached as a
+/// named `SystemBus` UART. Keep the browser constructor's console contract
+/// explicit rather than asking the generic bus resolver to find it.
+fn validate_pic24_console(console: &HostConsole) -> Result<(), String> {
+    match console {
+        HostConsole::Undeclared => Ok(()),
+        HostConsole::Uart(name) if name.eq_ignore_ascii_case("uart1") => Ok(()),
+        HostConsole::Uart(name) => Err(format!(
+            "PIC24 browser support only models CPU-internal UART1, not bus UART '{name}'; declare `debug_uart: uart1`"
+        )),
+        HostConsole::UsbSerialJtag => Err(
+            "PIC24 browser support does not model USB-Serial-JTAG; declare `debug_uart: uart1` for the CPU-internal UART1 console"
+                .to_string(),
+        ),
+    }
+}
+
 impl WasmSimulator {
     /// [`Self::new_from_config`] from inputs already owned, kept on the
     /// simulator so it can be built again (snapshot restore, fault
@@ -515,10 +534,7 @@ impl WasmSimulator {
             MachineFamily::Xtensa => Self::new_from_config_xtensa_esp32(&manifest, firmware),
             // Classic Arduino Nano / ATmega328P — same shape as `build_avr_node`.
             MachineFamily::Avr => Self::new_from_config_avr(&chip, &manifest, firmware),
-            // PIC24 M0 has no browser constructor yet.
-            MachineFamily::Pic24 => Err(JsValue::from_str(
-                "PIC24 (M0) is not available in the browser build yet",
-            )),
+            MachineFamily::Pic24 => Self::new_from_config_pic24(&chip, &manifest, firmware),
         }?;
         // Every architecture's machine is built by now, so co-simulation binds
         // here once rather than in each constructor above.
@@ -638,6 +654,67 @@ impl WasmSimulator {
             console,
             uart_rx_bufs,
             arch: MachineFamily::Avr,
+            esp32_ipi: None,
+            jit_browser_enabled: false,
+            jit_browser_cache: None,
+            cosim: None,
+            tools: Default::default(),
+        })
+    }
+
+    /// PIC24 M0 (ELF boot, CPU UART1 TX, and the declared GPIO pad models).
+    ///
+    /// Like the core's PIC24 builder, the UART is part of the CPU rather than
+    /// a bus UART, so it writes directly to the same sink the Serial pane
+    /// drains. M0 browser support deliberately rejects external devices: the
+    /// PIC24 I2C1/SPI1 controllers are CPU-internal and need the later M3
+    /// attachment path, while the current browser constructor only promises
+    /// firmware boot, UART1, and GPIO.
+    fn new_from_config_pic24(
+        chip: &ChipDescriptor,
+        manifest: &SystemManifest,
+        firmware: &[u8],
+    ) -> Result<WasmSimulator, JsValue> {
+        if !manifest.external_devices.is_empty() {
+            return Err(JsValue::from_str(
+                "PIC24 browser support currently accepts no external devices (M0: CPU UART1 and GPIO only)",
+            ));
+        }
+
+        let bus = SystemBus::from_config(chip, manifest)
+            .map_err(|e| JsValue::from_str(&format!("Bus config error: {e:#}")))?;
+
+        let console = ConsoleCapture::for_manifest(manifest);
+        validate_pic24_console(console.tapped()).map_err(|e| JsValue::from_str(&e))?;
+        let uart_sink = console.heard_sink();
+        // PIC24 UART1 is CPU-internal and writes directly to this sink below.
+        // There is no bus UART or USB-Serial-JTAG console to attach here.
+        let uart_rx_bufs = bus.attach_uart_rx_source();
+
+        let program_image = load_elf_bytes(firmware)
+            .map_err(|e| JsValue::from_str(&format!("Loader Error: {e}")))?;
+        if program_image.arch != CoreArch::Pic24 {
+            return Err(JsValue::from_str(&format!(
+                "firmware architecture {:?} is incompatible with PIC24 chip '{}'",
+                program_image.arch, chip.name
+            )));
+        }
+
+        let mut cpu = labwired_core::cpu::Pic24::new();
+        cpu.set_port_masks(labwired_core::system::builder::pic24_port_masks(chip));
+        cpu.load_program_image(&program_image);
+        cpu.set_serial_sink(uart_sink.clone());
+
+        let boxed: Box<dyn Cpu> = Box::new(cpu);
+        let machine = Machine::new(boxed, bus);
+
+        Ok(WasmSimulator {
+            machine: Some(machine),
+            board_io: manifest.board_io.clone(),
+            uart_sink,
+            console,
+            uart_rx_bufs,
+            arch: MachineFamily::Pic24,
             esp32_ipi: None,
             jit_browser_enabled: false,
             jit_browser_cache: None,
@@ -1908,6 +1985,30 @@ impl WasmSimulator {
         }
     }
 
+    /// Enable/disable Cortex-M loop TRACES on top of the browser JIT.
+    ///
+    /// When on, a counted pure-ALU loop whose conditional backedge targets
+    /// its own entry compiles to a single wasm `loop` that runs many
+    /// iterations per dispatch, instead of one dispatch per iteration (see
+    /// `labwired_core`'s `emit_loop_trace`). Only meaningful with
+    /// `set_jit_enabled(true)`. Off by default; the RP2040 demo opts in.
+    ///
+    /// Toggling drops the compiled-block cache: a block keeps the mode it
+    /// was compiled under, so a cached untraced block would otherwise
+    /// survive the switch.
+    #[wasm_bindgen]
+    pub fn set_jit_loop_traces_enabled(&mut self, on: bool) -> Result<(), JsValue> {
+        self.record(lab_tools::Op::SetJitLoopTraces(on));
+        let machine = self.machine();
+        machine.config.cortex_m_jit_loop_traces = on;
+        // The window runner reads the bus copy for IRQ decisions and the
+        // machine copy for the span; keep them in step like the tick
+        // interval setter does.
+        machine.bus.config.cortex_m_jit_loop_traces = on;
+        self.jit_browser_cache = None;
+        Ok(())
+    }
+
     /// Enable/disable scheduler-safe CPU idle fast-forwarding. Off by default;
     /// browser callers opt in explicitly after comparing accelerated and
     /// non-accelerated traces for the target firmware.
@@ -2006,6 +2107,31 @@ impl WasmSimulator {
             .as_ref()
             .map(|c| c.refusals)
             .unwrap_or(0)
+    }
+
+    /// Loop-trace iterations the browser JIT retired inside traced runs.
+    ///
+    /// Zero after a batch through the loop-trace path means either no trace
+    /// was compiled or every trace dispatch retired nothing; non-zero is the
+    /// non-vacuity proof for the browser-layer gate and the bench.
+    #[wasm_bindgen]
+    pub fn jit_trace_iters(&self) -> Result<u64, JsValue> {
+        Ok(self
+            .jit_browser_cache
+            .as_ref()
+            .map(|c| c.trace_iters())
+            .unwrap_or(0))
+    }
+
+    /// Number of loop-trace dispatches (one per entry of a counted-loop
+    /// trace), the companion of [`Self::jit_trace_iters`].
+    #[wasm_bindgen]
+    pub fn jit_trace_runs(&self) -> Result<u64, JsValue> {
+        Ok(self
+            .jit_browser_cache
+            .as_ref()
+            .map(|c| c.trace_runs())
+            .unwrap_or(0))
     }
 
     /// Bench runner: execute `cycles` `step_with_esp32_aids` iterations

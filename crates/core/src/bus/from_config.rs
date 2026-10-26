@@ -347,6 +347,9 @@ impl SystemBus {
             peripheral_accesses: Cell::new(0),
             poll_streak: Cell::new((u32::MAX, 0, 0, 0)),
             legacy_walk_disabled: false,
+            legacy_walk_pinned_on: false,
+            legacy_tick_candidate_mask: Vec::new(),
+            legacy_tick_peer_write_indices: Vec::new(),
             resident_tick_interval_override: None,
             gpio_devices: Vec::new(),
             device_pin_pads: Vec::new(),
@@ -374,6 +377,7 @@ impl SystemBus {
             u5_program_gate_idx: None,
             nrf52_nvmc_idx: None,
             flash_store_owner_idx: None,
+            samd51_nvmctrl_idx: None,
             bus_trace: bus_trace::new_log(),
             logic_tap: crate::logic_capture::LogicTap::new(),
             pin_map: std::collections::HashMap::new(),
@@ -705,9 +709,27 @@ impl SystemBus {
                         .and_then(|v| v.as_u64())
                         .map(|n| n as u32)
                         .unwrap_or(0x0000_07FF);
-                    Box::new(crate::peripherals::uart::Uart::new_with_layout_cr3(
-                        layout, cr3_mask,
-                    ))
+                    let full = p_cfg
+                        .config
+                        .get("full_featured")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
+                    let stm32_lpuart = p_cfg
+                        .config
+                        .get("stm32_lpuart")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
+                    let u5_features = p_cfg
+                        .config
+                        .get("u5_features")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
+                    Box::new(
+                        crate::peripherals::uart::Uart::new_with_layout_cr3(layout, cr3_mask)
+                            .set_full_featured(full)
+                            .set_stm32_lpuart(stm32_lpuart)
+                            .set_u5_features(u5_features),
+                    )
                 }
                 "gpio" | "stm32_gpioport" | "stm32f4_gpio" | "efmgpioport" | "npcx_gpio"
                 | "imxrt_gpio" => {
@@ -758,10 +780,11 @@ impl SystemBus {
                                 .map(|n| n as u32)
                                 .unwrap_or(0)
                         };
-                        crate::peripherals::gpio::GpioPort::new_stm32v2_with_resets(
+                        crate::peripherals::gpio::GpioPort::new_stm32v2_with_resets_and_seccfgr(
                             cfg_u32("reset_moder"),
                             cfg_u32("reset_ospeedr"),
                             cfg_u32("reset_pupdr"),
+                            cfg_u32("reset_seccfgr"),
                         )
                         .with_window_offset(window_offset)
                     } else {
@@ -1128,16 +1151,17 @@ impl SystemBus {
         //
         //   Some(true)  → force deleted (hand opt-in / escape hatch)
         //   Some(false) → pin the walk ON, overriding auto-derivation
-        //   None        → auto-derive: delete iff EVERY peripheral is provably
-        //                 walk-independent for all firmware states.
+        //   None        → auto-derive: delete iff EVERY walk-capable peripheral
+        //                 is currently inactive.
         //
         // The auto-derivation is deliberately conservative — see
         // `derive_walk_deletable`. It only fires when deleting the walk is
-        // byte-identical for ANY reachable firmware state, so it can never
-        // silently starve a peripheral of its per-cycle `tick()`. A hand
+        // safe for the current state; dynamic models restore the walk when
+        // later MMIO/GPIO activity makes them active. A hand
         // `walk_deleted: true` stays honored for configs whose byte-identity is
         // firmware-specific (the firmware never arms the timers/ADC/DMA the chip
         // descriptor instantiates) and thus not config-derivable.
+        bus.legacy_walk_pinned_on = manifest.walk_deleted == Some(false);
         bus.legacy_walk_disabled = match manifest.walk_deleted {
             Some(explicit) => explicit,
             None => bus.derive_walk_deletable(),
@@ -1154,6 +1178,22 @@ impl SystemBus {
                 manifest.name.as_str()
             };
             bus.attach_private_lab_air(node);
+        }
+
+        // U5: the RCC backup domain (BDCR) is write-protected until
+        // PWR_DBPR.DBP is set. The bus is the only place that knows both
+        // models, so one shared flag links them.
+        if let (Some(rcc_i), Some(pwr_i)) = (
+            bus.find_peripheral_index_by_name("rcc"),
+            bus.find_peripheral_index_by_name("pwr"),
+        ) {
+            let flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+            bus.peripherals[rcc_i]
+                .dev
+                .bind_backup_domain_write_enable(flag.clone());
+            bus.peripherals[pwr_i]
+                .dev
+                .bind_backup_domain_write_enable(flag);
         }
 
         Ok(bus)
@@ -1185,6 +1225,7 @@ impl SystemBus {
     /// is their manifest seam and calls this pass itself, so a canvas button is
     /// attached by ONE implementation on every chip family.
     pub(crate) fn attach_board_io_buttons(&mut self, manifest: &SystemManifest) {
+        use crate::peripherals::gpio::GpioMode;
         use labwired_config::{BoardIoKind, BoardIoSignal};
 
         for binding in &manifest.board_io {
@@ -1213,15 +1254,19 @@ impl SystemBus {
             // reset value of 0 reads as a press that is never released, so a
             // sketch waiting on the button fires immediately at boot.
             //
-            // Then PROVE the level landed. A GPIO model that does not honour an
-            // externally driven level would leave a button that discovery
-            // advertises, `set_input` accepts, and the firmware never sees move
-            // — a stimulus that reports success and proves nothing. Where we
-            // cannot demonstrate the drive, we do not claim the capability: the
-            // button is dropped and the pin is left exactly as that chip had it.
+            // Then PROVE the GPIO model accepted the outside level. An analog
+            // reset pin correctly reads zero from IDR, so keep the button
+            // attached when the model accepts its drive even though firmware
+            // must first select digital input mode to observe it. A model that
+            // cannot accept an external level still drops the button.
             let (level, _) = button.service();
-            let landed = self.drive_input_bit(anchor, binding.pin, level)
-                && self.peripherals[idx].dev.read_gpio_input(binding.pin) == Some(level);
+            let accepted = self.drive_input_bit(anchor, binding.pin, level);
+            let reads_back = self.peripherals[idx].dev.read_gpio_input(binding.pin) == Some(level);
+            let waits_for_digital_mode = self.peripherals[idx]
+                .dev
+                .gpio_routing(binding.pin)
+                .is_some_and(|route| route.mode == GpioMode::Analog);
+            let landed = accepted && (reads_back || waits_for_digital_mode);
             if !landed {
                 tracing::warn!(
                     "board_io button '{}' on '{}' pin {}: this GPIO model does not reflect an \

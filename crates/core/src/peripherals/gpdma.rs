@@ -31,9 +31,8 @@
 //! - `MISR` / `SMISR` would read the OR of per-channel flag&enable; this
 //!   model returns 0 — firmware that polls per-channel CSR (the common
 //!   HAL path) is unaffected.
-//! - `SWREQ = 0` (peripheral-request mode, RM0481 §16.4.2) is not yet
-//!   modeled: enabling a channel without SWREQ does not start a
-//!   transfer and CSR stays IDLEF.
+//! - Peripheral-request mode (`SWREQ = 0`, RM0481 §16.4.2) starts an enabled
+//!   channel but waits for a routed peripheral request before moving data.
 //! - Linked-list mode is not modeled: CLBAR / CLLR are plain storage
 //!   the engine ignores.
 //! - Transfers move one source data unit per arbitration slot (one slot per
@@ -61,8 +60,11 @@
 //! * **Legacy mode** (feature off / no clock): per-cycle `tick()` runs the
 //!   same slot.
 
-use crate::{CycleClock, DmaDirection, DmaRequest, Peripheral, PeripheralTickResult, SimResult};
+use crate::{
+    CycleClock, DmaDirection, DmaRequest, DmaRoute, Peripheral, PeripheralTickResult, SimResult,
+};
 use std::any::Any;
+use std::collections::BTreeMap;
 
 // ---- Channel-relative register offsets (CMSIS stm32h563xx.h) ----
 const CHAN_BASE: u64 = 0x50;
@@ -131,13 +133,20 @@ struct GpdmaChannel {
     ctr3: u32,
     cbr2: u32,
     cllr: u32,
-    /// Transfer in flight. Set on EN rising edge when CTR2.SWREQ = 1.
+    /// Channel active after EN rises. Software-request mode transfers
+    /// immediately; peripheral-request mode stays active while waiting for
+    /// its routed request.
     active: bool,
     /// BNDT value latched at EN, used for the half-transfer (HTF) mark.
     bndt_initial: u32,
     /// A data transfer error latched after its item ran (DTEIE), pended at
     /// the next slot.
     irq_deferred: bool,
+    /// Peripheral-request mode: one hardware request is outstanding for this
+    /// channel. A request line is a level, so this is set by
+    /// [`Peripheral::dma_request`] and consumed by one data beat.
+    #[serde(default)]
+    request_pending: bool,
 }
 
 impl GpdmaChannel {
@@ -166,6 +175,15 @@ pub struct Gpdma {
     /// Own bus base address (for linked-list node-fetch self-copies).
     #[serde(default)]
     base: u32,
+    /// `<peripheral id>_tx` / `<peripheral id>_rx` -> GPDMA request-select
+    /// number (RM0456 Table 136, the `GPDMA1_REQUEST_*` constants). Only
+    /// channels in peripheral-request mode (`CxTR2.SWREQ = 0`) are matched.
+    #[serde(default)]
+    request_table: BTreeMap<String, u32>,
+    /// NVIC base of channels 8..15 on the 16-channel U5 GPDMA1 (80..87).
+    /// Absent keeps the historic `irq_base + n` routing for every channel.
+    #[serde(default)]
+    irq_high_base: Option<u32>,
     /// The channel served by the most recent slot: the issuer of the item a
     /// bus error reports ([`Peripheral::dma_transfer_error`]).
     #[serde(skip)]
@@ -200,6 +218,28 @@ impl Gpdma {
         self
     }
 
+    /// Route hardware-request names (`usart1_rx`, `spi1_tx`, …) to the
+    /// GPDMA request-select numbers in `CxTR2.REQSEL`.
+    pub fn with_request_table(mut self, table: BTreeMap<String, u32>) -> Self {
+        self.request_table = table;
+        self
+    }
+
+    /// NVIC base of channels 8..15 (the U5 GPDMA1 splits 0..7 at `irq_base`
+    /// and 8..15 at this base; H563 has only 8 channels).
+    pub fn with_irq_high_base(mut self, base: u32) -> Self {
+        self.irq_high_base = Some(base);
+        self
+    }
+
+    fn channel_irq(&self, ch_idx: usize) -> Option<u32> {
+        match (self.irq_base, self.irq_high_base) {
+            (Some(_base), Some(high)) if ch_idx >= 8 => Some(high + (ch_idx as u32 - 8)),
+            (Some(base), _) => Some(base + ch_idx as u32),
+            _ => None,
+        }
+    }
+
     crate::cycle_clock::scheduler_mode!();
 
     /// Test/differential knob: detach the cycle clock so the model stays
@@ -213,6 +253,12 @@ impl Gpdma {
     fn channel_needs_service(ch: &GpdmaChannel) -> bool {
         if !ch.active {
             return false;
+        }
+        // Peripheral-request mode moves nothing until the request line is
+        // asserted (RM0456 §16.4.2); software-request mode keeps the old
+        // free-running block behaviour.
+        if ch.ctr2 & CTR2_SWREQ == 0 && ch.cllr == 0 {
+            return ch.request_pending;
         }
         let bndt = ch.cbr1 & BNDT_MASK;
         bndt > 0 || ch.cllr != 0
@@ -308,14 +354,13 @@ impl Gpdma {
                         let old_en = ch.ccr & CCR_EN != 0;
                         ch.ccr = value;
                         let new_en = value & CCR_EN != 0;
-                        // EN rising edge with software request (mem-to-mem)
-                        // starts the transfer immediately. SWREQ = 0
-                        // (peripheral-request mode) is not yet modeled —
-                        // the channel stays idle (CSR = IDLEF).
-                        // Start on EN rise for software-request transfers
-                        // and for linked-list starts (CLLR set, the first
-                        // node delivers CTR2/CBR1 from memory).
-                        if !old_en && new_en && (ch.ctr2 & CTR2_SWREQ != 0 || ch.cllr != 0) {
+                        // EN rising edge starts the block. Software-request
+                        // transfers run immediately; peripheral-request
+                        // transfers remain active while waiting for a request.
+                        if !old_en && new_en {
+                            // A software-request channel starts its block at
+                            // once; a peripheral-request channel becomes
+                            // active and waits for its request line.
                             ch.active = true;
                             ch.bndt_initial = ch.cbr1 & BNDT_MASK;
                         }
@@ -356,11 +401,10 @@ impl Gpdma {
         let mut dma_requests: Option<Vec<DmaRequest>> = None;
         let mut irq = false;
         let mut explicit_irqs: Option<Vec<u32>> = None;
-        let irq_base = self.irq_base;
-        let mut pend = |ch_idx: usize, irq_flag: &mut bool| match irq_base {
-            Some(base) => explicit_irqs
-                .get_or_insert_with(Vec::new)
-                .push(base + ch_idx as u32),
+        let channel_irq: Vec<Option<u32>> =
+            (0..NUM_CHANNELS).map(|i| self.channel_irq(i)).collect();
+        let mut pend = |ch_idx: usize, irq_flag: &mut bool| match channel_irq[ch_idx] {
+            Some(line) => explicit_irqs.get_or_insert_with(Vec::new).push(line),
             None => *irq_flag = true,
         };
 
@@ -370,6 +414,13 @@ impl Gpdma {
         let ch = &mut self.channels[ch_idx];
         if !ch.active {
             return (None, false, None);
+        }
+        let peripheral_mode = ch.ctr2 & CTR2_SWREQ == 0 && ch.cllr == 0;
+        if peripheral_mode {
+            if !ch.request_pending {
+                return (None, false, None);
+            }
+            ch.request_pending = false;
         }
         let bndt = ch.cbr1 & BNDT_MASK;
         if bndt == 0 {
@@ -491,10 +542,8 @@ impl Gpdma {
         let mut explicit_irqs: Option<Vec<u32>> = None;
         for ch_idx in 0..NUM_CHANNELS {
             if std::mem::take(&mut self.channels[ch_idx].irq_deferred) {
-                match self.irq_base {
-                    Some(base) => explicit_irqs
-                        .get_or_insert_with(Vec::new)
-                        .push(base + ch_idx as u32),
+                match self.channel_irq(ch_idx) {
+                    Some(line) => explicit_irqs.get_or_insert_with(Vec::new).push(line),
                     None => irq = true,
                 }
             }
@@ -557,6 +606,37 @@ impl Peripheral for Gpdma {
 
     fn uses_scheduler(&self) -> bool {
         self.scheduler_mode()
+    }
+
+    /// A hardware request line is asserted by a peripheral (`spi1_tx`,
+    /// `usart1_rx`, …). Route it to every enabled channel whose
+    /// `CxTR2.REQSEL` selects that request in peripheral-request mode.
+    fn dma_route_request(&self, request: &str, out: &mut Vec<DmaRoute>) {
+        let Some(&reqsel) = self.request_table.get(request) else {
+            return;
+        };
+        for (idx, ch) in self.channels.iter().enumerate() {
+            if ch.ccr & CCR_EN == 0 || ch.ctr2 & CTR2_SWREQ != 0 {
+                continue;
+            }
+            if ch.ctr2 & 0x7F == reqsel {
+                out.push(DmaRoute {
+                    controller: None,
+                    channel: idx as u32,
+                });
+            }
+        }
+    }
+
+    /// One routed request: arm one data beat on the channel. The peripheral
+    /// request is a level, so the beat runs at the next arbitration slot.
+    fn dma_request(&mut self, channel: u32) {
+        let idx = channel as usize;
+        if let Some(ch) = self.channels.get_mut(idx) {
+            if ch.active && ch.ctr2 & CTR2_SWREQ == 0 {
+                ch.request_pending = true;
+            }
+        }
     }
 
     fn needs_legacy_walk(&self) -> bool {
@@ -891,9 +971,7 @@ mod tests {
     }
 
     #[test]
-    fn test_swreq_zero_peripheral_mode_does_not_start() {
-        // SWREQ = 0 (peripheral-request mode) is not yet modeled: the
-        // transfer must not start and CSR stays IDLEF.
+    fn test_swreq_zero_peripheral_mode_waits_for_request() {
         let mut bus = bus_with_gpdma();
         fill_src(&mut bus, 16);
         bus.write_u32(CH0_CTR1, CTR1_SINC | CTR1_DINC).unwrap();
@@ -906,7 +984,7 @@ mod tests {
         for _ in 0..4 {
             bus.tick_peripherals_fully_forced();
         }
-        assert_eq!(bus.read_u32(CH0_CSR).unwrap(), CSR_IDLEF);
+        assert_eq!(bus.read_u32(CH0_CSR).unwrap() & CSR_IDLEF, 0);
         assert_eq!(bus.read_u32(CH0_CBR1).unwrap() & BNDT_MASK, 16);
         assert_eq!(bus.read_u8(DST).unwrap(), 0);
     }

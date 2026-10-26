@@ -11,6 +11,8 @@
 //! and a missing PWR peripheral bus-faults at the very first store.
 
 use crate::SimResult;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct Pwr {
@@ -472,11 +474,19 @@ impl crate::Peripheral for PwrL0 {
 #[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct PwrWba {
     regs: std::collections::HashMap<u64, u32>,
+    /// PWR_DBPR.DBP shared with the U5 RCC backup-domain write protection.
+    #[serde(skip)]
+    dbp_flag: Option<Arc<AtomicBool>>,
 }
 
 impl PwrWba {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Link PWR_DBPR.DBP to the U5 RCC backup-domain write protection.
+    pub fn set_dbp_flag(&mut self, flag: Arc<AtomicBool>) {
+        self.dbp_flag = Some(flag);
     }
 
     fn read_reg(&self, offset: u64) -> u32 {
@@ -485,7 +495,11 @@ impl PwrWba {
             let vosr = self.regs.get(&0x0C).copied().unwrap_or(0);
             let mut svmsr = self.regs.get(&0x3C).copied().unwrap_or(0);
             // Clear hardware status bits we synthesize, keep software-visible others.
-            svmsr &= !((1 << 15) | (1 << 16));
+            svmsr &= !((1 << 1) | (1 << 15) | (1 << 16));
+            // REGS (bit 1) reports the regulator selected by CR3.REGSEL (same
+            // bit): HAL_PWREx_ConfigSupply writes CR3 and spins on SVMSR.REGS.
+            let cr3 = self.regs.get(&0x08).copied().unwrap_or(0);
+            svmsr |= cr3 & (1 << 1);
             let vos = vosr & (0x3 << 16);
             if vos != 0 || (vosr & (1 << 15)) != 0 {
                 svmsr |= 1 << 15; // ACTVOSRDY
@@ -510,11 +524,20 @@ impl PwrWba {
             // SVMSR is mostly status; ignore FW writes to ACTVOS/ACTVOSRDY.
             return;
         }
+        if offset == 0x28 {
+            if let Some(flag) = &self.dbp_flag {
+                flag.store(v & 1 != 0, Ordering::Relaxed);
+            }
+        }
         self.regs.insert(offset, v);
     }
 }
 
 impl crate::Peripheral for PwrWba {
+    fn bind_backup_domain_write_enable(&mut self, enabled: Arc<AtomicBool>) {
+        self.set_dbp_flag(enabled);
+    }
+
     // Inert walk: register storage with instant VOSRDY; tick() is no-op.
     fn needs_legacy_walk(&self) -> bool {
         false
@@ -690,6 +713,20 @@ mod wba_tests {
         let svmsr = pwr.read_u32(0x3C).unwrap();
         assert_ne!(svmsr & (1 << 15), 0, "ACTVOSRDY");
         assert_ne!(svmsr & (1 << 16), 0, "ACTVOS mirrors VOS");
+    }
+
+    #[test]
+    fn svmsr_reports_the_selected_regulator_from_cr3() {
+        let mut pwr = PwrWba::new();
+        assert_eq!(pwr.read_u32(0x3C).unwrap() & (1 << 1), 0, "LDO default");
+        pwr.write_u32(0x08, 1 << 1).unwrap();
+        assert_ne!(
+            pwr.read_u32(0x3C).unwrap() & (1 << 1),
+            0,
+            "SVMSR.REGS follows CR3.REGSEL"
+        );
+        pwr.write_u32(0x08, 0).unwrap();
+        assert_eq!(pwr.read_u32(0x3C).unwrap() & (1 << 1), 0);
     }
 
     #[test]

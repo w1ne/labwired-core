@@ -158,6 +158,12 @@ const SHIPPED: &[Board] = &[
         display_lab: true,
     },
     Board {
+        chip: "stm32u5a5zj",
+        aliases: &["stm32u5a5zj", "u5a5", "nucleo-u5a5zj"],
+        yaml_stem: "stm32u5a5zj",
+        display_lab: false,
+    },
+    Board {
         chip: "stm32h563",
         aliases: &["stm32h563", "h563"],
         yaml_stem: "stm32h563",
@@ -488,6 +494,12 @@ fn every_shipped_descriptor_is_ratcheted() {
         // separate PR) and it has no executing-fidelity differential of its own.
         // Promote when the catalog board lands AND a differential exists.
         "atmega2560",
+        // 64-pin ATmega2561 on the same public AVR core. Has a descriptor,
+        // a system manifest, an example with a deterministic io-smoke, a
+        // committed fixture and a chip-conformance behavior gate — but no
+        // bundled-configs.ts catalog board and no executing-fidelity
+        // differential of its own. Promote when both exist.
+        "atmega2561",
         // First Microchip part in the engine. Has a chip descriptor, an
         // io-smoke executed by the coverage matrix and the strict-onboarding
         // gate, and a peripheral-estate test — but it is NOT a
@@ -497,6 +509,23 @@ fn every_shipped_descriptor_is_ratcheted() {
         // stm32f411ceu6 below. Promote when the catalog registration lands and
         // a real board is benched.
         "atsamd21g18a",
+        // Exact A-variant SAM D21 orderable geometries. They reuse the public
+        // G18A engine and add no peripheral/clock models of their own; their
+        // geometry is pinned by `atsamd21_variant_geometry`, but they have no
+        // catalog board, no silicon oracle and no executing-fidelity
+        // differential. Promote only when a bench part and a differential
+        // exist, exactly like atsamd21g18a above.
+        "atsamd21e15a",
+        "atsamd21e16a",
+        "atsamd21e17a",
+        "atsamd21e18a",
+        "atsamd21g15a",
+        "atsamd21g16a",
+        "atsamd21g17a",
+        "atsamd21j15a",
+        "atsamd21j16a",
+        "atsamd21j17a",
+        "atsamd21j18a",
         "esp32",         // classic Xtensa, separate e2e lane, not a catalog board
         "esp32s3-zero",  // board variant of esp32s3 (covered by esp32s3)
         "stm32f401cdu6", // BlackPill variant of stm32f401 (covered by stm32f401)
@@ -509,6 +538,17 @@ fn every_shipped_descriptor_is_ratcheted() {
         // PIC24 core. Same rationale: no bundled-configs.ts board and no
         // silicon oracle yet.
         "dspic33fj32mc202",
+        // PIC24F KA family: six exact part descriptors plus per-part XC16 UART
+        // smokes on the public PIC24 core. The modelled slice is package GPIO
+        // and UART1 only; no bundled-configs.ts catalog board, no silicon
+        // oracle and no executing-fidelity differential. Promote when the
+        // catalog and a differential exist.
+        "pic24f04ka200",
+        "pic24f04ka201",
+        "pic24f08ka101",
+        "pic24f08ka102",
+        "pic24f16ka101",
+        "pic24f16ka102",
         // First RISC-V soft-core SoC in the engine (LiteX VexRiscv, RV32IM).
         // Has a chip descriptor, a system manifest, an example with an
         // io-smoke, a committed smoke fixture and a firmware-survival gate —
@@ -517,10 +557,23 @@ fn every_shipped_descriptor_is_ratcheted() {
         // its own. Promote when the browser board lands AND a differential
         // exists.
         "litex-vexriscv",
+        // Digilent Arty A7-35T on the LiteX VexRiscv SoC: chip + system + example
+        // with an io-smoke, a committed fixture and a survival gate, but no
+        // bundled-configs.ts catalog board, no bitstream capture and no
+        // executing-fidelity differential of its own. Same bar as litex-vexriscv.
+        "arty-litex-vexriscv",
         // Vega board (RI5CY): chip + system + example with an io-smoke, a
         // committed fixture and a survival gate; no catalog board, no silicon
         // capture and no executing-fidelity differential.
         "vegaboard-ri5cy",
+        // First SAM4S part (SAM4S Xplained): chip + system + example with an
+        // io-smoke, a committed fixture and a survival gate; no catalog board,
+        // no silicon capture and no executing-fidelity differential.
+        "sam4s16c",
+        // First STM32F0 part (STM32F072B-DISCO): chip + system + example with
+        // an io-smoke, a committed fixture and a survival gate; no catalog
+        // board, no silicon capture and no executing-fidelity differential.
+        "stm32f072",
         // Descriptor-level derivative of the F401 lane (shared F4 profiles,
         // DEV_ID 0x413), smoke-validated via the feather-f405 example only:
         // no catalog board, no silicon oracle, no executing-fidelity

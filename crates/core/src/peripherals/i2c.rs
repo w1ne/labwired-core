@@ -2546,6 +2546,31 @@ impl I2c {
     }
 }
 
+/// One historical walk tick for this controller. Hardware-oracle paths use it
+/// to settle scheduler-owned peripherals while the CPU is frozen; production
+/// scheduler execution continues through `on_event`.
+fn tick_legacy(i2c: &mut I2c) -> crate::PeripheralTickResult {
+    let irq = match i2c {
+        I2c::Stm32F1(i) => i.tick(),
+        I2c::Stm32L4(i) => i.tick(),
+        I2c::Kinetis(i) => i.tick(),
+        // A transaction completes inside the register write, so there is
+        // nothing to advance here — only the level IRQ to re-assert.
+        I2c::Efr32s2(i) => i.irq_pending(),
+    };
+    // Errors ride the ER vector, not the EV vector the `irq` flag pends.
+    let explicit_irqs = match i2c {
+        I2c::Stm32F1(i) => i.error_irqs(),
+        _ => None,
+    };
+    crate::PeripheralTickResult {
+        irq,
+        cycles: 0,
+        explicit_irqs,
+        ..Default::default()
+    }
+}
+
 impl crate::Peripheral for I2c {
     fn line_names(&self) -> &'static [&'static str] {
         match self {
@@ -2604,6 +2629,10 @@ impl crate::Peripheral for I2c {
         true
     }
 
+    fn has_attached_time_devices(&self) -> bool {
+        !self.attached_devices().is_empty()
+    }
+
     /// Advance every attached slave's data-ready clock. Slaves live behind
     /// `RefCell` here (the transaction engine hands out interior-mutable borrows
     /// mid-transfer), so borrow each cell in turn. On STM32/Kinetis the machine
@@ -2625,6 +2654,22 @@ impl crate::Peripheral for I2c {
         for cell in self.attached_devices() {
             crate::peripherals::device::drain_i2c_pin_drives(&mut **cell.borrow_mut(), out);
         }
+    }
+
+    /// RXDR is one byte wide. A word read must pop exactly one byte, not
+    /// byte-slice the register four times (which would consume/duplicate the
+    /// framing).
+    fn read_u32(&self, offset: u64) -> SimResult<u32> {
+        if let Self::Stm32L4(i) = self {
+            if offset & !3 == 0x24 {
+                return Ok(i.read_reg(0x24));
+            }
+        }
+        let b0 = self.read(offset)? as u32;
+        let b1 = self.read(offset + 1)? as u32;
+        let b2 = self.read(offset + 2)? as u32;
+        let b3 = self.read(offset + 3)? as u32;
+        Ok(b0 | (b1 << 8) | (b2 << 16) | (b3 << 24))
     }
 
     /// Atomic word writes: STM32 HAL stores CR2 as a single STR (START, NBYTES,
@@ -2658,25 +2703,11 @@ impl crate::Peripheral for I2c {
         if self.scheduler_mode() {
             return crate::PeripheralTickResult::default();
         }
-        let irq = match self {
-            Self::Stm32F1(i) => i.tick(),
-            Self::Stm32L4(i) => i.tick(),
-            Self::Kinetis(i) => i.tick(),
-            // A transaction completes inside the register write, so there is
-            // nothing to advance here — only the level IRQ to re-assert.
-            Self::Efr32s2(i) => i.irq_pending(),
-        };
-        // Errors ride the ER vector, not the EV vector the `irq` flag pends.
-        let explicit_irqs = match self {
-            Self::Stm32F1(i) => i.error_irqs(),
-            _ => None,
-        };
-        crate::PeripheralTickResult {
-            irq,
-            cycles: 0,
-            explicit_irqs,
-            ..Default::default()
-        }
+        tick_legacy(self)
+    }
+
+    fn tick_elapsed_forced(&mut self, _cycles: u64) -> crate::PeripheralTickResult {
+        tick_legacy(self)
     }
 
     fn uses_scheduler(&self) -> bool {

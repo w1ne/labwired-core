@@ -16,6 +16,9 @@ pub struct NvicState {
     pub event_register: AtomicBool,
     pub sev_on_pend: AtomicBool,
     pub iser: [AtomicU32; 8],
+    /// Cached "any ISER bit is set" so the per-boundary interrupt collection
+    /// can skip its eight-word scan on a machine that never enabled one.
+    pub any_enabled: AtomicBool,
     pub ispr: [AtomicU32; 8],
     pub iabr: [AtomicU32; 8],
     pub ipr: [AtomicU32; 240], // Priority registers (simplified)
@@ -58,6 +61,7 @@ impl Default for NvicState {
             event_register: AtomicBool::new(false),
             sev_on_pend: AtomicBool::new(false),
             iser: Default::default(),
+            any_enabled: AtomicBool::new(false),
             ispr: Default::default(),
             iabr: Default::default(),
             ipr: [0; 240].map(|_| AtomicU32::new(0)),
@@ -165,10 +169,23 @@ impl Peripheral for Nvic {
         if offset < 0x20 {
             // ISER: Writing 1 sets the enable bit
             self.state.iser[reg_idx].fetch_or(mask, Ordering::SeqCst);
+            if mask != 0 {
+                self.state.any_enabled.store(true, Ordering::Relaxed);
+            }
         } else if (0x80..0xA0).contains(&offset) {
-            // ICER: Writing 1 clears the enable bit
+            // ICER: Writing 1 clears the enable bit. Recompute the cache only
+            // when the write actually changed the word.
             let real_idx = reg_idx - 0x80 / 4;
-            self.state.iser[real_idx].fetch_and(!mask, Ordering::SeqCst);
+            let before = self.state.iser[real_idx].fetch_and(!mask, Ordering::SeqCst);
+            if before & mask != 0
+                && self
+                    .state
+                    .iser
+                    .iter()
+                    .all(|word| word.load(Ordering::Relaxed) == 0)
+            {
+                self.state.any_enabled.store(false, Ordering::Relaxed);
+            }
         } else if (0x100..0x120).contains(&offset) {
             // ISPR: Writing 1 sets the pending bit
             let real_idx = reg_idx - 0x100 / 4;

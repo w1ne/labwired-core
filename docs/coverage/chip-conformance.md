@@ -9,9 +9,23 @@ Reg match = verifiable cold-reset registers reproduced. "Excluded" = registers a
 | esp32c3 | **L2** | ✓ | 40 | 380/402 (94%) | 190 | firmware_survival::test_esp32c3_demo_survival |
 | esp32c6 | **L1** | ✓ | 16 | — | — | firmware_survival::test_esp32c6_demo_survival |
 | litex-vexriscv | **L1** | ✓ | 5 | — | — | firmware_survival::test_litex_vexriscv_smoke_survival |
+| arty-litex-vexriscv | **L1** | ✓ | 6 | — | — | firmware_survival::test_arty_litex_smoke_survival |
 | vegaboard-ri5cy | **L1** | ✓ | 9 | — | — | firmware_survival::test_vegaboard_ri5cy_smoke_survival |
+| sam4s16c | **L1** | ✓ | 20 | — | — | firmware_survival::test_sam4s_xplained_smoke_survival |
+| stm32f072 | **L1** | ✓ | 39 | — | — | firmware_survival::test_stm32f072b_disco_smoke_survival |
 | nrf54l15 | **L1** | ✓ | 29 | — | — | firmware_survival::test_nrf54l15_zephyr_survival |
 | atsamd21g18a | **L1** | ✓ | 15 | — | — | atsamd21_peripheral_estate::the_estate_answers_at_its_own_addresses |
+| atsamd21e15a | **L0** | ✓ | 13 | — | — | — |
+| atsamd21e16a | **L0** | ✓ | 13 | — | — | — |
+| atsamd21e17a | **L0** | ✓ | 13 | — | — | — |
+| atsamd21e18a | **L0** | ✓ | 13 | — | — | — |
+| atsamd21g15a | **L0** | ✓ | 15 | — | — | — |
+| atsamd21g16a | **L0** | ✓ | 15 | — | — | — |
+| atsamd21g17a | **L0** | ✓ | 15 | — | — | — |
+| atsamd21j15a | **L0** | ✓ | 15 | — | — | — |
+| atsamd21j16a | **L0** | ✓ | 15 | — | — | — |
+| atsamd21j17a | **L0** | ✓ | 15 | — | — | — |
+| atsamd21j18a | **L0** | ✓ | 15 | — | — | — |
 | nrf54lm20a | **L1** | ✓ | 31 | — | — | nrf54lm20a_peripheral_estate::the_estate_answers_at_its_own_addresses |
 | esp32 | **L1** | ✓ | 32 | — | — | firmware_survival::test_esp32_tier1_survival |
 | esp32s3 | **L1** | ✓ | 14 | — | — | firmware_survival::test_esp32s3_tier1_survival |
@@ -33,8 +47,9 @@ Reg match = verifiable cold-reset registers reproduced. "Excluded" = registers a
 | stm32g0b1re | **L0** | ✓ | 10 | — | — | — |
 | stm32g474re | **L1** | ✓ | 22 | — | — | firmware_survival::test_stm32g474_zephyr_survival |
 | stm32h563 | **L1** | ✓ | 37 | — | — | firmware_survival::test_stm32h563_demo_survival |
-| stm32u575 | **L1** | ✓ | 41 | — | — | firmware_survival::test_stm32u575_zephyr_survival |
-| stm32u545 | **L1** | ✓ | 38 | — | — | firmware_survival::test_stm32u545_blinky_survival |
+| stm32u575 | **L1** | ✓ | 43 | — | — | firmware_survival::test_stm32u575_zephyr_survival |
+| stm32u545 | **L1** | ✓ | 39 | — | — | firmware_survival::test_stm32u545_blinky_survival |
+| stm32u5a5zj | **L1** | ✓ | 45 | — | — | stm32u5_exec_oracle::u5a5_hash_saes_and_pka_execute_register_level_operations |
 | stm32h735 | **L1** | ✓ | 40 | — | — | firmware_survival::test_stm32h735_tier1_survival |
 | stm32l073 | **L2** | ✓ | 42 | 54/54 (100%) | 6 | firmware_survival::test_nucleo_l073rz_smoke_survival |
 | stm32l476 | **L1** | ✓ | 58 | — | — | firmware_survival::test_nucleo_l476rg_demo_survival |
@@ -44,6 +59,7 @@ Reg match = verifiable cold-reset registers reproduced. "Excluded" = registers a
 | efr32mg26 | **L2** | ✓ | 34 | 243/243 (100%) | 1 | efr32_deck_behavior::the_deck_firmware_drives_every_part |
 | atmega328p | **L1** | ✓ | 7 | — | — | avr_nano_golden_survival::arduino_nano_golden_prints_and_blinks |
 | atmega2560 | **L1** | ✓ | 15 | — | — | avr_mega2560_io::each_led_lands_on_its_mega_port_pin |
+| atmega2561 | **L1** | ✓ | 11 | — | — | avr_atmega2561::atmega2561_boots_and_prints |
 | atsamd21 | **L1** | ✓ | 7 | — | — | firmware_survival::test_atsamd21_nano33_smoke_survival |
 | atsamd51 | **L1** | ✓ | 9 | — | — | firmware_survival::test_atsamd51_metro_m4_smoke_survival |
 | atsamd51-pybadge | **L0** | ✓ | 10 | — | — | — |
@@ -52,7 +68,13 @@ Reg match = verifiable cold-reset registers reproduced. "Excluded" = registers a
 | stm32f746 | **L1** | ✓ | 17 | — | — | firmware_survival::test_stm32f746_discovery_smoke_survival |
 | stm32g071 | **L1** | ✓ | 41 | — | — | firmware_survival::test_nucleo_g071rb_smoke_survival |
 | dspic33fj32mc204 | **L1** | ✓ | 3 | — | — | pic24_m0_smoke::pic24_fixture_boots_and_writes_h_to_uart |
-| dspic33fj32mc202 | **L1** | ✓ | 0 | — | — | pic24_xc16_202_smoke::xc16_202_firmware_boots_and_writes_hi_to_uart |
+| dspic33fj32mc202 | **L1** | ✓ | 3 | — | — | pic24_xc16_202_smoke::xc16_202_firmware_boots_and_writes_hi_to_uart |
+| pic24f04ka200 | **L1** | ✓ | 3 | — | — | pic24_ka_smoke::pic24f04ka200_uart_smoke |
+| pic24f04ka201 | **L1** | ✓ | 3 | — | — | pic24_ka_smoke::pic24f04ka201_uart_smoke |
+| pic24f08ka101 | **L1** | ✓ | 3 | — | — | pic24_ka_smoke::pic24f08ka101_uart_smoke |
+| pic24f08ka102 | **L1** | ✓ | 3 | — | — | pic24_ka_smoke::pic24f08ka102_uart_smoke |
+| pic24f16ka101 | **L1** | ✓ | 3 | — | — | pic24_ka_smoke::pic24f16ka101_uart_smoke |
+| pic24f16ka102 | **L1** | ✓ | 3 | — | — | pic24_ka_smoke::pic24f16ka102_uart_smoke |
 
 ## Declared platforms without a model
 

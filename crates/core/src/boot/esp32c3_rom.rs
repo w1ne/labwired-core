@@ -601,7 +601,7 @@ pub fn build_rom_boot_machine<C: crate::Cpu, F: FnOnce(crate::cpu::RiscV) -> C>(
     // behavior byte-identical to before the migration.
     #[cfg(feature = "event-scheduler")]
     {
-        bus.legacy_walk_disabled = bus.derive_walk_deletable();
+        bus.recompute_walk_deletable();
     }
     // Every die has a factory MAC. There is no such thing as a shipped ESP32
     // whose eFuse base MAC reads zero, and a zero one is not neutral: it makes

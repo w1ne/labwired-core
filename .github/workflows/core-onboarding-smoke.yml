@@ -18,6 +18,7 @@ on:
       - "configs/systems/**"
       - "examples/**"
       - "crates/core/**"
+      - "crates/firmware-stm32u575-demo/**"
       - "crates/cli/**"
       - "crates/labwired-models-**"
       - ".github/workflows/core-onboarding-smoke.yml"
@@ -52,6 +53,19 @@ jobs:
             target: thumbv8m.main-none-eabi
             script: examples/nucleo-u575zi/io-smoke.yaml
             system: configs/systems/nucleo-u575zi.yaml
+          # U5A5 uses the shared U575 demo only for its common Cortex-M33 boot
+          # and USART1 `OK` path. Its PKA/HASH/SAES operation coverage remains
+          # in the U5A5 SystemBus oracle, not in this board bring-up smoke.
+          - id: stm32u5a5zj-nucleo
+            crate: firmware-stm32u575-demo
+            target: thumbv8m.main-none-eabi
+            script: examples/nucleo-u5a5zj/io-smoke.yaml
+            system: examples/nucleo-u5a5zj/system.yaml
+          - id: stm32u575-star-catcher
+            crate: firmware-stm32u575-demo
+            target: thumbv8m.main-none-eabi
+            script: examples/nucleo-u575zi/star-catcher-smoke.yaml
+            system: examples/nucleo-u575zi/star-catcher-system.yaml
           - id: rp2040-pio
             crate: firmware-rp2040-pio-onboarding
             target: thumbv6m-none-eabi
@@ -97,6 +111,88 @@ jobs:
           name: onboarding-smoke-${{ matrix.id }}
           path: out/onboarding-smoke/${{ matrix.id }}/
           retention-days: 5
+
+  stm32u575-reference:
+    name: stm32u575-60north-reference
+    if: ${{ github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      RENODE_U5_FIRMWARE: ${{ github.workspace }}/.external/renode-stm32u5/build/firmware
+      U5_REFERENCE_SHA: 9cef86b9a9d880c0fae0c7b6c92ff039ec8a0c82
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checkout pinned MIT 60North reference
+        uses: actions/checkout@v4
+        with:
+          repository: 60north/renode-stm32u5
+          ref: 9cef86b9a9d880c0fae0c7b6c92ff039ec8a0c82
+          path: .external/renode-stm32u5
+          persist-credentials: false
+
+      - name: Install firmware build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y gcc-arm-none-eabi libnewlib-arm-none-eabi cmake ninja-build
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.95.0
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: stm32u575-reference
+
+      - name: Build all 13 pinned reference firmwares
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out/stm32u575-reference
+          reference=.external/renode-stm32u5
+          test "$(git -C "$reference" rev-parse HEAD)" = "$U5_REFERENCE_SHA"
+          {
+            echo "60North reference: $U5_REFERENCE_SHA"
+            git rev-parse HEAD
+            arm-none-eabi-gcc --version
+            cmake --version
+            ninja --version
+          } > out/stm32u575-reference/provenance.txt
+          # Upstream CMake verifies all six ST/CMSIS component commits after fetch.
+          cmake -S "$reference/firmware-tests" -B "$RENODE_U5_FIRMWARE" -G Ninja \
+            -DSTM32CUBE_FIRMWARE=ON 2>&1 | tee out/stm32u575-reference/configure.log
+          cmake --build "$RENODE_U5_FIRMWARE" --parallel 2 2>&1 | tee out/stm32u575-reference/build.log
+          firmwares=(core-smoke clock-init hal-clock hal-gpio hal-uart hal-spi hal-spi-dma
+            hal-spi-dma-loopback hal-uart-dma st-spi-fullduplex-polling-master
+            st-i2c-twoboards-polling-master st-fdcan-loopback st-dma-flash-to-ram)
+          for firmware in "${firmwares[@]}"; do
+            test -s "$RENODE_U5_FIRMWARE/$firmware.elf"
+            sha256sum "$RENODE_U5_FIRMWARE/$firmware.elf"
+          done > out/stm32u575-reference/firmware-sha256.txt
+          for component in st_hal st_device st_cmsis_core st_nucleo_bsp st_eval_bsp; do
+            printf '%s ' "$component" >> out/stm32u575-reference/provenance.txt
+            git -C "$RENODE_U5_FIRMWARE/_deps/$component-src" rev-parse HEAD >> out/stm32u575-reference/provenance.txt
+          done
+          git -C "$RENODE_U5_FIRMWARE/_deps/stm32cubeu5-examples" rev-parse HEAD >> out/stm32u575-reference/provenance.txt
+
+      - name: Run firmware acceptance, register contracts and chip drift guards
+        shell: bash
+        run: |
+          set -euo pipefail
+          # These are LabWired runs of reference firmware, not Renode differential or silicon tests.
+          cargo test --locked -p labwired-core --test stm32u575_60north -- --ignored --nocapture \
+            2>&1 | tee out/stm32u575-reference/firmware-tests.log
+          cargo test --locked -p labwired-core --test stm32u575_60north_registers --test u545_u575_drift_guard -- --nocapture \
+            2>&1 | tee out/stm32u575-reference/register-drift-tests.log
+
+      - name: Upload reference evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stm32u575-60north-reference
+          path: out/stm32u575-reference/
+          if-no-files-found: warn
+          retention-days: 14
 
   onboarding-scoreboard:
     name: onboarding-scoreboard

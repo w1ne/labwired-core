@@ -47,6 +47,7 @@ mod policy;
 mod profiles;
 mod resident_device;
 mod routing;
+mod samd51_storage;
 pub mod sim_inputs;
 mod tick;
 mod timed_can;
@@ -99,11 +100,20 @@ impl SystemBus {
     }
 
     #[inline]
-    fn legacy_tick_index_active(p: &PeripheralEntry) -> bool {
-        if cfg!(feature = "event-scheduler") && p.dev.uses_scheduler() {
-            return false;
+    fn legacy_tick_index_eligible(p: &PeripheralEntry) -> bool {
+        let uses_scheduler = p.dev.uses_scheduler();
+        if cfg!(feature = "event-scheduler") {
+            !uses_scheduler && p.dev.needs_legacy_walk()
+        } else {
+            // Scheduler-capable peripherals still use their legacy tick
+            // fallback here (for example, RP2040 USB host polling).
+            uses_scheduler || p.dev.needs_legacy_walk()
         }
-        p.dev.legacy_tick_active()
+    }
+
+    #[inline]
+    fn legacy_tick_index_active(p: &PeripheralEntry) -> bool {
+        Self::legacy_tick_index_eligible(p) && p.dev.legacy_tick_active()
     }
 
     /// True when CPU idle fast-forward can skip the legacy peripheral walk for
@@ -675,6 +685,16 @@ pub struct SystemBus {
     /// Read only under the `event-scheduler` feature; flag-off the walk always
     /// runs, so the shipped build is unchanged.
     pub legacy_walk_disabled: bool,
+    /// `walk_deleted: false` from the system manifest is a hard opt-out from
+    /// automatic walk deletion, retained across dynamic activity changes.
+    pub(crate) legacy_walk_pinned_on: bool,
+    /// Peripherals eligible for the legacy index at range rebuild, including
+    /// scheduler fallbacks when the feature is off. Indexed by slot to reject
+    /// unrelated MMIO writes before calling activity predicates.
+    legacy_tick_candidate_mask: Vec<bool>,
+    /// Dynamic legacy-tick observers whose activity can change after a write
+    /// to a different peripheral's MMIO window.
+    legacy_tick_peer_write_indices: Vec<usize>,
     /// Differential audit of the walk-free ESP32-S3 interrupt path, installed
     /// only by [`Self::install_esp32s3_irq_audit`]. `None` in every production
     /// build and every other test, where the cost is one null check per
@@ -831,6 +851,10 @@ pub struct SystemBus {
     /// `rebuild_peripheral_ranges`. `None` on every bus without such a
     /// controller, so the flash-region store path costs one test.
     flash_store_owner_idx: Option<usize>,
+    /// Index of the opt-in SAMD51 manual-storage controller, if any. Cached in
+    /// `rebuild_peripheral_ranges` and used by the instruction-boundary commit
+    /// and the pending-op watch. `None` on every default board.
+    samd51_nvmctrl_idx: Option<usize>,
     /// Universal bus-transaction trace (logic analyzer): a shared, ring-
     /// buffered log that `I2c`/`Spi` peripherals record into once wrapped via
     /// `set_bus_trace` + `attach` (see `crate::bus::bus_trace`). Always

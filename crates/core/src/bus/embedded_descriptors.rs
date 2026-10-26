@@ -2654,6 +2654,10 @@ static DESCRIPTORS: &[(&str, &str)] = &[
         include_str!("../../../../configs/peripherals/stm32u575/gpioi.yaml"),
     ),
     (
+        "stm32u575/hash.yaml",
+        include_str!("../../../../configs/peripherals/stm32u575/hash.yaml"),
+    ),
+    (
         "stm32u575/i2c1.yaml",
         include_str!("../../../../configs/peripherals/stm32u575/i2c1.yaml"),
     ),
@@ -2678,6 +2682,10 @@ static DESCRIPTORS: &[(&str, &str)] = &[
         include_str!("../../../../configs/peripherals/stm32u575/lpuart1.yaml"),
     ),
     (
+        "stm32u575/pka.yaml",
+        include_str!("../../../../configs/peripherals/stm32u575/pka.yaml"),
+    ),
+    (
         "stm32u575/pwr.yaml",
         include_str!("../../../../configs/peripherals/stm32u575/pwr.yaml"),
     ),
@@ -2692,6 +2700,10 @@ static DESCRIPTORS: &[(&str, &str)] = &[
     (
         "stm32u575/rtc.yaml",
         include_str!("../../../../configs/peripherals/stm32u575/rtc.yaml"),
+    ),
+    (
+        "stm32u575/saes.yaml",
+        include_str!("../../../../configs/peripherals/stm32u575/saes.yaml"),
     ),
     (
         "stm32u575/spi1.yaml",

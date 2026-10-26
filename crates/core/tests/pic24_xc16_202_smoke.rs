@@ -52,6 +52,7 @@ fn boot(steps: usize) -> (Pic24, Vec<u8>) {
     let sink: Arc<Mutex<Vec<u8>>> = console.heard_sink();
 
     let mut cpu = Pic24::new();
+    cpu.set_port_masks(labwired_core::system::builder::pic24_port_masks(&chip));
     cpu.load_program_image(&image);
     cpu.set_serial_sink(sink.clone());
     cpu.reset(&mut bus).expect("reset");

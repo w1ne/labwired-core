@@ -1,0 +1,12 @@
+name: atmega2561-io
+# Same target as configs/systems/atmega2561.yaml: the bare 64-pin part at
+# 16 MHz, with PB5 bound to the status LED.
+chip: ../../configs/chips/atmega2561.yaml
+cpu_hz: 16000000
+board_io:
+  - id: "status_led"
+    kind: "led"
+    peripheral: "portb"
+    pin: 5
+    signal: "output"
+    active_high: true

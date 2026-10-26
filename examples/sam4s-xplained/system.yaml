@@ -1,0 +1,30 @@
+# LabWired - SAM4S Xplained system manifest
+#
+# The SAM4S Xplained board (Atmel SAM4S16C, Renode `sam4s_xplained`):
+#   PC10 — user LED (active high)
+#   PA5  — user button (active low, external pull-up)
+#   PA9/PA10 — UART0 (J-Link OB VCP; simulator capture; Renode `sysbus.uart0`)
+#
+# Zephyr board documentation connects UART0 to the onboard SEGGER J-Link OB
+# VCP. The simulator captures the UART stream directly; it does not model the
+# USB bridge or establish physical acceptance. The LED and button are modeled.
+# The touch/joystick, the EEFC, the TCs and the serial buses are not modelled
+# (declared stubs in the chip).
+
+name: "sam4s-xplained"
+chip: "../../configs/chips/sam4s16c.yaml"
+debug_uart: "uart0"
+external_devices: []
+board_io:
+  - id: "led"
+    kind: "led"
+    peripheral: "pioC"
+    pin: 10
+    signal: "output"
+    active_high: true
+  - id: "button"
+    kind: "button"
+    peripheral: "pioA"
+    pin: 5
+    signal: "input"
+    active_high: false

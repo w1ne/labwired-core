@@ -1,0 +1,87 @@
+# LabWired - Digilent Arty A7-35T system manifest (LiteX VexRiscv SoC)
+#
+# Board facts (Digilent Arty A7 reference manual; the LiteX control-and-status
+# block at 0x60006800):
+#   LD4..LD7  — four user LEDs, driven by CAS Leds bits 0..3 (active high)
+#   SW0..SW3  — four slide switches, CAS Switches bits 0..3 (active low wiring)
+#   BTN0..BTN3 — four push-buttons, CAS ButtonsStatus bits 0..3 (active low;
+#                presses also latch in ButtonsPending)
+#
+# Console: the FTDI USB-UART bridge wired to the SoC's LiteX UART.
+name: "arty-litex-vexriscv"
+chip: "../chips/arty-litex-vexriscv.yaml"
+debug_uart: "uart"
+external_devices: []
+board_io:
+  - id: "led_ld4"
+    kind: "led"
+    peripheral: "cas"
+    pin: 0
+    signal: "output"
+    active_high: true
+  - id: "led_ld5"
+    kind: "led"
+    peripheral: "cas"
+    pin: 1
+    signal: "output"
+    active_high: true
+  - id: "led_ld6"
+    kind: "led"
+    peripheral: "cas"
+    pin: 2
+    signal: "output"
+    active_high: true
+  - id: "led_ld7"
+    kind: "led"
+    peripheral: "cas"
+    pin: 3
+    signal: "output"
+    active_high: true
+  - id: "switch_sw0"
+    kind: "button"
+    peripheral: "cas"
+    pin: 32
+    signal: "input"
+    active_high: false
+  - id: "switch_sw1"
+    kind: "button"
+    peripheral: "cas"
+    pin: 33
+    signal: "input"
+    active_high: false
+  - id: "switch_sw2"
+    kind: "button"
+    peripheral: "cas"
+    pin: 34
+    signal: "input"
+    active_high: false
+  - id: "switch_sw3"
+    kind: "button"
+    peripheral: "cas"
+    pin: 35
+    signal: "input"
+    active_high: false
+  - id: "button_btn0"
+    kind: "button"
+    peripheral: "cas"
+    pin: 64
+    signal: "input"
+    active_high: false
+  - id: "button_btn1"
+    kind: "button"
+    peripheral: "cas"
+    pin: 65
+    signal: "input"
+    active_high: false
+  - id: "button_btn2"
+    kind: "button"
+    peripheral: "cas"
+    pin: 66
+    signal: "input"
+    active_high: false
+  - id: "button_btn3"
+    kind: "button"
+    peripheral: "cas"
+    pin: 67
+    signal: "input"
+    active_high: false
