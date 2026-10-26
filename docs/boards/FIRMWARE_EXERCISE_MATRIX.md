@@ -203,6 +203,38 @@ _Drives 10 rubric classes via its tier-1 fixture, and the nightly J1939 monitor 
 - `bkp` (configs/chips/stm32f103.yaml:222 (type: stub)) — CLOSABLE: author-declared stub with no schema wired in the descriptor — the backup-domain registers (RTC backup data and calibration) are not modelled; no gated firmware touches the window.
 - `WWDG` (crates/core/src/peripherals/wwdg.rs:63 (configs/chips/stm32f103.yaml:185)) — CLOSABLE: inert register bank — tick() is the trait-default no-op, so an armed watchdog never fires. No behavioural test and no gated firmware drives it; reset values are pinned by the bench-F103 probe in stm32f1_mmio_diff.
 
+### `stm32f103c4`
+
+_Exact low-density x4/x6 geometry slice for stm32f103c4; it reuses the shared medium-density STM32F103 peripheral map, so firmware-exercise claims stay under `stm32f103`. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+
+### `stm32f103c6`
+
+_Exact low-density x4/x6 geometry slice for stm32f103c6; it reuses the shared medium-density STM32F103 peripheral map, so firmware-exercise claims stay under `stm32f103`. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+
+### `stm32f103r4`
+
+_Exact low-density x4/x6 geometry slice for stm32f103r4; it reuses the shared medium-density STM32F103 peripheral map, so firmware-exercise claims stay under `stm32f103`. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+
+### `stm32f103r4h`
+
+_Exact low-density x4/x6 geometry slice for stm32f103r4h; it reuses the shared medium-density STM32F103 peripheral map, so firmware-exercise claims stay under `stm32f103`. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+
+### `stm32f103r6`
+
+_Exact low-density x4/x6 geometry slice for stm32f103r6; it reuses the shared medium-density STM32F103 peripheral map, so firmware-exercise claims stay under `stm32f103`. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+
+### `stm32f103r6h`
+
+_Exact low-density x4/x6 geometry slice for stm32f103r6h; it reuses the shared medium-density STM32F103 peripheral map, so firmware-exercise claims stay under `stm32f103`. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+
+### `stm32f103t4`
+
+_Exact low-density x4/x6 geometry slice for stm32f103t4; it reuses the shared medium-density STM32F103 peripheral map, so firmware-exercise claims stay under `stm32f103`. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+
+### `stm32f103t6`
+
+_Exact low-density x4/x6 geometry slice for stm32f103t6; it reuses the shared medium-density STM32F103 peripheral map, so firmware-exercise claims stay under `stm32f103`. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+
 ### `stm32f401`
 
 _All 12 declared rubric classes are driven by its tier-1 fixture — including a byte-exact memory-to-memory transfer on DMA2 plus the EXTI→NVIC and TIM1-PWM checks — while PWR_CR.VOS is programmed by the PR-gated Arduino startup and DBGMCU_CR by the Zephyr SoC-debug init; TIM2 input capture is driven by two register-level firmwares (HC-SR04 echo width through the CC2 interrupt, and PWM-input period/duty in slave reset mode); that leaves the other stream controller, DMA1, as the chip's one beyond-rubric gap._
@@ -212,6 +244,54 @@ _All 12 declared rubric classes are driven by its tier-1 fixture — including a
 - TIM2 PWM-input mode (TS=TI1FP1, SMS=reset) — CCR1 period and CCR2 high time equal to the injected edge cycles exactly — `timer-capture/freq-meter` · timer_input_capture.rs:pwm_input_mode_measures_period_and_duty_exactly (ungated)
 
 **Advanced peripherals — unit-tested only** (no firmware drives them): `DMA1`
+
+### `stm32f401cb`
+
+_Exact orderable geometry slice for stm32f401cb on the shared F401 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+
+### `stm32f401cc`
+
+_Exact orderable geometry slice for stm32f401cc on the shared F401 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+
+### `stm32f401cd`
+
+_Exact orderable geometry slice for stm32f401cd on the shared F401 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+
+### `stm32f401ce`
+
+_Exact orderable geometry slice for stm32f401ce on the shared F401 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+
+### `stm32f401rb`
+
+_Exact orderable geometry slice for stm32f401rb on the shared F401 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+
+### `stm32f401rc`
+
+_Exact orderable geometry slice for stm32f401rc on the shared F401 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+
+### `stm32f401rd`
+
+_Exact orderable geometry slice for stm32f401rd on the shared F401 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+
+### `stm32f401re`
+
+_Exact orderable geometry slice for stm32f401re on the shared F401 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+
+### `stm32f401vb`
+
+_Exact orderable geometry slice for stm32f401vb on the shared F401 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+
+### `stm32f401vc`
+
+_Exact orderable geometry slice for stm32f401vc on the shared F401 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+
+### `stm32f401vd`
+
+_Exact orderable geometry slice for stm32f401vd on the shared F401 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+
+### `stm32f401ve`
+
+_Exact orderable geometry slice for stm32f401ve on the shared F401 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
 
 ### `stm32f405`
 
@@ -226,6 +306,30 @@ _No tier-1 target (absent from tier1-matrix.json), so this entry carries the who
 _Its 9-class tier-1 fixture leaves dma/irq/pwm unrecorded, and the DMA gap is real: no firmware drives either stream controller (only the descriptor-level differential does); the PR-gated smoke reads DBGMCU IDCODE, the Arduino startup programs PWR_CR.VOS then reads REV_ID back, and the `arduino-matrix-gate` L8_can loopback sketch drives bxCAN1 to self-reception (ID 0x123, data 0xA5), so debug, power and CAN are firmware-exercised; the AHT20+BMP280 e2e drives two real I²C device twins but decodes no physical value._
 
 **Advanced peripherals — unit-tested only** (no firmware drives them): `DMA1`, `DMA2`
+
+### `stm32f407ie`
+
+_Exact orderable geometry slice for stm32f407ie on the shared F407 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+
+### `stm32f407ig`
+
+_Exact orderable geometry slice for stm32f407ig on the shared F407 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+
+### `stm32f407ve`
+
+_Exact orderable geometry slice for stm32f407ve on the shared F407 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+
+### `stm32f407vg`
+
+_Exact orderable geometry slice for stm32f407vg on the shared F407 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+
+### `stm32f407ze`
+
+_Exact orderable geometry slice for stm32f407ze on the shared F407 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+
+### `stm32f407zg`
+
+_Exact orderable geometry slice for stm32f407zg on the shared F407 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
 
 ### `stm32f401cdu6`
 
