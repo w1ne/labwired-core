@@ -17,7 +17,7 @@ use std::collections::VecDeque;
 use aes::cipher::{BlockDecrypt, BlockEncrypt, KeyInit};
 use aes::{Aes128, Aes256};
 
-use crate::{Peripheral, PeripheralTickResult, SimResult};
+use crate::{Peripheral, SimResult};
 
 const CR: u64 = 0x000;
 const SR: u64 = 0x004;
@@ -356,9 +356,17 @@ impl Peripheral for Stm32u5Saes {
         Ok(())
     }
 
-    fn tick(&mut self) -> PeripheralTickResult {
+    fn irq_line_level(&self) -> Option<bool> {
         let pending = self.word(ISR) & self.word(IER);
-        PeripheralTickResult::with_irq(pending != 0)
+        Some(pending != 0)
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
+    fn legacy_tick_active(&self) -> bool {
+        false
     }
 }
 

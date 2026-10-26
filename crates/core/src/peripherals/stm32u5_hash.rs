@@ -17,7 +17,7 @@ use md5::Md5;
 use sha1::Sha1;
 use sha2::{Digest, Sha224, Sha256};
 
-use crate::{Peripheral, PeripheralTickResult, SimResult};
+use crate::{Peripheral, SimResult};
 
 const CR: u64 = 0x00;
 const DIN: u64 = 0x04;
@@ -275,13 +275,21 @@ impl Peripheral for Stm32u5Hash {
         Ok(())
     }
 
-    fn tick(&mut self) -> PeripheralTickResult {
+    fn irq_line_level(&self) -> Option<bool> {
         let status = self.word(SR);
         let mask = self.word(IMR);
-        PeripheralTickResult::with_irq(
+        Some(
             (status & SR_DCIS != 0 && mask & IMR_DCIE != 0)
                 || (status & SR_DINIS != 0 && mask & IMR_DINIE != 0),
         )
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
+    fn legacy_tick_active(&self) -> bool {
+        false
     }
 }
 

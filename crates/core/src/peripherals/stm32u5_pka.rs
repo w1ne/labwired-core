@@ -14,7 +14,7 @@
 
 use num_bigint::{BigInt, BigUint, Sign};
 
-use crate::{Peripheral, PeripheralTickResult, SimResult};
+use crate::{Peripheral, SimResult};
 
 const CR: u64 = 0x000;
 const SR: u64 = 0x004;
@@ -336,15 +336,23 @@ impl Peripheral for Stm32u5Pka {
         Ok(())
     }
 
-    fn tick(&mut self) -> PeripheralTickResult {
+    fn irq_line_level(&self) -> Option<bool> {
         let control = self.registers[0];
         let status = self.registers[1];
-        PeripheralTickResult::with_irq(
+        Some(
             (status & SR_PROCENDF != 0 && control & CR_PROCENDIE != 0)
                 || (status & SR_RAMERRF != 0 && control & CR_RAMERRIE != 0)
                 || (status & SR_ADDRERRF != 0 && control & CR_ADDRERRIE != 0)
                 || (status & SR_OPERRF != 0 && control & CR_OPERRIE != 0),
         )
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
+    fn legacy_tick_active(&self) -> bool {
+        false
     }
 }
 

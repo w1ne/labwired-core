@@ -53,6 +53,14 @@ jobs:
             target: thumbv8m.main-none-eabi
             script: examples/nucleo-u575zi/io-smoke.yaml
             system: configs/systems/nucleo-u575zi.yaml
+          # U5A5 uses the shared U575 demo only for its common Cortex-M33 boot
+          # and USART1 `OK` path. Its PKA/HASH/SAES operation coverage remains
+          # in the U5A5 SystemBus oracle, not in this board bring-up smoke.
+          - id: stm32u5a5zj-nucleo
+            crate: firmware-stm32u575-demo
+            target: thumbv8m.main-none-eabi
+            script: examples/nucleo-u5a5zj/io-smoke.yaml
+            system: examples/nucleo-u5a5zj/system.yaml
           - id: stm32u575-star-catcher
             crate: firmware-stm32u575-demo
             target: thumbv8m.main-none-eabi
