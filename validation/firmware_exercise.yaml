@@ -582,6 +582,55 @@ chips:
     advanced_unit_only: []
     advanced_dead: []
     shim: []
+
+  - id: pic24f04ka200
+    arch: pic24
+    headline: "L1 smoke, SIM-DERIVED; no beyond-rubric content. Exact PIC24F04KA200 descriptor (DS30009937C): 14-pin package, 4 KB flash, 512 B SRAM, PORTA 0x007F / PORTB 0xC310 / no PORTC, UART1 at 0x0220. A real XC16 v1.70 ELF prints `HI` on UART1 and toggles RA0 (crates/core/tests/pic24_ka_smoke.rs, examples/pic24f04ka200/io-smoke.yaml). Data EEPROM (absent), UART2, timers, ADC, SPI and I2C are not exercised for this part."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: pic24f04ka201
+    arch: pic24
+    headline: "L1 smoke, SIM-DERIVED; no beyond-rubric content. Exact PIC24F04KA201 descriptor (DS30009937C): 20-pin package, 4 KB flash, 512 B SRAM, PORTA 0x007F / PORTB 0xF397 / no PORTC, UART1 at 0x0220. A real XC16 v1.70 ELF prints `HI` on UART1 and toggles RA0 (crates/core/tests/pic24_ka_smoke.rs, examples/pic24f04ka201/io-smoke.yaml). Data EEPROM (absent), UART2, timers, ADC, SPI and I2C are not exercised for this part."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: pic24f08ka101
+    arch: pic24
+    headline: "L1 smoke, SIM-DERIVED; no beyond-rubric content. Exact PIC24F08KA101 descriptor (DS39927C): 20-pin package, 8 KB flash, 1536 B SRAM, PORTA 0x007F / PORTB 0xF397 / no PORTC, UART1 at 0x0220. A real XC16 v1.70 ELF prints `HI` on UART1 and toggles RA0 (crates/core/tests/pic24_ka_smoke.rs, examples/pic24f08ka101/io-smoke.yaml). Data EEPROM (512 B at 0x7FFE00), UART2, timers, ADC, SPI and I2C are not exercised for this part."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: pic24f08ka102
+    arch: pic24
+    headline: "L1 smoke, SIM-DERIVED; no beyond-rubric content. Exact PIC24F08KA102 descriptor (DS39927C): 28-pin package, 8 KB flash, 1536 B SRAM, PORTA 0x00FF / PORTB 0xFFFF / no PORTC, UART1 at 0x0220. A real XC16 v1.70 ELF prints `HI` on UART1 and toggles RA0 (crates/core/tests/pic24_ka_smoke.rs, examples/pic24f08ka102/io-smoke.yaml). Data EEPROM (512 B at 0x7FFE00), UART2, timers, ADC, SPI and I2C are not exercised for this part."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: pic24f16ka101
+    arch: pic24
+    headline: "L1 smoke, SIM-DERIVED; no beyond-rubric content. Exact PIC24F16KA101 descriptor (DS39927C): 20-pin package, 16 KB flash, 1536 B SRAM, PORTA 0x007F / PORTB 0xF397 / no PORTC, UART1 at 0x0220. A real XC16 v1.70 ELF prints `HI` on UART1 and toggles RA0 (crates/core/tests/pic24_ka_smoke.rs, examples/pic24f16ka101/io-smoke.yaml). Data EEPROM (512 B at 0x7FFE00), UART2, timers, ADC, SPI and I2C are not exercised for this part."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: pic24f16ka102
+    arch: pic24
+    headline: "L1 smoke, SIM-DERIVED; no beyond-rubric content. Exact PIC24F16KA102 descriptor (DS39927C): 28-pin package, 16 KB flash, 1536 B SRAM, PORTA 0x00FF / PORTB 0xFFFF / no PORTC, UART1 at 0x0220. A real XC16 v1.70 ELF prints `HI` on UART1 and toggles RA0 (crates/core/tests/pic24_ka_smoke.rs, examples/pic24f16ka102/io-smoke.yaml). Data EEPROM (512 B at 0x7FFE00), UART2, timers, ADC, SPI and I2C are not exercised for this part."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
   - id: litex-vexriscv
     arch: riscv32im
     headline: "L1 smoke, SIM-DERIVED; no beyond-rubric content. Boot, the LiteX UART console and the countdown-timer one-shot are proven by tests/fixtures/litex-vexriscv-smoke.elf and examples/litex-vexriscv/io-smoke.yaml. SPI flash, Ethernet and MMCM are declared stubs and timer IRQ delivery is not wired (examples/litex-vexriscv/VALIDATION.md), so no advanced blocks exist to list."

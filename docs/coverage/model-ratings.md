@@ -60,6 +60,12 @@ same fields but never their source, chip YAML, binary or build paths.
 | stm32g071 | open | L1 | 41 | 937.4 | 1.6 | ≥1× (CI) | — |
 | dspic33fj32mc204 | open | L1 | 3 | — | — | ≥1× (CI) | — |
 | dspic33fj32mc202 | open | L1 | 3 | — | — | ≥1× (CI) | — |
+| pic24f04ka200 | open | L1 | 3 | — | — | ≥1× (CI) | — |
+| pic24f04ka201 | open | L1 | 3 | — | — | ≥1× (CI) | — |
+| pic24f08ka101 | open | L1 | 3 | — | — | ≥1× (CI) | — |
+| pic24f08ka102 | open | L1 | 3 | — | — | ≥1× (CI) | — |
+| pic24f16ka101 | open | L1 | 3 | — | — | ≥1× (CI) | — |
+| pic24f16ka102 | open | L1 | 3 | — | — | ≥1× (CI) | — |
 | k32w041z (closed) | closed | L2 | 9 | 987.8 | 1.6 | 6.50× | [doc](docs/boards/k32w041amdk6.md) |
 
 Open-model RTx is a CI receipt; the committed open perf rating is step/batch.

@@ -290,6 +290,36 @@
       "firmware": "examples/dspic33fj32mc202/firmware/dspic33fj32mc202-xc16-uart-smoke.elf",
       "expect": "UART: HI"
     },
+    "pic24f04ka200": {
+      "how": "committed",
+      "firmware": "examples/pic24f04ka200/firmware/pic24f04ka200-xc16-uart-smoke.elf",
+      "expect": "UART: HI"
+    },
+    "pic24f04ka201": {
+      "how": "committed",
+      "firmware": "examples/pic24f04ka201/firmware/pic24f04ka201-xc16-uart-smoke.elf",
+      "expect": "UART: HI"
+    },
+    "pic24f08ka101": {
+      "how": "committed",
+      "firmware": "examples/pic24f08ka101/firmware/pic24f08ka101-xc16-uart-smoke.elf",
+      "expect": "UART: HI"
+    },
+    "pic24f08ka102": {
+      "how": "committed",
+      "firmware": "examples/pic24f08ka102/firmware/pic24f08ka102-xc16-uart-smoke.elf",
+      "expect": "UART: HI"
+    },
+    "pic24f16ka101": {
+      "how": "committed",
+      "firmware": "examples/pic24f16ka101/firmware/pic24f16ka101-xc16-uart-smoke.elf",
+      "expect": "UART: HI"
+    },
+    "pic24f16ka102": {
+      "how": "committed",
+      "firmware": "examples/pic24f16ka102/firmware/pic24f16ka102-xc16-uart-smoke.elf",
+      "expect": "UART: HI"
+    },
     "stm32f072": {
       "how": "needs-build",
       "why": "The STM32F0 part is newer than the released CLI this gate installs. The committed smoke tests/fixtures/stm32f072b-disco-smoke.elf prints 'STM32F072B-DISCO SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"

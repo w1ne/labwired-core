@@ -613,6 +613,46 @@ const CHIPS: &[ChipConf] = &[
         reset_oracle: None,
         behavior_gate: Some("pic24_xc16_202_smoke::xc16_202_firmware_boots_and_writes_hi_to_uart"),
     },
+    // PIC24F KA family (DS30009937C / DS39927C). The modelled slice is the
+    // package GPIO masks and UART1; each gate boots that part's own real
+    // XC16 v1.70 image and checks `HI`. Data EEPROM, UART2, timers, ADC, SPI
+    // and I2C are not exercised, so this is L1, not full-device parity.
+    ChipConf {
+        name: "pic24f04ka200",
+        yaml: "configs/chips/pic24f04ka200.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("pic24_ka_smoke::pic24f04ka200_uart_smoke"),
+    },
+    ChipConf {
+        name: "pic24f04ka201",
+        yaml: "configs/chips/pic24f04ka201.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("pic24_ka_smoke::pic24f04ka201_uart_smoke"),
+    },
+    ChipConf {
+        name: "pic24f08ka101",
+        yaml: "configs/chips/pic24f08ka101.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("pic24_ka_smoke::pic24f08ka101_uart_smoke"),
+    },
+    ChipConf {
+        name: "pic24f08ka102",
+        yaml: "configs/chips/pic24f08ka102.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("pic24_ka_smoke::pic24f08ka102_uart_smoke"),
+    },
+    ChipConf {
+        name: "pic24f16ka101",
+        yaml: "configs/chips/pic24f16ka101.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("pic24_ka_smoke::pic24f16ka101_uart_smoke"),
+    },
+    ChipConf {
+        name: "pic24f16ka102",
+        yaml: "configs/chips/pic24f16ka102.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("pic24_ka_smoke::pic24f16ka102_uart_smoke"),
+    },
 ];
 
 /// Registers a cold-reset sim model can *never* reproduce from a `reset_halt`
