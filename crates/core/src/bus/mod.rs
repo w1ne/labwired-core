@@ -101,8 +101,13 @@ impl SystemBus {
 
     #[inline]
     fn legacy_tick_index_active(p: &PeripheralEntry) -> bool {
-        if !p.dev.needs_legacy_walk()
-            || (cfg!(feature = "event-scheduler") && p.dev.uses_scheduler())
+        let uses_scheduler = p.dev.uses_scheduler();
+        // With the scheduler feature off, scheduler-capable peripherals still
+        // use their legacy tick fallback (for example, RP2040 USB host polling).
+        // `needs_legacy_walk` only removes structurally idle models from that
+        // fallback when they are not scheduler-capable.
+        if (cfg!(feature = "event-scheduler") && uses_scheduler)
+            || (!uses_scheduler && !p.dev.needs_legacy_walk())
         {
             return false;
         }

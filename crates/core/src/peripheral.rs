@@ -893,8 +893,8 @@ pub trait Peripheral: std::fmt::Debug + Send {
     ///
     /// The conservative default is `true`: unless a model *proves* its
     /// `tick()`/`tick_elapsed()` can never mutate observable state, it keeps the
-    /// walk on. Override to `false` ONLY when BOTH hold for every reachable
-    /// state:
+    /// walk on. For a peripheral that does not use the scheduler, override to
+    /// `false` ONLY when BOTH hold for every reachable state:
     ///
     /// - the peripheral's `tick()`/`tick_elapsed()` is a genuine no-op
     ///   (a pure register bank / stub, or a purely lazy model that advances its
@@ -903,11 +903,12 @@ pub trait Peripheral: std::fmt::Debug + Send {
     ///   the walk.
     ///
     /// Scheduler-driven peripherals need NOT override this (they are handled by
-    /// `uses_scheduler()` in the derivation); overriding is only for models that
-    /// stay on the legacy path but do nothing there. Getting this wrong (a
-    /// `false` on a model that actually does walk work) silently starves the
-    /// peripheral of ticks once the bus derives walk-deletion — so the honest
-    /// direction under any doubt is to leave it `true`.
+    /// `uses_scheduler()` in the derivation). In builds without
+    /// `event-scheduler`, their active legacy fallback remains indexed even if
+    /// this returns `false`. Getting this wrong on a non-scheduler model (a
+    /// `false` when it actually does walk work) silently starves the peripheral
+    /// of ticks once the bus derives walk-deletion — so the honest direction
+    /// under any doubt is to leave it `true`.
     fn needs_legacy_walk(&self) -> bool {
         true
     }

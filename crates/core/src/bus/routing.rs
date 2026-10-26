@@ -344,7 +344,13 @@ impl SystemBus {
             .iter()
             .enumerate()
             .filter_map(|(index, p)| {
-                (p.dev.needs_legacy_walk() && !p.dev.uses_scheduler()).then_some(index)
+                let uses_scheduler = p.dev.uses_scheduler();
+                let needs_legacy_drive = if cfg!(feature = "event-scheduler") {
+                    !uses_scheduler && p.dev.needs_legacy_walk()
+                } else {
+                    uses_scheduler || p.dev.needs_legacy_walk()
+                };
+                needs_legacy_drive.then_some(index)
             })
             .collect();
         self.legacy_tick_peer_write_indices = self
