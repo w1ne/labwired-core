@@ -111,17 +111,14 @@ fn machine_run_records_step_profile_counters() {
     assert_eq!(profile.peripheral_ticks, 2);
     assert_eq!(profile.peripheral_ticked_entries, 0);
     assert_eq!(profile.bus_tick_entries, 0);
-    // 2 peripheral ticks x the number of WALK-ACTIVE peripherals on the default
-    // bus. That bus has four (uart1, gpioa, rcc, systick), but `gpioa` is a
-    // `GpioPort`, which overrides neither `tick()` nor `tick_elapsed()` and so
-    // reports `legacy_tick_active() == false` — it is no longer visited. Hence
-    // 3 active entries per tick, not 4.
-    //
-    // This counter is a profiling diagnostic, not a behavioural assertion: the
-    // drop from 8 to 6 is the intended effect of removing a no-op peripheral
-    // from the per-cycle walk, and no observable peripheral behaviour changed.
+    // The feature-off walk retains the historical RCC entry, so it visits uart1,
+    // rcc, and systick twice (6 entries). With the scheduler enabled, systick is
+    // event-driven and RCC is statically walk-free, leaving only uart1 (2 entries).
+    // `gpioa` is skipped in both builds because it has no tick implementation.
+    // This is a profiling diagnostic; skipping these no-op calls changes no
+    // peripheral behavior.
     let expected_legacy_tick_entries = if cfg!(feature = "event-scheduler") {
-        4
+        2
     } else {
         6
     };
