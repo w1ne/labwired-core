@@ -30,6 +30,7 @@ cargo run -q -p labwired-cli -- test \
 | ADC0..ADC7 inputs | `avr_adc` with eight channels |
 | 4 KB EEPROM | **not modelled** — no EECR/EEDR/EEAR controller is exposed |
 | USART1 | **not declared** — registers exist only as untested storage on the shared core |
-| Ports H..L, ADC8..ADC15, Timer3/4/5, 12 PWM channels | 100-pin ATmega2560 features, not present here and not declared |
+| Timer3 | **not modelled** — present on the 2561 silicon, but the shared core provides no timer behaviour |
+| Ports H..L, ADC8..ADC15, Timer4/5, twelve PWM channels | 100-pin ATmega2560 features, not present on the 64-pin part; the 2561 has six PWM channels, none declared |
 
 Sources and explicit non-claims: `REQUIRED_DOCS.md`, `VALIDATION.md`.

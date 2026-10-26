@@ -10,7 +10,7 @@
 //! in `sim_mega2560.c`), so this file pins the things that make it the 2561 and
 //! not the 2560: the exact memory geometry, the 54-pin A..G map, only USART0,
 //! and exactly eight ADC inputs. The non-claims (EEPROM controller, USART1,
-//! ports H..L, ADC8..15) are asserted absent from the descriptor.
+//! Timer3, ports H..L, ADC8..15) are asserted absent from the descriptor.
 
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
@@ -93,6 +93,14 @@ fn descriptor_is_the_64_pin_2561_and_not_the_100_pin_2560() {
         assert!(
             !ids.contains(&absent),
             "descriptor claims unmodelled/100-pin block {absent}"
+        );
+    }
+    // DS40002211A gives the 2561 Timer3, but this slice does not model it.
+    // Timer4/5 belong to the 100-pin parts (six vs twelve PWM channels).
+    for absent in ["timer3", "timer4", "timer5"] {
+        assert!(
+            !ids.contains(&absent),
+            "timer block {absent} is not modelled in this slice"
         );
     }
 
