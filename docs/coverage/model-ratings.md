@@ -18,6 +18,17 @@ same fields but never their source, chip YAML, binary or build paths.
 | stm32f072 | open | L1 | 39 | 937.9 | 1.6 | ≥1× (CI) | [doc](docs/boards/stm32f072.md) |
 | nrf54l15 | open | L1 | 29 | 1364.0 | 1.9 | ≥1× (CI) | [doc](docs/boards/nrf54l15.md) |
 | atsamd21g18a | open | L1 | 15 | 895.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/atsamd21g18a.md) |
+| atsamd21e15a | open | L0 | 13 | — | — | ≥1× (CI) | — |
+| atsamd21e16a | open | L0 | 13 | — | — | ≥1× (CI) | — |
+| atsamd21e17a | open | L0 | 13 | — | — | ≥1× (CI) | — |
+| atsamd21e18a | open | L0 | 13 | — | — | ≥1× (CI) | — |
+| atsamd21g15a | open | L0 | 15 | — | — | ≥1× (CI) | — |
+| atsamd21g16a | open | L0 | 15 | — | — | ≥1× (CI) | — |
+| atsamd21g17a | open | L0 | 15 | — | — | ≥1× (CI) | — |
+| atsamd21j15a | open | L0 | 15 | — | — | ≥1× (CI) | — |
+| atsamd21j16a | open | L0 | 15 | — | — | ≥1× (CI) | — |
+| atsamd21j17a | open | L0 | 15 | — | — | ≥1× (CI) | — |
+| atsamd21j18a | open | L0 | 15 | — | — | ≥1× (CI) | — |
 | nrf54lm20a | open | L1 | 31 | 1412.4 | 2.0 | ≥1× (CI) | — |
 | esp32 | open | L1 | 32 | 955.5 | 1.4 | ≥1× (CI) | [doc](docs/boards/esp32.md) |
 | esp32s3 | open | L1 | 14 | 991.9 | 2.4 | ≥1× (CI) | [doc](docs/boards/esp32s3.md) |
