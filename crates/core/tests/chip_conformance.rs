@@ -544,6 +544,16 @@ const CHIPS: &[ChipConf] = &[
         reset_oracle: None,
         behavior_gate: Some("avr_mega2560_io::each_led_lands_on_its_mega_port_pin"),
     },
+    // 64-pin ATmega2561, the same public AVR core but a narrower SKU. Behavior:
+    // the committed 3-byte-PC image boots, prints on USART0 and drives PB5;
+    // the descriptor test pins 54 GPIO, eight ADC inputs and no ports H..L.
+    // No silicon capture → below L2.
+    ChipConf {
+        name: "atmega2561",
+        yaml: "configs/chips/atmega2561.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("avr_atmega2561::atmega2561_boots_and_prints"),
+    },
     ChipConf {
         name: "atsamd21",
         yaml: "configs/chips/atsamd21.yaml",

@@ -9,6 +9,10 @@
   },
   {
     "buses": [],
+    "name": "atmega2561"
+  },
+  {
+    "buses": [],
     "name": "atmega328p"
   },
   {

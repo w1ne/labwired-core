@@ -494,6 +494,12 @@ fn every_shipped_descriptor_is_ratcheted() {
         // separate PR) and it has no executing-fidelity differential of its own.
         // Promote when the catalog board lands AND a differential exists.
         "atmega2560",
+        // 64-pin ATmega2561 on the same public AVR core. Has a descriptor,
+        // a system manifest, an example with a deterministic io-smoke, a
+        // committed fixture and a chip-conformance behavior gate — but no
+        // bundled-configs.ts catalog board and no executing-fidelity
+        // differential of its own. Promote when both exist.
+        "atmega2561",
         // First Microchip part in the engine. Has a chip descriptor, an
         // io-smoke executed by the coverage matrix and the strict-onboarding
         // gate, and a peripheral-estate test — but it is NOT a
