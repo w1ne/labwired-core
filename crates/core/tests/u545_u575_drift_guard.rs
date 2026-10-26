@@ -18,7 +18,7 @@ use std::path::PathBuf;
 
 /// Peripherals the STM32U545 does not have: absent from ST's STM32U545 SVD and
 /// stm32u545xx.h (the U535/U545 die has no USART2, GPIOF or GPIOI).
-const REMOVED_ON_U545: &[&str] = &["usart2", "gpiof", "gpioi"];
+const REMOVED_ON_U545: &[&str] = &["usart2", "gpiof", "gpioi", "hash"];
 
 /// (peripheral id, field path) pairs that legitimately differ.
 const ALLOWED_PERIPHERAL_DIFFS: &[(&str, &str)] = &[

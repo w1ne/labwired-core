@@ -158,6 +158,12 @@ const SHIPPED: &[Board] = &[
         display_lab: true,
     },
     Board {
+        chip: "stm32u5a5zj",
+        aliases: &["stm32u5a5zj", "u5a5", "nucleo-u5a5zj"],
+        yaml_stem: "stm32u5a5zj",
+        display_lab: false,
+    },
+    Board {
         chip: "stm32h563",
         aliases: &["stm32h563", "h563"],
         yaml_stem: "stm32h563",

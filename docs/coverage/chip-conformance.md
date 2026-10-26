@@ -36,8 +36,9 @@ Reg match = verifiable cold-reset registers reproduced. "Excluded" = registers a
 | stm32g0b1re | **L0** | ✓ | 10 | — | — | — |
 | stm32g474re | **L1** | ✓ | 22 | — | — | firmware_survival::test_stm32g474_zephyr_survival |
 | stm32h563 | **L1** | ✓ | 37 | — | — | firmware_survival::test_stm32h563_demo_survival |
-| stm32u575 | **L1** | ✓ | 42 | — | — | firmware_survival::test_stm32u575_zephyr_survival |
+| stm32u575 | **L1** | ✓ | 43 | — | — | firmware_survival::test_stm32u575_zephyr_survival |
 | stm32u545 | **L1** | ✓ | 39 | — | — | firmware_survival::test_stm32u545_blinky_survival |
+| stm32u5a5zj | **L1** | ✓ | 45 | — | — | stm32u5_exec_oracle::u5a5_hash_saes_and_pka_execute_register_level_operations |
 | stm32h735 | **L1** | ✓ | 40 | — | — | firmware_survival::test_stm32h735_tier1_survival |
 | stm32l073 | **L2** | ✓ | 42 | 54/54 (100%) | 6 | firmware_survival::test_nucleo_l073rz_smoke_survival |
 | stm32l476 | **L1** | ✓ | 58 | — | — | firmware_survival::test_nucleo_l476rg_demo_survival |

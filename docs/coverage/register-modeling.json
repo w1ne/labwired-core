@@ -67,6 +67,9 @@
     "modeled": 554,
     "total": 3923
   },
+  "stm32u5a5zj": {
+    "svd_pending": true
+  },
   "stm32u575": {
     "modeled": 408,
     "total": 4483
