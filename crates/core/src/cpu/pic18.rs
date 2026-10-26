@@ -18,7 +18,11 @@
 //! * `a = 0` uses the Access Bank: `f < 0x60` is access RAM `0x000..0x05F`,
 //!   `f >= 0x60` is the SFR window `0xF60..0xFFF`.
 //!
-//! `MOVFF` carries a 12-bit absolute file address and ignores banking.
+//! Access-bank `INDFn`, `POSTINCn`, `POSTDECn`, `PREINCn` and `PLUSWn` are
+//! virtual registers. Byte and bit file operations route through the
+//! per-instruction resolver, which uses `FSRn` as a full 12-bit data address
+//! and applies the alias's FSR update once per instruction access.
+//! `MOVFF` keeps its 12-bit absolute-address path (see the progress doc).
 //!
 //! This milestone models the instruction subset listed in
 //! `docs/PIC18-CORE-PROGRESS.md`. Anything else returns
@@ -34,6 +38,9 @@ use std::sync::Arc;
 pub const PIC18_FLASH_BYTES: usize = 64 * 1024;
 /// Classic 16-bank data file (`0x000..0xFFF`).
 pub const PIC18_DATA_BYTES: usize = 0x1000;
+/// 12-bit data-space mask; classic PIC18 `FSRn` values are a full 12-bit
+/// address, not a bank-relative offset.
+pub const PIC18_DATA_MASK: u16 = (PIC18_DATA_BYTES - 1) as u16;
 /// Classic PIC18 hardware return-stack depth.
 pub const PIC18_STACK_DEPTH: usize = 31;
 /// 21-bit byte PC; bit 0 is always clear.
@@ -48,6 +55,21 @@ pub const SFR_FSR1L: u16 = 0xFE1;
 pub const SFR_FSR1H: u16 = 0xFE2;
 pub const SFR_FSR2L: u16 = 0xFD9;
 pub const SFR_FSR2H: u16 = 0xFDA;
+pub const SFR_PLUSW2: u16 = 0xFDB;
+pub const SFR_PREINC2: u16 = 0xFDC;
+pub const SFR_POSTDEC2: u16 = 0xFDD;
+pub const SFR_POSTINC2: u16 = 0xFDE;
+pub const SFR_INDF2: u16 = 0xFDF;
+pub const SFR_PLUSW1: u16 = 0xFE3;
+pub const SFR_PREINC1: u16 = 0xFE4;
+pub const SFR_POSTDEC1: u16 = 0xFE5;
+pub const SFR_POSTINC1: u16 = 0xFE6;
+pub const SFR_INDF1: u16 = 0xFE7;
+pub const SFR_PLUSW0: u16 = 0xFEB;
+pub const SFR_PREINC0: u16 = 0xFEC;
+pub const SFR_POSTDEC0: u16 = 0xFED;
+pub const SFR_POSTINC0: u16 = 0xFEE;
+pub const SFR_INDF0: u16 = 0xFEF;
 pub const SFR_PRODL: u16 = 0xFF3;
 pub const SFR_PRODH: u16 = 0xFF4;
 pub const SFR_TABLAT: u16 = 0xFF5;
@@ -87,6 +109,24 @@ pub fn check_pic18_entry(entry: u64) -> Result<(), String> {
         ));
     }
     Ok(())
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum IndirectMode {
+    Indf,
+    PostInc,
+    PostDec,
+    PreInc,
+    PlusW,
+}
+
+/// One resolved file access. `post` is the FSR update to apply after the
+/// instruction finishes reading/writing `addr`; RMW instructions resolve once
+/// so `POSTINC`/`POSTDEC` move the pointer exactly one step.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct FileAccess {
+    addr: u16,
+    post: Option<(usize, i32)>,
 }
 
 #[derive(Debug, Clone)]
@@ -273,12 +313,100 @@ impl Pic18 {
         }
     }
 
-    pub fn read_file(&self, f: u8, a: bool) -> u8 {
-        self.read_data(self.file_address(f, a))
+    fn indirect_mode(addr: u16) -> Option<(usize, IndirectMode)> {
+        match addr {
+            SFR_INDF0 => Some((0, IndirectMode::Indf)),
+            SFR_POSTINC0 => Some((0, IndirectMode::PostInc)),
+            SFR_POSTDEC0 => Some((0, IndirectMode::PostDec)),
+            SFR_PREINC0 => Some((0, IndirectMode::PreInc)),
+            SFR_PLUSW0 => Some((0, IndirectMode::PlusW)),
+            SFR_INDF1 => Some((1, IndirectMode::Indf)),
+            SFR_POSTINC1 => Some((1, IndirectMode::PostInc)),
+            SFR_POSTDEC1 => Some((1, IndirectMode::PostDec)),
+            SFR_PREINC1 => Some((1, IndirectMode::PreInc)),
+            SFR_PLUSW1 => Some((1, IndirectMode::PlusW)),
+            SFR_INDF2 => Some((2, IndirectMode::Indf)),
+            SFR_POSTINC2 => Some((2, IndirectMode::PostInc)),
+            SFR_POSTDEC2 => Some((2, IndirectMode::PostDec)),
+            SFR_PREINC2 => Some((2, IndirectMode::PreInc)),
+            SFR_PLUSW2 => Some((2, IndirectMode::PlusW)),
+            _ => None,
+        }
+    }
+
+    /// Resolve an absolute data address, expanding the virtual `FSRn` aliases.
+    ///
+    /// Indirect addressing uses the whole 12-bit `FSRn` value; `BSR` and the
+    /// instruction's `a` bit never contribute to this address. `PREINC`
+    /// updates the pointer before the access. `POSTINC`/`POSTDEC` return a
+    /// deferred update so a read-modify-write instruction moves the pointer
+    /// only once, after it has written the original location. `PLUSW` adds a
+    /// signed WREG offset and does not modify either register.
+    fn resolve_data_access(&mut self, addr: u16) -> FileAccess {
+        let Some((n, mode)) = Self::indirect_mode(addr) else {
+            return FileAccess { addr, post: None };
+        };
+        match mode {
+            IndirectMode::Indf => {
+                let addr = self.fsr[n] & PIC18_DATA_MASK;
+                FileAccess { addr, post: None }
+            }
+            IndirectMode::PostInc => {
+                let addr = self.fsr[n] & PIC18_DATA_MASK;
+                FileAccess {
+                    addr,
+                    post: Some((n, 1)),
+                }
+            }
+            IndirectMode::PostDec => {
+                let addr = self.fsr[n] & PIC18_DATA_MASK;
+                FileAccess {
+                    addr,
+                    post: Some((n, -1)),
+                }
+            }
+            IndirectMode::PreInc => {
+                self.fsr[n] = self.fsr[n].wrapping_add(1) & PIC18_DATA_MASK;
+                FileAccess {
+                    addr: self.fsr[n],
+                    post: None,
+                }
+            }
+            IndirectMode::PlusW => {
+                let offset = i16::from(self.wreg as i8);
+                let addr = self.fsr[n].wrapping_add_signed(offset) & PIC18_DATA_MASK;
+                FileAccess { addr, post: None }
+            }
+        }
+    }
+
+    fn resolve_file_access(&mut self, f: u8, a: bool) -> FileAccess {
+        let addr = self.file_address(f, a);
+        self.resolve_data_access(addr)
+    }
+
+    fn complete_file_access(&mut self, access: FileAccess) {
+        if let Some((n, delta)) = access.post {
+            self.fsr[n] = self.fsr[n].wrapping_add_signed(delta as i16) & PIC18_DATA_MASK;
+        }
+    }
+
+    fn read_file_access(&mut self, f: u8, a: bool) -> (u8, FileAccess) {
+        let access = self.resolve_file_access(f, a);
+        let value = self.read_data(access.addr);
+        (value, access)
+    }
+
+    pub fn read_file(&mut self, f: u8, a: bool) -> u8 {
+        let (value, access) = self.read_file_access(f, a);
+        self.complete_file_access(access);
+        value
     }
 
     pub fn write_file(&mut self, f: u8, a: bool, value: u8) {
-        self.write_data(self.file_address(f, a), value);
+        let access = self.resolve_file_access(f, a);
+        self.write_data(access.addr, value);
+        self.complete_file_access(access);
     }
 
     pub fn stack_pointer(&self) -> u8 {
@@ -417,10 +545,10 @@ impl Pic18 {
         self.status = (self.status & !STATUS_FLAG_MASK) | flags;
     }
 
-    fn write_result(&mut self, f: u8, a: bool, d: bool, value: u8) {
+    fn write_result_at(&mut self, access: FileAccess, d: bool, value: u8) {
         if d {
-            if self.file_address(f, a) != SFR_STATUS {
-                self.write_file(f, a, value);
+            if access.addr != SFR_STATUS {
+                self.write_data(access.addr, value);
             }
         } else {
             self.wreg = value;
@@ -525,10 +653,12 @@ impl Pic18 {
         if word & 0xFE00 == 0x6A00 {
             let a = word & 0x0100 != 0;
             let f = word as u8;
-            if self.file_address(f, a) != SFR_STATUS {
-                self.write_file(f, a, 0);
+            let access = self.resolve_file_access(f, a);
+            if access.addr != SFR_STATUS {
+                self.write_data(access.addr, 0);
             }
             self.set_z_only(0);
+            self.complete_file_access(access);
             return Ok(1);
         }
 
@@ -536,9 +666,10 @@ impl Pic18 {
             let d = word & 0x0200 != 0;
             let a = word & 0x0100 != 0;
             let f = word as u8;
-            let value = self.read_file(f, a);
+            let (value, access) = self.read_file_access(f, a);
             self.set_nz(value);
-            self.write_result(f, a, d, value);
+            self.write_result_at(access, d, value);
+            self.complete_file_access(access);
             return Ok(1);
         }
 
@@ -546,25 +677,26 @@ impl Pic18 {
             let d = word & 0x0200 != 0;
             let a = word & 0x0100 != 0;
             let f = word as u8;
-            let addr = self.file_address(f, a);
+            let access = self.resolve_file_access(f, a);
             // Reading PCL exposes this instruction's own address and latches
             // the upper PC bytes; it does not expose the already-advanced PC.
-            let b = if addr == SFR_PCL {
+            let b = if access.addr == SFR_PCL {
                 self.pclath = (pc >> 8) as u8;
                 self.pclatu = ((pc >> 16) & 0x1F) as u8;
                 pc as u8
             } else {
-                self.read_data(addr)
+                self.read_data(access.addr)
             };
             let result = self.wreg.wrapping_add(b);
             self.set_add_flags(self.wreg, b, result);
-            if d && addr == SFR_PCL {
+            if d && access.addr == SFR_PCL {
                 // Computed GOTO: the addition does not propagate into the
                 // upper PC bytes (the table must not cross a 256-byte page).
                 self.pc = Self::align_pc((pc & 0xFFFF00) | u32::from(result));
             } else {
-                self.write_result(f, a, d, result);
+                self.write_result_at(access, d, result);
             }
+            self.complete_file_access(access);
             return Ok(1);
         }
 
@@ -572,9 +704,11 @@ impl Pic18 {
             let d = word & 0x0200 != 0;
             let a = word & 0x0100 != 0;
             let f = word as u8;
-            let result = self.wreg & self.read_file(f, a);
+            let (value, access) = self.read_file_access(f, a);
+            let result = self.wreg & value;
             self.set_nz(result);
-            self.write_result(f, a, d, result);
+            self.write_result_at(access, d, result);
+            self.complete_file_access(access);
             return Ok(1);
         }
 
@@ -582,9 +716,11 @@ impl Pic18 {
             let d = word & 0x0200 != 0;
             let a = word & 0x0100 != 0;
             let f = word as u8;
-            let result = self.wreg | self.read_file(f, a);
+            let (value, access) = self.read_file_access(f, a);
+            let result = self.wreg | value;
             self.set_nz(result);
-            self.write_result(f, a, d, result);
+            self.write_result_at(access, d, result);
+            self.complete_file_access(access);
             return Ok(1);
         }
 
@@ -592,9 +728,11 @@ impl Pic18 {
             let d = word & 0x0200 != 0;
             let a = word & 0x0100 != 0;
             let f = word as u8;
-            let result = self.wreg ^ self.read_file(f, a);
+            let (value, access) = self.read_file_access(f, a);
+            let result = self.wreg ^ value;
             self.set_nz(result);
-            self.write_result(f, a, d, result);
+            self.write_result_at(access, d, result);
+            self.complete_file_access(access);
             return Ok(1);
         }
 
@@ -602,10 +740,11 @@ impl Pic18 {
             let d = word & 0x0200 != 0;
             let a = word & 0x0100 != 0;
             let f = word as u8;
-            let b = self.read_file(f, a);
+            let (b, access) = self.read_file_access(f, a);
             let result = b.wrapping_sub(1);
             self.set_sub_flags(b, 1, result);
-            self.write_result(f, a, d, result);
+            self.write_result_at(access, d, result);
+            self.complete_file_access(access);
             return Ok(1);
         }
 
@@ -613,10 +752,11 @@ impl Pic18 {
             let d = word & 0x0200 != 0;
             let a = word & 0x0100 != 0;
             let f = word as u8;
-            let b = self.read_file(f, a);
+            let (b, access) = self.read_file_access(f, a);
             let result = b.wrapping_add(1);
             self.set_add_flags(b, 1, result);
-            self.write_result(f, a, d, result);
+            self.write_result_at(access, d, result);
+            self.complete_file_access(access);
             return Ok(1);
         }
 
@@ -624,14 +764,15 @@ impl Pic18 {
             let a = word & 0x0100 != 0;
             let b = ((word >> 9) & 0x7) as u8;
             let f = word as u8;
-            let value = self.read_file(f, a);
+            let (value, access) = self.read_file_access(f, a);
             let mask = 1u8 << b;
             let result = match word & 0xF000 {
                 0x9000 => value & !mask,
                 0x8000 => value | mask,
                 _ => value ^ mask,
             };
-            self.write_file(f, a, result);
+            self.write_data(access.addr, result);
+            self.complete_file_access(access);
             return Ok(1);
         }
 
@@ -639,7 +780,9 @@ impl Pic18 {
             let a = word & 0x0100 != 0;
             let b = ((word >> 9) & 0x7) as u8;
             let f = word as u8;
-            let set = self.read_file(f, a) & (1u8 << b) != 0;
+            let (value, access) = self.read_file_access(f, a);
+            self.complete_file_access(access);
+            let set = value & (1u8 << b) != 0;
             let skip = if word & 0xF000 == 0xB000 { !set } else { set };
             if skip {
                 self.skip_next(pc);
@@ -937,6 +1080,142 @@ mod tests {
         assert_eq!(cpu.data[0x120], 0x99);
         assert_eq!(cpu.wreg(), 0x05);
         assert_eq!(cpu.status(), 0x05);
+    }
+
+    #[test]
+    fn indirect_aliases_use_their_fsr_not_bsr() {
+        let mut cpu = Pic18::new();
+        cpu.fsr = [0x020, 0x120, 0x220];
+        cpu.bsr = 0x0F;
+        cpu.load_words(&[
+            0x0E11, // MOVLW 0x11
+            0x6EEF, // MOVWF INDF0
+            0x0E22, // MOVLW 0x22
+            0x6EE7, // MOVWF INDF1
+            0x0E33, // MOVLW 0x33
+            0x6EDF, // MOVWF INDF2
+            0x50EF, // MOVF INDF0,W
+        ]);
+        run(&mut cpu, 7);
+        assert_eq!(cpu.read_data(0x020), 0x11);
+        assert_eq!(cpu.read_data(0x120), 0x22);
+        assert_eq!(cpu.read_data(0x220), 0x33);
+        assert_eq!(cpu.read_data(0xF20), 0);
+        assert_eq!(cpu.fsr, [0x020, 0x120, 0x220]);
+        assert_eq!(cpu.bsr(), 0x0F);
+        assert_eq!(cpu.wreg(), 0x11);
+    }
+
+    #[test]
+    fn postinc_read_write_and_rmw_move_the_pointer_once() {
+        let mut cpu = Pic18::new();
+        cpu.fsr[0] = 0x020;
+        cpu.write_data(0x020, 0x11);
+        cpu.load_words(&[
+            0x50EE, // MOVF POSTINC0,W -> W=0x11, FSR=0x21
+            0x0E33, // MOVLW 0x33
+            0x6EEE, // MOVWF POSTINC0 -> [0x21]=0x33, FSR=0x22
+            0x2AEE, // INCF POSTINC0,F -> [0x22]=1, FSR=0x23 (one update)
+        ]);
+        run(&mut cpu, 4);
+        assert_eq!(cpu.wreg(), 0x33);
+        assert_eq!(cpu.read_data(0x021), 0x33);
+        assert_eq!(cpu.read_data(0x022), 1);
+        assert_eq!(cpu.read_data(0x023), 0);
+        assert_eq!(cpu.fsr[0], 0x023);
+    }
+
+    #[test]
+    fn postdec_and_preinc_move_before_or_after_the_access() {
+        let mut cpu = Pic18::new();
+        cpu.fsr[0] = 0x021;
+        cpu.write_data(0x021, 0x44);
+        cpu.load_words(&[
+            0x50ED, // MOVF POSTDEC0,W -> W=0x44, FSR=0x20
+            0x0E55, // MOVLW 0x55
+            0x6EED, // MOVWF POSTDEC0 -> [0x20]=0x55, FSR=0x1F
+        ]);
+        run(&mut cpu, 3);
+        assert_eq!(cpu.wreg(), 0x55);
+        assert_eq!(cpu.read_data(0x021), 0x44);
+        assert_eq!(cpu.read_data(0x020), 0x55);
+        assert_eq!(cpu.fsr[0], 0x01F);
+
+        let mut cpu = Pic18::new();
+        cpu.fsr[0] = 0x01F;
+        cpu.write_data(0x020, 0x66);
+        cpu.load_words(&[
+            0x50EC, // MOVF PREINC0,W -> FSR=0x20, W=0x66
+            0x0E77, // MOVLW 0x77
+            0x6EEC, // MOVWF PREINC0 -> FSR=0x21, [0x21]=0x77
+        ]);
+        run(&mut cpu, 3);
+        assert_eq!(cpu.wreg(), 0x77);
+        assert_eq!(cpu.read_data(0x020), 0x66);
+        assert_eq!(cpu.read_data(0x021), 0x77);
+        assert_eq!(cpu.fsr[0], 0x021);
+    }
+
+    #[test]
+    fn plusw_uses_a_signed_wreg_offset_without_touching_fsr() {
+        let mut cpu = Pic18::new();
+        cpu.fsr[0] = 0x030;
+        cpu.wreg = 0xF0;
+        cpu.write_data(0x020, 0x01);
+        cpu.load_words(&[0x26EB]); // ADDWF PLUSW0,F -> [0x20] = 0x01 + (-16)
+        run(&mut cpu, 1);
+        assert_eq!(cpu.read_data(0x020), 0xF1);
+        assert_eq!(cpu.read_data(0x030), 0);
+        assert_eq!(cpu.wreg(), 0xF0);
+        assert_eq!(cpu.fsr[0], 0x030);
+
+        let mut cpu = Pic18::new();
+        cpu.fsr[0] = 0x030;
+        cpu.wreg = 0x10;
+        cpu.load_words(&[0x6EEB]); // MOVWF PLUSW0 -> [0x40] = 0x10
+        run(&mut cpu, 1);
+        assert_eq!(cpu.read_data(0x040), 0x10);
+        assert_eq!(cpu.read_data(0x030), 0);
+        assert_eq!(cpu.wreg(), 0x10);
+        assert_eq!(cpu.fsr[0], 0x030);
+    }
+
+    #[test]
+    fn postinc_aliases_for_fsr1_and_fsr2_update_their_own_pairs() {
+        let mut cpu = Pic18::new();
+        cpu.fsr = [0x020, 0x120, 0x220];
+        cpu.write_data(0x120, 0x12);
+        cpu.write_data(0x220, 0x22);
+        cpu.load_words(&[
+            0x50E6, // MOVF POSTINC1,W -> W=0x12, FSR1=0x121
+            0x50DE, // MOVF POSTINC2,W -> W=0x22, FSR2=0x221
+        ]);
+        run(&mut cpu, 2);
+        assert_eq!(cpu.wreg(), 0x22);
+        assert_eq!(cpu.fsr, [0x020, 0x121, 0x221]);
+    }
+
+    #[test]
+    fn bit_operations_resolve_the_same_indirect_aliases() {
+        let mut cpu = Pic18::new();
+        cpu.fsr[0] = 0x020;
+        cpu.load_words(&[
+            0x86EF, // BSF INDF0,3
+            0x96EF, // BCF INDF0,3
+            0x86EF, // BSF INDF0,3 again
+        ]);
+        run(&mut cpu, 3);
+        assert_eq!(cpu.read_data(0x020), 0x08);
+        assert_eq!(cpu.fsr[0], 0x020);
+    }
+
+    #[test]
+    fn indirect_pointers_wrap_in_the_12_bit_data_space() {
+        let mut cpu = Pic18::new();
+        cpu.fsr[0] = 0x0FFF;
+        cpu.load_words(&[0x50EE]); // MOVF POSTINC0,W
+        run(&mut cpu, 1);
+        assert_eq!(cpu.fsr[0], 0);
     }
 
     #[test]
