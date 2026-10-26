@@ -342,7 +342,7 @@ impl SystemBus {
         self.legacy_tick_candidate_mask = self
             .peripherals
             .iter()
-            .map(Self::legacy_tick_index_candidate)
+            .map(Self::legacy_tick_index_eligible)
             .collect();
         self.legacy_tick_peer_write_indices = self
             .peripherals

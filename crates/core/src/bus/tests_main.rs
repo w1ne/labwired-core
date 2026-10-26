@@ -527,7 +527,7 @@ fn scheduler_peripherals_follow_build_mode_legacy_tick_index() {
     } else {
         vec![0]
     };
-    assert_eq!(bus.legacy_tick_candidate_mask, vec![true]);
+    assert_eq!(bus.legacy_tick_candidate_mask, vec![!scheduler_enabled]);
     assert!(
         bus.legacy_tick_indices == expected_indices,
         "scheduler-owned peripherals use the event scheduler when enabled and their active legacy fallback otherwise"

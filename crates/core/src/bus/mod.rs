@@ -112,14 +112,6 @@ impl SystemBus {
     }
 
     #[inline]
-    fn legacy_tick_index_candidate(p: &PeripheralEntry) -> bool {
-        // Keep dynamic scheduler peripherals in the mask even when their
-        // current mode excludes them from the legacy index. For example,
-        // SysTick can switch to scheduler mode after its cycle clock attaches.
-        p.dev.uses_scheduler() || p.dev.needs_legacy_walk()
-    }
-
-    #[inline]
     fn legacy_tick_index_active(p: &PeripheralEntry) -> bool {
         Self::legacy_tick_index_eligible(p) && p.dev.legacy_tick_active()
     }
@@ -696,8 +688,9 @@ pub struct SystemBus {
     /// `walk_deleted: false` from the system manifest is a hard opt-out from
     /// automatic walk deletion, retained across dynamic activity changes.
     pub(crate) legacy_walk_pinned_on: bool,
-    /// Potential legacy-tick candidates, including scheduler fallbacks when
-    /// the feature is off. Indexed by peripheral slot for O(1) reactivation.
+    /// Peripherals eligible for the legacy index at range rebuild, including
+    /// scheduler fallbacks when the feature is off. Indexed by slot to reject
+    /// unrelated MMIO writes before calling activity predicates.
     legacy_tick_candidate_mask: Vec<bool>,
     /// Dynamic legacy-tick observers whose activity can change after a write
     /// to a different peripheral's MMIO window.
