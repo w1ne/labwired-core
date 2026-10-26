@@ -480,8 +480,11 @@ fn structurally_walk_free_models_do_not_enter_the_legacy_tick_index() {
     bus.add_peripheral("walk-free", 0x1000, 0x100, None, Box::new(WalkFree));
 
     assert!(bus.legacy_tick_indices.is_empty());
+    assert_eq!(bus.legacy_tick_candidate_mask, vec![false]);
+    bus.legacy_walk_disabled = true;
     assert!(!bus.refresh_legacy_tick_index(0));
     assert!(bus.legacy_tick_indices.is_empty());
+    assert!(bus.legacy_walk_disabled);
     assert!(bus.derive_walk_deletable());
 }
 
@@ -520,11 +523,15 @@ fn scheduler_peripherals_follow_build_mode_legacy_tick_index() {
     } else {
         vec![0]
     };
+    assert_eq!(bus.legacy_tick_candidate_mask, vec![!scheduler_enabled]);
     assert!(
         bus.legacy_tick_indices == expected_indices,
         "scheduler-owned peripherals use the event scheduler when enabled and their active legacy fallback otherwise"
     );
+    bus.legacy_walk_disabled = true;
+    bus.legacy_tick_indices.clear();
     assert_eq!(bus.refresh_legacy_tick_index(0), !scheduler_enabled);
+    assert_eq!(bus.legacy_walk_disabled, scheduler_enabled);
     assert!(
         bus.legacy_tick_indices == expected_indices,
         "refresh must preserve the build-specific scheduler or legacy fallback path"
@@ -3739,7 +3746,7 @@ fn test_flash_boot_alias_read_and_write() {
         poll_streak: std::cell::Cell::new((u32::MAX, 0, 0, 0)),
         legacy_walk_disabled: false,
         legacy_walk_pinned_on: false,
-        walk_capable_indices: Vec::new(),
+        legacy_tick_candidate_mask: Vec::new(),
         legacy_tick_peer_write_indices: Vec::new(),
         reset_vector_offset: 0,
         flash_boot_alias: true,
@@ -3872,7 +3879,7 @@ fn h5_flash_bus(gate: bool) -> SystemBus {
         poll_streak: std::cell::Cell::new((u32::MAX, 0, 0, 0)),
         legacy_walk_disabled: false,
         legacy_walk_pinned_on: false,
-        walk_capable_indices: Vec::new(),
+        legacy_tick_candidate_mask: Vec::new(),
         legacy_tick_peer_write_indices: Vec::new(),
         reset_vector_offset: 0,
         flash_boot_alias: true,
@@ -4158,7 +4165,7 @@ fn h5_rww_bus(gate: bool) -> SystemBus {
         poll_streak: std::cell::Cell::new((u32::MAX, 0, 0, 0)),
         legacy_walk_disabled: false,
         legacy_walk_pinned_on: false,
-        walk_capable_indices: Vec::new(),
+        legacy_tick_candidate_mask: Vec::new(),
         legacy_tick_peer_write_indices: Vec::new(),
         reset_vector_offset: 0,
         flash_boot_alias: true,
@@ -4440,7 +4447,7 @@ fn test_peripheral_range_index_lookup() {
         poll_streak: std::cell::Cell::new((u32::MAX, 0, 0, 0)),
         legacy_walk_disabled: false,
         legacy_walk_pinned_on: false,
-        walk_capable_indices: Vec::new(),
+        legacy_tick_candidate_mask: Vec::new(),
         legacy_tick_peer_write_indices: Vec::new(),
         reset_vector_offset: 0,
         flash_boot_alias: true,
@@ -4578,7 +4585,7 @@ fn test_dma_tick_executes_copy_and_raises_irq() {
         poll_streak: std::cell::Cell::new((u32::MAX, 0, 0, 0)),
         legacy_walk_disabled: false,
         legacy_walk_pinned_on: false,
-        walk_capable_indices: Vec::new(),
+        legacy_tick_candidate_mask: Vec::new(),
         legacy_tick_peer_write_indices: Vec::new(),
         reset_vector_offset: 0,
         flash_boot_alias: true,

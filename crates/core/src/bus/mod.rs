@@ -100,18 +100,20 @@ impl SystemBus {
     }
 
     #[inline]
-    fn legacy_tick_index_active(p: &PeripheralEntry) -> bool {
+    fn legacy_tick_index_eligible(p: &PeripheralEntry) -> bool {
         let uses_scheduler = p.dev.uses_scheduler();
-        // With the scheduler feature off, scheduler-capable peripherals still
-        // use their legacy tick fallback (for example, RP2040 USB host polling).
-        // `needs_legacy_walk` only removes structurally idle models from that
-        // fallback when they are not scheduler-capable.
-        if (cfg!(feature = "event-scheduler") && uses_scheduler)
-            || (!uses_scheduler && !p.dev.needs_legacy_walk())
-        {
-            return false;
+        if cfg!(feature = "event-scheduler") {
+            !uses_scheduler && p.dev.needs_legacy_walk()
+        } else {
+            // Scheduler-capable peripherals still use their legacy tick
+            // fallback here (for example, RP2040 USB host polling).
+            uses_scheduler || p.dev.needs_legacy_walk()
         }
-        p.dev.legacy_tick_active()
+    }
+
+    #[inline]
+    fn legacy_tick_index_active(p: &PeripheralEntry) -> bool {
+        Self::legacy_tick_index_eligible(p) && p.dev.legacy_tick_active()
     }
 
     /// True when CPU idle fast-forward can skip the legacy peripheral walk for
@@ -686,10 +688,9 @@ pub struct SystemBus {
     /// `walk_deleted: false` from the system manifest is a hard opt-out from
     /// automatic walk deletion, retained across dynamic activity changes.
     pub(crate) legacy_walk_pinned_on: bool,
-    /// Indices of peripherals that still require the legacy walk when active.
-    /// Used by `refresh_legacy_tick_index` to restore the walk after an
-    /// inactive model is enabled by an MMIO write. Sorted by index.
-    walk_capable_indices: Vec<usize>,
+    /// Peripherals eligible for the legacy tick index in this build mode.
+    /// Indexed by peripheral slot for constant-time walk-reactivation checks.
+    legacy_tick_candidate_mask: Vec<bool>,
     /// Dynamic legacy-tick observers whose activity can change after a write
     /// to a different peripheral's MMIO window.
     legacy_tick_peer_write_indices: Vec<usize>,

@@ -339,13 +339,10 @@ impl SystemBus {
             .collect();
         self.peripheral_ranges.sort_by_key(|r| r.start);
         self.rebuild_legacy_tick_indices();
-        self.walk_capable_indices = self
+        self.legacy_tick_candidate_mask = self
             .peripherals
             .iter()
-            .enumerate()
-            .filter_map(|(index, p)| {
-                (p.dev.needs_legacy_walk() && !p.dev.uses_scheduler()).then_some(index)
-            })
+            .map(Self::legacy_tick_index_eligible)
             .collect();
         self.legacy_tick_peer_write_indices = self
             .peripherals
@@ -844,11 +841,22 @@ impl SystemBus {
     }
 
     pub(crate) fn refresh_legacy_tick_index(&mut self, idx: usize) -> bool {
-        let active = self
-            .peripherals
-            .get(idx)
-            .is_some_and(Self::legacy_tick_index_active);
         if self.legacy_walk_disabled {
+            // Most MMIO stores on a walk-deleted bus cannot wake a legacy
+            // peripheral. Reject them by cached index before calling trait
+            // predicates; the common case stays cheap even on large buses.
+            if !self
+                .legacy_tick_candidate_mask
+                .get(idx)
+                .copied()
+                .unwrap_or(false)
+            {
+                return false;
+            }
+            let active = self
+                .peripherals
+                .get(idx)
+                .is_some_and(|p| p.dev.legacy_tick_active());
             // If this write enables an indexed legacy tick, restore the walk
             // and its active set. Scheduler-capable fallbacks can be active
             // here when the event-scheduler feature is off. In that build the
@@ -859,6 +867,10 @@ impl SystemBus {
             }
             return active;
         }
+        let active = self
+            .peripherals
+            .get(idx)
+            .is_some_and(Self::legacy_tick_index_active);
         let pos = self.legacy_tick_indices.iter().position(|&i| i == idx);
         let was_active = pos.is_some();
         match (active, pos) {
@@ -871,7 +883,13 @@ impl SystemBus {
             }
             _ => {}
         }
-        if active != was_active && self.walk_capable_indices.binary_search(&idx).is_ok() {
+        if active != was_active
+            && self
+                .legacy_tick_candidate_mask
+                .get(idx)
+                .copied()
+                .unwrap_or(false)
+        {
             self.recompute_walk_deletable();
         }
         active

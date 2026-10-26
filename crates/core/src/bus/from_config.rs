@@ -348,7 +348,7 @@ impl SystemBus {
             poll_streak: Cell::new((u32::MAX, 0, 0, 0)),
             legacy_walk_disabled: false,
             legacy_walk_pinned_on: false,
-            walk_capable_indices: Vec::new(),
+            legacy_tick_candidate_mask: Vec::new(),
             legacy_tick_peer_write_indices: Vec::new(),
             resident_tick_interval_override: None,
             gpio_devices: Vec::new(),
