@@ -60,6 +60,55 @@ fn esp32s3_spi_latches_display_dc_from_gpio_output() {
 }
 
 #[test]
+fn gpio_edge_snapshot_skips_generic_gpio_without_edge_observers() {
+    #[derive(Debug)]
+    struct EdgeObserver;
+
+    impl crate::Peripheral for EdgeObserver {
+        fn read(&self, _offset: u64) -> crate::SimResult<u8> {
+            Ok(0)
+        }
+
+        fn write(&mut self, _offset: u64, _value: u8) -> crate::SimResult<()> {
+            Ok(())
+        }
+
+        fn observes_gpio_edges(&self) -> bool {
+            true
+        }
+    }
+
+    fn bus_with_observer(include_observer: bool) -> SystemBus {
+        let mut bus = SystemBus::empty();
+        bus.add_peripheral(
+            "gpio",
+            0x6000_4000,
+            0x1000,
+            None,
+            Box::new(crate::peripherals::esp32c3::gpio::Esp32c3Gpio::new()),
+        );
+        if include_observer {
+            bus.add_peripheral("edge-observer", 0x1000, 0x100, None, Box::new(EdgeObserver));
+        }
+        bus
+    }
+
+    let mut without_observer = bus_with_observer(false);
+    without_observer.tick_peripherals_fully();
+    assert!(
+        without_observer.last_gpio_in.is_none(),
+        "a generic GPIO name alone must not trigger the per-tick edge snapshot"
+    );
+
+    let mut with_observer = bus_with_observer(true);
+    with_observer.tick_peripherals_fully();
+    assert!(
+        with_observer.last_gpio_in.is_some(),
+        "GPIO edge observers still need the input snapshot"
+    );
+}
+
+#[test]
 fn timer_poll_coalesce_uses_peripheral_access_class_not_chip_names() {
     let mut bus = SystemBus::new();
     // Systimer model owns ESP register map; bus only sees MmioAccessClass.
