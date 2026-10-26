@@ -848,10 +848,12 @@ impl SystemBus {
             .peripherals
             .get(idx)
             .is_some_and(Self::legacy_tick_index_active);
-        if cfg!(feature = "event-scheduler") && self.legacy_walk_disabled {
+        if self.legacy_walk_disabled {
             // Inactive walk-capable models do not keep the walk alive. If one
             // is enabled by this write, restore the walk and its active set;
-            // otherwise stay on the fast path.
+            // otherwise preserve the deleted-walk fast path. The flag also
+            // guards the cached set in feature-off builds, where the full
+            // walker ignores deletion but profiling still uses this index.
             if active && self.walk_capable_indices.binary_search(&idx).is_ok() {
                 self.rebuild_legacy_tick_indices();
                 self.legacy_walk_disabled = false;
