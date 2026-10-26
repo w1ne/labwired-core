@@ -16,6 +16,10 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * UART: USART0 registers live on the AVR CPU and are forwarded to the bus-side host; this harness drives bus MMIO, not the CPU, so no bring-up exists here
   * I2C: AVR from_config I2C is generic type:i2c without PadLines cell
   * SPI: AVR from_config SPI is generic type:spi without PadLines cell
+* **atmega2561**
+  * UART: USART0 registers live on the AVR CPU and are forwarded to the bus-side host; this harness drives bus MMIO, not the CPU, so no bring-up exists here
+  * I2C: AVR from_config I2C is generic type:i2c without PadLines cell
+  * SPI: AVR from_config SPI is generic type:spi without PadLines cell
 * **atmega328p**
   * UART: USART0 registers live on the AVR CPU and are forwarded to the bus-side host; this harness drives bus MMIO, not the CPU, so no bring-up exists here
   * I2C: AVR from_config I2C is generic type:i2c without PadLines cell
@@ -78,6 +82,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 |------|-----|-----|------|
 | arty-litex-vexriscv | — | — | — |
 | atmega2560 | — | — | — |
+| atmega2561 | — | — | — |
 | atmega328p | — | — | — |
 | atsamd21 | — | — | — |
 | atsamd21g18a | — | — | — |
