@@ -863,7 +863,7 @@ impl SystemBus {
             }
         }
 
-        if !self.irq_fabric.esp32c3.routing && self.nordic_gpio_service {
+        if !self.irq_fabric.esp32c3.routing {
             // GPIO edge-detection pass: snapshot the IN registers of GPIO ports
             // 0 and 1, diff against last-known state, and notify every
             // peripheral of changed pins. GPIOTE overrides observe_gpio_change
@@ -885,7 +885,7 @@ impl SystemBus {
             // never fire. `read_gpio_input` asks each model for its own input
             // register, and answers the identical value for the Nordic ports
             // it already served.
-            const GPIO_PORT_IDS: [(&str, usize); 9] = [
+            const GPIO_PORT_IDS: [(&str, usize); 8] = [
                 ("gpio0", 0),
                 ("gpio1", 1),
                 ("gpio2", 2),
@@ -894,8 +894,6 @@ impl SystemBus {
                 ("gpiob", 1),
                 ("gpioc", 2),
                 ("gpiod", 3),
-                // NXP K32W041 exposes its 22-pad GPIO block as one port.
-                ("gpio", 0),
             ];
             // Resolved once, then cached — see `SystemBus::gpio_port_idx`. Doing
             // it per tick is eight linear scans of the peripheral list with a
@@ -909,6 +907,16 @@ impl SystemBus {
                         if resolved[port].is_none() {
                             resolved[port] = self.find_peripheral_index_by_name(name);
                         }
+                    }
+                    // A few chips, including NXP K32W041, expose a single
+                    // generic `gpio` port. Only poll that alias when an edge
+                    // service needs it. ESP32-C3 also names its GPIO block
+                    // `gpio`, but drives it through its own register path;
+                    // polling its computed input word on every tick is costly.
+                    let has_edge_observer =
+                        self.peripherals.iter().any(|p| p.dev.observes_gpio_edges());
+                    if resolved[0].is_none() && has_edge_observer {
+                        resolved[0] = self.find_peripheral_index_by_name("gpio");
                     }
                     self.gpio_port_idx = Some(resolved);
                     resolved

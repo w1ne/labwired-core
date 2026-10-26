@@ -61,6 +61,11 @@ fn esp32s3_spi_latches_display_dc_from_gpio_output() {
 
 #[test]
 fn gpio_edge_snapshot_skips_generic_gpio_without_edge_observers() {
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
+
     #[derive(Debug)]
     struct EdgeObserver;
 
@@ -78,32 +83,53 @@ fn gpio_edge_snapshot_skips_generic_gpio_without_edge_observers() {
         }
     }
 
-    fn bus_with_observer(include_observer: bool) -> SystemBus {
+    #[derive(Debug)]
+    struct CountedGpio(Arc<AtomicUsize>);
+
+    impl crate::Peripheral for CountedGpio {
+        fn read(&self, _offset: u64) -> crate::SimResult<u8> {
+            Ok(0)
+        }
+
+        fn write(&mut self, _offset: u64, _value: u8) -> crate::SimResult<()> {
+            Ok(())
+        }
+
+        fn read_gpio_input_word(&self) -> u32 {
+            self.0.fetch_add(1, Ordering::SeqCst);
+            0
+        }
+    }
+
+    fn bus_with_observer(include_observer: bool) -> (SystemBus, Arc<AtomicUsize>) {
         let mut bus = SystemBus::empty();
+        let gpio_reads = Arc::new(AtomicUsize::new(0));
         bus.add_peripheral(
             "gpio",
             0x6000_4000,
             0x1000,
             None,
-            Box::new(crate::peripherals::esp32c3::gpio::Esp32c3Gpio::new()),
+            Box::new(CountedGpio(gpio_reads.clone())),
         );
         if include_observer {
             bus.add_peripheral("edge-observer", 0x1000, 0x100, None, Box::new(EdgeObserver));
         }
-        bus
+        (bus, gpio_reads)
     }
 
-    let mut without_observer = bus_with_observer(false);
+    let (mut without_observer, gpio_reads_without_observer) = bus_with_observer(false);
     without_observer.tick_peripherals_fully();
-    assert!(
-        without_observer.last_gpio_in.is_none(),
-        "a generic GPIO name alone must not trigger the per-tick edge snapshot"
+    assert_eq!(
+        gpio_reads_without_observer.load(Ordering::SeqCst),
+        0,
+        "a generic GPIO name alone must not trigger per-tick input polling"
     );
 
-    let mut with_observer = bus_with_observer(true);
+    let (mut with_observer, gpio_reads_with_observer) = bus_with_observer(true);
     with_observer.tick_peripherals_fully();
-    assert!(
-        with_observer.last_gpio_in.is_some(),
+    assert_eq!(
+        gpio_reads_with_observer.load(Ordering::SeqCst),
+        1,
         "GPIO edge observers still need the input snapshot"
     );
 }
