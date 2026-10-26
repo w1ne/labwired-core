@@ -338,11 +338,17 @@ impl SystemBus {
             })
             .collect();
         self.peripheral_ranges.sort_by_key(|r| r.start);
-        self.legacy_tick_indices = self
+        self.rebuild_legacy_tick_indices();
+        self.legacy_tick_candidate_mask = self
+            .peripherals
+            .iter()
+            .map(Self::legacy_tick_index_eligible)
+            .collect();
+        self.legacy_tick_peer_write_indices = self
             .peripherals
             .iter()
             .enumerate()
-            .filter_map(|(index, p)| Self::legacy_tick_index_active(p).then_some(index))
+            .filter_map(|(index, p)| p.dev.legacy_tick_observes_peer_mmio().then_some(index))
             .collect();
         self.bus_tick_indices = self
             .peripherals
@@ -825,19 +831,48 @@ impl SystemBus {
         self.rebuild_peripheral_ranges();
     }
 
+    fn rebuild_legacy_tick_indices(&mut self) {
+        self.legacy_tick_indices = self
+            .peripherals
+            .iter()
+            .enumerate()
+            .filter_map(|(index, p)| Self::legacy_tick_index_active(p).then_some(index))
+            .collect();
+    }
+
     pub(crate) fn refresh_legacy_tick_index(&mut self, idx: usize) -> bool {
-        // Walk-deleted buses never consult `legacy_tick_indices` (the walk is
-        // off). Skip the trait calls + linear index scan on every MMIO write —
-        // the post-#555 C3 OLED hot path was spending more samples here than
-        // in the write itself once fetch/route optims landed.
         if self.legacy_walk_disabled {
-            return false;
+            // Most MMIO stores on a walk-deleted bus cannot wake a legacy
+            // peripheral. Reject them by cached index before calling trait
+            // predicates; the common case stays cheap even on large buses.
+            if !self
+                .legacy_tick_candidate_mask
+                .get(idx)
+                .copied()
+                .unwrap_or(false)
+            {
+                return false;
+            }
+            let active = self
+                .peripherals
+                .get(idx)
+                .is_some_and(Self::legacy_tick_index_active);
+            // If this write enables an indexed legacy tick, restore the walk
+            // and its active set. Scheduler-capable fallbacks can be active
+            // here when the event-scheduler feature is off. In that build the
+            // full walker ignores deletion, but profiling still uses the cache.
+            if active {
+                self.rebuild_legacy_tick_indices();
+                self.legacy_walk_disabled = false;
+            }
+            return active;
         }
         let active = self
             .peripherals
             .get(idx)
             .is_some_and(Self::legacy_tick_index_active);
         let pos = self.legacy_tick_indices.iter().position(|&i| i == idx);
+        let was_active = pos.is_some();
         match (active, pos) {
             (true, None) => {
                 self.legacy_tick_indices.push(idx);
@@ -848,7 +883,27 @@ impl SystemBus {
             }
             _ => {}
         }
+        if active != was_active
+            && self
+                .legacy_tick_candidate_mask
+                .get(idx)
+                .copied()
+                .unwrap_or(false)
+        {
+            self.recompute_walk_deletable();
+        }
         active
+    }
+
+    /// Refresh the small set of dynamic models whose activity can depend on
+    /// shared state changed by a different peripheral's MMIO write.
+    pub(crate) fn refresh_legacy_tick_peer_write_observers(&mut self, changed_idx: usize) {
+        for pos in 0..self.legacy_tick_peer_write_indices.len() {
+            let idx = self.legacy_tick_peer_write_indices[pos];
+            if idx != changed_idx && self.peripherals[idx].dev.legacy_tick_dynamic() {
+                self.refresh_legacy_tick_index(idx);
+            }
+        }
     }
 
     pub(crate) fn refresh_bus_tick_index(&mut self, idx: usize) -> bool {
