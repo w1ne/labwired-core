@@ -153,8 +153,11 @@ fn no_chip_declares_a_size_in_decimal_mb() {
 ///   Luckfox Mini A boots from external MicroSD, not internal flash. Its zero
 ///   flash placeholder maps no storage; RAM/window checks still apply.
 /// * RAM and the extra CPU-visible windows are whole KiB. Erase granularity
-///   does not apply to them (the ATmega328P has 2 KiB of SRAM), but no part
-///   exposes a window that stops part-way through a KiB.
+///   does not apply to them (the ATmega328P has 2 KiB of SRAM). The PIC24F KA
+///   family is the documented exception: the 04KA200/201 have 512 B of data
+///   SRAM (DS30009937C Table 1-1 and the §4.2 stack example ending at 0x09FF)
+///   and the 08KA/16KA parts have 1536 B (DS39927C Table 1-1), neither of
+///   which a whole-KiB rule can express.
 ///
 /// This is the backstop for the mistake with no unit attached: `size: 4000000`
 /// spelled as a bare byte count reaches the same wrong number by hand.
@@ -177,7 +180,7 @@ fn declared_memory_sizes_are_real_part_sizes() {
                 chip.flash.size as f64 / 1024.0
             ));
         }
-        if chip.ram.size == 0 || chip.ram.size % 1024 != 0 {
+        if !ram_geometry_is_valid(&chip) {
             offenders.push(format!(
                 "{name}: ram.size = {} bytes = {:.3} KiB — not a whole number of KiB",
                 chip.ram.size,
@@ -207,6 +210,29 @@ fn declared_memory_sizes_are_real_part_sizes() {
     );
 }
 
+/// Non-KiB-aligned SRAM is real on exactly these PIC24F KA parts.
+/// Everywhere else a non-KiB-aligned RAM size is still a transcription error.
+const NON_KIB_RAM_PARTS: &[(&str, u64)] = &[
+    ("pic24f04ka200", 512),  // DS30009937C Table 1-1, §4.2
+    ("pic24f04ka201", 512),  // DS30009937C Table 1-1, §4.2
+    ("pic24f08ka101", 1536), // DS39927C Table 1-1
+    ("pic24f08ka102", 1536), // DS39927C Table 1-1
+    ("pic24f16ka101", 1536), // DS39927C Table 1-1
+    ("pic24f16ka102", 1536), // DS39927C Table 1-1
+];
+
+fn ram_geometry_is_valid(chip: &ChipDescriptor) -> bool {
+    if chip.ram.size == 0 {
+        return false;
+    }
+    if chip.ram.size % 1024 == 0 {
+        return true;
+    }
+    NON_KIB_RAM_PARTS
+        .iter()
+        .any(|(name, size)| chip.name == *name && chip.ram.size == *size)
+}
+
 /// Zero is an honest absence of internal flash only for this declared SoC.
 /// The base must also be zero: the placeholder must not imply a storage map.
 fn flash_geometry_is_valid(chip: &ChipDescriptor) -> bool {
@@ -218,6 +244,28 @@ fn flash_geometry_is_valid(chip: &ChipDescriptor) -> bool {
         && chip.arch == Arch::Arm
         && chip.core.as_deref() == Some("cortex-a7")
         && chip.flash.base == 0
+}
+
+#[test]
+fn non_kib_ram_exception_is_exactly_the_six_pic24f_ka_parts() {
+    for (name, size) in NON_KIB_RAM_PARTS {
+        let path = chips_dir().join(format!("{name}.yaml"));
+        let chip = ChipDescriptor::from_file(&path).expect("load non-KiB RAM part");
+        assert_eq!(chip.ram.size, *size, "{name}");
+        assert!(ram_geometry_is_valid(&chip), "{name}");
+    }
+    let mut other = ChipDescriptor::from_file(chips_dir().join("pic24f04ka200.yaml")).unwrap();
+    other.name = "not-a-pic24f-ka".into();
+    assert!(
+        !ram_geometry_is_valid(&other),
+        "the exception must not leak by size alone"
+    );
+    other.name = "pic24f04ka200".into();
+    other.ram.size = 768;
+    assert!(
+        !ram_geometry_is_valid(&other),
+        "the exception is 512/1536 B, not any non-KiB size"
+    );
 }
 
 #[test]

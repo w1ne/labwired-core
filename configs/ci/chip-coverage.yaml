@@ -1,11 +1,79 @@
-# Explicit debt for the newly declared RV1103 platform, not firmware coverage.
+# Explicit debt for the RV1103 prototype and geometry-only SAMD21 variants,
+# not firmware coverage.
 # scripts/ci/chip_coverage.py derives coverage from actual workflow execution;
-# this ledger only records the reduced prototype without qualified full board firmware coverage.
+# this ledger only records shipped models without a qualifying per-chip firmware run.
 # Another uncovered chip still fails. Remove this entry and the file when an
-# RV1103 firmware CLI gate exists; the stale-waiver check enforces that change.
-max_uncovered: 1
+# RV1103 firmware CLI gate and SAMD21 variant CLI coverage exist; the
+# stale-waiver check enforces that change.
+max_uncovered: 12
 
 uncovered:
+  atsamd21e15a:
+    kind: pending
+    reason: >-
+      Geometry-only SAMD21 alternate reuses the atsamd21g18a engine. Descriptor
+      conformance is checked, but no CLI firmware smoke boots this exact chip
+      yet; the Arduino Zero and Nano 33 IoT runs exercise the shared G18A model.
+  atsamd21e16a:
+    kind: pending
+    reason: >-
+      Geometry-only SAMD21 alternate reuses the atsamd21g18a engine. Descriptor
+      conformance is checked, but no CLI firmware smoke boots this exact chip
+      yet; the Arduino Zero and Nano 33 IoT runs exercise the shared G18A model.
+  atsamd21e17a:
+    kind: pending
+    reason: >-
+      Geometry-only SAMD21 alternate reuses the atsamd21g18a engine. Descriptor
+      conformance is checked, but no CLI firmware smoke boots this exact chip
+      yet; the Arduino Zero and Nano 33 IoT runs exercise the shared G18A model.
+  atsamd21e18a:
+    kind: pending
+    reason: >-
+      Geometry-only SAMD21 alternate reuses the atsamd21g18a engine. Descriptor
+      conformance is checked, but no CLI firmware smoke boots this exact chip
+      yet; the Arduino Zero and Nano 33 IoT runs exercise the shared G18A model.
+  atsamd21g15a:
+    kind: pending
+    reason: >-
+      Geometry-only SAMD21 alternate reuses the atsamd21g18a engine. Descriptor
+      conformance is checked, but no CLI firmware smoke boots this exact chip
+      yet; the Arduino Zero and Nano 33 IoT runs exercise the shared G18A model.
+  atsamd21g16a:
+    kind: pending
+    reason: >-
+      Geometry-only SAMD21 alternate reuses the atsamd21g18a engine. Descriptor
+      conformance is checked, but no CLI firmware smoke boots this exact chip
+      yet; the Arduino Zero and Nano 33 IoT runs exercise the shared G18A model.
+  atsamd21g17a:
+    kind: pending
+    reason: >-
+      Geometry-only SAMD21 alternate reuses the atsamd21g18a engine. Descriptor
+      conformance is checked, but no CLI firmware smoke boots this exact chip
+      yet; the Arduino Zero and Nano 33 IoT runs exercise the shared G18A model.
+  atsamd21j15a:
+    kind: pending
+    reason: >-
+      Geometry-only SAMD21 alternate reuses the atsamd21g18a engine. Descriptor
+      conformance is checked, but no CLI firmware smoke boots this exact chip
+      yet; the Arduino Zero and Nano 33 IoT runs exercise the shared G18A model.
+  atsamd21j16a:
+    kind: pending
+    reason: >-
+      Geometry-only SAMD21 alternate reuses the atsamd21g18a engine. Descriptor
+      conformance is checked, but no CLI firmware smoke boots this exact chip
+      yet; the Arduino Zero and Nano 33 IoT runs exercise the shared G18A model.
+  atsamd21j17a:
+    kind: pending
+    reason: >-
+      Geometry-only SAMD21 alternate reuses the atsamd21g18a engine. Descriptor
+      conformance is checked, but no CLI firmware smoke boots this exact chip
+      yet; the Arduino Zero and Nano 33 IoT runs exercise the shared G18A model.
+  atsamd21j18a:
+    kind: pending
+    reason: >-
+      Geometry-only SAMD21 alternate reuses the atsamd21g18a engine. Descriptor
+      conformance is checked, but no CLI firmware smoke boots this exact chip
+      yet; the Arduino Zero and Nano 33 IoT runs exercise the shared G18A model.
   rv1103:
     kind: waived
     reason: >-

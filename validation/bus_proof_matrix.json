@@ -898,6 +898,72 @@
         "lane": "none"
       }
     },
+    "atsamd21e15a": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "Geometry-only descriptor reuses the atsamd21g18a engine; no per-orderable firmware UART run is claimed.", "lane": "none" },
+      "spi": { "state": "none", "gap": "SERCOM SPI mode is not modelled.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "SERCOM I2C mode is not modelled.", "lane": "none" }
+    },
+    "atsamd21e16a": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "Geometry-only descriptor reuses the atsamd21g18a engine; no per-orderable firmware UART run is claimed.", "lane": "none" },
+      "spi": { "state": "none", "gap": "SERCOM SPI mode is not modelled.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "SERCOM I2C mode is not modelled.", "lane": "none" }
+    },
+    "atsamd21e17a": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "Geometry-only descriptor reuses the atsamd21g18a engine; no per-orderable firmware UART run is claimed.", "lane": "none" },
+      "spi": { "state": "none", "gap": "SERCOM SPI mode is not modelled.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "SERCOM I2C mode is not modelled.", "lane": "none" }
+    },
+    "atsamd21e18a": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "Geometry-only descriptor reuses the atsamd21g18a engine; no per-orderable firmware UART run is claimed.", "lane": "none" },
+      "spi": { "state": "none", "gap": "SERCOM SPI mode is not modelled.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "SERCOM I2C mode is not modelled.", "lane": "none" }
+    },
+    "atsamd21g15a": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "Geometry-only descriptor reuses the atsamd21g18a engine; no per-orderable firmware UART run is claimed.", "lane": "none" },
+      "spi": { "state": "none", "gap": "SERCOM SPI mode is not modelled.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "SERCOM I2C mode is not modelled.", "lane": "none" }
+    },
+    "atsamd21g16a": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "Geometry-only descriptor reuses the atsamd21g18a engine; no per-orderable firmware UART run is claimed.", "lane": "none" },
+      "spi": { "state": "none", "gap": "SERCOM SPI mode is not modelled.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "SERCOM I2C mode is not modelled.", "lane": "none" }
+    },
+    "atsamd21g17a": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "Geometry-only descriptor reuses the atsamd21g18a engine; no per-orderable firmware UART run is claimed.", "lane": "none" },
+      "spi": { "state": "none", "gap": "SERCOM SPI mode is not modelled.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "SERCOM I2C mode is not modelled.", "lane": "none" }
+    },
+    "atsamd21j15a": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "Geometry-only descriptor reuses the atsamd21g18a engine; no per-orderable firmware UART run is claimed.", "lane": "none" },
+      "spi": { "state": "none", "gap": "SERCOM SPI mode is not modelled.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "SERCOM I2C mode is not modelled.", "lane": "none" }
+    },
+    "atsamd21j16a": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "Geometry-only descriptor reuses the atsamd21g18a engine; no per-orderable firmware UART run is claimed.", "lane": "none" },
+      "spi": { "state": "none", "gap": "SERCOM SPI mode is not modelled.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "SERCOM I2C mode is not modelled.", "lane": "none" }
+    },
+    "atsamd21j17a": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "Geometry-only descriptor reuses the atsamd21g18a engine; no per-orderable firmware UART run is claimed.", "lane": "none" },
+      "spi": { "state": "none", "gap": "SERCOM SPI mode is not modelled.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "SERCOM I2C mode is not modelled.", "lane": "none" }
+    },
+    "atsamd21j18a": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "Geometry-only descriptor reuses the atsamd21g18a engine; no per-orderable firmware UART run is claimed.", "lane": "none" },
+      "spi": { "state": "none", "gap": "SERCOM SPI mode is not modelled.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "SERCOM I2C mode is not modelled.", "lane": "none" }
+    },
     "atsamd21": {
       "in_boards": true,
       "uart": {
@@ -1160,6 +1226,126 @@
       "i2c": {
         "state": "none",
         "gap": "TWI0/TWI1 are declared `type: stub` (the SAM4S TWI block is not modelled).",
+        "lane": "none"
+      }
+    },
+    "pic24f04ka200": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/pic24_ka_smoke.rs",
+        "test": "pic24f04ka200_uart_smoke",
+        "signal": "the committed XC16 v1.70 ELF boots on pic24f04ka200 and writes 'HI' through U1TXREG (0x0224); examples/pic24f04ka200/io-smoke.yaml asserts the same output under `labwired test`",
+        "lane": "pr-workspace-tests shards - cargo test -p labwired-core --test pic24_ka_smoke; strict_onboarding examples/pic24f04ka200/io-smoke.yaml"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "No KA example or test drives SPI1 on this part; the shared PIC24 SPI model is not claimed for the KA family.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "No KA example or test drives I2C1 on this part; the shared PIC24 I2C model is not claimed for the KA family.",
+        "lane": "none"
+      }
+    },
+    "pic24f04ka201": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/pic24_ka_smoke.rs",
+        "test": "pic24f04ka201_uart_smoke",
+        "signal": "the committed XC16 v1.70 ELF boots on pic24f04ka201 and writes 'HI' through U1TXREG (0x0224); examples/pic24f04ka201/io-smoke.yaml asserts the same output under `labwired test`",
+        "lane": "pr-workspace-tests shards - cargo test -p labwired-core --test pic24_ka_smoke; strict_onboarding examples/pic24f04ka201/io-smoke.yaml"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "No KA example or test drives SPI1 on this part; the shared PIC24 SPI model is not claimed for the KA family.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "No KA example or test drives I2C1 on this part; the shared PIC24 I2C model is not claimed for the KA family.",
+        "lane": "none"
+      }
+    },
+    "pic24f08ka101": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/pic24_ka_smoke.rs",
+        "test": "pic24f08ka101_uart_smoke",
+        "signal": "the committed XC16 v1.70 ELF boots on pic24f08ka101 and writes 'HI' through U1TXREG (0x0224); examples/pic24f08ka101/io-smoke.yaml asserts the same output under `labwired test`",
+        "lane": "pr-workspace-tests shards - cargo test -p labwired-core --test pic24_ka_smoke; strict_onboarding examples/pic24f08ka101/io-smoke.yaml"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "No KA example or test drives SPI1 on this part; the shared PIC24 SPI model is not claimed for the KA family.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "No KA example or test drives I2C1 on this part; the shared PIC24 I2C model is not claimed for the KA family.",
+        "lane": "none"
+      }
+    },
+    "pic24f08ka102": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/pic24_ka_smoke.rs",
+        "test": "pic24f08ka102_uart_smoke",
+        "signal": "the committed XC16 v1.70 ELF boots on pic24f08ka102 and writes 'HI' through U1TXREG (0x0224); examples/pic24f08ka102/io-smoke.yaml asserts the same output under `labwired test`",
+        "lane": "pr-workspace-tests shards - cargo test -p labwired-core --test pic24_ka_smoke; strict_onboarding examples/pic24f08ka102/io-smoke.yaml"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "No KA example or test drives SPI1 on this part; the shared PIC24 SPI model is not claimed for the KA family.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "No KA example or test drives I2C1 on this part; the shared PIC24 I2C model is not claimed for the KA family.",
+        "lane": "none"
+      }
+    },
+    "pic24f16ka101": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/pic24_ka_smoke.rs",
+        "test": "pic24f16ka101_uart_smoke",
+        "signal": "the committed XC16 v1.70 ELF boots on pic24f16ka101 and writes 'HI' through U1TXREG (0x0224); examples/pic24f16ka101/io-smoke.yaml asserts the same output under `labwired test`",
+        "lane": "pr-workspace-tests shards - cargo test -p labwired-core --test pic24_ka_smoke; strict_onboarding examples/pic24f16ka101/io-smoke.yaml"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "No KA example or test drives SPI1 on this part; the shared PIC24 SPI model is not claimed for the KA family.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "No KA example or test drives I2C1 on this part; the shared PIC24 I2C model is not claimed for the KA family.",
+        "lane": "none"
+      }
+    },
+    "pic24f16ka102": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/pic24_ka_smoke.rs",
+        "test": "pic24f16ka102_uart_smoke",
+        "signal": "the committed XC16 v1.70 ELF boots on pic24f16ka102 and writes 'HI' through U1TXREG (0x0224); examples/pic24f16ka102/io-smoke.yaml asserts the same output under `labwired test`",
+        "lane": "pr-workspace-tests shards - cargo test -p labwired-core --test pic24_ka_smoke; strict_onboarding examples/pic24f16ka102/io-smoke.yaml"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "No KA example or test drives SPI1 on this part; the shared PIC24 SPI model is not claimed for the KA family.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "No KA example or test drives I2C1 on this part; the shared PIC24 I2C model is not claimed for the KA family.",
         "lane": "none"
       }
     }

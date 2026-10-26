@@ -385,6 +385,50 @@ _No tier-1 target. The firmware that runs is the SAM D21 bring-up smoke built fr
 - `SYSCTRL` (configs/chips/atsamd21g18a.yaml:144 (type: declarative; configs/peripherals/atsamd21g18a/sysctrl.yaml)) — CLOSABLE: declarative register file with no engine — the smoke's OSC8MRDY poll (crates/firmware-samd21-demo/src/main.rs:151-155) is bounded (`for _ in 0..10_000`) and passes even with PCLKSR reset to 0, so it does not depend on the hand-set value; that value (0x1_8ADF, configs/peripherals/atsamd21g18a/sysctrl.yaml:250-272, value at :264) is what unbounded driver spins like the Arduino SAMD core's DFLLRDY wait need, and the pin is the estate test (atsamd21_peripheral_estate.rs:116-139), the chip's `chip_conformance` behavior gate (chip_conformance.rs:86-93). No oscillator/DFLL state is modelled, and regenerating the file from the SVD drops the value. ⚠️ examples/samd21-smoke/io-smoke.yaml:17-19 and crates/firmware-samd21-demo/src/main.rs:149-150 still claim a PCLKSR=0 model hangs / never returns — those comments are STALE (the poll is bounded); do not 'correct' this note back from them.
 - `NVMCTRL` (configs/chips/atsamd21g18a.yaml:172 (type: declarative; configs/peripherals/atsamd21g18a/nvmctrl.yaml)) — CLOSABLE: declarative register file — the smoke's CTRLB.RWS wait-state write (crates/firmware-samd21-demo/src/main.rs:147) is stored, never read back or polled, and no flash-controller behaviour follows (no programming, erase or ready timing).
 
+### `atsamd21e15a`
+
+_Geometry-only orderable on the atsamd21g18a engine; no per-orderable firmware exercise or beyond-rubric content is claimed._
+
+### `atsamd21e16a`
+
+_Geometry-only orderable on the atsamd21g18a engine; no per-orderable firmware exercise or beyond-rubric content is claimed._
+
+### `atsamd21e17a`
+
+_Geometry-only orderable on the atsamd21g18a engine; no per-orderable firmware exercise or beyond-rubric content is claimed._
+
+### `atsamd21e18a`
+
+_Geometry-only orderable on the atsamd21g18a engine; no per-orderable firmware exercise or beyond-rubric content is claimed._
+
+### `atsamd21g15a`
+
+_Geometry-only orderable on the atsamd21g18a engine; no per-orderable firmware exercise or beyond-rubric content is claimed._
+
+### `atsamd21g16a`
+
+_Geometry-only orderable on the atsamd21g18a engine; no per-orderable firmware exercise or beyond-rubric content is claimed._
+
+### `atsamd21g17a`
+
+_Geometry-only orderable on the atsamd21g18a engine; no per-orderable firmware exercise or beyond-rubric content is claimed._
+
+### `atsamd21j15a`
+
+_Geometry-only orderable on the atsamd21g18a engine; no per-orderable firmware exercise or beyond-rubric content is claimed._
+
+### `atsamd21j16a`
+
+_Geometry-only orderable on the atsamd21g18a engine; no per-orderable firmware exercise or beyond-rubric content is claimed._
+
+### `atsamd21j17a`
+
+_Geometry-only orderable on the atsamd21g18a engine; no per-orderable firmware exercise or beyond-rubric content is claimed._
+
+### `atsamd21j18a`
+
+_Geometry-only orderable on the atsamd21g18a engine; no per-orderable firmware exercise or beyond-rubric content is claimed._
+
 ### `atsamd51`
 
 _No tier-1 target. The firmware that runs is the PR-gated `firmware_survival::test_atsamd51_metro_m4_smoke_survival` (step core-ci.yml:779; case firmware_survival.rs:1336): the committed Metro M4 smoke ELF (tests/fixtures/atsamd51-metro-m4-smoke.elf, built from crates/firmware-atsamd51-demo) writes MCLK.APBBMASK + GCLK PCHCTRL[24] and prints `OK` on Serial1 (crates/firmware-atsamd51-demo/src/main.rs:35-41). The same demo is built and run by strict_onboarding (nightly core-full, through examples/metro-m4/io-smoke.yaml) and the nightly coverage-matrix cell `metro-m4` (core-coverage-matrix-smoke.yml:82-88, examples/metro-m4/uart-smoke.yaml). Beyond the rubric the descriptor declares two zero windows, USB and QSPI, that no firmware opens._
@@ -470,6 +514,30 @@ _M0 + M1a + M1b + M1c + M2 + M3 bring-up: boot (PC 0 -> reset GOTO) with UART1 T
 ### `dspic33fj32mc202`
 
 _M0 + M1 + M2 + M3 bring-up on the 28-pin sibling of the dsPIC33FJ32MC204: boot (PC 0 -> reset GOTO) and UART1 TX; the 28-pin GPIO package (RA0-RA4, RB0-RB15, no PORTC; TRIS/LAT/ODC masks derived from the descriptor's pic24_gpio pads); the shared T1 timer, Motor Control PWM 1 (complementary pair with dead time on RB14/RB15) and QEI1 (x4 index reset, QEA/QEB/INDX on RB0/RB1/RB2) on 202 package pins; and the shared ADC1/SPI1/I2C1 models on the 202's AN0-AN5 analog set (AN0=RA0, AN1=RA1, AN2=RB0..AN5=RB3; AN6-AN8 are RC0-RC2 and absent on the 28-pin package), SPI1 loopback and I2C1 TMP102 at 0x48. Four real XC16 v1.70 firmwares: xc16-uart-smoke.c prints `HI` and toggles LATB0 (crates/core/tests/pic24_xc16_202_smoke.rs); xc16-m1-gpio.c prints `G1`, makes PORTA/PORTB outputs and toggles RA0/RB0 (crates/core/tests/pic24_xc16_202_m1.rs), including the reset masks and pad levels; xc16-m2-pwm-qei.c waits on T1IF and configures PWM1+QEI1 (crates/core/tests/pic24_xc16_202_m2.rs), with injected quadrature edges, PWM pad checks and the direction-aware index reset; xc16-m3-adc-spi-i2c.c samples AN4 (RB2), shifts 0xA5 through SPI1, reads the TMP102 at 0x48 and prints `M3 OK` (crates/core/tests/pic24_xc16_202_m3.rs), with the 0xBEEF completion marker. The 202 shares the 204's PIC24/dsPIC33F core, 32 KB flash / 2 KB SRAM, UART1 and instruction set. The 202 track now covers M0-M3 with nothing left in that range; there is no silicon capture, so the results are simulation-derived only._
+
+### `pic24f04ka200`
+
+_L1 smoke, SIM-DERIVED; no beyond-rubric content. Exact PIC24F04KA200 descriptor (DS30009937C): 14-pin package, 4 KB flash, 512 B SRAM, PORTA 0x007F / PORTB 0xC310 / no PORTC, UART1 at 0x0220. A real XC16 v1.70 ELF prints `HI` on UART1 and toggles RA0 (crates/core/tests/pic24_ka_smoke.rs, examples/pic24f04ka200/io-smoke.yaml). Data EEPROM (absent), UART2, timers, ADC, SPI and I2C are not exercised for this part._
+
+### `pic24f04ka201`
+
+_L1 smoke, SIM-DERIVED; no beyond-rubric content. Exact PIC24F04KA201 descriptor (DS30009937C): 20-pin package, 4 KB flash, 512 B SRAM, PORTA 0x007F / PORTB 0xF397 / no PORTC, UART1 at 0x0220. A real XC16 v1.70 ELF prints `HI` on UART1 and toggles RA0 (crates/core/tests/pic24_ka_smoke.rs, examples/pic24f04ka201/io-smoke.yaml). Data EEPROM (absent), UART2, timers, ADC, SPI and I2C are not exercised for this part._
+
+### `pic24f08ka101`
+
+_L1 smoke, SIM-DERIVED; no beyond-rubric content. Exact PIC24F08KA101 descriptor (DS39927C): 20-pin package, 8 KB flash, 1536 B SRAM, PORTA 0x007F / PORTB 0xF397 / no PORTC, UART1 at 0x0220. A real XC16 v1.70 ELF prints `HI` on UART1 and toggles RA0 (crates/core/tests/pic24_ka_smoke.rs, examples/pic24f08ka101/io-smoke.yaml). Data EEPROM (512 B at 0x7FFE00), UART2, timers, ADC, SPI and I2C are not exercised for this part._
+
+### `pic24f08ka102`
+
+_L1 smoke, SIM-DERIVED; no beyond-rubric content. Exact PIC24F08KA102 descriptor (DS39927C): 28-pin package, 8 KB flash, 1536 B SRAM, PORTA 0x00FF / PORTB 0xFFFF / no PORTC, UART1 at 0x0220. A real XC16 v1.70 ELF prints `HI` on UART1 and toggles RA0 (crates/core/tests/pic24_ka_smoke.rs, examples/pic24f08ka102/io-smoke.yaml). Data EEPROM (512 B at 0x7FFE00), UART2, timers, ADC, SPI and I2C are not exercised for this part._
+
+### `pic24f16ka101`
+
+_L1 smoke, SIM-DERIVED; no beyond-rubric content. Exact PIC24F16KA101 descriptor (DS39927C): 20-pin package, 16 KB flash, 1536 B SRAM, PORTA 0x007F / PORTB 0xF397 / no PORTC, UART1 at 0x0220. A real XC16 v1.70 ELF prints `HI` on UART1 and toggles RA0 (crates/core/tests/pic24_ka_smoke.rs, examples/pic24f16ka101/io-smoke.yaml). Data EEPROM (512 B at 0x7FFE00), UART2, timers, ADC, SPI and I2C are not exercised for this part._
+
+### `pic24f16ka102`
+
+_L1 smoke, SIM-DERIVED; no beyond-rubric content. Exact PIC24F16KA102 descriptor (DS39927C): 28-pin package, 16 KB flash, 1536 B SRAM, PORTA 0x00FF / PORTB 0xFFFF / no PORTC, UART1 at 0x0220. A real XC16 v1.70 ELF prints `HI` on UART1 and toggles RA0 (crates/core/tests/pic24_ka_smoke.rs, examples/pic24f16ka102/io-smoke.yaml). Data EEPROM (512 B at 0x7FFE00), UART2, timers, ADC, SPI and I2C are not exercised for this part._
 
 ### `litex-vexriscv`
 

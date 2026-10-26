@@ -125,6 +125,13 @@ def main() -> int:
         return 2
 
     chips = bp.discover_chips()
+    if args.boards:
+        requested = set(args.boards.split(","))
+        missing = requested - set(chips)
+        if missing:
+            print(f"error: unknown/uncovered boards: {', '.join(sorted(missing))}", file=sys.stderr)
+            return 2
+        chips = {board: chip for board, chip in chips.items() if board in requested}
     try:
         covered, waived = bp.plan_coverage(chips)
     except bp.CoverageError as exc:

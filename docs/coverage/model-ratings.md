@@ -18,6 +18,17 @@ same fields but never their source, chip YAML, binary or build paths.
 | stm32f072 | open | L1 | 39 | 937.9 | 1.6 | ≥1× (CI) | [doc](docs/boards/stm32f072.md) |
 | nrf54l15 | open | L1 | 29 | 1364.0 | 1.9 | ≥1× (CI) | [doc](docs/boards/nrf54l15.md) |
 | atsamd21g18a | open | L1 | 15 | 895.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/atsamd21g18a.md) |
+| atsamd21e15a | open | L0 | 13 | 893.0 | 1.4 | ≥1× (CI) | — |
+| atsamd21e16a | open | L0 | 13 | 893.0 | 1.4 | ≥1× (CI) | — |
+| atsamd21e17a | open | L0 | 13 | 893.0 | 1.4 | ≥1× (CI) | — |
+| atsamd21e18a | open | L0 | 13 | 893.0 | 1.4 | ≥1× (CI) | — |
+| atsamd21g15a | open | L0 | 15 | 893.0 | 1.4 | ≥1× (CI) | — |
+| atsamd21g16a | open | L0 | 15 | 893.0 | 1.4 | ≥1× (CI) | — |
+| atsamd21g17a | open | L0 | 15 | 893.0 | 1.4 | ≥1× (CI) | — |
+| atsamd21j15a | open | L0 | 15 | 893.0 | 1.4 | ≥1× (CI) | — |
+| atsamd21j16a | open | L0 | 15 | 893.0 | 1.4 | ≥1× (CI) | — |
+| atsamd21j17a | open | L0 | 15 | 893.0 | 1.4 | ≥1× (CI) | — |
+| atsamd21j18a | open | L0 | 15 | 893.0 | 1.4 | ≥1× (CI) | — |
 | nrf54lm20a | open | L1 | 31 | 1412.4 | 2.0 | ≥1× (CI) | — |
 | esp32 | open | L1 | 32 | 955.5 | 1.4 | ≥1× (CI) | [doc](docs/boards/esp32.md) |
 | esp32s3 | open | L1 | 14 | 991.9 | 2.4 | ≥1× (CI) | [doc](docs/boards/esp32s3.md) |
@@ -61,6 +72,12 @@ same fields but never their source, chip YAML, binary or build paths.
 | stm32g071 | open | L1 | 41 | 937.4 | 1.6 | ≥1× (CI) | — |
 | dspic33fj32mc204 | open | L1 | 3 | — | — | ≥1× (CI) | — |
 | dspic33fj32mc202 | open | L1 | 3 | — | — | ≥1× (CI) | — |
+| pic24f04ka200 | open | L1 | 3 | — | — | ≥1× (CI) | — |
+| pic24f04ka201 | open | L1 | 3 | — | — | ≥1× (CI) | — |
+| pic24f08ka101 | open | L1 | 3 | — | — | ≥1× (CI) | — |
+| pic24f08ka102 | open | L1 | 3 | — | — | ≥1× (CI) | — |
+| pic24f16ka101 | open | L1 | 3 | — | — | ≥1× (CI) | — |
+| pic24f16ka102 | open | L1 | 3 | — | — | ≥1× (CI) | — |
 | k32w041z (closed) | closed | L2 | 9 | 987.8 | 1.6 | 6.50× | [doc](docs/boards/k32w041amdk6.md) |
 
 Open-model RTx is a CI receipt; the committed open perf rating is step/batch.

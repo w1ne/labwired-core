@@ -118,6 +118,7 @@ impl SystemBus {
         self.sync_esp32c3_pms_write(idx, mmio_addr - base);
         self.peripherals[idx].ticks_remaining = 0;
         self.refresh_legacy_tick_index(idx);
+        self.refresh_legacy_tick_peer_write_observers(idx);
         self.refresh_bus_tick_index(idx);
         self.reconcile_irq_levels_after_write(idx);
     }
@@ -1310,6 +1311,7 @@ impl crate::Bus for SystemBus {
                 // map (and honours a VIOLATE_CLR pulse).
                 self.sync_esp32c3_pms_write(idx, mmio_addr - base);
                 self.refresh_legacy_tick_index(idx);
+                self.refresh_legacy_tick_peer_write_observers(idx);
                 self.refresh_bus_tick_index(idx);
                 // Level reconcile at the write choke (single- and multi-line
                 // level sources): see `reconcile_irq_levels_after_write`.
@@ -1508,6 +1510,7 @@ impl crate::Bus for SystemBus {
                 // map (and honours a VIOLATE_CLR pulse).
                 self.sync_esp32c3_pms_write(idx, mmio_addr - base);
                 self.refresh_legacy_tick_index(idx);
+                self.refresh_legacy_tick_peer_write_observers(idx);
                 self.refresh_bus_tick_index(idx);
                 // Level reconcile at the write choke (single- and multi-line
                 // level sources): see `reconcile_irq_levels_after_write`.
@@ -1599,6 +1602,7 @@ impl crate::Bus for SystemBus {
         };
         f(&mut *self.peripherals[idx].dev);
         self.refresh_legacy_tick_index(idx);
+        self.refresh_legacy_tick_peer_write_observers(idx);
         self.collect_scheduled_events(idx);
         true
     }
