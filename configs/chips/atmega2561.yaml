@@ -27,9 +27,9 @@ registers_count: 32
 #     still decodes MUX5, but only these eight inputs are mapped.
 #   * Timer3 exists on the 64-pin part (DS40002211A feature list and interrupt
 #     vectors) but the public interpreter has no Timer3 behaviour, so it is not
-#     modelled or declared here. Timer4/5, ports H..L and the twelve PWM
-#     channels are 100-pin (ATmega2560) features; the 2561 has six PWM
-#     channels, none of which is declared.
+#     modelled or declared here. Timer4/5 and ports H..L are 100-pin
+#     (ATmega2560) features. DS40002211A Table 2-1 lists six 16-bit-resolution
+#     PWM channels for the 2561; no PWM behavior is modelled.
 cpu_hz: 16_000_000
 # DS40002211A §31.1 (DC characteristics): VCC 1.8-5.5 V; VIL max 0.3·VCC and
 # VIH min 0.6·VCC on the I/O pins at the 5 V rail.

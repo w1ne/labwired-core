@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# atmega2561's CLI proof: the committed 3-byte-PC AVR image prints "2561 OK"
-# through USART0 and drives PB5, which io-smoke.yaml asserts.
+# atmega2561 CLI smoke: the committed 3-byte-PC AVR image prints "2561 OK"
+# through USART0. The Rust integration test separately asserts the PB5 output.
 set -euo pipefail
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"

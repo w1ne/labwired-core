@@ -14,7 +14,8 @@ channels on LabWired's public AVR interpreter.
 | ADC | ✅ ADC0..ADC7; ❌ ADC8..ADC15 (100-pin only) |
 | EEPROM | Present on silicon (4 KB); no public controller model |
 | Timer3 | Present on silicon; not modelled by LabWired |
-| Timer4/5, twelve PWM channels, ports H..L | ❌ 100-pin ATmega2560 features, not present on the 64-pin part; the 2561 has six PWM channels, none modelled |
+| Ports H..L, ADC8..ADC15, Timer4/5 | ❌ 100-pin ATmega2560 features, not present on the 64-pin part |
+| PWM | DS40002211A Table 2-1 lists six 16-bit-resolution channels; PWM behavior is not modelled |
 
 The public CPU alias follows simavr: both route ATmega2561 to the shared
 ATmega2560 core. The LabWired descriptor is narrower, so only behaviours the

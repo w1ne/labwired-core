@@ -31,6 +31,7 @@ cargo run -q -p labwired-cli -- test \
 | 4 KB EEPROM | **not modelled** — no EECR/EEDR/EEAR controller is exposed |
 | USART1 | **not declared** — registers exist only as untested storage on the shared core |
 | Timer3 | **not modelled** — present on the 2561 silicon, but the shared core provides no timer behaviour |
-| Ports H..L, ADC8..ADC15, Timer4/5, twelve PWM channels | 100-pin ATmega2560 features, not present on the 64-pin part; the 2561 has six PWM channels, none declared |
+| Ports H..L, ADC8..ADC15, Timer4/5 | 100-pin ATmega2560 features, not present on the 64-pin part |
+| PWM | DS40002211A Table 2-1 lists six 16-bit-resolution channels; no PWM behavior is modelled |
 
 Sources and explicit non-claims: `REQUIRED_DOCS.md`, `VALIDATION.md`.

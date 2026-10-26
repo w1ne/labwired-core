@@ -36,9 +36,10 @@ prints `2561 OK`.
 - **Timer3**: DS40002211A gives the ATmega2561 Timer3, but this LabWired slice
   models no Timer3 behaviour and the descriptor declares no timer window.
   Firmware that uses Timer3 is not supported.
-- **Ports H..L, ADC8..ADC15, Timer4/5, twelve PWM channels**: these are 100-pin
-  ATmega2560 features. They are not present on the 64-pin part and are not
-  exposed. The ATmega2561 has six PWM channels on silicon; none is modelled.
+- **Ports H..L, ADC8..ADC15, Timer4/5**: these are 100-pin ATmega2560
+  features and are not present on the 64-pin part.
+- **PWM**: DS40002211A Table 2-1 lists six 16-bit-resolution PWM channels for
+  the ATmega2561; PWM behavior is not modelled.
 - **PG6/PG7**: Port G is six bits on this package. The register model is
   byte-wide because it is shared AVR hardware, but the authoritative pin map
   declares only PG0..PG5.
