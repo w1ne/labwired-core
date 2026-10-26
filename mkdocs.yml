@@ -143,6 +143,7 @@ nav:
     - nRF5340: boards/nrf5340.md
     - nRF54L15: boards/nrf54l15.md
     - ATSAMD21G18A: boards/atsamd21g18a.md
+    - ATSAMD21 A-variants: boards/atsamd21-variants.md
 
   - Parts:
     - Overview: parts/index.md

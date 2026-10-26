@@ -503,6 +503,23 @@ fn every_shipped_descriptor_is_ratcheted() {
         // stm32f411ceu6 below. Promote when the catalog registration lands and
         // a real board is benched.
         "atsamd21g18a",
+        // Exact A-variant SAM D21 orderable geometries. They reuse the public
+        // G18A engine and add no peripheral/clock models of their own; their
+        // geometry is pinned by `atsamd21_variant_geometry`, but they have no
+        // catalog board, no silicon oracle and no executing-fidelity
+        // differential. Promote only when a bench part and a differential
+        // exist, exactly like atsamd21g18a above.
+        "atsamd21e15a",
+        "atsamd21e16a",
+        "atsamd21e17a",
+        "atsamd21e18a",
+        "atsamd21g15a",
+        "atsamd21g16a",
+        "atsamd21g17a",
+        "atsamd21j15a",
+        "atsamd21j16a",
+        "atsamd21j17a",
+        "atsamd21j18a",
         "esp32",         // classic Xtensa, separate e2e lane, not a catalog board
         "esp32s3-zero",  // board variant of esp32s3 (covered by esp32s3)
         "stm32f401cdu6", // BlackPill variant of stm32f401 (covered by stm32f401)
@@ -515,6 +532,17 @@ fn every_shipped_descriptor_is_ratcheted() {
         // PIC24 core. Same rationale: no bundled-configs.ts board and no
         // silicon oracle yet.
         "dspic33fj32mc202",
+        // PIC24F KA family: six exact part descriptors plus per-part XC16 UART
+        // smokes on the public PIC24 core. The modelled slice is package GPIO
+        // and UART1 only; no bundled-configs.ts catalog board, no silicon
+        // oracle and no executing-fidelity differential. Promote when the
+        // catalog and a differential exist.
+        "pic24f04ka200",
+        "pic24f04ka201",
+        "pic24f08ka101",
+        "pic24f08ka102",
+        "pic24f16ka101",
+        "pic24f16ka102",
         // First RISC-V soft-core SoC in the engine (LiteX VexRiscv, RV32IM).
         // Has a chip descriptor, a system manifest, an example with an
         // io-smoke, a committed smoke fixture and a firmware-survival gate —
