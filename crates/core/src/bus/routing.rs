@@ -342,7 +342,7 @@ impl SystemBus {
         self.legacy_tick_candidate_mask = self
             .peripherals
             .iter()
-            .map(Self::legacy_tick_index_eligible)
+            .map(Self::legacy_tick_index_candidate)
             .collect();
         self.legacy_tick_peer_write_indices = self
             .peripherals
@@ -856,7 +856,7 @@ impl SystemBus {
             let active = self
                 .peripherals
                 .get(idx)
-                .is_some_and(|p| p.dev.legacy_tick_active());
+                .is_some_and(Self::legacy_tick_index_active);
             // If this write enables an indexed legacy tick, restore the walk
             // and its active set. Scheduler-capable fallbacks can be active
             // here when the event-scheduler feature is off. In that build the
