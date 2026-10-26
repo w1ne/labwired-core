@@ -8,7 +8,7 @@
 #   datasheet:
 #     - Table 2 (device features and peripheral counts)
 #     - Table 5 (pin definitions / package bond-out)
-#     - Table 55 (ordering information scheme)
+#     - Table 58 (ordering information scheme)
 #   https://www.st.com/resource/en/datasheet/stm32f103c6.pdf
 #
 # SOURCE OF TRUTH for peripheral bases/IRQs:
@@ -27,13 +27,18 @@
 #   exact for this orderable part. The register behaviour is the medium-density
 #   engine's; no separate low-density silicon capture exists.
 
-# EXACT ORDERABLE GEOMETRY for STM32F103R6 (STM32F103 low-density x6).
+# EXACT ORDERABLE GEOMETRY for STM32F103R6 in the LQFP64 package
+# (STM32F103 low-density x6).
 #
 #   Flash 32 KB at 0x0800_0000 · SRAM 10 KB at 0x2000_0000
-#   64-pin LQFP64/TFBGA64 · 51 GPIOs · 16 regular ADC channels
+#   64-pin LQFP64 · 51 GPIOs · 16 regular ADC channels
 #
-# Ordering suffixes (package + temperature 6/7 + internal code A + carrier):
-#   T6A, T6ATR, T7A, T7ATR, H6A, H6ATR, H7A, H7ATR
+# Ordering suffixes (LQFP64 + temperature 6/7 + internal code A + carrier):
+#   T6A, T6ATR, T7A, T7ATR
+#
+# The TFBGA64 package of the same die is a separate descriptor,
+# stm32f103r6h, because its PC3 pad is VREF+ and it exposes only 15 ADC
+# channels (DS5792 Rev 7, Table 2 note 1 and Table 5 note 7).
 
 name: "stm32f103r6"
 arch: "arm"
@@ -41,7 +46,7 @@ core: "cortex-m3"
 registers_count: 125
 # STM32F103 maximum core clock, 72 MHz (DS5792 section 5.3).
 cpu_hz: 72_000_000
-# DS5792 Rev 7, Table 34 "I/O static characteristics", all I/Os except BOOT0:
+# DS5792 Rev 7, Table 35 "I/O static characteristics", all I/Os except BOOT0:
 # VIL max 0.35·VDD, VIH min 0.65·VDD (same electrical family as DS5319).
 io_voltage_v: 3.3
 gpio_input_thresholds:
@@ -50,12 +55,12 @@ gpio_input_thresholds:
 
 # Descriptive ordering data. The engine ignores these keys; the focused
 # `stm32_variant_geometry` gate parses and checks them against DS5792.
-package: "LQFP64/TFBGA64"
+package: "LQFP64"
 pin_count: 64
 gpio_pin_count: 51
 adc_channels: 16
 variant: "x6"
-orderable_suffixes: ["T6A", "T6ATR", "T7A", "T7ATR", "H6A", "H6ATR", "H7A", "H7ATR"]
+orderable_suffixes: ["T6A", "T6ATR", "T7A", "T7ATR"]
 
 flash:
   base: 0x08000000
@@ -395,9 +400,10 @@ peripherals:
     config:
       debug_schema: "../peripherals/stm32f103/usart3.yaml"
 
-# Regular ADC inputs by pad on the LQFP64/TFBGA64 package: ADC12_IN0..IN15.
+# Regular ADC inputs by pad on the LQFP64 package: ADC12_IN0..IN15.
 # The family allocation is PA0..PA7 = IN0..IN7, PB0/PB1 = IN8/IN9 and, on
-# the 64-pin R package only, PC0..PC5 = IN10..IN15 (DS5792 Table 2/5).
+# this 64-pin package, PC0..PC5 = IN10..IN15 (DS5792 Table 2/5). The TFBGA64
+# descriptor stm32f103r6h omits PC3/IN13 because that pad is VREF+.
 # Consumed by co-simulation `board.analog.<pad>_volts`; pads not listed are refused.
 analog_pins:
   PA0: { peripheral: "adc1", channel: 0 }

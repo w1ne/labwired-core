@@ -8,7 +8,7 @@
 #   datasheet:
 #     - Table 2 (device features and peripheral counts)
 #     - Table 5 (pin definitions / package bond-out)
-#     - Table 55 (ordering information scheme)
+#     - Table 58 (ordering information scheme)
 #   https://www.st.com/resource/en/datasheet/stm32f103c6.pdf
 #
 # SOURCE OF TRUTH for peripheral bases/IRQs:
@@ -41,7 +41,7 @@ core: "cortex-m3"
 registers_count: 125
 # STM32F103 maximum core clock, 72 MHz (DS5792 section 5.3).
 cpu_hz: 72_000_000
-# DS5792 Rev 7, Table 34 "I/O static characteristics", all I/Os except BOOT0:
+# DS5792 Rev 7, Table 35 "I/O static characteristics", all I/Os except BOOT0:
 # VIL max 0.35·VDD, VIH min 0.65·VDD (same electrical family as DS5319).
 io_voltage_v: 3.3
 gpio_input_thresholds:

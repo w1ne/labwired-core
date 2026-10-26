@@ -25,10 +25,14 @@
 # EXACT ORDERABLE GEOMETRY for STM32F401CE (STM32F401 xE).
 #
 #   Flash 512 KB at 0x0800_0000 · SRAM 96 KB at 0x2000_0000
-#   48-pin UFQFPN48/WLCSP49 · 36 GPIOs · 10 regular ADC channels
+#   UFQFPN48 (48 pins) / WLCSP49 (49 balls) · 36 GPIOs · 10 regular ADC channels
 #
-# Ordering suffixes (package + temperature 6 + packing):
-#   U6, U6TR, Y6, Y6TR
+# Ordering suffixes (package + temperature 6/7 + packing):
+#   U6, U6TR, U7, U7TR, Y6, Y6TR, Y7, Y7TR
+#
+# Temperature grades: 6 = -40..85 °C, 7 = -40..105 °C. The datasheet ordering
+# schemes also define grade 3 (125 °C) for some part numbers and other packing
+# or programmed-part options; this package/suffix list is not exhaustive.
 
 name: "stm32f401ce"
 arch: "arm"
@@ -46,11 +50,16 @@ gpio_input_thresholds:
 # Descriptive ordering data. The engine ignores these keys; the focused
 # `stm32_variant_geometry` gate parses and checks them against ST's tables.
 package: "UFQFPN48/WLCSP49"
-pin_count: 48
+# DS9716 section 8 / DS10086 section 8: pin-count code C = 48/49 pins.
+# UFQFPN48 has 48 pins; WLCSP49 has 49 balls. Both bond out the same 36
+# GPIOs and 10 regular ADC channels.
+packages:
+  UFQFPN48: { pin_count: 48 }
+  WLCSP49: { pin_count: 49 }
 gpio_pin_count: 36
 adc_channels: 10
 variant: "xE"
-orderable_suffixes: ["U6", "U6TR", "Y6", "Y6TR"]
+orderable_suffixes: ["U6", "U6TR", "U7", "U7TR", "Y6", "Y6TR", "Y7", "Y7TR"]
 
 flash:
   base: 0x08000000

@@ -27,8 +27,12 @@
 #   Flash 256 KB at 0x0800_0000 · SRAM 64 KB at 0x2000_0000
 #   100-pin LQFP100/UFBGA100 · 81 GPIOs · 16 regular ADC channels
 #
-# Ordering suffixes (package + temperature 6 + packing):
-#   T6, T6TR, H6, H6TR
+# Ordering suffixes (package + temperature 6/7 + packing):
+#   T6, T6TR, T7, T7TR, H6, H6TR, H7, H7TR
+#
+# Temperature grades: 6 = -40..85 °C, 7 = -40..105 °C. The datasheet ordering
+# schemes also define grade 3 (125 °C) for some part numbers and other packing
+# or programmed-part options; this package/suffix list is not exhaustive.
 
 name: "stm32f401vc"
 arch: "arm"
@@ -50,7 +54,7 @@ pin_count: 100
 gpio_pin_count: 81
 adc_channels: 16
 variant: "xC"
-orderable_suffixes: ["T6", "T6TR", "H6", "H6TR"]
+orderable_suffixes: ["T6", "T6TR", "T7", "T7TR", "H6", "H6TR", "H7", "H7TR"]
 
 flash:
   base: 0x08000000

@@ -11,8 +11,8 @@
 //! inherit its base part's memory or package data.
 //!
 //! Sources:
-//!   * ST DS5792 Rev 7 / DocID15060 — STM32F103x4/x6 low-density, Tables 2,
-//!     5 and 55.
+//!   * ST DS5792 Rev 7 / DocID15060 — STM32F103x4/x6 low-density, Table 2,
+//!     Table 5 and ordering Table 58.
 //!   * ST DS9716 Rev 11 — STM32F401xB/xC, Table 2 and section 8.
 //!   * ST DS10086 Rev 5 — STM32F401xD/xE, Table 2 and section 8.
 //!   * ST DS8626 Rev 12 — STM32F405xx/STM32F407xx, Table 2 and section 7.
@@ -30,7 +30,7 @@ use labwired_config::{ChipDescriptor, SystemManifest, BUILTIN_CHIP_NAMES};
 use labwired_core::bus::SystemBus;
 use labwired_core::system::cortex_m::configure_cortex_m;
 use labwired_core::Bus;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -57,17 +57,17 @@ struct Variant {
 
 const T4: &[&str] = &["U6A", "U6ATR", "U7A", "U7ATR"];
 const C4: &[&str] = &["T6A", "T6ATR", "T7A", "T7ATR"];
-const R4: &[&str] = &[
-    "T6A", "T6ATR", "T7A", "T7ATR", "H6A", "H6ATR", "H7A", "H7ATR",
-];
-const C48: &[&str] = &["U6", "U6TR", "Y6", "Y6TR"];
-const R64: &[&str] = &["T6", "T6TR"];
-const V100: &[&str] = &["T6", "T6TR", "H6", "H6TR"];
+const R4_LQFP: &[&str] = &["T6A", "T6ATR", "T7A", "T7ATR"];
+const R4_TFBGA: &[&str] = &["H6A", "H6ATR", "H7A", "H7ATR"];
+const C48: &[&str] = &["U6", "U6TR", "U7", "U7TR", "Y6", "Y6TR", "Y7", "Y7TR"];
+const R64: &[&str] = &["T6", "T6TR", "T7", "T7TR"];
+const V100: &[&str] = &["T6", "T6TR", "T7", "T7TR", "H6", "H6TR", "H7", "H7TR"];
 const V100_1M: &[&str] = &["T6", "T6TR", "T7", "T7TR"];
 const I176: &[&str] = &["T6", "T6TR", "T7", "T7TR", "H6", "H6TR", "H7", "H7TR"];
+const C_PACKAGE_PINS: &[(&str, u64)] = &[("UFQFPN48", 48), ("WLCSP49", 49)];
 
 const VARIANTS: &[Variant] = &[
-    // ── STM32F103 low-density x4/x6 (DS5792 Table 2/5/55) ───────────────────
+    // ── STM32F103 low-density x4/x6 (DS5792 Table 2/5/58) ───────────────────
     Variant {
         name: "stm32f103t4",
         family: Family::F103,
@@ -125,26 +125,52 @@ const VARIANTS: &[Variant] = &[
         family: Family::F103,
         flash: 16 * 1024,
         ram: 6 * 1024,
-        package: "LQFP64/TFBGA64",
+        package: "LQFP64",
         pin_count: 64,
         gpio_pin_count: 51,
         adc_channels: 16,
         modelled_analog: 16,
         variant: "x4",
-        suffixes: R4,
+        suffixes: R4_LQFP,
     },
     Variant {
         name: "stm32f103r6",
         family: Family::F103,
         flash: 32 * 1024,
         ram: 10 * 1024,
-        package: "LQFP64/TFBGA64",
+        package: "LQFP64",
         pin_count: 64,
         gpio_pin_count: 51,
         adc_channels: 16,
         modelled_analog: 16,
         variant: "x6",
-        suffixes: R4,
+        suffixes: R4_LQFP,
+    },
+    Variant {
+        name: "stm32f103r4h",
+        family: Family::F103,
+        flash: 16 * 1024,
+        ram: 6 * 1024,
+        package: "TFBGA64",
+        pin_count: 64,
+        gpio_pin_count: 51,
+        adc_channels: 15,
+        modelled_analog: 15,
+        variant: "x4",
+        suffixes: R4_TFBGA,
+    },
+    Variant {
+        name: "stm32f103r6h",
+        family: Family::F103,
+        flash: 32 * 1024,
+        ram: 10 * 1024,
+        package: "TFBGA64",
+        pin_count: 64,
+        gpio_pin_count: 51,
+        adc_channels: 15,
+        modelled_analog: 15,
+        variant: "x6",
+        suffixes: R4_TFBGA,
     },
     // ── STM32F401xB/xC (DS9716 Table 2 & ordering scheme) ───────────────────
     Variant {
@@ -424,7 +450,7 @@ fn the_inventory_ids_are_public_builtins() {
         VARIANTS.len(),
         "inventory ids must be unique"
     );
-    assert_eq!(inventory.len(), 23, "unexpected inventory size");
+    assert_eq!(inventory.len(), 25, "unexpected inventory size");
     for name in &inventory {
         assert!(
             BUILTIN_CHIP_NAMES.contains(name),
@@ -455,7 +481,32 @@ fn variant_geometry_matches_the_st_datasheets() {
 
         let doc = raw_yaml(v.name);
         assert_eq!(doc["package"].as_str(), Some(v.package), "{}", v.name);
-        assert_eq!(doc["pin_count"].as_u64(), Some(v.pin_count), "{}", v.name);
+        if doc.get("packages").is_some() {
+            // The C-package F401s group UFQFPN48 and WLCSP49. Their physical
+            // pin/ball counts differ (48 vs 49), so the descriptor must carry
+            // the exact per-package counts instead of one ambiguous pin_count.
+            let packages = doc["packages"]
+                .as_mapping()
+                .unwrap_or_else(|| panic!("{} packages is not a map", v.name));
+            let got: BTreeMap<&str, u64> = packages
+                .iter()
+                .map(|(name, body)| {
+                    (
+                        name.as_str().expect("package name"),
+                        body["pin_count"].as_u64().expect("package pin_count"),
+                    )
+                })
+                .collect();
+            let want: BTreeMap<&str, u64> = C_PACKAGE_PINS.iter().copied().collect();
+            assert_eq!(got, want, "{} package pin counts", v.name);
+            assert!(
+                doc.get("pin_count").is_none(),
+                "{} keeps a package-ambiguous top-level pin_count",
+                v.name
+            );
+        } else {
+            assert_eq!(doc["pin_count"].as_u64(), Some(v.pin_count), "{}", v.name);
+        }
         assert_eq!(
             doc["gpio_pin_count"].as_u64(),
             Some(v.gpio_pin_count),
@@ -512,13 +563,34 @@ fn variant_analog_pads_follow_the_package_featured_map() {
     };
     for v in VARIANTS {
         let chip = load(v.name);
-        let expected = f1_f4(v.modelled_analog == 16);
+        let expected = if v.adc_channels == 15 {
+            // TFBGA64 R4/R6: PC3 is VREF+, so IN13 has no pad. Keep the
+            // family channel numbers for the five PC pads that are bonded.
+            let mut pads = f1_f4(false);
+            pads.extend([
+                ("PC0".to_string(), 10),
+                ("PC1".to_string(), 11),
+                ("PC2".to_string(), 12),
+                ("PC4".to_string(), 14),
+                ("PC5".to_string(), 15),
+            ]);
+            pads
+        } else {
+            f1_f4(v.modelled_analog == 16)
+        };
         let got: Vec<(String, u8)> = chip
             .analog_pins
             .iter()
             .map(|(pad, pin)| (pad.clone(), pin.channel))
             .collect();
         assert_eq!(got, expected, "{} analog pin map", v.name);
+        if v.adc_channels == 15 {
+            assert!(
+                !chip.analog_pins.contains_key("PC3"),
+                "{} must not expose PC3/ADC12_IN13 on TFBGA64",
+                v.name
+            );
+        }
     }
 }
 
@@ -529,6 +601,13 @@ fn variant_pin_labels_use_the_reference_port_groups() {
         let expected = match v.family {
             Family::F103 | Family::F401 => 3 * 16,
             Family::F407 => 5 * 16,
+        };
+        // TFBGA64 replaces PC3 with VREF+; the package-specific descriptor
+        // omits that pad from its authoritative pin-label map.
+        let expected = if v.adc_channels == 15 {
+            expected - 1
+        } else {
+            expected
         };
         assert_eq!(chip.pins.len(), expected, "{} pin-label map", v.name);
         for (port, gpio) in [("PA", "gpioa"), ("PB", "gpiob"), ("PC", "gpioc")] {
