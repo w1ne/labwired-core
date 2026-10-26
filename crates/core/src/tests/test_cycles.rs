@@ -111,16 +111,14 @@ fn machine_run_records_step_profile_counters() {
     assert_eq!(profile.peripheral_ticks, 2);
     assert_eq!(profile.peripheral_ticked_entries, 0);
     assert_eq!(profile.bus_tick_entries, 0);
-    // The feature-off walk retains the historical RCC entry, so it visits uart1,
-    // rcc, and systick twice (6 entries). With the scheduler enabled, systick is
-    // event-driven and RCC is statically walk-free, leaving only uart1 (2 entries).
-    // `gpioa` is skipped in both builds because it has no tick implementation.
-    // This is a profiling diagnostic; skipping these no-op calls changes no
-    // peripheral behavior.
+    // The index omits gpioa and RCC because neither needs a legacy tick. Without
+    // the scheduler, uart1 and systick are visited twice (4 entries); with it,
+    // systick is event-driven, leaving uart1 (2 entries). This profiling
+    // diagnostic reflects skipped no-op calls, which do not change behavior.
     let expected_legacy_tick_entries = if cfg!(feature = "event-scheduler") {
         2
     } else {
-        6
+        4
     };
     assert_eq!(profile.legacy_tick_entries, expected_legacy_tick_entries);
 }

@@ -101,10 +101,8 @@ impl SystemBus {
 
     #[inline]
     fn legacy_tick_index_active(p: &PeripheralEntry) -> bool {
-        // Keep the feature-off walk compatible: `needs_legacy_walk()` only
-        // permits deleting entries when the event-scheduler path is enabled.
-        if cfg!(feature = "event-scheduler")
-            && (!p.dev.needs_legacy_walk() || p.dev.uses_scheduler())
+        if !p.dev.needs_legacy_walk()
+            || (cfg!(feature = "event-scheduler") && p.dev.uses_scheduler())
         {
             return false;
         }
