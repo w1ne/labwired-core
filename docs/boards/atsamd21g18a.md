@@ -136,6 +136,8 @@ cd crates/firmware-samd21-demo && cargo build --release
 
 ## Related
 
+- [ATSAMD21 A-variant orderable geometries](atsamd21-variants.md) — the other
+  E/G/J A-suffix parts on this same engine
 - [Board onboarding playbook](../board_onboarding_playbook.md)
 - [Onboarding candidates](../onboarding-candidates.md) — SAMD51/SAME54 are the
   cheap follow-ons now that the SAM family exists
