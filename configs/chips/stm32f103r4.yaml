@@ -33,8 +33,9 @@
 #   Flash 16 KB at 0x0800_0000 · SRAM 6 KB at 0x2000_0000
 #   64-pin LQFP64 · 51 GPIOs · 16 regular ADC channels
 #
-# Ordering suffixes (LQFP64 + temperature 6/7 + internal code A + carrier):
-#   T6A, T6ATR, T7A, T7ATR
+# Ordering suffixes (LQFP64 + temperature 6/7 + optional internal code A + carrier):
+#   T6, T6TR, T6A, T6ATR, T7, T7TR, T7A, T7ATR
+#   Programmed-part options (xxx) are not enumerated.
 #
 # The TFBGA64 package of the same die is a separate descriptor,
 # stm32f103r4h, because its PC3 pad is VREF+ and it exposes only 15 ADC
@@ -60,7 +61,7 @@ pin_count: 64
 gpio_pin_count: 51
 adc_channels: 16
 variant: "x4"
-orderable_suffixes: ["T6A", "T6ATR", "T7A", "T7ATR"]
+orderable_suffixes: ["T6", "T6TR", "T6A", "T6ATR", "T7", "T7TR", "T7A", "T7ATR"]
 
 flash:
   base: 0x08000000

@@ -32,8 +32,9 @@
 #   Flash 16 KB at 0x0800_0000 · SRAM 6 KB at 0x2000_0000
 #   36-pin VFQFPN36 · 26 GPIOs · 10 regular ADC channels
 #
-# Ordering suffixes (package + temperature 6/7 + internal code A + carrier):
-#   U6A, U6ATR, U7A, U7ATR
+# Ordering suffixes (package + temperature 6/7 + optional internal code A + carrier):
+#   U6, U6TR, U6A, U6ATR, U7, U7TR, U7A, U7ATR
+#   Programmed-part options (xxx) are not enumerated.
 
 name: "stm32f103t4"
 arch: "arm"
@@ -55,7 +56,7 @@ pin_count: 36
 gpio_pin_count: 26
 adc_channels: 10
 variant: "x4"
-orderable_suffixes: ["U6A", "U6ATR", "U7A", "U7ATR"]
+orderable_suffixes: ["U6", "U6TR", "U6A", "U6ATR", "U7", "U7TR", "U7A", "U7ATR"]
 
 flash:
   base: 0x08000000

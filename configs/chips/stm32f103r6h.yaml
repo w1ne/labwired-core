@@ -34,8 +34,9 @@
 #   64-ball TFBGA64 · 51 GPIOs (DS5792 Table 2 Rx group) · 15 regular ADC
 #   channels · PC3 is VREF+ on this package, so ADC12_IN13/PC3 is not bonded
 #
-# Ordering suffixes (TFBGA64 + temperature 6/7 + internal code A + carrier):
-#   H6A, H6ATR, H7A, H7ATR
+# Ordering suffixes (TFBGA64 + temperature 6/7 + optional internal code A + carrier):
+#   H6, H6TR, H6A, H6ATR, H7, H7TR, H7A, H7ATR
+#   Programmed-part options (xxx) are not enumerated.
 #
 # The LQFP64 package of the same die is the separate stm32f103r6
 # descriptor, which does bond PC3 and therefore exposes all 16 ADC channels.
@@ -60,7 +61,7 @@ pin_count: 64
 gpio_pin_count: 51
 adc_channels: 15
 variant: "x6"
-orderable_suffixes: ["H6A", "H6ATR", "H7A", "H7ATR"]
+orderable_suffixes: ["H6", "H6TR", "H6A", "H6ATR", "H7", "H7TR", "H7A", "H7ATR"]
 
 flash:
   base: 0x08000000

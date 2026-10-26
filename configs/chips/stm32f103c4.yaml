@@ -30,10 +30,12 @@
 # EXACT ORDERABLE GEOMETRY for STM32F103C4 (STM32F103 low-density x4).
 #
 #   Flash 16 KB at 0x0800_0000 · SRAM 6 KB at 0x2000_0000
-#   48-pin LQFP48 · 37 GPIOs · 10 regular ADC channels
+#   48-pin LQFP48/UFQFPN48 · 37 GPIOs · 10 regular ADC channels
 #
-# Ordering suffixes (package + temperature 6/7 + internal code A + carrier):
-#   T6A, T6ATR, T7A, T7ATR
+# Ordering suffixes (package + temperature 6/7 + optional internal code A + carrier):
+#   T6, T6TR, T6A, T6ATR, T7, T7TR, T7A, T7ATR
+#   U6, U6TR, U6A, U6ATR, U7, U7TR, U7A, U7ATR
+#   Programmed-part options (xxx) are not enumerated.
 
 name: "stm32f103c4"
 arch: "arm"
@@ -50,12 +52,12 @@ gpio_input_thresholds:
 
 # Descriptive ordering data. The engine ignores these keys; the focused
 # `stm32_variant_geometry` gate parses and checks them against DS5792.
-package: "LQFP48"
+package: "LQFP48/UFQFPN48"
 pin_count: 48
 gpio_pin_count: 37
 adc_channels: 10
 variant: "x4"
-orderable_suffixes: ["T6A", "T6ATR", "T7A", "T7ATR"]
+orderable_suffixes: ["T6", "T6TR", "T6A", "T6ATR", "T7", "T7TR", "T7A", "T7ATR", "U6", "U6TR", "U6A", "U6ATR", "U7", "U7TR", "U7A", "U7ATR"]
 
 flash:
   base: 0x08000000
@@ -395,7 +397,7 @@ peripherals:
     config:
       debug_schema: "../peripherals/stm32f103/usart3.yaml"
 
-# Regular ADC inputs by pad on the LQFP48 package: ADC12_IN0..IN9.
+# Regular ADC inputs on the shared LQFP48/UFQFPN48 pin map: ADC12_IN0..IN9.
 # The family allocation is PA0..PA7 = IN0..IN7, PB0/PB1 = IN8/IN9 and, on
 # the 64-pin R package only, PC0..PC5 = IN10..IN15 (DS5792 Table 2/5).
 # Consumed by co-simulation `board.analog.<pad>_volts`; pads not listed are refused.

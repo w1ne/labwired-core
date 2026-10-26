@@ -55,10 +55,13 @@ struct Variant {
     suffixes: &'static [&'static str],
 }
 
-const T4: &[&str] = &["U6A", "U6ATR", "U7A", "U7ATR"];
-const C4: &[&str] = &["T6A", "T6ATR", "T7A", "T7ATR"];
-const R4_LQFP: &[&str] = &["T6A", "T6ATR", "T7A", "T7ATR"];
-const R4_TFBGA: &[&str] = &["H6A", "H6ATR", "H7A", "H7ATR"];
+const T4: &[&str] = &["U6", "U6TR", "U6A", "U6ATR", "U7", "U7TR", "U7A", "U7ATR"];
+const C4: &[&str] = &[
+    "T6", "T6TR", "T6A", "T6ATR", "T7", "T7TR", "T7A", "T7ATR", "U6", "U6TR", "U6A", "U6ATR", "U7",
+    "U7TR", "U7A", "U7ATR",
+];
+const R4_LQFP: &[&str] = &["T6", "T6TR", "T6A", "T6ATR", "T7", "T7TR", "T7A", "T7ATR"];
+const R4_TFBGA: &[&str] = &["H6", "H6TR", "H6A", "H6ATR", "H7", "H7TR", "H7A", "H7ATR"];
 const C48: &[&str] = &["U6", "U6TR", "U7", "U7TR", "Y6", "Y6TR", "Y7", "Y7TR"];
 const R64: &[&str] = &["T6", "T6TR", "T7", "T7TR"];
 const V100: &[&str] = &["T6", "T6TR", "T7", "T7TR", "H6", "H6TR", "H7", "H7TR"];
@@ -99,7 +102,7 @@ const VARIANTS: &[Variant] = &[
         family: Family::F103,
         flash: 16 * 1024,
         ram: 6 * 1024,
-        package: "LQFP48",
+        package: "LQFP48/UFQFPN48",
         pin_count: 48,
         gpio_pin_count: 37,
         adc_channels: 10,
@@ -112,7 +115,7 @@ const VARIANTS: &[Variant] = &[
         family: Family::F103,
         flash: 32 * 1024,
         ram: 10 * 1024,
-        package: "LQFP48",
+        package: "LQFP48/UFQFPN48",
         pin_count: 48,
         gpio_pin_count: 37,
         adc_channels: 10,
@@ -292,6 +295,19 @@ const VARIANTS: &[Variant] = &[
         suffixes: R64,
     },
     Variant {
+        name: "stm32f401re",
+        family: Family::F401,
+        flash: 512 * 1024,
+        ram: 96 * 1024,
+        package: "LQFP64",
+        pin_count: 64,
+        gpio_pin_count: 50,
+        adc_channels: 16,
+        modelled_analog: 16,
+        variant: "xE",
+        suffixes: R64,
+    },
+    Variant {
         name: "stm32f401vd",
         family: Family::F401,
         flash: 384 * 1024,
@@ -450,7 +466,7 @@ fn the_inventory_ids_are_public_builtins() {
         VARIANTS.len(),
         "inventory ids must be unique"
     );
-    assert_eq!(inventory.len(), 25, "unexpected inventory size");
+    assert_eq!(inventory.len(), 26, "unexpected inventory size");
     for name in &inventory {
         assert!(
             BUILTIN_CHIP_NAMES.contains(name),
