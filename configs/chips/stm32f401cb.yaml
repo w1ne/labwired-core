@@ -1,0 +1,378 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+# SOURCE OF TRUTH for geometry, package and ordering data:
+#   ST DS9716 Rev 11, "STM32F401xB STM32F401xC" datasheet, Table 2
+#   (features and peripheral counts) and section 8 (ordering information):
+#   https://www.st.com/resource/en/datasheet/stm32f401cc.pdf
+#   ST DS10086 Rev 5, "STM32F401xD STM32F401xE" datasheet, Table 2 and
+#   section 8 (ordering information):
+#   https://www.st.com/resource/en/datasheet/stm32f401re.pdf
+#
+# SOURCE OF TRUTH for peripheral bases/IRQs:
+#   configs/chips/stm32f401.yaml (STM32F401RE public engine), bound to RM0368
+#   and the vendored STM32F401 SVD.
+#
+# REUSE BOUNDARY, STATED PLAINLY:
+#   This is an exact orderable GEOMETRY descriptor (flash, SRAM, package,
+#   GPIO/ADC channel counts, suffix) on the public STM32F401RE peripheral map,
+#   not a new peripheral model. The reused map's instance set/package
+#   bond-out is not separately claimed for xB/xC parts; extra ports and
+#   package-specific pin muxing remain exactly what stm32f401.yaml models. No silicon capture exists for these specific orderable parts.
+
+# EXACT ORDERABLE GEOMETRY for STM32F401CB (STM32F401 xB).
+#
+#   Flash 128 KB at 0x0800_0000 · SRAM 64 KB at 0x2000_0000
+#   48-pin UFQFPN48/WLCSP49 · 36 GPIOs · 10 regular ADC channels
+#
+# Ordering suffixes (package + temperature 6 + packing):
+#   U6, U6TR, Y6, Y6TR
+
+name: "stm32f401cb"
+arch: "arm"
+core: "cortex-m4"
+registers_count: 150
+# STM32F401 maximum core clock, 84 MHz (DS9716/DS10086).
+cpu_hz: 84_000_000
+# DS9716 Rev 11 / DS10086 Rev 5, I/O static characteristics, FT and NRST I/O:
+# VIL max 0.3·VDD, VIH min 0.7·VDD.
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.3
+  vih: 0.7
+
+# Descriptive ordering data. The engine ignores these keys; the focused
+# `stm32_variant_geometry` gate parses and checks them against ST's tables.
+package: "UFQFPN48/WLCSP49"
+pin_count: 48
+gpio_pin_count: 36
+adc_channels: 10
+variant: "xB"
+orderable_suffixes: ["U6", "U6TR", "Y6", "Y6TR"]
+
+flash:
+  base: 0x08000000
+  size: "128KB"
+ram:
+  base: 0x20000000
+  size: "64KB"
+
+# Family-wide P<port><bit> label map for the ports the reference engine
+# declares. Package bond-out is a board fact; this map only says which GPIO
+# register/bit a label names when that pad is bonded.
+pins:
+  PA0: { gpio: "gpioa", bit: 0 }
+  PA1: { gpio: "gpioa", bit: 1 }
+  PA2: { gpio: "gpioa", bit: 2 }
+  PA3: { gpio: "gpioa", bit: 3 }
+  PA4: { gpio: "gpioa", bit: 4 }
+  PA5: { gpio: "gpioa", bit: 5 }
+  PA6: { gpio: "gpioa", bit: 6 }
+  PA7: { gpio: "gpioa", bit: 7 }
+  PA8: { gpio: "gpioa", bit: 8 }
+  PA9: { gpio: "gpioa", bit: 9 }
+  PA10: { gpio: "gpioa", bit: 10 }
+  PA11: { gpio: "gpioa", bit: 11 }
+  PA12: { gpio: "gpioa", bit: 12 }
+  PA13: { gpio: "gpioa", bit: 13 }
+  PA14: { gpio: "gpioa", bit: 14 }
+  PA15: { gpio: "gpioa", bit: 15 }
+  PB0: { gpio: "gpiob", bit: 0 }
+  PB1: { gpio: "gpiob", bit: 1 }
+  PB2: { gpio: "gpiob", bit: 2 }
+  PB3: { gpio: "gpiob", bit: 3 }
+  PB4: { gpio: "gpiob", bit: 4 }
+  PB5: { gpio: "gpiob", bit: 5 }
+  PB6: { gpio: "gpiob", bit: 6 }
+  PB7: { gpio: "gpiob", bit: 7 }
+  PB8: { gpio: "gpiob", bit: 8 }
+  PB9: { gpio: "gpiob", bit: 9 }
+  PB10: { gpio: "gpiob", bit: 10 }
+  PB11: { gpio: "gpiob", bit: 11 }
+  PB12: { gpio: "gpiob", bit: 12 }
+  PB13: { gpio: "gpiob", bit: 13 }
+  PB14: { gpio: "gpiob", bit: 14 }
+  PB15: { gpio: "gpiob", bit: 15 }
+  PC0: { gpio: "gpioc", bit: 0 }
+  PC1: { gpio: "gpioc", bit: 1 }
+  PC2: { gpio: "gpioc", bit: 2 }
+  PC3: { gpio: "gpioc", bit: 3 }
+  PC4: { gpio: "gpioc", bit: 4 }
+  PC5: { gpio: "gpioc", bit: 5 }
+  PC6: { gpio: "gpioc", bit: 6 }
+  PC7: { gpio: "gpioc", bit: 7 }
+  PC8: { gpio: "gpioc", bit: 8 }
+  PC9: { gpio: "gpioc", bit: 9 }
+  PC10: { gpio: "gpioc", bit: 10 }
+  PC11: { gpio: "gpioc", bit: 11 }
+  PC12: { gpio: "gpioc", bit: 12 }
+  PC13: { gpio: "gpioc", bit: 13 }
+  PC14: { gpio: "gpioc", bit: 14 }
+  PC15: { gpio: "gpioc", bit: 15 }
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40023800
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32f401/rcc.yaml"
+      profile: "stm32f4"
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x40020000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32f401/gpioa.yaml"
+      profile: "stm32v2"
+      # SWD/JTAG defaults (RM0368 §8.4 / STM32F401 SVD): PA13/14/15 in AF mode.
+      reset_moder: 0xA8000000
+      reset_pupdr: 0x64000000
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x40020400
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32f401/gpiob.yaml"
+      profile: "stm32v2"
+      # JTAG defaults (RM0368 §8.4 / STM32F401 SVD): PB3 (JTDO/SWO), PB4 (NJTRST).
+      reset_moder: 0x00000280
+      reset_ospeedr: 0x000000C0
+      reset_pupdr: 0x00000100
+  - id: "gpioc"
+    type: "gpio"
+    base_address: 0x40020800
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32f401/gpioc.yaml"
+      profile: "stm32v2"
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+  - id: "uart2"
+    type: "uart"
+    base_address: 0x40004400
+    size: "1KB"
+    irq: 38
+    config:
+      debug_schema: "../peripherals/stm32f401/usart2.yaml"
+  - id: "i2c1"
+    type: "i2c"
+    base_address: 0x40005400
+    size: "1KB"
+    # I2C1 has TWO NVIC lines on F4 (RM0368 §11.1.3): EV = 31 (below) and
+    # ER = 32. AF/BERR/ARLO/OVR raise ER under CR2.ITERREN, and an
+    # interrupt-mode HAL only learns an address was NACKed from the ER
+    # handler — STM32duino 3.x drives I2C via HAL_I2C_Master_Transmit_IT, so
+    # without ER every NACK surfaced as a 100 ms timeout instead of a NACK.
+    irq: 31
+    config:
+      debug_schema: "../peripherals/stm32f401/i2c1.yaml"
+      irq_error: 32
+  - id: "flash"
+    type: "flash"
+    base_address: 0x40023C00
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32f401/flash.yaml"
+      # F4 embedded-flash interface (RM0368 §3.8): ACR reset 0 (no F1-style
+      # prefetch default), CR LOCK at bit 31, OPTCR present. The F1 profile's
+      # 0x30 ACR default and bit-7 LOCK are silicon-wrong for F401.
+      profile: "stm32f4"
+  - id: "pwr"
+    type: "pwr"
+    base_address: 0x40007000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32f401/pwr.yaml"
+      # F4 PWR (RM0368 §5.4): only PWR_CR/PWR_CSR exist, both reset 0. The
+      # default L4 model surfaced CR1=0x200 / CR3=0x8000 and phantom PUCRx regs.
+      profile: "stm32f4"
+  - id: "uart1"
+    type: "uart"
+    base_address: 0x40011000
+    size: "1KB"
+    irq: 37
+    config:
+      debug_schema: "../peripherals/stm32f401/usart1.yaml"
+  # TIM2 — 32-bit general-purpose timer (RM0368 §13). On APB1, clock-gated by
+  # RCC_APB1ENR.TIM2EN (bit 0); unclocked out of reset, so register writes are
+  # dropped until firmware enables the gate.
+  - id: "tim2"
+    type: "timer"
+    base_address: 0x40000000
+    size: "1KB"
+    irq: 28
+    config:
+      input_capture: "stm32f4"
+      debug_schema: "../peripherals/stm32f401/tim2.yaml"
+      width: 32
+    clock: { reg: "apb1enr", bit: 0 }
+  # TIM3 — 16-bit general-purpose timer (RM0368 §13), APB1, IRQ 29. Clock-gated
+  # by RCC_APB1ENR.TIM3EN (bit 1); unclocked out of reset like TIM2. The pin map
+  # advertises TIM3 on PA6/PA7, PB0/PB1, PB4/PB5 and PC6–PC9.
+  - id: "tim3"
+    type: "timer"
+    base_address: 0x40000400
+    size: "1KB"
+    irq: 29
+    config:
+      debug_schema: "../peripherals/stm32f401/tim3.yaml"
+      width: 16
+    clock: { reg: "apb1enr", bit: 1 }
+  # TIM4 — 16-bit general-purpose timer (RM0368 §13), APB1, IRQ 30. Clock-gated
+  # by RCC_APB1ENR.TIM4EN (bit 2); the pin map advertises it on PB6–PB9.
+  - id: "tim4"
+    type: "timer"
+    base_address: 0x40000800
+    size: "1KB"
+    irq: 30
+    config:
+      debug_schema: "../peripherals/stm32f401/tim4.yaml"
+      width: 16
+    clock: { reg: "apb1enr", bit: 2 }
+  # SPI1 — classic STM32 SPI (RM0368 §20). On APB2, clock-gated by
+  # RCC_APB2ENR.SPI1EN (bit 12). F4 silicon CR masks mirror the F407:
+  # CR2 bit 4 (FRF/TI-mode) writable → 0xF7; CR1 bit 12 (CRCNEXT) not latched
+  # → 0xEFFF.
+  - id: "spi1"
+    type: "spi"
+    base_address: 0x40013000
+    size: "1KB"
+    irq: 35
+    config:
+      debug_schema: "../peripherals/stm32f401/spi1.yaml"
+      cr2_mask: 0xF7
+      cr1_mask: 0xEFFF
+    clock: { reg: "apb2enr", bit: 12 }
+  # ADC1 — 12-bit SAR ADC (RM0368 §11). On APB2, clock-gated by
+  # RCC_APB2ENR.ADC1EN (bit 8); unclocked out of reset.
+  - id: "adc1"
+    type: "adc"
+    base_address: 0x40012000
+    size: "1KB"
+    irq: 18
+    clock: { reg: "apb2enr", bit: 8 }
+    config:
+      debug_schema: "../peripherals/stm32f401/adc1.yaml"
+      profile: "stm32f4"
+  # IWDG — independent watchdog (RM0368 §14). Clocked from the dedicated LSI
+  # oscillator, NOT an APB/AHB peripheral-enable bit, so it carries no `clock:`
+  # gate. The KR key (0x5555) protects PR/RLR writes instead.
+  - id: "iwdg"
+    type: "iwdg"
+    base_address: 0x40003000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32f401/iwdg.yaml"
+  # RTC — calendar real-time clock (RM0368 §16; same IP as the L4 `rtc` model).
+  # Lives in the backup domain, clock-enabled via RCC_BDCR.RTCEN — outside the
+  # APB/AHB peripheral-enable gate this model expresses, so it is left ungated.
+  - id: "rtc"
+    type: "rtc"
+    base_address: 0x40002800
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32f401/rtc.yaml"
+  # EXTI — external interrupt/event controller (RM0368 §10.2). The F401
+  # implements 23 lines (0..22): 16 GPIO + PVD + RTC alarm + USB OTG FS wakeup
+  # + RTC tamper/timestamp + RTC wakeup. Sits on APB2 but has no RCC enable bit
+  # of its own — the SYSCFG clock gates the line *muxing*, not the EXTI block.
+  # SYSCFG (RM0090 §9 / RM0368 §7): EXTICR1..4 select the GPIO port of each
+  # EXTI line 0..15, so external edges reach EXTI only from the selected port.
+  # Clocked from RCC_APB2ENR.SYSCFGEN (bit 14).
+  - id: "syscfg"
+    type: "syscfg"
+    base_address: 0x40013800
+    size: "1KB"
+    clock: { reg: "apb2enr", bit: 14 }
+    config:
+      debug_schema: "../peripherals/stm32f401/syscfg.yaml"
+      profile: "stm32f4"
+  - id: "exti"
+    type: "exti"
+    base_address: 0x4001_3C00
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32f401/exti.yaml"
+      lines: 23
+  # NVIC is wired unconditionally for Cortex-M machines; this entry declares
+  # the tier1 irq class and pins the canonical base.
+  - id: "nvic"
+    type: "nvic"
+    base_address: 0xE000E100
+    size: "1KB"
+  - id: "dbgmcu"
+    type: "dbgmcu"
+    base_address: 0xE004_2000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32f401/dbg.yaml"
+      # DBGMCU_IDCODE per tests/fixtures/real_world/stm32f401.svd: resetValue
+      # 0x10006411 (DEV_ID=0x411, REV_ID=0x1000). The brief's assumed
+      # DEV_ID=0x433 (F401xD/xE per RM0368 §24.6.1) does not match the
+      # shipped SVD, which the SVD wins per project convention — using the
+      # SVD-verified value here instead.
+      idcode: 0x10006411
+  # TIM1 — advanced-control PWM timer (APB2, RM0368 §12). The `_pwm` id suffix
+  # declares the pwm class alongside timer. RCC_APB2ENR.TIM1EN (bit 0),
+  # verified against tests/fixtures/real_world/stm32f401.svd.
+  - id: "tim1_pwm"
+    type: "timer"
+    base_address: 0x4001_0000
+    size: "1KB"
+    irq: 25
+    clock: { reg: "apb2enr", bit: 0 }
+    config:
+      input_capture: "stm32f4"
+      debug_schema: "../peripherals/stm32f401/tim1.yaml"
+      advanced: true
+  # DMA1 / DMA2 — stream-based DMA controllers (RM0368 §9; same IP as F407,
+  # RM0090 §10). Eight streams each; DMA2 additionally supports
+  # memory-to-memory transfers (RM0368 §9.3.3). Clocked from RCC_AHB1ENR
+  # (DMA1EN bit 21, DMA2EN bit 22 — verified against the SVD).
+  - id: "dma1"
+    type: "stm32f4_dma"
+    base_address: 0x4002_6000
+    size: "1KB"
+    clock: { reg: "ahb1enr", bit: 21 }
+    config:
+      debug_schema: "../peripherals/stm32f401/dma1.yaml"
+      # DMA1_Stream0..7 NVIC positions, verified against
+      # tests/fixtures/real_world/stm32f401.svd: 11..17, then 47.
+      stream_irqs: [11, 12, 13, 14, 15, 16, 17, 47]
+  - id: "dma2"
+    type: "stm32f4_dma"
+    base_address: 0x4002_6400
+    size: "1KB"
+    clock: { reg: "ahb1enr", bit: 22 }
+    config:
+      debug_schema: "../peripherals/stm32f401/dma2.yaml"
+      dma2: true
+      # DMA2_Stream0..7 NVIC positions, verified against
+      # tests/fixtures/real_world/stm32f401.svd: 56..60, then 68..70.
+      stream_irqs: [56, 57, 58, 59, 60, 68, 69, 70]
+      # Peripheral requests as [stream, SxCR.CHSEL] (RM0368 Table 28, DMA2
+      # request mapping): SPI1_RX on stream 0 or 2, SPI1_TX on 3 or 5, all
+      # channel 3.
+      requests:
+        spi1_rx: [[0, 3], [2, 3]]
+        spi1_tx: [[3, 3], [5, 3]]
+
+# Regular ADC inputs by pad on the UFQFPN48/WLCSP49 package: ADC1_IN0..IN9.
+# PA0..PA7 = IN0..IN7, PB0/PB1 = IN8/IN9 and, on the 64/100-pin R/V
+# packages only, PC0..PC5 = IN10..IN15 (DS9716/DS10086 Table 2 and pinout).
+# Consumed by co-simulation `board.analog.<pad>_volts`; pads not listed are refused.
+analog_pins:
+  PA0: { peripheral: "adc1", channel: 0 }
+  PA1: { peripheral: "adc1", channel: 1 }
+  PA2: { peripheral: "adc1", channel: 2 }
+  PA3: { peripheral: "adc1", channel: 3 }
+  PA4: { peripheral: "adc1", channel: 4 }
+  PA5: { peripheral: "adc1", channel: 5 }
+  PA6: { peripheral: "adc1", channel: 6 }
+  PA7: { peripheral: "adc1", channel: 7 }
+  PB0: { peripheral: "adc1", channel: 8 }
+  PB1: { peripheral: "adc1", channel: 9 }
