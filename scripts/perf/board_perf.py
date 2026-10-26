@@ -1062,8 +1062,16 @@ def main() -> int:
         )
         return 2
 
+    chips = discover_chips()
+    if args.boards:
+        requested = set(args.boards.split(","))
+        missing = requested - set(chips)
+        if missing:
+            print(f"error: unknown/uncovered boards: {', '.join(sorted(missing))}", file=sys.stderr)
+            return 2
+        chips = {board: chip for board, chip in chips.items() if board in requested}
     try:
-        covered, waived = plan_coverage(discover_chips())
+        covered, waived = plan_coverage(chips)
     except CoverageError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2

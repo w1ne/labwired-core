@@ -647,6 +647,22 @@ def test_run_summary_separates_measured_skipped_and_never_measured(monkeypatch, 
     assert not re.search(r"^covered:", out, re.M), out
 
 
+def test_boards_argument_limits_the_run_to_the_requested_chip(monkeypatch, capsys, tmp_path):
+    _stub_a_full_run(monkeypatch, tmp_path, ["--boards", "stm32f103"])
+
+    assert bp.main() == 0
+    out = capsys.readouterr().out
+    assert re.search(r"^stm32f103\s", out, re.M), out
+    assert not re.search(r"^stm32f401\s", out, re.M), out
+
+
+def test_boards_argument_rejects_unknown_chips(monkeypatch, capsys, tmp_path):
+    _stub_a_full_run(monkeypatch, tmp_path, ["--boards", "not-a-chip"])
+
+    assert bp.main() == 2
+    assert "unknown/uncovered boards: not-a-chip" in capsys.readouterr().err
+
+
 def test_a_baseline_moves_a_board_from_never_measured_to_merely_skipped(
     monkeypatch, capsys, tmp_path
 ):

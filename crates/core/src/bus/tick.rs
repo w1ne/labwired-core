@@ -136,11 +136,13 @@ impl SystemBus {
 
     /// Config-time derivation of walk-deletability (issue: browser-perf chain).
     ///
-    /// Returns `true` iff EVERY peripheral currently on the bus is provably
-    /// *walk-independent for all reachable firmware states* — meaning deleting
-    /// the per-cycle legacy walk (`legacy_tick_indices` iteration in
-    /// `tick_peripherals_phase1`) cannot change any observable output no matter
-    /// what the firmware does. A peripheral qualifies when either:
+    /// Returns `true` iff EVERY peripheral currently on the bus is either
+    /// scheduler-driven or inactive under its current-state predicate, so the
+    /// per-cycle legacy walk (`legacy_tick_indices` iteration in
+    /// `tick_peripherals_phase1`) can be deleted for the current state. This
+    /// is not a proof for every reachable firmware state: dynamic models must
+    /// restore the walk when later writes or input changes make them active.
+    /// A peripheral qualifies when either:
     ///
     /// 1. `uses_scheduler()` — the walk loop already returns `default()` for it
     ///    every cycle (it is driven by the event scheduler, not the walk), so
@@ -151,12 +153,12 @@ impl SystemBus {
     ///    walk). See the `Peripheral::needs_legacy_walk` contract.
     ///
     /// CONSERVATIVE by construction: the default `needs_legacy_walk()` is
-    /// `true`, so any peripheral whose walk-independence is not *proven* (an
-    /// unknown native model, a timer/ADC/DMA/EXTI/SysTick whose `tick()` does
-    /// real work once firmware arms it, a declarative bank with timed inflight
-    /// events) forces `false` here and the walk stays on. Getting this wrong
-    /// would silently starve a peripheral of ticks, so the predicate errs
-    /// entirely toward keeping the walk.
+    /// `true`, so a walk-capable peripheral whose tick is active now (an
+    /// unknown native model, or a timer/ADC/DMA/EXTI/SysTick that firmware has
+    /// armed) keeps the walk on. Dynamic models can drop out while idle and
+    /// wake the walk again when an MMIO write or GPIO edge makes them active.
+    /// Getting the activity predicate wrong would silently starve a
+    /// peripheral of ticks, so unknown activity errs toward keeping the walk.
     ///
     /// Note this is strictly weaker than a hand `walk_deleted: true`: the hand
     /// flag can assert firmware-*specific* byte-identity (e.g. "this firmware
@@ -164,9 +166,9 @@ impl SystemBus {
     /// config-time predicate can prove. Such configs must keep the explicit
     /// opt-in.
     pub(crate) fn derive_walk_deletable(&self) -> bool {
-        self.peripherals
-            .iter()
-            .all(|p| p.dev.uses_scheduler() || !p.dev.needs_legacy_walk())
+        self.peripherals.iter().all(|p| {
+            p.dev.uses_scheduler() || !p.dev.needs_legacy_walk() || !p.dev.legacy_tick_active()
+        })
     }
 
     /// Re-run [`Self::derive_walk_deletable`] and latch it into
@@ -179,7 +181,21 @@ impl SystemBus {
     /// recompute the rom-boot path (`esp32c3_rom`) and the in-crate routing gates
     /// already perform; exposed publicly for out-of-crate test harnesses.
     pub fn recompute_walk_deletable(&mut self) {
-        self.legacy_walk_disabled = self.derive_walk_deletable();
+        self.legacy_walk_disabled = !self.legacy_walk_pinned_on && self.derive_walk_deletable();
+    }
+
+    /// Peripheral additions and replacements can make an already walk-free
+    /// bus need legacy ticks. Their index rebuild has already populated the
+    /// active tick set, so restore the walk when the new peripheral set no
+    /// longer satisfies the current-state deletion predicate.
+    pub(crate) fn restore_legacy_walk_if_active(&mut self) {
+        if self.legacy_walk_pinned_on {
+            self.legacy_walk_disabled = false;
+            return;
+        }
+        if self.legacy_walk_disabled && !self.derive_walk_deletable() {
+            self.legacy_walk_disabled = false;
+        }
     }
 
     pub(crate) fn tick_profile_entry_counts(&self) -> (usize, usize) {
@@ -869,7 +885,7 @@ impl SystemBus {
             // never fire. `read_gpio_input` asks each model for its own input
             // register, and answers the identical value for the Nordic ports
             // it already served.
-            const GPIO_PORT_IDS: [(&str, usize); 8] = [
+            const GPIO_PORT_IDS: [(&str, usize); 9] = [
                 ("gpio0", 0),
                 ("gpio1", 1),
                 ("gpio2", 2),
@@ -878,6 +894,8 @@ impl SystemBus {
                 ("gpiob", 1),
                 ("gpioc", 2),
                 ("gpiod", 3),
+                // NXP K32W041 exposes its 22-pad GPIO block as one port.
+                ("gpio", 0),
             ];
             // Resolved once, then cached — see `SystemBus::gpio_port_idx`. Doing
             // it per tick is eight linear scans of the peripheral list with a

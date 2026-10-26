@@ -101,7 +101,9 @@ impl SystemBus {
 
     #[inline]
     fn legacy_tick_index_active(p: &PeripheralEntry) -> bool {
-        if cfg!(feature = "event-scheduler") && p.dev.uses_scheduler() {
+        if !p.dev.needs_legacy_walk()
+            || (cfg!(feature = "event-scheduler") && p.dev.uses_scheduler())
+        {
             return false;
         }
         p.dev.legacy_tick_active()
@@ -676,6 +678,16 @@ pub struct SystemBus {
     /// Read only under the `event-scheduler` feature; flag-off the walk always
     /// runs, so the shipped build is unchanged.
     pub legacy_walk_disabled: bool,
+    /// `walk_deleted: false` from the system manifest is a hard opt-out from
+    /// automatic walk deletion, retained across dynamic activity changes.
+    pub(crate) legacy_walk_pinned_on: bool,
+    /// Indices of peripherals that still require the legacy walk when active.
+    /// Used by `refresh_legacy_tick_index` to restore the walk after an
+    /// inactive model is enabled by an MMIO write. Sorted by index.
+    walk_capable_indices: Vec<usize>,
+    /// Dynamic legacy-tick observers whose activity can change after a write
+    /// to a different peripheral's MMIO window.
+    legacy_tick_peer_write_indices: Vec<usize>,
     /// Differential audit of the walk-free ESP32-S3 interrupt path, installed
     /// only by [`Self::install_esp32s3_irq_audit`]. `None` in every production
     /// build and every other test, where the cost is one null check per

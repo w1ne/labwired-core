@@ -395,6 +395,96 @@ fn declarative_peripherals_enter_legacy_tick_set_only_while_events_are_pending()
     );
 }
 
+#[test]
+fn an_inactive_walk_model_is_deleted_and_restored_when_enabled() {
+    #[derive(Debug)]
+    struct ToggleWalk {
+        active: bool,
+    }
+    impl crate::Peripheral for ToggleWalk {
+        fn read(&self, _offset: u64) -> SimResult<u8> {
+            Ok(0)
+        }
+        fn write(&mut self, _offset: u64, value: u8) -> SimResult<()> {
+            self.active = value != 0;
+            Ok(())
+        }
+        fn legacy_tick_active(&self) -> bool {
+            self.active
+        }
+        fn legacy_tick_dynamic(&self) -> bool {
+            true
+        }
+    }
+
+    let mut bus = SystemBus::empty();
+    bus.add_peripheral(
+        "toggle-walk",
+        0x1000,
+        0x100,
+        None,
+        Box::new(ToggleWalk { active: false }),
+    );
+    bus.legacy_walk_disabled = bus.derive_walk_deletable();
+    assert!(
+        bus.legacy_walk_disabled,
+        "an inactive walk-capable model must not keep the walk alive"
+    );
+    assert!(bus.legacy_tick_indices.is_empty());
+
+    bus.write_u8(0x1000, 1).unwrap();
+    assert!(
+        !bus.legacy_walk_disabled,
+        "enabling the model must bring the walk back"
+    );
+    assert_eq!(bus.legacy_tick_indices, vec![0]);
+
+    bus.write_u8(0x1000, 0).unwrap();
+    assert!(
+        bus.legacy_walk_disabled,
+        "disabling the last walk-capable model must delete the walk again"
+    );
+    assert!(bus.legacy_tick_indices.is_empty());
+
+    bus.add_peripheral(
+        "new-toggle-walk",
+        0x2000,
+        0x100,
+        None,
+        Box::new(ToggleWalk { active: true }),
+    );
+    assert!(
+        !bus.legacy_walk_disabled,
+        "adding an active walk-capable model must restore the walk"
+    );
+    assert_eq!(bus.legacy_tick_indices, vec![1]);
+}
+
+#[test]
+fn structurally_walk_free_models_do_not_enter_the_legacy_tick_index() {
+    #[derive(Debug)]
+    struct WalkFree;
+    impl crate::Peripheral for WalkFree {
+        fn read(&self, _offset: u64) -> SimResult<u8> {
+            Ok(0)
+        }
+        fn write(&mut self, _offset: u64, _value: u8) -> SimResult<()> {
+            Ok(())
+        }
+        fn needs_legacy_walk(&self) -> bool {
+            false
+        }
+    }
+
+    let mut bus = SystemBus::empty();
+    bus.add_peripheral("walk-free", 0x1000, 0x100, None, Box::new(WalkFree));
+
+    assert!(bus.legacy_tick_indices.is_empty());
+    assert!(!bus.refresh_legacy_tick_index(0));
+    assert!(bus.legacy_tick_indices.is_empty());
+    assert!(bus.derive_walk_deletable());
+}
+
 #[cfg(feature = "event-scheduler")]
 #[test]
 fn scheduler_peripherals_do_not_enter_legacy_tick_index() {
@@ -836,6 +926,38 @@ fn test_from_config_attaches_adxl345_external_device_to_i2c() {
     let any = bus.peripherals[i2c_idx].dev.as_any_mut().unwrap();
     let i2c = any.downcast_mut::<crate::peripherals::i2c::I2c>().unwrap();
     assert_eq!(i2c.attached_devices().len(), 1);
+
+    #[derive(Debug)]
+    struct ToggleWalk(bool);
+    impl crate::Peripheral for ToggleWalk {
+        fn read(&self, _offset: u64) -> SimResult<u8> {
+            Ok(0)
+        }
+        fn write(&mut self, _offset: u64, value: u8) -> SimResult<()> {
+            self.0 = value != 0;
+            Ok(())
+        }
+        fn legacy_tick_active(&self) -> bool {
+            self.0
+        }
+        fn legacy_tick_dynamic(&self) -> bool {
+            true
+        }
+    }
+
+    bus.add_peripheral(
+        "toggle-walk",
+        0x5000,
+        0x100,
+        None,
+        Box::new(ToggleWalk(false)),
+    );
+    bus.write_u8(0x5000, 1).unwrap();
+    bus.write_u8(0x5000, 0).unwrap();
+    assert!(
+        !bus.legacy_walk_disabled,
+        "manifest walk_deleted: false must pin the legacy walk on after dynamic activity drains"
+    );
 }
 
 #[test]
@@ -3607,6 +3729,9 @@ fn test_flash_boot_alias_read_and_write() {
         peripheral_accesses: std::cell::Cell::new(0),
         poll_streak: std::cell::Cell::new((u32::MAX, 0, 0, 0)),
         legacy_walk_disabled: false,
+        legacy_walk_pinned_on: false,
+        walk_capable_indices: Vec::new(),
+        legacy_tick_peer_write_indices: Vec::new(),
         reset_vector_offset: 0,
         flash_boot_alias: true,
         atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
@@ -3737,6 +3862,9 @@ fn h5_flash_bus(gate: bool) -> SystemBus {
         peripheral_accesses: std::cell::Cell::new(0),
         poll_streak: std::cell::Cell::new((u32::MAX, 0, 0, 0)),
         legacy_walk_disabled: false,
+        legacy_walk_pinned_on: false,
+        walk_capable_indices: Vec::new(),
+        legacy_tick_peer_write_indices: Vec::new(),
         reset_vector_offset: 0,
         flash_boot_alias: true,
         atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
@@ -4020,6 +4148,9 @@ fn h5_rww_bus(gate: bool) -> SystemBus {
         peripheral_accesses: std::cell::Cell::new(0),
         poll_streak: std::cell::Cell::new((u32::MAX, 0, 0, 0)),
         legacy_walk_disabled: false,
+        legacy_walk_pinned_on: false,
+        walk_capable_indices: Vec::new(),
+        legacy_tick_peer_write_indices: Vec::new(),
         reset_vector_offset: 0,
         flash_boot_alias: true,
         atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
@@ -4299,6 +4430,9 @@ fn test_peripheral_range_index_lookup() {
         peripheral_accesses: std::cell::Cell::new(0),
         poll_streak: std::cell::Cell::new((u32::MAX, 0, 0, 0)),
         legacy_walk_disabled: false,
+        legacy_walk_pinned_on: false,
+        walk_capable_indices: Vec::new(),
+        legacy_tick_peer_write_indices: Vec::new(),
         reset_vector_offset: 0,
         flash_boot_alias: true,
         atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
@@ -4434,6 +4568,9 @@ fn test_dma_tick_executes_copy_and_raises_irq() {
         peripheral_accesses: std::cell::Cell::new(0),
         poll_streak: std::cell::Cell::new((u32::MAX, 0, 0, 0)),
         legacy_walk_disabled: false,
+        legacy_walk_pinned_on: false,
+        walk_capable_indices: Vec::new(),
+        legacy_tick_peer_write_indices: Vec::new(),
         reset_vector_offset: 0,
         flash_boot_alias: true,
         atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,

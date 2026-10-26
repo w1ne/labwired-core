@@ -347,6 +347,9 @@ impl SystemBus {
             peripheral_accesses: Cell::new(0),
             poll_streak: Cell::new((u32::MAX, 0, 0, 0)),
             legacy_walk_disabled: false,
+            legacy_walk_pinned_on: false,
+            walk_capable_indices: Vec::new(),
+            legacy_tick_peer_write_indices: Vec::new(),
             resident_tick_interval_override: None,
             gpio_devices: Vec::new(),
             device_pin_pads: Vec::new(),
@@ -1148,16 +1151,17 @@ impl SystemBus {
         //
         //   Some(true)  → force deleted (hand opt-in / escape hatch)
         //   Some(false) → pin the walk ON, overriding auto-derivation
-        //   None        → auto-derive: delete iff EVERY peripheral is provably
-        //                 walk-independent for all firmware states.
+        //   None        → auto-derive: delete iff EVERY walk-capable peripheral
+        //                 is currently inactive.
         //
         // The auto-derivation is deliberately conservative — see
         // `derive_walk_deletable`. It only fires when deleting the walk is
-        // byte-identical for ANY reachable firmware state, so it can never
-        // silently starve a peripheral of its per-cycle `tick()`. A hand
+        // safe for the current state; dynamic models restore the walk when
+        // later MMIO/GPIO activity makes them active. A hand
         // `walk_deleted: true` stays honored for configs whose byte-identity is
         // firmware-specific (the firmware never arms the timers/ADC/DMA the chip
         // descriptor instantiates) and thus not config-derivable.
+        bus.legacy_walk_pinned_on = manifest.walk_deleted == Some(false);
         bus.legacy_walk_disabled = match manifest.walk_deleted {
             Some(explicit) => explicit,
             None => bus.derive_walk_deletable(),

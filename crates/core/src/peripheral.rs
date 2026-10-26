@@ -876,6 +876,14 @@ pub trait Peripheral: std::fmt::Debug + Send {
     fn legacy_tick_dynamic(&self) -> bool {
         false
     }
+    /// True if this peripheral's dynamic legacy-tick activity can change when
+    /// another peripheral is written through MMIO. The bus refreshes these
+    /// observers after successful MMIO stores so shared fabrics (for example,
+    /// INPUTMUX/IOCON state consumed by PINT) can wake an idle model without
+    /// a per-cycle scan. Default false.
+    fn legacy_tick_observes_peer_mmio(&self) -> bool {
+        false
+    }
     /// True if this peripheral's participation in the legacy per-cycle walk is
     /// behaviorally significant for SOME reachable firmware state — i.e.
     /// deleting the walk (`SystemBus::derive_walk_deletable`) could change

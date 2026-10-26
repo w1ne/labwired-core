@@ -338,11 +338,20 @@ impl SystemBus {
             })
             .collect();
         self.peripheral_ranges.sort_by_key(|r| r.start);
-        self.legacy_tick_indices = self
+        self.rebuild_legacy_tick_indices();
+        self.walk_capable_indices = self
             .peripherals
             .iter()
             .enumerate()
-            .filter_map(|(index, p)| Self::legacy_tick_index_active(p).then_some(index))
+            .filter_map(|(index, p)| {
+                (p.dev.needs_legacy_walk() && !p.dev.uses_scheduler()).then_some(index)
+            })
+            .collect();
+        self.legacy_tick_peer_write_indices = self
+            .peripherals
+            .iter()
+            .enumerate()
+            .filter_map(|(index, p)| p.dev.legacy_tick_observes_peer_mmio().then_some(index))
             .collect();
         self.bus_tick_indices = self
             .peripherals
@@ -825,19 +834,32 @@ impl SystemBus {
         self.rebuild_peripheral_ranges();
     }
 
+    fn rebuild_legacy_tick_indices(&mut self) {
+        self.legacy_tick_indices = self
+            .peripherals
+            .iter()
+            .enumerate()
+            .filter_map(|(index, p)| Self::legacy_tick_index_active(p).then_some(index))
+            .collect();
+    }
+
     pub(crate) fn refresh_legacy_tick_index(&mut self, idx: usize) -> bool {
-        // Walk-deleted buses never consult `legacy_tick_indices` (the walk is
-        // off). Skip the trait calls + linear index scan on every MMIO write —
-        // the post-#555 C3 OLED hot path was spending more samples here than
-        // in the write itself once fetch/route optims landed.
-        if self.legacy_walk_disabled {
-            return false;
-        }
         let active = self
             .peripherals
             .get(idx)
             .is_some_and(Self::legacy_tick_index_active);
+        if cfg!(feature = "event-scheduler") && self.legacy_walk_disabled {
+            // Inactive walk-capable models do not keep the walk alive. If one
+            // is enabled by this write, restore the walk and its active set;
+            // otherwise stay on the fast path.
+            if active && self.walk_capable_indices.binary_search(&idx).is_ok() {
+                self.rebuild_legacy_tick_indices();
+                self.legacy_walk_disabled = false;
+            }
+            return active;
+        }
         let pos = self.legacy_tick_indices.iter().position(|&i| i == idx);
+        let was_active = pos.is_some();
         match (active, pos) {
             (true, None) => {
                 self.legacy_tick_indices.push(idx);
@@ -848,7 +870,21 @@ impl SystemBus {
             }
             _ => {}
         }
+        if active != was_active && self.walk_capable_indices.binary_search(&idx).is_ok() {
+            self.recompute_walk_deletable();
+        }
         active
+    }
+
+    /// Refresh the small set of dynamic models whose activity can depend on
+    /// shared state changed by a different peripheral's MMIO write.
+    pub(crate) fn refresh_legacy_tick_peer_write_observers(&mut self, changed_idx: usize) {
+        for pos in 0..self.legacy_tick_peer_write_indices.len() {
+            let idx = self.legacy_tick_peer_write_indices[pos];
+            if idx != changed_idx && self.peripherals[idx].dev.legacy_tick_dynamic() {
+                self.refresh_legacy_tick_index(idx);
+            }
+        }
     }
 
     pub(crate) fn refresh_bus_tick_index(&mut self, idx: usize) -> bool {
