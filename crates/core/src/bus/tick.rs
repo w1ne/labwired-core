@@ -863,7 +863,7 @@ impl SystemBus {
             }
         }
 
-        if !self.irq_fabric.esp32c3.routing {
+        if !self.irq_fabric.esp32c3.routing && self.nordic_gpio_service {
             // GPIO edge-detection pass: snapshot the IN registers of GPIO ports
             // 0 and 1, diff against last-known state, and notify every
             // peripheral of changed pins. GPIOTE overrides observe_gpio_change
