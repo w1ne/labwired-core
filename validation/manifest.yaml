@@ -1656,7 +1656,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: e3f8909a7a8f9db8d45e913135879bc1f2c8dc4a3d2c0178ba85feb46be7e595
+    drift_ack_digest: 650b7d7ea24b01204febca53e066ac81f3a01ce7e19fa79790906ba05eb2593a
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -2220,8 +2220,12 @@ boards:
     # 2026-10-25 CI repair: H5/U5 SPI SR readback includes the modeled
     # CTSIZE field; the fix is H5-profile-only, while L4/F1 paths are
     # unchanged. Unit/firmware tests cover simulation behavior; ACK, NOT A
-    # SILICON CAPTURE, and live re-capture remains pending.
-    drift_ack: 2026-10-25
+    # 2026-10-26 (shared STM32 I2C forced-oracle hook): the scheduler-owned
+    # transaction now advances through tick_elapsed_forced only when a
+    # frozen-CPU hardware oracle requests the historical walk. Production
+    # event scheduling is unchanged. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
+    drift_ack: 2026-10-26
     # 2026-10-25 (perf/cortex-m-decode-reference): the Cortex-M decode cache
     # now checks the PC tag through a borrow and copies only on a hit. The
     # interpreter's decoded instruction stream and state are unchanged;
@@ -3621,7 +3625,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: 68b750d97fbdc454fe25be70b1388d8e92e6bb59ae47849e87418c93861e5b45
+    drift_ack_digest: fca6be1ecd437ba0d40b9e3abf357000d7aa5f7bc39297fb2065d476092714e7
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4173,8 +4177,12 @@ boards:
     # 2026-10-25 CI repair: H5/U5 SPI SR readback includes the modeled
     # CTSIZE field; the fix is H5-profile-only, while L4/F1 paths are
     # unchanged. Unit/firmware tests cover simulation behavior; ACK, NOT A
-    # SILICON CAPTURE, and live re-capture remains pending.
-    drift_ack: 2026-10-25
+    # 2026-10-26 (shared STM32 I2C forced-oracle hook): the scheduler-owned
+    # transaction now advances through tick_elapsed_forced only when a
+    # frozen-CPU hardware oracle requests the historical walk. Production
+    # event scheduling is unchanged. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
+    drift_ack: 2026-10-26
   - id: nucleo-l073rz
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
     # 2026-09-16 (#1125): Cortex-M JIT follow-ups (block chaining, floor 4, IT-predicated ALU, VFP S-ALU, VLDR/VSTR, LDR.W PC), plus two model fixes that ride along: the bit-band alias decode no longer swallows peripherals vendors place inside 0x4200_0000 (SAMD51 QSPI/SERCOM), and the STM32 timer's scheduled compare pend lands on the latch tick like the walk. JIT is opt-in (`cortex_m_jit_enabled` default off); interpreter path unchanged, JIT-on vs off lockstep in cortex_m_jit_nrf_differential; both fixes pinned by bus-level gates. No silicon capture pins JIT.
@@ -4567,7 +4575,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: 0d1e83619337182162ec027cfa747f06325eaf48e5aef68c209945b9c526514a
+    drift_ack_digest: aa94b7d42910ec979235a6e3b094b71782b4246cdecad03c7d0299d1ef7ea43f
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5052,8 +5060,12 @@ boards:
     # 2026-10-25 CI repair: H5/U5 SPI SR readback includes the modeled
     # CTSIZE field; the fix is H5-profile-only, while L4/F1 paths are
     # unchanged. Unit/firmware tests cover simulation behavior; ACK, NOT A
-    # SILICON CAPTURE, and live re-capture remains pending.
-    drift_ack: 2026-10-25
+    # 2026-10-26 (shared STM32 I2C forced-oracle hook): the scheduler-owned
+    # transaction now advances through tick_elapsed_forced only when a
+    # frozen-CPU hardware oracle requests the historical walk. Production
+    # event scheduling is unchanged. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
+    drift_ack: 2026-10-26
     # 2026-10-25 (perf/cortex-m-decode-reference): the Cortex-M decode cache
     # now checks the PC tag through a borrow and copies only on a hit. The
     # interpreter's decoded instruction stream and state are unchanged;
@@ -5504,7 +5516,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: 6e1b8f3e4778ee26f480d3f0b813da3b443337cabb95048291dd1450b95b2224
+    drift_ack_digest: b5733544d138e104a456e13fad8fad436dd13718f15b81d9404e2de3723a083a
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6059,8 +6071,12 @@ boards:
     # 2026-10-25 CI repair: H5/U5 SPI SR readback includes the modeled
     # CTSIZE field; the fix is H5-profile-only, while L4/F1 paths are
     # unchanged. Unit/firmware tests cover simulation behavior; ACK, NOT A
-    # SILICON CAPTURE, and live re-capture remains pending.
-    drift_ack: 2026-10-25
+    # 2026-10-26 (shared STM32 I2C forced-oracle hook): the scheduler-owned
+    # transaction now advances through tick_elapsed_forced only when a
+    # frozen-CPU hardware oracle requests the historical walk. Production
+    # event scheduling is unchanged. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
+    drift_ack: 2026-10-26
     # 2026-10-25 (perf/cortex-m-decode-reference): the Cortex-M decode cache
     # now checks the PC tag through a borrow and copies only on a hit. The
     # interpreter's decoded instruction stream and state are unchanged;
@@ -6474,7 +6490,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: 52ad838114060d5e9bb070bc75b4a29044dd81df9e6e8564ec87ab51a207ac00
+    drift_ack_digest: 1ef4fd220ab3fb6f8aaf802b165baaf1113122f02b7dfb60afb27856404f5cfb
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6968,8 +6984,12 @@ boards:
     # 2026-10-25 CI repair: H5/U5 SPI SR readback includes the modeled
     # CTSIZE field; the fix is H5-profile-only, while L4/F1 paths are
     # unchanged. Unit/firmware tests cover simulation behavior; ACK, NOT A
-    # SILICON CAPTURE, and live re-capture remains pending.
-    drift_ack: 2026-10-25
+    # 2026-10-26 (shared STM32 I2C forced-oracle hook): the scheduler-owned
+    # transaction now advances through tick_elapsed_forced only when a
+    # frozen-CPU hardware oracle requests the historical walk. Production
+    # event scheduling is unchanged. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
+    drift_ack: 2026-10-26
     # 2026-10-25 (perf/cortex-m-decode-reference): the Cortex-M decode cache
     # now checks the PC tag through a borrow and copies only on a hit. The
     # interpreter's decoded instruction stream and state are unchanged;
