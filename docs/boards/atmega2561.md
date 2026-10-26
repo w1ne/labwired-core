@@ -12,8 +12,8 @@ channels on LabWired's public AVR interpreter.
 | GPIO | ✅ PA0..PA7, PB0..PB7, PC0..PC7, PD0..PD7, PE0..PE7, PF0..PF7, PG0..PG5 |
 | USART | ✅ USART0 console; ❌ USART1 (not modelled) |
 | ADC | ✅ ADC0..ADC7; ❌ ADC8..ADC15 (100-pin only) |
-| EEPROM | Present (4 KB) on silicon; no public controller model |
-| Timer3 | Present on silicon; not modelled in this LabWired slice |
+| EEPROM | Present on silicon (4 KB); no public controller model |
+| Timer3 | Present on silicon; not modelled by LabWired |
 | Timer4/5, twelve PWM channels, ports H..L | ❌ 100-pin ATmega2560 features, not present on the 64-pin part; the 2561 has six PWM channels, none modelled |
 
 The public CPU alias follows simavr: both route ATmega2561 to the shared
