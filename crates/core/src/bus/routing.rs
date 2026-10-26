@@ -344,13 +344,7 @@ impl SystemBus {
             .iter()
             .enumerate()
             .filter_map(|(index, p)| {
-                let uses_scheduler = p.dev.uses_scheduler();
-                let needs_legacy_drive = if cfg!(feature = "event-scheduler") {
-                    !uses_scheduler && p.dev.needs_legacy_walk()
-                } else {
-                    uses_scheduler || p.dev.needs_legacy_walk()
-                };
-                needs_legacy_drive.then_some(index)
+                (p.dev.needs_legacy_walk() && !p.dev.uses_scheduler()).then_some(index)
             })
             .collect();
         self.legacy_tick_peer_write_indices = self
@@ -855,12 +849,11 @@ impl SystemBus {
             .get(idx)
             .is_some_and(Self::legacy_tick_index_active);
         if self.legacy_walk_disabled {
-            // Inactive walk-capable models do not keep the walk alive. If one
-            // is enabled by this write, restore the walk and its active set;
-            // otherwise preserve the deleted-walk fast path. The flag also
-            // guards the cached set in feature-off builds, where the full
-            // walker ignores deletion but profiling still uses this index.
-            if active && self.walk_capable_indices.binary_search(&idx).is_ok() {
+            // If this write enables an indexed legacy tick, restore the walk
+            // and its active set. Scheduler-capable fallbacks can be active
+            // here when the event-scheduler feature is off. In that build the
+            // full walker ignores deletion, but profiling still uses the cache.
+            if active {
                 self.rebuild_legacy_tick_indices();
                 self.legacy_walk_disabled = false;
             }

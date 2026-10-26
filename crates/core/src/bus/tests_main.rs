@@ -485,9 +485,8 @@ fn structurally_walk_free_models_do_not_enter_the_legacy_tick_index() {
     assert!(bus.derive_walk_deletable());
 }
 
-#[cfg(feature = "event-scheduler")]
 #[test]
-fn scheduler_peripherals_do_not_enter_legacy_tick_index() {
+fn scheduler_peripherals_follow_build_mode_legacy_tick_index() {
     #[derive(Debug)]
     struct SchedulerPeripheral;
     impl crate::Peripheral for SchedulerPeripheral {
@@ -515,57 +514,20 @@ fn scheduler_peripherals_do_not_enter_legacy_tick_index() {
     let mut bus = SystemBus::empty();
     bus.add_peripheral("sched", 0x1000, 0x100, None, Box::new(SchedulerPeripheral));
 
+    let scheduler_enabled = cfg!(feature = "event-scheduler");
+    let expected_indices = if scheduler_enabled {
+        Vec::new()
+    } else {
+        vec![0]
+    };
     assert!(
-        bus.legacy_tick_indices.is_empty(),
-        "scheduler-owned peripherals are advanced by the event scheduler, not the legacy tick walk"
+        bus.legacy_tick_indices == expected_indices,
+        "scheduler-owned peripherals use the event scheduler when enabled and their active legacy fallback otherwise"
     );
-    assert!(!bus.refresh_legacy_tick_index(0));
+    assert_eq!(bus.refresh_legacy_tick_index(0), !scheduler_enabled);
     assert!(
-        bus.legacy_tick_indices.is_empty(),
-        "refresh must not reinsert scheduler-owned peripherals into the legacy tick walk"
-    );
-}
-
-#[cfg(not(feature = "event-scheduler"))]
-#[test]
-fn feature_off_keeps_scheduler_models_with_legacy_fallback_ticks() {
-    #[derive(Debug)]
-    struct SchedulerFallback;
-    impl crate::Peripheral for SchedulerFallback {
-        fn read(&self, _offset: u64) -> SimResult<u8> {
-            Ok(0)
-        }
-
-        fn write(&mut self, _offset: u64, _value: u8) -> SimResult<()> {
-            Ok(())
-        }
-
-        fn legacy_tick_active(&self) -> bool {
-            true
-        }
-
-        fn uses_scheduler(&self) -> bool {
-            true
-        }
-
-        fn needs_legacy_walk(&self) -> bool {
-            false
-        }
-    }
-
-    let mut bus = SystemBus::empty();
-    bus.add_peripheral(
-        "scheduler-fallback",
-        0x1000,
-        0x100,
-        None,
-        Box::new(SchedulerFallback),
-    );
-
-    assert_eq!(
-        bus.legacy_tick_indices,
-        vec![0],
-        "without event-scheduler, active scheduler-capable models use their legacy fallback"
+        bus.legacy_tick_indices == expected_indices,
+        "refresh must preserve the build-specific scheduler or legacy fallback path"
     );
 }
 
