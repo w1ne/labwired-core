@@ -345,6 +345,36 @@ WAIVED: dict[str, str] = {
         "represent it. No perf-spin fixture or throughput claim for this part yet "
         "(docs/pic24-m0-reference.md)."
     ),
+    "pic24f04ka200": (
+        "PIC24 M0 bring-up: boot, UART1 TX and GPIO smoke only. The checked-in "
+        "XC16 image is not a representative perf-spin workload, and this gate "
+        "has no XC16 fixture builder; no throughput claim is made for this part."
+    ),
+    "pic24f04ka201": (
+        "PIC24 M0 bring-up: boot, UART1 TX and GPIO smoke only. The checked-in "
+        "XC16 image is not a representative perf-spin workload, and this gate "
+        "has no XC16 fixture builder; no throughput claim is made for this part."
+    ),
+    "pic24f08ka101": (
+        "PIC24 M0 bring-up: boot, UART1 TX and GPIO smoke only. The checked-in "
+        "XC16 image is not a representative perf-spin workload, and this gate "
+        "has no XC16 fixture builder; no throughput claim is made for this part."
+    ),
+    "pic24f08ka102": (
+        "PIC24 M0 bring-up: boot, UART1 TX and GPIO smoke only. The checked-in "
+        "XC16 image is not a representative perf-spin workload, and this gate "
+        "has no XC16 fixture builder; no throughput claim is made for this part."
+    ),
+    "pic24f16ka101": (
+        "PIC24 M0 bring-up: boot, UART1 TX and GPIO smoke only. The checked-in "
+        "XC16 image is not a representative perf-spin workload, and this gate "
+        "has no XC16 fixture builder; no throughput claim is made for this part."
+    ),
+    "pic24f16ka102": (
+        "PIC24 M0 bring-up: boot, UART1 TX and GPIO smoke only. The checked-in "
+        "XC16 image is not a representative perf-spin workload, and this gate "
+        "has no XC16 fixture builder; no throughput claim is made for this part."
+    ),
     "litex-vexriscv": (
         "L1 smoke, SIM-DERIVED: CPU + integrated SRAM + the LiteX UART console and "
         "countdown timer only, with no silicon capture and no executing-fidelity "

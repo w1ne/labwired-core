@@ -464,6 +464,94 @@ chips:
       - {p: "SYSCTRL", ev: "configs/chips/atsamd21g18a.yaml:144 (type: declarative; configs/peripherals/atsamd21g18a/sysctrl.yaml)", note: "CLOSABLE: declarative register file with no engine — the smoke's OSC8MRDY poll (crates/firmware-samd21-demo/src/main.rs:151-155) is bounded (`for _ in 0..10_000`) and passes even with PCLKSR reset to 0, so it does not depend on the hand-set value; that value (0x1_8ADF, configs/peripherals/atsamd21g18a/sysctrl.yaml:250-272, value at :264) is what unbounded driver spins like the Arduino SAMD core's DFLLRDY wait need, and the pin is the estate test (atsamd21_peripheral_estate.rs:116-139), the chip's `chip_conformance` behavior gate (chip_conformance.rs:86-93). No oscillator/DFLL state is modelled, and regenerating the file from the SVD drops the value. ⚠️ examples/samd21-smoke/io-smoke.yaml:17-19 and crates/firmware-samd21-demo/src/main.rs:149-150 still claim a PCLKSR=0 model hangs / never returns — those comments are STALE (the poll is bounded); do not 'correct' this note back from them."}
       - {p: "NVMCTRL", ev: "configs/chips/atsamd21g18a.yaml:172 (type: declarative; configs/peripherals/atsamd21g18a/nvmctrl.yaml)", note: "CLOSABLE: declarative register file — the smoke's CTRLB.RWS wait-state write (crates/firmware-samd21-demo/src/main.rs:147) is stored, never read back or polled, and no flash-controller behaviour follows (no programming, erase or ready timing)."}
 
+  - id: atsamd21e15a
+    arch: cortex-m0plus
+    headline: "Geometry-only orderable on the atsamd21g18a engine; no per-orderable firmware exercise or beyond-rubric content is claimed."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: atsamd21e16a
+    arch: cortex-m0plus
+    headline: "Geometry-only orderable on the atsamd21g18a engine; no per-orderable firmware exercise or beyond-rubric content is claimed."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: atsamd21e17a
+    arch: cortex-m0plus
+    headline: "Geometry-only orderable on the atsamd21g18a engine; no per-orderable firmware exercise or beyond-rubric content is claimed."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: atsamd21e18a
+    arch: cortex-m0plus
+    headline: "Geometry-only orderable on the atsamd21g18a engine; no per-orderable firmware exercise or beyond-rubric content is claimed."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: atsamd21g15a
+    arch: cortex-m0plus
+    headline: "Geometry-only orderable on the atsamd21g18a engine; no per-orderable firmware exercise or beyond-rubric content is claimed."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: atsamd21g16a
+    arch: cortex-m0plus
+    headline: "Geometry-only orderable on the atsamd21g18a engine; no per-orderable firmware exercise or beyond-rubric content is claimed."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: atsamd21g17a
+    arch: cortex-m0plus
+    headline: "Geometry-only orderable on the atsamd21g18a engine; no per-orderable firmware exercise or beyond-rubric content is claimed."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: atsamd21j15a
+    arch: cortex-m0plus
+    headline: "Geometry-only orderable on the atsamd21g18a engine; no per-orderable firmware exercise or beyond-rubric content is claimed."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: atsamd21j16a
+    arch: cortex-m0plus
+    headline: "Geometry-only orderable on the atsamd21g18a engine; no per-orderable firmware exercise or beyond-rubric content is claimed."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: atsamd21j17a
+    arch: cortex-m0plus
+    headline: "Geometry-only orderable on the atsamd21g18a engine; no per-orderable firmware exercise or beyond-rubric content is claimed."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: atsamd21j18a
+    arch: cortex-m0plus
+    headline: "Geometry-only orderable on the atsamd21g18a engine; no per-orderable firmware exercise or beyond-rubric content is claimed."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
   - id: atsamd51
     arch: cortex-m4
     headline: "No tier-1 target. The firmware that runs is the PR-gated `firmware_survival::test_atsamd51_metro_m4_smoke_survival` (step core-ci.yml:779; case firmware_survival.rs:1336): the committed Metro M4 smoke ELF (tests/fixtures/atsamd51-metro-m4-smoke.elf, built from crates/firmware-atsamd51-demo) writes MCLK.APBBMASK + GCLK PCHCTRL[24] and prints `OK` on Serial1 (crates/firmware-atsamd51-demo/src/main.rs:35-41). The same demo is built and run by strict_onboarding (nightly core-full, through examples/metro-m4/io-smoke.yaml) and the nightly coverage-matrix cell `metro-m4` (core-coverage-matrix-smoke.yml:82-88, examples/metro-m4/uart-smoke.yaml). Beyond the rubric the descriptor declares two zero windows, USB and QSPI, that no firmware opens."
