@@ -515,6 +515,17 @@ fn every_shipped_descriptor_is_ratcheted() {
         // PIC24 core. Same rationale: no bundled-configs.ts board and no
         // silicon oracle yet.
         "dspic33fj32mc202",
+        // PIC24F KA family: six exact part descriptors plus per-part XC16 UART
+        // smokes on the public PIC24 core. The modelled slice is package GPIO
+        // and UART1 only; no bundled-configs.ts catalog board, no silicon
+        // oracle and no executing-fidelity differential. Promote when the
+        // catalog and a differential exist.
+        "pic24f04ka200",
+        "pic24f04ka201",
+        "pic24f08ka101",
+        "pic24f08ka102",
+        "pic24f16ka101",
+        "pic24f16ka102",
         // First RISC-V soft-core SoC in the engine (LiteX VexRiscv, RV32IM).
         // Has a chip descriptor, a system manifest, an example with an
         // io-smoke, a committed smoke fixture and a firmware-survival gate —

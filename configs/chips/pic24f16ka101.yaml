@@ -1,0 +1,72 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+#
+# PIC24F16KA101 (DS39927C, PIC24F16KA102 family).
+# - 20-pin PDIP/SSOP/SOIC/QFN, Ports A and B only, 18 I/O pins
+#   (Table 1-1: PORTA<6:0>, PORTB<15:12, 9:7, 4, 2:0>), no PORTC.
+# - Program flash 16 KB (5632 instructions), data SRAM 1536 B, data EEPROM
+#   512 B at 0x7FFE00 (Table 1-1; §4.1.3).
+# - PIC24F 16-bit modified-Harvard core, 76 base instructions, 32 MHz max.
+# - I/O SFRs (Tables 4-12/4-13): TRISA 0x02C0, PORTA 0x02C2, LATA 0x02C4,
+#   ODCA 0x02C6, TRISB 0x02C8, PORTB 0x02CA, LATB 0x02CC, ODCB 0x02CE.
+# - UART1 (Table 4-10): U1MODE 0x0220, U1STA 0x0222, U1TXREG 0x0224,
+#   U1RXREG 0x0226, U1BRG 0x0228. This family also has UART2 at 0x0230,
+#   which is not modelled.
+# - The public PIC24 core backs flash/SRAM with its dsPIC33FJ32MC204-sized
+#   storage, so this real XC16 image fits; the descriptor still records the
+#   part's exact 16 KB / 1536 B geometry. Data EEPROM, UART2, timers, ADC,
+#   SPI, I2C and the package's alternate functions are not exercised here.
+#
+# The GPIO windows use the public core's mirror layout
+# (PIC24_IO_MIRROR_BASE + TRISx + 16*port), exactly like the dsPIC33FJ32MC20x
+# descriptors: A 0x102C0, B 0x102D0, C 0x102E0.
+name: pic24f16ka101
+arch: pic24
+core: pic24f
+cpu_hz: 32000000
+flash:
+  base: 0x000000
+  size: "16KB"
+ram:
+  base: 0x000800
+  size: "1536B"
+peripherals:
+  - id: "gpioa"
+    type: "pic24_gpio"
+    base_address: 0x000102C0
+    size: "12"
+    config: { port: "a", mask: 0x007F }
+  - id: "gpiob"
+    type: "pic24_gpio"
+    base_address: 0x000102D0
+    size: "12"
+    config: { port: "b", mask: 0xF397 }
+  - id: "gpioc"
+    type: "pic24_gpio"
+    base_address: 0x000102E0
+    size: "12"
+    config: { port: "c", mask: 0x0000 }
+# Package pin map (DS39927C Table 1-1, Table 1-2). The 20-pin package bonds
+# RB0-RB2, RB4, RB7-RB9 and RB12-RB15.
+pins:
+  RA0: { gpio: gpioa, bit: 0 }
+  RA1: { gpio: gpioa, bit: 1 }
+  RA2: { gpio: gpioa, bit: 2 }
+  RA3: { gpio: gpioa, bit: 3 }
+  RA4: { gpio: gpioa, bit: 4 }
+  RA5: { gpio: gpioa, bit: 5 }
+  RA6: { gpio: gpioa, bit: 6 }
+  RB0: { gpio: gpiob, bit: 0 }
+  RB1: { gpio: gpiob, bit: 1 }
+  RB2: { gpio: gpiob, bit: 2 }
+  RB4: { gpio: gpiob, bit: 4 }
+  RB7: { gpio: gpiob, bit: 7 }
+  RB8: { gpio: gpiob, bit: 8 }
+  RB9: { gpio: gpiob, bit: 9 }
+  RB12: { gpio: gpiob, bit: 12 }
+  RB13: { gpio: gpiob, bit: 13 }
+  RB14: { gpio: gpiob, bit: 14 }
+  RB15: { gpio: gpiob, bit: 15 }

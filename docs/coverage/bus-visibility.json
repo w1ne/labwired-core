@@ -127,6 +127,30 @@
   },
   {
     "buses": [],
+    "name": "pic24f04ka200"
+  },
+  {
+    "buses": [],
+    "name": "pic24f04ka201"
+  },
+  {
+    "buses": [],
+    "name": "pic24f08ka101"
+  },
+  {
+    "buses": [],
+    "name": "pic24f08ka102"
+  },
+  {
+    "buses": [],
+    "name": "pic24f16ka101"
+  },
+  {
+    "buses": [],
+    "name": "pic24f16ka102"
+  },
+  {
+    "buses": [],
     "name": "ra4m1"
   },
   {
