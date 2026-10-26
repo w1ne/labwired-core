@@ -62,13 +62,15 @@ del m["chips"]["stm32h563"]
 json.dump(m, open(work / "missing-chip.json", "w"), indent=2)
 
 # 3. A marker the firmware never prints — an entry copied from a sibling chip
-#    and never actually run.
-m = trimmed({"stm32f103"})
-m["chips"]["stm32f103"]["expect"] = "TIER1 THIS LINE IS NEVER PRINTED"
+#    and never actually run. Use the known-good U545 smoke so this reaches the
+#    marker assertion instead of relying on the F103 fixture's UART transcript.
+m = trimmed({"stm32u545"})
+m["chips"]["stm32u545"]["expect"] = "THIS LINE IS NEVER PRINTED"
 json.dump(m, open(work / "wrong-marker.json", "w"), indent=2)
 
-# 4. The positive control.
-json.dump(trimmed({"stm32f103"}), open(work / "good.json", "w"), indent=2)
+# 4. The positive control. This committed smoke prints `OK` from a bare-metal
+#    image through the direct CLI path; it does not depend on a toolchain.
+json.dump(trimmed({"stm32u545"}), open(work / "good.json", "w"), indent=2)
 
 PY
 

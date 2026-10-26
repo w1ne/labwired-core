@@ -46,7 +46,9 @@ checks SHA-256 of `abc`, the AES-128 ECB NIST block vector, and
 `4^13 mod 497 = 445` through the actual `SystemBus` register path. It also
 checks negative integer subtraction sign extension through 4160 bits and rejects
 operand widths above 4160 bits. Unit tests cover SHA-1/SHA-224/MD5, an RFC 4231 HMAC vector,
-and PKA unsupported-mode status. [`stm32u5_reset_conformance.rs`](../../crates/core/tests/stm32u5_reset_conformance.rs)
+AES-128 ECB/CBC/CTR vectors, and PKA unsupported-mode status. The model implements
+AES-256 ECB/CBC/CTR, but the current vectors do not cover AES-256.
+[`stm32u5_reset_conformance.rs`](../../crates/core/tests/stm32u5_reset_conformance.rs)
 checks the selected memory map and reset state.
 
 ## Playground

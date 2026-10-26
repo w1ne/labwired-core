@@ -29,7 +29,7 @@ The models column is a content digest over everything that board's `models` list
 | `nrf5340` | 🔵 sim-validated (deep model, no HW diff) | — | `73a4f6d1da20d9ca` | no silicon capture |
 | `stm32h735` | 🔵 sim-validated (deep model, no HW diff) | — | `24a57a066f584a16` | no silicon capture |
 | `stm32u575` | 🔵 sim-validated (deep model, no HW diff) | — | `9b588dd4dfc2d6a4` | no silicon capture |
-| `stm32u5a5zj` | 🔵 sim-validated (deep model, no HW diff) | — | `e7ac98a98b1116a9` | no silicon capture |
+| `stm32u5a5zj` | 🔵 sim-validated (deep model, no HW diff) | — | `15c211b346234abe` | no silicon capture |
 | `nucleo-u545re` | 🔵 sim-validated (deep model, no HW diff) | — | `6e405e66030bbd44` | no silicon capture |
 | `stm32f411ceu6` | 🔵 sim-validated (deep model, no HW diff) | — | `63769b62946581ab` | no silicon capture |
 | `brd2709a` | 🟡 smoke-manual | — | `d913ae31bfe88d82` | no silicon capture |
@@ -231,7 +231,7 @@ The models column is a content digest over everything that board's `models` list
 ## `stm32u5a5zj` — 🔵 sim-validated (deep model, no HW diff)
 
 - Doc: [`docs/boards/stm32u5a5zj.md`](stm32u5a5zj.md)  ·  Chip: `configs/chips/stm32u5a5zj.yaml`
-- Note: STM32U5A5ZJT6Q on NUCLEO-U5A5ZJ-Q (MB1549), LQFP144, 4 MiB flash and 2.5-MiB-class SRAM. It shares the STM32U5 register surfaces with U575 and adds HASH, SAES and PKA behavioral models. Register-level vectors exercise CPU-fed SHA-1/MD5/SHA-224/SHA-256/HMAC, AES-128/256 ECB/CBC/CTR, modular exponentiation and selected PKA arithmetic/modular operations, including negative arithmetic subtraction with sign extension. PKA operations are limited to the documented 4160-bit operand maximum. These models are synchronous and omit DMA pacing/timing; SAES GCM/CCM, TrustZone key selection, DPA, and PKA ECC/RSA-CRT/Montgomery helper modes remain unsupported. ICACHE is register-contract only, FDCAN loopback is not a physical bus, and the U5A5 pin/AF map in Playground is a common subset rather than a complete pin inventory. Simulator evidence only; no physical U5A5 board acceptance is claimed.
+- Note: STM32U5A5ZJT6Q on NUCLEO-U5A5ZJ-Q (MB1549), LQFP144, 4 MiB flash and 2.5-MiB-class SRAM. It shares the STM32U5 register surfaces with U575 and adds HASH, SAES and PKA behavioral models. The U5A5 SystemBus oracle checks SHA-256 of abc, AES-128 ECB, 4^13 mod 497, and negative PKA subtraction sign extension through 4160 bits; it rejects 4161-bit operands. Shared-model tests on U575 cover SHA-1/SHA-224/MD5 and RFC 4231 HMAC, while SAES unit vectors cover AES-128 ECB/CBC/CTR. The model implements AES-256 ECB/CBC/CTR, but no AES-256 vector currently tests it. PKA operations are limited to the documented 4160-bit operand maximum. These models are synchronous and omit DMA pacing/timing; SAES GCM/CCM, TrustZone key selection, DPA, and PKA ECC/RSA-CRT/Montgomery helper modes remain unsupported. ICACHE is register-contract only, FDCAN loopback is not a physical bus, and the U5A5 pin/AF map in Playground is a common subset rather than a complete pin inventory. Simulator evidence only; no physical U5A5 board acceptance is claimed.
 - Silicon: none — not validated against real hardware.
   - offline (CI): chip_conformance (estate OK; register-level HASH/SAES/PKA behavior gate)
   - offline (CI): stm32u5_exec_oracle::u5a5_hash_saes_and_pka_execute_register_level_operations

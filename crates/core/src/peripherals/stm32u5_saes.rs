@@ -167,8 +167,8 @@ impl Stm32u5Saes {
             }
             1 => {
                 if encrypt {
-                    for index in 0..16 {
-                        block[index] ^= self.iv[index];
+                    for (byte, iv_byte) in block.iter_mut().zip(self.iv) {
+                        *byte ^= iv_byte;
                     }
                     if key.len() == 16 {
                         Aes128::new_from_slice(&key)
@@ -191,8 +191,8 @@ impl Stm32u5Saes {
                             .map_err(|_| ())?
                             .decrypt_block((&mut block).into());
                     }
-                    for index in 0..16 {
-                        block[index] ^= self.iv[index];
+                    for (byte, iv_byte) in block.iter_mut().zip(self.iv) {
+                        *byte ^= iv_byte;
                     }
                     self.write_iv(ciphertext);
                 }
