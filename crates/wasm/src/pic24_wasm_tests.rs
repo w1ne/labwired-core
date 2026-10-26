@@ -1,5 +1,6 @@
-use crate::WasmSimulator;
+use crate::{validate_pic24_console, WasmSimulator};
 use labwired_config::BoardIoBinding;
+use labwired_core::console::HostConsole;
 use labwired_core::system::arch_policy::MachineFamily;
 use std::fs;
 use std::path::PathBuf;
@@ -54,6 +55,7 @@ fn ka102_inputs() -> (String, String, Vec<u8>) {
     // actual package GPIO output without inventing a development board.
     system.push_str(
         r#"
+debug_uart: "uart1"
 board_io:
   - id: "ra0-led"
     kind: "led"
@@ -131,4 +133,21 @@ fn browser_constructor_runs_pic24f16ka102_xc16_uart_and_gpio() {
         toggled,
         "PIC24F16KA102 XC16 LATA0 loop must reach browser board IO state"
     );
+}
+
+#[test]
+fn pic24_console_accepts_internal_uart1_and_rejects_unsupported_routes() {
+    assert!(validate_pic24_console(&HostConsole::Uart("uart1".to_owned())).is_ok());
+    assert!(validate_pic24_console(&HostConsole::Uart("UART1".to_owned())).is_ok());
+    assert!(validate_pic24_console(&HostConsole::Undeclared).is_ok());
+
+    let uart2_error = validate_pic24_console(&HostConsole::Uart("uart2".to_owned()))
+        .expect_err("UART2 is not part of the PIC24 M0 browser model");
+    assert!(uart2_error.contains("uart2"));
+    assert!(uart2_error.contains("UART1"));
+
+    let usb_error = validate_pic24_console(&HostConsole::UsbSerialJtag)
+        .expect_err("PIC24 has no USB-Serial-JTAG console");
+    assert!(usb_error.contains("USB-Serial-JTAG"));
+    assert!(usb_error.contains("uart1"));
 }

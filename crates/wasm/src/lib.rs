@@ -435,6 +435,23 @@ impl WasmSimulator {
     }
 }
 
+/// PIC24 UART1 is implemented inside the CPU, so it cannot be attached as a
+/// named `SystemBus` UART. Keep the browser constructor's console contract
+/// explicit rather than asking the generic bus resolver to find it.
+fn validate_pic24_console(console: &HostConsole) -> Result<(), String> {
+    match console {
+        HostConsole::Undeclared => Ok(()),
+        HostConsole::Uart(name) if name.eq_ignore_ascii_case("uart1") => Ok(()),
+        HostConsole::Uart(name) => Err(format!(
+            "PIC24 browser support only models CPU-internal UART1, not bus UART '{name}'; declare `debug_uart: uart1`"
+        )),
+        HostConsole::UsbSerialJtag => Err(
+            "PIC24 browser support does not model USB-Serial-JTAG; declare `debug_uart: uart1` for the CPU-internal UART1 console"
+                .to_string(),
+        ),
+    }
+}
+
 impl WasmSimulator {
     /// [`Self::new_from_config`] from inputs already owned, kept on the
     /// simulator so it can be built again (snapshot restore, fault
@@ -664,13 +681,14 @@ impl WasmSimulator {
             ));
         }
 
-        let mut bus = SystemBus::from_config(chip, manifest)
+        let bus = SystemBus::from_config(chip, manifest)
             .map_err(|e| JsValue::from_str(&format!("Bus config error: {e:#}")))?;
 
         let console = ConsoleCapture::for_manifest(manifest);
+        validate_pic24_console(console.tapped()).map_err(|e| JsValue::from_str(&e))?;
         let uart_sink = console.heard_sink();
-        bus.attach_host_console(console.tapped(), uart_sink.clone())
-            .map_err(|e| JsValue::from_str(&e))?;
+        // PIC24 UART1 is CPU-internal and writes directly to this sink below.
+        // There is no bus UART or USB-Serial-JTAG console to attach here.
         let uart_rx_bufs = bus.attach_uart_rx_source();
 
         let program_image = load_elf_bytes(firmware)
