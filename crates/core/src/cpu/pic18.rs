@@ -385,28 +385,75 @@ impl Pic18 {
         self.resolve_data_access(addr)
     }
 
-    fn complete_file_access(&mut self, access: FileAccess) {
+    fn is_virtual_indirect(addr: u16) -> bool {
+        Self::indirect_mode(addr).is_some()
+    }
+
+    fn is_fsr_pair(addr: u16) -> bool {
+        matches!(
+            addr,
+            SFR_FSR0L | SFR_FSR0H | SFR_FSR1L | SFR_FSR1H | SFR_FSR2L | SFR_FSR2H
+        )
+    }
+
+    /// Read through a resolved file target. Virtual indirect operands are not
+    /// physically implemented, so an indirect read that lands on one returns
+    /// zero (DS41303F §5.4.3.3).
+    fn read_file_data(&self, addr: u16) -> u8 {
+        if Self::is_virtual_indirect(addr) {
+            0
+        } else {
+            self.read_data(addr)
+        }
+    }
+
+    /// Write through a resolved file target. Returns false when the target is
+    /// a virtual indirect operand, which makes the indirect write a NOP.
+    fn write_file_data(&mut self, addr: u16, value: u8) -> bool {
+        if Self::is_virtual_indirect(addr) {
+            return false;
+        }
+        self.write_data(addr, value);
+        true
+    }
+
+    fn apply_post_action(&mut self, access: FileAccess) {
         if let Some((n, delta)) = access.post {
             self.fsr[n] = self.fsr[n].wrapping_add_signed(delta as i16) & PIC18_DATA_MASK;
         }
     }
 
+    fn complete_file_read(&mut self, access: FileAccess) {
+        self.apply_post_action(access);
+    }
+
+    /// Complete a file write. A write that targets an FSR pair is documented
+    /// to store the value without the selected operand's post-increment or
+    /// post-decrement (DS41303F §5.4.3.3). A rejected write to a virtual
+    /// operand is a NOP, including its pointer action.
+    fn complete_file_write(&mut self, access: FileAccess, wrote: bool) {
+        if !wrote || Self::is_fsr_pair(access.addr) {
+            return;
+        }
+        self.apply_post_action(access);
+    }
+
     fn read_file_access(&mut self, f: u8, a: bool) -> (u8, FileAccess) {
         let access = self.resolve_file_access(f, a);
-        let value = self.read_data(access.addr);
+        let value = self.read_file_data(access.addr);
         (value, access)
     }
 
     pub fn read_file(&mut self, f: u8, a: bool) -> u8 {
         let (value, access) = self.read_file_access(f, a);
-        self.complete_file_access(access);
+        self.complete_file_read(access);
         value
     }
 
     pub fn write_file(&mut self, f: u8, a: bool, value: u8) {
         let access = self.resolve_file_access(f, a);
-        self.write_data(access.addr, value);
-        self.complete_file_access(access);
+        let wrote = self.write_file_data(access.addr, value);
+        self.complete_file_write(access, wrote);
     }
 
     pub fn stack_pointer(&self) -> u8 {
@@ -545,13 +592,23 @@ impl Pic18 {
         self.status = (self.status & !STATUS_FLAG_MASK) | flags;
     }
 
-    fn write_result_at(&mut self, access: FileAccess, d: bool, value: u8) {
+    fn write_result_at(&mut self, access: FileAccess, d: bool, value: u8) -> bool {
         if d {
-            if access.addr != SFR_STATUS {
-                self.write_data(access.addr, value);
+            if access.addr == SFR_STATUS {
+                return true;
             }
+            self.write_file_data(access.addr, value)
         } else {
             self.wreg = value;
+            false
+        }
+    }
+
+    fn complete_result(&mut self, access: FileAccess, d: bool, wrote: bool) {
+        if d {
+            self.complete_file_write(access, wrote);
+        } else {
+            self.complete_file_read(access);
         }
     }
 
@@ -654,11 +711,13 @@ impl Pic18 {
             let a = word & 0x0100 != 0;
             let f = word as u8;
             let access = self.resolve_file_access(f, a);
-            if access.addr != SFR_STATUS {
-                self.write_data(access.addr, 0);
-            }
+            let wrote = if access.addr == SFR_STATUS {
+                true
+            } else {
+                self.write_file_data(access.addr, 0)
+            };
             self.set_z_only(0);
-            self.complete_file_access(access);
+            self.complete_file_write(access, wrote);
             return Ok(1);
         }
 
@@ -668,8 +727,8 @@ impl Pic18 {
             let f = word as u8;
             let (value, access) = self.read_file_access(f, a);
             self.set_nz(value);
-            self.write_result_at(access, d, value);
-            self.complete_file_access(access);
+            let wrote = self.write_result_at(access, d, value);
+            self.complete_result(access, d, wrote);
             return Ok(1);
         }
 
@@ -689,14 +748,15 @@ impl Pic18 {
             };
             let result = self.wreg.wrapping_add(b);
             self.set_add_flags(self.wreg, b, result);
-            if d && access.addr == SFR_PCL {
+            let wrote = if d && access.addr == SFR_PCL {
                 // Computed GOTO: the addition does not propagate into the
                 // upper PC bytes (the table must not cross a 256-byte page).
                 self.pc = Self::align_pc((pc & 0xFFFF00) | u32::from(result));
+                true
             } else {
-                self.write_result_at(access, d, result);
-            }
-            self.complete_file_access(access);
+                self.write_result_at(access, d, result)
+            };
+            self.complete_result(access, d, wrote);
             return Ok(1);
         }
 
@@ -707,8 +767,8 @@ impl Pic18 {
             let (value, access) = self.read_file_access(f, a);
             let result = self.wreg & value;
             self.set_nz(result);
-            self.write_result_at(access, d, result);
-            self.complete_file_access(access);
+            let wrote = self.write_result_at(access, d, result);
+            self.complete_result(access, d, wrote);
             return Ok(1);
         }
 
@@ -719,8 +779,8 @@ impl Pic18 {
             let (value, access) = self.read_file_access(f, a);
             let result = self.wreg | value;
             self.set_nz(result);
-            self.write_result_at(access, d, result);
-            self.complete_file_access(access);
+            let wrote = self.write_result_at(access, d, result);
+            self.complete_result(access, d, wrote);
             return Ok(1);
         }
 
@@ -731,8 +791,8 @@ impl Pic18 {
             let (value, access) = self.read_file_access(f, a);
             let result = self.wreg ^ value;
             self.set_nz(result);
-            self.write_result_at(access, d, result);
-            self.complete_file_access(access);
+            let wrote = self.write_result_at(access, d, result);
+            self.complete_result(access, d, wrote);
             return Ok(1);
         }
 
@@ -743,8 +803,8 @@ impl Pic18 {
             let (b, access) = self.read_file_access(f, a);
             let result = b.wrapping_sub(1);
             self.set_sub_flags(b, 1, result);
-            self.write_result_at(access, d, result);
-            self.complete_file_access(access);
+            let wrote = self.write_result_at(access, d, result);
+            self.complete_result(access, d, wrote);
             return Ok(1);
         }
 
@@ -755,8 +815,8 @@ impl Pic18 {
             let (b, access) = self.read_file_access(f, a);
             let result = b.wrapping_add(1);
             self.set_add_flags(b, 1, result);
-            self.write_result_at(access, d, result);
-            self.complete_file_access(access);
+            let wrote = self.write_result_at(access, d, result);
+            self.complete_result(access, d, wrote);
             return Ok(1);
         }
 
@@ -771,8 +831,8 @@ impl Pic18 {
                 0x8000 => value | mask,
                 _ => value ^ mask,
             };
-            self.write_data(access.addr, result);
-            self.complete_file_access(access);
+            let wrote = self.write_file_data(access.addr, result);
+            self.complete_file_write(access, wrote);
             return Ok(1);
         }
 
@@ -781,7 +841,7 @@ impl Pic18 {
             let b = ((word >> 9) & 0x7) as u8;
             let f = word as u8;
             let (value, access) = self.read_file_access(f, a);
-            self.complete_file_access(access);
+            self.complete_file_read(access);
             let set = value & (1u8 << b) != 0;
             let skip = if word & 0xF000 == 0xB000 { !set } else { set };
             if skip {
@@ -1207,6 +1267,92 @@ mod tests {
         run(&mut cpu, 3);
         assert_eq!(cpu.read_data(0x020), 0x08);
         assert_eq!(cpu.fsr[0], 0x020);
+    }
+
+    #[test]
+    fn indirect_reads_and_writes_of_virtual_operands_are_zero_and_nop() {
+        let aliases = [
+            SFR_PLUSW2,
+            SFR_PREINC2,
+            SFR_POSTDEC2,
+            SFR_POSTINC2,
+            SFR_INDF2,
+            SFR_PLUSW1,
+            SFR_PREINC1,
+            SFR_POSTDEC1,
+            SFR_POSTINC1,
+            SFR_INDF1,
+            SFR_PLUSW0,
+            SFR_PREINC0,
+            SFR_POSTDEC0,
+            SFR_POSTINC0,
+            SFR_INDF0,
+        ];
+        for alias in aliases {
+            let mut cpu = Pic18::new();
+            cpu.write_data(alias, 0x5A);
+            cpu.fsr[0] = alias;
+            cpu.load_words(&[0x50EF]); // MOVF INDF0,W
+            run(&mut cpu, 1);
+            assert_eq!(cpu.wreg(), 0, "indirect read of {alias:#x} must be 0");
+            assert_eq!(
+                cpu.read_data(alias),
+                0x5A,
+                "raw slot for virtual alias {alias:#x} must not be read"
+            );
+            assert_eq!(cpu.fsr[0], alias);
+
+            let mut cpu = Pic18::new();
+            cpu.write_data(alias, 0x5A);
+            cpu.fsr[0] = alias;
+            cpu.wreg = 0x99;
+            cpu.load_words(&[0x6EEF]); // MOVWF INDF0
+            run(&mut cpu, 1);
+            assert_eq!(
+                cpu.read_data(alias),
+                0x5A,
+                "indirect write of {alias:#x} must be a NOP"
+            );
+            assert_eq!(cpu.fsr[0], alias);
+        }
+
+        // A rejected write also drops the selected operand's post-action.
+        let mut cpu = Pic18::new();
+        cpu.write_data(SFR_INDF1, 0x5A);
+        cpu.fsr[0] = SFR_INDF1;
+        cpu.wreg = 0x99;
+        cpu.load_words(&[0x6EEE]); // MOVWF POSTINC0
+        run(&mut cpu, 1);
+        assert_eq!(cpu.read_data(SFR_INDF1), 0x5A);
+        assert_eq!(cpu.fsr[0], SFR_INDF1);
+    }
+
+    #[test]
+    fn indirect_write_to_an_fsr_pair_skips_the_post_action() {
+        let mut cpu = Pic18::new();
+        cpu.fsr[0] = SFR_FSR1L;
+        cpu.wreg = 0x34;
+        cpu.load_words(&[0x6EEE]); // MOVWF POSTINC0 -> FSR1L, no post-increment
+        run(&mut cpu, 1);
+        assert_eq!(cpu.fsr[0], SFR_FSR1L);
+        assert_eq!(cpu.fsr[1], 0x0034);
+
+        // Self-targeting POSTDEC2 writes FSR2L but does not decrement FSR2.
+        let mut cpu = Pic18::new();
+        cpu.fsr[2] = SFR_FSR2L;
+        cpu.wreg = 0x56;
+        cpu.load_words(&[0x6EDD]); // MOVWF POSTDEC2
+        run(&mut cpu, 1);
+        assert_eq!(cpu.fsr[2], 0x0F56);
+
+        // INDF has no post-action, so writing an FSR pair is unchanged.
+        let mut cpu = Pic18::new();
+        cpu.fsr[0] = SFR_FSR1H;
+        cpu.wreg = 0x77;
+        cpu.load_words(&[0x6EEF]); // MOVWF INDF0
+        run(&mut cpu, 1);
+        assert_eq!(cpu.fsr[0], SFR_FSR1H);
+        assert_eq!(cpu.fsr[1], 0x7700);
     }
 
     #[test]
