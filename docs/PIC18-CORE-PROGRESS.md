@@ -68,23 +68,38 @@ returns `SimulationError::DecodeError(pc)`; no opcode is guessed.
 * Modeled SFRs: WREG, STATUS, BSR, FSR0L/H, FSR1L/H, FSR2L/H, PRODL/H, TABLAT,
   TBLPTRL/H/U, PCL, PCLATH, PCLATU, STKPTR, TOSL/H/U. Other SFR addresses are
   plain bytes in the file for now.
-* Indirect aliases are the classic Access Bank virtual registers: `INDFn` at
-  `0xFEF`/`0xFE7`/`0xFDF`, with `POSTINC`, `POSTDEC`, `PREINC` and `PLUSW`
-  adjacent. Byte-oriented and bit-oriented file operations resolve through the
-  same helper.
+* Indirect aliases are the classic Access Bank virtual registers in three
+  groups: `0xFDB..0xFDF` (FSR2), `0xFE3..0xFE7` (FSR1) and `0xFEB..0xFEF`
+  (FSR0), each ordered `PLUSW`, `PREINC`, `POSTDEC`, `POSTINC`, `INDF`. This
+  matches DS41303F §5.4.3.1/§5.4.3.3, including the INDF1 example at `0xFE7`.
+  Byte-oriented and bit-oriented file operations resolve through the same
+  helper.
 * `INDFn` reads/writes `FSRn` without changing it. `POSTINCn`/`POSTDECn`
   access the current address and then move the pointer by one;
   `PREINCn` moves before the access. A read-modify-write instruction
   (`ADDWF`, `INCF`, `BCF`, ...) resolves the operand once, writes the original
   location, then applies the pointer update once. `PLUSWn` adds the signed
   8-bit WREG offset and changes neither WREG nor `FSRn`.
+* If an indirect access resolves to any of the 15 virtual operand addresses
+  above, the virtual register is not physically implemented: an indirect read
+  returns `0x00`, and an indirect write is a `NOP` (DS41303F §5.4.3.3). A
+  rejected write also drops the selected operand's post-action, because no
+  access is committed in this model.
+* If an indirect write resolves to an FSR pair (`FSR0L/H`, `FSR1L/H`,
+  `FSR2L/H`), the byte is stored in the FSR, but the selected operand's
+  `POSTINC`/`POSTDEC` is not applied. `PREINC` has already run before the
+  target is known. This is the documented self-target interaction, e.g.
+  `POSTDEC2` targeting `FSR2L` stores the value without decrementing.
 * FSR addresses and updates wrap in the 12-bit data space. The direct SFR
-  read/write helpers still expose the raw file bytes; indirect expansion is an
-  instruction-operand feature.
+  read/write helpers still expose the raw file bytes; indirect expansion and
+  virtual-target filtering are instruction-operand features.
 * `MOVFF` keeps its 12-bit absolute-address path and does not expand virtual
   `FSRn` aliases in this milestone. The public material inspected did not
   establish that behavior for `MOVFF`, so it is left explicit rather than
   guessed.
+* `TOSL/H/U` remain direct hardware-stack mirrors; indirect-target semantics
+  for those stack registers are not claimed. The virtual-operand rule above is
+  limited to the documented 15 INDF/POST/PRE/PLUS addresses.
 
 ### Program counter and return stack
 
@@ -106,8 +121,8 @@ Commands run from this worktree:
 
 | Command | Result |
 | :--- | :--- |
-| `cargo test -p labwired-core pic18` | PASS: 28 PIC18 unit tests; other test binaries filtered to 0 |
-| `cargo test -p labwired-core --lib cpu::pic18` | PASS: 28 passed; 0 failed |
+| `cargo test -p labwired-core pic18` | PASS: 30 PIC18 unit tests; other test binaries filtered to 0 |
+| `cargo test -p labwired-core --lib cpu::pic18` | PASS: 30 passed; 0 failed |
 | `cargo fmt --all -- --check` | PASS |
 | XC8 local check (`command -v xc8-cc` / `xc8`, repository fixture search) | No XC8 compiler on PATH and no PIC18 ELF/HEX fixture in the worktree; no real firmware smoke is claimed |
 | `cargo test -p labwired-core one_arch_policy` | PASS: 8 passed; 0 failed |
@@ -124,7 +139,9 @@ The PIC18 tests cover reset and PC alignment, Access Bank vs BSR addressing,
 `INDF0/1/2` through their FSRs with a conflicting BSR, FSR1/FSR2 post-increment,
 `POSTINC` read/write and read-modify-write pointer movement, `POSTDEC`/`PREINC`
 ordering, `PLUSW` positive and negative signed offsets without pointer/WREG
-changes, 12-bit pointer wrap, indirect bit operations, exact
+changes, 12-bit pointer wrap, indirect bit operations, reads/writes of all
+15 virtual operand aliases (`0x00` read, `NOP` write), the FSR-pair
+write/post-action suppression (including self-targeting `POSTDEC2`), exact
 `C`/`DC`/`Z`/`OV`/`N` cases, logic/`CLRF`/`MOVF` flag rules, `MOVFF` absolute
 addressing, two-word `GOTO`/`CALL`/`RETURN`, `LFSR`, conditional branches,
 `BTG`/`BTFSS`, `RCALL`/`RETLW`, skip over a two-word instruction, return-stack
@@ -138,7 +155,8 @@ Commit: `d6402f376` (`feat(core): add PIC18 vertical slice`).
 Follow-ups: `75f859ce9` (`fix(pic18): let MOVFF to PCL update the PC`),
 `7f81f318b` (progress note), `c718f35a8`
 (`test(pic18): cover PCL jumps and remaining bit/return ops`), and
-`d56049d17` (`feat(pic18): implement FSR indirect addressing`).
+`d56049d17` (`feat(pic18): implement FSR indirect addressing`), plus
+`3fb236eec` (`fix(pic18): honor virtual indirect target rules`).
 
 ## Next missing pieces
 
@@ -160,8 +178,9 @@ Follow-ups: `75f859ce9` (`fix(pic18): let MOVFF to PCL update the PC`),
 5. **Data-memory completeness.** Expanded (>4 KiB) data memory and wider FSR
    pointers, direct `FSRnH` field masking (indirect paths already wrap at 12
    bits), device-specific Access Bank split (`0x60` vs `0x80`), unmodeled SFR
-   reset values, and `MOVFF`/`MOVFFL` virtual-alias behavior that still needs
-   authoritative evidence.
+   reset values, indirect-target behavior for `TOSL/H/U`, and
+   `MOVFF`/`MOVFFL` virtual-alias behavior that still needs authoritative
+   evidence.
 6. **Device geometry and integration.** Per-device flash size, RAM/bank count,
    stack depth, `STVREN`, chip YAMLs, console/UART wiring, and a real
    end-to-end firmware run. Interrupt and peripheral support must not be
