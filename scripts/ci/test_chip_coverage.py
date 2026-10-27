@@ -353,6 +353,21 @@ def test_a_matrix_system_override_proves_each_exact_chip_only_when_run(tmp_path)
     assert all(chip in out for chip in chips)
     assert "NO CI gate executes firmware" in out
 
+    # Compound shell filters can skip an iteration without using a multiline
+    # `if` block, so they must also be rejected.
+    compound_guarded = valid_workflow.replace(
+        "labwired test --script",
+        '[[ "$system" != "never" ]] && continue\n            labwired test --script',
+    )
+    workflow.write_text(compound_guarded)
+    parsed_workflow = cc.load_yaml(workflow)
+    compound_run = parsed_workflow["jobs"]["coverage-matrix-smoke"]["steps"][0]["run"]
+    assert '[[ "$system" != "never" ]] && continue' in compound_run
+    code, out = run_gate(tmp_path)
+    assert code == 1, out
+    assert all(chip in out for chip in chips)
+    assert "NO CI gate executes firmware" in out
+
     workflow.write_text(valid_workflow.replace(' --system "$system"', ""))
     code, out = run_gate(tmp_path)
     assert code == 1

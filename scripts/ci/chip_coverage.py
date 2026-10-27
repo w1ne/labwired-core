@@ -181,12 +181,13 @@ def _exact_system_loop_runs_cli(run: str) -> bool:
 
     lines = loop.group("body").splitlines()
     # This deliberately accepts a straight-line loop body only. A guard,
-    # nested loop, or early exit could make a syntactically present CLI call
-    # skip some exact systems while the coverage ledger credits every one.
+    # compound operator, nested loop, or early exit could make a syntactically
+    # present CLI call skip some exact systems while the ledger credits all.
     shell_control = re.compile(
-        r"^(?:if|elif|else|fi|case|esac|while|until|select|for|continue|break|return|exit)\b"
+        r"\b(?:if|elif|else|fi|case|esac|while|until|select|for|continue|break|return|exit)\b"
+        r"|&&|\|\||;"
     )
-    if any(shell_control.match(line.strip()) for line in lines):
+    if any(shell_control.search(line) for line in lines):
         return False
 
     index = 0
