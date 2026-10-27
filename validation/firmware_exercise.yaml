@@ -230,6 +230,71 @@ chips:
       - {p: bkp, ev: "configs/chips/stm32f103.yaml:222 (type: stub)", note: "CLOSABLE: author-declared stub with no schema wired in the descriptor — the backup-domain registers (RTC backup data and calibration) are not modelled; no gated firmware touches the window."}
       - {p: "WWDG", ev: "crates/core/src/peripherals/wwdg.rs:63 (configs/chips/stm32f103.yaml:185)", note: "CLOSABLE: inert register bank — tick() is the trait-default no-op, so an armed watchdog never fires. No behavioural test and no gated firmware drives it; reset values are pinned by the bench-F103 probe in stm32f1_mmio_diff."}
 
+
+  - id: stm32f103c4
+    arch: cortex-m3
+    headline: "Exact low-density x4/x6 geometry slice for stm32f103c4; it reuses the shared medium-density STM32F103 peripheral map, so firmware-exercise claims stay under `stm32f103`. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32f103c6
+    arch: cortex-m3
+    headline: "Exact low-density x4/x6 geometry slice for stm32f103c6; it reuses the shared medium-density STM32F103 peripheral map, so firmware-exercise claims stay under `stm32f103`. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32f103r4
+    arch: cortex-m3
+    headline: "Exact low-density x4/x6 geometry slice for stm32f103r4; it reuses the shared medium-density STM32F103 peripheral map, so firmware-exercise claims stay under `stm32f103`. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32f103r4h
+    arch: cortex-m3
+    headline: "Exact low-density x4/x6 geometry slice for stm32f103r4h; it reuses the shared medium-density STM32F103 peripheral map, so firmware-exercise claims stay under `stm32f103`. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32f103r6
+    arch: cortex-m3
+    headline: "Exact low-density x4/x6 geometry slice for stm32f103r6; it reuses the shared medium-density STM32F103 peripheral map, so firmware-exercise claims stay under `stm32f103`. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32f103r6h
+    arch: cortex-m3
+    headline: "Exact low-density x4/x6 geometry slice for stm32f103r6h; it reuses the shared medium-density STM32F103 peripheral map, so firmware-exercise claims stay under `stm32f103`. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32f103t4
+    arch: cortex-m3
+    headline: "Exact low-density x4/x6 geometry slice for stm32f103t4; it reuses the shared medium-density STM32F103 peripheral map, so firmware-exercise claims stay under `stm32f103`. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32f103t6
+    arch: cortex-m3
+    headline: "Exact low-density x4/x6 geometry slice for stm32f103t6; it reuses the shared medium-density STM32F103 peripheral map, so firmware-exercise claims stay under `stm32f103`. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
   - id: stm32f401
     arch: cortex-m4f
     headline: "All 12 declared rubric classes are driven by its tier-1 fixture — including a byte-exact memory-to-memory transfer on DMA2 plus the EXTI→NVIC and TIM1-PWM checks — while PWR_CR.VOS is programmed by the PR-gated Arduino startup and DBGMCU_CR by the Zephyr SoC-debug init; TIM2 input capture is driven by two register-level firmwares (HC-SR04 echo width through the CC2 interrupt, and PWM-input period/duty in slave reset mode); that leaves the other stream controller, DMA1, as the chip's one beyond-rubric gap."
@@ -241,6 +306,103 @@ chips:
         fw: timer-capture/freq-meter
         ev: "timer_input_capture.rs:pwm_input_mode_measures_period_and_duty_exactly"
     advanced_unit_only: [DMA1]
+    advanced_dead: []
+    shim: []
+
+
+  - id: stm32f401cb
+    arch: cortex-m4f
+    headline: "Exact orderable geometry slice for stm32f401cb on the shared F401 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32f401cc
+    arch: cortex-m4f
+    headline: "Exact orderable geometry slice for stm32f401cc on the shared F401 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32f401cd
+    arch: cortex-m4f
+    headline: "Exact orderable geometry slice for stm32f401cd on the shared F401 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32f401ce
+    arch: cortex-m4f
+    headline: "Exact orderable geometry slice for stm32f401ce on the shared F401 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32f401rb
+    arch: cortex-m4f
+    headline: "Exact orderable geometry slice for stm32f401rb on the shared F401 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32f401rc
+    arch: cortex-m4f
+    headline: "Exact orderable geometry slice for stm32f401rc on the shared F401 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32f401rd
+    arch: cortex-m4f
+    headline: "Exact orderable geometry slice for stm32f401rd on the shared F401 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32f401re
+    arch: cortex-m4f
+    headline: "Exact orderable geometry slice for stm32f401re on the shared F401 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32f401vb
+    arch: cortex-m4f
+    headline: "Exact orderable geometry slice for stm32f401vb on the shared F401 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32f401vc
+    arch: cortex-m4f
+    headline: "Exact orderable geometry slice for stm32f401vc on the shared F401 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32f401vd
+    arch: cortex-m4f
+    headline: "Exact orderable geometry slice for stm32f401vd on the shared F401 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32f401ve
+    arch: cortex-m4f
+    headline: "Exact orderable geometry slice for stm32f401ve on the shared F401 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`."
+    functional: []
+    advanced_unit_only: []
     advanced_dead: []
     shim: []
 
@@ -265,6 +427,55 @@ chips:
   # ── declaring a wall of zero stubs the F401 does not; the F411 owns its own
   # ── tier-1 row through its own descriptor. Neither F7 part is a tier-1
   # ── target, so its entry carries the whole story.
+
+  - id: stm32f407ie
+    arch: cortex-m4f
+    headline: "Exact orderable geometry slice for stm32f407ie on the shared F407 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32f407ig
+    arch: cortex-m4f
+    headline: "Exact orderable geometry slice for stm32f407ig on the shared F407 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32f407ve
+    arch: cortex-m4f
+    headline: "Exact orderable geometry slice for stm32f407ve on the shared F407 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32f407vg
+    arch: cortex-m4f
+    headline: "Exact orderable geometry slice for stm32f407vg on the shared F407 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32f407ze
+    arch: cortex-m4f
+    headline: "Exact orderable geometry slice for stm32f407ze on the shared F407 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32f407zg
+    arch: cortex-m4f
+    headline: "Exact orderable geometry slice for stm32f407zg on the shared F407 peripheral engine; firmware-exercise claims stay under the family entry. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
   - id: stm32f401cdu6
     arch: cortex-m4f
     headline: "384 KiB Black-Pill package variant of the F401. Its PR-gated firmware is the UART-only black-pill demo (`firmware_survival::test_stm32f401cdu6_demo_survival`, `OK` over USART2); the install-canary lane runs the sibling stm32f401 tier-1 ELF against this descriptor but asserts only `TIER1 clock PASS`, because this descriptor declares no RCC clock gates and zero-window stubs for RTC/IWDG/WWDG/DMA1-2/CRC/SDIO/SYSCFG/I2S extensions/OTG FS/DBG — the sibling fixture's gate-proving timer/spi/adc/pwm checks, its wdt/rtc checks and its byte-exact DMA2 transfer all fail here (a dev run prints clock/gpio/i2c/irq PASS and seven FAIL lines, `dma-ndtr` among them). PWR is a real stm32f4-profile model that no firmware on this descriptor drives."

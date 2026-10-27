@@ -1,0 +1,5 @@
+# Exact-part CI smoke system for the STM32 catalog model stm32f401rb.
+name: "stm32f401rb-smoke"
+chip: "../../chips/stm32f401rb.yaml"
+external_devices: []
+board_io: []

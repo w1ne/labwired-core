@@ -1,0 +1,5 @@
+# Exact-part CI smoke system for the STM32 catalog model stm32f401cd.
+name: "stm32f401cd-smoke"
+chip: "../../chips/stm32f401cd.yaml"
+external_devices: []
+board_io: []

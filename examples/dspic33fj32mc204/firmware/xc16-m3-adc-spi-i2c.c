@@ -67,6 +67,10 @@ int main(void)
     while (!SPI1STATbits.SPIRBF) {
     }
     SPI_RESULT = SPI1BUF & 0x00FF;
+    if (SPI_RESULT != 0x00A5) {
+        FAIL_CODE = 2;      /* no loopback / wrong byte */
+        goto fail;
+    }
 
     /* ---------- I2C1: master, TMP102 at 0x48 ---------- */
     I2C1CON = 0x8000;       /* I2CEN */

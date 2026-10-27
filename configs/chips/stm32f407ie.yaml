@@ -1,0 +1,498 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+# SOURCE OF TRUTH for geometry, package and ordering data:
+#   ST DS8626 Rev 12, "STM32F405xx STM32F407xx" datasheet, Table 2
+#   (features and peripheral counts) and section 7 (part numbering):
+#   https://www.st.com/resource/en/datasheet/stm32f407vg.pdf
+#
+# SOURCE OF TRUTH for peripheral bases/IRQs:
+#   configs/chips/stm32f407.yaml (STM32F407VGT6 public engine), bound to
+#   RM0090 and the vendored STM32F407 SVD.
+#
+# REUSE BOUNDARY, STATED PLAINLY:
+#   This is an exact orderable GEOMETRY descriptor (flash, package, GPIO/ADC
+#   channel counts, suffix) on the public STM32F407VGT6 peripheral map, not a
+#   new peripheral model. `ram` is the 128 KiB main SRAM the engine maps at
+#   0x2000_0000; the 64 KiB CCM at 0x1000_0000 is not declared, exactly as on
+#   the reference descriptor. For Z/I packages the extra GPIOF-I ports and
+#   ADC2/ADC3 channels (up to 24) are NOT modelled here; only the reference
+#   map's ADC1 inputs are transcribed. No silicon capture exists for these
+#   specific orderable parts.
+
+# EXACT ORDERABLE GEOMETRY for STM32F407IE (STM32F407 xE).
+#
+#   Flash 512 KB at 0x0800_0000 · SRAM 192 KB total (128 KiB main at
+#   0x2000_0000 + 64 KiB CCM at 0x1000_0000; only main SRAM is declared)
+#   176-pin LQFP176/UFBGA176 · 140 GPIOs · 24 ADC channels on silicon
+#
+# Ordering suffixes (package + temperature 6/7 + carrier):
+#   T6, T6TR, T7, T7TR, H6, H6TR, H7, H7TR
+
+name: "stm32f407ie"
+arch: "arm"
+core: "cortex-m4"
+registers_count: 150
+# STM32F407 maximum core clock, 168 MHz (DS8626).
+cpu_hz: 168_000_000
+# DS8626 Rev 12, Table 48 "I/O static characteristics", FT/TTa/NRST I/O:
+# VIL max 0.3·VDD, VIH min 0.7·VDD.
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.3
+  vih: 0.7
+
+# Descriptive ordering data. The engine ignores these keys; the focused
+# `stm32_variant_geometry` gate parses and checks them against DS8626.
+package: "LQFP176/UFBGA176"
+pin_count: 176
+gpio_pin_count: 140
+adc_channels: 24
+variant: "xE"
+orderable_suffixes: ["T6", "T6TR", "T7", "T7TR", "H6", "H6TR", "H7", "H7TR"]
+
+flash:
+  base: 0x08000000
+  size: "512KB"
+ram:
+  base: 0x20000000
+  size: "128KB"
+
+# Family-wide P<port><bit> label map for the GPIOA-GPIOE ports the reference
+# engine declares. Package bond-out is a board fact; this map only says which
+# GPIO register/bit a label names when that pad is bonded.
+pins:
+  PA0: { gpio: "gpioa", bit: 0 }
+  PA1: { gpio: "gpioa", bit: 1 }
+  PA2: { gpio: "gpioa", bit: 2 }
+  PA3: { gpio: "gpioa", bit: 3 }
+  PA4: { gpio: "gpioa", bit: 4 }
+  PA5: { gpio: "gpioa", bit: 5 }
+  PA6: { gpio: "gpioa", bit: 6 }
+  PA7: { gpio: "gpioa", bit: 7 }
+  PA8: { gpio: "gpioa", bit: 8 }
+  PA9: { gpio: "gpioa", bit: 9 }
+  PA10: { gpio: "gpioa", bit: 10 }
+  PA11: { gpio: "gpioa", bit: 11 }
+  PA12: { gpio: "gpioa", bit: 12 }
+  PA13: { gpio: "gpioa", bit: 13 }
+  PA14: { gpio: "gpioa", bit: 14 }
+  PA15: { gpio: "gpioa", bit: 15 }
+  PB0: { gpio: "gpiob", bit: 0 }
+  PB1: { gpio: "gpiob", bit: 1 }
+  PB2: { gpio: "gpiob", bit: 2 }
+  PB3: { gpio: "gpiob", bit: 3 }
+  PB4: { gpio: "gpiob", bit: 4 }
+  PB5: { gpio: "gpiob", bit: 5 }
+  PB6: { gpio: "gpiob", bit: 6 }
+  PB7: { gpio: "gpiob", bit: 7 }
+  PB8: { gpio: "gpiob", bit: 8 }
+  PB9: { gpio: "gpiob", bit: 9 }
+  PB10: { gpio: "gpiob", bit: 10 }
+  PB11: { gpio: "gpiob", bit: 11 }
+  PB12: { gpio: "gpiob", bit: 12 }
+  PB13: { gpio: "gpiob", bit: 13 }
+  PB14: { gpio: "gpiob", bit: 14 }
+  PB15: { gpio: "gpiob", bit: 15 }
+  PC0: { gpio: "gpioc", bit: 0 }
+  PC1: { gpio: "gpioc", bit: 1 }
+  PC2: { gpio: "gpioc", bit: 2 }
+  PC3: { gpio: "gpioc", bit: 3 }
+  PC4: { gpio: "gpioc", bit: 4 }
+  PC5: { gpio: "gpioc", bit: 5 }
+  PC6: { gpio: "gpioc", bit: 6 }
+  PC7: { gpio: "gpioc", bit: 7 }
+  PC8: { gpio: "gpioc", bit: 8 }
+  PC9: { gpio: "gpioc", bit: 9 }
+  PC10: { gpio: "gpioc", bit: 10 }
+  PC11: { gpio: "gpioc", bit: 11 }
+  PC12: { gpio: "gpioc", bit: 12 }
+  PC13: { gpio: "gpioc", bit: 13 }
+  PC14: { gpio: "gpioc", bit: 14 }
+  PC15: { gpio: "gpioc", bit: 15 }
+  PD0: { gpio: "gpiod", bit: 0 }
+  PD1: { gpio: "gpiod", bit: 1 }
+  PD2: { gpio: "gpiod", bit: 2 }
+  PD3: { gpio: "gpiod", bit: 3 }
+  PD4: { gpio: "gpiod", bit: 4 }
+  PD5: { gpio: "gpiod", bit: 5 }
+  PD6: { gpio: "gpiod", bit: 6 }
+  PD7: { gpio: "gpiod", bit: 7 }
+  PD8: { gpio: "gpiod", bit: 8 }
+  PD9: { gpio: "gpiod", bit: 9 }
+  PD10: { gpio: "gpiod", bit: 10 }
+  PD11: { gpio: "gpiod", bit: 11 }
+  PD12: { gpio: "gpiod", bit: 12 }
+  PD13: { gpio: "gpiod", bit: 13 }
+  PD14: { gpio: "gpiod", bit: 14 }
+  PD15: { gpio: "gpiod", bit: 15 }
+  PE0: { gpio: "gpioe", bit: 0 }
+  PE1: { gpio: "gpioe", bit: 1 }
+  PE2: { gpio: "gpioe", bit: 2 }
+  PE3: { gpio: "gpioe", bit: 3 }
+  PE4: { gpio: "gpioe", bit: 4 }
+  PE5: { gpio: "gpioe", bit: 5 }
+  PE6: { gpio: "gpioe", bit: 6 }
+  PE7: { gpio: "gpioe", bit: 7 }
+  PE8: { gpio: "gpioe", bit: 8 }
+  PE9: { gpio: "gpioe", bit: 9 }
+  PE10: { gpio: "gpioe", bit: 10 }
+  PE11: { gpio: "gpioe", bit: 11 }
+  PE12: { gpio: "gpioe", bit: 12 }
+  PE13: { gpio: "gpioe", bit: 13 }
+  PE14: { gpio: "gpioe", bit: 14 }
+  PE15: { gpio: "gpioe", bit: 15 }
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40023800
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32f407/rcc.yaml"
+      profile: "stm32f4"
+      # ENR writable masks = the F407's implemented-peripheral set, silicon-
+      # confirmed on the bench F407 (stm32f4_mmio_diff). Per-part: the smaller
+      # F401 sharing F4Rcc keeps the default (unmasked) until benched.
+      rcc_ahb1enr_mask: 0x7E7411FF
+      rcc_apb1enr_mask: 0x36FEC9FF
+      rcc_apb2enr_mask: 0x00075F33
+  - id: "gpioa"
+    type: "stm32f4_gpio"
+    base_address: 0x40020000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32f407/gpioa.yaml"
+  - id: "gpiob"
+    type: "stm32f4_gpio"
+    base_address: 0x40020400
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32f407/gpiob.yaml"
+  - id: "gpioc"
+    type: "stm32f4_gpio"
+    base_address: 0x40020800
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32f407/gpioc.yaml"
+  - id: "gpiod"
+    type: "stm32f4_gpio"
+    base_address: 0x40020C00
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32f407/gpiod.yaml"
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+    config:
+      debug_schema: "../peripherals/stm32f407/stk.yaml"
+  - id: "uart2"
+    type: "uart"
+    base_address: 0x40004400
+    size: "1KB"
+    irq: 38
+    # F4 USART CR3 adds bit 11 (ONEBIT) over the shared F1 map → 0xFFF.
+    # Silicon-confirmed on the bench F407 (stm32f4_mmio_diff).
+    config:
+      debug_schema: "../peripherals/stm32f407/usart2.yaml"
+      cr3_mask: 0xFFF
+  - id: "i2c1"
+    type: "i2c"
+    base_address: 0x40005400
+    size: "1KB"
+    irq: 31
+    # I2C1 is clocked from RCC_APB1ENR.I2C1EN (bit 21). Unclocked out of reset
+    # (RM0090 §6.3.13) — registers read 0 / drop writes until the clock is on.
+    clock: { reg: "apb1enr", bit: 21 }
+    # I2C1 has TWO NVIC lines: EV (below) and ER = 32. AF/BERR/ARLO/OVR raise
+    # ER under CR2.ITERREN, and an interrupt-mode HAL (STM32duino 3.x uses
+    # HAL_I2C_Master_Transmit_IT) only learns an address was NACKed there.
+    config:
+      debug_schema: "../peripherals/stm32f407/i2c1.yaml"
+      irq_error: 32
+  - id: "gpioe"
+    type: "stm32f4_gpio"
+    base_address: 0x40021000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32f407/gpioe.yaml"
+  # TIM1 — advanced-control PWM timer (APB2). The `_pwm` id suffix declares
+  # the pwm class alongside timer. RCC_APB2ENR.TIM1EN (bit 0).
+  - id: "tim1_pwm"
+    type: "timer"
+    base_address: 0x40010000
+    size: "1KB"
+    irq: 27
+    clock: { reg: "apb2enr", bit: 0 }
+    config:
+      input_capture: "stm32f4"
+      debug_schema: "../peripherals/stm32f407/tim1.yaml"
+      advanced: true
+  - id: "tim2"
+    type: "timer"
+    base_address: 0x40000000
+    size: "1KB"
+    irq: 28
+    config:
+      input_capture: "stm32f4"
+      debug_schema: "../peripherals/stm32f407/tim2.yaml"
+      width: 32
+    # TIM2 is clocked from RCC_APB1ENR.TIM2EN (bit 0). Unclocked out of reset
+    # (RM0090 §6.3.11) — ARR reads its 0xFFFFFFFF reset only once the clock is on.
+    clock: { reg: "apb1enr", bit: 0 }
+  - id: "tim3"
+    type: "timer"
+    base_address: 0x40000400
+    size: "1KB"
+    irq: 29
+    config:
+      input_capture: "stm32f4"
+      debug_schema: "../peripherals/stm32f407/tim3.yaml"
+  - id: "tim4"
+    type: "timer"
+    base_address: 0x40000800
+    size: "1KB"
+    irq: 30
+    config:
+      input_capture: "stm32f4"
+      debug_schema: "../peripherals/stm32f407/tim4.yaml"
+  - id: "tim5"
+    type: "timer"
+    base_address: 0x40000C00
+    size: "1KB"
+    irq: 50
+    config:
+      input_capture: "stm32f4"
+      debug_schema: "../peripherals/stm32f407/tim5.yaml"
+      width: 32
+  - id: "usart1"
+    type: "uart"
+    base_address: 0x40011000
+    size: "1KB"
+    irq: 37
+    config:
+      debug_schema: "../peripherals/stm32f407/usart1.yaml"
+      cr3_mask: 0xFFF
+  - id: "usart3"
+    type: "uart"
+    base_address: 0x40004800
+    size: "1KB"
+    irq: 39
+    config:
+      debug_schema: "../peripherals/stm32f407/usart3.yaml"
+      cr3_mask: 0xFFF
+  - id: "usart6"
+    type: "uart"
+    base_address: 0x40011400
+    size: "1KB"
+    irq: 71
+    config:
+      debug_schema: "../peripherals/stm32f407/usart6.yaml"
+      cr3_mask: 0xFFF
+  - id: "spi1"
+    type: "spi"
+    base_address: 0x40013000
+    size: "1KB"
+    irq: 35
+    # SPI1 is clocked from RCC_APB2ENR.SPI1EN (bit 12). Unclocked out of reset
+    # (RM0090 §6.3.16) — SR.TXE never asserts until the clock is enabled.
+    clock: { reg: "apb2enr", bit: 12 }
+    # F4 classic SPI CR2 adds bit 4 (FRF/TI-mode) over the F1 map → 0xF7.
+    config:
+      debug_schema: "../peripherals/stm32f407/spi1.yaml"
+      cr2_mask: 0xF7
+      # F407 silicon does not latch CR1 bit 12 (CRCNEXT): writing 0xFFFF reads
+      # back 0xEFFF (silicon-confirmed over SWD). F1/L0/L4 leave it writable.
+      cr1_mask: 0xEFFF
+  - id: "spi2"
+    type: "spi"
+    base_address: 0x40003800
+    size: "1KB"
+    irq: 36
+    config:
+      debug_schema: "../peripherals/stm32f407/spi2.yaml"
+      cr2_mask: 0xF7
+      # F407 silicon does not latch CR1 bit 12 (CRCNEXT): writing 0xFFFF reads
+      # back 0xEFFF (silicon-confirmed over SWD). F1/L0/L4 leave it writable.
+      cr1_mask: 0xEFFF
+  - id: "spi3"
+    type: "spi"
+    base_address: 0x40003C00
+    size: "1KB"
+    irq: 51
+    config:
+      debug_schema: "../peripherals/stm32f407/spi3.yaml"
+      cr2_mask: 0xF7
+      # F407 silicon does not latch CR1 bit 12 (CRCNEXT): writing 0xFFFF reads
+      # back 0xEFFF (silicon-confirmed over SWD). F1/L0/L4 leave it writable.
+      cr1_mask: 0xEFFF
+  - id: "i2c2"
+    type: "i2c"
+    base_address: 0x40005800
+    size: "1KB"
+    irq: 33
+    config:
+      debug_schema: "../peripherals/stm32f407/i2c2.yaml"
+  - id: "i2c3"
+    type: "i2c"
+    base_address: 0x40005C00
+    size: "1KB"
+    irq: 72
+    config:
+      debug_schema: "../peripherals/stm32f407/i2c3.yaml"
+  - id: "adc1"
+    type: "adc"
+    base_address: 0x40012000
+    size: "1KB"
+    irq: 18
+    # ADC1 is clocked from RCC_APB2ENR.ADC1EN (bit 8 on F4 — NOT bit 9 as on F1).
+    # Unclocked out of reset (RM0090 §6.3.16) — the converter is dead until on.
+    clock: { reg: "apb2enr", bit: 8 }
+    config:
+      debug_schema: "../peripherals/stm32f407/adc1.yaml"
+      profile: "stm32f4"
+  # bxCAN1 — basic-extended CAN (RM0090 §32). Same IP as F1/L4; matrix L8
+  # loopback uses BTR.LBKM + filter accept-all. Clock: RCC_APB1ENR.CAN1EN bit 25.
+  - id: "bxcan1"
+    type: "bxcan"
+    base_address: 0x40006400
+    size: "1KB"
+    clock: { reg: "apb1enr", bit: 25 }
+    config:
+      debug_schema: "../peripherals/stm32f407/can1.yaml"
+  # SYSCFG (RM0090 §9 / RM0368 §7): EXTICR1..4 select the GPIO port of each
+  # EXTI line 0..15, so external edges reach EXTI only from the selected port.
+  # Clocked from RCC_APB2ENR.SYSCFGEN (bit 14).
+  - id: "syscfg"
+    type: "syscfg"
+    base_address: 0x40013800
+    size: "1KB"
+    clock: { reg: "apb2enr", bit: 14 }
+    config:
+      debug_schema: "../peripherals/stm32f407/syscfg.yaml"
+      profile: "stm32f4"
+  - id: "exti"
+    type: "exti"
+    base_address: 0x40013C00
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32f407/exti.yaml"
+      lines: 23
+  # NVIC is wired unconditionally for Cortex-M machines; this entry declares
+  # the tier1 irq class and pins the canonical base.
+  - id: "nvic"
+    type: "nvic"
+    base_address: 0xE000E100
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32f407/nvic.yaml"
+  # IWDG — independent watchdog (RM0090 §21). Clocked from the dedicated LSI
+  # oscillator, NOT an APB/AHB peripheral-enable bit, so it carries no `clock:`
+  # gate. The KR key (0x5555) protects PR/RLR writes instead.
+  - id: "iwdg"
+    type: "iwdg"
+    base_address: 0x40003000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32f407/iwdg.yaml"
+  # RTC — calendar real-time clock (RM0090 §26; same IP as the L4 `rtc` model).
+  # Lives in the backup domain, clock-enabled via RCC_BDCR.RTCEN — outside the
+  # APB/AHB peripheral-enable gate this model expresses, so it is left ungated.
+  - id: "rtc"
+    type: "rtc"
+    base_address: 0x40002800
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32f407/rtc.yaml"
+  - id: "dbgmcu"
+    type: "dbgmcu"
+    base_address: 0xE0042000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32f407/dbg.yaml"
+      # DBGMCU_IDCODE for STM32F407: DEV_ID=0x413, REV_ID=0x1001.
+      # Read from the user's silicon via `openocd -f interface/stlink.cfg
+      # -f target/stm32f4x.cfg -c "program ... verify reset exit"` — the
+      # `device id = 0x10016413` line in the program output is the
+      # authoritative source. REV_ID=0x1001 = "Rev 1", the most common
+      # silicon revision for STM32F407V/Z/IG.
+      idcode: 0x10016413
+  # DMA1 / DMA2 — stream-based DMA controllers (RM0090 §10). Eight streams each;
+  # DMA2 additionally supports memory-to-memory transfers (RM0090 §10.3.3). Each
+  # stream has its own NVIC vector — the F4 stream lines are non-contiguous
+  # (stm32f407xx.h), so they are listed explicitly per stream. Clocked from
+  # RCC_AHB1ENR (DMA1EN bit 21, DMA2EN bit 22).
+  - id: "dma1"
+    type: "stm32f4_dma"
+    base_address: 0x40026000
+    size: "1KB"
+    clock: { reg: "ahb1enr", bit: 21 }
+    config:
+      debug_schema: "../peripherals/stm32f407/dma1.yaml"
+      # DMA1_Stream0..7 NVIC positions (stm32f407xx.h): 11..17, then 47.
+      stream_irqs: [11, 12, 13, 14, 15, 16, 17, 47]
+      # Peripheral requests as [stream, SxCR.CHSEL] (RM0090 Table 42, DMA1
+      # request mapping, channel 0): SPI3_RX streams 0/2, SPI2_RX stream 3,
+      # SPI2_TX stream 4, SPI3_TX streams 5/7.
+      requests:
+        spi2_rx: [[3, 0]]
+        spi2_tx: [[4, 0]]
+        spi3_rx: [[0, 0], [2, 0]]
+        spi3_tx: [[5, 0], [7, 0]]
+  - id: "dma2"
+    type: "stm32f4_dma"
+    base_address: 0x40026400
+    size: "1KB"
+    clock: { reg: "ahb1enr", bit: 22 }
+    config:
+      debug_schema: "../peripherals/stm32f407/dma2.yaml"
+      dma2: true
+      # DMA2_Stream0..7 NVIC positions (stm32f407xx.h): 56..60, then 68..70.
+      stream_irqs: [56, 57, 58, 59, 60, 68, 69, 70]
+      # RM0090 Table 43, DMA2 request mapping (channel 3): SPI1_RX streams
+      # 0/2, SPI1_TX streams 3/5.
+      requests:
+        spi1_rx: [[0, 3], [2, 3]]
+        spi1_tx: [[3, 3], [5, 3]]
+  # FLASH interface + PWR — required by Arduino/STM32 core bring-up
+  # (HAL_RCC_ClockConfig waits on FLASH_ACR latency; SystemInit touches PWR).
+  # Same bindings as stm32f401.yaml; without them Arduino sketches bus-fault
+  # at 0x40023C00 / 0x40007000 (see validation/arduino-matrix).
+  - id: "flash"
+    type: "flash"
+    base_address: 0x40023C00
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32f407/flash.yaml"
+      profile: "f1"
+  - id: "pwr"
+    type: "pwr"
+    base_address: 0x40007000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32f407/pwr.yaml"
+
+# Regular ADC inputs by pad on the reference LQFP100 map: ADC123_IN0..IN3,
+# ADC12_IN4..IN15 (DS8626). The Z/I packages expose up to 24 ADC
+# channels on ADC1/ADC2/ADC3 (including PF pins and ADC3 inputs), but only
+# the reference descriptor's ADC1 pads are transcribed here. Consumed by
+# co-simulation `board.analog.<pad>_volts`; pads not listed are refused.
+analog_pins:
+  PA0: { peripheral: "adc1", channel: 0 }
+  PA1: { peripheral: "adc1", channel: 1 }
+  PA2: { peripheral: "adc1", channel: 2 }
+  PA3: { peripheral: "adc1", channel: 3 }
+  PA4: { peripheral: "adc1", channel: 4 }
+  PA5: { peripheral: "adc1", channel: 5 }
+  PA6: { peripheral: "adc1", channel: 6 }
+  PA7: { peripheral: "adc1", channel: 7 }
+  PB0: { peripheral: "adc1", channel: 8 }
+  PB1: { peripheral: "adc1", channel: 9 }
+  PC0: { peripheral: "adc1", channel: 10 }
+  PC1: { peripheral: "adc1", channel: 11 }
+  PC2: { peripheral: "adc1", channel: 12 }
+  PC3: { peripheral: "adc1", channel: 13 }
+  PC4: { peripheral: "adc1", channel: 14 }
+  PC5: { peripheral: "adc1", channel: 15 }

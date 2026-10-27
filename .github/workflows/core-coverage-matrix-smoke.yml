@@ -428,6 +428,43 @@ jobs:
             profile_dir: release
             script: examples/vegaboard-ri5cy/io-smoke.yaml
             system: examples/vegaboard-ri5cy/system.yaml
+          # One shared ARMv6-M spin image boots against every exact STM32
+          # Exact chip descriptor. The system override selects each part's own
+          # flash/RAM geometry; the smoke claims execution only, not peripheral
+          # behavior. Grouping the variants keeps this to one build/job.
+          - id: stm32-exact-catalog
+            target: thumbv6m-none-eabi
+            crate: firmware-perf-spin
+            profile: release
+            profile_dir: release
+            script: examples/ci/arm-spin-smoke.yaml
+            exact_systems:
+              - configs/systems/stm32-catalog/stm32f103c4.yaml
+              - configs/systems/stm32-catalog/stm32f103c6.yaml
+              - configs/systems/stm32-catalog/stm32f103r4.yaml
+              - configs/systems/stm32-catalog/stm32f103r4h.yaml
+              - configs/systems/stm32-catalog/stm32f103r6.yaml
+              - configs/systems/stm32-catalog/stm32f103r6h.yaml
+              - configs/systems/stm32-catalog/stm32f103t4.yaml
+              - configs/systems/stm32-catalog/stm32f103t6.yaml
+              - configs/systems/stm32-catalog/stm32f401cb.yaml
+              - configs/systems/stm32-catalog/stm32f401cc.yaml
+              - configs/systems/stm32-catalog/stm32f401cd.yaml
+              - configs/systems/stm32-catalog/stm32f401ce.yaml
+              - configs/systems/stm32-catalog/stm32f401rb.yaml
+              - configs/systems/stm32-catalog/stm32f401rc.yaml
+              - configs/systems/stm32-catalog/stm32f401rd.yaml
+              - configs/systems/stm32-catalog/stm32f401re.yaml
+              - configs/systems/stm32-catalog/stm32f401vb.yaml
+              - configs/systems/stm32-catalog/stm32f401vc.yaml
+              - configs/systems/stm32-catalog/stm32f401vd.yaml
+              - configs/systems/stm32-catalog/stm32f401ve.yaml
+              - configs/systems/stm32-catalog/stm32f407ie.yaml
+              - configs/systems/stm32-catalog/stm32f407ig.yaml
+              - configs/systems/stm32-catalog/stm32f407ve.yaml
+              - configs/systems/stm32-catalog/stm32f407vg.yaml
+              - configs/systems/stm32-catalog/stm32f407ze.yaml
+              - configs/systems/stm32-catalog/stm32f407zg.yaml
 
     steps:
       - uses: actions/checkout@v4
@@ -489,6 +526,7 @@ jobs:
           printf 'entry point 0x%08x\n' "$entry"
 
       - name: Run matrix smoke
+        if: matrix.id != 'stm32-exact-catalog'
         run: |
           mkdir -p "out/coverage-matrix/${{ matrix.id }}"
           # nRF5340 Zephyr hello parks in arch_cpu_idle after the banner.
@@ -505,6 +543,24 @@ jobs:
             --script "${{ matrix.script }}" \
             --output-dir "out/coverage-matrix/${{ matrix.id }}" \
             --no-uart-stdout
+
+      - name: Run exact STM32 catalog variants
+        if: matrix.id == 'stm32-exact-catalog'
+        env:
+          EXACT_SYSTEMS: "${{ join(matrix.exact_systems, ' ') }}"
+        run: |
+          set -euo pipefail
+          for system in $EXACT_SYSTEMS; do
+            model=${system##*/}
+            model=${model%.yaml}
+            out="out/coverage-matrix/stm32-catalog-$model"
+            mkdir -p "$out"
+            ./target/release/labwired test \
+              --script "${{ matrix.script }}" \
+              --system "$system" \
+              --output-dir "$out" \
+              --no-uart-stdout
+          done
 
       # The dual-UE pub/sub story, gated on its own marker.
       #
