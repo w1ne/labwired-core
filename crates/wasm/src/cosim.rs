@@ -47,6 +47,24 @@ pub(crate) fn check_browser_models(
             ));
         }
         if model.adapter == CosimAdapter::Ngspice {
+            if let Some(value) = model.config.get("trace_volts") {
+                let list = value.as_sequence().ok_or_else(|| {
+                    format!(
+                        "co-sim model {} config.trace_volts must be a list of output names",
+                        model.id
+                    )
+                })?;
+                for entry in list {
+                    let name = entry.as_str().filter(|name| !name.is_empty()).ok_or_else(|| format!("co-sim model {} config.trace_volts entries must be non-empty names", model.id))?;
+                    let node = model.config.get("output_nodes").and_then(|v| v.get(name));
+                    if !model.outputs.contains_key(name) && node.is_none() {
+                        return Err(format!(
+                            "co-sim model {} config.trace_volts references unknown output {}",
+                            model.id, name
+                        ));
+                    }
+                }
+            }
             for path in model.inputs.values().chain(model.outputs.values()) {
                 if path.starts_with("pwm.duty:") || path.starts_with("adc.input_mv:") {
                     return Err(format!(
@@ -175,11 +193,7 @@ impl WasmSimulator {
                             config.id
                         ))
                     })?;
-                    Ok(crate::ngspice::adapter(
-                        &config.id,
-                        config.outputs.keys().cloned().collect(),
-                        callback,
-                    ))
+                    Ok(crate::ngspice::adapter(config, callback))
                 } else {
                     labwired_core::cosim::build_cosim_adapter_with_base(config, Path::new("."))
                 }

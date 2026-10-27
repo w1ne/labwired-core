@@ -1492,6 +1492,24 @@ impl CosimSession {
         let (routed, errors) = self
             .advance_to(machine.total_cycles, &mut machine.bus)
             .map_err(|error| CosimAdvanceError::Model { report, error })?;
+        // A failed ngspice output must stop at this boundary. Continuing to
+        // spend the batch would let firmware run against a disconnected circuit.
+        if !errors.is_empty()
+            && self
+                .configs
+                .iter()
+                .any(|config| config.adapter == ManifestCosimAdapter::Ngspice)
+        {
+            let message = errors
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join("; ");
+            return Err(CosimAdvanceError::Model {
+                report,
+                error: SimulationError::Other(format!("co-sim routing failed: {message}")),
+            });
+        }
         let new_routing_errors = errors
             .into_iter()
             .filter(|err| self.reported_errors.insert(err.to_string()))

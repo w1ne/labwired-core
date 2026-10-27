@@ -1078,3 +1078,126 @@ cosim_models:
         "co-simulation must bypass the independent JIT execution path"
     );
 }
+
+#[test]
+fn ngspice_routing_error_stops_firmware() {
+    use labwired_core::cosim::{
+        CosimAdapter, CosimSession, CosimSignals, CosimStep, CosimStepResult,
+    };
+    use labwired_core::SimResult;
+    struct Voltage;
+    impl CosimAdapter for Voltage {
+        fn step(&mut self, _: CosimStep) -> SimResult<CosimStepResult> {
+            let mut outputs = CosimSignals::new();
+            outputs.insert("v".into(), CosimSignalValue::F64(1.0));
+            Ok(CosimStepResult { outputs })
+        }
+    }
+    let chip = CHIP_YAML.replace("gpio_input_thresholds:\n  vil: 0.3\n  vih: 0.7\n", "");
+    let mut sim =
+        WasmSimulator::new_from_config(PLAIN_SYSTEM, &chip, FIRMWARE, JsValue::NULL).unwrap();
+    let config = manifest(
+        r#"
+name: route
+chip: stm32f401
+cosim_models:
+  - id: plant
+    adapter: ngspice
+    model: rc.cir
+    step_ns: 1000
+    outputs: {v: board.gpio_in.pa5}
+"#,
+    );
+    let bus = &sim.machine.as_ref().unwrap().bus;
+    let session =
+        CosimSession::new_with_factory(&config.cosim_models, bus, |_| Ok(Box::new(Voltage)))
+            .unwrap()
+            .unwrap();
+    assert!(session.binding_errors().is_empty());
+    sim.cosim = Some(session);
+    assert!(sim
+        .advance_machine(AdvanceRequest::run(Some(10000)))
+        .is_err());
+    let stopped = sim.machine.as_ref().unwrap().total_cycles;
+    assert!(sim.advance_machine(AdvanceRequest::single()).is_err());
+    assert_eq!(sim.machine.as_ref().unwrap().total_cycles, stopped);
+}
+
+#[test]
+fn ngspice_scope_records_routed_voltage_with_correct_units() {
+    use labwired_core::cosim::{AnalogTraceRegistry, CosimSignals};
+    let config = manifest(
+        r#"
+name: trace
+chip: stm32f401
+cosim_models:
+  - id: plant
+    adapter: ngspice
+    model: rc.cir
+    outputs: {v_out: board.analog.pa0_volts, digital: board.gpio_in.pa1}
+"#,
+    );
+    let registry = AnalogTraceRegistry::new();
+    let mut trace = crate::ngspice::NgspiceTrace::new(&config.cosim_models[0]);
+    trace.attach(&registry.handle(), "plant.");
+    let mut outputs = CosimSignals::new();
+    outputs.insert("v_out".into(), CosimSignalValue::F64(2.086));
+    outputs.insert("digital".into(), CosimSignalValue::Bool(true));
+    trace.record(1000000, &outputs).unwrap();
+    let batch = registry.snapshot(0);
+    assert_eq!(batch.channels, vec![AnalogChannel::volts("plant.v_out")]);
+    assert_eq!(batch.samples.len(), 1);
+    assert_eq!(batch.samples[0].time_ns, 1000000);
+    assert!((batch.samples[0].values[0] - 2.086).abs() < 1e-5);
+}
+
+#[test]
+fn ngspice_scope_can_trace_explicit_scope_only_voltages() {
+    use labwired_core::cosim::{AnalogTraceRegistry, CosimSignals};
+    let config = manifest(
+        r#"
+name: trace
+chip: stm32f401
+cosim_models:
+  - id: plant
+    adapter: ngspice
+    model: rc.cir
+    outputs: {probe: scope.internal}
+    config: {trace_volts: [probe]}
+"#,
+    );
+    let registry = AnalogTraceRegistry::new();
+    let mut trace = crate::ngspice::NgspiceTrace::new(&config.cosim_models[0]);
+    trace.attach(&registry.handle(), "plant.");
+    let mut outputs = CosimSignals::new();
+    outputs.insert("probe".into(), CosimSignalValue::F64(1.25));
+    trace.record(10, &outputs).unwrap();
+    assert_eq!(
+        registry.channels(),
+        vec![AnalogChannel::volts("plant.probe")]
+    );
+    assert_eq!(registry.snapshot(0).samples[0].values[0], 1.25);
+}
+
+#[test]
+fn ngspice_scope_refuses_values_that_overflow_its_storage() {
+    use labwired_core::cosim::{AnalogTraceRegistry, CosimSignals};
+    let config = manifest(
+        r#"
+name: trace
+chip: stm32f401
+cosim_models:
+  - id: plant
+    adapter: ngspice
+    model: rc.cir
+    outputs: {v_out: board.analog.pa0_volts}
+"#,
+    );
+    let registry = AnalogTraceRegistry::new();
+    let mut trace = crate::ngspice::NgspiceTrace::new(&config.cosim_models[0]);
+    trace.attach(&registry.handle(), "plant.");
+    let mut outputs = CosimSignals::new();
+    outputs.insert("v_out".into(), CosimSignalValue::F64(f64::MAX));
+    assert!(trace.record(10, &outputs).is_err());
+    assert!(registry.snapshot(0).samples.is_empty());
+}

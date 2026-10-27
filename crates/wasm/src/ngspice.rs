@@ -87,10 +87,99 @@ thread_local! {
 
 static NEXT_NGSPICE_CALLBACK_ID: AtomicU64 = AtomicU64::new(1);
 
+/// Voltage routes are already expressed in volts by the manifest contract.
+/// Boolean and unitless routes are deliberately not presented as scope volts.
+pub(crate) struct NgspiceTrace {
+    names: Vec<String>,
+    handle: Option<labwired_core::cosim::AnalogTraceHandle>,
+    base: usize,
+    steps: u64,
+}
+
+impl NgspiceTrace {
+    pub(crate) fn new(config: &labwired_config::CosimModelConfig) -> Self {
+        use labwired_core::cosim::SignalPath;
+        let mut names: Vec<_> = config
+            .outputs
+            .iter()
+            .filter_map(|(name, path)| match SignalPath::parse(path) {
+                Some(
+                    SignalPath::AnalogPad { .. }
+                    | SignalPath::AdcChannel { .. }
+                    | SignalPath::SupplyRail { .. },
+                ) => Some(name.clone()),
+                _ => None,
+            })
+            .collect();
+        if let Some(extra) = config
+            .config
+            .get("trace_volts")
+            .and_then(|v| v.as_sequence())
+        {
+            names.extend(extra.iter().filter_map(|v| v.as_str().map(str::to_owned)));
+        }
+        names.sort();
+        names.dedup();
+        Self {
+            names,
+            handle: None,
+            base: 0,
+            steps: 0,
+        }
+    }
+
+    pub(crate) fn attach(
+        &mut self,
+        handle: &labwired_core::cosim::AnalogTraceHandle,
+        prefix: &str,
+    ) {
+        let channels: Vec<_> = self
+            .names
+            .iter()
+            .map(|name| labwired_core::cosim::AnalogChannel::volts(format!("{prefix}{name}")))
+            .collect();
+        let mut trace = handle
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        self.base = trace.register_channels(&channels);
+        self.handle = Some(handle.clone());
+    }
+
+    pub(crate) fn record(&mut self, time_ns: u64, outputs: &CosimSignals) -> Result<(), String> {
+        if self.names.is_empty() {
+            return Ok(());
+        }
+        let mut values = Vec::with_capacity(self.names.len());
+        for name in &self.names {
+            match outputs.get(name) {
+                Some(CosimSignalValue::F64(value))
+                    if value.is_finite() && (*value as f32).is_finite() =>
+                {
+                    values.push(*value)
+                }
+                _ => {
+                    return Err(format!(
+                        "ngspice voltage output {name} must be a finite number"
+                    ))
+                }
+            }
+        }
+        self.steps += 1;
+        if let Some(handle) = &self.handle {
+            handle
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .push(self.base, self.steps, time_ns, &values);
+        }
+        Ok(())
+    }
+}
+
 struct NgspiceCallbackAdapter {
     callback_id: u64,
     model_id: String,
     expected_outputs: Vec<String>,
+    trace: NgspiceTrace,
 }
 
 impl CosimAdapter for NgspiceCallbackAdapter {
@@ -122,7 +211,18 @@ impl CosimAdapter for NgspiceCallbackAdapter {
         let result = parse_response(&self.model_id, &response).map_err(SimulationError::Other)?;
         require_outputs(&self.model_id, &result, &self.expected_outputs)
             .map_err(SimulationError::Other)?;
+        self.trace
+            .record(step.time_ns, &result.outputs)
+            .map_err(SimulationError::Other)?;
         Ok(result)
+    }
+
+    fn attach_analog_trace(
+        &mut self,
+        handle: &labwired_core::cosim::AnalogTraceHandle,
+        prefix: &str,
+    ) {
+        self.trace.attach(handle, prefix);
     }
 }
 
@@ -143,14 +243,20 @@ impl Drop for NgspiceCallbackAdapter {
 }
 
 pub(crate) fn adapter(
-    model_id: &str,
-    expected_outputs: Vec<String>,
+    config: &labwired_config::CosimModelConfig,
     callback: &Function,
 ) -> Box<dyn CosimAdapter> {
     Box::new(NgspiceCallbackAdapter {
         callback_id: register_ngspice_callback(callback.clone()),
-        model_id: model_id.to_string(),
-        expected_outputs,
+        model_id: config.id.clone(),
+        expected_outputs: {
+            let mut names: Vec<_> = config.outputs.keys().cloned().collect();
+            names.extend(NgspiceTrace::new(config).names);
+            names.sort();
+            names.dedup();
+            names
+        },
+        trace: NgspiceTrace::new(config),
     })
 }
 
