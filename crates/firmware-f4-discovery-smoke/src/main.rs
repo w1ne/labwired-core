@@ -5,7 +5,7 @@
 //! STM32F4-Discovery (MB997, STM32F407VGT6) smoke firmware: a running light
 //! over the four user LEDs plus a heartbeat line on USART2, in bare registers.
 //!
-//! Board facts (UM1467; Zephyr `stm32f4_disco`):
+//! Board facts (UM1472; Zephyr `stm32f4_disco`):
 //!   PD12..PD15 — user LEDs LD4 (green), LD3 (orange), LD5 (red), LD6 (blue),
 //!                all active high (core configs/systems/stm32f4-discovery.yaml)
 //!   PA0        — USER button (not driven here)

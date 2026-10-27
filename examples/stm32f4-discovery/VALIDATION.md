@@ -1,61 +1,55 @@
-# Validation — STM32F4-Discovery (STM32F407VGT6)
+# Validation — STM32F4DISCOVERY (MB997, STM32F407VGT6)
 
-Claims, evidence, and what is explicitly **not** claimed yet.
+**Status: simulator smoke passed 2026-10-27.** The run uses the exact
+`stm32f407vg` chip descriptor and board system below. It is not a physical
+board test.
 
 ## Tier status
 
 | Capability | Tier | Evidence |
 | :--- | :--- | :--- |
-| Boot from ELF via the vector table (PC/SP init) | smoke-tested | run below: `Initial PC: 0x8000400, SP: 0x20020000` |
-| Cortex-M4F core executing the committed firmware | smoke-tested | `labwired test` 3/3 checks, 4,000,000 steps |
-| RCC clock gates (AHB1ENR GPIOA/GPIOD, APB1ENR USART2) | smoke-tested | firmware bring-up + UART output |
-| GPIOD PD12..PD15 drive + ODR readback | smoke-tested | `hb=0 ld4=on odr=00001000` … asserted in `io-smoke.yaml` |
-| USART2 PA2 TX @ 115200 from 16 MHz HSI | smoke-tested | `F4-DISCO SMOKE` + heartbeat lines on the console sink |
-| Determinism (same inputs → same output) | smoke-tested | two runs, identical UART streams (`diff` clean) |
-| Instruction support for this firmware | audited | `unsupported_instruction_audit.sh`: 200,000 instructions, 0 unsupported |
-| USER button PA0 input | declared only | wired in the system manifest `board_io`; no firmware path reads it |
-| I²C/SPI/timers/ADC/DMA/USB/Ethernet/CAN | **not modelled here** | no claims; see `EXTERNAL_COMPONENTS.md` |
+| ELF boot and Cortex-M4F execution | smoke-tested | `labwired test` passed 3/3 assertions at 4,000,000 steps |
+| RCC gates for GPIOA/GPIOD and USART2 | smoke-tested | firmware bring-up and UART output |
+| User LEDs PD12–PD15 | smoke-tested | UART reports each LED on/off with `GPIOD_ODR` readback |
+| USART2 PA2 TX from 16 MHz HSI | smoke-tested | smoke banner and heartbeat lines captured |
+| Repeatability | smoke-tested | two runs produced identical UART logs |
+| Instruction support for this firmware | audited | 200,000 instructions, 0 unsupported |
+| USER button PA0 input | declared only | system manifest maps it; firmware does not read it |
+| I²C/SPI/timers/ADC/DMA/USB/Ethernet/CAN | **not modelled here** | see `EXTERNAL_COMPONENTS.md` |
 
-## Commands and evidence (verified 2026-10-19)
+## Commands and evidence
 
-```bash
-# from core/
+Tool: `labwired-cli 0.25.0`
+
+Firmware target: `thumbv7em-none-eabi`
+
+Firmware SHA-256: `e539bf8f3c22cdc8bb3504341cf1afeada3269655ec92c5a3fc5ac8f8a7907cf`
+
+System chip: `configs/chips/stm32f407vg.yaml`
+
+```sh
 cargo build -p firmware-f4-discovery-smoke --release --target thumbv7em-none-eabi
-#   Finished `release` profile — no warnings
-
-./target/release/labwired test \
+cargo run -q -p labwired-cli -- test \
   --script examples/stm32f4-discovery/io-smoke.yaml \
-  --output-dir out/f4-discovery-smoke --no-uart-stdout
-#   PASS  3/3 checks · io-smoke · 4000000 steps · 3.09s
-
-./target/release/labwired \
-  --firmware target/thumbv7em-none-eabi/release/firmware-f4-discovery-smoke \
-  --system configs/systems/stm32f4-discovery.yaml --max-steps 400000
-#   Initial PC: 0x8000400, SP: 0x20020000
-#   F4-DISCO SMOKE
-#   hb=0 ld4=on odr=00001000
-#   hb=1 ld4=off odr=00000000
-#   hb=2 ld3=on odr=00002000
-#   hb=3 ld3=off odr=00000000
-
-# Determinism: two runs, identical streams
-./target/release/labwired --firmware … --system … --max-steps 400000 | grep '^hb=' > run1
-./target/release/labwired --firmware … --system … --max-steps 400000 | grep '^hb=' > run2
-diff run1 run2   # clean
-
-source "$HOME/.cargo/env"
+  --output-dir out/f4-discovery-smoke-final --no-uart-stdout
+cargo run -q -p labwired-cli -- test \
+  --script examples/stm32f4-discovery/io-smoke.yaml \
+  --output-dir out/f4-discovery-smoke-repeat --no-uart-stdout
+diff out/f4-discovery-smoke-final/uart.log out/f4-discovery-smoke-repeat/uart.log
 ./scripts/unsupported_instruction_audit.sh \
   --firmware target/thumbv7em-none-eabi/release/firmware-f4-discovery-smoke \
   --system configs/systems/stm32f4-discovery.yaml \
-  --max-steps 200000 --out-dir out/unsupported-audit/stm32f4-discovery
-#   simulator exit 0 · Instructions executed: 200000 · Unsupported: 0
-#   report: out/unsupported-audit/stm32f4-discovery/report.md
+  --max-steps 200000 \
+  --out-dir out/unsupported-audit/stm32f4-discovery-final \
+  --fail-on-unsupported
 ```
 
-## Notes
+Results: build completed; both smoke runs passed **3/3 assertions** at
+4,000,000 steps; the UART logs matched. Captured UART showed `F4-DISCO SMOKE`
+and on/off readbacks for LD4/PD12, LD3/PD13, LD5/PD14, and LD6/PD15. The
+unsupported-instruction audit exited 0 with **200,000 instructions executed,
+0 unsupported**. Detailed run output is under the `out/` paths above.
 
-- The heartbeat's `odr=` field is read back from `GPIOD_ODR` after each write,
-  so the assertions check the pad the firmware actually drove, not what it
-  intended to drive.
-- The board's ST-LINK VCP is not wired to the MCU UART (UM1467); the console
-  pins are PA2/PA3. The example does not claim a USB console path.
+The heartbeat's `odr=` value is read back from `GPIOD_ODR` after each write.
+The board's ST-LINK VCP is not wired to the MCU UART (UM1472); the console
+pins are PA2/PA3. The example does not claim a USB console path.

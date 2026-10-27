@@ -18,7 +18,7 @@
 # specific demo firmware is bundled — point this YAML at your own ELF.
 
 name: "nucleo-f103rb-epaper"
-chip: "../chips/stm32f103.yaml"
+chip: "../chips/stm32f103rb.yaml"
 
 external_devices:
   - id: "epaper"

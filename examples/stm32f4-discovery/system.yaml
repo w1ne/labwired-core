@@ -3,7 +3,7 @@
 # Same board manifest as configs/systems/stm32f4-discovery.yaml, kept beside the
 # example so the package is self-contained.
 name: "stm32f4-discovery"
-chip: "../../configs/chips/stm32f407.yaml"
+chip: "../../configs/chips/stm32f407vg.yaml"
 external_devices: []
 board_io:
   - id: "led_ld4"
@@ -35,4 +35,4 @@ board_io:
     peripheral: "gpioa"
     pin: 0
     signal: "input"
-    active_high: false
+    active_high: true
