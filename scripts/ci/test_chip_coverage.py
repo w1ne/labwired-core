@@ -326,6 +326,20 @@ def test_a_matrix_system_override_proves_each_exact_chip_only_when_run(tmp_path)
         assert all(chip in out for chip in chips)
         assert "NO CI gate executes firmware" in out
 
+    # `--system` inside another option's quoted value is not a system override.
+    quoted_argument = valid_workflow.replace(
+        ' --system "$system"',
+        " --output-dir '--system \"$system\"'",
+    )
+    workflow.write_text(quoted_argument)
+    parsed_workflow = cc.load_yaml(workflow)
+    quoted_run = parsed_workflow["jobs"]["coverage-matrix-smoke"]["steps"][0]["run"]
+    assert "--output-dir '--system \"$system\"'" in quoted_run
+    code, out = run_gate(tmp_path)
+    assert code == 1, out
+    assert all(chip in out for chip in chips)
+    assert "NO CI gate executes firmware" in out
+
     # A matching invocation inside a filter can skip exact systems. Credit only
     # a straight-line loop body that invokes the CLI on every iteration.
     command_line = next(

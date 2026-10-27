@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import shlex
 import sys
 from pathlib import Path
 
@@ -242,12 +243,26 @@ def _exact_system_loop_runs_cli(run: str) -> bool:
             if not continued:
                 break
         command = " ".join(command_parts)
-        if (
-            re.search(r"[;&|`]", command)
-            or "$(" in command
-            or '--script "${{ matrix.script }}"' not in command
-            or '--system "$system"' not in command
-        ):
+        if re.search(r"[;&|`]", command) or "$(" in command:
+            return False
+        try:
+            arguments = shlex.split(command)
+        except ValueError:
+            return False
+        if len(arguments) < 2 or arguments[1] != "test":
+            return False
+
+        def has_option_value(option: str, expected: str) -> bool:
+            positions = [i for i, token in enumerate(arguments) if token == option]
+            return (
+                len(positions) == 1
+                and positions[0] + 1 < len(arguments)
+                and arguments[positions[0] + 1] == expected
+            )
+
+        if not has_option_value("--script", "${{ matrix.script }}"):
+            return False
+        if not has_option_value("--system", "$system"):
             return False
         cli_seen = True
     return cli_seen
