@@ -524,14 +524,17 @@ impl SamDmacByte {
             return;
         }
         if completed {
+            // Capture before the channels borrow: Board/CODAL latches TCMPL for
+            // NOACT and INT alike (DmaInstance / Adafruit_ZeroDMA). Software-byte
+            // / SERCOM4 TX foundation guests still gate on BTCTRL bit 3 so NOACT
+            // stays silent when INTEN is armed (sam_dmac_byte authored modes).
+            let latch_tcmpl = self.profile == Profile::Board || d.control & 8 != 0;
             let c = &mut self.channels[index];
             c.control &= !ENABLE;
             c.pending = false;
-            // Links are refused, so this block ends the transaction: the
-            // channel disables and TCMPL is set for NOACT and INT alike.
-            // CODAL's DmaInstance and Adafruit_ZeroDMA both complete
-            // single-descriptor transfers this way on SAMD21/SAMD51 hardware.
-            c.flags |= TCMPL;
+            if latch_tcmpl {
+                c.flags |= TCMPL;
+            }
         }
     }
 
