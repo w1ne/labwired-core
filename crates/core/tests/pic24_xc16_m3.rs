@@ -190,13 +190,30 @@ fn example_system_builder_attaches_the_m3_devices() {
         "builder-attached TMP102/loopback did not complete: {out:?}"
     );
 
-    // Negative control: without the external devices the firmware must take
-    // its failure path, not print the success message.
+    // Negative controls: remove both devices, then each one alone. The
+    // firmware must reach its failure path in every case, so neither attach
+    // can regress silently.
     let mut no_devices = system.clone();
     no_devices.external_devices.clear();
     let failed = run_builder(&no_devices, &elf);
     assert!(
         failed.ends_with("M3 FAIL\n"),
-        "the end-to-end test cannot detect a missing device: {failed:?}"
+        "the end-to-end test cannot detect missing devices: {failed:?}"
+    );
+
+    let mut no_spi = system.clone();
+    no_spi.external_devices.retain(|d| d.connection != "spi1");
+    let failed = run_builder(&no_spi, &elf);
+    assert!(
+        failed.ends_with("M3 FAIL\n"),
+        "the firmware did not notice the missing SPI loopback: {failed:?}"
+    );
+
+    let mut no_i2c = system.clone();
+    no_i2c.external_devices.retain(|d| d.connection != "i2c1");
+    let failed = run_builder(&no_i2c, &elf);
+    assert!(
+        failed.ends_with("M3 FAIL\n"),
+        "the firmware did not notice the missing TMP102: {failed:?}"
     );
 }
