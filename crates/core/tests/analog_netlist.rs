@@ -72,11 +72,33 @@ S1 c 0 gate ron=1.5 roff=1meg
         assert_eq!(switch.ctrl, "gate");
         assert_eq!(switch.ron, 1.5);
         assert_eq!(switch.roff, 1e6);
+        assert!(switch.voltage.is_none(), "digital form has no voltage control");
 
         assert_eq!(circuit.node_ic.len(), 2);
 
         // 3 nodes (a, b, c) + 1 voltage source + 1 inductor branch current.
         assert_eq!(circuit.unknowns(), 5);
+    }
+
+    #[test]
+    fn parses_a_voltage_controlled_switch() {
+        let text = "\
+* voltage switch
+S1 a b sense+ sense- vt=3.75 vh=3.25 invert=1 ron=0.1 roff=1meg
+.end
+";
+        let circuit = parse_netlist(text).expect("voltage switch parses");
+        let switch = &circuit.switches[0];
+        assert!(switch.ctrl.is_empty(), "voltage form leaves ctrl empty");
+        let control = switch.voltage.as_ref().expect("voltage control set");
+        assert!((control.vt - 3.75).abs() < 1e-12);
+        assert!((control.vh - 3.25).abs() < 1e-12);
+        assert!(control.invert);
+        assert!((switch.ron - 0.1).abs() < 1e-12);
+        assert!((switch.roff - 1e6).abs() < 1e-6);
+        // Sense nodes were interned.
+        assert!(circuit.node("sense+").is_some());
+        assert!(circuit.node("sense-").is_some());
     }
 
     #[test]

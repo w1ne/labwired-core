@@ -275,11 +275,14 @@ impl Solver {
     /// Several switches may share one control (a break-before-make pair).
     pub fn switches_controlled_by(&self, ctrl: &str) -> Vec<usize> {
         let key = ctrl.trim().to_ascii_lowercase();
+        if key.is_empty() {
+            return Vec::new();
+        }
         self.circuit
             .switches
             .iter()
             .enumerate()
-            .filter(|(_, s)| s.ctrl.to_ascii_lowercase() == key)
+            .filter(|(_, s)| s.voltage.is_none() && s.ctrl.to_ascii_lowercase() == key)
             .map(|(index, _)| index)
             .collect()
     }
@@ -316,13 +319,59 @@ impl Solver {
     }
 
     /// Open or close a switch. Takes effect on the next [`Self::advance`].
+    ///
+    /// Voltage-controlled switches ignore this: their state is refreshed from
+    /// the sensed nodes at the start of every step.
     pub fn set_switch(&mut self, index: usize, closed: bool) {
+        if self.circuit.switches[index].voltage.is_some() {
+            return;
+        }
         if self.switch_closed[index] != closed {
             self.switch_closed[index] = closed;
             self.cached_stamp = None;
             self.restart = true;
             self.settled = false;
         }
+    }
+
+    /// Refresh every voltage-controlled switch from the latest node voltages.
+    ///
+    /// Returns true when any contact changed, so the caller can clear the
+    /// linear stamp cache / restart integration.
+    fn update_voltage_switches(&mut self) -> bool {
+        let mut changed = false;
+        for index in 0..self.circuit.switches.len() {
+            let Some(control) = self.circuit.switches[index].voltage.clone() else {
+                continue;
+            };
+            let v = node_diff(&self.node_v, control.pos, control.neg).abs();
+            let on = control.vt;
+            let off = (control.vt - control.vh).max(0.0);
+            let closed_now = self.switch_closed[index];
+            let desired = if control.invert {
+                // NC: closed (COM–NC) when |V| is below the dropout threshold.
+                if closed_now {
+                    v < on
+                } else {
+                    v <= off
+                }
+            } else if closed_now {
+                // NO: stay closed until |V| falls through dropout.
+                v > off
+            } else {
+                v >= on
+            };
+            if desired != closed_now {
+                self.switch_closed[index] = desired;
+                changed = true;
+            }
+        }
+        if changed {
+            self.cached_stamp = None;
+            self.restart = true;
+            self.settled = false;
+        }
+        changed
     }
 
     /// Voltage at a node (`None` is ground, which is always 0 V).
@@ -355,21 +404,28 @@ impl Solver {
 
     /// Solve the DC operating point and reset the reactive state to it.
     pub fn solve_operating_point(&mut self) -> Result<(), AnalogError> {
-        self.cached_stamp = None;
-        self.settled = false;
-        if self.nonlinear {
-            self.save_linearisation();
-            if let Err(error) = self.newton(Stamp::OperatingPoint, None, self.time) {
-                self.restore_linearisation();
-                self.gmin_stepping().map_err(|_| error)?;
+        // Voltage-controlled contacts depend on the solved node voltages, so
+        // the OP may need a few passes until the contacts stop flipping.
+        for _ in 0..8 {
+            self.cached_stamp = None;
+            self.settled = false;
+            if self.nonlinear {
+                self.save_linearisation();
+                if let Err(error) = self.newton(Stamp::OperatingPoint, None, self.time) {
+                    self.restore_linearisation();
+                    self.gmin_stepping().map_err(|_| error)?;
+                }
+            } else {
+                self.build(Stamp::OperatingPoint);
+                self.factorize()?;
+                self.solve();
             }
-        } else {
-            self.build(Stamp::OperatingPoint);
-            self.factorize()?;
-            self.solve();
+            self.node_v.copy_from_slice(&self.solution[..self.nodes]);
+            self.branch_i.copy_from_slice(&self.solution[self.nodes..]);
+            if !self.update_voltage_switches() {
+                break;
+            }
         }
-        self.node_v.copy_from_slice(&self.solution[..self.nodes]);
-        self.branch_i.copy_from_slice(&self.solution[self.nodes..]);
         for index in 0..self.circuit.capacitors.len() {
             let capacitor = &self.circuit.capacitors[index];
             self.cap_v[index] = node_diff(&self.node_v, capacitor.a, capacitor.b);
@@ -501,6 +557,7 @@ impl Solver {
     /// One step of exactly `h`, no retry.
     fn step(&mut self, h: f64) -> Result<(), AnalogError> {
         let time = self.time + h;
+        self.update_voltage_switches();
         self.apply_waveforms(time);
         // Backward Euler for the first step after a discontinuity; see the
         // module docs. A no-op distinction when the rule already is BE.

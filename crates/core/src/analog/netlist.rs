@@ -19,7 +19,8 @@
 //! | Inductor | `L<name> n1 n2 <value> [ic=<i>]` |
 //! | Voltage source | `V<name> n+ n- <source>` |
 //! | Current source | `I<name> n+ n- <source>` |
-//! | Switch | `S<name> n1 n2 <ctrl> ron=<r> roff=<r>` |
+//! | Switch | `S<name> n1 n2 <ctrl> ron=<r> roff=<r>` or `S<name> n1 n2 nc+ nc- vt=<v> [vh=<v>] [invert=0\|1] ron=<r> roff=<r>` |
+//! | Voltage switch | `S<name> n1 n2 nc+ nc- vt=<v> [vh=<v>] [invert=0|1] ron=<r> roff=<r>` |
 //! | Diode | `D<name> n+ n- <model>` |
 //! | BJT | `Q<name> nc nb ne <model>` |
 //! | MOSFET | `M<name> nd ng ns nb <model> [w=<m>] [l=<m>]` |
@@ -1206,8 +1207,34 @@ pub struct Mosfet {
     pub beta: f64,
 }
 
+/// Voltage threshold control for a switch: closes from the voltage between
+/// `pos` and `neg` rather than from a routed boolean input.
+///
+/// `|V(pos) − V(neg)|` is compared to `vt` with hysteresis `vh`. With
+/// `invert == false` (NO contact) the switch closes at `vt` and opens at
+/// `vt − vh`. With `invert == true` (NC contact) those edges are reversed, so
+/// the contact is closed while the coil is de-energised.
+#[derive(Debug, Clone, PartialEq)]
+pub struct VoltageSwitchControl {
+    /// Positive sense node.
+    pub pos: NodeRef,
+    /// Negative sense node.
+    pub neg: NodeRef,
+    /// Closing threshold in volts (`|V|` rising through `vt`).
+    pub vt: f64,
+    /// Hysteresis in volts; the opening threshold is `vt − vh` (clamped at 0).
+    pub vh: f64,
+    /// When true, the contact is the complement (NC) of the NO threshold rule.
+    pub invert: bool,
+}
+
 /// `S<name> n1 n2 <ctrl> ron=<r> roff=<r>` — an ideal switch whose control is a
 /// routed boolean input name, not a circuit node.
+///
+/// Or `S<name> n1 n2 nc+ nc- vt=<v> [vh=<v>] [invert=0|1] ron=<r> roff=<r>` —
+/// the same switch closed by the absolute voltage between `nc+` and `nc-`.
+/// When `voltage` is `Some`, `ctrl` is empty and the adapter does not expose a
+/// routed input for this element.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Switch {
     /// Element name as written.
@@ -1217,11 +1244,14 @@ pub struct Switch {
     /// Second terminal.
     pub b: NodeRef,
     /// Name of the routed boolean input that opens and closes it.
+    /// Empty when [`Self::voltage`] is set.
     pub ctrl: String,
     /// Closed resistance in ohms.
     pub ron: f64,
     /// Open resistance in ohms.
     pub roff: f64,
+    /// Voltage-threshold control, when the switch is not digitally routed.
+    pub voltage: Option<VoltageSwitchControl>,
 }
 
 /// A parsed netlist: elements in file order plus the node table.
@@ -1816,41 +1846,116 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                 });
             }
             'S' => {
-                let shape = "S<name> n1 n2 <ctrl> ron=<r> roff=<r>";
+                let digital = "S<name> n1 n2 <ctrl> ron=<r> roff=<r>";
+                let voltage = "S<name> n1 n2 nc+ nc- vt=<v> [vh=<v>] [invert=0|1] ron=<r> roff=<r>";
                 let rest = &tokens[1..];
-                if rest.len() != 5 {
-                    return Err(ctx.parse_err(format!("expected `{shape}`")));
-                }
-                let mut ron = None;
-                let mut roff = None;
-                for token in &rest[3..] {
-                    let (key, value) = token
+                let voltage_form = rest.iter().any(|token| {
+                    token
                         .split_once('=')
-                        .ok_or_else(|| ctx.parse_err(format!("expected `{shape}`")))?;
-                    match key.to_ascii_lowercase().as_str() {
-                        "ron" => ron = Some(ctx.value(value, "ron")?),
-                        "roff" => roff = Some(ctx.value(value, "roff")?),
-                        other => {
-                            return Err(ctx.parse_err(format!("unknown switch parameter `{other}`")))
+                        .map(|(key, _)| key.eq_ignore_ascii_case("vt"))
+                        .unwrap_or(false)
+                });
+                if voltage_form {
+                    if rest.len() < 6 {
+                        return Err(ctx.parse_err(format!("expected `{voltage}`")));
+                    }
+                    let mut ron = None;
+                    let mut roff = None;
+                    let mut vt = None;
+                    let mut vh = 0.0;
+                    let mut invert = false;
+                    for token in &rest[4..] {
+                        let (key, value) = token
+                            .split_once('=')
+                            .ok_or_else(|| ctx.parse_err(format!("expected `{voltage}`")))?;
+                        match key.to_ascii_lowercase().as_str() {
+                            "ron" => ron = Some(ctx.value(value, "ron")?),
+                            "roff" => roff = Some(ctx.value(value, "roff")?),
+                            "vt" => vt = Some(ctx.value(value, "vt")?),
+                            "vh" => vh = ctx.value(value, "vh")?,
+                            "invert" => {
+                                let parsed = ctx.value(value, "invert")?;
+                                if parsed != 0.0 && parsed != 1.0 {
+                                    return Err(ctx.parse_err("invert must be 0 or 1"));
+                                }
+                                invert = parsed != 0.0;
+                            }
+                            other => {
+                                return Err(ctx.parse_err(format!(
+                                    "unknown switch parameter `{other}`"
+                                )))
+                            }
                         }
                     }
+                    let (Some(ron), Some(roff), Some(vt)) = (ron, roff, vt) else {
+                        return Err(ctx.parse_err(format!("expected `{voltage}`")));
+                    };
+                    if ron <= 0.0 || roff <= 0.0 {
+                        return Err(ctx.parse_err("ron and roff must be positive"));
+                    }
+                    if vt <= 0.0 {
+                        return Err(ctx.parse_err("vt must be positive"));
+                    }
+                    if vh < 0.0 || vh > vt {
+                        return Err(ctx.parse_err("vh must be in [0, vt]"));
+                    }
+                    let a = circuit.intern(rest[0]);
+                    let b = circuit.intern(rest[1]);
+                    let pos = circuit.intern(rest[2]);
+                    let neg = circuit.intern(rest[3]);
+                    circuit.switches.push(Switch {
+                        name: head.to_string(),
+                        a,
+                        b,
+                        ctrl: String::new(),
+                        ron,
+                        roff,
+                        voltage: Some(VoltageSwitchControl {
+                            pos,
+                            neg,
+                            vt,
+                            vh,
+                            invert,
+                        }),
+                    });
+                } else {
+                    if rest.len() != 5 {
+                        return Err(ctx.parse_err(format!("expected `{digital}`")));
+                    }
+                    let mut ron = None;
+                    let mut roff = None;
+                    for token in &rest[3..] {
+                        let (key, value) = token
+                            .split_once('=')
+                            .ok_or_else(|| ctx.parse_err(format!("expected `{digital}`")))?;
+                        match key.to_ascii_lowercase().as_str() {
+                            "ron" => ron = Some(ctx.value(value, "ron")?),
+                            "roff" => roff = Some(ctx.value(value, "roff")?),
+                            other => {
+                                return Err(ctx.parse_err(format!(
+                                    "unknown switch parameter `{other}`"
+                                )))
+                            }
+                        }
+                    }
+                    let (Some(ron), Some(roff)) = (ron, roff) else {
+                        return Err(ctx.parse_err(format!("expected `{digital}`")));
+                    };
+                    if ron <= 0.0 || roff <= 0.0 {
+                        return Err(ctx.parse_err("ron and roff must be positive"));
+                    }
+                    let a = circuit.intern(rest[0]);
+                    let b = circuit.intern(rest[1]);
+                    circuit.switches.push(Switch {
+                        name: head.to_string(),
+                        a,
+                        b,
+                        ctrl: rest[2].to_string(),
+                        ron,
+                        roff,
+                        voltage: None,
+                    });
                 }
-                let (Some(ron), Some(roff)) = (ron, roff) else {
-                    return Err(ctx.parse_err(format!("expected `{shape}`")));
-                };
-                if ron <= 0.0 || roff <= 0.0 {
-                    return Err(ctx.parse_err("ron and roff must be positive"));
-                }
-                let a = circuit.intern(rest[0]);
-                let b = circuit.intern(rest[1]);
-                circuit.switches.push(Switch {
-                    name: head.to_string(),
-                    a,
-                    b,
-                    ctrl: rest[2].to_string(),
-                    ron,
-                    roff,
-                });
             }
             _ => unreachable!("element letter filtered above"),
         }
