@@ -2390,7 +2390,7 @@ boards:
     # reset value the reset-conformance capture asserts is touched: the new
     # behaviour lives in exchange memory and the radio event path, which that
     # capture does not cover. This acknowledges model drift, NOT a recapture.
-    drift_ack_digest: 2dfe30ff3f846490c3d83712cc5204bee9b22be8bc073b8cc26b01251f2deac3
+    drift_ack_digest: 448982acbde535004583cb8ea548d2cf62551c6a984ded3b7086cbeaa6a1d78a
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
