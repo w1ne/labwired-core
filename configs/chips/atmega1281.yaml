@@ -1,0 +1,160 @@
+name: "atmega1281"
+arch: "avr"
+core: "avr8"
+registers_count: 32
+# ATmega1281 (64-pin TQFP/QFN): 128 KB flash, 4 KB EEPROM, 8 KB SRAM,
+# 54 general-purpose I/O (PA0..PA7, PB0..PB7, PC0..PC7, PD0..PD7, PE0..PE7,
+# PF0..PF7, PG0..PG5), two USARTs and an 8-channel 10-bit ADC.
+# Microchip DS40002211A (ATmega640/1280/1281/2560/2561), Table 2-1 and
+# Figure 1-3. The same family datasheet calls this a 128 KB part in the
+# 64-pin package; the ATmega2560 is the 100-pin sibling with ports H..L and
+# ADC8..15.
+#
+# The public interpreter selects the dedicated AvrModel::Atmega1281 model
+# (crates/core/src/cpu/avr.rs): 128 KB flash, 8 KB SRAM at 0x0200, and a
+# 16-bit word PC whose return address uses two stack bytes. EIND/EIJMP/EICALL
+# are absent on ATmega1281; RAMPZ/ELPM remains available. The shared AVR mega
+# implementation supplies the common port and peripheral behavior, while this
+# descriptor exposes only the 64-pin A..G map and eight bonded ADC inputs.
+#
+# Deliberate limits, not facts about the silicon:
+#   * 4 KB EEPROM is not modelled. The interpreter has no EECR/EEDR/EEAR
+#     controller, so no EEPROM window is declared.
+#   * The part has USART0 and USART1, but the interpreter implements USART0
+#     only. USART1 has no driver, IRQ or console path, so it is not declared.
+#   * ADC0..ADC7 are the bonded channels on the 64-pin part. The shared core
+#     still decodes MUX5, but only these eight inputs are mapped.
+#   * Timer3 exists on the 64-pin part but the public interpreter has no
+#     Timer3 behavior, so it is not modelled or declared here. Timer4/5 and
+#     ports H..L are 100-pin features. DS40002211A Table 2-1 lists six
+#     16-bit-resolution PWM channels for the 1281; PWM behavior is not modelled.
+cpu_hz: 16_000_000
+# DS40002211A §31.1 (DC characteristics): VCC 1.8-5.5 V; VIL max 0.3·VCC and
+# VIH min 0.6·VCC on the I/O pins at the 5 V rail.
+io_voltage_v: 5.0
+gpio_input_thresholds:
+  vil: 0.3
+  vih: 0.6
+
+flash:
+  base: 0x00000000
+  size: "128KB"
+ram:
+  base: 0x00000200
+  size: "8KB"
+
+# 54 package GPIO lines from DS40002211A Figure 1-3. Port G is six bits on
+# this package: PG6/PG7 do not exist and are deliberately absent.
+pins:
+  PA0: { gpio: "porta", bit: 0 }
+  PA1: { gpio: "porta", bit: 1 }
+  PA2: { gpio: "porta", bit: 2 }
+  PA3: { gpio: "porta", bit: 3 }
+  PA4: { gpio: "porta", bit: 4 }
+  PA5: { gpio: "porta", bit: 5 }
+  PA6: { gpio: "porta", bit: 6 }
+  PA7: { gpio: "porta", bit: 7 }
+  PB0: { gpio: "portb", bit: 0 }
+  PB1: { gpio: "portb", bit: 1 }
+  PB2: { gpio: "portb", bit: 2 }
+  PB3: { gpio: "portb", bit: 3 }
+  PB4: { gpio: "portb", bit: 4 }
+  PB5: { gpio: "portb", bit: 5 }
+  PB6: { gpio: "portb", bit: 6 }
+  PB7: { gpio: "portb", bit: 7 }
+  PC0: { gpio: "portc", bit: 0 }
+  PC1: { gpio: "portc", bit: 1 }
+  PC2: { gpio: "portc", bit: 2 }
+  PC3: { gpio: "portc", bit: 3 }
+  PC4: { gpio: "portc", bit: 4 }
+  PC5: { gpio: "portc", bit: 5 }
+  PC6: { gpio: "portc", bit: 6 }
+  PC7: { gpio: "portc", bit: 7 }
+  PD0: { gpio: "portd", bit: 0 }
+  PD1: { gpio: "portd", bit: 1 }
+  PD2: { gpio: "portd", bit: 2 }
+  PD3: { gpio: "portd", bit: 3 }
+  PD4: { gpio: "portd", bit: 4 }
+  PD5: { gpio: "portd", bit: 5 }
+  PD6: { gpio: "portd", bit: 6 }
+  PD7: { gpio: "portd", bit: 7 }
+  PE0: { gpio: "porte", bit: 0 }
+  PE1: { gpio: "porte", bit: 1 }
+  PE2: { gpio: "porte", bit: 2 }
+  PE3: { gpio: "porte", bit: 3 }
+  PE4: { gpio: "porte", bit: 4 }
+  PE5: { gpio: "porte", bit: 5 }
+  PE6: { gpio: "porte", bit: 6 }
+  PE7: { gpio: "porte", bit: 7 }
+  PF0: { gpio: "portf", bit: 0 }
+  PF1: { gpio: "portf", bit: 1 }
+  PF2: { gpio: "portf", bit: 2 }
+  PF3: { gpio: "portf", bit: 3 }
+  PF4: { gpio: "portf", bit: 4 }
+  PF5: { gpio: "portf", bit: 5 }
+  PF6: { gpio: "portf", bit: 6 }
+  PF7: { gpio: "portf", bit: 7 }
+  PG0: { gpio: "portg", bit: 0 }
+  PG1: { gpio: "portg", bit: 1 }
+  PG2: { gpio: "portg", bit: 2 }
+  PG3: { gpio: "portg", bit: 3 }
+  PG4: { gpio: "portg", bit: 4 }
+  PG5: { gpio: "portg", bit: 5 }
+
+peripherals:
+  # Parking SPI / I2C controllers for kit attach. The interpreter owns the
+  # real SPCR/SPSR/SPDR and TWI registers on the CPU.
+  - id: "spi"
+    type: "spi"
+    base_address: 0x00010000
+    size: "16"
+  - id: "i2c"
+    type: "i2c"
+    base_address: 0x00010010
+    size: "16"
+  # Port mirrors: PINx/DDRx/PORTx at data-space base, mirrored at
+  # 0x1_0000 + base. A..F sit at 0x20..0x34, G at 0x32.
+  - id: "porta"
+    type: "avr_gpio"
+    base_address: 0x00010020
+    size: "3"
+  - id: "portb"
+    type: "avr_gpio"
+    base_address: 0x00010023
+    size: "3"
+  - id: "portc"
+    type: "avr_gpio"
+    base_address: 0x00010026
+    size: "3"
+  - id: "portd"
+    type: "avr_gpio"
+    base_address: 0x00010029
+    size: "3"
+  - id: "porte"
+    type: "avr_gpio"
+    base_address: 0x0001002C
+    size: "3"
+  - id: "portf"
+    type: "avr_gpio"
+    base_address: 0x0001002F
+    size: "3"
+  - id: "portg"
+    type: "avr_gpio"
+    base_address: 0x00010032
+    size: "3"
+  # USART0 host for peers (the part's first USART); same registers as the
+  # 328P (UCSR0A 0xC0..UDR0 0xC6). USART1 is not modelled.
+  - id: "usart0"
+    type: "uart"
+    base_address: 0x000100C0
+    size: "8"
+    config:
+      profile: "avr"
+  # ADC input side: millivolts on ADC0..ADC7, two bytes per channel. Only the
+  # eight channels bonded on the 64-pin part are declared.
+  - id: "adc"
+    type: "avr_adc"
+    base_address: 0x00010200
+    size: "16"
+    config:
+      channels: 8

@@ -205,6 +205,14 @@ const SHIPPED: &[Board] = &[
         yaml_stem: "atmega328p",
         display_lab: false,
     },
+    // Bare 64-pin ATmega1281 shipped in the Playground picker. Its committed
+    // AVR-GCC firmware is exercised by both the smoke and execution differential.
+    Board {
+        chip: "atmega1281",
+        aliases: &["atmega1281"],
+        yaml_stem: "atmega1281",
+        display_lab: false,
+    },
 ];
 
 /// SHRINK-ONLY allowlist of (chip, class) pairs known to lack coverage today.
