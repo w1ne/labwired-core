@@ -66,7 +66,10 @@ pub(crate) fn check_browser_models(
                 }
             }
             for path in model.inputs.values().chain(model.outputs.values()) {
-                if path.starts_with("pwm.duty:") || path.starts_with("adc.input_mv:") {
+                if ["pwm.duty:", "adc.input_mv:", "gpio.pad:", "gpio.input:"]
+                    .iter()
+                    .any(|prefix| path.starts_with(prefix))
+                {
                     return Err(format!(
                         "co-sim model {} uses unsupported legacy route {}; use board signal paths",
                         model.id, path

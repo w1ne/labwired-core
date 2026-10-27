@@ -1036,6 +1036,14 @@ cosim_models:
     );
     let error = crate::cosim::check_browser_models(&config.cosim_models, true).unwrap_err();
     assert!(error.contains("plant") && error.contains("pwm.duty"));
+    for route in ["gpio.pad:gpio/1", "gpio.input:gpio/1"] {
+        let mut model = config.cosim_models[0].clone();
+        model.inputs.clear();
+        model.outputs.clear();
+        model.inputs.insert("signal".into(), route.into());
+        let error = crate::cosim::check_browser_models(&[model], true).unwrap_err();
+        assert!(error.contains(route), "{error}");
+    }
 }
 
 #[test]

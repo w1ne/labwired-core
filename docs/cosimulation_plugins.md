@@ -584,7 +584,7 @@ values and voltages that cannot be represented by the scope trace are errors.
 A model failure or routing failure stops browser execution at the boundary. In
 a session containing ngspice, any routing failure stops the entire session,
 including failures from other models, so the firmware cannot continue against a
-partially disconnected circuit. The older `pwm.duty:` and `adc.input_mv:`
-route forms are not supported here and are rejected; use the board signal
+partially disconnected circuit. The older `pwm.duty:`, `adc.input_mv:`,
+`gpio.pad:`, and `gpio.input:` route forms are not supported and are rejected; use the board signal
 paths described above. Native execution of `adapter: ngspice` still requires a
 host integration and is refused explicitly by the core factory.
