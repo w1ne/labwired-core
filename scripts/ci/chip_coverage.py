@@ -294,7 +294,11 @@ def script_proofs() -> dict[str, set[str]]:
             workflow = {}
         job = (workflow.get("jobs") or {}).get("coverage-matrix-smoke") or {}
         job_condition = job.get("if")
-        job_can_run = job_condition in (None, EXACT_MATRIX_JOB_CONDITION)
+        job_continue_on_error = job.get("continue-on-error")
+        job_can_run = (
+            job_condition in (None, EXACT_MATRIX_JOB_CONDITION)
+            and (job_continue_on_error is None or job_continue_on_error is False)
+        )
         steps = (job.get("steps") or []) if job_can_run else []
         exact_system_run_ids = set()
         for step in steps:
@@ -307,6 +311,10 @@ def script_proofs() -> dict[str, set[str]]:
                 match
                 and (step.get("env") or {}).get("EXACT_SYSTEMS")
                 == "${{ join(matrix.exact_systems, ' ') }}"
+                and (
+                    step.get("continue-on-error") is None
+                    or step.get("continue-on-error") is False
+                )
                 and _exact_system_loop_runs_cli(run)
             ):
                 exact_system_run_ids.add(match.group(1))

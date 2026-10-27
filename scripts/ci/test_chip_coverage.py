@@ -325,6 +325,39 @@ def test_a_matrix_system_override_proves_each_exact_chip_only_when_run(tmp_path)
     assert all(chip in out for chip in chips)
     assert "NO CI gate executes firmware" in out
 
+    job_may_ignore_failure = valid_workflow.replace(
+        "  coverage-matrix-smoke:\n",
+        "  coverage-matrix-smoke:\n    continue-on-error: true\n",
+        1,
+    )
+    workflow.write_text(job_may_ignore_failure)
+    parsed_workflow = cc.load_yaml(workflow)
+    assert parsed_workflow["jobs"]["coverage-matrix-smoke"]["continue-on-error"] is True
+    code, out = run_gate(tmp_path)
+    assert code == 1, out
+    assert all(chip in out for chip in chips)
+    assert "NO CI gate executes firmware" in out
+
+    run_line = next(
+        line for line in valid_workflow.splitlines() if line.strip() == "run: |"
+    )
+    run_indent = len(run_line) - len(run_line.lstrip())
+    step_may_ignore_failure = valid_workflow.replace(
+        run_line,
+        f"{' ' * run_indent}continue-on-error: true\n{run_line}",
+        1,
+    )
+    workflow.write_text(step_may_ignore_failure)
+    parsed_workflow = cc.load_yaml(workflow)
+    assert (
+        parsed_workflow["jobs"]["coverage-matrix-smoke"]["steps"][0]["continue-on-error"]
+        is True
+    )
+    code, out = run_gate(tmp_path)
+    assert code == 1, out
+    assert all(chip in out for chip in chips)
+    assert "NO CI gate executes firmware" in out
+
     help_workflow = valid_workflow.replace(
         "--no-uart-stdout", "--no-uart-stdout --help"
     )
