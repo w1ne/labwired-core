@@ -272,9 +272,10 @@ impl CosimRunner {
         inputs: CosimSignals,
     ) -> SimResult<Vec<CosimModelStep>> {
         let mut results = Vec::new();
-        for model in &mut self.models {
-            while time_ns >= model.next_step_ns {
-                let step_time = model.next_step_ns;
+        while let Some(step_time) = next_due_time(&self.models, time_ns) {
+            for index in due_models_at(&self.models, step_time) {
+                let model = &mut self.models[index];
+                let next = next_model_time(model)?;
                 let result = model.adapter.step(CosimStep {
                     time_ns: step_time,
                     dt_ns: model.config.step_ns,
@@ -284,7 +285,7 @@ impl CosimRunner {
                     model_id: model.config.id.clone(),
                     result,
                 });
-                model.next_step_ns = model.next_step_ns.saturating_add(model.config.step_ns);
+                model.next_step_ns = next;
             }
         }
         Ok(results)
@@ -296,25 +297,60 @@ impl CosimRunner {
         signals: &mut CosimSignals,
     ) -> SimResult<Vec<CosimRoutedModelStep>> {
         let mut results = Vec::new();
-        for model in &mut self.models {
-            while time_ns >= model.next_step_ns {
-                let step_time = model.next_step_ns;
-                let inputs = routed_inputs(&model.config, signals);
+        while let Some(step_time) = next_due_time(&self.models, time_ns) {
+            let due = due_models_at(&self.models, step_time);
+            let snapshot = signals.clone();
+            let mut pending = Vec::with_capacity(due.len());
+            for index in due {
+                let model = &mut self.models[index];
+                let next = next_model_time(model)?;
+                let inputs = routed_inputs(&model.config, &snapshot);
                 let result = model.adapter.step(CosimStep {
                     time_ns: step_time,
                     dt_ns: model.config.step_ns,
                     inputs,
                 })?;
-                let outputs = route_outputs(&model.config, result.outputs, signals);
-                results.push(CosimRoutedModelStep {
-                    model_id: model.config.id.clone(),
-                    outputs,
-                });
-                model.next_step_ns = model.next_step_ns.saturating_add(model.config.step_ns);
+                pending.push((index, model.config.id.clone(), result.outputs));
+                model.next_step_ns = next;
+            }
+            for (index, model_id, model_outputs) in pending {
+                let outputs = route_outputs(&self.models[index].config, model_outputs, signals);
+                results.push(CosimRoutedModelStep { model_id, outputs });
             }
         }
         Ok(results)
     }
+}
+
+fn next_due_time(models: &[CosimRunnerModel], time_ns: u64) -> Option<u64> {
+    models
+        .iter()
+        .map(|model| model.next_step_ns)
+        .filter(|&time| time <= time_ns)
+        .min()
+}
+
+fn due_models_at(models: &[CosimRunnerModel], time_ns: u64) -> Vec<usize> {
+    models
+        .iter()
+        .enumerate()
+        .filter_map(|(index, model)| (model.next_step_ns == time_ns).then_some(index))
+        .collect()
+}
+
+fn next_model_time(model: &CosimRunnerModel) -> SimResult<u64> {
+    if model.config.step_ns == 0 {
+        return Err(SimulationError::Other(format!(
+            "co-sim model {} step_ns must be greater than zero",
+            model.config.id
+        )));
+    }
+    model
+        .next_step_ns
+        .checked_add(model.config.step_ns)
+        .ok_or_else(|| {
+            SimulationError::Other(format!("co-sim model {} time overflow", model.config.id))
+        })
 }
 
 fn routed_inputs(config: &CosimModelConfig, signals: &CosimSignals) -> CosimSignals {
