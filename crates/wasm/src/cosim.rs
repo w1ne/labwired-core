@@ -174,6 +174,11 @@ impl WasmSimulator {
             .map_err(|error| error.to_string())
     }
 
+    #[cfg(test)]
+    pub(crate) fn attach_cosim(&mut self, manifest: &SystemManifest) -> Result<(), String> {
+        self.attach_cosim_with_ngspice(manifest, None)
+    }
+
     /// Build the co-simulation session for `manifest` and publish its analog
     /// trace on the machine, exactly as `labwired test` does. A manifest with
     /// no `cosim_models:` leaves the simulator untouched.
@@ -181,10 +186,6 @@ impl WasmSimulator {
     /// Every failure is an error, never a skip: a model the browser cannot
     /// run, a model that fails to build, and a routed path that does not
     /// resolve on this chip.
-    pub(crate) fn attach_cosim(&mut self, manifest: &SystemManifest) -> Result<(), String> {
-        self.attach_cosim_with_ngspice(manifest, None)
-    }
-
     pub(crate) fn attach_cosim_with_ngspice(
         &mut self,
         manifest: &SystemManifest,
