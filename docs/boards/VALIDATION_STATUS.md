@@ -44,7 +44,7 @@ The models column is a content digest over everything that board's `models` list
 | `stm32wb55` | 🔵 sim-validated (deep model, no HW diff) | — | `03a7bce0fd47eb83` | no silicon capture |
 | `ci-fixture-riscv` | ⚪ structural | — | `d58e51cdda296e67` | no silicon capture |
 | `nano-33-iot` | 🟡 smoke-manual | — | `e4558c576a22cce3` | no silicon capture |
-| `metro-m4` | 🟡 smoke-manual | — | `7126b9d70226aa59` | no silicon capture |
+| `metro-m4` | 🟡 smoke-manual | — | `a7e80efc4317e77d` | no silicon capture |
 | `arduino-uno-r4-minima` | 🟡 smoke-manual | — | `66e091fba16b7276` | no silicon capture |
 | `teensy-41` | 🟡 smoke-manual | — | `7b5ead59613ab745` | no silicon capture |
 | `stm32f7-discovery` | 🟡 smoke-manual | — | `987c7c37bcd30dd8` | no silicon capture |

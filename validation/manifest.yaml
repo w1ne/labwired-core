@@ -8982,6 +8982,16 @@ boards:
       - crates/core/src/peripherals/stub.rs
       - crates/core/src/peripherals/systick.rs
       - crates/core/src/peripherals/uart.rs
+      # 2026-10-27: the SAMD51 board models atsamd51.yaml now declares
+      # (ported from CrispStrobe/labwired-core). No silicon capture, so no
+      # ack is implied.
+      - crates/core/src/peripherals/sam/adc.rs
+      - crates/core/src/peripherals/sam/dac.rs
+      - crates/core/src/peripherals/sam/eic.rs
+      - crates/core/src/peripherals/sam/oscctrl.rs
+      - crates/core/src/peripherals/sam/pac.rs
+      - crates/core/src/peripherals/sam/tc.rs
+      - crates/core/src/peripherals/sam/tcc.rs
 
   - id: arduino-uno-r4-minima
     doc: docs/boards/arduino-uno-r4-minima.md
