@@ -44,3 +44,9 @@ boards:
     kind: sim-validate
     path: examples/atmega2561-io
     gate: true
+  # Builds the real target source with avr-gcc and runs its committed ELF.
+  - id: atmega1281-io
+    kind: sim-validate
+    path: examples/atmega1281-io
+    apt: [gcc-avr, binutils-avr, avr-libc]
+    gate: true

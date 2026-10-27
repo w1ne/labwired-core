@@ -5,6 +5,10 @@
   },
   {
     "buses": [],
+    "name": "atmega1281"
+  },
+  {
+    "buses": [],
     "name": "atmega2560"
   },
   {
