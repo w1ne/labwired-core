@@ -29,11 +29,19 @@ struct TestPeripheral;
 
 impl Peripheral for TestPeripheral {
     fn read(&self, offset: u64) -> SimResult<u8> {
-        Ok(if offset == GPIO_OUTPUT_OFFSET { 0x5A } else { 0 })
+        Ok(if offset == GPIO_OUTPUT_OFFSET {
+            0x5A
+        } else {
+            0
+        })
     }
 
     fn peek(&self, offset: u64) -> Option<u8> {
-        Some(if offset == GPIO_OUTPUT_OFFSET { 0x5A } else { 0 })
+        Some(if offset == GPIO_OUTPUT_OFFSET {
+            0x5A
+        } else {
+            0
+        })
     }
 
     fn write(&mut self, _offset: u64, _value: u8) -> SimResult<()> {
