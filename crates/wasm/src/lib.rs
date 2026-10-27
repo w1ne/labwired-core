@@ -2199,7 +2199,8 @@ impl WasmSimulator {
     /// and permanently disabled idle FF for the classic-aids playground path.
     #[wasm_bindgen]
     pub fn step_with_esp32_aids(&mut self, cycles: u32) -> Result<(), JsValue> {
-        self.ensure_cosim_healthy().map_err(AdvanceFailure::into_js)?;
+        self.ensure_cosim_healthy()
+            .map_err(AdvanceFailure::into_js)?;
         self.record(lab_tools::Op::StepEsp32Aids(cycles));
         // Real dual-core: a genuine APP_CPU is attached, so the handshake
         // keep-alive and the FROM_CPU IPI bridge below are unnecessary — the
