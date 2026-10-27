@@ -9,6 +9,9 @@
 # Playground pinout is Metro M4. QSPI, USB, NeoPixel, and unused SERCOMs
 # are intentionally stubbed / omitted — only the MCU core, PORT, MCLK/GCLK,
 # SERCOM1/3 UARTs and SysTick are modelled here.
+# The SAMD51 board models (PAC, OSCCTRL, SAMD51 GCLK generators, EIC,
+# TC0..5, TCC0..4, ADC0/1, DAC) are modelled to their documented register
+# slices; see docs/engineering/samd51-board-models.md.
 # Pin labels follow Adafruit ArduinoCore-samd variants/metro_m4/variant.cpp.
 
 name: "atsamd51j19a"
@@ -99,7 +102,7 @@ peripherals:
     base_address: 0x40000800
     size: "256B"
   - id: "gclk"
-    type: "sam_gclk"
+    type: "samd51_gclk"
     base_address: 0x40001C00
     size: "1KB"
   - id: "porta"
@@ -145,6 +148,93 @@ peripherals:
     config:
       profile: "sercom"
       gclk_id: 24
+  # SAMD51 board models (DS60001507F; register slices and limits in
+  # docs/engineering/samd51-board-models.md). Fixed instance addresses and
+  # IRQs are enforced by the model builder.
+  - id: "pac"
+    type: "samd51_pac"
+    base_address: 0x40000000
+    size: "1KB"
+  - id: "oscctrl"
+    type: "samd51_oscctrl"
+    base_address: 0x40001000
+    size: "1KB"
+  # EIC reports its own sixteen channel lines (EIC_EXTINT_0..15 = 12..27).
+  - id: "eic"
+    type: "samd51_eic"
+    base_address: 0x40002800
+    size: "1KB"
+  # TC0..TC5: IRQ = TCn (107..112); WO0/WO1 on PMUX function E pads.
+  - id: "tc0"
+    type: "samd51_tc"
+    base_address: 0x40003800
+    size: "1KB"
+    irq: 107
+  - id: "tc1"
+    type: "samd51_tc"
+    base_address: 0x40003C00
+    size: "1KB"
+    irq: 108
+  - id: "tc2"
+    type: "samd51_tc"
+    base_address: 0x4101A000
+    size: "1KB"
+    irq: 109
+  - id: "tc3"
+    type: "samd51_tc"
+    base_address: 0x4101C000
+    size: "1KB"
+    irq: 110
+  - id: "tc4"
+    type: "samd51_tc"
+    base_address: 0x42001400
+    size: "1KB"
+    irq: 111
+  - id: "tc5"
+    type: "samd51_tc"
+    base_address: 0x42001800
+    size: "1KB"
+    irq: 112
+  # TCC0..TCC4: IRQ is line 0 (OVF/TRG/CNT/ERR); MCx lines follow it.
+  - id: "tcc0"
+    type: "samd51_tcc"
+    base_address: 0x41016000
+    size: "1KB"
+    irq: 85
+  - id: "tcc1"
+    type: "samd51_tcc"
+    base_address: 0x41018000
+    size: "1KB"
+    irq: 92
+  - id: "tcc2"
+    type: "samd51_tcc"
+    base_address: 0x42000C00
+    size: "1KB"
+    irq: 97
+  - id: "tcc3"
+    type: "samd51_tcc"
+    base_address: 0x42001000
+    size: "1KB"
+    irq: 101
+  - id: "tcc4"
+    type: "samd51_tcc"
+    base_address: 0x43001000
+    size: "1KB"
+    irq: 104
+  # ADC0/ADC1: software-triggered single-ended conversions; inputs set by
+  # the host. Interrupts are not modelled.
+  - id: "adc0"
+    type: "samd51_adc"
+    base_address: 0x43001C00
+    size: "1KB"
+  - id: "adc1"
+    type: "samd51_adc"
+    base_address: 0x43002000
+    size: "1KB"
+  - id: "dac"
+    type: "samd51_dac"
+    base_address: 0x43002400
+    size: "1KB"
   - id: "usb"
     type: "stub"
     base_address: 0x41000000
