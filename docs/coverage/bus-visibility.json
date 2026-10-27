@@ -242,6 +242,70 @@
       "SPI",
       "UART"
     ],
+    "name": "stm32f103c4"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f103c6"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f103r4"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f103r4h"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f103r6"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f103r6h"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f103t4"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f103t6"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
     "name": "stm32f401"
   },
   {
@@ -250,7 +314,103 @@
       "SPI",
       "UART"
     ],
+    "name": "stm32f401cb"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f401cc"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f401cd"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
     "name": "stm32f401cdu6"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f401ce"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f401rb"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f401rc"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f401rd"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f401re"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f401vb"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f401vc"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f401vd"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f401ve"
   },
   {
     "buses": [
@@ -267,6 +427,54 @@
       "UART"
     ],
     "name": "stm32f407"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f407ie"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f407ig"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f407ve"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f407vg"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f407ze"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f407zg"
   },
   {
     "buses": [

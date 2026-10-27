@@ -1,0 +1,5 @@
+# Exact-part CI smoke system for the STM32 catalog model stm32f103r6.
+name: "stm32f103r6-smoke"
+chip: "../../chips/stm32f103r6.yaml"
+external_devices: []
+board_io: []
