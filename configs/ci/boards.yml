@@ -50,3 +50,9 @@ boards:
     path: examples/atmega1281-io
     apt: [gcc-avr, binutils-avr, avr-libc]
     gate: true
+  # Dedicated STK600 board harness over the existing ATmega1281 chip profile.
+  - id: stk600-atmega1281
+    kind: sim-validate
+    path: examples/stk600-atmega1281
+    apt: [gcc-avr, binutils-avr, avr-libc]
+    gate: true

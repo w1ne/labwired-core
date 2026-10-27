@@ -1,0 +1,9 @@
+# STK600 ATmega1281 smoke. USART0 is captured at the simulated MCU boundary.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/avr/stk600-atmega1281.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "STK600 1281 READY"

@@ -114,6 +114,7 @@ nav:
 
   - Boards:
     - Arduino Uno R3: boards/arduino-uno.md
+    - ATmega1281 on STK600: boards/stk600-atmega1281.md
     - ESP32-C3: boards/esp32c3.md
     - ESP32-C6: boards/esp32c6-devkitc.md
     - ESP32-S3: boards/esp32s3.md

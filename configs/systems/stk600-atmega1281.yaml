@@ -1,0 +1,18 @@
+name: stk600-atmega1281
+chip: ../chips/atmega1281.yaml
+# Playground model: 16 MHz ATmega1281 on the STK600 RC09 + SC02 kit.
+# The board's headers are jumper-routed; these two wires are the explicit demo harness.
+cpu_hz: 16000000
+board_io:
+  - id: "led0"
+    kind: "led"
+    peripheral: "portb"
+    pin: 5
+    signal: "output"
+    active_high: false
+  - id: "sw0"
+    kind: "button"
+    peripheral: "portb"
+    pin: 0
+    signal: "input"
+    active_high: false
