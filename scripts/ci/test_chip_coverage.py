@@ -368,6 +368,21 @@ def test_a_matrix_system_override_proves_each_exact_chip_only_when_run(tmp_path)
     assert all(chip in out for chip in chips)
     assert "NO CI gate executes firmware" in out
 
+    # `exec` replaces the shell successfully, preventing the later CLI line
+    # from running even though it is present in the loop text.
+    exec_workflow = valid_workflow.replace(
+        "labwired test --script", "exec true\n            labwired test --script"
+    )
+    workflow.write_text(exec_workflow)
+    parsed_workflow = cc.load_yaml(workflow)
+    exec_run = parsed_workflow["jobs"]["coverage-matrix-smoke"]["steps"][0]["run"]
+    assert "exec true" in exec_run
+    assert "labwired test --script" in exec_run
+    code, out = run_gate(tmp_path)
+    assert code == 1, out
+    assert all(chip in out for chip in chips)
+    assert "NO CI gate executes firmware" in out
+
     workflow.write_text(valid_workflow.replace(' --system "$system"', ""))
     code, out = run_gate(tmp_path)
     assert code == 1

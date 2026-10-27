@@ -163,14 +163,38 @@ def _texts_that_drive_the_cli() -> list[tuple[str, str]]:
     return out
 
 
-def _exact_system_loop_runs_cli(run: str) -> bool:
-    """Whether a real `labwired test` command checks each loop system.
+def _strip_shell_comment(line: str) -> str:
+    """Strip an unquoted shell comment without treating `${name##pattern}` as one."""
+    quote: str | None = None
+    escaped = False
+    for index, char in enumerate(line):
+        if escaped:
+            escaped = False
+            continue
+        if char == "\\" and quote != "'":
+            escaped = True
+            continue
+        if quote:
+            if char == quote:
+                quote = None
+            continue
+        if char in "'\"":
+            quote = char
+        elif char == "#" and (index == 0 or line[index - 1].isspace()):
+            return line[:index]
+    return line
 
-    Strip shell comments, find the exact-system loop, then inspect only an
-    active CLI command and its backslash-continued arguments. Text in a comment
-    or an `echo` must not count as execution evidence.
+
+def _exact_system_loop_runs_cli(run: str) -> bool:
+    """Whether a straight-line exact-system loop runs the CLI for every part.
+
+    This is intentionally a small, fail-closed parser for the checked-in loop:
+    comments are removed, only its known setup statements are accepted, and
+    exactly one active `labwired test` command must pass the loop variable.
+    Comments, `echo`, filters, early exits, command aliases, or other shell
+    constructs are not execution evidence.
     """
-    active_run = "\n".join(line.split("#", 1)[0] for line in run.splitlines())
+    active_run = "\n".join(_strip_shell_comment(line) for line in run.splitlines())
     loop = re.search(
         r"(?ms)^[ \t]*for[ \t]+system[ \t]+in[ \t]+\$EXACT_SYSTEMS;[ \t]*do[ \t]*\n"
         r"(?P<body>.*?)^[ \t]*done[ \t]*$",
@@ -179,23 +203,35 @@ def _exact_system_loop_runs_cli(run: str) -> bool:
     if not loop:
         return False
 
-    lines = loop.group("body").splitlines()
-    # This deliberately accepts a straight-line loop body only. A guard,
-    # compound operator, nested loop, or early exit could make a syntactically
-    # present CLI call skip some exact systems while the ledger credits all.
-    shell_control = re.compile(
-        r"\b(?:if|elif|else|fi|case|esac|while|until|select|for|continue|break|return|exit)\b"
-        r"|&&|\|\||;"
-    )
-    if any(shell_control.search(line) for line in lines):
+    prefix = active_run[: loop.start()]
+    if any(
+        line.strip() not in {"", "set -euo pipefail"}
+        for line in prefix.splitlines()
+    ):
         return False
 
+    lines = loop.group("body").splitlines()
+    safe_assignments = {
+        "model=${system##*/}",
+        "model=${model%.yaml}",
+        'out="out/coverage-matrix/proteus-$model"',
+    }
+    cli_seen = False
     index = 0
     while index < len(lines):
         line = lines[index].strip()
-        if not re.match(r"(?:\./)?(?:[\w.-]+/)*labwired[ \t]+test(?:[ \t]|$)", line):
+        if not line:
             index += 1
             continue
+
+        if line in safe_assignments or line == 'mkdir -p "$out"':
+            index += 1
+            continue
+
+        if not re.match(r"(?:\./)?(?:[\w.-]+/)*labwired[ \t]+test(?:[ \t]|$)", line):
+            return False
+        if cli_seen:
+            return False
 
         command_parts = []
         while index < len(lines):
@@ -206,11 +242,15 @@ def _exact_system_loop_runs_cli(run: str) -> bool:
             if not continued:
                 break
         command = " ".join(command_parts)
-        return (
-            '--script "${{ matrix.script }}"' in command
-            and '--system "$system"' in command
-        )
-    return False
+        if (
+            re.search(r"[;&|`]", command)
+            or "$(" in command
+            or '--script "${{ matrix.script }}"' not in command
+            or '--system "$system"' not in command
+        ):
+            return False
+        cli_seen = True
+    return cli_seen
 
 
 def script_proofs() -> dict[str, set[str]]:
