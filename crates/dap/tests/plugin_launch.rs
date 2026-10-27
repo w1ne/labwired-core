@@ -196,7 +196,7 @@ peripherals:
   - id: plugin0
     type: test_dap_plugin_peripheral
     base_address: 0x70000000
-    size: 4KB
+    size: 16KB
 "#,
     )
     .expect("write temporary Arduino system manifest");
@@ -211,15 +211,22 @@ peripherals:
     adapter
         .load_firmware(firmware_path, Some(system_path.clone()))
         .expect("Arduino ESP32 firmware loads with plugins");
-    let plugin_read = adapter
-        .read_memory(0x7000_0000, 1)
-        .ok()
-        .and_then(|bytes| bytes.first().copied());
+    // 0x2200 is the plugin GPIO output register. A 4KB window ends at 0x1000,
+    // so the read has to use the same 16KB window as the plugin chip YAML or
+    // the address stays unmapped and DAP flattens it to 0.
+    let plugin_addr = 0x7000_0000 + GPIO_OUTPUT_OFFSET;
+    let (bytes, unreadable) = adapter
+        .peek_memory(plugin_addr, 1)
+        .expect("Arduino ESP32 plugin window is readable");
 
     let _ = std::fs::remove_file(system_path);
     assert_eq!(
-        plugin_read,
+        unreadable, 0,
+        "Arduino-ESP32 builder maps the plugin peripheral at {plugin_addr:#x}"
+    );
+    assert_eq!(
+        bytes.first().copied(),
         Some(0x5A),
-        "Arduino-ESP32 builder attaches plugin-owned peripheral"
+        "Arduino-ESP32 builder attaches plugin-owned peripheral at {plugin_addr:#x}"
     );
 }
