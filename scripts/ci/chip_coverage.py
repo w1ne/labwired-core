@@ -20,7 +20,8 @@ So coverage here is DERIVED, never declared:
     names it AND that board id appears in the workflow's matrix list;
   * a chip is proven by a script only if some workflow (or a board manifest's
     `ci/test.sh`) passes that script to `labwired test`, and the script's
-    system resolves to that chip.
+    system resolves to that chip; a matrix system override counts only when
+    the workflow passes each listed system to `labwired test`.
 
 `configs/ci/chip-coverage.yaml` is then only for what is NOT proven, with a
 reason per chip and a ceiling that can only be lowered. A chip that becomes
@@ -36,10 +37,15 @@ from __future__ import annotations
 
 import argparse
 import re
+import shlex
 import sys
 from pathlib import Path
 
 import yaml
+
+EXACT_MATRIX_JOB_CONDITION = (
+    "${{ github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core' }}"
+)
 
 # Mutable so the tests can point the whole gate at a synthetic tree (see
 # --repo-root). Everything below reads it through the helpers, never at import
@@ -162,6 +168,108 @@ def _texts_that_drive_the_cli() -> list[tuple[str, str]]:
     return out
 
 
+def _strip_shell_comment(line: str) -> str:
+    """Strip an unquoted shell comment without treating `${name##pattern}` as one."""
+    quote: str | None = None
+    escaped = False
+    for index, char in enumerate(line):
+        if escaped:
+            escaped = False
+            continue
+        if char == "\\" and quote != "'":
+            escaped = True
+            continue
+        if quote:
+            if char == quote:
+                quote = None
+            continue
+        if char in "'\"":
+            quote = char
+        elif char == "#" and (index == 0 or line[index - 1].isspace()):
+            return line[:index]
+    return line
+
+
+def _exact_system_loop_runs_cli(run: str) -> bool:
+    """Whether a straight-line exact-system loop runs the CLI for every part.
+
+    This is intentionally a small, fail-closed parser for the checked-in loop:
+    comments are removed, only its known setup statements are accepted, and
+    exactly one active `labwired test` command must pass the loop variable.
+    Comments, `echo`, filters, early exits, command aliases, or other shell
+    constructs are not execution evidence.
+    """
+    active_run = "\n".join(_strip_shell_comment(line) for line in run.splitlines())
+    loop = re.search(
+        r"(?ms)^[ \t]*for[ \t]+system[ \t]+in[ \t]+\$EXACT_SYSTEMS;[ \t]*do[ \t]*\n"
+        r"(?P<body>.*?)^[ \t]*done[ \t]*$",
+        active_run,
+    )
+    if not loop:
+        return False
+
+    prefix = active_run[: loop.start()]
+    if any(
+        line.strip() not in {"", "set -euo pipefail"}
+        for line in prefix.splitlines()
+    ):
+        return False
+
+    lines = loop.group("body").splitlines()
+    safe_assignments = {
+        "model=${system##*/}",
+        "model=${model%.yaml}",
+        'out="out/coverage-matrix/stm32-catalog-$model"',
+    }
+    cli_seen = False
+    index = 0
+    while index < len(lines):
+        line = lines[index].strip()
+        if not line:
+            index += 1
+            continue
+
+        if line in safe_assignments or line == 'mkdir -p "$out"':
+            index += 1
+            continue
+
+        if not re.match(r"\./target/release/labwired[ \t]+test(?:[ \t]|$)", line):
+            return False
+        if cli_seen:
+            return False
+
+        command_parts = []
+        while index < len(lines):
+            part = lines[index].strip()
+            continued = part.endswith("\\")
+            command_parts.append(part[:-1].strip() if continued else part)
+            index += 1
+            if not continued:
+                break
+        command = " ".join(command_parts)
+        if re.search(r"[;&|`]", command) or "$(" in command:
+            return False
+        try:
+            arguments = shlex.split(command)
+        except ValueError:
+            return False
+        expected_arguments = [
+            "./target/release/labwired",
+            "test",
+            "--script",
+            "${{ matrix.script }}",
+            "--system",
+            "$system",
+            "--output-dir",
+            "$out",
+            "--no-uart-stdout",
+        ]
+        if arguments != expected_arguments:
+            return False
+        cli_seen = True
+    return cli_seen
+
+
 def script_proofs() -> dict[str, set[str]]:
     """chip -> the CI sources that run a real script against it."""
     proofs: dict[str, set[str]] = {}
@@ -173,6 +281,66 @@ def script_proofs() -> dict[str, set[str]]:
             chip = chip_of_script((REPO_ROOT / rel).resolve())
             if chip:
                 proofs.setdefault(chip, set()).add(f"{label}: {rel}")
+
+    # The coverage smoke matrix can run one script against several exact chip
+    # descriptors by overriding the script's default system manifest. Count
+    # those parts only when the workflow actually passes each matrix system to
+    # `labwired test`; a list in YAML by itself is not proof that anything ran.
+    matrix_path = workflow_dir() / "core-coverage-matrix-smoke.yml"
+    if matrix_path.is_file():
+        try:
+            workflow = load_yaml(matrix_path)
+        except yaml.YAMLError:
+            workflow = {}
+        job = (workflow.get("jobs") or {}).get("coverage-matrix-smoke") or {}
+        job_condition = job.get("if")
+        job_continue_on_error = job.get("continue-on-error")
+        job_can_run = (
+            job_condition in (None, EXACT_MATRIX_JOB_CONDITION)
+            and (job_continue_on_error is None or job_continue_on_error is False)
+        )
+        steps = (job.get("steps") or []) if job_can_run else []
+        exact_system_run_ids = set()
+        for step in steps:
+            match = re.fullmatch(
+                r"matrix\.id\s*==\s*['\"]([\w.-]+)['\"]",
+                str(step.get("if", "")),
+            )
+            run = str(step.get("run", ""))
+            if (
+                match
+                and (step.get("env") or {}).get("EXACT_SYSTEMS")
+                == "${{ join(matrix.exact_systems, ' ') }}"
+                and (
+                    step.get("continue-on-error") is None
+                    or step.get("continue-on-error") is False
+                )
+                and _exact_system_loop_runs_cli(run)
+            ):
+                exact_system_run_ids.add(match.group(1))
+        if exact_system_run_ids:
+            include = (
+                (job.get("strategy") or {})
+                .get("matrix", {})
+                .get("include", [])
+            )
+            for row in include:
+                script = row.get("script")
+                systems = row.get("exact_systems") or []
+                if (
+                    row.get("id") not in exact_system_run_ids
+                    or not script
+                    or not (REPO_ROOT / str(script)).is_file()
+                ):
+                    continue
+                for system in systems:
+                    if not isinstance(system, str) or not system:
+                        continue
+                    chip = chip_of_system((REPO_ROOT / system).resolve())
+                    if chip:
+                        proofs.setdefault(chip, set()).add(
+                            f"core-coverage-matrix-smoke.yml: {script} with {system}"
+                        )
     return proofs
 
 

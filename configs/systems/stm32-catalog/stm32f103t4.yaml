@@ -1,0 +1,5 @@
+# Exact-part CI smoke system for the STM32 catalog model stm32f103t4.
+name: "stm32f103t4-smoke"
+chip: "../../chips/stm32f103t4.yaml"
+external_devices: []
+board_io: []

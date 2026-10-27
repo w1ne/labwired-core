@@ -1,0 +1,9 @@
+# Shared bare-metal execution smoke for exact Cortex-M descriptor variants.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv6m-none-eabi/release/firmware-perf-spin"
+  system: "../../configs/systems/ci-fixture-uart1.yaml"
+limits:
+  max_steps: 1024
+assertions:
+  - expected_stop_reason: max_steps

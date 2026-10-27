@@ -343,11 +343,137 @@ const CHIPS: &[ChipConf] = &[
         reset_oracle: None,
         behavior_gate: Some("stm32f1_exec_oracle"),
     },
+    // Exact low-density F103 order codes share the F103 engine. Geometry is
+    // checked per part, but there is no per-order-code silicon capture or
+    // executing-fidelity differential, so these remain honest L0 entries.
+    ChipConf {
+        name: "stm32f103c4",
+        yaml: "configs/chips/stm32f103c4.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "stm32f103c6",
+        yaml: "configs/chips/stm32f103c6.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "stm32f103r4",
+        yaml: "configs/chips/stm32f103r4.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "stm32f103r4h",
+        yaml: "configs/chips/stm32f103r4h.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "stm32f103r6",
+        yaml: "configs/chips/stm32f103r6.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "stm32f103r6h",
+        yaml: "configs/chips/stm32f103r6h.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "stm32f103t4",
+        yaml: "configs/chips/stm32f103t4.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "stm32f103t6",
+        yaml: "configs/chips/stm32f103t6.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
     ChipConf {
         name: "stm32f401",
         yaml: "configs/chips/stm32f401.yaml",
         reset_oracle: None,
         behavior_gate: Some("firmware_survival::test_stm32f401_blinky_survival"),
+    },
+    // Exact F401 order codes carry the family's same peripheral engine. Their
+    // package/memory geometry is pinned independently; no part-specific
+    // silicon or executing-fidelity receipt exists yet (L0).
+    ChipConf {
+        name: "stm32f401cb",
+        yaml: "configs/chips/stm32f401cb.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "stm32f401cc",
+        yaml: "configs/chips/stm32f401cc.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "stm32f401cd",
+        yaml: "configs/chips/stm32f401cd.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "stm32f401ce",
+        yaml: "configs/chips/stm32f401ce.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "stm32f401rb",
+        yaml: "configs/chips/stm32f401rb.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "stm32f401rc",
+        yaml: "configs/chips/stm32f401rc.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "stm32f401rd",
+        yaml: "configs/chips/stm32f401rd.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "stm32f401re",
+        yaml: "configs/chips/stm32f401re.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "stm32f401vb",
+        yaml: "configs/chips/stm32f401vb.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "stm32f401vc",
+        yaml: "configs/chips/stm32f401vc.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "stm32f401vd",
+        yaml: "configs/chips/stm32f401vd.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "stm32f401ve",
+        yaml: "configs/chips/stm32f401ve.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
     },
     ChipConf {
         name: "stm32f405",
@@ -378,6 +504,45 @@ const CHIPS: &[ChipConf] = &[
         yaml: "configs/chips/stm32f407.yaml",
         reset_oracle: None,
         behavior_gate: Some("firmware_survival::test_nucleo_f407_smoke_survival"),
+    },
+    // Exact F407 order codes share the NUCLEO-F407 engine. Geometry is pinned
+    // per part; no per-part silicon capture or executing-fidelity differential
+    // exists, so these are listed at L0.
+    ChipConf {
+        name: "stm32f407ie",
+        yaml: "configs/chips/stm32f407ie.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "stm32f407ig",
+        yaml: "configs/chips/stm32f407ig.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "stm32f407ve",
+        yaml: "configs/chips/stm32f407ve.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "stm32f407vg",
+        yaml: "configs/chips/stm32f407vg.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "stm32f407ze",
+        yaml: "configs/chips/stm32f407ze.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "stm32f407zg",
+        yaml: "configs/chips/stm32f407zg.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
     },
     ChipConf {
         // No silicon reset capture. The external-artifact customer ELF WAKE
