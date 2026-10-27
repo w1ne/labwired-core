@@ -2390,7 +2390,7 @@ boards:
     # reset value the reset-conformance capture asserts is touched: the new
     # behaviour lives in exchange memory and the radio event path, which that
     # capture does not cover. This acknowledges model drift, NOT a recapture.
-    drift_ack_digest: 705efa0bce5458a39552b7ed7a83dc89656ef3c0ed850de01f7fbc19d6bef2e1
+    drift_ack_digest: 2dfe30ff3f846490c3d83712cc5204bee9b22be8bc073b8cc26b01251f2deac3
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
@@ -3190,7 +3190,11 @@ boards:
     # (device-time throttle, NVIC any-enabled cache, logic-capture guard,
     # plain-RAM store fast path, AVR timer/OC shortcuts). No register map,
     # reset value, IRQ route or byte path changed. ACK, NOT A CAPTURE.
-    drift_ack: 2026-10-19
+    # 2026-10-27 (port/esp32c3-s3-ledc-pads, from CrispStrobe 96b0ab6f9):
+    # LEDC channel outputs drive the GPIO output matrix (signals 45..50), and
+    # DUTY_START now latches DUTY into DUTY_R. No register map or reset value
+    # change; the reset-state oracle is untouched. ACK, NOT A CAPTURE.
+    drift_ack: 2026-10-27
 
   - id: nucleo-l476rg
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
@@ -7791,8 +7795,12 @@ boards:
     # wrapped in `with_device_write_bypass` (hardware-originated guest-memory
     # transfers only). CPU-visible register/reset paths are unchanged.
     # ACK, NOT A CAPTURE.
-    drift_ack: 2026-10-19
-    drift_ack_digest: ded2b7b36eff69887f6dbe1611a2670ceb11f68d6e0de6bdd9675799ac3481e2
+    # 2026-10-27 (port/esp32c3-s3-ledc-pads, from CrispStrobe 96b0ab6f9):
+    # LEDC channel outputs drive the GPIO output matrix (signals 73..80), plus
+    # the gpio_matrix_out ROM thunk (0x4000_1aa0). No register map or reset
+    # value change. ACK, NOT A CAPTURE.
+    drift_ack: 2026-10-27
+    drift_ack_digest: 3bd419ae3af19b6eacb7bacac067b71b5181e0b4697d8edfd7293bda30e21512
 
   - id: esp32s3-zero
     # Board variant of esp32s3: same silicon (LX7), 4 MiB flash / 480 KiB RAM.
