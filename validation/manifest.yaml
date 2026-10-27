@@ -1656,7 +1656,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: 650b7d7ea24b01204febca53e066ac81f3a01ce7e19fa79790906ba05eb2593a
+    drift_ack_digest: 4ffedc91e1f39a3a81fb6c04f9a63f25622aa248a19571f62ce5b9500d32ff2f
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -2225,7 +2225,13 @@ boards:
     # frozen-CPU hardware oracle requests the historical walk. Production
     # event scheduling is unchanged. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
-    drift_ack: 2026-10-26
+    # 2026-10-27 (port/samd51-board-models-a, from CrispStrobe 40dba659/
+    # e0f5e975): shared engine files gained SAM-only paths (SAM PORT PMUX in
+    # selected_function/bind_timer_output_pad, the PinPort port-name prefix,
+    # an edge-sink bus-tick refresh, a SAMD51-only bit-band opt-out). STM32
+    # paths and register maps are unchanged. ACK, NOT A SILICON CAPTURE;
+    # live re-capture remains pending.
+    drift_ack: 2026-10-27
     # 2026-10-25 (perf/cortex-m-decode-reference): the Cortex-M decode cache
     # now checks the PC tag through a borrow and copies only on a hit. The
     # interpreter's decoded instruction stream and state are unchanged;
@@ -3625,7 +3631,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: fca6be1ecd437ba0d40b9e3abf357000d7aa5f7bc39297fb2065d476092714e7
+    drift_ack_digest: 7dd9953587f27fc978508045d62d4e8603cfb67910ca3da25ff82b0521f2cea3
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4182,7 +4188,13 @@ boards:
     # frozen-CPU hardware oracle requests the historical walk. Production
     # event scheduling is unchanged. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
-    drift_ack: 2026-10-26
+    # 2026-10-27 (port/samd51-board-models-a, from CrispStrobe 40dba659/
+    # e0f5e975): shared engine files gained SAM-only paths (SAM PORT PMUX in
+    # selected_function/bind_timer_output_pad, the PinPort port-name prefix,
+    # an edge-sink bus-tick refresh, a SAMD51-only bit-band opt-out). STM32
+    # paths and register maps are unchanged. ACK, NOT A SILICON CAPTURE;
+    # live re-capture remains pending.
+    drift_ack: 2026-10-27
   - id: nucleo-l073rz
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
     # 2026-09-16 (#1125): Cortex-M JIT follow-ups (block chaining, floor 4, IT-predicated ALU, VFP S-ALU, VLDR/VSTR, LDR.W PC), plus two model fixes that ride along: the bit-band alias decode no longer swallows peripherals vendors place inside 0x4200_0000 (SAMD51 QSPI/SERCOM), and the STM32 timer's scheduled compare pend lands on the latch tick like the walk. JIT is opt-in (`cortex_m_jit_enabled` default off); interpreter path unchanged, JIT-on vs off lockstep in cortex_m_jit_nrf_differential; both fixes pinned by bus-level gates. No silicon capture pins JIT.
@@ -4575,7 +4587,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: aa94b7d42910ec979235a6e3b094b71782b4246cdecad03c7d0299d1ef7ea43f
+    drift_ack_digest: bf6ec4f2269f8e5dc9b92b7cfce434c114a892adbbe2f5647eeb7b2973697075
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5065,7 +5077,13 @@ boards:
     # frozen-CPU hardware oracle requests the historical walk. Production
     # event scheduling is unchanged. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
-    drift_ack: 2026-10-26
+    # 2026-10-27 (port/samd51-board-models-a, from CrispStrobe 40dba659/
+    # e0f5e975): shared engine files gained SAM-only paths (SAM PORT PMUX in
+    # selected_function/bind_timer_output_pad, the PinPort port-name prefix,
+    # an edge-sink bus-tick refresh, a SAMD51-only bit-band opt-out). STM32
+    # paths and register maps are unchanged. ACK, NOT A SILICON CAPTURE;
+    # live re-capture remains pending.
+    drift_ack: 2026-10-27
     # 2026-10-25 (perf/cortex-m-decode-reference): the Cortex-M decode cache
     # now checks the PC tag through a borrow and copies only on a hit. The
     # interpreter's decoded instruction stream and state are unchanged;
@@ -5516,7 +5534,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: b5733544d138e104a456e13fad8fad436dd13718f15b81d9404e2de3723a083a
+    drift_ack_digest: 261604d1f56b94ecebf729008f35255f1e18a25af04e93491f4e12102553abe4
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6076,7 +6094,13 @@ boards:
     # frozen-CPU hardware oracle requests the historical walk. Production
     # event scheduling is unchanged. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
-    drift_ack: 2026-10-26
+    # 2026-10-27 (port/samd51-board-models-a, from CrispStrobe 40dba659/
+    # e0f5e975): shared engine files gained SAM-only paths (SAM PORT PMUX in
+    # selected_function/bind_timer_output_pad, the PinPort port-name prefix,
+    # an edge-sink bus-tick refresh, a SAMD51-only bit-band opt-out). STM32
+    # paths and register maps are unchanged. ACK, NOT A SILICON CAPTURE;
+    # live re-capture remains pending.
+    drift_ack: 2026-10-27
     # 2026-10-25 (perf/cortex-m-decode-reference): the Cortex-M decode cache
     # now checks the PC tag through a borrow and copies only on a hit. The
     # interpreter's decoded instruction stream and state are unchanged;
@@ -6490,7 +6514,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: 1ef4fd220ab3fb6f8aaf802b165baaf1113122f02b7dfb60afb27856404f5cfb
+    drift_ack_digest: 6b5cd4a33a836ab7b04076d59c5733b5193091972e468d9bb8a860d5ce118afe
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6989,7 +7013,13 @@ boards:
     # frozen-CPU hardware oracle requests the historical walk. Production
     # event scheduling is unchanged. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
-    drift_ack: 2026-10-26
+    # 2026-10-27 (port/samd51-board-models-a, from CrispStrobe 40dba659/
+    # e0f5e975): shared engine files gained SAM-only paths (SAM PORT PMUX in
+    # selected_function/bind_timer_output_pad, the PinPort port-name prefix,
+    # an edge-sink bus-tick refresh, a SAMD51-only bit-band opt-out). STM32
+    # paths and register maps are unchanged. ACK, NOT A SILICON CAPTURE;
+    # live re-capture remains pending.
+    drift_ack: 2026-10-27
     # 2026-10-25 (perf/cortex-m-decode-reference): the Cortex-M decode cache
     # now checks the PC tag through a borrow and copies only on a hit. The
     # interpreter's decoded instruction stream and state are unchanged;

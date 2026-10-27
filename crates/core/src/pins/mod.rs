@@ -205,8 +205,14 @@ impl PortId {
     /// when the bus attaches the port; `None` for any other id, which leaves
     /// the port without edge sinks.
     pub fn from_port_name(name: &str) -> Option<Self> {
+        Self::from_prefixed_name(name, "gpio")
+    }
+
+    /// [`from_port_name`](Self::from_port_name) for a port family whose ids
+    /// use another prefix ([`PinPort::port_name_prefix`]): SAM `porta`.
+    pub fn from_prefixed_name(name: &str, prefix: &str) -> Option<Self> {
         let lower = name.to_ascii_lowercase();
-        let suffix = lower.strip_prefix("gpio")?;
+        let suffix = lower.strip_prefix(prefix)?;
         let &[letter] = suffix.as_bytes() else {
             return None;
         };
@@ -223,6 +229,13 @@ impl PortId {
 pub trait PinPort {
     /// Pads this port owns (pins `0..count`).
     fn pin_count(&self) -> u8;
+
+    /// The prefix before the port letter in this family's chip-yaml ids,
+    /// from which the bus derives the [`PortId`]. Default `gpio`; SAM PORT
+    /// groups are `porta`, `portb`.
+    fn port_name_prefix(&self) -> &'static str {
+        "gpio"
+    }
 
     /// The chip's own drive on `pin`, decoded from registers only, `None`
     /// when the model cannot say (a pad handed to a peripheral signal whose
@@ -607,5 +620,7 @@ mod tests {
         assert_eq!(PortId::from_port_name("gpio0"), None);
         assert_eq!(PortId::from_port_name("portb"), None);
         assert_eq!(PortId::from_port_name("gpioab"), None);
+        assert_eq!(PortId::from_prefixed_name("portb", "port"), Some(PortId(1)));
+        assert_eq!(PortId::from_prefixed_name("gpiob", "port"), None);
     }
 }
