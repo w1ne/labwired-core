@@ -34,7 +34,7 @@ def validate(entries: list[dict], repo_root: str) -> list[str]:
         path = root / e.get("path", "")
         if not path.is_dir():
             errors.append(f"{eid}: path {e.get('path')!r} is not a directory")
-        if kind == "firmware-gate":
+        if kind in {"firmware-gate", "sim-validate"}:
             for script in ("ci/build.sh", "ci/test.sh"):
                 if not (path / script).is_file():
                     errors.append(f"{eid}: missing {e['path']}/{script}")

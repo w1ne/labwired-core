@@ -313,6 +313,12 @@
       "firmware": "tests/fixtures/nucleo-u545re-blinky.elf",
       "expect": "OK"
     },
+    "atmega2561": {
+      "how": "example",
+      "script": "examples/atmega2561-io/io-smoke.yaml",
+      "expect": "1/1 checks",
+      "note": "64-pin ATmega2561 on the shared public AVR core. The committed tiny ELF prints `2561 OK` through USART0 and drives PB5; the script verdict is asserted because `labwired test` does not echo the AVR console."
+    },
     "atmega2560": {
       "how": "example",
       "script": "examples/arduino-mega-2560-io/io-smoke.yaml",

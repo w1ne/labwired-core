@@ -63,6 +63,26 @@
         "lane": "none"
       }
     },
+    "atmega2561": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/avr_atmega2561.rs",
+        "test": "atmega2561_boots_and_prints",
+        "signal": "the committed 3-byte-PC image tests/fixtures/avr/atmega2561-io.elf prints `2561 OK` through USART0 UDR0 and the test asserts the console sink receives it; examples/atmega2561-io/io-smoke.yaml asserts the same line under `labwired test`",
+        "lane": "pr-workspace-tests shards - cargo test -p labwired-core --test avr_atmega2561; configs/ci/boards.yml atmega2561-io (sim-validate, gate)"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "No SPI controller model on the AVR part; the descriptor carries only the generic parking controller used to attach kits to the CPU-owned SPCR/SPDR.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "No TWI controller model on the AVR part; the descriptor carries only the generic parking controller used to attach kits to the CPU-owned TWI registers.",
+        "lane": "none"
+      }
+    },
     "atmega328p": {
       "in_boards": true,
       "uart": {

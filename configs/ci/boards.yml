@@ -39,3 +39,8 @@ boards:
     kind: sim-validate
     path: examples/arduino-mega-2560-io
     gate: true
+  # atmega2561's CLI proof. Committed tiny AVR ELF, no toolchain, seconds to run.
+  - id: atmega2561-io
+    kind: sim-validate
+    path: examples/atmega2561-io
+    gate: true
