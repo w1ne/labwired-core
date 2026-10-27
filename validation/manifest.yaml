@@ -8990,6 +8990,7 @@ boards:
       - crates/core/src/peripherals/sam/eic.rs
       - crates/core/src/peripherals/sam/oscctrl.rs
       - crates/core/src/peripherals/sam/pac.rs
+      - crates/core/src/peripherals/sam/sercom_i2cm.rs
       - crates/core/src/peripherals/sam/tc.rs
       - crates/core/src/peripherals/sam/tcc.rs
 

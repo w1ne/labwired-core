@@ -177,6 +177,8 @@ pub const MODEL_TYPES: &[&str] = &[
     "samd51_dac",
     "samd51_adc",
     "samd51_pac",
+    "samd51_sercom_i2cm",
+    "samd51_sercom_usart",
     "sam_dmac_byte",
     "sam_dmac_sercom4_tx_byte",
     // Reserve the full name: never fuzzy-coerce an unqualified SAM DMAC to STM32.
@@ -387,8 +389,13 @@ fn build_samd51_board_model(
     kind: &str,
     p_cfg: &PeripheralConfig,
 ) -> anyhow::Result<Box<dyn Peripheral>> {
-    // The DAC's only options are the board's reference levels.
-    let admitted = |key: &String| kind == "samd51_dac" && (key == "vrefa_mv" || key == "vddana_mv");
+    // The DAC's only options are the board's reference levels; the I2C
+    // master's is the board's SCL rise time.
+    let admitted = |key: &String| match kind {
+        "samd51_dac" => key == "vrefa_mv" || key == "vddana_mv",
+        "samd51_sercom_i2cm" => key == "scl_rise_ns",
+        _ => false,
+    };
     if !p_cfg.config.keys().all(admitted) {
         anyhow::bail!("{kind} admits no config overrides");
     }
@@ -438,6 +445,21 @@ fn build_samd51_board_model(
             } else {
                 Box::new(crate::peripherals::sam::pac::Samd51Pac::new())
             }
+        }
+        "samd51_sercom_i2cm" => {
+            use crate::peripherals::sam::sercom_i2cm::{Samd51SercomI2cm, SERCOM_INSTANCES};
+            let Some(instance) = SERCOM_INSTANCES
+                .iter()
+                .find(|i| i.base == p_cfg.base_address)
+            else {
+                anyhow::bail!("SAMD51 SERCOM base must be one of SERCOM0..SERCOM5");
+            };
+            // Four lines (first_irq..first_irq+3) are reported by the model itself.
+            if p_cfg.irq.is_some() {
+                anyhow::bail!("SAMD51 SERCOM I2C master takes no single IRQ");
+            }
+            let rise = p_cfg.config.get("scl_rise_ns").and_then(|v| v.as_u64());
+            Box::new(Samd51SercomI2cm::new(*instance).with_scl_rise_ns(rise.unwrap_or(0)))
         }
         "samd51_eic" => {
             // Sixteen channel lines (IRQ 12..27) are reported by the model itself.
@@ -723,8 +745,42 @@ pub fn try_build(
             Box::new(crate::peripherals::sam::sercom_usart::SamSercomUsart::new())
         }
         "samd51_oscctrl" | "samd51_gclk" | "samd51_tc" | "samd51_tcc" | "samd51_eic"
-        | "samd51_dac" | "samd51_adc" | "samd51_pac" => {
+        | "samd51_dac" | "samd51_adc" | "samd51_pac" | "samd51_sercom_i2cm" => {
             build_samd51_board_model(canonical_type, p_cfg)?
+        }
+        "samd51_sercom_usart" => {
+            use crate::peripherals::sam::sercom_usart::{SamSercomUsart, UsartPads};
+            let key = |k: &str| p_cfg.config.get(k).and_then(|v| v.as_u64());
+            let usart = SamSercomUsart::new_samd51();
+            // Optional pads: all of tx/rx port and bit, pad_mux, txpo, rxpo.
+            match (
+                key("tx_port_base"),
+                key("tx_bit"),
+                key("rx_port_base"),
+                key("rx_bit"),
+                key("pad_mux"),
+                key("txpo"),
+                key("rxpo"),
+            ) {
+                (Some(tp), Some(tb), Some(rp), Some(rb), Some(mux), Some(txpo), Some(rxpo))
+                    if tb < 32 && rb < 32 && mux < 16 && txpo < 4 && rxpo < 4 =>
+                {
+                    let usart = usart.with_pads(UsartPads {
+                        tx: (tp, tb as u8),
+                        rx: (rp, rb as u8),
+                        mux: mux as u8,
+                        txpo: txpo as u8,
+                        rxpo: rxpo as u8,
+                    });
+                    // Optional: the core clock channel paces bytes at the baud.
+                    match key("gclk_id") {
+                        Some(channel) => Box::new(usart.with_pacing(channel)),
+                        None => Box::new(usart),
+                    }
+                }
+                (None, None, None, None, None, None, None) => Box::new(usart),
+                _ => anyhow::bail!("SAMD51 USART '{}' needs all pad keys or none", p_cfg.id),
+            }
         }
         "samd51_nvmctrl_manual_storage" | "samd51_cmcc_control" => {
             let expected = if canonical_type == "samd51_nvmctrl_manual_storage" {
@@ -796,6 +852,9 @@ pub fn try_build(
                     mosi: mosi as u8,
                     mux: mux as u8,
                     dopo: dopo as u8,
+                    // Optional: the SERCOM core clock channel times bytes on
+                    // the live clock tree.
+                    core_gclk: p_cfg.config.get("gclk_id").and_then(|v| v.as_u64()),
                 },
             ))
         }

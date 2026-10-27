@@ -84,6 +84,13 @@ pub trait I2cDevice: Send {
     fn start(&mut self) {}
     fn stop(&mut self) {}
 
+    /// Nanoseconds this device holds SCL low after acknowledging each byte it
+    /// receives and before each byte it sends (clock stretching). Default: none.
+    /// Only controllers that model bus timing add it to the transfer.
+    fn clock_stretch_ns(&self) -> u64 {
+        0
+    }
+
     /// What this device can show of itself — its own inspect evidence.
     ///
     /// The ONE place a an I²C device's artifacts are decided is the model

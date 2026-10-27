@@ -10,8 +10,9 @@
 # are intentionally stubbed / omitted — only the MCU core, PORT, MCLK/GCLK,
 # SERCOM1/3 UARTs and SysTick are modelled here.
 # The SAMD51 board models (PAC, OSCCTRL, SAMD51 GCLK generators, EIC,
-# TC0..5, TCC0..4, ADC0/1, DAC) are modelled to their documented register
-# slices; see docs/engineering/samd51-board-models.md.
+# TC0..5, TCC0..4, ADC0/1, DAC and the Wire SERCOM I2C master) are
+# modelled to their documented register slices; see
+# docs/engineering/samd51-board-models.md.
 # Pin labels follow Adafruit ArduinoCore-samd variants/metro_m4/variant.cpp.
 
 name: "atsamd51j19a"
@@ -234,6 +235,12 @@ peripherals:
   - id: "dac"
     type: "samd51_dac"
     base_address: 0x43002400
+    size: "1KB"
+  # Metro M4 Wire: SERCOM5 PAD0/PAD1 on PB02 (SDA) / PB03 (SCL), variant.h.
+  # The model reports its four SERCOM lines itself, so no single IRQ.
+  - id: "sercom5"
+    type: "samd51_sercom_i2cm"
+    base_address: 0x43000400
     size: "1KB"
   - id: "usb"
     type: "stub"
