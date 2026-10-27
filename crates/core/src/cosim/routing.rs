@@ -1218,10 +1218,32 @@ impl CosimSession {
         base_dir: &Path,
         bus: &SystemBus,
     ) -> SimResult<Option<Self>> {
+        Self::new_with_factory(configs, bus, |config| {
+            crate::cosim::build_cosim_adapter_with_base(config, base_dir)
+        })
+    }
+
+    /// Build a session using adapters supplied by the host, while retaining the
+    /// same scheduler, routing, and trace setup as the native constructor.
+    pub fn new_with_factory<F>(
+        configs: &[CosimModelConfig],
+        bus: &SystemBus,
+        mut factory: F,
+    ) -> SimResult<Option<Self>>
+    where
+        F: FnMut(&CosimModelConfig) -> SimResult<Box<dyn crate::cosim::CosimAdapter>>,
+    {
         if configs.is_empty() {
             return Ok(None);
         }
-        let runner = CosimRunner::from_configs_with_base(configs, base_dir)?;
+        let mut models = Vec::with_capacity(configs.len());
+        for config in configs {
+            models.push(crate::cosim::CosimRunnerModel::new(
+                config.clone(),
+                factory(config)?,
+            ));
+        }
+        let runner = CosimRunner::new(models);
         let (router, binding_errors) = SignalRouter::bind(configs, bus);
         let fallback_clock = bus.cpu_hz == 0;
         let cpu_hz = if fallback_clock {
@@ -2064,6 +2086,33 @@ mod tests {
                 path: "ui.touch.pressed".to_string()
             }]
         );
+    }
+
+    #[test]
+    fn host_adapter_is_stepped_at_the_session_boundary() {
+        use crate::cosim::{CosimAdapter as RuntimeAdapter, CosimStep, CosimStepResult};
+        use std::sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc,
+        };
+        struct HostAdapter(Arc<AtomicUsize>);
+        impl RuntimeAdapter for HostAdapter {
+            fn step(&mut self, _: CosimStep) -> SimResult<CosimStepResult> {
+                self.0.fetch_add(1, Ordering::SeqCst);
+                Ok(CosimStepResult::default())
+            }
+        }
+        let mut bus = crate::bus::SystemBus::new();
+        let mut model = mock_model("host", 1000, &[], &[], &[]);
+        model.adapter = CosimAdapter::Ngspice;
+        let calls = Arc::new(AtomicUsize::new(0));
+        let mut session = CosimSession::new_with_factory(&[model], &bus, |_| {
+            Ok(Box::new(HostAdapter(calls.clone())))
+        })
+        .unwrap()
+        .unwrap();
+        session.advance_to(1000, &mut bus).unwrap();
+        assert!(calls.load(Ordering::SeqCst) > 0);
     }
 
     #[test]
