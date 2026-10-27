@@ -393,13 +393,17 @@ fn build_samd51_usb_device_banks(p_cfg: &PeripheralConfig) -> anyhow::Result<Box
     if !p_cfg.clock.as_ref().is_some_and(|clocks| {
         let gates = clocks.as_slice();
         gates.len() == 2
-            && [("AHBMASK", 10), ("APBBMASK", 0)].into_iter().all(|(reg, bit)| {
-                gates
-                    .iter()
-                    .any(|gate| gate.controller == "mclk" && gate.reg == reg && gate.bit == bit)
-            })
+            && [("AHBMASK", 10), ("APBBMASK", 0)]
+                .into_iter()
+                .all(|(reg, bit)| {
+                    gates
+                        .iter()
+                        .any(|gate| gate.controller == "mclk" && gate.reg == reg && gate.bit == bit)
+                })
     }) {
-        anyhow::bail!("SAMD51 USB banks require exactly the mclk AHBMASK bit10 and APBBMASK bit0 gates");
+        anyhow::bail!(
+            "SAMD51 USB banks require exactly the mclk AHBMASK bit10 and APBBMASK bit0 gates"
+        );
     }
     Ok(Box::new(
         crate::peripherals::sam::usb_device::Samd51UsbDeviceBanks::new(),
@@ -849,9 +853,11 @@ pub fn try_build(
                     "SAMD51 DMAC board profile requires explicit mclk AHBMASK bit9 binding"
                 );
             }
-            Box::new(crate::peripherals::sam::dmac_byte::SamDmacByte::new_samd51_board(
-                p_cfg.base_address,
-            ))
+            Box::new(
+                crate::peripherals::sam::dmac_byte::SamDmacByte::new_samd51_board(
+                    p_cfg.base_address,
+                ),
+            )
         }
         "samd51_usb_device_banks" => build_samd51_usb_device_banks(p_cfg)?,
         "sam_dmac_sercom4_tx_byte" => {

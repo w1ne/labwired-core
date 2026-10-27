@@ -31,11 +31,11 @@ fn chip(extra: &[&str]) -> (ChipDescriptor, SystemManifest) {
     let mut chip = ChipDescriptor::from_file(root().join("configs/chips/atsamd51.yaml")).unwrap();
     for cfg in extra {
         let p: labwired_config::PeripheralConfig = serde_yaml::from_str(cfg).unwrap();
-        chip.peripherals.retain(|q| q.base_address != p.base_address);
+        chip.peripherals
+            .retain(|q| q.base_address != p.base_address);
         chip.peripherals.push(p);
     }
-    let manifest =
-        SystemManifest::from_file(root().join("configs/systems/metro-m4.yaml")).unwrap();
+    let manifest = SystemManifest::from_file(root().join("configs/systems/metro-m4.yaml")).unwrap();
     (chip, manifest)
 }
 
@@ -69,10 +69,16 @@ fn set_bits(bus: &mut SystemBus, addr: u64, bits: u32) {
 fn usb_device_banks_build_only_on_their_fixed_instance() {
     let (c, m) = chip(&[USB_CFG]);
     let bus = SystemBus::from_config(&c, &m).unwrap();
-    assert!(bus.peripherals.iter().any(|p| p.name == "usb-banks" && p.base == USB));
+    assert!(bus
+        .peripherals
+        .iter()
+        .any(|p| p.name == "usb-banks" && p.base == USB));
     for bad in [
         USB_CFG.replace("irq: 80", "irq: 81"),
-        USB_CFG.replace("  - { controller: \"mclk\", reg: \"APBBMASK\", bit: 0 }\n", ""),
+        USB_CFG.replace(
+            "  - { controller: \"mclk\", reg: \"APBBMASK\", bit: 0 }\n",
+            "",
+        ),
     ] {
         let (c, m) = chip(&[bad.as_str()]);
         assert!(SystemBus::from_config(&c, &m).is_err(), "{bad}");
@@ -122,20 +128,23 @@ fn board_dmac_paces_dac_samples_on_tc3_overflow() {
     bus.write_u32(GCLK + 0x80 + 26 * 4, 0x40).unwrap(); // TC2/TC3 on GEN0
     let samples = [0x123u16, 0x456, 0x789];
     for (i, s) in samples.iter().enumerate() {
-        bus.write_u16(u64::from(SAMPLES) + 2 * i as u64, *s).unwrap();
+        bus.write_u16(u64::from(SAMPLES) + 2 * i as u64, *s)
+            .unwrap();
     }
     // VALID | BEATSIZE=HWORD | SRCINC; SRCADDR is the block end.
     let t = u64::from(TABLE);
     bus.write_u16(t, 0x0501).unwrap();
     bus.write_u16(t + 2, samples.len() as u16).unwrap();
-    bus.write_u32(t + 4, SAMPLES + 2 * samples.len() as u32).unwrap();
+    bus.write_u32(t + 4, SAMPLES + 2 * samples.len() as u32)
+        .unwrap();
     bus.write_u32(t + 8, (DAC + 0x10) as u32).unwrap();
     bus.write_u32(t + 12, 0).unwrap();
     bus.write_u32(DMA + 0x34, TABLE).unwrap();
     bus.write_u32(DMA + 0x38, WB).unwrap();
     bus.write_u32(DMA, 0x0f02).unwrap(); // LVLEN0..3, DMAENABLE
-    bus.write_u32(DMA + 0x40, (0x35 << 8) | (2 << 20) | 2).unwrap(); // TC3 OVF, BURST
-    // TC3: COUNT16, MFRQ with TOP = CC0, DIV1.
+    bus.write_u32(DMA + 0x40, (0x35 << 8) | (2 << 20) | 2)
+        .unwrap(); // TC3 OVF, BURST
+                   // TC3: COUNT16, MFRQ with TOP = CC0, DIV1.
     bus.write_u8(TC3 + 0x0c, 1).unwrap();
     bus.write_u16(TC3 + 0x1c, 99).unwrap();
     bus.write_u32(TC3, 2).unwrap();
