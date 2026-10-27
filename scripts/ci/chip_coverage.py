@@ -163,6 +163,46 @@ def _texts_that_drive_the_cli() -> list[tuple[str, str]]:
     return out
 
 
+def _exact_system_loop_runs_cli(run: str) -> bool:
+    """Whether a real `labwired test` command checks each loop system.
+
+    Strip shell comments, find the exact-system loop, then inspect only an
+    active CLI command and its backslash-continued arguments. Text in a comment
+    or an `echo` must not count as execution evidence.
+    """
+    active_run = "\n".join(line.split("#", 1)[0] for line in run.splitlines())
+    loop = re.search(
+        r"(?ms)^[ \t]*for[ \t]+system[ \t]+in[ \t]+\$EXACT_SYSTEMS;[ \t]*do[ \t]*\n"
+        r"(?P<body>.*?)^[ \t]*done[ \t]*$",
+        active_run,
+    )
+    if not loop:
+        return False
+
+    lines = loop.group("body").splitlines()
+    index = 0
+    while index < len(lines):
+        line = lines[index].strip()
+        if not re.match(r"(?:\./)?(?:[\w.-]+/)*labwired[ \t]+test(?:[ \t]|$)", line):
+            index += 1
+            continue
+
+        command_parts = []
+        while index < len(lines):
+            part = lines[index].strip()
+            continued = part.endswith("\\")
+            command_parts.append(part[:-1].strip() if continued else part)
+            index += 1
+            if not continued:
+                break
+        command = " ".join(command_parts)
+        return (
+            '--script "${{ matrix.script }}"' in command
+            and '--system "$system"' in command
+        )
+    return False
+
+
 def script_proofs() -> dict[str, set[str]]:
     """chip -> the CI sources that run a real script against it."""
     proofs: dict[str, set[str]] = {}
@@ -198,9 +238,7 @@ def script_proofs() -> dict[str, set[str]]:
                 match
                 and (step.get("env") or {}).get("EXACT_SYSTEMS")
                 == "${{ join(matrix.exact_systems, ' ') }}"
-                and "for system in $EXACT_SYSTEMS" in run
-                and '--script "${{ matrix.script }}"' in run
-                and '--system "$system"' in run
+                and _exact_system_loop_runs_cli(run)
             ):
                 exact_system_run_ids.add(match.group(1))
         if exact_system_run_ids:

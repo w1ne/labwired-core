@@ -312,6 +312,20 @@ def test_a_matrix_system_override_proves_each_exact_chip_only_when_run(tmp_path)
     code, out = run_gate(tmp_path)
     assert code == 0, out
 
+    # Keep the loop and its arguments in place, but make the apparent CLI call
+    # inert. Argument text in an echo or a comment is not evidence that any
+    # firmware ran against these exact systems.
+    for inert_prefix in ("echo ", "# "):
+        workflow.write_text(
+            valid_workflow.replace(
+                "labwired test --script", f"{inert_prefix}labwired test --script"
+            )
+        )
+        code, out = run_gate(tmp_path)
+        assert code == 1, out
+        assert all(chip in out for chip in chips)
+        assert "NO CI gate executes firmware" in out
+
     workflow.write_text(valid_workflow.replace(' --system "$system"', ""))
     code, out = run_gate(tmp_path)
     assert code == 1
