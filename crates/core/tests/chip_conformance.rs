@@ -343,6 +343,15 @@ const CHIPS: &[ChipConf] = &[
         reset_oracle: None,
         behavior_gate: Some("stm32f1_exec_oracle"),
     },
+    // The exact NUCLEO-F103RB chip geometry shares the family peripheral
+    // definitions. The board UART/GPIO smoke is gated in
+    // core-coverage-matrix-smoke.yml; no exact-part silicon capture is claimed.
+    ChipConf {
+        name: "stm32f103rb",
+        yaml: "configs/chips/stm32f103rb.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
     // Exact low-density F103 order codes share the F103 engine. Geometry is
     // checked per part, but there is no per-order-code silicon capture or
     // executing-fidelity differential, so these remain honest L0 entries.
