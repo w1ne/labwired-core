@@ -42,6 +42,12 @@ fn atmega1281_compiled_firmware_prints_and_drives_pb5() {
         }
     }
 
-    assert_eq!(String::from_utf8_lossy(&serial.lock().unwrap()).trim_end(), "1281 OK");
-    assert_eq!(machine.bus.peripherals[portb].dev.read_gpio_output(5), Some(true));
+    assert_eq!(
+        String::from_utf8_lossy(&serial.lock().unwrap()).trim_end(),
+        "1281 OK"
+    );
+    assert_eq!(
+        machine.bus.peripherals[portb].dev.read_gpio_output(5),
+        Some(true)
+    );
 }

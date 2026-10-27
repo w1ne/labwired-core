@@ -326,6 +326,12 @@ FIXTURES = {
 # their own chip config and get their own baseline. A generic CPU-only smoke
 # fixture must not stand in for an unimplemented board platform.
 WAIVED: dict[str, str] = {
+    "atmega1281": (
+        "The committed -mmcu=atmega1281 firmware validates boot, USART0 and GPIO, "
+        "but no representative AVR6 throughput fixture is built. The available "
+        "AVR spin ELF is linked for atmega328p with SRAM at 0x100; this part's "
+        "SRAM starts at 0x200. No separate throughput claim is made yet."
+    ),
     "atmega2561": (
         "Runs on the same AVR interpreter as atmega328p (AvrModel::Atmega2560: "
         "3-byte PC, RAM at 0x200), but the AVR spin fixture is linked with "
