@@ -94,7 +94,7 @@ labwired cosim-step examples/cosim-spice-rc/system-analog.yaml \
 ```
 
 The two engines are held to within 1 % of each other at every step by
-`crates/cli/tests/analog_vs_ngspice_differential.rs`. What the in-core engine
-does not do — diodes, transistors, `.include` model libraries, AC/DC sweeps —
-it refuses by name and points back at the ngspice adapter above; see
-`docs/cosimulation_plugins.md`.
+`crates/cli/tests/analog_vs_ngspice_differential.rs`. The in-core engine also
+supports simplified diode, BJT and level-1 MOSFET models. Subcircuits, `.include` model libraries and AC/DC sweeps require the
+native ngspice adapter; the semiconductor models also have important limits.
+See [`docs/cosimulation_plugins.md`](../../docs/cosimulation_plugins.md#semiconductor-models).
