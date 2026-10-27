@@ -326,6 +326,33 @@ def test_a_matrix_system_override_proves_each_exact_chip_only_when_run(tmp_path)
         assert all(chip in out for chip in chips)
         assert "NO CI gate executes firmware" in out
 
+    # A matching invocation inside a filter can skip exact systems. Credit only
+    # a straight-line loop body that invokes the CLI on every iteration.
+    command_line = next(
+        line for line in valid_workflow.splitlines() if "labwired test --script" in line
+    )
+    command_indent = command_line[: len(command_line) - len(command_line.lstrip())]
+    filtered_workflow = valid_workflow.replace(
+        command_line.strip(),
+        f'if [ "$system" = "never" ]; then\n{command_indent}  {command_line.strip()}',
+    )
+    loop_close = filtered_workflow.rfind("done")
+    loop_close_line = filtered_workflow.rfind("\n", 0, loop_close) + 1
+    filtered_workflow = (
+        filtered_workflow[:loop_close_line]
+        + f"{command_indent}fi\n"
+        + filtered_workflow[loop_close_line:]
+    )
+    workflow.write_text(filtered_workflow)
+    parsed_workflow = cc.load_yaml(workflow)
+    filtered_run = parsed_workflow["jobs"]["coverage-matrix-smoke"]["steps"][0]["run"]
+    assert 'if [ "$system" = "never" ]' in filtered_run
+    assert "labwired test --script" in filtered_run
+    code, out = run_gate(tmp_path)
+    assert code == 1, out
+    assert all(chip in out for chip in chips)
+    assert "NO CI gate executes firmware" in out
+
     workflow.write_text(valid_workflow.replace(' --system "$system"', ""))
     code, out = run_gate(tmp_path)
     assert code == 1
