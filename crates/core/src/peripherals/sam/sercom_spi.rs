@@ -34,6 +34,8 @@ pub struct SamSpiPads {
     pub dopo: u8,
     /// GCLK peripheral channel of the SERCOM core clock (PCHCTRL index).
     pub core_gclk: Option<u64>,
+    /// DMAC trigger sources (TX, RX) of this SERCOM, from the chip description.
+    pub dma: Option<(u32, u32)>,
 }
 
 pub struct SamSercomSpi {
@@ -298,6 +300,9 @@ impl SamSercomSpi {
 }
 
 impl Peripheral for SamSercomSpi {
+    fn on_system_reset(&mut self) {
+        self.store(0, 1, 32); // CTRLA.SWRST: registers, RX and transfer state
+    }
     fn attach_irq_line(&mut self, irq: Option<u32>) {
         // Four consecutive NVIC positions, never wrap or claim system exceptions.
         self.irq_base = irq.filter(|irq| *irq <= 252);
@@ -344,6 +349,12 @@ impl Peripheral for SamSercomSpi {
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
         self.store(offset, value.into(), 8);
         Ok(())
+    }
+    fn dma_rx_request(&self, offset: u64) -> Option<bool> {
+        (offset == 0x28).then(|| self.enabled() && !self.rx.borrow().is_empty())
+    }
+    fn dma_triggers(&self) -> Option<(u32, u32)> {
+        self.pads.dma
     }
     fn dma_tx_request(&self, offset: u64) -> Option<bool> {
         (offset == 0x28).then(|| self.enabled() && self.holding.is_none())

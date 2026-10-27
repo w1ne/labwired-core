@@ -185,6 +185,9 @@ impl Samd51Eic {
 }
 
 impl Peripheral for Samd51Eic {
+    fn on_system_reset(&mut self) {
+        *self = Self::default();
+    }
     fn read(&self, offset: u64) -> SimResult<u8> {
         let word = self.read_reg(offset & !3)?;
         Ok((word >> (8 * (offset & 3))) as u8)

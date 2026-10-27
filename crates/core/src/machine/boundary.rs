@@ -691,6 +691,7 @@ impl<C: Cpu> Machine<C> {
             self.reset_core_system_state();
             self.reset()?;
             self.record_peripheral_reset_cause(crate::PeripheralResetCause::System);
+            self.system_reset_peripherals();
             // An emulated SoftDevice restarts with the chip (crate::sd_hle).
             if let Some(slot) = self.sd_hle.as_mut() {
                 slot.sd.reset();
@@ -710,6 +711,7 @@ impl<C: Cpu> Machine<C> {
                 for cause in requests.into_iter().flatten() {
                     self.record_peripheral_reset_cause(cause);
                 }
+                self.system_reset_peripherals();
                 if let Some(slot) = self.sd_hle.as_mut() {
                     slot.sd.reset();
                 }

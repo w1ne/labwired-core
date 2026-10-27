@@ -2567,6 +2567,16 @@ impl crate::pins::PinPort for GpioPort {
 }
 
 impl crate::Peripheral for GpioPort {
+    fn on_system_reset(&mut self) {
+        // SAM PORT only: registers to power-on, the outside world's levels kept.
+        if let GpioFamily::SamPort(g) = &mut self.family {
+            let (external, in_latch) = (g.external, g.in_latch);
+            *g = SamGpio::default();
+            g.external = external;
+            g.in_latch = in_latch;
+            self.sync_pin_cells();
+        }
+    }
     /// Not in the per-cycle walk: this model overrides neither `tick()` nor
     /// `tick_elapsed()`, so every visit ran the default no-op and returned a
     /// default `PeripheralTickResult`. Skipping it removes dispatch, never an

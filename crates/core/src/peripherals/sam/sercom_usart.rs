@@ -658,6 +658,9 @@ impl SamSercomUsart {
 }
 
 impl Peripheral for SamSercomUsart {
+    fn on_system_reset(&mut self) {
+        self.software_reset();
+    }
     fn needs_bus_tick(&self) -> bool {
         self.pads.is_some() && self.enabled()
     }
