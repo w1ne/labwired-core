@@ -4,7 +4,7 @@
 
 **Goal:** Publish only the public `configs/` tree plus chip names from the existing core `Catalog` as a versioned download for the VS Code extension.
 
-**Architecture:** A tiny Rust example prints `Catalog::chip_names()` so the workflow uses the existing discovery implementation. A tested Python builder creates `configs.tar.gz` and `catalog.json` with the core commit, chip names, archive name, and SHA-256. A workflow updates a dedicated `model-catalog` branch whenever public configs change.
+**Architecture:** A tiny Rust example prints `Catalog::chip_names()` so the workflow uses the existing discovery implementation. A tested Python builder creates `configs.tar.gz` and `catalog.json` with the core commit, chip names, archive name, and SHA-256. A workflow updates a dedicated `model-catalog` branch whenever public configs or catalog discovery inputs change.
 
 **Tech Stack:** Rust, Python 3 standard library, GitHub Actions, tar.gz.
 
@@ -48,9 +48,10 @@
 
 **Files:** Create `.github/workflows/publish-model-catalog.yml`.
 
-- [ ] Trigger on pushes to `main` that change `configs/**`, the bundle builder, or this workflow; also support `workflow_dispatch` for the first publication.
+- [ ] Trigger on pushes to `main` that change `configs/**`, `crates/core/src/session/catalog.rs`, `crates/core/examples/export_catalog_names.rs`, the bundle builder, or this workflow. Including the workflow path triggers the first publication when it is merged.
 - [ ] Grant only `contents: write` and serialize publications with a workflow concurrency group.
-- [ ] Run the bundle unit test, then run `cargo run --quiet -p labwired-core --example export_catalog_names` and pass its JSON to the bundle builder with `${GITHUB_SHA}`.
+- [ ] Keep the non-main ref guard as defense-in-depth, check out `refs/heads/main` explicitly, and derive `CORE_COMMIT` from that checkout with `git rev-parse HEAD` so reruns publish current main.
+- [ ] Run the bundle unit test, then run `cargo run --quiet -p labwired-core --example export_catalog_names` and pass its JSON and `CORE_COMMIT` to the bundle builder. Use the same `CORE_COMMIT` in the publication commit message.
 - [ ] Publish only `catalog.json` and `configs.tar.gz` at the root of the `model-catalog` branch. Replace that branch's contents on each publication so it contains no core source files.
 - [ ] Run `actionlint .github/workflows/publish-model-catalog.yml` when available and inspect the workflow diff for branch and permission scope.
 

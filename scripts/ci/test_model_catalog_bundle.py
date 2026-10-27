@@ -66,8 +66,11 @@ class ModelCatalogBundleTest(unittest.TestCase):
 
 
 class ModelCatalogWorkflowTest(unittest.TestCase):
-    def test_manual_publication_fails_for_refs_other_than_main(self):
+    def test_manual_dispatch_is_removed_and_checkout_uses_main(self):
         workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+        self.assertNotIn("workflow_dispatch:", workflow)
+        checkout_step = workflow.split("- uses: actions/checkout@v4", 1)[1].split("\n\n", 1)[0]
+        self.assertIn("ref: refs/heads/main", checkout_step)
         self.assertIn("github.ref != 'refs/heads/main'", workflow)
         self.assertLess(
             workflow.index("- name: Require main ref"),
@@ -75,9 +78,15 @@ class ModelCatalogWorkflowTest(unittest.TestCase):
         )
         self.assertIn("exit 1", workflow)
 
+    def test_bundle_commit_and_publication_message_use_checked_out_head(self):
+        workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+        self.assertIn('echo "CORE_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"', workflow)
+        self.assertIn('--core-commit "$CORE_COMMIT"', workflow)
+        self.assertIn('git commit -m "Publish model catalog for $CORE_COMMIT"', workflow)
+
     def test_push_triggers_include_catalog_discovery_sources(self):
         workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
-        push_paths = workflow.split("    paths:\n", 1)[1].split("  workflow_dispatch:", 1)[0]
+        push_paths = workflow.split("    paths:\n", 1)[1].split("\n\npermissions:", 1)[0]
         for path in (
             "crates/core/src/session/catalog.rs",
             "crates/core/examples/export_catalog_names.rs",

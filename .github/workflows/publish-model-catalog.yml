@@ -10,7 +10,6 @@ on:
       - "crates/core/examples/export_catalog_names.rs"
       - "scripts/ci/build_model_catalog_bundle.py"
       - ".github/workflows/publish-model-catalog.yml"
-  workflow_dispatch:
 
 permissions:
   contents: write
@@ -31,6 +30,11 @@ jobs:
           exit 1
 
       - uses: actions/checkout@v4
+        with:
+          ref: refs/heads/main
+
+      - name: Resolve checked-out main commit
+        run: echo "CORE_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
       - uses: dtolnay/rust-toolchain@1.95.0
 
@@ -44,7 +48,7 @@ jobs:
           chips_json="$(cargo run --quiet -p labwired-core --example export_catalog_names)"
           python3 scripts/ci/build_model_catalog_bundle.py \
             --chips-json "$chips_json" \
-            --core-commit "$GITHUB_SHA" \
+            --core-commit "$CORE_COMMIT" \
             --output-dir "$RUNNER_TEMP/model-catalog"
 
       - name: Replace model-catalog branch contents
@@ -60,5 +64,5 @@ jobs:
           expected_files=$'catalog.json\nconfigs.tar.gz'
           staged_files="$(git diff --cached --name-only | sort)"
           test "$staged_files" = "$expected_files"
-          git commit -m "Publish model catalog for $GITHUB_SHA"
+          git commit -m "Publish model catalog for $CORE_COMMIT"
           git push --force origin HEAD:model-catalog
