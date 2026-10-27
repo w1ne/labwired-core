@@ -48,6 +48,10 @@ const SIG_I2CEXT0_SDA: u32 = 54;
 const SIG_FSPICLK: u32 = 63;
 const SIG_FSPID: u32 = 65;
 const SIG_FSPICS0: u32 = 68;
+/// GPIO-matrix OUTPUT index of LEDC channel 0 — esp-idf
+/// `soc/esp32c3/include/soc/gpio_sig_map.h` `LEDC_LS_SIG_OUT0_IDX`; the six
+/// channel outputs are contiguous (45..50).
+const SIG_LEDC_LS_OUT0: u32 = 45;
 /// GPIO-matrix OUTPUT signal indices of the UART transmitters (esp-idf
 /// `gpio_sig_map.h` :29 `U0TXD_OUT_IDX`, :35 `U1TXD_OUT_IDX`).
 ///
@@ -57,10 +61,6 @@ const SIG_FSPICS0: u32 = 68;
 /// the GPIO latch. The route lights up when firmware remaps TX to any other pin
 /// — `uart_set_pin` falls back to `gpio_matrix_out` for a non-IO_MUX pad, and
 /// UART1 has no IO_MUX route on the C3 at all, so it is matrix-only.
-/// GPIO-matrix OUTPUT index of LEDC channel 0 — esp-idf
-/// `soc/esp32c3/include/soc/gpio_sig_map.h` `LEDC_LS_SIG_OUT0_IDX`; the six
-/// channel outputs are contiguous (45..50).
-const SIG_LEDC_LS_OUT0: u32 = 45;
 const SIG_U0TXD: u32 = 6;
 const SIG_U1TXD: u32 = 9;
 
