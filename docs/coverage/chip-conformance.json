@@ -563,6 +563,13 @@
     "behavior": true,
     "excluded": 0,
     "level": 1,
+    "name": "atmega1281",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
     "name": "atsamd21",
     "reg_match": 0
   },

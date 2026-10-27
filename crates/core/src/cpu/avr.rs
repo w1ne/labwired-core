@@ -34,10 +34,12 @@ pub const FLASH_SIZE: usize = 32 * 1024;
 pub const RAMEND: u16 = 0x08FF;
 pub const SRAM_START: u16 = 0x0100;
 
-/// The AVR parts this interpreter runs. The ATmega2560 (Arduino Mega) is the
-/// ATmega328P core with: 256 KB flash and a 3-byte PC (CALL/RCALL/ICALL/RET/
-/// RETI and interrupt entry push and pop 3 bytes and take one cycle more;
-/// EIND for EIJMP/EICALL, RAMPZ for ELPM), 8 KB SRAM at 0x0200, ports A..L
+/// The AVR parts this interpreter runs. The ATmega1281 and ATmega2560 family
+/// cores share mega peripheral behavior, with per-device flash and PC geometry.
+/// The ATmega2560 (Arduino Mega) has 256 KB flash and a 3-byte PC; the
+/// ATmega1281 has 128 KB flash and a 2-byte PC. Both have 8 KB SRAM at 0x0200.
+/// EIND for EIJMP/EICALL is available on the ATmega2560/2561 model, while
+/// RAMPZ for ELPM is shared. The mega peripheral map includes ports A..L
 /// (H..L in extended I/O at 0x100..0x10B), a 16-channel ADC (ADCSRB.MUX5
 /// selects ADC8..ADC15) and its own vector table. Timer0/1/2, USART0, SPI and
 /// TWI sit at the same data addresses as on the 328P, so they are shared; their
@@ -51,15 +53,19 @@ pub const SRAM_START: u16 = 0x0100;
 pub enum AvrModel {
     #[default]
     Atmega328p,
+    Atmega1281,
     Atmega2560,
 }
 
 impl AvrModel {
-    /// The model a chip descriptor names: `atmega2560`/`atmega2561`/`mega2560`
-    /// select the ATmega2560, anything else the ATmega328P.
+    /// The model a chip descriptor names. atmega1281 selects the 128 KB
+    /// two-byte-PC mega core; atmega2560/atmega2561/mega2560 select the
+    /// 256 KB three-byte-PC mega core. Other names default to the ATmega328P.
     pub fn from_chip_name(name: &str) -> Self {
         let n = name.to_ascii_lowercase();
-        if n.contains("2560") || n.contains("2561") {
+        if n.contains("1281") {
+            AvrModel::Atmega1281
+        } else if n.contains("2560") || n.contains("2561") {
             AvrModel::Atmega2560
         } else {
             AvrModel::Atmega328p
@@ -68,19 +74,20 @@ impl AvrModel {
     pub fn flash_size(self) -> usize {
         match self {
             AvrModel::Atmega328p => FLASH_SIZE,
+            AvrModel::Atmega1281 => 128 * 1024,
             AvrModel::Atmega2560 => 256 * 1024,
         }
     }
     pub fn sram_start(self) -> u16 {
         match self {
             AvrModel::Atmega328p => SRAM_START,
-            AvrModel::Atmega2560 => 0x0200,
+            AvrModel::Atmega1281 | AvrModel::Atmega2560 => 0x0200,
         }
     }
     pub fn ramend(self) -> u16 {
         match self {
             AvrModel::Atmega328p => RAMEND,
-            AvrModel::Atmega2560 => 0x21FF,
+            AvrModel::Atmega1281 | AvrModel::Atmega2560 => 0x21FF,
         }
     }
     /// Bus base of this model's `avr_adc` input window (2 bytes per channel).
@@ -89,11 +96,15 @@ impl AvrModel {
     pub fn adc_input_base(self) -> u64 {
         match self {
             AvrModel::Atmega328p => AVR_ADC_INPUT_BASE,
-            AvrModel::Atmega2560 => AVR_MEGA_ADC_INPUT_BASE,
+            AvrModel::Atmega1281 | AvrModel::Atmega2560 => AVR_MEGA_ADC_INPUT_BASE,
         }
     }
     /// `true` when the PC is pushed as 3 bytes (flash above 128 KB).
     pub fn three_byte_pc(self) -> bool {
+        self == AvrModel::Atmega2560
+    }
+    /// Whether this model implements EIND, EIJMP and EICALL.
+    pub fn supports_eind(self) -> bool {
         self == AvrModel::Atmega2560
     }
 }
@@ -515,7 +526,7 @@ impl Avr {
 
     #[inline]
     fn is_mega(&self) -> bool {
-        self.model == AvrModel::Atmega2560
+        matches!(self.model, AvrModel::Atmega1281 | AvrModel::Atmega2560)
     }
 
     /// `PINx` of a port this model has.
@@ -523,7 +534,7 @@ impl Avr {
     fn is_pin_reg(&self, addr: u16) -> bool {
         match self.model {
             AvrModel::Atmega328p => matches!(addr, AVR_PINB | AVR_PINC | AVR_PIND),
-            AvrModel::Atmega2560 => MEGA2560_PIN_ADDRS.contains(&addr),
+            AvrModel::Atmega1281 | AvrModel::Atmega2560 => MEGA2560_PIN_ADDRS.contains(&addr),
         }
     }
 
@@ -532,7 +543,7 @@ impl Avr {
     fn is_port_reg(&self, addr: u16) -> bool {
         match self.model {
             AvrModel::Atmega328p => (AVR_PINB..=AVR_PIND + 2).contains(&addr),
-            AvrModel::Atmega2560 => {
+            AvrModel::Atmega1281 | AvrModel::Atmega2560 => {
                 (0x20..=0x34).contains(&addr) || (0x100..=0x10B).contains(&addr)
             }
         }
@@ -2968,6 +2979,47 @@ mod tests {
         let m = mega();
         assert_eq!(m.sp, 0x21FF, "SP resets to RAMEND");
         assert_eq!(m.flash.len(), 256 * 1024);
+    }
+
+    #[test]
+    fn mega_128k_names_use_the_128k_two_byte_pc_core() {
+        let cpu = Avr::for_chip_name("atmega1281");
+        assert_eq!(cpu.model, AvrModel::Atmega1281);
+        assert_eq!(cpu.flash.len(), 128 * 1024);
+        assert_eq!(cpu.sram.len(), 8 * 1024);
+        assert_eq!(cpu.sp, 0x21FF);
+        assert!(!cpu.model.three_byte_pc());
+    }
+
+    #[test]
+    fn atmega1281_does_not_decode_eind_control_flow_opcodes() {
+        for opcode in [0x9419, 0x9519] {
+            let mut cpu = Avr::for_chip_name("atmega1281");
+            let mut bus = MockBus::new();
+            cpu.load_words(0, &[opcode]);
+            let err = cpu.step(&mut bus, &[], &SimulationConfig::default());
+            assert!(
+                matches!(err, Err(SimulationError::DecodeError(0))),
+                "opcode {opcode:#06x}"
+            );
+        }
+    }
+
+    #[test]
+    fn atmega1281_call_and_ret_use_a_two_byte_return_address() {
+        let mut cpu = Avr::for_chip_name("atmega1281");
+        let mut bus = MockBus::new();
+        cpu.load_words(0, &[0x940E, 0x0080]);
+        cpu.load_words(0x100, &[0x9508]);
+        let initial_sp = cpu.sp;
+
+        step_n(&mut cpu, &mut bus, 1);
+        assert_eq!(cpu.pc, 0x100);
+        assert_eq!(initial_sp - cpu.sp, 2, "128 KB part pushes 2 PC bytes");
+
+        step_n(&mut cpu, &mut bus, 1);
+        assert_eq!(cpu.pc, 4);
+        assert_eq!(cpu.sp, initial_sp);
     }
 
     #[test]
