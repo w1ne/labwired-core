@@ -1,0 +1,68 @@
+#!/usr/bin/env python3
+"""Tests for the public model catalog bundle builder."""
+
+import importlib.util
+import hashlib
+import json
+import tempfile
+import unittest
+from pathlib import Path
+import tarfile
+
+
+BUILDER_PATH = Path(__file__).with_name("build_model_catalog_bundle.py")
+SPEC = (
+    importlib.util.spec_from_file_location("build_model_catalog_bundle", BUILDER_PATH)
+    if BUILDER_PATH.is_file()
+    else None
+)
+BUILDER = importlib.util.module_from_spec(SPEC) if SPEC else None
+if SPEC and SPEC.loader and BUILDER:
+    SPEC.loader.exec_module(BUILDER)
+
+
+class ModelCatalogBundleTest(unittest.TestCase):
+    def test_bundle_contains_only_configs_and_manifest_matches_archive(self):
+        self.assertIsNotNone(BUILDER, "bundle builder module must be available")
+        self.assertTrue(hasattr(BUILDER, "build_bundle"), "build_bundle must be implemented")
+
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            root = Path(temporary_dir)
+            configs = root / "configs"
+            (configs / "chips").mkdir(parents=True)
+            (configs / "systems").mkdir(parents=True)
+            (configs / "chips" / "alpha.yaml").write_text("chip: alpha\n")
+            (configs / "systems" / "alpha.yaml").write_text("chip: alpha\n")
+            (root / "README.md").write_text("unrelated repository file\n")
+            output = root / "bundle"
+
+            BUILDER.build_bundle(
+                configs_dir=configs,
+                chips=["zeta", "alpha"],
+                core_commit="0123456789abcdef0123456789abcdef01234567",
+                output_dir=output,
+            )
+
+            archive_path = output / "configs.tar.gz"
+            manifest = json.loads((output / "catalog.json").read_text())
+            with tarfile.open(archive_path, "r:gz") as archive:
+                names = archive.getnames()
+
+            self.assertTrue(all(name == "configs" or name.startswith("configs/") for name in names))
+            self.assertIn("configs/chips/alpha.yaml", names)
+            self.assertIn("configs/systems/alpha.yaml", names)
+            self.assertNotIn("README.md", names)
+            self.assertEqual(
+                manifest,
+                {
+                    "schema_version": 1,
+                    "core_commit": "0123456789abcdef0123456789abcdef01234567",
+                    "archive": "configs.tar.gz",
+                    "sha256": hashlib.sha256(archive_path.read_bytes()).hexdigest(),
+                    "chips": ["alpha", "zeta"],
+                },
+            )
+
+
+if __name__ == "__main__":
+    unittest.main()

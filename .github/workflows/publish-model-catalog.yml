@@ -1,0 +1,55 @@
+name: Publish Model Catalog
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "configs/**"
+      - "scripts/ci/build_model_catalog_bundle.py"
+      - ".github/workflows/publish-model-catalog.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: model-catalog-publisher
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@1.95.0
+
+      - name: Test bundle builder
+        run: python3 scripts/ci/test_model_catalog_bundle.py
+
+      - name: Build model catalog bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          chips_json="$(cargo run --quiet -p labwired-core --example export_catalog_names)"
+          python3 scripts/ci/build_model_catalog_bundle.py \
+            --chips-json "$chips_json" \
+            --core-commit "$GITHUB_SHA" \
+            --output-dir "$RUNNER_TEMP/model-catalog"
+
+      - name: Replace model-catalog branch contents
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch --orphan model-catalog
+          cp "$RUNNER_TEMP/model-catalog/catalog.json" ./catalog.json
+          cp "$RUNNER_TEMP/model-catalog/configs.tar.gz" ./configs.tar.gz
+          git add -- catalog.json configs.tar.gz
+          expected_files=$'catalog.json\nconfigs.tar.gz'
+          staged_files="$(git diff --cached --name-only | sort)"
+          test "$staged_files" = "$expected_files"
+          git commit -m "Publish model catalog for $GITHUB_SHA"
+          git push --force origin HEAD:model-catalog
