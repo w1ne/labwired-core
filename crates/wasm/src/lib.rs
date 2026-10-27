@@ -20,6 +20,7 @@ mod inspect;
 mod install;
 mod jit_browser;
 mod lab_tools;
+mod ngspice;
 #[cfg(test)]
 mod pic24_wasm_tests;
 #[cfg(test)]

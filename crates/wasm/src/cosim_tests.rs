@@ -952,3 +952,63 @@ fn regulated_supply_runs_in_the_browser_engine_as_committed() {
          say why in the commit — the browser gate compares against the same file"
     );
 }
+
+#[test]
+fn ngspice_callback_contract_preserves_boolean_and_numeric_signals() {
+    use labwired_core::cosim::{CosimSignalValue, CosimSignals, CosimStep};
+    let mut inputs = CosimSignals::new();
+    inputs.insert("gate".into(), CosimSignalValue::Bool(true));
+    inputs.insert("drive".into(), CosimSignalValue::F64(1.5));
+    let request = crate::ngspice::request_json(
+        "plant",
+        &CosimStep {
+            time_ns: 100,
+            dt_ns: 20,
+            inputs,
+        },
+    )
+    .unwrap();
+    let value: serde_json::Value = serde_json::from_str(&request).unwrap();
+    assert_eq!(value["model_id"], "plant");
+    assert_eq!(value["time_ns"], 100);
+    assert_eq!(value["inputs"]["gate"], true);
+    assert_eq!(value["inputs"]["drive"], 1.5);
+    let result = crate::ngspice::parse_response("plant", r#"{"voltage":2.5,"high":true}"#).unwrap();
+    assert_eq!(result.outputs["voltage"], CosimSignalValue::F64(2.5));
+    assert_eq!(result.outputs["high"], CosimSignalValue::Bool(true));
+    assert!(crate::ngspice::parse_response("plant", r#"{"voltage":"bad"}"#).is_err());
+}
+
+#[test]
+fn failed_cosim_model_prevents_further_firmware_advance() {
+    use labwired_core::cosim::{CosimAdapter, CosimSession, CosimStep, CosimStepResult};
+    use labwired_core::{SimResult, SimulationError};
+    struct Failure;
+    impl CosimAdapter for Failure {
+        fn step(&mut self, _: CosimStep) -> SimResult<CosimStepResult> {
+            Err(SimulationError::Other("solver stopped".into()))
+        }
+    }
+    let mut sim = build(PLAIN_SYSTEM);
+    let manifest = manifest(
+        r#"
+name: failure
+chip: stm32f401
+cosim_models:
+  - id: circuit
+    adapter: ngspice
+    model: model.cir
+    step_ns: 1000
+"#,
+    );
+    let bus = &sim.machine.as_ref().unwrap().bus;
+    sim.cosim =
+        CosimSession::new_with_factory(&manifest.cosim_models, bus, |_| Ok(Box::new(Failure)))
+            .unwrap();
+    assert!(sim
+        .advance_machine(AdvanceRequest::run(Some(10000)))
+        .is_err());
+    let stopped_at = sim.machine.as_ref().unwrap().total_cycles;
+    assert!(sim.advance_machine(AdvanceRequest::single()).is_err());
+    assert_eq!(sim.machine.as_ref().unwrap().total_cycles, stopped_at);
+}

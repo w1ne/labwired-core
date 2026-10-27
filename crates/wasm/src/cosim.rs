@@ -179,6 +179,9 @@ impl WasmSimulator {
         let Some(session) = self.cosim.as_mut() else {
             return machine.advance(request).map_err(AdvanceFailure::Machine);
         };
+        if let Some(message) = session.failure() {
+            return Err(AdvanceFailure::Cosim(message.to_string()));
+        }
         match session.advance_budget(machine, request) {
             Ok(advance) => {
                 for error in &advance.new_routing_errors {
@@ -187,10 +190,14 @@ impl WasmSimulator {
                 Ok(advance.report)
             }
             Err(CosimAdvanceError::Machine(error)) => Err(AdvanceFailure::Machine(error)),
-            Err(CosimAdvanceError::Model { error, .. }) => Err(AdvanceFailure::Cosim(format!(
-                "Co-sim Error: model step failed at cycle {}: {error}",
-                machine.total_cycles
-            ))),
+            Err(CosimAdvanceError::Model { error, .. }) => {
+                let message = format!(
+                    "Co-sim Error: model step failed at cycle {}: {error}",
+                    machine.total_cycles
+                );
+                session.latch_failure(message.clone());
+                Err(AdvanceFailure::Cosim(message))
+            }
         }
     }
 }

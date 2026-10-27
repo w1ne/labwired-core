@@ -1095,6 +1095,7 @@ pub struct CosimSession {
     configs: Vec<CosimModelConfig>,
     epoch_cycles: u64,
     last_global_cycles: u64,
+    failure: Option<String>,
 }
 
 /// What one lockstep advance did: the machine's report, and what happened at
@@ -1286,7 +1287,20 @@ impl CosimSession {
             configs: configs.to_vec(),
             epoch_cycles: 0,
             last_global_cycles: 0,
+            failure: None,
         }))
+    }
+
+    /// Return the first model failure latched by the host.
+    pub fn failure(&self) -> Option<&str> {
+        self.failure.as_deref()
+    }
+
+    /// Preserve the first model failure so a host cannot resume after it.
+    pub fn latch_failure(&mut self, message: String) {
+        if self.failure.is_none() {
+            self.failure = Some(message);
+        }
     }
 
     /// Every manifest path that did not resolve against the machine's bus.
