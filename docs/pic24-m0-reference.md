@@ -266,10 +266,12 @@ clamped to the converter range; PCFG = 1 reads 0.
 
 **SPI model.** Master writes to SPI1BUF start a transfer whose duration is
 `bits × PPRE × SPRE` TCY (PPRE 1/4/16/64, SPRE 1-8; DS70206C Equation 18-1:
-`FSCK = FCY / (PPRE × SPRE)`). MODE16 exchanges two bytes (high first). SPITBF stays set
-while the word shifts; the received word lands in SPI1BUF, sets SPIRBF and
-SPI1IF; an unread previous word sets SPIROV and SPI1EIF instead. A second
-write while shifting is held in a one-deep TX slot. SPI1CON2 keeps the
+`FSCK = FCY / (PPRE × SPRE)`). MODE16 exchanges two bytes (high first).
+SPITBF clears when TXB moves into the shift register; a second write while
+shifting fills the one-deep TX slot and sets SPITBF again. The received word
+lands in SPI1BUF, sets SPIRBF and SPI1IF; an unread previous word is
+discarded, sets SPIROV and SPI1EIF (SPI1IF remains set from that previous
+word). SPI1CON2 keeps the
 framed-mode bits (the framing protocol itself is not driven). Slave mode
 loads TXB on a SPI1BUF write and is clocked through the
 `spi_slave_clock()` test seam. Attached `SpiDevice`s are called once per
@@ -287,7 +289,10 @@ here) and data thereafter. Address matching uses
 `I2cDevice::claims_address`, then `select_address`/`start`; writes go to
 `write()`, RCEN reads from `read()`, and PEN calls `stop()`. ACKSTAT
 reports a missing slave's NACK; RBF/TBF track the buffers; reading
-I2C1RCV clears RBF; I2COV/IWCOL/BCL are clear-on-0. The TMP102 model is
+I2C1RCV clears RBF; I2COV/IWCOL/BCL are clear-on-0. ADD10 is set at the
+second byte of a matched 10-bit address and cleared at Stop
+(DS70283H Register 18-2); the 7-bit `I2cDevice` contract has no 10-bit
+match, so a master 10-bit probe is NACKed and ADD10 stays clear. The TMP102 model is
 attached by the session builder from the manifest's `i2c1` entries
 (`type: "tmp102"`, pointer register + 12-bit left-justified temperature).
 Slave mode is register-level plus test seams (`i2c_slave_address`,
@@ -298,7 +303,9 @@ external master model.
 modes, ASAM/SSRC = 111, the TMR3 trigger, the scan list, the split buffer,
 SMPI, SPI byte/word transfers with the prescaler timing, SPIROV, the slave
 seam, an I2C TMP102 temperature read, a missing-slave NACK, I2COV and the
-slave seams, plus the IFS1/IPC3/IPC4 vectors. Booting the firmware also
+slave seams, plus the IFS1/IPC3/IPC4 vectors. The session-path test removes
+both external devices, then each one alone, and requires `M3 FAIL` every
+time. Booting the firmware also
 added four base-ISA encodings the XC16 startup uses: 3-operand `SUB`,
 `INC Ws,Wd` (C/DC/N/OV/Z), and the WREG forms of `CLR Wd`/`SETM Wd`
 (no status flags; DS70283H Table 22-2 #15/#39/#69), pinned by xc16-as words. The real XC16 firmware
