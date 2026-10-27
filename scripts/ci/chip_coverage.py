@@ -249,24 +249,18 @@ def _exact_system_loop_runs_cli(run: str) -> bool:
             arguments = shlex.split(command)
         except ValueError:
             return False
-        if (
-            len(arguments) < 2
-            or arguments[0] != "./target/release/labwired"
-            or arguments[1] != "test"
-        ):
-            return False
-
-        def has_option_value(option: str, expected: str) -> bool:
-            positions = [i for i, token in enumerate(arguments) if token == option]
-            return (
-                len(positions) == 1
-                and positions[0] + 1 < len(arguments)
-                and arguments[positions[0] + 1] == expected
-            )
-
-        if not has_option_value("--script", "${{ matrix.script }}"):
-            return False
-        if not has_option_value("--system", "$system"):
+        expected_arguments = [
+            "./target/release/labwired",
+            "test",
+            "--script",
+            "${{ matrix.script }}",
+            "--system",
+            "$system",
+            "--output-dir",
+            "$out",
+            "--no-uart-stdout",
+        ]
+        if arguments != expected_arguments:
             return False
         cli_seen = True
     return cli_seen

@@ -303,7 +303,7 @@ def test_a_matrix_system_override_proves_each_exact_chip_only_when_run(tmp_path)
           EXACT_SYSTEMS: "${{ join(matrix.exact_systems, ' ') }}"
         run: |
           for system in $EXACT_SYSTEMS; do
-                ./target/release/labwired test --script "${{ matrix.script }}" --system "$system"
+                ./target/release/labwired test --script "${{ matrix.script }}" --system "$system" --output-dir "$out" --no-uart-stdout
           done
 '''
     )
@@ -311,6 +311,18 @@ def test_a_matrix_system_override_proves_each_exact_chip_only_when_run(tmp_path)
     valid_workflow = workflow.read_text()
     code, out = run_gate(tmp_path)
     assert code == 0, out
+
+    help_workflow = valid_workflow.replace(
+        "--no-uart-stdout", "--no-uart-stdout --help"
+    )
+    workflow.write_text(help_workflow)
+    parsed_workflow = cc.load_yaml(workflow)
+    help_run = parsed_workflow["jobs"]["coverage-matrix-smoke"]["steps"][0]["run"]
+    assert "--help" in help_run
+    code, out = run_gate(tmp_path)
+    assert code == 1, out
+    assert all(chip in out for chip in chips)
+    assert "NO CI gate executes firmware" in out
 
     # Keep the loop and its arguments in place, but make the apparent CLI call
     # inert. Argument text in an echo or a comment is not evidence that any
