@@ -943,7 +943,9 @@ fn output_carries_volts(config: &CosimModelConfig, model_signal: &str) -> bool {
             Some(serde_yaml::Value::Number(number))
                 if number.as_i64().is_none() && number.as_f64().is_some()
         ),
-        ManifestCosimAdapter::ExternalProcess | ManifestCosimAdapter::Fmi => false,
+        ManifestCosimAdapter::ExternalProcess
+        | ManifestCosimAdapter::Fmi
+        | ManifestCosimAdapter::Ngspice => false,
     }
 }
 

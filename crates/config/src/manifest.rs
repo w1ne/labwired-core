@@ -474,7 +474,7 @@ impl SystemManifest {
             }
             if matches!(
                 model.adapter,
-                CosimAdapter::ExternalProcess | CosimAdapter::Fmi
+                CosimAdapter::ExternalProcess | CosimAdapter::Fmi | CosimAdapter::Ngspice
             ) && model
                 .model
                 .as_deref()

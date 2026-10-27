@@ -40,6 +40,9 @@ pub fn build_cosim_adapter_with_base(
                 })?;
             Ok(Box::new(adapter))
         }
+        ManifestCosimAdapter::Ngspice => Err(SimulationError::NotImplemented(
+            "co-sim adapter ngspice needs a host-provided solver".to_string(),
+        )),
         ManifestCosimAdapter::Fmi => Err(SimulationError::NotImplemented(
             "co-sim adapter 'fmi' is declared but FMI import is not wired yet".to_string(),
         )),

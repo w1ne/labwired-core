@@ -243,6 +243,45 @@ external_devices: []
 }
 
 #[test]
+fn system_manifest_accepts_ngspice_alongside_analog() {
+    let yaml = r#"
+name: mixed
+chip: chips/stm32f401.yaml
+cosim_models:
+  - id: spice
+    adapter: ngspice
+    model: circuit.cir
+    step_ns: 10000
+  - id: analog
+    adapter: analog
+    step_ns: 10000
+    config:
+      netlist_text: "R1 out 0 1k\n.end"
+      probes: { out: "v(out)" }
+"#;
+    let manifest: SystemManifest =
+        serde_yaml::from_str(yaml).expect("both adapters must deserialize");
+    assert_eq!(manifest.cosim_models.len(), 2);
+    assert!(manifest.validate_cosim_models().is_empty());
+}
+
+#[test]
+fn ngspice_model_requires_a_netlist_path() {
+    let yaml = r#"
+name: missing
+chip: chips/stm32f401.yaml
+cosim_models:
+  - id: spice
+    adapter: ngspice
+"#;
+    let manifest: SystemManifest = serde_yaml::from_str(yaml).unwrap();
+    assert!(manifest
+        .validate_cosim_models()
+        .iter()
+        .any(|issue| issue.contains("cosim_models[0].model")));
+}
+
+#[test]
 fn an_analog_model_must_declare_a_circuit_and_a_probe() {
     let yaml = r#"
 name: "rc"

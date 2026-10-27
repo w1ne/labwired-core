@@ -39,6 +39,7 @@ fn check_browser_models(models: &[CosimModelConfig]) -> Result<(), String> {
     for model in models {
         let refusal = match model.adapter {
             CosimAdapter::ExternalProcess => Some(EXTERNAL_PROCESS_IN_BROWSER),
+            CosimAdapter::Ngspice => Some("ngspice requires a browser solver callback"),
             // `netlist_text` wins over `netlist` when both are given (see
             // `labwired_core::analog::adapter::netlist_source`), so only a
             // model that would actually read a file is refused.

@@ -12,6 +12,8 @@ use crate::*;
 pub enum CosimAdapter {
     ExternalProcess,
     Fmi,
+    /// Persistent ngspice circuit hosted by a co-simulation runtime.
+    Ngspice,
     Mock,
     /// `labwired_core::analog` — the in-core MNA engine. No `model` path: the
     /// circuit is a SPICE netlist under `config.netlist` / `config.netlist_text`.
