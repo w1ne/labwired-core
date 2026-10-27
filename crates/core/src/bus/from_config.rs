@@ -61,6 +61,32 @@ fn default_region_image_path(env: &str) -> Option<PathBuf> {
     candidates.into_iter().find(|p| p.is_file())
 }
 
+fn merged_peripheral_configs(
+    chip: &ChipDescriptor,
+    manifest: &SystemManifest,
+) -> Vec<labwired_config::PeripheralConfig> {
+    let mut merged = chip.peripherals.clone();
+    for manifest_cfg in &manifest.peripherals {
+        if let Some(existing) = merged.iter_mut().find(|p| p.id == manifest_cfg.id) {
+            for (key, value) in &manifest_cfg.config {
+                existing.config.insert(key.clone(), value.clone());
+            }
+            if manifest_cfg.base_address != 0 {
+                existing.base_address = manifest_cfg.base_address;
+            }
+            if manifest_cfg.irq.is_some() {
+                existing.irq = manifest_cfg.irq;
+            }
+            if manifest_cfg.size.is_some() {
+                existing.size = manifest_cfg.size.clone();
+            }
+        } else {
+            merged.push(manifest_cfg.clone());
+        }
+    }
+    merged
+}
+
 impl SystemBus {
     /// Collect debugger-only register schemas from each peripheral's optional
     /// `config.debug_schema` path.
@@ -150,6 +176,63 @@ impl SystemBus {
         plugins: &[&dyn crate::plugin::ChipPlugin],
     ) -> anyhow::Result<Self> {
         Self::from_config_with_region_images(chip, manifest, plugins, &Default::default())
+    }
+
+    /// Attach peripherals claimed by out-of-tree plugins to an already
+    /// configured bus. Specialized builders such as the ESP32 banks register
+    /// their hardwired devices first, then call this to add or replace only
+    /// descriptor entries a plugin claims.
+    pub fn attach_plugin_peripherals(
+        &mut self,
+        chip: &ChipDescriptor,
+        manifest: &SystemManifest,
+        plugins: &[&dyn crate::plugin::ChipPlugin],
+    ) -> anyhow::Result<()> {
+        if plugins.is_empty() {
+            return Ok(());
+        }
+
+        let merged = merged_peripheral_configs(chip, manifest);
+        let mut attached = Vec::new();
+        for p_cfg in &merged {
+            let canonical_type = Self::canonical_peripheral_type(&p_cfg.r#type);
+            let plugin_dev = plugins
+                .iter()
+                .find_map(|plugin| {
+                    plugin.try_build_peripheral(
+                        &crate::plugin::PeripheralBuildCtx {
+                            canonical_type: &canonical_type,
+                            manifest,
+                            bus_trace: &self.bus_trace,
+                            chip_map: crate::peripherals::chip_map::ChipMap::new(&merged),
+                        },
+                        p_cfg,
+                    )
+                })
+                .transpose()
+                .with_context(|| {
+                    format!(
+                        "chip plugin failed to build peripheral '{}' (type '{}')",
+                        p_cfg.id, p_cfg.r#type
+                    )
+                })?;
+
+            let Some(dev) = plugin_dev else {
+                continue;
+            };
+            let size = match &p_cfg.size {
+                Some(size) => parse_size(size).with_context(|| {
+                    format!("invalid size for plugin peripheral '{}'", p_cfg.id)
+                })?,
+                None => 0x1000,
+            };
+            self.replace_or_add_peripheral_at(&p_cfg.id, p_cfg.base_address, size, p_cfg.irq, dev);
+            attached.push(p_cfg.clone());
+        }
+
+        self.resolve_clock_gates(&attached)?;
+        self.refresh_peripheral_index();
+        Ok(())
     }
 
     /// [`Self::from_config_with_plugins`] with caller-supplied images for the
@@ -405,27 +488,7 @@ impl SystemBus {
         bus.gpio_input_thresholds = chip.gpio_input_thresholds;
         bus.supply = crate::power::SupplySupervisor::new(chip.supply_monitor.clone());
 
-        let mut merged_peripherals = chip.peripherals.clone();
-        for m_p in &manifest.peripherals {
-            if let Some(existing) = merged_peripherals.iter_mut().find(|p| p.id == m_p.id) {
-                // Merge config map
-                for (k, v) in &m_p.config {
-                    existing.config.insert(k.clone(), v.clone());
-                }
-                // Also override other fields if provided
-                if m_p.base_address != 0 {
-                    existing.base_address = m_p.base_address;
-                }
-                if m_p.irq.is_some() {
-                    existing.irq = m_p.irq;
-                }
-                if m_p.size.is_some() {
-                    existing.size = m_p.size.clone();
-                }
-            } else {
-                merged_peripherals.push(m_p.clone());
-            }
-        }
+        let merged_peripherals = merged_peripheral_configs(chip, manifest);
 
         // External-device ids already attached by a chip-specific I²C path
         // (the `i2c` / `esp32c3_i2c` arms below). The generic external-device

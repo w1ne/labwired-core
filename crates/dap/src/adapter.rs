@@ -435,25 +435,30 @@ impl LabwiredAdapter {
                     .iter()
                     .any(|name| s.resolve_symbol(name).is_some())
             });
+        let plugin_refs: Vec<&dyn labwired_core::plugin::ChipPlugin> =
+            self.plugins.iter().map(|plugin| plugin.as_ref()).collect();
         let mut machine: Box<dyn SessionMachine> = if arduino_esp32 {
             use labwired_core::boot::esp32_arduino::{
                 build_arduino_elf_machine, ArduinoElfBootOpts,
             };
             let image = labwired_loader::load_elf_bytes(elf)?;
             let symbols = labwired_loader::extract_arduino_esp32_thunks(elf);
-            let built = build_arduino_elf_machine(
+            let mut built = build_arduino_elf_machine(
                 &image,
                 symbols,
                 &manifest,
                 &ArduinoElfBootOpts::default(),
             )
             .map_err(|e| anyhow!("Arduino-ESP32 boot: {e}"))?;
+            built
+                .machine
+                .bus
+                .attach_plugin_peripherals(&chip, &manifest, &plugin_refs)
+                .map_err(|e| anyhow!("Arduino-ESP32 plugin peripherals: {e:#}"))?;
             *self.console.lock().unwrap() = Some(built.uart_sink);
             *self.esp32_thread.lock().unwrap() = Some(esp32_thread_state());
             Box::new(built.machine)
         } else {
-            let plugin_refs: Vec<&dyn labwired_core::plugin::ChipPlugin> =
-                self.plugins.iter().map(|plugin| plugin.as_ref()).collect();
             let built = build_machine_with_plugins(
                 BuildRequest {
                     chip: &chip,

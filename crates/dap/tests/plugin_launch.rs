@@ -1,6 +1,7 @@
 use labwired_config::PeripheralConfig;
 use labwired_core::plugin::{ChipPlugin, PeripheralBuildCtx, PLUGIN_API_VERSION};
 use labwired_core::{Peripheral, SimResult};
+use labwired_dap::adapter::LabwiredAdapter;
 use labwired_dap::server::DapServer;
 use serde_json::{json, Value};
 use std::io::{Cursor, Write};
@@ -23,6 +24,10 @@ struct TestPeripheral;
 impl Peripheral for TestPeripheral {
     fn read(&self, _offset: u64) -> SimResult<u8> {
         Ok(0x5A)
+    }
+
+    fn peek(&self, _offset: u64) -> Option<u8> {
+        Some(0x5A)
     }
 
     fn write(&mut self, _offset: u64, _value: u8) -> SimResult<()> {
@@ -145,4 +150,47 @@ fn dap_launch_resolves_and_builds_a_registered_plugin_chip() {
 
     let _ = std::fs::remove_file(system_path);
     assert_eq!(launch["success"], true, "launch response: {launch}");
+}
+
+#[test]
+fn arduino_esp32_adapter_path_attaches_registered_plugin_peripherals() {
+    let system_path = std::env::temp_dir().join(format!(
+        "labwired-dap-arduino-plugin-system-{}.yaml",
+        std::process::id()
+    ));
+    std::fs::write(
+        &system_path,
+        r#"
+name: Arduino plugin board
+chip: esp32
+peripherals:
+  - id: plugin0
+    type: test_dap_plugin_peripheral
+    base_address: 0x70000000
+    size: 4KB
+"#,
+    )
+    .expect("write temporary Arduino system manifest");
+    let firmware_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/source-debug/esp32-arduino.elf");
+    assert!(
+        firmware_path.exists(),
+        "committed Arduino ESP32 ELF is present"
+    );
+
+    let adapter = LabwiredAdapter::with_plugins(vec![Arc::new(TestPlugin)]);
+    adapter
+        .load_firmware(firmware_path, Some(system_path.clone()))
+        .expect("Arduino ESP32 firmware loads with plugins");
+    let plugin_read = adapter
+        .read_memory(0x7000_0000, 1)
+        .ok()
+        .and_then(|bytes| bytes.first().copied());
+
+    let _ = std::fs::remove_file(system_path);
+    assert_eq!(
+        plugin_read,
+        Some(0x5A),
+        "Arduino-ESP32 builder attaches plugin-owned peripheral"
+    );
 }

@@ -74,7 +74,7 @@ pub(super) fn build(
 fn build_esp32(
     req: &BuildRequest<'_>,
     firmware: &[u8],
-    _plugins: &[&dyn crate::plugin::ChipPlugin],
+    plugins: &[&dyn crate::plugin::ChipPlugin],
 ) -> anyhow::Result<BuiltMachine> {
     let manifest = req.system;
     // Drop any leftover process/thread-local aids state from a prior machine on
@@ -83,6 +83,7 @@ fn build_esp32(
 
     let mut bus = SystemBus::new();
     let cpu = crate::system::xtensa::configure_xtensa_esp32(&mut bus);
+    bus.attach_plugin_peripherals(req.chip, manifest, plugins)?;
 
     // A classic ESP32 has NO USB peripheral: its devkit's CP210x sits on UART0
     // and IS the USB device the host enumerates. So `debug_uart: usb_serial_jtag`
@@ -142,7 +143,7 @@ fn build_esp32s3_flash(
     req: &BuildRequest<'_>,
     flash: &[u8],
     symbols: Option<&[u8]>,
-    _plugins: &[&dyn crate::plugin::ChipPlugin],
+    plugins: &[&dyn crate::plugin::ChipPlugin],
 ) -> anyhow::Result<BuiltMachine> {
     let (chip, manifest, blobs) = (req.chip, req.system, req.blobs);
 
@@ -176,6 +177,7 @@ fn build_esp32s3_flash(
             "ESP32-S3 flash boot needs the real boot ROM, but the injected images did not resolve"
         ));
     }
+    bus.attach_plugin_peripherals(chip, manifest, plugins)?;
     let mut cpu = wiring.cpu;
     // The ROM and the app install the window overflow/underflow vectors and
     // build a genuine stack save chain, so the CPU must use the real per-access
@@ -222,7 +224,7 @@ fn build_esp32s3_flash(
 fn build_esp32s3(
     req: &BuildRequest<'_>,
     firmware: &[u8],
-    _plugins: &[&dyn crate::plugin::ChipPlugin],
+    plugins: &[&dyn crate::plugin::ChipPlugin],
 ) -> anyhow::Result<BuiltMachine> {
     use crate::boot::esp32s3::{fast_boot, BootOpts};
     let (chip, manifest, blobs) = (req.chip, req.system, req.blobs);
@@ -243,6 +245,7 @@ fn build_esp32s3(
         ..Esp32s3Opts::for_chip(chip)
     };
     let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
+    bus.attach_plugin_peripherals(chip, manifest, plugins)?;
     let mut cpu = wiring.cpu;
 
     let console = attach_s3_consoles(&mut bus, manifest, req)?;
