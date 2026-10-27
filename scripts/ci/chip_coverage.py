@@ -43,6 +43,10 @@ from pathlib import Path
 
 import yaml
 
+EXACT_MATRIX_JOB_CONDITION = (
+    "${{ github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core' }}"
+)
+
 # Mutable so the tests can point the whole gate at a synthetic tree (see
 # --repo-root). Everything below reads it through the helpers, never at import
 # time, or a test would silently grade the real repo instead of its fixture.
@@ -289,7 +293,9 @@ def script_proofs() -> dict[str, set[str]]:
         except yaml.YAMLError:
             workflow = {}
         job = (workflow.get("jobs") or {}).get("coverage-matrix-smoke") or {}
-        steps = job.get("steps") or []
+        job_condition = job.get("if")
+        job_can_run = job_condition in (None, EXACT_MATRIX_JOB_CONDITION)
+        steps = (job.get("steps") or []) if job_can_run else []
         exact_system_run_ids = set()
         for step in steps:
             match = re.fullmatch(

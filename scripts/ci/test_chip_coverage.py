@@ -312,6 +312,19 @@ def test_a_matrix_system_override_proves_each_exact_chip_only_when_run(tmp_path)
     code, out = run_gate(tmp_path)
     assert code == 0, out
 
+    disabled_job = valid_workflow.replace(
+        "  coverage-matrix-smoke:\n",
+        "  coverage-matrix-smoke:\n    if: false\n",
+        1,
+    )
+    workflow.write_text(disabled_job)
+    parsed_workflow = cc.load_yaml(workflow)
+    assert parsed_workflow["jobs"]["coverage-matrix-smoke"]["if"] is False
+    code, out = run_gate(tmp_path)
+    assert code == 1, out
+    assert all(chip in out for chip in chips)
+    assert "NO CI gate executes firmware" in out
+
     help_workflow = valid_workflow.replace(
         "--no-uart-stdout", "--no-uart-stdout --help"
     )
