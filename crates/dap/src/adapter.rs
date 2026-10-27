@@ -159,6 +159,7 @@ type ConsoleSink = Arc<Mutex<Vec<u8>>>;
 
 #[derive(Clone)]
 pub struct LabwiredAdapter {
+    plugins: Arc<Vec<Arc<dyn labwired_core::plugin::ChipPlugin>>>,
     pub machine: Arc<Mutex<Option<Box<dyn SessionMachine>>>>,
     pub symbols: Arc<Mutex<Option<SymbolProvider>>>,
     pub uart_sink: Arc<Mutex<Vec<u8>>>,
@@ -232,8 +233,15 @@ impl LabwiredAdapter {
     }
 
     pub fn new() -> Self {
+        Self::with_plugins(Vec::new())
+    }
+
+    /// Create an adapter whose board manifests may name chips and peripheral
+    /// models supplied by out-of-tree plugins.
+    pub fn with_plugins(plugins: Vec<Arc<dyn labwired_core::plugin::ChipPlugin>>) -> Self {
         let uart_sink = Arc::new(Mutex::new(Vec::new()));
         Self {
+            plugins: Arc::new(plugins),
             machine: Arc::new(Mutex::new(None)),
             symbols: Arc::new(Mutex::new(None)),
             uart_sink,
@@ -399,13 +407,19 @@ impl LabwiredAdapter {
         sys_path: &std::path::Path,
     ) -> Result<(Box<dyn SessionMachine>, MachineFamily)> {
         use labwired_core::system::builder::{
-            build_machine, BlobMap, BootMode, BuildOptions, BuildRequest, FirmwareSource,
+            build_machine_with_plugins, BlobMap, BootMode, BuildOptions, BuildRequest,
+            FirmwareSource,
         };
         let mut manifest = labwired_config::SystemManifest::from_file(sys_path)?;
         let chip_dir = sys_path
             .parent()
             .unwrap_or_else(|| std::path::Path::new("."));
-        let chip = labwired_config::ChipDescriptor::resolve(&manifest.chip, chip_dir)?;
+        let chip =
+            labwired_config::ChipDescriptor::resolve_with(&manifest.chip, chip_dir, &|name| {
+                self.plugins
+                    .iter()
+                    .find_map(|plugin| plugin.chip_yaml(name))
+            })?;
         *self.board_io_bindings.lock().unwrap() = resolve_board_io_bindings(&chip, &manifest);
         if !labwired_config::is_builtin_chip_spec(&manifest.chip) {
             manifest.chip = chip_dir.join(&manifest.chip).to_string_lossy().into_owned();
@@ -438,17 +452,22 @@ impl LabwiredAdapter {
             *self.esp32_thread.lock().unwrap() = Some(esp32_thread_state());
             Box::new(built.machine)
         } else {
-            let built = build_machine(BuildRequest {
-                chip: &chip,
-                system: &manifest,
-                firmware: FirmwareSource::Elf(elf),
-                boot: BootMode::FastBoot,
-                blobs: &BlobMap::new(),
-                options: BuildOptions {
-                    uart_rx: manifest.debug_uart.clone(),
-                    ..Default::default()
+            let plugin_refs: Vec<&dyn labwired_core::plugin::ChipPlugin> =
+                self.plugins.iter().map(|plugin| plugin.as_ref()).collect();
+            let built = build_machine_with_plugins(
+                BuildRequest {
+                    chip: &chip,
+                    system: &manifest,
+                    firmware: FirmwareSource::Elf(elf),
+                    boot: BootMode::FastBoot,
+                    blobs: &BlobMap::new(),
+                    options: BuildOptions {
+                        uart_rx: manifest.debug_uart.clone(),
+                        ..Default::default()
+                    },
                 },
-            })?;
+                &plugin_refs,
+            )?;
             *self.console.lock().unwrap() = Some(built.uart.sink);
             built.machine
         };
@@ -1599,6 +1618,22 @@ fn profile_name(peripheral: &labwired_config::PeripheralConfig) -> Option<&str> 
 fn gpio_offsets_for_peripheral(
     peripheral: &labwired_config::PeripheralConfig,
 ) -> Option<GpioOffsets> {
+    if let Some(value) = peripheral.config.get("gpio_offsets") {
+        if let (Some(input), Some(output)) = (
+            value.get("input").and_then(|v| v.as_u64()),
+            value.get("output").and_then(|v| v.as_u64()),
+        ) {
+            return Some(GpioOffsets {
+                idr_offset: input,
+                odr_offset: output,
+            });
+        }
+        tracing::warn!(
+            "GPIO peripheral '{}' has invalid gpio_offsets; expected numeric input and output offsets",
+            peripheral.id
+        );
+    }
+
     if peripheral.r#type != "gpio" {
         return None;
     }
@@ -1946,6 +1981,32 @@ mod tests {
         assert_eq!(resolved.len(), 2);
         assert_eq!(resolved[0].register_addr, 0x4100_4400 + 0x10); // OUT
         assert_eq!(resolved[1].register_addr, 0x4100_4400 + 0x20); // IN
+    }
+
+    #[test]
+    fn test_resolve_board_io_bindings_accepts_custom_gpio_offsets() {
+        let mut chip = gpio_chip(
+            "gpioa",
+            0x4000_0000,
+            None,
+            (0x0, 64 * 1024),
+            (0x2000_0000, 4 * 1024),
+        );
+        let peripheral = &mut chip.peripherals[0];
+        peripheral.r#type = "k32w041_gpio".to_string();
+        peripheral.config.insert(
+            "gpio_offsets".to_string(),
+            serde_yaml::from_str("{ input: 0x2100, output: 0x2200 }")
+                .expect("custom GPIO offsets parse"),
+        );
+        let manifest = board_io_manifest(vec![button("gpioa", 2), led("gpioa", 3)]);
+
+        let resolved = resolve_board_io_bindings(&chip, &manifest);
+        assert_eq!(resolved.len(), 2);
+        assert_eq!(resolved[0].register_addr, 0x4000_0000 + 0x2100);
+        assert_eq!(resolved[0].pin_mask, 1 << 2);
+        assert_eq!(resolved[1].register_addr, 0x4000_0000 + 0x2200);
+        assert_eq!(resolved[1].pin_mask, 1 << 3);
     }
 
     #[test]
