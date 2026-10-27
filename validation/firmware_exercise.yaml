@@ -279,6 +279,14 @@ chips:
     advanced_dead: []
     shim: []
 
+  - id: stm32f103rb
+    arch: cortex-m3
+    headline: "Exact STM32F103RBT6 LQFP64 model with 128 KiB flash and 20 KiB SRAM. The NUCLEO-F103RB source smoke exercises PA5 GPIO output and USART2; firmware-exercise rubric claims remain on the STM32F103 family row until exact-part rubric coverage is added."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
   - id: stm32f103t4
     arch: cortex-m3
     headline: "Exact low-density x4/x6 geometry slice for stm32f103t4; it reuses the shared medium-density STM32F103 peripheral map, so firmware-exercise claims stay under `stm32f103`. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`."
