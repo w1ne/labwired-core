@@ -1,0 +1,10 @@
+name: atmega1281-io
+chip: ../../configs/chips/atmega1281.yaml
+cpu_hz: 16000000
+board_io:
+  - id: "status_led"
+    kind: "led"
+    peripheral: "portb"
+    pin: 5
+    signal: "output"
+    active_high: true
