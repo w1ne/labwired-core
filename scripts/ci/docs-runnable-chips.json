@@ -313,6 +313,12 @@
       "firmware": "tests/fixtures/nucleo-u545re-blinky.elf",
       "expect": "OK"
     },
+    "atmega1281": {
+      "how": "example",
+      "script": "examples/atmega1281-io/io-smoke.yaml",
+      "expect": "1/1 checks",
+      "note": "The 64-pin target uses its AVR-GCC reset image. The CLI smoke asserts the USART0 banner and the PB5 status LED; the Playground uses this same compiled ELF."
+    },
     "atmega2561": {
       "how": "example",
       "script": "examples/atmega2561-io/io-smoke.yaml",
