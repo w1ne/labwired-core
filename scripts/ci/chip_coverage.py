@@ -229,7 +229,7 @@ def _exact_system_loop_runs_cli(run: str) -> bool:
             index += 1
             continue
 
-        if not re.match(r"(?:\./)?(?:[\w.-]+/)*labwired[ \t]+test(?:[ \t]|$)", line):
+        if not re.match(r"\./target/release/labwired[ \t]+test(?:[ \t]|$)", line):
             return False
         if cli_seen:
             return False
@@ -249,7 +249,11 @@ def _exact_system_loop_runs_cli(run: str) -> bool:
             arguments = shlex.split(command)
         except ValueError:
             return False
-        if len(arguments) < 2 or arguments[1] != "test":
+        if (
+            len(arguments) < 2
+            or arguments[0] != "./target/release/labwired"
+            or arguments[1] != "test"
+        ):
             return False
 
         def has_option_value(option: str, expected: str) -> bool:

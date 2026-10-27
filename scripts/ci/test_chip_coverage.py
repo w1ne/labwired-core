@@ -303,7 +303,7 @@ def test_a_matrix_system_override_proves_each_exact_chip_only_when_run(tmp_path)
           EXACT_SYSTEMS: "${{ join(matrix.exact_systems, ' ') }}"
         run: |
           for system in $EXACT_SYSTEMS; do
-            labwired test --script "${{ matrix.script }}" --system "$system"
+                ./target/release/labwired test --script "${{ matrix.script }}" --system "$system"
           done
 '''
     )
@@ -318,7 +318,8 @@ def test_a_matrix_system_override_proves_each_exact_chip_only_when_run(tmp_path)
     for inert_prefix in ("echo ", "# "):
         workflow.write_text(
             valid_workflow.replace(
-                "labwired test --script", f"{inert_prefix}labwired test --script"
+                "./target/release/labwired test --script",
+                f"{inert_prefix}./target/release/labwired test --script",
             )
         )
         code, out = run_gate(tmp_path)
@@ -335,6 +336,15 @@ def test_a_matrix_system_override_proves_each_exact_chip_only_when_run(tmp_path)
     parsed_workflow = cc.load_yaml(workflow)
     quoted_run = parsed_workflow["jobs"]["coverage-matrix-smoke"]["steps"][0]["run"]
     assert "--output-dir '--system \"$system\"'" in quoted_run
+    code, out = run_gate(tmp_path)
+    assert code == 1, out
+    assert all(chip in out for chip in chips)
+    assert "NO CI gate executes firmware" in out
+
+    wrapper_workflow = valid_workflow.replace(
+        "./target/release/labwired", "./tmp/bin/labwired"
+    )
+    workflow.write_text(wrapper_workflow)
     code, out = run_gate(tmp_path)
     assert code == 1, out
     assert all(chip in out for chip in chips)
@@ -370,8 +380,9 @@ def test_a_matrix_system_override_proves_each_exact_chip_only_when_run(tmp_path)
     # Compound shell filters can skip an iteration without using a multiline
     # `if` block, so they must also be rejected.
     compound_guarded = valid_workflow.replace(
-        "labwired test --script",
-        '[[ "$system" != "never" ]] && continue\n            labwired test --script',
+        "./target/release/labwired test --script",
+        '[[ "$system" != "never" ]] && continue\n'
+        '            ./target/release/labwired test --script',
     )
     workflow.write_text(compound_guarded)
     parsed_workflow = cc.load_yaml(workflow)
@@ -385,7 +396,8 @@ def test_a_matrix_system_override_proves_each_exact_chip_only_when_run(tmp_path)
     # `exec` replaces the shell successfully, preventing the later CLI line
     # from running even though it is present in the loop text.
     exec_workflow = valid_workflow.replace(
-        "labwired test --script", "exec true\n            labwired test --script"
+        "./target/release/labwired test --script",
+        "exec true\n            ./target/release/labwired test --script",
     )
     workflow.write_text(exec_workflow)
     parsed_workflow = cc.load_yaml(workflow)
