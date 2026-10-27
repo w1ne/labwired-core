@@ -1201,3 +1201,54 @@ cosim_models:
     assert!(trace.record(10, &outputs).is_err());
     assert!(registry.snapshot(0).samples.is_empty());
 }
+
+#[test]
+fn ngspice_session_refuses_binary_runtime_snapshots() {
+    use labwired_core::cosim::{CosimSession, CosimSignals, StaticCosimAdapter};
+    let mut sim = build(PLAIN_SYSTEM);
+    let config = manifest(
+        r#"
+name: snapshot
+chip: stm32f401
+cosim_models:
+  - id: plant
+    adapter: ngspice
+    model: rc.cir
+"#,
+    );
+    let bus = &sim.machine.as_ref().unwrap().bus;
+    sim.cosim = CosimSession::new_with_factory(&config.cosim_models, bus, |_| {
+        Ok(Box::new(StaticCosimAdapter::new(CosimSignals::new())))
+    })
+    .unwrap();
+    assert!(sim.runtime_snapshot_refusal().unwrap().contains("ngspice"));
+    sim.cosim = None;
+    assert!(sim.runtime_snapshot_refusal().is_none());
+}
+
+#[test]
+fn ngspice_failure_is_detected_before_esp32_aids_can_run() {
+    use labwired_core::cosim::{CosimSession, CosimSignals, StaticCosimAdapter};
+    let mut sim = build(PLAIN_SYSTEM);
+    let config = manifest(
+        r#"
+name: failure
+chip: stm32f401
+cosim_models:
+  - id: plant
+    adapter: ngspice
+    model: rc.cir
+"#,
+    );
+    let bus = &sim.machine.as_ref().unwrap().bus;
+    let mut session = CosimSession::new_with_factory(&config.cosim_models, bus, |_| {
+        Ok(Box::new(StaticCosimAdapter::new(CosimSignals::new())))
+    })
+    .unwrap()
+    .unwrap();
+    session.latch_failure("solver failed".into());
+    sim.cosim = Some(session);
+    assert!(sim.ensure_cosim_healthy().is_err());
+    sim.cosim = None;
+    assert!(sim.ensure_cosim_healthy().is_ok());
+}

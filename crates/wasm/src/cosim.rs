@@ -127,6 +127,18 @@ impl AdvanceFailure {
 
 #[wasm_bindgen]
 impl WasmSimulator {
+    pub(crate) fn ensure_cosim_healthy(&self) -> Result<(), AdvanceFailure> {
+        match self.cosim.as_ref().and_then(|session| session.failure()) {
+            Some(message) => Err(AdvanceFailure::Cosim(message.to_string())),
+            None => Ok(()),
+        }
+    }
+    pub(crate) fn runtime_snapshot_refusal(&self) -> Option<&'static str> {
+        self.cosim
+            .as_ref()
+            .filter(|session| session.has_ngspice())
+            .map(|_| "runtime snapshots cannot capture or restore externally hosted ngspice state")
+    }
     /// Set a co-simulation signal from outside the engine: a canvas touch pad
     /// sends `('ui.<partId>.pressed', 1)` on press and `0` on release.
     ///

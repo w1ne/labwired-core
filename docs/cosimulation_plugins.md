@@ -570,7 +570,8 @@ loads the circuit and owns the solver; the callback exchanges JSON containing
 `model_id`, `time_ns`, `dt_ns`, and named `inputs`, and returns an object of
 named numeric or boolean outputs. Each declared output must be present.
 The callback and solver state are released with the simulator. Snapshot and
-replay are unavailable for these externally owned solver sessions.
+replay and binary runtime snapshot capture/restore are unavailable for these
+externally owned solver sessions.
 
 The existing `board.analog.<pad>_volts`, `adc.<peripheral>.<channel>_volts`,
 and `board.power.<rail>_volts` routes publish their returned values as voltage

@@ -1313,6 +1313,13 @@ impl CosimSession {
         self.runner.model_count()
     }
 
+    /// Whether this session relies on an externally hosted ngspice solver.
+    pub fn has_ngspice(&self) -> bool {
+        self.configs
+            .iter()
+            .any(|config| config.adapter == ManifestCosimAdapter::Ngspice)
+    }
+
     /// The runner's analog waveform ring. Every `adapter: analog` model writes
     /// its routed outputs and `config.trace` channels here as it steps; publish
     /// it with [`Machine::attach_analog_trace`](crate::Machine::attach_analog_trace)
