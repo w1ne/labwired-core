@@ -1012,3 +1012,69 @@ cosim_models:
     assert!(sim.advance_machine(AdvanceRequest::single()).is_err());
     assert_eq!(sim.machine.as_ref().unwrap().total_cycles, stopped_at);
 }
+
+#[test]
+fn ngspice_callback_rejects_missing_routed_outputs() {
+    let result = crate::ngspice::parse_response("plant", "{}").unwrap();
+    let error = crate::ngspice::require_outputs("plant", &result, &["v_out".into()]).unwrap_err();
+    assert!(error.contains("plant") && error.contains("v_out"));
+}
+
+#[test]
+fn browser_ngspice_rejects_legacy_routes_until_they_are_bound() {
+    let config = manifest(
+        r#"
+name: legacy
+chip: stm32f401
+cosim_models:
+  - id: plant
+    adapter: ngspice
+    model: rc.cir
+    inputs: {duty: 'pwm.duty:pwm/0/a'}
+    outputs: {voltage_mv: 'adc.input_mv:adc/0'}
+"#,
+    );
+    let error = crate::cosim::check_browser_models(&config.cosim_models, true).unwrap_err();
+    assert!(error.contains("plant") && error.contains("pwm.duty"));
+}
+
+#[test]
+fn browser_rejects_zero_cosim_period_before_building_a_session() {
+    let config = manifest(
+        r#"
+name: zero
+chip: stm32f401
+cosim_models:
+  - id: plant
+    adapter: ngspice
+    model: rc.cir
+    step_ns: 0
+"#,
+    );
+    let error = crate::cosim::check_browser_models(&config.cosim_models, true).unwrap_err();
+    assert!(error.contains("plant") && error.contains("step_ns"));
+}
+
+#[test]
+fn esp32_aids_does_not_enable_jit_when_cosim_is_active() {
+    let mut sim = build(PLAIN_SYSTEM);
+    let cfg = manifest(
+        r#"
+name: mock
+chip: stm32f401
+cosim_models:
+  - id: m
+    adapter: mock
+    step_ns: 1000
+    config: { outputs: { value: 1 } }
+"#,
+    );
+    sim.attach_cosim(&cfg).unwrap();
+    sim.esp32_ipi = Some(crate::Esp32IpiBridge::default());
+    sim.jit_browser_enabled = true;
+    sim.step_with_esp32_aids(1).unwrap();
+    assert!(
+        sim.jit_browser_cache.is_none(),
+        "co-simulation must bypass the independent JIT execution path"
+    );
+}

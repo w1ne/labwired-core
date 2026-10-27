@@ -35,11 +35,33 @@ pub(crate) const NETLIST_FILE_IN_BROWSER: &str =
 ///
 /// Checked before any adapter is built: building an `external_process` adapter
 /// spawns the process, which is exactly what must not be attempted here.
-fn check_browser_models(models: &[CosimModelConfig]) -> Result<(), String> {
+pub(crate) fn check_browser_models(
+    models: &[CosimModelConfig],
+    has_ngspice_callback: bool,
+) -> Result<(), String> {
     for model in models {
+        if model.step_ns == 0 {
+            return Err(format!(
+                "co-sim model '{}' step_ns must be greater than zero",
+                model.id
+            ));
+        }
+        if model.adapter == CosimAdapter::Ngspice {
+            for path in model.inputs.values().chain(model.outputs.values()) {
+                if path.starts_with("pwm.duty:") || path.starts_with("adc.input_mv:") {
+                    return Err(format!(
+                        "co-sim model {} uses unsupported legacy route {}; use board signal paths",
+                        model.id, path
+                    ));
+                }
+            }
+        }
         let refusal = match model.adapter {
             CosimAdapter::ExternalProcess => Some(EXTERNAL_PROCESS_IN_BROWSER),
-            CosimAdapter::Ngspice => Some("ngspice requires a browser solver callback"),
+            CosimAdapter::Ngspice if !has_ngspice_callback => {
+                Some("ngspice requires a browser solver callback")
+            }
+            CosimAdapter::Ngspice => None,
             // `netlist_text` wins over `netlist` when both are given (see
             // `labwired_core::analog::adapter::netlist_source`), so only a
             // model that would actually read a file is refused.
@@ -127,16 +149,41 @@ impl WasmSimulator {
     /// run, a model that fails to build, and a routed path that does not
     /// resolve on this chip.
     pub(crate) fn attach_cosim(&mut self, manifest: &SystemManifest) -> Result<(), String> {
+        self.attach_cosim_with_ngspice(manifest, None)
+    }
+
+    pub(crate) fn attach_cosim_with_ngspice(
+        &mut self,
+        manifest: &SystemManifest,
+        callback: Option<&js_sys::Function>,
+    ) -> Result<(), String> {
         if manifest.cosim_models.is_empty() {
             return Ok(());
         }
-        check_browser_models(&manifest.cosim_models)?;
+        check_browser_models(&manifest.cosim_models, callback.is_some())?;
         let machine = self
             .machine
             .as_mut()
             .ok_or_else(|| "simulator has no machine".to_string())?;
         // No base directory: the checks above leave no model that reads a path.
-        let Some(session) = CosimSession::new(&manifest.cosim_models, Path::new("."), &machine.bus)
+        let Some(session) =
+            CosimSession::new_with_factory(&manifest.cosim_models, &machine.bus, |config| {
+                if config.adapter == CosimAdapter::Ngspice {
+                    let callback = callback.ok_or_else(|| {
+                        SimulationError::Other(format!(
+                            "co-sim model {} needs an ngspice callback",
+                            config.id
+                        ))
+                    })?;
+                    Ok(crate::ngspice::adapter(
+                        &config.id,
+                        config.outputs.keys().cloned().collect(),
+                        callback,
+                    ))
+                } else {
+                    labwired_core::cosim::build_cosim_adapter_with_base(config, Path::new("."))
+                }
+            })
             .map_err(|e| format!("co-sim: failed to start the declared models: {e}"))?
         else {
             return Ok(());
