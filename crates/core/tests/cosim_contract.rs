@@ -478,3 +478,34 @@ fn cosim_runner_uses_pre_boundary_snapshot_for_models_due_together() {
     );
     assert_eq!(signals["plant.voltage"], CosimSignalValue::F64(2.0));
 }
+
+#[test]
+fn runner_rejects_zero_and_overflowing_periods_without_stepping() {
+    use labwired_config::{CosimAdapter as ManifestAdapter, CosimModelConfig};
+    use labwired_core::cosim::{CosimRunner, CosimRunnerModel};
+    use std::collections::HashMap;
+    for period in [0, u64::MAX] {
+        let config = CosimModelConfig {
+            id: "invalid".into(),
+            adapter: ManifestAdapter::Mock,
+            model: None,
+            step_ns: period,
+            inputs: HashMap::new(),
+            outputs: HashMap::new(),
+            config: HashMap::new(),
+        };
+        let mut runner = CosimRunner::new(vec![CosimRunnerModel::new(
+            config,
+            Box::new(StaticCosimAdapter::new(BTreeMap::new())),
+        )]);
+        let error = runner
+            .step_until(period, BTreeMap::new())
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("invalid"), "{error}");
+        assert!(
+            error.contains(if period == 0 { "step_ns" } else { "overflow" }),
+            "{error}"
+        );
+    }
+}
