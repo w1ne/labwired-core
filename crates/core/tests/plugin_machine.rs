@@ -99,6 +99,15 @@ board_io:
     assert_eq!(built.arch, labwired_config::Arch::Arm);
     assert_eq!(built.board_io.len(), 1);
     assert_eq!(built.board_io[0].id, "plugin-led");
+    assert_eq!(
+        built
+            .machine
+            .read_memory(0x4000_0000, 1)
+            .ok()
+            .and_then(|bytes| bytes.first().copied()),
+        Some(0xA5),
+        "machine MMIO reads use the plugin-owned peripheral"
+    );
 }
 
 fn xtensa_chip_with_plugin_peripheral(chip_name: &str) -> ChipDescriptor {

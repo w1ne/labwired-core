@@ -15,7 +15,12 @@ core: "cortex-m0+"
 flash: { base: 0x0, size: "64KB" }
 ram: { base: 0x20000000, size: "4KB" }
 peripherals:
-  - { id: plugin0, type: test_dap_plugin_peripheral, base_address: 0x40000000 }
+  - id: plugin0
+    type: test_dap_plugin_peripheral
+    base_address: 0x40000000
+    size: 16KB
+    config:
+      gpio_offsets: { input: 0x2100, output: 0x2200 }
 "#;
 
 #[derive(Debug)]
@@ -115,7 +120,9 @@ fn dap_launch_resolves_and_builds_a_registered_plugin_chip() {
     ));
     std::fs::write(
         &system_path,
-        format!("name: plugin test board\nchip: {CHIP_NAME}\n"),
+        format!(
+            "name: plugin test board\nchip: {CHIP_NAME}\nboard_io:\n  - id: plugin-led\n    kind: led\n    peripheral: plugin0\n    pin: 1\n    signal: output\n"
+        ),
     )
     .expect("write temporary system manifest");
     let firmware_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -142,6 +149,11 @@ fn dap_launch_resolves_and_builds_a_registered_plugin_chip() {
             SharedOutput(output.clone()),
         )
         .expect("DAP server handles plugin launch");
+    let board_io = server
+        .adapter
+        .get_telemetry()
+        .expect("telemetry exists after plugin launch")
+        .board_io;
     let output = output.lock().unwrap().clone();
     let launch = parse_messages(&output)
         .into_iter()
@@ -150,6 +162,14 @@ fn dap_launch_resolves_and_builds_a_registered_plugin_chip() {
 
     let _ = std::fs::remove_file(system_path);
     assert_eq!(launch["success"], true, "launch response: {launch}");
+    assert_eq!(board_io.len(), 1);
+    assert_eq!(board_io[0].id, "plugin-led");
+    assert_eq!(board_io[0].kind, "led");
+    assert_eq!(board_io[0].signal, "output");
+    assert!(
+        board_io[0].active,
+        "bit 1 is set in plugin register value 0x5A"
+    );
 }
 
 #[test]

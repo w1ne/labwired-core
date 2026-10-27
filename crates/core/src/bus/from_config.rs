@@ -61,7 +61,9 @@ fn default_region_image_path(env: &str) -> Option<PathBuf> {
     candidates.into_iter().find(|p| p.is_file())
 }
 
-fn merged_peripheral_configs(
+/// Return the chip peripherals after applying system manifest additions and
+/// overrides, using the same merge rules as bus construction.
+pub fn merged_peripheral_configs(
     chip: &ChipDescriptor,
     manifest: &SystemManifest,
 ) -> Vec<labwired_config::PeripheralConfig> {
