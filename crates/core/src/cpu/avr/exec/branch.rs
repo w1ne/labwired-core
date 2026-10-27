@@ -144,14 +144,14 @@ impl Avr {
             return Ok(Some(()));
         }
         // EIJMP: jump to EIND:Z (ATmega2560).
-        if op == 0x9419 {
+        if op == 0x9419 && self.model.supports_eind() {
             let z = u32::from(u16::from_le_bytes([self.r[30], self.r[31]]));
             self.pc = ((self.eind() << 16) | z) * 2;
             self.cycles += 2;
             return Ok(Some(()));
         }
         // EICALL: call EIND:Z (ATmega2560; push_pc adds the 3-byte-PC cycle).
-        if op == 0x9519 {
+        if op == 0x9519 && self.model.supports_eind() {
             self.pc = next;
             self.push_pc(bus)?;
             let z = u32::from(u16::from_le_bytes([self.r[30], self.r[31]]));
