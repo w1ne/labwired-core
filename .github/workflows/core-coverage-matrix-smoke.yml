@@ -428,6 +428,43 @@ jobs:
             profile_dir: release
             script: examples/vegaboard-ri5cy/io-smoke.yaml
             system: examples/vegaboard-ri5cy/system.yaml
+          # One shared ARMv6-M spin image boots against every exact STM32
+          # Proteus descriptor. The system override selects each part's own
+          # flash/RAM geometry; the smoke claims execution only, not peripheral
+          # behavior. Grouping the variants keeps this to one build/job.
+          - id: proteus-stm32-exact-catalog
+            target: thumbv6m-none-eabi
+            crate: firmware-perf-spin
+            profile: release
+            profile_dir: release
+            script: examples/ci/arm-spin-smoke.yaml
+            exact_systems:
+              - configs/systems/proteus/stm32f103c4.yaml
+              - configs/systems/proteus/stm32f103c6.yaml
+              - configs/systems/proteus/stm32f103r4.yaml
+              - configs/systems/proteus/stm32f103r4h.yaml
+              - configs/systems/proteus/stm32f103r6.yaml
+              - configs/systems/proteus/stm32f103r6h.yaml
+              - configs/systems/proteus/stm32f103t4.yaml
+              - configs/systems/proteus/stm32f103t6.yaml
+              - configs/systems/proteus/stm32f401cb.yaml
+              - configs/systems/proteus/stm32f401cc.yaml
+              - configs/systems/proteus/stm32f401cd.yaml
+              - configs/systems/proteus/stm32f401ce.yaml
+              - configs/systems/proteus/stm32f401rb.yaml
+              - configs/systems/proteus/stm32f401rc.yaml
+              - configs/systems/proteus/stm32f401rd.yaml
+              - configs/systems/proteus/stm32f401re.yaml
+              - configs/systems/proteus/stm32f401vb.yaml
+              - configs/systems/proteus/stm32f401vc.yaml
+              - configs/systems/proteus/stm32f401vd.yaml
+              - configs/systems/proteus/stm32f401ve.yaml
+              - configs/systems/proteus/stm32f407ie.yaml
+              - configs/systems/proteus/stm32f407ig.yaml
+              - configs/systems/proteus/stm32f407ve.yaml
+              - configs/systems/proteus/stm32f407vg.yaml
+              - configs/systems/proteus/stm32f407ze.yaml
+              - configs/systems/proteus/stm32f407zg.yaml
 
     steps:
       - uses: actions/checkout@v4
@@ -505,6 +542,24 @@ jobs:
             --script "${{ matrix.script }}" \
             --output-dir "out/coverage-matrix/${{ matrix.id }}" \
             --no-uart-stdout
+
+      - name: Run exact Proteus STM32 catalog variants
+        if: matrix.id == 'proteus-stm32-exact-catalog'
+        env:
+          EXACT_SYSTEMS: "${{ join(matrix.exact_systems, ' ') }}"
+        run: |
+          set -euo pipefail
+          for system in $EXACT_SYSTEMS; do
+            model=${system##*/}
+            model=${model%.yaml}
+            out="out/coverage-matrix/proteus-$model"
+            mkdir -p "$out"
+            ./target/release/labwired test \
+              --script "${{ matrix.script }}" \
+              --system "$system" \
+              --output-dir "$out" \
+              --no-uart-stdout
+          done
 
       # The dual-UE pub/sub story, gated on its own marker.
       #

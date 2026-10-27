@@ -521,6 +521,162 @@
         "note": "the arduino-matrix INA219 cell is a second, independent proof on this chip."
       }
     },
+    "stm32f103c4": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f103c6": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f103r4": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f103r4h": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f103r6": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f103r6h": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f103t4": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f103t6": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f401cb": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f401cc": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f401cd": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f401ce": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f401rb": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f401rc": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f401rd": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f401re": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f401vb": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f401vc": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f401vd": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f401ve": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f407ie": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f407ig": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f407ve": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f407vg": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f407ze": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f407zg": {
+      "in_boards": false,
+      "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
     "stm32f411ceu6": {
       "in_boards": false,
       "uart": {

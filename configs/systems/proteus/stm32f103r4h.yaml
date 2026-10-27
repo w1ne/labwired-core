@@ -1,0 +1,5 @@
+# Exact-part CI smoke system for the Proteus catalog model stm32f103r4h.
+name: "proteus-stm32f103r4h-smoke"
+chip: "../../chips/stm32f103r4h.yaml"
+external_devices: []
+board_io: []

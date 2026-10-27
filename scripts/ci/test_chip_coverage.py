@@ -258,6 +258,78 @@ def test_a_script_no_workflow_runs_is_not_coverage(tmp_path):
     assert "nrf54l15" in out and "NO CI gate executes firmware" in out
 
 
+def test_a_matrix_system_override_proves_each_exact_chip_only_when_run(tmp_path):
+    chips = ["stm32f103c4", "stm32f401cb"]
+    build_tree(
+        tmp_path,
+        chips=chips,
+        arduino_boards=[],
+        matrix_ids=[],
+        ledger=EMPTY_LEDGER,
+    )
+
+    script_rel = "examples/ci/arm-spin-smoke.yaml"
+    script = tmp_path / script_rel
+    script.parent.mkdir(parents=True)
+    script.write_text(
+        'inputs:\n  firmware: "./fw.elf"\n  system: "./unused-system.yaml"\n'
+    )
+
+    systems = [f"configs/systems/proteus/{chip}.yaml" for chip in chips]
+    for chip, system_rel in zip(chips, systems, strict=True):
+        system = tmp_path / system_rel
+        system.parent.mkdir(parents=True, exist_ok=True)
+        system.write_text(f'chip: "../../chips/{chip}.yaml"\n')
+
+    workflow = tmp_path / ".github/workflows/core-coverage-matrix-smoke.yml"
+    workflow.write_text(
+        textwrap.dedent(
+            f'''\
+            jobs:
+              coverage-matrix-smoke:
+                strategy:
+                  matrix:
+                    include:
+                      - id: exact-stm32-catalog
+                        script: {script_rel}
+                        exact_systems:
+            '''
+        )
+        + "".join(f"              - {system}\n" for system in systems)
+        + '''    steps:
+      - name: Run exact variants
+        if: matrix.id == 'exact-stm32-catalog'
+        env:
+          EXACT_SYSTEMS: "${{ join(matrix.exact_systems, ' ') }}"
+        run: |
+          for system in $EXACT_SYSTEMS; do
+            labwired test --script "${{ matrix.script }}" --system "$system"
+          done
+'''
+    )
+
+    valid_workflow = workflow.read_text()
+    code, out = run_gate(tmp_path)
+    assert code == 0, out
+
+    workflow.write_text(valid_workflow.replace(' --system "$system"', ""))
+    code, out = run_gate(tmp_path)
+    assert code == 1
+    assert all(chip in out for chip in chips)
+    assert "NO CI gate executes firmware" in out
+
+    workflow.write_text(
+        valid_workflow.replace(
+            "matrix.id == 'exact-stm32-catalog'",
+            "matrix.id == 'different-matrix-cell'",
+        )
+    )
+    code, out = run_gate(tmp_path)
+    assert code == 1
+    assert all(chip in out for chip in chips)
+    assert "NO CI gate executes firmware" in out
+
+
 def test_a_declared_gap_passes_with_a_reason(tmp_path):
     build_tree(
         tmp_path,

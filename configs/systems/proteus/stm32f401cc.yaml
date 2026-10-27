@@ -1,0 +1,5 @@
+# Exact-part CI smoke system for the Proteus catalog model stm32f401cc.
+name: "proteus-stm32f401cc-smoke"
+chip: "../../chips/stm32f401cc.yaml"
+external_devices: []
+board_io: []

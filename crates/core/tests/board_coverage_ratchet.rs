@@ -523,6 +523,38 @@ fn every_shipped_descriptor_is_ratcheted() {
         "esp32",         // classic Xtensa, separate e2e lane, not a catalog board
         "esp32s3-zero",  // board variant of esp32s3 (covered by esp32s3)
         "stm32f401cdu6", // BlackPill variant of stm32f401 (covered by stm32f401)
+        // Exact Proteus order-code geometries for the F103/F401/F407 engines.
+        // These are core chip descriptors, not Playground boards in
+        // bundled-configs.ts; their family behavior is shared with the three
+        // catalog boards above. Per-part geometry is guarded by
+        // stm32_variant_geometry, and the catalog CI smoke executes each exact
+        // descriptor, but none has its own silicon differential.
+        "stm32f103c4",
+        "stm32f103c6",
+        "stm32f103r4",
+        "stm32f103r4h",
+        "stm32f103r6",
+        "stm32f103r6h",
+        "stm32f103t4",
+        "stm32f103t6",
+        "stm32f401cb",
+        "stm32f401cc",
+        "stm32f401cd",
+        "stm32f401ce",
+        "stm32f401rb",
+        "stm32f401rc",
+        "stm32f401rd",
+        "stm32f401re",
+        "stm32f401vb",
+        "stm32f401vc",
+        "stm32f401vd",
+        "stm32f401ve",
+        "stm32f407ie",
+        "stm32f407ig",
+        "stm32f407ve",
+        "stm32f407vg",
+        "stm32f407ze",
+        "stm32f407zg",
         // First 16-bit PIC/dsPIC target, M0 bring-up (boot + UART1 TX). Has a
         // chip descriptor, an example with an io-smoke, unit + integration
         // tests — but not a bundled-configs.ts catalog board and no silicon

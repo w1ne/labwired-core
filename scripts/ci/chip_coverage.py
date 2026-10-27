@@ -20,7 +20,8 @@ So coverage here is DERIVED, never declared:
     names it AND that board id appears in the workflow's matrix list;
   * a chip is proven by a script only if some workflow (or a board manifest's
     `ci/test.sh`) passes that script to `labwired test`, and the script's
-    system resolves to that chip.
+    system resolves to that chip; a matrix system override counts only when
+    the workflow passes each listed system to `labwired test`.
 
 `configs/ci/chip-coverage.yaml` is then only for what is NOT proven, with a
 reason per chip and a ceiling that can only be lowered. A chip that becomes
@@ -173,6 +174,58 @@ def script_proofs() -> dict[str, set[str]]:
             chip = chip_of_script((REPO_ROOT / rel).resolve())
             if chip:
                 proofs.setdefault(chip, set()).add(f"{label}: {rel}")
+
+    # The coverage smoke matrix can run one script against several exact chip
+    # descriptors by overriding the script's default system manifest. Count
+    # those parts only when the workflow actually passes each matrix system to
+    # `labwired test`; a list in YAML by itself is not proof that anything ran.
+    matrix_path = workflow_dir() / "core-coverage-matrix-smoke.yml"
+    if matrix_path.is_file():
+        try:
+            workflow = load_yaml(matrix_path)
+        except yaml.YAMLError:
+            workflow = {}
+        job = (workflow.get("jobs") or {}).get("coverage-matrix-smoke") or {}
+        steps = job.get("steps") or []
+        exact_system_run_ids = set()
+        for step in steps:
+            match = re.fullmatch(
+                r"matrix\.id\s*==\s*['\"]([\w.-]+)['\"]",
+                str(step.get("if", "")),
+            )
+            run = str(step.get("run", ""))
+            if (
+                match
+                and (step.get("env") or {}).get("EXACT_SYSTEMS")
+                == "${{ join(matrix.exact_systems, ' ') }}"
+                and "for system in $EXACT_SYSTEMS" in run
+                and '--script "${{ matrix.script }}"' in run
+                and '--system "$system"' in run
+            ):
+                exact_system_run_ids.add(match.group(1))
+        if exact_system_run_ids:
+            include = (
+                (job.get("strategy") or {})
+                .get("matrix", {})
+                .get("include", [])
+            )
+            for row in include:
+                script = row.get("script")
+                systems = row.get("exact_systems") or []
+                if (
+                    row.get("id") not in exact_system_run_ids
+                    or not script
+                    or not (REPO_ROOT / str(script)).is_file()
+                ):
+                    continue
+                for system in systems:
+                    if not isinstance(system, str) or not system:
+                        continue
+                    chip = chip_of_system((REPO_ROOT / system).resolve())
+                    if chip:
+                        proofs.setdefault(chip, set()).add(
+                            f"core-coverage-matrix-smoke.yml: {script} with {system}"
+                        )
     return proofs
 
 
