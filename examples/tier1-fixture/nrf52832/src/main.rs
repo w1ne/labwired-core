@@ -31,13 +31,15 @@ use tier1_fixture_common::{rd32 as reg_read, wr32 as reg_write};
 
 // ── UART0 (nRF52832 PS §15.8 memory map, base 0x40002000) ─────────────────
 //
-// The nrf52832 chip YAML models uart0 with the nRF52 generic UART profile,
-// which captures a 32-bit write to TXD (offset 0x51C) as one TX byte. This is
-// the legacy non-DMA path and is exactly what the existing fixture used to
-// emit `TIER1 done`; it is reused here unchanged.
+// The chip YAML uses the shared nRF52 UART/UARTE model. ENABLE=4 selects
+// legacy non-DMA UART; STARTTX arms it, and TXDRDY marks a completed shift.
 const UART0_BASE: u32 = 0x4000_2000;
 const UART0_ENABLE: u32 = UART0_BASE + 0x500;
 const UART0_TXD: u32 = UART0_BASE + 0x51C;
+const UART0_STARTTX: u32 = UART0_BASE + 0x008;
+const UART0_TXDRDY: u32 = UART0_BASE + 0x11C;
+const UART0_BAUDRATE: u32 = UART0_BASE + 0x524;
+const UART0_PSEL_TXD: u32 = UART0_BASE + 0x50C;
 
 // ── GPIO0 / P0 (base 0x50000000) ──────────────────────────────────────────
 //
@@ -181,10 +183,17 @@ fn poll_event(addr: u32) -> bool {
 
 // ── UART0 output (legacy byte-at-a-time TXD writes) ──────────────────────
 //
-// Write each byte directly to the TXD register. The simulator's nRF52 UART
-// model captures each word write as one TX byte (low 8 bits).
+// Start the transmitter in main, then wait for each shift to finish. TXD is
+// not an unbounded host byte sink: writes without STARTTX or while busy drop.
 fn uart_write_byte(byte: u8) {
+    reg_write(UART0_TXDRDY, 0);
     reg_write(UART0_TXD, byte as u32);
+    for _ in 0..100_000 {
+        if reg_read(UART0_TXDRDY) != 0 {
+            return;
+        }
+    }
+    panic!("uart-tx-timeout");
 }
 
 fn uart_write_str(s: &str) {
@@ -463,6 +472,9 @@ fn check_pwm() -> Result<(), &'static str> {
 fn main() -> ! {
     // Enable UART0 (value 4 per Nordic PS UART.ENABLE field).
     reg_write(UART0_ENABLE, 4);
+    reg_write(UART0_PSEL_TXD, 6); // P0.06: owned fixture console output.
+    reg_write(UART0_BAUDRATE, 0x01D6_0000); // Nordic 115200 baud encoding.
+    reg_write(UART0_STARTTX, 1);
 
     // gpio: declared in chip YAML (gpio0 / P0).
     report("gpio", check_gpio());

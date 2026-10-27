@@ -55,6 +55,19 @@ const RTC_BASE: u32 = 0x4000_2800; // type rtc_f1
 // even-op 0101-family encodings).
 const CONSOLE: Console = Console::new(USART1_BASE, USART1_BASE + 0x04, 1 << 7);
 
+fn init_console() {
+    // USART1 on PA9, non-remapped. A DR write is not console evidence unless
+    // the clock, alternate-function output, divisor and transmitter are set.
+    let enables = rd32(RCC_BASE + 0x18);
+    wr32(RCC_BASE + 0x18, enables | (1 << 0) | (1 << 2) | (1 << 14));
+    let crh = rd32(GPIOA_BASE + 0x04);
+    wr32(GPIOA_BASE + 0x04, (crh & !(0xF << 4)) | (0xB << 4));
+    // Nonzero 16x divisor; this fixture qualifies register behavior, not an
+    // independently calibrated physical baud rate.
+    wr32(USART1_BASE + 0x08, 69);
+    wr32(USART1_BASE + 0x0C, (1 << 13) | (1 << 3)); // UE | TE.
+}
+
 // ── Checks ──────────────────────────────────────────────────────────────────
 
 /// clock: F1 RCC. HSI is on+ready out of reset; HSEON (bit 16) must latch
@@ -350,6 +363,7 @@ fn check_rtc() -> Result<(), &'static [u8]> {
 
 #[entry]
 fn main() -> ! {
+    init_console();
     CONSOLE.report(b"clock", check_clock());
     CONSOLE.report(b"gpio", check_gpio());
     CONSOLE.report(b"timer", check_timer());
