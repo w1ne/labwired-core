@@ -24,6 +24,11 @@ impl Samd51Pac {
 }
 
 impl Peripheral for Samd51Pac {
+    /// No `tick()` work: state moves on MMIO and the bus tick only, so the
+    /// legacy walk can be deleted on a scheduler build.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
     fn read(&self, offset: u64) -> SimResult<u8> {
         match offset {
             // WRCTRL, EVCTRL, INTENCLR/SET, INTFLAGAHB, INTFLAGA..D, STATUSA..D

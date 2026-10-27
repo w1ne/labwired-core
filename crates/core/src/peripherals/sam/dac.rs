@@ -81,7 +81,7 @@ impl Samd51Dac {
         Ok(match offset {
             0x00 => u16::from(self.ctrla),
             0x01 => u16::from(self.ctrlb),
-            0x02 => 0,
+            0x02 | 0x03 => 0, // EVCTRL; 0x03 is reserved and reads 0
             0x04..=0x06 => 0,
             0x07 => u16::from(self.ready0()), // STATUS.READY0; EOC not modelled
             0x08..=0x0b => 0,                 // SYNCBUSY: writes complete at once

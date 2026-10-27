@@ -100,6 +100,11 @@ impl Samd51Oscctrl {
 }
 
 impl Peripheral for Samd51Oscctrl {
+    /// No `tick()` work: state moves on MMIO and the bus tick only, so the
+    /// legacy walk can be deleted on a scheduler build.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
     fn read(&self, offset: u64) -> SimResult<u8> {
         let word = self.read_reg(offset & !3)?;
         Ok((word >> (8 * (offset & 3))) as u8)
