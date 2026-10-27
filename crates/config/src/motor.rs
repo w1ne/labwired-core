@@ -29,6 +29,12 @@ pub struct BrushedMotorConfig {
     pub back_emf_constant_v_per_rad_s: f64,
     pub rotor_inertia_kg_m2: f64,
     pub viscous_friction_nm_per_rad_s: f64,
+    /// Dry (Coulomb) bearing and brush friction, N·m: a constant torque
+    /// opposing rotation that also holds a resting shaft (stiction). Without
+    /// it a shaft that only viscous drag slows coasts for many seconds after
+    /// its drive is cut. Absent = 0, the frictionless shaft of older configs.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub coulomb_friction_nm: f64,
     /// Bridge supply. Required (and positive) for `armature: bridge`; must be
     /// absent for `armature: circuit`, where the analog netlist's own rail
     /// supplies the winding and a second, fixed figure here would disagree
@@ -137,6 +143,12 @@ pub struct BldcMotorConfig {
     pub back_emf_constant_v_per_rad_s: f64,
     pub rotor_inertia_kg_m2: f64,
     pub viscous_friction_nm_per_rad_s: f64,
+    /// Dry (Coulomb) bearing and brush friction, N·m: a constant torque
+    /// opposing rotation that also holds a resting shaft (stiction). Without
+    /// it a shaft that only viscous drag slows coasts for many seconds after
+    /// its drive is cut. Absent = 0, the frictionless shaft of older configs.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub coulomb_friction_nm: f64,
     pub supply_voltage_v: f64,
     pub load_torque_nm: f64,
     pub encoder_cpr: u32,
@@ -257,6 +269,7 @@ impl MotorModelConfig {
                     config.back_emf_constant_v_per_rad_s,
                     config.rotor_inertia_kg_m2,
                     config.viscous_friction_nm_per_rad_s,
+                    config.coulomb_friction_nm,
                     (!circuit).then_some(config.supply_voltage_v),
                     config.load_torque_nm,
                     config.encoder_cpr,
@@ -390,6 +403,7 @@ impl MotorModelConfig {
                     config.back_emf_constant_v_per_rad_s,
                     config.rotor_inertia_kg_m2,
                     config.viscous_friction_nm_per_rad_s,
+                    config.coulomb_friction_nm,
                     Some(config.supply_voltage_v),
                     config.load_torque_nm,
                     config.encoder_cpr,
@@ -553,6 +567,10 @@ pub(crate) fn validate_optional_motor_pin(
     }
 }
 
+fn is_zero(value: &f64) -> bool {
+    *value == 0.0
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn validate_motor_common(
     id: &str,
@@ -562,6 +580,7 @@ pub(crate) fn validate_motor_common(
     back_emf_constant_v_per_rad_s: f64,
     rotor_inertia_kg_m2: f64,
     viscous_friction_nm_per_rad_s: f64,
+    coulomb_friction_nm: f64,
     // `None`: the motor has no supply of its own (a circuit-driven winding).
     supply_voltage_v: Option<f64>,
     load_torque_nm: f64,
@@ -596,6 +615,12 @@ pub(crate) fn validate_motor_common(
         issues.push(format!(
             "{} must be finite and non-negative",
             path("viscous_friction_nm_per_rad_s")
+        ));
+    }
+    if !coulomb_friction_nm.is_finite() || coulomb_friction_nm < 0.0 {
+        issues.push(format!(
+            "{} must be finite and non-negative",
+            path("coulomb_friction_nm")
         ));
     }
     if !load_torque_nm.is_finite() {

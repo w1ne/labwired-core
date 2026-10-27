@@ -161,12 +161,15 @@ impl InputThresholds {
 /// | `board.power.vdd_volts` | model → machine | `F64` |
 /// | `board.motor.<id>.back_emf_v` | machine → model | `F64` volts |
 /// | `board.motor.<id>.current_a` | model → machine | `F64` amps |
+/// | `board.motor.<id>.supply_v` | model → machine | `F64` volts |
 ///
 /// The two `board.motor.` paths close the loop of an `armature: circuit` DC
 /// motor: the netlist solves the winding current (its R, L, switch, flyback
 /// diode and rail are netlist elements) and routes it in; the motor publishes
 /// the back-EMF the netlist's series source must carry. Both refuse, at bind
 /// time, a motor id the bus does not have or a motor that is not circuit-driven.
+/// The optional `supply_v` carries the rail the winding's switch connects it
+/// to, as the netlist solved it; the motor reports it as its bus voltage.
 ///
 /// `board.power.vdd_volts` is the MCU's supply: the chip's supply supervisor
 /// ([`crate::power`]) holds the core in reset below its power-on threshold and
@@ -224,6 +227,9 @@ pub enum SignalPath {
     /// `board.motor.<id>.current_a` — the winding current the netlist solved
     /// for an `armature: circuit` DC motor.
     MotorCurrent { motor: String },
+    /// `board.motor.<id>.supply_v` — the supply rail feeding an
+    /// `armature: circuit` DC motor's winding, as the netlist solved it.
+    MotorSupply { motor: String },
 }
 
 impl SignalPath {
@@ -258,6 +264,11 @@ impl SignalPath {
         if let Some(rest) = path.strip_prefix("board.motor.") {
             if let Some(motor) = rest.strip_suffix(".back_emf_v") {
                 return (!motor.is_empty()).then(|| Self::MotorBackEmf {
+                    motor: motor.to_string(),
+                });
+            }
+            if let Some(motor) = rest.strip_suffix(".supply_v") {
+                return (!motor.is_empty()).then(|| Self::MotorSupply {
                     motor: motor.to_string(),
                 });
             }
@@ -315,6 +326,7 @@ impl SignalPath {
                 | Self::AdcChannel { .. }
                 | Self::SupplyRail { .. }
                 | Self::MotorCurrent { .. }
+                | Self::MotorSupply { .. }
         )
     }
 }
@@ -544,6 +556,8 @@ enum WriteBinding {
     SupplyVdd,
     /// Index of an `armature: circuit` motor; its winding current in amps.
     MotorCurrent { motor: usize },
+    /// Index of an `armature: circuit` motor; its supply rail in volts.
+    MotorSupply { motor: usize },
 }
 
 /// Routes manifest signal paths between a running machine and the co-sim
@@ -697,7 +711,8 @@ impl SignalRouter {
             SignalPath::AnalogPad { .. }
             | SignalPath::AdcChannel { .. }
             | SignalPath::SupplyRail { .. }
-            | SignalPath::MotorCurrent { .. } => Err(RoutingError::NotReadable {
+            | SignalPath::MotorCurrent { .. }
+            | SignalPath::MotorSupply { .. } => Err(RoutingError::NotReadable {
                 path: path.to_string(),
             }),
         }
@@ -766,6 +781,9 @@ impl SignalRouter {
                 Ok(WriteBinding::SupplyVdd)
             }
             SignalPath::MotorCurrent { motor } => Ok(WriteBinding::MotorCurrent {
+                motor: circuit_motor(bus, motor, path)?,
+            }),
+            SignalPath::MotorSupply { motor } => Ok(WriteBinding::MotorSupply {
                 motor: circuit_motor(bus, motor, path)?,
             }),
             SignalPath::GpioOutput { .. }
@@ -921,6 +939,16 @@ impl SignalRouter {
                 WriteBinding::MotorCurrent { motor } => {
                     let accepted = signal_as_f64(value)
                         .is_some_and(|amps| bus.set_circuit_motor_current(*motor, amps));
+                    if !accepted {
+                        errors.push(RoutingError::TypeMismatch {
+                            path: path.clone(),
+                            value: value.clone(),
+                        });
+                    }
+                }
+                WriteBinding::MotorSupply { motor } => {
+                    let accepted = signal_as_f64(value)
+                        .is_some_and(|volts| bus.set_circuit_motor_supply(*motor, volts));
                     if !accepted {
                         errors.push(RoutingError::TypeMismatch {
                             path: path.clone(),
@@ -1790,10 +1818,20 @@ mod tests {
         );
         assert!(current.is_writable());
         assert!(!current.is_readable());
+        let supply = SignalPath::parse("board.motor.M1.supply_v").unwrap();
+        assert_eq!(
+            supply,
+            SignalPath::MotorSupply {
+                motor: "M1".to_string()
+            }
+        );
+        assert!(supply.is_writable());
+        assert!(!supply.is_readable());
         for bad in [
             "board.motor.",
             "board.motor.M1",
             "board.motor..current_a",
+            "board.motor..supply_v",
             "board.motor.M1.speed_rpm",
         ] {
             assert_eq!(SignalPath::parse(bad), None, "{bad}");

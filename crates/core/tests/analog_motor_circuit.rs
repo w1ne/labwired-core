@@ -10,7 +10,10 @@
 //! supplying it. The winding is series R + L + a back-EMF source; the netlist
 //! solves its current, routes it into the motor on
 //! `board.motor.M1.current_a`, and the motor routes its back-EMF back on
-//! `board.motor.M1.back_emf_v`. Nothing here is motor-specific to the switch:
+//! `board.motor.M1.back_emf_v`; the rail the winding hangs from comes in on
+//! `board.motor.M1.supply_v` as the motor's bus voltage. The shaft carries
+//! the catalog `dc_motor` friction (viscous plus dry Coulomb), so a coasting
+//! fan stops rather than spinning down for seconds. Nothing here is motor-specific to the switch:
 //! the same three elements sit under any driver a netlist can describe.
 
 mod common;
@@ -22,9 +25,11 @@ use labwired_core::cpu::avr::Avr;
 use labwired_core::{AdvanceRequest, Bus, Machine};
 use std::path::Path;
 
-/// The motor and its low-side NPN driver. Winding: 1.2 ohm, 2 mH, Kt = Ke =
-/// 0.08, a fan-like 1 mN·m·s/rad viscous load; base drive 1 k from PB1;
-/// 1N4001-style flyback from collector to rail.
+/// The motor and its low-side NPN driver, every motor figure the catalog
+/// `dc_motor` default (configs/devices/dc_motor.yaml): 1.2 ohm, 2 mH,
+/// Kt = Ke = 0.08, 40 g·cm² rotor, 10 µN·m·s/rad viscous and 6 mN·m Coulomb
+/// friction. Base drive 1 k from PB1; 1N4001-style flyback from collector to
+/// rail.
 const MOTOR_SYSTEM: &str = r#"
 motor_models:
   - kind: dc
@@ -35,7 +40,8 @@ motor_models:
     torque_constant_nm_per_a: 0.08
     back_emf_constant_v_per_rad_s: 0.08
     rotor_inertia_kg_m2: 0.00004
-    viscous_friction_nm_per_rad_s: 0.001
+    viscous_friction_nm_per_rad_s: 0.00001
+    coulomb_friction_nm: 0.006
     load_torque_nm: 0.0
     encoder_cpr: 12
     simulation_clock_hz: 16000000
@@ -49,6 +55,7 @@ cosim_models:
       emf_M1: "board.motor.M1.back_emf_v"
     outputs:
       motor_M1: "board.motor.M1.current_a"
+      supply_M1: "board.motor.M1.supply_v"
     config:
       vdd: 5.0
       netlist_text: |
@@ -65,6 +72,7 @@ cosim_models:
         .model DFLY D (IS=2.52e-9 N=1.752 RS=0)
       probes:
         motor_M1: "i(LM1)"
+        supply_M1: "v(vcc)"
         collector: "v(col)"
       sources:
         drv_pb1: "Vdrv_pb1"
@@ -165,9 +173,10 @@ fn switched_on_the_winding_carries_current_and_the_shaft_spins() {
     assert!(motor.speed_rpm > 100.0, "spinning: {} rpm", motor.speed_rpm);
     let current = motor.current_a.expect("a routed winding current");
     assert!(current > 0.0, "forward winding current: {current} A");
-    assert_eq!(
-        motor.bus_voltage_v, 0.0,
-        "the rail is the netlist's, the motor reports none of its own"
+    assert!(
+        (motor.bus_voltage_v - 5.0).abs() < 0.01,
+        "the motor reports the netlist rail it hangs from: {} V",
+        motor.bus_voltage_v
     );
 }
 
@@ -205,7 +214,7 @@ fn back_emf_pulls_the_running_current_below_the_inrush() {
 }
 
 #[test]
-fn switched_off_the_flyback_diode_carries_the_decay_and_the_shaft_slows() {
+fn switched_off_the_winding_current_decays_and_the_shaft_stops() {
     let mut bench = Bench::new();
     bench.run_to_ms(400);
     let on_current = bench.motor().current_a.expect("current");
@@ -225,8 +234,8 @@ fn switched_off_the_flyback_diode_carries_the_decay_and_the_shaft_slows() {
         .map(|p| p.1)
         .fold(f64::MIN, f64::max);
     assert!(
-        peak > 5.0 && peak < 5.0 + 1.5,
-        "the diode clamps the collector one drop above the rail: peak {peak} V"
+        peak < 5.0 + 1.5,
+        "the diode clamps the collector at most one drop above the rail: peak {peak} V"
     );
     let off = bench.motor();
     assert!(
@@ -235,9 +244,54 @@ fn switched_off_the_flyback_diode_carries_the_decay_and_the_shaft_slows() {
         off.current_a
     );
     assert!(
-        off.speed_rpm < on_speed && off.speed_rpm >= 0.0,
-        "coasting down: {} rpm after {on_speed} rpm",
-        off.speed_rpm
+        on_speed > 100.0,
+        "spinning before the switch opened: {on_speed} rpm"
+    );
+    assert_eq!(
+        off.speed_rpm, 0.0,
+        "dry friction stops the fan within a second of the switch opening"
+    );
+    // And it stays stopped: stiction holds a shaft nothing drives.
+    bench.run_to_ms(1900);
+    assert_eq!(bench.motor().speed_rpm, 0.0);
+}
+
+/// The catalog fan's 83 mA no-load current freewheels out through the diode
+/// in tens of microseconds, under one netlist sample. A stalled rotor (dry
+/// friction past the stall torque) has no back-EMF and carries the full
+/// inrush, so its switch-off shows the clamp itself.
+#[test]
+fn a_stalled_winding_switched_off_freewheels_through_the_flyback_diode() {
+    let mut bench = Bench::with_system(
+        &MOTOR_SYSTEM.replace("coulomb_friction_nm: 0.006", "coulomb_friction_nm: 10.0"),
+    );
+    bench.run_to_ms(100);
+    assert_eq!(bench.motor().speed_rpm, 0.0, "the rotor is held");
+    let on_current = bench.motor().current_a.expect("current");
+    // The 1 k base drive limits the NPN to well under the 4 A the winding alone would draw.
+    assert!(on_current > 0.5, "stall current: {on_current} A");
+    bench.fan_off();
+    bench.run_to_ms(200);
+    let series = bench.machine.analog_series().expect("a series");
+    let collector = series
+        .channels
+        .iter()
+        .find(|c| c.name == "circuit.collector")
+        .expect("collector channel");
+    let peak = collector
+        .points
+        .iter()
+        .filter(|p| p.0 > 100_000_000)
+        .map(|p| p.1)
+        .fold(f64::MIN, f64::max);
+    assert!(
+        peak > 5.0 && peak < 5.0 + 1.5,
+        "the diode clamps the collector one drop above the rail: peak {peak} V"
+    );
+    let off = bench.motor().current_a.expect("current");
+    assert!(
+        off.abs() < 0.01 * on_current,
+        "winding current decayed: {off} A (was {on_current} A)"
     );
 }
 
@@ -246,9 +300,13 @@ fn the_speed_series_covers_the_run_in_change_points() {
     let mut bench = Bench::new();
     bench.run_to_ms(300);
     bench.fan_off();
-    bench.run_to_ms(900);
+    bench.run_to_ms(1400);
     let series = bench.machine.analog_series().expect("a series");
-    assert!(series.end_time_ns >= 890_000_000, "{}", series.end_time_ns);
+    assert!(
+        series.end_time_ns >= 1_390_000_000,
+        "{}",
+        series.end_time_ns
+    );
     let speed = series
         .channels
         .iter()
@@ -261,12 +319,18 @@ fn the_speed_series_covers_the_run_in_change_points() {
     }
     let rising = held_at(&speed.points, 300);
     assert!(rising > 100.0, "spinning at 300 ms: {rising} rpm");
+    let coasting = held_at(&speed.points, 500);
     assert!(
-        held_at(&speed.points, 890) < rising,
-        "slower after the switch opened"
+        coasting > 0.0 && coasting < rising,
+        "spinning down 200 ms after the switch opened: {coasting} rpm"
+    );
+    assert_eq!(
+        held_at(&speed.points, 1300),
+        0.0,
+        "stopped within a second of the switch opening"
     );
     // Change points, not one per motor service.
-    let services = 900_000_000 / (4096 * 1_000_000_000 / CPU_HZ);
+    let services = 1_400_000_000 / (4096 * 1_000_000_000 / CPU_HZ);
     assert!(
         (speed.points.len() as u64) < services,
         "{} points",
@@ -307,7 +371,7 @@ fn a_bridge_motor_refuses_the_circuit_paths() {
 #[test]
 fn no_routed_current_holds_the_shaft_instead_of_guessing() {
     let no_output = MOTOR_SYSTEM.replace(
-        "    outputs:\n      motor_M1: \"board.motor.M1.current_a\"\n",
+        "    outputs:\n      motor_M1: \"board.motor.M1.current_a\"\n      supply_M1: \"board.motor.M1.supply_v\"\n",
         "    outputs: {}\n",
     );
     let manifest = manifest(&no_output);
@@ -334,4 +398,5 @@ fn no_routed_current_holds_the_shaft_instead_of_guessing() {
     assert_eq!(motor.control_state, "circuit:no-current");
     assert_eq!(motor.speed_rpm, 0.0);
     assert_eq!(motor.current_a, None);
+    assert_eq!(motor.bus_voltage_v, 0.0, "no rail routed, none reported");
 }

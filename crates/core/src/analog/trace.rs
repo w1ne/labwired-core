@@ -312,7 +312,11 @@ pub(crate) fn record_change(
             _ => SERIES_DEADBAND_VOLTS,
         };
         let band = floor.max(SERIES_DEADBAND_REL * held.abs());
-        if (value - held).abs() <= band {
+        // Arriving at exactly zero (a shaft dry friction stopped, a switched-off
+        // rail) is a state, not noise: always a point, so the series never
+        // holds a last sub-deadband crawl for a value that reached rest.
+        let came_to_rest = value == 0.0 && held != 0.0;
+        if !came_to_rest && (value - held).abs() <= band {
             return;
         }
     }
@@ -428,5 +432,18 @@ mod tests {
         let series = trace.series();
         assert_eq!(series.channels[0].points, vec![(0, 0.100), (2, 0.150)]);
         assert_eq!(series.channels[1].points, vec![(0, 1.0), (2, 2.0)]);
+    }
+
+    #[test]
+    fn reaching_exactly_zero_is_a_point_even_inside_the_deadband() {
+        let mut trace = AnalogTrace::new(8);
+        trace.register_channels(&[AnalogChannel::amps("i")]);
+        trace.push(0, 0, 0, &[0.5]);
+        trace.push(0, 1, 1, &[SERIES_DEADBAND_AMPS * 0.5]);
+        trace.push(0, 2, 2, &[0.0]);
+        trace.push(0, 3, 3, &[0.0]);
+        let points = &trace.series().channels[0].points;
+        assert_eq!(points.last(), Some(&(2, 0.0)), "{points:?}");
+        assert!(!points.contains(&(3, 0.0)), "a held zero is no new point");
     }
 }

@@ -518,6 +518,7 @@ mod tests {
             shaft: ShaftParams {
                 inertia_kg_m2: 0.0001,
                 viscous_friction_nm_per_rad_s: 0.00001,
+                coulomb_friction_nm: 0.0,
                 load_torque_nm: 0.0,
             },
         }

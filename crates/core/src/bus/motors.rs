@@ -259,6 +259,10 @@ pub(super) struct CircuitWinding {
     /// shaft then does not move at all, rather than being driven by a current
     /// nobody solved.
     pub(super) winding_current_a: Option<f64>,
+    /// Last rail voltage the netlist routed in on `board.motor.<id>.supply_v`:
+    /// the supply the winding's switch connects it to, solved by the netlist.
+    /// Reported as the motor's bus voltage; `None` until routed.
+    pub(super) supply_v: Option<f64>,
 }
 
 /// Longest shaft step a circuit-driven winding takes in one go. Far below any
@@ -447,6 +451,7 @@ impl SystemBus {
         let shaft = ShaftParams {
             inertia_kg_m2: c.rotor_inertia_kg_m2,
             viscous_friction_nm_per_rad_s: c.viscous_friction_nm_per_rad_s,
+            coulomb_friction_nm: c.coulomb_friction_nm,
             load_torque_nm: c.load_torque_nm,
         };
         let plant = BrushedDcMotor::new(BrushedMotorParams {
@@ -548,6 +553,7 @@ impl SystemBus {
             shaft: ShaftParams {
                 inertia_kg_m2: c.rotor_inertia_kg_m2,
                 viscous_friction_nm_per_rad_s: c.viscous_friction_nm_per_rad_s,
+                coulomb_friction_nm: c.coulomb_friction_nm,
                 load_torque_nm: c.load_torque_nm,
             },
         })?;
@@ -631,6 +637,7 @@ impl SystemBus {
             shaft: ShaftParams {
                 inertia_kg_m2: c.rotor_inertia_kg_m2,
                 viscous_friction_nm_per_rad_s: c.viscous_friction_nm_per_rad_s,
+                coulomb_friction_nm: c.coulomb_friction_nm,
                 load_torque_nm: c.load_torque_nm,
             },
         })?;
@@ -1113,6 +1120,24 @@ impl SystemBus {
         }
     }
 
+    /// Route the netlist's supply rail for circuit motor `index`, in volts.
+    /// `false` for a non-finite value or a motor that is not circuit-driven.
+    pub(crate) fn set_circuit_motor_supply(&mut self, index: usize, volts: f64) -> bool {
+        if !volts.is_finite() {
+            return false;
+        }
+        match self.motors.get_mut(index) {
+            Some(MotorRuntime::Dc {
+                circuit: Some(winding),
+                ..
+            }) => {
+                winding.supply_v = Some(volts);
+                true
+            }
+            _ => false,
+        }
+    }
+
     /// Back-EMF circuit motor `index` presents to the netlist, in volts.
     pub(crate) fn circuit_motor_back_emf_v(&self, index: usize) -> Option<f64> {
         match self.motors.get(index) {
@@ -1139,10 +1164,14 @@ impl SystemBus {
                 } => {
                     let s = plant.snapshot();
                     // A circuit winding reports no current before the netlist
-                    // routed one, and no bus voltage: its rail is in the netlist.
-                    let current_a = match circuit {
-                        Some(winding) => winding.winding_current_a.map(|_| s.current_a),
-                        None => Some(s.current_a),
+                    // routed one; its bus voltage is the rail the netlist
+                    // solved and routed in (0 until it has).
+                    let (current_a, bus_voltage_v) = match circuit {
+                        Some(winding) => (
+                            winding.winding_current_a.map(|_| s.current_a),
+                            winding.supply_v.unwrap_or(0.0),
+                        ),
+                        None => (Some(s.current_a), plant.params().supply_voltage_v),
                     };
                     MotorSnapshot {
                         id: id.clone(),
@@ -1155,7 +1184,7 @@ impl SystemBus {
                         torque_nm: s.electromagnetic_torque_nm,
                         current_a,
                         phase_currents_a: None,
-                        bus_voltage_v: plant.params().supply_voltage_v,
+                        bus_voltage_v,
                         commutation_sector: None,
                         control_state: control_state.clone(),
                         faults: s

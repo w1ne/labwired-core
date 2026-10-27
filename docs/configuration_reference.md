@@ -635,6 +635,7 @@ external_devices:
       back_emf_constant_v_per_rad_s: 0.08
       rotor_inertia_kg_m2: 0.00004
       viscous_friction_nm_per_rad_s: 0.00001
+      coulomb_friction_nm: 0.006
       supply_voltage_v: 12.0
       load_torque_nm: 0.0
       encoder_cpr: 1024
@@ -659,6 +660,16 @@ netlist's wired rail: `supply_voltage_v`, `pwm_pin` and the direction / brake /
 enable / timer keys are refused. Every motor also publishes
 `motor.<id>.speed_rpm` and `motor.<id>.current_a` change-point series in
 `analog_series` (with `armature: circuit`, current is absent until routed).
+The netlist may also route the rail feeding the winding in on
+`board.motor.<id>.supply_v`; the motor reports it as its `bus_voltage_v`
+(0 while unrouted).
+
+Both motor kinds take an optional `coulomb_friction_nm` (default 0): dry
+bearing and brush friction, a constant torque opposing rotation that also
+holds a resting shaft until the drive exceeds it. Viscous drag alone never
+stops a shaft — the catalog motor's 10 µN·m·s/rad over a 40 g·cm² rotor is a
+4 s time constant — so the catalog `dc-motor` part defaults it to 6 mN·m,
+which stops a coasting fan in well under a second.
 
 ```yaml
 motor_models:
@@ -670,7 +681,8 @@ motor_models:
     torque_constant_nm_per_a: 0.08
     back_emf_constant_v_per_rad_s: 0.08
     rotor_inertia_kg_m2: 0.00004
-    viscous_friction_nm_per_rad_s: 0.001
+    viscous_friction_nm_per_rad_s: 0.00001
+    coulomb_friction_nm: 0.006
     load_torque_nm: 0.0
     encoder_cpr: 12
     simulation_clock_hz: 16000000

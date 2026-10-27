@@ -18,6 +18,9 @@ behavior:
     back_emf_constant_v_per_rad_s: { key: back_emf_constant_v_per_rad_s, default: 0.08 }
     rotor_inertia_kg_m2: { key: rotor_inertia_kg_m2, default: 0.00004 }
     viscous_friction_nm_per_rad_s: { key: viscous_friction_nm_per_rad_s, default: 0.00001 }
+    # Dry bearing/brush friction: Kt x a ~75 mA no-load current. It holds a
+    # resting shaft and stops a coasting one in under a second at 12 V.
+    coulomb_friction_nm: { key: coulomb_friction_nm, default: 0.006 }
     supply_voltage_v: { key: supply_voltage_v, default: 12.0 }
     load_torque_nm: { key: load_torque_nm, default: 0.0 }
     encoder_cpr: { key: encoder_cpr, default: 1024 }
@@ -50,6 +53,7 @@ emit:
     - { key: back_emf_constant_v_per_rad_s, from_attr: back_emf_constant_v_per_rad_s, default: 0.08 }
     - { key: rotor_inertia_kg_m2, from_attr: rotor_inertia_kg_m2, default: 0.00004 }
     - { key: viscous_friction_nm_per_rad_s, from_attr: viscous_friction_nm_per_rad_s, default: 0.00001 }
+    - { key: coulomb_friction_nm, from_attr: coulomb_friction_nm, default: 0.006 }
     - { key: supply_voltage_v, from_attr: supply_voltage_v, default: 12.0 }
     - { key: load_torque_nm, from_attr: load_torque_nm, default: 0.0 }
     - { key: encoder_cpr, from_attr: encoder_cpr, default: 1024 }
