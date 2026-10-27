@@ -1211,9 +1211,14 @@ pub struct Mosfet {
 /// `pos` and `neg` rather than from a routed boolean input.
 ///
 /// `|V(pos) − V(neg)|` is compared to `vt` with hysteresis `vh`. With
-/// `invert == false` (NO contact) the switch closes at `vt` and opens at
-/// `vt − vh`. With `invert == true` (NC contact) those edges are reversed, so
-/// the contact is closed while the coil is de-energised.
+/// `invert == false` (NO contact) the switch closes at `|V| >= vt` and stays
+/// closed until `|V|` falls through `vt − vh`. With `invert == true` (NC
+/// contact) the switch stays closed while `|V| < vt` and only re-closes from
+/// open at `|V| <= vt − vh`, so the contact is closed while the coil is
+/// de-energised.
+///
+/// An NO/NC pair that shares the same sense nodes transfers atomically in one
+/// solver update (no break-before-make delay).
 #[derive(Debug, Clone, PartialEq)]
 pub struct VoltageSwitchControl {
     /// Positive sense node.
@@ -1881,9 +1886,9 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                                 invert = parsed != 0.0;
                             }
                             other => {
-                                return Err(ctx.parse_err(format!(
-                                    "unknown switch parameter `{other}`"
-                                )))
+                                return Err(
+                                    ctx.parse_err(format!("unknown switch parameter `{other}`"))
+                                )
                             }
                         }
                     }
@@ -1932,9 +1937,9 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                             "ron" => ron = Some(ctx.value(value, "ron")?),
                             "roff" => roff = Some(ctx.value(value, "roff")?),
                             other => {
-                                return Err(ctx.parse_err(format!(
-                                    "unknown switch parameter `{other}`"
-                                )))
+                                return Err(
+                                    ctx.parse_err(format!("unknown switch parameter `{other}`"))
+                                )
                             }
                         }
                     }

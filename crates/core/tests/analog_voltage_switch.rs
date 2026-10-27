@@ -166,3 +166,57 @@ fn relay_coil_current_and_contact_follow_drive_with_flyback_clamp() {
         solver.node_voltage(com)
     );
 }
+
+#[test]
+fn spdt_no_nc_transfer_is_atomic_same_update() {
+    // Lean choice vs break-before-make: contacts that share a sense node flip in
+    // the same update_voltage_switches pass, so COM moves from NC to NO with no
+    // observable both-open interval between advances. Pin that so a later BBM
+    // change has to update this test on purpose.
+    let circuit = parse_netlist(
+        "* spdt atomic\n\
+         Vctrl ctrl 0 dc 0\n\
+         Vdd vdd 0 dc 5\n\
+         Rno vdd no 1k\n\
+         Rnc vdd nc 1k\n\
+         Sno no 0 ctrl 0 vt=3.75 vh=3.25 ron=1 roff=1meg\n\
+         Snc nc 0 ctrl 0 vt=3.75 vh=3.25 invert=1 ron=1 roff=1meg\n\
+         Cno no 0 1p\n\
+         Cnc nc 0 1p\n\
+         .end\n",
+    )
+    .expect("netlist parses");
+    let mut solver = Solver::new(circuit, Integration::BackwardEuler).expect("solver");
+    let no = solver.circuit().node("no").expect("no");
+    let nc = solver.circuit().node("nc").expect("nc");
+
+    run_to(&mut solver, 1e-6, 50);
+    let no_rest = solver.node_voltage(no);
+    let nc_rest = solver.node_voltage(nc);
+    assert!(no_rest > 4.5, "NO open at rest: {no_rest} V");
+    assert!(nc_rest < 0.05, "NC closed at rest: {nc_rest} V");
+
+    // Drive through pickup. Voltage switches refresh at the start of each step
+    // from the previous solution, so the first step that observes a transfer is
+    // the one whose update flipped both contacts together.
+    solver.set_voltage_source(0, 5.0);
+    let mut saw_transfer = false;
+    for _ in 0..20 {
+        solver.advance(1e-6).expect("step");
+        let no_closed = solver.node_voltage(no) < 0.5;
+        let nc_open = solver.node_voltage(nc) > 4.0;
+        if no_closed || nc_open {
+            assert!(
+                no_closed && nc_open,
+                "atomic transfer: after the update that moved either contact, \
+                 NO closed={no_closed} NC open={nc_open} (no BBM gap)"
+            );
+            saw_transfer = true;
+            break;
+        }
+    }
+    assert!(
+        saw_transfer,
+        "expected NO/NC to transfer within a few steps after energising"
+    );
+}

@@ -72,7 +72,10 @@ S1 c 0 gate ron=1.5 roff=1meg
         assert_eq!(switch.ctrl, "gate");
         assert_eq!(switch.ron, 1.5);
         assert_eq!(switch.roff, 1e6);
-        assert!(switch.voltage.is_none(), "digital form has no voltage control");
+        assert!(
+            switch.voltage.is_none(),
+            "digital form has no voltage control"
+        );
 
         assert_eq!(circuit.node_ic.len(), 2);
 

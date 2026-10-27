@@ -336,6 +336,12 @@ impl Solver {
 
     /// Refresh every voltage-controlled switch from the latest node voltages.
     ///
+    /// All voltage-controlled contacts are evaluated against the same `|V|` in
+    /// one pass, so an NO/NC pair transfers atomically: the NC opens and the
+    /// NO closes in the same update (no break-before-make interval). Real Form
+    /// C relays are break-before-make; modelling a short open-transfer delay is
+    /// deferred.
+    ///
     /// Returns true when any contact changed, so the caller can clear the
     /// linear stamp cache / restart integration.
     fn update_voltage_switches(&mut self) -> bool {
@@ -349,7 +355,8 @@ impl Solver {
             let off = (control.vt - control.vh).max(0.0);
             let closed_now = self.switch_closed[index];
             let desired = if control.invert {
-                // NC: closed (COM–NC) when |V| is below the dropout threshold.
+                // NC: stays closed while |V| < vt; re-closes from open only at
+                // |V| <= vt − vh.
                 if closed_now {
                     v < on
                 } else {
