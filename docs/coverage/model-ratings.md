@@ -89,6 +89,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | atmega328p | open | L1 | 7 | 1044.8 | 7.6 | ≥1× (CI) | — |
 | atmega2560 | open | L1 | 15 | — | — | ≥1× (CI) | — |
 | atmega2561 | open | L1 | 11 | — | — | ≥1× (CI) | [doc](docs/boards/atmega2561.md) |
+| atmega1281 | open | L1 | 11 | — | — | ≥1× (CI) | [doc](docs/boards/atmega1281.md) |
 | atsamd21 | open | L1 | 7 | 895.0 | 1.4 | ≥1× (CI) | — |
 | atsamd51 | open | L1 | 27 | 1240.0 | 1.4 | ≥1× (CI) | — |
 | atsamd51-pybadge | open | L0 | 28 | 1251.8 | 1.5 | ≥1× (CI) | — |
