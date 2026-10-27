@@ -20,6 +20,7 @@ mod inspect;
 mod install;
 mod jit_browser;
 mod lab_tools;
+mod ngspice;
 #[cfg(test)]
 mod pic24_wasm_tests;
 #[cfg(test)]
@@ -433,6 +434,37 @@ impl WasmSimulator {
             blobs: parse_named_blobs(&blobs),
         }))
     }
+
+    /// Construct a browser simulator with a host-owned persistent ngspice solver.
+    #[wasm_bindgen]
+    pub fn new_from_config_with_ngspice_callback(
+        system_yaml: &str,
+        chip_yaml: &str,
+        firmware: &[u8],
+        blobs: JsValue,
+        callback: JsValue,
+    ) -> Result<WasmSimulator, JsValue> {
+        use wasm_bindgen::JsCast;
+        let callback = callback
+            .dyn_into::<js_sys::Function>()
+            .map_err(|_| JsValue::from_str("ngspice callback must be a function"))?;
+        let inputs = std::rc::Rc::new(lab_tools::CtorInputs {
+            system_yaml: system_yaml.to_string(),
+            chip_yaml: chip_yaml.to_string(),
+            firmware: firmware.to_vec(),
+            blobs: parse_named_blobs(&blobs),
+        });
+        let mut sim = Self::build_from_config(
+            &inputs.system_yaml,
+            &inputs.chip_yaml,
+            &inputs.firmware,
+            &inputs.blobs,
+            Some(&callback),
+        )?;
+        sim.tools.get_mut().ctor = Some(inputs);
+        sim.untracked("connected to an external ngspice solver");
+        Ok(sim)
+    }
 }
 
 /// PIC24 UART1 is implemented inside the CPU, so it cannot be attached as a
@@ -464,6 +496,7 @@ impl WasmSimulator {
             &inputs.chip_yaml,
             &inputs.firmware,
             &inputs.blobs,
+            None,
         )?;
         sim.tools.get_mut().ctor = Some(inputs);
         Ok(sim)
@@ -474,6 +507,7 @@ impl WasmSimulator {
         chip_yaml: &str,
         firmware: &[u8],
         blob_map: &std::collections::HashMap<String, Vec<u8>>,
+        ngspice_callback: Option<&js_sys::Function>,
     ) -> Result<WasmSimulator, JsValue> {
         // Same reason as `new()`: the fidelity log is thread-local and outlives
         // the machine, so scope it to this one.
@@ -538,7 +572,7 @@ impl WasmSimulator {
         }?;
         // Every architecture's machine is built by now, so co-simulation binds
         // here once rather than in each constructor above.
-        sim.attach_cosim(&manifest)
+        sim.attach_cosim_with_ngspice(&manifest, ngspice_callback)
             .map_err(|e| JsValue::from_str(&e))?;
         Ok(sim)
     }
@@ -2165,6 +2199,8 @@ impl WasmSimulator {
     /// and permanently disabled idle FF for the classic-aids playground path.
     #[wasm_bindgen]
     pub fn step_with_esp32_aids(&mut self, cycles: u32) -> Result<(), JsValue> {
+        self.ensure_cosim_healthy()
+            .map_err(AdvanceFailure::into_js)?;
         self.record(lab_tools::Op::StepEsp32Aids(cycles));
         // Real dual-core: a genuine APP_CPU is attached, so the handshake
         // keep-alive and the FROM_CPU IPI bridge below are unnecessary — the
@@ -2255,7 +2291,7 @@ impl WasmSimulator {
             // regular step picks up at the post-block callx8.
             // CCOUNT advance happens inside the JIT helper to keep
             // CCOMPARE0 edge detection honest.
-            if self.jit_browser_enabled {
+            if self.jit_browser_enabled && self.cosim.is_none() {
                 let machine = self.machine.as_mut().unwrap();
                 if self.jit_browser_cache.is_none() {
                     self.jit_browser_cache = Some(Box::new(jit_browser::BrowserJitCache::new()));

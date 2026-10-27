@@ -389,6 +389,9 @@ impl WasmSimulator {
     /// partially overwritten — callers should treat that as a hard reset.
     #[wasm_bindgen]
     pub fn apply_runtime_snapshot(&mut self, bytes: &[u8]) -> Result<(), JsValue> {
+        if let Some(reason) = self.runtime_snapshot_refusal() {
+            return Err(JsValue::from_str(reason));
+        }
         self.record(lab_tools::Op::ApplyRuntimeSnapshot(bytes.to_vec()));
         let machine = self
             .machine
@@ -408,6 +411,9 @@ impl WasmSimulator {
     /// `WasmSimulator` with the same firmware + bus topology.
     #[wasm_bindgen]
     pub fn take_runtime_snapshot(&self) -> Result<Vec<u8>, JsValue> {
+        if let Some(reason) = self.runtime_snapshot_refusal() {
+            return Err(JsValue::from_str(reason));
+        }
         let machine = self
             .machine
             .as_ref()

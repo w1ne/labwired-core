@@ -943,7 +943,9 @@ fn output_carries_volts(config: &CosimModelConfig, model_signal: &str) -> bool {
             Some(serde_yaml::Value::Number(number))
                 if number.as_i64().is_none() && number.as_f64().is_some()
         ),
-        ManifestCosimAdapter::ExternalProcess | ManifestCosimAdapter::Fmi => false,
+        ManifestCosimAdapter::ExternalProcess
+        | ManifestCosimAdapter::Fmi
+        | ManifestCosimAdapter::Ngspice => false,
     }
 }
 
@@ -1093,6 +1095,7 @@ pub struct CosimSession {
     configs: Vec<CosimModelConfig>,
     epoch_cycles: u64,
     last_global_cycles: u64,
+    failure: Option<String>,
 }
 
 /// What one lockstep advance did: the machine's report, and what happened at
@@ -1216,10 +1219,32 @@ impl CosimSession {
         base_dir: &Path,
         bus: &SystemBus,
     ) -> SimResult<Option<Self>> {
+        Self::new_with_factory(configs, bus, |config| {
+            crate::cosim::build_cosim_adapter_with_base(config, base_dir)
+        })
+    }
+
+    /// Build a session using adapters supplied by the host, while retaining the
+    /// same scheduler, routing, and trace setup as the native constructor.
+    pub fn new_with_factory<F>(
+        configs: &[CosimModelConfig],
+        bus: &SystemBus,
+        mut factory: F,
+    ) -> SimResult<Option<Self>>
+    where
+        F: FnMut(&CosimModelConfig) -> SimResult<Box<dyn crate::cosim::CosimAdapter>>,
+    {
         if configs.is_empty() {
             return Ok(None);
         }
-        let runner = CosimRunner::from_configs_with_base(configs, base_dir)?;
+        let mut models = Vec::with_capacity(configs.len());
+        for config in configs {
+            models.push(crate::cosim::CosimRunnerModel::new(
+                config.clone(),
+                factory(config)?,
+            ));
+        }
+        let runner = CosimRunner::new(models);
         let (router, binding_errors) = SignalRouter::bind(configs, bus);
         let fallback_clock = bus.cpu_hz == 0;
         let cpu_hz = if fallback_clock {
@@ -1262,7 +1287,20 @@ impl CosimSession {
             configs: configs.to_vec(),
             epoch_cycles: 0,
             last_global_cycles: 0,
+            failure: None,
         }))
+    }
+
+    /// Return the first model failure latched by the host.
+    pub fn failure(&self) -> Option<&str> {
+        self.failure.as_deref()
+    }
+
+    /// Preserve the first model failure so a host cannot resume after it.
+    pub fn latch_failure(&mut self, message: String) {
+        if self.failure.is_none() {
+            self.failure = Some(message);
+        }
     }
 
     /// Every manifest path that did not resolve against the machine's bus.
@@ -1273,6 +1311,13 @@ impl CosimSession {
     /// How many models this session steps.
     pub fn model_count(&self) -> usize {
         self.runner.model_count()
+    }
+
+    /// Whether this session relies on an externally hosted ngspice solver.
+    pub fn has_ngspice(&self) -> bool {
+        self.configs
+            .iter()
+            .any(|config| config.adapter == ManifestCosimAdapter::Ngspice)
     }
 
     /// The runner's analog waveform ring. Every `adapter: analog` model writes
@@ -1454,6 +1499,24 @@ impl CosimSession {
         let (routed, errors) = self
             .advance_to(machine.total_cycles, &mut machine.bus)
             .map_err(|error| CosimAdvanceError::Model { report, error })?;
+        // A failed ngspice output must stop at this boundary. Continuing to
+        // spend the batch would let firmware run against a disconnected circuit.
+        if !errors.is_empty()
+            && self
+                .configs
+                .iter()
+                .any(|config| config.adapter == ManifestCosimAdapter::Ngspice)
+        {
+            let message = errors
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join("; ");
+            return Err(CosimAdvanceError::Model {
+                report,
+                error: SimulationError::Other(format!("co-sim routing failed: {message}")),
+            });
+        }
         let new_routing_errors = errors
             .into_iter()
             .filter(|err| self.reported_errors.insert(err.to_string()))
@@ -2062,6 +2125,33 @@ mod tests {
                 path: "ui.touch.pressed".to_string()
             }]
         );
+    }
+
+    #[test]
+    fn host_adapter_is_stepped_at_the_session_boundary() {
+        use crate::cosim::{CosimAdapter as RuntimeAdapter, CosimStep, CosimStepResult};
+        use std::sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc,
+        };
+        struct HostAdapter(Arc<AtomicUsize>);
+        impl RuntimeAdapter for HostAdapter {
+            fn step(&mut self, _: CosimStep) -> SimResult<CosimStepResult> {
+                self.0.fetch_add(1, Ordering::SeqCst);
+                Ok(CosimStepResult::default())
+            }
+        }
+        let mut bus = crate::bus::SystemBus::new();
+        let mut model = mock_model("host", 1000, &[], &[], &[]);
+        model.adapter = CosimAdapter::Ngspice;
+        let calls = Arc::new(AtomicUsize::new(0));
+        let mut session = CosimSession::new_with_factory(&[model], &bus, |_| {
+            Ok(Box::new(HostAdapter(calls.clone())))
+        })
+        .unwrap()
+        .unwrap();
+        session.advance_to(1000, &mut bus).unwrap();
+        assert!(calls.load(Ordering::SeqCst) > 0);
     }
 
     #[test]
