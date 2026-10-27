@@ -8,6 +8,7 @@ use std::io::{Cursor, Write};
 use std::sync::{Arc, Mutex};
 
 const CHIP_NAME: &str = "test-dap-plugin-chip";
+const GPIO_OUTPUT_OFFSET: u64 = 0x2200;
 const CHIP_YAML: &str = r#"
 name: "test-dap-plugin-chip"
 arch: "arm"
@@ -27,12 +28,12 @@ peripherals:
 struct TestPeripheral;
 
 impl Peripheral for TestPeripheral {
-    fn read(&self, _offset: u64) -> SimResult<u8> {
-        Ok(0x5A)
+    fn read(&self, offset: u64) -> SimResult<u8> {
+        Ok(if offset == GPIO_OUTPUT_OFFSET { 0x5A } else { 0 })
     }
 
-    fn peek(&self, _offset: u64) -> Option<u8> {
-        Some(0x5A)
+    fn peek(&self, offset: u64) -> Option<u8> {
+        Some(if offset == GPIO_OUTPUT_OFFSET { 0x5A } else { 0 })
     }
 
     fn write(&mut self, _offset: u64, _value: u8) -> SimResult<()> {
@@ -168,7 +169,7 @@ fn dap_launch_resolves_and_builds_a_registered_plugin_chip() {
     assert_eq!(board_io[0].signal, "output");
     assert!(
         board_io[0].active,
-        "bit 1 is set in plugin register value 0x5A"
+        "DAP reads the configured GPIO output register at {GPIO_OUTPUT_OFFSET:#x}"
     );
 }
 
