@@ -6,6 +6,8 @@ on:
       - main
     paths:
       - "configs/**"
+      - "crates/core/src/session/catalog.rs"
+      - "crates/core/examples/export_catalog_names.rs"
       - "scripts/ci/build_model_catalog_bundle.py"
       - ".github/workflows/publish-model-catalog.yml"
   workflow_dispatch:
@@ -21,6 +23,13 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
+      - name: Require main ref
+        if: ${{ github.ref != 'refs/heads/main' }}
+        shell: bash
+        run: |
+          echo "::error::Model catalog publication requires refs/heads/main (got $GITHUB_REF)."
+          exit 1
+
       - uses: actions/checkout@v4
 
       - uses: dtolnay/rust-toolchain@1.95.0

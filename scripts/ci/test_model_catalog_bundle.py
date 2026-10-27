@@ -11,6 +11,7 @@ import tarfile
 
 
 BUILDER_PATH = Path(__file__).with_name("build_model_catalog_bundle.py")
+WORKFLOW_PATH = Path(__file__).resolve().parents[2] / ".github/workflows/publish-model-catalog.yml"
 SPEC = (
     importlib.util.spec_from_file_location("build_model_catalog_bundle", BUILDER_PATH)
     if BUILDER_PATH.is_file()
@@ -62,6 +63,27 @@ class ModelCatalogBundleTest(unittest.TestCase):
                     "chips": ["alpha", "zeta"],
                 },
             )
+
+
+class ModelCatalogWorkflowTest(unittest.TestCase):
+    def test_manual_publication_fails_for_refs_other_than_main(self):
+        workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+        self.assertIn("github.ref != 'refs/heads/main'", workflow)
+        self.assertLess(
+            workflow.index("- name: Require main ref"),
+            workflow.index("- uses: actions/checkout@v4"),
+        )
+        self.assertIn("exit 1", workflow)
+
+    def test_push_triggers_include_catalog_discovery_sources(self):
+        workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+        push_paths = workflow.split("    paths:\n", 1)[1].split("  workflow_dispatch:", 1)[0]
+        for path in (
+            "crates/core/src/session/catalog.rs",
+            "crates/core/examples/export_catalog_names.rs",
+        ):
+            with self.subTest(path=path):
+                self.assertIn(f'      - "{path}"', push_paths)
 
 
 if __name__ == "__main__":
