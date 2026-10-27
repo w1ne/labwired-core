@@ -6,9 +6,9 @@ of today's tree: they would go green for the wrong reason the moment someone
 edited a workflow, and they could never express "a chip with no gate must
 fail", because the real tree is (by design) not in that state.
 
-The one case that does read the real repo is the last one, and it asserts the
-committed ledger and the committed workflows agree — which is the gate's own
-claim, not a restatement of it.
+The cases that read the real repo assert that committed workflows, coverage
+ledgers, and the exact-system smoke contract agree — claims of the gate itself,
+not restatements of synthetic cases.
 """
 
 import subprocess
@@ -619,3 +619,17 @@ def test_the_committed_tree_passes_its_own_gate():
             "nothing is uncovered — delete configs/ci/chip-coverage.yaml rather "
             "than keeping an empty one"
         )
+
+
+def test_proteus_stm32_exact_catalog_skips_the_fixture_smoke():
+    """The exact row must reach its per-system override without the generic fixture run."""
+    workflow = (REPO_ROOT / ".github/workflows/core-coverage-matrix-smoke.yml").read_text()
+    generic_step = workflow.split("      - name: Run matrix smoke\n", 1)[1].split(
+        "      - name:", 1
+    )[0]
+    exact_step = workflow.split(
+        "      - name: Run exact Proteus STM32 catalog variants\n", 1
+    )[1].split("      - name:", 1)[0]
+
+    assert "if: matrix.id != 'proteus-stm32-exact-catalog'" in generic_step
+    assert "if: matrix.id == 'proteus-stm32-exact-catalog'" in exact_step

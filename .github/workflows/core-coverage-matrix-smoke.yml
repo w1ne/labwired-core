@@ -526,6 +526,7 @@ jobs:
           printf 'entry point 0x%08x\n' "$entry"
 
       - name: Run matrix smoke
+        if: matrix.id != 'proteus-stm32-exact-catalog'
         run: |
           mkdir -p "out/coverage-matrix/${{ matrix.id }}"
           # nRF5340 Zephyr hello parks in arch_cpu_idle after the banner.
