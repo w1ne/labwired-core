@@ -95,10 +95,11 @@ fn check_clock() -> Result<(), &'static [u8]> {
     if (rd32(RCC_BASE + 0x04) >> 2) & 0x3 != 0x1 {
         return Err(b"clock-sws");
     }
-    // APB2ENR round-trip: IOPA/IOPB/IOPC + USART1 enables.
+    // APB2ENR round-trip: IOPA/IOPB/IOPC + USART1 enables, read-modify-write
+    // so the AFIOEN bit init_console set stays on.
     let enr = (1 << 2) | (1 << 3) | (1 << 4) | (1 << 14);
-    wr32(RCC_BASE + 0x18, enr);
-    if rd32(RCC_BASE + 0x18) != enr {
+    wr32(RCC_BASE + 0x18, rd32(RCC_BASE + 0x18) | enr);
+    if rd32(RCC_BASE + 0x18) & enr != enr {
         return Err(b"clock-enr");
     }
     Ok(())

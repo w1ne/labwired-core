@@ -473,7 +473,7 @@ fn main() -> ! {
     // Enable UART0 (value 4 per Nordic PS UART.ENABLE field).
     reg_write(UART0_ENABLE, 4);
     reg_write(UART0_PSEL_TXD, 6); // P0.06: owned fixture console output.
-    reg_write(UART0_BAUDRATE, 0x01D6_0000); // Nordic 115200 baud encoding.
+    reg_write(UART0_BAUDRATE, 0x01D7_E000); // UART (not UARTE) BAUDRATE: Baud115200.
     reg_write(UART0_STARTTX, 1);
 
     // gpio: declared in chip YAML (gpio0 / P0).
