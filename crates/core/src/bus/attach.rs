@@ -354,10 +354,55 @@ impl SystemBus {
     pub(crate) fn wire_esp32_ledc_pads(&mut self) {
         use crate::peripherals::esp32::gpio::Esp32Gpio;
         use crate::peripherals::esp32::ledc::Ledc;
+        self.wire_esp_ledc_pads(
+            |_: &Esp32Gpio| true,
+            Ledc::pad_lines_arc,
+            Esp32Gpio::bind_ledc_lines,
+        );
+    }
 
-        // By NAME, as `wire_esp32_spi_pads` resolves `spi3`: both classic
-        // builders register these two as `gpio` and `ledc`
-        // (`ESP32_PERIPHERALS`, `configs/chips/esp32.yaml`).
+    /// The ESP32-C3 counterpart of [`Self::wire_esp32_ledc_pads`]: bind the six
+    /// LEDC channel outputs to the C3 output matrix (`LEDC_LS_SIG_OUT0..5` =
+    /// 45..50), so `ledcWrite`/`analogWrite` duty is a waveform on the pad
+    /// `ledc_channel_config` routed.
+    ///
+    /// ⚠️ The C6 reuses both the C3 LEDC and the C3 GPIO model, but its matrix
+    /// numbers 45/46 as I²C, so a C6 GPIO layout declines the binding and no
+    /// wire cell is created.
+    pub(crate) fn wire_esp32c3_ledc_pads(&mut self) {
+        use crate::peripherals::esp32c3::gpio::Esp32c3Gpio;
+        use crate::peripherals::esp32c3::ledc::Esp32c3Ledc;
+        self.wire_esp_ledc_pads(
+            Esp32c3Gpio::has_ledc_signals,
+            Esp32c3Ledc::pad_lines_arc,
+            Esp32c3Gpio::bind_ledc_lines,
+        );
+    }
+
+    /// The ESP32-S3 counterpart of [`Self::wire_esp32_ledc_pads`]: bind the
+    /// eight LEDC channel outputs to the S3 output matrix
+    /// (`LEDC_LS_SIG_OUT0..7` = 73..80).
+    pub(crate) fn wire_esp32s3_ledc_pads(&mut self) {
+        use crate::peripherals::esp32s3::gpio::Esp32s3Gpio;
+        use crate::peripherals::esp32s3::ledc::Esp32s3Ledc;
+        self.wire_esp_ledc_pads(
+            |_: &Esp32s3Gpio| true,
+            Esp32s3Ledc::pad_lines_arc,
+            Esp32s3Gpio::bind_ledc_lines,
+        );
+    }
+
+    /// The shared body of the three ESP LEDC pad-wiring passes. Resolves both
+    /// models by NAME, as `wire_esp32_spi_pads` resolves `spi3`: every ESP
+    /// builder registers them as `gpio` and `ledc`. One generic body serves
+    /// all three chips for one extra `downcast_mut` over the classic pass
+    /// alone (see `tests::downcast_ratchet`).
+    fn wire_esp_ledc_pads<G: 'static, L: 'static>(
+        &mut self,
+        gpio_accepts: fn(&G) -> bool,
+        lines_of: fn(&mut L) -> std::sync::Arc<crate::peripherals::pad_lines::PadLines>,
+        bind: fn(&mut G, &std::sync::Arc<crate::peripherals::pad_lines::PadLines>),
+    ) {
         let (Some(ledc_idx), Some(gpio_idx)) = (
             self.find_peripheral_index_by_name("ledc"),
             self.find_peripheral_index_by_name("gpio"),
@@ -367,27 +412,28 @@ impl SystemBus {
         // Resolve BOTH types before touching either: `pad_lines_arc` CREATES
         // the wire cell, and a controller owning a cell no route reaches
         // publishes edges nothing reads.
-        let gpio_is_classic = self.peripherals[gpio_idx]
+        let gpio_takes_it = self.peripherals[gpio_idx]
             .dev
             .as_any_mut()
-            .is_some_and(|a| a.is::<Esp32Gpio>());
-        if !gpio_is_classic {
+            .and_then(|a| a.downcast_mut::<G>())
+            .is_some_and(|g| gpio_accepts(g));
+        if !gpio_takes_it {
             return;
         }
         let Some(lines) = self.peripherals[ledc_idx]
             .dev
             .as_any_mut()
-            .and_then(|a| a.downcast_mut::<Ledc>())
-            .map(Ledc::pad_lines_arc)
+            .and_then(|a| a.downcast_mut::<L>())
+            .map(lines_of)
         else {
             return;
         };
         if let Some(gpio) = self.peripherals[gpio_idx]
             .dev
             .as_any_mut()
-            .and_then(|a| a.downcast_mut::<Esp32Gpio>())
+            .and_then(|a| a.downcast_mut::<G>())
         {
-            gpio.bind_ledc_lines(&lines);
+            bind(gpio, &lines);
         }
     }
 
