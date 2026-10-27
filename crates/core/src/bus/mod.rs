@@ -63,6 +63,7 @@ pub use interrupt_fabric::{
     InterruptFabric,
 };
 pub use memory_policy::{CpuWritePolicy, MemoryPolicyReport, RegionPolicyStats, RegionViolation};
+pub(crate) use motors::CircuitMotorLookup;
 pub use motors::MotorSnapshot;
 
 impl SystemBus {

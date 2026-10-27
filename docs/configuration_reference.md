@@ -647,6 +647,35 @@ external_devices:
       timer_channel: 1
 ```
 
+A `kind: dc` motor can instead put its winding in an analog netlist with
+`armature: circuit`. The netlist carries the winding as series R + L + a
+back-EMF voltage source under whatever switch, flyback diode and rail drive it
+(a low-side transistor, a bridge, a relay — any MCU); it routes the solved
+winding current in on `board.motor.<id>.current_a` and reads the motor's
+back-EMF on `board.motor.<id>.back_emf_v` (see
+[cosimulation_plugins.md](cosimulation_plugins.md)). The plant then only turns
+that current into torque and integrates the shaft, so the supply is the
+netlist's wired rail: `supply_voltage_v`, `pwm_pin` and the direction / brake /
+enable / timer keys are refused. Every motor also publishes
+`motor.<id>.speed_rpm` and `motor.<id>.current_a` change-point series in
+`analog_series` (with `armature: circuit`, current is absent until routed).
+
+```yaml
+motor_models:
+  - kind: dc
+    id: fan
+    armature: circuit          # default: bridge
+    resistance_ohm: 1.2
+    inductance_h: 0.002
+    torque_constant_nm_per_a: 0.08
+    back_emf_constant_v_per_rad_s: 0.08
+    rotor_inertia_kg_m2: 0.00004
+    viscous_friction_nm_per_rad_s: 0.001
+    load_torque_nm: 0.0
+    encoder_cpr: 12
+    simulation_clock_hz: 16000000
+```
+
 ### Board I/O
 
 `board_io:` is the board-level pin vocabulary: an LED soldered to a pad, a
