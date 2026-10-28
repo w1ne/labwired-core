@@ -2519,6 +2519,15 @@ impl<C: Cpu> Machine<C> {
         }
     }
 
+    /// Return every peripheral that opts in through
+    /// [`Peripheral::on_system_reset`] to its power-on register state, after
+    /// a system reset rebooted the core.
+    fn system_reset_peripherals(&mut self) {
+        for peripheral in &mut self.bus.peripherals {
+            peripheral.dev.on_system_reset();
+        }
+    }
+
     /// Returns true (and clears the latch) if the registered SCB peripheral
     /// has a pending SYSRESETREQ — an AIRCR write with the correct VECTKEY and
     /// the SYSRESETREQ bit set (`Scb::write_reg`, offset 0x0C). The

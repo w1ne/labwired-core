@@ -179,6 +179,27 @@ pub trait Peripheral: std::fmt::Debug + Send {
     fn read(&self, offset: u64) -> SimResult<u8>;
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()>;
 
+    /// Byte RX DMA request: `Some(true)` while a received byte waits in the
+    /// register at `offset` (a DMA read of it consumes the byte). `None`
+    /// refuses this endpoint; `Some(false)` is a supported endpoint with no
+    /// byte waiting.
+    fn dma_rx_request(&self, _offset: u64) -> Option<bool> {
+        None
+    }
+
+    /// The DMAC trigger sources (TX, RX) this peripheral raises, as its chip
+    /// description declares them. `None`: it declares none.
+    fn dma_triggers(&self) -> Option<(u32, u32)> {
+        None
+    }
+
+    /// Peripheral side of [`crate::Bus::take_dma_trigger`]: consume one
+    /// pending request of DMAC trigger source `source` if this peripheral
+    /// raises it. Default `None`: it raises none.
+    fn take_dma_trigger(&mut self, _source: u32) -> Option<bool> {
+        None
+    }
+
     /// Controller-local byte TX DMA request. `None` refuses this endpoint;
     /// `Some(false)` is a supported endpoint that is not ready. This does not
     /// grant bus access: the bus must separately enforce clocks and routing.
@@ -265,6 +286,16 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// `cause` here. Called after the requesting peripheral has cleared its
     /// own latch. Default: ignore.
     fn on_peripheral_reset(&mut self, _cause: PeripheralResetCause) {}
+
+    /// A system reset (Cortex-M `AIRCR.SYSRESETREQ`, or a peripheral-requested
+    /// reboot such as a watchdog time-out) just restarted the core: return the
+    /// registers to their power-on values, as silicon does. Keep what is not
+    /// chip state: attached devices, wires, the cycle clock and non-volatile
+    /// contents. Called after [`Self::on_peripheral_reset`].
+    ///
+    /// Default: nothing, which keeps the historical behaviour for every model
+    /// that has not opted in.
+    fn on_system_reset(&mut self) {}
 
     /// `true` if this peripheral can ever return `true` from
     /// [`Self::take_reset_request`]. The machine caches the bus indices of

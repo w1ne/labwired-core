@@ -523,6 +523,10 @@ impl I2cSlaveHost for Samd51SercomI2cm {
 }
 
 impl Peripheral for Samd51SercomI2cm {
+    fn on_system_reset(&mut self) {
+        self.stop_selected();
+        self.reset();
+    }
     fn read(&self, offset: u64) -> SimResult<u8> {
         let base = match offset {
             0x00..=0x0f | 0x1c..=0x1f | 0x24..=0x27 => offset & !3,

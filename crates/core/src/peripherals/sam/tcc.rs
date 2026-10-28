@@ -264,6 +264,9 @@ impl Samd51Tcc {
 }
 
 impl Peripheral for Samd51Tcc {
+    fn on_system_reset(&mut self) {
+        *self = Self::new(self.instance);
+    }
     fn read(&self, offset: u64) -> SimResult<u8> {
         let aligned = match offset {
             0x04 | 0x05 | 0x1e => offset,

@@ -1656,7 +1656,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: 4ffedc91e1f39a3a81fb6c04f9a63f25622aa248a19571f62ce5b9500d32ff2f
+    drift_ack_digest: 98bbe5ba04f6c8b2fa732c9f53e80e2f704e98e12ba2c6f82b339e523d8a3f69
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -3631,7 +3631,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: 7dd9953587f27fc978508045d62d4e8603cfb67910ca3da25ff82b0521f2cea3
+    drift_ack_digest: aa36a9e50f02db8580b0e7ba8cda0899806cd10ec5cb5158312cca414ff737bd
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4587,7 +4587,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: bf6ec4f2269f8e5dc9b92b7cfce434c114a892adbbe2f5647eeb7b2973697075
+    drift_ack_digest: ac0ed0530fe9c5262eb51d038e896c3ec079a57abd81836cc878f917bec0a8c5
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5534,7 +5534,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: 261604d1f56b94ecebf729008f35255f1e18a25af04e93491f4e12102553abe4
+    drift_ack_digest: 5e0ab5c760c997ad9a0fa39f64bb81110437459206c2ce0769811f323d9595e1
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6514,7 +6514,7 @@ boards:
     # receives the same explicit GPIO edge through a capability. Captured
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
-    drift_ack_digest: 6b5cd4a33a836ab7b04076d59c5733b5193091972e468d9bb8a860d5ce118afe
+    drift_ack_digest: 781540a4831e364a9032a207e9045c7e19d4e59b49b487d6fca5d445be7861eb
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the

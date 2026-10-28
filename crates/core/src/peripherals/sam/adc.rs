@@ -225,6 +225,17 @@ impl Samd51Adc {
 }
 
 impl Peripheral for Samd51Adc {
+    fn on_system_reset(&mut self) {
+        // Registers to power-on; the analog inputs and the conversion count
+        // are the outside world and evidence, not chip state.
+        let (inputs, vddana_mv, conversions) = (self.inputs, self.vddana_mv, self.conversions);
+        *self = Self {
+            inputs,
+            vddana_mv,
+            conversions,
+            ..Self::new(self.instance)
+        };
+    }
     /// No `tick()` work: state moves on MMIO and the bus tick only, so the
     /// legacy walk can be deleted on a scheduler build.
     fn needs_legacy_walk(&self) -> bool {

@@ -136,6 +136,10 @@ impl Samd51Dac {
 }
 
 impl Peripheral for Samd51Dac {
+    fn on_system_reset(&mut self) {
+        let _ = self.write_reg(0, 1); // CTRLA.SWRST keeps the recorded conversions
+        self.clocked = false;
+    }
     fn read(&self, offset: u64) -> SimResult<u8> {
         if offset < 0x08 || offset == 0x18 {
             return Ok(self.read_reg(offset)? as u8); // 8-bit registers
