@@ -113,6 +113,24 @@ pub trait Bus {
         false
     }
 
+    /// Byte RX DMA readiness after bus routing/clock admission. Unsupported
+    /// endpoints return None; supported but empty endpoints return false.
+    fn dma_rx_request(&self, _addr: u64) -> Option<bool> {
+        None
+    }
+
+    /// The DMAC trigger sources (TX, RX) declared by the peripheral at `addr`.
+    fn dma_triggers_at(&self, _addr: u64) -> Option<(u32, u32)> {
+        None
+    }
+
+    /// Consume one pending request of DMAC trigger source `source` (a SAMD51
+    /// `TCn_DMAC_ID_OVF`). `None` refuses: no peripheral raises that source;
+    /// `Some(false)` means none is pending.
+    fn take_dma_trigger(&mut self, _source: u32) -> Option<bool> {
+        None
+    }
+
     /// Byte TX readiness after bus routing/clock admission. Unsupported
     /// endpoints return None; supported but blocked endpoints return false.
     fn dma_tx_request(&self, _addr: u64) -> Option<bool> {

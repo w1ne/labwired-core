@@ -181,6 +181,8 @@ pub const MODEL_TYPES: &[&str] = &[
     "samd51_sercom_usart",
     "sam_dmac_byte",
     "sam_dmac_sercom4_tx_byte",
+    "samd51_dmac_board",
+    "samd51_usb_device_banks",
     // Reserve the full name: never fuzzy-coerce an unqualified SAM DMAC to STM32.
     "sam_dmac",
     // ⚠️ Load-bearing. Without this entry the fuzzy `contains("spi")` heuristic
@@ -379,6 +381,33 @@ fn dma_request_table(p_cfg: &PeripheralConfig) -> Vec<(String, serde_yaml::Value
         .collect();
     out.sort_by(|a, b| a.0.cmp(&b.0));
     out
+}
+
+// Opt-in SAMD51 USB device banks: the fixed instance, IRQ and clock gates.
+#[cold]
+#[inline(never)]
+fn build_samd51_usb_device_banks(p_cfg: &PeripheralConfig) -> anyhow::Result<Box<dyn Peripheral>> {
+    if p_cfg.base_address != 0x41000000 || p_cfg.irq != Some(80) || !p_cfg.config.is_empty() {
+        anyhow::bail!("SAMD51 USB banks require base 0x41000000, IRQ80 and no config overrides");
+    }
+    if !p_cfg.clock.as_ref().is_some_and(|clocks| {
+        let gates = clocks.as_slice();
+        gates.len() == 2
+            && [("AHBMASK", 10), ("APBBMASK", 0)]
+                .into_iter()
+                .all(|(reg, bit)| {
+                    gates
+                        .iter()
+                        .any(|gate| gate.controller == "mclk" && gate.reg == reg && gate.bit == bit)
+                })
+    }) {
+        anyhow::bail!(
+            "SAMD51 USB banks require exactly the mclk AHBMASK bit10 and APBBMASK bit0 gates"
+        );
+    }
+    Ok(Box::new(
+        crate::peripherals::sam::usb_device::Samd51UsbDeviceBanks::new(),
+    ))
 }
 
 // Opt-in SAMD51 board models: fixed instance addresses, no config overrides.
@@ -810,6 +839,27 @@ pub fn try_build(
                 p_cfg.base_address,
             ))
         }
+        "samd51_dmac_board" => {
+            if p_cfg.irq != Some(31) || p_cfg.base_address != 0x4100a000 {
+                anyhow::bail!("SAMD51 DMAC board profile requires base 0x4100a000 and IRQ31");
+            }
+            if !p_cfg.clock.as_ref().is_some_and(|clocks| {
+                clocks
+                    .as_slice()
+                    .iter()
+                    .any(|gate| gate.controller == "mclk" && gate.reg == "AHBMASK" && gate.bit == 9)
+            }) {
+                anyhow::bail!(
+                    "SAMD51 DMAC board profile requires explicit mclk AHBMASK bit9 binding"
+                );
+            }
+            Box::new(
+                crate::peripherals::sam::dmac_byte::SamDmacByte::new_samd51_board(
+                    p_cfg.base_address,
+                ),
+            )
+        }
+        "samd51_usb_device_banks" => build_samd51_usb_device_banks(p_cfg)?,
         "sam_dmac_sercom4_tx_byte" => {
             if p_cfg.irq != Some(31) || p_cfg.base_address != 0x4100a000 {
                 anyhow::bail!("SERCOM4 TX byte profile requires SAMD51 base 0x4100a000 and IRQ31");
@@ -845,6 +895,16 @@ pub fn try_build(
             if sck >= 32 || mosi >= 32 || mux >= 16 || dopo >= 4 {
                 anyhow::bail!("SAM SPI '{}' has invalid pad configuration", p_cfg.id);
             }
+            // Optional: the SERCOM's DMAC trigger sources (both or neither).
+            let optional = |key: &str| p_cfg.config.get(key).and_then(|v| v.as_u64());
+            let dma = match (optional("dma_tx_trigger"), optional("dma_rx_trigger")) {
+                (Some(tx), Some(rx)) => Some((tx as u32, rx as u32)),
+                (None, None) => None,
+                _ => anyhow::bail!(
+                    "SAM SPI '{}' declares one DMA trigger without the other",
+                    p_cfg.id
+                ),
+            };
             Box::new(crate::peripherals::sam::sercom_spi::SamSercomSpi::new(
                 crate::peripherals::sam::sercom_spi::SamSpiPads {
                     port_base: number("port_base")?,
@@ -855,6 +915,7 @@ pub fn try_build(
                     // Optional: the SERCOM core clock channel times bytes on
                     // the live clock tree.
                     core_gclk: p_cfg.config.get("gclk_id").and_then(|v| v.as_u64()),
+                    dma,
                 },
             ))
         }

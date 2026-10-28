@@ -22,6 +22,10 @@ impl Samd51Cmcc {
     }
 }
 impl Peripheral for Samd51Cmcc {
+    fn on_system_reset(&mut self) {
+        // Cache disabled at power-on; the invalidation count is evidence.
+        self.enabled = false;
+    }
     fn read(&self, offset: u64) -> SimResult<u8> {
         match offset {
             8 | 12 => Ok(u8::from(self.enabled)),
