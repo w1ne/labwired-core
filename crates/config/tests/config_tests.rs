@@ -5,8 +5,8 @@
 // See the LICENSE file in the project root for full license information.
 
 use labwired_config::{
-    ChipDescriptor, CosimAdapter, DeviceDescriptor, MemoryValueDetails, MotorModelConfig,
-    PeripheralConfig, SystemManifest,
+    ChipDescriptor, CosimAdapter, DeviceDescriptor, MemoryValueDetails, MotorArmature,
+    MotorModelConfig, PeripheralConfig, SystemManifest,
 };
 
 #[test]
@@ -396,6 +396,85 @@ fn motor_model_parses_valid_dc_and_roundtrips_stably() {
         serde_yaml::from_str::<MotorModelConfig>(&yaml).unwrap(),
         model
     );
+}
+
+fn circuit_dc_motor_yaml() -> &'static str {
+    r#"
+kind: dc
+id: fan
+armature: circuit
+resistance_ohm: 1.2
+inductance_h: 0.002
+torque_constant_nm_per_a: 0.08
+back_emf_constant_v_per_rad_s: 0.08
+rotor_inertia_kg_m2: 0.00004
+viscous_friction_nm_per_rad_s: 0.001
+load_torque_nm: 0.0
+encoder_cpr: 12
+"#
+}
+
+#[test]
+fn circuit_armature_needs_no_supply_or_bridge_pins_and_roundtrips() {
+    let model: MotorModelConfig = serde_yaml::from_str(circuit_dc_motor_yaml()).unwrap();
+    let MotorModelConfig::Dc(cfg) = &model else {
+        panic!("expected dc motor");
+    };
+    assert_eq!(cfg.armature, MotorArmature::Circuit);
+    assert!(model.validate().is_empty(), "{:?}", model.validate());
+    let yaml = serde_yaml::to_string(&model).unwrap();
+    assert!(yaml.contains("armature: circuit"));
+    assert!(!yaml.contains("pwm_pin"));
+    assert_eq!(
+        serde_yaml::from_str::<MotorModelConfig>(&yaml).unwrap(),
+        model
+    );
+}
+
+#[test]
+fn bridge_armature_stays_the_default_and_still_needs_its_supply() {
+    let model: MotorModelConfig = serde_yaml::from_str(valid_dc_motor_yaml()).unwrap();
+    let MotorModelConfig::Dc(cfg) = &model else {
+        panic!("expected dc motor");
+    };
+    assert_eq!(cfg.armature, MotorArmature::Bridge);
+    assert!(!serde_yaml::to_string(&model).unwrap().contains("armature"));
+    let unsupplied = valid_dc_motor_yaml().replace("supply_voltage_v: 12.0\n", "");
+    let model: MotorModelConfig = serde_yaml::from_str(&unsupplied).unwrap();
+    assert!(
+        model
+            .validate()
+            .iter()
+            .any(|issue| issue.contains("supply_voltage_v")),
+        "{:?}",
+        model.validate()
+    );
+}
+
+#[test]
+fn circuit_armature_refuses_bridge_controls_and_its_own_supply() {
+    for extra in [
+        "pwm_pin: PA8\n",
+        "direction_pin: PA9\n",
+        "brake_pin: PA10\n",
+        "enable_pin: PA11\n",
+        "supply_voltage_v: 12.0\n",
+    ] {
+        let yaml = format!("{}{extra}", circuit_dc_motor_yaml());
+        let model: MotorModelConfig = serde_yaml::from_str(&yaml).unwrap();
+        let field = extra.split(':').next().unwrap();
+        assert!(
+            model
+                .validate()
+                .iter()
+                .any(|issue| issue.contains(field) && issue.contains("armature: circuit")),
+            "{extra}: {:?}",
+            model.validate()
+        );
+    }
+    let half_encoder = format!("{}encoder_a_pin: PB6\n", circuit_dc_motor_yaml());
+    let model: MotorModelConfig = serde_yaml::from_str(&half_encoder).unwrap();
+    assert!(!model.validate().is_empty());
 }
 
 #[test]

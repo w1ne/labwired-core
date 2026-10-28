@@ -130,9 +130,105 @@ pub struct BrushedDcMotor {
     speed_rpm: f64,
     bridge_state: HBridgeState,
     faults: MotorFaults,
+    /// The winding current comes from outside (an analog netlist), not from
+    /// this model's own electrical integration. See
+    /// [`Self::new_circuit_driven`].
+    circuit_driven: bool,
 }
 
 impl BrushedDcMotor {
+    /// A motor whose winding is an element of an external circuit.
+    ///
+    /// The circuit solves the winding current (its R and L are in the netlist,
+    /// together with whatever switch, flyback diode and rail drive it) and
+    /// hands it in through [`Self::step_with_winding_current`]; this model
+    /// only turns that current into torque, integrates the shaft, and reports
+    /// the back-EMF the circuit must see. `supply_voltage_v` is not used and
+    /// may be zero: the circuit owns the supply. [`Self::step`] is refused.
+    pub fn new_circuit_driven(params: BrushedMotorParams) -> Result<Self, ModelError> {
+        let mut checked = params;
+        // Every other parameter is validated exactly as for a bridge motor.
+        checked.supply_voltage_v = 1.0;
+        let mut motor = Self::new(checked)?;
+        motor.params.supply_voltage_v = params.supply_voltage_v.max(0.0);
+        motor.circuit_driven = true;
+        Ok(motor)
+    }
+
+    /// True when the winding current is supplied from outside.
+    pub fn is_circuit_driven(&self) -> bool {
+        self.circuit_driven
+    }
+
+    /// Advances the shaft by `dt_s` with the winding carrying `current_a`
+    /// (positive = forward torque), held for the whole step.
+    ///
+    /// Only valid on a [`Self::new_circuit_driven`] motor. The shaft update is
+    /// the same semi-implicit step a bridge motor uses; the explicit-
+    /// integration envelope that applies is the mechanical one
+    /// (`dt_s * viscous_friction_nm_per_rad_s / inertia_kg_m2 < 2`). The
+    /// winding's electrical dynamics are the circuit's, so the electrical
+    /// envelope does not apply here.
+    pub fn step_with_winding_current(
+        &mut self,
+        current_a: f64,
+        dt_s: f64,
+    ) -> Result<(), ModelError> {
+        if !self.circuit_driven {
+            return Err(ModelError {
+                field: "current_a",
+                message: "this motor integrates its own winding current; \
+                          only a circuit-driven motor takes it from outside"
+                    .to_owned(),
+            });
+        }
+        if !current_a.is_finite() {
+            return Err(ModelError {
+                field: "current_a",
+                message: "must be finite".to_owned(),
+            });
+        }
+        validate_positive("dt_s", dt_s)?;
+        let friction = self.params.shaft.viscous_friction_nm_per_rad_s;
+        if friction > 0.0 {
+            let ratio = dt_s * friction / self.params.shaft.inertia_kg_m2;
+            if !ratio.is_finite() || ratio >= 2.0 {
+                return Err(ModelError {
+                    field: "dt_s",
+                    message: "exceeds the mechanical explicit-integration stability envelope \
+                              (dt_s * viscous_friction_nm_per_rad_s / inertia_kg_m2 must be less than 2)"
+                        .to_owned(),
+                });
+            }
+        }
+        let mut candidate = self.clone();
+        if candidate.faults.stalled {
+            candidate.shaft.hold_still();
+        }
+        candidate.current_a = current_a;
+        candidate.electromagnetic_torque_nm = candidate.params.torque_constant_nm_per_a * current_a;
+        validate_candidate(
+            "electromagnetic_torque_nm",
+            candidate.electromagnetic_torque_nm,
+        )?;
+        if !candidate.faults.stalled {
+            candidate
+                .shaft
+                .step(candidate.electromagnetic_torque_nm, dt_s)?;
+        }
+        candidate.back_emf_v = candidate.params.back_emf_constant_v_per_rad_s
+            * candidate.shaft.angular_velocity_rad_s();
+        validate_candidate("back_emf_v", candidate.back_emf_v)?;
+        // What the winding terminals see in steady state; the inductive term is
+        // the circuit's and is not known here.
+        candidate.applied_voltage_v =
+            candidate.back_emf_v + candidate.params.resistance_ohm * current_a;
+        candidate.speed_rpm = candidate.shaft.angular_velocity_rad_s() * (60.0 / TAU);
+        validate_candidate("speed_rpm", candidate.speed_rpm)?;
+        *self = candidate;
+        Ok(())
+    }
+
     pub fn new(params: BrushedMotorParams) -> Result<Self, ModelError> {
         validate_positive("resistance_ohm", params.resistance_ohm)?;
         validate_positive("inductance_h", params.inductance_h)?;
@@ -154,6 +250,7 @@ impl BrushedDcMotor {
             speed_rpm: 0.0,
             bridge_state: HBridgeState::Coast,
             faults: MotorFaults::default(),
+            circuit_driven: false,
         })
     }
 
@@ -189,6 +286,12 @@ impl BrushedDcMotor {
 
     /// Atomically updates the DC supply used by subsequent bridge steps.
     pub fn set_supply_voltage_v(&mut self, supply_voltage_v: f64) -> Result<(), ModelError> {
+        if self.circuit_driven {
+            return Err(ModelError {
+                field: "supply_voltage_v",
+                message: "a circuit-driven motor is supplied by its circuit's rail".to_owned(),
+            });
+        }
         validate_positive("supply_voltage_v", supply_voltage_v)?;
         self.params.supply_voltage_v = supply_voltage_v;
         Ok(())
@@ -220,6 +323,14 @@ impl BrushedDcMotor {
     /// `dt_s * viscous_friction_nm_per_rad_s / inertia_kg_m2 < 2`. Coast
     /// current itself uses exact exponential decay.
     pub fn step(&mut self, command: HBridgeCommand, dt_s: f64) -> Result<(), ModelError> {
+        if self.circuit_driven {
+            return Err(ModelError {
+                field: "command",
+                message: "a circuit-driven motor takes its winding current from the circuit, \
+                          not from a bridge command"
+                    .to_owned(),
+            });
+        }
         command.validate()?;
         validate_positive("dt_s", dt_s)?;
         validate_timestep(self.params, command.state, dt_s)?;
@@ -407,6 +518,7 @@ mod tests {
             shaft: ShaftParams {
                 inertia_kg_m2: 0.0001,
                 viscous_friction_nm_per_rad_s: 0.00001,
+                coulomb_friction_nm: 0.0,
                 load_torque_nm: 0.0,
             },
         }
@@ -534,5 +646,43 @@ mod tests {
         );
         assert_eq!(snapshot.bridge_state, HBridgeState::Forward);
         assert_eq!(snapshot.faults, MotorFaults::default());
+    }
+
+    #[test]
+    fn a_circuit_driven_motor_turns_the_handed_current_into_torque_and_emf() {
+        let mut params = motor_params();
+        params.supply_voltage_v = 0.0;
+        assert!(BrushedDcMotor::new(params).is_err());
+        let mut motor = BrushedDcMotor::new_circuit_driven(params).unwrap();
+        assert!(motor.is_circuit_driven());
+        assert!(motor
+            .step(HBridgeCommand::forward(1.0).unwrap(), 0.00001)
+            .is_err());
+        for _ in 0..1000 {
+            motor.step_with_winding_current(0.5, 0.0001).unwrap();
+        }
+        let spun = motor.snapshot();
+        assert!(spun.speed_rpm > 0.0);
+        assert_eq!(spun.current_a, 0.5);
+        assert!(
+            (spun.back_emf_v - params.back_emf_constant_v_per_rad_s * spun.angular_velocity_rad_s)
+                .abs()
+                < 1e-12
+        );
+        // Reverse current brakes the shaft.
+        motor.step_with_winding_current(-0.5, 0.0001).unwrap();
+        assert!(motor.snapshot().speed_rpm < spun.speed_rpm);
+        // Bad input leaves the state untouched.
+        let before = motor.snapshot();
+        assert!(motor.step_with_winding_current(f64::NAN, 0.0001).is_err());
+        assert!(motor.step_with_winding_current(0.1, 0.0).is_err());
+        assert_eq!(motor.snapshot(), before);
+    }
+
+    #[test]
+    fn a_bridge_motor_refuses_an_external_winding_current() {
+        let mut motor = BrushedDcMotor::new(motor_params()).unwrap();
+        assert!(!motor.is_circuit_driven());
+        assert!(motor.step_with_winding_current(0.5, 0.0001).is_err());
     }
 }

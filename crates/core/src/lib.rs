@@ -898,9 +898,19 @@ impl<C: Cpu> Machine<C> {
     }
 
     /// Run-long change-point series of every analog channel (`result.json`'s
-    /// `analog_series`); `None` when no co-simulation runner is attached.
+    /// `analog_series`): the co-simulated netlist's channels, then each
+    /// motor's `motor.<id>.speed_rpm` and `motor.<id>.current_a`. `None` when
+    /// there is neither a co-simulation runner nor a motor.
     pub fn analog_series(&self) -> Option<crate::analog::AnalogSeries> {
-        self.analog_trace.as_ref().map(|registry| registry.series())
+        let netlist = self.analog_trace.as_ref().map(|registry| registry.series());
+        let (motor_channels, motor_end_ns) = self.bus.motor_series();
+        if motor_channels.is_empty() {
+            return netlist;
+        }
+        let mut series = netlist.unwrap_or_default();
+        series.end_time_ns = series.end_time_ns.max(motor_end_ns);
+        series.channels.extend(motor_channels);
+        Some(series)
     }
 
     /// Current engine cycle — the `nowCycle` reported alongside a logic-edge

@@ -104,6 +104,8 @@ steps the model against the pins the firmware is actually driving:
 | `board.analog.<pad>_volts` | model → machine | number | The analog level on the ADC channel belonging to `<pad>`. |
 | `adc.<peripheral>.<channel>_volts` | model → machine | number | The analog level on an explicitly named ADC channel. |
 | `board.power.vdd_volts` | model → machine | number | The MCU's supply. The chip's `supply_monitor:` holds the core in reset below its power-on threshold and resets it on power-down or brown-out; a chip without one refuses the route. |
+| `board.motor.<id>.back_emf_v` | machine → model | number | The back-EMF of an `armature: circuit` DC motor (Ke·ω, volts), for the netlist's series EMF source. |
+| `board.motor.<id>.current_a` | model → machine | number | The winding current the netlist solved for an `armature: circuit` DC motor (amps, positive = forward torque). Until it is routed the motor holds still and reports no current. |
 | `ui.<partId>.<field>` | outside → model | bool or number | Set from outside the engine (a canvas part, a test stimulus); 0 / false until set. |
 
 `<pad>` is a pad label in whatever form the chip speaks — `pa5` / `PA5` on

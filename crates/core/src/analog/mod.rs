@@ -45,5 +45,5 @@ pub use netlist::{
 pub use trace::{
     AnalogChannel, AnalogSample, AnalogSeries, AnalogSeriesChannel, AnalogTrace, AnalogTraceBatch,
     AnalogTraceHandle, AnalogTraceRegistry, DEFAULT_SERIES_POINTS, DEFAULT_TRACE_SAMPLES,
-    SERIES_DEADBAND_AMPS, SERIES_DEADBAND_REL, SERIES_DEADBAND_VOLTS,
+    SERIES_DEADBAND_AMPS, SERIES_DEADBAND_REL, SERIES_DEADBAND_RPM, SERIES_DEADBAND_VOLTS,
 };
