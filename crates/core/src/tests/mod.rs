@@ -59,6 +59,7 @@ pub mod riscv_cycle_counter_pulse_in;
 pub mod bench_spi_engine;
 pub mod esp32_i2c_waveform;
 pub mod esp32_ledc_waveform;
+pub mod esp32c3_s3_ledc_waveform;
 #[cfg(test)]
 pub mod esp32s3_i2c_waveform;
 pub mod esp_spi_uart_waveform;

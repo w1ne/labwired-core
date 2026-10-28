@@ -234,8 +234,14 @@ const MAX_DOWNCAST_REF: usize = 195;
 // and it is the only way to prove the boxed call reaches the concrete core
 // rather than the trait default. This is test-only verification; no production
 // bus plumbing gained a reach.
+// 337 → 338 (`downcast_mut` only): `wire_esp32_ledc_pads` became one generic
+// body (`wire_esp_ledc_pads`) shared with the ESP32-C3 and ESP32-S3 LEDC
+// passes. The GPIO type check is now a `downcast_mut` instead of `is`, because
+// the C3 GPIO model must be asked whether its layout numbers LEDC signals at
+// all (the C6 reuses it and numbers 45/46 as I²C). Three chips, one set of
+// reaches, instead of three.
 const MAX_AS_ANY_MUT: usize = 272;
-const MAX_DOWNCAST_MUT: usize = 337;
+const MAX_DOWNCAST_MUT: usize = 338;
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

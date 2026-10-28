@@ -40,6 +40,8 @@ pub const DEFAULT_SERIES_POINTS: usize = 65_536;
 pub const SERIES_DEADBAND_AMPS: f64 = 1e-5;
 /// Absolute deadband of the run-long series: 1 mV for a voltage channel.
 pub const SERIES_DEADBAND_VOLTS: f64 = 1e-3;
+/// Absolute deadband of the run-long series: 1 rpm for a motor speed channel.
+pub const SERIES_DEADBAND_RPM: f64 = 1.0;
 /// Relative deadband: a change smaller than 0.5 % of the held value is not a
 /// new point.
 pub const SERIES_DEADBAND_REL: f64 = 5e-3;
@@ -55,7 +57,7 @@ pub const SERIES_DEADBAND_REL: f64 = 5e-3;
 pub struct AnalogSeriesChannel {
     /// Same name as the scope channel (`<model>.<probe or trace expression>`).
     pub name: String,
-    /// `"V"` or `"A"`.
+    /// `"V"` or `"A"`; `"rpm"` for a motor speed channel.
     pub unit: String,
     /// `[time_ns, value]` change points, oldest first.
     pub points: Vec<(u64, f64)>,
@@ -78,7 +80,7 @@ pub struct AnalogChannel {
     /// Channel name — the probe name, or the `trace:` expression, prefixed
     /// with `<model id>.` when the adapter is registered on a runner.
     pub name: String,
-    /// `"V"` or `"A"`.
+    /// `"V"` or `"A"`; `"rpm"` for a motor speed channel.
     pub unit: String,
 }
 
@@ -294,18 +296,27 @@ impl AnalogTrace {
 }
 
 /// Append `value` to `channel` when it left the deadband of the last point.
-fn record_change(channel: &mut AnalogSeriesChannel, cap: usize, time_ns: u64, value: f64) {
+pub(crate) fn record_change(
+    channel: &mut AnalogSeriesChannel,
+    cap: usize,
+    time_ns: u64,
+    value: f64,
+) {
     if !value.is_finite() {
         return;
     }
     if let Some(&(_, held)) = channel.points.last() {
-        let floor = if channel.unit == "A" {
-            SERIES_DEADBAND_AMPS
-        } else {
-            SERIES_DEADBAND_VOLTS
+        let floor = match channel.unit.as_str() {
+            "A" => SERIES_DEADBAND_AMPS,
+            "rpm" => SERIES_DEADBAND_RPM,
+            _ => SERIES_DEADBAND_VOLTS,
         };
         let band = floor.max(SERIES_DEADBAND_REL * held.abs());
-        if (value - held).abs() <= band {
+        // Arriving at exactly zero (a shaft dry friction stopped, a switched-off
+        // rail) is a state, not noise: always a point, so the series never
+        // holds a last sub-deadband crawl for a value that reached rest.
+        let came_to_rest = value == 0.0 && held != 0.0;
+        if !came_to_rest && (value - held).abs() <= band {
             return;
         }
     }
@@ -421,5 +432,18 @@ mod tests {
         let series = trace.series();
         assert_eq!(series.channels[0].points, vec![(0, 0.100), (2, 0.150)]);
         assert_eq!(series.channels[1].points, vec![(0, 1.0), (2, 2.0)]);
+    }
+
+    #[test]
+    fn reaching_exactly_zero_is_a_point_even_inside_the_deadband() {
+        let mut trace = AnalogTrace::new(8);
+        trace.register_channels(&[AnalogChannel::amps("i")]);
+        trace.push(0, 0, 0, &[0.5]);
+        trace.push(0, 1, 1, &[SERIES_DEADBAND_AMPS * 0.5]);
+        trace.push(0, 2, 2, &[0.0]);
+        trace.push(0, 3, 3, &[0.0]);
+        let points = &trace.series().channels[0].points;
+        assert_eq!(points.last(), Some(&(2, 0.0)), "{points:?}");
+        assert!(!points.contains(&(3, 0.0)), "a held zero is no new point");
     }
 }

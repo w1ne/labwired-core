@@ -83,7 +83,7 @@
         "lane": "none"
       }
     },
-    "atmega328p": {
+    "atmega328p":{
       "in_boards": true,
       "uart": {
         "state": "none",

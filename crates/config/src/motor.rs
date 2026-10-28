@@ -29,13 +29,30 @@ pub struct BrushedMotorConfig {
     pub back_emf_constant_v_per_rad_s: f64,
     pub rotor_inertia_kg_m2: f64,
     pub viscous_friction_nm_per_rad_s: f64,
+    /// Dry (Coulomb) bearing and brush friction, N·m: a constant torque
+    /// opposing rotation that also holds a resting shaft (stiction). Without
+    /// it a shaft that only viscous drag slows coasts for many seconds after
+    /// its drive is cut. Absent = 0, the frictionless shaft of older configs.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub coulomb_friction_nm: f64,
+    /// Bridge supply. Required (and positive) for `armature: bridge`; must be
+    /// absent for `armature: circuit`, where the analog netlist's own rail
+    /// supplies the winding and a second, fixed figure here would disagree
+    /// with it.
+    #[serde(default)]
     pub supply_voltage_v: f64,
     pub load_torque_nm: f64,
     pub encoder_cpr: u32,
     #[serde(default = "default_motor_simulation_clock_hz")]
     pub simulation_clock_hz: u64,
+    /// Who drives the winding. Absent = [`MotorArmature::Bridge`], the plant
+    /// integrating its own current from pin levels as it always has.
+    #[serde(default, skip_serializing_if = "MotorArmature::is_bridge")]
+    pub armature: MotorArmature,
     /// Speed / enable input: the low-side switch gate, an H-bridge's ENA or
     /// PWMA. A rail label (`VCC`, `3V3`, ...) means "jumpered full on".
+    /// Required for `armature: bridge`; must be absent for `armature: circuit`.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub pwm_pin: String,
     /// Single-pin direction (high = forward). Exactly one of `direction_pin` or
     /// the `in1_pin`/`in2_pin` pair selects direction.
@@ -85,6 +102,29 @@ pub struct BrushedMotorConfig {
     pub timer_channel: Option<u8>,
 }
 
+/// Who drives a brushed DC motor's winding.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum MotorArmature {
+    /// The plant integrates its own winding current from the bridge state its
+    /// control pins select, at `supply_voltage_v`.
+    #[default]
+    Bridge,
+    /// The winding is an element of an analog co-simulation netlist (series
+    /// R + L + a back-EMF source, wired to whatever switch, diode and rail the
+    /// circuit has). The netlist solves the current and routes it in on
+    /// `board.motor.<id>.current_a`; the plant turns it into torque, integrates
+    /// the shaft, and publishes `board.motor.<id>.back_emf_v` back to the
+    /// netlist. No pin, bridge or supply setting applies.
+    Circuit,
+}
+
+impl MotorArmature {
+    pub fn is_bridge(&self) -> bool {
+        *self == Self::Bridge
+    }
+}
+
 /// Bridge behaviour with both terminal-drive inputs low.
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -103,6 +143,12 @@ pub struct BldcMotorConfig {
     pub back_emf_constant_v_per_rad_s: f64,
     pub rotor_inertia_kg_m2: f64,
     pub viscous_friction_nm_per_rad_s: f64,
+    /// Dry (Coulomb) bearing and brush friction, N·m: a constant torque
+    /// opposing rotation that also holds a resting shaft (stiction). Without
+    /// it a shaft that only viscous drag slows coasts for many seconds after
+    /// its drive is cut. Absent = 0, the frictionless shaft of older configs.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub coulomb_friction_nm: f64,
     pub supply_voltage_v: f64,
     pub load_torque_nm: f64,
     pub encoder_cpr: u32,
@@ -214,6 +260,7 @@ impl MotorModelConfig {
         let mut issues = Vec::new();
         match self {
             Self::Dc(config) => {
+                let circuit = config.armature == MotorArmature::Circuit;
                 validate_motor_common(
                     &config.id,
                     config.resistance_ohm,
@@ -222,11 +269,22 @@ impl MotorModelConfig {
                     config.back_emf_constant_v_per_rad_s,
                     config.rotor_inertia_kg_m2,
                     config.viscous_friction_nm_per_rad_s,
-                    config.supply_voltage_v,
+                    config.coulomb_friction_nm,
+                    (!circuit).then_some(config.supply_voltage_v),
                     config.load_torque_nm,
                     config.encoder_cpr,
                     &mut issues,
                 );
+                if circuit {
+                    validate_circuit_armature(config, &mut issues);
+                    if config.simulation_clock_hz == 0 {
+                        issues.push(format!(
+                            "motor_models[{}].simulation_clock_hz must be greater than zero",
+                            config.id
+                        ));
+                    }
+                    return issues;
+                }
                 validate_required_motor_pins(
                     &config.id,
                     [("pwm_pin", config.pwm_pin.as_str())],
@@ -345,7 +403,8 @@ impl MotorModelConfig {
                     config.back_emf_constant_v_per_rad_s,
                     config.rotor_inertia_kg_m2,
                     config.viscous_friction_nm_per_rad_s,
-                    config.supply_voltage_v,
+                    config.coulomb_friction_nm,
+                    Some(config.supply_voltage_v),
                     config.load_torque_nm,
                     config.encoder_cpr,
                     &mut issues,
@@ -448,6 +507,53 @@ impl MotorModelConfig {
     }
 }
 
+/// A circuit-driven winding takes nothing from pins or a bridge supply. Any
+/// such field present is refused rather than ignored: it would read as if it
+/// drove the motor while the netlist actually does.
+fn validate_circuit_armature(config: &BrushedMotorConfig, issues: &mut Vec<String>) {
+    let id = &config.id;
+    let mut present: Vec<&str> = Vec::new();
+    if !config.pwm_pin.is_empty() {
+        present.push("pwm_pin");
+    }
+    for (field, set) in [
+        ("direction_pin", config.direction_pin.is_some()),
+        ("in1_pin", config.in1_pin.is_some()),
+        ("in2_pin", config.in2_pin.is_some()),
+        ("both_inputs_low", config.both_inputs_low.is_some()),
+        ("brake_pin", config.brake_pin.is_some()),
+        ("enable_pin", config.enable_pin.is_some()),
+        ("timer_name", config.timer_name.is_some()),
+        ("timer_channel", config.timer_channel.is_some()),
+    ] {
+        if set {
+            present.push(field);
+        }
+    }
+    if config.supply_voltage_v != 0.0 {
+        present.push("supply_voltage_v");
+    }
+    for field in present {
+        issues.push(format!(
+            "motor_models[{id}].{field} does not apply to armature: circuit (the analog netlist \
+             drives the winding); remove it"
+        ));
+    }
+    for (field, pin) in [
+        ("encoder_a_pin", config.encoder_a_pin.as_deref()),
+        ("encoder_b_pin", config.encoder_b_pin.as_deref()),
+        ("encoder_index_pin", config.encoder_index_pin.as_deref()),
+        ("fault_pin", config.fault_pin.as_deref()),
+    ] {
+        validate_optional_motor_pin(id, field, pin, issues);
+    }
+    if config.encoder_a_pin.is_some() != config.encoder_b_pin.is_some() {
+        issues.push(format!(
+            "motor_models[{id}]: encoder A and B must be wired together, or both absent"
+        ));
+    }
+}
+
 pub(crate) fn validate_optional_motor_pin(
     id: &str,
     field: &str,
@@ -461,6 +567,10 @@ pub(crate) fn validate_optional_motor_pin(
     }
 }
 
+fn is_zero(value: &f64) -> bool {
+    *value == 0.0
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn validate_motor_common(
     id: &str,
@@ -470,7 +580,9 @@ pub(crate) fn validate_motor_common(
     back_emf_constant_v_per_rad_s: f64,
     rotor_inertia_kg_m2: f64,
     viscous_friction_nm_per_rad_s: f64,
-    supply_voltage_v: f64,
+    coulomb_friction_nm: f64,
+    // `None`: the motor has no supply of its own (a circuit-driven winding).
+    supply_voltage_v: Option<f64>,
     load_torque_nm: f64,
     encoder_cpr: u32,
     issues: &mut Vec<String>,
@@ -488,8 +600,10 @@ pub(crate) fn validate_motor_common(
             back_emf_constant_v_per_rad_s,
         ),
         ("rotor_inertia_kg_m2", rotor_inertia_kg_m2),
-        ("supply_voltage_v", supply_voltage_v),
-    ] {
+    ]
+    .into_iter()
+    .chain(supply_voltage_v.map(|v| ("supply_voltage_v", v)))
+    {
         if !value.is_finite() || value <= 0.0 {
             issues.push(format!(
                 "{} must be finite and greater than zero",
@@ -501,6 +615,12 @@ pub(crate) fn validate_motor_common(
         issues.push(format!(
             "{} must be finite and non-negative",
             path("viscous_friction_nm_per_rad_s")
+        ));
+    }
+    if !coulomb_friction_nm.is_finite() || coulomb_friction_nm < 0.0 {
+        issues.push(format!(
+            "{} must be finite and non-negative",
+            path("coulomb_friction_nm")
         ));
     }
     if !load_torque_nm.is_finite() {

@@ -418,16 +418,17 @@ impl Samd51Tc {
     }
 }
 
-impl Samd51Tc {
+impl Peripheral for Samd51Tc {
     /// The overflow DMA request for trigger `source` (this TC's OVF trigger),
-    /// consumed on read; `None` for any other source. DMAC wiring is a
-    /// later stage; the request is latched so it can be polled.
-    pub fn take_dma_trigger(&mut self, source: u32) -> Option<bool> {
+    /// consumed on read; `None` for any other source. The board DMAC profile
+    /// (`samd51_dmac_board`) polls it through `Bus::take_dma_trigger`.
+    fn take_dma_trigger(&mut self, source: u32) -> Option<bool> {
         (source == self.instance.dma_ovf).then(|| std::mem::take(&mut self.ovf_request))
     }
-}
-
-impl Peripheral for Samd51Tc {
+    fn on_system_reset(&mut self) {
+        self.reset();
+        self.refresh_outputs();
+    }
     fn read(&self, offset: u64) -> SimResult<u8> {
         let aligned = match offset {
             0x14..=0x17 => 0x14,

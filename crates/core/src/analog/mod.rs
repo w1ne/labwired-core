@@ -38,11 +38,12 @@ pub use netlist::{
     parse_netlist, parse_spice_value, AnalogError, Bjt, BjtModel, Capacitor, Cccs, Ccvs, Circuit,
     ComparatorModel, ComparatorOutput, CurrentSource, Diode, DiodeModel, Inductor, ModelCard,
     MosModel, Mosfet, NodeRef, OpAmpModel, Polarity, PowerSink, RegulatorKind, RegulatorModel,
-    Resistor, Switch, Vccs, Vcvs, VoltageSource, Waveform, COMPARATOR_PP_GAIN, MACRO_CLAMP_DIODE,
-    MACRO_GAIN_RESISTANCE, POWER_SINK_VMIN, REGULATOR_LIMIT_DIODE, REGULATOR_LIMIT_GAIN,
+    Resistor, Switch, Vccs, Vcvs, VoltageSource, VoltageSwitchControl, Waveform,
+    COMPARATOR_PP_GAIN, MACRO_CLAMP_DIODE, MACRO_GAIN_RESISTANCE, POWER_SINK_VMIN,
+    REGULATOR_LIMIT_DIODE, REGULATOR_LIMIT_GAIN,
 };
 pub use trace::{
     AnalogChannel, AnalogSample, AnalogSeries, AnalogSeriesChannel, AnalogTrace, AnalogTraceBatch,
     AnalogTraceHandle, AnalogTraceRegistry, DEFAULT_SERIES_POINTS, DEFAULT_TRACE_SAMPLES,
-    SERIES_DEADBAND_AMPS, SERIES_DEADBAND_REL, SERIES_DEADBAND_VOLTS,
+    SERIES_DEADBAND_AMPS, SERIES_DEADBAND_REL, SERIES_DEADBAND_RPM, SERIES_DEADBAND_VOLTS,
 };

@@ -18,9 +18,10 @@
 //! then read the value back (`ledcRead`, `ledc_get_duty`). So the dominant
 //! fidelity requirement is **round-tripping the config registers** and the
 //! **DUTY → DUTY_R commit** on a DUTY_START write — which is what this module
-//! does. We do not synthesise a GPIO waveform; the duty/freq registers are
-//! the observable state and the GPIO matrix routes the (modeled-elsewhere)
-//! signal.
+//! does. Each channel's output is also a real waveform ([`LedcPads`], shared
+//! with the classic and C3 models) on its matrix wire (`LEDC_LS_SIG_OUT0..7` =
+//! 73..80), bound to every pad by `SystemBus::wire_esp32s3_ledc_pads`, so the
+//! duty reaches the pad `ledc_channel_config` routed.
 //!
 //! ## Register subset modeled
 //!
@@ -46,9 +47,32 @@
 //!
 //! All other offsets accept writes silently and read 0.
 
+use std::sync::Arc;
+
+use crate::peripherals::esp_ledc_wave::{channel_drive, LedcPads, LedcTimerState};
+use crate::peripherals::pad_lines::PadLines;
 use crate::peripherals::LedcDutyObserver;
 use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
-use std::sync::Arc;
+
+/// Channel wire names, in channel order.
+pub(crate) const LEDC_LINES: &[&str] = &[
+    "LEDC_LS_CH0",
+    "LEDC_LS_CH1",
+    "LEDC_LS_CH2",
+    "LEDC_LS_CH3",
+    "LEDC_LS_CH4",
+    "LEDC_LS_CH5",
+    "LEDC_LS_CH6",
+    "LEDC_LS_CH7",
+];
+/// `LSTIMERx_CONF`: PAUSE (22), RST (23), TICK_SEL (24) —
+/// `soc/esp32s3/include/soc/ledc_struct.h`; DUTY_RES [3:0], CLK_DIV [21:4].
+const TIMER_PAUSE: u32 = 1 << 22;
+const TIMER_RST: u32 = 1 << 23;
+const TIMER_TICK_SEL: u32 = 1 << 24;
+const TIMER_COUNTING: u32 = 0xF | (0x3_FFFF << 4) | TIMER_PAUSE | TIMER_RST | TIMER_TICK_SEL;
+/// S3 core clock until the bus hands over the chip's own `cpu_hz`.
+const DEFAULT_CPU_HZ: u64 = 240_000_000;
 
 pub const LEDC_BASE: u32 = 0x6001_9000;
 pub const LEDC_SIZE: u64 = 0x1000;
@@ -147,6 +171,11 @@ pub struct Esp32s3Ledc {
 
     /// Bus-published cycle clock (walk-free level export).
     clock: Option<CycleClock>,
+    /// The eight channel outputs as waveforms (see module docs).
+    pads: LedcPads,
+    /// Per timer: the cycle its counter last restarted (pad waveform phase).
+    timer_origin: [u64; NUM_TIMERS],
+    cpu_hz: u64,
 
     /// Notified on each committed channel duty (`ledcWrite`), the hook the
     /// classic ESP32 and ESP32-C3 LEDC offer, so PWM-driven parts (a servo)
@@ -180,6 +209,9 @@ impl Esp32s3Ledc {
             date: DATE_RESET,
 
             clock: None,
+            pads: LedcPads::new(LEDC_LINES),
+            timer_origin: [0; NUM_TIMERS],
+            cpu_hz: DEFAULT_CPU_HZ,
             duty_observers: Vec::new(),
         }
     }
@@ -203,6 +235,13 @@ impl Esp32s3Ledc {
         }
         let duty = (self.active_duty(ch) >> 4) as f64;
         (duty / (1u64 << res) as f64).clamp(0.0, 1.0)
+    }
+
+    /// The eight channel outputs' wire, created on first call. The S3 GPIO
+    /// model binds its lines to the output-matrix signals
+    /// `LEDC_LS_SIG_OUT0..7` (73..80); see `SystemBus::wire_esp32s3_ledc_pads`.
+    pub(crate) fn pad_lines_arc(&mut self) -> Arc<PadLines> {
+        self.pads.lines_arc()
     }
 
     /// Active (committed) duty for channel `ch`, as exposed at DUTY_R. The
@@ -230,6 +269,109 @@ impl Esp32s3Ledc {
             Some((t, reg))
         } else {
             None
+        }
+    }
+}
+
+impl Esp32s3Ledc {
+    /// The register store side of an MMIO write.
+    fn write_register(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        if let Some((ch, reg)) = Self::channel_at(offset) {
+            match reg {
+                CH_CONF0 => self.ch_conf0[ch] = value,
+                CH_HPOINT => self.ch_hpoint[ch] = value & HPOINT_FIELD_MASK,
+                CH_DUTY => self.ch_duty[ch] = value & DUTY_FIELD_MASK,
+                CH_CONF1 => {
+                    // Store CONF1, but the DUTY_START bit auto-clears once the
+                    // commit is taken (matches polling firmware).
+                    self.ch_conf1[ch] = value & !CONF1_DUTY_START;
+                    if value & CONF1_DUTY_START != 0 {
+                        // Commit the staged duty into the active/read-back reg.
+                        self.ch_duty_r[ch] = self.ch_duty[ch] & DUTY_FIELD_MASK;
+                        // Gradual-change machine "completes" instantly here, so
+                        // raise the per-channel duty-change-done interrupt.
+                        self.int_raw |= duty_chng_end_bit(ch);
+                        if !self.duty_observers.is_empty() {
+                            let fraction = self.channel_duty_fraction(ch);
+                            for obs in &self.duty_observers {
+                                obs.on_duty_change(ch as u64, fraction);
+                            }
+                        }
+                    }
+                }
+                CH_DUTY_R => {} // read-only
+                _ => {
+                    crate::census_reg!("esp32s3.ledc:Esp32s3Ledc", reg, "write");
+                }
+            }
+            return Ok(());
+        }
+        if let Some((t, reg)) = Self::timer_at(offset) {
+            match reg {
+                TIMER_CONF => self.timer_conf[t] = value,
+                TIMER_VALUE => {} // read-only counter
+                _ => {
+                    crate::census_reg!("esp32s3.ledc:Esp32s3Ledc", reg, "write");
+                }
+            }
+            return Ok(());
+        }
+        match offset {
+            // INT_RAW is hardware-set; allow firmware to also force bits (some
+            // drivers do for testing). Restrict to modeled bits.
+            REG_INT_RAW => self.int_raw = value & INT_MODELED_MASK,
+            REG_INT_ENA => self.int_ena = value & INT_MODELED_MASK,
+            // W1C: writing 1 clears the matching raw latch.
+            REG_INT_CLR => self.int_raw &= !value,
+            REG_INT_ST => {} // read-only (INT_RAW & INT_ENA)
+            REG_CONF => self.conf = value,
+            REG_DATE => self.date = value,
+            _ => {
+                crate::census_reg!("esp32s3.ledc:Esp32s3Ledc", offset, "write");
+            } // accept-and-ignore (reserved/timing regs)
+        }
+        Ok(())
+    }
+
+    fn wave_now(&self) -> u64 {
+        self.clock
+            .as_ref()
+            .map_or(self.pads.anchor(), |c| c.now().max(self.pads.anchor()))
+    }
+
+    /// Re-derive every channel's output from the registers at `now`.
+    fn redrive(&mut self, now: u64) {
+        self.pads.advance_to(now);
+        let slow_hz = match self.conf & 0b11 {
+            1 => 80_000_000,
+            2 => 17_500_000,
+            3 => 40_000_000,
+            _ => 0,
+        };
+        for ch in 0..NUM_CHANNELS {
+            let t = (self.ch_conf0[ch] & 0b11) as usize;
+            let conf = self.timer_conf[t];
+            let timer = LedcTimerState {
+                duty_res: conf & 0xF,
+                div_q8: u64::from((conf >> 4) & 0x3_FFFF),
+                paused: conf & TIMER_PAUSE != 0,
+                reset: conf & TIMER_RST != 0,
+                src_hz: if conf & TIMER_TICK_SEL != 0 {
+                    1_000_000
+                } else {
+                    slow_hz
+                },
+                origin: self.timer_origin[t],
+            };
+            let d = channel_drive(
+                self.ch_conf0[ch],
+                u64::from(self.ch_hpoint[ch] & HPOINT_FIELD_MASK),
+                u64::from(self.active_duty(ch) >> 4),
+                &timer,
+                self.cpu_hz,
+                self.pads.level(ch),
+            );
+            self.pads.set_drive(ch, d, now);
         }
     }
 }
@@ -313,64 +455,27 @@ impl Peripheral for Esp32s3Ledc {
     }
 
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
-        if let Some((ch, reg)) = Self::channel_at(offset) {
-            match reg {
-                CH_CONF0 => self.ch_conf0[ch] = value,
-                CH_HPOINT => self.ch_hpoint[ch] = value & HPOINT_FIELD_MASK,
-                CH_DUTY => self.ch_duty[ch] = value & DUTY_FIELD_MASK,
-                CH_CONF1 => {
-                    // Store CONF1, but the DUTY_START bit auto-clears once the
-                    // commit is taken (matches polling firmware).
-                    self.ch_conf1[ch] = value & !CONF1_DUTY_START;
-                    if value & CONF1_DUTY_START != 0 {
-                        // Commit the staged duty into the active/read-back reg.
-                        self.ch_duty_r[ch] = self.ch_duty[ch] & DUTY_FIELD_MASK;
-                        // Gradual-change machine "completes" instantly here, so
-                        // raise the per-channel duty-change-done interrupt.
-                        self.int_raw |= duty_chng_end_bit(ch);
-                        if !self.duty_observers.is_empty() {
-                            let fraction = self.channel_duty_fraction(ch);
-                            for obs in &self.duty_observers {
-                                obs.on_duty_change(ch as u64, fraction);
-                            }
-                        }
-                    }
-                }
-                CH_DUTY_R => {} // read-only
-                _ => {
-                    crate::census_reg!("esp32s3.ledc:Esp32s3Ledc", reg, "write");
-                }
+        let now = self.wave_now();
+        self.pads.advance_to(now);
+        if let Some((t, TIMER_CONF)) = Self::timer_at(offset) {
+            if (self.timer_conf[t] ^ value) & TIMER_COUNTING != 0 {
+                self.timer_origin[t] = now;
             }
-            return Ok(());
         }
-        if let Some((t, reg)) = Self::timer_at(offset) {
-            match reg {
-                TIMER_CONF => self.timer_conf[t] = value,
-                TIMER_VALUE => {} // read-only counter
-                _ => {
-                    crate::census_reg!("esp32s3.ledc:Esp32s3Ledc", reg, "write");
-                }
-            }
-            return Ok(());
+        let res = self.write_register(offset, value);
+        if offset < REG_INT_RAW || offset == REG_CONF {
+            self.redrive(now);
         }
-        match offset {
-            // INT_RAW is hardware-set; allow firmware to also force bits (some
-            // drivers do for testing). Restrict to modeled bits.
-            REG_INT_RAW => self.int_raw = value & INT_MODELED_MASK,
-            REG_INT_ENA => self.int_ena = value & INT_MODELED_MASK,
-            // W1C: writing 1 clears the matching raw latch.
-            REG_INT_CLR => self.int_raw &= !value,
-            REG_INT_ST => {} // read-only (INT_RAW & INT_ENA)
-            REG_CONF => self.conf = value,
-            REG_DATE => self.date = value,
-            _ => {
-                crate::census_reg!("esp32s3.ledc:Esp32s3Ledc", offset, "write");
-            } // accept-and-ignore (reserved/timing regs)
-        }
-        Ok(())
+        res
     }
 
     fn tick(&mut self) -> PeripheralTickResult {
+        // Legacy walk (no event scheduler): publish the pad waveform up to
+        // the bus clock here, since no edge wake will.
+        if !self.uses_scheduler() {
+            let now = self.wave_now();
+            self.pads.advance_to(now);
+        }
         // LEDC is a level interrupt: assert the matrix source for as long as
         // any enabled interrupt is latched. The intmatrix de-asserts when
         // INT_ST returns to 0 (firmware clears via INT_CLR).
@@ -398,6 +503,45 @@ impl Peripheral for Esp32s3Ledc {
 
     fn attach_cycle_clock(&mut self, clock: CycleClock) {
         self.clock = Some(clock);
+    }
+
+    fn attach_cpu_hz(&mut self, hz: u64) {
+        if hz != 0 {
+            self.cpu_hz = hz;
+        }
+    }
+
+    fn sync_to(&mut self, _now_cycle: u64) {
+        let now = self.wave_now();
+        self.pads.advance_to(now);
+    }
+
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        if !self.uses_scheduler() {
+            return Vec::new();
+        }
+        self.pads.take_scheduled_events()
+    }
+
+    fn on_event(
+        &mut self,
+        event_token: u32,
+        sched: &mut crate::sched::EventScheduler,
+        _bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        let (_, reschedule_delay) = self.pads.on_event(event_token, sched.now());
+        crate::sched::EventResult {
+            reschedule_delay,
+            ..Default::default()
+        }
+    }
+
+    fn line_names(&self) -> &'static [&'static str] {
+        LEDC_LINES
+    }
+
+    fn wire_lines(&self) -> Option<&PadLines> {
+        self.pads.wire_lines()
     }
 
     fn matrix_irq_sources_into(&self, out: &mut Vec<u32>) {

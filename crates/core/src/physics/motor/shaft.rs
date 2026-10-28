@@ -40,6 +40,11 @@ impl std::error::Error for ModelError {}
 pub struct ShaftParams {
     pub inertia_kg_m2: f64,
     pub viscous_friction_nm_per_rad_s: f64,
+    /// Dry (Coulomb) friction of the bearings and brushes, N·m. It opposes
+    /// motion with a constant magnitude, and while the shaft is at rest it
+    /// holds it there until the other torques exceed it (stiction). Zero
+    /// models a frictionless shaft that only viscous drag slows.
+    pub coulomb_friction_nm: f64,
     pub load_torque_nm: f64,
 }
 
@@ -81,6 +86,14 @@ impl Shaft {
         if params.viscous_friction_nm_per_rad_s < 0.0 {
             return Err(ModelError::new(
                 "viscous_friction_nm_per_rad_s",
+                "must be non-negative",
+            ));
+        }
+
+        validate_finite("coulomb_friction_nm", params.coulomb_friction_nm)?;
+        if params.coulomb_friction_nm < 0.0 {
+            return Err(ModelError::new(
+                "coulomb_friction_nm",
                 "must be non-negative",
             ));
         }
@@ -165,6 +178,11 @@ impl Shaft {
 
     /// Advances the shaft by one fixed semi-implicit Euler step.
     ///
+    /// Coulomb friction opposes the start-of-step velocity (or, at rest, the
+    /// torque trying to move it) and holds a resting shaft whose other torques
+    /// it can balance. A step it would carry through zero velocity ends at
+    /// rest instead, so a coasting shaft stops in finite time.
+    ///
     /// The viscous term uses the angular velocity at the start of the step. For
     /// pure viscous decay, this explicit damping update is stable only when
     /// `dt_s * viscous_friction_nm_per_rad_s / inertia_kg_m2 < 2`. Callers must
@@ -177,12 +195,33 @@ impl Shaft {
             return Err(ModelError::new("dt_s", "must be greater than zero"));
         }
 
-        let net_torque_nm = drive_torque_nm
+        let velocity = self.angular_velocity_rad_s;
+        let coulomb = self.params.coulomb_friction_nm;
+        let applied_nm = drive_torque_nm
             - self.params.load_torque_nm
-            - self.params.viscous_friction_nm_per_rad_s * self.angular_velocity_rad_s;
-        let angular_acceleration_rad_s2 = net_torque_nm / self.params.inertia_kg_m2;
-        let angular_velocity_rad_s =
-            self.angular_velocity_rad_s + angular_acceleration_rad_s2 * dt_s;
+            - self.params.viscous_friction_nm_per_rad_s * velocity;
+        let (net_torque_nm, angular_acceleration_rad_s2, angular_velocity_rad_s) =
+            if coulomb > 0.0 && velocity == 0.0 && applied_nm.abs() <= coulomb {
+                // Stiction: at rest, dry friction balances anything up to it.
+                (0.0, 0.0, 0.0)
+            } else {
+                let opposing = if velocity != 0.0 {
+                    velocity.signum()
+                } else {
+                    applied_nm.signum()
+                };
+                let net = applied_nm - coulomb * opposing;
+                let acceleration = net / self.params.inertia_kg_m2;
+                let next = velocity + acceleration * dt_s;
+                // Dry friction can stop a shaft but never reverse it: a step
+                // that would carry the velocity through zero ends at rest.
+                let next = if coulomb > 0.0 && velocity != 0.0 && next * velocity <= 0.0 {
+                    0.0
+                } else {
+                    next
+                };
+                (net, acceleration, next)
+            };
         let position_rad = self.position_rad + angular_velocity_rad_s * dt_s;
 
         if !net_torque_nm.is_finite()
@@ -221,6 +260,7 @@ mod tests {
         Shaft::new(ShaftParams {
             inertia_kg_m2: 0.01,
             viscous_friction_nm_per_rad_s: 0.0,
+            coulomb_friction_nm: 0.0,
             load_torque_nm: 0.0,
         })
         .unwrap()
@@ -231,6 +271,7 @@ mod tests {
         let mut shaft = Shaft::new(ShaftParams {
             inertia_kg_m2: 0.01,
             viscous_friction_nm_per_rad_s: 0.1,
+            coulomb_friction_nm: 0.0,
             load_torque_nm: 1.0,
         })
         .unwrap();
@@ -242,6 +283,75 @@ mod tests {
         assert!((shaft.angular_velocity_rad_s() - 10.0).abs() < 1e-9);
         assert!((shaft.position_rad() - 2.0).abs() < 1e-9);
         assert!((shaft.net_torque_nm() - 0.0).abs() < 1e-9);
+    }
+
+    fn dry_shaft(coulomb_friction_nm: f64) -> Shaft {
+        Shaft::new(ShaftParams {
+            inertia_kg_m2: 0.01,
+            viscous_friction_nm_per_rad_s: 0.0,
+            coulomb_friction_nm,
+            load_torque_nm: 0.0,
+        })
+        .unwrap()
+    }
+
+    #[test]
+    fn stiction_holds_a_resting_shaft_until_the_drive_exceeds_it() {
+        let mut shaft = dry_shaft(0.5);
+        shaft.step(0.5, 0.1).unwrap();
+        assert_eq!(shaft.angular_velocity_rad_s(), 0.0);
+        assert_eq!(shaft.position_rad(), 0.0);
+        shaft.step(-0.4, 0.1).unwrap();
+        assert_eq!(shaft.angular_velocity_rad_s(), 0.0);
+
+        // Breakaway: only the torque above the friction accelerates it.
+        shaft.step(1.5, 0.1).unwrap();
+        assert!((shaft.angular_velocity_rad_s() - 10.0).abs() < 1e-9);
+        assert!((shaft.net_torque_nm() - 1.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn coulomb_friction_stops_a_coasting_shaft_and_never_reverses_it() {
+        let mut shaft = dry_shaft(0.5);
+        shaft.step(1.5, 0.1).unwrap(); // 10 rad/s
+        let mut steps = 0;
+        while shaft.angular_velocity_rad_s() != 0.0 {
+            shaft.step(0.0, 0.03).unwrap();
+            assert!(shaft.angular_velocity_rad_s() >= 0.0, "never reverses");
+            steps += 1;
+            assert!(steps < 100, "a coasting shaft stops in finite time");
+        }
+        // 0.5 N·m against 0.01 kg·m² at 10 rad/s: 0.2 s, i.e. on the 7th step.
+        assert_eq!(steps, 7);
+        let position = shaft.position_rad();
+        for _ in 0..10 {
+            shaft.step(0.0, 0.03).unwrap();
+        }
+        assert_eq!(shaft.angular_velocity_rad_s(), 0.0, "stays stopped");
+        assert_eq!(shaft.position_rad(), position);
+    }
+
+    #[test]
+    fn coulomb_friction_opposes_reverse_rotation_too() {
+        let mut shaft = dry_shaft(0.5);
+        shaft.step(-1.5, 0.1).unwrap();
+        assert!((shaft.angular_velocity_rad_s() + 10.0).abs() < 1e-9);
+        shaft.step(0.0, 0.1).unwrap();
+        assert!((shaft.angular_velocity_rad_s() + 5.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn negative_or_non_finite_coulomb_friction_is_rejected() {
+        for coulomb_friction_nm in [-0.1, f64::NAN, f64::INFINITY] {
+            let error = Shaft::new(ShaftParams {
+                inertia_kg_m2: 0.01,
+                viscous_friction_nm_per_rad_s: 0.0,
+                coulomb_friction_nm,
+                load_torque_nm: 0.0,
+            })
+            .unwrap_err();
+            assert_eq!(error.field, "coulomb_friction_nm");
+        }
     }
 
     #[test]
@@ -272,6 +382,7 @@ mod tests {
         let mut shaft = Shaft::new(ShaftParams {
             inertia_kg_m2: 1.0,
             viscous_friction_nm_per_rad_s: 0.0,
+            coulomb_friction_nm: 0.0,
             load_torque_nm: 0.0,
         })
         .unwrap();
@@ -290,6 +401,7 @@ mod tests {
         let mut shaft = Shaft::new(ShaftParams {
             inertia_kg_m2: 1.0,
             viscous_friction_nm_per_rad_s: 0.0,
+            coulomb_friction_nm: 0.0,
             load_torque_nm: 0.0,
         })
         .unwrap();
@@ -307,6 +419,7 @@ mod tests {
         let error = Shaft::new(ShaftParams {
             inertia_kg_m2: 0.0,
             viscous_friction_nm_per_rad_s: 0.0,
+            coulomb_friction_nm: 0.0,
             load_torque_nm: 0.0,
         })
         .unwrap_err();
@@ -320,6 +433,7 @@ mod tests {
         let error = Shaft::new(ShaftParams {
             inertia_kg_m2: 1.0,
             viscous_friction_nm_per_rad_s: -0.1,
+            coulomb_friction_nm: 0.0,
             load_torque_nm: 0.0,
         })
         .unwrap_err();
@@ -335,6 +449,7 @@ mod tests {
                 ShaftParams {
                     inertia_kg_m2: f64::NAN,
                     viscous_friction_nm_per_rad_s: 0.0,
+                    coulomb_friction_nm: 0.0,
                     load_torque_nm: 0.0,
                 },
                 "inertia_kg_m2",
@@ -343,6 +458,7 @@ mod tests {
                 ShaftParams {
                     inertia_kg_m2: 1.0,
                     viscous_friction_nm_per_rad_s: f64::INFINITY,
+                    coulomb_friction_nm: 0.0,
                     load_torque_nm: 0.0,
                 },
                 "viscous_friction_nm_per_rad_s",
@@ -351,6 +467,7 @@ mod tests {
                 ShaftParams {
                     inertia_kg_m2: 1.0,
                     viscous_friction_nm_per_rad_s: 0.0,
+                    coulomb_friction_nm: 0.0,
                     load_torque_nm: f64::NEG_INFINITY,
                 },
                 "load_torque_nm",
@@ -395,6 +512,7 @@ mod tests {
         let mut shaft = Shaft::new(ShaftParams {
             inertia_kg_m2: f64::MIN_POSITIVE,
             viscous_friction_nm_per_rad_s: 0.0,
+            coulomb_friction_nm: 0.0,
             load_torque_nm: 0.0,
         })
         .unwrap();

@@ -4,8 +4,15 @@ use crate::physics::motor::{
     HBridgeState, InverterCommand, Phase, QuadratureEncoder, ShaftParams,
 };
 use labwired_config::{
-    BldcMotorConfig, BothInputsLow, BrushedMotorConfig, MotorModelConfig, SystemManifest,
+    BldcMotorConfig, BothInputsLow, BrushedMotorConfig, MotorArmature, MotorModelConfig,
+    SystemManifest,
 };
+
+/// `control_state` of a circuit-driven motor before the netlist has routed
+/// any winding current: the shaft is held, not guessed.
+pub(super) const CIRCUIT_NO_CURRENT: &str = "circuit:no-current";
+/// `control_state` of a circuit-driven motor once the netlist drives it.
+pub(super) const CIRCUIT_DRIVEN: &str = "circuit";
 
 pub(super) const MOTOR_STALL_INPUT: crate::sim_input::InputChannel =
     crate::sim_input::InputChannel {
@@ -215,6 +222,11 @@ pub(super) enum MotorRuntime {
         simulation_clock_hz: u64,
         speed_extremes: SpeedExtremes,
         control_state: String,
+        /// `Some` when the winding is an analog-netlist element
+        /// (`armature: circuit`): the pin/bridge fields above are inert
+        /// constants and the plant is advanced from the routed current.
+        circuit: Option<CircuitWinding>,
+        series: Box<MotorSeries>,
     },
     Bldc {
         id: String,
@@ -235,7 +247,68 @@ pub(super) enum MotorRuntime {
         injected_inverter_fault: bool,
         computed_inverter_fault: bool,
         pwm_phase_cursor: Option<Box<PwmPhaseCursor>>,
+        series: Box<MotorSeries>,
     },
+}
+
+/// The circuit side of an `armature: circuit` DC motor.
+#[derive(Debug, Clone, Copy, Default)]
+pub(super) struct CircuitWinding {
+    /// Last winding current the co-simulated netlist routed in on
+    /// `board.motor.<id>.current_a`. `None` until the first one arrives: the
+    /// shaft then does not move at all, rather than being driven by a current
+    /// nobody solved.
+    pub(super) winding_current_a: Option<f64>,
+    /// Last rail voltage the netlist routed in on `board.motor.<id>.supply_v`:
+    /// the supply the winding's switch connects it to, solved by the netlist.
+    /// Reported as the motor's bus voltage; `None` until routed.
+    pub(super) supply_v: Option<f64>,
+}
+
+/// Longest shaft step a circuit-driven winding takes in one go. Far below any
+/// motor's mechanical time constant; the current is held across it.
+const CIRCUIT_WINDING_MAX_STEP_S: f64 = 1e-4;
+
+/// Run-long change-point series of one motor's speed and current, the motor
+/// counterpart of the analog netlist's `analog_series` channels.
+#[derive(Debug, Clone)]
+pub(super) struct MotorSeries {
+    speed: crate::analog::AnalogSeriesChannel,
+    current: crate::analog::AnalogSeriesChannel,
+    end_time_ns: u64,
+}
+
+impl MotorSeries {
+    fn new(id: &str) -> Box<Self> {
+        let channel = |quantity: &str, unit: &str| crate::analog::AnalogSeriesChannel {
+            name: format!("motor.{id}.{quantity}"),
+            unit: unit.to_owned(),
+            points: Vec::new(),
+            dropped: 0,
+        };
+        Box::new(Self {
+            speed: channel("speed_rpm", "rpm"),
+            current: channel("current_a", "A"),
+            end_time_ns: 0,
+        })
+    }
+
+    fn observe(&mut self, time_ns: u64, speed_rpm: f64, current_a: Option<f64>) {
+        let cap = crate::analog::DEFAULT_SERIES_POINTS;
+        crate::analog::trace::record_change(&mut self.speed, cap, time_ns, speed_rpm);
+        if let Some(current) = current_a {
+            crate::analog::trace::record_change(&mut self.current, cap, time_ns, current);
+        }
+        self.end_time_ns = self.end_time_ns.max(time_ns);
+    }
+}
+
+/// Simulated time of `cycle` on a motor's clock.
+fn motor_time_ns(cycle: u64, clock_hz: u64) -> u64 {
+    if clock_hz == 0 {
+        return 0;
+    }
+    (u128::from(cycle) * 1_000_000_000 / u128::from(clock_hz)).min(u128::from(u64::MAX)) as u64
 }
 
 impl SystemBus {
@@ -372,9 +445,13 @@ impl SystemBus {
     }
 
     fn build_dc_motor(&self, c: BrushedMotorConfig) -> anyhow::Result<MotorRuntime> {
+        if c.armature == MotorArmature::Circuit {
+            return self.build_circuit_dc_motor(c);
+        }
         let shaft = ShaftParams {
             inertia_kg_m2: c.rotor_inertia_kg_m2,
             viscous_friction_nm_per_rad_s: c.viscous_friction_nm_per_rad_s,
+            coulomb_friction_nm: c.coulomb_friction_nm,
             load_torque_nm: c.load_torque_nm,
         };
         let plant = BrushedDcMotor::new(BrushedMotorParams {
@@ -457,6 +534,59 @@ impl SystemBus {
             speed_extremes: SpeedExtremes::default(),
             control_state: "coast".to_owned(),
             encoder: QuadratureEncoder::new(c.encoder_cpr)?,
+            circuit: None,
+            series: MotorSeries::new(&c.id),
+            id: c.id,
+            plant: Box::new(plant),
+        })
+    }
+
+    /// An `armature: circuit` motor: no control pins, no bridge, no supply of
+    /// its own. Only the optional observer pads (encoder, fault) are wired.
+    fn build_circuit_dc_motor(&self, c: BrushedMotorConfig) -> anyhow::Result<MotorRuntime> {
+        let plant = BrushedDcMotor::new_circuit_driven(BrushedMotorParams {
+            resistance_ohm: c.resistance_ohm,
+            inductance_h: c.inductance_h,
+            torque_constant_nm_per_a: c.torque_constant_nm_per_a,
+            back_emf_constant_v_per_rad_s: c.back_emf_constant_v_per_rad_s,
+            supply_voltage_v: 0.0,
+            shaft: ShaftParams {
+                inertia_kg_m2: c.rotor_inertia_kg_m2,
+                viscous_friction_nm_per_rad_s: c.viscous_friction_nm_per_rad_s,
+                coulomb_friction_nm: c.coulomb_friction_nm,
+                load_torque_nm: c.load_torque_nm,
+            },
+        })?;
+        Ok(MotorRuntime::Dc {
+            pwm: MotorControlSource::Constant(false),
+            steering: DcSteering::Direction(MotorControlSource::Constant(true)),
+            brake: MotorControlSource::Constant(false),
+            enable: MotorControlSource::Constant(false),
+            feedback: MotorFeedbackBindings {
+                encoder_a: self.resolve_optional_motor_input(
+                    &c.id,
+                    "encoder A",
+                    c.encoder_a_pin.as_deref(),
+                )?,
+                encoder_b: self.resolve_optional_motor_input(
+                    &c.id,
+                    "encoder B",
+                    c.encoder_b_pin.as_deref(),
+                )?,
+            },
+            index: self.resolve_optional_motor_input(
+                &c.id,
+                "encoder index",
+                c.encoder_index_pin.as_deref(),
+            )?,
+            fault: self.resolve_optional_motor_input(&c.id, "fault", c.fault_pin.as_deref())?,
+            timer: None,
+            simulation_clock_hz: c.simulation_clock_hz,
+            speed_extremes: SpeedExtremes::default(),
+            control_state: CIRCUIT_NO_CURRENT.to_owned(),
+            encoder: QuadratureEncoder::new(c.encoder_cpr)?,
+            circuit: Some(CircuitWinding::default()),
+            series: MotorSeries::new(&c.id),
             id: c.id,
             plant: Box::new(plant),
         })
@@ -507,9 +637,11 @@ impl SystemBus {
             shaft: ShaftParams {
                 inertia_kg_m2: c.rotor_inertia_kg_m2,
                 viscous_friction_nm_per_rad_s: c.viscous_friction_nm_per_rad_s,
+                coulomb_friction_nm: c.coulomb_friction_nm,
                 load_torque_nm: c.load_torque_nm,
             },
         })?;
+        let series = MotorSeries::new(&c.id);
         Ok(MotorRuntime::Bldc {
             id: c.id.clone(),
             plant: Box::new(plant),
@@ -564,6 +696,7 @@ impl SystemBus {
             injected_inverter_fault: false,
             computed_inverter_fault: false,
             pwm_phase_cursor: None,
+            series,
         })
     }
 
@@ -625,97 +758,102 @@ impl SystemBus {
                     simulation_clock_hz,
                     speed_extremes,
                     control_state,
+                    circuit,
                     ..
                 } => {
                     let dt_s = elapsed as f64 / *simulation_clock_hz as f64;
-                    // Consume the timer ONLY while its channel actually owns the
-                    // pad as a PWM output. A timer-driven pin sits in alternate-
-                    // function mode, so its ODR never moves and the timer's duty
-                    // is the truth; firmware that drives the pad as plain GPIO
-                    // never configures the channel, so fall back to the latch.
-                    let (duty, timer_gate) = match *timer {
-                        Some((timer, channel)) => {
-                            use crate::peripherals::timer::TimerChannelOutputMode;
-                            let output = self.timer_output_at(timer);
-                            let channel_index = usize::from(channel).saturating_sub(1);
-                            let owns_pad = output.as_ref().is_some_and(|pwm| {
-                                pwm.channels.get(channel_index).is_some_and(|ch| {
-                                    ch.enabled
-                                        && matches!(
-                                            ch.mode,
-                                            TimerChannelOutputMode::Pwm1
-                                                | TimerChannelOutputMode::Pwm2
-                                        )
-                                })
-                            });
-                            match output {
-                                Some(pwm) if owns_pad => (
-                                    pwm.channels[channel_index].duty_fraction,
-                                    pwm.main_output_enabled && pwm.counter_enabled,
-                                ),
-                                _ => (f64::from(self.control_level(*pwm)), true),
+                    if let Some(winding) = circuit {
+                        service_circuit_winding(plant, winding, dt_s, control_state);
+                    } else {
+                        // Consume the timer ONLY while its channel actually owns the
+                        // pad as a PWM output. A timer-driven pin sits in alternate-
+                        // function mode, so its ODR never moves and the timer's duty
+                        // is the truth; firmware that drives the pad as plain GPIO
+                        // never configures the channel, so fall back to the latch.
+                        let (duty, timer_gate) = match *timer {
+                            Some((timer, channel)) => {
+                                use crate::peripherals::timer::TimerChannelOutputMode;
+                                let output = self.timer_output_at(timer);
+                                let channel_index = usize::from(channel).saturating_sub(1);
+                                let owns_pad = output.as_ref().is_some_and(|pwm| {
+                                    pwm.channels.get(channel_index).is_some_and(|ch| {
+                                        ch.enabled
+                                            && matches!(
+                                                ch.mode,
+                                                TimerChannelOutputMode::Pwm1
+                                                    | TimerChannelOutputMode::Pwm2
+                                            )
+                                    })
+                                });
+                                match output {
+                                    Some(pwm) if owns_pad => (
+                                        pwm.channels[channel_index].duty_fraction,
+                                        pwm.main_output_enabled && pwm.counter_enabled,
+                                    ),
+                                    _ => (f64::from(self.control_level(*pwm)), true),
+                                }
                             }
-                        }
-                        None => (f64::from(self.control_level(*pwm)), true),
-                    };
-                    let braking = self.control_level(*brake);
-                    let (state, duty) = match *steering {
-                        DcSteering::Direction(direction) => {
-                            let enabled = self.control_level(*enable) && timer_gate;
-                            let state = if !enabled {
-                                HBridgeState::Coast
-                            } else if braking {
-                                HBridgeState::Brake
-                            } else if self.control_level(direction) {
-                                HBridgeState::Forward
-                            } else {
-                                HBridgeState::Reverse
-                            };
-                            (state, duty)
-                        }
-                        DcSteering::Terminals {
-                            in1,
-                            in2,
-                            pwm_input,
-                            both_low_brakes,
-                        } => {
-                            // PWM on an IN pin: a stopped timer leaves that input
-                            // low, it does not disable the bridge. A separate
-                            // PWM/enable pad that stops gates the bridge off.
-                            let (enabled, duty) = if pwm_input.is_some() {
-                                (
-                                    self.control_level(*enable),
-                                    if timer_gate { duty } else { 0.0 },
-                                )
-                            } else {
-                                (self.control_level(*enable) && timer_gate, duty)
-                            };
-                            terminal_drive(
-                                enabled,
-                                braking,
-                                self.control_level(in1),
-                                self.control_level(in2),
+                            None => (f64::from(self.control_level(*pwm)), true),
+                        };
+                        let braking = self.control_level(*brake);
+                        let (state, duty) = match *steering {
+                            DcSteering::Direction(direction) => {
+                                let enabled = self.control_level(*enable) && timer_gate;
+                                let state = if !enabled {
+                                    HBridgeState::Coast
+                                } else if braking {
+                                    HBridgeState::Brake
+                                } else if self.control_level(direction) {
+                                    HBridgeState::Forward
+                                } else {
+                                    HBridgeState::Reverse
+                                };
+                                (state, duty)
+                            }
+                            DcSteering::Terminals {
+                                in1,
+                                in2,
                                 pwm_input,
-                                duty,
                                 both_low_brakes,
-                            )
-                        }
-                    };
-                    let command = match state {
-                        HBridgeState::Forward => HBridgeCommand::forward(duty),
-                        HBridgeState::Reverse => HBridgeCommand::reverse(duty),
-                        HBridgeState::Brake => Ok(HBridgeCommand::brake()),
-                        HBridgeState::Coast => Ok(HBridgeCommand::coast()),
-                    };
-                    *control_state = format!("{state:?}").to_ascii_lowercase();
-                    if let Ok(command) = command {
-                        let params = plant.params();
-                        for step_s in stable_substeps(
-                            dt_s,
-                            0.25 * params.inductance_h / params.resistance_ohm,
-                        ) {
-                            if plant.step(command, step_s).is_err() {
-                                break;
+                            } => {
+                                // PWM on an IN pin: a stopped timer leaves that input
+                                // low, it does not disable the bridge. A separate
+                                // PWM/enable pad that stops gates the bridge off.
+                                let (enabled, duty) = if pwm_input.is_some() {
+                                    (
+                                        self.control_level(*enable),
+                                        if timer_gate { duty } else { 0.0 },
+                                    )
+                                } else {
+                                    (self.control_level(*enable) && timer_gate, duty)
+                                };
+                                terminal_drive(
+                                    enabled,
+                                    braking,
+                                    self.control_level(in1),
+                                    self.control_level(in2),
+                                    pwm_input,
+                                    duty,
+                                    both_low_brakes,
+                                )
+                            }
+                        };
+                        let command = match state {
+                            HBridgeState::Forward => HBridgeCommand::forward(duty),
+                            HBridgeState::Reverse => HBridgeCommand::reverse(duty),
+                            HBridgeState::Brake => Ok(HBridgeCommand::brake()),
+                            HBridgeState::Coast => Ok(HBridgeCommand::coast()),
+                        };
+                        *control_state = format!("{state:?}").to_ascii_lowercase();
+                        if let Ok(command) = command {
+                            let params = plant.params();
+                            for step_s in stable_substeps(
+                                dt_s,
+                                0.25 * params.inductance_h / params.resistance_ohm,
+                            ) {
+                                if plant.step(command, step_s).is_err() {
+                                    break;
+                                }
                             }
                         }
                     }
@@ -890,7 +1028,126 @@ impl SystemBus {
                 }
             }
         }
+        let cycle = self.current_cycle;
+        for motor in &mut motors {
+            match motor {
+                MotorRuntime::Dc {
+                    plant,
+                    simulation_clock_hz,
+                    circuit,
+                    series,
+                    ..
+                } => {
+                    let s = plant.snapshot();
+                    // A circuit winding has no current until the netlist routes one.
+                    let current = match circuit {
+                        Some(winding) => winding.winding_current_a.map(|_| s.current_a),
+                        None => Some(s.current_a),
+                    };
+                    series.observe(
+                        motor_time_ns(cycle, *simulation_clock_hz),
+                        s.speed_rpm,
+                        current,
+                    );
+                }
+                MotorRuntime::Bldc {
+                    plant,
+                    simulation_clock_hz,
+                    series,
+                    ..
+                } => {
+                    let s = plant.snapshot();
+                    series.observe(
+                        motor_time_ns(cycle, *simulation_clock_hz),
+                        s.speed_rpm,
+                        Some(s.dc_bus_current_a),
+                    );
+                }
+            }
+        }
         self.motors = motors;
+    }
+
+    /// Run-long speed (`motor.<id>.speed_rpm`, rpm) and current
+    /// (`motor.<id>.current_a`, A) change-point series of every motor, in the
+    /// same shape as the analog netlist's series, plus the latest time any of
+    /// them covers. Empty when the bus has no motor.
+    pub fn motor_series(&self) -> (Vec<crate::analog::AnalogSeriesChannel>, u64) {
+        let mut channels = Vec::new();
+        let mut end = 0;
+        for motor in &self.motors {
+            let (MotorRuntime::Dc { series, .. } | MotorRuntime::Bldc { series, .. }) = motor;
+            channels.push(series.speed.clone());
+            channels.push(series.current.clone());
+            end = end.max(series.end_time_ns);
+        }
+        (channels, end)
+    }
+
+    /// Index of the circuit-driven DC motor `id`, for a co-simulation binding.
+    pub(crate) fn circuit_motor_index(&self, id: &str) -> Result<usize, CircuitMotorLookup> {
+        let index = self
+            .motors
+            .iter()
+            .position(|motor| {
+                matches!(motor, MotorRuntime::Dc { id: m, .. } | MotorRuntime::Bldc { id: m, .. } if m == id)
+            })
+            .ok_or(CircuitMotorLookup::Unknown)?;
+        match &self.motors[index] {
+            MotorRuntime::Dc {
+                circuit: Some(_), ..
+            } => Ok(index),
+            _ => Err(CircuitMotorLookup::NotCircuit),
+        }
+    }
+
+    /// Route the netlist-solved winding current into circuit motor `index`
+    /// (from [`Self::circuit_motor_index`]). A non-finite value is refused and
+    /// leaves the last good current in place.
+    pub(crate) fn set_circuit_motor_current(&mut self, index: usize, current_a: f64) -> bool {
+        if !current_a.is_finite() {
+            return false;
+        }
+        match self.motors.get_mut(index) {
+            Some(MotorRuntime::Dc {
+                circuit: Some(winding),
+                ..
+            }) => {
+                winding.winding_current_a = Some(current_a);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Route the netlist's supply rail for circuit motor `index`, in volts.
+    /// `false` for a non-finite value or a motor that is not circuit-driven.
+    pub(crate) fn set_circuit_motor_supply(&mut self, index: usize, volts: f64) -> bool {
+        if !volts.is_finite() {
+            return false;
+        }
+        match self.motors.get_mut(index) {
+            Some(MotorRuntime::Dc {
+                circuit: Some(winding),
+                ..
+            }) => {
+                winding.supply_v = Some(volts);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Back-EMF circuit motor `index` presents to the netlist, in volts.
+    pub(crate) fn circuit_motor_back_emf_v(&self, index: usize) -> Option<f64> {
+        match self.motors.get(index) {
+            Some(MotorRuntime::Dc {
+                plant,
+                circuit: Some(_),
+                ..
+            }) => Some(plant.snapshot().back_emf_v),
+            _ => None,
+        }
     }
 
     pub fn motor_snapshots(&self) -> Vec<MotorSnapshot> {
@@ -902,9 +1159,20 @@ impl SystemBus {
                     plant,
                     speed_extremes,
                     control_state,
+                    circuit,
                     ..
                 } => {
                     let s = plant.snapshot();
+                    // A circuit winding reports no current before the netlist
+                    // routed one; its bus voltage is the rail the netlist
+                    // solved and routed in (0 until it has).
+                    let (current_a, bus_voltage_v) = match circuit {
+                        Some(winding) => (
+                            winding.winding_current_a.map(|_| s.current_a),
+                            winding.supply_v.unwrap_or(0.0),
+                        ),
+                        None => (Some(s.current_a), plant.params().supply_voltage_v),
+                    };
                     MotorSnapshot {
                         id: id.clone(),
                         kind: "dc",
@@ -914,9 +1182,9 @@ impl SystemBus {
                         speed_rpm_max: speed_extremes.max_rpm,
                         speed_rpm_min: speed_extremes.min_rpm,
                         torque_nm: s.electromagnetic_torque_nm,
-                        current_a: Some(s.current_a),
+                        current_a,
                         phase_currents_a: None,
-                        bus_voltage_v: plant.params().supply_voltage_v,
+                        bus_voltage_v,
                         commutation_sector: None,
                         control_state: control_state.clone(),
                         faults: s
@@ -1323,6 +1591,36 @@ fn sampled_gate_pair(
         high: channel.enabled && (main_raw ^ channel.active_low),
         low: channel.complementary_enabled
             && (complementary_raw ^ channel.complementary_active_low),
+    }
+}
+
+/// Why a co-simulation binding found no circuit-driven motor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CircuitMotorLookup {
+    /// No motor has that id.
+    Unknown,
+    /// The motor exists but its winding is not `armature: circuit`.
+    NotCircuit,
+}
+
+/// Advance a circuit-driven plant by `dt_s` at the routed winding current.
+/// Nothing routed yet: the shaft is held and the state says so.
+fn service_circuit_winding(
+    plant: &mut BrushedDcMotor,
+    winding: &CircuitWinding,
+    dt_s: f64,
+    control_state: &mut String,
+) {
+    let Some(current_a) = winding.winding_current_a else {
+        CIRCUIT_NO_CURRENT.clone_into(control_state);
+        return;
+    };
+    CIRCUIT_DRIVEN.clone_into(control_state);
+    for step_s in stable_substeps(dt_s, CIRCUIT_WINDING_MAX_STEP_S) {
+        if plant.step_with_winding_current(current_a, step_s).is_err() {
+            "circuit:fault".clone_into(control_state);
+            break;
+        }
     }
 }
 

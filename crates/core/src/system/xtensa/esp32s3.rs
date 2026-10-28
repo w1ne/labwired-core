@@ -796,6 +796,7 @@ pub(crate) fn register_esp32s3_peripherals(bus: &mut SystemBus, opts: &Esp32s3Op
     // `from_config` alone would be green in test and dark in production.
     bus.wire_esp32s3_spi_pads();
     bus.wire_esp32s3_uart_pads();
+    bus.wire_esp32s3_ledc_pads();
 
     // Share the IO_MUX per-pad register bank with GPIO now that both models
     // exist, so a `FUN_WPU` write (Arduino `INPUT_PULLUP`) changes the level a
@@ -846,6 +847,12 @@ fn register_default_thunks(bank: &mut RomThunkBank) {
     // so subsequent ets_delay_us calls calibrate correctly. We don't model
     // ROM timing, so accepting and discarding the value is fine.
     bank.register(0x4000_1a4c, rom_thunks::nop_return_zero);
+    // gpio_matrix_out(gpio, signal, out_inv, oen_inv) — what
+    // `ledcAttachPin` / `esp_rom_gpio_connect_out_signal` call to route a
+    // peripheral signal (LEDC 73..80, UART TX, …) onto a pad. A no-op here
+    // would leave FUNCn_OUT_SEL_CFG at the bypass sentinel and every matrix
+    // output dark on a real image.
+    bank.register(0x4000_1aa0, gpio_matrix_out);
     // ets_delay_us(us) — busy-wait the requested microseconds. The simulator
     // doesn't model wall-clock so we return immediately; real silicon would
     // spin. Side-effect-free callers (boot timing) accept this.
@@ -1023,3 +1030,23 @@ pub(crate) const ESP32S3_PERIPHERALS: &[(&str, &str, u64, u64, Option<u32>)] = &
     ("uart1_s3",        "esp32s3_uart",            0x6001_0000, 0x0100, Some(28)),
     ("uart2_s3",        "esp32s3_uart",            0x6002_E000, 0x0100, Some(29)),
 ];
+
+/// `GPIO_FUNC0_OUT_SEL_CFG_REG` (`DR_REG_GPIO_BASE` 0x6000_4000 + 0x554), stride 4.
+const GPIO_FUNC0_OUT_SEL_CFG: u64 = 0x6000_4554;
+
+/// S3 ROM `gpio_matrix_out` @ `0x4000_1aa0` (`esp32s3.rom.ld`): the classic
+/// part's thunk (`system::xtensa::esp32`) on the S3's register map and 54 pads.
+/// Writes `FUNCn_OUT_SEL_CFG` = signal | out_inv << 9 | oen_inv << 11.
+fn gpio_matrix_out(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> crate::SimResult<()> {
+    let n = cpu.ps.callinc() * 4;
+    let gpio = cpu.regs.read_logical(n + 2);
+    let signal = cpu.regs.read_logical(n + 3) & 0x1FF;
+    let out_inv = cpu.regs.read_logical(n + 4) & 1;
+    let oen_inv = cpu.regs.read_logical(n + 5) & 1;
+    if gpio < 54 {
+        let value = signal | (out_inv << 9) | (oen_inv << 11);
+        bus.write_u32(GPIO_FUNC0_OUT_SEL_CFG + u64::from(gpio) * 4, value)?;
+    }
+    RomThunkBank::return_with(cpu, 0);
+    Ok(())
+}
