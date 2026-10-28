@@ -1875,9 +1875,10 @@ impl World {
                 .parent()
                 .unwrap_or_else(|| std::path::Path::new("."))
                 .join(&sysman.chip);
-            // File-backed chips keep their absolute path on the manifest so
-            // `type: declarative` `config.path` resolves next to the chip YAML
-            // (same rewrite `build_system_bus_with_plugins` does for single-node).
+            // File-backed chips rewrite `chip` to the system-dir join of the
+            // relative chip path (not a canonicalize — same rewrite
+            // `build_system_bus_with_plugins` does for single-node) so
+            // `type: declarative` `config.path` resolves next to the chip YAML.
             // Built-in / plugin names stay as names — their descriptors are embedded.
             let chip = match labwired_config::ChipDescriptor::from_file(&chip_path) {
                 Ok(chip) => {
@@ -2403,5 +2404,110 @@ mod tests {
 
         let rx_ch = radio2.read(0x10).unwrap();
         assert_eq!(rx_ch, 10);
+    }
+
+    /// Multi-node `from_manifest` must keep each file-backed chip as a
+    /// system-dir join so declarative `config.path` resolves next to the chip
+    /// YAML (not against process CWD). Without that rewrite, this fixture
+    /// fails to load `peripherals/stub.yaml`.
+    #[test]
+    fn from_manifest_keeps_filesystem_chip_path_for_declarative() {
+        struct TempDirGuard(std::path::PathBuf);
+        impl Drop for TempDirGuard {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+
+        let dir = std::env::temp_dir().join(format!(
+            "labwired-world-chip-path-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("peripherals")).expect("temp dir");
+        let _guard = TempDirGuard(dir.clone());
+
+        std::fs::write(
+            dir.join("peripherals/stub.yaml"),
+            r#"peripheral: stub
+version: "0.1.0"
+registers:
+  - id: REG0
+    address_offset: 0
+    size: 32
+    access: READ_WRITE
+    reset_value: 0
+"#,
+        )
+        .expect("stub descriptor");
+
+        std::fs::write(
+            dir.join("chip.yaml"),
+            r#"name: "world-chip-path-fixture"
+arch: "cortex-m3"
+core: "cortex-m3"
+registers_count: 50
+cpu_hz: 80_000_000
+flash:
+  base: 0x00000000
+  size: "128KB"
+ram:
+  base: 0x20000000
+  size: "128KB"
+peripherals:
+  - id: "stub"
+    type: "declarative"
+    base_address: 0x40001000
+    size: "64B"
+    config:
+      path: "peripherals/stub.yaml"
+"#,
+        )
+        .expect("chip.yaml");
+
+        std::fs::write(
+            dir.join("system.yaml"),
+            r#"name: "world-chip-path-system"
+chip: "chip.yaml"
+external_devices: []
+"#,
+        )
+        .expect("system.yaml");
+
+        let elf_src = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/coverage-brake-ecu-cm3.elf");
+        std::fs::copy(&elf_src, dir.join("fw.elf")).expect("copy fixture elf");
+
+        // Two file-backed nodes — the multi-node path that used to leave
+        // `chip:` as a bare relative path.
+        let env = labwired_config::EnvironmentManifest::bare(
+            "world-chip-path-env",
+            vec![
+                labwired_config::NodeConfig {
+                    id: "n1".into(),
+                    system: "system.yaml".into(),
+                    firmware: "fw.elf".into(),
+                    config_overrides: Default::default(),
+                    profile: None,
+                },
+                labwired_config::NodeConfig {
+                    id: "n2".into(),
+                    system: "system.yaml".into(),
+                    firmware: "fw.elf".into(),
+                    config_overrides: Default::default(),
+                    profile: None,
+                },
+            ],
+            vec![],
+        );
+
+        let world = World::from_manifest(env, &dir)
+            .expect("from_manifest must resolve declarative path via system-dir chip join");
+        assert!(world.machines.contains_key("n1"));
+        assert!(world.machines.contains_key("n2"));
+        // Declarative stub window is live: a bare relative `chip:` would have
+        // failed the build above; reading the reset value pins attach too.
+        assert_eq!(world.machines["n1"].read_u8(0x4000_1000).unwrap(), 0);
     }
 }
