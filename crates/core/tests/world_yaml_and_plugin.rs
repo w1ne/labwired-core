@@ -117,12 +117,22 @@ fn write_world_root(root: &Path, firmware: &[u8]) {
     fs::write(root.join("fw.elf"), firmware).unwrap();
 }
 
+/// Removes the temp world root on drop, so it is cleaned up even if the test panics.
+struct TempDirGuard(PathBuf);
+
+impl Drop for TempDirGuard {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.0);
+    }
+}
+
 #[test]
 fn filesystem_yaml_chip_and_plugin_cpu_coexist_in_one_world() {
     PLUGIN_BUILDS.store(0, Ordering::SeqCst);
 
     let firmware = include_bytes!("../../../tests/fixtures/uart-ok-thumbv7m.elf");
     let dir = world_root();
+    let _cleanup = TempDirGuard(dir.clone());
     write_world_root(&dir, firmware);
 
     let env = EnvironmentManifest {
@@ -179,7 +189,9 @@ fn filesystem_yaml_chip_and_plugin_cpu_coexist_in_one_world() {
         .write_u8(0x5000_0000, 0xA5)
         .expect("plugin MMIO write");
     assert_eq!(
-        plugin_node.read_u8(0x5000_0000).expect("plugin MMIO reread"),
+        plugin_node
+            .read_u8(0x5000_0000)
+            .expect("plugin MMIO reread"),
         0xA5,
         "plugin MMIO must round-trip through the plugin peripheral"
     );
@@ -191,6 +203,4 @@ fn filesystem_yaml_chip_and_plugin_cpu_coexist_in_one_world() {
             "both nodes must step: {results:?}"
         );
     }
-
-    let _ = fs::remove_dir_all(&dir);
 }
