@@ -143,6 +143,13 @@ pub trait Bus {
     /// no pin ports.
     fn set_pull_ups_disabled(&mut self, _disabled: bool) {}
 
+    /// Clock one SPI byte through parking SPI controllers that still hold
+    /// attached kits (latching each device's D/C first). Default: no parking
+    /// SPI — return 0. AVR SPDR uses this instead of downcasting to SystemBus.
+    fn clock_parking_spi(&mut self, _mosi: u8) -> u8 {
+        0
+    }
+
     /// Is an instruction fetch at `pc` permitted by a memory-protection unit
     /// the bus models? Called by the core only when its 256-byte fetch window
     /// does not already cover `pc`, i.e. once per window refill. That is exact

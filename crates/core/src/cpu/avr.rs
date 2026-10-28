@@ -933,15 +933,10 @@ impl Avr {
                 }
                 // Kits left on the parking SPI controller (not taken): latch
                 // D/C and clock them so inspect / display_artifact still see
-                // the panel.
-                if let Some(sys) = bus
-                    .as_any_mut()
-                    .and_then(|a| a.downcast_mut::<crate::bus::SystemBus>())
-                {
-                    let bus_miso = sys.clock_parking_spi(mosi);
-                    if bus_miso != 0 {
-                        miso = bus_miso;
-                    }
+                // the panel. Bus::clock_parking_spi — no SystemBus downcast.
+                let bus_miso = bus.clock_parking_spi(mosi);
+                if bus_miso != 0 {
+                    miso = bus_miso;
                 }
                 self.spdr = miso;
                 self.spsr |= 1 << 7; // SPIF

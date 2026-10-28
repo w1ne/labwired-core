@@ -1667,6 +1667,10 @@ impl crate::Bus for SystemBus {
         Some(self)
     }
 
+    fn clock_parking_spi(&mut self, mosi: u8) -> u8 {
+        Self::clock_parking_spi(self, mosi)
+    }
+
     fn device_write_bypass(&self) -> bool {
         Self::device_write_bypass(self)
     }
