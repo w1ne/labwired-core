@@ -796,7 +796,10 @@ impl SystemBus {
                             .set_u5_features(u5_features);
                     if matches!(layout, crate::peripherals::uart::UartRegisterLayout::Custom) {
                         // Vendor-neutral YAML map. `tx_offset` is required;
-                        // status/rx/ready/enable keys are optional.
+                        // status/rx/ready/enable keys are optional. The status
+                        // window is opt-in: omit `status_offset` for TX-only
+                        // maps (no default [0,4) window that would collide with
+                        // `tx_offset: 0`).
                         // Custom maps do not model TX/TC IRQ enables — see
                         // `UartRegisterLayout::Custom` docs.
                         let peri_size = match &p_cfg.size {
@@ -815,11 +818,7 @@ impl SystemBus {
                                     p_cfg.id
                                 )
                             })?;
-                        let status = p_cfg
-                            .config
-                            .get("status_offset")
-                            .and_then(|v| v.as_u64())
-                            .unwrap_or(0);
+                        let status_opt = p_cfg.config.get("status_offset").and_then(|v| v.as_u64());
                         let rx = p_cfg
                             .config
                             .get("rx_offset")
@@ -832,18 +831,26 @@ impl SystemBus {
                             .and_then(|v| v.as_u64())
                             .map(|n| n as u32)
                             .unwrap_or(0);
-                        let status_width = p_cfg
-                            .config
-                            .get("status_width")
-                            .and_then(|v| v.as_u64())
-                            .unwrap_or(4);
-                        if status_width == 0 || status_width > 4 {
-                            anyhow::bail!(
-                                "Peripheral '{}': config.status_width must be 1..=4 bytes (got {})",
-                                p_cfg.id,
-                                status_width
-                            );
-                        }
+                        // status_width only applies when status_offset is set.
+                        // With no status window, width is 0 so reads never hit it.
+                        let status_width = if status_opt.is_some() {
+                            let w = p_cfg
+                                .config
+                                .get("status_width")
+                                .and_then(|v| v.as_u64())
+                                .unwrap_or(4);
+                            if w == 0 || w > 4 {
+                                anyhow::bail!(
+                                    "Peripheral '{}': config.status_width must be 1..=4 bytes (got {})",
+                                    p_cfg.id,
+                                    w
+                                );
+                            }
+                            w
+                        } else {
+                            0
+                        };
+                        let status = status_opt.unwrap_or(0);
                         let rx_present_set = p_cfg
                             .config
                             .get("rx_present_set")
@@ -896,7 +903,9 @@ impl SystemBus {
                             }
                             Ok(())
                         };
-                        require_in_window("status", status, status_width)?;
+                        if status_opt.is_some() {
+                            require_in_window("status", status, status_width)?;
+                        }
                         require_in_window("tx", tx, 1)?;
                         require_in_window("rx", rx, 1)?;
                         if let Some((en_off, _)) = enable {
@@ -904,12 +913,14 @@ impl SystemBus {
                         }
 
                         // Reject overlapping status / tx / rx / enable windows.
+                        // Status is only in the set when status_offset was set.
                         let ranges: Vec<(&str, u64, u64)> = {
-                            let mut v = vec![
-                                ("status", status, status_width),
-                                ("tx", tx, 1),
-                                ("rx", rx, 1),
-                            ];
+                            let mut v = Vec::new();
+                            if status_opt.is_some() {
+                                v.push(("status", status, status_width));
+                            }
+                            v.push(("tx", tx, 1));
+                            v.push(("rx", rx, 1));
                             if let Some((en_off, _)) = enable {
                                 v.push(("enable", en_off, 4));
                             }
@@ -1802,5 +1813,14 @@ peripherals:
             "4KB",
         );
         SystemBus::from_config(&chip, &manifest).expect("valid custom map must build");
+    }
+
+    #[test]
+    fn custom_uart_accepts_tx_at_zero_without_status() {
+        // Status window is opt-in. A TX-only map with tx_offset: 0 must not be
+        // rejected by a default status window at [0, 4).
+        let (chip, manifest) = chip_with_custom_uart("      tx_offset: 0\n", "4KB");
+        SystemBus::from_config(&chip, &manifest)
+            .expect("tx_offset 0 with no status_offset must build");
     }
 }

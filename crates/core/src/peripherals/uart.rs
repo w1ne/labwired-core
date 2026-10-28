@@ -742,13 +742,14 @@ impl UartRegisterLayout {
 pub struct Uart {
     layout: UartRegisterLayout,
     /// YAML-parameterised map when `layout` is [`UartRegisterLayout::Custom`].
-    /// Skipped in snapshots: rebuilt from chip YAML via `from_config` /
-    /// `with_custom_map` after restore (not round-tripped through serde).
+    /// Skipped in snapshots (not serialized). `Uart::restore` is a no-op, so
+    /// the live instance keeps this map across snapshot restore; it is not
+    /// rebuilt from chip YAML.
     #[serde(skip)]
     custom_map: Option<UartRegMap>,
     /// Optional TX-enable gate (`config.enable_offset` / `enable_mask`).
     /// When set, TX bytes are dropped until `(enable_value & mask) == mask`.
-    /// Skipped in snapshots — same rebuild-from-config contract as `custom_map`.
+    /// Skipped in snapshots — kept on the live instance like `custom_map`.
     #[serde(skip)]
     enable_offset: Option<u64>,
     #[serde(skip)]
