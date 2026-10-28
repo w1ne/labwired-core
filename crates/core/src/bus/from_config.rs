@@ -789,12 +789,84 @@ impl SystemBus {
                         .get("u5_features")
                         .and_then(|v| v.as_bool())
                         .unwrap_or(false);
-                    Box::new(
+                    let mut uart =
                         crate::peripherals::uart::Uart::new_with_layout_cr3(layout, cr3_mask)
                             .set_full_featured(full)
                             .set_stm32_lpuart(stm32_lpuart)
-                            .set_u5_features(u5_features),
-                    )
+                            .set_u5_features(u5_features);
+                    if matches!(layout, crate::peripherals::uart::UartRegisterLayout::Custom) {
+                        // Vendor-neutral YAML map. `tx_offset` is required;
+                        // status/rx/ready/enable keys are optional.
+                        let tx = p_cfg
+                            .config
+                            .get("tx_offset")
+                            .and_then(|v| v.as_u64())
+                            .ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "Peripheral '{}' with profile 'custom' requires config.tx_offset (TX data register offset)",
+                                    p_cfg.id
+                                )
+                            })?;
+                        let status = p_cfg
+                            .config
+                            .get("status_offset")
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(0);
+                        let rx = p_cfg
+                            .config
+                            .get("rx_offset")
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(tx);
+                        let status_idle = p_cfg
+                            .config
+                            .get("status_idle")
+                            .or_else(|| p_cfg.config.get("status_ready"))
+                            .and_then(|v| v.as_u64())
+                            .map(|n| n as u32)
+                            .unwrap_or(0);
+                        let status_width = p_cfg
+                            .config
+                            .get("status_width")
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(4);
+                        let rx_present_set = p_cfg
+                            .config
+                            .get("rx_present_set")
+                            .and_then(|v| v.as_u64())
+                            .map(|n| n as u32)
+                            .unwrap_or(0);
+                        let rx_present_clear = p_cfg
+                            .config
+                            .get("rx_present_clear")
+                            .and_then(|v| v.as_u64())
+                            .map(|n| n as u32)
+                            .unwrap_or(0);
+                        uart = uart.with_custom_map(crate::peripherals::uart::UartRegMap {
+                            status,
+                            tx,
+                            rx,
+                            cr3: u64::MAX,
+                            cr1: None,
+                            txeie_mask: 0,
+                            tcie_mask: 0,
+                            status_width,
+                            status_idle,
+                            rx_present_set,
+                            rx_present_clear,
+                        });
+                        if let Some(en_off) =
+                            p_cfg.config.get("enable_offset").and_then(|v| v.as_u64())
+                        {
+                            let en_mask = p_cfg
+                                .config
+                                .get("enable_mask")
+                                .and_then(|v| v.as_u64())
+                                .map(|n| n as u32)
+                                .unwrap_or(1);
+                            uart = uart.with_enable_gate(en_off, en_mask);
+                        }
+                    }
+                    Box::new(uart)
                 }
                 "gpio" | "stm32_gpioport" | "stm32f4_gpio" | "efmgpioport" | "npcx_gpio"
                 | "imxrt_gpio" => {
