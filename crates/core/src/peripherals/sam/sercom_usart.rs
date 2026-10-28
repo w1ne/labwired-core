@@ -53,6 +53,18 @@
 //! FERR/BUFOVF paths, collision detection, CTS/RTS flow control, RXS/RXBRK/
 //! CTSIC, DBGCTRL.DBGSTOP, and the SERCOM SPI and I²C modes.
 //!
+//! **Byte pacing (SAMD51, opt-in).** An instance declared with its pads and
+//! its core clock channel ([`SamSercomUsart::with_pacing`]) paces bytes at the
+//! configured baud on the live clock tree: one start bit, CHSIZE data bits, a
+//! parity bit when FORM selects one and one or two stop bits, each lasting
+//! `S * 65536 / (65536 - BAUD)` core-clock cycles for the arithmetic SAMPR
+//! settings (S = 16, 8, 3) or `S * (BAUD + FP / 8)` for the fractional ones
+//! (DS60001507F 34.6.2.3). DATA feeds a one-byte holding register in front of
+//! the shift register, so DRE drops while both are full and TXC rises when the
+//! last stop bit has left. Host bytes arrive one frame apart into a two-byte
+//! receive buffer; a third sets STATUS.BUFOVF and is lost. Without pacing,
+//! the instance keeps the zero-latency behaviour above.
+//!
 //! Also absent: a `PadLines` wire cell. TX bytes reach the console sink and the
 //! bus trace, but no narration wire is published, so a logic-analyzer WIRE
 //! probe on this SERCOM has nothing to bind to. Declared rather than faked —
@@ -101,6 +113,40 @@ const INT_RXC: u8 = 1 << 2;
 /// DATA write — only "the IRQ level may have moved".
 const SERCOM_WAKE_TOKEN: u32 = 0;
 
+/// TX and RX pads of a SAMD51 SERCOM USART: (PORT group, pin) each, their PMUX
+/// function and the CTRLA.TXPO / RXPO values that select them.
+#[derive(Clone, Copy, Debug)]
+pub struct UsartPads {
+    pub tx: (u64, u8),
+    pub rx: (u64, u8),
+    pub mux: u8,
+    pub txpo: u8,
+    pub rxpo: u8,
+}
+
+/// Byte pacing state of a SAMD51 instance (see the module docs). Times are
+/// CPU cycles on the bus cycle clock.
+#[derive(Debug, Default)]
+struct UsartPace {
+    /// GCLK peripheral channel of the SERCOM core clock (PCHCTRL index).
+    core_gclk: u64,
+    /// CPU cycles per bit, resolved from BAUD, SAMPR and the clock tree; `None`
+    /// (no clock, external clock mode, reserved SAMPR) moves no byte.
+    bit: Option<f64>,
+    /// BAUD, CTRLA or CTRLB changed since `bit` was resolved.
+    dirty: bool,
+    /// DATA holding register: the byte and the cycle it was written.
+    hold: Option<(u8, u64)>,
+    /// The byte in the shift register and the cycle its stop bit ends.
+    shift: Option<(u8, f64)>,
+    /// When the transmitter's last frame ended.
+    tx_free: f64,
+    /// Receive buffer (two bytes on silicon) and the end of the frame being
+    /// received from the host.
+    rx_fifo: std::cell::RefCell<VecDeque<u8>>,
+    rx_end: Option<f64>,
+}
+
 /// SERCOM in USART mode.
 pub struct SamSercomUsart {
     ctrla: u32,
@@ -131,6 +177,16 @@ pub struct SamSercomUsart {
     /// Level of `intenset & flags` at the last tick, so the IRQ is raised on
     /// the 0→1 edge instead of every cycle the flag stays set.
     irq_level: bool,
+    /// SAMD51 layout: DRE, TXC, RXC and the remaining flags on four
+    /// consecutive NVIC lines from the entry's IRQ (DS60001507F 10.2.2), not
+    /// the SAMD21 single line. `Some(first line)` once the bus attached it.
+    samd51_lines: Option<Option<u32>>,
+    /// Board-declared TX/RX pads (SAMD51 instances). When declared, a byte
+    /// reaches the wire only while its pad is muxed to this SERCOM and
+    /// CTRLA.TXPO/RXPO select it; the routing is latched on the bus tick.
+    pads: Option<UsartPads>,
+    routed: (bool, bool),
+    pace: Option<UsartPace>,
     /// Cycle clock handed over by the bus at registration on an
     /// `event-scheduler` build. Its presence — not the feature alone — is what
     /// [`Self::scheduler_mode`] reads, so a hand-built bus that never attaches
@@ -182,12 +238,199 @@ impl SamSercomUsart {
             // Default to console echo; a capture sink is attached on demand.
             echo_stdout: true,
             irq_level: false,
+            samd51_lines: None,
+            pads: None,
+            routed: (false, false),
+            pace: None,
             clock: None,
             scheduled: false,
             legacy_walk_forced: false,
             trace: crate::bus::bus_trace::BusTrace::default(),
             trace_name: String::new(),
         }
+    }
+
+    /// Declare the TX/RX pads (see [`UsartPads`]).
+    pub fn with_pads(mut self, pads: UsartPads) -> Self {
+        self.pads = Some(pads);
+        self
+    }
+
+    /// Pace bytes at the configured baud from the SERCOM core clock on GCLK
+    /// channel `core_gclk` (see the module docs). Needs declared pads.
+    pub fn with_pacing(mut self, core_gclk: u64) -> Self {
+        self.pace = Some(UsartPace {
+            core_gclk,
+            dirty: true,
+            ..Default::default()
+        });
+        self
+    }
+
+    fn now(&self) -> u64 {
+        self.clock.as_ref().map_or(0, |c| c.now())
+    }
+
+    /// Bits per frame: start, CHSIZE data bits, parity when FORM has one, stop.
+    fn frame_bits(&self) -> f64 {
+        let data = match self.ctrlb & 7 {
+            1 => 9,
+            n @ 5..=7 => n,
+            _ => 8,
+        };
+        let parity = matches!((self.ctrla >> 24) & 0xf, 1 | 5) as u32;
+        let stop = 1 + (self.ctrlb >> 6 & 1);
+        f64::from(1 + data + parity + stop)
+    }
+
+    /// CPU cycles per bit from BAUD and CTRLA.SAMPR at the live clock rates.
+    fn resolve_bit(&self, bus: &dyn crate::Bus, core_gclk: u64) -> Option<f64> {
+        if (self.ctrla >> CTRLA_MODE_SHIFT) & CTRLA_MODE_MASK != MODE_USART_INT_CLK {
+            return None;
+        }
+        let gclk = super::clock_tree::peripheral_hz(bus, core_gclk)? as f64;
+        let cpu = super::clock_tree::cpu_hz(bus)? as f64;
+        let core = bit_clocks(self.ctrla, self.baud)?;
+        (gclk > 0.0).then_some(core * cpu / gclk)
+    }
+
+    /// Advance the paced transmitter and receiver to cycle `now`.
+    fn settle(&mut self, now: u64) {
+        let frame = match self.pace.as_ref().and_then(|p| p.bit) {
+            Some(bit) if self.enabled() => bit * self.frame_bits(),
+            _ => return,
+        };
+        let (routed_tx, routed_rx) = self.routed;
+        let receiving = self.ctrlb & CTRLB_RXEN != 0 && routed_rx;
+        let now_f = now as f64;
+        let mut emitted = Vec::new();
+        let mut txc = false;
+        {
+            let pace = self.pace.as_mut().unwrap();
+            loop {
+                if let Some((byte, end)) = pace.shift {
+                    if end > now_f {
+                        break;
+                    }
+                    pace.shift = None;
+                    pace.tx_free = end;
+                    if routed_tx {
+                        emitted.push(byte);
+                    }
+                    txc = pace.hold.is_none();
+                }
+                // The holding register moves into an idle shift register.
+                match pace.hold.take() {
+                    Some((byte, written)) => {
+                        let start = pace.tx_free.max(written as f64);
+                        pace.shift = Some((byte, start + frame));
+                        txc = false;
+                    }
+                    None => break,
+                }
+            }
+            if receiving {
+                loop {
+                    let queued = self
+                        .rx_source
+                        .lock()
+                        .map(|q| !q.is_empty())
+                        .unwrap_or(false);
+                    if !queued {
+                        pace.rx_end = None;
+                        break;
+                    }
+                    let end = *pace.rx_end.get_or_insert(now_f + frame);
+                    if end > now_f {
+                        break;
+                    }
+                    let byte = self.rx_source.lock().ok().and_then(|mut q| q.pop_front());
+                    let mut fifo = pace.rx_fifo.borrow_mut();
+                    match byte {
+                        Some(byte) if fifo.len() < 2 => fifo.push_back(byte),
+                        Some(_) => self.status |= 1 << 2, // STATUS.BUFOVF
+                        None => {}
+                    }
+                    drop(fifo);
+                    pace.rx_end = Some(end + frame);
+                }
+            }
+        }
+        for byte in emitted {
+            self.emit_byte(byte);
+        }
+        if txc {
+            self.intflag |= INT_TXC;
+        }
+    }
+
+    /// The next cycle a paced byte finishes (the shift register's stop bit, a
+    /// byte arriving from the host) or, with a byte waiting in the holding
+    /// register of an idle transmitter, now.
+    fn pace_deadline(&self) -> Option<f64> {
+        let pace = self.pace.as_ref()?;
+        let waiting = pace.hold.is_some() && pace.shift.is_none();
+        let receiving = self.ctrlb & CTRLB_RXEN != 0;
+        let ends = [
+            pace.shift.map(|s| s.1),
+            pace.rx_end.filter(|_| receiving),
+            waiting.then_some(self.now() as f64),
+        ];
+        ends.into_iter().flatten().reduce(f64::min)
+    }
+
+    /// Latch the pad routing, resolve the bit time when the clocks or
+    /// registers changed, and move the paced transmitter and receiver to now.
+    fn advance(&mut self, bus: &dyn crate::Bus) {
+        if let Some(p) = self.pads {
+            let txpo = (self.ctrla >> 16) & 3 == u32::from(p.txpo);
+            let rxpo = (self.ctrla >> 20) & 3 == u32::from(p.rxpo);
+            self.routed = (
+                txpo && self.pad_routed(bus, p.tx.0, p.tx.1, p.mux),
+                rxpo && self.pad_routed(bus, p.rx.0, p.rx.1, p.mux),
+            );
+        }
+        if let Some(core_gclk) = self
+            .pace
+            .as_ref()
+            .filter(|p| p.dirty || p.bit.is_none())
+            .map(|p| p.core_gclk)
+        {
+            let bit = self.resolve_bit(bus, core_gclk);
+            let pace = self.pace.as_mut().unwrap();
+            pace.bit = bit;
+            pace.dirty = false;
+        }
+        let now = self.now();
+        self.settle(now);
+    }
+
+    fn pad_routed(&self, bus: &dyn crate::Bus, port: u64, pin: u8, mux: u8) -> bool {
+        let cfg = bus.read_u8(port + 0x40 + u64::from(pin)).unwrap_or(0);
+        let pmux = bus.read_u8(port + 0x30 + u64::from(pin / 2)).unwrap_or(0);
+        let selected = if pin & 1 != 0 { pmux >> 4 } else { pmux & 0xf };
+        cfg & 1 != 0 && selected == mux
+    }
+
+    /// The SAMD51 four-line interrupt layout (`samd51_sercom_usart`).
+    pub fn new_samd51() -> Self {
+        Self {
+            samd51_lines: Some(None),
+            ..Self::new()
+        }
+    }
+
+    /// SAMD51 lines asserted now: DRE, TXC, RXC, then RXS/CTSIC/RXBRK/ERROR.
+    fn samd51_pending(&self) -> Vec<u32> {
+        let Some(Some(base)) = self.samd51_lines else {
+            return Vec::new();
+        };
+        let active = self.intenset & self.effective_intflag();
+        [INT_DRE, 1 << 1, INT_RXC, !(INT_DRE | (1 << 1) | INT_RXC)]
+            .into_iter()
+            .enumerate()
+            .filter_map(|(line, mask)| (active & mask != 0).then_some(base + line as u32))
+            .collect()
     }
 
     /// Attach a capture sink and/or toggle stdout echo. Mirrors
@@ -217,6 +460,12 @@ impl SamSercomUsart {
     }
 
     fn rx_queued(&self) -> bool {
+        if let Some(pace) = &self.pace {
+            return !pace.rx_fifo.borrow().is_empty();
+        }
+        if self.pads.is_some() && !self.routed.1 {
+            return false; // bytes on an unrouted RX pad never reach the receiver
+        }
         self.rx_source
             .lock()
             .map(|q| !q.is_empty())
@@ -232,7 +481,7 @@ impl SamSercomUsart {
     /// has to remember to set.
     fn effective_intflag(&self) -> u8 {
         let mut flags = self.intflag;
-        if self.enabled() {
+        if self.enabled() && self.pace.as_ref().is_none_or(|p| p.hold.is_none()) {
             flags |= INT_DRE;
         }
         if self.enabled() && self.ctrlb & CTRLB_RXEN != 0 && self.rx_queued() {
@@ -284,7 +533,10 @@ impl SamSercomUsart {
         let level_moved = (self.intenset & self.effective_intflag() != 0) != self.irq_level;
         let receiver_armed =
             self.enabled() && self.ctrlb & CTRLB_RXEN != 0 && self.intenset & INT_RXC != 0;
-        level_moved || receiver_armed
+        // A paced byte in flight changes DRE, TXC and RXC when its frame ends,
+        // and nothing on the bus fires then.
+        let pacing = self.enabled() && self.pace_deadline().is_some();
+        level_moved || receiver_armed || pacing
     }
 
     /// Reset to power-on state, keeping the wiring (sink, RX queue, trace) that
@@ -302,6 +554,13 @@ impl SamSercomUsart {
         self.intflag = 0;
         self.rx_holding.set(0);
         self.irq_level = false;
+        if let Some(pace) = &mut self.pace {
+            *pace = UsartPace {
+                core_gclk: pace.core_gclk,
+                dirty: true,
+                ..Default::default()
+            };
+        }
     }
 
     fn emit_byte(&mut self, byte: u8) {
@@ -336,7 +595,22 @@ impl SamSercomUsart {
         if !self.enabled() || self.ctrlb & CTRLB_TXEN == 0 {
             return;
         }
-        self.emit_byte((value & 0xFF) as u8);
+        if self.pace.is_some() {
+            let now = self.now();
+            self.settle(now);
+            let pace = self.pace.as_mut().unwrap();
+            if pace.hold.is_none() {
+                // A write while DRE is clear is ignored, as on silicon.
+                pace.hold = Some(((value & 0xFF) as u8, now));
+                self.intflag &= !INT_TXC; // writing DATA clears TXC
+                self.settle(now);
+            }
+            return;
+        }
+        // The SERCOM transmits either way; an unrouted TX pad carries nothing.
+        if self.pads.is_none() || self.routed.0 {
+            self.emit_byte((value & 0xFF) as u8);
+        }
         // Transmission is complete by the time the store returns.
         self.intflag |= INT_TXC;
     }
@@ -345,6 +619,12 @@ impl SamSercomUsart {
     /// consuming it. Reading with nothing queued returns the holding register,
     /// as silicon does — not a fabricated zero.
     fn read_data(&self) -> u16 {
+        if let Some(pace) = &self.pace {
+            if let Some(byte) = pace.rx_fifo.borrow_mut().pop_front() {
+                self.rx_holding.set(u16::from(byte));
+            }
+            return self.rx_holding.get();
+        }
         if self.enabled() && self.ctrlb & CTRLB_RXEN != 0 {
             if let Ok(mut q) = self.rx_source.lock() {
                 if let Some(byte) = q.pop_front() {
@@ -378,6 +658,12 @@ impl SamSercomUsart {
 }
 
 impl Peripheral for SamSercomUsart {
+    fn needs_bus_tick(&self) -> bool {
+        self.pads.is_some() && self.enabled()
+    }
+    fn tick_with_bus(&mut self, bus: &mut dyn crate::Bus) {
+        self.advance(bus);
+    }
     fn attach_bus_trace(&mut self, name: &str, trace: &crate::bus::bus_trace::BusTrace) {
         self.trace = trace.clone();
         self.trace_name = name.to_string();
@@ -441,9 +727,37 @@ impl Peripheral for SamSercomUsart {
         if self.sched_driven() {
             return PeripheralTickResult::default();
         }
+        if self.samd51_lines.is_some() {
+            self.irq_edge(); // keep the latched level for the work predicate
+            let lines = self.samd51_pending();
+            return PeripheralTickResult {
+                explicit_irqs: (!lines.is_empty()).then_some(lines),
+                ..Default::default()
+            };
+        }
         PeripheralTickResult {
             irq: self.irq_edge(),
             ..Default::default()
+        }
+    }
+
+    fn attach_irq_line(&mut self, irq: Option<u32>) {
+        if self.samd51_lines.is_some() {
+            self.samd51_lines = Some(irq.filter(|irq| *irq <= 252));
+        }
+    }
+
+    fn reads_can_deassert_irq(&self) -> bool {
+        // SAMD51 lines are level sources, and reading DATA consumes RX (RXC).
+        self.samd51_lines.is_some()
+    }
+
+    fn irq_line_levels(&self, report: &mut dyn FnMut(u32, bool)) {
+        if let Some(Some(base)) = self.samd51_lines {
+            let pending = self.samd51_pending();
+            for line in 0..4 {
+                report(base + line, pending.contains(&(base + line)));
+            }
         }
     }
 
@@ -455,6 +769,14 @@ impl Peripheral for SamSercomUsart {
     /// pair, unlike its nRF54L cousins: it has no deferred transfer to
     /// re-expose. A SERCOM transmits inside the DATA write.
     fn tick_elapsed_forced(&mut self, _cycles: u64) -> PeripheralTickResult {
+        if self.samd51_lines.is_some() {
+            self.irq_edge();
+            let lines = self.samd51_pending();
+            return PeripheralTickResult {
+                explicit_irqs: (!lines.is_empty()).then_some(lines),
+                ..Default::default()
+            };
+        }
         PeripheralTickResult {
             irq: self.irq_edge(),
             ..Default::default()
@@ -526,6 +848,7 @@ impl Peripheral for SamSercomUsart {
         _sched: &mut crate::sched::EventScheduler,
         bus: &mut dyn crate::Bus,
     ) -> crate::sched::EventResult {
+        self.advance(bus);
         let irq = self.irq_edge();
         let keep_going = self.has_active_work();
         self.scheduled = keep_going;
@@ -542,8 +865,20 @@ impl Peripheral for SamSercomUsart {
         // No `#[cfg]` pair: `Bus::peripheral_tick_interval` is available in
         // both worlds and defaults to 1, so the featureless build gets the
         // legacy one-tick cadence from the same expression.
-        let delay = u64::from(bus.peripheral_tick_interval().max(1));
+        let mut delay = u64::from(bus.peripheral_tick_interval().max(1));
+        // A paced frame wakes the SERCOM exactly when it ends. A deadline
+        // already behind (no core clock yet, so nothing moves) polls instead.
+        if let Some(end) = self.pace_deadline().filter(|&end| end > self.now() as f64) {
+            delay = delay.min((end - self.now() as f64).ceil() as u64);
+        }
 
+        if self.samd51_lines.is_some() {
+            return crate::sched::EventResult {
+                explicit_irqs: self.samd51_pending(),
+                reschedule_delay: keep_going.then_some(delay),
+                ..Default::default()
+            };
+        }
         crate::sched::EventResult {
             // `raise_own_irq`, not `raise_irq`: this model does not know its
             // own NVIC line — the bus maps it from `PeripheralEntry::irq`,
@@ -573,6 +908,12 @@ impl Peripheral for SamSercomUsart {
 }
 
 impl SamSercomUsart {
+    fn mark_pace_dirty(&mut self) {
+        if let Some(pace) = &mut self.pace {
+            pace.dirty = true;
+        }
+    }
+
     /// Apply a write to `base`. `triggers` says whether this access carries the
     /// register's side effect (transmit, receive, reset) — false for the upper
     /// byte lanes of a decomposed multi-byte store.
@@ -585,9 +926,16 @@ impl SamSercomUsart {
                 }
                 // SWRST never reads back as set: it self-clears.
                 self.ctrla = value & !CTRLA_SWRST;
+                self.mark_pace_dirty();
             }
-            CTRLB => self.ctrlb = value,
-            BAUD => self.baud = (value & 0xFFFF) as u16,
+            CTRLB => {
+                self.ctrlb = value;
+                self.mark_pace_dirty();
+            }
+            BAUD => {
+                self.baud = (value & 0xFFFF) as u16;
+                self.mark_pace_dirty();
+            }
             RXPL => self.rxpl = (value & 0xFF) as u8,
             // Write 1 to clear / write 1 to set — two views, one register.
             INTENCLR => self.intenset &= !((value & 0xFF) as u8),
@@ -616,6 +964,24 @@ impl SamSercomUsart {
             }
         }
     }
+}
+
+/// Core-clock cycles per bit for CTRLA.SAMPR and BAUD (DS60001507F 34.6.2.3):
+/// arithmetic `S * 65536 / (65536 - BAUD)` for S = 16, 8, 3, fractional
+/// `S * (BAUD[12:0] + FP / 8)` for S = 16, 8; reserved settings give `None`.
+fn bit_clocks(ctrla: u32, baud: u16) -> Option<f64> {
+    let arithmetic = |samples: f64| samples * 65536.0 / (65536.0 - f64::from(baud));
+    let fractional =
+        |samples: f64| samples * (f64::from(baud & 0x1fff) + f64::from(baud >> 13) / 8.0);
+    let clocks = match (ctrla >> 13) & 7 {
+        0 => arithmetic(16.0),
+        1 => fractional(16.0),
+        2 => arithmetic(8.0),
+        3 => fractional(8.0),
+        4 => arithmetic(3.0),
+        _ => return None,
+    };
+    (clocks > 0.0).then_some(clocks)
 }
 
 /// The base offset of the register covering `offset`.
@@ -815,5 +1181,146 @@ mod scheduler_mode_tests {
             "vacuity guard: the fixture must actually produce an edge, or this \
              comparison is two streams of `false`"
         );
+    }
+}
+
+#[cfg(test)]
+mod pacing_tests {
+    use super::*;
+    use crate::cycle_clock::CycleClock;
+
+    /// An enabled, routed SAMD51 USART (internal clock, TX and RX on) paced at
+    /// `bit` CPU cycles per bit, on a host-controlled clock.
+    fn paced(bit: f64) -> (SamSercomUsart, CycleClock, Arc<Mutex<Vec<u8>>>) {
+        let pads = UsartPads {
+            tx: (0, 16),
+            rx: (0, 17),
+            mux: 2,
+            txpo: 0,
+            rxpo: 1,
+        };
+        let mut u = SamSercomUsart::new_samd51().with_pads(pads).with_pacing(35);
+        let clock = CycleClock::default();
+        u.attach_cycle_clock(clock.clone());
+        let sink = Arc::new(Mutex::new(Vec::new()));
+        u.set_sink(Some(sink.clone()), false);
+        u.write_u32(
+            CTRLA,
+            CTRLA_ENABLE | (MODE_USART_INT_CLK << CTRLA_MODE_SHIFT),
+        )
+        .unwrap();
+        u.write_u32(CTRLB, CTRLB_TXEN | CTRLB_RXEN).unwrap();
+        u.routed = (true, true);
+        let pace = u.pace.as_mut().unwrap();
+        pace.bit = Some(bit);
+        pace.dirty = false;
+        (u, clock, sink)
+    }
+
+    fn at(u: &mut SamSercomUsart, clock: &CycleClock, cycle: u64) {
+        clock.publish(cycle);
+        u.settle(cycle);
+    }
+
+    #[test]
+    fn codal_115200_on_100_mhz_is_the_arithmetic_baud() {
+        // BAUD = 65536 - (16 * 115200 << 16) / 100 MHz = 64329.
+        let clocks = bit_clocks(0, 64329).unwrap();
+        assert!((clocks - 16.0 * 65536.0 / 1207.0).abs() < 1e-9);
+        assert!(
+            (100e6 / clocks - 115_108.0).abs() < 1.0,
+            "the baud it yields"
+        );
+        // Fractional 16x: BAUD 54, FP 2 is 16 * 54.25 clocks.
+        assert_eq!(bit_clocks(1 << 13, 54 | 2 << 13), Some(16.0 * 54.25));
+        assert_eq!(bit_clocks(5 << 13, 0), None, "reserved SAMPR");
+    }
+
+    #[test]
+    fn a_byte_in_flight_keeps_the_scheduler_waking_until_its_frame_ends() {
+        // Frame of 100 cycles. Nothing on the bus fires when a frame ends, so
+        // the wake predicate itself must cover the paced byte.
+        let (mut u, clock, sink) = paced(10.0);
+        assert!(!u.has_active_work() || u.intenset & INT_RXC != 0);
+        u.write_u32(INTENCLR, 0xff).unwrap();
+        u.write_u32(DATA, u32::from(b'A')).unwrap();
+        assert!(u.has_active_work(), "held byte");
+        assert!(!u.take_scheduled_events().is_empty());
+        at(&mut u, &clock, 0);
+        assert_eq!(u.pace_deadline(), Some(100.0), "shift register stop bit");
+        assert!(u.has_active_work());
+        at(&mut u, &clock, 100);
+        assert_eq!(sink.lock().unwrap().as_slice(), b"A");
+        assert_eq!(u.pace_deadline(), None);
+        assert!(!u.has_active_work(), "idle once the frame ended");
+    }
+
+    #[test]
+    fn frames_count_start_data_parity_and_stop_bits() {
+        let (mut u, _, _) = paced(1.0);
+        assert_eq!(u.frame_bits(), 10.0, "8N1");
+        u.ctrla |= 1 << 24; // FORM: frame with parity
+        u.ctrlb |= 1 << 6; // two stop bits
+        assert_eq!(u.frame_bits(), 12.0);
+    }
+
+    #[test]
+    fn transmit_holds_one_byte_behind_the_shift_register() {
+        let (mut u, clock, sink) = paced(100.0); // 1000-cycle 8N1 frames
+        u.write_u16(DATA, u16::from(b'A')).unwrap();
+        assert_ne!(
+            u.read(INTFLAG).unwrap() & INT_DRE,
+            0,
+            "A went straight to the shifter"
+        );
+        u.write_u16(DATA, u16::from(b'B')).unwrap();
+        assert_eq!(u.read(INTFLAG).unwrap() & INT_DRE, 0, "B waits in DATA");
+        u.write_u16(DATA, u16::from(b'C')).unwrap(); // ignored: DRE was clear
+        at(&mut u, &clock, 999);
+        assert!(sink.lock().unwrap().is_empty());
+        at(&mut u, &clock, 1000);
+        assert_eq!(*sink.lock().unwrap(), b"A");
+        assert_ne!(u.read(INTFLAG).unwrap() & INT_DRE, 0);
+        assert_eq!(u.read(INTFLAG).unwrap() & INT_TXC, 0, "B is still shifting");
+        at(&mut u, &clock, 2000);
+        assert_eq!(*sink.lock().unwrap(), b"AB");
+        assert_ne!(
+            u.read(INTFLAG).unwrap() & INT_TXC,
+            0,
+            "TXC after the last stop bit"
+        );
+    }
+
+    #[test]
+    fn host_bytes_arrive_a_frame_apart_and_overflow_the_two_byte_buffer() {
+        let (mut u, clock, _) = paced(100.0);
+        u.rx_buffer().lock().unwrap().extend(b"xyz");
+        at(&mut u, &clock, 0);
+        assert_eq!(
+            u.read(INTFLAG).unwrap() & INT_RXC,
+            0,
+            "the first frame is on the wire"
+        );
+        at(&mut u, &clock, 1000);
+        assert_ne!(u.read(INTFLAG).unwrap() & INT_RXC, 0);
+        at(&mut u, &clock, 3000);
+        assert_eq!(
+            u.read_u16(STATUS).unwrap() & 4,
+            4,
+            "z found both buffer bytes full"
+        );
+        assert_eq!(u.read_u16(DATA).unwrap(), u16::from(b'x'));
+        assert_eq!(u.read_u16(DATA).unwrap(), u16::from(b'y'));
+        assert_eq!(u.read(INTFLAG).unwrap() & INT_RXC, 0);
+    }
+
+    #[test]
+    fn an_unrouted_receiver_takes_nothing_off_the_wire() {
+        let (mut u, clock, _) = paced(100.0);
+        u.routed.1 = false;
+        u.rx_buffer().lock().unwrap().push_back(b'x');
+        at(&mut u, &clock, 5000);
+        assert_eq!(u.read(INTFLAG).unwrap() & INT_RXC, 0);
+        assert_eq!(u.rx_buffer().lock().unwrap().len(), 1);
     }
 }

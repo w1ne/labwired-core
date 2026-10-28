@@ -141,6 +141,9 @@ pub struct SamGclk {
     enabled: [bool; 64],
     /// Generator enable; generator 0 defaults on (silicon GCLKGEN0).
     gen_enabled: [bool; 16],
+    /// SAMD51 GENCTRL[0..11] at 0x20 + 4n, present only for `samd51_gclk`; the
+    /// legacy `sam_gclk` layout keeps its single indirect GENCTRL at 0x04.
+    d51_genctrl: Option<[u32; 12]>,
 }
 
 impl Default for SamGclk {
@@ -161,7 +164,29 @@ impl SamGclk {
             pchctrl: [0; PCHCTRL_COUNT],
             enabled: [false; 64],
             gen_enabled,
+            d51_genctrl: None,
         }
+    }
+
+    /// SAMD51 GCLK (DS60001507F 14.8): GENCTRL0 resets to DFLL48M, enabled.
+    pub fn samd51() -> Self {
+        let mut g = Self::new();
+        let mut genctrl = [0u32; 12];
+        genctrl[0] = 0x0000_0106;
+        g.d51_genctrl = Some(genctrl);
+        g
+    }
+
+    /// SAMD51 GENCTRL value of generator `n`, when this is the SAMD51 layout.
+    pub fn samd51_genctrl(&self, n: usize) -> Option<u32> {
+        self.d51_genctrl.and_then(|g| g.get(n).copied())
+    }
+
+    fn d51_index(&self, offset: u64) -> Option<(usize, u32)> {
+        self.d51_genctrl?;
+        (0x20..0x50)
+            .contains(&offset)
+            .then(|| (((offset - 0x20) / 4) as usize, ((offset - 0x20) % 4) as u32))
     }
 
     /// Whether the peripheral channel `id` is enabled (D21 CLKCTRL or D51 PCHCTRL).
@@ -209,6 +234,9 @@ impl SamGclk {
     }
 
     fn read_byte(&self, offset: u64) -> u8 {
+        if let (Some((n, byte)), Some(g)) = (self.d51_index(offset), self.d51_genctrl) {
+            return (g[n] >> (byte * 8)) as u8;
+        }
         if let Some((id, byte)) = Self::pchctrl_index(offset) {
             return ((self.pchctrl[id] >> (byte * 8)) & 0xFF) as u8;
         }
@@ -230,6 +258,15 @@ impl SamGclk {
     }
 
     fn write_byte(&mut self, offset: u64, value: u8) {
+        if let Some((n, byte)) = self.d51_index(offset) {
+            if let Some(g) = self.d51_genctrl.as_mut() {
+                let mask: u32 = 0xFF << (byte * 8);
+                g[n] = (g[n] & !mask) | ((value as u32) << (byte * 8));
+                // GENEN is bit 8 in the SAMD51 layout.
+                self.gen_enabled[n] = g[n] & (1 << 8) != 0;
+            }
+            return;
+        }
         if let Some((id, byte)) = Self::pchctrl_index(offset) {
             let mut v = self.pchctrl[id];
             let mask: u32 = 0xFF << (byte * 8);
@@ -435,6 +472,24 @@ mod tests {
         g.write_u16(0x02, 0x4016).unwrap(); // ID=22, GEN=0, CLKEN=1
         assert!(g.clk_enabled(22));
         assert!(!g.clk_enabled(21));
+    }
+
+    /// SAMD51 layout stores GENCTRL[n] at 0x20+4*n; the legacy layout ignores it.
+    #[test]
+    fn samd51_generator_controls_are_stored_only_in_the_samd51_layout() {
+        let mut g = SamGclk::samd51();
+        assert_eq!(
+            g.read_u32(0x20).unwrap(),
+            0x106,
+            "GENCTRL0 reset: DFLL, enabled"
+        );
+        g.write_u32(0x20 + 4 * 4, 0x0006_0106).unwrap(); // GCLK4 = DFLL / 6
+        assert_eq!(g.read_u32(0x30).unwrap(), 0x0006_0106);
+        assert_eq!(g.samd51_genctrl(4), Some(0x0006_0106));
+        let mut legacy = SamGclk::new();
+        legacy.write_u32(0x30, 0x0006_0106).unwrap();
+        assert_eq!(legacy.read_u32(0x30).unwrap(), 0);
+        assert_eq!(legacy.samd51_genctrl(4), None);
     }
 
     /// SAMD51 GCLK: PCHCTRL[n] at 0x80+4*n, CHEN=bit 6 (DS60001507).

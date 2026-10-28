@@ -1186,6 +1186,15 @@ impl SystemBus {
     /// (enabled on Arm) so pre-existing third-party configs that rely on
     /// bit-band keep working; all in-tree Arm chip configs declare `core`.
     pub(crate) fn chip_has_bit_band(chip: &ChipDescriptor) -> bool {
+        // Bit-banding is optional on M3/M4, and the SAMD51 (Cortex-M4F) does
+        // not implement it: its APB-C/D bridges map real peripherals in the
+        // would-be alias window (TC4/TC5, SERCOM4..7, DAC, QSPI at
+        // 0x4200_0000..0x4400_0000, DS60001507F §9.2), so translating there
+        // would redirect those registers onto PAC/OSCCTRL at 0x4000_xxxx.
+        // Matched by part name so no other M3/M4 chip changes behaviour.
+        if chip.name.to_ascii_lowercase().starts_with("atsamd51") {
+            return false;
+        }
         match chip.core.as_deref() {
             Some(core) => {
                 let c = core.trim().to_ascii_lowercase();
