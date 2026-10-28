@@ -635,9 +635,10 @@ impl<C: Cpu + 'static> MachineTrait for Machine<C> {
             include_bytes,
             peripheral: None,
         };
-        self.bus.display_artifact_with_extra(device_id, &opts, &mut |f| {
-            self.cpu.for_each_attached_device(f);
-        })
+        self.bus
+            .display_artifact_with_extra(device_id, &opts, &mut |f| {
+                self.cpu.for_each_attached_device(f);
+            })
     }
 
     fn bus_trace_snapshot(&self) -> Vec<crate::bus::BusTraceEvent> {

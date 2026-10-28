@@ -7,9 +7,9 @@
 
 use labwired_config::{ChipDescriptor, ExternalDevice, SystemManifest};
 use labwired_core::bus::SystemBus;
-use labwired_core::Bus;
 use labwired_core::cpu::Avr;
 use labwired_core::inspect::InspectOpts;
+use labwired_core::Bus;
 use labwired_core::Machine;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -24,14 +24,8 @@ fn uno_st7789_bus() -> SystemBus {
     let chip_path = repo("configs/chips/atmega328p.yaml");
     let chip = ChipDescriptor::from_file(&chip_path).expect("atmega328p");
     let mut cfg = HashMap::new();
-    cfg.insert(
-        "cs_pin".into(),
-        serde_yaml::Value::String("PB2".into()),
-    );
-    cfg.insert(
-        "dc_pin".into(),
-        serde_yaml::Value::String("PB1".into()),
-    );
+    cfg.insert("cs_pin".into(), serde_yaml::Value::String("PB2".into()));
+    cfg.insert("dc_pin".into(), serde_yaml::Value::String("PB1".into()));
     let manifest = SystemManifest {
         cosim_models: Vec::new(),
         motor_models: Vec::new(),
@@ -87,7 +81,7 @@ fn paint_white_block(bus: &mut SystemBus) {
         (false, 0x01), // SWRESET
         (false, 0x11), // SLPOUT
         (false, 0x3A),
-        (true, 0x55), // COLMOD 16bpp
+        (true, 0x55),  // COLMOD 16bpp
         (false, 0x29), // DISPON
         (false, 0x2A),
         (true, 0x00),
@@ -98,7 +92,7 @@ fn paint_white_block(bus: &mut SystemBus) {
         (true, 0x00),
         (true, 0x00),
         (true, 0x00),
-        (true, 0x01), // RASET y0..y1
+        (true, 0x01),  // RASET y0..y1
         (false, 0x2C), // RAMWR
         (true, 0xFF),
         (true, 0xFF),
@@ -161,7 +155,8 @@ fn cpu_held_spi_after_take_is_visible_via_inspect_extra() {
         cpu.push_spi_device(d);
     }
     assert!(
-        bus.inspect_devices(None, &InspectOpts::default()).is_empty(),
+        bus.inspect_devices(None, &InspectOpts::default())
+            .is_empty(),
         "after take, bus-only inspect must not see the panel"
     );
     let machine = Machine::new(cpu, bus);

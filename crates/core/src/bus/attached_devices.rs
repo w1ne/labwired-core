@@ -213,6 +213,7 @@ impl SystemBus {
     /// Like [`Self::inspect_devices`], but also walks devices supplied by
     /// `extra` (CPU-held SPI/I²C after a `take_*`). Same join against
     /// `external_device_decls`.
+    #[allow(clippy::type_complexity)]
     pub fn inspect_devices_with_extra(
         &self,
         filter: Option<&str>,
@@ -269,6 +270,7 @@ impl SystemBus {
     }
 
     /// Like [`Self::display_artifact`], also walking CPU-held devices via `extra`.
+    #[allow(clippy::type_complexity)]
     pub fn display_artifact_with_extra(
         &self,
         id: &str,
@@ -330,6 +332,7 @@ impl SystemBus {
         self.join_devices_with_extra(filter, only_id, opts, &mut |_| {})
     }
 
+    #[allow(clippy::type_complexity)]
     fn join_devices_with_extra(
         &self,
         filter: Option<&str>,
@@ -348,16 +351,23 @@ impl SystemBus {
     pub fn device_logs(&self, id: &str) -> Option<Vec<crate::peripheral_log::PeripheralLog>> {
         let mut logs = None;
         let opts = crate::inspect::InspectOpts::default();
-        self.join_devices_visit(None, Some(id), &opts, &mut |_, d| {
-            if logs.is_none() {
-                logs = Some(d.evidence.map(|e| e.evidence_logs()).unwrap_or_default());
-            }
-        }, &mut |_| {});
+        self.join_devices_visit(
+            None,
+            Some(id),
+            &opts,
+            &mut |_, d| {
+                if logs.is_none() {
+                    logs = Some(d.evidence.map(|e| e.evidence_logs()).unwrap_or_default());
+                }
+            },
+            &mut |_| {},
+        );
         logs
     }
 
     /// [`Self::join_devices`], calling `visit(id, device)` for each device
     /// that passes the filters, after its id is resolved.
+    #[allow(clippy::type_complexity)]
     fn join_devices_visit(
         &self,
         filter: Option<&str>,
