@@ -44,14 +44,17 @@ use std::sync::{Arc, Mutex};
 const ESP_IMAGE_HEADER_LEN: usize = 24;
 const ESP_IMAGE_MAGIC: u8 = 0xE9;
 
-pub(super) fn build(req: BuildRequest<'_>) -> anyhow::Result<BuiltMachine> {
+pub(super) fn build(
+    req: BuildRequest<'_>,
+    plugins: &[&dyn crate::plugin::ChipPlugin],
+) -> anyhow::Result<BuiltMachine> {
     match (&req.firmware, req.boot) {
-        (FirmwareSource::Elf(elf), BootMode::FastBoot) => build_plain(&req, elf),
+        (FirmwareSource::Elf(elf), BootMode::FastBoot) => build_plain(&req, elf, plugins),
         (FirmwareSource::FlashImage { image, symbols }, BootMode::FastBoot) => {
-            build_flash_fastboot(&req, image, *symbols)
+            build_flash_fastboot(&req, image, *symbols, plugins)
         }
         (FirmwareSource::FlashImage { image, symbols }, BootMode::RomBoot) => {
-            build_romboot(&req, image, *symbols)
+            build_romboot(&req, image, *symbols, plugins)
         }
         (FirmwareSource::Elf(_), BootMode::RomBoot) => Err(anyhow!(
             "RISC-V ROM boot needs a flash image (bootloader + partition table + app): the \
@@ -65,9 +68,13 @@ pub(super) fn build(req: BuildRequest<'_>) -> anyhow::Result<BuiltMachine> {
 /// SP is seeded at the top of RAM because fast boot skips the ROM and 2nd-stage
 /// bootloader that would normally set it; the app's first prologue store would
 /// otherwise fault.
-fn build_plain(req: &BuildRequest<'_>, elf: &[u8]) -> anyhow::Result<BuiltMachine> {
+fn build_plain(
+    req: &BuildRequest<'_>,
+    elf: &[u8],
+    plugins: &[&dyn crate::plugin::ChipPlugin],
+) -> anyhow::Result<BuiltMachine> {
     let program_image = parse_elf_image(elf).map_err(|e| anyhow!("Loader Error: {e:#}"))?;
-    build_program_image(req, &program_image, elf.to_vec())
+    build_program_image(req, &program_image, elf.to_vec(), plugins)
 }
 
 /// `new_from_config_riscv_program_image`.
@@ -75,11 +82,12 @@ fn build_program_image(
     req: &BuildRequest<'_>,
     program_image: &ProgramImage,
     firmware_bytes: Vec<u8>,
+    plugins: &[&dyn crate::plugin::ChipPlugin],
 ) -> anyhow::Result<BuiltMachine> {
     let (chip, manifest, blobs) = (req.chip, req.system, req.blobs);
     let echo = req.options.echo_uart_stdout;
-    let mut bus =
-        SystemBus::from_config(chip, manifest).map_err(|e| anyhow!("Bus config error: {e:#}"))?;
+    let mut bus = SystemBus::from_config_with_plugins(chip, manifest, plugins)
+        .map_err(|e| anyhow!("Bus config error: {e:#}"))?;
 
     // Inject the on-demand ESP32-C3 boot ROM blobs into the chip's still
     // zero-filled `rom`/`rom_data` regions, replay the ROM's `.data` copy, and
@@ -153,10 +161,11 @@ fn build_flash_fastboot(
     req: &BuildRequest<'_>,
     flash: &[u8],
     symbols: Option<&[u8]>,
+    plugins: &[&dyn crate::plugin::ChipPlugin],
 ) -> anyhow::Result<BuiltMachine> {
     let (chip, manifest, blobs) = (req.chip, req.system, req.blobs);
-    let mut bus =
-        SystemBus::from_config(chip, manifest).map_err(|e| anyhow!("Bus config error: {e:#}"))?;
+    let mut bus = SystemBus::from_config_with_plugins(chip, manifest, plugins)
+        .map_err(|e| anyhow!("Bus config error: {e:#}"))?;
 
     let (Some(irom), Some(drom)) = (blobs.get("esp32c3_irom"), blobs.get("esp32c3_drom")) else {
         return Err(anyhow!(
@@ -226,10 +235,11 @@ fn build_romboot(
     req: &BuildRequest<'_>,
     flash: &[u8],
     symbols: Option<&[u8]>,
+    plugins: &[&dyn crate::plugin::ChipPlugin],
 ) -> anyhow::Result<BuiltMachine> {
     let (chip, manifest, blobs) = (req.chip, req.system, req.blobs);
-    let mut bus =
-        SystemBus::from_config(chip, manifest).map_err(|e| anyhow!("Bus config error: {e:#}"))?;
+    let mut bus = SystemBus::from_config_with_plugins(chip, manifest, plugins)
+        .map_err(|e| anyhow!("Bus config error: {e:#}"))?;
 
     // ROM boot cannot proceed without the real ROM — the reset vector executes
     // it directly.

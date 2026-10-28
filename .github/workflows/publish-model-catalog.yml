@@ -1,0 +1,68 @@
+name: Publish Model Catalog
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "configs/**"
+      - "crates/core/src/session/catalog.rs"
+      - "crates/core/examples/export_catalog_names.rs"
+      - "scripts/ci/build_model_catalog_bundle.py"
+      - ".github/workflows/publish-model-catalog.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: model-catalog-publisher
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require main ref
+        if: ${{ github.ref != 'refs/heads/main' }}
+        shell: bash
+        run: |
+          echo "::error::Model catalog publication requires refs/heads/main (got $GITHUB_REF)."
+          exit 1
+
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/heads/main
+
+      - name: Resolve checked-out main commit
+        run: echo "CORE_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - uses: dtolnay/rust-toolchain@1.95.0
+
+      - name: Test bundle builder
+        run: python3 scripts/ci/test_model_catalog_bundle.py
+
+      - name: Build model catalog bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          chips_json="$(cargo run --quiet -p labwired-core --example export_catalog_names)"
+          python3 scripts/ci/build_model_catalog_bundle.py \
+            --chips-json "$chips_json" \
+            --core-commit "$CORE_COMMIT" \
+            --output-dir "$RUNNER_TEMP/model-catalog"
+
+      - name: Replace model-catalog branch contents
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch --orphan model-catalog
+          cp "$RUNNER_TEMP/model-catalog/catalog.json" ./catalog.json
+          cp "$RUNNER_TEMP/model-catalog/configs.tar.gz" ./configs.tar.gz
+          git add -- catalog.json configs.tar.gz
+          expected_files=$'catalog.json\nconfigs.tar.gz'
+          staged_files="$(git diff --cached --name-only | sort)"
+          test "$staged_files" = "$expected_files"
+          git commit -m "Publish model catalog for $CORE_COMMIT"
+          git push --force origin HEAD:model-catalog

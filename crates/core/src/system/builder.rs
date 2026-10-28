@@ -327,12 +327,21 @@ pub struct BuiltMachine {
 /// boot path the engine has no constructor for); nothing falls back to a
 /// different path.
 pub fn build_machine(req: BuildRequest<'_>) -> anyhow::Result<BuiltMachine> {
+    build_machine_with_plugins(req, &[])
+}
+
+/// [`build_machine`] with an out-of-tree chip plugin registry. Plugins are
+/// offered each configured peripheral before the in-tree factories.
+pub fn build_machine_with_plugins(
+    req: BuildRequest<'_>,
+    plugins: &[&dyn crate::plugin::ChipPlugin],
+) -> anyhow::Result<BuiltMachine> {
     match machine_family(req.chip)? {
-        MachineFamily::CortexM => arm::build(req),
-        MachineFamily::CortexA => cortex_a::build(req),
-        MachineFamily::RiscV => riscv::build(req),
-        MachineFamily::Xtensa => xtensa::build(req),
-        MachineFamily::Avr => avr::build(req),
-        MachineFamily::Pic24 => pic24::build(req),
+        MachineFamily::CortexM => arm::build(req, plugins),
+        MachineFamily::CortexA => cortex_a::build(req, plugins),
+        MachineFamily::RiscV => riscv::build(req, plugins),
+        MachineFamily::Xtensa => xtensa::build(req, plugins),
+        MachineFamily::Avr => avr::build(req, plugins),
+        MachineFamily::Pic24 => pic24::build(req, plugins),
     }
 }

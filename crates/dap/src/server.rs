@@ -394,8 +394,13 @@ impl DapServer {
     }
 
     pub fn new() -> Self {
+        Self::with_plugins(Vec::new())
+    }
+
+    /// Create a DAP server with the supplied chip and peripheral plugins.
+    pub fn with_plugins(plugins: Vec<Arc<dyn labwired_core::plugin::ChipPlugin>>) -> Self {
         Self {
-            adapter: LabwiredAdapter::new(),
+            adapter: LabwiredAdapter::with_plugins(plugins),
             running: Arc::new(Mutex::new(false)),
             stop_on_entry: Arc::new(Mutex::new(true)),
             source_map: Arc::new(Mutex::new(Vec::new())),

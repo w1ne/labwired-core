@@ -13,7 +13,7 @@ use crate::Peripheral;
 /// Version of the plugin interface. Bump on any breaking change to
 /// `ChipPlugin` or the types it exposes; `labwired_cli::run_with_plugins`
 /// refuses plugins whose `api_version()` does not match.
-pub const PLUGIN_API_VERSION: u32 = 1;
+pub const PLUGIN_API_VERSION: u32 = 2;
 
 /// Inputs a plugin's peripheral factory receives — the union of what the
 /// in-tree family factories get today.
@@ -26,7 +26,7 @@ pub struct PeripheralBuildCtx<'a> {
 
 /// A bundle of out-of-tree chips: behavioral peripheral models plus the
 /// embedded YAMLs that let `chip: "<name>"` resolve without the filesystem.
-pub trait ChipPlugin {
+pub trait ChipPlugin: Send + Sync {
     /// Must return [`PLUGIN_API_VERSION`] of the core the plugin was built against.
     fn api_version(&self) -> u32;
 
