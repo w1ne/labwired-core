@@ -631,13 +631,13 @@ impl<C: Cpu + 'static> MachineTrait for Machine<C> {
         device_id: &str,
         include_bytes: bool,
     ) -> Option<crate::inspect::Artifact> {
-        self.bus.display_artifact(
-            device_id,
-            &crate::inspect::InspectOpts {
-                include_bytes,
-                peripheral: None,
-            },
-        )
+        let opts = crate::inspect::InspectOpts {
+            include_bytes,
+            peripheral: None,
+        };
+        self.bus.display_artifact_with_extra(device_id, &opts, &mut |f| {
+            self.cpu.for_each_attached_device(f);
+        })
     }
 
     fn bus_trace_snapshot(&self) -> Vec<crate::bus::BusTraceEvent> {

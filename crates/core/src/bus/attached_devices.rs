@@ -210,6 +210,18 @@ impl SystemBus {
         self.join_devices(filter, None, opts)
     }
 
+    /// Like [`Self::inspect_devices`], but also walks devices supplied by
+    /// `extra` (CPU-held SPI/I²C after a `take_*`). Same join against
+    /// `external_device_decls`.
+    pub fn inspect_devices_with_extra(
+        &self,
+        filter: Option<&str>,
+        opts: &crate::inspect::InspectOpts,
+        extra: &mut dyn FnMut(&mut dyn FnMut(Option<&str>, AttachedDeviceRef<'_>)),
+    ) -> Vec<crate::inspect::DeviceInspect> {
+        self.join_devices_with_extra(filter, None, opts, extra)
+    }
+
     /// What the device the author called `id` is currently showing — THE door
     /// for reading a display, whatever bound it.
     ///
@@ -249,6 +261,21 @@ impl SystemBus {
         opts: &crate::inspect::InspectOpts,
     ) -> Option<crate::inspect::Artifact> {
         self.join_devices(None, Some(id), opts)
+            .into_iter()
+            .next()?
+            .artifacts
+            .into_iter()
+            .find(crate::inspect::is_display_artifact)
+    }
+
+    /// Like [`Self::display_artifact`], also walking CPU-held devices via `extra`.
+    pub fn display_artifact_with_extra(
+        &self,
+        id: &str,
+        opts: &crate::inspect::InspectOpts,
+        extra: &mut dyn FnMut(&mut dyn FnMut(Option<&str>, AttachedDeviceRef<'_>)),
+    ) -> Option<crate::inspect::Artifact> {
+        self.join_devices_with_extra(None, Some(id), opts, extra)
             .into_iter()
             .next()?
             .artifacts
@@ -300,7 +327,17 @@ impl SystemBus {
         only_id: Option<&str>,
         opts: &crate::inspect::InspectOpts,
     ) -> Vec<crate::inspect::DeviceInspect> {
-        self.join_devices_visit(filter, only_id, opts, &mut |_, _| {})
+        self.join_devices_with_extra(filter, only_id, opts, &mut |_| {})
+    }
+
+    fn join_devices_with_extra(
+        &self,
+        filter: Option<&str>,
+        only_id: Option<&str>,
+        opts: &crate::inspect::InspectOpts,
+        extra: &mut dyn FnMut(&mut dyn FnMut(Option<&str>, AttachedDeviceRef<'_>)),
+    ) -> Vec<crate::inspect::DeviceInspect> {
+        self.join_devices_visit(filter, only_id, opts, &mut |_, _| {}, extra)
     }
 
     /// The named logs of the attached device whose manifest id is `id`
@@ -315,7 +352,7 @@ impl SystemBus {
             if logs.is_none() {
                 logs = Some(d.evidence.map(|e| e.evidence_logs()).unwrap_or_default());
             }
-        });
+        }, &mut |_| {});
         logs
     }
 
@@ -327,6 +364,7 @@ impl SystemBus {
         only_id: Option<&str>,
         opts: &crate::inspect::InspectOpts,
         visit: &mut dyn FnMut(&str, &AttachedDeviceRef<'_>),
+        extra: &mut dyn FnMut(&mut dyn FnMut(Option<&str>, AttachedDeviceRef<'_>)),
     ) -> Vec<crate::inspect::DeviceInspect> {
         let decls = &self.external_device_decls;
         // A declaration's controller is its own `connection` unless that names
@@ -343,7 +381,7 @@ impl SystemBus {
 
         let mut used = vec![false; decls.len()];
         let mut out = Vec::new();
-        self.for_each_attached_device(&mut |bus, d| {
+        let mut one = |bus: Option<&str>, d: AttachedDeviceRef<'_>| {
             if filter.is_some_and(|f| bus != Some(f)) {
                 return;
             }
@@ -404,7 +442,9 @@ impl SystemBus {
                 id,
                 artifacts,
             });
-        });
+        };
+        self.for_each_attached_device(&mut one);
+        extra(&mut one);
         out
     }
 

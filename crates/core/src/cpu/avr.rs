@@ -224,11 +224,11 @@ pub struct Avr {
     pub spcr: u8,
     pub spsr: u8,
     pub spdr: u8,
-    /// SPI slaves (e.g. matrix MAX31855) attached for L4.
+    /// SPI slaves attached directly to the CPU (unit tests / legacy take).
     ///
-    /// Not `Clone`/`Debug`: trait objects. Kits land here after
-    /// [`crate::bus::SystemBus::take_spi_devices`] moves them off the bus
-    /// parking SPI controller (AVR has no MMIO SPI model).
+    /// Not `Clone`/`Debug`: trait objects. Production kits stay on the bus
+    /// parking SPI controller and are clocked from SPDR via
+    /// [`crate::bus::SystemBus::clock_parking_spi`] so inspect can see them.
     pub spi_devices: Vec<Box<dyn SpiDevice>>,
     /// TWI (I²C) — TWBR/TWSR/TWAR/TWDR/TWCR (data-space 0xB8..0xBC).
     pub twbr: u8,
@@ -905,12 +905,42 @@ impl Avr {
             }
             0x004E => {
                 // SPI data: master clocks one byte through attached slaves.
+                // Sample D/C for every device that declares a `dc_source`
+                // (same semantics as SystemBus::maybe_latch_dc) — generic for
+                // any SPI panel with a DC line, not device-specific.
                 let mosi = value;
                 let mut miso = 0u8;
+                {
+                    let sources: Vec<(usize, u64, u8)> = self
+                        .spi_devices
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(i, d)| d.dc_source().map(|(a, b)| (i, a, b)))
+                        .collect();
+                    for (i, addr, bit) in sources {
+                        let level = bus
+                            .read_u32(addr)
+                            .map(|v| (v >> bit) & 1 != 0)
+                            .unwrap_or(false);
+                        self.spi_devices[i].set_dc_level(level);
+                    }
+                }
                 for dev in &mut self.spi_devices {
                     let resp = dev.transfer(mosi);
                     if resp != 0 {
                         miso = resp;
+                    }
+                }
+                // Kits left on the parking SPI controller (not taken): latch
+                // D/C and clock them so inspect / display_artifact still see
+                // the panel.
+                if let Some(sys) = bus
+                    .as_any_mut()
+                    .and_then(|a| a.downcast_mut::<crate::bus::SystemBus>())
+                {
+                    let bus_miso = sys.clock_parking_spi(mosi);
+                    if bus_miso != 0 {
+                        miso = bus_miso;
                     }
                 }
                 self.spdr = miso;
@@ -1741,6 +1771,18 @@ impl Cpu for Avr {
             5
         } else {
             4
+        }
+    }
+
+    fn for_each_attached_device(
+        &self,
+        f: &mut dyn FnMut(Option<&str>, crate::inspect::AttachedDeviceRef<'_>),
+    ) {
+        for device in &self.spi_devices {
+            crate::inspect::visit_spi_device(&**device, &mut |d| f(Some("spi"), d));
+        }
+        for slave in &self.i2c_slaves {
+            crate::inspect::visit_i2c_device(&**slave, &mut |d| f(Some("i2c"), d));
         }
     }
 
@@ -3161,5 +3203,74 @@ mod tests {
         for (v328, v2560) in table {
             assert_eq!(mega2560_vector(v328), v2560, "328P vector {v328}");
         }
+    }
+
+    /// Recording SPI slave: captures (dc_level, mosi) at each transfer so the
+    /// SPDR path's D/C sample can be asserted without a full panel model.
+    struct DcProbe {
+        src: Option<(u64, u8)>,
+        level: bool,
+        frames: std::sync::Arc<std::sync::Mutex<Vec<(bool, u8)>>>,
+    }
+
+    impl SpiDevice for DcProbe {
+        fn transfer(&mut self, mosi_byte: u8) -> u8 {
+            self.frames.lock().unwrap().push((self.level, mosi_byte));
+            0
+        }
+        fn cs_pin(&self) -> &str {
+            "PB2"
+        }
+        fn set_dc_level(&mut self, level: bool) {
+            self.level = level;
+        }
+        fn dc_source(&self) -> Option<(u64, u8)> {
+            self.src
+        }
+        fn set_dc_source(&mut self, odr_addr: u64, bit: u8) {
+            self.src = Some((odr_addr, bit));
+        }
+        fn as_any(&self) -> Option<&dyn std::any::Any> {
+            Some(self)
+        }
+    }
+
+    #[test]
+    fn spdr_write_samples_dc_pin_per_byte() {
+        let mut cpu = Avr::new();
+        let frames = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let mut probe = DcProbe {
+            src: None,
+            level: false,
+            frames: frames.clone(),
+        };
+        // Fake PORT latch at 0x1000 bit 3 — whatever the kit's dc_source is.
+        const ODR: u64 = 0x1000;
+        const BIT: u8 = 3;
+        probe.set_dc_source(ODR, BIT);
+        cpu.push_spi_device(Box::new(probe));
+
+        let mut bus = MockBus::new();
+        // Assert the sampled D/C level rides with the GPIO latch per byte.
+        bus.write_u8(ODR, 1 << BIT).unwrap();
+        cpu.data_write(0x4E, 0xAA, &mut bus).unwrap();
+        bus.write_u8(ODR, 0).unwrap();
+        cpu.data_write(0x4E, 0x55, &mut bus).unwrap();
+        bus.write_u8(ODR, 1 << BIT).unwrap();
+        cpu.data_write(0x4E, 0xFF, &mut bus).unwrap();
+
+        let got = frames.lock().unwrap().clone();
+        assert!(
+            got.iter().any(|&(dc, b)| dc && b == 0xAA),
+            "SPDR must latch D/C high before 0xAA; got {got:?}"
+        );
+        assert!(
+            got.iter().any(|&(dc, b)| !dc && b == 0x55),
+            "SPDR must latch D/C low before 0x55; got {got:?}"
+        );
+        assert!(
+            got.iter().any(|&(dc, b)| dc && b == 0xFF),
+            "SPDR must re-sample D/C high before 0xFF; got {got:?}"
+        );
     }
 }

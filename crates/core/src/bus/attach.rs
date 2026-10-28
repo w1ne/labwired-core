@@ -3509,12 +3509,49 @@ impl SystemBus {
         Ok(())
     }
 
+    /// Clock one SPI byte through every parking SPI controller that still
+    /// holds attached kits, latching each device's D/C line first.
+    ///
+    /// AVR hardware SPI lives in the CPU data-space model (SPCR/SPSR/SPDR),
+    /// not as bus MMIO. Kits therefore stay on the bus parking `spi`
+    /// peripheral so [`SystemBus::inspect_devices`] / [`SystemBus::display_artifact`]
+    /// can see them; the AVR SPDR write path calls this to move bytes.
+    /// Same D/C semantics as [`Self::maybe_latch_dc`] — generic for any SPI
+    /// device that declares a `dc_source`, not panel-specific.
+    pub fn clock_parking_spi(&mut self, mosi: u8) -> u8 {
+        let indices: Vec<usize> = self
+            .peripherals
+            .iter()
+            .enumerate()
+            .filter(|(_, entry)| {
+                entry
+                    .dev
+                    .spi_attached_devices()
+                    .is_some_and(|devs| !devs.is_empty())
+            })
+            .map(|(i, _)| i)
+            .collect();
+        let mut miso = 0u8;
+        for idx in indices {
+            self.maybe_latch_dc(idx);
+            if let Some(devs) = self.peripherals[idx].dev.spi_attached_devices_mut() {
+                for device in devs {
+                    let resp = device.transfer(mosi);
+                    if resp != 0 {
+                        miso = resp;
+                    }
+                }
+            }
+        }
+        miso
+    }
+
     /// Take every slave off a SPI controller (by peripheral id).
     ///
-    /// Used by the AVR path: kits attach onto a bus parking `spi` peripheral
-    /// during `from_config`, then the interpreter owns the devices because
-    /// hardware SPI lives in the CPU data-space model (SPCR/SPSR/SPDR), not
-    /// as bus MMIO.
+    /// Historically used by the AVR path. Prefer leaving kits on the parking
+    /// controller and clocking them via [`Self::clock_parking_spi`] so inspect
+    /// / display readout still see the panel. Kept for callers that still move
+    /// devices onto a CPU-owned list.
     pub fn take_spi_devices(
         &mut self,
         controller: &str,

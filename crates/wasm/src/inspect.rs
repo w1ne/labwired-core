@@ -191,7 +191,11 @@ impl WasmSimulator {
             include_bytes,
             peripheral: None,
         };
-        if let Some(found) = machine.bus.display_artifact(device_id, &opts) {
+        if let Some(found) = machine.bus.display_artifact_with_extra(
+            device_id,
+            &opts,
+            &mut |f| machine.cpu.for_each_attached_device(f),
+        ) {
             return Some(found);
         }
         let binding = self.board_io.iter().find(|b| b.id == device_id)?;
