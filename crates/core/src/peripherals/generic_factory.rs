@@ -167,6 +167,18 @@ pub const MODEL_TYPES: &[&str] = &[
     "sam_sercom_spi",
     "samd51_nvmctrl_manual_storage",
     "samd51_cmcc_control",
+    // Opt-in SAMD51 board models (`build_samd51_board_model`): fixed
+    // instance addresses, wired by the SAMD51 chip descriptors.
+    "samd51_oscctrl",
+    "samd51_gclk",
+    "samd51_tc",
+    "samd51_tcc",
+    "samd51_eic",
+    "samd51_dac",
+    "samd51_adc",
+    "samd51_pac",
+    "samd51_sercom_i2cm",
+    "samd51_sercom_usart",
     "sam_dmac_byte",
     "sam_dmac_sercom4_tx_byte",
     // Reserve the full name: never fuzzy-coerce an unqualified SAM DMAC to STM32.
@@ -367,6 +379,117 @@ fn dma_request_table(p_cfg: &PeripheralConfig) -> Vec<(String, serde_yaml::Value
         .collect();
     out.sort_by(|a, b| a.0.cmp(&b.0));
     out
+}
+
+// Opt-in SAMD51 board models: fixed instance addresses, no config overrides.
+// Cold construction keeps them out of the shared dispatcher's hot path.
+#[cold]
+#[inline(never)]
+fn build_samd51_board_model(
+    kind: &str,
+    p_cfg: &PeripheralConfig,
+) -> anyhow::Result<Box<dyn Peripheral>> {
+    // The DAC's only options are the board's reference levels; the I2C
+    // master's is the board's SCL rise time.
+    let admitted = |key: &String| match kind {
+        "samd51_dac" => key == "vrefa_mv" || key == "vddana_mv",
+        "samd51_sercom_i2cm" => key == "scl_rise_ns",
+        _ => false,
+    };
+    if !p_cfg.config.keys().all(admitted) {
+        anyhow::bail!("{kind} admits no config overrides");
+    }
+    Ok(match kind {
+        "samd51_oscctrl" => {
+            if p_cfg.base_address != 0x40001000 || p_cfg.irq.is_some() {
+                anyhow::bail!("SAMD51 OSCCTRL requires base 0x40001000 and no IRQ");
+            }
+            Box::new(crate::peripherals::sam::oscctrl::Samd51Oscctrl::new())
+        }
+        "samd51_adc" => {
+            use crate::peripherals::sam::adc::{Samd51Adc, ADC_INSTANCES};
+            let Some(instance) = ADC_INSTANCES.iter().find(|i| i.base == p_cfg.base_address) else {
+                anyhow::bail!("SAMD51 ADC base must be ADC0 or ADC1");
+            };
+            if p_cfg.irq.is_some() {
+                anyhow::bail!("SAMD51 ADC interrupts are not modelled");
+            }
+            Box::new(Samd51Adc::new(*instance))
+        }
+        "samd51_tcc" => {
+            use crate::peripherals::sam::tcc::{Samd51Tcc, TCC_INSTANCES};
+            let Some(instance) = TCC_INSTANCES.iter().find(|i| i.base == p_cfg.base_address) else {
+                anyhow::bail!("SAMD51 TCC base must be one of TCC0..TCC4");
+            };
+            // Line 0 plus one line per channel are reported by the model itself.
+            if p_cfg.irq.is_some_and(|irq| irq != instance.irq) {
+                anyhow::bail!("SAMD51 TCC IRQ must be its first line {}", instance.irq);
+            }
+            Box::new(Samd51Tcc::new(*instance))
+        }
+        "samd51_dac" | "samd51_pac" => {
+            let base = if kind == "samd51_dac" {
+                0x43002400
+            } else {
+                0x40000000
+            };
+            if p_cfg.base_address != base || p_cfg.irq.is_some() {
+                anyhow::bail!("{kind} requires base {base:#x} and no IRQ");
+            }
+            if kind == "samd51_dac" {
+                let mv = |key: &str| p_cfg.config.get(key).and_then(|v| v.as_f64());
+                Box::new(
+                    crate::peripherals::sam::dac::Samd51Dac::new()
+                        .with_references(mv("vrefa_mv"), mv("vddana_mv")),
+                )
+            } else {
+                Box::new(crate::peripherals::sam::pac::Samd51Pac::new())
+            }
+        }
+        "samd51_sercom_i2cm" => {
+            use crate::peripherals::sam::sercom_i2cm::{Samd51SercomI2cm, SERCOM_INSTANCES};
+            let Some(instance) = SERCOM_INSTANCES
+                .iter()
+                .find(|i| i.base == p_cfg.base_address)
+            else {
+                anyhow::bail!("SAMD51 SERCOM base must be one of SERCOM0..SERCOM5");
+            };
+            // Four lines (first_irq..first_irq+3) are reported by the model itself.
+            if p_cfg.irq.is_some() {
+                anyhow::bail!("SAMD51 SERCOM I2C master takes no single IRQ");
+            }
+            let rise = p_cfg.config.get("scl_rise_ns").and_then(|v| v.as_u64());
+            Box::new(Samd51SercomI2cm::new(*instance).with_scl_rise_ns(rise.unwrap_or(0)))
+        }
+        "samd51_eic" => {
+            // Sixteen channel lines (IRQ 12..27) are reported by the model itself.
+            if p_cfg.base_address != 0x40002800 || p_cfg.irq.is_some() {
+                anyhow::bail!("SAMD51 EIC requires base 0x40002800 and no single IRQ");
+            }
+            Box::new(crate::peripherals::sam::eic::Samd51Eic::new())
+        }
+        "samd51_gclk" => {
+            if p_cfg.base_address != 0x40001c00 || p_cfg.irq.is_some() {
+                anyhow::bail!("SAMD51 GCLK requires base 0x40001C00 and no IRQ");
+            }
+            Box::new(crate::peripherals::sam_clock::SamGclk::samd51())
+        }
+        "samd51_tc" => {
+            use crate::peripherals::sam::tc::{Samd51Tc, TC_INSTANCES};
+            let Some(instance) = TC_INSTANCES.iter().find(|i| i.base == p_cfg.base_address) else {
+                anyhow::bail!("SAMD51 TC base must be one of TC0..TC5");
+            };
+            if p_cfg.irq != Some(instance.irq) {
+                anyhow::bail!(
+                    "SAMD51 TC at {:#x} requires IRQ {}",
+                    instance.base,
+                    instance.irq
+                );
+            }
+            Box::new(Samd51Tc::new(*instance))
+        }
+        _ => anyhow::bail!("unknown SAMD51 board model {kind}"),
+    })
 }
 
 /// Build a generic peripheral model for `canonical_type`, or `None` if it is not
@@ -621,6 +744,44 @@ pub fn try_build(
         "sam_sercom_usart" => {
             Box::new(crate::peripherals::sam::sercom_usart::SamSercomUsart::new())
         }
+        "samd51_oscctrl" | "samd51_gclk" | "samd51_tc" | "samd51_tcc" | "samd51_eic"
+        | "samd51_dac" | "samd51_adc" | "samd51_pac" | "samd51_sercom_i2cm" => {
+            build_samd51_board_model(canonical_type, p_cfg)?
+        }
+        "samd51_sercom_usart" => {
+            use crate::peripherals::sam::sercom_usart::{SamSercomUsart, UsartPads};
+            let key = |k: &str| p_cfg.config.get(k).and_then(|v| v.as_u64());
+            let usart = SamSercomUsart::new_samd51();
+            // Optional pads: all of tx/rx port and bit, pad_mux, txpo, rxpo.
+            match (
+                key("tx_port_base"),
+                key("tx_bit"),
+                key("rx_port_base"),
+                key("rx_bit"),
+                key("pad_mux"),
+                key("txpo"),
+                key("rxpo"),
+            ) {
+                (Some(tp), Some(tb), Some(rp), Some(rb), Some(mux), Some(txpo), Some(rxpo))
+                    if tb < 32 && rb < 32 && mux < 16 && txpo < 4 && rxpo < 4 =>
+                {
+                    let usart = usart.with_pads(UsartPads {
+                        tx: (tp, tb as u8),
+                        rx: (rp, rb as u8),
+                        mux: mux as u8,
+                        txpo: txpo as u8,
+                        rxpo: rxpo as u8,
+                    });
+                    // Optional: the core clock channel paces bytes at the baud.
+                    match key("gclk_id") {
+                        Some(channel) => Box::new(usart.with_pacing(channel)),
+                        None => Box::new(usart),
+                    }
+                }
+                (None, None, None, None, None, None, None) => Box::new(usart),
+                _ => anyhow::bail!("SAMD51 USART '{}' needs all pad keys or none", p_cfg.id),
+            }
+        }
         "samd51_nvmctrl_manual_storage" | "samd51_cmcc_control" => {
             let expected = if canonical_type == "samd51_nvmctrl_manual_storage" {
                 0x4100_4000
@@ -691,6 +852,9 @@ pub fn try_build(
                     mosi: mosi as u8,
                     mux: mux as u8,
                     dopo: dopo as u8,
+                    // Optional: the SERCOM core clock channel times bytes on
+                    // the live clock tree.
+                    core_gclk: p_cfg.config.get("gclk_id").and_then(|v| v.as_u64()),
                 },
             ))
         }

@@ -699,6 +699,13 @@ pub trait Peripheral: std::fmt::Debug + Send {
         None
     }
 
+    /// Family of the waveform outputs behind [`Self::timer_output_lines`], for
+    /// bus wiring passes that bind them to a chip family's pad table (the
+    /// SAMD51 TC pass binds only `samd51_tc`). `None` by default.
+    fn timer_output_family(&self) -> Option<&'static str> {
+        None
+    }
+
     /// GPIO capability: bind pad `pin` CONDITIONALLY to `line` of a timer's
     /// channel-output wire `cell` — live while the pad is an alternate-function
     /// output and the timer drives that line (STM32 F1 fixed mapping). A port

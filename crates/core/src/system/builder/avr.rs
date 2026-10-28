@@ -28,7 +28,10 @@ use crate::system::node::parse_avr_elf_image;
 use crate::{Cpu, Machine};
 use anyhow::anyhow;
 
-pub(super) fn build(req: BuildRequest<'_>) -> anyhow::Result<BuiltMachine> {
+pub(super) fn build(
+    req: BuildRequest<'_>,
+    plugins: &[&dyn crate::plugin::ChipPlugin],
+) -> anyhow::Result<BuiltMachine> {
     let firmware = match (&req.firmware, req.boot) {
         (FirmwareSource::Elf(elf), BootMode::FastBoot) => *elf,
         _ => {
@@ -41,8 +44,8 @@ pub(super) fn build(req: BuildRequest<'_>) -> anyhow::Result<BuiltMachine> {
     };
     let (chip, manifest) = (req.chip, req.system);
 
-    let mut bus =
-        SystemBus::from_config(chip, manifest).map_err(|e| anyhow!("Bus config error: {e:#}"))?;
+    let mut bus = SystemBus::from_config_with_plugins(chip, manifest, plugins)
+        .map_err(|e| anyhow!("Bus config error: {e:#}"))?;
 
     let console = ConsoleCapture::for_manifest(manifest);
     let uart_sink = console.heard_sink();

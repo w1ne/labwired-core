@@ -2451,6 +2451,7 @@ dependencies = [
  "labwired-loader",
  "serde",
  "serde_json",
+ "serde_yaml",
  "thiserror 1.0.69",
  "tracing",
  "tracing-subscriber",
