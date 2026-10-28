@@ -3255,17 +3255,98 @@ mod tests {
         cpu.data_write(0x4E, 0xFF, &mut bus).unwrap();
 
         let got = frames.lock().unwrap().clone();
-        assert!(
-            got.iter().any(|&(dc, b)| dc && b == 0xAA),
-            "SPDR must latch D/C high before 0xAA; got {got:?}"
+        assert_eq!(
+            got,
+            vec![(true, 0xAA), (false, 0x55), (true, 0xFF)],
+            "SPDR must sample D/C per byte, in order"
         );
+    }
+
+    /// End to end: SPDR writes from the CPU clock a parking (not taken)
+    /// ST7789 on a real SystemBus, with D/C from PORTB.1, and the panel paints.
+    #[test]
+    fn spdr_writes_paint_parking_st7789() {
+        use crate::bus::SystemBus;
+        use labwired_config::{ChipDescriptor, ExternalDevice, SystemManifest};
+        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let chip_path = root.join("configs/chips/atmega328p.yaml");
+        let chip = ChipDescriptor::from_file(&chip_path).expect("atmega328p");
+        let mut cfg = std::collections::HashMap::new();
+        cfg.insert("cs_pin".into(), serde_yaml::Value::String("PB2".into()));
+        cfg.insert("dc_pin".into(), serde_yaml::Value::String("PB1".into()));
+        let manifest = SystemManifest {
+            cosim_models: Vec::new(),
+            motor_models: Vec::new(),
+            walk_deleted: Some(false),
+            schema_version: "1.0".to_string(),
+            name: "spdr-e2e".to_string(),
+            chip: chip_path.to_string_lossy().to_string(),
+            cpu_hz: Some(16_000_000),
+            external_devices: vec![ExternalDevice {
+                id: "DS1".to_string(),
+                r#type: "st7789-170x320".to_string(),
+                connection: "spi".to_string(),
+                channel: None,
+                route: Default::default(),
+                config: cfg,
+            }],
+            board_io: vec![],
+            debug_uart: None,
+            wifi_ap: None,
+            peripherals: vec![],
+            parts: Default::default(),
+            memory_overrides: Default::default(),
+        };
+        let mut bus = SystemBus::from_config(&chip, &manifest).expect("bus");
+        if let Some(idx) = bus.find_peripheral_index_by_name("spi") {
+            if let Some(devs) = bus.peripherals[idx].dev.spi_attached_devices_mut() {
+                for d in devs.iter_mut() {
+                    d.cs_select();
+                }
+            }
+        }
+        let mut cpu = Avr::for_chip_name("atmega328p");
+        let portb = 0x0001_0023u64;
+        bus.write_u8(portb + 1, 1 << 1).unwrap(); // DDRB.1 output
+        let frames: &[(bool, u8)] = &[
+            (false, 0x01),
+            (false, 0x11),
+            (false, 0x3A),
+            (true, 0x55),
+            (false, 0x29),
+            (false, 0x2A),
+            (true, 0),
+            (true, 0),
+            (true, 0),
+            (true, 1),
+            (false, 0x2B),
+            (true, 0),
+            (true, 0),
+            (true, 0),
+            (true, 1),
+            (false, 0x2C),
+            (true, 0xFF),
+            (true, 0xFF),
+            (true, 0xFF),
+            (true, 0xFF),
+            (true, 0xFF),
+            (true, 0xFF),
+            (true, 0xFF),
+            (true, 0xFF),
+        ];
+        for &(dc, b) in frames {
+            bus.write_u8(portb + 2, if dc { 1 << 1 } else { 0 })
+                .unwrap();
+            cpu.data_write(0x4E, b, &mut bus).unwrap();
+        }
+        let art = bus
+            .display_artifact("DS1", &crate::inspect::InspectOpts::default())
+            .expect("DS1 artifact");
+        let painted = art.meta["painted_bytes"].as_u64().unwrap_or(0);
         assert!(
-            got.iter().any(|&(dc, b)| !dc && b == 0x55),
-            "SPDR must latch D/C low before 0x55; got {got:?}"
-        );
-        assert!(
-            got.iter().any(|&(dc, b)| dc && b == 0xFF),
-            "SPDR must re-sample D/C high before 0xFF; got {got:?}"
+            painted > 0,
+            "SPDR-driven parking ST7789 must paint; meta={:?}",
+            art.meta
         );
     }
 }
