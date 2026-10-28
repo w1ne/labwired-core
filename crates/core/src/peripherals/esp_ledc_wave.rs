@@ -53,7 +53,6 @@ pub(crate) struct LedcTimebase {
 impl LedcTimebase {
     /// Build from the chip's registers. `None` for a timer that cannot count
     /// (zero divider or zero source clock).
-    #[cfg(test)]
     pub fn new(
         duty_res: u32,
         clk_div_q8: u64,
@@ -126,6 +125,12 @@ impl LedcDrive {
         }
     }
 
+    /// Level the channel shows while its counter is frozen at count 0 (timer
+    /// held in reset) — what [`LedcDrive::Pwm`] would show at its origin.
+    pub fn level_at_count_zero(period: u64, hpoint: u64, duty: u64) -> bool {
+        Self::level_at_count(period.max(1), hpoint, duty, 0)
+    }
+
     /// First cycle strictly after `t` at which the output toggles.
     fn next_toggle_after(&self, t: u64) -> Option<u64> {
         let LedcDrive::Pwm {
@@ -157,6 +162,65 @@ impl LedcDrive {
         };
         let n0 = timer.count_at(t);
         Some(timer.cycle_of(n0 - n0 % timer.period + timer.period))
+    }
+}
+
+/// One timer's counting state, decoded by the chip model from its own register
+/// layout (the field positions differ per chip; the meaning does not).
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct LedcTimerState {
+    pub duty_res: u32,
+    /// `CLK_DIV`, Q8 fixed point.
+    pub div_q8: u64,
+    pub paused: bool,
+    /// `RST`: the counter is held at 0.
+    pub reset: bool,
+    /// The timer's source clock in Hz (0 = no clock selected).
+    pub src_hz: u64,
+    /// Cycle the counter last restarted at 0.
+    pub origin: u64,
+}
+
+/// `CHn_CONF0.SIG_OUT_EN` (bit 2) and `IDLE_LV` (bit 3) — the same bits on the
+/// classic ESP32, C3 and S3 (`ledc_struct.h` of each).
+const CONF0_SIG_OUT_EN: u32 = 1 << 2;
+const CONF0_IDLE_LV: u32 = 1 << 3;
+
+/// Decode one channel into the drive it puts on its output.
+///
+/// `held` is the channel's present level, which a PAUSED counter freezes.
+pub(crate) fn channel_drive(
+    conf0: u32,
+    hpoint: u64,
+    duty: u64,
+    timer: &LedcTimerState,
+    cpu_hz: u64,
+    held: bool,
+) -> LedcDrive {
+    if conf0 & CONF0_SIG_OUT_EN == 0 {
+        return LedcDrive::Level(conf0 & CONF0_IDLE_LV != 0);
+    }
+    if timer.paused {
+        return LedcDrive::Level(held);
+    }
+    match LedcTimebase::new(
+        timer.duty_res,
+        timer.div_q8,
+        timer.src_hz,
+        cpu_hz,
+        timer.origin,
+    ) {
+        Some(tb) if !timer.reset => LedcDrive::Pwm {
+            timer: tb,
+            hpoint,
+            duty,
+        },
+        // Held in reset, or no clock: the counter sits at 0.
+        _ => LedcDrive::Level(LedcDrive::level_at_count_zero(
+            1u64 << timer.duty_res.min(20),
+            hpoint,
+            duty,
+        )),
     }
 }
 
