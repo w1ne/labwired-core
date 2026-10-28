@@ -23,7 +23,10 @@ use crate::system::node::parse_elf_image;
 use crate::{Cpu, Machine};
 use anyhow::anyhow;
 
-pub(super) fn build(req: BuildRequest<'_>) -> anyhow::Result<BuiltMachine> {
+pub(super) fn build(
+    req: BuildRequest<'_>,
+    plugins: &[&dyn crate::plugin::ChipPlugin],
+) -> anyhow::Result<BuiltMachine> {
     // The browser constructor has one Cortex-M path, an ELF loaded without a
     // reset. A ROM-boot request must say so, not silently get that path.
     if req.boot == BootMode::RomBoot {
@@ -33,7 +36,7 @@ pub(super) fn build(req: BuildRequest<'_>) -> anyhow::Result<BuiltMachine> {
             req.chip.name
         ));
     }
-    let mut bus = SystemBus::from_config(req.chip, req.system)
+    let mut bus = SystemBus::from_config_with_plugins(req.chip, req.system, plugins)
         .map_err(|e| anyhow!("Bus config error: {e:#}"))?;
 
     let console = ConsoleCapture::for_manifest(req.system);

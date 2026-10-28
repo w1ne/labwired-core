@@ -57,11 +57,11 @@
   },
   "atsamd51": {
     "batch": 1.4,
-    "step": 895.0
+    "step": 1240.0
   },
   "atsamd51-pybadge": {
     "batch": 1.5,
-    "step": 905.7
+    "step": 1251.8
   },
   "efr32mg26": {
     "batch": 2.2,

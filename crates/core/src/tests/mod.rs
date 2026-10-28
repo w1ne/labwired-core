@@ -96,6 +96,7 @@ pub mod rp2040_spi_carries_a_byte;
 pub mod rp2040_spi_waveform;
 #[cfg(test)]
 pub mod rp2040_uart_waveform;
+pub mod samd51_board_models;
 #[cfg(test)]
 pub mod scb_reset;
 #[cfg(test)]

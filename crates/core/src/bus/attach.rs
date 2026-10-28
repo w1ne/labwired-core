@@ -2621,6 +2621,79 @@ impl SystemBus {
         }
     }
 
+    /// Route each opt-in SAMD51 TC's waveform outputs (WO0, WO1) onto the
+    /// pads that carry them on PMUX function E, so a pad handed to the TC reads
+    /// the PWM it generates. Pads from the ATSAMD51J19A ATDF (Microchip SAMD51
+    /// DFP 3.9.276, Apache-2.0). Only `samd51_tc` instances are wired; the
+    /// route is live only while the pad's PINCFG.PMUXEN selects function E.
+    pub(crate) fn wire_samd51_tc_output_pads(&mut self) {
+        // (TC, WO, port, pin)
+        const PADS: &[(u8, usize, char, u8)] = &[
+            (0, 0, 'a', 4),
+            (0, 0, 'a', 8),
+            (0, 0, 'b', 30),
+            (0, 1, 'a', 5),
+            (0, 1, 'a', 9),
+            (0, 1, 'b', 31),
+            (1, 0, 'a', 6),
+            (1, 0, 'a', 10),
+            (1, 1, 'a', 7),
+            (1, 1, 'a', 11),
+            (2, 0, 'a', 0),
+            (2, 0, 'a', 12),
+            (2, 0, 'a', 16),
+            (2, 1, 'a', 1),
+            (2, 1, 'a', 13),
+            (2, 1, 'a', 17),
+            (3, 0, 'a', 14),
+            (3, 0, 'a', 18),
+            (3, 1, 'a', 15),
+            (3, 1, 'a', 19),
+            (4, 0, 'a', 22),
+            (4, 0, 'b', 8),
+            (4, 0, 'b', 12),
+            (4, 1, 'a', 23),
+            (4, 1, 'b', 9),
+            (4, 1, 'b', 13),
+            (5, 0, 'a', 24),
+            (5, 0, 'b', 10),
+            (5, 0, 'b', 14),
+            (5, 1, 'a', 25),
+            (5, 1, 'b', 11),
+            (5, 1, 'b', 15),
+        ];
+        const FUNCS: [[&str; 2]; 6] = [
+            ["TC0_WO0", "TC0_WO1"],
+            ["TC1_WO0", "TC1_WO1"],
+            ["TC2_WO0", "TC2_WO1"],
+            ["TC3_WO0", "TC3_WO1"],
+            ["TC4_WO0", "TC4_WO1"],
+            ["TC5_WO0", "TC5_WO1"],
+        ];
+        for &(tc, wo, port, pin) in PADS {
+            let Some(t_idx) = self.find_peripheral_index_by_name(&format!("tc{tc}")) else {
+                continue;
+            };
+            if self.peripherals[t_idx].dev.timer_output_family() != Some("samd51_tc") {
+                continue;
+            }
+            let Some(gpio_idx) = self.find_peripheral_index_by_name(&format!("port{port}")) else {
+                continue;
+            };
+            let Some(lines) = self.peripherals[t_idx].dev.timer_output_lines(false) else {
+                continue;
+            };
+            if self.peripherals[gpio_idx].dev.bind_timer_output_pad(
+                &lines,
+                pin,
+                wo,
+                FUNCS[usize::from(tc)][wo],
+            ) {
+                self.peripherals[t_idx].dev.timer_output_lines(true);
+            }
+        }
+    }
+
     /// Bind every nRF52 bus controller's wire to every pad its `PSEL` can name,
     /// so a probe shows the bus instead of the GPIO output latch.
     ///
