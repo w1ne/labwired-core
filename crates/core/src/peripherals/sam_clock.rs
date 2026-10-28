@@ -69,6 +69,9 @@ impl SamPm {
 }
 
 impl Peripheral for SamPm {
+    fn on_system_reset(&mut self) {
+        *self = Self::new(); // the constructed (power-on) masks
+    }
     fn needs_legacy_walk(&self) -> bool {
         false
     }
@@ -319,6 +322,13 @@ impl SamGclk {
 }
 
 impl Peripheral for SamGclk {
+    fn on_system_reset(&mut self) {
+        *self = if self.d51_genctrl.is_some() {
+            Self::samd51()
+        } else {
+            Self::new()
+        };
+    }
     fn needs_legacy_walk(&self) -> bool {
         false
     }
@@ -409,6 +419,9 @@ impl SamMclk {
 }
 
 impl Peripheral for SamMclk {
+    fn on_system_reset(&mut self) {
+        *self = Self::new();
+    }
     fn needs_legacy_walk(&self) -> bool {
         false
     }
