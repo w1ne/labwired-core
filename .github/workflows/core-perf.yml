@@ -110,8 +110,11 @@ jobs:
     # Keep absolute RTx and relative Ir/step receipts on one stable image.
     # `ubuntu-latest` moves to Ubuntu 26 on 2026-10-19, which would silently
     # change both the compiler output and host throughput under our baselines.
+    # main at cc0ac6b2 finished this job in 44m58s. A later run printed
+    # "no throughput regression" and was cancelled at 45 minutes, which
+    # fails perf-verdict closed. The Ir/step gate is unchanged.
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
 
