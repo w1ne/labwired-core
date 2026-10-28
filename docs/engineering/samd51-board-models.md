@@ -4,7 +4,8 @@ Models for running a complete SAMD51 board, ported from
 `CrispStrobe/labwired-core` (MIT). `configs/chips/atsamd51.yaml` and
 `configs/chips/atsamd51-pybadge.yaml` declare them. Construction goes through
 one cold builder with fixed instance addresses and IRQs; the DAC's board
-reference levels are its only config options.
+reference levels and the I2C master's SCL rise time are its only config
+options.
 
 | Type | Register slice | Not modelled |
 | --- | --- | --- |
@@ -16,6 +17,9 @@ reference levels are its only config options.
 | `samd51_pac` | The access-error flags drivers clear before use (no access errors are modelled: flags read 0). | Write protection, events, the PAC interrupt (refused). |
 | `samd51_tcc` | TCC0..TCC4 counters (24-bit TCC0/1, 16-bit TCC2..4) at the prescaled generic clock, PER top, CC0..CCn matches, CTRLB commands, and the SAMD51 lines: line 0 for OVF/TRG/CNT/ERR/faults, line 1 + x for MCx. | Waveforms, CCBUF/PERBUF, dithering, faults, capture, patterns, events, DMA. |
 | `samd51_adc` | ADC0/ADC1 single-ended software-triggered conversions of AINn against GND with the VDDANA references (INTVCC1, INTVCC0), 8/10/12-bit, `floor(V * 2^n / Vref)`. A conversion completes on the next bus tick only while the ADC is enabled and clocked and the input's pad is on PMUX B. Input voltages are set by the host (`set_input_millivolts`). | Analog front end, averaging, correction, windowing, differential mode, events, DMA. |
+| `sam_sercom_spi` (timing) | With `gclk_id` resolving on the live clock tree, a byte takes 16 * (BAUD + 1) core clocks at `f_CPU / f_GCLK`, the fraction carried across back-to-back bytes; otherwise nominal core-clock cycles. The pad configuration is unchanged. | Pad and edge timing, slave mode. |
+| `samd51_sercom_i2cm` | SERCOM I2C master (declared as the Wire SERCOM: SERCOM2 on the PyBadge, SERCOM5 on the Metro M4): 7-bit addressing, writes, smart-mode reads, repeated start, STOP, MB/SB/RXNACK against attached `I2cDevice` slaves. An operation completes on the next bus tick only while the SERCOM's bus and core clocks run and a PAD0 (SDA) and PAD1 (SCL) pad are muxed to it (ATDF pad table). With the core clock resolving, an operation lasts whole SCL periods of `10 + BAUD + BAUDLOW + f_core * t_rise` core clocks, with the rise time from the optional `scl_rise_ns` (default 0): START plus nine bits per address, nine more for a read's first byte, nine per byte, one per STOP. A device's `I2cDevice::clock_stretch_ns` is added once per byte it acknowledges or sends (twice for a read address, which carries the first byte). With `CTRLA.LOWTOUTEN`, a hold beyond the SCL low time-out (25 ms, the earliest of the datasheet's 25-35 ms) ends the operation there: MB or SB as normal, STOP sent, `STATUS.LOWTOUT` and `BUSERR` with `INTFLAG.ERROR`; a START written during a STOP follows it. An open read stays on the bus tick (a smart-mode DATA read issues the next byte). `busy()` and `completed()` expose operation progress to hosts. | Rise-time waveform, arbitration, the other bus timeouts (MEXTTOEN, SEXTTOEN, INACTOUT), 10-bit/high-speed, DMA, slave mode (refused). |
+| `samd51_sercom_usart` | Opt-in (the board descriptors keep their console UARTs): `sam_sercom_usart` with the SAMD51 interrupt layout: DRE, TXC, RXC and the remaining flags on four consecutive NVIC lines, reported as level sources (a DATA read can deassert RXC). Optional `tx_port_base`/`tx_bit`/`rx_port_base`/`rx_bit`/`pad_mux`/`txpo`/`rxpo`: a byte reaches the TX sink, and host bytes reach the receiver, only while that pad is muxed and selected by TXPO/RXPO (latched on the bus tick). With the pads and `gclk_id` declared, bytes are paced at the baud from BAUD and SAMPR (arithmetic and fractional) on the live clock tree: frames of start, data, parity and stop bits, a DATA holding register before the shift register (DRE, TXC), host bytes a frame apart into a two-byte receive buffer (BUFOVF beyond). On an `event-scheduler` build the SERCOM wakes itself at each frame end while a byte is in flight. | As `sam_sercom_usart`; external-clock and reserved SAMPR settings move no byte when paced. |
 
 `sam/clock_tree.rs` resolves nominal generator, peripheral-channel and CPU
 frequencies from GCLK/OSCCTRL/MCLK registers on the bus. A source that is not
@@ -34,6 +38,8 @@ running resolves to `None`, never to a guessed frequency.
   bound route consult it.
 - **`Peripheral::timer_output_family`** names a timer's output family, so the
   SAMD51 TC pad wiring needs no downcast.
+- **`I2cDevice::clock_stretch_ns`** (default 0) lets a slave declare how long
+  it holds SCL low per byte; only a controller that models bus timing adds it.
 - **No bit-band on the SAMD51.** `chip_has_bit_band` returns false for
   `atsamd51*` parts: their APB-C/D bridges map TC4/TC5, SERCOM4..7, the DAC and
   QSPI inside the would-be alias window. Every other chip is unchanged.
