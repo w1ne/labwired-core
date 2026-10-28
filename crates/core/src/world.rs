@@ -1869,14 +1869,23 @@ impl World {
         let mut resolved = Vec::with_capacity(manifest.nodes.len());
         for node in &manifest.nodes {
             let sys_path = root_dir.join(&node.system);
-            let sysman = labwired_config::SystemManifest::from_file(&sys_path)
+            let mut sysman = labwired_config::SystemManifest::from_file(&sys_path)
                 .with_context(|| format!("node '{}': system {:?}", node.id, sys_path))?;
             let chip_path = sys_path
                 .parent()
                 .unwrap_or_else(|| std::path::Path::new("."))
                 .join(&sysman.chip);
+            // File-backed chips keep their absolute path on the manifest so
+            // `type: declarative` `config.path` resolves next to the chip YAML
+            // (same rewrite `build_system_bus_with_plugins` does for single-node).
+            // Built-in / plugin names stay as names — their descriptors are embedded.
             let chip = match labwired_config::ChipDescriptor::from_file(&chip_path) {
-                Ok(chip) => chip,
+                Ok(chip) => {
+                    if !labwired_config::is_builtin_chip_spec(&sysman.chip) {
+                        sysman.chip = chip_path.to_string_lossy().into_owned();
+                    }
+                    chip
+                }
                 Err(file_err) => match plugins.iter().find_map(|p| p.chip_yaml(&sysman.chip)) {
                     Some(yaml) => serde_yaml::from_str::<labwired_config::ChipDescriptor>(yaml)
                         .with_context(|| {
