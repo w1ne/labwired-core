@@ -2,11 +2,12 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! USB_SERIAL_JTAG — the CDC-ACM console the ESP32-C3 and ESP32-S3 expose on
-//! their own USB pins (shared with the JTAG debug interface).
+//! USB_SERIAL_JTAG — the CDC-ACM console the ESP32-C3, ESP32-S3, and ESP32-C6
+//! expose on their own USB pins (shared with the JTAG debug interface).
 //!
-//! On boards like the ESP32-C3 SuperMini and the ESP32-S3-Zero the USB-C socket
-//! is wired to THIS block, not to UART0. Firmware for such a board is built with
+//! On boards like the ESP32-C3 SuperMini, the ESP32-S3-Zero, and the second
+//! USB-C on the ESP32-C6-DevKitC-1 the USB-C socket is wired to THIS block, not
+//! to UART0. Firmware for such a board is built with
 //! `-DARDUINO_USB_CDC_ON_BOOT=1 -DARDUINO_USB_MODE=1`, which makes Arduino's
 //! `Serial` an `HWCDC` rather than a `HardwareSerial` — and `HWCDC` is entirely
 //! interrupt-driven. A model with no interrupt surface does not merely lose a
@@ -15,41 +16,46 @@
 //! # Chip differences — read before reusing this model
 //!
 //! This file lives under `esp32s3/` for historical reasons but models the IP as
-//! it appears on BOTH chips. Same offset does NOT imply same register across
+//! it appears on C3, S3, and C6. Same offset does NOT imply same register across
 //! Espressif parts, so each claim below is per-chip and cited:
 //!
-//! | | ESP32-C3 | ESP32-S3 |
-//! |---|---|---|
-//! | Base | `0x6004_3000` (`DR_REG_USB_SERIAL_JTAG_BASE`, `esp32c3/include/soc/soc.h:68`) | `0x6003_8000` (`DR_REG_USB_DEVICE_BASE`, `esp32s3/include/soc/soc.h:87`) |
-//! | Matrix source | 26 | 96 |
+//! | | ESP32-C3 | ESP32-S3 | ESP32-C6 |
+//! |---|---|---|---|
+//! | Base | `0x6004_3000` (`DR_REG_USB_SERIAL_JTAG_BASE`, `esp32c3/include/soc/soc.h:68`) | `0x6003_8000` (`DR_REG_USB_DEVICE_BASE`, `esp32s3/include/soc/soc.h:87`) | `0x6000_F000` (`DR_REG_USB_SERIAL_JTAG_BASE` / SVD `USB_DEVICE`, `esp32c6.svd`) |
+//! | Matrix source | 26 | 96 | 48 |
+//! | CPU clock | 160 MHz | 240 MHz | 160 MHz |
 //!
 //! The base address and the interrupt-matrix source id **differ**. The source id
 //! is a constructor choice with NO default: [`UsbSerialJtag::new`] wires no
 //! interrupt source at all, and a caller opts in per chip via
-//! [`UsbSerialJtag::new_esp32c3`] / [`UsbSerialJtag::new_esp32s3`]. An S3
-//! assumption therefore cannot reach C3 silicon by omission. The base address is
-//! owned by the chip YAML and passed at registration; this model never holds a
-//! copy of it (see `tests::yaml_owned_base_contract`).
+//! [`UsbSerialJtag::new_esp32c3`] / [`UsbSerialJtag::new_esp32s3`] /
+//! [`UsbSerialJtag::new_esp32c6`]. An S3 assumption therefore cannot reach C3
+//! or C6 silicon by omission. The base address is owned by the chip YAML and
+//! passed at registration; this model never holds a copy of it (see
+//! `tests::yaml_owned_base_contract`).
 //!
 //! The source ids are `ETS_USB_SERIAL_JTAG_INTR_SOURCE` evaluated in each chip's
 //! own `soc/periph_defs.h` (`periph_interrput_t`, unnumbered enumerators — they
-//! must be counted, never guessed). Both are corroborated independently:
+//! must be counted, never guessed). Corroborated independently:
 //!  * C3 = 26 — visible in a compiled Arduino image: `HWCDC::begin` emits
 //!    `li a0,26` immediately before `jal esp_intr_alloc`, and the surrounding
 //!    code addresses `lui a5,0x60043`.
 //!  * S3 = 96 — the same enum walk reproduces `ETS_I2C_EXT0 = 42`,
 //!    `ETS_I2C_EXT1 = 43`, `ETS_LEDC = 35` and `ETS_LCD_CAM = 24`, which are the
 //!    values `esp32s3::i2c`, `esp32s3::ledc` and `esp32s3::lcd_cam` already pin.
+//!  * C6 = 48 — vendored `tests/fixtures/real_world/esp32c6.svd` peripheral
+//!    `USB_DEVICE` interrupt value 48 at base `0x6000_F000`.
 //!
-//! Register offsets and interrupt bit positions are IDENTICAL on the two chips.
-//! That is not an assumption: `esp32c3/include/soc/usb_serial_jtag_reg.h` and
-//! `esp32s3/include/soc/usb_serial_jtag_reg.h` agree on EP1 `0x00`,
+//! Register offsets and interrupt bit positions are IDENTICAL on the three
+//! chips. That is not an assumption: `esp32c3/include/soc/usb_serial_jtag_reg.h`
+//! and `esp32s3/include/soc/usb_serial_jtag_reg.h` agree on EP1 `0x00`,
 //! EP1_CONF `0x04`, INT_RAW `0x08`, INT_ST `0x0C`, INT_ENA `0x10`,
 //! INT_CLR `0x14`, CONF0 `0x18`, and on SOF `BIT(1)`,
 //! SERIAL_OUT_RECV_PKT `BIT(2)`, SERIAL_IN_EMPTY `BIT(3)`,
 //! USB_BUS_RESET `BIT(9)`, WR_DONE `BIT(0)`, SERIAL_IN_EP_DATA_FREE `BIT(1)`,
-//! SERIAL_OUT_EP_DATA_AVAIL `BIT(2)`. The two `hal/usb_serial_jtag_ll.h` copies
-//! are likewise identical in the accessors this model serves.
+//! SERIAL_OUT_EP_DATA_AVAIL `BIT(2)`. The C6 SVD `USB_DEVICE` block lists the
+//! same offsets and bit positions. The two `hal/usb_serial_jtag_ll.h` copies
+//! (C3/S3) are likewise identical in the accessors this model serves.
 //!
 //! # Register behaviour
 //!
@@ -208,15 +214,20 @@ const EP1_CONF_SERIAL_OUT_EP_DATA_AVAIL: u32 = 1 << 2;
 pub const ESP32C3_INTR_SOURCE_ID: u32 = 26;
 /// `ETS_USB_SERIAL_JTAG_INTR_SOURCE` on the ESP32-S3 (`esp32s3/soc/periph_defs.h`).
 pub const ESP32S3_INTR_SOURCE_ID: u32 = 96;
+/// `USB_DEVICE` interrupt on the ESP32-C6 (`esp32c6.svd` peripheral interrupt value).
+pub const ESP32C6_INTR_SOURCE_ID: u32 = 48;
 // NOTE: the per-chip BASE ADDRESSES are deliberately NOT constants here.
-// They differ between the chips (C3 0x60043000 vs S3 0x60038000) and they are
-// documented in the module docs above, but a base address is owned by the chip
-// YAML — a copy in Rust would be a second home for the same fact, and the two
-// disagreeing fails silently because a wrong address is still a valid address.
-// The registration sites pass the base; this model only ever sees offsets.
+// They differ between the chips (C3 0x60043000, S3 0x60038000, C6 0x6000F000)
+// and they are documented in the module docs above, but a base address is owned
+// by the chip YAML — a copy in Rust would be a second home for the same fact,
+// and the two disagreeing fails silently because a wrong address is still a
+// valid address. The registration sites pass the base; this model only ever
+// sees offsets.
 
 const ESP32C3_CPU_CLOCK_HZ: u64 = 160_000_000;
 const ESP32S3_CPU_CLOCK_HZ: u64 = 240_000_000;
+/// ESP32-C6 HP core clock (same 160 MHz as the C3).
+const ESP32C6_CPU_CLOCK_HZ: u64 = 160_000_000;
 
 /// USB full-speed frame rate: a host sends one SOF every 1 ms.
 const SOF_HZ: u64 = 1_000;
@@ -312,6 +323,11 @@ impl UsbSerialJtag {
     /// ESP32-S3 instance: matrix source [`ESP32S3_INTR_SOURCE_ID`], 240 MHz.
     pub fn new_esp32s3() -> Self {
         Self::with_source(Some(ESP32S3_INTR_SOURCE_ID), ESP32S3_CPU_CLOCK_HZ)
+    }
+
+    /// ESP32-C6 instance: matrix source [`ESP32C6_INTR_SOURCE_ID`], 160 MHz.
+    pub fn new_esp32c6() -> Self {
+        Self::with_source(Some(ESP32C6_INTR_SOURCE_ID), ESP32C6_CPU_CLOCK_HZ)
     }
 
     fn with_source(irq_source: Option<u32>, cpu_clock_hz: u64) -> Self {
@@ -668,9 +684,13 @@ mod tests {
     fn per_chip_constants_are_distinct_and_pinned() {
         assert_eq!(ESP32C3_INTR_SOURCE_ID, 26);
         assert_eq!(ESP32S3_INTR_SOURCE_ID, 96);
+        assert_eq!(ESP32C6_INTR_SOURCE_ID, 48);
         assert_ne!(ESP32C3_INTR_SOURCE_ID, ESP32S3_INTR_SOURCE_ID);
+        assert_ne!(ESP32C3_INTR_SOURCE_ID, ESP32C6_INTR_SOURCE_ID);
+        assert_ne!(ESP32S3_INTR_SOURCE_ID, ESP32C6_INTR_SOURCE_ID);
         assert_eq!(UsbSerialJtag::new_esp32c3().irq_source(), Some(26));
         assert_eq!(UsbSerialJtag::new_esp32s3().irq_source(), Some(96));
+        assert_eq!(UsbSerialJtag::new_esp32c6().irq_source(), Some(48));
         // The un-chipped constructor must NOT silently pick a chip.
         assert_eq!(UsbSerialJtag::new().irq_source(), None);
     }
