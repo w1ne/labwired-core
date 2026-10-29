@@ -34,6 +34,8 @@ pub mod esp32;
 pub mod esp32c3_i2c_waveform;
 #[cfg(test)]
 pub mod esp32c3_rtc_delay_loop;
+#[cfg(test)]
+pub mod esp32c6_i2c_waveform;
 
 /// The `event-scheduler` conditional-compilation surface may not grow.
 #[cfg(test)]
