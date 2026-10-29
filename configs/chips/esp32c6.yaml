@@ -394,10 +394,16 @@ peripherals:
     type: "stub"
     base_address: 0x600b3c00
     size: "1KB"
+  # Machine-mode PLIC (DR_REG_PLIC_MX_BASE). IDF/ROM esprv_intc_* writes
+  # enable/type/priority/threshold HERE — not INTPRI. INTPRI keeps only the
+  # CPU_INTR_FROM_CPU_n doorbells; the bus C6 routing arm reads the gates
+  # from this bank (crates/core/src/bus/routing.rs).
   - id: "plic_mx"
-    type: "stub"
+    type: "declarative"
     base_address: 0x20001000
     size: "1KB"
+    config:
+      path: "../peripherals/esp32c6/plic_mx.yaml"
   - id: "plic_ux"
     type: "stub"
     base_address: 0x20001400

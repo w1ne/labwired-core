@@ -494,10 +494,16 @@ mod tests {
         install_xip_window(&mut bus, flash.clone(), mmu.clone());
         assert_eq!(bus.read_u8(XIP_BASE).unwrap(), 0xE9);
         assert_eq!(bus.read_u8(XIP_BASE + 1).unwrap(), 0xA5);
-        // Unmapped page faults / returns err — entry 2 still invalid
-        assert!(
-            bus.read_u8(XIP_BASE + 0x2_0000).is_err(),
-            "unmapped MMU page must not serve LinearMemory identity"
+        // Unmapped virt page 2: FlashXip returns 0 (not Err). Seed the
+        // identity flash offset so a LinearMemory fallback would show 0x5A.
+        {
+            let mut f = flash.lock().unwrap();
+            f[0x2_0000] = 0x5A;
+        }
+        assert_eq!(
+            bus.read_u8(XIP_BASE + 0x2_0000).unwrap(),
+            0,
+            "unmapped MMU page must read 0 via FlashXip, not LinearMemory identity"
         );
     }
 }
