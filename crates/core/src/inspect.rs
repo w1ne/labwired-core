@@ -785,6 +785,81 @@ pub fn artifact_region_ink(
     Ok((ink, region.w * region.h))
 }
 
+/// Count pixels in `region` whose packed RGB565 value equals `colour`.
+///
+/// Only `rgb565_be` is supported today (ST7789 / ILI9341 / RM67162 family).
+/// Other formats return an error rather than a silent zero — same fail-closed
+/// rule as [`artifact_region_ink`].
+pub fn artifact_region_colour_count(
+    format: &str,
+    meta: &serde_json::Value,
+    bytes: &[u8],
+    region: PixelRegion,
+    colour: u16,
+) -> Result<usize, String> {
+    let dim = |k: &str| -> Result<usize, String> {
+        meta.get(k)
+            .and_then(|v| v.as_u64())
+            .and_then(|v| usize::try_from(v).ok())
+            .ok_or_else(|| format!("framebuffer artifact has no numeric `meta.{k}`"))
+    };
+    let (pw, ph) = (dim("w")?, dim("h")?);
+    if region.w == 0 || region.h == 0 {
+        return Err(format!(
+            "region {}x{} at ({},{}) is empty — an empty region can only ever be vacuously true",
+            region.w, region.h, region.x, region.y
+        ));
+    }
+    if region.x.checked_add(region.w).is_none_or(|end| end > pw)
+        || region.y.checked_add(region.h).is_none_or(|end| end > ph)
+    {
+        return Err(format!(
+            "region ({},{}) {}x{} falls outside the {pw}x{ph} panel",
+            region.x, region.y, region.w, region.h
+        ));
+    }
+    if let Some(unknown) = meta.get("unknown_pixels") {
+        match unknown.as_u64() {
+            Some(0) => {}
+            Some(n) => {
+                return Err(format!(
+                    "framebuffer has {n} unknown pixels; cannot measure an undefined frame"
+                ));
+            }
+            None => return Err("framebuffer meta.unknown_pixels is not an unsigned count".into()),
+        }
+    }
+    match format {
+        artifact_format::RGB565_BE => {
+            let need = pw
+                .checked_mul(ph)
+                .and_then(|n| n.checked_mul(2))
+                .ok_or_else(|| "rgb565_be geometry overflows payload length".to_string())?;
+            if bytes.len() < need {
+                return Err(format!(
+                    "rgb565_be payload is {} bytes, expected {need} for {pw}x{ph}",
+                    bytes.len()
+                ));
+            }
+            let want_hi = (colour >> 8) as u8;
+            let want_lo = (colour & 0xff) as u8;
+            let mut n = 0usize;
+            for y in region.y..(region.y + region.h) {
+                for x in region.x..(region.x + region.w) {
+                    let i = (y * pw + x) * 2;
+                    if bytes[i] == want_hi && bytes[i + 1] == want_lo {
+                        n += 1;
+                    }
+                }
+            }
+            Ok(n)
+        }
+        other => Err(format!(
+            "colour count is not implemented for framebuffer format '{other}' (only rgb565_be)"
+        )),
+    }
+}
+
 /// Visit one I²C slave, then everything wired behind it if it is a bus switch.
 ///
 /// Every I²C controller's `for_each_attached_device` funnels through this, so
@@ -1355,6 +1430,46 @@ mod tests {
             )
             .is_err(),
             "an empty region could only ever pass vacuously"
+        );
+    }
+    // ── artifact_region_colour_count ───────────────────────────────────────
+
+    #[test]
+    fn colour_count_counts_exact_rgb565_be_pixels() {
+        use artifact_format::RGB565_BE;
+        // 2x2 panel: red, blue, red, black
+        let w = 2usize;
+        let h = 2usize;
+        let red: u16 = 0xF800;
+        let blue: u16 = 0x001F;
+        let pack = |c: u16| -> [u8; 2] { [(c >> 8) as u8, (c & 0xff) as u8] };
+        let mut bytes = Vec::new();
+        for c in [red, blue, red, 0u16] {
+            bytes.extend_from_slice(&pack(c));
+        }
+        let meta = serde_json::json!({ "w": w, "h": h, "unknown_pixels": 0 });
+        let full = PixelRegion { x: 0, y: 0, w, h };
+        assert_eq!(
+            artifact_region_colour_count(RGB565_BE, &meta, &bytes, full, red).unwrap(),
+            2
+        );
+        assert_eq!(
+            artifact_region_colour_count(RGB565_BE, &meta, &bytes, full, blue).unwrap(),
+            1
+        );
+        assert_eq!(
+            artifact_region_colour_count(RGB565_BE, &meta, &bytes, full, 0x07E0).unwrap(),
+            0
+        );
+        let left = PixelRegion {
+            x: 0,
+            y: 0,
+            w: 1,
+            h: 2,
+        };
+        assert_eq!(
+            artifact_region_colour_count(RGB565_BE, &meta, &bytes, left, red).unwrap(),
+            2
         );
     }
 }
