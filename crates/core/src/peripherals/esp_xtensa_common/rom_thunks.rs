@@ -1441,8 +1441,6 @@ pub fn rom_strncpy(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
     Ok(())
 }
 
-
-
 /// `memcpy(dst, src, n) -> dst` — byte-wise copy via the bus.
 ///
 /// Args (Xtensa C ABI, post-ENTRY view from caller's frame so we read
