@@ -532,26 +532,13 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
                     )),
                 };
             }
-            match machine.bus.attach_uart_rx_source_named(&u.uart) {
-                Some(rx) => {
-                    let bytes = u.bytes.as_bytes();
-                    match rx.lock() {
-                        Ok(mut guard) => {
-                            guard.extend(bytes.iter().copied());
-                            info!(
-                                "uart_injection: {} byte(s) delivered to '{}'",
-                                bytes.len(),
-                                u.uart
-                            );
-                        }
-                        Err(e) => error!("uart_injection '{}': RX buffer poisoned: {e}", u.uart),
-                    }
+            let bytes = u.bytes.as_bytes();
+            match machine.bus.deliver_uart_rx_named(&u.uart, &bytes) {
+                Ok(n) => {
+                    info!("uart_injection: {n} byte(s) delivered to '{}'", u.uart);
                     None
                 }
-                None => Some(format!(
-                    "uart_injection: UART peripheral '{}' not found on the bus",
-                    u.uart
-                )),
+                Err(e) => Some(e),
             }
         };
     // A later injection that names a device which is not there could never be

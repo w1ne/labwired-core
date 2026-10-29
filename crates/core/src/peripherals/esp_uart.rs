@@ -590,6 +590,18 @@ impl EspUart {
         }
     }
 
+    /// Whether the external RX queue (test-script `uart_injections` / interactive
+    /// serial) still holds bytes that have not been moved into the FIFO.
+    fn rx_source_has_pending(&self) -> bool {
+        if !self.rx_source_exposed.get() {
+            return false;
+        }
+        self.rx_source
+            .lock()
+            .map(|s| !s.is_empty())
+            .unwrap_or(false)
+    }
+
     /// Give each attached peer `cycles` of simulated time and deliver whatever
     /// it emits into the RX FIFO. The counterpart to the `on_tx_byte` forward
     /// in `drain_cycles`: together they make a cross-linked UART bidirectional.
@@ -696,7 +708,13 @@ impl EspUart {
     }
 
     /// INT_RAW = latched edge bits OR the live level conditions.
+    ///
+    /// Ingests any pending external RX first: under the event-scheduler an idle
+    /// UART may never tick, and `matrix_irq_sources_into` / status reads are the
+    /// only places an IRQ-driven guest (Arduino HardwareSerial) learns that
+    /// injected bytes have arrived.
     fn int_raw(&self) -> u32 {
+        self.ingest_rx_source();
         let mut v = self.int_raw_sticky;
         if self.tx_fifo.len() < self.txfifo_empty_thrhd() {
             v |= INT_TXFIFO_EMPTY;
@@ -1040,7 +1058,11 @@ impl Peripheral for EspUart {
         // keeps the scheduler byte-identical to the per-cycle walk.
         let need_tx = !self.tx_fifo.is_empty();
         let need_stream = !self.attached_streams.is_empty();
-        if !(need_tx || need_stream) || self.scheduled {
+        // External RX injections push into `rx_source` with no guest MMIO write,
+        // so the write-side harvest never re-arms us. Wake ASAP when the queue
+        // has pending bytes so `on_event` can ingest + raise RXFIFO_TOUT.
+        let need_rx = self.rx_source_has_pending();
+        if !(need_tx || need_stream || need_rx) || self.scheduled {
             return Vec::new();
         }
         self.scheduled = true;
@@ -1053,7 +1075,11 @@ impl Peripheral for EspUart {
             let done = self.drain_accum + elapsed;
             return vec![(per_byte.saturating_sub(done).max(1), UART_WAKE_TOKEN)];
         }
-        // Stream-only: poll peer at baud-paced intervals.
+        if need_rx && !need_stream {
+            // One-cycle wake: move injected bytes into the FIFO and raise IRQ.
+            return vec![(1, UART_WAKE_TOKEN)];
+        }
+        // Stream-only (or stream+rx): poll peer at baud-paced intervals.
         vec![(per_byte, UART_WAKE_TOKEN)]
     }
 
@@ -1080,7 +1106,9 @@ impl Peripheral for EspUart {
         } else {
             self.drain_cycles(per_byte);
         }
-        let keep = !self.tx_fifo.is_empty() || !self.attached_streams.is_empty();
+        let keep = !self.tx_fifo.is_empty()
+            || !self.attached_streams.is_empty()
+            || self.rx_source_has_pending();
         self.scheduled = keep;
         let mut explicit_irqs = Vec::new();
         if self.int_raw() & self.reg(OFF_INT_ENA) != 0 {
@@ -1441,5 +1469,64 @@ mod tests {
         assert_eq!((status >> 16) & 0x3FF, 1, "TXFIFO_CNT=1");
         // Static idle bits still present.
         assert_eq!(status & STATUS_IDLE_BITS, STATUS_IDLE_BITS);
+    }
+
+    /// Regression: `int_raw` must ingest external RX so STATUS/FIFO see the
+    /// bytes without a prior tick (default RXFIFO_FULL_THRHD is 96, so a short
+    /// inject raises occupancy rather than FULL — TOUT is latched on the
+    /// mut ingest path used by `on_event`).
+    #[test]
+    fn external_rx_inject_visible_in_status_without_tick() {
+        let u = EspUart::new(false, 27);
+        u.rx_buffer().lock().unwrap().extend(*b"state\n");
+        let _ = u.int_raw(); // ingest side effect
+        let status = u.read_u32(OFF_STATUS).unwrap();
+        assert_eq!(status & 0x3FF, 6, "six injected bytes must land in RX FIFO");
+        assert_eq!(u.read_u32(OFF_FIFO).unwrap(), u32::from(b's'));
+    }
+
+    /// Regression: mut ingest (tick / on_event) latches RXFIFO_TOUT so an
+    /// IRQ-enabled guest is woken for a short inject below FULL threshold.
+    #[test]
+    fn tick_elapsed_latches_tout_for_pending_rx_source() {
+        let mut u = EspUart::new(false, 27);
+        u.write_u32(OFF_INT_ENA, INT_RXFIFO_TOUT).unwrap();
+        u.rx_buffer().lock().unwrap().extend(*b"hi\n");
+        let result = u.tick_elapsed(1);
+        assert_eq!(
+            u.int_raw() & INT_RXFIFO_TOUT,
+            INT_RXFIFO_TOUT,
+            "mut ingest must latch RXFIFO_TOUT"
+        );
+        assert_eq!(
+            result.explicit_irqs.as_ref().map(|v| v.as_slice()),
+            Some([27u32].as_slice()),
+            "enabled TOUT must export the matrix source"
+        );
+        assert_eq!(u.read_u32(OFF_FIFO).unwrap(), u32::from(b'h'));
+    }
+
+    /// Regression: under the event-scheduler, a pending `rx_source` must arm
+    /// `take_scheduled_events` so a mid-run injection is harvested without a
+    /// guest UART MMIO write.
+    #[cfg(feature = "event-scheduler")]
+    #[test]
+    fn pending_rx_source_arms_scheduled_wake() {
+        use crate::cycle_clock::CycleClock;
+        use crate::Peripheral;
+        let mut u = EspUart::new(false, 27);
+        u.attach_cycle_clock(CycleClock::default());
+        assert!(
+            u.take_scheduled_events().is_empty(),
+            "idle UART schedules nothing"
+        );
+        u.rx_buffer().lock().unwrap().extend(*b"hi\n");
+        let ev = u.take_scheduled_events();
+        assert_eq!(ev.len(), 1, "pending rx_source must arm a wake");
+        assert_eq!(ev[0].1, UART_WAKE_TOKEN);
+        assert!(
+            u.take_scheduled_events().is_empty(),
+            "second harvest is a no-op while scheduled"
+        );
     }
 }

@@ -1096,6 +1096,33 @@ impl SystemBus {
     /// is derived from the queue being non-empty, with no enable gating).
     /// Give `bytes` to the far side of the external device `device` that is
     /// attached to the UART `uart` (see `UartStreamDevice::inject_remote`).
+    /// Push `bytes` into the named UART's external RX queue and re-arm its
+    /// scheduler wake.
+    ///
+    /// Test-script `uart_injections` (and interactive serial) used to only
+    /// `extend` the shared queue. Under the event-scheduler an idle EspUart
+    /// never ticks and the write-side harvest never runs, so an IRQ-driven
+    /// guest (Arduino `HardwareSerial` / ESP-IDF uart driver) never saw the
+    /// bytes. Delivering through this path calls [`Self::collect_scheduled_events`]
+    /// so `EspUart::take_scheduled_events` can wake, ingest, and raise
+    /// `RXFIFO_TOUT` / `RXFIFO_FULL`.
+    pub fn deliver_uart_rx_named(&mut self, name: &str, bytes: &[u8]) -> Result<usize, String> {
+        let index = self.find_peripheral_index_by_name(name).ok_or_else(|| {
+            format!("uart_injection: UART peripheral '{name}' not found on the bus")
+        })?;
+        let rx = self.attach_uart_rx_source_named(name).ok_or_else(|| {
+            format!("uart_injection: UART peripheral '{name}' not found on the bus")
+        })?;
+        {
+            let mut guard = rx.lock().map_err(|e| {
+                format!("uart_injection '{name}': RX buffer poisoned: {e}")
+            })?;
+            guard.extend(bytes.iter().copied());
+        }
+        self.collect_scheduled_events(index);
+        Ok(bytes.len())
+    }
+
     pub fn inject_uart_peer_remote(
         &mut self,
         uart: &str,
