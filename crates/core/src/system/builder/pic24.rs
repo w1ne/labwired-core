@@ -21,7 +21,10 @@ use crate::system::node::parse_elf_image;
 use crate::{Cpu, Machine};
 use anyhow::anyhow;
 
-pub(super) fn build(req: BuildRequest<'_>) -> anyhow::Result<BuiltMachine> {
+pub(super) fn build(
+    req: BuildRequest<'_>,
+    plugins: &[&dyn crate::plugin::ChipPlugin],
+) -> anyhow::Result<BuiltMachine> {
     let firmware = match (&req.firmware, req.boot) {
         (FirmwareSource::Elf(elf), BootMode::FastBoot) => *elf,
         _ => {
@@ -39,7 +42,7 @@ pub(super) fn build(req: BuildRequest<'_>) -> anyhow::Result<BuiltMachine> {
     // without those entries and attach them to the CPU below.
     let mut bus_manifest = manifest.clone();
     bus_manifest.external_devices.clear();
-    let mut bus = SystemBus::from_config(chip, &bus_manifest)
+    let mut bus = SystemBus::from_config_with_plugins(chip, &bus_manifest, plugins)
         .map_err(|e| anyhow!("Bus config error: {e:#}"))?;
     // Keep the manifest's declarations for inspection even though the
     // devices themselves are attached to the CPU, not to bus peripherals.

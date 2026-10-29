@@ -1667,6 +1667,10 @@ impl crate::Bus for SystemBus {
         Some(self)
     }
 
+    fn clock_parking_spi(&mut self, mosi: u8) -> u8 {
+        Self::clock_parking_spi(self, mosi)
+    }
+
     fn device_write_bypass(&self) -> bool {
         Self::device_write_bypass(self)
     }
@@ -1688,6 +1692,26 @@ impl crate::Bus for SystemBus {
 
     fn has_mmio_window(&self, addr: u64) -> bool {
         self.find_peripheral_index(addr).is_some()
+    }
+
+    fn dma_rx_request(&self, addr: u64) -> Option<bool> {
+        let idx = self.dma_tx_endpoint_index(addr)?;
+        let p = &self.peripherals[idx];
+        p.dev
+            .dma_rx_request(addr - p.base)
+            .map(|ready| self.is_peripheral_clocked(idx) && ready)
+    }
+
+    fn dma_triggers_at(&self, addr: u64) -> Option<(u32, u32)> {
+        let idx = self.dma_tx_endpoint_index(addr)?;
+        self.peripherals[idx].dev.dma_triggers()
+    }
+
+    fn take_dma_trigger(&mut self, source: u32) -> Option<bool> {
+        // Trigger sources are unique per chip: the first peripheral raising it answers.
+        self.peripherals
+            .iter_mut()
+            .find_map(|p| p.dev.take_dma_trigger(source))
     }
 
     fn dma_tx_request(&self, addr: u64) -> Option<bool> {

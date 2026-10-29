@@ -728,6 +728,17 @@ const CHIPS: &[ChipConf] = &[
         reset_oracle: None,
         behavior_gate: Some("avr_atmega2561::atmega2561_boots_and_prints"),
     },
+    // 64-pin ATmega1281. The committed AVR-GCC image exercises the exact
+    // two-byte-PC profile, USART0 output and PB5 package pin. No silicon
+    // capture exists, so the behavior gate supports L1 only.
+    ChipConf {
+        name: "atmega1281",
+        yaml: "configs/chips/atmega1281.yaml",
+        reset_oracle: None,
+        behavior_gate: Some(
+            "avr_atmega1281_firmware::atmega1281_compiled_firmware_prints_and_drives_pb5",
+        ),
+    },
     ChipConf {
         name: "atsamd21",
         yaml: "configs/chips/atsamd21.yaml",

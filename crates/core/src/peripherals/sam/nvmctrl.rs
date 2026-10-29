@@ -203,6 +203,10 @@ impl ManualFlashStorage for Samd51Nvmctrl {
 }
 
 impl Peripheral for Samd51Nvmctrl {
+    fn on_system_reset(&mut self) {
+        // Registers and the page/holding buffers; the flash array is bus memory.
+        *self = Self::new();
+    }
     fn manual_flash_storage(&self) -> Option<&dyn ManualFlashStorage> {
         Some(self)
     }

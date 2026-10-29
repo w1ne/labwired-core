@@ -1,0 +1,10 @@
+# LabWired — ATmega1281 I/O smoke test
+# The AVR-GCC image prints "1281 OK\n" through USART0 and drives PB5 high.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/avr/atmega1281-io.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "1281 OK"

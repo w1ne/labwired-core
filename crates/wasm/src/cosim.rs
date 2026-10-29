@@ -35,10 +35,54 @@ pub(crate) const NETLIST_FILE_IN_BROWSER: &str =
 ///
 /// Checked before any adapter is built: building an `external_process` adapter
 /// spawns the process, which is exactly what must not be attempted here.
-fn check_browser_models(models: &[CosimModelConfig]) -> Result<(), String> {
+pub(crate) fn check_browser_models(
+    models: &[CosimModelConfig],
+    has_ngspice_callback: bool,
+) -> Result<(), String> {
     for model in models {
+        if model.step_ns == 0 {
+            return Err(format!(
+                "co-sim model '{}' step_ns must be greater than zero",
+                model.id
+            ));
+        }
+        if model.adapter == CosimAdapter::Ngspice {
+            if let Some(value) = model.config.get("trace_volts") {
+                let list = value.as_sequence().ok_or_else(|| {
+                    format!(
+                        "co-sim model {} config.trace_volts must be a list of output names",
+                        model.id
+                    )
+                })?;
+                for entry in list {
+                    let name = entry.as_str().filter(|name| !name.is_empty()).ok_or_else(|| format!("co-sim model {} config.trace_volts entries must be non-empty names", model.id))?;
+                    let node = model.config.get("output_nodes").and_then(|v| v.get(name));
+                    if !model.outputs.contains_key(name) && node.is_none() {
+                        return Err(format!(
+                            "co-sim model {} config.trace_volts references unknown output {}",
+                            model.id, name
+                        ));
+                    }
+                }
+            }
+            for path in model.inputs.values().chain(model.outputs.values()) {
+                if ["pwm.duty:", "adc.input_mv:", "gpio.pad:", "gpio.input:"]
+                    .iter()
+                    .any(|prefix| path.starts_with(prefix))
+                {
+                    return Err(format!(
+                        "co-sim model {} uses unsupported legacy route {}; use board signal paths",
+                        model.id, path
+                    ));
+                }
+            }
+        }
         let refusal = match model.adapter {
             CosimAdapter::ExternalProcess => Some(EXTERNAL_PROCESS_IN_BROWSER),
+            CosimAdapter::Ngspice if !has_ngspice_callback => {
+                Some("ngspice requires a browser solver callback")
+            }
+            CosimAdapter::Ngspice => None,
             // `netlist_text` wins over `netlist` when both are given (see
             // `labwired_core::analog::adapter::netlist_source`), so only a
             // model that would actually read a file is refused.
@@ -86,6 +130,18 @@ impl AdvanceFailure {
 
 #[wasm_bindgen]
 impl WasmSimulator {
+    pub(crate) fn ensure_cosim_healthy(&self) -> Result<(), AdvanceFailure> {
+        match self.cosim.as_ref().and_then(|session| session.failure()) {
+            Some(message) => Err(AdvanceFailure::Cosim(message.to_string())),
+            None => Ok(()),
+        }
+    }
+    pub(crate) fn runtime_snapshot_refusal(&self) -> Option<&'static str> {
+        self.cosim
+            .as_ref()
+            .filter(|session| session.has_ngspice())
+            .map(|_| "runtime snapshots cannot capture or restore externally hosted ngspice state")
+    }
     /// Set a co-simulation signal from outside the engine: a canvas touch pad
     /// sends `('ui.<partId>.pressed', 1)` on press and `0` on release.
     ///
@@ -118,6 +174,11 @@ impl WasmSimulator {
             .map_err(|error| error.to_string())
     }
 
+    #[cfg(test)]
+    pub(crate) fn attach_cosim(&mut self, manifest: &SystemManifest) -> Result<(), String> {
+        self.attach_cosim_with_ngspice(manifest, None)
+    }
+
     /// Build the co-simulation session for `manifest` and publish its analog
     /// trace on the machine, exactly as `labwired test` does. A manifest with
     /// no `cosim_models:` leaves the simulator untouched.
@@ -125,17 +186,34 @@ impl WasmSimulator {
     /// Every failure is an error, never a skip: a model the browser cannot
     /// run, a model that fails to build, and a routed path that does not
     /// resolve on this chip.
-    pub(crate) fn attach_cosim(&mut self, manifest: &SystemManifest) -> Result<(), String> {
+    pub(crate) fn attach_cosim_with_ngspice(
+        &mut self,
+        manifest: &SystemManifest,
+        callback: Option<&js_sys::Function>,
+    ) -> Result<(), String> {
         if manifest.cosim_models.is_empty() {
             return Ok(());
         }
-        check_browser_models(&manifest.cosim_models)?;
+        check_browser_models(&manifest.cosim_models, callback.is_some())?;
         let machine = self
             .machine
             .as_mut()
             .ok_or_else(|| "simulator has no machine".to_string())?;
         // No base directory: the checks above leave no model that reads a path.
-        let Some(session) = CosimSession::new(&manifest.cosim_models, Path::new("."), &machine.bus)
+        let Some(session) =
+            CosimSession::new_with_factory(&manifest.cosim_models, &machine.bus, |config| {
+                if config.adapter == CosimAdapter::Ngspice {
+                    let callback = callback.ok_or_else(|| {
+                        SimulationError::Other(format!(
+                            "co-sim model {} needs an ngspice callback",
+                            config.id
+                        ))
+                    })?;
+                    Ok(crate::ngspice::adapter(config, callback))
+                } else {
+                    labwired_core::cosim::build_cosim_adapter_with_base(config, Path::new("."))
+                }
+            })
             .map_err(|e| format!("co-sim: failed to start the declared models: {e}"))?
         else {
             return Ok(());
@@ -178,6 +256,9 @@ impl WasmSimulator {
         let Some(session) = self.cosim.as_mut() else {
             return machine.advance(request).map_err(AdvanceFailure::Machine);
         };
+        if let Some(message) = session.failure() {
+            return Err(AdvanceFailure::Cosim(message.to_string()));
+        }
         match session.advance_budget(machine, request) {
             Ok(advance) => {
                 for error in &advance.new_routing_errors {
@@ -186,10 +267,14 @@ impl WasmSimulator {
                 Ok(advance.report)
             }
             Err(CosimAdvanceError::Machine(error)) => Err(AdvanceFailure::Machine(error)),
-            Err(CosimAdvanceError::Model { error, .. }) => Err(AdvanceFailure::Cosim(format!(
-                "Co-sim Error: model step failed at cycle {}: {error}",
-                machine.total_cycles
-            ))),
+            Err(CosimAdvanceError::Model { error, .. }) => {
+                let message = format!(
+                    "Co-sim Error: model step failed at cycle {}: {error}",
+                    machine.total_cycles
+                );
+                session.latch_failure(message.clone());
+                Err(AdvanceFailure::Cosim(message))
+            }
         }
     }
 }

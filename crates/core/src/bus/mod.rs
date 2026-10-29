@@ -34,6 +34,7 @@ pub(crate) mod embedded_descriptors;
 pub(crate) mod external_devices;
 mod faults;
 mod from_config;
+pub use from_config::merged_peripheral_configs;
 pub mod interrupt_fabric;
 pub mod known_stubs;
 mod memory_policy;
@@ -63,6 +64,7 @@ pub use interrupt_fabric::{
     InterruptFabric,
 };
 pub use memory_policy::{CpuWritePolicy, MemoryPolicyReport, RegionPolicyStats, RegionViolation};
+pub(crate) use motors::CircuitMotorLookup;
 pub use motors::MotorSnapshot;
 
 impl SystemBus {

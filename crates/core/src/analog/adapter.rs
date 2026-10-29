@@ -272,7 +272,12 @@ impl AnalogCosimAdapter {
         }
         // A switch's `<ctrl>` is itself a routed input name, so it needs no
         // `sources:` entry. An explicit entry wins if a manifest declares both.
+        // Voltage-controlled switches have an empty ctrl and are driven by the
+        // MNA engine from their sense nodes, so they are not routed inputs.
         for switch in &solver.circuit().switches {
+            if switch.voltage.is_some() || switch.ctrl.is_empty() {
+                continue;
+            }
             let indices = solver.switches_controlled_by(&switch.ctrl);
             inputs
                 .entry(switch.ctrl.clone())

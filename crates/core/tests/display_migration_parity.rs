@@ -91,6 +91,11 @@ fn assert_same_artifact(old: &Artifact, new: &Artifact, what: &str) {
     keys.sort();
     keys.dedup();
     for k in keys {
+        // Additive oracle field on the YAML model only — frozen display_oracle
+        // copies never grew a ring. Skip so parity stays about the picture.
+        if k.as_str() == "generation_history" {
+            continue;
+        }
         assert_eq!(
             o.get(k),
             n.get(k),
@@ -2074,6 +2079,7 @@ fn rm67162_artifact_keeps_its_published_shape() {
             "display_on",
             "format",
             "generation",
+            "generation_history",
             "h",
             "lit",
             "madctl",
@@ -2167,6 +2173,8 @@ fn assert_same_epaper_artifact(old: &Artifact, new: &Artifact, what: &str) {
     let mut extra: Vec<&str> = n
         .keys()
         .filter(|k| !o.contains_key(*k))
+        // Additive oracle ring — not part of the deleted-model contract.
+        .filter(|k| k.as_str() != "generation_history")
         .map(|k| k.as_str())
         .collect();
     extra.sort_unstable();
@@ -2624,11 +2632,21 @@ fn an_epaper_runtime_snapshot_round_trips_and_an_untagged_one_is_refused() {
 
     let mut dst = new_ssd1680();
     SpiDevice::restore_runtime_snapshot(&mut dst, &blob).expect("a tagged snapshot restores");
-    assert_eq!(
-        epd_art(&dst).meta,
-        epd_art(&src).meta,
-        "every published fact survives the round trip",
-    );
+    {
+        let mut src_meta = epd_art(&src).meta.clone();
+        let mut dst_meta = epd_art(&dst).meta.clone();
+        // Ring is not part of the picture snapshot (pixels + refresh only).
+        src_meta
+            .as_object_mut()
+            .map(|m| m.remove("generation_history"));
+        dst_meta
+            .as_object_mut()
+            .map(|m| m.remove("generation_history"));
+        assert_eq!(
+            dst_meta, src_meta,
+            "every published fact survives the round trip"
+        );
+    }
     assert_eq!(epd_art(&dst).bytes, epd_art(&src).bytes, "and every byte");
     assert_eq!(
         epd_art(&dst).meta["screen_black_ink_bytes"],

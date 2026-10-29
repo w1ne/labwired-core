@@ -10,7 +10,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | Model | Visibility | Conformance | Peripherals | Step Ir/step | Batch Ir/step | RTx | Public docs |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | esp32c3 | open | L2 | 40 | — | 2.5 | ≥1× (CI) | [doc](docs/boards/esp32c3.md) |
-| esp32c6 | open | L1 | 16 | — | 3.5 | ≥1× (CI) | — |
+| esp32c6 | open | L1 | 17 | — | 3.5 | ≥1× (CI) | — |
 | litex-vexriscv | open | L1 | 5 | — | — | ≥1× (CI) | [doc](docs/boards/litex-vexriscv.md) |
 | arty-litex-vexriscv | open | L1 | 6 | — | — | ≥1× (CI) | [doc](docs/boards/arty-litex-vexriscv.md) |
 | vegaboard-ri5cy | open | L1 | 9 | — | — | ≥1× (CI) | [doc](docs/boards/vegaboard-ri5cy.md) |
@@ -90,9 +90,10 @@ same fields but never their source, chip YAML, binary or build paths.
 | atmega328p | open | L1 | 7 | 1044.8 | 7.6 | ≥1× (CI) | — |
 | atmega2560 | open | L1 | 15 | — | — | ≥1× (CI) | — |
 | atmega2561 | open | L1 | 11 | — | — | ≥1× (CI) | [doc](docs/boards/atmega2561.md) |
+| atmega1281 | open | L1 | 11 | — | — | ≥1× (CI) | [doc](docs/boards/atmega1281.md) |
 | atsamd21 | open | L1 | 7 | 895.0 | 1.4 | ≥1× (CI) | — |
-| atsamd51 | open | L1 | 9 | 895.0 | 1.4 | ≥1× (CI) | — |
-| atsamd51-pybadge | open | L0 | 10 | 905.7 | 1.5 | ≥1× (CI) | — |
+| atsamd51 | open | L1 | 27 | 1240.0 | 1.4 | ≥1× (CI) | — |
+| atsamd51-pybadge | open | L0 | 28 | 1251.8 | 1.5 | ≥1× (CI) | — |
 | ra4m1 | open | L1 | 7 | 895.0 | 1.4 | ≥1× (CI) | — |
 | imxrt1064 | open | L1 | 6 | 895.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/imxrt1064.md) |
 | stm32f746 | open | L1 | 17 | 895.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/stm32f746.md) |

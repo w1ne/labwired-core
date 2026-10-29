@@ -323,3 +323,189 @@ fn manifest_builds_runner_with_manifest_relative_model_path() {
     assert_eq!(signals["plant.output.voltage"], CosimSignalValue::F64(10.0));
     assert_eq!(signals["plant.output.current"], CosimSignalValue::F64(10.0));
 }
+
+#[test]
+fn cosim_runner_steps_models_in_global_chronological_order() {
+    use labwired_config::{CosimAdapter as ManifestCosimAdapter, CosimModelConfig};
+    use labwired_core::cosim::{CosimRunner, CosimRunnerModel};
+    use std::collections::HashMap;
+    use std::sync::{Arc, Mutex};
+
+    type RecordedCall = (String, u64, Option<CosimSignalValue>);
+
+    struct RecordingAdapter {
+        model_id: String,
+        calls: Arc<Mutex<Vec<RecordedCall>>>,
+        output_voltage_from_time: bool,
+    }
+
+    impl CosimAdapter for RecordingAdapter {
+        fn step(&mut self, step: CosimStep) -> labwired_core::SimResult<CosimStepResult> {
+            self.calls.lock().unwrap().push((
+                self.model_id.clone(),
+                step.time_ns,
+                step.inputs.get("voltage").cloned(),
+            ));
+
+            let outputs = if self.output_voltage_from_time {
+                BTreeMap::from([(
+                    "voltage".to_string(),
+                    CosimSignalValue::F64(step.time_ns as f64),
+                )])
+            } else {
+                BTreeMap::new()
+            };
+            Ok(CosimStepResult { outputs })
+        }
+    }
+
+    let calls = Arc::new(Mutex::new(Vec::new()));
+    // Put the slower model first to ensure scheduling is by deadline, not model order.
+    let slow = CosimModelConfig {
+        id: "slow_reader".to_string(),
+        adapter: ManifestCosimAdapter::Mock,
+        model: None,
+        step_ns: 20,
+        inputs: HashMap::from([("voltage".to_string(), "plant.voltage".to_string())]),
+        outputs: HashMap::new(),
+        config: HashMap::new(),
+    };
+    let fast = CosimModelConfig {
+        id: "fast_writer".to_string(),
+        adapter: ManifestCosimAdapter::Mock,
+        model: None,
+        step_ns: 10,
+        inputs: HashMap::new(),
+        outputs: HashMap::from([("voltage".to_string(), "plant.voltage".to_string())]),
+        config: HashMap::new(),
+    };
+    let mut runner = CosimRunner::new(vec![
+        CosimRunnerModel::new(
+            slow,
+            Box::new(RecordingAdapter {
+                model_id: "slow_reader".to_string(),
+                calls: Arc::clone(&calls),
+                output_voltage_from_time: false,
+            }),
+        ),
+        CosimRunnerModel::new(
+            fast,
+            Box::new(RecordingAdapter {
+                model_id: "fast_writer".to_string(),
+                calls: Arc::clone(&calls),
+                output_voltage_from_time: true,
+            }),
+        ),
+    ]);
+    let mut signals = BTreeMap::from([("plant.voltage".to_string(), CosimSignalValue::F64(0.0))]);
+
+    runner.step_until_with_signals(20, &mut signals).unwrap();
+
+    assert_eq!(
+        *calls.lock().unwrap(),
+        vec![
+            ("fast_writer".to_string(), 10, None),
+            (
+                "slow_reader".to_string(),
+                20,
+                Some(CosimSignalValue::F64(10.0))
+            ),
+            ("fast_writer".to_string(), 20, None),
+        ]
+    );
+}
+
+#[test]
+fn cosim_runner_uses_pre_boundary_snapshot_for_models_due_together() {
+    use labwired_config::{CosimAdapter as ManifestCosimAdapter, CosimModelConfig};
+    use labwired_core::cosim::{CosimRunner, CosimRunnerModel};
+    use std::collections::HashMap;
+    use std::sync::{Arc, Mutex};
+
+    let reader_inputs = Arc::new(Mutex::new(Vec::new()));
+
+    struct WriterAdapter;
+
+    impl CosimAdapter for WriterAdapter {
+        fn step(&mut self, _step: CosimStep) -> labwired_core::SimResult<CosimStepResult> {
+            Ok(CosimStepResult {
+                outputs: BTreeMap::from([("voltage".to_string(), CosimSignalValue::F64(2.0))]),
+            })
+        }
+    }
+
+    struct ReaderAdapter(Arc<Mutex<Vec<Option<CosimSignalValue>>>>);
+
+    impl CosimAdapter for ReaderAdapter {
+        fn step(&mut self, step: CosimStep) -> labwired_core::SimResult<CosimStepResult> {
+            self.0
+                .lock()
+                .unwrap()
+                .push(step.inputs.get("voltage").cloned());
+            Ok(CosimStepResult::default())
+        }
+    }
+
+    let writer = CosimModelConfig {
+        id: "writer".to_string(),
+        adapter: ManifestCosimAdapter::Mock,
+        model: None,
+        step_ns: 10,
+        inputs: HashMap::new(),
+        outputs: HashMap::from([("voltage".to_string(), "plant.voltage".to_string())]),
+        config: HashMap::new(),
+    };
+    let reader = CosimModelConfig {
+        id: "reader".to_string(),
+        adapter: ManifestCosimAdapter::Mock,
+        model: None,
+        step_ns: 10,
+        inputs: HashMap::from([("voltage".to_string(), "plant.voltage".to_string())]),
+        outputs: HashMap::new(),
+        config: HashMap::new(),
+    };
+    let mut runner = CosimRunner::new(vec![
+        CosimRunnerModel::new(writer, Box::new(WriterAdapter)),
+        CosimRunnerModel::new(reader, Box::new(ReaderAdapter(Arc::clone(&reader_inputs)))),
+    ]);
+    let mut signals = BTreeMap::from([("plant.voltage".to_string(), CosimSignalValue::F64(1.0))]);
+
+    runner.step_until_with_signals(10, &mut signals).unwrap();
+
+    assert_eq!(
+        *reader_inputs.lock().unwrap(),
+        vec![Some(CosimSignalValue::F64(1.0))]
+    );
+    assert_eq!(signals["plant.voltage"], CosimSignalValue::F64(2.0));
+}
+
+#[test]
+fn runner_rejects_zero_and_overflowing_periods_without_stepping() {
+    use labwired_config::{CosimAdapter as ManifestAdapter, CosimModelConfig};
+    use labwired_core::cosim::{CosimRunner, CosimRunnerModel};
+    use std::collections::HashMap;
+    for period in [0, u64::MAX] {
+        let config = CosimModelConfig {
+            id: "invalid".into(),
+            adapter: ManifestAdapter::Mock,
+            model: None,
+            step_ns: period,
+            inputs: HashMap::new(),
+            outputs: HashMap::new(),
+            config: HashMap::new(),
+        };
+        let mut runner = CosimRunner::new(vec![CosimRunnerModel::new(
+            config,
+            Box::new(StaticCosimAdapter::new(BTreeMap::new())),
+        )]);
+        let error = runner
+            .step_until(period, BTreeMap::new())
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("invalid"), "{error}");
+        assert!(
+            error.contains(if period == 0 { "step_ns" } else { "overflow" }),
+            "{error}"
+        );
+    }
+}

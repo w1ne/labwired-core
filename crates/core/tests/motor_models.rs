@@ -22,6 +22,7 @@ fn params(load_torque_nm: f64) -> BrushedMotorParams {
         shaft: ShaftParams {
             inertia_kg_m2: 0.0001,
             viscous_friction_nm_per_rad_s: 0.00001,
+            coulomb_friction_nm: 0.0,
             load_torque_nm,
         },
     }
@@ -322,6 +323,7 @@ fn bldc_params(load_torque_nm: f64) -> BldcMotorParams {
         shaft: ShaftParams {
             inertia_kg_m2: 0.0001,
             viscous_friction_nm_per_rad_s: 0.00001,
+            coulomb_friction_nm: 0.0,
             load_torque_nm,
         },
     }
@@ -961,4 +963,70 @@ fn identical_bldc_command_traces_are_bit_exact() {
 
     assert_eq!(first.params(), second.params());
     assert_eq!(first.snapshot(), second.snapshot());
+}
+
+/// The catalog `dc_motor` part's default parameters, read from the part pack
+/// itself so this test follows whatever the catalog ships.
+fn catalog_dc_motor_params() -> BrushedMotorParams {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../configs/devices/dc_motor.yaml");
+    let pack: serde_yaml::Value =
+        serde_yaml::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let default = |key: &str| {
+        pack["behavior"]["params"][key]["default"]
+            .as_f64()
+            .unwrap_or_else(|| panic!("dc_motor.yaml has a numeric default for {key}"))
+    };
+    BrushedMotorParams {
+        resistance_ohm: default("resistance_ohm"),
+        inductance_h: default("inductance_h"),
+        torque_constant_nm_per_a: default("torque_constant_nm_per_a"),
+        back_emf_constant_v_per_rad_s: default("back_emf_constant_v_per_rad_s"),
+        supply_voltage_v: default("supply_voltage_v"),
+        shaft: ShaftParams {
+            inertia_kg_m2: default("rotor_inertia_kg_m2"),
+            viscous_friction_nm_per_rad_s: default("viscous_friction_nm_per_rad_s"),
+            coulomb_friction_nm: default("coulomb_friction_nm"),
+            load_torque_nm: default("load_torque_nm"),
+        },
+    }
+}
+
+#[test]
+fn the_catalog_dc_motor_coasts_to_a_stop_within_a_second() {
+    let params = catalog_dc_motor_params();
+    assert!(params.shaft.coulomb_friction_nm > 0.0);
+    let mut motor = BrushedDcMotor::new(params).unwrap();
+    // 0.3 s at full supply: well past the electromechanical time constant.
+    step_many(&mut motor, HBridgeCommand::forward(1.0).unwrap(), 30_000);
+    let running = motor.snapshot();
+    assert!(running.speed_rpm > 1000.0, "{} rpm", running.speed_rpm);
+    // The dry friction costs a small running current, not the speed.
+    let no_load_rpm = params.supply_voltage_v / params.back_emf_constant_v_per_rad_s * 60.0
+        / std::f64::consts::TAU;
+    assert!(
+        running.speed_rpm > 0.95 * no_load_rpm,
+        "{} rpm",
+        running.speed_rpm
+    );
+    assert!(
+        running.current_a > 0.0 && running.current_a < 0.2,
+        "{} A",
+        running.current_a
+    );
+
+    let coast = HBridgeCommand::coast();
+    let mut steps = 0usize;
+    while motor.snapshot().speed_rpm != 0.0 {
+        motor.step(coast, DT_S).unwrap();
+        assert!(motor.snapshot().speed_rpm >= 0.0, "never reverses");
+        steps += 1;
+        assert!(steps <= 100_000, "stopped within 1 s of coasting");
+    }
+    assert!(
+        steps > 10_000,
+        "a real spin-down, not an instant stop: {steps} steps"
+    );
+    step_many(&mut motor, coast, 10_000);
+    assert_eq!(motor.snapshot().speed_rpm, 0.0, "stiction holds it");
 }

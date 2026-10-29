@@ -82,12 +82,55 @@
 //! 14-bit counter), the integer `CLK_DIV` divider, and the sticky W1C `OVF`
 //! latch. Every counter read, `INT_RAW`/`INT_ST` value and OVF-IRQ cycle is
 //! byte-identical to the walk-driven reference at tick interval 1.
+//!
+//! ## Channel outputs on the pads
+//!
+//! Each of the six channels' outputs is a real waveform ([`LedcPads`], shared
+//! with the classic and S3 models), published on its matrix wire
+//! (`LEDC_LS_SIG_OUT0..5` = 45..50) and bound to every pad by
+//! `SystemBus::wire_esp32c3_ledc_pads`, so `analogWrite`/`ledcWrite` duty
+//! reaches the pad `ledc_channel_config` routed. The waveform is clocked by the
+//! real source (`LEDC_CONF.APB_CLK_SEL`: 1 = APB 80 MHz, 2 = RC_FAST 17.5 MHz,
+//! 3 = XTAL 40 MHz) through the full Q8 `CLK_DIV`, converted to CPU cycles via
+//! `cpu_hz`. ⚠️ That is NOT the time base of the overflow counters above,
+//! which keep their historical one-count-per-integer-divider-CPU-cycles rate
+//! (pinned byte-for-byte by the walk differentials); the pad waveform is the
+//! one that matches silicon. `CONF1.DUTY_START` now commits `DUTY` into
+//! `DUTY_R`, as `ledc_get_duty()` expects. The waveform's edge wakes carry
+//! [`WAVE_TOKEN_BIT`] so they never collide with the overflow chain's tokens.
 
 use std::cell::Cell;
 use std::sync::Arc;
 
+use crate::peripherals::esp_ledc_wave::{channel_drive, LedcPads, LedcTimerState, WAVE_TOKEN_BIT};
+use crate::peripherals::pad_lines::PadLines;
 use crate::peripherals::LedcDutyObserver;
 use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
+
+/// Channel wire names, in channel order.
+pub(crate) const LEDC_LINES: &[&str] = &[
+    "LEDC_LS_CH0",
+    "LEDC_LS_CH1",
+    "LEDC_LS_CH2",
+    "LEDC_LS_CH3",
+    "LEDC_LS_CH4",
+    "LEDC_LS_CH5",
+];
+/// `LEDC_CONF` — `APB_CLK_SEL` [1:0] (`soc/esp32c3/include/soc/ledc_struct.h`).
+const LEDC_CONF: u64 = 0xD0;
+/// Per-channel register block, stride 0x14: CONF0, HPOINT, DUTY, CONF1, DUTY_R.
+const CH_STRIDE: u64 = 0x14;
+const CH_CONF0: u64 = 0x00;
+const CH_HPOINT: u64 = 0x04;
+const CH_DUTY: u64 = 0x08;
+const CH_CONF1: u64 = 0x0C;
+const CH_DUTY_R: u64 = 0x10;
+/// `CHn_CONF1.DUTY_START`: the strobe `ledc_update_duty` sets to commit a duty.
+const CONF1_DUTY_START_BIT: u32 = 1 << 31;
+const DUTY_MASK: u32 = 0x7_FFFF;
+const HPOINT_MASK: u32 = 0x3FFF;
+/// C3 core clock until the bus hands over the chip's own `cpu_hz`.
+const DEFAULT_CPU_HZ: u64 = 160_000_000;
 
 pub const LEDC_BASE: u32 = 0x6001_9000;
 pub const LEDC_SIZE: u64 = 0x400;
@@ -108,12 +151,6 @@ const NUM_CHANNELS: usize = 6;
 /// value matches the silicon capture without changing timer behavior.
 const CH_CONF1_RESET: u32 = 0x4000_0000;
 
-/// Channel register block stride: CONF0, HPOINT, DUTY, CONF1, DUTY_R.
-const CH_STRIDE: u64 = 0x14;
-const CH_DUTY: u64 = 0x08;
-const CH_CONF1: u64 = 0x0C;
-/// `CHn_CONF1.DUTY_START`: the strobe `ledc_update_duty` sets to commit a duty.
-const CONF1_DUTY_START_BIT: u32 = 1 << 31;
 /// `CHn_CONF0.TIMER_SEL` [1:0]: which timer clocks the channel.
 const CONF0_TIMER_SEL_MASK: u32 = 0b11;
 
@@ -270,6 +307,9 @@ pub struct Esp32c3Ledc {
     /// in-flight overflow event scheduled under an older configuration dies on
     /// arrival (token mismatch) instead of racing the fresh chain.
     arm_seq: u32,
+    /// Absolute cycle the live overflow event (token `arm_seq`) targets, `None`
+    /// when none is in flight.
+    ovf_target: Option<u64>,
     /// Bus-published cycle clock (walk-free plan). `Some` once
     /// `SystemBus::add_peripheral` attaches it (under the `event-scheduler`
     /// feature); its presence flips the model onto the event scheduler. `None`
@@ -277,6 +317,11 @@ pub struct Esp32c3Ledc {
     /// `force_legacy_walk`) keeps the legacy per-cycle walk. Not serialized —
     /// re-attached by the bus.
     clock: Option<CycleClock>,
+    /// The six channel outputs as waveforms (see module docs).
+    pads: LedcPads,
+    /// Per timer: the cycle its counter last restarted (pad waveform phase).
+    timer_origin: [u64; NUM_TIMERS],
+    cpu_hz: u64,
     /// Notified on each committed channel duty (`ledcWrite`), the same hook
     /// the classic ESP32 LEDC offers, so PWM-driven parts (a servo) follow it.
     duty_observers: Vec<Arc<dyn LedcDutyObserver>>,
@@ -326,7 +371,11 @@ impl Esp32c3Ledc {
             int_ena: 0,
             anchor: Cell::new(0),
             arm_seq: 0,
+            ovf_target: None,
             clock: None,
+            pads: LedcPads::new(LEDC_LINES),
+            timer_origin: [0; NUM_TIMERS],
+            cpu_hz: DEFAULT_CPU_HZ,
             duty_observers: Vec::new(),
         }
     }
@@ -347,6 +396,53 @@ impl Esp32c3Ledc {
         }
         let duty = (self.reg(base + CH_DUTY) >> 4) as f64;
         (duty / timer.period() as f64).clamp(0.0, 1.0)
+    }
+
+    /// The six channel outputs' wire, created on first call. The C3 GPIO
+    /// model binds its lines to the output-matrix signals
+    /// `LEDC_LS_SIG_OUT0..5` (45..50); see `SystemBus::wire_esp32c3_ledc_pads`.
+    pub(crate) fn pad_lines_arc(&mut self) -> Arc<PadLines> {
+        self.pads.lines_arc()
+    }
+
+    fn wave_now(&self) -> u64 {
+        self.clock
+            .as_ref()
+            .map_or(self.pads.anchor(), |c| c.now().max(self.pads.anchor()))
+    }
+
+    /// Re-derive every channel's output from the registers at `now`.
+    fn redrive(&mut self, now: u64) {
+        self.pads.advance_to(now);
+        let src_hz = match self.reg(LEDC_CONF) & 0b11 {
+            1 => 80_000_000,
+            2 => 17_500_000,
+            3 => 40_000_000,
+            _ => 0,
+        };
+        for ch in 0..NUM_CHANNELS {
+            let base = ch as u64 * CH_STRIDE;
+            let conf0 = self.reg(base + CH_CONF0);
+            let t = (conf0 & 0b11) as usize;
+            let conf = self.timers[t].conf;
+            let timer = LedcTimerState {
+                duty_res: conf & DUTY_RES_MASK,
+                div_q8: u64::from((conf >> CLK_DIV_SHIFT) & CLK_DIV_FIELD_MASK),
+                paused: conf & PAUSE_BIT != 0,
+                reset: conf & RST_BIT != 0,
+                src_hz,
+                origin: self.timer_origin[t],
+            };
+            let d = channel_drive(
+                conf0,
+                u64::from(self.reg(base + CH_HPOINT) & HPOINT_MASK),
+                u64::from((self.reg(base + CH_DUTY_R) & DUTY_MASK) >> 4),
+                &timer,
+                self.cpu_hz,
+                self.pads.level(ch),
+            );
+            self.pads.set_drive(ch, d, now);
+        }
     }
 
     crate::cycle_clock::scheduler_mode!();
@@ -417,6 +513,42 @@ impl Esp32c3Ledc {
         Some((idx, is_value))
     }
 
+    /// The register store side of an MMIO write (timer CONF, interrupt block,
+    /// register-backed window).
+    fn write_register(&mut self, off: u64, value: u32) -> SimResult<()> {
+        if let Some((idx, is_value)) = Self::timer_at(off) {
+            if is_value {
+                // CNT is read-only on silicon; ignore writes.
+            } else {
+                // Store the config (PARA_UP is a self-clearing commit strobe);
+                // applying DUTY_RES/CLK_DIV immediately is sufficient here.
+                self.timers[idx].conf = value & !PARA_UP_BIT;
+                if value & RST_BIT != 0 {
+                    self.timers[idx].counter.set(0);
+                    self.timers[idx].accum.set(0);
+                }
+            }
+            return Ok(());
+        }
+        match off {
+            // R/WTC and W1C: writing 1s clears those latched overflow bits.
+            INT_RAW | INT_CLR => {
+                self.int_raw
+                    .set(self.int_raw.get() & !(value & OVF_INT_MASK));
+            }
+            INT_ENA => {
+                self.int_ena = value & OVF_INT_MASK;
+            }
+            INT_ST => {} // read-only
+            o => {
+                if let Some(slot) = self.regs.get_mut((o / 4) as usize) {
+                    *slot = value;
+                }
+            }
+        }
+        Ok(())
+    }
+
     fn reg(&self, off: u64) -> u32 {
         *self.regs.get((off / 4) as usize).unwrap_or(&0)
     }
@@ -472,48 +604,41 @@ impl Peripheral for Esp32c3Ledc {
         // too, and is idempotent. No-op in legacy mode.
         self.sync_from_clock();
         let off = offset & !3;
-        if let Some((idx, is_value)) = Self::timer_at(off) {
-            if is_value {
-                // CNT is read-only on silicon; ignore writes.
-            } else {
-                // Store the config (PARA_UP is a self-clearing commit strobe);
-                // applying DUTY_RES/CLK_DIV immediately is sufficient here.
-                self.timers[idx].conf = value & !PARA_UP_BIT;
-                if value & RST_BIT != 0 {
-                    self.timers[idx].counter.set(0);
-                    self.timers[idx].accum.set(0);
-                }
+        let now = self.wave_now();
+        self.pads.advance_to(now);
+        if let Some((idx, false)) = Self::timer_at(off) {
+            const COUNTING: u32 =
+                DUTY_RES_MASK | (CLK_DIV_FIELD_MASK << CLK_DIV_SHIFT) | PAUSE_BIT | RST_BIT;
+            if (self.timers[idx].conf ^ value) & COUNTING != 0 {
+                self.timer_origin[idx] = now;
             }
-            return Ok(());
         }
-        match off {
-            // R/WTC and W1C: writing 1s clears those latched overflow bits.
-            INT_RAW | INT_CLR => {
-                self.int_raw
-                    .set(self.int_raw.get() & !(value & OVF_INT_MASK));
-            }
-            INT_ENA => {
-                self.int_ena = value & OVF_INT_MASK;
-            }
-            INT_ST => {} // read-only
-            o => {
-                if let Some(slot) = self.regs.get_mut((o / 4) as usize) {
-                    *slot = value;
-                }
-                let ch = o / CH_STRIDE;
-                if ch < NUM_CHANNELS as u64
-                    && o % CH_STRIDE == CH_CONF1
-                    && value & CONF1_DUTY_START_BIT != 0
-                    && !self.duty_observers.is_empty()
+        let res = self.write_register(off, value);
+        if off < INT_RAW || off == LEDC_CONF {
+            if off < (NUM_CHANNELS as u64) * CH_STRIDE
+                && off % CH_STRIDE == CH_CONF1
+                && value & CONF1_DUTY_START_BIT != 0
+            {
+                // DUTY_START commits the staged DUTY into DUTY_R — the duty
+                // the output generates and `ledc_get_duty()` reads back.
+                let duty = self.reg(off - CH_CONF1 + CH_DUTY) & DUTY_MASK;
+                if let Some(slot) = self
+                    .regs
+                    .get_mut(((off - CH_CONF1 + CH_DUTY_R) / 4) as usize)
                 {
+                    *slot = duty;
+                }
+                if !self.duty_observers.is_empty() {
+                    let ch = off / CH_STRIDE;
                     let fraction = self.channel_duty_fraction(ch);
                     for obs in &self.duty_observers {
                         obs.on_duty_change(ch, fraction);
                     }
                 }
             }
+            self.redrive(now);
         }
-        Ok(())
+        res
     }
 
     fn tick(&mut self) -> PeripheralTickResult {
@@ -535,6 +660,10 @@ impl Peripheral for Esp32c3Ledc {
                 }
             }
             self.int_raw.set(raw);
+            // No edge wakes on the legacy walk: publish the pad waveform up
+            // to the bus clock here instead.
+            let now = self.wave_now();
+            self.pads.advance_to(now);
         }
         PeripheralTickResult {
             explicit_irqs: if self.int_st() != 0 {
@@ -584,7 +713,23 @@ impl Peripheral for Esp32c3Ledc {
     fn sync_to(&mut self, now_cycle: u64) {
         if self.scheduler_mode() {
             self.advance_to(now_cycle);
+            let now = self.wave_now();
+            self.pads.advance_to(now);
         }
+    }
+
+    fn attach_cpu_hz(&mut self, hz: u64) {
+        if hz != 0 {
+            self.cpu_hz = hz;
+        }
+    }
+
+    fn line_names(&self) -> &'static [&'static str] {
+        LEDC_LINES
+    }
+
+    fn wire_lines(&self) -> Option<&PadLines> {
+        self.pads.wire_lines()
     }
 
     fn attach_cycle_clock(&mut self, clock: CycleClock) {
@@ -620,11 +765,34 @@ impl Peripheral for Esp32c3Ledc {
         if !self.scheduler_mode() {
             return Vec::new();
         }
-        self.arm_seq = self.arm_seq.wrapping_add(1);
-        match self.cycles_to_next_overflow() {
-            Some(cycles) => vec![(cycles.saturating_sub(1), self.arm_seq)],
-            None => Vec::new(),
+        // Re-stamp ONLY when the overflow deadline actually moved. Stamping on
+        // every call (this runs after EVERY register write) left one stale but
+        // still-queued event per write, so a real Arduino `ledcSetup` +
+        // `ledcWrite` sequence held 9 live events against the scheduler's
+        // ceiling of 8 (`MAX_LIVE_EVENTS_PER_PERIPHERAL`, debug-asserted) — a
+        // channel or duty write never moves the overflow. A moved deadline
+        // still takes a fresh token, so the old event dies on arrival.
+        //
+        // Overflow-chain tokens stay below WAVE_TOKEN_BIT; the pad waveform's
+        // edge wakes carry it.
+        let target = self
+            .cycles_to_next_overflow()
+            .map(|c| self.anchor.get() + c);
+        let mut events = Vec::new();
+        if target != self.ovf_target {
+            self.arm_seq = self.arm_seq.wrapping_add(1) & !WAVE_TOKEN_BIT;
+            self.ovf_target = target;
+            if let Some(t) = target {
+                events.push(((t - self.anchor.get()).saturating_sub(1), self.arm_seq));
+            }
         }
+        events.extend(
+            self.pads
+                .take_scheduled_events()
+                .into_iter()
+                .map(|(delay, token)| (delay, token | WAVE_TOKEN_BIT)),
+        );
+        events
     }
 
     /// Fire the nearest overflow at its exact cycle: advance every timer to the
@@ -641,14 +809,25 @@ impl Peripheral for Esp32c3Ledc {
         sched: &mut crate::sched::EventScheduler,
         _bus: &mut dyn crate::Bus,
     ) -> crate::sched::EventResult {
+        if self.scheduler_mode() && event_token & WAVE_TOKEN_BIT != 0 {
+            let (_, reschedule_delay) = self
+                .pads
+                .on_event(event_token & !WAVE_TOKEN_BIT, sched.now());
+            return crate::sched::EventResult {
+                reschedule_delay,
+                ..Default::default()
+            };
+        }
         if !self.scheduler_mode() || event_token != self.arm_seq {
             // Stale chain (re-armed since this event was scheduled): die.
             return crate::sched::EventResult::default();
         }
         self.advance_to(sched.now());
         let mut res = crate::sched::EventResult::default();
+        self.ovf_target = None;
         if let Some(cycles) = self.cycles_to_next_overflow() {
             res.reschedule_delay = Some(cycles);
+            self.ovf_target = Some(sched.now().max(self.anchor.get()) + cycles);
         }
         res
     }

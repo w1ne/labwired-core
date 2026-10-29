@@ -898,9 +898,19 @@ impl<C: Cpu> Machine<C> {
     }
 
     /// Run-long change-point series of every analog channel (`result.json`'s
-    /// `analog_series`); `None` when no co-simulation runner is attached.
+    /// `analog_series`): the co-simulated netlist's channels, then each
+    /// motor's `motor.<id>.speed_rpm` and `motor.<id>.current_a`. `None` when
+    /// there is neither a co-simulation runner nor a motor.
     pub fn analog_series(&self) -> Option<crate::analog::AnalogSeries> {
-        self.analog_trace.as_ref().map(|registry| registry.series())
+        let netlist = self.analog_trace.as_ref().map(|registry| registry.series());
+        let (motor_channels, motor_end_ns) = self.bus.motor_series();
+        if motor_channels.is_empty() {
+            return netlist;
+        }
+        let mut series = netlist.unwrap_or_default();
+        series.end_time_ns = series.end_time_ns.max(motor_end_ns);
+        series.channels.extend(motor_channels);
+        Some(series)
     }
 
     /// Current engine cycle — the `nowCycle` reported alongside a logic-edge
@@ -2509,6 +2519,15 @@ impl<C: Cpu> Machine<C> {
         }
     }
 
+    /// Return every peripheral that opts in through
+    /// [`Peripheral::on_system_reset`] to its power-on register state, after
+    /// a system reset rebooted the core.
+    fn system_reset_peripherals(&mut self) {
+        for peripheral in &mut self.bus.peripherals {
+            peripheral.dev.on_system_reset();
+        }
+    }
+
     /// Returns true (and clears the latch) if the registered SCB peripheral
     /// has a pending SYSRESETREQ — an AIRCR write with the correct VECTKEY and
     /// the SYSRESETREQ bit set (`Scb::write_reg`, offset 0x0C). The
@@ -2679,8 +2698,11 @@ impl<C: Cpu> Machine<C> {
         // Device binding lives on the bus, which is the one thing that holds
         // BOTH the live models (inside controllers and directly on itself) and
         // the manifest declarations they are named from. See
-        // `crate::bus::attached_devices`.
-        let devices = self.bus.inspect_devices(filter, opts);
+        // `crate::bus::attached_devices`. CPU-held SPI/I²C (AVR take_*) are
+        // folded in via the extra walk so inspect still sees them.
+        let devices = self.bus.inspect_devices_with_extra(filter, opts, &mut |f| {
+            self.cpu.for_each_attached_device(f);
+        });
         crate::inspect::MachineInspect {
             peripherals,
             devices,

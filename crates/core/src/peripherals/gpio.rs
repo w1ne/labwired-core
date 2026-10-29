@@ -2280,6 +2280,9 @@ impl GpioPort {
                 let cnf = (cr >> (shift + 2)) & 0b11;
                 (mode != 0 && cnf >= 0b10).then_some(0)
             }
+            // SAM PORT: PINCFG.PMUXEN hands the pad to the PMUX function
+            // (A = 0 .. N = 13); only pads with a bound route ever ask.
+            GpioFamily::SamPort(g) => g.pmux_of(pin).map(u32::from),
             _ => None,
         }
     }
@@ -2409,6 +2412,13 @@ impl GpioPort {
 }
 
 impl crate::pins::PinPort for GpioPort {
+    fn port_name_prefix(&self) -> &'static str {
+        match self.family {
+            GpioFamily::SamPort(_) => "port",
+            _ => "gpio",
+        }
+    }
+
     fn pin_count(&self) -> u8 {
         match &self.family {
             GpioFamily::Stm32F1(_)
@@ -2557,6 +2567,16 @@ impl crate::pins::PinPort for GpioPort {
 }
 
 impl crate::Peripheral for GpioPort {
+    fn on_system_reset(&mut self) {
+        // SAM PORT only: registers to power-on, the outside world's levels kept.
+        if let GpioFamily::SamPort(g) = &mut self.family {
+            let (external, in_latch) = (g.external, g.in_latch);
+            *g = SamGpio::default();
+            g.external = external;
+            g.in_latch = in_latch;
+            self.sync_pin_cells();
+        }
+    }
     /// Not in the per-cycle walk: this model overrides neither `tick()` nor
     /// `tick_elapsed()`, so every visit ran the default no-op and returned a
     /// default `PeripheralTickResult`. Skipping it removes dispatch, never an
@@ -2770,12 +2790,19 @@ impl crate::Peripheral for GpioPort {
         line: usize,
         func: &'static str,
     ) -> bool {
-        let fits = matches!(self.family, GpioFamily::Stm32F1(_)) && pin < 16;
-        if fits {
-            self.pad_routes
-                .bind_when_driving(cell, pin, None, line, func);
+        match self.family {
+            GpioFamily::Stm32F1(_) if pin < 16 => {
+                self.pad_routes
+                    .bind_when_driving(cell, pin, None, line, func);
+                true
+            }
+            // SAM TC waveform outputs are PMUX function E (DS60001507F 6.1).
+            GpioFamily::SamPort(_) if pin < 32 => {
+                self.pad_routes.bind(cell, pin, Some(4), line, func);
+                true
+            }
+            _ => false,
         }
-        fits
     }
 
     fn take_timer_input_edges(&mut self) -> Vec<TimerInputEdge> {

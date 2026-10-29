@@ -104,6 +104,8 @@ steps the model against the pins the firmware is actually driving:
 | `board.analog.<pad>_volts` | model → machine | number | The analog level on the ADC channel belonging to `<pad>`. |
 | `adc.<peripheral>.<channel>_volts` | model → machine | number | The analog level on an explicitly named ADC channel. |
 | `board.power.vdd_volts` | model → machine | number | The MCU's supply. The chip's `supply_monitor:` holds the core in reset below its power-on threshold and resets it on power-down or brown-out; a chip without one refuses the route. |
+| `board.motor.<id>.back_emf_v` | machine → model | number | The back-EMF of an `armature: circuit` DC motor (Ke·ω, volts), for the netlist's series EMF source. |
+| `board.motor.<id>.current_a` | model → machine | number | The winding current the netlist solved for an `armature: circuit` DC motor (amps, positive = forward torque). Until it is routed the motor holds still and reports no current. |
 | `ui.<partId>.<field>` | outside → model | bool or number | Set from outside the engine (a canvas part, a test stimulus); 0 / false until set. |
 
 `<pad>` is a pad label in whatever form the chip speaks — `pa5` / `PA5` on
@@ -549,15 +551,42 @@ circuit's channels. The CSV header and VCD variables use the same names.
 
 ### The boundary
 
-The in-core engine is linear elements and ideal switches, and nothing else. It
-does not model diodes, transistors, subcircuits, `.include` / `.lib` device
-libraries, or AC/DC sweeps, and it does not approximate them: a netlist line
-outside the subset fails **manifest validation** with
+The in-core engine supports the linear elements, switches, and diode, BJT and
+level-1 MOSFET models listed above. Its semiconductor models have the limitations
+described in [Semiconductor models](#semiconductor-models), including omitted
+device capacitances and temperature effects. Subcircuits, `.include` / `.lib`
+device libraries, other MOSFET levels, and AC/DC sweeps are not supported by
+the in-core engine. Unsupported netlist constructs fail validation with guidance
+to use the native ngspice adapter.
 
-```
-element `D1 a b diode` needs ngspice; use `adapter: external_process` with `tools/cosim/labwired_ngspice.py`
-```
+Use `adapter: external_process` with `tools/cosim/labwired_ngspice.py` for
+circuits needing those capabilities. The browser runs `adapter: analog` with
+an inline `netlist_text`; it cannot run the external-process adapter.
 
-That is the whole boundary. Native runs that need real device physics use the
-ngspice adapter above, which has none of these limits; the browser runs the
-in-core engine, which needs no process.
+### Browser-hosted ngspice callback
+
+The browser can supply a synchronous ngspice callback to
+`WasmSimulator::new_from_config_with_ngspice_callback`. Models using
+`adapter: ngspice` require a `model` path and a positive `step_ns`. The host
+loads the circuit and owns the solver; the callback exchanges JSON containing
+`model_id`, `time_ns`, `dt_ns`, and named `inputs`, and returns an object of
+named numeric or boolean outputs. Each declared output must be present.
+The callback and solver state are released with the simulator. Snapshot and
+replay and binary runtime snapshot capture/restore are unavailable for these
+externally owned solver sessions.
+
+The existing `board.analog.<pad>_volts`, `adc.<peripheral>.<channel>_volts`,
+and `board.power.<rail>_volts` routes publish their returned values as voltage
+scope channels named `<model id>.<output name>`. To expose other solver outputs
+as volts, list their names in `config.trace_volts`; each listed output must be
+returned by the callback, in volts. For example, `trace_volts: [probe]` can
+publish an output named `probe` without routing it into an MCU. Non-finite
+values and voltages that cannot be represented by the scope trace are errors.
+
+A model failure or routing failure stops browser execution at the boundary. In
+a session containing ngspice, any routing failure stops the entire session,
+including failures from other models, so the firmware cannot continue against a
+partially disconnected circuit. The older `pwm.duty:`, `adc.input_mv:`,
+`gpio.pad:`, and `gpio.input:` route forms are not supported and are rejected; use the board signal
+paths described above. Native execution of `adapter: ngspice` still requires a
+host integration and is refused explicitly by the core factory.

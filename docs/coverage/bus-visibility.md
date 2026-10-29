@@ -12,6 +12,10 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 
 * **arty-litex-vexriscv**
   * UART: no LiteX UART bring-up in this harness; bytes are proven by the arty-litex-vexriscv survival smoke
+* **atmega1281**
+  * UART: USART0 registers live on the AVR CPU and are forwarded to the bus-side host; this harness drives bus MMIO, not the CPU, so no bring-up exists here
+  * I2C: AVR from_config I2C is generic type:i2c without PadLines cell
+  * SPI: AVR from_config SPI is generic type:spi without PadLines cell
 * **atmega2560**
   * UART: USART0 registers live on the AVR CPU and are forwarded to the bus-side host; this harness drives bus MMIO, not the CPU, so no bring-up exists here
   * I2C: AVR from_config I2C is generic type:i2c without PadLines cell
@@ -81,6 +85,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | Chip | I2C | SPI | UART |
 |------|-----|-----|------|
 | arty-litex-vexriscv | — | — | — |
+| atmega1281 | — | — | — |
 | atmega2560 | — | — | — |
 | atmega2561 | — | — | — |
 | atmega328p | — | — | — |

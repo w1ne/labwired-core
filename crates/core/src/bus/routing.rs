@@ -400,9 +400,9 @@ impl SystemBus {
             .peripherals
             .iter()
             .map(|p| {
-                p.dev
-                    .pins()
-                    .and_then(|_| crate::pins::PortId::from_port_name(&p.name))
+                p.dev.pins().and_then(|pins| {
+                    crate::pins::PortId::from_prefixed_name(&p.name, pins.port_name_prefix())
+                })
             })
             .collect();
         // Pin ports whose pulls another block keeps: link them, and hand each

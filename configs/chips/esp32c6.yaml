@@ -284,8 +284,19 @@ peripherals:
     size: "4KB"
     config:
       path: "../peripherals/esp32c6/intpri.yaml"
+  # USB Serial/JTAG (USB_DEVICE). Same EP1/INT_* IP as C3/S3; behavioural model
+  # is `UsbSerialJtag::new_esp32c6` (matrix source 48, 160 MHz). Base and irq
+  # from vendored esp32c6.svd peripheral USB_DEVICE. The DevKitC-1's *primary*
+  # console remains UART0 (USB-UART bridge on GPIO16/17); this window is the
+  # second Type-C / CDC-ACM path. id MUST be `usb_serial_jtag` so the shared
+  # console tap (`attach_usb_serial_jtag_sink`) finds it.
+  - id: "usb_serial_jtag"
+    type: "esp32c6_usb_serial_jtag"
+    irq: 48 # USB_DEVICE (esp32c6.svd)
+    base_address: 0x6000F000
+    size: "4KB"
   # Everything else the C6 exposes (SPI0/1, I2S0, RMT, SYSTIMER, TWAI0/1,
-  # USB-Serial/JTAG, AES/SHA/RSA/ECC/HMAC/DS, eFuse, PMU, LP_WDT, the LP_I2C/
+  # AES/SHA/RSA/ECC/HMAC/DS, eFuse, PMU, LP_WDT, the LP_I2C/
   # LP_UART blocks, the LP core, WiFi/BT/802.15.4 MACs) is deliberately NOT
   # declared: unmapped windows fault loudly instead of pretending to work.
   # `lp_wdt` in particular is NOT the declared wdt: the wdt class is served by
