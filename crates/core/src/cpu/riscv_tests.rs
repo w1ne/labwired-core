@@ -148,6 +148,7 @@ fn esp32c6_accepts_mideleg_used_by_intr_alloc() {
     }
 }
 
+#[test]
 fn c3_rom_init_csrs_do_not_widen_custom_csr_acceptance() {
     let cases = [
         (RiscVCoreProfile::Esp32C3, 0x7ff2_9073, 0x7ff),

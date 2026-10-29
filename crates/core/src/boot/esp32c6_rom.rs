@@ -339,14 +339,14 @@ mod tests {
         let mut bus = c6_bus();
         seed_rom_data(&mut bus);
         let mut b = [0u8; 4];
-        for i in 0..4 {
-            b[i] = bus.read_u8(0x4087_ffd8 + i as u64).expect("read");
+        for (i, byte) in b.iter_mut().enumerate() {
+            *byte = bus.read_u8(0x4087_ffd8 + i as u64).expect("read");
         }
         assert_eq!(u32::from_le_bytes(b), 0x4004_d0d0, "heap_tlsf_table_ptr");
         // And the table entry ROM serves at +52
         let mut e = [0u8; 4];
-        for i in 0..4 {
-            e[i] = bus.read_u8(0x4004_d0d0 + 52 + i as u64).expect("rom");
+        for (i, byte) in e.iter_mut().enumerate() {
+            *byte = bus.read_u8(0x4004_d0d0 + 52 + i as u64).expect("rom");
         }
         // Without ROM image this may be 0; with LABWIRED_ESP32C6_ROM it should be 0x400210b2
         let v = u32::from_le_bytes(e);
