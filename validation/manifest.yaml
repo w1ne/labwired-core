@@ -2397,7 +2397,7 @@ boards:
     # reset value the reset-conformance capture asserts is touched: the new
     # behaviour lives in exchange memory and the radio event path, which that
     # capture does not cover. This acknowledges model drift, NOT a recapture.
-    drift_ack_digest: f3514584365562addf2777778dbb8d516e376c593a3c6f4f6008c82cfe2fcad8
+    drift_ack_digest: 2571590a02a7935ea91960945b8174bc7e2a3a65eb1f7278cd015df2e3ff46f8
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
@@ -3209,6 +3209,11 @@ boards:
     # uart_tx_wait_idle); C3 construction leaves the flag false so POSPULSE
     # reset/readback is unchanged. No C3 register map or reset-state oracle
     # change. ACK, NOT A CAPTURE.
+    # 2026-10-29 (#1537 feat/esp32s3-rom-strcmp): watched esp_xtensa_common/
+    # rom_thunks.rs. Adds rom_strcmp/strncmp/strcpy/strncpy thunks (S3 ROM
+    # slots 0x40001230/123c/1218/1224). Shared thunk bank also listed on C3;
+    # C3 register map and reset-oracle set are unchanged (C3 does not wire
+    # these S3 slots). ACK, NOT A CAPTURE.
     drift_ack: 2026-10-29
 
   - id: nucleo-l476rg
@@ -7861,8 +7866,13 @@ boards:
     # 256×64KiB) behind the same register window; FlashXip maps the C6
     # 0x4200_0000 IRAM/DROM window through those entries. S3 MMU format and
     # the nine captured reset-state windows are unchanged. ACK, NOT A CAPTURE.
+    # 2026-10-29 (#1537 feat/esp32s3-rom-strcmp): watched rom_thunks.rs +
+    # system/xtensa/esp32s3.rs. Registers ROM strcmp/strncmp/strcpy/strncpy
+    # at the newlib export addresses so Arduino String/C string ops stop
+    # hitting nop_return_zero. No peripheral register map or the nine
+    # captured reset-state windows change. ACK, NOT A CAPTURE.
     drift_ack: 2026-10-29
-    drift_ack_digest: b711a3108fb0d8935d20ce64407eb3d9f516098298ea34bb7f5d6163e3dd36d6
+    drift_ack_digest: 84c53ae3c90fb74306899d5b2a3c901a6788799f3c70a435aef35ce396ac0a88
 
   - id: esp32s3-zero
     # Board variant of esp32s3: same silicon (LX7), 4 MiB flash / 480 KiB RAM.
