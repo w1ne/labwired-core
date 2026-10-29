@@ -7834,8 +7834,17 @@ boards:
     # LEDC channel outputs drive the GPIO output matrix (signals 73..80), plus
     # the gpio_matrix_out ROM thunk (0x4000_1aa0). No register map or reset
     # value change. ACK, NOT A CAPTURE.
-    drift_ack: 2026-10-27
-    drift_ack_digest: 3bd419ae3af19b6eacb7bacac067b71b5181e0b4697d8edfd7293bda30e21512
+    # 2026-10-29 (#1528 C6 Arduino Preferences substrate): watched
+    # esp32s3/spi_mem_flash.rs. FLASH_PP / SE / BE (and the matching USR
+    # CMD_PAGE_PROGRAM / CMD_SECTOR_ERASE / CMD_BLOCK_ERASE_*) now mutate the
+    # NOR backing (program = AND, erase = 0xFF) instead of only clearing WEL/WIP.
+    # Needed so ESP32-C6 Arduino Preferences (NVS via MSPI SPI_MEM) can round-trip;
+    # S3/C3 flash-boot paths that already program via other routes are unchanged
+    # at the register map. No register map or reset value in the nine captured
+    # windows changed. Ran: peripherals::esp32s3::spi_mem_flash (10),
+    # boot::esp32c6_rom (5). No S3 board attached. ACK, NOT A CAPTURE.
+    drift_ack: 2026-10-29
+    drift_ack_digest: 6fdf91874c21523c37d2db07c291f2ab827f8057153271187c7043c0603af569
 
   - id: esp32s3-zero
     # Board variant of esp32s3: same silicon (LX7), 4 MiB flash / 480 KiB RAM.

@@ -70,7 +70,10 @@ pub fn seed_flash_partitions(flash: &mut [u8], partitions: Option<&[u8]>) {
         }
     };
     let off = PARTITION_TABLE_OFFSET as usize;
-    let n = pt.len().min(MAX_PARTITION_TABLE_LEN).min(flash.len().saturating_sub(off));
+    let n = pt
+        .len()
+        .min(MAX_PARTITION_TABLE_LEN)
+        .min(flash.len().saturating_sub(off));
     if n == 0 {
         return;
     }
@@ -258,8 +261,7 @@ mod tests {
         const CMD: u64 = 0x00;
 
         let payload: u32 = 0xA1B2_C3D4;
-        bus.write_u32(SPI0_BASE + CMD, FLASH_WREN)
-            .expect("WREN");
+        bus.write_u32(SPI0_BASE + CMD, FLASH_WREN).expect("WREN");
         bus.write_u32(SPI0_BASE + ADDR, nvs_off as u32)
             .expect("ADDR");
         bus.write_u32(SPI0_BASE + W0, payload).expect("W0");

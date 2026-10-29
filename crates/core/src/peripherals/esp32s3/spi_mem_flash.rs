@@ -429,7 +429,6 @@ impl SpiMemFlash {
                 self.flash_status &= !(STATUS_WEL | STATUS_WIP);
             }
             CMD_PAGE_PROGRAM => {
-                let addr = addr;
                 let data = self.take_mosi_bytes(self.mosi_bytes());
                 self.program_flash_bytes(addr, &data);
                 self.flash_status &= !(STATUS_WEL | STATUS_WIP);
