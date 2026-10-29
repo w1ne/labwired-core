@@ -2346,6 +2346,109 @@ pub(crate) fn run_test(
                                     );
                                 }
                             }
+                            // C6: bootloader-equivalent factory layout + SPI_MEM MMU
+                            // + FlashXip. IROM/DROM share 0x4200_0000; MMU lives in
+                            // SPI0 MMU_ITEM_INDEX/CONTENT (VALID=BIT(9), 256×64KiB).
+                            // Leave unused entries invalid so spi_flash_mmap can
+                            // allocate free pages for the partition table @ 0x8000.
+                            if labwired_core::boot::esp32c6_rom::is_esp32c6(&chip) {
+                                use labwired_core::boot::esp32c6_rom::{
+                                    install_xip_window, write_mmu_entry, FACTORY_APP_OFFSET,
+                                    MMU_VALID,
+                                };
+                                use labwired_core::peripherals::esp32s3::spi_mem_flash::SpiMemFlash;
+                                const PAGE: usize = 64 * 1024;
+                                let factory_off = FACTORY_APP_OFFSET as usize;
+                                let factory_page = (factory_off / PAGE) as u32; // 1
+                                let flash_page_has_payload = |page: &[u8]| -> bool {
+                                    !(page.iter().all(|&b| b == 0)
+                                        || page.iter().all(|&b| b == 0xFF))
+                                };
+                                let mut virt_pages: Vec<u32> = Vec::new();
+                                let irom_len = machine.bus.flash.data.len();
+                                for page in 0..irom_len.div_ceil(PAGE) {
+                                    if page >= 256 {
+                                        break;
+                                    }
+                                    let start = page * PAGE;
+                                    let end = (start + PAGE).min(irom_len);
+                                    if flash_page_has_payload(
+                                        &machine.bus.flash.data[start..end],
+                                    ) {
+                                        virt_pages.push(page as u32);
+                                    }
+                                }
+                                let flash_arc = machine
+                                    .bus
+                                    .find_peripheral_index_by_name("spimem0_flash")
+                                    .and_then(|idx| {
+                                        machine.bus.peripherals[idx].dev.as_any().and_then(
+                                            |a| {
+                                                a.downcast_ref::<SpiMemFlash>()
+                                                    .map(|spi| {
+                                                        (spi.flash_backing(), spi.mmu_table())
+                                                    })
+                                            },
+                                        )
+                                    });
+                                if let Some((flash, Some(mmu))) = flash_arc {
+                                    {
+                                        let mut f = flash.lock().unwrap();
+                                        for page in virt_pages.clone() {
+                                            let start = page as usize * PAGE;
+                                            let end = (start + PAGE).min(irom_len);
+                                            let dst = factory_off + start;
+                                            if start >= irom_len || dst >= f.len() {
+                                                continue;
+                                            }
+                                            let n = (end - start).min(f.len() - dst);
+                                            for i in 0..n {
+                                                let b = machine.bus.flash.data[start + i];
+                                                if b != 0 && b != 0xFF {
+                                                    f[dst + i] = b;
+                                                }
+                                            }
+                                        }
+                                        if let Some(p) = resolve_esp_partitions_bin(
+                                            std::path::Path::new(&firmware_path),
+                                        ) {
+                                            if let Ok(pt) = std::fs::read(&p) {
+                                                let n = pt.len().min(0xC00);
+                                                let off = 0x8000;
+                                                if off + n <= f.len() {
+                                                    f[off..off + n]
+                                                        .copy_from_slice(&pt[..n]);
+                                                }
+                                            }
+                                        }
+                                        // App image magic at start of factory partition.
+                                        if f.len() > factory_off {
+                                            f[factory_off] = 0xE9;
+                                        }
+                                    }
+                                    virt_pages.sort_unstable();
+                                    virt_pages.dedup();
+                                    for vp in &virt_pages {
+                                        let phys = factory_page + *vp;
+                                        write_mmu_entry(&mut machine.bus, *vp, phys);
+                                    }
+                                    install_xip_window(&mut machine.bus, flash, mmu);
+                                    if !virt_pages.is_empty() {
+                                        eprintln!(
+                                            "labwired-cli test: C6 MMU factory@{:#x} mapped {} virt page(s) {:?} → phys+{}; VALID={:#x}; free entries for PT mmap",
+                                            factory_off,
+                                            virt_pages.len(),
+                                            virt_pages,
+                                            factory_page,
+                                            MMU_VALID
+                                        );
+                                    }
+                                } else {
+                                    eprintln!(
+                                        "labwired-cli test: C6 MMU/XIP skipped — spimem0_flash or SharedMmu missing"
+                                    );
+                                }
+                            }
                         }
                     }
                 }

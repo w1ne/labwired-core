@@ -21,9 +21,11 @@
 //!   +0x28 MISO_DLEN read data bitlen-1
 //!   +0x58 W0..W15   data buffer (MOSI out / MISO in)
 
+use crate::peripherals::esp32s3::flash_xip::SharedMmuTable;
 use crate::peripherals::esp32s3::psram_opi::PsramDevice;
 use crate::{Peripheral, SimResult};
 use std::collections::HashMap;
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 
 const CMD: u64 = 0x00;
@@ -44,6 +46,12 @@ const MISO_DLEN: u64 = 0x28;
 /// which matters: a zero-initialised MISC would read as "PSRAM selected" and
 /// send every flash command to the wrong chip.
 const MISC: u64 = 0x34;
+/// SPI_MEM_MMU_ITEM_CONTENT_REG — write programs SharedMmu[index]; read returns it.
+/// C6 (and C2/H2/C5/C61) expose the flash-cache MMU through these two SPI0 regs
+/// instead of a flat table at 0x600C_5000 (which is INTPRI on C6).
+const MMU_ITEM_CONTENT: u64 = 0x37C;
+/// SPI_MEM_MMU_ITEM_INDEX_REG — selects which MMU entry CONTENT reads/writes.
+const MMU_ITEM_INDEX: u64 = 0x380;
 /// Bit 0 is `CS0_DIS`. It is described above rather than declared: the model
 /// routes on CS1 alone (flash is the default target), so a `CS0_DIS` constant
 /// would be dead code the compiler warns about.
@@ -143,6 +151,9 @@ pub struct SpiMemFlash {
     /// module without PSRAM — then a CS1 command finds no device, exactly as it
     /// would on bare silicon.
     psram: Option<Arc<Mutex<PsramDevice>>>,
+    /// Shared flash-cache MMU table, when this controller owns the C6-style
+    /// MMU_ITEM_INDEX/CONTENT window (SPI0). `None` on S3/C3 SPIMEM twins.
+    mmu: Option<SharedMmuTable>,
 }
 
 impl SpiMemFlash {
@@ -158,7 +169,19 @@ impl SpiMemFlash {
             sr2: 0,
             sr3: 0,
             psram: None,
+            mmu: None,
         }
+    }
+
+    /// Attach the flash-cache MMU table this SPI_MEM MMU_ITEM_* window drives.
+    pub fn with_mmu(mut self, mmu: SharedMmuTable) -> Self {
+        self.mmu = Some(mmu);
+        self
+    }
+
+    /// Shared MMU table, if this controller owns MMU_ITEM_INDEX/CONTENT.
+    pub fn mmu_table(&self) -> Option<SharedMmuTable> {
+        self.mmu.clone()
     }
 
     /// Attach the octal PSRAM that lives on chip select 1.
@@ -481,12 +504,32 @@ impl Peripheral for SpiMemFlash {
     }
 
     fn read_u32(&self, offset: u64) -> SimResult<u32> {
-        Ok(self.reg(offset & !3))
+        let off = offset & !3;
+        if off == MMU_ITEM_CONTENT {
+            if let Some(mmu) = &self.mmu {
+                let idx = self.reg(MMU_ITEM_INDEX) as usize;
+                let table = mmu.entries.lock().unwrap();
+                return Ok(table.get(idx).copied().unwrap_or(0));
+            }
+        }
+        Ok(self.reg(off))
     }
 
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
-        self.set_reg(offset & !3, value);
-        if (offset & !3) == CMD && (value & CMD_TRIGGER_MASK) != 0 {
+        let off = offset & !3;
+        self.set_reg(off, value);
+        if off == MMU_ITEM_CONTENT {
+            if let Some(mmu) = &self.mmu {
+                let idx = self.reg(MMU_ITEM_INDEX) as usize;
+                let mut table = mmu.entries.lock().unwrap();
+                if idx < table.len() {
+                    table[idx] = value;
+                    mmu.generation.fetch_add(1, Ordering::Release);
+                }
+            }
+            return Ok(());
+        }
+        if off == CMD && (value & CMD_TRIGGER_MASK) != 0 {
             self.launch_command();
         }
         Ok(())
@@ -666,5 +709,21 @@ mod tests {
         c.write_u32(MISO_DLEN, 32 - 1).unwrap();
         c.write_u32(CMD, USR_BIT).unwrap();
         assert_eq!(c.read_u32(W0).unwrap(), 0xFFFF_FFFF);
+    }
+
+    #[test]
+    fn mmu_item_content_programs_shared_table() {
+        use crate::peripherals::esp32s3::flash_xip::new_mmu_table_c6;
+        let flash = Arc::new(Mutex::new(vec![0xFFu8; 4096]));
+        let mmu = new_mmu_table_c6();
+        let mut c = SpiMemFlash::new(flash).with_mmu(mmu.clone());
+        // entry 3 ← phys page 5 | VALID
+        c.write_u32(MMU_ITEM_INDEX, 3).unwrap();
+        c.write_u32(MMU_ITEM_CONTENT, (1 << 9) | 5).unwrap();
+        assert_eq!(c.read_u32(MMU_ITEM_CONTENT).unwrap(), (1 << 9) | 5);
+        assert_eq!(mmu.entries.lock().unwrap()[3], (1 << 9) | 5);
+        // invalidate
+        c.write_u32(MMU_ITEM_CONTENT, 0).unwrap();
+        assert_eq!(mmu.entries.lock().unwrap()[3], 0);
     }
 }
