@@ -1657,7 +1657,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: a51f550ed9bf9a2d31eda2fb490e7d11dbb32b0a5ab302e91fd6b2b874f7cae9
+    drift_ack_digest: b0f33ad4f8eaa4853129eb31871340236de964f4a64085684309c4118646a72a
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -2232,7 +2232,12 @@ boards:
     # an edge-sink bus-tick refresh, a SAMD51-only bit-band opt-out). STM32
     # paths and register maps are unchanged. ACK, NOT A SILICON CAPTURE;
     # live re-capture remains pending.
-    drift_ack: 2026-10-27
+    drift_ack: 2026-10-29
+    # 2026-10-29 (feat/nucleo-l552ze-q-l1): rcc.rs gained a new `stm32l5`
+    # profile (L5Rcc) and enum/dispatch arms. Additive: F1/F4/L4/V2/H5/H7/G0/
+    # G4/F0/WB/WBA register maps, reset values and byte paths are untouched,
+    # so these boards' pinned oracles are unaffected. ACK, NOT A SILICON
+    # CAPTURE; live re-capture remains pending.
     # 2026-10-25 (perf/cortex-m-decode-reference): the Cortex-M decode cache
     # now checks the PC tag through a borrow and copies only on a hit. The
     # interpreter's decoded instruction stream and state are unchanged;
@@ -3656,7 +3661,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: 9db306e5b96832f9940469035b096bf754145d1ff7ba78be56f683c307d66ea7
+    drift_ack_digest: 703f3fb43cffbc7cc6f90466da5155a2dc608a6c2ea303ea0bbb743dc3eddbd5
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -4219,7 +4224,12 @@ boards:
     # an edge-sink bus-tick refresh, a SAMD51-only bit-band opt-out). STM32
     # paths and register maps are unchanged. ACK, NOT A SILICON CAPTURE;
     # live re-capture remains pending.
-    drift_ack: 2026-10-27
+    drift_ack: 2026-10-29
+    # 2026-10-29 (feat/nucleo-l552ze-q-l1): rcc.rs gained a new `stm32l5`
+    # profile (L5Rcc) and enum/dispatch arms. Additive: F1/F4/L4/V2/H5/H7/G0/
+    # G4/F0/WB/WBA register maps, reset values and byte paths are untouched,
+    # so these boards' pinned oracles are unaffected. ACK, NOT A SILICON
+    # CAPTURE; live re-capture remains pending.
   - id: nucleo-l073rz
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
     # 2026-09-16 (#1125): Cortex-M JIT follow-ups (block chaining, floor 4, IT-predicated ALU, VFP S-ALU, VLDR/VSTR, LDR.W PC), plus two model fixes that ride along: the bit-band alias decode no longer swallows peripherals vendors place inside 0x4200_0000 (SAMD51 QSPI/SERCOM), and the STM32 timer's scheduled compare pend lands on the latch tick like the walk. JIT is opt-in (`cortex_m_jit_enabled` default off); interpreter path unchanged, JIT-on vs off lockstep in cortex_m_jit_nrf_differential; both fixes pinned by bus-level gates. No silicon capture pins JIT.
@@ -4613,7 +4623,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: 60909ad7287737e27f6b2d2a0fd6af08b84917041e0e42c0c49a96c30a0fe012
+    drift_ack_digest: 7e9489511584e80e336ddc58d1a263dff6d3da5c338e2ed65d325b9182e9effb
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5109,7 +5119,12 @@ boards:
     # an edge-sink bus-tick refresh, a SAMD51-only bit-band opt-out). STM32
     # paths and register maps are unchanged. ACK, NOT A SILICON CAPTURE;
     # live re-capture remains pending.
-    drift_ack: 2026-10-27
+    drift_ack: 2026-10-29
+    # 2026-10-29 (feat/nucleo-l552ze-q-l1): rcc.rs gained a new `stm32l5`
+    # profile (L5Rcc) and enum/dispatch arms. Additive: F1/F4/L4/V2/H5/H7/G0/
+    # G4/F0/WB/WBA register maps, reset values and byte paths are untouched,
+    # so these boards' pinned oracles are unaffected. ACK, NOT A SILICON
+    # CAPTURE; live re-capture remains pending.
     # 2026-10-25 (perf/cortex-m-decode-reference): the Cortex-M decode cache
     # now checks the PC tag through a borrow and copies only on a hit. The
     # interpreter's decoded instruction stream and state are unchanged;
@@ -5561,7 +5576,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: c15053362dd7f9e2fc29b43c1f253c83f8e114080d3828dfd205215b4341de89
+    drift_ack_digest: 82affbe406fbc7eaca07eae6a8a43d78e194d6c5c34e1c248224287ecbea5aa7
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6127,7 +6142,12 @@ boards:
     # an edge-sink bus-tick refresh, a SAMD51-only bit-band opt-out). STM32
     # paths and register maps are unchanged. ACK, NOT A SILICON CAPTURE;
     # live re-capture remains pending.
-    drift_ack: 2026-10-27
+    drift_ack: 2026-10-29
+    # 2026-10-29 (feat/nucleo-l552ze-q-l1): rcc.rs gained a new `stm32l5`
+    # profile (L5Rcc) and enum/dispatch arms. Additive: F1/F4/L4/V2/H5/H7/G0/
+    # G4/F0/WB/WBA register maps, reset values and byte paths are untouched,
+    # so these boards' pinned oracles are unaffected. ACK, NOT A SILICON
+    # CAPTURE; live re-capture remains pending.
     # 2026-10-25 (perf/cortex-m-decode-reference): the Cortex-M decode cache
     # now checks the PC tag through a borrow and copies only on a hit. The
     # interpreter's decoded instruction stream and state are unchanged;
@@ -6542,7 +6562,7 @@ boards:
     # families retain their previous behavior. ACK, NOT A SILICON CAPTURE;
     # physical re-capture remains pending.
     # 2026-10-28: re-acked for the opt-in custom UART register map; the default UART path is unchanged.
-    drift_ack_digest: f3232b453b913ac8cd219ca3d2a9092f9c932037f9c7e94cdceabe9a3f98b4bc
+    drift_ack_digest: ef0de3956e8a46b6b839d7841066b0a4cbe1e067494a2d1c4cd809bab8a91262
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -7047,7 +7067,12 @@ boards:
     # an edge-sink bus-tick refresh, a SAMD51-only bit-band opt-out). STM32
     # paths and register maps are unchanged. ACK, NOT A SILICON CAPTURE;
     # live re-capture remains pending.
-    drift_ack: 2026-10-27
+    drift_ack: 2026-10-29
+    # 2026-10-29 (feat/nucleo-l552ze-q-l1): rcc.rs gained a new `stm32l5`
+    # profile (L5Rcc) and enum/dispatch arms. Additive: F1/F4/L4/V2/H5/H7/G0/
+    # G4/F0/WB/WBA register maps, reset values and byte paths are untouched,
+    # so these boards' pinned oracles are unaffected. ACK, NOT A SILICON
+    # CAPTURE; live re-capture remains pending.
     # 2026-10-25 (perf/cortex-m-decode-reference): the Cortex-M decode cache
     # now checks the PC tag through a borrow and copies only on a hit. The
     # interpreter's decoded instruction stream and state are unchanged;
@@ -9257,6 +9282,50 @@ boards:
       - crates/firmware-litex-vexriscv-smoke
       - configs/chips/litex-vexriscv.yaml
       - configs/systems/litex-vexriscv.yaml
+  - id: stm32l552
+    # 2026-10-29: NUCLEO-L552ZE-Q (STM32L552ZET6Q, Cortex-M33 / Armv8-M;
+    # 512 KiB flash at 0x08000000, 192 KiB SRAM1 at 0x20000000 + 64 KiB SRAM2
+    # at 0x20030000). First STM32L5 part: a new `stm32l5` RCC profile
+    # (RM0432 §7 — AHB1ENR/AHB2ENR/AHB3ENR/APB1ENR1/APB1ENR2/APB2ENR,
+    # MSI boot, APB1ENR2.LPUART1EN), v2 GPIO, LPUART1/USART1-3/UART4-5, SPI
+    # v2 FIFO, v2 I2C, timers, DMA/DMAMUX, RNG/CRC/RTC/IWDG/WWDG and PWR.
+    # FLASH controller, EXTI, ADC, FDCAN and USB are declared stubs.
+    # TrustZone/SAU/GTZC and MPU/PMSAv8 enforcement are NOT modelled.
+    # SIM-DERIVED — no STM32L552 bench part. See
+    # docs/boards/nucleo-l552ze-q.md and
+    # examples/nucleo-l552ze-q/VALIDATION.md.
+    doc: docs/boards/nucleo-l552ze-q.md
+    chip: configs/chips/stm32l552.yaml
+    tier: smoke-manual
+    offline_tests:
+      - "firmware_survival::test_nucleo_l552ze_q_smoke_survival"
+    models:
+      - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/decoder/arm.rs
+      - crates/core/src/peripherals/rcc.rs
+      - crates/core/src/peripherals/gpio.rs
+      - crates/core/src/peripherals/uart.rs
+      - crates/core/src/peripherals/systick.rs
+      - crates/core/src/peripherals/pwr.rs
+      - crates/core/src/peripherals/spi.rs
+      - crates/core/src/peripherals/i2c.rs
+      - crates/core/src/peripherals/timer.rs
+      - crates/core/src/peripherals/dma.rs
+      - crates/core/src/peripherals/dmamux.rs
+      - crates/core/src/peripherals/rng.rs
+      - crates/core/src/peripherals/crc.rs
+      - crates/core/src/peripherals/rtc.rs
+      - crates/core/src/peripherals/iwdg.rs
+      - crates/core/src/peripherals/wwdg.rs
+      - crates/core/src/peripherals/stub.rs
+      - crates/core/src/bus/from_config.rs
+      - crates/core/src/bus/profiles.rs
+      - crates/core/src/peripherals/generic_factory.rs
+      - crates/core/src/system/builder/arm.rs
+      - crates/firmware-l552ze-smoke
+      - configs/chips/stm32l552.yaml
+      - configs/systems/nucleo-l552ze-q.yaml
+
   - id: sam4s16c
     # 2026-10-23: SAM4S Xplained (ATSAM4S16C, Cortex-M4; 1 MiB flash at
     # 0x00400000, 128 KiB SRAM at 0x20000000). First SAM4S part: the PMC

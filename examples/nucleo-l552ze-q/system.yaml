@@ -1,0 +1,38 @@
+# LabWired - NUCLEO-L552ZE-Q example system (STM32L552ZET6Q)
+#
+# Same board manifest as configs/systems/nucleo-l552ze-q.yaml, kept beside the
+# example so the package is self-contained.
+#
+# UM2623 / Zephyr `nucleo_l552ze_q`:
+#   LD1 green PC7, LD2 blue PB7, LD3 red PA9 (active high)
+#   B1 user PC13 (active high)
+#   VCP console LPUART1 PG7/PG8 (AF8)
+name: "nucleo-l552ze-q"
+chip: "../../configs/chips/stm32l552.yaml"
+cpu_hz: 4_000_000
+external_devices: []
+board_io:
+  - id: "led_ld1"
+    kind: "led"
+    peripheral: "gpioc"
+    pin: 7
+    signal: "output"
+    active_high: true
+  - id: "led_ld2"
+    kind: "led"
+    peripheral: "gpiob"
+    pin: 7
+    signal: "output"
+    active_high: true
+  - id: "led_ld3"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 9
+    signal: "output"
+    active_high: true
+  - id: "button_b1"
+    kind: "button"
+    peripheral: "gpioc"
+    pin: 13
+    signal: "input"
+    active_high: true

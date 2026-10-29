@@ -567,6 +567,13 @@
   {
     "buses": [
       "I2C",
+      "SPI"
+    ],
+    "name": "stm32l552"
+  },
+  {
+    "buses": [
+      "I2C",
       "SPI",
       "UART"
     ],

@@ -14,6 +14,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | litex-vexriscv | open | L1 | 5 | — | — | ≥1× (CI) | [doc](docs/boards/litex-vexriscv.md) |
 | arty-litex-vexriscv | open | L1 | 6 | — | — | ≥1× (CI) | [doc](docs/boards/arty-litex-vexriscv.md) |
 | vegaboard-ri5cy | open | L1 | 9 | — | — | ≥1× (CI) | [doc](docs/boards/vegaboard-ri5cy.md) |
+| stm32l552 | open | L1 | 46 | — | — | ≥1× (CI) | [doc](docs/boards/stm32l552.md) |
 | sam4s16c | open | L1 | 20 | — | — | ≥1× (CI) | [doc](docs/boards/sam4s16c.md) |
 | stm32f072 | open | L1 | 39 | 937.9 | 1.6 | ≥1× (CI) | [doc](docs/boards/stm32f072.md) |
 | nrf54l15 | open | L1 | 29 | 1364.0 | 1.9 | ≥1× (CI) | [doc](docs/boards/nrf54l15.md) |

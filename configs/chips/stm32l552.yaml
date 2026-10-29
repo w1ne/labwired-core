@@ -1,0 +1,402 @@
+# LabWired - STM32L552 chip configuration
+#
+# The STM32L552ZET6Q: Cortex-M33 (Armv8-M), 512 KiB flash, 256 KiB SRAM — the
+# MCU on the NUCLEO-L552ZE-Q. First STM32L5 part in the engine.
+#
+# Sources:
+# - RM0432 (STM32L55x/L56x reference manual): RCC §7, GPIO §9, USART/LPUART §37,
+#   SPI §36, I2C §35, timers §31, DMA §13, EXTI §20, PWR §6, FLASH §8.
+# - DS12380 (STM32L552xx/L562xx datasheet): memory boundaries, pin map, clock
+#   limits, I/O static characteristics.
+# - ST CMSIS `stm32l552xx.h` (RCC/PWR/FLASH/EXTI register maps).
+# - Zephyr `nucleo_l552ze_q` board dts: console LPUART1 (PG7/PG8), LEDs and
+#   button map (the board package lives in the system manifest, not here).
+# - Renode `platforms/cpus/stm32l552.repl` as a behavioural cross-check for
+#   base addresses/IRQs (its test platform is not the generic L552 platform;
+#   it fakes the RCC with PythonPeripheral).
+#
+# Profiles (shared silicon IP, chosen per family):
+# - rcc     `stm32l5`  — RM0432 §7 map (AHB1ENR@0x48, AHB2ENR@0x4C,
+#                        APB1ENR1@0x58, APB1ENR2@0x5C, APB2ENR@0x60; MSI boot).
+# - gpio    `stm32v2`  — MODER/OTYPER/OSPEEDR/PUPDR/IDR/ODR/BSRR/AFRx.
+# - uart    `stm32v2`  — ISR/RDR/TDR ("USART v2"); LPUART1 uses the same
+#                        register offsets with a 256x Baud divider.
+# - spi     `stm32_fifo` — the SPI v2 FIFO block.
+# - i2c     `stm32l4`  — the v2 CR1/CR2/TIMINGR/ISR I2C block.
+# - pwr     L4-shaped  — CR1..CR4/SR1/SR2/SCR/PUCRx; the smoke does not touch it.
+# - timer   generic    — TIMx CR1/PSC/ARR/CNT.
+# - dma     generic    — DMA1/DMA2 v2 channel registers.
+# - rng     generic    — the STM32 RNG block.
+#
+# Tier: L1 smoke — boot + LPUART1 console + GPIO LED/button path on the
+# NUCLEO-L552ZE-Q board map. SIM-DERIVED (no STM32L552 bench part).
+#
+# Explicitly NOT modelled here (see docs/boards/nucleo-l552ze-q.md):
+# - TrustZone / SAU / GTZC / secure-vs-non-secure aliasing, MPU/PMSAv8
+#   enforcement, TT/TTA. The Cortex-M33 core stores the MPU registers but does
+#   not enforce them (docs/isa_coverage.md).
+# - The L5 non-secure FLASH controller, EXTI (L5 has its own 64-line block),
+#   FDCAN1, ADC1/ADC2 and USB FS are declared as stubs. The `flash:` memory
+#   region below still boots/executes; only the controller register file is a
+#   stub.
+
+name: "stm32l552"
+arch: "arm"
+core: "cortex-m33"
+# STM32L552 maximum core clock, 110 MHz (DS12380).
+cpu_hz: 110_000_000
+# DS12380 §5.3.14 "I/O static characteristics": VIL max 0.3·VDDIOx,
+# VIH min 0.7·VDDIOx.
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.3
+  vih: 0.7
+
+flash:
+  base: 0x08000000
+  # 512 KiB of main flash (L552ZE; DS12380 Table 2, Zephyr stm32l552Xe.dtsi).
+  size: "512KB"
+ram:
+  base: 0x20000000
+  # SRAM1 = 192 KiB at 0x20000000 (Zephyr stm32l552Xe.dtsi sram0).
+  size: "192KB"
+memory_regions:
+  # SRAM2 = 64 KiB at 0x20030000 (RM0432 memory map; the Renode platform
+  # declares the same split).
+  - name: "sram2"
+    base: 0x20030000
+    size: "64KB"
+
+pins:
+  # Board-relevant pads (NUCLEO-L552ZE-Q + L552ZET6Q LQFP144).
+  PA9: { gpio: "gpioa", bit: 9 }    # LD3 (red)
+  PB7: { gpio: "gpiob", bit: 7 }    # LD2 (blue)
+  PC7: { gpio: "gpioc", bit: 7 }    # LD1 (green)
+  PC13: { gpio: "gpioc", bit: 13 }  # B1 user button (active high)
+  PG7: { gpio: "gpiog", bit: 7 }    # LPUART1_TX (AF8), VCP console
+  PG8: { gpio: "gpiog", bit: 8 }    # LPUART1_RX (AF8), VCP console
+  PD8: { gpio: "gpiod", bit: 8 }    # USART3_TX (AF7), optional second console
+  PD9: { gpio: "gpiod", bit: 9 }    # USART3_RX (AF7)
+
+peripherals:
+  # --- Clock / power -------------------------------------------------------
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40021000
+    size: "1KB"
+    config:
+      profile: "stm32l5"
+
+  - id: "pwr"
+    type: "pwr"
+    base_address: 0x40007000
+    size: "1KB"
+    # PWREN: RCC_APB1ENR1 bit 28 (RM0432 §7.4.25).
+    clock: { reg: "apb1enr1", bit: 28 }
+
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+    size: "16B"
+
+  # --- GPIO (AHB2 @ 0x42020000, one 1 KiB window per port) ------------------
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x42020000
+    size: "1KB"
+    clock: { reg: "ahb2enr", bit: 0 }
+    config:
+      profile: "stm32v2"
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x42020400
+    size: "1KB"
+    clock: { reg: "ahb2enr", bit: 1 }
+    config:
+      profile: "stm32v2"
+  - id: "gpioc"
+    type: "gpio"
+    base_address: 0x42020800
+    size: "1KB"
+    clock: { reg: "ahb2enr", bit: 2 }
+    config:
+      profile: "stm32v2"
+  - id: "gpiod"
+    type: "gpio"
+    base_address: 0x42020C00
+    size: "1KB"
+    clock: { reg: "ahb2enr", bit: 3 }
+    config:
+      profile: "stm32v2"
+  - id: "gpioe"
+    type: "gpio"
+    base_address: 0x42021000
+    size: "1KB"
+    clock: { reg: "ahb2enr", bit: 4 }
+    config:
+      profile: "stm32v2"
+  - id: "gpiof"
+    type: "gpio"
+    base_address: 0x42021400
+    size: "1KB"
+    clock: { reg: "ahb2enr", bit: 5 }
+    config:
+      profile: "stm32v2"
+  - id: "gpiog"
+    type: "gpio"
+    base_address: 0x42021800
+    size: "1KB"
+    clock: { reg: "ahb2enr", bit: 6 }
+    config:
+      profile: "stm32v2"
+  - id: "gpioh"
+    type: "gpio"
+    base_address: 0x42021C00
+    size: "1KB"
+    clock: { reg: "ahb2enr", bit: 7 }
+    config:
+      profile: "stm32v2"
+
+  # --- USART / LPUART (v2 layout) ------------------------------------------
+  # LPUART1 is the NUCLEO-L552ZE-Q VCP console (PG7/PG8, AF8). Its clock is
+  # APB1ENR2 bit 0 — the bit the L4 profile does not have.
+  - id: "lpuart1"
+    type: "uart"
+    base_address: 0x40008000
+    size: "1KB"
+    irq: 66
+    clock: { reg: "apb1enr2", bit: 0 }
+    config:
+      profile: "stm32v2"
+  - id: "usart1"
+    type: "uart"
+    base_address: 0x40013800
+    size: "1KB"
+    irq: 61
+    clock: { reg: "apb2enr", bit: 14 }
+    config:
+      profile: "stm32v2"
+  - id: "usart2"
+    type: "uart"
+    base_address: 0x40004400
+    size: "1KB"
+    irq: 62
+    clock: { reg: "apb1enr1", bit: 17 }
+    config:
+      profile: "stm32v2"
+  - id: "usart3"
+    type: "uart"
+    base_address: 0x40004800
+    size: "1KB"
+    irq: 63
+    clock: { reg: "apb1enr1", bit: 18 }
+    config:
+      profile: "stm32v2"
+  - id: "uart4"
+    type: "uart"
+    base_address: 0x40004C00
+    size: "1KB"
+    irq: 64
+    clock: { reg: "apb1enr1", bit: 19 }
+    config:
+      profile: "stm32v2"
+  - id: "uart5"
+    type: "uart"
+    base_address: 0x40005000
+    size: "1KB"
+    irq: 65
+    clock: { reg: "apb1enr1", bit: 20 }
+    config:
+      profile: "stm32v2"
+
+  # --- SPI (v2 FIFO) -------------------------------------------------------
+  - id: "spi1"
+    type: "spi"
+    base_address: 0x40013000
+    size: "1KB"
+    irq: 59
+    clock: { reg: "apb2enr", bit: 12 }
+    config:
+      profile: "stm32_fifo"
+  - id: "spi2"
+    type: "spi"
+    base_address: 0x40003800
+    size: "1KB"
+    irq: 60
+    clock: { reg: "apb1enr1", bit: 14 }
+    config:
+      profile: "stm32_fifo"
+  - id: "spi3"
+    type: "spi"
+    base_address: 0x40003C00
+    size: "1KB"
+    irq: 99
+    clock: { reg: "apb1enr1", bit: 15 }
+    config:
+      profile: "stm32_fifo"
+
+  # --- I2C (v2) ------------------------------------------------------------
+  - id: "i2c1"
+    type: "i2c"
+    base_address: 0x40005400
+    size: "1KB"
+    irq: 55
+    clock: { reg: "apb1enr1", bit: 21 }
+    config:
+      profile: "stm32l4"
+  - id: "i2c2"
+    type: "i2c"
+    base_address: 0x40005800
+    size: "1KB"
+    irq: 57
+    clock: { reg: "apb1enr1", bit: 22 }
+    config:
+      profile: "stm32l4"
+
+  # --- Timers --------------------------------------------------------------
+  - id: "tim1"
+    type: "timer"
+    base_address: 0x40012C00
+    size: "1KB"
+    irq: 41
+    clock: { reg: "apb2enr", bit: 11 }
+  - id: "tim2"
+    type: "timer"
+    base_address: 0x40000000
+    size: "1KB"
+    irq: 45
+    clock: { reg: "apb1enr1", bit: 0 }
+    config:
+      width: 32
+  - id: "tim3"
+    type: "timer"
+    base_address: 0x40000400
+    size: "1KB"
+    irq: 46
+    clock: { reg: "apb1enr1", bit: 1 }
+  - id: "tim4"
+    type: "timer"
+    base_address: 0x40000800
+    size: "1KB"
+    irq: 47
+    clock: { reg: "apb1enr1", bit: 2 }
+  - id: "tim5"
+    type: "timer"
+    base_address: 0x40000C00
+    size: "1KB"
+    irq: 48
+    clock: { reg: "apb1enr1", bit: 3 }
+    config:
+      width: 32
+  - id: "tim6"
+    type: "timer"
+    base_address: 0x40001000
+    size: "1KB"
+    irq: 49
+    clock: { reg: "apb1enr1", bit: 4 }
+  - id: "tim7"
+    type: "timer"
+    base_address: 0x40001400
+    size: "1KB"
+    irq: 50
+    clock: { reg: "apb1enr1", bit: 5 }
+  - id: "tim8"
+    type: "timer"
+    base_address: 0x40013400
+    size: "1KB"
+    irq: 51
+    clock: { reg: "apb2enr", bit: 13 }
+  - id: "tim15"
+    type: "timer"
+    base_address: 0x40014000
+    size: "1KB"
+    irq: 69
+    clock: { reg: "apb2enr", bit: 16 }
+  - id: "tim16"
+    type: "timer"
+    base_address: 0x40014400
+    size: "1KB"
+    irq: 70
+    clock: { reg: "apb2enr", bit: 17 }
+  - id: "tim17"
+    type: "timer"
+    base_address: 0x40014800
+    size: "1KB"
+    irq: 71
+    clock: { reg: "apb2enr", bit: 18 }
+
+  # --- DMA (v2 channels) ---------------------------------------------------
+  - id: "dma1"
+    type: "dma"
+    base_address: 0x40020000
+    size: "1KB"
+    irq: 29
+    clock: { reg: "ahb1enr", bit: 0 }
+  - id: "dma2"
+    type: "dma"
+    base_address: 0x40020400
+    size: "1KB"
+    irq: 80
+    clock: { reg: "ahb1enr", bit: 1 }
+  - id: "dmamux1"
+    type: "dmamux"
+    base_address: 0x40020800
+    size: "1KB"
+    irq: 27
+    clock: { reg: "ahb1enr", bit: 2 }
+
+  # --- Analog / system -----------------------------------------------------
+  - id: "rng"
+    type: "rng"
+    base_address: 0x420C0800
+    size: "1KB"
+    irq: 94
+    clock: { reg: "ahb2enr", bit: 18 }
+  - id: "crc"
+    type: "crc"
+    base_address: 0x40023000
+    size: "1KB"
+    clock: { reg: "ahb1enr", bit: 12 }
+  - id: "rtc"
+    type: "rtc"
+    base_address: 0x40002800
+    size: "1KB"
+    irq: 2
+    clock: { reg: "apb1enr1", bit: 10 }
+  - id: "iwdg"
+    type: "iwdg"
+    base_address: 0x40003000
+    size: "1KB"
+  - id: "wwdg"
+    type: "wwdg"
+    base_address: 0x40002C00
+    size: "1KB"
+    irq: 0
+    clock: { reg: "apb1enr1", bit: 11 }
+
+  # --- Declared, not modelled (honest L1 boundary) -------------------------
+  # The L5 non-secure FLASH controller (NSKEYR/NSSR/NSCR, 2 KiB pages) has a
+  # different register file from the L4 profile, so it is a stub rather than a
+  # silently wrong model. Firmware never programs flash in the L1 smoke.
+  - id: "flash_ctrl"
+    type: "stub"
+    base_address: 0x40022000
+    size: "1KB"
+  # L5 EXTI is a 64-line G0-style block (RPR1/FPR1 + EXTICR at 0x60), not the
+  # L4 two-bank map; declared as a stub until a matching model exists.
+  - id: "exti"
+    type: "stub"
+    base_address: 0x4000F400
+    size: "1KB"
+  - id: "adc1"
+    type: "stub"
+    base_address: 0x42028000
+    size: "1KB"
+  - id: "fdcan1"
+    type: "stub"
+    base_address: 0x4000A400
+    size: "1KB"
+  - id: "usb"
+    type: "stub"
+    base_address: 0x4000D400
+    size: "1KB"
