@@ -140,7 +140,9 @@ pub(crate) fn validate_display_region(index: usize, d: &DisplayRegionDetails) ->
                  like \"0x7BD4\" (got {colour:?})"
             );
         }
-        let min_c = d.min_colour_pixels.unwrap_or(if d.max_colour_pixels.is_none() { 1 } else { 0 });
+        let min_c = d
+            .min_colour_pixels
+            .unwrap_or(if d.max_colour_pixels.is_none() { 1 } else { 0 });
         if let Some(max_c) = d.max_colour_pixels {
             if max_c < min_c {
                 anyhow::bail!(
@@ -160,7 +162,10 @@ pub(crate) fn validate_display_region(index: usize, d: &DisplayRegionDetails) ->
 /// Parse `"0x7BD4"` / `"7BD4"` / `0x7bd4` into a packed RGB565 value.
 pub fn parse_rgb565(s: &str) -> Option<u16> {
     let t = s.trim();
-    let hex = t.strip_prefix("0x").or_else(|| t.strip_prefix("0X")).unwrap_or(t);
+    let hex = t
+        .strip_prefix("0x")
+        .or_else(|| t.strip_prefix("0X"))
+        .unwrap_or(t);
     if hex.is_empty() || hex.len() > 4 || !hex.chars().all(|c| c.is_ascii_hexdigit()) {
         return None;
     }

@@ -860,7 +860,6 @@ pub fn artifact_region_colour_count(
     }
 }
 
-
 /// Visit one I²C slave, then everything wired behind it if it is a bus switch.
 ///
 /// Every I²C controller's `for_each_attached_device` funnels through this, so
@@ -1462,12 +1461,15 @@ mod tests {
             artifact_region_colour_count(RGB565_BE, &meta, &bytes, full, 0x07E0).unwrap(),
             0
         );
-        let left = PixelRegion { x: 0, y: 0, w: 1, h: 2 };
+        let left = PixelRegion {
+            x: 0,
+            y: 0,
+            w: 1,
+            h: 2,
+        };
         assert_eq!(
             artifact_region_colour_count(RGB565_BE, &meta, &bytes, left, red).unwrap(),
             2
         );
     }
-
-
 }

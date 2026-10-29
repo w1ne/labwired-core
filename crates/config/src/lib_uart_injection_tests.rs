@@ -177,7 +177,9 @@ fn display_region_colour_bound_makes_zero_ink_non_vacuous() {
     let script = display_script(
         "assertions:\n  - display_region:\n      id: \"tft\"\n      min_ink: 0.0\n      colour: \"0x7BD4\"\n",
     );
-    script.validate().expect("colour bound must make min_ink 0.0 non-vacuous");
+    script
+        .validate()
+        .expect("colour bound must make min_ink 0.0 non-vacuous");
     match &script.assertions[0] {
         TestAssertion::DisplayRegion(a) => {
             assert_eq!(a.display_region.colour.as_deref(), Some("0x7BD4"));
@@ -205,7 +207,6 @@ fn parse_rgb565_accepts_common_forms() {
     assert_eq!(crate::parse_rgb565(""), None);
     assert_eq!(crate::parse_rgb565("0xGGGG"), None);
 }
-
 
 #[test]
 fn display_region_rejects_impossible_bounds() {
