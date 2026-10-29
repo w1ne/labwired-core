@@ -128,6 +128,15 @@ const CHIPS: &[ChipConf] = &[
         yaml: "configs/chips/stm32l552.yaml",
         reset_oracle: None,
         behavior_gate: Some("firmware_survival::test_nucleo_l552ze_q_smoke_survival"),
+        // FRDM-K64F (MK64FN1M0VLL12, Cortex-M4F). SIM-DERIVED: no K64F bench
+        // part. UART-only L1: classic Kinetis UART0-4, Kinetis GPIO A-E and the
+        // behavioural MCG FEI block. SIM clock gating, PORT pad mux, MCG PLL,
+        // ENET/PHY, RNGA, FTFE and the rest are declared stubs — see
+        // examples/frdm-k64f/VALIDATION.md.
+        name: "mk64f12",
+        yaml: "configs/chips/mk64f12.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("firmware_survival::test_frdm_k64f_smoke_survival"),
     },
     ChipConf {
         // SAM4S Xplained (ATSAM4S16C, Cortex-M4). SIM-DERIVED: no SAM4S bench

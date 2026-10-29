@@ -1,0 +1,27 @@
+# LabWired - FRDM-K64F UART-only IO smoke
+#
+# Build: cargo build -p firmware-frdm-k64f-smoke --release --target thumbv7em-none-eabi
+#
+# The firmware enables SIM gates (SCGC4 UART0, SCGC5 PORTB/PORTE), muxes
+# PTB16/17 to UART0 ALT3 and the LED pins to GPIO, then walks the active-low
+# RGB LED and prints the PDOR bit it actually drove. Console is UART0 at
+# 115200 8N1 from the reset FEI clock (20.97152 MHz).
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-frdm-k64f-smoke"
+  system: "./system.yaml"
+limits:
+  max_steps: 4000000
+assertions:
+  - uart_contains: "FRDM-K64F SMOKE"
+  - uart_ordered:
+      - "cpu=cortex-m4 uart=uart0"
+      - "led=red on pin=0"
+      - "led=red off pin=1"
+      - "led=green on pin=0"
+      - "led=green off pin=1"
+      - "led=blue on pin=0"
+      - "led=blue off pin=1"
+      - "hb=0 red=0 green=1 blue=1"
+      - "hb=1 red=0 green=1 blue=1"
+  - expected_stop_reason: max_steps

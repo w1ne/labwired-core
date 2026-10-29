@@ -1,0 +1,201 @@
+# LabWired - MK64FN1M0VLL12 chip configuration
+#
+# The MK64FN1M0VLL12: Cortex-M4F, 1 MiB flash, 256 KiB SRAM — the MCU on the
+# NXP FRDM-K64F. Second Renode-survey candidate after STM32L552.
+#
+# Sources:
+# - K64P144M120SF5RM (K64 Sub-Family Reference Manual): SIM, MCG, UART, GPIO,
+#   PORT, FTFE memory map.
+# - MK64F12 datasheet (K64P144M120SF5): memory boundaries, pin map, clock
+#   limits, I/O static characteristics.
+# - Zephyr `frdm_k64f` board dts / `nxp/kinetis/k6x/nxp_k6x.dtsi`: board pins
+#   (LEDs, buttons, UART0/3), peripheral bases and IRQs.
+# - Renode `platforms/cpus/nxp-k6xf.repl` as a cross-check for the memory map
+#   and the UART0/MCG/SIM bases (it models only UART0 + ENET).
+#
+# Profiles:
+# - uart    `k6xf`   — the classic Kinetis 8-bit UART (BDH/BDL/C1..C5/S1/S2/D).
+# - gpio    `kinetis` — PDOR/PSOR/PCOR/PTOR/PDIR/PDDR.
+# - mcq     `nxp_mcg` — the existing behavioural Kinetis MCG (FEI at reset).
+#
+# Tier: L1 UART-only smoke — boot, UART0 console, three RGB LEDs with PDOR
+# readback. SIM-DERIVED (no K64F bench part).
+#
+# NOT modelled in this slice:
+# - SIM clock gating: the SIM window is a stub, so firmware clock-enable writes
+#   are accepted by the bus but do not gate anything. The real firmware still
+#   writes SIM_SCGC4/SCGC5 as silicon requires.
+# - PORT pad muxing: PORTx PCR is a stub. The GPIO output path and the LED
+#   readback work; UART0 pin muxing is not required by the console model.
+# - MCG PLL/FEE: the smoke runs on the reset FEI clock (20.97 MHz). The MCG
+#   model is the KW41Z FEI/FBE behavioural block; the K64F PLL (C5/C6,
+#   S_LOCK0/PLLST) is NOT modelled.
+# - ENET + KSZ8081 PHY, RNGA, FTFE flash controller, eDMA, PIT/FTM, I2C/SPI,
+#   ADC/DAC, USB, CAN, SDHC: declared stubs. The Zephyr TCP test is deferred
+#   until an Ethernet MAC/PHY model exists.
+
+name: "mk64f12"
+arch: "arm"
+core: "cortex-m4"
+# MK64FN1M0VLL12 maximum core clock, 120 MHz.
+cpu_hz: 120_000_000
+# MK64F12 datasheet, "I/O DC characteristics": VIL max 0.35·VDD,
+# VIH min 0.70·VDD.
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.35
+  vih: 0.70
+
+flash:
+  base: 0x00000000
+  # 1 MiB program flash (MK64FN1M0; Zephyr flash0 / Renode nxp-k6xf.repl).
+  size: "1024KB"
+ram:
+  base: 0x20000000
+  # SRAM_U = 192 KiB at 0x20000000 (upper SRAM).
+  size: "192KB"
+memory_regions:
+  # SRAM_L = 64 KiB at 0x1FFF0000 (lower SRAM; Renode declares the same split).
+  - name: "sram_l"
+    base: 0x1FFF0000
+    size: "64KB"
+
+pins:
+  # FRDM-K64F board wiring (Zephyr frdm_k64f dts).
+  PTB22: { gpio: "gpiob", bit: 22 }  # RGB red, LD1, active low
+  PTE26: { gpio: "gpioe", bit: 26 }  # RGB green, LD2, active low
+  PTB21: { gpio: "gpiob", bit: 21 }  # RGB blue, LD3, active low
+  PTC6:  { gpio: "gpioc", bit: 6 }   # SW2, active low
+  PTA4:  { gpio: "gpioa", bit: 4 }   # SW3, active low
+  PTB16: { gpio: "gpiob", bit: 16 }  # UART0_RX (ALT3), OpenSDA VCP
+  PTB17: { gpio: "gpiob", bit: 17 }  # UART0_TX (ALT3), OpenSDA VCP
+
+peripherals:
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+    size: "16B"
+
+  # --- UART (classic Kinetis 8-bit block) ---------------------------------
+  # UART0 is the FRDM-K64F OpenSDA VCP console (PTB16/PTB17, ALT3).
+  - id: "uart0"
+    type: "uart"
+    base_address: 0x4006A000
+    size: "1KB"
+    irq: 31
+    config:
+      profile: "k6xf"
+  - id: "uart1"
+    type: "uart"
+    base_address: 0x4006B000
+    size: "1KB"
+    irq: 33
+    config:
+      profile: "k6xf"
+  - id: "uart2"
+    type: "uart"
+    base_address: 0x4006C000
+    size: "1KB"
+    irq: 35
+    config:
+      profile: "k6xf"
+  - id: "uart3"
+    type: "uart"
+    base_address: 0x4006D000
+    size: "1KB"
+    irq: 37
+    config:
+      profile: "k6xf"
+  - id: "uart4"
+    type: "uart"
+    base_address: 0x400EA000
+    size: "1KB"
+    irq: 66
+    config:
+      profile: "k6xf"
+
+  # --- GPIO (Kinetis: PDOR/PSOR/PCOR/PTOR/PDIR/PDDR) ----------------------
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x400FF000
+    size: "64B"
+    config:
+      profile: "kinetis"
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x400FF040
+    size: "64B"
+    config:
+      profile: "kinetis"
+  - id: "gpioc"
+    type: "gpio"
+    base_address: 0x400FF080
+    size: "64B"
+    config:
+      profile: "kinetis"
+  - id: "gpiod"
+    type: "gpio"
+    base_address: 0x400FF0C0
+    size: "64B"
+    config:
+      profile: "kinetis"
+  - id: "gpioe"
+    type: "gpio"
+    base_address: 0x400FF100
+    size: "64B"
+    config:
+      profile: "kinetis"
+
+  # --- Clock control -----------------------------------------------------
+  # MCG: the existing behavioural Kinetis block. At reset it reports FEI
+  # (IREFST=1, CLKST=00), which is the clock the smoke runs on. No PLL.
+  - id: "mcg"
+    type: "nxp_mcg"
+    base_address: 0x40064000
+    size: "16B"
+
+  # --- Declared, not modelled (honest L1 boundary) -----------------------
+  # SIM clock gates (SIM_SCGC1/4/5) are not modelled; the smoke writes them
+  # for silicon realism but the bus does not gate on them.
+  - id: "sim"
+    type: "stub"
+    base_address: 0x40047000
+    size: "8KB"
+  # PORT pad mux/pulls (PORTx_PCRn) are not modelled. The GPIO output path
+  # and the LED readback do not need them; UART0 pin muxing is not enforced.
+  - id: "porta"
+    type: "stub"
+    base_address: 0x40049000
+    size: "1KB"
+  - id: "portb"
+    type: "stub"
+    base_address: 0x4004A000
+    size: "1KB"
+  - id: "portc"
+    type: "stub"
+    base_address: 0x4004B000
+    size: "1KB"
+  - id: "portd"
+    type: "stub"
+    base_address: 0x4004C000
+    size: "1KB"
+  - id: "porte"
+    type: "stub"
+    base_address: 0x4004D000
+    size: "1KB"
+  # FTFE flash controller (program/erase not modelled; the flash memory region
+  # still boots and executes).
+  - id: "flash_ctrl"
+    type: "stub"
+    base_address: 0x40020000
+    size: "1KB"
+  # Ethernet MAC + KSZ8081 PHY are the deferred TCP milestone.
+  - id: "enet"
+    type: "stub"
+    base_address: 0x400C0000
+    size: "4KB"
+  # Kinetis RNGA is not the STM32 RNG block; declare it honestly as a stub.
+  - id: "rng"
+    type: "stub"
+    base_address: 0x40029000
+    size: "1KB"

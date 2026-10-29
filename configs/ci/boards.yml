@@ -58,4 +58,10 @@ boards:
     kind: sim-validate
     path: examples/nucleo-l552ze-q
     rust_targets: [thumbv8m.main-none-eabi]
+  # FRDM-K64F UART-only L1: builds the Cortex-M4F smoke and runs the UART0/RGB
+  # LED io-smoke plus the unsupported-instruction audit through the CLI.
+  - id: frdm-k64f
+    kind: sim-validate
+    path: examples/frdm-k64f
+    rust_targets: [thumbv7em-none-eabi]
     gate: true

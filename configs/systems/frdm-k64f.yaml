@@ -1,0 +1,48 @@
+# LabWired - FRDM-K64F system manifest
+#
+# Board facts (NXP FRDM-K64F user manual; Zephyr `frdm_k64f`):
+#   RGB LED (active low): red PTB22 (LD1), green PTE26 (LD2), blue PTB21 (LD3)
+#   User buttons (active low): SW2 PTC6, SW3 PTA4
+#   Console: UART0 PTB16 (RX) / PTB17 (TX), AF3, wired to the OpenSDA VCP
+#
+# The on-board OpenSDA debug bridge exposes UART0 as a virtual COM port; the
+# simulator captures the UART0 stream and does not model USB/OpenSDA.
+
+name: "frdm-k64f"
+chip: "../chips/mk64f12.yaml"
+# The K64F boots on the MCG FEI clock: 32.768 kHz IRC x 640 = 20.97152 MHz.
+# The smoke never enables the PLL, so this is the real core rate, not the
+# part's 120 MHz maximum. The browser's RealtimeGovernor paces to this value.
+cpu_hz: 20_971_520
+external_devices: []
+board_io:
+  - id: "led_red"
+    kind: "led"
+    peripheral: "gpiob"
+    pin: 22
+    signal: "output"
+    active_high: false
+  - id: "led_green"
+    kind: "led"
+    peripheral: "gpioe"
+    pin: 26
+    signal: "output"
+    active_high: false
+  - id: "led_blue"
+    kind: "led"
+    peripheral: "gpiob"
+    pin: 21
+    signal: "output"
+    active_high: false
+  - id: "button_sw2"
+    kind: "button"
+    peripheral: "gpioc"
+    pin: 6
+    signal: "input"
+    active_high: false
+  - id: "button_sw3"
+    kind: "button"
+    peripheral: "gpioa"
+    pin: 4
+    signal: "input"
+    active_high: false

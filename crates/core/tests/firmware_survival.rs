@@ -295,6 +295,20 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         fixture: "nucleo-l552ze-q-smoke.elf",
         valid_pc_ranges: &[(0x0800_0000, 0x0807_FFFF), (0x2000_0000, 0x2003_FFFF)],
         expected_uart_output: b"NUCLEO-L552ZE-Q SMOKE\n",
+        // FRDM-K64F: MK64FN1M0VLL12 (Cortex-M4F), 1 MiB flash at 0x00000000,
+        // 64 KiB SRAM_L at 0x1FFF0000 + 192 KiB SRAM_U at 0x20000000. UART0
+        // (PTB16/PTB17, ALT3) is the OpenSDA VCP console; the smoke walks the
+        // active-low RGB LED with PDOR readback. UART-only L1: ENET/TCP and the
+        // MCG PLL are deferred. SIM-DERIVED.
+        name: "frdm_k64f_smoke",
+        core: "cortex-m4",
+        family: CpuFamily::CortexM,
+        hal: Hal::Bare,
+        chip: "mk64f12",
+        system: "frdm-k64f",
+        fixture: "frdm-k64f-smoke.elf",
+        valid_pc_ranges: &[(0x0000_0000, 0x000F_FFFF), (0x1FFF_0000, 0x2003_FFFF)],
+        expected_uart_output: b"FRDM-K64F SMOKE\n",
     },
     SurvivalCase {
         // SAM4S Xplained: ATSAM4S16C (Cortex-M4), 1 MiB flash at 0x00400000,
@@ -2124,6 +2138,7 @@ survival_gate!(test_nrf52840_demo_survival, "nrf52840_demo");
 survival_gate!(test_sam4s_xplained_smoke_survival, "sam4s_xplained_smoke");
 
 survival_gate!(test_nucleo_l552ze_q_smoke_survival, "nucleo_l552ze_q_smoke");
+survival_gate!(test_frdm_k64f_smoke_survival, "frdm_k64f_smoke");
 
 survival_gate!(
     test_stm32f072b_disco_smoke_survival,

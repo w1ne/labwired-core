@@ -81,6 +81,7 @@ members = [
     "crates/firmware-sam4s-xplained-smoke",
     "crates/firmware-stm32f072b-disco-smoke",
     "crates/firmware-l552ze-smoke",
+    "crates/firmware-frdm-k64f-smoke",
     "crates/firmware-arduino-nano-33-ble-smoke",
     "crates/firmware-litex-vexriscv-smoke",
     "crates/firmware-nucleo-wb55rg-demo",

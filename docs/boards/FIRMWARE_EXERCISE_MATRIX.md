@@ -658,6 +658,9 @@ _L1 smoke, SIM-DERIVED; no beyond-rubric content. Boot, the LiteX UART console a
 ### `stm32l552`
 
 _L1 smoke, SIM-DERIVED; no beyond-rubric content. Boot from 0x08000000, the new L5 RCC gates (AHB2ENR GPIO, APB1ENR2.LPUART1EN), the LPUART1 console (PG7/PG8, AF8) and the three-LED GPIO walk with ODR readback plus the PC13 button are proven by tests/fixtures/nucleo-l552ze-q-smoke.elf and examples/nucleo-l552ze-q/io-smoke.yaml. TrustZone/SAU/GTZC, MPU/PMSAv8 enforcement and the L5 non-secure FLASH controller are not modelled; FLASH/EXTI/ADC/FDCAN/USB are declared stubs (examples/nucleo-l552ze-q/VALIDATION.md), so no advanced blocks exist to list._
+### `mk64f12`
+
+_L1 UART-only smoke, SIM-DERIVED; no beyond-rubric content. Boot from 0x00000000, the classic Kinetis UART0 console (PTB16/PTB17 ALT3, 115200 from the 20.97152 MHz FEI reset clock) and the active-low RGB LED walk with PDOR readback are proven by tests/fixtures/frdm-k64f-smoke.elf and examples/frdm-k64f/io-smoke.yaml. SIM clock gating, PORT pad mux/pulls and the MCG PLL/FEE are not modelled; ENET+KSZ8081 (TCP deferred), RNGA, FTFE, eDMA, PIT/FTM, I2C/SPI, ADC/DAC, USB, CAN and SDHC are declared stubs (examples/frdm-k64f/VALIDATION.md), so no advanced blocks exist to list._
 
 ### `sam4s16c`
 
