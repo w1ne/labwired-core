@@ -39,6 +39,7 @@ Reg match = verifiable cold-reset registers reproduced. "Excluded" = registers a
 | nrf5340 | **L1** | ✓ | 21 | — | — | firmware_survival::test_nrf5340_zephyr_survival |
 | rp2040 | **L1** | ✓ | 22 | — | — | firmware_survival::test_rp2040_demo_survival |
 | stm32f103 | **L1** | ✓ | 31 | — | — | stm32f1_exec_oracle |
+| stm32f103rb | **L0** | ✓ | 32 | — | — | — |
 | stm32f103c4 | **L0** | ✓ | 31 | — | — | — |
 | stm32f103c6 | **L0** | ✓ | 31 | — | — | — |
 | stm32f103r4 | **L0** | ✓ | 31 | — | — | — |
