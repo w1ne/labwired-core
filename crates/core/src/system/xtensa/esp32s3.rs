@@ -871,6 +871,10 @@ fn register_default_thunks(bank: &mut RomThunkBank) {
     bank.register(0x4000_11f4, rom_thunks::rom_memcpy);
     // strlen — Print::write / Serial.println length; see rom_strlen docs.
     bank.register(0x4000_1248, rom_thunks::rom_strlen);
+    // strcmp / strncmp — String::equals and C string compares. Without these,
+    // nop_return_zero makes every equals() succeed (see rom_strcmp docs).
+    bank.register(0x4000_1230, rom_thunks::rom_strcmp);
+    bank.register(0x4000_123c, rom_thunks::rom_strncmp);
     bank.register(0x4000_2544, rom_thunks::rom_udivdi3);
     // libgcc 64-bit arithmetic + bit/byte helpers, in ROM. The full ESP-IDF
     // image pulls these from the C runtime (printf, timers, hashing). Each has
