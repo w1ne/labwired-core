@@ -431,6 +431,8 @@ fn build_riscv_node(
                     crate::boot::esp32c3_rom::install_fast_boot_rom(&mut bus, &images);
                 }
             }
+            // C6 Arduino Preferences/NVS substrate (SPI_MEM + partitions @ 0x8000).
+            crate::boot::esp32c6_rom::maybe_install_arduino_flash(&mut bus, chip);
             let cpu = crate::system::riscv::configure_riscv(&mut bus);
             let mut machine = Machine::new(cpu, bus);
             machine

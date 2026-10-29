@@ -39,9 +39,12 @@ This is an **L3 (production-ready)** target by the [target support rubric](../ta
 Unlike the C3, the C6 maps **both** instructions and constant data through the
 same external-memory window (`0x4200_0000..0x42FF_FFFF`; esp-idf v5.3
 `soc/esp32c6/include/soc/soc.h` sets `SOC_IROM_LOW = SOC_DROM_LOW = 0x42000000`).
-The 8 MB DevKitC-1 flash is declared as that window and behaves as plain memory:
-there is **no SPI flash controller** behind it, so a real IDF image's ROM boot
-sequence cannot run. The smoke ELF is loaded straight at its link addresses.
+The 8 MB DevKitC-1 flash is declared as that window and behaves as plain memory
+for the bare-ELF smoke path (the smoke ELF loads straight at its link addresses).
+A real IDF image's **mask-ROM** boot sequence still cannot run end-to-end. The
+Arduino-ELF fast-boot path separately installs the MSPI SPI_MEM controllers and
+seeds a partition table so Preferences/NVS traffic reaches a shared flash
+backing — see `boot::esp32c6_rom`.
 
 **ROM region (optional):** 320 KB at `0x4000_0000`, loadable via
 `LABWIRED_ESP32C6_ROM`. Nothing on the L1 smoke path needs it; without the env

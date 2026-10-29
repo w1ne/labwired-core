@@ -95,6 +95,10 @@ const CMD_WRDI: u8 = 0x04; // write disable
 const CMD_SFDP: u8 = 0x5A; // read SFDP
 const CMD_RDUID: u8 = 0x4B; // read unique ID (64-bit)
 const CMD_RDID: u8 = 0x9F; // read JEDEC id
+const CMD_PAGE_PROGRAM: u8 = 0x02; // page program (≤256 B)
+const CMD_SECTOR_ERASE: u8 = 0x20; // 4 KiB sector erase
+const CMD_BLOCK_ERASE_32K: u8 = 0x52; // 32 KiB block erase
+const CMD_BLOCK_ERASE_64K: u8 = 0xD8; // 64 KiB block erase
 
 /// The smallest SPI flash part any board this controller serves is fitted with.
 /// Every ESP32 module in the catalog carries at least 4 MB, and the pre-2026-08
@@ -180,6 +184,45 @@ impl SpiMemFlash {
         self.regs.insert(off, val);
     }
 
+    /// Program `data` into the flash backing at `addr` (NOR: bits only clear).
+    ///
+    /// Page program on silicon ANDs new bytes onto erased (`0xFF`) cells. Doing
+    /// the same here keeps a second program of the same page from resurrecting
+    /// bits Preferences / NVS already cleared.
+    fn program_flash_bytes(&mut self, addr: usize, data: &[u8]) {
+        let mut flash = self.flash.lock().unwrap();
+        for (i, &b) in data.iter().enumerate() {
+            let off = addr + i;
+            if off < flash.len() {
+                flash[off] &= b;
+            }
+        }
+    }
+
+    /// Fill `[addr, addr+len)` with `0xFF` (NOR erase).
+    fn erase_flash_range(&mut self, addr: usize, len: usize) {
+        let mut flash = self.flash.lock().unwrap();
+        let end = (addr + len).min(flash.len());
+        if addr < flash.len() {
+            flash[addr..end].fill(0xFF);
+        }
+    }
+
+    /// Bytes the current MOSI_DLEN describes (0 when the register is unset).
+    fn mosi_bytes(&self) -> usize {
+        ((self.reg(MOSI_DLEN) as usize) + 1) / 8
+    }
+
+    /// Pack W0.. into a byte vector of `nbytes` (little-endian words).
+    fn take_mosi_bytes(&self, nbytes: usize) -> Vec<u8> {
+        let mut out = Vec::with_capacity(nbytes);
+        for i in 0..nbytes {
+            let word = self.reg(W0 + (i as u64 / 4) * 4);
+            out.push(((word >> (8 * (i % 4))) & 0xFF) as u8);
+        }
+        out
+    }
+
     /// Launch whichever command bit is set in CMD. The generic `USR` command
     /// reads its opcode from USER2 and may return data in the W buffer; the
     /// dedicated command bits (RES/WRDI/WREN/DP/…) have no data phase the boot
@@ -199,11 +242,26 @@ impl SpiMemFlash {
         if cmd & FLASH_WRDI != 0 {
             self.flash_status &= !STATUS_WEL;
         }
-        if cmd & (FLASH_PP | FLASH_SE | FLASH_BE | FLASH_WRSR) != 0 {
-            // Program/erase/write-status complete instantly (no write latency);
-            // the write-enable latch is consumed, write-in-progress stays clear.
-            self.flash_status &= !STATUS_WEL;
-            self.flash_status &= !STATUS_WIP;
+        if cmd & FLASH_PP != 0 {
+            // Dedicated page-program: ADDR holds the byte address, W0.. the
+            // payload, MOSI_DLEN the bit length. Without this, Preferences
+            // putBytes completes the poll but never lands in flash.
+            let addr = self.reg(ADDR) as usize;
+            let data = self.take_mosi_bytes(self.mosi_bytes());
+            self.program_flash_bytes(addr, &data);
+            self.flash_status &= !(STATUS_WEL | STATUS_WIP);
+        }
+        if cmd & FLASH_SE != 0 {
+            self.erase_flash_range(self.reg(ADDR) as usize, 4 * 1024);
+            self.flash_status &= !(STATUS_WEL | STATUS_WIP);
+        }
+        if cmd & FLASH_BE != 0 {
+            self.erase_flash_range(self.reg(ADDR) as usize, 64 * 1024);
+            self.flash_status &= !(STATUS_WEL | STATUS_WIP);
+        }
+        if cmd & FLASH_WRSR != 0 {
+            // Write-status completes instantly; latch consumed, WIP clear.
+            self.flash_status &= !(STATUS_WEL | STATUS_WIP);
         }
         if cmd & FLASH_RDSR != 0 {
             // Capture the status register where the firmware reads it back.
@@ -368,6 +426,23 @@ impl SpiMemFlash {
             }
             CMD_WRSR3 => {
                 self.sr3 = (self.reg(W0) & 0xFF) as u8;
+                self.flash_status &= !(STATUS_WEL | STATUS_WIP);
+            }
+            CMD_PAGE_PROGRAM => {
+                let data = self.take_mosi_bytes(self.mosi_bytes());
+                self.program_flash_bytes(addr, &data);
+                self.flash_status &= !(STATUS_WEL | STATUS_WIP);
+            }
+            CMD_SECTOR_ERASE => {
+                self.erase_flash_range(addr, 4 * 1024);
+                self.flash_status &= !(STATUS_WEL | STATUS_WIP);
+            }
+            CMD_BLOCK_ERASE_32K => {
+                self.erase_flash_range(addr, 32 * 1024);
+                self.flash_status &= !(STATUS_WEL | STATUS_WIP);
+            }
+            CMD_BLOCK_ERASE_64K => {
+                self.erase_flash_range(addr, 64 * 1024);
                 self.flash_status &= !(STATUS_WEL | STATUS_WIP);
             }
             _ => {
@@ -556,5 +631,40 @@ mod tests {
         c.write_u32(CMD, USR_BIT).unwrap();
         assert_eq!(c.read_u32(W0).unwrap() & 1, 0); // WIP clear
         assert_eq!(c.read_u32(CMD).unwrap(), 0);
+    }
+
+    /// Page program must land bytes in the backing — otherwise NVS/Preferences
+    /// put completes its WIP poll and still reads erased flash forever.
+    #[test]
+    fn page_program_writes_backing() {
+        let mut c = ctrl_with(vec![0xFFu8; 0x200]);
+        c.write_u32(CMD, FLASH_WREN).unwrap();
+        c.write_u32(USER2, CMD_PAGE_PROGRAM as u32).unwrap();
+        c.write_u32(ADDR, 0x100).unwrap();
+        c.write_u32(W0, 0xA1B2_C3D4).unwrap();
+        c.write_u32(MOSI_DLEN, 32 - 1).unwrap();
+        c.write_u32(CMD, USR_BIT).unwrap();
+        assert_eq!(c.read_u32(CMD).unwrap(), 0);
+        // Read back through READ.
+        c.write_u32(USER2, CMD_READ as u32).unwrap();
+        c.write_u32(ADDR, 0x100).unwrap();
+        c.write_u32(MISO_DLEN, 32 - 1).unwrap();
+        c.write_u32(CMD, USR_BIT).unwrap();
+        assert_eq!(c.read_u32(W0).unwrap(), 0xA1B2_C3D4);
+    }
+
+    #[test]
+    fn sector_erase_restores_ones() {
+        let flash = vec![0x00u8; 0x2000];
+        let mut c = ctrl_with(flash);
+        c.write_u32(CMD, FLASH_WREN).unwrap();
+        c.write_u32(USER2, CMD_SECTOR_ERASE as u32).unwrap();
+        c.write_u32(ADDR, 0x1000).unwrap();
+        c.write_u32(CMD, USR_BIT).unwrap();
+        c.write_u32(USER2, CMD_READ as u32).unwrap();
+        c.write_u32(ADDR, 0x1000).unwrap();
+        c.write_u32(MISO_DLEN, 32 - 1).unwrap();
+        c.write_u32(CMD, USR_BIT).unwrap();
+        assert_eq!(c.read_u32(W0).unwrap(), 0xFFFF_FFFF);
     }
 }

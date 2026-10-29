@@ -31,6 +31,7 @@ use crate::boot::esp32c3_rom::{
     build_rom_boot_machine, c3_rom_data_init_writes, inject_rom_regions, install_fast_boot_rom,
     RomBootOpts,
 };
+use crate::boot::esp32c6_rom;
 use crate::boot::esp32s3_rom::RomImages;
 use crate::bus::SystemBus;
 use crate::console::{ConsoleCapture, HostConsole};
@@ -105,6 +106,10 @@ fn build_program_image(
         ),
         None => false,
     };
+
+    // C6 Arduino Preferences/NVS: MSPI SPI_MEM + partition table @ 0x8000.
+    // No-op on non-C6 chips. See `boot::esp32c6_rom`.
+    esp32c6_rom::maybe_install_arduino_flash(&mut bus, chip);
 
     let console = ConsoleCapture::for_manifest(manifest);
     let uart_sink = console.heard_sink();

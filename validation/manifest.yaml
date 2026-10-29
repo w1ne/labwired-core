@@ -7839,8 +7839,17 @@ boards:
     # `ESP32C6_INTR_SOURCE_ID=48` / 160 MHz clock constants. S3 EP1/INT_*
     # register map, reset values, and irq source 96 are unchanged; the
     # 9-reg reset-state silicon anchor is untouched. ACK, NOT A CAPTURE.
+    # 2026-10-29 (#1528 C6 Arduino Preferences substrate): watched
+    # esp32s3/spi_mem_flash.rs. FLASH_PP / SE / BE (and the matching USR
+    # CMD_PAGE_PROGRAM / CMD_SECTOR_ERASE / CMD_BLOCK_ERASE_*) now mutate the
+    # NOR backing (program = AND, erase = 0xFF) instead of only clearing WEL/WIP.
+    # Needed so ESP32-C6 Arduino Preferences (NVS via MSPI SPI_MEM) can round-trip;
+    # S3/C3 flash-boot paths that already program via other routes are unchanged
+    # at the register map. No register map or reset value in the nine captured
+    # windows changed. Ran: peripherals::esp32s3::spi_mem_flash (10),
+    # boot::esp32c6_rom (5). No S3 board attached. ACK, NOT A CAPTURE.
     drift_ack: 2026-10-29
-    drift_ack_digest: e59319685d2337ad225c570a43db5d033f55d7c5edd80069fe3e1a87c3e7bba4
+    drift_ack_digest: 1a32da0722f6953522dd1e124e73fe711a6da0ec932e74ecef02eb8307c67208
 
   - id: esp32s3-zero
     # Board variant of esp32s3: same silicon (LX7), 4 MiB flash / 480 KiB RAM.

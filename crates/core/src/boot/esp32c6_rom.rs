@@ -1,0 +1,315 @@
+// LabWired - Firmware Simulation Platform
+// Copyright (C) 2026 Andrii Shylenko
+// SPDX-License-Identifier: MIT
+
+//! ESP32-C6 Arduino-ELF flash / NVS substrate for the fast-boot path.
+//!
+//! Why this module exists
+//! ======================
+//! The C6 L1 smoke path treats the unified external-memory window at
+//! `0x4200_0000` as plain memory — there is no SPI flash controller behind it,
+//! so a bare ELF loads straight at its link addresses (see
+//! `docs/boards/esp32c6-devkitc.md`). That is enough for gpio-net demos. It is
+//! **not** enough for an Arduino-ESP32 sketch that calls `Preferences`: those
+//! APIs go through ESP-IDF's `nvs_flash_init` → partition table @ flash offset
+//! `0x8000` → SPI NOR reads/writes issued on the MSPI SPI_MEM controllers
+//! (SPI0 @ `0x6000_2000`, SPI1 @ `0x6000_3000`, matching `esp32c6.svd`).
+//!
+//! Without those controllers and a seeded table, `nvs_flash_init` returns
+//! `ESP_ERR_NOT_FOUND` (0x105) and every Preferences begin/get/put/remove fails
+//! on the twin while working on silicon — the one thing this product must never
+//! do. This module is the one home for that recipe so the RISC-V builder and a
+//! world node cannot diverge.
+//!
+//! What this is not
+//! ================
+//! Full mask-ROM flash-image boot (bootloader + partitions + app through the
+//! BROM) stays out of scope at L1 — `KNOWN_LIMITATIONS.md` already says so.
+//! C3's MMU/XIP/DROM path is **not** copied here: on the C6, INTPRI already
+//! owns `0x600C_5000` (the C3 MMU table base), and IROM/DROM share one window.
+//! Reuses [`crate::peripherals::esp32s3::spi_mem_flash::SpiMemFlash`] and
+//! [`super::esp_partition_table`] rather than forking either.
+
+use std::sync::{Arc, Mutex};
+
+use labwired_config::ChipDescriptor;
+
+use crate::bus::SystemBus;
+use crate::peripherals::esp32s3::spi_mem_flash::SpiMemFlash;
+
+use super::esp_partition_table::{
+    default_partition_table, PartitionSubtype, PartitionType, DEFAULT_ARDUINO_4MB,
+    MAX_PARTITION_TABLE_LEN, MODELLED_FLASH_SIZE, PARTITION_TABLE_OFFSET,
+};
+
+/// SPI0 (MSPI) — `esp32c6.svd` `SPI0` @ `0x6000_2000`.
+pub const SPI0_BASE: u64 = 0x6000_2000;
+/// SPI1 (MSPI) — `esp32c6.svd` `SPI1` @ `0x6000_3000`.
+pub const SPI1_BASE: u64 = 0x6000_3000;
+/// Register window size the C3/S3 SPI_MEM twin is wired with.
+const SPI_MEM_WINDOW: u64 = 0x100;
+
+/// True when `chip` is an ESP32-C6 (name match, same style as `is_esp32c3`).
+pub fn is_esp32c6(chip: &ChipDescriptor) -> bool {
+    chip.name.to_ascii_lowercase().contains("esp32c6")
+}
+
+/// Seed `partitions` (or the default Arduino 4 MiB table) at flash offset
+/// [`PARTITION_TABLE_OFFSET`] inside a shared flash backing buffer.
+///
+/// The buffer is erased (`0xFF`) first — matching NOR — then the table is
+/// written. A caller-supplied `partitions.bin` always wins over the default
+/// (same precedence as classic ESP32 / C3).
+pub fn seed_flash_partitions(flash: &mut [u8], partitions: Option<&[u8]>) {
+    let default_pt;
+    let pt: &[u8] = match partitions {
+        Some(pt) => pt,
+        None => {
+            default_pt = default_partition_table();
+            &default_pt
+        }
+    };
+    let off = PARTITION_TABLE_OFFSET as usize;
+    let n = pt
+        .len()
+        .min(MAX_PARTITION_TABLE_LEN)
+        .min(flash.len().saturating_sub(off));
+    if n == 0 {
+        return;
+    }
+    flash[off..off + n].copy_from_slice(&pt[..n]);
+}
+
+/// Install MSPI SPI_MEM twins + a partition-seeded flash backing on a C6 bus.
+///
+/// Returns the shared backing so tests (and a future CLI path) can inspect or
+/// further seed it without walking the peripheral list. Idempotent on the
+/// peripheral names: a second call replaces the controllers and attaches a
+/// fresh backing.
+///
+/// Does **not** touch the CPU-visible `0x4200_0000` LinearMemory window — that
+/// remains the bare-ELF / XIP load target. Preferences traffic goes through
+/// SPI_MEM into this backing, which is how ESP-IDF reaches the partition table
+/// and NVS on silicon too.
+pub fn install_arduino_flash(
+    bus: &mut SystemBus,
+    partitions: Option<&[u8]>,
+) -> Arc<Mutex<Vec<u8>>> {
+    let mut img = vec![0xFFu8; MODELLED_FLASH_SIZE as usize];
+    seed_flash_partitions(&mut img, partitions);
+    let flash = Arc::new(Mutex::new(img));
+
+    bus.replace_or_add_peripheral(
+        "spimem0_flash",
+        SPI0_BASE,
+        SPI_MEM_WINDOW,
+        None,
+        Box::new(SpiMemFlash::new(flash.clone())),
+    );
+    bus.replace_or_add_peripheral(
+        "spimem1_flash",
+        SPI1_BASE,
+        SPI_MEM_WINDOW,
+        None,
+        Box::new(SpiMemFlash::new(flash.clone())),
+    );
+    // SPI_MEM twins must not be elided by the optimized-access fast path: the
+    // C3 Arduino install flips the same flag for the same reason.
+    bus.config.optimized_bus_access = false;
+    bus.refresh_peripheral_index();
+    flash
+}
+
+/// Install the C6 Arduino flash substrate when `chip` is a C6; no-op otherwise.
+///
+/// One call site for the RISC-V builder and world-node ELF path.
+pub fn maybe_install_arduino_flash(bus: &mut SystemBus, chip: &ChipDescriptor) {
+    if is_esp32c6(chip) {
+        let _ = install_arduino_flash(bus, None);
+    }
+}
+
+/// Flash offset of the NVS data partition in [`DEFAULT_ARDUINO_4MB`].
+pub fn default_nvs_offset() -> u32 {
+    DEFAULT_ARDUINO_4MB
+        .iter()
+        .find(|p| p.ptype == PartitionType::Data && p.subtype == PartitionSubtype::DataNvs)
+        .map(|p| p.offset)
+        .expect("DEFAULT_ARDUINO_4MB always declares nvs")
+}
+
+/// Flash size of the NVS data partition in [`DEFAULT_ARDUINO_4MB`].
+pub fn default_nvs_size() -> u32 {
+    DEFAULT_ARDUINO_4MB
+        .iter()
+        .find(|p| p.ptype == PartitionType::Data && p.subtype == PartitionSubtype::DataNvs)
+        .map(|p| p.size)
+        .expect("DEFAULT_ARDUINO_4MB always declares nvs")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Bus;
+    use labwired_config::{ChipDescriptor, SystemManifest};
+
+    fn repo_root() -> std::path::PathBuf {
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
+    }
+
+    fn c6_bus() -> SystemBus {
+        let chip = ChipDescriptor::from_file(repo_root().join("configs/chips/esp32c6.yaml"))
+            .expect("load esp32c6.yaml");
+        let manifest =
+            SystemManifest::from_file(repo_root().join("configs/systems/esp32c6-devkitc.yaml"))
+                .expect("load esp32c6-devkitc.yaml");
+        SystemBus::from_config(&chip, &manifest).expect("build C6 bus")
+    }
+
+    /// Decode partition entries the way ESP-IDF walks the table — not by
+    /// calling back into our encoder.
+    fn decode_table(blob: &[u8]) -> Vec<(u8, u8, u32, u32, String)> {
+        let mut out = Vec::new();
+        for chunk in blob.chunks_exact(32) {
+            let magic = u16::from_le_bytes([chunk[0], chunk[1]]);
+            if magic != 0x50AA {
+                break;
+            }
+            out.push((
+                chunk[2],
+                chunk[3],
+                u32::from_le_bytes(chunk[4..8].try_into().unwrap()),
+                u32::from_le_bytes(chunk[8..12].try_into().unwrap()),
+                String::from_utf8_lossy(&chunk[12..28])
+                    .trim_end_matches('\0')
+                    .to_string(),
+            ));
+        }
+        out
+    }
+
+    #[test]
+    fn is_esp32c6_matches_chip_name() {
+        let mut chip = ChipDescriptor::from_file(repo_root().join("configs/chips/esp32c6.yaml"))
+            .expect("load esp32c6.yaml");
+        assert!(is_esp32c6(&chip));
+        chip.name = "esp32c3".into();
+        assert!(!is_esp32c6(&chip));
+    }
+
+    #[test]
+    fn install_seeds_nvs_partition_at_0x8000() {
+        let mut bus = c6_bus();
+        let flash = install_arduino_flash(&mut bus, None);
+        let img = flash.lock().expect("flash lock");
+        let off = PARTITION_TABLE_OFFSET as usize;
+        let parts = decode_table(&img[off..off + MAX_PARTITION_TABLE_LEN]);
+        let nvs = parts
+            .iter()
+            .find(|p| p.0 == 1 && p.1 == 2)
+            .expect("no NVS partition — Preferences begin would fail with ESP_ERR_NOT_FOUND");
+        assert_eq!(nvs.4, "nvs");
+        assert!(nvs.3 > 0, "NVS partition has zero size");
+        let core = parts
+            .iter()
+            .find(|p| p.0 == 1 && p.1 == 3)
+            .expect("no coredump partition");
+        assert_eq!(core.4, "coredump");
+    }
+
+    #[test]
+    fn spimem_controllers_land_at_svd_bases() {
+        let mut bus = c6_bus();
+        let _ = install_arduino_flash(&mut bus, None);
+        assert!(
+            bus.find_peripheral_index_by_name("spimem0_flash").is_some(),
+            "SPI0 MSPI twin missing"
+        );
+        assert!(
+            bus.find_peripheral_index_by_name("spimem1_flash").is_some(),
+            "SPI1 MSPI twin missing"
+        );
+        // Probe the SPI0 CMD register through the bus — must not fault.
+        let _ = bus.read_u32(SPI0_BASE).expect("SPI0 CMD readable");
+        let _ = bus.read_u32(SPI1_BASE).expect("SPI1 CMD readable");
+    }
+
+    /// Preferences put/get needs the NVS region to accept a write and return
+    /// the same bytes on read. Drive that through the SPI_MEM twin the way
+    /// ESP-IDF's flash driver does (dedicated FLASH_PP + USR READ), not by
+    /// poking the Arc behind the model's back for the write half.
+    #[test]
+    fn nvs_region_round_trips_through_spimem() {
+        let mut bus = c6_bus();
+        let flash = install_arduino_flash(&mut bus, None);
+        let nvs_off = default_nvs_offset() as u64;
+        assert!(
+            nvs_off + 16 <= default_nvs_offset() as u64 + default_nvs_size() as u64,
+            "test blob must sit inside the NVS partition"
+        );
+
+        // Erase the page's worth first isn't required for a fresh 0xFF backing,
+        // but FLASH_WREN + FLASH_PP is the silicon sequence.
+        const USR_BIT: u32 = 1 << 18;
+        const FLASH_WREN: u32 = 1 << 30;
+        const FLASH_PP: u32 = 1 << 25;
+        const ADDR: u64 = 0x04;
+        const USER2: u64 = 0x20;
+        const MOSI_DLEN: u64 = 0x24;
+        const MISO_DLEN: u64 = 0x28;
+        const W0: u64 = 0x58;
+        const CMD: u64 = 0x00;
+
+        let payload: u32 = 0xA1B2_C3D4;
+        bus.write_u32(SPI0_BASE + CMD, FLASH_WREN).expect("WREN");
+        bus.write_u32(SPI0_BASE + ADDR, nvs_off as u32)
+            .expect("ADDR");
+        bus.write_u32(SPI0_BASE + W0, payload).expect("W0");
+        bus.write_u32(SPI0_BASE + MOSI_DLEN, 32 - 1)
+            .expect("MOSI_DLEN");
+        bus.write_u32(SPI0_BASE + CMD, FLASH_PP).expect("PP");
+        assert_eq!(
+            bus.read_u32(SPI0_BASE + CMD).expect("CMD after PP"),
+            0,
+            "FLASH_PP must auto-clear"
+        );
+
+        // Host-side confirm the backing took the write (Preferences' storage).
+        {
+            let img = flash.lock().expect("flash lock");
+            let off = nvs_off as usize;
+            let got = u32::from_le_bytes(img[off..off + 4].try_into().unwrap());
+            assert_eq!(got, payload, "NVS backing did not keep the programmed word");
+        }
+
+        // Read back through SPI USR READ (0x03) — the path load_partitions /
+        // nvs reads use after mmap fallbacks.
+        bus.write_u32(SPI0_BASE + USER2, 0x03).expect("USER2 READ");
+        bus.write_u32(SPI0_BASE + ADDR, nvs_off as u32)
+            .expect("ADDR");
+        bus.write_u32(SPI0_BASE + MISO_DLEN, 32 - 1)
+            .expect("MISO_DLEN");
+        bus.write_u32(SPI0_BASE + CMD, USR_BIT).expect("USR");
+        assert_eq!(bus.read_u32(SPI0_BASE + CMD).expect("CMD after READ"), 0);
+        assert_eq!(
+            bus.read_u32(SPI0_BASE + W0).expect("W0"),
+            payload,
+            "SPI READ of NVS offset must return the programmed word"
+        );
+    }
+
+    #[test]
+    fn maybe_install_is_noop_for_non_c6() {
+        let chip = ChipDescriptor::from_file(repo_root().join("configs/chips/esp32c3.yaml"))
+            .expect("load esp32c3.yaml");
+        let manifest =
+            SystemManifest::from_file(repo_root().join("configs/systems/esp32c3-devkit.yaml"))
+                .expect("load esp32c3 system");
+        let mut bus = SystemBus::from_config(&chip, &manifest).expect("C3 bus");
+        maybe_install_arduino_flash(&mut bus, &chip);
+        assert!(
+            bus.find_peripheral_index_by_name("spimem0_flash").is_none(),
+            "C6 install must not fire on a C3 bus"
+        );
+    }
+}
