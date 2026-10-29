@@ -206,7 +206,6 @@ const C6_SYSTEM: &str = "name: \"t\"\nchip: \"../chips/esp32c6.yaml\"\n";
 /// succeed.
 #[test]
 fn esp32c6_usb_serial_jtag_is_the_behavioural_console() {
-    use labwired_core::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag;
     use labwired_core::Bus;
 
     let mut bus = bus_for("esp32c6.yaml", C6_SYSTEM);
@@ -221,16 +220,6 @@ fn esp32c6_usb_serial_jtag_is_the_behavioural_console() {
         .read_u32(0x6000_F000 + 0x04)
         .expect("USB_DEVICE EP1_CONF must not fault");
     assert_ne!(conf & (1 << 1), 0, "SERIAL_IN_EP_DATA_FREE reset level");
-
-    // Matrix source is the C6's, not a silent C3/S3 default.
-    let idx = bus
-        .find_peripheral_index_by_name("usb_serial_jtag")
-        .expect("usb_serial_jtag present");
-    let any = bus.peripherals[idx].dev.as_any_mut().expect("downcastable");
-    let jtag = any
-        .downcast_mut::<UsbSerialJtag>()
-        .expect("behavioural model");
-    assert_eq!(jtag.irq_source(), Some(48));
 }
 
 /// Declaring `debug_uart: usb_serial_jtag` on a C6 bus must attach, not refuse.

@@ -7834,8 +7834,13 @@ boards:
     # LEDC channel outputs drive the GPIO output matrix (signals 73..80), plus
     # the gpio_matrix_out ROM thunk (0x4000_1aa0). No register map or reset
     # value change. ACK, NOT A CAPTURE.
-    drift_ack: 2026-10-27
-    drift_ack_digest: 3bd419ae3af19b6eacb7bacac067b71b5181e0b4697d8edfd7293bda30e21512
+    # 2026-10-29 (#1526 feat/esp32c6-usb-serial-jtag): shared
+    # `peripherals/esp32s3/usb_serial_jtag.rs` gains `new_esp32c6()` /
+    # `ESP32C6_INTR_SOURCE_ID=48` / 160 MHz clock constants. S3 EP1/INT_*
+    # register map, reset values, and irq source 96 are unchanged; the
+    # 9-reg reset-state silicon anchor is untouched. ACK, NOT A CAPTURE.
+    drift_ack: 2026-10-29
+    drift_ack_digest: e59319685d2337ad225c570a43db5d033f55d7c5edd80069fe3e1a87c3e7bba4
 
   - id: esp32s3-zero
     # Board variant of esp32s3: same silicon (LX7), 4 MiB flash / 480 KiB RAM.

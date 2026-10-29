@@ -218,8 +218,11 @@ peripheral sources beyond UART0 (GPIO edges, I²C/SPI/ADC/LEDC/GDMA matrix
 lines, edge-vs-level `CPU_INT_TYPE`, `CPU_INT_CLEAR` semantics, sub-tick
 de-assert latency), watchdogs that must actually reset the chip, RTC wall-time
 and sleep retention, matrix-routed I²C/SPI waveform fidelity on C6 pads, LP
-core and power management, Wi-Fi/BT/802.15.4, USB Serial/JTAG, analog, power,
-antenna/EMI, production sign-off.
+core and power management, Wi-Fi/BT/802.15.4, analog, power, antenna/EMI,
+production sign-off. (USB Serial/JTAG EP1 is modelled — see the matrix row
+above and `KNOWN_LIMITATIONS`; DevKitC-1 still defaults `debug_uart` to
+`uart0`, and Arduino CDC-on-boot as the primary console remains a separate
+gap.)
 
 ---
 

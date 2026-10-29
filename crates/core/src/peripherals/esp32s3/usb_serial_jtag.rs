@@ -943,6 +943,7 @@ mod tests {
         for (mut p, expect) in [
             (UsbSerialJtag::new_esp32c3(), ESP32C3_INTR_SOURCE_ID),
             (UsbSerialJtag::new_esp32s3(), ESP32S3_INTR_SOURCE_ID),
+            (UsbSerialJtag::new_esp32c6(), ESP32C6_INTR_SOURCE_ID),
         ] {
             assert!(p.matrix_irq_sources().is_empty(), "masked until INT_ENA");
             p.write_u32(OFF_INT_ENA, INT_SERIAL_IN_EMPTY).unwrap();
