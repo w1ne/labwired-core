@@ -137,9 +137,13 @@ pub struct Lcd1602 {
     blink_on: bool,
     /// Function set `N`: true = 2-line mode.
     two_line: bool,
-    /// Distinct panel texts observed while the display was on, newest last.
-    /// Caps at 32 so a spinning sketch cannot grow the inspect payload without
-    /// bound. DisplayClause `contains` searches this ring as well as `text`.
+    /// Every distinct non-blank panel text seen during the run, newest last.
+    ///
+    /// Survives a clear-display (0x01): DDRAM goes blank but prior paints stay
+    /// in this ring so a DisplayClause `contains` can still prove a mid-run
+    /// Status:ALARM after a later overwrite. Capped at 32 so a spinning sketch
+    /// cannot grow the inspect payload without bound; DisplayClause searches
+    /// this ring as well as the current `text`.
     #[serde(skip)]
     texts_seen: VecDeque<String>,
 }
@@ -352,6 +356,8 @@ impl Lcd1602 {
     const TEXTS_SEEN_CAP: usize = 32;
 
     /// Record the current visible text when it changes and is non-blank.
+    /// Entries accumulate for the whole run (a clear does not wipe them) and
+    /// the ring is capped at [`Self::TEXTS_SEEN_CAP`] (32).
     fn record_text_if_changed(&mut self) {
         if !self.display_on {
             return;
@@ -593,7 +599,9 @@ mod tests {
             .get("texts_seen")
             .and_then(|v| v.as_array())
             .expect("texts_seen in artifact meta");
-        assert!(texts.iter().any(|v| v.as_str().unwrap_or("").starts_with("Yo")));
+        assert!(texts
+            .iter()
+            .any(|v| v.as_str().unwrap_or("").starts_with("Yo")));
     }
 
     #[test]
