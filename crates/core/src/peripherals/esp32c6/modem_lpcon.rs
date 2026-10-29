@@ -92,7 +92,10 @@ mod tests {
     #[test]
     fn seeds_i2c_mst_clock_enable() {
         let p = Esp32c6ModemLpcon::new();
-        assert_eq!(p.read_u32(CLK_CONF_OFFSET).unwrap() & CLK_I2C_MST_EN, CLK_I2C_MST_EN);
+        assert_eq!(
+            p.read_u32(CLK_CONF_OFFSET).unwrap() & CLK_I2C_MST_EN,
+            CLK_I2C_MST_EN
+        );
     }
 
     #[test]

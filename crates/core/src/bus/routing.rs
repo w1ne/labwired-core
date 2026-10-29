@@ -570,24 +570,44 @@ impl SystemBus {
 
         if let Some(p_idx) = intpri_idx {
             // C6 layout: INTPRI @0x600C_5000 carries the `CPU_INTR_FROM_CPU_n`
-            // doorbells (0x90 + n*4, bit0; sources 22..25). Enable / priority /
-            // threshold live in the PLIC @0x2000_1000 when present (IDF ROM
-            // `esprv_intc_*`); fall back to INTPRI's SVD copies only when the
-            // descriptor has no plic_mx (hand-built unit buses).
-            let gates_idx = self.irq_fabric.esp32c3.plic_mx_idx.unwrap_or(p_idx);
-            let (pri_base, thresh_off) = if self.irq_fabric.esp32c3.plic_mx_idx.is_some() {
-                (0x10u64, 0x90u64) // PLIC_MXINT_n_PRI / PLIC_MXINT_THRESH
+            // doorbells (0x90 + n*4, bit0; sources 22..25). IDF/ROM
+            // `esprv_intc_*` programs enable/priority/threshold at PLIC
+            // @0x2000_1000; bare-metal examples (gpio-net) still write the
+            // INTPRI SVD copies. Merge both so either path can arm a line:
+            // enable is OR'd; per-line priority and threshold take the max
+            // (more permissive of the two programmed floors).
+            let intpri_en = self.read_cached_declarative_u32(p_idx, 0x00).unwrap_or(0);
+            let intpri_thresh =
+                (self.read_cached_declarative_u32(p_idx, 0x8C).unwrap_or(0) & 0xFF) as u8;
+            let (plic_en, plic_thresh) = if let Some(plic_idx) = self.irq_fabric.esp32c3.plic_mx_idx
+            {
+                (
+                    self.read_cached_declarative_u32(plic_idx, 0x00)
+                        .unwrap_or(0),
+                    (self
+                        .read_cached_declarative_u32(plic_idx, 0x90)
+                        .unwrap_or(0)
+                        & 0xFF) as u8,
+                )
             } else {
-                (0x0Cu64, 0x8Cu64) // INTPRI CPU_INT_PRI_n / CPU_INT_THRESH
+                (0u32, 0u8)
             };
-            cache.int_enable = self.read_cached_declarative_u32(gates_idx, 0x00).unwrap_or(0);
-            cache.int_thresh =
-                (self.read_cached_declarative_u32(gates_idx, thresh_off).unwrap_or(0) & 0xFF) as u8;
+            cache.int_enable = plic_en | intpri_en;
+            cache.int_thresh = plic_thresh.max(intpri_thresh);
             for line in 0..cache.line_pri.len() {
-                cache.line_pri[line] = (self
-                    .read_cached_declarative_u32(gates_idx, pri_base + (line as u64) * 4)
+                let intpri_pri = (self
+                    .read_cached_declarative_u32(p_idx, 0x0C + (line as u64) * 4)
                     .unwrap_or(0)
                     & 0xF) as u8;
+                let plic_pri = if let Some(plic_idx) = self.irq_fabric.esp32c3.plic_mx_idx {
+                    (self
+                        .read_cached_declarative_u32(plic_idx, 0x10 + (line as u64) * 4)
+                        .unwrap_or(0)
+                        & 0xF) as u8
+                } else {
+                    0
+                };
+                cache.line_pri[line] = plic_pri.max(intpri_pri);
             }
             cache.from_cpu_source_base = 22;
             for n in 0..4 {
@@ -722,20 +742,28 @@ impl SystemBus {
             }
         } else if Some(idx) == self.irq_fabric.esp32c3.plic_mx_idx {
             // C6 PLIC @0x2000_1000: enable / priority / threshold (IDF ROM path).
+            // Merge with INTPRI so a bare-metal enable is not wiped by a later
+            // PLIC write of a disjoint mask (and vice versa on the INTPRI path).
+            let intpri_en = self
+                .irq_fabric
+                .esp32c3
+                .intpri_idx
+                .and_then(|i| self.read_cached_declarative_u32(i, 0x00))
+                .unwrap_or(0);
             if let Some(cache) = &mut self.irq_fabric.esp32c3.intc {
                 match aligned {
                     0x00 => {
-                        cache.int_enable = value;
+                        cache.int_enable = value | intpri_en;
                         inputs_changed = true;
                     }
                     0x90 => {
-                        cache.int_thresh = (value & 0xFF) as u8;
+                        cache.int_thresh = cache.int_thresh.max((value & 0xFF) as u8);
                         inputs_changed = true;
                     }
                     0x10..=0x8C if (aligned - 0x10) % 4 == 0 => {
                         let line = ((aligned - 0x10) / 4) as usize;
                         if let Some(pri) = cache.line_pri.get_mut(line) {
-                            *pri = (value & 0xF) as u8;
+                            *pri = (*pri).max((value & 0xF) as u8);
                             inputs_changed = true;
                         }
                     }
@@ -744,22 +772,29 @@ impl SystemBus {
             }
         } else if Some(idx) == self.irq_fabric.esp32c3.intpri_idx {
             // C6 INTPRI @0x600C_5000: FROM_CPU doorbells always; enable/pri/thresh
-            // only when no PLIC is wired (hand-built unit buses).
+            // also arm the cache (bare-metal / gpio-net). When PLIC is present
+            // IDF writes go there; merge so INTPRI programming is not ignored.
+            let plic_en = self
+                .irq_fabric
+                .esp32c3
+                .plic_mx_idx
+                .and_then(|i| self.read_cached_declarative_u32(i, 0x00))
+                .unwrap_or(0);
             if let Some(cache) = &mut self.irq_fabric.esp32c3.intc {
-                let use_intpri_gates = self.irq_fabric.esp32c3.plic_mx_idx.is_none();
                 match aligned {
-                    0x00 if use_intpri_gates => {
-                        cache.int_enable = value;
+                    0x00 => {
+                        // `value` is the new INTPRI enable; OR with live PLIC.
+                        cache.int_enable = plic_en | value;
                         inputs_changed = true;
                     }
-                    0x8C if use_intpri_gates => {
-                        cache.int_thresh = (value & 0xFF) as u8;
+                    0x8C => {
+                        cache.int_thresh = cache.int_thresh.max((value & 0xFF) as u8);
                         inputs_changed = true;
                     }
-                    0x0C..=0x88 if use_intpri_gates && (aligned - 0x0C) % 4 == 0 => {
+                    0x0C..=0x88 if (aligned - 0x0C) % 4 == 0 => {
                         let line = ((aligned - 0x0C) / 4) as usize;
                         if let Some(pri) = cache.line_pri.get_mut(line) {
-                            *pri = (value & 0xF) as u8;
+                            *pri = (*pri).max((value & 0xF) as u8);
                             inputs_changed = true;
                         }
                     }

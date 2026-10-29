@@ -78,7 +78,6 @@ pub fn app_stack_top() -> u32 {
     APP_SRAM_END & !0xF
 }
 
-
 /// True when `chip` is an ESP32-C6 (name match, same style as `is_esp32c3`).
 pub fn is_esp32c6(chip: &ChipDescriptor) -> bool {
     chip.name.to_ascii_lowercase().contains("esp32c6")
@@ -162,11 +161,7 @@ pub fn install_arduino_flash(
 /// flash image so fetches and mmap reads translate through the MMU exactly as
 /// on silicon. Unused MMU entries stay invalid so `spi_flash_mmap` can claim
 /// free pages for the partition table at flash `0x8000`.
-pub fn install_xip_window(
-    bus: &mut SystemBus,
-    flash: Arc<Mutex<Vec<u8>>>,
-    mmu: SharedMmuTable,
-) {
+pub fn install_xip_window(bus: &mut SystemBus, flash: Arc<Mutex<Vec<u8>>>, mmu: SharedMmuTable) {
     bus.replace_or_add_peripheral_at(
         "flash_irom_xip",
         XIP_BASE,
@@ -193,7 +188,6 @@ pub fn write_mmu_entry(bus: &mut SystemBus, entry_id: u32, phys_page: u32) {
     );
 }
 
-
 /// C6 mask-ROM `.data` the fast-boot path must seed because it skips the ROM
 /// `unpackloop` (12-byte `{dst_start,dst_end,src}` records at `_data_table_start`).
 /// Without this, `rom_cache_internal_table_ptr` @ `0x4087_ffc8` stays null and
@@ -207,18 +201,27 @@ fn c6_rom_data_init_writes() -> &'static [(u32, &'static [u8])] {
         // heap_tlsf_table_ptr
         (0x4087_ffd8, &[0xd0, 0xd0, 0x04, 0x40]),
         // spi_flash chip table ptrs
-        (0x4087_ffdc, &[0x80, 0xd9, 0x04, 0x40, 0x40, 0xd9, 0x04, 0x40]),
+        (
+            0x4087_ffdc,
+            &[0x80, 0xd9, 0x04, 0x40, 0x40, 0xd9, 0x04, 0x40],
+        ),
         // esp_flash ops ptr
         (0x4087_ffe4, &[0xcc, 0xd8, 0x04, 0x40]),
         // spiflash_legacy ptrs (DRAM targets — OK if unused early)
-        (0x4087_ffec, &[0x08, 0xfa, 0x87, 0x40, 0x24, 0xfa, 0x87, 0x40]),
+        (
+            0x4087_ffec,
+            &[0x08, 0xfa, 0x87, 0x40, 0x24, 0xfa, 0x87, 0x40],
+        ),
         // ets_ops_table_ptr
         (0x4087_fff8, &[0x80, 0xa6, 0x04, 0x40]),
         // .data_ets / .data_uart flags
         (0x4087_e610, &[0x01, 0x00, 0x00, 0x00]),
         (0x4087_f564, &[0x01, 0x00, 0x00, 0x00]),
         // .data_cache
-        (0x4087_fa84, &[0x00, 0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00]),
+        (
+            0x4087_fa84,
+            &[0x00, 0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00],
+        ),
         // .data_ets_delay
         (0x4087_faa0, &[0x28, 0x00, 0x00, 0x00]),
         // .data_c: __global_locale_ptr → ROM locale object (newlib
@@ -320,12 +323,14 @@ mod tests {
         out
     }
 
-
     #[test]
     fn app_stack_top_below_rom_reserve() {
         let sp = app_stack_top();
         assert_eq!(sp, 0x4086_E610);
-        assert!(sp < 0x4087_ffc8, "must not smash rom_cache_internal_table_ptr");
+        assert!(
+            sp < 0x4087_ffc8,
+            "must not smash rom_cache_internal_table_ptr"
+        );
         assert_eq!(sp & 0xF, 0, "16-byte aligned");
     }
 
@@ -348,7 +353,7 @@ mod tests {
         eprintln!("tlsf table +52 = {v:#x}");
     }
 
-        #[test]
+    #[test]
     fn is_esp32c6_matches_chip_name() {
         let mut chip = ChipDescriptor::from_file(repo_root().join("configs/chips/esp32c6.yaml"))
             .expect("load esp32c6.yaml");

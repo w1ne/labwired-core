@@ -118,7 +118,6 @@ mod tests {
         );
     }
 
-
     #[test]
     fn fsm_status_idle_at_0x70_for_rom_tx_wait() {
         // C6 UART_FSM_STATUS_REG @ 0x70; ST_UTX_OUT[7:4] must read 0 or the

@@ -93,7 +93,9 @@ peripherals:
   - id: "gpio"
     type: "esp32c6_gpio"
     base_address: 0x60091000
-    size: "4KB"
+    # 3840 (0xF00): ends at gpio_sd @ 0x60091F00. Was 4KB → overlapped
+    # gpio_sd (0x60091F00) and mem_monitor (0x60092000).
+    size: "3840"
     config:
       debug_schema: "../peripherals/esp32c6/gpio.yaml"
   # Timer Groups. The C6 TIMG register head (T0CONFIG@0x00/T0LO@0x04/T0HI@0x08/
@@ -313,7 +315,8 @@ peripherals:
   - id: "gpio_sd"
     type: "stub"
     base_address: 0x60091f00
-    size: "1KB"
+    # 256 (0x100): ends at mem_monitor @ 0x60092000. Was 1KB → overlapped it.
+    size: "256"
   - id: "mem_monitor"
     type: "stub"
     base_address: 0x60092000
@@ -417,29 +420,21 @@ peripherals:
     base_address: 0x20001C00
     size: "1KB"
   - id: "pmu"
-    type: "declarative"
+    type: "stub"
     base_address: 0x600B0000
     size: "1KB"
-    config:
-      path: "../peripherals/esp32c6/pmu.yaml"
   - id: "lp_clkrst"
-    type: "declarative"
+    type: "stub"
     base_address: 0x600B0400
     size: "1KB"
-    config:
-      path: "../peripherals/esp32c6/lp_clkrst.yaml"
   - id: "lp_wdt"
-    type: "declarative"
+    type: "stub"
     base_address: 0x600B1C00
     size: "1KB"
-    config:
-      path: "../peripherals/esp32c6/lp_wdt.yaml"
   - id: "lp_aon"
-    type: "declarative"
+    type: "stub"
     base_address: 0x600B1000
     size: "1KB"
-    config:
-      path: "../peripherals/esp32c6/lp_aon.yaml"
   - id: "lp_timer"
     type: "esp32c6_lp_rtc"
     irq: 15 # ETS_LP_RTC_TIMER_INTR_SOURCE (esp32c6.svd LP_TIMER)
@@ -517,21 +512,17 @@ peripherals:
   # no MMU translation). Cache SYNC/LOCK DONE bits are storage — may need
   # side-effects if firmware polls them.
   - id: "trace"
-    type: "declarative"
+    type: "stub"
     base_address: 0x600C0000
     size: "4KB"
-    config:
-      path: "../peripherals/esp32c6/trace.yaml"
   - id: "extmem"
     type: "esp32c6_extmem"
     base_address: 0x600C8000
     size: "4KB"
   - id: "assist_debug"
-    type: "declarative"
+    type: "stub"
     base_address: 0x600C2000
     size: "4KB"
-    config:
-      path: "../peripherals/esp32c6/assist_debug.yaml"
 
   # USB Serial/JTAG (USB_DEVICE). Same EP1/INT_* IP as C3/S3; behavioural model
   # is `UsbSerialJtag::new_esp32c6` (matrix source 48, 160 MHz). Base and irq

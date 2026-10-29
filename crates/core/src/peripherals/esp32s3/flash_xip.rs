@@ -285,7 +285,7 @@ pub const MMU_FMT_C3: MmuFmt = MmuFmt {
 /// - valid = BIT(9) set; invalid = 0; page field = bits[8:0] (0x1FF)
 /// - programmed through SPI_MEM MMU_ITEM_INDEX/CONTENT, not a flat table
 pub const MMU_FMT_C6: MmuFmt = MmuFmt {
-    invalid_bit: 0,        // unused — valid_bit polarity
+    invalid_bit: 0, // unused — valid_bit polarity
     valid_bit: 1 << 9,
     valid_val_mask: 0x1FF,
     vaddr_mask: 0xFF_FFFF, // 16 MiB (256 × 64 KiB)

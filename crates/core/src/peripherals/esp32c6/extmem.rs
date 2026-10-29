@@ -51,13 +51,13 @@ const FREEZE_BANKS: [(u32, u32); 5] = [
 
 /// Idle seeds so polls exit before any launch write (SVD reset + DONE asserted).
 const IDLE_STATUS_SEEDS: [(u64, u32); 12] = [
-    (0x88, 1 << 2),  // CACHE_LOCK_DONE
-    (0x98, 1 << 4),  // CACHE_SYNC_DONE (not SVD reset 1 = INVALIDATE_ENA)
+    (0x88, 1 << 2), // CACHE_LOCK_DONE
+    (0x98, 1 << 4), // CACHE_SYNC_DONE (not SVD reset 1 = INVALIDATE_ENA)
     (0xa8, 1 << 1),
     (0xb4, 1 << 1),
     (0xc0, 1 << 1),
     (0xcc, 1 << 1),
-    (0xd8, 1 << 1),  // L1_CACHE_PRELOAD_DONE
+    (0xd8, 1 << 1), // L1_CACHE_PRELOAD_DONE
     (0xe4, 1 << 1),
     (0xf8, 1 << 1),
     (0x10c, 1 << 1),

@@ -125,8 +125,6 @@ fn esp32c3_accepts_exact_rom_init_csrs_before_mtvec_initialization() {
 }
 
 #[test]
-
-#[test]
 fn esp32c6_accepts_pma_csrs_used_by_region_protect() {
     // esp_cpu_configure_invalid_regions writes CSR_PMAADDR0 (0xBD0) /
     // CSR_PMACFG0 (0xBC0). Without stubs those CSRRWs trap as illegal

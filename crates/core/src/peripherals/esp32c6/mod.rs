@@ -35,8 +35,8 @@
 pub mod extmem;
 pub mod factory;
 pub mod gdma;
+pub mod i2c_ana_mst;
 pub mod lp_timer;
 pub mod modem_lpcon;
-pub mod i2c_ana_mst;
 pub mod pcr;
 pub mod uart;
