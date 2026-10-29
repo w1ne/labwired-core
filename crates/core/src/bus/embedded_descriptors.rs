@@ -346,6 +346,10 @@ static DESCRIPTORS: &[(&str, &str)] = &[
         include_str!("../../../../configs/peripherals/esp32c6/pcr.yaml"),
     ),
     (
+        "esp32c6/plic_mx.yaml",
+        include_str!("../../../../configs/peripherals/esp32c6/plic_mx.yaml"),
+    ),
+    (
         "esp32c6/spi2.yaml",
         include_str!("../../../../configs/peripherals/esp32c6/spi2.yaml"),
     ),

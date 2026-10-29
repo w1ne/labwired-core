@@ -438,11 +438,19 @@ fn build_riscv_node(
             machine
                 .load_firmware(&image)
                 .map_err(|e| anyhow::anyhow!("node '{id}': load firmware: {e:?}"))?;
+            // Re-seed ROM .data after ELF load (mask-ROM unpack never ran).
+            if crate::boot::esp32c6_rom::is_esp32c6(chip) {
+                crate::boot::esp32c6_rom::seed_rom_data(&mut machine.bus);
+            }
             // Fast boot skips the ROM/2nd-stage bootloader that would normally
-            // set the stack pointer, so seed it at the top of RAM (16-byte
+            // set the stack pointer, so seed it at the top of app SRAM (16-byte
             // aligned, RISC-V ABI) or the first prologue store faults.
-            let ram_size = chip.ram.size;
-            let sp_top = (chip.ram.base + ram_size) as u32;
+            // C6: below ROM-reserved HP SRAM (esp32c6_rom::APP_SRAM_END).
+            let sp_top = if crate::boot::esp32c6_rom::is_esp32c6(chip) {
+                crate::boot::esp32c6_rom::app_stack_top()
+            } else {
+                (chip.ram.base + chip.ram.size) as u32
+            };
             machine.cpu.set_sp(sp_top & !0xF);
             machine.cpu.set_pc(image.entry_point as u32);
             Ok(Box::new(machine))

@@ -1863,6 +1863,22 @@ pub(crate) fn run_test(
                 std::path::Path::new(&firmware_path),
             );
         }
+        // ESP32-C6: SPI_MEM + partition seed + ROM .data pointers (CLI RISC-V
+        // path does not go through builder/riscv.rs).
+        if let Some(sys_path) = system_path.as_ref() {
+            if let Ok(manifest) = labwired_config::SystemManifest::from_file(sys_path) {
+                let chip_dir = sys_path
+                    .parent()
+                    .unwrap_or_else(|| std::path::Path::new("."));
+                if let Ok(chip) = labwired_config::ChipDescriptor::resolve_with(
+                    &manifest.chip,
+                    chip_dir,
+                    &crate::plugin_chip_yaml(plugins),
+                ) {
+                    labwired_core::boot::esp32c6_rom::maybe_install_arduino_flash(&mut bus, &chip);
+                }
+            }
+        }
     }
 
     let uart_tx = Arc::new(Mutex::new(Vec::new()));
@@ -2094,6 +2110,26 @@ pub(crate) fn run_test(
             // does not — seed SP at the top of chip RAM (16B aligned) and force
             // PC to the ELF entry so we don't start at SP=0 → fault @ 0xfffffffc.
             if matches!(program.arch, labwired_core::Arch::RiscV) {
+                // C6: re-seed ROM interface pointers after ELF load. Mask-ROM
+                // unpack never ran; without this multi_heap_register_impl
+                // jalrs through garbage at heap_tlsf_table_ptr. No-op on
+                // non-C6 (writes are to C6 HP-SRAM interface addresses).
+                if let Some(sys_path) = system_path.as_ref() {
+                    if let Ok(manifest) = labwired_config::SystemManifest::from_file(sys_path) {
+                        let chip_dir = sys_path
+                            .parent()
+                            .unwrap_or_else(|| std::path::Path::new("."));
+                        if let Ok(chip) = labwired_config::ChipDescriptor::resolve_with(
+                            &manifest.chip,
+                            chip_dir,
+                            &crate::plugin_chip_yaml(plugins),
+                        ) {
+                            if labwired_core::boot::esp32c6_rom::is_esp32c6(&chip) {
+                                labwired_core::boot::esp32c6_rom::seed_rom_data(&mut machine.bus);
+                            }
+                        }
+                    }
+                }
                 // Fast-boot skips mask-ROM reset's `.data` unpack into high
                 // DRAM (`ets_ops_table_ptr` / `rom_spiflash_legacy_*` /
                 // `g_flash_guard_ops` @ 0x3FCD_FFxx). Without that copy, ROM
@@ -2137,6 +2173,12 @@ pub(crate) fn run_test(
                                 if chip.name == "esp32c3" {
                                     const C3_BOOT_STACK_TOP: u32 = 0x3FCD_C000;
                                     sp_top = C3_BOOT_STACK_TOP;
+                                }
+                                // C6: stay below ROM-reserved HP SRAM so the
+                                // boot stack cannot smash heap_tlsf_table_ptr
+                                // @ 0x4087_ffd8 (and friends).
+                                if chip.name.to_ascii_lowercase().contains("esp32c6") {
+                                    sp_top = labwired_core::boot::esp32c6_rom::app_stack_top();
                                 }
                                 machine.cpu.set_sp(sp_top & !0xF);
                             }
@@ -2301,6 +2343,89 @@ pub(crate) fn run_test(
                                         virt_pages.len(),
                                         virt_pages,
                                         FACTORY_PAGE
+                                    );
+                                }
+                            }
+                            // C6: bootloader-equivalent factory layout + SPI_MEM MMU
+                            // + FlashXip. IROM/DROM share 0x4200_0000; MMU lives in
+                            // SPI0 MMU_ITEM_INDEX/CONTENT (VALID=BIT(9), 256×64KiB).
+                            // Leave unused entries invalid so spi_flash_mmap can
+                            // allocate free pages for the partition table @ 0x8000.
+                            if labwired_core::boot::esp32c6_rom::is_esp32c6(&chip) {
+                                use labwired_core::boot::esp32c6_rom::{
+                                    install_arduino_flash, install_xip_window, write_mmu_entry,
+                                    FACTORY_APP_OFFSET, MMU_VALID,
+                                };
+                                const PAGE: usize = 64 * 1024;
+                                let factory_off = FACTORY_APP_OFFSET as usize;
+                                let factory_page = (factory_off / PAGE) as u32; // 1
+                                let flash_page_has_payload = |page: &[u8]| -> bool {
+                                    !(page.iter().all(|&b| b == 0)
+                                        || page.iter().all(|&b| b == 0xFF))
+                                };
+                                let mut virt_pages: Vec<u32> = Vec::new();
+                                let irom_len = machine.bus.flash.data.len();
+                                for page in 0..irom_len.div_ceil(PAGE) {
+                                    if page >= 256 {
+                                        break;
+                                    }
+                                    let start = page * PAGE;
+                                    let end = (start + PAGE).min(irom_len);
+                                    if flash_page_has_payload(
+                                        &machine.bus.flash.data[start..end],
+                                    ) {
+                                        virt_pages.push(page as u32);
+                                    }
+                                }
+                                // Re-install for (flash, mmu) handles — avoids a
+                                // new as_any/downcast site (ratchet stays at 195).
+                                // Fresh backing is then filled from bus.flash.
+                                let partitions = resolve_esp_partitions_bin(
+                                    std::path::Path::new(&firmware_path),
+                                )
+                                .and_then(|p| std::fs::read(p).ok());
+                                let (flash, mmu) = install_arduino_flash(
+                                    &mut machine.bus,
+                                    partitions.as_deref(),
+                                );
+                                {
+                                    let mut f = flash.lock().unwrap();
+                                    // Full page copy — unlike C3 (execute
+                                    // stays on bus.flash), C6 FlashXip
+                                    // serves fetches from this backing, so
+                                    // sparse skip-0x00 would corrupt code.
+                                    for page in virt_pages.clone() {
+                                        let start = page as usize * PAGE;
+                                        let end = (start + PAGE).min(irom_len);
+                                        let dst = factory_off + start;
+                                        if start >= irom_len || dst >= f.len() {
+                                            continue;
+                                        }
+                                        let n = (end - start).min(f.len() - dst);
+                                        f[dst..dst + n].copy_from_slice(
+                                            &machine.bus.flash.data[start..start + n],
+                                        );
+                                    }
+                                    // App image magic at start of factory partition.
+                                    if f.len() > factory_off {
+                                        f[factory_off] = 0xE9;
+                                    }
+                                }
+                                virt_pages.sort_unstable();
+                                virt_pages.dedup();
+                                for vp in &virt_pages {
+                                    let phys = factory_page + *vp;
+                                    write_mmu_entry(&mut machine.bus, *vp, phys);
+                                }
+                                install_xip_window(&mut machine.bus, flash, mmu);
+                                if !virt_pages.is_empty() {
+                                    eprintln!(
+                                        "labwired-cli test: C6 MMU factory@{:#x} mapped {} virt page(s) {:?} → phys+{}; VALID={:#x}; free entries for PT mmap",
+                                        factory_off,
+                                        virt_pages.len(),
+                                        virt_pages,
+                                        factory_page,
+                                        MMU_VALID
                                     );
                                 }
                             }

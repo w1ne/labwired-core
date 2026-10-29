@@ -35,6 +35,9 @@ use std::sync::{Arc, Mutex};
 use labwired_config::ChipDescriptor;
 
 use crate::bus::SystemBus;
+use crate::peripherals::esp32s3::flash_xip::{
+    new_mmu_table_c6, FlashXipPeripheral, SharedMmuTable, MMU_FMT_C6,
+};
 use crate::peripherals::esp32s3::spi_mem_flash::SpiMemFlash;
 
 use super::esp_partition_table::{
@@ -42,12 +45,38 @@ use super::esp_partition_table::{
     MAX_PARTITION_TABLE_LEN, MODELLED_FLASH_SIZE, PARTITION_TABLE_OFFSET,
 };
 
+/// Unified external-memory / XIP window (IROM == DROM on C6).
+pub const XIP_BASE: u64 = 0x4200_0000;
+/// C6 MMU covers 256 × 64 KiB = 16 MiB of the 0x4200_0000 window.
+pub const XIP_WINDOW: u64 = 0x100_0000;
+/// Default factory app partition offset (Arduino 4 MiB table).
+pub const FACTORY_APP_OFFSET: u32 = 0x1_0000;
+/// SPI_MEM MMU_ITEM_CONTENT / INDEX offsets (from SPI0/1 base).
+pub const MMU_ITEM_CONTENT_OFF: u64 = 0x37C;
+pub const MMU_ITEM_INDEX_OFF: u64 = 0x380;
+/// `SOC_MMU_VALID` — BIT(9).
+pub const MMU_VALID: u32 = 1 << 9;
+
 /// SPI0 (MSPI) — `esp32c6.svd` `SPI0` @ `0x6000_2000`.
 pub const SPI0_BASE: u64 = 0x6000_2000;
 /// SPI1 (MSPI) — `esp32c6.svd` `SPI1` @ `0x6000_3000`.
 pub const SPI1_BASE: u64 = 0x6000_3000;
-/// Register window size the C3/S3 SPI_MEM twin is wired with.
-const SPI_MEM_WINDOW: u64 = 0x100;
+/// Full MSPI SPI_MEM register block (SVD ~1KB). Was 0x100; yaml `spi0`/`spi1`
+/// stubs are also 1KB — name-only replace left those stubs in place and a
+/// too-narrow layered window left high offsets on the stub.
+const SPI_MEM_WINDOW: u64 = 0x1000;
+
+/// End of IDF `sram_seg` (exclusive). App stack must stay below this; HP SRAM
+/// from here to `0x4088_0000` is reserved for mask-ROM `.data` / `.bss` /
+/// interface pointers (`memory.ld`: `len = 0x4086E610 - 0x40800000`).
+pub const APP_SRAM_END: u32 = 0x4086_E610;
+
+/// Fast-boot SP for C6 Arduino ELFs — 16-byte aligned top of app SRAM.
+/// Using the full 512 KiB RAM top (`0x4088_0000`) smashes `rom_cache_internal_table_ptr`
+/// and friends at `0x4087_ffc8`.
+pub fn app_stack_top() -> u32 {
+    APP_SRAM_END & !0xF
+}
 
 /// True when `chip` is an ESP32-C6 (name match, same style as `is_esp32c3`).
 pub fn is_esp32c6(chip: &ChipDescriptor) -> bool {
@@ -80,44 +109,146 @@ pub fn seed_flash_partitions(flash: &mut [u8], partitions: Option<&[u8]>) {
     flash[off..off + n].copy_from_slice(&pt[..n]);
 }
 
-/// Install MSPI SPI_MEM twins + a partition-seeded flash backing on a C6 bus.
+/// Install MSPI SPI_MEM twins + a partition-seeded flash backing + shared MMU
+/// on a C6 bus.
 ///
-/// Returns the shared backing so tests (and a future CLI path) can inspect or
-/// further seed it without walking the peripheral list. Idempotent on the
-/// peripheral names: a second call replaces the controllers and attaches a
-/// fresh backing.
+/// Returns `(flash_backing, mmu_table)`. Idempotent on the peripheral names: a
+/// second call replaces the controllers and attaches a fresh backing/MMU.
 ///
-/// Does **not** touch the CPU-visible `0x4200_0000` LinearMemory window — that
-/// remains the bare-ELF / XIP load target. Preferences traffic goes through
-/// SPI_MEM into this backing, which is how ESP-IDF reaches the partition table
-/// and NVS on silicon too.
+/// Does **not** install the FlashXip window yet — ELF load still writes the
+/// bare `0x4200_0000` LinearMemory. Call [`install_xip_window`] after the
+/// factory image has been copied into the backing and the MMU programmed
+/// (bootloader-equivalent), so instruction fetch and `spi_flash_mmap` both
+/// translate through the real table.
 pub fn install_arduino_flash(
     bus: &mut SystemBus,
     partitions: Option<&[u8]>,
-) -> Arc<Mutex<Vec<u8>>> {
+) -> (Arc<Mutex<Vec<u8>>>, SharedMmuTable) {
     let mut img = vec![0xFFu8; MODELLED_FLASH_SIZE as usize];
     seed_flash_partitions(&mut img, partitions);
     let flash = Arc::new(Mutex::new(img));
+    let mmu = new_mmu_table_c6();
 
-    bus.replace_or_add_peripheral(
+    // Match by base so yaml `spi0`/`spi1` stubs at these addresses are
+    // replaced (name-only replace_or_add left the stubs and layered a twin;
+    // IDF partition reads then hit the stub → 0xFF → "No MD5 found").
+    // SPI0 owns the MMU_ITEM_* window (`mmu_ll_*` uses SPI_MEM_*_REG(0)).
+    bus.replace_or_add_peripheral_at(
         "spimem0_flash",
         SPI0_BASE,
         SPI_MEM_WINDOW,
         None,
-        Box::new(SpiMemFlash::new(flash.clone())),
+        Box::new(SpiMemFlash::new(flash.clone()).with_mmu(mmu.clone())),
     );
-    bus.replace_or_add_peripheral(
+    bus.replace_or_add_peripheral_at(
         "spimem1_flash",
         SPI1_BASE,
         SPI_MEM_WINDOW,
         None,
-        Box::new(SpiMemFlash::new(flash.clone())),
+        Box::new(SpiMemFlash::new(flash.clone()).with_mmu(mmu.clone())),
     );
     // SPI_MEM twins must not be elided by the optimized-access fast path: the
     // C3 Arduino install flips the same flag for the same reason.
     bus.config.optimized_bus_access = false;
     bus.refresh_peripheral_index();
-    flash
+    (flash, mmu)
+}
+
+/// Install the C6 FlashXip window at `0x4200_0000` over `flash`/`mmu`.
+///
+/// Call **after** ELF load + factory MMU programming. With
+/// `optimized_bus_access = false`, this peripheral wins over the LinearMemory
+/// flash image so fetches and mmap reads translate through the MMU exactly as
+/// on silicon. Unused MMU entries stay invalid so `spi_flash_mmap` can claim
+/// free pages for the partition table at flash `0x8000`.
+pub fn install_xip_window(bus: &mut SystemBus, flash: Arc<Mutex<Vec<u8>>>, mmu: SharedMmuTable) {
+    bus.replace_or_add_peripheral_at(
+        "flash_irom_xip",
+        XIP_BASE,
+        XIP_WINDOW,
+        None,
+        Box::new(FlashXipPeripheral::new_mmu_fmt(
+            flash,
+            XIP_BASE as u32,
+            mmu,
+            MMU_FMT_C6,
+        )),
+    );
+    bus.config.optimized_bus_access = false;
+    bus.refresh_peripheral_index();
+}
+
+/// Program one C6 MMU entry through SPI0's MMU_ITEM_INDEX/CONTENT (silicon path).
+pub fn write_mmu_entry(bus: &mut SystemBus, entry_id: u32, phys_page: u32) {
+    use crate::Bus;
+    let _ = bus.write_u32(SPI0_BASE + MMU_ITEM_INDEX_OFF, entry_id);
+    let _ = bus.write_u32(
+        SPI0_BASE + MMU_ITEM_CONTENT_OFF,
+        (phys_page & MMU_FMT_C6.valid_val_mask) | MMU_VALID,
+    );
+}
+
+/// C6 mask-ROM `.data` the fast-boot path must seed because it skips the ROM
+/// `unpackloop` (12-byte `{dst_start,dst_end,src}` records at `_data_table_start`).
+/// Without this, `rom_cache_internal_table_ptr` @ `0x4087_ffc8` stays null and
+/// Arduino `cache_hal_init` dispatches ROM `Cache_*` helpers through a null
+/// table → panic_abort. Values taken from Espressif `esp32c6_rev0_rom.elf`
+/// PROGBITS (interface pointers + cache/spi_flash/.data_ets).
+fn c6_rom_data_init_writes() -> &'static [(u32, &'static [u8])] {
+    &[
+        // rom_cache_internal_table_ptr → rom_default_cache_internal_table
+        (0x4087_ffc8, &[0x10, 0xdb, 0x04, 0x40]),
+        // heap_tlsf_table_ptr
+        (0x4087_ffd8, &[0xd0, 0xd0, 0x04, 0x40]),
+        // spi_flash chip table ptrs
+        (
+            0x4087_ffdc,
+            &[0x80, 0xd9, 0x04, 0x40, 0x40, 0xd9, 0x04, 0x40],
+        ),
+        // esp_flash ops ptr
+        (0x4087_ffe4, &[0xcc, 0xd8, 0x04, 0x40]),
+        // spiflash_legacy ptrs (DRAM targets — OK if unused early)
+        (
+            0x4087_ffec,
+            &[0x08, 0xfa, 0x87, 0x40, 0x24, 0xfa, 0x87, 0x40],
+        ),
+        // ets_ops_table_ptr
+        (0x4087_fff8, &[0x80, 0xa6, 0x04, 0x40]),
+        // .data_ets / .data_uart flags
+        (0x4087_e610, &[0x01, 0x00, 0x00, 0x00]),
+        (0x4087_f564, &[0x01, 0x00, 0x00, 0x00]),
+        // .data_cache
+        (
+            0x4087_fa84,
+            &[0x00, 0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00],
+        ),
+        // .data_ets_delay
+        (0x4087_faa0, &[0x28, 0x00, 0x00, 0x00]),
+        // .data_c: __global_locale_ptr → ROM locale object (newlib
+        // __get_locale_string / assert paths load *ptr+0xF0 as a C string).
+        (0x4087_faac, &[0xd0, 0x95, 0x04, 0x40]),
+    ]
+}
+
+/// Write ROM `.data` interface pointers into HP SRAM (fast-boot only).
+pub fn seed_rom_data(bus: &mut SystemBus) {
+    use crate::Bus;
+    for (dst, bytes) in c6_rom_data_init_writes() {
+        for (i, b) in bytes.iter().enumerate() {
+            let addr = *dst as u64 + i as u64;
+            if let Err(e) = bus.write_u8(addr, *b) {
+                eprintln!("seed_rom_data write fail @ {addr:#x}: {e:?}");
+            }
+        }
+    }
+    // Prove the heap_tlsf_table_ptr seed stuck (ROM multi_heap_register_impl
+    // loads this before calling into the tlsf dispatch table).
+    let mut v = [0u8; 4];
+    for (i, b) in v.iter_mut().enumerate() {
+        *b = bus.read_u8(0x4087_ffd8 + i as u64).unwrap_or(0xEE);
+    }
+    let ptr = u32::from_le_bytes(v);
+    eprintln!("seed_rom_data: heap_tlsf_table_ptr @ 0x4087ffd8 = {ptr:#010x}");
 }
 
 /// Install the C6 Arduino flash substrate when `chip` is a C6; no-op otherwise.
@@ -126,6 +257,10 @@ pub fn install_arduino_flash(
 pub fn maybe_install_arduino_flash(bus: &mut SystemBus, chip: &ChipDescriptor) {
     if is_esp32c6(chip) {
         let _ = install_arduino_flash(bus, None);
+        // Fast-boot skips mask-ROM unpackloop — seed the ROM `.data` tables
+        // Arduino cache_hal / Preferences dispatch through.
+        seed_rom_data(bus);
+        // FlashXip is installed later (after ELF → factory map) by the CLI.
     }
 }
 
@@ -189,6 +324,36 @@ mod tests {
     }
 
     #[test]
+    fn app_stack_top_below_rom_reserve() {
+        let sp = app_stack_top();
+        assert_eq!(sp, 0x4086_E610);
+        assert!(
+            sp < 0x4087_ffc8,
+            "must not smash rom_cache_internal_table_ptr"
+        );
+        assert_eq!(sp & 0xF, 0, "16-byte aligned");
+    }
+
+    #[test]
+    fn seed_rom_data_writes_heap_tlsf_ptr() {
+        let mut bus = c6_bus();
+        seed_rom_data(&mut bus);
+        let mut b = [0u8; 4];
+        for (i, byte) in b.iter_mut().enumerate() {
+            *byte = bus.read_u8(0x4087_ffd8 + i as u64).expect("read");
+        }
+        assert_eq!(u32::from_le_bytes(b), 0x4004_d0d0, "heap_tlsf_table_ptr");
+        // And the table entry ROM serves at +52
+        let mut e = [0u8; 4];
+        for (i, byte) in e.iter_mut().enumerate() {
+            *byte = bus.read_u8(0x4004_d0d0 + 52 + i as u64).expect("rom");
+        }
+        // Without ROM image this may be 0; with LABWIRED_ESP32C6_ROM it should be 0x400210b2
+        let v = u32::from_le_bytes(e);
+        eprintln!("tlsf table +52 = {v:#x}");
+    }
+
+    #[test]
     fn is_esp32c6_matches_chip_name() {
         let mut chip = ChipDescriptor::from_file(repo_root().join("configs/chips/esp32c6.yaml"))
             .expect("load esp32c6.yaml");
@@ -200,7 +365,7 @@ mod tests {
     #[test]
     fn install_seeds_nvs_partition_at_0x8000() {
         let mut bus = c6_bus();
-        let flash = install_arduino_flash(&mut bus, None);
+        let (flash, _mmu) = install_arduino_flash(&mut bus, None);
         let img = flash.lock().expect("flash lock");
         let off = PARTITION_TABLE_OFFSET as usize;
         let parts = decode_table(&img[off..off + MAX_PARTITION_TABLE_LEN]);
@@ -241,7 +406,7 @@ mod tests {
     #[test]
     fn nvs_region_round_trips_through_spimem() {
         let mut bus = c6_bus();
-        let flash = install_arduino_flash(&mut bus, None);
+        let (flash, _mmu) = install_arduino_flash(&mut bus, None);
         let nvs_off = default_nvs_offset() as u64;
         assert!(
             nvs_off + 16 <= default_nvs_offset() as u64 + default_nvs_size() as u64,
@@ -310,6 +475,40 @@ mod tests {
         assert!(
             bus.find_peripheral_index_by_name("spimem0_flash").is_none(),
             "C6 install must not fire on a C3 bus"
+        );
+    }
+
+    #[test]
+    fn mmu_item_and_xip_translate_factory_page() {
+        use crate::Bus;
+        let mut bus = c6_bus();
+        let (flash, mmu) = install_arduino_flash(&mut bus, None);
+        // Put a marker at factory page 1 (flash 0x10000)
+        {
+            let mut f = flash.lock().unwrap();
+            f[0x10000] = 0xE9;
+            f[0x10001] = 0xA5;
+        }
+        // Map virt page 0 → phys page 1 (factory)
+        write_mmu_entry(&mut bus, 0, 1);
+        assert_eq!(
+            mmu.entries.lock().unwrap()[0],
+            MMU_VALID | 1,
+            "SPI0 MMU_ITEM_CONTENT must program SharedMmu"
+        );
+        install_xip_window(&mut bus, flash.clone(), mmu.clone());
+        assert_eq!(bus.read_u8(XIP_BASE).unwrap(), 0xE9);
+        assert_eq!(bus.read_u8(XIP_BASE + 1).unwrap(), 0xA5);
+        // Unmapped virt page 2: FlashXip returns 0 (not Err). Seed the
+        // identity flash offset so a LinearMemory fallback would show 0x5A.
+        {
+            let mut f = flash.lock().unwrap();
+            f[0x2_0000] = 0x5A;
+        }
+        assert_eq!(
+            bus.read_u8(XIP_BASE + 0x2_0000).unwrap(),
+            0,
+            "unmapped MMU page must read 0 via FlashXip, not LinearMemory identity"
         );
     }
 }

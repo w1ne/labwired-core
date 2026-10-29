@@ -147,6 +147,14 @@ pub const MODEL_TYPES: &[&str] = &[
     // C6 USB Serial/JTAG — same shared model as C3/S3, own matrix source.
     // Listed so a fuzzy `contains("usb")` path cannot coerce it elsewhere.
     "esp32c6_usb_serial_jtag",
+    // C6 MODEM_LPCON + I2C_ANA_MST — sticky register banks for fast-boot
+    // regi2c. `esp32c6_i2c_ana_mst` MUST be listed: fuzzy `contains("i2c")`
+    // would otherwise coerce it onto the STM32 I2C map.
+    "esp32c6_modem_lpcon",
+    "esp32c6_i2c_ana_mst",
+    // C6 EXTMEM / MSPI cache controller (DONE/freeze handshakes).
+    "esp32c6_extmem",
+    "esp32c6_systimer",
     // nRF52 behavioral models (nrf52 factory).
     "nrf52840_twim",
     "nrf52_saadc",

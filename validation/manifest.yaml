@@ -2397,7 +2397,7 @@ boards:
     # reset value the reset-conformance capture asserts is touched: the new
     # behaviour lives in exchange memory and the radio event path, which that
     # capture does not cover. This acknowledges model drift, NOT a recapture.
-    drift_ack_digest: cc7a758b7f7402987d99dc53c0b8fed6eb99224ad36833b4d30d54a55f9efc08
+    drift_ack_digest: 1bea3abf94dcd2d8822f3415ac8cfab5a76eb687cf513b465bf7787da4a52371
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
@@ -3201,6 +3201,14 @@ boards:
     # LEDC channel outputs drive the GPIO output matrix (signals 45..50), and
     # DUTY_START now latches DUTY into DUTY_R. No register map or reset value
     # change; the reset-state oracle is untouched. ACK, NOT A CAPTURE.
+    # 2026-10-29 (#1534 feat/esp32c6-mmu-xip): watched cpu/riscv.rs and
+    # esp_uart.rs. RISC-V Esp32C3 profile accepts mideleg/medeleg (0x302/0x303)
+    # and Espressif PMA CSRs (0xBC0..=0xBDF) as RAZ/WI so C6 IDF early init
+    # does not trap; side effects are not modelled. EspUart gains an opt-in
+    # c6_reg_map that remaps offset 0x70 to idle UART_FSM_STATUS (ROM
+    # uart_tx_wait_idle); C3 construction leaves the flag false so POSPULSE
+    # reset/readback is unchanged. No C3 register map or reset-state oracle
+    # change. ACK, NOT A CAPTURE.
     # 2026-10-29 (#1537 feat/esp32s3-rom-strcmp): watched esp_xtensa_common/
     # rom_thunks.rs. Adds rom_strcmp/strncmp/strcpy/strncpy thunks (S3 ROM
     # slots 0x40001230/123c/1218/1224). Shared thunk bank also listed on C3;
@@ -7859,6 +7867,11 @@ boards:
     # at the register map. No register map or reset value in the nine captured
     # windows changed. Ran: peripherals::esp32s3::spi_mem_flash (10),
     # boot::esp32c6_rom (5). No S3 board attached. ACK, NOT A CAPTURE.
+    # 2026-10-29 (#1534 feat/esp32c6-mmu-xip): watched esp32s3/spi_mem_flash.rs
+    # and flash_xip.rs. SPI_MEM gains C6 MMU item INDEX/CONTENT (VALID BIT(9),
+    # 256×64KiB) behind the same register window; FlashXip maps the C6
+    # 0x4200_0000 IRAM/DROM window through those entries. S3 MMU format and
+    # the nine captured reset-state windows are unchanged. ACK, NOT A CAPTURE.
     # 2026-10-29 (#1537 feat/esp32s3-rom-strcmp): watched rom_thunks.rs +
     # system/xtensa/esp32s3.rs. Registers ROM strcmp/strncmp/strcpy/strncpy
     # at the newlib export addresses so Arduino String/C string ops stop
@@ -7869,7 +7882,7 @@ boards:
     # UART0 is outside the nine captured reset-state windows; no register map
     # or reset value change. ACK, NOT A CAPTURE.
     drift_ack: 2026-10-29
-    drift_ack_digest: 9e0a39bce1e7f70a3c92dc25a80954cb89c90e16025d11b085f757dfd7097dca
+    drift_ack_digest: 9bf67e33982a546e9231f535016f4c705266f71a0c1faf768262bea62394b98b
 
   - id: esp32s3-zero
     # Board variant of esp32s3: same silicon (LX7), 4 MiB flash / 480 KiB RAM.
@@ -9200,12 +9213,23 @@ boards:
       - configs/peripherals/esp32c6/timg1.yaml
       - configs/peripherals/esp32c6/uart0.yaml
       - configs/peripherals/esp32c6/uart1.yaml
+      - configs/peripherals/esp32c3/systimer.yaml
+      - configs/peripherals/esp32c6/plic_mx.yaml
       # 2026-09-21, model_paths_drift_gate: models this board REGISTERS that
       # its list omitted, so they were invisible to the drift digest. This
       # board records no silicon capture, so there is no "silicon-verified"
       # claim for the corrected digest to invalidate — no ack is implied.
       - crates/core/src/peripherals/esp32c6/gdma.rs
       - crates/core/src/peripherals/esp32c6/pcr.rs
+      # 2026-10-29 (#1534), model_paths_drift_gate: remaining registered C6
+      # models the YAML-only round-2 watch still omitted (extmem / I2C_ANA_MST /
+      # MODEM_LPCON / shared EspSystimer / StubDevice). SIM-DERIVED — no
+      # silicon ack implied.
+      - crates/core/src/peripherals/esp32c6/extmem.rs
+      - crates/core/src/peripherals/esp32c6/i2c_ana_mst.rs
+      - crates/core/src/peripherals/esp32c6/modem_lpcon.rs
+      - crates/core/src/peripherals/esp_systimer.rs
+      - crates/core/src/peripherals/stub.rs
   - id: litex-vexriscv
     # 2026-10-19: first RISC-V soft-core SoC in the engine (LiteX VexRiscv,
     # RV32IM). SIM-DERIVED — no silicon capture and no executing-fidelity

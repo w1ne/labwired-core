@@ -350,6 +350,10 @@ pub struct EspUart {
     /// Core clock this instance is paced against (S3 = 240 MHz, C3 = 160 MHz).
     /// 0 only via `Default`, which no bus path uses; `cycles_per_byte` clamps.
     cpu_clock_hz: u64,
+    /// ESP32-C6 UART register tail: `UART_FSM_STATUS` lives at 0x70 (C3 had
+    /// `POSPULSE` there). ROM `uart_tx_wait_idle` polls `ST_UTX_OUT` in bits
+    /// [7:4] and spins forever if the C3 POSPULSE reset (0xFFF) is returned.
+    c6_reg_map: bool,
     /// Externally-fed RX queue, shared with `attach_uart_rx_source[_named]`.
     /// Bytes pushed here are moved into the RX FIFO on the next access — the
     /// same injection mechanism the generic `Uart` exposes, so a declarative
@@ -428,6 +432,7 @@ impl EspUart {
             clock: None,
             scheduled: false,
             cpu_clock_hz,
+            c6_reg_map: false,
             rx_source: Arc::new(Mutex::new(VecDeque::new())),
             rx_source_exposed: Cell::new(false),
             lines: None,
@@ -740,8 +745,20 @@ impl EspUart {
         dynamic | STATUS_IDLE_BITS
     }
 
+    /// ESP32-C6: remap offset 0x70 to idle `UART_FSM_STATUS` (see field docs).
+    pub fn with_c6_reg_map(mut self) -> Self {
+        self.c6_reg_map = true;
+        self
+    }
+
     /// Word value for a non-FIFO register read.
     fn read_reg_word(&self, word_off: u64) -> u32 {
+        // C6: 0x70 is FSM_STATUS (ST_URX_OUT[3:0] | ST_UTX_OUT[7:4]), reset 0.
+        // Mask-ROM uart_tx_wait_idle polls ST_UTX_OUT == 0; the C3 POSPULSE
+        // reset value 0xFFF at this offset wedges that poll forever.
+        if self.c6_reg_map && word_off == OFF_POSPULSE {
+            return 0;
+        }
         match word_off {
             OFF_INT_RAW => self.int_raw(),
             OFF_INT_ST => self.int_raw() & self.reg(OFF_INT_ENA),

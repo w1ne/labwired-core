@@ -1,0 +1,448 @@
+peripheral: PLIC_MX
+version: 0.1.0
+registers:
+- id: CPU_MXINT_ENABLE
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_MXINT_ENABLE
+    bit_range:
+    - 31
+    - 0
+    description: PLIC MX CPU_MXINT_ENABLE
+  side_effects: null
+- id: CPU_MXINT_TYPE
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_MXINT_TYPE
+    bit_range:
+    - 31
+    - 0
+    description: PLIC MX CPU_MXINT_TYPE
+  side_effects: null
+- id: CPU_MXINT_CLEAR
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_MXINT_CLEAR
+    bit_range:
+    - 31
+    - 0
+    description: PLIC MX CPU_MXINT_CLEAR
+  side_effects: null
+- id: CPU_EIP_STATUS
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_EIP_STATUS
+    bit_range:
+    - 31
+    - 0
+    description: PLIC MX CPU_EIP_STATUS
+  side_effects: null
+- id: CPU_MXINT0_PRI
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_MXINT0_PRI
+    bit_range:
+    - 3
+    - 0
+    description: PLIC MX CPU_MXINT0_PRI
+  side_effects: null
+- id: CPU_MXINT1_PRI
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_MXINT1_PRI
+    bit_range:
+    - 3
+    - 0
+    description: PLIC MX CPU_MXINT1_PRI
+  side_effects: null
+- id: CPU_MXINT2_PRI
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_MXINT2_PRI
+    bit_range:
+    - 3
+    - 0
+    description: PLIC MX CPU_MXINT2_PRI
+  side_effects: null
+- id: CPU_MXINT3_PRI
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_MXINT3_PRI
+    bit_range:
+    - 3
+    - 0
+    description: PLIC MX CPU_MXINT3_PRI
+  side_effects: null
+- id: CPU_MXINT4_PRI
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_MXINT4_PRI
+    bit_range:
+    - 3
+    - 0
+    description: PLIC MX CPU_MXINT4_PRI
+  side_effects: null
+- id: CPU_MXINT5_PRI
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_MXINT5_PRI
+    bit_range:
+    - 3
+    - 0
+    description: PLIC MX CPU_MXINT5_PRI
+  side_effects: null
+- id: CPU_MXINT6_PRI
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_MXINT6_PRI
+    bit_range:
+    - 3
+    - 0
+    description: PLIC MX CPU_MXINT6_PRI
+  side_effects: null
+- id: CPU_MXINT7_PRI
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_MXINT7_PRI
+    bit_range:
+    - 3
+    - 0
+    description: PLIC MX CPU_MXINT7_PRI
+  side_effects: null
+- id: CPU_MXINT8_PRI
+  address_offset: 48
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_MXINT8_PRI
+    bit_range:
+    - 3
+    - 0
+    description: PLIC MX CPU_MXINT8_PRI
+  side_effects: null
+- id: CPU_MXINT9_PRI
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_MXINT9_PRI
+    bit_range:
+    - 3
+    - 0
+    description: PLIC MX CPU_MXINT9_PRI
+  side_effects: null
+- id: CPU_MXINT10_PRI
+  address_offset: 56
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_MXINT10_PRI
+    bit_range:
+    - 3
+    - 0
+    description: PLIC MX CPU_MXINT10_PRI
+  side_effects: null
+- id: CPU_MXINT11_PRI
+  address_offset: 60
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_MXINT11_PRI
+    bit_range:
+    - 3
+    - 0
+    description: PLIC MX CPU_MXINT11_PRI
+  side_effects: null
+- id: CPU_MXINT12_PRI
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_MXINT12_PRI
+    bit_range:
+    - 3
+    - 0
+    description: PLIC MX CPU_MXINT12_PRI
+  side_effects: null
+- id: CPU_MXINT13_PRI
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_MXINT13_PRI
+    bit_range:
+    - 3
+    - 0
+    description: PLIC MX CPU_MXINT13_PRI
+  side_effects: null
+- id: CPU_MXINT14_PRI
+  address_offset: 72
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_MXINT14_PRI
+    bit_range:
+    - 3
+    - 0
+    description: PLIC MX CPU_MXINT14_PRI
+  side_effects: null
+- id: CPU_MXINT15_PRI
+  address_offset: 76
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_MXINT15_PRI
+    bit_range:
+    - 3
+    - 0
+    description: PLIC MX CPU_MXINT15_PRI
+  side_effects: null
+- id: CPU_MXINT16_PRI
+  address_offset: 80
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_MXINT16_PRI
+    bit_range:
+    - 3
+    - 0
+    description: PLIC MX CPU_MXINT16_PRI
+  side_effects: null
+- id: CPU_MXINT17_PRI
+  address_offset: 84
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_MXINT17_PRI
+    bit_range:
+    - 3
+    - 0
+    description: PLIC MX CPU_MXINT17_PRI
+  side_effects: null
+- id: CPU_MXINT18_PRI
+  address_offset: 88
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_MXINT18_PRI
+    bit_range:
+    - 3
+    - 0
+    description: PLIC MX CPU_MXINT18_PRI
+  side_effects: null
+- id: CPU_MXINT19_PRI
+  address_offset: 92
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_MXINT19_PRI
+    bit_range:
+    - 3
+    - 0
+    description: PLIC MX CPU_MXINT19_PRI
+  side_effects: null
+- id: CPU_MXINT20_PRI
+  address_offset: 96
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_MXINT20_PRI
+    bit_range:
+    - 3
+    - 0
+    description: PLIC MX CPU_MXINT20_PRI
+  side_effects: null
+- id: CPU_MXINT21_PRI
+  address_offset: 100
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_MXINT21_PRI
+    bit_range:
+    - 3
+    - 0
+    description: PLIC MX CPU_MXINT21_PRI
+  side_effects: null
+- id: CPU_MXINT22_PRI
+  address_offset: 104
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_MXINT22_PRI
+    bit_range:
+    - 3
+    - 0
+    description: PLIC MX CPU_MXINT22_PRI
+  side_effects: null
+- id: CPU_MXINT23_PRI
+  address_offset: 108
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_MXINT23_PRI
+    bit_range:
+    - 3
+    - 0
+    description: PLIC MX CPU_MXINT23_PRI
+  side_effects: null
+- id: CPU_MXINT24_PRI
+  address_offset: 112
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_MXINT24_PRI
+    bit_range:
+    - 3
+    - 0
+    description: PLIC MX CPU_MXINT24_PRI
+  side_effects: null
+- id: CPU_MXINT25_PRI
+  address_offset: 116
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_MXINT25_PRI
+    bit_range:
+    - 3
+    - 0
+    description: PLIC MX CPU_MXINT25_PRI
+  side_effects: null
+- id: CPU_MXINT26_PRI
+  address_offset: 120
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_MXINT26_PRI
+    bit_range:
+    - 3
+    - 0
+    description: PLIC MX CPU_MXINT26_PRI
+  side_effects: null
+- id: CPU_MXINT27_PRI
+  address_offset: 124
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_MXINT27_PRI
+    bit_range:
+    - 3
+    - 0
+    description: PLIC MX CPU_MXINT27_PRI
+  side_effects: null
+- id: CPU_MXINT28_PRI
+  address_offset: 128
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_MXINT28_PRI
+    bit_range:
+    - 3
+    - 0
+    description: PLIC MX CPU_MXINT28_PRI
+  side_effects: null
+- id: CPU_MXINT29_PRI
+  address_offset: 132
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_MXINT29_PRI
+    bit_range:
+    - 3
+    - 0
+    description: PLIC MX CPU_MXINT29_PRI
+  side_effects: null
+- id: CPU_MXINT30_PRI
+  address_offset: 136
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_MXINT30_PRI
+    bit_range:
+    - 3
+    - 0
+    description: PLIC MX CPU_MXINT30_PRI
+  side_effects: null
+- id: CPU_MXINT31_PRI
+  address_offset: 140
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_MXINT31_PRI
+    bit_range:
+    - 3
+    - 0
+    description: PLIC MX CPU_MXINT31_PRI
+  side_effects: null
+- id: CPU_MXINT_THRESH
+  address_offset: 144
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_MXINT_THRESH
+    bit_range:
+    - 7
+    - 0
+    description: PLIC MX CPU_MXINT_THRESH
+  side_effects: null
+timing: null
