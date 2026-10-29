@@ -138,7 +138,7 @@ Classes with no declared peripheral type stay `na` in
 | clock | **pass** | `pcr` (native `esp32c6_pcr`, full SVD map) is the yaml `clock:` gate controller: `UART0_SCLK_CONF`/`SYSCLK_CONF` round-trip, and `UART0_CONF.CLK_EN=0` really silences UART0 (`reads → 0`, writes dropped, pre-gate value survives); `CLK_EN=1` restores it. Same gate declared for UART1/TIMG0/TIMG1/GDMA/I²C0/SPI2/LEDC/SARADC. `RST_EN` is recorded, not enforced |
 | timer | **pass** | TIMG0 (`esp32c6_mwdt` = shared `esp32::timg::Timg` + MWDT): `T0CONFIG.EN` → `T0UPDATE`-latched `T0LO/T0HI` advances across a bounded spin; clearing `EN` freezes the counter |
 | dma | **pass** | GDMA (0x6008_0000, `esp32c6_gdma`, 3 channels): real in-RAM linked-list mem→mem transfer; descriptors walked, bytes land in the destination, `IN_SUC_EOF`/`IN_DONE` + `OUT_TOTAL_EOF`/`OUT_DONE` latch, owner bits written back (`OUT_AUTO_WRBACK`) |
-| i2c | **pass** | I²C0 (0x6000_4000, `esp32c3_i2c` with C6 source 50): RSTART→WRITE(1)→STOP walks to STOP, `COMD.command_done` latches, `CTR.TRANS_START` self-clears, `INT_RAW.TRANS_COMPLETE` latches after the wire transaction (NACKed address, no slave attached). No matrix-routed pad proof |
+| i2c | **pass** | I²C0 (0x6000_4000, `esp32c3_i2c` with C6 source 50): RSTART→WRITE(1)→STOP walks to STOP, `COMD.command_done` latches, `CTR.TRANS_START` self-clears, `INT_RAW.TRANS_COMPLETE` latches after the wire transaction (NACKed address, no slave attached). Matrix-routed pad proof: `esp32c6_i2c_waveform` (signals 45/46, pads 16/17) |
 | spi | **pass** | GP-SPI2 (0x6008_1000, `esp32c3_spi` with C6 source 72): `SPI_CMD.USR` launch self-clears, `TRANS_DONE` latches in `DMA_INT_RAW`, and `W0` reads back `0xFFFF_FFFF` (idle-bus MISO shifted in) |
 | adc | **pass** | APB_SARADC (0x6000_E000, `esp32c3_apb_saradc` with C6 source 60): one-shot `ONETIME_START` self-clears, `SAR1_DONE` latches, `SAR1DATA_STATUS` packs a channel-dependent 12-bit sample plus the selected channel id; two channels differ predictably |
 | pwm | **pass** | LEDC (0x6000_7000, `esp32c3_ledc` with C6 source 45): TIMER0's live counter advances, wraps at `2^DUTY_RES` and latches `LSTIMER0_OVF`; `PAUSE` freezes it and stops new overflows |
@@ -180,8 +180,8 @@ TIER1 done
   DMA (SPI/UART/I2S/AES/…) is unimplemented and stalls visibly.
 - The GPIO claim is register/side-effect behaviour on the shared C3-sized
   model. IO_MUX pad routing stays declarative: no electrical pad claim. The
-  I²C0/SPI2 engines are not proven against matrix-routed pads on the C6 (the
-  shared C3 pad wiring uses C3 signal indices, which differ on the C6).
+  I²C0 matrix-routed pads are proven on the C6 (signals 45/46; see
+  `esp32c6_i2c_waveform`); SPI2 pad routing on the C6 is still unproven.
 - `i2c`/`spi`/`adc`/`pwm` reuse the C3 behavioral engines at the C6 bases; the
   C6 register tails those engines do not touch (LEDC gamma/capture/event,
   I²C filter tail, SARADC TSENS/CALI) are register-backed storage only.
@@ -220,7 +220,7 @@ deterministic CI of a C6 image.
 peripheral sources beyond UART0 (GPIO edges, I²C/SPI/ADC/LEDC/GDMA matrix
 lines, edge-vs-level `CPU_INT_TYPE`, `CPU_INT_CLEAR` semantics, sub-tick
 de-assert latency), watchdogs that must actually reset the chip, RTC wall-time
-and sleep retention, matrix-routed I²C/SPI waveform fidelity on C6 pads, LP
+and sleep retention, matrix-routed SPI waveform fidelity on C6 pads, LP
 core and power management, Wi-Fi/BT/802.15.4, analog, power, antenna/EMI,
 production sign-off. (USB Serial/JTAG EP1 is modelled — see the matrix row
 above and `KNOWN_LIMITATIONS`; DevKitC-1 still defaults `debug_uart` to
