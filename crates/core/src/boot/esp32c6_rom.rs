@@ -244,8 +244,8 @@ pub fn seed_rom_data(bus: &mut SystemBus) {
     // Prove the heap_tlsf_table_ptr seed stuck (ROM multi_heap_register_impl
     // loads this before calling into the tlsf dispatch table).
     let mut v = [0u8; 4];
-    for i in 0..4 {
-        v[i] = bus.read_u8(0x4087_ffd8 + i as u64).unwrap_or(0xEE);
+    for (i, b) in v.iter_mut().enumerate() {
+        *b = bus.read_u8(0x4087_ffd8 + i as u64).unwrap_or(0xEE);
     }
     let ptr = u32::from_le_bytes(v);
     eprintln!("seed_rom_data: heap_tlsf_table_ptr @ 0x4087ffd8 = {ptr:#010x}");

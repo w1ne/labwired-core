@@ -2397,7 +2397,7 @@ boards:
     # reset value the reset-conformance capture asserts is touched: the new
     # behaviour lives in exchange memory and the radio event path, which that
     # capture does not cover. This acknowledges model drift, NOT a recapture.
-    drift_ack_digest: 448982acbde535004583cb8ea548d2cf62551c6a984ded3b7086cbeaa6a1d78a
+    drift_ack_digest: f3514584365562addf2777778dbb8d516e376c593a3c6f4f6008c82cfe2fcad8
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
@@ -3201,7 +3201,15 @@ boards:
     # LEDC channel outputs drive the GPIO output matrix (signals 45..50), and
     # DUTY_START now latches DUTY into DUTY_R. No register map or reset value
     # change; the reset-state oracle is untouched. ACK, NOT A CAPTURE.
-    drift_ack: 2026-10-27
+    # 2026-10-29 (#1534 feat/esp32c6-mmu-xip): watched cpu/riscv.rs and
+    # esp_uart.rs. RISC-V Esp32C3 profile accepts mideleg/medeleg (0x302/0x303)
+    # and Espressif PMA CSRs (0xBC0..=0xBDF) as RAZ/WI so C6 IDF early init
+    # does not trap; side effects are not modelled. EspUart gains an opt-in
+    # c6_reg_map that remaps offset 0x70 to idle UART_FSM_STATUS (ROM
+    # uart_tx_wait_idle); C3 construction leaves the flag false so POSPULSE
+    # reset/readback is unchanged. No C3 register map or reset-state oracle
+    # change. ACK, NOT A CAPTURE.
+    drift_ack: 2026-10-29
 
   - id: nucleo-l476rg
     # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
@@ -7848,8 +7856,13 @@ boards:
     # at the register map. No register map or reset value in the nine captured
     # windows changed. Ran: peripherals::esp32s3::spi_mem_flash (10),
     # boot::esp32c6_rom (5). No S3 board attached. ACK, NOT A CAPTURE.
+    # 2026-10-29 (#1534 feat/esp32c6-mmu-xip): watched esp32s3/spi_mem_flash.rs
+    # and flash_xip.rs. SPI_MEM gains C6 MMU item INDEX/CONTENT (VALID BIT(9),
+    # 256×64KiB) behind the same register window; FlashXip maps the C6
+    # 0x4200_0000 IRAM/DROM window through those entries. S3 MMU format and
+    # the nine captured reset-state windows are unchanged. ACK, NOT A CAPTURE.
     drift_ack: 2026-10-29
-    drift_ack_digest: 1a32da0722f6953522dd1e124e73fe711a6da0ec932e74ecef02eb8307c67208
+    drift_ack_digest: b711a3108fb0d8935d20ce64407eb3d9f516098298ea34bb7f5d6163e3dd36d6
 
   - id: esp32s3-zero
     # Board variant of esp32s3: same silicon (LX7), 4 MiB flash / 480 KiB RAM.
@@ -9180,6 +9193,8 @@ boards:
       - configs/peripherals/esp32c6/timg1.yaml
       - configs/peripherals/esp32c6/uart0.yaml
       - configs/peripherals/esp32c6/uart1.yaml
+      - configs/peripherals/esp32c3/systimer.yaml
+      - configs/peripherals/esp32c6/plic_mx.yaml
       # 2026-09-21, model_paths_drift_gate: models this board REGISTERS that
       # its list omitted, so they were invisible to the drift digest. This
       # board records no silicon capture, so there is no "silicon-verified"
