@@ -226,10 +226,7 @@ fn esp32c6_usb_serial_jtag_is_the_behavioural_console() {
     let idx = bus
         .find_peripheral_index_by_name("usb_serial_jtag")
         .expect("usb_serial_jtag present");
-    let any = bus.peripherals[idx]
-        .dev
-        .as_any_mut()
-        .expect("downcastable");
+    let any = bus.peripherals[idx].dev.as_any_mut().expect("downcastable");
     let jtag = any
         .downcast_mut::<UsbSerialJtag>()
         .expect("behavioural model");

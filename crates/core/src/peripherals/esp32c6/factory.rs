@@ -85,9 +85,9 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         // USB Serial/JTAG — same EP1/INT_* IP as C3/S3 (`UsbSerialJtag`), with
         // the C6 matrix source (48) and 160 MHz clock. Base is owned by the
         // chip yaml (`0x6000_F000`); see the model module docs.
-        "esp32c6_usb_serial_jtag" => Box::new(
-            crate::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag::new_esp32c6(),
-        ),
+        "esp32c6_usb_serial_jtag" => {
+            Box::new(crate::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag::new_esp32c6())
+        }
         _ => return None,
     };
     Some(dev)
